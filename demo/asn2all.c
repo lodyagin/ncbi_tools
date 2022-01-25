@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.9 $
+* $Revision: 1.18 $
 *
 * File Description:
 *
@@ -53,9 +53,315 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "1.1"
+#define ASN2ALL_APP_VER "1.0"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
+
+static ValNodePtr  requested_uid_list = NULL;
+static TNlmMutex   requested_uid_mutex = NULL;
+
+static ValNodePtr  locked_bsp_list = NULL;
+static TNlmMutex   locked_bsp_mutex = NULL;
+
+static void AddUidToQueue (
+  SeqIdPtr sip
+)
+
+{
+  ValNodePtr  last = NULL, vnp;
+  Int4        ret;
+  Int4        uid;
+
+  if (sip == NULL || sip->choice != SEQID_GI) return;
+  uid = (Int4) sip->data.intvalue;
+  if (uid < 1) return;
+
+  ret = NlmMutexLockEx (&requested_uid_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "AddUidToQueue mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  /* check against uids already in queue */
+
+  last = NULL;
+  for (vnp = requested_uid_list; vnp != NULL; vnp = vnp->next) {
+    last = vnp;
+    if ((Int4) vnp->data.intvalue == uid) break;
+  }
+
+  /* add uid to queue */
+
+  if (vnp == NULL) {
+    if (last != NULL) {
+      vnp = ValNodeAddInt (&last, 0, uid);
+      last = vnp;
+    } else {
+      requested_uid_list = ValNodeAddInt (NULL, 0, uid);
+      last = requested_uid_list;
+    }
+  }
+
+  NlmMutexUnlock (requested_uid_mutex);
+}
+
+static Int4 RemoveUidFromQueue (
+  void
+)
+
+{
+  Int4        ret, uid = 0;
+  ValNodePtr  vnp;
+
+  ret = NlmMutexLockEx (&requested_uid_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "RemoveUidFromQueue mutex failed [%ld]", (long) ret);
+    return 0;
+  }
+
+  /* extract next requested uid from queue */
+
+  if (requested_uid_list != NULL) {
+    vnp = requested_uid_list;
+    requested_uid_list = vnp->next;
+    vnp->next = NULL;
+    uid = (Int4) vnp->data.intvalue;
+    ValNodeFree (vnp);
+  }
+
+  NlmMutexUnlock (requested_uid_mutex);
+
+  return uid;
+}
+
+static void QueueFarSegments (SeqLocPtr slp)
+
+{
+  BioseqPtr   bsp;
+  SeqLocPtr   loc;
+  SeqIdPtr    sip;
+  ValNodePtr  vnp;
+
+  if (slp == NULL) return;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) {
+    loc = SeqLocFindNext (slp, NULL);
+    if (loc != NULL) {
+      sip = SeqLocId (loc);
+    }
+  }
+  if (sip == NULL) return;
+
+  /* if packaged in record, no need to fetch it */
+
+  if (BioseqFindCore (sip) != NULL) return;
+
+  /* check against currently locked records */
+
+  for (vnp = locked_bsp_list; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp == NULL) continue;
+    if (SeqIdIn (sip, bsp->id)) return;
+  }
+
+  AddUidToQueue (sip);
+}
+
+static void QueueFarBioseqs (BioseqPtr bsp, Pointer userdata)
+
+{
+  DeltaSeqPtr  dsp;
+  SeqLocPtr    slp = NULL;
+  ValNode      vn;
+
+  if (bsp == NULL) return;
+
+  if (bsp->repr == Seq_repr_seg) {
+    vn.choice = SEQLOC_MIX;
+    vn.extended = 0;
+    vn.data.ptrvalue = bsp->seq_ext;
+    vn.next = NULL;
+    while ((slp = SeqLocFindNext (&vn, slp)) != NULL) {
+      if (slp != NULL && slp->choice != SEQLOC_NULL) {
+        QueueFarSegments (slp);
+      }
+    }
+  } else if (bsp->repr == Seq_repr_delta) {
+    for (dsp = (DeltaSeqPtr) (bsp->seq_ext); dsp != NULL; dsp = dsp->next) {
+      if (dsp->choice == 1) {
+        slp = (SeqLocPtr) dsp->data.ptrvalue;
+        if (slp != NULL && slp->choice != SEQLOC_NULL) {
+          QueueFarSegments (slp);
+        }
+      }
+    }
+  }
+}
+
+static void AddBspToList (
+  BioseqPtr bsp
+)
+
+{
+  Int4        ret;
+  ValNodePtr  vnp;
+
+  if (bsp == NULL) return;
+
+  ret = NlmMutexLockEx (&locked_bsp_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "AddBspToList mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  vnp = ValNodeAddPointer (&locked_bsp_list, 0, (Pointer) bsp);
+
+  NlmMutexUnlock (locked_bsp_mutex);
+}
+
+static ValNodePtr ExtractBspList (
+  void
+)
+
+{
+  Int4        ret;
+  ValNodePtr  vnp;
+
+  ret = NlmMutexLockEx (&locked_bsp_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "ExtractBspList mutex failed [%ld]", (long) ret);
+    return NULL;
+  }
+
+  vnp = locked_bsp_list;
+  locked_bsp_list = NULL;
+
+  NlmMutexUnlock (locked_bsp_mutex);
+
+  return vnp;
+}
+
+static VoidPtr DoAsyncLookup (
+  VoidPtr arg
+)
+
+{
+  BioseqPtr  bsp;
+  Int4       uid;
+  ValNode    vn;
+
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+
+  uid = RemoveUidFromQueue ();
+  while (uid > 0) {
+
+    vn.choice = SEQID_GI;
+    vn.data.intvalue = uid;
+    vn.next = NULL;
+
+    bsp = BioseqLockById (&vn);
+    if (bsp != NULL) {
+      AddBspToList (bsp);
+    }
+
+    uid = RemoveUidFromQueue ();
+  }
+
+  return NULL;
+}
+
+#define NUM_ASYNC_LOOKUP_THREADS 5
+
+static void ProcessAsyncLookups (
+  void
+)
+
+{
+  Int2        i;
+  VoidPtr     status;
+  TNlmThread  thds [NUM_ASYNC_LOOKUP_THREADS];
+
+  /* spawn several threads for individual BioseqLockById requests */
+
+  for (i = 0; i < NUM_ASYNC_LOOKUP_THREADS; i++) {
+    thds [i] = NlmThreadCreate (DoAsyncLookup, NULL);
+  }
+
+  /* wait for all fetching threads to complete */
+
+  for (i = 0; i < NUM_ASYNC_LOOKUP_THREADS; i++) {
+    NlmThreadJoin (thds [i], &status);
+  }
+}
+
+static ValNodePtr AsyncLockFarComponents (
+  SeqEntryPtr sep
+)
+
+{
+  BioseqPtr    bsp;
+  ValNodePtr   bsplist = NULL, sublist, vnp;
+  SeqEntryPtr  oldsep;
+
+  if (sep == NULL) return NULL;
+  oldsep = SeqEntrySetScope (sep);
+
+  /* add far uids to queue */
+
+  VisitBioseqsInSep (sep, NULL, QueueFarBioseqs);
+
+  /* fetching from uid list using several threads */
+
+  ProcessAsyncLookups ();
+
+  sublist = ExtractBspList ();
+
+  /* take list, look for seg or delta, recurse */
+
+  while (sublist != NULL) {
+    for (vnp = sublist; vnp != NULL; vnp = vnp->next) {
+      bsp = (BioseqPtr) vnp->data.ptrvalue;
+      if (bsp == NULL) continue;
+      QueueFarBioseqs (bsp, NULL);
+    }
+
+    ValNodeLink (&bsplist, sublist);
+    sublist = NULL;
+
+    ProcessAsyncLookups ();
+
+    sublist = ExtractBspList ();
+  }
+
+  SeqEntrySetScope (oldsep);
+  return bsplist;
+}
+
+static ValNodePtr DoLockFarComponents (
+  SeqEntryPtr sep,
+  Boolean useThreads
+)
+
+{
+  ValNodePtr  rsult;
+  time_t      start_time, stop_time;
+
+  start_time = GetSecs ();
+
+  if (NlmThreadsAvailable () && useThreads) {
+    rsult = AsyncLockFarComponents (sep);
+  } else if (useThreads) {
+    Message (MSG_POST, "Threads not available in this executable");
+    rsult = LockFarComponents (sep);
+  } else {
+    rsult = LockFarComponents (sep);
+  }
+
+  stop_time = GetSecs ();
+
+  return rsult;
+}
 
 typedef enum {
   FLATFILE_FORMAT = 1,
@@ -64,7 +370,8 @@ typedef enum {
   TINY_FORMAT,
   INSDSEQ_FORMAT,
   ASN_FORMAT,
-  XML_FORMAT
+  XML_FORMAT,
+  CACHE_COMPONENTS
 } AppFormat;
 
 typedef struct appflags {
@@ -73,10 +380,12 @@ typedef struct appflags {
   Boolean       binary;
   Boolean       compressed;
   Boolean       lock;
+  Boolean       useThreads;
   Int2          type;
   Int2          linelen;
   Int2          nearpolicy;
   ModType       mode;
+  Boolean       extended;
   Boolean       failed;
   FILE          *nt;
   FILE          *aa;
@@ -84,11 +393,16 @@ typedef struct appflags {
   AsnIoPtr      ap;
   AsnModulePtr  amp;
   AsnTypePtr    atp_bss;
+  AsnTypePtr    atp_bsss;
   AsnTypePtr    atp_se;
+  AsnTypePtr    atp_bsc;
+  AsnTypePtr    bssp_atp;
+  AsnTypePtr    atp_inst;
   AsnTypePtr    atp_insd;
   AsnTypePtr    atp_insde;
   AsnTypePtr    atp_tss;
   AsnTypePtr    atp_tsse;
+  BioseqSet     bss;
   GBSeq         gbsq;
   GBSet         gbst;
   XtraBlock     xtran;
@@ -198,12 +512,19 @@ static void IsItFar (
 
 static void FormatRecord (
   SeqEntryPtr sep,
-  AppFlagPtr afp
+  AppFlagPtr afp,
+  ValNodePtr bsplist
 )
 
 {
-  FlgType  flags = 0;
-  Boolean  is_far = FALSE;
+  BioseqPtr    bsp;
+  CstType      custom = 0;
+  Uint2        entityID;
+  FlgType      flags = 0;
+  Boolean      is_far = FALSE;
+  LckType      locks = 0;
+  SeqEntryPtr  top;
+  ValNodePtr   vnp;
 
   if (sep == NULL || afp == NULL) return;
 
@@ -214,15 +535,22 @@ static void FormatRecord (
   } else {
     flags = SHOW_CONTIG_FEATURES;
   }
+  if (is_far && (! afp->lock)) {
+    locks = LOOKUP_FAR_COMPONENTS;
+  }
+  if (afp->extended) {
+    flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+  }
 
   switch (afp->format) {
     case FLATFILE_FORMAT :
       if (afp->nt != NULL) {
         SeqEntryToGnbk (sep, NULL, GENBANK_FMT, afp->mode, NORMAL_STYLE,
-                        flags, 0, 0, NULL, afp->nt);
+                        flags, locks, custom, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE, 0, 0, 0, NULL, afp->aa);
+        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+                        flags, 0, custom, NULL, afp->aa);
       }
       break;
     case FASTA_FORMAT :
@@ -230,17 +558,19 @@ static void FormatRecord (
         if (afp->nearpolicy == 1 ||
             (afp->nearpolicy == 2 && (! is_far)) ||
             (afp->nearpolicy == 3 && is_far)) {
-          SeqEntryFastaStream (sep, afp->nt, STREAM_EXPAND_GAPS, afp->linelen, 0, 0, TRUE, FALSE, FALSE);
+          SeqEntryFastaStream (sep, afp->nt, STREAM_EXPAND_GAPS, afp->linelen,
+                               0, 0, TRUE, FALSE, FALSE);
         }
       }
       if (afp->aa != NULL) {
-        SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen, 0, 0, FALSE, TRUE, FALSE);
+        SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen,
+                             0, 0, FALSE, TRUE, FALSE);
       }
       break;
     case TABLE_FORMAT :
       if (afp->nt != NULL) {
         SeqEntryToGnbk (sep, NULL, FTABLE_FMT, afp->mode, NORMAL_STYLE,
-                        flags, 0, 0, NULL, afp->nt);
+                        flags, locks, 0, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
         VisitBioseqsInSep (sep, (Pointer) afp, DoProtFtables);
@@ -257,15 +587,29 @@ static void FormatRecord (
     case INSDSEQ_FORMAT :
       if (afp->an != NULL) {
         SeqEntryToGnbk (sep, NULL, GENBANK_FMT, afp->mode, NORMAL_STYLE,
-                        flags, 0, 0, &(afp->xtran), NULL);
+                        flags, locks, custom, &(afp->xtran), NULL);
       }
       if (afp->ap != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE, 0, 0, 0, &(afp->xtrap), NULL);
+        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+                        flags, 0, custom, &(afp->xtrap), NULL);
       }
       break;
     case ASN_FORMAT :
     case XML_FORMAT :
       SeqEntryAsnWrite (sep, afp->an, NULL);
+      break;
+    case CACHE_COMPONENTS :
+      if (afp->an != NULL) {
+        for (vnp = bsplist; vnp != NULL; vnp = vnp->next) {
+          bsp = (BioseqPtr) vnp->data.ptrvalue;
+          if (bsp == NULL) continue;
+          entityID = ObjMgrGetEntityIDForPointer (bsp);
+          if (entityID < 1) continue;
+          top = GetTopSeqEntryForEntityID (entityID);
+          if (top == NULL) continue;
+          SeqEntryAsnWrite (top, afp->an, afp->atp_se);
+        }
+      }
       break;
     default :
       break;
@@ -375,10 +719,10 @@ static void ProcessSingleRecord (
     if (sep != NULL) {
       bsplist = NULL;
       if (afp->lock) {
-        bsplist = LockFarComponents (sep);
+        bsplist = DoLockFarComponents (sep, afp->useThreads);
       }
 
-      FormatRecord (sep, afp);
+      FormatRecord (sep, afp, bsplist);
 
       bsplist = UnlockFarComponents (bsplist);
     }
@@ -399,6 +743,7 @@ static void ProcessMultipleRecord (
 {
   AsnIoPtr       aip, aop = NULL;
   AsnTypePtr     atp;
+  BioseqPtr      bsp;
   ValNodePtr     bsplist;
   Char           cmmd [256];
   DataVal        dv;
@@ -424,7 +769,7 @@ static void ProcessMultipleRecord (
 
 #ifdef OS_UNIX
   if (afp->compressed) {
-    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
+    gzcatprog = getenv ("NCBI_UNCOMPRESS_BINARY");
     if (gzcatprog != NULL) {
       sprintf (cmmd, "%s %s", gzcatprog, filename);
     } else {
@@ -481,10 +826,26 @@ static void ProcessMultipleRecord (
 
   if (aop != NULL) {
 
-    while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
-      AsnReadVal (aip, atp, &dv);
-      AsnWrite (aop, atp, &dv);
-      AsnKillValue (atp, &dv);
+    if (afp->format == XML_FORMAT) {
+      while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+        if (atp == afp->atp_inst) {
+          /* converts compressed sequences to iupac like asn2xml */
+          bsp = BioseqNew ();
+          BioseqInstAsnRead (bsp, aip, atp);
+          BioseqInstAsnWrite (bsp, aop, atp);
+          bsp = BioseqFree (bsp);
+        } else {
+          AsnReadVal (aip, atp, &dv);
+          AsnWrite (aop, atp, &dv);
+          AsnKillValue (atp, &dv);
+        }
+      }
+    } else {
+      while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+        AsnReadVal (aip, atp, &dv);
+        AsnWrite (aop, atp, &dv);
+        AsnKillValue (atp, &dv);
+      }
     }
 
   } else {
@@ -497,10 +858,10 @@ static void ProcessMultipleRecord (
         if (sep != NULL) {
           bsplist = NULL;
           if (afp->lock) {
-            bsplist = LockFarComponents (sep);
+            bsplist = DoLockFarComponents (sep, afp->useThreads);
           }
 
-          FormatRecord (sep, afp);
+          FormatRecord (sep, afp, bsplist);
 
           bsplist = UnlockFarComponents (bsplist);
         }
@@ -532,10 +893,14 @@ static void ProcessMultipleRecord (
 
 static void ProcessOneRecord (
   CharPtr filename,
-  AppFlagPtr afp
+  Pointer userdata
 )
 
 {
+  AppFlagPtr  afp;
+
+  if (StringHasNoText (filename)) return;
+  afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
 
@@ -652,29 +1017,37 @@ static void DisplayHelpText (
 
 /* Args structure contains command-line arguments */
 
-#define i_argInputFile   0
-#define o_argNtOutFile   1
-#define v_argAaOutFile   2
-#define f_argFormat      3
-#define a_argType        4
-#define b_argBinary      5
-#define c_argCompressed  6
-#define r_argRemote      7
-#define d_argAsnIdx      8
-#define l_argLockFar     9
-#define n_argNear       10
-#define A_argAccession  11
-#define h_argHelp       12
+#define p_argInputPath    0
+#define i_argInputFile    1
+#define o_argNtOutFile    2
+#define v_argAaOutFile    3
+#define x_argSuffix       4
+#define f_argFormat       5
+#define a_argType         6
+#define b_argBinary       7
+#define c_argCompressed   8
+#define r_argRemote       9
+#define d_argAsnIdx      10
+#define l_argLockFar     11
+#define T_argThreads     12
+#define n_argNear        13
+#define X_argExtended    14
+#define A_argAccession   15
+#define h_argHelp        16
 
 
 Args myargs [] = {
+  {"Path to Files", NULL, NULL, NULL,
+    TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
   {"Input File Name", "stdin", NULL, NULL,
     TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Nucleotide Output File Name", NULL, NULL, NULL,
     TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Protein Output File Name", NULL, NULL, NULL,
     TRUE, 'v', ARG_FILE_OUT, 0.0, 0, NULL},
-  {"Format (g GenBank/GenPept, f FASTA, t Feature Table, y TinySet XML, s INSDSet XML, a ASN.1, x XML)", NULL, NULL, NULL,
+  {"File Selection Suffix", ".aso", NULL, NULL,
+    TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
+  {"Format (g GenBank/GenPept, f FASTA, t Feature Table, y TinySet XML, s INSDSet XML, a ASN.1, x XML, c Cache Components)", NULL, NULL, NULL,
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
@@ -688,8 +1061,12 @@ Args myargs [] = {
     TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
   {"Lock Components in Advance", "F", NULL, NULL,
     TRUE, 'l', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Use Threads", "F", NULL, NULL,
+    TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Near Fasta Policy (a All, n Near Only, f Far Only)", "n", NULL, NULL,
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
+  {"Extended Qualifier Output", "F", NULL, NULL,
+    TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession to Fetch", NULL, NULL, NULL,
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
   {"Display Help Message", "F", NULL, NULL,
@@ -699,9 +1076,10 @@ Args myargs [] = {
 Int2 Main (void)
 
 {
-  CharPtr      asnin, aaout, ntout, accn, asnidx, str;
+  CharPtr      asnin, aaout, directory, suffix, ntout, accn, asnidx, str;
   AppFlagData  afd;
   Char         app [64], format, nearpolicy, type, xmlbuf [128];
+  DataVal      av;
   ValNodePtr   bsplist;
   Boolean      help, local, remote;
   SeqEntryPtr  sep;
@@ -770,9 +1148,11 @@ Int2 Main (void)
   local = (Boolean) StringDoesHaveText (asnidx);
   accn = (CharPtr) myargs [A_argAccession].strvalue;
 
+  directory = (CharPtr) myargs [p_argInputPath].strvalue;
   asnin = (CharPtr) myargs [i_argInputFile].strvalue;
   ntout = (CharPtr) myargs [o_argNtOutFile].strvalue;
   aaout = (CharPtr) myargs [v_argAaOutFile].strvalue;
+  suffix = (CharPtr) myargs [x_argSuffix].strvalue;
 
   /* default to stdout for nucleotide output if nothing specified */
 
@@ -787,10 +1167,12 @@ Int2 Main (void)
   afd.binary = (Boolean) myargs [b_argBinary].intvalue;
   afd.compressed = (Boolean) myargs [c_argCompressed].intvalue;
   afd.lock = (Boolean) myargs [l_argLockFar].intvalue;
+  afd.useThreads = (Boolean) myargs [T_argThreads].intvalue;
   afd.type = 1;
   afd.linelen = 70;
   afd.nearpolicy = 1;
   afd.mode = ENTREZ_MODE;
+  afd.extended = (Boolean) myargs [X_argExtended].intvalue;
   afd.failed = FALSE;
 
   str = myargs [f_argFormat].strvalue;
@@ -824,6 +1206,9 @@ Int2 Main (void)
       break;
     case 'x' :
       afd.format = XML_FORMAT;
+      break;
+    case 'c' :
+      afd.format = CACHE_COMPONENTS;
       break;
     default :
       afd.format = FLATFILE_FORMAT;
@@ -896,7 +1281,11 @@ Int2 Main (void)
 
   afd.amp = AsnAllModPtr ();
   afd.atp_bss = AsnFind ("Bioseq-set");
+  afd.atp_bsss = AsnFind ("Bioseq-set.seq-set");
   afd.atp_se = AsnFind ("Bioseq-set.seq-set.E");
+  afd.atp_inst = AsnFind ("Bioseq.inst");
+  afd.atp_bsc = AsnFind ("Bioseq-set.class");
+  afd.bssp_atp = AsnLinkType (NULL, afd.atp_bss);
   afd.atp_insd = AsnLinkType (NULL, AsnFind ("INSDSet"));
   afd.atp_insde = AsnLinkType (NULL, AsnFind ("INSDSet.E"));
   afd.atp_tss = AsnLinkType (NULL, AsnFind ("TSeqSet"));
@@ -958,6 +1347,15 @@ Int2 Main (void)
         }
       }
       break;
+    case CACHE_COMPONENTS :
+      if (! StringHasNoText (ntout)) {
+        afd.an = AsnIoOpen (ntout, "wb");
+        if (afd.an == NULL) {
+          Message (MSG_FATAL, "Unable to open output file");
+          return 1;
+        }
+      }
+      break;
     default :
       break;
   }
@@ -997,6 +1395,14 @@ Int2 Main (void)
         AsnOpenStruct (afd.ap, afd.atp_insd, (Pointer) &(afd.gbst));
       }
       break;
+    case CACHE_COMPONENTS :
+      if (afd.an != NULL) {
+        AsnOpenStruct (afd.an, afd.bssp_atp, (Pointer) &(afd.bss));
+        av.intvalue = 7;
+        AsnWrite (afd.an, afd.atp_bsc, &av);
+        AsnOpenStruct (afd.an, afd.atp_bsss, (Pointer) &(afd.bss.seq_set));
+      }
+      break;
     default :
       break;
   }
@@ -1010,16 +1416,20 @@ Int2 Main (void)
       if (sep != NULL) {
         bsplist = NULL;
         if (afd.lock) {
-          bsplist = LockFarComponents (sep);
+          bsplist = DoLockFarComponents (sep, afd.useThreads);
         }
 
-        FormatRecord (sep, &afd);
+        FormatRecord (sep, &afd, bsplist);
 
         bsplist = UnlockFarComponents (bsplist);
 
         SeqEntryFree (sep);
       }
     }
+
+  } else if (StringDoesHaveText (directory)) {
+
+    DirExplore (directory, NULL, suffix, ProcessOneRecord, (Pointer) &afd);
 
   } else {
 
@@ -1049,6 +1459,13 @@ Int2 Main (void)
         AsnPrintNewLine (afd.ap);
       }
       break;
+    case CACHE_COMPONENTS :
+      if (afd.an != NULL) {
+        AsnCloseStruct (afd.an, afd.atp_bsss, (Pointer) &(afd.bss.seq_set));
+        AsnCloseStruct (afd.an, afd.bssp_atp, (Pointer) &(afd.bss));
+        AsnPrintNewLine (afd.an);
+      }
+      break;
     default :
       break;
   }
@@ -1068,6 +1485,10 @@ Int2 Main (void)
 
   if (afd.ap != NULL) {
     AsnIoClose (afd.ap);
+  }
+
+  if (afd.format == CACHE_COMPONENTS) {
+    CreateAsnIndex (ntout, TRUE);
   }
 
   /* close fetch functions */

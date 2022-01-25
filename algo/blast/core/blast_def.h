@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.49 2004/09/28 16:24:57 papadopo Exp $
+/* $Id: blast_def.h,v 1.58 2005/04/27 19:47:22 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,13 +41,6 @@
 extern "C" {
 #endif
 
-/** Safe free a pointer: belongs to a higher level header. */
-#ifndef sfree
-#define sfree(x) __sfree((void**)&(x))
-#endif
-NCBI_XBLAST_EXPORT
-void __sfree(void** x); /* implemented in lib/util.c */
-
 /******************** Preprocessor definitions ******************************/
 
 /** Program type: defines the engine's notion of the different
@@ -58,10 +51,26 @@ typedef enum {
     eBlastTypeBlastx,
     eBlastTypeTblastn,
     eBlastTypeTblastx,
+    eBlastTypePsiBlast,
     eBlastTypeRpsBlast,
     eBlastTypeRpsTblastn,
+    eBlastTypePhiBlastn,
+    eBlastTypePhiBlastp,
     eBlastTypeUndefined
 } EBlastProgramType;
+
+extern const int kDustLevel;  /**< Level parameter used by dust. */
+extern const int kDustWindow; /**< Window parameter used by dust. */
+extern const int kDustLinker; /**< Parameter used by dust to link together close low-complexity segments. */
+
+extern const int kSegWindow;  /**< Window that SEG examines at once. */
+extern const double kSegLocut;   /**< Locut parameter for SEG. */
+extern const double kSegHicut;   /**< Hicut parameter for SEG. */
+
+/** Maximum number of HPSs to be saved in an ungapped search.
+ * Value defined in blast_options.c
+ */
+extern const int kUngappedHSPNumMax; 
 
 /** Codons are always of length 3 */
 #ifndef CODON_LENGTH
@@ -83,9 +92,29 @@ typedef enum {
 #ifndef NUM_FRAMES
 #define NUM_FRAMES 6
 #endif
+
+/** Number of frames in a nucleotide sequence */
 #ifndef NUM_STRANDS
 #define NUM_STRANDS 2
 #endif
+
+/**
+ * A macro expression that returns 1, 0, -1 if a is greater than,
+ * equal to or less than b, respectively.  This macro evaluates its
+ * arguments more than once.
+ */
+#ifndef BLAST_CMP
+#define BLAST_CMP(a,b) ((a)>(b) ? 1 : ((a)<(b) ? -1 : 0))
+#endif
+
+/** Safe free a pointer: belongs to a higher level header. */
+#ifndef sfree
+#define sfree(x) __sfree((void**)&(x))
+#endif
+
+/** Implemented in lookup_util.c. @sa sfree */
+NCBI_XBLAST_EXPORT
+void __sfree(void** x);
 
 /********************* Structure definitions ********************************/
 
@@ -107,7 +136,13 @@ typedef struct BlastSeqLoc {
 
 /** Structure for keeping the query masking information */
 typedef struct BlastMaskLoc {
-   Int4 total_size; /**< total size of the BlastSeqLoc array below (FIXME: same as # of contexts, or of queries?) */
+   Int4 total_size; /**< Total size of the BlastSeqLoc array below. Inside the
+                       engine equal to number of contexts in the BlastQueryInfo
+                       structure. For lower case mask in a translated search,
+                       total size is at first equal to number of query 
+                       sequences, but then expanded to number of contexts
+                       (total number of translated frames), i.e. 6 times number
+                       of queries. */
    BlastSeqLoc** seqloc_array; /**< array of mask locations. */
 } BlastMaskLoc;
 
@@ -143,20 +178,46 @@ typedef struct BLAST_SequenceBlk {
                                     lcase_mask */
 } BLAST_SequenceBlk;
 
+/** The context related information
+ */
+typedef struct BlastContextInfo {
+    Int4 query_offset;      /**< Offset of this query, strand or frame in the
+                               concatenated super-query. */
+    Int4 query_length;      /**< Length of this query, strand or frame */
+    Int8 eff_searchsp;      /**< Effective search space for this context. */
+    Int4 length_adjustment; /**< Length adjustment for boundary conditions */
+    Int4 query_index;       /**< Index of query (same for all frames) */
+    Int1 frame;             /**< Frame number (-1, -2, -3, 0, 1, 2, or 3) */
+} BlastContextInfo;
+
+/** Information about a single pattern occurence in the query. */
+typedef struct SPHIPatternInfo {
+    Int4 offset;  /**< Starting offset of this pattern occurrence. */
+    Int4 length;  /**< Length of this pattern occurrence. */
+} SPHIPatternInfo;
+
+/** In PHI BLAST, structure containing information about all pattern 
+ * occurrences in query.
+ */
+typedef struct SPHIQueryInfo {
+    Int4 num_patterns;  /**< Number of pattern occurrences in query. */
+    SPHIPatternInfo *occurrences; /**< Array of pattern occurrence information
+                                        structures. */
+    Int4 allocated_size; /**< Allocated size of the occurrences array. */
+    double probability; /**< Probability of the pattern */
+} SPHIQueryInfo;
+
 /** The query related information 
  */
 typedef struct BlastQueryInfo {
-   Int4 first_context; /**< Index of the first element of the context array */
-   Int4 last_context;  /**< Index of the last element of the context array */
-   int num_queries;   /**< Number of query sequences */
-   Int4* context_offsets; /**< Offsets of the individual queries in the
-                               concatenated super-query */
-   Int4* length_adjustments; /**< Length adjustments for boundary conditions */
-   Int8* eff_searchsp_array; /**< Array of effective search spaces for
-                                  multiple queries. Dimension = number of 
-                                  query sequences. */
-   Uint4 max_length; /**< Length of the longest among the concatenated 
-                        queries */
+    Int4 first_context;  /**< Index of the first element of the context array */
+    Int4 last_context;   /**< Index of the last element of the context array */
+    int num_queries;     /**< Number of query sequences */
+    BlastContextInfo * contexts; /**< Information per context */
+    Uint4 max_length;    /**< Length of the longest among the concatenated
+                            queries */
+    SPHIQueryInfo* pattern_info; /**< Counts of PHI BLAST pattern
+                                      occurrences, used in PHI BLAST only. */
 } BlastQueryInfo;
 
 

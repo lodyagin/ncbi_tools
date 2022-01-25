@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.h,v 1.17 2004/09/13 12:39:50 madden Exp $
+/* $Id: mb_lookup.h,v 1.24 2005/03/31 16:16:54 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,9 +28,8 @@
  */
 
 /** @file mb_lookup.h
- * Functions responsible for the creation of a lookup table
- * @todo FIXME: shouldn't file description read megablast lookup table? ; use
- * doxygen comments
+ * Declarations of functions and structures for 
+ * creating and scanning megablast lookup tables
  */
 
 
@@ -44,11 +43,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** The fraction of sites that must have at least one hit to not use 
- * PV_ARRAY. 
- */
-#define PV_ARRAY_FACTOR 0.5
 
 /** Mask to determine whether a residue is an ambiguity. */
 #define NUC_MASK 0xfc
@@ -294,9 +288,9 @@ extern "C" {
 typedef struct BlastMBLookupTable {
    Int4 hashsize;       /**< = 2^(8*width) */ 
    Int4 mask;           /**< hashsize - 1 */
-   Int2 compressed_wordsize;/**< Number of bytes in intersection between 
+   Int4 compressed_wordsize;/**< Number of bytes in intersection between 
                                consecutive words */
-   Int2 word_length;      /**< The length of the initial word without the 
+   Int4 word_length;      /**< The length of the initial word without the 
                              extra part */
    Boolean discontiguous; /**< Are discontiguous words used? */
    Uint1 template_length; /**< Length of the discontiguous word template */
@@ -305,7 +299,8 @@ typedef struct BlastMBLookupTable {
    Uint1 second_template_type; /**< Type of the second discontiguous word 
                                   template */
    Int4 scan_step;     /**< Step size for scanning the database */
-   Boolean full_byte_scan; 
+   Boolean full_byte_scan; /**< In discontiguous case: is scanning done by full
+                              bytes or at each sequence base (2 bits)? */
    Int4* hashtable;   /**< Array of positions              */
    Int4* hashtable2;  /**< Array of positions for second template */
    Int4* next_pos;    /**< Extra positions stored here     */
@@ -317,6 +312,9 @@ typedef struct BlastMBLookupTable {
                           the backbone */
    Int4 longest_chain; /**< Largest number of query positions for a given 
                           word */
+   Boolean variable_wordsize; /**< if TRUE then only full bytes are compared as initial words. */
+   Boolean ag_scanning_mode;  /**< Using AG scanning mode (or stride) if TRUE, so that 
+                               not every base is checked.  */
 } BlastMBLookupTable;
 
 /**
@@ -370,15 +368,15 @@ typedef enum {
  * @param lookup Pointer to the (wrapper to) lookup table [in]
  * @param subject The (compressed) sequence to be scanned for words [in]
  * @param start_offset The offset into the sequence in actual coordinates [in]
- * @param q_offsets Array of query positions where words are found [out]
- * @param s_offsets Array of subject positions where words are found [out]
+ * @param offset_pairs Array of query and subject positions where words are 
+ *                     found [out]
  * @param max_hits The allocated size of the above arrays - how many offsets 
  *        can be returned [in]
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 MB_ScanSubject(const LookupTableWrap* lookup,
        const BLAST_SequenceBlk* subject, Int4 start_offset,
-       Uint4* q_offsets, Uint4* s_offsets, Int4 max_hits,
+       BlastOffsetPair* NCBI_RESTRICT offset_pairs, Int4 max_hits,
        Int4* end_offset);
 
 /** Scan the compressed subject sequence, returning all word hits, looking up 
@@ -387,15 +385,15 @@ Int4 MB_ScanSubject(const LookupTableWrap* lookup,
  * @param lookup Pointer to the (wrapper to) lookup table [in]
  * @param subject The (compressed) sequence to be scanned for words [in]
  * @param start_offset The offset into the sequence in actual coordinates [in]
- * @param q_offsets Array of query positions where words are found [out]
- * @param s_offsets Array of subject positions where words are found [out]
+ * @param offset_pairs Array of query and subject positions where words are 
+ *                     found [out]
  * @param max_hits The allocated size of the above arrays - how many offsets 
  *        can be returned [in]
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
        const BLAST_SequenceBlk* subject, Int4 start_offset, 
-       Uint4* q_offsets, Uint4* s_offsets, Int4 max_hits,     
+       BlastOffsetPair* NCBI_RESTRICT offset_pairs, Int4 max_hits,     
        Int4* end_offset);
 
 /** Scan the compressed subject sequence, returning all word hits, using the 
@@ -404,15 +402,15 @@ Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
  * @param lookup Pointer to the (wrapper to) lookup table [in]
  * @param subject The (compressed) sequence to be scanned for words [in]
  * @param start_offset The offset into the sequence in actual coordinates [in]
- * @param q_offsets Array of query positions where words are found [out]
- * @param s_offsets Array of subject positions where words are found [out]
+ * @param offset_pairs Array of query and subject positions where words are 
+ *                     found [out]
  * @param max_hits The allocated size of the above arrays - how many offsets 
  *        can be returned [in]
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup,
        const BLAST_SequenceBlk* subject, Int4 start_offset,
-       Uint4* q_offsets, Uint4* s_offsets, Int4 max_hits,
+       BlastOffsetPair* NCBI_RESTRICT offset_pairs, Int4 max_hits,
        Int4* end_offset); 
 
 #ifdef __cplusplus

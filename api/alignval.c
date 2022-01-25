@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.43 $
+* $Revision: 6.45 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -49,7 +49,7 @@
 #include <sequtil.h> 
 #include <sqnutils.h>
 #include <satutil.h>
-
+#include <salsap.h>
 #include <txalign.h>
 #include <salpacc.h>
 #include <alignval.h>
@@ -484,23 +484,6 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
 }
 
  
-/******************************************************************
-******************************************************************/ 
-static SeqAlignPtr LIBCALL is_salp_in_sap (SeqAnnotPtr sap, Uint1 choice)
-{
-  SeqAlignPtr      salp = NULL;
-
-  if (sap != NULL) {
-     for (; sap!= NULL; sap=sap->next) {
-        if (sap->type == choice) {
-           salp = (SeqAlignPtr) sap->data;
-           return salp;
-        }
-     }   
-  }
-  return NULL;
-}
-
 /******************************************************************
 return the number of seqid
 ******************************************************************/ 
@@ -1920,7 +1903,10 @@ static Boolean ValidateSeqAlignFunc (SeqAlignPtr salp, Boolean find_remote_bsp)
   ValidateStrandinSeqAlign (salp);
        
   /*validate Fasta like*/
-  Is_Fasta_Seqalign (salp);
+  if (Is_Fasta_Seqalign (salp))
+  {
+  	error = TRUE;
+  }
       
   /*validate segment gap*/
   Segment_Gap_In_SeqAlign (salp);

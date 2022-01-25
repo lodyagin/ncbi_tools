@@ -178,6 +178,12 @@ This sequence has a circular topology, but it is not marked as complete.
 $^   BadHTGSeq, 49
 High throughput genomic sequences without gaps should have quality score graphs.
 
+$^   GapInProtein, 50
+Gap symbols found in this protein Bioseq.
+
+$^   BadProteinStart, 51
+A gap symbols was found at the start of this protein Bioseq.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -292,6 +298,19 @@ The lower-level ones are redundant, and should be removed.
 $^   TransgenicProblem, 28
 A BioSource descriptor with /transgenic set must be accompanied by a BioSource
 feature on the nucleotide record.
+
+$^   TaxonomyLookupProblem, 29
+A BioSource descriptor or feature has flags returned by taxonomy lookup that
+are either inconsistent with the data or require a taxonomy consult.
+
+$^   MultipleTitles, 30
+There are multiple title descriptors in the same Bioseq or BioseqSet chain.
+
+$^   RefGeneTrackingOnNonRefSeq, 31
+The RefGeneTracking user object should only be in RefSeq records.
+
+$^   BioSourceInconsistency, 32
+There is an internal inconsistency with specific fields in the BioSource.
 
 $$ GENERIC, 3
 
@@ -482,7 +501,7 @@ This qualifier is not legal for this feature.
 $^ MissingQualOnImpFeat, 26
 An essential qualifier for this feature is missing.
 
-$^ PsuedoCdsHasProduct, 27
+$^ PseudoCdsHasProduct, 27
 A coding region flagged as pseudo has a protein product.  There should be no
 protein product bioseq on a pseudo CDS.
 
@@ -714,6 +733,48 @@ match the prefix of the general ID of the CDS or mRNA product Bioseq.
 $^   MrnaTransFail, 82
 A fundamental error occurred in software while attempting to transcribe this
 messenger RNA. It is either a software problem or sever data corruption.
+
+$^ PseudoCdsViaGeneHasProduct, 83
+A coding region overlapped by a pseudo gene has a protein product.  There
+should be no protein product bioseq on a pseudo CDS.
+
+$^ MissingGeneXref, 84
+This feature has multiple overlapping genes of the same length, but no
+xref to determine which one should be used for the /gene qualifier.
+
+$^ FeatureCitationProblem, 85
+This feature has a citation to a publication that needs to be repaired.
+
+$^ NestedSeqLocMix, 86
+A location should not have nested SEQLOC_MIX structures.
+
+$^ WrongQualOnFeature, 87
+This qualifier is not legal for this feature.
+
+$^ MissingQualOnFeature, 88
+An essential qualifier for this feature is missing.
+
+$^ CodonQualifierUsed, 89
+The codon qualifier should be replaced by individual transl_except code breaks,
+after checking to make sure the proper genetic code is being used.
+
+$^ UnknownFeatureQual, 90
+A feature has an unrecognized qualifier.
+
+$^ BadCharInAuthorName, 91
+An author name has illegal characters.
+
+$^ PolyATail, 92
+The mRNA feature has polyA tail added to make the mRNA sequence.
+
+$^ ProteinNameEndsInBracket, 93
+The protein name ends with a right square bracket, and may have been
+copied from another GenPept record, where the organism name is
+appended to the definition line and placed inside brackets.
+
+$^ CDSwithMultipleMRNAs, 94
+The CDS feature has more than one overlapping mRNA with the proper intervals and
+no other identification assigning it to a different coding region.
 
 $$ SEQ_ALIGN, 6
 

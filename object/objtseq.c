@@ -475,6 +475,7 @@ NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp)
 		    case SEQID_TPG:
 		    case SEQID_TPE:
 		    case SEQID_TPD:
+		    case SEQID_GPIPE:
 				SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, 250);
 				tsp->accver = StringSave(buf);
 				break;
@@ -525,7 +526,7 @@ NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp)
 	seq = MemNew(bsp->length + 1);
 	if (seq != NULL) {
 		tsp->sequence = seq;
-		SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &seq, SaveTseqSequence);
+		SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &seq, SaveTseqSequence);
 	}
 
 	return tsp;
@@ -546,7 +547,7 @@ static void LIBCALLBACK TSeqStreamProc (CharPtr sequence, Pointer userdata)
 static Boolean LIBCALL StreamTSeq (Pointer object, AsnIoPtr aip)
 
 {
-  SeqPortStream ((BioseqPtr) object, STREAM_EXPAND_GAPS, (Pointer) aip, TSeqStreamProc);
+  SeqPortStream ((BioseqPtr) object, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) aip, TSeqStreamProc);
   return TRUE;
 }
 
@@ -586,6 +587,7 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 		    case SEQID_TPG:
 		    case SEQID_TPE:
 		    case SEQID_TPD:
+		    case SEQID_GPIPE:
 				SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, 250);
 				tsp->accver = StringSave(buf);
 				break;
@@ -637,7 +639,7 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 	seq = MemNew(bsp->length + 1);
 	if (seq != NULL) {
 		tsp->sequence = seq;
-		SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &seq, SaveTseqSequence);
+		SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &seq, SaveTseqSequence);
 	}
 	*/
 

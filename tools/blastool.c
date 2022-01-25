@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.275 2004/08/31 17:07:14 dondosha Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.280 2005/02/15 21:10:47 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,23 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.275 $
+* $Revision: 6.280 $
 * $Log: blastool.c,v $
+* Revision 6.280  2005/02/15 21:10:47  dondosha
+* Set X-dropoff for the traceback in MegaBlastPrintAlignInfo to final X-dropoff parameter
+*
+* Revision 6.279  2004/12/09 16:21:21  camacho
+* Do not do the traceback for non-Smith-Waterman blastpgp runs [by Mike Gertz]
+*
+* Revision 6.278  2004/11/19 13:22:05  madden
+* Remove no_check_score completely (from Mike Gertz)
+*
+* Revision 6.277  2004/11/17 13:03:56  madden
+* Always set no_score_check to TRUE
+*
+* Revision 6.276  2004/11/01 20:43:15  camacho
+* + BlastErrorToString
+*
 * Revision 6.275  2004/08/31 17:07:14  dondosha
 * For PRINT_SEQUENCES option in tabular output, always show query on forward strand; reverse complement subject is necessary
 *
@@ -1216,7 +1231,6 @@ ValNodePtr BlastErrorChainDestroy(ValNodePtr vnp)
 */
 
 void LIBCALL BlastErrorPrint(ValNodePtr error_return)
-
 {
 	BlastErrorMsgPtr error_msg;
 
@@ -1248,6 +1262,65 @@ void LIBCALL BlastErrorPrint(ValNodePtr error_return)
 	}
 	return;
 	
+}
+
+CharPtr LIBCALL BlastErrorToString(ValNodePtr error_return)
+{
+	BlastErrorMsgPtr error_msg;
+    ValNodePtr tmp = NULL;
+    Uint4 length = 0;
+    CharPtr retval = NULL;
+
+	if ( !error_return ) {
+		return NULL;
+    }
+
+    /* First, determine the length of the error messages */
+    for (tmp = error_return; tmp; tmp = tmp->next) {
+        error_msg = (BlastErrorMsgPtr) tmp->data.ptrvalue;
+        length += StringLen(error_msg->msg);
+        switch (error_msg->level) {
+        case 0: length += 4; break;     /* INFO */
+        case 1: length += 7; break;     /* WARNING */
+        case 2: length += 5; break;     /* ERROR */
+        case 3: length += 5; break;     /* FATAL */
+        default: break;
+        }
+        length += 2;        /* for space and ':' */
+        length += 2;        /* for newline/NULL byte */
+    }
+
+    retval = (CharPtr) Malloc(sizeof(Char)*length);
+    if ( !retval ) {
+        return NULL;
+    }
+    *retval = NULLB;
+
+    for (tmp = error_return; tmp; tmp = tmp->next) {
+        Char buffer[BUFFER_LENGTH] = { NULLB };
+        error_msg = (BlastErrorMsgPtr) tmp->data.ptrvalue;
+
+		switch (error_msg->level)
+		{
+        case 0:
+            sprintf(buffer, "%s: %s\n", "INFO", error_msg->msg);
+            break;
+        case 1:
+            sprintf(buffer, "%s: %s\n", "WARNING", error_msg->msg);
+            break;
+        case 2:
+            sprintf(buffer, "%s: %s\n", "ERROR", error_msg->msg);
+            break;
+        case 3:
+            sprintf(buffer, "%s: %s\n", "FATAL", error_msg->msg);
+            break;
+        default:
+            ErrPostEx(SEV_WARNING, 0, 0, "Unknown BLAST error level");
+            break;
+		}
+        StringNCat(retval, buffer, length);
+	}
+	return retval;
 }
 
 void LIBCALL BlastErrorPrintExtra(ValNodePtr error_return, Boolean errpostex, FILE* fp)
@@ -1441,7 +1514,6 @@ BLASTOptionNewEx(CharPtr progname, Boolean gapped, Boolean is_megablast)
                 options->gap_x_dropoff_final  = GAP_X_DROPOFF_FINAL_NUCL;
                 options->gap_trigger  = 25.0;
                 options->strand_option  = BLAST_BOTH_STRAND;
-                options->no_check_score  = FALSE;
                 if (gapped)
                    options->do_sum_stats = FALSE;
                 else
@@ -1465,7 +1537,6 @@ BLASTOptionNewEx(CharPtr progname, Boolean gapped, Boolean is_megablast)
 		options->reward  = 0;
 		options->gap_decay_rate = 0.5;
 		options->gap_prob = 0.5;
-		options->no_check_score  = TRUE;
 
 		options->gap_open  = GAP_OPEN_PROT;
 		options->gap_extend  = GAP_EXTN_PROT;
@@ -5442,6 +5513,8 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
          FloatHi searchsp_eff;
          Int4 max_offset, max_start = MAX_DBSEQ_LEN / 2, start_shift;
 
+         /* Set the X-dropoff to the final X dropoff parameter. */
+         gap_align->x_parameter = search->pbp->gap_x_dropoff_final;
          gap_align->query = query_seq;
          gap_align->query_length = query_length;
          gap_align->subject = subject_seq;
@@ -6209,9 +6282,10 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
    {
       result_struct = search->result_struct;
       hitlist_count = result_struct->hitlist_count;
-      
-      if (!options || !(options->smith_waterman)) {
-         
+
+      if (!options || !(options->smith_waterman ||
+                        options->tweak_parameters)) {
+
          for (index=0; index<hitlist_count; index++) {
             seqalign = BlastGetGapAlgnTbckWithReaddb(search, index, FALSE);
             result_struct->results[index]->seqalign = seqalign;

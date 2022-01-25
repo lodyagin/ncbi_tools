@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -132,6 +132,7 @@ NLM_EXTERN void PropagateFeatDialog (IteM i);
 
 extern ValNodePtr JK_NTPattern (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint1 mol_type);
 extern ValNodePtr JK_NTPattern2 (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint2 entityID);
+extern ValNodePtr JK_NTPattern2Ex (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint2 entityID, Uint1 pick_frame);
 
 
 #ifdef __cplusplus

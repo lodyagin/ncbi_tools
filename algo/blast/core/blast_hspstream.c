@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.c,v 1.3 2004/06/07 17:06:49 dondosha Exp $
+/*  $Id: blast_hspstream.c,v 1.5 2005/02/10 17:06:03 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,8 +31,10 @@
  * Definition of ADT to save and retrieve lists of HSPs in the BLAST engine.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hspstream.c,v 1.3 2004/06/07 17:06:49 dondosha Exp $";
+    "$Id: blast_hspstream.c,v 1.5 2005/02/10 17:06:03 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_hspstream.h>
 #include <algo/blast/core/blast_def.h>      /* needed for sfree */
@@ -120,7 +122,7 @@ const int kBlastHSPStream_Eof = 1;
  * upon creation of the implementation of the BlastHSPStream interface 
  * @param hsp_stream The BlastHSPStream object [in]
  * @param name Name of the method to invoke on hsp_stream [in]
- * @param arg Arbitrary argument passed to the method name [in]
+ * @param hsp_list HSP list to work with [in] [out]
  * @return kBlastHSPStream_Error on NULL hsp_stream or NULL method pointer 
  * (i.e.: unimplemented or uninitialized method on the BlastHSPStream 
  * interface) or return value of the implementation.

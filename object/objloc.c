@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,12 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.10  2005/04/26 21:33:00  kans
+* added SEQID_GPIPE
+*
+* Revision 6.9  2005/03/10 17:18:43  kans
+* added SeqLocCopy as a convenience function in ncbiobj library
+*
 * Revision 6.8  2004/05/12 20:41:56  kans
 * set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
 *
@@ -281,7 +287,7 @@ NLM_EXTERN Boolean LIBCALL SeqLocAsnLoad (void)
 *      except integers, in data.intvalue
 *   choice:
 *   0 = not set
-    1 = local Object-id ,      -- local use
+    1 = local Object-id ,        -- local use
     2 = gibbsq INTEGER ,         -- Geninfo backbone seqid
     3 = gibbmt INTEGER ,         -- Geninfo backbone moltype
     4 = giim Giimport-id ,       -- Geninfo import id
@@ -290,15 +296,16 @@ NLM_EXTERN Boolean LIBCALL SeqLocAsnLoad (void)
     7 = pir Textseq-id ,
     8 = swissprot Textseq-id ,
     9 = patent Patent-seq-id ,
-    10 = other Textseq-id ,       -- catch all
-    11 = general Dbtag }          -- for other databases
-    12 = gi  INTEGER          -- GenInfo Integrated Database
-    13 = ddbj Textseq-id    -- ddbj
-	14 = prf Textseq-id ,         -- PRF SEQDB
+    10 = other Textseq-id ,      -- catch all
+    11 = general Dbtag }         -- for other databases
+    12 = gi  INTEGER             -- GenInfo Integrated Database
+    13 = ddbj Textseq-id         -- ddbj
+	14 = prf Textseq-id ,        -- PRF SEQDB
 	15 = pdb PDB-seq-id          -- PDB sequence
-    16 = tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
-    17 = tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
-    18 = tpd Textseq-id }         -- Third Party Annot/Seq DDBJ
+    16 = tpg Textseq-id ,        -- Third Party Annot/Seq Genbank
+    17 = tpe Textseq-id ,        -- Third Party Annot/Seq EMBL
+    18 = tpd Textseq-id ,        -- Third Party Annot/Seq DDBJ
+    19 = gpipe Textseq-id        -- Internal NCBI genome pipeline processing ID }
 *
 *****************************************************************************/
 /*****************************************************************************
@@ -333,9 +340,10 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdFree (SeqIdPtr anp)
         case SEQID_OTHER:     /* other */
         case SEQID_DDBJ:
 		case SEQID_PRF:
-	case SEQID_TPG:
-	case SEQID_TPE:
-	case SEQID_TPD:
+    	case SEQID_TPG:
+	    case SEQID_TPE:
+	    case SEQID_TPD:
+        case SEQID_GPIPE:
             TextSeqIdFree((TextSeqIdPtr)pnt);
             break;
         case SEQID_PATENT:      /* patent seq id */
@@ -461,6 +469,10 @@ NLM_EXTERN Boolean LIBCALL SeqIdAsnWrite (SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr
             break;
         case SEQID_TPD:      /* tpd   */
             writetype = SEQ_ID_tpd;
+            func = (AsnWriteFunc) TextSeqIdAsnWrite;
+            break;
+        case SEQID_GPIPE:
+            writetype = SEQ_ID_gpipe;
             func = (AsnWriteFunc) TextSeqIdAsnWrite;
             break;
     }
@@ -608,6 +620,11 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         choice = SEQID_TPD;
         func = (AsnReadFunc) TextSeqIdAsnRead;
     }
+    else if (atp == SEQ_ID_gpipe)
+    {
+        choice = SEQID_GPIPE;
+        func = (AsnReadFunc) TextSeqIdAsnRead;
+    }
     else
         goto erret;
 
@@ -686,6 +703,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
 		case SEQID_TPG:
 		case SEQID_TPE:
 		case SEQID_TPD:
+        case SEQID_GPIPE:
 			at = (TextSeqIdPtr)oldid->data.ptrvalue;
             bt = TextSeqIdNew();
 			if (bt == NULL) return NULL;
@@ -1512,6 +1530,23 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocFree (SeqLocPtr anp)
 	ObjMgrDelete(OBJ_SEQLOC, (Pointer)anp);
 
 	return (SeqLocPtr)MemFree(anp);
+}
+
+/*****************************************************************************
+*
+*   SeqLocCopy(anp)
+*       Convenience function to duplicate SeqLoc
+*
+*****************************************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL SeqLocCopy (SeqLocPtr anp)
+
+{
+    if (anp == NULL)
+        return anp;
+    
+    return (SeqLocPtr) AsnIoMemCopy ((Pointer) anp,
+                                     (AsnReadFunc) SeqLocAsnRead,
+                                     (AsnWriteFunc) SeqLocAsnWrite);
 }
 
 /*****************************************************************************

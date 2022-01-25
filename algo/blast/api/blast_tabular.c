@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.13 2004/10/18 16:37:14 dondosha Exp $
+/* $Id: blast_tabular.c,v 1.27 2005/04/19 13:56:48 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,23 +21,14 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
+*  Author: Ilya Dondoshansky
 * ===========================================================================*/
 
-/*****************************************************************************
+/** @file blast_tabular.c
+ * On-the-fly tabular formatting of BLAST results
+ */
 
-File name: blast_tabular.c
-
-Author: Ilya Dondoshansky
-
-Contents: On-the-fly tabular formatting of BLAST results
-
-Detailed Contents: 
-
-******************************************************************************
- * $Revision: 1.13 $
- * */
-
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.13 2004/10/18 16:37:14 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.27 2005/04/19 13:56:48 kans Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -46,70 +37,120 @@ static char const rcsid[] = "$Id: blast_tabular.c,v 1.13 2004/10/18 16:37:14 don
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seqalign.h>
+#include <algo/blast/core/blast_seqsrc_impl.h>
 
 #include <txalign.h>
 
-BlastTabularFormatData* 
-Blast_TabularFormatDataInit(EBlastProgramType program, 
-   BlastHSPStream* hsp_stream, BlastSeqSrc* seq_src, 
-   BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
-   const BlastScoringOptions* score_options, BlastScoreBlk* sbp,
-   const BlastEffectiveLengthsOptions* eff_len_options,
-   const BlastExtensionOptions* ext_options,
-   const BlastHitSavingOptions* hit_options,
-   const BlastDatabaseOptions* db_options, 
-   SeqLoc* query_slp, FILE* outfp)
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
+BlastTabularFormatData*
+BlastTabularFormatDataNew(FILE* outfp, SeqLoc* query_seqloc,
+                          EBlastTabularFormatOptions format_option)
 {
    BlastTabularFormatData* tf_data = 
       (BlastTabularFormatData*) calloc(1, sizeof(BlastTabularFormatData));
-   tf_data->perform_traceback =
-      (score_options->gapped_calculation && 
-       ext_options->eTbackExt != eSkipTbck);
-
-   tf_data->program = program;
-   tf_data->hsp_stream = hsp_stream;
-   tf_data->query = query;
-   tf_data->gen_code_string = db_options->gen_code_string;
-   tf_data->query_slp = query_slp;
    tf_data->outfp = outfp;
-   /* Sequence source must be copied, to guarantee multi-thread safety. */
-   tf_data->seq_src = BlastSeqSrcCopy(seq_src);
-   /* Effective lengths must be duplicated in query info structure, because
-      they might be changing in the preliminary search. */
-   tf_data->query_info = BlastQueryInfoDup(query_info);
-
-   /* If traceback will have to be performed before tabular output, 
-      do the preparation for it here. */
-   if (tf_data->perform_traceback) {
-      BLAST_GapAlignSetUp(program, seq_src, 
-         score_options, eff_len_options, ext_options, hit_options,
-         tf_data->query_info, sbp, &tf_data->score_params, 
-         &tf_data->ext_params, &tf_data->hit_params, 
-         &tf_data->eff_len_params, &tf_data->gap_align);
-   }
-
-   tf_data->format_options = eBlastTabularDefault;
+   tf_data->query_slp = query_seqloc;
+   tf_data->format_options = format_option;
 
    return tf_data;
 }
 
-void BlastTabularFormatDataFree(BlastTabularFormatData* tf_data)
+Int2
+Blast_TabularFormatDataSetUp(BlastTabularFormatData* tf_data,
+                             EBlastProgramType program, 
+                             BlastHSPStream* hsp_stream, 
+                             const BlastSeqSrc* seq_src, 
+                             BLAST_SequenceBlk* query, 
+                             BlastQueryInfo* query_info,
+                             const BlastScoringOptions* score_options, 
+                             BlastScoreBlk* sbp,
+                             const BlastEffectiveLengthsOptions* eff_len_options,
+                             const BlastExtensionOptions* ext_options,
+                             const BlastHitSavingOptions* hit_options,
+                             const BlastDatabaseOptions* db_options)
 {
-   /* Free only the structures that have been initialized internally */
-   tf_data->query_info = BlastQueryInfoFree(tf_data->query_info);
-   tf_data->score_params = BlastScoringParametersFree(tf_data->score_params);
-   tf_data->ext_params = BlastExtensionParametersFree(tf_data->ext_params);
-   tf_data->hit_params = BlastHitSavingParametersFree(tf_data->hit_params);
-   tf_data->eff_len_params = 
-      BlastEffectiveLengthsParametersFree(tf_data->eff_len_params);
-   tf_data->gap_align = BLAST_GapAlignStructFree(tf_data->gap_align);
-   tf_data->seq_src = BlastSeqSrcFree(tf_data->seq_src);
-   sfree(tf_data);
+    Int2 status = 0;
+
+    ASSERT(score_options && db_options);
+
+    tf_data->perform_traceback =
+        (score_options->gapped_calculation && 
+         ext_options->ePrelimGapExt != eGreedyWithTracebackExt);
+    
+    tf_data->program = program;
+    tf_data->hsp_stream = hsp_stream;
+    tf_data->query = query;
+    tf_data->gen_code_string = db_options->gen_code_string;
+    /* Sequence source must be copied, to guarantee multi-thread safety. */
+    tf_data->seq_src = BlastSeqSrcCopy(seq_src);
+    /* Effective lengths must be duplicated in query info structure, because
+       they might be changing in the preliminary search. */
+    tf_data->query_info = BlastQueryInfoDup(query_info);
+    
+    /* If traceback will have to be performed before tabular output, 
+       do the preparation for it here. */
+    if (tf_data->perform_traceback) {
+        status = 
+            BLAST_GapAlignSetUp(program, seq_src, score_options, 
+                                eff_len_options, ext_options, hit_options, 
+                                tf_data->query_info, sbp, &tf_data->score_params,
+                                &tf_data->ext_params, &tf_data->hit_params, 
+                                &tf_data->eff_len_params, &tf_data->gap_align);
+        tf_data->gap_align->gap_x_dropoff = tf_data->ext_params->gap_x_dropoff_final;
+    }
+    return status;
 }
 
+void
+BlastTabularFormatDataClean(BlastTabularFormatData* tf_data)
+{
+    if (!tf_data)
+        return;
+
+    /* Free the structures that have been allocated internally */
+    tf_data->query_info = BlastQueryInfoFree(tf_data->query_info);
+    tf_data->score_params = BlastScoringParametersFree(tf_data->score_params);
+    tf_data->ext_params = BlastExtensionParametersFree(tf_data->ext_params);
+    tf_data->hit_params = BlastHitSavingParametersFree(tf_data->hit_params);
+    tf_data->eff_len_params = 
+        BlastEffectiveLengthsParametersFree(tf_data->eff_len_params);
+    tf_data->gap_align = BLAST_GapAlignStructFree(tf_data->gap_align);
+    tf_data->seq_src = BlastSeqSrcFree(tf_data->seq_src);
+}
+
+BlastTabularFormatData* 
+BlastTabularFormatDataFree(BlastTabularFormatData* tf_data)
+{
+    if (!tf_data)
+        return NULL;
+
+    /* Free the internal structures, if they haven't been freed earlier. */
+    BlastTabularFormatDataClean(tf_data);
+
+    sfree(tf_data);
+    return tf_data;
+}
+
+/** Creates nucleotide sequence buffers corresponding to a local alignment.
+ * Used in tabular output with "print sequences" option.
+ * @param program Type of BLAST program [in]
+ * @param hsp Internal HSP structure [in]
+ * @param query_seq Query sequence in blastna encoding. [in]
+ * @param subject_seq Subject sequence in blastna encoding [in]
+ * @param query_length Length of query sequence [in]
+ * @param subject_length Length of subject sequence [in]
+ * @param query_buffer Preallocated buffer for text query sequence [in] [out]
+ * @param subject_buffer Preallocated buffer for text subject sequence [in] [out]
+ */
 static void 
-FillNuclSequenceBuffers(Uint1* query_seq, Uint1* subject_seq, BlastHSP* hsp,
-            char* query_buffer, char* subject_buffer)
+FillNuclSequenceBuffers(EBlastProgramType program, BlastHSP* hsp, 
+                        Uint1* query_seq, Uint1* subject_seq, Int4 query_length, 
+                        Int4 subject_length, char* query_buffer, 
+                        char* subject_buffer)
 {
    Int4 index, index1;
    const char* blastna_to_iupacna     = "ACGTRYMKWSBDHVN-";
@@ -124,16 +165,22 @@ FillNuclSequenceBuffers(Uint1* query_seq, Uint1* subject_seq, BlastHSP* hsp,
    Int4 start1, start2;
    char* buffer;
    Boolean reverse;
+   Boolean translate1, translate2;
+
+   translate1 = (program == eBlastTypeBlastx || program == eBlastTypeTblastx ||
+                 program == eBlastTypeRpsTblastn);
+   translate2 = (program == eBlastTypeTblastn || program == eBlastTypeTblastx);
 
    reverse = (hsp->query.frame != hsp->subject.frame);
 
    /* Calculate number of segments. */
-   esp = hsp->gap_info->esp;
+   esp = hsp->gap_info;
    for (numseg = 0; esp; esp = esp->next, ++numseg);
    /* Find the starts and lengths of each segment. */
    start1 = hsp->query.offset;
    start2 = hsp->subject.offset;
-   GapCollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg, 
+   GapCollectDataForSeqalign(hsp, hsp->gap_info, numseg, query_length,
+                             subject_length, translate1, translate2,
                              &starts, &lengths, NULL, &start1, &start2);
 
    offset = 0;
@@ -195,12 +242,9 @@ FillNuclSequenceBuffers(Uint1* query_seq, Uint1* subject_seq, BlastHSP* hsp,
    sfree(lengths);
 }
 
+/** Maximal buffer length to use for a Seq-id in tabular output. */
 #define SEQIDLEN_MAX 255
 
-/* This function might serve as a starting point for a callback function 
- * that prints results before the traceback stage, e.g. the on-the-fly 
- * tabular output, a la the -D3 option of the old megablast.
- */
 void* Blast_TabularFormatThread(void* data) 
 {
    BlastTabularFormatData* tf_data;
@@ -224,14 +268,16 @@ void* Blast_TabularFormatThread(void* data)
    char* eval_buff_ptr = NULL;
    BlastHSP* hsp;
    SeqId** query_id_array = NULL;
-   SeqId* subject_id;
+   SeqId* subject_id = NULL;
    Int4 align_length = 0;
    Int4 num_gaps = 0, num_gap_opens = 0, num_mismatches = 0;
    double perc_ident = 0;
-   GetSeqArg seq_arg;
+   BlastSeqSrcGetSeqArg seq_arg;
    Boolean one_seq_update_params;
    ReadDBFILE* rdfp = NULL;
    char* descr;
+   Int4 num_queries;
+   Int4* query_lengths;
  
    tf_data = (BlastTabularFormatData*) data;
    if (!tf_data || !tf_data->query_slp || !tf_data->hsp_stream ||
@@ -256,19 +302,24 @@ void* Blast_TabularFormatThread(void* data)
       seq_arg.encoding = Blast_TracebackGetEncoding(program);
    }
 
-   query_id_array = 
-      (SeqId**) malloc(ValNodeLen(tf_data->query_slp)*sizeof(SeqId*));
+   num_queries = ValNodeLen(tf_data->query_slp);
+   query_id_array = (SeqId**) malloc(num_queries*sizeof(SeqId*));
+   query_lengths = (Int4*) malloc(num_queries*sizeof(Int4));
 
    for (index = 0, slp = tf_data->query_slp; slp; ++index, slp = slp->next) {
       query_id_array[index] = SeqLocId(slp);
+      query_lengths[index] = SeqLocLen(slp);
    }
 
-   one_seq_update_params = (BLASTSeqSrcGetTotLen(seq_src) == 0);
+   one_seq_update_params = (BlastSeqSrcGetTotLen(seq_src) == 0);
 
-   rdfp = (ReadDBFILE*) GetDataStructure(seq_src);
+   /* The line below shouldn't have to access the BlastSeqSrc's data structure
+    * FIXME*/
+   rdfp = (ReadDBFILE*) _BlastSeqSrcImpl_GetDataStructure(seq_src);
 
    while (BlastHSPStreamRead(tf_data->hsp_stream, &hsp_list) 
           != kBlastHSPStream_Eof) {
+       Int4 subject_length; 
       if (!hsp_list) {
          /* This should not happen, but just in case */
          continue;
@@ -277,7 +328,7 @@ void* Blast_TabularFormatThread(void* data)
       /* Perform traceback if necessary */
       if (tf_data->perform_traceback) {
          seq_arg.oid = hsp_list->oid;
-         if (BLASTSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
+         if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
              continue;
          
          if (one_seq_update_params) {
@@ -288,10 +339,10 @@ void* Blast_TabularFormatThread(void* data)
                              seq_arg.seq->length, 
                              score_params->options, 
                              query_info, gap_align->sbp, 
-                             ext_params, hit_params, NULL, 
+                             hit_params, NULL, 
                              eff_len_params)) != 0) {
                hsp_list = Blast_HSPListFree(hsp_list);
-               BLASTSeqSrcRetSequence(seq_src, (void*)&seq_arg);
+               BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
                continue;
             }
          }
@@ -302,7 +353,7 @@ void* Blast_TabularFormatThread(void* data)
          /* Return subject sequence unless it is needed for the sequence
             printout */
          if (tf_data->format_options != eBlastTabularAddSequences)
-            BLASTSeqSrcRetSequence(seq_src, (void*)&seq_arg);
+            BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
          /* Recalculate the bit scores, since they might have changed. */
          Blast_HSPListGetBitScores(hsp_list, 
             score_params->options->gapped_calculation, gap_align->sbp);
@@ -330,6 +381,8 @@ void* Blast_TabularFormatThread(void* data)
          if (subject_buffer != NULL)
             sfree(descr);
       }
+      if (subject_id)
+         subject_id = SeqIdSetFree(subject_id);
 
       /* Last chance to assign anything - take the first token from the 
          description. */
@@ -339,12 +392,14 @@ void* Blast_TabularFormatThread(void* data)
       /* Retrieve the subject sequence if it is needed and this has not 
 	 already been done. */ 
       if (tf_data->format_options == eBlastTabularAddSequences && 
-	  !tf_data->perform_traceback) {
-	 seq_arg.oid = hsp_list->oid;
-	 seq_arg.encoding = BLASTNA_ENCODING;
-	 if (BLASTSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
-	    continue;
+          !tf_data->perform_traceback) {
+          seq_arg.oid = hsp_list->oid;
+          seq_arg.encoding = BLASTNA_ENCODING;
+          if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
+              continue;
       }
+
+      subject_length = BlastSeqSrcGetSeqLen(seq_src, (void*)&hsp_list->oid);
 
       for (index = 0; index < hsp_list->hspcnt; ++index) {
          char* query_buffer_ptr=NULL;
@@ -364,7 +419,9 @@ void* Blast_TabularFormatThread(void* data)
          perc_ident = ((double)hsp->num_ident)/align_length * 100;
          num_mismatches = align_length - hsp->num_ident - num_gaps;
          
-         Blast_HSPGetAdjustedOffsets(hsp, &q_start, &q_end, &s_start, &s_end);
+         Blast_HSPGetAdjustedOffsets(program, hsp, query_lengths[query_index],
+                                     subject_length, &q_start, &q_end, 
+                                     &s_start, &s_end);
          
          query_buffer_ptr = query_buffer;
          if (strstr(query_buffer, "lcl|") == query_buffer)
@@ -376,14 +433,17 @@ void* Blast_TabularFormatThread(void* data)
             Uint1* query_seq = NULL;
             Int4 context;
             context = hsp->context - (hsp->context % 2);
-            query_seq = 
-               &query->sequence[query_info->context_offsets[context]];
-
+            query_seq =
+                & query->sequence[query_info->contexts[context].query_offset];
+            
             query_seq_buffer = MemNew((align_length+1));
             subject_seq_buffer = MemNew((align_length+1));
 
-            FillNuclSequenceBuffers(query_seq, seq_arg.seq->sequence, hsp, 
-                                    query_seq_buffer, subject_seq_buffer);
+            FillNuclSequenceBuffers(program, hsp, query_seq, 
+                                    seq_arg.seq->sequence, 
+                                    query_lengths[query_index], 
+                                    seq_arg.seq->length, query_seq_buffer, 
+                                    subject_seq_buffer);
             
             fprintf(tf_data->outfp, 
                     "%s\t%s\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\t%s\n",
@@ -406,7 +466,7 @@ void* Blast_TabularFormatThread(void* data)
       }
 
       /* Return the subject sequence */
-      BLASTSeqSrcRetSequence(seq_src, (void*)&seq_arg);
+      BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
       fflush(tf_data->outfp);
       sfree(subject_buffer);
       hsp_list = Blast_HSPListFree(hsp_list);
@@ -414,9 +474,10 @@ void* Blast_TabularFormatThread(void* data)
 
    BlastSequenceBlkFree(seq_arg.seq);
 
+   sfree(query_lengths);
    sfree(query_id_array);
 
-   /* Deallocate the formatting thread data structure */
-   BlastTabularFormatDataFree(tf_data);
    return NULL;
 }
+/* @} */
+

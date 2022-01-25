@@ -1,4 +1,4 @@
-/* $Id: blast_dust.c,v 1.27 2004/09/21 20:42:28 coulouri Exp $
+/* $Id: blast_dust.c,v 1.32 2005/03/17 13:42:31 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,13 +35,22 @@
  * from ASN.1 spec.
  */
 
-static char const rcsid[] = 
-    "$Id: blast_dust.c,v 1.27 2004/09/21 20:42:28 coulouri Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] =
+    "$Id: blast_dust.c,v 1.32 2005/03/17 13:42:31 madden Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_dust.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_filter.h>
+
+
+/** Declared in blast_def.h as extern const. */
+const int kDustLevel = 20;
+const int kDustWindow = 64;
+const int kDustLinker = 1;
+
 
 /* local, file scope, structures and variables */
 
@@ -51,8 +60,11 @@ typedef struct DREGION { /* endpoints */
 } DREGION;
 
 typedef struct DCURLOC { /* localcurrents */
-	Int4	curlevel, curstart, curend;
+	Int4	cursum, curstart, curend;
+	Int2	curlength;
 } DCURLOC;
+
+Uint1 *SUM_THRESHOLD;
 
 /* local functions */
 
@@ -74,15 +86,22 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
    Int4	nreg;
    
    /* defaults are more-or-less in keeping with original dust */
-   if (level < 2 || level > 64) level = 20;
-   if (windowsize < 8 || windowsize > 64) windowsize = 64;
-   if (linker < 1 || linker > 32) linker = 1;
+   if (level < 2 || level > 64) level = kDustLevel;
+   if (windowsize < 8 || windowsize > 64) windowsize = kDustWindow;
+   if (linker < 1 || linker > 32) linker = kDustLinker;
    
    nreg = 0;
    seq = (Uint1*) calloc(1, windowsize);			/* triplets */
    if (!seq) {
       return -1;
    }
+   SUM_THRESHOLD = (Uint1 *) calloc(windowsize, sizeof(Uint1));  
+   if (!SUM_THRESHOLD) {
+      return -1;
+   }
+   SUM_THRESHOLD[0] = 1;
+   for (i=1; i < windowsize; i++)
+       SUM_THRESHOLD[i] = (level * i)/10;
 
    if (length < windowsize) windowsize = length;
 
@@ -91,7 +110,7 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
       len = i-1;
       wo (len, sequence, 0, &cloc, seq, 1, level);
       
-      if (cloc.curlevel > level) {
+      if (cloc.cursum*10 > level*cloc.curlength) {
          if (nreg &&
              regold->to + linker >= cloc.curstart+start &&
              regold->from <= cloc.curend + start + linker) {
@@ -108,6 +127,7 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
             reg = (DREGION*) calloc(1, sizeof(DREGION));
             if (!reg) {
                sfree(seq);
+               sfree(SUM_THRESHOLD);
                return -1;
             }
             reg->next = NULL;
@@ -125,7 +145,7 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
       else /* remaining portion of sequence is less than windowsize */
           wo (len, sequence, i, &cloc, seq, 3, level);
       
-      if (cloc.curlevel > level) {
+      if (cloc.cursum*10 > level*cloc.curlength) {
          if (nreg &&
              regold->to + linker >= cloc.curstart+i+start &&
              regold->from <= cloc.curend + i + start + linker) {
@@ -142,6 +162,7 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
             reg = (DREGION*) calloc(1, sizeof(DREGION));
             if (!reg) {
                sfree(seq);
+               sfree(SUM_THRESHOLD);
                return -1;
             }
             reg->next = NULL;
@@ -151,6 +172,7 @@ static Int4 dust_segs (Uint1* sequence, Int4 length, Int4 start,
       }				/* end 'if' high score	*/
    }					/* end for */
    sfree (seq);
+   sfree(SUM_THRESHOLD);
    return nreg;
 }
 
@@ -160,7 +182,8 @@ static void wo (Int4 len, Uint1* seq_start, Int4 iseg, DCURLOC* cloc,
 	Int4 smaller_window_start, mask_window_end;
         Boolean SINGLE_TRIPLET;
 
-	cloc->curlevel = 0;
+	cloc->cursum = 0;
+	cloc->curlength = 1;
 	cloc->curstart = 0;
 	cloc->curend = 0;
 
@@ -188,7 +211,7 @@ static void wo (Int4 len, Uint1* seq_start, Int4 iseg, DCURLOC* cloc,
         /* consider smaller windows only if anything interesting 
            found for starting position  and smaller windows have potential of
            being at higher level */
-	if ((cloc->curlevel > level) && (!SINGLE_TRIPLET)) {
+        if ((cloc->cursum*10 > level*cloc->curlength) && (!SINGLE_TRIPLET)) {
 		mask_window_end = cloc->curend-1;
 		smaller_window_start = 1;
                 while ((smaller_window_start < mask_window_end) &&
@@ -207,7 +230,6 @@ static Boolean wo1 (Int4 len, Uint1* seq, Int4 iwo, DCURLOC* cloc)
 {
    Uint4 sum;
 	Int4 loop;
-	Int4 newlevel;
 
 	Int2* countsptr;
 	Int2 counts[4*4*4];
@@ -216,7 +238,6 @@ static Boolean wo1 (Int4 len, Uint1* seq, Int4 iwo, DCURLOC* cloc)
 	memset (counts, 0, sizeof (counts));
 /* zero everything */
 	sum = 0;
-	newlevel = 0;
 
 /* dust loop -- specific for triplets	*/
 	for (loop = 0; loop < len; loop++)
@@ -226,14 +247,16 @@ static Boolean wo1 (Int4 len, Uint1* seq, Int4 iwo, DCURLOC* cloc)
 		{
 			sum += (Uint4)(*countsptr);
 
-			newlevel = 10 * sum / loop;
-
-			if (cloc->curlevel < newlevel)
+		    if (sum >= SUM_THRESHOLD[loop])
+		    {
+			if (cloc->cursum*loop < sum*cloc->curlength)
 			{
-				cloc->curlevel = newlevel;
+				cloc->cursum = sum;
+				cloc->curlength = loop;
 				cloc->curstart = iwo;
 				cloc->curend = loop + 2; /* triplets */
 			}
+		    }
 		}
 		else
 			triplet_count++;

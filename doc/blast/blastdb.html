@@ -37,15 +37,15 @@ The preformatted databases offer the following advantages:
 
 Preformatted databases must be downloaded in binary mode and inflated 
 with gzip or other decompress tools. The BLAST database files can then 
-be extracted out of the resulting tar file using &ldquo;tar&rdquo; program on Unix/Linux 
+be extracted out of the resulting tar file using tar program on Unix/Linux 
 or WinZip and StuffIt Expander on Windows and Macintosh platforms, 
 respectively.  
 
 Large databases are formatted in multiple 1 Gigabytes volumes, which 
-are named using the &ldquo;database.##.tar.gz&rdquo; convention.  All relevant volumes
+are named using the database.##.tar.gz convention.  All relevant volumes
 are required. An alias file is provided so that the database can be called
 using the alias name without the extension (.nal or .pal). For example, 
-to call est database, simply use &ldquo;&ndash;d est&rdquo; option in the commandline 
+to call est database, simply use "-d est" option in the commandline 
 (without the quotes). 
 
 Certain databases are subsets of a larger parental database. For those 
@@ -170,7 +170,8 @@ human_genomic.gz*       human RefSeq (NC_######) chromosome records
                           with gap adjusted concatenated NT_ contigs 
 
 igSeqNt.gz              human and mouse immunoglobulin nucleotide 
-                          sequences
+                        sequences.  See http://www.ncbi.nlm.nih.gov/igblast/
+                        for details.
 igSeqProt.gz            human and mouse immunoglobulin protein 
                           sequences
 
@@ -252,7 +253,7 @@ nr record are separated by control-A characters invisible to most
 programs. In the example below both entries gi|1469284 and gi|1477453 
 have the same sequence, in every respect:
 
-&gt;gi|3023276|sp|Q57293|AFUC_ACTPL   Ferric transport ATP-binding protein afuC 
+>gi|3023276|sp|Q57293|AFUC_ACTPL   Ferric transport ATP-binding protein afuC 
 ^Agi|1469284|gb|AAB05030.1|   afuC gene product ^Agi|1477453|gb|AAB17216.1|   
 afuC [Actinobacillus pleuropneumoniae]
 MNNDFLVLKNITKSFGKATVIDNLDLVIKRGTMVTLLGPSGCGKTTVLRLVAGLENPTSGQIFIDGEDVT
@@ -310,8 +311,8 @@ distributed in the standalone BLAST package for more details.
 FASTA database files need to be formatted with formatdb before they can be 
 used in local blast search.  For those from NCBI, the following formatdb 
 are recommended:
-        formatdb &ndash;i input_db &ndash;p F &ndash;o T  for nucleotide
-        formatdb &ndash;i input_db &ndash;p T &ndash;o T  for protein
+        formatdb -i input_db -p F -o T  for nucleotide
+        formatdb -i input_db -p T -o T  for protein
 
 The -A option introduced in 2.2.3 is now built into the formatdb program 
 and thus removed from the list of configurable options since 2.2.8. This 

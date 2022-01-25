@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.71 2004/09/21 13:59:31 dondosha Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.73 2005/01/24 21:17:36 camacho Exp $";
 
-/* $Id: rpsutil.c,v 6.71 2004/09/21 13:59:31 dondosha Exp $
+/* $Id: rpsutil.c,v 6.73 2005/01/24 21:17:36 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,20 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.71 2004/09/21 13:59:31 dondosha 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.71 $
+* $Revision: 6.73 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.73  2005/01/24 21:17:36  camacho
+* 1. Changed implementation of RPSBlastResultHspScoreCmp to have the same
+*    tie-breakers as score_compare_hsps
+* 2. Renamed RPSBlastResultHspScoreCmp to BLASTResultHspScoreCmp
+*
+* Revision 6.72  2004/11/08 18:18:01  madden
+* Changes contributed from Howard Feldman (Samuel Lunenfeld Research Institute) to remove global variables
+*
 * Revision 6.71  2004/09/21 13:59:31  dondosha
 * Use query length in protein scale for search space calculation for RPS tblastn; do not multiply search space by extra 6
 *
@@ -291,17 +299,10 @@ typedef struct _RPS_MTDataStruct {
     VoidPtr print_user_data;
 } RPS_MTDataStruct, PNTR RPS_MTDataStructPtr;
 
-static Boolean search_is_done=FALSE;
 static Int4 glb_sequence_count=0;
-
-void ResetRPS(void)
-{
-   search_is_done = FALSE;
-}
 
 int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 	       Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr subject_bsp);
-
 
 
 static void RPSFreeLookup(RPSLookupPtr lookup)
@@ -1266,7 +1267,7 @@ static int RPSSearchPartialPrepare( BlastSearchBlkPtr search,
   HeapSort(search->result_struct->results[0]->hsp_array, 
 	   search->result_struct->results[0]->hspcnt, 
 	   sizeof(BLASTResultHsp), 
-	   RPSResultHspScoreCmp);
+	   BLASTResultHspScoreCmp);
     
   subject_length = SeqLocLen(slp);
 
@@ -1427,7 +1428,7 @@ static SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinf
 
     HeapSort(result_struct->results[0]->hsp_array, 
              result_struct->results[0]->hspcnt, 
-             sizeof(BLASTResultHsp), RPSResultHspScoreCmp);
+             sizeof(BLASTResultHsp), BLASTResultHspScoreCmp);
     
     subject_length = SeqLocLen(slp);
 
@@ -1683,7 +1684,7 @@ RPS_FIX(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 
     HeapSort(search->result_struct->results[0]->hsp_array, 
              search->result_struct->results[0]->hspcnt, 
-             sizeof(BLASTResultHsp), RPSResultHspScoreCmp);
+             sizeof(BLASTResultHsp), BLASTResultHspScoreCmp);
     
     subject_length = SeqLocLen(slp);
 
@@ -2472,6 +2473,8 @@ BioseqPtr createFakeProtein(void)
 static VoidPtr RPSEngineThread(VoidPtr data)
 {
 
+    Boolean search_is_done = FALSE;
+    Boolean *retval;
     RPS_MTDataStructPtr mtdata;
     SeqAlignPtr seqalign;
     ValNodePtr other_returns;
@@ -2651,7 +2654,9 @@ static VoidPtr RPSEngineThread(VoidPtr data)
 
     RPSInfoDetach(rpsinfo_local);
 
-    return NULL;
+    retval=(Boolean *)MemNew(sizeof(Boolean));
+    *retval = search_is_done;
+    return retval;
 }
 
 Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop, 
@@ -2661,6 +2666,7 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
                          VoidPtr print_user_data)
 {
     
+    Boolean search_is_done=FALSE;
     RPS_MTDataStructPtr mtdata;
     RPSInfoPtr rpsinfo_main;
     Int4 i;
@@ -2686,11 +2692,11 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
     mtdata->print_user_data = print_user_data;
 
     while(!search_is_done) {
+	VoidPtr status=NULL;
     
         if(rpsbop->num_threads > 1 && NlmThreadsAvailable()) {
 
 	    TNlmThread* thread_array = (TNlmThread PNTR) MemNew((rpsbop->num_threads)*sizeof(TNlmThread));
-	    VoidPtr status=NULL;
 
             for(i = 0; i < rpsbop->num_threads; i++) {
                 if((thread_array[i]=NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata)) == NULL_thread) {
@@ -2703,9 +2709,20 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
             	NlmThreadJoin(thread_array[i], &status);
             }
             thread_array = MemFree(thread_array);
+            if (status) {
+                 if (*((Boolean *)status)==TRUE) {
+                            search_is_done = TRUE;
+                            status = MemFree(status);
+                 }
+             }
+
 
         } else {
-            RPSEngineThread((VoidPtr) mtdata);
+            status = RPSEngineThread((VoidPtr) mtdata);
+            if (status) {
+               search_is_done = *((Boolean *)status);
+               status = MemFree(status);
+            }
         }
         
         ObjMgrFreeCache(0);

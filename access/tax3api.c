@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.12 $
+* $Revision: 1.13 $
 *
 * File Description: 
 *
@@ -653,11 +653,7 @@ NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn)
     biop = (BioSourcePtr) biop_vnp->data.ptrvalue;
     swap_org = biop->org;
     response_org = response_vnp->data.ptrvalue;
-    if (response_org == NULL)
-    {
-      Message (MSG_POST, "No tax server information for %s", biop->org->taxname);
-    }
-    else
+    if (response_org != NULL)
     {
       biop->org = response_org;
       response_vnp->data.ptrvalue = NULL;

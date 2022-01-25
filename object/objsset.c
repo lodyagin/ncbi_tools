@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.9  2005/04/26 21:33:00  kans
+* added SEQID_GPIPE
+*
 * Revision 6.8  2004/05/12 20:41:57  kans
 * set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
 *
@@ -168,6 +171,7 @@ static void FindBestBioseqLabel (SeqEntryPtr sep, Pointer data, Int4 index, Int2
 			case SEQID_TPG:
 			case SEQID_TPE:
 			case SEQID_TPD:
+		    case SEQID_GPIPE:
 				has_gb = TRUE;
 			case SEQID_PIR:
 			case SEQID_SWISSPROT:

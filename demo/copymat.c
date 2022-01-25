@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.39 2004/09/15 17:40:21 papadopo Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.41 2005/02/14 14:11:55 camacho Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,12 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.41  2005/02/14 14:11:55  camacho
+Changes to use SBlastScoreMatrix
+
+Revision 6.40  2005/01/10 13:48:20  madden
+Change to BLAST_FillInitialWordOptions prototype
+
 Revision 6.39  2004/09/15 17:40:21  papadopo
 change use of ListNode to use of BlastSeqLoc for lookup table creation
 
@@ -529,6 +535,36 @@ Boolean RPSDumpLookupTable(BlastLookupTable *lookup, FILE *fd)
     
     return TRUE;
 }
+
+/* Copied verbatim from algo/blast/core/blast_traceback.c */
+void RPSPsiMatrixAttach(BlastScoreBlk* sbp, Int4** rps_pssm)
+{
+    ASSERT(sbp);
+
+    /* Create a dummy PSI-BLAST matrix structure, only to then free it as we'd
+     * like to piggy back on the already created structure to use the gapped
+     * alignment routines */
+    sbp->psi_matrix = (SPsiBlastScoreMatrix*) 
+        calloc(1, sizeof(SPsiBlastScoreMatrix));
+    ASSERT(sbp->psi_matrix);
+
+    sbp->psi_matrix->pssm = (SBlastScoreMatrix*)
+        calloc(1, sizeof(SBlastScoreMatrix));
+    ASSERT(sbp->psi_matrix->pssm);
+
+    /* The only data field that RPS-BLAST really needs */
+    sbp->psi_matrix->pssm->data = rps_pssm;
+}
+
+void RPSPsiMatrixDetach(BlastScoreBlk* sbp)
+{
+    ASSERT(sbp);
+    sbp->psi_matrix->pssm->data = NULL;
+    sfree(sbp->psi_matrix->pssm);
+    sfree(sbp->psi_matrix);
+}
+
+
 /* -- SSH --
    Create lookup table for the large sequence, that represented
    by all collection of PSSM matrixes and dump this table to disk
@@ -570,10 +606,10 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     }
 
     sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, 1);
-    sbp->posMatrix = posMatrix;
+    RPSPsiMatrixAttach(sbp, posMatrix);
     LookupTableOptionsNew(eBlastTypeBlastp, &lookup_options);
     BLAST_FillLookupTableOptions(lookup_options, eBlastTypeBlastp, FALSE, 
-	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE, FALSE, TRUE);  /* add last arg for psi-blast?? */
+	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE, TRUE);  /* add last arg for psi-blast?? */
 
 
     BlastSeqLocNew(&lookup_segment, 0, all_length);
@@ -581,7 +617,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     /* Need query for psi-blast??  where to put the PSSM? */
     LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr, NULL);
    
-    sbp->posMatrix = NULL;
+    RPSPsiMatrixDetach(sbp);
     sbp = BlastScoreBlkFree(sbp);
     lookup_options = LookupTableOptionsFree(lookup_options);
     lookup_segment = BlastSeqLocFree(lookup_segment);

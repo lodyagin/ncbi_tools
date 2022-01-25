@@ -1,4 +1,4 @@
-/*  $Id: blast_setup.h,v 1.44 2004/08/11 11:58:43 ivanov Exp $
+/*  $Id: blast_setup.h,v 1.51 2005/04/27 19:49:01 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,10 +35,11 @@
 #define __BLAST_SETUP__
 
 #include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/pattern.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,7 +74,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
         BlastScoreBlk* *sbpp, 
         Blast_Message* *blast_message);
 
-/** BlastScoreBlkGappedFill, fills the ScoreBlkPtr for a gapped search.  
+/** Blast_ScoreBlkKbpGappedCalc, fills the ScoreBlkPtr for a gapped search.  
  *      Should be moved to blast_stat.c in the future.
  * @param sbp Contains fields to be set, should not be NULL. [out]
  * @param scoring_options Scoring_options [in]
@@ -82,7 +83,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
  *
 */
 NCBI_XBLAST_EXPORT
-Int2 BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
+Int2 Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
     const BlastScoringOptions * scoring_options,
     EBlastProgramType program, BlastQueryInfo * query_info);
 
@@ -141,7 +142,6 @@ Int2 BLAST_GapAlignSetUp(EBlastProgramType program_number,
  * @param query_info The query information structure. Effective lengths
  *                   are recalculated here. [in] [out]
  * @param sbp Scoring statistical parameters [in]
- * @param ext_params Parameters for gapped extensions. [in]
  * @param hit_params Parameters for saving hits. Score cutoffs are recalculated
  *                   here [in] [out]
  * @param word_params Parameters for ungapped extension. Score cutoffs are
@@ -155,20 +155,20 @@ Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
     const BlastScoringOptions* scoring_options,
     BlastQueryInfo* query_info, 
     BlastScoreBlk* sbp, 
-    const BlastExtensionParameters* ext_params,
     BlastHitSavingParameters* hit_params,
     BlastInitialWordParameters* word_params,
     BlastEffectiveLengthsParameters* eff_len_params);
 
-/** BlastScoreBlkMatrixInit, fills score matrix parameters in the ScoreBlkPtr
- *      Should be moved to blast_stat.c in the future.
+/** Initializes the substitution matrix in the BlastScoreBlk according to the
+ * scoring options specified.
+ * @todo Should be moved to blast_stat.c in the future.
  * @param program_number Used to set fields on sbp [in]
  * @param scoring_options Scoring_options [in]
  * @param sbp Contains fields to be set, should not be NULL. [out]
  *
 */
 NCBI_XBLAST_EXPORT
-Int2 BlastScoreBlkMatrixInit(EBlastProgramType program_number, 
+Int2 Blast_ScoreBlkMatrixInit(EBlastProgramType program_number, 
     const BlastScoringOptions* scoring_options,
     BlastScoreBlk* sbp);
 
@@ -177,20 +177,58 @@ Int2 BlastScoreBlkMatrixInit(EBlastProgramType program_number,
  * @param query_info Additional query information [in]
  * @param scoring_options Scoring options [in]
  * @param program_number BLAST program type [in]
- * @param phi_align Is this a PHI BLAST search? [in]
  * @param sbpp Initialized score block [out]
  * @param scale_factor Matrix scaling factor for this search [in]
  * @param blast_message Error message [out]
  */
 NCBI_XBLAST_EXPORT
-Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
+Int2 BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk, 
     BlastQueryInfo* query_info, 
     const BlastScoringOptions* scoring_options, 
     EBlastProgramType program_number, 
-    Boolean phi_align, 
     BlastScoreBlk* *sbpp, 
     double scale_factor, 
     Blast_Message* *blast_message);
+
+
+/** Adjusts the mask locations coordinates to a sequence interval. Removes those
+ * mask locations that do not intersect the interval. Can do this either for all 
+ * queries or only for the first one.
+ * @param mask Structure containing a mask location. [in] [out]
+ * @param from Starting offset of a sequence interval [in]
+ * @param to Ending offset of a sequence interval [in]
+ */
+void
+BlastSeqLoc_RestrictToInterval(BlastSeqLoc* *mask, Int4 from, Int4 to);
+
+
+/** In a PHI BLAST search, adds pattern information to the BlastQueryInfo 
+ * structure.
+ * @param program Type of PHI BLAST program [in]
+ * @param pattern_blk Auxiliary pattern items structure [in]
+ * @param query Query sequence [in]
+ * @param lookup_segments Locations on query sequence to find pattern on [in]
+ * @param query_info Query information structure, where pattern occurrences
+ *                   will be saved. [in][out]
+ * @return Status, 0 on success, -1 on error.
+ */
+Int2 
+Blast_SetPHIPatternInfo(EBlastProgramType program, 
+                        SPHIPatternSearchBlk* pattern_blk, 
+                        BLAST_SequenceBlk* query, BlastSeqLoc* lookup_segments,
+                        BlastQueryInfo* query_info);
+
+/** Calculates pattern space, which is used instead of search space in PHI BLAST
+ * e-value calculations. Pattern space is equal to the product of the number of 
+ * effective occurrences of pattern in query, and the number of pattern 
+ * occurrences in database.
+ * @param query_info The query information structure [in][out]
+ * @param diagnostics The diagnostics structure containing the pattern count in 
+ *                    database [in]
+ */
+void
+PHIPatternSpaceCalc(BlastQueryInfo* query_info, 
+                    const BlastDiagnostics* diagnostics);
 
 #ifdef __cplusplus
 }
@@ -200,6 +238,28 @@ Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
 /*
  *
 * $Log: blast_setup.h,v $
+* Revision 1.51  2005/04/27 19:49:01  dondosha
+* Added Blast_SetPHIPatternInfo function for PHI BLAST query pattern occurrences calculation, and
+* PHIPatternSpaceCalc for calculation of pattern space after all database occurrences are found.
+*
+* Revision 1.50  2004/12/29 13:32:43  madden
+* Replaced include of blast_options.h with include of blast_parameters.h
+*
+* Revision 1.49  2004/12/09 21:16:26  camacho
+* Removed inaccurate comment for Blast_ScoreBlkMatrixInit
+*
+* Revision 1.48  2004/12/09 15:21:32  dondosha
+* Renamed some functions dealing with BlastScoreBlk and Blast_KarlinBlk structures
+*
+* Revision 1.47  2004/11/30 16:54:43  dondosha
+* Added BlastSeqLoc_RestrictToInterval
+*
+* Revision 1.46  2004/11/23 21:46:05  camacho
+* kbp_ideal field of BlastScoreBlk is initialized unconditionally
+*
+* Revision 1.45  2004/11/02 18:18:20  madden
+* Remove BlastExtensionParameters from BLAST_OneSubjectUpdateParameters prototype
+*
 * Revision 1.44  2004/08/11 11:58:43  ivanov
 * Added more export specifiers NCBI_XBLAST_EXPORT
 *
@@ -255,7 +315,7 @@ Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
 * Moved BLAST_CalcEffLengths from blast_engine.h; Added BLAST_GapAlignSetUp to set up only gapped alignment related structures
 *
 * Revision 1.27  2004/02/10 20:05:14  dondosha
-* Made BlastScoreBlkGappedFill external again: needed in unit test
+* Made Blast_ScoreBlkKbpGappedCalc external again: needed in unit test
 *
 * Revision 1.26  2003/12/03 16:31:46  dondosha
 * Renamed BlastMask to BlastMaskLoc, BlastResults to BlastHSPResults, to avoid name conflicts
@@ -270,7 +330,7 @@ Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
 * Added algo/blast/core path to all #included headers
 *
 * Revision 1.22  2003/08/01 22:33:32  dondosha
-* Made BlastScoreBlkGappedFill static
+* Made Blast_ScoreBlkKbpGappedCalc static
 *
 * Revision 1.21  2003/08/01 17:20:39  dondosha
 * Renamed BLAST_ScoreBlk to BlastScoreBlk
@@ -381,7 +441,7 @@ Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
 * Create lookup table for proteins
 *
 * Revision 1.8  2002/12/20 20:55:19  dondosha
-* BlastScoreBlkGappedFill made external (probably temporarily)
+* Blast_ScoreBlkKbpGappedCalc made external (probably temporarily)
 *
 * Revision 1.7  2002/12/19 21:22:39  madden
 * Add BlastSetUp_Mega prototype

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -356,6 +356,7 @@ static void VSeqMgrSaveProc (ChoicE c)
 	if (! GatherDataForProc(&ompc, TRUE))  /* anything selected? */
 	{
 		ErrShow();
+		Message (MSG_ERROR, "Nothing selected");
 		return;
 	}
 
@@ -2367,6 +2368,20 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID));
 			vsmgp->currline--;
 			break;
+		case OBJ_ANNOTDESC:
+			if (vsmgp->level[OBJ_ANNOTDESC] < 2)
+				buflen = 40;
+			else
+				buflen = 80;
+			seg = CreateSegment(vsmgp->segs[gcp->indent], (Uint2)(gcp->thistype), 0);
+			vsmgp->segs[i] = seg;
+			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
+			width = StringWidth(buf) + (2 * vsmp->charw);
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
+			AddAttribute(seg, COLOR_ATT , CYAN_COLOR, 0, 0,0,0);
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			vsmgp->currline--;
+			break;
 		case OBJ_SEQGRAPH:
 			if (vsmgp->level[OBJ_SEQGRAPH] < 2)
 				buflen = 40;
@@ -2560,6 +2575,7 @@ SegmenT VSMEntityDraw (ObjMgrDataPtr omdp, VSMPictPtr vsmpp, VSeqMgrPtr vsmp)
 					vsg.level[OBJ_BIOSEQ] = 2;
 					vsg.level[OBJ_SEQDESC] = 1;
 					vsg.level[OBJ_SEQANNOT] = 1;
+					vsg.level[OBJ_ANNOTDESC] = 1;
 					vsg.level[OBJ_SEQFEAT] = 1;
 					vsg.level[OBJ_SEQGRAPH] = 1;
 					vsg.level[OBJ_SEQALIGN] = 1;
@@ -2569,6 +2585,7 @@ SegmenT VSMEntityDraw (ObjMgrDataPtr omdp, VSMPictPtr vsmpp, VSeqMgrPtr vsmp)
 					vsg.level[OBJ_BIOSEQ] = 3;
 					vsg.level[OBJ_SEQDESC] = 2;
 					vsg.level[OBJ_SEQANNOT] = 2;
+					vsg.level[OBJ_ANNOTDESC] = 2;
 					vsg.level[OBJ_SEQFEAT] = 2;
 					vsg.level[OBJ_SEQGRAPH] = 2;
 					vsg.level[OBJ_SEQALIGN] = 2;
@@ -2585,12 +2602,14 @@ SegmenT VSMEntityDraw (ObjMgrDataPtr omdp, VSMPictPtr vsmpp, VSeqMgrPtr vsmp)
 				if (expansion > 1)
 				{
 					vsg.level[OBJ_SEQANNOT] = 1;
+					vsg.level[OBJ_ANNOTDESC] = 1;
 					vsg.level[OBJ_SEQFEAT] = 1;
 					vsg.level[OBJ_SEQGRAPH] = 1;
 					vsg.level[OBJ_SEQALIGN] = 1;
 				}
 				if (expansion > 2)
 				{
+					vsg.level[OBJ_ANNOTDESC] = 2;
 					vsg.level[OBJ_SEQFEAT] = 2;
 					vsg.level[OBJ_SEQGRAPH] = 2;
 					vsg.level[OBJ_SEQALIGN] = 2;

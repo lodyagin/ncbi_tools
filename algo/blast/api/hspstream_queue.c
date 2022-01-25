@@ -1,4 +1,4 @@
-/*  $Id: hspstream_queue.c,v 1.3 2004/06/22 16:22:13 dondosha Exp $
+/*  $Id: hspstream_queue.c,v 1.8 2005/04/12 17:59:08 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,13 +32,20 @@
  * on the fly.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspstream_queue.c,v 1.3 2004/06/22 16:22:13 dondosha Exp $";
+    "$Id: hspstream_queue.c,v 1.8 2005/04/12 17:59:08 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/api/hspstream_queue.h>
 #include <ncbithr.h>
+
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
 
 /** Default hit saving stream methods */
 
@@ -133,9 +140,15 @@ BlastHSPListQueueWrite(BlastHSPStream* hsp_stream,
    BlastHSPListQueueData* stream_data = 
       (BlastHSPListQueueData*) GetData(hsp_stream);
 
-   /* If input is empty, don't do anything, but return success */
+   /* If input is Null, don't do anything, but return success */
    if (*hsp_list == NULL)
       return kBlastHSPStream_Success;
+
+    /* If input HSP list is empty, free it and return success */
+    if ((*hsp_list)->hspcnt == 0) {
+        *hsp_list = Blast_HSPListFree(*hsp_list);
+        return kBlastHSPStream_Success;
+    }    
 
    /* If stream is closed for writing, return error */
    if (stream_data->m_writingDone)
@@ -195,7 +208,7 @@ BlastHSPListQueueNew(BlastHSPStream* hsp_stream, void* args)
     return hsp_stream;
 }
 
-/** Create a new BlastHSPStream with an HSP list queue data structure. */
+/* Create a new BlastHSPStream with an HSP list queue data structure. */
 BlastHSPStream* Blast_HSPListQueueInit()
 {
     BlastHSPListQueueData* stream_data = 
@@ -210,3 +223,6 @@ BlastHSPStream* Blast_HSPListQueueInit()
 
     return BlastHSPStreamNew(&info);
 }
+
+/* @} */
+

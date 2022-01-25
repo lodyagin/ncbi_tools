@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.9 2004/10/12 15:12:35 papadopo Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.15 2005/02/22 14:17:31 camacho Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,24 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.9 2004/10/12 15:12:35 papado
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.15  2005/02/22 14:17:31  camacho
+    Fix bioseq data type
+
+    Revision 1.14  2005/02/08 17:03:12  papadopo
+    performance optimization: do not build the PSSM linked list incrementally
+
+    Revision 1.13  2005/01/10 13:48:20  madden
+    Change to BLAST_FillInitialWordOptions prototype
+
+    Revision 1.12  2004/11/23 13:56:19  camacho
+    Add quotations to matrix names in error message
+
+    Revision 1.11  2004/11/23 13:52:31  camacho
+    Add matrix names to error message when there is a mismatch
+
+    Revision 1.10  2004/11/04 20:52:31  papadopo
+    prepend 'Blast' to RPSInfo and related structures
+
     Revision 1.9  2004/10/12 15:12:35  papadopo
     1. Modify scoremat IO to comply with new scoremat spec
     2. Remove check that residue frequencies read from scoremat are <= 1.0
@@ -235,6 +253,7 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     Int4 array_size;
     Nlm_FloatHi *lambda, *K, *H;
     ValNodePtr freq_list;
+    ValNodePtr score_list;
     CharPtr matrix_name;
 
     /* pick out the underlying score matrix */
@@ -251,7 +270,7 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
 
     bsp = pssm->query->data.ptrvalue;
     if (!bsp->seq_data || !ISA_aa(bsp->mol) || 
-        bsp->seq_data_type != Seq_code_ncbieaa) {
+        bsp->seq_data_type != Seq_code_ncbistdaa) {
         return -1;
     }
 
@@ -395,23 +414,33 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     posSearch->stdFreqRatios = PSIMatrixFrequencyRatiosFree(
                                           posSearch->stdFreqRatios);
 
-    /* turn the computed PSSM into a linked list */
+    /* turn the computed PSSM into a linked list.
+       Do *not* rely on ValNodeAddInt() to append new
+       entries; build the whole list first */
 
     pssm->finalData->scalingFactor = Nlm_Nint(ScalingFactor);
+
+    score_list = NULL;
+    for (i = 0; i < seq_size * alphabet_size; i++) {
+        ValNodePtr score_list_tmp = ValNodeNew(NULL);
+        score_list_tmp->next = score_list;
+        score_list = score_list_tmp;
+    }
+    pssm->finalData->scores = score_list;
 
     if (pssm->byRow == FALSE) {
         for (i = 0; i < seq_size; i++) {
             for (j = 0; j < alphabet_size; j++) {
-                ValNodeAddInt(&pssm->finalData->scores, 0, 
-                              posSearch->posPrivateMatrix[i][j]);
+                score_list->data.intvalue = posSearch->posPrivateMatrix[i][j];
+                score_list = score_list->next;
             }
         }
     }
     else {
         for (j = 0; j < alphabet_size; j++) {
             for (i = 0; i < seq_size; i++) {
-                ValNodeAddInt(&pssm->finalData->scores, 0, 
-                              posSearch->posPrivateMatrix[i][j]);
+                score_list->data.intvalue = posSearch->posPrivateMatrix[i][j];
+                score_list = score_list->next;
             }
         }
     }
@@ -521,7 +550,7 @@ Int2 RPSUpdatePSSM(RPS_DbInfo *info,
        must be decremented to get the right byte offset
        into the file */
 
-    fseek(info->pssm_fd, sizeof(RPSProfileHeader) + 
+    fseek(info->pssm_fd, sizeof(BlastRPSProfileHeader) + 
                         (seq_index - 1) * sizeof(Int4), SEEK_SET);
     FileWrite(&info->curr_seq_offset, sizeof(Int4), 1, info->pssm_fd);
 
@@ -603,14 +632,11 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
         return 1;
     }
 
-    info->lookup_options->alphabet_size = alphabet_size;
-
     if (BLAST_FillLookupTableOptions(info->lookup_options,
                                      eBlastTypeBlastp,
                                      FALSE, /* no megablast */
                                      threshold, /* neighboring threshold */
                                      BLAST_WORDSIZE_PROT,
-                                     FALSE, /* no striding */
                                      FALSE, /* no variable words */
                                      TRUE  /* use a PSSM */
                                     ) != 0) {
@@ -791,7 +817,10 @@ Int2 RPSAddSequence(RPS_DbInfo *info,
     }
     if (StringICmp(rps_params->matrixName,
                    dump_args[underlying_matrix_arg].strvalue)) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Score matrix does not match");
+        ErrPostEx(SEV_ERROR, 0, 0, "Score matrix does not match: "
+                  "input=\"%s\" vs command-line=\"%s\"", 
+                  rps_params->matrixName,
+                  dump_args[underlying_matrix_arg].strvalue);
         return 1;
     }
 
@@ -835,7 +864,7 @@ void RPS_DbClose(RPS_DbInfo *info)
        This is the total number of letters for all RPS
        DB sequences combined */
 
-    fseek(info->pssm_fd, sizeof(RPSProfileHeader) + 
+    fseek(info->pssm_fd, sizeof(BlastRPSProfileHeader) + 
                         (info->num_seqs - 1) * sizeof(Int4), SEEK_SET);
     FileWrite(&info->curr_seq_offset, sizeof(Int4), 1, info->pssm_fd);
 
@@ -848,7 +877,7 @@ void RPS_DbClose(RPS_DbInfo *info)
         /* Change the lookup table format to match that
            of the legacy BLAST lookup table */
 
-        RPSLookupFileHeader header;
+        BlastRPSLookupFileHeader header;
         BlastLookupTable *lut = info->lookup;
         Int4 i, index; 
         Int4 cursor, old_cursor;

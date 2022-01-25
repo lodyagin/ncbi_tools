@@ -4,6 +4,9 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.41  2004/10/21 14:37:35  kans
+* gap feature has note and map qualifiers
+*
 * Revision 6.40  2004/08/19 20:56:02  kans
 * changed opt_num (SB caught this oversight)
 *
@@ -330,8 +333,8 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"gap",  1, {GBQUAL_estimated_length, -1, -1, -1, -1}, 0,
-     {-1, -1,  -1,  -1, -1,  -1, -1, -1,  -1,  -1,
+   {"gap",  1, {GBQUAL_estimated_length, -1, -1, -1, -1}, 2,
+     {GBQUAL_map, GBQUAL_note,  -1,  -1, -1,  -1, -1, -1,  -1,  -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},

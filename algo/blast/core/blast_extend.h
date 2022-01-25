@@ -1,4 +1,4 @@
-/* $Id: blast_extend.h,v 1.29 2004/08/05 20:39:18 dondosha Exp $
+/* $Id: blast_extend.h,v 1.38 2005/04/27 19:47:39 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #define __BLAST_EXTEND__
 
 #include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/lookup_wrap.h>
 #include <algo/blast/core/blast_diagnostics.h>
 
@@ -50,15 +50,14 @@ typedef struct BlastUngappedData {
    Int4 s_start; /**< Start of the ungapped alignment in subject */ 
    Int4 length;  /**< Length of the ungapped alignment */
    Int4 score;   /**< Score of the ungapped alignment */
-   Int2 frame;   /**< Needed for translated searches */
 } BlastUngappedData;
 
 /** Structure to hold the initial HSP information */
 typedef struct BlastInitHSP {
-   Int4 q_off; /**< Offset in query */
-   Int4 s_off; /**< Offset in subject */
-   BlastUngappedData* ungapped_data; /**< Pointer to a structure holding
-                                          ungapped alignment information */
+    BlastOffsetPair offsets; /**< Offsets in query and subject, or, in PHI
+                                BLAST, start and end of pattern in subject. */
+    BlastUngappedData* ungapped_data; /**< Pointer to a structure holding
+                                         ungapped alignment information */
 } BlastInitHSP;
 
 /** Structure to hold all initial HSPs for a given subject sequence */
@@ -76,13 +75,18 @@ typedef struct DiagStruct {
    Int4 diag_level; /**< To what length has this hit been extended so far? */
 } DiagStruct;
 
-/** Structure for keeping last hit information for a diagonal on a stack */
+/** Structure for keeping last hit information for a diagonal on a stack, 
+ * when eDiagUpdate method is used for initial hit extension.
+ */
 typedef struct MB_Stack {
    Int4 diag; /**< This hit's actual diagonal */
    Int4 level; /**< This hit's offset in the subject sequence */
    Int4 length; /**< To what length has this hit been extended so far? */
 } MB_Stack;
 
+/** Structure for keeping last hit information for a diagonal on a stack, when 
+ * eRight or eRightAndLeft methods are used for initial hit extension.
+ */
 typedef struct BlastnStack {
    Int4 diag; /**< This hit's actual diagonal */
    Int4 level; /**< This hit's offset in the subject sequence */
@@ -134,16 +138,17 @@ typedef struct Blast_ExtendWord {
 } Blast_ExtendWord;
 
 /** Initializes the word extension structure
- * @param is_na Is this a nucleotide-nucleotide (blastn) search? [in]
+ * @param lookup_wrap Pointer to lookup table. Allows to distinguish different 
+ *                    cases. [in]
  * @param query_length Length of the query sequence [in]
- * @param word_options Options for initial word extension [in]
+ * @param word_params Parameters for initial word extension [in]
  * @param subject_length Average length of a subject sequence, used to 
  *                       calculate average search space. [in]
  * @param ewp_ptr Pointer to the word extension structure [out]
  */
-Int2 BlastExtendWordNew(Boolean is_na, Uint4 query_length,
-   const BlastInitialWordOptions* word_options,
-   Uint4 subject_length, Blast_ExtendWord** ewp_ptr);
+Int2 BlastExtendWordNew(const LookupTableWrap* lookup_wrap, Uint4 query_length,
+                        const BlastInitialWordParameters* word_params,
+                        Uint4 subject_length, Blast_ExtendWord** ewp_ptr);
 
 /** Allocate memory for the BlastInitHitList structure */
 BlastInitHitList* BLAST_InitHitListNew(void);
@@ -165,8 +170,7 @@ BlastInitHitList* BLAST_InitHitListFree(BlastInitHitList* init_hitlist);
  * @param matrix The scoring matrix [in]
  * @param word_params Parameters for the initial word extension [in]
  * @param ewp Structure needed for initial word information maintenance [in]
- * @param q_offsets pointer to previously-allocated query offset array [in]
- * @param s_offsets pointer to previously-allocated query offset array [in]
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param max_hits size of offset arrays [in]
  * @param init_hitlist Structure to hold all hits information. Has to be 
  *        allocated up front [out]
@@ -178,29 +182,10 @@ Int2 MB_WordFinder(BLAST_SequenceBlk* subject,
 		   Int4** matrix, 
 		   const BlastInitialWordParameters* word_params,
 		   Blast_ExtendWord* ewp,
-		   Uint4* q_offsets,
-		   Uint4* s_offsets,
+                   BlastOffsetPair* offset_pairs,
 		   Int4 max_hits,
 		   BlastInitHitList* init_hitlist, 
          BlastUngappedStats* ungapped_stats);
-
-/** Perform ungapped extension of a word hit
- * @param query The query sequence [in]
- * @param subject The subject sequence [in]
- * @param matrix The scoring matrix [in]
- * @param q_off The offset of a word in query [in]
- * @param s_off The offset of a word in subject [in]
- * @param cutoff The minimal score the ungapped alignment must reach [in]
- * @param X The drop-off parameter for the ungapped extension [in]
- * @param ungapped_data The ungapped extension information [out]
- * @return TRUE if ungapped alignment score is below cutoff, indicating that 
- *         this HSP should be deleted.
- */
-Boolean
-BlastnWordUngappedExtend(BLAST_SequenceBlk* query, 
-   BLAST_SequenceBlk* subject, Int4** matrix, 
-   Int4 q_off, Int4 s_off, Int4 cutoff, Int4 X, 
-   BlastUngappedData** ungapped_data);
 
 /** Finds all initial hits for a given subject sequence, that satisfy the 
  *  wordsize condition, and pass the ungapped extension test.
@@ -212,8 +197,7 @@ BlastnWordUngappedExtend(BLAST_SequenceBlk* query,
  * @param matrix The scoring matrix [in]
  * @param word_params Parameters for the initial word extension [in]
  * @param ewp Structure needed for initial word information maintenance [in]
- * @param q_offsets pointer to previously-allocated query offset array [in]
- * @param s_offsets pointer to previously-allocated subject offset array [in]
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param max_hits size of offset arrays [in]
  * @param init_hitlist Structure to hold all hits information. Has to be 
  *        allocated up front [out]
@@ -225,8 +209,7 @@ Int2 BlastNaWordFinder(BLAST_SequenceBlk* subject,
 		       Int4** matrix,
 		       const BlastInitialWordParameters* word_params, 
 		       Blast_ExtendWord* ewp,
-		       Uint4* q_offsets,
-		       Uint4* s_offsets,
+                       BlastOffsetPair* offset_pairs,
 		       Int4 max_hits,
 		       BlastInitHitList* init_hitlist, 
              BlastUngappedStats* ungapped_stats);
@@ -242,8 +225,7 @@ Int2 BlastNaWordFinder(BLAST_SequenceBlk* subject,
  * @param matrix The scoring matrix [in]
  * @param word_params Parameters for the initial word extension [in]
  * @param ewp Structure needed for initial word information maintenance [in]
- * @param q_offsets pointer to previously-allocated query offset array [in]
- * @param s_offsets pointer to previously-allocated subject offset array [in]
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param max_hits size of offset arrays [in]
  * @param init_hitlist Structure to hold all hits information. Has to be 
  *        allocated up front [out]
@@ -255,8 +237,7 @@ Int2 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject,
 			  Int4** matrix,
 			  const BlastInitialWordParameters* word_params, 
 			  Blast_ExtendWord* ewp,
-			  Uint4* q_offsets,
-			  Uint4* s_offsets,
+                          BlastOffsetPair* offset_pairs,
 			  Int4 max_hits,
 			  BlastInitHitList* init_hitlist, 
            BlastUngappedStats* ungapped_stats);
@@ -287,6 +268,18 @@ Blast_ExtendWord* BlastExtendWordFree(Blast_ExtendWord* ewp);
 void 
 BlastSaveInitHsp(BlastInitHitList* ungapped_hsps, Int4 q_start, Int4 s_start, 
                  Int4 q_off, Int4 s_off, Int4 len, Int4 score);
+
+/** Sort array of initial HSPs by score. 
+ * @param init_hitlist Initial hit list structure to check. [in]
+ */
+void 
+Blast_InitHitListSortByScore(BlastInitHitList* init_hitlist);
+
+/** Check if array of initial HSPs is sorted by score. 
+ * @param init_hitlist Initial hit list structure to check. [in]
+ * @return TRUE if sorted, FALSE otherwise.
+*/
+Boolean Blast_InitHitListIsSortedByScore(BlastInitHitList* init_hitlist);
 
 #ifdef __cplusplus
 }

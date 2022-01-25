@@ -98,6 +98,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_inline.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_itree.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_itree.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_kappa.c
 # End Source File
 # Begin Source File
@@ -194,13 +202,30 @@ SOURCE=..\..\..\..\..\algo\blast\core\pattern.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\pattern_priv.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\phi_extend.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\phi_gapalign.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\phi_lookup.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_parameters.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_posit.c
+# End Source File
 # End Group
+
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
@@ -346,7 +371,19 @@ SOURCE=..\..\..\..\..\algo\blast\core\phi_extend.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\phi_gapalign.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\phi_lookup.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_parameters.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_posit.h
 # End Source File
 # End Group
 # End Target

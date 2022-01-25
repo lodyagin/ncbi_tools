@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.h,v 1.8 2004/10/04 14:04:26 madden Exp $
+/* $Id: twoseq_api.h,v 1.11 2005/02/09 20:55:38 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -22,17 +22,15 @@
 * In any work or product derived from this material, proper attribution   *
 * of the author(s) as the source of the software or data would be         *
 * appreciated.                                                            *
+*                                                                         *
+* Author: Jason Papadopoulos                                              *
+*                                                                         *
 ***************************************************************************/
-/**************************************************************************
 
-  File name: twoseq_api.h
-
-  Author: Jason Papadopoulos
-
-  Contents: Functions for C toolkit applications to compare two sequences
-                using the rewritten blast engine 
-
-***************************************************************************/
+/** @file twoseq_api.h
+ * Functions for C toolkit applications to compare two sequences using the
+ * rewritten BLAST engine.
+ */ 
 
 #ifndef _TWOSEQ_API_H_
 #define _TWOSEQ_API_H_
@@ -43,6 +41,15 @@
 #include <sqnutils.h>
 #include <algo/blast/api/blast_returns.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
+/** Maximal query length, for which Blastn is used as default. Mega BLAST or
+ * discontiguous Mega BLAST are set to be default for fast or sensitive 
+ * searches, if query is longer than this cutoff.
+ */
 #define MEGABLAST_CUTOFF 10000
 
 /**
@@ -196,5 +203,7 @@ Int2 BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *options,
                          SeqLoc** filter_out,
                          Boolean* mask_at_hash,
                          Blast_SummaryReturn* *extra_returns);
+
+/* @} */
 
 #endif  /* !_TWOSEQ_API_H_ */

@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_PSI__H
 #define ALGO_BLAST_CORE___BLAST_PSI__H
 
-/* $Id: blast_psi.h,v 1.10 2004/09/17 13:08:29 camacho Exp $
+/* $Id: blast_psi.h,v 1.13 2005/04/04 22:40:35 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,7 +45,8 @@ extern "C" {
  * sequence alignment data structure
  */
 typedef struct PSIMsaCell {
-    Uint1   letter;             /**< Preferred letter at this position */
+    Uint1   letter;             /**< Preferred letter at this position, in
+                                  ncbistdaa encoding */
     Boolean is_aligned;         /**< Is this letter part of the alignment? */
 } PSIMsaCell;
 
@@ -73,6 +74,7 @@ typedef struct PSIMsa {
  * to allocate [in]
  * @return allocated PSIMsa structure or NULL if out of memory.
  */
+NCBI_XBLAST_EXPORT
 PSIMsa*
 PSIMsaNew(const PSIMsaDimensions* dimensions);
 
@@ -80,6 +82,7 @@ PSIMsaNew(const PSIMsaDimensions* dimensions);
  * @param msa multiple sequence alignment structure to deallocate [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 PSIMsa*
 PSIMsaFree(PSIMsa* msa);
 
@@ -143,6 +146,20 @@ typedef struct PSIDiagnosticsResponse {
                                              positions in the PSSM */
     Uint4 alphabet_size;                   /**< Specifies length of alphabet */
 } PSIDiagnosticsResponse;
+
+/** Allocates a PSIDiagnosticsRequest structure, setting all fields to false
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure 
+ */
+PSIDiagnosticsRequest* 
+PSIDiagnosticsRequestNew();
+
+/** Deallocates the PSIDiagnosticsRequest structure passed in
+ * @param diags_request structure to deallocate [in]
+ * @return NULL
+ */
+PSIDiagnosticsRequest* 
+PSIDiagnosticsRequestFree(PSIDiagnosticsRequest* diags_request);
 
 /** Allocates a new PSI-BLAST diagnostics structure based on which fields of
  * the PSIDiagnosticsRequest structure are TRUE. Note: this is declared

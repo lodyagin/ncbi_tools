@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_ENCODING__H
 #define ALGO_BLAST_CORE___BLAST_ENCODING__H
 
-/*  $Id: blast_encoding.h,v 1.4 2004/06/21 12:53:54 camacho Exp $
+/*  $Id: blast_encoding.h,v 1.5 2004/11/24 16:00:39 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -67,8 +67,9 @@ extern const Uint1 AMINOACID_TO_NCBISTDAA[];
 #define BLASTNA_SIZE 16     /**< Size of nucleic acid alphabet */
 #define BLASTAA_SIZE 26     /**< Size of aminoacid alphabet */
 
-/* Identifies the blastna alphabet, for use in blast only. */
-#define BLASTNA_SEQ_CODE 99
+
+#define BLASTNA_SEQ_CODE 99 /**< Identifies the blastna alphabet, for use in 
+                                blast only. */
 #define BLASTAA_SEQ_CODE 11 /**< == Seq_code_ncbistdaa */
 #define NCBI4NA_SEQ_CODE 4  /**< == Seq_code_ncbi4na */	
 
@@ -82,6 +83,9 @@ extern const Uint1 AMINOACID_TO_NCBISTDAA[];
 /*
  * ===========================================================================
  * $Log: blast_encoding.h,v $
+ * Revision 1.5  2004/11/24 16:00:39  dondosha
+ * Added and/or fixed doxygen comments
+ *
  * Revision 1.4  2004/06/21 12:53:54  camacho
  * Remove PSI_ALPHABET_SIZE as it is identical to BLASTAA_SIZE
  *

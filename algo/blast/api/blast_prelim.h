@@ -1,4 +1,4 @@
-/* $Id: blast_prelim.h,v 1.1 2004/07/06 19:56:08 dondosha Exp $
+/* $Id: blast_prelim.h,v 1.6 2005/04/06 23:27:53 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,20 +21,14 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
+*  Author: Ilya Dondoshansky
 * ===========================================================================*/
 
-/*****************************************************************************
+/** @file blast_prelim.h
+ * Preliminary stage of a BLAST search performed by one of the threads
+ * in a multi-threaded search.
+ */
 
-File name: blast_prelim.h
-
-Author: Ilya Dondoshansky
-
-Contents: Preliminary stage of a BLAST search performed by one of the threads
-          in a multi-threaded search.
-
-******************************************************************************
- * $Revision: 1.1 $
- * */
 #ifndef __BLAST_PRELIM__
 #define __BLAST_PRELIM__
 
@@ -52,25 +46,36 @@ extern "C" {
 #include <algo/blast/core/blast_hspstream.h>
 #include <algo/blast/core/blast_diagnostics.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
 /** Data structure containing all information necessary for performing 
  * preliminary stage of a BLAST search.
  */
 typedef struct BlastPrelimSearchThreadData {
-   EBlastProgramType program;
+   EBlastProgramType program; /**< BLAST program type */
    BLAST_SequenceBlk* query; /**< Query sequence */
    BlastQueryInfo* query_info; /**< Query information, including context
                                   offsets and effective lengths. */
    BlastSeqSrc* seq_src; /**< Source of the subject sequences */
-   LookupTableWrap* lut;
-   BlastScoringOptions* score_options;
-   BlastInitialWordOptions* word_options;
-   BlastExtensionOptions* ext_options;
-   BlastHitSavingOptions* hit_options;
-   BlastEffectiveLengthsOptions* eff_len_options;
-   PSIBlastOptions* psi_options;
-   BlastDatabaseOptions* db_options;
-   BlastScoreBlk* sbp;
-   BlastDiagnostics* diagnostics;
+   LookupTableWrap* lut; /**< Lookup table for finding initial seeds. */
+   const BlastScoringOptions* score_options; /**< Options for scoring
+                                                  alignments. */
+   const BlastInitialWordOptions* word_options; /**< Options for ungapped 
+                                                 extension of initial seeds. */
+   const BlastExtensionOptions* ext_options; /**< Gapped extension options. */
+   const BlastHitSavingOptions* hit_options; /**< Hit saving options. */
+   const BlastEffectiveLengthsOptions* eff_len_options; /**< Options specifying 
+                                                           effective lengths */
+   const PSIBlastOptions* psi_options; /**< Options specific to PSI BLAST. */
+   const BlastDatabaseOptions* db_options; /**< Database options - genetic 
+                                                code */
+   BlastScoreBlk* sbp; /**< Scoring block, containing Karlin-Altschul 
+                            parameters. */
+   BlastDiagnostics* diagnostics; /**< Search diagnostic data, 
+                                       e.g. hit counts. */
    BlastHSPStream* hsp_stream; /**< Source of the BLAST results */
 } BlastPrelimSearchThreadData;
 
@@ -95,11 +100,14 @@ typedef struct BlastPrelimSearchThreadData {
 BlastPrelimSearchThreadData* 
 BlastPrelimSearchThreadDataInit(EBlastProgramType program,
    BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
-   BlastSeqSrc* seq_src, LookupTableWrap* lut, 
-   BlastScoringOptions* score_options, BlastInitialWordOptions* word_options,
-   BlastExtensionOptions* ext_options, BlastHitSavingOptions* hit_options,
-   BlastEffectiveLengthsOptions* eff_len_options,
-   PSIBlastOptions* psi_options, BlastDatabaseOptions* db_options,
+   const BlastSeqSrc* seq_src, LookupTableWrap* lut, 
+   const BlastScoringOptions* score_options, 
+   const BlastInitialWordOptions* word_options,
+   const BlastExtensionOptions* ext_options, 
+   const BlastHitSavingOptions* hit_options,
+   const BlastEffectiveLengthsOptions* eff_len_options,
+   const PSIBlastOptions* psi_options, 
+   const BlastDatabaseOptions* db_options,
    BlastScoreBlk* sbp, BlastDiagnostics* diagnostics,
    BlastHSPStream* hsp_stream);
 
@@ -109,11 +117,16 @@ BlastPrelimSearchThreadDataInit(EBlastProgramType program,
 BlastPrelimSearchThreadData* 
 BlastPrelimSearchThreadDataFree(BlastPrelimSearchThreadData* data);
 
-/** Driver for the thread producing tabular output. */
+/** Driver for the thread producing tabular output.
+ * @param data Pointer to the BlastPrelimSearchThreadData structure. [in]
+ */
 void* Blast_PrelimSearchThreadRun(void* data);
+
+/* @} */
 
 #ifdef __cplusplus
 }
 #endif
+
 #endif /* !__BLAST_PRELIM__ */
 

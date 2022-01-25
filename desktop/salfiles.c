@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.97 $
+* $Revision: 6.99 $
 *
 * File Description: 
 *
@@ -151,7 +151,7 @@ static CharPtr get_first_notemptyline (FILE *fp)
 }
 
 /**********************************************************/
-static SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep)
+static SeqEntryPtr make_se_for_se (SeqEntryPtr sep)
 {
   SeqEntryPtr  sep1 = NULL,
                tmp;
@@ -219,7 +219,7 @@ static SeqEntryPtr strings_to_seqentry (ValNodePtr seqvnp, Uint1 mol_type, SeqId
         }
      }
   }
-  sep_list = make_seqentry_for_seqentry (sep_list);
+  sep_list = make_se_for_se (sep_list);
   SeqAlignAddInSeqEntry (sep_list, sap);
   return sep_list;
 }
@@ -257,7 +257,7 @@ extern SeqEntryPtr FastaRead (CharPtr path, Uint2 mol_type)
         pre_sep = sep;
      }
      FileClose(fpin);
-     sep_list = make_seqentry_for_seqentry (sep_list);
+     sep_list = make_se_for_se (sep_list);
   }
   return sep_list;
 }
@@ -486,7 +486,7 @@ static SeqEntryPtr FastaReadAdvanced (CharPtr path, Uint2 mol_type, Int2 *seqnum
      else 
         sep = NewFastaRead (fpin, (Boolean)ISA_na (mol_type), TRUE, NULL, NULL, NULL, NULL);
      FileClose (fpin);
-     sep = make_seqentry_for_seqentry (sep);
+     sep = make_se_for_se (sep);
   }
   return sep;
 }
@@ -2305,8 +2305,6 @@ static void CCDownloadProc (ButtoN b)
 
 {
   CharPtr       accn;
-  BioseqPtr     bsp;
-  Uint2         entityID;
   FetchFormPtr  ffp;
   SeqEntryPtr   sep;
   Char          str [32];
@@ -2442,7 +2440,8 @@ static SeqIdPtr FindSeqIdForFastaExport (BioseqPtr bsp)
 	60, /* 15 = pdb */
 	60,  /* 16 = tpg */
 	60,  /* 17 = tpe */
-	60   /* 18 = tpd */
+	60,  /* 18 = tpd */
+	60   /* 19 = gpp */
 	};
 
   if (bsp == NULL || bsp->id == NULL) return NULL;

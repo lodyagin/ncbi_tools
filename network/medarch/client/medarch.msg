@@ -13,6 +13,8 @@ $^   DiffConsortAuthors, 10, SEV_WARNING
 $^   PmidMismatch, 11, SEV_WARNING
 $^   Multiple_pmid, 12, SEV_WARNING
 $^   FailedToGetPub, 13, SEV_ERROR
-
+$^   MedArchMatchIgnored, 14, SEV_ERROR
+$^   SuccessfulPmidLookup, 15, SEV_INFO
+$^   PmidNotFound, 16, SEV_WARNING
 $$ PRINT, 2
 $^   Failed, 1, SEV_WARNING

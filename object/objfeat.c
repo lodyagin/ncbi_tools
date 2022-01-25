@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1842,7 +1842,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"-------------------M---------------M----------------------------\" } ,\n" \
 "{ name \"Ascidian Mitochondrial\" , id 13 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"sncbieaa \"---M------------------------------MM---------------M------------\" } ,\n" \
 "{ name \"Alternative Flatworm Mitochondrial\" , id 14 ,\n" \
 "ncbieaa  \"FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \

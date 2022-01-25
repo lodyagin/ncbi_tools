@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.66 $
+* $Revision: 6.68 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.68  2005/01/24 15:02:40  kans
+* remove unnecessary and uninitialized StringMove (tmp...) in GetArgs_ST
+*
+* Revision 6.67  2005/01/13 18:47:01  kans
+* Nlm_showGetArgTag set by Nlm_GetReady, used by GetArg_ST
+*
 * Revision 6.66  2004/07/19 13:37:24  bollin
 * adjusted FixVisibilityIssues function to handle nesting of groups
 *
@@ -847,6 +853,8 @@ static       char Nlm_AppName[PATH_MAX+1]  = "vibrant";
 
 Nlm_WindowTool  Nlm_currentWindowTool;
 Nlm_Boolean     Nlm_processUpdatesFirstVal = TRUE;
+
+static Nlm_Boolean     Nlm_showGetArgTag = FALSE;
 
 static Nlm_GphPrcsPtr  gphprcsptr = NULL;
 
@@ -6637,12 +6645,15 @@ static void Nlm_GetReady (void)
 
   GetKeys (keys);
   if ((keys [1] & 1) != 0) {
+    Nlm_showGetArgTag = TRUE;
     Nlm_GetSet ();
   }
 #endif
 #ifdef WIN_MSWIN
-  if (GetAsyncKeyState(VK_SHIFT) & 0x8000)
+  if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+    Nlm_showGetArgTag = TRUE;
     Nlm_GetSet();
+  }
 #endif
   Nlm_VibrantSetGUI();
   Nlm_InitCursorShapes();
@@ -7938,7 +7949,7 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
   Nlm_Int2       i, j;
   Nlm_ArgPtr     curarg;
   Nlm_Boolean   *resolved;
-  Nlm_Char       arg[256];
+  Nlm_Char       arg[512];
   Nlm_Int2       delta;
   Nlm_GrouP      g;
   Nlm_GrouP      h;
@@ -7946,6 +7957,7 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
   Nlm_RecT       r1;
   Nlm_RecT       r2;
   Nlm_Boolean    smallScreen;
+  Nlm_Char       tag [16];
   Nlm_WindoW     w;
   Nlm_TexT       firstText;
   Nlm_CharPtr    tmp;
@@ -8100,7 +8112,7 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
   if (Nlm_screenRect.bottom < 352)
     smallScreen = TRUE;
 #endif
-  g = Nlm_HiddenGroup (w, 4, 0, NULL);
+  g = Nlm_HiddenGroup (w, 5, 0, NULL);
   hp = (Nlm_HandlePtr) Nlm_MemNew (numargs * sizeof (Nlm_Handle));
 
   firstText = NULL;
@@ -8109,17 +8121,26 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
     if ((smallScreen && j >= 10) || j >= 15) {
       j = 0;
       Nlm_Advance (w);
-      g = Nlm_HiddenGroup (w, 4, 0, NULL);
+      g = Nlm_HiddenGroup (w, 5, 0, NULL);
     }
+
     Nlm_StaticPrompt(g, (char*)s_TypeStrings[curarg->type], 0,
                      Nlm_dialogTextHeight, Nlm_systemFont, 'l');
 
+
+    tag [0] = '\0';
+    if (Nlm_showGetArgTag) {
+      sprintf (tag, " -%c", (char) curarg->tag);
+    }
+
     /* Populate the Arg-Query Dialog Box's input controls and
        initialize these by default values */
+
     switch (curarg->type) {
       case ARG_BOOLEAN:
         hp[i] = (Nlm_Handle)
           Nlm_CheckBox(g, (Nlm_CharPtr) curarg->prompt, NULL);
+        Nlm_StaticPrompt(g, tag, 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
         Nlm_StaticPrompt (g, "", 0, 0, Nlm_systemFont, 'l');
         if (curarg->intvalue == 1) {
           Nlm_SetStatus (hp [i], TRUE);
@@ -8133,6 +8154,7 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
       case ARG_DATA_IN:
       case ARG_DATA_OUT:
         Nlm_MultiLinePrompt (g, (Nlm_CharPtr) curarg->prompt, 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
+        Nlm_StaticPrompt(g, tag, 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
         hp[i] = (Nlm_Handle) Nlm_DialogText(g, (Nlm_CharPtr) curarg->defaultvalue, 10, NULL);
         if (firstText == NULL) {
           firstText = (Nlm_TexT) hp[i];

@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.12 2004/09/17 12:21:48 bollin Exp $
+ * $Id: alnread.c,v 1.17 2005/01/13 14:56:42 bollin Exp $
  *
  * ===========================================================================
  *
@@ -2403,7 +2403,9 @@ static EBool s_IsConsensusLine (char * str)
 {
     if (str == NULL 
         ||  strspn (str, "*:. \t\r\n") < strlen (str)
-        ||  strchr (str, '*') == NULL) {
+        ||  (strchr (str, '*') == NULL 
+             &&  strchr (str, ':') == NULL
+             &&  strchr (str, '.') == NULL)) {
         return eFalse;
     } else {
         return eTrue;
@@ -3280,7 +3282,9 @@ s_FindInterleavedBlocks
         }
     }
     best_ptr = s_GetMostPopularSizeInfo (size_list);
-    if (best_ptr != NULL  &&  best_ptr->num_appearances > 1) {
+    if (best_ptr != NULL  
+        &&  (best_ptr->num_appearances > 1  ||  
+             (size_list->next == NULL  &&  size_list->size_value > 1))) {
         afrp->block_size = best_ptr->size_value;
         line_counter = 0;
         for (llp = pattern_list; llp != NULL; llp = llp->next) {
@@ -3348,7 +3352,7 @@ s_ReadAlignFileRaw
     EBool                    in_taxa_comment;
     EBool                    in_bracketed_comment = eFalse;
     TBracketedCommentListPtr comment_list = NULL, last_comment = NULL;
-    
+    EBool                    last_line_was_marked_id = eFalse;
 
 
     if (readfunc == NULL  ||  sequence_info == NULL) {
@@ -3451,13 +3455,24 @@ s_ReadAlignFileRaw
             }
   
             if (tmp [0] == '>'  &&  ! found_stop) {
-                afrp->marked_ids = eTrue;
+                /* this could be a block of organism lines in a
+                 * NEXUS file.  If there is no sequence data between
+                 * the lines, don't process this file for marked IDs.
+                 */
+                if (last_line_was_marked_id)
+                {
+                    afrp->marked_ids = eFalse;
+                }
+                else
+                {
+                    afrp->marked_ids = eTrue;
+                }
                 new_offset = s_IntLinkNew (overall_line_count + 1,
                                           afrp->offset_list);
                 if (afrp->offset_list == NULL) afrp->offset_list = new_offset;
-            }
-
-            if (! afrp->marked_ids) {
+                last_line_was_marked_id = eTrue;
+            } else {
+                last_line_was_marked_id = eFalse;
                 /* add to length list for interleaved block search */
                 len = strcspn (tmp, " \t\r");
                 if (len > 0) {
@@ -3854,17 +3869,20 @@ s_CreateSequencesBasedOnTokenPatterns
                              ||  line_counter < next_offset_ptr->ival - 1);
                      pattern_line_counter ++)
                 {
-                    if ((int) strlen (lip->data) != sip->size_value) {
-                        s_ReportLineLengthError (curr_id, lip, sip->size_value,
-                                               afrp->report_error,
-                                               afrp->report_error_userdata);
+                    if (lip->data [0]  !=  ']'  &&  lip->data [0]  != '[') {
+                        if ((int) strlen (lip->data) != sip->size_value) {
+                            s_ReportLineLengthError (curr_id, lip, 
+                                                     sip->size_value,
+                                                     afrp->report_error,
+                                                     afrp->report_error_userdata);
+                        }
+                        afrp->sequences = s_AddAlignRawSeqById (afrp->sequences, 
+                                                                curr_id, 
+                                                                lip->data,
+                                                                lip->line_num,
+                                                                lip->line_num,
+                                                                lip->line_offset);
                     }
-                    afrp->sequences = s_AddAlignRawSeqById (afrp->sequences, 
-                                                          curr_id, 
-                                                          lip->data,
-                                                          lip->line_num,
-                                                          lip->line_num,
-                                                          lip->line_offset);
                     lip = lip->next;
                     line_counter ++;
                 }
@@ -4526,6 +4544,8 @@ s_AugmentOffsetList
     int           line_counter, forecast_position, line_skip;
     EBool         skipped_previous = eFalse;
     int           num_chars;
+    int           num_additional_offsets = 0;
+    int           max_additional_offsets = 5000; /* if it's that bad, forget it */
 
     if (list == NULL  ||  anchorpattern == NULL) {
         return offset_list;
@@ -4543,7 +4563,7 @@ s_AugmentOffsetList
     next_offset = offset_list;
     line_counter = 0;
     sip = list;
-    while (sip != NULL) {
+    while (sip != NULL  &&  num_additional_offsets < max_additional_offsets) {
         /* if we are somehow out of synch, don't get caught in infinite loop */
         if (next_offset != NULL  &&  line_counter > next_offset->ival) {
             next_offset = next_offset->next;
@@ -4561,6 +4581,7 @@ s_AugmentOffsetList
         } else if (skipped_previous) {
             line_skip = 0;
             while (sip != NULL  &&  line_skip < sip->num_appearances 
+                  &&  num_additional_offsets < max_additional_offsets
                   &&  (next_offset == NULL
                        ||  line_counter < next_offset->ival)) {
                 /* see if we can build a pattern that matches the pattern 
@@ -4572,6 +4593,7 @@ s_AugmentOffsetList
                                                      sip);
                 if (forecast_position > 0) {
                     new_offset = s_IntLinkNew (forecast_position, NULL);
+                    num_additional_offsets++;
                     if (new_offset == NULL) {
                         return NULL;
                     }
@@ -4612,6 +4634,11 @@ s_AugmentOffsetList
             line_counter += sip->num_appearances;
             sip = sip->next;
         }
+    }
+    if (num_additional_offsets >= max_additional_offsets)
+    {
+      s_IntLinkFree (offset_list);
+      offset_list = NULL;
     }
     return offset_list;
 }
@@ -5744,6 +5771,23 @@ ReadAlignmentFile
 /*
  * ===========================================================================
  * $Log: alnread.c,v $
+ * Revision 1.17  2005/01/13 14:56:42  bollin
+ * be sure to skip over segment brackets when reading segments for alignment of
+ * segmented sets
+ *
+ * Revision 1.16  2005/01/10 19:31:09  bollin
+ * limit how hard we will try to read a badly formatted alignment
+ *
+ * Revision 1.15  2004/12/21 15:13:44  bollin
+ * handle blocks of organism definition lines in NEXUS files that do not
+ * separate the definition lines from the sequence data
+ *
+ * Revision 1.14  2004/12/02 17:12:18  bollin
+ * allow reading of an interleaved alignment with only one block
+ *
+ * Revision 1.13  2004/12/01 14:14:35  bollin
+ * improved detection of consensus lines in Clustal files
+ *
  * Revision 1.12  2004/09/17 12:21:48  bollin
  * allow all-gap segments in segmented alignments
  *

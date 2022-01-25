@@ -38,7 +38,7 @@ RSC=rc.exe
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /MDd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # SUBTRACT BASE CPP /Fr
-# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\tools" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\ddv" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\vibrant" /I "..\..\..\desktop" /I "..\..\..\network\taxon1\common" /I "..\..\..\network\taxon1\taxon2" /I "..\..\..\network\blast3\client" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\access" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\tools" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\ddv" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\vibrant" /I "..\..\..\desktop" /I "..\..\..\network\taxon1\common" /I "..\..\..\network\taxon1\taxon2" /I "..\..\..\network\blast3\client" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe

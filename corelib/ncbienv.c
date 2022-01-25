@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.38  2004/10/27 20:00:44  kans
+* Ncbienv_FileOpen suppresses missing file error post
+*
 * Revision 6.37  2004/08/06 20:56:27  kans
 * G/SetAppParam on PC no longer uses PrivateProfileString functions - instead it checks USERPROFILE, SYSTEMROOT, and then NCBI environment variables
 *
@@ -336,6 +339,18 @@ static Nlm_Boolean destroyDeadComments = FALSE;
 *      if configuration file is found, tries to read the parameter from it.
 *
 *****************************************************************************/
+
+static FILE* LIBCALL Ncbienv_FileOpen (const char *filename, const char *mode)
+
+{
+  FILE    *fp;
+  ErrSev  sev;
+
+  sev = ErrSetMessageLevel (SEV_ERROR);
+  fp = FileOpen (filename, mode);
+  ErrSetMessageLevel (sev);
+  return fp;
+}
 
 static Nlm_Int2 
 Nlm_WorkGetAppParam(const Nlm_Char* file, 
@@ -713,15 +728,15 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       Nlm_FileBuildPath(path, "Library", NULL);
       Nlm_FileBuildPath(path, "Preferences", NULL);
       Nlm_FileBuildPath(path, NULL, str);
-      fp = Nlm_FileOpen (path, "r");
+      fp = Ncbienv_FileOpen (path, "r");
       if (fp == NULL && create) {
-        fp = Nlm_FileOpen (path, "w");
+        fp = Ncbienv_FileOpen (path, "w");
         Nlm_FileClose (fp);
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
       }
       if (writeMode && fp != NULL) {
         Nlm_FileClose (fp);
-        fp = Nlm_FileOpen (path, "w");
+        fp = Ncbienv_FileOpen (path, "w");
       }
       if (fp != NULL) {
         return fp;
@@ -733,7 +748,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       FileBuildPath(path, "Contents", NULL);
       FileBuildPath (path, "Resources", NULL);
       Nlm_FileBuildPath (path, NULL, str);
-      fp = Nlm_FileOpen (path, "r");
+      fp = Ncbienv_FileOpen (path, "r");
       if (fp != NULL) {
         return fp;
       }
@@ -755,7 +770,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     Nlm_StringNCpy_0(path, str, sizeof(path));
 
     if (! dontUseLocalConfig)
-      fp = Nlm_FileOpen (path, "r");
+      fp = Ncbienv_FileOpen (path, "r");
     if (fp == NULL) {
       if (Nlm_GetHome (path, sizeof (path))) {
         Nlm_FileBuildPath(path, NULL, str);
@@ -763,11 +778,11 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
         Nlm_StringNCpy_0(path, str, sizeof(path));
       }
       if (! dontUseLocalConfig)
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
       if (fp == NULL && create) {
-        newfp = Nlm_FileOpen (path, "w");
+        newfp = Ncbienv_FileOpen (path, "w");
         Nlm_FileClose (newfp);
-        newfp = Nlm_FileOpen (path, "r");
+        newfp = Ncbienv_FileOpen (path, "r");
       }
     }
     if (fp == NULL) {
@@ -775,11 +790,11 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       pth = getenv ("NCBI");
       if (pth != NULL) {
         Nlm_FileBuildPath(path, pth, str + 1);
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
         if (fp == NULL) {
           path[0] = '\0';
           Nlm_FileBuildPath(path, pth, str);
-          fp = Nlm_FileOpen (path, "r");
+          fp = Ncbienv_FileOpen (path, "r");
         }
       }
     }
@@ -793,7 +808,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     }
     if (writeMode && fp != NULL) {
       Nlm_FileClose (fp);
-      fp = Nlm_FileOpen (path, "w");
+      fp = Ncbienv_FileOpen (path, "w");
     }
   }
   return fp;
@@ -857,11 +872,11 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     if (tmp != NULL && *tmp != '\0') {
       StringNCpy_0 (path, tmp, sizeof (path));
       Nlm_FileBuildPath(path, NULL, str);
-      fp = Nlm_FileOpen (path, "r");
+      fp = Ncbienv_FileOpen (path, "r");
       if (fp == NULL && create) {
-        newfp = Nlm_FileOpen (path, "w");
+        newfp = Ncbienv_FileOpen (path, "w");
         Nlm_FileClose (newfp);
-        newfp = Nlm_FileOpen (path, "r");
+        newfp = Ncbienv_FileOpen (path, "r");
       }
     }
 
@@ -872,7 +887,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       if (tmp != NULL && *tmp != '\0') {
         StringNCpy_0 (path, tmp, sizeof (path));
         Nlm_FileBuildPath(path, NULL, str);
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
       }
     }
 
@@ -883,7 +898,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       if (tmp != NULL && *tmp != '\0') {
         StringNCpy_0 (path, tmp, sizeof (path));
         Nlm_FileBuildPath(path, NULL, str);
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
       }
     }
 
@@ -897,7 +912,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     }
     if (writeMode && fp != NULL) {
       Nlm_FileClose (fp);
-      fp = Nlm_FileOpen (path, "w");
+      fp = Ncbienv_FileOpen (path, "w");
     }
   }
   return fp;
@@ -1090,18 +1105,18 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     }
     Nlm_StringNCpy_0(path, str, sizeof(path));
 
-    fp = Nlm_FileOpen (path, "r");  /* File exists? */
+    fp = Ncbienv_FileOpen (path, "r");  /* File exists? */
     if (fp == NULL) {
       if (Nlm_GetHome (path, sizeof (path))) {
         Nlm_FileBuildPath(path, NULL, str);
       } else {
         Nlm_StringNCpy_0(path, str, sizeof(path));
       }
-      fp = Nlm_FileOpen (path, "r");   /* File exists? */
+      fp = Ncbienv_FileOpen (path, "r");   /* File exists? */
       if (fp == NULL && create) {
-        newfp = Nlm_FileOpen (path, "w");
+        newfp = Ncbienv_FileOpen (path, "w");
         Nlm_FileClose (newfp);
-        newfp = Nlm_FileOpen (path, "r");
+        newfp = Ncbienv_FileOpen (path, "r");
       }
     }
 
@@ -1110,7 +1125,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       pth = getenv ("NCBI");
       if (pth != NULL) {
         Nlm_FileBuildPath(path, pth, str);
-        fp = Nlm_FileOpen (path, "r");
+        fp = Ncbienv_FileOpen (path, "r");
       }
     }
 
@@ -1143,7 +1158,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
       fgetname(fp,temp);
       Nlm_FileClose (fp);
       delete(temp);
-      fp = Nlm_FileOpen (path, "w");
+      fp = Ncbienv_FileOpen (path, "w");
     }
   }
   return fp;

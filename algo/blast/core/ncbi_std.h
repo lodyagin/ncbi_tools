@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.30 2004/09/02 19:19:37 madden Exp $
+/* $Id: ncbi_std.h,v 1.34 2004/12/14 17:11:24 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,8 @@
 
 
 
-#ifndef __NCBI_STD__
-#define __NCBI_STD__
+#ifndef ALGO_BLAST_CORE__NCBI_STD
+#define ALGO_BLAST_CORE__NCBI_STD
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,17 +48,15 @@
 /* which toolkit are we using? */
 #include "blast_toolkit.h"
 
-#include <algo/blast/core/ncbi_math.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* For some reason, ICC claims a suitable __STDC_VERSION__ but then
+/** For some reason, ICC claims a suitable __STDC_VERSION__ but then
    barfs on restrict. Added ECC per Haruna Cofer */
 #if defined(__ICC) || defined(__ECC)
 #define NCBI_RESTRICT __restrict
-#elif __STDC_VERSION__ >= 199901
+#elif __STDC_VERSION__ >= 199901  &&  (!defined(__IBMC__) || defined(__C99_RESTRICT))
 #define NCBI_RESTRICT restrict
 #else
 #define NCBI_RESTRICT
@@ -66,7 +64,7 @@ extern "C" {
 
 /* inlining support -- compiler dependent */
 #if defined(__cplusplus)  ||  __STDC_VERSION__ >= 199901
-/* C++ and C99 both guarantee "inline" */
+/** C++ and C99 both guarantee "inline" */
 #define NCBI_INLINE inline
 #elif defined(__GNUC__)
 /* So does GCC, normally, but it may be running with strict options
@@ -76,7 +74,7 @@ extern "C" {
 /* MSVC and (older) MIPSpro always require leading underscores */
 #define NCBI_INLINE __inline
 #else
-/* "inline" seems to work on our remaining in-house compilers
+/** "inline" seems to work on our remaining in-house compilers
    (WorkShop, Compaq, ICC, MPW) */
 #define NCBI_INLINE inline
 #endif
@@ -88,62 +86,77 @@ extern "C" {
 #endif
 
 #ifndef _NCBISTD_ /* if we're not in the C toolkit... */
+/** bool replacment for C */
 typedef Uint1 Boolean;
 #ifndef TRUE
+/** bool replacment for C indicating true. */
 #define TRUE 1
 #endif
 #ifndef FALSE
+/** bool replacment for C indicating false. */
 #define FALSE 0
 #endif
 #endif
 
+/** macro for assert. */
 #ifndef ASSERT
 #define ASSERT assert
 #endif
 
 #ifndef MIN
+/** returns smaller of a and b. */
 #define MIN(a,b)	((a)>(b)?(b):(a))
 #endif
 
 #ifndef MAX
+/** returns larger of a and b. */
 #define MAX(a,b)	((a)>=(b)?(a):(b))
 #endif
 
 #ifndef ABS
+/** returns absolute value of a (|a|) */
 #define ABS(a)	((a)>=0?(a):-(a))
 #endif
 
 #ifndef SIGN
+/** return +1 for a > 0, -1 for a < 0 */
 #define SIGN(a)	((a)>0?1:((a)<0?-1:0))
 #endif
 
 /* low-level ANSI-style functions */
 
 #ifndef _NCBISTD_ /* if we're not in the C toolkit ... */
+
+/** largest number represented by unsigned int. */
 #define UINT4_MAX     4294967295U
+/** largest nubmer represented by signed int */
 #define INT4_MAX    2147483647
+/** Smallest (most negative) number represented by signed int */
 #define INT4_MIN    (-2147483647-1)
+/** natural log of 2. */
 #define NCBIMATH_LN2      0.69314718055994530941723212145818
-#define LN2         (0.693147180559945)
+/** largest number represented by signed (two byte) short */
 #define INT2_MAX    32767
+/** smallest (most negative) number represented by signed (two byte) short */
 #define INT2_MIN    (-32768)
 
 #ifndef DIM
+/** dimension of an array. */
 #define DIM(A) (sizeof(A)/sizeof((A)[0]))
 #endif
 
+/** terminating byte of a char* string. */
 #define NULLB '\0'
-
-#ifndef PATH_MAX
-#define PATH_MAX 1024
-#endif
-#define DIRDELIMSTR        "/"
-
-#else
 
 #endif /* _NCBISTD_ */
 
-extern void* BlastMemDup (const void *orig, size_t size);
+/** Copies memory using memcpy and malloc
+ * @param orig memory to be copied [in]
+ * @param size amount to be copied [in]
+ * @return pointer to newly allocated memory. NULL if orig NULL, size is zero,
+ *   or allocation fails.
+ */
+void* BlastMemDup (const void *orig, size_t size);
 
 
 /******************************************************************************/
@@ -155,36 +168,60 @@ typedef struct ListNode {
 	struct ListNode *next;  /**< next in linked list */
 } ListNode;
 
-/** Create a new list node */
+/** Create a new list node  
+ * @param vnp Pointer to the start of the list, may be NULL [in]
+ * @return newly allocated node 
+ */
 ListNode* ListNodeNew (ListNode* vnp);
 
 /** Add a node to the list.
- * @param head Pointer to the start of the list. [in] [out]
+ * @param head Pointer to the start of the list, if *head is NULL will
+ *  be Pointer to new node. [in] [out]
  * @return New node
  */
 ListNode* ListNodeAdd (ListNode** head);
+
 /** Add a node to the list with a given choice and data pointer.
- * @param head Pointer to the start of the list [in] [out]
+ * @param head Pointer to the start of the list, if *head is NULL will
+ *  be Pointer to new node. [in] [out]
  * @param choice Choice value for the new node. [in]
  * @param value Data pointer for the new node. [in]
  * @return New node
  */
 ListNode* ListNodeAddPointer (ListNode** head, Uint1 choice, void *value);
-/** Free all list's nodes */
+
+/** Free all list's nodes, does not attempt to free data. 
+ * @param vnp objects to be freed [in]
+ * @return NULL
+ */
 ListNode* ListNodeFree (ListNode* vnp);
-/** Free only the attached data for all list's nodes */
+
+/** Free nodes as well as data (vnp->ptr) assuming it is one contiguous chunk.
+ * @param vnp objects to be freed [in] 
+ * @return NULL
+ */
 ListNode* ListNodeFreeData (ListNode* vnp);
-/** Sort the list, using a provided comparison function. */
-ListNode* ListNodeSort (ListNode* list_to_sort, 
-               int (*compar) (const void *, const void *));
+
 /** Add a node to the list with a provided choice, and attached data 
  * pointing to a provided string.
+ * @param head Pointer to the start of the list, if *head is NULL will
+ *  be Pointer to new node. [in] [out]
+ * @param choice sets the "choice" field in ListNode [in]
+ * @param str char* buffer to be copied [in]
+ * @return newly allocated node 
  */
-ListNode* ListNodeCopyStr (ListNode** head, Uint1 choice, char* str);
-/** Count number of nodes in a list */
-Int4 ListNodeLen (ListNode* vnp);
+ListNode* ListNodeCopyStr (ListNode** head, Uint1 choice, const char* str);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__NCBI_STD__ */
+
+/** The following header file needs some of the definitions from this header, 
+ * so it #include's ncbi_std.h. The circular inclusion is avoided because of
+ * the header-specific macros that are #define'd only once. On the other hand
+ * it is convenient to include ncbi_math.h automatically whenever ncbi_std.h
+ * is included in any other file.
+ */
+#include <algo/blast/core/ncbi_math.h>
+
+#endif /* !ALGO_BLAST_CORE__NCBI_STD */

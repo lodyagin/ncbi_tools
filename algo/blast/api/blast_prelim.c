@@ -1,4 +1,4 @@
-/* $Id: blast_prelim.c,v 1.2 2004/10/06 15:00:44 dondosha Exp $
+/* $Id: blast_prelim.c,v 1.7 2005/02/09 20:55:38 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,24 +21,16 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
-* ===========================================================================*/
+*  Author: Ilya Dondoshansky
+*
+*****************************************************************************/
 
-/*****************************************************************************
+/** @file blast_prelim.c
+ * Preliminary stage of a BLAST search performed by one of the threads
+ * in a multi-threaded search.
+ */
 
-File name: blast_prelim.c
-
-Author: Ilya Dondoshansky
-
-Contents: Preliminary stage of a BLAST search performed by one of the threads
-          in a multi-threaded search.
-
-Detailed Contents: 
-
-******************************************************************************
- * $Revision: 1.2 $
- * */
-
-static char const rcsid[] = "$Id: blast_prelim.c,v 1.2 2004/10/06 15:00:44 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_prelim.c,v 1.7 2005/02/09 20:55:38 dondosha Exp $";
 
 #include <algo/blast/api/blast_prelim.h>
 #include <algo/blast/core/blast_util.h>
@@ -46,14 +38,22 @@ static char const rcsid[] = "$Id: blast_prelim.c,v 1.2 2004/10/06 15:00:44 dondo
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_engine.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
 BlastPrelimSearchThreadData* 
 BlastPrelimSearchThreadDataInit(EBlastProgramType program,
    BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
-   BlastSeqSrc* seq_src, LookupTableWrap* lut, 
-   BlastScoringOptions* score_options, BlastInitialWordOptions* word_options,
-   BlastExtensionOptions* ext_options, BlastHitSavingOptions* hit_options,
-   BlastEffectiveLengthsOptions* eff_len_options,
-   PSIBlastOptions* psi_options, BlastDatabaseOptions* db_options,
+   const BlastSeqSrc* seq_src, LookupTableWrap* lut, 
+   const BlastScoringOptions* score_options, 
+   const BlastInitialWordOptions* word_options,
+   const BlastExtensionOptions* ext_options, 
+   const BlastHitSavingOptions* hit_options,
+   const BlastEffectiveLengthsOptions* eff_len_options,
+   const PSIBlastOptions* psi_options, 
+   const BlastDatabaseOptions* db_options,
    BlastScoreBlk* sbp, BlastDiagnostics* diagnostics,
    BlastHSPStream* hsp_stream)
 {
@@ -95,52 +95,21 @@ BlastPrelimSearchThreadDataFree(BlastPrelimSearchThreadData* data)
 void* Blast_PrelimSearchThreadRun(void* data)
 {
    void* ret_status = NULL;
-   Int2 status;
+   Int2 status = 0;
    BlastPrelimSearchThreadData* search_data = 
       (BlastPrelimSearchThreadData*) data;
    
-   BlastScoringParameters* score_params = NULL; /**< Scoring parameters */
-   BlastExtensionParameters* ext_params = NULL; /**< Gapped extension 
-                                                   parameters */
-   BlastHitSavingParameters* hit_params = NULL; /**< Hit saving parameters*/
-   BlastEffectiveLengthsParameters* eff_len_params = NULL; /**< Parameters
-                                        for effective lengths calculations */
-   BlastGapAlignStruct* gap_align = NULL; /**< Gapped alignment structure */
-   BlastDiagnostics* local_diagnostics = NULL;
-
-   /* No need for a mutex in the local diagnostics structure. */
-   local_diagnostics = Blast_DiagnosticsInit();
-
-   status = 
-      BLAST_GapAlignSetUp(search_data->program, search_data->seq_src, 
-         search_data->score_options, search_data->eff_len_options, 
-         search_data->ext_options, search_data->hit_options,
-         search_data->query_info, search_data->sbp, &score_params, 
-         &ext_params, &hit_params, &eff_len_params, &gap_align);
-   if (status)
-      return ret_status;
-
-   BLAST_PreliminarySearchEngine(search_data->program,
-      search_data->query, search_data->query_info, search_data->seq_src, 
-      gap_align, score_params, search_data->lut, search_data->word_options, 
-      ext_params, hit_params, eff_len_params, search_data->psi_options, 
-      search_data->db_options, search_data->hsp_stream, 
-      local_diagnostics);
-
-   /* Do not destruct score block here */
-   gap_align->sbp = NULL;
-   gap_align = BLAST_GapAlignStructFree(gap_align);
-   
-   score_params = BlastScoringParametersFree(score_params);
-   hit_params = BlastHitSavingParametersFree(hit_params);
-   ext_params = BlastExtensionParametersFree(ext_params);
-   eff_len_params = BlastEffectiveLengthsParametersFree(eff_len_params);
-   
-   Blast_DiagnosticsUpdate(search_data->diagnostics, local_diagnostics);
-   
-   Blast_DiagnosticsFree(local_diagnostics);
+   status = Blast_RunPreliminarySearch(search_data->program, search_data->query, 
+                search_data->query_info, search_data->seq_src, 
+                search_data->score_options, search_data->sbp, search_data->lut, 
+                search_data->word_options, search_data->ext_options, 
+                search_data->hit_options, search_data->eff_len_options, 
+                search_data->psi_options, search_data->db_options, 
+                search_data->hsp_stream, search_data->diagnostics);
 
    BlastPrelimSearchThreadDataFree(search_data);
 
    return ret_status;
 }
+/* @} */
+

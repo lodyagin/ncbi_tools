@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.22 $
+* $Revision: 1.35 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -131,8 +131,8 @@ static Char link_ck [MAX_WWWBUF];
 static Char link_rice [MAX_WWWBUF];
 #define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="
 
-static Char link_sp [MAX_WWWBUF];
-#define DEF_LINK_SP "http://www.expasy.org/cgi-bin/sprot-search-ac%3f"
+NLM_EXTERN Char link_sp [MAX_WWWBUF];
+#define DEF_LINK_SP "http://www.uniprot.org/entry/"
 
 static Char link_pdb [MAX_WWWBUF];
 #define DEF_LINK_PDB "http://www.expasy.org/cgi-bin/get-pdb-entry%3f"
@@ -222,7 +222,7 @@ static Char link_subtilist [MAX_WWWBUF];
 #define DEF_LINK_SUBTILIST  "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"
 
 NLM_EXTERN Char link_go [MAX_WWWBUF];
-#define DEF_LINK_GO "http://db.yeastgenome.org/cgi-bin/SGD/GO/go.pl?goid="
+#define DEF_LINK_GO "http://www.godatabase.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query="
 
 static Char link_hinvdb [MAX_WWWBUF];
 #define DEF_LINK_HINVDB "http://www.h-invitational.jp"
@@ -238,6 +238,21 @@ static Char link_asap [MAX_WWWBUF];
 
 static Char link_dicty [MAX_WWWBUF];
 #define DEF_LINK_DICTY "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="
+
+static Char link_maizegdb [MAX_WWWBUF];
+#define DEF_LINK_MAIZEGDB "http://www.maizegdb.org/"
+
+static Char link_axeldb [MAX_WWWBUF];
+#define DEF_LINK_AXELDB "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="
+
+static Char link_vbase2 [MAX_WWWBUF];
+#define DEF_LINK_VBASE2 "http://www.dnaplot.de/vbase2/vgene.php?id="
+
+static Char link_ccds [MAX_WWWBUF];
+#define DEF_LINK_CCDS "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="
+
+static Char link_ecocyc [MAX_WWWBUF];
+#define DEF_LINK_ECOCYC "http://biocyc.org/ECOLI/new-image?type=GENE&object="
 
 
 /* www utility functions */
@@ -322,6 +337,11 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIX", DEF_LINK_HINVDBHIX, link_hinvdbhix, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ASAP", DEF_LINK_ASAP, link_asap, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_DICTY", DEF_LINK_DICTY, link_dicty, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MAIZEGDB", DEF_LINK_MAIZEGDB, link_maizegdb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_AXELDB", DEF_LINK_AXELDB, link_axeldb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBASE2", DEF_LINK_VBASE2, link_vbase2, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CCDS", DEF_LINK_CCDS, link_ccds, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECOCYC", DEF_LINK_ECOCYC, link_ecocyc, MAX_WWWBUF);
 }
 
 
@@ -480,6 +500,22 @@ static void FF_www_db_xref_ifo(
 }
 
 
+static void FF_www_db_xref_maizegdb(
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier
+)
+{
+  while (*identifier == ' ')
+    identifier++;
+
+  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=", link_maizegdb, ">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
+
+
 static void FF_www_db_xref_gdb(
   StringItemPtr ffstring,
   CharPtr db, 
@@ -496,10 +532,10 @@ static void FF_www_db_xref_gdb(
     start += StringLen("G00-");
     while ( *start != '\0' ) {
       if ( *start != '-' ) {
-        *idp++ = *start++;
-      } else {
-        *start++;
-      }
+		*idp = *start;
+		++idp;
+	  }
+	  ++start;
     }
     *idp = '\0';
     FFAddTextToString(ffstring, "<a href=", link_gdb, id, FALSE, FALSE, TILDE_IGNORE);  
@@ -545,6 +581,25 @@ static void FF_www_db_xref_hinvdb (
   FF_www_db_xref_std(ffstring, db, identifier, link);
 }
 
+static void FF_www_db_xref_tax (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier
+)
+{
+  CharPtr link = MemNew (StringLen(link_tax) + 10);
+  if (link == NULL) return;
+  
+  StringCpy(link, link_tax);
+
+  if (IS_DIGIT(*identifier)) {
+    StringCat(link, "id=");
+  } else {
+    StringCat(link, "name=");
+  }
+
+  FF_www_db_xref_std(ffstring, db, identifier, link);
+}
 
 static void Do_www_db_xref(
   IntAsn2gbJobPtr ajp,
@@ -626,7 +681,11 @@ static void Do_www_db_xref(
     FF_www_db_xref_gdb(ffstring, db, identifier);
   } else if ( StringCmp(db , "REBASE") == 0) {
     FF_www_db_xref_rebase(ffstring, db, identifier);
-  } else if ( StringCmp(db , "Swiss-Prot") == 0) {
+  } else if ( StringCmp(db , "UniProt") == 0 ||
+              StringCmp(db , "Swiss-Prot") == 0 ||
+              StringCmp(db , "TrEMBL") == 0 ||
+              StringCmp(db , "UniProt/Swiss-Prot") == 0 ||
+              StringCmp(db , "UniProt/TrEMBL") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_sp);
   /*
   } else if ( StringCmp(db , "ENCODE") == 0) {
@@ -644,6 +703,18 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_asap);
   } else if ( StringCmp(db , "dictyBase") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_dicty);
+  } else if ( StringCmp(db , "MaizeGDB") == 0) {
+    FF_www_db_xref_maizegdb(ffstring, db, identifier);
+  } else if ( StringCmp(db , "axeldb") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_axeldb);
+  } else if ( StringCmp(db , "VBASE2") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_vbase2);
+  } else if ( StringCmp(db , "CCDS") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_ccds);
+  } else if ( StringCmp(db , "ECOCYC") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_ecocyc);
+  } else if ( StringCmp(db , "taxon") == 0) {
+    FF_www_db_xref_tax(ffstring, db, identifier);
 
   } else {  
     /* default: no link just the text */
@@ -2015,7 +2086,7 @@ static CharPtr FormatCitBookArt (
     } else {
       StringCpy (year, "(");
       StringNCat (year, dp->str, 4);
-      StringCpy (year, ")");
+      StringNCat (year, ")", 1);
     }
   }
 
@@ -2270,9 +2341,7 @@ static CharPtr FormatThesis (
   afp = imp->pub;
   if (afp != NULL) {
     if (afp->choice == 1) {
-      if (StringLen (afp->affil) > 7) {
-        str = StringSave (afp->affil);
-      }
+      str = StringSave (afp->affil);
     } else if (afp->choice == 2) {
       str = MakeAffilStr (afp);
     }
@@ -2349,11 +2418,13 @@ static CharPtr FormatCitPat (
 {
   AffilPtr       afp;
   AuthListPtr    alp;
+  CharPtr        consortium = NULL;
   Char           date [40];
   ValNodePtr     head = NULL;
   CharPtr        prefix = NULL;
   CharPtr        rsult = NULL;
   SeqIdPtr       sip;
+  CharPtr        str;
   CharPtr        suffix = NULL;
   PatentSeqIdPtr psip;
   Int4           pat_seqid = 0;
@@ -2431,7 +2502,7 @@ static CharPtr FormatCitPat (
         suffix = ";";
       }
 
-      /* If and of the affiliation fields are */
+      /* If any of the affiliation fields are */
       /* non-blank, put them on a new line.   */
 
       if ((! StringHasNoText (afp->affil)) ||
@@ -2467,6 +2538,67 @@ static CharPtr FormatCitPat (
         AddValNodeString (&head, ";\n", afp->country, ";");
       }
     }
+  }
+
+  alp = cpp->assignees;
+  if (alp != NULL) {
+    str = GetAuthorsString (format, alp, &consortium, NULL, NULL);
+    afp = alp->affil;
+    if (afp != NULL) {
+      suffix = NULL;
+      if (afp->choice == 2) {
+        suffix = ";";
+      }
+
+      /* If any of the affiliation fields are */
+      /* non-blank, put them on a new line.   */
+
+      if ((! StringHasNoText (str)) ||
+          (! StringHasNoText (consortium)) ||
+          (! StringHasNoText (afp->affil)) ||
+          (! StringHasNoText (afp->street)) ||
+          (! StringHasNoText (afp->div)) ||
+          (! StringHasNoText (afp->city)) ||
+          (! StringHasNoText (afp->sub)) ||
+          (! StringHasNoText (afp->country)))
+        ValNodeCopyStr (&head, 0, "\n");
+
+      if (! StringHasNoText (str)) {
+        AddValNodeString (&head, NULL, str, ";");
+        prefix = " ";
+      }
+      if (! StringHasNoText (consortium)) {
+        AddValNodeString (&head, NULL, consortium, ";");
+        prefix = " ";
+      }
+
+      /* Write out the affiliation fields */
+
+      if (! StringHasNoText (afp->affil)) {
+        AddValNodeString (&head, NULL, afp->affil, suffix);
+        prefix = " ";
+      }
+      if (! StringHasNoText (afp->street)) {
+        AddValNodeString (&head, prefix, afp->street, ";");
+        prefix = " ";
+      }
+      if (! StringHasNoText (afp->div)) {
+        AddValNodeString (&head, prefix, afp->div, ";");
+        prefix = " ";
+      }
+      if (! StringHasNoText (afp->city)) {
+        AddValNodeString (&head, prefix, afp->city, NULL);
+        prefix = ", ";
+      }
+      if (! StringHasNoText (afp->sub)) {
+        AddValNodeString (&head, prefix, afp->sub, NULL);
+      }
+      if (! StringHasNoText (afp->country)) {
+        AddValNodeString (&head, ";\n", afp->country, ";");
+      }
+    }
+    MemFree (consortium);
+    MemFree (str);
   }
 
   rsult = MergeFFValNodeStrs (head);
@@ -2792,6 +2924,8 @@ static Int4 GetMuid (
 )
 
 {
+  ArticleIdPtr	   aip;
+  CitArtPtr        cap;
   MedlineEntryPtr  mep;
   ValNodePtr       vnp;
 
@@ -2807,6 +2941,15 @@ static Int4 GetMuid (
         break;
       case PUB_Muid :
         return vnp->data.intvalue;
+      case PUB_Article:
+        cap = (CitArtPtr) vnp->data.ptrvalue;
+        if (cap!= NULL && cap->ids != NULL) {
+          for (aip = cap->ids; aip != NULL; aip = aip->next) {
+            if (aip->choice == ARTICLEID_MEDLINE) {
+              return aip->data.intvalue;
+            }
+		  }
+        }
       default :
         break;
     }
@@ -2820,6 +2963,8 @@ static Int4 GetPmid (
 )
 
 {
+  ArticleIdPtr	   aip;
+  CitArtPtr        cap;
   MedlineEntryPtr  mep;
   ValNodePtr       vnp;
 
@@ -2835,6 +2980,15 @@ static Int4 GetPmid (
         break;
       case PUB_PMid :
         return vnp->data.intvalue;
+      case PUB_Article:
+        cap = (CitArtPtr) vnp->data.ptrvalue;
+        if (cap!= NULL && cap->ids != NULL) {
+          for (aip = cap->ids; aip != NULL; aip = aip->next) {
+            if (aip->choice == ARTICLEID_PUBMED) {
+              return aip->data.intvalue;
+            }
+		  }
+        }
       default :
         break;
     }
@@ -3051,6 +3205,8 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 )
 
 {
+  SeqMgrAndContext   acontext;
+  AnnotDescPtr       adp;
   IntAsn2gbJobPtr    ajp;
   AuthListPtr        alp;
   Asn2gbSectPtr      asp;
@@ -3155,7 +3311,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   if (! StringHasNoText (rbp->string)) return StringSave (rbp->string);
 
-  /* could be descriptor, feature, or submit block citation */
+  /* could be descriptor, feature, annotdesc, or submit block citation */
 
   if (rbp->itemtype == OBJ_SEQDESC) {
 
@@ -3169,6 +3325,13 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     sfp = SeqMgrGetDesiredFeature (rbp->entityID, NULL, rbp->itemID, 0, NULL, &fcontext);
     if (sfp != NULL && fcontext.seqfeattype == SEQFEAT_PUB) {
       pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+    }
+
+  } else if (rbp->itemtype == OBJ_ANNOTDESC) {
+
+    adp = SeqMgrGetDesiredAnnotDesc (rbp->entityID, NULL, rbp->itemID, &acontext);
+    if (adp != NULL && acontext.annotdesctype == Annot_descr_pub) {
+      pdp = (PubdescPtr) adp->data.ptrvalue;
     }
 
   } else if (rbp->itemtype == OBJ_SEQSUB_CIT) {
@@ -3513,8 +3676,10 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   FFRecycleString(ajp, temp);
   temp = FFGetString(ajp);
   
+  pmid = GetPmid (pdp);
   muid = GetMuid (pdp);
-  if (muid > 0) {
+
+  if (pmid == 0 && muid > 0) {
     FFStartPrint (temp, afp->format, 2, 12, "MEDLINE", 12, 5, 5, "RX", FALSE);
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
@@ -3529,16 +3694,19 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   FFRecycleString(ajp, temp);
   temp = FFGetString(ajp);
-
-  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    pmid = GetPmid (pdp);
-    if (pmid > 0) {
-      FFStartPrint (temp, afp->format, 3, 12, "PUBMED", 12, 5, 5, "RX", FALSE);
-
+  
+  if (pmid > 0) {
+    FFStartPrint (temp, afp->format, 3, 12, "PUBMED", 12, 5, 5, "RX", FALSE);
+    if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FF_www_muid (ajp, temp, pmid);
       FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+    } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
+      sprintf (buf, "PUBMED; %ld.", (long) pmid);
+      FFAddOneString (temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
+      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RX");
     }
   }
+  FFRecycleString(ajp, temp);
 
   if (gbseq != NULL) {
     if (gbref != NULL) {

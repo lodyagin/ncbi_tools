@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.106 2004/09/21 17:07:02 beloslyu Exp $
+# $Id: makedis.csh,v 1.108 2005/04/05 18:21:45 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -143,6 +143,8 @@ case OSF1:
 	end
 	breaksw
 case Linux:
+case GNU/Linux:
+	lsb_release -a
     echo "libs version is:"
 	ls -l /lib/libc.so*
 	echo "the gcc version is:"
@@ -167,8 +169,15 @@ case Linux:
 	case "alpha":
 		set platform=linux-alpha
 		breaksw
+	case "ppc64":
+		set platform=linux-power
+		breaksw
 	default:
-		set platform=linux
+		if (-d /usr/X11R6/lib64) then
+			set platform=linux64
+		else
+			set platform=linux
+		endif
 		breaksw
 	endsw
 	#check do we have Motif on linux installed

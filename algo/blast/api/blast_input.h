@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.13 2004/07/14 13:17:38 madden Exp $
+/* $Id: blast_input.h,v 1.16 2005/04/06 23:27:53 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,19 +21,15 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
-* ===========================================================================*/
+* ===========================================================================
+*
+* Author: Ilya Dondoshansky
+*
+*/
 
-/*****************************************************************************
-
-File name: blast_input.h
-
-Author: Ilya Dondoshansky
-
-Contents: Reading FASTA sequences for BLAST
-
-$Revision: 1.13 $
-
-******************************************************************************/
+/** @file blast_input.h
+ * Reading FASTA sequences for BLAST
+ */
 
 #ifndef __BLAST_INPUT__
 #define __BLAST_INPUT__
@@ -48,6 +44,11 @@ extern "C" {
 
 #include <ncbi.h>
 #include <algo/blast/core/blast_def.h>
+
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
 
 /** Read the query sequences from a file, return a SeqLoc list.
  * @param infp The input file [in]
@@ -67,20 +68,32 @@ extern "C" {
  * @return number of letters read, negative number on error.
  */
 Int4
-BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, Int4 max_total_length,
-   Int4 from, Int4 to, BlastMaskLoc** lcase_mask, SeqLocPtr* query_slp, Int2Ptr ctr,
-   Int4* num_queries, Boolean believe_query);
+BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, 
+                     Int4 max_total_length, Int4 from, Int4 to, 
+                     SeqLoc** lcase_mask, SeqLocPtr* query_slp, Int2Ptr ctr,
+                     Int4* num_queries, Boolean believe_query);
 
-/** Given a file containing sequence(s) in fasta format,
- * read a sequence and fill out a BLAST_SequenceBlk structure.
- *
- * @param fasta_fp the file to read from, assumed to already be open
- * @param seq pointer to the sequence block to fill out
- * @return Zero if successful, one on any error.
- */
-Int4 MakeBlastSequenceBlkFromFasta(FILE *fasta_fp, BLAST_SequenceBlk* seq);
+/* @} */
 
 #ifdef __cplusplus
 }
 #endif
+
+/*
+* ===========================================================================
+*
+* $Log: blast_input.h,v $
+* Revision 1.16  2005/04/06 23:27:53  dondosha
+* Doxygen fixes
+*
+* Revision 1.15  2005/02/09 20:55:38  dondosha
+* Changed doxygen group from AlgoBlast, which is reserved for C++ toolkit, to CToolkitAlgoBlast
+*
+* Revision 1.14  2005/02/02 18:57:21  dondosha
+* Pass back lower case mask in a SeqLoc form; removed unused function
+*
+*
+* ===========================================================================
+*/
+
 #endif /* !__BLAST_INPUT__ */

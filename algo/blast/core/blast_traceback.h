@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.37 2004/10/06 19:03:43 dondosha Exp $
+/* $Id: blast_traceback.h,v 1.45 2005/04/27 19:49:35 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,7 @@
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_gapalign.h>
 #include <algo/blast/core/blast_hspstream.h>
+#include <algo/blast/core/pattern.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,14 +63,31 @@ extern "C" {
  */
 NCBI_XBLAST_EXPORT
 Int2
-Blast_TracebackFromHSPList(EBlastProgramType program_number, BlastHSPList* hsp_list,
-   BLAST_SequenceBlk* query_blk, BLAST_SequenceBlk* subject_blk,
-   BlastQueryInfo* query_info,
+Blast_TracebackFromHSPList(EBlastProgramType program_number, 
+   BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
+   BLAST_SequenceBlk* subject_blk, BlastQueryInfo* query_info,
    BlastGapAlignStruct* gap_align, BlastScoreBlk* sbp,
    const BlastScoringParameters* score_params,
    const BlastExtensionOptions* ext_options,
    const BlastHitSavingParameters* hit_params,
    const Uint1* gen_code_string);
+
+/** Get the subject sequence encoding type for the traceback,
+ * given a program number.
+ */
+NCBI_XBLAST_EXPORT
+Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number);
+
+/** Modifies the HSP data after the final gapped alignment.
+ * Input includes only data that likely needs modification. This function
+ * could be static in blast_traceback.c, but for a unit test which checks its
+ * functionality.
+ * @param gap_align Structure containing gapped alignment information [in]
+ * @param hsp Original HSP from the preliminary stage [in] [out]
+ */
+Int2
+Blast_HSPUpdateWithTraceback(BlastGapAlignStruct* gap_align, BlastHSP* hsp);
+
 
 /** Given the preliminary alignment results from a database search, redo 
  * the gapped alignment with traceback, if it has not yet been done.
@@ -77,7 +95,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number, BlastHSPList* hsp_l
  * @param hsp_stream A stream for reading HSP lists [in]
  * @param query The query sequence [in]
  * @param query_info Information about the query [in]
- * @param bssp BLAST database structure [in]
+ * @param seq_src Source of subject sequences [in]
  * @param gap_align The auxiliary structure for gapped alignment [in]
  * @param score_params Scoring parameters (esp. scale factor) [in]
  * @param ext_params Gapped extension parameters [in]
@@ -87,73 +105,59 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number, BlastHSPList* hsp_l
  *                       space. Can change if not a database search. [in]
  * @param db_options Options containing database genetic code string [in]
  * @param psi_options Options for iterative searches [in]
+ * @param rps_info RPS BLAST auxiliary data structure [in]
+ * @param pattern_blk PHI BLAST auxiliary data structure [in]
  * @param results All results from the BLAST search [out]
  * @return nonzero indicates failure, otherwise zero
  */
 NCBI_XBLAST_EXPORT
-Int2 BLAST_ComputeTraceback(EBlastProgramType program_number, BlastHSPStream* hsp_stream, 
-        BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
-        const BlastSeqSrc* bssp, BlastGapAlignStruct* gap_align,
-        BlastScoringParameters* score_params,
-        const BlastExtensionParameters* ext_params,
-        BlastHitSavingParameters* hit_params,
-        BlastEffectiveLengthsParameters* eff_len_params,
-        const BlastDatabaseOptions* db_options,
-        const PSIBlastOptions* psi_options, BlastHSPResults** results);
+Int2 
+BLAST_ComputeTraceback(EBlastProgramType program_number, 
+   BlastHSPStream* hsp_stream, BLAST_SequenceBlk* query, 
+   BlastQueryInfo* query_info, const BlastSeqSrc* seq_src, 
+   BlastGapAlignStruct* gap_align, BlastScoringParameters* score_params,
+   const BlastExtensionParameters* ext_params,
+   BlastHitSavingParameters* hit_params,
+   BlastEffectiveLengthsParameters* eff_len_params,
+   const BlastDatabaseOptions* db_options,
+   const PSIBlastOptions* psi_options, const BlastRPSInfo* rps_info, 
+   SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results);
 
-/** Compute traceback information for alignments found by an
- *  RPS blast search. This function performs two major tasks:
- *  - Computes a composition-specific PSSM to be used during the
- *    traceback computation (non-translated searches only)
- *  - After traceback is computed, switch query offsets with 
- *    subject offsets and switch the edit blocks that describe
- *    the alignment. This is required because the entire RPS search
- *    was performed with these quatities reversed.
- * This call is also the first time that enough information 
- * exists to compute E-values for alignments that are found.
- *
- * @param program_number Type of the BLAST program [in]
- * @param hsp_stream A stream for reading HSP lists [in]
- * @param concat_db The concatentation of all RPS DB sequences. 
- *                  The sequence data itself is not needed, 
- *                  only its size [in]
- * @param concat_db_info Used for the list of context offsets 
- *                       for concat_db [in]
- * @param query The original query sequence [in]
- * @param query_info Information associated with the original query. 
- *                   Only used for the search space [in]
- * @param gap_align The auxiliary structure for gapped alignment [in]
- * @param score_params Scoring parameters (esp. scale factor) [in]
- * @param ext_params Gapped extension parameters [in]
- * @param hit_params Parameters for saving hits. Can change if not a 
-                     database search [in]
- * @param db_options Options containing database genetic code string [in]
- * @param karlin_k Array of Karlin values, one for each database 
- *                 sequence. Used for E-value calculation [in]
- * @param results Results structure containing all HSPs, with added
- *                traceback information. [out]
- * @return nonzero indicates failure, otherwise zero
+/** Entry point from the API level to perform the traceback stage of a BLAST 
+ * search, given the source of HSP lists, obtained from the preliminary stage. 
+ * The parameters internal to the engine are calculated here independently of 
+ * the similar calculation in the preliminary stage, effectively making the two 
+ * stages independent of each other.
+ * @param program BLAST program type [in]
+ * @param query Query sequence(s) structure [in]
+ * @param query_info Additional query information [in]
+ * @param seq_src Source of subject sequences [in]
+ * @param score_options Scoring options [in]
+ * @param ext_options Word extension options, needed for cutoff scores 
+ *                    calculation only [in]
+ * @param hit_options Hit saving options [in]
+ * @param eff_len_options Options for calculating effective lengths [in]
+ * @param db_options Database options (database genetic code) [in]
+ * @param psi_options PSI BLAST options [in]
+ * @param sbp Scoring block with statistical parameters and matrix [in]
+ * @param hsp_stream Source of HSP lists. [in]
+ * @param rps_info RPS database information structure [in]
+ * @param pattern_blk PHI BLAST auxiliary data structure [in]
+ * @param results Where to save the results after traceback. [out]
  */
 NCBI_XBLAST_EXPORT
-Int2 BLAST_RPSTraceback(EBlastProgramType program_number,
-        BlastHSPStream* hsp_stream, 
-        BLAST_SequenceBlk* concat_db,
-        BlastQueryInfo* concat_db_info,
-        BLAST_SequenceBlk* query,
-        BlastQueryInfo* query_info,
-        BlastGapAlignStruct* gap_align, 
-        const BlastScoringParameters* score_params,
-        const BlastExtensionParameters* ext_params,
-        BlastHitSavingParameters* hit_params,
-        const BlastDatabaseOptions* db_options,
-        const double* karlin_k,
-        BlastHSPResults** results);
+Int2 
+Blast_RunTracebackSearch(EBlastProgramType program, 
+   BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
+   const BlastSeqSrc* seq_src, const BlastScoringOptions* score_options,
+   const BlastExtensionOptions* ext_options,
+   const BlastHitSavingOptions* hit_options,
+   const BlastEffectiveLengthsOptions* eff_len_options,
+   const BlastDatabaseOptions* db_options, 
+   const PSIBlastOptions* psi_options, BlastScoreBlk* sbp,
+   BlastHSPStream* hsp_stream, const BlastRPSInfo* rps_info, 
+   SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results);
 
-/** Get the subject sequence encoding type for the traceback,
- * given a program number.
- */
-NCBI_XBLAST_EXPORT
-Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number);
 
 #ifdef __cplusplus
 }

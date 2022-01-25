@@ -1,4 +1,4 @@
-/* $Id: lookup_util.c,v 1.8 2004/05/19 14:52:03 camacho Exp $
+/* $Id: lookup_util.c,v 1.11 2005/03/01 14:00:56 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,13 +25,16 @@
  */
 
 /** @file lookup_util.c
- * @todo FIXME needs file description
+ *  Utility functions for lookup table generation.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_util.c,v 1.8 2004/05/19 14:52:03 camacho Exp $";
+    "$Id: lookup_util.c,v 1.11 2005/03/01 14:00:56 coulouri Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_util.h>
+#include <algo/blast/core/blast_options.h>
 
 void __sfree(void **x)
 {
@@ -182,4 +185,39 @@ void debruijn(Int4 n, Int4 k, Uint1* output, Uint1* alphabet)
   
   sfree(a);
   return;
+}
+
+Int4 CalculateBestStride(Int4 word_size, Boolean var_words, Int4 lut_type)
+{
+   Int4 lut_width;
+   Int4 extra = 1;
+   Uint1 remainder;
+   Int4 stride;
+
+   if (lut_type == MB_LOOKUP_TABLE)
+      lut_width = 12;
+   else if (word_size >= 8)
+      lut_width = 8;
+   else
+      lut_width = 4;
+
+   remainder = word_size % COMPRESSION_RATIO;
+
+   if (var_words && (remainder == 0) )
+      extra = COMPRESSION_RATIO;
+
+   stride = word_size - lut_width + extra;
+
+   remainder = stride % 4;
+
+   /*
+    The resulting stride is rounded to a number divisible by 4 
+    for all values except 6 and 7. This is done because scanning database 
+    with a stride divisible by 4 does not require splitting bytes of 
+    compressed sequences. For values 6 and 7 however the advantage of a 
+    larger stride outweighs the disadvantage of splitting the bytes.
+    */
+   if (stride > 8 || (stride > 4 && remainder == 1) )
+      stride -= remainder;
+   return stride;
 }

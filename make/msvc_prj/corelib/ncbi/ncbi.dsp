@@ -123,10 +123,6 @@ SOURCE=..\..\..\..\corelib\ncbibs.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbibuf.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\..\corelib\ncbienv.c
 # End Source File
 # Begin Source File
@@ -164,10 +160,6 @@ SOURCE=..\..\..\..\corelib\ncbiprop.c
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbisgml.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\connect\ncbisock.c
 # End Source File
 # Begin Source File
 
@@ -273,15 +265,7 @@ SOURCE=..\..\..\..\corelib\ncbi.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbi_util.h
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\..\corelib\ncbibs.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\connect\ncbibuf.h
 # End Source File
 # Begin Source File
 
@@ -302,18 +286,6 @@ SOURCE=..\..\..\..\corelib\ncbilang.h
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbilcl.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\corelib\ncbilcl.msw
-# Begin Custom Build
-InputDir=\ncbi\corelib
-InputPath=..\..\..\..\corelib\ncbilcl.msw
-
-"$(InputDir)\ncbilcl.h" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
-	copy $(InputPath) $(InputDir)\ncbilcl.h
-
-# End Custom Build
 # End Source File
 # Begin Source File
 
@@ -338,10 +310,6 @@ SOURCE=..\..\..\..\corelib\ncbiprop.h
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbisgml.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\connect\ncbisock.h
 # End Source File
 # Begin Source File
 

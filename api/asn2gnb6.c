@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.29 $
+* $Revision: 1.44 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -156,6 +156,15 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_teleomorph,
   SCQUAL_breed,
 
+  SCQUAL_lat_lon,
+  SCQUAL_collection_date,
+  SCQUAL_collected_by,
+  SCQUAL_identified_by,
+  SCQUAL_fwd_primer_seq,
+  SCQUAL_rev_primer_seq,
+  SCQUAL_fwd_primer_name,
+  SCQUAL_rev_primer_name,
+
   SCQUAL_genotype,
   SCQUAL_plastid_name,
 
@@ -197,6 +206,15 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_teleomorph,
   SCQUAL_breed,
 
+  SCQUAL_lat_lon,
+  SCQUAL_collection_date,
+  SCQUAL_collected_by,
+  SCQUAL_identified_by,
+  SCQUAL_fwd_primer_seq,
+  SCQUAL_rev_primer_seq,
+  SCQUAL_fwd_primer_name,
+  SCQUAL_rev_primer_name,
+
   SCQUAL_genotype,
   SCQUAL_plastid_name,
 
@@ -233,6 +251,8 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "citation",             Qual_class_pubset    },
   { "clone",                Qual_class_subsource },
   { "clone_lib",            Qual_class_subsource },
+  { "collected_by",         Qual_class_subsource },
+  { "collection_date",      Qual_class_subsource },
   { "common",               Qual_class_orgmod    },
   { "common",               Qual_class_string    },
   { "country",              Qual_class_subsource },
@@ -249,6 +269,8 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "forma",                Qual_class_orgmod    },
   { "forma_specialis",      Qual_class_orgmod    },
   { "frequency",            Qual_class_subsource },
+  { "fwd_primer_name",      Qual_class_subsource },
+  { "fwd_primer_seq",       Qual_class_subsource },
   { "gb_acronym",           Qual_class_orgmod    },
   { "gb_anamorph",          Qual_class_orgmod    },
   { "gb_synonym",           Qual_class_orgmod    },
@@ -256,11 +278,13 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "germline",             Qual_class_subsource },
   { "group",                Qual_class_orgmod    },
   { "haplotype",            Qual_class_subsource },
+  { "identified_by",        Qual_class_subsource },
   { "insertion_seq",        Qual_class_subsource },
   { "isolate",              Qual_class_orgmod    },
   { "isolation_source",     Qual_class_subsource },
   { "lab_host",             Qual_class_subsource },
   { "label",                Qual_class_label     },
+  { "lat_lon",              Qual_class_subsource },
   { "macronuclear",         Qual_class_boolean   },
   { "map",                  Qual_class_subsource },
   { "mol_type",             Qual_class_string    },
@@ -275,6 +299,8 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "plastid",              Qual_class_subsource },
   { "pop_variant",          Qual_class_subsource },
   { "rearranged",           Qual_class_subsource },
+  { "rev_primer_name",      Qual_class_subsource },
+  { "rev_primer_seq",       Qual_class_subsource },
   { "segment",              Qual_class_subsource },
   { "seqfeat_note",         Qual_class_string    },
   { "sequenced_mol",        Qual_class_quote     },
@@ -306,7 +332,7 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "?",                    Qual_class_subsource },
 };
 
-NLM_EXTERN SourceType subSourceToSourceIdx [30] = {
+NLM_EXTERN SourceType subSourceToSourceIdx [38] = {
   SCQUAL_zero_subsrc,
   SCQUAL_chromosome,
   SCQUAL_map,
@@ -336,6 +362,14 @@ NLM_EXTERN SourceType subSourceToSourceIdx [30] = {
   SCQUAL_transgenic,
   SCQUAL_environmental_sample,
   SCQUAL_isolation_source,
+  SCQUAL_lat_lon,
+  SCQUAL_collection_date,
+  SCQUAL_collected_by,
+  SCQUAL_identified_by,
+  SCQUAL_fwd_primer_seq,
+  SCQUAL_rev_primer_seq,
+  SCQUAL_fwd_primer_name,
+  SCQUAL_rev_primer_name,
   SCQUAL_subsource_note
 };
 
@@ -354,6 +388,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ATCC",
   "ATCC(in host)",
   "ATCC(dna)",
+  "axeldb",
   "BDGP_EST",
   "BDGP_INS",
   "CDD",
@@ -377,6 +412,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GOA",
   "H-InvDB",
   "IFO",
+  "IMGT/GENE-DB",
   "IMGT/HLA",
   "IMGT/LIGM",
   "InterimID",
@@ -384,7 +420,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ISFinder",
   "JCM",
   "LocusID",
-  "MaizeDB",
+  "MaizeGDB",
   "MGD",
   "MGI",
   "MIM",
@@ -405,6 +441,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "UniProt/Swiss-Prot",
   "UniProt/TrEMBL",
   "UniSTS",
+  "VBASE2",
   "WorfDB",
   "WormBase",
   "ZFIN",
@@ -412,9 +449,11 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
 };
 
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
-  "REBASE",
-  "IMGT/GENE-DB",
+  "CCDS",
   "CloneID",
+  "ECOCYC",
+  "HPRD",
+  "REBASE",
   NULL
 };
 
@@ -1816,6 +1855,7 @@ NLM_EXTERN CharPtr FFFlatLoc (
     order [SEQID_TPG] = num++;
     order [SEQID_TPE] = num++;
     order [SEQID_TPD] = num++;
+    order [SEQID_GPIPE] = num++;
     order [SEQID_GIBBSQ] = num++;
     order [SEQID_GIBBMT] = num++;
     order [SEQID_PRF] = num++;
@@ -2012,9 +2052,9 @@ static void SubSourceToQualArray (
   while (ssp != NULL) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 29;
+      subtype = 37;
     }
-    if (subtype < 30) {
+    if (subtype < 38) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].ssp == NULL) {
@@ -2909,10 +2949,10 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
           FFAddOneString (ffstring, "/note=\"", FALSE, FALSE, TILDE_IGNORE);
           if (is_desc) {
-            /* AB055064.1 says TILDE_IGNORE on descriptors */
-            FFAddOneString (ffstring, notestr, FALSE, TRUE, TILDE_IGNORE);
+            /* AB055064.1 said TILDE_IGNORE on descriptors, but now changing policy */
+            FFAddOneString (ffstring, notestr, FALSE, TRUE, /* TILDE_IGNORE */ TILDE_EXPAND);
           } else {
-            /* ASZ93724.1 says TILDE_EXPAND on features */
+            /* ASZ93724.1 said TILDE_EXPAND on features, but record does not exist */
             FFAddOneString (ffstring, notestr, FALSE, TRUE, TILDE_EXPAND);
           }
           FFAddOneString (ffstring, "\"", FALSE, FALSE, TILDE_IGNORE);
@@ -3175,7 +3215,8 @@ static void CatenateSequenceInGbseq (
     12, /* 15 = pdb */
     10, /* 16 = tpg */
     10, /* 17 = tpe */
-    10  /* 18 = tpd */
+    10, /* 18 = tpd */
+    10  /* 19 = gpp */
   };
 
 static void PrintGenome (
@@ -3188,9 +3229,9 @@ static void PrintGenome (
 {
   Char         buf[40], val[166];
   Boolean      first = TRUE;
+  SeqIdPtr     freeid, sid, newid;
   SeqLocPtr    slp;
   Int4         from, to, start, stop;
-  SeqIdPtr     sid, newid;
   BioseqPtr    bsp = NULL;
   Int2         p1=0, p2=0;
 
@@ -3211,12 +3252,16 @@ static void PrintGenome (
       continue;
     }
     newid = NULL;
+    freeid = NULL;
     buf [0] = '\0';
     if (sid->choice == SEQID_GI) {
       if (GetAccnVerFromServer (sid->data.intvalue, buf)) {
         /* no need to call GetSeqIdForGI */
       } else {
         newid = GetSeqIdForGI (sid->data.intvalue);
+        if (newid != NULL) {
+          freeid = newid;
+        }
         if (newid != NULL && segWithParts) {
           if (newid->choice == SEQID_GIBBSQ ||
               newid->choice == SEQID_GIBBMT ||
@@ -3281,6 +3326,9 @@ static void PrintGenome (
     FFAddOneString(ffstring, val, FALSE, FALSE, TILDE_IGNORE);
     p1 += StringLen (val);
     p2 += StringLen (val);
+    if (freeid != NULL) {
+      freeid = SeqIdFree (freeid);
+    }
   }
 }
 
@@ -3487,7 +3535,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   SeqLocPtr         slp;
   Int4              start;
   Int4              stop;
-  CharPtr           str;
+  CharPtr           str = NULL;
   CharPtr           tmp;
   StringItemPtr     ffstring;
 
@@ -3506,11 +3554,21 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   if (ajp->gbseq) {
     gbseq = &asp->gbseq;
 
-    str = MemNew (sizeof (Char) * (bsp->length + 10));
+    if (ajp->ajp.slp != NULL) {
+      slp = ajp->ajp.slp;
+      str = MemNew (sizeof (Char) * (SeqLocLen (slp) + 10));
+    } else {
+      str = MemNew (sizeof (Char) * (bsp->length + 10));
+    }
     if (str == NULL) return NULL;
 
     tmp = str;
-    SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &tmp, SaveGBSeqSequence);
+    if (ajp->ajp.slp != NULL) {
+      slp = ajp->ajp.slp;
+      SeqPortStreamLoc (slp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &tmp, SaveGBSeqSequence);
+    } else {
+      SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &tmp, SaveGBSeqSequence);
+    }
     gbseq->sequence = StringSave (str);
 
     tmp = gbseq->sequence;
@@ -3559,9 +3617,9 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
             sl.data.ptrvalue = (Pointer) slp->data.ptrvalue;
             sl.next = NULL;
           }
-          SeqPortStreamInt (&bsq, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+          SeqPortStreamInt (&bsq, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) str, NULL);
         } else {
-          SeqPortStreamInt (bsp, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+          SeqPortStreamInt (bsp, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) str, NULL);
         }
         sbp->bases = str;
       }

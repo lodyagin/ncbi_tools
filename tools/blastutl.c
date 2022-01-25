@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.447 2004/10/18 13:02:41 madden Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.459 2005/04/25 14:16:36 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,62 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.447 $
+$Revision: 6.459 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.459  2005/04/25 14:16:36  coulouri
+* set db_chunk_size adaptively
+*
+* Revision 6.458  2005/04/04 20:44:27  camacho
+* Do not overwrite the effective search space in Pssm2Sequences if specified in the options structure
+*
+* Revision 6.457  2005/02/07 15:30:08  dondosha
+* Removed restriction on the value of longest intron option
+*
+* Revision 6.456  2005/01/24 20:37:37  camacho
+* Added conditional compilation to structs need for BLAST_CLUSTER_HITS
+*
+* Revision 6.455  2005/01/18 14:54:13  camacho
+* Change in tie-breakers for score comparison, suggestion by Mike Gertz
+*
+* Revision 6.454  2004/12/20 15:22:16  camacho
+* Calculate kbp_ideal values rather than loading them from pre-computed values
+*
+* Revision 6.453  2004/12/01 17:24:15  coulouri
+* do not dereference null pointer
+*
+* Revision 6.452  2004/11/22 16:10:11  dondosha
+* Minor fix to make sure that "evalue" score type is always used when hsp is not part of a linked set
+*
+* Revision 6.451  2004/11/04 15:51:55  bealer
+* - bl2seq should use dblen as average length if database is not available.
+*
+* Revision 6.450  2004/11/01 14:07:56  madden
+* From Mike Gertz:
+*
+*    - In query_offset_compare_hsp and query_end_compare_hsp, use the
+*      subject query/offset as a tie-breaker.  Without this tie-breaker
+*      CheckGappedAlignmentsForOverlap won't work properly.
+*
+*    - In CheckGappedAlignmentsForOverlap check that hsp_array, rather
+*      than *hsp_array, is not nil.
+*
+*    - In BlastSaveCurrentHsp, rewrote the binary search to use
+*      score_compare_hsps, so that the answers are consistent with the
+*      heap code used in the algo/blast/core code.
+*
+*    - In BlastGappedScoreInternal delete gapped extensions that don't
+*      reach the cutoff score (cutoff_s1).
+*
+* Revision 6.449  2004/10/25 18:36:17  papadopo
+* From Michael Gertz: remove unneeded decrement of alignment offsets in BlastNtSaveCurrentHsp
+*
+* Revision 6.448  2004/10/19 19:42:17  dondosha
+* Optimized algorithm in BlastPruneSeqAlignByGiList to make it up to 25 times faster; Added new function BlastPruneSeqAlignBySortedGiList
+*
 * Revision 6.447  2004/10/18 13:02:41  madden
 * Changes from Mike Gertz:
 *         - In score_compare_hsps, query_offset_compare_hsp and
@@ -2939,12 +2989,10 @@ static BLAST_ScorePtr *B2SCalculateScaledPSSM(BlastSearchBlkPtr search,
 {
     BLAST_ScorePtr *retval = NULL;
     posSearchItems *posSearch = NULL;
-    Int4 qlen, alphabet_sz, rv, array_sz;
+    Int4 qlen, alphabet_sz, rv;
     Nlm_FloatHi scalingFactor = search->pbp->scalingFactor;
     BLAST_ScoreBlkPtr sbp = NULL;
     ValNodePtr error_return;
-    Int4Ptr open, extend;        /* gap open and extension costs */
-    Nlm_FloatHiPtr lambda, K, H; /* Karlin_Altschul score paramters */
     Int4 i, gap_open, gap_extend;
 
     if (!search || !compactSearch || !posFreqs)
@@ -2995,20 +3043,6 @@ static BLAST_ScorePtr *B2SCalculateScaledPSSM(BlastSearchBlkPtr search,
         return NULL;
     }
 
-    array_sz = BlastKarlinGetMatrixValues(sbp->name, &open, &extend, &lambda,
-            &K, &H, NULL);
-    if (array_sz > 0) {
-        for (i = 0; i < array_sz; i++) {
-            if (open[i] == INT2_MAX && extend[i] == INT2_MAX) {
-                sbp->kbp_ideal = BlastKarlinBlkCreate();
-                sbp->kbp_ideal->Lambda = lambda[i];
-                sbp->kbp_ideal->K = K[i];
-                sbp->kbp_ideal->H = H[i];
-            }
-        }
-        MemFree(open); MemFree(extend); 
-        MemFree(lambda); MemFree(K); MemFree(H);
-    }
     if (sbp->kbp_ideal == NULL)
         sbp->kbp_ideal = BlastKarlinBlkStandardCalcEx(sbp);
     compactSearch->lambda =  sbp->kbp_gap_std[0]->Lambda;
@@ -3407,8 +3441,12 @@ SeqAlignPtr * LIBCALL B2SPssmMultipleQueries(SeqLocPtr pssm_slp,
                         options->db_length : SeqLocLen(pssm_slp);
         Int4 nseqs = (options->dbseq_num != 0) ?  options->dbseq_num : 1;
 
-        search->searchsp_eff  = BLASTCalculateSearchSpace(options, nseqs, 
-                dblen, SeqLocLen(target_seqs[i]));
+        /* If search space has been specified in the options structure, the it
+         * must have been set in BLASTSetUpSearchEx, so don't overwrite it */
+        if ( ! (options->searchsp_eff > 0) ) {
+            search->searchsp_eff  = BLASTCalculateSearchSpace(options, nseqs, 
+                    dblen, SeqLocLen(target_seqs[i]));
+        }
         sa_array[i] = B2SPssmOnTheFlyByLoc(search, target_seqs[i]);
     }
 
@@ -3464,9 +3502,9 @@ BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr
 	/* If filtering is performed, do not reverse the sequence.  
            In this case the wrong sequence would be filtered. */
 	reverse_forbidden = FALSE;
-	if (options && ((options->filter_string &&
+	if ((options && ((options->filter_string &&
                         StringCmp(options->filter_string, "F")) ||
-                        options->is_megablast_search) ||
+                        options->is_megablast_search)) ||
                         matrix != NULL)
 	{
 		reverse_forbidden = TRUE;
@@ -3965,7 +4003,7 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 	register int state;
 	Int2 total_remainder;
 	Int4 prot_length;
-	register int byte_value, codon;
+	register int byte_value, codon=0;
 	Uint1 last_remainder, last_byte, remainder;
 	register Uint1Ptr translation, nt_seq_end, nt_seq_start;
 	Uint1Ptr prot_seq_start;
@@ -4413,6 +4451,9 @@ evalue_compare_hits(VoidPtr v1, VoidPtr v2)
     return 0;
 }
 
+/* Code in BLAST_CLUSTER_HITS is not currently in use */
+
+#ifdef BLAST_CLUSTER_HITS        
 typedef struct _blast_result_with_subject_id {
    BLASTResultHspPtr hsp;
    Int4 hitlist_index, hsp_index;
@@ -4450,6 +4491,7 @@ static int LIBCALLBACK ResultHspWithIdIndexCmp(VoidPtr v1, VoidPtr v2)
    else /* Should never happen */
       return 0;
 }
+#endif
 
 #define CLUSTER_LENGTH_THRESH 0.1
 #define CLUSTER_OVERLAP_THRESH 0.9
@@ -4459,24 +4501,20 @@ SeqAlignPtr LIBCALL
 BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                         Int4Ptr *pos_matrix)
 {
-	BLASTResultHspPtr hsp, hsp1;
-	BlastResultHspWithIdPtr PNTR hspp;
-	BLASTResultsStructPtr result_struct;
-	BLASTResultHitlistPtr   result_hitlist;
-	Char buffer[512];
-	GapXEditBlockPtr edit_block;
-	Int4 hitlist_count, hitlist_max, hspcnt, index, index1, index2;
-	Int4 length, sequence_length;
-	Int4 q_overlap, total_num_hsp=0;
-	SeqAlignPtr sap, head, seqalign, seqalign_var;
-	SeqIdPtr gi_list=NULL, subject_id;
-	Uint1Ptr sequence;
-	StdSegPtr ssp;
-	BioseqPtr bsp1, bsp2, PNTR bspp; 
-	BlastSearchBlkPtr search1;
+	Int4 hitlist_max;
+	SeqAlignPtr head, seqalign;
+#ifdef BLAST_CLUSTER_HITS
+        BLASTResultHspPtr hsp, hsp1;
+        BlastResultHspWithIdPtr PNTR hspp;
+        BLASTResultsStructPtr result_struct;
+        BLASTResultHitlistPtr   result_hitlist;
+        Int4 hspcnt, index, index1, index2;
+        Int4 q_overlap;
+        BioseqPtr bsp1, bsp2, PNTR bspp;
+        BlastSearchBlkPtr search1;
         BLAST_KarlinBlkPtr kbp;
         FloatHi bit_score;
-
+#endif
 
 	head = seqalign = NULL;
 
@@ -5104,7 +5142,7 @@ HitRangeToSeqLoc(BlastHitRangePtr bhrp, Int4 link_value, Boolean combine)
 
 {
 	Boolean make_seqloc, start=TRUE;
-	Int4 index, total, start_pos, stop_pos, largest_stop_pos;
+	Int4 index, total, start_pos=0, stop_pos, largest_stop_pos=0;
 	SeqIntPtr sint;
 	SeqLocPtr retval=NULL;
 
@@ -5681,7 +5719,6 @@ BlastThrInfoPtr BlastThrInfoNew(void)
     BlastThrInfoPtr thr_info;
     
     thr_info = MemNew(sizeof(BlastThrInfo));
-    thr_info->db_chunk_size = BLAST_DB_CHUNK_SIZE;
     
     return thr_info;
 }
@@ -6675,7 +6712,7 @@ BioseqSegEx(BioseqPtr bsp_unfilter, CharPtr options)
 	Boolean mask_state;
 	Char cmd_buf[2*PATH_MAX], temp_file[PATH_MAX];
 	CharPtr filter_dir;
-	Int4 index, mask_begin;
+	Int4 index, mask_begin=0;
 	SeqEntryPtr sep;
 	SeqLocPtr slp_mask;
 	SeqPortPtr spp_filter, spp_unfilter;
@@ -6958,7 +6995,7 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
         /* -z Effective database length */
         index = BlastGetLetterIndex(opt_str, 'z');
         if (values[index] != NULL) {
-           const char **dummy;
+           const char **dummy=NULL;
            options->db_length =  StringToInt8(values[index], dummy);
         }
 
@@ -7010,8 +7047,7 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
            if (options->is_megablast_search)
               options->mb_template_length = atoi(values[index]);
            else 
-              options->longest_intron = 
-                 MAX(atoi(values[index]), MAX_INTRON_LENGTH);
+              options->longest_intron = atoi(values[index]);
 	}
 
 	/* -g  Scan every base of the database for megablast */
@@ -7634,8 +7670,10 @@ FilterWithSeg (Uint1Ptr sequence, Int4 length, Uint1 alphabet)
 
 BLAST_HSPPtr BLAST_HSPFree(BLAST_HSPPtr hsp)
 {
+if (hsp)
    hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
-   return (BLAST_HSPPtr) MemFree(hsp);
+
+return (BLAST_HSPPtr) MemFree(hsp);
 }
 
 /* 
@@ -7836,44 +7874,30 @@ int LIBCALLBACK
 score_compare_hsps(VoidPtr v1, VoidPtr v2)
 
 {
-    BLAST_HSPPtr h1, h2;
-    BLAST_HSPPtr PNTR hp1, PNTR hp2;
+    BLAST_HSPPtr hsp1, hsp2;    /* the HSPs to be compared */
+    int result = 0;             /* the result of the comparison */
 
-    hp1 = (BLAST_HSPPtr PNTR) v1;
-    hp2 = (BLAST_HSPPtr PNTR) v2;
-    h1 = *hp1;
-    h2 = *hp2;
+    hsp1 = *((BLAST_HSPPtr PNTR) v1);
+    hsp2 = *((BLAST_HSPPtr PNTR) v2);
 
-    if (h1 == NULL) {
-        return (h2 == NULL) ? 0 : 1;
-    } else if (h2 == NULL) {
-      return -1;
+    /* Null HSPs are "greater" than any non-null ones, so they go to the end
+       of a sorted list. */
+    if (!hsp1 && !hsp2)
+        return 0;
+    else if (!hsp1)
+        return 1;
+    else if (!hsp2)
+        return -1;
+
+    if (0 == (result = BLAST_CMP(hsp2->score,          hsp1->score)) &&
+        0 == (result = BLAST_CMP(hsp1->subject.offset, hsp2->subject.offset)) &&
+        0 == (result = BLAST_CMP(hsp2->subject.end,    hsp1->subject.end)) &&
+        0 == (result = BLAST_CMP(hsp1->query  .offset, hsp2->query  .offset))) {
+        /* if all other test can't distinguish the HSPs, then the final
+           test is the result */
+        result = BLAST_CMP(hsp2->query.end, hsp1->query.end);
     }
-    /* Neither HSP is nil */
-    else if (h1->score > h2->score)
-      return -1;
-    else if (h1->score < h2->score)
-      return 1;
-    /* Tie-breakers: decreasing subject offsets; decreasing subject
-       ends, decreasing query offsets, decreasing query ends */
-    else if (h1->subject.offset > h2->subject.offset)
-      return -1;
-    else if (h1->subject.offset < h2->subject.offset)
-      return 1;
-    else if (h1->subject.end > h2->subject.end)
-      return -1;
-    else if (h1->subject.end < h2->subject.end)
-      return 1;
-    else if (h1->query.offset > h2->query.offset)
-      return -1;
-    else if (h1->query.offset < h2->query.offset)
-      return 1;
-    else if (h1->query.end > h2->query.end)
-      return -1;
-    else if (h1->query.end < h2->query.end)
-      return 1;
-
-    return 0;
+    return result;
 }
 
 /*
@@ -8122,6 +8146,11 @@ query_offset_compare_hsp(VoidPtr v1, VoidPtr v2)
 	if (h1->query.offset > h2->query.offset)
 		return 1;
 
+	if (h1->subject.offset < h2->subject.offset)
+		return -1;
+	if (h1->subject.offset > h2->subject.offset)
+		return 1;
+
 	return 0;
 }
 
@@ -8148,6 +8177,11 @@ query_end_compare_hsp(VoidPtr v1, VoidPtr v2)
 	if (h1->query.end > h2->query.end)
 		return 1;
 
+	if (h1->subject.end < h2->subject.end)
+		return -1;
+	if (h1->subject.end > h2->subject.end)
+		return 1;
+
 	return 0;
 }
 /*
@@ -8164,7 +8198,7 @@ CheckGappedAlignmentsForOverlap(BlastSearchBlkPtr search, BLAST_HSPPtr *hsp_arra
 {
 	Int4 index1, index, increment;
 
-	if (search == NULL || *hsp_array == NULL || hsp_count == 0)
+	if (search == NULL || hsp_array == NULL || hsp_count == 0)
 		return 0;
 
     	HeapSort(hsp_array, hsp_count, sizeof(BLAST_HSPPtr), query_offset_compare_hsp);
@@ -8386,7 +8420,7 @@ static BLAST_HSPPtr PNTR
 BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, GapAlignBlkPtr gap_align, BLAST_HSPPtr *hsp_array, Int4Ptr hspcnt, Int4Ptr hspcnt_max, Int4 hspmax, Int2 frame)
 
 {
-	BLAST_HSPPtr hsp, hsp1;
+	BLAST_HSPPtr hsp, hsp1=NULL;
 	BLAST_HSPPtr PNTR hsp_array_new;
 	BLAST_HSP_helperPtr helper;
 	Boolean hsp_start_is_contained, hsp_end_is_contained;
@@ -8442,10 +8476,10 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
 			   }
 			}
 		}
-
+                
 		if (hsp_start_is_contained == FALSE ||
-			 hsp_end_is_contained == FALSE || 
-				hsp->score > hsp1->score)
+                    hsp_end_is_contained   == FALSE || 
+                    (hsp1 == NULL) || (hsp->score > hsp1->score))
 		{
 			gap_align->include_query = 0;
 
@@ -8516,32 +8550,37 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
                         hsp->query.length = hsp->query.end - hsp->query.offset;
                         hsp->subject.length = hsp->subject.end - hsp->subject.offset;
 			hsp->score = gap_align->score;
-/* TLM */
-                        /* AM: Changed to support query concatenation */
-			if( !search->mult_queries )
-			  hsp->evalue = BlastKarlinStoE_simple(hsp->score, search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
-                        else
-			{
-			  query_num = GetQueryNum( search->mult_queries,
-			                           hsp->query.offset,
-						   hsp->query.end,
-						   hsp->query.frame );
-			  hsp->evalue = BlastKarlinStoE_simple(hsp->score, 
-			                                   search->sbp->kbp_gap[search->first_context], 
-							   search->mult_queries->SearchSpEff[query_num]);
-			}
+            if( hsp->score >= search->pbp->cutoff_s1 ) {
+                /* AM: Changed to support query concatenation */
+                if( !search->mult_queries )
+                    hsp->evalue =
+                        BlastKarlinStoE_simple(hsp->score,
+                                               search->sbp->
+                                               kbp_gap[search->first_context],
+                                               search->searchsp_eff);
+                else {
+                    query_num = GetQueryNum( search->mult_queries,
+                                             hsp->query.offset,
+                                             hsp->query.end,
+                                             hsp->query.frame );
+                    hsp->evalue =
+                        BlastKarlinStoE_simple(hsp->score,
+                                               search->sbp->
+                                               kbp_gap[search->first_context],
+                                               search->mult_queries->
+                                               SearchSpEff[query_num]);
+                }
 
-			hsp_cnt++;
-			/* Fill in the helper structure. */
-			helper[index].qoffset = hsp->query.offset;
-			helper[index].qend = hsp->query.end;
-/*
-			helper[index].soffset = hsp->subject.offset;
-			helper[index].send = hsp->subject.end;
-			helper[index1].qframe = hsp->query.frame;
-			helper[index1].sframe = hsp->subject.frame;
-*/
-		}
+                hsp_cnt++;
+                /* Fill in the helper structure. */
+                helper[index].qoffset = hsp->query.offset;
+                helper[index].qend = hsp->query.end;
+            } else {
+                /* Score of the gapped extension is below the required
+                   cutoff, delete this hsp */
+                hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
+            }
+        }
 		else
 		{ /* Contained within another HSP, delete. */
 			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
@@ -8583,7 +8622,7 @@ static Boolean
 BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, GapAlignBlkPtr gap_align, BLAST_HSPPtr *hsp_array, Int4Ptr hspcnt, Int4Ptr hspcnt_max, Int4 hspmax)
 
 {
-	BLAST_HSPPtr hsp, hsp1;
+	BLAST_HSPPtr hsp, hsp1=NULL;
 	BLAST_HSP_helperPtr helper;
 	Boolean hsp_start_is_contained, hsp_end_is_contained;
 	Int4 hsp_cnt=0, index, index1, next_offset, query_length;
@@ -8871,8 +8910,7 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     Int4 index, index1, index2, query_length, max_offset;
     Int4Ptr translated_subject_length=NULL; 
     Int4Ptr translated_subject_length_orig=NULL;
-    SeqAlignPtr sap, seqalign, seqalign_var, *seqalign_array;
-    StdSegPtr ssp;
+    SeqAlignPtr seqalign, seqalign_var, *seqalign_array;
     Uint1Ptr query, PNTR translated_subject=NULL, PNTR translated_subject_orig=NULL;
     ValNodePtr gi_list=NULL;
     BLAST_HitListPtr tmp_hitlist;
@@ -9156,8 +9194,8 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                    keep = FALSE;
                 }
 
-                if (keep && search->prog_number == blast_type_blastp ||
-                    search->prog_number == blast_type_blastn) {
+                if (keep && (search->prog_number == blast_type_blastp ||
+                    search->prog_number == blast_type_blastn)) {
                    if (search->pbp->mb_params) {
                       FloatHi searchsp_eff = (FloatHi) search->dblen_eff *
                          (FloatHi) search->context[hsp->context].query->effective_length;
@@ -10431,8 +10469,7 @@ BlastSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, 
 {
 	BLAST_HitListPtr current_hitlist;
 	BLAST_HSPPtr PNTR hsp_array, new_hsp;
-	BLAST_Score highscore, lowscore;
-	Int4 hspcnt, hspmax, index, new_index, high_index, old_index, low_index;
+	Int4 hspcnt, hspmax, index, high_index, low_index;
 
 	current_hitlist = search->current_hitlist;
 	hsp_array = current_hitlist->hsp_array;
@@ -10512,73 +10549,36 @@ BlastSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, 
 	}
 
 /* Use a binary search to insert the HSP. */
-
-	if (hspcnt != 0)
-	{
-		highscore = hsp_array[0]->score;
-		lowscore = hsp_array[hspcnt-1]->score;
-	}
-	else
-	{
-		highscore = 0;
-		lowscore = 0;
-	}
-
-	if (score >= highscore)
-	{
-		new_index = 0;
-	}
-	else if (score <= lowscore)
-	{
-		new_index = hspcnt;
-	}
-	else
-	{
-		low_index = 0;
-		high_index = hspcnt-1;
-		new_index = (low_index+high_index)/2;
-		old_index = new_index;
-
-		for (index=0; index<BLAST_SAVE_ITER_MAX; index++)
-		{
-			if (score > hsp_array[new_index]->score)
-			{
-				high_index = new_index;
-			}
-			else
-			{
-				low_index = new_index;
-			}
-			new_index = (low_index+high_index)/2;
-                        if (new_index == old_index)
-                        { /* Perform this check as new_index get rounded DOWN a
-bove.*/
-                                if (score < hsp_array[new_index]->score)
-                                {
-                                        new_index++;
-                                }
-                                break;
-                        }
-                        old_index = new_index;
-		}
-	}
+        low_index  = 0;
+        high_index = hspcnt;
+        while(low_index < high_index) {
+            Int4 next_index = (low_index + high_index)/2;
+            if( score_compare_hsps(&new_hsp, &hsp_array[next_index]) > 0 ) {
+                low_index = next_index  + 1;
+            } else {
+                high_index = next_index;
+            }
+        }
 
 	if (hspcnt >= hspmax)
 	{
-		if (new_index >= hspcnt)
-		{ /* this HSP is less significant than others on a full list.*/
-			new_hsp = BLAST_HSPFree(new_hsp);
-			return;
-		}
-		else
-		{ /* Delete the last HPS on the list. */
-			hspcnt = --current_hitlist->hspcnt;
-			hsp_array[hspcnt] = BLAST_HSPFree(hsp_array[hspcnt]);
-		}
+            if (low_index >= hspcnt) {
+                /* this HSP is less significant than others on a full list.*/
+                new_hsp = BLAST_HSPFree(new_hsp);
+                return;
+            } else {
+                /* Delete the last HPS on the list. */
+                hspcnt = --current_hitlist->hspcnt;
+                hsp_array[hspcnt] = BLAST_HSPFree(hsp_array[hspcnt]);
+            }
 	}
-	current_hitlist->hspcnt++;
-	Nlm_MemMove((hsp_array+new_index+1), (hsp_array+new_index), (hspcnt-new_index)*sizeof(hsp_array[0]));
-	hsp_array[new_index] = new_hsp;
+        /* Move existing elements out of the way */
+        Nlm_MemMove(&hsp_array[low_index] + 1, &hsp_array[low_index],
+                    (hspcnt-low_index)*sizeof(hsp_array[0]));
+        hspcnt = ++current_hitlist->hspcnt;
+
+        /* Insert the new HSP */
+        hsp_array[low_index] = new_hsp;
 	return;
 }
 
@@ -10802,9 +10802,8 @@ BlastNtSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset
 	new_hsp->query.frame = ContextToFrame(search, context);
 	new_hsp->subject.frame = search->subject->frame;
 
-/* HACK */
-new_hsp->query.gapped_start = query_gap_start-1;
-new_hsp->subject.gapped_start = subject_gap_start-1;
+    new_hsp->query.gapped_start   = query_gap_start;
+    new_hsp->subject.gapped_start = subject_gap_start;
 
 /* If we are saving ALL HSP's, simply save and sort later. */
 	if (current_hitlist->do_not_reallocate == FALSE)
@@ -11001,7 +11000,7 @@ BlastDeleteFakeBioseq(BioseqPtr fake_bsp)
 }
 
 /* Comparison function for sorting gi list */
-static Int4 LIBCALLBACK Int4Compare(VoidPtr i, VoidPtr j)
+static int Int4Compare(const void* i, const void* j)
 {
   if (*(Int4Ptr)i > *(Int4Ptr)j)
     return (1);
@@ -11010,23 +11009,43 @@ static Int4 LIBCALLBACK Int4Compare(VoidPtr i, VoidPtr j)
   return (0);
 }
 
-/* 
-   Remove hits from a SeqAlignPtr that are not from a gi list 
-*/
-
+/* Remove hits from a SeqAlignPtr that are not from a gi list. The function
+ * is optimized with an assumption that the incoming gi list is not sorted.
+ * Since sorting of the gi list may be expensive, the hit gis are found 
+ * and sorted. Then for each gi in the (presumably large) incoming gi list,
+ * a binary search is performed to check if it is present in the list of hit
+ * gis. This procedure is linear in the gi list size. 
+ */
 SeqAlignPtr 
-BlastPruneSeqAlignByGiList(SeqAlignPtr seqalign, Int4Ptr gi_list, Int4 gi_list_total)
+BlastPruneSeqAlignByGiList(SeqAlignPtr seqalign, Int4Ptr gi_list, 
+                           Int4 gi_list_total, Int4 hitlist_size)
 {
    SeqAlignPtr head = NULL, last_sap = NULL, next_sap, sap;
    SeqIdPtr sip;
    BioseqPtr bsp;
-   Int4 index, gi;
+   Int4 gi = 0, index;
+   Int4* hit_gis;
+   Int4 num_hit_gis, gi_index;
+   Boolean* good_gis;
+   Boolean good_gi = FALSE;
 
    if (!gi_list || gi_list_total <= 0)
       return NULL;
 
-   HeapSort((VoidPtr)gi_list, gi_list_total, sizeof(Int4), Int4Compare);
+   /* If the size of the gi list is small, sort it and use a different
+      routine, which takes a sorted list argument. */
+      
+   if (hitlist_size >= gi_list_total) {
+      qsort((void*)gi_list, gi_list_total, sizeof(Int4), Int4Compare);
+      return BlastPruneSeqAlignBySortedGiList(seqalign, gi_list, 
+                                              gi_list_total);
+   }
 
+   hit_gis = (Int4*) MemNew(hitlist_size*sizeof(Int4));
+
+   gi = 0;
+   index = 0;
+   /* Find all subject gis in the Seq-align chain */
    for (sap = seqalign; sap; sap = sap->next) {
       sip = SeqAlignId(sap, 1);
       if (sip->choice != SEQID_GI) {
@@ -11037,22 +11056,133 @@ BlastPruneSeqAlignByGiList(SeqAlignPtr seqalign, Int4Ptr gi_list, Int4 gi_list_t
          }
       }
       if (sip->choice == SEQID_GI) {
-         gi = sip->data.intvalue;
-         index = BinarySearchInt4(gi, gi_list, gi_list_total);
-         if (gi_list[index] == gi) {
-            next_sap = Malloc(sizeof(SeqAlign));
-            MemCpy(next_sap, sap, sizeof(SeqAlign));
-            if (head == NULL)
-               head = last_sap = next_sap;
-            else {
-               last_sap->next = next_sap;
-               last_sap = last_sap->next;
-            }
+         /* Save this gi if the previous value of gi 
+            is different from the current value. */
+         if (gi != sip->data.intvalue) {
+           gi = sip->data.intvalue;
+           hit_gis[index] = gi;
+           ++index;
          }
       }
    }
-   if (last_sap)
-      last_sap->next = NULL;
+   num_hit_gis = index;
+   qsort((void*)hit_gis, num_hit_gis, sizeof(Int4), 
+         Int4Compare);
+   good_gis = (Boolean*) MemNew(num_hit_gis*sizeof(Boolean));
+
+   for (index = 0; index < gi_list_total; ++index) {
+      gi_index = BinarySearchInt4(gi_list[index], hit_gis, num_hit_gis);
+      if (hit_gis[gi_index] == gi_list[index])
+         good_gis[gi_index] = TRUE;
+   }
+
+   for (sap = seqalign; sap; sap = next_sap) {
+      next_sap = sap->next;
+      sip = SeqAlignId(sap, 1);
+      if (sip->choice != SEQID_GI) {
+         bsp = BioseqLockById(sip);
+         if (bsp) {
+            sip = SeqIdFindBest(bsp->id, SEQID_GI);
+            BioseqUnlock(bsp);
+         }
+      }
+      if (sip->choice == SEQID_GI) {
+         /* Do the following check only if the previous value of gi 
+            is different from the current value. */
+         if (gi != sip->data.intvalue) {
+            gi = sip->data.intvalue;
+            index = BinarySearchInt4(gi, hit_gis, num_hit_gis);
+            good_gi = good_gis[index];
+         }
+      } else {
+         good_gi = FALSE;
+      }
+      if (good_gi) {
+         /* Advance the pointer to the last link in the pruned chain to 
+            the current Seq-align. */
+         if (head == NULL)
+            head = last_sap = sap;
+         else {
+            last_sap = sap;
+         }
+      } else {
+         /* Link last Seq-align in the pruned chain to the next Seq-align
+            in the original chain. */
+         if (last_sap)
+            last_sap->next = sap->next;
+         sap->next = NULL;
+         /* Free this Seq-align, since it's no longer needed. */
+         sap = SeqAlignFree(sap);
+      }
+   }
+
+
+   return head;
+}
+
+/* Remove hits from a SeqAlignPtr that are not from a sorted gi list.
+ * No check is made that incoming gi list is sorted. User must make
+ * sure that it is that way. The pruning is done by a single pass over the
+ * list of Seq-aligns, in which a binary search is performed for any new 
+ * subject gi to check if it is present in the gi list.
+ */
+SeqAlignPtr 
+BlastPruneSeqAlignBySortedGiList(SeqAlignPtr seqalign, Int4Ptr gi_list, 
+                                 Int4 gi_list_total)
+{
+   SeqAlignPtr head = NULL, last_sap = NULL, next_sap, sap;
+   SeqIdPtr sip;
+   BioseqPtr bsp;
+   Int4 gi = 0;
+   Boolean good_gi = FALSE;
+
+   if (!gi_list || gi_list_total <= 0)
+      return NULL;
+
+   /* Find all subject gis in the Seq-align chain */
+   for (sap = seqalign; sap; sap = next_sap) {
+      next_sap = sap->next;
+      sip = SeqAlignId(sap, 1);
+      if (sip->choice != SEQID_GI) {
+         bsp = BioseqLockById(sip);
+         if (bsp) {
+            sip = SeqIdFindBest(bsp->id, SEQID_GI);
+            BioseqUnlock(bsp);
+         }
+      }
+      if (sip->choice == SEQID_GI) {
+         /* Do the following check only if the previous value of gi is
+            different from the current value. Otherwise the "good_gi" 
+            variable is left with its previous value. */
+         if (gi != sip->data.intvalue) {
+            Int4 index;
+            gi = sip->data.intvalue;
+            index = BinarySearchInt4(gi, gi_list, gi_list_total);
+            good_gi = (gi_list[index] == gi); 
+         }
+      } else {
+         good_gi = FALSE;
+      }
+
+      if (good_gi) {
+         /* Advance the pointer to the last link in the pruned chain to 
+            the current Seq-align. */
+         if (head == NULL)
+            head = last_sap = sap;
+         else {
+            last_sap = sap;
+         }
+      } else {
+         /* Link last Seq-align in the pruned chain to the next Seq-align
+            in the original chain. */
+         if (last_sap)
+            last_sap->next = sap->next;
+         sap->next = NULL;
+         /* Free this Seq-align, since it's no longer needed. */
+         sap = SeqAlignFree(sap);
+      }
+   }
+
    return head;
 }
 
@@ -11065,16 +11195,21 @@ SeqAlignPtr
 BlastPruneSeqAlignByEvalueRange(SeqAlignPtr seqalign, FloatHi expect_low,
                            FloatHi expect_high)
 {
-   SeqAlignPtr head = NULL, last_sap = NULL, next_sap, sap;
+   SeqAlignPtr head = NULL, last_sap = NULL, sap, next_sap;
    Int4 score, number;
    FloatHi evalue, bit_score;
    SeqIdPtr sip = NULL;
 
-   for (sap = seqalign; sap; sap = sap->next) {
+   for (sap = seqalign; sap; sap = next_sap) {
+      next_sap = sap->next;
       GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
       if (evalue >= expect_low && evalue <= expect_high) {
-         next_sap = Malloc(sizeof(SeqAlign));
-         MemCpy(next_sap, sap, sizeof(SeqAlign));
+         /* Leave this Seq-align */
+         if (head == NULL)
+            head = last_sap = sap;
+         else {
+            last_sap = sap;
+         }
 
          if (sip && SeqIdComp(TxGetSubjectIdFromSeqAlign(sap), sip) 
              == SIC_YES) {
@@ -11083,18 +11218,20 @@ BlastPruneSeqAlignByEvalueRange(SeqAlignPtr seqalign, FloatHi expect_low,
          }
          sip = NULL;
 
-         if (head == NULL)
-            head = last_sap = next_sap;
-         else {
-            last_sap->next = next_sap;
-            last_sap = last_sap->next;
+      } else {
+         if (evalue < expect_low && sip == NULL) {
+            sip = TxGetSubjectIdFromSeqAlign(sap);
          }
-      } else if (evalue < expect_low && sip == NULL)
-         sip = TxGetSubjectIdFromSeqAlign(sap);
+         /* Remove this Seq-align: link last Seq-align in the pruned
+            chain to the next Seq-align in the original chain. */
+         if (last_sap)
+            last_sap->next = sap->next;
+         sap->next = NULL;
+         /* Free this Seq-align, since it's no longer needed. */
+         sap = SeqAlignFree(sap);
+      }
 
    }
-   if (last_sap)
-      last_sap->next = NULL;
    return head;
 }
 
@@ -12122,7 +12259,7 @@ GetScoreSetFromBlastResultHsp(BLASTResultHspPtr hsp, SeqIdPtr gi_list)
 		MakeBlastScore(&score_set, scoretype, 0.0, score);
 
 	prob = hsp->e_value;
-	if (hsp->number == 1)
+	if (hsp->number <= 1)
 	{
 		scoretype = "e_value";
 	}

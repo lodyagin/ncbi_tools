@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.21 2004/08/02 18:26:58 lavr Exp $
+# $Id: fwd_check.sh,v 1.23 2005/01/06 23:25:56 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -9,7 +9,7 @@ delay_sec="$1"
 delay_sec=${delay_sec:="10"}
 
 cat <<EOF
-http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html
+http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html
 
 Checking connections to NCBI Firewall Daemons as of `date -u +'%b %d %Y %R GMT'`:
 EOF
@@ -29,8 +29,8 @@ cat <<EOF
 130.14.29.112	5863	OK
 130.14.29.112	5864	OK
 130.14.29.112	5865	OK
-130.14.29.112	5866	RESERVED
-130.14.29.112	5867	RESERVED
+130.14.29.112	5866	OK
+130.14.29.112	5867	OK
 130.14.29.112	5868	RESERVED
 130.14.29.112	5869	RESERVED
 130.14.29.112	5870	RESERVED

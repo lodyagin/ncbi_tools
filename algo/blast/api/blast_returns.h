@@ -1,4 +1,4 @@
-/* $Id: blast_returns.h,v 1.7 2004/10/04 14:02:02 madden Exp $
+/* $Id: blast_returns.h,v 1.12 2005/04/27 20:00:15 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,19 +21,13 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
+*  Author: Ilya Dondoshansky
 * ===========================================================================*/
 
-/*****************************************************************************
+/** @file blast_returns.h
+ * Manipulation of data returned from BLAST other than Seq-aligns
+ */
 
-File name: blast_returns.h
-
-Author: Ilya Dondoshansky
-
-Contents: Manipulation of data returned from BLAST other than Seq-aligns
-
-******************************************************************************
- * $Revision: 1.7 $
- * */
 #ifndef __BLAST_RETURNS__
 #define __BLAST_RETURNS__
 
@@ -50,12 +44,18 @@ extern "C" {
 #include <algo/blast/core/blast_diagnostics.h>   
 #include <blfmtutl.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
 /** Small structure containing the just those Karlin-Altschul parameters needed
  * for the BLAST formatting */
 typedef struct BLAST_KAParameters {
    double Lambda;     /**< Karlin-Altschul scaling parameter. */
    double K;          /**< Karlin-Altschul K parameter. */
    double H;          /**< Karlin-Altschul entropy */
+   double C;          /**< Constant factor for PHI BLAST e-values. */ 
 } BLAST_KAParameters;
 
 /** Small structure containing some numbers about database length, adjustment, 
@@ -95,11 +95,14 @@ typedef struct Blast_SearchParams {
  * than the alignment.
  */
 typedef struct Blast_SummaryReturn {
-   BLAST_KAParameters* ka_params; /**< Ungapped Karlin-Altschul parameters */
-   BLAST_KAParameters* ka_params_gap;/**< Gapped Karlin-Altschul parameters */
-   Blast_DatabaseStats* db_stats; /**< database numbers and adjustments */
-   Blast_SearchParams* search_params; /**< parameters used in search. */
-   BlastDiagnostics* diagnostics;     /**< diagnositics from engine. */
+    BLAST_KAParameters* ka_params; /**< Ungapped Karlin-Altschul parameters */
+    BLAST_KAParameters* ka_params_gap;/**< Gapped Karlin-Altschul parameters */
+    Blast_DatabaseStats* db_stats; /**< database numbers and adjustments */
+    Blast_SearchParams* search_params;/**< parameters used in search. */
+    BlastDiagnostics* diagnostics; /**< diagnositics from engine. */
+    Blast_Message* error;          /**< Error or warning message. */
+    SPHIQueryInfo* pattern_info; /**< In PHI BLAST only: information about 
+                                          pattern occurrences in query. */
 } Blast_SummaryReturn;
 
 /** Retrieves necessary information from a sequence source and fills the 
@@ -123,22 +126,23 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
 /** Fills the summary returns from the provided information.
  * NOTE: either one of rdfp or subject_loc (below) can be NULL,
  * but not both.
- *
+ * @param program_number Type of BLAST program [in]
  * @param score_options pointer for scoring options [in]
- * @parm sbp Karlin-Altschul/statistics information [in]
+ * @param sbp Karlin-Altschul/statistics information [in]
  * @param lookup_options pointer for lookup table options [in]
  * @param word_options pointer for word finding options [in]
  * @param ext_options pointer for extension options [in]
  * @param hit_options pointer for hit saving options [in]
  * @param eff_len_options pointer for effective length options [in]
  * @param query_setup pointer for query setup options [in]
- * @param query_info information about query [in]
- * @param rdfp used to fetch information from BLAST db, leave NULL if 
- *    "blast2seqs" case [in]
- * @param subject_loc location of target sequence, leave NULL if db search [in]
+ * @param query_info Information about query. Note: in PHI BLAST, the query 
+ *                   pattern information pointer is passed on to the sum_returns 
+ *                   structure and set to NULL in the query_info within this 
+ *                   function. [in]
+ * @param seq_src Source of subject sequences [in]
  * @param diagnostics pointer to diagnostic information, SET to NULL
  *    on return [in|out]
- * @param sum_returns_out object to be filled in [out]
+ * @param sum_returns Object to be filled in. Must be already allocated. [out]
  * @return zero returned on success
  */
 Int2 Blast_SummaryReturnFill(EBlastProgramType program_number, 
@@ -151,9 +155,12 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
         const BlastEffectiveLengthsOptions* eff_len_options,
         const QuerySetUpOptions* query_setup,
         const BlastQueryInfo* query_info,
-        ReadDBFILE* rdfp, SeqLoc* subject_slp,
+        const BlastSeqSrc* seq_src,
         BlastDiagnostics** diagnostics,
-        Blast_SummaryReturn** sum_returns_out);
+        Blast_SummaryReturn* sum_returns);
+
+/** Allocate the Blast_SummaryReturn structure */
+Blast_SummaryReturn* Blast_SummaryReturnNew(void);
 
 /** Deallocates memory for the summary returns structure 
  * @param sum_return object to be freed [in]
@@ -161,8 +168,18 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
  */
 Blast_SummaryReturn* Blast_SummaryReturnFree(Blast_SummaryReturn* sum_return);
 
+/** Frees the contents of the summary returns structure, but not the structure
+ * itself.
+ * @param sum_returns Structure to clean. [in] [out]
+ */
+void 
+Blast_SummaryReturnClean(Blast_SummaryReturn* sum_returns);
+
+/* @} */
+
 #ifdef __cplusplus
 }
 #endif
+
 #endif /* !__BLAST_FORMAT__ */
 

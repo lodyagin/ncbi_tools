@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.69 $
+* $Revision: 6.71 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -387,6 +387,7 @@ static void LookForGi (
       case SEQID_TPG :
       case SEQID_TPE :
       case SEQID_TPD :
+      case SEQID_GPIPE :
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL && hgp->accn!= NULL &&
             StringICmp (tsip->accession, hgp->accn) == 0) {
@@ -745,7 +746,7 @@ static Int2 HandleMultipleRecords (
 
 #ifdef OS_UNIX
   if (compressed) {
-    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
+    gzcatprog = getenv ("NCBI_UNCOMPRESS_BINARY");
     if (gzcatprog != NULL) {
       sprintf (cmmd, "%s %s", gzcatprog, inputFile);
     } else {

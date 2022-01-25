@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.h,v 1.5 2004/10/04 13:41:24 madden Exp $
+/* $Id: blast_diagnostics.h,v 1.8 2005/01/24 14:23:05 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -49,7 +49,7 @@ typedef struct BlastRawCutoffs {
                        extensions */
    Int4 x_drop_gap_final; /**< Raw value of the x-dropoff for gapped 
                              extensions with traceback */
-   Int4 gap_trigger; /**< Minimal raw score for starting gapped extension */
+   Int4 ungapped_cutoff; /**< Minimal raw score for starting gapped extension */
    Int4 cutoff_score; /**< Cutoff score corresponding to given evalue. */
 } BlastRawCutoffs;
 
@@ -108,11 +108,12 @@ void Blast_UngappedStatsUpdate(BlastUngappedStats* ungapped_stats,
 
 /** In a multi-threaded run, update global diagnostics data with the data
  * coming from one of the preliminary search threads.
- * @param global Diagnostics for the entire BLAST search [in] [out]
- * @param local Diagnostics from one of the preliminary search threads [in]
+ * @param diag_global Diagnostics for the entire BLAST search [in] [out]
+ * @param diag_local Diagnostics from one of the preliminary search threads [in]
  */
 void 
-Blast_DiagnosticsUpdate(BlastDiagnostics* global, BlastDiagnostics* local);
+Blast_DiagnosticsUpdate(BlastDiagnostics* diag_global,
+                        BlastDiagnostics* diag_local);
 
 #ifdef __cplusplus
 }

@@ -16,8 +16,6 @@ extern "C" { /* } */
 
 /**************************************************
 *
-*    Generated objects for Module NCBI-ID2Access
-*    Generated using ASNCODE Revision: 6.0 at Oct 18, 2004  1:24 AM
 *
 **************************************************/
 

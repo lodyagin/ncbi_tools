@@ -55,11 +55,19 @@ LIB32=link.exe -lib
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_ansi_ext.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_ansi_ext.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_buffer.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_comm.h
 # End Source File
 # Begin Source File
 
@@ -83,11 +91,19 @@ SOURCE=..\..\..\connect\ncbi_core_c.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_dispd.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_dispd.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_file_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_ftp_connector.c
 # End Source File
 # Begin Source File
 
@@ -104,6 +120,10 @@ SOURCE=..\..\..\connect\ncbi_host_infop.h
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_http_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_lbsmd.h
 # End Source File
 # Begin Source File
 
@@ -163,15 +183,7 @@ SOURCE=..\..\..\connect\ncbi_util.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=..\..\..\connect\ncbi_ansi_ext.h
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\connect\ncbi_buffer.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\connect\ncbi_comm.h
 # End Source File
 # Begin Source File
 
@@ -199,11 +211,11 @@ SOURCE=..\..\..\connect\ncbi_core_c.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\connect\ncbi_dispd.h
+SOURCE=..\..\..\connect\ncbi_file_connector.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\connect\ncbi_file_connector.h
+SOURCE=..\..\..\connect\ncbi_ftp_connector.h
 # End Source File
 # Begin Source File
 

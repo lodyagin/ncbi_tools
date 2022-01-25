@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.15 2004/09/21 13:43:36 dondosha Exp $
+/* $Id: blast_lookup.h,v 1.22 2005/03/28 21:22:50 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,8 +25,10 @@
  */
 
 /** @file blast_lookup.h
+ *  Routines for creating protein and nucleotide BLAST lookup tables.
  *  Contains definitions and prototypes for the lookup table
- *  construction and scanning phase of blastn, blastp, RPS blast
+ *  construction and scanning phase of blastn, blastp, and RPS blast.
+ * @todo: Re-examine code here and in unit tests for 32/64 bit portability.
  */
 
 #include <algo/blast/core/blast_def.h>
@@ -42,30 +44,30 @@ extern "C" {
 #endif
 
 /* some defines for the pv_array, as this changes from 32-bit to 64-bit systems. */
-#if defined(LONG_BIT) && LONG_BIT==64
+
+#if 0
+/*The 64 bit versions are disabled for now.*/
 
 #define PV_ARRAY_TYPE Uint8     /**< The pv_array 'native' type. */
 #define PV_ARRAY_BYTES 8        /**< number of BYTES in 'native' type. */
 #define PV_ARRAY_BTS 6          /**< bits-to-shift from lookup_index to pv_array index. */
 #define PV_ARRAY_MASK 63        /**< amount to mask off. */
 
-#else
+#endif
 
 #define PV_ARRAY_TYPE Uint4     /**< The pv_array 'native' type. */
 #define PV_ARRAY_BYTES 4        /**< number of BYTES in 'native' type. */
 #define PV_ARRAY_BTS 5          /**< bits-to-shift from lookup_index to pv_array index. */
 #define PV_ARRAY_MASK 31        /**< amount to mask off. */
 
-#endif
-
 /** Set the bit at position 'index' in the PV 
  *  array bitfield within 'lookup'
  */
-#define PV_SET(lookup, index) ( (lookup)->pv[(index)>>PV_ARRAY_BTS] |= 1 << ((index) & PV_ARRAY_MASK) )
+#define PV_SET(lookup, index) ( (lookup)->pv[(index)>>PV_ARRAY_BTS] |= (PV_ARRAY_TYPE)1 << ((index) & PV_ARRAY_MASK) )
 /** Test the bit at position 'index' in the PV 
  *  array bitfield within 'lookup'
  */
-#define PV_TEST(lookup, index) ( (lookup)->pv[(index)>>PV_ARRAY_BTS] & 1 << ((index) & PV_ARRAY_MASK) )
+#define PV_TEST(lookup, index) ( (lookup)->pv[(index)>>PV_ARRAY_BTS] & (PV_ARRAY_TYPE)1 << ((index) & PV_ARRAY_MASK) )
 
 #define FULL_BYTE_SHIFT 8 /**< Number of bits to shift in lookup 
                                index calculation when scanning 
@@ -129,6 +131,9 @@ typedef struct BlastLookupTable {
     Boolean use_pssm;      /**< if TRUE, lookup table construction will assume
                                 that the underlying score matrix is position-
                                 specific */
+    Boolean variable_wordsize; /**< if TRUE then only full bytes are compared as initial words. */
+    Boolean ag_scanning_mode;  /**< Using AG scanning mode (or stride) if TRUE, so that 
+                               not every base is checked.  */
   } BlastLookupTable;
   
   /** Create a mapping from word w to the supplied query offset
@@ -148,8 +153,8 @@ Int4 BlastAaLookupAddWordHit(BlastLookupTable* lookup,
  * @param lookup the lookup table [in]
  * @return Zero.
  */
-
 Int4 _BlastAaLookupFinalize(BlastLookupTable* lookup);
+
 /**
  * Scans the subject sequence from "offset" to the end of the sequence.
  * Copies at most array_size hits.
@@ -160,16 +165,14 @@ Int4 _BlastAaLookupFinalize(BlastLookupTable* lookup);
  * @param lookup_wrap the lookup table [in]
  * @param subject the subject sequence [in]
  * @param offset the offset in the subject at which to begin scanning [in/out]
- * @param query_offsets array to which hits will be copied [out]
- * @param subject_offsets array to which hits will be copied [out]
+ * @param offset_pairs Array to which hits will be copied [out]
  * @param array_size length of the offset arrays [in]
  * @return The number of hits found.
  */
 Int4 BlastAaScanSubject(const LookupTableWrap* lookup_wrap,
                         const BLAST_SequenceBlk *subject,
                         Int4* offset,
-                        Uint4 * NCBI_RESTRICT query_offsets,
-                        Uint4 * NCBI_RESTRICT subject_offsets,
+                        BlastOffsetPair* NCBI_RESTRICT offset_pairs,
                         Int4 array_size);
 
 /**
@@ -182,16 +185,14 @@ Int4 BlastAaScanSubject(const LookupTableWrap* lookup_wrap,
  * @param lookup_wrap the lookup table [in]
  * @param sequence the subject sequence [in]
  * @param offset the offset in the subject at which to begin scanning [in/out]
- * @param table_offsets array to which hits will be copied [out]
- * @param sequence_offsets array to which hits will be copied [out]
+ * @param offset_pairs array to which hits will be copied [out]
  * @param array_size length of the offset arrays [in]
  * @return The number of hits found.
  */
 Int4 BlastRPSScanSubject(const LookupTableWrap* lookup_wrap,
                         const BLAST_SequenceBlk *sequence,
                         Int4* offset,
-		        Uint4 * table_offsets,
-                        Uint4 * sequence_offsets,
+                        BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 		        Int4 array_size);
 
 /** Create a new protein lookup table.
@@ -225,7 +226,6 @@ BlastLookupTable* LookupTableDestruct(BlastLookupTable* lookup);
  * @param matrix the substitution matrix [in]
  * @param query the array of queries to index
  * @param unmasked_regions an array of BlastSeqLoc*s, each of which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
- * @param num_queries the number of queries [in]
  * @return Zero.
  */
 Int4 BlastAaLookupIndexQuery(BlastLookupTable* lookup,
@@ -323,7 +323,7 @@ typedef struct BlastRPSLookupTable {
     Int4 ** rps_pssm;   /**< Pointer to memory-mapped RPS Blast profile file */
     Int4 * rps_seq_offsets; /**< array of start offsets for each RPS DB seq. */
     Int4 num_profiles; /**< Number of profiles in RPS database. */
-    RPSAuxInfo* rps_aux_info; /**< RPS Blast auxiliary information */
+    BlastRPSAuxInfo* rps_aux_info; /**< RPS Blast auxiliary information */
     Int4 * overflow;    /**< the overflow array for the compacted 
                              lookup table */
     Int4  overflow_size;/**< Number of elements in the overflow array */
@@ -338,7 +338,8 @@ typedef struct BlastRPSLookupTable {
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 RPSLookupTableNew(const RPSInfo *rps_info, BlastRPSLookupTable* * lut);
+Int4 RPSLookupTableNew(const BlastRPSInfo *rps_info, 
+                       BlastRPSLookupTable* * lut);
 
 /** Free the lookup table. 
  *  @param lookup The lookup table structure to free; note that
@@ -359,17 +360,16 @@ BlastRPSLookupTable* RPSLookupTableDestruct(BlastRPSLookupTable* lookup);
  * @param lookup_wrap Pointer to the (wrapper to) lookup table [in]
  * @param subject The (compressed) sequence to be scanned for words [in]
  * @param start_offset The offset into the sequence in actual coordinates [in]
- * @param q_offsets Array of query positions where words are found [out]
- * @param s_offsets Array of subject positions where words are found [out]
- * @param max_hits The allocated size of the above arrays - how many offsets 
+ * @param offset_pairs Array of query and subject positions where words are 
+ *                found [out]
+ * @param max_hits The allocated size of the above array - how many offsets 
  *        can be returned [in]
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
                         const BLAST_SequenceBlk* subject,
                         Int4 start_offset,
-                        Uint4* NCBI_RESTRICT q_offsets,
-                        Uint4* NCBI_RESTRICT s_offsets,
+                        BlastOffsetPair* NCBI_RESTRICT offset_pairs,
                         Int4 max_hits, 
                         Int4* end_offset);
 
@@ -379,9 +379,9 @@ Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
  * @param lookup_wrap Pointer to the (wrapper to) lookup table [in]
  * @param subject The (compressed) sequence to be scanned for words [in]
  * @param start_offset The offset into the sequence in actual coordinates [in]
- * @param q_offsets Array of query positions where words are found [out]
- * @param s_offsets Array of subject positions where words are found [out]
- * @param max_hits The allocated size of the above arrays - how many offsets 
+ * @param offset_pairs Array of query and subject positions where words are 
+ *                     found [out]
+ * @param max_hits The allocated size of the above array - how many offsets 
  *        can be returned [in]
  * @param end_offset Where the scanning should stop [in], has stopped [out]
  * @return The number of hits found from the lookup table
@@ -389,8 +389,7 @@ Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
 Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
                         const BLAST_SequenceBlk* subject,
                         Int4 start_offset,
-                        Uint4* NCBI_RESTRICT q_offsets,
-                        Uint4* NCBI_RESTRICT s_offsets,
+                        BlastOffsetPair* NCBI_RESTRICT offset_pairs,
                         Int4 max_hits, 
                         Int4* end_offset);
 

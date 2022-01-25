@@ -614,7 +614,7 @@ Pub-set ::= CHOICE {
 
 END
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --**********************************************************************
 --
 --  NCBI Sequence location and identifier elements
@@ -638,7 +638,7 @@ IMPORTS Object-id, Int-fuzz, Dbtag, Date FROM NCBI-General
 --*
 
 Seq-id ::= CHOICE {
-    local Object-id ,      -- local use
+    local Object-id ,        -- local use
     gibbsq INTEGER ,         -- Geninfo backbone seqid
     gibbmt INTEGER ,         -- Geninfo backbone moltype
     giim Giimport-id ,       -- Geninfo import id
@@ -655,7 +655,9 @@ Seq-id ::= CHOICE {
     pdb PDB-seq-id ,         -- PDB sequence
     tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
     tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
-    tpd Textseq-id }         -- Third Party Annot/Seq DDBJ
+    tpd Textseq-id ,         -- Third Party Annot/Seq DDBJ
+    gpipe Textseq-id         -- Internal NCBI genome pipeline processing ID
+}
 
 
 Patent-seq-id ::= SEQUENCE {
@@ -669,14 +671,14 @@ Textseq-id ::= SEQUENCE {
     version INTEGER OPTIONAL }
 
 Giimport-id ::= SEQUENCE {
-    id INTEGER ,               -- the id to use here
-    db VisibleString OPTIONAL ,  -- dbase used in
-    release VisibleString OPTIONAL }   -- the release
+    id INTEGER ,                     -- the id to use here
+    db VisibleString OPTIONAL ,      -- dbase used in
+    release VisibleString OPTIONAL } -- the release
 
 PDB-seq-id ::= SEQUENCE {
-    mol PDB-mol-id ,          -- the molecule name
-    chain INTEGER DEFAULT 32 ,-- a single ASCII character, chain id
-    rel Date OPTIONAL }   -- release date, month and year
+    mol PDB-mol-id ,           -- the molecule name
+    chain INTEGER DEFAULT 32 , -- a single ASCII character, chain id
+    rel Date OPTIONAL }        -- release date, month and year
 
 PDB-mol-id ::= VisibleString  -- name of mol, 4 chars
     
@@ -719,7 +721,7 @@ Packed-seqpnt ::= SEQUENCE {
     fuzz Int-fuzz OPTIONAL ,
     points SEQUENCE OF INTEGER }
 
-Na-strand ::= ENUMERATED {          -- strand of nucleid acid
+Na-strand ::= ENUMERATED {          -- strand of nucleic acid
     unknown (0) ,
     plus (1) ,
     minus (2) ,               
@@ -738,7 +740,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.9 $
+--$Revision: 6.11 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -865,6 +867,7 @@ MolInfo ::= SEQUENCE {
         htc (19) ,              -- high throughput cDNA
         wgs (20) ,              -- whole genome shotgun sequencing
         barcode (21) ,          -- barcode of life project
+        composite-wgs-htgs (22) , -- composite of WGS and HTGS
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -1512,7 +1515,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.9 $
+--$Revision: 6.13 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1568,7 +1571,10 @@ Seq-feat ::= SEQUENCE {
     xref SET OF SeqFeatXref OPTIONAL ,   -- cite other relevant features
     dbxref SET OF Dbtag OPTIONAL ,  -- support for xref to other databases
     pseudo BOOLEAN OPTIONAL ,     -- annotated on pseudogene?
-    except-text VisibleString OPTIONAL } -- explain if except=TRUE
+    except-text VisibleString OPTIONAL , -- explain if except=TRUE
+    ids SET OF Feat-id OPTIONAL ,       -- set of Ids; will replace 'id' field
+    exts SET OF User-object OPTIONAL    -- set of extensions; will replace 'ext' field
+}
 
 SeqFeatData ::= CHOICE {
     gene Gene-ref ,
@@ -1613,6 +1619,7 @@ SeqFeatData ::= CHOICE {
         signal-peptide (23) ,
         transit-peptide (24) ,
         transmembrane-region (25) ,
+        nitrosylation (26) ,
         other (255) } ,
     rsite Rsite-ref ,       -- restriction site  (for maps really)
     user User-object ,      -- user defined structure
@@ -1951,11 +1958,6 @@ BioSource ::= SEQUENCE {
         proplastid (18) ,
         endogenous-virus (19)
       } DEFAULT unknown ,
-                                       -- 4 more genome values coming
-                                       -- nucleomorph (15)
-                                       -- apicoplast (16)
-                                       -- leucoplast (17)
-                                       -- proplastid (18)
     origin INTEGER {
       unknown (0) ,
       natural (1) ,                    -- normal biological entity
@@ -1998,6 +2000,14 @@ SubSource ::= SEQUENCE {
         transgenic (26) ,
         environmental-sample (27) ,
         isolation-source (28) ,
+        lat-lon (29) ,          -- +/- decimal degrees
+        collection-date (30) ,  -- DD-MMM-YYYY format
+        collected-by (31) ,     -- name of person who collected the sample
+        identified-by (32) ,    -- name of person who identified the sample
+        fwd-primer-seq (33) ,   -- sequence (possibly more than one; semicolon-separated)
+        rev-primer-seq (34) ,   -- sequence (possibly more than one; semicolon-separated)
+        fwd-primer-name (35) ,
+        rev-primer-name (36) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name

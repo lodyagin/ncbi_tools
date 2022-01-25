@@ -1,4 +1,4 @@
-/*  $Id: hspstream_collector.c,v 1.7 2004/09/08 16:03:11 dondosha Exp $
+/*  $Id: hspstream_collector.c,v 1.12 2005/01/31 15:14:15 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,8 +32,10 @@
  * a BLAST search, and subsequently return them in sorted order.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspstream_collector.c,v 1.7 2004/09/08 16:03:11 dondosha Exp $";
+    "$Id: hspstream_collector.c,v 1.12 2005/01/31 15:14:15 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 
 #include <algo/blast/core/blast_hits.h>
@@ -46,7 +48,7 @@ static char const rcsid[] =
  * @return NULL.
  */
 static BlastHSPStream* 
-BlastHSPListCollectorFree(BlastHSPStream* hsp_stream) 
+s_BlastHSPListCollectorFree(BlastHSPStream* hsp_stream) 
 {
    BlastHSPListCollectorData* stream_data = 
       (BlastHSPListCollectorData*) GetData(hsp_stream);
@@ -62,7 +64,7 @@ BlastHSPListCollectorFree(BlastHSPStream* hsp_stream)
  * @param hsp_stream The HSP stream to close [in] [out]
  */ 
 static void 
-BlastHSPListCollectorClose(BlastHSPStream* hsp_stream)
+s_BlastHSPListCollectorClose(BlastHSPStream* hsp_stream)
 {
    BlastHSPListCollectorData* stream_data = 
       (BlastHSPListCollectorData*) GetData(hsp_stream);
@@ -89,7 +91,7 @@ BlastHSPListCollectorClose(BlastHSPStream* hsp_stream)
  * @return Success, error, or end of reading, when nothing left to read.
  */
 static int 
-BlastHSPListCollectorRead(BlastHSPStream* hsp_stream, 
+s_BlastHSPListCollectorRead(BlastHSPStream* hsp_stream, 
                           BlastHSPList** hsp_list_out) 
 {
    BlastHSPListCollectorData* stream_data = 
@@ -109,7 +111,7 @@ BlastHSPListCollectorRead(BlastHSPStream* hsp_stream,
       following 2 lines should be removed, and stream closure for writing 
       should be done outside of the read function. */
    if (!stream_data->results_sorted)
-      BlastHSPListCollectorClose(hsp_stream);
+      s_BlastHSPListCollectorClose(hsp_stream);
 
    /* Find index of the first query that has results. */
    for (index = stream_data->first_query_index; 
@@ -148,7 +150,7 @@ BlastHSPListCollectorRead(BlastHSPStream* hsp_stream,
  * @return Success or error, if stream is already closed for writing.
  */
 static int 
-BlastHSPListCollectorWrite(BlastHSPStream* hsp_stream, 
+s_BlastHSPListCollectorWrite(BlastHSPStream* hsp_stream, 
                            BlastHSPList** hsp_list)
 {
    BlastHSPListCollectorData* stream_data = 
@@ -196,17 +198,17 @@ BlastHSPListCollectorWrite(BlastHSPStream* hsp_stream,
  * @return Filled HSP stream.
  */
 static BlastHSPStream* 
-BlastHSPListCollectorNew(BlastHSPStream* hsp_stream, void* args) 
+s_BlastHSPListCollectorNew(BlastHSPStream* hsp_stream, void* args) 
 {
     BlastHSPStreamFunctionPointerTypes fnptr;
 
-    fnptr.dtor = &BlastHSPListCollectorFree;
+    fnptr.dtor = &s_BlastHSPListCollectorFree;
     SetMethod(hsp_stream, eDestructor, fnptr);
-    fnptr.method = &BlastHSPListCollectorRead;
+    fnptr.method = &s_BlastHSPListCollectorRead;
     SetMethod(hsp_stream, eRead, fnptr);
-    fnptr.method = &BlastHSPListCollectorWrite;
+    fnptr.method = &s_BlastHSPListCollectorWrite;
     SetMethod(hsp_stream, eWrite, fnptr);
-    fnptr.closeFn = &BlastHSPListCollectorClose;
+    fnptr.closeFn = &s_BlastHSPListCollectorClose;
     SetMethod(hsp_stream, eClose, fnptr);
 
     SetData(hsp_stream, args);
@@ -214,9 +216,10 @@ BlastHSPListCollectorNew(BlastHSPStream* hsp_stream, void* args)
 }
 
 BlastHSPStream* 
-Blast_HSPListCollectorInitMT(EBlastProgramType program, BlastHitSavingOptions* hit_options,
-                           Int4 num_queries, Boolean sort_on_read,
-                           MT_LOCK lock)
+Blast_HSPListCollectorInitMT(EBlastProgramType program, 
+                             const BlastHitSavingOptions* hit_options,
+                             Int4 num_queries, Boolean sort_on_read,
+                             MT_LOCK lock)
 {
     BlastHSPListCollectorData* stream_data = 
        (BlastHSPListCollectorData*) malloc(sizeof(BlastHSPListCollectorData));
@@ -224,28 +227,23 @@ Blast_HSPListCollectorInitMT(EBlastProgramType program, BlastHitSavingOptions* h
 
     stream_data->program = program;
     stream_data->hit_options = hit_options;
-    if (program == eBlastTypeRpsBlast || program == eBlastTypeRpsTblastn) {
-       /* For RPS BLAST, there is only one query, and num_queries variable
-        * is in fact the number of database sequences. */
-       Blast_HSPResultsInit(1, &stream_data->results);
-       stream_data->results->hitlist_array[0] = 
-          Blast_HitListNew(num_queries);
-    } else {
-       Blast_HSPResultsInit(num_queries, &stream_data->results);
-    }
+
+    stream_data->results = Blast_HSPResultsNew(num_queries);
+
     stream_data->results_sorted = FALSE;
     stream_data->sort_on_read = sort_on_read;
     stream_data->first_query_index = 0;
     stream_data->x_lock = lock;
 
-    info.constructor = &BlastHSPListCollectorNew;
+    info.constructor = &s_BlastHSPListCollectorNew;
     info.ctor_argument = (void*)stream_data;
 
     return BlastHSPStreamNew(&info);
 }
 
 BlastHSPStream* 
-Blast_HSPListCollectorInit(EBlastProgramType program, BlastHitSavingOptions* hit_options,
+Blast_HSPListCollectorInit(EBlastProgramType program, 
+                           const BlastHitSavingOptions* hit_options,
                            Int4 num_queries, Boolean sort_on_read)
 {
    return Blast_HSPListCollectorInitMT(program, hit_options, num_queries, 

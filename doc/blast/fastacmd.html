@@ -13,7 +13,7 @@
 <pre>
 fastacmd README 
 ===============
-Last updated: 04/09/2003
+Last updated: 12/02/2004
 
 
 Table of Contents
@@ -40,7 +40,7 @@ Command line options
 --------------------
 The fastacmd options are:
 
-fastacmd 2.2.5   arguments:
+fastacmd 2.2.10   arguments:
 
   -d  Database [String]  Optional
     default = nr
@@ -49,9 +49,9 @@ fastacmd 2.2.5   arguments:
          T - protein   
          F - nucleotide [String]  Optional
     default = G
-  -s  Search string: GIs, accessions and locuses may be used delimited
+  -s  Search string: GIs, accessions and loci may be used delimited
       by comma. [String]  Optional
-  -i  Input file wilth GIs/accessions/locuses for batch
+  -i  Input file wilth GIs/accessions/loci for batch
       retrieval [String]  Optional
   -a  Retrieve duplicate accessions [T/F]  Optional
     default = F
@@ -59,16 +59,15 @@ fastacmd 2.2.5   arguments:
     default = 80
   -t  Definition line should contain target gi only [T/F]  Optional
     default = F
-
-  This option is only relevant to non-redundant databases only (ie: 
-  protein nr and pataa, as provided in the NCBI ftp site)
-
   -o  Output file [File Out]  Optional
     default = stdout
   -c  Use Ctrl-A's as non-redundant defline separator [T/F]  Optional
     default = F
-  -D  Dump the entire database in fasta format [T/F]  Optional
-    default = F
+  -D  Dump the entire database as (default is not to dump anything):
+      1 FASTA
+      2 Gi list
+ [Integer]  Optional
+    default = 0
   -L  Range of sequence to extract (Format: start,stop)
       0 in 'start' refers to the beginning of the sequence
       0 in 'stop' refers to the end of the sequence [String]  Optional
@@ -79,11 +78,15 @@ fastacmd 2.2.5   arguments:
     default = F
   -I  Print database information only (overrides all other options) [T/F]
     default = F
+  -P  Retrieve sequences with this PIG [Integer]  Optional
+
+  Please note that options -t and -c are only relevant to non-redundant 
+  databases only (ie: protein nr and pataa, as provided in the NCBI ftp site)
 
 Usage
 -----
 
-1.) Retrieving a sequence by gi:
+1.) Retrieving a sequence by identifier:
 
 fastacmd -d nt -s 555
 &gt;gi|555|emb|X65215.1|BTMISATN B.taurus microsatellite DNA (624bp)
@@ -95,6 +98,16 @@ TGAGAGCCTGGTAGGCTGCAGTCCATGGGGTCACACAGAGTCGGACATGACTGAGCGACTTCACTTTCACTTTTCAATTT
 CATGCATTGGAGCCGGAAATGGCAACCCACTCCAGTGTTCTTGCCTGGAGAATCCCAGGGATGGGGAAGCCTGGTGGGCT
 GCTGTCTATGGGGTCGCAGAGAGTCAGACACGACTGAAGTGACTTAGCAGCAACCTTCTGGAATAAACGCCTCAGGCTTT
 AAACTCTGGCTTGACCATTCACTAGCCATGGGATCCACTAGAGTCGACCTGCAGGCATGCAAGC
+
+If the identifier is not a gi or an accession, you must pass the entire seqid
+string to fastacmd. That is, if your sequence is
+
+&gt;gnl|mydb|myid my sequence description
+ACGT...
+
+, you must search for it with
+
+fastacmd -d mydb -s 'gnl|mydb|myid'
 
 2.) Printing a summary of database statistics:
 
@@ -110,7 +123,7 @@ File name:
 
 3.) Obtaining a FASTA file from a blast database:
 
-fastacmd -D -d nt -o nt.fsa
+fastacmd -D 1 -d nt -o nt.fsa
 [output removed for brevity]
 
 4.) Retrieving only part of a sequence:
@@ -126,6 +139,11 @@ NCBI sequence id: gi|555|emb|X65215.1|BTMISATN
 NCBI taxonomy id: 9913
 Common name: cow
 Scientific name: Bos taurus
+
+6.) Obtaining a list of gis from a blast database:
+
+fastacmd -D 2 -d nt -o nt.gis
+[output removed for brevity]
 
 
 Return values

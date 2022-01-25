@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.205 2004/09/13 18:33:01 dondosha Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.213 2005/03/07 16:30:57 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,33 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.205 $
+ * $Revision: 6.213 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.213  2005/03/07 16:30:57  dondosha
+ * In reevaluation with ambiguities, if HSP start changed, update starting offsets in edit block
+ *
+ * Revision 6.212  2004/12/07 16:09:04  coulouri
+ * check malloc returncode
+ *
+ * Revision 6.211  2004/11/25 01:59:38  coulouri
+ * reinitialize full_query_length to prevent overflow of query_seq_combined when only minus strands are searched
+ *
+ * Revision 6.210  2004/11/22 20:54:15  coulouri
+ * initialize pointer variables
+ *
+ * Revision 6.209  2004/11/22 15:17:34  dondosha
+ * Do not calculate length adjustment for empty contexts, i.e. ones with null Karlin blocks
+ *
+ * Revision 6.208  2004/11/19 13:22:05  madden
+ * Remove no_check_score completely (from Mike Gertz)
+ *
+ * Revision 6.207  2004/11/05 15:34:53  coulouri
+ * bring in system includes after toolkit includes so that LONG_BIT is defined correctly on amd64
+ *
+ * Revision 6.206  2004/10/29 21:34:45  dondosha
+ * Calculate length adjustment for each context separately; do not allow effective query length to be less than 1
+ *
  * Revision 6.205  2004/09/13 18:33:01  dondosha
  * Advance mask pointer in the list when one of the queries in a set is discarded due to being too short, and also has a lower case mask
  *
@@ -675,7 +699,6 @@ Detailed Contents:
  *
  * */
 
-#include <time.h>
 #include <ncbi.h>
 #include <blastpri.h>
 #include <lookup.h>
@@ -690,6 +713,7 @@ Detailed Contents:
 #include <dust.h>
 #include <mbalign.h>
 #include <mblast.h>
+#include <time.h>
 
 Int4
 MegaBlastWordFinder (BlastSearchBlkPtr search, LookupTablePtr lookup);
@@ -1130,21 +1154,20 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    Char buffer[128];
    Int2 retval, status;
    Int4 effective_query_length, query_length,
-      index, length, length_adjustment=0, last_length_adjustment,
+      index, length, length_adjustment=0,
       min_query_length, full_query_length=0;
    Int4 context, num_queries;
    Nlm_FloatHi avglen;
-   SeqIdPtr qid;
-   SeqLocPtr filter_slp=NULL, private_slp=NULL, private_slp_rev=NULL, slp,
-      tmp_slp;
+   SeqIdPtr qid=NULL;
+   SeqLocPtr filter_slp=NULL, private_slp=NULL, private_slp_rev=NULL, slp=NULL, tmp_slp=NULL;
    Uint1 residue;
-   Uint1Ptr query_seq, query_seq_start, query_seq_rev, query_seq_start_rev;
-   Uint1Ptr query_seq_combined;
-   CharPtr filter_string;
+   Uint1Ptr query_seq=NULL, query_seq_start=NULL, query_seq_rev=NULL, query_seq_start_rev=NULL;
+   Uint1Ptr query_seq_combined=NULL;
+   CharPtr filter_string=NULL;
    Uint4 query_gi;
    Int4 homo_gilist_size, mouse_gilist_size, rat_gilist_size;
-   BlastDoubleInt4Ptr homo_gilist, mouse_gilist, rat_gilist;
-   SeqLocPtr mask_slp, next_mask_slp;
+   BlastDoubleInt4Ptr homo_gilist=NULL, mouse_gilist=NULL, rat_gilist=NULL;
+   SeqLocPtr mask_slp=NULL, next_mask_slp=NULL;
    SeqPortPtr spp = NULL;
    
    if (options == NULL) {
@@ -1156,11 +1179,6 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       ErrPostEx(SEV_FATAL, 1, 0, "Query is NULL\n");
       return 1;
    }
-   
-   query_seq = NULL;	/* Gets rid of warning. */
-   query_seq_rev = NULL;	/* Gets rid of warning. */
-   query_seq_start = NULL;	/* Gets rid of warning. */
-   query_seq_start_rev = NULL;	/* Gets rid of warning. */
    
    context = search->first_context; 
    
@@ -1351,6 +1369,7 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       }
 
       query_seq_combined[0] = 0x0f;
+      full_query_length = 0;
 
       /* Extract the mask location corresponding to this query */
       if (next_mask_slp && 
@@ -1543,38 +1562,35 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    */
    if (retval)
       return retval;
-   context = search->first_context;
-
-   length = search->context[context].query->length;
    
-   /* Find first valid Karlin block - needed if first query is 
-      completely masked */
-   while (!search->sbp->kbp[context])
-      context++;
-
-   min_query_length = (Int4) 1/(search->sbp->kbp[context]->K);
-   
-   BlastComputeLengthAdjustment(search->sbp->kbp[context]->K,
-                                search->sbp->kbp[context]->logK,
-                                1/search->sbp->kbp[context]->H,
-                                0.0, 
-                                length,
-                                search->dblen, search->dbseq_num,
-                                &length_adjustment );
-
-   search->length_adjustment = length_adjustment;
- 
-   search->dblen_eff =
-     search->dblen - search->dbseq_num*search->length_adjustment;
+   /* Calculate length adjustments and effective query lengths for 
+      each query. */
    for( context=search->first_context;
         context<=search->last_context;
         context++ ) {
+      /* Skip those contexts where sequence is not searched. */
+      if (!search->sbp->kbp[context])
+         continue;
+      BlastComputeLengthAdjustment(search->sbp->kbp[context]->K,
+                                   search->sbp->kbp[context]->logK,
+                                   1/search->sbp->kbp[context]->H,
+                                   0.0, 
+                                   length,
+                                   search->dblen, search->dbseq_num,
+                                   &length_adjustment );
+
        length = search->query_context_offsets[context+1] -
            search->query_context_offsets[context] - 1;
-       effective_query_length = length - length_adjustment;
+       min_query_length = (Int4) 1/(search->sbp->kbp[context]->K);
+       effective_query_length = 
+          MAX(min_query_length, length - length_adjustment);
        search->context[context].query->effective_length =
            effective_query_length;
+       if (context == search->first_context)
+          search->length_adjustment = length_adjustment;
    }
+   search->dblen_eff =
+     search->dblen - search->dbseq_num*search->length_adjustment;
    /*if (search->searchsp_eff == 0)
       search->searchsp_eff = ((Nlm_FloatHi) search->dblen_eff) *
       ((Nlm_FloatHi) effective_query_length); */
@@ -1672,8 +1688,6 @@ available) this needs to be set higher up. */
    }
    
    search->pbp->dropoff_2nd_pass = - options->dropoff_2nd_pass;
-   
-   search->pbp->no_check_score = TRUE;
    
    avglen = BLAST_NT_AVGLEN;
    /* Use only one type of gap for blastn */
@@ -2822,6 +2836,10 @@ Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search)
 
    e_hsp_array = (MegaBlastExactMatchPtr PNTR) 
       Malloc(hspcnt*sizeof(MegaBlastExactMatchPtr));
+
+   if (e_hsp_array == NULL)
+      return 1;
+
    for (index=0; index < hspcnt; index++) {
       e_hsp_array[index] = 
          &(search->current_hitlist->exact_match_array[index]);
@@ -3585,7 +3603,7 @@ Boolean ReevaluateScoreWithAmbiguities(BlastSearchBlkPtr search,
    BLAST_ScorePtr PNTR    matrix;
    Uint1Ptr query_start, query, subject;
    Uint1Ptr new_q_start, new_s_start, new_q_end, new_s_end;
-   Int4 index, i, context, last_esp_num;
+   Int4 i, context, last_esp_num;
    Int2 factor;
    Uint1 mask = 0x0f;
    Boolean delete_hsp;
@@ -3699,9 +3717,10 @@ Boolean ReevaluateScoreWithAmbiguities(BlastSearchBlkPtr search,
       } else {
          hsp->query.length = new_q_end - new_q_start;
          hsp->subject.length = new_s_end - new_s_start;
-         hsp->query.offset = new_q_start - query_start;
+         hsp->query.offset = hsp->gap_info->start1 = new_q_start - query_start;
          hsp->query.end = hsp->query.offset + hsp->query.length;
-         hsp->subject.offset = new_s_start - subject_start;
+         hsp->subject.offset = hsp->gap_info->start2 = 
+             new_s_start - subject_start;
          hsp->subject.end = hsp->subject.offset + hsp->subject.length;
          /* Make corrections in edit block and free any parts that
             are no longer needed */

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.86 2004/09/08 20:59:53 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.87 2005/03/31 14:30:25 kans Exp $";
 
 /*****************************************************************************
 *
@@ -39,7 +39,7 @@ static SeqFeatPtr list;
 #define num_bond 5
 static CharPtr feat_bond[num_bond] = {NULL, "disulfide bond", "thiolester bond", "xlink bond", "thioether bond"};
 
-#define num_site 26
+#define num_site 27
 static CharPtr feat_site[num_site] = {NULL, 
 		"active", 
 		"binding",
@@ -66,6 +66,7 @@ static CharPtr feat_site[num_site] = {NULL,
         "signal-peptide",
         "transit-peptide",
         "transmembrane-region",
+        "nitrosylation"
 };
 
 #define num_genome 15

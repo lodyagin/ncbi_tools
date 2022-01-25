@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.16 $
+* $Revision: 6.19 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.19  2004/12/23 20:50:51  kans
+* added context field to new callback
+*
+* Revision 6.18  2004/12/22 21:56:40  kans
+* CustValErr supports ValidErrorFunc callback for finer error reporting
+*
+* Revision 6.17  2004/12/20 22:57:16  kans
+* added verbosityLevel argument - to be used for finer control over error reporting by asn2val
+*
 * Revision 6.16  2004/10/04 15:50:22  kans
 * added vsp->justShowAccession for extremely terse output
 *
@@ -153,6 +162,21 @@ extern "C" {
 typedef void (*SpellCallBackFunc) (char * str);
 typedef int (* SpellCheckFunc) (char *String, SpellCallBackFunc);
 
+/* callback type for finer error reporting */
+
+typedef void (LIBCALLBACK *ValidErrorFunc) (
+  ErrSev severity,
+  int errcode,
+  int subcode,
+  CharPtr accession,
+  CharPtr message,
+  CharPtr objtype,
+  CharPtr label,
+  CharPtr context,
+  CharPtr location,
+  CharPtr product,
+  Pointer userdata
+);
 
 #define SET_DEPTH 20
 
@@ -202,6 +226,10 @@ typedef struct validstruct {
 	Boolean justShowAccession;     /* extremely terse output with accession and error type */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
+								   /* this section used for finer error reporting callback */
+	ValidErrorFunc errfunc;
+	Pointer userdata;
+	Boolean convertGiToAccn;
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));
@@ -210,6 +238,9 @@ NLM_EXTERN ValidStructPtr ValidStructNew (void);
 NLM_EXTERN ValidStructPtr ValidStructFree (ValidStructPtr vsp);
 NLM_EXTERN void SpellCallBack (char * str);
 NLM_EXTERN Boolean IsNuclAcc (CharPtr name);
+
+NLM_EXTERN CharPtr GetValidCategoryName (int errcode);
+NLM_EXTERN CharPtr GetValidErrorName (int errcode, int subcode);
 
 NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
 

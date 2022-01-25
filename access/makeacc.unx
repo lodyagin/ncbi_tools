@@ -11,3 +11,7 @@ asntool -m taxon3.asn -o asntax3.h
 mv asntax3.h ../asnstat
 asntool -m taxon3.asn -M ../asn/seqfeat.asn -G -B objtax3 -K asntax3.h
 
+asntool -m entrezgene.asn -o asnentgene.h
+mv asnentgene.h ../asnstat
+asntool -m entrezgene.asn -M ../asn/seqfeat.asn,../asn/seqloc.asn,../asn/general.asn,../asn/pub.asn,../asn/biblio.asn,../asn/medline.asn -G -B objentgene -I egkludge.h -K asnentgene.h -V
+

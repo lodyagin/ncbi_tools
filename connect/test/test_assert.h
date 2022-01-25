@@ -1,7 +1,7 @@
 #ifndef TEST_ASSERT__H
 #define TEST_ASSERT__H
 
-/*  $Id: test_assert.h,v 6.22 2004/06/10 19:20:27 ivanov Exp $
+/*  $Id: test_assert.h,v 6.25 2005/04/07 16:27:30 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,24 +57,36 @@
  * and in debug libraries, as well as all General Protection Fault messages.
  * Environment variable DIAG_SILENT_ABORT must be set to "Y" or "y".
  */
+
+/* Handler for "Unhandled" exceptions */
+static LONG CALLBACK _SEH_Handler(EXCEPTION_POINTERS* ep)
+{
+    /* Always terminate a program */
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 static int _SuppressDiagPopupMessages(void)
 {
     /* Check environment variable for silent abort app at error */
     const char* value = getenv("DIAG_SILENT_ABORT");
     if (value  &&  (*value == 'Y'  ||  *value == 'y')) {
         /* Windows GPF errors */
-        SetErrorMode(SEM_NOGPFAULTERRORBOX);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
+                     SEM_NOOPENFILEERRORBOX);
 
         /* Runtime library */
         _set_error_mode(_OUT_TO_STDERR);
 
         /* Debug library */
-        _CrtSetReportFile(_CRT_WARN,   stderr);
+        _CrtSetReportFile(_CRT_WARN,   _CRTDBG_FILE_STDERR);
         _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
-        _CrtSetReportFile(_CRT_ERROR,  stderr);
+        _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
         _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
-        _CrtSetReportFile(_CRT_ASSERT, stderr);
+        _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
         _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+
+        /* Exceptions */
+        SetUnhandledExceptionFilter(_SEH_Handler);
     }
     return 0;
 }
@@ -130,6 +142,15 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 /*
  * --------------------------------------------------------------------------
  * $Log: test_assert.h,v $
+ * Revision 6.25  2005/04/07 16:27:30  ivanov
+ * _SuppressDiagPopupMessages(): added handling of "Unhandled" exceptions
+ *
+ * Revision 6.24  2005/02/22 19:49:55  ivanov
+ * Added more suppress modes for SetErrorMode()
+ *
+ * Revision 6.23  2004/12/21 03:44:42  lavr
+ * Fix CRT report file destination, _CRTDBG_FILE_STDERR not stderr!
+ *
  * Revision 6.22  2004/06/10 19:20:27  ivanov
  * _SuppressDiagPopupMessages() returns 'int' to avoid runtime errors on MSVC7
  *

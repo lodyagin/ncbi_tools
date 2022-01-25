@@ -1,4 +1,4 @@
-/* $Id: blast_seg.h,v 1.14 2004/10/04 12:41:21 madden Exp $
+/* $Id: blast_seg.h,v 1.15 2004/11/29 19:54:00 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -72,7 +72,7 @@ void SegParametersFree(SegParameters* sparamsp);
  * @param offset amount to shift over resulting locations 
  *    (if full sequence not passed in) [in]
  * @param sparamsp the seg parameters created with SegParametersNewAa [in]
- * @params seg_locs resulting locations for filtering [out]
+ * @param seg_locs resulting locations for filtering [out]
  * @return zero on success
  */
 Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,

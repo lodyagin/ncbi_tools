@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.34 2004/08/19 15:26:54 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.36 2005/03/05 21:04:11 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,11 +62,11 @@ typedef struct SSERV_IterTag* SERV_ITER;
 
 
 /* Create an iterator for the iterative server lookup.
- * Connection information 'info' can be a NULL pointer, which means
- * not to make any network connections (only LBSMD will be consulted).
- * If 'info' is not NULL, LBSMD is consulted first (unless 'info->lb_disable'
- * is non-zero, meaning to skip LBSMD), and then DISPD is consulted
- * (using the information provided) but only if mapping with LBSMD (if any)
+ * Connection information 'net_info' can be a NULL pointer, which means
+ * not to make any network connections (only LBSMD will be consulted). If
+ * 'net_info' is not NULL, LBSMD is consulted first (unless 'net_info->lb_disable'
+ * is non-zero, meaning to skip LBSMD), and then DISPD is consulted (using
+ * the information provided) but only if mapping with LBSMD (if any)
  * has failed. This scheme permits to use any combination of service mappers.
  * Note that if 'info' is not NULL then non-zero value of 'info->stateless'
  * forces 'types' to have 'fSERV_StatelessOnly' set.
@@ -91,6 +91,8 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenSimple
 
 /* Can be combined in types to get even dead services (not off ones!) */
 #define fSERV_Promiscuous 0x80000000
+/* Do reverse DNS translation of the resulting info */
+#define fSERV_ReverseDns  0x40000000
 
 
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
@@ -202,6 +204,12 @@ extern NCBI_XCONNECT_EXPORT void DISP_SetMessageHook(FDISP_MessageHook);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.36  2005/03/05 21:04:11  lavr
+ * +fSERV_ReverseDns
+ *
+ * Revision 6.35  2005/01/31 17:08:35  lavr
+ * info -> net_info where appropriate for consistency
+ *
  * Revision 6.34  2004/08/19 15:26:54  lavr
  * +fSERV_Promiscuous
  *

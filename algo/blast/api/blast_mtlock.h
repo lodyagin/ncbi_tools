@@ -1,4 +1,4 @@
-/*  $Id: blast_mtlock.h,v 1.1 2004/06/23 14:21:43 dondosha Exp $
+/*  $Id: blast_mtlock.h,v 1.4 2005/03/31 16:18:21 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,7 +40,15 @@
 extern "C" {
 #endif
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
+/** Initializes a mutex locking mechanism. */
 MT_LOCK Blast_MT_LOCKInit(void);
+
+/* @} */
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: makemat.c,v 6.15 2004/07/19 17:19:09 papadopo Exp $";
+static char const rcsid[] = "$Id: makemat.c,v 6.16 2004/12/20 15:22:30 camacho Exp $";
 
 /*
 * ===========================================================================
@@ -244,10 +244,6 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
     BLAST_ScoreBlkPtr sbp;
     BioseqPtr query_bsp;  /*structure to hold query information*/
     SeqEntryPtr sep;      /*structure to hold query retrieval result*/
-    Int4 array_size;  /*holds returns from computing the Karlin-Altschul
-                        parameters*/
-    Int4Ptr open, extend; /*gap open and extension costs*/
-    Nlm_FloatHiPtr lambda, K, H; /*Karlin_Altschul score paramters*/
     Int4 index; /*loop index for array_size*/
     Int4 *lengthArray; /*array of sequence lengths*/
     Nlm_FloatHi *KArray;  /*array of K values, one per sequence*/
@@ -355,22 +351,6 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
             return(-1);
         }
         
-        array_size = BlastKarlinGetMatrixValues(sbp->name, &open, &extend, &lambda, &K, &H, NULL);
-        if (array_size > 0) {
-            for (index=0; index<array_size; index++) {
-                if (open[index] == INT2_MAX && extend[index] == INT2_MAX) {
-                    sbp->kbp_ideal = BlastKarlinBlkCreate();
-                    sbp->kbp_ideal->Lambda = lambda[index];
-                    sbp->kbp_ideal->K = K[index];
-                    sbp->kbp_ideal->H = H[index];
-                }
-            }
-            MemFree(open);
-            MemFree(extend);
-            MemFree(lambda);
-            MemFree(K);
-            MemFree(H);
-        }
         if (sbp->kbp_ideal == NULL)
             sbp->kbp_ideal = BlastKarlinBlkStandardCalcEx(sbp);
         compactSearch->lambda =  sbp->kbp_gap_std[0]->Lambda;

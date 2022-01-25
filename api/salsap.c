@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -2007,7 +2007,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr s
   Int4        from;
   Int4        sumlens = 0;
   Int4        seqlens = 0;
-  Int4        lensplus;
+  Int4        lensplus = 0;
   Int4        position;
   Int2        newseg;
   Int2        j, tmp;

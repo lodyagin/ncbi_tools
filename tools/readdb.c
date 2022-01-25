@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.459 2004/10/04 18:00:00 madden Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.473 2005/04/26 21:34:39 kans Exp $";
 
-/* $Id: readdb.c,v 6.459 2004/10/04 18:00:00 madden Exp $ */
+/* $Id: readdb.c,v 6.473 2005/04/26 21:34:39 kans Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.459 $
+* $Revision: 6.473 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,48 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.473  2005/04/26 21:34:39  kans
+* added SEQID_GPIPE
+*
+* Revision 6.472  2005/04/20 19:02:15  lavr
+* +<assert.h>
+*
+* Revision 6.471  2005/04/11 18:55:16  coulouri
+* Make BLASTDB environment variable usage consistent across platforms
+*
+* Revision 6.470  2005/04/11 18:04:56  madden
+* Fix for alignment issue in readdb_get_sequence_ex
+*
+* Revision 6.469  2005/04/07 12:19:35  madden
+* Refactor readdb_get_sequence_ex to eliminate unnecessary allocations
+*
+* Revision 6.468  2005/04/06 16:01:25  camacho
+* Return -1 in case of memory allocation failures in readdb_get_sequence_ex
+*
+* Revision 6.467  2005/02/24 14:34:05  camacho
+* Fix invocation of FDBAddSequence
+*
+* Revision 6.466  2005/02/22 14:15:48  camacho
+* Pass bioseq data type by reference to FDBAddBioseq
+*
+* Revision 6.465  2004/12/07 15:14:14  kans
+* third parameter to readdb_get_header_ex needs to be pointer to Uint4, not Int4 - CodeWarrior error
+*
+* Revision 6.464  2004/12/04 03:41:09  camacho
+* Add extra enum for fastacmd -D option for error checking
+*
+* Revision 6.463  2004/12/03 04:57:57  camacho
+* Fix name conflict in enumeration for fastacmd dump types
+*
+* Revision 6.462  2004/12/02 20:37:31  camacho
+* + fastacmd feature to dump list of gis
+*
+* Revision 6.461  2004/11/22 20:54:58  coulouri
+* optimization for subset database searches restricted by gi list
+*
+* Revision 6.460  2004/10/28 15:39:37  camacho
+* Fixes to previous commit
+*
 * Revision 6.459  2004/10/04 18:00:00  madden
 * Further fixes for SI_Record.title
 *
@@ -1777,6 +1819,7 @@ Detailed Contents:
 #include <blast.h>
 #include <ncbisort.h>
 #include <tofasta.h>
+#include <assert.h>
 #include <errno.h>
 #include <txalign.h>
 #include <sqnutils.h>
@@ -2352,11 +2395,9 @@ Int4ListReadFromFile PROTO((CharPtr fname))
        }
        MemFree(path);
     } else {
-#ifdef OS_UNIX
        if (getenv("BLASTDB"))
           Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
        else
-#endif
           Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
     }
     sprintf(file_name, "%s%s%s", blast_dir, DIRDELIMSTR, FileNameFind(fname));
@@ -3104,14 +3145,10 @@ CharPtr    FindBlastDBFile (CharPtr filename)
     buffer  = MemNew(PATH_MAX);
     buffer1 = MemNew(PATH_MAX);
 
-#ifdef OS_UNIX
     if ((envp = getenv("BLASTDB")) == NULL)
         Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
     else
         StringCpy(buffer, envp);
-#else
-    Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
-#endif
 
     sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
 
@@ -3172,7 +3209,7 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
        in the following order  (and stopping when it is found): 
        1) If absolute path was given, only this file is attempted.
        2) Current working directory
-       3) getenv("BLASTDB") (UNIX only)
+       3) getenv("BLASTDB")
        4) .ncbirc file: a) current working directory, b) home directory, c)
            NCBI directory (obtained from the environment)
        Then defind which index system to use.  If "CommonIndex" then
@@ -3197,19 +3234,14 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
         localdb = TRUE;
         rdfp = readdb_destruct(rdfp);
     } else  {
-        /* Try to read this from environment (UNIX only). If not found, try
+        /* Try to read this from environment. If not found, try
          * the .ncbirc file */
         
-#ifdef OS_UNIX
         if ((envp = getenv("BLASTDB")) == NULL)
             Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, 
                         buffer, PATH_MAX);
         else
             StringCpy(buffer, envp);
-#else
-        Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, 
-                         buffer, PATH_MAX);
-#endif
         
         sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
         
@@ -3268,11 +3300,9 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     /* First see if user has preferences */
     StringCpy(buffer1, "CommonIndex");
     
-#ifdef OS_UNIX
     if (getenv("INDEX_SYSTEM") && 
         StringCmp(getenv("INDEX_SYSTEM"), "CommonIndex"))
         StringCpy(buffer1, "ISAM");
-#endif
   
     Nlm_GetAppParam ("NCBI", "BLAST", "INDEX_SYSTEM", buffer1, 
                      buffer, PATH_MAX);
@@ -4515,6 +4545,7 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
             continue;
         }
 
+        /* Resolve GI to OID. */
         if((error = NISAMSearch(rdfp->nisam_opt, gi, 
             &Value, NULL)) < 0) {
         ErrPostEx(SEV_WARNING, 0, 0, "Failed to initialize search. "
@@ -4529,6 +4560,31 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
         /* Before returning, make sure that this gi belongs to
          * the subset (mask) database, if we are dealing with one */
         if (rdfp->oidlist && rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
+
+            /*
+             * For performance reasons, check to see if the OID corresponding
+             * to the GI in the GI list exists in the oid mask.
+             */
+
+            {
+              /* which word in the array? */
+            Uint4 oidmask_index = Value / MASK_WORD_SIZE;
+              /* which bit in the word? */
+            Uint4 oidmask_bit   = 0x1 << ( (MASK_WORD_SIZE-1) - (Value % MASK_WORD_SIZE));
+
+              /* If the OID is past the end of the mask, bail out. */
+            if (Value > rdfp->oidlist->total) return -1;
+
+              /* If the bit isn't set, bail out early. */
+            if (!(SwapUint4(rdfp->oidlist->list[oidmask_index]) & oidmask_bit))
+                return -1;
+            }
+
+            /*
+             * Otherwise, load the GI's defline to verify it belongs to
+             * the subset database, since multiple GIs may resolve
+             * to a single OID.
+             */
             if (!OID_GI_BelongsToMaskDB(rdfp, Value+rdfp->start, gi))
                 return -1;
         }
@@ -4636,13 +4692,14 @@ static Boolean readdb_find_best_id(SeqIdPtr sip, Int4Ptr gi, CharPtr tmpbuf)
         case SEQID_EMBL:      /* embl */
         case SEQID_DDBJ:      /* ddbj */
         case SEQID_GENBANK:   /* genbank */
-    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
-    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
-    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+        case SEQID_TPG:       /* Third Party Annot/Seq Genbank */
+        case SEQID_TPE:       /* Third Party Annot/Seq EMBL */
+        case SEQID_TPD:       /* Third Party Annot/Seq DDBJ */
         case SEQID_OTHER:     /* other */
         case SEQID_PIR:       /* pir   */
         case SEQID_SWISSPROT: /* swissprot */
         case SEQID_PRF:       /* prf   */
+        case SEQID_GPIPE:     /* genome pipeline */
             tsip = (TextSeqIdPtr)(sip_tmp->data.ptrvalue);
             break;
         case SEQID_GENERAL:   /* general */
@@ -4722,13 +4779,14 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
             case SEQID_EMBL:      /* embl */
             case SEQID_DDBJ:      /* ddbj */
             case SEQID_GENBANK:   /* genbank */
-        case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
-        case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
-        case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+            case SEQID_TPG:       /* Third Party Annot/Seq Genbank */
+            case SEQID_TPE:       /* Third Party Annot/Seq EMBL */
+            case SEQID_TPD:       /* Third Party Annot/Seq DDBJ */
             case SEQID_OTHER:     /* other */
             case SEQID_PIR:       /* pir   */
             case SEQID_SWISSPROT: /* swissprot */
             case SEQID_PRF:       /* prf   */
+            case SEQID_GPIPE:     /* genome pipeline */
                 tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
                 break;
             default:
@@ -5523,20 +5581,19 @@ and the last two bits of the byte holds the size of the remainder (0-3). */
     The length of the sequence requested is the return value.
     protein sequences are always returned as Seq_code_ncbistdaa,
     nucleotide sequences as Seq_code_ncbi4na.
+
+    In case of memory allocation failure, buffer is free'd and points to NULL,
+    buffer_length is set to 0 and -1 is returned
 */
 
 Int4 LIBCALL 
 readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length, Boolean ready)
 
 {
-    ByteStorePtr byte_store;
-    Uint1 byte_value;
-    Int4 index, index2, length, copy_length;
-    Uint1Ptr private_buffer, buffer_4na;
-    Uint4Ptr ambchar = NULL;
-    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
+    Int4 length; /* Uncompressed length of sequence to be fetched */
+    Uint1Ptr readdb_buffer; /* Pointer to (read-only) data returned by readdb. */
 
-    length = readdb_get_sequence(rdfp, sequence_number, &private_buffer);
+    length = readdb_get_sequence(rdfp, sequence_number, &readdb_buffer);
 
     /* Check the length, make it one longer for ALIGN. */
     if ((length+2) > *buffer_length || *buffer == NULL)
@@ -5545,66 +5602,60 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
             MemFree(*buffer);
 
         *buffer = Nlm_Malloc((length+2)*sizeof(Uint1));
+        if (*buffer == NULL) {
+            *buffer_length = 0;
+            return -1;
+        }
         *buffer_length = length+2;
     }
 
     /* Copy sequence into allocated buffer. */
-    if (!is_prot)
+    if (rdfp->parameters & READDB_IS_PROT)   /* Protein */
     {
+        MemCpy((VoidPtr) *buffer, readdb_buffer, length);
+    }
+    else   /* Nucleotide. */
+    {
+        Int4 copy_length;  /*  compressed (4-to-1) length of sequence being fetched. */
+        Uint4Ptr ambchar = NULL;  /* Used below for fetching ambiguity information. */
+        Uint1* buffer_ptr = (*buffer);   /* Used for calls to MapNa2ByteToNa4String and  RebuildDNA_4na */
+
         copy_length = length/4;
-    }
-    else
-    {
-        copy_length = length;
-        MemCpy((VoidPtr) *buffer, private_buffer, copy_length);
-    }
+        MapNa2ByteToNa4String(readdb_buffer, (Uint2*) buffer_ptr, copy_length);
 
-        if (!is_prot) 
-    {
-            byte_store = BSNew(0);
-                /* Nucleotide sequence require more attention */
-        /* Add one in case it's not divisible by four. */
-            buffer_4na = Nlm_Malloc((2*(copy_length+1))*sizeof(Uint1));
-            MapNa2ByteToNa4String(private_buffer, (Uint2Ptr) buffer_4na, copy_length);
         if (length%4 != 0)
-        {
-                    byte_value = *(private_buffer+length/4);
-                    byte_value &= 252; 
-                MapNa2ByteToNa4String(&byte_value, (Uint2Ptr) (buffer_4na+(2*copy_length)), 1);
-            copy_length++;
+        {   /* Sets letters in last (incomplete) byte. */
+                Uint1 byte_value = *(readdb_buffer+length/4);
+                byte_value &= 252; 
+                MapNa2ByteToNa4String(&byte_value, (Uint2*) (buffer_ptr+(2*copy_length)), 1);
+                copy_length++;   
         }
-                BSWrite(byte_store, (VoidPtr) buffer_4na, copy_length*2);
         
-            if(!readdb_get_ambchar(rdfp, sequence_number, &ambchar)) {
-                    ErrPostEx(SEV_WARNING, 0, 0, 
+        if(!readdb_get_ambchar(rdfp, sequence_number, &ambchar)) {
+                ErrPostEx(SEV_WARNING, 0, 0, 
                           "Failure to read ambiguity information");
-                    BSFree(byte_store);
-                        MemFree(buffer_4na);
-                    return -1;
-            }
+                return -1;
+        }
         /* Convert sequence if ambiguities. */
-               if(ambchar != NULL) {/* are there any ambiguity ? */
-                    byte_store = BSRebuildDNA_4na(byte_store, ambchar);
-                    if (byte_store == NULL)
-                        ErrPostEx(SEV_FATAL, 1, 0, "BSRebuildDNA_4na() failed to allocate memory.");
-                    MemFree(ambchar);
-            }
-        MemFree(buffer_4na);
-
-        /* Sequence is copied back to *buffer. */
-        BSSeek(byte_store, 0, SEEK_SET);
-        if (ready)
-            BSMerge(byte_store, (*buffer)+1);
-        else
-            BSMerge(byte_store, *buffer);
-        BSFree(byte_store);
+        if(ambchar != NULL) /* are there any ambiguity ? */
+        {
+                Boolean status = RebuildDNA_4na(buffer_ptr, copy_length*2, ambchar);
+                ambchar = MemFree(ambchar);
+                if (status == FALSE)
+                {
+                   ErrPostEx(SEV_WARNING, 0, 0, 
+                          "Failure to rebuild DNA in readdb_get_seqeuence_ex");
+                   return -1;
+                }
+           
+        }
 
         if (ready)
         {
-            private_buffer = (*buffer)+1;
-            index = length/2 - 1;
+            Int4 index, index2;   /* Loop indices. */
+            Uint1* private_buffer = (*buffer) + 1;
+            index = length/2 - 2;
             index2 = length-1;
-            private_buffer[length] = ncbi4na_to_blastna[0];
             if (length%2 != 0)
             {
                 private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index+1] >> 4)];
@@ -5617,11 +5668,13 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
                 private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] >> 4)];
                 index2--; index--;
             }
+            private_buffer[length] = ncbi4na_to_blastna[0];
             (*buffer)[0] = ncbi4na_to_blastna[0];
         }
         else
         {
-            private_buffer = *buffer;
+            Int4 index, index2;   /* Loop indices. */
+            Uint1* private_buffer = (*buffer);
             index = length/2 - 1;
             index2 = length-1;
             if (length%2 != 0)
@@ -5637,8 +5690,6 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
                 index2--; index--;
             }
         }
-
-        
     }
 
     return length;
@@ -8028,10 +8079,11 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_DDBJ:      /* ddbj */
         do_gb = TRUE;     /* also index embl, ddbj as genbank */
     case SEQID_GENBANK:   /* genbank */
-    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
-    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
-    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+    case SEQID_TPG:       /* Third Party Annot/Seq Genbank */
+    case SEQID_TPE:       /* Third Party Annot/Seq EMBL */
+    case SEQID_TPD:       /* Third Party Annot/Seq DDBJ */
     case SEQID_OTHER:     /* other */
+    case SEQID_GPIPE:     /* genome pipeline */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
     if ((tsip->version > 0) && (tsip->release == NULL))
         version = tsip->version;
@@ -8185,10 +8237,11 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_DDBJ:      /* ddbj */
         do_gb = TRUE;     /* also index embl, ddbj as genbank */
     case SEQID_GENBANK:   /* genbank */
-    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
-    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
-    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+    case SEQID_TPG:       /* Third Party Annot/Seq Genbank */
+    case SEQID_TPE:       /* Third Party Annot/Seq EMBL */
+    case SEQID_TPD:       /* Third Party Annot/Seq DDBJ */
     case SEQID_OTHER:     /* other */
+    case SEQID_GPIPE:     /* genome pipeline */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
     if ((tsip->version > 0) && (tsip->release == NULL))
         version = tsip->version;
@@ -8365,9 +8418,10 @@ static SeqIdPtr SeqIdSetFree_NO_OBJ_MGR(SeqIdPtr sip)
          case SEQID_SWISSPROT:      /* swissprot */
          case SEQID_OTHER:     /* other */
          case SEQID_DDBJ:
-                 case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
-             case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
-             case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+         case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+         case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+         case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+         case SEQID_GPIPE:
          case SEQID_PRF:
             TextSeqIdFree(sip->data.ptrvalue);
             break;
@@ -8915,7 +8969,7 @@ static Int4 FDBExtend4Sequence(FormatDBPtr fdbp,
  * information, is obtained from this parameter and thus the remainder
  * parameters are ignored. */
 Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
-                    Uint1 seq_data_type, ByteStorePtr * seq_data,
+                    Uint1* seq_data_type, ByteStorePtr * seq_data,
                     Int4 SequenceLen,
 
                     /* These 2 parameters are left for the backward
@@ -8935,6 +8989,9 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
     SI_Record si;
     Int2 status = 0;
 
+    ASSERT(seq_data);
+    ASSERT(seq_data_type);
+
     si.title = NULL;  
 
     if (SequenceLen <= 0) {
@@ -8943,27 +9000,27 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
         return 1;
     }
     if (fdbp->options->is_protein) {
-        if (seq_data_type != Seq_code_ncbistdaa) {
+        if (*seq_data_type != Seq_code_ncbistdaa) {
             new_data = BSConvertSeq(*seq_data, Seq_code_ncbistdaa,
-                                    seq_data_type, SequenceLen);
+                                    *seq_data_type, SequenceLen);
             *seq_data = new_data;
-            seq_data_type = Seq_code_ncbistdaa;
+            *seq_data_type = Seq_code_ncbistdaa;
         }
     } else {                    /* if(!fdbp->options->is_protein) */
 
         AmbCharPtr = NULL;
-        if (seq_data_type != Seq_code_ncbi2na
-            && seq_data_type != Seq_code_ncbi4na) {
+        if (*seq_data_type != Seq_code_ncbi2na
+            && *seq_data_type != Seq_code_ncbi4na) {
             Uint1 new_code;
             new_data =
-                BSPack(*seq_data, seq_data_type, SequenceLen, &new_code);
+                BSPack(*seq_data, *seq_data_type, SequenceLen, &new_code);
             if (new_data != NULL) {
                 *seq_data = new_data;
-                seq_data_type = new_code;
+                *seq_data_type = new_code;
             }
         }
 
-        if (seq_data_type == Seq_code_ncbi4na && seq_data != NULL) {
+        if (*seq_data_type == Seq_code_ncbi4na && seq_data != NULL) {
             /* ncbi4na require compression into ncbi2na */
 
             if (fdbp->options->version > FORMATDB_VER_TEXT) {
@@ -8983,7 +9040,7 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
             }
             *seq_data = new_data;
 
-            seq_data_type = Seq_code_ncbi2na;   /* just for information */
+            *seq_data_type = Seq_code_ncbi2na;   /* just for information */
 
         } else {
             Uint1 remainder;
@@ -9014,13 +9071,14 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
            si.title = StringSave(bdp->title);
         si.taxid = bdp->taxid;
     } else {
-        StringNCpy_0(si.seqid, seq_id, sizeof(si.seqid));
+        if (seq_id)
+            StringNCpy_0(si.seqid, seq_id, sizeof(si.seqid));
         if (title)
-           si.title = StringSave(bdp->title);
+           si.title = StringSave(title);
         si.taxid = tax_id;
     }
 
-    status = FDBAddSequence2(fdbp, &si, seq_data_type, seq_data, SequenceLen,
+    status = FDBAddSequence2(fdbp, &si, *seq_data_type, seq_data, SequenceLen,
                            AmbCharPtr, PIG_NONE, 0);
 
     if (si.title)
@@ -9035,7 +9093,7 @@ Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
                                            information for each gi */
                      /* sequence data itself */
                      Uint1 seq_data_type, 
-                     ByteStorePtr * seq_data, 
+                     const ByteStorePtr * seq_data, 
                      Int4 SequenceLen, 
                      Uint4Ptr AmbCharPtr, 
                      
@@ -9082,9 +9140,11 @@ Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
 
     if (fdbp->options->is_protein) {
         int i = 0;
+        ASSERT(seq_data_type == Seq_code_ncbistdaa);
         if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1)
             return 1;
     } else {
+        ASSERT(seq_data_type == Seq_code_ncbi2na);
         /* dump ambiguity characters. */
         fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);  /* Anyway...  */
 
@@ -9206,13 +9266,13 @@ Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp)
         if (BioseqGetLen(bsp) <= 0)
             ErrPostEx(SEV_WARNING, 0, 0, "%s has zero-length sequence\n", tmpbuf);
 
-        return FDBAddSequence (fdbp, NULL, bsp->seq_data_type, 
+        return FDBAddSequence (fdbp, NULL, &bsp->seq_data_type, 
                                &bsp->seq_data, bsp->length, tmpbuf, 
                                BioseqGetTitle(bsp), 0, 0, 0, 0, 0);
     } else {
 
         ASSERT(fdbp->options->version >= FORMATDB_VER);
-        return FDBAddSequence (fdbp, bdp, bsp->seq_data_type, 
+        return FDBAddSequence (fdbp, bdp, &bsp->seq_data_type, 
                                &bsp->seq_data, bsp->length, NULL, NULL,
                                0, 0, 0, 0, 0);
     }
@@ -10004,7 +10064,7 @@ static Boolean FDB_FastaFileFunc(BioseqPtr bsp, Int2 key, CharPtr buf,
         /* Here we should add new entry to FD database and reset 
            all spaces */
 
-        FDBAddSequence(fsedip->fdbp, NULL, fsedip->seq_data_type, 
+        FDBAddSequence(fsedip->fdbp, NULL, &fsedip->seq_data_type, 
                        &fsedip->bsp, fsedip->length, 
                        fsedip->seqid, fsedip->defline,
                        0, 0, 0, 0, 0);
@@ -10116,7 +10176,7 @@ static void FDBSeqEntry_callback (SeqEntryPtr sep, Pointer data,
         fsedip->tfp->mfp->no_sequence = TRUE;
         SeqEntryFasta(sep, fsedip->tfp, index, indent);
         
-        FDBAddSequence(fsedip->fdbp, NULL, bsp->seq_data_type, 
+        FDBAddSequence(fsedip->fdbp, NULL, &bsp->seq_data_type, 
                        &bsp->seq_data, bsp->length, 
                        fsedip->seqid, fsedip->defline, 0, 0, 0, 0, 0);
         
@@ -11537,13 +11597,13 @@ Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
     CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out)
 {
     return Fastacmd_Search_ex(searchstr, database, READDB_DB_UNKNOWN, 
-            batchfile, dupl, linelen, out, FALSE, FALSE, FALSE, NULL, 
+            batchfile, dupl, linelen, out, FALSE, FALSE, eNoDump, NULL, 
             Seq_strand_unknown, FALSE, FALSE, PIG_NONE);
 }
 
 Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
-    Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
+    Boolean use_target, Boolean use_ctrlAs, EBlastDbDumpType dump_db, 
     CharPtr seqlocstr, Uint1 strand, 
     Boolean taxonomy_info_only, Boolean dbinfo_only, Int4 pig)
 {
@@ -11555,7 +11615,6 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     FILE             *fd;
     Int4Ptr          ids = NULL;
     Int4             guess_gi = -1;
-    Boolean          translateBlastDB2FASTA = dump_db;
     SeqLocPtr        slp = NULL;
     Uint1            init_state = 0;
     Int2             retval = FASTACMD_SUCCESS;
@@ -11565,6 +11624,8 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 
     if (dbname == NULL)
         dbname = FASTACMD_DEFAULT_DB;
+
+    ASSERT(dump_db >= eNoDump || dump_db < eDumpTypeMax);
 
     if (taxonomy_info_only)
         init_state = READDB_NEW_DO_TAXDB;
@@ -11620,7 +11681,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         }
     }
 
-    if (!translateBlastDB2FASTA) {
+    if (dump_db == eNoDump) {
         if(searchstr != NULL) {
             if((falp =  GetAccList(searchstr, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
@@ -11644,7 +11705,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         }
     }
     
-    for (falp_tmp = falp; falp_tmp != NULL; falp_tmp = falp_tmp->next) {  
+    for (falp_tmp = falp; falp_tmp != NULL; falp_tmp = falp_tmp->next) {
 
         if(falp_tmp->gi != 0) {
             fid = readdb_gi2seq(rdfp, falp_tmp->gi, NULL);
@@ -11700,8 +11761,9 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         }   
     }
 
-    if (translateBlastDB2FASTA) {
-        BlastDBToFasta(rdfp, out, linelen, use_ctrlAs);
+    /* sanity check */
+    if (dump_db) {
+        DumpBlastDB(rdfp, out, linelen, use_ctrlAs, dump_db);
     }
 
     readdb_destruct(rdfp);
@@ -11712,7 +11774,8 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 
 /* #define SHOW_PROGRESS */
 
-Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
+Int2 DumpBlastDB(const ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, 
+                 Boolean ctrlA, EBlastDbDumpType dump_type)
 {
     register Uint4 maskidx, bit_shift, dump;
     register Int4 i;
@@ -11754,14 +11817,42 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
                 fprintf(stderr,"\b\b\b\b%3d%%",(int)((100*i)/total));
              }
 #endif
-            if ((bsp = readdb_get_bioseq_ex(rdfp,i, TRUE, ctrlA)) != NULL) {
-                if (!BioseqRawToFastaExtra(bsp, fp, linelen)) {
-                    ErrPostEx(SEV_ERROR,0,0,
-                            "Could not convert Bioseq to FASTA");
+            switch (dump_type) {
+            case eFasta:
+                if ((bsp = readdb_get_bioseq_ex(rdfp,i, TRUE, ctrlA)) != NULL) {
+                    if (!BioseqRawToFastaExtra(bsp, fp, linelen)) {
+                        ErrPostEx(SEV_ERROR,0,0,
+                                "Could not convert Bioseq to FASTA");
+                    }
+                    dumped++;
                 }
-                dumped++;
+                BioseqFree(bsp);
+                break;
+
+            case eGi:
+                {
+                    Int4 taxid = 0;
+                    Uint4 h = 0;     /* header marker for readdb_get_header_ex */
+                    CharPtr title = NULL;
+                    SeqIdPtr sip = NULL;
+                    while (readdb_get_header_ex(rdfp, i, &h, &sip, &title, 
+                                                &taxid, NULL, NULL)) {
+                        if (dump_type == eGi) {
+                            SeqIdPtr gi = SeqIdFindBest(sip, SEQID_GI);
+                            if (gi) {
+                                fprintf(fp, "%d\n", gi->data.intvalue);
+                            }
+                        }
+                        /* TODO: could easily handle other cases as well */
+                        sip = SeqIdFree(sip);
+                        title = MemFree(title);
+                    }
+                }
+                break;
+
+            default:
+            abort();        /* should never happen */
             }
-            BioseqFree(bsp);
         }
     } else {
 
@@ -11806,7 +11897,11 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
             /* Mask this index! */
             dump = SwapUint4(oidlist->list[maskidx]) & (0x1 << bit_shift);
 
-            if (dump) {
+            if ( !dump ) {
+                continue;
+            }
+            switch (dump_type) {
+            case eFasta:
                 if ((bsp = readdb_get_bioseq_ex(rdfp,i, TRUE, ctrlA)) != NULL) {
                     if (!BioseqRawToFastaExtra(bsp, fp, linelen)) {
                             ErrPostEx(SEV_ERROR,0,0,
@@ -11815,6 +11910,31 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
                     dumped++;
                 }
                 BioseqFree(bsp);
+                break;
+
+            case eGi:
+                {
+                    Int4 taxid = 0;
+                    Uint4 h = 0;     /* header marker for readdb_get_header_ex */
+                    CharPtr title = NULL;
+                    SeqIdPtr sip = NULL;
+                    while (readdb_get_header_ex(rdfp, i, &h, &sip, &title, 
+                                                &taxid, NULL, NULL)) {
+                        if (dump_type == eGi) {
+                            SeqIdPtr gi = SeqIdFindBest(sip, SEQID_GI);
+                            if (gi) {
+                                fprintf(fp, "%d\n", gi->data.intvalue);
+                            }
+                        }
+                        /* TODO: could easily handle other cases as well */
+                        sip = SeqIdFree(sip);
+                        title = MemFree(title);
+                    }
+                }
+                break;
+
+            default:
+                abort();        /* should never happen */
             }
         }
     }

@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.c,v 1.14 2004/10/06 14:59:16 dondosha Exp $
+/*  $Id: seqsrc_multiseq.c,v 1.22 2005/04/27 20:00:36 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,25 +21,48 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
-* ===========================================================================
-*
-* Author:  Ilya Dondoshansky
-*
-* File Description:
-*   C implementation of the BlastSeqSrc interface for a list of sequence 
-*   locations.
-*
-*/
+*  Author:  Ilya Dondoshansky
+* ===========================================================================*/
 
-static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.14 2004/10/06 14:59:16 dondosha Exp $";
+/** @file seqsrc_multiseq.c
+ * C implementation of the BlastSeqSrc interface for a list of sequence 
+ * locations.
+ */
+
+static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.22 2005/04/27 20:00:36 dondosha Exp $";
 
 #include <algo/blast/api/seqsrc_multiseq.h>
+#include <algo/blast/core/blast_seqsrc_impl.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/api/blast_seq.h>
 #include <sequtil.h>
 
-static MultiSeqInfo* MultiSeqInfoNew(const SeqLoc* seqloc_list, 
-                                     EBlastProgramType program)
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
+/** Encapsulates the arguments needed to initialize multi-sequence source. */
+typedef struct MultiSeqSrcNewArgs {
+    SeqLoc* seqloc_list; /**< List of sequence locations. */
+    EBlastProgramType program; /**< Type of BLAST program */
+} MultiSeqSrcNewArgs;
+
+/** Contains information about all sequences in a set */
+typedef struct MultiSeqInfo {
+    Boolean is_prot; /**< Are these sequences protein or nucleotide? */
+    BLAST_SequenceBlk** seqblk_array; /**< Array of sequence blocks */
+    Uint4 max_length; /**< Maximal length of the participating sequences */
+    Uint4 avg_length; /**< Average length of the participating sequences */
+    Uint4 num_seqs; /**< Number of sequences. */
+    Boolean contents_allocated; /**< Is seqblk_array allocated or just copied */
+} MultiSeqInfo;
+
+/** Initializes the MultiSeqInfo structure, given a list of SeqLoc's and 
+ * program.
+ */
+static MultiSeqInfo* 
+s_MultiSeqInfoNew(const SeqLoc* seqloc_list, EBlastProgramType program)
 {
    Uint4 index;
    Uint4 num_seqs = ValNodeLen((ValNode*)seqloc_list);
@@ -49,12 +72,15 @@ static MultiSeqInfo* MultiSeqInfoNew(const SeqLoc* seqloc_list,
 
    retval->num_seqs = num_seqs;
    retval->is_prot = 
-      (program == eBlastTypeBlastp || program == eBlastTypeBlastx);
+      (program == eBlastTypeBlastp || program == eBlastTypePhiBlastp ||
+       program == eBlastTypePsiBlast || program == eBlastTypeBlastx);
    retval->seqblk_array = (BLAST_SequenceBlk**) 
       calloc(retval->num_seqs, sizeof(BLAST_SequenceBlk*));
       
    for (index = 0, seqloc_ptr = (SeqLoc*) seqloc_list; 
 	index < num_seqs; ++index, seqloc_ptr = seqloc_ptr->next) {
+       /** @todo FIXME: check the return value and set the call SetInitErrorStr
+        * if appropriate */
       BLAST_SetUpSubject(program, seqloc_ptr, &retval->seqblk_array[index]);
       max_length = MAX(max_length, (Uint4)retval->seqblk_array[index]->length);
    }
@@ -67,7 +93,8 @@ static MultiSeqInfo* MultiSeqInfoNew(const SeqLoc* seqloc_list,
 /** Destruct the MultiSeqInfo structure, except the SeqLoc structures, which it
  * does not own.
  */
-static MultiSeqInfo* MultiSeqInfoFree(MultiSeqInfo* seq_info)
+static MultiSeqInfo* 
+s_MultiSeqInfoFree(MultiSeqInfo* seq_info)
 {
    Uint4 index;
    
@@ -85,7 +112,8 @@ static MultiSeqInfo* MultiSeqInfoFree(MultiSeqInfo* seq_info)
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static Int4 MultiSeqGetMaxLength(void* multiseq_handle, void* ignoreme)
+static Int4 
+s_MultiSeqGetMaxLength(void* multiseq_handle, void* ignoreme)
 {
     Int4 retval = 0;
     Uint4 index;
@@ -107,7 +135,8 @@ static Int4 MultiSeqGetMaxLength(void* multiseq_handle, void* ignoreme)
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static Int4 MultiSeqGetAvgLength(void* multiseq_handle, void* ignoreme)
+static Int4 
+s_MultiSeqGetAvgLength(void* multiseq_handle, void* ignoreme)
 {
     Int8 total_length = 0;
     Uint4 avg_length;
@@ -131,7 +160,8 @@ static Int4 MultiSeqGetAvgLength(void* multiseq_handle, void* ignoreme)
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static Int4 MultiSeqGetNumSeqs(void* multiseq_handle, void* ignoreme)
+static Int4 
+s_MultiSeqGetNumSeqs(void* multiseq_handle, void* ignoreme)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
 
@@ -143,7 +173,8 @@ static Int4 MultiSeqGetNumSeqs(void* multiseq_handle, void* ignoreme)
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static Int8 MultiSeqGetTotLen(void* multiseq_handle, void* ignoreme)
+static Int8 
+s_MultiSeqGetTotLen(void* multiseq_handle, void* ignoreme)
 {
     return 0;
 }
@@ -153,7 +184,7 @@ static Int8 MultiSeqGetTotLen(void* multiseq_handle, void* ignoreme)
  * @param ignoreme Unused by this implementation [in]
  */
 static const char* 
-MultiSeqGetName(void* multiseq_handle, void* ignoreme)
+s_MultiSeqGetName(void* multiseq_handle, void* ignoreme)
 {
     return NULL;
 }
@@ -162,7 +193,8 @@ MultiSeqGetName(void* multiseq_handle, void* ignoreme)
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static Boolean MultiSeqGetIsProt(void* multiseq_handle, void* ignoreme)
+static Boolean 
+s_MultiSeqGetIsProt(void* multiseq_handle, void* ignoreme)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
 
@@ -173,13 +205,14 @@ static Boolean MultiSeqGetIsProt(void* multiseq_handle, void* ignoreme)
 
 /** Retrieves the sequence meeting the criteria defined by its second argument.
  * @param multiseq_handle Pointer to the structure containing sequences [in]
- * @param args Pointer to GetSeqArg structure [in]
+ * @param args Pointer to BlastSeqSrcGetSeqArg structure [in]
  * @return return codes defined in blast_seqsrc.h
  */
-static Int2 MultiSeqGetSequence(void* multiseq_handle, void* args)
+static Int2 
+s_MultiSeqGetSequence(void* multiseq_handle, void* args)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
-    GetSeqArg* seq_args = (GetSeqArg*) args;
+    BlastSeqSrcGetSeqArg* seq_args = (BlastSeqSrcGetSeqArg*) args;
     Int4 index;
 
     ASSERT(seq_info);
@@ -209,19 +242,15 @@ static Int2 MultiSeqGetSequence(void* multiseq_handle, void* args)
 
 /** Deallocates uncompressed sequence buffer, obtained by MultiSeqGetSequence
  * @param multiseq_handle Pointer to the structure containing sequences [in]
- * @param args Pointer to GetSeqArg structure [in]
- * @return return codes defined in blast_seqsrc.h
+ * @param args Pointer to BlastSeqSrcGetSeqArg structure [in]
  */
-static Int2 MultiSeqRetSequence(void* multiseq_handle, void* args)
+static void
+s_MultiSeqReleaseSequence(void* multiseq_handle, void* args)
 {
-    GetSeqArg* seq_args = (GetSeqArg*) args;
-
+    BlastSeqSrcGetSeqArg* seq_args = (BlastSeqSrcGetSeqArg*) args;
     ASSERT(seq_args);
-
     if (seq_args->seq->sequence_start_allocated)
        sfree(seq_args->seq->sequence_start);
-
-    return 0;
 }
 
 /** Retrieve length of a given sequence.
@@ -230,7 +259,8 @@ static Int2 MultiSeqRetSequence(void* multiseq_handle, void* args)
  *             vector [in]
  * @return Length of the sequence or BLAST_SEQSRC_ERROR.
  */
-static Int4 MultiSeqGetSeqLen(void* multiseq_handle, void* args)
+static Int4 
+s_MultiSeqGetSeqLen(void* multiseq_handle, void* args)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
     Int4 index;
@@ -242,38 +272,9 @@ static Int4 MultiSeqGetSeqLen(void* multiseq_handle, void* args)
     return seq_info->seqblk_array[index]->length;
 }
 
-/** Return any error messages saved during initialization. 
- * @todo FIXME: At this time, no error messages are saved, so there is nothing to 
- * return. Should a better error reporting be implemented?
- */
-static Blast_Message* 
-MultiSeqGetErrorMessage(void* multiseq_handle, void* ignoreme)
-{
-    return NULL;
-}
-
-/** Gets the next sequence index, given a BlastSeqSrc pointer. */
-static Int4 MultiSeqIteratorNext(void* seqsrc, BlastSeqSrcIterator* itr)
-{
-    BlastSeqSrc* seq_src = (BlastSeqSrc*) seqsrc;
-    Int4 retval = BLAST_SEQSRC_EOF;
-    Int2 status = 0;
-
-    ASSERT(seq_src);
-    ASSERT(itr);
-
-    if ((status = BLASTSeqSrcGetNextChunk(seq_src, itr))
-        == BLAST_SEQSRC_EOF) {
-        return status;
-    }
-    retval = itr->current_pos++;
-
-    return retval;
-}
-
 /** Gets the next sequence index, given a MultiSeqInfo pointer. */
-static Int2 MultiSeqGetNextChunk(void* multiseq_handle, 
-                                 BlastSeqSrcIterator* itr)
+static Int2 
+s_MultiSeqGetNextChunk(void* multiseq_handle, BlastSeqSrcIterator* itr)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
 
@@ -289,70 +290,105 @@ static Int2 MultiSeqGetNextChunk(void* multiseq_handle,
     return BLAST_SEQSRC_SUCCESS;
 }
 
-BlastSeqSrc* MultiSeqSrcNew(BlastSeqSrc* retval, void* args)
+/** Gets the next sequence index, given a BlastSeqSrc pointer. */
+static Int4 
+s_MultiSeqIteratorNext(void* multiseq_handle, BlastSeqSrcIterator* itr)
 {
-    MultiSeqSrcNewArgs* seqsrc_args = (MultiSeqSrcNewArgs*) args;
-    MultiSeqInfo* seq_info;
+    Int4 retval = BLAST_SEQSRC_EOF;
+    Int2 status = 0;
 
-    if (!retval)
-        return NULL;
-    
-    seq_info = 
-        MultiSeqInfoNew(seqsrc_args->seqloc_list, seqsrc_args->program);
-    
-    /* Initialize the BlastSeqSrc structure fields with user-defined function
-     * pointers and seq_info */
-    SetDeleteFnPtr(retval, &MultiSeqSrcFree);
-    SetCopyFnPtr(retval, &MultiSeqSrcCopy);
-    SetDataStructure(retval, (void*) seq_info);
-    SetGetNumSeqs(retval, &MultiSeqGetNumSeqs);
-    SetGetMaxSeqLen(retval, &MultiSeqGetMaxLength);
-    SetGetAvgSeqLen(retval, &MultiSeqGetAvgLength);
-    SetGetTotLen(retval, &MultiSeqGetTotLen);
-    SetGetName(retval, &MultiSeqGetName);
-    SetGetIsProt(retval, &MultiSeqGetIsProt);
-    SetGetSequence(retval, &MultiSeqGetSequence);
-    SetGetSeqLen(retval, &MultiSeqGetSeqLen);
-    SetGetError(retval, &MultiSeqGetErrorMessage);
-    SetGetNextChunk(retval, &MultiSeqGetNextChunk);
-    SetIterNext(retval, &MultiSeqIteratorNext);
-    SetRetSequence(retval, &MultiSeqRetSequence);
-    
+    ASSERT(multiseq_handle);
+    ASSERT(itr);
+
+    if ((status = s_MultiSeqGetNextChunk(multiseq_handle, itr))
+        == BLAST_SEQSRC_EOF) {
+        return status;
+    }
+    retval = itr->current_pos++;
+
     return retval;
 }
 
-BlastSeqSrc* MultiSeqSrcFree(BlastSeqSrc* seq_src)
+/** Multi sequence source destructor: frees its internal data structure and the
+ * BlastSeqSrc structure itself.
+ * @param seq_src BlastSeqSrc structure to free [in]
+ * @return NULL
+ */
+static BlastSeqSrc* 
+s_MultiSeqSrcFree(BlastSeqSrc* seq_src)
 {
    MultiSeqInfo* seq_info;
 
     if (!seq_src) 
         return NULL;
 
-    seq_info = (MultiSeqInfo*)GetDataStructure(seq_src);
+    seq_info = (MultiSeqInfo*)_BlastSeqSrcImpl_GetDataStructure(seq_src);
 
-    seq_info = MultiSeqInfoFree(seq_info);
+    seq_info = s_MultiSeqInfoFree(seq_info);
     sfree(seq_src);
 
     return NULL;
 }
 
-BlastSeqSrc* MultiSeqSrcCopy(BlastSeqSrc* seq_src)
+/** Multi sequence source copier; copies the MultiSeqInfo structure
+ * @param seq_src BlastSeqSrc structure to copy [in]
+ * @return New BlastSeqSrc structure
+ */
+static BlastSeqSrc* 
+s_MultiSeqSrcCopy(BlastSeqSrc* seq_src)
 {
    MultiSeqInfo* seq_info;
 
    if (!seq_src) 
       return NULL;
 
-   seq_info = (MultiSeqInfo*) BlastMemDup(GetDataStructure(seq_src), sizeof(MultiSeqInfo));
+   seq_info = (MultiSeqInfo*) BlastMemDup
+       (_BlastSeqSrcImpl_GetDataStructure(seq_src), sizeof(MultiSeqInfo));
    seq_info->contents_allocated = FALSE;
 
-   SetDataStructure(seq_src, (void*) seq_info);
+   _BlastSeqSrcImpl_SetDataStructure(seq_src, (void*) seq_info);
     
    return seq_src;
 }
 
+/** Multi-sequence source constructor 
+ * @param retval BlastSeqSrc structure (already allocated) to populate [in]
+ * @param args Pointer to MultiSeqSrcNewArgs structure above [in]
+ * @return Updated bssp structure (with all function pointers initialized)
+ */
+static BlastSeqSrc* 
+s_MultiSeqSrcNew(BlastSeqSrc* retval, void* args)
+{
+    MultiSeqSrcNewArgs* seqsrc_args = (MultiSeqSrcNewArgs*) args;
+    MultiSeqInfo* seq_info = NULL;
+
+    ASSERT(retval);
+    ASSERT(seqsrc_args);
+    
+    seq_info = 
+        s_MultiSeqInfoNew(seqsrc_args->seqloc_list, seqsrc_args->program);
+    
+    /* Initialize the BlastSeqSrc structure fields with user-defined function
+     * pointers and seq_info */
+    _BlastSeqSrcImpl_SetDeleteFnPtr(retval, &s_MultiSeqSrcFree);
+    _BlastSeqSrcImpl_SetCopyFnPtr(retval, &s_MultiSeqSrcCopy);
+    _BlastSeqSrcImpl_SetDataStructure(retval, (void*) seq_info);
+    _BlastSeqSrcImpl_SetGetNumSeqs(retval, &s_MultiSeqGetNumSeqs);
+    _BlastSeqSrcImpl_SetGetMaxSeqLen(retval, &s_MultiSeqGetMaxLength);
+    _BlastSeqSrcImpl_SetGetAvgSeqLen(retval, &s_MultiSeqGetAvgLength);
+    _BlastSeqSrcImpl_SetGetTotLen(retval, &s_MultiSeqGetTotLen);
+    _BlastSeqSrcImpl_SetGetName(retval, &s_MultiSeqGetName);
+    _BlastSeqSrcImpl_SetGetIsProt(retval, &s_MultiSeqGetIsProt);
+    _BlastSeqSrcImpl_SetGetSequence(retval, &s_MultiSeqGetSequence);
+    _BlastSeqSrcImpl_SetGetSeqLen(retval, &s_MultiSeqGetSeqLen);
+    _BlastSeqSrcImpl_SetIterNext(retval, &s_MultiSeqIteratorNext);
+    _BlastSeqSrcImpl_SetReleaseSequence(retval, &s_MultiSeqReleaseSequence);
+    
+    return retval;
+}
+
 BlastSeqSrc*
-MultiSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program)
+MultiSeqBlastSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program)
 {
     BlastSeqSrc* seq_src;
     BlastSeqSrcNewInfo bssn_info;
@@ -360,7 +396,7 @@ MultiSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program)
         (MultiSeqSrcNewArgs*) calloc(1, sizeof(MultiSeqSrcNewArgs));;
     args->seqloc_list = seqloc_list;
     args->program = program;
-    bssn_info.constructor = &MultiSeqSrcNew;
+    bssn_info.constructor = &s_MultiSeqSrcNew;
     bssn_info.ctor_argument = (void*) args;
 
     seq_src = BlastSeqSrcNew(&bssn_info);
@@ -368,3 +404,6 @@ MultiSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program)
 
     return seq_src;
 }
+
+/* @} */
+

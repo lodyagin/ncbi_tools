@@ -1,4 +1,4 @@
-/* $Id: greedy_align.h,v 1.17 2004/10/06 20:03:44 papadopo Exp $
+/* $Id: greedy_align.h,v 1.21 2005/04/07 20:09:54 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,95 +28,52 @@
  */
 
 /** @file greedy_align.h
- * Copy of mbalign.h from ncbitools library 
- * @todo FIXME need better file description
+ * Prototypes and structures for greedy gapped alignment
  */
 
 #ifndef _GREEDY_H_
 #define _GREEDY_H_
 
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/gapinfo.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** edit mask operations */
-enum EOpType {
-    eEditOpError  = 0x0,         /**< operation not valid */
-    eEditOpInsert  = 0x1,         /**< insert operation */
-    eEditOpDelete  = 0x2,         /**< delete operation */
-    eEditOpReplace = 0x3          /**< replace operation */
-};
-
-/** A collection of identical editing operations */
-typedef struct MBEditOp {
-    Uint4 op_type : 2;     /**< the type of operation */
-    Uint4 num_ops : 30;    /**< number of operations of this type to perform */
-} MBEditOp;
-
-/** Macro for a formula estimating maximal gap length in the greedy algorithm */
-#define ICEIL(x,y) ((((x)-1)/(y))+1)
-
-/** Fraction of the sequence length in calculation of maximal cost (= 2) */
+/** sequence_length / (this number) is a measure of how hard the 
+    alignment code will work to find the optimal alignment; in fact
+    this gives a worst case bound on the number of loop iterations */
 #define GREEDY_MAX_COST_FRACTION 2
-
-/** Edit script structure for saving traceback information for greedy gapped 
- * alignment. */
-typedef struct MBGapEditScript {
-    MBEditOp *edit_ops;        /**< array of edit operations */
-    Uint4 num_ops_allocated;   /**< size of allocated array */
-    Uint4 num_ops;             /**< number of edit ops presently in use */
-    enum EOpType last_op;      /**< most recent operation added */
-} MBGapEditScript;
-
-/** Frees an edit script structure 
-    @param script The edit script to free [in]
-    @return Always NULL
-*/
-MBGapEditScript *
-MBGapEditScriptFree(MBGapEditScript *script);
-
-/** Allocates an edit script structure 
-    @return Pointer to the allocated edit script
-*/
-MBGapEditScript *
-MBGapEditScriptNew(void);
-
-/** Add the list of edit operations in one edit script to
-    the list in another edit script
-
-    @param dest_script The edit script to be expanded [in/modified]
-    @param src_script The edit script whose operations
-                        will be appended [in]
-    @return Pointer to the expanded edit script
-*/
-MBGapEditScript *
-MBGapEditScriptAppend(MBGapEditScript *dest_script, 
-                      MBGapEditScript *src_script);
 
 /* ----- pool allocator ----- */
 
-/** Bookkeeping structure that maintains the smallest distances
-    at an intermediate point in the greedy alignment */
-typedef struct SThreeVal {
-    Int4 I;     /**< Best distance for a path ending in an insertion */
-    Int4 C;     /**< Best distance for a path ending in a match */
-    Int4 D;     /**< Best distance for a path ending in a deletion */
-} SThreeVal;
+/** Bookkeeping structure for greedy alignment. When aligning
+    two sequences, the members of this structure store the
+    largest offset into the second sequence that leads to a
+    high-scoring alignment for a given start point */
+typedef struct SGreedyOffset {
+    Int4 insert_off;    /**< Best offset for a path ending in an insertion */
+    Int4 match_off;     /**< Best offset for a path ending in a match */
+    Int4 delete_off;    /**< Best offset for a path ending in a deletion */
+} SGreedyOffset;
 
 /** Space structure for greedy alignment algorithm */
 typedef struct SMBSpace {
-    SThreeVal* space_array;     /**< array of bookkeeping structures */
+    SGreedyOffset* space_array; /**< array of bookkeeping structures */
     Int4 space_allocated;       /**< number of structures allocated */
     Int4 space_used;            /**< number of structures actually in use */
     struct SMBSpace *next;      /**< pointer to next structure in list */
 } SMBSpace;
 
 /** Allocate a space structure for greedy alignment
-    @return Pointer to allocated structure, or NULL upon failure
-*/
-SMBSpace* MBSpaceNew(void);
+ *  At least num_space_arrays will be allocated, possibly more if the
+ *  number is low.
+ *
+ *  @param num_space_arrays number of array elements to allocated [in]
+ *  @return Pointer to allocated structure, or NULL upon failure
+ */
+SMBSpace* MBSpaceNew(int num_space_arrays);
 
 /** Free the space structure 
     @param sp Linked list of structures to free
@@ -125,28 +82,30 @@ void MBSpaceFree(SMBSpace* sp);
 
 /** All auxiliary memory needed for the greedy extension algorithm. */
 typedef struct SGreedyAlignMem {
-   Int4** flast_d;              /**< 2-D array of distances */
-   Int4* max_row_free;          /**< array of maximum distances */
-   SThreeVal** flast_d_affine;  /**< Like flast_d but for affine searches */
-   Int4* uplow_free;            /**< ? */
-   SMBSpace* space;             /**< local memory pool for SThreeVal structs */
+   Int4** last_seq2_off;              /**< 2-D array of distances */
+   Int4* max_score;                   /**< array of maximum scores */
+   SGreedyOffset** last_seq2_off_affine;  /**< Like last_seq2_off but for 
+                                               affine searches */
+   Int4* diag_bounds;                 /**< bounds on ranges of diagonals */
+   SMBSpace* space;                   /**< local memory pool for 
+                                           SGreedyOffset structs */
 } SGreedyAlignMem;
 
 /** Perform the greedy extension algorithm with non-affine gap penalties.
- * @param seq1 First sequence (may be compressed) [in]
+ * @param seq1 First sequence (always uncompressed) [in]
  * @param len1 Maximal extension length in first sequence [in]
- * @param seq2 Second sequence (always uncompressed) [in]
+ * @param seq2 Second sequence (may be compressed) [in]
  * @param len2 Maximal extension length in second sequence [in]
  * @param reverse Is extension performed in backwards direction? [in]
  * @param xdrop_threshold X-dropoff value to use in extension [in]
  * @param match_cost Match score to use in extension [in]
  * @param mismatch_cost Mismatch score to use in extension [in]
- * @param extent1 Length of extension on sequence 1 [out]
- * @param extent2 Length of extension on sequence 2 [out]
+ * @param seq1_align_len Length of extension on sequence 1 [out]
+ * @param seq2_align_len Length of extension on sequence 2 [out]
  * @param aux_data Structure containing all preallocated memory [in]
- * @param script Edit script structure for saving traceback. 
+ * @param edit_block Edit script structure for saving traceback. 
  *          Traceback is not saved if NULL is passed. [in] [out]
- * @param rem Offset within a byte of the compressed first sequence. 
+ * @param rem Offset within a byte of the compressed second sequence. 
  *          Set to 4 if sequence is uncompressed. [in]
  * @return The minimum distance between the two sequences, i.e.
  *          the number of mismatches plus gaps in the resulting alignment
@@ -156,27 +115,27 @@ BLAST_GreedyAlign (const Uint1* seq1, Int4 len1,
                    const Uint1* seq2, Int4 len2,
                    Boolean reverse, Int4 xdrop_threshold, 
                    Int4 match_cost, Int4 mismatch_cost,
-                   Int4* extent1, Int4* extent2, 
+                   Int4* seq1_align_len, Int4* seq2_align_len, 
                    SGreedyAlignMem* aux_data, 
-                   MBGapEditScript *script, Uint1 rem);
+                   GapPrelimEditBlock *edit_block, Uint1 rem);
 
 /** Perform the greedy extension algorithm with affine gap penalties.
- * @param seq1 First sequence (may be compressed) [in]
+ * @param seq1 First sequence (always uncompressed) [in]
  * @param len1 Maximal extension length in first sequence [in]
- * @param seq2 Second sequence (always uncompressed) [in]
+ * @param seq2 Second sequence (may be compressed) [in]
  * @param len2 Maximal extension length in second sequence [in]
  * @param reverse Is extension performed in backwards direction? [in]
  * @param xdrop_threshold X-dropoff value to use in extension [in]
  * @param match_cost Match score to use in extension [in]
  * @param mismatch_cost Mismatch score to use in extension [in]
- * @param gap_open Gap opening penalty [in]
- * @param gap_extend Gap extension penalty [in]
- * @param extent1 Length of extension on sequence 1 [out]
- * @param extent2 Length of extension on sequence 2 [out]
+ * @param in_gap_open Gap opening penalty [in]
+ * @param in_gap_extend Gap extension penalty [in]
+ * @param seq1_align_len Length of extension on sequence 1 [out]
+ * @param seq2_align_len Length of extension on sequence 2 [out]
  * @param aux_data Structure containing all preallocated memory [in]
- * @param script Edit script structure for saving traceback. 
+ * @param edit_block Edit script structure for saving traceback. 
  *          Traceback is not saved if NULL is passed. [in] [out]
- * @param rem Offset within a byte of the compressed first sequence.
+ * @param rem Offset within a byte of the compressed second sequence.
  *          Set to 4 if sequence is uncompressed. [in]
  * @return The score of the alignment
  */
@@ -185,10 +144,10 @@ BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
                          const Uint1* seq2, Int4 len2,
                          Boolean reverse, Int4 xdrop_threshold, 
                          Int4 match_cost, Int4 mismatch_cost,
-                         Int4 gap_open, Int4 gap_extend,
-                         Int4* extent1, Int4* extent2, 
+                         Int4 in_gap_open, Int4 in_gap_extend,
+                         Int4* seq1_align_len, Int4* seq2_align_len, 
                          SGreedyAlignMem* aux_data, 
-                         MBGapEditScript *script, Uint1 rem);
+                         GapPrelimEditBlock *edit_block, Uint1 rem);
 
 #ifdef __cplusplus
 }

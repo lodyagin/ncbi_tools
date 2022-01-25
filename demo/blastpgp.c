@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.126 2004/10/12 15:14:39 papadopo Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.127 2005/04/04 14:57:47 papadopo Exp $";
 
-/* $Id: blastpgp.c,v 6.126 2004/10/12 15:14:39 papadopo Exp $ */
+/* $Id: blastpgp.c,v 6.127 2005/04/04 14:57:47 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,11 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.126 2004/10/12 15:14:39 papadop
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.126 $ 
+ * $Revision: 6.127 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.127  2005/04/04 14:57:47  papadopo
+ * remove requirement for a fasta format query file if restarting from scoremat
+ *
  * Revision 6.126  2004/10/12 15:14:39  papadopo
  * add gap open and extend penalties to [BC]posComputation calls
  *
@@ -494,6 +497,7 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.126 2004/10/12 15:14:39 papadop
 #include <xmlblast.h>
 #include <ddvcreate.h>
 #include <blfmtutl.h>
+#include <objscoremat.h>
 
 /* Used by the callback function. */
 FILE *global_fp=NULL;
@@ -531,8 +535,8 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 static Args myargs[] = {
     { "Database",               /* 0 */
       "nr", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL},
-    { "Query File",             /* 1 */
-      "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
+    { "Query File (not needed if restarting from scoremat)", /* 1 */
+      "stdin", NULL, NULL, TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Multiple Hits window size", /* 2 */
       "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
     { "Threshold for extending hits", /* 3 */
@@ -727,12 +731,6 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     
     bop->blast_database   = StringSave(myargs[0].strvalue);
 
-    if ((bop->infp = FileOpen(myargs[1].strvalue, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
-                  myargs[1].strvalue);
-        return NULL;
-    }
-    
     if (align_view != 7 && align_view != 10 && align_view != 11 && myargs[6].strvalue != NULL) {
         if ((bop->outfp = FileOpen(myargs[6].strvalue, "w")) == NULL) {
             ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
@@ -808,28 +806,84 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
 
     options = BLASTOptionNew("blastp", TRUE);
     bop->options = options;
+    
+    /* read the query sequence */
 
-    if(myargs[41].intvalue) {
-        if((sep = FastaToSeqEntryForDb (bop->infp, FALSE, NULL, bop->believe_query, NULL, NULL, &options->query_lcase_mask)) == NULL) {
-            ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
+    if (myargs[43].intvalue == NO_SCOREMAT_IO) {
+        if ((bop->infp = FileOpen(myargs[1].strvalue, "r")) == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
+                      myargs[1].strvalue);
             return NULL;
         }
-    } else {
-        if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, bop->believe_query)) == NULL) {
-            ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
+        if(myargs[41].intvalue) {
+            if((sep = FastaToSeqEntryForDb (bop->infp, FALSE, NULL, bop->believe_query, NULL, NULL, &options->query_lcase_mask)) == NULL) {
+                ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
+                return NULL;
+            }
+        } else {
+            if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, bop->believe_query)) == NULL) {
+                ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
+                return NULL;
+            }
+        }
+        
+        SeqEntryExplore(sep, &bop->query_bsp, FindProt);    
+        if (bop->query_bsp == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
+            return NULL;
+        }    
+    }
+    else {                      /* recover the query sequence from scoremat */
+        AsnIoPtr scorematfile;
+        PssmWithParametersPtr scoremat = NULL;
+
+        if (myargs[29].strvalue == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "No restart file specified\n");
             return NULL;
         }
+
+        if (myargs[43].intvalue == ASCII_SCOREMAT)
+            scorematfile = AsnIoOpen(myargs[29].strvalue, "r");
+        else  /* binary scoremat */
+            scorematfile = AsnIoOpen(myargs[29].strvalue, "rb");
+
+        if (scorematfile == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to open scoremat file\n");
+            return NULL;
+        }    
+        
+        scoremat = PssmWithParametersAsnRead(scorematfile, NULL);
+        AsnIoClose(scorematfile);
+        if (scoremat == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "Could not read scoremat "
+                                       "for query sequence\n");
+            return NULL;
+        }
+
+        if (scoremat->pssm == NULL ||
+            scoremat->pssm->query == NULL ||
+            scoremat->pssm->query->data.ptrvalue == NULL) {
+            ErrPostEx(SEV_FATAL, 1, 0, "Cannot read query sequence "
+                                       "from scoremat\n");
+            return NULL;
+        }
+
+        /* use the bioseq from 'scoremat'; remove from that
+           structure so the bioseq is not freed along with the
+           rest of the scoremat. Note that only the first
+           bioseq in a bioseq-set is used */
+
+        bop->query_bsp = (BioseqPtr)(scoremat->pssm->query->data.ptrvalue);
+        scoremat->pssm->query = ValNodeFree(scoremat->pssm->query);
+        PssmWithParametersFree(scoremat);
     }
     
-    SeqEntryExplore(sep, &bop->query_bsp, FindProt);    
-    /*    sep->data.ptrvalue = NULL;
-          SeqEntryFree(sep); */
-    
+    /* without a bioseq we cannot continue */
     if (bop->query_bsp == NULL) {
         ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
         return NULL;
     }    
-    
+
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, myargs[25].strvalue, 0, 0);
 
@@ -982,6 +1036,11 @@ Boolean PGPReadNextQuerySequence(PGPBlastOptionsPtr bop)
         BioseqFree(bop->query_bsp);
     } else {
         BioseqFree(bop->fake_bsp);
+    }
+
+    /* scoremats contain only one sequence */
+    if(myargs[29].intvalue != NO_SCOREMAT_IO) { 
+        return FALSE;
     }
 
     if(myargs[41].intvalue) {

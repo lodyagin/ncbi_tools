@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_PSI_PRIV__H
 #define ALGO_BLAST_CORE___BLAST_PSI_PRIV__H
 
-/*  $Id: blast_psi_priv.h,v 1.14 2004/10/18 14:33:14 camacho Exp $
+/*  $Id: blast_psi_priv.h,v 1.27 2005/03/23 14:04:24 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -79,6 +79,10 @@ extern const double kDefaultEvalueForPosition; */
 /** Successor to POSIT_SCALE_FACTOR  */
 extern const int kPSIScaleFactor;
 
+/** Constant used in scaling PSSM routines: Successor to POSIT_PERCENT */
+extern const double kPositScalingPercent;
+/** Constant used in scaling PSSM routines: Successor to POSIT_NUM_ITERATIONS */
+extern const Uint4 kPositScalingNumIterations;
 
 /****************************************************************************/
 /* Matrix utility functions */
@@ -110,59 +114,107 @@ _PSIDeallocateMatrix(void** matrix, unsigned int ncols);
  * @param dest Destination matrix           [out]
  * @param src Source matrix                 [in]
  * @param ncols Number of columns to copy   [in]
- * @param ncows Number of rows to copy      [in]
+ * @param nrows Number of rows to copy      [in]
  */
 void
-_PSICopyIntMatrix(int** dest, int** src,
-                  unsigned int ncols, unsigned int nrows);
+_PSICopyMatrix_int(int** dest, int** src,
+                   unsigned int ncols, unsigned int nrows);
+
+/** Copies src matrix into dest matrix, both of which must be double matrices 
+ * with dimensions ncols by nrows
+ * @param dest Destination matrix           [out]
+ * @param src Source matrix                 [in]
+ * @param ncols Number of columns to copy   [in]
+ * @param nrows Number of rows to copy      [in]
+ */
+void
+_PSICopyMatrix_double(double** dest, double** src,
+                      unsigned int ncols, unsigned int nrows);
 
 /****************************************************************************/
 /* Structure declarations */
 
-/** Internal PSSM Engine data structure analogous to the PSIMsaCell */
+/** Internal data structure to represent a position in the multiple sequence
+ * alignment data structure @sa _PSIMsa */
 typedef struct _PSIMsaCell {
     Uint1       letter;           /**< Preferred letter at this position */
-    Boolean     is_aligned;       /**< Is this letter being used? */
-    SSeqRange   extents;          /**< Extent of this aligned position, used by 
-                                    PSSM engine */
+    Boolean     is_aligned;       /**< Is this letter part of the alignment? */
+    SSeqRange   extents;          /**< Extents of this aligned position */
 } _PSIMsaCell;
 
+/** Internal multiple alignment data structure used by the PSSM engine */
 typedef struct _PSIMsa {
     PSIMsaDimensions*   dimensions;         /**< dimensions of field below */
-    _PSIMsaCell**       cell;               /**< query_length x num_seqs + 1 */
-    Boolean*            use_sequence;       /**< num_seqs + 1 */
-    Uint1*              query;              /**< query_length */
-    Uint4**             residue_counts;     /**< query_length x alphabet_size */
-    Uint4               alphabet_size;
-    Uint4*              num_matching_seqs;  /**< query_length */
+    _PSIMsaCell**       cell;               /**< multiple sequence alignment
+                                              matrix (dimensions: query_length 
+                                              x num_seqs + 1) */
+    Boolean*            use_sequence;       /**< used to indicate whether a
+                                              sequence should be used for
+                                              further processing by the engine
+                                              (length: num_seqs + 1) */
+    Uint1*              query;              /**< query sequence (length:
+                                              query_length) */
+    Uint4**             residue_counts;     /**< matrix to keep track of the
+                                              raw residue counts at each
+                                              position of the multiple sequence
+                                              alignment (dimensions: 
+                                              query_length x alphabet_size) */
+    Uint4               alphabet_size;      /**< number of elements in 
+                                              alphabet */
+    Uint4*              num_matching_seqs;  /**< number of sequences aligned at
+                                              a given position in the multiple
+                                              sequence alignment (length: 
+                                              query_length) */
 } _PSIMsa;
 
+/** Allocates and initializes the internal version of the PSIMsa structure
+ * (makes a deep copy) for internal use by the PSSM engine.
+ * @param msa multiple sequence alignment data structure provided by the user
+ * [in]
+ * @param alphabet_size number of elements in the alphabet that makes up the
+ * aligned characters in the multiple sequence alignment [in]
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure
+ */
 _PSIMsa*
 _PSIMsaNew(const PSIMsa* msa, Uint4 alphabet_size);
 
+/** Deallocates the _PSIMsa data structure.
+ * @param msa multiple sequence alignment data structure to deallocate [in] 
+ * @return NULL
+ */
 _PSIMsa*
 _PSIMsaFree(_PSIMsa* msa);
 
+/** Internal representation of a PSSM in various stages of its creation and its
+ * dimensions. */
 typedef struct _PSIInternalPssmData {
-    Uint4       ncols;
-    Uint4       nrows;
-    int**       pssm;
-    int**       scaled_pssm;
-    double**    res_freqs;
+    Uint4       ncols;          /**< number of columns (query_length) */
+    Uint4       nrows;          /**< number of rows (alphabet_size) */
+    int**       pssm;           /**< PSSM (scores) */
+    int**       scaled_pssm;    /**< scaled PSSM (scores) */
+    double**    freq_ratios;    /**< frequency ratios */
 } _PSIInternalPssmData;
 
+/** Allocates a new _PSIInternalPssmData structure.
+ * @param query_length number of columns for the PSSM [in]
+ * @param alphabet_size number of rows for the PSSM [in]
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure 
+ */
 _PSIInternalPssmData*
 _PSIInternalPssmDataNew(Uint4 query_length, Uint4 alphabet_size);
 
+/** Deallocates the _PSIInternalPssmData structure.
+ * @param pssm data structure to deallocate [in] 
+ * @return NULL
+ */
 _PSIInternalPssmData*
 _PSIInternalPssmDataFree(_PSIInternalPssmData* pssm);
 
-/* FIXME: Should be renamed to extents? - this is what posExtents was in old 
-   code, only using a simpler structure */
-
 /** This structure keeps track of the regions aligned between the query
  * sequence and those that were not purged. It is used when calculating the
- * sequence weights */
+ * sequence weights (replaces posExtents in old code) */
 typedef struct _PSIAlignedBlock {
     SSeqRange*  pos_extnt;      /**< Dynamically allocated array of size 
                                   query_length to keep track of the extents 
@@ -171,46 +223,66 @@ typedef struct _PSIAlignedBlock {
     Uint4*      size;           /**< Dynamically allocated array of size 
                                   query_length that contains the size of the 
                                   intervals in the array above */
-    /*FIXME: rename to extent sizes? */
 } _PSIAlignedBlock;
 
+/** Allocates and initializes the _PSIAlignedBlock structure.
+ * @param query_length length of the query sequence of the multiple
+ * sequence alignment [in]
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure 
+ */
 _PSIAlignedBlock*
-_PSIAlignedBlockNew(Uint4 num_positions);
+_PSIAlignedBlockNew(Uint4 query_length);
 
+/** Deallocates the _PSIAlignedBlock structure.
+ * @param aligned_blocks data structure to deallocate [in] 
+ * @return NULL
+ */
 _PSIAlignedBlock*
 _PSIAlignedBlockFree(_PSIAlignedBlock* aligned_blocks);
 
 /** Internal data structure to keep computed sequence weights */
 typedef struct _PSISequenceWeights {
-    double** match_weights; /**< weighted observed residue frequencies (f_i
-                               in 2001 paper). Dimensions are query_length 
-                               by BLASTAA_SIZE
-                             */
-    Uint4 match_weights_size;    /**< kept for help deallocate the field above
-                                   */
+    double** match_weights;     /**< weighted observed residue frequencies (f_i
+                                  in 2001 paper). (dimensions: query_length 
+                                  x BlastScoreBlk's alphabet_size) */
+    Uint4 match_weights_size;   /**< kept for help deallocate the field above */
 
     double* norm_seq_weights;   /**< Stores the normalized sequence weights
-                                  (size num_seqs + 1) */
-    double* row_sigma;  /**< array of num_seqs + 1 */
+                                  (length: num_seqs + 1) */
+    double* row_sigma;  /**< array of length num_seqs + 1 */
     /* Sigma: number of different characters occurring in matches within a
-     * multi-alignment block - why is it a double? */
-    double* sigma;      /**< array of query_length length */
+     * multi-alignment block - FIXME: why is it a double? */
+    double* sigma;      /**< array of length query_length */
 
     double* std_prob;   /**< standard amino acid probabilities */
 
-    /* These fields are required for important diagnostic output, they are
+    /* This fields is required for important diagnostic output, they are
      * copied into diagnostics structure */
     double* gapless_column_weights; /**< FIXME */
 } _PSISequenceWeights;
 
+/** Allocates and initializes the _PSISequenceWeights structure.
+ * @param dims structure containing the multiple sequence alignment dimensions
+ * [in]
+ * @param sbp score block structure initialized for the scoring system used
+ * with the query sequence [in]
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure 
+ */
 _PSISequenceWeights*
-_PSISequenceWeightsNew(const PSIMsaDimensions* info, const BlastScoreBlk* sbp);
+_PSISequenceWeightsNew(const PSIMsaDimensions* dims, const BlastScoreBlk* sbp);
 
+/** Deallocates the _PSISequenceWeights structure.
+ * @param seq_weights data structure to deallocate [in] 
+ * @return NULL
+ */
 _PSISequenceWeights*
 _PSISequenceWeightsFree(_PSISequenceWeights* seq_weights);
 
 /* Return values for internal PSI-BLAST functions */
 
+/** Successful operation */
 #define PSI_SUCCESS             (0)
 /** Bad parameter used in function */
 #define PSIERR_BADPARAM         (-1)
@@ -241,10 +313,9 @@ _PSISequenceWeightsFree(_PSISequenceWeights* seq_weights);
 /** Main function for keeping only those selected sequences for PSSM
  * construction (stage 2). After this function the multiple sequence alignment
  * data will not be modified.
- * N.B.: If ignore_consensus is TRUE, the function _PSIPurgeAlignedRegion
- * should have been called before this function.
- * @return PSIERR_BADPARAM if alignment is NULL
- *         PSI_SUCCESS otherwise
+ * @sa implementation of PSICreatePssmWithDiagnostics
+ * @param msa multiple sequence alignment data structure [in]
+ * @return PSIERR_BADPARAM if alignment is NULL; PSI_SUCCESS otherwise
  */
 int 
 _PSIPurgeBiasedSegments(_PSIMsa* msa);
@@ -252,76 +323,141 @@ _PSIPurgeBiasedSegments(_PSIMsa* msa);
 /** Main validation function for multiple sequence alignment structure. Should
  * be called after _PSIPurgeBiasedSegments.
  * @param msa multiple sequence alignment data structure [in]
- * @param ignore_consensus TRUE if query sequence should be ignored [in]
  * @return One of the errors defined above if validation fails or bad
  * parameter is passed in, else PSI_SUCCESS
  */
 int
-_PSIValidateMSA(const _PSIMsa* msa, Boolean ignore_consensus);
+_PSIValidateMSA(const _PSIMsa* msa);
 
-/** Main function to compute aligned blocks for each position within multiple 
- * alignment (stage 3) 
+/** Main function to compute aligned blocks' properties for each position 
+ * within multiple alignment (stage 3) 
+ * @param msa multiple sequence alignment data structure [in]
+ * @param aligned_block data structure describing the aligned blocks'
+ * properties for each position of the multiple sequence alignment [out]
  * @return PSIERR_BADPARAM if arguments are NULL
  *         PSI_SUCCESS otherwise
  */
 int
-_PSIComputeAlignmentBlocks(const _PSIMsa* msa,                  /* [in] */
-                           _PSIAlignedBlock* aligned_block);    /* [out] */
+_PSIComputeAlignmentBlocks(const _PSIMsa* msa,
+                           _PSIAlignedBlock* aligned_block);
 
 /** Main function to calculate the sequence weights. Should be called with the
  * return value of PSIComputeAlignmentBlocks (stage 4)
- * @param ignore_consensus TRUE if query sequence should be ignored [in]
+ * @param msa multiple sequence alignment data structure [in]
+ * @param aligned_blocks data structure describing the aligned blocks'
+ * properties for each position of the multiple sequence alignment [in]
+ * @param nsg_compatibility_mode set to true to emulate the structure group's
+ * use of PSSM engine in the cddumper application. By default should be FALSE
+ * [in]
+ * @param seq_weights data structure containing the data needed to compute the
+ * sequence weights [out]
+ * @return PSIERR_BADPARAM if arguments are NULL, PSIERR_OUTOFMEM in case of
+ * memory allocation failure, PSIERR_BADSEQWEIGHTS if the sequence weights fail
+ * to add up to 1.0, PSI_SUCCESS otherwise
  */
 int
-_PSIComputeSequenceWeights(const _PSIMsa* msa,                      /* [in] */
-                           const _PSIAlignedBlock* aligned_blocks,  /* [in] */
-                           Boolean ignore_consensus,                /* [in] */
-                          _PSISequenceWeights* seq_weights);        /* [out] */
+_PSIComputeSequenceWeights(const _PSIMsa* msa,
+                           const _PSIAlignedBlock* aligned_blocks,
+                           Boolean nsg_compatibility_mode,
+                          _PSISequenceWeights* seq_weights);
 
-/** Main function to compute the residue frequencies for the PSSM (stage 5) */
+/** Main function to compute the PSSM's frequency ratios (stage 5).
+ * Implements formula 2 in Nucleic Acids Research, 2001, Vol 29, No 14.
+ * @param msa multiple sequence alignment data structure [in]
+ * @param seq_weights data structure containing the data needed to compute the
+ * sequence weights [in]
+ * @param sbp score block structure initialized for the scoring system used
+ * with the query sequence [in]
+ * @param aligned_blocks data structure describing the aligned blocks'
+ * properties for each position of the multiple sequence alignment [in]
+ * @param pseudo_count pseudo count constant [in]
+ * @param internal_pssm PSSM being computed [out]
+ * @return PSIERR_BADPARAM if arguments are NULL, PSI_SUCCESS otherwise
+ */
 int
-_PSIComputeResidueFrequencies(const _PSIMsa* msa,                    /* [in] */
-                              const _PSISequenceWeights* seq_weights,/* [in] */
-                              const BlastScoreBlk* sbp,              /* [in] */
-                              const _PSIAlignedBlock* aligned_blocks,/* [in] */
-                              Int4 pseudo_count,                     /* [in] */
-                              _PSIInternalPssmData* internal_pssm);              /* [out] */
+_PSIComputeFreqRatios(const _PSIMsa* msa,
+                      const _PSISequenceWeights* seq_weights,
+                      const BlastScoreBlk* sbp,
+                      const _PSIAlignedBlock* aligned_blocks,
+                      Int4 pseudo_count,
+                      _PSIInternalPssmData* internal_pssm);
 
-/** Converts the residue frequencies obtained in the previous stage to a PSSM
- * (stage 6) */
+/** Converts the PSSM's frequency ratios obtained in the previous stage to a 
+ * PSSM of scores. (stage 6) 
+ * @param internal_pssm PSSM being computed [in|out]
+ * @param query query sequence in ncbistdaa encoding. The length of this
+ * sequence is read from internal_pssm->ncols [in]
+ * @param sbp score block structure initialized for the scoring system used
+ * with the query sequence [in]
+ * @param std_probs array containing the standard residue probabilities [in]
+ * @return PSIERR_BADPARAM if arguments are NULL, PSI_SUCCESS otherwise
+ */
 int
-_PSIConvertResidueFreqsToPSSM(_PSIInternalPssmData* internal_pssm,           /* [in|out] */
-                              const Uint1* query,                /* [in] */
-                              const BlastScoreBlk* sbp,          /* [in] */
-                              const double* std_probs);          /* [in] */
+_PSIConvertFreqRatiosToPSSM(_PSIInternalPssmData* internal_pssm,
+                            const Uint1* query,
+                            const BlastScoreBlk* sbp,
+                            const double* std_probs);
 
 /** Scales the PSSM (stage 7)
- * @param scaling_factor if not null, use this value to further scale the
- * matrix (default is kPSIScaleFactor). Useful for composition based statistics
- * [in] optional 
+ * @param query query sequence in ncbistdaa encoding. The length of this
+ * sequence is read from internal_pssm->ncols [in]
+ * @param std_probs array containing the standard background residue 
+ * probabilities [in]
+ * @param internal_pssm PSSM being computed [in|out]
+ * @param sbp score block structure initialized for the scoring system used
+ * with the query sequence [in|out]
+ * @return PSIERR_BADPARAM if arguments are NULL, PSIERR_POSITIVEAVGSCORE if
+ * the average score of the generated PSSM is positive, PSI_SUCCESS otherwise
  */
 int
-_PSIScaleMatrix(const Uint1* query,              /* [in] */
-                Uint4 query_length,              /* [in] */
-                const double* std_probs,         /* [in] */
-                double* scaling_factor,          /* [in - optional] */
-                _PSIInternalPssmData* internal_pssm,         /* [in|out] */
-                BlastScoreBlk* sbp);             /* [in|out] */
+_PSIScaleMatrix(const Uint1* query,
+                const double* std_probs,
+                _PSIInternalPssmData* internal_pssm,
+                BlastScoreBlk* sbp);
 
 /****************************************************************************/
 /* Function prototypes for auxiliary functions for the stages above */
 
+
+/** Updates the Karlin-Altschul parameters based on the query sequence and 
+ * PSSM's score frequencies. Port of blastool.c's updateLambdaK
+ * @param pssm PSSM [in]
+ @ @param query query sequence in ncbistdaa encoding [in]
+ * @param query_length length of the query sequence above [in]
+ * @param std_probs array containing the standard background residue 
+ * probabilities [in]
+ * @param sbp Score block structure where the calculated lambda and K will be
+ * returned [in|out]
+ */
+void
+_PSIUpdateLambdaK(const int** pssm,
+                  const Uint1* query,
+                  Uint4 query_length,
+                  const double* std_probs,
+                  BlastScoreBlk* sbp);
+
+/** Provides a similar function to _PSIScaleMatrix but it performs the scaling
+ * as IMPALA did, i.e.: allowing the specification of a scaling factor and when
+ * calculating the score probabilities, the query length includes 'X' residues.
+ * @todo Ideally all scaling code should be refactored so that it is
+ * consolidated, eliminating the need for blast_posit.[hc]. Please note that
+ * blast_kappa.c's scalePosMatrix also does something very similar.
+ */
+int
+_IMPALAScaleMatrix(const Uint1* query, const double* std_probs,
+                   _PSIInternalPssmData* internal_pssm, 
+                   BlastScoreBlk* sbp,
+                   double scaling_factor);
+
 /** Marks the (start, stop] region corresponding to sequence seq_index in
  * alignment so that it is not further considered for PSSM calculation.
- * This function is not applicable to the query sequence in the alignment
- * (seq_index == 0)
+ * Note that the query sequence cannot be purged.
  * @param   msa multiple sequence alignment data  [in|out]
  * @param   seq_index index of the sequence of interested in alignment [in]
  * @param   start start of the region to remove [in]
  * @param   stop stop of the region to remove [in]
  * @return  PSIERR_BADPARAM if no alignment is given, or if seq_index or stop
- *          are invalid, 
- *          PSI_SUCCESS otherwise
+ *          are invalid, PSI_SUCCESS otherwise
  */
 int
 _PSIPurgeAlignedRegion(_PSIMsa* msa,
@@ -329,10 +465,12 @@ _PSIPurgeAlignedRegion(_PSIMsa* msa,
                        unsigned int start,
                        unsigned int stop);
 
-/** This function is called after the biased sequences and regions have
- * been purged from PSIPurgeBiasedSegments. Its provided as public for
- * convenience in testing.
- * @param msa multiple sequence alignment data  [in|out]
+/** Counts the number of sequences matching the query per query position
+ * (columns of the multiple alignment) as well as the number of residues
+ * present in each position of the query.
+ * Should be called after multiple alignment data has been purged from biased
+ * sequences.
+ * @param msa multiple sequence alignment structure [in|out]
  */
 void
 _PSIUpdatePositionCounts(_PSIMsa* msa);
@@ -340,23 +478,10 @@ _PSIUpdatePositionCounts(_PSIMsa* msa);
 /** Checks for any positions in sequence seq_index still considered for PSSM 
  * construction. If none is found, the entire sequence is marked as unused.
  * @param msa multiple sequence alignment data  [in|out]
- * @param seq_index index of the sequence of interest
+ * @param seq_index index of the sequence of interest [in]
  */
 void
 _PSIDiscardIfUnused(_PSIMsa* msa, unsigned int seq_index);
-
-/** The the standard residue frequencies for a scoring system specified in the
- * BlastScoreBlk structure. This is a wrapper for Blast_ResFreqStdComp() from
- * blast_stat.c with a more intention-revealing name :) .
- * used in kappa.c?
- * Caller is responsible for deallocating return value via sfree().
- * @param sbp Score block structure [in]
- * @return NULL if there is not enough memory otherwise an array of lenght
- *         sbp->alphabet_size with the standard background probabilities for 
- *         the scoring system requested.
- */
-double*
-_PSIGetStandardProbabilities(const BlastScoreBlk* sbp);
 
 /** Calculates the length of the sequence without including any 'X' residues.
  * used in kappa.c
@@ -367,22 +492,31 @@ _PSIGetStandardProbabilities(const BlastScoreBlk* sbp);
 Uint4
 _PSISequenceLengthWithoutX(const Uint1* seq, Uint4 length);
 
-/* Compute the probabilities for each score in the PSSM.
+/** Compute the probabilities for each score in the PSSM.
  * This is only valid for protein sequences.
- * Should this go in blast_stat.[hc]?
+ * FIXME: Should this be moved to blast_stat.[hc]?
  * used in kappa.c in notposfillSfp()
+ * @param pssm PSSM for which to compute the score probabilities [in]
+ * @param query query sequence for the PSSM above in ncbistdaa encoding [in]
+ * @param query_length length of the query sequence above [in]
+ * @param std_probs array containing the standard background residue 
+ * probabilities [in]
+ * @param sbp score block structure initialized for the scoring system used
+ * with the query sequence [in]
+ * @return structure containing the score frequencies, or NULL in case of error
  */
 Blast_ScoreFreq*
-_PSIComputeScoreProbabilities(const int** pssm,             /* [in] */
-                              const Uint1* query,           /* [in] */
-                              Uint4 query_length,           /* [in] */
-                              const double* std_probs,      /* [in] */
-                              const BlastScoreBlk* sbp);    /* [in] */
+_PSIComputeScoreProbabilities(const int** pssm,
+                              const Uint1* query,
+                              Uint4 query_length,
+                              const double* std_probs,
+                              const BlastScoreBlk* sbp);
 
 /** Collects diagnostic information from the process of creating the PSSM 
  * @param msa multiple sequence alignment data structure [in]
  * @param aligned_block aligned regions' extents [in]
  * @param seq_weights sequence weights data structure [in]
+ * @param internal_pssm structure containing PSSM's frequency ratios [in]
  * @param diagnostics output parameter [out]
  * @return PSI_SUCCESS on success, PSIERR_OUTOFMEM if memory allocation fails
  * or PSIERR_BADPARAM if any of its arguments is NULL
@@ -394,7 +528,7 @@ _PSISaveDiagnostics(const _PSIMsa* msa,
                     const _PSIInternalPssmData* internal_pssm,
                     PSIDiagnosticsResponse* diagnostics);
 
-/* Calculates the information content from the scoring matrix
+/** Calculates the information content from the scoring matrix
  * @param score_mat alphabet by alphabet_sz matrix of scores (const) [in]
  * @param std_prob standard residue probabilities [in]
  * @param query query sequence [in]
@@ -413,10 +547,11 @@ _PSICalculateInformationContentFromScoreMatrix(
     Uint4 alphabet_sz,
     double lambda);
 
-/* Calculates the information content from the residue frequencies calculated
+/** Calculates the information content from the residue frequencies calculated
  * in stage 5 of the PSSM creation algorithm 
- * @param res_freqs query_length by alphabet_sz matrix of residue frequencies
- * (const) [in]
+ * @sa _PSIComputeFreqRatios: stage 5
+ * @param freq_ratios matrix of frequency ratios (dimensions: query_length x 
+ * alphabet_sz) (const) [in]
  * @param std_prob standard residue probabilities [in]
  * @param query_length length of the query [in]
  * @param alphabet_sz length of the alphabet used by the query [in]
@@ -424,11 +559,16 @@ _PSICalculateInformationContentFromScoreMatrix(
  * query position or NULL on error (e.g.: out-of-memory or NULL parameters)
  */
 double*
-_PSICalculateInformationContentFromResidueFreqs(
-    double** res_freqs,
+_PSICalculateInformationContentFromFreqRatios(
+    double** freq_ratios,
     const double* std_prob,
     Uint4 query_length,
     Uint4 alphabet_sz);
+
+#ifdef _DEBUG
+void
+__printMsa(const char* filename, const _PSIMsa* msa);
+#endif /* _DEBUG */
 
 #ifdef __cplusplus
 }
@@ -439,6 +579,53 @@ _PSICalculateInformationContentFromResidueFreqs(
  * ===========================================================================
  *
  * $Log: blast_psi_priv.h,v $
+ * Revision 1.27  2005/03/23 14:04:24  camacho
+ * doxygen fix
+ *
+ * Revision 1.26  2005/03/22 15:35:10  camacho
+ * Fix to enable backwards compatibility with old PSSM engine when the query is
+ * the only sequence aligned for a given column of the multiple sequence
+ * alignment.
+ *
+ * Revision 1.25  2005/02/28 13:40:11  camacho
+ * Minor doxygen fix
+ *
+ * Revision 1.24  2005/02/23 17:24:41  camacho
+ * 1. Moved prototype of _PSIUpdateLambdaK to blast_psi_priv.h
+ * 2. Removed unneeded fields from Kappa_compactSearchItems
+ * 3. Doxygen fixes
+ *
+ * Revision 1.23  2005/02/22 22:49:34  camacho
+ * + impala_scaling_factor, first cut
+ *
+ * Revision 1.22  2005/01/31 16:50:21  camacho
+ * 1. Moved constants to private header.
+ * 2. Changed signature of functions to copy matrices.
+ *
+ * Revision 1.21  2004/12/13 22:26:59  camacho
+ * Consolidated structure group customizations in option: nsg_compatibility_mode
+ *
+ * Revision 1.20  2004/12/08 15:06:02  camacho
+ * Call _PSIUpdatePositionCounts is needed after purging query sequence for
+ * structure group customization, thus this function has been changed to reset the
+ * appropriate _PSIMsa fields so that residue counts/aligned sequences are
+ * reported accurately.
+ *
+ * Revision 1.19  2004/12/07 22:07:34  camacho
+ * Add sanity checks for purge identity threshold
+ *
+ * Revision 1.18  2004/11/26 14:22:54  camacho
+ * doxygen fixes
+ *
+ * Revision 1.17  2004/11/22 14:38:48  camacho
+ * + option to set % identity threshold to PSSM engine
+ *
+ * Revision 1.16  2004/11/18 16:25:32  camacho
+ * Rename _PSIGetStandardProbabilities to BLAST_GetStandardAaProbabilities
+ *
+ * Revision 1.15  2004/11/02 20:37:30  camacho
+ * Doxygen fixes
+ *
  * Revision 1.14  2004/10/18 14:33:14  camacho
  * 1. Added validation routines
  * 2. Fixed bug in calculating sequence weights

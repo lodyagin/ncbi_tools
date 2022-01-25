@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.54 2004/08/10 14:52:00 ivanov Exp $
+/* $Id: blast_gapalign.h,v 1.62 2005/04/27 19:47:57 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #define __BLAST_GAPALIGN__
 
 #include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/greedy_align.h>
@@ -45,9 +45,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** Diagonal distance cutoff when looking for HSP inclusion in Mega BLAST */ 
-#define MB_DIAG_NEAR 30 
 
 /** Diagonal distance between HSPs for which one can be considered included in 
    the other in Mega BLAST */
@@ -59,19 +56,20 @@ extern "C" {
 /** Structure supporting the gapped alignment */
 typedef struct BlastGapAlignStruct {
    Boolean positionBased; /**< Is this PSI-BLAST? */
-   Int4 position_offset; /**< Offset into the PSSM for the present sequence */
    GapStateArrayStruct* state_struct; /**< Structure to keep extension 
                                                 state information */
-   GapEditBlock* edit_block; /**< The traceback (gap) information */
+   GapEditScript* edit_script; /**< The traceback (gap) information */
+   GapPrelimEditBlock *fwd_prelim_tback; /**< traceback from left extensions */
+   GapPrelimEditBlock *rev_prelim_tback; /**< traceback from right extensions */
    SGreedyAlignMem* greedy_align_mem;/**< Preallocated memory for the greedy 
                                          gapped extension */
    BlastScoreBlk* sbp; /**< Pointer to the scoring information block */
    Int4 gap_x_dropoff; /**< X-dropoff parameter to use */
-   Int4 query_start, query_stop;/**< Return values: query offsets */
-   Int4 subject_start, subject_stop;/**< Return values: subject offsets */
+   Int4 query_start; /**< query start offset of current alignment */
+   Int4 query_stop; /**< query end offseet of current alignment */
+   Int4 subject_start;  /**< subject start offset current alignment */
+   Int4 subject_stop; /**< subject end offset of current alignment */
    Int4 score;   /**< Return value: alignment score */
-   double percent_identity;/**< Return value: percent identity - filled only 
-                               by the greedy non-affine alignment algorithm */
 } BlastGapAlignStruct;
 
 /** Initializes the BlastGapAlignStruct structure 
@@ -196,21 +194,6 @@ BLAST_GreedyGappedAlignment(Uint1* query, Uint1* subject,
    const BlastScoringParameters* score_params, 
    Int4 q_off, Int4 s_off, Boolean compressed_subject, Boolean do_traceback);
 
-/** Perform a gapped alignment with traceback for PHI BLAST
- * @param query The query sequence [in]
- * @param subject The subject sequence [in]
- * @param gap_align The gapped alignment structure [in] [out]
- * @param score_params Scoring parameters [in]
- * @param q_start Offset in query where to start alignment [in]
- * @param s_start Offset in subject where to start alignment [in]
- * @param query_length Maximal allowed extension in query [in]
- * @param subject_length Maximal allowed extension in subject [in]
- */
-Int2 PHIGappedAlignmentWithTraceback(Uint1* query, Uint1* subject, 
-        BlastGapAlignStruct* gap_align, 
-        const BlastScoringParameters* score_params,
-        Int4 q_start, Int4 s_start, Int4 query_length, Int4 subject_length);
-
 /** Convert initial HSP list to an HSP list: to be used in ungapped search.
  * Ungapped data must be available in the initial HSP list for this function 
  * to work.
@@ -226,31 +209,6 @@ Int2 BLAST_GetUngappedHSPList(BlastInitHitList* init_hitlist,
         BlastQueryInfo* query_info, BLAST_SequenceBlk* subject, 
         const BlastHitSavingOptions* hit_options, 
         BlastHSPList** hsp_list_ptr);
-
-/** Preliminary gapped alignment for PHI BLAST.
- * @param program_number Type of BLAST program [in]
- * @param query The query sequence block [in]
- * @param query_info Query information structure, containing offsets into 
- *                   the concatenated sequence [in]
- * @param subject The subject sequence block [in]
- * @param gap_align The auxiliary structure for gapped alignment [in]
- * @param score_params Options related to scoring [in]
- * @param ext_params Options and parameters related to extensions [in]
- * @param hit_params Options related to saving hits [in]
- * @param init_hitlist List of initial HSPs, including offset pairs and
- *                     pattern match lengths [in]
- * @param hsp_list_ptr Structure containing all saved HSPs [out]
- * @param gapped_stats Return statistics (not filled if NULL) [out]
- */
-Int2 PHIGetGappedScore (EBlastProgramType program_number, 
-        BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
-        BLAST_SequenceBlk* subject, 
-        BlastGapAlignStruct* gap_align,
-        const BlastScoringParameters* score_params,
-        const BlastExtensionParameters* ext_params,
-        const BlastHitSavingParameters* hit_params,
-        BlastInitHitList* init_hitlist,
-        BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats);
 
 /** Adjusts range of subject sequence to be passed for gapped extension,
  * taking into account the length and starting position of the alignment in

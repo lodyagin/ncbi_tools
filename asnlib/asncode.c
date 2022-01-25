@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.16  2005/01/24 17:12:11  kans
+* added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
+*
 * Revision 6.15  2004/07/08 15:24:05  kans
 * needed a couple additional TESTNIL wrappers
 *
@@ -141,7 +144,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.15 $";
+static char     RCS_Rev [] = "$Revision: 6.16 $";
 
 /*******************
  * Interator structure
@@ -203,6 +206,7 @@ typedef struct struct_asniter {
    FnPtr undef301err;
    FnPtr userobj;
    Boolean do_opt_bits;
+   Boolean do_chs_struct;
 } AsnIter, PNTR AsnIterPtr;
 
 typedef void (* AsnCodeIterFunc) PROTO (( AsnIterPtr iter));
@@ -2278,6 +2282,10 @@ userobj_OUTER (AsnIterPtr iter)
 *  ... other stuff before
 *     we_are_here SomeUserObject  <<<<< dealing with this thing
 * --- other stuff after
+*
+* for choice type, iter->do_chs_struct forces e.g., struct_Date PNTR instead of
+* newer default ValNodePtr, so old hand-coded object loaders can be linked with.
+*
 ************************/
 static void
 userobj_SEQSET (AsnIterPtr iter, AsnTypePtr final_atp)
@@ -2290,7 +2298,7 @@ userobj_SEQSET (AsnIterPtr iter, AsnTypePtr final_atp)
    case ITER_CHECK_LIST:
       break;
    case ITER_OBJECTS:
-      if (AsnCodeIsReallyChoice (iter->atp) || (final_atp != NULL &&
+      if ((AsnCodeIsReallyChoice (iter->atp) && (! iter->do_chs_struct)) || (final_atp != NULL &&
 	  final_atp->branch != NULL &&
 	  ((AsnTypePtr) final_atp->branch)->name == NULL &&
 	  ((AsnTypePtr) final_atp->branch)->type != NULL &&
@@ -4382,6 +4390,7 @@ AsnCode (AsnCodeInfoPtr acip)
    CharPtr loadname = acip -> loadname;
    CharPtr filename = acip -> filename;
    Boolean do_bit_twiddle  = acip -> do_bit_twiddle;
+   Boolean force_choice_struct = acip -> force_choice_struct;
    CharPtr include_filename = acip ->  include_filename;
    CharPtr object_manager_entry = acip -> object_manager_entry;
    CharPtr objlabel = acip->object_label;
@@ -4394,6 +4403,7 @@ AsnCode (AsnCodeInfoPtr acip)
 
    iter -> acip = acip;
    iter -> do_opt_bits = do_bit_twiddle;
+   iter -> do_chs_struct = force_choice_struct;
    StringCpy (buf, filename);
    /*-----remove any erroneous extension----*/
    pnt = buf;

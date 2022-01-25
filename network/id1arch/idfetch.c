@@ -25,6 +25,12 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.37  2005/04/13 14:38:12  kans
+ prototype for TryGetGi, send NORMAL_STYLE to SeqEntryToGnbk again
+
+ Revision 1.36  2004/10/19 21:51:29  vysokolo
+ Bug fix of -s key
+
  Revision 1.35  2004/10/12 21:39:28  vysokolo
  Added intervals of accessions like: "ABC_000123-ABC_000456"
 
@@ -194,6 +200,8 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
                                Boolean is_na, Boolean count_only);
 static Boolean IdFetch_func1(CharPtr data, Int2 maxplex);
 static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex);
+
+static int TryGetGi(int choice, char *accession, char *name, int version);
 
 Args myargs[] = {
 	{"Filename for output ","stdout", NULL,NULL,FALSE,'o',ARG_FILE_OUT, 0.0,0,NULL},
@@ -627,7 +635,7 @@ Int2 Main()
   if(! fp_in && ! gi && ! (myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue))
   {
     Char tacc[64];
-    if( sip->data.ptrvalue && GetIntervalAccession( accession, tacc) > 0 )
+    if( sip->data.ptrvalue && GetIntervalAccession( accession, tacc) > 0 && myargs[fastaarg].strvalue == NULL)
     {
       do{ 
       	Int4 tgi = TryGetGi( type_int, tacc, NULL, 0);
@@ -1078,8 +1086,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       break;
     case 3:
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
-      if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
-         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY,0,NULL,fp)){
+      if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,NORMAL_STYLE,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
+         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|LOOKUP_FAR_OTHERS,
+         0,NULL,fp)){
         ErrPostEx(SEV_WARNING,0,0,
                   "GenBank Format does not exist for this sequence ");
         retval=FALSE;
@@ -1088,8 +1097,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       break;
     case 4:
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
-      if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
-        LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY,0,NULL,fp))
+      if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,NORMAL_STYLE,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
+        LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|LOOKUP_FAR_OTHERS,
+        0,NULL,fp))
       {
         ErrPostEx(SEV_WARNING,0,0,
                   "GenPept Format does not exist for this sequence");

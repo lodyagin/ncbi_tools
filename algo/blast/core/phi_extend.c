@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.8 2004/07/12 16:26:38 papadopo Exp $
+/* $Id: phi_extend.c,v 1.12 2005/04/27 19:56:13 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,46 +31,60 @@
  * Word finder functions for PHI-BLAST
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_extend.c,v 1.8 2004/07/12 16:26:38 papadopo Exp $";
+    "$Id: phi_extend.c,v 1.12 2005/04/27 19:56:13 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/phi_extend.h>
 
-
-Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
-        BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
-        Int4** matrix, const BlastInitialWordParameters* word_params,
-        Blast_ExtendWord* ewp, Uint4* query_offsets, Uint4* subject_offsets,
-        Int4 max_hits, BlastInitHitList* init_hitlist, 
-        BlastUngappedStats* ungapped_stats)
+/** Saves a pattern hit in a BlastInitHitList.
+ * @param offset_pair Pattern start and stop in subject [in]
+ * @param init_hitlist Initial hit list structure to save the hit in. [in] [out]
+ */
+static Int2 
+s_PHISaveInitialHit(BlastInitHitList* init_hitlist, BlastOffsetPair* offset_pair)
 {
-   BlastPHILookupTable* lookup = (BlastPHILookupTable*) lookup_wrap->lut;
+    /* BlastOffsetPair is a union of two structures representing a pair of 
+       offsets. Use common function BLAST_SaveInitialHit, with correct order of
+       offsets to be saved. */
+    return 
+        BLAST_SaveInitialHit(init_hitlist, offset_pair->phi_offsets.s_start, 
+                             offset_pair->phi_offsets.s_end, NULL);
+}
+
+Int2 
+PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
+                   BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
+                   Int4** matrix, const BlastInitialWordParameters* word_params,
+                   Blast_ExtendWord* ewp, BlastOffsetPair* offset_pairs,
+                   Int4 max_hits, BlastInitHitList* init_hitlist, 
+                   BlastUngappedStats* ungapped_stats)
+{
    Int4 hits=0;
    Int4 totalhits=0;
    Int4 first_offset = 0;
    Int4 last_offset  = subject->length;
-   Int4 i;
 
    while(first_offset < last_offset)
    {
+       Int4 hit_index;
       /* scan the subject sequence for hits */
 
       hits = PHIBlastScanSubject(lookup_wrap, query, subject, &first_offset, 
-                query_offsets, subject_offsets,	max_hits);
+                                 offset_pairs, max_hits);
 
       totalhits += hits;
-      /* for each hit, */
-      for (i = 0; i < hits; ++i) {
-         /* do an extension */
-         BlastSaveInitHsp(init_hitlist, 
-            lookup->start_offsets[query_offsets[i]], subject_offsets[i], 
-            lookup->start_offsets[query_offsets[i]], subject_offsets[i], 
-            lookup->lengths[query_offsets[i]], 0);
-      } /* end for */
+
+      /* Save all database pattern hits. */
+      for (hit_index = 0; hit_index < hits; ++hit_index) {
+          s_PHISaveInitialHit(init_hitlist, &offset_pairs[hit_index]);
+      } /* End loop over hits. */
    } /* end while */
 
-   Blast_UngappedStatsUpdate(ungapped_stats, totalhits, totalhits, totalhits);
+   Blast_UngappedStatsUpdate(ungapped_stats, totalhits, 0, 0);
    return 0;
 }
+

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.23 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
@@ -332,7 +332,12 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   Boolean locations,
   Boolean products,
   Boolean alignments,
-  Boolean history
+  Boolean history,
+  Boolean others
+);
+
+NLM_EXTERN Int4 AccnListPreLoadSeqIdGiCache (
+  CharPtr PNTR accns
 );
 
 /* SeqId chain fetch function */
@@ -351,7 +356,8 @@ typedef void (LIBCALLBACK *CacheAccnListProc) (
 /*
  CacheAccnList takes the AccnList query result, and calls the
  user callback if it is not NULL, otherwise it preloads the
- sequence manager gi/accession lookup cache
+ sequence manager gi/accession lookup cache.  Used internally
+ by AccnListPreLoadSeqIdGiCache function.
 */
 
 NLM_EXTERN Int4 CacheAccnList (

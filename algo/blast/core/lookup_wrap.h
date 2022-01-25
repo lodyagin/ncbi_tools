@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.7 2004/09/13 12:39:50 madden Exp $
+/* $Id: lookup_wrap.h,v 1.10 2005/03/31 16:16:54 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,7 +61,7 @@ typedef struct LookupTableWrap {
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, RPSInfo *rps_info);
+        LookupTableWrap** lookup_wrap_ptr, BlastRPSInfo *rps_info);
 
 /** Deallocate memory for the lookup table */
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);
@@ -73,6 +73,24 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);
  * the ScanSubject function.
  */
 Int4 GetOffsetArraySize(LookupTableWrap* lookup);
+
+/** Structure holding a pair of offsets. Used for storing offsets for the
+ * initial sseds. In most programs the offsets are query offset and subject 
+ * offset of an initial word match. For PHI BLAST, the offsets are start and 
+ * end of the pattern occurrence in subject, with no query information, 
+ * because all pattern occurrences in subjects are aligned to all pattern 
+ * occurrences in query.
+ */
+typedef union BlastOffsetPair {
+    struct {
+        Uint4 q_off;  /**< Query offset */
+        Uint4 s_off;  /**< Subject offset */
+    } qs_offsets;     /**< Query/subject offset pair */
+    struct {
+        Uint4 s_start;/**< Start offset of pattern in subject */
+        Uint4 s_end;  /**< End offset of pattern in subject */
+    } phi_offsets;    /**< Pattern offsets in subject (PHI BLAST only) */
+} BlastOffsetPair;
 
 #ifdef __cplusplus
 }

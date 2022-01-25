@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.69 $
+* $Revision: 1.74 $
 *
 * File Description: 
 *
@@ -985,9 +985,11 @@ static int LIBCALLBACK SortVnpByStr (VoidPtr ptr1, VoidPtr ptr2)
   }
   return 0;
 }
-NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
   Entrez2InfoPtr e2ip,
-  ValNodePtr PNTR head
+  ValNodePtr PNTR head,
+  Boolean checkMenuNameVariants
 )
 
 {
@@ -1088,6 +1090,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
     }
     if (e2db->link_count < 1 || e2db->links == NULL) {
       if (StringICmp (db, "books") != 0 &&
+          StringICmp (db, "gensat") != 0 &&
           StringICmp (db, "mesh") != 0 &&
           StringICmp (db, "nlmcatalog") != 0) {
         sprintf (buf, "Database %s has no links", db);
@@ -1297,7 +1300,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
         sprintf (buf, "Menu names %s [%s] and %s [%s] differ in capitalization", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
-      } else {
+      } else if (checkMenuNameVariants) {
         len1 = StringLen (last);
         len2 = StringLen (str);
         if (len1 < len2) {
@@ -1313,6 +1316,15 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             } else if (StringICmp (last, "Submitter") == 0 && StringICmp (str, "Submitter Handle") == 0) {
             } else if (StringICmp (last, "Abstract") == 0 && StringICmp (str, "Abstract/Index Tags") == 0) {
             } else if (StringICmp (last, "Author") == 0 && StringICmp (str, "Author Full Name") == 0) {
+            } else if (StringICmp (last, "Expression") == 0 && StringICmp (str, "Expression Level") == 0) {
+            } else if (StringICmp (last, "Chromosome") == 0 && StringICmp (str, "Chromosome GI") == 0) {
+            } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease or phenotype") == 0) {
+            } else if (StringICmp (last, "GC") == 0 && StringICmp (str, "GC Content") == 0) {
+            } else if (StringICmp (last, "Organism") == 0 && StringICmp (str, "Organism Motility") == 0) {
+            } else if (StringICmp (last, "Publisher") == 0 && StringICmp (str, "Publisher ID") == 0) {
+            } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease-Stage") == 0) {
+            } else if (StringICmp (last, "ActiveAid") == 0 && StringICmp (str, "ActiveAidCount") == 0) {
+            } else if (StringICmp (last, "InactiveAid") == 0 && StringICmp (str, "InactiveAidCount") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
@@ -1332,6 +1344,16 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
   ValNodeFreeData (menuhead);
 
   return rsult;
+}
+
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head
+)
+
+{
+  return ValidateEntrez2InfoPtrEx (e2ip, head, FALSE);
 }
 
 /* network connection test functions */

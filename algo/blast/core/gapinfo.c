@@ -1,4 +1,4 @@
-/* $Id: gapinfo.c,v 1.8 2004/05/19 14:52:03 camacho Exp $
+/* $Id: gapinfo.c,v 1.16 2005/04/27 19:55:13 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,12 +28,14 @@
  */
 
 /** @file gapinfo.c
- * Initialization and freeing of structures for gapped alignment
+ * Initialization and freeing of structures containing traceback information.
  */
 
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: gapinfo.c,v 1.8 2004/05/19 14:52:03 camacho Exp $";
+    "$Id: gapinfo.c,v 1.16 2005/04/27 19:55:13 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/gapinfo.h>
 
@@ -41,85 +43,155 @@ GapStateArrayStruct*
 GapStateFree(GapStateArrayStruct* state_struct)
 
 {
-	GapStateArrayStruct* next;
+    GapStateArrayStruct* next;
 
-	while (state_struct)
-	{
-		next = state_struct->next;
-		sfree(state_struct->state_array);
-		sfree(state_struct);
-		state_struct = next;
-		
-	}
+    while (state_struct) {
+        next = state_struct->next;
+        sfree(state_struct->state_array);
+        sfree(state_struct);
+        state_struct = next;
+    }
 
-	return NULL;
+    return NULL;
 }
 
-/*
-	Allocates an EditScriptPtr and puts it on the end of
-	the chain of EditScriptPtr's.  Returns a pointer to the
-	new one.
-
-*/
+/* see gapinfo.h for description */
 GapEditScript* 
 GapEditScriptNew(GapEditScript* old)
 
 {
-	GapEditScript* new;
+    GapEditScript* new;
 
-	new = (GapEditScript*) calloc(1, sizeof(GapEditScript));
+    new = (GapEditScript*) calloc(1, sizeof(GapEditScript));
+    if (old == NULL)
+        return new;
 
-	if (old == NULL)
-		return new;
+    while (old->next != NULL) {
+        old = old->next;
+    }
 
-	while (old->next != NULL)
-	{
-		old = old->next;
-	}
-
-	old->next = new;
-
-	return new;
+    old->next = new;
+    return new;
 }
 
 GapEditScript*
 GapEditScriptDelete(GapEditScript* old)
 {
-	GapEditScript* next;
+    GapEditScript* next;
 
-	while (old)
-	{
-		next = old->next;
-		sfree(old);
-		old = next;
-	}
-	return old;
+    while (old) {
+        next = old->next;
+        sfree(old);
+        old = next;
+    }
+    return old;
 }
 
-GapEditBlock*
-GapEditBlockNew(Int4 start1, Int4 start2)
-
+/** Ensures that a preliminary edit script has enough memory allocated
+ *  to hold a given number of edit operations
+ *
+ *  @param edit_block The script to examine [in/modified]
+ *  @param total_ops Number of operations the script must support [in]
+ *  @return 0 if successful, nonzero otherwise
+ */
+static Int2 
+s_GapPrelimEditBlockRealloc(GapPrelimEditBlock *edit_block, Int4 total_ops)
 {
-	GapEditBlock* edit_block;
+    if (edit_block->num_ops_allocated <= total_ops) {
+        Int4 new_size = total_ops * 2;
+        GapPrelimEditScript *new_ops;
+    
+        new_ops = realloc(edit_block->edit_ops, new_size * 
+                                sizeof(GapPrelimEditScript));
+        if (new_ops == NULL)
+            return -1;
 
-	edit_block = (GapEditBlock*) calloc(1, sizeof(GapEditBlock));
-	edit_block->start1 = start1;
-	edit_block->start2 = start2;
-
-	return edit_block;
+        edit_block->edit_ops = new_ops;
+        edit_block->num_ops_allocated = new_size;
+    }
+    return 0;
 }
 
-GapEditBlock*
-GapEditBlockDelete(GapEditBlock* edit_block)
+/** Add an edit operation to an edit script
 
+  @param edit_block The edit script to update [in/modified]
+  @param op_type The edit operation to add [in]
+  @param num_ops The number of operations of the specified type [in]
+  @return 0 on success, nonzero otherwise
+*/
+static Int2 
+s_GapPrelimEditBlockAddNew(GapPrelimEditBlock *edit_block, 
+                           EGapAlignOpType op_type, Int4 num_ops)
 {
-	if (edit_block == NULL)
-		return NULL;
+    if (s_GapPrelimEditBlockRealloc(edit_block, edit_block->num_ops + 2) != 0)
+        return -1;
 
-	edit_block->esp = GapEditScriptDelete(edit_block->esp);
+    ASSERT(op_type != eGapAlignInvalid);
 
-	sfree(edit_block);
+    edit_block->last_op = op_type;
+    edit_block->edit_ops[edit_block->num_ops].op_type = op_type;
+    edit_block->edit_ops[edit_block->num_ops].num = num_ops;
+    edit_block->num_ops++;
 
-	return edit_block;
+    return 0;
 }
 
+void
+GapPrelimEditBlockAdd(GapPrelimEditBlock *edit_block, 
+                 EGapAlignOpType op_type, Int4 num_ops)
+{
+    if (num_ops == 0)
+        return;
+
+    if (edit_block->last_op == op_type)
+        edit_block->edit_ops[edit_block->num_ops-1].num += num_ops;
+    else
+        s_GapPrelimEditBlockAddNew(edit_block, op_type, num_ops);
+}
+
+GapPrelimEditBlock *
+GapPrelimEditBlockNew(void)
+{
+    GapPrelimEditBlock *edit_block = malloc(sizeof(GapPrelimEditBlock));
+    if (edit_block != NULL) {
+        edit_block->edit_ops = NULL;
+        edit_block->num_ops_allocated = 0;
+        edit_block->num_ops = 0;
+        edit_block->last_op = eGapAlignInvalid;
+        s_GapPrelimEditBlockRealloc(edit_block, 100);
+    }
+    return edit_block;
+}
+
+GapPrelimEditBlock *
+GapPrelimEditBlockFree(GapPrelimEditBlock *edit_block)
+{
+    if (edit_block == NULL)
+        return NULL;
+
+    sfree(edit_block->edit_ops);
+    sfree(edit_block);
+    return NULL;
+}
+
+void
+GapPrelimEditBlockReset(GapPrelimEditBlock *edit_block)
+{
+    if (edit_block) {
+        edit_block->num_ops = 0;
+        edit_block->last_op = eGapAlignInvalid;
+    }
+}
+
+void
+GapPrelimEditBlockAppend(GapPrelimEditBlock *edit_block1,
+                         GapPrelimEditBlock *edit_block2)
+{
+    Int4 index;
+    GapPrelimEditScript *op;
+
+    for (index = 0, op = edit_block2->edit_ops; index < edit_block2->num_ops; 
+         ++index, ++op) {
+        GapPrelimEditBlockAdd(edit_block1, op->op_type, op->num);
+    }
+}

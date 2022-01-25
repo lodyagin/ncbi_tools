@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.23 $
+* $Revision: 1.29 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "1.2"
+#define ASN2FSA_APP_VER "1.4"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -253,6 +253,7 @@ static ValNodePtr ExtractBspList (
 typedef struct fastaflags {
   Boolean  master_style;
   Boolean  expand_gaps;
+  Boolean  use_dashes;
   Boolean  far_genomic_qual;
   Boolean  qual_gap_is_zero;
   Boolean  batch;
@@ -284,7 +285,7 @@ static VoidPtr DoAsyncLookup (
   ValNode       vn;
 
   ffp = (FastaFlagPtr) arg;
-  if (ffp == NULL) return;
+  if (ffp == NULL) return NULL;
 
 #ifdef INTERNAL_NCBI_ASN2FSA
   if (ffp->usePUBSEQ) {
@@ -320,6 +321,8 @@ static VoidPtr DoAsyncLookup (
     PUBSEQFini ();
   }
 #endif
+
+  return NULL;
 }
 
 #define NUM_ASYNC_LOOKUP_THREADS 5
@@ -549,8 +552,9 @@ static void ProcessSingleRecord (
   Pointer        dataptr = NULL;
   Uint2          datatype, entityID = 0;
   Char           file [FILENAME_MAX], path [PATH_MAX];
-  StreamFlgType  flags = 0;
+  StreamFlgType  flags = STREAM_CORRECT_INVAL;
   FILE           *fp, *ofp = NULL;
+  ObjMgrPtr      omp;
   SeqEntryPtr    sep;
 
   if (ffp == NULL) return;
@@ -648,8 +652,12 @@ static void ProcessSingleRecord (
     }
 
     if (sep != NULL) {
-      if (ffp->expand_gaps) {
-        flags = STREAM_EXPAND_GAPS;
+      if (ffp->expand_gaps && ffp->use_dashes) {
+        flags |= EXPAND_GAPS_TO_DASHES;
+      } else if (ffp->expand_gaps) {
+        flags |= STREAM_EXPAND_GAPS;
+      } else if (ffp->use_dashes) {
+        flags |= GAP_TO_SINGLE_DASH;
       }
 
       bsplist = NULL;
@@ -684,6 +692,9 @@ static void ProcessSingleRecord (
   }
 
   ObjMgrFree (datatype, dataptr);
+  omp = ObjMgrGet ();
+  ObjMgrReapOne (omp);
+  ObjMgrFreeCache (0);
 }
 
 static void ProcessMultipleRecord (
@@ -700,9 +711,8 @@ static void ProcessMultipleRecord (
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
   Char           buf [64], cmmd [256], file [FILENAME_MAX], path [PATH_MAX], longest [64];
-  Char           path1 [PATH_MAX], path2 [PATH_MAX], path3 [PATH_MAX];
-  StreamFlgType  flags = 0;
-  FILE           *fp, *tfp;
+  StreamFlgType  flags = STREAM_CORRECT_INVAL;
+  FILE           *fp;
   Int4           numrecords = 0;
   SeqEntryPtr    fsep, sep;
   ObjMgrPtr      omp;
@@ -760,7 +770,7 @@ static void ProcessMultipleRecord (
 
 #ifdef OS_UNIX
   if (ffp->compressed) {
-    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
+    gzcatprog = getenv ("NCBI_UNCOMPRESS_BINARY");
     if (gzcatprog != NULL) {
       sprintf (cmmd, "%s %s", gzcatprog, path);
     } else {
@@ -802,25 +812,14 @@ static void ProcessMultipleRecord (
     return;
   }
 
-  TmpNam (path1);
-  tfp = FileOpen (path1, "w");
-  fprintf (tfp, "\n");
-  FileClose (tfp);
-
-  TmpNam (path2);
-  tfp = FileOpen (path2, "w");
-  fprintf (tfp, "\n");
-  FileClose (tfp);
-
-  TmpNam (path3);
-  tfp = FileOpen (path3, "w");
-  fprintf (tfp, "\n");
-  FileClose (tfp);
-
   atp = atp_bss;
 
-  if (ffp->expand_gaps) {
-    flags = STREAM_EXPAND_GAPS;
+  if (ffp->expand_gaps && ffp->use_dashes) {
+    flags |= EXPAND_GAPS_TO_DASHES;
+  } else if (ffp->expand_gaps) {
+    flags |= STREAM_EXPAND_GAPS;
+  } else if (ffp->use_dashes) {
+    flags |= GAP_TO_SINGLE_DASH;
   }
 
   longest [0] = '\0';
@@ -899,9 +898,6 @@ static void ProcessMultipleRecord (
     fprintf (ffp->logfp, "Total number of records %ld\n", (long) numrecords);
     fflush (ffp->logfp);
   }
-
-  sprintf (cmmd, "rm %s; rm %s; rm %s", path1, path2, path3);
-  system (cmmd);
 }
 
 static void ProcessOneRecord (
@@ -929,12 +925,16 @@ static void ProcessOneSeqEntry (
 
 {
   ValNodePtr     bsplist;
-  StreamFlgType  flags = 0;
+  StreamFlgType  flags = STREAM_CORRECT_INVAL;
 
   if (sep == NULL || ffp == NULL) return;
 
-  if (ffp->expand_gaps) {
-    flags = STREAM_EXPAND_GAPS;
+  if (ffp->expand_gaps && ffp->use_dashes) {
+    flags |= EXPAND_GAPS_TO_DASHES;
+  } else if (ffp->expand_gaps) {
+    flags |= STREAM_EXPAND_GAPS;
+  } else if (ffp->use_dashes) {
+    flags |= GAP_TO_SINGLE_DASH;
   }
 
   bsplist = NULL;
@@ -1074,21 +1074,22 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 #define u_argRecurse       6
 #define m_argMaster        7
 #define g_argExpandGaps    8
-#define s_argGenomicQual   9
-#define z_argZeroQualGap  10
-#define a_argType         11
-#define b_argBinary       12
-#define c_argCompressed   13
-#define r_argRemote       14
-#define f_argFastaIdx     15
-#define d_argBlastDB      16
-#define k_argLocalFetch   17
-#define l_argLockFar      18
-#define h_argFarOutFile   19
-#define e_argLineLength   20
-#define T_argThreads      21
-#define L_argLogFile      22
-#define A_argAccession    23
+#define D_argUseDashes     9
+#define s_argGenomicQual  10
+#define z_argZeroQualGap  11
+#define a_argType         12
+#define b_argBinary       13
+#define c_argCompressed   14
+#define r_argRemote       15
+#define f_argFastaIdx     16
+#define d_argBlastDB      17
+#define k_argLocalFetch   18
+#define l_argLockFar      19
+#define h_argFarOutFile   20
+#define e_argLineLength   21
+#define T_argThreads      22
+#define L_argLogFile      23
+#define A_argAccession    24
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1109,6 +1110,8 @@ Args myargs [] = {
     TRUE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Expand Delta Gaps into Ns", "F", NULL, NULL,
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Use Dash for Gap", "F", NULL, NULL,
+    TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Far Genomic Contig for Quality Scores", "F", NULL, NULL,
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Print Quality Score Gap as -1", "F", NULL, NULL,
@@ -1149,7 +1152,8 @@ Int2 Main (void)
                  aaout, qlout, frout, logfile, ptr, str, suffix;
   Boolean        batch, binary, blast, compressed, dorecurse,
                  expandgaps, fargenomicqual, fasta, local, lock,
-                 masterstyle, qualgapzero, remote, usethreads;
+                 masterstyle, qualgapzero, remote, usedashes,
+                 usethreads;
   FastaFlagData  ffd;
   Int2           linelen, type = 0;
   time_t         run_time, start_time, stop_time;
@@ -1211,6 +1215,7 @@ Int2 Main (void)
   usethreads = (Boolean) myargs [T_argThreads].intvalue;
 
   expandgaps = (Boolean) myargs [g_argExpandGaps].intvalue;
+  usedashes = (Boolean) myargs [D_argUseDashes].intvalue;
   masterstyle = (Boolean) myargs [m_argMaster].intvalue;
   fargenomicqual = (Boolean) myargs [s_argGenomicQual].intvalue;
   qualgapzero = (Boolean) myargs [z_argZeroQualGap].intvalue;
@@ -1268,6 +1273,7 @@ Int2 Main (void)
   /* populate parameter structure */
 
   ffd.expand_gaps = expandgaps;
+  ffd.use_dashes = usedashes;
   ffd.master_style = masterstyle;
   ffd.far_genomic_qual = fargenomicqual;
   ffd.qual_gap_is_zero = (Boolean) (! qualgapzero);
@@ -1390,6 +1396,7 @@ Int2 Main (void)
   } else if (StringDoesHaveText (base)) {
 
     ptr = StringRChr (base, '.');
+    sfx[0] = '\0';
     if (ptr != NULL) {
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';

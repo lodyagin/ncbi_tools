@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -221,7 +221,10 @@ static void ValDoNotify (ValidExtraPtr vep, Int2 item, Boolean select, Boolean t
             bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
           } else {
             sfp = GetSeqFeatGivenIDs (entityID, itemID, itemtype);
-            bsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
+            if (sfp != NULL)
+            {
+              bsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
+            }
           }
           if (bsp != NULL) {
             sip = SeqIdFindWorst (bsp->id);

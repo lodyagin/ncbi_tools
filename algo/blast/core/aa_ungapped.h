@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.h,v 1.19 2004/06/08 17:29:57 dondosha Exp $
+/* $Id: aa_ungapped.h,v 1.23 2005/03/28 21:22:50 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #include <algo/blast/core/blast_lookup.h>
 #include <algo/blast/core/blast_extend.h>
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -48,8 +48,7 @@ extern "C" {
  * @param matrix the substitution matrix [in]
  * @param word_params word parameters, needed for cutoff and dropoff [in]
  * @param ewp extend parameters, needed for diagonal tracking [in]
- * @param query_offsets array for storing query offsets [out]
- * @param subject_offsets array for storing subject offsets [out]
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param offset_array_size the number of elements in each offset array [in]
  * @param init_hitlist hsps resulting from the ungapped extension [out]
  * @param ungapped_stats Various hit counts. Not filled if NULL [out]
@@ -60,8 +59,7 @@ Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
 		       Int4** matrix,
 		       const BlastInitialWordParameters* word_params,
 		       Blast_ExtendWord* ewp,
-		       Uint4* NCBI_RESTRICT query_offsets,
-		       Uint4* NCBI_RESTRICT subject_offsets,
+                       BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 		       Int4 offset_array_size,
 		       BlastInitHitList* init_hitlist, 
              BlastUngappedStats* ungapped_stats);
@@ -75,8 +73,7 @@ Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
  * @param matrix the substitution matrix [in]
  * @param cutoff cutoff score for saving ungapped HSPs [in]
  * @param dropoff x dropoff [in]
- * @param query_offsets array for storing query offsets [out]
- * @param subject_offsets array for storing subject offsets [out]
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param array_size the number of elements in each offset array [in]
  * @param ungapped_hsps hsps resulting from the ungapped extension [out]
  * @param ungapped_stats Various hit counts. Not filled if NULL [out]
@@ -89,11 +86,10 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 			      Int4 ** matrix,
 			      Int4 cutoff,
 			      Int4 dropoff,
-			      Uint4 * NCBI_RESTRICT query_offsets,
-			      Uint4 * NCBI_RESTRICT subject_offsets,
+                              BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 			      Int4 array_size,
-	            BlastInitHitList* ungapped_hsps, 
-               BlastUngappedStats* ungapped_stats);
+	                      BlastInitHitList* ungapped_hsps, 
+                              BlastUngappedStats* ungapped_stats);
 
 /** Scan a subject sequence for word hits and trigger one-hit extensions.
  *
@@ -104,8 +100,7 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
  * @param matrix the substitution matrix [in]
  * @param cutoff cutoff score for saving ungapped HSPs [in]
  * @param dropoff x dropoff [in]
- * @param query_offsets array for storing query offsets
- * @param subject_offsets array for storing subject offsets
+ * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param array_size the number of elements in each offset array
  * @param ungapped_hsps hsps resulting from the ungapped extensions [out]
  * @param ungapped_stats Various hit counts. Not filled if NULL [out]
@@ -117,8 +112,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 			      Int4 ** matrix,
 			      Int4 cutoff,
 			      Int4 dropoff,
-			      Uint4 * NCBI_RESTRICT query_offsets,
-			      Uint4 * NCBI_RESTRICT subject_offsets,
+                              BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 			      Int4 array_size,
 	            BlastInitHitList* ungapped_hsps, 
                BlastUngappedStats* ungapped_stats);
@@ -173,6 +167,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
  * @param q_off query offset [in]
  * @param dropoff the X dropoff parameter [in]
  * @param displacement the length of the extension [out]
+ * @param score the score so far (probably from initial word hit) [in]
  * @return The score of the extension
  */
 
@@ -182,14 +177,16 @@ Int4 BlastAaExtendLeft(Int4 ** matrix,
 		       Int4 s_off,
 		       Int4 q_off,
 		       Int4 dropoff,
-		       Int4* displacement);
+		       Int4* displacement,
+                       Int4 score);
 
 Int4 BlastPSSMExtendLeft(Int4 ** matrix,
 		       const BLAST_SequenceBlk* subject,
 		       Int4 s_off,
 		       Int4 q_off,
 		       Int4 dropoff,
-		       Int4* displacement);
+		       Int4* displacement,
+                       Int4 score);
 
 
 /** Perform a one-hit extension. Beginning at the specified hit,
@@ -204,6 +201,7 @@ Int4 BlastPSSMExtendLeft(Int4 ** matrix,
  * @param hsp_q the offset in the query where the HSP begins [out]
  * @param hsp_s the offset in the subject where the HSP begins [out]
  * @param hsp_len the length of the HSP [out]
+ * @param word_size number of letters in the initial word hit [in]
  * @param use_pssm TRUE if the scoring matrix is position-specific [in]
  * @param s_last_off the rightmost subject offset examined [out]
  * @return the score of the hsp.
@@ -218,6 +216,7 @@ Int4 BlastAaExtendOneHit(Int4 ** matrix,
 			 Int4* hsp_q,
 			 Int4* hsp_s,
 			 Int4* hsp_len,
+                         Int4 word_size,
 	                 Boolean use_pssm,
 	                 Int4* s_last_off);
 	                 
@@ -257,19 +256,7 @@ Int4 BlastAaExtendTwoHit(Int4 ** matrix,
 	                 Boolean *right_extend,
 	                 Int4* s_last_off);
 
-/** Update the offset for use with a new sequence.
-  * @param diag pointer to the diagonal array structure [in]
-  * @param length length of the new sequence [in]
-  */
-  
-Int4 DiagUpdate(BLAST_DiagTable* diag, Int4 length);
-
-/** Reset the diagonal array structure. Used when offset has wrapped around.
-  * @param diag pointer to the diagonal array structure [in]
-  */
-Int4 DiagClear(BLAST_DiagTable* diag);
-
-#ifdef _cplusplus
+#ifdef __cplusplus
 }
 #endif
 

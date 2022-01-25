@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.153 $
+* $Revision: 6.157 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,18 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.157  2005/02/22 14:15:48  camacho
+* Pass bioseq data type by reference to FDBAddBioseq
+*
+* Revision 6.156  2004/12/04 03:41:09  camacho
+* Add extra enum for fastacmd -D option for error checking
+*
+* Revision 6.155  2004/12/03 04:57:57  camacho
+* Fix name conflict in enumeration for fastacmd dump types
+*
+* Revision 6.154  2004/12/02 20:37:31  camacho
+* + fastacmd feature to dump list of gis
+*
 * Revision 6.153  2004/09/27 16:29:34  madden
 * Make title on SI_Record dynamically allocated
 *
@@ -1626,9 +1638,11 @@ FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
 
 /* For database version FORMATDB_VER (or greater), only the first 5 parameters
  * are used, the latter are kept for the FORMATDB_VER_TEXT version of the BLAST
- * databases */
+ * databases. Please note that the seq_data and seq_data_type will be changed
+ * if the data passed in doesn't match the format that is required for the
+ * BLAST database format (ncbistdaa for proteins, ncbi2na for nucleotides) */
 Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp, 
-                     Uint1 seq_data_type, ByteStorePtr *seq_data, 
+                     Uint1* seq_data_type, ByteStorePtr *seq_data, 
                      Int4 SequenceLen, 
                      CharPtr seq_id, CharPtr title, 
                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date);
@@ -1636,6 +1650,8 @@ Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp,
 /**
  * FDBAddSequence2: is an interface to add "non-redundant sequence", i.e
  * common sequence data and multiple sequence information block (1 per gi)
+ * This function will NOT alter the seq_data field, it assumes that the data is
+ * already provided in the required format
  * @param fdbp target blast db [in]
  * @param srp linked list of sequence information for each gi [in]
  * @param seq_data_type type of the parameter below [in]
@@ -1649,7 +1665,7 @@ Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp,
 Int2 FDBAddSequence2 (FormatDBPtr  fdbp,
                       SI_RecordPtr srp,
                       Uint1 seq_data_type,
-                      ByteStorePtr *seq_data,
+                      const ByteStorePtr *seq_data,
                       Int4 SequenceLen,
                       Uint4Ptr  AmbCharPtr,
                       Int4 pig_id, 
@@ -1778,14 +1794,31 @@ void LIBCALL FCMDAccListFree(FCMDAccListPtr falp);
 /* Fastacmd_Search and Fastacmd_Search_ex return non-zero on failure */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
+
+/* Used to specify which kind of data to dump using fastacmd */
+typedef enum EBlastDbDumpType {
+    eNoDump = 0,        /* Don't dump any data from the database, the default for
+                           fastacmd */
+    eFasta,             /* dump contents of database as FASTA */
+    eGi,                /* List of gis in the database */
+    eDumpTypeMax        /* not really a dump type, needed for error checking */
+} EBlastDbDumpType;
+
 Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
-	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
+	Boolean use_target, Boolean use_ctrlAs, EBlastDbDumpType dump_db, 
     CharPtr seqlocstr, Uint1 strand, Boolean taxonomy_info_only, 
     Boolean dbinfo_only, Int4 pig);
 
-Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
-		    Boolean use_ctrlAs);
+/**
+ * @param rdfp Blast database handle [in]
+ * @param fp output FILE pointer [in]
+ * @param linelen number of characters to print per line [in]
+ * @param use_ctrlAs use Ctrl-A to separate non-redundant deflines? [in]
+ * @param dump_type type of information to dump [in]
+ */
+Int2 DumpBlastDB(const ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
+		         Boolean use_ctrlAs, EBlastDbDumpType dump_type);
 
 Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 					    output_file));

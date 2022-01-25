@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.148 2004/09/28 16:06:38 papadopo Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.150 2005/02/07 15:30:39 dondosha Exp $";
 
-/* $Id: blastall.c,v 6.148 2004/09/28 16:06:38 papadopo Exp $
+/* $Id: blastall.c,v 6.150 2005/02/07 15:30:39 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,12 @@ static char const rcsid[] = "$Id: blastall.c,v 6.148 2004/09/28 16:06:38 papadop
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.150  2005/02/07 15:30:39  dondosha
+ * Removed restriction on the value of longest intron option
+ *
+ * Revision 6.149  2005/01/10 18:52:28  coulouri
+ * fixes from morgulis to allow concatenation of >255 queries in [t]blastn
+ *
  * Revision 6.148  2004/09/28 16:06:38  papadopo
  * From Michael Gertz:
  * 1. Disabled ungapped psitblastn.
@@ -922,14 +928,14 @@ Int2 Main (void)
     Boolean done = TRUE;
     int (LIBCALLBACK *handle_results)(VoidPtr srch);       
     Int4 from = 0, to = -1;
-    Uint1 num_queries;		/*--KM for concatenated queries in blastn, tblastn */
-    Uint1 num_iters;
-    Uint1 sap_iter;
+    Uint4 num_queries;		/*--KM for concatenated queries in blastn, tblastn */
+    Uint4 num_iters;
+    Uint4 sap_iter;
     SeqAlignPtr curr_seqalign;
     SeqAlignPtrArray sap_array;		/*--KM for separating seqaligns to test concat printing, temporary?*/
     SeqAnnotPtr curr_seqannot;
     SeqAnnotPtrArray seq_annot_arr;
-    Uint1 bsp_iter;
+    Uint4 bsp_iter;
     BspArray fake_bsp_arr;	/*--KM the array of fake_bsps for indiv. queries */ 
     SeqLocPtr PNTR lcase_mask_arr = NULL;	/* AM: information about lower case masked parts of queries */
     Boolean concat_done, nuc_concat;
@@ -1190,8 +1196,7 @@ Int2 Main (void)
         
     /* Input longest intron length is in nucleotide scale; in the lower level
        code it will be used in protein scale */
-    options->longest_intron =
-      MIN(myargs[ARG_INTRON].intvalue, MAX_INTRON_LENGTH);
+    options->longest_intron = myargs[ARG_INTRON].intvalue;
 
     aip = NULL;
     if (myargs[ARG_ASNOUT].strvalue != NULL) {
@@ -1573,6 +1578,7 @@ Int2 Main (void)
            }
            slp = SeqLocIntNew(from, to, options->strand_option, 
                               fake_bsp->id);
+           
 #ifdef BLAST_CS_API
            seqalign = BlastSeqLocNetCore(bl3hp, slp, blast_program, 
                                          blast_database, options,

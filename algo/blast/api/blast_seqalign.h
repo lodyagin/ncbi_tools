@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.19 2004/09/08 16:07:07 dondosha Exp $
+/* $Id: blast_seqalign.h,v 1.24 2005/04/06 23:27:53 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,19 +21,13 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
+*  Author: Ilya Dondoshansky
 * ===========================================================================*/
 
-/*****************************************************************************
+/** @file blast_seqalign.h
+ * Functions to convert BLAST results to the SeqAlign form
+ */
 
-File name: blast_seqalign.h
-
-Author: Ilya Dondoshansky
-
-Contents: Functions to convert BLAST results to the SeqAlign form
-
-******************************************************************************
- * $Revision: 1.19 $
- * */
 #ifndef __BLAST_SEQALIGN__
 #define __BLAST_SEQALIGN__
 
@@ -47,6 +41,11 @@ extern "C" {
 
 #include <readdb.h>
 #include <algo/blast/core/blast_hits.h>
+
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
 
 /** This should be defined somewhere else!!!!!!!!!!!!! */
 #define BLAST_SMALL_GAPS 0
@@ -66,33 +65,36 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
         ReadDBFILE* rdfp, SeqLoc* subject_slp, 
         Boolean is_gapped, Boolean is_ooframe, SeqAlignPtr* head_seqalign);
 
-Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
-                                  GapEditScript* curr_in, Int4 numseg,
-                                  Int4** start_out,
-                                  Int4** length_out,
-                                  Uint1** strands_out,
-                                  Int4* start1, Int4* start2);
-
-SeqAlignPtr LIBCALL GapEditBlockToSeqAlign(GapEditBlock* edit_block,
-                                           SeqIdPtr subject_id,
-                                           SeqIdPtr query_id);
-
-/** Adjusts the offsets in a Seq-align list produced by a BLAST search
- * of multiple queries against multiple subjects. Seq-aligns in a list are
- * assumed to be sorted by query, and then by subject, i.e. all Seq-aligns for
- * the first query are at the beginning of the list, then all for the second
- * query, etc. Within a list for any single query, all Seq-aligns for one 
- * subject are grouped together. The order of queries in the Seq-align list 
- * must be the same as in the query Seq-loc list; the order of subjects
- * within a Seq-align list for a given query is the same as in the subject
- * Seq-loc list. Some or all queries or subjects might be skipped in the 
- * Seq-align list.
+/** Given an internal edit block structure, returns the segments information in
+ * form of arrays.
+ * @param hsp HSP structure containing traceback for one local alignment [in]
+ * @param curr_in Link in editing script where to start collecting the data. [in]
+ * @param numseg Number of segments in the alignment [in]
+ * @param query_length Length of query sequence [in]
+ * @param subject_length Length of subject sequence [in]
+ * @param translate1 Is query translated? [in]
+ * @param translate2 Is subject translated? [in]
+ * @param start_out Array of segment starting offsets [out]
+ * @param length_out Array of segment lengths [out]
+ * @param strands_out Array of segment strands [out]
+ * @param start1 Starting query offset; modified to point to next starting
+ *               offset if one edit block combines multiple alignments, like
+ *               in an ungapped search. [in] [out]
+ * @param start2 Starting subject offset for this alignment. [in] [out]
+ * @return Status.
  */
-void Blast_AdjustOffsetsInSeqAlign(SeqAlign* head, SeqLoc* query_slp,
-				   SeqLoc* subject_slp);
+Int2 
+GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg, 
+                          Int4 query_length, Int4 subject_length,
+                          Boolean translate1, Boolean translate2,
+                          Int4** start_out, Int4** length_out,
+                          Uint1** strands_out, Int4* start1, Int4* start2);
+
+/* @} */
 
 #ifdef __cplusplus
 }
 #endif
+
 #endif /* !__BLAST_SEQALIGN__ */
 

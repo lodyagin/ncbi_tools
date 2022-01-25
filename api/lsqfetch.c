@@ -37,6 +37,12 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.30  2004/10/27 20:07:14  kans
+* LsqFetch_AsnIoOpen to suppress missing file warning, similar to LsqFetch_FileOpen
+*
+* Revision 6.29  2004/10/26 14:45:30  kans
+* LsqFetch_FileOpen suppresses FileOpen failure INFO message
+*
 * Revision 6.28  2004/10/05 19:11:23  kans
 * separate internal CreateBinaryAsnIndex and CreateTextAsnIndex functions
 *
@@ -176,6 +182,37 @@
 #else
 	static CharPtr seqinfo_file = ".seqinfo";
 #endif
+
+/********************************************************************
+*
+*	Local versions of FileOpen and AsnIoOpen suppress missing file error report
+*
+*********************************************************************/
+
+static FILE* LIBCALL LsqFetch_FileOpen (const char *filename, const char *mode)
+
+{
+  FILE    *fp;
+  ErrSev  sev;
+
+  sev = ErrSetMessageLevel (SEV_ERROR);
+  fp = FileOpen (filename, mode);
+  ErrSetMessageLevel (sev);
+  return fp;
+}
+
+static AsnIoPtr LIBCALL  LsqFetch_AsnIoOpen (CharPtr file_name, CharPtr mode)
+
+{
+  AsnIoPtr  aip;
+  ErrSev    sev;
+
+  sev = ErrSetMessageLevel (SEV_ERROR);
+  aip = AsnIoOpen (file_name, mode);
+  ErrSetMessageLevel (sev);
+  return aip;
+}
+
 
 /***********************************************************************
 ***
@@ -489,7 +526,7 @@ static Int2 LIBCALLBACK FastaLibBioseqFetchFunc (Pointer data)
 	{
 		if(flp->state == FASTALIB_CLOSE)
 		{
-			flp->fp = FileOpen(flp->file_name, "r");
+			flp->fp = LsqFetch_FileOpen(flp->file_name, "r");
 			if(flp->fp == NULL)
 				flp->state = FASTALIB_ERROR;
 			else
@@ -528,7 +565,7 @@ NLM_EXTERN Boolean FastaLibBioseqFetchEnable(ValNodePtr libs, Boolean now)
 		file_name = libs->data.ptrvalue;
 		if(now)
 		{
-			if((fp = FileOpen(file_name, "r")) == NULL)
+			if((fp = LsqFetch_FileOpen(file_name, "r")) == NULL)
 				ok = FALSE;
 		}
 		if(ok)
@@ -734,7 +771,7 @@ static Int2 LIBCALLBACK FileBioseqFetchFunc (Pointer data)
 		switch(sbfp->choice)
 		{
 			case FASTA_FILE:
-				if((fp = FileOpen(c_name, "r")) != NULL)
+				if((fp = LsqFetch_FileOpen(c_name, "r")) != NULL)
 				{
 					sep = fasta_lib_sep(fp, NULL, sip);
 					FileClose(fp);
@@ -744,7 +781,7 @@ static Int2 LIBCALLBACK FileBioseqFetchFunc (Pointer data)
 			case TEXT_ASN:	
 			case BIN_ASN:
 				bin = (sbfp->choice == BIN_ASN);
-				if((aip = AsnIoOpen(c_name, bin?"rb":"r")) != NULL) 
+				if((aip = LsqFetch_AsnIoOpen(c_name, bin?"rb":"r")) != NULL) 
 				{
 					sep = SeqEntryAsnRead(aip, NULL);
 					AsnIoClose(aip);
@@ -1008,7 +1045,7 @@ NLM_EXTERN Boolean LocalSeqFetchInit(Boolean now)
 	}
 
 	seq_file = seqinfo_file;	/*check the current search path*/
-	if((fp = FileOpen(seq_file, "r")) != NULL)
+	if((fp = LsqFetch_FileOpen(seq_file, "r")) != NULL)
 	{
    		while(FileGets(str, 100, fp) != NULL)   /*find the right seq*/
 		{
@@ -1162,7 +1199,7 @@ static FastaIndexPtr ReadFastaIndex (
   fip = (FastaIndexPtr) MemNew (sizeof (FastaIndex));
   if (fip == NULL) return NULL;
   
-  fp = FileOpen (file, "r");
+  fp = LsqFetch_FileOpen (file, "r");
   if (fp == NULL) {
     MemFree (fip);
     return NULL;
@@ -1316,7 +1353,7 @@ static Int2 LIBCALLBACK IndexedFastaLibBioseqFetchFunc (Pointer data)
           sprintf (file, "chr%s.fa", tmp);
           StringNCpy_0 (path, flfp->path, sizeof (path));
           FileBuildPath (path, NULL, file);
-          fp = FileOpen (path, "r");
+          fp = LsqFetch_FileOpen (path, "r");
           if (fp == NULL) return OM_MSG_RET_ERROR;
           fseek (fp, offset, SEEK_SET);
           dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,
@@ -1483,7 +1520,7 @@ static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
       StringCat (file, ".fa");
       StringNCpy_0 (path, fip->path, sizeof (path));
       FileBuildPath (path, NULL, file);
-      fp = FileOpen (path, "r");
+      fp = LsqFetch_FileOpen (path, "r");
       if (fp == NULL) {
         tmp = StringStr (file, ".fa");
         if (tmp != NULL) {
@@ -1491,7 +1528,7 @@ static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
           StringCat (file, ".fsa");
           StringNCpy_0 (path, fip->path, sizeof (path));
           FileBuildPath (path, NULL, file);
-          fp = FileOpen (path, "r");
+          fp = LsqFetch_FileOpen (path, "r");
         }
       }
       if (fp == NULL) return OM_MSG_RET_ERROR;
@@ -1659,10 +1696,10 @@ NLM_EXTERN void CreateFastaIndex (
   }
   StringCat (path, ".idx");
 
-  ifp = FileOpen (file, "r");
+  ifp = LsqFetch_FileOpen (file, "r");
   if (ifp == NULL) return;
 
-  ofp = FileOpen (path, "w");
+  ofp = LsqFetch_FileOpen (path, "w");
   if (ofp != NULL) {
 
     /* get initial file offset */
@@ -1805,7 +1842,7 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
     StringCat (file, ".aso");
     StringNCpy_0 (path, fip->path, sizeof (path));
     FileBuildPath (path, NULL, file);
-    aip = AsnIoOpen (path, alfp->binary? "rb" : "r");
+    aip = LsqFetch_AsnIoOpen (path, alfp->binary? "rb" : "r");
     if (aip == NULL) {
       tmp = StringStr (file, ".aso");
       if (tmp != NULL) {
@@ -1813,7 +1850,7 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
         StringCat (file, ".asn");
         StringNCpy_0 (path, fip->path, sizeof (path));
         FileBuildPath (path, NULL, file);
-        aip = AsnIoOpen (path, alfp->binary? "rb" : "r");
+        aip = LsqFetch_AsnIoOpen (path, alfp->binary? "rb" : "r");
       }
     }
     if (aip == NULL) return OM_MSG_RET_ERROR;
@@ -2008,10 +2045,10 @@ static void CreateBinaryAsnIndex (
   }
   StringCat (path, ".idx");
 
-  aip = AsnIoOpen (file, "rb");
+  aip = LsqFetch_AsnIoOpen (file, "rb");
   if (aip == NULL) return;
 
-  ofp = FileOpen (path, "w");
+  ofp = LsqFetch_FileOpen (path, "w");
   if (ofp != NULL) {
 
     MemSet ((Pointer) &aid, 0, sizeof (AsnIdxData));
@@ -2097,10 +2134,10 @@ static void CreateTextAsnIndex (
   }
   StringCat (path, ".idx");
 
-  ifp = FileOpen (file, "r");
+  ifp = LsqFetch_FileOpen (file, "r");
   if (ifp == NULL) return;
 
-  ofp = FileOpen (path, "w");
+  ofp = LsqFetch_FileOpen (path, "w");
   if (ofp != NULL) {
 
     MemSet ((Pointer) &aid, 0, sizeof (AsnIdxData));

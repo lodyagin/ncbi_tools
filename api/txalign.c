@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.89 2004/09/09 19:39:49 jianye Exp $
+/* $Id: txalign.c,v 6.90 2004/12/13 16:14:45 jianye Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.89 $
+* $Revision: 6.90 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.90  2004/12/13 16:14:45  jianye
+* increase the width of new.gif so that it looks normal on window browsers
+*
 * Revision 6.89  2004/09/09 19:39:49  jianye
 * Added gene linkout
 *
@@ -4973,9 +4976,9 @@ PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *
                             firstnew = FALSE;
                             fprintf(outfp, "<a name = Evalue></a>");
                         }
-                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/new.gif\" WIDTH=25 HEIGHT=15 ALT=\"New sequence mark\">", www_root_path == NULL? "" : www_root_path);
+                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/new.gif\" WIDTH=30 HEIGHT=15 ALT=\"New sequence mark\">", www_root_path == NULL? "" : www_root_path);
                     } else {
-                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/bg.gif\" WIDTH=25 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "" : www_root_path);
+                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/bg.gif\" WIDTH=30 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "" : www_root_path);
                     }
                     if (txsp->waschecked) {
                         fprintf(outfp, "<IMG SRC=\"%s/blast/images/checked.gif\" WIDTH=15 HEIGHT=15 ALT=\"Checked mark\">",  www_root_path == NULL? "" : www_root_path);

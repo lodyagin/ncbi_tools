@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.9 2004/09/13 12:41:33 madden Exp $
+/* $Id: lookup_wrap.c,v 1.14 2005/04/27 19:55:29 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,11 +28,17 @@
  */
 
 /** @file lookup_wrap.c
- * @todo FIXME file had copy-and-paste description!
+ * Wrapper for different flavors of lookup tables allowing a uniform interface in the code.
+ * The wrapper (LookupTableWrap) contains an unsigned byte specifying the type of lookup 
+ * table as well as a void pointer pointing to the actual lookup table.  Examples of different 
+ * types of lookup tables are those for protein queries, the "standard" nucleotide one, the 
+ * megablast lookup table, etc.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.9 2004/09/13 12:41:33 madden Exp $";
+    "$Id: lookup_wrap.c,v 1.14 2005/04/27 19:55:29 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
 #include <algo/blast/core/blast_lookup.h>
@@ -43,10 +49,9 @@ static char const rcsid[] =
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, RPSInfo *rps_info)
+        LookupTableWrap** lookup_wrap_ptr, BlastRPSInfo *rps_info)
 {
    LookupTableWrap* lookup_wrap;
-   Boolean is_na;
 
    /* Construct the lookup table. */
    *lookup_wrap_ptr = lookup_wrap = 
@@ -55,12 +60,19 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
 
    switch ( lookup_options->lut_type ) {
    case AA_LOOKUP_TABLE:
-      BlastAaLookupNew(lookup_options, (BlastLookupTable* *)
-                       &lookup_wrap->lut);
-      BlastAaLookupIndexQuery( (BlastLookupTable*) lookup_wrap->lut,
-                                 (lookup_options->use_pssm == TRUE) ? sbp->posMatrix : sbp->matrix, 
-                                query, lookup_segments);
-      _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+       {
+       Int4** matrix = NULL;
+       if (lookup_options->use_pssm) {
+           matrix = sbp->psi_matrix->pssm->data;
+       } else {
+           matrix = sbp->matrix->data;
+       }
+       BlastAaLookupNew(lookup_options, (BlastLookupTable* *)
+                        &lookup_wrap->lut);
+       BlastAaLookupIndexQuery( (BlastLookupTable*) lookup_wrap->lut, matrix, 
+                                 query, lookup_segments);
+       _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+       }
       break;
    case MB_LOOKUP_TABLE:
       MB_LookupTableNew(query, lookup_segments, 
@@ -75,16 +87,19 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
       _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
       break;
    case PHI_AA_LOOKUP: case PHI_NA_LOOKUP:
-      is_na = (lookup_options->lut_type == PHI_NA_LOOKUP);
-      PHILookupTableNew(lookup_options, 
-                   (BlastPHILookupTable* *) &(lookup_wrap->lut), is_na, sbp);
-      /* Initialize the "pattern space" by number of pattern occurrencies 
-         in query, effectively setting number of patterns in database to 1
-         at this time. */
-      sbp->effective_search_sp = 
-         PHIBlastIndexQuery((BlastPHILookupTable*) lookup_wrap->lut, query,
-                            lookup_segments, is_na);
-      break;
+       {
+           Blast_Message* error_msg = NULL;
+           const Boolean kIsDna = (lookup_options->lut_type == PHI_NA_LOOKUP);
+           SPHIPatternSearchBlkNew(lookup_options->phi_pattern, kIsDna, sbp,
+                             (SPHIPatternSearchBlk* *) &(lookup_wrap->lut),
+                             &error_msg);
+           /** @todo FIXME: this error message must be passed further up!!! */
+           if (error_msg) {
+               Blast_MessagePost(error_msg);
+               Blast_MessageFree(error_msg);
+           }
+           break;
+       }
    case RPS_LOOKUP_TABLE:
       RPSLookupTableNew(rps_info, (BlastRPSLookupTable* *)(&lookup_wrap->lut));
       break;
@@ -108,8 +123,8 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup)
          MBLookupTableDestruct((BlastMBLookupTable*)lookup->lut);
    } else if (lookup->lut_type == PHI_AA_LOOKUP || 
               lookup->lut_type == PHI_NA_LOOKUP) {
-      lookup->lut = (void*)
-         PHILookupTableDestruct((BlastPHILookupTable*)lookup->lut);
+       lookup->lut = (void*)
+           SPHIPatternSearchBlkFree((SPHIPatternSearchBlk*)lookup->lut);
    } else if (lookup->lut_type == RPS_LOOKUP_TABLE) {
       lookup->lut = (void*) 
          RPSLookupTableDestruct((BlastRPSLookupTable*)lookup->lut);
@@ -129,9 +144,6 @@ Int4 GetOffsetArraySize(LookupTableWrap* lookup)
    case MB_LOOKUP_TABLE:
       offset_array_size = OFFSET_ARRAY_SIZE + 
          ((BlastMBLookupTable*)lookup->lut)->longest_chain;
-      break;
-   case PHI_AA_LOOKUP: case PHI_NA_LOOKUP:
-      offset_array_size = MIN_PHI_LOOKUP_SIZE;
       break;
    case AA_LOOKUP_TABLE: case NA_LOOKUP_TABLE:
       offset_array_size = OFFSET_ARRAY_SIZE + 

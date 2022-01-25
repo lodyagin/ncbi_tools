@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.56 2004/10/04 17:10:45 dondosha Exp $
+/* $Id: blast_hits.h,v 1.76 2005/04/28 14:05:55 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 #ifndef __BLAST_HITS__
 #define __BLAST_HITS__
 
-#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/blast_seqsrc.h>
 
@@ -46,10 +46,15 @@ extern "C" {
 typedef struct BlastSeg {
    Int2 frame;  /**< Translation frame */
    Int4 offset; /**< Start of hsp */
-   Int4 length; /**< Length of hsp */
-   Int4 end;    /**< End of HSP */
+   Int4 end;    /**< End of hsp */
    Int4 gapped_start;/**< Where the gapped extension started. */
 } BlastSeg;
+
+/** In PHI BLAST: information about pattern match in a given HSP. */
+typedef struct SPHIHspInfo {
+    Int4 index; /**< Index of query pattern occurrence for this HSP. */ 
+    Int4 length; /**< Length of this pattern occurrence in subject. */
+} SPHIHspInfo;
 
 /** Structure holding all information about an HSP */
 typedef struct BlastHSP {
@@ -60,10 +65,13 @@ typedef struct BlastHSP {
    BlastSeg query;       /**< Query sequence info. */
    BlastSeg subject;     /**< Subject sequence info. */
    Int4     context;     /**< Context number of query */
-   GapEditBlock* gap_info;/**< ALL gapped alignment is here */
-   Int4 num;             /**< How many HSP's make up this (sum) segment? */
-   Uint4 pattern_length; /**< Length of pattern occurrence in this HSP, in 
-                            PHI BLAST */
+   GapEditScript* gap_info;/**< ALL gapped alignment is here */
+   Int4 num;             /**< How many HSP's are linked together for sum 
+                              statistics evaluation? If unset (0), this HSP is
+                              not part of a linked set, i.e. value 0 is treated
+                              the same way as 1. */
+   SPHIHspInfo* pat_info; /**< In PHI BLAST, information about this pattern
+                                 match. */
 } BlastHSP;
 
 /** The structure to hold all HSPs for a given sequence after the gapped 
@@ -78,6 +86,10 @@ typedef struct BlastHSPList {
    Int4 allocated; /**< The allocated size of the hsp_array */
    Int4 hsp_max; /**< The maximal number of HSPs allowed to be saved */
    Boolean do_not_reallocate; /**< Is reallocation of the hsp_array allowed? */
+   double best_evalue; /**< Smallest e-value for HSPs in this list. Filled after 
+                          e-values are calculated. Necessary because HSPs are
+                          sorted by score, but highest scoring HSP may not have
+                          the lowest e-value if sum statistics is used. */
 } BlastHSPList;
 
 /** The structure to contain all BLAST results for one query sequence */
@@ -137,7 +149,7 @@ NCBI_XBLAST_EXPORT
 BlastHSP* Blast_HSPNew(void);
 
 /** Allocates BlastHSP and inits with information from input.
- * structure
+ * structure.
  * @param query_start Start of query alignment [in]
  * @param query_end End of query alignment [in]
  * @param subject_start Start of subject alignment [in]
@@ -145,6 +157,8 @@ BlastHSP* Blast_HSPNew(void);
  * @param query_gapped_start Where gapped alignment started on query [in]
  * @param subject_gapped_start Where gapped alignment started on subject [in]
  * @param query_context The index of the query containing this HSP [in]
+ * @param query_frame Query frame: -3..3 for translated sequence, 
+ *        1 or -1 for blastn, 0 for blastp [in]
  * @param subject_frame Subject frame: -3..3 for translated sequence, 
  *        1 for blastn, 0 for blastp [in]
  * @param score score of alignment [in]
@@ -154,69 +168,60 @@ BlastHSP* Blast_HSPNew(void);
  */
 NCBI_XBLAST_EXPORT
 Int2
-Blast_HSPInit(Int4 query_start, Int4 query_end, Int4 subject_start, 
-              Int4 subject_end,
-              Int4 query_gapped_start, Int4 subject_gapped_start,
-              Int4 query_context, Int2 subject_frame, Int4 score,
-              GapEditBlock* *gap_edit, BlastHSP** ret_hsp);
+Blast_HSPInit(Int4 query_start, Int4 query_end, 
+              Int4 subject_start, Int4 subject_end, 
+              Int4 query_gapped_start, Int4 subject_gapped_start, 
+              Int4 query_context, Int2 query_frame, Int2 subject_frame,
+              Int4 score, GapEditScript* *gap_edit, BlastHSP** ret_hsp);
 
-
-/** Modifies the HSP data after the final gapped alignment.
- *   Input includes only data that likely needs modification.
- * @param query_start start of alignment on query [in]
- * @param query_end end of alignment on query [in]
- * @param subject_start start of alignment on subject [in]
- * @param subject_end end of alignment on subject [in]
- * @param score New score for this HSP [in]
- * @param gap_edit traceback from final gapped alignment [in] [out]
- * @param hsp Original HSP from the preliminary stage [in] [out]
- */
-NCBI_XBLAST_EXPORT
-Int2
-Blast_HSPReset(Int4 query_start, Int4 query_end, Int4 subject_start, 
-               Int4 subject_end, Int4 score, GapEditBlock* *gap_edit, 
-               BlastHSP* hsp);
-
-/** Calculate e-value for an HSP found by PHI BLAST.
- * @param hsp An HSP found by PHI BLAST [in]
- * @param sbp Scoring block with statistical parameters [in]
- */
-NCBI_XBLAST_EXPORT
-void Blast_HSPPHIGetEvalue(BlastHSP* hsp, BlastScoreBlk* sbp);
-
-/** Reevaluate the HSP's score, e-value and percent identity after taking
- * into account the ambiguity information. Needed for blastn only, either
- * after a greedy gapped extension, or for ungapped search.
+/** Reevaluate the HSP's score and percent identity after taking
+ * into account the ambiguity information. Used only for blastn after a greedy
+ * gapped extension with traceback. This function can remove part of the 
+ * alignment at either end, if its score becomes negative after reevaluation.
+ * Traceback is also adjusted in that case.
  * @param hsp The HSP structure [in] [out]
  * @param query_start Pointer to the start of the query sequence [in]
  * @param subject_start Pointer to the start of the subject sequence [in]
- * @param hit_options Hit saving options with e-value cut-off [in]
+ * @param hit_params Hit saving parameters containing score cut-off [in]
  * @param score_params Scoring parameters [in]
- * @param query_info Query information structure, containing effective search
- *                   space(s) [in]
  * @param sbp Score block with Karlin-Altschul parameters [in]
  * @return Should this HSP be deleted after the score reevaluation?
  */
 NCBI_XBLAST_EXPORT
-Boolean Blast_HSPReevaluateWithAmbiguities(BlastHSP* hsp, 
-           Uint1* query_start, Uint1* subject_start, 
-           const BlastHitSavingOptions* hit_options, 
-           const BlastScoringParameters* score_params, 
-           BlastQueryInfo* query_info, BlastScoreBlk* sbp);
+Boolean 
+Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp, Uint1* query_start, 
+   Uint1* subject_start, const BlastHitSavingParameters* hit_params, 
+   const BlastScoringParameters* score_params, BlastScoreBlk* sbp);
+
+/** Reevaluate the HSP's score and percent identity after taking into
+ * account the ambiguity information. Used for ungapped searches with 
+ * nucleotide database (blastn, tblastn, tblastx).
+ * @param hsp The HSP structure [in] [out]
+ * @param query_start Pointer to the start of the query sequence [in]
+ * @param subject_start Pointer to the start of the subject sequence [in]
+ * @param word_params Initial word parameters with ungapped cutoff score [in]
+ * @param sbp Score block with Karlin-Altschul parameters [in]
+ * @param translated Are sequences protein (with a translated subject)? [in]
+ * @return Should this HSP be deleted after the score reevaluation?
+ */
+NCBI_XBLAST_EXPORT
+Boolean 
+Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, 
+   Uint1* query_start, Uint1* subject_start,
+   const BlastInitialWordParameters* word_params, 
+   BlastScoreBlk* sbp, Boolean translated);
 
 /** Calculate number of identities in an HSP.
  * @param query The query sequence [in]
  * @param subject The uncompressed subject sequence [in]
  * @param hsp All information about the HSP [in]
- * @param is_gapped Is this a gapped search? [in]
  * @param num_ident_ptr Number of identities [out]
  * @param align_length_ptr The alignment length, including gaps [out]
  */
 NCBI_XBLAST_EXPORT
 Int2
 Blast_HSPGetNumIdentities(Uint1* query, Uint1* subject, BlastHSP* hsp, 
-                          Boolean is_gapped, Int4* num_ident_ptr, 
-                          Int4* align_length_ptr);
+                          Int4* num_ident_ptr, Int4* align_length_ptr);
 
 /** Calculate number of identities in an HSP for an out-of-frame alignment.
  * @param query The query sequence [in]
@@ -232,6 +237,25 @@ Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject, BlastHSP* hsp,
                              EBlastProgramType program, Int4* num_ident_ptr, 
                              Int4* align_length_ptr);
 
+/** Calculates number of identities and alignment lengths of an HSP and 
+ * determines whether this HSP should be kept or deleted. The num_ident
+ * field of the BlastHSP structure is filled here.
+ * @param program_number Type of BLAST program [in]
+ * @param hsp An HSP structure [in] [out]
+ * @param query Query sequence [in]
+ * @param subject Subject sequence [in]
+ * @param score_options Scoring options, needed to distinguish the 
+ *                      out-of-frame case. [in]
+ * @param hit_options Hit saving options containing percent identity and
+ *                    HSP length thresholds.
+ * @return FALSE if HSP passes the test, TRUE if it should be deleted.
+ */ 
+Boolean
+Blast_HSPTestIdentityAndLength(EBlastProgramType program_number, 
+                               BlastHSP* hsp, Uint1* query, Uint1* subject, 
+                               const BlastScoringOptions* score_options,
+                               const BlastHitSavingOptions* hit_options);
+
 /** Calculate length of an HSP as length in query plus length of gaps in 
  * query. If gap information is unavailable, return maximum between length in
  * query and in subject.
@@ -241,12 +265,15 @@ Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject, BlastHSP* hsp,
  * @param gap_opens Number of gap openings in this HSP [out] 
  */
 NCBI_XBLAST_EXPORT
-void Blast_HSPCalcLengthAndGaps(BlastHSP* hsp, Int4* length,
+void Blast_HSPCalcLengthAndGaps(const BlastHSP* hsp, Int4* length,
                                 Int4* gaps, Int4* gap_opens);
 
 /** Adjust HSP endpoint offsets according to strand/frame; return values in
  * 1-offset coordinates instead of internal 0-offset.
+ * @param program Type of BLAST program [in]
  * @param hsp An HSP structure [in]
+ * @param query_length Length of query [in]
+ * @param subject_length Length of subject [in]
  * @param q_start Start of alignment in query [out]
  * @param q_end End of alignment in query [out]
  * @param s_start Start of alignment in subject [out]
@@ -254,8 +281,38 @@ void Blast_HSPCalcLengthAndGaps(BlastHSP* hsp, Int4* length,
  */
 NCBI_XBLAST_EXPORT
 void 
-Blast_HSPGetAdjustedOffsets(BlastHSP* hsp, Int4* q_start, Int4* q_end,
+Blast_HSPGetAdjustedOffsets(EBlastProgramType program, BlastHSP* hsp, 
+                            Int4 query_length, Int4 subject_length, 
+                            Int4* q_start, Int4* q_end,
                             Int4* s_start, Int4* s_end);
+
+/** Performs the translation and coordinates adjustment, if only part of the 
+ * subject sequence is translated for gapped alignment. 
+ * @param subject_blk Subject sequence structure [in]
+ * @param hsp The HSP information [in] [out]
+ * @param is_ooframe Return a mixed-frame sequence if TRUE [in]
+ * @param gen_code_string Database genetic code [in]
+ * @param translation_buffer_ptr Pointer to buffer holding the translation [out]
+ * @param subject_ptr Pointer to sequence to be passed to the gapped 
+ *                    alignment [out]
+ * @param subject_length_ptr Length of the translated sequence [out]
+ * @param start_shift_ptr How far is the partial sequence shifted w.r.t. the 
+ *                        full sequence. [out]
+ */
+NCBI_XBLAST_EXPORT
+Int2
+Blast_HSPGetPartialSubjectTranslation(BLAST_SequenceBlk* subject_blk, 
+   BlastHSP* hsp, Boolean is_ooframe, const Uint1* gen_code_string, 
+   Uint1** translation_buffer_ptr, Uint1** subject_ptr, 
+   Int4* subject_length_ptr, Int4* start_shift_ptr);
+
+/** Adjusts offsets if partial sequence was used for extension.
+ * @param hsp The hit to work on [in][out]
+ * @param start_shift amount of database sequence not used for extension. [in]
+*/
+NCBI_XBLAST_EXPORT
+void
+Blast_HSPAdjustSubjectOffset(BlastHSP* hsp, Int4 start_shift);
 
 /********************************************************************************
           HSPList API
@@ -284,16 +341,6 @@ NCBI_XBLAST_EXPORT
 Int2
 Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* hsp);
 
-/** Assign frames in all HSPs in the HSP list.
- * @param program_number Type of BLAST program [in]
- * @param hsp_list List of HSPs for one subject sequence [in] [out]
- * @param is_ooframe Is out-of-frame gapping used? [in]
-*/
-NCBI_XBLAST_EXPORT
-void 
-Blast_HSPListSetFrames(EBlastProgramType program_number, BlastHSPList* hsp_list, 
-                 Boolean is_ooframe);
-
 /** Calculate the expected values for all HSPs in a hit list, without using 
  * the sum statistics. In case of multiple queries, the offsets are assumed 
  * to be already adjusted to individual query coordinates, and the contexts 
@@ -305,18 +352,25 @@ Blast_HSPListSetFrames(EBlastProgramType program_number, BlastHSPList* hsp_list,
  * @param sbp Structure containing statistical information [in]
  * @param gap_decay_rate Adjustment parameter to compensate for the effects of
  * performing multiple tests when linking HSPs. No adjustment is made if 0. [in]
+ * @param scaling_factor Scaling factor by which Lambda should be divided. Used in
+ *                       RPS BLAST only; should be set to 1.0 in other cases. [in]
+ *                       
  */
 NCBI_XBLAST_EXPORT
-Int2 Blast_HSPListGetEvalues(BlastQueryInfo* query_info,
-        BlastHSPList* hsp_list, Boolean gapped_calculation, 
-        BlastScoreBlk* sbp, double gap_decay_rate);
+Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
+                             BlastHSPList* hsp_list,
+                             Boolean gapped_calculation, 
+                             BlastScoreBlk* sbp, double gap_decay_rate,
+                             double scaling_factor);
 
 /** Calculate e-values for a PHI BLAST HSP list.
  * @param hsp_list HSP list found by PHI BLAST [in] [out]
  * @param sbp Scoring block with statistical parameters [in]
+ * @param query_info Structure containing information about pattern counts [in]
  */
 NCBI_XBLAST_EXPORT
-void Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp);
+void Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp, 
+                                const BlastQueryInfo* query_info);
 
 /** Calculate bit scores from raw scores in an HSP list.
  * @param hsp_list List of HSPs [in] [out]
@@ -327,6 +381,12 @@ NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListGetBitScores(BlastHSPList* hsp_list, 
                                Boolean gapped_calculation, BlastScoreBlk* sbp);
 
+/** Calculate bit scores from raw scores in an HSP list for a PHI BLAST search.
+ * @param hsp_list List of HSPs [in] [out]
+ * @param sbp Scoring block with statistical parameters [in]
+ */
+void Blast_HSPListPHIGetBitScores(BlastHSPList* hsp_list, BlastScoreBlk* sbp);
+    
 /** Discard the HSPs above the e-value threshold from the HSP list 
  * @param hsp_list List of HSPs for one subject sequence [in] [out]
  * @param hit_options Options block containing the e-value cut-off [in]
@@ -349,23 +409,30 @@ Blast_HSPListPurgeNullHSPs(BlastHSPList* hsp_list);
  * already available.
  * Subject sequence is uncompressed and saved here. Number of identities is
  * calculated for each HSP along the way. 
+ * @param program Type of BLAST program [in]
  * @param hsp_list The list of HSPs for one subject sequence [in] [out]
  * @param query_blk The query sequence [in]
  * @param subject_blk The subject sequence [in] [out]
- * @param hit_options The options related to saving hits [in]
+ * @param word_params Initial word parameters, containing ungapped cutoff 
+ *                    score [in]
+ * @param hit_params Hit saving parameters, including cutoff score [in]
  * @param query_info Auxiliary query information [in]
  * @param sbp The statistical information [in]
  * @param score_params Parameters related to scoring [in]
  * @param seq_src The BLAST database structure (for retrieving uncompressed
  *             sequence) [in]
+ * @param gen_code_string Genetic code string in case of a translated 
+ *                        database search. [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
-Blast_HSPListReevaluateWithAmbiguities(BlastHSPList* hsp_list,
-   BLAST_SequenceBlk* query_blk, BLAST_SequenceBlk* subject_blk, 
-   const BlastHitSavingOptions* hit_options, BlastQueryInfo* query_info, 
+Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program, 
+   BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
+   BLAST_SequenceBlk* subject_blk, 
+   const BlastInitialWordParameters* word_params,
+   const BlastHitSavingParameters* hit_params, const BlastQueryInfo* query_info, 
    BlastScoreBlk* sbp, const BlastScoringParameters* score_params, 
-   const BlastSeqSrc* seq_src);
+   const BlastSeqSrc* seq_src, const Uint1* gen_code_string);
 
 /** Append one HSP list to the other. Discard lower scoring HSPs if there is
  * not enough space to keep all.
@@ -403,14 +470,17 @@ Int2 Blast_HSPListsMerge(BlastHSPList* hsp_list,
 NCBI_XBLAST_EXPORT
 void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset);
 
-/** Sort the HSPs in an HSP list by diagonal and remove redundant HSPs. */
+/** Check if HSP list is sorted by score.
+ * @param hsp_list The list to check [in]
+ * @return TRUE if sorted, FALSE if not.
+ */
 NCBI_XBLAST_EXPORT
-Int2
-Blast_HSPListUniqSort(BlastHSPList* hsp_list);
+Boolean Blast_HSPListIsSortedByScore(const BlastHSPList* hsp_list);
 
-/** Sort the HSPs in an HSP list by score. This type of sorting is done
- * at the beginning of the traceback stage, and is needed to eliminate the effects
- * of wrong score order because of application of sum statistics. 
+/** Sort the HSPs in an HSP list by score. This type of sorting is done before
+ * the e-values are calcaulted, and also at the beginning of the traceback stage, 
+ * where it is needed to eliminate the effects of wrong score order because of 
+ * application of sum statistics. 
  * Checks if the HSP array is already sorted before proceeding with quicksort.
  * @param hsp_list Structure containing array of HSPs to be sorted. [in] [out]
  */
@@ -424,7 +494,6 @@ void Blast_HSPListSortByScore(BlastHSPList* hsp_list);
  */
 NCBI_XBLAST_EXPORT
 void Blast_HSPListSortByEvalue(BlastHSPList* hsp_list);
-
 
 /********************************************************************************
           HitList API.
@@ -465,10 +534,9 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
 /** Initialize the results structure.
  * @param num_queries Number of query sequences to allocate results structure
  *                    for [in]
- * @param results_ptr The allocated structure [out]
  */
 NCBI_XBLAST_EXPORT
-Int2 Blast_HSPResultsInit(Int4 num_queries, BlastHSPResults** results_ptr);
+BlastHSPResults* Blast_HSPResultsNew(Int4 num_queries);
 
 /** Deallocate memory for BLAST results */
 NCBI_XBLAST_EXPORT
@@ -489,12 +557,31 @@ Int2 Blast_HSPResultsReverseSort(BlastHSPResults* results);
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPResultsReverseOrder(BlastHSPResults* results);
 
+/** For each query sequence in the BLAST results, remove any hits
+ *  whose query range is enveloped by too many other higher-scoring
+ *  hits. All hits to a query sequence are considered together.
+ *  For more details see Berman P. et. al, "Winnowing Sequences
+ *  from a Database Search" Journal of Computational Biology
+ *  vol 7(2000) pp 293-302
+ *
+ * @param results The collection of results to cull [in][out]
+ * @param query_info Query offset information [in]
+ * @param culling_limit Maximum number of hits allowed to envelop
+ *                      the query range of an HSP before the HSP is removed
+ * @param query_length Length of concatenated query [in]
+ * @return 0 on success
+ */
+NCBI_XBLAST_EXPORT
+Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
+                                    const BlastQueryInfo *query_info,
+                                    Int4 culling_limit,
+                                    Int4 query_length);
+
 /** Blast_HSPResultsSaveRPSHSPList
  *  Save the HSPs from an HSPList obtained on the preliminary stage of 
  * RPS BLAST to appropriate places in the results structure. Input HSPList
  * contains HSPs from a single query, but from all RPS BLAST database 
- * sequences. The HSPs in the list are not assumed to be sorted, because
- * e-values are not yet calculated.
+ * sequences. The HSPs in the list are assumed to be sorted by score.
  * @param program The type of BLAST search [in]
  * @param results The structure holding results for all queries [in] [out]
  * @param hsp_list The results for the current subject sequence; in case of 
@@ -510,7 +597,7 @@ Int2 Blast_HSPResultsSaveRPSHSPList(EBlastProgramType program, BlastHSPResults* 
  *  Save the current HSP list to appropriate places in the results structure.
  * The input HSPList contains HSPs from a single BLAST database sequence, but
  * possibly from multiple queries. The HSPs in the list are assumed to be sorted
- * by e-value and score.
+ * by score.
  * @param program The type of BLAST search [in]
  * @param results The structure holding results for all queries [in] [out]
  * @param hsp_list The results for the current subject sequence; in case of 
@@ -524,8 +611,8 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
 
 /** Blast_HSPResultsSaveHSPList
  * Insert an HSP list to the appropriate place in the results structure.
- * All HSPs in this list must be from the same query, and the query index
- * must be set in the BlastHSPList input structure.
+ * All HSPs in this list must be from the same query and same subject; the oid
+ * and query_index fields must be set in the BlastHSPList input structure.
  * @param results The structure holding results for all queries [in] [out]
  * @param hsp_list The results for one query-subject sequence pair. [in]
  * @param hitlist_size Maximal allowed hit list size. [in]

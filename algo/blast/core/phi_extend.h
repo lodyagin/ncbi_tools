@@ -1,4 +1,4 @@
-/* $Id: phi_extend.h,v 1.6 2004/07/06 15:29:20 dondosha Exp $
+/* $Id: phi_extend.h,v 1.8 2005/04/27 19:50:31 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,8 @@
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_util.h>
 
-#ifndef PHI_EXTEND__H
-#define PHI_EXTEND__H
+#ifndef ALGO_BLAST_CORE__PHI_EXTEND_H
+#define ALGO_BLAST_CORE__PHI_EXTEND_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +45,7 @@ extern "C" {
 Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
         BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
         Int4** matrix, const BlastInitialWordParameters* word_params,
-        Blast_ExtendWord* ewp, Uint4* q_offsets, Uint4* s_offsets,
+        Blast_ExtendWord* ewp, BlastOffsetPair* NCBI_RESTRICT offset_pairs,
         Int4 max_hits, BlastInitHitList* init_hitlist, 
         BlastUngappedStats* ungapped_stats);
 
@@ -53,4 +53,4 @@ Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject,
 }
 #endif
 
-#endif /* PHI_EXTEND__H */
+#endif /* ALGO_BLAST_CORE__PHI_EXTEND_H */

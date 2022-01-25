@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.92 2004/06/22 14:20:19 camacho Exp $
+/* $Id: cddutil.c,v 1.93 2004/11/05 15:36:28 coulouri Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.92 $
+* $Revision: 1.93 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.93  2004/11/05 15:36:28  coulouri
+* remove explicit stdio.h include; it causes LONG_BIT to be defined incorrectly on amd64
+*
 * Revision 1.92  2004/06/22 14:20:19  camacho
 * Changed invocation of posFreqsToMatrix to conform with new signature.
 *
@@ -316,7 +319,6 @@
 */
 
 
-#include <stdio.h>
 #include <ncbi.h>
 /*#include <accentr.h>*/
 #include <lsqfetch.h>

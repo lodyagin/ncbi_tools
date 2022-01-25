@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.71 $
+* $Revision: 1.83 $
 *
 * File Description: 
 *
@@ -1579,16 +1579,15 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 {
   BioseqPtr         bsp;
   Int4              flags = -1;
-  Char              id [64];
   OMUserDataPtr     omdp = NULL;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
   Int2              retcode = 0;
   SeqEntryPtr       sep = NULL;
-  SeqIdPtr          sid;
   SeqIdPtr          sip;
   Int4              uid = 0;
 #ifdef OS_UNIX
+  Char              id [64];
   BioseqPtr         firstbsp;
   SeqEntryPtr       firstsep;
   ObjMgrPtr         omp;
@@ -1636,10 +1635,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   } else if (sip->choice == SEQID_GI) {
     uid = sip->data.intvalue;
   } else if (sip->choice != SEQID_LOCAL) {
-    sid = SeqIdDup (sip);
-    SeqIdWrite (sid, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
-    SeqIdFree (sid);
-    uid = AccnRevHistSynchronousQuery (id);
+    uid = GetGIForSeqId (sip);
   }
 
   if (uid == 0) return OM_MSG_RET_OK;
@@ -1858,7 +1854,7 @@ NLM_EXTERN Int4 CacheAccnList (
       ptr++;
       ch = *ptr;
     }
-    if (StringNCmp (tmp, "ERROR", 5) != 0) {
+    if (StringNCmp (tmp, "ERROR", 5) != 0 && StringNCmp (tmp, "Sorry", 5) != 0 && StringChr (tmp, '|') != NULL) {
       ids = SeqIdParse (tmp);
       if (ids != NULL) {
         gi = 0;
@@ -1879,6 +1875,7 @@ NLM_EXTERN Int4 CacheAccnList (
             case SEQID_TPG :
             case SEQID_TPE :
             case SEQID_TPD :
+            case SEQID_GPIPE :
               accn = sip;
               break;
             default :
@@ -1897,14 +1894,11 @@ NLM_EXTERN Int4 CacheAccnList (
 
           } else {
 
-            /* safety check before recording in cache */
-
-            if (! FetchFromSeqIdGiCache (gi, NULL)) {
-              RecordInSeqIdGiCache (gi, accn);
-              count++;
-            }
+            RecordInSeqIdGiCache (gi, accn);
+            count++;
           }
         }
+        SeqIdSetFree (ids);
       }
     }
     i++;
@@ -1969,20 +1963,16 @@ static Int4 IntPreLoadSeqIdGiCache (
     if (StringNCmp (tmp, "ERROR", 5) != 0) {
       gi = ids [i];
 
-      /* safety check before recording in cache */
-
-      if (! FetchFromSeqIdGiCache (gi, NULL)) {
-        sip = NULL;
-        if (StringChr (tmp, '|') != NULL) {
-          sip = SeqIdParse (tmp);
-        } else {
-          sip = SeqIdFromAccessionDotVersion (tmp);
-        }
-        if (sip != NULL) {
-          RecordInSeqIdGiCache (gi, sip);
-          SeqIdFree (sip);
-          count++;
-        }
+      sip = NULL;
+      if (StringChr (tmp, '|') != NULL) {
+        sip = SeqIdParse (tmp);
+      } else {
+        sip = SeqIdFromAccessionDotVersion (tmp);
+      }
+      if (sip != NULL) {
+        RecordInSeqIdGiCache (gi, sip);
+        SeqIdSetFree (sip);
+        count++;
       }
     }
     i++;
@@ -1995,7 +1985,8 @@ static Int4 IntPreLoadSeqIdGiCache (
 
 static Int4 FilterKnownGis (
   Int4 num,
-  Int4Ptr uniq
+  Int4Ptr uniq,
+  Boolean filter
 )
 
 {
@@ -2004,7 +1995,6 @@ static Int4 FilterKnownGis (
   Int4       i;
   Int4       ids [501];
   Int4       j;
-  SeqIdPtr   sip;
   ValNode    vn;
 
   if (num < 1 || num > 500 || uniq == NULL) return 0;
@@ -2018,12 +2008,13 @@ static Int4 FilterKnownGis (
     gi = uniq [i];
     if (gi < 1) continue;
 
-    vn.data.intvalue = gi;
-    bsp = BioseqFindCore (&vn);
-    if (bsp != NULL) continue; /* already loaded */
+    if (filter) {
+      vn.data.intvalue = gi;
+      bsp = BioseqFindCore (&vn);
+      if (bsp != NULL) continue; /* already loaded */
 
-    sip = NULL;
-    if (FetchFromSeqIdGiCache (gi, NULL)) continue; /* already cached */
+      if (FetchFromSeqIdGiCache (gi, NULL)) continue; /* already cached */
+    }
 
     ids [j] = gi;
     j++;
@@ -2036,7 +2027,8 @@ static Int4 FilterKnownGis (
 
 static Int4 UniqPreLoadList (
   Int4 num,
-  Int4Ptr srted
+  Int4Ptr srted,
+  Boolean filter
 )
 
 {
@@ -2061,12 +2053,13 @@ static Int4 UniqPreLoadList (
   }
   num = j;
 
-  return FilterKnownGis (num, uniq);
+  return FilterKnownGis (num, uniq, filter);
 }
 
 static Int4 SortPreLoadList (
   Int4 num,
-  Int4Ptr raw
+  Int4Ptr raw,
+  Boolean filter
 )
 
 {
@@ -2085,12 +2078,13 @@ static Int4 SortPreLoadList (
 
   HeapSort ((Pointer) uids, (size_t) num, sizeof (Int4), SortByInt4);
 
-  return UniqPreLoadList (num, uids);
+  return UniqPreLoadList (num, uids, filter);
 }
 
-NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
+static Int4 GiRevHistPreLoadSeqIdGiCacheInt (
   Int4 num,
-  Int4Ptr uids
+  Int4Ptr uids,
+  Boolean filter
 )
 
 {
@@ -2104,7 +2098,7 @@ NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   count = (Int4) MIN (num, 500L);
   offset = 0;
   while (count > 0 && num > 0) {
-    rsult += SortPreLoadList (count, uids + offset);
+    rsult += SortPreLoadList (count, uids + offset, filter);
     offset += count;
     num -= count;
     count = (Int4) MIN (num, 500L);
@@ -2112,20 +2106,95 @@ NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   return rsult;
 }
 
+NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
+  Int4 num,
+  Int4Ptr uids
+)
+
+{
+  return GiRevHistPreLoadSeqIdGiCacheInt (num, uids, TRUE);
+}
+
+static Int4 SortPreLoadAccns (
+  Int4 num,
+  CharPtr PNTR raw
+)
+
+{
+  CharPtr  accns [501];
+  Int4     i, rsult = 0;
+  CharPtr  str;
+
+  if (num < 1 || num > 500 || raw == NULL) return 0;
+
+  /* copy raw uid list */
+
+  for (i = 0; i < num; i++) {
+    accns [i] = raw [i];
+  }
+  accns [i] = NULL;
+
+  str = AccnListSynchronousQuery (accns);
+  if (str == NULL) return 0;
+
+  rsult = CacheAccnList (str, NULL);
+
+  MemFree (str);
+  return rsult;
+}
+
+NLM_EXTERN Int4 AccnListPreLoadSeqIdGiCache (
+  CharPtr PNTR accns
+)
+
+{
+  Int4  count, num, offset, rsult = 0;
+ 
+  if (accns == NULL) return 0;
+
+  for (num = 0; accns [num] != NULL; num++) continue;
+  if (num < 1) return 0;
+
+  count = (Int4) MIN (num, 500L);
+  offset = 0;
+
+  while (count > 0 && num > 0) {
+    rsult += SortPreLoadAccns (count, accns + offset);
+    offset += count;
+    num -= count;
+    count = (Int4) MIN (num, 500L);
+  }
+
+  return rsult;
+}
+
 typedef struct fariddata {
-  Int4  num;
-  Int4  lastgi;
-  Int4  total;
-  Int4  uids [101];
+  ValNodePtr  gis;
+  ValNodePtr  accns;
 } FarIdData, PNTR FarIDPtr;
+
+
+static void ReplaceSpacesWithPluses (CharPtr str)
+{
+  CharPtr cp;
+  
+  if (str == NULL) return;
+  
+  for (cp = str; *cp; cp++)
+  {
+    if (*cp == ' ')
+    {
+      *cp = '+';
+    }
+  }
+}
 
 static void LookupSegments (SeqLocPtr slp, SeqIdPtr sip, Pointer userdata)
 
 {
-  FarIDPtr   fip;
-  Int4       gi;
-  Int2       i;
-  SeqLocPtr  loc;
+  FarIDPtr    fip;
+  SeqLocPtr   loc;
+  ValNodePtr  vnp;
 
   if (slp == NULL && sip == NULL) return;
   if (userdata == NULL) return;
@@ -2142,26 +2211,35 @@ static void LookupSegments (SeqLocPtr slp, SeqIdPtr sip, Pointer userdata)
   }
   if (sip == NULL) return;
 
-  if (sip->choice != SEQID_GI) return;
-  gi = sip->data.intvalue;
-  if (gi < 1) return;
-
-  /* do not add if already in list */
-
-  if (gi == fip->lastgi) return;
-
-  for (i = 0; i < fip->num; i++) {
-    if (gi == fip->uids [i]) return;
+  switch (sip->choice) {
+    case SEQID_GI :
+      vnp = ValNodeAddInt (NULL, 0, sip->data.intvalue);
+      if (fip->gis == NULL) {
+        fip->gis = vnp;
+      } else {
+        vnp->next = fip->gis;
+        fip->gis = vnp;
+      }
+      break;
+    case SEQID_GENBANK :
+    case SEQID_EMBL :
+    case SEQID_DDBJ :
+    case SEQID_TPG :
+    case SEQID_TPE :
+    case SEQID_TPD :
+    case SEQID_OTHER :
+    case SEQID_GPIPE :
+      vnp = ValNodeAddPointer (NULL, 0, sip);
+      if (fip->accns == NULL) {
+        fip->accns = vnp;
+      } else {
+        vnp->next = fip->accns;
+        fip->accns = vnp;
+      }
+      break;
+    default :
+      break;
   }
-
-  if (fip->num > 99) {
-    fip->total += GiRevHistPreLoadSeqIdGiCache (fip->num, fip->uids);
-    fip->num = 0;
-  }
-
-  fip->uids [fip->num] = gi;
-  (fip->num)++;
-  fip->lastgi = gi;
 }
 
 static void LookupBioseqs (BioseqPtr bsp, Pointer userdata)
@@ -2291,18 +2369,223 @@ static void LookupHistory (BioseqPtr bsp, Pointer userdata)
   }
 }
 
+static void LookupOthers (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  SeqIdPtr    sip;
+  SPBlockPtr  spb;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_sp) return;
+  spb = (SPBlockPtr) sdp->data.ptrvalue;
+  if (spb == NULL) return;
+
+  for (sip = spb->seqref; sip != NULL; sip = sip->next) {
+    LookupSegments (NULL, sip, userdata);
+  }
+}
+
+static Boolean GiExists (
+  Int4 gi
+)
+
+{
+  ValNode  vn;
+
+  if (gi < 1) return TRUE;
+
+  vn.choice = SEQID_GI;
+  vn.data.intvalue = gi;
+  vn.next = NULL;
+
+  if (BioseqFindCore (&vn) != NULL) return TRUE;
+
+  if (FetchFromSeqIdGiCache (gi, NULL)) return TRUE;
+
+  return FALSE;
+}
+
+static ValNodePtr FilterCachedGis (
+  ValNodePtr head
+)
+
+{
+  ValNodePtr    next;
+  Pointer PNTR  prev;
+  ValNodePtr    top;
+  ValNodePtr    vnp;
+
+  if (head == NULL) return NULL;
+  top = head;
+
+  prev = (Pointer PNTR) &top;
+  vnp = top;
+  while (vnp != NULL) {
+    next = vnp->next;
+    if (GiExists (vnp->data.intvalue)) {
+      *(prev) = next;
+      vnp->next = NULL;
+      ValNodeFree (vnp);
+    } else {
+      prev = (Pointer PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
+
+
+  return top;
+}
+
+static Boolean SipExists (
+  SeqIdPtr sip
+)
+
+{
+  if (sip == NULL) return TRUE;
+
+  if (BioseqFindCore (sip) != NULL) return TRUE;
+
+  if (FetchFromGiSeqIdCache (sip, NULL)) return TRUE;
+
+  return FALSE;
+}
+
+static ValNodePtr FilterCachedAccns (
+  ValNodePtr head
+)
+
+{
+  ValNodePtr    next;
+  Pointer PNTR  prev;
+  ValNodePtr    top;
+  ValNodePtr    vnp;
+
+  if (head == NULL) return NULL;
+  top = head;
+
+  prev = (Pointer PNTR) &top;
+  vnp = top;
+  while (vnp != NULL) {
+    next = vnp->next;
+    if (SipExists (vnp->data.ptrvalue)) {
+      *(prev) = next;
+      vnp->next = NULL;
+      ValNodeFree (vnp);
+    } else {
+      prev = (Pointer PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
+
+
+  return top;
+}
+
+static int SeqIdSortCompare (SeqIdPtr sip1, SeqIdPtr sip2)
+
+{
+  TextSeqIdPtr  tsip1, tsip2;
+
+  if (sip1 == NULL || sip2 == NULL) return 0;
+
+  if (sip1->choice > sip2->choice) {
+    return 1;
+  } else if (sip1->choice < sip2->choice) {
+    return -1;
+  }
+
+  switch (sip1->choice) {
+    case SEQID_GENBANK :
+    case SEQID_EMBL :
+    case SEQID_DDBJ :
+    case SEQID_TPG :
+    case SEQID_TPE :
+    case SEQID_TPD :
+    case SEQID_OTHER :
+    case SEQID_GPIPE :
+      tsip1 = (TextSeqIdPtr) sip1->data.ptrvalue;
+      tsip2 = (TextSeqIdPtr) sip2->data.ptrvalue;
+      if (tsip1 == NULL || tsip2 == NULL) return 0;
+      if (StringDoesHaveText (tsip1->accession) && StringDoesHaveText (tsip2->accession)) {
+        return StringICmp (tsip1->accession, tsip2->accession);
+      }
+      if (StringDoesHaveText (tsip1->name) && StringDoesHaveText (tsip2->name)) {
+        return StringICmp (tsip1->name, tsip2->name);
+      }
+      break;
+    default :
+      break;
+  }
+
+  return 0;
+}
+
+static int LIBCALLBACK SortVnpBySeqId (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+ SeqIdPtr    sip1, sip2;
+  ValNodePtr  vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  sip1 = (SeqIdPtr) vnp1->data.ptrvalue;
+  sip2 = (SeqIdPtr) vnp2->data.ptrvalue;
+  if (sip1 == NULL || sip2 == NULL) return 0;
+  return SeqIdSortCompare (sip1, sip2);
+}
+
+static ValNodePtr UniqueSeqIdValNode (ValNodePtr list)
+
+{
+  SeqIdPtr      curr;
+  SeqIdPtr      last;
+  ValNodePtr    next;
+  Pointer PNTR  prev;
+  ValNodePtr    vnp;
+
+  if (list == NULL) return NULL;
+  last = (SeqIdPtr) list->data.ptrvalue;
+  vnp = list->next;
+  prev = (Pointer PNTR) &(list->next);
+  while (vnp != NULL) {
+    next = vnp->next;
+    curr = (SeqIdPtr) vnp->data.ptrvalue;
+    if (SeqIdSortCompare (last, curr) == 0) {
+      vnp->next = NULL;
+      *prev = next;
+      ValNodeFree (vnp);
+    } else {
+      last = (SeqIdPtr) vnp->data.ptrvalue;
+      prev = (Pointer PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
+
+  return list;
+}
+
 NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   SeqEntryPtr sep,
   Boolean components,
   Boolean locations,
   Boolean products,
   Boolean alignments,
-  Boolean history
+  Boolean history,
+  Boolean others
 )
 
 {
-  FarIdData    fid;
-  SeqEntryPtr  oldsep;
+  CharPtr       accn;
+  CharPtr PNTR  accns;
+  Char          buf [64];
+  Int4          gi;
+  Int4Ptr       gis;
+  FarIdData     fid;
+  Int4          i, num, total = 0;
+  SeqIdPtr      sip;
+  ValNodePtr    vnp;
+  SeqEntryPtr   oldsep;
 
   if (sep == NULL) return 0;
   MemSet ((Pointer) &fid, 0, sizeof (FarIdData));
@@ -2324,13 +2607,66 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   if (history) {
     VisitBioseqsInSep (sep, (Pointer) &fid, LookupHistory);
   }
-
-  if (fid.num > 0) {
-    fid.total += GiRevHistPreLoadSeqIdGiCache (fid.num, fid.uids);
+  if (others) {
+    VisitDescriptorsInSep (sep, (Pointer) &fid, LookupOthers);
   }
 
+  if (fid.gis != NULL) {
+    fid.gis = ValNodeSort (fid.gis, SortByIntvalue);
+    fid.gis = UniqueIntValNode (fid.gis);
+    fid.gis = FilterCachedGis (fid.gis);
+    num = ValNodeLen (fid.gis);
+
+    if (num > 0) {
+      gis = (Int4Ptr) MemNew (sizeof (Int4) * (num + 2));
+      if (gis != NULL) {
+        for (vnp = fid.gis, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+          gi = (Int4) vnp->data.intvalue;
+          if (gi < 1) continue;
+          gis [i] = gi;
+        }
+        total += GiRevHistPreLoadSeqIdGiCacheInt (num, gis, FALSE);
+        MemFree (gis);
+      }
+    }
+  }
+
+  if (fid.accns != NULL) {
+    fid.accns = ValNodeSort (fid.accns, SortVnpBySeqId);
+    fid.accns = UniqueSeqIdValNode (fid.accns);
+    fid.accns = FilterCachedAccns (fid.accns);
+    for (vnp = fid.accns; vnp != NULL; vnp = vnp->next) {
+      sip = (SeqIdPtr) vnp->data.ptrvalue;
+      if (sip == NULL) continue;
+      SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+      ReplaceSpacesWithPluses (buf);
+      vnp->data.ptrvalue = StringSave (buf);
+    }
+    num = ValNodeLen (fid.accns);
+
+    if (num > 0) {
+      accns = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num + 2));
+      if (accns != NULL) {
+        for (vnp = fid.accns, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+          accn = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (accn)) continue;
+          accns [i] = accn;
+        }
+        total += AccnListPreLoadSeqIdGiCache (accns);
+        MemFree (accns);
+      }
+    }
+
+    for (vnp = fid.accns; vnp != NULL; vnp = vnp->next) {
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+    }
+  }
+
+  ValNodeFree (fid.gis);
+  ValNodeFree (fid.accns);
+
   SeqEntrySetScope (oldsep);
-  return fid.total;
+  return total;
 }
 
 NLM_EXTERN SeqIdPtr LIBCALLBACK GiRevHistLookupSeqIdSet (

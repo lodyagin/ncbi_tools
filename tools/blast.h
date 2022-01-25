@@ -32,8 +32,22 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.68 $ 
+/* $Revision: 6.72 $ 
 * $Log: blast.h,v $
+* Revision 6.72  2005/01/24 21:17:36  camacho
+* 1. Changed implementation of RPSBlastResultHspScoreCmp to have the same
+*    tie-breakers as score_compare_hsps
+* 2. Renamed RPSBlastResultHspScoreCmp to BLASTResultHspScoreCmp
+*
+* Revision 6.71  2005/01/18 14:54:13  camacho
+* Change in tie-breakers for score comparison, suggestion by Mike Gertz
+*
+* Revision 6.70  2004/11/01 20:43:15  camacho
+* + BlastErrorToString
+*
+* Revision 6.69  2004/10/19 19:41:33  dondosha
+* Added hitlist_size argument to BlastPruneSeqAlignByGiList; Added new function BlastPruneSeqAlignBySortedGiList
+*
 * Revision 6.68  2004/06/30 12:28:20  madden
 * Removed some function prototypes and moved to blfmtutl.h
 *
@@ -620,6 +634,8 @@ SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallbackMult PROTO((SeqLocPtr slp,
 
 void LIBCALL BlastErrorPrint PROTO((ValNodePtr error_return));
 void LIBCALL BlastErrorPrintExtra PROTO((ValNodePtr error_return,  Boolean errpostex, FILE* fp));
+/* Caller is responsible for deallocating return value */
+CharPtr LIBCALL BlastErrorToString PROTO((ValNodePtr error_return));
 
 
 Uint1 LIBCALL BlastGetProgramNumber PROTO((CharPtr blast_program));
@@ -660,10 +676,15 @@ void BLASTAddBlastDBTitleToSeqAnnotEx PROTO((SeqAnnotPtr seqannot, CharPtr title
 
 Int4 reverse_seq (Uint1 *seq, Uint1 *pos, Uint1 *target);
 
-int LIBCALLBACK RPSResultHspScoreCmp(VoidPtr v1, VoidPtr v2);
+/* CC: Changed to have the same tie-breakers as score_compare_hsps */
+int LIBCALLBACK BLASTResultHspScoreCmp(VoidPtr v1, VoidPtr v2);
 
 SeqAlignPtr 
-BlastPruneSeqAlignByGiList PROTO((SeqAlignPtr seqalign, Int4Ptr gi_list, Int4 gi_list_total));
+BlastPruneSeqAlignByGiList PROTO((SeqAlignPtr seqalign, Int4Ptr gi_list, 
+                                  Int4 gi_list_total, Int4 hitlist_size));
+SeqAlignPtr 
+BlastPruneSeqAlignBySortedGiList PROTO((SeqAlignPtr seqalign, Int4Ptr gi_list,
+                                        Int4 gi_list_total));
 SeqAlignPtr 
 BlastPruneSeqAlignByEvalueRange PROTO((SeqAlignPtr seqalign, FloatHi expect_low, FloatHi expect_high));
 
@@ -738,6 +759,16 @@ BLAST_Wizard(
     int*                        alignments,
     int*                        descriptions,
     char**                      error);
+
+/**
+ * A macro expression that returns 1, 0, -1 if a is greater than,
+ * equal to or less than b, respectively.  This macro evaluates its
+ * arguments more than once.
+ */
+#ifndef BLAST_CMP
+#define BLAST_CMP(a,b) ((a)>(b) ? 1 : ((a)<(b) ? -1 : 0))
+#endif
+
 
 /* ----------------------------------------------------------- */
 

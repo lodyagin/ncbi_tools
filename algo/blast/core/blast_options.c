@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.136 2004/10/14 17:10:35 madden Exp $
+/* $Id: blast_options.c,v 1.163 2005/04/27 19:53:45 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,92 +25,258 @@
  */
 
 /** @file blast_options.c
- * @todo FIXME needs file description & doxygen comments
+ *  The structures and functions in blast_options.[ch] should be used to specify 
+ *  user preferences.  The options structures should not be changed by the BLAST code
+ *  but rather be read to determine user preferences.  When possible these structures
+ *  should be passed in as "const".
+ *
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.136 2004/10/14 17:10:35 madden Exp $";
+    "$Id: blast_options.c,v 1.163 2005/04/27 19:53:45 dondosha Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_filter.h>
-#include <algo/blast/core/blast_encoding.h>
+
+const int kUngappedHSPNumMax = 400;
+
+SDustOptions* SDustOptionsFree(SDustOptions* dust_options)
+{
+    if (dust_options)
+      sfree(dust_options);
+    return NULL;
+}
+
+Int2 SDustOptionsNew(SDustOptions* *dust_options)
+{
+    if (dust_options == NULL)
+        return 1;
+
+    *dust_options = (SDustOptions*) malloc(sizeof(SDustOptions));
+    (*dust_options)->level = kDustLevel;
+    (*dust_options)->window = kDustWindow;
+    (*dust_options)->linker = kDustLinker;
+
+    return 0;
+}
+
+SSegOptions* SSegOptionsFree(SSegOptions* seg_options)
+{
+    if (seg_options)
+      sfree(seg_options);
+    return NULL;
+}
+
+Int2 SSegOptionsNew(SSegOptions* *seg_options)
+{
+    if (seg_options == NULL)
+        return 1;
+
+    *seg_options = (SSegOptions*) malloc(sizeof(SSegOptions));
+    (*seg_options)->window = kSegWindow;
+    (*seg_options)->locut = kSegLocut;
+    (*seg_options)->hicut = kSegHicut;
+
+    return 0;
+}
+
+SRepeatFilterOptions* SRepeatFilterOptionsFree(SRepeatFilterOptions* repeat_options)
+{
+    if (repeat_options)
+    {
+        sfree(repeat_options->database);
+        sfree(repeat_options);
+    }
+    return NULL;
+}
+
+Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options)
+{
+
+    const char* kRepeatDB = "humrep";
+    if (repeat_options == NULL)
+        return 1;
+
+    *repeat_options = (SRepeatFilterOptions*) calloc(1, sizeof(SRepeatFilterOptions));
+    if (*repeat_options == NULL)
+        return 1;
+
+    (*repeat_options)->database = strdup(kRepeatDB);
+
+    return 0;
+}
+
+Int2 SRepeatFilterOptionsResetDB(SRepeatFilterOptions* *repeat_options, const char* db)
+{
+    Int2 status=0;
+
+    if (*repeat_options == NULL)
+      status = SRepeatFilterOptionsNew(repeat_options);
+
+    if (status)
+      return status;
+
+    sfree((*repeat_options)->database);
+    (*repeat_options)->database = strdup(db);
+
+    return status;
+}
+
+SBlastFilterOptions* SBlastFilterOptionsFree(SBlastFilterOptions* filter_options)
+{
+    if (filter_options)
+    {
+        filter_options->dustOptions = SDustOptionsFree(filter_options->dustOptions);
+        filter_options->segOptions = SSegOptionsFree(filter_options->segOptions);
+        filter_options->repeatFilterOptions = SRepeatFilterOptionsFree(filter_options->repeatFilterOptions);
+        sfree(filter_options);
+    }
+
+    return NULL;
+}
+
+Int2 SBlastFilterOptionsNew(SBlastFilterOptions* *filter_options,  EFilterOptions type)
+{
+    Int2 status = 0;
+
+    if (filter_options)
+    {
+        *filter_options = (SBlastFilterOptions*) calloc(1, sizeof(SBlastFilterOptions));
+        (*filter_options)->mask_at_hash = FALSE;
+        if (type == eSeg)
+          SSegOptionsNew(&((*filter_options)->segOptions)); 
+        if (type == eDust || type == eDustRepeats)
+          SDustOptionsNew(&((*filter_options)->dustOptions)); 
+        if (type == eRepeats || type == eDustRepeats)
+          SRepeatFilterOptionsNew(&((*filter_options)->repeatFilterOptions)); 
+    }
+    else
+        status = 1;
+
+    return status;
+}
+
+Boolean SBlastFilterOptionsMaskAtHash(const SBlastFilterOptions* filter_options)
+{
+       if (filter_options == NULL)
+          return FALSE;
+      
+       return filter_options->mask_at_hash;
+}
+
+Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastFilterOptions* filter_options, Blast_Message* *blast_message)
+{
+       Int2 status = 0;
+
+       if (filter_options == NULL)
+       {
+           Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, "SBlastFilterOptionsValidate: NULL filter_options");
+           return 1;
+       }
+
+       if (filter_options->repeatFilterOptions)
+       {
+           if (program_number != eBlastTypeBlastn)
+           {
+               if (blast_message)
+                  Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, 
+                   "SBlastFilterOptionsValidate: Repeat filtering only supported with blastn");
+               return 1;
+           }
+           if (filter_options->repeatFilterOptions->database == NULL)
+           {
+               if (blast_message)
+                  Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, 
+                   "SBlastFilterOptionsValidate: No repeat database specified for repeat filtering");
+               return 1;
+           }
+       }
+
+       if (filter_options->dustOptions)
+       {
+           if (program_number != eBlastTypeBlastn)
+           {
+               if (blast_message)
+                  Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, 
+                   "SBlastFilterOptionsValidate: Dust filtering only supported with blastn");
+               return 1;
+           }
+       }
+  
+       if (filter_options->segOptions)
+       {
+           if (program_number == eBlastTypeBlastn)
+           {
+               if (blast_message)
+                  Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, 
+                   "SBlastFilterOptionsValidate: SEG filtering is not supported with blastn");
+               return 1;
+           }
+       }
+
+       return status;
+}
+
 
 QuerySetUpOptions*
 BlastQuerySetUpOptionsFree(QuerySetUpOptions* options)
 
 {
-   sfree(options->filter_string);
-
-   sfree(options);
+   if (options)
+   {
+       sfree(options->filter_string);
+       options->filtering_options = SBlastFilterOptionsFree(options->filtering_options);
+       sfree(options);
+   }
    return NULL;
 }
 
 Int2
 BlastQuerySetUpOptionsNew(QuerySetUpOptions* *options)
 {
+   Int2 status = 0;
+
+   if (options == NULL)
+      return 1;
+
    *options = (QuerySetUpOptions*) calloc(1, sizeof(QuerySetUpOptions));
    
    if (*options == NULL)
       return 1;
-   
+
    (*options)->genetic_code = BLAST_GENETIC_CODE;
 
-   return 0;
+   status = SBlastFilterOptionsNew(&((*options)->filtering_options), eEmpty);
+   
+   return status;
 }
 
 Int2 BLAST_FillQuerySetUpOptions(QuerySetUpOptions* options,
         EBlastProgramType program, const char *filter_string, Uint1 strand_option)
 {
+   Int2 status = 0;
+
    if (options == NULL)
       return 1;
    
    if (strand_option && 
-       (program == eBlastTypeBlastn || program == eBlastTypeBlastx ||
-       program == eBlastTypeTblastx)) {
+       (program == eBlastTypeBlastn || program == eBlastTypePhiBlastn || 
+        program == eBlastTypeBlastx || program == eBlastTypeTblastx)) {
       options->strand_option = strand_option;
    }
 
-   /* "L" indicates low-complexity (seg for proteins, 
-      dust for nucleotides). */
-   if (!filter_string || !strcasecmp(filter_string, "T")) {
-      if (program == eBlastTypeBlastn)
-         options->filter_string = strdup("D");
-      else
-         options->filter_string = strdup("S");
-   } else {
-      options->filter_string = strdup(filter_string); 
+   if (filter_string) {
+       /* Free whatever filter string has been set before. */
+       sfree(options->filter_string);
+       /* Free whatever filtering options have been set. */
+       options->filtering_options =  SBlastFilterOptionsFree(options->filtering_options);
+       /* Parse the filter_string for options, do not save the string. */
+       status = BlastFilteringOptionsFromString(program, filter_string, 
+          &options->filtering_options, NULL);
    }
-
-   return 0;
-}
-
-/** Looks for a "valid" Karlin Blk within the list of blocks.
- * Valid means that Lambda, K, and H are not all -1.
- * Invalid blocks are often caused by completely masked sequences.
- * @param kbp_in array of Karlin blocks to be searched [in]
- * @param query_info information on number of queries [in]
- * @param kbp_ret the object to be pointed at [out]
- * @return zero on success, 1 if no valid block found
- */
-
-static Int2
-BlastFindValidKarlinBlk(Blast_KarlinBlk** kbp_in, const BlastQueryInfo* query_info, Blast_KarlinBlk** kbp_ret)
-{
-        Int4 index;   /* Look for the first valid kbp. */
-        Int2 status=1;  /* 1 means no valid block found. */
-
-        ASSERT(kbp_in && query_info && kbp_ret);
-
-        for (index=query_info->first_context; index<=query_info->last_context; index++)
-        {
-             if (kbp_in[index]->Lambda > 0 && kbp_in[index]->K > 0 && kbp_in[index]->H > 0)
-             {
-                  *kbp_ret = kbp_in[index];
-                  status = 0;
-                  break;
-             }
-        }
-        return status;
+   return status;
 }
 
 BlastInitialWordOptions*
@@ -133,12 +299,19 @@ BlastInitialWordOptionsNew(EBlastProgramType program,
    if (*options == NULL)
       return 1;
 
-   if (program != eBlastTypeBlastn) {	/* protein-protein options. */
+   if (program != eBlastTypeBlastn &&
+       program != eBlastTypePhiBlastn) {	/* protein-protein options. */
       (*options)->window_size = BLAST_WINDOW_SIZE_PROT;
       (*options)->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_PROT;
+      (*options)->gap_trigger = BLAST_GAP_TRIGGER_PROT;
    } else {
       (*options)->window_size = BLAST_WINDOW_SIZE_NUCL;
+      (*options)->gap_trigger = BLAST_GAP_TRIGGER_NUCL;
+      (*options)->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_NUCL;
    }
+   /* Except in one special case of greedy gapped extension, we always do 
+      ungapped extension. Let the special case unset this option. */
+   (*options)->ungapped_extension = TRUE;
 
    return 0;
 }
@@ -147,79 +320,24 @@ BlastInitialWordOptionsNew(EBlastProgramType program,
 Int2
 BlastInitialWordOptionsValidate(EBlastProgramType program_number,
    const BlastInitialWordOptions* options, 
-   const LookupTableOptions* lookup_options,
    Blast_Message* *blast_msg)
 {
    Int4 code=2;
    Int4 subcode=1;
 
-   ASSERT(options && lookup_options);
-   
-   if (program_number == eBlastTypeBlastn) {
+   ASSERT(options);
 
-      if (options->extension_method == eRight && 
-          lookup_options->scan_step != COMPRESSION_RATIO) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
-                            "Scanning stride must equal 4 if words are"
-                            " extended only in one direction");
+   /* For some blastn variants (i.e., megablast), and for PHI BLAST there is no
+    * ungapped extension. */
+   if (program_number != eBlastTypeBlastn  &&
+       program_number != eBlastTypePhiBlastn  &&
+       program_number != eBlastTypePhiBlastp && options->x_dropoff <= 0.0)
+   {
+      Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode,
+                            "x_dropoff must be greater than zero");
          return (Int2) code;
-      }
-
-      if (options->variable_wordsize && 
-          ((lookup_options->word_size % 4) != 0) ) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                            "Word size must be divisible by 4 if only full "
-                            "bytes of subject sequences are matched to query");
-         return (Int2) code;
-      }
-      
-      if (options->extension_method == eUpdateDiag &&
-          lookup_options->mb_template_length == 0) {
-         if (lookup_options->lut_type != MB_LOOKUP_TABLE) {
-            Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                               "eUpdateDiag extension method works only with "
-                               "megablast lookup table");
-            return (Int2) code;
-         } else if (lookup_options->scan_step != COMPRESSION_RATIO ||
-                    lookup_options->word_size % 4 != 0) {
-
-            Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                               "eUpdateDiag extension method for contiguous"
-                               " megablast requires scanning stride 4 and"
-                               " word size divisible by 4");
-            return (Int2) code;
-         }
-      }
-
-      if (lookup_options->mb_template_length != 0 &&
-          options->extension_method != eUpdateDiag) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                            "Discontiguous megablast requires eUpdateDiag "
-                            "extension method ");
-         return (Int2) code;
-      }         
-
-   } else {
-      if (options->extension_method != eRight) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                            "For all protein BLAST varieties initial word "
-                            "extension method must be one-directional");
-         return (Int2) code;
-      }
-      if (options->variable_wordsize) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                            "For all protein BLAST varieties \"variable "
-                            "wordsize\" option is not applicable");
-         return (Int2) code;
-      }
-      if (options->container_type != eDiagArray) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
-                            "For all protein BLAST varieties only diagonal "
-                            "array container type is used");
-         return (Int2) code;
-      }
-
    }
+   
    return 0;
 }
 
@@ -227,187 +345,20 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
 Int2
 BLAST_FillInitialWordOptions(BlastInitialWordOptions* options, 
    EBlastProgramType program, Boolean greedy, Int4 window_size, 
-   Boolean variable_wordsize, Boolean ag_blast, Boolean mb_lookup,
    double xdrop_ungapped)
 {
    if (!options)
       return 1;
 
    /* Ungapped extension is performed in all cases except when greedy
-      gapped extension is used */
-   if (program != eBlastTypeBlastn) {
-      options->ungapped_extension = TRUE;
-      options->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_PROT;
-   } else if (!greedy) {
-      options->ungapped_extension = TRUE;
-      options->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_NUCL;
-   } else {
-      options->ungapped_extension = FALSE;
-   }
+      gapped extension is used. */
+   if (program == eBlastTypeBlastn && greedy)
+       options->ungapped_extension = FALSE;
 
    if (window_size != 0)
       options->window_size = window_size;
    if (xdrop_ungapped != 0)
       options->x_dropoff = xdrop_ungapped;
-
-   options->variable_wordsize = variable_wordsize;
-
-   if (ag_blast) {
-      options->extension_method = eRightAndLeft;
-      options->container_type = eDiagArray;
-   } else {
-      if (mb_lookup) {
-         options->container_type = eWordStacks;
-         options->extension_method = eUpdateDiag;
-      } else {
-         options->extension_method = eRight;
-         options->container_type = eDiagArray;
-      }
-   }
-
-   return 0;
-}
-
-
-
-BlastInitialWordParameters*
-BlastInitialWordParametersFree(BlastInitialWordParameters* parameters)
-
-{
-	sfree(parameters);
-	return NULL;
-
-}
-
-/** Compute the default cutoff expect value for ungapped extensions
- * @param program The blast program type
- * @return The default per-program expect value
- */
-static double GetCutoffEvalue(EBlastProgramType program)
-{
-   switch(program) {
-   case eBlastTypeBlastn:
-      return CUTOFF_E_BLASTN;
-   case eBlastTypeBlastp: 
-   case eBlastTypeRpsBlast: 
-      return CUTOFF_E_BLASTP;
-   case eBlastTypeBlastx: 
-      return CUTOFF_E_BLASTX;
-   case eBlastTypeTblastn:
-   case eBlastTypeRpsTblastn:
-      return CUTOFF_E_TBLASTN;
-   case eBlastTypeTblastx:
-      return CUTOFF_E_TBLASTX;
-   case eBlastTypeUndefined:
-   default:
-      abort(); /* should never happen */
-   }
-   return 0;
-}
-
-Int2
-BlastInitialWordParametersNew(EBlastProgramType program_number, 
-   const BlastInitialWordOptions* word_options, 
-   const BlastHitSavingParameters* hit_params, 
-   const BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
-   BlastQueryInfo* query_info, 
-   Uint4 subject_length,
-   BlastInitialWordParameters* *parameters)
-{
-   Blast_KarlinBlk* kbp_std;
-   Int2 status = 0;
-
-   /* If parameters pointer is NULL, there is nothing to fill, 
-      so don't do anything */
-   if (!parameters)
-      return 0;
-
-   ASSERT(word_options);
-   ASSERT(sbp);
-   ASSERT(sbp->kbp_std[query_info->first_context]);
-   if (BlastFindValidKarlinBlk(sbp->kbp_std, query_info, &kbp_std) != 0)
-         return -1;
-
-   *parameters = (BlastInitialWordParameters*) 
-      calloc(1, sizeof(BlastInitialWordParameters));
-
-   (*parameters)->options = (BlastInitialWordOptions *) word_options;
-
-   (*parameters)->x_dropoff_init = (Int4)
-      ceil(sbp->scale_factor * word_options->x_dropoff * NCBIMATH_LN2/
-           kbp_std->Lambda);
-
-   status = BlastInitialWordParametersUpdate(program_number,
-               hit_params, ext_params, sbp, query_info,
-               subject_length, *parameters);
-
-   return status;
-}
-
-Int2
-BlastInitialWordParametersUpdate(EBlastProgramType program_number, 
-   const BlastHitSavingParameters* hit_params, 
-   const BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
-   BlastQueryInfo* query_info, Uint4 subj_length,
-   BlastInitialWordParameters* parameters)
-{
-   Blast_KarlinBlk* kbp;
-   Boolean gapped_calculation = TRUE;
-   Int4 cutoff_s = 0;
-
-   ASSERT(sbp);
-   ASSERT(hit_params);
-   ASSERT(ext_params);
-   ASSERT(query_info);
-
-   /* kbp_gap is only non-NULL for gapped searches! */
-   if (sbp->kbp_gap) {
-      if (BlastFindValidKarlinBlk(sbp->kbp_gap, query_info, &kbp) != 0)
-         return -1;
-   } else {
-      if (BlastFindValidKarlinBlk(sbp->kbp_std, query_info, &kbp) != 0)
-         return -1;
-      gapped_calculation = FALSE;
-   }
-
-   ASSERT(kbp);
-
-   if (!gapped_calculation || program_number == eBlastTypeBlastn) {
-      double cutoff_e;
-      /* Calculate score cutoff corresponding to a fixed e-value, depending on
-         the program. If it is smaller, then use this one. 
-         Use average query length. */
-      Int4 avg_qlen = 
-         (query_info->context_offsets[query_info->last_context+1] - 1) /
-         (query_info->last_context + 1);
-   
-      cutoff_e = GetCutoffEvalue(program_number);
-   
-      BLAST_Cutoffs(&cutoff_s, &cutoff_e, kbp, 
-                    MIN(subj_length, (Uint4) avg_qlen)*subj_length,
-                    FALSE, 0);
-      cutoff_s *= (Int4)sbp->scale_factor;
-   } else {
-      cutoff_s = ext_params->gap_trigger;
-   }
-
-   /* For non-blastn programs, ungapped cutoff is never greater than gap 
-      trigger. */
-   if (program_number != eBlastTypeBlastn)
-      cutoff_s = MIN(cutoff_s, ext_params->gap_trigger);
-
-   parameters->cutoff_score = MIN(hit_params->cutoff_score, cutoff_s);
-   
-   /* Note that x_dropoff_init stays constant throughout the search.
-      The cutoff_score and x_dropoff parameters may be updated multiple times, 
-      if every subject sequence is treated individually. Hence we need to know 
-      the original value of x_dropoff in order to take the minimum. */
-   if (parameters->x_dropoff_init != 0 && parameters->cutoff_score != 0) {
-      parameters->x_dropoff = 
-         MIN(parameters->x_dropoff_init, parameters->cutoff_score);
-   } else if (parameters->cutoff_score != 0) {
-      parameters->x_dropoff = parameters->cutoff_score;
-   }
 
    return 0;
 }
@@ -422,8 +373,6 @@ BlastExtensionOptionsFree(BlastExtensionOptions* options)
 	return NULL;
 }
 
-
-
 Int2
 BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *options)
 
@@ -434,19 +383,19 @@ BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *opti
 	if (*options == NULL)
 		return 1;
 
-	if (program != eBlastTypeBlastn) /* protein-protein options. */
+	if (program != eBlastTypeBlastn &&
+        program != eBlastTypePhiBlastn) /* protein-protein options. */
 	{
 		(*options)->gap_x_dropoff = BLAST_GAP_X_DROPOFF_PROT;
 		(*options)->gap_x_dropoff_final = 
                    BLAST_GAP_X_DROPOFF_FINAL_PROT;
-		(*options)->gap_trigger = BLAST_GAP_TRIGGER_PROT;
-		(*options)->ePrelimGapExt = eDynProgExt;
-		(*options)->eTbackExt = eDynProgTbck;
-	}
-	else
-	{
-		(*options)->gap_trigger = BLAST_GAP_TRIGGER_NUCL;
-	}
+    } else {
+        (*options)->gap_x_dropoff = BLAST_GAP_X_DROPOFF_NUCL;
+        (*options)->gap_x_dropoff_final = BLAST_GAP_X_DROPOFF_FINAL_NUCL;
+    }
+
+    (*options)->ePrelimGapExt = eDynProgExt;
+    (*options)->eTbackExt = eDynProgTbck;
 
 	return 0;
 }
@@ -458,12 +407,12 @@ BLAST_FillExtensionOptions(BlastExtensionOptions* options,
    if (!options)
       return 1;
 
-   if (program == eBlastTypeBlastn) {
+   if (program == eBlastTypeBlastn ||
+       program == eBlastTypePhiBlastn) {
       switch (greedy) {
       case 1:
          options->gap_x_dropoff = BLAST_GAP_X_DROPOFF_GREEDY;
          options->ePrelimGapExt = eGreedyWithTracebackExt;
-         options->eTbackExt = eSkipTbck;
          break;
       case 2:
          options->gap_x_dropoff = BLAST_GAP_X_DROPOFF_GREEDY;
@@ -519,66 +468,6 @@ BlastExtensionOptionsValidate(EBlastProgramType program_number,
 	return 0;
 }
 
-Int2 BlastExtensionParametersNew(EBlastProgramType program_number, 
-        const BlastExtensionOptions* options, BlastScoreBlk* sbp,
-        BlastQueryInfo* query_info, BlastExtensionParameters* *parameters)
-{
-   Blast_KarlinBlk* kbp=NULL;
-   Blast_KarlinBlk* kbp_gap=NULL;
-   BlastExtensionParameters* params;
-
-   /* If parameters pointer is NULL, there is nothing to fill, 
-      so don't do anything */
-   if (!parameters)
-      return 0;
-
-       
- 
-   if (sbp->kbp) {
-      if (BlastFindValidKarlinBlk(sbp->kbp, query_info, &kbp) != 0)
-         return -1;
-   } else {
-      /* The Karlin block is not found, can't do any calculations */
-      *parameters = NULL;
-      return -1;
-   }
-
-   *parameters = params = (BlastExtensionParameters*) 
-      calloc(1, sizeof(BlastExtensionParameters));
-
-   params->options = (BlastExtensionOptions *) options;
-
-   /* The gap trigger parameter is needed for other calculations, so it 
-      needs to be set even when search is ungapped. */
-   params->gap_trigger = (Int4)
-      ((options->gap_trigger*NCBIMATH_LN2 + kbp->logK) / kbp->Lambda);
-
-   /* Set gapped X-dropoffs only if it is a gapped search. */
-   if (sbp->kbp_gap) {
-      if (BlastFindValidKarlinBlk(sbp->kbp_gap, query_info, &kbp_gap) != 0)
-         return -1;
-      params->gap_x_dropoff = 
-         (Int4) (options->gap_x_dropoff*NCBIMATH_LN2 / kbp_gap->Lambda);
-      params->gap_x_dropoff_final = (Int4) 
-         (options->gap_x_dropoff_final*NCBIMATH_LN2 / kbp_gap->Lambda);
-   }
-   
-   if (sbp->scale_factor > 1.0) {
-      params->gap_trigger *= (Int4)sbp->scale_factor;
-      params->gap_x_dropoff *= (Int4)sbp->scale_factor;
-      params->gap_x_dropoff_final *= (Int4)sbp->scale_factor;
-   }
-   return 0;
-}
-
-BlastExtensionParameters*
-BlastExtensionParametersFree(BlastExtensionParameters* parameters)
-{
-  sfree(parameters);
-  return NULL;
-}
-
-
 BlastScoringOptions*
 BlastScoringOptionsFree(BlastScoringOptions* options)
 
@@ -601,14 +490,20 @@ BlastScoringOptionsNew(EBlastProgramType program_number, BlastScoringOptions* *o
    if (*options == NULL)
       return 1;
    
-   if (program_number != eBlastTypeBlastn) {	/* protein-protein options. */
+   if (program_number != eBlastTypeBlastn &&
+       program_number != eBlastTypePhiBlastn) {	/* protein-protein options. */
       (*options)->shift_pen = INT2_MAX;
       (*options)->is_ooframe = FALSE;
       (*options)->gap_open = BLAST_GAP_OPEN_PROT;
       (*options)->gap_extend = BLAST_GAP_EXTN_PROT;
+      (*options)->matrix = strdup(BLAST_DEFAULT_MATRIX);
    } else {	/* nucleotide-nucleotide options. */
       (*options)->penalty = BLAST_PENALTY;
       (*options)->reward = BLAST_REWARD;
+      /* This is correct except when greedy extension is used. In that case 
+         these values would have to be reset. */
+      (*options)->gap_open = BLAST_GAP_OPEN_NUCL;
+      (*options)->gap_extend = BLAST_GAP_EXTN_NUCL;
    }
    (*options)->decline_align = INT2_MAX;
    (*options)->gapped_calculation = TRUE;
@@ -624,16 +519,12 @@ BLAST_FillScoringOptions(BlastScoringOptions* options,
    if (!options)
       return 1;
 
-   if (program_number != eBlastTypeBlastn) {	/* protein-protein options. */
-      if (matrix) {
-         unsigned int i;
-         options->matrix = strdup(matrix);
-         /* Make it all upper case */
-         for (i=0; i<strlen(options->matrix); ++i)
-            options->matrix[i] = toupper(options->matrix[i]);
-      } else {
-         options->matrix = strdup("BLOSUM62");
-      }
+   if (program_number != eBlastTypeBlastn &&
+       program_number != eBlastTypePhiBlastn) {	/* protein-protein options. */
+      /* If matrix name is not provided, keep the default "BLOSUM62" value filled in 
+         BlastScoringOptionsNew, otherwise reset it. */
+      if (matrix)
+          BlastScoringOptionsSetMatrix(options, matrix);
    } else {	/* nucleotide-nucleotide options. */
       if (penalty)
          options->penalty = penalty;
@@ -674,7 +565,8 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 		return (Int2) code;
    }
 
-	if (program_number == eBlastTypeBlastn)
+	if (program_number == eBlastTypeBlastn ||
+        program_number == eBlastTypePhiBlastn)
 	{
 		if (options->penalty >= 0)
 		{
@@ -698,7 +590,7 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	{
 		Int2 status=0;
 
-		if ((status=Blast_KarlinkGapBlkFill(NULL, options->gap_open, 
+		if ((status=Blast_KarlinBlkGappedLoadFromTables(NULL, options->gap_open, 
                      options->gap_extend, options->decline_align, 
                      options->matrix)) != 0)
 		{
@@ -766,42 +658,20 @@ BlastScoringOptionsDup(BlastScoringOptions* *new_opt, const BlastScoringOptions*
     return 0;
 }
 
-BlastScoringParameters*
-BlastScoringParametersFree(BlastScoringParameters* parameters)
+Int2 BlastScoringOptionsSetMatrix(BlastScoringOptions* opts,
+                                  const char* matrix_name)
 {
-	sfree(parameters);
-	return NULL;
+    Uint4 i;
+
+    if (matrix_name) {
+        sfree(opts->matrix);
+        opts->matrix = strdup(matrix_name);
+        /* Make it all upper case */
+        for (i=0; i<strlen(opts->matrix); ++i)
+            opts->matrix[i] = toupper(opts->matrix[i]);
+    }
+    return 0;
 }
-
-
-Int2
-BlastScoringParametersNew(const BlastScoringOptions* score_options, 
-                          BlastScoreBlk* sbp, 
-                          BlastScoringParameters* *parameters)
-{
-   BlastScoringParameters *params;
-   double scale_factor;
-
-   if (score_options == NULL)
-      return 1;
-
-   *parameters = params = (BlastScoringParameters*) 
-                        calloc(1, sizeof(BlastScoringParameters));
-   if (params == NULL)
-      return 2;
-
-   params->options = (BlastScoringOptions *)score_options;
-   scale_factor = sbp->scale_factor;
-   params->scale_factor = scale_factor;
-   params->reward = score_options->reward;
-   params->penalty = score_options->penalty;
-   params->gap_open = score_options->gap_open * (Int4)scale_factor;
-   params->gap_extend = score_options->gap_extend * (Int4)scale_factor;
-   params->decline_align = score_options->decline_align * (Int4)scale_factor;
-   params->shift_pen = score_options->shift_pen * (Int4)scale_factor;
-   return 0;
-}
-
 
 BlastEffectiveLengthsOptions*
 BlastEffectiveLengthsOptionsFree(BlastEffectiveLengthsOptions* options)
@@ -823,28 +693,6 @@ BlastEffectiveLengthsOptionsNew(BlastEffectiveLengthsOptions* *options)
    if (*options == NULL)
       return 1;
    
-   return 0;
-}
-
-BlastEffectiveLengthsParameters*
-BlastEffectiveLengthsParametersFree(BlastEffectiveLengthsParameters* parameters)
-
-{
-	sfree(parameters);
-
-	return NULL;
-}
-
-Int2 
-BlastEffectiveLengthsParametersNew(const BlastEffectiveLengthsOptions* options, 
-                               Int8 db_length, Int4 num_seqs,
-                               BlastEffectiveLengthsParameters* *parameters)
-{
-   *parameters = (BlastEffectiveLengthsParameters*) 
-      calloc(1, sizeof(BlastEffectiveLengthsParameters));
-   (*parameters)->options = (BlastEffectiveLengthsOptions*) options;
-   (*parameters)->real_db_length = db_length;
-   (*parameters)->real_num_seqs = num_seqs;
    return 0;
 }
 
@@ -886,68 +734,52 @@ LookupTableOptionsNew(EBlastProgramType program_number, LookupTableOptions* *opt
    if (*options == NULL)
       return 1;
    
-   if (program_number != eBlastTypeBlastn) {
-      (*options)->word_size = BLAST_WORDSIZE_PROT;
-      (*options)->alphabet_size = BLASTAA_SIZE;
-      (*options)->lut_type = AA_LOOKUP_TABLE;
-      
-      if (program_number == eBlastTypeBlastp ||
-          program_number == eBlastTypeRpsBlast)
-         (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTP;
-      else if (program_number == eBlastTypeBlastx)
-         (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTX;
-      else if (program_number == eBlastTypeTblastn ||
-               program_number == eBlastTypeRpsTblastn)
-         (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTN;
-      else if (program_number == eBlastTypeTblastx)
-         (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTX;
-      
-   } else {
-      (*options)->alphabet_size = BLASTNA_SIZE;
+   switch (program_number) {
+   case eBlastTypeBlastn:
+       /* Blastn default is megablast. */
+       (*options)->word_size = BLAST_WORDSIZE_MEGABLAST;
+       (*options)->lut_type = MB_LOOKUP_TABLE;
+       (*options)->max_positions = INT4_MAX;
+       /* Discontig mb scanning default is one byte at at time. */
+       (*options)->full_byte_scan = TRUE; 
+       break;
+   case eBlastTypeRpsBlast: case eBlastTypeRpsTblastn:
+       (*options)->word_size = BLAST_WORDSIZE_PROT;
+       (*options)->lut_type = RPS_LOOKUP_TABLE;
+       
+       if (program_number == eBlastTypeRpsBlast)
+           (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTP;
+       else 
+           (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTN;
+       break;
+   case eBlastTypePhiBlastn:
+       (*options)->lut_type = PHI_NA_LOOKUP;
+       break;
+   case eBlastTypePhiBlastp:
+       (*options)->lut_type = PHI_AA_LOOKUP;
+       break;
+   default:
+       (*options)->word_size = BLAST_WORDSIZE_PROT;
+       (*options)->lut_type = AA_LOOKUP_TABLE;
+       
+       if (program_number == eBlastTypeBlastp)
+           (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTP;
+       else if (program_number == eBlastTypeBlastx)
+           (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTX;
+       else if (program_number == eBlastTypeTblastn)
+           (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTN;
+       else if (program_number == eBlastTypeTblastx)
+           (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTX;
+       break;
    }
-
+   
    return 0;
-}
-
-Int4 CalculateBestStride(Int4 word_size, Boolean var_words, Int4 lut_type)
-{
-   Int4 lut_width;
-   Int4 extra = 1;
-   Uint1 remainder;
-   Int4 stride;
-
-   if (lut_type == MB_LOOKUP_TABLE)
-      lut_width = 12;
-   else if (word_size >= 8)
-      lut_width = 8;
-   else
-      lut_width = 4;
-
-   remainder = word_size % COMPRESSION_RATIO;
-
-   if (var_words && (remainder == 0) )
-      extra = COMPRESSION_RATIO;
-
-   stride = word_size - lut_width + extra;
-
-   remainder = stride % 4;
-
-   /*
-    The resulting stride is rounded to a number divisible by 4 
-    for all values except 6 and 7. This is done because scanning database 
-    with a stride divisible by 4 does not require splitting bytes of 
-    compressed sequences. For values 6 and 7 however the advantage of a 
-    larger stride outweighs the disadvantage of splitting the bytes.
-    */
-   if (stride > 8 || (stride > 4 && remainder == 1) ) 
-      stride -= remainder;
-   return stride;
 }
 
 Int2 
 BLAST_FillLookupTableOptions(LookupTableOptions* options, 
    EBlastProgramType program_number, Boolean is_megablast, Int4 threshold,
-   Int2 word_size, Boolean ag_blast, Boolean variable_wordsize,
+   Int4 word_size, Boolean variable_wordsize,
    Boolean use_pssm)
 {
    if (!options)
@@ -984,12 +816,7 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
    if (word_size)
       options->word_size = word_size;
    if (program_number == eBlastTypeBlastn) {
-      if (!ag_blast) {
-         options->scan_step = COMPRESSION_RATIO;
-      } else {
-         options->scan_step = CalculateBestStride(options->word_size, variable_wordsize,
-                                                  options->lut_type);
-      }
+      options->variable_wordsize = variable_wordsize;
    }
    return 0;
 }
@@ -1003,7 +830,7 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
  * @return TRUE if options combination valid.
  */
 static Boolean 
-DiscWordOptionsValidate(Int2 word_size, Uint1 template_length,
+s_DiscWordOptionsValidate(Int4 word_size, Uint1 template_length,
                         Uint1 template_type)
 {
    if (template_length == 0)
@@ -1027,15 +854,26 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 {
    Int4 code=2;
    Int4 subcode=1;
+   const Boolean kPhiBlast = (program_number == eBlastTypePhiBlastn || 
+                              program_number == eBlastTypePhiBlastp);
 
 	if (options == NULL)
 		return 1;
 
-        if (program_number == eBlastTypeRpsBlast ||
-            program_number == eBlastTypeRpsTblastn)
-                return 0;
+    if (options->phi_pattern && !kPhiBlast) {
+        Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+            "PHI pattern can be specified only for blastp and blastn");
+        return (Int2) code;
+    }
 
-	if (program_number != eBlastTypeBlastn && options->threshold <= 0)
+    /* For PHI BLAST, the subsequent word size tests are not needed. */
+    if (kPhiBlast)
+        return 0;
+
+	if (program_number != eBlastTypeBlastn && 
+            program_number != eBlastTypeRpsBlast &&
+            program_number != eBlastTypeRpsTblastn &&
+            options->threshold <= 0)
 	{
 		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
                          "Non-zero threshold required");
@@ -1044,9 +882,13 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 
 	if (options->word_size <= 0)
 	{
-		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
-                         "Word-size must be greater than zero");
-		return (Int2) code;
+                if (program_number != eBlastTypeRpsBlast &&
+                    program_number != eBlastTypeRpsTblastn) {
+        		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, 
+                                           code, subcode, 
+                                         "Word-size must be greater than zero");
+		        return (Int2) code;
+                }
 	} else if (program_number == eBlastTypeBlastn && options->word_size < 4)
 	{
 		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
@@ -1061,6 +903,15 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 		return (Int2) code;
 	}
 
+
+        /* FIXME: is this really needed?? */
+        if (options->variable_wordsize && 
+          ((options->word_size % 4) != 0) ) {
+         Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
+                            "Word size must be divisible by 4 if only full "
+                            "bytes of subject sequences are matched to query");
+         return (Int2) code;
+      }
 
 	if (program_number != eBlastTypeBlastn && 
        options->lut_type == MB_LOOKUP_TABLE)
@@ -1079,7 +930,7 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
    }
 
    if (program_number == eBlastTypeBlastn && options->mb_template_length > 0) {
-      if (!DiscWordOptionsValidate(options->word_size,
+      if (!s_DiscWordOptionsValidate(options->word_size,
               options->mb_template_length, options->mb_template_type)) {
          Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
                             "Invalid discontiguous template parameters");
@@ -1088,12 +939,7 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
          Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
             "Invalid lookup table type for discontiguous Mega BLAST");
          return (Int2) code;
-      } else if (options->scan_step != 1 && 
-                 options->scan_step != COMPRESSION_RATIO) {
-         Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
-            "Invalid scanning stride for discontiguous Mega BLAST");
-         return (Int2) code;
-      }
+      } 
    }
 	return 0;
 }
@@ -1119,15 +965,14 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
    (*options)->prelim_hitlist_size = BLAST_PRELIM_HITLIST_SIZE;
    (*options)->expect_value = BLAST_EXPECT_VALUE;
 
-   /* other stuff?? */
-   
    return 0;
 
 }
 
 Int2
 BLAST_FillHitSavingOptions(BlastHitSavingOptions* options, 
-                           double evalue, Int4 hitlist_size)
+                           double evalue, Int4 hitlist_size,
+                           Boolean is_gapped, Int4 culling_limit)
 {
    if (!options)
       return 1;
@@ -1136,6 +981,9 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       options->hitlist_size = options->prelim_hitlist_size = hitlist_size;
    if (evalue)
       options->expect_value = evalue;
+   if(!is_gapped)
+     options->hsp_num_max = kUngappedHSPNumMax;
+   options->culling_limit = culling_limit;
 
    return 0;
 
@@ -1176,250 +1024,16 @@ BlastHitSavingOptionsValidate(EBlastProgramType program_number,
 		return (Int2) code;
    }
 
+	if (options->culling_limit < 0)
+	{
+		Int4 code=2;
+		Int4 subcode=1;
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                    "culling limit must be greater than or equal to zero");
+		return (Int2) code;
+	}	
+
 	return 0;
-}
-
-BlastLinkHSPParameters* 
-BlastLinkHSPParametersFree(BlastLinkHSPParameters* parameters)
-{
-   sfree(parameters);
-   return NULL;
-}
-
-Int2 BlastLinkHSPParametersNew(EBlastProgramType program_number, 
-                               Boolean gapped_calculation,
-                               BlastLinkHSPParameters** link_hsp_params)
-{
-   BlastLinkHSPParameters* params;
-
-   if (!link_hsp_params)
-      return -1;
-
-   params = (BlastLinkHSPParameters*)
-      calloc(1, sizeof(BlastLinkHSPParameters));
-
-   if (program_number == eBlastTypeBlastn || !gapped_calculation) {
-      params->gap_prob = BLAST_GAP_PROB;
-      params->gap_decay_rate = BLAST_GAP_DECAY_RATE;
-   } else {
-      params->gap_prob = BLAST_GAP_PROB_GAPPED;
-      params->gap_decay_rate = BLAST_GAP_DECAY_RATE_GAPPED;
-   }
-   params->gap_size = BLAST_GAP_SIZE;
-   params->overlap_size = BLAST_OVERLAP_SIZE;
-
-   *link_hsp_params = params;
-   return 0;
-}
-
-Int2 
-BlastLinkHSPParametersUpdate(const BlastInitialWordParameters* word_params,
-                             const BlastExtensionParameters* ext_params,
-                             const BlastHitSavingParameters* hit_params,
-                             Boolean gapped_calculation)
-{
-   if (!word_params || !ext_params || !hit_params)
-      return -1;
-   if (!hit_params->link_hsp_params)
-      return 0;
-
-   if (gapped_calculation) {
-      hit_params->link_hsp_params->cutoff_small_gap = 
-         MIN(hit_params->cutoff_score, ext_params->gap_trigger);
-   } else {
-      /* For all ungapped programs other than blastn, this value will be 
-         recalculated anyway in CalculateLinkHSPCutoffs, but for blastn 
-         this will be the final value. */
-      hit_params->link_hsp_params->cutoff_small_gap = 
-         MIN(hit_params->cutoff_score, word_params->cutoff_score);
-   }
-
-   return 0;
-}
-
-BlastHitSavingParameters*
-BlastHitSavingParametersFree(BlastHitSavingParameters* parameters)
-
-{
-   if (parameters) {
-      sfree(parameters->link_hsp_params);
-      sfree(parameters);
-   }
-   return NULL;
-}
-
-
-Int2
-BlastHitSavingParametersNew(EBlastProgramType program_number, 
-   const BlastHitSavingOptions* options, 
-   const BlastExtensionParameters* ext_params, 
-   BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
-   Int4 avg_subj_length,
-   BlastHitSavingParameters* *parameters)
-{
-   Boolean gapped_calculation = TRUE;
-   Int2 status = 0;
-   BlastHitSavingParameters* params;
-   Boolean do_sum_stats = FALSE;
-
-   /* If parameters pointer is NULL, there is nothing to fill, 
-      so don't do anything */
-   if (!parameters)
-      return 0;
-
-   *parameters = NULL;
-
-   ASSERT(options);
-   ASSERT(sbp);
-   
-   if (!sbp->kbp_gap)
-      gapped_calculation = FALSE;
-
-   /* If sum statistics use is forced by the options, 
-      set it in the paramters */
-   if (options->do_sum_stats == eSumStatsTrue) {
-      do_sum_stats = TRUE;
-   } else if (options->do_sum_stats == eSumStatsNotSet) {
-      /* By default, sum statistics is used for all translated searches 
-       * (except RPS BLAST), and for all ungapped searches.
-       */
-      if (!gapped_calculation ||  
-          (program_number == eBlastTypeBlastx) ||
-          (program_number == eBlastTypeTblastn) ||
-          (program_number == eBlastTypeTblastx))
-         do_sum_stats = TRUE;
-   }
-  
-   if (do_sum_stats && gapped_calculation && avg_subj_length <= 0)
-       return 1;
-       
-
-   /* If parameters have not yet been created, allocate and fill all
-      parameters that are constant throughout the search */
-   *parameters = params = (BlastHitSavingParameters*) 
-      calloc(1, sizeof(BlastHitSavingParameters));
-
-   if (params == NULL)
-      return 1;
-
-   params->options = (BlastHitSavingOptions *) options;
-
-
-   if (do_sum_stats) {
-      BlastLinkHSPParametersNew(program_number, gapped_calculation,
-                                &params->link_hsp_params);
-
-      if(program_number == eBlastTypeBlastx  ||
-         program_number == eBlastTypeTblastn) {
-          /* The program may use Blast_UnevenGapLinkHSPs find significant
-             collections of distinct alignments */
-          Int4 max_protein_gap; /* the largest gap permitted in the
-                               * translated sequence */
-
-          max_protein_gap = (options->longest_intron - 2)/3;
-          if(gapped_calculation) {
-              if(options->longest_intron == 0) {
-                  /* a zero value of longest_intron invokes the
-                   * default behavior, which for gapped calculation is
-                   * to set longest_intron to a predefined value. */
-                  params->link_hsp_params->longest_intron =
-                      (DEFAULT_LONGEST_INTRON - 2) / 3;
-              } else if(max_protein_gap <= 0) {
-                  /* A nonpositive value of max_protein_gap disables linking */
-                  params->link_hsp_params =
-                      BlastLinkHSPParametersFree(params->link_hsp_params);
-              } else { /* the value of max_protein_gap is positive */
-                  params->link_hsp_params->longest_intron = max_protein_gap;
-              }
-          } else { /* This is an ungapped calculation. */
-              /* For ungapped calculations, we preserve the old behavior
-               * of the longest_intron parameter to maintain
-               * backward-compatibility with older versions of BLAST. */
-              params->link_hsp_params->longest_intron =
-                MAX(max_protein_gap, 0);
-          }
-      }
-   }
-
-   status = BlastHitSavingParametersUpdate(program_number, ext_params, sbp, query_info, 
-               avg_subj_length, params);
-
-   return status;
-}
-
-Int2
-BlastHitSavingParametersUpdate(EBlastProgramType program_number, 
-   const BlastExtensionParameters* ext_params, 
-   BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
-   Int4 avg_subject_length, BlastHitSavingParameters* params)
-{
-   BlastHitSavingOptions* options;
-   Blast_KarlinBlk* kbp;
-   double scale_factor = sbp->scale_factor;
-   Boolean gapped_calculation;
-   Boolean do_sum_stats = FALSE;
-
-   ASSERT(params);
-   ASSERT(query_info);
-   ASSERT(ext_params);
-
-   if (params->link_hsp_params)
-        do_sum_stats = TRUE;
-
-   options = params->options;
-
-   /* Scoring options are not available here, but we can determine whether
-      this is a gapped or ungapped search by checking whether gapped
-      Karlin blocks have been set. */
-   gapped_calculation = (sbp->kbp_gap != NULL);
-   if (gapped_calculation) {
-      if (BlastFindValidKarlinBlk(sbp->kbp_gap, query_info, &kbp) != 0)
-         return -1;
-   } else {
-      if (BlastFindValidKarlinBlk(sbp->kbp, query_info, &kbp) != 0)
-         return -1;
-   }
-
-   /* Calculate cutoffs based on the current effective lengths information */
-   if (options->cutoff_score > 0) {
-      params->cutoff_score = options->cutoff_score * (Int4) sbp->scale_factor;
-   } else if (!options->phi_align) {
-      Int4 context = query_info->first_context;
-      Int4 cutoff_score=0;
-      Int8 searchsp = query_info->eff_searchsp_array[context];
-      double evalue = options->expect_value;
-
-      /* translated RPS searches must scale the search space down */
-      if (program_number == eBlastTypeRpsTblastn)
-         searchsp = searchsp / NUM_FRAMES;
-
-      /* Get cutoff_score for specified evalue. */
-      BLAST_Cutoffs(&cutoff_score, &evalue, kbp, searchsp, FALSE, 0);
-
-      params->cutoff_score = 0;
-      if (do_sum_stats && gapped_calculation)
-      {
-         double evalue_hsp=1.0;
-         Int4 avg_qlen = 
-             (query_info->context_offsets[query_info->last_context+1] - 1) / (query_info->last_context + 1);
-         BLAST_Cutoffs(&params->cutoff_score, &evalue_hsp, kbp, (Int8) MIN(avg_qlen, avg_subject_length)* (Int8)avg_subject_length, 
-               TRUE, params->link_hsp_params->gap_decay_rate);
-         if (gapped_calculation)  
-         {   /* Assure that cutoff_score for one HSP is no smaller than gap_trigger. */
-             params->cutoff_score = MAX(params->cutoff_score, ext_params->gap_trigger);
-         }
-         /* Assure that cutoff_score for one HSP is no larger than cutoff_score for specified expect value. */
-         params->cutoff_score = MIN(params->cutoff_score, cutoff_score);
-      }
-      else
-         params->cutoff_score = cutoff_score;
-     
-      params->cutoff_score *= (Int4) scale_factor;
-   } else {
-      params->cutoff_score = 0;
-   }
-
-   return 0;
 }
 
 Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
@@ -1427,7 +1041,7 @@ Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
    PSIBlastOptions* options = NULL;
 
    if ( !psi_options )
-      return 0;
+      return 1;
 
    options = (PSIBlastOptions*)calloc(1, sizeof(PSIBlastOptions));
    if ( !options ) 
@@ -1437,9 +1051,36 @@ Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
    options->inclusion_ethresh = PSI_INCLUSION_ETHRESH;
    options->pseudo_count = PSI_PSEUDO_COUNT_CONST;
    options->use_best_alignment = TRUE;
-   options->ignore_consensus = FALSE;
+
+   options->nsg_compatibility_mode = FALSE;
+   options->impala_scaling_factor = 1.0;    /* 1.0 indicates not to use this */
    
    return 0;
+}
+
+Int2 PSIBlastOptionsValidate(const PSIBlastOptions* psi_options,
+                             Blast_Message** blast_msg)
+{
+    Int2 retval = 1;    /* assume failure */
+
+    if ( !psi_options ) {
+        return retval;
+    }
+
+    if (psi_options->pseudo_count <= 0) {
+        Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, 0, 0,
+                           "Pseudo count must be greater than 0");
+        return retval;
+    }
+
+    if (psi_options->inclusion_ethresh <= 0.0) {
+        Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, 0, 0,
+                           "Inclusion threshold must be greater than 0");
+        return retval;
+    }
+
+    retval = 0;
+    return retval;
 }
 
 PSIBlastOptions* PSIBlastOptionsFree(PSIBlastOptions* psi_options)
@@ -1450,9 +1091,13 @@ PSIBlastOptions* PSIBlastOptionsFree(PSIBlastOptions* psi_options)
 
 Int2 BlastDatabaseOptionsNew(BlastDatabaseOptions** db_options)
 {
-   BlastDatabaseOptions* options = (BlastDatabaseOptions*)
-      calloc(1, sizeof(BlastDatabaseOptions));
+   BlastDatabaseOptions* options = NULL;
 
+   if ( !db_options ) {
+       return 1;
+   }
+
+   options = (BlastDatabaseOptions*) calloc(1, sizeof(BlastDatabaseOptions));
    if ( !options ) {
        return 1;
    }
@@ -1535,104 +1180,107 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
                     lookup_options, blast_msg)) != 0)   
        return status;
    if ((status = BlastInitialWordOptionsValidate(program_number, 
-                    word_options, lookup_options, blast_msg)) != 0)   
+                    word_options, blast_msg)) != 0)   
        return status;
    if ((status = BlastHitSavingOptionsValidate(program_number, hit_options,
                                                blast_msg)) != 0)
        return status;
+
    return status;
 }
-
-/** machine epsilon assumed by CalculateLinkHSPCutoffs */
-#define MY_EPS 1.0e-9
-
-void
-CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info, 
-   BlastScoreBlk* sbp, BlastLinkHSPParameters* link_hsp_params, 
-   const BlastExtensionParameters* ext_params,
-   Int8 db_length, Int4 subject_length)
-{
-   double gap_prob, gap_decay_rate, x_variable, y_variable;
-   Blast_KarlinBlk* kbp;
-   Int4 expected_length, window_size, query_length;
-   Int8 search_sp;
-   Boolean translated_subject = (program == eBlastTypeTblastn || 
-                                 program == eBlastTypeRpsTblastn || 
-                                 program == eBlastTypeTblastx);
-
-   if (!link_hsp_params)
-      return;
-
-	/* Do this for the first context, should this be changed?? */
-	kbp = sbp->kbp[query_info->first_context];
-	window_size = link_hsp_params->gap_size + link_hsp_params->overlap_size + 1;
-	gap_prob = link_hsp_params->gap_prob;
-	gap_decay_rate = link_hsp_params->gap_decay_rate;
-   /* Use average query length */
-	query_length = 
-      (query_info->context_offsets[query_info->last_context+1] - 1) /
-      (query_info->last_context + 1);
-
-   if (translated_subject) {
-      /* Lengths in subsequent calculations should be on the protein scale */
-      subject_length /= CODON_LENGTH;
-      db_length /= CODON_LENGTH;
-   }
-
-	/* Subtract off the expected score. */
-   expected_length = BLAST_Nint(log(kbp->K*((double) query_length)*
-                                    ((double) subject_length))/(kbp->H));
-   query_length = query_length - expected_length;
-
-   subject_length = subject_length - expected_length;
-   query_length = MAX(query_length, 1);
-   subject_length = MAX(subject_length, 1);
-
-   /* If this is a database search, use database length, else the single 
-      subject sequence length */
-   if (db_length > subject_length) {
-      y_variable = log((double) (db_length)/(double) subject_length)*(kbp->K)/
-         (gap_decay_rate);
-   } else {
-      y_variable = log((double) (subject_length + expected_length)/
-                       (double) subject_length)*(kbp->K)/(gap_decay_rate);
-   }
-   search_sp = ((Int8) query_length)* ((Int8) subject_length);
-   x_variable = 0.25*y_variable*((double) search_sp);
-
-   /* To use "small" gaps the query and subject must be "large" compared to
-      the gap size. If small gaps may be used, then the cutoff values must be
-      adjusted for the "bayesian" possibility that both large and small gaps 
-      are being checked for. */
-
-   if (search_sp > 8*window_size*window_size) {
-      x_variable /= (1.0 - gap_prob + MY_EPS);
-      link_hsp_params->cutoff_big_gap = 
-         (Int4) floor((log(x_variable)/kbp->Lambda)) + 1;
-      x_variable = y_variable*(window_size*window_size);
-      x_variable /= (gap_prob + MY_EPS);
-      link_hsp_params->cutoff_small_gap = 
-         MAX(ext_params->gap_trigger, 
-             (Int4) floor((log(x_variable)/kbp->Lambda)) + 1);
-      link_hsp_params->gap_prob = BLAST_GAP_PROB;
-   } else {
-      link_hsp_params->cutoff_big_gap = 
-         (Int4) floor((log(x_variable)/kbp->Lambda)) + 1;
-      /* The following is equivalent to forcing small gap rule to be ignored
-         when linking HSPs. */
-      link_hsp_params->gap_prob = 0;
-      link_hsp_params->cutoff_small_gap = 0;
-   }	
-
-   link_hsp_params->cutoff_big_gap *= (Int4)sbp->scale_factor;
-   link_hsp_params->cutoff_small_gap *= (Int4)sbp->scale_factor;
-}
-
 
 /*
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.163  2005/04/27 19:53:45  dondosha
+ * Added handling of PHI BLAST program enumeration values
+ *
+ * Revision 1.162  2005/04/27 14:46:18  papadopo
+ * set culling limit in BlastHitSavingOptions, and validate it
+ *
+ * Revision 1.161  2005/03/21 15:20:31  papadopo
+ * Allow RPS searches in LookupTableOptionsValidate
+ *
+ * Revision 1.160  2005/03/08 21:00:51  camacho
+ * PSIBlastOptionsNew returns 0 on success only, passing in NULL is an error
+ *
+ * Revision 1.159  2005/03/02 13:55:26  madden
+ * Rename Filtering option funcitons to standard naming convention
+ *
+ * Revision 1.158  2005/02/28 17:14:48  camacho
+ * Move hard coded constant to header
+ *
+ * Revision 1.157  2005/02/24 13:43:04  madden
+ * Added new functions for structured filtering options
+ *
+ * Revision 1.156  2005/02/22 22:48:02  camacho
+ * + impala_scaling_factor, first cut
+ *
+ * Revision 1.155  2005/02/17 17:49:22  camacho
+ * fix to BlastScoringOptionsSetMatrix
+ *
+ * Revision 1.154  2005/02/08 18:32:49  dondosha
+ * Added check in lookup table options validation that program and PHI pattern are compatible
+ *
+ * Revision 1.153  2005/02/03 21:37:03  dondosha
+ * Tiny memory leak fix
+ *
+ * Revision 1.152  2005/02/02 18:55:33  dondosha
+ * Added BlastScoringOptionsSetMatrix; added setting of more default values in some of the BlastXXXOptionsNew functions
+ *
+ * Revision 1.151  2005/01/10 13:21:23  madden
+ * Move some fields from InitialWordOptions to InitialWordParameters, remove function CalculateBestStride
+ *
+ * Revision 1.150  2004/12/29 13:33:47  madden
+ * Removed functions relevant to parameters, move to blast_parameters.c
+ *
+ * Revision 1.149  2004/12/28 13:37:01  madden
+ * word size changed from Int2 to Int4
+ *
+ * Revision 1.148  2004/12/21 17:10:58  dondosha
+ * Removed eSkipTbck option
+ *
+ * Revision 1.147  2004/12/13 22:26:59  camacho
+ * Consolidated structure group customizations in option: nsg_compatibility_mode
+ *
+ * Revision 1.146  2004/12/09 15:22:56  dondosha
+ * Renamed some functions dealing with BlastScoreBlk and Blast_KarlinBlk structures
+ *
+ * Revision 1.145  2004/12/08 14:20:29  camacho
+ * + PSIBlastOptionsValidate
+ *
+ * Revision 1.144  2004/12/02 17:22:41  camacho
+ * Fix compiler error
+ *
+ * Revision 1.143  2004/12/02 15:55:54  bealer
+ * - Change multiple-arrays to array-of-struct in BlastQueryInfo
+ *
+ * Revision 1.142  2004/11/22 14:38:48  camacho
+ * + option to set % identity threshold to PSSM engine
+ *
+ * Revision 1.141  2004/11/15 16:32:37  dondosha
+ * Changed constant names and static functions names in accordance with C++ toolkit guidelines
+ *
+ * Revision 1.140  2004/11/02 18:20:14  madden
+ * 1.) Reorganization of options to move gap_trigger from BlastExtensionParameters to BlastInitialWordOptions,
+ * and use ungapped_cutoff in place of gap_trigger in parameter structures.
+ * 2.) restored CUTOFF_E_ to orginal values and change call to BlastCutoffs
+ * 3.) cleaned up code.
+ *
+ * Revision 1.139  2004/11/02 17:56:48  camacho
+ * Add DOXYGEN_SKIP_PROCESSING to guard rcsid string
+ *
+ * Revision 1.138  2004/11/01 18:37:23  madden
+ *    - In BLAST_FillHitSavingOption, set hsp_num_max to a finite value
+ *      (400) for ungapped searches.
+ *
+ *    - In CalculateLinkHSPCutoffs reset gap_prob for each subject
+ *      sequence before the value of gap_prob is used.
+ *
+ * Revision 1.137  2004/10/25 16:27:49  coulouri
+ * include the length of the reverse complement strand for blastn
+ *
  * Revision 1.136  2004/10/14 17:10:35  madden
  * BlastHitSavingParametersNew and BlastHitSavingParametersUpdate changes for gapped sum statistics
  *
@@ -2102,7 +1750,7 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
  * Moved BlastNumber2Program and BlastProgram2Number from blast_options to blast_util
  *
  * Revision 1.16  2003/03/03 14:43:21  madden
- * Use BlastKarlinkGapBlkFill, PrintMatrixMessage, and PrintAllowedValuesMessage
+ * Use BlastKarlinBlkGappedFill, PrintMatrixMessage, and PrintAllowedValuesMessage
  *
  * Revision 1.15  2003/02/26 15:42:50  madden
  * const charPtr becomes const char *, add BlastExtensionOptionsValidate

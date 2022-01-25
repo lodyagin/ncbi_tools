@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -64,6 +64,7 @@ extern void FreeOrganismTable (void);
 
 extern void SetupGeneticCodes (void);
 extern void FreeGeneticCodes (void);
+extern ValNodePtr GetGeneticCodeValNodeList (void);
 
 /*
  *  The BioSourceEditProcsPtr may be registered with a call to SetAppProperty

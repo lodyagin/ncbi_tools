@@ -28,13 +28,21 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.56 $
+* $Revision: 6.58 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.58  2005/03/01 13:56:03  bollin
+* if the alignment we want to index is a DenseSeg and not a list of alignments,
+* just give it a simple index - don't decompose to pairwise and reconstruct it.
+*
+* Revision 6.57  2005/02/23 14:40:55  bollin
+* when condensing columns in AlnMgr2CondenseColumns, make sure we do not
+* disturb the ascending order of starts for each row
+*
 * Revision 6.56  2004/09/15 14:59:19  bollin
 * make sure we do not read outside the alignment index arrays
 *
@@ -1192,6 +1200,12 @@ NLM_EXTERN void AlnMgr2IndexSeqAlignEx(SeqAlignPtr sap, Boolean replace_gi)
       return;
    if (replace_gi) {
      SAM_ReplaceGI(sap);
+   }
+   
+   if (sap->next == NULL && sap->segtype == SAS_DENSEG)
+   {
+     AlnMgr2IndexSingleChildSeqAlign(sap);
+     return;
    }
 
    AlnMgr2IndexLite(sap);
@@ -2482,6 +2496,7 @@ static Boolean AlnMgr2SameSeq(AMVertexPtr vertex1, AMVertexPtr vertex2)
       return FALSE;
 }
 
+
 /* SECTION 2C */
 /***************************************************************************
 *
@@ -2817,7 +2832,7 @@ static Boolean AlnMgr2AddSeqPiece(
   s->aligned = what->aligned;
   s->set = set;
   s->next = NULL;
-  if (s->prev = set->tail) {
+  if ((s->prev = set->tail) != NULL) {
     s->prev->next = s;
   }
   set->tail = s;
@@ -2872,7 +2887,7 @@ static Boolean AlnMgr2InsertSeqPiece(
   s->aligned = what->aligned;
   s->set = where->set;
   s->next = where;
-  if (s->prev = where->prev) {
+  if ((s->prev = where->prev) != NULL) {
     if (s->prev) {
       s->prev->next = s;
     } else {
@@ -4243,6 +4258,35 @@ static Int4 AlnMgr2GetSegForStartPos(SeqAlignPtr sap, Int4 pos, Int4 row)
    return srdp->sect[L];
 }
 
+static Int4 GetNextStart (DenseSegPtr dsp, Int4 row, Int4 col, Int4Ptr pnext_start_col)
+{
+  Int4 next_start_col;
+  
+  if (dsp == NULL || row < 0 || row >= dsp->dim || col < 0 || col >= dsp->numseg)
+  {
+    return -1;
+  }
+  
+  for (next_start_col = col + 1;
+       next_start_col < dsp->numseg 
+         && dsp->starts[(next_start_col * dsp->dim) + row] == -1; 
+       next_start_col++)
+  {
+  }
+  if (next_start_col < dsp->numseg)
+  {
+    if (pnext_start_col != NULL)
+    {
+      *pnext_start_col = next_start_col;
+    }
+    return dsp->starts[(next_start_col * dsp->dim) + row];
+  }
+  else
+  {
+    return -1;
+  }
+}
+
 static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
 /***************************************************************************
 *
@@ -4261,7 +4305,7 @@ static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
 {
   int gap_start_seg = -1;
   int gap_end_seg = -1;
-  int row, seg, base_col, col;
+  int row, seg, base_col, col, next_start, next_start_col;
   Boolean can_fit;
 
   for (seg = 0;  seg < dsp->numseg;  ++seg) {
@@ -4296,6 +4340,18 @@ static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
               can_fit = FALSE;
               break;
             }
+            else if (dsp->starts[dsp->dim * col + row] != -1)
+            {
+              /* make sure we aren't going to disturb the order of
+               * the starts */
+              next_start = GetNextStart (dsp, row, base_col, &next_start_col);
+              if (next_start > -1
+                  && next_start < dsp->starts[dsp->dim * col + row]
+                  && next_start_col < col)
+              {
+                can_fit = FALSE;
+              }
+            }
           }
 
           if (can_fit) {
@@ -4305,7 +4361,7 @@ static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
                   dsp->starts[dsp->dim * col + row];
               }
             }
-
+            
             /* remove column col */
             {{
               Int4Ptr       starts, lens;
@@ -4340,6 +4396,7 @@ static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
               dsp->lens = lens;
 
               dsp->numseg--;
+
             }}
 
             --gap_end_seg;

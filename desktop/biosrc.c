@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.52 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -92,24 +92,32 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Chromosome",             1},
   {"Clone",                  3},
   {"Clone-lib",             11},
+  {"Collected-by",          31},
+  {"Collection-date",       30},
   {"Country",               23},
   {"Dev-stage",             12},
   {"Endogenous-virus-name", 25},
   {"Environmental-sample",  27},
   {"Frequency",             13},
+  {"Fwd-primer-name",       35},
+  {"Fwd-primer-seq",        33},
   {"Genotype",               6},
   {"Germline",              14},
   {"Haplotype",              5},
+  {"Identified-by",         32},
     /*
   {"Ins-seq-name",          21},
     */
   {"Isolation-source",      28},
   {"Lab-host",              16},
+  {"Lat-Lon",               29},
   {"Map",                    2},
   {"Plasmid-name",          19},
   {"Plastid-name",          22},
   {"Pop-variant",           17},
   {"Rearranged",            15},
+  {"Rev-primer-name",       36},
+  {"Rev-primer-seq",        34},
   {"Segment",               24},
   {"Sex",                    7},
   {"Subclone",               4},
@@ -171,7 +179,8 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Endogenous-virus",    19},
 END_ENUM_ALIST
 
-static ENUM_ALIST(biosource_origin_alist)
+extern EnumFieldAssoc  biosource_origin_alist [];
+extern ENUM_ALIST(biosource_origin_alist)
   {" ",               0},
   {"Natural",         1},
   {"Natural Mutant",  2},
@@ -471,6 +480,22 @@ extern void FreeGeneticCodes (void)
   for (i = 0; i < NUM_GENETIC_CODES; i++) {
     gcNames [i] = MemFree (gcNames [i]);
   }
+}
+
+extern ValNodePtr GetGeneticCodeValNodeList (void)
+{
+  ValNodePtr gencodelist = NULL;
+  Int4       index;
+  
+  for (index = 0; index < numGeneticCodes; index++)
+  {
+    if (StringHasNoText (gcNames[index]))
+    {
+      continue;
+    }
+    ValNodeAddPointer (&gencodelist, gcIndexToId [index], StringSave (gcNames[index]));
+  }
+  return gencodelist;
 }
 
 static void CopyField (CharPtr str, size_t max, CharPtr source, Int2 col)
@@ -863,7 +888,7 @@ extern Boolean SetBioSourceDialogTaxName (DialoG d, CharPtr taxname)
   Char          str [256];
 
   gbp = (GenBioPagePtr) GetObjectExtra (d);
-  if (gbp == NULL || StringHasNoText (taxname)) return FALSE;
+  if (gbp == NULL) return FALSE;
   num = 0;
   oldOrg = gbp->selectedOrg;
   GetItemParams (gbp->orglist, 1, NULL, &num, NULL, NULL, NULL);
@@ -876,11 +901,11 @@ extern Boolean SetBioSourceDialogTaxName (DialoG d, CharPtr taxname)
       CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
       if (StringICmp (str, taxname) != 0) {
         SafeSetTitle (gbp->commonName, "");
-        SafeSetTitle (gbp->taxName, "");
+        SafeSetTitle (gbp->taxName, taxname);
         gbp->selectedOrg = 0;
         InvalDocRows (gbp->orglist, 1, oldOrg, oldOrg);
         ChangeGencodePopups (gbp);
-        return FALSE;
+        return TRUE;
       }
       CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
       SafeSetTitle (gbp->taxName, str);
@@ -888,7 +913,18 @@ extern Boolean SetBioSourceDialogTaxName (DialoG d, CharPtr taxname)
       SafeSetTitle (gbp->commonName, str);
       Select (gbp->taxName);
       SetCodes (gbp, row, TRUE);
+      gbp->selectedOrg = row;
+      InvalDocRows (gbp->orglist, 1, oldOrg, oldOrg);
+      InvalDocRows (gbp->orglist, 1, row, row);
       return TRUE;
+    }
+    else
+    {
+      SafeSetTitle (gbp->taxName, taxname);
+      SafeSetTitle (gbp->commonName, "");
+      gbp->selectedOrg = 0;
+      InvalDocRows (gbp->orglist, 1, oldOrg, oldOrg);
+      ChangeGencodePopups (gbp);
     }
   }
   return FALSE;
@@ -1279,6 +1315,10 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
   OrgModPtr      tmpmod;
   SubSourcePtr   tmpssp;
   UIEnum         val;
+  
+  Int2           num; /* contains number of items in gbp->orglist */
+  Int4           row; /* contains closest row to match in gbp->orglist */
+  Char           txt [256]; /* holds tax name copied from gbp->orglist */
 
   biop = NULL;
   gbp = (GenBioPagePtr) GetObjectExtra (d);
@@ -1296,6 +1336,25 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
       biop->org = orp;
       if (orp != NULL) {
         orp->taxname = SaveStringFromText (gbp->taxName);
+      
+        /* make sure we use capitalization from list */
+        if (gbp->orglist != NULL)
+        {
+          GetItemParams (gbp->orglist, 1, NULL, &num, NULL, NULL, NULL);
+          if (num > 0) {
+            row = FindTaxText (orp->taxname, num);
+            if (row > 0 && row <= num) {
+              CopyStrFromTaxPtr (txt, sizeof (txt) - 2, row, 1);
+              if (StringICmp (txt, orp->taxname) == 0
+                  && StringCmp (txt, orp->taxname) != 0) {
+                orp->taxname = MemFree (orp->taxname);
+                orp->taxname = StringSave (txt);
+              }
+            }
+          }
+        }
+        
+
         /*
         orp->common = SaveStringFromText (gbp->commonName);
         */
@@ -1482,15 +1541,27 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
         }
       }
       RemoveTextFromTextFreeSubSourceModifiers (biop, NULL);     
-      /* look for plasmid-name - if we find one, set the location to plasmid */
-      tmpssp = biop->subtype;
-      while (tmpssp != NULL)
+
+      /* if we find plasmid-name on a location that cannot have
+       * plasmids, change the location to plasmid */
+      if (biop->genome != GENOME_mitochondrion
+          && biop->genome != GENOME_chloroplast
+          && biop->genome != GENOME_kinetoplast
+          && biop->genome != GENOME_chromoplast
+          && biop->genome != GENOME_plastid
+          && biop->genome != GENOME_apicoplast
+          && biop->genome != GENOME_leucoplast
+          && biop->genome != GENOME_proplastid)
       {
-        if (tmpssp->subtype == SUBSRC_plasmid_name) {
-          biop->genome = GENOME_plasmid;
-          break;
+        tmpssp = biop->subtype;
+        while (tmpssp != NULL)
+        {
+          if (tmpssp->subtype == SUBSRC_plasmid_name) {
+            biop->genome = GENOME_plasmid;
+            break;
+          }
+          tmpssp = tmpssp->next;
         }
-        tmpssp = tmpssp->next;
       }
  
       if (orp != NULL) {
@@ -1546,16 +1617,35 @@ static void BioSourceMessage (DialoG d, Int2 mssg)
   }
 }
 
-extern void ReplaceBioSourceGenomePopup (DialoG d, PopuP genome);
-void ReplaceBioSourceGenomePopup (DialoG d, PopuP genome)
+extern PopuP ReplaceBioSourceGenomePopup (DialoG d, PopuP genome);
+PopuP ReplaceBioSourceGenomePopup (DialoG d, PopuP genome)
 
 {
   GenBioPagePtr  gbp;
+  PopuP          orig_genome = NULL;
 
   gbp = (GenBioPagePtr) GetObjectExtra (d);
   if (gbp != NULL) {
+    orig_genome = gbp->genome;
     gbp->genome = genome;
   }
+  return orig_genome;
+}
+
+
+extern PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode);
+PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode)
+
+{
+  GenBioPagePtr  gbp;
+  PopuP          orig_gencode = NULL;
+
+  gbp = (GenBioPagePtr) GetObjectExtra (d);
+  if (gbp != NULL) {
+    orig_gencode = gbp->simplecode;
+    gbp->simplecode = gencode;
+  }
+  return orig_gencode;
 }
 
 
@@ -1622,7 +1712,7 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     SelectFont (systemFont);
     gbp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 6);
     SetObjectExtra (gbp->orglist, gbp, NULL);
-    SetDocAutoAdjust (gbp->orglist, FALSE);
+    SetDocAutoAdjust (gbp->orglist, TRUE);
     orgListCol [0].pixWidth = screenRect.right - screenRect.left;
     AppendItem (gbp->orglist, AllButFirstLinePrtProc, orgTxtPtr, FALSE, orgNum,
                 &orgListPar, orgListCol, programFont);

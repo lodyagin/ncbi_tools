@@ -1,4 +1,4 @@
-/*  $Id: blast_mtlock.c,v 1.2 2004/06/23 14:52:35 kans Exp $
+/*  $Id: blast_mtlock.c,v 1.5 2005/03/31 16:18:21 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,21 @@
  */
 
 static char const rcsid[] = 
-    "$Id: blast_mtlock.c,v 1.2 2004/06/23 14:52:35 kans Exp $";
+    "$Id: blast_mtlock.c,v 1.5 2005/03/31 16:18:21 dondosha Exp $";
 
 #include <ncbithr.h>
 #include <algo/blast/api/blast_mtlock.h>
 #include <algo/blast/core/blast_def.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
+/** Mutex lock handler for saving BLAST results. 
+ * @param user_data Pointer to the mutex [in]
+ * @param how What to do with the mutex? [in]
+ */
 static int CollectorLockHandler(void* user_data, EMT_Lock how)
 {
    int result = 0;
@@ -56,6 +65,9 @@ static int CollectorLockHandler(void* user_data, EMT_Lock how)
    return result;
 }
 
+/** Mutex lock clean up handler.
+ * @param user_data Pointer to the mutex [in]
+ */
 static void CollectorLockCleanup(void* user_data)
 {
    NlmMutexDestroy((TNlmMutex)user_data);
@@ -70,3 +82,6 @@ MT_LOCK Blast_MT_LOCKInit()
                      CollectorLockCleanup);
    return lock;
 }
+
+/* @} */
+

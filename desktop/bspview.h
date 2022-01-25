@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.56 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *
@@ -92,6 +92,7 @@ typedef struct bioseqviewdata {
   GrouP           docTxtControlGrp;
   GrouP           baseCtgControlGrp;
   GrouP           modeControlGrp;
+  GrouP           extraControlGrp;
   GrouP           newGphControlGrp;
   GrouP           pnlParentGrp;
 
@@ -124,6 +125,16 @@ typedef struct bioseqviewdata {
                                             * translation of coding regions should
                                             * be shown.
                                             */
+  Boolean         showAlnSubstitutions;    /* This indicates whether dots 
+                                            * should be used to indicate
+                                            * matching characters.
+                                            */
+  Int4            last_aln_row_clicked;    /* This indicates the last alignment
+                                            * row clicked by the user.  If this
+                                            * value is 0, no row has been selected.
+                                            * This is used for drawing the alignment
+                                            * cursor and generating the position text.
+                                            */
 
   GrouP           udvParentGrp;
   /*
@@ -155,7 +166,8 @@ typedef struct bioseqviewdata {
 
   PopuP           ffModeCtrl;
   PopuP           ffStyleCtrl;
-  ButtoN          ffCustomBtn;
+  PopuP           ffCustomBtn;
+  PopuP           ffRifCtrl;
 
   PopuP           newGphStyle;
   PopuP           newGphFilter;

@@ -51,6 +51,8 @@
 #define ERR_SEQ_INST_CompleteTitleProblem  1,47
 #define ERR_SEQ_INST_CompleteCircleProblem  1,48
 #define ERR_SEQ_INST_BadHTGSeq  1,49
+#define ERR_SEQ_INST_GapInProtein  1,50
+#define ERR_SEQ_INST_BadProteinStart  1,51
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -80,6 +82,10 @@
 #define ERR_SEQ_DESCR_UnwantedCompleteFlag  2,26
 #define ERR_SEQ_DESCR_CollidingPublications  2,27
 #define ERR_SEQ_DESCR_TransgenicProblem  2,28
+#define ERR_SEQ_DESCR_TaxonomyLookupProblem  2,29
+#define ERR_SEQ_DESCR_MultipleTitles  2,30
+#define ERR_SEQ_DESCR_RefGeneTrackingOnNonRefSeq  2,31
+#define ERR_SEQ_DESCR_BioSourceInconsistency  2,32
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -131,7 +137,7 @@
 #define ERR_SEQ_FEAT_UnknownImpFeatQual  5,24
 #define ERR_SEQ_FEAT_WrongQualOnImpFeat  5,25
 #define ERR_SEQ_FEAT_MissingQualOnImpFeat  5,26
-#define ERR_SEQ_FEAT_PsuedoCdsHasProduct  5,27
+#define ERR_SEQ_FEAT_PseudoCdsHasProduct  5,27
 #define ERR_SEQ_FEAT_IllegalDbXref  5,28
 #define ERR_SEQ_FEAT_FarLocation  5,29
 #define ERR_SEQ_FEAT_DuplicateFeat  5,30
@@ -187,6 +193,18 @@
 #define ERR_SEQ_FEAT_UnnecessaryException  5,80
 #define ERR_SEQ_FEAT_LocusTagProductMismatch  5,81
 #define ERR_SEQ_FEAT_MrnaTransFail  5,82
+#define ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct  5,83
+#define ERR_SEQ_FEAT_MissingGeneXref  5,84
+#define ERR_SEQ_FEAT_FeatureCitationProblem  5,85
+#define ERR_SEQ_FEAT_NestedSeqLocMix  5,86
+#define ERR_SEQ_FEAT_WrongQualOnFeature  5,87
+#define ERR_SEQ_FEAT_MissingQualOnFeature  5,88
+#define ERR_SEQ_FEAT_CodonQualifierUsed  5,89
+#define ERR_SEQ_FEAT_UnknownFeatureQual  5,90
+#define ERR_SEQ_FEAT_BadCharInAuthorName  5,91
+#define ERR_SEQ_FEAT_PolyATail  5,92
+#define ERR_SEQ_FEAT_ProteinNameEndsInBracket  5,93
+#define ERR_SEQ_FEAT_CDSwithMultipleMRNAs  5,94
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

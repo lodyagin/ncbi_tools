@@ -4,14 +4,26 @@ if (not -e "Log") {
   `mkdir Log`;
 }
 
+if ($#ARGV != 0) {
+  print <<TEXT;
+
+USAGE:
+
+  $0 <application>
+  
+  The only supported application at this time is wblast2.REAL.
+TEXT
+  exit();
+}
+
 my $app = $ARGV[0];
 my $diff = 'diff -w';
 my $time = &GetTimeCmd();
 
-#my $oldbin = "/net/blast012/export/home/web/public/htdocs/BLAST/bl2seq/$app";
-my $oldbin = "../wblast2.old.REAL";
+my $oldbin = "/net/blast012/export/home/web/public/htdocs/BLAST/bl2seq/$app";
+#my $oldbin = "../wblast2.REAL.old";
 chomp(my $basedir = `pwd`);
-my $newbin = "$basedir/$app";
+my $newbin = "$basedir/../$app";
 
 my $out = "out";
 
@@ -39,6 +51,12 @@ if ($app eq "wblast2.REAL") {
    $Tests{'blastn-plus'} = "\"ONE=NT_004487.15&TWO=AA441981.1&FROM=7685545&TO=7686027&FFROM=10&TTO=480&STRAND=1&FILTER=1&PROGRAM=blastn\"";
 
    $Tests{'fully-masked'} = "\"ONE=U09816&TWO=BX641126.1&FROM=1280&TO=1324&FFROM=2052&TTO=2082&STRAND=2&PROGRAM=blastn\"";
+   $Tests{'blastx-long-filter'} = "\"ONE=2655203&TWO=2655204&PROGRAM=blastx&FILTER=T\"";
+   $Tests{'filtered-query'} = "\"PROGRAM=blastn&FILTER=1&TWO=555&SEQ=CATCATCATCATCATCAGGCATCATCATGCATCATCATCATCAGCATCAT\"";
+# short-subject-discmb finds no hits because there are no words to search; 
+# short-subject-blastn finds one hit.
+   $Tests{'short-subject-discmb'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000&MEGABLAST=yes\"";
+   $Tests{'short-subject-blastn'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000\"";
 } else {
   if ($app eq "blast_cs.REAL") {
 

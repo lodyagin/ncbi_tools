@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.117 $
-* $Revision: 6.117 $
+* $Revision: 6.118 $
+* $Revision: 6.118 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -1577,6 +1577,8 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	Uint1 focus;
 	BioseqPtr bsp;
 	SeqEntryPtr sep = NULL;
+
+Message (MSG_POSTERR, "The asn2ff flatfile generator is obsolete and unsupported.  Please switch to using asn2gb/SeqEntryToGnbk in the future.");
 
 	if (ajp->sep != NULL) {
 	  sep = ajp->sep;

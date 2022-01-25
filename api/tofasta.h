@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.27  2005/03/21 22:15:09  kans
+* added SeqLocFastaStream
+*
 * Revision 6.26  2004/10/14 19:36:34  kans
 * CreateDefLineExEx has extProtTitle argument, normally only use first protein name in defline
 *
@@ -259,6 +262,7 @@ NLM_EXTERN Boolean BioseqToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is
 *
 *   BioseqFastaStream (bsp, fp, flags, linelen, blocklen, grouplen, do_defline)
 *   BioseqFastaMemStream (bsp, bs, flags, linelen, blocklen, grouplen, do_defline)
+*   SeqLocFastaStream (slp, bs, flags, linelen, blocklen, grouplen)
 *   SeqEntryFastaStream (sep, fp, flags, linelen, blocklen, grouplen,
 *                        do_na, do_aa, master_style)
 *
@@ -283,6 +287,15 @@ NLM_EXTERN Int4 BioseqFastaMemStream (
   Int2 blocklen,
   Int2 grouplen,
   Boolean do_defline
+);
+
+NLM_EXTERN Int4 SeqLocFastaStream (
+  SeqLocPtr slp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen
 );
 
 NLM_EXTERN Int4 SeqEntryFastaStream (

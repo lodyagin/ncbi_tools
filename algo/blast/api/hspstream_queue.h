@@ -1,4 +1,4 @@
-/*  $Id: hspstream_queue.h,v 1.3 2004/06/22 16:22:13 dondosha Exp $
+/*  $Id: hspstream_queue.h,v 1.5 2005/02/09 20:55:38 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,6 +45,11 @@ extern "C" {
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_hspstream.h>
 
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
+ */
+
 /** Data structure for the queue implementation of BlastHSPStream */
 typedef struct BlastHSPListQueueData {
    ListNode* m_queueStart;  /**< First element of the linked list of HSP 
@@ -58,6 +63,8 @@ typedef struct BlastHSPListQueueData {
 
 /** Function to initialize the queue implementation of BlastHSPStream */
 BlastHSPStream* Blast_HSPListQueueInit(void);
+
+/* @} */
 
 #ifdef __cplusplus
 }

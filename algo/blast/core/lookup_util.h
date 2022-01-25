@@ -1,4 +1,4 @@
-/* $Id: lookup_util.h,v 1.8 2004/05/19 14:52:01 camacho Exp $
+/* $Id: lookup_util.h,v 1.10 2005/03/01 13:59:51 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,7 +25,7 @@
  */
 
 /** @file lookup_util.h
- * @todo FIXME: need description
+ *  Utility functions for lookup table generation.
  */
 
 #include <algo/blast/core/blast_def.h>
@@ -78,6 +78,20 @@ Int4 makemask(Int4 x);
  */
 
 void debruijn(Int4 n, Int4 k, Uint1* output, Uint1* alphabet);
+
+/** Auxiliary function that calculates best database scanning stride for the
+ * given parameters.
+ * @param word_size Length of the exact match required to trigger 
+ *                  extensions [in]
+ * @param var_words If true, and word_size is divisible by 4, partial bytes 
+ *                  need not be checked to test the length of the 
+ *                  exact match [in]
+ * @param lut_type  What kind of lookup table is used (based on 4-mers, 8-mers 
+ *                  or 12-mers) [in]
+ * @return          The stride necessary to find all exact matches of a given
+ *                  word size.
+ */
+Int4 CalculateBestStride(Int4 word_size, Boolean var_words, Int4 lut_type);
 
 #ifdef __cplusplus
 }

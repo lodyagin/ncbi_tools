@@ -585,7 +585,8 @@ types. Enter in the Molecule pop-up menu the type of molecule that was
 sequenced.
 
 #-Genomic DNA: Sequence derived directly from the DNA of an organism. 
-Note: The DNA sequence of an rRNA gene has this molecule type, as does that from a naturally-occurring plasmid.
+Note: The DNA sequence of an rRNA gene has this molecule type, as does
+that from a naturally-occurring plasmid.
 
 #-Genomic RNA: Sequence derived directly from the genomic RNA of certain
 organisms, such as viruses.
@@ -607,7 +608,8 @@ example, the sequence of a cDNA derived from snRNA.
 #-Small cytoplasmic RNA: A sequence derived from small cytoplasmic RNA,
 for example, the sequence of a cDNA derived from small cytoplasmic RNA.
 
-#-Other-Genetic: A synthetically derived sequence including cloning vectors and tagged fusion constructs. 
+#-Other-Genetic: A synthetically derived sequence including cloning
+vectors and tagged fusion constructs. 
 
 #-cRNA: A sequence derived from complementary RNA transcribed from DNA, mainly
 used for viral submissions.
@@ -1816,9 +1818,9 @@ sequence.
 #-EST:  Expressed Sequence Tag: single-pass, low-quality mRNA sequences
 derived from cDNAs.  These sequences will appear in the EST division.
 
-#-STS:  Sequence Tagged Site: short sequences that are operationally unique in a genome 
-and that define a specific position on the physical map.  These sequences
-will appear in the STS division.
+#-STS:  Sequence Tagged Site: short sequences that are operationally
+unique in a genome and that define a specific position on the physical
+map.  These sequences will appear in the STS division.
 
 #-Survey: single-pass genomic sequence.  These sequences will appear in
 the Genome Survey Sequence (GSS) division.
@@ -2216,7 +2218,9 @@ location (upstream or downstream) relative to the promoter.
 
 *gap
 
-#Gap in the sequence, only applied to gaps of unknown length.  The location span of the gap feature is 100 base pairs, indicated by 100 "n"s in the sequence.  The qualifier /estimated_length=unknown is mandatory.
+#Gap in the sequence, only applied to gaps of unknown length.  The
+location span of the gap feature is 100 base pairs, indicated by 100 "n"s
+in the sequence.  The qualifier /estimated_length=unknown is mandatory.
 
 *GC_signal
 
@@ -2322,11 +2326,13 @@ this location.
 
 *operon
 
-#Region containing polycistronic transcript under the control of the same regulatory sequences.
+#Region containing polycistronic transcript under the control of the same
+regulatory sequences.
 
 *oriT
 
-Origin of transfer; region of DNA where transfer is initiated during the process of conjugation or mobilization.
+Origin of transfer; region of DNA where transfer is initiated during the
+process of conjugation or mobilization.
 
 *polyA_signal
 
@@ -2683,9 +2689,9 @@ using this modifier.
 #-Genotype:  Genotype of the organism.
 
 #-Germline:  If the sequence shown is DNA and a member of the
-immunoglobulin family, this qualifier is used to denote that the
-sequence is from unrearranged DNA.  Do not include extra text when using
-this modifier. 
+immunoglobulin family, this qualifier is used to denote that the sequence
+is from unrearranged DNA.  Do not include extra text when using this
+modifier. 
 
 #-Haplotype:  Haplotype of the organism.
 
@@ -2705,9 +2711,9 @@ the sequence was derived.
 obtained.
 
 #-Rearranged:  If the sequence shown is DNA and a member of the
-immunoglobulin family, this qualifier is used to denote that the
-sequence is from rearranged DNA.  Do not include extra text when using
-this modifier.
+immunoglobulin family, this qualifier is used to denote that the sequence
+is from rearranged DNA.  Do not include extra text when using this
+modifier.
 
 #-Segment: Name of viral genome fragmented into two or more nucleic acid molecules.
 
@@ -2905,7 +2911,8 @@ sequence will appear.
 
 #-Patent
 
-#-Online Publication: Used for journals which publish strictly online and do not issue print copies.
+#-Online Publication: Used for journals which publish strictly online and
+do not issue print copies.
 
 #-Submission
 
@@ -2913,8 +2920,7 @@ sequence will appear.
 
 #Using the radio buttons, select one of the options.
 
-#-Refers to the entire sequence: Most publications should be classified
-as such.
+#-Refers to the entire sequence: Most publications should be classified as such.
 
 #-Refers to part of the sequence: For use only when a publication
 discusses only part of the presented sequence.  You must enter the
@@ -3009,15 +3015,6 @@ a FASTA-formatted sequence file.  The sequence will be displayed in Sequin and
 can be analyzed with tools such as CDD Search, but it should not be submitted,
 because it does not have the appropriate annotations.
 
-*FASTA Nucleotide Direct to Sequence Editor
-
-#Opens a FASTA formatted sequence directly into the Sequence Editor.  The
-sequence can then be analyzed with tools such as the
-<A HREF="#Find">
-"Find"
-</A> 
-command.
-
 *Close
 
 #Close this entry.
@@ -3040,6 +3037,12 @@ database, that is, it does not validate the entry.
 *Save As
 
 #See Save.
+
+*Save as Binary Seq-entry
+
+#Saves the file in a compressed format and should be used only when the
+file is to be imported into other analysis programs.  Do not use this
+option to save files for submission directly to GenBank.
 
 *Restore
 
@@ -3073,10 +3076,6 @@ be one of the Sequin forms or pages, or the help documentation.
 *Clear
 
 #Clear the selected item.
-
-*Duplicate
-
-#Duplicates the selected feature.
 
 *Edit Sequence
 
@@ -3158,17 +3157,22 @@ that has already been saved in Sequin). If you are running Sequin in
 <A HREF="#NetConfigure">
 Network Aware mode,
 </A> 
-you can use Download Accession to import a record from Entrez. If 
-you have done a QBLAST search, you can use Selected Alignment to import a 
-sequence from the alignment that you have selected in the Graphic or Alignment 
-view.  The FASTA or ASN1 set option allows you to update multiple
-sequences using either FASTA or ASN1 formats.  In both cases the sequence
-identifier must be identical in the new and old sequences. 
+you can use Download Accession to import a record from Entrez. If you
+have done a QBLAST search, you can use Selected Alignment to import a
+sequence from the alignment that you have selected in the Graphic or
+Alignment view.  The FASTA or ASN1 set option allows you to update
+multiple sequences using either FASTA or ASN1 formats.  In both cases the
+sequence identifier must be identical in the new and old sequences. 
 
-#In all cases, the imported and original sequences must have regions similar 
-enough for the two sequences to be aligned.  If the sequences are not 
-similar enough to generate an alignment, Sequin will inform you that 
-the similarity is insufficient to perform the update. 
+#In all cases, the imported and original sequences must have regions
+similar enough for the two sequences to be aligned.  If the sequences are
+not similar enough to generate an alignment, Sequin will inform you that
+the similarity is insufficient to perform the update.  If you are
+updating multiple sequences and one sequence does not align, a pop-up box
+will be generated informing you which sequence does not align.  You must
+select whether you wish to skip the replacement of this sequence, skip
+all sequences which do not align, replace the sequence or replace all
+sequences that do not align. 
 
 #After you import the updated sequence, a new window will open that displays
 two graphical views and the text of the alignment of the new and old sequence.
@@ -3186,26 +3190,24 @@ affecting flanking regions.
 #When updating via the Download Accession or Read Sequence Record methods, the 
 update operation box allows you to specify whether the sequence and/or the 
 features should be updated.  In cases where the new and old records contain
-duplicate features, you may chose to retain the new and/or old feature or 
-merge the duplicated features into one.
+duplicate features, you may chose to retain the new and/or old features. 
 
-#The check boxes at the bottom of the form allow you to specify actions to
-be taken regarding coding regions, references, or quality score when
+#The check boxes at the bottom of the form allow you to specify actions
+to be taken regarding coding regions, references, or quality score when
 updating the sequence.  Add Cit-subs for Updated Sequences is used by the
 database staff to append reference information regarding the updating of
 publicly available sequences.  Please do not use this function.  The
 Replace Quality Scores function allows you to update the quality scores
 associated with the new sequence.  If the new sequence does not have
 quality scores, the old quality scores will be deleted by checking this
-function.  By default, Update Proteins for Updated Sequences is selected.
- Sequin will attempt to clean-up conceptual translations of annotated
-coding regions based on the updated nucleotide sequence.  You can also
-select options which will truncate retranslated proteins at stops, extend
-retranslated proteins without stops or extend retranslated proteins
-without starts.  The Correct CDS genes function adjusts the corresponding
-gene span based on the new coding region span.   In any case, all
-annotated coding regions should be manually reviewed following a sequence
-update.   
+function.  The Update Proteins for Updated Sequences function will
+attempt to clean-up conceptual translations of annotated coding regions
+based on the updated nucleotide sequence.  You can also select options
+which will truncate retranslated proteins at stops, extend retranslated
+proteins without stops or extend retranslated proteins without starts. 
+The Correct CDS genes function adjusts the corresponding gene span based
+on the new coding region span.   In any case, all annotated coding
+regions should be manually reviewed following a sequence update.   
 
 *Extend Sequence
 
@@ -3254,6 +3256,25 @@ population, mutation, phylogenetic, or environmental sample set.
 You may import the new entry in FASTA format or ASN.1 format (for
 example, a sequence record that has been saved in Sequin). 
 
+*Parse File to Source
+
+#This selection allows you to add unique information for one source
+qualifier for each of the records in a batch or set.  The input file must
+be in the format of a tab-delimited, two column table.  The first column
+should list the SeqID exactly as it was listed in the original FASTA
+file.  The second column should list the text value for the desired
+source qualifier for each record. Once the file has been imported, a
+pop-up box will appear with the source qualifiers listed in the pull down
+menus.  The qualifiers are separated into three menus: one for taxonomic
+information, one for the Organism modifiers and one for the Source
+modifiers.   For example, in order to add the clone designations 57 and
+49 to the sequences labeled seq1 and seq2, the table
+
+seq1	57
+seq2	49
+
+should be used and clone should be selected from the Source modifiers pull-down menu.
+ 
 >Search Menu
 
 *Find ASN.1
@@ -3628,11 +3649,11 @@ hit the Look at button.
 
 *Editing Sequence and Existing Annotation
 
-#Select a piece of sequence by highlighting it with the mouse.  To select
-the entire sequence, click on a sequence location number on the left side
-of the window.  Any sequence that is highlighted in the Sequence Editor
-will show up as a box on the sequence when it is viewed in the Graphic
-Display Format.
+#Select a piece of sequence by highlighting it with the mouse.  To
+select the entire sequence, click on a sequence location number on the
+left side of the window.  Any sequence that is highlighted in the
+Sequence Editor will show up as a box on the sequence when it is viewed
+in the Graphic Display Format.
 
 #One way to insert and delete residues is with the mouse.  Move the
 cursor to the appropriate location and type.  Text will be inserted to
@@ -3644,7 +3665,7 @@ key.
 #Another way to insert and delete residues is with options under the Edit
 menu of the Sequence Editor.  Use Cut to remove, or Copy to copy,
 highlighted residues.  Copied residues can then be pasted elsewhere
-within the sequence by using the Paste option.  
+within the sequence by using the Paste option.
 
 #Features annotated via the record viewer will be displayed in a
 graphical format within the sequence editor.  CDS features will be be
@@ -3692,9 +3713,9 @@ until you Save the record in the record viewer.
 
 **Merge Feature Mode/Split Feature Mode
 
-#In merge mode, any new sequence that is entered into a region spanned by
-an existing feature becomes part of that feature.  For example, if you
-enter new sequence in the middle of a CDS, that sequence will be
+#In merge mode, any new sequence that is entered into a region spanned
+by an existing feature becomes part of that feature.  For example, if
+you enter new sequence in the middle of a CDS, that sequence will be
 translated as part of the CDS.  In split mode, the new sequence
 interrupts the feature.  For example, if you enter new sequence in the
 middle of a CDS, the CDS will be interrupted by that sequence (see the
@@ -3717,12 +3738,12 @@ for easier viewing.
 **Accept
 
 #Closes the Sequence Editor after saving all of the changes made to
-sequences and features.
+sequences and features.  
 
 **Cancel
 
-#Closes the Sequence Editor without saving any changes made to sequences
-or features.
+#Closes the Sequence Editor without saving any changes made to sequences or
+features.
 
 
 **Translate CDS
@@ -3737,15 +3758,14 @@ changed within the graphical view.
 #Allows the export of a range of sequence as a FASTA file or text file. 
 Using the text option will also export overlapping features if they are
 displayed.  If the features are first hidden, only the sequence will be
-exported.
+exported.  All protein translations displayed at the time of export, will
+be exported as well. 
 
 **Accept
-#Closes the Sequence Editor after saving all of the changes made to
-sequence and features.
+#Closes the Sequence Editor after saving all of the changes made to sequence and features.
 
 **Cancel
-#Closes the Sequence Editor without saving any changes made to sequences
-of features.
+#Closes the Sequence Editor without saving any changes made to sequences of features.
 
 *Sequence Editor Edit Menu
 
@@ -3780,9 +3800,9 @@ the reverse complement box at the bottom of the pop-up box.
 
 #To find an exact match to an amino acid seqeunce pattern, type that
 sequence in the box, and click on "translate sequence".  Sequin will look
-for all occurrences of that pattern in all three plus strand open reading
-frames.  The DNA sequence encoding that protein sequence in any of the
-three plus strand reading frames will be hightlighted. 
+for all occurrences of that pattern in all six open reading frames.  The
+DNA sequence encoding that protein sequence in any of the six reading
+frames will be hightlighted.
 
 **Translate CDS
 
@@ -3793,7 +3813,7 @@ changed within the graphical view.
 
 #Shows the complement of the submitted strand underneath the original.
 
-**Reading Frames
+**Reading Frames 
 
 #Shows the indicated phase translation of the selected coding sequence.
 You can select any or all of the six reading frames, all reading frames
@@ -3810,7 +3830,7 @@ will be indicated by a red box around the amino acid abbreviation.
 
 #Creates a second amino acid sequence in the display which retranslates
 as the nucleotide sequence is changed to allow side-by-side comparison to
-the original amino acid sequence.
+the original amino acid sequence. 
 
 *Sequence Editor Features Menu
 
@@ -3840,12 +3860,12 @@ imported individually in FASTA format, Sequin can generate its own
 alignment.
 
 #You can view the aligned sequences in the Sequence Alignment Editor. In
-the record viewer, select All Sequences in the Target Sequences menu, and
-select the Alignment Display Format.  Highlight the alignment by clicking
-inside of the box surrounding the sequence bars.  Then select Edit
-alignment from the Edit menu. The aligned sequences can be viewed in a
-number of different formats.  See instructions for the Sequence Editor
-Alignment menu,
+the record viewer, select All Sequences in the Target Sequences menu,
+and select the Alignment Display Format.  Highlight the alignment by
+clicking inside of the box surrounding the sequence bars.  Then select
+Edit alignment from the Edit menu. The aligned sequences can be viewed
+in a number of different formats.  See instructions for the Sequence
+Editor Alignment menu,
 <A HREF="#SequenceEditorAlignmentmenu">
 below.
 </A>
@@ -3854,8 +3874,9 @@ below.
 (coding sequence) feature to one or more of the sequences.  You must
 first add the CDS feature to a single sequence.  To access the Sequence
 Editor for a single sequence, double click on the name of that sequence
-in the Alignment view. You can then propagate the feature to other sequences
-(see <A HREF="#Feature Propagate">Feature Propagate</A> under the Edit menu).
+in the Alignment view. You can then propagate the feature to other
+sequences (see <A HREF="#Feature Propagate">Feature Propagate</A> under
+the Edit menu).
 
 *Sequence Editor Alignment Menu
 
@@ -3909,7 +3930,7 @@ ALT="Table of Contents" ALIGN=top BORDER=2></A>
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised October 18, 2004
+<P CLASS=medium1>Revised November 5, 2004
 
 </CENTER>
 

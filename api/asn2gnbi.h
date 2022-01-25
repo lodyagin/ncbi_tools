@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.16 $
+* $Revision: 1.29 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -119,28 +119,34 @@ typedef struct stringitem {
 /* internal asn2gbjob structure has fields on top of Asn2gbJob fields */
 
 typedef struct int_asn2gb_job {
-  Asn2gbJob      ajp;
-  FmtType        format;
-  ModType        mode;
-  Asn2gbFlags    flags;
-  Boolean        showFarTransl;
-  Boolean        transIfNoProd;
-  Boolean        alwaysTranslCds;
-  Boolean        showTranscript;
-  Boolean        showPeptide;
-  Boolean        masterStyle;
-  Boolean        newSourceOrg;
-  Boolean        produceInsdSeq;
-  ValNodePtr     lockedBspList;
-  Boolean        relModeError;
-  Boolean        skipProts;
-  Boolean        skipMrnas;
-  IndxPtr        index;
-  GBSeqPtr       gbseq;
-  AsnIoPtr       aip;
-  AsnTypePtr     atp;
-  StringItemPtr  pool;
-  Boolean        www;
+  Asn2gbJob       ajp;
+  FmtType         format;
+  ModType         mode;
+  Asn2gbFlags     flags;
+  Boolean         showFarTransl;
+  Boolean         transIfNoProd;
+  Boolean         alwaysTranslCds;
+  Boolean         showTranscript;
+  Boolean         showPeptide;
+  Boolean         masterStyle;
+  Boolean         newSourceOrg;
+  Boolean         produceInsdSeq;
+  Boolean         refseqConventions;
+  ValNodePtr      lockedBspList;
+  ValNodePtr      gapvnp;
+  ValNodePtr      remotevnp;
+  Asn2gbLockFunc  remotelock;
+  Asn2gbFreeFunc  remotefree;
+  Pointer         remotedata;
+  Boolean         relModeError;
+  Boolean         skipProts;
+  Boolean         skipMrnas;
+  IndxPtr         index;
+  GBSeqPtr        gbseq;
+  AsnIoPtr        aip;
+  AsnTypePtr      atp;
+  StringItemPtr   pool;
+  Boolean         www;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -171,9 +177,6 @@ typedef struct asn2gbformat {
   FmtType          format;
   Asn2gbWriteFunc  ffwrite;
   Pointer          userdata;
-  Asn2gbLockFunc   remotelock;
-  Asn2gbFreeFunc   remotefree;
-  Pointer          remotedata;
   FILE             *fp;
   AsnIoPtr         aip;
   AsnTypePtr       atp;
@@ -249,9 +252,14 @@ typedef struct asn2gbwork {
 
   Boolean          hideGeneRIFs;
   Boolean          onlyGeneRIFs;
-  Boolean          latestGeneRIFs;
+  Boolean          onlyReviewPubs;
+  Boolean          newestPubs;
+  Boolean          oldestPubs;
 
   Boolean          showRefs;
+  Boolean          hideGaps;
+  Boolean          hideSources;
+  Boolean          hideSequence;
 
   Boolean          isGPS;
   Boolean          copyGpsCdsUp;
@@ -376,6 +384,7 @@ typedef enum {
   Qual_class_code_break,
   Qual_class_anti_codon,
   Qual_class_codon,
+  Qual_class_compare,
   Qual_class_method,
   Qual_class_pubset,
   Qual_class_db_xref,
@@ -418,6 +427,8 @@ typedef enum {
   SCQUAL_citation,
   SCQUAL_clone,
   SCQUAL_clone_lib,
+  SCQUAL_collected_by,
+  SCQUAL_collection_date,
   SCQUAL_common,
   SCQUAL_common_name,
   SCQUAL_country,
@@ -434,6 +445,8 @@ typedef enum {
   SCQUAL_forma,
   SCQUAL_forma_specialis,
   SCQUAL_frequency,
+  SCQUAL_fwd_primer_name,
+  SCQUAL_fwd_primer_seq,
   SCQUAL_gb_acronym,
   SCQUAL_gb_anamorph,
   SCQUAL_gb_synonym,
@@ -441,11 +454,13 @@ typedef enum {
   SCQUAL_germline,
   SCQUAL_group,
   SCQUAL_haplotype,
+  SCQUAL_identified_by,
   SCQUAL_ins_seq_name,
   SCQUAL_isolate,
   SCQUAL_isolation_source,
   SCQUAL_lab_host,
   SCQUAL_label,
+  SCQUAL_lat_lon,
   SCQUAL_macronuclear,
   SCQUAL_map,
   SCQUAL_mol_type,
@@ -460,6 +475,8 @@ typedef enum {
   SCQUAL_plastid_name,
   SCQUAL_pop_variant,
   SCQUAL_rearranged,
+  SCQUAL_rev_primer_name,
+  SCQUAL_rev_primer_seq,
   SCQUAL_segment,
   SCQUAL_seqfeat_note,
   SCQUAL_sequenced_mol,
@@ -513,6 +530,7 @@ typedef enum {
   FTQUAL_direction,
   FTQUAL_EC_number,
   FTQUAL_encodes,
+  FTQUAL_estimated_length,
   FTQUAL_evidence,
   FTQUAL_exception,
   FTQUAL_exception_note,
@@ -607,6 +625,7 @@ NLM_EXTERN Char link_muid [MAX_WWWBUF];
 NLM_EXTERN Char link_code [MAX_WWWBUF];
 NLM_EXTERN Char link_encode [MAX_WWWBUF];
 NLM_EXTERN Char link_go [MAX_WWWBUF];
+NLM_EXTERN Char link_sp [MAX_WWWBUF];
 
 NLM_EXTERN void FF_www_db_xref(
   IntAsn2gbJobPtr ajp,
@@ -626,7 +645,7 @@ typedef struct sourcequal {
 
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE];
 
-NLM_EXTERN SourceType subSourceToSourceIdx [30];
+NLM_EXTERN SourceType subSourceToSourceIdx [38];
 
 NLM_EXTERN void DoOneSection (
   BioseqPtr target,

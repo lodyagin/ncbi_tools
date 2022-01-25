@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.44 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -61,6 +61,84 @@
 #include <salpedit.h>
 #include <alignmgr2.h>
 #include <actutils.h>
+
+/* general file recursion function */
+
+NLM_EXTERN Int4 DirExplore (
+  CharPtr directory,
+  CharPtr filter,
+  CharPtr suffix,
+  DirExpProc proc,
+  Pointer userdata
+)
+
+{
+  Int4        count = 0;
+  Char        file [FILENAME_MAX], path [PATH_MAX];
+  CharPtr     ptr, str;
+  ValNodePtr  head, vnp;
+
+  if (proc == NULL) return 0;
+  if (StringHasNoText (directory) || StringHasNoText (suffix)) return 0;
+
+  /* get list of all files in source directory */
+
+  head = DirCatalog (directory);
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 0) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (! StringHasNoText (str)) {
+
+        /* check filename for indicated suffix */
+
+        ptr = StringStr (str, suffix);
+        if (ptr != NULL) {
+
+          /* make sure detected suffix is really at end of filename */
+
+          if (StringCmp (ptr, suffix) == 0) {
+            *ptr = '\0';
+          } else {
+            ptr = NULL;
+          }
+        }
+
+        if (StringHasNoText (suffix) || ptr != NULL) {
+
+          StringNCpy_0 (path, directory, sizeof (path));
+          sprintf (file, "%s%s", str, suffix);
+          FileBuildPath (path, NULL, file);
+
+          /* check full path/file name for desired filter */
+
+          if (StringHasNoText (filter) || StringStr (path, filter) != NULL) {
+
+            /* process file that satisfies optional filter and suffix constraints */
+
+            proc (path, userdata);
+            count++;
+          }
+        }
+      }
+    } else if (vnp->choice == 1) {
+
+      /* recurse into subdirectory */
+
+      StringNCpy_0 (path, directory, sizeof (path));
+      str = (CharPtr) vnp->data.ptrvalue;
+      FileBuildPath (path, str, NULL);
+
+      count += DirExplore (path, filter, suffix, proc, userdata);
+    }
+  }
+
+  /* clean up file list */
+
+  ValNodeFreeData (head);
+
+  return count;
+}
 
 /* CautiousSeqEntryCleanup section */
 
@@ -274,7 +352,7 @@ static CharPtr feat_bond [num_bond] = {
   "thioether bond"
 };
 
-#define num_site 26
+#define num_site 27
 static CharPtr feat_site [num_site] = {
   NULL, 
   "active", 
@@ -301,7 +379,8 @@ static CharPtr feat_site [num_site] = {
   "dna-binding",
   "signal-peptide",
   "transit-peptide",
-  "transmembrane-region"
+  "transmembrane-region",
+  "nitrosylation"
 };
 
 static Int2 FindStr (CharPtr PNTR array, Int2 array_num, CharPtr str)
@@ -1522,7 +1601,7 @@ NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp)
   bs = BSNew (bsp->length);
   if (bs == NULL) return;
 
-  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) bs, SPStreamToRaw);
+  SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) bs, SPStreamToRaw);
 
   if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1) {
     bsp->seq_ext = SeqLocSetFree ((ValNodePtr) bsp->seq_ext);
@@ -2637,7 +2716,7 @@ MakeSegmentedSetFromAlignment
 }
 
 
-static CharPtr AlignmentStringToSequenceString (CharPtr aln_str, Uint1 moltype)
+extern CharPtr AlignmentStringToSequenceString (CharPtr aln_str, Uint1 moltype)
 {
   CharPtr cp_aln, cp_seq;
   Char    ch;
@@ -2798,6 +2877,54 @@ static SeqEntryPtr MakeDeltaSeqsFromAlignmentSequences (TAlignmentFilePtr afp, U
   return sep_list;
 }
 
+static SeqIdPtr GetFarPointerID (CharPtr id_str)
+{
+  CharPtr  tmp_id_str;
+  CharPtr  cp_start, cp_end;
+  Int4     len;
+  SeqIdPtr sip;
+  
+  if (id_str == NULL)
+  {
+    return NULL;
+  }
+
+  cp_start = StringChr (id_str, '|');
+  if (cp_start == NULL)
+  {
+    cp_start = id_str;
+    len = StringLen (id_str);
+  }
+  else
+  {
+    cp_start++;
+    cp_end = StringChr (cp_start, '|');
+    if (cp_end == NULL)
+    {
+      len = StringLen (cp_start);
+    }
+    else
+    {
+      len = cp_end - cp_start;
+    }
+  }
+  if (len == 0)
+  {
+    return NULL;
+  }
+  tmp_id_str = (CharPtr) MemNew ((len + 4) * sizeof (Char));
+  if (tmp_id_str == NULL)
+  {
+    return NULL;
+  }
+  StringCpy (tmp_id_str, "acc");
+  StringNCat (tmp_id_str, cp_start, len);
+  tmp_id_str [len + 3] = 0;
+  sip = MakeSeqID (tmp_id_str);
+  MemFree (tmp_id_str);
+  return sip;
+}
+
 
 extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 moltype, Boolean check_ids) 
 {
@@ -2861,7 +2988,10 @@ extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 m
     else
     {
       sip = MakeSeqID (afp->ids [index]);
-      sip->next = SeqIdFree (sip->next);
+      if (sip != NULL)
+      {
+        sip->next = SeqIdFree (sip->next);
+      }
       if (check_ids && StringNCmp (afp->ids[index], "acc", 3) != 0)
       {
         bsp = BioseqFind (sip);
@@ -2880,16 +3010,17 @@ extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 m
           if (ans == ANS_YES)
           {
             sip = SeqIdFree (sip);
-            tmp_id_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (afp->ids [index]) + 4));
-            sprintf (tmp_id_str, "acc%s", afp->ids [index]);
-            sip = MakeSeqID (tmp_id_str);
-            MemFree (tmp_id_str);   
+            sip = GetFarPointerID (afp->ids [index]);
           }
           else
           {
             sip = SeqIdFree (sip);
             sip = MakeSeqID (afp->ids [index]);
-          }  
+          }
+          if (sip != NULL)
+          {
+            sip->next = SeqIdFree (sip->next);
+          }
         }
       }
 
@@ -3134,6 +3265,7 @@ typedef struct alignmentforbsp
   BioseqPtr   bsp;
   SeqAlignPtr salp_list;
   SeqAlignPtr salp_last;
+  ValNodePtr  seq_annot_list;
 } AlignmentForBspData, PNTR AlignmentForBspPtr;
 
 static void FindAlignmentsForBioseqCallback (SeqAnnotPtr sap, Pointer userdata)
@@ -3203,3 +3335,344 @@ extern SeqAlignPtr FindAlignmentsForBioseq (BioseqPtr bsp)
   return afbd.salp_list;
 }
 
+static void FindAlignSeqAnnotsForBioseqCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  AlignmentForBspPtr   afbp;
+  SeqAlignPtr          salp;
+  SeqIdPtr             sip;
+  Boolean              found = FALSE;
+
+  if (sap == NULL || sap->type != 2 || userdata == NULL) 
+  {
+    return;
+  }
+  afbp = (AlignmentForBspPtr) userdata;
+  if (afbp->bsp == NULL)
+  {
+    return;
+  }
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  for (sip = afbp->bsp->id; sip != NULL && !found; sip = sip->next)
+  {
+    if (SeqAlignFindSeqId (salp, sip))
+    {
+      ValNodeAddPointer (&(afbp->seq_annot_list), 0, sap);
+      found = TRUE;
+    }
+  }
+}
+
+extern ValNodePtr FindAlignSeqAnnotsForBioseq (BioseqPtr bsp)
+{
+  SeqEntryPtr         topsep;
+  AlignmentForBspData afbd;
+  SeqLocPtr           slp;
+  SeqIdPtr            sip;
+  
+  if (bsp == NULL) return NULL;
+  topsep = GetTopSeqEntryForEntityID (bsp->idx.entityID);
+  afbd.salp_list = NULL;
+  afbd.salp_last = NULL;
+  afbd.seq_annot_list = NULL;
+  if (bsp->repr == Seq_repr_seg)
+  {
+    for (slp = bsp->seq_ext; slp != NULL; slp = slp->next)
+    {
+      sip = SeqLocId (slp);
+      afbd.bsp = BioseqFind (sip);
+      VisitAnnotsInSep (topsep, &afbd, FindAlignSeqAnnotsForBioseqCallback);
+    }
+  }
+  else
+  {
+    afbd.bsp = bsp;
+    VisitAnnotsInSep (topsep, &afbd, FindAlignSeqAnnotsForBioseqCallback);
+  }
+  
+  return afbd.seq_annot_list;
+}
+
+NLM_EXTERN void ChangeSeqIdToWorstID (SeqIdPtr sip)
+{
+  BioseqPtr       bsp;
+  SeqIdPtr        id;
+  Pointer         pnt;
+
+  if (sip == NULL)
+    return;
+  bsp = BioseqFindCore (sip);
+  if (bsp == NULL)
+    return;
+  id = SeqIdDup (SeqIdFindWorst (bsp->id));
+  if (id == NULL)
+    return;
+  /* now remove SeqId contents to reuse SeqId valnode */
+  pnt = sip->data.ptrvalue;
+  switch (sip->choice) {
+  case SEQID_LOCAL:            /* local */
+    ObjectIdFree ((ObjectIdPtr) pnt);
+    break;
+  case SEQID_GIBBSQ:           /* gibbseq */
+  case SEQID_GIBBMT:           /* gibbmt */
+    break;
+  case SEQID_GIIM:             /* giimid */
+    GiimFree ((GiimPtr) pnt);
+    break;
+  case SEQID_GENBANK:          /* genbank */
+  case SEQID_EMBL:             /* embl */
+  case SEQID_PIR:              /* pir   */
+  case SEQID_SWISSPROT:        /* swissprot */
+  case SEQID_OTHER:            /* other */
+  case SEQID_DDBJ:
+  case SEQID_PRF:
+  case SEQID_TPG:
+  case SEQID_TPE:
+  case SEQID_TPD:
+  case SEQID_GPIPE:
+    TextSeqIdFree ((TextSeqIdPtr) pnt);
+    break;
+  case SEQID_PATENT:           /* patent seq id */
+    PatentSeqIdFree ((PatentSeqIdPtr) pnt);
+    break;
+  case SEQID_GENERAL:          /* general */
+    DbtagFree ((DbtagPtr) pnt);
+    break;
+  case SEQID_GI:               /* gi */
+    break;
+  case SEQID_PDB:
+    PDBSeqIdFree ((PDBSeqIdPtr) pnt);
+    break;
+  }
+  sip->choice = id->choice;
+  sip->data.ptrvalue = id->data.ptrvalue;
+  SeqIdStripLocus (sip);
+}
+
+NLM_EXTERN void ChangeSeqLocToWorstID (SeqLocPtr slp)
+{
+  SeqLocPtr       loc;
+  PackSeqPntPtr   psp;
+  SeqBondPtr      sbp;
+  SeqIntPtr       sinp;
+  SeqIdPtr        sip;
+  SeqPntPtr       spp;
+
+  while (slp != NULL) {
+    switch (slp->choice) {
+    case SEQLOC_NULL:
+      break;
+    case SEQLOC_EMPTY:
+    case SEQLOC_WHOLE:
+      sip = (SeqIdPtr) slp->data.ptrvalue;
+      ChangeSeqIdToWorstID (sip);
+      break;
+    case SEQLOC_INT:
+      sinp = (SeqIntPtr) slp->data.ptrvalue;
+      if (sinp != NULL) {
+        sip = sinp->id;
+        ChangeSeqIdToWorstID (sip);
+      }
+      break;
+    case SEQLOC_PNT:
+      spp = (SeqPntPtr) slp->data.ptrvalue;
+      if (spp != NULL) {
+        sip = spp->id;
+        ChangeSeqIdToWorstID (sip);
+      }
+      break;
+    case SEQLOC_PACKED_PNT:
+      psp = (PackSeqPntPtr) slp->data.ptrvalue;
+      if (psp != NULL) {
+        sip = psp->id;
+        ChangeSeqIdToWorstID (sip);
+      }
+      break;
+    case SEQLOC_PACKED_INT:
+    case SEQLOC_MIX:
+    case SEQLOC_EQUIV:
+      loc = (SeqLocPtr) slp->data.ptrvalue;
+      while (loc != NULL) {
+        ChangeSeqLocToWorstID (loc);
+        loc = loc->next;
+      }
+      break;
+    case SEQLOC_BOND:
+      sbp = (SeqBondPtr) slp->data.ptrvalue;
+      if (sbp != NULL) {
+        spp = (SeqPntPtr) sbp->a;
+        if (spp != NULL) {
+          sip = spp->id;
+          ChangeSeqIdToWorstID (sip);
+        }
+        spp = (SeqPntPtr) sbp->b;
+        if (spp != NULL) {
+          sip = spp->id;
+          ChangeSeqIdToWorstID (sip);
+        }
+      }
+      break;
+    case SEQLOC_FEAT:
+      break;
+    default:
+      break;
+    }
+    slp = slp->next;
+  }
+}
+
+/* This function will remove DenDiag and pairwise alignments if they contain
+ * the sequence identified by sip, otherwise it will remove the sequence from
+ * the alignment.
+ */
+static SeqAlignPtr RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr salphead)
+{
+  Uint4       seqid_order;
+  SeqIdPtr    tmpsip;
+  SeqAlignPtr salp, salp_next, prev_salp, remove_salp, last_remove;
+  
+  if (!FindSeqIdinSeqAlign (salphead, sip)) return NULL;
+  
+  salp = salphead;
+  prev_salp = NULL;
+  remove_salp = NULL;
+  last_remove = NULL;
+  while (salp != NULL)
+  {
+    salp_next = salp->next;
+    tmpsip = SeqIdPtrFromSeqAlign (salp);
+    seqid_order = SeqIdOrderInBioseqIdList(sip, tmpsip);
+    if (seqid_order == 0)
+    {
+      /* do nothing for this subalignment */
+      prev_salp = salp;
+    }
+    else if (salp->dim == 2 || salphead->segtype ==1)
+    {
+      /* This is for a pairwise alignment or a DENDIAG alignment */
+      if (prev_salp == NULL)
+      {
+      	salphead = salp->next;
+      }
+      else
+      {
+      	prev_salp->next = salp->next;
+      }
+      /* save the alignments that we want to free in a list and get rid of them
+       * at the end - freeing them beforehand causes problems with listing the
+       * IDs in the alignment.
+       */
+      salp->next = NULL;
+      if (remove_salp == NULL)
+      {
+      	remove_salp = salp;
+      }
+      else
+      {
+      	last_remove->next = salp;
+      }
+      last_remove = salp;
+    }
+    else 
+    {
+      SeqAlignBioseqDeleteById (salphead, sip);  
+      prev_salp = salp;
+    }
+    salp = salp_next;
+  }
+  /* Now we can free the alignment */
+  SeqAlignFree (remove_salp);
+  return salphead;
+}
+
+static void RemoveSequenceFromAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  SeqAlignPtr salp;
+  SeqIdPtr    sip;
+
+  if (sap == NULL || sap->type != 2 || userdata == NULL) return;
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  sip = (SeqIdPtr) userdata;
+  sap->data = RemoveOneSequenceFromAlignment (sip, salp);
+  /* if we've deleted all of the alignments, get rid of the annotation as well */
+  if (sap->data == NULL)
+  {
+  	sap->idx.deleteme = TRUE;
+  }
+}
+
+typedef struct checkforremovesequencefromalignments
+{
+  Boolean  found_problem;
+  SeqIdPtr sip;
+} CheckForRemoveSequenceFromAlignmentsData, PNTR CheckForRemoveSequenceFromAlignmentsPtr;
+
+/* This is the callback function for looking for pairwise alignments.
+ * If we delete the first sequence in a pairwise alignment, we end up deleting
+ * the entire alignment because that sequence is paired with every other sequence.
+ */
+static void CheckForRemoveSequenceFromAlignmentsProblemsCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  CheckForRemoveSequenceFromAlignmentsPtr p;
+  SeqAlignPtr salphead, salp;
+  Uint4       seqid_order;
+  SeqIdPtr    tmpsip;
+  
+  if (sap == NULL || sap->type != 2
+      || (p = (CheckForRemoveSequenceFromAlignmentsPtr)userdata) == NULL
+      || p->found_problem)
+  {
+  	return;
+  }
+  salphead = (SeqAlignPtr) sap->data;
+  if (salphead == NULL) return;
+  
+  if (!FindSeqIdinSeqAlign (salphead, p->sip))
+  {
+  	return;
+  }
+  for (salp = salphead; salp != NULL; salp = salp->next)
+  {
+    tmpsip = SeqIdPtrFromSeqAlign (salp);
+    seqid_order = SeqIdOrderInBioseqIdList(p->sip, tmpsip);
+    if (seqid_order == 0)
+    {
+      continue;
+    }
+    else if (seqid_order == 1 && salp->dim == 2)
+    {
+      p->found_problem = TRUE;      
+    }
+  }
+}
+
+extern Boolean IsSequenceFirstInPairwise (SeqEntryPtr sep, SeqIdPtr sip)
+{
+  CheckForRemoveSequenceFromAlignmentsData data;
+  
+  if (sep == NULL || sip == NULL)
+  {
+    return FALSE;
+  }
+  
+	data.sip = sip;
+	data.found_problem = FALSE;
+  
+  VisitAnnotsInSep (sep, (Pointer) &data, CheckForRemoveSequenceFromAlignmentsProblemsCallback);
+  return data.found_problem;
+}
+
+extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip)
+{
+  if (sep == NULL || sip == NULL)
+  {
+    return FALSE;
+  }
+  if (IsSequenceFirstInPairwise (sep, sip))
+  {
+    return FALSE;
+  }
+  VisitAnnotsInSep (sep, (Pointer) sip, RemoveSequenceFromAlignmentsCallback);
+  return TRUE;
+}

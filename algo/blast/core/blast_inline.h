@@ -1,4 +1,4 @@
-/* $Id: blast_inline.h,v 1.4 2004/09/01 13:19:43 madden Exp $
+/* $Id: blast_inline.h,v 1.5 2005/02/24 15:39:34 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  */
 
 /** @file blast_inline.h
- * @todo FIXME needs file description
+ * Functions from algo/blast/core that should be inlined if possible.
  */
 
 #include <algo/blast/core/blast_util.h>

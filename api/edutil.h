@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.14  2005/04/06 19:33:15  bollin
+* made it possible to insert and remove gaps from delta sequences
+*
 * Revision 6.13  2004/10/08 16:04:16  bollin
 * added ability to check when an action will remove a feature
 *
@@ -570,6 +573,7 @@ NLM_EXTERN DeltaSeqPtr LIBCALL GappedSeqLocsToDeltaSeqs(SeqLocPtr slp);
  * in desktop/seqpanel.c
  */
 typedef enum { eSeqEdInsert, eSeqEdDelete, eSeqEdFeatMove, eSeqEdTranslate,
+               eSeqEdInsertGap, eSeqEdDeleteGap,
                eSeqEdJournalStart, eSeqEdJournalEnd } ESeqEdJournalAction ;
 
 typedef struct seqedjournaldata
@@ -594,6 +598,10 @@ typedef struct seqedjournaldata
   ValNodePtr          affected_feats;      /* This is a list of features which were shortened by
                                             * an eSeqEdDelete operation - their locations will
                                             * need to be reconstructed if the operation is undone. */
+  Boolean             unknown_gap;         /* This is used only when action is eSeqEdInsertGap
+                                            * or eSeqEdDeleteGap.  It indicates whether the gap
+                                            * being inserted (or deleted) from a delta sequence
+                                            * is unknown. */                                            
   BioseqPtr           bsp;                 /* The Bioseq for which the action is to be/was applied. */
   Uint2               moltype;             /* Molecule type for bsp.  Stored for convenience. */
   Uint2               entityID;            /* entityID for bsp.  Stored for convenience. */

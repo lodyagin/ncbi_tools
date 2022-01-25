@@ -251,7 +251,15 @@ SOURCE=..\..\..\object\objcode.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objegkludge.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\access\objent2.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\objentgene.c
 # End Source File
 # Begin Source File
 
@@ -811,7 +819,15 @@ SOURCE=..\..\..\object\objcode.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objegkludge.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\access\objent2.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\objentgene.h
 # End Source File
 # Begin Source File
 

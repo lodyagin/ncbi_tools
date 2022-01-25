@@ -5,6 +5,366 @@
 	};
 	objectVersion = 39;
 	objects = {
+		F00209F507523F0100252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+				F00209FA07523F4900252E7D,
+				F00209FC07523F8200252E7D,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F00209F607523F0100252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F00209F707523F0100252E7D = {
+			buildPhases = (
+				F00209F507523F0100252E7D,
+				F00209F607523F0100252E7D,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = megablast;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = megablast;
+			productName = megablast;
+			productReference = F00209F807523F0100252E7D;
+			productType = "com.apple.product-type.tool";
+		};
+		F00209F807523F0100252E7D = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = megablast;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F00209FA07523F4900252E7D = {
+			fileRef = F0B6D6A606AEC362002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F00209FC07523F8200252E7D = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A2407524C2200252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+				F0020A3907524CD100252E7D,
+				F0020A3A07524CD600252E7D,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A2507524C2200252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A2607524C2200252E7D = {
+			buildPhases = (
+				F0020A2407524C2200252E7D,
+				F0020A2507524C2200252E7D,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = spidey;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = spidey;
+			productName = spidey;
+			productReference = F0020A2707524C2200252E7D;
+			productType = "com.apple.product-type.tool";
+		};
+		F0020A2707524C2200252E7D = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = spidey;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0020A2907524C5400252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+				F0020A3D07524D0500252E7D,
+				F0020A3E07524D0A00252E7D,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A2A07524C5400252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A2B07524C5400252E7D = {
+			buildPhases = (
+				F0020A2907524C5400252E7D,
+				F0020A2A07524C5400252E7D,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = copymat;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = copymat;
+			productName = copymat;
+			productReference = F0020A2C07524C5400252E7D;
+			productType = "com.apple.product-type.tool";
+		};
+		F0020A2C07524C5400252E7D = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = copymat;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0020A2E07524C8000252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+				F0020A3F07524D3200252E7D,
+				F0020A4007524D3700252E7D,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A2F07524C8000252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A3007524C8000252E7D = {
+			buildPhases = (
+				F0020A2E07524C8000252E7D,
+				F0020A2F07524C8000252E7D,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = bl2seq;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = bl2seq;
+			productName = bl2seq;
+			productReference = F0020A3107524C8000252E7D;
+			productType = "com.apple.product-type.tool";
+		};
+		F0020A3107524C8000252E7D = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = bl2seq;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0020A3407524CB400252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+				F0020A4107524D5900252E7D,
+				F0020A4207524D5E00252E7D,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A3507524CB400252E7D = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0020A3607524CB400252E7D = {
+			buildPhases = (
+				F0020A3407524CB400252E7D,
+				F0020A3507524CB400252E7D,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "-DBLAST_CS_API";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = blastCL3;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = blastCL3;
+			productName = blastCL3;
+			productReference = F0020A3707524CB400252E7D;
+			productType = "com.apple.product-type.tool";
+		};
+		F0020A3707524CB400252E7D = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = blastCL3;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0020A3907524CD100252E7D = {
+			fileRef = F0B6D71E06AEDA86002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A3A07524CD600252E7D = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A3D07524D0500252E7D = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A3E07524D0A00252E7D = {
+			fileRef = F0B6D6CB06AEC421002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A3F07524D3200252E7D = {
+			fileRef = F0B6D69106AEC307002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A4007524D3700252E7D = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A4107524D5900252E7D = {
+			fileRef = F0B6D62606AEC0C6002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A4207524D5E00252E7D = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0020A5207524F4300252E7D = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0020A3007524C8000252E7D;
+			remoteInfo = bl2seq;
+		};
+		F0020A5307524F4300252E7D = {
+			isa = PBXTargetDependency;
+			target = F0020A3007524C8000252E7D;
+			targetProxy = F0020A5207524F4300252E7D;
+		};
+		F0020A5407524F4300252E7D = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0020A3607524CB400252E7D;
+			remoteInfo = blastCL3;
+		};
+		F0020A5507524F4300252E7D = {
+			isa = PBXTargetDependency;
+			target = F0020A3607524CB400252E7D;
+			targetProxy = F0020A5407524F4300252E7D;
+		};
+		F0020A5607524F4300252E7D = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0020A2B07524C5400252E7D;
+			remoteInfo = copymat;
+		};
+		F0020A5707524F4300252E7D = {
+			isa = PBXTargetDependency;
+			target = F0020A2B07524C5400252E7D;
+			targetProxy = F0020A5607524F4300252E7D;
+		};
+		F0020A5807524F4300252E7D = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F00209F707523F0100252E7D;
+			remoteInfo = megablast;
+		};
+		F0020A5907524F4300252E7D = {
+			isa = PBXTargetDependency;
+			target = F00209F707523F0100252E7D;
+			targetProxy = F0020A5807524F4300252E7D;
+		};
+		F0020A5A07524F4300252E7D = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0020A2607524C2200252E7D;
+			remoteInfo = spidey;
+		};
+		F0020A5B07524F4300252E7D = {
+			isa = PBXTargetDependency;
+			target = F0020A2607524C2200252E7D;
+			targetProxy = F0020A5A07524F4300252E7D;
+		};
 		F00AEE1006AFD5A6003C8FEB = {
 			buildActionMask = 2147483647;
 			files = (
@@ -496,6 +856,18 @@
 				F079CE1206CB9FB300E2E865,
 				F079CE1406CB9FB300E2E865,
 				F079CE1606CB9FB300E2E865,
+				F0020A5307524F4300252E7D,
+				F0020A5507524F4300252E7D,
+				F0020A5707524F4300252E7D,
+				F0020A5907524F4300252E7D,
+				F0020A5B07524F4300252E7D,
+				F0AEB12E075380AF00D1AE1C,
+				F0AEB17D07539C5400D1AE1C,
+				F04A396E075DFD210078AB2A,
+				F04A3970075DFD210078AB2A,
+				F04A3972075DFD210078AB2A,
+				F04A3974075DFD210078AB2A,
+				F0A82BC1075E0315008AE9A4,
 			);
 			isa = PBXAggregateTarget;
 			name = "Build All Console Tools";
@@ -684,24 +1056,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F012D8F606A552CB00741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = drwnflpt.c;
-			path = ../../corelib/drwnflpt.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F012D8F906A552CB00741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = drwnmfls.c;
-			path = ../../corelib/drwnmfls.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F012D8FA06A552CB00741D48 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -735,15 +1089,6 @@
 			lastKnownFileType = sourcecode.c.c;
 			name = ncbimem.c;
 			path = ../../corelib/ncbimem.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F012D90A06A552CB00741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = drwnfspc.c;
-			path = ../../corelib/drwnfspc.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -921,15 +1266,6 @@
 			settings = {
 			};
 		};
-		F012D92806A5559200741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = ncbisock.c;
-			path = ../../connect/ncbisock.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F012D92906A5559200741D48 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -939,29 +1275,8 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F012D92A06A5559200741D48 = {
-			fileRef = F012D92806A5559200741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F012D92B06A5559200741D48 = {
 			fileRef = F012D92906A5559200741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F012D92C06A555BB00741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = ncbibuf.c;
-			path = ../../connect/ncbibuf.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F012D92D06A555BB00741D48 = {
-			fileRef = F012D92C06A555BB00741D48;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -1003,8 +1318,8 @@
 			fileEncoding = 30;
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.c;
-			name = ncbi_file_connector.c;
-			path = ../../connect/ncbi_file_connector.c;
+			name = ncbi_ftp_connector.c;
+			path = ../../connect/ncbi_ftp_connector.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -1281,15 +1596,6 @@
 			settings = {
 			};
 		};
-		F012D95806A5572200741D48 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = lbapi.c;
-			path = ../../connect/lbapi/lbapi.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F012D95A06A5577A00741D48 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -1326,26 +1632,8 @@
 			settings = {
 			};
 		};
-		F012D96906A557E700741D48 = {
-			fileRef = F012D8F606A552CB00741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F012D96D06A557E900741D48 = {
 			fileRef = F012D8FB06A552CB00741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F012D97006A557EA00741D48 = {
-			fileRef = F012D8F906A552CB00741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F012D97206A557EB00741D48 = {
-			fileRef = F012D90A06A552CB00741D48;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -1460,6 +1748,14 @@
 		};
 		F012D9DA06A562B100741D48 = {
 			children = (
+				F04A9EED07AACC1B002B097A,
+				F0D4E75C07A66C93006CF3D5,
+				F04A3961075DFCEC0078AB2A,
+				F04A3962075DFCEC0078AB2A,
+				F04A3963075DFCEC0078AB2A,
+				F04A3964075DFCEC0078AB2A,
+				F04A3965075DFCEC0078AB2A,
+				F04A3966075DFCEC0078AB2A,
 				F037432106AC4E76003F9632,
 				F09464E806AC18B600DF5D77,
 				F09464AD06AC0CC500DF5D77,
@@ -1682,6 +1978,14 @@
 				F037431D06AC4C13003F9632,
 				F037432206AC4E76003F9632,
 				F0463DD006AD72A700639203,
+				F04A3967075DFCEC0078AB2A,
+				F04A3968075DFCEC0078AB2A,
+				F04A3969075DFCEC0078AB2A,
+				F04A396A075DFCEC0078AB2A,
+				F04A396B075DFCEC0078AB2A,
+				F04A396C075DFCEC0078AB2A,
+				F0D4E75D07A66C93006CF3D5,
+				F04A9EEE07AACC1B002B097A,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2100,11 +2404,6 @@
 				F079CE1A06CB9FCB00E2E865,
 				F079CDEA06CB9FA300E2E865,
 				F079CDEC06CB9FA300E2E865,
-				F079CDEE06CB9FA300E2E865,
-				F079CDF006CB9FA300E2E865,
-				F079CDF206CB9FA300E2E865,
-				F079CDF406CB9FA300E2E865,
-				F079CDF606CB9FA300E2E865,
 			);
 			isa = PBXAggregateTarget;
 			name = "Build All Applications";
@@ -2158,6 +2457,471 @@
 		};
 		F0463DD006AD72A700639203 = {
 			fileRef = F09464AE06AC0CC500DF5D77;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3914075DF9A20078AB2A = {
+			children = (
+				F04A3941075DFA470078AB2A,
+			);
+			isa = PBXGroup;
+			name = blastclust;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F04A3919075DF9B10078AB2A = {
+			children = (
+				F04A3944075DFA560078AB2A,
+			);
+			isa = PBXGroup;
+			name = blastpgp;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F04A391D075DF9C20078AB2A = {
+			children = (
+				F04A3948075DFA770078AB2A,
+			);
+			isa = PBXGroup;
+			name = rpsblast;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F04A391F075DF9C80078AB2A = {
+			children = (
+				F04A394B075DFA840078AB2A,
+			);
+			isa = PBXGroup;
+			name = seedtop;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F04A3922075DF9F00078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+				F04A3942075DFA470078AB2A,
+				F04A394F075DFB400078AB2A,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A3923075DF9F00078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A3924075DF9F00078AB2A = {
+			buildPhases = (
+				F04A3922075DF9F00078AB2A,
+				F04A3923075DF9F00078AB2A,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = blastclust;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = blastclust;
+			productName = blastclust;
+			productReference = F04A3925075DF9F00078AB2A;
+			productType = "com.apple.product-type.tool";
+		};
+		F04A3925075DF9F00078AB2A = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = blastclust;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F04A3928075DF9FD0078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+				F04A3945075DFA560078AB2A,
+				F04A3950075DFB450078AB2A,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A3929075DF9FD0078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A392A075DF9FD0078AB2A = {
+			buildPhases = (
+				F04A3928075DF9FD0078AB2A,
+				F04A3929075DF9FD0078AB2A,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = blastpgp;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = blastpgp;
+			productName = blastpgp;
+			productReference = F04A392B075DF9FD0078AB2A;
+			productType = "com.apple.product-type.tool";
+		};
+		F04A392B075DF9FD0078AB2A = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = blastpgp;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F04A3934075DFA150078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+				F04A3949075DFA770078AB2A,
+				F04A3951075DFB490078AB2A,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A3935075DFA150078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A3936075DFA150078AB2A = {
+			buildPhases = (
+				F04A3934075DFA150078AB2A,
+				F04A3935075DFA150078AB2A,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = rpsblast;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = rpsblast;
+			productName = rpsblast;
+			productReference = F04A3937075DFA150078AB2A;
+			productType = "com.apple.product-type.tool";
+		};
+		F04A3937075DFA150078AB2A = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = rpsblast;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F04A393A075DFA200078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+				F04A394C075DFA840078AB2A,
+				F04A3952075DFB4C0078AB2A,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A393B075DFA200078AB2A = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F04A393C075DFA200078AB2A = {
+			buildPhases = (
+				F04A393A075DFA200078AB2A,
+				F04A393B075DFA200078AB2A,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = seedtop;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = seedtop;
+			productName = seedtop;
+			productReference = F04A393D075DFA200078AB2A;
+			productType = "com.apple.product-type.tool";
+		};
+		F04A393D075DFA200078AB2A = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = seedtop;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F04A3941075DFA470078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blastclust.c;
+			path = ../../demo/blastclust.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3942075DFA470078AB2A = {
+			fileRef = F04A3941075DFA470078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3944075DFA560078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blastpgp.c;
+			path = ../../demo/blastpgp.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3945075DFA560078AB2A = {
+			fileRef = F04A3944075DFA560078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3948075DFA770078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = rpsblast.c;
+			path = ../../demo/rpsblast.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3949075DFA770078AB2A = {
+			fileRef = F04A3948075DFA770078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A394B075DFA840078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = seedtop.c;
+			path = ../../demo/seedtop.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A394C075DFA840078AB2A = {
+			fileRef = F04A394B075DFA840078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A394F075DFB400078AB2A = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3950075DFB450078AB2A = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3951075DFB490078AB2A = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3952075DFB4C0078AB2A = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3961075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvgraph.c;
+			path = ../../ddv/ddvgraph.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3962075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvcreate.c;
+			path = ../../ddv/ddvcreate.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3963075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvclick.c;
+			path = ../../ddv/ddvclick.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3964075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvpanel.c;
+			path = ../../ddv/ddvpanel.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3965075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvopen.c;
+			path = ../../ddv/ddvopen.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3966075DFCEC0078AB2A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ddvmain.c;
+			path = ../../ddv/ddvmain.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A3967075DFCEC0078AB2A = {
+			fileRef = F04A3961075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3968075DFCEC0078AB2A = {
+			fileRef = F04A3962075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A3969075DFCEC0078AB2A = {
+			fileRef = F04A3963075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A396A075DFCEC0078AB2A = {
+			fileRef = F04A3964075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A396B075DFCEC0078AB2A = {
+			fileRef = F04A3965075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A396C075DFCEC0078AB2A = {
+			fileRef = F04A3966075DFCEC0078AB2A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F04A396D075DFD210078AB2A = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F04A3924075DF9F00078AB2A;
+			remoteInfo = blastclust;
+		};
+		F04A396E075DFD210078AB2A = {
+			isa = PBXTargetDependency;
+			target = F04A3924075DF9F00078AB2A;
+			targetProxy = F04A396D075DFD210078AB2A;
+		};
+		F04A396F075DFD210078AB2A = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F04A392A075DF9FD0078AB2A;
+			remoteInfo = blastpgp;
+		};
+		F04A3970075DFD210078AB2A = {
+			isa = PBXTargetDependency;
+			target = F04A392A075DF9FD0078AB2A;
+			targetProxy = F04A396F075DFD210078AB2A;
+		};
+		F04A3971075DFD210078AB2A = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F04A3936075DFA150078AB2A;
+			remoteInfo = rpsblast;
+		};
+		F04A3972075DFD210078AB2A = {
+			isa = PBXTargetDependency;
+			target = F04A3936075DFA150078AB2A;
+			targetProxy = F04A3971075DFD210078AB2A;
+		};
+		F04A3973075DFD210078AB2A = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F04A393C075DFA200078AB2A;
+			remoteInfo = seedtop;
+		};
+		F04A3974075DFD210078AB2A = {
+			isa = PBXTargetDependency;
+			target = F04A393C075DFA200078AB2A;
+			targetProxy = F04A3973075DFD210078AB2A;
+		};
+		F04A9EED07AACC1B002B097A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = objegkludge.c;
+			path = ../../access/objegkludge.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F04A9EEE07AACC1B002B097A = {
+			fileRef = F04A9EED07AACC1B002B097A;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -2244,6 +3008,21 @@
 			target = F04B0DB106DA1AE600ED1405;
 			targetProxy = F04B0DB606DA1B6B00ED1405;
 		};
+		F067051E0783170B001506C1 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_parameters.c;
+			path = ../../algo/blast/core/blast_parameters.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F067051F0783170B001506C1 = {
+			fileRef = F067051E0783170B001506C1;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F069E56506CB958000A2BF93 = {
 			containerPortal = F0E3B02206A5513900F473CA;
 			isa = PBXContainerItemProxy;
@@ -2267,6 +3046,51 @@
 			isa = PBXTargetDependency;
 			target = F00AEE6C06AFD6DD003C8FEB;
 			targetProxy = F069E56706CB958000A2BF93;
+		};
+		F06B098607E741DD004F1D7D = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_itree.c;
+			path = ../../algo/blast/core/blast_itree.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F06B098707E741DD004F1D7D = {
+			fileRef = F06B098607E741DD004F1D7D;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F06B098D07E74226004F1D7D = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_posit.c;
+			path = ../../algo/blast/core/blast_posit.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F06B098E07E74226004F1D7D = {
+			fileRef = F06B098D07E74226004F1D7D;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F06B099507E742FC004F1D7D = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = repeats_filter.c;
+			path = ../../algo/blast/api/repeats_filter.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F06B099607E742FC004F1D7D = {
+			fileRef = F06B099507E742FC004F1D7D;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 		F079CDD906CB96B400E2E865 = {
 			containerPortal = F0E3B02206A5513900F473CA;
@@ -2303,66 +3127,6 @@
 			isa = PBXTargetDependency;
 			target = F0B6D5DE06AEBF8C002EF6DC;
 			targetProxy = F079CDEB06CB9FA300E2E865;
-		};
-		F079CDED06CB9FA300E2E865 = {
-			containerPortal = F0E3B02206A5513900F473CA;
-			isa = PBXContainerItemProxy;
-			proxyType = 1;
-			remoteGlobalIDString = F0B6D67D06AEC24A002EF6DC;
-			remoteInfo = BlastCL3;
-		};
-		F079CDEE06CB9FA300E2E865 = {
-			isa = PBXTargetDependency;
-			target = F0B6D67D06AEC24A002EF6DC;
-			targetProxy = F079CDED06CB9FA300E2E865;
-		};
-		F079CDEF06CB9FA300E2E865 = {
-			containerPortal = F0E3B02206A5513900F473CA;
-			isa = PBXContainerItemProxy;
-			proxyType = 1;
-			remoteGlobalIDString = F0B6D61F06AEC094002EF6DC;
-			remoteInfo = Bl2seq;
-		};
-		F079CDF006CB9FA300E2E865 = {
-			isa = PBXTargetDependency;
-			target = F0B6D61F06AEC094002EF6DC;
-			targetProxy = F079CDEF06CB9FA300E2E865;
-		};
-		F079CDF106CB9FA300E2E865 = {
-			containerPortal = F0E3B02206A5513900F473CA;
-			isa = PBXContainerItemProxy;
-			proxyType = 1;
-			remoteGlobalIDString = F0B6D69F06AEC32F002EF6DC;
-			remoteInfo = MegaBlast;
-		};
-		F079CDF206CB9FA300E2E865 = {
-			isa = PBXTargetDependency;
-			target = F0B6D69F06AEC32F002EF6DC;
-			targetProxy = F079CDF106CB9FA300E2E865;
-		};
-		F079CDF306CB9FA300E2E865 = {
-			containerPortal = F0E3B02206A5513900F473CA;
-			isa = PBXContainerItemProxy;
-			proxyType = 1;
-			remoteGlobalIDString = F0B6D6BD06AEC3FC002EF6DC;
-			remoteInfo = Copymat;
-		};
-		F079CDF406CB9FA300E2E865 = {
-			isa = PBXTargetDependency;
-			target = F0B6D6BD06AEC3FC002EF6DC;
-			targetProxy = F079CDF306CB9FA300E2E865;
-		};
-		F079CDF506CB9FA300E2E865 = {
-			containerPortal = F0E3B02206A5513900F473CA;
-			isa = PBXContainerItemProxy;
-			proxyType = 1;
-			remoteGlobalIDString = F0B6D70D06AEDA55002EF6DC;
-			remoteInfo = Spidey;
-		};
-		F079CDF606CB9FA300E2E865 = {
-			isa = PBXTargetDependency;
-			target = F0B6D70D06AEDA55002EF6DC;
-			targetProxy = F079CDF506CB9FA300E2E865;
 		};
 		F079CDF706CB9FB300E2E865 = {
 			containerPortal = F0E3B02206A5513900F473CA;
@@ -5024,6 +5788,9 @@
 		};
 		F095C4FC06AE8E5F00C0C74D = {
 			children = (
+				F06B098D07E74226004F1D7D,
+				F06B098607E741DD004F1D7D,
+				F067051E0783170B001506C1,
 				F095C50706AE8ECB00C0C74D,
 				F095C50806AE8ECB00C0C74D,
 				F095C50906AE8ECB00C0C74D,
@@ -5110,6 +5877,9 @@
 				F095C54A06AE8ECB00C0C74D,
 				F095C54B06AE8ECB00C0C74D,
 				F095C54C06AE8ECB00C0C74D,
+				F067051F0783170B001506C1,
+				F06B098707E741DD004F1D7D,
+				F06B098E07E74226004F1D7D,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -5676,7 +6446,9 @@
 		};
 		F095C58606AE8FA700C0C74D = {
 			children = (
-				F0FB657F071FF25300DF3230,
+				F06B099507E742FC004F1D7D,
+				F097944607B2466E00F7660A,
+				F097943F07B2457E00F7660A,
 				F095C59606AE8FFE00C0C74D,
 				F095C59706AE8FFE00C0C74D,
 				F095C59806AE8FFE00C0C74D,
@@ -5705,7 +6477,6 @@
 		F095C58F06AE8FDE00C0C74D = {
 			buildActionMask = 2147483647;
 			files = (
-				F0FB6581071FF28B00DF3230,
 				F095C5A206AE8FFE00C0C74D,
 				F095C5A306AE8FFE00C0C74D,
 				F095C5A406AE8FFE00C0C74D,
@@ -5718,6 +6489,9 @@
 				F095C5AB06AE8FFE00C0C74D,
 				F095C5AC06AE8FFE00C0C74D,
 				F095C5AD06AE8FFE00C0C74D,
+				F097944007B2457E00F7660A,
+				F097944707B2466E00F7660A,
+				F06B099607E742FC004F1D7D,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -6353,6 +7127,288 @@
 			isa = PBXBuildFile;
 			settings = {
 			};
+		};
+		F097943F07B2457E00F7660A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_api.c;
+			path = ../../algo/blast/api/blast_api.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F097944007B2457E00F7660A = {
+			fileRef = F097943F07B2457E00F7660A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F097944607B2466E00F7660A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_options_api.c;
+			path = ../../algo/blast/api/blast_options_api.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F097944707B2466E00F7660A = {
+			fileRef = F097944607B2466E00F7660A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0A82BAF075E0275008AE9A4 = {
+			children = (
+				F0A82BB4075E0292008AE9A4,
+			);
+			isa = PBXGroup;
+			name = impala;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F0A82BB4075E0292008AE9A4 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = profiles.c;
+			path = ../../demo/profiles.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F0A82BB5075E02A4008AE9A4 = {
+			buildActionMask = 2147483647;
+			files = (
+				F0A82BBA075E02B2008AE9A4,
+				F0A82BBB075E02B7008AE9A4,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0A82BB6075E02A4008AE9A4 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0A82BB7075E02A4008AE9A4 = {
+			buildPhases = (
+				F0A82BB5075E02A4008AE9A4,
+				F0A82BB6075E02A4008AE9A4,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = impala;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = impala;
+			productName = impala;
+			productReference = F0A82BB8075E02A4008AE9A4;
+			productType = "com.apple.product-type.tool";
+		};
+		F0A82BB8075E02A4008AE9A4 = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = impala;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0A82BBA075E02B2008AE9A4 = {
+			fileRef = F0A82BB4075E0292008AE9A4;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0A82BBB075E02B7008AE9A4 = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0A82BC0075E0315008AE9A4 = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0A82BB7075E02A4008AE9A4;
+			remoteInfo = impala;
+		};
+		F0A82BC1075E0315008AE9A4 = {
+			isa = PBXTargetDependency;
+			target = F0A82BB7075E02A4008AE9A4;
+			targetProxy = F0A82BC0075E0315008AE9A4;
+		};
+		F0AEB11407537F9D00D1AE1C = {
+			children = (
+				F0AEB11F0753800700D1AE1C,
+			);
+			isa = PBXGroup;
+			name = formatrpsdb;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F0AEB11F0753800700D1AE1C = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = formatrpsdb.c;
+			path = ../../demo/formatrpsdb.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F0AEB1200753801200D1AE1C = {
+			buildActionMask = 2147483647;
+			files = (
+				F0AEB1250753804800D1AE1C,
+				F0AEB1260753804E00D1AE1C,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0AEB1210753801200D1AE1C = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0AEB1220753801200D1AE1C = {
+			buildPhases = (
+				F0AEB1200753801200D1AE1C,
+				F0AEB1210753801200D1AE1C,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = formatrpsdb;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = formatrpsdb;
+			productName = formatrpsdb;
+			productReference = F0AEB1230753801200D1AE1C;
+			productType = "com.apple.product-type.tool";
+		};
+		F0AEB1230753801200D1AE1C = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = formatrpsdb;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0AEB1250753804800D1AE1C = {
+			fileRef = F0AEB11F0753800700D1AE1C;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0AEB1260753804E00D1AE1C = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0AEB12D075380AF00D1AE1C = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0AEB1220753801200D1AE1C;
+			remoteInfo = formatrpsdb;
+		};
+		F0AEB12E075380AF00D1AE1C = {
+			isa = PBXTargetDependency;
+			target = F0AEB1220753801200D1AE1C;
+			targetProxy = F0AEB12D075380AF00D1AE1C;
+		};
+		F0AEB17207539B9900D1AE1C = {
+			buildActionMask = 2147483647;
+			files = (
+				F0AEB17707539BCB00D1AE1C,
+				F0AEB17807539BE300D1AE1C,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0AEB17307539B9900D1AE1C = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0AEB17407539B9900D1AE1C = {
+			buildPhases = (
+				F0AEB17207539B9900D1AE1C,
+				F0AEB17307539B9900D1AE1C,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/bin;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = blastall;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = blastall;
+			productName = blastall;
+			productReference = F0AEB17507539B9900D1AE1C;
+			productType = "com.apple.product-type.tool";
+		};
+		F0AEB17507539B9900D1AE1C = {
+			explicitFileType = "compiled.mach-o.executable";
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = blastall;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F0AEB17707539BCB00D1AE1C = {
+			fileRef = F0B6D62606AEC0C6002EF6DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0AEB17807539BE300D1AE1C = {
+			fileRef = F012D8B806A552CB00741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0AEB17C07539C5400D1AE1C = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F0AEB17407539B9900D1AE1C;
+			remoteInfo = blastall;
+		};
+		F0AEB17D07539C5400D1AE1C = {
+			isa = PBXTargetDependency;
+			target = F0AEB17407539B9900D1AE1C;
+			targetProxy = F0AEB17C07539C5400D1AE1C;
 		};
 		F0B2E48306AC1EC40054E175 = {
 			children = (
@@ -7323,7 +8379,6 @@
 			children = (
 				F0FEF69706AC414C005DD516,
 				F0FEF69806AC414C005DD516,
-				F0BC2D8806AC2C0F00EC2330,
 				F0BC2D8906AC2C0F00EC2330,
 				F0BC2D8A06AC2C0F00EC2330,
 				F0BC2D8B06AC2C0F00EC2330,
@@ -7331,9 +8386,7 @@
 				F0BC2D8D06AC2C0F00EC2330,
 				F0BC2D8E06AC2C0F00EC2330,
 				F0BC2D8F06AC2C0F00EC2330,
-				F0BC2D9006AC2C0F00EC2330,
 				F0BC2D9106AC2C0F00EC2330,
-				F0BC2D9206AC2C0F00EC2330,
 				F0BC2D8406AC2BB400EC2330,
 				F0BC2D8506AC2BB400EC2330,
 				F0BC2D7C06AC2B7900EC2330,
@@ -7390,7 +8443,6 @@
 				F0BC2D8306AC2B7900EC2330,
 				F0BC2D8606AC2BB400EC2330,
 				F0BC2D8706AC2BB400EC2330,
-				F0BC2D9306AC2C0F00EC2330,
 				F0BC2D9406AC2C0F00EC2330,
 				F0BC2D9506AC2C0F00EC2330,
 				F0BC2D9606AC2C0F00EC2330,
@@ -7398,9 +8450,7 @@
 				F0BC2D9806AC2C0F00EC2330,
 				F0BC2D9906AC2C0F00EC2330,
 				F0BC2D9A06AC2C0F00EC2330,
-				F0BC2D9B06AC2C0F00EC2330,
 				F0BC2D9C06AC2C0F00EC2330,
-				F0BC2D9D06AC2C0F00EC2330,
 				F0FEF69906AC414C005DD516,
 				F0FEF69A06AC414C005DD516,
 			);
@@ -8821,7 +9871,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd ../../asn\ndt=$BUILD_ROOT/$EXECUTABLE_NAME\necho Using asntool: $dt\necho Checking ASN files...\n\nif test ! -d ../asnstat ; then mkdir ../asnstat ; fi\n\nFILES=\"\\\nhead.all general.asn biblio.asn medline.asn pubmed.asn medlars.asn pub.asn \\\nseqloc.asn seq.asn seqset.asn seqcode.asn seqblock.asn \\\nseqfeat.asn seqalign.asn seqres.asn submit.asn ../biostruc/cn3d/cn3d.asn \\\nproj.asn access.asn featdef.asn ncbimime.asn objprt.asn gbseq.asn insdseq.asn \\\ntinyseq.asn \"\n\nif ! test -e asn.all ; then cat $FILES > asn.all ; fi\n\n\n\nif ! test -e ../asnstat/asngen.h ; then $dt -m ../asn/general.asn -o ../asnstat/asngen.h ; fi\nif ! test -e ../asnstat/asnsset.h ; then $dt -m ../asn/seqset.asn -o ../asnstat/asnsset.h ; fi\nif ! test -e ../asnstat/asnfeat.h ; then $dt -m ../asn/seqfeat.asn -o ../asnstat/asnfeat.h ; fi\nif ! test -e ../asnstat/asnalign.h ; then $dt -m ../asn/seqalign.asn -o ../asnstat/asnalign.h ; fi\nif ! test -e ../asnstat/asnloc.h ; then $dt -m ../asn/seqloc.asn -o ../asnstat/asnloc.h ; fi\nif ! test -e ../asnstat/asnres.h ; then $dt -m ../asn/seqres.asn -o ../asnstat/asnres.h ; fi\nif ! test -e ../asnstat/asnmedli.h ; then $dt -m ../asn/medline.asn -o ../asnstat/asnmedli.h ; fi\nif ! test -e ../asnstat/asnbibli.h ; then $dt -m ../asn/biblio.asn -o ../asnstat/asnbibli.h ; fi\nif ! test -e ../asnstat/asnseq.h ; then $dt -m ../asn/seq.asn -o ../asnstat/asnseq.h ; fi\nif ! test -e ../asnstat/asnpub.h ; then $dt -m ../asn/pub.asn -o ../asnstat/asnpub.h ; fi\nif ! test -e ../asnstat/asnacces.h ; then $dt -m ../asn/access.asn -o ../asnstat/asnacces.h ; fi\n#if ! test -e ../asnstat/allpub.h ; then $dt -m ../asn/asnpub.all -o ../asnstat/allpub.h ; fi\nif ! test -e ../asnstat/all.h ; then $dt -m ../asn/asn.all -o ../asnstat/all.h ; fi\nif ! test -e ../asnstat/cdrom.h ; then $dt -m ../cdromlib/cdrom.asn -o ../asnstat/cdrom.h ; fi\nif ! test -e ../asnstat/asnsubmt.h ; then $dt -m ../asn/submit.asn -o ../asnstat/asnsubmt.h ; fi\nif ! test -e ../asnstat/asncode.h ; then $dt -m ../asn/seqcode.asn -o ../asnstat/asncode.h ; fi\nif ! test -e ../asnstat/asnblock.h ; then $dt -m ../asn/seqblock.asn -o ../asnstat/asnblock.h ; fi\nif ! test -e ../asnstat/asnfdef.h ; then $dt -m ../asn/featdef.asn -o ../asnstat/asnfdef.h ; fi\nif ! test -e ../asnstat/asnneten.h ; then $dt -m ../network/entrez/client/netentr.asn -o ../asnstat/asnneten.h ; fi\nif ! test -e ../asnstat/asnmla.h ; then $dt -m ../network/medarch/client/mla.asn -o ../asnstat/asnmla.h ; fi\nif ! test -e ../asnstat/asntaxon.h ; then $dt -m ../network/taxonomy/client/taxon.asn -o ../asnstat/asntaxon.h ; fi\nif ! test -e ../asnstat/asnid0.h ; then $dt -m ../network/id0arch/client/id0.asn -o ../asnstat/asnid0.h ; fi\nif ! test -e ../asnstat/spell.h ; then $dt -m ../network/spell/client/spell.asn -o ../asnstat/spell.h ; fi\nif ! test -e ../asnstat/ni_asn.h ; then $dt -m ../network/nsclilib/ni_msg.asn -o ../asnstat/ni_asn.h ; fi\nif ! test -e ../asnstat/echo_asn.h ; then $dt -m ../network/nsdemocl/echo.asn -o ../asnstat/echo_asn.h ; fi\nif ! test -e ../asnstat/asnprt.h ; then $dt -m ../asn/objprt.asn -o ../asnstat/asnprt.h ; fi\nif ! test -e ../asnstat/mmdb1.h ; then $dt -m ../biostruc/mmdb1.asn -o ../asnstat/mmdb1.h -w100 ; fi\nif ! test -e ../asnstat/mmdb2.h ; then $dt -m ../biostruc/mmdb2.asn -o ../asnstat/mmdb2.h -w100 ; fi\nif ! test -e ../asnstat/mmdb3.h ; then $dt -m ../biostruc/mmdb3.asn -o ../asnstat/mmdb3.h -w100 ; fi\nif ! test -e ../asnstat/cn3d.h ; then $dt -m ../biostruc/cn3d/cn3d.asn -o ../asnstat/cn3d.h -w100 ; fi\n#if ! test -e ../asnstat/asnbl18.h ; then $dt -m ../network/blast2/client/blast18.asn -o ../asnstat/asnbl18.h ; fi\nif ! test -e ../asnstat/blstspc.h ; then $dt -m ../network/blast3/client/blstspc.asn -o ../asnstat/blstspc.h -w100 ; fi\nif ! test -e ../asnstat/sugmap.h ; then $dt -m ../network/suggest/client/suggest.asn -o ../asnstat/sugmap.h ; fi\nif ! test -e ../asnstat/taxon1.h ; then $dt -m ../network/taxon1/common/taxon1.asn -o ../asnstat/taxon1.h ; fi\nif ! test -e ../asnstat/asnmime.h ; then $dt -m ../asn/ncbimime.asn -o ../asnstat/asnmime.h ; fi\nif ! test -e ../asnstat/asnpubme.h ; then $dt -m ../asn/pubmed.asn -o ../asnstat/asnpubme.h ; fi\nif ! test -e ../asnstat/asnmdrs.h ; then $dt -m ../asn/medlars.asn -o ../asnstat/asnmdrs.h ; fi\nif ! test -e ../asnstat/asnproj.h ; then $dt -m ../asn/proj.asn -o ../asnstat/asnproj.h ; fi\nif ! test -e ../asnstat/asnent2.h ; then $dt -m ../access/entrez2.asn -o ../asnstat/asnent2.h ; fi\nif ! test -e ../asnstat/asnmim.h ; then $dt -m ../access/mim.asn -o ../asnstat/asnmim.h ; fi\nif ! test -e ../asnstat/asntax3.h ; then $dt -m ../access/taxon3.asn -o ../asnstat/asntax3.h ; fi\nif ! test -e ../asnstat/asngbseq.h ; then $dt -m ../asn/gbseq.asn -o ../asnstat/asngbseq.h ; fi\nif ! test -e ../asnstat/asninsdseq.h ; then $dt -m ../asn/insdseq.asn -o ../asnstat/asninsdseq.h ; fi\nif ! test -e ../asnstat/asntseq.h ; then $dt -m ../asn/tinyseq.asn -o ../asnstat/asntseq.h ; fi\n\n#if ! test -e *.h ; then mv *.h ../asnstat ; fi\n\necho Done...";
+			shellScript = "cd ../../asn\ndt=$BUILD_ROOT/$EXECUTABLE_NAME\necho Using asntool: $dt\necho Checking ASN files...\n\nif test ! -d ../asnstat ; then mkdir ../asnstat ; fi\n\nFILES=\"\\\nhead.all general.asn biblio.asn medline.asn pubmed.asn medlars.asn pub.asn \\\nseqloc.asn seq.asn seqset.asn seqcode.asn seqblock.asn \\\nseqfeat.asn seqalign.asn seqres.asn submit.asn ../biostruc/cn3d/cn3d.asn \\\nproj.asn access.asn featdef.asn ncbimime.asn objprt.asn gbseq.asn insdseq.asn \\\ntinyseq.asn \"\n\nif ! test -e asn.all ; then cat $FILES > asn.all ; fi\n\n\n\nif ! test -e ../asnstat/asngen.h ; then $dt -m ../asn/general.asn -o ../asnstat/asngen.h ; fi\nif ! test -e ../asnstat/asnsset.h ; then $dt -m ../asn/seqset.asn -o ../asnstat/asnsset.h ; fi\nif ! test -e ../asnstat/asnfeat.h ; then $dt -m ../asn/seqfeat.asn -o ../asnstat/asnfeat.h ; fi\nif ! test -e ../asnstat/asnalign.h ; then $dt -m ../asn/seqalign.asn -o ../asnstat/asnalign.h ; fi\nif ! test -e ../asnstat/asnloc.h ; then $dt -m ../asn/seqloc.asn -o ../asnstat/asnloc.h ; fi\nif ! test -e ../asnstat/asnres.h ; then $dt -m ../asn/seqres.asn -o ../asnstat/asnres.h ; fi\nif ! test -e ../asnstat/asnmedli.h ; then $dt -m ../asn/medline.asn -o ../asnstat/asnmedli.h ; fi\nif ! test -e ../asnstat/asnbibli.h ; then $dt -m ../asn/biblio.asn -o ../asnstat/asnbibli.h ; fi\nif ! test -e ../asnstat/asnseq.h ; then $dt -m ../asn/seq.asn -o ../asnstat/asnseq.h ; fi\nif ! test -e ../asnstat/asnpub.h ; then $dt -m ../asn/pub.asn -o ../asnstat/asnpub.h ; fi\nif ! test -e ../asnstat/asnacces.h ; then $dt -m ../asn/access.asn -o ../asnstat/asnacces.h ; fi\n#if ! test -e ../asnstat/allpub.h ; then $dt -m ../asn/asnpub.all -o ../asnstat/allpub.h ; fi\nif ! test -e ../asnstat/all.h ; then $dt -m ../asn/asn.all -o ../asnstat/all.h ; fi\nif ! test -e ../asnstat/cdrom.h ; then $dt -m ../cdromlib/cdrom.asn -o ../asnstat/cdrom.h ; fi\nif ! test -e ../asnstat/asnsubmt.h ; then $dt -m ../asn/submit.asn -o ../asnstat/asnsubmt.h ; fi\nif ! test -e ../asnstat/asncode.h ; then $dt -m ../asn/seqcode.asn -o ../asnstat/asncode.h ; fi\nif ! test -e ../asnstat/asnblock.h ; then $dt -m ../asn/seqblock.asn -o ../asnstat/asnblock.h ; fi\nif ! test -e ../asnstat/asnfdef.h ; then $dt -m ../asn/featdef.asn -o ../asnstat/asnfdef.h ; fi\nif ! test -e ../asnstat/asnneten.h ; then $dt -m ../network/entrez/client/netentr.asn -o ../asnstat/asnneten.h ; fi\nif ! test -e ../asnstat/asnmla.h ; then $dt -m ../network/medarch/client/mla.asn -o ../asnstat/asnmla.h ; fi\nif ! test -e ../asnstat/asntaxon.h ; then $dt -m ../network/taxonomy/client/taxon.asn -o ../asnstat/asntaxon.h ; fi\nif ! test -e ../asnstat/asnid0.h ; then $dt -m ../network/id0arch/client/id0.asn -o ../asnstat/asnid0.h ; fi\nif ! test -e ../asnstat/spell.h ; then $dt -m ../network/spell/client/spell.asn -o ../asnstat/spell.h ; fi\nif ! test -e ../asnstat/ni_asn.h ; then $dt -m ../network/nsclilib/ni_msg.asn -o ../asnstat/ni_asn.h ; fi\nif ! test -e ../asnstat/asnprt.h ; then $dt -m ../asn/objprt.asn -o ../asnstat/asnprt.h ; fi\nif ! test -e ../asnstat/mmdb1.h ; then $dt -m ../biostruc/mmdb1.asn -o ../asnstat/mmdb1.h -w100 ; fi\nif ! test -e ../asnstat/mmdb2.h ; then $dt -m ../biostruc/mmdb2.asn -o ../asnstat/mmdb2.h -w100 ; fi\nif ! test -e ../asnstat/mmdb3.h ; then $dt -m ../biostruc/mmdb3.asn -o ../asnstat/mmdb3.h -w100 ; fi\nif ! test -e ../asnstat/cn3d.h ; then $dt -m ../biostruc/cn3d/cn3d.asn -o ../asnstat/cn3d.h -w100 ; fi\n#if ! test -e ../asnstat/asnbl18.h ; then $dt -m ../network/blast2/client/blast18.asn -o ../asnstat/asnbl18.h ; fi\nif ! test -e ../asnstat/blstspc.h ; then $dt -m ../network/blast3/client/blstspc.asn -o ../asnstat/blstspc.h -w100 ; fi\nif ! test -e ../asnstat/sugmap.h ; then $dt -m ../network/suggest/client/suggest.asn -o ../asnstat/sugmap.h ; fi\nif ! test -e ../asnstat/taxon1.h ; then $dt -m ../network/taxon1/common/taxon1.asn -o ../asnstat/taxon1.h ; fi\nif ! test -e ../asnstat/asnmime.h ; then $dt -m ../asn/ncbimime.asn -o ../asnstat/asnmime.h ; fi\nif ! test -e ../asnstat/asnpubme.h ; then $dt -m ../asn/pubmed.asn -o ../asnstat/asnpubme.h ; fi\nif ! test -e ../asnstat/asnmdrs.h ; then $dt -m ../asn/medlars.asn -o ../asnstat/asnmdrs.h ; fi\nif ! test -e ../asnstat/asnproj.h ; then $dt -m ../asn/proj.asn -o ../asnstat/asnproj.h ; fi\nif ! test -e ../asnstat/asnent2.h ; then $dt -m ../access/entrez2.asn -o ../asnstat/asnent2.h ; fi\nif ! test -e ../asnstat/asnmim.h ; then $dt -m ../access/mim.asn -o ../asnstat/asnmim.h ; fi\nif ! test -e ../asnstat/asntax3.h ; then $dt -m ../access/taxon3.asn -o ../asnstat/asntax3.h ; fi\nif ! test -e ../asnstat/asnentgene.h ; then $dt -m ../access/entrezgene.asn -o ../asnstat/asnentgene.h ; fi\nif ! test -e ../asnstat/asnegkludge.h ; then $dt -m ../access/egkludge.asn -o ../asnstat/asnegkludge.h ; fi\n\nif ! test -e ../asnstat/asngbseq.h ; then $dt -m ../asn/gbseq.asn -o ../asnstat/asngbseq.h ; fi\nif ! test -e ../asnstat/asninsdseq.h ; then $dt -m ../asn/insdseq.asn -o ../asnstat/asninsdseq.h ; fi\nif ! test -e ../asnstat/asntseq.h ; then $dt -m ../asn/tinyseq.asn -o ../asnstat/asntseq.h ; fi\n\n#if ! test -e *.h ; then mv *.h ../asnstat ; fi\n\necho Done...";
 		};
 		F0B6D58F06AEBC1C002EF6DC = {
 			fileRef = F012D8B806A552CB00741D48;
@@ -8901,7 +9951,7 @@
 				INFOPLIST_FILE = "";
 				INSTALL_PATH = "$(USER_APPS_DIR)";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbimmdb -lvibrant -lncbiobj -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbimmdb -lncbiblastapi -lncbiblast -lvibrant -lncbiobj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = Entrez2;
 				REZ_EXECUTABLE = NO;
@@ -8935,86 +9985,10 @@
 				F0B6D62606AEC0C6002EF6DC,
 			);
 			isa = PBXGroup;
-			name = BlastCL3;
+			name = blastCL3;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
-		};
-		F0B6D61A06AEC094002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXHeadersBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D61B06AEC094002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXResourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D61C06AEC094002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-				F0B6D69206AEC307002EF6DC,
-			);
-			isa = PBXSourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D61D06AEC094002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXRezBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D61E06AEC094002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXFrameworksBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D61F06AEC094002EF6DC = {
-			buildPhases = (
-				F0B6D61A06AEC094002EF6DC,
-				F0B6D61B06AEC094002EF6DC,
-				F0B6D61C06AEC094002EF6DC,
-				F0B6D61D06AEC094002EF6DC,
-				F0B6D61E06AEC094002EF6DC,
-			);
-			buildRules = (
-			);
-			buildSettings = {
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
-				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
-				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INFOPLIST_FILE = "";
-				INSTALL_PATH = "$(USER_APPS_DIR)";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lvibrant -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = Bl2seq;
-				REZ_EXECUTABLE = NO;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = "-Wmost";
-			};
-			dependencies = (
-			);
-			isa = PBXNativeTarget;
-			name = Bl2seq;
-			productName = BlastCL3;
-			productReference = F0B6D62006AEC094002EF6DC;
-			productType = "com.apple.product-type.application";
-		};
-		F0B6D62006AEC094002EF6DC = {
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			isa = PBXFileReference;
-			path = Bl2seq.app;
-			refType = 3;
-			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		F0B6D62606AEC0C6002EF6DC = {
 			fileEncoding = 30;
@@ -9030,7 +10004,8 @@
 				F0B6D69106AEC307002EF6DC,
 			);
 			isa = PBXGroup;
-			name = Bl2seq;
+			name = bl2seq;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
 		};
@@ -9039,7 +10014,8 @@
 				F0B6D6A606AEC362002EF6DC,
 			);
 			isa = PBXGroup;
-			name = Megablast;
+			name = megablast;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
 		};
@@ -9048,7 +10024,8 @@
 				F0B6D6CB06AEC421002EF6DC,
 			);
 			isa = PBXGroup;
-			name = Copymat;
+			name = copymat;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
 		};
@@ -9067,16 +10044,27 @@
 				F0B6D71E06AEDA86002EF6DC,
 			);
 			isa = PBXGroup;
-			name = Spidey;
+			name = spidey;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
 		};
 		F0B6D64C06AEC165002EF6DC = {
 			children = (
+				F0A82BAF075E0275008AE9A4,
+				F04A391F075DF9C80078AB2A,
+				F04A391D075DF9C20078AB2A,
+				F04A3919075DF9B10078AB2A,
+				F04A3914075DF9A20078AB2A,
+				F0AEB11407537F9D00D1AE1C,
+				F0B6D61506AEC088002EF6DC,
+				F0B6D62D06AEC12B002EF6DC,
+				F0B6D63206AEC133002EF6DC,
+				F0B6D63706AEC13A002EF6DC,
+				F0B6D64606AEC153002EF6DC,
 				F04B0DA806DA1A7900ED1405,
 				F0B6D64106AEC14B002EF6DC,
 				F0E47F9F06AEE7DC00FD29D4,
-				F0E47F9A06AEE7BF00FD29D4,
 				F0E47F9506AEE7B700FD29D4,
 				F0B6D75F06AEDDA5002EF6DC,
 				F0B6D75A06AEDD9A002EF6DC,
@@ -9096,88 +10084,6 @@
 			refType = 4;
 			sourceTree = "<group>";
 		};
-		F0B6D67806AEC24A002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXHeadersBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D67906AEC24A002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXResourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D67A06AEC24A002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-				F0B6D68706AEC261002EF6DC,
-			);
-			isa = PBXSourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D67B06AEC24A002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXRezBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D67C06AEC24A002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXFrameworksBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D67D06AEC24A002EF6DC = {
-			buildPhases = (
-				F0B6D67806AEC24A002EF6DC,
-				F0B6D67906AEC24A002EF6DC,
-				F0B6D67A06AEC24A002EF6DC,
-				F0B6D67B06AEC24A002EF6DC,
-				F0B6D67C06AEC24A002EF6DC,
-			);
-			buildRules = (
-			);
-			buildSettings = {
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
-				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
-				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INSTALL_PATH = "$(USER_APPS_DIR)";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lvibrant -lncbiobj -lncbimmdb -lncbi -framework Carbon";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = BlastCL3;
-				REZ_EXECUTABLE = NO;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = "-Wmost";
-			};
-			dependencies = (
-			);
-			isa = PBXNativeTarget;
-			name = BlastCL3;
-			productName = BlastCL3;
-			productReference = F0B6D67E06AEC24A002EF6DC;
-			productType = "com.apple.product-type.application";
-		};
-		F0B6D67E06AEC24A002EF6DC = {
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			isa = PBXFileReference;
-			path = BlastCL3.app;
-			refType = 3;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		F0B6D68706AEC261002EF6DC = {
-			fileRef = F0B6D62606AEC0C6002EF6DC;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F0B6D69106AEC307002EF6DC = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -9186,89 +10092,6 @@
 			path = ../../demo/bl2seq.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
-		};
-		F0B6D69206AEC307002EF6DC = {
-			fileRef = F0B6D69106AEC307002EF6DC;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F0B6D69A06AEC32F002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXHeadersBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D69B06AEC32F002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXResourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D69C06AEC32F002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-				F0B6D6A706AEC362002EF6DC,
-			);
-			isa = PBXSourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D69D06AEC32F002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXRezBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D69E06AEC32F002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXFrameworksBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D69F06AEC32F002EF6DC = {
-			buildPhases = (
-				F0B6D69A06AEC32F002EF6DC,
-				F0B6D69B06AEC32F002EF6DC,
-				F0B6D69C06AEC32F002EF6DC,
-				F0B6D69D06AEC32F002EF6DC,
-				F0B6D69E06AEC32F002EF6DC,
-			);
-			buildRules = (
-			);
-			buildSettings = {
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
-				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
-				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INFOPLIST_FILE = "";
-				INSTALL_PATH = "$(USER_APPS_DIR)";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lvibrant -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = MegaBlast;
-				REZ_EXECUTABLE = NO;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = "-Wmost";
-			};
-			dependencies = (
-			);
-			isa = PBXNativeTarget;
-			name = MegaBlast;
-			productName = MegaBlast;
-			productReference = F0B6D6A006AEC32F002EF6DC;
-			productType = "com.apple.product-type.application";
-		};
-		F0B6D6A006AEC32F002EF6DC = {
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			isa = PBXFileReference;
-			path = MegaBlast.app;
-			refType = 3;
-			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		F0B6D6A606AEC362002EF6DC = {
 			fileEncoding = 30;
@@ -9279,89 +10102,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F0B6D6A706AEC362002EF6DC = {
-			fileRef = F0B6D6A606AEC362002EF6DC;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F0B6D6B806AEC3FC002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXHeadersBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D6B906AEC3FC002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXResourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D6BA06AEC3FC002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-				F0B6D6CC06AEC421002EF6DC,
-			);
-			isa = PBXSourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D6BB06AEC3FC002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXRezBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D6BC06AEC3FC002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXFrameworksBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D6BD06AEC3FC002EF6DC = {
-			buildPhases = (
-				F0B6D6B806AEC3FC002EF6DC,
-				F0B6D6B906AEC3FC002EF6DC,
-				F0B6D6BA06AEC3FC002EF6DC,
-				F0B6D6BB06AEC3FC002EF6DC,
-				F0B6D6BC06AEC3FC002EF6DC,
-			);
-			buildRules = (
-			);
-			buildSettings = {
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
-				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
-				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INFOPLIST_FILE = "";
-				INSTALL_PATH = "$(USER_APPS_DIR)";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lvibrant -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = Copymat;
-				REZ_EXECUTABLE = NO;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = "-Wmost";
-			};
-			dependencies = (
-			);
-			isa = PBXNativeTarget;
-			name = Copymat;
-			productName = Copymat;
-			productReference = F0B6D6BE06AEC3FC002EF6DC;
-			productType = "com.apple.product-type.application";
-		};
-		F0B6D6BE06AEC3FC002EF6DC = {
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			isa = PBXFileReference;
-			path = Copymat.app;
-			refType = 3;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
 		F0B6D6CB06AEC421002EF6DC = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -9371,89 +10111,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F0B6D6CC06AEC421002EF6DC = {
-			fileRef = F0B6D6CB06AEC421002EF6DC;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F0B6D70806AEDA55002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXHeadersBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D70906AEDA55002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXResourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D70A06AEDA55002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-				F0B6D71F06AEDA86002EF6DC,
-			);
-			isa = PBXSourcesBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D70B06AEDA55002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXRezBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D70C06AEDA55002EF6DC = {
-			buildActionMask = 2147483647;
-			files = (
-			);
-			isa = PBXFrameworksBuildPhase;
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0B6D70D06AEDA55002EF6DC = {
-			buildPhases = (
-				F0B6D70806AEDA55002EF6DC,
-				F0B6D70906AEDA55002EF6DC,
-				F0B6D70A06AEDA55002EF6DC,
-				F0B6D70B06AEDA55002EF6DC,
-				F0B6D70C06AEDA55002EF6DC,
-			);
-			buildRules = (
-			);
-			buildSettings = {
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
-				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
-				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INFOPLIST_FILE = "";
-				INSTALL_PATH = "$(USER_APPS_DIR)";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lvibrant -lncbiobj -lncbimmdb -lncbi -framework Carbon";
-				OTHER_REZFLAGS = "";
-				PRODUCT_NAME = Spidey;
-				REZ_EXECUTABLE = NO;
-				SECTORDER_FLAGS = "";
-				WARNING_CFLAGS = "-Wmost";
-			};
-			dependencies = (
-			);
-			isa = PBXNativeTarget;
-			name = Spidey;
-			productName = Spidey;
-			productReference = F0B6D70E06AEDA55002EF6DC;
-			productType = "com.apple.product-type.application";
-		};
-		F0B6D70E06AEDA55002EF6DC = {
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			isa = PBXFileReference;
-			path = Spidey.app;
-			refType = 3;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
 		F0B6D71E06AEDA86002EF6DC = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -9462,12 +10119,6 @@
 			path = ../../demo/spideymain.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
-		};
-		F0B6D71F06AEDA86002EF6DC = {
-			fileRef = F0B6D71E06AEDA86002EF6DC;
-			isa = PBXBuildFile;
-			settings = {
-			};
 		};
 		F0B6D74106AEDD47002EF6DC = {
 			children = (
@@ -10165,15 +10816,6 @@
 			settings = {
 			};
 		};
-		F0BC2D8806AC2C0F00EC2330 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = ni_www.c;
-			path = ../../network/nsclilib/ni_www.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F0BC2D8906AC2C0F00EC2330 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -10237,15 +10879,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F0BC2D9006AC2C0F00EC2330 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = ncbiurl.c;
-			path = ../../network/nsclilib/ncbiurl.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F0BC2D9106AC2C0F00EC2330 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -10254,21 +10887,6 @@
 			path = ../../network/nsclilib/ni_disp.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
-		};
-		F0BC2D9206AC2C0F00EC2330 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = ncbicli.c;
-			path = ../../network/nsclilib/ncbicli.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F0BC2D9306AC2C0F00EC2330 = {
-			fileRef = F0BC2D8806AC2C0F00EC2330;
-			isa = PBXBuildFile;
-			settings = {
-			};
 		};
 		F0BC2D9406AC2C0F00EC2330 = {
 			fileRef = F0BC2D8906AC2C0F00EC2330;
@@ -10312,20 +10930,8 @@
 			settings = {
 			};
 		};
-		F0BC2D9B06AC2C0F00EC2330 = {
-			fileRef = F0BC2D9006AC2C0F00EC2330;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F0BC2D9C06AC2C0F00EC2330 = {
 			fileRef = F0BC2D9106AC2C0F00EC2330;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F0BC2D9D06AC2C0F00EC2330 = {
-			fileRef = F0BC2D9206AC2C0F00EC2330;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -11111,6 +11717,21 @@
 			target = F0BC2DA106AC2D8600EC2330;
 			targetProxy = F0BC2E0C06AC3D2500EC2330;
 		};
+		F0D4E75C07A66C93006CF3D5 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = objentgene.c;
+			path = ../../access/objentgene.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F0D4E75D07A66C93006CF3D5 = {
+			fileRef = F0D4E75C07A66C93006CF3D5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F0E3B01E06A5513900F473CA = {
 			children = (
 				F095C60006AE908A00C0C74D,
@@ -11186,28 +11807,35 @@
 				F095C59006AE8FDE00C0C74D,
 				F095C4A906AE8A3E00C0C74D,
 				F0B6D5DE06AEBF8C002EF6DC,
-				F0B6D67D06AEC24A002EF6DC,
-				F0B6D61F06AEC094002EF6DC,
-				F0B6D69F06AEC32F002EF6DC,
-				F0B6D6BD06AEC3FC002EF6DC,
-				F0B6D70D06AEDA55002EF6DC,
 				F0FEF6BD06AC4515005DD516,
-				F0B6D78E06AEDF06002EF6DC,
-				F00AEE2206AFD5C6003C8FEB,
-				F00AEE3A06AFD603003C8FEB,
-				F00AEE1A06AFD5B8003C8FEB,
-				F0B6D7D106AEE06C002EF6DC,
-				F0B6D7AA06AEDFD5002EF6DC,
 				F04B0DB106DA1AE600ED1405,
 				F0FEB70206B542B400975471,
 				F0B6D7EE06AEE275002EF6DC,
 				F0B6D81206AEE32F002EF6DC,
 				F0B6D83B06AEE6E1002EF6DC,
 				F00AEE1206AFD5A6003C8FEB,
-				F0FEF69F06AC42E3005DD516,
-				F00AEE4206AFD613003C8FEB,
-				F00AEE2A06AFD5D7003C8FEB,
+				F0020A3007524C8000252E7D,
+				F0AEB17407539B9900D1AE1C,
+				F0020A3607524CB400252E7D,
+				F04A3924075DF9F00078AB2A,
+				F04A392A075DF9FD0078AB2A,
+				F0020A2B07524C5400252E7D,
 				F00AEE3206AFD5EC003C8FEB,
+				F00AEE2A06AFD5D7003C8FEB,
+				F0AEB1220753801200D1AE1C,
+				F00AEE4206AFD613003C8FEB,
+				F0A82BB7075E02A4008AE9A4,
+				F0B6D7AA06AEDFD5002EF6DC,
+				F00209F707523F0100252E7D,
+				F04A3936075DFA150078AB2A,
+				F0020A2607524C2200252E7D,
+				F0B6D78E06AEDF06002EF6DC,
+				F00AEE2206AFD5C6003C8FEB,
+				F00AEE3A06AFD603003C8FEB,
+				F00AEE1A06AFD5B8003C8FEB,
+				F0B6D7D106AEE06C002EF6DC,
+				F0FEF69F06AC42E3005DD516,
+				F04A393C075DFA200078AB2A,
 			);
 		};
 		F0E3B02906A551A100F473CA = {
@@ -11215,7 +11843,6 @@
 				F095C83206AEBAE100C0C74D,
 				F012D96006A557C100741D48,
 				F012D95A06A5577A00741D48,
-				F012D95806A5572200741D48,
 				F012D95606A556FF00741D48,
 				F012D93006A5568500741D48,
 				F012D93106A5568500741D48,
@@ -11237,8 +11864,6 @@
 				F012D94106A5568500741D48,
 				F012D94206A5568500741D48,
 				F012D92E06A555D900741D48,
-				F012D92C06A555BB00741D48,
-				F012D92806A5559200741D48,
 				F012D92906A5559200741D48,
 				F012D91406A5554100741D48,
 				F012D91506A5554100741D48,
@@ -11269,13 +11894,10 @@
 				F012D8E206A552CB00741D48,
 				F012D8EA06A552CB00741D48,
 				F012D8EC06A552CB00741D48,
-				F012D8F606A552CB00741D48,
-				F012D8F906A552CB00741D48,
 				F012D8FA06A552CB00741D48,
 				F012D8FB06A552CB00741D48,
 				F012D90006A552CB00741D48,
 				F012D90806A552CB00741D48,
-				F012D90A06A552CB00741D48,
 				F012D90E06A552CB00741D48,
 				F012D8B306A552A600741D48,
 			);
@@ -11300,9 +11922,7 @@
 				F012D92506A5554100741D48,
 				F012D92606A5554100741D48,
 				F012D92706A5554100741D48,
-				F012D92A06A5559200741D48,
 				F012D92B06A5559200741D48,
-				F012D92D06A555BB00741D48,
 				F012D92F06A555D900741D48,
 				F012D94306A5568500741D48,
 				F012D94406A5568500741D48,
@@ -11327,10 +11947,7 @@
 				F012D95B06A5577A00741D48,
 				F012D96106A557C100741D48,
 				F012D96706A557E600741D48,
-				F012D96906A557E700741D48,
 				F012D96D06A557E900741D48,
-				F012D97006A557EA00741D48,
-				F012D97206A557EB00741D48,
 				F012D97406A557EC00741D48,
 				F012D97606A557F200741D48,
 				F012D97806A557F300741D48,
@@ -11407,11 +12024,6 @@
 				F095C78506AEB72300C0C74D,
 				F095C7FE06AEB84D00C0C74D,
 				F0B6D5DF06AEBF8C002EF6DC,
-				F0B6D62006AEC094002EF6DC,
-				F0B6D67E06AEC24A002EF6DC,
-				F0B6D6A006AEC32F002EF6DC,
-				F0B6D6BE06AEC3FC002EF6DC,
-				F0B6D70E06AEDA55002EF6DC,
 				F0B6D78F06AEDF06002EF6DC,
 				F0B6D7AB06AEDFD5002EF6DC,
 				F0B6D7D206AEE06C002EF6DC,
@@ -11427,6 +12039,18 @@
 				F00AEE4306AFD613003C8FEB,
 				F0FEB70306B542B400975471,
 				F04B0DB206DA1AE600ED1405,
+				F00209F807523F0100252E7D,
+				F0020A2707524C2200252E7D,
+				F0020A2C07524C5400252E7D,
+				F0020A3107524C8000252E7D,
+				F0020A3707524CB400252E7D,
+				F0AEB1230753801200D1AE1C,
+				F0AEB17507539B9900D1AE1C,
+				F04A3925075DF9F00078AB2A,
+				F04A392B075DF9FD0078AB2A,
+				F04A3937075DFA150078AB2A,
+				F04A393D075DFA200078AB2A,
+				F0A82BB8075E02A4008AE9A4,
 			);
 			isa = PBXGroup;
 			name = Products;
@@ -11484,11 +12108,13 @@
 			);
 			isa = PBXGroup;
 			name = testval;
+			path = "";
 			refType = 4;
 			sourceTree = "<group>";
 		};
 		F0E47F9F06AEE7DC00FD29D4 = {
 			children = (
+				F0E47F9A06AEE7BF00FD29D4,
 				F00AEE4806AFD642003C8FEB,
 			);
 			isa = PBXGroup;
@@ -11521,21 +12147,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if test ! -d ../../include ; then mkdir ../../include ; fi\nif test ! -e ../../include/ncbilcl.h ; then cp ../../corelib/ncbilcl.met ../../include/ncbilcl.h ; fi";
-		};
-		F0FB657F071FF25300DF3230 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = blast_tback.c;
-			path = ../../algo/blast/api/blast_tback.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F0FB6581071FF28B00DF3230 = {
-			fileRef = F0FB657F071FF25300DF3230;
-			isa = PBXBuildFile;
-			settings = {
-			};
 		};
 		F0FEB6FD06B5429300975471 = {
 			fileEncoding = 30;
@@ -11642,11 +12253,6 @@
 			children = (
 				F095C4AE06AE8A6F00C0C74D,
 				F0B6D59406AEBCFF002EF6DC,
-				F0B6D61506AEC088002EF6DC,
-				F0B6D62D06AEC12B002EF6DC,
-				F0B6D63206AEC133002EF6DC,
-				F0B6D63706AEC13A002EF6DC,
-				F0B6D64606AEC153002EF6DC,
 			);
 			isa = PBXGroup;
 			name = Applications;

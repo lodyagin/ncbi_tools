@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.138 $
+* $Revision: 6.142 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.142  2005/04/27 14:30:33  kans
+* gpipe was making TPA defline, moved to its own case
+*
+* Revision 6.141  2005/04/26 21:33:52  kans
+* added SEQID_GPIPE
+*
+* Revision 6.140  2005/03/21 22:15:09  kans
+* added SeqLocFastaStream
+*
+* Revision 6.139  2004/10/22 19:56:45  kans
+* UseOrgMods has strain before chromosome and other qualifiers
+*
 * Revision 6.138  2004/10/14 19:36:34  kans
 * CreateDefLineExEx has extProtTitle argument, normally only use first protein name in defline
 *
@@ -880,6 +892,7 @@ void SeqEntryFasta (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             case SEQID_TPG:
             case SEQID_TPE:
             case SEQID_TPD:
+            case SEQID_GPIPE:
               tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
               if (tsip->accession != NULL)
                 mfp->accession = tsip->accession;
@@ -1530,8 +1543,9 @@ static void LIBCALLBACK FsaStreamProc (
   }
 }
 
-static Int4 BioseqFastaStreamInt (
+static Int4 BioseqFastaStreamInternal (
   BioseqPtr bsp,
+  SeqLocPtr slp,
   FILE *fp,
   ByteStorePtr bs,
   StreamFlgType flags,
@@ -1549,7 +1563,7 @@ static Int4 BioseqFastaStreamInt (
   SeqDescrPtr  sdp;
   StreamFsa    sf;
 
-  if (bsp == NULL) return 0;
+  if (bsp == NULL && slp == NULL) return 0;
   if (fp == NULL && bs == NULL) return 0;
 
   if (linelen > 128) {
@@ -1610,7 +1624,11 @@ static Int4 BioseqFastaStreamInt (
     }
   }
 
-  count = SeqPortStream (bsp, flags, (Pointer) &sf, FsaStreamProc);
+  if (bsp != NULL) {
+    count = SeqPortStream (bsp, flags, (Pointer) &sf, FsaStreamProc);
+  } else if (slp != NULL) {
+    count = SeqPortStreamLoc (slp, flags, (Pointer) &sf, FsaStreamProc);
+  }
 
   /* print any remaining sequence */
 
@@ -1645,7 +1663,7 @@ NLM_EXTERN Int4 BioseqFastaStream (
 )
 
 {
-  return BioseqFastaStreamInt (bsp, fp, NULL, flags, linelen, blocklen, grouplen, do_defline);
+  return BioseqFastaStreamInternal (bsp, NULL, fp, NULL, flags, linelen, blocklen, grouplen, do_defline);
 }
 
 NLM_EXTERN Int4 BioseqFastaMemStream (
@@ -1659,7 +1677,20 @@ NLM_EXTERN Int4 BioseqFastaMemStream (
 )
 
 {
-  return BioseqFastaStreamInt (bsp, NULL, bs, flags, linelen, blocklen, grouplen, do_defline);
+  return BioseqFastaStreamInternal (bsp, NULL, NULL, bs, flags, linelen, blocklen, grouplen, do_defline);
+}
+
+NLM_EXTERN Int4 SeqLocFastaStream (
+  SeqLocPtr slp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen
+)
+
+{
+  return BioseqFastaStreamInternal (NULL, slp, fp, NULL, flags, linelen, blocklen, grouplen, FALSE);
 }
 
 /*****************************************************************************
@@ -3845,6 +3876,10 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 		def = StringCat(def, name);
 		MemFree(name);
 	}
+	if (str) {
+		def = StringCat(def, str);
+		MemFree(str);
+	}
 	if (chr) {
 		def = StringCat(def, chr);
 		MemFree(chr);
@@ -3856,10 +3891,6 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 	if (map) {
 		def = StringCat(def, map);
 		MemFree(map);
-	}
-	if (str) {
-		def = StringCat(def, str);
-		MemFree(str);
 	}
 	if (suffix) {
 		def = StringCat(def, " ");
@@ -4208,6 +4239,9 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 						}
 					}
 				}
+				break;
+		    case SEQID_GPIPE :
+				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 				break;
 			default :
 				break;

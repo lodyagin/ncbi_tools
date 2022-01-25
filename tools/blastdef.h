@@ -30,8 +30,17 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.159 $ 
+/* $Revision: 6.162 $ 
 * $Log: blastdef.h,v $
+* Revision 6.162  2005/04/25 14:16:36  coulouri
+* set db_chunk_size adaptively
+*
+* Revision 6.161  2005/01/10 18:52:29  coulouri
+* fixes from morgulis to allow concatenation of >255 queries in [t]blastn
+*
+* Revision 6.160  2004/11/19 13:22:05  madden
+* Remove no_check_score completely (from Mike Gertz)
+*
 * Revision 6.159  2004/09/28 16:02:29  papadopo
 * From Michael Gertz: Changed the "sumscore" field of an HSP to
 * "xsum" to represent a normalized sum score of linked HSPs;
@@ -1117,7 +1126,6 @@ typedef struct _blast_optionsblk {
 					but statistics should be based upon the real database. */
         Boolean         use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
         Int4            max_num_patterns; /* Maximum number of patterns to be used in PHI-Blast search */
-	Boolean         no_check_score;
         Boolean         is_megablast_search; /* Is this a MegaBlast search? */
         Uint1         no_traceback;    /* No traceback in MegaBLAST extension */
         Boolean         is_rps_blast;     /* If this RPS Blast ? */
@@ -1146,7 +1154,7 @@ typedef struct _blast_optionsblk {
         Boolean mb_use_dyn_prog;  /* Use dynamic programming gapped extension in
                                      megablast with affine gap scores */ 
         MBDiscWordType mb_disc_type;
-	Int4 NumQueries;		/*--KM for query concatenation in [t]blastn */
+	Uint4 NumQueries;		/*--KM for query concatenation in [t]blastn */
         Boolean ignore_gilist;    /* Used in traceback stage to not lookup gi's */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
@@ -1367,7 +1375,6 @@ typedef struct _blast_parameterblk {
 			final_db_seq;		/* Final sequence to be compared. */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
         Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
-	Boolean no_check_score;
         MegaBlastParameterBlkPtr mb_params;  /* Is this a MegaBlast search? */
         CharPtr filter_string;  /* String specifying the type of filtering and filter options. - used with Translated RPS Blast */
         Boolean is_rps_blast;      /* If this RPS Blast ? */
@@ -1720,7 +1727,6 @@ typedef struct SWResults {
 
 /* How many ticks should be emitted total. */
 #define BLAST_NTICKS 50
-#define BLAST_DB_CHUNK_SIZE 500
 
 /* period of sending out a star/message. */
 #define STAR_MSG_PERIOD 60
@@ -1741,7 +1747,7 @@ typedef struct _BlastThrInfo {
     Int4 gi_current;
     BlastGiListPtr blast_gi_list;
     
-    /* db_chunk_size is used, if the db is smaller than BLAST_DB_CHUNK_SIZE */
+    /* Number of database sequences for each thread to process. */
     Int4 db_chunk_size;
 
     /* The last db sequence to be assigned.  Used only in get_db_chunk after

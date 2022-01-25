@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.102 2004/09/28 16:04:19 papadopo Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.105 2005/04/27 17:20:45 papadopo Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.102 $
+ * $Revision: 6.105 $
  * $Log: blastkar.c,v $
+ * Revision 6.105  2005/04/27 17:20:45  papadopo
+ * copy X scores to U scores when building score matrix
+ *
+ * Revision 6.104  2005/04/20 19:02:15  lavr
+ * +<assert.h>
+ *
+ * Revision 6.103  2005/01/31 17:02:03  dondosha
+ * Fixed bug in BlastKarlinLHtoK for blastn with penalty == -reward
+ *
  * Revision 6.102  2004/09/28 16:04:19  papadopo
  * From Michael Gertz:
  * 1. Pass the effective database size into BlastSmallGapSumE,
@@ -601,6 +610,7 @@ Detailed Contents:
  *
  * */
 #include <ncbi.h>
+#include <assert.h>
 #include <ncbimath.h>
 #include <objcode.h>
 #include <objseq.h>
@@ -1800,6 +1810,9 @@ static Char ASCII_TO_BLASTNA_CONVERT[128]={
 15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
 15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15};
 
+#define X_CODE 21
+#define U_CODE 24
+
 Int2 LIBCALL
 BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
 {
@@ -1967,6 +1980,15 @@ BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
     
     if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
         sbp->mat_dim1 = a1cnt;
+
+        /* For protein matrices, copy the X scores to the
+           U scores. Keeping the U scores as BLAST_SCORE_MIN
+           means that U never aligns with another letter,
+           even another U */
+        for (index1 = 0; index1 < a2cnt; index1++) {
+            matrix[U_CODE][index1] = matrix[X_CODE][index1];
+            matrix[index1][U_CODE] = matrix[index1][X_CODE];
+        }
     }
     
     NlmMutexUnlock(read_matrix_mutex); 
@@ -3452,15 +3474,14 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi    lambda, Nlm_FloatHi H)
     expMinusLambda      = exp((Nlm_FloatHi) -lambda);
 
     if (low == -1 && high == 1) {
-        K = (sfp->sprob[low] - sfp->sprob[high]) *
-            (sfp->sprob[low] - sfp->sprob[high]) / sfp->sprob[low];
+        K = (sfp->sprob[low*divisor] - sfp->sprob[high*divisor]) *
+            (sfp->sprob[low*divisor] - sfp->sprob[high*divisor]) / 
+            sfp->sprob[low*divisor];
         return(K);
     }
 
     if (low == -1 || high == 1) {
-        if (high == 1)
-            ;
-        else {
+        if (high != 1) {
             score_avg = sfp->score_avg / divisor;
             firstTermClosedForm
                 = (score_avg * score_avg) / firstTermClosedForm;

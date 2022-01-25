@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description:
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.39  2005/04/20 19:46:02  kans
+* fixed ReplaceAllCallback
+*
+* Revision 6.38  2005/03/03 21:44:05  kans
+* PubEquivLookupProc takes extra BoolPtr parameter to signal success or failure
+*
 * Revision 6.37  2004/08/13 16:07:54  kans
 * warn if changing pub_reftype to sites or lost
 *
@@ -1955,6 +1961,7 @@ static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep,
   Int2        num;
   ValNodePtr  pep;
   ValNodePtr  pub;
+  Boolean     success = FALSE;
   ValNodePtr  vnp;
 
   pub = NULL;
@@ -1975,8 +1982,12 @@ static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep,
           }
         }
       }
-      pub = lookup (pep);
+      pub = lookup (pep, &success);
       PubEquivFree (pep);
+      if (! success) {
+        Message (MSG_OK, "Publication lookup failed");
+        return pub;
+      }
       if (pub != NULL) {
         if (! byMuid) {
           pep = AsnIoMemCopy (oldpep, (AsnReadFunc) PubEquivAsnRead,
@@ -3408,39 +3419,52 @@ typedef struct replacealldata {
   PubdescPtr  replaceWith;
 } ReplaceAllData, PNTR ReplaceAllDataPtr;
 
-static Boolean ReplaceAllCallback (GatherContextPtr gcp)
+static Boolean ReplaceAllCallback (GatherObjectPtr gop)
 
 {
   PubdescPtr         pdp;
+  /*
   ValNodePtr         pep;
+  */
   ValNodePtr         ppr;
   ReplaceAllDataPtr  radp;
   ValNodePtr         sdp;
   Int2               serial_number;
   SeqFeatPtr         sfp;
   ValNodePtr         tmp;
+  ValNode            vn;
   ValNodePtr         vnp;
 
-  radp = (ReplaceAllDataPtr) gcp->userdata;
+  radp = (ReplaceAllDataPtr) gop->userdata;
   if (radp != NULL) {
     pdp = NULL;
-    if (gcp->thistype == OBJ_SEQDESC) {
-      sdp = (ValNodePtr) gcp->thisitem;
+    if (gop->itemtype == OBJ_SEQDESC) {
+      sdp = (ValNodePtr) gop->dataptr;
       if (sdp != NULL && sdp->choice == Seq_descr_pub) {
         pdp = (PubdescPtr) sdp->data.ptrvalue;
       }
-    } else if (gcp->thistype == OBJ_SEQFEAT) {
-      sfp = (SeqFeatPtr) gcp->thisitem;
+    } else if (gop->itemtype == OBJ_SEQFEAT) {
+      sfp = (SeqFeatPtr) gop->dataptr;
       if (sfp != NULL && sfp->data.choice == SEQFEAT_PUB) {
         pdp = (PubdescPtr) sfp->data.value.ptrvalue;
       }
-    } else if (gcp->thistype == OBJ_SEQFEAT_CIT) {
-      vnp = (ValNodePtr) gcp->thisitem;
+    } else if (gop->itemtype == OBJ_SEQFEAT_CIT) {
+      vnp = (ValNodePtr) gop->dataptr;
       tmp = ValNodeNew (NULL);
       if (tmp != NULL) {
         tmp->choice = PUB_Equiv;
         tmp->data.ptrvalue = radp->deleteThis->pub;
         if (PubLabelMatch (tmp, vnp) == 0) {
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          MemCopy (&vn, vnp, sizeof (ValNode));
+          tmp->choice = PUB_Equiv;
+          tmp->data.ptrvalue = radp->replaceWith->pub;
+          ppr = MinimizePub (tmp);
+          MemCopy (vnp, ppr, sizeof (ValNode));
+          vnp->next = vn.next;
+          MemCopy (ppr, &vn, sizeof (ValNode));
+          PubFree (ppr);
+          /*
           pep = ValNodeNew (NULL);
           if (pep != NULL) {
             tmp->choice = PUB_Equiv;
@@ -3449,10 +3473,11 @@ static Boolean ReplaceAllCallback (GatherContextPtr gcp)
             pep->choice = PUB_Equiv;
             pep->data.ptrvalue = ppr;
             pep->next = vnp->next;
-            *(gcp->prevlink) = pep;
+            *(gop->prevlink) = pep;
             vnp->next = NULL;
             PubFree (vnp);
           }
+          */
         }
       }
       ValNodeFree (tmp);
@@ -3497,7 +3522,10 @@ static void UpdateRAD (ReplaceAllDataPtr radp, PubdescFormPtr pfp)
       MemSet ((Pointer) &gs, 0, sizeof (GatherScope));
       gs.get_feats_location = TRUE;
       gs.seglevels = 1;
+      /*
       GatherEntity (pfp->input_entityID, radp, ReplaceAllCallback, &gs);
+      */
+      GatherObjectsInEntity (pfp->input_entityID, 0, NULL, ReplaceAllCallback, (Pointer) radp, NULL);
     }
   }
 }

@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.28 2004/10/06 14:47:59 dondosha Exp $
+/*  $Id: blast_seqsrc.h,v 1.40 2005/04/21 15:27:31 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,6 +29,16 @@
 
 /** @file blast_seqsrc.h
  * Declaration of ADT to retrieve sequences for the BLAST engine.
+ *
+ * @todo The following are pending items to be addressed in the BlastSeqSrc
+ * interface and implementations
+ * - Make "multi-sequence" BlastSeqSrc implementations MT-safe                  
+ * - Provide possibility of retrieving an error from BlastSeqSrc (not just 
+ *   initialization errors).                                               
+ * - Constrain all use of the BlastSeqSrc to CORE BLAST                         
+ * - Remove BlastSeqSrcCopier as MT-safe copying of BlastSeqSrc objects inside 
+ *   CORE BLAST should not be needed (threading should be done outside CORE
+ *   BLAST)
  */
 
 #ifndef BLAST_SEQSRC_H
@@ -44,73 +54,122 @@ extern "C" {
 /** The BlastSeqSrc ADT is an opaque data type that defines an interface which
  *  is used by the core BLAST code to retrieve sequences.
  *  The interface currently provides the following services:
- *  - Retrieving number of sequences in set
- *  - Retrieving the total length (in bases/residues) of sequences in set.
- *  - Retrieving the length of the longest sequence in set
+ *  - Retrieving number of sequences in a set
+ *  - Retrieving the total length (in bases/residues) of sequences in a set.
+ *  - Retrieving the length of the longest sequence in a set
  *  - Retrieving an individual sequence in a user-specified encoding by ordinal
- *    id (index into the set)
- *  - Retrieving the length of a given sequence in set by ordinal id
- *  - Allow MT-safe iteration over sequences in set through the
+ *    id (index into a set)
+ *  - Retrieving the length of a given sequence in a set by ordinal id
+ *  - Allow MT-safe iteration over sequences in a set through the
  *    BlastSeqSrcIterator abstraction
  *  .
- *  Implementations of this interface should provide functions for all
- *  the functions listed above.
+ *
+ *  Currently available client implementations of the BlastSeqSrc API include:
+ *  - ReaddbBlastSeqSrcInit (C toolkit)
+ *  - SeqDbBlastSeqSrcInit (C++ toolkit)
+ *  - MultiSeqBlastSeqSrcInit (C/C++ toolkit)
+ *  .
+ *  For more details, see also @ref _impl_blast_seqsrc_howto
  */
 typedef struct BlastSeqSrc BlastSeqSrc;
 
-/** Function pointer typedef to create a new BlastSeqSrc structure.
- * First argument is a pointer to the structure to be populated (allocated for
- * client implementations), second argument should be typecast'd to the 
- * correct type by user-defined constructor function */
-typedef BlastSeqSrc* (*BlastSeqSrcConstructor) (BlastSeqSrc*, void*);
-
-/** Function pointer typedef to deallocate a BlastSeqSrc structure.
- * Argument is the BlastSeqSrc structure to free, always returns NULL. */
-typedef BlastSeqSrc* (*BlastSeqSrcDestructor) (BlastSeqSrc*);
-
-/** Function pointer typedef to modify whatever is necessary in a copy of a 
- * BlastSeqSrc structure to achieve multi-thread safety.
- * Argument is the already copied BlastSeqSrc structure; 
- * returns the modified structure. */
-typedef BlastSeqSrc* (*BlastSeqSrcCopier) (BlastSeqSrc*);
-
-/** Function pointer typedef to return a 4-byte integer.
- * First argument is the BlastSeqSrc structure used, second argument is
- * passed to user-defined implementation */
-typedef Int4 (*GetInt4FnPtr) (void*, void*);
-
-/** Function pointer typedef to return a 8-byte integer.
- * First argument is the BlastSeqSrc structure used, second argument is
- * passed to user-defined implementation */
-typedef Int8 (*GetInt8FnPtr) (void*, void*);
-
-/** Function pointer typedef to return a null terminated string. 
- * First argument is the BlastSeqSrc structure used, second
- * argument is passed to user-defined implementation. */
-typedef const char* (*GetStrFnPtr) (void*, void*);
-
-/** Function pointer typedef to return a boolean value. 
- * First argument is the BlastSeqSrc structure used, second
- * argument is passed to user-defined implementation. */
-typedef Boolean (*GetBoolFnPtr) (void*, void*);
-
-/** Function pointer typedef to return error messages. This may be needed
- * when it is necessary to catch exceptions in a C++ implementation, pass them 
- * through the C code and throw them again.
- * First argument is the BlastSeqSrc structure used, second argument is 
- * passed to user-defined implementation. 
+/** Blast Sequence Source Iterator, designed to be used in conjunction with the
+ * BlastSeqSrc to provide MT-safe iteration over the sequences in the
+ * BlastSeqSrc 
+ * @todo This is still coupled to the BLAST database implementations of the
+ * BlastSeqSrc, could be made more generic if needed.
  */
-typedef Blast_Message* (*GetErrorFnPtr) (void*, void*);
+typedef struct BlastSeqSrcIterator BlastSeqSrcIterator;
 
-/** Function pointer typedef to retrieve sequences from data structure embedded
- * in the BlastSeqSrc structure.
- * First argument is the BlastSeqSrc structure used, second argument is
- * passed to user-defined implementation.
- * (currently, the GetSeqArg structure defined below is used in the engine) */
-typedef Int2 (*GetSeqBlkFnPtr) (void*, void*); 
+/** Structure that contains the information needed for BlastSeqSrcNew to fully
+ * populate the BlastSeqSrc structure it returns */
+typedef struct BlastSeqSrcNewInfo BlastSeqSrcNewInfo;
 
-/** Second argument to GetSeqBlkFnPtr */
-typedef struct GetSeqArg {
+/** Allocates memory for a BlastSeqSrc structure and then invokes the
+ * constructor function defined in its first argument, passing the 
+ * ctor_argument member of that same structure. If the constructor function
+ * pointer is not set or there is a memory allocation failure, NULL is
+ * returned.
+ * @note This function need not be called directly by client code as all the
+ * implementations of the BlastSeqSrc interface provide a function(s) which
+ * call this function (@ref MultiSeqBlastSeqSrcInit, @ref SeqDbBlastSeqSrcInit)
+ * @param bssn_info Structure defining constructor and its argument to be
+ *        invoked from this function [in]
+ * @return a properly initialized BlastSeqSrc structure or NULL.
+ */
+NCBI_XBLAST_EXPORT
+BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info);
+
+/** Copy function: needed to guarantee thread safety.
+ * @todo Is this function really needed? Shouldn't this description be a bit
+ * more elaborate?
+ * @param seq_src BlastSeqSrc to copy [in]
+ * @return an MT-safe copy of the structure passed in, NULL in case of memory
+ * allocation failure, or if no copy function was provided by the
+ * implementation, a bitwise copy of the input parameter.
+ */
+NCBI_XBLAST_EXPORT
+BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src);
+
+/** Frees the BlastSeqSrc structure by invoking the destructor function set by
+ * the user-defined constructor function when the structure is initialized
+ * (indirectly, by BlastSeqSrcNew). If the destructor function pointer is not
+ * set, a memory leak could occur. Note that it is the implementation's
+ * destructor responsibility to free the BlastSeqSrc structure by calling
+ * sfree.
+ * @param seq_src BlastSeqSrc to free [in]
+ * @return NULL
+ */
+NCBI_XBLAST_EXPORT
+BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* seq_src);
+
+/** Get the number of sequences contained in the sequence source.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetNumSeqs(const BlastSeqSrc* seq_src);
+
+/** Get the length of the longest sequence in the sequence source.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetMaxSeqLen(const BlastSeqSrc* seq_src);
+
+/** Get the average length of all sequences in the sequence source.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetAvgSeqLen(const BlastSeqSrc* seq_src);
+
+/** Get the total length of all sequences in the sequence source.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int8
+BlastSeqSrcGetTotLen(const BlastSeqSrc* seq_src);
+
+/** Get the Blast Sequence source name (e.g.: BLAST database name).
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+const char*
+BlastSeqSrcGetName(const BlastSeqSrc* seq_src);
+
+/** Find if the Blast Sequence Source contains protein or nucleotide sequences.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Boolean
+BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src);
+
+/** Structure used as the second argument to functions satisfying the 
+  GetSeqBlkFnPtr signature, usually associated with index-based 
+  implementations of the BlastSeqSrc interface. Index-based implementations
+  include BLAST databases or an array/vector of sequences. */
+typedef struct BlastSeqSrcGetSeqArg {
     /** Oid in BLAST database, index in an array of sequences, etc [in] */
     Int4 oid;
     /** Encoding of sequence, ie: BLASTP_ENCODING, NCBI4NA_ENCODING, etc [in] */
@@ -118,215 +177,90 @@ typedef struct GetSeqArg {
     /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr, else
      * its contents are freed and the structure is reused [out]*/
     BLAST_SequenceBlk* seq;
-} GetSeqArg;
+} BlastSeqSrcGetSeqArg;
 
-/* Return values from GetSeqBlkFnPtr */
+/* Return values from BlastSeqSrcGetSequence */
 
 #define BLAST_SEQSRC_ERROR      -2  /**< Error while retrieving sequence */
 #define BLAST_SEQSRC_EOF        -1  /**< No more sequences available */
 #define BLAST_SEQSRC_SUCCESS     0  /**< Successful sequence retrieval */
 
+/** Retrieve an individual sequence.
+ * @param seq_src the BLAST sequence source [in]
+ * @param sequence should be of type BlastSeqSrcGetSeqArg [in|out]
+ * @return one of the BLAST_SEQSRC_* defined in blast_seqsrc.h
+ */
+NCBI_XBLAST_EXPORT
+Int2
+BlastSeqSrcGetSequence(const BlastSeqSrc* seq_src, 
+                       void* sequence);
+
+/** Retrieve sequence length.
+ * @param seq_src the BLAST sequence source [in]
+ * @param oid ordinal id of the sequence desired (should be Uint4) [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetSeqLen(const BlastSeqSrc* seq_src, void* oid);
+
+/** Deallocate individual sequence.
+ * @param seq_src the BLAST sequence source [in]
+ * @param sequence should be of type BlastSeqSrcGetSeqArg [in|out]
+ */
+NCBI_XBLAST_EXPORT
+void
+BlastSeqSrcReleaseSequence(const BlastSeqSrc* seq_src,
+                           void* sequence);
+
+/** Function to retrieve NULL terminated string containing the description 
+ * of an initialization error or NULL. This function MUST ALWAYS be called 
+ * after calling one of the client implementation's Init functions. If the
+ * return value is not NULL, invoking any other functionality from the
+ * BlastSeqSrc will result in undefined behavior. Caller is responsible for 
+ * deallocating the return value. 
+ * @param seq_src BlastSeqSrc from which to get an error [in]
+ * @return error message or NULL
+ */
+NCBI_XBLAST_EXPORT
+char* BlastSeqSrcGetInitError(const BlastSeqSrc* seq_src);
+
 /******************** BlastSeqSrcIterator API *******************************/
 
-/** Defines the type of data contained in the BlastSeqSrcIterator structure */
-typedef enum BlastSeqSrcItrType {
-    eOidList,   /**< Data is a list of discontiguous ordinal ids (indices) */
-    eOidRange   /**< Data is a range of contiguous ordinal ids (indices) */
-} BlastSeqSrcItrType;
-
-/** Definition of Blast Sequence Source Iterator */
-typedef struct BlastSeqSrcIterator {
-    /** Indicates which member to access: oid_list or oid_range */
-    BlastSeqSrcItrType  itr_type;
-
-    /** Array of ordinal ids used when itr_type is eOidList */
-    unsigned int* oid_list;
-    /** This is a half-closed interval [a,b) */
-    unsigned int  oid_range[2];
-
-    /** Keep track of this iterator's current position */
-    unsigned int  current_pos;
-    /** Size of the chunks to advance over the BlastSeqSrc, also size of 
-      * oid_list member */
-    unsigned int  chunk_sz;
-} BlastSeqSrcIterator;
+/** Allocate and initialize an iterator over a BlastSeqSrc with a default chunk
+ * size for MT-safe iteration.
+ * @return pointer to initialized iterator for BlastSeqSrc
+ */
+NCBI_XBLAST_EXPORT
+BlastSeqSrcIterator* BlastSeqSrcIteratorNew(void);
 
 /** How many database sequences to process in one database chunk. */
 extern const unsigned int kBlastSeqSrcDefaultChunkSize;
 
-/** Allocated and initialized an iterator over a BlastSeqSrc. 
+/** Allocate and initialize an iterator over a BlastSeqSrc. 
  * @param chunk_sz sets the chunk size of the iterator, if zero 
  *    use kBlastSeqSrcDefaultChunkSize (above). [in]
  * @return pointer to initialized iterator for BlastSeqSrc
  */
-BlastSeqSrcIterator* BlastSeqSrcIteratorNew(unsigned int chunk_sz);
+NCBI_XBLAST_EXPORT
+BlastSeqSrcIterator* BlastSeqSrcIteratorNewEx(unsigned int chunk_sz);
 
 /** Frees the BlastSeqSrcIterator structure. 
  * @param itr BlastSeqSrcIterator to free [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 BlastSeqSrcIterator* BlastSeqSrcIteratorFree(BlastSeqSrcIterator* itr);
-Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src, BlastSeqSrcIterator* itr);
 
-/** Function pointer typedef to obtain the next ordinal id to fetch from the
- * BlastSeqSrc structure. First argument is the BlastSeqSrc structure used,
- * second argument is the iterator structure. This structure should allow
- * multi-threaded iteration over sequence sources such as a BLAST database.
- * Return value is the next ordinal id, or BLAST_SEQSRC_EOF if no more
- * sequences are available.
+/** Increments the BlastSeqSrcIterator.
+ * @param itr the BlastSeqSrcIterator to increment.
+ * @param seq_src the underlying BlastSeqSrc
+ * @return one of the BLAST_SEQSRC_* defined in blast_seqsrc.h
  */
-typedef Int4 (*AdvanceIteratorFnPtr) (void*, BlastSeqSrcIterator*);
-
-/** Function pointer typedef to obtain the next chunk of ordinal ids for the
- * BLAST engine to search. By calling this function with a give chunk size
- * (stored in the iterator structure), one reduces the number of calls which
- * have to be guarded by a mutex in a multi-threaded environment by examining
- * the BlastSeqSrc structure infrequently.
- * First argument is the BlastSeqSrc structure used, second argument is the 
- * iterator structure which is updated with the next chunk of ordinal ids to
- * retrieve.
- * Return value is one of the BLAST_SEQSRC_* defines
- */
-typedef Int2 (*GetNextChunkFnPtr) (void*, BlastSeqSrcIterator*);
+NCBI_XBLAST_EXPORT
+Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src, 
+                             BlastSeqSrcIterator* itr);
 
 /*****************************************************************************/
-
-/** Structure that contains the information needed for BlastSeqSrcNew to fully
- * populate the BlastSeqSrc structure it returns */
-typedef struct BlastSeqSrcNewInfo {
-    BlastSeqSrcConstructor constructor; /**< User-defined function to initialize
-                                          a BlastSeqSrc structure */
-    void* ctor_argument;                /**< Argument to the above function */
-} BlastSeqSrcNewInfo;
-
-/** Allocates memory for a BlastSeqSrc structure and then invokes the
- * constructor function defined in its first argument, passing the 
- * ctor_argument member of that same structure. If the constructor function
- * pointer is not set, NULL is returned.
- * @param bssn_info Structure defining constructor and its argument to be
- *        invoked from this function [in]
- */
-BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info);
-
-/** Frees the BlastSeqSrc structure by invoking the destructor function set by
- * the user-defined constructor function when the structure is initialized
- * (indirectly, by BlastSeqSrcNew). If the destructor function pointer is not
- * set, a memory leak could occur.
- * @param seq_src BlastSeqSrc to free [in]
- * @return NULL
- */
-NCBI_XBLAST_EXPORT
-BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* seq_src);
-
-/** Copy function: needed to guarantee thread safety. 
- */
-NCBI_XBLAST_EXPORT
-BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src);
-
-/** Convenience macros call function pointers (TODO: needs to be more robust)
- * Currently, this defines the API */
-#define BLASTSeqSrcGetNumSeqs(seq_src) \
-    (*GetGetNumSeqs(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetMaxSeqLen(seq_src) \
-    (*GetGetMaxSeqLen(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetAvgSeqLen(seq_src) \
-    (*GetGetAvgSeqLen(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetTotLen(seq_src) \
-    (*GetGetTotLen(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetName(seq_src) \
-    (*GetGetName(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetIsProt(seq_src) \
-    (*GetGetIsProt(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcGetSequence(seq_src, arg) \
-    (*GetGetSequence(seq_src))(GetDataStructure(seq_src), arg)
-#define BLASTSeqSrcGetSeqLen(seq_src, arg) \
-    (*GetGetSeqLen(seq_src))(GetDataStructure(seq_src), arg)
-#define BLASTSeqSrcGetNextChunk(seq_src, iterator) \
-    (*GetGetNextChunk(seq_src))(GetDataStructure(seq_src), iterator)
-#define BLASTSeqSrcGetError(seq_src) \
-    (*GetGetError(seq_src))(GetDataStructure(seq_src), NULL)
-#define BLASTSeqSrcRetSequence(seq_src, arg) \
-    (*GetRetSequence(seq_src))(GetDataStructure(seq_src), arg)
-
-
-#define DECLARE_MEMBER_FUNCTIONS(member_type, member, data_structure_type) \
-DECLARE_ACCESSOR(member_type, member, data_structure_type); \
-DECLARE_MUTATOR(member_type, member, data_structure_type)
-
-#define DECLARE_ACCESSOR(member_type, member, data_structure_type) \
-NCBI_XBLAST_EXPORT member_type Get##member(const data_structure_type var)
-
-#define DECLARE_MUTATOR(member_type, member, data_structure_type) \
-NCBI_XBLAST_EXPORT void Set##member(data_structure_type var, member_type arg) \
-
-
-DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcConstructor, NewFnPtr, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr, BlastSeqSrc*);
-
-DECLARE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetMaxSeqLen(seq_src)
-   \brief Get the length of the longest sequence in the sequence source.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetAvgSeqLen(seq_src)
-   \brief Get the average length of all sequences in the sequence source.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetAvgSeqLen, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetTotLen(seq_src)
-   \brief Get the total length of all sequences in the sequence source.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLen, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetName(seq_src)
-   \brief Get the database name.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetName, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetIsProt(seq_src)
-   \brief Find if the database is protein or nucleotide.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetSequence(seq_src,arg)
-   \brief Retrieve an individual sequence.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetSeqLen(seq_src,arg)
-   \brief Retrieve sequence length.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcGetNextChunk(seq_src,iterator)
-   \brief Get next chunk of sequence indices.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetNextChunkFnPtr, GetNextChunk, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(AdvanceIteratorFnPtr, IterNext, BlastSeqSrc*);
-
-/*!\fn BLASTSeqSrcRetSequence(seq_src,arg)
-   \brief Deallocate individual sequence buffer if necessary.
-*/
-
-DECLARE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, RetSequence, BlastSeqSrc*);
-
-
-/*!\fn BlasteqSrcGetError(seq_src)
-   \brief Retrieves error message, if defined.
-*/
-DECLARE_MEMBER_FUNCTIONS(GetErrorFnPtr, GetError, BlastSeqSrc*);
 
 #ifdef __cplusplus
 }

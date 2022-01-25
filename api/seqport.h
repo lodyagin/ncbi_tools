@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.44 $
+* $Revision: 6.49 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.49  2005/03/15 14:35:44  kans
+* seqport stream gap control flags (2-bit set) are STREAM_EXPAND_GAPS, GAP_TO_SINGLE_DASH, and EXPAND_GAPS_TO_DASHES
+*
+* Revision 6.48  2005/03/14 22:48:11  kans
+* inserted STREAM_INDICATE_GAPS before STREAM_CORRECT_INVAL, will mark gap with 251 instead of N or X
+*
+* Revision 6.47  2004/11/29 17:12:42  kans
+* added SearchFlgType for expandPattern, allowOneMismatch, justTopStrand arguments
+*
+* Revision 6.46  2004/11/26 18:53:09  kans
+* SeqSearchAddNucleotidePattern takes expandPattern, allowOneMismatch arguments
+*
+* Revision 6.45  2004/10/27 22:15:34  kans
+* added STREAM_CORRECT_INVAL flag to SeqPortStream
+*
 * Revision 6.44  2004/07/16 19:37:37  kans
 * SeqPortStream and FastaStream functions return Int4, negative count if any fetch failures
 *
@@ -372,7 +387,11 @@ typedef void (LIBCALLBACK *SeqPortStreamProc) (
 
 typedef unsigned long StreamFlgType;
 
-#define STREAM_EXPAND_GAPS  1
+#define STREAM_EXPAND_GAPS     1
+#define GAP_TO_SINGLE_DASH     2
+#define EXPAND_GAPS_TO_DASHES  3
+
+#define STREAM_CORRECT_INVAL   4
 
 NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
@@ -824,20 +843,26 @@ typedef void (LIBCALLBACK *SeqSearchMatchProc) (Int4 position, CharPtr name, Cha
 
 NLM_EXTERN SeqSearchPtr SeqSearchNew (
   SeqSearchMatchProc matchproc,
-  Pointer userdata,
-  Boolean allowOneMismatch
+  Pointer userdata
 );
 
 /*
    add nucleotide pattern or restriction site to sequence search finite state
-   machine, uses ambiguity codes, e.g., R = A and G, H = A, C and T
+   machine, expands using ambiguity codes R = A and G, H = A, C and T, etc.
 */
+
+typedef unsigned long SearchFlgType;
+
+#define SEQ_SEARCH_JUST_TOP_STRAND  1
+#define SEQ_SEARCH_EXPAND_PATTERN   2
+#define SEQ_SEARCH_ALLOW_MISMATCH   4
 
 NLM_EXTERN void SeqSearchAddNucleotidePattern (
   SeqSearchPtr tbl,
   CharPtr name,
   CharPtr pattern,
-  Int2 cutSite
+  Int2 cutSite,
+  SearchFlgType flags
 );
 
 /* program passes each character in turn to finite state machine */
@@ -867,11 +892,13 @@ NLM_EXTERN SeqSearchPtr SeqSearchFree (
 );
 
 
-/*
-   Convenience functions for genome processing use BioseqLockById to get sequence
-   record (perhaps with phrap quality score graphs) so fetching from some network
-   or local server must be enabled, or sequences must already be in memory.
-*/
+/*****************************************************************************
+*
+*  Convenience functions for genome processing use BioseqLockById to get sequence
+*  record (perhaps with phrap quality score graphs) so fetching from some network
+*  or local server must be enabled, or sequences must already be in memory.
+*
+*****************************************************************************/
 
 NLM_EXTERN CharPtr GetSequenceByBsp (
   BioseqPtr bsp
@@ -901,7 +928,12 @@ NLM_EXTERN BytePtr GetScoresbySeqId (
   Int4Ptr bsplength
 );
 
-/* ConvertNsToGaps assumes string of Ns means a gap of known length */
+/*****************************************************************************
+*
+*   ConvertNsToGaps
+*       Assumes string of Ns means a gap of known length
+*
+*****************************************************************************/
 
 NLM_EXTERN void ConvertNsToGaps (
   BioseqPtr bsp,

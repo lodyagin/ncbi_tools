@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.48 $
+* $Revision: 6.50 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -132,6 +132,17 @@ typedef struct seqmgrfeatcontext {
   Pointer       omdp;
   Uint4         index;
 } SeqMgrFeatContext, PNTR SeqMgrFeatContextPtr;
+
+typedef struct seqmgrandcontext {
+  Uint2         entityID;
+  Uint4         itemID;
+  AnnotDescPtr  adp;
+  Uint1         annotdesctype;
+  Pointer       userdata;
+                          /* the following fields are for internal use only */
+  Pointer       omdp;
+  Uint4         index;
+} SeqMgrAndContext, PNTR SeqMgrAndContextPtr;
 
 /*****************************************************************************
 *
@@ -276,6 +287,13 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature (
   Uint1 seqFeatChoice,
   Uint1 featDefChoice,
   SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrGetNextAnnotDesc (
+  BioseqPtr bsp,
+  AnnotDescPtr curr,
+  Uint1 annotDescChoice,
+  SeqMgrAndContext PNTR context
 );
 
 /*****************************************************************************
@@ -423,6 +441,13 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (
   Uint4 index,
   SeqFeatPtr sfp,
   SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrGetDesiredAnnotDesc (
+  Uint2 entityID,
+  BioseqPtr bsp,
+  Uint4 itemID,
+  SeqMgrAndContext PNTR context
 );
 
 /*****************************************************************************
@@ -585,6 +610,20 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (
   Pointer ptr,
   Boolean flip,
   Boolean dorevfeats
+);
+
+/*****************************************************************************
+*
+*   SeqMgrIndexFeaturesExEx allows indexing of remotely fetched features
+*
+*****************************************************************************/
+
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
+  Uint2 entityID,
+  Pointer ptr,
+  Boolean flip,
+  Boolean dorevfeats,
+  ValNodePtr extra
 );
 
 /*****************************************************************************

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.15 $
+* $Revision: 1.27 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -232,6 +232,87 @@ static void AddHTGSCommentString (
   ValNodeFreeData (head);
 }
 
+typedef struct barcodedata {
+  CharPtr  orgmods [40];
+  CharPtr  subsources [40];
+  CharPtr  taxname;
+} BarCodeData, PNTR BarCodePtr;
+
+static Boolean AddBarCodeCommentString (
+  BioSourcePtr biop,
+  BarCodePtr bcp
+)
+
+{
+  OrgModPtr     omp;
+  OrgNamePtr    onp;
+  OrgRefPtr     orp;
+  SubSourcePtr  ssp;
+  Uint1         subtype;
+
+  if (biop == NULL || bcp == NULL) return FALSE;
+  orp = biop->org;
+  if (orp == NULL) return FALSE;
+
+  MemSet ((Pointer) bcp, 0, sizeof (BarCodeData));
+
+  bcp->taxname = orp->taxname;
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    subtype = ssp->subtype;
+    if (subtype == 255) {
+      subtype = 37;
+    }
+    if (subtype < 38) {
+      bcp->subsources [subtype] = ssp->name;
+    }
+  }
+
+  onp = orp->orgname;
+  if (onp != NULL) {
+    for (omp = onp->mod; omp != NULL; omp = omp->next) {
+      subtype = omp->subtype;
+      if (subtype == 253) {
+        subtype = 35;
+      } else if (subtype == 254) {
+        subtype = 36;
+      } else if (subtype == 255) {
+        subtype = 37;
+      }
+      if (subtype < 38) {
+        bcp->orgmods [subtype] = omp->subname;
+      }
+    }
+  }
+
+  return TRUE;
+}
+
+static void PrintOneBarCodeElement (
+  StringItemPtr ffstring,
+  StringItemPtr temp,
+  FmtType format,
+  CharPtr label,
+  CharPtr spaces,
+  CharPtr value
+)
+
+{
+  FFStartPrint (temp, format, 16, 35, NULL, 12, 9, 28, "CC", FALSE);
+
+  FFAddOneString (temp, label, FALSE, FALSE, TILDE_EXPAND);
+  if (StringDoesHaveText (value)) {
+    FFAddOneString (temp,  spaces, FALSE, FALSE, TILDE_EXPAND);
+     FFAddOneString (temp, value, FALSE, FALSE, TILDE_EXPAND);
+  }
+  FFAddNewLine (temp);
+
+  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
+    FFLineWrap(ffstring, temp, 16, 35, ASN2FF_GB_MAX, NULL);
+  } else {
+    FFLineWrap(ffstring, temp, 9, 28, ASN2FF_EMBL_MAX, "CC");
+  }
+}
+
 static void AddWGSMasterCommentString (
   StringItemPtr ffstring,
   BioseqPtr bsp,
@@ -425,7 +506,7 @@ static CharPtr reftxt4 = " This record has undergone preliminary review of the s
 static CharPtr reftxt5 = " This record has been curated by ";
 static CharPtr reftxt6 = " This record is predicted by automated computational analysis.";
 static CharPtr reftxt7 = " This record is provided to represent a collection of whole genome shotgun sequences.";
-static CharPtr reftxt8 = " This record is derived from an annotated genomic sequence (";
+static CharPtr reftxt9 = " This record is derived from an annotated genomic sequence (";
 
 static CharPtr GetStatusForRefTrack (
   UserObjectPtr uop
@@ -464,6 +545,8 @@ static CharPtr GetStatusForRefTrack (
         return "MODEL ";
       } else if (StringICmp (st, "WGS") == 0) {
         return "WGS ";
+      } else if (StringICmp (st, "Pipeline") == 0) {
+        return "Pipeline ";
       }
     }
   }
@@ -511,6 +594,8 @@ static void AddStrForRefTrack (
         review = 6;
       } else if (StringICmp (st, "WGS") == 0) {
         review = 7;
+      } else if (StringICmp (st, "Pipeline") == 0) {
+        review = 8;
       }
     } else if (StringCmp (oip->str, "Collaborator") == 0) {
       st = (CharPtr) ufp->data.ptrvalue;
@@ -562,6 +647,7 @@ static void AddStrForRefTrack (
     FFAddOneString (ffstring, reftxt6, FALSE, FALSE, TILDE_IGNORE);
   } else if (review == 7) {
     FFAddOneString (ffstring, reftxt7, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 8) {
   }
   if (review != 5 && curator != NULL) {
     FFAddOneString (ffstring, reftxt5, FALSE, FALSE, TILDE_IGNORE);
@@ -569,7 +655,7 @@ static void AddStrForRefTrack (
     FFAddOneString (ffstring, ".", FALSE, FALSE, TILDE_IGNORE);
   }
   if (source != NULL) {
-    FFAddOneString (ffstring, reftxt8, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, reftxt9, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString (ffstring, ").", FALSE, FALSE, TILDE_IGNORE);
   }
@@ -950,29 +1036,6 @@ static Boolean IsTpa (
   if (has_local && has_tpa_assembly) return TRUE;
 
   return FALSE;
-}
-
-static Boolean GetAccnVerFromServer (Int4 gi, CharPtr buf)
-
-{
-  AccnVerLookupFunc  func;
-  SeqMgrPtr          smp;
-  CharPtr            str;
-
-  if (buf == NULL) return FALSE;
-  *buf = '\0';
-  smp = SeqMgrWriteLock ();
-  if (smp == NULL) return FALSE;
-  func = smp->accn_ver_lookup_func;
-  SeqMgrUnlock ();
-  if (func == NULL) return FALSE;
-  str = (*func) (gi);
-  if (str == NULL) return FALSE;
-  if (StringLen (str) < 40) {
-    StringCpy (buf, str);
-  }
-  MemFree (str);
-  return TRUE;
 }
 
 static CharPtr GetStrForTpaOrRefSeqHist (
@@ -1384,6 +1447,8 @@ NLM_EXTERN void AddCommentBlock (
 {
   size_t             acclen;
   IntAsn2gbJobPtr    ajp;
+  BarCodeData        bcd;
+  BioSourcePtr       biop;
   BioseqPtr          bsp;
   Char               buf [128];
   CommentBlockPtr    cbp;
@@ -1433,7 +1498,7 @@ NLM_EXTERN void AddCommentBlock (
   ValNodePtr         vnp;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
-  StringItemPtr      ffstring = NULL;
+  StringItemPtr      ffstring = NULL, temp = NULL;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -1977,7 +2042,9 @@ NLM_EXTERN void AddCommentBlock (
               FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
             }
 
-            FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+            if (StringICmp (str, "Pipeline ") != 0) {
+              FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+            }
 
             AddStrForRefTrack (ajp, ffstring, uop);
 
@@ -2211,7 +2278,7 @@ NLM_EXTERN void AddCommentBlock (
               FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
             }
 
-            AddWGSMasterCommentString (ffstring,bsp, wgsaccn, wgsname);
+            AddWGSMasterCommentString (ffstring, bsp, wgsaccn, wgsname);
 
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
@@ -2255,6 +2322,139 @@ NLM_EXTERN void AddCommentBlock (
 
           if (awp->afp != NULL) {
             DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
+        }
+      }
+    }
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      if (mip->tech == MI_TECH_barcode) {
+
+        sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+        if (sdp != NULL) {
+          biop = (BioSourcePtr) sdp->data.ptrvalue;
+
+          if (AddBarCodeCommentString (biop, &bcd)) {
+
+            temp = FFGetString(ajp);
+            if ( temp != NULL ) {
+
+              cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+              if (cbp != NULL) {
+
+                cbp->entityID = dcontext.entityID;
+                cbp->itemID = dcontext.itemID;
+                cbp->itemtype = OBJ_SEQDESC;
+                cbp->entityID = awp->entityID;
+                cbp->first = first;
+                first = FALSE;
+
+                if (cbp->first) {
+                  FFStartPrint (temp, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+                } else {
+                  FFStartPrint (temp, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+                }
+
+                FFAddOneString (temp, "Barcode Consortium: Standard Data Elements", FALSE, FALSE, TILDE_EXPAND);
+                FFAddNewLine (temp);
+                FFAddNewLine (temp);
+
+                if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
+                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                } else {
+                  FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "CC");
+                }
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Organism:", "          ", bcd.taxname);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Collected By:", "      ", bcd.subsources [SUBSRC_collected_by]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Collection Date:", "   ", bcd.subsources [SUBSRC_collection_date]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Country:", "           ", bcd.subsources [SUBSRC_country]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Identified By:", "     ", bcd.subsources [SUBSRC_identified_by]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Isolate:", "           ", bcd.orgmods [ORGMOD_isolate]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Lat-Lon:", "           ", bcd.subsources [SUBSRC_lat_lon]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Specimen Voucher:", "  ", bcd.orgmods [ORGMOD_specimen_voucher]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Forward Primer:", "    ", bcd.subsources [SUBSRC_fwd_primer_seq]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Reverse Primer:", "    ", bcd.subsources [SUBSRC_rev_primer_seq]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Fwd Primer Name:", "   ", bcd.subsources [SUBSRC_fwd_primer_name]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                PrintOneBarCodeElement (ffstring, temp, awp->format, "Rev Primer Name:", "   ", bcd.subsources [SUBSRC_rev_primer_name]);
+
+                FFRecycleString (ajp, temp);
+                temp = FFGetString (ajp);
+
+                if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
+                  /*
+                  do not do extra blank line for EMBL format,
+                  since it would be followed by blank XX line,
+                  and we do not expect subsequent comments in
+                  barcode records
+                  */
+                  FFStartPrint (temp, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+                  FFAddNewLine (temp);
+                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                }
+
+               cbp->string = FFToCharPtr(ffstring);
+                FFRecycleString(ajp, ffstring);
+                ffstring = FFGetString(ajp);
+
+                if (awp->afp != NULL) {
+                  DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+                }
+              }
+              FFRecycleString(ajp, temp);
+            }
           }
         }
       }
@@ -3691,8 +3891,8 @@ static Boolean NotEMBLorDDBJ (
 
   if (bsp == NULL) return TRUE;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_EMBL) return FALSE;
-    if (sip->choice == SEQID_DDBJ) return FALSE;
+    if (sip->choice == SEQID_EMBL || sip->choice == SEQID_TPE) return FALSE;
+    if (sip->choice == SEQID_DDBJ || sip->choice == SEQID_TPD) return FALSE;
   }
   return TRUE;
 }
@@ -3780,6 +3980,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   if (awp->hideExonFeats && fcontext->featdeftype == FEATDEF_exon) return TRUE;
   if (awp->hideIntronFeats && fcontext->featdeftype == FEATDEF_intron) return TRUE;
   if (awp->hideMiscFeats && fcontext->featdeftype == FEATDEF_misc_feature) return TRUE;
+  if (awp->hideGaps && fcontext->featdeftype == FEATDEF_gap) return TRUE;
   if (awp->hideRemImpFeats && sfp->data.choice == SEQFEAT_IMP) {
     if (fcontext->featdeftype != FEATDEF_variation &&
         fcontext->featdeftype != FEATDEF_exon &&
@@ -3952,7 +4153,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                       sip->choice == SEQID_PATENT ||
                       sip->choice == SEQID_TPG ||
                       sip->choice == SEQID_TPE ||
-                      sip->choice == SEQID_TPD) {
+                      sip->choice == SEQID_TPD ||
+                      sip->choice == SEQID_GPIPE) {
                     tsip = (TextSeqIdPtr) sip->data.ptrvalue;
                     if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
                       if (ValidateAccn (tsip->accession) == 0)
@@ -3979,7 +4181,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                        sip->choice == SEQID_PATENT ||
                        sip->choice == SEQID_TPG ||
                        sip->choice == SEQID_TPE ||
-                       sip->choice == SEQID_TPD) {
+                       sip->choice == SEQID_TPD ||
+                       sip->choice == SEQID_GPIPE) {
               tsip = (TextSeqIdPtr) sip->data.ptrvalue;
               if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
                 if (ValidateAccn (tsip->accession) == 0)
@@ -4027,6 +4230,17 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
           }
         }
       }
+      if (! okay) {
+        /* compare qualifier can now substitute for citation qualifier */
+        gbq = sfp->qual;
+        while (gbq != NULL) {
+          if (StringICmp (gbq->qual, "compare") == 0 && (! StringHasNoText (gbq->val))) {
+            okay = TRUE;
+            break;
+          }
+          gbq = gbq->next;
+        }
+      }
       break;
 
     case FEATDEF_GENE:
@@ -4068,6 +4282,18 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       gbq = sfp->qual;
       while (gbq != NULL) {
         if (StringICmp (gbq->qual, "mod_base") == 0 && (! StringHasNoText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
+    case FEATDEF_gap:
+      /* modified_base requires FTQUAL_estimated_length */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "estimated_length") == 0 && (! StringHasNoText (gbq->val))) {
           okay = TRUE;
           break;
         }
@@ -4376,51 +4602,57 @@ NLM_EXTERN void AddFeatureBlock (
     }
   }
 
-  if (awp->farFeatsSuppress) {
+  if (! awp->onlyNearFeats) {
+    if (awp->farFeatsSuppress) {
 
-    if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
+      if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
 
-      /* if farFeatsSuppress first collect features on remote segments in MASTER_STYLE */
+        /* if farFeatsSuppress first collect features on remote segments in MASTER_STYLE */
 
-      SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
+        SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
+      }
+    }
+
+    if ((! awp->farFeatsSuppress) || (! awp->featseen)) {
+
+      /* reminder - features on near parts are indexed on segmented Bioseq */
+
+      slp = ajp->ajp.slp;
+      if (slp != NULL && SeqLocStrand (slp) == Seq_strand_minus) {
+        SeqMgrExploreFeaturesRev (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
+      } else {
+        SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
+      }
     }
   }
 
-  if ((! awp->farFeatsSuppress) || (! awp->featseen)) {
-
-    /* reminder - features on near parts are indexed on segmented Bioseq */
-
-    slp = ajp->ajp.slp;
-    if (slp != NULL && SeqLocStrand (slp) == Seq_strand_minus) {
-      SeqMgrExploreFeaturesRev (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
-    } else {
-      SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
-    }
-  }
 
   if (awp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
     cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
     if (cds != NULL && cds->data.choice == SEQFEAT_CDREGION) {
+      /* if protein bioseq and cds feature but no nucleotide, cannot index cds, so skip */
+      if (fcontext.entityID > 0 && fcontext.itemID > 0) {
 
-      fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
-      if (fbp != NULL) {
+        fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+        if (fbp != NULL) {
 
-        fbp->entityID = fcontext.entityID;
-        fbp->itemID = fcontext.itemID;
-        fbp->itemtype = OBJ_SEQFEAT;
-        fbp->featdeftype = fcontext.featdeftype;
-        ifp = (IntFeatBlockPtr) fbp;
-        ifp->mapToNuc = FALSE;
-        ifp->mapToProt = TRUE;
-        ifp->mapToGen = FALSE;
-        ifp->mapToMrna = FALSE;
-        ifp->mapToPep = FALSE;
-        ifp->isCDS = TRUE;
-        ifp->firstfeat = awp->firstfeat;
-        awp->firstfeat = FALSE;
+          fbp->entityID = fcontext.entityID;
+          fbp->itemID = fcontext.itemID;
+          fbp->itemtype = OBJ_SEQFEAT;
+          fbp->featdeftype = fcontext.featdeftype;
+          ifp = (IntFeatBlockPtr) fbp;
+          ifp->mapToNuc = FALSE;
+          ifp->mapToProt = TRUE;
+          ifp->mapToGen = FALSE;
+          ifp->mapToMrna = FALSE;
+          ifp->mapToPep = FALSE;
+          ifp->isCDS = TRUE;
+          ifp->firstfeat = awp->firstfeat;
+          awp->firstfeat = FALSE;
 
-        if (awp->afp != NULL) {
-          DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+          }
         }
       }
     }
@@ -4462,6 +4694,7 @@ NLM_EXTERN void AddFeatureBlock (
   }
 
   if (awp->onlyNearFeats) return;
+
   if (awp->nearFeatsSuppress && awp->featseen) return;
 
   if (! awp->farFeatsSuppress) {

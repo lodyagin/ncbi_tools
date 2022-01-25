@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.38  2005/04/20 20:14:31  lavr
+* +<assert.h>
+*
 * Revision 6.37  2004/07/21 18:08:30  kans
 * FileCacheSetup calls _setmode (_fileno (fp), _O_BINARY) if OS_MSWIN
 *
@@ -204,6 +207,7 @@ Removed disabled CD routines.
 #define THIS_FILE  _this_file
 
 #include <ncbilcl.h>
+#include <assert.h>
 
 #include "corepriv.h"
 #ifdef OS_MAC

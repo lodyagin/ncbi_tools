@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.22  2004/12/08 04:39:38  beloslyu
+* c++ comment changed to c-style one. Anrdrei, please be careful
+*
 * Revision 6.21  2004/08/17 19:34:42  kans
 * AsnPrintOctets uses BSRead instead of BSGetByte for significant speed increase
 *
@@ -2392,7 +2395,7 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
 					repeat = "*";
 				else
 					repeat = "*";
-//					repeat = "+";
+/*					repeat = "+"; */
 				AsnXMLElementAdd(NULL, atp->branch, repeat, aip, FALSE);
 				break;
 			case INTEGER_TYPE:

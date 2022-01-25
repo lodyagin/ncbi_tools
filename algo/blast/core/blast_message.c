@@ -1,4 +1,4 @@
-/* $Id: blast_message.c,v 1.12 2004/05/19 14:52:02 camacho Exp $
+/* $Id: blast_message.c,v 1.17 2005/02/07 15:18:39 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,17 +25,16 @@
  */
 
 /** @file blast_message.c
- * @todo FIXME needs file description & doxygen comments
+ * These functions provide access to Blast_Message objects, used by
+ * the BLAST code as a wrapper for error and warning messages.
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_message.c,v 1.12 2004/05/19 14:52:02 camacho Exp $";
+    "$Id: blast_message.c,v 1.17 2005/02/07 15:18:39 bealer Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_message.h>
-
-/*
-	Deallocates message memory.
-*/
 
 Blast_Message* 
 Blast_MessageFree(Blast_Message* blast_msg)
@@ -48,10 +47,6 @@ Blast_MessageFree(Blast_Message* blast_msg)
 	sfree(blast_msg);
 	return NULL;
 }
-
-/*
-	Writes a message to a structure.
-*/
 
 Int2 
 Blast_MessageWrite(Blast_Message* *blast_msg, BlastSeverity severity, 
@@ -70,26 +65,69 @@ Blast_MessageWrite(Blast_Message* *blast_msg, BlastSeverity severity,
 	return 0;
 }
 
-/*
-	Print a message with ErrPostEx
-*/
-
 Int2 
 Blast_MessagePost(Blast_Message* blast_msg)
 {
 	if (blast_msg == NULL)
 		return 1;
 
-	/*ErrPostEx(blast_msg->severity, blast_msg->code, blast_msg->subcode, "%s", blast_msg->message);*/
 	fprintf(stderr, "%s", blast_msg->message);	/* FIXME! */
 
 	return 0;
+}
+
+Blast_Message*
+Blast_Perror(Int2 error_code)
+{
+    Blast_Message* retval = (Blast_Message*) calloc(1, sizeof(Blast_Message));
+
+    switch (error_code) {
+    case BLASTERR_IDEALSTATPARAMCALC:
+        retval->message = strdup("Failed to calculate ideal Karlin-Altschul "
+                                 "parameters");
+        retval->severity = BLAST_SEV_ERROR;
+        break;
+    case BLASTERR_REDOALIGNMENTCORE_NOTSUPPORTED:
+        retval->message = strdup("Composition based statistics or "
+                                 "Smith-Waterman not supported for your "
+                                 "program type");
+        retval->severity = BLAST_SEV_ERROR;
+        break;
+    case 0:
+        retval = Blast_MessageFree(retval);
+        break;
+    default:
+        {
+            char buf[512];
+            snprintf(buf, sizeof(buf) - 1, "Unknown error code %d", error_code);
+            retval->message = strdup(buf);
+            retval->severity = BLAST_SEV_ERROR;
+        }
+        break;
+    }
+
+    return retval;
 }
 
 /*
  * ===========================================================================
  *
  * $Log: blast_message.c,v $
+ * Revision 1.17  2005/02/07 15:18:39  bealer
+ * - Fix doxygen file-level comments.
+ *
+ * Revision 1.16  2004/11/26 20:28:38  camacho
+ * + BLASTERR_REDOALIGNMENTCORE_NOTSUPPORTED
+ *
+ * Revision 1.15  2004/11/23 21:48:10  camacho
+ * Added default handler for undefined error codes in Blast_Perror.
+ *
+ * Revision 1.14  2004/11/19 00:07:47  camacho
+ * + Blast_Perror
+ *
+ * Revision 1.13  2004/11/02 17:56:48  camacho
+ * Add DOXYGEN_SKIP_PROCESSING to guard rcsid string
+ *
  * Revision 1.12  2004/05/19 14:52:02  camacho
  * 1. Added doxygen tags to enable doxygen processing of algo/blast/core
  * 2. Standardized copyright, CVS $Id string, $Log and rcsid formatting and i

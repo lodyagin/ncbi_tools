@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.h,v 1.4 2004/10/06 14:59:16 dondosha Exp $
+/*  $Id: seqsrc_multiseq.h,v 1.9 2005/04/06 23:27:53 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,15 +21,13 @@
 *
 *  Please cite the author in any work or product based on this material.
 *
-* ===========================================================================
-*
-* Author:  Ilya Dondoshansky
-*
-* File Description:
-*   C Implementation of the BlastSeqSrc interface for a list of sequence 
-*   locations.
-*
-*/
+*  Author:  Ilya Dondoshansky
+* ===========================================================================*/
+
+/** @file seqsrc_multiseq.h
+ * C Implementation of the BlastSeqSrc interface for a list of sequence 
+ * locations.
+ */
 
 #ifndef MULTISEQ_SRC_H
 #define MULTISEQ_SRC_H
@@ -39,47 +37,26 @@
 #include <algo/blast/core/blast_message.h>
 #include <objloc.h>
 
-/** Encapsulates the arguments needed to initialize multi-sequence source. */
-typedef struct MultiSeqSrcNewArgs {
-    SeqLoc* seqloc_list;
-    EBlastProgramType program;
-} MultiSeqSrcNewArgs;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/** Contains information about all sequences in a set */
-typedef struct MultiSeqInfo {
-   Boolean is_prot; /**< Are these sequences protein or nucleotide? */
-   BLAST_SequenceBlk** seqblk_array; /**< Array of sequence blocks */
-   Uint4 max_length;
-   Uint4 avg_length;
-   Uint4 num_seqs;
-   Boolean contents_allocated;
-} MultiSeqInfo;
-
-/** Multi-sequence source constructor 
- * @param seq_src BlastSeqSrc structure (already allocated) to populate [in]
- * @param args Pointer to MultiSeqSrcNewArgs structure above [in]
- * @return Updated bssp structure (with all function pointers initialized
+/** @addtogroup CToolkitAlgoBlast
+ *
+ * @{
  */
-BlastSeqSrc* MultiSeqSrcNew(BlastSeqSrc* seq_src, void* args);
 
 /** Initialize the sequence source structure.
- * @param seq_vector Vector of sequence locations [in]
+ * @param seqloc_list Linked list of sequence locations [in]
  * @param program Type of BLAST to be performed [in]
  */
 BlastSeqSrc* 
-MultiSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program);
+MultiSeqBlastSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program);
 
-/** Multi sequence source destructor: frees its internal data structure and the
- * BlastSeqSrc structure itself.
- * @param seq_src BlastSeqSrc structure to free [in]
- * @return NULL
- */
-BlastSeqSrc* MultiSeqSrcFree(BlastSeqSrc* seq_src);
+/* @} */
 
-/** Multi sequence source copier; copies the MultiSeqInfo structure
- * @param bssp BlastSeqSrc structure to copy [in]
- * @return New BlastSeqSrc structure
- */
-BlastSeqSrc* MultiSeqSrcCopy(BlastSeqSrc* seq_src);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MULTISEQ_SRC_H */

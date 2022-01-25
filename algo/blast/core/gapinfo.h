@@ -1,4 +1,4 @@
-/* $Id: gapinfo.h,v 1.13 2004/07/02 19:23:38 dondosha Exp $
+/* $Id: gapinfo.h,v 1.20 2005/04/27 19:49:49 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,8 +28,7 @@
  */
 
 /** @file gapinfo.h
- * Structures definitions from gapxdrop.h in ncbitools 
- * @todo FIXME: doxygen comments
+ * Definitions of structures used for saving traceback information.
  */
 
 #ifndef __GAPINFO__
@@ -50,7 +49,8 @@ typedef enum EGapAlignOpType {
    eGapAlignIns1 = 4,/**< Frame shift insertion of one nucleotide */
    eGapAlignIns2 = 5,/**< Frame shift insertion of two nucleotides */
    eGapAlignIns = 6, /**< Insertion: a gap in subject */
-   eGapAlignDecline = 7 /**< Non-aligned region */
+   eGapAlignDecline = 7, /**< Non-aligned region */
+   eGapAlignInvalid = 8 /**< Invalid operation */
 } EGapAlignOpType;
 
 /** Edit script: linked list of correspondencies between two sequences */
@@ -60,20 +60,22 @@ typedef struct GapEditScript {
    struct GapEditScript* next; /**< Pointer to next link */
 } GapEditScript;
 
-/** Editing block structure containing all information returned from a 
- * single gapped extension. */
-typedef struct GapEditBlock {
-   Int4 start1,  start2,       /**< starts of alignments. */
-      length1, length2,       /**< total lengths of the sequences. */
-      original_length1, original_length2; /**< Untranslated lengths of the 
-                                             sequences. */
-   Int2 frame1, frame2;	    /**< frames of the sequences. */
-   Boolean translate1,	translate2; /**< are either of these be translated. */
-   Boolean reverse;	/**< reverse sequence 1 and 2 when producing SeqALign? */
-   Boolean is_ooframe; /**< Is this out_of_frame edit block? */
-   Boolean discontinuous; /**< Is this OK to produce discontinuous SeqAlign? */
-   GapEditScript* esp; /**< Editing script for the traceback. */
-} GapEditBlock;
+/** A version of GapEditScript used to store initial results
+    from the gapped alignment routines */
+typedef struct GapPrelimEditScript {
+   EGapAlignOpType op_type;    /**< Type of operation */
+   Int4 num;                   /**< Number of operations */
+} GapPrelimEditScript;
+
+/** Preliminary version of GapEditBlock, used directly by the low-
+ * level dynamic programming routines 
+ */
+typedef struct GapPrelimEditBlock {
+    GapPrelimEditScript *edit_ops;  /**< array of edit operations */
+    Int4 num_ops_allocated;        /**< size of allocated array */
+    Int4 num_ops;                  /**< number of edit ops presently in use */
+    EGapAlignOpType last_op;        /**< most recent operation added */
+} GapPrelimEditBlock;
 
 /** Structure to keep memory for state structure. */ 
 typedef struct GapStateArrayStruct {
@@ -83,23 +85,65 @@ typedef struct GapStateArrayStruct {
 	struct GapStateArrayStruct* next; /**< Next link in the list. */
 } GapStateArrayStruct;
 
-/** Initialize the gap editing script structure. */
+/** Initialize the edit script structure. 
+ *  @param old Pointer to existing edit script to which
+ *         the new script will be appended
+ *  @return Pointer to the new edit script
+ */
 GapEditScript* 
 GapEditScriptNew (GapEditScript* old);
 
-/** Free the gap editing script structure. */
-GapEditScript* GapEditScriptDelete (GapEditScript* esp);
-
-/** Initialize the gap editing block structure. 
- * @param start1 Offset to start alignment in first sequence. [in]
- * @param start2 Offset to start alignment in second sequence. [in]
+/** Free all links of an edit script structure. 
+ *  @param esp Pointer to first link in the edit script [in]
+ *  @return Always NULL
  */
-GapEditBlock* GapEditBlockNew (Int4 start1, Int4 start2);
+GapEditScript* 
+GapEditScriptDelete (GapEditScript* esp);
 
-/** Free the edit block structure. */
-GapEditBlock* GapEditBlockDelete (GapEditBlock* edit_block);
+/** Frees a preliminary edit block structure 
+ *  @param edit_block The edit block to free [in]
+ *  @return Always NULL
+ */
+GapPrelimEditBlock *
+GapPrelimEditBlockFree(GapPrelimEditBlock *edit_block);
 
-/** Free the gap state structure. */
+/** Allocates a preliminary edit block structure 
+ *  @return Pointer to the allocated preliminary edit block
+ */
+GapPrelimEditBlock *
+GapPrelimEditBlockNew(void);
+
+/** Add a new operation to a preliminary edit block, possibly combining
+ *  it with the last operation if the two operations are identical
+ *
+ *  @param edit_block The script to update [in/modified]
+ *  @param op_type The operation type to add [in]
+ *  @param num_ops The number of the specified type of operation to add [in]
+ */
+void
+GapPrelimEditBlockAdd(GapPrelimEditBlock *edit_block, 
+                 EGapAlignOpType op_type, Int4 num_ops);
+
+/** Append one GapPrelimEditBlock to the end of the other.
+ * @param edit_block1 First traceback block [in]
+ * @param edit_block2 Second traceback block, to be appended at the end of
+ *                    the first.
+ */
+void
+GapPrelimEditBlockAppend(GapPrelimEditBlock *edit_block1,
+                         GapPrelimEditBlock *edit_block2);
+
+
+/** Reset a preliminary edit block without freeing it 
+ * @param edit_block The preliminary edit block to reset
+ */
+void
+GapPrelimEditBlockReset(GapPrelimEditBlock *edit_block);
+
+/** Free the gap state structure. 
+ * @param state_struct The state structure to free
+ * @return Always NULL
+ */
 GapStateArrayStruct* 
 GapStateFree(GapStateArrayStruct* state_struct);
 

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.90 2004/09/08 20:59:53 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.91 2005/04/22 17:41:00 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -14,6 +14,8 @@ static char const rcsid[] = "$Id: toporg.c,v 6.90 2004/09/08 20:59:53 kans Exp $
 #include <explore.h>
 #include <subutil.h>
 #include <tofasta.h>
+
+static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr);
 
 SeqDescrPtr remove_descr PROTO((SeqDescrPtr head, SeqDescrPtr x));
 /****************************************************************************
@@ -562,7 +564,7 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	      descr = tmp->descr;
 	}
 	if (bssp->descr == NULL) {
-		bssp->descr = GetDescr(&descr);
+		bssp->descr = GetDescrNoTitles(&descr);
 	} else {
 		for (vnp = bssp->descr; vnp!= NULL; vnp= vnp->next) {
 			if (vnp->choice == Seq_descr_title) {
@@ -667,7 +669,7 @@ void MoveNPPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	      descr = tmp->descr;
 	}
 	if (bssp->descr == NULL) {
-		bssp->descr = GetDescr(&descr);
+		bssp->descr = GetDescrNoTitles(&descr);
 	} else {
 /* move pubs to nuc-prot level */	
 		vnp = ValNodeExtractList(&descr, Seq_descr_pub);
@@ -1134,6 +1136,42 @@ ValNodePtr GetDescr(ValNodePtr PNTR descr)
    return (hvnp);
 
 } /* GetDescr */
+
+static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr)
+{
+   ValNodePtr    vnp, hvnp = NULL;
+
+
+
+   vnp = ValNodeExtractList(descr, Seq_descr_org);
+   if (vnp != NULL) {
+     hvnp = ValNodeLink(&hvnp, vnp);
+   }
+
+   if ( check_GIBB(*descr)) {
+       vnp = ValNodeExtractList(descr, Seq_descr_modif);
+       if (vnp != NULL) {
+         hvnp = ValNodeLink(&hvnp, vnp); 
+       }
+   }
+   vnp = ValNodeExtractList(descr, Seq_descr_comment);
+   if (vnp != NULL) {
+     hvnp = ValNodeLink(&hvnp, vnp);
+   }
+
+   vnp = ValNodeExtractList(descr, Seq_descr_pub);
+   if (vnp != NULL) {
+     hvnp = ValNodeLink(&hvnp, vnp);
+   }
+
+   vnp = ValNodeExtractList(descr, Seq_descr_update_date);
+   if (vnp != NULL) {
+     hvnp = ValNodeLink(&hvnp, vnp);
+   }
+
+   return (hvnp);
+
+} /* GetDescrNoTitles */
 
 /*------------------------ check_GIBB() --------------------------*/
 /*****************************************************************************
