@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.42 2005/05/20 18:57:51 camacho Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.44 2005/12/22 14:22:19 papadopo Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,12 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.44  2005/12/22 14:22:19  papadopo
+change signature of BLAST_FillLookupTableOptions
+
+Revision 6.43  2005/12/20 15:36:39  papadopo
+change name of structure field
+
 Revision 6.42  2005/05/20 18:57:51  camacho
 Update to use new signature to BLAST_FillLookupTableOptions
 
@@ -428,7 +434,7 @@ static Boolean RPSUpdateOffsets(BlastLookupTable *lookup)
     Int4 offset_diff;
 
     len = lookup->backbone_size;
-    offset_diff = lookup->wordsize - 1;
+    offset_diff = lookup->word_length - 1;
 
     /* Walk through table, copying info into mod_lt[] */
     for(index = 0; index < len; index++) {
@@ -612,7 +618,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     RPSPsiMatrixAttach(sbp, posMatrix);
     LookupTableOptionsNew(eBlastTypeBlastp, &lookup_options);
     BLAST_FillLookupTableOptions(lookup_options, eBlastTypePsiBlast, FALSE, 
-	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE);
+	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue);
 
 
     BlastSeqLocNew(&lookup_segment, 0, all_length);

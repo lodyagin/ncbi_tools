@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.102 2005/10/21 19:32:45 papadopo Exp $
+/* $Id: blast_driver.c,v 1.105 2006/01/24 18:44:00 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.102 $
+ * $Revision: 1.105 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.102 2005/10/21 19:32:45 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.105 2006/01/24 18:44:00 papadopo Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -74,7 +74,6 @@ typedef enum {
    ARG_PHI,
    ARG_THRESHOLD,
    ARG_WINDOW,
-   ARG_VARIABLE_WORD,
    ARG_XDROP_UNGAPPED,
    ARG_UNGAPPED,
    ARG_GREEDY,
@@ -93,11 +92,12 @@ typedef enum {
    ARG_OUT,
    ARG_FORMAT,
    ARG_HTML,
-   ARG_ASNOUT,
    ARG_TABULAR,
    ARG_THREADS,
    ARG_SHOWGI,
-   ARG_ACCESSION
+   ARG_ACCESSION,
+   ARG_COMP_BASED_STATS,
+   ARG_SMITH_WATERMAN
 } BlastArguments;
 
 static Args myargs[] = {
@@ -152,8 +152,6 @@ static Args myargs[] = {
    { "Window size (max. allowed distance between a pair of initial hits;\n"
      "      0 causes default behavior, -1 turns off multiple hits)", 
      "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL}, /* ARG_WINDOW */
-   { "Use variable word size approach to database scanning",/* ARG_VARIABLE_WORD */ 
-     "F", NULL, NULL, FALSE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
    { "X dropoff value for ungapped extensions in bits (0 invokes default "
      "behavior)\n      blastn 20, others 7",/*ARG_XDROP_UNGAPPED*/
       "0", NULL, NULL, FALSE, 'y', ARG_INT, 0.0, 0, NULL},
@@ -202,8 +200,6 @@ static Args myargs[] = {
      "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
    { "Produce HTML output",                    /* ARG_HTML */
      "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
-   { "File name for output in ASN.1 format",   /* ARG_ASNOUT */
-     NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL}, 
    { "Produce on-the-fly tabular output; 1 - just offsets and quality values;\n"
      "2 - add sequence data.",
      "0", NULL, NULL, FALSE, 'B', ARG_INT, 0.0, 0, NULL}, /* ARG_TABULAR */
@@ -212,7 +208,25 @@ static Args myargs[] = {
    { "Show gis in sequence ids",
      "F", NULL, NULL, FALSE, 'n', ARG_BOOLEAN, 0.0, 0, NULL}, /* ARG_SHOWGI */
    { "Show only accessions for sequence ids in tabular output",
-     "F", NULL, NULL, FALSE, 'N', ARG_BOOLEAN, 0.0, 0, NULL}/* ARG_ACCESSION */
+     "F", NULL, NULL, FALSE, 'N', ARG_BOOLEAN, 0.0, 0, NULL},/* ARG_ACCESSION */
+   { "Use composition-based statistics for tblastn:\n"                /* ARG_COMP_BASED_STATS */
+     "      D or d: default (equivalent to F)\n"
+     "      0 or F or f: no composition-based statistics\n"
+     "      1 or T or t: Composition-based statistics as in "
+     "NAR 29:2994-3005, 2001\n"
+     "      2: Composition-based score adjustment as in "
+     "Bioinformatics 21:902-911,\n"
+     "          2005, conditioned on sequence properties\n"
+     "      3: Composition-based score adjustment as in "
+     "Bioinformatics 21:902-911,\n"
+     "          2005, unconditionally\n"
+     "      For programs other than tblastn, must either be absent "
+     "or be D, F or 0.\n     ",
+     "D", NULL, NULL, FALSE, 'C', ARG_STRING, 0.0, 0, NULL},
+   { "Compute locally optimal Smith-Waterman alignments "
+     "(This option is only\n"
+     "      available for gapped tblastn.)",                          /* ARG_SMITH_WATERMAN */
+     "F", NULL, NULL, FALSE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 extern void PrintTabularOutputHeader PROTO((char* blast_database, 
@@ -242,8 +256,9 @@ s_FillOptions(SBlastOptions* options)
    BlastScoringOptions* score_options = options->score_options;
    BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
 
-   Boolean variable_wordsize = FALSE, mb_lookup = FALSE;
+   Boolean mb_lookup = FALSE;
    Int4 greedy_extension = 0;
+   Int4 diag_separation = 0;
    Boolean greedy_with_ungapped = FALSE;
    Boolean is_gapped = FALSE;
    EBlastProgramType program_number = options->program;
@@ -252,22 +267,16 @@ s_FillOptions(SBlastOptions* options)
    if (program_number == eBlastTypeBlastn) {
       if (myargs[ARG_TEMPL_LEN].intvalue == 0) {
          mb_lookup = (Boolean) myargs[ARG_LOOKUP].intvalue;
-         /* Variable word size can only be used for word sizes divisible 
-            by 4 */
-         if (myargs[ARG_WORDSIZE].intvalue % COMPRESSION_RATIO == 0)
-            variable_wordsize = (Boolean) myargs[ARG_VARIABLE_WORD].intvalue;
       } else {
          /* Discontiguous words */
          mb_lookup = TRUE;
-         variable_wordsize = FALSE;
       }
       greedy_extension = MIN(myargs[ARG_GREEDY].intvalue, 2);
       greedy_with_ungapped = (myargs[ARG_GREEDY].intvalue == 3);
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
-      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue, 
-      variable_wordsize);
+      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
       (Uint1) myargs[ARG_TEMPL_LEN].intvalue;
@@ -324,12 +333,16 @@ s_FillOptions(SBlastOptions* options)
       score_options->is_ooframe = TRUE;
    }
 
+   if (mb_lookup)
+       diag_separation = 6;
+
    BLAST_FillHitSavingOptions(hit_options, 
       myargs[ARG_EVALUE].floatvalue, 
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
           myargs[ARG_ALIGNMENTS].intvalue),
       is_gapped,
-      myargs[ARG_CULLING].intvalue);
+      myargs[ARG_CULLING].intvalue,
+      diag_separation);
  
    hit_options->percent_identity = myargs[ARG_PERC_IDENT].floatvalue;
    hit_options->longest_intron = myargs[ARG_INTRON].intvalue;
@@ -337,7 +350,54 @@ s_FillOptions(SBlastOptions* options)
    if (myargs[ARG_SEARCHSP].floatvalue != 0) {
       eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
    }
-
+   if ((program_number == eBlastTypeTblastn ||
+        program_number == eBlastTypeBlastp) && is_gapped) {
+       /* Set options specific to gapped tblastn */
+       switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
+       case 'D': case 'd':
+       case '0': case 'F': case 'f':
+           ext_options->compositionBasedStats = 0;
+           break;
+        case '1': case 'T': case 't':
+            ext_options->compositionBasedStats = 1;
+            break;
+       case '2':
+           ErrPostEx(SEV_WARNING, 1, 0, "the -C 2 argument "
+                     "is currently experimental\n");
+           ext_options->compositionBasedStats = 2;
+           break;
+       case '3':
+           ErrPostEx(SEV_WARNING, 1, 0, "the -C 3 argument "
+                     "is currently experimental\n");
+           ext_options->compositionBasedStats = 3;
+           break;
+       default:
+           ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"
+                     "based statistics; see -C options\n");
+           break;
+       }
+       if (myargs[ARG_SMITH_WATERMAN].intvalue) {
+           ext_options->eTbackExt = eSmithWatermanTbck;
+       }
+   } else {
+       /* Make sure tblastn and blastp parameters were not set for
+        * other programs */
+       
+       switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
+       case '0': case 'D': case 'd': case 'F': case 'f':
+           break;
+       default:
+           ErrPostEx(SEV_FATAL, 1, 0,
+                     "Invalid option -C: only gapped tblastn may use"
+                     " composition based statistics.");
+           break;
+       }
+       if(myargs[ARG_SMITH_WATERMAN].intvalue) {
+           ErrPostEx(SEV_FATAL, 1, 0,
+                     "Invalid option -s: Smith-Waterman alignments are only "
+                     "available for gapped tblastn and blastp.");
+       }
+   }
    if (program_number == eBlastTypeTblastn ||
        program_number == eBlastTypeRpsTblastn ||
        program_number == eBlastTypeTblastx) {
@@ -521,7 +581,7 @@ Int2 Nlm_Main(void)
 
    /* Get the query (queries), loop if necessary. */
    while (1) {
-       SeqAlign* seqalign = NULL;
+       SBlastSeqalignArray* seqalign_arr = NULL;
        SeqLoc* filter_loc=NULL;	/* All masking locations */
        SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
        Int4 letters_read;
@@ -587,12 +647,12 @@ Int2 Nlm_Main(void)
        } else if (dbname) {
            status = 
                Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, 
-                                    tf_data, &seqalign, &filter_loc, 
+                                    tf_data, &seqalign_arr, &filter_loc, 
                                     sum_returns);
        } else {
            status = 
                Blast_TwoSeqLocSetsAdvanced(query_slp, subject_slp, lcase_mask, 
-                                           options, tf_data, &seqalign, 
+                                           options, tf_data, &seqalign_arr, 
                                            &filter_loc, sum_returns);
        }
 
@@ -617,19 +677,13 @@ Int2 Nlm_Main(void)
                                          sum_returns);
                phivnps = PHIBlastResultsFree(phivnps);
            } else if (!tabular_output) {
-               if (myargs[ARG_ASNOUT].strvalue) {
-                   AsnIoPtr asnout = 
-                       AsnIoOpen(myargs[ARG_ASNOUT].strvalue, (char*)"w");
-                   GenericSeqAlignSetAsnWrite(seqalign, asnout);
-                   asnout = AsnIoClose(asnout);
-               }
                
                /* Format the results */
                status = 
-                   BLAST_FormatResults(seqalign, num_queries, query_slp, 
+                   BLAST_FormatResults(seqalign_arr, num_queries, query_slp, 
                                        filter_loc, format_info, sum_returns);
                
-               seqalign = SeqAlignSetFree(seqalign);
+               seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
            }
 
        }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.49 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -117,7 +117,9 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   TexT            featid;           \
   TexT            fidxref;          \
   ButtoN          leave_dlg_up;     \
-  UserObjectPtr   goTermUserObj;
+  UserObjectPtr   goTermUserObj;    \
+  Int2            badInfAttempts;   \
+  Boolean         acceptBadInf;
 
 typedef struct descform {
   DESCRIPTOR_FORM_BLOCK
@@ -142,12 +144,17 @@ extern void StdInitFeatFormProc (ForM f);
 extern void StdFeatFormCleanupProc (GraphiC g, VoidPtr data);
 extern void StdFeatFormAcceptButtonProc (ButtoN b);
 
+extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertBadToNote);
+extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
+
 /*
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 */
 
 extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 procid);
 extern Int2 LIBCALLBACK StdVibrantEditorMsgFunc (OMMsgStructPtr ommsp);
+
+extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len, CharPtr badInfMssg);
 
 /*****************************************************************************
 *

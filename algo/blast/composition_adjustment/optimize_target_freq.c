@@ -24,9 +24,6 @@
 
 /**
  * @file optimize_target_freq.c
- *
- * Author E. Michael Gertz
- *
  * Routines for finding an optimal set of target frequencies for the
  * purpose of generating a compositionally adjusted score matrix.  The
  * function for performing this optimization is named
@@ -34,16 +31,16 @@
  *
  * The optimal target frequencies x minimize the Kullback-Liebler
  * "distance"
- *
+ * 
  *       sum_k x[k] * ln(x[k]/q[k])
- *
+ * 
  * from the set q of target frequencies from a standard matrix.  They
  * also satisfy the constraints
  *
- * \sum_{i = 0...alphsize - 1} x[i * alphsize + j] = col_sums[j]
+ * sum_{i = 0...alphsize - 1} x[i * alphsize + j] = col_sums[j]
  *      for j = 0...alphsize - 1
  *
- * \sum_{j = 0...alphsize - 1} x[i * alphsize + j] = row_sums[j]
+ * sum_{j = 0...alphsize - 1} x[i * alphsize + j] = row_sums[j]
  *      for i = 1...alphsize - 1
  *
  * where col_sums and row_sums are sets of background frequencies.
@@ -82,10 +79,12 @@
  * Agarwala, Aleksandr Morgulis, Alejandro Schaffer and Yi-Kuo Yu
  * (2005) Protein Database Searches Using Compositionally Adjusted
  * Substitution Matrices.  FEBS Journal, 272,5101-9.
+ *
+ * @author E. Michael Gertz
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: optimize_target_freq.c,v 1.6 2005/12/01 13:49:43 gertz Exp $";
+    "$Id: optimize_target_freq.c,v 1.8 2005/12/19 15:37:33 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <string.h>
@@ -103,9 +102,9 @@ static char const rcsid[] =
  * this routine.
  *
  * The symmetric product
- *
- *     A D A\T = \sum_{k = 0}^{n - 1} d_k * A[:][k] * A[:][k]\T,
- *
+ * \f[
+ *     A D A^T = \sum_{k = 0}^{n - 1} d_k \times A[:][k] \times A[:][k]^T,
+ * \f]
  * where n = alphsize * alphsize and A[:][k] is column k of A.
  *
  * @param alphsize     the size of the alphabet for this minimization
@@ -261,6 +260,7 @@ ResidualsLinearConstraints(double rA[], int alphsize, const double x[],
  * Lagrangian function.
  *
  * @param resids_x     the dual residual vector
+ * @param z            dual variables (Lagrange multipliers)
  * @param alphsize     the alphabet size for this optimization problem
  * @param grads        the gradient of the objective function, an
  *                     possibly the nonlinear relative entropy constraint.
@@ -367,24 +367,23 @@ CalculateResiduals(double * rnorm,
  * factorization of -J D^{-1} J^T, and the sufficient information to
  * backsolve using this factorization are stored.
  */
-struct ReNewtonSystem {
-    int alphsize;              /*< the size of the alphabet */
-    int constrain_rel_entropy; /*< if true, use the relative entropy
+typedef struct ReNewtonSystem {
+    int alphsize;              /**< the size of the alphabet */
+    int constrain_rel_entropy; /**< if true, use the relative entropy
                                     constraint for this optimization
                                     problem */
-    double ** W;                /*< A lower-triangular matrix
+    double ** W;               /**< A lower-triangular matrix
                                     representing a factorization of
                                     the (2,2) block, -J D^{-1} J^T, of
                                     the condensed linear system */
-    double * Dinv;              /*< The diagonal elements of the
+    double * Dinv;             /**< The diagonal elements of the
                                     inverse of the necessarily
                                     diagonal (1,1) block of the linear
                                     system */
-    double * grad_re;           /*< the gradient of the
+    double * grad_re;          /**< the gradient of the
                                     relative-entropy constraint, if
                                     this constraint is used. */
-};
-typedef struct ReNewtonSystem ReNewtonSystem;
+} ReNewtonSystem;
 
 
 /**
@@ -467,6 +466,8 @@ normal_return:
  * @param constrain_rel_entropy    if true, then the relative entropy
  *                                 constraint is used for this optimization
  *                                 problem.
+ * @param workspace          an allocated workspace array at least
+ *                           as large as the number of target frequencies
  */
 static void
 FactorReNewtonSystem(ReNewtonSystem * newton_system,
@@ -547,6 +548,8 @@ FactorReNewtonSystem(ReNewtonSystem * newton_system,
  * @param z               on entry, the primal residuals; on exit, the
  *                        step in the dual variables.
  * @param newton_system   the factored matrix for the Newton system.
+ * @param workspace       an allocated workspace array at least
+ *                        as large as the number of target frequencies
  */
 static void
 SolveReNewtonSystem(double x[], double z[],
@@ -613,6 +616,7 @@ SolveReNewtonSystem(double x[], double z[],
  * @param grads         grads[0] is the gradient of the objective function
  *                      and grad[1] is the gradient of the relative entropy
  *                      constraint
+ * @param alphsize      the alphabet size for this problem
  * @param x             the primal variables
  * @param q             target frequencies of the standard matrix
  * @param scores        scores as computed using the target frequencies
@@ -682,40 +686,7 @@ ComputeScoresFromProbs(double scores[],
 }
 
 
-/**
- * Find an optimal set of target frequencies for the purpose of
- * generating a compositionally adjusted score matrix.
- *
- * @param x           On exit, the optimal set of target frequencies,
- *                    interpreted as a two dimensional array in
- *                    row-major order.  x need not be initialized on
- *                    entry; any initial value will be ignored.
- * @param alphsize    the size of the alphabet for this optimization
- *                    problem.
- * @param q           a set of target frequencies from a standard
- *                    matrix
- * @param row_sums    the required row sums for the target frequencies;
- *                    the composition of one of the sequences being compared.
- * @param col_sums    the required column sums for the target frequencies;
- *                    the composition of the other sequence being compared.
- * @param constrain_rel_entropy   if true, constrain the relative
- *                                entropy of the optimal target
- *                                frequencies to equal
- *                                relative_entropy
- * @param relative_entropy  if constrain_rel_entropy is true, then this
- *                          is the required relative entropy for the
- *                          optimal target frequencies.  Otherwise,
- *                          this argument is ignored.
- * @param maxits    the maximum number of iterations permitted for the
- *                  optimization algorithm; a good value is 2000.
- * @param tol       the solution tolerance; the residuals of the optimization
- *                  program must have Euclidean norm <= tol for the
- *                  algorithm to terminate.
- *
- * @returns         if an optimal set of target frequencies is
- *                  found, then 0, if the iteration failed to
- *                  converge, then 1, if there was some error, then -1.
- */
+/* Documented in optimized_target_freq.h */
 int
 Blast_OptimizeTargetFrequencies(double x[],
                                 int alphsize,

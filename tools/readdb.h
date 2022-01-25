@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.164 $
+* $Revision: 6.165 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,9 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.165  2006/02/15 21:07:29  camacho
+* Add validation to fastacmd to reject mixed protein/nucleotide databases
+*
 * Revision 6.164  2005/10/04 20:40:50  madden
 * Make PrintDbInformationBasicEx public
 *
@@ -1409,6 +1412,19 @@ Int4 LIBCALL readdb_get_formatdb_version PROTO((ReadDBFILEPtr rdfp));
 	gathering the filebits.
 */
 Boolean LIBCALL readdb_get_filebits PROTO((ReadDBFILEPtr rdfp, Int4 ordinal_id, Uint2Ptr filebit, Uint2Ptr aliasfilebit));
+
+/* Possible return values for readdb_validate */
+
+#define READDB_VALID 0
+#define READDB_INVALID_NULL_ARG -1
+#define READDB_INVALID_MIXED_DBS -2
+
+/* Validate the linked list of rdfp structures passed as an argument to this
+ * function.
+ * Return 
+ * list or if the argument is NULL, otherwise returns TRUE
+ */
+Int4 LIBCALL readdb_validate PROTO((ReadDBFILEPtr rdfp));
 
 /* For the BioseqFetch functions. */
 

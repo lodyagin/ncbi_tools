@@ -29,13 +29,18 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.49  2006/01/05 14:11:56  bollin
+* added SeqLocPrintUseBestID function, which prints out the sequence location
+* but uses the "best" sequence ID instead of the one actually stored in the
+* SeqLoc.
+*
 * Revision 6.48  2005/08/03 18:28:36  kans
 * ValidateAccnDotVer returns -5 for missing version and -6 for bad version (not just digits)
 *
@@ -844,7 +849,7 @@ NLM_EXTERN Int2 SeqLocOrder(SeqLocPtr a, SeqLocPtr b, BioseqPtr in);
 NLM_EXTERN Int2 SeqLocMol(SeqLocPtr seqloc);
 
 NLM_EXTERN CharPtr SeqLocPrint(SeqLocPtr slp);
-
+NLM_EXTERN CharPtr SeqLocPrintUseBestID(SeqLocPtr slp);
 
 /*****************************************************************************
 *

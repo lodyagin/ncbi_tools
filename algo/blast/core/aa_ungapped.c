@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.c,v 1.45 2005/11/16 14:27:03 madden Exp $
+/* $Id: aa_ungapped.c,v 1.46 2005/12/19 16:04:50 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: aa_ungapped.c,v 1.45 2005/11/16 14:27:03 madden Exp $";
+    "$Id: aa_ungapped.c,v 1.46 2005/12/19 16:04:50 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/aa_ungapped.h>
@@ -127,7 +127,7 @@ BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
    }
    else {
       lookup = (BlastLookupTable *)lookup_wrap->lut;
-      wordsize = lookup->wordsize;
+      wordsize = lookup->word_length;
    }
    last_offset  = subject->length - wordsize;
    use_pssm = (rps_lookup != NULL) || (lookup->use_pssm);
@@ -265,7 +265,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
    }
    else {
       lookup = (BlastLookupTable *)lookup_wrap->lut;
-      wordsize = lookup->wordsize;
+      wordsize = lookup->word_length;
    }
    last_offset  = subject->length - wordsize;
    use_pssm = (rps_lookup != NULL) || (lookup->use_pssm);

@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.175 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_options.c,v 1.180 2006/02/09 18:47:07 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.175 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_options.c,v 1.180 2006/02/09 18:47:07 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -182,14 +182,15 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number != eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
                    "SBlastFilterOptionsValidate: Repeat filtering only supported with blastn");
                return 1;
            }
-           if (filter_options->repeatFilterOptions->database == NULL)
+           if (filter_options->repeatFilterOptions->database == NULL ||
+               strlen(filter_options->repeatFilterOptions->database) == 0)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
                    "SBlastFilterOptionsValidate: No repeat database specified for repeat filtering");
                return 1;
            }
@@ -200,7 +201,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number != eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
                    "SBlastFilterOptionsValidate: Dust filtering only supported with blastn");
                return 1;
            }
@@ -211,7 +212,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number == eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
                    "SBlastFilterOptionsValidate: SEG filtering is not supported with blastn");
                return 1;
            }
@@ -796,8 +797,8 @@ LookupTableOptionsNew(EBlastProgramType program_number, LookupTableOptions* *opt
 
 Int2 
 BLAST_FillLookupTableOptions(LookupTableOptions* options, 
-   EBlastProgramType program_number, Boolean is_megablast, Int4 threshold,
-   Int4 word_size, Boolean variable_wordsize)
+   EBlastProgramType program_number, Boolean is_megablast, 
+   Int4 threshold, Int4 word_size)
 {
    if (!options)
       return 1;
@@ -827,9 +828,6 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
       options->lut_type = RPS_LOOKUP_TABLE;
    if (word_size)
       options->word_size = word_size;
-   if (program_number == eBlastTypeBlastn) {
-      options->variable_wordsize = variable_wordsize;
-   }
    return 0;
 }
 
@@ -972,16 +970,6 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 		return (Int2) code;
 	}
 
-
-        /* FIXME: is this really needed?? */
-        if (options->variable_wordsize && 
-          ((options->word_size % 4) != 0) ) {
-         Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
-                            "Word size must be divisible by 4 if only full "
-                            "bytes of subject sequences are matched to query");
-         return (Int2) code;
-      }
-
 	if (program_number != eBlastTypeBlastn && 
        options->lut_type == MB_LOOKUP_TABLE)
 	{
@@ -989,14 +977,6 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
                          "Megablast lookup table only supported with blastn");
 		return (Int2) code;
 	}
-
-   if (options->lut_type == MB_LOOKUP_TABLE && options->word_size < 12 && 
-       options->mb_template_length == 0) {
-      Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
-                         "Word size must be 12 or greater with megablast"
-                         " lookup table");
-      return (Int2) code;
-   }
 
    if (program_number == eBlastTypeBlastn && options->mb_template_length > 0) {
       if (!s_DiscWordOptionsValidate(options->word_size,
@@ -1040,7 +1020,8 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
 Int2
 BLAST_FillHitSavingOptions(BlastHitSavingOptions* options, 
                            double evalue, Int4 hitlist_size,
-                           Boolean is_gapped, Int4 culling_limit)
+                           Boolean is_gapped, Int4 culling_limit,
+                           Int4 min_diag_separation)
 {
    if (!options)
       return 1;
@@ -1049,6 +1030,8 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       options->hitlist_size = hitlist_size;
    if (evalue)
       options->expect_value = evalue;
+   if (min_diag_separation)
+      options->min_diag_separation = min_diag_separation;
    if(!is_gapped)
      options->hsp_num_max = kUngappedHSPNumMax;
    options->culling_limit = culling_limit;
@@ -1232,6 +1215,42 @@ Int2 BLAST_InitDefaultOptions(EBlastProgramType program_number,
 
 }
 
+/**  Checks that the extension and scoring options are consistent with each other
+ * @param program_number identifies the program [in]
+ * @param ext_options the extension options [in]
+ * @param score_options the scoring options [in]
+ * @param blast_msg returns a message on errors. [in|out]
+ * @return zero on success, an error code otherwise. 
+ */
+static Int2 s_BlastExtensionScoringOptionsValidate(EBlastProgramType program_number,
+                           const BlastExtensionOptions* ext_options,
+                           const BlastScoringOptions* score_options, 
+                           Blast_Message* *blast_msg)
+{
+    if (ext_options == NULL || score_options == NULL)
+        return -1;
+
+    if (program_number == eBlastTypeBlastn)
+    {
+        if (score_options->gap_open == 0 && score_options->gap_extend == 0)
+        {
+	    if (ext_options->ePrelimGapExt != eGreedyWithTracebackExt && 
+                ext_options->ePrelimGapExt != eGreedyExt && 
+                ext_options->eTbackExt != eGreedyTbck)
+	    {
+			Int4 code=2;
+			Int4 subcode=1;
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
+                            "Greedy extension must be used if gap existence and extension options are zero");
+			return (Int2) code;
+	    }
+	}
+    }
+
+    return 0;
+}
+                   
+
 Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
                            const BlastExtensionOptions* ext_options,
                            const BlastScoringOptions* score_options, 
@@ -1257,6 +1276,11 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
    if ((status = BlastHitSavingOptionsValidate(program_number, hit_options,
                                                blast_msg)) != 0)
        return status;
+   if ((status = s_BlastExtensionScoringOptionsValidate(program_number, ext_options,
+                                               score_options, blast_msg)) != 0)
+       return status;
+
+   
 
    return status;
 }
@@ -1265,6 +1289,22 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.180  2006/02/09 18:47:07  camacho
+ * Correct error reporting when there are errors in validation of filtering
+ * options.
+ *
+ * Revision 1.179  2006/01/23 16:29:51  papadopo
+ * allow the number of diagonals used in containment tests to be specified when initializing HitSavingOptions
+ *
+ * Revision 1.178  2005/12/22 14:07:48  papadopo
+ * remove variable wordsize, and change signature to BlastFillLookupTableOptions
+ *
+ * Revision 1.177  2005/12/19 16:11:12  papadopo
+ * no minimum value for megablast word size need be enforced; the engine will switch to a standard lookup table if the specified word size is too small
+ *
+ * Revision 1.176  2005/12/12 13:38:27  madden
+ * Add call to s_BlastExtensionScoringOptionsValidate to BLAST_ValidateOptions to check that scoring and extension options are consistent
+ *
  * Revision 1.175  2005/11/16 14:27:03  madden
  * Fix spelling in CRN
  *

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.252 $
+* $Revision: 6.259 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.259  2006/02/17 19:05:05  kans
+* special case coded_by only for CDS feature on isolated protein bioseq
+*
+* Revision 6.258  2006/02/17 18:46:20  kans
+* get gene overlapping coded_by CDS on isolated protein bioseq within flatfile generator, not feature indexer
+*
+* Revision 6.257  2006/02/17 17:24:24  kans
+* changes to index CDS feature (with ignore flag) on isolated protein bioseq, xref gene feature
+*
+* Revision 6.256  2006/02/16 22:00:55  kans
+* always pass FALSE for circular to CheckForTransSplice for more stringency
+*
+* Revision 6.255  2006/02/16 21:09:20  kans
+* SeqMgrGetBestOverlappingFeat takes new parameter from get best gene by overlap, uses LOCATION_SUBSET if gene candidate is bad_order or mixed_strand
+*
+* Revision 6.254  2006/02/16 20:24:32  kans
+* added bad_order and mixed_strand fields to feature index - to be used for get best gene overlap function in cases of trans-splicing
+*
+* Revision 6.253  2006/01/20 20:12:21  kans
+* in LockAllSegments, bail if BioseqLockById returns NULL
+*
 * Revision 6.252  2005/09/21 19:20:45  kans
 * SeqMgrGetNextAnnotDesc sets context->index properly
 *
@@ -5373,6 +5394,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (Uint2 entityID, BioseqPtr
     context->partialL = item->partialL;
     context->partialR = item->partialR;
     context->farloc = item->farloc;
+    context->bad_order = item->bad_order;
+    context->mixed_strand = item->mixed_strand;
     context->strand = item->strand;
     if (curr != NULL) {
       context->seqfeattype = curr->data.choice;
@@ -5665,6 +5688,7 @@ NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrGetDesiredAnnotDesc (
 *****************************************************************************/
 
 typedef struct extraindex {
+  SeqEntryPtr     topsep;
   BioseqPtr       lastbsp;
   SeqAnnotPtr     lastsap;
   BioseqSetPtr    lastbssp;
@@ -5764,6 +5788,7 @@ NLM_EXTERN void LIBCALL SeqMgrIndexAlignments (Uint2 entityID)
 
   /* count alignments */
 
+  exind.topsep = NULL;
   exind.lastbsp = NULL;
   exind.lastsap = NULL;
   exind.lastbssp = NULL;
@@ -6004,7 +6029,8 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPt
 static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
                               BioseqPtr bsp, ExtraIndexPtr exindx, SeqFeatPtr sfp,
                               Int4 left, Int4 right, Uint4 itemID, Uint2 subtype,
-                              Boolean farloc, Boolean ignore)
+                              Boolean farloc, Boolean bad_order, Boolean mixed_strand,
+                              Boolean ignore)
 
 {
   Char            buf [129];
@@ -6084,6 +6110,8 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
 		item->dnaStop = -1;
         CheckSeqLocForPartial (sfp->location, &(item->partialL), &(item->partialR));
         item->farloc = farloc;
+        item->bad_order = bad_order;
+        item->mixed_strand = mixed_strand;
         /*
         item->strand = SeqLocStrand (sfp->location);
         if (exindx->flip) {
@@ -6159,6 +6187,105 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
   }
 }
 
+
+static void CheckForTransSplice (
+  SeqFeatPtr sfp,
+  BoolPtr bad_orderP,
+  BoolPtr mixed_strandP,
+  Boolean circular
+)
+
+{
+  Boolean    mixed_strand = FALSE, ordered = TRUE;
+  SeqIdPtr   id1, id2;
+  SeqLocPtr  prev, tmp;
+  SeqIntPtr  sip1, sip2, prevsip;
+  Uint1      strand1, strand2;
+
+  if (sfp == NULL || sfp->location == NULL) return;
+
+  tmp = NULL;
+  prev = NULL;
+  sip1 = NULL;
+  id1 = NULL;
+  prevsip = NULL;
+  strand1 = Seq_strand_other;
+
+  while ((tmp = SeqLocFindNext (sfp->location, tmp)) != NULL) {
+
+    /* just check seqloc_interval */
+
+    if (tmp->choice == SEQLOC_INT) {
+      sip1 = prevsip;
+      sip2 = (SeqIntPtr) (tmp->data.ptrvalue);
+      strand2 = sip2->strand;
+      id2 = sip2->id;
+      if ((sip1 != NULL) && (ordered) && (! circular)) {
+        if (SeqIdForSameBioseq (sip1->id, sip2->id)) {
+          if (strand2 == Seq_strand_minus) {
+            if (sip1->to < sip2->to) {
+              ordered = FALSE;
+            }
+          } else {
+            if (sip1->to > sip2->to) {
+              ordered = FALSE;
+            }
+          }
+        }
+      }
+      prevsip = sip2;
+      if ((strand1 != Seq_strand_other) && (strand2 != Seq_strand_other)) {
+        if (SeqIdForSameBioseq (id1, id2)) {
+          if (strand1 != strand2) {
+            if (strand1 == Seq_strand_plus && strand2 == Seq_strand_unknown) {
+              /* unmarked_strand = TRUE; */
+            } else if (strand1 == Seq_strand_unknown && strand2 == Seq_strand_plus) {
+              /* unmarked_strand = TRUE; */
+            } else {
+              mixed_strand = TRUE;
+            }
+          }
+        }
+      }
+
+      strand1 = strand2;
+      id1 = id2;
+    }
+  }
+
+  /* Publication intervals ordering does not matter */
+
+  if (sfp->idx.subtype == FEATDEF_PUB) {
+    ordered = TRUE;
+  }
+
+  /* ignore ordering of heterogen bonds */
+
+  if (sfp->data.choice == SEQFEAT_HET) {
+    ordered = TRUE;
+  }
+
+  /* misc_recomb intervals SHOULD be in reverse order */
+
+  if (sfp->idx.subtype == FEATDEF_misc_recomb) {
+    ordered = TRUE;
+  }
+
+    /* primer_bind intervals MAY be in on opposite strands */
+
+  if (sfp->idx.subtype == FEATDEF_primer_bind) {
+    mixed_strand = FALSE;
+    ordered = TRUE;
+  }
+
+  if (! ordered) {
+    *bad_orderP = TRUE;
+  }
+  if (mixed_strand) {
+    *mixed_strandP = TRUE;
+  }
+}
+
 typedef struct adpbspdata {
   AnnotDescPtr  adp;
   BioseqPtr     bsp;
@@ -6171,6 +6298,7 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
 {
   AdpBspPtr       abp;
   AnnotDescPtr    adp = NULL;
+  Boolean         bad_order;
   BioseqPtr       bsp = NULL;
   BioseqExtraPtr  bspextra;
   BioseqSetPtr    bssp = NULL;
@@ -6181,6 +6309,7 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   ExtraIndexPtr   exindx;
   Int4            left;
   CharPtr         loclbl;
+  Boolean         mixed_strand;
   ObjMgrDataPtr   omdp;
   ProtRefPtr      prp;
   Int4            right;
@@ -6189,6 +6318,7 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   SeqFeatPtr      sfp = NULL;
   SeqAlignPtr     sal = NULL;
   SeqLocPtr       slp;
+  Boolean         special_case = FALSE;
   Int4            swap;
   SeqFeatPtr      tmp;
   Boolean         usingLocalBsp = FALSE;
@@ -6376,8 +6506,18 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
     }
     MemFree (ctmp);
 
-    if (bsp == NULL) return TRUE;
-    usingLocalBsp = TRUE;
+    if (bsp == NULL && sfp->product != NULL &&
+        sfp->data.choice == SEQFEAT_CDREGION &&
+        IS_Bioseq (exindx->topsep)) {
+      bsp = (BioseqPtr) exindx->topsep->data.ptrvalue;
+      if (bsp == NULL || (! ISA_aa (bsp->mol))) return TRUE;
+      special_case = TRUE;
+      bsp = FindAppropriateBioseq (sfp->product, exindx->lastbsp);
+      if (bsp == NULL) return TRUE;
+    } else {
+      if (bsp == NULL) return TRUE;
+      usingLocalBsp = TRUE;
+    }
   }
 
   /* assume subsequent features will be on this bioseq */
@@ -6403,7 +6543,11 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   /*
   slp = SeqLocMergeEx (bsp, sfp->location, NULL, TRUE, TRUE, FALSE, FALSE);
   */
-  slp = sfp->location;
+  if (special_case) {
+    slp = sfp->product;
+  } else {
+    slp = sfp->location;
+  }
   left = GetOffsetInNearBioseq (slp, bsp, SEQLOC_LEFT_END);
   right = GetOffsetInNearBioseq (slp, bsp, SEQLOC_RIGHT_END);
   /*
@@ -6517,8 +6661,13 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
       right = swap;
     }
 
+    bad_order = FALSE;
+    mixed_strand = FALSE;
+    CheckForTransSplice (sfp, &bad_order, &mixed_strand, /* (Boolean) (bsp->topology == TOPOLOGY_CIRCULAR) */ FALSE);
+
     RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left,
-                      right, gop->itemID, gop->subtype, usingLocalBsp, FALSE);
+                      right, gop->itemID, gop->subtype, usingLocalBsp,
+                      bad_order, mixed_strand, special_case);
 
     /* record gene, publication, and biosource features twice if spanning the origin */
 
@@ -6529,7 +6678,8 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
           sfp->idx.subtype == FEATDEF_operon) {
 
         RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left + bsp->length,
-                          right + bsp->length, gop->itemID, gop->subtype, usingLocalBsp, TRUE);
+                          right + bsp->length, gop->itemID, gop->subtype, usingLocalBsp,
+                          bad_order, mixed_strand, TRUE);
 
       }
     }
@@ -8270,6 +8420,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
 
   /* gather all segmented locations */
 
+  exind.topsep = sep;
   exind.lastbsp = NULL;
   exind.lastsap = NULL;
   exind.lastbssp = NULL;
@@ -8302,6 +8453,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
   /* now gather to get descriptor itemID counts on each bioseq or bioseq set,
      and record features on the bioseq indicated by the feature location */
 
+  exind.topsep = sep;
   exind.lastbsp = NULL;
   exind.lastsap = NULL;
   exind.lastbssp = NULL;
@@ -8514,6 +8666,8 @@ static void SetContextForFeature (SeqFeatPtr sfp, SeqMgrFeatContext PNTR context
   context->partialL = best->partialL;
   context->partialR = best->partialR;
   context->farloc = best->farloc;
+  context->bad_order = best->bad_order;
+  context->mixed_strand = best->mixed_strand;
   context->strand = best->strand;
   if (bst != NULL) {
     context->seqfeattype = bst->data.choice;
@@ -8826,6 +8980,8 @@ static void SeqMgrBestOverlapSetContext (
     context->partialL = best->partialL;
     context->partialR = best->partialR;
     context->farloc = best->farloc;
+    context->bad_order = best->bad_order;
+    context->mixed_strand = best->mixed_strand;
     context->strand = best->strand;
     if (bst != NULL) {
       context->seqfeattype = bst->data.choice;
@@ -8841,14 +8997,19 @@ static void SeqMgrBestOverlapSetContext (
   }
 }
 
-static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
-                                                SMFeatItemPtr PNTR array,
-                                                Int4 num, Int4Ptr pos,
-                                                Int2 overlapType,
-                                                SeqMgrFeatContext PNTR context,
-                                                Int2Ptr count,
-                                                Pointer userdata,
-                                                SeqMgrFeatExploreProc userfunc)
+static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
+  SeqLocPtr slp,
+  Uint2 subtype,
+  SMFeatItemPtr PNTR array,
+  Int4 num,
+  Int4Ptr pos,
+  Int2 overlapType,
+  SeqMgrFeatContext PNTR context,
+  Int2Ptr count,
+  Pointer userdata,
+  SeqMgrFeatExploreProc userfunc,
+  Boolean special
+)
 
 {
   SMFeatItemPtr   best = NULL;
@@ -9028,7 +9189,11 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
 
       /* requires feature to be contained within gene, etc. */
 
-      diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
+      if (special && (feat->bad_order || feat->mixed_strand)) {
+        diff = TestForOverlap (feat, slp, left, right, LOCATION_SUBSET, numivals, ivals);
+      } else {
+        diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
+      }
       if (diff >= 0) {
 
         if (StrandsMatch (feat->strand, strand)) {
@@ -9063,7 +9228,11 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
     feat = array [hier];
     if (feat != NULL && ((! feat->ignore) || userfunc == NULL)) {
 
-      diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
+      if (special && (feat->bad_order || feat->mixed_strand)) {
+        diff = TestForOverlap (feat, slp, left, right, LOCATION_SUBSET, numivals, ivals);
+      } else {
+        diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
+      }
       if (diff >= 0) {
 
         if (StrandsMatch (feat->strand, strand)) {
@@ -9134,43 +9303,43 @@ NLM_EXTERN Int4 TestFeatOverlap (SeqFeatPtr sfpA, SeqFeatPtr sfpB, Int2 overlapT
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_GENE, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_GENE, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, TRUE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetLocationSupersetmRNA (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, LOCATION_SUBSET, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, LOCATION_SUBSET, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_CDS, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_CDS, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_PUB, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_PUB, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_BIOSRC, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_BIOSRC, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingOperon (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_operon, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_operon, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL, FALSE);
 }
 
 /*****************************************************************************
@@ -9275,6 +9444,8 @@ static SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabelEx (BioseqPtr bsp, CharPtr labe
           context->partialL = feat->partialL;
           context->partialR = feat->partialR;
           context->farloc = feat->farloc;
+          context->bad_order = feat->bad_order;
+          context->mixed_strand = feat->mixed_strand;
           context->strand = feat->strand;
           context->seqfeattype = seqfeattype;
           context->featdeftype = feat->subtype;
@@ -9398,6 +9569,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByFeatID (
           context->partialL = feat->partialL;
           context->partialR = feat->partialR;
           context->farloc = feat->farloc;
+          context->bad_order = feat->bad_order;
+          context->mixed_strand = feat->mixed_strand;
           context->strand = feat->strand;
           context->seqfeattype = sfp->data.choice;;
           context->featdeftype = feat->subtype;
@@ -9519,7 +9692,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (SeqLocPtr slp, Uint2 
 
 {
   return SeqMgrGetBestOverlappingFeat (slp, subtype, (SMFeatItemPtr PNTR) featarray,
-                                       numfeats, position, overlapType, context, NULL, NULL, NULL);
+                                       numfeats, position, overlapType, context, NULL, NULL, NULL, FALSE);
 }
 
 NLM_EXTERN Int2 LIBCALL SeqMgrGetAllOverlappingFeatures (SeqLocPtr slp, Uint2 subtype,
@@ -9535,7 +9708,7 @@ NLM_EXTERN Int2 LIBCALL SeqMgrGetAllOverlappingFeatures (SeqLocPtr slp, Uint2 su
 
   SeqMgrGetBestOverlappingFeat (slp, subtype, (SMFeatItemPtr PNTR) featarray,
                                 numfeats, NULL, overlapType, &context, &count,
-                                userdata, userfunc);
+                                userdata, userfunc, FALSE);
 
   return count;
 }
@@ -9579,6 +9752,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (BioseqPtr bsp, VoidPtr fe
     context->partialL = item->partialL;
     context->partialR = item->partialR;
     context->farloc = item->farloc;
+    context->bad_order = item->bad_order;
+    context->mixed_strand = item->mixed_strand;
     context->strand = item->strand;
     if (curr != NULL) {
       context->seqfeattype = curr->data.choice;
@@ -9781,6 +9956,8 @@ static SeqFeatPtr LIBCALL SeqMgrGetNextFeatureEx (BioseqPtr bsp, SeqFeatPtr curr
           context->partialL = item->partialL;
           context->partialR = item->partialR;
           context->farloc = item->farloc;
+          context->bad_order = item->bad_order;
+          context->mixed_strand = item->mixed_strand;
           context->strand = item->strand;
           context->seqfeattype = seqfeattype;
           context->featdeftype = item->subtype;
@@ -10258,6 +10435,8 @@ static Int4 LIBCALL SeqMgrExploreFeaturesInt (BioseqPtr bsp, Pointer userdata,
         context.partialL = item->partialL;
         context.partialR = item->partialR;
         context.farloc = item->farloc;
+        context.bad_order = item->bad_order;
+        context.mixed_strand = item->mixed_strand;
         context.strand = item->strand;
         context.seqfeattype = seqfeattype;
         context.featdeftype = item->subtype;
@@ -10421,6 +10600,8 @@ NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures (Uint2 entityID, Pointer userdata,
         context.partialL = item->partialL;
         context.partialR = item->partialR;
         context.farloc = item->farloc;
+        context.bad_order = item->bad_order;
+        context.mixed_strand = item->mixed_strand;
         context.strand = item->strand;
         context.seqfeattype = seqfeattype;
         context.featdeftype = item->subtype;
@@ -10812,6 +10993,7 @@ static void LockAllSegments (SeqLocPtr slp, ValNodePtr PNTR vnpp)
   }
 
   bsp = BioseqLockById (sip);
+  if (bsp == NULL) return;
   ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
 
   /* now recurse if component is also far delta or seg */

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.57 2005/11/29 19:56:33 lavr Exp $
+/*  $Id: ncbi_server_info.c,v 6.61 2006/01/27 17:09:32 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -148,7 +148,7 @@ char* SERV_WriteInfo(const SSERV_Info* info)
         memcpy(s, attr->tag, attr->tag_len);
         s += attr->tag_len;
         *s++ = ' ';
-        s += HostPortToString(info->host, info->port, s, reserve);
+        s += SOCK_HostPortToString(info->host, info->port, s, reserve);
         if ((n = strlen(str + reserve)) != 0) {
             *s++ = ' ';
             memmove(s, str + reserve, n + 1);
@@ -179,26 +179,27 @@ char* SERV_WriteInfo(const SSERV_Info* info)
 }
 
 
-SSERV_Info* SERV_ReadInfoEx(const char* info_str, size_t add)
+SSERV_Info* SERV_ReadInfoEx(const char* info_str, const char* name)
 {
     /* detect server type */
-    ESERV_Type  type;
-    const char* str = SERV_ReadType(info_str, &type);
-    int/*bool*/ coef, mime, locl, priv, quorum, rate, sful, time;
+    ESERV_Type     type;
+    const char*    str = SERV_ReadType(info_str, &type);
+    int/*bool*/    coef, mime, locl, priv, quorum, rate, sful, time;
+    unsigned int   host;                /* network byte order       */
     unsigned short port;                /* host (native) byte order */
-    unsigned int host;                  /* network byte order       */
-    SSERV_Info *info;
+    SSERV_Info*    info;
 
     if (!str || (*str && !isspace((unsigned char)(*str))))
         return 0;
     while (*str && isspace((unsigned char)(*str)))
         str++;
-    if (!(str = StringToHostPort(str, &host, &port)))
+    if (!(str = SOCK_StringToHostPort(str, &host, &port)))
         return 0;
     while (*str && isspace((unsigned char)(*str)))
         str++;
     /* read server-specific info according to the detected type */
-    if (!(info = s_GetAttrByType(type)->vtable.Read(&str, add)))
+    info = s_GetAttrByType(type)->vtable.Read(&str, name ? strlen(name)+1 : 0);
+    if (!info)
         return 0;
     info->host = host;
     if (port)
@@ -343,6 +344,12 @@ SSERV_Info* SERV_ReadInfoEx(const char* info_str, size_t add)
     if (*str) {
         free(info);
         info = 0;
+    } else if (name) {
+        strcpy((char*) info + SERV_SizeOfInfo(info), name);
+        if (info->type == fSERV_Dns)
+            info->u.dns.name = 1/*true*/;
+    } else if (info->type == fSERV_Dns) {
+        info->u.dns.name = 0/*false*/;
     }
     return info;
 }
@@ -354,10 +361,45 @@ SSERV_Info* SERV_ReadInfo(const char* info_str)
 }
 
 
+SSERV_Info* SERV_CopyInfoEx(const SSERV_Info* orig, const char* name)
+{
+    size_t      size = SERV_SizeOfInfo(orig);
+    SSERV_Info* info;
+    if (!size)
+        return 0;
+    if ((info = (SSERV_Info*)malloc(size + (name ? strlen(name)+1 : 0))) != 0){
+        memcpy(info, orig, size);
+        memset(&info->reserved, 0, sizeof(info->reserved));
+        if (name) {
+            strcpy((char*) info + size, name);
+            if (orig->type == fSERV_Dns)
+                info->u.dns.name = 1/*true*/;
+        } else if (orig->type == fSERV_Dns)
+            info->u.dns.name = 0/*false*/;
+    }
+    return info;
+}
+
+
+SSERV_Info* SERV_CopyInfo(const SSERV_Info* orig)
+{
+    return SERV_CopyInfoEx(orig, 0);
+}
+
+
+const char* SERV_NameOfInfo(const SSERV_Info* info)
+{
+    if (!info)
+        return 0;
+    return info->type != fSERV_Dns  ||  info->u.dns.name
+        ? (const char*) info + SERV_SizeOfInfo(info) : "";
+}
+
+
 size_t SERV_SizeOfInfo(const SSERV_Info *info)
 {
-    return sizeof(*info) - sizeof(info->u) +
-        s_GetAttrByType(info->type)->vtable.SizeOf(&info->u);
+    return info ? sizeof(*info) - sizeof(info->u) +
+        s_GetAttrByType(info->type)->vtable.SizeOf(&info->u) : 0;
 }
 
 
@@ -676,7 +718,7 @@ static SSERV_Info* s_Firewall_Read(const char** str, size_t add)
     ESERV_Type type;
     const char* s;
     if (!(s = SERV_ReadType(*str, &type)))
-        type = (ESERV_Type) fSERV_Any;
+        type = (ESERV_Type) 0/*fSERV_Any*/;
     else
         *str = s;
     return SERV_CreateFirewallInfoEx(0, 0, type, add);
@@ -775,7 +817,7 @@ SSERV_Info* SERV_CreateDnsInfoEx(unsigned int host, size_t add)
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
         info->quorum = 0;
-        memset(&info->u.dns.pad, 0, sizeof(info->u.dns.pad));
+        memset(&info->u.dns, 0, sizeof(info->u.dns));
     }
     return info;
 }
@@ -871,6 +913,20 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.c,v $
+ * Revision 6.61  2006/01/27 17:09:32  lavr
+ * Replace obsolete call names with current ones
+ *
+ * Revision 6.60  2006/01/11 16:31:41  lavr
+ * Cosmetics
+ *
+ * Revision 6.59  2005/12/23 18:14:04  lavr
+ * Use fSERV_Any explicitly (instead of cast 0)
+ *
+ * Revision 6.58  2005/12/14 21:25:24  lavr
+ * Name parameter for SERV_ReadInfoEx() (instead of "add")
+ * +SERV_CopyInfoEx(), +SERV_NameOfInfo() [+u.dns.name use]
+ * SERV_SizeOfInfo() to return 0 on NULL
+ *
  * Revision 6.57  2005/11/29 19:56:33  lavr
  * Changed service type tag comparison to be case-insensitive
  *

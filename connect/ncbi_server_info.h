@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVER_INFO__H
 #define CONNECT___NCBI_SERVER_INFO__H
 
-/*  $Id: ncbi_server_info.h,v 6.37 2003/04/09 19:05:48 siyan Exp $
+/*  $Id: ncbi_server_info.h,v 6.39 2005/12/23 18:06:53 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,18 +56,14 @@ extern "C" {
 /* Server types
  */
 typedef enum {
-    fSERV_Ncbid      = 0x1,
-    fSERV_Standalone = 0x2,
-    fSERV_HttpGet    = 0x4,
-    fSERV_HttpPost   = 0x8,
-    fSERV_Http       = fSERV_HttpGet | fSERV_HttpPost,
-    fSERV_Firewall   = 0x10,
-    fSERV_Dns        = 0x20
+    fSERV_Ncbid           = 0x01,
+    fSERV_Standalone      = 0x02,
+    fSERV_HttpGet         = 0x04,
+    fSERV_HttpPost        = 0x08,
+    fSERV_Http            = fSERV_HttpGet | fSERV_HttpPost,
+    fSERV_Firewall        = 0x10,
+    fSERV_Dns             = 0x20
 } ESERV_Type;
-
-#define fSERV_Any           0
-#define fSERV_StatelessOnly 0x80
-typedef unsigned int TSERV_Type;  /* bit-wise OR of "ESERV_Type" flags */
 
 
 /* Flags to specify the algorithm for selecting the most preferred
@@ -105,27 +101,28 @@ extern NCBI_XCONNECT_EXPORT const char* SERV_ReadType
 /* Meta-addresses for various types of NCBI servers
  */
 typedef struct {
-    TNCBI_Size     args;
+    TNCBI_Size   args;
 #define SERV_NCBID_ARGS(ui)     ((char*) (ui) + (ui)->args)
 } SSERV_NcbidInfo;
 
 typedef struct {
-    char           dummy;       /* placeholder, not used                     */
+    char         dummy;         /* placeholder, not used                     */
 } SSERV_StandaloneInfo;
 
 typedef struct {
-    TNCBI_Size     path;
-    TNCBI_Size     args;
+    TNCBI_Size   path;
+    TNCBI_Size   args;
 #define SERV_HTTP_PATH(ui)      ((char*) (ui) + (ui)->path)
 #define SERV_HTTP_ARGS(ui)      ((char*) (ui) + (ui)->args)
 } SSERV_HttpInfo;
 
 typedef struct {
-    ESERV_Type     type;        /* type of original server                   */
+    ESERV_Type   type;          /* type of original server                   */
 } SSERV_FirewallInfo;
 
 typedef struct {
-    char         pad[8];        /* reserved for the future use, must be zero */
+    char/*bool*/ name;          /* name presence flag                        */
+    char         pad[7];        /* reserved for the future use, must be zero */
 } SSERV_DnsInfo;
 
 
@@ -156,6 +153,8 @@ typedef struct {
     unsigned short      quorum; /* quorum required to override this entry    */
     USERV_Info               u; /* server type-specific data/params          */
 } SSERV_Info;
+
+#define SERV_TIME_INFINITE ((TNCBI_Time)(-1))
 
 
 /* Constructors for the various types of NCBI server meta-addresses
@@ -215,23 +214,25 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *                        Servers of this type do not take any arguments.
  *
  *    NCBID servers: Arguments to CGI in addition to specified by application.
- *                   Empty additional arguments denoted as '' (double quotes).
- *                   Note that arguments must not contain space characters.
+ *                   Empty additional arguments denoted as '' (two single
+ *                   quotes, back to back).  Note that the additional
+ *                   arguments must not contain space characters.
  *
  *    HTTP* servers: Path (required) and args (optional) in the form
  *                   path[?args] (here brackets denote the optional part).
- *                   Note that no spaces allowed within this parameter.
+ *                   Note that no spaces are allowed within these parameters.
  *
  *    FIREWALL servers: Servers of this type are converted real servers of
  *                      the above types, when only accessible via FIREWALL
- *                      mode of NCBI dispatcher. The purpose of this fake
+ *                      mode of NCBI dispatcher.  The purpose of this fake
  *                      server type is just to let the client know that
- *                      the service exists. Additional parameter the original
- *                      type of the server before conversion. Note that servers
- *                      of type FIREWALL cannot be configured in LBSMD.
+ *                      the service exists.  Additional parameter is optional
+ *                      and if present, is the original type of the server
+ *                      before conversion.  Note that servers of this type
+ *                      cannot be configured in LBSMD.
  *
- *    DNS servers: Experimental (as of now) services for load-balancing
- *                 DNS mapping at the NCBI Web entry point.
+ *    DNS servers: Services for DNS and DB load-balancing, 
+ *                 and dynamic ProxyPassing at the NCBI Web entry point.
  *                 Never exported to the outside world.
  *
  * Tags may follow in no particular order but no more than one instance
@@ -356,6 +357,13 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_ReadInfo
  );
 
 
+/* Make (a free()'able) copy of a server info.
+ */
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CopyInfo
+(const SSERV_Info* info
+ );
+
+
 /* Return an actual size (in bytes) the server info occupies
  * (to be used for copying info structures in whole).
  */
@@ -383,6 +391,14 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_EqualInfo
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.h,v $
+ * Revision 6.39  2005/12/23 18:06:53  lavr
+ * fSERV_StatelessOnly -> fSERV_Stateless
+ * fSERV_Any, fSERV_Stateless -> <connect/ncbi_service.h>
+ * +SERV_TIME_INFINITE
+ *
+ * Revision 6.38  2005/12/14 21:20:59  lavr
+ * +SERV_CopyInfo(); DNS type to have name presence flag
+ *
  * Revision 6.37  2003/04/09 19:05:48  siyan
  * Added doxygen support
  *

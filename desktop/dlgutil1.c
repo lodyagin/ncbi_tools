@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.87 $
+* $Revision: 6.97 $
 *
 * File Description: 
 *
@@ -972,8 +972,6 @@ extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual)
 }
 
 extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
-extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
-extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp);
 
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
 
@@ -1208,7 +1206,7 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
       }
       CleanupEvidenceGBQuals (&(sfp->qual));
       VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
-      InferenceDialogToGBQuals (ffp->inference, sfp);
+      InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
       if (ffp->usrobjext != NULL) {
         sfp->ext = DialogToPointer (ffp->usrobjext);
       } else if (sfp->ext == NULL) {
@@ -1392,11 +1390,78 @@ static void RemoveProtXrefs (SeqFeatPtr sfp)
   }  
 }
 
+static CharPtr infDetails [] = {
+  "unknown error",
+  "empty inference string",
+  "bad inference prefix",
+  "bad inference body",
+  "single inference field",
+  "spaces in inference",
+  "same species misused",
+  "bad inference accession",
+  "accession is missing version",
+  "accession.version not public",
+  NULL
+};
+
+extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len, CharPtr badInfMssg)
+
+{
+  GBQualPtr   gbq;
+  Int2        inferenceCode;
+  Boolean     rsult = TRUE;
+  CharPtr     str;
+  SeqFeatPtr  tmp;
+
+  if (ffp == NULL) return FALSE;
+  tmp = SeqFeatNew ();
+  if (tmp == NULL) return FALSE;
+  if (badInfQual != NULL) {
+    *badInfQual = '\0';
+  }
+  if (badInfMssg != NULL) {
+    *badInfMssg = '\0';
+  }
+  InferenceDialogToGBQuals (ffp->inference, tmp, FALSE);
+  for (gbq = tmp->qual; gbq != NULL; gbq = gbq->next) {
+    str = gbq->val;
+    if (StringICmp (gbq->qual, "inference") != 0) continue;
+    inferenceCode = ValidateInferenceQualifier (str, FALSE);
+    if (inferenceCode != VALID_INFERENCE) {
+  	  if (inferenceCode < VALID_INFERENCE || inferenceCode > ACC_VERSION_NOT_PUBLIC) {
+  	    inferenceCode = VALID_INFERENCE;
+  	  }
+  	  if (badInfQual != NULL) {
+        StringNCpy_0 (badInfQual, str, len);
+  	  }
+  	  if (badInfMssg != NULL) {
+        StringCpy (badInfMssg, infDetails [(int) inferenceCode]);
+  	  }
+      rsult = FALSE;
+      break;
+    }
+  }
+  SeqFeatFree (tmp);
+  return rsult;
+}
+
+static CharPtr infWarning1 =
+"Bad inference qualifier!  You must conform to international nucleotide sequence database\nconventions for inference qualifiers!";
+
+static CharPtr infWarning2 =
+"Still has bad inference!  You must conform to international nucleotide sequence database\nconventions for inference qualifiers!";
+
+static CharPtr infAccept =
+"Do you want to accept changes with bad inference data?  The bad qualifier will be converted to a note!";
+
 extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
 
 {
   Char            allele [128];
   MsgAnswer       ans;
+  Int2            attempts = 3;
+  Char            badInfMssg [32];
+  Char            badInfQual [256];
   BioseqPtr       bsp;
   Char            ch;
   Char            desc [128];
@@ -1434,6 +1499,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   SeqLocPtr       old_location = NULL; /* we need the old location of the feature 
                                         * if we're going to do a gene update    
                                         */
+  Boolean         fix_interval_order;
 
   rsult = FALSE;
   ffp = (FeatureFormPtr) GetObjectExtra (f);
@@ -1497,12 +1563,45 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         err_list = ValNodeFree (err_list);    
         return FALSE;
       }
+      if ((! ffp->acceptBadInf) && (! TestInference (ffp, badInfQual, sizeof (badInfQual), badInfMssg))) {
+        (ffp->badInfAttempts)++;
+        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+          attempts = 2;
+        }
+        if (ffp->badInfAttempts < attempts) {
+          if (ffp->badInfAttempts == 2) {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
+          } else {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
+          }
+          return FALSE;
+        } else {
+          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return;
+          ffp->acceptBadInf = TRUE;
+        }
+      }
       bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
       if (bsp != NULL) {
         if (SeqLocBadSortOrder (bsp, sfp->location)) {
-          ans = Message (MSG_YN,
+          fix_interval_order = FALSE;
+          if (StringICmp (sfp->except_text, "trans-splicing") == 0)
+          {
+            ans = Message (MSG_YN, "Your feature intervals are out of order, but this coding region has a trans-splicing exception. Continue without correcting interval order?");
+            if (ans == ANS_NO)
+            {
+              fix_interval_order = TRUE;
+            }
+          }
+          else
+          {
+            ans = Message (MSG_YN,
             "Feature location intervals are out of order.  Do you want them repaired?");
-          if (ans == ANS_YES) {
+            if (ans == ANS_YES)
+            {
+              fix_interval_order = TRUE;
+            }
+          }
+          if (fix_interval_order) {
             hasNulls = LocationHasNullsBetween (sfp->location);
             gslp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, hasNulls);
             if (gslp != NULL) {
@@ -1604,7 +1703,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       if (ompc.input_entityID == 0) {
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
-        InferenceDialogToGBQuals (ffp->inference, sfp);
+        InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1628,7 +1727,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
-        InferenceDialogToGBQuals (ffp->inference, sfp);
+        InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1852,6 +1951,9 @@ extern void StdInitFeatFormProc (ForM f)
 extern void StdFeatFormAcceptButtonProc (ButtoN b)
 
 {
+  Int2            attempts = 3;
+  Char            badInfMssg [32];
+  Char            badInfQual [256];
   FeatureFormPtr  ffp;
   SeqLocPtr       slp;
   WindoW          w;
@@ -1874,6 +1976,23 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b)
         return;
       }
       SeqLocFree (slp);
+      if ((! ffp->acceptBadInf) && (! TestInference (ffp, badInfQual, sizeof (badInfQual), badInfMssg))) {
+        (ffp->badInfAttempts)++;
+        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+          attempts = 2;
+        }
+        if (ffp->badInfAttempts < attempts) {
+          if (ffp->badInfAttempts == 2) {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
+          } else {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
+          }
+          return;
+        } else {
+          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return;
+          ffp->acceptBadInf = TRUE;
+        }
+      }
       Hide (w);
       (ffp->actproc) (ffp->form);
       SeqEntrySetScope (oldscope);
@@ -5735,6 +5854,75 @@ static Pointer IntervalChoiceEditorToSeqLoc (DialoG d)
   }
 }
 
+
+static Boolean WriteIntervalChoiceDialog (DialoG d, CharPtr filename)
+
+{
+  AsnIoPtr          aip;
+  IntervalChoicePtr dlg;
+  SeqLocPtr         slp;
+  Char              path [PATH_MAX];
+#ifdef WIN_MAC
+  FILE            *f;
+#endif
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+      f = FileOpen (path, "r");
+      if (f != NULL) {
+        FileClose (f);
+      } else {
+        FileCreate (path, "TEXT", "ttxt");
+      }
+#endif
+      aip = AsnIoOpen (path, "w");
+      if (aip != NULL) {
+        slp = IntervalChoiceEditorToSeqLoc (dlg->dialog);
+        SeqLocAsnWrite (slp, aip, NULL);
+        AsnIoClose (aip);
+        slp = SeqLocFree (slp);
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+
+static Boolean ReadIntervalChoiceDialog (DialoG d, CharPtr filename)
+
+{
+  AsnIoPtr          aip;
+  IntervalChoicePtr dlg;
+  SeqLocPtr         slp;
+  Char              path [PATH_MAX];
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
+      aip = AsnIoOpen (path, "r");
+      if (aip != NULL) {
+        slp = SeqLocAsnRead (aip, NULL);
+        AsnIoClose (aip);
+        if (slp != NULL) {
+          SeqLocToIntervalChoiceEditor (dlg->dialog, slp);
+          slp = SeqLocFree (slp);
+          Update ();
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+
 static void IntervalChoiceEditorMessage (DialoG d, Int2 mssg)
 
 {
@@ -5927,6 +6115,8 @@ static DialoG CreateIntervalEditorDialogAlnChoice (GrouP h, CharPtr title, Uint2
     dlg->fromdialog = IntervalChoiceEditorToSeqLoc;
     dlg->dialogmessage = IntervalChoiceEditorMessage;
     dlg->testdialog = TestIntervalChoiceEditor;
+    dlg->exportdialog = WriteIntervalChoiceDialog;
+    dlg->importdialog = ReadIntervalChoiceDialog;
 
     g = HiddenGroup (p, 0, 0, NULL);
     dlg->seq_dlg = CreateIntervalEditorDialogExEx (g, title, rows, spacing, sep,

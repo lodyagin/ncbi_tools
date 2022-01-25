@@ -59,6 +59,8 @@ if ($app eq "wblast2.REAL" or $app eq "wblast2_cs.REAL") {
    $Tests{'short-subject-discmb'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000&MEGABLAST=yes\"";
    $Tests{'short-subject-blastn'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000\"";
    $Tests{'bare-fasta'} = "\"PROGRAM=blastn&SEQ=agcctggtaggctgcagtccatggggtcacacagagtcggacatgactgagcgacttcac&SSEQ=agcctggtaggctgcaatccatggggtcgctagagtcggacacgactgagcgacttcac&PROGRAM=blastn&FILTER=1\"";
+   $Tests{'cds_feature_plus'} = "\"ONE=48869482&TWO=60844&FROM=&TO=&FFROM=&TTO=&STRAND=1&FILTER=1&PROGRAM=blastn&cds_translation=on\"";
+   $Tests{'maks_color'} = "\"page=2&match=1&msmatch=-2&gopen=5&gext=2&dropoff=50&expect=10.000000&word=11&Filter=1&view=1&mask_char=2&mask_color=3&cds_translation=on&program=blastn&matrix=0&seq=u93236+&sseq=u93237&from=1&to=2772&ffrom=1&tto=9180\"";
 } else {
   if ($app eq "blast_cs.REAL") {
 

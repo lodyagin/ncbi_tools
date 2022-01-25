@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.79 $
+* $Revision: 6.81 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <edutil.h>
 #include <dlogutil.h>
 #include <import.h>
+#include <seqpanel.h>
 
 #define OBJ_VIRT 254
 
@@ -3682,6 +3683,48 @@ static void PropagateCDS (SeqFeatPtr dup,
   dup->partial = (Boolean) (partial5 || partial3);
 }
 
+
+static SeqAlignPtr CheckForProteinAlignment (ByteStorePtr bs, BioseqPtr match_prot)
+{
+  BioseqPtr   newBsp;
+  SeqAlignPtr salp;
+  SeqEntryPtr nwsep;
+  Boolean     revcomp;
+  ErrSev      oldsev;
+  
+  if (bs == NULL || match_prot == NULL)
+  {
+    return NULL;
+  }
+  newBsp = BioseqNew ();
+  if (newBsp == NULL) {
+    return NULL;
+  }
+
+  newBsp->id = SeqIdParse ("lcl|ProtAlign");
+  newBsp->repr = Seq_repr_raw;
+  newBsp->mol = Seq_mol_aa;
+  newBsp->seq_data_type = Seq_code_ncbieaa;
+  newBsp->seq_data = bs;
+  newBsp->length = BSLen (bs);
+
+  /* create SeqEntry for temporary protein bioseq to live in */
+  nwsep = SeqEntryNew ();
+  nwsep->choice = 1;
+  nwsep->data.ptrvalue = newBsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) newBsp, nwsep);
+
+  oldsev = ErrSetMessageLevel (SEV_MAX);
+  salp = Sequin_GlobalAlign2Seq (match_prot, newBsp, &revcomp);
+  ErrSetMessageLevel (oldsev);
+
+  SeqMgrDeleteFromBioseqIndex (newBsp);
+  /* the calling function will free bs */
+  newBsp->seq_data = NULL;
+  nwsep = SeqEntryFree (nwsep);
+  return salp;
+}
+
 /*------------------------------------------------------------------*/
 /*                                                                  */
 /* CalculateReadingFrame () -- Calculates a sequence's reading      */
@@ -3691,7 +3734,7 @@ static void PropagateCDS (SeqFeatPtr dup,
 /*                                                                  */
 /*------------------------------------------------------------------*/
 
-static Int2 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3)
+static Int2 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr match_prot)
 {
   ByteStorePtr  bs;
   CdRegionPtr   crp;
@@ -3700,6 +3743,8 @@ static Int2 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3)
   Uint1         frame;
   Int2          i;
   CharPtr       protstr;
+  SeqAlignPtr   salp = NULL;
+  Boolean       best_is_aligned = FALSE;
 
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
 
@@ -3726,12 +3771,27 @@ static Int2 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3)
   for (i = 1; i <= 3; i++) {
     crp->frame = (Uint1) i;
     bs = ProteinFromCdRegionEx (sfp, FALSE, FALSE);
+    salp = CheckForProteinAlignment (bs, match_prot);
     len = BSLen (bs);
     BSFree (bs);
-    if (len > max) {
+    if (salp == NULL) 
+    {
+      /* if no alignment, take longest protein */
+      if (! best_is_aligned && len > max) {
+        max = len;
+        frame = (Uint1) i;
+      }
+    } else if (!best_is_aligned) {
+      /* if this is the first alignment encountered, use this */
+      max = len;
+      frame = (Uint1) i;
+      best_is_aligned = TRUE;
+    } else if (len > max) {
+      /* if this is not the first alignment, but the sequence is longer, use this */
       max = len;
       frame = (Uint1) i;
     }
+    salp = SeqAlignFree (salp);
   }
 
   return frame;
@@ -3853,7 +3913,7 @@ PropagateOneFeat
   LocListPtr      llp;
   Uint2           strand;
   ProtRefPtr      prp = NULL;
-  BioseqPtr       pbsp;
+  BioseqPtr       pbsp = NULL;
   SeqFeatPtr      prot;
   
   if (sfp == NULL || sfp->location == NULL) return;
@@ -3956,7 +4016,7 @@ PropagateOneFeat
       case SEQFEAT_CDREGION :
         crp = (CdRegionPtr) dup->data.value.ptrvalue;
         if (crp != NULL) {
-          crp->frame = CalculateReadingFrame (dup, partial3);
+          crp->frame = CalculateReadingFrame (dup, partial3, pbsp);
           frame = crp->frame;
  
           PropagateCodeBreaks (crp, sip,
@@ -6152,3 +6212,80 @@ extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr
   Show (w);
 }
 
+extern SeqAnnotPtr GetSeqAnnotForAlignment (SeqAlignPtr sap)
+{
+  SeqAnnotPtr  sanp = NULL;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  Boolean      found = FALSE;
+  
+  if (sap == NULL)
+  {
+    return NULL;
+  }
+  
+  if (sap->idx.parenttype == OBJ_BIOSEQ)
+  {
+    bsp = (BioseqPtr) sap->idx.parentptr;
+    if (bsp != NULL)
+    {
+      sanp = bsp->annot;
+    }
+  }
+  else if (sap->idx.parenttype == OBJ_BIOSEQSET)
+  {
+    bssp = (BioseqSetPtr) sap->idx.parentptr;
+    if (bssp != NULL)
+    {
+      sanp = bssp->annot;
+    }
+  }
+  else if (sap->idx.parenttype == OBJ_SEQANNOT)
+  {
+    sanp = (SeqAnnotPtr) sap->idx.parentptr;
+  }
+  while (sanp != NULL && !found)
+  {
+    if (sanp->type == 2 && sanp->data == sap)
+    {
+      found = TRUE;
+    }
+    else
+    {
+      sanp = sanp->next;
+    }
+  }
+  return sanp;
+}
+
+extern void ConvertPairwiseToMultipleAlignment (SeqAlignPtr sap)
+{
+  SeqAlignPtr salp, salp_next;
+  
+  salp = sap;
+  while (salp != NULL)
+  {
+     if (salp->saip != NULL)
+     {
+        SeqAlignIndexFree(salp->saip);
+        salp->saip = NULL;
+     }
+     salp = salp->next;
+  }
+  AlnMgr2IndexSeqAlign (sap);
+
+  salp = AlnMgr2GetSubAlign (sap, 0, -1, 0, FALSE);
+  if (salp == NULL) return;
+  AlnMgr2IndexSeqAlign (salp);
+
+  if (sap->idx.prevlink != NULL) {
+    *(sap->idx.prevlink) = (Pointer) salp;
+  }
+
+  while (sap != NULL) {
+    salp_next = sap->next;
+    sap->next = NULL;
+    SeqAlignFree (sap);
+    sap = salp_next;
+  }
+}

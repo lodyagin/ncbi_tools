@@ -23,14 +23,13 @@
 * ===========================================================================*/
 
 /** @file nlm_linear_algebra.c
+ * Basic matrix and vector operations
  *
  * @author E. Michael Gertz
- *
- * Basic matrix and vector operations
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: nlm_linear_algebra.c,v 1.5 2005/12/01 13:49:43 gertz Exp $";
+    "$Id: nlm_linear_algebra.c,v 1.7 2005/12/19 15:37:33 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <math.h>
@@ -38,13 +37,8 @@ static char const rcsid[] =
 #include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/composition_adjustment/nlm_linear_algebra.h>
 
-/**
- * Create and return a new, dense matrix.  Elements of the matrix A
- * may be accessed as A[i][j]
- *
- * @param nrows     the number of rows for the new matrix.
- * @param ncols     the number of columns for the new matrix.
- */
+
+/* Documented in nlm_linear_algebra.h. */
 double **
 Nlm_DenseMatrixNew(int nrows,
                    int ncols)
@@ -69,12 +63,7 @@ Nlm_DenseMatrixNew(int nrows,
 }
 
 
-/**
- * Create and return a new, dense, lower-triangular matrix.  Elements
- * of the matrix A may be accessed as A[i][j] for i <= j.
- *
- * @param n         the dimension of the matrix.
- */
+/* Documented in nlm_linear_algebra.h. */
 double **
 Nlm_LtriangMatrixNew(int n)
 {
@@ -100,13 +89,7 @@ Nlm_LtriangMatrixNew(int n)
 }
 
 
-/**
- * Free a matrix created by Nlm_DenseMatrixNew or
- * Nlm_LtriangMatrixNew.
- *
- * @param mat       the matrix to be freed
- * @return          always NULL
- */
+/* Documented in nlm_linear_algebra.h. */
 void
 Nlm_DenseMatrixFree(double *** mat)
 {
@@ -118,13 +101,7 @@ Nlm_DenseMatrixFree(double *** mat)
 }
 
 
-/**
- * Create and return a new Int4 matrix.  Elements of the matrix A
- * may be accessed as A[i][j]
- *
- * @param nrows     the number of rows for the new matrix.
- * @param ncols     the number of columns for the new matrix.
- */
+/* Documented in nlm_linear_algebra.h. */
 Int4 ** Nlm_Int4MatrixNew(int nrows, int ncols)
 {
     int i;             /* iteration index */
@@ -147,13 +124,7 @@ Int4 ** Nlm_Int4MatrixNew(int nrows, int ncols)
 }
 
 
-/**
- * Free a matrix created by Nlm_DenseMatrixNew or
- * Nlm_LtriangMatrixNew.
- *
- * @param mat       the matrix to be freed
- * @return          always NULL
- */
+/* Documented in nlm_linear_algebra.h. */
 void
 Nlm_Int4MatrixFree(Int4 *** mat)
 {
@@ -164,19 +135,8 @@ Nlm_Int4MatrixFree(Int4 *** mat)
     *mat = NULL;
 }
 
-/**
- * Accessing only the lower triangular elements of the symmetric,
- * positive definite matrix A, compute a lower triangular matrix L
- * such that A = L L^T (Cholesky factorization.)  Overwrite the lower
- * triangle of A with L.
- *
- * This routine may be used with the Nlm_SolveLtriangPosDef routine to
- * solve systems of equations.
- *
- * @param A         the lower triangle of a symmetric, positive-definite
- *                  matrix
- * @param n         the size of A
- */
+
+/* Documented in nlm_linear_algebra.h. */
 void
 Nlm_FactorLtriangPosDef(double ** A, int n)
 {
@@ -201,17 +161,8 @@ Nlm_FactorLtriangPosDef(double ** A, int n)
 }
 
 
-/**
- * Solve the linear system L L\T y = b, where L is a non-singular
- * lower triangular matrix, usually computed using
- * the Nlm_FactorLtriangPosDef routine.
- *
- * @param x         on entry, the right hand size of the linear system
- *                  L L\T y = b; on exit the solution
- * @param n         the size of x
- * @param L         a non-singular lower triangular matrix
- */
-void Nlm_SolveLtriangPosDef(double * x, int n,
+/* Documented in nlm_linear_algebra.h. */
+void Nlm_SolveLtriangPosDef(double x[], int n,
                             double ** L )
 {
     int i, j;                   /* iteration indices */
@@ -239,17 +190,9 @@ void Nlm_SolveLtriangPosDef(double * x, int n,
 }
 
 
-/**
- * Compute the Euclidean norm (2-norm) of a vector.
- *
- * This routine is based on the (freely available) BLAS routine dnrm2,
- * which handles the scale of the elements of v in a stable fashion.
- *
- * @param v      a vector
- * @param n      the length of v
- */
+/* Documented in nlm_linear_algebra.h. */
 double
-Nlm_EuclideanNorm(const double * v, int n)
+Nlm_EuclideanNorm(const double v[], int n)
 {
     double sum   = 1.0;   /* sum of squares of elements in v */
     double scale = 0.0;   /* a scale factor for the elements in v */
@@ -270,14 +213,8 @@ Nlm_EuclideanNorm(const double * v, int n)
 }
 
 
-/**
- * Let y = y + alpha * x
- *
- * @param y         a vector
- * @param x         another vector
- * @param n         the length of x and y
- */
-void Nlm_AddVectors(double * y, int n, double alpha, const double * x)
+/* Documented in nlm_linear_algebra.h. */
+void Nlm_AddVectors(double y[], int n, double alpha, const double x[])
 {
     int i;                     /* iteration index */
 
@@ -287,17 +224,9 @@ void Nlm_AddVectors(double * y, int n, double alpha, const double * x)
 }
 
 
-/**
- * Given a nonnegative vector x and a nonnegative scalar max, returns
- * the largest value in [0, max] for which x + alpha * step_x >= 0.
- *
- * @param x         a vector with nonnegative elements
- * @param step_x    another vector
- * @param n         the size of x and step_x
- * @param max       a nonnegative scalar
- */
+/* Documented in nlm_linear_algebra.h. */
 double
-Nlm_StepBound(const double * x, int n, const double * step_x, double max)
+Nlm_StepBound(const double x[], int n, const double step_x[], double max)
 {
     int i;                 /* iteration index */
     double alpha = max;    /* current largest permitted step */

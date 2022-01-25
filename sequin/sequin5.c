@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.434 $
+* $Revision: 6.447 $
 *
 * File Description:
 *
@@ -71,7 +71,7 @@
 #include <import.h>
 #include <salutil.h>
 
-#include <asn2gnbp.h> /* added for mockup parse to flatfile */
+#include <asn2gnbp.h> /* added for  parse to flatfile */
 #include <seqpanel.h> /* added to include SeqEdTranslateOneCDS */
 #include <salpanel.h>
 
@@ -3015,6 +3015,7 @@ static GbFeatName EditQualifierList[] = {
 };
 
 const Int4 NumEditQualifiers = sizeof (EditQualifierList) / sizeof (GbFeatName);
+#define QUAL_EVIDENCE 13
 #define QUAL_EXPERIMENT 15
 
 static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
@@ -3044,8 +3045,8 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Forma",                  25},
   {"Forma-specialis",        26},
   {"Frequency",             113},
-  {"Fwd-primer-name",       135},
-  {"Fwd-primer-seq",        133},
+  {"Fwd-PCR-primer-name",   135},
+  {"Fwd-PCR-primer-seq",    133},
   {"Genotype",              106},
   {"Germline",              114},
   {"Group",                  15},
@@ -3066,8 +3067,8 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Plastid-name",          122},
   {"Pop-variant",           117},
   {"Rearranged",            115},
-  {"Rev-primer-name",       136},
-  {"Rev-primer-seq",        134},
+  {"Rev-PCR-primer-name",   136},
+  {"Rev-PCR-primer-seq",    134},
   {"Segment",               124},
   {"Serogroup",               8},
   {"Serotype",                7},
@@ -3479,11 +3480,12 @@ extern ValNodePtr ValNodeFuncFree (ValNodePtr vnp, FreeValNodeProc free_vn_proc)
   return NULL;
 }
 
-static ChoiceConstraintPtr ChoiceConstraintFree (ChoiceConstraintPtr scp)
+extern ChoiceConstraintPtr ChoiceConstraintFree (ChoiceConstraintPtr scp)
 {
   if (scp == NULL) return NULL;
   scp->qual_choice = ValNodeFuncFree (scp->qual_choice, scp->free_vn_proc);
   scp->string_constraint = StringConstraintFree (scp->string_constraint);
+  scp->pseudo_constraint = MemFree (scp->pseudo_constraint);
   scp = MemFree (scp);
   return scp;
 }
@@ -5575,6 +5577,17 @@ static CharPtr GetGBQualString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr fsp
     {
         str = GetDbxrefString (sfp);
     }
+    else if (StringICmp (EditQualifierList [field_choice - 1].name, "evidence") == 0)
+    {
+      if (sfp->exp_ev == 1)
+      {
+        str = StringSave ("experimental");
+      }
+      else if (sfp->exp_ev == 2)
+      {
+        str = StringSave ("non-experimental");
+      }
+    }
     else
     {
       gbqual = sfp->qual;
@@ -5976,6 +5989,144 @@ static void RemoveGBQualField (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fs
   {
     gbqual_next = gbqual->next;
     if (StringCmp (gbqual->qual, EditQualifierList[avp->field_list->data.intvalue - 1].name) == 0)
+    {
+      if (gbqual_last == NULL)
+      {
+        sfp->qual = gbqual->next;
+      }
+      else
+      {
+        gbqual_last->next = gbqual->next;
+      }
+      gbqual->next = NULL;
+      GBQualFree (gbqual);
+    }
+    else
+    {
+      gbqual_last = gbqual;
+    }
+    gbqual = gbqual_next;
+  }
+}
+
+
+static void RemoveGoTerm (SeqFeatPtr sfp, CharPtr term_name)
+{
+  UserObjectPtr       uop;
+  ObjectIdPtr         oip;
+  UserFieldPtr  curr, curr_next, prev = NULL;
+  
+  if (sfp == NULL || sfp->ext == NULL || StringHasNoText (term_name))
+  {
+    return;
+  }
+
+  uop = (UserObjectPtr) sfp->ext;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "GeneOntology") != 0) return;
+  
+  for (curr = uop->data; curr != NULL; curr = curr_next)
+  {
+    curr_next = curr->next;
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, term_name) == 0)
+    {
+      if (prev == NULL)
+      {
+        uop->data = curr->next;
+      }
+      else
+      {
+        prev->next = curr->next;
+      }
+      curr->next = NULL;
+      UserFieldFree (curr);
+    }
+    else
+    {
+      prev = curr;
+    }
+  }
+ 
+  if (uop->data == NULL)
+  {
+    sfp->ext = UserObjectFree (sfp->ext);
+  }
+ 
+}
+
+
+static void RemoveGBQualByNameConstraint (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  GBQualPtr           gbqual, gbqual_last = NULL, gbqual_next;
+  RnaRefPtr           rrp;
+  GeneRefPtr          grp;
+  StringConstraintPtr scp;
+  
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  scp = (StringConstraintPtr) userdata;
+  if (scp == NULL)
+  {
+    return;
+  }
+  
+  if (DoesStringMatchConstraint ("note", scp))
+  {
+    sfp->comment = MemFree (sfp->comment);
+  }
+  
+  if (DoesStringMatchConstraint ("exception", scp))
+  {
+    sfp->except_text = MemFree (sfp->except_text);
+  }
+
+  if (DoesStringMatchConstraint ("product", scp) && sfp->data.choice == SEQFEAT_RNA)
+  {
+    rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+    if (rrp != NULL && rrp->ext.choice == 1)
+    {
+      rrp->ext.choice = 0;
+      rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    }
+  }
+  
+  if (DoesStringMatchConstraint ("map", scp) && sfp->data.choice == SEQFEAT_GENE)
+  {
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+    if (grp != NULL)
+    {
+      grp->maploc = MemFree (grp->maploc);
+    }
+  }
+  
+  if (DoesStringMatchConstraint ("db_xref", scp))
+  {
+    sfp->dbxref = RemoveDbxrefList (sfp->dbxref);
+  }
+  
+  if (DoesStringMatchConstraint ("go_process", scp))
+  {
+    RemoveGoTerm (sfp, "process");
+  }
+  
+  if (DoesStringMatchConstraint ("go_function", scp))
+  {
+    RemoveGoTerm (sfp, "function");
+  }
+
+  if (DoesStringMatchConstraint ("go_component", scp))
+  {
+    RemoveGoTerm (sfp, "component");
+  }
+
+  gbqual = sfp->qual;
+  while (gbqual != NULL)
+  {
+    gbqual_next = gbqual->next;
+    if (DoesStringMatchConstraint (gbqual->qual, scp))
     {
       if (gbqual_last == NULL)
       {
@@ -6437,7 +6588,7 @@ static CharPtr gene_field_list [] =
 #define GENEFIELD_SYNONYM       7
 #define GENEFIELD_OLD_LOCUS_TAG 8
 
-static num_gene_fields = sizeof (gene_field_list) / sizeof (CharPtr);
+static int num_gene_fields = sizeof (gene_field_list) / sizeof (CharPtr);
 
 extern DialoG 
 GeneFieldSelectionDialog
@@ -6796,7 +6947,7 @@ static CharPtr mrna_field_list [] =
 #define MRNAFIELD_PRODUCT     1
 #define MRNAFIELD_COMMENT     2
 
-static num_mrna_fields = sizeof (mrna_field_list) / sizeof (CharPtr);
+static int num_mrna_fields = sizeof (mrna_field_list) / sizeof (CharPtr);
 
 extern DialoG 
 MRNAFieldSelectionDialog
@@ -6929,6 +7080,11 @@ static void SetmRNAFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr f
   switch (avp->field_list->data.intvalue)
   {
     case MRNAFIELD_PRODUCT:
+      if (rrp->ext.choice == 0)
+      {
+        rrp->ext.choice = 1;
+        rrp->ext.value.ptrvalue = NULL;
+      }    
       rrp->ext.value.ptrvalue = HandleApplyValue (rrp->ext.value.ptrvalue, avp);
       break;
     case MRNAFIELD_COMMENT:
@@ -6985,7 +7141,7 @@ static CharPtr protein_field_list [] =
   "name", "description", "E.C. number", "activity", "comment", "mat_peptide name", "mat_peptide comment"
 };
 
-static num_protein_fields = sizeof (protein_field_list) / sizeof (CharPtr);
+static int num_protein_fields = sizeof (protein_field_list) / sizeof (CharPtr);
 
 extern DialoG 
 ProteinFieldSelectionDialog
@@ -7596,7 +7752,7 @@ static CharPtr GetRNASubtypeName (ValNodePtr vnp)
 {
   CharPtr label = NULL;
   
-  if (vnp != NULL && vnp->choice >= 0 && vnp->choice < num_rna_subtypes)
+  if (vnp != NULL && vnp->choice < num_rna_subtypes)
   {
     label = StringSave (rna_subtype_list[vnp->choice]);
   }
@@ -8105,7 +8261,7 @@ static CharPtr biosrc_string_list [] =
   "Organism Name", "Lineage", "Division"
 };
 
-static num_biosrc_strings = sizeof (biosrc_string_list) / sizeof (CharPtr);
+static int num_biosrc_strings = sizeof (biosrc_string_list) / sizeof (CharPtr);
 
 extern DialoG BioSourceStringDialog 
 (GrouP                    h,
@@ -8760,6 +8916,151 @@ extern DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn)
   return (DialoG) p;
 }
 
+
+typedef struct pseudoconstraintdialog 
+{
+  DIALOG_MESSAGE_BLOCK
+  GrouP  pseudo_choice;  
+  DialoG feature_choice;
+} PseudoConstraintDialogData, PNTR PseudoConstraintDialogPtr;
+
+static ENUM_ALIST(pseudoconstraint_alist)
+{"Any Feature",   FEATDEF_ANY  },
+{"CDS",   FEATDEF_CDS  },
+{"Gene",  FEATDEF_GENE },
+{"mRNA",  FEATDEF_mRNA },
+END_ENUM_ALIST
+
+static void ResetPseudoConstraintDialog (PseudoConstraintDialogPtr pcdp)
+{
+  if (pcdp != NULL)
+  {
+    SetValue (pcdp->pseudo_choice, 1);
+    SendMessageToDialog (pcdp->feature_choice, VIB_MSG_INIT);
+  }
+}
+
+static void PseudoConstraintToDialog (DialoG d, Pointer data)
+{
+  PseudoConstraintDialogPtr pcdp;
+  PseudoConstraintPtr       pcp;
+  ValNode                   vn;
+
+  pcdp = (PseudoConstraintDialogPtr) GetObjectExtra (d);
+  
+  if (pcdp != NULL)
+  {
+    ResetPseudoConstraintDialog (pcdp);
+    pcp = (PseudoConstraintPtr) data;
+    if (pcp != NULL)
+    {
+      if (pcp->is_pseudo)
+      {
+        SetValue (pcdp->pseudo_choice, 1);
+      }
+      else
+      {
+        SetValue (pcdp->pseudo_choice, 2);
+      }
+      vn.choice = pcp->featdef_type;
+      vn.data.ptrvalue = NULL;
+      vn.next = NULL;
+      PointerToDialog (pcdp->feature_choice, &vn);
+    }
+  }
+}
+
+static Pointer DialogToPseudoConstraint (DialoG d)
+{
+  PseudoConstraintDialogPtr pcdp;
+  PseudoConstraintPtr       pcp;  
+  ValNodePtr                vnp;
+
+  pcdp = (PseudoConstraintDialogPtr) GetObjectExtra (d);
+  if (pcdp == NULL) return NULL;
+  pcp = (PseudoConstraintPtr) MemNew (sizeof (PseudoConstraintData));
+  if (pcp != NULL)
+  {
+    if (GetValue (pcdp->pseudo_choice) == 1)
+    {
+      pcp->is_pseudo = TRUE;
+    }
+    else
+    {
+      pcp->is_pseudo = FALSE;
+    }
+    vnp = DialogToPointer (pcdp->feature_choice);
+    if (vnp == NULL)
+    {
+      pcp->featdef_type = FEATDEF_ANY;
+    }
+    else
+    {
+      pcp->featdef_type = vnp->choice;
+    }
+    ValNodeFreeData (vnp);
+  }
+  return pcp;
+}
+
+static void PseudoConstraintMessage (DialoG d, Int2 mssg)
+
+{
+  PseudoConstraintDialogPtr pcdp;
+
+  pcdp = (PseudoConstraintDialogPtr) GetObjectExtra (d);
+  if (pcdp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_INIT :
+        ResetPseudoConstraintDialog (pcdp);        
+        break;
+      case VIB_MSG_ENTER :
+        Select (pcdp->feature_choice);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static ValNodePtr TestPseudoConstraintDialog (DialoG d)
+
+{
+  return NULL;
+}
+
+static DialoG PseudoConstraintDialog (GrouP h)
+{
+  PseudoConstraintDialogPtr pcdp;
+  GrouP                     p;
+  
+  pcdp = (PseudoConstraintDialogPtr) MemNew (sizeof (PseudoConstraintDialogData));
+  if (pcdp == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetObjectExtra (p, pcdp, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  pcdp->dialog = (DialoG) p;
+  pcdp->todialog = PseudoConstraintToDialog;
+  pcdp->fromdialog = DialogToPseudoConstraint;
+  pcdp->dialogmessage = PseudoConstraintMessage;
+  pcdp->testdialog = TestPseudoConstraintDialog;
+
+  pcdp->feature_choice = EnumAssocSelectionDialog (p, pseudoconstraint_alist,
+                                                   "feature", FALSE, NULL, NULL);
+
+  pcdp->pseudo_choice = HiddenGroup (p, 2, 0, NULL);
+  RadioButton (pcdp->pseudo_choice, "Is Pseudo");
+  RadioButton (pcdp->pseudo_choice, "Is Not Pseudo");
+  SetValue (pcdp->pseudo_choice, 1);
+  
+  return (DialoG) p;  
+}
+
 typedef struct choiceconstraintdialog 
 {
   DIALOG_MESSAGE_BLOCK
@@ -8767,6 +9068,7 @@ typedef struct choiceconstraintdialog
   DialoG              present_qual_choice;
   DialoG              string_qual_choice;
   DialoG              string_constraint;
+  DialoG              pseudo_constraint;
   FreeValNodeProc     free_vn_proc;
   CopyValNodeDataProc copy_vn_proc;
 } ChoiceConstraintDialogData, PNTR ChoiceConstraintDialogPtr;
@@ -8788,18 +9090,28 @@ static void ChangeChoiceConstraintType (GrouP p)
     Enable (scdp->present_qual_choice);
     Disable (scdp->string_qual_choice);
     Disable (scdp->string_constraint);
+    SafeDisable (scdp->pseudo_constraint);
   }
   else if (constraint_type == CHOICE_CONSTRAINT_STRING)
   {
     Enable (scdp->string_qual_choice);
     Enable (scdp->string_constraint);
     Disable (scdp->present_qual_choice);
+    SafeDisable (scdp->pseudo_constraint);
+  }
+  else if (constraint_type == CHOICE_CONSTRAINT_PSEUDO)
+  {
+    Disable (scdp->present_qual_choice);
+    Disable (scdp->string_qual_choice);
+    Disable (scdp->string_constraint);
+    Enable (scdp->pseudo_constraint);
   }
   else
   {
     Disable (scdp->present_qual_choice);
     Disable (scdp->string_qual_choice);
     Disable (scdp->string_constraint);
+    SafeDisable (scdp->pseudo_constraint);
   }
 }
 
@@ -8811,6 +9123,7 @@ static void ResetChoiceConstraintDialog (ChoiceConstraintDialogPtr scdp)
     PointerToDialog (scdp->present_qual_choice, NULL);
     PointerToDialog (scdp->string_qual_choice, NULL);
     PointerToDialog (scdp->string_constraint, NULL);
+    PointerToDialog (scdp->pseudo_constraint, NULL);
     ChangeChoiceConstraintType (scdp->constraint_type);
   }
 }
@@ -8834,7 +9147,7 @@ static void ChoiceConstraintToDialog (DialoG d, Pointer data)
   else
   {
     constraint_type = src_data->constraint_type;
-    if (constraint_type < CHOICE_CONSTRAINT_ANY || constraint_type > CHOICE_CONSTRAINT_STRING)
+    if (constraint_type < CHOICE_CONSTRAINT_ANY || constraint_type > CHOICE_CONSTRAINT_PSEUDO)
     {
       constraint_type = CHOICE_CONSTRAINT_ANY;
     }
@@ -8847,6 +9160,10 @@ static void ChoiceConstraintToDialog (DialoG d, Pointer data)
     {
       PointerToDialog (src_dlg->string_qual_choice, src_data->qual_choice);
       PointerToDialog (src_dlg->string_constraint, src_data->string_constraint);
+    }
+    else if (constraint_type == CHOICE_CONSTRAINT_PSEUDO)
+    {
+      PointerToDialog (src_dlg->pseudo_constraint, src_data->pseudo_constraint);
     }
     ChangeChoiceConstraintType (src_dlg->constraint_type);
   }
@@ -8875,6 +9192,10 @@ static Pointer DialogToChoiceConstraint (DialoG d)
     {
       src_data->qual_choice = DialogToPointer (src_dlg->string_qual_choice);
       src_data->string_constraint = DialogToPointer (src_dlg->string_constraint);
+    }
+    else if (src_data->constraint_type == CHOICE_CONSTRAINT_PSEUDO)
+    {
+      src_data->pseudo_constraint = DialogToPointer (src_dlg->pseudo_constraint);
     }
     src_data->free_vn_proc = src_dlg->free_vn_proc;
     src_data->copy_vn_proc = src_dlg->copy_vn_proc;
@@ -8917,7 +9238,8 @@ ConstraintChoiceDialog
  CopyValNodeDataProc       copy_vn_proc,
  CharPtr                   any_name,
  CharPtr                   present_name,
- Boolean                   clear_btn)
+ Boolean                   clear_btn,
+ Boolean                   use_pseudo)
 {
   ChoiceConstraintDialogPtr scdp;
   GrouP                     p, q;
@@ -8951,6 +9273,16 @@ ConstraintChoiceDialog
   scdp->string_qual_choice = func_string (q, TRUE, NULL, NULL);
   scdp->string_constraint = StringConstraintDialog (q, NULL, FALSE);
   
+  if (use_pseudo)
+  {
+    RadioButton (scdp->constraint_type, "When");
+    scdp->pseudo_constraint = PseudoConstraintDialog (scdp->constraint_type);
+  }
+  else
+  {
+    scdp->pseudo_constraint = NULL;
+  }
+  
   SetValue (scdp->constraint_type, CHOICE_CONSTRAINT_ANY);
   SetObjectExtra (scdp->constraint_type, scdp, NULL);
 
@@ -8979,7 +9311,8 @@ extern DialoG SourceConstraintDialog (GrouP h, Boolean clear_btn)
                                  ValNodeSimpleDataFree,
                                  SourceQualValNodeDataCopy,
                                  "For any source", "When qualifier present:",
-                                 clear_btn);
+                                 clear_btn,
+                                 FALSE);
 }
 
 static ValNodePtr CDSGeneProtValNodeDataCopy (ValNodePtr vnp)
@@ -9000,7 +9333,7 @@ extern DialoG CDSGeneProtConstraintDialog (GrouP h, Boolean clear_btn)
                                  NULL, IntValNodeCopy,
                                  "For any CDS-Gene-Prot-mRNA set", 
                                  "When field present:", 
-                                 clear_btn);
+                                 clear_btn, TRUE);
 }
 
 typedef struct locationconstraintdialog 
@@ -10054,7 +10387,7 @@ static Boolean DoesSourceHaveQualPresent (BioSourcePtr biop, ValNodePtr qual_lis
   return qual_found;
 }
 
-static Boolean 
+extern Boolean 
 DoesOneSourceMatchConstraint 
 (BioSourcePtr biop, ChoiceConstraintPtr scp)
 {
@@ -10440,6 +10773,8 @@ extern GetSamplePtr GetSampleNew (void)
     gsp->all_same = TRUE;
     gsp->sample_text = NULL;
     gsp->num_found = 0;
+    gsp->feat_dest_list = NULL;
+    gsp->descr_dest_list = NULL;
     
     gsp->fieldstring_func = NULL;
     gsp->descrstring_func = NULL;
@@ -10460,6 +10795,8 @@ extern GetSamplePtr GetSampleFree (GetSamplePtr gsp)
       (gsp->free_vn_proc)(gsp->requested_field);
     }
     gsp->requested_field = ValNodeFree (gsp->requested_field);
+    gsp->feat_dest_list = ValNodeFree (gsp->feat_dest_list);
+    gsp->descr_dest_list = ValNodeFree (gsp->descr_dest_list);
     gsp = MemFree (gsp);
   }
   return gsp;
@@ -10468,6 +10805,7 @@ extern GetSamplePtr GetSampleFree (GetSamplePtr gsp)
 static GetSamplePtr GetSampleCopy (GetSamplePtr gsp)
 {
   GetSamplePtr copy_gsp;
+  ValNodePtr   copy_vnp;
   
   if (gsp == NULL)
   {
@@ -10488,8 +10826,63 @@ static GetSamplePtr GetSampleCopy (GetSamplePtr gsp)
     copy_gsp->sample_text = StringSave (gsp->sample_text);
     copy_gsp->num_found = gsp->num_found;
     copy_gsp->all_same = gsp->all_same;
+    
+    copy_vnp = gsp->feat_dest_list;
+    copy_gsp->feat_dest_list = NULL;
+    while (copy_vnp != NULL)
+    {
+      ValNodeAddPointer (&(copy_gsp->feat_dest_list), copy_vnp->choice, copy_vnp->data.ptrvalue);
+      copy_vnp = copy_vnp->next;
+    }
+    
+    copy_vnp = gsp->descr_dest_list;
+    copy_gsp->descr_dest_list = NULL;
+    while (copy_vnp != NULL)
+    {
+      ValNodeAddPointer (&(copy_gsp->descr_dest_list), copy_vnp->choice, copy_vnp->data.ptrvalue);
+      copy_vnp = copy_vnp->next;
+    }
+    
   }
   return copy_gsp;
+}
+
+static ValNodePtr AddValNodeLists (ValNodePtr vnp1, ValNodePtr vnp2)
+{
+  ValNodePtr new_list = NULL, copy_vnp, check_vnp;
+  
+  /* copy first list */
+  copy_vnp = vnp1;
+  while (copy_vnp != NULL)
+  {
+    ValNodeAddPointer (&(new_list), copy_vnp->choice, copy_vnp->data.ptrvalue);
+    copy_vnp = copy_vnp->next;
+  }
+      
+  copy_vnp = vnp2;
+  while (copy_vnp != NULL)
+  {
+    /* check to see if destination is already in the list */
+  	check_vnp = new_list;
+   	while (check_vnp != NULL && check_vnp->data.ptrvalue != copy_vnp->data.ptrvalue)
+   	{
+      check_vnp = check_vnp->next;
+    }
+      
+    if (check_vnp == NULL)
+    {
+      /* add to list if not present */
+      ValNodeAddPointer (&new_list, copy_vnp->choice, copy_vnp->data.ptrvalue);
+    }
+    else if (check_vnp->choice < 250)
+    {
+      /* do not increase choice beyond 250 */
+      check_vnp->choice ++;
+    }
+      	
+    copy_vnp = copy_vnp->next;
+  }
+  return new_list;
 }
 
 static GetSamplePtr GetSampleAdd (GetSamplePtr gsp1, GetSamplePtr gsp2)
@@ -10539,6 +10932,10 @@ static GetSamplePtr GetSampleAdd (GetSamplePtr gsp1, GetSamplePtr gsp2)
       {
         sum_gsp->all_same = FALSE;
       }
+      
+      /* combine destination lists */
+      sum_gsp->feat_dest_list = AddValNodeLists (gsp1->feat_dest_list, gsp2->feat_dest_list);
+            
     }
   }
   return sum_gsp;
@@ -10549,6 +10946,7 @@ static void GetSampleFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSe
 {
   GetSamplePtr cp;
   CharPtr      str;
+  ValNodePtr   check_vnp;
   
   if (sfp == NULL || userdata == NULL)
   {
@@ -10561,8 +10959,26 @@ static void GetSampleFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSe
     return;
   }
   
+  check_vnp = cp->feat_dest_list;
+  while (check_vnp != NULL && check_vnp->data.ptrvalue != sfp)
+  {
+    check_vnp = check_vnp->next;
+  }
+  if (check_vnp == NULL)
+  {
+    ValNodeAddPointer (&(cp->feat_dest_list), 1, sfp);
+  }
+  else
+  {
+    if (check_vnp->choice < 250)
+    {
+      check_vnp->choice ++;
+    }
+    return;
+  }
+  
   str = cp->fieldstring_func (sfp, cp->requested_field, NULL);
-  if (!StringHasNoText (str))
+  if (!StringHasNoText (str) || (fsp != NULL && fsp->scp != NULL && fsp->scp->not_present))
   {
     cp->num_found ++;
     if (cp->sample_text == NULL)
@@ -10584,6 +11000,7 @@ static void GetSampleDescriptorCallback (SeqDescrPtr sdp, Pointer userdata, Filt
 {
   GetSamplePtr cp;
   CharPtr      str;
+  ValNodePtr   check_vnp;
   
   if (sdp == NULL || userdata == NULL)
   {
@@ -10596,6 +11013,24 @@ static void GetSampleDescriptorCallback (SeqDescrPtr sdp, Pointer userdata, Filt
     return;
   }
   
+  check_vnp = cp->descr_dest_list;
+  while (check_vnp != NULL && check_vnp->data.ptrvalue != sdp)
+  {
+    check_vnp = check_vnp->next;
+  }
+  if (check_vnp == NULL)
+  {
+    ValNodeAddPointer (&(cp->descr_dest_list), 1, sdp);
+  }
+  else
+  {
+    if (check_vnp->choice < 250)
+    {
+      check_vnp->choice ++;
+    }
+    return;
+  }
+
   str = cp->descrstring_func (sdp, cp->requested_field, NULL);
   if (!StringHasNoText (str))
   {
@@ -11346,7 +11781,7 @@ static CharPtr parse_src_field_list [] =
   "Definition Line", "GenBank Flatfile", "Local ID", "Organism Name", "Comment", "Bankit Comment"  
 };
 
-static num_parse_src_fields = sizeof (parse_src_field_list) / sizeof (CharPtr);
+static int num_parse_src_fields = sizeof (parse_src_field_list) / sizeof (CharPtr);
 
 extern DialoG ParseFieldSourceDialog
 (GrouP                    h,
@@ -11685,6 +12120,9 @@ static void RefreshSampleDialog (SampleDialogPtr dlg)
     gsd.requested_field = sample_field;
     gsd.num_found = 0;
     gsd.all_same = TRUE;
+    gsd.feat_dest_list = NULL;
+    gsd.descr_dest_list = NULL;
+    
     OperateOnSeqEntryConstrainedObjects (sep, dlg->ssp->fsp, GetSampleFeatureCallback, 
                                          GetSampleDescriptorCallback,
                                          0, 0, 0, &gsd);
@@ -12722,6 +13160,1365 @@ static void ParseFromSource (BioSourcePtr biop, ParseActionPtr pap, ParseActionO
   {
     ParseActionTaxnameText (biop, paop);
   }
+}
+
+typedef struct parsesourceinfo 
+{
+  BioseqPtr   bsp;
+  SeqFeatPtr  sfp;
+  SeqDescrPtr sdp;
+  SeqIdPtr    sip;
+  ValNodePtr  dest_list; /* Choice: 1 indicates feature, 2 indicates descriptor */
+  CharPtr     parse_src_txt;
+} ParseSourceInfoData, PNTR ParseSourceInfoPtr;
+
+static ParseSourceInfoPtr ParseSourceInfoNew (void)
+{
+  ParseSourceInfoPtr psip;
+  
+  psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+  if (psip != NULL)
+  {
+    psip->bsp = NULL;
+    psip->sfp = NULL;
+    psip->sdp = NULL;
+    psip->sip = NULL;
+    psip->dest_list = NULL;
+    psip->parse_src_txt = NULL;
+  }
+  return psip;
+}
+
+static ParseSourceInfoPtr ParseSourceInfoFree (ParseSourceInfoPtr psip)
+{
+  if (psip != NULL)
+  {
+    psip->dest_list = ValNodeFree (psip->dest_list);
+    psip->parse_src_txt = MemFree (psip->parse_src_txt);
+    psip = MemFree (psip);
+  }
+  return psip;
+}
+
+static ValNodePtr ParseSourceListFree (ValNodePtr vnp)
+{
+  if (vnp != NULL)
+  {
+    ParseSourceListFree (vnp->next);
+    vnp->next = NULL;
+    vnp->data.ptrvalue = ParseSourceInfoFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+  }
+  return vnp;
+}
+
+typedef struct parsesource
+{
+  Int4           src_field;
+  FilterSetPtr   fsp;
+  ParseFieldPtr  dst_field_data;
+  ValNodePtr     source_list; /* ptrvalue points to ParseSourceInfo struct */
+  TextPortionPtr tp;
+} ParseSourceData, PNTR ParseSourcePtr;
+
+
+static void 
+GetDeflineSourcesForBioseq 
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ ValNodePtr PNTR source_list)
+{
+  SeqDescrPtr        sdp;
+  SeqMgrDescContext  dcontext;
+  ParseSourceInfoPtr psip;
+  CharPtr            found_loc = NULL, parse_src_txt;
+  Int4               found_len = 0;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+  while (sdp != NULL)
+  {
+    if (fsp == NULL
+        || fsp->ccp == NULL
+        || DoesStringMatchConstraint (sdp->data.ptrvalue, fsp->ccp->string_constraint))
+    {
+      FindTextPortionInString (sdp->data.ptrvalue, tp, &found_loc, &found_len);
+      if (found_loc != NULL)
+      {
+        parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+        StringNCpy (parse_src_txt, found_loc, found_len);
+        parse_src_txt [found_len] = 0;
+      
+        psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+        if (psip != NULL)
+        {
+          psip->bsp = bsp;
+          psip->sdp = sdp;
+          psip->sfp = NULL;
+          psip->sip = NULL;
+          psip->dest_list = NULL;
+          psip->parse_src_txt = parse_src_txt;
+          ValNodeAddPointer (source_list, 0, psip);
+        }
+        else
+        {
+          parse_src_txt = MemFree (parse_src_txt);
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_title, &dcontext);
+  }
+}
+
+static void
+GetLocalIDSourcesForBioseq
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ ValNodePtr PNTR source_list)
+{
+  SeqIdPtr           sip;
+  ParseSourceInfoPtr psip;
+  Char               id_str [128];
+  CharPtr            src_str, found_loc = NULL, parse_src_txt;
+  Int4               found_len;
+  ObjectIdPtr        oip;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sip = bsp->id;
+  while (sip != NULL)
+  {
+    if (sip->choice == SEQID_LOCAL)
+    {
+      SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
+      if (fsp == NULL
+          || fsp->ccp == NULL
+          || DoesStringMatchConstraint (id_str, fsp->ccp->string_constraint))
+      {
+        oip = (ObjectIdPtr) sip->data.ptrvalue;
+        if (oip->str == NULL)
+        {
+          sprintf (id_str, "%d", oip->id);
+          src_str = id_str;
+        }
+        else
+        {
+          src_str = oip->str;
+        }
+        FindTextPortionInString (src_str, tp, &found_loc, &found_len);
+        if (found_loc != NULL)
+        {
+          parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+          StringNCpy (parse_src_txt, found_loc, found_len);
+          parse_src_txt [found_len] = 0;
+          psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+          if (psip != NULL)
+          {
+            psip->bsp = bsp;
+            psip->sdp = NULL;
+            psip->sfp = NULL;
+            psip->sip = sip;
+            psip->dest_list = NULL;
+            psip->parse_src_txt = parse_src_txt;
+            ValNodeAddPointer (source_list, 0, psip);
+          }
+          else
+          {
+            parse_src_txt = MemFree (parse_src_txt);
+          }
+        }
+      }
+    }
+    sip = sip->next;
+  }
+}
+
+static void 
+GetTaxNameSourcesForBioseq 
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ ValNodePtr PNTR source_list)
+{
+  SeqDescrPtr        sdp;
+  SeqFeatPtr         sfp;
+  SeqMgrFeatContext  fcontext;
+  SeqMgrDescContext  dcontext;
+  ParseSourceInfoPtr psip;
+  CharPtr            found_loc = NULL, parse_src_txt;
+  Int4               found_len;
+  BioSourcePtr       biop;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  while (sdp != NULL)
+  {
+    if ((biop = sdp->data.ptrvalue) != NULL
+        && biop->org != NULL
+        && (fsp == NULL
+        || fsp->ccp == NULL
+        || DoesOneSourceMatchConstraint (biop, fsp->ccp)))
+    {
+      FindTextPortionInString (biop->org->taxname, tp, &found_loc, &found_len);
+      if (found_loc != NULL)
+      {
+        parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+        StringNCpy (parse_src_txt, found_loc, found_len);
+        parse_src_txt [found_len] = 0;
+      
+        psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+        if (psip != NULL)
+        {
+          psip->bsp = bsp;
+          psip->sdp = sdp;
+          psip->sfp = NULL;
+          psip->sip = NULL;
+          psip->dest_list = NULL;
+          psip->parse_src_txt = parse_src_txt;
+          ValNodeAddPointer (source_list, 0, psip);
+        }
+        else
+        {
+          parse_src_txt = MemFree (parse_src_txt);
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_source, &dcontext);
+  }
+  
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+  while (sfp != NULL)
+  {
+    if ((biop = sfp->data.value.ptrvalue) != NULL
+        && biop->org != NULL
+        && (fsp == NULL
+        || fsp->ccp == NULL
+        || DoesOneSourceMatchConstraint (sfp->data.value.ptrvalue, fsp->ccp)))
+    {
+      FindTextPortionInString (biop->org->taxname, tp, &found_loc, &found_len);
+      if (found_loc != NULL)
+      {
+        parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+        StringNCpy (parse_src_txt, found_loc, found_len);
+        parse_src_txt [found_len] = 0;
+      
+        psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+        if (psip != NULL)
+        {
+          psip->bsp = bsp;
+          psip->sdp = NULL;
+          psip->sfp = sfp;
+          psip->sip = NULL;
+          psip->dest_list = NULL;
+          psip->parse_src_txt = parse_src_txt;
+          ValNodeAddPointer (source_list, 0, psip);
+        }
+        else
+        {
+          parse_src_txt = MemFree (parse_src_txt);
+        }
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_BIOSRC, 0, &fcontext);
+  }
+}
+
+static void
+GetBankitCommentSourcesForBioseq 
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ ValNodePtr PNTR source_list)
+{
+  SeqDescrPtr        sdp;
+  SeqMgrDescContext  dcontext;
+  ParseSourceInfoPtr psip;
+  UserObjectPtr      uop;
+  ObjectIdPtr        oip;
+  UserFieldPtr       ufp;
+  CharPtr            found_loc = NULL, parse_src_txt;
+  Int4               found_len = 0;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL)
+  {
+    if (sdp->extended != 0)
+    {
+      /* Bankit Comments */
+      uop = (UserObjectPtr) sdp->data.ptrvalue;
+      if (uop != NULL && StringCmp (uop->_class, "SMART_V1.0") != 0)
+      {
+        oip = uop->type;
+        if (oip != NULL && StringCmp (oip->str, "Submission") == 0)
+        {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+          {
+            oip = ufp->label;
+            if (oip != NULL && StringCmp (oip->str, "AdditionalComment") == 0)
+            {
+              if (fsp == NULL
+                  || fsp->ccp == NULL
+                  || DoesStringMatchConstraint (ufp->data.ptrvalue, fsp->ccp->string_constraint))
+              {
+                FindTextPortionInString (ufp->data.ptrvalue, tp, &found_loc, &found_len);
+                if (found_loc != NULL)
+                {
+                  parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+                  StringNCpy (parse_src_txt, found_loc, found_len);
+                  parse_src_txt [found_len] = 0;
+              
+                  psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+                  if (psip != NULL)
+                  {
+                    psip->bsp = bsp;
+                    psip->sdp = sdp;
+                    psip->sfp = NULL;
+                    psip->sip = NULL;
+                    psip->dest_list = NULL;
+                    psip->parse_src_txt = parse_src_txt;
+                    ValNodeAddPointer (source_list, 0, psip);
+                  }
+                  else
+                  {
+                    parse_src_txt = MemFree (parse_src_txt);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+}
+
+static void 
+GetCommentSourcesForBioseq 
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ ValNodePtr PNTR source_list)
+{
+  SeqDescrPtr        sdp;
+  SeqFeatPtr         sfp;
+  SeqMgrFeatContext  fcontext;
+  SeqMgrDescContext  dcontext;
+  ParseSourceInfoPtr psip;
+  CharPtr            found_loc = NULL, parse_src_txt;
+  Int4               found_len;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext);
+  while (sdp != NULL)
+  {
+    if (fsp == NULL
+        || fsp->ccp == NULL
+        || DoesStringMatchConstraint (sdp->data.ptrvalue, fsp->ccp->string_constraint))
+    {
+      FindTextPortionInString (sdp->data.ptrvalue, tp, &found_loc, &found_len);
+      if (found_loc != NULL)
+      {
+        parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+        StringNCpy (parse_src_txt, found_loc, found_len);
+        parse_src_txt [found_len] = 0;
+      
+        psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+        if (psip != NULL)
+        {
+          psip->bsp = bsp;
+          psip->sdp = sdp;
+          psip->sfp = NULL;
+          psip->sip = NULL;
+          psip->dest_list = NULL;
+          psip->parse_src_txt = parse_src_txt;
+          ValNodeAddPointer (source_list, 0, psip);
+        }
+        else
+        {
+          parse_src_txt = MemFree (parse_src_txt);
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &dcontext);
+  }
+  
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_COMMENT, 0, &fcontext);
+  while (sfp != NULL)
+  {
+    if (fsp == NULL
+        || fsp->ccp == NULL
+        || DoesStringMatchConstraint (sfp->data.value.ptrvalue, fsp->ccp->string_constraint))
+    {
+      FindTextPortionInString (sdp->data.ptrvalue, tp, &found_loc, &found_len);
+      if (found_loc != NULL)
+      {
+        parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+        StringNCpy (parse_src_txt, found_loc, found_len);
+        parse_src_txt [found_len] = 0;
+        
+        psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+        if (psip != NULL)
+        {
+          psip->bsp = bsp;
+          psip->sdp = NULL;
+          psip->sfp = sfp;
+          psip->sip = NULL;
+          psip->dest_list = NULL;
+          psip->parse_src_txt = parse_src_txt;
+          ValNodeAddPointer (source_list, 0, psip);
+        }
+        else
+        {
+          parse_src_txt = MemFree (parse_src_txt);
+        }
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_COMMENT, 0, &fcontext);
+  }
+  GetBankitCommentSourcesForBioseq (bsp, fsp, tp, source_list);
+}
+
+static void FindParseSourceBioseqCallback (BioseqPtr bsp, Pointer userdata)
+{
+  ParseSourcePtr     psp;
+  
+  if (bsp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  psp = (ParseSourcePtr) userdata;
+  switch (psp->src_field)
+  {
+    case PARSE_FIELD_SRC_DEFLINE:
+      if (!ISA_aa (bsp->mol))
+      {
+        GetDeflineSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
+      }
+      break;
+    case PARSE_FIELD_SRC_LOCAL_ID:
+      if (! ISA_aa (bsp->mol) && bsp->repr != Seq_repr_seg)
+      {
+        GetLocalIDSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
+      }
+      break;
+    case PARSE_FIELD_SRC_TAXNAME:
+      GetTaxNameSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
+      break;
+    case PARSE_FIELD_SRC_COMMENT:
+      GetCommentSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
+      break;
+    case PARSE_FIELD_BANKIT_COMMENT:
+      GetBankitCommentSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
+      break;
+  }
+}
+
+static void GetBioSourceDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list)
+{
+  SeqDescrPtr        sdp;
+  SeqFeatPtr         sfp;
+  SeqMgrFeatContext  fcontext;
+  SeqMgrDescContext  dcontext;
+
+  if (bsp == NULL || dest_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  while (sdp != NULL)
+  {
+    ValNodeAddPointer (dest_list, 2, sdp);
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_source, &dcontext);
+  }
+  
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+  while (sfp != NULL)
+  {
+    ValNodeAddPointer (dest_list, 1, sfp);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_BIOSRC, 0, &fcontext);
+  }  
+}
+
+static void GetDeflineDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list)
+{
+  SeqDescrPtr        sdp;
+  SeqMgrDescContext  dcontext;
+
+  if (bsp == NULL || dest_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+  while (sdp != NULL)
+  {
+    ValNodeAddPointer (dest_list, 2, sdp);
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_title, &dcontext);
+  }
+}
+
+static Boolean DestAlreadyInList (ValNodePtr dest_list, Int4 type, Pointer data)
+{
+  while (dest_list != NULL)
+  {
+    if (dest_list->choice == type && dest_list->data.ptrvalue == data)
+    {
+      return TRUE;
+    }
+    dest_list = dest_list->next;
+  }
+  return FALSE;
+}
+
+static void 
+GetFeatureDestinationsForBioseq 
+(BioseqPtr       bsp, 
+ Uint1           seqFeatChoice,
+ Uint1           featDefChoice,
+ ValNodePtr PNTR dest_list)
+{
+  SeqFeatPtr         sfp;
+  SeqMgrFeatContext  fcontext;
+  SeqAnnotPtr        sap;
+
+  if (bsp == NULL || dest_list == NULL)
+  {
+    return;
+  }
+  
+  sfp = SeqMgrGetNextFeature (bsp, NULL, seqFeatChoice, featDefChoice, &fcontext);
+  while (sfp != NULL)
+  {
+    ValNodeAddPointer (dest_list, 1, sfp);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, seqFeatChoice, featDefChoice, &fcontext);
+  }  
+  
+  sap = bsp->annot;
+  while (sap != NULL)
+  {
+    if (sap->type == 1)
+    {
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL)
+      {
+        if (!DestAlreadyInList (*dest_list, 1, sfp))
+        {
+          ValNodeAddPointer (dest_list, 1, sfp);
+        }
+        sfp = sfp->next;
+      }
+    }
+    sap = sap->next;
+  }
+}
+
+static void 
+GetCommentDestinationsForBioseq 
+(BioseqPtr       bsp,
+ ValNodePtr PNTR dest_list)
+{
+  SeqDescrPtr        sdp;
+  SeqMgrDescContext  dcontext;
+  
+  if (bsp == NULL || dest_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext);
+  while (sdp != NULL)
+  {
+    ValNodeAddPointer (dest_list, 2, sdp);
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_title, &dcontext);
+  }
+  
+}
+
+static void 
+FindDestinationsForParseSourceInfo 
+(ParseSourceInfoPtr psip,
+ ParseFieldPtr dst_field_data)
+{
+  SeqEntryPtr sep;
+  ValNodePtr  vnp;
+  
+  if (psip == NULL || psip->bsp == NULL || dst_field_data == NULL)
+  {
+    return;
+  }
+  
+  sep = SeqMgrGetSeqEntryForData (psip->bsp);
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  switch (dst_field_data->parse_field_type)
+  {
+    case PARSE_FIELD_SOURCE_QUAL:
+      GetBioSourceDestinationsForBioseq (psip->bsp, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_DEFLINE :
+      GetDeflineDestinationsForBioseq (psip->bsp, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_BIOSRC_STRING :
+      GetBioSourceDestinationsForBioseq (psip->bsp, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_GENE_FIELD :
+      GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_GENE, 0, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_MRNA_FIELD :
+      GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_RNA, FEATDEF_mRNA, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_CDS_COMMENT:
+      GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_CDREGION, FEATDEF_CDS, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_PROTEIN_FIELD:
+      GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_PROT, 0, &(psip->dest_list));
+      break;
+    case PARSE_FIELD_IMPORT_QUAL :
+      for (vnp = dst_field_data->feature_subtype; 
+           vnp != NULL;
+           vnp = vnp->next)
+      {
+        GetFeatureDestinationsForBioseq (psip->bsp, 
+                                         SEQFEAT_IMP, 
+                                         dst_field_data->parse_field_type, 
+                                         &(psip->dest_list));
+      }
+      break;    
+    case PARSE_FIELD_FEATURE_NOTE :
+      for (vnp = dst_field_data->feature_field; 
+           vnp != NULL;
+           vnp = vnp->next)
+      {
+        GetFeatureDestinationsForBioseq (psip->bsp, 
+                                         0, 
+                                         vnp->choice, 
+                                         &(psip->dest_list));
+      }
+      break;
+    case PARSE_FIELD_COMMENT_DESC :
+      GetCommentDestinationsForBioseq (psip->bsp, &(psip->dest_list));
+      break;
+  }
+}
+
+static Boolean SourceHasOneUndeletedDestination (ParseSourceInfoPtr source)
+{
+  Int4       num_seen = 0;
+  ValNodePtr vnp;
+  
+  if (source == NULL
+      || source->dest_list == NULL)
+  {
+    return FALSE;
+  }
+  
+  vnp = source->dest_list;
+  while (vnp != NULL && num_seen < 2)
+  {
+    if (vnp->choice > 1)
+    {
+      num_seen ++;
+    }
+    vnp = vnp->next;
+  }
+  if (num_seen == 1)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+static void CombineSourcesForDestinations (ValNodePtr PNTR source_list)
+{
+  ValNodePtr         source1_vnp, source2_vnp, dest1_vnp, dest2_vnp;
+  ValNodePtr         source_new, del_vnp;
+  ParseSourceInfoPtr psip1, psip2, new_psip;
+  CharPtr            comb_txt;
+  
+  for (source1_vnp = *source_list;
+       source1_vnp != NULL; 
+       source1_vnp = source1_vnp->next)
+  {
+    psip1 = (ParseSourceInfoPtr) source1_vnp->data.ptrvalue;
+    if (psip1 == NULL || psip1->dest_list == NULL)
+    {
+      continue;
+    }
+    for (source2_vnp = source1_vnp->next;
+         source2_vnp != NULL; 
+         source2_vnp = source2_vnp->next)
+    {
+      if (source2_vnp->choice > 0) 
+      {
+        /* already marked for deletion */
+        continue;
+      }
+      psip2 = (ParseSourceInfoPtr) source2_vnp->data.ptrvalue;
+      if (psip2 == NULL || psip2->dest_list == NULL)
+      {
+        continue;
+      }
+      for (dest1_vnp = psip1->dest_list;
+           dest1_vnp != NULL; 
+           dest1_vnp = dest1_vnp->next)
+      {
+        if (dest1_vnp->choice == 0)
+        {
+          /* already marked for deletion */
+          continue;
+        }
+        for (dest2_vnp = psip2->dest_list;
+             dest2_vnp != NULL;
+             dest2_vnp = dest2_vnp->next)
+        {
+          if (dest2_vnp->choice == 0)
+          {
+            /* already marked for deletion */
+            continue;
+          }
+          if (dest1_vnp->choice == dest2_vnp->choice
+              && dest1_vnp->data.ptrvalue == dest2_vnp->data.ptrvalue)
+          {
+            comb_txt = (CharPtr) (MemNew (sizeof (Char) 
+                                  * (StringLen (psip1->parse_src_txt)
+                                     + StringLen (psip2->parse_src_txt)
+                                     + 2)));
+            StringCpy (comb_txt, psip1->parse_src_txt);
+            StringCat (comb_txt, ";");
+            StringCat (comb_txt, psip2->parse_src_txt);
+            
+            /* If the first source has a single destination, then we can 
+             * add the text from the second source to the first and remove
+             * the destination from the second source.
+             */
+            if (SourceHasOneUndeletedDestination (psip1))
+            {
+              
+              psip1->parse_src_txt = MemFree (psip1->parse_src_txt);
+              psip1->parse_src_txt = comb_txt;
+              dest2_vnp->choice = 0;
+            }             
+            /* If the first source has more than one destination and
+             * the second source has a single destination, then we can 
+             * remove the repeated desination from the first source
+             * and add the text from the first source to the second source.
+             */
+            else if (SourceHasOneUndeletedDestination (psip2))
+            {
+              psip2->parse_src_txt = MemFree (psip2->parse_src_txt);
+              psip2->parse_src_txt = comb_txt;
+              dest1_vnp->choice = 0;
+            }
+            /* If the first and second sources have multiple destinations,
+             * we need to remove the repeated destination from both the first
+             * and second source and create a new source with the combined 
+             * text for just the repeated destination.
+             */
+            else
+            {
+              new_psip = ParseSourceInfoNew ();
+              ValNodeAddPointer (&(new_psip->dest_list), 
+                                 dest1_vnp->choice, 
+                                 dest1_vnp->data.ptrvalue);
+              new_psip->parse_src_txt = comb_txt;
+              dest1_vnp->choice = 0;
+              dest2_vnp->choice = 0;
+              source_new = ValNodeNew (NULL);
+              source_new->choice = 0;
+              source_new->data.ptrvalue = new_psip;
+              source_new->next = source1_vnp->next;
+              source1_vnp->next = source_new;
+            }
+          }
+        }
+      }
+      
+      del_vnp = ValNodeExtractList (&(psip1->dest_list), 0);
+      del_vnp = ValNodeFree (del_vnp);
+      if (psip1->dest_list == NULL)
+      {
+        source1_vnp->choice = 1;
+      }
+      del_vnp = ValNodeExtractList (&(psip2->dest_list), 0);
+      del_vnp = ValNodeFree (del_vnp);
+      if (psip2->dest_list == NULL)
+      {
+        source2_vnp->choice = 1;
+      }
+    }
+  }
+
+  /* now remove sources deleted */
+  del_vnp = ValNodeExtractList (source_list, 1);
+  del_vnp = ParseSourceListFree (del_vnp); 
+}
+
+static Boolean DoSourcesApplyToMultipleDestinations (ValNodePtr source_list)
+{
+  ValNodePtr         source1_vnp, source2_vnp, dest1_vnp, dest2_vnp;
+  ParseSourceInfoPtr psip1, psip2;
+  
+  for (source1_vnp = source_list;
+       source1_vnp != NULL; 
+       source1_vnp = source1_vnp->next)
+  {
+    psip1 = (ParseSourceInfoPtr) source1_vnp->data.ptrvalue;
+    if (psip1 == NULL || psip1->dest_list == NULL)
+    {
+      continue;
+    }
+    for (source2_vnp = source1_vnp->next;
+         source2_vnp != NULL; 
+         source2_vnp = source2_vnp->next)
+    {
+      psip2 = (ParseSourceInfoPtr) source2_vnp->data.ptrvalue;
+      if (psip2 == NULL || psip2->dest_list == NULL)
+      {
+        continue;
+      }
+      for (dest1_vnp = psip1->dest_list;
+           dest1_vnp != NULL; 
+           dest1_vnp = dest1_vnp->next)
+      {
+        for (dest2_vnp = psip2->dest_list;
+             dest2_vnp != NULL;
+             dest2_vnp = dest2_vnp->next)
+        {
+          if (dest1_vnp->choice == dest2_vnp->choice
+              && dest1_vnp->data.ptrvalue == dest2_vnp->data.ptrvalue)
+          {
+            return TRUE;
+          }
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+static GetSamplePtr 
+CheckParseActionPairListForExistingText 
+(ParseSourcePtr psp)
+{
+  ValNodePtr         vnp, dest_vnp;
+  ParseSourceInfoPtr psip;
+  GetSamplePtr       gsp;
+
+  if (psp == NULL || psp->dst_field_data == NULL)
+  {
+    return NULL;
+  }
+
+  /* set up structure to hold sample data */
+  gsp = (GetSamplePtr) MemNew (sizeof (GetSampleData));
+  if (gsp == NULL)
+  {
+    return NULL;
+  }
+  
+  gsp->sample_text = NULL;
+  gsp->fieldstring_func = NULL;
+  gsp->descrstring_func = NULL;
+  gsp->free_vn_proc = NULL;
+  gsp->copy_vn_proc = NULL;
+  gsp->requested_field = NULL;
+  gsp->num_found = 0;
+  gsp->all_same = TRUE;
+  
+  switch (psp->dst_field_data->parse_field_type)
+  {
+    case PARSE_FIELD_SOURCE_QUAL :
+      gsp->fieldstring_func = GetSourceQualFeatureString;
+      gsp->descrstring_func = GetSourceQualDescrString;
+      gsp->free_vn_proc = ValNodeSimpleDataFree;
+      gsp->copy_vn_proc = SourceQualValNodeDataCopy;
+      gsp->requested_field = SourceQualValNodeDataCopy (psp->dst_field_data->feature_field);
+      break;
+    case PARSE_FIELD_DEFLINE:
+      gsp->descrstring_func = GetStringFromStringDescriptor;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = ValNodeNew (NULL);
+      gsp->requested_field->data.intvalue = Seq_descr_title;
+      break;
+    case PARSE_FIELD_BIOSRC_STRING:
+      gsp->fieldstring_func = GetSourceFeatureString;
+      gsp->descrstring_func = GetSourceDescriptorString;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = IntValNodeCopy (psp->dst_field_data->feature_field);
+      break;
+    case PARSE_FIELD_GENE_FIELD:
+      gsp->fieldstring_func = GetGeneFieldString;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = IntValNodeCopy (psp->dst_field_data->feature_field);
+      break;
+    case PARSE_FIELD_MRNA_FIELD:
+      gsp->fieldstring_func = GetmRNAFieldString;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = IntValNodeCopy (psp->dst_field_data->feature_field);
+      break;
+    case PARSE_FIELD_CDS_COMMENT:
+      gsp->fieldstring_func = GetCDSComment;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      break;
+    case PARSE_FIELD_COMMENT_DESC:
+      gsp->descrstring_func = GetStringFromStringDescriptor;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = ValNodeNew (NULL);
+      gsp->requested_field->data.intvalue = Seq_descr_comment;
+      break;
+    case PARSE_FIELD_PROTEIN_FIELD:
+      gsp->fieldstring_func = GetProteinFieldString;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = IntValNodeCopy (psp->dst_field_data->feature_field);      
+      break;
+    case PARSE_FIELD_IMPORT_QUAL:
+      gsp->fieldstring_func = GetGBQualString;
+      gsp->copy_vn_proc = IntValNodeCopy;
+      gsp->requested_field = IntValNodeCopy (psp->dst_field_data->feature_field);
+      break;
+    case PARSE_FIELD_FEATURE_NOTE:
+      gsp->fieldstring_func = GetFeatureNote;
+      gsp->free_vn_proc = ValNodeSimpleDataFree;
+      gsp->copy_vn_proc = ValNodeStringCopy;
+      gsp->requested_field = ValNodeStringCopy (psp->dst_field_data->feature_field);
+      break;
+  }
+  
+  for (vnp = psp->source_list; vnp != NULL; vnp = vnp->next)
+  {
+    psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
+    if (psip == NULL) continue;
+    for (dest_vnp = psip->dest_list; dest_vnp != NULL; dest_vnp = dest_vnp->next)
+    {
+      if (dest_vnp->choice == 1)
+      {
+        GetSampleFeatureCallback (dest_vnp->data.ptrvalue, gsp, NULL);
+      }
+      else if (dest_vnp->choice == 2)
+      {
+        GetSampleDescriptorCallback (dest_vnp->data.ptrvalue, gsp, NULL);
+      }
+    }
+    
+  }
+
+  return gsp;
+}
+
+static void 
+ParseToOneFeature 
+(SeqFeatPtr    sfp,
+ Int4          parse_field_type,
+ Pointer       userdata,
+ FilterSetPtr  fsp)
+{
+  SetFeatureFieldString set_string_func = NULL;
+  ApplyValuePtr         avp;
+  BioseqPtr             prot_bsp, bsp;
+  SeqMgrFeatContext     context;
+  ProtRefPtr            prp;
+  
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  avp = (ApplyValuePtr) userdata;
+  
+  switch (parse_field_type)
+  {
+    case PARSE_FIELD_GENE_FIELD :
+      set_string_func = SetGeneFieldString;
+      break;
+    case PARSE_FIELD_MRNA_FIELD :
+      set_string_func = SetmRNAFieldString;
+      break;
+    case PARSE_FIELD_CDS_COMMENT:
+      set_string_func = SetCDSComment;
+      break;
+    case PARSE_FIELD_PROTEIN_FIELD:
+      set_string_func = SetProteinFieldString;
+      break;
+    case PARSE_FIELD_IMPORT_QUAL:
+      set_string_func = SetGBQualString;
+      break;
+    case PARSE_FIELD_FEATURE_NOTE:
+      set_string_func = SetFeatureNote;
+      break;
+    default:
+      return;
+      break;
+  }
+  
+  if (set_string_func == NULL)
+  {
+    return;
+  }
+  
+  if (parse_field_type == PARSE_FIELD_PROTEIN_FIELD
+      || (sfp->idx.subtype == FEATDEF_mat_peptide_aa
+        &&  (parse_field_type == PARSE_FIELD_IMPORT_QUAL
+             || parse_field_type == PARSE_FIELD_FEATURE_NOTE)))
+  {
+    if (sfp->data.choice == SEQFEAT_CDREGION)
+    {
+      /* need to translate coding region to create protein */
+      prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+      if (prot_bsp == NULL)
+      {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+  	    SeqEdTranslateOneCDS (sfp, bsp, sfp->idx.entityID);
+  	    SeqMgrIndexFeatures (sfp->idx.entityID, NULL);
+        prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+      }
+      sfp = SeqMgrGetNextFeature (prot_bsp, NULL, 0, FEATDEF_PROT, &context);
+      if (sfp == NULL)
+      {
+        sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_PROT, NULL);
+        prp = ProtRefNew ();
+        sfp->data.value.ptrvalue = prp;
+  	    SeqMgrIndexFeatures (prot_bsp->idx.entityID, NULL);
+      }
+    }
+  }
+  
+  if (sfp != NULL)
+  {
+    set_string_func (sfp, avp, NULL);
+  }  
+}
+
+
+static BioseqSetPtr GetPartsForSourceDescriptorOnSegSet (SeqDescrPtr sdp)
+{
+  ObjValNodePtr ovp;
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+  
+  if (sdp == NULL || sdp->extended != 1) 
+  {
+    return NULL;
+  }
+  ovp = (ObjValNodePtr) sdp;
+  if (ovp->idx.parenttype != OBJ_BIOSEQSET || ovp->idx.parentptr == NULL) 
+  {
+    return NULL;
+  }
+  bssp = (BioseqSetPtr) ovp->idx.parentptr;
+  
+  if (bssp->_class == BioseqseqSet_class_nuc_prot
+      && IS_Bioseq_set (bssp->seq_set)
+      && bssp->seq_set->data.ptrvalue != NULL)
+  {
+    bssp = (BioseqSetPtr) bssp->seq_set->data.ptrvalue;
+  }
+  
+  if (bssp->_class == BioseqseqSet_class_segset) 
+  {
+    sep = bssp->seq_set;
+    while (sep != NULL)
+    {
+      if (IS_Bioseq_set (sep) && sep->data.ptrvalue != NULL)
+      {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if (bssp->_class == BioseqseqSet_class_parts)
+        {
+          return bssp;
+        }
+      }
+      sep = sep->next;
+    }
+  }
+
+  return NULL;
+}
+
+static SeqDescrPtr FindSourceDescriptorInSeqEntry (SeqEntryPtr sep)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp = NULL;
+  
+  if (sep != NULL && sep->data.ptrvalue != NULL) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      sdp = bsp->descr;
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      sdp = bssp->descr;
+    }
+    while (sdp != NULL && sdp->choice != Seq_descr_source)
+    {
+      sdp = sdp->next;
+    }
+  }
+  return sdp;
+}
+
+static SeqDescrPtr PropagateToSeqEntry (SeqEntryPtr sep, SeqDescrPtr sdp)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  new_sdp = NULL;
+  
+  if (sep != NULL && sep->data.ptrvalue != NULL) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      new_sdp = AsnIoMemCopy ((Pointer) sdp,
+                              (AsnReadFunc) SeqDescrAsnRead,
+                              (AsnWriteFunc) SeqDescrAsnWrite);
+      ValNodeLink (&(bsp->descr), new_sdp);
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      new_sdp = AsnIoMemCopy ((Pointer) sdp,
+                              (AsnReadFunc) SeqDescrAsnRead,
+                              (AsnWriteFunc) SeqDescrAsnWrite);
+      ValNodeLink (&(bssp->descr), new_sdp);
+    }
+  }
+  return new_sdp;
+}
+
+static void PropagateSourceOnSegSetForParse (ValNodePtr parse_source_list)
+{
+  ParseSourceInfoPtr psip;
+  ValNodePtr         vnp_src, vnp_dst;
+  SeqDescrPtr        sdp, other_sdp;
+  SeqEntryPtr        sep;
+  ValNodePtr         extra_dests = NULL;
+  BioseqSetPtr       parts_bssp;
+  
+  for (vnp_src = parse_source_list; vnp_src != NULL; vnp_src = vnp_src->next)
+  {
+    psip = (ParseSourceInfoPtr) vnp_src->data.ptrvalue;
+    if (psip != NULL)
+    {
+      for (vnp_dst = psip->dest_list; vnp_dst != NULL; vnp_dst = vnp_dst->next)
+      {
+        if (vnp_dst->choice == 2)
+        {
+          sdp = (SeqDescrPtr) vnp_dst->data.ptrvalue;
+          if (sdp != NULL && sdp->choice == Seq_descr_source)
+          {
+            parts_bssp = GetPartsForSourceDescriptorOnSegSet (sdp);
+            if (parts_bssp != NULL)
+            {
+              for (sep = parts_bssp->seq_set; sep != NULL; sep = sep->next)
+              {
+                if (IS_Bioseq(sep) && sep->data.ptrvalue == psip->bsp)
+                {
+                  other_sdp = FindSourceDescriptorInSeqEntry (sep);
+                  if (other_sdp == NULL) 
+                  {
+                    other_sdp = PropagateToSeqEntry (sep, sdp);
+                    ValNodeAddPointer (&extra_dests, 2, other_sdp);
+                  }
+                }
+              }
+            
+              /* set choice to 0 so master won't be a destination */
+              vnp_dst->choice = 0;
+            
+            }
+          }
+        }
+      }
+      /* add extra destinations to list */
+      ValNodeLink (&psip->dest_list, extra_dests);
+      extra_dests = NULL;
+    }
+  }
+  
+}
+
+
+static void 
+ParsePairListItem 
+(ParseSourceInfoPtr psip, 
+ Int4               src_field,
+ ParseFieldPtr      dst_field_data,
+ TextPortionPtr     tp,
+ ExistingTextPtr    etp)
+{
+  ApplyValueData  avd;
+  ValNodePtr            dest_vnp;
+  FeatureActionProc     feature_action = NULL;
+  DescriptorActionProc  descriptor_action = NULL;
+  
+  if (psip == NULL || psip->dest_list == NULL || dst_field_data == NULL
+      || psip->parse_src_txt == NULL)
+  {
+    return;
+  }
+
+
+  avd.new_text = psip->parse_src_txt;
+  avd.etp = etp;
+  avd.text_to_replace = NULL;
+  
+  switch (dst_field_data->parse_field_type)
+  {
+    case PARSE_FIELD_SOURCE_QUAL:
+      avd.field_list = dst_field_data->feature_field;
+      feature_action = ApplySourceQualFeatureCallback;
+      descriptor_action = ApplySourceQualDescriptorCallback;
+      break;
+    case PARSE_FIELD_DEFLINE :
+      avd.field_list = dst_field_data->feature_field;
+      descriptor_action = ApplyTitleDescriptorCallback;
+      break;
+    case PARSE_FIELD_BIOSRC_STRING :
+      avd.field_list = dst_field_data->feature_field;
+      feature_action = ApplySourceStringFeatureCallback;
+      descriptor_action = ApplySourceStringDescriptorCallback;
+      break;
+    case PARSE_FIELD_COMMENT_DESC :
+#if 0    
+      avd.field_list = mp->dst_field_data->feature_field;
+      sep = FindNucSeqEntry (pap->sep);
+      sep = GetBestTopParentForData (mp->input_entityID, sep->data.ptrvalue);
+      ParseToCommentDescriptor (sep, &avd);
+      avd.new_text = MemFree (avd.new_text);
+#endif      
+      break;
+    case PARSE_FIELD_GENE_FIELD :
+    case PARSE_FIELD_MRNA_FIELD :
+    case PARSE_FIELD_CDS_COMMENT:
+    case PARSE_FIELD_PROTEIN_FIELD:
+    case PARSE_FIELD_IMPORT_QUAL :
+    case PARSE_FIELD_FEATURE_NOTE :
+      avd.field_list = dst_field_data->feature_field;
+      break;
+  }
+  
+  for (dest_vnp = psip->dest_list; dest_vnp != NULL; dest_vnp = dest_vnp->next)
+  {
+    if (dest_vnp->choice == 1 && feature_action != NULL)
+    {
+      feature_action (dest_vnp->data.ptrvalue, &avd, NULL);
+    }
+    else if (dest_vnp->choice == 2 && descriptor_action != NULL)
+    {
+      descriptor_action (dest_vnp->data.ptrvalue, &avd, NULL);
+    }
+    else if (dest_vnp->choice == 1 
+             && (dst_field_data->parse_field_type == PARSE_FIELD_GENE_FIELD
+                 || dst_field_data->parse_field_type == PARSE_FIELD_MRNA_FIELD
+                 || dst_field_data->parse_field_type == PARSE_FIELD_CDS_COMMENT
+                 || dst_field_data->parse_field_type == PARSE_FIELD_PROTEIN_FIELD
+                 || dst_field_data->parse_field_type == PARSE_FIELD_IMPORT_QUAL
+                 || dst_field_data->parse_field_type == PARSE_FIELD_FEATURE_NOTE))
+    {
+      ParseToOneFeature (dest_vnp->data.ptrvalue, dst_field_data->parse_field_type,
+                         &avd, NULL);
+    }
+  }
+}
+
+
+static Boolean 
+FindParseActionPairList 
+(SeqEntryPtr   sep, 
+ Int4          src_field,
+ ParseFieldPtr dst_field_data,
+ FilterSetPtr  fsp,
+ TextPortionPtr tp)
+{
+  ParseSourceData    psd;
+  ValNodePtr         vnp;
+  ParseSourceInfoPtr psip;
+  GetSamplePtr       gsp;
+  ExistingTextPtr    etp;
+  Boolean            rval = FALSE;
+  
+  psd.fsp = fsp;
+  psd.source_list = NULL;
+  psd.src_field = src_field;
+  psd.dst_field_data = dst_field_data;
+  psd.fsp = fsp;
+  psd.tp = tp;
+  
+  /* first, we need to get a list of the parse sources */
+  VisitBioseqsInSep (sep, &psd, FindParseSourceBioseqCallback);
+  
+  /* for each parse source, we need to get a list of the destinations */
+  for (vnp = psd.source_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue == NULL) continue;
+    psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
+    FindDestinationsForParseSourceInfo (psip, dst_field_data);
+  }
+
+  /* now compare the lists, to check for destinations appearing for multiple sources */
+  if (dst_field_data->parse_field_type != PARSE_FIELD_SOURCE_QUAL
+      && DoSourcesApplyToMultipleDestinations (psd.source_list))
+  {
+    if (ANS_CANCEL == Message (MSG_OKC, "Some destinations have multiple sources - these will be combined."))
+    {
+      psd.source_list = ParseSourceListFree (psd.source_list);
+      return FALSE;
+    }
+        
+    CombineSourcesForDestinations (&(psd.source_list));
+  }
+  
+  /* check for existing text */
+  gsp = CheckParseActionPairListForExistingText (&psd);
+  etp = GetExistingTextHandlerInfo (gsp, FALSE);
+  gsp = GetSampleFree (gsp);  
+  
+  if (etp == NULL || etp->existing_text_choice != EXISTING_TEXT_CHOICE_CANCEL)
+  {
+    if (dst_field_data->parse_field_type == PARSE_FIELD_SOURCE_QUAL)
+    {
+      PropagateSourceOnSegSetForParse (psd.source_list);
+    }
+  
+    /* Parse to the appropriate fields */
+    for (vnp = psd.source_list; vnp != NULL; vnp = vnp->next)
+    {
+      if (vnp->data.ptrvalue == NULL) continue;
+      psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
+      ParsePairListItem (psip, src_field, dst_field_data, tp, etp);
+    }
+    rval = TRUE;
+  }
+  
+  etp = MemFree (etp);
+  
+  psd.source_list = ParseSourceListFree (psd.source_list);
+  return rval;
 }
 
 static void 
@@ -14209,6 +16006,7 @@ static void GetParseToExistingTextCallback (ParseActionPtr pap, Pointer userdata
   ParseFormPtr mp;
   GetSamplePtr gsp = NULL;
   SeqEntryPtr  sep;
+  ValNodePtr   sum_vnp;
 
   mp = (ParseFormPtr) userdata;
   if (mp == NULL || mp->dst_field_data == NULL)
@@ -14247,6 +16045,15 @@ static void GetParseToExistingTextCallback (ParseActionPtr pap, Pointer userdata
     {
       mp->gsp->all_same = FALSE;
     }
+    
+    sum_vnp = AddValNodeLists (mp->gsp->feat_dest_list, gsp->feat_dest_list);
+    mp->gsp->feat_dest_list = ValNodeFree (mp->gsp->feat_dest_list);
+    mp->gsp->feat_dest_list = sum_vnp;
+    
+    sum_vnp = AddValNodeLists (mp->gsp->descr_dest_list, gsp->descr_dest_list);
+    mp->gsp->descr_dest_list = ValNodeFree (mp->gsp->descr_dest_list);
+    mp->gsp->descr_dest_list = sum_vnp;
+    
     gsp = GetSampleFree (gsp);
   } 
 }
@@ -14980,19 +16787,9 @@ static Boolean ParseTextAction (Pointer data)
         WatchCursor ();
         Update ();
         
-        ResetParseActionVisitData (&pad);
-        VisitSeqEntriesForParseAction (sep, &pad, GetParseToExistingTextCallback, mp, FALSE);
-        mp->etp = GetExistingTextHandlerInfo (mp->gsp, FALSE);        
-        mp->gsp = GetSampleFree (mp->gsp);
-        if (mp->etp == NULL || mp->etp->existing_text_choice != EXISTING_TEXT_CHOICE_CANCEL)
-        {
-          ResetParseActionVisitData (&pad);
-          VisitSeqEntriesForParseAction (sep, &pad, ParseToDest, mp, FALSE);
-          mp->etp = MemFree (mp->etp);
-          ObjMgrSetDirtyFlag (mp->input_entityID, TRUE);
-          ObjMgrSendMsg (OM_MSG_UPDATE, mp->input_entityID, 0, 0);
-          rval = TRUE;
-        }
+        rval = FindParseActionPairList (sep, pad.src_field, mp->dst_field_data, pad.fsp, pad.tp);
+        ObjMgrSetDirtyFlag (mp->input_entityID, TRUE);
+        ObjMgrSendMsg (OM_MSG_UPDATE, mp->input_entityID, 0, 0);
         ArrowCursor ();
         Update ();    
         break;
@@ -15188,12 +16985,13 @@ enum feature_editor_actions
   FEAT_ED_STRAND,
   FEAT_ED_CITATION,
   FEAT_ED_EXPERIMENT,
-  FEAT_ED_INFERENCE
+  FEAT_ED_INFERENCE,
+  FEAT_ED_PSEUDO
 };
 
-#define NUM_FEAT_ED_ACTIONS 7
+#define NUM_FEAT_ED_ACTIONS 8
 
-typedef struct mockupfeated
+typedef struct feated
 {
   FORM_MESSAGE_BLOCK
   DialoG  feature_select;
@@ -15248,15 +17046,19 @@ typedef struct mockupfeated
   GrouP      experiment_action;
   TexT       experiment_text;
   
-} MockupFeatEdData, PNTR MockupFeatEdPtr;
+  /* for pseudo */
+  GrouP      pseudo_action;
+  Boolean    pseudo_val;
+  
+} FeatEdData, PNTR FeatEdPtr;
 
-static void MockupFeatEdChangeNotify (Pointer userdata)
+static void FeatEdChangeNotify (Pointer userdata)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   ValNodePtr      err_list;
   CharPtr         str;
 
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   if (mp == NULL) return;
   
   if (mp->explanation_choice != NULL)
@@ -15295,11 +17097,11 @@ static void MockupFeatEdChangeNotify (Pointer userdata)
   ValNodeFree (err_list);  
 }
 
-static void MockupFeatEdClear (Pointer data)
+static void FeatEdClear (Pointer data)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
 
-  mp = (MockupFeatEdPtr) data;
+  mp = (FeatEdPtr) data;
   if (mp == NULL) return;
  
   PointerToDialog (mp->feature_select, NULL);
@@ -15363,16 +17165,22 @@ static void MockupFeatEdClear (Pointer data)
   {
     SetTitle (mp->experiment_text, "");
   }
+  
+  /* for pseudo */
+  if (mp->pseudo_action != NULL)
+  {
+    SetValue (mp->pseudo_action, 1);
+  }
 
-  MockupFeatEdChangeNotify (mp);
+  FeatEdChangeNotify (mp);
 }
 
-static void MockupFeatEdClearText (Pointer data)
+static void FeatEdClearText (Pointer data)
 {
-  MockupFeatEdPtr     mp;
+  FeatEdPtr     mp;
   FilterSetPtr        fsp;
 
-  mp = (MockupFeatEdPtr) data;
+  mp = (FeatEdPtr) data;
   if (mp == NULL) return;
  
   /* clear text from constraints */
@@ -15393,10 +17201,30 @@ static void MockupFeatEdClearText (Pointer data)
     SetTitle (mp->experiment_text, "");
   }
 
-  MockupFeatEdChangeNotify (mp);
+  FeatEdChangeNotify (mp);
 }
 
-static GrouP MockupFeatureEvidenceGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeaturePseudoGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP g;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  
+  g = HiddenGroup (h, 0, 0, NULL);
+
+  mp->pseudo_action = HiddenGroup (g, 2, 0, NULL);
+  SetGroupSpacing (mp->pseudo_action, 10, 10);
+  RadioButton (mp->pseudo_action, "Set Pseudo");
+  RadioButton (mp->pseudo_action, "Clear Pseudo");
+  SetValue (mp->pseudo_action, 1);
+  
+  return g;  
+}
+
+static GrouP FeatureEvidenceGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP g;
   
@@ -15418,11 +17246,11 @@ static GrouP MockupFeatureEvidenceGroup (GrouP h, MockupFeatEdPtr mp)
   return g;
 }
 
-static void MockupFeatExplanationChange (PopuP p)
+static void FeatExplanationChange (PopuP p)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
 
-  mp = (MockupFeatEdPtr) GetObjectExtra (p);
+  mp = (FeatEdPtr) GetObjectExtra (p);
   if (mp == NULL) return;
   
   if (GetValue (mp->explanation_choice) == 9)
@@ -15434,15 +17262,15 @@ static void MockupFeatExplanationChange (PopuP p)
     Disable (mp->other_explanation);
   }
   
-  MockupFeatEdChangeNotify (mp);
+  FeatEdChangeNotify (mp);
 }
 
-static void MockupFeatOtherExplanationChange (TexT t)
+static void FeatOtherExplanationChange (TexT t)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
  
-  mp = (MockupFeatEdPtr) GetObjectExtra (t);
-  MockupFeatEdChangeNotify (mp);
+  mp = (FeatEdPtr) GetObjectExtra (t);
+  FeatEdChangeNotify (mp);
 }
 
 static CharPtr exception_explanations[] = 
@@ -15454,7 +17282,7 @@ static CharPtr exception_explanations[] =
 
 static Int4 num_exception_explanations = sizeof (exception_explanations) / sizeof (CharPtr);
 
-static GrouP MockupFeatureExceptionGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureExceptionGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP  g, k1, k2;
   Int4   i;
@@ -15469,7 +17297,7 @@ static GrouP MockupFeatureExceptionGroup (GrouP h, MockupFeatEdPtr mp)
   k1 = HiddenGroup (g, 3, 0, NULL);
   SetGroupSpacing (k1, 10, 10);
   StaticPrompt (k1, "Set Explanation to ", 0, dialogTextHeight, systemFont, 'l');
-  mp->explanation_choice = PopupList (k1, TRUE, MockupFeatExplanationChange);
+  mp->explanation_choice = PopupList (k1, TRUE, FeatExplanationChange);
   SetObjectExtra (mp->explanation_choice, mp, NULL);
   PopupItem (mp->explanation_choice, " ");
   for (i = 0; i < num_exception_explanations; i++)
@@ -15477,7 +17305,7 @@ static GrouP MockupFeatureExceptionGroup (GrouP h, MockupFeatEdPtr mp)
     PopupItem (mp->explanation_choice, exception_explanations [i]);
   }
   SetValue (mp->explanation_choice, 1);
-  mp->other_explanation = DialogText (k1, "", 10, MockupFeatOtherExplanationChange);
+  mp->other_explanation = DialogText (k1, "", 10, FeatOtherExplanationChange);
   Disable (mp->other_explanation);
   SetObjectExtra (mp->other_explanation, mp, NULL);
 
@@ -15502,9 +17330,9 @@ static GrouP MockupFeatureExceptionGroup (GrouP h, MockupFeatEdPtr mp)
 
 static void ChangeExplanationConstraint (ButtoN b)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   
-  mp = (MockupFeatEdPtr) GetObjectExtra (b);
+  mp = (FeatEdPtr) GetObjectExtra (b);
   if (mp == NULL)
   {
     return;
@@ -15519,7 +17347,7 @@ static void ChangeExplanationConstraint (ButtoN b)
   }  
 }
 
-static GrouP FeatureEditorCitationGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureEditorCitationGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP  g, k1, k2;
   Int4   i;
@@ -15562,7 +17390,7 @@ static GrouP FeatureEditorCitationGroup (GrouP h, MockupFeatEdPtr mp)
   return g;
 }
 
-static GrouP FeatureEditorPartialGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureEditorPartialGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP g, k1, k2;
   
@@ -15628,7 +17456,7 @@ static GrouP FeatureEditorPartialGroup (GrouP h, MockupFeatEdPtr mp)
 #define FEATED_STRAND_MINUS       4
 #define FEATED_STRAND_BOTH        5
 
-static GrouP FeatureEditorStrandGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureEditorStrandGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP  g;
   
@@ -15661,8 +17489,8 @@ static GrouP FeatureEditorStrandGroup (GrouP h, MockupFeatEdPtr mp)
 
 static void ChangeExperimentAction (GrouP g)
 {
-  MockupFeatEdPtr mp;
-  mp = (MockupFeatEdPtr) GetObjectExtra (g);
+  FeatEdPtr mp;
+  mp = (FeatEdPtr) GetObjectExtra (g);
   if (mp != NULL)
   {
     if (GetValue (mp->experiment_action) == 1)
@@ -15676,7 +17504,7 @@ static void ChangeExperimentAction (GrouP g)
   }
 }
 
-static GrouP FeatureEditorExperimentGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureEditorExperimentGroup (GrouP h, FeatEdPtr mp)
 {
   if (mp == NULL)
   {
@@ -15692,7 +17520,7 @@ static GrouP FeatureEditorExperimentGroup (GrouP h, MockupFeatEdPtr mp)
   return mp->experiment_action;
 }
 
-static GrouP FeatureEditorInferenceGroup (GrouP h, MockupFeatEdPtr mp)
+static GrouP FeatureEditorInferenceGroup (GrouP h, FeatEdPtr mp)
 {
   GrouP g;
 
@@ -15704,10 +17532,10 @@ static GrouP FeatureEditorInferenceGroup (GrouP h, MockupFeatEdPtr mp)
 
 static void ChangeFeatureEditorActionGroup (GrouP g)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   Int4            i;
   
-  mp = (MockupFeatEdPtr) GetObjectExtra (g);
+  mp = (FeatEdPtr) GetObjectExtra (g);
   if (mp == NULL)
   {
     return;
@@ -15724,11 +17552,11 @@ static void ChangeFeatureEditorActionGroup (GrouP g)
     Show (mp->action_grps [i-1]);
   }
 
-  MockupFeatEdChangeNotify (mp);
+  FeatEdChangeNotify (mp);
   
 }
 
-static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_action)
+static GrouP FeatureEditorActionGroup (GrouP h, FeatEdPtr mp, Int4 first_action)
 {
   GrouP g, k, n = NULL;
   PrompT p1;
@@ -15740,7 +17568,7 @@ static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_a
   g = HiddenGroup (h, -1, 0, NULL);
 
   p1 = StaticPrompt (g, "For", 0, dialogTextHeight, systemFont, 'l');
-  mp->feature_select = FeatureSelectionDialog (g, TRUE, MockupFeatEdChangeNotify, mp);
+  mp->feature_select = FeatureSelectionDialog (g, TRUE, FeatEdChangeNotify, mp);
   
   k = HiddenGroup (g, -1, 0, NULL);
   mp->action_choice_grp = HiddenGroup (g, NUM_FEAT_ED_ACTIONS, 0, ChangeFeatureEditorActionGroup);
@@ -15752,30 +17580,33 @@ static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_a
   RadioButton (mp->action_choice_grp, "Citations");
   RadioButton (mp->action_choice_grp, "Experiment");
   RadioButton (mp->action_choice_grp, "Inference");
+  RadioButton (mp->action_choice_grp, "Pseudo");
   if (first_action >= 1 && first_action <= NUM_FEAT_ED_ACTIONS)
   {
     SetValue (mp->action_choice_grp, first_action);
   }
   else
   {
-    SetValue (mp->action_choice_grp, FEAT_ED_EVIDENCE);
+    SetValue (mp->action_choice_grp, FEAT_ED_PSEUDO);
   }
     
   n = HiddenGroup (g, 0, 0, NULL);
-  mp->action_grps [0] = MockupFeatureEvidenceGroup (n, mp);
-  mp->action_grps[1] = MockupFeatureExceptionGroup (n, mp);
+  mp->action_grps [0] = FeatureEvidenceGroup (n, mp);
+  mp->action_grps[1] = FeatureExceptionGroup (n, mp);
   mp->action_grps[2] = FeatureEditorPartialGroup (n, mp);
   mp->action_grps[3] = FeatureEditorStrandGroup (n, mp);
   mp->action_grps[4] = FeatureEditorCitationGroup (n, mp);
   mp->action_grps[5] = FeatureEditorExperimentGroup (n, mp);
   mp->action_grps[6] = FeatureEditorInferenceGroup (n, mp);
+  mp->action_grps[7] = FeaturePseudoGroup (n, mp);
   AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_grps [0],
                               (HANDLE) mp->action_grps [1],
                               (HANDLE) mp->action_grps [2],
                               (HANDLE) mp->action_grps [3],
                               (HANDLE) mp->action_grps [4], 
-							  (HANDLE) mp->action_grps [5],
-							  (HANDLE) mp->action_grps [6],
+							                (HANDLE) mp->action_grps [5],
+							                (HANDLE) mp->action_grps [6],
+							                (HANDLE) mp->action_grps [7],
 							  NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_choice_grp, (HANDLE) n, NULL);
   
@@ -15786,23 +17617,37 @@ static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_a
   return g;
 }
 
-static void DoEvidenceFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+static void DoPseudoFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
 
   if (sfp == NULL || userdata == NULL)
   {
     return;
   }
   
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
+  
+  sfp->pseudo = mp->pseudo_val;  
+}
+
+static void DoEvidenceFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  FeatEdPtr mp;
+
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
   
   sfp->exp_ev = (Uint1) mp->evidence_val;
 }
 
 static void DoExceptionFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
-  MockupFeatEdPtr  mp;
+  FeatEdPtr  mp;
   ExistingTextData etd;
   CharPtr          old_explanation = NULL;
 
@@ -15811,7 +17656,7 @@ static void DoExceptionFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetP
     return;
   }
   
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   
   if ((mp->product_val == 1 && sfp->product != NULL)
       || (mp->product_val == 2 && sfp->product == NULL)
@@ -15850,7 +17695,7 @@ static void DoExceptionFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetP
 
 static void DoPartialFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   Boolean      partial5, partial3;
   Boolean      dash_at_end = FALSE;
   Boolean      star_at_end = FALSE;
@@ -15870,7 +17715,7 @@ static void DoPartialFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr
     return;
   }
   
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   bsp = BioseqFindFromSeqLoc (sfp->location);
@@ -16263,14 +18108,14 @@ static void ConvertLocationStrand (SeqLocPtr slp, Int4 fromStrand, Int4 toStrand
 
 static void DoStrandFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   
   if (sfp == NULL || userdata == NULL)
   {
     return;
   }
   
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   
   ConvertLocationStrand (sfp->location, mp->from_strand_val, mp->to_strand_val);
   
@@ -16278,7 +18123,7 @@ static void DoStrandFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr 
 
 static void DoCitationFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   ByteStorePtr    bs;
   BioseqPtr       protbsp;
   CharPtr         seq1 = NULL, seq2 = NULL;
@@ -16289,7 +18134,7 @@ static void DoCitationFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
     return;
   }
   
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   
   if (mp->use_explanation_constraint && mp->explanation_constraint_choice_val != 1)
   {
@@ -16359,7 +18204,7 @@ FeatureEditorDoOneAction
 (SeqEntryPtr     sep, 
  ValNodePtr      feature_type_list, 
  FilterSetPtr    fsp,
- MockupFeatEdPtr mp,
+ FeatEdPtr mp,
  Int4            action_choice)
 {
   Int4            exception_choice;
@@ -16367,6 +18212,8 @@ FeatureEditorDoOneAction
   Uint2           feat_def_choice;
   ApplyValueData  avd;
   GetSamplePtr    gsp;
+  MsgAnswer       ans;
+  Boolean         also_remove_evidence = FALSE;
 
   avd.etp = NULL;
   avd.field_list = NULL;
@@ -16376,14 +18223,14 @@ FeatureEditorDoOneAction
   if (action_choice == FEAT_ED_EXPERIMENT)
   {
     avd.field_list = ValNodeNew (NULL);
-	avd.field_list->data.intvalue = QUAL_EXPERIMENT;
+    avd.field_list->data.intvalue = QUAL_EXPERIMENT;
     avd.new_text = SaveStringFromText (mp->experiment_text);
-	if (StringHasNoText (avd.new_text) || GetValue (mp->experiment_action) != 1)
-	{
-	  avd.new_text = MemFree (avd.new_text);
-	}
-	else
-	{
+    if (StringHasNoText (avd.new_text) || GetValue (mp->experiment_action) != 1)
+    {
+      avd.new_text = MemFree (avd.new_text);
+    }
+    else
+    {
       /* get handling for existing text */
       gsp = GetGBQualExistingText (sep, feature_type_list,
                                    avd.field_list,
@@ -16394,10 +18241,35 @@ FeatureEditorDoOneAction
           && avd.etp->existing_text_choice == EXISTING_TEXT_CHOICE_CANCEL)
       {
         avd.etp = MemFree (avd.etp);
-	    avd.field_list = ValNodeFree (avd.field_list);
+        avd.field_list = ValNodeFree (avd.field_list);
         return;
       }
-	}
+    }
+  }
+  else if (action_choice == FEAT_ED_INFERENCE)
+  {
+    avd.field_list = ValNodeNew (NULL);
+    avd.field_list->data.intvalue = QUAL_EVIDENCE;
+    avd.new_text = NULL;
+    /* get handling for existing text */
+    gsp = GetGBQualExistingText (sep, feature_type_list,
+                                 avd.field_list,
+                                 fsp);
+    if (gsp->num_found > 0)
+    {
+      ans = Message (MSG_YNC, "There are evidence qualifiers on your features, which are displayed as inference qualifiers in the flat file.  Would you like to remove them as well?");
+      if (ans == ANS_CANCEL)
+      {
+        gsp = GetSampleFree (gsp);
+	      avd.field_list = ValNodeFree (avd.field_list);
+        return;
+      }
+      else if (ans == ANS_YES)
+      {
+        also_remove_evidence = TRUE;
+      }
+    }
+    gsp = GetSampleFree (gsp);
   }
   
   for (vnp = feature_type_list; vnp != NULL; vnp = vnp->next)
@@ -16409,6 +18281,19 @@ FeatureEditorDoOneAction
     }
     switch (action_choice)
     {
+      case FEAT_ED_PSEUDO:
+        if (GetValue (mp->pseudo_action) == 1)
+        {
+          mp->pseudo_val = TRUE;
+        }
+        else
+        {
+          mp->pseudo_val = FALSE;
+        }
+        OperateOnSeqEntryConstrainedObjects (sep, fsp, 
+                                             DoPseudoFeatureProc,
+                                             NULL, 0, feat_def_choice, 0, mp);
+        break;
       case FEAT_ED_EVIDENCE:
         mp->evidence_val = GetValue (mp->evidence_choice) - 1;
         OperateOnSeqEntryConstrainedObjects (sep, fsp, 
@@ -16463,23 +18348,30 @@ FeatureEditorDoOneAction
                                              DoCitationFeatureProc,
                                              NULL, 0, feat_def_choice, 0, mp);
         break;
-	  case FEAT_ED_EXPERIMENT:
-		if (avd.new_text == NULL)
-		{
+	    case FEAT_ED_EXPERIMENT:
+		    if (avd.new_text == NULL)
+        {
            OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveGBQualField,
                                                NULL, 0, feat_def_choice, 0, &avd);
-		}
-		else
-		{
+	      }
+        else
+        {
           OperateOnSeqEntryConstrainedObjects (sep, fsp, SetGBQualString,
                                                NULL, 0, feat_def_choice, 0, &avd);  
-		}
- 
-		break;
-	  case FEAT_ED_INFERENCE:
+        }
+
+        break;
+      case FEAT_ED_INFERENCE:
         OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveInference,
                                                NULL, 0, feat_def_choice, 0, &avd);
-		break;
+        if (also_remove_evidence)
+        {
+          mp->evidence_val = 0;
+          OperateOnSeqEntryConstrainedObjects (sep, fsp, 
+                                             DoEvidenceFeatureProc,
+                                             NULL, 0, feat_def_choice, 0, mp);
+        }
+        break;
     }
   }
   avd.field_list = ValNodeFree (avd.field_list);
@@ -16490,13 +18382,13 @@ FeatureEditorDoOneAction
 
 static Boolean FeatureEditorAction (Pointer userdata)
 {
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   Int4            action_choice;
   SeqEntryPtr     sep;
   ValNodePtr      feature_type_list;
   FilterSetPtr    fsp;
 
-  mp = (MockupFeatEdPtr) userdata;
+  mp = (FeatEdPtr) userdata;
   if (mp == NULL)
   {
     return FALSE;
@@ -16534,7 +18426,7 @@ static Boolean FeatureEditorAction (Pointer userdata)
 static void FeatureEditor (IteM i, Int4 first_action)
 {
   BaseFormPtr     bfp;
-  MockupFeatEdPtr mp;
+  FeatEdPtr mp;
   WindoW          w;
   GrouP           h, g;
 
@@ -16545,7 +18437,7 @@ static void FeatureEditor (IteM i, Int4 first_action)
 #endif
   if (bfp == NULL) return;
 
-  mp = (MockupFeatEdPtr) MemNew (sizeof (MockupFeatEdData));
+  mp = (FeatEdPtr) MemNew (sizeof (FeatEdData));
   if (mp == NULL) return;
   
   w = FixedWindow (-50, -33, -10, -10, "Feature Editor", StdCloseWindowProc);
@@ -16560,8 +18452,8 @@ static void FeatureEditor (IteM i, Int4 first_action)
   mp->constraints = FilterGroup (h, TRUE, FALSE, TRUE, FALSE, "Where feature text");
                       
   mp->accept_cancel = AcceptCancelDialog (h, FeatureEditorAction, NULL, 
-                                          MockupFeatEdClear, 
-                                          MockupFeatEdClearText, 
+                                          FeatEdClear, 
+                                          FeatEdClearText, 
                                           (Pointer)mp, w);
   AlignObjects (ALIGN_CENTER, (HANDLE) g,
                               (HANDLE) mp->constraints,
@@ -16604,6 +18496,11 @@ extern void FeatureExperimentEditor (IteM i)
 extern void FeatureInferenceEditor (IteM i)
 {
   FeatureEditor(i, FEAT_ED_INFERENCE);
+}
+
+extern void FeaturePseudoEditor (IteM i)
+{
+  FeatureEditor (i, FEAT_ED_PSEUDO);
 }
 
 typedef struct cdset 
@@ -16996,6 +18893,71 @@ static void RemoveCDSetField (CDSetPtr cdsp, ValNodePtr vnp)
   }
 }
 
+static Boolean GetCDSetPseudoMatch (CDSetPtr cdsp, Int4 featdef_type, Boolean is_pseudo)
+{
+  ValNodePtr sfp_vnp;
+  CharPtr    str = NULL;
+  SeqFeatPtr sfp;
+  GeneRefPtr grp;
+  Boolean    gene_is_pseudo;
+  
+  if (cdsp == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (featdef_type == FEATDEF_CDS || featdef_type == FEATDEF_ANY)
+  {
+    for (sfp_vnp = cdsp->cds_list; sfp_vnp != NULL && str == NULL; sfp_vnp = sfp_vnp->next)
+    {
+      sfp = sfp_vnp->data.ptrvalue;
+      if (sfp != NULL && ((is_pseudo && sfp->pseudo) || (!is_pseudo && ! sfp->pseudo)))
+      {
+        return TRUE;
+      }
+    }
+  }
+  if (featdef_type == FEATDEF_GENE || featdef_type == FEATDEF_ANY)
+  {
+    for (sfp_vnp = cdsp->gene_list; sfp_vnp != NULL && str == NULL; sfp_vnp = sfp_vnp->next)
+    {
+      sfp = sfp_vnp->data.ptrvalue;
+      if (sfp != NULL)
+      {
+        gene_is_pseudo = FALSE;
+        if (sfp->pseudo)
+        {
+          gene_is_pseudo = TRUE;
+        }
+        if (sfp->data.choice == SEQFEAT_GENE)
+        {
+          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+          if (grp != NULL && grp->pseudo)
+          {
+            gene_is_pseudo = TRUE;
+          }
+        }
+        if ((is_pseudo && gene_is_pseudo) || (!is_pseudo && ! gene_is_pseudo))
+        {
+          return TRUE;
+        }
+      }
+    }
+  }
+  if (featdef_type == FEATDEF_mRNA || featdef_type == FEATDEF_ANY)
+  {
+    for (sfp_vnp = cdsp->mrna_list; sfp_vnp != NULL && str == NULL; sfp_vnp = sfp_vnp->next)
+    {
+      sfp = sfp_vnp->data.ptrvalue;
+      if (sfp != NULL && ((is_pseudo && sfp->pseudo) || (!is_pseudo && ! sfp->pseudo)))
+      {
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
 static Boolean DoesCDSetMatchConstraint (CDSetPtr cdsp, ChoiceConstraintPtr ccp)
 {
   Boolean                does_match = FALSE;
@@ -17052,6 +19014,19 @@ static Boolean DoesCDSetMatchConstraint (CDSetPtr cdsp, ChoiceConstraintPtr ccp)
     if (ccp->string_constraint != NULL && ccp->string_constraint->not_present)
     {
       does_match = ! does_match;
+    }
+  }
+  else if (ccp->constraint_type == CHOICE_CONSTRAINT_PSEUDO)
+  {
+    if (ccp->pseudo_constraint == NULL)
+    {
+      does_match = TRUE;
+    }
+    else
+    {
+      does_match = GetCDSetPseudoMatch (cdsp, 
+                                        ccp->pseudo_constraint->featdef_type, 
+                                        ccp->pseudo_constraint->is_pseudo);
     }
   }
   return does_match;
@@ -20853,6 +22828,283 @@ extern void RemoveRNAQual (IteM i)
   RNAQualApplyEditRemoveConvert (i, AECR_REMOVE, FALSE);
 }
 
+
+typedef struct removegbqualdlg 
+{
+  DIALOG_MESSAGE_BLOCK
+  DialoG          field_list;
+  DialoG          subtype_list;
+  GrouP           list_or_txt_grp;
+  DialoG          qual_name_constraint;
+  
+  /* These are necessary to produce the SimpleAECR structure for output */
+  FreeValNodeProc free_field_vn_proc;
+  FreeValNodeProc free_subtype_vn_proc;
+  
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+  Uint2                    entityID;
+  
+} RemoveGBQualDlgData, PNTR RemoveGBQualDlgPtr;
+
+
+typedef struct removegbqual
+{
+  ValNodePtr          field_list;
+  ValNodePtr          subtype_list;
+  StringConstraintPtr scp;
+  Boolean             use_field_list;
+} RemoveGBQualData, PNTR RemoveGBQualPtr;
+
+static RemoveGBQualPtr RemoveGBQualFree (RemoveGBQualPtr ap)
+{
+  if (ap != NULL)
+  {
+    ap->field_list = ValNodeFree (ap->field_list);
+    ap->subtype_list = ValNodeFree (ap->subtype_list);
+    ap->scp = StringConstraintFree (ap->scp);
+    ap = MemFree (ap);
+  }
+  return ap;
+}
+
+
+static void ClearTextRemoveGBQualDlg (RemoveGBQualDlgPtr dlg)
+{
+  if (dlg != NULL)
+  {
+    PointerToDialog (dlg->qual_name_constraint, NULL);    
+  }
+}
+
+static void ResetRemoveGBQualDlg (RemoveGBQualDlgPtr dlg)
+{
+  if (dlg != NULL)
+  {
+    PointerToDialog (dlg->field_list, NULL);
+    SendMessageToDialog (dlg->field_list, NUM_VIB_MSG + 1);
+    PointerToDialog (dlg->subtype_list, NULL);
+    ClearTextRemoveGBQualDlg (dlg);
+    SetValue (dlg->list_or_txt_grp, 1);
+    Enable (dlg->subtype_list);
+    Disable (dlg->qual_name_constraint);
+  }
+}
+
+
+static void RemoveGBQualToDialog (DialoG d, Pointer userdata)
+{
+  RemoveGBQualDlgPtr dlg;
+  RemoveGBQualPtr    data;
+  
+  dlg = (RemoveGBQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+    
+  data = (RemoveGBQualPtr) userdata;
+  if (data == NULL)
+  {
+    PointerToDialog (dlg->field_list, NULL);
+    PointerToDialog (dlg->subtype_list, NULL);
+    ClearTextRemoveGBQualDlg (dlg);
+    SetValue (dlg->list_or_txt_grp, 1);
+    Enable (dlg->subtype_list);
+    Disable (dlg->qual_name_constraint);
+  }
+  else
+  {
+    PointerToDialog (dlg->field_list, data->field_list);
+    PointerToDialog (dlg->subtype_list, data->subtype_list);
+    PointerToDialog (dlg->qual_name_constraint, data->scp);
+    if (data->use_field_list)
+    {
+      SetValue (dlg->list_or_txt_grp, 1);
+      Enable (dlg->subtype_list);
+      Disable (dlg->qual_name_constraint);
+    }
+    else
+    {
+      SetValue (dlg->list_or_txt_grp, 2);
+      Disable (dlg->subtype_list);
+      Enable (dlg->qual_name_constraint);
+    }
+  }
+}
+
+
+static Pointer DialogToRemoveGBQual (DialoG d)
+{
+  RemoveGBQualDlgPtr dlg;
+  RemoveGBQualPtr    data;
+  
+  dlg = (RemoveGBQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  data = (RemoveGBQualPtr) MemNew (sizeof (RemoveGBQualData));
+  if (data != NULL)
+  {
+    data->field_list = DialogToPointer (dlg->field_list);
+    data->subtype_list = DialogToPointer (dlg->subtype_list);
+    data->scp = DialogToPointer (dlg->qual_name_constraint);
+    if (GetValue (dlg->list_or_txt_grp) == 1)
+    {
+      data->use_field_list = TRUE;
+    }
+    else
+    {
+      data->use_field_list = FALSE;
+    }
+  }
+  return data;
+}
+
+
+static void RemoveGBQualMessage (DialoG d, Int2 mssg)
+
+{
+  RemoveGBQualDlgPtr  dlg;
+
+  dlg = (RemoveGBQualDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) 
+    {
+      case VIB_MSG_INIT :
+        /* reset list */
+        ResetRemoveGBQualDlg (dlg);
+        break;
+      case VIB_MSG_ENTER :
+        if (dlg->subtype_list != NULL)
+        {
+          Select (dlg->subtype_list);
+        }
+        else
+        {
+          Select (dlg->field_list);
+        }
+        break;
+      case AECR_VIB_MSG_SET_DEFAULT :
+        SendMessageToDialog (dlg->field_list, AECR_VIB_MSG_SET_DEFAULT);
+        SendMessageToDialog (dlg->subtype_list, AECR_VIB_MSG_SET_DEFAULT);
+        ClearTextRemoveGBQualDlg (dlg);
+        break;
+      case AECR_VIB_MSG_CLEAR_TEXT :
+        ClearTextRemoveGBQualDlg (dlg);
+        break;
+      case AECR_VIB_MSG_AUTOPOPULATE:
+        break; 
+      default :
+        break;
+    }
+  }
+}
+
+static ValNodePtr TestRemoveGBQual (DialoG d)
+{
+  RemoveGBQualDlgPtr dlg;
+  ValNodePtr         err_list = NULL;
+  ValNodePtr         total_err_list = NULL;
+  
+  dlg = (RemoveGBQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  total_err_list = TestDialog (dlg->subtype_list);
+
+  if (GetValue (dlg->list_or_txt_grp) == 1)
+  {
+    err_list = TestDialog (dlg->field_list);
+    total_err_list = ValNodeAppend (total_err_list, err_list);
+  }      
+      
+  return total_err_list;
+}
+
+
+static void GBQualChangeNotify (GrouP b)
+{
+  RemoveGBQualDlgPtr dlg;
+  ValNodePtr         field_list = NULL, subtype_list = NULL;
+
+  dlg = (RemoveGBQualDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  if (GetValue (dlg->list_or_txt_grp) == 1)
+  {
+    Enable (dlg->field_list);
+    Disable (dlg->qual_name_constraint);
+  }
+  else
+  {
+    Disable (dlg->field_list);
+    Enable (dlg->qual_name_constraint);
+  }
+    
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify)(dlg->change_userdata);
+  }  
+}
+
+
+static DialoG GBQualRemoveDialog
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Uint2                    entityID)
+{
+  RemoveGBQualDlgPtr dlg;
+  GrouP              p, g1;
+  
+  dlg = (RemoveGBQualDlgPtr) MemNew (sizeof (RemoveGBQualDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = RemoveGBQualToDialog;
+  dlg->fromdialog = DialogToRemoveGBQual;
+  dlg->dialogmessage = RemoveGBQualMessage;
+  dlg->testdialog = TestRemoveGBQual;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->entityID = entityID;
+  
+  g1 = HiddenGroup (p, 2, 0, NULL);
+  StaticPrompt (g1, "Feature", 0, dialogTextHeight, systemFont, 'l');
+  StaticPrompt (g1, "Qualifier", 0, dialogTextHeight, systemFont, 'l');
+  dlg->subtype_list = FeatureSelectionDialog (g1, TRUE, 
+                                                 change_notify,
+                                                 change_userdata);
+  dlg->list_or_txt_grp = HiddenGroup (g1, 2, 0, GBQualChangeNotify);
+  SetObjectExtra (dlg->list_or_txt_grp, dlg, NULL);
+  RadioButton (dlg->list_or_txt_grp, "Choose from Standard List");
+  RadioButton (dlg->list_or_txt_grp, "Select Qual Name Constraint");
+  dlg->field_list = GBQualSelectionDialog (dlg->list_or_txt_grp, FALSE, 
+                                                change_notify,
+                                                change_userdata);
+  dlg->qual_name_constraint = StringConstraintDialog (dlg->list_or_txt_grp, "Where qualifier name contains", FALSE);
+  SetValue (dlg->list_or_txt_grp, 1);
+  Disable (dlg->qual_name_constraint);
+    
+  return (DialoG) p;
+}
+
+
 static DialoG 
 GBQualListDialog
 (GrouP                    h,
@@ -20861,10 +23113,17 @@ GBQualListDialog
  Pointer                  change_userdata,
  Uint2                    entityID)
 {
-  return SimpleAECRDialog (h, action_choice, change_notify, change_userdata,
-                           NULL, ValNodeSimpleDataFree,
-                           GBQualSelectionDialog, FeatureSelectionDialog, NULL,
-                           "Qualifier", "Feature", TRUE, entityID);
+  if (action_choice == AECR_REMOVE)
+  {
+    return GBQualRemoveDialog (h, change_notify, change_userdata, entityID);
+  }
+  else
+  {
+    return SimpleAECRDialog (h, action_choice, change_notify, change_userdata,
+                             NULL, ValNodeSimpleDataFree,
+                             GBQualSelectionDialog, FeatureSelectionDialog, NULL,
+                             "Qualifier", "Feature", TRUE, entityID);
+  }
 }
 
 static GetSamplePtr 
@@ -20909,7 +23168,8 @@ GetGBQualExistingText
 static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
 {
   ApplyEditConvertRemovePtr ap;
-  SimpleAECRPtr             gp;
+  SimpleAECRPtr             gp = NULL;
+  RemoveGBQualPtr           rgp = NULL;
   Int4                      action_choice;
   SeqEntryPtr               sep;
   ApplyValueData            avd;
@@ -20919,14 +23179,21 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
   ValNodePtr                vnp, qual_vnp;
   Boolean                   rval = TRUE;
 
+  ValNodePtr                field_list = NULL;
+  ValNodePtr                field_list_to = NULL;
+  ValNodePtr                subtype_list = NULL;
+  Boolean                   leave_on_original = FALSE;
+  EditApplyPtr              edit_apply = NULL;
+  FreeValNodeProc           free_field_vn_proc = NULL;
+  FreeValNodeProc           free_subtype_vn_proc = NULL;
+  EditApplyPtr              eap = NULL;
+
+
   ap = (ApplyEditConvertRemovePtr) userdata;
   if (ap == NULL)
   {
     return FALSE;
   }
-  
-  WatchCursor ();
-  Update ();
   
   if (ap->crippled)
   {
@@ -20940,14 +23207,40 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
   {
     return FALSE;
   }
-  gp = (SimpleAECRPtr) DialogToPointer (ap->aecr_pages[action_choice - 1]);
+  
+  if (action_choice == AECR_REMOVE)
+  {
+    rgp = (RemoveGBQualPtr) DialogToPointer (ap->aecr_pages[action_choice - 1]);
+    if (rgp == NULL)
+    {
+      return FALSE;
+    }
+    field_list = rgp->field_list;
+    subtype_list = rgp->subtype_list;
+  }
+  else
+  {
+    gp = (SimpleAECRPtr) DialogToPointer (ap->aecr_pages[action_choice - 1]);
+    if (gp == NULL)
+    {
+      return FALSE;
+    }
+    field_list = gp->field_list;
+    subtype_list = gp->subtype_list;
+    eap = gp->edit_apply;
+  }
 
+  WatchCursor ();
+  Update ();
+  
   sep = GetTopSeqEntryForEntityID (ap->input_entityID);
-  if (gp->subtype_list == NULL || gp->field_list == NULL
+  if (subtype_list == NULL || (action_choice != AECR_REMOVE && field_list == NULL)
+      || (action_choice == AECR_REMOVE && rgp->use_field_list && field_list == NULL)
       || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP) 
            && gp->field_list_to == NULL))
   {
     gp = SimpleAECRFree (gp);
+    rgp = RemoveGBQualFree (rgp);
     ArrowCursor ();
     Update ();
     return FALSE;
@@ -21021,14 +23314,22 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
     }
     cfd.etp = MemFree (cfd.etp);
   }
+  else if (action_choice == AECR_REMOVE && rgp != NULL && ! rgp->use_field_list)
+  {
+    for (vnp = subtype_list; vnp != NULL; vnp = vnp->next)
+    {
+      OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveGBQualByNameConstraint,
+                                           NULL, 0, vnp->choice, 0, rgp->scp);  
+    }
+  }
   else
   {
-    avd.field_list = gp->field_list;
+    avd.field_list = field_list;
   
     /* get handling for existing text */
     if (action_choice == AECR_APPLY)
     {
-      gsp = GetGBQualExistingText (sep, gp->subtype_list,
+      gsp = GetGBQualExistingText (sep, subtype_list,
                                    avd.field_list,
                                    fsp);
       avd.etp = GetExistingTextHandlerInfo (gsp, FALSE);
@@ -21045,9 +23346,9 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
       avd.etp = NULL;
     }
   
-    AddEditApplyDataToApplyValue (action_choice, gp->edit_apply, &avd);
+    AddEditApplyDataToApplyValue (action_choice, eap, &avd);
         
-    for (vnp = gp->subtype_list; vnp != NULL; vnp = vnp->next)
+    for (vnp = subtype_list; vnp != NULL; vnp = vnp->next)
     {
       if (action_choice == AECR_EDIT || action_choice == AECR_APPLY)
       {
@@ -21056,7 +23357,7 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
       }
       else if (action_choice == AECR_REMOVE)
       {
-        for (qual_vnp = gp->field_list; qual_vnp != NULL; qual_vnp = qual_vnp->next)
+        for (qual_vnp = field_list; qual_vnp != NULL; qual_vnp = qual_vnp->next)
         {
           avd.field_list = qual_vnp;
           OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveGBQualField,
@@ -21070,6 +23371,7 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
   }
   FilterSetFree (fsp);
   gp = SimpleAECRFree (gp);
+  rgp = RemoveGBQualFree (rgp);
   
   if (rval)
   {
@@ -21252,6 +23554,7 @@ extern void RemoveGBQual (IteM i)
 {
   GBQualApplyEditRemoveConvert (i, AECR_REMOVE, FALSE);
 }
+
 
 typedef struct locustagtooldlocustag 
 {

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ftp_connector.c,v 1.14 2005/06/08 20:42:05 lavr Exp $
+/*  $Id: ncbi_ftp_connector.c,v 1.17 2006/01/27 17:01:19 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -351,7 +351,7 @@ static EIO_Status s_FTPPasv(SFTPConnector* xxx)
             return eIO_Unknown;
     }
     i = (((((o[0] << 8) | o[1]) << 8) | o[2]) << 8) | o[3];
-    host = SOCK_htonl(i);
+    host = SOCK_HostToNetLong(i);
     i = (o[4] << 8) | o[5];
     port = (unsigned short) i;
     if (SOCK_ntoa(host, buf, sizeof(buf)) == 0  &&
@@ -410,7 +410,7 @@ static EIO_Status s_FTPExecute(SFTPConnector* xxx, const STimeout* timeout)
     if (BUF_Read(xxx->wbuf, s, size) == size  &&
         SOCK_SetTimeout(xxx->cntl, eIO_ReadWrite, timeout) == eIO_Success) {
         char* c;
-        if ((c = memchr(s, '\n', size)) != 0) {
+        if ((c = (char*) memchr(s, '\n', size)) != 0) {
             if (c != s  &&  c[-1] == '\r')
                 c--;
             *c = '\0';
@@ -538,7 +538,7 @@ static EIO_Status s_VT_Write
     if (!xxx->cntl)
         return eIO_Closed;
 
-    if ((c = memchr((const char*) buf, '\n', size)) != 0  &&
+    if ((c = (const char*) memchr((const char*) buf, '\n', size)) != 0  &&
         c < (const char*) buf + size - 1) {
         return eIO_Unknown;
     }
@@ -715,7 +715,7 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
                                              const char*    path,
                                              TFCDC_Flags    flag)
 {
-    CONNECTOR      ccc = (SConnector*) malloc(sizeof(SConnector));
+    CONNECTOR      ccc = (SConnector*)    malloc(sizeof(SConnector));
     SFTPConnector* xxx = (SFTPConnector*) malloc(sizeof(*xxx));
 
     assert(!(flag & ~eFCDC_LogAll));
@@ -730,6 +730,7 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
     xxx->path    = path  &&  *path ? strdup(path) : 0;
     xxx->name    = 0;
     xxx->flag    = flag;
+
     /* initialize connector data */
     ccc->handle  = xxx;
     ccc->next    = 0;
@@ -744,6 +745,15 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_ftp_connector.c,v $
+ * Revision 1.17  2006/01/27 17:01:19  lavr
+ * Replace obsolete call names with current ones
+ *
+ * Revision 1.16  2006/01/11 20:21:32  lavr
+ * Uniform creation/fill-up of connector structures
+ *
+ * Revision 1.15  2005/12/14 21:31:04  lavr
+ * Two explicit (char*) casts added
+ *
  * Revision 1.14  2005/06/08 20:42:05  lavr
  * Use safer memmove() instead of strcpy() in PASV parsing
  *

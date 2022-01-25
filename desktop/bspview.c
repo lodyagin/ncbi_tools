@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.132 $
+* $Revision: 6.133 $
 *
 * File Description: 
 *
@@ -3578,6 +3578,8 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
     }
     PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
     AdjustDynamicGraphicViewer (&(bfp->bvd));
+    
+    UpdateSeqViewPanel (bfp->bvd.seqView);
   }
   if (ommsp->message == OM_MSG_SELECT || ommsp->message == OM_MSG_DESELECT) {
     ResetClip ();

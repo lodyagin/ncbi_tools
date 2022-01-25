@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.144 $
+* $Revision: 6.147 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,16 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.147  2006/01/23 13:01:41  bollin
+* when converting sequences from raw to delta, adjust any alignments that the
+* sequence may be part of.
+*
+* Revision 6.146  2005/12/16 20:19:56  bollin
+* only allow reverse for delta sequences when the delta sequence has no far locations
+*
+* Revision 6.145  2005/12/15 19:45:24  bollin
+* added functions to reverse and complement delta sequences
+*
 * Revision 6.144  2005/08/24 15:14:31  kans
 * modified MolWtForLoc to use StreamCache, added MolWtForBsp and MolWtForStr
 *
@@ -597,6 +607,7 @@ static char *this_file = __FILE__;
 #include <subutil.h>
 #include <tofasta.h>   /* for FastaSeqLineEx function */
 #include <salutil.h> 
+#include <alignmgr2.h> /* for correcting alignments when converting to delta */
 
 
 NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
@@ -4989,44 +5000,18 @@ NLM_EXTERN Boolean LIBCALL BioseqRevComp (BioseqPtr bsp)
 	return retval;
 }
 
-/*-------------- BioseqComplement () ---------------------------*/
-/***********************************************************************
-*   BioseqComplement:   Takes the nucleic acid sequence from Bioseq
-*	Entry and gives the complement sequence in place
-*       Does not change features.
-************************************************************************/
-NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
+static Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, ByteStorePtr bysp)
 {
 	SeqCodeTablePtr sctp;
-	ByteStorePtr    bysp;
-	long		readbyte, bslen;
-	Int4            seqlen;
-	Uint1           seqtype, byte = 0, byte_to, newbyte = 0, residue;
+	long		        readbyte, bslen;
+	Uint1           byte = 0, byte_to, newbyte = 0, residue;
 	Uint1           comp, bitctr, mask, lshift, rshift, bc;
 	
-        if (bsp == NULL)
-        {
-                ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
-                return FALSE;  
-        }
-                        
-        if (bsp->repr != Seq_repr_raw)
-        {
-                ErrPostEx(SEV_ERROR,0,0, "Error: not a raw sequence\n");
-                return FALSE;  
-        }
-                        
-	if (bsp->seq_data == NULL)
+	if (bysp == NULL)
 	{
 		ErrPostEx(SEV_ERROR,0,0, "Error:  no sequence data\n");
-		return FALSE;
+		return FALSE;	  
 	}
-
-	seqtype = bsp->seq_data_type;
-        if ( ISA_aa(bsp->mol)) {
-                ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa\n");
-		return FALSE;
-        }
 
 	if ((sctp = SeqCodeTableFind (seqtype)) == NULL)
 	{
@@ -5056,22 +5041,21 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 			lshift = 0;
 			mask = 255;
 			break;
-                case Seq_code_iupacaa:
-                case Seq_code_ncbi8aa:
-                case Seq_code_ncbieaa:
-                case Seq_code_ncbipaa:
-                case Seq_code_iupacaa3:
-                case Seq_code_ncbistdaa: 			/* ignore amino acid */
-                    ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa ; No ->mol flag on Bioseq\n");
-                    return FALSE;
-                case Seq_code_ncbipna:
-                    ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to complement profile\n");
+    case Seq_code_iupacaa:
+    case Seq_code_ncbi8aa:
+    case Seq_code_ncbieaa:
+    case Seq_code_ncbipaa:
+    case Seq_code_iupacaa3:
+    case Seq_code_ncbistdaa: 			/* ignore amino acid */
+      ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa ; No ->mol flag on Bioseq\n");
+      return FALSE;
+    case Seq_code_ncbipna:
+      ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to complement profile\n");
+			return FALSE;
 		default:
 			return FALSE;
 	}
 
-	seqlen = bsp->length;
-	bysp = bsp->seq_data;
 	bslen = BSLen(bysp);
 	bitctr = 0;
 	readbyte = 0;
@@ -5110,46 +5094,100 @@ together*/
 		}
 	}
 	return TRUE;
+  
+}
+
+
+static Boolean DeltaBioseqComplement (BioseqPtr bsp)
+{
+  DeltaSeqPtr dsp;
+  SeqLitPtr   slip;
+  Boolean     rval = FALSE;
+  
+  if (bsp == NULL || bsp->repr != Seq_repr_delta)
+  {
+    return rval;
+  }
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL)
+  {
+    if (dsp->choice != 2) 
+    {
+      ErrPostEx(SEV_ERROR,0,0, "Error: Can't complement delta sequences with far locs\n");
+      return FALSE;  
+    }
+    dsp = dsp->next;
+  }
+  rval = TRUE;
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL)
+  {
+    slip = (SeqLitPtr) dsp->data.ptrvalue;
+    /* complement data */
+    if (slip->seq_data != NULL)
+    {
+      rval &= ComplementSeqData (slip->seq_data_type, slip->length, slip->seq_data);
+    }
+    dsp = dsp->next;
+  }
+  return rval;
+}
+
+
+/*-------------- BioseqComplement () ---------------------------*/
+/***********************************************************************
+*   BioseqComplement:   Takes the nucleic acid sequence from Bioseq
+*	Entry and gives the complement sequence in place
+*       Does not change features.
+************************************************************************/
+NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
+{
+	Boolean         rval = FALSE;
+	
+  if (bsp == NULL)
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
+    rval = FALSE;  
+  }
+  else if (ISA_aa(bsp->mol)) 
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa\n");
+		rval = FALSE;  
+  }
+  else if (bsp->repr == Seq_repr_delta)
+  {
+    rval = DeltaBioseqComplement (bsp);
+  }
+  else if (bsp->repr == Seq_repr_raw)
+  {
+    rval = ComplementSeqData (bsp->seq_data_type, bsp->length, bsp->seq_data);
+  }
+  else
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error: not a raw or delta sequence\n");
+		rval = FALSE;  
+  }
+  return rval;                        
 
 } /* BioseqComplement */
 
-           
-/*-------------- BioseqReverse () ---------------------------*/
-/***********************************************************************
-*   BioseqReverse:   Takes nucleic acid sequence from Bioseq Entry and 
-*	reverses the whole sequence in place
-*       Does not change features.
-************************************************************************/
-NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
+
+static Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, ByteStorePtr bysp1)
 {
-	ByteStorePtr 	bysp1 = '\0';
 	ByteStorePtr 	bysp2 = '\0';
 	long 		readbyte, bslen = 0;
-	Int4 		seqlen, count = 0;
-	Uint1 		seqtype, byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
+	Int4 		count = 0;
+	Uint1 	byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
 	Uint1		newbyte2, finalbyte, residue, residue2, bitctr, bc2 = 0;
 	Uint1 		bitctr2, mask, mask2, lshift, rshift, bc = 0, jagged;
 	
-        if (bsp == NULL)
-        {
-                ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
-                return FALSE;  
-        }
-                        
-        if (bsp->repr != Seq_repr_raw)
-        {
-                ErrPostEx(SEV_ERROR,0,0, "Error: not a raw sequence\n");
-                return FALSE;  
-        }
-                        
-        if (bsp->seq_data == NULL)
-        {
-                ErrPostEx(SEV_ERROR,0,0, "Error:  No sequence data\n");
-                return FALSE;
-        }
+  if (bysp1 == NULL)
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error:  No sequence data\n");
+    return FALSE;
+  }
 
-	seqlen = bsp->length;
-	seqtype = bsp->seq_data_type;
 	switch (seqtype){
 		case Seq_code_ncbi2na:		/*bitshifts needed*/
 			mask = 192;
@@ -5219,7 +5257,6 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 		default:		/*ignores amino acid sequence*/
 			return FALSE;
 	}
-	bysp1 = bsp->seq_data;
 	bysp2 = BSDup(bysp1);
 	bslen = BSLen (bysp1);
 	bitctr = bitctr2 = 0;
@@ -5314,6 +5351,84 @@ bytes*/
 	}
 	BSFree(bysp2);
 	return TRUE;
+} /* ReverseSeqData */
+
+
+static Boolean DeltaBioseqReverse (BioseqPtr bsp)
+{
+  DeltaSeqPtr dsp, next_dsp, newchain = NULL;
+  SeqLitPtr   slip;
+  Boolean     rval = FALSE;
+  Boolean     split = FALSE;
+  
+  if (bsp == NULL || bsp->repr != Seq_repr_delta)
+  {
+    return rval;
+  }
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL)
+  {
+    if (dsp->choice != 2) 
+    {
+      ErrPostEx(SEV_ERROR,0,0, "Error: Can't reverse delta sequences with far locs\n");
+      return FALSE;  
+    }
+    dsp = dsp->next;
+  }
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;  
+  rval = TRUE;
+  while (dsp != NULL)
+  {
+    slip = (SeqLitPtr) dsp->data.ptrvalue;
+    /* reverse data */
+    if (slip->seq_data != NULL)
+    {
+      rval &= ReverseSeqData (slip->seq_data_type, slip->length, slip->seq_data);
+    }
+    
+    /* reverse the chain */
+    next_dsp = dsp->next;
+    dsp->next = newchain;
+    newchain = dsp;
+    
+    dsp = next_dsp;
+  }
+  bsp->seq_ext = newchain;
+  return rval;
+}
+           
+/*-------------- BioseqReverse () ---------------------------*/
+/***********************************************************************
+*   BioseqReverse:   Takes nucleic acid sequence from Bioseq Entry and 
+*	reverses the whole sequence in place
+*       Does not change features.
+************************************************************************/
+NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
+{
+	Boolean       rval;
+	
+  if (bsp == NULL)
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
+    rval = FALSE;  
+  }
+  else if (bsp->repr == Seq_repr_delta)
+  {
+    rval = DeltaBioseqReverse (bsp);
+  }                       
+  else if (bsp->repr == Seq_repr_raw)
+  {
+    rval = ReverseSeqData (bsp->seq_data_type, bsp->length, bsp->seq_data);
+  }
+  else
+  {
+    ErrPostEx(SEV_ERROR,0,0, "Error: not a raw or delta sequence\n");
+    rval = FALSE;  
+  }
+                        
+	return rval;
 } /* BioseqReverse */
 
 #define SPC_BUFF_CHUNK 1024
@@ -7817,12 +7932,17 @@ NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (CharPtr accession)
 }
 
 
-static void FixGapLength (SeqIdPtr sip, Uint2 moltype, Int4 offset, Int4 diff)
+static void FixGapLength (BioseqPtr bsp, Int4 offset, Int4 diff)
 {
-  CharPtr    extra_ns;
-  SeqLocPtr  slp;
+  CharPtr     extra_ns;
+  SeqLocPtr   slp;
+  ValNodePtr  align_annot_list, vnp;
+  SeqAnnotPtr sanp;
   
-  if (sip == NULL || diff == 0) return;
+  if (bsp == NULL || bsp->id == NULL || diff == 0) return;
+  
+  align_annot_list = FindAlignSeqAnnotsForBioseq (bsp);
+
   if (diff > 0)
   {
     extra_ns = (CharPtr)MemNew ((diff + 1) * sizeof (Char));
@@ -7830,13 +7950,33 @@ static void FixGapLength (SeqIdPtr sip, Uint2 moltype, Int4 offset, Int4 diff)
     {
       MemSet (extra_ns, 'N', diff);
       extra_ns [diff] = 0;
-      insertchar (extra_ns, offset, sip, moltype, FALSE);
+      insertchar (extra_ns, offset, bsp->id, bsp->mol, FALSE);
     }
+  	slp = SeqLocIntNew (offset, offset + diff - 1, Seq_strand_plus, bsp->id);
+    for (vnp = align_annot_list; vnp != NULL; vnp = vnp->next)
+    {
+      sanp = vnp->data.ptrvalue;
+      if (sanp != NULL && sanp->type == 2)
+      {
+        sanp->data = SeqAlignInsertByLoc (slp, sanp->data);
+      }
+    }
+    SeqLocFree (slp);
   }
   else
   {
-  	slp = SeqLocIntNew (offset, offset - diff - 1, Seq_strand_plus, sip);
+  	slp = SeqLocIntNew (offset, offset - diff - 1, Seq_strand_plus, bsp->id);
     SeqDeleteByLoc (slp, TRUE, FALSE);
+ 
+    for (vnp = align_annot_list; vnp != NULL; vnp = vnp->next)
+    {
+      sanp = vnp->data.ptrvalue;
+      if (sanp != NULL && sanp->type == 2)
+      {
+        sanp->data = SeqAlignDeleteByLoc (slp, sanp->data);
+      }
+    }
+
     SeqLocFree (slp);
   }
 }
@@ -7998,7 +8138,7 @@ NLM_EXTERN void ConvertNsToGaps (
           slp->fuzz = ifp;
           if (slp->length != 100)
           {
-            FixGapLength (bsp->id, bsp->mol, len, 100 - slp->length);
+            FixGapLength (bsp, len, 100 - slp->length);
           	slp->length = 100;
           }
         }

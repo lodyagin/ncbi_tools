@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.105 2005/11/16 14:27:04 madden Exp $
+/* $Id: blast_util.c,v 1.106 2006/01/12 20:32:47 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.105 2005/11/16 14:27:04 madden Exp $";
+    "$Id: blast_util.c,v 1.106 2006/01/12 20:32:47 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -712,6 +712,41 @@ Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program)
       break;
    }
    return index;
+}
+
+BlastQueryInfo* BlastQueryInfoNew(EBlastProgramType program, int num_queries)
+{
+    const unsigned int kNumContexts = BLAST_GetNumberOfContexts(program);
+    BlastQueryInfo* retval = NULL;
+    
+    if (num_queries <= 0) {
+        return retval;
+    }
+    ASSERT(kNumContexts != 0);
+
+    retval = (BlastQueryInfo*) calloc(1, sizeof(BlastQueryInfo));
+    if ( !retval ) {
+        return BlastQueryInfoFree(retval);
+    }
+
+    retval->num_queries = num_queries;
+
+    retval->first_context = 0;
+    retval->last_context = retval->num_queries * kNumContexts - 1;
+
+    retval->contexts = (BlastContextInfo*) calloc(retval->last_context + 1,
+                                                  sizeof(BlastContextInfo));
+
+    if ( !retval->contexts ) {
+        return BlastQueryInfoFree(retval);
+    } else {
+        int i;
+        for (i = 0; i < retval->last_context + 1; i++) {
+            retval->contexts[i].is_valid = TRUE;
+        }
+    }
+
+    return retval;
 }
 
 BlastQueryInfo* BlastQueryInfoFree(BlastQueryInfo* query_info)

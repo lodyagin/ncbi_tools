@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.15 2005/07/26 20:00:33 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.16 2005/12/07 22:18:20 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -64,9 +64,7 @@ static void s_REG_Get(void* user_data,
                       char* value, size_t val_size)
 {
     const char* conf_file = (const char*) user_data;
-    char* dflt = (char*) (*value ? malloc(strlen(value) + 1) : 0);
-    if (dflt)
-        strcpy(dflt, value);
+    char* dflt = *value ? strdup(value) : 0;
     Nlm_GetAppParam(conf_file, section, name, dflt, value, val_size);
     if (dflt)
         free(dflt);
@@ -87,7 +85,8 @@ static void s_REG_Set(void* user_data,
 
 static void s_REG_Cleanup(void* user_data)
 {
-    free(user_data);
+    if (user_data)
+        free(user_data);
 }
 
 
@@ -100,7 +99,7 @@ extern REG REG_c2c(const char* conf_file)
     if (!(s = strdup(conf_file)))
         return 0/*failure*/;
 
-    return REG_Create(s, s_REG_Get, s_REG_Set, s_REG_Cleanup, 0);
+    return REG_Create(s/*user_data*/, s_REG_Get, s_REG_Set, s_REG_Cleanup, 0);
 }
 
 
@@ -242,6 +241,9 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.16  2005/12/07 22:18:20  lavr
+ * Use strdup() instead of malloc()+strcpy()
+ *
  * Revision 6.15  2005/07/26 20:00:33  lavr
  * Retroactively provide s_NCBI_ConnectSrandAddent() temporarily
  *

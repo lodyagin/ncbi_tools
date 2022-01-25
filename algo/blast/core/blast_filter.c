@@ -1,4 +1,4 @@
-/* $Id: blast_filter.c,v 1.78 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_filter.c,v 1.80 2006/02/14 21:38:21 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_filter.c,v 1.78 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_filter.c,v 1.80 2006/02/14 21:38:21 bealer Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -996,6 +996,7 @@ BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk,
 
     ASSERT(query_info && query_blk && filter_maskloc);
 
+    ASSERT(blast_message);
     ASSERT(kNumContexts == 
            query_info->num_queries*BLAST_GetNumberOfContexts(program_number));
     *filter_maskloc = BlastMaskLocNew(kNumContexts);
@@ -1012,9 +1013,11 @@ BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk,
                                                       &filter_per_context, 
                                                       blast_message);
         if (status) {
-           Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
-              "Failure at filtering");
-           return status;
+            if (*blast_message == NULL) {
+                Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
+                                   "Failure at filtering");
+            }
+            return status;
         }
 
     /* NB: for translated searches filter locations are returned in 
@@ -1035,7 +1038,7 @@ Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
 
         Int4 index, start, stop;
         const Uint1 kMaskingLetter = is_na ? kNuclMask : kProtMask;
-
+        
         if (reverse) {
             start = length - 1 - mask_loc->ssr->right;
             stop = length - 1 - mask_loc->ssr->left;
@@ -1043,10 +1046,13 @@ Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
             start = mask_loc->ssr->left;
             stop = mask_loc->ssr->right;
         }
-
+        
         start -= offset;
         stop -= offset;
-
+        
+        ASSERT(start < length);
+        ASSERT(stop < length);
+        
         for (index = start; index <= stop; index++)
             buffer[index] = kMaskingLetter;
     }

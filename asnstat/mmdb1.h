@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "mmdb1.h60";
+static char * asnfilename = "mmdb1.h61";
 static AsnValxNode avnx[138] = {
     {20,"physiological-form" ,1,0.0,&avnx[1] } ,
     {20,"crystallographic-cell" ,2,0.0,&avnx[2] } ,
@@ -150,11 +150,11 @@ static AsnValxNode avnx[138] = {
     {20,"positive" ,1,0.0,&avnx[137] } ,
     {20,"negative" ,2,0.0,NULL } };
 
-static AsnType atx[163] = {
+static AsnType atx[165] = {
   {401, "Biostruc" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[1],0,&atx[3]} ,
   {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[12],&atx[2],0,&atx[13]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
-  {402, "Biostruc-id" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[4],0,&atx[138]} ,
+  {402, "Biostruc-id" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[4],0,&atx[140]} ,
   {0, "mmdb-id" ,128,0,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[7]} ,
   {416, "Mmdb-id" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[21]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -192,131 +192,133 @@ static AsnType atx[163] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[17],NULL,0,NULL} ,
   {0, "attribution" ,128,4,0,0,0,0,0,0,NULL,&atx[40],NULL,0,NULL} ,
   {411, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
-  {0, "chemical-graph" ,128,2,0,0,0,0,0,0,NULL,&atx[42],NULL,0,&atx[132]} ,
-  {406, "Biostruc-graph" ,1,0,0,0,0,0,1,0,NULL,&atx[43],NULL,0,&atx[157]} ,
+  {0, "chemical-graph" ,128,2,0,0,0,0,0,0,NULL,&atx[42],NULL,0,&atx[134]} ,
+  {406, "Biostruc-graph" ,1,0,0,0,0,0,1,0,NULL,&atx[43],NULL,0,&atx[159]} ,
   {401, "Biostruc-graph" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[44],0,&atx[46]} ,
   {0, "descr" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[45],0,&atx[58]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
-  {402, "Biomol-descr" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[47],0,&atx[101]} ,
+  {402, "Biomol-descr" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[47],0,&atx[103]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[48]} ,
   {0, "pdb-class" ,128,1,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[49]} ,
   {0, "pdb-source" ,128,2,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[50]} ,
   {0, "pdb-comment" ,128,3,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[51]} ,
   {0, "other-comment" ,128,4,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[52]} ,
   {0, "organism" ,128,5,0,0,0,0,0,0,NULL,&atx[53],NULL,0,&atx[54]} ,
-  {408, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[66]} ,
+  {409, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[66]} ,
   {0, "attribution" ,128,6,0,0,0,0,0,0,NULL,&atx[55],NULL,0,&atx[56]} ,
-  {407, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[53]} ,
+  {408, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[53]} ,
   {0, "assembly-type" ,128,7,0,0,0,0,0,0,NULL,&atx[6],&avnx[0],0,&atx[57]} ,
   {0, "molecule-type" ,128,8,0,0,0,0,0,0,NULL,&atx[6],&avnx[3],0,NULL} ,
-  {0, "molecule-graphs" ,128,1,0,0,0,0,0,0,NULL,&atx[12],&atx[59],0,&atx[97]} ,
+  {0, "molecule-graphs" ,128,1,0,0,0,0,0,0,NULL,&atx[12],&atx[59],0,&atx[99]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
-  {411, "Molecule-graph" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[61],0,&atx[88]} ,
+  {412, "Molecule-graph" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[61],0,&atx[88]} ,
   {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[63]} ,
-  {404, "Molecule-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[71]} ,
+  {404, "Molecule-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[98]} ,
   {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[64],0,&atx[65]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
   {0, "seq-id" ,128,2,0,1,0,0,0,0,NULL,&atx[66],NULL,0,&atx[67]} ,
-  {409, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[80]} ,
+  {410, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[80]} ,
   {0, "residue-sequence" ,128,3,0,0,0,0,0,0,NULL,&atx[12],&atx[68],0,&atx[86]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[69],NULL,0,NULL} ,
-  {413, "Residue" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[70],0,&atx[74]} ,
+  {414, "Residue" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[70],0,&atx[74]} ,
   {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[71],NULL,0,&atx[72]} ,
-  {405, "Residue-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[94]} ,
+  {406, "Residue-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[94]} ,
   {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[17],NULL,0,&atx[73]} ,
   {0, "residue-graph" ,128,2,0,0,0,0,0,0,NULL,&atx[74],NULL,0,NULL} ,
-  {414, "Residue-graph-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[75],0,&atx[76]} ,
+  {415, "Residue-graph-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[75],0,&atx[76]} ,
   {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[76],NULL,0,&atx[77]} ,
-  {415, "Residue-graph-id" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[78]} ,
+  {416, "Residue-graph-id" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[78]} ,
   {0, "biostruc" ,128,1,0,0,0,0,0,0,NULL,&atx[78],NULL,0,&atx[82]} ,
-  {416, "Biostruc-graph-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[79],0,&atx[83]} ,
+  {417, "Biostruc-graph-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[79],0,&atx[83]} ,
   {0, "biostruc-id" ,128,0,0,0,0,0,0,0,NULL,&atx[80],NULL,0,&atx[81]} ,
-  {410, "Biostruc-id" ,1,0,0,0,0,0,1,0,NULL,&atx[3],NULL,0,&atx[60]} ,
+  {411, "Biostruc-id" ,1,0,0,0,0,0,1,0,NULL,&atx[3],NULL,0,&atx[60]} ,
   {0, "residue-graph-id" ,128,1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
   {0, "standard" ,128,2,0,0,0,0,0,0,NULL,&atx[83],NULL,0,NULL} ,
-  {417, "Biostruc-residue-graph-set-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[84],0,&atx[110]} ,
+  {418, "Biostruc-residue-graph-set-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[84],0,&atx[112]} ,
   {0, "biostruc-residue-graph-set-id" ,128,0,0,0,0,0,0,0,NULL,&atx[80],NULL,0,&atx[85]} ,
   {0, "residue-graph-id" ,128,1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
-  {0, "inter-residue-bonds" ,128,4,0,1,0,0,0,0,NULL,&atx[12],&atx[87],0,NULL} ,
+  {0, "inter-residue-bonds" ,128,4,0,1,0,0,0,0,NULL,&atx[12],&atx[87],0,&atx[97]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[88],NULL,0,NULL} ,
-  {412, "Inter-residue-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[89],0,&atx[69]} ,
+  {413, "Inter-residue-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[89],0,&atx[69]} ,
   {0, "atom-id-1" ,128,0,0,0,0,0,0,0,NULL,&atx[90],NULL,0,&atx[95]} ,
-  {421, "Atom-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[91],0,&atx[161]} ,
+  {422, "Atom-pntr" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[91],0,&atx[163]} ,
   {0, "molecule-id" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[92]} ,
   {0, "residue-id" ,128,1,0,0,0,0,0,0,NULL,&atx[71],NULL,0,&atx[93]} ,
   {0, "atom-id" ,128,2,0,0,0,0,0,0,NULL,&atx[94],NULL,0,NULL} ,
-  {406, "Atom-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[55]} ,
+  {407, "Atom-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[55]} ,
   {0, "atom-id-2" ,128,1,0,0,0,0,0,0,NULL,&atx[90],NULL,0,&atx[96]} ,
   {0, "bond-order" ,128,2,0,1,0,0,0,0,NULL,&atx[6],&avnx[10],0,NULL} ,
-  {0, "inter-molecule-bonds" ,128,2,0,1,0,0,0,0,NULL,&atx[12],&atx[98],0,&atx[99]} ,
+  {0, "sid" ,128,5,0,1,0,0,0,0,NULL,&atx[98],NULL,0,NULL} ,
+  {405, "PCSubstance-id" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[71]} ,
+  {0, "inter-molecule-bonds" ,128,2,0,1,0,0,0,0,NULL,&atx[12],&atx[100],0,&atx[101]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[88],NULL,0,NULL} ,
-  {0, "residue-graphs" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[100],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[101],NULL,0,NULL} ,
-  {403, "Residue-graph" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[102],0,&atx[62]} ,
-  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[76],NULL,0,&atx[103]} ,
-  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[104],0,&atx[105]} ,
+  {0, "residue-graphs" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[102],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[103],NULL,0,NULL} ,
+  {403, "Residue-graph" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[104],0,&atx[62]} ,
+  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[76],NULL,0,&atx[105]} ,
+  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[106],0,&atx[107]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
-  {0, "residue-type" ,128,2,0,1,0,0,0,0,NULL,&atx[6],&avnx[17],0,&atx[106]} ,
-  {0, "iupac-code" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[107],0,&atx[108]} ,
+  {0, "residue-type" ,128,2,0,1,0,0,0,0,NULL,&atx[6],&avnx[17],0,&atx[108]} ,
+  {0, "iupac-code" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[109],0,&atx[110]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[17],NULL,0,NULL} ,
-  {0, "atoms" ,128,4,0,0,0,0,0,0,NULL,&atx[12],&atx[109],0,&atx[118]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[110],NULL,0,NULL} ,
-  {418, "Atom" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[111],0,&atx[120]} ,
-  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[112]} ,
-  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[17],NULL,0,&atx[113]} ,
-  {0, "iupac-code" ,128,2,0,1,0,0,0,0,NULL,&atx[12],&atx[114],0,&atx[115]} ,
+  {0, "atoms" ,128,4,0,0,0,0,0,0,NULL,&atx[12],&atx[111],0,&atx[120]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[112],NULL,0,NULL} ,
+  {419, "Atom" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[113],0,&atx[122]} ,
+  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[114]} ,
+  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[17],NULL,0,&atx[115]} ,
+  {0, "iupac-code" ,128,2,0,1,0,0,0,0,NULL,&atx[12],&atx[116],0,&atx[117]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[17],NULL,0,NULL} ,
-  {0, "element" ,128,3,0,0,0,0,0,0,NULL,&atx[116],&avnx[21],0,&atx[117]} ,
+  {0, "element" ,128,3,0,0,0,0,0,0,NULL,&atx[118],&avnx[21],0,&atx[119]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "ionizable-proton" ,128,4,0,1,0,0,0,0,NULL,&atx[116],&avnx[126],0,NULL} ,
-  {0, "bonds" ,128,5,0,0,0,0,0,0,NULL,&atx[12],&atx[119],0,&atx[124]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[120],NULL,0,NULL} ,
-  {419, "Intra-residue-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[121],0,&atx[126]} ,
-  {0, "atom-id-1" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[122]} ,
-  {0, "atom-id-2" ,128,1,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[123]} ,
+  {0, "ionizable-proton" ,128,4,0,1,0,0,0,0,NULL,&atx[118],&avnx[126],0,NULL} ,
+  {0, "bonds" ,128,5,0,0,0,0,0,0,NULL,&atx[12],&atx[121],0,&atx[126]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[122],NULL,0,NULL} ,
+  {420, "Intra-residue-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[123],0,&atx[128]} ,
+  {0, "atom-id-1" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[124]} ,
+  {0, "atom-id-2" ,128,1,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[125]} ,
   {0, "bond-order" ,128,2,0,1,0,0,0,0,NULL,&atx[6],&avnx[129],0,NULL} ,
-  {0, "chiral-centers" ,128,6,0,1,0,0,0,0,NULL,&atx[12],&atx[125],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[126],NULL,0,NULL} ,
-  {420, "Chiral-center" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[127],0,&atx[90]} ,
-  {0, "c" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[128]} ,
-  {0, "n1" ,128,1,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[129]} ,
-  {0, "n2" ,128,2,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[130]} ,
-  {0, "n3" ,128,3,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[131]} ,
-  {0, "sign" ,128,4,0,0,0,0,0,0,NULL,&atx[116],&avnx[136],0,NULL} ,
-  {0, "features" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[133],0,&atx[135]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[134],NULL,0,NULL} ,
+  {0, "chiral-centers" ,128,6,0,1,0,0,0,0,NULL,&atx[12],&atx[127],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[128],NULL,0,NULL} ,
+  {421, "Chiral-center" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[129],0,&atx[90]} ,
+  {0, "c" ,128,0,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[130]} ,
+  {0, "n1" ,128,1,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[131]} ,
+  {0, "n2" ,128,2,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[132]} ,
+  {0, "n3" ,128,3,0,0,0,0,0,0,NULL,&atx[94],NULL,0,&atx[133]} ,
+  {0, "sign" ,128,4,0,0,0,0,0,0,NULL,&atx[118],&avnx[136],0,NULL} ,
+  {0, "features" ,128,3,0,1,0,0,0,0,NULL,&atx[12],&atx[135],0,&atx[137]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[136],NULL,0,NULL} ,
   {410, "Biostruc-feature-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[40]} ,
-  {0, "model" ,128,4,0,1,0,0,0,0,NULL,&atx[12],&atx[136],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[137],NULL,0,NULL} ,
-  {409, "Biostruc-model" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[134]} ,
-  {403, "Biostruc-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[139],0,&atx[145]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[140],0,&atx[141]} ,
+  {0, "model" ,128,4,0,1,0,0,0,0,NULL,&atx[12],&atx[138],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[139],NULL,0,NULL} ,
+  {409, "Biostruc-model" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[136]} ,
+  {403, "Biostruc-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[141],0,&atx[147]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[142],0,&atx[143]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
-  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[142],0,&atx[143]} ,
+  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[144],0,&atx[145]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
-  {0, "biostrucs" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[144],0,NULL} ,
+  {0, "biostrucs" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[146],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} ,
-  {404, "Biostruc-annot-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[146],0,&atx[152]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[147],0,&atx[148]} ,
+  {404, "Biostruc-annot-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[148],0,&atx[154]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[149],0,&atx[150]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
-  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[149],0,&atx[150]} ,
+  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[151],0,&atx[152]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
-  {0, "features" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[151],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[134],NULL,0,NULL} ,
-  {405, "Biostruc-residue-graph-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[153],0,&atx[42]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[154],0,&atx[155]} ,
+  {0, "features" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[153],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[136],NULL,0,NULL} ,
+  {405, "Biostruc-residue-graph-set" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[155],0,&atx[42]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[12],&atx[156],0,&atx[157]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
-  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[156],0,&atx[158]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[157],NULL,0,NULL} ,
-  {407, "Biomol-descr" ,1,0,0,0,0,0,1,0,NULL,&atx[46],NULL,0,&atx[160]} ,
-  {0, "residue-graphs" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[159],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[160],NULL,0,NULL} ,
-  {408, "Residue-graph" ,1,0,0,0,0,0,1,0,NULL,&atx[101],NULL,0,&atx[137]} ,
-  {422, "Atom-pntr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[162],0,NULL} ,
+  {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[12],&atx[158],0,&atx[160]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[159],NULL,0,NULL} ,
+  {407, "Biomol-descr" ,1,0,0,0,0,0,1,0,NULL,&atx[46],NULL,0,&atx[162]} ,
+  {0, "residue-graphs" ,128,2,0,0,0,0,0,0,NULL,&atx[12],&atx[161],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[162],NULL,0,NULL} ,
+  {408, "Residue-graph" ,1,0,0,0,0,0,1,0,NULL,&atx[103],NULL,0,&atx[139]} ,
+  {423, "Atom-pntr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[164],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[90],NULL,0,NULL} };
 
 static AsnModule ampx[2] = {
-  { "MMDB" , "mmdb1.h60",&atx[0],NULL,&ampx[1],0,0} ,
+  { "MMDB" , "mmdb1.h61",&atx[0],NULL,&ampx[1],0,0} ,
   { "MMDB-Chemical-graph" , NULL,&atx[43],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
@@ -337,39 +339,39 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_descr &at[13]
 #define BIOSTRUC_descr_E &at[14]
 #define BIOSTRUC_chemical_graph &at[41]
-#define BIOSTRUC_features &at[132]
-#define BIOSTRUC_features_E &at[133]
-#define BIOSTRUC_model &at[135]
-#define BIOSTRUC_model_E &at[136]
+#define BIOSTRUC_features &at[134]
+#define BIOSTRUC_features_E &at[135]
+#define BIOSTRUC_model &at[137]
+#define BIOSTRUC_model_E &at[138]
 
 #define BIOSTRUC_ID &at[3]
 #define BIOSTRUC_ID_mmdb_id &at[4]
 #define BIOSTRUC_ID_other_database &at[7]
 #define BIOSTRUC_ID_local_id &at[9]
 
-#define BIOSTRUC_SET &at[138]
-#define BIOSTRUC_SET_id &at[139]
-#define BIOSTRUC_SET_id_E &at[140]
-#define BIOSTRUC_SET_descr &at[141]
-#define BIOSTRUC_SET_descr_E &at[142]
-#define BIOSTRUC_SET_biostrucs &at[143]
-#define BIOSTRUC_SET_biostrucs_E &at[144]
+#define BIOSTRUC_SET &at[140]
+#define BIOSTRUC_SET_id &at[141]
+#define BIOSTRUC_SET_id_E &at[142]
+#define BIOSTRUC_SET_descr &at[143]
+#define BIOSTRUC_SET_descr_E &at[144]
+#define BIOSTRUC_SET_biostrucs &at[145]
+#define BIOSTRUC_SET_biostrucs_E &at[146]
 
-#define BIOSTRUC_ANNOT_SET &at[145]
-#define BIOSTRUC_ANNOT_SET_id &at[146]
-#define BIOSTRUC_ANNOT_SET_id_E &at[147]
-#define BIOSTRUC_ANNOT_SET_descr &at[148]
-#define BIOSTRUC_ANNOT_SET_descr_E &at[149]
-#define BIOSTRUC_ANNOT_SET_features &at[150]
-#define BIOSTRUC_ANNOT_SET_features_E &at[151]
+#define BIOSTRUC_ANNOT_SET &at[147]
+#define BIOSTRUC_ANNOT_SET_id &at[148]
+#define BIOSTRUC_ANNOT_SET_id_E &at[149]
+#define BIOSTRUC_ANNOT_SET_descr &at[150]
+#define BIOSTRUC_ANNOT_SET_descr_E &at[151]
+#define BIOSTRUC_ANNOT_SET_features &at[152]
+#define BIOSTRUC_ANNOT_SET_features_E &at[153]
 
-#define BIOSTRUC_RESIDUE_GRAPH_SET &at[152]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_id &at[153]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_id_E &at[154]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_descr &at[155]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_descr_E &at[156]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_residue_graphs &at[158]
-#define BIOSTRUC_RESIDUE_GRAPH_SET_residue_graphs_E &at[159]
+#define BIOSTRUC_RESIDUE_GRAPH_SET &at[154]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_id &at[155]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_id_E &at[156]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_descr &at[157]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_descr_E &at[158]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_residue_graphs &at[160]
+#define BIOSTRUC_RESIDUE_GRAPH_SET_residue_graphs_E &at[161]
 
 #define BIOSTRUC_DESCR &at[15]
 #define BIOSTRUC_DESCR_name &at[16]
@@ -411,10 +413,10 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_GRAPH_descr_E &at[45]
 #define BIOSTRUC_GRAPH_molecule_graphs &at[58]
 #define BIOSTRUC_GRAPH_molecule_graphs_E &at[59]
-#define BIOSTRUC_GRAPH_inter_molecule_bonds &at[97]
-#define BIOSTRUC_GRAPH_inter_molecule_bonds_E &at[98]
-#define BIOSTRUC_GRAPH_residue_graphs &at[99]
-#define BIOSTRUC_GRAPH_residue_graphs_E &at[100]
+#define BIOSTRUC_GRAPH_inter_molecule_bonds &at[99]
+#define BIOSTRUC_GRAPH_inter_molecule_bonds_E &at[100]
+#define BIOSTRUC_GRAPH_residue_graphs &at[101]
+#define BIOSTRUC_GRAPH_residue_graphs_E &at[102]
 
 #define BIOMOL_DESCR &at[46]
 #define BIOMOL_DESCR_name &at[47]
@@ -427,21 +429,23 @@ static AsnModulePtr amp = ampx;
 #define BIOMOL_DESCR_assembly_type &at[56]
 #define BIOMOL_DESCR_molecule_type &at[57]
 
-#define RESIDUE_GRAPH &at[101]
-#define RESIDUE_GRAPH_id &at[102]
-#define RESIDUE_GRAPH_descr &at[103]
-#define RESIDUE_GRAPH_descr_E &at[104]
-#define RESIDUE_GRAPH_residue_type &at[105]
-#define RESIDUE_GRAPH_iupac_code &at[106]
-#define RESIDUE_GRAPH_iupac_code_E &at[107]
-#define RESIDUE_GRAPH_atoms &at[108]
-#define RESIDUE_GRAPH_atoms_E &at[109]
-#define RESIDUE_GRAPH_bonds &at[118]
-#define RESIDUE_GRAPH_bonds_E &at[119]
-#define RESIDUE_GRAPH_chiral_centers &at[124]
-#define RESIDUE_GRAPH_chiral_centers_E &at[125]
+#define RESIDUE_GRAPH &at[103]
+#define RESIDUE_GRAPH_id &at[104]
+#define RESIDUE_GRAPH_descr &at[105]
+#define RESIDUE_GRAPH_descr_E &at[106]
+#define RESIDUE_GRAPH_residue_type &at[107]
+#define RESIDUE_GRAPH_iupac_code &at[108]
+#define RESIDUE_GRAPH_iupac_code_E &at[109]
+#define RESIDUE_GRAPH_atoms &at[110]
+#define RESIDUE_GRAPH_atoms_E &at[111]
+#define RESIDUE_GRAPH_bonds &at[120]
+#define RESIDUE_GRAPH_bonds_E &at[121]
+#define RESIDUE_GRAPH_chiral_centers &at[126]
+#define RESIDUE_GRAPH_chiral_centers_E &at[127]
 
 #define MOLECULE_ID &at[62]
+
+#define PCSUBSTANCE_ID &at[98]
 
 #define RESIDUE_ID &at[71]
 
@@ -456,6 +460,7 @@ static AsnModulePtr amp = ampx;
 #define MOLECULE_GRAPH_residue_sequence_E &at[68]
 #define MOLECULE_GRAPH_inter_residue_bonds &at[86]
 #define MOLECULE_GRAPH_inter_residue_bonds_E &at[87]
+#define MOLECULE_GRAPH_sid &at[97]
 
 #define INTER_RESIDUE_BOND &at[88]
 #define INTER_RESIDUE_BOND_atom_id_1 &at[89]
@@ -482,30 +487,30 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_RESIDUE_GRAPH_SET_PNTR_biostruc_residue_graph_set_id &at[84]
 #define BIOSTRUC_RESIDUE_GRAPH_SET_PNTR_residue_graph_id &at[85]
 
-#define ATOM &at[110]
-#define ATOM_id &at[111]
-#define ATOM_name &at[112]
-#define ATOM_iupac_code &at[113]
-#define ATOM_iupac_code_E &at[114]
-#define ATOM_element &at[115]
-#define ATOM_ionizable_proton &at[117]
+#define ATOM &at[112]
+#define ATOM_id &at[113]
+#define ATOM_name &at[114]
+#define ATOM_iupac_code &at[115]
+#define ATOM_iupac_code_E &at[116]
+#define ATOM_element &at[117]
+#define ATOM_ionizable_proton &at[119]
 
-#define INTRA_RESIDUE_BOND &at[120]
-#define INTRA_RESIDUE_BOND_atom_id_1 &at[121]
-#define INTRA_RESIDUE_BOND_atom_id_2 &at[122]
-#define INTRA_RESIDUE_BOND_bond_order &at[123]
+#define INTRA_RESIDUE_BOND &at[122]
+#define INTRA_RESIDUE_BOND_atom_id_1 &at[123]
+#define INTRA_RESIDUE_BOND_atom_id_2 &at[124]
+#define INTRA_RESIDUE_BOND_bond_order &at[125]
 
-#define CHIRAL_CENTER &at[126]
-#define CHIRAL_CENTER_c &at[127]
-#define CHIRAL_CENTER_n1 &at[128]
-#define CHIRAL_CENTER_n2 &at[129]
-#define CHIRAL_CENTER_n3 &at[130]
-#define CHIRAL_CENTER_sign &at[131]
+#define CHIRAL_CENTER &at[128]
+#define CHIRAL_CENTER_c &at[129]
+#define CHIRAL_CENTER_n1 &at[130]
+#define CHIRAL_CENTER_n2 &at[131]
+#define CHIRAL_CENTER_n3 &at[132]
+#define CHIRAL_CENTER_sign &at[133]
 
 #define ATOM_PNTR &at[90]
 #define ATOM_PNTR_molecule_id &at[91]
 #define ATOM_PNTR_residue_id &at[92]
 #define ATOM_PNTR_atom_id &at[93]
 
-#define ATOM_PNTR_SET &at[161]
-#define ATOM_PNTR_SET_E &at[162]
+#define ATOM_PNTR_SET &at[163]
+#define ATOM_PNTR_SET_E &at[164]

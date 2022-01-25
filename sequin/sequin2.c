@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.583 $
+* $Revision: 6.586 $
 *
 * File Description: 
 *
@@ -2678,12 +2678,14 @@ static ValNodePtr ReadRowListFromFile (void)
 }
 
 /* This function will find the sequence number in the IDAndTitleEdit
- * to use for each row and put that value in the choice for the row.
+ * to use for each row and put that value in the sequence_numbers array.
  */
 static Boolean 
 ValidateModifierTableSequenceIDs 
 (ValNodePtr        header_line,
- IDAndTitleEditPtr iatep)
+ IDAndTitleEditPtr iatep,
+ Int4Ptr           sequence_numbers,
+ Int4              num_rows)
 {
   ValNodePtr   not_found = NULL;
   ValNodePtr   found_more_than_once = NULL;
@@ -2695,13 +2697,18 @@ ValidateModifierTableSequenceIDs
   CharPtr      err_msg = NULL;
   ValNodePtr   row_vnp, col_vnp, prev_row;
   Int4         i, seq_num, other_instances;
+  Boolean      found;
+  Int4         row_number;
   
-  if (header_line == NULL || header_line->next == NULL || iatep == NULL)
+  if (header_line == NULL || header_line->next == NULL || iatep == NULL
+      || sequence_numbers == NULL || num_rows < ValNodeLen (header_line->next))
   {
     return FALSE;
   }
   
-  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  for (row_vnp = header_line->next, row_number = 0; 
+       row_vnp != NULL && row_number < num_rows;
+       row_vnp = row_vnp->next, row_number++)
   {
     col_vnp = row_vnp->data.ptrvalue;
     if (col_vnp == NULL || col_vnp->data.ptrvalue == NULL)
@@ -2710,18 +2717,18 @@ ValidateModifierTableSequenceIDs
     }
     
     /* find correct sequence number */
-    seq_num = -1;
-    for (i = 0; i < iatep->num_sequences && seq_num < 0; i++)
+    seq_num = 0;
+    for (i = 0, found = FALSE; i < iatep->num_sequences && !found; i++)
     {
       if (StringCmp (iatep->id_list [i], col_vnp->data.ptrvalue) == 0)
       {
         seq_num = i;
+        found = TRUE;
       }
     }
+    sequence_numbers[row_number] = seq_num;
     
-    row_vnp->choice = seq_num;
-
-    if (seq_num < 0)
+    if (!found)
     {
       ValNodeAddPointer (&not_found, 0, StringSave (col_vnp->data.ptrvalue));
     }
@@ -2904,7 +2911,7 @@ static Boolean ValidateTableValues (ValNodePtr header_line)
   for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
   {
     /* skip rows with bad sequence IDs */
-    if (row_vnp->choice < 0 || row_vnp->data.ptrvalue == NULL)
+    if (row_vnp->data.ptrvalue == NULL)
     {
       continue;
     }
@@ -2974,6 +2981,8 @@ static Boolean
 CheckModifiersForOverwrite 
 (ValNodePtr        header_line,
  IDAndTitleEditPtr iatep,
+ Int4Ptr           sequence_numbers,
+ Int4              num_rows,
  BoolPtr           erase_where_blank,
  BoolPtr           parse_multiple)
 {
@@ -2982,12 +2991,13 @@ CheckModifiersForOverwrite
   ValNodePtr blank_column_list = NULL;
   ValNodePtr replace_column_list = NULL;
   ValNodePtr parse_multi_list = NULL;
-  Int4       col_num;
+  Int4       col_num, row_num;
   Boolean    rval = TRUE;
   CharPtr    err_msg;
   MsgAnswer  ans;
   
   if (header_line == NULL || header_line->next == NULL || iatep == NULL
+      || sequence_numbers == NULL || num_rows < ValNodeLen (header_line->next)
       || erase_where_blank == NULL || parse_multiple == NULL)
   {
     return FALSE;
@@ -2996,9 +3006,11 @@ CheckModifiersForOverwrite
   *erase_where_blank = FALSE;
   *parse_multiple = FALSE;
   
-  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  for (row_vnp = header_line->next, row_num = 0;
+       row_vnp != NULL && row_num < num_rows;
+       row_vnp = row_vnp->next, row_num++)
   {
-    if (row_vnp->choice < 0 || row_vnp->data.ptrvalue == NULL)
+    if (row_vnp->data.ptrvalue == NULL)
     {
       continue;
     }
@@ -3016,7 +3028,7 @@ CheckModifiersForOverwrite
       if (header_vnp->data.ptrvalue != NULL)
       {
         title_val = FindValueFromPairInDefline (header_vnp->data.ptrvalue,
-                                                iatep->title_list [row_vnp->choice]);
+                                                iatep->title_list [sequence_numbers[row_num]]);
         data_val = col_vnp->data.ptrvalue;
         if (!StringHasNoText (title_val))
         {
@@ -3118,6 +3130,8 @@ static Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep)
 {
   ValNodePtr   header_line, row_vnp, col_vnp, header_vnp;
   Boolean      erase_where_blank = FALSE, parse_multi = FALSE;
+  Int4Ptr      sequence_numbers;
+  Int4         num_rows, row_number;
   
   if (iatep == NULL)
   {
@@ -3140,9 +3154,13 @@ static Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep)
     return FALSE;
   }
   
-  if (!ValidateModifierTableSequenceIDs (header_line, iatep))
+  num_rows = ValNodeLen (header_line->next);
+  sequence_numbers = (Int4Ptr) MemNew (num_rows * sizeof (Int4));
+  
+  if (!ValidateModifierTableSequenceIDs (header_line, iatep, sequence_numbers, num_rows))
   {
     header_line = FreeTableDisplayRowList (header_line);
+    sequence_numbers = MemFree (sequence_numbers);
     return FALSE;
   }
   
@@ -3150,25 +3168,32 @@ static Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep)
   if (!ValidateImportModifierColumnNames (header_line))
   {
     header_line = FreeTableDisplayRowList (header_line);
+    sequence_numbers = MemFree (sequence_numbers);
     return FALSE;
   }
   
   if (!ValidateTableValues (header_line))
   {
     header_line = FreeTableDisplayRowList (header_line);
+    sequence_numbers = MemFree (sequence_numbers);
     return FALSE;
   }
   
-  if (!CheckModifiersForOverwrite (header_line, iatep, &erase_where_blank, &parse_multi))
+  if (!CheckModifiersForOverwrite (header_line, iatep, 
+                                   sequence_numbers, num_rows, 
+                                   &erase_where_blank, &parse_multi))
   {
     header_line = FreeTableDisplayRowList (header_line);
+    sequence_numbers = MemFree (sequence_numbers);
     return FALSE;
   }
   
   /* now apply */
-  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  for (row_vnp = header_line->next, row_number = 0;
+       row_vnp != NULL && row_number < num_rows; 
+       row_vnp = row_vnp->next, row_number++)
   {
-    if (row_vnp->data.ptrvalue == NULL || row_vnp->choice < 0)
+    if (row_vnp->data.ptrvalue == NULL)
     {
       continue;
     }
@@ -3183,13 +3208,14 @@ static Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep)
          header_vnp != NULL && col_vnp != NULL;
          header_vnp = header_vnp->next, col_vnp = col_vnp->next)
     {
-      iatep->title_list [row_vnp->choice] = ApplyImportModToTitle (iatep->title_list [row_vnp->choice],
+      iatep->title_list [sequence_numbers [row_number]] = ApplyImportModToTitle (iatep->title_list [sequence_numbers[row_number]],
                                                                    header_vnp->data.ptrvalue,
                                                                    col_vnp->data.ptrvalue,
                                                                    erase_where_blank,
                                                                    parse_multi);
     }
   }
+  sequence_numbers = MemFree (sequence_numbers);  
   return TRUE;
 }
 
@@ -17161,7 +17187,7 @@ static Boolean IsDuplicateEditID (IDAndTitleEditPtr iatep_new, Int4 new_pos, IDA
     {
       continue;
     }
-    if (StringCmp (iatep_new->id_list [new_pos], iatep_new->id_list [j]) == 0)
+    if (StringICmp (iatep_new->id_list [new_pos], iatep_new->id_list [j]) == 0)
     {
       return TRUE;
     }
@@ -17170,7 +17196,7 @@ static Boolean IsDuplicateEditID (IDAndTitleEditPtr iatep_new, Int4 new_pos, IDA
   {
     for (j = 0; j < iatep_current->num_sequences; j++)
     {
-      if (StringCmp (iatep_new->id_list [new_pos], iatep_current->id_list [j]) == 0)
+      if (StringICmp (iatep_new->id_list [new_pos], iatep_current->id_list [j]) == 0)
       {
         return TRUE;
       }
@@ -17192,7 +17218,7 @@ static Boolean EditHasDuplicateIDs (IDAndTitleEditPtr iatep_new, IDAndTitleEditP
   {
     for (j = i + 1; j < iatep_new->num_sequences; j++)
     {
-      if (StringCmp (iatep_new->id_list [i], iatep_new->id_list [j]) == 0)
+      if (StringICmp (iatep_new->id_list [i], iatep_new->id_list [j]) == 0)
       {
         return TRUE;
       }
@@ -17201,7 +17227,7 @@ static Boolean EditHasDuplicateIDs (IDAndTitleEditPtr iatep_new, IDAndTitleEditP
     {
       for (j = 0; j < iatep_current->num_sequences; j++)
       {
-        if (StringCmp (iatep_new->id_list [i], iatep_current->id_list [j]) == 0)
+        if (StringICmp (iatep_new->id_list [i], iatep_current->id_list [j]) == 0)
         {
           return TRUE;
         }

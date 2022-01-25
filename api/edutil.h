@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,10 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.17  2006/02/07 13:41:29  bollin
+* added function AdjustFeatureForGapChange, which changes a feature to accommodate
+* a change in the length of a gap
+*
 * Revision 6.16  2005/05/02 14:21:15  bollin
 * removed function prototypes for PlayJournal and UnplayJournal, since these
 * functions live in desktop/seqpanel.c and are only used there
@@ -729,6 +733,12 @@ NLM_EXTERN void SeqEdReindexAffectedFeatures (Int4 shift_start, Int4 shift_amt,
 NLM_EXTERN void SeqEdReindexFeature (SeqFeatPtr sfp, BioseqPtr bsp);
 NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_deleted);
 
+NLM_EXTERN void 
+AdjustFeatureForGapChange 
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp, 
+ Int4       offset, 
+ Int4       len_diff);
 
 #ifdef __cplusplus
 }

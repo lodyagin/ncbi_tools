@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.52 $
+* $Revision: 6.54 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,14 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.54  2006/02/07 13:41:29  bollin
+* added function AdjustFeatureForGapChange, which changes a feature to accommodate
+* a change in the length of a gap
+*
+* Revision 6.53  2005/12/12 14:12:54  bollin
+* BioseqCopyEx was not correctly handling copying the data contents of a
+* delta sequence
+*
 * Revision 6.52  2005/09/22 19:21:34  bollin
 * In the sequence editor, if the user inserts Ns into a gap of known length,
 * the gap length will be increased instead of creating two gaps on either side
@@ -1829,6 +1837,29 @@ NLM_EXTERN Boolean	LIBCALL SeqEntryDelFeat (SeqEntryPtr sep, SeqIdPtr sip, Int4 
 *
 *****************************************************************************/
 
+static DeltaSeqPtr CopyDeltaSeqPtrChain (DeltaSeqPtr dsp)
+{
+  DeltaSeqPtr new_chain = NULL;
+  SeqLocPtr   slp_orig, slp_new;
+  SeqLitPtr   slip_orig, slip_new;
+  
+  while (dsp != NULL) {
+    if (dsp->choice == 1) {
+      slp_orig = (SeqLocPtr) dsp->data.ptrvalue;
+      slp_new = AsnIoMemCopy (slp_orig, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+      ValNodeAddPointer (&new_chain, 1, slp_new);
+    }
+    else if (dsp->choice ==2) 
+    {
+      slip_orig = (SeqLitPtr) dsp->data.ptrvalue;
+      slip_new = AsnIoMemCopy(slip_orig, (AsnReadFunc) SeqLitAsnRead, (AsnWriteFunc) SeqLitAsnWrite);
+      ValNodeAddPointer (&new_chain, 2, slip_new);
+    }
+    dsp = dsp->next;
+  }
+  
+  return new_chain;  
+}
 
 /*****************************************************************************
 *
@@ -1947,9 +1978,8 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int
 		else if (newbsp->repr == Seq_repr_delta)
 		{
 			dsp = (DeltaSeqPtr)(oldbsp->seq_ext);  /* real data is here */
-			the_segs = DeltaSeqsToSeqLocs(dsp);
-			head = SeqLocCopyPart (the_segs, from, to, strand, FALSE, NULL, NULL);
-			SeqLocFree (the_segs);
+			
+			head = CopyDeltaSeqPtrChain (dsp);
 		}
 
         newbsp->seq_ext = (Pointer)head;
@@ -6838,6 +6868,36 @@ NLM_EXTERN void SeqEdFeatureAdjust
   }
 }
 
+
+NLM_EXTERN void 
+AdjustFeatureForGapChange 
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp, 
+ Int4       offset, 
+ Int4       len_diff)
+{
+  if (sfp == NULL || bsp == NULL || offset < 0 || len_diff == 0)
+  {
+    return;
+  }
+  
+  if (len_diff > 0)
+  {
+    SeqEdSeqFeatDelete (sfp, bsp, offset, offset + len_diff - 1, TRUE);
+  }
+  else
+  {
+    sfp->location = SeqEdSeqLocInsert (sfp->location, bsp, offset, -len_diff, FALSE, NULL);
+    if (sfp->data.choice == SEQFEAT_CDREGION)
+	  {
+      SeqEdInsertAdjustCdRgn (sfp, bsp, offset, -len_diff, FALSE);
+	  }
+	  else if (sfp->data.choice == SEQFEAT_RNA)
+	  {
+      SeqEdInsertAdjustRNA (sfp, bsp, offset, -len_diff, FALSE);
+	  }
+  }    
+}
 
 
 

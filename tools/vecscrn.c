@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: vecscrn.c,v 6.136 2004/07/27 14:26:54 madden Exp $";
+static char const rcsid[] = "$Id: vecscrn.c,v 6.137 2005/12/27 14:46:44 madden Exp $";
 
 /* ===========================================================================
 *
@@ -33,9 +33,12 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.136 $
+ * $Revision: 6.137 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.137  2005/12/27 14:46:44  madden
+ * Fix buffer overflow in Print62Notation
+ *
  * Revision 6.136  2004/07/27 14:26:54  madden
  * New location for tunf.cgi
  *
@@ -167,19 +170,15 @@ static Boolean
 Print62Notation(SeqLocPtr seqloc, Int4 query_length, CharPtr *buffer)
 {
 	Char a1[2], a2[2], b1[2], b2[2];
-	CharPtr ptr, my_buffer, my_new_buffer;
+	CharPtr ptr, my_buffer;
 	Int4 buffer_size, position, start, stop;
-	Nlm_FloatHi block_size, screen_width;
+	Nlm_FloatHi block_size;
+        const int kScreenWidth = 600;
 
 	if (seqloc == NULL)
 		return FALSE;
 
-
-/*
-	screen_width = (Nlm_FloatHi) MIN(600, query_length);
-*/
-	screen_width = 600.0;
-	block_size = ((Nlm_FloatHi) query_length)/screen_width;
+	block_size = ((Nlm_FloatHi) query_length)/kScreenWidth;
 	
 	if (seqloc->choice == SEQLOC_PACKED_INT)
 		seqloc = (ValNodePtr) seqloc->data.ptrvalue;
@@ -190,8 +189,11 @@ Print62Notation(SeqLocPtr seqloc, Int4 query_length, CharPtr *buffer)
 	ptr = my_buffer;
 	while (seqloc)
 	{
-		if (position+4 > buffer_size)
+                /* We check for +5 as we need to allow addition of four characters within
+                   this loop as well as setting the final byte to NULLB outside of the loop. */
+		if (position+5 > buffer_size)
 		{
+                        CharPtr my_new_buffer = NULL;
 			buffer_size += ADD_TO_BUFFER_FOR_BLAST;
 			my_new_buffer = (CharPtr) MemNew(buffer_size*sizeof(Char));
 			MemCpy(my_new_buffer, my_buffer, position);

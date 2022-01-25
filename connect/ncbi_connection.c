@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connection.c,v 6.45 2005/05/18 18:15:21 lavr Exp $
+/*  $Id: ncbi_connection.c,v 6.48 2006/02/23 17:43:01 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,7 +53,11 @@
              : "Unknown", IO_StatusStr(status)))
 
 #define CONN_LOG(level, descr)  CONN_LOG_EX(level, descr, status)
-
+#ifdef _DEBUG
+#  define CONN_TRACE(descr)  CONN_LOG(eLOG_Trace, descr)
+#else
+#  define CONN_TRACE(descr)  ((void) 0)
+#endif /*_DEBUG*/
 
 /* Standard macros to verify that the passed connection handle is not NULL
  */
@@ -262,7 +266,7 @@ extern char* CONN_Description(CONN conn)
 extern EIO_Status CONN_SetTimeout
 (CONN            conn,
  EIO_Event       event,
- const STimeout* new_timeout)
+ const STimeout* timeout)
 {
     EIO_Status status = eIO_Success;
 
@@ -270,38 +274,42 @@ extern EIO_Status CONN_SetTimeout
 
     switch (event) {
     case eIO_Open:
-        if (new_timeout  &&  new_timeout != kDefaultTimeout) {
-            conn->oo_timeout = *new_timeout;
+        if (timeout  &&  timeout != kDefaultTimeout) {
+            if (&conn->oo_timeout != timeout)
+                conn->oo_timeout = *timeout;
             conn->o_timeout  = &conn->oo_timeout;
         } else {
-            conn->o_timeout  = new_timeout;
+            conn->o_timeout  = timeout;
         }
         break;
     case eIO_Close:
-        if (new_timeout  &&  new_timeout != kDefaultTimeout) {
-            conn->cc_timeout = *new_timeout;
+        if (timeout  &&  timeout != kDefaultTimeout) {
+            if (&conn->cc_timeout != timeout)
+                conn->cc_timeout = *timeout;
             conn->c_timeout  = &conn->cc_timeout;
         } else {
-            conn->c_timeout  = new_timeout;
+            conn->c_timeout  = timeout;
         }
         break;
     case eIO_Read:
     case eIO_ReadWrite:
-        if (new_timeout  &&  new_timeout != kDefaultTimeout) {
-            conn->rr_timeout = *new_timeout;
+        if (timeout  &&  timeout != kDefaultTimeout) {
+            if (&conn->rr_timeout != timeout)
+                conn->rr_timeout = *timeout;
             conn->r_timeout  = &conn->rr_timeout;
         } else {
-            conn->r_timeout  = new_timeout;
+            conn->r_timeout  = timeout;
         }
         if (event != eIO_ReadWrite)
             break;
         /*FALLTHRU*/
     case eIO_Write:
-        if (new_timeout  &&  new_timeout != kDefaultTimeout) {
-            conn->ww_timeout = *new_timeout;
+        if (timeout  &&  timeout != kDefaultTimeout) {
+            if (&conn->ww_timeout != timeout)
+                conn->ww_timeout = *timeout;
             conn->w_timeout  = &conn->ww_timeout;
         } else {
-            conn->w_timeout  = new_timeout;
+            conn->w_timeout  = timeout;
         }
         break;
     default:
@@ -406,11 +414,11 @@ static EIO_Status s_CONN_Write
     /* call current connector's "WRITE" method */
     status = conn->meta.write(conn->meta.c_write, buf, size, n_written,
                               conn->w_timeout == kDefaultTimeout ?
-                              conn->meta.default_timeout :conn->w_timeout);
+                              conn->meta.default_timeout : conn->w_timeout);
 
     if (status != eIO_Success) {
         if ( *n_written ) {
-            CONN_LOG(eLOG_Trace, "[CONN_Write]  Write error");
+            CONN_TRACE("[CONN_Write]  Write error");
             status = eIO_Success;
         } else if ( size )
             CONN_LOG(eLOG_Error, "[CONN_Write]  Cannot write data");
@@ -562,11 +570,10 @@ static EIO_Status s_CONN_Read
 
     if (status != eIO_Success) {
         if ( *n_read ) {
-            CONN_LOG(eLOG_Trace, "[CONN_Read]  Read error");
+            CONN_TRACE("[CONN_Read]  Read error");
             status = eIO_Success;
-        } else if ( size ) {
-            CONN_LOG(status == eIO_Closed  ? eLOG_Trace   :
-                     status == eIO_Timeout ? eLOG_Warning : eLOG_Error,
+        } else if (size  &&  status != eIO_Closed) {
+            CONN_LOG(status == eIO_Timeout ? eLOG_Warning : eLOG_Error,
                      "[CONN_Read]  Cannot read data");
         }
     }
@@ -855,6 +862,15 @@ extern EIO_Status CONN_WaitAsync
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connection.c,v $
+ * Revision 6.48  2006/02/23 17:43:01  lavr
+ * CONN_Read():  No CLOSED trace on EOF
+ *
+ * Revision 6.47  2006/02/14 15:49:42  lavr
+ * Introduce and use CORE_TRACE macros (NOP in Release mode)
+ *
+ * Revision 6.46  2006/01/18 03:38:17  lavr
+ * Prevent copying STimeout structs into themselves [where can occur]
+ *
  * Revision 6.45  2005/05/18 18:15:21  lavr
  * Formatting spot
  *
@@ -923,7 +939,7 @@ extern EIO_Status CONN_WaitAsync
  * Checks for kDefaultTimeout and use of default_timeout of meta-connector
  *
  * Revision 6.23  2002/04/24 21:18:04  lavr
- * Beautifying: pup open check before buffer check in CONN_Wait()
+ * Beautifying: move open check in front of buffer check in CONN_Wait()
  *
  * Revision 6.22  2002/04/22 19:30:01  lavr
  * Do not put trace message on polling wait (tmo={0,0})
@@ -991,7 +1007,7 @@ extern EIO_Status CONN_WaitAsync
  *
  * Revision 6.2  2000/12/29 17:52:59  lavr
  * Adapted to use new connector structure; modified to have
- * Internal tri-state {Unusable | Open | Closed }.
+ * an internal tri-state {Unusable | Open | Closed }.
  *
  * Revision 6.1  2000/03/24 22:53:34  vakatov
  * Initial revision

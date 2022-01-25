@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.50 $
+* $Revision: 6.53 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,15 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.53  2006/02/06 19:00:15  kans
+* added CreateFeatureFetchPolicyUserObject
+*
+* Revision 6.52  2006/01/23 16:39:57  kans
+* added CreateAnnotDescCommentPolicyUserObject
+*
+* Revision 6.51  2006/01/17 18:25:07  kans
+* support for genomeprojectsdb user object
+*
 * Revision 6.50  2005/06/10 14:06:16  kans
 * added GENOME_hydrogenosome define
 *
@@ -1679,6 +1688,26 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
   Int4 to
 );
 
+NLM_EXTERN UserObjectPtr CreateGenomeProjectsDBUserObject (
+  void
+);
+NLM_EXTERN UserObjectPtr AddIDsToGenomeProjectsDBUserObject (
+  UserObjectPtr uop,
+  Int4 projectID,
+  Int4 parentID
+);
+
+/* annot desc comment policy user object */
+NLM_EXTERN UserObjectPtr CreateAnnotDescCommentPolicyUserObject (
+  Boolean showInCommentBlock
+);
+
+/* feature fetch policy user object */
+
+NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
+  CharPtr policy
+);
+
 
 #ifdef __cplusplus
 }
@@ -1739,6 +1768,7 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
                 ( symbol "R", name "Arginine"),
                 ( symbol "S", name "Serine"),
                 ( symbol "T", name "Threoine"),
+                { symbol "U", name "Selenocysteine"},
                 ( symbol "V", name "Valine"),
                 ( symbol "W", name "Tryptophan" ),
                 ( symbol "X", name "Undetermined or atypical"),
@@ -1753,38 +1783,56 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
 *   Genetic Code id's and names from /ncbi/data/gc.prt
 *      gc.prt lists the legal start codons and genetic codes fully
 *   
-		name "Standard" ,
-		id 1 ,
+                name "Standard" ,
+                id 1 ,
 
-		name "Vertebrate Mitochondrial" ,
-		id 2 ,
+                name "Vertebrate Mitochondrial" ,
+                id 2 ,
 
-		name "Yeast Mitochondrial" ,
-		id 3 ,
+                name "Yeast Mitochondrial" ,
+                id 3 ,
 
-		name "Mold Mitochondrial and Mycoplasma" ,
-		id 4 ,
+                name "Mold Mitochondrial and Mycoplasma" ,
+                id 4 ,
 
-		name "Invertebrate Mitochondrial" ,
-		id 5 ,
+                name "Invertebrate Mitochondrial" ,
+                id 5 ,
 
-		name "Ciliate Macronuclear and Daycladacean" ,
-		id 6 ,
+                name "Ciliate Macronuclear and Daycladacean" ,
+                id 6 ,
 
-		name "Protozoan Mitochondrial (and Kinetoplast)" ,
-		id 7 ,
+                name "Echinoderm Mitochondrial" ,
+                id 9 ,
 
-		name "Plant Mitochondrial" ,
-		id 8 ,
+                name "Euplotid Macronuclear" ,
+                id 10 ,
 
-		name "Echinoderm Mitochondrial" ,
-		id 9 ,
+                name "Bacterial and Plant Plastid" ,
+                id 11 ,
 
-		name "Euplotid Macronuclear" ,
-		id 10 ,
+                name "Alternative Yeast Nuclear" ,
+                id 12 ,
 
-		name "Eubacterial" ,
-		id 11 ,
+                name "Ascidian Mitochondrial" ,
+                id 13 ,
+
+                name "Alternative Flatworm Mitochondrial" ,
+                id 14 ,
+
+                name "Blepharisma Macronuclear" ,
+                id 15 ,
+
+                name "Chlorophycean Mitochondrial" ,
+                id 16 ,
+
+                name "Trematode Mitochondrial" ,
+                id 21 ,
+
+                name "Scenedesmus obliquus Mitochondrial" ,
+                id 22 ,
+
+                name "Thraustochytrium Mitochondrial" ,
+                id 23 ,
 
 *   
 *

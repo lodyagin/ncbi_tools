@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.203 2005/11/22 13:44:13 coulouri Exp $
+/* $Id: blast_engine.c,v 1.208 2006/02/23 18:30:20 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.203 2005/11/22 13:44:13 coulouri Exp $";
+    "$Id: blast_engine.c,v 1.208 2006/02/23 18:30:20 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -87,8 +87,6 @@ typedef struct BlastCoreAuxStruct {
                                               pointer */
    BlastInitHitList* init_hitlist; /**< Placeholder for HSPs after 
                                         ungapped extension */
-   BlastHSPList* hsp_list; /**< Placeholder for HSPs after gapped 
-                                extension */
    BlastOffsetPair* offset_pairs; /**< Array of offset pairs for initial seeds. */
    Uint1* translation_buffer; /**< Placeholder for translated subject
                                    sequences */
@@ -103,7 +101,6 @@ s_BlastCoreAuxStructFree(BlastCoreAuxStruct* aux_struct)
 {
    BlastExtendWordFree(aux_struct->ewp);
    BLAST_InitHitListFree(aux_struct->init_hitlist);
-   Blast_HSPListFree(aux_struct->hsp_list);
    sfree(aux_struct->offset_pairs);
    
    sfree(aux_struct);
@@ -228,16 +225,15 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
    const BlastDatabaseOptions* db_options,
    BlastDiagnostics* diagnostics,
    BlastCoreAuxStruct* aux_struct,
-   BlastHSPList** hsp_list_out)
+   BlastHSPList** hsp_list_out_ptr)
 {
    BlastInitHitList* init_hitlist = aux_struct->init_hitlist;
-   BlastHSPList* hsp_list = aux_struct->hsp_list;
+   BlastHSPList* hsp_list_out=NULL;
    Uint1* translation_buffer = NULL;
    Int4* frame_offsets   = NULL;
    Int4* frame_offsets_a = NULL; /* Will be freed if non-null */
    BlastHitSavingOptions* hit_options = hit_params->options;
    BlastScoringOptions* score_options = score_params->options;
-   BlastHSPList* combined_hsp_list = NULL;
    Int2 status = 0;
    Uint4 context, first_context, last_context;
    Int4 orig_length = subject->length;
@@ -254,6 +250,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
         (Blast_SubjectIsTranslated(program_number) || program_number == eBlastTypeRpsTblastn);
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
+
+   *hsp_list_out_ptr = NULL;
 
    if (kTranslatedSubject) {
       first_context = 0;
@@ -284,7 +282,6 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       last_context = 0;
    }
 
-   *hsp_list_out = NULL;
 
    if (gap_align->positionBased)
       matrix = gap_align->sbp->psi_matrix->pssm->data;
@@ -301,13 +298,10 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
    /* Substitute query info by concatenated database info for RPS BLAST search */
    if (Blast_ProgramIsRpsBlast(program_number)) {
       BlastRPSLookupTable* lut = (BlastRPSLookupTable*) lookup->lut;
-      query_info = (BlastQueryInfo*) calloc(1, sizeof(BlastQueryInfo));
-      query_info->num_queries = lut->num_profiles;
-      query_info->last_context = lut->num_profiles - 1;
+      query_info = BlastQueryInfoNew(eBlastTypeRpsBlast, lut->num_profiles);
       /* Since this will really be "subject info", not "query info",
          pass program argument such that all frames will be set to 0. */
-      s_RPSOffsetArrayToContextOffsets(query_info,
-                                       lut->rps_seq_offsets);
+      s_RPSOffsetArrayToContextOffsets(query_info, lut->rps_seq_offsets);
    }
 
    /* Loop over frames of the subject sequence */
@@ -316,6 +310,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       Int4 num_chunks; /* loop variable below. */
       Int4 offset = 0; /* Used as offset into subject sequence (if chunked) */
       Int4 total_subject_length; /* Length of subject sequence used when split. */
+      BlastHSPList* combined_hsp_list = NULL;
+      BlastHSPList* hsp_list = NULL;
 
       if (kTranslatedSubject) {
          subject->frame =
@@ -333,6 +329,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
          (MAX_DBSEQ_LEN - DBSEQ_CHUNK_OVERLAP) + 1;
       total_subject_length = subject->length;
       
+      /* Delete if not done in last loop iteration to prevent memory leak. */
+      hsp_list = Blast_HSPListFree(hsp_list);  /* In case this was not freed in above loop. */
       for (chunk = 0; chunk < num_chunks; ++chunk) {
          if (chunk > 0) {
             offset += subject->length - DBSEQ_CHUNK_OVERLAP;
@@ -403,15 +401,16 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
          Blast_HSPListAdjustOffsets(hsp_list, offset);
          /* Allow merging of HSPs either if traceback is already 
             available, or if it is an ungapped search */
-         Blast_HSPListsMerge(hsp_list, &combined_hsp_list, hsp_num_max, offset,
+         Blast_HSPListsMerge(&hsp_list, &combined_hsp_list, hsp_num_max, offset,
             (Boolean)(prelim_traceback || !score_options->gapped_calculation));
       } /* End loop on chunks of subject sequence */
 
-      if (Blast_HSPListAppend(combined_hsp_list, hsp_list_out, hsp_num_max)) {
+      hsp_list = Blast_HSPListFree(hsp_list);  /* In case this was not freed in above loop. */
+
+      if (Blast_HSPListAppend(&combined_hsp_list, &hsp_list_out, hsp_num_max)) {
          status = 1;
          break;
       }
-      combined_hsp_list = Blast_HSPListFree(combined_hsp_list);
    } /* End loop on frames */
 
    /* Restore the original contents of the subject block */
@@ -421,10 +420,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
    if (status) 
       return status;
 
-   hsp_list = *hsp_list_out;
-
    if (hit_params->link_hsp_params) {
-      status = BLAST_LinkHsps(program_number, hsp_list, query_info,
+      status = BLAST_LinkHsps(program_number, hsp_list_out, query_info,
                   subject->length, gap_align->sbp, hit_params->link_hsp_params, 
                   score_options->gapped_calculation);
    } else if (!Blast_ProgramIsPhiBlast(program_number) &&
@@ -432,7 +429,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
        /* Calculate e-values for all HSPs. Skip this step
           for PHI and RPS BLAST, since calculating the E values 
           requires precomputation that has not been done yet */
-       status = Blast_HSPListGetEvalues(query_info, hsp_list, 
+       status = Blast_HSPListGetEvalues(query_info, hsp_list_out, 
                                         score_options->gapped_calculation, 
                                         gap_align->sbp, 0, 1.0);
    }
@@ -442,15 +439,15 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       BlastQueryInfoFree(query_info);
 
    /* Discard HSPs that don't pass the e-value test. */
-   status = Blast_HSPListReapByEvalue(hsp_list, hit_options);
+   status = Blast_HSPListReapByEvalue(hsp_list_out, hit_options);
 
    /* If there are no HSPs left, destroy the HSP list too. */
-   if (hsp_list && hsp_list->hspcnt == 0)
-      *hsp_list_out = hsp_list = Blast_HSPListFree(hsp_list);
+   if (hsp_list_out && hsp_list_out->hspcnt == 0)
+      *hsp_list_out_ptr = hsp_list_out = Blast_HSPListFree(hsp_list_out);
 
-   if (gapped_stats && hsp_list && hsp_list->hspcnt > 0) {
+   if (gapped_stats && hsp_list_out && hsp_list_out->hspcnt > 0) {
       ++gapped_stats->num_seqs_passed;
-      gapped_stats->good_extensions += hsp_list->hspcnt;
+      gapped_stats->good_extensions += hsp_list_out->hspcnt;
    }
 
    /* Free translation buffer and frame offsets, except for RPS tblastn,
@@ -467,6 +464,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
        sfree(frame_offsets_a);
    }
    
+   *hsp_list_out_ptr = hsp_list_out;
+
    return status;
 }
 
@@ -564,12 +563,9 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
    /* Pick which gapped alignment algorithm to use. */
    if (phi_lookup)
       aux_struct->GetGappedScore = PHIGetGappedScore;
-   else if (ext_options->ePrelimGapExt == eDynProgExt)
+   else 
       aux_struct->GetGappedScore = BLAST_GetGappedScore;
-   else
-      aux_struct->GetGappedScore = BLAST_MbGetGappedScore;
 
-   aux_struct->hsp_list = Blast_HSPListNew(hit_options->hsp_num_max);
    return status;
 }
 
@@ -813,6 +809,8 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                      hsp_list, query, seq_arg.seq, word_params, hit_params, 
                      query_info, sbp, score_params, seq_src, 
                      (db_options ? db_options->gen_code_string : NULL));
+               if (status)
+                  return status;
                /* Relink HSPs if sum statistics is used, because scores might
                 * have changed after reevaluation with ambiguities, and there
                 * will be no traceback stage where relinking is done normally.

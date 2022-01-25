@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.96 $
+* $Revision: 6.104 $
 *
 * File Description: 
 *
@@ -1497,6 +1497,7 @@ static CharPtr  commonNoCitFormTabs [] = {
 };
 
 static DialoG CreateInferenceDialog (GrouP h, Uint2 rows, Int2 spacing, Int2 width);
+static DialoG NewCreateInferenceDialog (GrouP prnt);
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
 
 extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
@@ -1759,7 +1760,10 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ppt1 = StaticPrompt (q, "Experiment", 0, 0, programFont, 'c');
     ffp->experiment = CreateVisibleStringDialog (q, 3, -1, 15);
     ppt2 = StaticPrompt (q, "Inference", 0, 0, programFont, 'c');
+    /*
     ffp->inference = CreateInferenceDialog (q, 3, 2, 15);
+    */
+    ffp->inference = NewCreateInferenceDialog (q);
     AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) ffp->experiment,
                   (HANDLE) ppt2, (HANDLE) ffp->inference, NULL);
     ffp->commonSubGrp [page] = c;
@@ -4991,6 +4995,7 @@ extern DialoG SequenceSelectionDialog
   return (DialoG) p;
 }
 
+/*
 static CharPtr inferencePrefix [] = {
   "",
   "similar to sequence",
@@ -5034,7 +5039,6 @@ static EnumFieldAssocPtr inference_popups [] = {
   inference_alist, NULL
 };
 
-extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
 extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
 
 {
@@ -5114,7 +5118,6 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
   CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
 }
 
-/*
 static void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual)
 
 {
@@ -5143,9 +5146,7 @@ static void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual)
   }
   ValNodeFreeData (head);
 }
-*/
 
-extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp);
 extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp)
 
 {
@@ -5224,5 +5225,1135 @@ static DialoG CreateInferenceDialog (GrouP h, Uint2 rows, Int2 spacing, Int2 wid
   return CreateTagListDialog (h, rows, 2, spacing,
                               inference_types, inference_widths,
                               inference_popups, NULL, NULL);
+}
+*/
+
+/* ************************ */
+
+/* inference dialog controls, utility functions */
+
+typedef struct inferevid {
+  CharPtr  prefix;     /* from inferencePrefix     */
+  Boolean  species;    /* optional (same species)  */
+  CharPtr  database;   /* INSD, RefSeq, etc.       */
+  CharPtr  db_other;   /* other database           */
+  CharPtr  accession;  /* accession.version        */
+  CharPtr  program;    /* common analysis program  */
+  CharPtr  pr_other;   /* other program            */
+  CharPtr  version;    /* program version          */
+  CharPtr  basis1;     /* profile or motif         */
+  CharPtr  basis2;     /*  evidence_basis texts    */
+} InferEvid, PNTR InferEvidPtr;
+
+typedef struct inferdialog {
+  DIALOG_MESSAGE_BLOCK
+
+  DoC           inferdoc;
+  Int2          currItem;
+
+  PopuP         prefix;
+  ButtoN        species;
+  PopuP         database;
+  TexT          db_other;
+  TexT          accession;
+  PopuP         program;
+  TexT          pr_other;
+  TexT          version;
+  TexT          basis1;
+  TexT          basis2;
+
+  GrouP         inf_accn_group;
+  GrouP         other_db_group;
+  GrouP         inf_prog_group;
+  GrouP         other_pr_group;
+  GrouP         inf_free_group;
+
+  Int2          numInf;
+  InferEvidPtr  evidence [128];
+
+} InferDialog, PNTR InferDialogPtr;
+
+static InferEvidPtr InferEvidNew (
+  void
+)
+
+{
+  InferEvidPtr  iep;
+
+  iep = MemNew (sizeof (InferEvid));
+  if (iep == NULL) return NULL;
+
+  return iep;
+}
+
+static InferEvidPtr InferEvidFree (
+  InferEvidPtr iep
+)
+
+{
+  if (iep == NULL) return NULL;
+
+  MemFree (iep->prefix);
+  MemFree (iep->database);
+  MemFree (iep->accession);
+  MemFree (iep->program);
+  MemFree (iep->version);
+  MemFree (iep->basis1);
+  MemFree (iep->basis2);
+
+  return MemFree (iep);
+}
+
+static InferEvidPtr GetInferEvid (
+  InferDialogPtr idp,
+  Int2 item
+)
+
+{
+  InferEvidPtr  iep;
+
+  if (idp == NULL || item < 0 || item > 127) return NULL;
+  iep = idp->evidence [item];
+  if (iep != NULL) return iep;
+
+  iep = InferEvidNew ();
+  if (iep != NULL) {
+    /*
+    iep->prefix = StringSave (" ");
+    iep->database = StringSave (" ");
+    iep->db_other = StringSave ("");
+    iep->accession = StringSave ("");
+    iep->program = StringSave (" ");
+    iep->pr_other = StringSave ("");
+    iep->version = StringSave ("");
+    iep->basis1 = StringSave ("");
+    iep->basis2 = StringSave ("");
+    */
+  }
+  idp->evidence [item] = iep;
+  return iep;
+}
+
+/* inference DoC object tables */
+
+#define NUM_INFERENCE_LINES 3
+
+static ParData  inferParFmt = { FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0 };
+
+static ColData  inferColFmt [] = {
+  {0, 5, 25, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE}, /* class     */
+  {0, 5, 25, 2, NULL, 'l', FALSE, TRUE,  FALSE, FALSE, TRUE}   /* specifics */
+};
+
+static CharPtr inferencePrefix [] = {
+  "",
+  "similar to sequence",
+  "similar to AA sequence",
+  "similar to DNA sequence",
+  "similar to RNA sequence",
+  "similar to RNA sequence, mRNA",
+  "similar to RNA sequence, EST",
+  "similar to RNA sequence, other RNA",
+  "profile",
+  "nucleotide motif",
+  "protein motif",
+  "ab initio prediction",
+  NULL
+};
+
+ENUM_ALIST(inference_alist)
+  { " ",                     0 },
+  { "similar to sequence",   1 },
+  { "similar to protein",    2 },
+  { "similar to DNA",        3 },
+  { "similar to RNA",        4 },
+  { "similar to mRNA",       5 },
+  { "similar to EST",        6 },
+  { "similar to other RNA",  7 },
+  { "profile",               8 },
+  { "nucleotide motif",      9 },
+  { "protein motif",        10 },
+  { "ab initio prediction", 11 },
+END_ENUM_ALIST
+
+static CharPtr accnTypePrefix [] = {
+  "",
+  "GenBank",
+  "EMBL",
+  "DDBJ",
+  "INSD",
+  "RefSeq",
+  "UniProt",
+  "?",
+  NULL
+};
+
+ENUM_ALIST(accn_type_alist)
+  { " ",       0 },
+  { "GenBank", 1 },
+  { "EMBL",    2 },
+  { "DDBJ",    3 },
+  { "INSD",    4 },
+  { "RefSeq",  5 },
+  { "UniProt", 6 },
+  { "Other",   7 },
+END_ENUM_ALIST
+
+static CharPtr programPrefix [] = {
+  "",
+  "tRNAscan",
+  "Genscan",
+  "?",
+  NULL
+};
+
+ENUM_ALIST(program_alist)
+  { " ",        0 },
+  { "tRNAscan", 1 },
+  { "Genscan",  2 },
+  { "Other",    3 },
+END_ENUM_ALIST
+
+static CharPtr PrintInferTable (
+  DoC d,
+  Int2 item,
+  Pointer data
+)
+
+{
+  Char            buf [256];
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (d);
+  if (idp == NULL || item < 1 || item > 127) return NULL;
+  iep = GetInferEvid (idp, item);
+  if (iep == NULL) return NULL;
+
+  buf [0] = '\0';
+
+  if (StringHasNoText (iep->prefix)) {
+    StringCat (buf, " \t \n");
+    return StringSave (buf);
+  }
+
+  StringCat (buf, iep->prefix);
+
+  StringCat (buf, "\t");
+
+  if (StringNICmp (iep->prefix, "similar to ", 11) == 0) {
+    if (StringDoesHaveText (iep->accession)) {
+      if (StringCmp (iep->database, "Other") == 0) {
+        if (StringDoesHaveText (iep->db_other)) {
+          StringCat (buf, iep->db_other);
+          StringCat (buf, ":");
+        }
+      } else if (StringDoesHaveText (iep->database)) {
+        StringCat (buf, iep->database);
+        StringCat (buf, ":");
+      }
+      StringCat (buf, iep->accession);
+    }
+  } else if (StringNICmp (iep->prefix, "ab initio ", 10) == 0) {
+    if (StringCmp (iep->program, "Other") == 0) {
+      if (StringDoesHaveText (iep->pr_other)) {
+        StringCat (buf, iep->pr_other);
+        if (StringDoesHaveText (iep->version)) {
+          StringCat (buf, ":");
+          StringCat (buf, iep->version);
+        }
+      }
+    } else if (StringDoesHaveText (iep->program)) {
+      StringCat (buf, iep->program);
+      if (StringDoesHaveText (iep->version)) {
+        StringCat (buf, ":");
+        StringCat (buf, iep->version);
+      }
+    }
+  } else if (StringDoesHaveText (iep->basis1)) {
+    StringCat (buf, iep->basis1);
+    if (StringDoesHaveText (iep->basis2)) {
+      StringCat (buf, ":");
+      StringCat (buf, iep->basis2);
+    }
+  } else {
+    StringCat (buf, " ");
+  }
+
+  StringCat (buf, "\n");
+  return StringSave (buf);
+}
+
+static void ShowInferenceGroup (
+  InferDialogPtr idp
+)
+
+{
+  CharPtr  str;
+  UIEnum   val;
+
+  if (idp == NULL) return;
+  if (GetEnumPopup (idp->prefix, inference_alist, &val)) {
+    if (val >= 1 && val <= 7) {
+      SafeHide (idp->inf_prog_group);
+      SafeHide (idp->inf_free_group);
+      SafeShow (idp->inf_accn_group);
+      SafeShow (idp->species);
+      str = GetEnumPopupByName (idp->database, accn_type_alist);
+      if (StringCmp (str, "Other") == 0) {
+        SafeShow (idp->other_db_group);
+      } else {
+        SafeHide (idp->other_db_group);
+      }
+      MemFree (str);
+    } else if (val >= 8 && val <= 10) {
+      SafeHide (idp->inf_accn_group);
+      SafeHide (idp->species);
+      SafeHide (idp->inf_prog_group);
+      SafeShow (idp->inf_free_group);
+    } else if (val == 11) {
+      SafeHide (idp->inf_accn_group);
+      SafeHide (idp->species);
+      SafeHide (idp->inf_free_group);
+      SafeShow (idp->inf_prog_group);
+      str = GetEnumPopupByName (idp->program, program_alist);
+      if (StringCmp (str, "Other") == 0) {
+        SafeShow (idp->other_pr_group);
+      } else {
+        SafeHide (idp->other_pr_group);
+      }
+      MemFree (str);
+    } else {
+      SafeHide (idp->inf_accn_group);
+      SafeHide (idp->species);
+      SafeHide (idp->inf_prog_group);
+      SafeHide (idp->inf_free_group);
+    }
+  } else {
+    SafeHide (idp->inf_accn_group);
+    SafeHide (idp->species);
+    SafeHide (idp->inf_prog_group);
+    SafeHide (idp->inf_free_group);
+  }
+  Update ();
+}
+
+static void SafeSetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
+
+{
+  if (StringDoesHaveText (name)) {
+    SetEnumPopupByName (lst, al, name);
+  } else {
+    SetEnumPopupByName (lst, al, " ");
+  }
+}
+
+static void ChangeInferTableSelect (
+  DoC d,
+  Int2 item,
+  Int2 row,
+  Int2 col,
+  Boolean dblClck
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  Int2            itemOld1, itemOld2;
+
+  idp = (InferDialogPtr) GetObjectExtra (d);
+  if (idp == NULL) return;
+  if (item == 0 || row == 0 || col == 0) return;
+
+  GetDocHighlight (d, &itemOld1, &itemOld2);
+  SetDocHighlight (d, item, item);
+  UpdateDocument (d, itemOld1, itemOld2);
+  UpdateDocument (d, item, item);
+  idp->currItem = item;
+
+  iep = GetInferEvid (idp, item);
+  if (iep != NULL) {
+    ResetClip ();
+    SafeSetEnumPopupByName (idp->prefix, inference_alist, iep->prefix);
+
+    SafeSetStatus (idp->species, iep->species);
+    SafeSetEnumPopupByName (idp->database, accn_type_alist, iep->database);
+    SafeSetTitle (idp->db_other, iep->db_other);
+    SafeSetTitle (idp->accession, iep->accession);
+
+    SafeSetEnumPopupByName (idp->program, program_alist, iep->program);
+    SafeSetTitle (idp->pr_other, iep->pr_other);
+    SafeSetTitle (idp->version, iep->version);
+
+    SafeSetTitle (idp->basis1, iep->basis1);
+    SafeSetTitle (idp->basis2, iep->basis2);
+
+    ShowInferenceGroup (idp);
+  }
+
+  Update ();
+}
+
+static void CheckExtendInferTable (
+  InferDialogPtr idp
+)
+
+{
+  Int2  numItems;
+
+  if (idp == NULL) return;
+
+  GetDocParams (idp->inferdoc, &numItems, NULL);
+  if (idp->currItem == numItems) {
+    AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+                &inferParFmt, inferColFmt, systemFont);
+  }
+
+  Update ();
+}
+
+static void ChangeInferPrefix (
+  PopuP p
+)
+
+{
+  AlistDialogPtr  adp;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  CharPtr         str;
+
+  adp = (AlistDialogPtr) GetObjectExtra (p);
+  if (adp == NULL) return;
+  idp = (InferDialogPtr) adp->userdata;
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  str = GetEnumPopupByName (idp->prefix, inference_alist);
+  iep->prefix = MemFree (iep->prefix);
+  iep->prefix = str; /* allocated by GetEnumPopupByName */
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeSameSpecies (
+  ButtoN b
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (b);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->species = (Boolean) (GetStatus (b));
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static CharPtr insdmessage =
+"GenBank, EMBL, and DDBJ records are part of the International Nucleotide " \
+"Sequence Database collaboration.\nThe database prefix for the /inference " \
+"qualifier in these cases is INSD by collaboration policy.";
+
+static void ChangeInferDatabase (
+  PopuP p
+)
+
+
+{
+  AlistDialogPtr  adp;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  CharPtr         str;
+
+  adp = (AlistDialogPtr) GetObjectExtra (p);
+  if (adp == NULL) return;
+  idp = (InferDialogPtr) adp->userdata;
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  str = GetEnumPopupByName (idp->database, accn_type_alist);
+  if (StringCmp (str, "GenBank") == 0 ||
+      StringCmp (str, "EMBL") == 0 ||
+      StringCmp (str, "DDBJ") == 0) {
+    if (GetAppProperty ("InternalNcbiSequin") == NULL) {
+      Message (MSG_OK, "%s", insdmessage);
+    }
+    SetEnumPopupByName (idp->database, accn_type_alist, "INSD");
+    str = MemFree (str);
+    str = StringSave ("INSD");
+  }
+  iep->database = MemFree (iep->database);
+  iep->database = str; /* allocated by GetEnumPopupByName */
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferDbOther (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->db_other = MemFree (iep->db_other);
+  iep->db_other = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferAccession (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->accession = MemFree (iep->accession);
+  iep->accession = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferProgram (
+  PopuP p
+)
+
+
+{
+  AlistDialogPtr  adp;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  CharPtr         str;
+
+  adp = (AlistDialogPtr) GetObjectExtra (p);
+  if (adp == NULL) return;
+  idp = (InferDialogPtr) adp->userdata;
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  str = GetEnumPopupByName (idp->program, program_alist);
+  iep->program = MemFree (iep->program);
+  iep->program = str; /* allocated by GetEnumPopupByName */
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferPrOther (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->pr_other = MemFree (iep->pr_other);
+  iep->pr_other = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferVersion (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->version = MemFree (iep->version);
+  iep->version = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferBasis1 (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->basis1 = MemFree (iep->basis1);
+  iep->basis1 = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static void ChangeInferBasis2 (
+  TexT t
+)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) GetObjectExtra (t);
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->basis2 = MemFree (iep->basis2);
+  iep->basis2 = SaveStringFromText (t);
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+static Boolean StringInList (CharPtr str, CharPtr PNTR list)
+
+{
+  Int2  i;
+
+  if (str == NULL || list == NULL) return FALSE;
+
+  for (i = 0; list [i] != NULL; i++) {
+    if (StringICmp (str, list[i]) == 0) return TRUE;
+  }
+
+  return FALSE;
+}
+
+extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
+
+{
+  Int2            best;
+  Char            ch;
+  GBQualPtr       gbq;
+  Int2            i, j, k;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  size_t          len;
+  CharPtr         rest;
+  CharPtr         str;
+  CharPtr         tmp;
+
+  idp = (InferDialogPtr) GetObjectExtra (d);
+  if (idp == NULL) return;
+
+  if (sfp == NULL || sfp->qual == NULL) {
+    Reset (idp->inferdoc);
+    SetValue (idp->prefix, 0);
+    SetStatus (idp->species, FALSE);
+    SetValue (idp->database, 0);
+    SetTitle (idp->db_other, "");
+    SetTitle (idp->accession, "");
+    SetValue (idp->program, 0);
+    SetTitle (idp->pr_other, "");
+    SetTitle (idp->version, "");
+    SetTitle (idp->basis1, "");
+    SetTitle (idp->basis2, "");
+    SafeHide (idp->inf_accn_group);
+    SafeHide (idp->inf_prog_group);
+    SafeHide (idp->inf_free_group);
+    idp->numInf = 0;
+    idp->currItem = 1;
+    for (i = 0; i < NUM_INFERENCE_LINES; i++) {
+      AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+                  &inferParFmt, inferColFmt, systemFont);
+    }
+    SetDocHighlight (idp->inferdoc, 1, 1);
+    return;
+  }
+
+  idp->numInf = 0;
+  idp->currItem = 1;
+  Reset (idp->inferdoc);
+
+  for (k = 0; k < 128; k++) {
+    iep = idp->evidence [k];
+    InferEvidFree (iep);
+    idp->evidence [k] = NULL;
+  }
+
+  for (gbq = sfp->qual, k = 0; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "inference") != 0) continue;
+    if (StringHasNoText (gbq->val)) continue;
+
+    rest = NULL;
+    best = -1;
+    for (j = 0; inferencePrefix [j] != NULL; j++) {
+      len = StringLen (inferencePrefix [j]);
+      if (StringNICmp (gbq->val, inferencePrefix [j], len) != 0) continue;
+      rest = gbq->val + len;
+      best = j;
+    }
+
+    k++;
+    iep = GetInferEvid (idp, k);
+    if (iep == NULL) continue;
+
+    str = NULL;
+    if (best > 0 && inferencePrefix [best] != NULL) {
+      iep->prefix = MemFree (iep->prefix);
+      iep->prefix =  GetEnumName ((UIEnum) best, inference_alist);
+
+      if (rest != NULL) {
+        ch = *rest;
+        while (IS_WHITESP (ch)) {
+          rest++;
+          ch = *rest;
+        }
+        if (StringNICmp (rest, "(same species)", 14) == 0) {
+          iep->species = TRUE;
+          rest += 14;
+        }
+        ch = *rest;
+        while (IS_WHITESP (ch) || ch == ':') {
+          rest++;
+          ch = *rest;
+        }
+      }
+      if (StringDoesHaveText (rest)) {
+        str = StringSave (rest);
+      }
+      tmp = StringChr (str, ':');
+      if (tmp != NULL) {
+        *tmp = '\0';
+        tmp++;
+        TrimSpacesAroundString (str);
+        TrimSpacesAroundString (tmp);
+      } else {
+        TrimSpacesAroundString (str);
+      }
+      if (StringNICmp (iep->prefix, "similar to ", 11) == 0) {
+        if (StringInList (str, accnTypePrefix)) {
+          iep->database = MemFree (iep->database);
+          iep->database = StringSaveNoNull (str);
+          iep->accession = MemFree (iep->accession);
+          iep->accession = StringSaveNoNull (tmp);
+        } else if (tmp != NULL) {
+          iep->database = MemFree (iep->database);
+          iep->database = StringSaveNoNull ("Other");
+          iep->db_other = MemFree (iep->db_other);
+          iep->db_other = StringSaveNoNull (str);
+          iep->accession = MemFree (iep->accession);
+          iep->accession = StringSaveNoNull (tmp);
+        } else {
+          iep->database = MemFree (iep->database);
+          iep->database = StringSaveNoNull (" ");
+          iep->db_other = MemFree (iep->db_other);
+          iep->accession = MemFree (iep->accession);
+          iep->accession = StringSaveNoNull (str);
+        }
+      } else if (StringNICmp (iep->prefix, "ab initio ", 10) == 0) {
+        if (StringInList (str, programPrefix)) {
+          iep->program = MemFree (iep->program);
+          iep->program = StringSaveNoNull (str);
+        } else {
+          iep->program = MemFree (iep->program);
+          iep->program = StringSaveNoNull ("Other");
+          iep->pr_other = MemFree (iep->pr_other);
+          iep->pr_other = StringSaveNoNull (str);
+        }
+        iep->version = MemFree (iep->version);
+        iep->version = StringSaveNoNull (tmp);
+      } else {
+        iep->basis1 = MemFree (iep->basis1);
+        iep->basis1 = StringSaveNoNull (str);
+        iep->basis2 = MemFree (iep->basis2);
+        iep->basis2 = StringSaveNoNull (tmp);
+      }
+
+    } else {
+      iep->prefix = StringSave ("???");
+      str = StringSave (gbq->val);
+      tmp = StringChr (str, ':');
+      if (tmp != NULL) {
+        *tmp = '\0';
+        tmp++;
+        TrimSpacesAroundString (str);
+        TrimSpacesAroundString (tmp);
+      } else {
+        TrimSpacesAroundString (str);
+      }
+      iep->basis1 = MemFree (iep->basis1);
+      iep->basis1 = StringSaveNoNull (str);
+      iep->basis2 = MemFree (iep->basis2);
+      iep->basis2 = StringSaveNoNull (tmp);
+    }
+
+    MemFree (str);
+
+    AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+                &inferParFmt, inferColFmt, systemFont);
+
+    (idp->numInf)++;
+  }
+
+  AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+              &inferParFmt, inferColFmt, systemFont);
+  k++;
+
+  while (k < NUM_INFERENCE_LINES) {
+    AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+                &inferParFmt, inferColFmt, systemFont);
+    k++;
+  }
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, 0, 0);
+
+  ChangeInferTableSelect (idp->inferdoc, 1, 1, 1, FALSE);
+
+  Update ();
+}
+
+extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertBadToNote)
+
+{
+  CharPtr         first = NULL, second = NULL;
+  GBQualPtr       gbq, lastgbq;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  Int2            k, numItems;
+  size_t          len;
+  CharPtr         prefix = NULL;
+  CharPtr         speciesies = NULL;
+  CharPtr         str;
+  UIEnum          val;
+
+  idp = (InferDialogPtr) GetObjectExtra (d);
+  if (idp == NULL || sfp == NULL) return;
+
+  lastgbq = NULL;
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    lastgbq = gbq;
+  }
+
+  GetDocParams (idp->inferdoc, &numItems, NULL);
+  for (k = 1; k <= numItems; k++) {
+    iep = GetInferEvid (idp, k);
+    if (iep == NULL) continue;
+
+    if (StringHasNoText (iep->prefix)) continue;
+    gbq = GBQualNew ();
+    if (gbq == NULL) continue;
+
+    gbq->qual = StringSave ("inference");
+
+    if (WhereInEnumPopup (inference_alist, iep->prefix, &val)) {
+      if (val > 0 && val <= 11) {
+        prefix = inferencePrefix [(int) val];
+      }
+    }
+    if (StringNICmp (iep->prefix, "similar to ", 11) == 0) {
+      if (iep->species) {
+        speciesies = " (same species)";
+      }
+      if (StringDoesHaveText (iep->accession)) {
+        if (StringCmp (iep->database, "Other") == 0) {
+          if (StringDoesHaveText (iep->db_other)) {
+            first = iep->db_other;
+          }
+        } else if (StringDoesHaveText (iep->database)) {
+          first = iep->database;
+        }
+        second = iep->accession;
+      }
+    } else if (StringNICmp (iep->prefix, "ab initio ", 10) == 0) {
+      if (StringCmp (iep->program, "Other") == 0) {
+        if (StringDoesHaveText (iep->pr_other)) {
+          first = iep->pr_other;
+        }
+      } else if (StringDoesHaveText (iep->program)) {
+        first = iep->program;
+      }
+      second = iep->version;
+    } else {
+      if (StringDoesHaveText (iep->basis1)) {
+        first = iep->basis1;
+        second = iep->basis2;
+      }
+    }
+
+    len = StringLen (prefix) + StringLen (speciesies) + StringLen (first) + StringLen (second);
+    str = MemNew (len + 5);
+    if (str != NULL) {
+      StringCpy (str, prefix);
+      StringCat (str, speciesies);
+      StringCat (str, ":");
+      StringCat (str, first);
+      StringCat (str, ":");
+      StringCat (str, second);
+      gbq->val = StringSave (str);
+      MemFree (str);
+    } else {
+      gbq->val = StringSave ("?");
+    }
+
+    /* do not allow saving of bad qualifier */
+    if (convertBadToNote &&
+        ValidateInferenceQualifier (gbq->val, FALSE) != VALID_INFERENCE) {
+      if (StringNICmp (gbq->val, "similar to ", 11) == 0) {
+        len = StringLen ("similar to ") + StringLen (first) + StringLen (second);
+        str = MemNew (len + 5);
+        if (str != NULL) {
+          StringCpy (str, "similar to ");
+          if (StringDoesHaveText (first)) {
+            StringCat (str, first);
+            if (StringDoesHaveText (second)) {
+              StringCat (str, ":");
+              StringCat (str, second);
+            }
+          } else if (StringDoesHaveText (second)) {
+            StringCat (str, second);
+          }
+          gbq->val = MemFree (gbq->val);
+          gbq->val = StringSave (str);
+          MemFree (str);
+        }
+      }
+      gbq->qual = MemFree (gbq->qual);
+      gbq->qual = StringSave ("note");
+    }
+
+    if (sfp->qual == NULL) {
+      sfp->qual = gbq;
+    }
+    if (lastgbq != NULL) {
+      lastgbq->next = gbq;
+    }
+    lastgbq = gbq;
+  }
+}
+
+static void CleanupInferProc (GraphiC g, VoidPtr data)
+
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  Int2            k;
+
+  idp = (InferDialogPtr) data;
+  if (idp != NULL) {
+    for (k = 0; k < 128; k++) {
+      iep = idp->evidence [k];
+      InferEvidFree (iep);
+      idp->evidence [k] = NULL;
+    }
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+static DialoG NewCreateInferenceDialog (
+  GrouP prnt
+)
+
+{
+  GrouP           cts, tbl, g0, g1, g2, g3, g4, g5, p;
+  FonT            fnt;
+  Int2            i, hgt, wid;
+  InferDialogPtr  idp;
+
+  idp = (InferDialogPtr) MemNew (sizeof (InferDialog));
+  if (idp == NULL) return NULL;
+
+  p = HiddenGroup (prnt, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  SetObjectExtra (p, idp, CleanupInferProc);
+  idp->dialog = (DialoG) p;
+  /*
+  idp->todialog = GBQualToInferTable;
+  idp->fromdialog = InferTableToGBQual;
+  */
+
+  SelectFont (systemFont);
+  hgt = LineHeight ();
+  inferColFmt [0].pixWidth = MaxAlistWidths (inference_alist) + 5;
+  inferColFmt [1].pixWidth = 25 * StringWidth ("X") + 5;
+  SelectFont (systemFont);
+
+  wid = 0;
+  for (i = 0; i < 2; i++) {
+    wid += inferColFmt [i].pixWidth;
+  }
+
+  tbl = HiddenGroup (p, -1, 0, NULL);
+  SetGroupSpacing (tbl, 10, 5);
+  SetGroupMargins (tbl, 5, 5);
+
+  g0 = HiddenGroup (tbl, 15, 0, NULL);
+  SetGroupSpacing (g0, 0, 3);
+#ifdef WIN_MSWIN
+  fnt = systemFont;
+#else
+  fnt = programFont;
+#endif
+  /*
+  StaticPrompt (g0, "Category", inferColFmt [0].pixWidth, 0, fnt, 'c');
+  StaticPrompt (g0, "Explanation", inferColFmt [1].pixWidth, 0, fnt, 'c');
+  */
+
+  idp->inferdoc = DocumentPanel (tbl, wid + 2, NUM_INFERENCE_LINES * hgt + 2);
+  SetObjectExtra (idp->inferdoc, idp, NULL);
+  SetDocCache (idp->inferdoc, NULL, NULL, NULL);
+  SetDocNotify (idp->inferdoc, ChangeInferTableSelect);
+  idp->numInf = 0;
+
+  for (i = 0; i < NUM_INFERENCE_LINES; i++) {
+    AppendItem (idp->inferdoc, PrintInferTable, idp, FALSE, 1,
+                &inferParFmt, inferColFmt, systemFont);
+  }
+
+  cts = HiddenGroup (p, -1, 0, NULL);
+  SetGroupSpacing (cts, 10, 10);
+  SetGroupMargins (cts, 5, 5);
+
+  g1 = HiddenGroup (cts, -10, 0, NULL);
+  SetGroupSpacing (g1, 5, 5);
+
+  StaticPrompt (g1, "Category", 0, popupMenuHeight, programFont, 'l');
+  idp->prefix = CreateEnumPopupDialog (g1, TRUE, ChangeInferPrefix, inference_alist, (UIEnum) 0, idp);
+
+  idp->species = CheckBox (g1, "(same species)", ChangeSameSpecies);
+  SetObjectExtra (idp->species, idp, NULL);
+  Hide (idp->species);
+
+  g2 = HiddenGroup (cts, 0, 0, NULL);
+  SetGroupSpacing (g2, 5, 5);
+
+  g3 = HiddenGroup (g2, -3, 0, NULL);
+  SetGroupSpacing (g3, 5, 5);
+
+  StaticPrompt (g3, "Database", 0, dialogTextHeight, programFont, 'l');
+  idp->database = CreateEnumPopupDialog (g3, TRUE, ChangeInferDatabase, accn_type_alist, (UIEnum) 0, idp);
+  idp->other_db_group = HiddenGroup (g3, -4, 0, NULL);
+  StaticPrompt (idp->other_db_group, ":", 0, dialogTextHeight, programFont, 'l');
+  idp->db_other = DialogText (idp->other_db_group, "", 8, ChangeInferDbOther);
+  SetObjectExtra (idp->db_other, idp, NULL);
+  Hide (idp->other_db_group);
+
+  StaticPrompt (g3, "Accession", 0, dialogTextHeight, programFont, 'l');
+  idp->accession = DialogText (g3, "", 10, ChangeInferAccession);
+  SetObjectExtra (idp->accession, idp, NULL);
+
+  idp->inf_accn_group = g3;
+  Hide (idp->inf_accn_group);
+
+  g4 = HiddenGroup (g2, -3, 0, NULL);
+  SetGroupSpacing (g4, 5, 5);
+
+  StaticPrompt (g4, "Program", 0, dialogTextHeight, programFont, 'l');
+  idp->program = CreateEnumPopupDialog (g4, TRUE, ChangeInferProgram, program_alist, (UIEnum) 0, idp);
+  idp->other_pr_group = HiddenGroup (g4, -4, 0, NULL);
+  StaticPrompt (idp->other_pr_group, ":", 0, dialogTextHeight, programFont, 'l');
+  idp->pr_other = DialogText (idp->other_pr_group, "", 8, ChangeInferPrOther);
+  SetObjectExtra (idp->pr_other, idp, NULL);
+  Hide (idp->other_pr_group);
+
+  StaticPrompt (g4, "Program Version", 0, dialogTextHeight, programFont, 'l');
+  idp->version = DialogText (g4, "", 3, ChangeInferVersion);
+  SetObjectExtra (idp->version, idp, NULL);
+
+  idp->inf_prog_group = g4;
+  Hide (idp->inf_prog_group);
+
+  g5 = HiddenGroup (g2, 2, 0, NULL);
+  SetGroupSpacing (g5, 5, 5);
+
+  StaticPrompt (g5, "Program or Database", 0, dialogTextHeight, programFont, 'l');
+  idp->basis1 = DialogText (g5, "", 10, ChangeInferBasis1);
+  SetObjectExtra (idp->basis1, idp, NULL);
+
+  StaticPrompt (g5, "Version or Accession", 0, dialogTextHeight, programFont, 'l');
+  idp->basis2 = DialogText (g5, "", 10, ChangeInferBasis2);
+  SetObjectExtra (idp->basis2, idp, NULL);
+
+  idp->inf_free_group = g5;
+  Hide (idp->inf_free_group);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) tbl, (HANDLE) cts, NULL);
+
+  idp->numInf = 0;
+  idp->currItem = 1;
+  SetDocHighlight (idp->inferdoc, 1, 1);
+
+  return (DialoG) p;
 }
 

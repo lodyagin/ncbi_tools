@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.74 $
+* $Revision: 6.75 $
 *
 * File Description: 
 *
@@ -99,8 +99,8 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Endogenous-virus-name", 25},
   {"Environmental-sample",  27},
   {"Frequency",             13},
-  {"Fwd-primer-name",       35},
-  {"Fwd-primer-seq",        33},
+  {"Fwd-PCR-primer-name",   35},
+  {"Fwd-PCR-primer-seq",    33},
   {"Genotype",               6},
   {"Germline",              14},
   {"Haplotype",              5},
@@ -116,8 +116,8 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Plastid-name",          22},
   {"Pop-variant",           17},
   {"Rearranged",            15},
-  {"Rev-primer-name",       36},
-  {"Rev-primer-seq",        34},
+  {"Rev-PCR-primer-name",   36},
+  {"Rev-PCR-primer-seq",    34},
   {"Segment",               24},
   {"Sex",                    7},
   {"Subclone",               4},

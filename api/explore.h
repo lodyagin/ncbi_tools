@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -122,6 +122,8 @@ typedef struct seqmgrfeatcontext {
   Boolean       partialL;
   Boolean       partialR;
   Boolean       farloc;
+  Boolean       bad_order;
+  Boolean       mixed_strand;
   Uint1         strand;
   Uint1         seqfeattype;
   Uint1         featdeftype;

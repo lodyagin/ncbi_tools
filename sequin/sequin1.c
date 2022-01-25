@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.535 $
+* $Revision: 6.539 $
 *
 * File Description: 
 *
@@ -126,7 +126,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "6.10"
+#define SEQ_APP_VER "6.15"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -269,6 +269,7 @@ static Boolean  bioseqsetMode = FALSE;
 static Boolean  binseqentryMode = FALSE;
 static Boolean  entrezMode = FALSE;
 static Boolean  nohelpMode = FALSE;
+static Boolean  backupMode = FALSE;
 static Uint2    subtoolDatatype = 0;
 static Uint2    subtoolEntityID = 0;
 
@@ -312,7 +313,7 @@ static CharPtr validFailMsg =
 "Submission failed validation test.  Continue?\n\
 (Choose Validate in the Search menu to see errors.)";
 
-static Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
+extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
 
 {
   Int2  rsult;
@@ -400,7 +401,7 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
   if (sep == NULL) return FALSE;
   if (GetSequinAppParam ("PREFERENCES", "ASKBEFOREVALIDATE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
-      if (! (subtoolMode ||smartnetMode) ) {
+      if (! (subtoolMode ||smartnetMode || backupMode) ) {
         if (Message (MSG_YN, "Do you wish to validate this entry?") == ANS_NO) return TRUE;
       }
     }
@@ -429,7 +430,7 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
     ErrClear ();
     ErrShow ();
     errors = 0;
-    if (subtoolMode || smartnetMode) {
+    if (subtoolMode || smartnetMode || backupMode) {
       for (j = 0; j < 6; j++) {
         errors += vsp->errors [j];
       }
@@ -442,7 +443,7 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
     if (errors > 0) {
       ArrowCursor ();
       Update ();
-      if (subtoolMode || smartnetMode) {
+      if (subtoolMode || smartnetMode || backupMode) {
         ans = Message (MSG_OKC, "%s\nReject %d, Error %d, Warning %d, Info %d\n%s",
                        "Submission failed validation test with:",
                        (int) vsp->errors [4], (int) vsp->errors [3],
@@ -469,6 +470,16 @@ static void ReplaceString (CharPtr PNTR target, CharPtr newstr)
   if (target == NULL) return;
   MemFree (*target);
   *target = StringSaveNoNull (newstr);
+}
+
+static void UncompressBsps (BioseqPtr bsp, Pointer userdata)
+
+{
+  if (ISA_na (bsp->mol)) {
+    BioseqConvert (bsp, Seq_code_iupacna);
+  } else if (ISA_aa (bsp->mol)) {
+    BioseqConvert (bsp, Seq_code_ncbieaa);
+  }
 }
 
 static Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary)
@@ -508,8 +519,11 @@ static Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary)
   if (GetSequinAppParam ("PREFERENCES", "UNCOMPRESS", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       sep = GetTopSeqEntryForEntityID (entityID);
+      VisitBioseqsInSep (sep, NULL, UncompressBsps);
+      /*
       SeqEntryConvert (sep, Seq_code_iupacna);
       SeqEntryConvert (sep, Seq_code_ncbieaa);
+      */
     }
   }
   if (binseqentryMode) {
@@ -673,6 +687,46 @@ static void SubtoolModeTimerProc (void)
 }
 
 static Int2 LIBCALLBACK SubtoolModeMsgFunc (OMMsgStructPtr ommsp)
+
+{
+  switch (ommsp->message) {
+    case OM_MSG_DEL :
+    case OM_MSG_CREATE :
+    case OM_MSG_UPDATE :
+      subtoolRecordDirty = TRUE;
+      break;
+    default :
+      break;
+  }
+  return OM_MSG_RET_OK;
+}
+
+static void BackupModeTimerProc (void)
+
+{
+  ObjMgrDataPtr  omdp;
+
+  subtoolTimerCount++;
+  if (subtoolTimerCount > subtoolTimerLimit) {
+    subtoolTimerCount = 0;
+    if (subtoolRecordDirty && subtoolEntityID > 0) {
+      omdp = ObjMgrGetData (subtoolEntityID);
+      if (omdp != NULL) {
+        if (WriteTheEntityID (subtoolEntityID, SEQUIN_EDIT_TEMP_FILE, FALSE)) {
+          FileRemove (SEQUIN_EDIT_PREV_FILE);
+          FileRename (SEQUIN_EDIT_BACK_FILE, SEQUIN_EDIT_PREV_FILE);
+          FileRename (SEQUIN_EDIT_TEMP_FILE, SEQUIN_EDIT_BACK_FILE);
+        } else {
+          Message (MSG_POSTERR, "Unable to save automatic temporary file");
+        }
+      }
+      subtoolRecordDirty = FALSE;
+    }
+  }
+  SequinCheckSocketsProc ();
+}
+
+static Int2 LIBCALLBACK BackupModeMsgFunc (OMMsgStructPtr ommsp)
 
 {
   switch (ommsp->message) {
@@ -2852,21 +2906,22 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
                                    Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq)
 
 {
-  ValNodePtr   bioseqs;
-  BioseqPtr    bsp;
-  Pointer      dataptr;
-  Uint2        datatype;
-  Boolean      each;
-  Uint2        entityID;
-  FILE         *fp;
-  ValNodePtr   head = NULL;
-  ValNodePtr   projects;
-  Boolean      rsult;
-  SeqEntryPtr  sep;
-  SeqEntryPtr  sephead = NULL;
-  ValNodePtr   simples;
-  Uint2        updateEntityID;
-  ValNodePtr   vnp;
+  ValNodePtr     bioseqs;
+  BioseqPtr      bsp;
+  Pointer        dataptr;
+  Uint2          datatype;
+  Boolean        each;
+  Uint2          entityID;
+  FILE           *fp;
+  ValNodePtr     head = NULL;
+  OMUserDataPtr  omudp;
+  ValNodePtr     projects;
+  Boolean        rsult;
+  SeqEntryPtr    sep;
+  SeqEntryPtr    sephead = NULL;
+  ValNodePtr     simples;
+  Uint2          updateEntityID;
+  ValNodePtr     vnp;
 
   if (filename == NULL) return FALSE;
   fp = FileOpen (filename, "r");
@@ -2888,6 +2943,14 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
       each = HandleOneNewAsnProc (bfp, removeold, askForSubmit, path, dataptr, datatype, entityID, &updateEntityID);
       removeold = FALSE;
       rsult = (Boolean) (rsult || each);
+      if (backupMode) {
+        subtoolEntityID = entityID;
+        omudp = ObjMgrAddUserData (subtoolEntityID, 0, 0, 0);
+        if (omudp != NULL) {
+          omudp->messagefunc = BackupModeMsgFunc;
+        }
+        subtoolRecordDirty = TRUE;
+      }
     }
     ValNodeFree (head);
     if (updateEntityID != 0) {
@@ -4736,13 +4799,16 @@ extern void QuitProc (void)
     }
   }
 #ifndef WIN_MAC
-  if (subtoolMode || smartnetMode) {
+  if (subtoolMode || smartnetMode || backupMode) {
     subtoolRecordDirty = FALSE;
     FileRemove (SEQUIN_EDIT_TEMP_FILE);
     /* FileRemove (SEQUIN_EDIT_PREV_FILE); */
     FileRemove (SEQUIN_EDIT_BACK_FILE);
     FileRemove (SEQUIN_EDIT_ARCH_FILE);
     FileRename (SEQUIN_EDIT_PREV_FILE, SEQUIN_EDIT_ARCH_FILE);
+    if (backupMode) {
+      FileRemove (SEQUIN_EDIT_ARCH_FILE);
+    }
   }
 #endif
   QuitProgram ();
@@ -5878,7 +5944,7 @@ static void BioseqViewFormMenus (WindoW w)
 /*#endif*/
 
     m = PulldownMenu (w, "Edit/ E");
-    if (subtoolMode || smartnetMode) {
+    if (subtoolMode || smartnetMode || backupMode) {
       FormCommandItem (m, UNDO_MENU_ITEM, bfp, VIB_MSG_UNDO);
       SeparatorItem (m);
     }
@@ -6873,7 +6939,7 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
       case VIB_MSG_COPY :
         break;
       case VIB_MSG_UNDO :
-        if (subtoolMode || smartnetMode) {
+        if (subtoolMode || smartnetMode || backupMode) {
           if (FileLength (SEQUIN_EDIT_PREV_FILE) > 0) {
             sep = GetTopSeqEntryForEntityID (subtoolEntityID);
             if (Message (MSG_YN, "Restore from backup?") == ANS_YES) {
@@ -8620,7 +8686,6 @@ static void SetupMacMenus (void)
   else
   {
     updateSeqMenu = SubMenu (m, "Update Sequence");
-    SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
     SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
     CommandItem (updateSeqMenu, "Single Sequence", TestUpdateSequenceSubmitter);
     if (useEntrez) {
@@ -10576,6 +10641,8 @@ Int2 Main (void)
           SetAppProperty ("OldFlatfileSource", (void *) 1024);
         } else if (StringCmp (argv[i], "-a") == 0) {
           gphviewscorealigns = TRUE;
+        } else if (StringCmp (argv[i], "-y") == 0) {
+          backupMode = TRUE;
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -10779,6 +10846,7 @@ Int2 Main (void)
 
   Metronome (SequinCheckSocketsProc);
 
+  subtoolEntityID = 0;
   subtoolTimerLimit = 100;
   subtoolTimerCount = 0;
   subtoolRecordDirty = FALSE;
@@ -11024,6 +11092,9 @@ Int2 Main (void)
     ArrowCursor ();
   }
 
+  if (backupMode) {
+    Metronome (BackupModeTimerProc);
+  }
 
   if (subtoolMode || stdinMode || binseqentryMode) {
   } else if (workbenchMode) {

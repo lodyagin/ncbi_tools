@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.174 2005/10/31 14:15:10 madden Exp $";
-/* $Id: megablast.c,v 6.174 2005/10/31 14:15:10 madden Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.178 2006/01/23 16:44:06 papadopo Exp $";
+/* $Id: megablast.c,v 6.178 2006/01/23 16:44:06 papadopo Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,18 @@ static char const rcsid[] = "$Id: megablast.c,v 6.174 2005/10/31 14:15:10 madden
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.178  2006/01/23 16:44:06  papadopo
+ * change signature of FillHitSavingOptions
+ *
+ * Revision 6.177  2006/01/10 20:44:10  madden
+ * Use SBlastSeqalignArray
+ *
+ * Revision 6.176  2005/12/22 14:22:19  papadopo
+ * change signature of BLAST_FillLookupTableOptions
+ *
+ * Revision 6.175  2005/12/12 13:42:59  madden
+ * SBlastOptionsSetRewardPenaltyAndGapCosts now has new greedy Boolean, BLAST_FillScoringOptions no longer called
+ *
  * Revision 6.174  2005/10/31 14:15:10  madden
  * Call SBlastOptionsSetRewardPenaltyAndGapCosts
  *
@@ -1807,9 +1819,10 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    BlastExtensionOptions* ext_options = options->ext_options;
    BlastHitSavingOptions* hit_options = options->hit_options ;
    BlastScoringOptions* score_options = options->score_options;
-   Boolean ag_blast = FALSE, variable_wordsize = FALSE, mb_lookup = TRUE;
+   Boolean mb_lookup = TRUE;
    Boolean greedy=TRUE; /* greedy alignment should be done. */
    double lambda=0;
+   const Int4 diag_separation = 6;
    const EBlastProgramType kProgram = eBlastTypeBlastn; 
    Int2 status = 0;
 
@@ -1818,15 +1831,14 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
 
    options->num_cpus = myargs[ARG_THREADS].intvalue;
 
-   BLAST_FillScoringOptions(score_options, kProgram, 
-                greedy, myargs[ARG_MISMATCH].intvalue, myargs[ARG_MATCH].intvalue,
-                NULL, myargs[ARG_GAPOPEN].intvalue, myargs[ARG_GAPEXT].intvalue);
-
    SBlastOptionsSetRewardPenaltyAndGapCosts(options,
         myargs[ARG_MATCH].intvalue,
         myargs[ARG_MISMATCH].intvalue,
-        MAX(0, myargs[ARG_GAPOPEN].intvalue),
-        MAX(0, myargs[ARG_GAPEXT].intvalue));
+        myargs[ARG_GAPOPEN].intvalue, 
+        myargs[ARG_GAPEXT].intvalue,
+        greedy);
+
+   score_options->gapped_calculation = TRUE;
 
    /* Use to "unscale" x-dropoff since they were never properly scaled in the old code but are in the new
       code, so we wish to keep megablast running like the old code without adding this "bug" back to the main 
@@ -1834,20 +1846,8 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
       high as the old one. */
    lambda = 1.02*GetLambdaFast(score_options); 
 
-   /* The following options are for blastn only */
-   if (myargs[ARG_TEMPL_LEN].intvalue == 0) {
-         ag_blast = TRUE;
-         /* Variable word size can only be used for word sizes divisible 
-            by 4 */
-         if (myargs[ARG_WORDSIZE].intvalue % COMPRESSION_RATIO == 0)
-            variable_wordsize = TRUE;
-   } else {
-         /* Discontiguous words */
-         variable_wordsize = FALSE;
-   }
-
    BLAST_FillLookupTableOptions(lookup_options, kProgram, mb_lookup,
-      0, myargs[ARG_WORDSIZE].intvalue, variable_wordsize);
+      0, myargs[ARG_WORDSIZE].intvalue);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
       (Uint1) myargs[ARG_TEMPL_LEN].intvalue;
@@ -1868,27 +1868,28 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
       lambda*myargs[ARG_XDROP].intvalue/NCBIMATH_LN2, 
       lambda*myargs[ARG_XDROP_FINAL].intvalue/NCBIMATH_LN2);
 
-   score_options->gapped_calculation = TRUE;
+   /* For discontiguous megablast we need to use a less drastic 
+      method of elimination redundant hits (at least to be compatiable 
+      with old code).  For two hits we do not perform an ungapped 
+      extension either. */
+   word_options->ungapped_extension = TRUE;
+   if (lookup_options->mb_template_length > 0)
+   {
+      if (word_options->window_size > 0)
+          word_options->ungapped_extension = FALSE;
+   }
 
    BLAST_FillHitSavingOptions(hit_options, 
       myargs[ARG_EVALUE].floatvalue, 
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
           myargs[ARG_ALIGNMENTS].intvalue),
-      score_options->gapped_calculation, 0);
+      score_options->gapped_calculation, 
+      0,                /* turn off culling */
+      diag_separation);
 
    if (myargs[ARG_MINSCORE].intvalue)
         hit_options->cutoff_score = myargs[ARG_MINSCORE].intvalue;
    
-   word_options->ungapped_extension = TRUE;
-   /* For discontiguous megablast we need to use a less drastic method of elimination redundant hits (at least to
-      be compatiable with old code).  For two hits we do not perform an ungapped extension either. */
-   if (lookup_options->mb_template_length > 0)
-   {
-      hit_options->min_diag_separation = 6;
-      if (word_options->window_size > 0)
-          word_options->ungapped_extension = FALSE;
-   }
-
    hit_options->percent_identity = myargs[ARG_PERC_IDENT].floatvalue;
 
 /* FIXME ??
@@ -1912,7 +1913,6 @@ static Int2 Main_new(void)
    Int2 status = 0;
    Int4 start=0, end=0;   /* start and end of sequence to be searched as specified by ARG_QUERYLOC */
    SeqLoc* lcase_mask = NULL;
-   SeqLoc* query_slp = NULL;
    FILE *infp=NULL, *outfp=NULL;
    SBlastOptions* options = NULL;
    Int2 ctr = 1;
@@ -2003,7 +2003,8 @@ static Int2 Main_new(void)
 
    /* Get the query (queries), loop if necessary. */
    while (1) {
-       SeqAlign* seqalign = NULL;
+       SBlastSeqalignArray* seqalign_arr=NULL;
+       SeqLoc* query_slp = NULL;
        SeqLoc* filter_loc=NULL;	/* All masking locations */
        SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
        Int4 num_queries; /* Number of queries read this time. */
@@ -2052,7 +2053,7 @@ static Int2 Main_new(void)
       
        /* The main search is here. */
       if((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
-                               &seqalign, &filter_loc, sum_returns)) != 0)
+                               &seqalign_arr, &filter_loc, sum_returns)) != 0)
       {
            if (sum_returns && sum_returns->error)
                ErrPostEx(SEV_ERROR, 1, 0, sum_returns->error->message);
@@ -2077,20 +2078,31 @@ static Int2 Main_new(void)
 
       if (!status && !tabular_output) {
           if (myargs[ARG_ASNOUT].strvalue) {
-              AsnIoPtr asnout = AsnIoOpen(myargs[ARG_ASNOUT].strvalue, (char*)"w");
-              GenericSeqAlignSetAsnWrite(seqalign, asnout);
-              asnout = AsnIoClose(asnout);
-          }
- 
-          /* Format the results; note that seqalign and filter locations 
-             are freed inside. */
-          status = 
-              BLAST_FormatResults(seqalign, num_queries, query_slp, 
-                                  filter_loc, format_info, sum_returns);
-          
-          seqalign = SeqAlignSetFree(seqalign);
+                   /* This just prints out the ASN.1 to a secondary file. */
+                   BlastFormattingInfo* asn_format_info = NULL;
+                   BlastFormattingInfoNew(eAlignViewAsnText, options,
+                              program_name, dbname,
+                              myargs[ARG_ASNOUT].strvalue, &asn_format_info);
 
+                   /* Pass TRUE for the "is megablast" argument. Since megablast is always
+                      gapped, pass FALSE for the "is ungapped" argument. */
+                   BlastFormattingInfoSetUpOptions(asn_format_info,
+                                       myargs[ARG_DESCRIPTIONS].intvalue,
+                                       myargs[ARG_ALIGNMENTS].intvalue,
+                                       (Boolean) myargs[ARG_HTML].intvalue,
+                                       FALSE,
+                                       (Boolean) myargs[ARG_SHOWGIS].intvalue,
+                                       believe_query);
+                   status =
+                       BLAST_FormatResults(seqalign_arr, num_queries, query_slp,
+                                   NULL, asn_format_info, sum_returns);
+                   asn_format_info = BlastFormattingInfoFree(asn_format_info);
+          }
+          status = 
+              BLAST_FormatResults(seqalign_arr, num_queries, query_slp, 
+                                  filter_loc, format_info, sum_returns);
       }
+      seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
       /* Update the cumulative summary returns structure and clean the returns
          substructures for the current search iteration. */
       Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);

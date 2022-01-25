@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.96 2005/11/22 13:31:05 madden Exp $
+/* $Id: blast_format.c,v 1.101 2006/01/13 14:33:48 merezhuk Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
  * Formatting of BLAST results (SeqAlign)
  */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.96 2005/11/22 13:31:05 madden Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.101 2006/01/13 14:33:48 merezhuk Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
@@ -44,17 +44,6 @@ static char const rcsid[] = "$Id: blast_format.c,v 1.96 2005/11/22 13:31:05 madd
 #include <blfmtutl.h>
 #include <xmlblast.h>
 
-extern void PrintTabularOutputHeader PROTO((char* blast_database, 
-               Bioseq* query_bsp, SeqLoc* query_slp, char* blast_program, 
-               Int4 iteration, Boolean believe_query, FILE *outfp));
-extern void BlastPrintTabulatedResults PROTO((SeqAlign* seqalign, 
-               Bioseq* query_bsp, SeqLoc* query_slp, Int4 num_alignments, 
-               char* blast_program, Boolean is_ungapped, 
-               Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, 
-               Boolean print_query_info));
-
-extern void MBXmlClose(MBXml* xmlp, ValNode* other_returns, 
-                       Boolean ungapped);
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -62,7 +51,7 @@ extern void MBXmlClose(MBXml* xmlp, ValNode* other_returns,
  */
 
 /** Allocate and initialize the formatting options structure.
- * @param program Number of the BLAST program [in]
+ * @param program_number Number of the BLAST program [in]
  * @param align_view What kind of formatted output to show? [in]
  * @param format_options_ptr The initialized structure [out]
  */
@@ -154,7 +143,7 @@ BlastPrintLogReport(const BlastFormattingInfo* format_info)
  * @param query_loc Query Seq-loc [in]
  * @param flags Flag to indicate whether query sequence should be included in
  *              the output. [in]
- * @param search_params Search parameters [in]
+ * @param search_param Search parameters [in]
  */
 static BlastOutput* 
 s_CreateBlastOutputHead(const char* program, const char* database, 
@@ -505,6 +494,7 @@ Int2 BlastFormattingInfoNew(EAlignView align_view,
          return -1;
       sfree(filename_copy);
    }
+   info->is_seqalign_null = TRUE; /* will be updated in BLAST_FormatResults */
    return 0;
 }
 
@@ -641,14 +631,11 @@ s_AcknowledgeEmptyResults(SeqLoc *slp,
     fprintf(outfp, " ***** No hits found ******\n\n\n");
 }
 
-Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries, 
+Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries, 
         SeqLoc* query_slp, SeqLoc* mask_loc_head, 
         BlastFormattingInfo* format_info,
         Blast_SummaryReturn* sum_returns)
 {  
-   SeqAlign* seqalign = head;
-   SeqAlign* sap;
-   SeqAlign* next_seqalign;
    SeqLoc* mask_loc;
    SeqLoc* next_mask_loc = NULL;
    SeqLoc* tmp_loc = NULL;
@@ -657,11 +644,7 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
    Int4 query_index;
    SeqLoc* slp;
    SeqLoc* mask_slp;
-   SeqId* query_id;
-   Bioseq* bsp = NULL;
    AsnIo* aip = NULL;
-   BlastPruneSapStruct* prune;
-   SeqAnnot* seqannot;
    MBXml* xmlp = NULL;
    FILE *outfp = NULL;
    BlastFormattingOptions* format_options;
@@ -706,28 +689,22 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
       }
    }
 
-   query_index = 0;
    slp = query_slp;
    mask_loc = mask_loc_head;
-
-   while (seqalign) {
+  
+   for (query_index=0; query_index<seqalign_arr->num_queries && slp; query_index++, slp=slp->next)
+   {
+      Bioseq* bsp = NULL;
+      SeqAlignPtr seqalign = seqalign_arr->array[query_index];
       /* Find which query the current SeqAlign is for */
-      query_id = TxGetQueryIdFromSeqAlign(seqalign);
-      for ( ; slp && query_index < num_queries; 
-            ++query_index, slp = slp->next) {
-         if (SeqIdComp(query_id, SeqLocId(slp)) == SIC_YES) {
-            break;
-         } else if (align_view < eAlignViewXml) {
-            /* This query has no results */
-            s_AcknowledgeEmptyResults(slp, format_options, outfp);
-         }
+      SeqId* query_id = TxGetQueryIdFromSeqAlign(seqalign);
+      if (seqalign == NULL)
+      {
+            if (align_view < eAlignViewXml)
+                s_AcknowledgeEmptyResults(slp, format_options, outfp);  /* this query has no results. */
+            continue;
       }
-      /* The following should never happen! We mustn't have a SeqAlign left
-         without a corresponding query */
-      if (!slp || query_index >= num_queries)
-         break;
-
-      slp = slp->next;
+      format_info->is_seqalign_null = FALSE; /* reset flag, at least one query has seqalign */
 
       /* Find the masking location for this query. Initialize next_mask_loc
 	 to the current start of the chain, in case nothing for this query 
@@ -755,18 +732,6 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
       }
 
       /* On the next iteration we can start from the next query */
-      ++query_index;
-
-      /* Find where this query's SeqAlign chain ends */
-      for (sap = seqalign; sap->next; sap = sap->next) {
-         if (SeqIdComp(query_id, TxGetQueryIdFromSeqAlign(sap->next)) != 
-             SIC_YES)
-            break;
-      }
-      /* Unlink this query's SeqAlign chain and save the start of the 
-         next chain*/
-      next_seqalign = sap->next;
-      sap->next = NULL;
 
       /* Retrieve this query's Bioseq */
       bsp = BioseqLockById(query_id);
@@ -798,13 +763,13 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
          iterp = 
              s_XMLBuildOneQueryIteration(seqalign, sum_returns, FALSE, 
                                          ungapped, 
-                                         query_index+format_info->num_formatted,
+                                         query_index+1+format_info->num_formatted,
                                          NULL, bsp, mask_loc);
          IterationAsnWrite(iterp, xmlp->aip, xmlp->atp);
          AsnIoFlush(xmlp->aip);
          IterationFree(iterp);
       } else {
-         seqannot = SeqAnnotNew();
+         SeqAnnot* seqannot = SeqAnnotNew();
          seqannot->type = 2;
          AddAlignInfoToSeqAnnot(seqannot, align_type);
          seqannot->data = seqalign;
@@ -813,7 +778,8 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
             AsnIoReset(aip);
          } 
          if (outfp) {
-             Int4** matrix = NULL;
+            BlastPruneSapStruct* prune;
+            Int4** matrix = NULL;
             ObjMgrSetHold();
             init_buff_ex(85);
             PrintDefLinesFromSeqAlignEx2(seqalign, 80, outfp, 
@@ -851,10 +817,6 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
          seqannot = SeqAnnotFree(seqannot);
       }
       BioseqUnlock(bsp);
-      bsp = NULL;
-      seqalign = next_seqalign;
-      /* Re-link the chain of Seq-aligns, to prevent memory leak. */
-      sap->next = next_seqalign;
       /* Relink the mask locations so chain can be freed in the end.
        The 'tmp_loc' variable points to the location that was unlinked. */
       if (tmp_loc)
@@ -865,12 +827,19 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
 
    } /* End loop on seqaligns for different queries */
 
-   /* if the list of seqaligns has run out but the list
-      of queries has not, acknowledge leftover queries */
-   if (align_view < eAlignViewXml) {
-      for (; slp; slp = slp->next) {
-         s_AcknowledgeEmptyResults(slp, format_options, outfp);
-      }
+   /* close BlastOutput_iterations openned in s_MBXmlInit; Rt ticket # 15135151 */
+   if((format_info->is_seqalign_null==TRUE) && (align_view == eAlignViewXml)) {
+     /* extra output only if no hits at all, otherwise "for loop" logic should take care*/
+     Iteration* iterp;    
+     iterp = IterationNew();
+     iterp->iter_num = 1;
+     iterp->stat = s_XMLBuildStatistics(sum_returns, ungapped);
+
+     ASSERT(xmlp && xmlp->aip);
+     IterationAsnWrite(iterp, xmlp->aip, xmlp->atp);
+     AsnIoFlush(xmlp->aip);
+     IterationFree(iterp);
+
    }
 
    if (format_info->db_name) {

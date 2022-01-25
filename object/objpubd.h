@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -45,6 +45,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objpubd.h,v $
+* Revision 6.11  2005/12/29 13:46:18  bollin
+* added PubdescContentMatch function
+*
 * Revision 6.10  2005/05/24 19:13:47  bollin
 * removed PubdescMatch function - was conflicting with local versions elsewhere.
 * Function is now a local function in desktop\seqsub.c
@@ -145,6 +148,8 @@ NLM_EXTERN PubdescPtr LIBCALL PubdescNew PROTO((void));
 NLM_EXTERN Boolean    LIBCALL PubdescAsnWrite PROTO((PubdescPtr pdp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN PubdescPtr LIBCALL PubdescAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN PubdescPtr LIBCALL PubdescFree PROTO((PubdescPtr pdp));
+
+NLM_EXTERN Boolean LIBCALL PubdescContentMatch (PubdescPtr pdp1, PubdescPtr pdp2);
 
 typedef ValNode Numbering, FAR *NumberingPtr;
 

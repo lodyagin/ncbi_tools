@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo Exp $";
 
-/* $Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho Exp $
+/* $Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,25 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.75 $
+* $Revision: 6.79 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.79  2006/01/23 16:44:06  papadopo
+* change signature of FillHitSavingOptions
+*
+* Revision 6.78  2006/01/10 20:44:10  madden
+* Use SBlastSeqalignArray
+*
+* Revision 6.77  2006/01/06 16:36:14  papadopo
+* 1. By default, log messages go to stderr and not a logfile
+* 2. Do not continue execution after a fatal error is encountered
+*
+* Revision 6.76  2005/12/22 14:22:19  papadopo
+* change signature of BLAST_FillLookupTableOptions
+*
 * Revision 6.75  2005/08/29 14:45:34  camacho
 * From Ilya Dondoshansky:
 * Retrieve mask_at_hash option from the SBlastOptions structure instead of
@@ -284,6 +297,7 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
+#include <algo/blast/api/blast_seqalign.h>
 
 #ifdef PURIFY
 #include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
@@ -393,7 +407,7 @@ static Args myargs[] = {
       "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
     /* OPT_LOGIFLE */
     {"Logfile name ",
-     "rpsblast.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
+     "stderr", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
     /* OPT_LCASE */
     {"Use lower case filtering of FASTA sequence",
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
@@ -430,8 +444,7 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    BLAST_FillLookupTableOptions(lookup_options, kProgram, 
                                 FALSE, /* megablast */
                                 0,     /* default threshold */
-                                0,     /* default wordsize */
-                                FALSE);/* no variable wordsize */
+                                0);    /* default wordsize */
 
    BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
                               myargs[OPT_FILTER].strvalue, 0);
@@ -460,7 +473,8 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
                       MAX(myargs[OPT_NUM_DESC].intvalue, 
                           myargs[OPT_NUM_RESULTS].intvalue),
                       TRUE,
-                      0);
+                      0,        /* turn off culling */
+                      0);       /* min diag separation */
 
    if (myargs[OPT_SEARCHSP].floatvalue != 0) {
       eff_len_options->searchsp_eff = (Int8) myargs[OPT_SEARCHSP].floatvalue; 
@@ -519,16 +533,12 @@ Int2 Main_New(void)
    char* dbname = NULL;
    FILE *infp;
    Int2 ctr = 1;
-   Int4 letters_read;
    Int4 query_from = 0, query_to = 0;
    SBlastOptions* options = NULL;
-   SeqLoc* query_slp = NULL;
-   SeqAlign* seqalign = NULL;
    BlastFormattingInfo* format_info = NULL;
    Blast_SummaryReturn* sum_returns=Blast_SummaryReturnNew();
    Int4 num_queries = 0;
    SeqLoc* lcase_mask = NULL;
-   SeqLoc* filter_loc = NULL;
    const int kMaxConcatLength = 40000;
    Blast_SummaryReturn* full_sum_returns = NULL;
 
@@ -598,6 +608,10 @@ Int2 Main_New(void)
 
    /* Loop over sets of queries. */
    while (1) {
+       SBlastSeqalignArray* seqalign_arr=NULL;
+       SeqLoc* query_slp = NULL;
+       SeqLoc* filter_loc = NULL;
+       Int4 letters_read;
 
        if ((Boolean)myargs[OPT_LCASE].intvalue) {
            letters_read = 
@@ -622,7 +636,7 @@ Int2 Main_New(void)
         */
        status = 
            Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, NULL, 
-                                &seqalign, &filter_loc, sum_returns);
+                                &seqalign_arr, &filter_loc, sum_returns);
 
        /* Free the lower case mask in SeqLoc form. */
        lcase_mask = Blast_ValNodeMaskListFree(lcase_mask);
@@ -646,19 +660,33 @@ Int2 Main_New(void)
        /* format results */
        
        if (myargs[OPT_ASNOUT].strvalue) {
-           AsnIoPtr asnout = AsnIoOpen(myargs[OPT_ASNOUT].strvalue, (char*)"w");
-           GenericSeqAlignSetAsnWrite(seqalign, asnout);
-           asnout = AsnIoClose(asnout);
+                   /* This just prints out the ASN.1 to a secondary file. */
+                   BlastFormattingInfo* asn_format_info = NULL;
+                   BlastFormattingInfoNew(eAlignViewAsnText, options,
+                              blast_program, dbname,
+                              myargs[OPT_ASNOUT].strvalue, &asn_format_info);
+
+                   BlastFormattingInfoSetUpOptions(asn_format_info,
+                                       myargs[OPT_NUM_DESC].intvalue,
+                                       myargs[OPT_NUM_DESC].intvalue,
+                                       FALSE,
+                                       FALSE,
+                                       FALSE,
+                                       TRUE);
+                   status =
+                       BLAST_FormatResults(seqalign_arr, num_queries, query_slp,
+                                   NULL, asn_format_info, sum_returns);
+                   asn_format_info = BlastFormattingInfoFree(asn_format_info);
        }
        
        status = 
-           BLAST_FormatResults(seqalign, num_queries, query_slp, filter_loc,
+           BLAST_FormatResults(seqalign_arr, num_queries, query_slp, filter_loc,
                                format_info, sum_returns);
        
        /* finish cleanup */
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
-       seqalign = SeqAlignSetFree(seqalign);
        query_slp = SeqLocSetFree(query_slp);
+       seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
        
        /* Update the cumulative summary returns structure and clean the returns
           substructures for the current search iteration. */
@@ -1187,11 +1215,11 @@ Int2 Main(void)
     if (!GetArgs(buf, NUM_ARGS, myargs))
         return 1;
     
-    if ( !ErrSetLog (myargs[OPT_LOGFILE].strvalue) ) { /* Logfile */
-        ErrShow();
-        return 1;
-    } else {
-        ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
+    if (strcmp(myargs[OPT_LOGFILE].strvalue, "stderr") != 0) {
+       if ( !ErrSetLog (myargs[OPT_LOGFILE].strvalue) ) { /* Logfile */
+          ErrShow();
+          return 1;
+       }
     }
     
     UseLocalAsnloadDataAndErrMsg ();

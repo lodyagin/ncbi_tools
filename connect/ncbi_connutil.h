@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.44 2005/11/29 21:32:07 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.51 2006/02/23 15:46:16 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +47,10 @@
  *       ConnNetInfo_AppendArg()
  *       ConnNetInfo_PrependArg()
  *       ConnNetInfo_DeleteArg()
+ *       ConnNetInfo_DeleteAllArgs()
  *       ConnNetInfo_PreOverrideArg()
  *       ConnNetInfo_PostOverrideArg()
+ *       ConnNetInfo_SetupStandardArgs()
  *       #define REG_CONN_***
  *       #define DEF_CONN_***
  *
@@ -76,13 +78,12 @@
  *       SOCK_StripToPattern()
  *       BUF_StripToPattern()
  *
- *    7.Convert "[host][:port]" from verbal into binary form and vice versa:
- *       StringToHostPort()
- *       HostPortToString()
- *
- *    8.CRC32
+ *    7.CRC32
  *       CRC32_Update()
  *
+ *    8.Miscellaneous
+ *       CONNUTIL_GetUsername()
+ *       CONNUTIL_GetVMPageSize()
  */
 
 #include <connect/ncbi_buffer.h>
@@ -286,10 +287,16 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_PrependArg
  const char*   val
  );
 
-/* delete argument from the list */
+/* delete one (first) argument from the list of arguments in "info" */
 extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteArg
 (SConnNetInfo* info,
  const char*   arg
+ );
+
+/* delete all arguments specified in "args" from the list in "info" */
+extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteAllArgs
+(SConnNetInfo* info,
+ const char*   args
  );
 
 /* same as sequence Delete then Prepend, see above */
@@ -369,6 +376,14 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteUserHeader
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ParseURL
 (SConnNetInfo* info,
  const char*   url
+ );
+
+
+/* Setup standard arguments:  service, address, and platform.
+ * Return non-zero on success; zero on error.
+ */
+extern int/*bool*/ ConnNetInfo_SetupStandardArgs
+(SConnNetInfo* info
  );
 
 
@@ -674,32 +689,20 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ MIME_ParseContentType
  );
 
 
-/* Read (skipping leading blanks) "[host][:port]" from a string.
- * On success, return the advanced pointer past the host/port read.
- * If no host/port detected, return 'str'.
- * On format error, return 0.
- * If host and/or port fragments are missing,
- * then corresponding 'host'/'port' value returned as 0.
- * Note that 'host' returned is in network byte order,
- * unlike 'port', which always comes out in host (native) byte order.
+/* Deprecated:  Use SOCK_StringHostToPort() and SOCK_HostPortToString() instead
  */
-extern NCBI_XCONNECT_EXPORT const char* StringToHostPort
-(const char*     str,   /* must not be NULL */
- unsigned int*   host,  /* must not be NULL */
- unsigned short* port   /* must not be NULL */
- );
+#ifndef NCBI_DEPRECATED
+#  define NCBI_CONNUTIL_DEPRECATED
+#else
+#  define NCBI_CONNUTIL_DEPRECATED NCBI_DEPRECATED
+#endif
+extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED
+const char* StringToHostPort
+(const char*, unsigned int*, unsigned short*);
 
-
-/* Print host:port into provided buffer string, not to exceed 'buflen' size.
- * Suppress printing host if parameter 'host' is zero.
- * Return the number of bytes printed.
- */
-extern NCBI_XCONNECT_EXPORT size_t HostPortToString
-(unsigned int   host,
- unsigned short port,
- char*          buf,
- size_t         buflen
- );
+extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED
+size_t HostPortToString
+(unsigned int, unsigned short, char*, size_t);
 
 
 /* Calculate/Update CRC32
@@ -713,6 +716,25 @@ extern NCBI_XCONNECT_EXPORT unsigned int CRC32_Update
  );
 
 
+/* Obtain and store current user's name in the buffer provided.
+ * Return 0 when the user name cannot be determined.
+ * Otherwise, return "buf".
+ * Note that resultant strlen(buf) is always guaranteed to be less
+ * than "bufsize", extra non-fit characters discarded.
+ * Both "buf" and "bufsize" must not be zeros.
+ */
+extern NCBI_XCONNECT_EXPORT const char* CONNUTIL_GetUsername
+(char*        buf,       /* Pointer to buffer to store the user name at */
+ size_t       bufsize    /* Size of buffer in bytes                     */
+ );
+
+
+/* Obtain virtual memory page size.
+ * Return 0 if the page size cannot be determined.
+ */
+extern NCBI_XCONNECT_EXPORT size_t CONNUTIL_GetVMPageSize(void);
+
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
@@ -724,6 +746,30 @@ extern NCBI_XCONNECT_EXPORT unsigned int CRC32_Update
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.51  2006/02/23 15:46:16  lavr
+ * Clean ChangeLog
+ *
+ * Revision 6.50  2006/02/23 15:22:43  lavr
+ * +CONNUTIL_GetVMPageSize()
+ *
+ * Revision 6.49  2006/01/27 19:17:41  lavr
+ * Fix NCBI_DEPRECATED placement to satify MSVC compiler
+ *
+ * Revision 6.48  2006/01/27 17:08:35  lavr
+ * Spell CONNUTIL_GetUsername() this way
+ *
+ * Revision 6.47  2006/01/27 16:57:53  lavr
+ * Obsoleted StringHostToPort() and HostPortToString()
+ * Added new CONNUTIL_GetUsername()
+ *
+ * Revision 6.46  2006/01/11 20:19:56  lavr
+ * -UTIL_ClientAddress()
+ * +ConnNetInfo_DeleteAllArgs()
+ * +ConnNetInfo_SetupStandardArgs()
+ *
+ * Revision 6.45  2006/01/11 16:24:03  lavr
+ * +UTIL_ClientAddress()
+ *
  * Revision 6.44  2005/11/29 21:32:07  lavr
  * Reserve SConnNetInfo::scheme, user, and pass for future use
  *

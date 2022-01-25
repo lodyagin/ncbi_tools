@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulouri Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.134 2006/01/24 18:33:51 papadopo Exp $";
 
-/* $Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulouri Exp $ */
+/* $Id: blastpgp.c,v 6.134 2006/01/24 18:33:51 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,11 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulour
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.133 $ 
+ * $Revision: 6.134 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.134  2006/01/24 18:33:51  papadopo
+ * from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
+ *
  * Revision 6.133  2005/08/31 20:34:02  coulouri
  *     In PGPReadBlastOptions:
  *       - set the value of options->kappa_expect_value.
@@ -529,6 +532,7 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulour
 #include <ddvcreate.h>
 #include <blfmtutl.h>
 #include <objscoremat.h>
+#include <algo/blast/composition_adjustment/composition_constants.h>
 
 /* Used by the callback function. */
 FILE *global_fp=NULL;
@@ -1062,23 +1066,22 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     case 'F':
     case 'f':
     case '0':
-        options->tweak_parameters = NO_COMP_ADJUSTMENT;
+        options->tweak_parameters = eNoCompositionBasedStats;
         break;
     case 'T':
     case 't':
     case '1':
-        options->tweak_parameters = COMP_BASED_STATISTICS;
+        options->tweak_parameters = eCompositionBasedStats;
         break;
     case '2':
         ErrPostEx(SEV_WARNING, 1, 0, "the -t 2 argument "
                   "is currently experimental\n");
-        options->tweak_parameters = COMP_MATRIX_ADJUSTMENT;
+        options->tweak_parameters = eCompositionMatrixAdjust;
         break;
     case '3':
         ErrPostEx(SEV_WARNING, 1, 0, "the -t 3 argument "
                   "is currently experimental\n");
-        options->tweak_parameters = COMP_BASED_STATISTICS |
-                                    COMP_MATRIX_ADJUSTMENT;
+        options->tweak_parameters = eCompoForceFullMatrixAdjust;
         break;
     default:
         ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"

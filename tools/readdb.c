@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.493 2005/12/02 14:04:07 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.496 2006/02/15 21:07:28 camacho Exp $";
 
-/* $Id: readdb.c,v 6.493 2005/12/02 14:04:07 camacho Exp $ */
+/* $Id: readdb.c,v 6.496 2006/02/15 21:07:28 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.493 $
+* $Revision: 6.496 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.496  2006/02/15 21:07:28  camacho
+* Add validation to fastacmd to reject mixed protein/nucleotide databases
+*
+* Revision 6.495  2006/01/11 16:24:45  camacho
+* Fix bug in Fastacmd_PrintTaxonomyInfo
+*
+* Revision 6.494  2005/12/23 16:30:57  camacho
+* Remove assertion no longer needed
+*
 * Revision 6.493  2005/12/02 14:04:07  camacho
 * Minor fix in ScanDIFile
 *
@@ -3651,6 +3660,29 @@ Boolean    ReadOIDList (OIDListPtr oidlist)
     return TRUE;
 }
 
+Int4 LIBCALL 
+readdb_validate (ReadDBFILEPtr rdfp)
+{
+    Int4 retval = READDB_VALID;
+
+    if ( !rdfp ) {
+        return READDB_INVALID_NULL_ARG;
+    }
+
+    /* Verify that all elements of the rdfp linked list are either protein or
+     * nucleotide */
+    {
+        Boolean is_prot = (rdfp->parameters & READDB_IS_PROT) ? TRUE : FALSE;
+        for (; rdfp; rdfp = rdfp->next) {
+            if ((rdfp->parameters & READDB_IS_PROT) && !is_prot) {
+                retval = READDB_INVALID_MIXED_DBS;
+                break;
+            }
+        }
+    }
+
+    return retval;
+}
 
 ReadDBFILEPtr LIBCALL 
 readdb_new_ex (CharPtr filename, Uint1 is_prot, Boolean init_indices)
@@ -10997,7 +11029,6 @@ Boolean is_REFSEQ(VoidPtr direc)
 {
     const int kMinAccessionLength = 9;
     const char* accession = ((DI_RecordPtr)direc)->acc;
-    ASSERT(accession != NULL);
 
     if ((StringLen(accession) >= kMinAccessionLength) &&
         IS_ALPHA(accession[0]) &&
@@ -11256,35 +11287,28 @@ static Boolean Fastacmd_PrintTaxonomyInfo(ReadDBFILEPtr rdfp, Int4 oid,
     if ((bdp = FDReadDeflineAsn(rdfp, oid)) == NULL)
         return FALSE;
 
-    if (bdp->taxid == 0) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information not encoded in "
-                "your blast database.");
-        BlastDefLineSetFree(bdp);
-        return FALSE;
-    }
-
-    if ((tnames = RDBGetTaxNames(rdfp->taxinfo, bdp->taxid)) == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information is not available "
-                "for this gi/accession.\nIf you have not done so already, "
-                "please update your copy from: %s\n", TAXDB_ON_FTP);
-        BlastDefLineSetFree(bdp);
-        return FALSE;
-    }
-
     asn2ff_set_output(fp, NULL);
     ff_StartPrint(0, 0, linelen, NULL);
 
     /* Print the taxonomy report for each sequence associated with this oid */
     for (bdp_tmp = bdp; bdp_tmp; bdp_tmp = bdp_tmp->next) {
 
-        if (rdfp->gi_target != 0) {
-            SeqIdPtr sip = SeqIdFindBest(bdp_tmp->seqid, SEQID_GI);
-            if (sip->data.intvalue != rdfp->gi_target) 
-                continue;
-        }
-
         MemSet(buf, 0, sizeof(buf));
         SeqIdWrite(bdp_tmp->seqid, buf, PRINTID_FASTA_LONG, sizeof(buf)-1);
+
+        if (bdp_tmp->taxid == 0) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information not encoded for "
+                    "Seq-id '%s'", buf);
+            continue;
+        }
+
+        if ((tnames = RDBGetTaxNames(rdfp->taxinfo, bdp_tmp->taxid)) == NULL) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information is not available "
+                    "for Seq-id '%s'.\nIf you have not done so already, "
+                    "please update your copy from: %s\n", buf, TAXDB_ON_FTP);
+            continue;
+        }
+
         ff_AddString("NCBI sequence id: "); 
         ff_AddString(buf); NewContLine();
 
@@ -11298,11 +11322,11 @@ static Boolean Fastacmd_PrintTaxonomyInfo(ReadDBFILEPtr rdfp, Int4 oid,
         ff_AddString(tnames->sci_name); NewContLine();
         if (bdp_tmp->next)
             NewContLine();
+        RDBTaxNamesFree(tnames);
     }
 
     ff_EndPrint();
     BlastDefLineSetFree(bdp);
-    RDBTaxNamesFree(tnames);
 
     return TRUE;
 }
@@ -11456,6 +11480,17 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for "
              "%s database\n", dbname);
         return FASTACMD_DB_NOT_FOUND;
+    }
+
+    /* Validation of rdfp */
+    {
+        Int4 rv = readdb_validate(rdfp);
+        ASSERT(rv != READDB_INVALID_NULL_ARG);
+        if (rv == READDB_INVALID_MIXED_DBS) {
+            ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize mismatched "
+                      "protein/nucleotide databases '%s'\n", dbname);
+            return FASTACMD_ERROR;
+        }
     }
 
     if (dbinfo_only) {

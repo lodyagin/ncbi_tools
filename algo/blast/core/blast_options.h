@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.125 2005/11/29 17:27:40 camacho Exp $
+/* $Id: blast_options.h,v 1.130 2006/01/23 16:34:00 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -66,8 +66,6 @@ extern "C" {
                                           megablast; for discontig megablast
                                           the word size is explicitly 
                                           overridden) */
-#define BLAST_VARWORD_NUCL 0  /**< blastn with variable wordsize */
-#define BLAST_VARWORD_MEGABLAST 1 /**< megablast with variable wordsize */
 
 /** Default matrix name: BLOSUM62 */
 #define BLAST_DEFAULT_MATRIX "BLOSUM62"
@@ -183,8 +181,6 @@ typedef struct LookupTableOptions {
    char* phi_pattern;  /**< PHI-BLAST pattern */
    Int4 max_num_patterns; /**< Maximal number of patterns allowed for 
                              PHI-BLAST */
-   Boolean variable_wordsize; /**< Should the partial bytes be examined for 
-                             determining whether exact match is long enough? */
 } LookupTableOptions;
 
 /** Options for dust algorithm, applies only to nucl.-nucl. comparisons.
@@ -281,7 +277,9 @@ typedef struct BlastExtensionOptions {
    EBlastPrelimGapExt ePrelimGapExt; /**< type of preliminary gapped extension (normally) for calculating
                               score. */
    EBlastTbackExt eTbackExt; /**< type of traceback extension. */
-   Boolean compositionBasedStats; /**< if TRUE use composition-based stats. */
+   Int4 compositionBasedStats; /**< mode of compositional adjustment to use;
+                                   if zero then compositional adjustment is
+                                   not used */
 } BlastExtensionOptions;
 
 /** Should sum statistics be performed? If not set, the engine decides this
@@ -728,14 +726,12 @@ Int2 LookupTableOptionsNew(EBlastProgramType program, LookupTableOptions* *optio
  * @param is_megablast Megablast (instead of blastn) if TRUE [in]
  * @param threshold Threshold value for finding neighboring words [in]
  * @param word_size Number of matched residues in an initial word [in]
- * @param variable_wordsize Are only full bytes of a compressed sequence 
- *        checked to find initial words? [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
 BLAST_FillLookupTableOptions(LookupTableOptions* options, 
    EBlastProgramType program, Boolean is_megablast, Int4 threshold,
-   Int4 word_size, Boolean variable_wordsize);
+   Int4 word_size);
 
 
 /** Deallocates memory for LookupTableOptions*.
@@ -789,13 +785,18 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program,
  * @param culling_limit Number of higher-scoring HSPs that must contain
  *                      the query range of an HSP before that HSP is declared
  *                      to be redundant (ignored if zero) [in]
+ * @param min_diag_separation Delete HSPs whose endpoints are at most this 
+ *                       many diagonals from a higher-scoring HSP. If zero,
+ *                       delete HSPs whose query and subject ranges are
+ *                       enveloped by those of a higher-scoring HSP [in]
 */
 NCBI_XBLAST_EXPORT
 Int2
 BLAST_FillHitSavingOptions(BlastHitSavingOptions* options, 
                            double evalue, Int4 hitlist_size,
                            Boolean is_gapped,
-                           Int4 culling_limit);
+                           Int4 culling_limit,
+                           Int4 min_diag_separation);
 
 /** Initialize default options for PSI BLAST 
  * @param psi_options pointer to pointer where structure will be allocated [in]

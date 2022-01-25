@@ -9,40 +9,19 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asngbseq.h65";
-static AsnValxNode avnx[19] = {
-    {20,"not-set" ,0,0.0,&avnx[1] } ,
-    {20,"single-stranded" ,1,0.0,&avnx[2] } ,
-    {20,"double-stranded" ,2,0.0,&avnx[3] } ,
-    {20,"mixed-stranded" ,3,0.0,NULL } ,
-    {3,NULL,0,0.0,NULL } ,
-    {20,"nucleic-acid" ,0,0.0,&avnx[6] } ,
-    {20,"dna" ,1,0.0,&avnx[7] } ,
-    {20,"rna" ,2,0.0,&avnx[8] } ,
-    {20,"trna" ,3,0.0,&avnx[9] } ,
-    {20,"rrna" ,4,0.0,&avnx[10] } ,
-    {20,"mrna" ,5,0.0,&avnx[11] } ,
-    {20,"urna" ,6,0.0,&avnx[12] } ,
-    {20,"snrna" ,7,0.0,&avnx[13] } ,
-    {20,"snorna" ,8,0.0,&avnx[14] } ,
-    {20,"peptide" ,9,0.0,NULL } ,
-    {3,NULL,0,0.0,NULL } ,
-    {20,"linear" ,1,0.0,&avnx[17] } ,
-    {20,"circular" ,2,0.0,NULL } ,
-    {3,NULL,1,0.0,NULL } };
-
-static AsnType atx[70] = {
-  {401, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[1],0,&atx[19]} ,
+static char * asnfilename = "asngbseq.h66";
+static AsnType atx[83] = {
+  {401, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[1],0,&atx[19]} ,
   {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[5]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "strandedness" ,128,2,0,0,1,0,0,0,&avnx[4],&atx[4],&avnx[0],0,&atx[6]} ,
-  {0, "moltype" ,128,3,0,0,1,0,0,0,&avnx[15],&atx[4],&avnx[5],0,&atx[7]} ,
-  {0, "topology" ,128,4,0,0,1,0,0,0,&avnx[18],&atx[4],&avnx[16],0,&atx[8]} ,
+  {0, "strandedness" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[6]} ,
+  {0, "moltype" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[7]} ,
+  {0, "topology" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[8]} ,
   {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[9]} ,
   {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[10]} ,
-  {0, "create-date" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[11]} ,
+  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[11]} ,
   {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[12]} ,
   {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[13]} ,
   {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[14]} ,
@@ -55,58 +34,71 @@ static AsnType atx[70] = {
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[20],&atx[22],0,&atx[24]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[23],NULL,0,NULL} ,
-  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[26]} ,
-  {0, "keywords" ,128,16,0,1,0,0,0,0,NULL,&atx[20],&atx[25],0,&atx[27]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
-  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[33]} ,
-  {0, "segment" ,128,17,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[28]} ,
-  {0, "source" ,128,18,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[29]} ,
-  {0, "organism" ,128,19,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[30]} ,
-  {0, "taxonomy" ,128,20,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[31]} ,
-  {0, "references" ,128,21,0,0,0,0,0,0,NULL,&atx[20],&atx[32],0,&atx[45]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} ,
-  {405, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[34],0,&atx[51]} ,
-  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[35]} ,
-  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[20],&atx[36],0,&atx[38]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[37],NULL,0,NULL} ,
-  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[56]} ,
-  {0, "consortium" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[39]} ,
-  {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[40]} ,
-  {0, "journal" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[41]} ,
-  {0, "medline" ,128,5,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[42]} ,
-  {0, "pubmed" ,128,6,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[43]} ,
-  {0, "remark" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[27]} ,
+  {0, "project" ,128,16,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[25]} ,
+  {0, "keywords" ,128,17,0,1,0,0,0,0,NULL,&atx[20],&atx[26],0,&atx[28]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[27],NULL,0,NULL} ,
+  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[34]} ,
+  {0, "segment" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[29]} ,
+  {0, "source" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[30]} ,
+  {0, "organism" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[31]} ,
+  {0, "taxonomy" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[32]} ,
+  {0, "references" ,128,22,0,1,0,0,0,0,NULL,&atx[20],&atx[33],0,&atx[52]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[34],NULL,0,NULL} ,
+  {405, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[35],0,&atx[58]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[36]} ,
+  {0, "position" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[37]} ,
+  {0, "authors" ,128,2,0,1,0,0,0,0,NULL,&atx[20],&atx[38],0,&atx[40]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[39],NULL,0,NULL} ,
+  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[45]} ,
+  {0, "consortium" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[41]} ,
+  {0, "title" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[42]} ,
+  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[43]} ,
+  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[49],&atx[44],0,&atx[50]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[45],NULL,0,NULL} ,
+  {408, "GBXref" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[46],0,&atx[63]} ,
+  {0, "dbname" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[47]} ,
+  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "comment" ,128,22,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[46]} ,
-  {0, "primary" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[47]} ,
-  {0, "source-db" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[48]} ,
-  {0, "database-reference" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[49]} ,
-  {0, "feature-table" ,128,26,0,1,0,0,0,0,NULL,&atx[20],&atx[50],0,&atx[66]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[51],NULL,0,NULL} ,
-  {406, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[52],0,&atx[37]} ,
-  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[53]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[54]} ,
-  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[20],&atx[55],0,&atx[61]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {408, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[57],0,&atx[63]} ,
-  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[58]} ,
-  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[59]} ,
-  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[60]} ,
-  {0, "accession" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "quals" ,128,3,0,1,0,0,0,0,NULL,&atx[20],&atx[62],0,NULL} ,
+  {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
+  {0, "pubmed" ,128,7,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[51]} ,
+  {0, "remark" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "comment" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[53]} ,
+  {0, "primary" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[54]} ,
+  {0, "source-db" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[55]} ,
+  {0, "database-reference" ,128,26,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[56]} ,
+  {0, "feature-table" ,128,27,0,1,0,0,0,0,NULL,&atx[20],&atx[57],0,&atx[79]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
+  {406, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[59],0,&atx[39]} ,
+  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[60]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[61]} ,
+  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[20],&atx[62],0,&atx[71]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[63],NULL,0,NULL} ,
-  {409, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[64],0,&atx[68]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[65]} ,
+  {409, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[64],0,&atx[76]} ,
+  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[65]} ,
+  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[66]} ,
+  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[67]} ,
+  {0, "iscomp" ,128,3,0,1,0,0,0,0,NULL,&atx[68],NULL,0,&atx[69]} ,
+  {301, "BOOLEAN" ,0,1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
+  {0, "interbp" ,128,4,0,1,0,0,0,0,NULL,&atx[68],NULL,0,&atx[70]} ,
+  {0, "accession" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "operator" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[72]} ,
+  {0, "partial5" ,128,4,0,1,0,0,0,0,NULL,&atx[68],NULL,0,&atx[73]} ,
+  {0, "partial3" ,128,5,0,1,0,0,0,0,NULL,&atx[68],NULL,0,&atx[74]} ,
+  {0, "quals" ,128,6,0,1,0,0,0,0,NULL,&atx[20],&atx[75],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
+  {410, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[48],&atx[77],0,&atx[81]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[78]} ,
   {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "sequence" ,128,27,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[67]} ,
-  {0, "contig" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {410, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[69],0,NULL} ,
+  {0, "sequence" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[80]} ,
+  {0, "contig" ,128,29,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {411, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[82],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-GBSeq" , "asngbseq.h65",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-GBSeq" , "asngbseq.h66",&atx[0],NULL,NULL,0,0} };
 
-static AsnValxNodePtr avn = avnx;
+static AsnValxNodePtr avn = NULL;
 static AsnTypePtr at = atx;
 static AsnModulePtr amp = ampx;
 
@@ -137,59 +129,71 @@ static AsnModulePtr amp = ampx;
 #define GBSEQ_other_seqids_E &at[18]
 #define GBSEQ_secondary_accessions &at[21]
 #define GBSEQ_secondary_accessions_E &at[22]
-#define GBSEQ_keywords &at[24]
-#define GBSEQ_keywords_E &at[25]
-#define GBSEQ_segment &at[27]
-#define GBSEQ_source &at[28]
-#define GBSEQ_organism &at[29]
-#define GBSEQ_taxonomy &at[30]
-#define GBSEQ_references &at[31]
-#define GBSEQ_references_E &at[32]
-#define GBSEQ_comment &at[45]
-#define GBSEQ_primary &at[46]
-#define GBSEQ_source_db &at[47]
-#define GBSEQ_database_reference &at[48]
-#define GBSEQ_feature_table &at[49]
-#define GBSEQ_feature_table_E &at[50]
-#define GBSEQ_sequence &at[66]
-#define GBSEQ_contig &at[67]
+#define GBSEQ_project &at[24]
+#define GBSEQ_keywords &at[25]
+#define GBSEQ_keywords_E &at[26]
+#define GBSEQ_segment &at[28]
+#define GBSEQ_source &at[29]
+#define GBSEQ_organism &at[30]
+#define GBSEQ_taxonomy &at[31]
+#define GBSEQ_references &at[32]
+#define GBSEQ_references_E &at[33]
+#define GBSEQ_comment &at[52]
+#define GBSEQ_primary &at[53]
+#define GBSEQ_source_db &at[54]
+#define GBSEQ_database_reference &at[55]
+#define GBSEQ_feature_table &at[56]
+#define GBSEQ_feature_table_E &at[57]
+#define GBSEQ_sequence &at[79]
+#define GBSEQ_contig &at[80]
 
 #define GBSEQID &at[19]
 
 #define GBSECONDARY_ACCN &at[23]
 
-#define GBKEYWORD &at[26]
+#define GBKEYWORD &at[27]
 
-#define GBREFERENCE &at[33]
-#define GBREFERENCE_reference &at[34]
-#define GBREFERENCE_authors &at[35]
-#define GBREFERENCE_authors_E &at[36]
-#define GBREFERENCE_consortium &at[38]
-#define GBREFERENCE_title &at[39]
-#define GBREFERENCE_journal &at[40]
-#define GBREFERENCE_medline &at[41]
-#define GBREFERENCE_pubmed &at[42]
-#define GBREFERENCE_remark &at[43]
+#define GBREFERENCE &at[34]
+#define GBREFERENCE_reference &at[35]
+#define GBREFERENCE_position &at[36]
+#define GBREFERENCE_authors &at[37]
+#define GBREFERENCE_authors_E &at[38]
+#define GBREFERENCE_consortium &at[40]
+#define GBREFERENCE_title &at[41]
+#define GBREFERENCE_journal &at[42]
+#define GBREFERENCE_xref &at[43]
+#define GBREFERENCE_xref_E &at[44]
+#define GBREFERENCE_pubmed &at[50]
+#define GBREFERENCE_remark &at[51]
 
-#define GBFEATURE &at[51]
-#define GBFEATURE_key &at[52]
-#define GBFEATURE_location &at[53]
-#define GBFEATURE_intervals &at[54]
-#define GBFEATURE_intervals_E &at[55]
-#define GBFEATURE_quals &at[61]
-#define GBFEATURE_quals_E &at[62]
+#define GBFEATURE &at[58]
+#define GBFEATURE_key &at[59]
+#define GBFEATURE_location &at[60]
+#define GBFEATURE_intervals &at[61]
+#define GBFEATURE_intervals_E &at[62]
+#define GBFEATURE_operator &at[71]
+#define GBFEATURE_partial5 &at[72]
+#define GBFEATURE_partial3 &at[73]
+#define GBFEATURE_quals &at[74]
+#define GBFEATURE_quals_E &at[75]
 
-#define GBAUTHOR &at[37]
+#define GBAUTHOR &at[39]
 
-#define GBINTERVAL &at[56]
-#define GBINTERVAL_from &at[57]
-#define GBINTERVAL_to &at[58]
-#define GBINTERVAL_point &at[59]
-#define GBINTERVAL_accession &at[60]
+#define GBXREF &at[45]
+#define GBXREF_dbname &at[46]
+#define GBXREF_id &at[47]
 
-#define GBQUALIFIER &at[63]
-#define GBQUALIFIER_name &at[64]
-#define GBQUALIFIER_value &at[65]
+#define GBINTERVAL &at[63]
+#define GBINTERVAL_from &at[64]
+#define GBINTERVAL_to &at[65]
+#define GBINTERVAL_point &at[66]
+#define GBINTERVAL_iscomp &at[67]
+#define GBINTERVAL_interbp &at[69]
+#define GBINTERVAL_accession &at[70]
 
-#define GBSET &at[68]
-#define GBSET_E &at[69]
+#define GBQUALIFIER &at[76]
+#define GBQUALIFIER_name &at[77]
+#define GBQUALIFIER_value &at[78]
+
+#define GBSET &at[81]
+#define GBSET_E &at[82]

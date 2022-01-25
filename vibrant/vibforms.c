@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.22  2006/02/01 17:57:57  kans
+* for Mac, FindFormMenuItem first tries window-specific list, and if nothing set it then tries the desktop window menu
+*
+* Revision 6.21  2006/01/27 17:42:02  kans
+* FindFormMenuItem handles menu inside Mac window in addition to desktop
+*
 * Revision 6.20  2005/07/11 14:11:50  bollin
 * when saving text from a TexT control for the TagList dialog, do not trim off
 * trailing space - if there is a callback for the text control this causes
@@ -1045,6 +1051,14 @@ extern IteM FindFormMenuItem (BaseFormPtr bfp, Int2 mssg)
   menuitemlist = NULL;
   menulistsize = 0;
 #ifdef WIN_MAC
+  if (bfp != NULL) {
+    menuitemlist = bfp->menuitemlist;
+    menulistsize = bfp->menulistsize;
+    if (menuitemlist != NULL && mssg >= 0 && mssg < menulistsize) {
+      return menuitemlist [mssg];
+    }
+  }
+  /* if not in specific window, try desktop menu bar list */
   menuitemlist = globalMenuItemList;
   menulistsize = globalMenuListSize;
 #else

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.141 $
+* $Revision: 6.143 $
 *
 * File Description: 
 *
@@ -64,7 +64,7 @@
 #include <pmfapi.h>
 #include <tax3api.h>
 
-#define TBL2ASN_APP_VER "5.3"
+#define TBL2ASN_APP_VER "5.5"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 

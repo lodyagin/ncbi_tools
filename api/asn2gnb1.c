@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.85 2005/12/01 20:09:32 kans Exp $
+* $Id: asn2gnb1.c,v 1.97 2006/02/23 16:38:54 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.85 $
+* $Revision: 1.97 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -367,7 +367,7 @@ NLM_EXTERN CharPtr DateToFF (
     }
 
     if (day < 1) {
-      sprintf (buf, "??-%s-%ld",
+      sprintf (buf, "\?\?-%s-%ld",
                month_names [month-1], (long) year);
     } else if (day < 10) {
       sprintf (buf, "0%ld-%s-%ld",
@@ -1313,7 +1313,7 @@ NLM_EXTERN void FFLineWrap (
       
       FFSavePosition(dest, &line_start, &line_pos);
 
-      // for EMBL 'XX' lines
+      /* for EMBL 'XX' lines */
       if (eb_line_prefix != NULL) {
         cont = FALSE;
         if (break_pos > 1) {
@@ -2998,7 +2998,7 @@ static Boolean IsSepRefseq (
 }
 
 typedef struct modeflags {
-  Boolean  flags [27];
+  Boolean  flags [29];
 } ModeFlags, PNTR ModeFlagsPtr;
 
 static ModeFlags flagTable [] = {
@@ -3009,7 +3009,7 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE},
+   TRUE,  TRUE,  TRUE,  TRUE},
 
   /* ENTREZ_MODE */
   {FALSE, TRUE,  TRUE,  TRUE,  TRUE,
@@ -3017,7 +3017,7 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  FALSE, TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, FALSE, TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE, FALSE},
+   TRUE,  TRUE,  TRUE,  FALSE},
 
   /* SEQUIN_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -3025,7 +3025,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   TRUE,  FALSE},
+   FALSE, TRUE,  FALSE, FALSE},
 
   /* DUMP_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -3033,7 +3033,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE}
+   FALSE, FALSE, FALSE, FALSE}
 };
 
 static void SetFlagsFromMode (
@@ -3083,7 +3083,9 @@ static void SetFlagsFromMode (
   ajp->flags.refSeqQualsToNote = *(bp++);
   ajp->flags.selenocysteineToNote = *(bp++);
 
+  ajp->flags.pyrrolysineToNote = *(bp++);
   ajp->flags.extraProductsToNote = *(bp++);
+  ajp->flags.codonRecognizedToNote = *(bp++);
   ajp->flags.forGbRelease = *(bp++);
 
   /* unapproved qualifiers suppressed for flatfile, okay for GBSeq XML */
@@ -3109,6 +3111,7 @@ static void SetFlagsFromMode (
       /* selenocysteine always a separate qualifier for RefSeq */
 
       ajp->flags.selenocysteineToNote = FALSE;
+      ajp->flags.pyrrolysineToNote = FALSE;
 
     } else {
 
@@ -3128,6 +3131,7 @@ static void SetFlagsFromMode (
       /* selenocysteine always a separate qualifier for RefSeq */
 
       ajp->flags.selenocysteineToNote = FALSE;
+      ajp->flags.pyrrolysineToNote = FALSE;
 
     }
   }
@@ -3363,19 +3367,57 @@ static void MakeGapFeats (
   }
 }
 
+static void LookForFeatFetchPolicy (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  BoolPtr        forceOnlyNearFeatsP;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  forceOnlyNearFeatsP = (BoolPtr) userdata;
+  if (forceOnlyNearFeatsP == NULL) return;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "FeatureFetchPolicy") != 0) return;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || ufp->data.ptrvalue == NULL) continue;
+    if (StringCmp (oip->str, "Policy") == 0) {
+      if (StringICmp ((CharPtr) ufp->data.ptrvalue, "OnlyNearFeatures") == 0) {
+        *forceOnlyNearFeatsP = TRUE;
+      }
+    }
+  }
+}
+
+static CharPtr bad_html_strings [] = {
+  "<script", "<object", "<applet", "<embed", "<form", "javascript:", NULL
+};
+
 static CharPtr defHead = "\
-Content-type: text/html\n\n\
-<HTML>\n\
-<HEAD><TITLE>GenBank entry</TITLE></HEAD>\n\
-<BODY>\n\
-<hr>\n\
+<html>\n\
+<head>\n\
+<meta http-equiv=\"Content-Type\" content=\"text/html; charset=us-ascii\" />\
+<title>GenBank entry</title>\n\
+</head>\n\
+<body>\n\
+<hr />\n\
 <pre>";
 
 static CharPtr defTail = "\
 </pre>\n\
-<hr>\n\
-</BODY>\n\
-</HTML>\n";
+<hr />\n\
+</body>\n\
+</html>\n";
 
 #define FAR_TRANS_MASK (SHOW_FAR_TRANSLATION | TRANSLATE_IF_NO_PRODUCT | ALWAYS_TRANSLATE_CDS)
 #define FEAT_FETCH_MASK (ONLY_NEAR_FEATURES | FAR_FEATURES_SUPPRESS | NEAR_FEATURES_SUPPRESS)
@@ -3411,6 +3453,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   CharPtr          ffhead = NULL;
   CharPtr          fftail = NULL;
   Asn2gbWriteFunc  ffwrite = NULL;
+  Boolean          forceOnlyNearFeats = FALSE;
   ValNodePtr       gapvnp = NULL;
   GBSeqPtr         gbseq = NULL;
   Int4             i;
@@ -3450,6 +3493,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   BaseBlockPtr     PNTR paragraphByIDs;
   BioseqPtr        parent = NULL;
   Int4             prevGi = 0;
+  Int2             q;
   Pointer          remotedata = NULL;
   Asn2gbFreeFunc   remotefree = NULL;
   Asn2gbLockFunc   remotelock = NULL;
@@ -3576,6 +3620,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   ajp = (IntAsn2gbJobPtr) MemNew (sizeof (IntAsn2gbJob));
   if (ajp == NULL) return NULL;
+
+  VisitDescriptorsInSep (sep, (Pointer) &forceOnlyNearFeats, LookForFeatFetchPolicy);
 
   gapvnp = NULL;
   if (format != FTABLE_FMT) {
@@ -3782,6 +3828,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
     if ((Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES)) {
       aw.onlyNearFeats = TRUE;
+    } else if (forceOnlyNearFeats) {
+      aw.onlyNearFeats = TRUE;
     } else {
       aw.nearFeatsSuppress = TRUE;
     }
@@ -3794,11 +3842,17 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
     if ((Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES)) {
       aw.onlyNearFeats = TRUE;
+    } else if (forceOnlyNearFeats) {
+      aw.onlyNearFeats = TRUE;
     } else {
       aw.nearFeatsSuppress = TRUE;
     }
     ajp->showFarTransl = TRUE;
 
+  } else if (forceOnlyNearFeats) {
+
+    aw.onlyNearFeats = TRUE;
+    
   } else {
 
     aw.onlyNearFeats = (Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES);
@@ -3861,6 +3915,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   if (mode == SEQUIN_MODE || mode == DUMP_MODE) {
     aw.showBaseCount = TRUE;
   }
+  aw.forcePrimaryBlock = (Boolean) ((flags & FORCE_PRIMARY_BLOCK) != 0);
+
+  aw.localFeatCount = VisitFeaturesInSep (sep, NULL, NULL);
 
   aw.hup = FALSE;
   aw.ssp = NULL;
@@ -3879,6 +3936,12 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
   }
 
+  ajp->bad_html_fsa = TextFsaNew ();
+
+  for (q = 0; bad_html_strings [q] != NULL; q++) {
+    TextFsaAdd (ajp->bad_html_fsa, bad_html_strings [q]);
+  }
+
   oldscope = SeqEntrySetScope (sep);
 
   if (stream) {
@@ -3895,6 +3958,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
     if (ffwrite != NULL) {
       ffwrite (ffhead, userdata, HEAD_BLOCK);
+    }
+    if (is_html) {
+      DoQuickLinkFormat (aw.afp, "<div class=\"sequence\">");
     }
   }
 
@@ -3927,6 +3993,10 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   }
 
   if (stream) {
+    if (is_html) {
+      DoQuickLinkFormat (aw.afp, "</div>");
+    }
+
     /* send optional tail string */
 
     if (fftail == NULL && is_html) {
@@ -4686,16 +4756,16 @@ static void PrintBioSourceFtableEntry (
         sprintf (str, "\t\t\tidentified_by\t");
         break;
       case SUBSRC_fwd_primer_seq :
-        sprintf (str, "\t\t\tleft_primer\t");
+        sprintf (str, "\t\t\tfwd_pcr_primer_seq\t");
         break;
       case SUBSRC_rev_primer_seq :
-        sprintf (str, "\t\t\tright_primer\t");
+        sprintf (str, "\t\t\trev_pcr_primer_seq\t");
         break;
       case SUBSRC_fwd_primer_name :
-        sprintf (str, "\t\t\tleft_primer\t");
+        sprintf (str, "\t\t\tfwd_pcr_primer_name\t");
         break;
       case SUBSRC_rev_primer_name :
-        sprintf (str, "\t\t\tright_primer\t");
+        sprintf (str, "\t\t\trev_pcr_primer_name\t");
         break;
       case SUBSRC_other :
           sprintf (str, "\t\t\tnote\t");
@@ -5266,16 +5336,21 @@ NLM_EXTERN void DoImmediateFormat (
 )
 
 {
-  BlockType    blocktype;
-  BioseqPtr    bsp;
-  FormatProc   fmt;
-  size_t       max;
-  SeqEntryPtr  oldscope;
-  QualValPtr   qv = NULL;
-  SeqEntryPtr  sep;
-  CharPtr      str = NULL;
+  IntAsn2gbJobPtr  ajp;
+  BlockType        blocktype;
+  BioseqPtr        bsp;
+  FormatProc       fmt;
+  Boolean          is_www;
+  size_t           max;
+  SeqEntryPtr      oldscope;
+  QualValPtr       qv = NULL;
+  SeqEntryPtr      sep;
+  CharPtr          str = NULL;
 
   if (afp == NULL || bbp == NULL) return;
+  ajp = afp->ajp;
+  if (ajp == NULL) return;
+  is_www = GetWWW (ajp);
 
   blocktype = bbp->blocktype;
   if (blocktype < LOCUS_BLOCK || blocktype > SLASH_BLOCK) return;
@@ -5556,6 +5631,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
       ValNodeFree (remotevnp);
     }
   }
+
+  TextFsaFree (iajp->bad_html_fsa);
 
   ValNodeFree (iajp->gihead);
 

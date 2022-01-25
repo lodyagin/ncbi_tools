@@ -239,6 +239,7 @@ Still others are expected to be rarely used, or are for testing new features.
 
 #define DDBJ_VARIANT_FORMAT    32768
 #define SPECIAL_GAP_DISPLAY    65536
+#define FORCE_PRIMARY_BLOCK   131072
 
 
 LOCKS are bits for controlling program performance, and are also ORed
@@ -298,18 +299,28 @@ articles in RefSeq records.
 #define ONLY_REVIEW_PUBS         768
 #define NEWEST_PUBS             1024
 #define OLDEST_PUBS             1280
+#define HIDE_ALL_PUBS           1792
 
 Protein feature tables and References in feature tables can also be shown.
 
-#define SHOW_PROT_FTABLE        8192
-#define SHOW_FTABLE_REFS       16384
+#define SHOW_PROT_FTABLE        2048
+#define SHOW_FTABLE_REFS        4096
 
 Source features, instantiated Gap features, and the sequence itself can
 also be suppressed.
 
-#define HIDE_SOURCE_FEATS      32768
-#define HIDE_GAP_FEATS         65536
-#define HIDE_SEQUENCE         131072
+#define HIDE_SOURCE_FEATS       8192
+#define HIDE_GAP_FEATS         16384
+#define HIDE_SEQUENCE          32768
+
+Gaps in far delta sequences in Web Entrez are normally converted to a
+shorthand notation. These can be forced to expand to runs of Ns.
+
+#define EXPANDED_GAP_DISPLAY   65536
+
+Gene Ontology terms can be suppressed if desired.
+
+#define HIDE_GO_TERMS         131072
 
 
 EXTRA is an opaque pointer used for preparing internal NCBI indices.  Most
@@ -486,7 +497,6 @@ Sciurognathi; Muridae; Murinae; Mus</INSDSeq_taxonomy>
 D-dopachrome tautomerase (DDT) and MIF</INSDReference_title>
         <INSDReference_journal>Mamm. Genome 9 (9), 753-757 (1998)
 </INSDReference_journal>
-        <INSDReference_medline>98384542</INSDReference_medline>
         <INSDReference_pubmed>9716662</INSDReference_pubmed>
       </INSDReference>
       <INSDReference>

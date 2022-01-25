@@ -31,7 +31,7 @@ objgbseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.14 at Apr 9, 2004 11:58 AM
+*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
 *
 **************************************************/
 
@@ -47,9 +47,6 @@ GBSeqNew(void)
 {
    GBSeqPtr ptr = MemNew((size_t) sizeof(GBSeq));
 
-   ptr -> strandedness = 0;
-   ptr -> moltype = 0;
-   ptr -> topology = 1;
    return ptr;
 
 }
@@ -69,6 +66,9 @@ GBSeqFree(GBSeqPtr ptr)
       return NULL;
    }
    MemFree(ptr -> locus);
+   MemFree(ptr -> strandedness);
+   MemFree(ptr -> moltype);
+   MemFree(ptr -> topology);
    MemFree(ptr -> division);
    MemFree(ptr -> update_date);
    MemFree(ptr -> create_date);
@@ -80,6 +80,7 @@ GBSeqFree(GBSeqPtr ptr)
    MemFree(ptr -> accession_version);
    AsnGenericBaseSeqOfFree(ptr -> other_seqids ,ASNCODE_PTRVAL_SLOT);
    AsnGenericBaseSeqOfFree(ptr -> secondary_accessions ,ASNCODE_PTRVAL_SLOT);
+   MemFree(ptr -> project);
    AsnGenericBaseSeqOfFree(ptr -> keywords ,ASNCODE_PTRVAL_SLOT);
    MemFree(ptr -> segment);
    MemFree(ptr -> source);
@@ -162,21 +163,21 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> strandedness = av.intvalue;
+      ptr -> strandedness = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_moltype) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> moltype = av.intvalue;
+      ptr -> moltype = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_topology) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> topology = av.intvalue;
+      ptr -> topology = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_division) {
@@ -254,6 +255,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if (isError && ptr -> secondary_accessions == NULL) {
          goto erret;
       }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_project) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> project = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_keywords) {
@@ -404,12 +412,18 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    av.intvalue = ptr -> length;
    retval = AsnWrite(aip, GBSEQ_length,  &av);
-   av.intvalue = ptr -> strandedness;
-   retval = AsnWrite(aip, GBSEQ_strandedness,  &av);
-   av.intvalue = ptr -> moltype;
-   retval = AsnWrite(aip, GBSEQ_moltype,  &av);
-   av.intvalue = ptr -> topology;
-   retval = AsnWrite(aip, GBSEQ_topology,  &av);
+   if (ptr -> strandedness != NULL) {
+      av.ptrvalue = ptr -> strandedness;
+      retval = AsnWrite(aip, GBSEQ_strandedness,  &av);
+   }
+   if (ptr -> moltype != NULL) {
+      av.ptrvalue = ptr -> moltype;
+      retval = AsnWrite(aip, GBSEQ_moltype,  &av);
+   }
+   if (ptr -> topology != NULL) {
+      av.ptrvalue = ptr -> topology;
+      retval = AsnWrite(aip, GBSEQ_topology,  &av);
+   }
    if (ptr -> division != NULL) {
       av.ptrvalue = ptr -> division;
       retval = AsnWrite(aip, GBSEQ_division,  &av);
@@ -448,6 +462,10 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> other_seqids ,ASNCODE_PTRVAL_SLOT, aip, GBSEQ_other_seqids, GBSEQ_other_seqids_E);
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> secondary_accessions ,ASNCODE_PTRVAL_SLOT, aip, GBSEQ_secondary_accessions, GBSEQ_secondary_accessions_E);
+   if (ptr -> project != NULL) {
+      av.ptrvalue = ptr -> project;
+      retval = AsnWrite(aip, GBSEQ_project,  &av);
+   }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> keywords ,ASNCODE_PTRVAL_SLOT, aip, GBSEQ_keywords, GBSEQ_keywords_E);
    if (ptr -> segment != NULL) {
       av.ptrvalue = ptr -> segment;
@@ -533,10 +551,12 @@ GBReferenceFree(GBReferencePtr ptr)
       return NULL;
    }
    MemFree(ptr -> reference);
+   MemFree(ptr -> position);
    AsnGenericBaseSeqOfFree(ptr -> authors ,ASNCODE_PTRVAL_SLOT);
    MemFree(ptr -> consortium);
    MemFree(ptr -> title);
    MemFree(ptr -> journal);
+   AsnGenericUserSeqOfFree(ptr -> xref, (AsnOptFreeFunc) GBXrefFree);
    MemFree(ptr -> remark);
    return MemFree(ptr);
 }
@@ -596,6 +616,13 @@ GBReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> reference = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBREFERENCE_position) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> position = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == GBREFERENCE_authors) {
       ptr -> authors = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
       if (isError && ptr -> authors == NULL) {
@@ -624,12 +651,11 @@ GBReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> journal = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == GBREFERENCE_medline) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == GBREFERENCE_xref) {
+      ptr -> xref = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBXrefAsnRead, (AsnOptFreeFunc) GBXrefFree);
+      if (isError && ptr -> xref == NULL) {
          goto erret;
       }
-      ptr -> medline = av.intvalue;
-      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBREFERENCE_pubmed) {
@@ -637,7 +663,7 @@ GBReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> pubmed = av.intvalue;
-      ptr -> OBbits__ |= 1<<1;
+      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBREFERENCE_remark) {
@@ -702,6 +728,10 @@ GBReferenceAsnWrite(GBReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> reference;
       retval = AsnWrite(aip, GBREFERENCE_reference,  &av);
    }
+   if (ptr -> position != NULL) {
+      av.ptrvalue = ptr -> position;
+      retval = AsnWrite(aip, GBREFERENCE_position,  &av);
+   }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> authors ,ASNCODE_PTRVAL_SLOT, aip, GBREFERENCE_authors, GBREFERENCE_authors_E);
    if (ptr -> consortium != NULL) {
       av.ptrvalue = ptr -> consortium;
@@ -715,10 +745,8 @@ GBReferenceAsnWrite(GBReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> journal;
       retval = AsnWrite(aip, GBREFERENCE_journal,  &av);
    }
-   if (ptr -> medline || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> medline;
-      retval = AsnWrite(aip, GBREFERENCE_medline,  &av);
-   }
-   if (ptr -> pubmed || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> pubmed;
+   AsnGenericUserSeqOfAsnWrite(ptr -> xref, (AsnWriteFunc) GBXrefAsnWrite, aip, GBREFERENCE_xref, GBREFERENCE_xref_E);
+   if (ptr -> pubmed || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> pubmed;
       retval = AsnWrite(aip, GBREFERENCE_pubmed,  &av);
    }
    if (ptr -> remark != NULL) {
@@ -769,6 +797,7 @@ GBFeatureFree(GBFeaturePtr ptr)
    MemFree(ptr -> key);
    MemFree(ptr -> location);
    AsnGenericUserSeqOfFree(ptr -> intervals, (AsnOptFreeFunc) GBIntervalFree);
+   MemFree(ptr -> operator__);
    AsnGenericUserSeqOfFree(ptr -> quals, (AsnOptFreeFunc) GBQualifierFree);
    return MemFree(ptr);
 }
@@ -842,6 +871,29 @@ GBFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBFEATURE_operator) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> operator__ = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBFEATURE_partial5) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> partial5 = av.boolvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBFEATURE_partial3) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> partial3 = av.boolvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == GBFEATURE_quals) {
       ptr -> quals = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBQualifierAsnRead, (AsnOptFreeFunc) GBQualifierFree);
       if (isError && ptr -> quals == NULL) {
@@ -909,7 +961,184 @@ GBFeatureAsnWrite(GBFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, GBFEATURE_location,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> intervals, (AsnWriteFunc) GBIntervalAsnWrite, aip, GBFEATURE_intervals, GBFEATURE_intervals_E);
+   if (ptr -> operator__ != NULL) {
+      av.ptrvalue = ptr -> operator__;
+      retval = AsnWrite(aip, GBFEATURE_operator,  &av);
+   }
+   if (ptr -> partial5 || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> partial5;
+      retval = AsnWrite(aip, GBFEATURE_partial5,  &av);
+   }
+   if (ptr -> partial3 || (ptr -> OBbits__ & (1<<1) )){   av.boolvalue = ptr -> partial3;
+      retval = AsnWrite(aip, GBFEATURE_partial3,  &av);
+   }
    AsnGenericUserSeqOfAsnWrite(ptr -> quals, (AsnWriteFunc) GBQualifierAsnWrite, aip, GBFEATURE_quals, GBFEATURE_quals_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBXrefNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBXrefPtr LIBCALL
+GBXrefNew(void)
+{
+   GBXrefPtr ptr = MemNew((size_t) sizeof(GBXref));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBXrefFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBXrefPtr LIBCALL
+GBXrefFree(GBXrefPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> dbname);
+   MemFree(ptr -> id);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBXrefAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBXrefPtr LIBCALL
+GBXrefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GBXrefPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBXref ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBXREF);
+   } else {
+      atp = AsnLinkType(orig, GBXREF);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBXrefNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBXREF_dbname) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> dbname = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBXREF_id) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> id = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBXrefFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBXrefAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBXrefAsnWrite(GBXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBXREF);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> dbname != NULL) {
+      av.ptrvalue = ptr -> dbname;
+      retval = AsnWrite(aip, GBXREF_dbname,  &av);
+   }
+   if (ptr -> id != NULL) {
+      av.ptrvalue = ptr -> id;
+      retval = AsnWrite(aip, GBXREF_id,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1027,6 +1256,22 @@ GBIntervalAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<2;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBINTERVAL_iscomp) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> iscomp = av.boolvalue;
+      ptr -> OBbits__ |= 1<<3;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBINTERVAL_interbp) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> interbp = av.boolvalue;
+      ptr -> OBbits__ |= 1<<4;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == GBINTERVAL_accession) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -1093,6 +1338,12 @@ GBIntervalAsnWrite(GBIntervalPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    if (ptr -> point || (ptr -> OBbits__ & (1<<2) )){   av.intvalue = ptr -> point;
       retval = AsnWrite(aip, GBINTERVAL_point,  &av);
+   }
+   if (ptr -> iscomp || (ptr -> OBbits__ & (1<<3) )){   av.boolvalue = ptr -> iscomp;
+      retval = AsnWrite(aip, GBINTERVAL_iscomp,  &av);
+   }
+   if (ptr -> interbp || (ptr -> OBbits__ & (1<<4) )){   av.boolvalue = ptr -> interbp;
+      retval = AsnWrite(aip, GBINTERVAL_interbp,  &av);
    }
    if (ptr -> accession != NULL) {
       av.ptrvalue = ptr -> accession;
@@ -1304,6 +1555,7 @@ NLM_EXTERN
 GBSetPtr LIBCALL
 GBSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1359,6 +1611,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 GBSetAsnWrite(GBSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

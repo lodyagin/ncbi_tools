@@ -15,3 +15,11 @@ asntool -m entrezgene.asn -o asnentgene.h
 mv asnentgene.h ../asnstat
 asntool -m entrezgene.asn -M ../asn/seqfeat.asn,../asn/seqloc.asn,../asn/general.asn,../asn/pub.asn,../asn/biblio.asn,../asn/medline.asn -G -B objentgene -I egkludge.h -K asnentgene.h -V
 
+asntool -m gbseq.asn -o asngbseq.h
+mv asngbseq.h ../asnstat/
+asntool -m gbseq.asn -G -B objgbseq -K asngbseq.h -Z
+
+asntool -m insdseq.asn -o asninsdseq.h
+mv asninsdseq.h ../asnstat/
+asntool -m insdseq.asn -G -B objinsdseq -K asninsdseq.h -Z
+

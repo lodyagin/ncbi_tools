@@ -1,4 +1,4 @@
-/*  $Id: ncbi_memory_connector.c,v 6.8 2005/04/20 18:15:59 lavr Exp $
+/*  $Id: ncbi_memory_connector.c,v 6.9 2006/01/11 20:21:38 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -251,7 +251,7 @@ extern CONNECTOR MEMORY_CreateConnector(MT_LOCK lock)
 
 extern CONNECTOR MEMORY_CreateConnectorEx(BUF buf, MT_LOCK lock)
 {
-    CONNECTOR         ccc = (SConnector*) malloc(sizeof(SConnector));
+    CONNECTOR         ccc = (SConnector*)       malloc(sizeof(SConnector));
     SMemoryConnector* xxx = (SMemoryConnector*) malloc(sizeof(*xxx));
 
     /* initialize internal data structures */
@@ -273,6 +273,9 @@ extern CONNECTOR MEMORY_CreateConnectorEx(BUF buf, MT_LOCK lock)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_memory_connector.c,v $
+ * Revision 6.9  2006/01/11 20:21:38  lavr
+ * Uniform creation/fill-up of connector structures
+ *
  * Revision 6.8  2005/04/20 18:15:59  lavr
  * +<assert.h>
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.299 $
+* $Revision: 1.306 $
 *
 * File Description: 
 *
@@ -340,8 +340,8 @@ static ModifierItemGlobalData DefLineModifiers[] = {
   { "Forma"                , TRUE , ORGMOD_forma                , FALSE },
   { "Forma-specialis"      , TRUE , ORGMOD_forma_specialis      , FALSE },
   { "Frequency"            , FALSE, SUBSRC_frequency            , FALSE },
-  { "Fwd-primer-name"      , FALSE, SUBSRC_fwd_primer_name      , FALSE },
-  { "Fwd-primer-seq"       , FALSE, SUBSRC_fwd_primer_seq       , FALSE },
+  { "Fwd-PCR-primer-name"  , FALSE, SUBSRC_fwd_primer_name      , FALSE },
+  { "Fwd-PCR-primer-seq"   , FALSE, SUBSRC_fwd_primer_seq       , FALSE },
   { "Genotype"             , FALSE, SUBSRC_genotype             , FALSE },
   { "Germline"             , FALSE, SUBSRC_germline             , FALSE },
   { "Group"                , TRUE , ORGMOD_group                , FALSE },
@@ -362,8 +362,8 @@ static ModifierItemGlobalData DefLineModifiers[] = {
   { "Plastid-name"         , FALSE, SUBSRC_plastid_name         , FALSE },
   { "Pop-variant"          , FALSE, SUBSRC_pop_variant          , FALSE },
   { "Rearranged"           , FALSE, SUBSRC_rearranged           , FALSE },
-  { "Rev-primer-name"      , FALSE, SUBSRC_rev_primer_name      , FALSE },
-  { "Rev-primer-seq"       , FALSE, SUBSRC_rev_primer_seq       , FALSE },
+  { "Rev-PCR-primer-name"  , FALSE, SUBSRC_rev_primer_name      , FALSE },
+  { "Rev-PCR-primer-seq"   , FALSE, SUBSRC_rev_primer_seq       , FALSE },
   { "Segment"              , FALSE, SUBSRC_segment              , FALSE },
   { "Serogroup"            , TRUE , ORGMOD_serogroup            , FALSE },
   { "Serotype"             , TRUE , ORGMOD_serotype             , FALSE },
@@ -4998,11 +4998,14 @@ static CharPtr GetProductName
     {
       return StringSave (grp->desc);
     }
+#if 0
+    /* removed by request from Linda Yankie */    
     if (grp->locus_tag != NULL && ! suppress_locus_tag
       && StringCmp (grp->locus_tag, gene_name) != 0)
     {
       return StringSave (grp->locus_tag);
     }
+#endif    
   }
   else
   {
@@ -7700,6 +7703,48 @@ static Boolean LIBCALLBACK ShouldRemoveGeneric
 }
 
 
+static Boolean IsBioseqPrecursorRNA (BioseqPtr bsp)
+{
+  SeqDescrPtr       sdp;
+  SeqMgrDescContext context;
+  MolInfoPtr        mol;
+  
+  if (bsp == NULL) return FALSE;
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
+  if (sdp != NULL && sdp->data.ptrvalue != NULL)
+  {
+		mol = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mol->biomol == 2)
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static Boolean LIBCALLBACK ShouldRemovePrecursorRNA
+( SeqFeatPtr sfp,
+  FeatureClausePtr parent_fcp,
+  FeatureClausePtr this_fcp,
+  BioseqPtr bsp,
+  Boolean isLonely,
+  Boolean isRequested,
+  Boolean isSegment,
+  Boolean suppress_locus_tag)
+{
+  if (!isLonely && IsBioseqPrecursorRNA(bsp))
+  {
+    return TRUE;
+  }
+  else
+  {
+    return ShouldRemoveGeneric (sfp, parent_fcp, this_fcp, bsp, isLonely, 
+                                isRequested, isSegment, suppress_locus_tag);
+  }
+}
+
+
 typedef struct removableitemglobal {
   matchFunction  itemmatch;
   ShouldRemoveFunction ShouldRemove;
@@ -7719,7 +7764,8 @@ static RemovableItemGlobalData remove_items[] = {
   { IsPromoter, ShouldRemovePromoter, "Promoters" },
   { IsLTR, ShouldRemoveLTR, "LTRs" },
   { Is3UTR, ShouldRemove3UTR, "3' UTRs" },
-  { Is5UTR, ShouldRemove5UTR, "5' UTRs" }
+  { Is5UTR, ShouldRemove5UTR, "5' UTRs" },
+  { IsPrecursorRNA, ShouldRemovePrecursorRNA, "Precursor RNAs" }
 };
 
 typedef enum {
@@ -7731,6 +7777,7 @@ typedef enum {
   RemovableLTR,
   Removable3UTR,
   Removable5UTR,
+  RemovablePrecursorRNA,
   NumRemovableItems
 } RemovableList;
 
@@ -9416,7 +9463,8 @@ static void BuildDefLineFeatClauseList (
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if ( bssp->_class == 7 || IsPopPhyEtcSet (bssp->_class)
-        || bssp->_class == BioseqseqSet_class_gen_prod_set)
+        || bssp->_class == BioseqseqSet_class_gen_prod_set
+        || bssp->_class == BioseqseqSet_class_not_set)
     {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
       {
@@ -10317,6 +10365,32 @@ static void CreateDefLineForm (
   Update ();
 }
 
+static CharPtr GetKeywordPrefix (SeqEntryPtr sep)
+{
+  ValNodePtr vnp;
+  GBBlockPtr gbp;
+  
+  vnp = SeqEntryGetSeqDescr (sep, Seq_descr_genbank, NULL);
+	if (vnp != NULL) {
+	  gbp = (GBBlockPtr) vnp->data.ptrvalue;
+	  if (gbp != NULL)
+	  {
+	    for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next)
+	    {
+	      if (StringICmp((CharPtr)vnp->data.ptrvalue, "TPA:inferential") == 0)
+	      {
+	        return "TPA_inf: ";
+	      }
+	      else if (StringICmp((CharPtr)vnp->data.ptrvalue, "TPA:experimental") == 0)
+	      {
+	        return "TPA_exp: ";
+	      }
+	    }
+	  }
+	}
+	return "";
+}
+
 static void BuildDefinitionLinesFromFeatureClauseLists (
   ValNodePtr list,
   ModifierItemLocalPtr modList,
@@ -10326,18 +10400,28 @@ static void BuildDefinitionLinesFromFeatureClauseLists (
 {
   ValNodePtr vnp;
   DefLineFeatClausePtr defline_featclause;
-  CharPtr    org_desc, tmp_str;
+  CharPtr    org_desc, tmp_str, keyword_prefix;
 
   for (vnp = list; vnp != NULL; vnp = vnp->next)
   {
     if (vnp->data.ptrvalue != NULL)
     {
       defline_featclause = vnp->data.ptrvalue;
+      
+      keyword_prefix = GetKeywordPrefix (defline_featclause->sep);
+      
       org_desc = GetOrganismDescription (defline_featclause->bsp,
                                          modList, m, &odmp);
-      tmp_str = (CharPtr) MemNew ( StringLen (org_desc) + StringLen (defline_featclause->clauselist) + 2);
+      tmp_str = (CharPtr) MemNew (StringLen (keyword_prefix) 
+                                  + StringLen (org_desc) 
+                                  + StringLen (defline_featclause->clauselist) + 2);
       if (tmp_str == NULL) return;
-      StringCpy (tmp_str, org_desc);
+      tmp_str [0] = 0;
+      if (keyword_prefix != NULL)
+      {
+        StringCat (tmp_str, keyword_prefix);
+      }
+      StringCat (tmp_str, org_desc);
       if (defline_featclause->clauselist != NULL
         && defline_featclause->clauselist [0] != ','
         && defline_featclause->clauselist [0] != '.'
@@ -12218,6 +12302,7 @@ typedef struct exportmodform
   ButtoN list_accession;
   ButtoN list_local;
   ButtoN list_general;
+  ButtoN list_additional_mods;
   ButtoN accept_btn;
 } ExportModFormData, PNTR ExportModFormPtr;
 
@@ -12228,26 +12313,35 @@ static void SetExportFormModsAccept (Pointer userdata)
 
   form_data = (ExportModFormPtr) userdata;
   if (form_data == NULL) return;
- 
-  selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
-  if (selected_mods == NULL)
+  
+  if (GetStatus (form_data->list_additional_mods))
   {
-    Disable (form_data->accept_btn);
+    Enable (form_data->selected_mods); 
+    selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
+    if (selected_mods == NULL)
+    {
+      Disable (form_data->accept_btn);
+      return;
+    }
+    else
+    {
+	    selected_mods = ValNodeFreeData (selected_mods);
+    }
   }
   else
   {
-	selected_mods = ValNodeFreeData (selected_mods);
+    Disable (form_data->selected_mods);
+  }
 
 	if (!GetStatus (form_data->list_tax_name) && ! GetStatus (form_data->list_accession)
 		&& !GetStatus (form_data->list_local) && ! GetStatus (form_data->list_general))
 	{
-      Disable (form_data->accept_btn);
+    Disable (form_data->accept_btn);
 	}
 	else
 	{
 	  Enable (form_data->accept_btn);
 	}
-  }
 }
 
 static void SetExportFormModsAcceptBtn (ButtoN b)
@@ -12292,19 +12386,7 @@ static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  form_data->selected_mods = ValNodeSelectionDialog (h, available_mods_list, TALL_SELECTION_LIST,
-                                ValNodeStringName,
-                                ValNodeSimpleDataFree, 
-                                ValNodeStringCopy,
-                                ValNodeStringMatch,
-                                "qualifiers", 
-                                SetExportFormModsAccept, form_data,
-                                TRUE);
-
-  /* initialize dialog to "All" */
-  SendMessageToDialog (form_data->selected_mods, NUM_VIB_MSG + 1);
-
-  g = HiddenGroup (h, 0, 4, NULL);
+  g = HiddenGroup (h, 0, 5, NULL);
   form_data->list_tax_name = CheckBox (g, "Tax Name", SetExportFormModsAcceptBtn);
   SetObjectExtra (form_data->list_tax_name, form_data, NULL);
   if (!(has_vals & ORGANISM_ID_PROFILE_HAS_TAX_NAME))
@@ -12345,6 +12427,22 @@ static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
   {
     SetStatus (form_data->list_general, TRUE);
   }
+  
+  form_data->list_additional_mods = CheckBox (g, "Additional Modifiers", SetExportFormModsAcceptBtn);
+  SetObjectExtra (form_data->list_additional_mods, form_data, NULL);
+  SetStatus (form_data->list_additional_mods, TRUE);
+
+  form_data->selected_mods = ValNodeSelectionDialog (h, available_mods_list, TALL_SELECTION_LIST,
+                                ValNodeStringName,
+                                ValNodeSimpleDataFree, 
+                                ValNodeStringCopy,
+                                ValNodeStringMatch,
+                                "qualifiers", 
+                                SetExportFormModsAccept, form_data,
+                                TRUE);
+
+  /* initialize dialog to "All" */
+  SendMessageToDialog (form_data->selected_mods, NUM_VIB_MSG + 1);
 
   c = HiddenGroup (h, 2, 0, NULL);
   form_data->accept_btn = PushButton (c, "Accept", ModalAcceptButton);
@@ -12373,32 +12471,39 @@ static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
   }
   else
   {
-    selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
+    if (GetStatus (form_data->list_additional_mods))
+    {
+      selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
+    }
+    else
+    {
+      selected_mods = NULL;
+    }
 
     for (idx = 0; idx < NumDefLineModifiers; idx++)
     {
       if (eotp->modList[idx].any_present)
       {
-	    found_mod = FALSE;
+        found_mod = FALSE;
    	    for (vnp = selected_mods; vnp != NULL && ! found_mod; vnp = vnp->next)
-	    {
+        {
           if (StringCmp (vnp->data.ptrvalue, DefLineModifiers [idx].name) == 0)
-		  {
-		    found_mod = TRUE;
-		  }
-		}
-		if (!found_mod)
-		{
-		  eotp->modList[idx].any_present = FALSE;
-		}
-	  }
+          {
+            found_mod = TRUE;
+          }
+        }
+        if (!found_mod)
+        {
+          eotp->modList[idx].any_present = FALSE;
+        }
+      }
     }
-	selected_mods = ValNodeFreeData (selected_mods);
+    selected_mods = ValNodeFreeData (selected_mods);
 
-	eotp->list_tax_name = GetStatus (form_data->list_tax_name);
-	eotp->list_accession = GetStatus (form_data->list_accession);
-	eotp->list_local = GetStatus (form_data->list_local);
-	eotp->list_general = GetStatus (form_data->list_general);
+    eotp->list_tax_name = GetStatus (form_data->list_tax_name);
+    eotp->list_accession = GetStatus (form_data->list_accession);
+    eotp->list_local = GetStatus (form_data->list_local);
+    eotp->list_general = GetStatus (form_data->list_general);
 
     return TRUE;
   }  

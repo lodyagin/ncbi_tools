@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
@@ -743,6 +743,8 @@ static void DrawIcon (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst)
   } else if (StringICmp (dbName, "Protein") == 0)
     icon = proteinicon;
   else if (StringICmp (dbName, "Nucleotide") == 0)
+    icon = dnaicon;
+  else if (StringICmp (dbName, "nuccore") == 0)
     icon = dnaicon;
   else if (StringICmp (dbName, "Structure") == 0)
     icon = threedicon;
@@ -1833,6 +1835,8 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
       labels = prtRadios;
     else if (StringICmp (dbName, "Nucleotide") == 0)
       labels = nucRadios;
+    else if (StringICmp (dbName, "nuccore") == 0)
+      labels = nucRadios;
     else if (StringICmp (dbName, "Structure") == 0)
       labels = strucRadios;
     else if (StringICmp (dbName, "Genome") == 0)
@@ -2233,7 +2237,9 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
             GetAppProperty ("MedlineDisplayForm");
           if (mvpp != NULL && mvpp->displayFont != NULL)
             font = mvpp->displayFont;
-        } else if ((StringICmp (dbName, "Protein") == 0) || (StringICmp (dbName, "Nucleotide") == 0)) {
+        } else if ((StringICmp (dbName, "Protein") == 0) ||
+                   (StringICmp (dbName, "Nucleotide") == 0) ||
+                   (StringICmp (dbName, "nuccore") == 0)) {
           svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
           if (svpp != NULL && svpp->displayFont != NULL)
             font = svpp->displayFont;
@@ -2245,6 +2251,8 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
       else if (StringICmp (dbName, "Protein") == 0)
         retrieveProc = aaDocProcs [val - 1];
       else if (StringICmp (dbName, "Nucleotide") == 0)
+        retrieveProc = ntDocProcs [val - 1];
+      else if (StringICmp (dbName, "nuccore") == 0)
         retrieveProc = ntDocProcs [val - 1];
       else if (StringICmp (dbName, "Structure") == 0)
         retrieveProc = stDocProcs [val - 1];
@@ -3131,7 +3139,8 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
       } else if (launchType == 4) {
         LaunchSequenceASN (uid);
       }
-    } else if (StringICmp (dbName, "Nucleotide") == 0) {
+    } else if (StringICmp (dbName, "Nucleotide") == 0 ||
+               StringICmp (dbName, "nuccore") == 0) {
       if (launchType == 1) {
         LaunchSequenceViewer (uid, numAlign, alignuids, dbName);
       } else if (launchType == 2) {
@@ -3776,6 +3785,8 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
     else if (StringICmp (dbName, "Protein") == 0)
       labels = prtRadios;
     else if (StringICmp (dbName, "Nucleotide") == 0)
+      labels = nucRadios;
+    else if (StringICmp (dbName, "nuccore") == 0)
       labels = nucRadios;
     else if (StringICmp (dbName, "Structure") == 0)
       labels = strucRadios;
@@ -5000,6 +5011,8 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = prtRadios;
     else if (StringICmp (e2db->db_name, "Nucleotide") == 0)
       labels = nucRadios;
+    else if (StringICmp (e2db->db_name, "nuccore") == 0)
+      labels = nucRadios;
     else if (StringICmp (e2db->db_name, "Structure") == 0)
       labels = strucRadios;
     else if (StringICmp (e2db->db_name, "Genome") == 0)
@@ -5057,6 +5070,8 @@ NLM_EXTERN ForM CreateDocsumForm (
     else if (StringICmp (e2db->db_name, "Protein") == 0)
       labels = prtLaunch;
     else if (StringICmp (e2db->db_name, "Nucleotide") == 0)
+      labels = nucLaunch;
+    else if (StringICmp (e2db->db_name, "nuccore") == 0)
       labels = nucLaunch;
     else if (StringICmp (e2db->db_name, "Structure") == 0)
       labels = strucLaunch;

@@ -206,7 +206,7 @@ on SetProjectData()
 			"ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", Â
 			"ncbi_file_connector", "ncbi_host_info.c", "ncbi_http_connector", Â
 			"ncbi_memory_connector", "ncbi_server_info", "ncbi_service", Â
-			"ncbi_service_connector", "ncbi_dispd", "ncbi_lbsmd_stub", Â
+			"ncbi_service_connector", "ncbi_dispd", "ncbi_lb", "ncbi_lbsmd_stub", Â
 			"ncbi_socket_connector", "ncbi_ftp_connector", "ncbi_sendmail"})
 	
 	AddSimpleProjectExceptFiles("netcli", {}, "network:nsclilib", {"ni_encr.c", "ni_list.c", "ni_lib.c", "ni_disp.c", "ni_encr.c"})

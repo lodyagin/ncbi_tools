@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.c,v 1.8 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_diagnostics.c,v 1.9 2006/01/23 16:28:06 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_diagnostics.c,v 1.8 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_diagnostics.c,v 1.9 2006/01/23 16:28:06 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_diagnostics.h>
@@ -116,8 +116,6 @@ Blast_DiagnosticsUpdate(BlastDiagnostics* global, BlastDiagnostics* local)
    if (global->gapped_stat && local->gapped_stat) {
       global->gapped_stat->seqs_ungapped_passed += 
          local->gapped_stat->seqs_ungapped_passed;
-      global->gapped_stat->extra_extensions += 
-         local->gapped_stat->extra_extensions;
       global->gapped_stat->extensions += 
          local->gapped_stat->extensions;
       global->gapped_stat->good_extensions += 

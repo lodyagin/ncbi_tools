@@ -3,6 +3,9 @@
 *   -- all common routines for main programs in this directory
 *
 * $Log: utilpars.c,v $
+* Revision 6.3  2006/01/31 22:31:49  kans
+* added O for pyrrolysine and J for leu or ile ambiguity
+*
 * Revision 6.2  2001/12/06 17:00:41  kans
 * TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
 *
@@ -113,21 +116,23 @@ ParFlat_AA1_to_AA3
         "Gly", 'G',
         "His", 'H',
         "Ile", 'I',
-        "Lys", 'K',  /* notice no 'J', breaks naive meaning of index -Karl */
+        "Xle", 'J',  /* was - notice no 'J', breaks naive meaning of index -Karl */
+        "Lys", 'K',
         "Leu", 'L',
         "Met", 'M',
         "Asn", 'N',
-        "Pro", 'P',  /* no 'O' */
+        "Pyl", 'O',  /* was - no 'O' */
+        "Pro", 'P',
         "Gln", 'Q',
         "Arg", 'R',
         "Ser", 'S',
         "Thr", 'T',
         "Val", 'V',
         "Trp", 'W', 
-        "Xxx", 'X', /* no U */
+        "Sec", 'U', /* was - not in iupacaa */
+        "Xxx", 'X',
         "Tyr", 'Y',
         "Glx", 'Z',
-        "Sec", 'U', /* not in iupacaa */
         "TERM", '*', /* not in iupacaa */ /*changed by Tatiana 06.07.95?`*/
         "OTHER", 'X'};
 

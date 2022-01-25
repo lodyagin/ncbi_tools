@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.240 $
+* $Revision: 6.244 $
 *
 * File Description: 
 *
@@ -1852,6 +1852,10 @@ static CharPtr molinfo_tech_list [] = {
   "fli cDNA", "htgs 0", "htc", "wgs", "barcode", "composite-wgs-htgs", NULL
 };
 
+static CharPtr molinfo_completeness_list [] = {
+  "unknown", "complete", "partial", "no-left", "no-right", "no-ends", "has-left", "has-right", NULL
+};
+
 NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip)
 {
   Int4 i;
@@ -1864,6 +1868,22 @@ NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip)
   for (i = 0; molinfo_tech_list [i] != NULL; i++) {
     if (StringsAreEquivalent (str, molinfo_tech_list [i])) {
       mip->tech = (Uint1) i;
+    }
+  }
+}
+
+NLM_EXTERN void ReadCompletenessFromString (CharPtr str, MolInfoPtr mip)
+{
+  Int4 i;
+  
+  if (mip == NULL || str == NULL)
+  {
+    return;
+  }
+  
+  for (i = 0; molinfo_completeness_list [i] != NULL; i++) {
+    if (StringsAreEquivalent (str, molinfo_completeness_list [i])) {
+      mip->completeness = (Uint1) i;
     }
   }
 }
@@ -1903,11 +1923,7 @@ NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
   ReadTechFromString (str, mip);
 
   str = SqnTagFind (stp, "completeness");
-  if (str != NULL) {
-    if (StringICmp (str, "complete") == 0) {
-      mip->completeness = 1;
-    }
-  }
+  ReadCompletenessFromString (str, mip);
 
   return mip;
 }
@@ -4002,6 +4018,8 @@ static CharPtr aaList [] = {
   "Z", "Glx", "Glu or Gln",
   "U", "Sec", "Selenocysteine",
   "*", "Ter", "Termination",
+  "O", "Pyl", "Pyrrolysine",
+  "J", "Xle", "Leu or Ile",
   NULL, NULL, NULL
 };
 
@@ -4966,6 +4984,9 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       isLocusTag = TRUE;
     }
   }
+  if (qnum == GBQUAL_evidence) {
+    qnum = -1; /* no longer legal */
+  }
   if (qnum <= -1) {
     bail = TRUE;
     if (sfp->data.choice == SEQFEAT_IMP) {
@@ -5151,6 +5172,7 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
   } else if (qnum == GBQUAL_replace && StringCmp (val, "-") == 0) {
     val = "";
   } else if (qnum == GBQUAL_evidence) {
+    /*
     if (StringICmp (val, "experimental") == 0) {
       sfp->exp_ev = 1;
     } else if (StringICmp (val, "not_experimental") == 0 ||
@@ -5159,6 +5181,7 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
                StringICmp (val, "non-experimental") == 0) {
       sfp->exp_ev = 2;
     }
+    */
     return;
   } else if (qnum == GBQUAL_exception) {
     sfp->excpt = TRUE;
@@ -8518,6 +8541,165 @@ NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Boolean gapIsZero, Po
 
   ValNodeFreeData (head);
 }
+
+
+NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_left)
+{
+  FloatHiPtr   new_flvalues = NULL, old_flvalues;
+  Int4Ptr      new_intvalues = NULL, old_intvalues;
+  ByteStorePtr new_bytevalues = NULL, old_bytevalues;
+  Int4         new_len;
+  Int4         start_pos;
+  FloatHi      fhmax = 0.0, fhmin = 0.0;
+  Int4         intmax = 0, intmin = 0;
+  Int2         bs_max = 0, bs_min = 0;
+  Int4         new_pos, old_pos;
+  Int2         val;
+  
+  if (sgp == NULL || num_to_trim < 1)
+  {
+    return;
+  }
+  
+  new_len = sgp->numval - num_to_trim;
+  if (from_left)
+  {
+    start_pos = num_to_trim;
+  }
+  else
+  {
+    start_pos = 0;
+  }
+  
+  if (sgp->flags[2] == 1)
+  {
+    new_flvalues = (FloatHiPtr) MemNew (new_len * sizeof (FloatHi));
+    old_flvalues = (FloatHiPtr) sgp->values;
+    new_pos = 0;
+    old_pos = start_pos;
+    while (old_pos < sgp->numval)
+    {
+      new_flvalues [new_pos] = old_flvalues[start_pos];
+      if (old_pos == start_pos)
+      {
+        fhmax = new_flvalues[new_pos];
+        fhmin = new_flvalues[new_pos];
+      }
+      else
+      {
+        if (fhmax < new_flvalues[new_pos])
+        {
+          fhmax = new_flvalues[new_pos];
+        }
+        
+        if (fhmin > new_flvalues[new_pos])
+        {
+          fhmin = new_flvalues[new_pos];
+        }
+      }
+      new_pos++;
+      old_pos++;
+    }
+    old_flvalues = MemFree (old_flvalues);
+    sgp->values = new_flvalues;
+    sgp->numval = new_len;
+    sgp->max.realvalue = fhmax;
+    sgp->min.realvalue = fhmin;
+  }
+  else if (sgp->flags[2] == 2)
+  {
+    new_intvalues = (Int4Ptr) MemNew (new_len * sizeof (FloatHi));
+    old_intvalues = (Int4Ptr) sgp->values;
+    new_pos = 0;
+    old_pos = start_pos;
+    while (old_pos < sgp->numval)
+    {
+      new_intvalues [new_pos] = old_intvalues[start_pos];
+      if (old_pos == start_pos)
+      {
+        intmax = new_intvalues[new_pos];
+        intmin = new_intvalues[new_pos];
+      }
+      else
+      {
+        if (intmax < new_intvalues[new_pos])
+        {
+          intmax = new_intvalues[new_pos];
+        }
+        
+        if (intmin > new_intvalues[new_pos])
+        {
+          intmin = new_intvalues[new_pos];
+        }
+      }
+      new_pos++;
+      old_pos++;
+    }
+    old_intvalues = MemFree (old_intvalues);
+    sgp->values = new_intvalues;
+    sgp->numval = new_len;
+    sgp->max.intvalue = intmax;
+    sgp->min.intvalue = intmin;
+  }
+  else if (sgp->flags[2] == 3)
+  {
+    new_bytevalues = BSNew(new_len + 1);
+    old_bytevalues = (ByteStorePtr) sgp->values;
+    new_pos = 0;
+    old_pos = start_pos;
+    while (old_pos < sgp->numval)
+    {
+      BSSeek (old_bytevalues, old_pos, SEEK_SET);
+      BSSeek (new_bytevalues, new_pos, SEEK_SET);
+      val = (Int2) BSGetByte (old_bytevalues);
+      BSPutByte (new_bytevalues, val);
+
+      if (old_pos == start_pos)
+      {
+        bs_max = val;
+        bs_min = val;
+      }
+      else
+      {
+        if (bs_max < val)
+        {
+          bs_max = val;
+        }
+        
+        if (bs_min > val)
+        {
+          bs_min = val;
+        }
+      }
+      new_pos++;
+      old_pos++;
+    }
+    BSPutByte (new_bytevalues, EOF);
+    old_bytevalues = BSFree (old_bytevalues);
+    sgp->values = new_bytevalues;
+    sgp->numval = new_len;
+    sgp->max.intvalue = bs_max;
+    sgp->min.intvalue = bs_min;
+  }
+}
+
+
+NLM_EXTERN void TrimQualityScores (BioseqPtr bsp, Int4 num_to_trim, Boolean from_left)
+{
+  ValNodePtr    qual_scores, vnp;
+  GphItemPtr    gip;
+
+  if (bsp == NULL) return;
+  qual_scores = GetSeqGraphsOnBioseq (bsp->idx.entityID, bsp);
+  for (vnp = qual_scores; vnp != NULL; vnp = vnp->next)
+  {
+    gip = (GphItemPtr) vnp->data.ptrvalue;
+    if (gip == NULL) continue;
+    TrimSeqGraph (gip->sgp, num_to_trim, from_left);
+  }
+  
+}
+
 
 NLM_EXTERN BytePtr GetScoresbySeqId (SeqIdPtr sip, Int4Ptr bsplength)
 

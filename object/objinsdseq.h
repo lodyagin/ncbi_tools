@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.14 at Jun 1, 2004 11:01 AM
+*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
 *
 **************************************************/
 
@@ -49,6 +49,7 @@ typedef struct struct_INSDSeq {
    CharPtr   accession_version;
    ValNodePtr   other_seqids;
    ValNodePtr   secondary_accessions;
+   CharPtr   project;
    ValNodePtr   keywords;
    CharPtr   segment;
    CharPtr   source;
@@ -81,14 +82,13 @@ typedef struct struct_INSDReference {
    struct struct_INSDReference PNTR next;
    Uint4 OBbits__;
    CharPtr   reference;
+   CharPtr   position;
    ValNodePtr   authors;
    CharPtr   consortium;
    CharPtr   title;
    CharPtr   journal;
-#define OB__INSDReference_medline 0
-
-   Int4   medline;
-#define OB__INSDReference_pubmed 1
+   struct struct_INSDXref PNTR   xref;
+#define OB__INSDReference_pubmed 0
 
    Int4   pubmed;
    CharPtr   remark;
@@ -113,6 +113,13 @@ typedef struct struct_INSDFeature {
    CharPtr   key;
    CharPtr   location;
    struct struct_INSDInterval PNTR   intervals;
+   CharPtr   operator__;
+#define OB__INSDFeature_partial5 0
+
+   Uint1   partial5;
+#define OB__INSDFeature_partial3 1
+
+   Uint1   partial3;
    struct struct_INSDQualifier PNTR   quals;
 } INSDFeature, PNTR INSDFeaturePtr;
 
@@ -121,6 +128,26 @@ NLM_EXTERN INSDFeaturePtr LIBCALL INSDFeatureFree PROTO ((INSDFeaturePtr ));
 NLM_EXTERN INSDFeaturePtr LIBCALL INSDFeatureNew PROTO (( void ));
 NLM_EXTERN INSDFeaturePtr LIBCALL INSDFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL INSDFeatureAsnWrite PROTO (( INSDFeaturePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    INSDXref
+*
+**************************************************/
+typedef struct struct_INSDXref {
+   struct struct_INSDXref PNTR next;
+   Uint4 OBbits__;
+   CharPtr   dbname;
+   CharPtr   id;
+} INSDXref, PNTR INSDXrefPtr;
+
+
+NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefFree PROTO ((INSDXrefPtr ));
+NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefNew PROTO (( void ));
+NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDXrefAsnWrite PROTO (( INSDXrefPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -141,6 +168,12 @@ typedef struct struct_INSDInterval {
 #define OB__INSDInterval_point 2
 
    Int4   point;
+#define OB__INSDInterval_iscomp 3
+
+   Uint1   iscomp;
+#define OB__INSDInterval_interbp 4
+
+   Uint1   interbp;
    CharPtr   accession;
 } INSDInterval, PNTR INSDIntervalPtr;
 

@@ -1,4 +1,4 @@
-/* $Id: composition_constants.h,v 1.1 2005/12/01 13:52:20 gertz Exp $
+/* $Id: composition_constants.h,v 1.5 2006/01/30 14:47:57 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -24,9 +24,9 @@
  * ===========================================================================*/
 /**
  * @file composition_constants.h
- * @author E. Michael Gertz, Alejandro Schaffer, Yi-Kuo Yu
- *
  * Constants used in compositional score matrix adjustment
+ *
+ * @author E. Michael Gertz, Alejandro Schaffer, Yi-Kuo Yu
  */
 
 
@@ -35,26 +35,31 @@
 
 #include <algo/blast/core/ncbi_std.h>
 
-/** Number of standard amino acids */
-#define COMPO_NUM_TRUE_AA 20
-
-/** Number of amino acids, including nonstandard ones */
-#define COMPO_PROTEIN_ALPHABET 26
-
 /** Minimum score in a matrix */
 #define COMPO_SCORE_MIN INT2_MIN
 
-/* An collection of constants that specify all permissible
+/** An collection of constants that specify all permissible
  * modes of composition adjustment */
-enum ECompoAdjustModes {
-    eNoCompositionAdjustment       = (-1),
-    eCompoKeepOldMatrix            = 0,
+typedef enum ECompoAdjustModes {
+    eNoCompositionBasedStats       = 0,
+    eCompositionBasedStats         = 1,
+    eCompositionMatrixAdjust       = 2,
+    eCompoForceFullMatrixAdjust    = 3,
+    eNumCompoAdjustModes
+} ECompoAdjustModes;
+
+
+/** An collection of constants that specify all rules that may
+ *  be used to generate a compositionally adjusted matrix.  */
+typedef enum EMatrixAdjustRule {
+    eDontAdjustMatrix              = (-1),
+    eCompoScaleOldMatrix           = 0,
     eUnconstrainedRelEntropy       = 1,
     eRelEntropyOldMatrixNewContext = 2,
     eRelEntropyOldMatrixOldContext = 3,
-    eUserSpecifiedRelEntropy       = 4,
-    eNumCompoAdjustModes
-};
-typedef enum ECompoAdjustModes ECompoAdjustModes;
+    eUserSpecifiedRelEntropy       = 4
+} EMatrixAdjustRule;
+
+
 
 #endif

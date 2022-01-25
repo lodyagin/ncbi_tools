@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.179 2005/12/01 14:47:48 madden Exp $
+/* $Id: blast_traceback.c,v 1.183 2006/02/15 18:40:35 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.179 2005/12/01 14:47:48 madden Exp $";
+    "$Id: blast_traceback.c,v 1.183 2006/02/15 18:40:35 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -70,49 +70,84 @@ static char const rcsid[] =
  */
 #define HSP_MAX_WINDOW 11
 
-/** Function to check that the highest scoring region in an HSP still gives a 
- * positive score. This value was originally calcualted by 
- * BlastGetStartForGappedAlignment but it may have changed due to the 
- * introduction of ambiguity characters. Such a change can lead to 'strange' 
- * results from ALIGN. 
+/**
+ * Check whether the starting point for gapped alignment lies in
+ * region that has positive score.  This routine is called after a
+ * preliminary gapped alignment has been computed, but before the
+ * traceback is computed.  The score of the region containing the
+ * starting point may have changed due to the introduction of
+ * ambiguity characters, further filtering of the sequences or the
+ * application of composition based statistics.
+ *
+ * Usually, we check an ungapped alignment of length 11 about the
+ * starting point: 5 characters to the left and 5 to the right.
+ * However, the actual region checked is occassionally shorter because
+ * we don't check characters before the start, or after the end, of
+ * the preliminarily aligned regions in the query or subject.
+ *
  * @param hsp An HSP structure [in]
  * @param query Query sequence buffer [in]
  * @param subject Subject sequence buffer [in]
  * @param sbp Scoring block containing matrix [in]
- * @return TRUE if region aroung starting offsets gives a positive score
+ * @return TRUE if region around starting offsets gives a positive score
 */
 Boolean
-BLAST_CheckStartForGappedAlignment(const BlastHSP* hsp, const Uint1* query, 
-                                   const Uint1* subject, const BlastScoreBlk* sbp)
+BLAST_CheckStartForGappedAlignment(const BlastHSP* hsp, const Uint1* query,
+                                   const Uint1* subject,
+                                   const BlastScoreBlk* sbp)
 {
-    Int4 index, score, start, end, width;
-    Uint1* query_var,* subject_var;
+    Int4 left, right;       /* Number of aligned characters to the
+                               left and right of the starting point */
+    Int4 score;             /* Score of the word alignment */
+    const Uint1*   subject_var;   /* Current character in the subject sequence */
+    const Uint1*   subject_right; /* Last character to be considered in the subject
+                               sequence */
     Boolean positionBased = (sbp->psi_matrix != NULL);
-    
-    width = MIN((hsp->query.gapped_start-hsp->query.offset), HSP_MAX_WINDOW/2);
-    start = hsp->query.gapped_start - width;
-    end = MIN(hsp->query.end, hsp->query.gapped_start + width);
-    /* Assures that the start of subject is above zero. */
-    if ((hsp->subject.gapped_start + start - hsp->query.gapped_start) < 0) {
-        start -= hsp->subject.gapped_start + (start - hsp->query.gapped_start);
+
+    /* Compute the number of characters to the left of the start
+       to include in the word */
+    left = -HSP_MAX_WINDOW/2;
+    if (left < hsp->query.offset - hsp->query.gapped_start) {
+        left = hsp->query.offset - hsp->query.gapped_start;
     }
-    query_var = ((Uint1*) query) + start;
-    subject_var = ((Uint1*) subject) + hsp->subject.gapped_start + 
-        (start - hsp->query.gapped_start);
-    score=0;
-    for (index = start; index < end; index++) {
-        if (!positionBased)
-            score += sbp->matrix->data[*query_var][*subject_var];
-        else
-            score += sbp->psi_matrix->pssm->data[index][*subject_var];
-        query_var++; subject_var++;
+    if (left < hsp->subject.offset - hsp->subject.gapped_start) {
+        left = hsp->subject.offset - hsp->subject.gapped_start;
+    }
+
+    /* Compute the number of characters to right to include in the word,
+       including the starting point itself. */
+    right = HSP_MAX_WINDOW/2 + 1;
+    if (right > hsp->query.end - hsp->query.gapped_start) {
+        right = hsp->query.end - hsp->query.gapped_start;
+    }
+    if (right > hsp->subject.end - hsp->subject.gapped_start) {
+        right = hsp->subject.end - hsp->subject.gapped_start;
+    }
+
+    /* Calculate the score of the word */
+    score = 0;
+    subject_var   = subject + hsp->subject.gapped_start + left;
+    subject_right = subject + hsp->subject.gapped_start + right;
+    if ( !positionBased ) {
+        const Uint1*   query_var;     /* Current character in the query */
+        query_var = query + hsp->query.gapped_start + left;
+        for ( ; subject_var < subject_right; subject_var++, query_var++) {
+           score += sbp->matrix->data[*query_var][*subject_var];
+        }
+    } else {
+        Int4 query_index;       /* Current position in the query */
+        query_index = hsp->query.gapped_start + left;
+        for ( ;  subject_var < subject_right;  subject_var++, query_index++) {
+            score += sbp->psi_matrix->pssm->data[query_index][*subject_var];
+        }
     }
     if (score <= 0) {
         return FALSE;
+    } else {
+        return TRUE;
     }
-    
-    return TRUE;
 }
+
 
 Int2
 Blast_HSPUpdateWithTraceback(BlastGapAlignStruct* gap_align, BlastHSP* hsp)
@@ -170,19 +205,18 @@ s_HSPListRescaleScores(BlastHSPList* hsp_list, double scale_factor)
 static void 
 s_BlastHSPRPSUpdate(BlastHSP *hsp)
 {
-   GapEditScript *esp;
+   GapEditScript *esp = hsp->gap_info;
+   Int4 index;
 
    if (hsp->gap_info == NULL)
       return;
 
-   esp = hsp->gap_info;
-   while (esp != NULL) {
-      if (esp->op_type == eGapAlignIns)
-          esp->op_type = eGapAlignDel;
-      else if (esp->op_type == eGapAlignDel)
-          esp->op_type = eGapAlignIns;
-
-      esp = esp->next;
+   for (index=0; index<esp->size; index++)
+   {
+      if (esp->op_type[index] == eGapAlignIns)
+          esp->op_type[index] = eGapAlignDel;
+      else if (esp->op_type[index] == eGapAlignDel)
+          esp->op_type[index] = eGapAlignIns;
    }
 }
 
@@ -760,16 +794,13 @@ s_RPSGapAlignDataPrepare(BlastQueryInfo* concat_db_info,
    if (!rps_info)
       return -1;
 
-   memset(concat_db_info, 0, sizeof(BlastQueryInfo)); /* fill in QueryInfo */
+   ASSERT(concat_db_info);
 
    profile_header = rps_info->profile_header;
    num_profiles = profile_header->num_profiles;
 
    /* Construct an auxiliary BlastQueryInfo structure for the concatenated
       database. */
-   concat_db_info->num_queries = num_profiles;
-   concat_db_info->first_context = 0;
-   concat_db_info->last_context = num_profiles - 1;
    OffsetArrayToContextOffsets(concat_db_info,
                                rps_info->profile_header->start_offsets,
                                eBlastTypeRpsBlast);
@@ -849,7 +880,8 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
       return -1;
    }
    
-   concat_db_info = (BlastQueryInfo*) malloc(sizeof(BlastQueryInfo));
+   concat_db_info = BlastQueryInfoNew(program_number,
+                                      rps_info->profile_header->num_profiles);
    if ((status = 
         s_RPSGapAlignDataPrepare(concat_db_info, gap_align, rps_info)) != 0)
       return status;
@@ -1001,20 +1033,21 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
    results = Blast_HSPResultsNew(query_info->num_queries);
 
    if (Blast_ProgramIsRpsBlast(program_number)) {
-       status = 
-           s_RPSComputeTraceback(program_number, hsp_stream, seq_src, query, 
-                                 query_info, gap_align, score_params, ext_params,
-                                 hit_params, rps_info, results);
-   } else if ((program_number == eBlastTypeBlastp || 
+       status =
+           s_RPSComputeTraceback(program_number, hsp_stream, seq_src, query,
+                                 query_info, gap_align, score_params,
+                                 ext_params, hit_params, rps_info, results);
+   } else if ((program_number == eBlastTypeBlastp ||
+               program_number == eBlastTypeTblastn ||
                program_number == eBlastTypePhiBlastp ||
-               program_number == eBlastTypePsiBlast) && 
-              (ext_params->options->compositionBasedStats == TRUE || 
+               program_number == eBlastTypePsiBlast) &&
+              (ext_params->options->compositionBasedStats > 0 ||
                ext_params->options->eTbackExt == eSmithWatermanTbck)) {
-      status = 
-          Blast_RedoAlignmentCore(program_number, query, query_info, sbp, 
+      status =
+          Blast_RedoAlignmentCore(program_number, query, query_info, sbp,
                                   hsp_stream, seq_src, gen_code_string,
-                                  score_params, ext_params, hit_params, 
-                                  psi_options, results); 
+                                  score_params, ext_params, hit_params,
+                                  psi_options, results);
    } else {
       BlastSeqSrcGetSeqArg seq_arg;
       EBlastEncoding encoding = Blast_TracebackGetEncoding(program_number);

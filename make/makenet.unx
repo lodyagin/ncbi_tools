@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.210 2005/09/14 00:05:18 ucko Exp $
+#	$Id: makenet.unx,v 6.213 2006/01/19 16:08:49 beloslyu Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -1004,7 +1004,14 @@ asnval :	asnval.c
 # asnval_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
 asnval_psf :	asnval.c
-	$(CC) -INTERNAL_NCBI_ASN2VAL -g -o asnval_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
+	$(CC) -DINTERNAL_NCBI_ASN2VAL -g -o asnval_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
+	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# asnval_dbx_psf, -- debug version -- uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
+# should be used only internally within NCBI.
+asnval_dbx_psf :	asnval.c
+	$(CC) -DINTERNAL_NCBI_ASN2VAL -g -o asnval_dbx_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 

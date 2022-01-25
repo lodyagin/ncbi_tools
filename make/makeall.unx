@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.268 2005/12/01 15:12:11 madden Exp $
+#	$Id: makeall.unx,v 6.269 2005/12/16 16:04:43 lavr Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -179,7 +179,7 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_http_connector.c ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
 	ncbi_host_info.c ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_ftp_connector.c ncbi_dispd.c \
-	ncbi_socket_connector.c urlquery.c binary.c \
+	ncbi_lb.c ncbi_socket_connector.c urlquery.c binary.c \
 	ncbi_sendmail.c asn_connection.c raw_scoremat.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
 
@@ -316,7 +316,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_http_connector.o ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
 	ncbi_host_info.o ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_ftp_connector.o ncbi_dispd.o \
-	ncbi_socket_connector.o urlquery.o binary.o \
+	ncbi_lb.o ncbi_socket_connector.o urlquery.o binary.o \
 	ncbi_sendmail.o asn_connection.o raw_scoremat.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
 
@@ -691,6 +691,7 @@ copy :
 	$(SRCCOPY) ../connect/ncbi_servicep.h .
 	$(SRCCOPY) ../connect/ncbi_dispd.h .
 	$(SRCCOPY) ../connect/ncbi_lbsmd.h .
+	$(SRCCOPY) ../connect/ncbi_lb.h .
 	$(SRCCOPY) ../connect/*.h ../include
 	-mkdir ../include/connect
 	-chmod ug+rw,o+r ../include/connect

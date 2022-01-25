@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.80 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -2779,11 +2779,22 @@ static Boolean FixCdRegionFormProteinFeatures (CdRgnFormPtr cfp, BioseqPtr newpr
   return rval;
 }
 
+static CharPtr infWarning1 =
+"Bad inference qualifier!  You must conform to international nucleotide sequence database\nconventions for inference qualifiers!";
+
+static CharPtr infWarning2 =
+"Still has bad inference!  You must conform to international nucleotide sequence database\nconventions for inference qualifiers!";
+
+static CharPtr infAccept =
+"Do you want to accept changes with bad inference data?  The bad qualifier will be converted to a note!";
 
 static void CdRgnFormAcceptButtonProc (ButtoN b)
 
 {
   MsgAnswer      ans;
+  Int2           attempts = 3;
+  Char           badInfMssg [32];
+  Char           badInfQual [256];
   BioseqPtr      bsp;
   CdRgnFormPtr   cfp;
   GBQualPtr      gbq;
@@ -2811,6 +2822,23 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
         ErrPostEx (SEV_ERROR, 0, 0, "%s", noLocMessage);
         SeqEntrySetScope (oldscope);
         return;
+      }
+      if ((! cfp->acceptBadInf) && (! TestInference ((FeatureFormPtr) cfp, badInfQual, sizeof (badInfQual), badInfMssg))) {
+        (cfp->badInfAttempts)++;
+        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+          attempts = 2;
+        }
+        if (cfp->badInfAttempts < attempts) {
+          if (cfp->badInfAttempts == 2) {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
+          } else {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
+          }
+          return;
+        } else {
+          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return;
+          cfp->acceptBadInf = TRUE;
+        }
       }
       slp = DialogToPointer (cfp->location);
       if (slp == NULL) {
@@ -3276,6 +3304,8 @@ static Boolean SeeIfProtTitleNeedsFixing (BioseqPtr bsp, Uint2 entityID)
 extern void CdRgnFeatFormActnProc (ForM f)
 
 {
+  Char          badInfMssg [32];
+  Char          badInfQual [256];
   BioseqPtr     bsp;
   CdRgnFormPtr  cfp;
   Char          desc [128];
@@ -3304,6 +3334,20 @@ extern void CdRgnFeatFormActnProc (ForM f)
     if (! cfp->locvisited) {
       ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
       return;
+    }
+    if ((! cfp->acceptBadInf) && (! TestInference ((FeatureFormPtr) cfp, badInfQual, sizeof (badInfQual), badInfMssg))) {
+      (cfp->badInfAttempts)++;
+      if (cfp->badInfAttempts < 3) {
+          if (cfp->badInfAttempts == 2) {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
+          } else {
+            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
+          }
+        return;
+      } else {
+        if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return;
+        cfp->acceptBadInf = TRUE;
+      }
     }
     slp = DialogToPointer (cfp->location);
     if (slp == NULL) {
@@ -3899,11 +3943,19 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
   return (Pointer) grp;
 }
 
-static CharPtr geneTabs [] = {
+static CharPtr geneTabs1 [] = {
+  "General", "Synonyms", NULL
+};
+
+static CharPtr geneTabs2 [] = {
+  "General", "Synonyms", "Cross-Refs", NULL
+};
+
+static CharPtr geneTabs3 [] = {
   "General", "Synonyms", "Nomenclature", NULL
 };
 
-static CharPtr geneTabsXref [] = {
+static CharPtr geneTabs4 [] = {
   "General", "Synonyms", "Nomenclature", "Cross-Refs", NULL
 };
 
@@ -3924,21 +3976,50 @@ static void ChangeGeneSubPage (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
+static void LookForRefSeq (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr   isRefSeqP;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+  isRefSeqP = (BoolPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      *isRefSeqP = TRUE;
+      return;
+    }
+  }
+}
+
+static Boolean GeneIsInRefSeq (SeqEntryPtr sep)
+
+{
+  Boolean  is_refseq = FALSE;
+
+  if (sep == NULL) return FALSE;
+  VisitBioseqsInSep (sep, (Pointer) &is_refseq, LookForRefSeq);
+  return is_refseq;
+}
+
 static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneFormPtr gfp)
 
 {
-  GrouP        f;
-  GrouP        g;
-  GenePagePtr  gpp;
-  Char         just;
-  GrouP        k;
-  GrouP        m;
-  GrouP        p;
-  GrouP        q;
-  GrouP        s;
-  Boolean      showXrefs;
-  GrouP        t;
-  DialoG       tbs;
+  GrouP         f;
+  GrouP         g;
+  GenePagePtr   gpp;
+  Char          just;
+  GrouP         k;
+  GrouP         m;
+  GrouP         p;
+  GrouP         q;
+  GrouP         s;
+  Boolean       showNomen = FALSE;
+  Boolean       showXrefs = FALSE;
+  GrouP         t;
+  CharPtr PNTR  tabs = NULL;
+  DialoG        tbs;
+  Int2          x;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -3960,24 +4041,36 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneForm
     m = HiddenGroup (s, -1, 0, NULL);
     SetGroupSpacing (m, 10, 10);
 
-    showXrefs = FALSE;
     if (grp != NULL && grp->db != NULL) {
       showXrefs = TRUE;
     }
-
-    if (showXrefs) {
-      tbs = CreateFolderTabs (m, geneTabsXref, 0, 0, 0,
-                              PROGRAM_FOLDER_TAB,
-                              ChangeGeneSubPage, (Pointer) gpp);
-    } else {
-      tbs = CreateFolderTabs (m, geneTabs, 0, 0, 0,
-                              PROGRAM_FOLDER_TAB,
-                              ChangeGeneSubPage, (Pointer) gpp);
+    if (gfp != NULL && GeneIsInRefSeq (gfp->sep)) {
+      showNomen = TRUE;
     }
+
+    tabs = geneTabs1;
+    if (showXrefs) {
+      if (showNomen) {
+        tabs = geneTabs4;
+      } else {
+        tabs = geneTabs2;
+      }
+    } else if (showNomen) {
+      tabs = geneTabs3;
+    }
+
+    tbs = CreateFolderTabs (m, tabs, 0, 0, 0,
+                            PROGRAM_FOLDER_TAB,
+                            ChangeGeneSubPage, (Pointer) gpp);
     k = HiddenGroup (m, 0, 0, NULL);
 
-    gpp->geneGrp [0] = HiddenGroup (k, -1, 0, NULL);
-    f = HiddenGroup (gpp->geneGrp [0], 2, 0, NULL);
+    for (x = 0; x < 4; x++) {
+      gpp->geneGrp [x] = NULL;
+    }
+    x = 0;
+
+    gpp->geneGrp [x] = HiddenGroup (k, -1, 0, NULL);
+    f = HiddenGroup (gpp->geneGrp [x], 2, 0, NULL);
     StaticPrompt (f, "Locus", 0, dialogTextHeight, programFont, 'l');
     gpp->locus = DialogText (f, "", 15, NULL);
     StaticPrompt (f, "Allele", 0, dialogTextHeight, programFont, 'l');
@@ -3989,22 +4082,27 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneForm
     StaticPrompt (f, "Locus Tag", 0, dialogTextHeight, programFont, 'l');
     gpp->locus_tag = DialogText (f, "", 15, NULL);
 
-    gpp->pseudo = CheckBox (gpp->geneGrp [0], "PseudoGene", NULL);
+    gpp->pseudo = CheckBox (gpp->geneGrp [x], "PseudoGene", NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) f, (HANDLE) gpp->pseudo, NULL);
+    x++;
 
-    gpp->geneGrp [1] = HiddenGroup (k, -1, 0, NULL);
-    g = HiddenGroup (gpp->geneGrp [1], 0, 2, NULL);
+    gpp->geneGrp [x] = HiddenGroup (k, -1, 0, NULL);
+    g = HiddenGroup (gpp->geneGrp [x], 0, 2, NULL);
     StaticPrompt (g, "Synonyms", 0, 0, programFont, 'c');
     gpp->syn = CreateVisibleStringDialog (g, 3, -1, 15);
-    Hide (gpp->geneGrp [1]);
+    Hide (gpp->geneGrp [x]);
+    x++;
 
-    gpp->geneGrp [2] = HiddenGroup (k, -1, 0, NULL);
-    gfp->usrobjext = CreateGeneUserObjectDialog (gpp->geneGrp [2]);
-    Hide (gpp->geneGrp [2]);
+    if (showNomen) {
+      gpp->geneGrp [x] = HiddenGroup (k, -1, 0, NULL);
+      gfp->usrobjext = CreateGeneUserObjectDialog (gpp->geneGrp [x]);
+      Hide (gpp->geneGrp [x]);
+      x++;
+    }
 
-    gpp->geneGrp [3] = HiddenGroup (k, -1, 0, NULL);
     if (showXrefs) {
-      q = HiddenGroup (gpp->geneGrp [3], -1, 0, NULL);
+      gpp->geneGrp [x] = HiddenGroup (k, -1, 0, NULL);
+      q = HiddenGroup (gpp->geneGrp [x], -1, 0, NULL);
       if (GetAppProperty ("ReadOnlyDbTags") == NULL) {
         just = 'c';
       } else {
@@ -4015,8 +4113,8 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneForm
       StaticPrompt (t, "Database", 7 * stdCharWidth, 0, programFont, just);
       StaticPrompt (t, "Object ID", 8 * stdCharWidth, 0, programFont, just);
       gpp->db = CreateDbtagDialog (q, 3, -1, 7, 8);
+      Hide (gpp->geneGrp [x]);
     }
-    Hide (gpp->geneGrp [3]);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs,
                   (HANDLE) gpp->geneGrp [0], (HANDLE) gpp->geneGrp [1],
@@ -5502,6 +5600,7 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
   Char        ch;
   Uint1       code;
   Uint1       codon [4];
+  Boolean     degenerate;
   ValNodePtr  head;
   Int2        i;
   Int2        j;
@@ -5554,26 +5653,32 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
                 str [0] = '\0';
                 StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
                 if (str [0] != '\0') {
+                  degenerate = FALSE;
                   k = 0;
                   q = 0;
                   ch = str [k];
                   while (ch != '\0' && q < 3) {
                     ch = TO_UPPER (ch);
-                    if (StringChr ("ACGTU", ch) != NULL) {
-                      if (ch == 'U') {
-                        ch = 'T';
-                      }
-                      codon [q] = (Uint1) ch;
-                      q++;
+                    if (ch == 'U') {
+                      ch = 'T';
                     }
+                    if (StringChr ("ACGT", ch) == NULL) {
+                      degenerate = TRUE;
+                    }
+                    codon [q] = (Uint1) ch;
+                    q++;
                     k++;
                     ch = str [k];
                   }
                   codon [q] = 0;
                   if (q == 3) {
-                    code = IndexForCodon (codon, Seq_code_iupacna);
-                    if (code != INVALID_RESIDUE) {
-                      trna->codon [j] = code;
+                    if (degenerate) {
+                      ParseDegenerateCodon (trna, codon);
+                    } else {
+                      code = IndexForCodon (codon, Seq_code_iupacna);
+                      if (code != INVALID_RESIDUE) {
+                        trna->codon [j] = code;
+                      }
                     }
                   }
                   j++;

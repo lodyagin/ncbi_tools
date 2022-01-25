@@ -2726,6 +2726,13 @@ MoleculeGraphAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == MOLECULE_GRAPH_sid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> sid = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -2787,6 +2794,10 @@ MoleculeGraphAsnWrite(MoleculeGraphPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> residue_sequence, (AsnWriteFunc) ResidueAsnWrite, aip, MOLECULE_GRAPH_residue_sequence, MOLECULE_GRAPH_residue_sequence_E);
    AsnGenericUserSeqOfAsnWrite(ptr -> inter_residue_bonds, (AsnWriteFunc) InterResidueBondAsnWrite, aip, MOLECULE_GRAPH_inter_residue_bonds, MOLECULE_GRAPH_inter_residue_bonds_E);
+   if (ptr -> sid > 0) {
+   	av.intvalue = ptr -> sid;
+   	retval = AsnWrite(aip, MOLECULE_GRAPH_sid,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

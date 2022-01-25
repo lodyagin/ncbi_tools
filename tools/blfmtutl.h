@@ -31,8 +31,11 @@ Contents: prototypes and defines for Blast formatting utilities
 
 ******************************************************************************/
 
-/* $Revision: 1.4 $ 
+/* $Revision: 1.5 $ 
 * $Log: blfmtutl.h,v $
+* Revision 1.5  2005/12/29 19:55:04  madden
+* Added functions to print tabular output
+*
 * Revision 1.4  2005/05/16 17:42:19  papadopo
 * From Alejandro Schaffer: Print references for composition-based statistics
 * and for compositional score matrix adjustment, if either method was used.
@@ -169,6 +172,21 @@ Boolean LIBCALL add_string_to_bufferEx PROTO((CharPtr buffer, CharPtr *old, Int2
 
 Boolean LIBCALL add_string_to_buffer PROTO((CharPtr buffer, CharPtr *old, Int2Ptr old_length));
 
+
+void PrintTabularOutputHeader PROTO((CharPtr blast_database, BioseqPtr query_bsp,
+                              SeqLocPtr query_slp, CharPtr blast_program,
+                              Int4 iteration, Boolean believe_query,
+                                     FILE *outfp));
+
+void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, Boolean print_query_info));
+
+void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, Boolean print_query_info));
+
+void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
+        SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program,
+        Boolean is_ungapped, Boolean is_ooframe, Boolean believe_query,
+        Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted,
+        Boolean print_query_info);
 
 #ifdef __cplusplus
 }

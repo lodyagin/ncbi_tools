@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.15 2005/10/31 14:14:29 madden Exp $
+/* $Id: blast_options_api.c,v 1.16 2005/12/12 13:41:35 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -216,13 +216,12 @@ Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options,
     /* Reward penalty do not apply to blastn. */
     if (options->program == eBlastTypeBlastn)
         return 0;
-    
-    status = 
-        BlastScoringOptionsSetMatrix(options->score_options, matrix_name);
 
+    status = BLAST_FillScoringOptions(options->score_options, options->program,
+                        FALSE, -1, -1, matrix_name, gap_open, gap_extend);
     if (status != 0)
-         return status;
-
+        return status;
+    
     if (gap_open < 0 || gap_extend < 0)
     {
         Int4 gap_open_priv = 0;
@@ -243,7 +242,8 @@ Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options,
 
 Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options, 
                                        Int4 reward, Int4 penalty,
-                                       Int4 gap_open, Int4 gap_extend)
+                                       Int4 gap_open, Int4 gap_extend,
+                                       Boolean greedy)
 {
     Int2 status = 0;
 
@@ -254,12 +254,31 @@ Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options,
     if (options->program != eBlastTypeBlastn)
         return 0;
     
+    status = BLAST_FillScoringOptions(options->score_options, options->program,
+                        greedy, penalty, reward, NULL, gap_open, gap_extend);
+    if (status != 0)
+        return status;
+    
     if (gap_open < 0 || gap_extend < 0)
     {
-        Int4 gap_open_priv = BLAST_GAP_OPEN_NUCL;
-        Int4 gap_extend_priv = BLAST_GAP_EXTN_NUCL;
+        Int4 gap_open_priv;
+        Int4 gap_extend_priv;
+      
+        if (greedy)
+        {
+             gap_open_priv = BLAST_GAP_OPEN_MEGABLAST;
+             gap_extend_priv = BLAST_GAP_EXTN_MEGABLAST;
+        }
+        else
+        {
+             gap_open_priv = BLAST_GAP_OPEN_NUCL;
+             gap_extend_priv = BLAST_GAP_EXTN_NUCL;
+        }
 
-        BLAST_GetNucleotideGapExistenceExtendParams(reward, penalty, &gap_open_priv, &gap_extend_priv);
+        status = BLAST_GetNucleotideGapExistenceExtendParams(reward, penalty, &gap_open_priv, &gap_extend_priv);
+        if (status)
+           return status;
+
         if (gap_open < 0)
             gap_open = gap_open_priv;
         if (gap_extend < 0)

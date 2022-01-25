@@ -30,8 +30,11 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.165 $ 
+/* $Revision: 6.166 $ 
 * $Log: blastdef.h,v $
+* Revision 6.166  2006/01/24 18:38:15  papadopo
+* from Mike Gertz: Remove #define'd constants that specify the composition adjustment mode.  These have been replaced by an enum in the composition adjustment library
+*
 * Revision 6.165  2005/08/31 20:32:47  coulouri
 * From Mike Gertz:
 *    - Added the kappa_expect_value field to the
@@ -1481,10 +1484,6 @@ typedef struct _blast_seg {
 
 #define BLAST_NUMBER_OF_ORDERING_METHODS 2
 
-/*possible values for comp_adjustment_method*/
-#define NO_COMP_ADJUSTMENT 0
-#define COMP_BASED_STATISTICS 1
-#define COMP_MATRIX_ADJUSTMENT 2
 
 /*
 	The following structure is used in "link_hsps" to decide between

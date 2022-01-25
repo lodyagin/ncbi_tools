@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.91 2005/04/22 17:41:00 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.93 2006/02/22 16:52:36 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -828,6 +828,89 @@ void MovePopPhyMutPubs (SeqEntryPtr sep)
   if (sep == NULL) return;
   SeqEntryExplore(sep, (Pointer) NULL, MovePopPhyMutPubsProc);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
+}
+
+static void AddFeatToBioseq (SeqFeatPtr sfp, BioseqPtr bsp)
+
+{
+  SeqFeatPtr   prev;
+  SeqAnnotPtr  sap;
+
+  if (sfp == NULL || bsp == NULL) return;
+  sap = bsp->annot;
+  while (sap != NULL && (sap->name != NULL || sap->desc != NULL || sap->type != 1)) {
+    sap = sap->next;
+  }
+  if (sap == NULL) {
+    sap = SeqAnnotNew ();
+    if (sap != NULL) {
+      sap->type = 1;
+      sap->next = bsp->annot;
+      bsp->annot = sap;
+    }
+  }
+  sap = bsp->annot;
+  if (sap != NULL) {
+    if (sap->data != NULL) {
+      prev = sap->data;
+      while (prev->next != NULL) {
+        prev = prev->next;
+      }
+      prev->next = sfp;
+    } else {
+      sap->data = (Pointer) sfp;
+    }
+  }
+}
+static void MoveFeatsOnPartsProc (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  SeqAnnotPtr    nextsap;
+  SeqFeatPtr     nextsfp;
+  Pointer PNTR   prevsap;
+  Pointer PNTR   prevsfp;
+  SeqAnnotPtr    sap;
+  SeqFeatPtr     sfp;
+  BioseqPtr      target;
+
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_parts) return;
+
+  sap = bssp->annot;
+  prevsap = (Pointer PNTR) &(bssp->annot);
+
+  while (sap != NULL) {
+    nextsap = sap->next;
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      prevsfp = (Pointer PNTR) &(sap->data);
+      while (sfp != NULL) {
+        nextsfp = sfp->next;
+        target = GetBioseqGivenSeqLoc (sfp->location, sfp->idx.entityID);
+        if (target != NULL) {
+          *(prevsfp) = sfp->next;
+          sfp->next = NULL;
+          AddFeatToBioseq (sfp, target);
+        } else {
+          prevsfp = (Pointer PNTR) &(sfp->next);
+        }
+        sfp = nextsfp;
+      }
+    }
+    if (sap->data == NULL) {
+      *(prevsap) = sap->next;
+      sap->next = NULL;
+      SeqAnnotFree (sap);
+    } else {
+      prevsap = (Pointer PNTR) &(sap->next);
+    }
+    sap = nextsap;
+  }
+}
+
+extern void MoveFeatsFromPartsSet (SeqEntryPtr sep)
+
+{
+  VisitSetsInSep (sep, NULL, MoveFeatsOnPartsProc);
 }
 
 Boolean CmpOrgById(BioSourcePtr b1, BioSourcePtr b2)
@@ -3644,7 +3727,7 @@ static Boolean CitSubsMatch (CitSubPtr csp1, CitSubPtr csp2)
   afp1 = alp1->affil;
   afp2 = alp2->affil;
   if (afp1 != NULL && afp2 != NULL) {
-    if (! AsnIoMemComp (afp1, afp2, (AsnWriteFunc) AffilAsnWrite)) FALSE;
+    if (! AsnIoMemComp (afp1, afp2, (AsnWriteFunc) AffilAsnWrite)) return FALSE;
   }
   return TRUE;
 }
@@ -4788,6 +4871,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   StripTitleFromProtsInNucProts (sep);
   */
   MarkBadProtTitlesInNucProts (sep);
+  MoveFeatsFromPartsSet (sep);
   move_cds_ex (sep, doPseudo);
   SeqEntryExplore (sep, NULL, MolInfoUpdate);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);

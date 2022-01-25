@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.21 2003/05/21 17:46:51 lavr Exp $
+/*  $Id: test_ncbi_socket.c,v 6.22 2006/01/27 17:12:15 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -787,8 +787,8 @@ static void TEST_gethostby(void)
 {
     fprintf(log_fp, "\n===============================\n");
 
-    assert( SOCK_htonl(0) == 0 );
-    assert( SOCK_htonl(0xFFFFFFFF) == 0xFFFFFFFF );
+    assert( SOCK_HostToNetLong(0) == 0 );
+    assert( SOCK_HostToNetLong(0xFFFFFFFF) == 0xFFFFFFFF );
 
     assert( !TEST_gethostbyname("  ") );
     assert( !TEST_gethostbyname("a1....b1") );
@@ -935,6 +935,9 @@ extern int main(int argc, char** argv)
 /*
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_socket.c,v $
+ * Revision 6.22  2006/01/27 17:12:15  lavr
+ * Replace obsolete call names with current ones
+ *
  * Revision 6.21  2003/05/21 17:46:51  lavr
  * Fix MSVC-related problems with SOCK_Shutdown()
  *

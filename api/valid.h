@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.22  2006/02/16 19:34:47  kans
+* use vsp->is_smupd_in_sep to suppress ERR_SEQ_FEAT_FeatureRefersToAccession
+*
+* Revision 6.21  2006/01/26 19:54:26  kans
+* added ERR_SEQ_FEAT_FeatureRefersToAccession to look for inconsistent use of gi and accession (with or without version) for sfp->location or sfp->product references in a single blob
+*
 * Revision 6.20  2005/06/08 15:26:06  kans
 * added is_htg_in_sep and is_refseq_in_sep flags to vsp to avoid repetitive checks
 *
@@ -236,6 +242,9 @@ typedef struct validstruct {
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 	Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
 	Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
+	Boolean is_smupd_in_sep;       /* record in INSD internal processing */
+	Boolean feat_loc_has_gi;       /* at least one feature has a gi location reference */
+	Boolean feat_prod_has_gi;      /* at least one feature has a gi product reference */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

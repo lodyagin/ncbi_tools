@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.h,v 1.7 2005/10/31 14:14:29 madden Exp $
+/* $Id: blast_options_api.h,v 1.10 2005/12/27 14:48:59 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -126,16 +126,18 @@ Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options,
  * @param penalty mismatch score [in]
  * @param gap_open New gap existence cost.  If zero default for reward/penalty is used. [in]
  * @param gap_extend New gap extension cost.  If zero default for reward/penalty is used. [in]
+ * @param greedy TRUE specifies that greedy algorithms will be used. [in]
  */
 Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options, 
                                        Int4 reward, Int4 penalty,
-                                       Int4 gap_open, Int4 gap_extend);
+                                       Int4 gap_open, Int4 gap_extend,
+                                       Boolean greedy);
 
 /** Set threshold value.
  * @param options options Options structure to update. [in] [out]
  * @param threshold New value to set, if zero default value for matrix
  *    will be used. [in]
- * @param zero unless error (e.g., threshold is < zero)
+ * @return zero unless error (e.g., threshold is < zero)
  */
 Int2 SBlastOptionsSetThreshold(SBlastOptions* options, 
                                Int4 threshold);
@@ -144,7 +146,7 @@ Int2 SBlastOptionsSetThreshold(SBlastOptions* options,
  * @param options options Options structure to update. [in] [out]
  * @param window_size New value to set, if zero default value for matrix
  *    will be used. [in]
- * @param zero unless error (e.g., window_size is < zero)
+ * @return zero unless error (e.g., window_size is < zero)
  */
 Int2 SBlastOptionsSetWindowSize(SBlastOptions* options, 
                                Int4 window_size);

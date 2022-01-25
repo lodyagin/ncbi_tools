@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.20 2005/09/19 15:40:03 camacho Exp $
+/* $Id: blast_api.c,v 1.27 2006/02/15 15:12:59 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -102,7 +102,7 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
 
    info->lookup_header = (BlastRPSLookupFileHeader *)lut_mmap->mmp_begin;
    if (info->lookup_header->magic_number != RPS_MAGIC_NUM) {
-       if (Nlm_SwapUint4(info->lookup_header->magic_number) == RPS_MAGIC_NUM) {
+       if (Nlm_SwitchUint4(info->lookup_header->magic_number)==RPS_MAGIC_NUM) {
            ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file was created "
                            "on an incompatible platform");
        }
@@ -118,7 +118,7 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
 
    info->profile_header = (BlastRPSProfileHeader *)pssm_mmap->mmp_begin;
    if (info->profile_header->magic_number != RPS_MAGIC_NUM) {
-       if (Nlm_SwapUint4(info->profile_header->magic_number) == RPS_MAGIC_NUM) {
+       if (Nlm_SwitchUint4(info->profile_header->magic_number)==RPS_MAGIC_NUM) {
            ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file was created "
                            "on an incompatible platform");
        }
@@ -453,6 +453,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     const BlastHitSavingOptions* hit_options = options->hit_options;
     SBlastOptions* rps_options = NULL;
     const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(kProgram);
+    const Uint1 kDeallocateMe = 253;
 
     if (!query_seqloc || !seq_src || !options || !extra_returns) 
         return -1;
@@ -467,9 +468,23 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     if (options->program == eBlastTypeBlastn)
     {
          SeqLoc* dust_mask = NULL; /* Dust mask locations */
+         SeqLoc* dust_mask_var = NULL;
          Blast_FindDustSeqLoc(query_seqloc, options, &dust_mask);
-         /* Combine dust mask with lower case mask */
-         ValNodeLink(&masking_locs, dust_mask);
+         /* Combine dust mask with lower case mask 
+            The dust mask will be deallocated by the end of this function
+            though as it's copied in BLAST_MainSetUp 
+            Not deallocating it will result in a memory leak if masking_locs
+            was NULL at the start of this function */
+         if (dust_mask)
+         {
+            SeqLoc* dust_mask_var = dust_mask;
+            while (dust_mask_var)
+            {
+               dust_mask_var->choice = kDeallocateMe;
+               dust_mask_var = dust_mask_var->next;
+            }
+            ValNodeLink(&masking_locs, dust_mask);
+         }
     }
 
     if (kRpsBlast) {
@@ -495,16 +510,47 @@ Blast_RunSearch(SeqLoc* query_seqloc,
                         query_info, scale_factor, &lookup_segments, &mask_loc,
                         &sbp, &extra_returns->error);
 
+    if (status)
+        return status;
+
     if (filter_out) {
         *filter_out = 
             BlastMaskLocToSeqLoc(kProgram, mask_loc, query_seqloc);
     }
-    
+
     /* Mask locations in BlastMaskLoc form are no longer needed. */
     BlastMaskLocFree(mask_loc);
-    
-    if (status)
-        return status;
+
+    if (masking_locs)
+    {
+          SeqLocPtr slp_var = masking_locs;
+          SeqLocPtr last = NULL;
+          while (slp_var)
+          {
+              if (slp_var->choice == kDeallocateMe)
+              {
+                  if (last == NULL)
+                  {
+                     masking_locs = slp_var->next;
+                     slp_var->next = NULL;
+                     Blast_ValNodeMaskListFree(slp_var);
+                     slp_var = masking_locs;
+                  }
+                  else
+                  {
+                     last->next = slp_var->next;
+                     slp_var->next = NULL;
+                     Blast_ValNodeMaskListFree(slp_var);
+                     slp_var = last->next;
+                  }
+              } 
+              else
+              {
+                  last = slp_var;
+                  slp_var = slp_var->next;
+              }
+          }
+    }
 
     if ((status = LookupTableWrapInit(query, lookup_options, 
                         lookup_segments, sbp, &lookup_wrap, rps_info)))
@@ -518,6 +564,8 @@ Blast_RunSearch(SeqLoc* query_seqloc,
         Blast_SetPHIPatternInfo(kProgram, pattern_blk, query, lookup_segments, 
                                 query_info);
     }
+    /* Only need for the setup of lookup table. */
+    lookup_segments = BlastSeqLocFree(lookup_segments);
 
     if ((status = s_BlastHSPStreamSetUp(query, query_info, seq_src, options, sbp,
                                         tf_data, &hsp_stream, extra_returns)))
@@ -529,9 +577,6 @@ Blast_RunSearch(SeqLoc* query_seqloc,
         return status;
     
     lookup_wrap = LookupTableWrapFree(lookup_wrap);
-    /* The following works because the ListNodes' data point to simple
-       double-integer structures */
-    lookup_segments = BlastSeqLocFree(lookup_segments);
     
     query = BlastSequenceBlkFree(query);
     query_info = BlastQueryInfoFree(query_info);
@@ -548,7 +593,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
                      SeqLoc* masking_locs,
                      const SBlastOptions* options,
                      BlastTabularFormatData* tf_data,
-                     SeqAlign **seqalign_out,
+                     SBlastSeqalignArray* *seqalign_arr,
                      SeqLoc** filter_out,
                      Blast_SummaryReturn* extra_returns)
 {
@@ -599,7 +644,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
                                     query_seqloc, rdfp, NULL, 
                                     options->score_options->gapped_calculation,
                                     options->score_options->is_ooframe, 
-                                    seqalign_out);
+                                    seqalign_arr);
     }
 
     readdb_destruct(rdfp);
@@ -617,6 +662,8 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
  *                mixed together. On return points to NULL. [in]
  * @param pattern_info Query pattern occurrences information [in]
  * @param program Program type (phiblastp or phiblastn) [in]
+ * @param query_seqloc List of query locations [in]
+ * @param rdfp blast db object [in]
  * @param phivnps List of ValNodes containing Seq-aligns. [out]
  * @return Status, 0 on success, -1 on failure.
  */
@@ -637,6 +684,7 @@ s_PHIResultsToSeqAlign(const BlastHSPResults* results,
 
         for (pattern_index = 0; pattern_index < pattern_info->num_patterns;
              ++pattern_index) {
+            SBlastSeqalignArray* seqalign_arr = NULL;
             SeqAlign* seqalign = NULL;
             BlastHSPResults* one_phi_results = phi_results[pattern_index];
 
@@ -648,9 +696,14 @@ s_PHIResultsToSeqAlign(const BlastHSPResults* results,
                 status =
                     BLAST_ResultsToSeqAlign(program, one_phi_results, 
                                             query_seqloc, rdfp, NULL, TRUE, 
-                                            FALSE, &seqalign);
+                                            FALSE, &seqalign_arr);
+                if (seqalign_arr)
+                {
+                    seqalign = seqalign_arr->array[0];
+                    seqalign_arr->array[0] = NULL;
+                    SBlastSeqalignArrayFree(seqalign_arr);
+                }
                 ValNodeAddPointer(phivnps, pattern_index, seqalign);
-
                 one_phi_results = Blast_HSPResultsFree(one_phi_results);
             }
         }
@@ -726,7 +779,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
                             SeqLoc* masking_locs,
                             const SBlastOptions* options,
                             BlastTabularFormatData* tf_data,
-                            SeqAlign **seqalign_out,
+                            SBlastSeqalignArray* *seqalign_arr,
                             SeqLoc** filter_out,
                             Blast_SummaryReturn* extra_returns)
 {
@@ -734,8 +787,10 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
     Int2 status = 0;
     BlastHSPResults* results = NULL;
 
+
     if (!options || !query_seqloc || !subject_seqloc || !extra_returns)
         return -1;
+
 
     seq_src = MultiSeqBlastSeqSrcInit(subject_seqloc, options->program);
 
@@ -767,7 +822,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
                                     NULL, subject_seqloc, 
                                     options->score_options->gapped_calculation,
                                     options->score_options->is_ooframe, 
-                                    seqalign_out);
+                                    seqalign_arr);
     }
 
     results = Blast_HSPResultsFree(results);

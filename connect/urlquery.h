@@ -1,71 +1,77 @@
 /*   urlquery.h
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*            National Center for Biotechnology Information (NCBI)
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government do not place any restriction on its use or reproduction.
-*  We would, however, appreciate having the NCBI and the author cited in
-*  any work or product based on this material
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-* ===========================================================================
-*
-* File Name:  urlquery.h
-*
-* Author:  Jonathan Kans
-*
-* Version Creation Date:   4/16/98
-*
-* $Revision: 6.12 $
-*
-* File Description: 
-*
-* Modifications:  
-* --------------------------------------------------------------------------
-* $Log: urlquery.h,v $
-* Revision 6.12  2003/09/03 21:15:29  lavr
-* Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
-* (formely it was to modify the dispatcher and was not really used anywhere)
-*
-* Revision 6.11  2002/11/21 15:24:31  johnson
-* changed 'queue' vars to 'q' to avoid stl conflict
-*
-* Revision 6.10  2001/06/07 20:07:41  kans
-* added QUERY_OpenServiceQuery
-*
-* Revision 6.9  2001/02/21 22:02:04  lavr
-* Changes for use new CONN interface
-*
-* Revision 6.8  2000/08/18 19:08:58  kans
-* added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
-*
-* Revision 6.7  2000/06/30 12:46:11  kans
-* added QUERY_CloseQueue
-*
-* Revision 6.6  2000/06/29 18:27:10  kans
-* QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding encoding parameters
-*
-* Revision 6.5  2000/06/13 12:58:15  kans
-* added closeConn parameter to QUERY_AddToQueue
-*
-* Revision 6.4  1999/07/28 21:05:23  vakatov
-* Moved all #include's from inside the NLM_EXTERN & `extern "C"' block
-*
-* ==========================================================================
-*/
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *            National Center for Biotechnology Information (NCBI)
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government do not place any restriction on its use or reproduction.
+ *  We would, however, appreciate having the NCBI and the author cited in
+ *  any work or product based on this material
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ * ===========================================================================
+ *
+ * File Name:  urlquery.h
+ *
+ * Author:  Jonathan Kans
+ *
+ * Version Creation Date:   4/16/98
+ *
+ * $Revision: 6.14 $
+ *
+ * File Description: 
+ *
+ * Modifications:  
+ * --------------------------------------------------------------------------
+ * $Log: urlquery.h,v $
+ * Revision 6.14  2006/01/24 20:22:26  lavr
+ * The boiler plate and revision log reindented
+ *
+ * Revision 6.13  2006/01/19 21:11:42  lavr
+ * QUERY_SendQuery() to return EIO_Status
+ *
+ * Revision 6.12  2003/09/03 21:15:29  lavr
+ * Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
+ * (formely it was to modify the dispatcher and was not really used anywhere)
+ *
+ * Revision 6.11  2002/11/21 15:24:31  johnson
+ * changed 'queue' vars to 'q' to avoid stl conflict
+ *
+ * Revision 6.10  2001/06/07 20:07:41  kans
+ * added QUERY_OpenServiceQuery
+ *
+ * Revision 6.9  2001/02/21 22:02:04  lavr
+ * Changes for use new CONN interface
+ *
+ * Revision 6.8  2000/08/18 19:08:58  kans
+ * added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
+ *
+ * Revision 6.7  2000/06/30 12:46:11  kans
+ * added QUERY_CloseQueue
+ *
+ * Revision 6.6  2000/06/29 18:27:10  kans
+ * QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding encoding parameters
+ *
+ * Revision 6.5  2000/06/13 12:58:15  kans
+ * added closeConn parameter to QUERY_AddToQueue
+ *
+ * Revision 6.4  1999/07/28 21:05:23  vakatov
+ * Moved all #include's from inside the NLM_EXTERN & `extern "C"' block
+ *
+ * ==========================================================================
+ */
 
 #ifndef _URLQUERY_
 #define _URLQUERY_
@@ -133,7 +139,7 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   either with CONN_Read, QUERY_CopyFileToQuery, or with QUERY_AsnIoConnOpen
   followed by a specific AsnWrite function.
 */
-NLM_EXTERN void QUERY_SendQuery (
+NLM_EXTERN EIO_Status QUERY_SendQuery (
   CONN conn
 );
 

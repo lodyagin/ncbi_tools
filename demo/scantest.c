@@ -25,14 +25,15 @@
 *
 * File Name:  scantest.c
 *
-* Author:  Kans, Schuler, Ostell
+* Author:  Kans
 *
 * Version Creation Date:   1/20/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.3 $
 *
 * File Description: 
-*       scans through sequence records on the Entrez discs
+*       template for custom scans of ASN.1 release files
+*       (was - scans through sequence records on the Entrez discs)
 *
 * Modifications:  
 * --------------------------------------------------------------------------
@@ -43,395 +44,252 @@
 * ==========================================================================
 */
 
-#ifndef _NEW_CdEntrez_
-#define _NEW_CdEntrez_
-#endif
-
 #include <ncbi.h>
-#include <casn.h>
-#include <accentr.h>
-#include <cdromlib.h>
-#include <seqport.h>
 #include <objall.h>
+#include <objsset.h>
+#include <objsub.h>
+#include <objfdef.h>
+#include <sequtil.h>
+#include <sqnutils.h>
+#include <explore.h>
 
-#define CHARSPERLINE  50
+typedef struct appflags {
+  Boolean  binary;
+  Boolean  compressed;
+  Boolean  verbose;
+  FILE     *fp;
+  Char     id [64];
+} AppFlagData, PNTR AppFlagPtr;
 
-typedef struct expstruct {
-  FILE      *fp;
-  AsnIoPtr  aip;
-  Boolean   is_na;
-  Uint1     feat;
-} ExpStruct, PNTR ExpStructPtr;
-
-static Char root [PATH_MAX];
-static EntrezInfoPtr eip;
-static EntrezDivInfo *div_info;
-
-static Boolean  scanDNA = FALSE;
-static Boolean  scanPRT = FALSE;
-static Boolean  scanCDS = FALSE;
-
-static void PrintSequence (BioseqPtr bsp, SeqFeatPtr sfp,
-                           FILE *fp, Boolean is_na)
+static void DoOneUser (UserObjectPtr uop, Pointer userdata)
 
 {
-  Char        buffer [255];
-  Uint1       code;
-  Int2        count;
-  Uint1       repr;
-  Uint1       residue;
-  SeqPortPtr  spp;
-  CharPtr     title;
-  CharPtr     tmp;
+  AppFlagPtr   afp;
+  Char         buf [128];
+  ObjectIdPtr  oip;
 
-  if (bsp != NULL && fp != NULL) {
-    if ((Boolean) ISA_na (bsp->mol) == is_na) {
-      repr = Bioseq_repr (bsp);
-      if (repr == Seq_repr_raw || repr == Seq_repr_const) {
-        title = BioseqGetTitle (bsp);
-        tmp = StringMove (buffer, ">");
-        tmp = SeqIdPrint (bsp->id, tmp, PRINTID_FASTA_LONG);
-        tmp = StringMove (tmp, " ");
-        StringNCpy (tmp, title, 200);
-        fprintf (fp, "%s\n", buffer);
-        if (is_na) {
-          code = Seq_code_iupacna;
-        } else {
-          code = Seq_code_iupacaa;
-        }
-        if (sfp != NULL) {
-          spp = SeqPortNewByLoc (sfp->location, code);
-        } else {
-          spp = SeqPortNew (bsp, 0, -1, 0, code);
-        }
-        if (spp != NULL) {
-          count = 0;
-          while ((residue = SeqPortGetResidue (spp)) != SEQPORT_EOF) {
-            if (! IS_residue (residue)) {
-              buffer [count] = '\0';
-              fprintf (fp, "%s\n", buffer);
-              count = 0;
-              switch (residue) {
-                case SEQPORT_VIRT :
-                  fprintf (fp, "[Gap]\n");
-                  break;
-                case SEQPORT_EOS :
-                  fprintf (fp, "[EOS]\n");
-                  break;
-                default :
-                  fprintf (fp, "[Invalid Residue]\n");
-                  break;
-              }
-            } else {
-              buffer [count] = residue;
-              count++;
-              if (count >= CHARSPERLINE) {
-                buffer [count] = '\0';
-                fprintf (fp, "%s\n", buffer);
-                count = 0;
-              }
-            }
-          }
-          if (count != 0) {
-            buffer [count] = '\0';
-            fprintf (fp, "%s\n", buffer);
-          }
-          SeqPortFree (spp);
-        }
-      }
+  if (uop == NULL) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  buf [0] = '\0';
+  if (StringDoesHaveText (uop->_class)) {
+    StringCat (buf, uop->_class);
+  }
+  StringCat (buf, "                                ");
+  buf [30] = '\0';
+  fprintf (afp->fp, "%s", buf);
+
+  buf [0] = '\0';
+  oip = uop->type;
+  if (oip != NULL) {
+    if (StringDoesHaveText (oip->str)) {
+      StringCat (buf, oip->str);
+    } else if (oip->id > 0) {
+      sprintf (buf, "%ld", (long) oip->id);
     }
+  }
+  StringCat (buf, "                                ");
+  buf [30] = '\0';
+  fprintf (afp->fp, "%s", buf);
+
+  if (afp->verbose) {
+    fprintf (afp->fp, "     %s", afp->id);
+  }
+
+  fprintf (afp->fp, "\n");
+  fflush (afp->fp);
+}
+
+static void DoOneDescriptor (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  AppFlagPtr     afp;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+
+  VisitUserObjectsInUop (uop, (Pointer) afp, DoOneUser);
+}
+
+static void DoOneFeature (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  AppFlagPtr     afp;
+  UserObjectPtr  uop;
+
+  if (sfp == NULL) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  uop = sfp->ext;
+  if (uop != NULL) {
+    VisitUserObjectsInUop (uop, (Pointer) afp, DoOneUser);
+  }
+
+  for (uop = sfp->exts; uop != NULL; uop = uop->next) {
+    VisitUserObjectsInUop (uop, (Pointer) afp, DoOneUser);
   }
 }
 
-static void LIBCALLBACK GetSeqFeat (AsnExpOptStructPtr aeosp)
+static void DoRecord (SeqEntryPtr sep, Pointer userdata)
 
 {
-  BioseqPtr     bsp;
-  ExpStructPtr  esp;
-  SeqFeatPtr    sfp;
+  AppFlagPtr   afp;
+  BioseqPtr    fbsp;
+  SeqEntryPtr  fsep;
 
-  if (aeosp->dvp->intvalue == START_STRUCT) {
-    esp = (ExpStructPtr) aeosp->data;
-    sfp = (SeqFeatPtr) aeosp->the_struct;
-    if (esp != NULL && esp->fp != NULL && sfp != NULL &&
-        sfp->data.choice == esp->feat) {
-      bsp = BioseqFind (SeqLocId (sfp->location));
-      if (bsp != NULL) {
-        PrintSequence (bsp, sfp, esp->fp, esp->is_na);
-      }
-    }
-  }
+  if (sep == NULL) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  fsep = FindNthBioseq (sep, 1);
+  if (fsep == NULL) return;
+  fbsp = (BioseqPtr) fsep->data.ptrvalue;
+  if (fbsp == NULL) return;
+
+  SeqIdWrite (fbsp->id, afp->id, PRINTID_FASTA_LONG, 64);
+
+  VisitDescriptorsInSep (sep, (Pointer) afp, DoOneDescriptor);
+  VisitFeaturesInSep (sep, (Pointer) afp, DoOneFeature);
 }
 
-static void SeqEntryToFeat (SeqEntryPtr sep, FILE *fp,
-                            Boolean is_na, Uint1 feat)
+static void ProcessOneRecord (
+  CharPtr filename,
+  Pointer userdata
+)
 
 {
-  AsnExpOptPtr  aeop;
-  AsnIoPtr      aip;
-  ExpStructPtr  esp;
+  AppFlagPtr  afp;
 
-  if (sep != NULL && fp != NULL) {
-    esp = MemNew (sizeof (ExpStruct));
-    if (esp != NULL) {
-      aip = AsnIoNullOpen ();
-      if (aip != NULL) {
-        esp->fp = fp;
-        esp->aip = AsnIoNew (ASNIO_TEXT_OUT, fp, NULL, NULL, NULL);
-        esp->is_na = is_na;
-        esp->feat = feat;
-        aeop = AsnExpOptNew (aip, "Seq-feat", (Pointer) esp, GetSeqFeat);
-        if (aeop != NULL) {
-          SeqEntryAsnWrite (sep, aip, NULL);
-          fflush (fp);
-          AsnExpOptFree (aip, aeop);
-        }
-        AsnIoClose (aip);
-      }
-      MemFree (esp);
-    }
+  if (StringHasNoText (filename)) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  if (StringStr (filename, "gbest") != NULL ||
+      StringStr (filename, "gbgss") != NULL ||
+      StringStr (filename, "gbhtg") != NULL) {
+    printf ("Skipping %s\n", filename);
+    return;
   }
+
+  printf ("%s\n", filename);
+  fflush (stdout);
+
+  fprintf (afp->fp, "%s\n", filename);
+  fflush (afp->fp);
+
+  ScanBioseqSetRelease (filename, afp->binary, afp->compressed, (Pointer) afp, DoRecord);
+
+  fprintf (afp->fp, "\n");
+  fflush (afp->fp);
 }
 
-static void LIBCALLBACK GetFastaSeq (SeqEntryPtr sep, Pointer data,
-                         Int4 index, Int2 indent)
+#define p_argInputPath    0
+#define i_argInputFile    1
+#define o_argOutputFile   2
+#define f_argFilter       3
+#define x_argSuffix       4
+#define u_argRecurse      5
+#define b_argBinary       6
+#define c_argCompressed   7
+#define v_argVerbose      8
 
-{
-  BioseqPtr     bsp;
-  ExpStructPtr  esp;
-
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    esp = (ExpStructPtr) data;
-    if (bsp != NULL && esp != NULL && esp->fp != NULL) {
-      PrintSequence (bsp, NULL, esp->fp, esp->is_na);
-    }
-  }
-}
-
-static void SeqEntryScan (SeqEntryPtr sep, FILE *fp, Boolean is_na)
-
-{
-  ExpStruct  es;
-
-  if (sep != NULL && fp != NULL) {
-    es.fp = fp;
-    es.aip = NULL;
-    es.is_na = is_na;
-    es.feat = 0;
-    SeqEntryExplore (sep, (Pointer) &es, GetFastaSeq);
-  }
-}
-
-static void ProcessSeqEntry (SeqEntryPtr sep, FILE *fp)
-
-{
-  if (sep != NULL && fp != NULL) {
-    if (scanDNA) {
-      SeqEntryScan (sep, fp, TRUE);
-    } else if (scanPRT) {
-      SeqEntryScan (sep, fp, FALSE);
-    } else if (scanCDS) {
-      SeqEntryToFeat (sep, fp, TRUE, 3);
-    }
-  }
-}
-
-typedef struct filelist {
-  Int2                  cdnum;
-  CharPtr               fdir;
-  CharPtr               fname;
-  struct filelist PNTR  next;
-} FileList, PNTR FileListPtr;
-
-static void ProcessFile (FileListPtr flp, CharPtr root, CharPtr outputfile)
-
-{
-  CASN_Handle  casnh;
-  FILE         *fp;
-  Char         path [PATH_MAX];
-  SeqEntryPtr  sep;
-  CASN_Type    type;
-
-  if (flp != NULL) {
-    fp = FileOpen (outputfile, "a");
-    if (fp != NULL) {
-      StringCpy (path, root);
-      FileBuildPath (path, flp->fdir, NULL);
-      FileBuildPath (path, NULL, flp->fname);
-      if ((casnh = CASN_Open (path)) != NULL) {
-        if (scanPRT) {
-          type = CASN_Type_aa;
-        } else {
-          type = CASN_Type_nt;
-        }
-        if (CASN_DocType (casnh) == type) {
-          while ((sep = CASN_NextSeqEntry (casnh)) != NULL) {
-            ProcessSeqEntry (sep, fp);
-            SeqEntryFree (sep);
-          }
-        }
-        CASN_Close (casnh);
-      }
-      FileClose (fp);
-    } else {
-      Message (MSG_FATAL, "Unable to reopen output file");
-    }
-  }
-}
-
-static void ProcessFileList (FileListPtr flp, CharPtr outputfile)
-
-{
-  Int2         device;
-  FileListPtr  next;
-  Char         root [PATH_MAX];
-
-  if (flp != NULL) {
-    root [0] = '\0';
-    device = flp->cdnum;
-    flp = flp->next;
-    while (flp != NULL) {
-      next = flp->next;
-      if (device != flp->cdnum) {
-        if (! CdMountEntrezVolume (flp->cdnum, root, sizeof (root))) {
-          Message (MSG_FATAL, "CdMountEntrezVolume failed");
-          root [0] = '\0';
-        }
-      }
-      ProcessFile (flp, root, outputfile);
-      device = flp->cdnum;
-      flp = next;
-    }
-  }
-}
-
-static FileListPtr FileListNew (FileListPtr flp, Int2 cdnum,
-                                CharPtr fdir, CharPtr fname)
-
-{
-  FileListPtr  newnode;
-
-  newnode = (FileListPtr) MemNew (sizeof (FileList));
-  if (newnode != NULL) {
-    if (flp != NULL) {
-      while (flp->next != NULL && flp->next->cdnum <= cdnum) {
-        flp = flp->next;
-      }
-      newnode->next = flp->next;
-      flp->next = newnode;
-    }
-    newnode->cdnum = cdnum;
-    if (fdir != NULL && *fdir != '\0') {
-      newnode->fdir = StringSave (fdir);
-    }
-    if (fname != NULL && *fname != '\0') {
-      newnode->fname = StringSave (fname);
-    }
-  }
-  return newnode;
-}
-
-static Boolean LIBCALLBACK EnumerateFiles (int cdnum, const char *fdir,
-                                           const char *fname, long fsize,
-                                           void *opaque_data)
-
-{
-  FileListPtr      flp;
-  FileListPtr PNTR head;
-
-  head = (FileListPtr PNTR) opaque_data;
-  flp = NULL;
-  if (head != NULL) {
-    flp = FileListNew (*head, (Int2) cdnum, (CharPtr) fdir, (CharPtr) fname);
-    if (*head == NULL) {
-      *head = flp;
-    }
-  } else {
-    flp = FileListNew (NULL, (Int2) cdnum, (CharPtr) fdir, (CharPtr) fname);
-  }
-  return TRUE;
-}
-
-#define NUMARGS 4
-
-Args myargs [NUMARGS] = {
-  {"Scan DNA", "F", NULL, NULL, TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Scan Protein", "F", NULL, NULL, TRUE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Scan Coding Regions", "F", NULL, NULL, TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Output File", "stdout", NULL, NULL, FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL}
+Args myargs [] = {
+  {"Path to Files", NULL, NULL, NULL,
+    TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
+  {"Input File Name", NULL, NULL, NULL,
+    TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Output File Name", NULL, NULL, NULL,
+    TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Substring Filter", NULL, NULL, NULL,
+    TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
+  {"File Selection Suffix", ".aso", NULL, NULL,
+    TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
+  {"Recurse", "F", NULL, NULL,
+    TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Bioseq-set is Binary", "F", NULL, NULL,
+    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Bioseq-set is Compressed", "F", NULL, NULL,
+    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Verbose", "F", NULL, NULL,
+    TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 extern Int2 Main (void)
 
 {
-  Char         div [8];
-  FileListPtr  flp;
-  FILE         *fp;
-  Int2         i;
-  Boolean      is_network;
-  FileListPtr  next;
-  Int2         sum;
+  AppFlagData  afd;
+  Boolean      dorecurse;
+  CharPtr      filter, infile, outfile, directory, suffix;
 
-  if (GetArgs ("Scantest", NUMARGS, myargs)) {
-    scanDNA = (Boolean) myargs [0].intvalue;
-    scanPRT = (Boolean) myargs [1].intvalue;
-    scanCDS = (Boolean) myargs [2].intvalue;
-    sum = 0;
-    for (i = 0; i < 3; i++) {
-      sum += myargs [i].intvalue;
-    }
-    if (sum == 1) {
-      if (AllObjLoad () && SeqCodeSetLoad ()) {
-        if (EntrezInit ("scantest", FALSE, &is_network)) {
-          if (is_network) {
-            Message (MSG_FATAL, "Network service does not allow scanning");
-          } else {
-            eip = EntrezGetInfo ();
-            if (eip != NULL && eip->div_info != NULL) {
-              flp = FileListNew (NULL, INT2_MIN, NULL, NULL);
-              if (flp != NULL) {
-                div_info = eip->div_info;
-                for (i = 0; i < eip->div_count; i++) {
-                  StringNCpy (div, div_info [i].tag, sizeof (div) - 1);
-                  if (scanPRT) {
-                    CdEnumFiles (CdDir_rec, TYP_AA, div, EnumerateFiles, &flp);
-                  } else {
-                    CdEnumFiles (CdDir_rec, TYP_NT, div, EnumerateFiles, &flp);
-                  }
-                }
-                fp = FileOpen (myargs[3].strvalue, "w");
-                if (fp != NULL) {
-                  FileClose (fp);
-                  ProcessFileList (flp, myargs[3].strvalue);
-                } else {
-                  Message (MSG_FATAL, "Unable to create output file");
-                }
-                while (flp != NULL) {
-                  next = flp->next;
-                  MemFree (flp->fdir);
-                  MemFree (flp->fname);
-                  MemFree (flp);
-                  flp = next;
-                }
-                flp = NULL;
-              } else {
-                Message (MSG_FATAL, "Unable to allocate file list pointer");
-              }
-            } else {
-              Message (MSG_FATAL, "Unable to obtain Entrez Info");
-            }
-          }
-          EntrezFini ();
-        } else {
-          Message (MSG_FATAL, "Unable to connect to Entrez service");
-        }
-      } else {
-        Message (MSG_FATAL, "Unable to load parse tables");
-      }
-    } else {
-      Message (MSG_FATAL, "You must choose one of the three options");
-    }
+  /* standard setup */
+
+  ErrSetFatalLevel (SEV_MAX);
+  ErrClearOptFlags (EO_SHOW_USERSTR);
+  ErrSetLogfile ("stderr", ELOG_APPEND);
+  UseLocalAsnloadDataAndErrMsg ();
+  ErrPathReset ();
+
+  if (! AllObjLoad ()) {
+    Message (MSG_FATAL, "AllObjLoad failed");
+    return 1;
   }
+  if (! SubmitAsnLoad ()) {
+    Message (MSG_FATAL, "SubmitAsnLoad failed");
+    return 1;
+  }
+  if (! FeatDefSetLoad ()) {
+    Message (MSG_FATAL, "FeatDefSetLoad failed");
+    return 1;
+  }
+  if (! SeqCodeSetLoad ()) {
+    Message (MSG_FATAL, "SeqCodeSetLoad failed");
+    return 1;
+  }
+  if (! GeneticCodeTableLoad ()) {
+    Message (MSG_FATAL, "GeneticCodeTableLoad failed");
+    return 1;
+  }
+
+  /* process command line arguments */
+
+  if (! GetArgs ("scantest", sizeof (myargs) / sizeof (Args), myargs)) {
+    return 0;
+  }
+
+  MemSet ((Pointer) &afd, 0, sizeof (AppFlagData));
+
+  directory = (CharPtr) myargs [p_argInputPath].strvalue;
+  infile = (CharPtr) myargs [i_argInputFile].strvalue;
+  outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
+  filter = (CharPtr) myargs [f_argFilter].strvalue;
+  suffix = (CharPtr) myargs [x_argSuffix].strvalue;
+  dorecurse = (Boolean) myargs [u_argRecurse].intvalue;
+  afd.binary = (Boolean) myargs [b_argBinary].intvalue;
+  afd.compressed = (Boolean) myargs [c_argCompressed].intvalue;
+  afd.verbose = (Boolean) myargs[v_argVerbose].intvalue;
+
+  afd.fp = FileOpen (outfile, "w");
+  if (afd.fp == NULL) {
+    return 0;
+  }
+
+  if (StringDoesHaveText (directory)) {
+
+    DirExplore (directory, NULL, suffix, dorecurse, ProcessOneRecord, (Pointer) &afd);
+
+  } else if (StringDoesHaveText (infile)) {
+
+    ProcessOneRecord (infile, &afd);
+  }
+
+  FileClose (afd.fp);
+
   return 0;
 }

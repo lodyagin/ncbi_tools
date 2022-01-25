@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/17/2005
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: 
 * This file provides the Main function for the standalone Submission Template
@@ -636,7 +636,7 @@ static Boolean LookupTaxonomyFunc (Uint2 entityID)
   return TRUE;
 }
 
-static Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
+static Int2 LclGetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
 
 {
   Int2  rsult;
@@ -694,13 +694,13 @@ static Boolean LoadReaderData ()
  #ifdef USE_TAXON
   useTaxon = TRUE;
 #endif
-  if (GetSequinAppParam ("SETTINGS", "USETAXON", NULL, str, sizeof (str))) {
+  if (LclGetSequinAppParam ("SETTINGS", "USETAXON", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       useTaxon = TRUE;
     }
   }
   
-  if (GetSequinAppParam ("SETTINGS", "INDEXERVERSION", NULL, str, sizeof (str))) {
+  if (LclGetSequinAppParam ("SETTINGS", "INDEXERVERSION", NULL, str, sizeof (str))) {
       SetAppProperty ("InternalNcbiSequin", (void *) 1024);
   }
 #ifdef INTERNAL_NCBI_SEQUIN

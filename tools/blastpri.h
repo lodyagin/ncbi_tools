@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.120 $ 
+/* $Revision: 6.121 $ 
 * $Log: blastpri.h,v $
+* Revision 6.121  2005/12/29 19:56:06  madden
+* Moved functions to print tabular output to blfmtutl
+*
 * Revision 6.120  2005/12/01 15:10:23  madden
 * Gave BLASTCheckHSPInclusion external linkage (i.e. removed the static specifier).
 *
@@ -990,14 +993,6 @@ StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length,
 
 int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
-void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, Boolean print_query_info));
-void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, Boolean print_query_info));
-
-void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
-        SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, 
-        Boolean is_ungapped, Boolean is_ooframe, Boolean believe_query, 
-        Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, 
-        Boolean print_query_info);
 
 void
 BlastProcessGiLists PROTO((BlastSearchBlkPtr search, 

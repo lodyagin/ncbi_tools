@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.c,v 1.12 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_parameters.c,v 1.16 2006/01/12 20:34:32 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_parameters.c,v 1.12 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_parameters.c,v 1.16 2006/01/12 20:34:32 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_parameters.h>
@@ -48,7 +48,11 @@ static char const rcsid[] =
  */
 static Boolean s_BlastKarlinBlkIsValid(const Blast_KarlinBlk* kbp)
 {
-    return (kbp->Lambda > 0 && kbp->K > 0 && kbp->H > 0);
+    if ( !kbp ) {
+        return FALSE;
+    } else {
+        return (kbp->Lambda > 0 && kbp->K > 0 && kbp->H > 0);
+    }
 }
 
 /** Returns the first valid Karlin-Altchul block from the list of blocks.
@@ -69,6 +73,8 @@ s_BlastFindValidKarlinBlk(Blast_KarlinBlk** kbp_in, const BlastQueryInfo* query_
     ASSERT(kbp_in && query_info && kbp_ret);
 
     for (i=query_info->first_context; i<=query_info->last_context; i++) {
+         ASSERT(s_BlastKarlinBlkIsValid(kbp_in[i]) ==
+                query_info->contexts[i].is_valid);
          if (s_BlastKarlinBlkIsValid(kbp_in[i])) {
               *kbp_ret = kbp_in[i];
               status = 0;
@@ -97,6 +103,8 @@ s_BlastFindSmallestLambda(Blast_KarlinBlk** kbp_in,
     ASSERT(kbp_in && query_info);
 
     for (i=query_info->first_context; i<=query_info->last_context; i++) {
+        ASSERT(s_BlastKarlinBlkIsValid(kbp_in[i]) ==
+               query_info->contexts[i].is_valid);
         if (s_BlastKarlinBlkIsValid(kbp_in[i])) {
             if (min_lambda > kbp_in[i]->Lambda)
             {
@@ -141,12 +149,10 @@ s_GetBestExtensionMethod(const LookupTableWrap* lookup_wrap)
                retval = eRight;
          break;
      case MB_LOOKUP_TABLE:
-         if (((BlastMBLookupTable*)lookup_wrap->lut)->ag_scanning_mode == TRUE)
-               retval = eRightAndLeft;
-         else if (((BlastMBLookupTable*)lookup_wrap->lut)->template_length > 0)
+         if (((BlastMBLookupTable*)lookup_wrap->lut)->template_length > 0)
                retval = eUpdateDiag;   /* Used for discontiguous megablast. */
          else
-               retval = eRight;
+               retval = eRightAndLeft;
          break;
    }
    ASSERT(retval != eMaxSeedExtensionMethod);
@@ -202,8 +208,9 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
 {
    Blast_KarlinBlk* kbp_std;
    Int2 status = 0;
-   const int kQueryLenForStacks = 50;  /* Use stacks rather than diag for 
-                                     any query longer than this.  Only for blastn. */
+   const int kQueryLenForStacks = 8000;  /* For blastn, use stacks rather 
+                                            than diags for any query longer 
+                                            than this */
 
    /* If parameters pointer is NULL, there is nothing to fill, 
       so don't do anything */
@@ -237,6 +244,33 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
    status = BlastInitialWordParametersUpdate(program_number,
                hit_params, sbp, query_info,
                subject_length, *parameters);
+
+   if (program_number == eBlastTypeBlastn) {
+      Int4 i;
+      Int4 reward = sbp->reward;
+      Int4 penalty = sbp->penalty;
+      Int4 *table = (*parameters)->nucl_score_table;
+
+      /* nucleotide ungapped extensions are first computed
+         approximately, and then recomputed exactly if the
+         approximate score is high enough. The approximate
+         computation considers nucleotides in batches of 4,
+         so a table is needed that contains the combined scores
+         of all combinations of 4 matches/mismatches */
+
+      for (i = 0; i < 256; i++) {
+         /* break the bit pattern of i into four 2-bit groups.
+            If bits in a group are set, that group represents 
+            a mismatch */
+
+         Int4 score = 0;
+         if (i & 3) score += penalty; else score += reward;
+         if ((i >> 2) & 3) score += penalty; else score += reward;
+         if ((i >> 4) & 3) score += penalty; else score += reward;
+         if (i >> 6) score += penalty; else score += reward;
+         table[i] = score;
+      }
+   }
 
    return status;
 }
@@ -292,6 +326,8 @@ BlastInitialWordParametersUpdate(EBlastProgramType program_number,
          Blast_KarlinBlk* kbp_ungap = sbp->kbp_std[index];
          const BlastInitialWordOptions* kOptions = parameters->options;
 
+         ASSERT(s_BlastKarlinBlkIsValid(kbp_ungap) ==
+                query_info->contexts[index].is_valid);
          if (s_BlastKarlinBlkIsValid(kbp_ungap)) {
             gap_trigger = (Int4) ((kOptions->gap_trigger * NCBIMATH_LN2 + 
                                    kbp_ungap->logK) / kbp_ungap->Lambda);
@@ -302,8 +338,10 @@ BlastInitialWordParametersUpdate(EBlastProgramType program_number,
           continue;
 
       kbp = kbp_array[index];
-      if (!s_BlastKarlinBlkIsValid(kbp))  /* skip invalid Karlin blocks */
+      if (!s_BlastKarlinBlkIsValid(kbp)) { /* skip invalid Karlin blocks */
+          ASSERT(query_info->contexts[index].is_valid == FALSE);
           continue;
+      }
 
       if (!gapped_calculation || program_number == eBlastTypeBlastn) {
          double cutoff_e = s_GetCutoffEvalue(program_number);
@@ -337,6 +375,13 @@ BlastInitialWordParametersUpdate(EBlastProgramType program_number,
 
    parameters->cutoff_score = MIN(hit_params->cutoff_score_max, cutoff_s);
    
+   /* Nucleotide searches first compute an approximate ungapped
+      alignment and compare it to a reduced ungapped cutoff score */
+   if (program_number == eBlastTypeBlastn) {
+       parameters->reduced_nucl_cutoff_score = 
+                          (Int4)(0.6 * parameters->cutoff_score);
+   }
+
    /* Note that x_dropoff_init stays constant throughout the search.
       The cutoff_score and x_dropoff parameters may be updated multiple times, 
       if every subject sequence is treated individually. Hence we need to know 
@@ -387,7 +432,7 @@ Int2 BlastExtensionParametersNew(EBlastProgramType program_number,
          when rescaling and composition based statistics is applied, as we
          lose precision. Therefore this is redone in Kappa_RedoAlignmentCore */
       params->gap_x_dropoff_final = (Int4) 
-          (options->gap_x_dropoff_final*NCBIMATH_LN2 / min_lambda);
+          MAX(options->gap_x_dropoff_final*NCBIMATH_LN2 / min_lambda, params->gap_x_dropoff);
    }
    
    if (sbp->scale_factor > 1.0) {
@@ -678,8 +723,10 @@ BlastHitSavingParametersUpdate(EBlastProgramType program_number,
          double evalue = options->expect_value;
 
          kbp = kbp_array[context];
-         if (!s_BlastKarlinBlkIsValid(kbp))  /* skip invalid Karlin blocks */
+         if (!s_BlastKarlinBlkIsValid(kbp)) { /* skip invalid Karlin blocks */
+             ASSERT(query_info->contexts[context].is_valid == FALSE);
              continue;
+         }
          searchsp = query_info->contexts[context].eff_searchsp;
          if (searchsp == 0)         /* skip invalid contexts */
             continue;
@@ -715,8 +762,10 @@ BlastHitSavingParametersUpdate(EBlastProgramType program_number,
             Int4 new_cutoff = 0;
 
             kbp = kbp_array[context];
-            if (!s_BlastKarlinBlkIsValid(kbp))  /* skip invalid Karlin blocks */
+            if (!s_BlastKarlinBlkIsValid(kbp)) {/* skip invalid Karlin blocks */
+                ASSERT(query_info->contexts[context].is_valid == FALSE);
                 continue;
+            }
             BLAST_Cutoffs(&new_cutoff, &evalue_hsp, kbp, searchsp,
                        TRUE, params->link_hsp_params->gap_decay_rate);
             /* Update the computed cutoff if new_cutoff is smaller */
@@ -826,6 +875,19 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
  * ===========================================================================
  *
  * $Log: blast_parameters.c,v $
+ * Revision 1.16  2006/01/12 20:34:32  camacho
+ * + assertions for validity of context
+ *
+ * Revision 1.15  2006/01/03 17:53:20  papadopo
+ * 1. increase the cutoff query size for using stacks
+ * 2. initialize fields for approximate nucleotide ungapped alignment
+ *
+ * Revision 1.14  2006/01/03 14:18:42  madden
+ * In BlastExtensionParametersNew raise gap_x_dropoff_final to gap_x_dropoff if it is lower
+ *
+ * Revision 1.13  2005/12/19 16:12:30  papadopo
+ * remove the possibility of specifying eRight for megablast extension method
+ *
  * Revision 1.12  2005/11/16 14:27:03  madden
  * Fix spelling in CRN
  *

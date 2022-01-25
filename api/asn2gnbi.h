@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.55 $
+* $Revision: 1.61 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -95,7 +95,9 @@ typedef struct asn2gbflags {
   Boolean             geneSynsToNote;
   Boolean             refSeqQualsToNote;
   Boolean             selenocysteineToNote;
+  Boolean             pyrrolysineToNote;
   Boolean             extraProductsToNote;
+  Boolean             codonRecognizedToNote;
   Boolean             forGbRelease;
 } Asn2gbFlags, PNTR Asn2gbFlagsPtr;
 
@@ -153,6 +155,7 @@ typedef struct int_asn2gb_job {
   Int4            seqGapCurrLen;
   ValNodePtr      gihead;
   ValNodePtr      gitail;
+  TextFsaPtr      bad_html_fsa;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -262,6 +265,7 @@ typedef struct asn2gbwork {
   Boolean          hideGeneFeats;
   Boolean          newLocusLine;
   Boolean          showBaseCount;
+  Boolean          forcePrimaryBlock;
 
   Boolean          hideImpFeats;
   Boolean          hideRemImpFeats;
@@ -300,6 +304,7 @@ typedef struct asn2gbwork {
   Boolean          firstfeat;
   Boolean          featseen;
   Boolean          featjustseen;
+  Int4             localFeatCount;
   ValNodePtr       wgsaccnlist;
 
   Boolean          has_mat_peptide;
@@ -640,6 +645,8 @@ typedef enum {
   FTQUAL_prot_names,
   FTQUAL_protein_id,
   FTQUAL_pseudo,
+  FTQUAL_pyrrolysine,
+  FTQUAL_pyrrolysine_note,
   FTQUAL_region,
   FTQUAL_region_name,
   FTQUAL_replace,
@@ -668,6 +675,7 @@ typedef enum {
   FTQUAL_trans_splicing,
   FTQUAL_trna_aa,
   FTQUAL_trna_codons,
+  FTQUAL_trna_codons_note,
   FTQUAL_usedin,
   FTQUAL_xtra_prod_quals,
   ASN2GNBK_TOTAL_FEATUR
@@ -678,6 +686,7 @@ typedef enum {
 NLM_EXTERN Char link_feat [MAX_WWWBUF];
 NLM_EXTERN Char link_featc [MAX_WWWBUF];
 NLM_EXTERN Char link_seq [MAX_WWWBUF];
+NLM_EXTERN Char link_projid [MAX_WWWBUF];
 NLM_EXTERN Char link_wgs [MAX_WWWBUF];
 NLM_EXTERN Char link_omim [MAX_WWWBUF];
 NLM_EXTERN Char ref_link [MAX_WWWBUF];

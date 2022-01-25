@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.48 $
+* $Revision: 1.54 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -73,6 +73,9 @@ NLM_EXTERN Char link_featc [MAX_WWWBUF];
 
 NLM_EXTERN Char link_seq [MAX_WWWBUF];
 #define DEF_LINK_SEQ  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
+
+NLM_EXTERN Char link_projid [MAX_WWWBUF];
+#define DEF_LINK_PROJID  "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids="
 
 NLM_EXTERN Char link_wgs [MAX_WWWBUF];
 #define DEF_LINK_WGS  "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?"
@@ -204,7 +207,7 @@ static Char link_gabi [MAX_WWWBUF];
 #define DEF_LINK_GABI "https://gabi.rzpd.de/cgi-bin-protected/GreenCards.pl.cgi?Mode=ShowBioObject&BioObjectName="
 
 static Char link_fantom [MAX_WWWBUF];
-#define DEF_LINK_FANTOM "http://fantom.gsc.riken.go.jp/db/view/main.cgi?masterid="
+#define DEF_LINK_FANTOM "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="
 
 static Char link_interpro [MAX_WWWBUF];
 #define DEF_LINK_INTERPRO "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="
@@ -213,7 +216,7 @@ static Char link_genedb [MAX_WWWBUF];
 #define DEF_LINK_GENEDB "http://www.genedb.org/genedb/Dispatcher?formType=navBar&submit=Search+for&organism=All%3Apombe%3Acerevisiae%3Adicty%3Aasp%3Atryp%3Aleish%3Amalaria%3Astyphi%3Aglossina&desc=yes&ohmr=%2F&name="
 
 static Char link_geneid [MAX_WWWBUF];
-#define DEF_LINK_GENEID "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=retrieve&dopt=graphics&list_uids="
+#define DEF_LINK_GENEID "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=Retrieve&dopt=full_report&list_uids="
 
 static Char link_zfin [MAX_WWWBUF];
 #define DEF_LINK_ZFIN "http://zfin.org/cgi-bin/webdriver?MIval=aa-markerview.apg&OID="
@@ -296,6 +299,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEAT", DEF_LINK_FEAT, link_feat, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEATC", DEF_LINK_FEATC, link_featc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PROJID", DEF_LINK_PROJID, link_projid, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_WGS", DEF_LINK_WGS, link_wgs, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_OMIM", DEF_LINK_OMIM, link_omim, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_REF", DEF_LINK_REF, ref_link, MAX_WWWBUF);
@@ -2504,18 +2508,21 @@ static CharPtr FormatCitArt (
 }
 
 static CharPtr FormatCitPat (
-  FmtType   format,
+  FmtType format,
+  ModType mode,
   CitPatPtr cpp,
-  SeqIdPtr  seqidp,
+  SeqIdPtr seqidp,
   IntAsn2gbJobPtr ajp
 )
 
 {
   AffilPtr       afp;
   AuthListPtr    alp;
+  IdPatPtr       cit;
   CharPtr        consortium = NULL;
   Char           date [40];
   ValNodePtr     head = NULL;
+  Boolean        is_us_pre_grant = FALSE;
   CharPtr        prefix = NULL;
   CharPtr        rsult = NULL;
   SeqIdPtr       sip;
@@ -2527,9 +2534,30 @@ static CharPtr FormatCitPat (
 
   if (cpp == NULL) return NULL;
 
+  if (StringHasNoText (cpp->number) &&
+      StringDoesHaveText (cpp->app_number) &&
+      StringCmp (cpp->country, "US") == 0 &&
+      mode != RELEASE_MODE) {
+    for (sip = seqidp; sip != NULL; sip = sip->next) {
+      if (sip->choice != SEQID_PATENT) continue;
+      psip = (PatentSeqIdPtr) sip->data.ptrvalue;
+      if (psip == NULL) continue;
+      cit = psip->cit;
+      if (cit == NULL) continue;
+      if (StringDoesHaveText (cit->app_number)) {
+        is_us_pre_grant = TRUE;
+      }
+    }
+  }
+
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
-    ValNodeCopyStr (&head, 0, "Patent: ");
-    suffix = " ";
+    if (is_us_pre_grant) {
+      ValNodeCopyStr (&head, 0, "Pre-Grant Patent: ");
+      suffix = " ";
+    } else {
+      ValNodeCopyStr (&head, 0, "Patent: ");
+      suffix = " ";
+    }
   } else if (format == EMBL_FMT || format == EMBLPEPT_FMT) {
     ValNodeCopyStr (&head, 0, "Patent number ");
   }
@@ -2550,7 +2578,11 @@ static CharPtr FormatCitPat (
       ValNodeCopyStr (&head, 0, cpp->number);
     }
   } else if (! StringHasNoText (cpp->app_number)) {
-    AddValNodeString (&head, "(", cpp->app_number, ")");
+    if (is_us_pre_grant) {
+      AddValNodeString (&head, NULL, cpp->app_number, NULL);
+    } else {
+      AddValNodeString (&head, "(", cpp->app_number, ")");
+    }
   }
 
   if (! StringHasNoText (cpp->doc_type)) {
@@ -2922,12 +2954,13 @@ static CharPtr FormatCitSub (
 
 static CharPtr GetPubJournal (
   FmtType format,
+  ModType mode,
   Boolean dropBadCitGens,
   Boolean noAffilOnUnpub,
   Boolean citArtIsoJta,
   PubdescPtr pdp,
   CitSubPtr csp,
-  SeqIdPtr  seqidp,
+  SeqIdPtr seqidp,
   IndxPtr index,
   IntAsn2gbJobPtr ajp
 )
@@ -2996,7 +3029,7 @@ static CharPtr GetPubJournal (
       case PUB_Patent :
         cpp = (CitPatPtr) vnp->data.ptrvalue;
         if (cpp != NULL) {
-          journal = FormatCitPat (format, cpp, seqidp, ajp);
+          journal = FormatCitPat (format, mode, cpp, seqidp, ajp);
         }
         break;
       default :
@@ -3730,9 +3763,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     citArtIsoJta = FALSE;
   }
 
-  str = GetPubJournal (afp->format, ajp->flags.dropBadCitGens,
-                       ajp->flags.noAffilOnUnpub, citArtIsoJta,
-                       pdp, csp, bsp->id, index, ajp);
+  str = GetPubJournal (afp->format, ajp->mode, ajp->flags.dropBadCitGens,
+                       ajp->flags.noAffilOnUnpub, citArtIsoJta, pdp, csp,
+                       bsp->id, index, ajp);
   if (str == NULL) {
     str = StringSave ("Unpublished");
   }
@@ -3815,7 +3848,6 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   if (gbseq != NULL) {
     if (gbref != NULL) {
-      gbref->medline = muid;
       gbref->pubmed = pmid;
     }
   }

@@ -2,6 +2,9 @@
 *   utilpars.h:
 *
 * $Log: utilpars.h,v $
+* Revision 6.2  2006/01/31 22:31:49  kans
+* added O for pyrrolysine and J for leu or ile ambiguity
+*
 * Revision 6.1  2001/12/06 17:00:41  kans
 * TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
 *
@@ -37,7 +40,7 @@
 #endif
 
 
-#define  ParFlat_TOTAL_AA            26
+#define  ParFlat_TOTAL_AA            28
 
 /*************************************************************************/
 

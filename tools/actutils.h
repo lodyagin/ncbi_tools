@@ -1,4 +1,4 @@
-/* $Id: actutils.h,v 6.15 2004/11/22 16:45:24 bollin Exp $
+/* $Id: actutils.h,v 6.16 2006/01/03 15:47:25 bollin Exp $
  *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,17 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.16  2006/01/03 15:47:25  bollin
+* allow alignment callback for ACT_FindPiece so that it can use the new BLAST
+* library
+*
 * Revision 6.15  2004/11/22 16:45:24  bollin
 * created global alignment function with callback method to allow use of new
 * BLAST library
@@ -208,14 +212,15 @@ NLM_EXTERN FloatHi ACT_CalcScore(ACT_PlaceBoundsPtr abp);
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 NLM_EXTERN void ReverseBioseqFeatureStrands (BioseqPtr bsp);
 NLM_EXTERN void ACT_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
-NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side);
 NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);
 NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 len2);
 extern void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 n);
 
 typedef SeqAlignPtr (LIBCALLBACK *GetAlignmentFunc) (BioseqPtr bsp1, BioseqPtr bsp2);
+typedef SeqAlignPtr (LIBCALLBACK *GetAlignmentPieceFunc) (SeqLocPtr bsp1, SeqLocPtr bsp2);
 
-NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GetAlignmentFunc aln_func);
+NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side, GetAlignmentPieceFunc aln_piece_func);
+NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GetAlignmentFunc aln_func, GetAlignmentPieceFunc aln_piece_func);
 
 /***************************************************************************
 *

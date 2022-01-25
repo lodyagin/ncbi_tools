@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.234 $
+* $Revision: 6.243 $
 *
 * File Description: 
 *
@@ -248,8 +248,8 @@ static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
   {"Forma",                    25},
   {"Forma-specialis",          26},
   {"Frequency",              1013},
-  {"Fwd-primer-name",        1035},
-  {"Fwd-primer-seq",         1033},
+  {"Fwd-PCR-primer-name",    1035},
+  {"Fwd-PCR-primer-seq",     1033},
   {"Genotype",               1006},
   {"Germline",               1014},
   {"Group",                    15},
@@ -270,8 +270,8 @@ static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
   {"Plastid-name",           1022},
   {"Pop-variant",            1017},
   {"Rearranged",             1015},
-  {"Rev-primer-name",        1036},
-  {"Rev-primer-seq",         1034},
+  {"Rev-PCR-primer-name",    1036},
+  {"Rev-PCR-primer-seq",     1034},
   {"Segment",                1024},
   {"Serogroup",                 8},
   {"Serotype",                  7},
@@ -355,8 +355,8 @@ static ENUM_ALIST (subsource_subtype_and_note_alist)
   {"Endogenous-virus-name", 25},
   {"Environmental-sample",  27},
   {"Frequency",             13},
-  {"Fwd-primer-name",       35},
-  {"Fwd-primer-seq",        33},
+  {"Fwd-PCR-primer-name",   35},
+  {"Fwd-PCR-primer-seq",    33},
   {"Genotype",               6},
   {"Germline",              14},
   {"Haplotype",              5},
@@ -373,8 +373,8 @@ static ENUM_ALIST (subsource_subtype_and_note_alist)
   {"Plastid-name",          22},
   {"Pop-variant",           17},
   {"Rearranged",            15},
-  {"Rev-primer-name",       36},
-  {"Rev-primer-seq",        34},
+  {"Rev-PCR-primer-name",   36},
+  {"Rev-PCR-primer-seq",    34},
   {"Segment",               24},
   {"Sex",                    7},
   {"Subclone",               4},
@@ -6879,9 +6879,10 @@ static ValNodePtr GapLocationsFromNs (BioseqPtr bsp, Int4Ptr gap_sizes)
 
 static SeqLocPtr 
 RemoveGapLocationsFromSeqLoc 
-(SeqLocPtr slp, 
+(SeqLocPtr  slp, 
  ValNodePtr gap_locs, 
- BioseqPtr bsp)
+ BioseqPtr  bsp,
+ BoolPtr    loc_changed)
 {
   ValNodePtr    gap_vnp;
   GapLocInfoPtr glip;
@@ -6890,6 +6891,11 @@ RemoveGapLocationsFromSeqLoc
   Boolean     changed, partial5, partial3;
   SeqLocPtr   before = NULL, after = NULL;
 
+  if (loc_changed != NULL)
+  {
+    *loc_changed = FALSE;
+  }
+  
   if (slp == NULL || gap_locs == NULL || bsp == NULL)
   {
     return slp;
@@ -6917,6 +6923,10 @@ RemoveGapLocationsFromSeqLoc
     }
     if (GapInLocation (glip->start_pos, glip->length, before))
     {
+      if (loc_changed != NULL)
+      {
+        *loc_changed = TRUE;
+      }
       /* we make a copy of the original location */
       after = SeqLocCopy (before);
       
@@ -6968,6 +6978,35 @@ RemoveGapLocationsFromSeqLoc
   return loc_list;  
 }
 
+const char *cds_gap_comment = "coding region disrupted by sequencing gap";
+
+static void AddCDSGapComment (SeqFeatPtr sfp)
+{
+  CharPtr new_comment = NULL;
+  
+  if (sfp == NULL)
+  {
+    return;
+  }
+  
+  if (StringHasNoText (sfp->comment))
+  {
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = StringSave (cds_gap_comment);
+  }
+  else
+  {
+    new_comment = (CharPtr) MemNew ((StringLen (sfp->comment) 
+                                     + StringLen (cds_gap_comment)
+                                     + 4) * sizeof (Char));
+    StringCpy (new_comment, sfp->comment);
+    StringCat (new_comment, "; ");
+    StringCat (new_comment, cds_gap_comment);
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = new_comment;
+  }
+}
+
 static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePtr gap_list)
 {
   SeqFeatPtr        sfp;
@@ -6977,6 +7016,7 @@ static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePt
   CdRegionPtr       crp;
   Boolean           partial5, partial3;
   Uint2             entityID;
+  Boolean           loc_changed;
   
   if (bsp == NULL || gap_list == NULL)
   {
@@ -6990,7 +7030,12 @@ static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePt
        sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext))
   {
     CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-    sfp->location = RemoveGapLocationsFromSeqLoc (sfp->location, gap_list, bsp);
+    loc_changed = FALSE;
+    sfp->location = RemoveGapLocationsFromSeqLoc (sfp->location, gap_list, bsp, &loc_changed);
+    if (loc_changed)
+    {
+      AddCDSGapComment (sfp);
+    }
    
     while (sfp->location->next != NULL)
     {
@@ -7003,6 +7048,7 @@ static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePt
 		                                       (AsnWriteFunc) CdRegionAsnWrite);
         new_sfp->data.value.ptrvalue = crp;
         new_sfp->location = sfp->location->next;
+        new_sfp->comment = StringSave (sfp->comment);
 
         protbsp = BioseqFindFromSeqLoc (sfp->product);        
         if (protbsp != NULL)
@@ -7080,6 +7126,435 @@ PrepareCodingRegionLocationsForDeltaConversionCallback
   
   gap_locations = ValNodeFreeData (gap_locations);
 }
+
+static Int4 
+CalculateGapCoverage 
+(BioseqPtr         bsp, 
+ SeqLocPtr         slp, 
+ SeqMgrFeatContext context,
+ Boolean           include_terminal_gaps)
+{
+  DeltaSeqPtr       dsp;
+  SeqLocPtr         loc;
+  SeqLitPtr         slip;
+  Int4              seq_offset = 0;
+  Int4              covered = 0;
+  Int4              k, start, stop;
+
+  if (slp == NULL
+      || bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4)
+  {
+    return 0;
+  }
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL && seq_offset < context.right)
+  {
+    if (dsp->choice == 1)
+    {
+      loc = (SeqLocPtr) dsp->data.ptrvalue;
+      if (loc != NULL)
+      {
+        seq_offset += SeqLocLen (loc);
+      }
+    }
+    else if (dsp->choice == 2)
+    {
+      slip = (SeqLitPtr) dsp->data.ptrvalue;
+      if (slip != NULL)
+      {
+        if (slip->seq_data == NULL
+            && slip->fuzz == NULL)
+        {        
+          if (seq_offset <= context.left && seq_offset + slip->length >= context.right)
+          {
+            /* gap covers entire location */
+            return SeqLocLen (slp);
+          }
+          else if (include_terminal_gaps || 
+                   (seq_offset > context.left 
+                    && seq_offset + slip->length < context.right))
+          {
+            /* we only count internal gaps */
+            for (k = 0; k < context.numivals; k += 2) 
+            {
+              start = context.ivals [k];
+              stop = context.ivals [k + 1];
+              if (seq_offset <= start && seq_offset + slip->length > stop)
+              {
+                /* gap covers entire interval */
+                covered += stop - start;
+              }
+              else if (seq_offset > start && seq_offset + slip->length < stop)
+              {
+                /* interval covers entire gap */
+                covered += slip->length;
+              }
+              else if (seq_offset < start && seq_offset + slip->length < stop)
+              {
+                /* gap covers left end of interval */
+                covered += seq_offset + slip->length - start;
+              }
+              else if (seq_offset > start && seq_offset + slip->length > stop)
+              {
+                /* gap covers right end of interval */
+                covered += stop - seq_offset;
+              }
+            }
+          }
+        }
+        seq_offset += slip->length;
+      }
+    }
+    dsp = dsp->next;
+  }
+
+  return covered;
+  
+}
+
+static SeqLocPtr 
+RemoveTerminalGapsFromLocation
+(BioseqPtr         bsp, 
+ SeqLocPtr         slp,
+ SeqMgrFeatContext context)
+{
+  DeltaSeqPtr       dsp;
+  SeqLocPtr         loc, slp_copy;
+  SeqLitPtr         slip;
+  Int4              seq_offset = 0;
+  SeqIdPtr          sip;
+  Boolean           changed = FALSE, partial5, partial3;
+
+  if (slp == NULL)
+  {
+    return NULL;
+  }
+  
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  
+  slp_copy = (SeqLocPtr) AsnIoMemCopy (slp, 
+                                       (AsnReadFunc) SeqLocAsnRead,
+                                       (AsnWriteFunc) SeqLocAsnWrite);
+  if (bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4)
+  {
+    return slp_copy;
+  }
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL && seq_offset < context.right && slp_copy != NULL)
+  {
+    if (dsp->choice == 1)
+    {
+      loc = (SeqLocPtr) dsp->data.ptrvalue;
+      if (loc != NULL)
+      {
+        seq_offset += SeqLocLen (loc);
+      }
+    }
+    else if (dsp->choice == 2)
+    {
+      slip = (SeqLitPtr) dsp->data.ptrvalue;
+      if (slip != NULL)
+      {
+        if (slip->seq_data == NULL
+            && slip->fuzz == NULL)
+        {        
+          if (seq_offset <= context.left && seq_offset + slip->length >= context.right)
+          {
+            slp_copy = SeqLocFree (slp_copy);
+          }
+          else if (seq_offset <= context.left && seq_offset + slip->length >= context.left)
+          {
+            sip = SeqIdDup (SeqLocId (slp_copy));
+            slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                              context.left, seq_offset + slip->length - 1,
+                              FALSE, &changed, &partial5, &partial3);
+            sip = SeqIdFree (sip);
+
+          }
+          
+          if (seq_offset <= context.right && seq_offset + slip->length >= context.right)
+          {
+            sip = SeqIdDup (SeqLocId (slp_copy));
+            slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                              seq_offset, context.right,
+                              FALSE, &changed, &partial5, &partial3);
+            sip = SeqIdFree (sip);
+          }
+        }
+        seq_offset += slip->length;
+      }
+    }
+    dsp = dsp->next;
+  }
+
+  if (slp_copy != NULL)  
+  {
+    SetSeqLocPartial (slp_copy, partial5, partial3);
+  }
+
+  return slp_copy;
+}
+
+static void 
+AdjustOneCodingRegionWithTerminalGapsOnBioseq 
+(BioseqPtr         bsp,
+ SeqFeatPtr        sfp,
+ SeqMgrFeatContext context)
+{
+  SeqLocPtr         adjusted_loc;
+  Int4              seq_offset = 0;
+  Int4              loc_len, adjusted_len;
+  Boolean           partial5, partial3;
+  BioseqPtr         protbsp;
+  SeqFeatPtr        gene_sfp;
+  SeqMgrFeatContext gene_context;
+
+  if (bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4
+      || sfp == NULL
+      || (sfp->data.choice != SEQFEAT_CDREGION && sfp->idx.subtype != FEATDEF_mRNA))
+  {
+    return;
+  }
+  
+  loc_len = SeqLocLen (sfp->location);
+  
+  adjusted_loc = RemoveTerminalGapsFromLocation (bsp, sfp->location, context);
+  adjusted_len = SeqLocLen (adjusted_loc);
+  if (adjusted_loc != NULL && adjusted_len < loc_len)
+  {
+    gene_sfp = SeqMgrGetOverlappingGene (sfp->location, &gene_context);
+    if (gene_sfp != NULL 
+        && SeqLocCompare (gene_sfp->location, sfp->location) == SLC_A_EQ_B)
+    {
+      gene_sfp->location = SeqLocFree (gene_sfp->location);
+      gene_sfp->location = (SeqLocPtr) AsnIoMemCopy (adjusted_loc,
+                                                     (AsnReadFunc) SeqLocAsnRead,
+                                                     (AsnWriteFunc) SeqLocAsnWrite);
+    }
+  
+    sfp->location = SeqLocFree (sfp->location);
+    sfp->location = adjusted_loc;
+    adjusted_loc = NULL;
+    CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+    sfp->partial = partial5 || partial3;
+    
+    protbsp = BioseqFindFromSeqLoc (sfp->product);
+
+    if (sfp->data.choice == SEQFEAT_CDREGION)
+    {
+      /* adjust frame */
+      AdjustFrame (sfp, protbsp);
+
+      /* retranslate coding region */
+      SeqEdTranslateOneCDS (sfp, bsp, sfp->idx.entityID);
+              
+      /* set partials on product */
+      SetProductSequencePartials (protbsp, partial5, partial3);
+    }
+  }
+  
+  adjusted_loc = SeqLocFree (adjusted_loc);
+  
+}
+
+static void AdjustCodingRegionsEndingInGapOnBioseq (BioseqPtr bsp, Pointer userdata)
+{
+  SeqMgrFeatContext context;
+  SeqFeatPtr        sfp;
+  
+  if (bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4)
+  {
+    return;
+  }
+    
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context))
+  {
+    AdjustOneCodingRegionWithTerminalGapsOnBioseq (bsp, sfp, context);
+  }
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, FEATDEF_mRNA, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, FEATDEF_mRNA, &context))
+  {
+    AdjustOneCodingRegionWithTerminalGapsOnBioseq (bsp, sfp, context);
+  }
+}
+
+extern void AdjustCodingRegionsEndingInGap (IteM i)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioseqsInSep (sep, NULL, AdjustCodingRegionsEndingInGapOnBioseq);
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+typedef struct cdstomiscfeatform
+{
+  FEATURE_FORM_BLOCK
+  
+  GrouP  all_or_percent_grp;
+  DialoG string_constraint_dlg;
+  
+  Boolean             convert_all;
+  FilterSetPtr        fsp;
+  StringConstraintPtr scp;
+  BioseqPtr           bsp;
+} CDSToMiscFeatFormData, PNTR CDSToMiscFeatFormPtr;
+
+static void ConvertCDSToMiscFeatFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  CDSToMiscFeatFormPtr cmffp;
+  Int4                 orig_len, covered_len;
+  SeqMgrFeatContext    context;
+  SeqEntryPtr          oldscope;
+
+  cmffp = (CDSToMiscFeatFormPtr) userdata;
+  
+  if (sfp == NULL || cmffp == NULL || cmffp->bsp == NULL)
+  {
+    return;
+  }
+  
+  sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, cmffp->bsp, sfp->idx.itemID, 0, sfp, &context);
+  if (sfp == NULL)
+  {
+    return;
+  }
+  
+  oldscope = SeqEntrySetScope (NULL);
+
+  orig_len = SeqLocLen (sfp->location);
+  covered_len = CalculateGapCoverage (cmffp->bsp, sfp->location, context, cmffp->convert_all);
+  if (covered_len >= orig_len / 2 || (cmffp->convert_all && covered_len > 0))
+  {
+    ConvertCDSToMiscFeat (sfp);
+  }
+  
+  SeqEntrySetScope (oldscope);
+}
+
+static void ConvertGappedCodingRegionsToMiscFeatBioseqCallback (BioseqPtr bsp, Pointer userdata)
+{
+  CDSToMiscFeatFormPtr cmffp;
+  SeqEntryPtr          sep;
+  
+  if (bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4
+      || userdata == NULL)
+  {
+    return;
+  }
+  
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  
+  cmffp = (CDSToMiscFeatFormPtr) userdata;
+  cmffp->bsp = bsp;
+  
+  OperateOnSeqEntryConstrainedObjects (sep, cmffp->fsp, 
+                                       ConvertCDSToMiscFeatFeatureCallback,
+                                       NULL, SEQFEAT_CDREGION, FEATDEF_CDS, 0, cmffp);
+
+}
+
+static void AcceptCDSToMiscFeat (ButtoN b)
+{
+  CDSToMiscFeatFormPtr cmffp;
+  SeqEntryPtr          sep;
+  
+  cmffp = (CDSToMiscFeatFormPtr) GetObjectExtra (b);
+  if (cmffp == NULL)
+  {
+    return;
+  }
+  
+  if (GetValue (cmffp->all_or_percent_grp) == 2)
+  {
+    cmffp->convert_all = TRUE;
+  }
+  else
+  {
+    cmffp->convert_all = FALSE;
+  }
+  
+  cmffp->fsp = FilterSetNew();
+  cmffp->fsp->scp = DialogToPointer (cmffp->string_constraint_dlg);
+
+  sep = GetTopSeqEntryForEntityID (cmffp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioseqsInSep (sep, cmffp, ConvertGappedCodingRegionsToMiscFeatBioseqCallback);
+  DeleteMarkedObjects (cmffp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (cmffp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, cmffp->input_entityID, 0, 0);
+  Remove (cmffp->form);  
+}
+
+extern void ConvertCodingRegionsWithInternalKnownGapToMiscFeat (IteM i)
+{
+  BaseFormPtr          bfp;
+  CDSToMiscFeatFormPtr cmffp;
+  WindoW               w;
+  GrouP                h, c;
+  ButtoN               b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  cmffp = (CDSToMiscFeatFormPtr) MemNew (sizeof (CDSToMiscFeatFormData));
+  if (cmffp == NULL) return;
+    
+  w = FixedWindow (-50, -33, -10, -10, "Convert Coding Regions With Gaps to Misc_Feat", StdCloseWindowProc);
+  SetObjectExtra (w, cmffp, StdCleanupFormProc);
+  cmffp->form = (ForM) w;
+  cmffp->input_entityID = bfp->input_entityID;
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  cmffp->all_or_percent_grp = HiddenGroup (h, 0, 2, NULL);
+  SetGroupSpacing (cmffp->all_or_percent_grp, 10, 10);
+  RadioButton (cmffp->all_or_percent_grp, "Convert only when internal gap covers 50% or more of the coding region");
+  RadioButton (cmffp->all_or_percent_grp, "Convert all coding regions with gaps (both terminal and internal)");
+  SetValue (cmffp->all_or_percent_grp, 1);
+  
+  cmffp->string_constraint_dlg = StringConstraintDialog (h, "Where feature text", FALSE);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Accept", AcceptCDSToMiscFeat);
+  SetObjectExtra (b, cmffp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) cmffp->all_or_percent_grp,
+                              (HANDLE) cmffp->string_constraint_dlg,
+                              (HANDLE) c,
+                              NULL);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+}
+
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
@@ -12153,17 +12628,6 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
   } else {
     return FALSE;
   }
-}
-
-static Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
-
-{
-  Int2  rsult;
-
-  rsult = GetAppParam ("SEQUINCUSTOM", section, type, NULL, buf, buflen);
-  if (rsult) return rsult;
-  rsult = GetAppParam ("SEQUIN", section, type, dflt, buf, buflen);
-  return rsult;
 }
 
 static FonT GetHelpFontFromConfig (CharPtr param, FonT dfault)

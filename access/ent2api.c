@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.83 $
+* $Revision: 1.85 $
 *
 * File Description: 
 *
@@ -58,16 +58,10 @@ NLM_EXTERN void EntrezSetProgramName (
 )
 
 {
-  CharPtr  str;
-
-  str = (CharPtr) GetAppProperty (ENTREZ_TOOL_PROPERTY);
-  MemFree (str);
-
-  if (! StringHasNoText (progname)) {
-    SetAppProperty (ENTREZ_TOOL_PROPERTY, StringSave (progname));
-  } else {
-    SetAppProperty (ENTREZ_TOOL_PROPERTY, NULL);
-  }
+  MemFree (GetAppProperty (ENTREZ_TOOL_PROPERTY));
+  SetAppProperty (ENTREZ_TOOL_PROPERTY, (StringHasNoText (progname)
+                                         ? NULL
+                                         : StringSave (progname)));
 }
 
 static CharPtr EntrezGetProgramName (
@@ -101,10 +95,8 @@ NLM_EXTERN void EntrezSetService (
 )
 
 {
-  if (! StringHasNoText (service)) {
-    e2_service = MemFree (e2_service);
-    e2_service = StringSaveNoNull (service);
-  }
+  MemFree (e2_service);
+  e2_service = StringSaveNoNull (service);
 }
 
 /* low-level connection functions */
@@ -1240,6 +1232,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title Abbreviation") == 0) {
             } else if (StringICmp (last, "Library") == 0 && StringICmp (str, "Library Class") == 0) {
             } else if (StringICmp (last, "Sequence") == 0 && StringICmp (str, "Sequence Count") == 0) {
+            } else if (StringICmp (last, "Journal") == 0 && StringICmp (str, "Journal List Identifier") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

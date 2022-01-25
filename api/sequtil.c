@@ -29,13 +29,36 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.183 $
+* $Revision: 6.190 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.190  2006/02/16 17:19:14  kans
+* better handling of trans splicing in GetThePointForOffset, SeqLocStart (CB)
+*
+* Revision 6.189  2006/02/07 17:50:53  kans
+* support for pgp instead of pat for pre-grant publication in SeqIdWrite and SeqIdParse
+*
+* Revision 6.188  2006/02/01 21:53:44  kans
+* DZ and EA for ncbi patent in WHICH_db_accession
+*
+* Revision 6.187  2006/01/24 17:59:26  kans
+* use DY for NCBI EST
+*
+* Revision 6.186  2006/01/05 14:11:56  bollin
+* added SeqLocPrintUseBestID function, which prints out the sequence location
+* but uses the "best" sequence ID instead of the one actually stored in the
+* SeqLoc.
+*
+* Revision 6.185  2006/01/03 15:49:36  kans
+* added DX as ncbi gss to WHICH_db_accession
+*
+* Revision 6.184  2005/12/09 19:43:43  kans
+* added DW as NCBI EST
+*
 * Revision 6.183  2005/09/20 21:11:34  kans
 * added DV as NCBI EST
 *
@@ -3321,7 +3344,7 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 		"emb",		/* embl = emb|accession|locus */
 		"pir",		/* pir = pir|accession|name */
 		"sp",		/* swissprot = sp|accession|name */
-		"pat",		/* patent = pat|country|patent number (string)|seq number (integer) */
+		"pat",		/* patent = pat|country|patent number (string)|seq number (integer) - use pgp for pre-grant pub */
 		"ref",		/* other = ref|accession|name|release - changed from oth to ref */
 		"gnl",		/* general = gnl|database(string)|id (string or number) */
 		"gi",		/* gi = gi|integer */
@@ -3465,8 +3488,10 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 	PDBSeqIdPtr psip;
 	ObjectIdPtr oip;
 	PatentSeqIdPtr patsip;
+	IdPatPtr ipp;
 	Boolean got_gi = FALSE;
 	Boolean got_tmsmart = FALSE;
+	Boolean is_us_pre_grant = FALSE;
 	DbtagPtr dbt;
 	Char chainbuf[3];
 	Char versionbuf[10];
@@ -3556,6 +3581,14 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 				if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0) {
 					got_tmsmart = TRUE;
 				}
+			} else if (sip->choice == SEQID_PATENT) {
+			    patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+			    if (patsip != NULL) {
+			        ipp = patsip->cit;
+			        if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+			            is_us_pre_grant = TRUE;
+			        }
+			    }
 			}
 		}
 		if (useGeneral) {
@@ -3576,8 +3609,18 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 		}
 		format = PRINTID_FASTA_SHORT; /* put on second (or only) SeqId in this format */
 	}
-	else
+	else {
 		sip = isip;          /* only one id processed */
+		if (sip != NULL && sip->choice == SEQID_PATENT) {
+		    patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+		    if (patsip != NULL) {
+		        ipp = patsip->cit;
+		        if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+		            is_us_pre_grant = TRUE;
+		        }
+		    }
+		}
+	}
 
 							 /* deal with LOCUS and ACCESSION */
 	if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS) ||
@@ -3626,7 +3669,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 
 	if (format == PRINTID_FASTA_SHORT)
 	{
-		Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
+	    if (sip->choice == SEQID_PATENT && is_us_pre_grant) {
+			Nlm_LabelCopyNext(&tmp, "pgp", &buflen);
+	    } else {
+			Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
+	    }
 		Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
 	}
 
@@ -3694,7 +3741,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 			Nlm_LabelCopyNext(&tmp, patsip->cit->country, &buflen);
 			if (format == PRINTID_FASTA_SHORT)
 				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-			Nlm_LabelCopyNext(&tmp, patsip->cit->number, &buflen);
+			if (is_us_pre_grant) {
+				Nlm_LabelCopyNext(&tmp, patsip->cit->app_number, &buflen);
+			} else {
+				Nlm_LabelCopyNext(&tmp, patsip->cit->number, &buflen);
+			}
 			if (format == PRINTID_FASTA_SHORT)
 				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
 			else
@@ -3884,7 +3935,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 	IdPatPtr ipp;
 	PDBSeqIdPtr psip;
 	GiimPtr gim;
-	Boolean done = FALSE;
+	Boolean done = FALSE, is_us_pre_grant = FALSE;
 	static Uint1 expect_tokens[NUM_SEQID] = {  /* number of tokens to expect */
  	0, /* 0 = not set */
 	1, /* 1 = local Object-id */
@@ -3939,6 +3990,12 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 		/* oth now ref, but still want to parse old style */
 		if ((! type) && (! StringCmp(localbuf, "oth"))) {
 			type = SEQID_OTHER;
+		}
+
+		/* pgp is for  pre-grant patent publications */
+		if ((! type) && (! StringCmp(localbuf, "pgp"))) {
+			type = SEQID_PATENT;
+		    is_us_pre_grant = TRUE;
 		}
 
 		if (! type) goto erret;
@@ -4077,7 +4134,11 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				ipp = IdPatNew();
 				patsip->cit = ipp;
 				ipp->country = StringSave(tokens[0]);
-				ipp->number = StringSave(tokens[1]);
+				if (is_us_pre_grant) {
+				    ipp->app_number = StringSave(tokens[1]);
+				} else {
+				    ipp->number = StringSave(tokens[1]);
+				}
 				sscanf(tokens[2], "%ld", &num);
 				patsip->seqid = (Int2)num;
             	break;
@@ -4831,8 +4892,9 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
 
 {
     Int4 pos = -1L, tpos, numpnt;
-	SeqIdPtr sip;
-	SeqLocPtr slp;
+    SeqIdPtr  sip;
+    SeqLocPtr slp;
+    SeqIntPtr sintp;
 
     if (anp == NULL)
         return pos;
@@ -4869,7 +4931,8 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
 			}
             break;
         case SEQLOC_INT:    /* int */
-            pos = ((SeqIntPtr)anp->data.ptrvalue)->from;
+            sintp = (SeqIntPtr) anp->data.ptrvalue;
+            pos = sintp->from;
             break;
         case SEQLOC_PNT:    /* pnt */
             pos = ((SeqPntPtr)anp->data.ptrvalue)->point;
@@ -6558,6 +6621,61 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 	return retval;    /* all failed */
 }
 
+
+static SeqIdPtr GetEarlierSeqIdPtr (SeqIdPtr sip1, SeqIdPtr sip2)
+{
+  BioseqPtr    bsp1, bsp2;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sep;
+  
+  if (sip1 == NULL && sip2 != NULL)
+  {
+    return sip2;
+  }
+  else if (sip1 != NULL && sip2 == NULL)
+  {
+    return sip1;
+  }
+  else if (SeqIdComp(sip1, sip2) == SIC_YES)
+  {
+    return sip1;
+  }
+  
+  bsp1 = BioseqFind (sip1);
+  bsp2 = BioseqFind (sip2);
+  if (bsp1 == NULL && bsp2 == NULL)
+  {
+    return sip1;
+  }
+  else if (bsp1 == NULL)
+  {
+    return sip2;
+  }
+  else if (bsp2 == NULL)
+  {
+    return sip1;
+  }
+  
+  if (bsp1->idx.parenttype == OBJ_BIOSEQSET
+      && bsp2->idx.parenttype == OBJ_BIOSEQSET
+      && bsp1->idx.parentptr == bsp2->idx.parentptr)
+  {
+    bssp = (BioseqSetPtr) bsp1->idx.parentptr;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+    {
+      if (sep->data.ptrvalue == bsp1)
+      {
+        return sip1;
+      }
+      else if (sep->data.ptrvalue == bsp2)
+      {
+        return sip2;
+      }
+    }
+  }
+  return sip1;
+}
+
 /*****************************************************************************
 *
 *   Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
@@ -6565,58 +6683,124 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 *****************************************************************************/
 Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 {
-	SeqLocPtr tmp, pnt, first=NULL, last=NULL;
-	Uint1 ofstrand;
-	Boolean getstart;
+	SeqLocPtr pnt, first=NULL, last=NULL;
+	Uint1 first_strand, last_strand;
+	Boolean all_minus = TRUE;
+	Int4    lowest = -1, highest = 0, tmp;
+	SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
+	Boolean   id_same;
 
 	pnt = NULL;    /* get first or last single span type in "of"*/
-	tmp = NULL;
 	while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
 	{
+	  last_strand = SeqLocStrand (pnt);
+	  last_sip = SeqLocId (pnt);
+	  if (last_strand != Seq_strand_minus)
+	  {
+	    all_minus = FALSE;
+	  }
 		last = pnt;
 		if (first == NULL)
+		{
 			first = pnt;
+			first_strand = last_strand;
+			first_sip = last_sip;
+			lowest = SeqLocStart(pnt);
+			highest = SeqLocStop (pnt);
+			low_sip = last_sip;
+			high_sip = last_sip;
+		}
+		else
+		{
+		  tmp = SeqLocStart (pnt);
+		  if (SeqIdComp (last_sip, low_sip))
+		  {
+		    id_same = TRUE;
+		  }
+		  else
+		  {
+		    id_same = FALSE;
+		  }
+		  if ((id_same && tmp < lowest)
+		      || (!id_same && last_sip == GetEarlierSeqIdPtr (last_sip, low_sip)))
+		  {
+		    lowest = tmp;
+		    low_sip = last_sip;
+		  }
+		  tmp = SeqLocStop (pnt);
+		  
+		  if (SeqIdComp (last_sip, high_sip))
+		  {
+		    id_same = TRUE;
+		  }
+		  else
+		  {
+		    id_same = FALSE;
+		  }
+		  if ((id_same && tmp > highest)
+		      || (!id_same && high_sip == GetEarlierSeqIdPtr (high_sip, last_sip)))
+		  {
+		    highest = tmp;
+		    high_sip = last_sip;
+		  }
+		}
 	}				   /* otherwise, get last */
 	if (first == NULL)
 		return FALSE;
-	ofstrand = SeqLocStrand(first);
-	getstart = TRUE;   /* assume we are getting SeqLocStart() */
+	
 	switch (which_end)
 	{
 		case SEQLOC_LEFT_END:
-			if (ofstrand == Seq_strand_minus)
-				tmp = last;
-			else
-				tmp = first;
+		  target->point = lowest;
+		  target->id = low_sip;
 			break;
 		case SEQLOC_RIGHT_END:
-			if (ofstrand == Seq_strand_minus)
-				tmp = first;
-			else
-				tmp = last;
-			getstart = FALSE;
+		  target->point = highest;
+		  target->id = high_sip;
 			break;
 		case SEQLOC_START:
-			tmp = first;
-			if (ofstrand == Seq_strand_minus)
-				getstart = FALSE;
+		  if (all_minus)
+		  {
+		    target->point = SeqLocStop (last);
+		    target->id = last_sip;
+		  }
+		  else
+		  {
+  	    if (first_strand == Seq_strand_minus)
+	      {
+		      target->point = SeqLocStop (first);
+		    }
+		    else
+		    {
+		      target->point = SeqLocStart (first);
+		    }
+		    target->id = first_sip;
+		  }
 			break;
 		case SEQLOC_STOP:
-			tmp = last;
-			if (ofstrand != Seq_strand_minus)
-				getstart = FALSE;
+		  if (all_minus)
+		  {
+		    target->point = SeqLocStart (first);
+		    target->id = first_sip;
+		  }
+		  else
+		  {
+  	    if (last_strand == Seq_strand_minus)
+	      {
+		      target->point = SeqLocStart (last);
+		    }
+		    else
+		    {
+		      target->point = SeqLocStop (last);
+		    }
+		    target->id = last_sip;
+		  }
 			break;
 		default:
 			return FALSE;   /* error */
 	}
 
 	/* SeqLocStart returns 'from', and SeqLocStop returns 'to', regardless of strand! */
-
-	if (getstart)
-		target->point = SeqLocStart(tmp);
-	else
-		target->point = SeqLocStop(tmp);
-	target->id = SeqLocId(tmp);
 
 	if ((target->point < 0) || (target->id == NULL))
 		return FALSE;
@@ -6792,15 +6976,11 @@ NLM_EXTERN Int2 SeqLocMol (SeqLocPtr seqloc)
 	return the_mol;
 }
 
-static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, SeqIdPtr lastid);
+static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, SeqIdPtr lastid, Boolean use_best_id);
 static void BSstring(ByteStorePtr bsp, CharPtr str);
 
-/*****************************************************************************
-*
-*   SeqLocPrint(slp)
-*
-*****************************************************************************/
-NLM_EXTERN CharPtr SeqLocPrint(SeqLocPtr slp)
+
+static CharPtr SeqLocPrintEx (SeqLocPtr slp, Boolean use_best_id)
 {
 	ByteStorePtr bsp;
 	CharPtr str;
@@ -6813,19 +6993,35 @@ NLM_EXTERN CharPtr SeqLocPrint(SeqLocPtr slp)
 	tmp = slp->next;    /* save possible chain */
 	slp->next = NULL;   /* take out of possible chain */
 
-	SeqLocPrintProc(slp, bsp, TRUE, NULL);
+	SeqLocPrintProc(slp, bsp, TRUE, NULL, use_best_id);
 
 	slp->next = tmp;    /* replace possible chain */
 	str = (CharPtr)BSMerge(bsp, NULL);
 	BSFree(bsp);
 
-	return str;
+	return str;  
+}
+
+/*****************************************************************************
+*
+*   SeqLocPrint(slp)
+*
+*****************************************************************************/
+NLM_EXTERN CharPtr SeqLocPrint(SeqLocPtr slp)
+{
+  return SeqLocPrintEx (slp, FALSE);
+}
+
+NLM_EXTERN CharPtr SeqLocPrintUseBestID(SeqLocPtr slp)
+{
+  return SeqLocPrintEx (slp, TRUE);
 }
 
 NLM_EXTERN SeqIdPtr SeqPointWrite(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, Int2 buflen);
 NLM_EXTERN SeqIdPtr SeqPointPrint(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid);
 NLM_EXTERN void IntFuzzPrint(IntFuzzPtr ifp, Int4 pos, CharPtr buf, Boolean right);
 static char strandsymbol[5] = { '\0', '\0', 'c', 'b', 'r' };
+static SeqIdPtr SeqPointWriteEx (SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, Int2 buflen, Boolean use_best_id);
 
 
 /*****************************************************************************
@@ -6835,7 +7031,13 @@ static char strandsymbol[5] = { '\0', '\0', 'c', 'b', 'r' };
 *   	goes down slp chain
 *
 *****************************************************************************/
-static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, SeqIdPtr lastid)
+static SeqIdPtr 
+SeqLocPrintProc
+(SeqLocPtr    slp,
+ ByteStorePtr bsp, 
+ Boolean      first, 
+ SeqIdPtr     lastid,
+ Boolean      use_best_id)
 {
 	Char buf[41];
 	SeqBondPtr sbp;
@@ -6844,6 +7046,8 @@ static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, 
 	IntFuzzPtr ifp1, ifp2;
 	Int4 from, to;
 	Int2 delim, delim2;
+	BioseqPtr   seq;
+	SeqIdPtr    thisid;
 
 	while (slp != NULL)
 	{
@@ -6861,7 +7065,7 @@ static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, 
 				sbp = (SeqBondPtr)(slp->data.ptrvalue);
 				if (sbp->a != NULL)
 				{
-					lastid = SeqPointWrite(sbp->a, buf, lastid, 40);
+					lastid = SeqPointWriteEx(sbp->a, buf, lastid, 40, use_best_id);
 					BSstring(bsp, buf);
 				}
 				else
@@ -6871,7 +7075,7 @@ static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, 
 
 				if (sbp->b != NULL)
 				{
-					lastid = SeqPointWrite(sbp->b, buf, lastid, 40);
+					lastid = SeqPointWriteEx(sbp->b, buf, lastid, 40, use_best_id);
 					BSstring(bsp, buf);
 				}
 				else
@@ -6906,18 +7110,27 @@ static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, 
 					delim2 = ']';
 				}
 				BSPutByte(bsp, delim);
-				lastid = SeqLocPrintProc((SeqLocPtr)(slp->data.ptrvalue), bsp, TRUE, lastid);
+				lastid = SeqLocPrintProc((SeqLocPtr)(slp->data.ptrvalue), bsp, TRUE, lastid, use_best_id);
 				BSPutByte(bsp, delim2);
 	            break;
     	    case SEQLOC_INT:    /* int */
 				sip = (SeqIntPtr)(slp->data.ptrvalue);
+				thisid = sip->id;
+				if (use_best_id)
+				{
+				  seq = BioseqFind (thisid);
+				  if (seq != NULL)
+				  {
+				    thisid = SeqIdFindBest (seq->id, SEQID_GENBANK);
+				  }
+				}
 				if (! SeqIdMatch(sip->id, lastid))
 				{
-					SeqIdWrite(sip->id, buf, PRINTID_FASTA_SHORT, 40);
+					SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, 40);
 					BSstring(bsp, buf);
 					BSPutByte(bsp, ':');
 				}
-				lastid = sip->id;
+				lastid = thisid;
 				if (strandsymbol[sip->strand])
 					BSPutByte(bsp, (Int2)strandsymbol[sip->strand]);
 				if ((sip->strand == Seq_strand_minus) ||
@@ -6944,8 +7157,8 @@ static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, 
 
         	    break;
 	        case SEQLOC_PNT:    /* pnt */
-				lastid = SeqPointWrite((SeqPntPtr)(slp->data.ptrvalue), 
-					buf, lastid, 40);
+				lastid = SeqPointWriteEx((SeqPntPtr)(slp->data.ptrvalue), 
+					                       buf, lastid, 40, use_best_id);
 				BSstring(bsp, buf);
 	            break;
     	    case SEQLOC_PACKED_PNT:    /* packed pnt */
@@ -7004,22 +7217,37 @@ NLM_EXTERN SeqIdPtr SeqPointPrint(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid)
 	return spp->id;
 }
 
-/*****************************************************************************
-*
-*   SeqPointWrite(spp, buf, lastid, buflen)
-*
-*****************************************************************************/
-NLM_EXTERN SeqIdPtr SeqPointWrite(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, Int2 buflen)
+static SeqIdPtr 
+SeqPointWriteEx
+(SeqPntPtr spp,
+ CharPtr buf, 
+ SeqIdPtr lastid, 
+ Int2 buflen, 
+ Boolean use_best_id)
 {
-	CharPtr tmp;
+	CharPtr  tmp;
+	SeqIdPtr best_id, tmp_next;
+	BioseqPtr bsp;
 
 	if ((spp == NULL) || (buf == NULL)) return NULL;
 	
 	tmp = buf;
 	*tmp = '\0';
-	if (! SeqIdMatch(spp->id, lastid))
+	best_id = spp->id;
+	if (use_best_id)
 	{
-		SeqIdWrite(spp->id, tmp, PRINTID_FASTA_SHORT, buflen);
+	  bsp = BioseqFind (spp->id);
+	  if (bsp != NULL)
+	  {
+	    best_id = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+	  }
+	}
+	tmp_next = best_id->next;
+	best_id->next = NULL;
+
+	if (! SeqIdMatch(best_id, lastid))
+	{
+		SeqIdWrite(best_id, tmp, PRINTID_FASTA_SHORT, buflen);
 		while (*tmp != '\0') tmp++;
 		*tmp = ':';
 		tmp++; *tmp = '\0';
@@ -7031,7 +7259,19 @@ NLM_EXTERN SeqIdPtr SeqPointWrite(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, I
 	}
 	IntFuzzPrint(spp->fuzz, spp->point, tmp, TRUE);
 	
-	return spp->id;
+	best_id->next = tmp_next;
+	
+	return best_id;
+}
+
+/*****************************************************************************
+*
+*   SeqPointWrite(spp, buf, lastid, buflen)
+*
+*****************************************************************************/
+NLM_EXTERN SeqIdPtr SeqPointWrite(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, Int2 buflen)
+{
+  return SeqPointWriteEx (spp, buf, lastid, buflen, FALSE);
 }
 
 /*****************************************************************************
@@ -9083,7 +9323,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"DN") == 0) || 
 	      (StringICmp(temp,"DR") == 0) || 
 	      (StringICmp(temp,"DT") == 0) || 
-	      (StringICmp(temp,"DV") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"DV") == 0) || 
+	      (StringICmp(temp,"DW") == 0) || 
+	      (StringICmp(temp,"DY") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9118,9 +9360,12 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CL") == 0) ||
                      (StringICmp(temp,"CW") == 0) ||
                      (StringICmp(temp,"CZ") == 0) ||
-                     (StringICmp(temp,"DU") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"DU") == 0) ||
+                     (StringICmp(temp,"DX") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
-          } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
+          } else if ((StringICmp(temp,"AR") == 0) ||
+                     (StringICmp(temp,"DZ") == 0) ||
+                     (StringICmp(temp,"EA") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;

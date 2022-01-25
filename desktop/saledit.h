@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -204,6 +204,7 @@ extern void OldAlignmentEditor (IteM i);
 extern void LaunchAnnotAlignEditor (SeqAnnotPtr sap);
 extern void LaunchAlignEditor (SeqAlignPtr salp);
 extern void LaunchAlignViewer (SeqAlignPtr salp);
+extern void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data);

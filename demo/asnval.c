@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.17 $
+* $Revision: 1.21 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "1.6"
+#define ASNVAL_APP_VER "2.0"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -272,6 +272,8 @@ typedef struct valflags {
   Boolean  usePUBSEQ;
   Int2     verbosity;
   Int2     type;
+  Int4     skipcount;
+  Int4     maxcount;
   CharPtr  outpath;
   FILE     *outfp;
   FILE     *logfp;
@@ -853,23 +855,31 @@ static void ProcessMultipleRecord (
 )
 
 {
-  AsnIoPtr       aip;
-  AsnModulePtr   amp;
-  AsnTypePtr     atp, atp_bss, atp_desc, atp_se;
-  BioseqPtr      bsp;
-  ValNodePtr     bsplist;
-  Char           buf [64], path [PATH_MAX], longest [64];
-  FILE           *fp, *ofp = NULL;
-  Int4           numrecords = 0;
-  SeqEntryPtr    fsep, sep;
-  ObjMgrPtr      omp;
-  CharPtr        ptr;
-  time_t         starttime, stoptime, worsttime;
+  AsnIoPtr        aip;
+  AsnModulePtr    amp;
+  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp;
+  BioseqPtr       bsp;
+  ValNodePtr      bsplist;
+  BioseqSetPtr    bssp;
+  Char            buf [64], path [PATH_MAX], longest [64];
+  Int2            skipcount = 0, maxcount = 0;
+  CitSubPtr       csp = NULL;
+  FILE            *fp, *ofp = NULL;
+  Int4            numrecords = 0;
+  SeqEntryPtr     fsep, sep;
+  ObjMgrPtr       omp;
+  ObjValNode      ovn;
+  Pubdesc         pd;
+  CharPtr         ptr;
+  SubmitBlockPtr  sbp = NULL;
+  time_t          starttime, stoptime, worsttime;
+  SeqDescrPtr     subcit = NULL;
+  ValNode         vn;
 #ifdef OS_UNIX
-  Char           cmmd [256];
-  CharPtr        gzcatprog;
-  int            ret;
-  Boolean        usedPopen = FALSE;
+  Char            cmmd [256];
+  CharPtr         gzcatprog;
+  int             ret;
+  Boolean         usedPopen = FALSE;
 #endif
 
   if (StringHasNoText (filename)) return;
@@ -885,6 +895,18 @@ static void ProcessMultipleRecord (
   amp = AsnAllModPtr ();
   if (amp == NULL) {
     Message (MSG_POSTERR, "Unable to load AsnAllModPtr");
+    return;
+  }
+
+  atp_ssp = AsnFind ("Seq-submit");
+  if (atp_ssp == NULL) {
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit");
+    return;
+  }
+
+  atp_sbp = AsnFind ("Seq-submit.sub");
+  if (atp_sbp == NULL) {
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.sub");
     return;
   }
 
@@ -950,7 +972,14 @@ static void ProcessMultipleRecord (
     return;
   }
 
-  atp = atp_bss;
+  if (vfp->type == 4) {
+    atp = atp_bss;
+  } else if (vfp->type == 5) {
+    atp = atp_ssp;
+  } else {
+    Message (MSG_ERROR, "Batch processing type not set properly");
+    return;
+  }
 
   longest [0] = '\0';
   worsttime = 0;
@@ -970,45 +999,69 @@ static void ProcessMultipleRecord (
     ofp = FileOpen (path, "w");
   }
 
-  while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
+  while ((atp = AsnReadId (aip, amp, atp)) != NULL && maxcount < vfp->maxcount) {
     if (atp == atp_se) {
       sep = SeqEntryAsnRead (aip, atp);
     
-      if (sep != NULL) {
-        starttime = GetSecs ();
-        buf [0] = '\0';
+      /* propagate submission citation as descriptor onto each Seq-entry */
 
-        if (vfp->logfp != NULL) {
-          fsep = FindNthBioseq (sep, 1);
-          if (fsep != NULL && fsep->choice == 1) {
-            bsp = (BioseqPtr) fsep->data.ptrvalue;
-            if (bsp != NULL) {
-              SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
-              fprintf (vfp->logfp, "%s\n", buf);
-              fflush (vfp->logfp);
+      if (subcit != NULL && sep != NULL && sep->data.ptrvalue != NULL) {
+        if (sep->choice == 1) {
+          bsp = (BioseqPtr) sep->data.ptrvalue;
+          ValNodeLink (&(bsp->descr),
+                       AsnIoMemCopy ((Pointer) subcit,
+                                     (AsnReadFunc) SeqDescrAsnRead,
+                                     (AsnWriteFunc) SeqDescrAsnWrite));
+        } else if (sep->choice == 2) {
+          bssp = (BioseqSetPtr) sep->data.ptrvalue;
+          ValNodeLink (&(bssp->descr),
+                       AsnIoMemCopy ((Pointer) subcit,
+                                     (AsnReadFunc) SeqDescrAsnRead,
+                                     (AsnWriteFunc) SeqDescrAsnWrite));
+        }
+      }
+
+      if (sep != NULL) {
+        if (skipcount < vfp->skipcount) {
+          skipcount++;
+        } else {
+
+          starttime = GetSecs ();
+          buf [0] = '\0';
+
+          if (vfp->logfp != NULL) {
+            fsep = FindNthBioseq (sep, 1);
+            if (fsep != NULL && fsep->choice == 1) {
+              bsp = (BioseqPtr) fsep->data.ptrvalue;
+              if (bsp != NULL) {
+                SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+                fprintf (vfp->logfp, "%s\n", buf);
+                fflush (vfp->logfp);
+              }
             }
           }
-        }
 
-        bsplist = NULL;
+          bsplist = NULL;
     
-        if (vfp->lookup) {
-          AccnListLookupFarSeqIDs (sep);
-        }
-        if (vfp->lock) {
-          bsplist = DoLockFarComponents (sep, vfp);
-        }
+          if (vfp->lookup) {
+            AccnListLookupFarSeqIDs (sep);
+          }
+          if (vfp->lock) {
+            bsplist = DoLockFarComponents (sep, vfp);
+          }
 
-        DoValidation (sep, vfp, ofp);
+          DoValidation (sep, vfp, ofp);
 
-        bsplist = UnlockFarComponents (bsplist);
+          bsplist = UnlockFarComponents (bsplist);
 
-        stoptime = GetSecs ();
-        if (stoptime - starttime > worsttime && StringDoesHaveText (buf)) {
-          worsttime = stoptime - starttime;
-          StringCpy (longest, buf);
+          stoptime = GetSecs ();
+          if (stoptime - starttime > worsttime && StringDoesHaveText (buf)) {
+            worsttime = stoptime - starttime;
+            StringCpy (longest, buf);
+          }
+          numrecords++;
+          maxcount++;
         }
-        numrecords++;
       }
 
       SeqEntryFree (sep);
@@ -1016,6 +1069,25 @@ static void ProcessMultipleRecord (
       ObjMgrReapOne (omp);
       ObjMgrFreeCache (0);
       FreeSeqIdGiCache ();
+    } else if (atp == atp_sbp) {
+      sbp = SubmitBlockAsnRead (aip, atp);
+      if (sbp != NULL) {
+        csp = sbp->cit;
+        if (csp != NULL) {
+          MemSet ((Pointer) &ovn, 0, sizeof (ObjValNode));
+          MemSet ((Pointer) &pd, 0, sizeof (Pubdesc));
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          vn.choice = PUB_Sub;
+          vn.data.ptrvalue = (Pointer) csp;
+          vn.next = NULL;
+          pd.pub = &vn;
+          ovn.vn.choice = Seq_descr_pub;
+          ovn.vn.data.ptrvalue = (Pointer) &pd;
+          ovn.vn.next = NULL;
+          ovn.vn.extended = 1;
+          subcit = (SeqDescrPtr) &ovn;
+        }
+      }
     } else {
       AsnReadVal (aip, atp, NULL);
     }
@@ -1089,6 +1161,8 @@ static void ProcessOneRecord (
 #define G_argGiLookup     21
 #define T_argThreads      22
 #define L_argLogFile      23
+#define S_argSkipCount    24
+#define C_argMaxCount     25
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1121,11 +1195,11 @@ Args myargs [] = {
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Verbosity", "0", "0", "3",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
+  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Bioseq-set is Binary", "F", NULL, NULL,
+  {"Batch File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Bioseq-set is Compressed", "F", NULL, NULL,
+  {"Batch File is Compressed", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Remote Fetching from ID", "F", NULL, NULL,
     TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1139,6 +1213,10 @@ Args myargs [] = {
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Log File", NULL, NULL, NULL,
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Skip Count", "0", NULL, NULL,
+    TRUE, 'S', ARG_INT, 0.0, 0, NULL},
+  {"Max Count", "0", NULL, NULL,
+    TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -1221,6 +1299,12 @@ Int2 Main (void)
 
   vfd.verbosity = (Int2) myargs [v_argVerbosity].intvalue;
 
+  vfd.skipcount = (Int4) myargs [S_argSkipCount].intvalue;
+  vfd.maxcount = (Int4) myargs [C_argMaxCount].intvalue;
+  if (vfd.maxcount < 1) {
+    vfd.maxcount = INT4_MAX;
+  }
+
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
@@ -1237,7 +1321,10 @@ Int2 Main (void)
   } else if (StringICmp (str, "m") == 0) {
     type = 5;
   } else if (StringICmp (str, "t") == 0) {
-    type = 1;
+    type = 4;
+    batch = TRUE;
+  } else if (StringICmp (str, "u") == 0) {
+    type = 5;
     batch = TRUE;
   } else {
     type = 1;
@@ -1356,6 +1443,8 @@ Int2 Main (void)
     PubSeqFetchDisable ();
 #endif
   }
+
+  TransTableFreeAll ();
 
   if (vfd.fatal_errors > 0) return 1;
 

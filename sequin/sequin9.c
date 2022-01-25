@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.423 $
+* $Revision: 6.426 $
 *
 * File Description: 
 *
@@ -12734,9 +12734,12 @@ IsSequenceUpdateChoiceAllowed
     /* If either sequence is not raw and not indexer version, do not allow sequence update */
     return FALSE;
   }  
-  else if ((upp->salp == NULL || ignore_alignment) && action == eSequenceUpdatePatch)
+  else if (action == eSequenceUpdatePatch
+           && (upp->salp == NULL || ignore_alignment 
+             || (! RawSequencePatchOk (upp->orig_bsp, upp->update_bsp)
+                 && !DeltaSequencePatchOk (upp->orig_bsp, upp->update_bsp))))
   {
-    /* If no alignment then disable the patch button */
+    /* If no alignment or patch not available then disable the patch button */
     return FALSE;
   }
   else if (ignore_alignment 
@@ -13617,7 +13620,7 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
     ch1 = dlg->aln2 [j];
     if (ch1 != '-') {
       if (dlg->revcomp) {
-        realpos = (dlg->uald.old5 + dlg->uald.olda + dlg->uald.old3 - pos - 1);
+        realpos = (dlg->uald.new5 + dlg->uald.newa + dlg->uald.new3 - pos - 1);
       } else {
         realpos = pos;
       }
@@ -15317,6 +15320,8 @@ static Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list)
 {
   SeqIdPtr sip_next;
   Char     id_txt1 [128], id_txt2 [128];
+  CharPtr  ptr;
+  Int4     len;
   
   if (sip == NULL || sip_list == NULL || sip->choice != SEQID_LOCAL)
   {
@@ -15336,6 +15341,15 @@ static Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list)
       if (StringCmp (id_txt1, id_txt2) == 0)
       {
         return TRUE;
+      }
+      ptr = StringChr (id_txt2, '.');
+      if (ptr != NULL)  /* ID in list has version */
+      {
+        len = StringLen (id_txt1);
+        if (len == ptr - id_txt2 && StringNCmp (id_txt1, id_txt2, len) == 0)
+        {
+          return TRUE;
+        }
       }
     }
     sip_list = sip_list->next;
@@ -17223,7 +17237,7 @@ static void LoadUpdateSequenceMapFile (UpdateMultiSequenceFormPtr usfp)
   Char                       path [PATH_MAX];
   ReadBufferData             rbd;
   CharPtr                    line, ptr;
-  SeqIdPtr                   sip_orig, sip_update;
+  SeqIdPtr                   sip_1, sip_2, sip_orig, sip_update;
   BioseqPtr                  bsp_orig, bsp_update;
   Int4                       orig_position, update_position;
   ValNodePtr                 update_vnp;
@@ -17255,13 +17269,36 @@ static void LoadUpdateSequenceMapFile (UpdateMultiSequenceFormPtr usfp)
     ptr += StringCSpn (ptr, "\t ");
     if (*ptr != 0 && ptr != line)
     {
+      /* truncate string after first ID */
       *ptr = '\0';
-      /* original ID first on line, followed by tab, followed by update ID */
-      sip_orig = MakeSeqID (line);
-      sip_update = MakeSeqID (ptr + 1);
+      ptr++;
+      /* skip over any white space before second ID */
+      ptr += StringSpn (ptr, "\t ");
+      /* truncate trailing white space */
+      while (*(ptr + StringLen (ptr) - 1) == ' ' || *(ptr + StringLen (ptr) - 1) == '\t')
+      {
+        *(ptr + StringLen (ptr) - 1) = 0;
+      }
       
-      bsp_orig = FindBioseqInList (usfp->no_updates_list, sip_orig, &orig_position);
-      bsp_update = FindBioseqInList (usfp->unmatched_updates_list, sip_update, &update_position);
+      sip_1 = MakeSeqID (line);
+      sip_2 = MakeSeqID (ptr);
+      
+      /* try to determine which is original and which is update */
+      bsp_orig = FindBioseqInList (usfp->no_updates_list, sip_1, &orig_position);
+      bsp_update = FindBioseqInList (usfp->unmatched_updates_list, sip_2, &update_position);
+      if (bsp_orig == NULL && bsp_update == NULL)
+      {
+        bsp_orig = FindBioseqInList (usfp->no_updates_list, sip_2, &orig_position);
+        bsp_update = FindBioseqInList (usfp->unmatched_updates_list, sip_1, &update_position);
+        sip_orig = sip_2;
+        sip_update = sip_1;
+      }
+      else
+      {
+        sip_orig = sip_1;
+        sip_update = sip_2;
+      }
+
       if (bsp_orig != NULL && bsp_update != NULL)
       {
         /* remove Bioseq from no update list and add to list of originals */

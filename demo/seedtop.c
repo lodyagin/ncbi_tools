@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: seedtop.c,v 6.11 2005/07/28 14:52:22 coulouri Exp $";
+static char const rcsid[] = "$Id: seedtop.c,v 6.12 2006/03/01 13:43:45 coulouri Exp $";
 
-/* $Id: seedtop.c,v 6.11 2005/07/28 14:52:22 coulouri Exp $ */
+/* $Id: seedtop.c,v 6.12 2006/03/01 13:43:45 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.11 $
+$Revision: 6.12 $
 
 $Log: seedtop.c,v $
+Revision 6.12  2006/03/01 13:43:45  coulouri
+From Alejandro Schaffer: do not dereference null pointer
+
 Revision 6.11  2005/07/28 14:52:22  coulouri
 remove dead code
 
@@ -293,6 +296,10 @@ Int2 Main(void)
 	  init_order(NULL, program_flag, is_dna, seedSearch);
 	}
 	rdpt = readdb_new(database, !is_dna);
+	if (NULL == rdpt) {
+	  ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to find or open database %s\n", database);
+	  return (1);
+	}
 	if (program_flag == PATTERN_FLAG) {
 	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, &info_vnp);
             PGPOutTextMessages(info_vnp, outfp);

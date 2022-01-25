@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.13 2005/06/16 15:28:28 bollin Exp $
+/* $Id: seqpanel.h,v 6.14 2006/01/17 17:47:58 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,7 @@
 #ifndef seqpanel_h
 #define seqpanel_h
 extern PaneL CreateSeqViewPanel (GrouP g, Int2 w, Int2 h);
+extern void UpdateSeqViewPanel (PaneL pnl);
 
 extern void WriteAlignmentContiguousToFile
 (SeqAlignPtr salp,

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.7  2005/12/29 13:46:18  bollin
+* added PubdescContentMatch function
+*
 * Revision 6.6  2004/04/01 13:43:08  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -1254,6 +1257,46 @@ NLM_EXTERN Int2 LIBCALL PubEquivMatch (ValNodePtr a, ValNodePtr b)
 		retval = 1;
 	return retval;
 }
+
+
+/*****************************************************************************
+*
+*   PubdescContentMatch(pub1, pub2)
+*
+*   returns TRUE if content of pub1 matches content of pub2, FALSE otherwise
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL PubdescContentMatch (PubdescPtr pdp1, PubdescPtr pdp2)
+{
+    if (pdp1 == NULL && pdp2 == NULL)
+    {
+        return TRUE;
+    }
+    else if (pdp1 == NULL || pdp2 == NULL)
+    {
+        return FALSE;
+    }
+    else if (pdp1->reftype != pdp2->reftype)
+    {
+        return FALSE;
+    }
+    else if (StringCmp (pdp1->name, pdp2->name) != 0
+             || StringCmp (pdp1->fig, pdp2->fig) != 0
+             || StringCmp (pdp1->maploc, pdp2->maploc) != 0
+             || StringCmp (pdp1->seq_raw, pdp2->seq_raw) != 0
+             || StringCmp (pdp1->comment, pdp2->comment) != 0)
+    {
+        return FALSE;
+    }
+    else if (PubMatch (pdp1->pub, pdp2->pub) != 0)
+    {
+        return FALSE;
+    }
+    else
+    {
+        return TRUE;
+    }
+}
+
 
 /*****************************************************************************
 *

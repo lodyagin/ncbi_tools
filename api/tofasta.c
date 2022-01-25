@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.148 $
+* $Revision: 6.150 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.150  2006/01/10 22:19:29  kans
+* CreateDefLine calls DoTpaPrefix to handle TPA_exp and TPA_inf
+*
+* Revision 6.149  2005/12/07 19:49:46  kans
+* in BioseqFastaStreamInternal, bail if virtual Bioseq
+*
 * Revision 6.148  2005/09/12 17:44:21  kans
 * in complete chromosome title, use virus instead of virion
 *
@@ -1583,6 +1589,8 @@ static Int4 BioseqFastaStreamInternal (
 
   if (bsp == NULL && slp == NULL) return 0;
   if (fp == NULL && bs == NULL) return 0;
+
+  if (bsp != NULL && bsp->repr == Seq_repr_virtual) return 0;
 
   if (linelen > 128) {
     linelen = 128;
@@ -4215,6 +4223,46 @@ static Boolean NotSpecialTaxName (CharPtr taxname)
   return TRUE;
 }
 
+static Boolean DoTpaPrefix (
+  CharPtr title,
+  CharPtr PNTR ttl,
+  CharPtr PNTR pfx,
+  Boolean is_tpa,
+  Boolean tpa_exp,
+  Boolean tpa_inf
+)
+
+{
+  /* must be called with ttl and pfx pointing to stack variables */
+  *ttl = title;
+  *pfx = NULL;
+
+  if (title == NULL || *title == '\0') return FALSE;
+
+  if (is_tpa) {
+    if (tpa_exp) {
+      if (StringNICmp (title, "TPA_exp: ", 9) == 0) return FALSE;
+      *pfx = "TPA_exp: ";
+      if (StringNICmp (title, "TPA: ", 5) == 0) {
+        *ttl = title +  5;
+      }
+      return TRUE;
+    } else if (tpa_inf) {
+      if (StringNICmp (title, "TPA_inf: ", 9) == 0) return FALSE;
+      *pfx = "TPA_inf: ";
+      if (StringNICmp (title, "TPA: ", 5) == 0) {
+        *ttl = title +  5;
+      }
+      return TRUE;
+    } else {
+      if (StringNICmp (title, "TPA: ", 5) == 0) return FALSE;
+      *pfx = "TPA: ";
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 /*****************************************************************************
 *
 *   CreateDefLine(iip, bsp, buf, buflen, tech)
@@ -4230,7 +4278,7 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
                                       CharPtr accession, CharPtr organism, Boolean ignoreTitle, Boolean extProtTitle)
 {
 	ValNodePtr vnp = NULL;
-	CharPtr tmp = NULL, title = NULL;
+	CharPtr tmp = NULL, title = NULL, ttl = NULL, pfx = NULL;
 	PdbBlockPtr pbp;
 	PatentSeqIdPtr psip;
 	PDBSeqIdPtr	pdbip;	
@@ -4245,7 +4293,8 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 		"WORKING DRAFT SEQUENCE",
 		"*** SEQUENCING IN PROGRESS ***" };
 	Boolean htg_tech = FALSE, htgs_draft = FALSE, htgs_cancelled = FALSE,
-	        is_nc = FALSE, is_nm = FALSE, is_nr = FALSE, is_tpa = FALSE;
+	        is_nc = FALSE, is_nm = FALSE, is_nr = FALSE, is_tpa = FALSE,
+	        tpa_exp = FALSE, tpa_inf = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
 	EMBLBlockPtr ebp = NULL;
@@ -4321,7 +4370,7 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 		buf += diff;
 	}
 	diff = 0;
-	if (htg_tech) {
+	if (htg_tech || is_tpa) {
 		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank,TRUE);
 		if (vnp != NULL) {
 			gbp = (GBBlockPtr) vnp->data.ptrvalue;
@@ -4337,6 +4386,20 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 			}
 		}
 	}
+	if (keywords != NULL) {
+		for (vnp = keywords; vnp != NULL; vnp = vnp->next) {
+			if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
+				htgs_draft = TRUE;
+			} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
+				htgs_cancelled = TRUE;
+			} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:experimental") == 0) {
+				tpa_exp = TRUE;
+			} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:inferential") == 0) {
+				tpa_inf = TRUE;
+			}
+		}
+	}
+
 	if (! ignoreTitle)
           {
             vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title,TRUE);
@@ -4409,12 +4472,14 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 	}
 /* some titles may have zero length */
 	if (title != NULL && *title != '\0') {
-		if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
-			diff = LabelCopy (buf, "TPA: ", buflen);
+	    ttl = title;
+	    pfx = NULL;
+        if (DoTpaPrefix (title, &ttl, &pfx, is_tpa, tpa_exp, tpa_inf)) {
+			diff = LabelCopy (buf, pfx, buflen);
 			buflen -= diff;
 			buf += diff;
 		}
-		diff = LabelCopy(buf, title, buflen);
+		diff = LabelCopy (buf, ttl, buflen);
 		                        /* remove trailing blanks and periods */
 		tmp = buf + diff - 1;   /* point at last character */
 		while (tmp >= buf && ((*tmp <= ' ') || (*tmp == '.'))) {
@@ -4495,12 +4560,14 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 					diff = LabelCopy(buf, title, buflen);
 				}
 				*/
-				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
-					diff = LabelCopy (buf, "TPA: ", buflen);
-					buflen -= diff;
-					buf += diff;
-				}
-				diff = LabelCopy(buf, title, buflen);
+	          ttl = title;
+	          pfx = NULL;
+              if (DoTpaPrefix (title, &ttl, &pfx, is_tpa, tpa_exp, tpa_inf)) {
+		        	diff = LabelCopy (buf, pfx, buflen);
+		        	buflen -= diff;
+		        	buf += diff;
+		        }
+		        diff = LabelCopy (buf, ttl, buflen);
 				if (organism == NULL && taxname != NULL) {
 					organism = taxname;
 					iip = NULL;
@@ -4512,15 +4579,17 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 				if (title == NULL) {
 					title = UseOrgMods(bsp, NULL);
 				}
-				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
-					diff = LabelCopy (buf, "TPA: ", buflen);
-					buflen -= diff;
-					buf += diff;
-				}
-				if (title != NULL) {
-					diff = LabelCopy(buf, title, buflen);
+                ttl = title;
+                pfx = NULL;
+                if (DoTpaPrefix (title, &ttl, &pfx, is_tpa, tpa_exp, tpa_inf)) {
+                    diff = LabelCopy (buf, pfx, buflen);
+                    buflen -= diff;
+                    buf += diff;
+                }
+				if (ttl != NULL) {
+					diff = LabelCopy (buf, ttl, buflen);
 				} else {
-					diff = LabelCopy(buf, "No definition line found", buflen);
+					diff = LabelCopy (buf, "No definition line found", buflen);
 				}
 			}
 		}
@@ -4537,12 +4606,14 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
 			if (title != NULL) {
-				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
-					diff = LabelCopy (buf, "TPA: ", buflen);
-					buflen -= diff;
-					buf += diff;
-				}
-				diff = LabelCopy(buf, title, buflen);
+                ttl = title;
+                pfx = NULL;
+                if (DoTpaPrefix (title, &ttl, &pfx, is_tpa, tpa_exp, tpa_inf)) {
+		        	diff = LabelCopy (buf, pfx, buflen);
+		        	buflen -= diff;
+		        	buf += diff;
+		        }
+		        diff = LabelCopy (buf, ttl, buflen);
 				buflen -= diff;
 				buf += diff;
 			}
@@ -4564,15 +4635,6 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 					i = 0;
 				}
 			} else {
-				if (keywords != NULL) {
-					for (vnp = keywords; vnp != NULL; vnp = vnp->next) {
-						if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
-							htgs_draft = TRUE;
-						} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
-							htgs_cancelled = TRUE;
-						}
-					}
-				}
 				if (htgs_draft) {
 					if (StringStr(title, "WORKING DRAFT") == NULL) {
 						doit = TRUE;
@@ -4629,12 +4691,14 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
 			if (title != NULL) {
-				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
-					diff = LabelCopy (buf, "TPA: ", buflen);
-					buflen -= diff;
-					buf += diff;
-				}
-				diff = LabelCopy(buf, title, buflen);
+                ttl = title;
+                pfx = NULL;
+                if (DoTpaPrefix (title, &ttl, &pfx, is_tpa, tpa_exp, tpa_inf)) {
+                    diff = LabelCopy (buf, pfx, buflen);
+                    buflen -= diff;
+                    buf += diff;
+                }
+                diff = LabelCopy (buf, ttl, buflen);
 				buflen -= diff;
 				buf += diff;
 			}

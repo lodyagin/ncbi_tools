@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.61 $
+* $Revision: 1.69 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -359,6 +359,45 @@ static Boolean LocusHasBadChars (
   return FALSE;
 }
 
+static CharPtr gbseq_strd [4] = {
+  NULL, "single", "double", "mixed"
+};
+
+static CharPtr gbseq_mol [10] = {
+  "?", "DNA", "RNA", "tRNA", "rRNA", "mRNA", "uRNA", "snRNA", "snoRNA", "AA"
+};
+
+static CharPtr gbseq_top [3] = {
+  NULL, "linear", "circular"
+};
+
+static void LookupAccnForNavLink (
+  Int4 gi,
+  CharPtr seqid,
+  size_t len,
+  CharPtr dfault
+)
+
+{
+  SeqIdPtr  sip;
+
+  if (seqid == NULL) return;
+  *seqid = '\0';
+  if (gi > 0) {
+    if (GetAccnVerFromServer (gi, seqid)) return;
+    sip = GetSeqIdForGI (gi);
+    if (sip != NULL) {
+      if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, len) != NULL) {
+        SeqIdFree (sip);
+        return;
+      }
+      SeqIdFree (sip);
+    }
+  }
+  if (dfault == NULL) return;
+  StringCpy (seqid, dfault);
+}
+
 NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
@@ -376,7 +415,7 @@ NLM_EXTERN void AddLocusBlock (
   BioSourcePtr       biop;
   Int2               bmol = 0;
   BioseqPtr          bsp;
-  Char               buf [512];
+  Char               buf [1024];
   SeqFeatPtr         cds;
   Int4               currGi;
   Char               date [40];
@@ -396,6 +435,7 @@ NLM_EXTERN void AddLocusBlock (
   ValNodePtr         gilistpos;
   Char               gi_buf [16];
   SeqIdPtr           gpp = NULL;
+  Boolean            has_next_pref_ul = FALSE;
   Boolean            hasComment;
   Char               id [41];
   Int2               imol = 0;
@@ -424,6 +464,8 @@ NLM_EXTERN void AddLocusBlock (
   Int4               prevGi;
   SeqDescrPtr        sdp;
   Char               sect [128];
+  Char               seg [32];
+  Char               seqid [128];
   SeqFeatPtr         sfp;
   SeqHistPtr         hist;
   SeqIdPtr           sip;
@@ -435,6 +477,7 @@ NLM_EXTERN void AddLocusBlock (
   UserObjectPtr      uop;
   ValNodePtr         vnp;
   Boolean            wgsmaster = FALSE;
+  Int2               moltype, strandedness, topol;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -1005,9 +1048,26 @@ NLM_EXTERN void AddLocusBlock (
     gbseq->locus = StringSave (locus);
     gbseq->length = length;
     gbseq->division = StringSave (div);
+    /*
     gbseq->strandedness = bsp->strand;
     gbseq->moltype = imolToMoltype [imol];
     gbseq->topology = topology;
+    */
+    strandedness = (Int2) bsp->strand;
+    if (strandedness < 0 || strandedness > 3) {
+      strandedness = 0;
+    }
+    gbseq->strandedness = StringSave (gbseq_strd [strandedness]);
+    moltype = (Int2) imolToMoltype [imol];
+    if (moltype < 0 || moltype > 9) {
+      moltype = 0;
+    }
+    gbseq->moltype = StringSave (gbseq_mol [moltype]);
+    topol = (Int2) topology;
+    if (topol < 0 || topol > 2) {
+      topol = 0;
+    }
+    gbseq->topology = StringSave (gbseq_top [topol]);
 
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
       SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id));
@@ -1095,7 +1155,6 @@ NLM_EXTERN void AddLocusBlock (
     DoQuickLinkFormat (awp->afp, buf);
 
     buf [0] = '\0';
-    prefix = NULL;
     hasComment = (Boolean) (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext) != NULL);
     if (! hasComment) {
       hasComment = (Boolean) (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_region, &dcontext) != NULL);
@@ -1134,42 +1193,32 @@ NLM_EXTERN void AddLocusBlock (
     }
 
     buf [0] = '\0';
-    StringCpy (buf, "<div class=\"localnav\"><ul class=\"locallinks\">");
+    StringCpy (buf, "<div class=\"localnav\"><ul class=\"locals\">");
 
     if (hasComment) {
-      sprintf (sect, "<li><a href=\"#comment_%ld\">Comment</a></li>", (long) awp->currGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      sprintf (sect, "<li><a href=\"#comment_%ld\" title=\"Jump to the comment section of this record\">Comment</a></li>", (long) awp->currGi);
       StringCat (buf, sect);
     }
-    sprintf (sect, "<li><a href=\"#feature_%ld\">Features</a></li>", (long) awp->currGi);
-    StringCat (buf, prefix);
-    prefix = "   ";
+    sprintf (sect, "<li><a href=\"#feature_%ld\" title=\"Jump to the feature table of this record\">Features</a></li>", (long) awp->currGi);
     StringCat (buf, sect);
     if (willshowwgs) {
-      sprintf (sect, "<li><a href=\"#wgs_%ld\">WGS</a></li>", (long) awp->currGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      sprintf (sect, "<li><a href=\"#wgs_%ld\" title=\"Jump to WGS section of this record\">WGS</a></li>", (long) awp->currGi);
       StringCat (buf, sect);
     }
     if (willshowgenome) {
-      sprintf (sect, "<li><a href=\"#genome_%ld\">Genome</a></li>", (long) awp->currGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      sprintf (sect, "<li><a href=\"#genome_%ld\" title=\"Jump to the genome section of this record\">Genome</a></li>", (long) awp->currGi);
       StringCat (buf, sect);
     }
     if (willshowcontig) {
-      sprintf (sect, "<li><a href=\"#contig_%ld\">Contig</a></li>", (long) awp->currGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      sprintf (sect, "<li><a href=\"#contig_%ld\" title=\"Jump to the contig section of this record\">Contig</a></li>", (long) awp->currGi);
       StringCat (buf, sect);
     }
     if (willshowsequence) {
-      sprintf (sect, "<li><a href=\"#sequence_%ld\">Sequence</a></li>", (long) awp->currGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      sprintf (sect, "<li><a href=\"#sequence_%ld\" title=\"Jump to the sequence of this record\">Sequence</a></li>", (long) awp->currGi);
       StringCat (buf, sect);
     }
+
+    StringCat (buf, "</ul>");
 
     prevGi = 0;
     currGi = 0;
@@ -1194,30 +1243,55 @@ NLM_EXTERN void AddLocusBlock (
       }
     } while (gilistpos != NULL && currGi != awp->currGi);
 
+    has_next_pref_ul = FALSE;
 
     if (currGi == awp->currGi && nextGi > 0 && awp->sectionCount < awp->sectionMax) {
-      sprintf (sect, "<li class=\"localnext\"><a href=\"#locus_%ld\">Next</a></li>", (long) nextGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      if (! has_next_pref_ul) {
+        StringCat (buf, "<ul class=\"nextprevlinks\">");
+        has_next_pref_ul = TRUE;
+      }
+      LookupAccnForNavLink (nextGi, seqid, sizeof (seqid), "the next record");
+      if (awp->seg + 1 > 0 && awp->numsegs > 0 && awp->seg + 1 <= awp->numsegs) {
+        sprintf (seg, " (segment %d of %ld)", (int) (awp->seg + 1), (long) awp->numsegs);
+        StringCat (seqid, seg);
+      }
+      sprintf (sect, "<li class=\"next\"><a href=\"#locus_%ld\" title=\"Jump to %s\">Next</a></li>", (long) nextGi, seqid);
       StringCat (buf, sect);
     } else if (awp->nextGi > 0) {
-      sprintf (sect, "<li class=\"localnext\"><a href=\"#locus_%ld\">Next</a></li>", (long) awp->nextGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      if (! has_next_pref_ul) {
+        StringCat (buf, "<ul class=\"nextprevlinks\">");
+        has_next_pref_ul = TRUE;
+      }
+      LookupAccnForNavLink (nextGi, seqid, sizeof (seqid), "the next record");
+      sprintf (sect, "<li class=\"next\"><a href=\"#locus_%ld\" title=\"Jump to %s\">Next</a></li>", (long) awp->nextGi, seqid);
       StringCat (buf, sect);
     }
     if (currGi == awp->currGi && prevGi > 0 && awp->sectionCount > 1) {
-      sprintf (sect, "<li class=\"localprev\"><a href=\"#locus_%ld\">Previous</a></li>", (long) prevGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      if (! has_next_pref_ul) {
+        StringCat (buf, "<ul class=\"nextprevlinks\">");
+        has_next_pref_ul = TRUE;
+      }
+      LookupAccnForNavLink (prevGi, seqid, sizeof (seqid), "the previous record");
+      if (awp->seg - 1 > 0 && awp->numsegs > 0 && awp->seg - 1 <= awp->numsegs) {
+        sprintf (seg, " (segment %d of %ld)", (int) (awp->seg - 1), (long) awp->numsegs);
+        StringCat (seqid, seg);
+      }
+      sprintf (sect, "<li class=\"prev\"><a href=\"#locus_%ld\" title=\"Jump to %s\">Previous</a></li>", (long) prevGi, seqid);
       StringCat (buf, sect);
     } else if (awp->prevGi > 0) {
-      sprintf (sect, "<li class=\"localprev\"><a href=\"#locus_%ld\">Previous</a></li>", (long) awp->prevGi);
-      StringCat (buf, prefix);
-      prefix = "   ";
+      if (! has_next_pref_ul) {
+        StringCat (buf, "<ul class=\"nextprevlinks\">");
+        has_next_pref_ul = TRUE;
+      }
+      LookupAccnForNavLink (prevGi, seqid, sizeof (seqid), "the previous record");
+      sprintf (sect, "<li class=\"prev\"><a href=\"#locus_%ld\" title=\"Jump to %s\">Previous</a></li>", (long) awp->prevGi, seqid);
       StringCat (buf, sect);
     }
-    StringCat (buf, "</ul></div>\n");
+    if (has_next_pref_ul) {
+      StringCat (buf, "</ul>");
+    }
+    StringCat (buf, "</div>\n");
+    StringCat (buf, "<pre class=\"genbank\">");
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -1922,11 +1996,128 @@ NLM_EXTERN void AddVersionBlock (
   }
 }
 
+static void FF_asn2gb_www_projID (
+  StringItemPtr ffstring,
+  CharPtr projID
+)
+
+{
+  FFAddOneString (ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, link_projid, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, ">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
+
 NLM_EXTERN void AddProjectBlock (
   Asn2gbWorkPtr awp
 )
 
 {
+  IntAsn2gbJobPtr    ajp;
+  BaseBlockPtr       bbp;
+  BioseqPtr          bsp;
+  Char               buf [32];
+  UserFieldPtr       curr;
+  SeqMgrDescContext  dcontext;
+  StringItemPtr      ffstring;
+  UserObjectPtr      gpuop = NULL;
+  Uint4              itemID;
+  ObjectIdPtr        oip;
+  Int4               parentID;
+  CharPtr            prefix;
+  Int4               projectID;
+  SeqDescrPtr        sdp;
+  UserObjectPtr      uop;
+  Int4               val;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+
+  if (! ISA_na (bsp->mol)) return;
+  if (awp->format != GENBANK_FMT) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL && StringICmp (oip->str, "GenomeProjectsDB") == 0) {
+        gpuop = uop;
+        itemID = dcontext.itemID;
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+  if (gpuop == NULL) return;
+
+  ffstring = FFGetString (ajp);
+  if ( ffstring == NULL ) return;
+
+  bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
+  if (bbp == NULL) return;
+
+  bbp->entityID = awp->entityID;
+  bbp->itemID = itemID;
+  bbp->itemtype = OBJ_SEQDESC;
+
+  FFStartPrint (ffstring, awp->format, 0, 12, "PROJECT", 12, 5, 5, "XX", TRUE);
+
+  prefix = "GenomeProject:";
+  projectID = 0;
+  parentID = 0;
+  for (curr = gpuop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip == NULL) continue;
+    if (StringICmp (oip->str, "ProjectID") == 0) {
+      if (curr->choice == 2) {
+        val = (Int4) curr->data.intvalue;
+        if (projectID > 0) {
+          sprintf (buf, "%ld", (long) projectID);
+          FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+          if (GetWWW (ajp)) {
+            FF_asn2gb_www_projID (ffstring, buf);
+          } else {
+            FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+          }
+          /*
+          FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
+          */
+          prefix = ",";
+          parentID = 0;
+        }
+        projectID = val;
+      }
+    } else if (StringICmp (oip->str, "ParentID") == 0) {
+      if (curr->choice == 2) {
+        val = (Int4) curr->data.intvalue;
+        parentID = val;
+      }
+    }
+  }
+  if (projectID > 0) {
+    sprintf (buf, "%ld", (long) projectID);
+    FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+    if (GetWWW (ajp)) {
+      FF_asn2gb_www_projID (ffstring, buf);
+    } else {
+      FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+    }
+    /*
+    FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
+    */
+  }
+
+  bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
+  FFRecycleString (ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 /* only displaying PID in GenPept format */
@@ -5355,7 +5546,7 @@ NLM_EXTERN void AddSlashBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "//\n<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "//</pre>\n<a name=\"slash_%ld\"></a>", (long) awp->currGi);
     str = StringSave (buf);
   } else {
     str = MemNew(sizeof(Char) * 4);

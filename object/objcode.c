@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.11  2006/01/31 22:30:53  kans
+* added O for pyrrolysine and J for leu or ile ambiguity
+*
 * Revision 6.10  2004/04/01 13:43:07  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -828,12 +831,12 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"G\", name \"Glycine\" },\n" \
 "{ symbol \"H\", name \"Histidine\"} ,\n" \
 "{ symbol \"I\", name \"Isoleucine\" },\n" \
-"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"J\", name \"Leu or Ile\" },\n" \
 "{ symbol \"K\", name \"Lysine\" },\n" \
 "{ symbol \"L\", name \"Leucine\" },\n" \
 "{ symbol \"M\", name \"Methionine\" },\n" \
 "{ symbol \"N\", name \"Asparagine\"} ,\n" \
-"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"O\", name \"Pyrrolysine\" },\n" \
 "{ symbol \"P\", name \"Proline\" },\n" \
 "{ symbol \"Q\", name \"Glutamine\"},\n" \
 "{ symbol \"R\", name \"Arginine\"},\n" \
@@ -878,12 +881,12 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"G\", name \"Glycine\" },\n" \
 "{ symbol \"H\", name \"Histidine\" } ,\n" \
 "{ symbol \"I\", name \"Isoleucine\" },\n" \
-"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"J\", name \"Leu or Ile\" },\n" \
 "{ symbol \"K\", name \"Lysine\" },\n" \
 "{ symbol \"L\", name \"Leucine\" },\n" \
 "{ symbol \"M\", name \"Methionine\" },\n" \
 "{ symbol \"N\", name \"Asparagine\" } ,\n" \
-"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"O\", name \"Pyrrolysine\" },\n" \
 "{ symbol \"P\", name \"Proline\" },\n" \
 "{ symbol \"Q\", name \"Glutamine\"},\n" \
 "{ symbol \"R\", name \"Arginine\"},\n" \
@@ -895,7 +898,7 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"X\", name \"Undetermined or atypical\"},\n" \
 "{ symbol \"Y\", name \"Tyrosine\"},\n" \
 "{ symbol \"Z\", name \"Glu or Gln\" } } } ,\n" \
-"{ code iupacaa3 , num 26 , one-letter FALSE , table {\n" \
+"{ code iupacaa3 , num 28 , one-letter FALSE , table {\n" \
 "{ symbol \"---\", name \"Gap\" } ,\n" \
 "{ symbol \"Ala\", name \"Alanine\" },\n" \
 "{ symbol \"Asx\", name \"Asp or Asn\" },\n" \
@@ -921,8 +924,10 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"Tyr\", name \"Tyrosine\"},\n" \
 "{ symbol \"Glx\", name \"Glu or Gln\" },\n" \
 "{ symbol \"Sec\", name \"Selenocysteine\"},\n" \
-"{ symbol \"Ter\", name \"Termination\" } } } ,\n" \
-"{ code ncbistdaa , num 26 , one-letter TRUE , table {\n" \
+"{ symbol \"Ter\", name \"Termination\"},\n" \
+"{ symbol \"Pyl\", name \"Pyrrolysine\"},\n" \
+"{ symbol \"Xle\", name \"Leu or Ile\" } } } ,\n" \
+"{ code ncbistdaa , num 28 , one-letter TRUE , table {\n" \
 "{ symbol \"-\", name \"Gap\" } ,\n" \
 "{ symbol \"A\", name \"Alanine\" },\n" \
 "{ symbol \"B\" , name \"Asp or Asn\" },\n" \
@@ -948,7 +953,9 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"Y\", name \"Tyrosine\"},\n" \
 "{ symbol \"Z\", name \"Glu or Gln\" },\n" \
 "{ symbol \"U\", name \"Selenocysteine\"},\n" \
-"{ symbol \"*\", name \"Termination\" } } } ,\n" \
+"{ symbol \"*\", name \"Termination\"},\n" \
+"{ symbol \"O\", name \"Pyrrolysine\"},\n" \
+"{ symbol \"J\", name \"Leu or Ile\" } } } ,\n" \
 "{ code ncbi2na , num 4 , one-letter TRUE , table {\n" \
 "{ symbol \"A\", name \"Adenine\" },\n" \
 "{ symbol \"C\", name \"Cytosine\" },\n" \
@@ -986,19 +993,19 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ from ncbi4na , to ncbi2na , num 16 ,\n" \
 "table { 3, 0, 1, 1, 2, 2, 1, 0, 3, 3, 3, 0, 2, 2, 1, 0 } } ,\n" \
 "{ from iupacaa , to ncbieaa , num 26 , start-at 65 ,\n" \
-"table { 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 255, 75, 76, 77, 78, 255, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90 } } ,\n" \
+"table { 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90 } } ,\n" \
 "{ from ncbieaa , to iupacaa , num 49 , start-at 42 ,\n" \
 "table { 88 , 255, 255, 88, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
-"65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 255, 75, 76, 77, 78, 255, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90 } } ,\n" \
+"65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90 } } ,\n" \
 "{ from iupacaa , to ncbistdaa , num 26 , start-at 65 ,\n" \
-"table { 1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
+"table { 1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 27, 10, 11, 12, 13, 26, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
 "{ from ncbieaa , to ncbistdaa , num 49 , start-at 42 ,\n" \
 "table { 25, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
-"1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
-"{ from ncbistdaa , to ncbieaa , num 26 ,\n" \
-"table { 45 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 42} } ,\n" \
-"{ from ncbistdaa , to iupacaa , num 26 ,\n" \
-"table { 255 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 255} } } };\n";
+"1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 27, 10, 11, 12, 13, 26, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
+"{ from ncbistdaa , to ncbieaa , num 28 ,\n" \
+"table { 45 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 42, 79, 74} } ,\n" \
+"{ from ncbistdaa , to iupacaa , num 28 ,\n" \
+"table { 255 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 255, 79, 74} } } };\n";
 #endif
 
 /*****************************************************************************

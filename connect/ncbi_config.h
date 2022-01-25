@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.10 2005/07/02 18:14:25 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.12 2006/02/23 15:31:33 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,35 +43,44 @@
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
+#  define HAVE_GETPWUID 1
 #  if defined(OS_UNIX_LINUX)
+#    define HAVE_GETPAGESIZE 1
 #    define NCBI_OS_LINUX 1
 #    ifdef PROC_X86_64
 #      define NCBI_PLATFORM_BITS 64
 #    else
 #      define NCBI_PLATFORM_BITS 32
 #    endif
+#    if !defined(HAVE_GETHOSTBYNAME_R)
+#      define HAVE_GETHOSTBYNAME_R 6
+#      define HAVE_GETHOSTBYADDR_R 8
+#    endif
+#    if !defined(HAVE_GETPWUID_R)
+#      define HAVE_GETPWUID_R      5
+#    endif
 #  elif defined(OS_UNIX_IRIX)
 #    define NCBI_OS_IRIX 1
+#    if !defined(HAVE_GETPWUID_R)
+#      define HAVE_GETPWUID_R      5
+#    endif
 #  elif defined(OS_UNIX_SOL)
 #    define NCBI_OS_SOLARIS 1
+#    define HAVE_GETPAGESIZE 1
+#    if !defined(HAVE_GETHOSTBYNAME_R)
+#      define HAVE_GETHOSTBYNAME_R 5
+#      define HAVE_GETHOSTBYADDR_R 7
+#    endif
 #  elif defined(OS_UNIX_BEOS)
 #    define NCBI_OS_BEOS 1
 #  elif defined(OS_UNIX_DARWIN)
 #    define NCBI_OS_DARWIN 1
+#    define HAVE_GETPAGESIZE 1
 #    ifdef COMP_METRO
 #      define NCBI_COMPILER_METROWERKS 1
 #      if _MSL_USING_MW_C_HEADERS
 #        define NCBI_COMPILER_MW_MSL
 #      endif
-#    endif
-#  endif
-#  if !defined(HAVE_GETHOSTBYNAME_R)
-#    if   defined(OS_UNIX_SOL)
-#      define HAVE_GETHOSTBYNAME_R 5
-#      define HAVE_GETHOSTBYADDR_R 7
-#    elif defined(OS_UNIX_LINUX)
-#      define HAVE_GETHOSTBYNAME_R 6
-#      define HAVE_GETHOSTBYADDR_R 8
 #    endif
 #  endif
 #elif defined(OS_MSWIN)

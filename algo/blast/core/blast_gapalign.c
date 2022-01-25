@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.c,v 1.163 2005/11/30 18:29:14 papadopo Exp $
+/* $Id: blast_gapalign.c,v 1.167 2006/02/15 15:07:07 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_gapalign.c,v 1.163 2005/11/30 18:29:14 papadopo Exp $";
+    "$Id: blast_gapalign.c,v 1.167 2006/02/15 15:07:07 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -190,13 +190,15 @@ s_BlastGreedyAlignMemAlloc(const BlastScoringParameters* score_params,
    if (score_params->reward % 2 == 1) {
       reward = 2*score_params->reward;
       penalty = -2*score_params->penalty;
-      Xdrop = 2*ext_params->gap_x_dropoff;
+      Xdrop = 2*MAX(ext_params->gap_x_dropoff,
+                    ext_params->gap_x_dropoff_final);
       gap_open = 2*score_params->gap_open;
       gap_extend = 2*score_params->gap_extend;
    } else {
       reward = score_params->reward;
       penalty = -score_params->penalty;
-      Xdrop = ext_params->gap_x_dropoff;
+      Xdrop = MAX(ext_params->gap_x_dropoff,
+                  ext_params->gap_x_dropoff_final);
       gap_open = score_params->gap_open;
       gap_extend = score_params->gap_extend;
    }
@@ -2098,104 +2100,6 @@ s_GetRelativeCoordinates(const BLAST_SequenceBlk* query,
    *context_out = context;
 }
 
-Int2 BLAST_MbGetGappedScore(EBlastProgramType program_number, 
-             BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
-			    BLAST_SequenceBlk* subject,
-			    BlastGapAlignStruct* gap_align,
-			    const BlastScoringParameters* score_params, 
-			    const BlastExtensionParameters* ext_params,
-			    const BlastHitSavingParameters* hit_params,
-			    BlastInitHitList* init_hitlist,
-			    BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats)
-{
-   const BlastExtensionOptions* ext_options = ext_params->options;
-   Int4 index;
-   BlastInitHSP* init_hsp;
-   BlastHSPList* hsp_list;
-   const BlastHitSavingOptions* hit_options = hit_params->options;
-   BLAST_SequenceBlk query_tmp;
-   Int4 context;
-   BlastIntervalTree *tree;
-   
-   if (*hsp_list_ptr == NULL)
-      *hsp_list_ptr = hsp_list = Blast_HSPListNew(hit_options->hsp_num_max);
-   else 
-      hsp_list = *hsp_list_ptr;
-
-   tree = Blast_IntervalTreeInit(0, query->length + 1,
-                                 0, subject->length + 1);
-
-   for (index=0; index<init_hitlist->total; index++) {
-      BlastHSP tmp_hsp;
-      Int4 q_start, q_end, s_start, s_end, score;
-
-      init_hsp = &init_hitlist->init_hsp_array[index];
-
-      /* Change query coordinates to relative in the initial HSP right here */
-      s_GetRelativeCoordinates(query, query_info, init_hsp, &query_tmp, NULL, 
-                             &context);
-
-      if (!init_hsp->ungapped_data) {
-         q_start = q_end = init_hsp->offsets.qs_offsets.q_off;
-         s_start = s_end = init_hsp->offsets.qs_offsets.s_off;
-         score = INT4_MIN;
-      } else {
-         q_start = init_hsp->ungapped_data->q_start;
-         q_end = q_start + init_hsp->ungapped_data->length;
-         s_start = init_hsp->ungapped_data->s_start;
-         s_end = s_start + init_hsp->ungapped_data->length;
-         score = init_hsp->ungapped_data->score;
-      }
-
-      tmp_hsp.score = score;
-      tmp_hsp.context = context;
-      tmp_hsp.query.offset = q_start;
-      tmp_hsp.query.end = q_end;
-      tmp_hsp.query.frame = query_info->contexts[context].frame;
-      tmp_hsp.subject.offset = s_start;
-      tmp_hsp.subject.end = s_end;
-      tmp_hsp.subject.frame = 1;
-
-      if (!BlastIntervalTreeContainsHSP(tree, &tmp_hsp, query_info,
-                                        MB_DIAG_CLOSE))
-      {
-         if (gapped_stats)
-            ++gapped_stats->extensions;
-
-         BLAST_GreedyGappedAlignment(query_tmp.sequence, 
-            subject->sequence, query_tmp.length, subject->length, gap_align, 
-            score_params, init_hsp->offsets.qs_offsets.q_off, 
-            init_hsp->offsets.qs_offsets.s_off, (Boolean) TRUE, 
-            (Boolean) (ext_options->ePrelimGapExt == eGreedyWithTracebackExt));
-
-         if (gap_align->score >= hit_options->cutoff_score) {
-            /* gap_align contains alignment endpoints; init_hsp contains 
-               the offsets to start the alignment from, if traceback is to 
-               be performed later */
-            BlastHSP* new_hsp;
-            Blast_HSPInit(gap_align->query_start, gap_align->query_stop, 
-                          gap_align->subject_start, gap_align->subject_stop,
-                          init_hsp->offsets.qs_offsets.q_off, 
-                          init_hsp->offsets.qs_offsets.s_off, context, 
-                          query_info->contexts[context].frame, 1, 
-                          gap_align->score, &(gap_align->edit_script), 
-                          &new_hsp);
-            Blast_HSPListSaveHSP(hsp_list, new_hsp);
-            BlastIntervalTreeAddHSP(new_hsp, tree, query_info, 
-                                    eQueryAndSubject);
-         }
-         else
-         {
-            gap_align->edit_script = GapEditScriptDelete(gap_align->edit_script);
-         }
-      }
-   }
-
-   tree = Blast_IntervalTreeFree(tree);
-
-   return 0;
-}
-
 
 /** Convert the initial list of traceback actions from a non-OOF
  *  gapped alignment into a blast edit script. Note that this routine
@@ -2210,51 +2114,59 @@ GapEditScript*
 Blast_PrelimEditBlockToGapEditScript (GapPrelimEditBlock* rev_prelim_tback,
                                       GapPrelimEditBlock* fwd_prelim_tback)
 {
-   GapEditScript* esp_start = NULL,* esp;
+   Boolean merge_ops = FALSE;
+   GapEditScript* esp;
    GapPrelimEditScript *op;
    Int4 i;
+   Int4 index=0;
+   Int4 size = 0;
 
    if (rev_prelim_tback == NULL || fwd_prelim_tback == NULL)
       return NULL;
 
-   /* turn the right extension into a linked list (built
-      last to first). Reverse the edit script in the process */
+   /* The fwd_prelim_tback script will get reversed here as the traceback started from the highest scoring point
+     and worked backwards. The rev_prelim_tback script does NOT get reversed.  Since it was reversed when the 
+     traceback was produced it's already "forward" */
 
-   for (i=0; i < fwd_prelim_tback->num_ops; i++) {
-      esp = (GapEditScript*) malloc(sizeof(GapEditScript));
-      op = fwd_prelim_tback->edit_ops + i;
-      esp->op_type = op->op_type;
-      esp->num = op->num;
-      esp->next = esp_start;
-      esp_start = esp;
+   if (fwd_prelim_tback->num_ops > 0 && rev_prelim_tback->num_ops > 0 &&
+       fwd_prelim_tback->edit_ops[(fwd_prelim_tback->num_ops)-1].op_type == 
+         rev_prelim_tback->edit_ops[(rev_prelim_tback->num_ops)-1].op_type)
+     merge_ops = TRUE;
+ 
+   size = fwd_prelim_tback->num_ops+rev_prelim_tback->num_ops;
+   if (merge_ops)
+     size--;
+
+   esp = GapEditScriptNew(size);
+
+   index = 0;
+   for (i=0; i < rev_prelim_tback->num_ops; i++) {
+      op = rev_prelim_tback->edit_ops + i;
+      esp->op_type[index] = op->op_type;
+      esp->num[index] = op->num;
+      index++;
    }
 
-   /* if the first operation in the forward script matches the
-      last operation in the reverse script, merge the two 
-      operations */
+   if (fwd_prelim_tback->num_ops == 0)
+      return esp;
 
-   if (rev_prelim_tback->num_ops == 0)
-       return esp_start;
+   if (merge_ops)
+       esp->num[index-1] += fwd_prelim_tback->edit_ops[(fwd_prelim_tback->num_ops)-1].num;
 
-   i = rev_prelim_tback->num_ops - 1;
-   op = rev_prelim_tback->edit_ops + i;
-   if (esp_start && esp_start->op_type == op->op_type) {
-       esp_start->num += op->num;
-       i--;
-   }
-
-   /* prepend the reverse script to the list of actions */
+   /* If we merge, then we skip the first one. */
+   if (merge_ops)
+      i = fwd_prelim_tback->num_ops - 2;
+   else
+      i = fwd_prelim_tback->num_ops - 1;
 
    for (; i >= 0; i--) {
-      esp = (GapEditScript*) malloc(sizeof(GapEditScript));
-      op = rev_prelim_tback->edit_ops + i;
-      esp->op_type = op->op_type;
-      esp->num = op->num;
-      esp->next = esp_start;
-      esp_start = esp;
+      op = fwd_prelim_tback->edit_ops + i;
+      esp->op_type[index] = op->op_type;
+      esp->num[index] = op->num;
+      index++;
    }
 
-   return esp_start;
+   return esp;
 }
 
 /** Fills the BlastGapAlignStruct structure with the results of a gapped 
@@ -2723,133 +2635,6 @@ BlastGetStartForGappedAlignment (Uint1* query, Uint1* subject,
     return max_offset;
 }
 
-/** Test for an array of ungapped HSPs to decide whether gapped alignment 
- * should be performed on all of them. If the best HSP already has score above
- * the cutoff for gapped alignments, then just return. Otherwise attempt 
- * gapped alignment for all HSPs with scores above gap trigger, and see any of
- * them receives score above the cutoff.
- * @param program_number Type of BLAST program [in]
- * @param query Query sequence [in]
- * @param query_info Additional query information [in]
- * @param subject Subject sequence [in]
- * @param gap_align Gapped alignment structure [in]
- * @param score_params Scoring parameters [in]
- * @param hit_params Hit saving parameters [in]
- * @param init_hitlist Initial hit list obtained by ungapped alignment [in]
- * @param gapped_stats Gapped extension stats [in]
- * @return TRUE if the set of initial HSPs has passed the test, so gapped 
- *         alignment needs to be performed.
- */
-static Boolean 
-s_BlastGappedScorePrelimTest(EBlastProgramType program_number, 
-        BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
-        BLAST_SequenceBlk* subject, 
-        BlastGapAlignStruct* gap_align,
-        const BlastScoringParameters* score_params,
-        const BlastHitSavingParameters* hit_params,
-        BlastInitHitList* init_hitlist,
-        BlastGappedStats* gapped_stats)
-{
-    BlastInitHSP* init_hsp = NULL;
-    BlastInitHSP* init_hsp_array;
-    Int4 init_hsp_count;
-    Int4 index;
-    BLAST_SequenceBlk query_tmp;
-    Int4 context;
-    Int4 **rpsblast_pssms = NULL;   /* Pointer to concatenated PSSMs in
-                                       RPS-BLAST database */
-    Boolean further_process = FALSE;
-    Int4 cutoff_score;
-    Boolean is_prot;
-    Int4 max_offset;
-    Int2 status = 0;
-
-    cutoff_score = hit_params->cutoff_score;
-    is_prot = (program_number != eBlastTypeBlastn &&
-               program_number != eBlastTypePhiBlastn);
-
-    if (program_number == eBlastTypeRpsTblastn || 
-        program_number == eBlastTypeRpsBlast) {
-        rpsblast_pssms = gap_align->sbp->psi_matrix->pssm->data;
-    }
-
-    ASSERT(Blast_InitHitListIsSortedByScore(init_hitlist));
-
-    init_hsp_array = init_hitlist->init_hsp_array;
-    init_hsp_count = init_hitlist->total;
-
-    /* If no initial HSP passes the score threshold corresponding to the e-value
-       cutoff so far, check if any would do after gapped alignment, and exit if
-       none are found. 
-       Only attempt to extend initial HSPs whose scores are already above 
-       gap trigger */
-    
-    if (init_hsp_array[0].ungapped_data && 
-        init_hsp_array[0].ungapped_data->score < cutoff_score) {
-        BlastInitHSP init_hsp_tmp;
-        init_hsp_tmp.ungapped_data = NULL;
-        for (index=0; index<init_hsp_count; index++) {
-            init_hsp = &init_hsp_array[index];
-
-            if (gapped_stats) {
-                ++gapped_stats->extra_extensions;
-                ++gapped_stats->extensions;
-            }
-
-            /* Don't modify initial HSP's coordinates here, because it will be 
-               done again if further processing is required */
-            s_GetRelativeCoordinates(query, query_info, init_hsp, &query_tmp, 
-                                   &init_hsp_tmp, &context);
-            if (rpsblast_pssms)
-                gap_align->sbp->psi_matrix->pssm->data = rpsblast_pssms + 
-                    query_info->contexts[context].query_offset;
-
-            if(is_prot && !score_params->options->is_ooframe) {
-                max_offset = 
-                    BlastGetStartForGappedAlignment(query_tmp.sequence, 
-                                                    subject->sequence, gap_align->sbp,
-                                                    init_hsp_tmp.ungapped_data->q_start,
-                                                    init_hsp_tmp.ungapped_data->length,
-                                                    init_hsp_tmp.ungapped_data->s_start,
-                                                    init_hsp_tmp.ungapped_data->length);
-                init_hsp_tmp.offsets.qs_offsets.s_off += 
-                    max_offset - init_hsp_tmp.offsets.qs_offsets.q_off;
-                init_hsp_tmp.offsets.qs_offsets.q_off = max_offset;
-            }
-
-            if (is_prot) {
-                status =  
-                    s_BlastProtGappedAlignment(program_number, &query_tmp, 
-                                              subject, gap_align, score_params, &init_hsp_tmp);
-            } else {
-                status = 
-                    s_BlastDynProgNtGappedAlignment(&query_tmp, subject, 
-                                                   gap_align, score_params, &init_hsp_tmp);
-            }
-            if (status) {
-                further_process = FALSE;
-                break;
-            }
-            if (gap_align->score >= cutoff_score) {
-                further_process = TRUE;
-                break;
-            }
-        }
-        sfree(init_hsp_tmp.ungapped_data);
-    } else {
-        index = 0;
-        further_process = TRUE;
-        if (gapped_stats)
-            ++gapped_stats->seqs_ungapped_passed;
-    }
-
-    if (rpsblast_pssms) {
-        gap_align->sbp->psi_matrix->pssm->data = rpsblast_pssms;
-    }
-
-    return further_process;
-}
-
 Int2 BLAST_GetGappedScore (EBlastProgramType program_number, 
         BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
         BLAST_SequenceBlk* subject, 
@@ -2866,6 +2651,7 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
    BlastInitHSP* init_hsp_array;
    Int4 q_start, s_start, q_end, s_end;
    Boolean is_prot;
+   Boolean is_greedy;
    Int4 max_offset;
    Int2 status = 0;
    BlastHSPList* hsp_list = NULL;
@@ -2886,21 +2672,19 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
 
    is_prot = (program_number != eBlastTypeBlastn &&
               program_number != eBlastTypePhiBlastn);
+   is_greedy = (ext_params->options->ePrelimGapExt != eDynProgExt);
 
    if (program_number == eBlastTypeRpsTblastn || 
        program_number == eBlastTypeRpsBlast) {
        rpsblast_pssms = gap_align->sbp->psi_matrix->pssm->data;
    }
 
+   ASSERT(Blast_InitHitListIsSortedByScore(init_hitlist));
+
    if (*hsp_list_ptr == NULL)
       *hsp_list_ptr = hsp_list = Blast_HSPListNew(hit_options->hsp_num_max);
    else 
       hsp_list = *hsp_list_ptr;
-
-   if (!s_BlastGappedScorePrelimTest(program_number, query, query_info, 
-           subject, gap_align, score_params, hit_params, 
-           init_hitlist, gapped_stats))
-      return 0;
 
    init_hsp_array = init_hitlist->init_hsp_array;
 
@@ -2982,6 +2766,16 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
          if (is_prot) {
             status =  s_BlastProtGappedAlignment(program_number, &query_tmp, 
                          subject, gap_align, score_params, init_hsp);
+         } else if (is_greedy) {
+            status = BLAST_GreedyGappedAlignment(
+                         query_tmp.sequence, subject->sequence, 
+                         query_tmp.length, subject->length, 
+                         gap_align, score_params, 
+                         init_hsp->offsets.qs_offsets.q_off, 
+                         init_hsp->offsets.qs_offsets.s_off, 
+                         (Boolean) TRUE, 
+                         (Boolean) (ext_params->options->ePrelimGapExt == 
+                                    eGreedyWithTracebackExt));
          } else {
             /*  Start the gapped alignment on the fourth character of the
              *  eight character word that seeded the alignment; the start
@@ -3022,6 +2816,14 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
              Blast_HSPListSaveHSP(hsp_list, new_hsp);
              BlastIntervalTreeAddHSP(new_hsp, tree, query_info, 
                                      eQueryAndSubject);
+         }
+         else {
+            /* a greedy alignment may have traceback associated with it;
+               free that traceback if the alignment will not be used */
+            if (is_greedy) {
+               gap_align->edit_script = GapEditScriptDelete(
+                                             gap_align->edit_script);
+            }
          }
       }
    }   
@@ -3260,6 +3062,7 @@ s_BlastOOFTracebackToGapEditScript(GapPrelimEditBlock *rev_prelim_tback,
     Int4 last_num;
     GapPrelimEditBlock *tmp_prelim_tback;
     Int4 i, num_nuc;
+    int extra_needed=0;
     
     /* prepend a substitution, since the input sequences were
        shifted prior to the OOF alignment */
@@ -3354,70 +3157,85 @@ s_BlastOOFTracebackToGapEditScript(GapPrelimEditBlock *rev_prelim_tback,
     }
 
     /* form the final edit block */
-
-    *edit_script_ptr = e_script =
-        Blast_PrelimEditBlockToGapEditScript(rev_prelim_tback,
-                                         fwd_prelim_tback);
+    e_script = Blast_PrelimEditBlockToGapEditScript(tmp_prelim_tback, fwd_prelim_tback);
+    GapPrelimEditBlockFree(tmp_prelim_tback);
 
     /* postprocess the edit script */
-
     num_nuc = 0;
-    while (e_script != NULL) {
-
+    for (i=0; i<e_script->size; i++)
+    {
+        int total_actions=0;
         /* Count the number of nucleotides in the next 
            traceback operation and delete any traceback operations
            that would make the alignment too long. This check is
            not needed for in-frame alignment because the
            traceback is never changed after it is computed */
 
-        last_op = e_script->op_type;
+        last_op = e_script->op_type[i];
 
         if (last_op == eGapAlignIns)
             last_op = eGapAlignSub;
-        i = last_op * e_script->num;
 
-        if (num_nuc + i >= nucl_align_length) {
-            e_script->num = (nucl_align_length - num_nuc + 
+        total_actions = last_op * e_script->num[i];
+
+        if (num_nuc + total_actions >= nucl_align_length) {
+            e_script->num[i] = (nucl_align_length - num_nuc + 
                              last_op - 1) / last_op;
-            e_script->next = GapEditScriptDelete(e_script->next);
+            break; /* We delete the rest of the script. */
         }
         else {
-            num_nuc += i;
+            num_nuc += total_actions;;
         }
-
-        /* Only one frame shift operation at a time is
-           allowed in a single edit script element. */
-        last_op = e_script->op_type;
-        if (last_op % 3 != 0 && e_script->num > 1) {
-            Int4 num_ops = e_script->num;
-            GapEditScript *last = e_script->next;
-            e_script->next = NULL;
-            e_script->num = 1;
-            for (i = 1; i < num_ops; i++) {
-                e_script = GapEditScriptNew(e_script);
-                e_script->op_type = last_op;
-                e_script->num = 1;
-            }
-            e_script->next = last;
-        }
-        e_script = e_script->next;
     }
+    e_script->size = i;  /* If we broke out early then we truncate the edit script. */
+
+    extra_needed = 0;
+    for (i=0; i<e_script->size; i++)
+    {
+        if (e_script->op_type[i] % 3 != 0 && e_script->num[i] > 1) {
+           extra_needed += e_script->num[i] - 1;
+        }
+    }
+
+    if (extra_needed)
+    {
+        GapEditScript* new_esp = GapEditScriptNew(extra_needed+e_script->size);
+        int new_esp_i=0;
+        for (i=0; i<e_script->size; i++)
+        {
+           /* Only one frame shift operation at a time is
+           allowed in a single edit script element. */
+           new_esp->num[new_esp_i] = e_script->num[i];
+           new_esp->op_type[new_esp_i] = e_script->op_type[i];
+           new_esp_i++;
+           last_op = e_script->op_type[i];
+           if (last_op % 3 != 0 && e_script->num[i] > 1) {
+               Int4 num_ops = e_script->num[i];
+               int esp_index=0;
+               new_esp->num[new_esp_i-1] = 1;
+               for (esp_index = 1; esp_index < num_ops; esp_index++) {
+                   new_esp->num[new_esp_i] = 1;
+                   new_esp->op_type[new_esp_i] = last_op;
+                   new_esp_i++;
+               }
+           }
+       }
+       e_script = GapEditScriptDelete(e_script);
+       e_script = new_esp;
+    }
+    *edit_script_ptr = e_script;
 
     /* finally, add one to the size of any block of substitutions
        that follows a frame shift op */
+    last_op = e_script->op_type[0];
+    for (i=1; i<e_script->size; i++)
+    {
+        if (e_script->op_type[i] == eGapAlignSub && (last_op % 3) != 0)
+            (e_script->num[i])++;
 
-    e_script = *edit_script_ptr;
-    last_op = e_script->op_type;
-    e_script = e_script->next;
-    while (e_script != NULL) {
-        if (e_script->op_type == eGapAlignSub && (last_op % 3) != 0)
-            e_script->num++;
-
-        last_op = e_script->op_type;
-        e_script = e_script->next;
+        last_op = e_script->op_type[i];
     }
 
-    GapPrelimEditBlockFree(tmp_prelim_tback);
     return 0;
 }
 

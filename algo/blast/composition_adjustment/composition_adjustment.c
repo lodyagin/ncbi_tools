@@ -23,15 +23,14 @@
 * ===========================================================================*/
 
 /** @file composition_adjustment.c
- *
- * @author Yi-Kuo Yu, Alejandro Schaffer, E. Michael Gertz
- *
  * Highest level functions to solve the optimization problem for
  * compositional score matrix adjustment.
+ *
+ * @author Yi-Kuo Yu, Alejandro Schaffer, E. Michael Gertz
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: composition_adjustment.c,v 1.6 2005/12/01 13:51:03 gertz Exp $";
+    "$Id: composition_adjustment.c,v 1.9 2006/01/30 14:45:44 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <limits.h>
@@ -63,23 +62,23 @@ static int alphaConvert[COMPO_PROTEIN_ALPHABET] =
  * not be attained. */
 static const int kCompositionMargin = 20;
 
-#define SCORE_BOUND            0.0000000001 /* average scores below 
-                                               -SCORE_BOUND are considered
-                                               effectively nonnegative, and
-                                               Newton's method will
-                                               will terminate */
-#define LAMBDA_STEP_FRACTION   0.5          /* default step fraction in
-                                               Newton's method */
-#define INITIAL_LAMBDA         1.0          /* initial value for Newton's
-                                               method */
-#define LAMBDA_ITERATION_LIMIT 300          /* iteration limit for Newton's
-                                               method. */
-#define LAMBDA_ERROR_TOLERANCE 0.0000001    /* bound on error for estimating
-                                               lambda */
+#define SCORE_BOUND            0.0000000001 /**< average scores below 
+                                                 -SCORE_BOUND are considered
+                                                 effectively nonnegative, and
+                                                 Newton's method will
+                                                 will terminate */
+#define LAMBDA_STEP_FRACTION   0.5          /**< default step fraction in
+                                                 Newton's method */
+#define INITIAL_LAMBDA         1.0          /**< initial value for Newton's
+                                                 method */
+#define LAMBDA_ITERATION_LIMIT 300          /**< iteration limit for Newton's
+                                                 method. */
+#define LAMBDA_ERROR_TOLERANCE 0.0000001    /**< bound on error for estimating
+                                                 lambda */
 
-/* bound on error for Newton's method */
+/** bound on error for Newton's method */
 static const double kCompoAdjustErrTolerance = 0.00000001;
-/* iteration limit for Newton's method */
+/** iteration limit for Newton's method */
 static const int kCompoAdjustIterationLimit = 2000;
 /** relative entropy of BLOSUM62 */
 static const double kFixedReBlosum62 = 0.44;
@@ -142,7 +141,7 @@ Blast_ApplyPseudocounts(double * probs_with_pseudo,
  * equals (within numerical precision) 1.0.
  *
  * @param score        the new score matrix [out]
- * @param alphasize    the number of rows and columns of score
+ * @param alphsize     the number of rows and columns of score
  * @param freq         a matrix of target frequencies [in]
  * @param row_sum      sum of each row of freq [in]
  * @param col_sum      sum of each column of freq[in]
@@ -168,20 +167,7 @@ Blast_ScoreMatrixFromFreq(double ** score, int alphsize, double ** freq,
 }
 
 
-/**
- * Compute the symmetric form of the relative entropy of two
- * probability vectors
- *
- * In this software relative entropy is expressed in "nats",
- * meaning that logarithms are base e. In some other scientific
- * and engineering domains where entropy is used, the logarithms
- * are taken base 2 and the entropy is expressed in bits.
- *
- * @param A    an array of length COMPO_NUM_TRUE_AA of
- *             probabilities.
- * @param B    a second array of length COMPO_NUM_TRUE_AA of
- *             probabilities.
- */
+/* Documented in composition_adjustment.h. */
 double
 Blast_GetRelativeEntropy(const double A[], const double B[])
 {
@@ -466,10 +452,6 @@ s_GetMatrixScoreProbs(double **scoreProb, int * obs_min, int * obs_max,
  * @param rows              the number of rows in matrix.
  * @param subjectProbArray  is an array containing the probability of
  *                          occurrence of each residue in the subject
- * @param queryProbArray    is an array containing the probability of
- *                          occurrence of each residue in the query
- * @param scoreProb         is an array of probabilities for each score
- *                          that is to be used as a field in return_sfp
  * @return 0 on success, -1 on out-of-memory
  */
 static int
@@ -510,14 +492,7 @@ s_GetPssmScoreProbs(double ** scoreProb, int * obs_min, int * obs_max,
 }
 
 
-/**
- * Compute an integer-valued amino-acid score matrix from a set of
- * score frequencies.
- *
- * @param matrix       the preallocated matrix
- * @param matrixName   the score frequencies
- * @param Lambda       the desired scale of the matrix
- */
+/* Documented in composition_adjustment.h. */
 void
 Blast_Int4MatrixFromFreq(Int4 **matrix, int alphsize,
                          double ** freq, double Lambda)
@@ -577,7 +552,7 @@ s_ScaleMatrixRow(int *matrixRow, const int *startMatrixRow,
 }
 
 
-/** Free memory associated with a Blast_MatrixInfo object */
+/* Documented in composition_adjustment.h. */
 void Blast_MatrixInfoFree(Blast_MatrixInfo ** ss)
 {
     if (*ss != NULL) {
@@ -590,13 +565,7 @@ void Blast_MatrixInfoFree(Blast_MatrixInfo ** ss)
 }
 
 
-/** Create a Blast_MatrixInfo object
- *
- *  @param rows        the number of rows in the matrix, should be
- *                     COMPO_PROTEIN_ALPHABET unless the matrix is position
- *                     based, in which case it is the query length
- *  @param positionBased  is this matrix position-based?
- */
+/* Documented in composition_adjustment.h. */
 Blast_MatrixInfo *
 Blast_MatrixInfoNew(int rows, int positionBased)
 {
@@ -678,28 +647,7 @@ s_ScaleMatrix(int **matrix, const Blast_MatrixInfo * ss,
 #define LambdaRatioLowerBound 0.5
 
 
-/**
- * Use composition-based statistics to adjust the scoring matrix, as
- * described in
- *
- *     Schaffer, A.A., Aravaind, L., Madden, T.L., Shavirin, S.,
- *     Spouge, J.L., Wolf, Y.I., Koonin, E.V., and Altschul, S.F.
- *     (2001), "Improving the accuracy of PSI-BLAST protein database
- *     searches with composition-based statistics and other
- *     refinements",  Nucleic Acids Res. 29:2994-3005.
- *
- * @param matrix          a scoring matrix to be adjusted [out]
- * @param *LambdaRatio    the ratio of the corrected lambda to the
- *                        original lambda [out]
- * @param ss              data used to compute matrix scores
- *
- * @param queryProb       amino acid probabilities in the query
- * @param resProb         amino acid probabilities in the subject
- * @param calc_lambda     a function that can calculate the
- *                        statistical parameter Lambda from a set of
- *                        score frequencies.
- * @return 0 on success, -1 on out of memory
- */
+/* Documented in composition_adjustment.h. */
 int
 Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
                             const Blast_MatrixInfo * ss,
@@ -744,13 +692,7 @@ Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
 }
 
 
-/**
- * Compute the amino acid composition of a sequence.
- *
- * @param composition      the computed composition
- * @param sequence         a sequence of amino acids
- * @param length           length of the sequence
- */
+/* Documented in composition_adjustment.h. */
 void
 Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
                         const Uint1 * sequence, int length)
@@ -781,18 +723,7 @@ Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
 }
 
 
-/**
- * Get the range of a sequence to be included when computing a
- * composition.  This function is used for translated sequences, where
- * the range to use when computing a composition is not the whole
- * sequence, but is rather a range about an existing alignment.
- *
- * @param *pleft, *pright  left and right endpoint of the range
- * @param subject_data     data from a translated sequence
- * @param length           length of subject_data
- * @param start, finish    start and finish (one past the end) of a
- *                         existing alignment
- */
+/* Documented in composition_adjustment.h. */
 void
 Blast_GetCompositionRange(int * pleft, int * pright,
                           const Uint1 * subject_data, int length,
@@ -841,8 +772,7 @@ Blast_GetCompositionRange(int * pleft, int * pright,
 }
 
 
-/** Free memory associated with a record of type
- * Blast_CompositionWorkspace. */
+/* Documented in composition_adjustment.h. */
 void
 Blast_CompositionWorkspaceFree(Blast_CompositionWorkspace ** pNRrecord)
 {
@@ -867,8 +797,7 @@ Blast_CompositionWorkspaceFree(Blast_CompositionWorkspace ** pNRrecord)
 }
 
 
-/** Create a new Blast_CompositionWorkspace object, allocating memory
- * for all its component arrays. */
+/* Documented in composition_adjustment.h. */
 Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew()
 {
     Blast_CompositionWorkspace * NRrecord;        /* record to allocate
@@ -946,8 +875,7 @@ normal_return:
 }
 
 
-/** Initialize the fields of a Blast_CompositionWorkspace for a specific
- * underlying scoring matrix. */
+/* Documented in composition_adjustment.h. */
 int
 Blast_CompositionWorkspaceInit(Blast_CompositionWorkspace * NRrecord,
                                const char *matrixName)
@@ -985,9 +913,9 @@ Blast_CompositionWorkspaceInit(Blast_CompositionWorkspace * NRrecord,
 }
 
 
-/*compute Lambda and if flag set according return re_o_newcontext,
-  otherwise return 0.0, also test for the possibility of average
-  score >= 0*/
+/** compute Lambda and if flag set according return re_o_newcontext,
+    otherwise return 0.0, also test for the possibility of average
+    score >= 0 */
 static double
 Blast_CalcLambdaForComposition(Blast_CompositionWorkspace * NRrecord,
                                int compute_re,
@@ -1121,35 +1049,7 @@ Blast_CalcLambdaForComposition(Blast_CompositionWorkspace * NRrecord,
 }
 
 
-/**
- * Use compositional score matrix adjustment, as described in
- *
- *     Altschul, Stephen F., John C. Wootton, E. Michael Gertz, Richa
- *     Agarwala, Aleksandr Morgulis, Alejandro A. Schaffer, and Yi-Kuo
- *     Yu (2005) "Protein database searches using compositionally
- *     adjusted substitution matrices", FEBS J.  272:5101-5109.
- *
- * to optimize a score matrix to a given set of letter frequencies.
- *
- * @param length1      adjusted length (not counting X) of the first
- *                     sequence
- * @param length2      adjusted length of the second sequence
- * @param probArray1   letter probabilities for the first sequence,
- *                     in the 20 letter amino-acid alphabet
- * @param probArray2   letter probabilities for the second sequence
- * @param pseudocounts number of pseudocounts to add the the
- *                     probabilities for each sequence, before optimizing
- *                     the scores.
- * @param specifiedRE  a relative entropy that might (subject to
- *                     fields in NRrecord) be used to as a constraint
- *                     of the optimization problem
- * @param NRrecord     a Blast_CompositionWorkspace that contains
- *                     fields used for the composition adjustment and
- *                     that will hold the output.
- * @param lambdaComputed   the new computed value of lambda
- *
- * @return 0 on success, 1 on failure to converge, -1 for out-of-memory
- */
+/* Documented in composition_adjustment.h. */
 int
 Blast_CompositionMatrixAdj(int length1,
                            int length2,
@@ -1258,50 +1158,27 @@ Blast_CompositionMatrixAdj(int length1,
 }
 
 
-/**
- * Compute a compositionally adjusted scoring matrix.
- *
- * @param matrix        the adjusted matrix
- * @param query_composition       composition of the query sequence
- * @param queryLength             length of the query sequence
- * @param subject_composition     composition of the subject (database)
- *                                sequence
- * @param queryLength             length of the subject sequence
- * @param matrixInfo    information about the underlying,
- *                      non-adjusted, scoring matrix.
- * @param RE_rule       the rule to use for computing the scoring
- *                      matrix
- * @param RE_pseudocounts    the number of pseudocounts to use in some
- *                           rules of composition adjustment
- * @param NRrecord      workspace used to perform compositional
- *                      adjustment
- * @param *whichMode    which mode of compositional adjustment was
- *                      actually used
- * @calc_lambda         a function that can calculate the statistical
- *                      parameter Lambda from a set of score
- *                      frequencies.
- * @return              0 for success, 1 for failure to converge,
- *                      -1 for out of memory
- */
+/* Documented in composition_adjustment.h. */
 int
-Blast_AdjustScores(int ** matrix,
+Blast_AdjustScores(Int4 ** matrix,
                    const Blast_AminoAcidComposition * query_composition,
                    int queryLength,
                    const Blast_AminoAcidComposition * subject_composition,
                    int subjectLength,
                    const Blast_MatrixInfo * matrixInfo,
-                   int RE_rule,
+                   ECompoAdjustModes composition_adjust_mode,
                    int RE_pseudocounts,
                    Blast_CompositionWorkspace *NRrecord,
-                   ECompoAdjustModes *whichMode,
+                   EMatrixAdjustRule *matrix_adjust_rule,
                    double calc_lambda(double *,int,int,double))
 {
     double LambdaRatio;      /* the ratio of the corrected
                                 lambda to the original lambda */
 
-    if (matrixInfo->positionBased || RE_rule == 0) {
+    if (matrixInfo->positionBased ||
+        composition_adjust_mode == eCompositionBasedStats) {
         /* Use old-style composition-based statistics unconditionally. */
-        *whichMode =  eCompoKeepOldMatrix;
+        *matrix_adjust_rule =  eCompoScaleOldMatrix;
         return Blast_CompositionBasedStats(matrix, &LambdaRatio,
                                            matrixInfo,
                                            query_composition->prob,
@@ -1318,14 +1195,14 @@ Blast_AdjustScores(int ** matrix,
         s_GatherLetterProbs(permutedQueryProbs, query_composition->prob);
         s_GatherLetterProbs(permutedMatchProbs, subject_composition->prob);
 
-        *whichMode =
-            Blast_ChooseCompoAdjustMode(queryLength, subjectLength,
-                                        permutedQueryProbs,
-                                        permutedMatchProbs,
-                                        matrixInfo->matrixName,
-                                        RE_rule-1);
+        *matrix_adjust_rule =
+            Blast_ChooseMatrixAdjustRule(queryLength, subjectLength,
+                                         permutedQueryProbs,
+                                         permutedMatchProbs,
+                                         matrixInfo->matrixName,
+                                         composition_adjust_mode);
         /* compute and plug in new matrix here */
-        if (eCompoKeepOldMatrix == *whichMode) {
+        if (eCompoScaleOldMatrix == *matrix_adjust_rule) {
             /* Yi-Kuo's code chose to use composition-based stats */
             return Blast_CompositionBasedStats(matrix, &LambdaRatio,
                                                matrixInfo,
@@ -1340,7 +1217,7 @@ Blast_AdjustScores(int ** matrix,
             REscoreMatrix = Nlm_DenseMatrixNew(COMPO_PROTEIN_ALPHABET,
                                                COMPO_PROTEIN_ALPHABET);
             if (REscoreMatrix != NULL) {
-                NRrecord->flag = *whichMode;
+                NRrecord->flag = *matrix_adjust_rule;
                 status =
                     Blast_CompositionMatrixAdj(query_composition->
                                                numTrueAminoAcids,

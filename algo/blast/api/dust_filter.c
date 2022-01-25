@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: dust_filter.c,v 1.5 2005/09/20 00:04:27 camacho Exp $";
+static char const rcsid[] = "$Id: dust_filter.c,v 1.6 2006/01/06 15:04:38 madden Exp $";
 
 /*
  * ===========================================================================
@@ -57,7 +57,6 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
     const Boolean kIsNucl = TRUE;
     Boolean no_forward_strand = (query_info->first_context > 0);  /* filtering needed on reverse strand. */
     SeqLoc* slp_var = query_seqloc;
-Int4 qindex = 0;
 
     ASSERT(query_info && query_blk && filter_maskloc && query_seqloc);
 

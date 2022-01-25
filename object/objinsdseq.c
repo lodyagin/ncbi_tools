@@ -31,7 +31,7 @@ objinsdseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.14 at Jun 1, 2004 11:01 AM
+*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
 *
 **************************************************/
 
@@ -80,6 +80,7 @@ INSDSeqFree(INSDSeqPtr ptr)
    MemFree(ptr -> accession_version);
    AsnGenericBaseSeqOfFree(ptr -> other_seqids ,ASNCODE_PTRVAL_SLOT);
    AsnGenericBaseSeqOfFree(ptr -> secondary_accessions ,ASNCODE_PTRVAL_SLOT);
+   MemFree(ptr -> project);
    AsnGenericBaseSeqOfFree(ptr -> keywords ,ASNCODE_PTRVAL_SLOT);
    MemFree(ptr -> segment);
    MemFree(ptr -> source);
@@ -254,6 +255,13 @@ INSDSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if (isError && ptr -> secondary_accessions == NULL) {
          goto erret;
       }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDSEQ_project) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> project = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == INSDSEQ_keywords) {
@@ -454,6 +462,10 @@ INSDSeqAsnWrite(INSDSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> other_seqids ,ASNCODE_PTRVAL_SLOT, aip, INSDSEQ_other_seqids, INSDSEQ_other_seqids_E);
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> secondary_accessions ,ASNCODE_PTRVAL_SLOT, aip, INSDSEQ_secondary_accessions, INSDSEQ_secondary_accessions_E);
+   if (ptr -> project != NULL) {
+      av.ptrvalue = ptr -> project;
+      retval = AsnWrite(aip, INSDSEQ_project,  &av);
+   }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> keywords ,ASNCODE_PTRVAL_SLOT, aip, INSDSEQ_keywords, INSDSEQ_keywords_E);
    if (ptr -> segment != NULL) {
       av.ptrvalue = ptr -> segment;
@@ -539,10 +551,12 @@ INSDReferenceFree(INSDReferencePtr ptr)
       return NULL;
    }
    MemFree(ptr -> reference);
+   MemFree(ptr -> position);
    AsnGenericBaseSeqOfFree(ptr -> authors ,ASNCODE_PTRVAL_SLOT);
    MemFree(ptr -> consortium);
    MemFree(ptr -> title);
    MemFree(ptr -> journal);
+   AsnGenericUserSeqOfFree(ptr -> xref, (AsnOptFreeFunc) INSDXrefFree);
    MemFree(ptr -> remark);
    return MemFree(ptr);
 }
@@ -602,6 +616,13 @@ INSDReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> reference = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == INSDREFERENCE_position) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> position = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == INSDREFERENCE_authors) {
       ptr -> authors = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
       if (isError && ptr -> authors == NULL) {
@@ -630,12 +651,11 @@ INSDReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> journal = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == INSDREFERENCE_medline) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == INSDREFERENCE_xref) {
+      ptr -> xref = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDXrefAsnRead, (AsnOptFreeFunc) INSDXrefFree);
+      if (isError && ptr -> xref == NULL) {
          goto erret;
       }
-      ptr -> medline = av.intvalue;
-      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == INSDREFERENCE_pubmed) {
@@ -643,7 +663,7 @@ INSDReferenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> pubmed = av.intvalue;
-      ptr -> OBbits__ |= 1<<1;
+      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == INSDREFERENCE_remark) {
@@ -708,6 +728,10 @@ INSDReferenceAsnWrite(INSDReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> reference;
       retval = AsnWrite(aip, INSDREFERENCE_reference,  &av);
    }
+   if (ptr -> position != NULL) {
+      av.ptrvalue = ptr -> position;
+      retval = AsnWrite(aip, INSDREFERENCE_position,  &av);
+   }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> authors ,ASNCODE_PTRVAL_SLOT, aip, INSDREFERENCE_authors, INSDREFERENCE_authors_E);
    if (ptr -> consortium != NULL) {
       av.ptrvalue = ptr -> consortium;
@@ -721,10 +745,8 @@ INSDReferenceAsnWrite(INSDReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> journal;
       retval = AsnWrite(aip, INSDREFERENCE_journal,  &av);
    }
-   if (ptr -> medline || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> medline;
-      retval = AsnWrite(aip, INSDREFERENCE_medline,  &av);
-   }
-   if (ptr -> pubmed || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> pubmed;
+   AsnGenericUserSeqOfAsnWrite(ptr -> xref, (AsnWriteFunc) INSDXrefAsnWrite, aip, INSDREFERENCE_xref, INSDREFERENCE_xref_E);
+   if (ptr -> pubmed || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> pubmed;
       retval = AsnWrite(aip, INSDREFERENCE_pubmed,  &av);
    }
    if (ptr -> remark != NULL) {
@@ -775,6 +797,7 @@ INSDFeatureFree(INSDFeaturePtr ptr)
    MemFree(ptr -> key);
    MemFree(ptr -> location);
    AsnGenericUserSeqOfFree(ptr -> intervals, (AsnOptFreeFunc) INSDIntervalFree);
+   MemFree(ptr -> operator__);
    AsnGenericUserSeqOfFree(ptr -> quals, (AsnOptFreeFunc) INSDQualifierFree);
    return MemFree(ptr);
 }
@@ -848,6 +871,29 @@ INSDFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == INSDFEATURE_operator) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> operator__ = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDFEATURE_partial5) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> partial5 = av.boolvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDFEATURE_partial3) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> partial3 = av.boolvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == INSDFEATURE_quals) {
       ptr -> quals = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDQualifierAsnRead, (AsnOptFreeFunc) INSDQualifierFree);
       if (isError && ptr -> quals == NULL) {
@@ -915,7 +961,184 @@ INSDFeatureAsnWrite(INSDFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, INSDFEATURE_location,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> intervals, (AsnWriteFunc) INSDIntervalAsnWrite, aip, INSDFEATURE_intervals, INSDFEATURE_intervals_E);
+   if (ptr -> operator__ != NULL) {
+      av.ptrvalue = ptr -> operator__;
+      retval = AsnWrite(aip, INSDFEATURE_operator,  &av);
+   }
+   if (ptr -> partial5 || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> partial5;
+      retval = AsnWrite(aip, INSDFEATURE_partial5,  &av);
+   }
+   if (ptr -> partial3 || (ptr -> OBbits__ & (1<<1) )){   av.boolvalue = ptr -> partial3;
+      retval = AsnWrite(aip, INSDFEATURE_partial3,  &av);
+   }
    AsnGenericUserSeqOfAsnWrite(ptr -> quals, (AsnWriteFunc) INSDQualifierAsnWrite, aip, INSDFEATURE_quals, INSDFEATURE_quals_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    INSDXrefNew()
+*
+**************************************************/
+NLM_EXTERN 
+INSDXrefPtr LIBCALL
+INSDXrefNew(void)
+{
+   INSDXrefPtr ptr = MemNew((size_t) sizeof(INSDXref));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    INSDXrefFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDXrefPtr LIBCALL
+INSDXrefFree(INSDXrefPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> dbname);
+   MemFree(ptr -> id);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    INSDXrefAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDXrefPtr LIBCALL
+INSDXrefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDXrefPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDXref ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDXREF);
+   } else {
+      atp = AsnLinkType(orig, INSDXREF);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = INSDXrefNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == INSDXREF_dbname) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> dbname = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDXREF_id) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> id = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDXrefFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDXrefAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDXrefAsnWrite(INSDXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDXREF);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> dbname != NULL) {
+      av.ptrvalue = ptr -> dbname;
+      retval = AsnWrite(aip, INSDXREF_dbname,  &av);
+   }
+   if (ptr -> id != NULL) {
+      av.ptrvalue = ptr -> id;
+      retval = AsnWrite(aip, INSDXREF_id,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1033,6 +1256,22 @@ INSDIntervalAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<2;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == INSDINTERVAL_iscomp) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> iscomp = av.boolvalue;
+      ptr -> OBbits__ |= 1<<3;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDINTERVAL_interbp) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> interbp = av.boolvalue;
+      ptr -> OBbits__ |= 1<<4;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == INSDINTERVAL_accession) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -1099,6 +1338,12 @@ INSDIntervalAsnWrite(INSDIntervalPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    if (ptr -> point || (ptr -> OBbits__ & (1<<2) )){   av.intvalue = ptr -> point;
       retval = AsnWrite(aip, INSDINTERVAL_point,  &av);
+   }
+   if (ptr -> iscomp || (ptr -> OBbits__ & (1<<3) )){   av.boolvalue = ptr -> iscomp;
+      retval = AsnWrite(aip, INSDINTERVAL_iscomp,  &av);
+   }
+   if (ptr -> interbp || (ptr -> OBbits__ & (1<<4) )){   av.boolvalue = ptr -> interbp;
+      retval = AsnWrite(aip, INSDINTERVAL_interbp,  &av);
    }
    if (ptr -> accession != NULL) {
       av.ptrvalue = ptr -> accession;
@@ -1310,6 +1555,7 @@ NLM_EXTERN
 INSDSetPtr LIBCALL
 INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1365,6 +1611,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

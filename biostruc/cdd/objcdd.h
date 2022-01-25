@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.15 at Oct 12, 2004 11:03 AM
+*    Generated using ASNCODE Revision: 6.16 at Feb 8, 2006  1:12 PM
 *
 **************************************************/
 
@@ -211,7 +211,7 @@ NLM_EXTERN Boolean LIBCALL CddProjectAsnWrite PROTO (( CddProjectPtr , AsnIoPtr,
 **************************************************/
 typedef struct struct_Cdd_org_ref {
    struct struct_Cdd_org_ref PNTR next;
-   OrgRefPtr   reference;
+   struct struct_Org_ref PNTR   reference;
    Uint1   active;
    Int4   parent_tax_id;
    CharPtr   rank;
@@ -336,6 +336,8 @@ typedef struct struct_Cdd_book_ref {
 
    Int4   elementid;
    Int4   subelementid;
+   CharPtr   celementid;
+   CharPtr   csubelementid;
 } CddBookRef, PNTR CddBookRefPtr;
 
 

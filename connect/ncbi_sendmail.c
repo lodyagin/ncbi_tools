@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail.c,v 6.25 2005/08/30 18:06:23 lavr Exp $
+/*  $Id: ncbi_sendmail.c,v 6.27 2006/01/27 17:09:12 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,14 +32,10 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_priv.h"
+#include <connect/ncbi_connutil.h>
 #include <connect/ncbi_sendmail.h>
-#include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <stdlib.h>
-#ifdef NCBI_OS_UNIX
-#include <pwd.h>
-#include <unistd.h>
-#endif
 #ifdef NCBI_CXX_TOOLKIT
 #define NCBI_SENDMAIL_TOOLKIT "C++"
 #else
@@ -168,35 +164,9 @@ static int/*bool*/ s_SockWrite(SOCK sock, const char* buf)
 static char* s_ComposeFrom(char* buf, size_t buf_size)
 {
     size_t buf_len, hostname_len;
-#ifdef NCBI_OS_UNIX
-    /* Get the user login name. FIXME: not MT-safe */
-    const char* login_name;
-    CORE_LOCK_WRITE;
-    login_name = getlogin();
-    if (!login_name) {
-        struct passwd* pwd = getpwuid(getuid());
-        if (!pwd) {
-            if (!(login_name = getenv("USER"))  &&
-                !(login_name = getenv("LOGNAME"))) {
-                CORE_UNLOCK;
-                return 0;
-            }
-        } else
-            login_name = pwd->pw_name;
-    }
-#else
-    /* Temporary solution for login name */
-    const char* login_name = "anonymous";
-#  ifdef NCBI_OS_MSWIN
-    const char* user_name = getenv("USERNAME");
-    if (user_name)
-        login_name = user_name;
-#  endif
-#endif
-    strncpy0(buf, login_name, buf_size - 1);
-#ifdef NCBI_OS_UNIX
-    CORE_UNLOCK;
-#endif
+
+    if (!CONNUTIL_GetUsername(buf, buf_size) || !*buf)
+        strncpy0(buf, "anonymous", buf_size - 1);
     buf_len = strlen(buf);
     hostname_len = buf_size - buf_len;
     if (hostname_len-- > 1) {
@@ -326,7 +296,7 @@ const char* CORE_SendMailEx(const char*          to,
                             const char*          body,
                             const SSendMailInfo* uinfo)
 {
-    static const STimeout zero;
+    static const STimeout zero = {0, 0};
     const SSendMailInfo* info;
     SSendMailInfo ainfo;
     char buffer[1024];
@@ -519,6 +489,12 @@ const char* CORE_SendMailEx(const char*          to,
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_sendmail.c,v $
+ * Revision 6.27  2006/01/27 17:09:12  lavr
+ * Take advantage of new CONNUTIL_GetUsername()
+ *
+ * Revision 6.26  2005/12/14 21:26:39  lavr
+ * CORE_SendMailEx(): Explicit init of static zero timeout
+ *
  * Revision 6.25  2005/08/30 18:06:23  lavr
  * Do not treat single quotes specially
  *

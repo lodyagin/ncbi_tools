@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.52 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_seqalign.c,v 1.56 2006/02/15 15:15:03 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,12 +28,10 @@
  * Conversion of BLAST results to the SeqAlign form
  */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.52 2005/04/06 23:27:53 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.56 2006/02/15 15:15:03 madden Exp $";
 
 #include <algo/blast/api/blast_seqalign.h>
 
-extern Int4 LIBCALL HspArrayPurge PROTO((BlastHSP** hsp_array, 
-                       Int4 hspcnt, Boolean clear_num));
 extern SeqIdPtr GetTheSeqAlignID (SeqIdPtr seq_id);
 extern ScorePtr MakeBlastScore (ScorePtr PNTR old, CharPtr scoretype, 
                                 Nlm_FloatHi prob, Int4 score);
@@ -42,6 +40,45 @@ extern ScorePtr MakeBlastScore (ScorePtr PNTR old, CharPtr scoretype,
  *
  * @{
  */
+
+SBlastSeqalignArray* 
+SBlastSeqalignArrayNew(Int4 size)
+{
+    SBlastSeqalignArray* retval = NULL;
+
+    if (size <= 0)
+     return retval;
+
+    retval = (SBlastSeqalignArray*) malloc(sizeof(SBlastSeqalignArray));
+    if (retval)
+    {
+        retval->num_queries = size;
+        retval->array = (SeqAlign**) calloc(size, sizeof(SeqAlign*));
+        if (retval->array == NULL)
+        {
+            sfree(retval);
+            retval = NULL;
+        }
+    }
+    return retval;
+}
+
+SBlastSeqalignArray* 
+SBlastSeqalignArrayFree(SBlastSeqalignArray* seqalign_vec)
+{
+   Int4 index;
+
+   if (seqalign_vec == NULL)
+      return NULL;
+
+   for (index=0; index<seqalign_vec->num_queries; index++)
+   {
+        SeqAlignSetFree(seqalign_vec->array[index]); 
+   }
+   sfree(seqalign_vec->array);
+   sfree(seqalign_vec);
+   return NULL;
+}
 
 /** Creates a score set corresponding to one HSP.
  * @param hsp HSP structure [in]
@@ -83,7 +120,11 @@ s_GetScoreSetFromBlastHsp(BlastHSP* hsp)
    
    if (hsp->num_ident > 0)
       MakeBlastScore(&score_set, "num_ident", 0.0, hsp->num_ident);
-   
+
+   if (hsp->comp_adjustment_method > 0) { 
+       MakeBlastScore(&score_set, "comp_adjustment_method",0.0,
+                      hsp->comp_adjustment_method);
+   }
    return score_set;
 }
 
@@ -383,13 +424,12 @@ s_GetProteinFrameLength(Int4 nuc_length, Int2 frame)
 }
 
 Int2 
-GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
+GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* esp, Int4 first, Int4 number,
                           Int4 query_length, Int4 subject_length,
                           Boolean translate1, Boolean translate2,
                           Int4** start_out, Int4** length_out, 
                           Uint1** strands_out, Int4* start1, Int4* start2)
 {
-    GapEditScript* curr;
     Int2 frame1, frame2;
     Int4 begin1, begin2, index, length1, length2;
     Int4 original_length1, original_length2, i;
@@ -423,37 +463,38 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
     else
         strand2 = Seq_strand_unknown; 
 
-    start = (Int4 *) calloc((2*numseg+1), sizeof(Int4));
-    length = (Int4 *) calloc((numseg+1), sizeof(Int4));
-    strands = (Uint1 *) calloc((2*numseg+1), sizeof(Uint1));
+    start = (Int4 *) calloc((2*number+1), sizeof(Int4));
+    length = (Int4 *) calloc((number+1), sizeof(Int4));
+    strands = (Uint1 *) calloc((2*number+1), sizeof(Uint1));
 
     index=0;
-    for (i = 0, curr=curr_in; curr && i < numseg; curr=curr->next, i++) {
-        switch(curr->op_type) {
+    for (i=first; i<number; i++)
+    {
+        switch(esp->op_type[i]) {
         case eGapAlignDecline:
         case eGapAlignSub:
             if (strand1 != Seq_strand_minus) {
                 if(translate1 == FALSE)
-                    begin1 = s_GetCurrentPos(start1, curr->num);
+                    begin1 = s_GetCurrentPos(start1, esp->num[i]);
                 else
-                    begin1 = frame1 - 1 + CODON_LENGTH*s_GetCurrentPos(start1, curr->num);
+                    begin1 = frame1 - 1 + CODON_LENGTH*s_GetCurrentPos(start1, esp->num[i]);
             } else {
                 if(translate1 == FALSE)
-                    begin1 = length1 - s_GetCurrentPos(start1, curr->num) - curr->num;
+                    begin1 = length1 - s_GetCurrentPos(start1, esp->num[i]) - esp->num[i];
                 else
-                    begin1 = original_length1 - CODON_LENGTH*(s_GetCurrentPos(start1, curr->num)+curr->num) + frame1 + 1;
+                    begin1 = original_length1 - CODON_LENGTH*(s_GetCurrentPos(start1, esp->num[i])+esp->num[i]) + frame1 + 1;
             }
 					
             if (strand2 != Seq_strand_minus) {
                 if(translate2 == FALSE)
-                    begin2 = s_GetCurrentPos(start2, curr->num);
+                    begin2 = s_GetCurrentPos(start2, esp->num[i]);
                 else
-                    begin2 = frame2 - 1 + CODON_LENGTH*s_GetCurrentPos(start2, curr->num);
+                    begin2 = frame2 - 1 + CODON_LENGTH*s_GetCurrentPos(start2, esp->num[i]);
             } else {
                 if(translate2 == FALSE)
-                    begin2 = length2 - s_GetCurrentPos(start2, curr->num) - curr->num;
+                    begin2 = length2 - s_GetCurrentPos(start2, esp->num[i]) - esp->num[i];
                 else
-                    begin2 = original_length2 - CODON_LENGTH*(s_GetCurrentPos(start2, curr->num)+curr->num) + frame2 + 1;
+                    begin2 = original_length2 - CODON_LENGTH*(s_GetCurrentPos(start2, esp->num[i])+esp->num[i]) + frame2 + 1;
             }
             
             strands[2*index] = strand1;
@@ -467,14 +508,14 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
             begin1 = -1;
             if (strand2 != Seq_strand_minus) {
                 if(translate2 == FALSE)
-                    begin2 = s_GetCurrentPos(start2, curr->num);
+                    begin2 = s_GetCurrentPos(start2, esp->num[i]);
                 else
-                    begin2 = frame2 - 1 + CODON_LENGTH*s_GetCurrentPos(start2, curr->num);
+                    begin2 = frame2 - 1 + CODON_LENGTH*s_GetCurrentPos(start2, esp->num[i]);
             } else {
                 if(translate2 == FALSE)
-                    begin2 = length2 - s_GetCurrentPos(start2, curr->num) - curr->num;
+                    begin2 = length2 - s_GetCurrentPos(start2, esp->num[i]) - esp->num[i];
                 else
-                    begin2 = original_length2 - CODON_LENGTH*(s_GetCurrentPos(start2, curr->num)+curr->num) + frame2 + 1;
+                    begin2 = original_length2 - CODON_LENGTH*(s_GetCurrentPos(start2, esp->num[i])+esp->num[i]) + frame2 + 1;
             }
             
             if (index > 0)
@@ -490,14 +531,14 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
         case eGapAlignIns:
             if (strand1 != Seq_strand_minus) {
                 if(translate1 == FALSE)
-                    begin1 = s_GetCurrentPos(start1, curr->num);
+                    begin1 = s_GetCurrentPos(start1, esp->num[i]);
                 else
-                    begin1 = frame1 - 1 + CODON_LENGTH*s_GetCurrentPos(start1, curr->num);
+                    begin1 = frame1 - 1 + CODON_LENGTH*s_GetCurrentPos(start1, esp->num[i]);
             } else {
                 if(translate1 == FALSE)
-                    begin1 = length1 - s_GetCurrentPos(start1, curr->num) - curr->num;
+                    begin1 = length1 - s_GetCurrentPos(start1, esp->num[i]) - esp->num[i];
                 else
-                    begin1 = original_length1 - CODON_LENGTH*(s_GetCurrentPos(start1, curr->num)+curr->num) + frame1 + 1;
+                    begin1 = original_length1 - CODON_LENGTH*(s_GetCurrentPos(start1, esp->num[i])+esp->num[i]) + frame1 + 1;
             }
             begin2 = -1;
             strands[2*index] = strand1;
@@ -512,7 +553,7 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
         default:
             break;
         }
-        length[index] = curr->num;
+        length[index] = esp->num[i];
         index++;
     }    
 
@@ -538,36 +579,25 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg,
 static void 
 s_GapCorrectUASequence(BlastHSP* hsp)
 {
-    GapEditScript* curr,* curr_last,* curr_last2;
-    Boolean last_indel;
+    GapEditScript* esp = hsp->gap_info;
+    int index;
 
-    last_indel = FALSE;
-    curr_last = NULL;
-    curr_last2 = NULL;
-
-    for (curr=hsp->gap_info; curr; curr = curr->next) {
-
-        if(curr->op_type == eGapAlignDecline && last_indel == TRUE) {
+    for (index=0; index<esp->size; index++)
+    {
+        // if GAPALIGN_DECLINE immediately follows an insertion or deletion
+        if (index > 0 && esp->op_type[index] == eGapAlignDecline &&
+           (esp->op_type[index-1] == eGapAlignIns || esp->op_type[index-1] == eGapAlignDel))
+        {
             /* This is invalid condition and regions should be
                exchanged */
+            int temp_num = esp->num[index];
+            EGapAlignOpType temp_op = esp->op_type[index];
 
-            if(curr_last2 != NULL)
-                curr_last2->next = curr;
-            else
-                hsp->gap_info = curr; /* First element in a list */
-            
-            curr_last->next = curr->next;
-            curr->next = curr_last;
+            esp->num[index] = esp->num[index-1];
+            esp->op_type[index] = esp->op_type[index-1];
+            esp->num[index-1] = temp_num;
+            esp->op_type[index-1] = temp_op;
         }
-        
-        last_indel = FALSE;
-        
-        if(curr->op_type == eGapAlignIns || curr->op_type == eGapAlignDel) {
-            last_indel = TRUE;
-            curr_last2 = curr_last;
-        }
-
-        curr_last = curr;
     }
     return;
 }
@@ -699,21 +729,25 @@ s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                      Int4 query_length, Int4 subject_length)
 
 {
-    GapEditScript* curr,* curr_last;
-    Int4 numseg, start1, start2;
+    GapEditScript* esp;
+    Int4 start1, start2;
     Int4* length,* start;
     Uint1* strands;
     Boolean is_disc_align = FALSE;
     SeqAlignPtr sap, sap_disc, sap_head, sap_tail;
-    Boolean skip_region = FALSE;
     Boolean translate1, translate2;
+    int index;
 
-    is_disc_align = FALSE; numseg = 0;
+    is_disc_align = FALSE;
 
-    for (curr=hsp->gap_info; curr; curr = curr->next) {
-        numseg++;
-        if(/*edit_block->discontinuous && */curr->op_type == eGapAlignDecline)
+    esp = hsp->gap_info;
+    for (index=0; index<esp->size; index++)
+    {
+        if(esp->op_type[index] == eGapAlignDecline)
+        {
            is_disc_align = TRUE;
+           break;
+        }
     }
     
     start1 = hsp->query.offset;
@@ -730,14 +764,14 @@ s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
            strand, translate, reverse etc. Real data is taken starting
            from "curr" and taken only "numseg" segments */
         
-        GapCollectDataForSeqalign(hsp, hsp->gap_info, numseg, query_length,
+        GapCollectDataForSeqalign(hsp, hsp->gap_info, 0, esp->size, query_length,
                                   subject_length, translate1, translate2,
                                   &start, &length, &strands, &start1, &start2);
         
         /* Result of this function will be either den-seg or Std-seg
            depending on translation options */
         sap = s_GapMakeSeqAlign(query_id, subject_id, translate1, translate2, 
-                                numseg, length, start, strands);
+                                esp->size, length, start, strands);
     } else {
 
         /* By request of Steven Altschul - we need to have 
@@ -752,33 +786,37 @@ s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
         sap_disc->type = SAT_PARTIAL; /* ordered segments, over part of seq */
         sap_disc->segtype = SAS_DISC; /* discontinuous alignment */
         
-        curr_last = hsp->gap_info; 
         sap_head = NULL; sap_tail = NULL;
-        while(curr_last != NULL) {
-            skip_region = FALSE;                        
-            for (numseg = 0, curr = curr_last; 
-                 curr; curr = curr->next, numseg++) {
+        for (index=0; index<esp->size; index++)
+        {
+            int numseg=0;
+            Boolean skip_region = FALSE;
+            int index2 = index;
+            int first = index;
+            for (index2=first; index2<esp->size; index2++, numseg++) {
 
-                if(curr->op_type == eGapAlignDecline) {
+                if(esp->op_type[index2] == eGapAlignDecline) {
                     if(numseg != 0) { /* End of aligned area */
                         break;
                     } else {
-                        while(curr && curr->op_type == eGapAlignDecline) {
+                        while (index2<esp->size && esp->op_type[index2] == eGapAlignDecline) {
                             numseg++;
-                            curr = curr->next; 
+                            index2++;
                         }
                         skip_region = TRUE;                        
                         break;
                     }
                 }
             }
+            
 
-            GapCollectDataForSeqalign(hsp, curr_last, numseg, query_length,
+            if(!skip_region) {            
+
+               GapCollectDataForSeqalign(hsp, esp, first, numseg, query_length,
                                       subject_length, translate1, translate2,
                                       &start, &length, &strands, &start1, 
                                       &start2);
             
-            if(!skip_region) {            
                 sap = 
                     s_GapMakeSeqAlign(query_id, subject_id, translate1, 
                                       translate2, numseg, length, start, 
@@ -792,8 +830,6 @@ s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                     sap_tail = sap;
                 }
             }
-            
-            curr_last = curr;
         }
         sap_disc->segs = sap_head;
         sap = sap_disc;
@@ -818,7 +854,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                          Int4 query_length, Int4 subject_length)
 {
     Boolean reverse = FALSE;
-    GapEditScript* curr,* esp;
+    GapEditScript* esp;
     Int2 frame1, frame2;
     Int4 start1, start2;
     Int4 original_length1, original_length2;
@@ -830,6 +866,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
     StdSeg* sseg,* sseg_head,* sseg_old;
     Uint1 strand1, strand2;
     Boolean first_shift;
+    int index;
 
     if (program == eBlastTypeBlastx) {
        reverse = TRUE;
@@ -866,7 +903,6 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
     else
         strand2 = Seq_strand_unknown;
     
-    esp = hsp->gap_info;
     
     sap = SeqAlignNew();
     
@@ -879,18 +915,20 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
 
     first_shift = FALSE;
 
-    for (curr=esp; curr; curr=curr->next) {
+    esp = hsp->gap_info;
 
+    for (index=0; index<esp->size; index++)
+    {
         slp1 = NULL;
         slp2 = NULL;
         
-        switch (curr->op_type) {
+        switch (esp->op_type[index]) {
         case eGapAlignDel: /* deletion of three nucleotides. */
             
             first_shift = FALSE;
 
             seq_int1 = SeqIntNew();
-            seq_int1->from = s_GetCurrentPos(&start1, curr->num);
+            seq_int1->from = s_GetCurrentPos(&start1, esp->num[index]);
             seq_int1->to = start1 - 1;            
 
             if(seq_int1->to >= original_length1)
@@ -995,7 +1033,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
             
             /* Nucleotide scale shifted by 3, protein gapped */
             seq_int2 = SeqIntNew();              
-            seq_int2->from = s_GetCurrentPos(&start2, curr->num*3);
+            seq_int2->from = s_GetCurrentPos(&start2, esp->num[index]*3);
             seq_int2->to = start2 - 1;
 
             if(seq_int2->to >= original_length2) {
@@ -1026,7 +1064,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
 
             /* Protein coordinates */
             seq_int1 = SeqIntNew();
-            seq_int1->from =  s_GetCurrentPos(&start1, curr->num);
+            seq_int1->from =  s_GetCurrentPos(&start1, esp->num[index]);
             seq_int1->to = start1 - 1;
 
             if(seq_int1->to >= original_length1)
@@ -1041,7 +1079,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
             seq_int2 = SeqIntNew();
 
             seq_int2->from = 
-               s_GetCurrentPos(&start2, curr->num*(Uint1)curr->op_type);
+               s_GetCurrentPos(&start2, esp->num[index]*(Uint1)esp->op_type[index]);
             seq_int2->to = start2 - 1;
 
 		/* Chop off three bases and one residue at a time.
@@ -1092,7 +1130,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                 seq_int2 = SeqIntNew();
 
                 seq_int2->from = 
-                   s_GetCurrentPos(&start2, (Uint1)curr->op_type);
+                   s_GetCurrentPos(&start2, (Uint1)esp->op_type[index]);
                 seq_int2->to = start2 - 1;
 
                 if(seq_int2->to >= original_length2) {
@@ -1127,7 +1165,7 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                we do not need to start new segment, but may continue
                old one */
             if(seq_int2_last != NULL) {
-                s_GetCurrentPos(&start2, curr->num*((Uint1)curr->op_type-3));
+                s_GetCurrentPos(&start2, esp->num[index]*((Uint1)esp->op_type[index]-3));
                 if(strand2 != Seq_strand_minus) {
                     seq_int2_last->to = start2 - 1;
                 } else {
@@ -1149,14 +1187,14 @@ s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
                         seq_int1_last++;
                 }
 
-            } else if ((Uint1)curr->op_type > 3) {
+            } else if ((Uint1)esp->op_type[index] > 3) {
                 /* Protein piece is empty */
                 ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(id1));
                 /* Simulating insertion of nucleotides */
                 seq_int2 = SeqIntNew();
                 seq_int2->from = 
                    s_GetCurrentPos(&start2, 
-                                   curr->num*((Uint1)curr->op_type-3));
+                                   esp->num[index]*((Uint1)esp->op_type[index]-3));
                 seq_int2->to = start2 - 1;
                 
                 if(seq_int2->to >= original_length2) {
@@ -1273,93 +1311,28 @@ s_HSPListToSeqAlignGapped(EBlastProgramType program_number,
    return status;
 }
 
-/** Adjusts the offsets in a Seq-align list produced by a BLAST search
- * of multiple queries against multiple subjects. Seq-aligns in a list are
- * assumed to be sorted by query, and then by subject, i.e. all Seq-aligns for
- * the first query are at the beginning of the list, then all for the second
- * query, etc. Within a list for any single query, all Seq-aligns for one 
- * subject are grouped together. The order of queries in the Seq-align list 
- * must be the same as in the query Seq-loc list; the order of subjects
- * within a Seq-align list for a given query is the same as in the subject
- * Seq-loc list. Some or all queries or subjects might be skipped in the 
- * Seq-align list.
- * @param head List of Seq-aligns [in|out]
- * @param query_slp List of query locations [in]
- * @param subject_slp List of subject locations [in]
- */
-static void 
-s_AdjustOffsetsInSeqAlign(SeqAlign* head, SeqLoc* query_slp,
-                          SeqLoc* subject_slp)
-{
-   SeqAlign* seqalign, *next_seqalign = NULL, *last_seqalign;
-   SeqLoc* qslp, *sslp;
-   SeqId* query_id, *subject_id;
-   
-   qslp = query_slp;
-   sslp = subject_slp;
-
-   for (seqalign = head; seqalign; seqalign = next_seqalign) {
-      query_id = TxGetQueryIdFromSeqAlign(seqalign);
-      subject_id = TxGetSubjectIdFromSeqAlign(seqalign);
-
-      /* Find Seq-locs corresponding to these query and subject. Start looking
-	 from the previously found Seq-locs, because Seq-aligns are sorted
-	 appropriately. */
-      for ( ; qslp; qslp = qslp->next) {
-	 if (SeqIdComp(query_id, SeqLocId(qslp)) == SIC_YES)
-	    break;
-	 /* Changing query: return subject Seq-loc pointer to the beginning 
-	    of the list of subject Seq-locs.*/
-	 sslp = subject_slp;
-      }
-      for ( ; sslp; sslp = sslp->next) {
-	 if (SeqIdComp(subject_id, SeqLocId(sslp)) == SIC_YES)
-	    break;
-      }
-
-      /* Find the first Seq-align that has either different subject or 
-	 different query. */
-      last_seqalign = seqalign;
-      for (next_seqalign = seqalign->next; next_seqalign; 
-	   next_seqalign = next_seqalign->next) {
-	 if ((SeqIdComp(subject_id, TxGetSubjectIdFromSeqAlign(next_seqalign)) 
-	      != SIC_YES) || 
-	     (SeqIdComp(query_id, TxGetQueryIdFromSeqAlign(next_seqalign)) 
-	      != SIC_YES)) {
-	    /* Unlink the Seq-align chain */
-	    last_seqalign->next = NULL;
-	    break;
-	 } else {
-	    last_seqalign = next_seqalign;
-	 }
-      }
-      AdjustOffSetsInSeqAlign(seqalign, qslp, sslp);
-      /* Reconnect the Seq-align chain */
-      last_seqalign->next = next_seqalign;
-   }
-}
-
 Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number, 
         BlastHSPResults* results, SeqLocPtr query_slp, 
         ReadDBFILE* rdfp, SeqLoc* subject_slp,
         Boolean is_gapped, Boolean is_ooframe, 
-        SeqAlignPtr* head_seqalign)
+        SBlastSeqalignArray* *seqalign_arr)
 {
    Int4 query_index, subject_index;
    SeqLocPtr slp = query_slp;
    SeqIdPtr query_id, subject_id = NULL;
-   BlastHitList* hit_list;
-   BlastHSPList* hsp_list;
-   SeqAlignPtr seqalign = NULL, last_seqalign = NULL;
    Int4 subject_length = 0;
    SeqLoc** subject_loc_array = NULL;
    
-   *head_seqalign = NULL;
-   if (!results)
+   if (!results || results->num_queries <= 0)
       return 0;
 
    if (!rdfp && !subject_slp)
       return -1;
+
+   *seqalign_arr = SBlastSeqalignArrayNew(results->num_queries);
+   if (*seqalign_arr == NULL)
+      return -1;
+   
 
    if (!rdfp) {
       subject_loc_array = 
@@ -1371,20 +1344,23 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
    slp = query_slp;
    for (query_index = 0; slp && query_index < results->num_queries; 
         ++query_index, slp = slp->next) {
-      hit_list = results->hitlist_array[query_index];
+      SeqAlignPtr head_seqalign = NULL, last_seqalign = NULL;
+      BlastHitList* hit_list = results->hitlist_array[query_index];
       if (!hit_list)
          continue;
+
       query_id = SeqLocId(slp);
 
       for (subject_index = 0; subject_index < hit_list->hsplist_count;
            ++subject_index) {
-         hsp_list = hit_list->hsplist_array[subject_index];
+         SeqAlignPtr seqalign = NULL;
+         BlastHSPList* hsp_list = hit_list->hsplist_array[subject_index];
          if (!hsp_list)
             continue;
 
-         // Sort HSPs with e-values as first priority and scores as 
-         // tie-breakers, since that is the order we want to see them in 
-         // in Seq-aligns.
+         /* Sort HSPs with e-values as first priority and scores as 
+            tie-breakers, since that is the order we want to see them in 
+            in Seq-aligns. */
          Blast_HSPListSortByEvalue(hsp_list);
 
          if (rdfp) {
@@ -1408,6 +1384,14 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
                                         subject_length, &seqalign);
          }                      
 
+         if (seqalign)
+         {
+             SeqLocPtr subject_loc = NULL;
+             if (subject_loc_array)
+                subject_loc = subject_loc_array[hsp_list->oid];
+             AdjustOffSetsInSeqAlign(seqalign, slp, subject_loc); 
+         }
+
          /* The subject id must be deallocated only in case of a ReadDB 
             interface */
          if (rdfp)
@@ -1415,18 +1399,17 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
 
          if (seqalign) {
 	    if (!last_seqalign) {
-	       *head_seqalign = last_seqalign = seqalign;
+	       head_seqalign = last_seqalign = seqalign;
 	    } else {
 	       last_seqalign->next = seqalign;
 	    }
 	    for ( ; last_seqalign->next; last_seqalign = last_seqalign->next);
          }
       }
+      (*seqalign_arr)->array[query_index] = head_seqalign;
    }
 
    sfree(subject_loc_array);
-
-   s_AdjustOffsetsInSeqAlign(*head_seqalign, query_slp, subject_slp);
 
    return 0;
 }

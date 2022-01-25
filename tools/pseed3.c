@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.45 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.46 2006/03/01 13:44:28 coulouri Exp $";
 
-/* $Id: pseed3.c,v 6.45 2005/07/28 14:57:10 coulouri Exp $ */
+/* $Id: pseed3.c,v 6.46 2006/03/01 13:44:28 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.45 $
+$Revision: 6.46 $
 
 $Log: pseed3.c,v $
+Revision 6.46  2006/03/01 13:44:28  coulouri
+From Alejandro Schaffer: handle patterns in a case-insensitive fashion. Fixes rt#15144173
+
 Revision 6.45  2005/07/28 14:57:10  coulouri
 remove dead code
 
@@ -1438,6 +1441,8 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
     Char line[BUF_SIZE];  /*Line read in from the file*/
     Char *name;  /*name of pattern, if there is a name*/
     Char  *rp;   /*pattern string read in from file*/
+    Int4 length; /*length of pattern string*/
+    Int4 i; /*loop index*/
 
     name = NULL; 
     stringForPattern[0] = '\0';
@@ -1475,6 +1480,10 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
 	      } */
 	    }
 	  }
+	  length = strlen(stringForPattern);
+	  for(i = 0; i < length; i++)
+	    if ('x' !=  stringForPattern[i])
+	      stringForPattern[i] = toupper(stringForPattern[i]);
 	  if (name) {
 	    return 1;
 	  }

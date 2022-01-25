@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.112 2005/09/01 19:17:24 madden Exp $
+# $Id: makedis.csh,v 1.114 2006/01/25 15:49:40 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -297,6 +297,14 @@ set noglob
 eval `sed -e 's/^ *#.*//g' -e 's/\$(\([a-zA-Z_]*\))/\${\1}/g' -e 's/ *= */=/g' -e 's/^\([^=]*\)=\(.*\)$/setenv \1 "\2";/' < $NCBI_DOT_MK`
 unset noglob
 
+# disable assert() unless ENABLE_ASSERT is set
+if ("$?ENABLE_ASSERT" == 0) then
+    set NCBI_OPTFLAG="-DNDEBUG $NCBI_OPTFLAG"
+    echo "Disabling assert()."
+else
+    echo "Enabling assert()."
+endif
+
 cd ncbi/build
 ln -s ../make/*.unx .
 ln -s ../make/ln-if-absent .
@@ -367,7 +375,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin sbtedit Nentrez udv ddv blastcl3 \
-		idfetch bl2seq asn2gb tbl2asn entrez2 gbseqget \
+		idfetch bl2seq asn2gb tbl2asn gene2xml entrez2 gbseqget \
 		$WWWBLAST $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
@@ -390,7 +398,7 @@ else if ( "$HAVE_MAC" == 1 ) then
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB_POST_LINK=\"/Developer/Tools/Rez -t APPL ../link/macmet/Carbon.r -o\" \
 		VIB=\"Psequin sbtedit udv ddv blastcl3 \
-		idfetch bl2seq asn2gb tbl2asn entrez2 gbseqget $WWWBLAST \") 
+		idfetch bl2seq asn2gb tbl2asn gene2xml entrez2 gbseqget $WWWBLAST \") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -399,7 +407,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 idfetch bl2seq asn2gb tbl2asn $NONVIBWWWBLAST \") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch bl2seq asn2gb tbl2asn gene2xml $NONVIBWWWBLAST \") 
 endif
 
 set CMD='make $MFLG \
@@ -497,7 +505,7 @@ else
 	errhdr fa2htgs fastacmd findspl fmerge formatdb formatrpsdb getfeat \
         getmesh getpub getseq gil2bin idfetch impala indexpub makemat makeset \
 	megablast ncbisort netentcf rpsblast seedtop seqtest sequin entrez2 \
-	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D \
+	tbl2asn gene2xml test_regexp testcore testobj testval udv vecscreen Cn3D \
 	blast debruijn $WWWBLAST )
 	if ( -x ./$i ) then
 		rm -f ../bin/$i

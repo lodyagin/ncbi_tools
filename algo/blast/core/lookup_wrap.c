@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.17 2005/11/16 14:27:04 madden Exp $
+/* $Id: lookup_wrap.c,v 1.19 2005/12/19 17:31:14 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,10 +37,11 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.17 2005/11/16 14:27:04 madden Exp $";
+    "$Id: lookup_wrap.c,v 1.19 2005/12/19 17:31:14 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
+#include <algo/blast/core/lookup_util.h>
 #include <algo/blast/core/blast_lookup.h>
 #include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/phi_lookup.h>
@@ -51,7 +52,9 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
         LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info)
 {
+   Int4 num_table_entries;
    LookupTableWrap* lookup_wrap;
+   const Int4 kNucEntriesCutoff = 8500;  /* probably machine dependent */
 
    /* Construct the lookup table. */
    *lookup_wrap_ptr = lookup_wrap = 
@@ -77,17 +80,40 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
        _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
        }
       break;
-   case MB_LOOKUP_TABLE:
-      MB_LookupTableNew(query, lookup_segments, 
-         (BlastMBLookupTable* *) &(lookup_wrap->lut), lookup_options);
-      break;
    case NA_LOOKUP_TABLE:
-      LookupTableNew(lookup_options, 
-         (BlastLookupTable* *) &(lookup_wrap->lut), FALSE);
+   case MB_LOOKUP_TABLE:
+      /* choose either a standard or a megablast lookup table,
+         depending on the query size and word size. Megablast
+         tables are used for large queries and word sizes, and
+         standard tables are used otherwise. For word size 11 
+         the standard lookup table is especially efficient, 
+         so the cutoff is larger in that case. Discontiguous
+         megablast must always use a megablast table */
+
+      num_table_entries = EstimateNumTableEntries(lookup_segments);
+
+      if (lookup_options->mb_template_length > 0 ||
+          (lookup_options->word_size == 11 && 
+           num_table_entries > 2*kNucEntriesCutoff) ||
+          (lookup_options->word_size >= 10 && 
+           lookup_options->word_size != 11 &&
+           num_table_entries > kNucEntriesCutoff) ) {
+
+         lookup_wrap->lut_type = MB_LOOKUP_TABLE;
+         MB_LookupTableNew(query, lookup_segments, 
+                           (BlastMBLookupTable* *) &(lookup_wrap->lut), 
+                           lookup_options, num_table_entries);
+      }
+      else {
+         lookup_wrap->lut_type = NA_LOOKUP_TABLE;
+         LookupTableNew(lookup_options, 
+                        (BlastLookupTable* *) &(lookup_wrap->lut), 
+                        num_table_entries, FALSE);
 	    
-      BlastNaLookupIndexQuery((BlastLookupTable*) lookup_wrap->lut, query,
-                              lookup_segments);
-      _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+         BlastNaLookupIndexQuery((BlastLookupTable*) lookup_wrap->lut, query,
+                                 lookup_segments);
+         _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+      }
       break;
    case PHI_AA_LOOKUP: case PHI_NA_LOOKUP:
        {

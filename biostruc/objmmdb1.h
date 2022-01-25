@@ -297,6 +297,7 @@ typedef struct struct_Molecule_graph {
    ValNodePtr   seq_id;
    struct struct_Residue PNTR   residue_sequence;
    struct struct_Inter_residue_bond PNTR   inter_residue_bonds;
+   Int4   sid;
 } MoleculeGraph, PNTR MoleculeGraphPtr;
 
 

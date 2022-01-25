@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.84 2005/09/27 14:42:20 madden Exp $
+/* $Id: blast_hits.h,v 1.91 2006/02/23 18:28:59 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -103,6 +103,9 @@ typedef struct BlastHSP {
                               statistics evaluation? If unset (0), this HSP is
                               not part of a linked set, i.e. value 0 is treated
                               the same way as 1. */
+   Int2		comp_adjustment_method;  /**< which mode of composition
+                                              adjustment was used; relevant
+                                              only for blastp and tblastn */
    SPHIHspInfo* pat_info; /**< In PHI BLAST, information about this pattern
                                  match. */
 } BlastHSP;
@@ -483,16 +486,15 @@ Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program,
 
 /** Append one HSP list to the other. Discard lower scoring HSPs if there is
  * not enough space to keep all.
- * @param hsp_list New list of HSPs [in]
+ * @param old_hsp_list_ptr list of HSPs, will be NULLed out on return [in|out]
  * @param combined_hsp_list_ptr Pointer to the combined list of HSPs, possibly
  *                              containing previously saved HSPs [in] [out]
  * @param hsp_num_max Maximal allowed number of HSPs to save (unlimited if INT4_MAX) [in]
  * @return Status: 0 on success, -1 on failure.
  */ 
 NCBI_XBLAST_EXPORT
-Int2 Blast_HSPListAppend(BlastHSPList* hsp_list, 
-                         BlastHSPList** combined_hsp_list_ptr, 
-                         Int4 hsp_num_max);
+Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
+        BlastHSPList** combined_hsp_list_ptr, Int4 hsp_num_max);
 
 /** Merge an HSP list from a chunk of the subject sequence into a previously
  * computed HSP list.
@@ -504,7 +506,7 @@ Int2 Blast_HSPListAppend(BlastHSPList* hsp_list,
  * @return 0 if HSP lists have been merged successfully, -1 otherwise.
  */
 NCBI_XBLAST_EXPORT
-Int2 Blast_HSPListsMerge(BlastHSPList* hsp_list, 
+Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list, 
                    BlastHSPList** combined_hsp_list_ptr, 
                    Int4 hsp_num_max, Int4 start, Boolean merge_hsps);
 
@@ -678,6 +680,25 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results, 
         BlastHSPList* hsp_list, Int4 hitlist_size);
+
+/* Forward declaration */
+struct BlastHSPStream;
+
+BlastHSPResults*
+Blast_HSPResultsFromHSPStream(struct BlastHSPStream* hsp_stream, 
+                              size_t num_queries, 
+                              const BlastHitSavingOptions* hit_options, 
+                              const BlastExtensionOptions* ext_options, 
+                              const BlastScoringOptions* scoring_options);
+
+BlastHSPResults*
+Blast_HSPResultsFromHSPStreamWithLimit(struct BlastHSPStream* hsp_stream, 
+                                   Uint4 num_queries, 
+                                   const BlastHitSavingOptions* hit_options, 
+                                   const BlastExtensionOptions* ext_options, 
+                                   const BlastScoringOptions* scoring_options,
+                                   Uint4 max_num_hsps,
+                                   Boolean* removed_hsps);
 
 /** Splits the BlastHSPResults structure for a PHI BLAST search into an array of
  * BlastHSPResults structures, corresponding to different pattern occurrences in

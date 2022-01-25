@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.24 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_seqalign.h,v 1.28 2006/02/15 15:13:47 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +47,24 @@ extern "C" {
  * @{
  */
 
-/** This should be defined somewhere else!!!!!!!!!!!!! */
-#define BLAST_SMALL_GAPS 0
+/** Object to hold a vector of seqaligns.
+ * Specially designed for the case of multiple queries. */
+typedef struct SBlastSeqalignArray {
+    SeqAlign** array;   /**< array of pointers to SeqAligns, one for each query. */
+    Int4 num_queries;   /**< length of array above. */
+} SBlastSeqalignArray;
+
+/** Returns a pointer to SBlastSeqalignArray,
+ * the array is allocated, but all pointers set to NULL.
+ * @param size length of array.
+ */
+SBlastSeqalignArray* SBlastSeqalignArrayNew(Int4 size);
+
+/** Frees memory of SBlastSeqalignArray, including 
+ * the SeqAlignPtr's that are pointed to in the array.
+ * @param array object to be deallocated.
+ */
+SBlastSeqalignArray* SBlastSeqalignArrayFree(SBlastSeqalignArray* array);
 
 /** Convert BLAST results structure to a list of SeqAlign's.
  * @param program_number Type of BLAST program [in]
@@ -58,17 +74,19 @@ extern "C" {
  * @param subject_slp List of subject sequences locations [in]
  * @param is_gapped Is this a gapped alignment search? [in]
  * @param is_ooframe Is this a search with out-of-frame gapping? [in]
- * @param head_seqalign List of SeqAlign's [out]
+ * @param seqalign_arr object with resulting SeqAligns [out]
  */
 Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number, 
         BlastHSPResults* results, SeqLocPtr query_slp, 
         ReadDBFILE* rdfp, SeqLoc* subject_slp, 
-        Boolean is_gapped, Boolean is_ooframe, SeqAlignPtr* head_seqalign);
+        Boolean is_gapped, Boolean is_ooframe, SBlastSeqalignArray* *seqalign_arr);
 
 /** Given an internal edit block structure, returns the segments information in
  * form of arrays.
  * @param hsp HSP structure containing traceback for one local alignment [in]
- * @param curr_in Link in editing script where to start collecting the data. [in]
+ * @param esp Link in editing script where to start collecting the data. [in]
+ * @param start first element of EditScript to use [in]
+ * @param number number of elements of EditScript to use [in]
  * @param numseg Number of segments in the alignment [in]
  * @param query_length Length of query sequence [in]
  * @param subject_length Length of subject sequence [in]
@@ -84,8 +102,8 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
  * @return Status.
  */
 Int2 
-GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* curr_in, Int4 numseg, 
-                          Int4 query_length, Int4 subject_length,
+GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* esp, Int4 start, 
+                          Int4 number, Int4 query_length, Int4 subject_length,
                           Boolean translate1, Boolean translate2,
                           Int4** start_out, Int4** length_out,
                           Uint1** strands_out, Int4* start1, Int4* start2);

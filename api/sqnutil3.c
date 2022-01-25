@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.63 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -4329,3 +4329,115 @@ extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip)
   VisitAnnotsInSep (sep, (Pointer) sip, RemoveSequenceFromAlignmentsCallback);
   return TRUE;
 }
+
+
+static CharPtr inferencePrefix [] = {
+  "",
+  "similar to sequence",
+  "similar to AA sequence",
+  "similar to DNA sequence",
+  "similar to RNA sequence",
+  "similar to RNA sequence, mRNA",
+  "similar to RNA sequence, EST",
+  "similar to RNA sequence, other RNA",
+  "profile",
+  "nucleotide motif",
+  "protein motif",
+  "ab initio prediction",
+  NULL
+};
+
+NLM_EXTERN Int2 ValidateInferenceQualifier (CharPtr val, Boolean fetchAccn)
+
+{
+  Int2           accnv, best, j, rsult;
+  Char           ch;
+  Boolean        has_fetch_function, same_species;
+  size_t         len;
+  ObjMgrProcPtr  ompp = NULL;
+  CharPtr        rest, str, tmp;
+  ErrSev         sev;
+  SeqIdPtr       sip;
+
+  if (StringHasNoText (val)) return EMPTY_INFERENCE_STRING;
+
+  rest = NULL;
+  best = -1;
+  for (j = 0; inferencePrefix [j] != NULL; j++) {
+    len = StringLen (inferencePrefix [j]);
+    if (StringNICmp (val, inferencePrefix [j], len) != 0) continue;
+    rest = val + len;
+    best = j;
+  }
+
+  if (best < 0 || inferencePrefix [best] == NULL) return BAD_INFERENCE_PREFIX;
+
+  if (rest == NULL) return BAD_INFERENCE_BODY;
+
+  same_species = FALSE;
+  ch = *rest;
+  while (IS_WHITESP (ch)) {
+    rest++;
+    ch = *rest;
+  }
+  if (StringNICmp (rest, "(same species)", 14) == 0) {
+    same_species = TRUE;
+    rest += 14;
+  }
+  ch = *rest;
+  while (IS_WHITESP (ch) || ch == ':') {
+    rest++;
+    ch = *rest;
+  }
+
+  if (StringHasNoText (rest)) return BAD_INFERENCE_BODY;
+
+  rsult = VALID_INFERENCE;
+  if (same_species && best > 7) {
+    rsult = SAME_SPECIES_MISUSED;
+  }
+
+  str = StringSave (rest);
+
+  tmp = StringChr (str, ':');
+  if (tmp != NULL) {
+    *tmp = '\0';
+    tmp++;
+    TrimSpacesAroundString (str);
+    TrimSpacesAroundString (tmp);
+    if (StringDoesHaveText (tmp)) {
+      if (StringICmp (str, "INSD") == 0 || StringICmp (str, "RefSeq") == 0) {
+        accnv = ValidateAccnDotVer (tmp);
+        if (accnv == -5 || accnv == -6) {
+          rsult = BAD_INFERENCE_ACC_VERSION;
+        } else if (accnv != 0) {
+          rsult = BAD_INFERENCE_ACCESSION;
+        } else if (fetchAccn) {
+          sip = SeqIdFromAccessionDotVersion (tmp);
+          has_fetch_function = FALSE;
+          while ((ompp = ObjMgrProcFindNext(NULL, OMPROC_FETCH, OBJ_SEQID, OBJ_SEQID, ompp)) != NULL) {
+            if ((ompp->subinputtype == 0) && (ompp->suboutputtype == SEQID_GI)) {
+              has_fetch_function = TRUE;
+            }
+          }
+          sev = ErrGetMessageLevel ();
+          ErrSetMessageLevel (SEV_ERROR);
+          if (has_fetch_function && GetGIForSeqId (sip) == 0) {
+            rsult = ACC_VERSION_NOT_PUBLIC;
+          }
+          ErrSetMessageLevel (sev);
+          SeqIdFree (sip);
+        }
+      }
+    }
+    if (StringChr (str, ' ') != NULL) rsult = SPACES_IN_INFERENCE;
+    if (StringChr (tmp, ' ') != NULL) rsult = SPACES_IN_INFERENCE;
+  } else {
+    rsult = SINGLE_INFERENCE_FIELD;
+  }
+
+  MemFree (str);
+
+  return rsult;
+}
+

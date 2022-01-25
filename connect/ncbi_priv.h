@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.15 2005/10/25 18:53:10 lavr Exp $
+/*  $Id: ncbi_priv.h,v 6.18 2006/02/21 14:56:10 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -108,6 +108,16 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
     } \
 } while (0)
 
+#ifdef _DEBUG
+#  define CORE_TRACE(message)    CORE_LOG(eLOG_Trace, message)
+#  define CORE_TRACEF(fmt_args)  CORE_LOGF(eLOG_Trace, fmt_args)
+#  define CORE_DEBUG_ARG(arg)    arg
+#else
+#  define CORE_TRACE(message)    ((void) 0)
+#  define CORE_TRACEF(fmt_args)  ((void) 0)
+#  define CORE_DEBUG_ARG(arg)    /*arg*/
+#endif /*_DEBUG*/
+
 #define CORE_DATA(data, size, message)  do { \
     if ( g_CORE_Log ) { \
         CORE_LOCK_READ; \
@@ -196,6 +206,15 @@ extern NCBI_XCONNECT_EXPORT char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.h,v $
+ * Revision 6.18  2006/02/21 14:56:10  lavr
+ * +CORE_DEBUG_ARG
+ *
+ * Revision 6.17  2006/02/14 18:26:00  ucko
+ * Fix typo in non-_DEBUG definition of CORE_TRACEF.
+ *
+ * Revision 6.16  2006/02/14 15:49:42  lavr
+ * Introduce and use CORE_TRACE macros (NOP in Release mode)
+ *
  * Revision 6.15  2005/10/25 18:53:10  lavr
  * Fix ADDEND spelling (finally, hopefully)
  *

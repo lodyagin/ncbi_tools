@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.163 2005/10/31 14:15:10 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.171 2006/01/24 18:33:44 papadopo Exp $";
 
-/* $Id: blastall.c,v 6.163 2005/10/31 14:15:10 madden Exp $
+/* $Id: blastall.c,v 6.171 2006/01/24 18:33:44 papadopo Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,35 @@ static char const rcsid[] = "$Id: blastall.c,v 6.163 2005/10/31 14:15:10 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.171  2006/01/24 18:33:44  papadopo
+ * from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
+ *
+ * Revision 6.170  2006/01/23 16:44:05  papadopo
+ * change signature of FillHitSavingOptions
+ *
+ * Revision 6.169  2006/01/13 15:39:17  madden
+ * - Enabled the use of composition-based statistics for tblastn (and
+ *   only tblastn) using the new engine.
+ * - Disabled setting evalue to a larger number when mode > 1
+ *   composition-based statistics is used by setting EVALUE_EXPAND to 1.
+ * - In Main_new, don't create a BlastSeqSrc.  It is apparently never
+ *   used and is a memory leak.  (from Mike Gertz).
+ *
+ * Revision 6.168  2006/01/10 20:44:10  madden
+ * Use SBlastSeqalignArray
+ *
+ * Revision 6.167  2005/12/22 14:22:19  papadopo
+ * change signature of BLAST_FillLookupTableOptions
+ *
+ * Revision 6.166  2005/12/16 18:30:08  coulouri
+ * disable new engine for smith-waterman and composition-based statistics until they are implemented
+ *
+ * Revision 6.165  2005/12/14 14:43:12  coulouri
+ * enable new engine by default
+ *
+ * Revision 6.164  2005/12/12 13:42:59  madden
+ * SBlastOptionsSetRewardPenaltyAndGapCosts now has new greedy Boolean, BLAST_FillScoringOptions no longer called
+ *
  * Revision 6.163  2005/10/31 14:15:10  madden
  * Call SBlastOptionsSetRewardPenaltyAndGapCosts
  *
@@ -582,6 +611,7 @@ static char const rcsid[] = "$Id: blastall.c,v 6.163 2005/10/31 14:15:10 madden 
 #include <xmlblast.h>
 #include <mblast.h>
 #include <blfmtutl.h>
+#include <algo/blast/composition_adjustment/composition_constants.h>
 #ifdef BLAST_CS_API
 #include <objblst3.h>
 #include <netblap3.h>
@@ -955,8 +985,8 @@ static Args myargs[] = {
     { "Number of concatenated queries, for blastn and tblastn", 
       "0", NULL, NULL, TRUE, 'B', ARG_INT, 0.0, 0, NULL},               /* ARG_NUMQUERIES */
 #ifndef BLASTALL_TOOLS_ONLY
-    { "Force use of old engine", 
-      "T", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},              /* ARG_FORCE_OLD */
+    { "Force use of the legacy BLAST engine", 
+      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},              /* ARG_FORCE_OLD */
 #endif  /* BLASTALL_TOOLS_ONLY */
 #endif
     { "Use composition-based statistics for tblastn:\n"                /* ARG_COMP_BASED_STATS */
@@ -1050,7 +1080,7 @@ s_FillOptions(SBlastOptions* options)
    BlastScoringOptions* score_options = options->score_options;
    BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
 
-   Boolean variable_wordsize = FALSE, mb_lookup = FALSE;
+   Boolean mb_lookup = FALSE;
    Boolean greedy = FALSE;
    Boolean is_gapped = FALSE;
    EBlastProgramType program_number = options->program;
@@ -1058,13 +1088,11 @@ s_FillOptions(SBlastOptions* options)
    if (myargs[ARG_USEMEGABLAST].intvalue != 0)
    {
        greedy = TRUE;
-       variable_wordsize = TRUE;
        mb_lookup = TRUE;
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
-      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue, 
-      variable_wordsize);
+      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
 
    BLAST_FillQuerySetUpOptions(query_setup_options, program_number, 
       myargs[ARG_FILTER].strvalue, (Uint1)myargs[ARG_STRAND].intvalue);
@@ -1080,11 +1108,6 @@ s_FillOptions(SBlastOptions* options)
    BLAST_FillExtensionOptions(ext_options, program_number, greedy, 
       myargs[ARG_XDROP].intvalue, myargs[ARG_XDROP_FINAL].intvalue);
 
-   BLAST_FillScoringOptions(score_options, program_number, 
-       greedy, myargs[ARG_MISMATCH].intvalue, 
-        myargs[ARG_MATCH].intvalue, myargs[ARG_MATRIX].strvalue, 
-        myargs[ARG_GAPOPEN].intvalue, myargs[ARG_GAPEXT].intvalue);
-
    /* if both gap_open and gap_extend are zero then they are set to suggested values */
    SBlastOptionsSetMatrixAndGapCosts(options, myargs[ARG_MATRIX].strvalue,
         myargs[ARG_GAPOPEN].intvalue, myargs[ARG_GAPEXT].intvalue);
@@ -1093,7 +1116,8 @@ s_FillOptions(SBlastOptions* options)
         myargs[ARG_MATCH].intvalue,
         myargs[ARG_MISMATCH].intvalue,
         myargs[ARG_GAPOPEN].intvalue,
-        myargs[ARG_GAPEXT].intvalue);
+        myargs[ARG_GAPEXT].intvalue,
+        FALSE);
 
    if (myargs[ARG_WINDOW].intvalue < 0)
        word_options->window_size = 0;
@@ -1117,7 +1141,9 @@ s_FillOptions(SBlastOptions* options)
       myargs[ARG_EVALUE].floatvalue, 
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
           myargs[ARG_ALIGNMENTS].intvalue),
-          is_gapped, 0);
+          is_gapped, 
+      0,                /* culling limit */
+      0);               /* min diag separation */
  
    hit_options->longest_intron = MIN(myargs[ARG_INTRON].intvalue, MAX_INTRON_LENGTH);
 
@@ -1128,6 +1154,53 @@ s_FillOptions(SBlastOptions* options)
        program_number == eBlastTypeRpsTblastn ||
        program_number == eBlastTypeTblastx) {
        SBlastOptionsSetDbGeneticCode(options, myargs[ARG_DBGENCODE].intvalue);
+   }
+   if (program_number == eBlastTypeTblastn && is_gapped) {
+       /* Set options specific to gapped tblastn */
+       switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
+       case 'D': case 'd':
+       case '0': case 'F': case 'f':
+           ext_options->compositionBasedStats = eNoCompositionBasedStats;
+           break;
+       case '1': case 'T': case 't':
+           ext_options->compositionBasedStats = eCompositionBasedStats;
+           break;
+       case '2':
+           ErrPostEx(SEV_WARNING, 1, 0, "the -C 2 argument "
+                     "is currently experimental\n");
+           ext_options->compositionBasedStats = eCompositionMatrixAdjust;
+           break;
+       case '3':
+           ErrPostEx(SEV_WARNING, 1, 0, "the -C 3 argument "
+                     "is currently experimental\n");
+           ext_options->compositionBasedStats = eCompoForceFullMatrixAdjust;
+           break;
+       default:
+           ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"
+                     "based statistics; see -C options\n");
+           break;
+       }
+       if (myargs[ARG_SMITH_WATERMAN].intvalue) {
+           ext_options->eTbackExt = eSmithWatermanTbck;
+       }
+   } else {
+       /* Make sure tblastn and blastp parameters were not set for
+        * other programs */
+       
+       switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
+       case '0': case 'D': case 'd': case 'F': case 'f':
+           break;
+       default:
+           ErrPostEx(SEV_FATAL, 1, 0,
+                     "Invalid option -C: only gapped tblastn may use"
+                     " composition based statistics.");
+           break;
+       }
+       if(myargs[ARG_SMITH_WATERMAN].intvalue) {
+           ErrPostEx(SEV_FATAL, 1, 0,
+                     "Invalid option -s: Smith-Waterman alignments are only "
+                     "available for gapped tblastn and blastp.");
+       }
    }
 
    return 0;
@@ -1185,7 +1258,6 @@ Int2 Main_new (void)
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
    Int2 ctr = 1;
-   BlastSeqSrc* seq_src = NULL;
    Boolean tabular_output = FALSE;
    Blast_SummaryReturn* sum_returns = Blast_SummaryReturnNew();
    Blast_SummaryReturn* full_sum_returns = NULL;
@@ -1255,7 +1327,7 @@ Int2 Main_new (void)
 
    /* Get the query (queries), loop if necessary. */
    while (1) {
-      SeqAlignPtr  seqalign=NULL;
+      SBlastSeqalignArray* seqalign_arr=NULL;
       BlastTabularFormatData* tf_data = NULL;
       SeqLoc* lcase_mask = NULL;
       SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
@@ -1263,7 +1335,7 @@ Int2 Main_new (void)
       SeqLoc* filter_loc=NULL;	/* All masking locations */
       Int4 num_queries; /* Number of queries read this time. */
       Int4  letters_read;  /* number of letters (bases/residues) read. */
-      seq_src = ReaddbBlastSeqSrcInit(myargs[ARG_DB].strvalue, !db_is_na, 0, 0);
+
       if ((Boolean)myargs[ARG_LCASE].intvalue) {
          letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na, 
                    myargs[ARG_STRAND].intvalue, BLASTALL_MAXQUERY, start, end,
@@ -1317,7 +1389,7 @@ Int2 Main_new (void)
 
 
       if ((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, 
-                                    tf_data, &seqalign, &filter_loc, 
+                                    tf_data, &seqalign_arr, &filter_loc, 
                                     sum_returns)) != 0)
       {
           if (sum_returns && sum_returns->error)
@@ -1347,19 +1419,34 @@ Int2 Main_new (void)
            Int4** ascii_matrix = BlastMatrixConvert(sbp->matrix);
 */
            if (myargs[ARG_ASNOUT].strvalue) {
-               AsnIoPtr asnout = 
-                   AsnIoOpen(myargs[ARG_ASNOUT].strvalue, (char*)"w");
-               GenericSeqAlignSetAsnWrite(seqalign, asnout);
-               asnout = AsnIoClose(asnout);
+                   /* This just prints out the ASN.1 to a secondary file. */
+                   BlastFormattingInfo* asn_format_info = NULL;
+                   BlastFormattingInfoNew(eAlignViewAsnText, options,
+                              blast_program, dbname,
+                              myargs[ARG_ASNOUT].strvalue, &asn_format_info);
+
+                   /* Pass TRUE for the "is megablast" argument. Since megablast is always
+                      gapped, pass FALSE for the "is ungapped" argument. */
+                   BlastFormattingInfoSetUpOptions(asn_format_info,
+                                       myargs[ARG_DESCRIPTIONS].intvalue,
+                                       myargs[ARG_ALIGNMENTS].intvalue,
+                                       (Boolean) myargs[ARG_HTML].intvalue,
+                                       FALSE,
+                                       (Boolean) myargs[ARG_SHOWGIS].intvalue,
+                                       believe_query);
+                   status = 
+                       BLAST_FormatResults(seqalign_arr, num_queries, query_slp, 
+                                   NULL, asn_format_info, sum_returns);
+                   asn_format_info = BlastFormattingInfoFree(asn_format_info);
            }
            
            /* Format the results */
            status = 
-               BLAST_FormatResults(seqalign, num_queries, query_slp, 
+               BLAST_FormatResults(seqalign_arr, num_queries, query_slp, 
                                    filter_loc, format_info, sum_returns);
        }
 
-       seqalign = SeqAlignSetFree(seqalign);
+       seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
        /* Update the cumulative summary returns structure and clean the returns
           substructures for the current search iteration. */
        Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
@@ -1394,7 +1481,7 @@ Int2 Main_new (void)
 
 /* Amount to relax the evalue threshold for preliminary alignments
  * when compositionally adjusted score matrices are used. */
-#define EVALUE_EXPAND 10
+#define EVALUE_EXPAND 1
 
 
 Int2 Main_old (void)
@@ -1610,12 +1697,12 @@ Int2 Main_old (void)
         /* Set some gapped tblastn-specific options to the correct
          * defaults for non-tblastn or non-gapped modes of operation.
          */
-        options->tweak_parameters = NO_COMP_ADJUSTMENT;
+        options->tweak_parameters = eNoCompositionBasedStats;
         options->smith_waterman = 0;
         
         switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
         case '0': case 'D': case 'd': case 'F': case 'f':
-            options->tweak_parameters = NO_COMP_ADJUSTMENT;
+            options->tweak_parameters = eNoCompositionBasedStats;
             break;
         default:
             ErrPostEx(SEV_FATAL, 1, 0,
@@ -1633,21 +1720,20 @@ Int2 Main_old (void)
         switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
         case 'D': case 'd':
         case '0': case 'F': case 'f':
-            options->tweak_parameters = NO_COMP_ADJUSTMENT;
+            options->tweak_parameters = eNoCompositionBasedStats;
             break;
         case '1': case 'T': case 't':
-            options->tweak_parameters = COMP_BASED_STATISTICS;
+            options->tweak_parameters = eCompositionBasedStats;
             break;
         case '2':
             ErrPostEx(SEV_WARNING, 1, 0, "the -C 2 argument "
                       "is currently experimental\n");
-            options->tweak_parameters = COMP_MATRIX_ADJUSTMENT;
+            options->tweak_parameters = eCompositionMatrixAdjust;
             break;
         case '3':
             ErrPostEx(SEV_WARNING, 1, 0, "the -C 3 argument "
                       "is currently experimental\n");
-            options->tweak_parameters = COMP_BASED_STATISTICS |
-                                        COMP_MATRIX_ADJUSTMENT;
+            options->tweak_parameters = eCompoForceFullMatrixAdjust;
         break;
         default:
             ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"

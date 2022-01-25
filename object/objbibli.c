@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,9 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.7  2006/02/22 17:31:45  kans
+* fix to AuthListMatch (CB)
+*
 * Revision 6.6  2005/05/18 17:31:01  bollin
 * added AffilMatch and AuthorMatch functions
 *
@@ -3400,7 +3403,7 @@ NLM_EXTERN Int2 LIBCALL AuthListMatch(AuthListPtr a, AuthListPtr b, Boolean all)
 						StringMove(name[i], nsp->names[0]);
 						lastnames++;
 					} else if (nsp->names[3] != NULL)  /* full name */
-						StringMove(name[i], nsp->names[0]);
+						StringMove(name[i], nsp->names[3]);
 				}
 				else if (pip->choice > 2)
 					StringMove(name[i], (CharPtr)pip->data);

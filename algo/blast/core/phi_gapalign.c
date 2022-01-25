@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.c,v 1.9 2005/11/30 18:25:32 papadopo Exp $
+/* $Id: phi_gapalign.c,v 1.10 2006/01/09 18:14:37 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,14 +51,11 @@
  *    s_PHIBlastAlignPatterns(...)    
  *    Right score = Blast_SemiGappedAlign(...) 
  * </pre>
- * @todo FIXME The alignment code uses complicated representation of the
- *             pattern, and may produce wrong alignments of patterns in case
- *             when pattern has variable length pieces longer than 32 residues.
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_gapalign.c,v 1.9 2005/11/30 18:25:32 papadopo Exp $";
+    "$Id: phi_gapalign.c,v 1.10 2006/01/09 18:14:37 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>

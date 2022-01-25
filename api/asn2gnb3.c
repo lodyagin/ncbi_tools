@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.48 $
+* $Revision: 1.55 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -705,12 +705,14 @@ static Boolean DoGetAnnotationComment (
 )
 
 {
+  Int2               ce = 0, cm = 0;
   SeqMgrDescContext  dcontext;
   CharPtr            method = NULL;
   UserObjectPtr      moduop;
   CharPtr            name = NULL;
   ObjectIdPtr        oip;
   SeqDescrPtr        sdp;
+  UserFieldPtr       u;
   UserFieldPtr       ufp;
   UserObjectPtr      uop;
 
@@ -726,14 +728,32 @@ static Boolean DoGetAnnotationComment (
           for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
             oip = ufp->label;
             if (oip == NULL) continue;
-            if (StringCmp(oip->str, "Contig Name") == 0) {
+            if (StringCmp (oip->str, "Contig Name") == 0) {
               name = (CharPtr) ufp->data.ptrvalue;
-            } else if (StringCmp(oip->str, "Method") == 0) {
+            } else if (StringCmp (oip->str, "Method") == 0) {
               method = (CharPtr) ufp->data.ptrvalue;
-            } else if (StringCmp(oip->str, "mRNA") == 0) {
+            } else if (StringCmp (oip->str, "mRNA") == 0) {
               *mrnaEv = TRUE;
-            } else if (StringCmp(oip->str, "EST") == 0) {
+            } else if (StringCmp (oip->str, "EST") == 0) {
               *estEv = TRUE;
+            } else if (StringCmp (oip->str, "Counts") == 0) {
+              for (u = (UserFieldPtr) ufp->data.ptrvalue; u != NULL; u = u->next) {
+                if (u->data.ptrvalue == NULL) continue;
+                if (u->choice != 2) continue;
+                oip = u->label;
+                if (oip == NULL) continue;
+                if (StringCmp (oip->str, "mRNA") == 0) {
+                  cm = (Int2) u->data.intvalue;
+                  if (cm > 0) {
+                    *mrnaEv = TRUE;
+                  }
+                } else if (StringCmp (oip->str, "EST") == 0) {
+                  ce = (Int2) u->data.intvalue;
+                  if (ce > 0) {
+                    *estEv = TRUE;
+                  }
+                }
+              }
             }
           }
         }
@@ -998,6 +1018,10 @@ static CharPtr GetPrimaryStrForDelta (
             accn = TRUE;
           } else {
             id = GetSeqIdForGI (gi);
+          }
+          if (id == NULL) {
+            sprintf (buf, "%ld", (long) gi);
+            accn = TRUE;
           }
         } else {
           id = SeqIdDup (sip);
@@ -1368,10 +1392,8 @@ NLM_EXTERN void AddPrimaryBlock (
   hist = bsp->hist;
   if ((! IsTpa (bsp, has_tpa_assembly, &isRefSeq)) ||
       hist == NULL || hist->assembly == NULL) {
-    if (awp->contig) {
-      /*
+    if (awp->forcePrimaryBlock) {
       AddAltPrimaryBlock (awp);
-      */
     }
     return;
   }
@@ -1499,10 +1521,9 @@ NLM_EXTERN void AddCommentBlock (
 
 {
   size_t             acclen;
-  /*
   SeqMgrAndContext   acontext;
   AnnotDescPtr       adp;
-  */
+  Boolean            annotDescCommentToComment;
   IntAsn2gbJobPtr    ajp;
   BioseqPtr          bsp;
   Char               buf [1024];
@@ -1548,6 +1569,7 @@ NLM_EXTERN void AddCommentBlock (
   CharPtr            str;
   Char               taxID [32];
   TextSeqIdPtr       tsip;
+  UserFieldPtr       ufp;
   UserObjectPtr      uop;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
@@ -2582,38 +2604,61 @@ NLM_EXTERN void AddCommentBlock (
 
   /* look for Seq-annot.desc.comment on annots packaged on current bioseq */
 
-  /*
-  adp = SeqMgrGetNextAnnotDesc (bsp, NULL, Annot_descr_comment, &acontext);
+  annotDescCommentToComment = FALSE;
+  adp = SeqMgrGetNextAnnotDesc (bsp, NULL, Annot_descr_user, &acontext);
   while (adp != NULL) {
-    str = (CharPtr) adp->data.ptrvalue;
-    if (StringDoesHaveText (str)) {
-      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-      if (cbp != NULL) {
-
-        cbp->entityID = awp->entityID;
-        cbp->first = first;
-        first = FALSE;
-
-        if (cbp->first) {
-          FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-        } else {
-          FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-        }
-
-        FFAddOneString (ffstring, str, TRUE, FALSE, TILDE_EXPAND);
-
-        cbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-        FFRecycleString (ajp, ffstring);
-        ffstring = FFGetString (ajp);
-
-        if (awp->afp != NULL) {
-          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+    uop = (UserObjectPtr) adp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL) {
+        if (StringCmp (oip->str, "AnnotDescCommentPolicy") == 0) {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+            oip = ufp->label;
+            if (oip == NULL || ufp->data.ptrvalue == NULL) continue;
+            if (StringCmp (oip->str, "Policy") == 0) {
+              if (StringICmp ((CharPtr) ufp->data.ptrvalue, "ShowInComment") == 0) {
+                annotDescCommentToComment = TRUE;
+              }
+            }
+          }
         }
       }
     }
-    adp = SeqMgrGetNextAnnotDesc (bsp, adp, Annot_descr_comment, &acontext);
+    adp = SeqMgrGetNextAnnotDesc (bsp, adp, Annot_descr_user, &acontext);
   }
-  */
+
+  if (annotDescCommentToComment) {
+    adp = SeqMgrGetNextAnnotDesc (bsp, NULL, Annot_descr_comment, &acontext);
+    while (adp != NULL) {
+      str = (CharPtr) adp->data.ptrvalue;
+      if (StringDoesHaveText (str)) {
+        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+        if (cbp != NULL) {
+
+          cbp->entityID = awp->entityID;
+          cbp->first = first;
+          first = FALSE;
+
+          if (cbp->first) {
+            FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+          } else {
+            FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+          }
+
+          FFAddOneString (ffstring, str, TRUE, FALSE, TILDE_EXPAND);
+
+          cbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+          FFRecycleString (ajp, ffstring);
+          ffstring = FFGetString (ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
+        }
+      }
+      adp = SeqMgrGetNextAnnotDesc (bsp, adp, Annot_descr_comment, &acontext);
+    }
+  }
 
   FFRecycleString(ajp, ffstring);
 }
@@ -4546,7 +4591,10 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->mapToPep = FALSE;
   ifp->firstfeat = awp->firstfeat;
   awp->firstfeat = FALSE;
-  awp->featseen = TRUE;
+  /* this allows remote SNP, CDD, MGC, etc., not to be treated as local annotation */
+  if (awp->entityID != fbp->entityID || fbp->itemID <= awp->localFeatCount) {
+    awp->featseen = TRUE;
+  }
   awp->featjustseen = TRUE;
 
   if (fcontext->seqfeattype == SEQFEAT_PROT) {
@@ -4999,7 +5047,7 @@ NLM_EXTERN void AddFeatureBlock (
   if (awp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
     cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
     if (cds != NULL && cds->data.choice == SEQFEAT_CDREGION) {
-      /* if protein bioseq and cds feature but no nucleotide, cannot index cds, so skip */
+
       if (fcontext.entityID > 0 && fcontext.itemID > 0) {
 
         fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
@@ -5009,6 +5057,31 @@ NLM_EXTERN void AddFeatureBlock (
           fbp->itemID = fcontext.itemID;
           fbp->itemtype = OBJ_SEQFEAT;
           fbp->featdeftype = fcontext.featdeftype;
+          ifp = (IntFeatBlockPtr) fbp;
+          ifp->mapToNuc = FALSE;
+          ifp->mapToProt = TRUE;
+          ifp->mapToGen = FALSE;
+          ifp->mapToMrna = FALSE;
+          ifp->mapToPep = FALSE;
+          ifp->isCDS = TRUE;
+          ifp->firstfeat = awp->firstfeat;
+          awp->firstfeat = FALSE;
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+          }
+        }
+      } else if (cds->idx.entityID > 0 && cds->idx.itemID > 0) {
+
+        /* if protein bioseq and cds feature but no nucleotide, handle as special case */
+
+        fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+        if (fbp != NULL) {
+
+          fbp->entityID = cds->idx.entityID;
+          fbp->itemID = cds->idx.itemID;
+          fbp->itemtype = OBJ_SEQFEAT;
+          fbp->featdeftype = FEATDEF_CDS;
           ifp = (IntFeatBlockPtr) fbp;
           ifp->mapToNuc = FALSE;
           ifp->mapToProt = TRUE;

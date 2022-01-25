@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.79 2005/11/29 21:32:31 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.97 2006/02/23 17:42:36 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,20 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#if defined(NCBI_OS_UNIX)
+#  ifndef NCBI_OS_SOLARIS
+#    include <limits.h>
+#  endif
+#  if defined(HAVE_GETPWUID)  ||  defined(HAVE_GETPWUID_R)
+#    include <pwd.h>
+#  endif
+#  include <unistd.h>
+#elif defined(NCBI_OS_MSWIN)
+#  if defined(_MSC_VER)  &&  (_MSC_VER > 1200)
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <windows.h>
+#endif
 
 
 static const char* s_GetValue(const char* service, const char* param,
@@ -118,7 +132,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     if (!SOCK_gethostbyaddr(0, info->client_host, sizeof(info->client_host)))
         SOCK_gethostname(info->client_host, sizeof(info->client_host));
 
-    /* Future extentions, clear up for now */
+    /* Future extensions, clear up for now */
     info->scheme  = eURL_Unspec;
     info->user[0] = '\0';
     info->pass[0] = '\0';
@@ -246,7 +260,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
 extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 {
-    if (info->http_proxy_adjusted  ||  !*info->http_proxy_host)
+    if (!info  ||  info->http_proxy_adjusted  ||  !*info->http_proxy_host)
         return 0/*false*/;
 
     if (strlen(info->host) + 16 + strlen(info->path) >= sizeof(info->path)) {
@@ -634,6 +648,27 @@ extern void ConnNetInfo_DeleteArg(SConnNetInfo* info,
 }
 
 
+extern void ConnNetInfo_DeleteAllArgs(SConnNetInfo* info,
+                                      const char*   args)
+{
+    char* temp;
+    char* arg;
+    if (!args || !*args || !(temp = strdup(args)))
+        return;
+    arg = temp;
+    while (*arg) {
+        char* end = strchr(arg, '&');
+        if (!end)
+            end = arg + strlen(arg);
+        else
+            *end++ = '\0';
+        ConnNetInfo_DeleteArg(info, arg);
+        arg = end;
+    }
+    free(temp);
+}
+
+
 extern int/*bool*/ ConnNetInfo_PreOverrideArg(SConnNetInfo* info,
                                               const char*   arg,
                                               const char*   val)
@@ -653,6 +688,85 @@ extern int/*bool*/ ConnNetInfo_PostOverrideArg(SConnNetInfo* info,
         return 1/*success*/;
     ConnNetInfo_DeleteArg(info, arg);
     return ConnNetInfo_AppendArg(info, arg, val);
+}
+
+
+static int/*bool*/ s_IsSufficientAddress(const char* addr)
+{
+    size_t i, len = strlen(addr);
+    int dots = 0, isip = 1;
+    const char* dot = 0;
+
+    for (i = 0; i < len; i++) {
+        if (!isdigit((unsigned char) addr[i]))
+            isip = 0;
+        if (addr[i] == '.') {
+            if (++dots > 3)
+                isip = 0;
+            if (isip  &&  dot  &&  &addr[i] - dot > 3)
+                isip = 0;
+            dot = &addr[i];
+        }
+    }
+    if (dots < 3)
+        isip = 0;
+    if (dot == &addr[len - 1])
+        --dots;
+    return isip ? 1 : dots < 2 ? 0 : 1;
+}
+
+
+static const char* s_ClientAddress(const char* client_host)
+{
+    unsigned int ip;
+    char addr[64];
+    char* s;
+
+    if (!client_host  ||  s_IsSufficientAddress(client_host)        ||
+        !(ip = SOCK_gethostbyname(*client_host ? client_host : 0))  ||
+        SOCK_ntoa(ip, addr, sizeof(addr)) != 0                      ||
+        !(s = (char*) malloc(strlen(client_host) + strlen(addr) + 3))) {
+        return client_host;
+    }
+    sprintf(s, "%s(%s)", client_host, addr);
+    return s;
+}
+
+
+extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info)
+{
+    static const char service[]  = "service";
+    static const char address[]  = "address";
+    static const char platform[] = "platform";
+    const char* arch;
+    const char* addr;
+
+    if (!info)
+        return 0/*failed*/;
+    if (!info->service  ||  !*info->service) {
+        assert(0);
+        return 0/*failed*/;
+    }
+    /* Dispatcher CGI arguments (sacrifice some if they all do not fit) */
+    if (!(arch = CORE_GetPlatform())  ||  !*arch)
+        ConnNetInfo_DeleteArg(info, platform);
+    else
+        ConnNetInfo_PreOverrideArg(info, platform, arch);
+    if (!(addr = s_ClientAddress(info->client_host))  ||  !*addr)
+        ConnNetInfo_DeleteArg(info, address);
+    else
+        ConnNetInfo_PreOverrideArg(info, address, addr);
+    if (addr != info->client_host)
+        free((void*) addr);
+    if (!ConnNetInfo_PreOverrideArg(info, service, info->service)) {
+        ConnNetInfo_DeleteArg(info, platform);
+        if (!ConnNetInfo_PreOverrideArg(info, service, info->service)) {
+            ConnNetInfo_DeleteArg(info, address);
+            if (!ConnNetInfo_PreOverrideArg(info, service, info->service))
+                return 0/*failed*/;
+        }
+    }
+    return 1/*succeeded*/;
 }
 
 
@@ -1631,76 +1745,22 @@ extern int/*bool*/ MIME_ParseContentType
 
 
 /****************************************************************************
- * Reading and writing [host][:port] addresses
+ * Reading and writing [host][:port] addresses:  Deprecated here, use upcalls.
  */
-
 
 extern const char* StringToHostPort(const char*     str,
                                     unsigned int*   host,
                                     unsigned short* port)
 {
-    unsigned short p;
-    unsigned int h;
-    char abuf[256];
-    const char* s;
-    size_t alen;
-    int n = 0;
-
-    if (host)
-        *host = 0;
-    if (port)
-        *port = 0;
-    for (s = str; *s; s++) {
-        if (isspace((unsigned char)(*s)) || *s == ':')
-            break;
-    }
-    if ((alen = (size_t)(s - str)) > sizeof(abuf) - 1)
-        return str;
-    if (alen) {
-        strncpy0(abuf, str, alen);
-        if (!(h = SOCK_gethostbyname(abuf)))
-            return str;
-    } else
-        h = 0;
-    if (*s == ':') {
-        if (sscanf(++s, "%hu%n", &p, &n) < 1 ||
-            (s[n] && !isspace((unsigned char) s[n])))
-            return alen ? 0 : str;
-    } else
-        p = 0;
-    if (host)
-        *host = h;
-    if (port)
-        *port = p;
-    return s + n;
+    return SOCK_StringToHostPort(str, host, port);
 }
-
 
 extern size_t HostPortToString(unsigned int   host,
                                unsigned short port,
                                char*          buf,
                                size_t         buflen)
 {
-    char   x_buf[16/*sizeof("255.255.255.255")*/ + 8/*:port*/];
-    size_t n;
-
-    if (!buf || !buflen)
-        return 0;
-    if (!host)
-        *x_buf = 0;
-    else if (SOCK_ntoa(host, x_buf, sizeof(x_buf)) != 0) {
-        *buf = 0;
-        return 0;
-    }
-    n = strlen(x_buf);
-    if (port || !host)
-        n += sprintf(x_buf + n, ":%hu", port);
-    assert(n < sizeof(x_buf));
-    if (n >= buflen)
-        n = buflen - 1;
-    memcpy(buf, x_buf, n);
-    buf[n] = 0;
-    return n;
+    return SOCK_HostPortToString(host, port, buf, buflen);
 }
 
 
@@ -1735,7 +1795,8 @@ static void s_CRC32_Init(void)
 }
 
 
-unsigned int CRC32_Update(unsigned int checksum, const void *ptr, size_t count)
+extern unsigned int CRC32_Update(unsigned int checksum,
+                                 const void *ptr, size_t count)
 {
     const unsigned char* str = (const unsigned char*) ptr;
     size_t j;
@@ -1750,9 +1811,225 @@ unsigned int CRC32_Update(unsigned int checksum, const void *ptr, size_t count)
 }
 
 
+
+/****************************************************************************
+ * CONNUTIL_GetUsername
+ */
+
+
+extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
+{
+#if defined(NCBI_OS_UNIX)  &&  !defined(NCBI_OS_SOLARIS)
+#  ifndef LOGIN_NAME_MAX
+#    ifdef _POSIX_LOGIN_NAME_MAX
+#      define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
+#    else
+#      define LOGIN_NAME_MAX 256
+#    endif
+#  endif
+    char loginbuf[LOGIN_NAME_MAX + 1];
+#endif
+#if defined(NCBI_OS_UNIX)
+    struct passwd* pw;
+#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETPWUID_R)
+    struct passwd pwd;
+    char pwdbuf[256];
+#  endif
+#elif defined(NCBI_OS_MSWIN)
+    char  loginbuf[256 + 1];
+    DWORD loginbufsize = sizeof(loginbuf) - 1;
+#endif
+    const char* login;
+
+    assert(buf  &&  bufsize);
+
+#ifndef NCBI_OS_UNIX
+#  ifdef NCBI_OS_MSWIN
+    if (GetUserName(loginbuf, &loginbufsize)) {
+        assert(loginbufsize < sizeof(loginbuf));
+        loginbuf[loginbufsize] = '\0';
+        strncpy0(buf, loginbuf, bufsize - 1);
+        return buf;
+    }
+    if ((login = getenv("USERNAME")) != 0) {
+        strncpy0(buf, login, bufsize - 1);
+        return buf;
+    }
+#  endif
+#else /*!NCBI_OS_UNIX*/
+
+#  if defined(NCBI_OS_SOLARIS)  ||  !defined(HAVE_GETLOGIN_R)
+    /* NB:  getlogin() is MT-safe on Solaris, yet getlogin_r() comes in two
+     * flavors that differ only in return type, so to make things simpler,
+     * use plain getlogin() here */
+#    ifndef NCBI_OS_SOLARIS
+    CORE_LOCK_WRITE;
+#    endif
+    if ((login = getlogin()) != 0)
+        strncpy0(buf, login, bufsize - 1);
+#    ifndef NCBI_OS_SOLARIS
+    CORE_UNLOCK;
+#    endif
+    if (login)
+        return buf;
+#  else
+    if (getlogin_r(loginbuf, sizeof(loginbuf) - 1) == 0) {
+        loginbuf[sizeof(loginbuf) - 1] = '\0';
+        strncpy0(buf, loginbuf, bufsize - 1);
+        return buf;
+    }
+#  endif
+
+#  if defined(NCBI_OS_SOLARIS)  ||  \
+    (!defined(HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
+    /* NB:  getpwuid() is MT safe on Solaris, so use it here, if available */
+#  ifndef NCBI_OS_SOLARIS
+    CORE_LOCK_WRITE;
+#  endif
+    if ((pw = getpwuid(getuid())) != 0  &&  pw->pw_name)
+        strncpy0(buf, pw->pw_name, bufsize - 1);
+#  ifndef NCBI_OS_SOLARIS
+    CORE_UNLOCK;
+#  endif
+    if (pw  &&  pw->pw_name)
+        return buf;
+#  elif defined(HAVE_GETPWUID_R)
+#    if   HAVE_GETPWUID_R == 4
+    /* obsolete but still existent */
+    pw = getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf));
+#    elif HAVE_GETPWUID_R == 5
+    /* POSIX-conforming */
+    if (getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf), &pw) != 0)
+        pw = 0;
+#    else
+#      error "Unknown value of HAVE_GETPWUID_R, 4 or 5 expected."
+#    endif
+    if (pw  &&  pw->pw_name) {
+        assert(pw == &pwd);
+        strncpy0(buf, pw->pw_name, bufsize - 1);
+        return buf;
+    }
+#  endif /*HAVE_GETPWUID_R*/
+
+#endif /*!NCBI_OS_UNIX*/
+
+    /* last resort */
+    if (!(login = getenv("USER"))  &&  !(login = getenv("LOGNAME"))) {
+        buf[0] = '\0';
+        return 0;
+    }
+    strncpy0(buf, login, bufsize - 1);
+    return buf;
+}
+
+
+
+/****************************************************************************
+ * Page size granularity
+ * See also at corelib's ncbi_system.cpp::GetVirtualMemoryPageSize().
+ */
+
+size_t CONNUTIL_GetVMPageSize(void)
+{
+    static size_t ps = 0;
+
+    if (!ps) {
+#if defined(NCBI_OS_MSWIN)
+        SYSTEM_INFO si;
+        GetSystemInfo(&si); 
+        ps = (size_t) si.dwAllocationGranularity;
+#elif defined(NCBI_OS_UNIX) 
+#  if   defined(_SC_PAGESIZE)
+#    define NCBI_SC_PAGESIZE _SC_PAGESIZE
+#  elif defined(_SC_PAGE_SIZE)
+#    define NCBI_SC_PAGESIZE _SC_PAGE_SIZE
+#  elif defined(NCBI_SC_PAGESIZE)
+#    undef  NCBI_SC_PAGESIZE
+#  endif
+#  ifndef   NCBI_SC_PAGESIZE
+        long x = 0;
+#  else
+        long x = sysconf(NCBI_SC_PAGESIZE);
+#    undef  NCBI_SC_PAGESIZE
+#  endif
+        if (x <= 0) {
+#  ifdef HAVE_GETPAGESIZE
+            if ((x = getpagesize()) <= 0)
+                return 0;
+#  else
+            return 0;
+#  endif
+        }
+        ps = (size_t) x;
+#endif /*OS_TYPE*/
+    }
+    return ps;
+}
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.97  2006/02/23 17:42:36  lavr
+ * CONNUTIL_GetVMPageSize(): use sysctl() first (fallback to getpagesize())
+ *
+ * Revision 6.96  2006/02/23 15:23:03  lavr
+ * +CONNUTIL_GetVMPageSize() [merely copy of what corelib/ncbi_system.cpp has]
+ *
+ * Revision 6.95  2006/02/14 15:50:22  lavr
+ * Introduce and use CONN_TRACE (via CORE_TRACE) -- NOP in Release mode
+ *
+ * Revision 6.94  2006/02/01 16:24:24  lavr
+ * CONNUTIL_GetUsername(): '\0'-terminate returned result of getlogin_r()
+ *
+ * Revision 6.93  2006/02/01 00:54:45  ucko
+ * One more fix to CONNUTIL_GetUsername: favor LOGIN_NAME_MAX over
+ * _POSIX_LOGIN_NAME_MAX, which tends to be smaller, and may not be
+ * defined at all on some BSDish systems, and fall back to 256 if neither
+ * is defined.
+ *
+ * Revision 6.92  2006/01/31 20:38:12  lavr
+ * CONNUTIL_GetUsername():  Pass pointer to buffer size in GetUserName()
+ *
+ * Revision 6.91  2006/01/31 20:29:24  lavr
+ * CONNUTIL_GetUsername():  use strncpy0 everywhere
+ *
+ * Revision 6.90  2006/01/31 20:26:46  lavr
+ * #include <pwd.h> only us getpwuid[_r]() is known to exist
+ *
+ * Revision 6.89  2006/01/31 19:32:55  lavr
+ * Use GetUserName() as provided by <winbase.h>
+ *
+ * Revision 6.88  2006/01/31 19:24:40  lavr
+ * CONNUTIL_GetUsername():  Clean ASCII username on MS-Windows
+ *
+ * Revision 6.87  2006/01/31 19:14:28  lavr
+ * CONNUTIL_GetUsername():  MS-Windows-specific username discovery
+ *
+ * Revision 6.86  2006/01/31 17:22:55  lavr
+ * CONNUTIL_GetUsername(): Consider USERNAME environment on Windows only
+ *
+ * Revision 6.85  2006/01/31 17:11:53  lavr
+ * MT-safe (as much as possible) implementation of CONNUTIL_GetUsername()
+ *
+ * Revision 6.84  2006/01/30 18:03:04  lavr
+ * Fix CONNUTIL_GetUsername() to return "buf" (instead of constant 0)
+ *
+ * Revision 6.83  2006/01/27 17:08:56  lavr
+ * Spell CONNUTIL_GetUsername() this way
+ *
+ * Revision 6.82  2006/01/27 17:00:52  lavr
+ * New CONNUTIL_GetUsername();  StringHostToPort() and HostPortToString()
+ * to remain obsoleted and upcall standardized SOCK_...() replacements
+ *
+ * Revision 6.81  2006/01/11 20:20:05  lavr
+ * -UTIL_ClientAddress()
+ * +ConnNetInfo_DeleteAllArgs()
+ * +ConnNetInfo_SetupStandardArgs()
+ *
+ * Revision 6.80  2006/01/11 16:25:02  lavr
+ * +UTIL_ClientAddress()
+ *
  * Revision 6.79  2005/11/29 21:32:31  lavr
  * Reserve SConnNetInfo::scheme, user, and pass for future use
  *

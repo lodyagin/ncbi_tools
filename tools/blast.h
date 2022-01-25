@@ -32,8 +32,11 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.73 $ 
+/* $Revision: 6.74 $ 
 * $Log: blast.h,v $
+* Revision 6.74  2005/12/29 19:56:06  madden
+* Moved functions to print tabular output to blfmtutl
+*
 * Revision 6.73  2005/08/02 14:40:29  coulouri
 * From Mike Gertz:
 * - Fixes to comments
@@ -709,10 +712,6 @@ SeqAlignPtr
 BlastPruneSeqAlignByEvalueRange PROTO((SeqAlignPtr seqalign, FloatHi expect_low, FloatHi expect_high));
 
 BlastDoubleInt4Ptr GetGisFromFile PROTO((CharPtr file_name, Int4Ptr gi_list_size));
-void PrintTabularOutputHeader PROTO((CharPtr blast_database, BioseqPtr query_bsp,
-                              SeqLocPtr query_slp, CharPtr blast_program,
-                              Int4 iteration, Boolean believe_query,
-                                     FILE *outfp));
 
 /* ------ Functions related to Smith-Waterman algorithm ------ */
 

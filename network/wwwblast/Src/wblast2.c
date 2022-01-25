@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.30 2005/12/05 16:14:48 coulouri Exp $
+/* $Id: wblast2.c,v 1.32 2006/01/17 21:47:28 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,18 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.30 $
+* $Revision: 1.32 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.32  2006/01/17 21:47:28  madden
+* Adjust to change in BLAST_TwoSeqLocSets prototype
+*
+* Revision 1.31  2006/01/05 17:28:07  jianye
+* use new formatter for internal use
+*
 * Revision 1.30  2005/12/05 16:14:48  coulouri
 * c99 variable declaration breaks irix and solaris compilers
 *
@@ -254,7 +260,9 @@
 #include <poll.h>
 #endif
 #include <time.h>
-
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+#include <showalignwrap.h>
+#endif
 #include <blastpat.h>
 #ifndef BL2SEQ_STANDALONE
 #include <Liburlapi/qblastnet.h>
@@ -744,7 +752,25 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
             printf("<option value=3 SELECTED> Both strands\n");
             printf("<option value=1> Forward strand\n");
             printf("<option value=2> Reverse strand\n");
-            printf("</select><HR>\n");
+            printf("</select>&nbsp;&nbsp;&nbsp;");
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+            printf("View option <select name=\"view\">\n");
+            printf("<option value=1 SELECTED> Standard\n");
+            printf("<option value=2> Mismatch-highlighting\n");
+            printf("</select>&nbsp;&nbsp;&nbsp;\n");
+            printf("<BR>Masking character option <select name=\"mask_char\">\n");
+            printf("<option value=1 SELECTED> X for protein, n for nucleotide\n");
+            printf("<option value=2> Lower case\n");
+            printf("</select>&nbsp;&nbsp;&nbsp;\n");
+
+            printf("Masking color option <select name=\"mask_color\">\n");
+            printf("<option value=1 SELECTED> Black\n");
+            printf("<option value=2> Grey\n");
+            printf("<option value=3> Red\n");
+            printf("</select>&nbsp;&nbsp;&nbsp;\n");
+            printf("<BR><INPUT type=checkbox NAME=cds_translation>Show CDS translation\n"); 
+#endif       
+            printf("<HR>\n");
 
             printf("Open gap\n");
             printf("<INPUT type=text size=4 name=\"gopen\" value=5>\n");
@@ -1523,7 +1549,7 @@ static void BLASTOptionValidateHTML(BLAST_OptionsBlkPtr options, CharPtr prognam
 {
     Int2 status;
     ValNodePtr error_return=NULL;
-    
+
     status = BLASTOptionValidateEx(options, progname, &error_return);
     if (status != 0) {
         Blast2SeqMainPage(NULL, seq1, seq2, one, two, error_return, is_prot, options, mtrx, from, to, ffrom, tto, filter, pagecount);
@@ -1531,13 +1557,13 @@ static void BLASTOptionValidateHTML(BLAST_OptionsBlkPtr options, CharPtr prognam
     return;
 }
 
-static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_OptionsBlkPtr options, CharPtr seq_2, CharPtr seq_1, CharPtr one, CharPtr two, BioseqPtr query_bsp, BioseqPtr subject_bsp, Int4 len1, Int4 len2, Int4 from, Int4 to, Int4 ffrom, Int4 tto, Int2 pagecount)
+static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_OptionsBlkPtr options, CharPtr seq_2, CharPtr seq_1, CharPtr one, CharPtr two, BioseqPtr query_bsp, BioseqPtr subject_bsp, Int4 len1, Int4 len2, Int4 from, Int4 to, Int4 ffrom, Int4 tto, Int2 pagecount, Int4 view, Int4 mask_char, Int4 mask_color, Boolean cds_translation)
 {
     ValNodePtr vnp;
     CharPtr s;
     static Char buf[41];
     Int4 gi;
-
+    CharPtr defline = NULL;
     printf("<FORM NAME= bl2 method=\"POST\" action="    
 #if defined (BL2SEQ_STANDALONE) && defined (NCBI_ENTREZ_CLIENT)
            "\"wblast2_cs.cgi"
@@ -1583,6 +1609,27 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
     } else {
         printf(">\n");
     }
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+    printf("View option <select name=\"view\">\n");
+    printf("<option value=1 %s> Standard\n", view == 1 ? "SELECTED" : "");
+    printf("<option value=2 %s> Mismatch-highlighting\n", view == 2 ? "SELECTED" : "");
+    printf("</select>&nbsp;&nbsp;&nbsp;\n");
+    printf("<BR>Masking character option <select name=\"mask_char\">\n");
+    printf("<option value=1 %s> X for protein, n for nucleotide\n", mask_char == 1 ? "SELECTED" : "" );
+    printf("<option value=2 %s> Lower case\n", mask_char == 2 ? "SELECTED" : "");
+    printf("</select>&nbsp;&nbsp;&nbsp;\n");
+    
+    printf("Masking color option <select name=\"mask_color\">\n");
+    printf("<option value=1 %s> Black\n", mask_color == 1 ? "SELECTED" : "");
+    printf("<option value=2 %s> Grey\n", mask_color == 2 ? "SELECTED" : "");
+    printf("<option value=3 %s> Red\n", mask_color == 3 ? "SELECTED" : "");
+    printf("</select>&nbsp;&nbsp;&nbsp;\n");
+    printf("<BR><INPUT type=checkbox NAME=cds_translation"); 
+    if (cds_translation) {
+        printf(" CHECKED");
+    }
+    printf(">Show CDS translation\n");
+#endif
     printf("<INPUT TYPE=hidden name=\"program\" value=\"%s\">\n",
            options->program_name);
     
@@ -1619,50 +1666,49 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
     printf("<INPUT TYPE=hidden name=\"to\" value=\"%d\">\n", to);
     printf("<INPUT TYPE=hidden name=\"ffrom\" value=\"%d\">\n", ffrom);
     printf("<INPUT TYPE=hidden name=\"tto\" value=\"%d\">\n", tto);
-    printf("<TABLE>\n");
-    printf("<TR><TD><strong> Sequence 1</strong></TD>\n");
+
+    printf("<BR><strong> Sequence 1</strong>: ");
     if ((gi = GetGIForSeqId(SeqIdFindBest(query_bsp->id, SEQID_GI))) != 0) {
-        printf("<TD>gi<A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld> %ld</A></TD>", gi, gi);
+        SeqIdWrite(query_bsp->id, buf, PRINTID_FASTA_SHORT, 30);
+        printf("<A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld>gi|%ld|%s</A>", gi, gi, buf);
     } else {
         SeqIdWrite(query_bsp->id, buf, PRINTID_FASTA_LONG, 40);
-        printf("<TD>%s</TD>", buf);
+        printf("%s", buf);
     }
-    for (vnp=query_bsp->descr; vnp; vnp=vnp->next) {
-        if (vnp->choice == Seq_descr_title) {
-            printf("<TD>%s</TD>", vnp->data.ptrvalue);
-            break;
-        }
-    }
-    if (vnp == NULL) {
-        printf("<TD></TD>");
-    }
-    printf("<TD><strong>Length</strong></TD><TD>%ld</TD>\n", len1);
+ 
+    defline = BioseqGetTitle(query_bsp);
+    if(defline) {
+        printf("%s", defline);
+    } 
+
+    printf("<BR>");
+    
+    printf("Length = %ld\n", len1);
     if (from != 0 || to != 0) {
-        printf("<TD>(%ld .. %ld)</TD>\n", from, to);
+        printf("(%ld .. %ld)\n", from, to);
     }
-    printf("</TR><TR>\n");
-    printf("<TR><TD><strong> Sequence 2</strong></TD>\n");
+    printf("<BR><BR>\n");
+    printf("<strong> Sequence 2</strong>: ");
     if ((gi = GetGIForSeqId(SeqIdFindBest(subject_bsp->id, SEQID_GI))) != 0) {
-        printf("<TD>gi <A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld>%ld</A></TD>", gi, gi);
+        SeqIdWrite(subject_bsp->id, buf, PRINTID_FASTA_SHORT, 30);
+        printf("<A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld>gi|%ld|%s</A>", gi, gi, buf);
     } else {
         SeqIdWrite(subject_bsp->id, buf, PRINTID_FASTA_LONG, 40);
-        printf("<TD>%s</TD>", buf);
+        printf("%s", buf);
     }
-    for (vnp=subject_bsp->descr; vnp; vnp=vnp->next) {
-        if (vnp->choice == Seq_descr_title) {
-            printf("<TD>%s</TD>", vnp->data.ptrvalue);
-            break;
-        }
-    }
-    if (vnp == NULL) {
-        printf("<TD></TD>");
-    }
-    printf("<TD><strong>Length</strong></TD><TD>%ld</TD>\n", len2);
-    if (ffrom != 0 || tto != 0) {
-        printf("<TD>(%ld .. %ld)</TD>\n", ffrom, tto);
-    }
-    printf("</TR></TABLE>\n");
+   
+    defline = BioseqGetTitle(subject_bsp);
+    if(defline) {
+        printf("%s", defline);
+    } 
+    printf("<BR>\n");
 
+    printf("Length = %ld\n", len2);
+    if (ffrom != 0 || tto != 0) {
+        printf("(%ld .. %ld)\n", ffrom, tto);
+    }
+    printf("<BR><BR><BR>\n");
+   
     return;
 }
 
@@ -1971,6 +2017,7 @@ Int2 Main(void)
     Int2 mtrx = 0, color=1;
     SeqAlignPtr seqalign = NULL, sap, sapnext;
     SeqAnnotPtr hsat= NULL, sat, satnext;
+    SBlastSeqalignArray* seqalign_arr=NULL;
     FloatHi	expect;
     Boolean is_prot=FALSE, is_aa1=FALSE, is_aa2=FALSE, is_na1=TRUE, is_na2=TRUE;
     CharPtr seq_1=NULL, seq_2=NULL, chptr;
@@ -2015,6 +2062,9 @@ Int2 Main(void)
     CharPtr rid = NULL, database = NULL;
     sigset_t sigset;
     struct sigaction sa;
+    Int4 mask_color =1, mask_char = 1, view = 1;
+    Boolean cds_translation = FALSE;
+    CharPtr value_holder = NULL;
 #ifndef BL2SEQ_STANDALONE
     TNlmThread connection_thread = NULL;
     void *thrstat;
@@ -2085,6 +2135,23 @@ Int2 Main(void)
         fd = FileOpen("__web.in", "w");
         fprintf(fd, "%s", ((WWWInfoDataPtr)theInfo->info)->query);
         FileClose(fd);
+    }
+   
+    value_holder = WWWGetValueByName(theInfo->info, "mask_color");
+    if(value_holder) {
+        mask_color = atoi (value_holder);
+    }
+    value_holder = WWWGetValueByName(theInfo->info, "mask_char");
+    if(value_holder) {
+        mask_char = atoi (value_holder);
+    }
+    value_holder = WWWGetValueByName(theInfo->info, "view");
+    if(value_holder) {
+        view = atoi (value_holder);
+    }
+
+    if (WWWGetValueByName(theInfo->info, "cds_translation") != NULL) {
+        cds_translation = TRUE;
     }
     
     if((chptr = WWWGetValueByName(theInfo->info, "PROGRAM")) != NULL)
@@ -2447,13 +2514,24 @@ Int2 Main(void)
 
     fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
     if (from == 0 && to == 0) {
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+        ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(query_bsp->id));
+        len1 = query_bsp->length;
+#else
         ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(fake_bsp->id));
         len1 = fake_bsp->length;
+#endif
+        
     } else {
         sip1 = SeqIntNew();
         sip1->from = (from > 0) ? from-1 : 0; 
-        sip1->to = (to < fake_bsp->length) ? to-1 : fake_bsp->length-1;
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+        sip1->to = (to < query_bsp->length) ? to-1 : query_bsp->length-1;
+        sip1->id = (SeqIdPtr) SeqIdDup (query_bsp->id);
+#else
+        sip1->to = (to < fake_bsp->length) ? to-1 : query_bsp->length-1;
         sip1->id = (SeqIdPtr) SeqIdDup (fake_bsp->id);
+#endif
         sip1->strand = options->strand_option;
         ValNodeAddPointer(&slp1, SEQLOC_INT, sip1);
         len1 = SeqLocLen(slp1);
@@ -2510,8 +2588,15 @@ Int2 Main(void)
 #ifndef USE_OLD_BLAST
     BLAST_SummaryOptionsInit(&s_options);
     BLASTOptions2SummaryOptions(options, progname, s_options);
-    BLAST_TwoSeqLocSets(s_options, slp1, slp2, NULL, &seqalign, &mask, &mask_at_hash,
+    BLAST_TwoSeqLocSets(s_options, slp1, slp2, NULL, &seqalign_arr, &mask, &mask_at_hash,
                         &s_return);
+    if (seqalign_arr && seqalign_arr->array)
+    {
+        seqalign = seqalign_arr->array[0];
+        seqalign_arr->array[0] = NULL;
+        seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
+    }
+
     if (s_return->error) {
         /* Print the error message. */        
         Blast2SeqMainPage(s_return->error->message, seq1EntryData, seq2EntryData, NULL, NULL, NULL,
@@ -2519,7 +2604,7 @@ Int2 Main(void)
                           pagecount);    
     } 
 
-
+  
     if (mask_at_hash) {
        /* If masking was done for lookup table only, do not use mask locations
           for formatting. */
@@ -2553,7 +2638,7 @@ Int2 Main(void)
                            len1, len2, progname);
         
         PrintParam(is_prot, mtrx, ma, ms, options, seq2EntryData, seq1EntryData, NULL, NULL,
-                   query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount);
+                   query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount, view, mask_char, mask_color, cds_translation);
         printf("<strong><font color=#0000EE>No significant similarity was found</font></strong>\n");
 
         goto cleanup;
@@ -2597,7 +2682,7 @@ Int2 Main(void)
     ValNodeFree(other_returns);
 #endif
     
-    to = (to >0) ? to : fake_bsp->length;
+    to = (to >0) ? to : query_bsp->length;
     tto = (tto >0) ? tto : subject_bsp->length;
     from = (from >0) ? from : 1;
     ffrom = (ffrom >0) ? ffrom : 1;
@@ -2606,7 +2691,7 @@ Int2 Main(void)
                        from, to, ffrom, tto, len1, len2, progname);
     
     PrintParam(is_prot, mtrx, ma, ms, options, seq2EntryData, seq1EntryData, NULL, NULL,
-               query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount);
+               query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount, view, mask_char, mask_color, cds_translation);
     
     align_type = BlastGetProgramNumber(progname);
     
@@ -2881,7 +2966,10 @@ Int2 Main(void)
                 color = 2;
             }
             printf("<a name=%d>\n", index);
+
+#ifndef NCBI_INTERNAL_NEW_FORMATTER
             PrintOutScore(sap, is_prot, NULL, mask);
+#endif
             if (sap->segtype == SAS_DENDIAG) {
                 for (ddp = sap->segs, index1=0; ddp; ddp= ddp->next, index1++);
             } else if (sap->segtype == SAS_DENSEG) {
@@ -2918,9 +3006,16 @@ Int2 Main(void)
         txoption += TXALIGN_HTML;
         
         AddAlignInfoToSeqAnnot(sat, align_type); 
-        
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+        fprintf(stdout, "<pre>");
+        DisplayAlign((SeqAlignPtr)sat->data, 60, query_bsp, subject_bsp,
+                     progname, txmatrix, mask, mask_char, mask_color, 
+                     cds_translation, view, stdout);
+        fprintf(stdout, "</pre>");
+#else
         ShowTextAlignFromAnnot(sat, 60, stdout, NULL, NULL,
-                               txoption, txmatrix, mask, NULL);
+                               txoption, txmatrix, mask, NULL); 
+#endif
     }
 
 cleanup:

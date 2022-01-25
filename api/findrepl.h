@@ -44,6 +44,12 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.h,v $
+* Revision 6.5  2006/01/04 20:39:41  kans
+* added FindStringsInEntity using finite state machine, general cleanup of code
+*
+* Revision 6.4  2005/12/29 20:54:41  kans
+* FindReplaceInEntity takes callback and userdata
+*
 * Revision 6.3  2003/07/31 20:54:54  kans
 * FindReplaceString does not need do_replace argument
 *
@@ -103,6 +109,8 @@ extern "C" {
 #define UPDATE_EACH  1  /* send it on each replace */
 #define UPDATE_ONCE  2  /* send once for whole entityID, if any replacements occur */
 
+typedef void (*FindReplProc) (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Pointer userdata);
+
 NLM_EXTERN void FindReplaceInEntity (
   Uint2 entityID,
   CharPtr find_string,
@@ -115,7 +123,9 @@ NLM_EXTERN void FindReplaceInEntity (
   BoolPtr descFilter,
   BoolPtr featFilter,
   BoolPtr seqidFilter,
-  Boolean do_seqid_local
+  Boolean do_seqid_local,
+  FindReplProc callback,
+  Pointer userdata
 );
 
 NLM_EXTERN void FindReplaceString (
@@ -124,6 +134,21 @@ NLM_EXTERN void FindReplaceString (
   CharPtr replace_string,
   Boolean case_counts,
   Boolean whole_word
+);
+
+NLM_EXTERN void FindStringsInEntity (
+  Uint2 entityID,
+  CharPtr PNTR find_strings,
+  Boolean case_counts,
+  Boolean whole_word,
+  Boolean select_item,
+  Int2 send_update,
+  BoolPtr descFilter,
+  BoolPtr featFilter,
+  BoolPtr seqidFilter,
+  Boolean do_seqid_local,
+  FindReplProc callback,
+  Pointer userdata
 );
 
 

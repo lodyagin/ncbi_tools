@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.73 2005/11/09 14:49:49 camacho Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.75 2006/01/19 18:43:32 madden Exp $";
 /*
 * ===========================================================================
 *
@@ -37,6 +37,7 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.73 2005/11/09 14:49:49 camacho
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_setup.h> /* For BlastSeqLoc_RestrictToInterval */
+#include <algo/blast/core/blast_inline.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -155,10 +156,22 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
    Int4 index;
    const Boolean k_translate = Blast_QueryIsTranslated(program_number);
    const Uint1 k_num_frames = BLAST_GetNumberOfContexts(program_number);
+   const Boolean kIsNucl = (program_number == eBlastTypeBlastn);
    SeqLoc* slp;
+   Boolean all_minus = TRUE;
 
    if (mask_loc == NULL || mask_loc->seqloc_array == NULL)
       return NULL;
+
+   for (slp = query_loc; slp; slp = slp->next)
+   {
+        Uint1 strand = SeqLocStrand(slp);
+        if (strand != Seq_strand_minus)
+        {
+           all_minus = FALSE;
+           break;
+        }
+   }
 
    for (index=0, slp = query_loc; slp; ++index, slp = slp->next)
    {
@@ -170,17 +183,20 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
       {
          BlastSeqLoc* loc = NULL;
          SeqLocPtr mask_slp_head = NULL, mask_slp_tail = NULL;
-         for (loc = mask_loc->seqloc_array[tmp_index]; loc; loc = loc->next)
+         if (all_minus || BlastIsReverseStrand(kIsNucl , tmp_index) == FALSE)
          {
-            SeqIntPtr si = SeqIntNew();
-            si->from = loc->ssr->left + slp_from;
-            si->to = loc->ssr->right + slp_from;
-            si->id = SeqIdDup(seqid);
-            /* Append the pointer, but also keep track of the tail of the list
-             * so that appending to the list is a constant operation */
-            mask_slp_tail = ValNodeAddPointer
-                ( (mask_slp_tail ? &mask_slp_tail : &mask_slp_head), 
-                  SEQLOC_INT, si);
+            for (loc = mask_loc->seqloc_array[tmp_index]; loc; loc = loc->next)
+            {
+               SeqIntPtr si = SeqIntNew();
+               si->from = loc->ssr->left + slp_from;
+               si->to = loc->ssr->right + slp_from;
+               si->id = SeqIdDup(seqid);
+               /* Append the pointer, but also keep track of the tail of the list
+                * so that appending to the list is a constant operation */
+               mask_slp_tail = ValNodeAddPointer
+                   ( (mask_slp_tail ? &mask_slp_tail : &mask_slp_head), 
+                     SEQLOC_INT, si);
+            }
          }
 
          if (mask_slp_head) {
@@ -260,7 +276,6 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
    Uint1 strand;
    BlastQueryInfo* query_info;
    Int4 index;
-   Int4 total_contexts;
    Uint4 max_length = 0;
 
    if (translate)
@@ -270,14 +285,8 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
    else
       num_frames = 1;
 
-   if ((query_info = (BlastQueryInfo*) calloc(1, sizeof(BlastQueryInfo)))
-       == NULL)
+   if ((query_info = BlastQueryInfoNew(program, ValNodeLen(slp))) == NULL) 
       return -1;
-
-   query_info->first_context = 0;
-   query_info->num_queries = ValNodeLen(slp);
-   query_info->last_context = query_info->num_queries*num_frames - 1;
-   total_contexts = query_info->last_context + 1;
 
    if ((strand = SeqLocStrand(slp)) == Seq_strand_minus) {
       if (translate)
@@ -285,8 +294,6 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
       else
          query_info->first_context = 1;
    }
-
-   query_info->contexts = calloc(total_contexts, sizeof(BlastContextInfo));
    
    /* Fill the context offsets */
    for (index = 0; slp; slp = slp->next, index += num_frames) {

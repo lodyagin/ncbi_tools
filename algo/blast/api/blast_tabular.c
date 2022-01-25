@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.30 2005/11/22 13:30:34 madden Exp $
+/* $Id: blast_tabular.c,v 1.31 2006/02/15 15:14:22 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.30 2005/11/22 13:30:34 madden Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.31 2006/02/15 15:14:22 madden Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -161,7 +161,6 @@ FillNuclSequenceBuffers(EBlastProgramType program, BlastHSP* hsp,
    Int4* starts;
    Int4* lengths;
    Int4 offset;
-   GapEditScript* esp;
    Int4 start1, start2;
    char* buffer;
    Boolean reverse;
@@ -174,12 +173,11 @@ FillNuclSequenceBuffers(EBlastProgramType program, BlastHSP* hsp,
    reverse = (hsp->query.frame != hsp->subject.frame);
 
    /* Calculate number of segments. */
-   esp = hsp->gap_info;
-   for (numseg = 0; esp; esp = esp->next, ++numseg);
+   numseg = hsp->gap_info->size;
    /* Find the starts and lengths of each segment. */
    start1 = hsp->query.offset;
    start2 = hsp->subject.offset;
-   GapCollectDataForSeqalign(hsp, hsp->gap_info, numseg, query_length,
+   GapCollectDataForSeqalign(hsp, hsp->gap_info, 0, numseg, query_length,
                              subject_length, translate1, translate2,
                              &starts, &lengths, NULL, &start1, &start2);
 

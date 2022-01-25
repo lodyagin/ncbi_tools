@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.18 2005/06/20 19:43:03 papadopo Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.20 2006/01/25 16:22:18 camacho Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,12 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.18 2005/06/20 19:43:03 papad
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.20  2006/01/25 16:22:18  camacho
+    Calculate kbp_ideal values rather than loading them from pre-computed values
+
+    Revision 1.19  2005/12/22 14:22:19  papadopo
+    change signature of BLAST_FillLookupTableOptions
+
     Revision 1.18  2005/06/20 19:43:03  papadopo
     explicitly specify use of PSSMs during lookup table construction
 
@@ -260,9 +266,6 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     BLAST_ScoreBlk *sbp;
     PssmPtr pssm = seq->pssm;
     PssmParametersPtr params = seq->params;
-    Int4 *open, *extend;
-    Int4 array_size;
-    Nlm_FloatHi *lambda, *K, *H;
     ValNodePtr freq_list;
     ValNodePtr score_list;
     CharPtr matrix_name;
@@ -322,24 +325,6 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     if (sbp->kbp_gap_std[0] == NULL || sbp->kbp_gap_psi[0] == NULL)
         return -3;
         
-    array_size = BlastKarlinGetMatrixValues(sbp->name, &open, &extend, 
-                                            &lambda, &K, &H, NULL);
-    if (array_size > 0) {
-        for (i = 0; i < array_size; i++) {
-            if (open[i] == INT2_MAX && extend[i] == INT2_MAX) {
-                sbp->kbp_ideal = BlastKarlinBlkCreate();
-                sbp->kbp_ideal->Lambda = lambda[i];
-                sbp->kbp_ideal->K = K[i];
-                sbp->kbp_ideal->H = H[i];
-                break;
-            }
-        }
-        MemFree(open);
-        MemFree(extend);
-        MemFree(lambda);
-        MemFree(K);
-        MemFree(H);
-    }
     if (sbp->kbp_ideal == NULL)
        sbp->kbp_ideal = BlastKarlinBlkStandardCalcEx(sbp);
 
@@ -647,8 +632,7 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
                                      eBlastTypePsiBlast,
                                      FALSE, /* no megablast */
                                      threshold, /* neighboring threshold */
-                                     BLAST_WORDSIZE_PROT,
-                                     FALSE /* no variable words */
+                                     BLAST_WORDSIZE_PROT
                                     ) != 0) {
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot set lookup table options");
         return 1;

@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.39 2005/06/21 16:34:42 dondosha Exp $
+/* $Id: blast_format.h,v 1.42 2006/01/13 14:33:48 merezhuk Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,6 +50,7 @@ extern "C" {
 #include <algo/blast/core/blast_diagnostics.h>   
 #include <algo/blast/api/twoseq_api.h>
 #include <algo/blast/api/blast_options_api.h>
+#include <algo/blast/api/blast_seqalign.h>
 #include <xmlblast.h>
 
 /** @addtogroup CToolkitAlgoBlast
@@ -57,6 +58,8 @@ extern "C" {
  * @{
  */
 
+/** Enums for selecting view type (query-anchored, pairwise, etc.)
+*/
 typedef enum EAlignView {
     /** Pairwise. */
     eAlignViewPairwise                   = 0,
@@ -114,6 +117,7 @@ typedef struct BlastFormattingInfo {
     FILE* outfp;                 /**< Output stream for text output. */
     AsnIo* aip;                  /**< Output stream for ASN.1 output */
     MBXml* xmlp;                 /**< Output stream for XML output */
+    Boolean is_seqalign_null;    /**< flag indicating absence of seqalign */
 } BlastFormattingInfo;
 
 /** Allocates and initializes the formatting information structure.
@@ -172,14 +176,14 @@ BlastFormattingInfoSetUpOptions(BlastFormattingInfo* info, Int4 num_descriptions
 BlastFormattingInfo* BlastFormattingInfoFree(BlastFormattingInfo* info);
 
 /** Print formatted output.
- * @param head Results in the SeqAlign form [in]
+ * @param seqalign_arr object with arrays of seqaligns [in]
  * @param num_queries Number of query sequences [in]
  * @param query_slp Linked list of query SeqLocs [in]
  * @param mask_loc Masking locations for all queries [in]
  * @param format_info Formatting options and other information [in]
  * @param sum_returns Summary data returned from the search. [in]
  */
-Int2 BLAST_FormatResults(SeqAlignPtr head, Int4 num_queries, 
+Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries, 
                          SeqLocPtr query_slp, SeqLoc* mask_loc, 
                          BlastFormattingInfo* format_info,
                          Blast_SummaryReturn* sum_returns);

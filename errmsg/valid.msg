@@ -194,7 +194,15 @@ $^   LeadingX, 54
 The protein sequence starts with one or more X (unknown) amino acids.
 
 $^   InternalNsInSeqRaw, 55
-There are runs of many Ns inside a raw sequence.
+There are runs of greater than 100 Ns within sequence.  Please describe
+what these Ns represent with your sequence submission.
+
+$^   InternalNsAdjacentToGap, 56
+There are Ns directly adjacent to a SeqLit gap in a delta Bioseq.
+
+$^   CaseDifferenceInSeqID, 57
+Multiple Bioseqs have the same Seq-id except for capitalization. Sequence
+identifiers must be unique in a case-insensitive manner within a record.
 
 $$ SEQ_DESCR, 2
 
@@ -336,6 +344,9 @@ the descriptor should be removed.
 $^   BadCollectionDate, 35
 The collection date is not in the required format.
 
+$^   BadPCRPrimerSequence, 36
+The PCR primer sequence has illegal characters or non-IUPAC nucleotides.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -367,7 +378,15 @@ $^   BadDate, 8
 There are bad values for month, day, or year in a date.
 
 $^   StructuredCitGenCit, 9
-The publication has title or journal embedded in the unstructured citgen.cit field.
+The publication has title or journal embedded in the unstructured citgen.cit
+field.
+
+$^   CollidingSerialNumbers, 10
+Multiple publications have the same serial number explicitly recorded in the
+data.
+
+$^   EmbeddedScript, 11
+Script or other markup tags should not be used in sequence record fields.
 
 $$ SEQ_PKG, 4
 
@@ -866,6 +885,31 @@ The old_locus_tag qualifier on a feature does not match that on the overlapping 
 
 $^   DuplicateGeneOntologyTerm, 111
 A feature has multiple identical Gene Ontology (GO) term specifications.
+
+$^   InvalidInferenceValue, 112
+The value of the inference qualifier is constrained by agreement of the international
+nucleotide sequence database collaboration.  This value does not conform to those
+constraints.  Please see the feature table documentation for more information.
+
+$^ HpotheticalProteinMismatch, 113
+There is a mismatch between the accession cited by the hypothetical protein claim
+and the actual accession of the record.
+
+$^ FeatureRefersToAccession, 114
+There is a mixture of features referring to sequence by gi numbers and by accession.
+This inconsistency is likely due to incomplete processing by software.
+
+$^ SelfReferentialProduct, 115
+A feature product points to the same sequence that the feature location does.
+The product must point to a different sequence that is the biological product
+of the first, due to transcription, translation, or peptide processing.
+
+$^ ITSdoesNotAbutRRNA, 116
+The internal transcribed spacer misc_RNA features should exactly abut the flanking rRNA features.
+
+$^ FeatureSeqIDCaseDifference, 117
+Feature location and referenced Bioseq have the same Seq-id except for capitalization.
+Sequence identifiers must be unique in a case-insensitive manner within a record.
 
 $$ SEQ_ALIGN, 6
 

@@ -6,8 +6,8 @@
 #include <objmmdb1.h>
 #include <objmmdb3.h>
 #include <objcn3d.h>
-#include <objscoremat.h>
 #include <objcdd.h>
+#include <objscoremat.h>
 
 static Boolean loaded = FALSE;
 
@@ -36,7 +36,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.15 at Oct 12, 2004 11:03 AM
+*    Generated using ASNCODE Revision: 6.16 at Feb 8, 2006  1:12 PM
 *
 **************************************************/
 
@@ -361,7 +361,7 @@ CddFree(CddPtr ptr)
    MemFree(ptr -> name);
    CddIdSetFree(ptr -> id);
    CddDescrSetFree(ptr -> description);
-   AsnGenericUserSeqOfFree(ptr -> seqannot, (AsnOptFreeFunc) SeqAnnotFree);
+   { SeqAnnotPtr sap, next; sap = ptr -> seqannot; while(sap) { next = sap->next; sap->next = NULL; sap = SeqAnnotFree(sap); sap = next; } }
    BiostrucAnnotSetFree(ptr -> features);
    SeqEntryFree(ptr -> sequences);
    SeqIntFree(ptr -> profile_range);
@@ -666,7 +666,7 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   AsnGenericUserSeqOfAsnWrite(ptr -> seqannot, (AsnWriteFunc) SeqAnnotAsnWrite, aip, CDD_seqannot, CDD_seqannot_E);
+   if (ptr->seqannot != NULL) if (SeqAnnotSetAsnWrite(ptr->seqannot,aip,CDD_seqannot,CDD_seqannot_E)==FALSE) goto erret;
    if (ptr -> features != NULL) {
       if ( ! BiostrucAnnotSetAsnWrite(ptr -> features, aip, CDD_features)) {
          goto erret;
@@ -1640,7 +1640,7 @@ CddOrgRefFree(CddOrgRefPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   OrgRefFree((OrgRefPtr)ptr -> reference);
+   OrgRefFree((OrgRefPtr) ptr -> reference);
    MemFree(ptr -> rank);
    return MemFree(ptr);
 }
@@ -1694,7 +1694,7 @@ CddOrgRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    func = NULL;
 
    if (atp == CDD_ORG_REF_reference) {
-      ptr -> reference = OrgRefAsnRead(aip, atp);
+      ptr -> reference = (struct struct_Org_ref PNTR) OrgRefAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -2594,6 +2594,8 @@ CddBookRefFree(CddBookRefPtr ptr)
       return NULL;
    }
    MemFree(ptr -> bookname);
+   MemFree(ptr -> celementid);
+   MemFree(ptr -> csubelementid);
    return MemFree(ptr);
 }
 
@@ -2673,6 +2675,20 @@ CddBookRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> subelementid = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CDD_BOOK_REF_celementid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> celementid = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_BOOK_REF_csubelementid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> csubelementid = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -2734,6 +2750,14 @@ CddBookRefAsnWrite(CddBookRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, CDD_BOOK_REF_elementid,  &av);
    av.intvalue = ptr -> subelementid;
    retval = AsnWrite(aip, CDD_BOOK_REF_subelementid,  &av);
+   if (ptr -> celementid != NULL) {
+      av.ptrvalue = ptr -> celementid;
+      retval = AsnWrite(aip, CDD_BOOK_REF_celementid,  &av);
+   }
+   if (ptr -> csubelementid != NULL) {
+      av.ptrvalue = ptr -> csubelementid;
+      retval = AsnWrite(aip, CDD_BOOK_REF_csubelementid,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

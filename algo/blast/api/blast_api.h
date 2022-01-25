@@ -1,4 +1,4 @@
-/* $Id: blast_api.h,v 1.5 2005/08/29 14:44:19 camacho Exp $
+/* $Id: blast_api.h,v 1.7 2006/01/13 15:58:31 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -46,6 +46,7 @@ extern "C" {
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/api/blast_options_api.h>
+#include <algo/blast/api/blast_seqalign.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -59,7 +60,7 @@ extern "C" {
  * @param masking_locs Locations in the queries that should be masked [in]
  * @param options Search options [in]
  * @param tf_data Structure to use for on-the-fly tabular formatting [in]
- * @param seqalign_out All results in Seq-align form. [out]
+ * @param seqalign_arr object that holds the array of SeqAligns [out]
  * @param filter_out Filtering locations [out]
  * @param extra_returns Additional information about the search [out]
  */
@@ -68,7 +69,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
                      SeqLoc* masking_locs,
                      const SBlastOptions* options,
                      BlastTabularFormatData* tf_data,
-                     SeqAlign **seqalign_out,
+                     SBlastSeqalignArray* *seqalign_arr,
                      SeqLoc** filter_out,
                      Blast_SummaryReturn* extra_returns);
 
@@ -79,7 +80,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
  * @param masking_locs Locations in the queries that should be masked [in]
  * @param options Search options [in]
  * @param tf_data Structure to use for on-the-fly tabular formatting [in]
- * @param seqalign_out All results in Seq-align form. [out]
+ * @param seqalign_arr object that holds the array of SeqAligns [out]
  * @param filter_out Filtering locations [out]
  * @param extra_returns Additional information about the search [out]
  */
@@ -89,7 +90,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
                             SeqLoc* masking_locs,
                             const SBlastOptions* options,
                             BlastTabularFormatData* tf_data,
-                            SeqAlign **seqalign_out,
+                            SBlastSeqalignArray* *seqalign_arr,
                             SeqLoc** filter_out,
                             Blast_SummaryReturn* extra_returns);
 

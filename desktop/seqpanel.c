@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.169 2005/11/08 19:39:30 bollin Exp $
+/* $Id: seqpanel.c,v 6.182 2006/02/02 18:05:09 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -44,7 +44,9 @@
 #include <subutil.h>
 #include <actutils.h>
 #include <algo/blast/api/twoseq_api.h>
+#include <algo/blast/api/blast_seqalign.h>
 #include <alignval.h>
+#include <salptool.h>
 
 enum ESeqNum   { eNumNone=1, eNumSide=2, eNumTop=3 };
 enum EDrawGrid { eDrawGridOn=1, eDrawGridOff=2 };
@@ -60,7 +62,6 @@ enum ELineType { eTypeTopSeqNumbers, eTypeTopScaleMarks, eTypeSequence,
 #define SEQ_GROUP_SIZE       10  /* Sequence group size           */
 #define SEQ_X_OFFSET          4
 #define SEQ_Y_OFFSET          4
-#define ALNMGR_GAP           -2
 #define ROW_UNDEFINED        -1
 #define PROT_PRODUCT_TYPE   255
 #define PROT_ON_THE_FLY     254
@@ -159,7 +160,12 @@ typedef struct seqedformdata
                                              
   MenU              aln_target_menu;        /* This is used by the alignment editor to
                                              * change the target.
-                                             */                                                                                     
+                                             */   
+
+  SeqAnnotPtr       annot;                  /* This is the annotation that should point
+                                             * to our alignment.  If it does not, the
+                                             * alignment has been replaced.
+                                             */                                                                                                                               
   
 } SeqEdFormData, PNTR SeqEdFormPtr;
 
@@ -419,6 +425,8 @@ static void FillFeatureInfo(BioseqViewPtr bvp, BioseqPtr bsp, Int2 lineLength, I
       Int4    fLeft    = x_FeatLeft (bvp, fcontext.left, aln_row);
       Int4    fRight   = x_FeatRight(bvp, fcontext.right, aln_row); 
       
+      if (fLeft < 0) fLeft = 0;
+      
       if (aln_strand == Seq_strand_minus)
       {
         /* if the alignment strand is reversed, the left and right endpoints will be
@@ -555,7 +563,8 @@ static SeqPanLinePtr PNTR CreateSeqPanelLines(Int2 lineLength, BioseqViewPtr bvp
                                        * so that we don't have to fetch
                                        * far pointers over and over again
                                        */                                       
-  BioseqPtr PNTR PNTR bioseqs_for_each_aln = NULL;                                       
+  BioseqPtr PNTR PNTR bioseqs_for_each_aln = NULL; 
+  Int4                para_num;                                      
   
   if (bvp->seqAlignMode) {
     /* if this is in alignment mode, get the list of sequences for each 
@@ -651,16 +660,22 @@ static SeqPanLinePtr PNTR CreateSeqPanelLines(Int2 lineLength, BioseqViewPtr bvp
   bvp->TotalLines = 0; /* go through all pararaphs and count total */
   if (bvp->seqAlignMode)
   {
+    para_num = 0;
     for (tmp_salp = bvp->salp, aln_idx = 0; tmp_salp != NULL; tmp_salp = tmp_salp->next, aln_idx ++)
     {
       /* add lines for features */
-      for (i = 0; i < lines_per_alignment [aln_idx]; i++) {
+      for (i = 0; i < lines_per_alignment [aln_idx]; i++) 
+      {
         Int4 sub_total = 0;
-        for (j = 0; j < featRows; j++) sub_total += ValNodeLen(ref[i]->pFeatList[j]); 
+        for (j = 0; j < featRows; j++) 
+        {
+          sub_total += ValNodeLen(ref[i + para_num]->pFeatList[j]); 
+        }
         bvp->TotalLines += fLines + sub_total + (alnRows == -1 ? 0 : alnValidRows[aln_idx]); /* reserve space for alignment */
       }
       /* add one more for divider */
       if (tmp_salp->next != NULL) bvp->TotalLines ++;
+      para_num += lines_per_alignment [aln_idx];
     }
   	
   }
@@ -1070,312 +1085,39 @@ static void DrawSeqSideLineNumbers(Int2 x, Int2 y, Int4 line, BioseqViewPtr bvp)
 }
 
 
-static void DrawAlignSideLineNumbers(Int2 x, Int2 y, Int4 line, Int4 row, BioseqViewPtr bvp)
+static void 
+DrawAlignSideLineNumbers
+(Int2          x, 
+ Int2          y, 
+ Int4          line, 
+ Int4          row, 
+ BioseqViewPtr bvp,
+ Int4          aln_idx)
 {
-  char buf[20];
-  Int4 aln_pos = line * bvp->CharsAtLine + 1;
-  Int4 pos = AlnMgr2MapSeqAlignToBioseq(bvp->salp, aln_pos, row);
+  char        buf[20];
+  Int4        aln_pos = line * bvp->CharsAtLine + 1;
+  Int4        seq_pos;
+  Int4        i;
+  SeqAlignPtr tmp_salp;
   
-  while (pos == ALNMGR_GAP && aln_pos > 1) { /* count back if we in the gap */
-    aln_pos--;
-    pos = AlnMgr2MapSeqAlignToBioseq(bvp->salp, aln_pos, row);
+  for (i=0, tmp_salp = bvp->salp; i < aln_idx && tmp_salp != NULL; i++, tmp_salp = tmp_salp->next)
+  {  	
   }
-  if (pos == ALNMGR_GAP) pos = 1;  /* Gap at the begining of the alignment */
+  if (tmp_salp == NULL) return;
+
+  seq_pos = AlnMgr2MapSeqAlignToBioseq(tmp_salp, aln_pos, row);
   
-  sprintf(buf, "%d", pos); /* In alignment coordinates */
+  while (seq_pos == ALNMGR_GAP && aln_pos > 1) { /* count back if we in the gap */
+    aln_pos--;
+    seq_pos = AlnMgr2MapSeqAlignToBioseq(bvp->salp, aln_pos, row);
+  }
+  if (seq_pos == ALNMGR_GAP) seq_pos = 1;  /* Gap at the begining of the alignment */
+  
+  sprintf(buf, "%d", seq_pos); /* In alignment coordinates */
 
   Magenta ();
   SelectFont ((FonT)(bvp->displayFont));    
   PaintStringEx (buf, x+ SEQ_X_OFFSET + (bvp->SeqStartPosX-30-bvp->CharWidth*StrLen(buf)), y);
-}
-
-
-static SeqPortPtr SeqPortFromAlignmentInterval (Int4 seqstart, Int4 seqstop, Uint1 strand, BioseqPtr bsp)
-{
-  SeqIntPtr  sinp;
-  SeqLocPtr  slp;
-  SeqPortPtr spp;
-
-  if (bsp == NULL) return NULL;
-  sinp = SeqIntNew();
-  if (sinp == NULL) return NULL;
-  sinp->from = seqstart;
-  sinp->to = seqstop;
-  sinp->strand = strand;
-  sinp->id = SeqIdDup (SeqIdFindBest (bsp->id, 0));
-  slp = ValNodeNew (NULL);
-  if (slp == NULL) {
-    SeqIntFree (sinp);
-    return NULL;
-  }
-  slp->choice = SEQLOC_INT;
-  slp->data.ptrvalue = (Pointer) sinp;
-  spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-  SeqLocFree (slp);
-  return spp;
-}
-
-static void SetSequenceIntervalBuf
-(SeqAlignPtr salp,
- BioseqPtr   bsp,
- Int4        row,
- Int4        start,                             
- Int4        stop,
- Int4Ptr     seqstart,
- Int4Ptr     seqstop,
- Int4        aln_len,                             
- Uint1Ptr    target_buf)
-{
-  Int4       buf_len = stop - start + 1;
-  Uint1      strand;
-  Int4       i;
-  SeqPortPtr spp;
-
-  if (seqstart == NULL || seqstop == NULL)
-  {
-    return;
-  }
-  
-  *seqstart = ALNMGR_GAP;
-  *seqstop = ALNMGR_GAP;
-  if (bsp == NULL)
-  {
-    return;
-  }
-  strand = SeqAlignStrand (salp, row - 1);
-  MemSet (target_buf, 0, buf_len);
-  /* if this is a minus strand sequence, start is stop and stop is start */
-  if (strand == Seq_strand_minus) {
-    *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
-    *seqstart  = AlnMgr2MapSeqAlignToBioseq(salp, stop, row);
-  } else {
-    *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
-    *seqstop  = AlnMgr2MapSeqAlignToBioseq(salp, stop, row);
-  }
-
-  if (strand == Seq_strand_minus) {
-    i = stop;
-    while (*seqstart == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
-      i--;
-      *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  } else {
-    i = start;
-    while (*seqstart == ALNMGR_GAP && i < aln_len) { /* count forward if we in the gap */
-      i++;
-      *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  }
-  if (*seqstop == -1 || *seqstop>=bsp->length) *seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
-  
-  if (strand == Seq_strand_minus) {
-    i = start;
-    while (*seqstop == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
-      i--;
-      *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  } else {
-    i = stop;
-    while (*seqstop == ALNMGR_GAP && i < aln_len) { /* count forward if we are in the gap */
-      i++;
-      *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  }
-  
-  if (*seqstart == ALNMGR_GAP  &&  *seqstop == ALNMGR_GAP) {
-    return;
-  }
-  if (*seqstop  < 0) *seqstop  = bsp->length - 1;
-  if (*seqstart < 0) *seqstart = *seqstop;
-  if (strand == Seq_strand_minus) {
-    if (*seqstop - *seqstart > buf_len) 
-      *seqstart = *seqstop - buf_len;
-  } else {
-    if (*seqstop - *seqstart > buf_len) *seqstop = *seqstart + buf_len;  /* not to exeed the current line */
-  }
-
-  spp = SeqPortFromAlignmentInterval (*seqstart, *seqstop, strand, bsp);
-  SeqPortRead  (spp, target_buf, *seqstop - *seqstart + 1);
-  SeqPortFree  (spp);
-}
-
-
-static void 
-AlignmentIntervalToString 
-(SeqAlignPtr salp,
- Int4        row,
- Int4        start,
- Int4        stop,
- Int4        target_row,
- Boolean     view_whole_entity,
- Uint1Ptr    seqbuf,
- Uint1Ptr    alnbuf,
- Int4 PNTR   alnbuffer_len,
- Boolean     show_substitutions)
-{
-  Int4       aln_len = AlnMgr2GetAlnLength(salp, FALSE);
-  SeqIdPtr   sip     = AlnMgr2GetNthSeqIdPtr(salp, row);
-  BioseqPtr  bsp     = BioseqLockById(sip);
-  Int4       alnbuf_len = stop - start + 1;
-  Uint1      strand;
-  Int4       seqstart, seqstop;
-  Int4       i, k;
-  SeqPortPtr spp;
-  Int4       seq_len;
-  Uint1      target_strand;
-  SeqIdPtr   sip_target;
-  BioseqPtr  bsp_target;
-  Int4       target_start;
-  Int4       target_stop;
-  Uint1Ptr   target_buf;
-  Int4       aln_pos;
-
-  MemSet(alnbuf, '-', alnbuf_len); /* assume all gaps and fill the sequence later */
-  MemSet(seqbuf, 0, alnbuf_len);
-  if (target_row < 0) return;
-  
-  if (stop > aln_len && start > aln_len)
-  {
-    aln_len = AlnMgr2GetAlnLength(salp, FALSE);
-    return;
-  }
-
-  if (stop > aln_len) {
-    MemSet (alnbuf + aln_len - start, 0, stop - aln_len);
-    stop = aln_len - 1;
-    alnbuf_len = stop - start + 1;
-  }
-
-  if (alnbuffer_len != NULL) {
-    *alnbuffer_len = alnbuf_len;
-  }
-
-  strand = SeqAlignStrand (salp, row - 1);
-  target_strand = SeqAlignStrand (salp, target_row - 1);
-  /* if this is a minus strand sequence, start is stop and stop is start */
-  if (strand == Seq_strand_minus) {
-    seqstop = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
-    seqstart  = AlnMgr2MapSeqAlignToBioseq(salp, stop,  row);
-  } else {
-    seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
-    seqstop  = AlnMgr2MapSeqAlignToBioseq(salp, stop,  row);
-  }
-  
-  if (strand == Seq_strand_minus) {
-    i = stop;
-    while (seqstart == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
-      i--;
-      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  } else {
-    i = start;
-    while (seqstart == ALNMGR_GAP && i < aln_len) { /* count forward if we in the gap */
-      i++;
-      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  }
-  
-  if (seqstop == -1 || seqstop>=bsp->length)
-  {
-    seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
-  }
-  
-  if (strand == Seq_strand_minus) {
-    i = start;
-    while (seqstop == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
-      i--;
-      seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  } else {
-    i = stop;
-    while (seqstop == ALNMGR_GAP && i < aln_len) { /* count forward if we are in the gap */
-      i++;
-      seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
-    }
-  }
-  
-  if (seqstart == ALNMGR_GAP  &&  seqstop == ALNMGR_GAP) seqstart = seqstop = 0;  /* whole line are gaps */
-  if (seqstop  < 0) seqstop  = bsp->length - 1;
-  if (seqstart < 0) seqstart = seqstop;
-  if (strand == Seq_strand_minus) {
-    if (seqstop - seqstart > alnbuf_len)
-    {
-      seqstart = seqstop - alnbuf_len;
-    }
-  } else {
-    if (seqstop - seqstart > alnbuf_len) 
-    {
-      seqstop = seqstart + alnbuf_len;  /* not to exeed the current line */
-    }
-  }
-
-  spp = SeqPortFromAlignmentInterval (seqstart, seqstop, strand, bsp);
-  SeqPortRead  (spp, seqbuf, seqstop - seqstart + 1);
-  if (seqbuf [stop - start] == 0) {
-    seq_len = StringLen ((CharPtr) seqbuf);
-  } else {
-    seq_len = stop - start + 1;
-  }
-  SeqPortFree  (spp);
-  BioseqUnlock (bsp);
-  SeqIdFree    (sip);
-
-  if (row != target_row  &&  ! view_whole_entity  &&  target_row != ROW_UNDEFINED)  {
-    sip_target = AlnMgr2GetNthSeqIdPtr(salp, target_row);
-    bsp_target = BioseqLockById(sip_target);
-
-    target_buf = (Uint1Ptr) MemNew (stop - start + 1);
-    MemSet (target_buf, 0, stop - start + 1);
-    if (target_buf != NULL) {
-      SetSequenceIntervalBuf (salp, bsp_target, target_row, start, stop, 
-                              &target_start, &target_stop, aln_len, target_buf);
-    }
-  } else {
-    sip_target = NULL;
-    bsp_target = NULL;
-    target_buf = NULL;
-  }
-
-  k = 0;
-  i = 0;
-
-  for (aln_pos = start; aln_pos <= stop; aln_pos ++) {
-    Int4 seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, row);
-    Int4 target_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, target_row);
-
-    if (seq_pos >= 0) {
-      alnbuf [aln_pos - start] = TO_LOWER (seqbuf[k]);
-      if (show_substitutions)
-      {
-        /* Handle mismatches (insert dots when matched) */
-        if (row != target_row  &&  ! view_whole_entity  &&  target_row != ROW_UNDEFINED)  {
-          if(target_pos >= 0  && target_pos < bsp_target->length) { /* no gap in the target sequence */
-            if (seqbuf[k] == target_buf[i]) {
-              alnbuf[aln_pos - start] = GAP_CHAR;
-            }
-          }
-        }   /* mismatches */
-      }
-      k++;
-    }
-    if (target_pos >= 0) {
-      i++;
-    }
-  }    
-
-  if (alnbuf[alnbuf_len] == 0) {
-    *alnbuffer_len = StringLen ((CharPtr) alnbuf);
-  }
-
-  if (bsp_target != NULL) {
-    BioseqUnlock (bsp_target);
-  }
-  if (sip_target != NULL) {
-    SeqIdFree (sip_target);
-  }
-  if (target_buf != NULL) {
-    MemFree (target_buf);
-  }
 }
 
 
@@ -1403,6 +1145,7 @@ static void DrawAlignment
   if (tmp_salp == NULL) return;
   sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, row);
   bsp = BioseqLockById(sip);
+  if (bsp == NULL) return;
 
   AlignmentIntervalToString (tmp_salp, row, start, stop, bvp->TargetRow,
                              bvp->viewWholeEntity, seqbuf, alnbuf, &alnbuf_len,
@@ -2678,7 +2421,7 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           break;
         case eTypeAlignSequence:
-          DrawAlignSideLineNumbers(x, y, splp->bioSeqLine, splp->row, bvp);
+          DrawAlignSideLineNumbers(x, y, splp->bioSeqLine, splp->row, bvp, aln_idx);
           DrawAlignment(x, y, splp->bioSeqLine, splp->row, buf, seqbuf, alnbuf, bvp, aln_idx);                /* Draw the alignment   */
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           if (bvp->last_aln_row_clicked == splp->row)
@@ -2797,6 +2540,26 @@ PaneL CreateSeqViewPanel (GrouP g, Int2 w, Int2 h)
   SetPanelClick(pnl, onSeqViewClick, NULL, NULL, onSeqViewRelease);
   
   return pnl;
+}
+
+extern void UpdateSeqViewPanel (PaneL pnl)
+{
+  BioseqViewPtr bvp;
+  WindoW        currentport, temport;
+
+  bvp = GetBioseqViewPtr(pnl);
+  if (bvp == NULL) return;
+  
+  bvp->salp = SeqAlignFree (bvp->salp);
+  if (Visible (bvp->seqView))
+  {
+    PopulateAlnView (bvp);
+    currentport = ParentWindow (bvp->seqView);
+    temport = SavePort (currentport);
+    Select (bvp->seqView);
+    inval_panel (bvp->seqView, -1, -1);
+    RestorePort (temport);
+  }
 }
 
 /* New Sequence Editor Functions */
@@ -6516,6 +6279,7 @@ static void SeqEdInsertGapMenuItem (IteM i)
   Int4                  gap_type, gap_len;
   Boolean               is_unknown_gap;
   Boolean               changed = FALSE;
+  Char                  len_text [20];
 
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   if (sefp == NULL || sefp->edit_pos_start < 0)
@@ -6532,7 +6296,15 @@ static void SeqEdInsertGapMenuItem (IteM i)
   RadioButton (gap_type_grp, "Known length:");
   k = HiddenGroup (g, 0, 2, NULL);
   StaticPrompt (k, "", 0, popupMenuHeight, programFont, 'l');
-  gap_len_txt = DialogText (k, "100", 5, NULL);
+  if (sefp->edit_pos_end > sefp->edit_pos_start)
+  {
+    sprintf (len_text, "%d", sefp->edit_pos_end - sefp->edit_pos_start);
+  }
+  else
+  {
+    sprintf (len_text, "100");
+  }
+  gap_len_txt = DialogText (k, len_text, 5, NULL);
   
   SetObjectExtra (gap_type_grp, gap_len_txt, NULL);
   SetValue (gap_type_grp, 1);
@@ -7670,7 +7442,7 @@ static void ObjMgrSelectSeqEdSelection (SeqEdFormPtr sefp, BioseqPtr target_bsp)
   Uint2     entityID;
   Int4      real_start, real_stop;
   Int4      aln_len;
-  Uint2     strand;
+  Uint1     strand;
   
   if (sefp == NULL || sefp->edit_pos_start == sefp->edit_pos_end || target_bsp == NULL) 
   {
@@ -8023,6 +7795,11 @@ static Int2 LIBCALLBACK SeqEditMsgFunc (OMMsgStructPtr ommsp)
   switch (ommsp->message) 
   {
       case OM_MSG_UPDATE:
+          if (sefp->bfp->bvd.seqAlignMode && sefp->annot != NULL
+              && sefp->annot->type == 2)
+          {
+            sefp->bfp->bvd.salp = sefp->annot->data;
+          }
           ResizeSeqEdView (sefp);
           Select (sefp->bfp->bvd.seqView);
           inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
@@ -8935,7 +8712,7 @@ static void SeqAlnFeaturePropagate (IteM i)
 static SeqLocPtr GetSeqLocForAlignmentEdit (SeqEdFormPtr sefp)
 {
   Int4 real_start, real_stop, aln_len;
-  Uint2 strand;
+  Uint1 strand;
   SeqLocPtr slp;
   SeqIdPtr  sip;
   
@@ -9112,7 +8889,7 @@ static void UpdateTargetMenu (SeqEdFormPtr sefp)
   
 }
 
-static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
+static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop, Boolean allow_feat)
 
 {
   MenU            edit_menu;
@@ -9163,6 +8940,10 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
   edit_menu = PulldownMenu (w, "Features");
   sub = SubMenu (edit_menu, "Apply To Target Sequence");
   SeqEdNewFeaturesMenu (sub, TRUE);
+  if (!allow_feat)
+  {
+    Disable (sub);
+  }
 
   sub = SubMenu (edit_menu, "Apply To Alignment");
   localItem = CommandItem (sub, "CDS", ApplyCDSToAlignment);
@@ -9171,7 +8952,10 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
   SetObjectExtra (localItem, sefp, NULL);
   localItem = CommandItem (sub, "Other Feature", ApplyOtherFeatureToAlignment);
   SetObjectExtra (localItem, sefp, NULL);
-  
+  if (!allow_feat)
+  {
+    Disable (sub);
+  }
   
 }
 
@@ -9199,6 +8983,8 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   {
     return NULL;
   }
+  
+  sefp->annot = GetSeqAnnotForAlignment (salp);
   
 #ifdef WIN_MAC
   font = ParseFont ("Monaco, 9");
@@ -9247,7 +9033,7 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   sefp->bfp->bvd.on_the_fly = FALSE;
   sefp->bfp->bvd.showAlnSubstitutions = FALSE;
  
-  CreateAlnMenus (w, IsAlignmentOnSet (sefp->bfp->bvd.salp));
+  CreateAlnMenus (w, IsAlignmentOnSet (sefp->bfp->bvd.salp), (Boolean)(salp->segtype == SAS_DENSEG));
    
 	btns_across = 4;
   sefp->upper_button_group = HiddenGroup (w, -10, -10, NULL);
@@ -9995,9 +9781,57 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
    return salp;
 }
 
+static SeqAlignPtr LIBCALLBACK GetSeqAlignPiece (SeqLocPtr slp1, SeqLocPtr slp2)
+{
+   BLAST_SummaryOptions *options = NULL;
+   SBlastSeqalignArray * seqalign_arr=NULL;
+   SeqAlignPtr           salp = NULL;
+   BioseqPtr             bsp;
+   
+   if (slp1 == NULL || slp2 == NULL) return NULL;
+
+
+   bsp = BioseqFindFromSeqLoc (slp1);
+   if (bsp == NULL)
+   {
+     return NULL;
+   }
+   
+   BLAST_SummaryOptionsInit(&options);
+   
+   if (ISA_na (bsp->mol))
+   {
+     options->program = eBlastn;
+   }
+   else
+   {
+     options->program = eBlastp;
+   }
+
+   options->gapped_calculation = TRUE;
+   options->cutoff_evalue = 10;
+   options->gap_x_dropoff = 100;
+   options->gap_open = 4;
+   options->gap_extend = 1;
+   options->nucleotide_mismatch = -1; 
+   options->word_size = 7;
+
+   BLAST_TwoSeqLocSets(options, slp1, slp2, NULL, &seqalign_arr, NULL, NULL, NULL);
+   
+   if (seqalign_arr != NULL)
+   {
+     salp = seqalign_arr->array[0];
+     seqalign_arr->array[0] = NULL;
+     seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
+   }
+    
+   BLAST_SummaryOptionsFree(options);
+   return salp;
+}
+
 NLM_EXTERN SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
-   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign);
+   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece);
 }
 
 /* This function produces a text representation of the alignment salp starting one nucleotide

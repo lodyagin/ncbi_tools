@@ -28,13 +28,18 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: salsap.h,v $
+* Revision 6.4  2006/01/10 22:27:06  bollin
+* added function SeqAlignInsertByLoc, to be used when nucleotides are inserted
+* into a sequence that is in an alignment.  An extra segment, where all functions
+* except the one with the insertion are gapped, is created.
+*
 * Revision 6.3  1999/11/24 21:24:28  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -156,6 +161,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignEndExtend (SeqAlignPtr sap, Int4 start1, 
 	Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, 
 	Uint1 strand1, Uint1 strand2);
 
+NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignInsertByLoc (SeqLocPtr slp, SeqAlignPtr salp);
 
 /**Delete, Truncate**/
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr salp);

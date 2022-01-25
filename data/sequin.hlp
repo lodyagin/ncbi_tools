@@ -1978,30 +1978,40 @@ http://www.ncbi.nlm.nih.gov/collab/db_xref.html
 ***Evidence Subpage
 
 #This page is primarily used by large sequencing centers to explain
-annotation prediction methods and its use is optional.  The two choices
-of evidence are Experiment or Inference.
+annotation prediction methods and its use is optional.  More details
+about these qualifiers can be found in the
+<A HREF="http://www.ncbi.nlm.nih.gov/GenBank/evidence.html">
+genome submission guidelines
+</A>.
+The two choices of evidence are Experiment or Inference.
 
 #Wet-bench, experimental evidence can be entered as free text in the
 Experiment section.  Please be as brief as possible.
 
 #The Inference section allows for information to be added in cases where
 the feature is annotated based solely on sequence similarity or
-prediction software.  There is a controlled format for this qualifier
-which is explained in detail on the 
+prediction software. In order to fill in text, you must select one of
+the options from the Category pull-down menu.  Different pull-down and
+text boxes will appear depending on the selection you choose from the
+Category menu.  If you select one of the 'similar to' categories, you
+must include the name of the database and the corresponding accession
+number of the sequence used as the basis for the annotation.  If you
+choose one of the prediction categories, you must include the name and
+version of the prediction program used as the basis for the annotation. 
 
-<A HREF="http://www.insdc.org/feature_table.html#7.4.1">
-INSD webpage
-</A>
-.  In order to fill in text, you must select one of the options from
-the pull-down menu.  The text field must be structured such that the
-evidence basis included is either a reference to a database entry
-(including accession and version number) or an algorithm (including
-version).  In the first case, the name of the database must be
-separated from the accession number by a ":".  For example, you could
-select "similar to DNA sequence" from the pull-down menu and then enter
-"INSD:AY411252.1" in the text portion.  If the annotation is based on a
-prediction algorithm, you would select "ab initio prediction" from the
-pull-down menu and then enter "Genscan:2.0" in the text portion. 
+#For example, if your annotation of a coding region was based on
+similarity to the sequence and annotation in GenBank Accession number
+AY411252, you would select "similar to DNA sequence" from the pull-down
+menu and then select "INSD" in the Database pull-down.  You would then
+type "AY411252.1" in the Accession text box.  If the annotation is
+based on the Genscan prediction algorithm, you would select "ab initio
+prediction" from the pull-down menu, select "Genscan" in the Program
+pull-down and enter 2.0 in the Program Version text box.  If the
+database or program used is not listed in the appropriate pull-down
+list, select Other from the list.  A new text box will appear where you
+can enter the name of the database or program used.  You still must
+include the appropriate accession number or version in the subsequent
+text box. 
 
 ***Identifiers Subpage
 
@@ -2671,10 +2681,10 @@ using this modifier.
 
 #-Frequency:  Frequency of occurrence of a feature.
 
-#-Fwd-primer-name:  Name or designation of forward primer used for
+#-Fwd-PCR-primer-name:  Name or designation of forward primer used for
 amplification.
 
-#-Fwd-primer-seq:  Sequence of forward primer used for amplification.
+#-Fwd-PCR-primer-seq:  Sequence of forward primer used for amplification.
 
 #-Genotype:  Genotype of the organism.
 
@@ -2711,10 +2721,10 @@ immunoglobulin family, this qualifier is used to denote that the sequence
 is from rearranged DNA.  Do not include extra text when using this
 modifier.
 
-#Rev-primer-name:  Name or description of reverse primer used for
+#Rev-PCR-primer-name:  Name or description of reverse primer used for
 amplification.
 
-#Rev-primer-seq:  Sequence of reverse primer used for amplification.
+#Rev-PCR-primer-seq:  Sequence of reverse primer used for amplification.
 
 #-Segment: Name of viral genome fragmented into two or more nucleic acid
 molecules.

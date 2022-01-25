@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.91 2005/05/16 17:39:20 papadopo Exp $
+/* $Id: txalign.c,v 6.92 2006/01/24 18:37:08 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.91 $
+* $Revision: 6.92 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.92  2006/01/24 18:37:08  papadopo
+* from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
+*
 * Revision 6.91  2005/05/16 17:39:20  papadopo
 * From Alejandro Schaffer: if matrix is adjusted due to composition in
 * blastpgp, then print the method for adjustment in the output alignments.
@@ -547,6 +550,7 @@
 #include <salpstat.h>
 #include <fdlKludge.h>
 #include <blastdef.h>
+#include <algo/blast/composition_adjustment/composition_constants.h>
 
 #define BUFFER_LENGTH 2048
 #define MIN_INS_SPACE 50
@@ -5662,7 +5666,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     Char fastaLongIdBuf[BUFFER_LENGTH+1];
     SeqIdPtr firstSip=NULL;
     Int4 num_ident;
-    Int2 comp_adjustment_method = NO_COMP_ADJUSTMENT;
+    Int2 comp_adjustment_method = eNoCompositionBasedStats;
 
 
     sp = asop->sp;
@@ -5881,10 +5885,10 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     else
         sprintf(buffer, "Expect(%ld+) = %s", (long) number, eval_buff_ptr);
     fprintf(asop->fp, "%s", buffer);
-    if (NO_COMP_ADJUSTMENT != comp_adjustment_method) {
-      if (COMP_BASED_STATISTICS == comp_adjustment_method)
+    if (eNoCompositionBasedStats != comp_adjustment_method) {
+      if (eCompositionBasedStats == comp_adjustment_method)
 	sprintf(buffer,",   Method: Composition-based stats.");
-      if (COMP_MATRIX_ADJUSTMENT == comp_adjustment_method)
+      if (eCompositionMatrixAdjust == comp_adjustment_method)
 	sprintf(buffer,",   Method: Compositional matrix adjust.");
       fprintf(asop->fp, "%s", buffer);
     }

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.464 2005/12/01 15:10:23 madden Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.465 2006/02/15 18:23:47 madden Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,19 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.464 $
+$Revision: 6.465 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.465  2006/02/15 18:23:47  madden
+* Made changes so that CheckStartForGappedAlignment by default
+* checks ungapped alignments of length 11, rather than length 10.
+* Made changes to the rules used when the starting point is close to
+* the edge of the preliminary gapped alignment.
+* (from Mike Gertz)
+*
 * Revision 6.464  2005/12/01 15:10:23  madden
 * Gave BLASTCheckHSPInclusion external linkage (i.e. removed the static specifier).
 *
@@ -7984,41 +7991,79 @@ Int4 GetStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uin
 }
 
 /*
-	Function to check that the highest scoring region in an HSP still gives a positive
-	score.  This value was originally calcualted by GetStartForGappedAlignment but it
-	may have changed due to the introduction of ambiguity characters.  Such a change
-	can lead to 'strange' results from ALIGN. 
+   Check whether the starting point for gapped alignment lies in
+   region that has positive score.  This routine is called after a
+   preliminary gapped alignment has been computed, but before the
+   traceback is computed.  The score of the region containing the
+   starting point may have changed due to the introduction of
+   ambiguity characters, further filtering of the sequences or the
+   application of composition based statistics.
+
+   Usually, we check an ungapped alignment of length 11 about the
+   starting point: 5 characters to the left and 5 to the right.
+   However, the actual region checked is occassionally shorter because
+   we don't check characters before the start, or after the end, of
+   the preliminarily aligned regions in the query or subject.
 */
 Boolean
-CheckStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix)
+CheckStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp,
+                              Uint1Ptr query, Uint1Ptr subject,
+                              Int4Ptr PNTR matrix)
 {
-	Int4 index1, score, start, end, width;
-	Uint1Ptr query_var, subject_var;
-        Boolean positionBased = 
-           (search->positionBased && search->sbp->posMatrix);
+    Int4 left, right;       /* Number of aligned characters to the
+                               left and right of the starting point */
+    Int4 score;             /* Score of the word alignment */
+    Uint1Ptr subject_var;   /* Current character in the subject sequence */
+    Uint1Ptr subject_right; /* last character to be considered in the subject
+                               sequence */
+    Boolean positionBased =
+        (search->positionBased && search->sbp->posMatrix);
 
-	width = MIN((hsp->query.gapped_start-hsp->query.offset), HSP_MAX_WINDOW/2);
-	start = hsp->query.gapped_start - width;
-	end = MIN(hsp->query.end, hsp->query.gapped_start + width);
-	/* Assures that the start of subject is above zero. */
-	if ((hsp->subject.gapped_start + start - hsp->query.gapped_start) < 0)
-		start -= hsp->subject.gapped_start + (start - hsp->query.gapped_start);
-	query_var = query + start;
-	subject_var = subject + hsp->subject.gapped_start + (start - hsp->query.gapped_start);
-	score=0;
-	for (index1=start; index1<end; index1++)
-	{
-	  if (!positionBased)
-	    score += matrix[*query_var][*subject_var];
-	  else
-	    score += search->sbp->posMatrix[index1][*subject_var];
-	  query_var++; subject_var++;
-	}
-	if (score <= 0)
-		return FALSE;
+    /* Compute the number of characters to the left of the start
+       to include in the word */
+    left = -HSP_MAX_WINDOW/2;
+    if (left < hsp->query.offset - hsp->query.gapped_start) {
+        left = hsp->query.offset - hsp->query.gapped_start;
+    }
+    if (left < hsp->subject.offset - hsp->subject.gapped_start) {
+        left = hsp->subject.offset - hsp->subject.gapped_start;
+    }
 
-	return TRUE;
+    /* Compute the number of characters to right to include in the word,
+       including the starting point itself. */
+    right = HSP_MAX_WINDOW/2 + 1;
+    if (right > hsp->query.end - hsp->query.gapped_start) {
+        right = hsp->query.end - hsp->query.gapped_start;
+    }
+    if (right > hsp->subject.end - hsp->subject.gapped_start) {
+        right = hsp->subject.end - hsp->subject.gapped_start;
+    }
+
+    /* Calculate the score of the word */
+    score = 0;
+    subject_var   = subject + hsp->subject.gapped_start + left;
+    subject_right = subject + hsp->subject.gapped_start + right;
+    if ( !positionBased ) {
+        Uint1Ptr query_var;     /* Current character in the query */
+        query_var = query + hsp->query.gapped_start + left;
+        for ( ; subject_var < subject_right; subject_var++, query_var++) {
+           score += matrix[*query_var][*subject_var];
+        }
+    } else {
+        Int4 query_index;       /* Current position in the query */
+        query_index = hsp->query.gapped_start + left;
+        for ( ;  subject_var < subject_right;  subject_var++, query_index++) {
+            score += search->sbp->posMatrix[query_index][*subject_var];
+        }
+    }
+    if (score <= 0) {
+        return FALSE;
+    } else {
+        return TRUE;
+    }
 }
+
+
 /*
 	Gets the ratio used to change an evalue calculated with the subject
 	sequence length to one with a db length.

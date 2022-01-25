@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.26 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_lookup.h,v 1.28 2005/12/22 14:33:28 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -107,8 +107,8 @@ typedef struct BlastLookupTable {
                                 (wordsize*charsize) bits should be discarded. */
     Int4 word_length;      /**< Length in bases of the full word match 
                                 required to trigger extension */
-    Int4 wordsize;         /**< number of full bytes in a full word */
-    Int4 reduced_wordsize; /**< number of bytes in a word stored in the LUT */
+    Int4 lut_word_length;  /**< Length in bases of a word indexed by the
+                                lookup table */
     Int4 charsize;         /**< number of bits for a base/residue */
     Int4 scan_step;        /**< number of bases between successive words */
     Int4 alphabet_size;    /**< number of letters in the alphabet */
@@ -132,7 +132,6 @@ typedef struct BlastLookupTable {
     Boolean use_pssm;      /**< if TRUE, lookup table construction will assume
                                 that the underlying score matrix is position-
                                 specific */
-    Boolean variable_wordsize; /**< if TRUE then only full bytes are compared as initial words. */
     Boolean ag_scanning_mode;  /**< Using AG scanning mode (or stride) if TRUE, so that 
                                not every base is checked.  */
   } BlastLookupTable;
@@ -208,11 +207,16 @@ Int4 BlastAaLookupNew(const LookupTableOptions* opt, BlastLookupTable* * lut);
 /** Create a new lookup table.
   * @param opt pointer to lookup table options structure [in]
   * @param lut handle to lookup table [in/modified]
+  * @param approx_num_entries an estimate of the number of words
+  *        to be added to the lookup table. Only used for nucleotide
+  *        lookup tables [in]
   * @param is_protein boolean indicating protein or nucleotide [in]
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 LookupTableNew(const LookupTableOptions* opt, BlastLookupTable* * lut, 
+Int4 LookupTableNew(const LookupTableOptions* opt, 
+                    BlastLookupTable* * lut, 
+                    Int4 approx_num_entries,
 		    Boolean is_protein);
 
 /** Free the lookup table.

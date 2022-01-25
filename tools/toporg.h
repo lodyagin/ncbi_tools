@@ -1,7 +1,7 @@
 #ifndef _TOPORG_
 #define _TOPORG_
 
-/*  $Id: toporg.h,v 6.3 2001/06/05 21:23:43 vakatov Exp $
+/*  $Id: toporg.h,v 6.4 2005/12/30 19:37:17 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -87,6 +87,7 @@ void StripBSfromTop(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void StripBSfromParts(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 Boolean CmpOrgById(BioSourcePtr b1, BioSourcePtr b2);
 extern void NormalizeSegSeqMolInfo(SeqEntryPtr sep);
+extern void MoveFeatsFromPartsSet (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

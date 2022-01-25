@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -2249,6 +2249,650 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr s
   }
   return salp;
 }
+
+static Boolean AreDenseSegSegmentsValid (DenseSegPtr dsp, Int4 start, Int4 num)
+{
+  Int4 k, seg_num, next_pos;
+  
+  if (dsp == NULL || start < 0 || num < 1)
+  {
+    return FALSE;
+  }
+  
+  for (k = 0; k < dsp->dim; k++)
+  {
+    if (dsp->strands == NULL || dsp->strands[k] == Seq_strand_plus)
+    {
+      if(dsp->starts [dsp->dim * start + k] > -1)
+      {
+        next_pos = dsp->starts [dsp->dim * start + k] + dsp->lens[start];
+      }
+      else
+      {
+        next_pos = -1;
+      }
+      for (seg_num = start + 1; seg_num - start < num; seg_num++)
+      {
+        if (dsp->starts[dsp->dim * seg_num + k] == -1)
+        {
+          continue;
+        }
+        if (next_pos != -1)
+        {
+          if (dsp->starts[dsp->dim * seg_num + k] != next_pos)
+          {
+            return FALSE;
+          }
+        }
+        next_pos = dsp->starts[dsp->dim * seg_num + k] + dsp->lens[seg_num];
+      }
+    }
+    else
+    {
+      if (dsp->starts [dsp->dim * (start + num - 1) + k] > -1)
+      {
+        next_pos = dsp->starts [dsp->dim * (start + num - 1) + k] + dsp->lens [start + num - 1];
+      }
+      else
+      {
+        next_pos = -1;
+      }
+      for (seg_num = start + num - 2; seg_num >= start; seg_num--)
+      {
+        if (dsp->starts [dsp->dim * seg_num + k] == -1)
+        {
+          continue;
+        }
+        if (next_pos != -1)
+        {
+          if (dsp->starts[dsp->dim * seg_num + k] != next_pos)
+          {
+            return FALSE;
+          }
+        }
+        next_pos = dsp->starts[dsp->dim * seg_num + k] + dsp->lens[seg_num];
+      }
+    }
+    
+  }
+  
+  return TRUE;
+}
+
+
+static void 
+FillInPlusStrandInsertionSegmentA
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        first_len,
+ Int4        second_len,
+ Int4        orig_segment,
+ Int4Ptr     this_seg)
+{
+  Int4 k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL
+      || insert_start < 0 || insert_len < 0
+      || first_len < 0
+      || second_len < 0
+      || orig_segment < 0 || orig_segment >= dsp_orig->numseg
+      || this_seg == NULL
+      || *this_seg < 0 || *this_seg >= dsp_new->numseg)
+  {
+    return;
+  }
+  
+  if (first_len == 0)
+  {
+    return;
+  }
+  
+  for (k = 0; k < dsp_orig->dim; k++)
+  {
+    dsp_new->starts[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->starts[orig_segment * dsp_orig->dim + k];
+    if (dsp_orig->strands != NULL)
+    {
+      dsp_new->strands[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->strands[orig_segment * dsp_orig->dim + k];        
+      if (dsp_orig->strands[orig_segment * dsp_orig->dim + k] == Seq_strand_minus
+          && dsp_new->starts[(*this_seg) * dsp_new->dim + k] > -1)
+      {
+        dsp_new->starts[(*this_seg) * dsp_new->dim + k] += second_len;
+      }
+    }
+  }
+  
+  dsp_new->lens[*this_seg] = first_len;
+  (*this_seg)++;
+}
+
+
+static void 
+FillInInsertionSegmentB
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        first_len,
+ Int4        second_len,
+ Int4        orig_segment,
+ Int4Ptr     this_seg)
+{
+  Int4 k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL
+      || insert_start < 0 || insert_len < 0
+      || first_len < 0
+      || second_len < 0
+      || orig_segment < 0 || orig_segment >= dsp_orig->numseg
+      || this_seg == NULL
+      || *this_seg < 0 || *this_seg >= dsp_new->numseg)
+  {
+    return;
+  }
+  
+  if (insert_len == 0)
+  {
+    return;
+  }
+  
+  for (k = 0; k < dsp_orig->dim; k++)
+  {
+    dsp_new->starts[(*this_seg) * dsp_new->dim + k] = -1;
+    if (dsp_orig->strands != NULL)
+    {
+      dsp_new->strands[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->strands[orig_segment * dsp_orig->dim + k];    
+    }
+  }
+  dsp_new->starts[(*this_seg) * dsp_new->dim + insert_row] = insert_start;
+  
+  dsp_new->lens[*this_seg] = insert_len;
+  (*this_seg)++;
+}
+
+static void FillInPlusStrandInsertionSegmentC
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        first_len,
+ Int4        second_len,
+ Int4        orig_segment,
+ Int4Ptr     this_seg)
+{
+  Int4 k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL
+      || insert_start < 0 || insert_len < 0
+      || first_len < 0
+      || second_len < 0
+      || orig_segment < 0 || orig_segment >= dsp_orig->numseg
+      || this_seg == NULL
+      || *this_seg < 0 || *this_seg >= dsp_new->numseg)
+  {
+    return;
+  }
+  
+  if (second_len == 0)
+  {
+    return;
+  }
+  
+  for (k = 0; k < dsp_orig->dim; k++)
+  {
+    if ((dsp_orig->strands == NULL 
+        || dsp_orig->strands[orig_segment * dsp_new->dim + k] != Seq_strand_minus)
+        && dsp_new->starts[(*this_seg) * dsp_new->dim + k] > -1)
+    {
+      dsp_new->starts[(*this_seg) * dsp_new->dim + k] = 
+        dsp_orig->starts[orig_segment * dsp_orig->dim + k] + first_len; 
+    }
+    else
+    {
+      dsp_new->starts[(*this_seg) * dsp_new->dim + k] = 
+        dsp_orig->starts[orig_segment * dsp_orig->dim + k]; 
+    }
+
+    if (dsp_orig->strands != NULL)
+    {
+      dsp_new->strands[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->strands[orig_segment * dsp_orig->dim + k];    
+    }
+  }
+  dsp_new->starts[(*this_seg) * dsp_new->dim + insert_row] += insert_len;
+  
+  dsp_new->lens[*this_seg] = second_len;
+  (*this_seg)++;
+}
+
+
+static void 
+FillInMinusStrandInsertionSegmentA
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        first_len,
+ Int4        second_len,
+ Int4        orig_segment,
+ Int4Ptr     this_seg)
+{
+  Int4 k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL
+      || insert_start < 0 || insert_len < 0
+      || first_len < 0
+      || second_len < 0
+      || orig_segment < 0 || orig_segment >= dsp_orig->numseg
+      || this_seg == NULL
+      || *this_seg < 0 || *this_seg >= dsp_new->numseg)
+  {
+    return;
+  }
+  
+  if (first_len == 0)
+  {
+    return;
+  }
+  
+  for (k = 0; k < dsp_orig->dim; k++)
+  {
+    dsp_new->starts[(*this_seg) * dsp_new->dim + k]
+           = dsp_orig->starts[orig_segment * dsp_orig->dim + k];
+    if (dsp_orig->strands != NULL)
+    {
+      dsp_new->strands[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->strands[orig_segment * dsp_orig->dim + k];        
+      if (dsp_orig->strands[orig_segment * dsp_orig->dim + k] == Seq_strand_minus
+          && dsp_new->starts[(*this_seg) * dsp_new->dim + k] != -1)
+      {
+        dsp_new->starts[(*this_seg) * dsp_new->dim + k] += second_len;
+      }
+    }
+  }
+  
+  dsp_new->starts[(*this_seg) * dsp_new->dim + insert_row] += insert_len;  
+  
+  dsp_new->lens[*this_seg] = first_len;
+  (*this_seg)++;
+}
+
+static void FillInMinusStrandInsertionSegmentC
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        first_len,
+ Int4        second_len,
+ Int4        orig_segment,
+ Int4Ptr     this_seg)
+{
+  Int4 k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL
+      || insert_start < 0 || insert_len < 0
+      || first_len < 0
+      || second_len < 0
+      || orig_segment < 0 || orig_segment >= dsp_orig->numseg
+      || this_seg == NULL
+      || *this_seg < 0 || *this_seg >= dsp_new->numseg)
+  {
+    return;
+  }
+  
+  if (second_len == 0)
+  {
+    return;
+  }
+  
+  for (k = 0; k < dsp_orig->dim; k++)
+  {
+    dsp_new->starts[(*this_seg) * dsp_new->dim + k] = 
+        dsp_orig->starts[orig_segment * dsp_orig->dim + k]; 
+        
+    if ((dsp_orig->strands == NULL 
+        || dsp_orig->strands[orig_segment * dsp_orig->dim + k] != Seq_strand_minus)
+        && dsp_new->starts[(*this_seg) * dsp_new->dim + k] != -1)
+    {
+      dsp_new->starts[(*this_seg) * dsp_new->dim + k] += first_len;
+    }
+
+    if (dsp_orig->strands != NULL)
+    {
+      dsp_new->strands[(*this_seg) * dsp_new->dim + k]
+        = dsp_orig->strands[orig_segment * dsp_orig->dim + k];    
+    }
+  }
+  
+  dsp_new->lens[*this_seg] = second_len;
+  (*this_seg)++;
+}
+
+static void 
+InsertInSegment
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4        insert_start,
+ Int4        insert_len,
+ Int4        insert_row,
+ Int4        orig_segment,
+ Int4Ptr     this_segment)
+{
+  /* The original segment needs to be replaced by either one or two segments
+   * in the new alignment.
+   * Call segment O the segment that contains insert_start.
+   * If insert_start == the start of segment O, only one additional segment 
+   * will be needed, otherwise allocate space for two extra segments.
+   * If insert_row is a plus row:
+   *    If insert_start == the start of segment O,
+   *              the gap segment will be inserted immediately before
+   *              segment O.  For insert_row, all starts
+   *              for segment O and beyond will be increased by insert_len.
+   *    Otherwise, segment O will be replaced by segment (A) (a truncated 
+                  version of segment O), a gap segment (B) will be
+   *              inserted after A, and a third segment (C) will be inserted
+   *              after segment B.  
+   *    Call first_len = insert_start - start of segment O on insert_row
+   *    Call second_len = length of segment O on insert_row - first_len
+   *    The length of the segment A will be first_len.
+   *    The start of segment A for all plus strand rows will be 
+   *              the start of segment O.
+   *    The start of segment A for all minus strand rows will be 
+   *              the start of segment O + second_len.
+   *    The start of segment B for insert_row will be insert_start,
+   *    The start of segment B for all other rows in the gap segment will be -1.
+   *    The length of segment B will be insert_len.
+   *    For insert_row, the start of segment C will be 
+   *              the start of segment O + first_len + insert_len.
+   *    For all remaining plus strand rows, the start of segment C
+   *              will be the start of segment O + first_len.
+   *    For all minus strand rows, the start of segment C will be
+   *              be the start of segment O.
+   *    The length of segment C will be second_len.
+   * If insert_row is a minus row:
+   *    If insert_start == the start of segment O,
+   *                       the gap segment will be inserted immediately after
+   *                       segment O and all of the starts for insert_row
+   *                       before segment O will be increased by insert_len.
+   *    Otherwise, segment O will be replaced by segment A, a gap segment (B),
+   *               and segment C.
+   *    Call first_len = start of segment O on insert_row + length of segment O on insert_row - insert_start
+   *    Call second_len = insert_start - start of segment O on insert_row
+   *    The length of segment A will be first_len.
+   *    For every plus strand row, the start of segment A will be the start of 
+   *               segment O.
+   *    For insert_row, the start of segment A will be the start of segment O + second_len + insert_len.
+   *    For every other minus strand row, the start of segment A will be the
+   *               the start of segment O + second_len.
+   *    The length of segment B will be insert_len.
+   *    For insert_row, the start of segment B will be insert_start.
+   *    For every other row, the start of segment B will be -1.
+   *    The length of segment C will be second_len.
+   *    For every minus row, the start of segment C will be the start of segment O.
+   *    For every plus row, the start of segment C will be the start of segment O + first_len.
+   *    For insert_row, the start of every segment prior to segment O will be increased
+   *               by insert_len.
+   */
+   
+   Int4 first_len, second_len;
+   
+   if (dsp_orig->strands != NULL && dsp_orig->strands[insert_row] == Seq_strand_minus)
+   {
+     first_len = dsp_orig->starts [dsp_orig->dim * orig_segment + insert_row]
+                    + dsp_orig->lens [orig_segment] - insert_start;
+     second_len = insert_start - dsp_orig->starts [dsp_orig->dim * orig_segment + insert_row];
+     FillInMinusStrandInsertionSegmentA(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+     FillInInsertionSegmentB(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+     FillInMinusStrandInsertionSegmentC(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+   }
+   else
+   {
+     first_len = insert_start - dsp_orig->starts [dsp_orig->dim * orig_segment + insert_row];
+     second_len = dsp_orig->lens[orig_segment] - first_len;
+     FillInPlusStrandInsertionSegmentA(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+     FillInInsertionSegmentB(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+     FillInPlusStrandInsertionSegmentC(dsp_orig, dsp_new, insert_start, insert_len,
+                                       insert_row, first_len, second_len,
+                                       orig_segment, this_segment);
+   }
+}
+
+static Int4
+FindSegmentForInsertPoint 
+(DenseSegPtr dsp,
+ Int4        insert_start,
+ Int4        insert_row,
+ Uint1       insert_strand)
+{
+  Int4    insert_segment = -1, k = 0;
+  
+  if (dsp == NULL || insert_start < 0 
+      || insert_row < 0 || insert_row >= dsp->dim)
+  {
+    return -1;
+  }
+  
+  if (insert_strand == Seq_strand_minus)
+  {
+    while (k < dsp->numseg && insert_segment == -1)
+    {
+      if (dsp->starts [k * dsp->dim + insert_row] != -1
+          && dsp->starts [k * dsp->dim + insert_row] <= insert_start
+          && dsp->starts [k * dsp->dim + insert_row] + dsp->lens[k] > insert_start)
+      {
+        insert_segment = k;
+      }
+      k++;
+    }
+  }
+  else
+  {
+    while (k < dsp->numseg && insert_segment == -1)
+    {
+      if (dsp->starts [k * dsp->dim + insert_row] != -1
+          && dsp->starts [dsp->dim * k + insert_row] <= insert_start
+          && dsp->starts [dsp->dim * k + insert_row] + dsp->lens [k] > insert_start)
+      {
+        insert_segment = k;
+      }
+      k++;
+    }
+  }
+  return insert_segment;
+}
+
+static void 
+CopyDensegSegments 
+(DenseSegPtr dsp_orig,
+ DenseSegPtr dsp_new,
+ Int4 start_seg,
+ Int4 copy_seg,
+ Int4 num_to_copy)
+{
+  Int4 num_copied = 0, k;
+  
+  if (dsp_orig == NULL || dsp_new == NULL)
+  {
+    return;
+  }
+  
+  while (start_seg < dsp_orig->numseg && copy_seg < dsp_new->numseg
+         && num_copied < num_to_copy)
+  {
+    if (start_seg >= 0 && copy_seg >= 0)
+    {
+      for (k = 0; k < dsp_orig->dim && k < dsp_new->dim; k++)
+      {
+        dsp_new->starts [copy_seg * dsp_new->dim + k]
+             = dsp_orig->starts[start_seg * dsp_orig->dim + k];
+        if (dsp_orig->strands != NULL && dsp_new->strands != NULL)
+        {
+          dsp_new->strands[copy_seg * dsp_new->dim + k]
+             = dsp_orig->strands[start_seg * dsp_orig->dim + k];
+        }
+      }
+      dsp_new->lens [copy_seg] = dsp_orig->lens[start_seg];
+      num_copied++;
+    }
+    start_seg ++;
+    copy_seg ++;
+  }
+}
+
+
+/**************************************************
+***
+***************************************************/
+NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignInsertByLoc (SeqLocPtr slp, SeqAlignPtr salp)
+{
+  SeqIdPtr    sip;
+  DenseSegPtr dsp, dsp_new;
+  Int4        from, start;
+  Int2        j;
+  Int2        index;
+  Int4        insert_len;
+  Int4        extra_segs;
+  Uint1       insert_strand;
+  Int4        insert_seg;
+  Int4        orig_segment;
+
+  if (salp == NULL || salp->segtype != SAS_DENSEG)
+     return salp;
+  sip = SeqLocId(slp);
+  insert_len = SeqLocLen (slp);
+  dsp = (DenseSegPtr) salp->segs;
+  if (dsp == NULL) {
+     return salp;
+  }
+  
+  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (index == 0) {
+     /* bioseq not in alignment */
+     return salp;
+  }
+  index -= 1;
+  insert_strand = SeqAlignStrand (salp, index);
+  
+  if (insert_strand == Seq_strand_minus)
+  {
+    from = SeqAlignStop (salp, index);
+  }
+  else
+  {
+    from = SeqAlignStart(salp, index);
+  }
+  start = SeqLocStart (slp);
+  if (start <= from)
+  {
+    /* just adjust the starts */
+    for (j = 0; j < dsp->numseg; j++)
+    {
+      if (dsp->starts [dsp->dim * j + index] > -1)
+      {
+        dsp->starts [dsp->dim * j + index] += insert_len;
+      }
+    }
+  }
+  else
+  {
+    /* need to insert gap of length insert_len at start */
+    /* first, find affected segment */
+    insert_seg = FindSegmentForInsertPoint (dsp, start, index, insert_strand);
+    if (insert_seg < 0 || insert_seg > dsp->numseg)
+    {
+      return salp;
+    }
+    
+    if (dsp->starts[dsp->dim * insert_seg + index] == start)
+    {
+      extra_segs = 1;
+    }
+    else
+    {
+      extra_segs = 2;
+    }
+
+    dsp_new = (DenseSegPtr) MemNew (sizeof (DenseSeg));
+    dsp_new->dim = dsp->dim;
+    dsp_new->numseg = dsp->numseg + extra_segs;
+    dsp_new->starts = (Int4Ptr) MemNew (dsp->dim * (dsp->numseg + extra_segs) * sizeof (Int4));
+    if (dsp->strands != NULL)
+    {
+      dsp_new->strands = (Uint1Ptr) MemNew (dsp->dim * (dsp->numseg + extra_segs) * sizeof (Uint1));
+    }
+    dsp_new->lens = (Int4Ptr) MemNew ((dsp->numseg + extra_segs) * sizeof (Int4));
+    
+    /* copy alignment up to point of insertion */
+    CopyDensegSegments (dsp, dsp_new, 0, 0, insert_seg);
+   
+    /* adjust starts in insert_row before insert_seg if insert_row on minus strand */
+    if (insert_strand == Seq_strand_minus)
+    {
+      for (j = 0; j < insert_seg; j++)
+      {
+        if (dsp_new->starts[dsp_new->dim * j + index] != -1)
+        {
+          dsp_new->starts[dsp_new->dim * j + index] += insert_len;
+        }
+      }
+    }
+    
+    /* create gap */
+    orig_segment = insert_seg;
+    InsertInSegment (dsp, dsp_new, start, insert_len, index, orig_segment, &insert_seg);
+    
+    /* Copy after insertion point */
+    CopyDensegSegments (dsp, dsp_new, orig_segment + 1, insert_seg, dsp->numseg - orig_segment);
+
+    /* Adjust starts in insert row after insert_seg if insert_row on plus strand */
+    if (insert_strand == Seq_strand_plus)
+    {
+      while (insert_seg < dsp_new->numseg)
+      {
+        if (dsp_new->starts[dsp_new->dim * insert_seg + index] != -1)
+        {
+          dsp_new->starts[dsp_new->dim * insert_seg + index] += insert_len;
+        }
+        insert_seg++;
+      }
+    }
+    
+    /* replace in old DenseSeg */
+    dsp->starts = MemFree (dsp->starts);
+    dsp->starts = dsp_new->starts;
+    dsp_new->starts = NULL;
+    dsp->strands = MemFree (dsp->strands);
+    dsp->strands = dsp_new->strands;
+    dsp_new->strands = NULL;
+    dsp->lens = MemFree (dsp->lens);
+    dsp->lens = dsp_new->lens;
+    dsp_new->lens = NULL;
+    dsp->numseg = dsp_new->numseg;
+
+  }
+  
+  return salp;
+}
+
 
 /*******************************************
 ***

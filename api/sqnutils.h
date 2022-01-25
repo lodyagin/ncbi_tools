@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.128 $
+* $Revision: 6.134 $
 *
 * File Description: 
 *
@@ -93,6 +93,16 @@ NLM_EXTERN Boolean LIBCALL PowerBLASTASN1Detected (SeqEntryPtr sep);
 NLM_EXTERN Int2 EntityIDToGeneticCode (Uint2 entityID, BoolPtr mito, CharPtr taxname, size_t maxsize);
 NLM_EXTERN Int2 SeqEntryToGeneticCode (SeqEntryPtr sep, BoolPtr mito, CharPtr taxname, size_t maxsize);
 NLM_EXTERN Int2 SeqEntryToBioSource (SeqEntryPtr sep, BoolPtr mito, CharPtr taxname, size_t maxsize, BioSourcePtr PNTR biopp);
+
+NLM_EXTERN Boolean BioseqToGeneticCode (
+  BioseqPtr bsp,
+  Int2Ptr gencodep,
+  BoolPtr mitop,
+  BoolPtr plastidp,
+  CharPtr taxnamep,
+  size_t maxsize,
+  BioSourcePtr PNTR biopp
+);
 
 NLM_EXTERN SeqLocPtr   CreateWholeInterval (SeqEntryPtr sep);
 NLM_EXTERN SeqFeatPtr  CreateNewFeature (SeqEntryPtr sep, SeqEntryPtr placeHere, Uint1 choice, SeqFeatPtr useThis);
@@ -252,6 +262,7 @@ NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp);
 NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
 
 NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip);
+NLM_EXTERN void ReadCompletenessFromString (CharPtr str, MolInfoPtr mip);
 
 /* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
 
@@ -356,6 +367,22 @@ NLM_EXTERN void KeyTagClear (KeyTag PNTR ktp);
 NLM_EXTERN Int2 KeyFromTag (KeyTag PNTR ktp, CharPtr tag);
 NLM_EXTERN CharPtr TagFromKey (KeyTag PNTR ktp, Int2 key);
 
+/* inference qualifier utility */
+
+#define VALID_INFERENCE            0
+#define EMPTY_INFERENCE_STRING     1
+#define BAD_INFERENCE_PREFIX       2
+#define BAD_INFERENCE_BODY         3
+#define SINGLE_INFERENCE_FIELD     4
+#define SPACES_IN_INFERENCE        5
+#define SAME_SPECIES_MISUSED       6
+#define BAD_INFERENCE_ACCESSION    7
+#define BAD_INFERENCE_ACC_VERSION  8
+#define ACC_VERSION_NOT_PUBLIC     9
+
+NLM_EXTERN Int2 ValidateInferenceQualifier (CharPtr val, Boolean fetchAccn);
+
+
 /* from Colombe */
 NLM_EXTERN SeqLocPtr StringSearchInBioseq (SeqIdPtr sip, CharPtr sub);
 
@@ -390,6 +417,9 @@ of contigs, and returns a SeqEntryList in the desired order, with all other cont
 NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs);
 
 NLM_EXTERN void PrintQualityScores (BioseqPtr bsp, FILE *fp);
+
+NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_left);
+NLM_EXTERN void TrimQualityScores (BioseqPtr bsp, Int4 num_to_trim, Boolean from_left);
 
 typedef void (*QualityWriteFunc) (CharPtr buf, Uint4 buflen, Pointer userdata);
 

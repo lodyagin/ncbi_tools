@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -154,5 +154,7 @@ ApplyFeatureToAlignment
  SeqLocPtr   slp, 
  Int4        feattype);
 
+extern SeqAnnotPtr GetSeqAnnotForAlignment (SeqAlignPtr sap);
+extern void ConvertPairwiseToMultipleAlignment (SeqAlignPtr sap);
 
 #endif

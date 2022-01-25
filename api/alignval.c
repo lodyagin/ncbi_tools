@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -2093,9 +2093,9 @@ static void ValidateSeqAlignInHist (SeqHistPtr hist, SaValPtr svp)
   SeqAlignPtr  salp;
 
   if (hist == NULL) return;
-  for (salp = hist->assembly; salp != NULL; salp = salp->next) {
-    ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-  }
+  salp = hist->assembly;
+  /* ValidateSeqAlign will validate the entire chain */
+  ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
 }
 
 static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,

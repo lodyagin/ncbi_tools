@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.72 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_util.h,v 1.73 2006/01/12 20:30:28 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -205,6 +205,10 @@ Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number);
  */
 NCBI_XBLAST_EXPORT
 Int4 Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program);
+
+/** Allocate memory for query information structure */
+NCBI_XBLAST_EXPORT
+BlastQueryInfo* BlastQueryInfoNew(EBlastProgramType program, int num_queries);
 
 /** Deallocate memory for query information structure */
 NCBI_XBLAST_EXPORT

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: mbalign.c,v 6.42 2005/05/03 20:29:17 papadopo Exp $";
+static char const rcsid[] = "$Id: mbalign.c,v 6.43 2006/02/02 17:57:34 papadopo Exp $";
 
-/* $Id: mbalign.c,v 6.42 2005/05/03 20:29:17 papadopo Exp $
+/* $Id: mbalign.c,v 6.43 2006/02/02 17:57:34 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,15 @@ static char const rcsid[] = "$Id: mbalign.c,v 6.42 2005/05/03 20:29:17 papadopo 
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.43  2006/02/02 17:57:34  papadopo
+* fix a rare bug computing greedy traceback
+*
 * Revision 6.42  2005/05/03 20:29:17  papadopo
 * remove use of ICEIL macro; use either a true integer ceiling or (quotient+1) as circumstances warrant
 *
@@ -1110,8 +1113,10 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
             if (state == sC) {
                 /* diag will not be changed*/
                 state = get_lastC(flast_d, lower, upper, &d, diag, Mis_cost, &row1);
-                if (row-row1 > 0) edit_script_rep(S, row-row1);
-                row = row1;
+                if (row-row1 > 0) {
+                   edit_script_rep(S, row-row1);
+                   row = row1;
+                }
             } else {
                 if (state == sI) {
                     /*row unchanged */

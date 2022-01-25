@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.14 at Apr 9, 2004 11:58 AM
+*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
 *
 **************************************************/
 
@@ -35,9 +35,9 @@ typedef struct struct_GBSeq {
    Uint4 OBbits__;
    CharPtr   locus;
    Int4   length;
-   Int4   strandedness;
-   Int4   moltype;
-   Int4   topology;
+   CharPtr   strandedness;
+   CharPtr   moltype;
+   CharPtr   topology;
    CharPtr   division;
    CharPtr   update_date;
    CharPtr   create_date;
@@ -49,6 +49,7 @@ typedef struct struct_GBSeq {
    CharPtr   accession_version;
    ValNodePtr   other_seqids;
    ValNodePtr   secondary_accessions;
+   CharPtr   project;
    ValNodePtr   keywords;
    CharPtr   segment;
    CharPtr   source;
@@ -81,14 +82,13 @@ typedef struct struct_GBReference {
    struct struct_GBReference PNTR next;
    Uint4 OBbits__;
    CharPtr   reference;
+   CharPtr   position;
    ValNodePtr   authors;
    CharPtr   consortium;
    CharPtr   title;
    CharPtr   journal;
-#define OB__GBReference_medline 0
-
-   Int4   medline;
-#define OB__GBReference_pubmed 1
+   struct struct_GBXref PNTR   xref;
+#define OB__GBReference_pubmed 0
 
    Int4   pubmed;
    CharPtr   remark;
@@ -113,6 +113,13 @@ typedef struct struct_GBFeature {
    CharPtr   key;
    CharPtr   location;
    struct struct_GBInterval PNTR   intervals;
+   CharPtr   operator__;
+#define OB__GBFeature_partial5 0
+
+   Uint1   partial5;
+#define OB__GBFeature_partial3 1
+
+   Uint1   partial3;
    struct struct_GBQualifier PNTR   quals;
 } GBFeature, PNTR GBFeaturePtr;
 
@@ -121,6 +128,26 @@ NLM_EXTERN GBFeaturePtr LIBCALL GBFeatureFree PROTO ((GBFeaturePtr ));
 NLM_EXTERN GBFeaturePtr LIBCALL GBFeatureNew PROTO (( void ));
 NLM_EXTERN GBFeaturePtr LIBCALL GBFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GBFeatureAsnWrite PROTO (( GBFeaturePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    GBXref
+*
+**************************************************/
+typedef struct struct_GBXref {
+   struct struct_GBXref PNTR next;
+   Uint4 OBbits__;
+   CharPtr   dbname;
+   CharPtr   id;
+} GBXref, PNTR GBXrefPtr;
+
+
+NLM_EXTERN GBXrefPtr LIBCALL GBXrefFree PROTO ((GBXrefPtr ));
+NLM_EXTERN GBXrefPtr LIBCALL GBXrefNew PROTO (( void ));
+NLM_EXTERN GBXrefPtr LIBCALL GBXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBXrefAsnWrite PROTO (( GBXrefPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -141,6 +168,12 @@ typedef struct struct_GBInterval {
 #define OB__GBInterval_point 2
 
    Int4   point;
+#define OB__GBInterval_iscomp 3
+
+   Uint1   iscomp;
+#define OB__GBInterval_interbp 4
+
+   Uint1   interbp;
    CharPtr   accession;
 } GBInterval, PNTR GBIntervalPtr;
 

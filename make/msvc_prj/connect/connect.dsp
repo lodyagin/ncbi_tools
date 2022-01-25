@@ -123,6 +123,14 @@ SOURCE=..\..\..\connect\ncbi_http_connector.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_lb.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_lb.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_lbsmd.h
 # End Source File
 # Begin Source File

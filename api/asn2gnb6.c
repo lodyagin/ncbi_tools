@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.63 $
+* $Revision: 1.69 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -990,6 +990,34 @@ static CharPtr FindUrlEnding(CharPtr str) {
   return ptr;
 }
 
+static Boolean CommentHasSuspiciousHtml (
+  IntAsn2gbJobPtr ajp,
+  CharPtr searchString
+)
+
+{
+  Char        ch;
+  CharPtr     ptr;
+  Int2        state;
+  ValNodePtr  matches;
+
+  if (StringHasNoText (searchString)) return FALSE;
+
+  state = 0;
+  ptr = searchString;
+  ch = *ptr;
+
+  while (ch != '\0') {
+    matches = NULL;
+    state = TextFsaNext (ajp->bad_html_fsa, state, ch, &matches);
+    if (matches != NULL) return TRUE;
+    ptr++;
+    ch = *ptr;
+  }
+
+  return FALSE;
+}
+
 NLM_EXTERN void AddCommentWithURLlinks (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
@@ -1001,6 +1029,17 @@ NLM_EXTERN void AddCommentWithURLlinks (
 {
   Char     ch;
   CharPtr  ptr;
+
+  if (GetWWW (ajp) && CommentHasSuspiciousHtml (ajp, str)) {
+    if (prefix != NULL) {
+      FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+    }
+    AddCommentStringWithTildes (ffstring, str);
+    if (suffix != NULL) {
+      FFAddOneString(ffstring, suffix, FALSE, FALSE, TILDE_IGNORE);
+    }
+    return;
+  }
 
   while (! StringHasNoText (str)) {
     ptr = StringStr (str, "http://");
@@ -4111,12 +4150,34 @@ static Int2 ProcessGapSpecialFormat (
     FixGapAtEnd (buf, ' ');
     ajp->seqGapCurrLen += endgap;
   } else if (endgap > 0) {
+    /*
     FixGapAtEnd (buf, pad);
+    */
+    FixGapAtEnd (buf, ' ');
+    ajp->seqGapCurrLen += endgap;
   }
 
   FixRemainingGaps (buf, pad);
 
   return startgapgap;
+}
+
+static void ChangeoTox (CharPtr str)
+
+{
+  Char  ch;
+
+  if (str == NULL) return;
+  ch = *str;
+  while (ch != '\0') {
+    if (ch == 'O') {
+      *str = 'X';
+    } else if (ch == 'o') {
+      *str = 'x';
+    }
+    str++;
+    ch = *str;
+  }
 }
 
 NLM_EXTERN CharPtr FormatSequenceBlock (
@@ -4181,6 +4242,11 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     } else {
       SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &tmp, SaveGBSeqSequence);
     }
+    if (ISA_aa (bsp->mol) && StringDoesHaveText (str)) {
+      if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+        ChangeoTox (str);
+      }
+    }
     gbseq->sequence = StringSave (str);
 
     tmp = gbseq->sequence;
@@ -4238,6 +4304,11 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
           SeqPortStreamInt (&bsq, start, extend - 1, Seq_strand_plus, flags, (Pointer) str, NULL);
         } else {
           SeqPortStreamInt (bsp, start, extend - 1, Seq_strand_plus, flags, (Pointer) str, NULL);
+        }
+        if (ISA_aa (bsp->mol) && StringDoesHaveText (str)) {
+          if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+            ChangeoTox (str);
+          }
         }
         sbp->bases = str;
       }
@@ -4306,6 +4377,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   return str;
 }
 
+/*
 static CharPtr insd_strd [4] = {
   NULL, "single", "double", "mixed"
 };
@@ -4317,6 +4389,7 @@ static CharPtr insd_mol [10] = {
 static CharPtr insd_top [3] = {
   NULL, "linear", "circular"
 };
+*/
 
 NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
 
@@ -4326,14 +4399,16 @@ NLM_EXTERN CharPtr FormatSlashBlock (
 )
 
 {
-  IntAsn2gbJobPtr    ajp;
-  Asn2gbSectPtr      asp;
-  GBFeaturePtr       currf, headf, nextf;
-  GBReferencePtr     currr, headr, nextr;
-  GBSeqPtr           gbseq, gbtmp;
-  IndxPtr            index;
-  INSDSeq            is;
-  Int2               moltype, strandedness, topology;
+  IntAsn2gbJobPtr  ajp;
+  Asn2gbSectPtr    asp;
+  GBFeaturePtr     currf, headf, nextf;
+  GBReferencePtr   currr, headr, nextr;
+  GBSeqPtr         gbseq, gbtmp;
+  IndxPtr          index;
+  INSDSeq          is;
+  /*
+  Int2              moltype, strandedness, topology;
+  */
 
   if (afp == NULL || bbp == NULL) return NULL;
   ajp = afp->ajp;
@@ -4405,21 +4480,26 @@ NLM_EXTERN CharPtr FormatSlashBlock (
       is.OBbits__ = gbseq->OBbits__;
       is.locus = gbseq->locus;
       is.length = gbseq->length;
+      is.strandedness = gbseq->strandedness;
+      is.moltype = gbseq->moltype;
+      is.topology = gbseq->topology;
+      /*
       strandedness = (Int2) gbseq->strandedness;
       if (strandedness < 0 || strandedness > 3) {
         strandedness = 0;
       }
-      is.strandedness = insd_strd [strandedness];
+      is.strandedness = StringSave (insd_strd [strandedness]);
       moltype = (Int2) gbseq->moltype;
       if (moltype < 0 || moltype > 9) {
         moltype = 0;
       }
-      is.moltype = insd_mol [moltype];
+      is.moltype = StringSave (insd_mol [moltype]);
       topology = (Int2) gbseq->topology;
       if (topology < 0 || topology > 2) {
         topology = 0;
       }
-      is.topology = insd_top [topology];
+      is.topology = StringSave (insd_top [topology]);
+      */
       is.division = gbseq->division;
       is.update_date = gbseq->update_date;
       is.create_date = gbseq->create_date;

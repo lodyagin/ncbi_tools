@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.349 $
+* $Revision: 6.366 $
 *
 * File Description: 
 *
@@ -344,6 +344,7 @@ extern void EnableFeaturesPerTarget (BaseFormPtr bfp);
 extern void EnableAnalysisItems (BaseFormPtr bfp, Boolean isDocSum);
 
 extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
+extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos);
 
 #define REGISTER_BIOSEQ_SEG_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Bioseq Seg","BioseqSegEditor",OBJ_BIOSEQ_SEG,0,OBJ_BIOSEQ_SEG,0,NULL,BioseqSegEditFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK BioseqSegEditFunc (Pointer data);
@@ -812,6 +813,7 @@ extern void FeatureStrandEditor (IteM i);
 extern void FeatureCitationEditor (IteM i);
 extern void FeatureExperimentEditor (IteM i);
 extern void FeatureInferenceEditor (IteM i);
+extern void FeaturePseudoEditor (IteM i);
 extern void ApplySourceQual (IteM i);
 extern void PublicApplySourceQual (IteM i);
 extern void EditSourceQual (IteM i);
@@ -918,18 +920,28 @@ typedef struct stringconstraint
 
 extern StringConstraintPtr StringConstraintFree (StringConstraintPtr scp);
 
+typedef struct pseudoconstraint
+{
+  Boolean is_pseudo;
+  Int4    featdef_type;
+} PseudoConstraintData, PNTR PseudoConstraintPtr;
+
 #define CHOICE_CONSTRAINT_ANY          1
 #define CHOICE_CONSTRAINT_QUAL_PRESENT 3
 #define CHOICE_CONSTRAINT_STRING       5
+#define CHOICE_CONSTRAINT_PSEUDO       7
 
 typedef struct choiceconstraint
 {
   Int4                constraint_type;
   ValNodePtr          qual_choice;
   StringConstraintPtr string_constraint;
+  PseudoConstraintPtr pseudo_constraint;
   FreeValNodeProc     free_vn_proc;
   CopyValNodeDataProc copy_vn_proc;
 } ChoiceConstraintData, PNTR ChoiceConstraintPtr;
+
+extern ChoiceConstraintPtr ChoiceConstraintFree (ChoiceConstraintPtr scp);
 
 typedef struct filterset 
 {
@@ -1186,8 +1198,10 @@ ConstraintChoiceDialog
  CopyValNodeDataProc       copy_vn_proc,
  CharPtr                   present_name,
  CharPtr                   text_name,
- Boolean                   clear_btn);
+ Boolean                   clear_btn,
+ Boolean                   use_pseudo);
 extern DialoG SourceConstraintDialog (GrouP h, Boolean clear_btn);
+extern Boolean DoesOneSourceMatchConstraint (BioSourcePtr biop, ChoiceConstraintPtr scp);
 extern DialoG CDSGeneProtConstraintDialog (GrouP h, Boolean clear_btn);
 extern DialoG 
 FilterGroup 
@@ -1266,7 +1280,11 @@ GetSampleForSeqEntry
 
 
 extern void ApplyGDSKeyword (IteM i);
-extern void ApplyGDSKeywordWithStringConstraint (IteM i);
+extern void ApplyTPAInferentialKeyword (IteM i);
+extern void ApplyTPAExperimentalKeyword (IteM i);
+extern void ApplyKeywordWithStringConstraint (IteM i);
+extern void RemoveKeywordWithStringConstraint (IteM i);
+
 #if defined(OS_UNIX) || defined(OS_MSWIN)
 extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data);
 #endif
@@ -1330,10 +1348,9 @@ extern Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID);
 
 extern void ConvertSelectedGapFeaturesToKnown (IteM i);
 extern void ConvertSelectedGapFeaturesToUnknown (IteM i);
-extern void ConvertAdjacentKnownGapsToSingleGaps (IteM i);
+extern void CombineAdjacentGaps (IteM i);
 
 extern void MarkGenesWithPseudoFeaturesPseudo (IteM i);
-extern void ConvertPseudoProteinNamesToProteinDescriptions (IteM i);
 
 typedef struct gaplocinfo 
 {
@@ -1354,6 +1371,22 @@ extern void ParseCollectionDateDayFirst (IteM i);
 extern void RemoveUnpublishedPublications (IteM i);
 extern void RemoveUnindexedFeatures (IteM i);
 extern void CopyLocusToLocusTag (IteM i);
+
+extern void ConvertCDSToMiscFeat (SeqFeatPtr sfp);
+extern void AdjustCodingRegionsEndingInGap (IteM i);
+
+extern void ConvertCodingRegionsWithInternalKnownGapToMiscFeat (IteM i);
+
+extern void FixOneAlignmentOverGaps (SeqAlignPtr salp, Uint2 entityID);
+extern void ConsolidateSegmentsOverKnownLengthGaps (SeqAlignPtr salp);
+
+extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp);
+extern void ConvertGapFeaturesToUnknown (IteM i);
+extern void ChangeKnownGapLength (IteM i);
+extern void AddFlankingNsToKnownLengthGaps (IteM i);
+
+extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen);
+extern Boolean DoBioseqFeaturesMatchSequenceConstraint (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintPtr scp);
 
 #ifdef __cplusplus
 }

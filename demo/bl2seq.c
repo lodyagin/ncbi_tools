@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.80 2005/10/17 14:06:44 madden Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.82 2006/01/13 16:00:02 madden Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,12 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.80 2005/10/17 14:06:44 madden Exp
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.82  2006/01/13 16:00:02  madden
+* BLAST_TwoSeqLocSets now takes SBlastSeqalignArray rather than SeqAlignPtr, remove unused variable
+*
+* Revision 6.81  2006/01/10 20:43:15  madden
+* BLAST_FormatResults now takes SBlastSeqalignArray
+*
 * Revision 6.80  2005/10/17 14:06:44  madden
 * Change message on gap parameter arg
 *
@@ -844,6 +850,7 @@ Int2 Main_new(void)
         SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
         Uint1 strand_option = 0; /* FIXME */
         SBlastOptions* search_options = NULL; /* Needed for formatting. */
+        SBlastSeqalignArray* seqalign_arr = NULL;
         
         strand_option = (Uint1) myargs[ARG_STRAND].intvalue;
 
@@ -909,7 +916,7 @@ Int2 Main_new(void)
         if (repeat_mask)
             lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
         
-        status = BLAST_TwoSeqLocSets(options, slp1, slp2, lcase_mask, &seqalign, 
+        status = BLAST_TwoSeqLocSets(options, slp1, slp2, lcase_mask, &seqalign_arr, 
                                      &filter_loc, &mask_at_hash, 
                                      &extra_returns);
 
@@ -926,10 +933,10 @@ Int2 Main_new(void)
                 return status;
         }
 
-        if (myargs[ARG_ASNOUT].strvalue) {
+        if (myargs[ARG_ASNOUT].strvalue && seqalign_arr) {
             AsnIoPtr asnout =
                AsnIoOpen(myargs[ARG_ASNOUT].strvalue, (char*)"w");
-            GenericSeqAlignSetAsnWrite(seqalign, asnout);
+            GenericSeqAlignSetAsnWrite(seqalign_arr->array[0], asnout);
             asnout = AsnIoClose(asnout);
         }
 
@@ -953,7 +960,7 @@ Int2 Main_new(void)
 
         /* Format the results */
         status = 
-            BLAST_FormatResults(seqalign, 1, slp1, filter_loc, format_info, 
+            BLAST_FormatResults(seqalign_arr, 1, slp1, filter_loc, format_info, 
                                 extra_returns);
         
         status = Blast_PrintOutputFooter(format_info, extra_returns);
@@ -974,7 +981,7 @@ Int2 Main_new(void)
         }
 
         options = BLAST_SummaryOptionsFree(options);
-        seqalign = SeqAlignSetFree(seqalign);
+        seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
         slp1 = SeqLocSetFree(slp1);
         slp2 = SeqLocSetFree(slp2);
 

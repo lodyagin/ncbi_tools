@@ -1,4 +1,4 @@
-/* $Id: composition_adjustment.h,v 1.6 2005/12/01 13:54:04 gertz Exp $
+/* $Id: composition_adjustment.h,v 1.11 2006/02/02 16:06:44 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -24,9 +24,9 @@
  * ===========================================================================*/
 /**
  * @file composition_adjustment.h
- * @author E. Michael Gertz, Alejandro Schaffer, Yi-Kuo Yu
- *
  * Definitions used in compositional score matrix adjustment
+ *
+ * @author E. Michael Gertz, Alejandro Schaffer, Yi-Kuo Yu
  */
 
 #ifndef __COMPOSITION_ADJUSTMENT__
@@ -36,8 +36,8 @@
 #include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/composition_adjustment/compo_mode_condition.h>
 
-/* Number of standard amino acids */
-#define COMPO_NUM_TRUE_AA 20
+/** Number of amino acids, including nonstandard ones */
+#define COMPO_PROTEIN_ALPHABET 26
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,20 +51,29 @@ enum { eGapChar = 0, eBchar = 2, eDchar = 4, eEchar = 5, eNchar = 13,
 
 /**
  * Represents the composition of an amino-acid sequence */
-struct Blast_AminoAcidComposition {
+typedef struct Blast_AminoAcidComposition {
     double prob[26];         /**< probabilities of each amino acid, including
                                   nonstandard amino acids */
     int numTrueAminoAcids;   /**< number of true amino acids in the sequence,
                                   omitting X characters */
-};
-typedef struct Blast_AminoAcidComposition Blast_AminoAcidComposition;
+} Blast_AminoAcidComposition;
 
+
+/**
+ * Compute the amino acid composition of a sequence.
+ *
+ * @param composition      the computed composition
+ * @param sequence         a sequence of amino acids
+ * @param length           length of the sequence
+ */
 NCBI_XBLAST_EXPORT
 void
 Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
                            const Uint1 * sequence, int length);
 
-struct Blast_MatrixInfo {
+
+/** Information about a amino-acid substitution matrix */
+typedef struct Blast_MatrixInfo {
     char * matrixName;         /**< name of the matrix */
     Int4    **startMatrix;     /**< Rescaled values of the original matrix */
     double **startFreqRatios;  /**< frequency ratios used to calculate matrix
@@ -74,14 +83,24 @@ struct Blast_MatrixInfo {
     int      positionBased;    /**< is the matrix position-based */
     double   ungappedLambda;   /**< ungapped Lambda value for this matrix
                                     in standard context */
-};
-typedef struct Blast_MatrixInfo Blast_MatrixInfo;
+} Blast_MatrixInfo;
 
+
+/** Create a Blast_MatrixInfo object
+ *
+ *  @param rows        the number of rows in the matrix, should be
+ *                     COMPO_PROTEIN_ALPHABET unless the matrix is position
+ *                     based, in which case it is the query length
+ *  @param positionBased  is this matrix position-based?
+ */
 NCBI_XBLAST_EXPORT
 Blast_MatrixInfo * Blast_MatrixInfoNew(int rows, int positionBased);
 
+
+/** Free memory associated with a Blast_MatrixInfo object */
 NCBI_XBLAST_EXPORT
 void Blast_MatrixInfoFree(Blast_MatrixInfo ** ss);
+
 
 /** Work arrays used to perform composition-based matrix adjustment */
 typedef struct Blast_CompositionWorkspace {
@@ -111,27 +130,103 @@ typedef struct Blast_CompositionWorkspace {
                                            second seq w/pseudocounts */
 } Blast_CompositionWorkspace;
 
+
+/** Create a new Blast_CompositionWorkspace object, allocating memory
+ * for all its component arrays. */
 NCBI_XBLAST_EXPORT
 Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew();
 
+
+/** Initialize the fields of a Blast_CompositionWorkspace for a specific
+ * underlying scoring matrix. */
 NCBI_XBLAST_EXPORT
 int Blast_CompositionWorkspaceInit(Blast_CompositionWorkspace * NRrecord,
                                    const char *matrixName);
 
+
+/** Free memory associated with a record of type
+ * Blast_CompositionWorkspace. */
 NCBI_XBLAST_EXPORT
 void Blast_CompositionWorkspaceFree(Blast_CompositionWorkspace ** NRrecord);
 
+
+/**
+ * Get the range of a sequence to be included when computing a
+ * composition.  This function is used for translated sequences, where
+ * the range to use when computing a composition is not the whole
+ * sequence, but is rather a range about an existing alignment.
+ *
+ * @param *pleft, *pright  left and right endpoint of the range
+ * @param subject_data     data from a translated sequence
+ * @param length           length of subject_data
+ * @param start, finish    start and finish (one past the end) of a
+ *                         existing alignment
+ */
 NCBI_XBLAST_EXPORT
 void Blast_GetCompositionRange(int * pleft, int * pright,
                                const Uint1 * subject_data, int length,
                                int start, int finish);
+
+
+/**
+ * Use composition-based statistics to adjust the scoring matrix, as
+ * described in
+ *
+ *     Schaffer, A.A., Aravind, L., Madden, T.L., Shavirin, S.,
+ *     Spouge, J.L., Wolf, Y.I., Koonin, E.V., and Altschul, S.F.
+ *     (2001), "Improving the accuracy of PSI-BLAST protein database
+ *     searches with composition-based statistics and other
+ *     refinements",  Nucleic Acids Res. 29:2994-3005.
+ *
+ * @param matrix          a scoring matrix to be adjusted [out]
+ * @param *LambdaRatio    the ratio of the corrected lambda to the
+ *                        original lambda [out]
+ * @param ss              data used to compute matrix scores
+ *
+ * @param queryProb       amino acid probabilities in the query
+ * @param resProb         amino acid probabilities in the subject
+ * @param calc_lambda     a function that can calculate the
+ *                        statistical parameter Lambda from a set of
+ *                        score frequencies.
+ * @return 0 on success, -1 on out of memory
+ */
 NCBI_XBLAST_EXPORT
 int
-Blast_CompositionBasedStats(Int4 ** matrix, double * LambdaRatio,
+Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
                             const Blast_MatrixInfo * ss,
                             const double queryProb[], const double resProb[],
                             double (*calc_lambda)(double*,int,int,double));
 
+
+/**
+ * Use compositional score matrix adjustment, as described in
+ *
+ *     Altschul, Stephen F., John C. Wootton, E. Michael Gertz, Richa
+ *     Agarwala, Aleksandr Morgulis, Alejandro A. Schaffer, and Yi-Kuo
+ *     Yu (2005) "Protein database searches using compositionally
+ *     adjusted substitution matrices", FEBS J.  272:5101-5109.
+ *
+ * to optimize a score matrix to a given set of letter frequencies.
+ *
+ * @param length1      adjusted length (not counting X) of the first
+ *                     sequence
+ * @param length2      adjusted length of the second sequence
+ * @param probArray1   letter probabilities for the first sequence,
+ *                     in the 20 letter amino-acid alphabet
+ * @param probArray2   letter probabilities for the second sequence
+ * @param pseudocounts number of pseudocounts to add the the
+ *                     probabilities for each sequence, before optimizing
+ *                     the scores.
+ * @param specifiedRE  a relative entropy that might (subject to
+ *                     fields in NRrecord) be used to as a constraint
+ *                     of the optimization problem
+ * @param NRrecord     a Blast_CompositionWorkspace that contains
+ *                     fields used for the composition adjustment and
+ *                     that will hold the output.
+ * @param lambdaComputed   the new computed value of lambda
+ *
+ * @return 0 on success, 1 on failure to converge, -1 for out-of-memory
+ */
 NCBI_XBLAST_EXPORT
 int Blast_CompositionMatrixAdj(int length1, int length2,
                                const double *probArray1,
@@ -140,6 +235,32 @@ int Blast_CompositionMatrixAdj(int length1, int length2,
                                Blast_CompositionWorkspace * NRrecord,
                                double * lambdaComputed);
 
+
+/**
+ * Compute a compositionally adjusted scoring matrix.
+ *
+ * @param matrix        the adjusted matrix
+ * @param query_composition       composition of the query sequence
+ * @param queryLength             length of the query sequence
+ * @param subject_composition     composition of the subject (database)
+ *                                sequence
+ * @param subjectLength           length of the subject sequence
+ * @param matrixInfo    information about the underlying,
+ *                      non-adjusted, scoring matrix.
+ * @param composition_adjust_mode   mode of composition-based statistics
+ *                                  to use
+ * @param RE_pseudocounts    the number of pseudocounts to use in some
+ *                           rules of composition adjustment
+ * @param NRrecord      workspace used to perform compositional
+ *                      adjustment
+ * @param *matrix_adjust_rule    rule used to compute the scoring matrix
+ *                      actually used
+ * @param calc_lambda   a function that can calculate the statistical
+ *                      parameter Lambda from a set of score
+ *                      frequencies.
+ * @return              0 for success, 1 for failure to converge,
+ *                      -1 for out of memory
+ */
 NCBI_XBLAST_EXPORT
 int
 Blast_AdjustScores(Int4 ** matrix,
@@ -148,16 +269,41 @@ Blast_AdjustScores(Int4 ** matrix,
                    const Blast_AminoAcidComposition * subject_composition,
                    int subjectLength,
                    const Blast_MatrixInfo * matrixInfo,
-                   int RE_rule,
+                   ECompoAdjustModes composition_adjust_mode,
                    int RE_pseudocounts,
                    Blast_CompositionWorkspace *NRrecord,
-                   ECompoAdjustModes *whichMode,
+                   EMatrixAdjustRule *matrix_adjust_rule,
                    double calc_lambda(double *,int,int,double));
 
+
+/**
+ * Compute an integer-valued amino-acid score matrix from a set of
+ * score frequencies.
+ *
+ * @param matrix       the preallocated matrix
+ * @param alphsize     the size of the alphabet for this matrix
+ * @param freq         a set of score frequencies
+ * @param Lambda       the desired scale of the matrix
+ */
 NCBI_XBLAST_EXPORT
 void Blast_Int4MatrixFromFreq(Int4 **matrix, int alphsize,
                               double ** freq, double Lambda);
 
+
+/**
+ * Compute the symmetric form of the relative entropy of two
+ * probability vectors
+ *
+ * In this software relative entropy is expressed in "nats",
+ * meaning that logarithms are base e. In some other scientific
+ * and engineering domains where entropy is used, the logarithms
+ * are taken base 2 and the entropy is expressed in bits.
+ *
+ * @param A    an array of length COMPO_NUM_TRUE_AA of
+ *             probabilities.
+ * @param B    a second array of length COMPO_NUM_TRUE_AA of
+ *             probabilities.
+ */
 NCBI_XBLAST_EXPORT
 double Blast_GetRelativeEntropy(const double A[], const double B[]);
 

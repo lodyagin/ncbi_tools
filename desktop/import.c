@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.52 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
@@ -218,7 +218,6 @@ static void CleanupImportPage (GraphiC g, VoidPtr data)
 }
 
 extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
-extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp);
 extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual);
 
 static void ChangeKey (Handle obj)
@@ -273,7 +272,7 @@ static void ChangeKey (Handle obj)
       sfp->qual = DialogToPointer (ifp->gbquals);
       CleanupEvidenceGBQuals (&(sfp->qual));
       VisStringDialogToGbquals (sfp, ifp->experiment, "experiment");
-      InferenceDialogToGBQuals (ifp->inference, sfp);
+      InferenceDialogToGBQuals (ifp->inference, sfp, TRUE);
       geneval = GetValue (ifp->gene);
       sep = GetTopSeqEntryForEntityID (ifp->input_entityID);
       StringCpy (title, "Feature");
@@ -2962,7 +2961,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       if (internal || genome) {
         gfp->gbppxaccns = gpp->xaccns;
         gfp->xaccnstohistory = CheckBox (f3, "Copy to Bioseq-history.replaces", NULL);
-        if (genome) {
+        if (! internal) {
           SetStatus (gfp->xaccnstohistory, TRUE);
           Hide (gfp->xaccnstohistory);
         }

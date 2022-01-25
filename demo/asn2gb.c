@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.79 $
+* $Revision: 6.87 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "2.8"
+#define ASN2GB_APP_VER "3.1"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -478,6 +478,44 @@ static void LookForRefSeq (
   }
 }
 
+static CharPtr fffmt [] = {
+  "",
+  "genbank",
+  "embl",
+  "genbank",
+  "embl",
+  "ftable",
+  NULL
+};
+
+static CharPtr ffmod [] = {
+  "",
+  "release",
+  "entrez",
+  "gbench",
+  "dump",
+  NULL
+};
+
+static CharPtr ffstl [] = {
+  "",
+  "normal",
+  "segment",
+  "master",
+  "contig",
+  NULL
+};
+
+static CharPtr ffvew [] = {
+  "",
+  "nuc",
+  "nuc",
+  "prot",
+  "prot",
+  "nuc",
+  NULL
+};
+
 static void CompareFlatFiles (
   CharPtr path1,
   CharPtr path2,
@@ -493,13 +531,15 @@ static void CompareFlatFiles (
   CstType custom,
   XtraPtr extra,
   Int2 batch,
-  CharPtr gbdjoin,
-  Boolean useGbdjoin
+  CharPtr ffdiff,
+  CharPtr asn2flat,
+  Boolean useFfdiff
 )
 
 {
 #ifdef OS_UNIX
   AsnIoPtr     aip;
+  Char         arguments [128];
   BioseqPtr    bsp;
   Char         buf [256];
   Char         cmmd [256];
@@ -527,8 +567,8 @@ static void CompareFlatFiles (
     SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks, custom);
     SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks, custom);
 
-    if (useGbdjoin) {
-      sprintf (cmmd, "%s -o %s -n %s -d reports", gbdjoin, path1, path2);
+    if (useFfdiff) {
+      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
       system (cmmd);
 
       sprintf (cmmd, "rm %s; rm %s", path1, path2);
@@ -559,6 +599,8 @@ static void CompareFlatFiles (
 
   } else if (batch == 3) {
 
+    SaveAsn2gnbk (sep, path1, format, mode, style, flags, locks, custom);
+
     aip = AsnIoOpen (path3, "w");
     if (aip == NULL) return;
 
@@ -570,6 +612,51 @@ static void CompareFlatFiles (
     bsp = (BioseqPtr) fsep->data.ptrvalue;
     if (bsp == NULL) return;
     SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+
+    arguments [0] = '\0';
+    sprintf (arguments, "-format %s -mode %s -style %s -view %s",
+             fffmt [(int) format], ffmod [(int) mode], ffstl [(int) style], ffvew [(int) format]);
+
+    sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path2);
+    system (cmmd);
+
+    if (useFfdiff) {
+      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
+      system (cmmd);
+
+      sprintf (cmmd, "rm %s; rm %s", path1, path2);
+      system (cmmd);
+    } else {
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
+      system (cmmd);
+
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
+      system (cmmd);
+
+      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
+      system (cmmd);
+
+      sprintf (cmmd, "cat %s", path3);
+      fpo = popen (cmmd, "r");
+      if (fpo != NULL) {
+        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+          fwrite (buf, 1, ct, fp);
+          fflush (fp);
+        }
+        pclose (fpo);
+      }
+
+      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
+      system (cmmd);
+    }
+
+  } else if (batch == 4) {
+
+    aip = AsnIoOpen (path3, "w");
+    if (aip == NULL) return;
+
+    SeqEntryAsnWrite (sep, aip, NULL);
+    AsnIoClose (aip);
 
     if (FindNucBioseq (sep) != NULL) {
 
@@ -605,7 +692,6 @@ static void CompareFlatFiles (
         pclose (fpo);
       }
     }
-
   }
 
 #else
@@ -683,7 +769,8 @@ static Int2 HandleMultipleRecords (
   Boolean binary,
   Boolean compressed,
   Boolean propOK,
-  CharPtr gbdjoin,
+  CharPtr ffdiff,
+  CharPtr asn2flat,
   CharPtr accn,
   FILE *logfp
 )
@@ -718,7 +805,7 @@ static Int2 HandleMultipleRecords (
   time_t          starttime, stoptime, worsttime;
   SeqDescrPtr     subcit = NULL;
   FILE            *tfp;
-  Boolean         useGbdjoin;
+  Boolean         useFfdiff;
   ValNode         vn;
 #ifdef OS_UNIX
   CharPtr         gzcatprog;
@@ -815,7 +902,7 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if ((batch == 1 || batch == 3 || format != GENBANK_FMT) && extra == NULL) {
+  if ((batch == 1 || batch == 3 || batch == 4 || format != GENBANK_FMT) && extra == NULL) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
       AsnIoClose (aip);
@@ -901,7 +988,7 @@ static Int2 HandleMultipleRecords (
           if (batch != 1) {
             printf ("%s\n", buf);
             fflush (stdout);
-            if (batch != 3) {
+            if (batch != 3 && batch != 4) {
               if (ofp != NULL) {
                 fprintf (ofp, "%s\n", buf);
                 fflush (ofp);
@@ -951,10 +1038,10 @@ static Int2 HandleMultipleRecords (
           }
 
           starttime = GetSecs ();
-          useGbdjoin = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
+          useFfdiff = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
           CompareFlatFiles (path1, path2, path3, sep, ofp,
                             format, altformat, mode, style, flags, locks,
-                            custom, extra, batch, gbdjoin, useGbdjoin);
+                            custom, extra, batch, ffdiff, asn2flat, useFfdiff);
           stoptime = GetSecs ();
           if (stoptime - starttime > worsttime) {
             worsttime = stoptime - starttime;
@@ -1158,13 +1245,14 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 #define r_argRemote      14
 #define A_argAccession   15
 #ifdef OS_UNIX
-#define q_argGbdJoin     16
-#define j_argFrom        17
-#define k_argTo          18
-#define d_argStrand      19
-#define y_argItemID      20
+#define q_argFfDiff      16
+#define n_argAsn2Flat    17
+#define j_argFrom        18
+#define k_argTo          19
+#define d_argStrand      20
+#define y_argItemID      21
 #ifdef ENABLE_ARG_X
-#define x_argAccnToSave  21
+#define x_argAccnToSave  22
 #endif
 #endif
 
@@ -1185,13 +1273,13 @@ Args myargs [] = {
     FALSE, 'h', ARG_INT, 0.0, 0, NULL},
   {"Custom Flags (2 HideMostImpFeats, 4 HideSnpFeats)", "0", NULL, NULL,
     FALSE, 'u', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Report)", "a", NULL, NULL,
+  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Batch (1 Report, 2 Sequin/Release)", "0", NULL, NULL,
+  {"Batch (1 Report, 2 Sequin/Release, 3 asn2gb/asn2flat, 4 oldasn2gb/newasn2gb)", "0", "0", "4",
     FALSE, 't', ARG_INT, 0.0, 0, NULL},
-  {"Bioseq-set is Binary", "F", NULL, NULL,
+  {"Input File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Bioseq-set is Compressed", "F", NULL, NULL,
+  {"Batch File is Compressed", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Propagate Top Descriptors", "F", NULL, NULL,
     TRUE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1203,11 +1291,15 @@ Args myargs [] = {
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
 #ifdef OS_UNIX
 #ifdef PROC_I80X86
-  {"Gbdjoin Executable", "gbdjoin", NULL, NULL,
+  {"Ffdiff Executable", "ffdiff", NULL, NULL,
     TRUE, 'q', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Asn2Flat Executable", "asn2flat", NULL, NULL,
+    TRUE, 'n', ARG_FILE_IN, 0.0, 0, NULL},
 #else
-  {"Gbdjoin Executable", "/netopt/genbank/subtool/bin/gbdjoin", NULL, NULL,
+  {"Ffdiff Executable", "/netopt/genbank/subtool/bin/ffdiff", NULL, NULL,
     TRUE, 'q', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Asn2Flat Executable", "asn2flat", NULL, NULL,
+    TRUE, 'n', ARG_FILE_IN, 0.0, 0, NULL},
 #endif
   {"SeqLoc From", "0", NULL, NULL,
     TRUE, 'j', ARG_INT, 0.0, 0, NULL},
@@ -1237,6 +1329,7 @@ Int2 Main (
   AsnIoPtr     aip = NULL;
   FmtType      altformat = (FmtType) 0;
   Char         app [64];
+  CharPtr      asn2flat = NULL;
   AsnTypePtr   atp = NULL;
   Int2         batch = 0;
   Boolean      binary = FALSE;
@@ -1247,10 +1340,10 @@ Int2 Main (
   Boolean      do_tiny_seq = FALSE;
   Boolean      do_fasta_stream = FALSE;
   XtraPtr      extra = NULL;
+  CharPtr      ffdiff = NULL;
   FlgType      flags;
   FmtType      format = GENBANK_FMT;
   Int4         from = 0;
-  CharPtr      gbdjoin = NULL;
   GBSeq        gbsq;
   GBSet        gbst;
   Int4         itemID = 0;
@@ -1259,6 +1352,7 @@ Int2 Main (
   FILE         *logfp = NULL;
   ModType      mode = SEQUIN_MODE;
   Boolean      propOK = FALSE;
+  Boolean      remote = FALSE;
   Int2         rsult = 0;
   time_t       runtime, starttime, stoptime;
   SeqEntryPtr  sep;
@@ -1305,8 +1399,6 @@ Int2 Main (
   if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
-
-  batch = (Int2) myargs [t_argBatch].intvalue;
 
   if (myargs [b_argBinary].intvalue) {
     binary = TRUE;
@@ -1418,6 +1510,10 @@ Int2 Main (
     type = 1;
   }
 
+  if (myargs [t_argBatch].intvalue > 0) {
+    batch = (Int2) myargs [t_argBatch].intvalue;
+  }
+
   if ((binary || compressed) && batch == 0) {
     if (type == 1) {
       Message (MSG_FATAL, "-b or -c cannot be used without -t or -a");
@@ -1425,7 +1521,14 @@ Int2 Main (
     }
   }
 
-  if (myargs [r_argRemote].intvalue) {
+  remote = (Boolean) myargs [r_argRemote].intvalue;
+
+  accntofetch = (CharPtr) myargs [A_argAccession].strvalue;
+  if (StringDoesHaveText (accntofetch)) {
+    remote = TRUE;
+  }
+
+  if (remote) {
 #ifdef INTERNAL_NCBI_ASN2GB
     if (! PUBSEQBioseqFetchEnable ("asn2gb", FALSE)) {
       Message (MSG_POSTERR, "PUBSEQBioseqFetchEnable failed");
@@ -1443,10 +1546,9 @@ Int2 Main (
     logfp = FileOpen (logfile, "w");
   }
 
-  accntofetch = (CharPtr) myargs [A_argAccession].strvalue;
-
 #ifdef OS_UNIX
-  gbdjoin = myargs [q_argGbdJoin].strvalue;
+  ffdiff = myargs [q_argFfDiff].strvalue;
+  asn2flat = myargs [n_argAsn2Flat].strvalue;
 
   from = myargs [j_argFrom].intvalue;
   to = myargs [k_argTo].intvalue;
@@ -1514,7 +1616,7 @@ Int2 Main (
 
   if (StringDoesHaveText (accntofetch)) {
 
-    if (myargs [r_argRemote].intvalue) {
+    if (remote) {
       sep = SeqEntryFromAccnOrGi (accntofetch);
       if (sep != NULL) {
         ProcessOneSeqEntry (sep, myargs [o_argOutputFile].strvalue,
@@ -1530,7 +1632,7 @@ Int2 Main (
                                    myargs [o_argOutputFile].strvalue,
                                    format, altformat, mode, style, flags, locks,
                                    custom, extra, type, batch, binary, compressed,
-                                   propOK, gbdjoin, accn, logfp);
+                                   propOK, ffdiff, asn2flat, accn, logfp);
   } else {
 
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
@@ -1553,7 +1655,7 @@ Int2 Main (
     FileClose (logfp);
   }
 
-  if (myargs [r_argRemote].intvalue) {
+  if (remote) {
     LocalSeqFetchDisable ();
     PubMedFetchDisable ();
 #ifdef INTERNAL_NCBI_ASN2GB

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.57 $
+* $Revision: 6.62 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.62  2006/02/06 19:00:15  kans
+* added CreateFeatureFetchPolicyUserObject
+*
+* Revision 6.61  2006/01/23 20:57:04  kans
+* cosmetic change
+*
+* Revision 6.60  2006/01/23 16:39:57  kans
+* added CreateAnnotDescCommentPolicyUserObject
+*
+* Revision 6.59  2006/01/17 20:47:05  kans
+* fixed AddIDsToGenomeProjectsDBUserObject
+*
+* Revision 6.58  2006/01/17 18:25:06  kans
+* support for genomeprojectsdb user object
+*
 * Revision 6.57  2005/10/26 21:30:46  kans
 * bug fix in AddSecondaryAccnToEntry provided by Joe Carlson
 *
@@ -4941,7 +4956,7 @@ NLM_EXTERN UserObjectPtr CreateModelEvidenceUserObject (
 )
 
 {
- UserFieldPtr    curr;
+  UserFieldPtr   curr;
   ObjectIdPtr    oip;
   UserFieldPtr   prev = NULL;
   UserObjectPtr  uop;
@@ -5259,5 +5274,128 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr 
   ufp->data.intvalue = to;
 
   prev->next = ufp;
+}
+
+NLM_EXTERN UserObjectPtr CreateGenomeProjectsDBUserObject (
+  void
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("GenomeProjectsDB");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN UserObjectPtr AddIDsToGenomeProjectsDBUserObject (
+  UserObjectPtr uop,
+  Int4 projectID,
+  Int4 parentID
+)
+
+{
+  UserFieldPtr   curr;
+  UserFieldPtr   prev = NULL;
+  UserFieldPtr   last = NULL;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "GenomeProjectsDB") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ProjectID");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = projectID;
+
+  if (prev != NULL) {
+    prev->next = ufp;
+  } else {
+    uop->data = ufp;
+  }
+  last = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ParentID");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = parentID;
+
+  last->next = ufp;
+
+  return uop;
+}
+
+/* annot desc comment policy user object */
+
+NLM_EXTERN UserObjectPtr CreateAnnotDescCommentPolicyUserObject (
+  Boolean showInCommentBlock
+)
+
+{
+  UserFieldPtr   curr;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("AnnotDescCommentPolicy");
+  uop->type = oip;
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Policy");
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  if (showInCommentBlock) {
+    curr->data.ptrvalue = (Pointer) StringSave ("ShowInComment");
+  } else {
+    curr->data.ptrvalue = (Pointer) StringSave ("ShowInNote");
+  }
+
+  uop->data = curr;
+  return uop;
+}
+
+/* feature fetch policy user object */
+
+NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
+  CharPtr policy
+)
+
+{
+  UserFieldPtr   curr;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (StringHasNoText (policy)) return NULL;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("FeatureFetchPolicy");
+  uop->type = oip;
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Policy");
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (policy);
+
+  uop->data = curr;
+  return uop;
 }
 

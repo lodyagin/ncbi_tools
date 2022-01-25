@@ -44,6 +44,28 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.21  2006/01/17 17:50:01  bollin
+* allow FindReplaceInEntity to search for a string made up of whitespace, as
+* long as whole_word is not specified
+*
+* Revision 6.20  2006/01/10 18:13:56  kans
+* FindReplAligns does not have case for SAS_DISC, since visit function recursively presents these components separately
+*
+* Revision 6.19  2006/01/09 21:15:03  bollin
+* allow punctuation to terminate a word in find replace
+*
+* Revision 6.18  2006/01/04 21:26:57  kans
+* FSA hit does not need code from validator unstructured source test, cleaned up variable names
+*
+* Revision 6.17  2006/01/04 20:39:41  kans
+* added FindStringsInEntity using finite state machine, general cleanup of code
+*
+* Revision 6.16  2005/12/29 21:42:06  kans
+* only call callback if text was found or replaced
+*
+* Revision 6.15  2005/12/29 20:54:41  kans
+* FindReplaceInEntity takes callback and userdata
+*
 * Revision 6.14  2005/09/21 14:39:09  bollin
 * fixed bug in FindReplace where if the whole-word flag was specified but
 * the substring was found in a not-whole-word context earlier in the string
@@ -83,7 +105,9 @@
 * using NUM_SEQID, added TPA ids to arrays
 *
 * Revision 6.2  2000/11/03 20:36:00  kans
-* FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign, no longer using AsnExpOptExplore because of the difficulty of replacing with a larger string (TF + JK)
+* FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign,
+* no longer using AsnExpOptExplore because of the difficulty of replacing with a
+* larger string (TF + JK)
 *
 * Revision 6.1  1999/03/05 23:31:07  kans
 * FindInEntityX was not initializing flen, replen
@@ -98,31 +122,31 @@
 * added whole_word parameter to FindInEntity and FindInEntityX, and protected
 * against multiple ObjMgrAlsoSelects on a single itemID
 *
- * Revision 5.1  1996/09/06  20:20:41  kans
- * keeps going even if ObjMgrTypeFind returns NULL (e.g., on OBJ_BIOSEQ_SEG),
- * and adds a case_counts parameter for case sensitive/insensitive searches.
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 1.7  1996/02/28  04:53:06  ostell
- * fix to prevernt recursion on substring replaces
- *
- * Revision 1.6  1996/02/26  20:24:05  kans
- * replace needs MemCopy instead of StringMove (JO), and set dirty flag
- *
- * Revision 1.5  1996/01/03  23:06:32  ostell
- * support for longer replaces, controlled updating
- *
- * Revision 1.3  1996/01/02  18:40:07  ostell
- * simplified code.
- *
- * Revision 1.2  1996/01/01  00:05:14  kans
- * replaced StringStr with StringISearch to ignore case
- *
- * Revision 1.1  1995/12/31  18:13:14  kans
- * Initial revision
- *
+* Revision 5.1  1996/09/06  20:20:41  kans
+* keeps going even if ObjMgrTypeFind returns NULL (e.g., on OBJ_BIOSEQ_SEG),
+* and adds a case_counts parameter for case sensitive/insensitive searches.
+*
+* Revision 5.0  1996/05/28  13:23:23  ostell
+* Set to revision 5.0
+*
+* Revision 1.7  1996/02/28  04:53:06  ostell
+* fix to prevernt recursion on substring replaces
+*
+* Revision 1.6  1996/02/26  20:24:05  kans
+* replace needs MemCopy instead of StringMove (JO), and set dirty flag
+*
+* Revision 1.5  1996/01/03  23:06:32  ostell
+* support for longer replaces, controlled updating
+*
+* Revision 1.3  1996/01/02  18:40:07  ostell
+* simplified code.
+*
+* Revision 1.2  1996/01/01  00:05:14  kans
+* replaced StringStr with StringISearch to ignore case
+*
+* Revision 1.1  1995/12/31  18:13:14  kans
+* Initial revision
+*
 * Revision 1.1.1.1  1995/10/19 18:42:10  sad
 * Initial version
 *
@@ -137,46 +161,42 @@
 #include <subutil.h>
 #include <findrepl.h>
 
-/* internal structure passed to callbacks */
+/* callback type for search/replace functions */
+
+typedef void (*FindReplFunc) (CharPtr PNTR strp, Pointer fspdata);
+
+/* internal data structure */
 
 typedef struct findstruct {
-  Uint2    entityID;
-  CharPtr  find_string;
-  CharPtr  replace_string;
-  Boolean  case_counts;
-  Boolean  whole_word;
-  Boolean  do_replace;
-  Boolean  select_item;
-  Int2     send_update;
-  Boolean  did_find;
-  Boolean  did_replace;
-  Boolean  dirty;
-  Boolean  descFilter [SEQDESCR_MAX];
-  Boolean  featFilter [FEATDEF_MAX];
-  Boolean  seqidFilter [NUM_SEQID];
-  int      d [256];
-  size_t   subLen;
+  Uint2         entityID;
+  FindReplFunc  func;
+  FindReplProc  callback;
+  Pointer       userdata;
+
+  CharPtr       find_string;
+  CharPtr       replace_string;
+  Boolean       case_counts;
+  Boolean       whole_word;
+  Int4          findLen;
+  Int4          replaceLen;
+
+  Boolean       select_item;
+  Int2          send_update;
+  Boolean       did_find;
+  Boolean       did_replace;
+  Boolean       dirty;
+
+  Boolean       descFilter [SEQDESCR_MAX];
+  Boolean       featFilter [FEATDEF_MAX];
+  Boolean       seqidFilter [NUM_SEQID];
+
+  int           d [256];
+  TextFsaPtr    fsa;
 } FindStruct, PNTR FindStructPtr;
 
-#define PID_NOTSET 0
-#define PID_DBTAG  1
-#define PID_NAME   2
-#define PID_ML     3
-#define PID_STR    4
-
-#define NAMESTD_LAST     0
-#define NAMESTD_FIRST    1
-#define NAMESTD_MIDDLE   2
-#define NAMESTD_FULL     3
-#define NAMESTD_INITIALS 4
-#define NAMESTD_SUFFIX   5
-#define NAMESTD_TITLE    6
-
-#define AUTHLIST_STRUCTURED 1
-#define AUTHLIST_ML         2
-#define AUTHLIST_STRING     3
-  
 #define FINDREPL_BUFFER_MAX  1000000
+
+/* BOYER-MOORE SEARCH FUNCTIONS */
 
 /* StringSearch and StringISearch use the Boyer-Moore algorithm, as described
    in Niklaus Wirth, Algorithms and Data Structures, Prentice- Hall, Inc.,
@@ -226,8 +246,8 @@ static CharPtr FindSubString (
   return NULL;
 }
 
-/* passed subLen and d array to avoid repeated initialization of the Boyer-Moore
-   displacement table */
+/* passed subLen and d array to avoid repeated initialization
+   of the Boyer-Moore displacement table */
 
 static CharPtr SearchForString (
   CharPtr str,
@@ -251,34 +271,177 @@ static CharPtr SearchForString (
   ptr = FindSubString (str, sub, case_counts, strLen, subLen, d);
   if (ptr == NULL) return NULL;
 
-  if (whole_word) {
-    while (keep_looking && ptr != NULL)
-    {
-      keep_looking = FALSE;
-      if (ptr > str) {
-        tmp = ptr - 1;
-        if (! IS_WHITESP (*tmp))
-        {
-          keep_looking = TRUE;
-        }
+  if (! whole_word) return ptr;
+
+  while (keep_looking && ptr != NULL) {
+    keep_looking = FALSE;
+    if (ptr > str) {
+      tmp = ptr - 1;
+      if (! IS_WHITESP (*tmp)) {
+        keep_looking = TRUE;
       }
-      if (!keep_looking)
-      {
-        tmp = ptr + StringLen (sub);
-        if (*tmp != '\0' && (! IS_WHITESP (*tmp)))
-        {
-          keep_looking = TRUE;
-        }
+    }
+    if (! keep_looking) {
+      tmp = ptr + StringLen (sub);
+      if (*tmp != '\0' && (! IS_WHITESP (*tmp)) && (! ispunct (*tmp))) {
+        keep_looking = TRUE;
       }
-      if (keep_looking)
-      {
-        ptr = FindSubString (ptr + subLen, sub, case_counts, strLen, subLen, d);
-      }
+    }
+    if (keep_looking) {
+      ptr = FindSubString (ptr + subLen, sub, case_counts, strLen, subLen, d);
     }
   }
 
   return ptr;
 }
+
+static void BoyerMooreFindString (
+  CharPtr PNTR strp,
+  Pointer userdata
+)
+
+{
+  FindStructPtr  fsp;
+  CharPtr        searchString;
+
+  if (strp == NULL || userdata == NULL) return;
+  fsp = (FindStructPtr) userdata;
+
+  searchString = *strp;
+  if (SearchForString (searchString, fsp->find_string, fsp->case_counts,
+                       fsp->whole_word, fsp->findLen, fsp->d) != NULL) {
+    fsp->did_find = TRUE;
+  }
+}
+
+static void BoyerMooreReplaceString (
+  CharPtr PNTR strp,
+  Pointer userdata
+)
+
+{
+  Int4           buffSize;
+  FindStructPtr  fsp;
+  Int4           searchLen;
+  CharPtr        searchString;
+  CharPtr        substringPtr;
+  Boolean        wasChanged;
+  CharPtr        workingBuffer;
+
+  if (strp == NULL || userdata == NULL) return;
+  fsp = (FindStructPtr) userdata;
+
+  searchString = *strp;
+  searchLen  = StringLen (searchString);
+
+  wasChanged = FALSE;
+
+  /*------------------------------------------------*/
+  /* Make a guess of how big a working buffer we'll */
+  /* need based on a worst case scenario.           */
+  /*                                                */
+  /*   A = Max occurrences of find string =         */
+  /*               searchLen / findLen              */
+  /*                                                */
+  /*   B = Size increase for each replacement =     */
+  /*               replaceLen - findLen             */
+  /*                                                */
+  /*   Maximum resultant string size =              */
+  /*               searchLen + (A * B)              */
+  /*                                                */
+  /*------------------------------------------------*/
+
+  if (fsp->replaceLen > fsp->findLen) {
+      buffSize = searchLen + ((searchLen/fsp->findLen) * (fsp->replaceLen - fsp->findLen));
+      if (buffSize > FINDREPL_BUFFER_MAX) {
+        buffSize = FINDREPL_BUFFER_MAX;
+      }
+  } else {
+    buffSize = searchLen;
+  }
+
+  workingBuffer = (CharPtr) MemNew (buffSize + 2);
+  if (workingBuffer == NULL) return;
+
+  workingBuffer[0] = '\0';
+
+  /*----------------------------------------*/
+  /* Create a new string with all instances */
+  /* of the find string replaced by the     */
+  /* replace string.                        */
+  /*----------------------------------------*/
+
+  while ((substringPtr = SearchForString (searchString, fsp->find_string,
+          fsp->case_counts, fsp->whole_word, fsp->findLen, fsp->d)) != NULL) {
+    wasChanged = TRUE;
+    substringPtr [0] = '\0';
+
+    if (StringLen (workingBuffer) + StringLen (searchString) > buffSize) return;
+
+    StringCat (workingBuffer, searchString);
+    StringCat (workingBuffer, fsp->replace_string);
+    substringPtr [0] = 'x';
+    searchString = substringPtr + fsp->findLen;
+  }
+
+  if (searchString != NULL) {
+    StringCat (workingBuffer, searchString);
+  }
+
+  /*-------------------------------------*/
+  /* If any replacements were made, then */
+  /* swap in the new string for the old. */
+  /*-------------------------------------*/
+
+  if (wasChanged) {
+    MemFree (*strp);
+    (*strp) = workingBuffer;
+
+    fsp->did_replace = TRUE;
+    fsp->dirty = TRUE;
+  } else {
+    MemFree (workingBuffer);
+  }
+}
+
+/* FINITE-STATE AUTOMATON SEARCH FUNCTION */
+
+static void FSAFindStrings (
+  CharPtr PNTR strp,
+  Pointer userdata
+)
+
+{
+  Char           ch;
+  FindStructPtr  fsp;
+  CharPtr        ptr;
+  CharPtr        searchString;
+  Int2           state;
+  ValNodePtr     matches;
+
+  if (strp == NULL || userdata == NULL) return;
+  fsp = (FindStructPtr) userdata;
+
+  searchString = *strp;
+  if (searchString == NULL) return;
+
+  state = 0;
+  ptr = searchString;
+  ch = *ptr;
+
+  while (ch != '\0') {
+    matches = NULL;
+    state = TextFsaNext (fsp->fsa, state, ch, &matches);
+    if (matches != NULL) {
+      fsp->did_find = TRUE;
+      return;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+}
+
+/* MASTER SEARCH FUNCTION CALLS DESIGNATED FUNC CALLBACK */
 
 /*=======================================================================*/
 /*                                                                       */
@@ -298,116 +461,15 @@ static CharPtr SearchForString (
 /*                                                                       */
 /*=======================================================================*/
 
-static Boolean FindReplString (
+static void FindReplString (
   CharPtr PNTR strp,
   FindStructPtr fsp
 )
 
 {
-  Boolean wasChanged;
-  Int4    replaceLen;
-  Int4    findLen;
-  Int4    searchLen;
-  Int4    buffSize;
-  CharPtr workingBuffer;
-  CharPtr searchString;
-  CharPtr substringPtr;
+  if (strp == NULL || fsp == NULL || fsp->func == NULL) return;
 
-  if (strp == NULL || fsp == NULL) return FALSE;
-
-  replaceLen = StringLen (fsp->replace_string);
-  findLen    = StringLen (fsp->find_string);
-  searchLen  = StringLen (*strp);
-
-  searchString = *strp;
-  wasChanged = FALSE;
-
-  if (! fsp->do_replace) {
-    if (SearchForString (searchString, fsp->find_string,
-          fsp->case_counts, fsp->whole_word,
-          findLen, fsp->d) != NULL) {
-
-      fsp->did_find = TRUE;
-    }
-    return TRUE;
-  }
-
-  /*------------------------------------------------*/
-  /* Make a guess of how big a working buffer we'll */
-  /* need based on a worst case scenario.           */
-  /*                                                */
-  /*   A = Max occurrences of find string =         */
-  /*               searchLen / findLen              */
-  /*                                                */
-  /*   B = Size increase for each replacement =     */
-  /*               replaceLen - findLen             */
-  /*                                                */
-  /*   Maximum resultant string size =              */
-  /*               searchLen + (A * B)              */
-  /*                                                */
-  /*------------------------------------------------*/
-
-  if (replaceLen > findLen)
-    {
-      buffSize = searchLen + ((searchLen/findLen) * (replaceLen - findLen));
-      if (buffSize > FINDREPL_BUFFER_MAX)
-        buffSize = FINDREPL_BUFFER_MAX;
-    }
-  else
-    buffSize = searchLen;
-
-  workingBuffer = (CharPtr) MemNew (buffSize + 2);
-  if (workingBuffer == NULL)
-    return FALSE;
-
-  workingBuffer[0] = '\0';
-
-  /*----------------------------------------*/
-  /* Create a new string with all instances */
-  /* of the find string replaced by the     */
-  /* replace string.                        */
-  /*----------------------------------------*/
-
-  while ((substringPtr = SearchForString (searchString, fsp->find_string,
-          fsp->case_counts, fsp->whole_word,
-          findLen, fsp->d)) != NULL)
-    {
-      wasChanged = TRUE;
-      substringPtr[0] = '\0';
-
-      if (StringLen (workingBuffer) + StringLen (searchString) > buffSize)
-        return FALSE;
-
-      StringCat (workingBuffer, searchString);
-      StringCat (workingBuffer, fsp->replace_string);
-      substringPtr[0] = 'x';
-      searchString = substringPtr + findLen;
-    }
-
-  if (searchString != NULL)
-    StringCat (workingBuffer, searchString);
-
-  /*-------------------------------------*/
-  /* If any replacements were made, then */
-  /* swap in the new string for the old. */
-  /*-------------------------------------*/
-
-  if (wasChanged)
-    {
-      MemFree (*strp);
-      (*strp) = workingBuffer;
-
-      fsp->did_replace = TRUE;
-      fsp->dirty = TRUE;
-    }
-  else
-    MemFree (workingBuffer);
-
-  /*---------------------*/
-  /* Return successfully */
-  /*---------------------*/
-
-  return TRUE;
+  fsp->func (strp, (Pointer) fsp);
 }
 
 /*=======================================================================*/
@@ -464,26 +526,25 @@ static void FindReplDbxrefs (
 
 static void FindReplAffil (
   AffilPtr pAffil,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pAffil == NULL)
-    return;
+  if (pAffil == NULL) return;
 
   if (pAffil->choice == 1) {
-    FindReplString (&(pAffil->affil)      , pFindStruct);
+    FindReplString (&(pAffil->affil)      , fsp);
   } else {
-    FindReplString (&(pAffil->affil)      , pFindStruct);
-    FindReplString (&(pAffil->div)        , pFindStruct);
-    FindReplString (&(pAffil->city)       , pFindStruct);
-    FindReplString (&(pAffil->sub)        , pFindStruct);
-    FindReplString (&(pAffil->country)    , pFindStruct);
-    FindReplString (&(pAffil->street)     , pFindStruct);
-    FindReplString (&(pAffil->email)      , pFindStruct);
-    FindReplString (&(pAffil->fax)        , pFindStruct);
-    FindReplString (&(pAffil->phone)      , pFindStruct);
-    FindReplString (&(pAffil->postal_code), pFindStruct);
+    FindReplString (&(pAffil->affil)      , fsp);
+    FindReplString (&(pAffil->div)        , fsp);
+    FindReplString (&(pAffil->city)       , fsp);
+    FindReplString (&(pAffil->sub)        , fsp);
+    FindReplString (&(pAffil->country)    , fsp);
+    FindReplString (&(pAffil->street)     , fsp);
+    FindReplString (&(pAffil->email)      , fsp);
+    FindReplString (&(pAffil->fax)        , fsp);
+    FindReplString (&(pAffil->phone)      , fsp);
+    FindReplString (&(pAffil->postal_code), fsp);
   }
 }
 
@@ -493,9 +554,23 @@ static void FindReplAffil (
 /*                                                                       */
 /*=======================================================================*/
 
+#define NAMESTD_LAST     0
+#define NAMESTD_FIRST    1
+#define NAMESTD_MIDDLE   2
+#define NAMESTD_FULL     3
+#define NAMESTD_INITIALS 4
+#define NAMESTD_SUFFIX   5
+#define NAMESTD_TITLE    6
+
+#define PID_NOTSET 0
+#define PID_DBTAG  1
+#define PID_NAME   2
+#define PID_ML     3
+#define PID_STR    4
+
 static void FindReplAuthor (
   AuthorPtr pAuthor,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
@@ -503,36 +578,33 @@ static void FindReplAuthor (
   CharPtr    pNameStr;
   ValNodePtr pDbxref;
 
-  if (pAuthor == NULL)
-    return;
+  if (pAuthor == NULL) return;
 
-  FindReplAffil (pAuthor->affil, pFindStruct);
+  FindReplAffil (pAuthor->affil, fsp);
   
-  switch (pAuthor->name->choice)
-    {
+  switch (pAuthor->name->choice) {
     case PID_NOTSET :
       break;
     case PID_DBTAG :
       pDbxref = pAuthor->name->data;
-      FindReplDbxrefs (pDbxref, pFindStruct);
+      FindReplDbxrefs (pDbxref, fsp);
       break;
     case PID_NAME :
       pNameStandard = pAuthor->name->data;
-      if (pNameStandard != NULL)
-      {
-        FindReplString (&(pNameStandard->names [NAMESTD_LAST])    , pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_FIRST])   , pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_MIDDLE])  , pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_FULL])    , pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_INITIALS]), pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_SUFFIX])  , pFindStruct);
-        FindReplString (&(pNameStandard->names [NAMESTD_TITLE])   , pFindStruct);
+      if (pNameStandard != NULL) {
+        FindReplString (&(pNameStandard->names [NAMESTD_LAST])    , fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_FIRST])   , fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_MIDDLE])  , fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_FULL])    , fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_INITIALS]), fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_SUFFIX])  , fsp);
+        FindReplString (&(pNameStandard->names [NAMESTD_TITLE])   , fsp);
       }
       break;
     case PID_ML :
     case PID_STR :
       pNameStr = pAuthor->name->data;
-      FindReplString (&pNameStr, pFindStruct);
+      FindReplString (&pNameStr, fsp);
       break;
     default:
       break;
@@ -545,6 +617,10 @@ static void FindReplAuthor (
 /*                                                                       */
 /*=======================================================================*/
 
+#define AUTHLIST_STRUCTURED 1
+#define AUTHLIST_ML         2
+#define AUTHLIST_STRING     3
+  
 static void FindReplAuthlist (
   AuthListPtr alp,
   FindStructPtr fsp
@@ -555,30 +631,25 @@ static void FindReplAuthlist (
   CharPtr    szAuthor;
   AuthorPtr  pAuthor;
 
-  if (alp == NULL)
-    return;
+  if (alp == NULL) return;
 
   FindReplAffil (alp->affil, fsp);
   vnpNames = alp->names;
-  while (vnpNames != NULL)
-    {
-      if (alp->choice == AUTHLIST_STRUCTURED)
-      {
-        pAuthor = (AuthorPtr) vnpNames->data.ptrvalue;
-        if (pAuthor != NULL)
-          FindReplAuthor (pAuthor, fsp);
+  while (vnpNames != NULL) {
+    if (alp->choice == AUTHLIST_STRUCTURED) {
+      pAuthor = (AuthorPtr) vnpNames->data.ptrvalue;
+      if (pAuthor != NULL) {
+        FindReplAuthor (pAuthor, fsp);
       }
-      else
-      {
-        szAuthor = (CharPtr) vnpNames->data.ptrvalue;
-        if (szAuthor != NULL)
-          {
-            FindReplString (&szAuthor, fsp);
-            vnpNames->data.ptrvalue = szAuthor;
-          }
+    } else {
+      szAuthor = (CharPtr) vnpNames->data.ptrvalue;
+      if (szAuthor != NULL) {
+        FindReplString (&szAuthor, fsp);
+        vnpNames->data.ptrvalue = szAuthor;
       }
-      vnpNames = vnpNames->next;
     }
+    vnpNames = vnpNames->next;
+  }
 }
 
 /*=======================================================================*/
@@ -589,14 +660,13 @@ static void FindReplAuthlist (
 
 static void FindReplCitRetract (
   CitRetractPtr pCitRetract,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pCitRetract == NULL)
-    return;
+  if (pCitRetract == NULL) return;
 
-  FindReplString (&(pCitRetract->exp), pFindStruct);
+  FindReplString (&(pCitRetract->exp), fsp);
 }
 
 /*=======================================================================*/
@@ -607,32 +677,22 @@ static void FindReplCitRetract (
 
 static void FindReplImprint (
   ImprintPtr pImprint,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
+  if (pImprint == NULL) return;
 
-  /*------------------*/
-  /* Check parameters */
-  /*------------------*/
+  FindReplString (&(pImprint->volume)   , fsp);
+  FindReplString (&(pImprint->issue)    , fsp);
+  FindReplString (&(pImprint->pages)    , fsp);
+  FindReplString (&(pImprint->section)  , fsp);
+  FindReplString (&(pImprint->part_sup) , fsp);
+  FindReplString (&(pImprint->language) , fsp);
+  FindReplString (&(pImprint->part_supi), fsp);
 
-  if (pImprint == NULL)
-    return;
-
-  /*-------------------------*/
-  /* Do the find and replace */
-  /*-------------------------*/
-
-  FindReplString (&(pImprint->volume)   , pFindStruct);
-  FindReplString (&(pImprint->issue)    , pFindStruct);
-  FindReplString (&(pImprint->pages)    , pFindStruct);
-  FindReplString (&(pImprint->section)  , pFindStruct);
-  FindReplString (&(pImprint->part_sup) , pFindStruct);
-  FindReplString (&(pImprint->language) , pFindStruct);
-  FindReplString (&(pImprint->part_supi), pFindStruct);
-
-  FindReplAffil (pImprint->pub, pFindStruct);
-  FindReplCitRetract (pImprint->retract, pFindStruct);
+  FindReplAffil (pImprint->pub, fsp);
+  FindReplCitRetract (pImprint->retract, fsp);
 }
 
 /*=======================================================================*/
@@ -643,31 +703,31 @@ static void FindReplImprint (
 
 static void FindReplCitBook (
   CitBookPtr pCitBook,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
   AffilPtr    afp;
-  ValNodePtr  vnp;
   CharPtr     tmpStr;
+  ValNodePtr  vnp;
 
   if (pCitBook == NULL) return;
 
-  FindReplStringList (pCitBook->title, pFindStruct);
-  FindReplImprint (pCitBook->imp, pFindStruct);
-  FindReplAuthlist (pCitBook->authors, pFindStruct);
-  FindReplStringList (pCitBook->title, pFindStruct);
-  FindReplStringList (pCitBook->coll, pFindStruct);
+  FindReplStringList (pCitBook->title, fsp);
+  FindReplImprint (pCitBook->imp, fsp);
+  FindReplAuthlist (pCitBook->authors, fsp);
+  FindReplStringList (pCitBook->title, fsp);
+  FindReplStringList (pCitBook->coll, fsp);
 
   if (pCitBook->othertype == 1) {
     for (vnp = (ValNodePtr) pCitBook->otherdata; vnp != NULL; vnp = vnp->next) {
       switch (vnp->choice) {
         case 1 :
-          FindReplString ((CharPtr PNTR) &(vnp->data.ptrvalue), pFindStruct);
+          FindReplString ((CharPtr PNTR) &(vnp->data.ptrvalue), fsp);
           break;
         case 3 :
           afp = (AffilPtr) vnp->data.ptrvalue;
-          FindReplAffil (afp, pFindStruct);
+          FindReplAffil (afp, fsp);
           break;
         default :
           break;
@@ -675,35 +735,34 @@ static void FindReplCitBook (
     }
   } else if (pCitBook->othertype == 2) {
     tmpStr = (CharPtr) pCitBook->otherdata;
-    FindReplString (&tmpStr, pFindStruct);
+    FindReplString (&tmpStr, fsp);
     pCitBook->otherdata = tmpStr;
   }
 }
 
 static void FindReplCitArt (
   CitArtPtr pCitArt,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  CitJourPtr pCitJournal;
-  CitBookPtr pCitBook;
+  CitBookPtr  pCitBook;
+  CitJourPtr  pCitJournal;
 
-  if (pCitArt == NULL)
-    return;
+  if (pCitArt == NULL) return;
 
-  FindReplAuthlist (pCitArt->authors, pFindStruct);
+  FindReplAuthlist (pCitArt->authors, fsp);
   if (pCitArt->fromptr != NULL) {
     switch (pCitArt->from) {
     case 1 :
       pCitJournal = (CitJourPtr) pCitArt->fromptr;
-      FindReplStringList (pCitArt->title, pFindStruct);
-      FindReplImprint (pCitJournal->imp, pFindStruct);
+      FindReplStringList (pCitArt->title, fsp);
+      FindReplImprint (pCitJournal->imp, fsp);
       break;
     case 2 :
     case 3 :
       pCitBook = (CitBookPtr) pCitArt->fromptr;
-      FindReplCitBook (pCitBook, pFindStruct);
+      FindReplCitBook (pCitBook, fsp);
       break;
     default :
       break;
@@ -719,7 +778,7 @@ static void FindReplCitArt (
 
 static void FindReplMedlineEntry (
   MedlineEntryPtr pMedlineEntry,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
@@ -728,61 +787,53 @@ static void FindReplMedlineEntry (
   MedlineRnPtr    pRn;
   CharPtr         tmpStr;
 
-  if (pMedlineEntry == NULL)
-    return;
+  if (pMedlineEntry == NULL) return;
 
-  FindReplCitArt(pMedlineEntry->cit, pFindStruct);
-  FindReplString (&(pMedlineEntry->abstract), pFindStruct);
+  FindReplCitArt(pMedlineEntry->cit, fsp);
+  FindReplString (&(pMedlineEntry->abstract), fsp);
 
   pRn = pMedlineEntry->substance;
-  while (pRn != NULL)
-    {
-      FindReplString (&(pRn->cit), pFindStruct);
-      FindReplString (&(pRn->name), pFindStruct);
-      pRn = pRn->next;
-    }
+  while (pRn != NULL) {
+    FindReplString (&(pRn->cit), fsp);
+    FindReplString (&(pRn->name), fsp);
+    pRn = pRn->next;
+  }
 
   pMesh = pMedlineEntry->mesh;
-  while (pMesh != NULL)
-    {
-      FindReplString (&(pMesh->term), pFindStruct);
-      pMesh = pMesh->next;
-    }
+  while (pMesh != NULL) {
+    FindReplString (&(pMesh->term), fsp);
+    pMesh = pMesh->next;
+  }
 
-  if (pMedlineEntry->xref != NULL)
-    {
-      tmpStr = (CharPtr) pMedlineEntry->xref->data.ptrvalue;
-      FindReplString (&tmpStr, pFindStruct);
-      pMedlineEntry->xref->data.ptrvalue = tmpStr;
-    }
+  if (pMedlineEntry->xref != NULL) {
+    tmpStr = (CharPtr) pMedlineEntry->xref->data.ptrvalue;
+    FindReplString (&tmpStr, fsp);
+    pMedlineEntry->xref->data.ptrvalue = tmpStr;
+  }
 
-  if (pMedlineEntry->idnum != NULL)
-    {
-      tmpStr = (CharPtr) pMedlineEntry->idnum->data.ptrvalue;
-      FindReplString (&tmpStr, pFindStruct);
-      pMedlineEntry->idnum->data.ptrvalue = tmpStr;
-    }
+  if (pMedlineEntry->idnum != NULL) {
+    tmpStr = (CharPtr) pMedlineEntry->idnum->data.ptrvalue;
+    FindReplString (&tmpStr, fsp);
+    pMedlineEntry->idnum->data.ptrvalue = tmpStr;
+  }
 
-  if (pMedlineEntry->pub_type != NULL)
-    {
-      tmpStr = (CharPtr) pMedlineEntry->pub_type->data.ptrvalue;
-      FindReplString (&tmpStr, pFindStruct);
-      pMedlineEntry->pub_type->data.ptrvalue = tmpStr;
-    }
+  if (pMedlineEntry->pub_type != NULL) {
+    tmpStr = (CharPtr) pMedlineEntry->pub_type->data.ptrvalue;
+    FindReplString (&tmpStr, fsp);
+    pMedlineEntry->pub_type->data.ptrvalue = tmpStr;
+  }
 
-  if (pMedlineEntry->gene != NULL)
-    {
-      tmpStr = (CharPtr) pMedlineEntry->gene->data.ptrvalue;
-      FindReplString (&tmpStr, pFindStruct);
-      pMedlineEntry->gene->data.ptrvalue = tmpStr;
-    }
+  if (pMedlineEntry->gene != NULL) {
+    tmpStr = (CharPtr) pMedlineEntry->gene->data.ptrvalue;
+    FindReplString (&tmpStr, fsp);
+    pMedlineEntry->gene->data.ptrvalue = tmpStr;
+  }
 
   pField = pMedlineEntry->mlfield;
-  while (pField != NULL)
-    {
-      FindReplString (&(pField->str), pFindStruct);
-      pField = pField->next;
-    }
+  while (pField != NULL) {
+    FindReplString (&(pField->str), fsp);
+    pField = pField->next;
+  }
 }
 
 /*=======================================================================*/
@@ -822,8 +873,7 @@ static void FindReplPub (
   }
   if (vnp->data.ptrvalue == NULL) return;
 
-  switch (vnp->choice)
-    {
+  switch (vnp->choice) {
     case PUB_Gen :
       cgp = (CitGenPtr) vnp->data.ptrvalue;
       FindReplAuthlist (cgp->authors, fsp);
@@ -832,8 +882,7 @@ static void FindReplPub (
       FindReplString (&(cgp->issue), fsp);
       FindReplString (&(cgp->pages), fsp);
       FindReplString (&(cgp->title), fsp);
-      if (cgp->journal != NULL)
-      {
+      if (cgp->journal != NULL) {
         tmpStr = (CharPtr) cgp->journal->data.ptrvalue;
         FindReplString (&tmpStr, fsp);
         cgp->journal->data.ptrvalue = tmpStr;
@@ -854,8 +903,7 @@ static void FindReplPub (
       break;
     case PUB_Journal :
       cjp = (CitJourPtr) vnp->data.ptrvalue;
-      if (cjp->title != NULL)
-      {
+      if (cjp->title != NULL) {
         tmpStr = (CharPtr) cjp->title->data.ptrvalue;
         FindReplString (&tmpStr, fsp);
         cjp->title->data.ptrvalue = tmpStr;
@@ -869,16 +917,14 @@ static void FindReplPub (
     case PUB_Proc :
       cbp = (CitBookPtr) vnp->data.ptrvalue;
       cpvnp = cbp->otherdata;
-      while (cpvnp != NULL)
-      {
-        if (cpvnp->choice == 1)
-          {
-            tmpStr = (CharPtr) cpvnp->data.ptrvalue;
-            FindReplString (&tmpStr, fsp);
-            cpvnp->data.ptrvalue = tmpStr;
-          }
-        else if (cpvnp->choice == 3)
+      while (cpvnp != NULL) {
+        if (cpvnp->choice == 1) {
+          tmpStr = (CharPtr) cpvnp->data.ptrvalue;
+          FindReplString (&tmpStr, fsp);
+          cpvnp->data.ptrvalue = tmpStr;
+        } else if (cpvnp->choice == 3) {
           FindReplAffil((AffilPtr) cpvnp->data.ptrvalue, fsp);
+        }
         cpvnp = cpvnp->next;
       }
       break;
@@ -1021,20 +1067,17 @@ static void FindReplBioSource (
 
 static void FindReplPatentSeqId (
   PatentSeqIdPtr pPatentSeqId,
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pPatentSeqId == NULL)
-    return;
+  if (pPatentSeqId == NULL) return;
+  if (pPatentSeqId->cit == NULL) return;
 
-  if (pPatentSeqId->cit == NULL)
-    return;
-
-  FindReplString (&(pPatentSeqId->cit->country), pFindStruct);
-  FindReplString (&(pPatentSeqId->cit->number), pFindStruct);
-  FindReplString (&(pPatentSeqId->cit->app_number), pFindStruct);
-  FindReplString (&(pPatentSeqId->cit->doc_type), pFindStruct);
+  FindReplString (&(pPatentSeqId->cit->country), fsp);
+  FindReplString (&(pPatentSeqId->cit->number), fsp);
+  FindReplString (&(pPatentSeqId->cit->app_number), fsp);
+  FindReplString (&(pPatentSeqId->cit->doc_type), fsp);
 }
 
 /*=======================================================================*/
@@ -1045,16 +1088,15 @@ static void FindReplPatentSeqId (
 
 static void FindReplTextSeqId (
   TextSeqIdPtr pTextSeqId, 
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pTextSeqId == NULL)
-    return;
+  if (pTextSeqId == NULL) return;
 
-  FindReplString (&(pTextSeqId->name), pFindStruct);
-  FindReplString (&(pTextSeqId->accession), pFindStruct);
-  FindReplString (&(pTextSeqId->release), pFindStruct);
+  FindReplString (&(pTextSeqId->name), fsp);
+  FindReplString (&(pTextSeqId->accession), fsp);
+  FindReplString (&(pTextSeqId->release), fsp);
 } 
 
 /*=======================================================================*/
@@ -1065,15 +1107,14 @@ static void FindReplTextSeqId (
 
 static void FindReplGiim (
   GiimPtr pGiim, 
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pGiim == NULL)
-    return;
+  if (pGiim == NULL) return;
 
-  FindReplString (&(pGiim->db), pFindStruct);
-  FindReplString (&(pGiim->release), pFindStruct);
+  FindReplString (&(pGiim->db), fsp);
+  FindReplString (&(pGiim->release), fsp);
 } 
 
 /*=======================================================================*/
@@ -1084,14 +1125,13 @@ static void FindReplGiim (
 
 static void FindReplPDBSeqId (
   PDBSeqIdPtr pPDBSeqId, 
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pPDBSeqId == NULL)
-    return;
+  if (pPDBSeqId == NULL) return;
 
-  FindReplString (&(pPDBSeqId->mol), pFindStruct);
+  FindReplString (&(pPDBSeqId->mol), fsp);
 }
 
 /*=======================================================================*/
@@ -1102,14 +1142,13 @@ static void FindReplPDBSeqId (
 
 static void FindReplObjectId (
   ObjectIdPtr pObjectId, 
-  FindStructPtr pFindStruct
+  FindStructPtr fsp
 )
 
 {
-  if (pObjectId == NULL)
-    return;
+  if (pObjectId == NULL) return;
 
-  FindReplString (&(pObjectId->str), pFindStruct);
+  FindReplString (&(pObjectId->str), fsp);
 }
 
 /*=======================================================================*/
@@ -1127,35 +1166,16 @@ static void FindReplSeqId (
   FindStructPtr  fsp;
   Uint1          subtype;
 
-  /*------------------*/
-  /* Check parameters */
-  /*------------------*/
-
-  if (sip == NULL)
-    return;
-
+  if (sip == NULL) return;
   fsp = (FindStructPtr) userdata;
-  if (fsp == NULL)
-    return;
 
-  /*-----------------------------------*/
-  /* Check to see if we're supposed to */
-  /* process this subtype or not.      */
-  /*-----------------------------------*/
+  /* check subtype against filter */
 
   subtype = sip->choice;
-  if (subtype >= NUM_SEQID)
-    return;
-  if (! fsp->seqidFilter [subtype])
-    return;
+  if (subtype >= NUM_SEQID) return;
+  if (! fsp->seqidFilter [subtype]) return;
 
-  /*------------------------------*/
-  /* Do search/replace on all the */
-  /* different SeqId types.       */
-  /*------------------------------*/
-
-  switch (subtype)
-    {
+  switch (subtype) {
     case SEQID_NOT_SET :
       break;
     case SEQID_LOCAL :
@@ -1216,6 +1236,9 @@ static void FindReplSendMessages (
   if (fsp->select_item && (fsp->did_find || fsp->did_replace)) {
     ObjMgrAlsoSelect (fsp->entityID, itemID, itemtype, 0, NULL);
   }
+  if (fsp->callback != NULL && (fsp->did_find || fsp->did_replace)) {
+    fsp->callback (fsp->entityID, itemID, itemtype, fsp->userdata);
+  }
 }
 
 /*=======================================================================*/
@@ -1233,6 +1256,8 @@ static void FindReplBioseqs (
   FindStructPtr  fsp;
   SeqIdPtr       sip;
 
+  if (bsp == NULL) return;
+
   fsp = (FindStructPtr) userdata;
   fsp->did_find = FALSE;
   fsp->did_replace = FALSE;
@@ -1241,7 +1266,9 @@ static void FindReplBioseqs (
     FindReplSeqId (sip, userdata);
   }
 
-  SeqMgrReplaceInBioseqIndex(bsp);
+  if (fsp->did_replace) {
+    SeqMgrReplaceInBioseqIndex (bsp);
+  }
 
   FindReplSendMessages (fsp, bsp->idx.itemID, bsp->idx.itemtype);
 }
@@ -1265,6 +1292,8 @@ static void FindReplAligns (
   SeqLocPtr      slp;
   StdSegPtr      ssp;
 
+  if (sap == NULL) return;
+
   fsp = (FindStructPtr) userdata;
   fsp->did_find = FALSE;
   fsp->did_replace = FALSE;
@@ -1273,6 +1302,8 @@ static void FindReplAligns (
   FindReplSeqId (sap->master, userdata);
 
   if (sap->segs == NULL) return;
+
+  /* SAS_DISC recursively presented by visit function, so removed here */
 
   switch (sap->segtype) {
     case SAS_DENDIAG :
@@ -1297,12 +1328,6 @@ static void FindReplAligns (
         }
       }
       break;
-    case SAS_DISC :
-      /* recursive */
-      for (sap = (SeqAlignPtr) sap->segs; sap != NULL; sap = sap->next) {
-        FindReplAligns (sap, userdata);
-      }
-      break;
     default :
       break;
   }
@@ -1323,6 +1348,8 @@ static void FindReplGraphs (
 
 {
   FindStructPtr  fsp;
+
+  if (sgp == NULL) return;
 
   fsp = (FindStructPtr) userdata;
   fsp->did_find = FALSE;
@@ -1358,6 +1385,8 @@ static void FindReplFeats (
   RnaRefPtr      rrp;
   Uint1          subtype;
   tRNAPtr        trp;
+
+  if (sfp == NULL) return;
 
   fsp = (FindStructPtr) userdata;
   fsp->did_find = FALSE;
@@ -1498,6 +1527,8 @@ static void FindReplDescs (
   PubdescPtr     pdp;
   Uint1          subtype;
 
+  if (sdp == NULL) return;
+
   fsp = (FindStructPtr) userdata;
   fsp->did_find = FALSE;
   fsp->did_replace = FALSE;
@@ -1613,6 +1644,7 @@ static void FindReplSubmitBlock (
   if (ssp == NULL) return;
   sub = ssp->sub;
   if (sub == NULL) return;
+
   fsp->did_find = FALSE;
   fsp->did_replace = FALSE;
 
@@ -1644,6 +1676,8 @@ static void FindReplSubmitBlock (
   FindReplSendMessages (fsp, ssp->idx.itemID, ssp->idx.itemtype);
 }
 
+/* EXTERNAL FIND-REPLACE FUNCTIONS */
+
 /*=======================================================================*/
 /*                                                                       */
 /*  FindReplaceInEntity() - New find/replace function.                   */
@@ -1662,7 +1696,9 @@ NLM_EXTERN void FindReplaceInEntity (
   BoolPtr descFilter,
   BoolPtr featFilter,
   BoolPtr seqidFilter,
-  Boolean do_seqid_local
+  Boolean do_seqid_local,
+  FindReplProc callback,
+  Pointer userdata
 )
 
 {
@@ -1672,8 +1708,10 @@ NLM_EXTERN void FindReplaceInEntity (
   ObjMgrDataPtr  omdp;
   SeqEntryPtr    sep = NULL;
   SeqSubmitPtr   ssp = NULL;
+  size_t         subLen;
 
-  if (entityID == 0 || StringHasNoText (find_string)) return;
+  if (entityID == 0 || find_string == NULL 
+      || (whole_word && StringHasNoText (find_string))) return;
 
   omdp = ObjMgrGetData (entityID);
   if (omdp != NULL) {
@@ -1698,29 +1736,38 @@ NLM_EXTERN void FindReplaceInEntity (
   MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
 
   fs.entityID = entityID;
+  if (do_replace) {
+    fs.func = BoyerMooreReplaceString;
+  } else {
+    fs.func = BoyerMooreFindString;
+  }
+  fs.callback = callback;
+  fs.userdata = userdata;
+
   fs.find_string = find_string;
   fs.replace_string = replace_string;
   fs.case_counts = case_counts;
   fs.whole_word = whole_word;
-  fs.do_replace = do_replace;
+  fs.findLen = StringLen (find_string);
+  fs.replaceLen = StringLen (replace_string);
+
   fs.select_item = select_item;
   fs.send_update = send_update;
-
   fs.did_find = FALSE;
   fs.did_replace = FALSE;
   fs.dirty = FALSE;
 
   /* build Boyer-Moore displacement array in advance */
 
-  fs.subLen = StringLen (find_string);
+  subLen = StringLen (find_string);
 
   for (ch = 0; ch < 256; ch++) {
-    fs.d [ch] = fs.subLen;
+    fs.d [ch] = subLen;
   }
-  for (j = 0; j < (int) (fs.subLen - 1); j++) {
+  for (j = 0; j < (int) (subLen - 1); j++) {
     ch = (int) (case_counts ? find_string [j] : TO_UPPER (find_string [j]));
     if (ch >= 0 && ch <= 255) {
-      fs.d [ch] = fs.subLen - j - 1;
+      fs.d [ch] = subLen - j - 1;
     }
   }
 
@@ -1779,6 +1826,141 @@ NLM_EXTERN void FindReplaceInEntity (
 
 /*=======================================================================*/
 /*                                                                       */
+/*  FindStringsInEntity() - Multi-string find function.                  */
+/*                                                                       */
+/*=======================================================================*/
+
+NLM_EXTERN void FindStringsInEntity (
+  Uint2 entityID,
+  CharPtr PNTR find_strings,
+  Boolean case_counts,
+  Boolean whole_word,
+  Boolean select_item,
+  Int2 send_update,
+  BoolPtr descFilter,
+  BoolPtr featFilter,
+  BoolPtr seqidFilter,
+  Boolean do_seqid_local,
+  FindReplProc callback,
+  Pointer userdata
+)
+
+{
+  FindStruct     fs;
+  int            j;
+  ObjMgrDataPtr  omdp;
+  SeqEntryPtr    sep = NULL;
+  SeqSubmitPtr   ssp = NULL;
+
+  if (entityID == 0 || find_strings == NULL) return;
+
+  omdp = ObjMgrGetData (entityID);
+  if (omdp != NULL) {
+    switch (omdp->datatype) {
+      case OBJ_SEQSUB :
+        ssp = (SeqSubmitPtr) omdp->dataptr;
+        if (ssp != NULL && ssp->datatype == 1) {
+          sep = (SeqEntryPtr) ssp->data;
+        }
+        break;
+      case OBJ_BIOSEQ :
+        sep = (SeqEntryPtr) omdp->choice;
+      case OBJ_BIOSEQSET :
+        sep = (SeqEntryPtr) omdp->choice;
+      default :
+        break;
+    }
+  }
+  /* sep = GetTopSeqEntryForEntityID (entityID); */
+  if (sep == NULL) return;
+
+  MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
+
+  fs.entityID = entityID;
+  fs.func = FSAFindStrings;
+  fs.callback = callback;
+  fs.userdata = userdata;
+
+  fs.find_string = NULL;
+  fs.replace_string = NULL;
+  fs.case_counts = case_counts;
+  fs.whole_word = whole_word;
+  fs.findLen = 0;
+  fs.replaceLen = 0;
+
+  fs.select_item = select_item;
+  fs.send_update = send_update;
+  fs.did_find = FALSE;
+  fs.did_replace = FALSE;
+  fs.dirty = FALSE;
+
+  /* build finite state machine in advance */
+
+  fs.fsa = TextFsaNew ();
+
+  for (j = 0; find_strings [j] != NULL; j++) {
+    TextFsaAdd (fs.fsa, find_strings [j]);
+  }
+
+  /* if desc or feat filter arrays not supplied, default to all TRUE */
+
+  if (descFilter != NULL) {
+    MemCopy ((Pointer) &fs.descFilter, (Pointer) descFilter, sizeof (fs.descFilter));
+  } else {
+    MemSet ((Pointer) &fs.descFilter, (int) TRUE, sizeof (fs.descFilter));
+  }
+
+  if (featFilter != NULL) {
+    MemCopy ((Pointer) &fs.featFilter, (Pointer) featFilter, sizeof (fs.featFilter));
+  } else {
+    MemSet ((Pointer) &fs.featFilter, (int) TRUE, sizeof (fs.featFilter));
+  }
+
+  /* if seqid filter array not supplied, default to all FALSE */
+
+  if (seqidFilter != NULL) {
+    MemCopy ((Pointer) &fs.seqidFilter, (Pointer) seqidFilter, sizeof (fs.seqidFilter));
+  } else if (do_seqid_local) {
+    MemSet ((Pointer) &fs.seqidFilter, (int) FALSE, sizeof (fs.seqidFilter));
+    fs.seqidFilter [SEQID_LOCAL] = TRUE;
+  } else {
+    MemSet ((Pointer) &fs.seqidFilter, (int) FALSE, sizeof (fs.seqidFilter));
+  }
+
+  /* ensure feature subtype is set in sfp->idx block */
+
+  AssignIDsInEntity (entityID, 0, NULL);
+
+  /* visit callbacks that find/replace specific fields */
+
+  VisitBioseqsInSep (sep, (Pointer) &fs, FindReplBioseqs);
+
+  VisitFeaturesInSep (sep, (Pointer) &fs, FindReplFeats);
+
+  VisitAlignmentsInSep (sep, (Pointer) &fs, FindReplAligns);
+
+  VisitGraphsInSep (sep, (Pointer) &fs, FindReplGraphs);
+
+  VisitDescriptorsInSep (sep, (Pointer) &fs, FindReplDescs);
+
+  if (ssp != NULL) {
+    FindReplSubmitBlock (ssp, &fs);
+  }
+
+  /* clean up finite state machine */
+
+  TextFsaFree (fs.fsa);
+
+  /* send select message, if applicable */
+
+  if (fs.send_update == UPDATE_ONCE && fs.dirty) {
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+}
+
+/*=======================================================================*/
+/*                                                                       */
 /*  FindReplaceString() - find/replace just one string.                  */
 /*                                                                       */
 /*=======================================================================*/
@@ -1795,35 +1977,41 @@ NLM_EXTERN void FindReplaceString (
   int         ch;
   FindStruct  fs;
   int         j;
+  size_t      subLen;
 
   if (strp == NULL || StringHasNoText (find_string)) return;
 
   MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
 
   fs.entityID = 0;
+  fs.func = BoyerMooreReplaceString;
+  fs.callback = NULL;
+  fs.userdata = NULL;
+
   fs.find_string = find_string;
   fs.replace_string = replace_string;
   fs.case_counts = case_counts;
   fs.whole_word = whole_word;
-  fs.do_replace = TRUE;
-  fs.select_item = FALSE;
-  fs.send_update = FALSE;
+  fs.findLen = StringLen (find_string);
+  fs.replaceLen = StringLen (replace_string);
 
+  fs.select_item = FALSE;
+  fs.send_update = UPDATE_NEVER;
   fs.did_find = FALSE;
   fs.did_replace = FALSE;
   fs.dirty = FALSE;
 
   /* build Boyer-Moore displacement array in advance */
 
-  fs.subLen = StringLen (find_string);
+  subLen = StringLen (find_string);
 
   for (ch = 0; ch < 256; ch++) {
-    fs.d [ch] = fs.subLen;
+    fs.d [ch] = subLen;
   }
-  for (j = 0; j < (int) (fs.subLen - 1); j++) {
+  for (j = 0; j < (int) (subLen - 1); j++) {
     ch = (int) (case_counts ? find_string [j] : TO_UPPER (find_string [j]));
     if (ch >= 0 && ch <= 255) {
-      fs.d [ch] = fs.subLen - j - 1;
+      fs.d [ch] = subLen - j - 1;
     }
   }
 

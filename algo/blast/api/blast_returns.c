@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.24 2005/06/09 17:05:18 dondosha Exp $
+/* $Id: blast_returns.c,v 1.25 2006/01/23 16:39:11 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Manipulating data returned from BLAST other than Seq-aligns
  */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.24 2005/06/09 17:05:18 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.25 2006/01/23 16:39:11 papadopo Exp $";
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
@@ -160,12 +160,6 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
           sprintf(buffer, "Number of HSP's successfully gapped: %ld", 
                   (long) gapped_stats->good_extensions);
           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-          if (gapped_stats->extra_extensions) {
-              sprintf(buffer, 
-                  "Number of extra gapped extensions for HSPs above %4.1f: %ld", 
-                  search_params->expect, (long) gapped_stats->extra_extensions);
-              add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-          }
       }
    }
 

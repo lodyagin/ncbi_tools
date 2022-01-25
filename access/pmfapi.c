@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.83 $
+* $Revision: 1.85 $
 *
 * File Description: 
 *
@@ -374,6 +374,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
     } else {
       ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for gi %ld is %s", (long) uid, str);
     }
+    MemFree (str);
   }
 #endif
 
@@ -1033,7 +1034,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   CONN         conn;
   PsConfirm    ps;
   SeqEntryPtr  sep;
-  CharPtr      str;
+  CharPtr      str = NULL;
 #ifdef OS_UNIX
   clock_t      starttime;
   clock_t      stoptime;
@@ -1068,7 +1069,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 
   str = CONN_Description (conn);
   if (StringHasNoText (str)) {
-    str = "?";
+    str = StringSave ("?");
   }
 
   sep = PubSeqWaitForReply (conn);
@@ -1098,6 +1099,8 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
                "PubSeqSynchronousQuery failed for gi %ld, date/time %s, URL is %s",
                (long) uid, buf, str);
   }
+
+  MemFree (str);
 
   return sep;
 }

@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.51 2005/10/20 20:58:58 madden Exp $
+/* $Id: twoseq_api.c,v 1.54 2006/01/23 16:39:50 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -110,6 +110,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
     Boolean do_megablast = FALSE;
     Boolean do_discontig = FALSE;
     Int4 greedy_align = 0;
+    Int4 diag_separation = 0;
     Int2 word_size = basic_options->word_size;
     char *matrix;
 
@@ -162,8 +163,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
                                  program_number, 
                                  do_megablast,
                                  basic_options->word_threshold,
-                                 word_size,
-                                 0);             /* no variable wordsize */ 
+                                 word_size);
  
     /* If discontiguous megablast is specified, choose
        the 11-of-21 optimal template).*/
@@ -218,11 +218,15 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
  
     score_options->gapped_calculation = basic_options->gapped_calculation;
  
+    if (do_megablast)
+        diag_separation = 6;
+
     BLAST_FillHitSavingOptions(hit_options, 
                                basic_options->cutoff_evalue,
                                0,     /* default number of alignments saved */
                                score_options->gapped_calculation,
-                               0);    /* do not perform culling */
+                               0,     /* do not perform culling */
+                               diag_separation);
 
     hit_options->percent_identity = 0;   /* no percent identity cutoff */
     hit_options->longest_intron = basic_options->longest_intron;   /* For uneven gap statistics. */
@@ -242,6 +246,7 @@ BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
     SeqLocPtr subject_slp = NULL;
     Boolean seq1_is_aa, seq2_is_aa;
     Int2 status = 0;
+    SBlastSeqalignArray* seqalign_arr=NULL;
 
     /* sanity checks */
 
@@ -285,7 +290,15 @@ BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
        return -1;
 
     status = BLAST_TwoSeqLocSets(basic_options, query_slp, subject_slp, 
-                                 NULL, seqalign_out, NULL, NULL, NULL);
+                                 NULL, &seqalign_arr, NULL, NULL, NULL);
+
+    if (seqalign_arr && seqalign_arr->num_queries)
+    {
+           *seqalign_out = seqalign_arr->array[0];
+           seqalign_arr->array[0] = NULL;
+           SBlastSeqalignArrayFree(seqalign_arr);
+    }
+
     SeqLocFree(query_slp);
     SeqLocFree(subject_slp);
 
@@ -355,7 +368,7 @@ Int2
 BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
                     SeqLoc* query_seqloc, SeqLoc* subject_seqloc, 
                     SeqLoc* masking_locs,
-                    SeqAlign **seqalign_out,
+                    SBlastSeqalignArray* *seqalign_arr,
                     SeqLoc** filter_out,
                     Boolean* mask_at_hash,
                     Blast_SummaryReturn* *extra_returns_ptr)
@@ -379,7 +392,7 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
     if (!status) {
         status = 
             Blast_TwoSeqLocSetsAdvanced(query_seqloc, subject_seqloc, 
-                masking_locs, options, NULL, seqalign_out, filter_out, 
+                masking_locs, options, NULL, seqalign_arr, filter_out, 
                 extra_returns);
     }
 

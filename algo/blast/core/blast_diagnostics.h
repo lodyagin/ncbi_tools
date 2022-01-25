@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.h,v 1.9 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_diagnostics.h,v 1.10 2006/01/23 16:33:18 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -71,8 +71,6 @@ typedef struct BlastGappedStats {
    Int4 seqs_ungapped_passed; /**< Number of sequences with top HSP 
                                  after ungapped extension passing the
                                  e-value threshold. */
-   Int4 extra_extensions; /**< Number of extra gapped extensions performed for
-                             ungapped HSPs above the e-value threshold. */
    Int4 extensions; /**< Total number of gapped extensions performed. */
    Int4 good_extensions; /**< Number of HSPs below the e-value threshold after
                             gapped extension */

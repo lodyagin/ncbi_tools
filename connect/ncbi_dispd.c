@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.68 2005/07/11 18:23:14 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.77 2006/02/21 14:57:59 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,28 +34,19 @@
 #include "ncbi_ansi_ext.h"
 #include "ncbi_comm.h"
 #include "ncbi_dispd.h"
+#include "ncbi_lb.h"
 #include "ncbi_priv.h"
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
-#include <connect/ncbi_service_misc.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
-#if 0/*defined(_DEBUG) && !defined(NDEBUG)*/
-#  define SERV_DISPD_DEBUG 1
-#endif /*_DEBUG && !NDEBUG*/
-
 /* Lower bound of up-to-date/out-of-date ratio */
 #define SERV_DISPD_STALE_RATIO_OK  0.8
-/* Default rate increase if svc runs locally */
+/* Default rate increase 20% if svc runs locally */
 #define SERV_DISPD_LOCAL_SVC_BONUS 1.2
-
-
-/* Dispatcher messaging support */
-static int               s_MessageIssued = 0;
-static FDISP_MessageHook s_MessageHook = 0;
 
 
 #ifdef __cplusplus
@@ -63,7 +54,7 @@ extern "C" {
 #endif /*__cplusplus*/
     static void        s_Reset      (SERV_ITER);
     static SSERV_Info* s_GetNextInfo(SERV_ITER, HOST_INFO*);
-    static int/*bool*/ s_Update     (SERV_ITER, TNCBI_Time, const char*);
+    static int/*bool*/ s_Update     (SERV_ITER, TNCBI_Time, const char*, int);
     static void        s_Close      (SERV_ITER);
 
     static const SSERV_VTable s_op = {
@@ -74,56 +65,42 @@ extern "C" {
 #endif /*__cplusplus*/
 
 
-int g_NCBIConnectRandomSeed = 0;
+struct SDISPD_Data {
+    int/*bool*/    disp_fail;
+    SConnNetInfo*  net_info;
+    SLB_Candidate* cand;
+    size_t         n_cand;
+    size_t         a_cand;
+};
 
 
-typedef struct {
-    SSERV_Info*   info;
-    double        status;
-} SDISPD_Node;
-
-
-typedef struct {
-    int/*bool*/   disp_fail;
-    SConnNetInfo* net_info;
-    SDISPD_Node*  s_node;
-    size_t        n_node;
-    size_t        a_node;
-    const char*   name;
-} SDISPD_Data;
-
-
-static int/*bool*/ s_AddServerInfo(SDISPD_Data* data, SSERV_Info* info)
+static int/*bool*/ s_AddServerInfo(struct SDISPD_Data* data, SSERV_Info* info)
 {
     size_t i;
-
+    const char* name = SERV_NameOfInfo(info);
     /* First check that the new server info updates an existing one */
-    for (i = 0; i < data->n_node; i++) {
-        if (SERV_EqualInfo(data->s_node[i].info, info)) {
+    for (i = 0; i < data->n_cand; i++) {
+        if (strcasecmp(name, SERV_NameOfInfo(data->cand[i].info))
+            &&  SERV_EqualInfo(info, data->cand[i].info)) {
             /* Replace older version */
-            free(data->s_node[i].info);
-            data->s_node[i].info = info;
+            free((void*) data->cand[i].info);
+            data->cand[i].info = info;
             return 1;
         }
     }
-
     /* Next, add new service to the list */
-    if (data->n_node == data->a_node) {
-        size_t n = data->a_node + 10;
-        SDISPD_Node* temp;
-
-        if (data->s_node)
-            temp = (SDISPD_Node*) realloc(data->s_node, sizeof(*temp) * n);
-        else
-            temp = (SDISPD_Node*) malloc(sizeof(*temp) * n);
+    if (data->n_cand == data->a_cand) {
+        size_t n = data->a_cand + 10;
+        SLB_Candidate* temp = (SLB_Candidate*)
+            (data->cand
+             ? realloc(data->cand, n * sizeof(*temp))
+             : malloc (            n * sizeof(*temp)));
         if (!temp)
             return 0;
-
-        data->s_node = temp;
-        data->a_node = n;
+        data->cand = temp;
+        data->a_cand = n;
     }
-
-    data->s_node[data->n_node++].info = info;
+    data->cand[data->n_cand++].info = info;
     return 1;
 }
 
@@ -134,11 +111,11 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
-/*ARGSUSED*/
-static int/*bool*/ s_ParseHeader(const char* header, void *iter,
-                                 int/*ignored*/ server_error)
+static int/*bool*/ s_ParseHeader(const char* header,
+                                 void*       iter,
+                                 int         server_error)
 {
-    SERV_Update((SERV_ITER) iter, header);
+    SERV_Update((SERV_ITER) iter, header, server_error);
     return 1/*header parsed okay*/;
 }
 
@@ -155,71 +132,33 @@ static int/*bool*/ s_Adjust(SConnNetInfo* net_info,
                             void*         iter,
                             unsigned int  n)
 {
-    SDISPD_Data* data = (SDISPD_Data*)((SERV_ITER) iter)->data;
+    struct SDISPD_Data* data = (struct SDISPD_Data*)((SERV_ITER) iter)->data;
     return data->disp_fail ? 0/*failed*/ : 1/*try again*/;
 }
 
 
 static int/*bool*/ s_Resolve(SERV_ITER iter)
 {
-    static const char service[]  = "service";
-    static const char address[]  = "address";
-    static const char platform[] = "platform";
-    SDISPD_Data* data = (SDISPD_Data*) iter->data;
-    SConnNetInfo *net_info = data->net_info;
+    struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
+    SConnNetInfo* net_info = data->net_info;
     CONNECTOR conn = 0;
-    const char *arch;
-    unsigned int ip;
-    char addr[64];
     char* s;
     CONN c;
 
-    /* Dispatcher CGI arguments (sacrifice some if they all do not fit) */
-    if ((arch = CORE_GetPlatform()) != 0 && *arch)
-        ConnNetInfo_PreOverrideArg(net_info, platform, arch);
-    if (*net_info->client_host && !strchr(net_info->client_host, '.') &&
-        (ip = SOCK_gethostbyname(net_info->client_host)) != 0 &&
-        SOCK_ntoa(ip, addr, sizeof(addr)) == 0) {
-        if ((s = (char*) malloc(strlen(net_info->client_host) +
-                                strlen(addr) + 3)) != 0) {
-            sprintf(s, "%s(%s)", net_info->client_host, addr);
-        } else
-            s = net_info->client_host;
-    } else
-        s = net_info->client_host;
-    if (s && *s)
-        ConnNetInfo_PreOverrideArg(net_info, address, s);
-    if (s != net_info->client_host)
-        free(s);
-    if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->name)) {
-        ConnNetInfo_DeleteArg(net_info, platform);
-        if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->name)) {
-            ConnNetInfo_DeleteArg(net_info, address);
-            if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->name))
-                return 0/*failed*/;
-        }
-    }
-    /* Reset request method to be GET ('cause no HTTP body will follow) */
-    net_info->req_method = eReqMethod_Get;
+    assert(!!net_info->stateless == !!iter->stateless);
     /* Obtain additional header information */
     if ((!(s = SERV_Print(iter, 0))
-         || ConnNetInfo_OverrideUserHeader(net_info, s))                     &&
-        ConnNetInfo_OverrideUserHeader(net_info, net_info->stateless
-                                       ?"Client-Mode: STATELESS_ONLY\r\n"
-                                       :"Client-Mode: STATEFUL_CAPABLE\r\n") &&
-        ConnNetInfo_OverrideUserHeader(net_info,
-                                       "Dispatch-Mode: INFORMATION_ONLY\r\n")){
-        ConnNetInfo_OverrideUserHeader
-            (net_info, "User-Agent: NCBIServiceDispatcher/"
-             DISP_PROTOCOL_VERSION
-#ifdef NCBI_CXX_TOOLKIT
-             " (C++ Toolkit)"
-#else
-             " (C Toolkit)"
-#endif /*NCBI_CXX_TOOLKIT*/
-             "\r\n");
+         || ConnNetInfo_OverrideUserHeader(net_info, s))                    &&
+        ConnNetInfo_OverrideUserHeader(net_info, !iter->promiscuous
+                                       ? "Dispatch-Mode: INFORMATION_ONLY\r\n"
+                                       : "Dispatch-Mode: PROMISCUOUS\r\n")  &&
+        ConnNetInfo_OverrideUserHeader(net_info, iter->reverse_dns
+                                       ? "Client-Mode: REVERSE_DNS\r\n"
+                                       : !net_info->stateless
+                                       ? "Client-Mode: STATEFUL_CAPABLE\r\n"
+                                       : "Client-Mode: STATELESS_ONLY\r\n")) {
+        /* all the rest in the net_info structure should be already fine */
         data->disp_fail = 0;
-        /* All the rest in the net_info structure is fine with us */
         conn = HTTP_CreateConnectorEx(net_info, fHCC_SureFlush, s_ParseHeader,
                                       s_Adjust, iter/*data*/, 0/*cleanup*/);
     }
@@ -236,95 +175,101 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     /* This will also send all the HTTP data, and trigger header callback */
     CONN_Flush(c);
     CONN_Close(c);
-    return ((SDISPD_Data*) iter->data)->n_node != 0;
+    return data->n_cand != 0  ||
+        (!data->disp_fail  &&  net_info->stateless  &&  net_info->firewall);
 }
 
 
-static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
+static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now,
+                            const char* text, int code)
 {
-    static const char service_name[] = "Service: ";
     static const char server_info[] = "Server-Info-";
-    SDISPD_Data* data = (SDISPD_Data*) iter->data;
-    size_t len = strlen(text);
+    struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
+    int/*bool*/ failure;
 
-    if (len >= sizeof(service_name)  &&
-        strncasecmp(text, service_name, sizeof(service_name) - 1) == 0) {
-        if (iter->mask) {
-            if (data->name)
-                free((void*) data->name);
-            text += sizeof(service_name) - 1;
-            while (*text  &&  isspace((unsigned char)(*text)))
-                text++;
-            data->name = strdup(text);
-        }
-    } else if (len >= sizeof(server_info) &&
-        strncasecmp(text, server_info, sizeof(server_info) - 1) == 0) {
-        const char* name = data->name ? data->name : "";
+    if (code == 400)
+        data->disp_fail = 1;
+    if (strncasecmp(text, server_info, sizeof(server_info) - 1) == 0) {
+        const char* name;
         SSERV_Info* info;
         unsigned int d1;
+        char* s;
         int d2;
 
         text += sizeof(server_info) - 1;
-        if (sscanf(text, "%u: %n", &d1, &d2) < 1)
+        if (sscanf(text, "%u: %n", &d1, &d2) < 1  ||  d1 < 1)
             return 0/*not updated*/;
-        info = SERV_ReadInfoEx(text + d2, strlen(name) + 1);
+        if (iter->ismask  ||  iter->reverse_dns) {
+            char* c;
+            if (!(s = strdup(text + d2)))
+                return 0/*not updated*/;
+            name = s;
+            while (*name  &&  isspace((unsigned char)(*name)))
+                name++;
+            if (!*name) {
+                free(s);
+                return 0/*not updated*/;
+            }
+            for (c = s + (name - s);  *c;  c++) {
+                if (isspace((unsigned char)(*c)))
+                    break;
+            }
+            *c++ = '\0';
+            d2 += (int)(c - s);
+        } else {
+            s = 0;
+            name = "";
+        }
+        info = SERV_ReadInfoEx(text + d2, name);
+        if (s)
+            free(s);
         if (info) {
-            assert(info->rate != 0.0);
-            info->time += now; /* expiration time now */
-            strcpy((char*) info + SERV_SizeOfInfo(info), name);
+            if (info->time != SERV_TIME_INFINITE)
+                info->time += now; /* expiration time now */
             if (s_AddServerInfo(data, info))
                 return 1/*updated*/;
             free(info);
         }
-    } else if (len >= sizeof(HTTP_DISP_FAILURES) &&
-               strncasecmp(text, HTTP_DISP_FAILURES,
-                           sizeof(HTTP_DISP_FAILURES) - 1) == 0) {
+    } else if (((failure = strncasecmp(text, HTTP_DISP_FAILURES,
+                                       sizeof(HTTP_DISP_FAILURES) - 1) == 0)
+                ||  strncasecmp(text, HTTP_DISP_MESSAGES,
+                                sizeof(HTTP_DISP_MESSAGES) - 1) == 0)) {
+        assert(sizeof(HTTP_DISP_FAILURES) == sizeof(HTTP_DISP_MESSAGES));
 #if defined(_DEBUG) && !defined(NDEBUG)
-        text += sizeof(HTTP_DISP_FAILURES) - 1;
-        while (*text  &&  isspace((unsigned char)(*text)))
-            text++;
-        if (data->net_info->debug_printout)
-            CORE_LOGF(eLOG_Warning, ("[DISPATCHER]  %s", text));
-#endif /*_DEBUG && !NDEBUG*/
-        data->disp_fail = 1;
-        return 1/*updated*/;
-    } else if (len >= sizeof(HTTP_DISP_MESSAGE) &&
-               strncasecmp(text, HTTP_DISP_MESSAGE,
-                           sizeof(HTTP_DISP_MESSAGE) - 1) == 0) {
-        text += sizeof(HTTP_DISP_MESSAGE) - 1;
-        while (*text  &&  isspace((unsigned char)(*text)))
-            text++;
-        if (s_MessageHook) {
-            if (s_MessageIssued <= 0) {
-                s_MessageIssued = 1;
-                s_MessageHook(text);
-            }
-        } else {
-            s_MessageIssued = -1;
-            CORE_LOGF(eLOG_Warning, ("[DISPATCHER]  %s", text));
+        if (data->net_info->debug_printout) {
+            text += sizeof(HTTP_DISP_FAILURES) - 1;
+            while (*text  &&  isspace((unsigned char)(*text)))
+                text++;
+            CORE_LOGF(eLOG_Warning, ("[DISPATCHER %s]  %s",
+                                     failure ? "FAILURE" : "MESSAGE", text));
         }
+#endif /*_DEBUG && !NDEBUG*/
+        if (failure)
+            data->disp_fail = 1;
+        return 1/*updated*/;
     }
 
     return 0/*not updated*/;
 }
 
 
-static int/*bool*/ s_IsUpdateNeeded(SDISPD_Data *data)
+static int/*bool*/ s_IsUpdateNeeded(struct SDISPD_Data *data)
 {
     double status = 0.0, total = 0.0;
 
-    if (data->n_node) {
+    if (data->n_cand) {
         TNCBI_Time t = (TNCBI_Time) time(0);
         size_t i = 0;
-        while (i < data->n_node) {
-            SSERV_Info* info = data->s_node[i].info;
+        while (i < data->n_cand) {
+            const SSERV_Info* info = data->cand[i].info;
 
             total += info->rate;
             if (info->time < t) {
-                if (i < --data->n_node)
-                    memmove(data->s_node + i, data->s_node + i + 1,
-                            (data->n_node - i)*sizeof(*data->s_node));
-                free(info);
+                if (i < --data->n_cand) {
+                    memmove(data->cand + i, data->cand + i + 1,
+                            sizeof(*data->cand)*(data->n_cand - i));
+                }
+                free((void*) info);
             } else {
                 status += info->rate;
                 i++;
@@ -332,94 +277,37 @@ static int/*bool*/ s_IsUpdateNeeded(SDISPD_Data *data)
         }
     }
 
-    return total == 0.0 ? 1 : (status/total < SERV_DISPD_STALE_RATIO_OK);
+    return total == 0.0 ? 1 : status/total < SERV_DISPD_STALE_RATIO_OK;
+}
+
+
+static SLB_Candidate* s_GetCandidate(void* user_data, size_t n)
+{
+    struct SDISPD_Data* data = (struct SDISPD_Data*) user_data;
+    return n < data->n_cand ? &data->cand[n] : 0;
 }
 
 
 static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 {
-    double total = 0.0, point = 0.0, access = 0.0, p = 0.0, status;
-    SDISPD_Data* data = (SDISPD_Data*) iter->data;
+    struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
     SSERV_Info* info;
-    size_t i;
+    size_t n;
 
-    if (!data)
+    assert(data);
+    if (s_IsUpdateNeeded(data)  &&  (!s_Resolve(iter)  ||  !data->n_cand))
         return 0;
 
-    if (s_IsUpdateNeeded(data) && !s_Resolve(iter))
-        return 0;
-    assert(data->n_node != 0);
-
-    for (i = 0; i < data->n_node; i++) {
-        info = data->s_node[i].info;
-        status = info->rate;
-        assert(status != 0.0);
-
-        if (iter->host == info->host  ||
-            (!iter->host  &&
-             info->locl  &&  info->coef < 0.0)) {
-            if (iter->pref  ||  info->coef <= 0.0) {
-                status *= SERV_DISPD_LOCAL_SVC_BONUS;
-                if (access < status &&
-                    (iter->pref  ||  info->coef < 0.0)) {
-                    access =  status;
-                    point  =  total + status; /* Latch this local server */
-                    p      = -info->coef;
-                    assert(point > 0.0);
-                }
-            } else
-                status *= info->coef;
-        }
-        total                 += status;
-        data->s_node[i].status = total;
+    for (n = 0; n < data->n_cand; n++)
+        data->cand[n].status = data->cand[n].info->rate;
+    n = LB_Select(iter, data, s_GetCandidate, SERV_DISPD_LOCAL_SVC_BONUS);
+    info = (SSERV_Info*) data->cand[n].info;
+    info->rate = data->cand[n].status;
+    if (n < --data->n_cand) {
+        memmove(data->cand + n, data->cand + n + 1,
+                (data->n_cand - n)*sizeof(*data->cand));
     }
 
-    if (point > 0.0  &&  iter->pref) {
-        if (total != access) {
-            p = SERV_Preference(iter->pref, access/total, data->n_node);
-#ifdef SERV_DISPD_DEBUG
-            CORE_LOGF(eLOG_Note, ("(P = %lf, A = %lf, T = %lf, N = %d)"
-                                  " -> Pref = %lf", iter->pref,
-                                  access, total, (int) data->n_node, p));
-#endif /*SERV_DISPD_DEBUG*/
-            status = total*p;
-            p = total*(1.0 - p)/(total - access);
-            for (i = 0; i < data->n_node; i++) {
-                data->s_node[i].status *= p;
-                if (p*point <= data->s_node[i].status) 
-                    data->s_node[i].status += status - p*access;
-            }
-#ifdef SERV_DISPD_DEBUG
-            for (i = 0; i < data->n_node; i++) {
-                char addr[16];
-                SOCK_ntoa(data->s_node[i].info->host, addr, sizeof(addr));
-                status = data->s_node[i].status -
-                    (i ? data->s_node[i-1].status : 0.0);
-                CORE_LOGF(eLOG_Note, ("%s %lf %.2lf%%", addr,
-                                      status, status/total*100.0));
-            }
-#endif /*SERV_DISPD_DEBUG*/
-        }
-        point = -1.0;
-    }
-
-    /* We take pre-chosen local server only if its status is not less than
-       p% of the average remaining status; otherwise, we ignore the server,
-       and apply the generic procedure by seeding a random point. */
-    if (point <= 0.0 || access*(data->n_node - 1) < p*0.01*(total - access))
-        point = (total * rand()) / (double) RAND_MAX;
-    for (i = 0; i < data->n_node; i++) {
-        if (point <= data->s_node[i].status)
-            break;
-    }
-    assert(i < data->n_node);
-
-    info = data->s_node[i].info;
-    info->rate = data->s_node[i].status - (i ? data->s_node[i-1].status : 0.0);
-    if (i < --data->n_node) {
-        memmove(data->s_node + i, data->s_node + i + 1,
-                (data->n_node - i)*sizeof(*data->s_node));
-    }
     if (host_info)
         *host_info = 0;
 
@@ -429,27 +317,23 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 
 static void s_Reset(SERV_ITER iter)
 {
-    SDISPD_Data* data = (SDISPD_Data*) iter->data;
-    if (data && data->s_node) {
+    struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
+    if (data  &&  data->cand) {
         size_t i;
-        assert(data->a_node);
-        for (i = 0; i < data->n_node; i++)
-            free(data->s_node[i].info);
-        data->n_node = 0;
-        if (data->name) {
-            free((void*) data->name);
-            data->name = 0;
-        }
+        assert(data->a_cand);
+        for (i = 0; i < data->n_cand; i++)
+            free((void*) data->cand[i].info);
+        data->n_cand = 0;
     }
 }
 
 
 static void s_Close(SERV_ITER iter)
 {
-    SDISPD_Data* data = (SDISPD_Data*) iter->data;
-    assert(!data->n_node && !data->name);/*s_Reset() had to be called before */
-    if (data->s_node)
-        free(data->s_node);
+    struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
+    assert(!data->n_cand); /* s_Reset() had to be called before */
+    if (data->cand)
+        free(data->cand);
     ConnNetInfo_Destroy(data->net_info);
     free(data);
     iter->data = 0;
@@ -465,22 +349,45 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
                                     const SConnNetInfo* net_info,
                                     SSERV_Info** info, HOST_INFO* u/*unused*/)
 {
-    SDISPD_Data* data;
+    struct SDISPD_Data* data;
 
-    if (!(data = (SDISPD_Data*) calloc(1, sizeof(*data))))
+    if (!iter->ismask  &&  strpbrk(iter->name, "?*"))
+        return 0/*failed to start unallowed wildcard search*/;
+
+    if (!(data = (struct SDISPD_Data*) calloc(1, sizeof(*data))))
         return 0;
+
+    assert(net_info); /*must called with non-NULL*/
+    if ((data->net_info = ConnNetInfo_Clone(net_info)) != 0)
+        data->net_info->service = iter->name; /* SetupStandardArgs() expects */
+    if (!ConnNetInfo_SetupStandardArgs(data->net_info)) {
+        ConnNetInfo_Destroy(data->net_info);
+        free(data);
+        return 0;
+    }
+    /* Reset request method to be GET ('cause no HTTP body is ever used) */
+    data->net_info->req_method = eReqMethod_Get;
+    if (iter->stateless)
+        data->net_info->stateless = 1/*true*/;
+    if (iter->type & fSERV_Firewall)
+        data->net_info->firewall = 1/*true*/;
+    ConnNetInfo_ExtendUserHeader(data->net_info,
+                                 "User-Agent: NCBIServiceDispatcher/"
+                                 DISP_PROTOCOL_VERSION
+#ifdef NCBI_CXX_TOOLKIT
+                                 " (C++ Toolkit)"
+#else
+                                 " (C Toolkit)"
+#endif /*NCBI_CXX_TOOLKIT*/
+                                 "\r\n");
+    iter->data = data;
+    iter->op = &s_op; /* SERV_Update() - from HTTP callback - expects this */
+
     if (g_NCBI_ConnectRandomSeed == 0) {
         g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
         srand(g_NCBI_ConnectRandomSeed);
     }
-    data->net_info = ConnNetInfo_Clone(net_info); /*called with non-NULL*/
-    if (iter->type & fSERV_StatelessOnly)
-        data->net_info->stateless = 1/*true*/;
-    if (iter->type & fSERV_Firewall)
-        data->net_info->firewall = 1/*true*/;
-    iter->data = data;
 
-    iter->op = &s_op; /* SERV_Update() - from HTTP callback - expects this */
     if (!s_Resolve(iter)) {
         iter->op = 0;
         s_Reset(iter);
@@ -488,27 +395,46 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
         return 0;
     }
 
-    /* call GetNextInfo if info is needed */
+    /* call GetNextInfo subsequently if info is actually needed */
     if (info)
         *info = 0;
     return &s_op;
 }
 
 
-extern void DISP_SetMessageHook(FDISP_MessageHook hook)
-{
-    if (hook) {
-        if (hook != s_MessageHook)
-            s_MessageIssued = s_MessageIssued ? -1 : -2;
-    } else if (s_MessageIssued < -1)
-        s_MessageIssued = 0;
-    s_MessageHook = hook;
-}
-
-
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_dispd.c,v $
+ * Revision 6.77  2006/02/21 14:57:59  lavr
+ * Dispatcher to not require server-infos for stateless firewalled client
+ *
+ * Revision 6.76  2006/02/01 17:13:30  lavr
+ * Remove spurious definition of g_NCBI_ConnectRandomSeed (ncbi_priv.c has it)
+ *
+ * Revision 6.75  2006/01/17 20:25:32  lavr
+ * Handling of NCBI messages moved to HTTP connector
+ * Dispatcher messages handled separately (FAILURES vs MESSAGES)
+ *
+ * Revision 6.74  2006/01/11 20:26:29  lavr
+ * Take advantage of ConnNetInfo_SetupStandardArgs(); other related changes
+ *
+ * Revision 6.73  2006/01/11 16:29:17  lavr
+ * Take advantage of UTIL_ClientAddress(), some other minor improvements
+ *
+ * Revision 6.72  2005/12/23 18:18:17  lavr
+ * Rework to use newer dispatcher protocol to closely match the functionality
+ * of local (LBSM shmem based) service locator.  Factoring out invariant
+ * initializations/tuneups; better detection of sufficiency of client addr.
+ *
+ * Revision 6.71  2005/12/16 16:00:16  lavr
+ * Take advantage of new generic LB API
+ *
+ * Revision 6.70  2005/12/14 21:33:15  lavr
+ * Use new SERV_ReadInfoEx() prototype
+ *
+ * Revision 6.69  2005/12/08 03:52:28  lavr
+ * Do not override User-Agent but extend it
+ *
  * Revision 6.68  2005/07/11 18:23:14  lavr
  * Break grounds for receiving wildcard matches via HTTP header tags
  *

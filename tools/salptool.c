@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.41 2005/05/27 19:06:59 bollin Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.51 2006/01/23 13:03:41 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -2044,43 +2044,52 @@ static SeqIdPtr SWSeqIdReplaceID(SeqIdPtr sip_head, SeqIdPtr sip1, SeqIdPtr sip2
    }
 }
 
+static Int4 CalculateAlignmentDisplayPosition (SeqAlignPtr sap, Int4 aln_pos, Int4 row)
+{
+  Int4 seq_pos;
+  
+  /* calculate alignment position */
+  if (sap == NULL)
+  {
+    return aln_pos;
+  }
+  seq_pos = AlnMgr2MapSeqAlignToBioseq(sap, aln_pos, row); 
+  while ((seq_pos == ALNMGR_GAP || seq_pos == ALNMGR_ROW_UNDEFINED) && aln_pos > 1) { /* count back if we in the gap */
+    aln_pos--;
+    seq_pos = AlnMgr2MapSeqAlignToBioseq(sap, aln_pos, 1);
+  }
+  if (seq_pos == ALNMGR_GAP || seq_pos == ALNMGR_ROW_UNDEFINED) 
+      seq_pos = 1;  /* Gap at the begining of the alignment */
+  return seq_pos;
+}
+
 static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
 {
-   AlnMsg2Ptr  amp;
-   BioseqPtr   bsp;
-   BioseqPtr   bsp2;
-   Uint1Ptr    buf;
-   Int4        ctr;
-   CharPtr     dig;
-   Int4        first_from;
+   Uint1Ptr    buf, seqbuf;
+   Char        dig [6];
    Int4        i;
    Int4        l;
    Int4        len;
-   Int4        linesize;
+   Int4        linesize = 70;
    FILE        *ofp;
-   CharPtr     seq;
-   CharPtr     seq1;
-   CharPtr     seq2;
    SeqIdPtr    sip;
    SeqIdPtr    sip2;
-   SeqPortPtr  spp;
-   Int4        start;
-   Int4        stop;
-   Uint1       strand;
+   Int4        alnbuflen;
+   Uint1       strand1, strand2;
    Char        textid1[16];
    Char        textid2[16];
-   CharPtr     tmp;
+   Int4        seq_pos;
 
-   linesize=70;
-   buf = (Uint1Ptr)MemNew(70*sizeof(Uint1));
    if (sap == NULL || filename == NULL)
       return;
    if (sap->saip == NULL)
       AlnMgr2IndexSingleChildSeqAlign(sap);
+   buf = (Uint1Ptr)MemNew(linesize * sizeof(Uint1));
+   seqbuf = (Uint1Ptr)MemNew(linesize * sizeof(Uint1));
+
    ofp = FileOpen(filename, "a");
    if (ofp == NULL)
       return;
-   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
    for (i=0; i<16; i++)
    {
       textid1[i] = textid2[i] = ' ';
@@ -2098,145 +2107,32 @@ static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
    }
    textid1[15] = '\0';
    textid2[15] = '\0';
-   bsp = BioseqLockById(sip);
-   bsp2 = BioseqLockById(sip2);
-   strand = AlnMgr2GetNthStrand(sap, 1);
-   dig = (CharPtr)MemNew(6*sizeof(Char));
-   for (l=0; l<start; l+=linesize)
-   {
-      spp = SeqPortNew(bsp, l, MIN(l+linesize-1, start-1), strand, Seq_code_iupacna);
-      ctr = SeqPortRead(spp, buf, MIN(l+linesize-1, start-1)-l+1);
-      buf[ctr] = '\0';
-      sprintf(dig, "%d", l+1);
-      for (i=StrLen(dig); i<5; i++)
-      {
-         dig[i] = ' ';
-      }
-      dig[i] = '\0';
-      fprintf(ofp, "%s%c%s %s\n", textid1, strand == Seq_strand_plus?'>':'<', dig, buf);
-      SeqPortFree(spp);
-   }
+   
    len = AlnMgr2GetAlnLength(sap, FALSE);
-   amp = AlnMsgNew2();
-   for (l=0; l<len; l+=linesize)
+   strand1 = AlnMgr2GetNthStrand(sap, 1);
+   strand2 = AlnMgr2GetNthStrand(sap, 2);
+   for (l = 0; l < len; l+= linesize)
    {
-      AlnMsgReNew2(amp);
-      amp->from_aln = l;
-      amp->to_aln = MIN(l+linesize-1, len-1);
-      amp->row_num = 1;
-      seq1 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
-      seq = seq1;
-      first_from = -1;
-      while (AlnMgr2GetNextAlnBit(sap, amp))
-      {
-         if (amp->type == AM_GAP)
-         {
-            for (i=0; i<amp->to_row - amp->from_row+1; i++)
-            {
-               *seq = '-';
-               seq++;
-            }
-         } else if (amp->type == AM_SEQ)
-         {
-            if (first_from == -1)
-            {
-               if (amp->strand == Seq_strand_minus)
-                  first_from = amp->to_row+1;
-               else
-                  first_from = amp->from_row+1;
-            }
-            spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
-            ctr = SeqPortRead(spp, buf, amp->to_row-amp->from_row+1);
-            buf[ctr] = '\0';
-            SeqPortFree(spp);
-            for (i=0; i<ctr; i++)
-            {
-               *seq = buf[i];
-               seq++;
-            }
-         }
-      }
-      sprintf(dig, "%d", first_from);
-      for (i=StrLen(dig); i<5; i++)
-      {
-         dig[i] = ' ';
-      }
-      dig[i] = '\0';
-      fprintf(ofp, "%s%c%s %s\n", textid1, amp->strand==Seq_strand_plus?'>':'<', dig, seq1);
-      AlnMsgReNew2(amp);
-      amp->from_aln = l;
-      amp->to_aln = MIN(l+linesize-1, len-1);
-      amp->row_num = 2;
-      seq2 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
-      seq = seq2;
-      first_from = -1;
-      while (AlnMgr2GetNextAlnBit(sap, amp))
-      {
-         if (amp->type == AM_GAP)
-         {
-            for (i=0; i<amp->to_row - amp->from_row+1; i++)
-            {
-               *seq = '-';
-               seq++;
-            }
-         } else if (amp->type == AM_SEQ)
-         {
-            if (first_from == -1)
-            {
-               if (amp->strand == Seq_strand_minus)
-                  first_from = amp->to_row+1;
-               else
-                  first_from = amp->from_row+1;
-            }
-            spp = SeqPortNew(bsp2, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
-            ctr = SeqPortRead(spp, buf, amp->to_row-amp->from_row+1);
-            buf[ctr] = '\0';
-            SeqPortFree(spp);
-            for (i=0; i<ctr; i++)
-            {
-               *seq = buf[i];
-               seq++;
-            }
-         }
-      }
-      sprintf(dig, "%d", first_from);
-      for (i=StrLen(dig); i<5; i++)
-      {
-         dig[i] = ' ';
-      }
-      dig[i] = '\0';
-      fprintf(ofp, "%s%c%s ", textid2, amp->strand==Seq_strand_plus?'>':'<', dig);
-      tmp = seq1;
-      seq = seq2;
-      while (*tmp != '\0')
-      {
-         if (*tmp == *seq)
-            fprintf(ofp, ".");
-         else
-            fprintf(ofp, "%c", *seq);
-         tmp++;
-         seq++;
-      }
-      fprintf(ofp, "\n\n");
+     alnbuflen = linesize;
+     AlignmentIntervalToString (sap, 1, l, l + linesize - 1, 1, FALSE, seqbuf, buf, &alnbuflen, TRUE);
+     StringUpper ((char *)buf);
+     seq_pos = CalculateAlignmentDisplayPosition (sap, l, 1);
+     sprintf (dig, "%5d", seq_pos + 1);
+     
+     fprintf(ofp, "%s%c%s %s\n", textid1, strand1 == Seq_strand_plus?'>':'<', dig, buf);
+     alnbuflen = linesize;
+     AlignmentIntervalToString (sap, 2, l, l + linesize - 1, 1, FALSE, seqbuf, buf, &alnbuflen, TRUE);
+     StringUpper ((char *)buf);
+     seq_pos = CalculateAlignmentDisplayPosition (sap, l, 2);
+     sprintf (dig, "%5d", seq_pos + 1);
+     fprintf(ofp, "%s%c%s %s\n", textid2, strand2 == Seq_strand_plus?'>':'<', dig, buf);  
+     fprintf (ofp, "\n");   
    }
-   AlnMsgFree2(amp);
-   for (l=stop+1; l<bsp->length; l+=linesize)
-   {
-      spp = SeqPortNew(bsp, l, MIN(l+linesize-1, bsp->length-1), strand, Seq_code_iupacna);
-      ctr = SeqPortRead(spp, buf, MIN(l+linesize-1, bsp->length-1)-l+1);
-      buf[ctr] = '\0';
-      sprintf(dig, "%d", l+1);
-      for (i=StrLen(dig); i<5; i++)
-      {
-         dig[i] = ' ';
-      }
-      dig[i] = '\0';
-      fprintf(ofp, "%s%c%s %s\n", textid1, strand == Seq_strand_plus?'>':'<', dig, buf);
-      SeqPortFree(spp);
-   }
-   BioseqUnlock(bsp);
-   SeqIdFree(sip);
-   MemFree(buf);
+
+   sip = SeqIdFree(sip);
+   sip2 = SeqIdFree (sip2);
+   buf = MemFree(buf);
+   seqbuf = MemFree (seqbuf);
    FileClose(ofp);
 }
 
@@ -2276,6 +2172,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Char                messagestr[1500];
   Int4                numhips;
   FILE                *ofp;
+  Int4                version;
 
   hip_prev = hip_head = NULL;
   errstr = (CharPtr)MemNew(500*sizeof(Char));
@@ -2304,6 +2201,18 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
               while (*tmp!='\0' && *tmp != '|' && *tmp!='\n')
                  tmp++;
               *tmp = '\0';
+              /* check for version */
+              tmp = TmpBuff;
+              version = 0;
+              while (*tmp != 0 && *tmp != '.')
+              {
+                *tmp++;
+              }
+              if (*tmp == '.')
+              {
+                *tmp = 0;
+                version = atoi (tmp + 1);
+              }
 
               ok = FALSE;
               j = StringLen (TmpBuff);
@@ -2314,9 +2223,10 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
               }
               dbsip=NULL;
               if(k != j) {
+                 
                  ok=(IS_ntdb_accession(TmpBuff) || IS_protdb_accession(TmpBuff));
                  if (ok) {
-                    dbsip = SeqIdFromAccession (TmpBuff, 0, NULL);
+                    dbsip = SeqIdFromAccession (TmpBuff, version, NULL);
                  }
               }
               else {
@@ -2490,6 +2400,10 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                      AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
                      AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
                      len = stop2 + start1;
+                     if (offset < 0)
+                     {
+                      offset = 0 - offset;
+                     }
                  } else
                       strand=Seq_strand_plus;
                  SeqAlignStartUpdate (salp, hiparray[j]->sip1, abs(offset), len, strand);
@@ -2534,6 +2448,10 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                         AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
                         AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
                         len = stop2 + start1;
+                        if (offset < 0)
+                        {
+                          offset = 0 - offset;
+                        }
                     } else
                          strand=Seq_strand_plus;
                     SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
@@ -2563,78 +2481,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
         }
         n = i;
         i = 0;
-      /*  while (n<numhips && hiparray[n]->nonly < 0)
-        {
-           i++;
-           n++;
-        }
-        if (i > 0)
-        {
-           messagestr[0] = '\0';
-           for (j=0; j<i; j++)
-           {
-              SeqIdWrite(hiparray[j+n]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
-              StringCat(messagestr, strLog);
-              StringCat(messagestr, ", ");
-           }
-           ans = Message(MSG_OKC, "This alignment contains %s that %s already in GenBank. \n However, the local sequence%s %s terminal Ns.\nDo you wish to replace %s?", messagestr, i>1?"are":"is", i>1?"s":"", i>1?"have":"has", i>1?"them": "it");
-           if (ans != ANS_CANCEL)
-           {
-              for (j=0; j<i; j++)
-              {
-                 offset = SeqAlignStart(hiparray[j+n]->sap, 1)-SeqAlignStart(hiparray[j+n]->sap, 0);
-                 if ((SeqAlignStrand(hiparray[j+n]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j+n]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 0) != Seq_strand_minus))
-                 {
-                     strand=Seq_strand_minus;
-                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j+n]->sap);
-                     AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 1, &start1, &stop1);
-                     AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 2, &start2, &stop2);
-                     len = stop2 + start1;
-                 } else
-                      strand=Seq_strand_plus;
-                 SeqAlignStartUpdate (salp, hiparray[j+n]->sip1, abs(offset), len, strand);
-                 dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j+n]->sip1, hiparray[j+n]->sip2);
-                 if (presip)
-                    sip = presip->next;
-                 else
-                    sip = dsp->ids;
-                 SeqAlignReplaceId (hiparray[j+n]->sip1, hiparray[j+n]->sip2, salp);
-                 vnp = nrSeqIdAdd (vnp, hiparray[j+n]->sip1);
-                 found = TRUE;
-                 SeqAlignFree(hiparray[j+n]->sap);
-              }
-           } else
-           {
-              for (j=0; j<i; j++)
-              {
-                 SeqIdWrite(hiparray[j+n]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                 ans = Message(MSG_OKC, "This alignment contains %s that is already in GenBank. \n %s\nDo you wish to replace it?", strLog, hiparray[j+n]->errstr);
-                 if (ans != ANS_CANCEL)
-                 {
-                    offset = SeqAlignStart(hiparray[j+n]->sap, 1)-SeqAlignStart(hiparray[j+n]->sap, 0);
-                    if ((SeqAlignStrand(hiparray[j+n]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j+n]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 0) != Seq_strand_minus))
-                    {
-                        strand=Seq_strand_minus;
-                        AlnMgr2IndexSingleChildSeqAlign(hiparray[j+n]->sap);
-                        AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 1, &start1, &stop1);
-                        AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 2, &start2, &stop2);
-                        len = stop2 + start1;
-                    } else
-                         strand=Seq_strand_plus;
-                    SeqAlignStartUpdate (salp, hiparray[j+n]->sip1, offset, len, strand);
-                    dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j+n]->sip1, hiparray[j+n]->sip2);
-                    if (presip)
-                       sip = presip->next;
-                    else
-                       sip = dsp->ids;
-                    SeqAlignReplaceId (hiparray[j+n]->sip1, hiparray[j+n]->sip2, salp);
-                    vnp = nrSeqIdAdd (vnp, hiparray[j+n]->sip1);
-                    found = TRUE;
-                    SeqAlignFree(hiparray[j+n]->sap);
-                 }
-              }
-           }
-        } */
+        /* Replacement of sequences that are not exact matches */
         for (j=n+i; j<numhips; j++)
         {
            if (hiparray[j]->errtype <3)
@@ -2644,8 +2491,19 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                if (ans != ANS_CANCEL)
                {
                   offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+
                   if (SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus || SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus)
+                  {
                      strand=Seq_strand_minus;
+                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                     len = stop2 + start1;
+                     if (offset < 0)
+                     {
+                       offset = 0 - offset;
+                     }                    
+                  }                  
                   else
                      strand=Seq_strand_plus;
                   SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
@@ -2793,6 +2651,10 @@ extern void CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold)
         AlnMgr2GetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
         AlnMgr2GetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
         len = stop2 + start1;
+        if (offset < 0)
+        {
+          offset = 0 - offset;
+        }                    
       } 
       else
       {
@@ -2809,6 +2671,396 @@ extern void CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold)
   {
   	MemFree (errstr);
   }
+}
+
+
+NLM_EXTERN Boolean TruncateAlignment (SeqAlignPtr salp, Int4 num_aln_pos, Boolean from_left)
+{
+  DenseSegPtr dsp, dsp_new;
+  Int4        num_trim, seg_lens;
+  Int4        segment_num;
+  Int4        sequence_num;
+  Int4        segment_trim = 0, orig_segment_offset;
+  
+  if (salp == NULL 
+      || salp->segtype != 2 
+      || salp->segs == NULL
+      || num_aln_pos <=0) return FALSE;
+      
+  dsp = (DenseSegPtr) salp->segs;
+  
+  /* how many segments do we need to trim? */
+  num_trim = 0;
+  seg_lens = 0;
+  if (from_left)   
+  {
+    while (seg_lens < num_aln_pos && num_trim < dsp->numseg) 
+    {
+      seg_lens += dsp->lens[num_trim];
+      num_trim++;
+    }
+    if (seg_lens > num_aln_pos)
+    {
+      num_trim--;
+      segment_trim = num_aln_pos - seg_lens + dsp->lens [num_trim];
+    }
+  }
+  else
+  {
+    while (seg_lens < num_aln_pos && num_trim < dsp->numseg)
+    {
+      seg_lens += dsp->lens[dsp->numseg - 1 - num_trim];
+      num_trim++;
+    }
+    if (seg_lens > num_aln_pos)
+    {
+      num_trim--;
+      segment_trim = num_aln_pos - seg_lens + dsp->lens [dsp->numseg - 1 - num_trim];
+    }
+  }
+  
+  
+  if (num_trim == dsp->numseg)
+  {
+    return FALSE;
+  }
+  
+  dsp_new = DenseSegNew();
+  dsp_new->dim = dsp->dim;
+  dsp_new->ids = SeqIdDupList (dsp->ids);
+  dsp_new->numseg = dsp->numseg - num_trim;
+  dsp_new->starts = (Int4Ptr) MemNew (dsp_new->dim * dsp_new->numseg * sizeof (Int4));
+  dsp_new->strands = (Uint1Ptr) MemNew (dsp_new->dim * dsp_new->numseg * sizeof (Uint1));  
+  dsp_new->lens = (Int4Ptr) MemNew (dsp_new->numseg * sizeof (Int4));
+  if (dsp->scores != NULL)
+  {
+    dsp_new->scores = (ScorePtr) MemNew (dsp_new->numseg * sizeof (Score));
+  }
+  dsp_new->strands = (Uint1Ptr) MemNew (dsp_new->dim * dsp_new->numseg * sizeof (Uint1));
+  
+  segment_num = 0;
+  orig_segment_offset = 0;
+  
+  if (from_left)
+  {
+    /* remove segments from the left */
+    orig_segment_offset = num_trim;
+    /* if we're only getting rid of part of a segment, 
+     * need to adjust the starts and the length
+     */
+    if (segment_trim > 0)
+    {
+      for (sequence_num = 0; sequence_num < dsp_new->dim; sequence_num++)
+      {
+        /* copy strands */
+        dsp_new->strands[segment_num * dsp_new->dim + sequence_num]
+              = dsp->strands[(orig_segment_offset + segment_num) * dsp->dim + sequence_num];
+        /* adjust starts */
+        if (dsp->starts[(orig_segment_offset + segment_num) * dsp->dim + sequence_num] > -1)
+        {
+          if (dsp_new->strands[segment_num * dsp_new->dim + sequence_num] == Seq_strand_minus)
+          {
+            dsp_new->starts[segment_num * dsp_new->dim + sequence_num]
+                = dsp->starts[(orig_segment_offset + segment_num) * dsp->dim + sequence_num];
+          }
+          else
+          {
+            dsp_new->starts[segment_num * dsp_new->dim + sequence_num]
+                = dsp->starts[(orig_segment_offset + segment_num) * dsp->dim + sequence_num] + segment_trim;
+          }
+        }
+        else
+        {
+          dsp_new->starts[segment_num * dsp_new->dim + sequence_num] = -1;
+        }
+        if (dsp_new->scores != NULL)
+        {
+          /* copy scores */
+          dsp_new->scores [segment_num * dsp_new->dim + sequence_num] = 
+              *((ScorePtr)AsnIoMemCopy (&(dsp->scores[(num_trim + segment_num) * dsp->dim + sequence_num]),
+                            (AsnReadFunc) ScoreSetAsnRead, 
+                            (AsnWriteFunc)ScoreSetAsnWrite));          
+        }
+      }
+      /* adjust len */
+      dsp_new->lens [segment_num] = dsp->lens[num_trim + segment_num] - segment_trim;
+      segment_num++;
+    }
+  }
+  
+  /* copy segments to the end of the alignment*/
+  while (segment_num < dsp_new->numseg)
+  {
+    for (sequence_num = 0; sequence_num < dsp_new->dim; sequence_num++)
+    {
+      /* copy starts */
+      dsp_new->starts[segment_num * dsp_new->dim + sequence_num]
+            = dsp->starts[(orig_segment_offset + segment_num) * dsp->dim + sequence_num];
+      /* copy strands */
+      dsp_new->strands[segment_num * dsp_new->dim + sequence_num]
+            = dsp->strands[(orig_segment_offset + segment_num) * dsp->dim + sequence_num];
+      if (dsp_new->scores != NULL)
+      {
+        /* copy scores */
+        dsp_new->scores [segment_num * dsp_new->dim + sequence_num] = 
+            *((ScorePtr)AsnIoMemCopy (&(dsp->scores[(orig_segment_offset + segment_num) * dsp->dim + sequence_num]),
+                          (AsnReadFunc) ScoreSetAsnRead, 
+                          (AsnWriteFunc)ScoreSetAsnWrite));          
+      }
+    }
+    /* copy len */
+    dsp_new->lens [segment_num] = dsp->lens[orig_segment_offset + segment_num];
+    segment_num++;
+  }
+  
+  if (!from_left && segment_trim > 0)
+  {
+    /* adjust len and starts for last segment if necessary */
+    segment_num--;
+    /* adjust length of segment */
+    dsp_new->lens [dsp_new->numseg - 1] -= segment_trim;
+    /* adjust starts if not in gap and on minus strand */
+    for (sequence_num = 0; sequence_num < dsp_new->dim; sequence_num++)
+    {
+      if (dsp_new->starts[segment_num * dsp_new->dim + sequence_num] > -1
+          && dsp_new->strands[segment_num * dsp_new->dim + sequence_num] == Seq_strand_minus)
+      {
+        dsp_new->starts[segment_num * dsp_new->dim + sequence_num] += segment_trim;
+      }
+    }
+  }
+
+  /* replace old segments with new */  
+  dsp = DenseSegFree (dsp);
+  salp->segs = dsp_new;
+
+  /* redo index */
+  AMFreeAllIndexes (salp);
+  AlnMgr2IndexSingleChildSeqAlign (salp);
+      
+  return TRUE;
+}
+
+static Boolean CutAlignmentAtGaps (SeqAlignPtr salp, Int4 seq_num)
+{
+  BioseqPtr   bsp;
+  SeqIdPtr    sip;
+  DeltaSeqPtr dsp;
+  SeqLitPtr   slip;
+  SeqLocPtr   loc;
+  Int4        seq_offset, aln_len;
+  SeqAlignPtr salp_next, new_salp_mid;
+  Int4        cut_pos;
+  Int4        start, stop;
+  
+  if (salp == NULL || salp->segtype != 2 || salp->segs == NULL || seq_num < 1)
+  {
+    return FALSE;
+  }
+  
+  sip = AlnMgrGetNthSeqIdPtr(salp, seq_num);
+
+  bsp = BioseqFind (sip);
+  if (bsp == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (bsp->repr != Seq_repr_delta)
+  {
+    return TRUE;
+  }
+  
+  salp_next = salp->next;
+	salp->next = NULL;
+	
+  AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+  
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  seq_offset = 0;
+  while (dsp != NULL)
+  {
+    if (dsp->choice == 1)
+    {
+      loc = (SeqLocPtr) dsp->data.ptrvalue;
+      seq_offset += SeqLocLen (loc);
+    }
+    else if (dsp->choice == 2)
+    {
+      slip = (SeqLitPtr) dsp->data.ptrvalue;
+		  if (slip->seq_data == NULL && slip->fuzz != NULL && slip->fuzz->choice == 4
+		      && start < seq_offset + 100 && stop > seq_offset)
+		  {
+        if (start < seq_offset)
+        {
+          aln_len = SeqAlignLength (salp);
+          /* make a copy of the original alignment */
+		      new_salp_mid = (SeqAlignPtr) AsnIoMemCopy (salp, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);   
+		      AlnMgr2IndexSingleChildSeqAlign (new_salp_mid);
+          
+          /* remove right end of first alignment, after start of gap */
+		      cut_pos = aln_len - AlnMgr2MapBioseqToSeqAlign (salp, seq_offset, seq_num);
+		      TruncateAlignment (salp, cut_pos, FALSE);
+          AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+          
+          /* remove left end of second alignment, before start of gap */
+		      cut_pos = AlnMgr2MapBioseqToSeqAlign (new_salp_mid, seq_offset, seq_num);
+          TruncateAlignment (new_salp_mid, cut_pos, TRUE);
+          salp->next = new_salp_mid;
+          salp = new_salp_mid;
+          AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+        }
+        
+        if (stop > seq_offset + 100)
+        {
+          aln_len = SeqAlignLength (salp);
+          /* make a copy of the original alignment */
+		      new_salp_mid = (SeqAlignPtr) AsnIoMemCopy (salp, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);   
+		      AlnMgr2IndexSingleChildSeqAlign (new_salp_mid);
+		      /* remove right end of first alignment, after end of gap */
+		      cut_pos = aln_len - AlnMgr2MapBioseqToSeqAlign (salp, seq_offset + 100, seq_num);
+		      TruncateAlignment (salp, cut_pos, FALSE);
+          AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+		      
+		      /* remove left end of second alignment, before end of gap */
+		      cut_pos = AlnMgr2MapBioseqToSeqAlign (new_salp_mid, seq_offset + 100, seq_num);
+          TruncateAlignment (new_salp_mid, cut_pos, TRUE);
+          salp->next = new_salp_mid;
+          salp = new_salp_mid;
+          AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+        }
+		  }
+		  seq_offset += slip->length;
+    }
+    dsp = dsp->next;
+  }
+  salp->next = salp_next;
+  
+  if (salp->next != NULL)
+  {
+    return CutAlignmentAtGaps (salp->next, seq_num);
+  }
+  return TRUE;
+}
+
+
+static SeqAlignPtr RemoveSequencesInGapFromAlignments (SeqAlignPtr salp)
+{
+  SeqAlignPtr salp_next;
+  SeqIdPtr    sip, sip_list, sip_remove_list = NULL, sip_tmp;
+  Boolean     remove_this;
+  Int4        seq_num, start, stop, seq_offset;
+  DeltaSeqPtr dsp;
+  SeqLitPtr   slip;
+  SeqLocPtr   loc;
+  Int4        num_keep = 0;
+  Int4        num_all_gap = 0;
+  BioseqPtr   bsp;
+  
+  if (salp == NULL)
+  {
+    return NULL;
+  }
+  
+  salp_next = salp->next;
+  salp->next = NULL;
+
+  sip_list = SeqIdPtrFromSeqAlign(salp);
+  
+  for (sip = sip_list, seq_num = 1; sip != NULL; sip = sip->next, seq_num++)
+  {
+    AlnMgr2GetNthSeqRangeInSA(salp, seq_num, &start, &stop);
+    if (start == -2 && stop == -2)
+    {
+      num_all_gap++;
+    }
+    
+
+    bsp = BioseqFind (sip);
+    if (bsp == NULL || bsp->repr != Seq_repr_delta)
+    {
+      num_keep ++;
+      continue;
+    }
+
+    remove_this = FALSE;
+    dsp = (DeltaSeqPtr) bsp->seq_ext;
+    seq_offset = 0;
+    while (dsp != NULL && !remove_this && seq_offset < stop)
+    {
+      if (dsp->choice == 1)
+      {
+        loc = (SeqLocPtr) dsp->data.ptrvalue;
+        seq_offset += SeqLocLen (loc);
+      }
+      else if (dsp->choice == 2)
+      {
+        slip = (SeqLitPtr) dsp->data.ptrvalue;
+		    if (slip->seq_data == NULL && slip->fuzz != NULL && slip->fuzz->choice == 4
+		        && seq_offset <= start && seq_offset + 100 >= stop)
+		    {
+		      remove_this = TRUE;
+		    }
+		    seq_offset += slip->length;
+      }
+      dsp = dsp->next;
+    }
+    if (remove_this)
+    {
+      sip_tmp = SeqIdDup (sip);
+      sip_tmp->next = sip_remove_list;
+      sip_remove_list = sip_tmp;
+    }
+    else
+    {
+      num_keep++;
+    }
+  }
+  
+  if (num_keep < 2 || num_keep == num_all_gap)
+  {
+    salp = SeqAlignFree (salp);
+    salp = RemoveSequencesInGapFromAlignments (salp_next);
+    sip_remove_list = SeqIdFree (sip_remove_list);
+  }
+  else
+  {
+    for (sip = sip_remove_list; sip != NULL; sip = sip_tmp)
+    {
+      sip_tmp = sip->next;
+      sip->next = NULL;
+      
+      salp = SeqAlignBioseqDeleteById (salp, sip);
+      /* reindex after removing sequence */
+      AlnMgr2IndexSingleChildSeqAlign (salp);
+      
+      sip = SeqIdFree (sip);
+    }
+    salp->next = salp_next;
+    salp->next = RemoveSequencesInGapFromAlignments (salp->next);
+  }
+  
+  return salp;
+}
+
+
+NLM_EXTERN SeqAlignPtr MakeDiscontiguousAlignments (SeqAlignPtr salp)
+{
+  Int4        seq_num;
+  
+  if (salp == NULL || salp->segtype != 2 || salp->segs == NULL)
+  {
+    return salp;
+  }
+  
+  for (seq_num = 1; seq_num < salp->dim; seq_num++)
+  {
+    CutAlignmentAtGaps (salp, seq_num);
+  }
+  
+  salp = RemoveSequencesInGapFromAlignments (salp);
+
+  return salp;
 }
 
 
@@ -2839,7 +3091,7 @@ static Boolean check_dbid_seqalign (SeqAlignPtr salp)
               if (*tmp == '|')
                  tmp++;
               TmpBuff = tmp;
-              while (*tmp!='\0' && *tmp != '|' && *tmp!='\n')
+              while (*tmp!='\0' && *tmp != '|' && *tmp!='\n' && *tmp != '.')
                  tmp++;
               *tmp = '\0';
 
@@ -3223,4 +3475,300 @@ NLM_EXTERN Boolean ValidateSeqAlignandACCInSeqEntry (SeqEntryPtr sep, Boolean me
      }
   }
   return success;
+}
+
+
+static SeqPortPtr SeqPortFromAlignmentInterval (Int4 seqstart, Int4 seqstop, Uint1 strand, BioseqPtr bsp)
+{
+  SeqIntPtr  sinp;
+  SeqLocPtr  slp;
+  SeqPortPtr spp;
+
+  if (bsp == NULL) return NULL;
+  sinp = SeqIntNew();
+  if (sinp == NULL) return NULL;
+  sinp->from = seqstart;
+  sinp->to = seqstop;
+  sinp->strand = strand;
+  sinp->id = SeqIdDup (SeqIdFindBest (bsp->id, 0));
+  slp = ValNodeNew (NULL);
+  if (slp == NULL) {
+    SeqIntFree (sinp);
+    return NULL;
+  }
+  slp->choice = SEQLOC_INT;
+  slp->data.ptrvalue = (Pointer) sinp;
+  spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
+  SeqLocFree (slp);
+  return spp;
+}
+
+
+static void SetSequenceIntervalBuf
+(SeqAlignPtr salp,
+ BioseqPtr   bsp,
+ Int4        row,
+ Int4        start,                             
+ Int4        stop,
+ Int4Ptr     seqstart,
+ Int4Ptr     seqstop,
+ Int4        aln_len,                             
+ Uint1Ptr    target_buf)
+{
+  Int4       buf_len = stop - start + 1;
+  Uint1      strand;
+  Int4       i;
+  SeqPortPtr spp;
+
+  if (seqstart == NULL || seqstop == NULL)
+  {
+    return;
+  }
+  
+  *seqstart = ALNMGR_GAP;
+  *seqstop = ALNMGR_GAP;
+  if (bsp == NULL)
+  {
+    return;
+  }
+  strand = SeqAlignStrand (salp, row - 1);
+  MemSet (target_buf, 0, buf_len);
+  /* if this is a minus strand sequence, start is stop and stop is start */
+  if (strand == Seq_strand_minus) {
+    *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    *seqstart  = AlnMgr2MapSeqAlignToBioseq(salp, stop, row);
+  } else {
+    *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    *seqstop  = AlnMgr2MapSeqAlignToBioseq(salp, stop, row);
+  }
+
+  if (strand == Seq_strand_minus) {
+    i = stop;
+    while ((*seqstart == ALNMGR_GAP || *seqstart == ALNMGR_ROW_UNDEFINED) && i > 0) { /* count backward if we are in the gap */
+      i--;
+      *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  } else {
+    i = start;
+    while ((*seqstart == ALNMGR_GAP || *seqstart == ALNMGR_ROW_UNDEFINED) && i < aln_len) { /* count forward if we in the gap */
+      i++;
+      *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  }
+  if (*seqstop == -1 || *seqstop>=bsp->length) *seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
+  
+  if (strand == Seq_strand_minus) {
+    i = start;
+    while (*seqstop == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
+      i--;
+      *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  } else {
+    i = stop;
+    while (*seqstop == ALNMGR_GAP && i < aln_len) { /* count forward if we are in the gap */
+      i++;
+      *seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  }
+  
+  if (*seqstart == ALNMGR_GAP  &&  *seqstop == ALNMGR_GAP) {
+    return;
+  }
+  if (*seqstop  < 0) *seqstop  = bsp->length - 1;
+  if (*seqstart < 0) *seqstart = *seqstop;
+  if (strand == Seq_strand_minus) {
+    if (*seqstop - *seqstart > buf_len) 
+      *seqstart = *seqstop - buf_len;
+  } else {
+    if (*seqstop - *seqstart > buf_len) *seqstop = *seqstart + buf_len;  /* not to exeed the current line */
+  }
+
+  spp = SeqPortFromAlignmentInterval (*seqstart, *seqstop, strand, bsp);
+  SeqPortRead  (spp, target_buf, *seqstop - *seqstart + 1);
+  SeqPortFree  (spp);
+}
+
+
+extern void 
+AlignmentIntervalToString 
+(SeqAlignPtr salp,
+ Int4        row,
+ Int4        start,
+ Int4        stop,
+ Int4        target_row,
+ Boolean     view_whole_entity,
+ Uint1Ptr    seqbuf,
+ Uint1Ptr    alnbuf,
+ Int4 PNTR   alnbuffer_len,
+ Boolean     show_substitutions)
+{
+  Int4       aln_len = AlnMgr2GetAlnLength(salp, FALSE);
+  SeqIdPtr   sip     = AlnMgr2GetNthSeqIdPtr(salp, row);
+  BioseqPtr  bsp     = BioseqLockById(sip);
+  Int4       alnbuf_len = stop - start + 1;
+  Uint1      strand;
+  Int4       seqstart, seqstop;
+  Int4       i, k;
+  SeqPortPtr spp;
+  Int4       seq_len;
+  Uint1      target_strand;
+  SeqIdPtr   sip_target;
+  BioseqPtr  bsp_target;
+  Int4       target_start;
+  Int4       target_stop;
+  Uint1Ptr   target_buf;
+  Int4       aln_pos;
+
+  MemSet(alnbuf, '-', alnbuf_len); /* assume all gaps and fill the sequence later */
+  MemSet(seqbuf, 0, alnbuf_len);
+  if (target_row < 0 || bsp == NULL)
+  {
+    BioseqUnlock (bsp);
+    SeqIdFree    (sip);
+    return;
+  }
+  
+  if (stop > aln_len && start > aln_len)
+  {
+    BioseqUnlock (bsp);
+    SeqIdFree    (sip);
+    return;
+  }
+
+  if (stop > aln_len) {
+    MemSet (alnbuf + aln_len - start, 0, stop - aln_len);
+    stop = aln_len - 1;
+    alnbuf_len = stop - start + 1;
+  }
+
+  if (alnbuffer_len != NULL) {
+    *alnbuffer_len = alnbuf_len;
+  }
+
+  strand = SeqAlignStrand (salp, row - 1);
+  target_strand = SeqAlignStrand (salp, target_row - 1);
+  /* if this is a minus strand sequence, start is stop and stop is start */
+  if (strand == Seq_strand_minus) {
+    seqstop = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    seqstart  = AlnMgr2MapSeqAlignToBioseq(salp, stop,  row);
+  } else {
+    seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    seqstop  = AlnMgr2MapSeqAlignToBioseq(salp, stop,  row);
+  }
+  
+  if (strand == Seq_strand_minus) {
+    i = stop;
+    while ((seqstart == ALNMGR_GAP || seqstart == ALNMGR_ROW_UNDEFINED) && i > 0) { /* count backward if we are in the gap */
+      i--;
+      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  } else {
+    i = start;
+    while ((seqstart == ALNMGR_GAP || seqstart == ALNMGR_ROW_UNDEFINED) && i < aln_len) { /* count forward if we in the gap */
+      i++;
+      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  }
+  
+  if (seqstop == -1 || seqstop>=bsp->length)
+  {
+    seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
+  }
+  
+  if (strand == Seq_strand_minus) {
+    i = start;
+    while (seqstop == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
+      i--;
+      seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  } else {
+    i = stop;
+    while (seqstop == ALNMGR_GAP && i < aln_len) { /* count forward if we are in the gap */
+      i++;
+      seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+  }
+  
+  if (seqstart == ALNMGR_GAP  &&  seqstop == ALNMGR_GAP) seqstart = seqstop = 0;  /* whole line are gaps */
+  if (seqstop  < 0) seqstop  = bsp->length - 1;
+  if (seqstart < 0) seqstart = seqstop;
+  if (strand == Seq_strand_minus) {
+    if (seqstop - seqstart > alnbuf_len)
+    {
+      seqstart = seqstop - alnbuf_len;
+    }
+  } else {
+    if (seqstop - seqstart > alnbuf_len) 
+    {
+      seqstop = seqstart + alnbuf_len;  /* not to exeed the current line */
+    }
+  }
+
+  spp = SeqPortFromAlignmentInterval (seqstart, seqstop, strand, bsp);
+  SeqPortRead  (spp, seqbuf, seqstop - seqstart + 1);
+  if (seqbuf [stop - start] == 0) {
+    seq_len = StringLen ((CharPtr) seqbuf);
+  } else {
+    seq_len = stop - start + 1;
+  }
+  SeqPortFree  (spp);
+  BioseqUnlock (bsp);
+  SeqIdFree    (sip);
+
+  if (row != target_row  &&  ! view_whole_entity  &&  target_row != ALNMGR_ROW_UNDEFINED)  {
+    sip_target = AlnMgr2GetNthSeqIdPtr(salp, target_row);
+    bsp_target = BioseqLockById(sip_target);
+
+    target_buf = (Uint1Ptr) MemNew (stop - start + 1);
+    MemSet (target_buf, 0, stop - start + 1);
+    if (target_buf != NULL) {
+      SetSequenceIntervalBuf (salp, bsp_target, target_row, start, stop, 
+                              &target_start, &target_stop, aln_len, target_buf);
+    }
+  } else {
+    sip_target = NULL;
+    bsp_target = NULL;
+    target_buf = NULL;
+  }
+
+  k = 0;
+  i = 0;
+
+  for (aln_pos = start; aln_pos <= stop; aln_pos ++) {
+    Int4 seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, row);
+    Int4 target_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, target_row);
+
+    if (seq_pos >= 0) {
+      alnbuf [aln_pos - start] = TO_LOWER (seqbuf[k]);
+      if (show_substitutions)
+      {
+        /* Handle mismatches (insert dots when matched) */
+        if (row != target_row  &&  ! view_whole_entity  &&  target_row != ALNMGR_ROW_UNDEFINED)  {
+          if(target_pos >= 0  && target_pos < bsp_target->length) { /* no gap in the target sequence */
+            if (seqbuf[k] == target_buf[i]) {
+              alnbuf[aln_pos - start] = '.';
+            }
+          }
+        }   /* mismatches */
+      }
+      k++;
+    }
+    if (target_pos >= 0) {
+      i++;
+    }
+  }    
+
+  if (alnbuf[alnbuf_len] == 0) {
+    *alnbuffer_len = StringLen ((CharPtr) alnbuf);
+  }
+
+  if (bsp_target != NULL) {
+    BioseqUnlock (bsp_target);
+  }
+  if (sip_target != NULL) {
+    SeqIdFree (sip_target);
+  }
+  if (target_buf != NULL) {
+    MemFree (target_buf);
+  }
 }

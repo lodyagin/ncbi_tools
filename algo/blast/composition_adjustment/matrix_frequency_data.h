@@ -1,4 +1,4 @@
-/* $Id: matrix_frequency_data.h,v 1.1 2005/12/01 13:52:20 gertz Exp $
+/* $Id: matrix_frequency_data.h,v 1.4 2006/01/30 14:47:57 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
  *
  * ===========================================================================*/
 /**
- * @file joint_probs.h
- * @author Alejandro Schaffer, E. Michael Gertz
- *
+ * @file matrix_frequency_data.h
  * Definitions used to get joint probabilities for a scoring matrix
+ *
+ * @author Alejandro Schaffer, E. Michael Gertz
  */
-#ifndef __BLAST_JOINT_PROBS__
-#define __BLAST_JOINT_PROBS__
+#ifndef __MATRIX_FREQUENCY_DATA__
+#define __MATRIX_FREQUENCY_DATA__
 
 #include <algo/blast/core/blast_export.h>
 
@@ -37,13 +37,30 @@
 extern "C" {
 #endif
 
+/** Number of standard amino acids */
+#define COMPO_NUM_TRUE_AA 20
+
+/**
+ * Get joint probabilities for the named matrix.
+ *
+ * @param probs        the joint probabilities [out]
+ * @param row_sums     sum of the values in each row of probs [out]
+ * @param col_sums     sum of the values in each column of probs [out]
+ * @param matrixName   the name of the matrix sought [in]
+ * @returns 0 if successful; -1 if the named matrix is not known.
+ */
 NCBI_XBLAST_EXPORT
 int Blast_GetJointProbsForMatrix(double ** probs, double row_sums[],
                                  double col_sums[], const char *matrixName);
 
+
+/** Return true if frequency data is available for the given matrix name. */
 NCBI_XBLAST_EXPORT
 const double * Blast_GetMatrixBackgroundFreq(const char *matrix_name);
 
+
+/** Retrieve the background letter probabilities implicitly used in
+ * constructing the score matrix matrix_name. */
 NCBI_XBLAST_EXPORT
 int Blast_FrequencyDataIsAvailable(const char *matrix_name);
 

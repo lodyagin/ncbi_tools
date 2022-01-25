@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.167 $
+* $Revision: 6.169 $
 *
 * File Description: 
 *
@@ -66,6 +66,7 @@
 #include <salpedit.h>
 #include <salptool.h>
 #include <alignmgr.h>
+#include <alignmgr2.h>
 #include <seqpanel.h>
 
 /******/
@@ -4895,15 +4896,70 @@ static Boolean DeltaLitOnly (BioseqPtr bsp)
   return TRUE;
 }
 
-static void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID)
+extern void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID)
 {
-  Int2                top;
-  ForM                f;
+  Int2                  top;
+  ForM                  f;
+  ModalAcceptCancelData acd;
+  WindoW                w;
+  GrouP                 h, c;
+  PrompT                ppt;
+  ButtoN                b;
+  SeqAnnotPtr           sanp;
 
   if (salp == NULL)
   {
     return;
   }
+  if (salp->segtype != SAS_DENSEG)
+  {
+    w = ModalWindow (-50, -33, -10, -10, NULL);
+    h = HiddenGroup (w, -1, 0, NULL);
+    SetGroupSpacing (h, 10, 10);
+    ppt = StaticPrompt (h, "Warning!  You have a pairwise alignment.  Some functions may not be available.",
+                        0, dialogTextHeight, programFont, 'l');
+    c = HiddenGroup (h, 4, 0, NULL);
+    b = PushButton (c, "Continue anyway", ModalAcceptButton);
+    SetObjectExtra (b, &acd, NULL);
+    b = PushButton (c, "Convert alignment", ModalThirdOptionButton);
+    SetObjectExtra (b, &acd, NULL);
+    b = PushButton (c, "Cancel", ModalCancelButton);
+    SetObjectExtra (b, &acd, NULL);
+      
+    acd.accepted = FALSE;
+    acd.cancelled = FALSE;
+    acd.third_option = FALSE;
+  
+    AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) c, NULL);
+    RealizeWindow (w);
+    Show (w);
+    Update ();
+  
+    while (!acd.accepted && ! acd.cancelled && ! acd.third_option)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+    Remove (w);
+    if (acd.cancelled)
+    {
+      return;
+    }
+    else if (acd.third_option)
+    {
+      WatchCursor();
+      Update();
+      sanp = GetSeqAnnotForAlignment (salp);
+      ConvertPairwiseToMultipleAlignment (salp);
+      ObjMgrSetDirtyFlag (input_entityID, TRUE);
+      ObjMgrSendMsg (OM_MSG_UPDATE, input_entityID, 0, 0);
+      salp = sanp->data;
+      ArrowCursor();
+      Update();
+    }
+  }
+  
 #ifdef WIN_MAC
   top = 53;
 #else
@@ -5163,7 +5219,7 @@ extern Int2 LIBCALLBACK AnnotAlgEditFunc (Pointer data)
   if (salp == NULL)
      return OM_MSG_RET_ERROR;
     
-  if (salp->dim == 2)
+  if (salp->dim == 2 || salp->segtype != SAS_DENSEG)
   {
     OpenNewAlignmentEditor (salp, ompcp->input_entityID);
   }

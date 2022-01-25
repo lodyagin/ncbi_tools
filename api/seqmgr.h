@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.58 $
+* $Revision: 6.59 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.59  2006/02/16 20:24:32  kans
+* added bad_order and mixed_strand fields to feature index - to be used for get best gene overlap function in cases of trans-splicing
+*
 * Revision 6.58  2005/08/18 21:02:34  kans
 * defined SMFidItemPtr structure and added featsByFeatID and numfids fields, in preparation for indexing by feature ID
 *
@@ -884,24 +887,26 @@ NLM_EXTERN void FreeSeqIdGiCache (void);
 /* the following structures are not frequently used directly by applications */
 
 typedef struct smfeatitem {
-  SeqFeatPtr   sfp;      /* freed when TL_CACHED, later will implement reassignment when reloaded */
-  SeqAnnotPtr  sap;      /* SeqAnnot containing SeqFeat, same reap/reload criteria as above */
-  BioseqPtr    bsp;      /* Bioseq on which this feature is indexed */
-  CharPtr      label;    /* featdef content label */
-  Int4         left;     /* extreme left on bioseq (first copy spanning origin is < 1) */
-  Int4         right;    /* extreme right on bioseq (second copy spanning origin is > length) */
-  Int4Ptr      ivals;    /* array of start/stop pairs */
-  Int2         numivals; /* number of start/stop pairs in ivals array */
-  Int4         dnaStop;  /* last stop on protein mapped to DNA coordinate for flatfile */
-  Boolean      partialL; /* left end is partial */
-  Boolean      partialR; /* right end is partial */
-  Boolean      farloc;   /* location has an accession not packaged in entity */
-  Uint1        strand;   /* strand (mapped to segmented bioseq if segmented) */
-  Uint1        subtype;  /* featdef subtype */
-  Uint4        itemID;   /* storing itemID so no need to gather again */
-  Boolean      ignore;   /* ignore this second copy of a feature spanning the origin */
-  Uint4        index;    /* position index needed for SeqMgrGetDesiredFeature */
-  Int4         overlap;  /* for xxxByPos, index of leftmost candidate that overlaps this */
+  SeqFeatPtr   sfp;          /* freed when TL_CACHED, later will implement reassignment when reloaded */
+  SeqAnnotPtr  sap;          /* SeqAnnot containing SeqFeat, same reap/reload criteria as above */
+  BioseqPtr    bsp;          /* Bioseq on which this feature is indexed */
+  CharPtr      label;        /* featdef content label */
+  Int4         left;         /* extreme left on bioseq (first copy spanning origin is < 1) */
+  Int4         right;        /* extreme right on bioseq (second copy spanning origin is > length) */
+  Int4Ptr      ivals;        /* array of start/stop pairs */
+  Int2         numivals;     /* number of start/stop pairs in ivals array */
+  Int4         dnaStop;      /* last stop on protein mapped to DNA coordinate for flatfile */
+  Boolean      partialL;     /* left end is partial */
+  Boolean      partialR;     /* right end is partial */
+  Boolean      farloc;       /* location has an accession not packaged in entity */
+  Boolean      bad_order;    /* location is out of order - possibly trans-spliced */
+  Boolean      mixed_strand; /* location has mixed strands - possibly trans-spliced */
+  Uint1        strand;       /* strand (mapped to segmented bioseq if segmented) */
+  Uint1        subtype;      /* featdef subtype */
+  Uint4        itemID;       /* storing itemID so no need to gather again */
+  Boolean      ignore;       /* ignore this second copy of a feature spanning the origin */
+  Uint4        index;        /* position index needed for SeqMgrGetDesiredFeature */
+  Int4         overlap;      /* for xxxByPos, index of leftmost candidate that overlaps this */
 } SMFeatItem, PNTR SMFeatItemPtr;
 
 typedef struct smfeatblock {

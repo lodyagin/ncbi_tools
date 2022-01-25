@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_connector.c,v 6.20 2005/04/20 18:15:59 lavr Exp $
+/*  $Id: ncbi_socket_connector.c,v 6.22 2006/01/27 17:10:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -136,7 +136,7 @@ static EIO_Status s_VT_Open
             char           addr[MAX_IP_ADDR_LEN];
 
             SOCK_GetPeerAddress(xxx->sock, &host, &port, eNH_HostByteOrder);
-            if (SOCK_ntoa(SOCK_htonl(host), addr, sizeof(addr)) != 0)
+            if (SOCK_ntoa(SOCK_HostToNetLong(host), addr, sizeof(addr)) != 0)
                 return eIO_Unknown;
             xxx->host = strdup(addr);
             xxx->port = port;
@@ -295,8 +295,8 @@ static CONNECTOR s_Init
  size_t         init_size,
  TSCC_Flags     flags)
 {
-    CONNECTOR       ccc = (SConnector    *) malloc(sizeof(SConnector    ));
-    SSockConnector* xxx = (SSockConnector*) malloc(sizeof(SSockConnector));
+    CONNECTOR       ccc = (SConnector    *) malloc(sizeof(SConnector));
+    SSockConnector* xxx = (SSockConnector*) malloc(sizeof(*xxx));
 
     /* parameter check: either sock or host/port, not both */
     assert((!sock && host && port) || (sock && !host && !port));
@@ -374,6 +374,12 @@ extern CONNECTOR SOCK_CreateConnectorOnTopEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_socket_connector.c,v $
+ * Revision 6.22  2006/01/27 17:10:54  lavr
+ * Replace obsolete call names with current ones
+ *
+ * Revision 6.21  2006/01/11 20:21:08  lavr
+ * Uniform creation/fill-up of connector structures
+ *
  * Revision 6.20  2005/04/20 18:15:59  lavr
  * +<assert.h>
  *

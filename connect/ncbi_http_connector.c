@@ -1,4 +1,4 @@
-/*  $Id: ncbi_http_connector.c,v 6.68 2005/11/21 21:09:31 lavr Exp $
+/*  $Id: ncbi_http_connector.c,v 6.72 2006/02/14 15:49:42 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,7 @@
  */
 
 #include "ncbi_ansi_ext.h"
+#include "ncbi_comm.h"
 #include "ncbi_priv.h"
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
@@ -95,6 +96,11 @@ typedef struct {
 } SHttpConnector;
 
 
+/* NCBI messaging support */
+static int                   s_MessageIssued = 0;
+static FHTTP_NcbiMessageHook s_MessageHook   = 0;
+
+
 /* Try to fix connection parameters (called for an unconnected connector) */
 static int/*bool*/ s_Adjust(SHttpConnector* uuu,
                             char**          redirect,
@@ -137,9 +143,6 @@ static int/*bool*/ s_Adjust(SHttpConnector* uuu,
     }
 
     ConnNetInfo_AdjustForHttpProxy(uuu->net_info);
-
-    if (uuu->net_info->debug_printout)
-        ConnNetInfo_Log(uuu->net_info, CORE_GetLOG());
     return 1/*success*/;
 }
 
@@ -192,6 +195,8 @@ static EIO_Status s_Connect(SHttpConnector* uuu, int/*bool*/ drop_unread)
                  "\r\n");
             reset_user_header = 1;
         }
+        if (uuu->net_info->debug_printout)
+            ConnNetInfo_Log(uuu->net_info, CORE_GetLOG());
         /* connect & send HTTP header */
         uuu->sock = URL_Connect
             (uuu->net_info->host,       uuu->net_info->port,
@@ -304,6 +309,7 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,int/*bool*/ drop_unread)
 /* Parse HTTP header */
 static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
 {
+    EIO_Status  status = eIO_Success;
     int/*bool*/ moved = 0/*false*/;
     int         server_error = 0;
     int         http_status = 0;
@@ -312,15 +318,9 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
 
     assert(uuu->sock && uuu->read_header);
     *redirect = 0;
-    if (uuu->flags & fHCC_KeepHeader) {
-        uuu->read_header = 0;
-        return eIO_Success;
-    }
 
     /* line by line HTTP header input */
     for (;;) {
-        EIO_Status status;
-
         /* do we have full header yet? */
         size = BUF_Size(uuu->http);
         if (!(header = (char*) malloc(size + 1))) {
@@ -344,19 +344,24 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
             return status;
         }
     }
-    uuu->read_header = 0/*false*/; /* the entire header has been read */
+    assert(header && status == eIO_Success);
+    /* the entire header has been read */
+    uuu->read_header = 0/*false*/;
+
     if (BUF_Read(uuu->http, 0, size) != size) {
         CORE_LOG(eLOG_Error, "[HTTP]  Cannot discard HTTP header buffer");
+        status = eIO_Unknown;
         assert(0);
     }
 
     /* HTTP status must come on the first line of the reply */
-    if (sscanf(header, " HTTP/%*d.%*d %d ", &http_status) != 1  ||
-        http_status < 200  ||  299 < http_status) {
+    if (sscanf(header, " HTTP/%*d.%*d %d ", &http_status) != 1)
+        http_status = -1;
+    if (http_status < 200 || 299 < http_status) {
         server_error = http_status;
-        if (http_status == 301  ||  http_status == 302)
+        if (http_status == 301 || http_status == 302)
             moved = 1;
-        else if (http_status == 403  ||  http_status == 404)
+        else if (http_status < 0 || http_status == 403 || http_status == 404)
             uuu->net_info->max_try = 0;
     }
 
@@ -365,8 +370,10 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
         /* HTTP header gets printed as part of data logging when
            uuu->net_info->debug_printout == eDebugPrintout_Data. */
         const char* header_header;
-        if (!server_error) 
+        if (!server_error)
             header_header = "HTTP header";
+        else if (uuu->flags & fHCC_KeepHeader)
+            header_header = "HTTP header (error)";
         else if (moved)
             header_header = "HTTP header (moved)";
         else if (!uuu->net_info->max_try)
@@ -376,16 +383,60 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
         CORE_DATA(header, size, header_header);
     }
 
-    if (uuu->parse_http_hdr) {
-        if (!(*uuu->parse_http_hdr)
-            (header, uuu->adjust_data, server_error))
-            server_error = 1;
+    {{
+        /* parsing "NCBI-Message" tag */
+        const char k_NcbiMessageTag[] = "\n" HTTP_NCBI_MESSAGE " ";
+        char*      message            = strstr(header, k_NcbiMessageTag);
+
+        if (message) {
+            char* s;
+            char  c;
+
+            message += sizeof(k_NcbiMessageTag) - 1;
+            while (*message && isspace((unsigned char)(*message)))
+                message++;
+            if (!(s = strchr(message, '\r')))
+                s = strchr(message, '\n');
+            assert(s);
+            do {
+                if (!isspace((unsigned char) s[-1]))
+                    break;
+            } while (--s > message);
+            c  = *s;
+            *s = '\0';
+            if (*message) {
+                if (s_MessageHook) {
+                    if (s_MessageIssued <= 0) {
+                        s_MessageIssued = 1;
+                        s_MessageHook(message);
+                    }
+                } else {
+                    s_MessageIssued = -1;
+                    CORE_LOGF(eLOG_Warning, ("[NCBI-MESSAGE]  %s", message));
+                }
+            }
+            *s = c;
+        }
+    }}
+
+    if (uuu->flags & fHCC_KeepHeader) {
+        if (!BUF_Write(&uuu->r_buf, header, size)) {
+            CORE_LOG(eLOG_Error, "[HTTP]  Cannot keep HTTP header");
+            status = eIO_Unknown;
+        }
+        free(header);
+        return status;
+    }
+
+    if (uuu->parse_http_hdr
+        && !(*uuu->parse_http_hdr)(header, uuu->adjust_data, server_error)) {
+        server_error = 1/*fake, but still boolean true*/;
     }
 
     if (moved) {
         /* parsing "Location" pointer */
         const char k_LocationTag[] = "\nLocation: ";
-        char*      location = strstr(header, k_LocationTag);
+        char*      location        = strstr(header, k_LocationTag);
 
         if (location) {
             char* s;
@@ -395,34 +446,33 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
                 *strchr(location, '\n') = 0;
             else
                 *s = 0;
-            while (*location) {
-                if (isspace((unsigned char)(*location)))
-                    location++;
-                else
-                    break;
-            }
-            for (s = location; *s; s++)
+            while (*location && isspace((unsigned char)(*location)))
+                location++;
+            for (s = location; *s; s++) {
                 if (isspace((unsigned char)(*s)))
                     break;
+            }
             *s = 0;
-            if (*location)
-                *redirect = strdup(location);
+            if ((size = strlen(location)) != 0) {
+                memmove(header, location, size + 1);
+                *redirect = header;
+            }
         }
     }
-
-    if (header)
+    if (!*redirect)
         free(header);
 
     /* skip & printout the content, if server error was flagged */
     if (server_error && uuu->net_info->debug_printout == eDebugPrintout_Some) {
-        BUF        buf = 0;
-        char*      body;
+        BUF   buf = 0;
+        char* body;
 
         SOCK_SetTimeout(uuu->sock, eIO_Read, 0);
-        /* because reading until EOF the verify below holds */
-        verify(SOCK_StripToPattern(uuu->sock, 0, 0, &buf, 0) != eIO_Success);
+        /* read until EOF */
+        SOCK_StripToPattern(uuu->sock, 0, 0, &buf, 0);
         if (!(size = BUF_Size(buf))) {
-            CORE_LOG(eLOG_Trace, "[HTTP]  No body received with this error");
+            CORE_LOG(eLOG_Trace,
+                     "[HTTP]  No HTTP body received with this error");
         } else if ((body = (char*) malloc(size)) != 0) {
             size_t n = BUF_Read(buf, body, size);
             if (n != size) {
@@ -431,7 +481,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
                                        (unsigned long) n,
                                        (unsigned long) size));
             }
-            CORE_DATA(body, n, "HTTP server error body");
+            CORE_DATA(body, n, "Server error body");
             free(body);
         } else {
             CORE_LOGF(eLOG_Error, ("[HTTP]  Cannot allocate server error "
@@ -440,7 +490,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
         BUF_Destroy(buf);
     }
 
-    return server_error ? eIO_Unknown : eIO_Success;
+    return server_error ? eIO_Unknown : status;
 }
 
 
@@ -531,13 +581,13 @@ static EIO_Status s_Read(SHttpConnector* uuu, void* buf,
         /* decode, then discard the successfully decoded data from the input */
         if (URL_Decode(peek_buf, n_peeked, &n_decoded, buf, size, n_read)) {
             if (n_decoded) {
-                size_t x_read;
-                SOCK_Read(uuu->sock,peek_buf,n_decoded,&x_read,eIO_ReadPlain);
-                assert(x_read == n_decoded);
+                SOCK_Read(uuu->sock, 0, n_decoded, &n_peeked, eIO_ReadPersist);
+                assert(n_peeked == n_decoded);
                 status = eIO_Success;
-            } else if (SOCK_Status(uuu->sock, eIO_Read) == eIO_Closed)
+            } else if (SOCK_Status(uuu->sock, eIO_Read) == eIO_Closed) {
                 /* we are at EOF, and the remaining data cannot be decoded */
                 status = eIO_Unknown;
+            }
         } else
             status = eIO_Unknown;
 
@@ -565,8 +615,8 @@ static EIO_Status s_Disconnect(SHttpConnector* uuu,
         }
     } else if ((status = s_PreRead(uuu, timeout, 0/*nodrop*/)) == eIO_Success){
         do {
-            char     buf[4096];
-            size_t   x_read;
+            char   buf[4096];
+            size_t x_read;
             status = s_Read(uuu, buf, sizeof(buf), &x_read);
             if (!BUF_Write(&uuu->r_buf, buf, x_read))
                 status = eIO_Unknown;
@@ -805,6 +855,7 @@ static EIO_Status s_VT_Flush
 
     /* The real flush will be performed on the first "READ" (or "CLOSE"),
      * or on "WAIT". Here, we just store the write timeout, that's all...
+     * ADDENDUM: fHCC_Flushable connectors are able to actually flush data.
      */
     if (timeout) {
         uuu->ww_timeout = *timeout;
@@ -813,9 +864,9 @@ static EIO_Status s_VT_Flush
         uuu->w_timeout  = timeout;
 
     assert(connector->meta);
-    return (!(uuu->flags & fHCC_Flushable)  ||  !connector->meta->wait
-            ? eIO_Success
-            : connector->meta->wait(connector->meta->c_wait, eIO_Read, &zero));
+    return !(uuu->flags & fHCC_Flushable) || !connector->meta->wait
+        ? eIO_Success
+        : connector->meta->wait(connector->meta->c_wait, eIO_Read, &zero);
 }
 
 
@@ -947,8 +998,6 @@ extern CONNECTOR HTTP_CreateConnectorEx
     uuu->net_info        = net_info ?
         ConnNetInfo_Clone(net_info) : ConnNetInfo_Create(0);
     ConnNetInfo_AdjustForHttpProxy(uuu->net_info);
-    if (uuu->net_info->debug_printout)
-        ConnNetInfo_Log(uuu->net_info, CORE_GetLOG());
 
     uuu->parse_http_hdr  = parse_http_hdr;
     uuu->adjust_net_info = adjust_net_info;
@@ -956,8 +1005,6 @@ extern CONNECTOR HTTP_CreateConnectorEx
     uuu->adjust_data     = adjust_data;
 
     uuu->flags           = flags;
-    if (flags & fHCC_UrlDecodeInput)
-        uuu->flags      &= ~fHCC_KeepHeader;
     uuu->can_connect     = eCC_Once;         /* will be properly set at open */
     uuu->error_header    = getenv("HTTP_ERROR_HEADER_ONLY") ? 1 : 0;
 
@@ -980,9 +1027,32 @@ extern CONNECTOR HTTP_CreateConnectorEx
 }
 
 
+extern void HTTP_SetNcbiMessageHook(FHTTP_NcbiMessageHook hook)
+{
+    if (hook) {
+        if (hook != s_MessageHook)
+            s_MessageIssued = s_MessageIssued ? -1 : -2;
+    } else if (s_MessageIssued < -1)
+        s_MessageIssued = 0;
+    s_MessageHook = hook;
+}
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_http_connector.c,v $
+ * Revision 6.72  2006/02/14 15:49:42  lavr
+ * Introduce and use CORE_TRACE macros (NOP in Release mode)
+ *
+ * Revision 6.71  2006/01/17 20:24:35  lavr
+ * Handle NCBI messages, and properly handle fHCC_KeepHeader
+ *
+ * Revision 6.70  2006/01/11 16:29:58  lavr
+ * Treat unparsable HTTP/x.y header line as a server error
+ *
+ * Revision 6.69  2005/12/08 03:53:23  lavr
+ * Log connection parameters right before use
+ *
  * Revision 6.68  2005/11/21 21:09:31  lavr
  * Fix compilation error
  *
