@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.426 $
+* $Revision: 6.427 $
 *
 * File Description: 
 *
@@ -385,7 +385,7 @@ static void RestrictionSearchProc (SeqEntryPtr sep, Pointer mydata, Int4 index, 
   if (bsp == NULL) return;
   if (! ISA_na (bsp->mol)) return;
 
-  desc = ValNodeNew (NULL);
+  desc = SeqDescrNew (NULL);
   desc->choice = Annot_descr_name;
   desc->data.ptrvalue = StringSave ("cutsites");
 

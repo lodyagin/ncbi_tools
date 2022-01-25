@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.366 $
+* $Revision: 6.376 $
 *
 * File Description: 
 *
@@ -235,18 +235,22 @@ extern void ConsolidateOrganismNotes (IteM i);
 extern void ConsolidateLikeModifiersWithSemicolons (IteM i);
 extern void ConsolidateLikeModifiersWithoutSemicolons (IteM i);
 
-extern void CountryLookup (IteM i);
+extern void CountryLookupWithoutCapFix (IteM i);
+extern void CountryLookupWithCapFix (IteM i);
 extern void ExtractProteinFeaturesFromNote (IteM i);
 extern void ConvertPseudoCDSToMiscFeat (IteM i);
 extern void ProcessPseudoMiscFeat (IteM i);
 extern void ParseInfluenzaAVirusNames (IteM i);
 extern void AddStrainAndSerotypeToInfluenzaAVirusNames (IteM i);
+extern void FixupInfluenzaAVirusNames(IteM i);
 extern void EditPubs (IteM i);
 extern void RemovePubConsortiums (IteM i);
 
 extern void ExtendPartialFeatures (IteM i);
 extern void TrimOrganismName (IteM i);
 extern void SUCSubmitterProc (IteM i);
+
+extern CharPtr FixInfluenzaVirusName (CharPtr orig_name);
 
 extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether);
 
@@ -343,7 +347,7 @@ extern Uint2 PackageFormResults (SequinBlockPtr sbp, SeqEntryPtr sep,
 extern void EnableFeaturesPerTarget (BaseFormPtr bfp);
 extern void EnableAnalysisItems (BaseFormPtr bfp, Boolean isDocSum);
 
-extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
+extern Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
 extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos);
 
 #define REGISTER_BIOSEQ_SEG_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Bioseq Seg","BioseqSegEditor",OBJ_BIOSEQ_SEG,0,OBJ_BIOSEQ_SEG,0,NULL,BioseqSegEditFunc,PROC_PRIORITY_DEFAULT)
@@ -454,6 +458,7 @@ extern void ApplyRRNA (IteM i);
 extern void ApplyImpFeat (IteM i);
 extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata);
 extern void AdjustCDSLocationsForGaps (IteM i);
+extern void AdjustCDSLocationsForGapsKnownAndUnknown (IteM i);
 extern void LoadTPAAccessionNumbersFromFile (IteM i);
 extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
 extern void LoadHistoryAccessionNumbersFromFile (IteM i);
@@ -707,6 +712,7 @@ extern ValNodePtr BuildFeatureValNodeList (
   Boolean skip_import
 );
 
+extern void RemoveOldName (OrgRefPtr orp);
 extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname);
 
 extern void MergeFeatureIntervalsToParts (SeqFeatPtr sfp, Boolean ordered);
@@ -965,6 +971,7 @@ typedef void (*SetDescriptorFieldString) PROTO ((SeqDescrPtr, Pointer, FilterSet
 typedef void (*RemoveDescriptorFieldString) PROTO ((SeqDescrPtr, Pointer, FilterSetPtr));
 typedef void (*FeatureActionProc) PROTO ((SeqFeatPtr, Pointer, FilterSetPtr));
 typedef void (*DescriptorActionProc) PROTO ((SeqDescrPtr, Pointer, FilterSetPtr));
+typedef Boolean (*OkToPreSample) PROTO ((Uint2 entityID));
 
 extern void 
 OperateOnSeqEntryConstrainedObjects 
@@ -989,9 +996,30 @@ typedef  void  (*Nlm_ClearTextActnProc) PROTO ((Pointer));
 
 extern ValNodePtr ValNodeFuncFree (ValNodePtr vnp, FreeValNodeProc free_vn_proc);
 
-#define CONVERT_TYPE_MOVE 0
-#define CONVERT_TYPE_COPY 1
-#define CONVERT_TYPE_SWAP 2
+typedef struct textportion
+{
+  Int4    start_choice;
+  CharPtr start_text;
+  Int4    end_choice;
+  CharPtr end_text;
+  Boolean insensitive;
+  Boolean whole_word;
+} TextPortionData, PNTR TextPortionPtr;
+
+extern TextPortionPtr TextPortionFree (TextPortionPtr tp);
+extern void 
+FindTextPortionInString 
+(CharPtr        str, 
+ TextPortionPtr tp, 
+ CharPtr PNTR   ploc, 
+ Int4Ptr        plen);
+
+extern DialoG TextPortionDialog (GrouP h);
+
+#define CONVERT_TYPE_MOVE  0
+#define CONVERT_TYPE_COPY  1
+#define CONVERT_TYPE_SWAP  2
+#define CONVERT_TYPE_PARSE 3
 
 typedef struct convertfield
 {
@@ -1007,6 +1035,9 @@ typedef struct convertfield
   RemoveDescriptorFieldString remove_d_str_func;
   NameFromValNodeProc         name_field_func;
   FilterSetPtr                fsp;
+  TextPortionPtr              text_portion;
+  Boolean                     strip_name_from_text;
+  Boolean                     remove_parsed;
 } ConvertFieldData, PNTR ConvertFieldPtr;
 
 extern DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn);
@@ -1168,26 +1199,6 @@ extern DialoG BioSourceStringDialog
  Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
-
-typedef struct textportion
-{
-  Int4    start_choice;
-  CharPtr start_text;
-  Int4    end_choice;
-  CharPtr end_text;
-  Boolean insensitive;
-  Boolean whole_word;
-} TextPortionData, PNTR TextPortionPtr;
-
-extern TextPortionPtr TextPortionFree (TextPortionPtr tp);
-extern void 
-FindTextPortionInString 
-(CharPtr        str, 
- TextPortionPtr tp, 
- CharPtr PNTR   ploc, 
- Int4Ptr        plen);
-
-extern DialoG TextPortionDialog (GrouP h);
 
 extern DialoG 
 ConstraintChoiceDialog 
@@ -1387,6 +1398,10 @@ extern void AddFlankingNsToKnownLengthGaps (IteM i);
 
 extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen);
 extern Boolean DoBioseqFeaturesMatchSequenceConstraint (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintPtr scp);
+extern void ResetCapitalization (Boolean first_is_upper, CharPtr pString);
+extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data);
+ 
+extern void MapFeaturesToProteinSequence(IteM i);
 
 #ifdef __cplusplus
 }

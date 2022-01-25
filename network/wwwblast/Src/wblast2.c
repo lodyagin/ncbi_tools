@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.32 2006/01/17 21:47:28 madden Exp $
+/* $Id: wblast2.c,v 1.37 2006/04/26 14:48:23 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,27 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.32 $
+* $Revision: 1.37 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.37  2006/04/26 14:48:23  jianye
+* force printing out accession in defline
+*
+* Revision 1.36  2006/04/26 12:49:08  madden
+* fix typo
+*
+* Revision 1.35  2006/04/25 17:33:51  jianye
+* fetch from nr first for protein sequence
+*
+* Revision 1.34  2006/03/20 17:04:51  jianye
+* use gi for query if possible
+*
+* Revision 1.33  2006/03/07 17:06:30  jianye
+* correct mask char
+*
 * Revision 1.32  2006/01/17 21:47:28  madden
 * Adjust to change in BLAST_TwoSeqLocSets prototype
 *
@@ -637,7 +652,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("</I></B></TD></TR></TABLE></CENTER>\n");
         }
         printf("<H2><CENTER><font color=#0000ff> BLAST 2 SEQUENCES</font></H2></CENTER>\n");
-        printf("<FORM NAME=\"bl2\" method=\"Post\" action=\"wblast2.cgi?%d\" enctype=\"multipart/form-data\">\n", pagecount);
+        printf("<FORM NAME=\"bl2\" method=\"post\" action=\"wblast2.cgi?%d\" enctype=\"multipart/form-data\">\n", pagecount);
 #else /* defined BL2SEQ_STANDALONE */
         printf("<BODY BGCOLOR=\"#F0F0FE\" LINK=\"#0000FF\" "
            "VLINK=\"#660099\" ALINK=\"#660099\">\n");
@@ -653,7 +668,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
         printf("</map>\n"); 
         printf("<IMG USEMAP=#img_map WIDTH=509 HEIGHT=22 "
                "SRC=\"images/bl2seq.gif\" BORDER=0 ISMAP></A>\n");
-        printf("<FORM NAME=\"bl2\" method=\"POST\" "
+        printf("<FORM NAME=\"bl2\" method=\"post\" "
 #ifdef NCBI_ENTREZ_CLIENT
            "action=\"wblast2_cs.cgi?%d\" "
 #else
@@ -759,7 +774,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
             printf("<option value=2> Mismatch-highlighting\n");
             printf("</select>&nbsp;&nbsp;&nbsp;\n");
             printf("<BR>Masking character option <select name=\"mask_char\">\n");
-            printf("<option value=1 SELECTED> X for protein, n for nucleotide\n");
+            printf("<option value=0 SELECTED> X for protein, n for nucleotide\n");
             printf("<option value=2> Lower case\n");
             printf("</select>&nbsp;&nbsp;&nbsp;\n");
 
@@ -1412,7 +1427,7 @@ static void DrawRectAlign(PrymPtr PNTR rect, Int2 k, Int2 color, Int2 height, In
 
 static BioseqPtr 
 
-FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num)
+FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num, Boolean is_aa)
 {
    BioseqPtr bsp = NULL;
 
@@ -1426,6 +1441,8 @@ FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num)
    Int2 retval, buf_length=512;
    Uint1 buf[512];
    ByteStorePtr old_seq_data = NULL;
+   Boolean fetch_from_nr = FALSE;
+   Boolean id1_fetch_again = FALSE;
 
    ID1BioseqFetchEnable ("wblast2", TRUE);
    
@@ -1496,7 +1513,26 @@ FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num)
    }
    if (gi > 0) {
       ValNodeAddInt(&sip, SEQID_GI, gi);
+
+      if(is_aa){
+#ifdef NCBI_INTERNAL_NEW_FORMATTER
+          fetch_from_nr = TRUE;
+#endif
+      }
+      if (fetch_from_nr) {
+          ID1BioseqFetchDisable();
+          ReadDBBioseqFetchEnable ("bl2seq", "nr", !is_aa, TRUE);          
+      }          
+      
       bsp = BioseqLockById(sip);
+
+      
+      if (!bsp && fetch_from_nr) { /*try id1 if fetch from nr failed*/
+          id1_fetch_again = TRUE;
+          ReadDBBioseqFetchDisable();
+          ID1BioseqFetchEnable ("wblast2", TRUE);
+          bsp = BioseqLockById(sip);
+      }
       SeqIdFree(sip);
    } 
 
@@ -1538,8 +1574,11 @@ FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num)
    SeqPortFree(spp);
    old_seq_data = BSFree(old_seq_data);
    BioseqPack(bsp);
-   ID1BioseqFetchDisable();
-   
+   if (fetch_from_nr && !id1_fetch_again) {
+       ReadDBBioseqFetchDisable();
+   } else {
+       ID1BioseqFetchDisable();
+   }
 #endif
 
     return bsp;
@@ -1564,7 +1603,7 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
     static Char buf[41];
     Int4 gi;
     CharPtr defline = NULL;
-    printf("<FORM NAME= bl2 method=\"POST\" action="    
+    printf("<FORM NAME= bl2 method=\"post\" action="    
 #if defined (BL2SEQ_STANDALONE) && defined (NCBI_ENTREZ_CLIENT)
            "\"wblast2_cs.cgi"
 #else 
@@ -1615,7 +1654,7 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
     printf("<option value=2 %s> Mismatch-highlighting\n", view == 2 ? "SELECTED" : "");
     printf("</select>&nbsp;&nbsp;&nbsp;\n");
     printf("<BR>Masking character option <select name=\"mask_char\">\n");
-    printf("<option value=1 %s> X for protein, n for nucleotide\n", mask_char == 1 ? "SELECTED" : "" );
+    printf("<option value=0 %s> X for protein, n for nucleotide\n", mask_char == 0 ? "SELECTED" : "" );
     printf("<option value=2 %s> Lower case\n", mask_char == 2 ? "SELECTED" : "");
     printf("</select>&nbsp;&nbsp;&nbsp;\n");
     
@@ -1669,7 +1708,7 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
 
     printf("<BR><strong> Sequence 1</strong>: ");
     if ((gi = GetGIForSeqId(SeqIdFindBest(query_bsp->id, SEQID_GI))) != 0) {
-        SeqIdWrite(query_bsp->id, buf, PRINTID_FASTA_SHORT, 30);
+        SeqIdWrite(SeqIdFindBestAccession(query_bsp->id), buf, PRINTID_FASTA_SHORT, 30);
         printf("<A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld>gi|%ld|%s</A>", gi, gi, buf);
     } else {
         SeqIdWrite(query_bsp->id, buf, PRINTID_FASTA_LONG, 40);
@@ -1690,7 +1729,7 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
     printf("<BR><BR>\n");
     printf("<strong> Sequence 2</strong>: ");
     if ((gi = GetGIForSeqId(SeqIdFindBest(subject_bsp->id, SEQID_GI))) != 0) {
-        SeqIdWrite(subject_bsp->id, buf, PRINTID_FASTA_SHORT, 30);
+        SeqIdWrite(SeqIdFindBestAccession(subject_bsp->id), buf, PRINTID_FASTA_SHORT, 30);
         printf("<A HREF=http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=%ld>gi|%ld|%s</A>", gi, gi, buf);
     } else {
         SeqIdWrite(subject_bsp->id, buf, PRINTID_FASTA_LONG, 40);
@@ -2062,7 +2101,7 @@ Int2 Main(void)
     CharPtr rid = NULL, database = NULL;
     sigset_t sigset;
     struct sigaction sa;
-    Int4 mask_color =1, mask_char = 1, view = 1;
+    Int4 mask_color =1, mask_char = 0, view = 1;
     Boolean cds_translation = FALSE;
     CharPtr value_holder = NULL;
 #ifndef BL2SEQ_STANDALONE
@@ -2337,7 +2376,7 @@ Int2 Main(void)
                                from, to, ffrom, tto, filter, pagecount);
           }
        } else {
-          if ((query_bsp = FindSeqByAccession(accessionOrGi_1, 1)) == NULL) {
+           if ((query_bsp = FindSeqByAccession(accessionOrGi_1, 1, is_aa1)) == NULL) {
              error_msg = "The first sequence accession is not found";
              
              Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, 
@@ -2368,7 +2407,7 @@ Int2 Main(void)
                                from, to, ffrom, tto, filter, pagecount);
           }
        } else {
-          subject_bsp = FindSeqByAccession(accessionOrGi_2, 2);
+           subject_bsp = FindSeqByAccession(accessionOrGi_2, 2, is_aa2);
        }
        if (subject_bsp == NULL) {
             error_msg = "The second sequence accession is not found";
@@ -2515,7 +2554,7 @@ Int2 Main(void)
     fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
     if (from == 0 && to == 0) {
 #ifdef NCBI_INTERNAL_NEW_FORMATTER
-        ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(query_bsp->id));
+        ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(query_bsp->id, SEQID_GI)));
         len1 = query_bsp->length;
 #else
         ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(fake_bsp->id));

@@ -31,7 +31,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 36
+#define NUMARG 37
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -69,6 +69,7 @@ Args myargs[NUMARG] = {
    {"htgs_cancelled keyword","F", NULL ,NULL ,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
    {"Filename for quality scores",NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL} ,
    {"Whole Genome Shotgun?","F", NULL ,NULL ,TRUE,'w',ARG_BOOLEAN,0.0,0,NULL},
+   {"Arbitrary Keyword",NULL, NULL ,NULL ,TRUE,'k',ARG_STRING,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -649,8 +650,8 @@ Int2 Main(void)
    int frg;
    ResqSeqgphPtr rsp;
    ResqContigPtr rcp;
-   CharPtr tool_ver = "fa2htgs 2.1";
-   CharPtr keywords [3];
+   CharPtr tool_ver = "fa2htgs 2.2";
+   CharPtr keywords [6], arbitraryKeyword = NULL;
    Int2 currkeyword = 0;
 
                /* check command line arguments */
@@ -700,6 +701,7 @@ Int2 Main(void)
    htgsActivefin = (Boolean) myargs[32].intvalue;
    htgsCancelled = (Boolean) myargs[33].intvalue;
    qual_fname = myargs [34].strvalue;
+   arbitraryKeyword = myargs [36].strvalue;
 
    dumsp6 [0] = '\0';
    dumt7 [0] = '\0';
@@ -1204,6 +1206,10 @@ Int2 Main(void)
    }
    if (htgsCancelled) {
       keywords [currkeyword] = "HTGS_CANCELLED";
+      currkeyword++;
+   }
+   if (StringDoesHaveText (arbitraryKeyword)) {
+      keywords [currkeyword] = arbitraryKeyword;
       currkeyword++;
    }
    if (currkeyword > 0) {

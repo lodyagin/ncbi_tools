@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_program.c,v 1.3 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_program.c,v 1.4 2006/03/22 18:45:33 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -37,6 +37,7 @@ static char const rcsid[] =
     
 #include <algo/blast/core/blast_program.h>
 
+/** Convert an arbitrary integer to true/false */
 #define SAFE_CAST_INT_TO_BOOLEAN(p) (((p) != 0) ? TRUE : FALSE)
 
 /* Classify query sequence */

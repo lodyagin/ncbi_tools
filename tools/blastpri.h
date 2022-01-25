@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.121 $ 
+/* $Revision: 6.122 $ 
 * $Log: blastpri.h,v $
+* Revision 6.122  2006/04/26 12:42:36  madden
+* BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
+*
 * Revision 6.121  2005/12/29 19:56:06  madden
 * Moved functions to print tabular output to blfmtutl
 *
@@ -941,11 +944,6 @@ Int4 BlastGetLetterIndex(CharPtr letters, Char ch);
 SeqIdPtr BlastGetAllowedGis PROTO((BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seqid));
 
 Int4 BlastDeleteHeap PROTO((BLASTHeapPtr which_heap, Int4 position));
-
-/* Functions used for printing error messages. */
-
-Uint1 BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id);
-void BlastDeleteUserErrorString(Uint1 err_id);
 
 
 

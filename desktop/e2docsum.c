@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
@@ -1610,7 +1610,7 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format,
   }
 
   if ((! do_fasta) && (! do_cds)) {
-    LookupFarSeqIDs (seqEntryPtr, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE);
+    LookupFarSeqIDs (seqEntryPtr, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE);
   }
 
   /*------------------------*/

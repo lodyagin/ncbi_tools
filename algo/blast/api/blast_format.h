@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.42 2006/01/13 14:33:48 merezhuk Exp $
+/* $Id: blast_format.h,v 1.44 2006/04/25 17:56:54 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -205,11 +205,12 @@ Int2 BLAST_PrintOutputHeader(const BlastFormattingInfo* format_info);
  * like:
  * "Mega BLAST run finished, processed 2 queries"
  *
- * @param format_info Formatting information structure, containing the output
+ * @param outfp output file pointer [in]
+ * @param num_processed number of records proceessed [in]
  *                    stream pointer. [in]
  * @return 0 on success 
  */
-Int2 BlastPrintLogReport(const BlastFormattingInfo* format_info);
+Int2 BlastPrintLogReport(FILE* outfp, Int4 num_processed);
 
 /** Given a Seq-id structure, returns a buffer in requested form.
  * @param sip Seq-id to get information from. [in]
@@ -217,10 +218,13 @@ Int2 BlastPrintLogReport(const BlastFormattingInfo* format_info);
  * @param ncbi_gi Should the NCBI gi be included in the id buffer? [in]
  * @param accession_only Should only accession be returned (only gi if ncbi_gi
  *                       is TRUE)? [in]
+ * @param search_for_id If TRUE, attempt to find a sequence identifier.
+ *                  If FALSE, the first token in the defline is treated
+ *                  as an identifier, even if it is not an actual ID [in]
  */
 void 
 Blast_SeqIdGetDefLine(SeqIdPtr sip, char** buffer_ptr, Boolean ncbi_gi, 
-                      Boolean accession_only);
+                      Boolean accession_only, Boolean search_for_id);
 
 /** Posts an error message from the summary returns, if any, to a provided
  * output stream. If no stream provided, nothing is written. 

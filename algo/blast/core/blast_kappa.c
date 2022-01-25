@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.68 2006/01/31 15:45:07 camacho Exp $
+/* $Id: blast_kappa.c,v 1.71 2006/05/03 14:30:59 madden Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.68 2006/01/31 15:45:07 camacho Exp $";
+"$Id: blast_kappa.c,v 1.71 2006/05/03 14:30:59 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -270,10 +270,13 @@ s_HSPListFromDistinctAlignments(BlastCompo_Alignment ** alignments,
  * @param queryInfo        information about the queries
  * @param sbp              the score block for this search
  * @param hitParams        parameters used to assign evalues and
- *                         decide whether to save hits. 
- *                         
+ *                         decide whether to save hits.
+ * @param pvalueForThisPair  composition p-value
+ * @param LambdaRatio        lambda ratio, if available
+ * @param subject_id         index of subject
+ *
  * @return 0 on success; -1 on failure (can fail because some methods
- *         of generating evalues use auxiliary structures) 
+ *         of generating evalues use auxiliary structures)
  */
 static int
 s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
@@ -282,7 +285,10 @@ s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
                           EBlastProgramType program_number,
                           BlastQueryInfo* queryInfo,
                           BlastScoreBlk* sbp,
-                          const BlastHitSavingParameters* hitParams)
+                          const BlastHitSavingParameters* hitParams,
+                          double pvalueForThisPair,
+                          double LambdaRatio,
+                          int subject_id)
 {
     int status = 0;
     *pbestEvalue = DBL_MAX;
@@ -1158,6 +1164,7 @@ s_RedoOneAlignment(BlastCompo_Alignment * in_align,
        into the translated subject_range; shifting in this manner
        is necessary for BLAST_CheckStartForGappedAlignment */
     hsp->subject.offset       -= subject_range->begin;
+    hsp->subject.end          -= subject_range->begin;
     hsp->subject.gapped_start -= subject_range->begin;
 
     if(BLAST_CheckStartForGappedAlignment(hsp, query_data->data,
@@ -1183,6 +1190,7 @@ s_RedoOneAlignment(BlastCompo_Alignment * in_align,
     /* Undo the shift so there is no side effect on the incoming HSP
        list. */
     hsp->subject.offset       += subject_range->begin;
+    hsp->subject.end          += subject_range->begin;
     hsp->subject.gapped_start += subject_range->begin;
 
     gapAlign->gap_x_dropoff = gapping_params->x_dropoff;
@@ -1286,12 +1294,6 @@ s_SavedParametersNew(Int4 rows,
     for (i = 0;  i < numQueries;  i++) {
         sp->kbp_gap_orig[i] = NULL;
     }
-    for (i = 0;  i < numQueries;  i++) {
-        sp->kbp_gap_orig[i] = Blast_KarlinBlkNew();
-        if (sp->kbp_gap_orig[i] == NULL) {
-            goto error_return;
-        }
-    }
     if (compo_adjust_mode != eNoCompositionBasedStats) {
         if (positionBased) {
             sp->origMatrix = Nlm_Int4MatrixNew(rows, BLASTAA_SIZE);
@@ -1319,7 +1321,7 @@ error_return:
  * @param compo_adjust_mode  composition adjustment mode [in]
  * @param positionBased     is this search position-based [in]
  */
-static void
+static int
 s_RecordInitialSearch(BlastKappa_SavedParameters * searchParams,
                       BlastScoreBlk* sbp,
                       const BlastScoringParameters* scoring,
@@ -1335,7 +1337,15 @@ s_RecordInitialSearch(BlastKappa_SavedParameters * searchParams,
     searchParams->scale_factor = scoring->scale_factor;
 
     for (i = 0;  i < searchParams->num_queries;  i++) { 
-        Blast_KarlinBlkCopy(searchParams->kbp_gap_orig[i], sbp->kbp_gap[i]);
+        if (sbp->kbp_gap[i] != NULL) {
+            /* There is a kbp_gap for query i and it must be copied */
+            searchParams->kbp_gap_orig[i] = Blast_KarlinBlkNew();
+            if (searchParams->kbp_gap_orig[i] == NULL) {
+                return -1;
+            }
+            Blast_KarlinBlkCopy(searchParams->kbp_gap_orig[i],
+                                sbp->kbp_gap[i]);
+        }
     }
 
     if (compo_adjust_mode != eNoCompositionBasedStats) {
@@ -1355,6 +1365,7 @@ s_RecordInitialSearch(BlastKappa_SavedParameters * searchParams,
             }
         }
     }
+    return 0;
 }
 
 
@@ -1375,9 +1386,11 @@ s_RescaleSearch(BlastScoreBlk* sbp,
 {
     int i;
     for (i = 0;  i < num_queries;  i++) {
-        Blast_KarlinBlk * kbp = sbp->kbp_gap[i];
-        kbp->Lambda /= scale_factor;
-        kbp->logK = log(kbp->K);
+        if (sbp->kbp_gap[i] != NULL) {
+            Blast_KarlinBlk * kbp = sbp->kbp_gap[i];
+            kbp->Lambda /= scale_factor;
+            kbp->logK = log(kbp->K);
+        }
     }
 
     sp->gap_open = BLAST_Nint(sp->gap_open  * scale_factor);
@@ -1415,7 +1428,10 @@ s_RestoreSearch(BlastScoreBlk* sbp,
     scoring->scale_factor = searchParams->scale_factor;
 
     for (i = 0;  i < searchParams->num_queries;  i++) {
-        Blast_KarlinBlkCopy(sbp->kbp_gap[i], searchParams->kbp_gap_orig[i]);
+        if (sbp->kbp_gap[i] != NULL) {
+            Blast_KarlinBlkCopy(sbp->kbp_gap[i],
+                                searchParams->kbp_gap_orig[i]);
+        }
     }
     if(compo_adjust_mode != eNoCompositionBasedStats) {
         int  j;             /* iteration index */
@@ -1482,8 +1498,7 @@ s_MatrixInfoInit(Blast_MatrixInfo * self,
         self->ungappedLambda = sbp->kbp_ideal->Lambda / scale_factor;
         status = s_GetStartFreqRatios(self->startFreqRatios, matrixName);
         if (status == 0) {
-            Blast_Int4MatrixFromFreq(self->startMatrix, BLASTAA_SIZE,
-                                     self->startFreqRatios,
+            Blast_Int4MatrixFromFreq(self->startMatrix, self->startFreqRatios,
                                      self->ungappedLambda);
         }
     }
@@ -1563,7 +1578,8 @@ s_GappingParamsNew(BlastKappa_GappingParamsContext * context,
     }
     
     for (i = 0;  i < num_queries;  i++) {
-        if (context->sbp->kbp_gap[i]->Lambda < min_lambda) {
+        if (context->sbp->kbp_gap[i] != NULL &&
+            context->sbp->kbp_gap[i]->Lambda < min_lambda) {
             min_lambda = context->sbp->kbp_gap[i]->Lambda;
         }
     }
@@ -1750,6 +1766,13 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
     Int4      **matrix;                   /* score matrix */
     BlastKappa_GappingParamsContext gapping_params_context;
 
+    double pvalueForThisPair = (-1); /* p-value for this match
+                                        for composition; -1 == no adjustment*/
+    double LambdaRatio; /*lambda ratio*/
+    /* which test function do we use to see if a composition-adjusted
+       p-value is desired; value needs to be passed in eventually*/
+    int compositionTestIndex = 0;
+
     if (positionBased) {
         matrix = sbp->psi_matrix->pssm->data;
     } else {
@@ -1790,9 +1813,13 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
         status_code = -1;
         goto function_cleanup;
     }
-    s_RecordInitialSearch(savedParams, sbp, scoringParams,
-                          queryInfo->max_length, compo_adjust_mode,
-                          positionBased);
+    status_code =
+        s_RecordInitialSearch(savedParams, sbp, scoringParams,
+                              queryInfo->max_length, compo_adjust_mode,
+                              positionBased);
+    if (status_code != 0) {
+        goto function_cleanup;
+    }
     if (compo_adjust_mode != eNoCompositionBasedStats) {
         if((0 == strcmp(scoringParams->options->matrix, "BLOSUM62_20"))) {
             localScalingFactor = SCALING_FACTOR / 10;
@@ -1904,14 +1931,20 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                                                 &matchingSeq, query_info,
                                                 numQueries, matrix,
                                                 NRrecord, &forbidden,
-                                                redoneMatches);
+                                                redoneMatches,
+                                                &pvalueForThisPair,
+                                                compositionTestIndex,
+                                                &LambdaRatio);
         } else {
             status_code =
                 Blast_RedoOneMatch(alignments, redo_align_params,
                                    incoming_aligns, thisMatch->hspcnt,
                                    kbp->Lambda, &matchingSeq,
                                    queryInfo->max_length, query_info,
-                                   numQueries, matrix, NRrecord);
+                                   numQueries, matrix, NRrecord,
+                                   &pvalueForThisPair,
+                                   compositionTestIndex,
+                                   &LambdaRatio);
         }
         if (status_code != 0) {
             goto match_loop_cleanup;
@@ -1944,7 +1977,9 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                                               matchingSeq.length,
                                               program_number,
                                               queryInfo, sbp,
-                                              hitParams);
+                                              hitParams,
+                                              pvalueForThisPair, LambdaRatio,
+                                              0);
                 if (status_code != 0) {
                     goto query_loop_cleanup;
                 }

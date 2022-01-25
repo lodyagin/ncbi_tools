@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.25 $
+* $Revision: 1.26 $
 *
 * File Description: 
 *
@@ -333,6 +333,7 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   Boolean products,
   Boolean alignments,
   Boolean history,
+  Boolean inference,
   Boolean others
 );
 

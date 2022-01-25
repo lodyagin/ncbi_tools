@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.138 2006/01/12 20:36:37 camacho Exp $
+/* $Id: blast_stat.c,v 1.141 2006/04/20 19:28:30 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.138 2006/01/12 20:36:37 camacho Exp $";
+    "$Id: blast_stat.c,v 1.141 2006/04/20 19:28:30 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
@@ -2056,47 +2056,76 @@ BlastKarlinLHtoK(Blast_ScoreFreq* sfp, double lambda, double H)
 
 
 /**
- * Find positive solution to sum_{i=low}^{high} exp(i lambda) = 1.
+ * Find positive solution to 
+ *
+ *     sum_{i=low}^{high} exp(i lambda) * probs[i] = 1.
  * 
- * @param probs probabilities of a score occurring 
- * @param d the gcd of the possible scores. This equals 1 if the scores
- * are not a lattice
- * @param low the lowest possible score
- * @param high the highest possible score
- * @param lambda0 an initial value for lambda
- * @param tolx the tolerance to which lambda must be computed
- * @param itmax the maximum number of times the function may be
- * evaluated
- * @param maxNewton the maximum permissible number of Newton
- * iteration. After that the computation will proceed by bisection.
- * @param itn a pointer to an integer that will receive the actually
- * number of iterations performed.
+ * Note that this solution does not exist unless the average score is
+ * negative and the largest score that occurs with nonzero probability
+ * is positive.
+ * 
+ * @param probs         probabilities of a score occurring 
+ * @param d             the gcd of the possible scores. This equals 1 if
+ *                      the scores are not a lattice
+ * @param low           the lowest possible score that occurs with
+ *                      nonzero probability
+ * @param high          the highest possible score that occurs with
+ *                      nonzero probability.
+ * @param lambda0       an initial guess for lambda
+ * @param tolx          the tolerance to which lambda must be computed
+ * @param itmax         the maximum number of times the function may be
+ *                      evaluated
+ * @param maxNewton     the maximum permissible number of Newton
+ *                      iterations; after that the computation will proceed
+ *                      by bisection.
+ * @param *itn          the number of iterations needed to compute Lambda,
+ *                      or itmax if Lambda could not be computed.
  *
- * Let phi(lambda) =  sum_{i=low}^{high} exp(i lambda) - 1. Then phi(lambda)
- * may be written
+ * Let phi(lambda) =  sum_{i=low}^{high} exp(i lambda) - 1. Then
+ * phi(lambda) may be written
  *
- *     phi(lamdba) = exp(u lambda) p( exp(-lambda) )
+ *     phi(lamdba) = exp(u lambda) f( exp(-lambda) )
  *
- * where p(x) is a polynomial that has exactly two zeros, one at x = 1
- * and one at y = exp(-lamdba). It is simpler, more numerically
- * efficient and stable to apply Newton's method to p(x) than to
- * phi(lambda).
+ * where f(x) is a polynomial that has exactly two zeros, one at x = 1
+ * and one at x = exp(-lamdba).  It is simpler to solve this problem
+ * in x = exp(-lambda) than it is to solve it in lambda, because we
+ * know that for x, a solution lies in [0,1], and because Newton's
+ * method is generally more stable and efficient for polynomials than
+ * it is for exponentials.
+ * 
+ * For the most part, this function is a standard safeguarded Newton
+ * iteration: define an interval of uncertainty [a,b] with f(a) > 0
+ * and f(b) < 0 (except for the initial value b = 1, where f(b) = 0);
+ * evaluate the function and use the sign of that value to shrink the
+ * interval of uncertainty; compute a Newton step; and if the Newton
+ * step suggests a point outside the interval of uncertainty or fails
+ * to decrease the function sufficiently, then bisect.  There are
+ * three further details needed to understand the algorithm:
  *
- * We define a safeguarded Newton iteration as follows. Let the
- * initial interval of uncertainty be [0,1]. If p'(x) >= 0, we bisect
- * the interval. Otherwise we try a Newton step. If the Newton iterate
- * lies in the current interval of uncertainty and it reduces the
- * value of | p(x) | by at least 10%, we accept the new
- * point. Otherwise, we bisect the current interval of uncertainty.
- * It is clear that this method converges to a zero of p(x).  Since
- * p'(x) > 0 in an interval containing x = 1, the method cannot
- * converge to x = 1 and therefore converges to the only other zero,
- * y.
+ * 1)  If y the unique solution in [0,1], then f is positive to the left of
+ *     y, and negative to the right.  Therefore, we may determine whether
+ *     the Newton step -f(x)/f'(x) is moving toward, or away from, y by
+ *     examining the sign of f'(x).  If f'(x) >= 0, we bisect instead
+ *     of taking the Newton step.
+ * 2)  There is a neighborhood around x = 1 for which f'(x) >= 0, so
+ *     (1) prevents convergence to x = 1 (and for a similar reason
+ *     prevents convergence to x = 0, if the function is incorrectly
+ *     called with probs[high] == 0).
+ * 3)  Conditions like  fabs(p) < lambda_tolerance * x * (1-x) are used in
+ *     convergence criteria because these values translate to a bound
+ *     on the relative error in lambda.  This is proved in the
+ *     "Blast Scoring Parameters" document that accompanies the BLAST
+ *     code.
+ *
+ * The iteration on f(x) is robust and doesn't overflow; defining a
+ * robust safeguarded Newton iteration on phi(lambda) that cannot
+ * converge to lambda = 0 and that is protected against overflow is
+ * more difficult.  So (despite the length of this comment) the Newton
+ * iteration on f(x) is the simpler solution.
  */
-
 static double 
-NlmKarlinLambdaNR( double* probs, Int4 d, Int4 low, Int4 high, double lambda0, double tolx,
-                            Int4 itmax, Int4 maxNewton, Int4 * itn ) 
+NlmKarlinLambdaNR(double* probs, Int4 d, Int4 low, Int4 high, double lambda0,
+                  double tolx, Int4 itmax, Int4 maxNewton, Int4 * itn ) 
 {
   Int4 k;
   double x0, x, a = 0, b = 1;
@@ -2340,31 +2369,11 @@ ErrExit:
    return 1;
 }
 
-/** Finds the first index of a context which is marked as not valid in the
- * BlastQueryInfo structure.
- * @param query_info BlastQueryInfo structure [in]
- * @return -1 if all contexts are valid, otherwise an integer between
- * BlastQueryInfo::first_context and BlastQueryInfo::last_context (inclusive)
- */
-static Int2
-s_FindFirstInvalidContext(const BlastQueryInfo* query_info)
-{
-    Int2 index;
-    ASSERT(query_info);
-
-    for (index = query_info->first_context; 
-         index <= query_info->last_context; index++) {
-        if ( !query_info->contexts[index].is_valid ) {
-            return index;
-        }
-    }
-    return -1;
-}
-
 Int2
 Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program, 
                               BlastScoreBlk* sbp, Uint1* query, 
-                              const BlastQueryInfo* query_info)
+                              const BlastQueryInfo* query_info,
+                              Blast_Message* *blast_message)
 {
    Int2 status = 0;
    Int4 context; /* loop variable. */
@@ -2373,6 +2382,7 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
    Boolean check_ideal = 
       (program == eBlastTypeBlastx || program == eBlastTypeTblastx ||
        program == eBlastTypeRpsTblastn);
+   Boolean valid_context = FALSE;
 
    ASSERT(contexts);
 
@@ -2392,17 +2402,12 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
       Int4 query_length;
       Uint1 *buffer;              /* holds sequence */
       Blast_KarlinBlk* kbp;
+      Int2 loop_status; /* status flag for functions in this loop. */
       
-      /* If no strand/frame is requested, no ungapped kbp structures are
-       * allocated */
-      if ((query_length = contexts[context].query_length) <= 0) {
-          contexts[context].is_valid = FALSE;
-          continue;
-      }
-
       if ( !contexts[context].is_valid )
           continue;
 
+      query_length = contexts[context].query_length;
       context_offset = contexts[context].query_offset;
       buffer = &query[context_offset];
       
@@ -2410,11 +2415,17 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
       sbp->sfp[context] = Blast_ScoreFreqNew(sbp->loscore, sbp->hiscore);
       BlastScoreFreqCalc(sbp, sbp->sfp[context], rfp, stdrfp);
       sbp->kbp_std[context] = kbp = Blast_KarlinBlkNew();
-      status = Blast_KarlinBlkUngappedCalc(kbp, sbp->sfp[context]);
-      if (status) {
+      loop_status = Blast_KarlinBlkUngappedCalc(kbp, sbp->sfp[context]);
+      if (loop_status) {
           contexts[context].is_valid = FALSE;
           sbp->sfp[context] = Blast_ScoreFreqFree(sbp->sfp[context]);
           sbp->kbp_std[context] = Blast_KarlinBlkFree(sbp->kbp_std[context]);
+          if (!Blast_QueryIsTranslated(program) ) {
+             Blast_MessageWrite(blast_message, eBlastSevWarning, context,
+                "Could not calculate ungapped Karlin-Altschul parameters due "
+                "to an invalid query sequence or its translation. Please verify the "
+                "query sequence(s) and/or filtering options");
+          }
           continue;
       }
       /* For searches with translated queries, check whether ideal values
@@ -2424,30 +2435,23 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
          Blast_KarlinBlkCopy(kbp, sbp->kbp_ideal);
 
       sbp->kbp_psi[context] = Blast_KarlinBlkNew();
-      status = Blast_KarlinBlkUngappedCalc(sbp->kbp_psi[context], 
+      loop_status = Blast_KarlinBlkUngappedCalc(sbp->kbp_psi[context], 
                                            sbp->sfp[context]);
-      if (status) {
+      if (loop_status) {
           contexts[context].is_valid = FALSE;
           sbp->sfp[context] = Blast_ScoreFreqFree(sbp->sfp[context]);
           sbp->kbp_std[context] = Blast_KarlinBlkFree(sbp->kbp_std[context]);
           sbp->kbp_psi[context] = Blast_KarlinBlkFree(sbp->kbp_psi[context]);
           continue;
       }
+      valid_context = TRUE;
    }
 
    rfp = Blast_ResFreqFree(rfp);
    stdrfp = Blast_ResFreqFree(stdrfp);
 
-   /* Report failures when calculating Karlin-Altschul parameters only for
-    * non-translated query searches, because for translated query searches,
-    * invalid frames can occur and this errors can go undetected safely. */
-   if ( !Blast_QueryIsTranslated(program) ) {
-       if (s_FindFirstInvalidContext(query_info) >= 0) {
-           status = 1;
-       } else {
-           ASSERT(status == 0);
-       }
-   }
+   if (valid_context == FALSE)
+     status = 1;  /* Not a single context was valid. */
 
    /* Set ungapped Blast_KarlinBlk* alias */
    sbp->kbp = (program == eBlastTypePsiBlast) ? sbp->kbp_psi : sbp->kbp_std;
@@ -2763,6 +2767,14 @@ void BLAST_GetAlphaBeta(const char* matrixName, double *alpha,
    sfree(beta_arr);
 }
 
+/** Splits an ArrayOf8 into two arrays of supported gap costs.  One is for non-affine 
+ * (megablast linear values) and the other is for standard (typically affine) values.
+ * @param input the array to be split [in]
+ * @param normal the standard (typically affine) values [out]
+ * @param non_affine the megablast (linear) values [out]
+ * @param split Boolean specifying whether the non-affine values are populated [out]
+ * @return 0 on success, -1 on error
+*/
 static Int2
 s_SplitArrayOf8(const array_of_8* input, const array_of_8** normal, const array_of_8** non_affine, Boolean *split)
 {
@@ -2967,7 +2979,7 @@ s_GetNuclValuesArray(Int4 reward, Int4 penalty, Int4* array_size,
             char buffer[256];
             sprintf(buffer, "Substitution scores %d and %d are not supported", 
                 reward, penalty);
-            Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+            Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
         }
     }
     if (split)
@@ -3105,7 +3117,7 @@ BlastKarlinReportAllowedValues(const char *matrix_name,
             sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) BLAST_Nint(values[index][0]), (long) BLAST_Nint(values[index][1]));
          else
             sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld are supported", (long) BLAST_Nint(values[index][0]), (long) BLAST_Nint(values[index][1]), (long) BLAST_Nint(values[index][2]));
-         Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+         Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
       }
    }
 
@@ -3139,13 +3151,13 @@ Blast_KarlinBlkGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, 
          vnp = head = BlastLoadMatrixValues();
 
          sprintf(buffer, "%s is not a supported matrix", matrix_name);
-         Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+         Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
 
          while (vnp)
          {
             matrix_info = vnp->ptr;
             sprintf(buffer, "%s is a supported matrix", matrix_info->name);
-            Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+            Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
             vnp = vnp->next;
          }
 
@@ -3157,7 +3169,7 @@ Blast_KarlinBlkGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, 
             sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
          else
             sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
-         Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+         Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
          BlastKarlinReportAllowedValues(matrix_name, error_return);
       }
    }
@@ -3410,7 +3422,7 @@ Blast_KarlinBlkNuclGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open,
                 len = strlen(buffer);
                 sprintf(buffer+len, "Any values more stringent than %ld and %ld are supported\n", 
                      (long) gap_open_max, (long) gap_extend_max);
-                Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+                Blast_MessageWrite(error_return, eBlastSevError, kBlastMessageNoContext, buffer);
                 sfree(normal);
                 sfree(linear);
                 return 1;
@@ -4351,6 +4363,16 @@ BLAST_ComputeLengthAdjustment(double K,
  * ===========================================================================
  *
  * $Log: blast_stat.c,v $
+ * Revision 1.141  2006/04/20 19:28:30  madden
+ * Prototype change for Blast_MessageWrite
+ *
+ * Revision 1.140  2006/04/07 13:45:04  madden
+ * Improved the comment for NlmKarlinLambdaNR.  Reformatted the
+ * function prototype to fit in 80 characters. (from Mike Gertz).
+ *
+ * Revision 1.139  2006/03/30 14:53:36  madden
+ * Doxygen comment
+ *
  * Revision 1.138  2006/01/12 20:36:37  camacho
  * Changes to Blast_ScoreBlkKbpUngappedCalc to set invalid contexts
  *

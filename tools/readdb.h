@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.165 $
+* $Revision: 6.169 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,18 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.169  2006/04/24 15:50:19  camacho
+* + is_REFSEQ_RNA
+*
+* Revision 6.168  2006/03/16 14:14:24  camacho
+* Fix parsing of locations for fastacmd command line argument (rt # 15151399)
+*
+* Revision 6.167  2006/03/09 21:56:02  camacho
+* Refactored sequence hash function
+*
+* Revision 6.166  2006/03/08 19:06:14  camacho
+* Added definition for maximum number of volumes, fixes rt ticket 15147600
+*
 * Revision 6.165  2006/02/15 21:07:29  camacho
 * Add validation to fastacmd to reject mixed protein/nucleotide databases
 *
@@ -1426,6 +1438,12 @@ Boolean LIBCALL readdb_get_filebits PROTO((ReadDBFILEPtr rdfp, Int4 ordinal_id, 
  */
 Int4 LIBCALL readdb_validate PROTO((ReadDBFILEPtr rdfp));
 
+/** Calculate a hash value for a given sequence data 
+ * @param sequence containing sequence data (must not be NULL) [in]
+ * @param sequence_length length of the buffer above populated with data [in]
+ */
+Uint4 readdb_sequence_hash(const char* sequence, int sequence_length);
+
 /* For the BioseqFetch functions. */
 
 Boolean LIBCALL ReadDBBioseqFetchEnable PROTO((CharPtr program, CharPtr dbname, Boolean is_na, Boolean now));
@@ -1603,6 +1621,9 @@ typedef struct _FDB_options {
    EFDBCleanOpt clean_opt;      /* clean up option */
 
 } FDB_options, PNTR FDB_optionsPtr;
+
+/** Maximum number of volumes constructed by formatdb */
+extern const Uint4 kFDBMaxNumVolumes;
     
 typedef struct formatdb 
 {
@@ -1818,6 +1839,7 @@ Boolean is_SWISSPROT(VoidPtr di_record);
 Boolean is_MONTH(VoidPtr di_record);
 Boolean is_PDB(VoidPtr di_record);
 Boolean is_REFSEQ(VoidPtr di_record);
+Boolean is_REFSEQ_RNA(VoidPtr di_record);
 Boolean is_CONTIG(VoidPtr di_record);
 
 /************************************************************************/
@@ -1860,6 +1882,13 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 	Boolean use_target, Boolean use_ctrlAs, EBlastDbDumpType dump_db, 
     CharPtr seqlocstr, Uint1 strand, Boolean taxonomy_info_only, 
     Boolean dbinfo_only, Int4 pig);
+
+/** Parses the string passed as its first argument, which should contain a pair
+ * of positive integers separated by ' ', ',', or ';' and returns the integers
+ * in the second argument. This function is non-static so that unit tests can
+ * be written for it.
+ */
+void Fastacmd_ParseLocations(const char* str, Int4 locations[2]);
 
 /**
  * @param rdfp Blast database handle [in]

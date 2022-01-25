@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.17 2005/08/08 15:51:41 dondosha Exp $
+/* $Id: blast_input.h,v 1.18 2006/04/21 14:33:44 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -72,7 +72,7 @@ extern "C" {
 Int4
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, 
                      Int4 max_total_length, Int4 from, Int4 to, 
-                     SeqLoc** lcase_mask, SeqLocPtr* query_slp, Int2Ptr ctr,
+                     SeqLoc** lcase_mask, SeqLocPtr* query_slp, Int4Ptr ctr,
                      Int4* num_queries, Boolean believe_query,
                      Int4 genetic_code);
 
@@ -86,6 +86,9 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
 * ===========================================================================
 *
 * $Log: blast_input.h,v $
+* Revision 1.18  2006/04/21 14:33:44  madden
+* BLAST_GetQuerySeqLoc parameter ctr is now a pointer to Int4, fixes case of more than 32k queries
+*
 * Revision 1.17  2005/08/08 15:51:41  dondosha
 * Added genetic code argument to BLAST_GetQuerySeqLoc, to save in the created Bioseqs
 *

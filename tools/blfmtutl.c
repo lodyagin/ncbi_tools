@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.14 2006/01/24 18:38:47 papadopo Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.18 2006/05/05 13:43:28 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,18 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.18  2006/05/05 13:43:28  coulouri
+* bump date
+*
+* Revision 1.17  2006/04/26 12:42:36  madden
+* BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
+*
+* Revision 1.16  2006/04/07 19:46:59  coulouri
+* correction to previous commit
+*
+* Revision 1.15  2006/04/07 18:38:19  coulouri
+* bump version
+*
 * Revision 1.14  2006/01/24 18:38:47  papadopo
 * from Mike Gertz: Fixed a typo in a name in a format string: Aravaind -> Aravind
 *
@@ -92,8 +104,8 @@ Contents: Utilities for BLAST formatting
 
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.13"
-#define BLAST_RELEASE_DATE "Nov-27-2005"
+#define BLAST_ENGINE_VERSION "2.2.14"
+#define BLAST_RELEASE_DATE "May-07-2006"
 
 #define BUFFER_LENGTH 255
 
@@ -1227,3 +1239,94 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    if (query_slp)
       BioseqUnlock(query_bsp);
 }
+
+
+
+/* Mutex for assignment of db seqs to search. */
+TNlmMutex err_message_mutex=NULL;
+
+#define BLAST_ERROR_BULEN 50
+/*
+	The following functions fill a the Error user string with
+	text to identify BLAST and the entry being worked on.
+	The SeqIdPtr is used to make a FASTA id, which is appended
+	to string.
+
+	A Uint1 is returned, which allows Nlm_ErrUserDelete to delete
+	this error string when it's done.
+*/
+
+Uint1
+BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
+
+{
+	BioseqPtr bsp;
+	Char buffer[2*BLAST_ERROR_BULEN+1], textid[BLAST_ERROR_BULEN+1];
+	CharPtr buf_start, ptr, title;
+	Int2 length=0, index;
+	Uint1 retval=0;
+
+	buffer[0] = NULLB;
+	ptr = buf_start = &buffer[0];
+
+	if (string)
+		StringNCpy_0(ptr, string, BLAST_ERROR_BULEN);
+
+	if (sip != NULL)
+	{
+	    bsp = BioseqLockById(sip);
+	    if(bsp)
+	    {
+		if (use_id)
+			sip = bsp->id;
+		else
+			title = BioseqGetTitle(bsp);
+	    }
+
+	    if (string)
+	    {
+	    	length = StringLen(string);
+	    	if (length > BLAST_ERROR_BULEN)
+			length = BLAST_ERROR_BULEN;
+	    }
+
+	    ptr += length;
+
+	    if (use_id)
+	    {
+    	    	SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, BLAST_ERROR_BULEN-1);
+	    	StringNCpy_0(ptr, textid, BLAST_ERROR_BULEN-1);
+	    }
+	    else if (title)
+	    {
+		for (index=0; index<BLAST_ERROR_BULEN-1; index++)
+		{
+			if (title[index] == NULLB || title[index] == ' ')
+			{
+				break;
+			}
+			*ptr = title[index];
+			ptr++;
+		}
+		*ptr = NULLB;
+	    }
+	    BioseqUnlock(bsp);
+	    StringCpy(ptr+StringLen(ptr), ":");
+	}
+	NlmMutexLockEx(&err_message_mutex);
+	retval = Nlm_ErrUserInstall (buf_start, 0);
+	NlmMutexUnlock(err_message_mutex);
+
+	return retval;
+}
+
+void
+BlastDeleteUserErrorString(Uint1 err_id)
+
+{
+	NlmMutexLockEx(&err_message_mutex);
+	Nlm_ErrUserDelete(err_id);
+	NlmMutexUnlock(err_message_mutex);
+	return;
+}
+

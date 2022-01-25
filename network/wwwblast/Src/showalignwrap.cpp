@@ -1,4 +1,4 @@
-/*  $Id: showalignwrap.cpp,v 1.1 2006/01/05 17:28:57 jianye Exp $
+/*  $Id: showalignwrap.cpp,v 1.2 2006/03/07 17:06:30 jianye Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -170,6 +170,12 @@ void DisplayAlign(SeqAlignPtr align, Int4 line_len, BioseqPtr query,
     
     if (mask_char == 2){
         cds.SetSeqLocChar(CDisplaySeqalign::eLowerCase);
+    } else if (mask_char == 0){
+        if(strcmp(program, "blastn") == 0){
+            cds.SetSeqLocChar (CDisplaySeqalign::eN);
+        }else {
+            cds.SetSeqLocChar (CDisplaySeqalign::eX);
+        }
     }
     
     if (mask_color == 2){
@@ -197,6 +203,9 @@ void DisplayAlign(SeqAlignPtr align, Int4 line_len, BioseqPtr query,
 /* 
 *============================================================
 *$Log: showalignwrap.cpp,v $
+*Revision 1.2  2006/03/07 17:06:30  jianye
+*correct mask char
+*
 *Revision 1.1  2006/01/05 17:28:57  jianye
 *for wblast2 to use new formatter
 *

@@ -1288,12 +1288,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F012D92B06A5559200741D48 = {
-			fileRef = F012D92906A5559200741D48;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F012D92906A5559200741D49 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -1303,13 +1297,18 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
+		F012D92B06A5559200741D48 = {
+			fileRef = F012D92906A5559200741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F012D92B06A5559200741D49 = {
 			fileRef = F012D92906A5559200741D49;
 			isa = PBXBuildFile;
 			settings = {
 			};
 		};
-
 		F012D92E06A555D900741D48 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -1367,6 +1366,15 @@
 			lastKnownFileType = sourcecode.c.c;
 			name = ncbi_connection.c;
 			path = ../../connect/ncbi_connection.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F012D93406A5568510741D48 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ncbi_local.c;
+			path = ../../connect/ncbi_local.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -1522,6 +1530,12 @@
 		};
 		F012D94706A5568500741D48 = {
 			fileRef = F012D93406A5568500741D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F012D94706A5568510741D48 = {
+			fileRef = F012D93406A5568510741D48;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -2420,6 +2434,7 @@
 		};
 		F01DC32F08D6FF2C002D34C9 = {
 			children = (
+				F08A59760A0907FA006DDAEB,
 				F01DC33008D6FFCF002D34C9,
 				F01DC33108D6FFCF002D34C9,
 				F01DC33208D6FFCF002D34C9,
@@ -2446,6 +2461,12 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
+		F01DC33008D70038002D34C9 = {
+			fileRef = F01DC33428D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F01DC33108D6FFCF002D34C9 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -2454,6 +2475,12 @@
 			path = ../../algo/blast/composition_adjustment/composition_adjustment.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33108D70038002D34C9 = {
+			fileRef = F01DC33438D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 		F01DC33208D6FFCF002D34C9 = {
 			fileEncoding = 30;
@@ -2464,6 +2491,18 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
+		F01DC33208D70038002D34C9 = {
+			fileRef = F01DC33448D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33308D70038002D34C9 = {
+			fileRef = F01DC33458D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F01DC33408D6FFCF002D34C9 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -2472,6 +2511,12 @@
 			path = ../../algo/blast/composition_adjustment/optimize_target_freq.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33408D70038002D34C9 = {
+			fileRef = F01DC33468D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 		F01DC33418D6FFCF002D34C9 = {
 			fileEncoding = 30;
@@ -2535,13 +2580,19 @@
 			path = ../../algo/blast/composition_adjustment/smith_waterman.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
-		};		
+		};
 		F01DC33508D6FFF0002D34C9 = {
 			buildActionMask = 2147483647;
 			files = (
 			);
 			isa = PBXHeadersBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F01DC33508D70038002D34C9 = {
+			fileRef = F01DC33478D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 		F01DC33608D6FFF0002D34C9 = {
 			buildActionMask = 2147483647;
@@ -2551,12 +2602,13 @@
 				F01DC33C08D70037002D34C9,
 				F01DC33D08D70038002D34C9,
 				F01DC33F08D70038002D34C9,
-				F01DC33G08D70038002D34C9,
-				F01DC33H08D70038002D34C9,
-				F01DC33I08D70038002D34C9,
-				F01DC33J08D70038002D34C9,
-				F01DC33K08D70038002D34C9,
-				F01DC33L08D70038002D34C9,
+				F01DC33008D70038002D34C9,
+				F01DC33108D70038002D34C9,
+				F01DC33208D70038002D34C9,
+				F01DC33308D70038002D34C9,
+				F01DC33408D70038002D34C9,
+				F01DC33508D70038002D34C9,
+				F08A59770A0907FA006DDAEB,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2628,42 +2680,6 @@
 		};
 		F01DC33F08D70038002D34C9 = {
 			fileRef = F01DC33418D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33G08D70038002D34C9 = {
-			fileRef = F01DC33428D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33H08D70038002D34C9 = {
-			fileRef = F01DC33438D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33I08D70038002D34C9 = {
-			fileRef = F01DC33448D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33J08D70038002D34C9 = {
-			fileRef = F01DC33458D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33K08D70038002D34C9 = {
-			fileRef = F01DC33468D6FFCF002D34C9;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F01DC33L08D70038002D34C9 = {
-			fileRef = F01DC33478D6FFCF002D34C9;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -2918,8 +2934,38 @@
 			target = F03C26B3088817C4006BFF22;
 			targetProxy = F03C26BA0888182B006BFF22;
 		};
+		F03CED7409F7AFA000EB5378 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_tune.c;
+			path = ../../algo/blast/core/blast_tune.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F03CED7509F7AFA100EB5378 = {
+			fileRef = F03CED7409F7AFA000EB5378;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F0463DD006AD72A700639203 = {
 			fileRef = F09464AE06AC0CC500DF5D77;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F047B93F09FFB54C00E76B3C = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_message_api.c;
+			path = ../../algo/blast/api/blast_message_api.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F047B94009FFB54C00E76B3C = {
+			fileRef = F047B93F09FFB54C00E76B3C;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -3471,6 +3517,21 @@
 			target = F04B0DB106DA1AE600ED1405;
 			targetProxy = F04B0DB606DA1B6B00ED1405;
 		};
+		F052068E09EC294C005AF35A = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_query_info.c;
+			path = ../../algo/blast/core/blast_query_info.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F052068F09EC294C005AF35A = {
+			fileRef = F052068E09EC294C005AF35A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		F067051E0783170B001506C1 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -3782,6 +3843,21 @@
 			isa = PBXTargetDependency;
 			target = F0BC2DFF06AC3D1F00EC2330;
 			targetProxy = F079CE1906CB9FCB00E2E865;
+		};
+		F08A59760A0907FA006DDAEB = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = unified_pvalues.c;
+			path = ../../algo/blast/composition_adjustment/unified_pvalues.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F08A59770A0907FA006DDAEB = {
+			fileRef = F08A59760A0907FA006DDAEB;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 		F094644F06AC0A1400DF5D77 = {
 			fileEncoding = 30;
@@ -6227,6 +6303,8 @@
 		};
 		F095C4FC06AE8E5F00C0C74D = {
 			children = (
+				F03CED7409F7AFA000EB5378,
+				F052068E09EC294C005AF35A,
 				5EDE874E0823E6AF008F2E80,
 				F06B098D07E74226004F1D7D,
 				F06B098607E741DD004F1D7D,
@@ -6323,6 +6401,8 @@
 				F06B098707E741DD004F1D7D,
 				F06B098E07E74226004F1D7D,
 				5EDE87650823F29F008F2E80,
+				F052068F09EC294C005AF35A,
+				F03CED7509F7AFA100EB5378,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -6889,6 +6969,7 @@
 		};
 		F095C58606AE8FA700C0C74D = {
 			children = (
+				F047B93F09FFB54C00E76B3C,
 				F06B099507E742FC004F1D7D,
 				F097944607B2466E00F7660A,
 				F097943F07B2457E00F7660A,
@@ -6937,6 +7018,7 @@
 				F097944007B2457E00F7660A,
 				F097944707B2466E00F7660A,
 				F06B099607E742FC004F1D7D,
+				F047B94009FFB54C00E76B3C,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -12186,6 +12268,7 @@
 				F012D93206A5568500741D48,
 				F012D93306A5568500741D48,
 				F012D93406A5568500741D48,
+				F012D93406A5568510741D48,
 				F012D93506A5568500741D48,
 				F012D93606A5568500741D48,
 				F012D93706A5568500741D48,
@@ -12267,6 +12350,7 @@
 				F012D94506A5568500741D48,
 				F012D94606A5568500741D48,
 				F012D94706A5568500741D48,
+				F012D94706A5568510741D48,
 				F012D94806A5568500741D48,
 				F012D94906A5568500741D48,
 				F012D94A06A5568500741D48,

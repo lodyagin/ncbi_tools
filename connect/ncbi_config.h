@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.12 2006/02/23 15:31:33 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.13 2006/03/07 17:23:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,13 +45,16 @@
 #  define NCBI_OS_UNIX 1
 #  define HAVE_GETPWUID 1
 #  if defined(OS_UNIX_LINUX)
-#    define HAVE_GETPAGESIZE 1
 #    define NCBI_OS_LINUX 1
 #    ifdef PROC_X86_64
 #      define NCBI_PLATFORM_BITS 64
 #    else
 #      define NCBI_PLATFORM_BITS 32
 #    endif
+#    define HAVE_STRDUP 1
+#    define HAVE_STRNDUP 1
+#    define HAVE_STRCASECMP 1
+#    define HAVE_GETPAGESIZE 1
 #    if !defined(HAVE_GETHOSTBYNAME_R)
 #      define HAVE_GETHOSTBYNAME_R 6
 #      define HAVE_GETHOSTBYADDR_R 8

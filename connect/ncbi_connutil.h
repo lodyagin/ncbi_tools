@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.51 2006/02/23 15:46:16 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.56 2006/04/21 14:41:19 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -208,6 +208,25 @@ typedef struct {
 #define REG_CONN_HTTP_USER_HEADER "HTTP_USER_HEADER"
 #define DEF_CONN_HTTP_USER_HEADER 0
 
+/* Environment/registry keys that are not kept in SConnNetInfo */
+#define REG_CONN_SERVICE_NAME     "SERVICE_NAME"
+#define REG_CONN_LOCAL_DISABLE    "LOCAL_DISABLE"
+#define REG_CONN_LBSMD_DISABLE    "LBSMD_DISABLE"
+#define REG_CONN_DISPD_DISABLE    "DISPD_DISABLE"
+
+/* Local service dispatcher */
+#define REG_CONN_LOCAL_SERVICES   "LOCAL_SERVICES"
+#define REG_CONN_LOCAL_SERVER     DEF_CONN_REG_SECTION "_LOCAL_SERVER"
+
+
+extern NCBI_XCONNECT_EXPORT const char* ConnNetInfo_GetValue
+(const char* service,
+ const char* param,
+ char*       value,
+ size_t      value_size,
+ const char* def_value
+ );
+
 
 /* This function to fill out the "*info" structure using
  * registry entries named (see above) in macros REG_CONN_<NAME>:
@@ -226,7 +245,8 @@ typedef struct {
  *  http_proxy_port   HTTP_PROXY_PORT
  *  proxy_host        PROXY_HOST
  *  debug_printout    DEBUG_PRINTOUT
- *  client_mode       CLIENT_MODE
+ *  stateless         STATELESS
+ *  firewall          FIREWALL
  *  lb_disable        LB_DISABLE
  *  http_user_header  HTTP_USER_HEADER  "\r\n" if missing is appended
  *
@@ -265,10 +285,10 @@ extern NCBI_XCONNECT_EXPORT SConnNetInfo* ConnNetInfo_Clone
 
 /* Convenience routines to manipulate SConnNetInfo::args[].
  * In "arg" all routines below assume to have a single arg name
- * or an "arg=value" pair. In the former case, additional "val"
+ * or an "arg=value" pair.  In the former case, additional "val"
  * may be supplied separately (and will be prepended by "=" if
- * necessary). In the latter case, having a non-zero string in
- * "val" may result in an erroneous behavior. Ampersand (&) gets
+ * necessary).  In the latter case, having a non-zero string in
+ * "val" may result in an erroneous behavior.  Ampersand (&) gets
  * automatically added to keep the arg list correct.
  * Return value (if any): none-zero on success; 0 on error.
  */
@@ -299,14 +319,14 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteAllArgs
  const char*   args
  );
 
-/* same as sequence Delete then Prepend, see above */
+/* same as sequence DeleteAll(arg) then Prepend(arg, val), see above */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_PreOverrideArg
 (SConnNetInfo* info,
  const char*   arg,
  const char*   val
  );
 
-/* same as sequence Delete then Append, see above */
+/* same as sequence DeleteAll(arg) then Append(arg, val), see above */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_PostOverrideArg
 (SConnNetInfo* info,
  const char*   arg,
@@ -746,6 +766,19 @@ extern NCBI_XCONNECT_EXPORT size_t CONNUTIL_GetVMPageSize(void);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.56  2006/04/21 14:41:19  lavr
+ * REG_CONN_SERVICE_NAME added
+ *
+ * Revision 6.55  2006/04/21 01:33:22  lavr
+ * SConnNetInfo::lb_disable reinstated along with LB_DISABLE reg/env key
+ *
+ * Revision 6.53  2006/04/20 13:57:51  lavr
+ * Registry keys for new switching scheme for service mappers;
+ * Registry keys for LOCAL service mappers
+ *
+ * Revision 6.52  2006/04/19 02:26:05  lavr
+ * Document ConnNetInfo_{Pre|Post}OverrideArg in more details
+ *
  * Revision 6.51  2006/02/23 15:46:16  lavr
  * Clean ChangeLog
  *

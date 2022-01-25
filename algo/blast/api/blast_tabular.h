@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.h,v 1.12 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_tabular.h,v 1.13 2006/04/25 17:59:02 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -86,6 +86,9 @@ typedef struct BlastTabularFormatData {
    Boolean show_accession; /**< Show accessions instead of full ids in output,
                               if possible. This option has lower priority than
                               show_gi. */
+   Boolean believe_query; /**< TRUE if query identifiers are parsed; if
+                               FALSE, the first token in the query defline is
+                               treated as an identifier */
    EBlastTabularFormatOptions format_options; /**< Tabular formatting options. */
 } BlastTabularFormatData;
 
@@ -94,11 +97,13 @@ typedef struct BlastTabularFormatData {
  * @param outfp Output stream to write to [in]
  * @param query_seqloc List of query sequence locations [in]
  * @param format_option What type of tabular output is requested? [in]
+ * @param believe_query Should query identifiers be parsed? [in]
  * @return Allocated structure
  */
 BlastTabularFormatData*
 BlastTabularFormatDataNew(FILE* outfp, SeqLoc* query_seqloc,
-                          EBlastTabularFormatOptions format_option);
+                          EBlastTabularFormatOptions format_option,
+                          Boolean believe_query);
 
 
 /** Function initializing the BlastTabularFormatData data structure fields. 

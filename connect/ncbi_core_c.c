@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.16 2005/12/07 22:18:20 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.17 2006/03/07 17:24:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -216,13 +216,6 @@ extern MT_LOCK MT_LOCK_c2c(TNlmRWlock lock, int/*bool*/ pass_ownership)
 }
 
 
-/* TO BE REMOVED */
-extern int g_NCBI_ConnectSrandAddent()
-{
-    return g_NCBI_ConnectSrandAddend();
-}
-
-
 /***********************************************************************
  *                                 Init                                *
  ***********************************************************************/
@@ -241,6 +234,9 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.17  2006/03/07 17:24:54  lavr
+ * Remove g_NCBI_ConnectSrandAddent for good
+ *
  * Revision 6.16  2005/12/07 22:18:20  lavr
  * Use strdup() instead of malloc()+strcpy()
  *

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.69 $
+* $Revision: 1.73 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -446,6 +446,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "UniProtKB/TrEMBL",
   "UniSTS",
   "VBASE2",
+  "VectorBase",
   "WorfDB",
   "WormBase",
   "ZFIN",
@@ -458,6 +459,7 @@ NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "ECOCYC",
   "HPRD",
   "REBASE",
+  "miRBase",
   NULL
 };
 
@@ -3195,7 +3197,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
           }
           if (! StringHasNoText (buf)) {
             FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
-            FF_www_db_xref(ajp, ffstring, dbt->db, buf);
+            FF_www_db_xref(ajp, ffstring, dbt->db, buf, bsp);
             FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
           }
         }
@@ -4087,7 +4089,7 @@ static Int2 ProcessGapSpecialFormat (
 )
 
 {
-  Char      fmt_buf [32];
+  Char      fmt_buf [64];
   Char      gapbuf [80];
   Int4      gi;
   Char      gi_buf [16];
@@ -4129,6 +4131,9 @@ static Int2 ProcessGapSpecialFormat (
       if (gi > 0) {
         sprintf(gi_buf, "%ld", (long) gi);
         sprintf(fmt_buf, "&fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
+        if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+          StringCat (fmt_buf, "&view=gbwithparts");
+        }
         FFAddOneString (ffstring, "    <a href=", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
@@ -4511,6 +4516,7 @@ NLM_EXTERN CharPtr FormatSlashBlock (
       is.accession_version = gbseq->accession_version;
       is.other_seqids = gbseq->other_seqids;
       is.secondary_accessions = gbseq->secondary_accessions;
+      is.project = gbseq->project;
       is.keywords = gbseq->keywords;
       is.segment = gbseq->segment;
       is.source = gbseq->source;

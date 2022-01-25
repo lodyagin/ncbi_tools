@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.447 $
+* $Revision: 6.462 $
 *
 * File Description:
 *
@@ -2526,6 +2526,61 @@ static void FeatConvertProtToProt (SeqFeatPtr sfp,
 
 }
 
+
+static SeqLocPtr BuildProtLoc (SeqFeatPtr overlapping_cds, SeqLocPtr slp, Int4Ptr frame)
+{
+  SeqLocPtr tmp_loc, aa_loc, prot_loc = NULL, last_loc = NULL, next_loc;
+  Boolean   partial5, partial3;
+  BioseqPtr prot_bsp;
+  Boolean   is_ordered = FALSE;
+  Boolean   first = TRUE;
+  
+  prot_bsp = BioseqFindFromSeqLoc (overlapping_cds->product);
+  if (prot_bsp == NULL) {
+    return NULL;
+  }
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  tmp_loc = SeqLocFindNext (slp, NULL);
+  while (tmp_loc != NULL) {
+    if (tmp_loc->choice == SEQLOC_NULL) {
+      is_ordered = TRUE;
+    } else {
+      if (first) {
+        aa_loc = dnaLoc_to_aaLoc (overlapping_cds, tmp_loc, FALSE, frame, FALSE);
+        first = FALSE;
+      } else {
+        aa_loc = dnaLoc_to_aaLoc (overlapping_cds, tmp_loc, FALSE, NULL, FALSE);
+      }
+    }
+    if (last_loc == NULL) {
+      prot_loc = aa_loc;
+    } else {
+      last_loc->next = aa_loc;
+    }
+    last_loc = aa_loc;
+    tmp_loc = SeqLocFindNext (slp, tmp_loc);
+  }
+  if (prot_loc != NULL && prot_loc->next != NULL) {
+    tmp_loc = NULL;
+    for (aa_loc = prot_loc; aa_loc != NULL; aa_loc = next_loc) {
+      next_loc = aa_loc->next;
+      aa_loc->next = NULL;
+      
+      last_loc = SeqLocMerge (prot_bsp, tmp_loc, aa_loc, FALSE, TRUE, is_ordered);
+      tmp_loc = SeqLocFree (tmp_loc);
+      aa_loc = SeqLocFree (aa_loc);
+      tmp_loc = last_loc;
+      last_loc = NULL;
+
+      aa_loc = next_loc;
+    }
+    prot_loc = tmp_loc;
+  }
+  SetSeqLocPartial (prot_loc, partial5, partial3);
+  return prot_loc;
+}
+
+
 /*---------------------------------------------------------------------*/
 /*                                                                     */
 /* FeatConvertImpToPeptide () - Convert a given import feature to a    */
@@ -2563,7 +2618,7 @@ static void FeatConvertImpToPeptide (SeqFeatPtr  sfp,
   if (cds == NULL)
     return;
 
-  slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, &frame, FALSE);
+  slp = BuildProtLoc (cds, sfp->location, &frame);
   if (slp == NULL)
     return;
 
@@ -2920,7 +2975,7 @@ static void FeatConvertRegionToProt (SeqFeatPtr sfp, Int2 toFeatSubType)
     }
     else
     {
-      location = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
+      location = BuildProtLoc (cds, sfp->location, NULL);
       sfp->location = SeqLocFree (sfp->location);
       sfp->location = location;
     }
@@ -5182,7 +5237,7 @@ static void RemoveOrgModFromBioSource (BioSourcePtr biop, Uint1 subtype, FilterS
       {
         prev_mod = mod;
       }
-      mod = mod->next;
+      mod = next_mod;
     }
   }
 }
@@ -6180,11 +6235,80 @@ static void RemoveFeatureNote (SeqFeatPtr sfp, Pointer userdata)
   sfp->comment = MemFree (sfp->comment);
 }
 
+
+static void StripFieldNameFromText(CharPtr text,
+                                   NameFromValNodeProc field_name_func, 
+                                   ValNodePtr          field_vnp)
+{
+  CharPtr src, dst;
+  CharPtr field_name = NULL;
+  Int4    field_name_len;
+  
+  if (StringHasNoText (text) || field_name_func == NULL)
+  {
+    return;
+  }
+  
+  field_name = field_name_func(field_vnp);
+  field_name_len = StringLen (field_name);
+    
+  if (!StringHasNoText (field_name) && StringNICmp(text, field_name, field_name_len) == 0
+        && StringLen (text) > field_name_len 
+        && text[field_name_len] == ' ')
+  {
+    src = text + field_name_len + 1;
+    while (*src == ' ')
+    {
+      src++;
+    }
+    dst = text;
+    while (*src != 0)
+    {
+      *dst = *src;
+      dst++;
+      src++;
+    }
+    *dst = 0;
+  }
+  field_name = MemFree (field_name);
+}
+
+
+static CharPtr ReplaceStringForParse(CharPtr src_text, TextPortionPtr text_portion)
+{
+  CharPtr         found_loc;
+  Int4            found_len;
+  CharPtr         dst_txt = NULL, cp;
+  
+  if (src_text == NULL || text_portion == NULL) {
+    return NULL;
+  }
+  // for parse, replace the source text with the portion we want
+  found_loc = NULL;
+  found_len = 0;
+  FindTextPortionInString (src_text, text_portion, &found_loc, &found_len);
+  if (found_loc != NULL) 
+  {
+    dst_txt = (CharPtr)MemNew (found_len + 1);
+    StringNCpy (dst_txt, found_loc, found_len);
+    dst_txt[found_len] = 0;
+    cp = found_loc + found_len;
+    while (*cp != 0) {
+      *found_loc = *cp;
+      found_loc++;
+      cp++;
+    }
+    *found_loc = 0;
+  }
+  return dst_txt;
+}
+
+
 static void ConvertFeatureFieldCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
   ConvertFieldPtr cfp;
   CharPtr         src_text;
-  CharPtr         dst_text;
+  CharPtr         dst_text = NULL;
   ApplyValueData  avd;
   
   if (sfp == NULL || userdata == NULL)
@@ -6203,6 +6327,12 @@ static void ConvertFeatureFieldCallback (SeqFeatPtr sfp, Pointer userdata, Filte
   
   avd.text_to_replace = NULL;
   src_text = (cfp->get_str_func)(sfp, cfp->src_field_list, cfp->fsp);
+  
+  if (cfp->strip_name_from_text)
+  {
+    StripFieldNameFromText(src_text, cfp->name_field_func, cfp->dst_field_list);
+  }
+  
   if (StringHasNoText (src_text))
   {
     src_text = MemFree (src_text);
@@ -6215,19 +6345,40 @@ static void ConvertFeatureFieldCallback (SeqFeatPtr sfp, Pointer userdata, Filte
      * we're putting it where the new text used to be. */
     avd.etp = NULL;
     /* and we need to get the destination text before it's replaced */
-    dst_text = (cfp->get_str_func)(sfp, cfp->dst_field_list, cfp->fsp);    
+    dst_text = (cfp->get_str_func)(sfp, cfp->dst_field_list, cfp->fsp); 
+    if (cfp->strip_name_from_text)
+    {
+      StripFieldNameFromText(dst_text, cfp->name_field_func, cfp->src_field_list);
+    }
+  }
+  else if (cfp->convert_type == CONVERT_TYPE_PARSE)
+  {
+    // for parse, replace the source text with the portion we want
+    dst_text = src_text;
+    src_text = ReplaceStringForParse(src_text, cfp->text_portion);
+    if (src_text == NULL) 
+    {
+      dst_text = MemFree (dst_text);
+      return;
+    }
+    if (!cfp->remove_parsed) {
+      dst_text = MemFree (dst_text);
+    }
+    avd.etp = cfp->etp;
   }
   else
   {
     avd.etp = cfp->etp;
   }
+  
     
   /* put src_text in the dst_field */
   avd.field_list = cfp->dst_field_list;
   avd.new_text = src_text;
   (cfp->set_str_func) (sfp, &avd, cfp->fsp);
   
-  if (cfp->convert_type == CONVERT_TYPE_SWAP)
+  if (cfp->convert_type == CONVERT_TYPE_SWAP
+      || (cfp->convert_type == CONVERT_TYPE_PARSE && cfp->remove_parsed))
   {
     /* put dst_text in the src_field */
     avd.field_list = cfp->src_field_list;
@@ -6267,6 +6418,11 @@ static void ConvertDescriptorFieldCallback (SeqDescrPtr sdp, Pointer userdata, F
   
   avd.text_to_replace = NULL;
   src_text = (cfp->get_d_str_func)(sdp, cfp->src_field_list, cfp->fsp);
+  if (cfp->strip_name_from_text)
+  {
+    StripFieldNameFromText(src_text, cfp->name_field_func, cfp->dst_field_list);
+  }
+
   if (StringHasNoText (src_text))
   {
     src_text = MemFree (src_text);
@@ -6280,6 +6436,26 @@ static void ConvertDescriptorFieldCallback (SeqDescrPtr sdp, Pointer userdata, F
     avd.etp = NULL;
     /* and we need to get the destination text before it's replaced */
     dst_text = (cfp->get_d_str_func)(sdp, cfp->dst_field_list, cfp->fsp);    
+    if (cfp->strip_name_from_text)
+    {
+      StripFieldNameFromText(dst_text, cfp->name_field_func, cfp->src_field_list);
+    }
+    
+  }
+  else if (cfp->convert_type == CONVERT_TYPE_PARSE)
+  {
+    // for parse, replace the source text with the portion we want
+    dst_text = src_text;
+    src_text = ReplaceStringForParse(src_text, cfp->text_portion);
+    if (src_text == NULL) 
+    {
+      dst_text = MemFree (dst_text);
+      return;
+    }
+    if (!cfp->remove_parsed) {
+      dst_text = MemFree (dst_text);
+    }
+    avd.etp = cfp->etp;
   }
   else
   {
@@ -6291,7 +6467,8 @@ static void ConvertDescriptorFieldCallback (SeqDescrPtr sdp, Pointer userdata, F
   avd.new_text = src_text;
   (cfp->set_d_str_func) (sdp, &avd, cfp->fsp);
   
-  if (cfp->convert_type == CONVERT_TYPE_SWAP)
+  if (cfp->convert_type == CONVERT_TYPE_SWAP
+      || (cfp->convert_type == CONVERT_TYPE_PARSE && cfp->remove_parsed))
   {
     /* put dst_text in the src_field */
     avd.field_list = cfp->src_field_list;
@@ -7157,18 +7334,30 @@ ProteinFieldSelectionDialog
 
 extern CharPtr GetProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field, FilterSetPtr fsp)
 {
-  ValNodePtr vnp, val_vnp;
-  CharPtr    str = NULL;
-  ProtRefPtr prp;
-  Int4       field_choice;
+  ValNodePtr     vnp, val_vnp;
+  CharPtr        str = NULL;
+  ProtRefPtr     prp = NULL;
+  Int4           field_choice;
+  SeqFeatXrefPtr xref;
   
-  if (sfp == NULL || protein_field == NULL || sfp->data.choice != SEQFEAT_PROT)
+  if (sfp == NULL || protein_field == NULL || (sfp->data.choice != SEQFEAT_PROT && sfp->data.choice != SEQFEAT_CDREGION))
   {
     return NULL;
   }
   
   vnp = protein_field;
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (sfp->data.choice == SEQFEAT_PROT) {
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
+      xref = sfp->xref;
+      while (xref != NULL && xref->data.choice != SEQFEAT_PROT) {
+          xref = xref->next;
+      }
+      if (xref != NULL) {
+          prp = xref->data.value.ptrvalue;
+      }
+  }
+
 
   while (vnp != NULL && vnp->data.intvalue != FEATUREFIELD_NONE && StringHasNoText (str))
   {
@@ -7177,7 +7366,7 @@ extern CharPtr GetProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field, 
     switch (field_choice)
     {
       case PROTEINFIELD_NAME:
-        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_PROT)
+        if (prp != NULL && prp->name != NULL && (sfp->idx.subtype == FEATDEF_PROT || sfp->idx.subtype == FEATDEF_CDS))
         {
           val_vnp = prp->name;
           str = val_vnp->data.ptrvalue;
@@ -7239,8 +7428,9 @@ extern CharPtr GetProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field, 
 static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
 {
   ValNodePtr vnp;
-  ProtRefPtr prp;
+  ProtRefPtr prp = NULL;
   Int4       field_choice;
+  SeqFeatXrefPtr xref, prev;
   
   if (sfp == NULL || protein_field == NULL)
   {
@@ -7248,7 +7438,17 @@ static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
   }
   
   vnp = protein_field;
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (sfp->idx.subtype == FEATDEF_PROT) {
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  } else if (sfp->idx.subtype == FEATDEF_CDS) {
+      xref = sfp->xref;
+      while (xref != NULL && xref->data.choice != SEQFEAT_PROT) {
+          xref = xref->next;
+      }
+      if (xref != NULL) {
+          prp = xref->data.value.ptrvalue;
+      }
+  }      
 
   while (vnp != NULL && vnp->data.intvalue != FEATUREFIELD_NONE)
   {
@@ -7256,7 +7456,7 @@ static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
     switch (field_choice)
     {
       case PROTEINFIELD_NAME:
-        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_PROT)
+        if (prp != NULL && prp->name != NULL)
         {
           prp->name = ValNodeFreeData (prp->name);
         }
@@ -7300,6 +7500,29 @@ static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
     }
     vnp = vnp->next;
   }
+  
+  /* remove protein xref if empty */
+  if (prp != NULL && xref != NULL
+      && prp->name == NULL
+      && StringHasNoText (prp->desc)
+      && prp->ec == NULL
+      && prp->activity == NULL
+      && prp->db == NULL) {
+    prp = ProtRefFree(prp);
+    xref->data.value.ptrvalue = NULL;
+    if (sfp->xref == xref) {
+        sfp->xref = xref->next;
+    } else {
+        prev = sfp->xref;
+        while (prev != NULL && prev->next != xref) {
+            prev = prev->next;
+        }
+        if (prev != NULL) {
+            prev->next = xref->next;
+        }
+    }
+    xref = SeqFeatXrefFree(xref);
+  }      
 }
 
 static void SetProteinFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
@@ -7785,6 +8008,34 @@ static DialoG RNASubtypeSelectionDialog
   return dlg;
 }
 
+
+static CharPtr GetRNANameString (SeqFeatPtr sfp)
+{
+  RnaRefPtr  rrp;
+  SeqMgrFeatContext context;
+  CharPtr    str = NULL;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  rrp = sfp->data.value.ptrvalue;
+  if (rrp->ext.choice == 1 && !StringHasNoText (rrp->ext.value.ptrvalue))
+  {
+    str = StringSave (rrp->ext.value.ptrvalue);        
+  }
+  else if (rrp->ext.choice == 2 && rrp->ext.value.ptrvalue != NULL)
+  {
+    if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context) != NULL
+        && !StringHasNoText (context.label))
+    {
+      str = (CharPtr) MemNew (sizeof (Char) + (StringLen (context.label) + 6));
+      sprintf (str, "tRNA-%s", context.label);
+    }
+  }
+  return str;
+}
+
 extern CharPtr GetRNAFieldString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr fsp)
 {
   RnaRefPtr  rrp;
@@ -7809,10 +8060,7 @@ extern CharPtr GetRNAFieldString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr f
     switch (vnp->data.intvalue)
     {
       case RNAFIELD_NAME :
-        if (rrp != NULL && rrp->ext.choice == 1 && !StringHasNoText (rrp->ext.value.ptrvalue))
-        {
-          str = StringSave (rrp->ext.value.ptrvalue);        
-        }
+        str = GetRNANameString (sfp);
         break;
       case RNAFIELD_COMMENT :
         if (!StringHasNoText (sfp->comment))
@@ -7856,6 +8104,104 @@ extern CharPtr GetRNAFieldString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr f
   return str;
 }
 
+
+static Boolean IsParseabletRNAName (CharPtr name_string)
+{
+  if (StringHasNoText(name_string)) 
+  {
+    return TRUE;
+  }
+  else if (StringNICmp (name_string, "trna-", 5) != 0)
+  {
+    return FALSE;
+  }
+  else if (StringLen (name_string) != 8)
+  {
+    return FALSE;
+  }
+  else if (ParseTRnaString (name_string, NULL, NULL, TRUE) == 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+
+static void SettRNAName (SeqFeatPtr sfp, ApplyValuePtr avp)
+{
+  RnaRefPtr     rrp;
+  tRNAPtr           trp;
+  Uint1             new_aa;
+  CharPtr           name_string;
+  Boolean           justTrnaText = FALSE;
+  Uint1             codon [6];
+  GBQualPtr         gbqual, gbqual_last = NULL;
+
+  if (sfp == NULL || sfp->data.value.ptrvalue == NULL 
+      || sfp->data.choice != SEQFEAT_RNA
+      || avp == NULL)
+  {
+    return;
+  }
+  
+  rrp = sfp->data.value.ptrvalue;
+  if (rrp->ext.choice != 2)
+  {
+    return;
+  }
+  trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+  
+  name_string = GetRNANameString (sfp);
+  name_string = HandleApplyValue (name_string, avp);
+  if (!IsParseabletRNAName(name_string))
+  {
+    if (trp->anticodon == NULL
+        && trp->codon[0] == 255
+        && trp->codon[1] == 255
+        && trp->codon[2] == 255
+        && trp->codon[3] == 255
+        && trp->codon[4] == 255
+        && trp->codon[5] == 255)
+    {
+      trp = MemFree (trp);
+      rrp->ext.choice = 1;
+      rrp->ext.value.ptrvalue = name_string;
+    }
+    else
+    {
+      trp->aa = 0;
+      gbqual = sfp->qual;
+      while (gbqual != NULL)
+      {
+        gbqual_last = gbqual;
+        gbqual = gbqual->next;
+      }
+      gbqual = GBQualNew ();
+      gbqual->qual = StringSave ("product");
+      gbqual->val = name_string;
+      if (gbqual_last == NULL)
+      {
+        sfp->qual = gbqual;
+      }
+      else
+      {
+        gbqual->next = gbqual_last->next;
+        gbqual_last->next = gbqual;
+      }
+    }
+  }
+  else
+  {
+    new_aa = ParseTRnaString (name_string, &justTrnaText, codon, TRUE);
+    trp->aa = new_aa;
+    name_string = MemFree (name_string);
+  }
+}
+
+
 static void SetRNAFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
   RnaRefPtr     rrp;
@@ -7891,6 +8237,10 @@ static void SetRNAFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fs
         if (rrp->ext.choice == 1)
         {
           rrp->ext.value.ptrvalue = HandleApplyValue (rrp->ext.value.ptrvalue, avp);        
+        }
+        else if (rrp->ext.choice == 2)
+        {
+          SettRNAName (sfp, avp);
         }
       }
       break;
@@ -7982,9 +8332,20 @@ static void RemoveRNAField (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
   switch (avp->field_list->data.intvalue)
   {
     case RNAFIELD_NAME :
-      if (rrp != NULL && rrp->ext.choice == 1)
+      if (rrp != NULL && rrp->ext.value.ptrvalue != NULL)
       {
-        rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);  
+        if (rrp->ext.choice == 1)
+        {
+          rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+        }
+        else if (rrp->ext.choice == 2)
+        {
+          trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+          if (trp != NULL)
+          {
+            trp->aatype = 0;
+          }
+        }
       }
       break;
     case RNAFIELD_COMMENT :
@@ -10497,7 +10858,7 @@ static void SeqEntryConstrainedFeaturesCallback (SeqFeatPtr sfp, Pointer userdat
   
   if (sfp == NULL || userdata == NULL) return;
   cop = (ConstraintOpPtr) userdata;
-  sfp = SeqMgrGetDesiredFeature (cop->entityID, NULL, 0, 0, sfp, &fcontext);
+  sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, sfp->idx.itemID, 0, sfp, &fcontext);
   if (sfp == NULL) return;
   
   if (cop->seqFeatChoice != 0 && cop->seqFeatChoice != sfp->data.choice) return;
@@ -12173,7 +12534,7 @@ static void PopulateSampleDialog (DialoG d, Pointer userdata)
   ssp = (SetSamplePtr) userdata;
   dlg->ssp = SetSampleFree (dlg->ssp);
   dlg->ssp = SetSampleCopy (ssp);
-  RefreshSampleDialog (dlg);
+//  RefreshSampleDialog (dlg);
 }
 
 static void 
@@ -13695,6 +14056,7 @@ static Boolean DestAlreadyInList (ValNodePtr dest_list, Int4 type, Pointer data)
   return FALSE;
 }
 
+
 static void 
 GetFeatureDestinationsForBioseq 
 (BioseqPtr       bsp, 
@@ -13726,7 +14088,8 @@ GetFeatureDestinationsForBioseq
       sfp = (SeqFeatPtr) sap->data;
       while (sfp != NULL)
       {
-        if (!DestAlreadyInList (*dest_list, 1, sfp))
+        if (sfp->data.choice == seqFeatChoice && sfp->idx.subtype == featDefChoice 
+            && !DestAlreadyInList (*dest_list, 1, sfp))
         {
           ValNodeAddPointer (dest_list, 1, sfp);
         }
@@ -13736,6 +14099,33 @@ GetFeatureDestinationsForBioseq
     sap = sap->next;
   }
 }
+
+
+static void GetProteinFeatureDestinationsForBioseq
+(BioseqPtr       bsp, 
+ Uint1           seqFeatChoice,
+ Uint1           featDefChoice,
+ ValNodePtr PNTR dest_list)
+{
+  SeqFeatPtr         sfp;
+  SeqMgrFeatContext  fcontext;
+  BioseqPtr          prot_bsp;
+
+  if (bsp == NULL || dest_list == NULL)
+  {
+    return;
+  }
+  
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
+  while (sfp != NULL)
+  {
+    prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+    GetFeatureDestinationsForBioseq (prot_bsp, seqFeatChoice, featDefChoice, dest_list);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
+  }  
+  
+}
+
 
 static void 
 GetCommentDestinationsForBioseq 
@@ -13799,7 +14189,7 @@ FindDestinationsForParseSourceInfo
       GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_CDREGION, FEATDEF_CDS, &(psip->dest_list));
       break;
     case PARSE_FIELD_PROTEIN_FIELD:
-      GetFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_PROT, 0, &(psip->dest_list));
+      GetProteinFeatureDestinationsForBioseq (psip->bsp, SEQFEAT_PROT, 0, &(psip->dest_list));
       break;
     case PARSE_FIELD_IMPORT_QUAL :
       for (vnp = dst_field_data->feature_subtype; 
@@ -14756,6 +15146,7 @@ typedef struct featureselremconform
   GrouP   remove_grp;
   GrouP   convert_grp;
   ButtoN  clear_constraints_on_action_change;
+  ButtoN  leave_original_feature_btn;  /* checkbox for conversion only */
   
   /* used for convert callback */
   Uint2      featdef_to;
@@ -14765,6 +15156,8 @@ typedef struct featureselremconform
   ValNodePtr productbsp_list;
   Int4       site_or_bond_type;
   Boolean    abort_convert;
+  Boolean    leave_original_feature;
+  ValNodePtr feat_list;
 } FeatureSelRemConvFormData, PNTR FeatureSelRemConvFormPtr;
 
 static void CleanupFeatureSelRemConvForm (GraphiC g, VoidPtr data)
@@ -14804,6 +15197,7 @@ static void FeatureRemoveClear (Pointer data)
   PointerToDialog (mrfp->constraints, NULL);
   PointerToDialog (mrfp->feature_select_to, NULL);
   PointerToDialog (mrfp->feature_select_from, NULL);
+  SetStatus (mrfp->leave_original_feature_btn, FALSE);
 }
 
 #define FEATURE_REMOVE   1
@@ -15243,7 +15637,7 @@ ConvertToBondSiteOrRegion
     Message (MSG_ERROR, "Unable to find DNA bioseq for %s", context.label);
     return;
   }
-  slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
+  slp = BuildProtLoc (cds, sfp->location, NULL);
   if (slp == NULL) {
     Message (MSG_ERROR, "Unable to convert to protein coordinate for %s", context.label);
     return;
@@ -15338,6 +15732,37 @@ static void ConvertImpToImp (SeqFeatPtr sfp, CharPtr featname_to)
   }
 }
 
+
+typedef struct origfeat 
+{
+  SeqEntryPtr sep;
+  SeqFeatPtr  sfp;
+} OrigFeatData, PNTR OrigFeatPtr;
+
+
+static void AddDuplicateFeature (SeqFeatPtr sfp_orig, ValNodePtr PNTR feat_list)
+{
+  SeqEntryPtr sep;
+  BioseqPtr   bsp;
+  OrigFeatPtr ofp;
+  
+  if (sfp_orig == NULL || feat_list == NULL) return;
+  bsp = BioseqFindFromSeqLoc (sfp_orig->location);
+  if (bsp == NULL) return;
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL) return;
+  
+  ofp = (OrigFeatPtr) MemNew (sizeof (OrigFeatData));
+  if (ofp == NULL) return;
+  
+  ofp->sep = sep;
+  ofp->sfp = (SeqFeatPtr) AsnIoMemCopy (sfp_orig, (AsnReadFunc) SeqFeatAsnRead,
+                                                 (AsnWriteFunc) SeqFeatAsnWrite);
+  
+  ValNodeAddPointer (feat_list, 0, ofp);
+}
+
+
 static void ConvertFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
   FeatureSelRemConvFormPtr   mrfp;
@@ -15353,6 +15778,14 @@ static void ConvertFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetP
   
   fromFeat = sfp->data.choice;
   toFeat   = FindFeatFromFeatDefType (mrfp->featdef_to);
+  
+  if (mrfp->leave_original_feature)
+  {
+    /* need a list of duplicate features that we can add to the appropriate SeqEntrys
+     * when we are done with the conversions.
+     */
+    AddDuplicateFeature (sfp, &(mrfp->feat_list)); 
+  }
 
   if (fromFeat == SEQFEAT_IMP 
       && toFeat == SEQFEAT_CDREGION)
@@ -15537,6 +15970,8 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
   Int4                  window_action;
   Int2                  feat_def_choice;
   RemoveFeatureData     rfd;
+  OrigFeatPtr           ofp;
+  SeqFeatPtr            sfp;
   
   if (userdata == NULL) return FALSE;
   
@@ -15565,6 +16000,7 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
      */
     vnp = ValNodeFree (vnp);
     feature_type_list = (ValNodePtr) DialogToPointer (mrfp->feature_select_from);
+    mrfp->leave_original_feature = GetStatus (mrfp->leave_original_feature_btn);
   }
   else
   {
@@ -15626,6 +16062,20 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
   {
     DeleteMarkedObjects (mrfp->input_entityID, 0, NULL);
   }
+  
+  if (window_action == FEATURE_CONVERT && mrfp->leave_original_feature)
+  {
+    for (vnp = mrfp->feat_list; vnp != NULL; vnp = vnp->next)
+    {
+      ofp = (OrigFeatPtr) vnp->data.ptrvalue;
+      if (ofp == NULL || ofp->sep == NULL || ofp->sfp == NULL)
+      {
+        continue;
+      }
+      sfp = CreateNewFeature (ofp->sep, NULL, ofp->sfp->data.choice, ofp->sfp);
+    }
+  }
+  mrfp->feat_list = ValNodeFreeData (mrfp->feat_list);
   
   ObjMgrSetDirtyFlag (mrfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, mrfp->input_entityID, 0, 0);  
@@ -15691,7 +16141,11 @@ static void FeatureRemoveOrConvert (IteM i, Int4 first_action)
                                                   mrfp);
   AlignObjects (ALIGN_CENTER, (HANDLE) mrfp->to_prompt, (HANDLE) mrfp->feature_select_to, NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE) mrfp->remove_grp, (HANDLE) mrfp->convert_grp, NULL);
+  mrfp->leave_original_feature_btn = CheckBox (mrfp->convert_grp, "Leave Original Feature", NULL);
+  SetStatus (mrfp->leave_original_feature_btn, FALSE);
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) mrfp->leave_original_feature_btn, NULL);
   
+  mrfp->feat_list = NULL;
   mrfp->constraints = FilterGroup (h, TRUE, FALSE, TRUE, FALSE, "Where feature text");
   mrfp->accept_cancel = AcceptCancelDialog (h, FeatureRemoveOrConvertAction, NULL, FeatureRemoveClear, FeatureRemoveClearText, (Pointer)mrfp, w);
   AlignObjects (ALIGN_CENTER, (HANDLE) mrfp->action_choice,
@@ -16999,7 +17453,6 @@ typedef struct feated
   DialoG  accept_cancel;
 
   /* for evidence */  
-  PopuP   evidence_choice;
   Int4    evidence_val;
       
   /* for exceptions */
@@ -17107,10 +17560,6 @@ static void FeatEdClear (Pointer data)
   PointerToDialog (mp->feature_select, NULL);
   PointerToDialog (mp->constraints, NULL);
 
-  if (mp->evidence_choice != NULL)
-  {
-    SetValue (mp->evidence_choice, 1);
-  }
   if (mp->explanation_choice != NULL)
   {
     SetValue (mp->explanation_choice, 1);
@@ -17236,12 +17685,7 @@ static GrouP FeatureEvidenceGroup (GrouP h, FeatEdPtr mp)
   g = HiddenGroup (h, 2, 0, NULL);
   SetGroupSpacing (g, 10, 10);
   
-  StaticPrompt (g, "Set Evidence to ", 0, dialogTextHeight, systemFont, 'l');
-  mp->evidence_choice = PopupList (g, TRUE, NULL);
-  PopupItem (mp->evidence_choice, " ");
-  PopupItem (mp->evidence_choice, "Experimental");
-  PopupItem (mp->evidence_choice, "Non-Experimental");
-  SetValue (mp->evidence_choice, 1);
+  StaticPrompt (g, "Click Accept to clear feature evidence.", 0, dialogTextHeight, systemFont, 'l');
   
   return g;
 }
@@ -18295,7 +18739,7 @@ FeatureEditorDoOneAction
                                              NULL, 0, feat_def_choice, 0, mp);
         break;
       case FEAT_ED_EVIDENCE:
-        mp->evidence_val = GetValue (mp->evidence_choice) - 1;
+        mp->evidence_val = 0;
         OperateOnSeqEntryConstrainedObjects (sep, fsp, 
                                              DoEvidenceFeatureProc,
                                              NULL, 0, feat_def_choice, 0, mp);
@@ -19410,8 +19854,9 @@ typedef DialoG  (*Nlm_SubtypeListDlgProc) PROTO ((GrouP, Boolean, Nlm_ChangeNoti
 #define AECR_EDIT    2
 #define AECR_CONVERT 3
 #define AECR_SWAP    4
-#define AECR_REMOVE  5
-#define NUM_AECR     5
+#define AECR_PARSE   5
+#define AECR_REMOVE  6
+#define NUM_AECR     6
 
 #define AECR_VIB_MSG_SET_DEFAULT (NUM_VIB_MSG + 1)
 #define AECR_VIB_MSG_CLEAR_TEXT  (NUM_VIB_MSG + 2)
@@ -19629,7 +20074,8 @@ ApplyEditConvertRemoveCombo
  CharPtr                  string_constraint_label,
  Nlm_AcceptActnProc       accept_actn,
  Nlm_CancelActnProc       cancel_actn,
- Nlm_ChangeAECRActionProc change_action)
+ Nlm_ChangeAECRActionProc change_action,
+ OkToPreSample            presample_check_proc)
 {
   BaseFormPtr               bfp;
   ApplyEditConvertRemovePtr mp;
@@ -19638,6 +20084,7 @@ ApplyEditConvertRemoveCombo
   Int4                      page_num;
   SampleBtnPtr              sbp;
   ButtoN                    b;
+  DialoG                    sample_dlg = NULL;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -19669,7 +20116,7 @@ ApplyEditConvertRemoveCombo
   SetGroupSpacing (k, 10, 10);
   if (show_sample && make_sample_dlg != NULL && ! mp->crippled)
   {
-    make_sample_dlg (k, mp->input_entityID);
+    sample_dlg = make_sample_dlg (k, mp->input_entityID);
   }
   
   h = HiddenGroup (k, -1, 0, NULL);
@@ -19696,6 +20143,7 @@ ApplyEditConvertRemoveCombo
     PopupItem (mp->action_popup, "Edit");
     PopupItem (mp->action_popup, "Convert");
     PopupItem (mp->action_popup, "Swap");
+    PopupItem (mp->action_popup, "Parse");
     PopupItem (mp->action_popup, "Remove");
     SetValue (mp->action_popup, first_action_choice);
   
@@ -19717,6 +20165,7 @@ ApplyEditConvertRemoveCombo
                               (HANDLE) mp->aecr_pages[2],
                               (HANDLE) mp->aecr_pages[3],
                               (HANDLE) mp->aecr_pages[4],
+                              (HANDLE) mp->aecr_pages[5],
                                NULL);
 
   if (! mp->crippled)
@@ -19750,8 +20199,47 @@ ApplyEditConvertRemoveCombo
                               
   mp->prev_page = -1;                              
   ChangeApplyEditConvertRemoveAction (mp, first_action_choice);
+  /* initialize sample values if conditions are met */
+  if (sample_dlg != NULL && (presample_check_proc == NULL || presample_check_proc(mp->input_entityID))) {
+    SendMessageToDialog (sample_dlg, VIB_MSG_INIT);
+  }
   Show (w);   
 }
+
+
+static void CountFeaturesCallback(SeqFeatPtr sfp, Pointer userdata)
+{
+  Int4Ptr pTotal;
+  
+  if (userdata == NULL || sfp == NULL) {
+      return;
+  }
+  
+  pTotal = (Int4Ptr) userdata;
+  
+  (*pTotal) ++;
+}
+
+
+static Boolean CheckFeaturesForPresample (Uint2 entityID)
+{
+  SeqEntryPtr sep;
+  Int4        total = 0;
+  
+  sep = GetTopSeqEntryForEntityID(entityID);
+  if (sep == NULL) {
+    return FALSE;
+  }
+  
+  VisitFeaturesInSep(sep, &total, CountFeaturesCallback);
+  
+  if (total > 1500) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
 
 typedef struct editapply
 {
@@ -19933,7 +20421,7 @@ static void EditApplyDialogCopy (ButtoN b)
   {
     return;
   }
-  str = SaveStringFromText (dlg->find_txt);
+  str = JustSaveStringFromText (dlg->find_txt);
   SetTitle (dlg->repl_txt, str);
   str = MemFree (str);
 }
@@ -20017,6 +20505,18 @@ static void GetConversionConflictsFeatureCallback (SeqFeatPtr sfp, Pointer userd
   }
   
   src_str = (ccp->cfp->get_str_func) (sfp, ccp->cfp->src_field_list, ccp->cfp->fsp);
+  
+  if (ccp->cfp->convert_type == CONVERT_TYPE_PARSE) 
+  {
+    dst_str = src_str;
+    src_str = ReplaceStringForParse(src_str, ccp->cfp->text_portion);
+    dst_str = MemFree (dst_str);
+    if (src_str == NULL) 
+    {
+      return;
+    }
+  }
+  
   if (!StringHasNoText (src_str))
   {
     dst_str = (ccp->cfp->get_str_func) (sfp, ccp->cfp->dst_field_list, ccp->cfp->fsp);
@@ -20062,6 +20562,18 @@ static void GetConversionConflictsDescriptorCallback (SeqDescPtr sdp, Pointer us
   }
   
   src_str = (ccp->cfp->get_d_str_func) (sdp, ccp->cfp->src_field_list, ccp->cfp->fsp);
+  
+  if (ccp->cfp->convert_type == CONVERT_TYPE_PARSE) 
+  {
+    dst_str = src_str;
+    src_str = ReplaceStringForParse(src_str, ccp->cfp->text_portion);
+    dst_str = MemFree (dst_str);
+    if (src_str == NULL) 
+    {
+      return;
+    }  
+  }
+  
   if (!StringHasNoText (src_str))
   {
     dst_str = (ccp->cfp->get_d_str_func) (sdp, ccp->cfp->dst_field_list, ccp->cfp->fsp);
@@ -20155,7 +20667,10 @@ typedef struct simpleaecr
   ValNodePtr      field_list_to;
   ValNodePtr      subtype_list;
   Boolean         leave_on_original;
+  Boolean         strip_name_from_text;
   EditApplyPtr    edit_apply;
+  TextPortionPtr  text_portion;
+  Boolean         remove_parsed;
   FreeValNodeProc free_field_vn_proc;
   FreeValNodeProc free_subtype_vn_proc;
 } SimpleAECRData, PNTR SimpleAECRPtr;
@@ -20168,6 +20683,7 @@ static SimpleAECRPtr SimpleAECRFree (SimpleAECRPtr sp)
     sp->field_list_to = ValNodeFuncFree (sp->field_list_to, sp->free_field_vn_proc);
     sp->subtype_list = ValNodeFuncFree (sp->subtype_list, sp->free_subtype_vn_proc);
     sp->edit_apply = EditApplyFree (sp->edit_apply);
+    sp->text_portion = TextPortionFree(sp->text_portion);
     sp = MemFree (sp);
   }
   return sp;
@@ -20183,7 +20699,10 @@ typedef struct simpleecrdlg
   DialoG          field_list_to;
   DialoG          subtype_list;
   ButtoN          leave_on_original;  
+  ButtoN          strip_name_from_text;
   DialoG          edit_apply; 
+  DialoG          text_portion;
+  ButtoN          remove_parsed;
   Int4            action_choice;
   /* These are necessary to produce the SimpleAECR structure for output */
   FreeValNodeProc free_field_vn_proc;
@@ -20201,6 +20720,7 @@ static void ClearTextSimpleAECRDlg (SimpleAECRDlgPtr dlg)
   if (dlg != NULL)
   {
     PointerToDialog (dlg->edit_apply, NULL);
+    PointerToDialog (dlg->text_portion, NULL);
   }
 }
 
@@ -20211,7 +20731,10 @@ static void ResetSimpleAECRDlg (SimpleAECRDlgPtr dlg)
     PointerToDialog (dlg->field_list, NULL);
     PointerToDialog (dlg->field_list_to, NULL);
     PointerToDialog (dlg->subtype_list, NULL);
+    PointerToDialog (dlg->text_portion, NULL);
     SafeSetStatus (dlg->leave_on_original, FALSE);
+    SafeSetStatus (dlg->strip_name_from_text, FALSE);
+    SafeSetStatus (dlg->remove_parsed, FALSE);
     ClearTextSimpleAECRDlg (dlg);
   }
 }
@@ -20236,7 +20759,10 @@ static void SimpleAECRToDialog (DialoG d, Pointer userdata)
     SendMessageToDialog (dlg->field_list_to, NUM_VIB_MSG + 1);
     PointerToDialog (dlg->subtype_list, data->subtype_list);
     PointerToDialog (dlg->edit_apply, data->edit_apply);
+    PointerToDialog (dlg->text_portion, data->text_portion);
     SafeSetValue (dlg->leave_on_original, data->leave_on_original);
+    SafeSetValue (dlg->strip_name_from_text, data->strip_name_from_text);
+    SafeSetStatus (dlg->remove_parsed, data->remove_parsed);
     dlg->free_field_vn_proc = data->free_field_vn_proc;
     dlg->free_subtype_vn_proc = data->free_subtype_vn_proc;
   }
@@ -20265,6 +20791,14 @@ static Pointer DialogToSimpleAECR (DialoG d)
     data->field_list_to = DialogToPointer (dlg->field_list_to);
     data->subtype_list = DialogToPointer (dlg->subtype_list);
     data->edit_apply = DialogToPointer (dlg->edit_apply);
+    data->text_portion = DialogToPointer (dlg->text_portion);
+    if (dlg->remove_parsed == NULL) {
+      data->remove_parsed = FALSE;
+    } 
+    else
+    {
+      data->remove_parsed = GetStatus (dlg->remove_parsed);
+    }
     if (dlg->leave_on_original != NULL)
     {
       data->leave_on_original = GetStatus (dlg->leave_on_original);
@@ -20272,6 +20806,14 @@ static Pointer DialogToSimpleAECR (DialoG d)
     else
     {
       data->leave_on_original = FALSE;
+    }
+    if (dlg->strip_name_from_text != NULL)
+    {
+      data->strip_name_from_text = GetStatus (dlg->strip_name_from_text);
+    }
+    else
+    {
+      data->strip_name_from_text = FALSE;
     }
     data->free_field_vn_proc = dlg->free_field_vn_proc;
     data->free_subtype_vn_proc = dlg->free_subtype_vn_proc;
@@ -20401,7 +20943,7 @@ static ValNodePtr TestSimpleAECR (DialoG d)
   return total_err_list;
 }
 
-static DialoG SimpleAECRDialog
+static DialoG SimpleAECRDialogEx
 (GrouP                    h,
  Int4                     action_choice, 
  Nlm_ChangeNotifyProc     change_notify,
@@ -20414,6 +20956,7 @@ static DialoG SimpleAECRDialog
  CharPtr                  field_label,
  CharPtr                  subtype_label,
  Boolean                  is_text,
+ Boolean                  strip_name,
  Uint2                    entityID)
 {
   SimpleAECRDlgPtr dlg;
@@ -20441,10 +20984,11 @@ static DialoG SimpleAECRDialog
   dlg->change_userdata = change_userdata;
   dlg->get_autopopulate_text = get_autopopulate_text;
   dlg->entityID = entityID;
+  dlg->strip_name_from_text = NULL;
   
   dlg->subtype_list = NULL;
   
-  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP)
+  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
     if (subtypelist_dlg_proc == NULL)
     {
@@ -20471,6 +21015,10 @@ static DialoG SimpleAECRDialog
     if (action_choice == AECR_CONVERT && is_text)
     {
       dlg->leave_on_original = CheckBox (p, "Leave on original", NULL);
+    }
+    if (strip_name)
+    {
+      dlg->strip_name_from_text = CheckBox (p, "Strip name from text", NULL);
     }
   }
   else
@@ -20514,21 +21062,71 @@ static DialoG SimpleAECRDialog
   {
     dlg->edit_apply = EditApplyDialog (p, action_choice, "New Text",
                                        change_notify, change_userdata);
+    dlg->text_portion = NULL;
+    dlg->remove_parsed = NULL;
+  }
+  else if (action_choice == AECR_PARSE)
+  {
+    dlg->edit_apply = NULL;
+    if (is_text) {
+        dlg->text_portion = TextPortionDialog(p);
+    }
+    dlg->remove_parsed = CheckBox (p, "Remove from parsed field", NULL);
   }
   else
   {
     dlg->edit_apply = NULL;
+    dlg->text_portion = NULL;
+    dlg->remove_parsed = NULL;
   }
 
   if (action_choice == AECR_CONVERT)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, NULL);
+    if (is_text)
+    {
+      AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, (HANDLE) dlg->strip_name_from_text, NULL);
+    }
+    else
+    {
+      AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->strip_name_from_text, NULL);
+    }
+  }
+  else if (action_choice == AECR_SWAP)
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->strip_name_from_text, NULL);
+  }
+  else if (action_choice == AECR_PARSE)
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->text_portion, (HANDLE) dlg->remove_parsed, NULL);
   }
   else
   {
     AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->edit_apply, NULL);
   }
   return (DialoG) p;
+}
+
+static DialoG SimpleAECRDialog
+(GrouP                    h,
+ Int4                     action_choice, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ FreeValNodeProc          free_field_vn_proc,
+ FreeValNodeProc          free_subtype_vn_proc,
+ Nlm_FieldListDlgProc     fieldlist_dlg_proc,
+ Nlm_SubtypeListDlgProc   subtypelist_dlg_proc,
+ GetAutoPopulateTextFunc  get_autopopulate_text,
+ CharPtr                  field_label,
+ CharPtr                  subtype_label,
+ Boolean                  is_text,
+ Uint2                    entityID)
+{
+  return SimpleAECRDialogEx(h, action_choice, change_notify, change_userdata,
+                            free_field_vn_proc, free_subtype_vn_proc, 
+                            fieldlist_dlg_proc, subtypelist_dlg_proc,
+                            get_autopopulate_text,
+                            field_label, subtype_label,
+                            is_text, FALSE, entityID);
 }
 
 static CharPtr 
@@ -20673,7 +21271,7 @@ static Boolean CDSGeneProtAECRAction (Pointer userdata)
   }
   
   /* find existing text and how to handle it */
-  if (action_choice == AECR_CONVERT || action_choice == AECR_APPLY)
+  if (action_choice == AECR_CONVERT || action_choice == AECR_APPLY || action_choice == AECR_PARSE)
   {
     gsp = GetCDSGeneProtAECRSample (cdset_list, sp->field_list, sp->field_list_to);
     etp = GetExistingTextHandlerInfo (gsp, FALSE);
@@ -20690,7 +21288,7 @@ static Boolean CDSGeneProtAECRAction (Pointer userdata)
     /* if we are applying gene fields, we need to make sure every sequence has a gene
      * and we need to recollect the cdset_list
      */
-    if (action_choice == AECR_APPLY
+    if ((action_choice == AECR_APPLY || action_choice == AECR_PARSE)
         && sp->field_list != NULL
         && sp->field_list->data.intvalue > 1 
         && sp->field_list->data.intvalue <= 1 + num_gene_fields)
@@ -20707,7 +21305,6 @@ static Boolean CDSGeneProtAECRAction (Pointer userdata)
       }
     }
     
-  
     for (cdset_vnp = cdset_list; cdset_vnp != NULL; cdset_vnp = cdset_vnp->next)
     {
       if (action_choice == AECR_CONVERT)
@@ -20736,6 +21333,27 @@ static Boolean CDSGeneProtAECRAction (Pointer userdata)
           SetCDSetField (cdset_vnp->data.ptrvalue, sp->field_list, str_dst, NULL);
         }
       }
+      else if (action_choice == AECR_PARSE)
+      {
+        str_src = GetCDSetField (cdset_vnp->data.ptrvalue, sp->field_list);
+        str_dst = str_src;
+        str_src = ReplaceStringForParse(str_src, sp->text_portion);
+        if (!sp->remove_parsed) {
+          str_dst = MemFree (str_dst);
+        }
+        if (str_src != NULL) {
+          BuildNewCDSGeneProtFeature (cdset_vnp->data.ptrvalue, sp->field_list_to);
+          if (sp->remove_parsed) {
+            BuildNewCDSGeneProtFeature (cdset_vnp->data.ptrvalue, sp->field_list);
+          }
+          SetCDSetField (cdset_vnp->data.ptrvalue, sp->field_list_to, str_src, etp);
+          if (sp->remove_parsed) {
+            SetCDSetField (cdset_vnp->data.ptrvalue, sp->field_list, str_dst, NULL);
+          }
+          str_src = MemFree (str_src);
+        }   
+        str_dst = MemFree (str_dst);
+      }      
       else if (action_choice == AECR_APPLY)
       {
         /* for now, this is taken care of by BuildNewGenes */
@@ -20787,7 +21405,8 @@ CDSGeneProtApplyEditConvertRemove
                                CDSGeneProtAECRDialog, 
                                TRUE, GetCDSGeneProtSample,
                                FALSE, FALSE, FALSE, TRUE, NULL,
-                               CDSGeneProtAECRAction, NULL, NULL);
+                               CDSGeneProtAECRAction, NULL, NULL,
+                               CheckFeaturesForPresample);
 }
 
 extern void ApplyCDSGeneProt (IteM i)
@@ -21395,10 +22014,11 @@ static DialoG ConvertSourceQualDialog
                                              change_notify, 
                                              change_userdata);
   dlg->leave_on_original = CheckBox (p, "Leave on original", NULL);
+  dlg->strip_name_from_text = CheckBox (p, "Strip name from text", NULL);  
   
   dlg->edit_apply = NULL;
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, (HANDLE) dlg->strip_name_from_text, NULL);
   return (DialoG) p;
 }
 
@@ -21520,6 +22140,14 @@ static DialoG SourceQualAECRDialog
                                                 change_userdata,
                                                 entityID);
   }
+  else if (action_choice == AECR_SWAP)
+  {
+    dlg->source_qual = SimpleAECRDialogEx (g1, action_choice, 
+                           change_notify, change_userdata,
+                           ValNodeSimpleDataFree, NULL,
+                           SourceQualTypeSelectionDialog, NULL, NULL,
+                           "Qualifier", NULL, TRUE, TRUE, entityID);    
+  }
   else
   {
     dlg->source_qual = SimpleAECRDialog (g1, action_choice, 
@@ -21615,7 +22243,7 @@ SourceQualQualApplyEditConvertRemoveAction
       || descriptor_apply_action == NULL
       || feature_remove_action == NULL
       || descriptor_remove_action == NULL
-      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP) 
+      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE) 
            && sp->field_list == NULL))
   {
     return FALSE;
@@ -21625,7 +22253,7 @@ SourceQualQualApplyEditConvertRemoveAction
   
   fsp = (FilterSetPtr) DialogToPointer (ap->constraints);
   
-  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP)
+  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
     cfd.src_field_list = sp->field_list;
     cfd.dst_field_list = sp->field_list_to;
@@ -21637,6 +22265,9 @@ SourceQualQualApplyEditConvertRemoveAction
     cfd.set_d_str_func = descriptor_apply_action;
     cfd.remove_d_str_func = descriptor_remove_action;
     cfd.fsp = fsp;
+    cfd.strip_name_from_text = sp->strip_name_from_text;
+    cfd.name_field_func = name_field_func;
+    cfd.text_portion = sp->text_portion;
     if (action_choice == AECR_CONVERT)
     {
       if (sp->leave_on_original)
@@ -21652,7 +22283,11 @@ SourceQualQualApplyEditConvertRemoveAction
     {
       cfd.convert_type = CONVERT_TYPE_SWAP;
     }
-    if ((cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY)
+    else if (action_choice == AECR_PARSE)
+    {
+      cfd.convert_type = CONVERT_TYPE_PARSE;
+    }
+    if ((cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY || cfd.convert_type == CONVERT_TYPE_PARSE)
         && ! non_text)
     {
       gsp = CheckForConversionExistingTextInSeqEntry (sep, &cfd, fsp, 
@@ -21674,8 +22309,6 @@ SourceQualQualApplyEditConvertRemoveAction
     {
       if (non_text)
       {
-        cfd.name_field_func = name_field_func;
-
         OperateOnSeqEntryConstrainedObjects (sep, fsp, 
                                              ConvertNonTextFeatureFieldCallback,
                                              ConvertNonTextDescriptorFieldCallback,
@@ -21803,7 +22436,7 @@ static Boolean SourceQualApplyEditConvertRemoveAction (Pointer userdata)
                                        GetSourceQualFeatureString,
                                        GetSourceQualDescrString,
                                        FALSE,
-                                       NULL);
+                                       SourceQualValNodeName);
       break;
     case QUALKIND_STRINGS :
       rval = SourceQualQualApplyEditConvertRemoveAction (ap, sp->strings, 
@@ -21903,7 +22536,7 @@ SourceQualApplyEditConvertRemove
                                FALSE, GetSourceQualSample,
                                FALSE, TRUE, FALSE, FALSE, NULL,
                                SourceQualApplyEditConvertRemoveAction, NULL,
-                               ChangeSourceQualAction);
+                               ChangeSourceQualAction, NULL);
 }
 
 extern void ApplySourceQual (IteM i)
@@ -21982,10 +22615,7 @@ static CharPtr GetRNASampleFieldString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSe
     switch (rna_field_type)
     {
       case 0 :
-        if (rrp != NULL && rrp->ext.choice == 1 && !StringHasNoText (rrp->ext.value.ptrvalue))
-        {
-          str = StringSave (rrp->ext.value.ptrvalue);        
-        }
+        str = GetRNANameString (sfp);
         break;
       case 1 :
         if (!StringHasNoText (sfp->comment))
@@ -22445,6 +23075,7 @@ static DialoG RNAQualListDialog
       break;
     case AECR_CONVERT:
     case AECR_SWAP:
+    case AECR_PARSE:
       d = SimpleAECRDialog (h, action_choice, change_notify, change_userdata,
                             NULL, NULL,
                             RNAFieldSelectionDialog,
@@ -22629,7 +23260,7 @@ AcceptRNAQualEditRemoveConvert
       || action_choice > NUM_AECR
       || rp == NULL
       || rp->subtype_list == NULL || rp->field_list == NULL
-      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP) 
+      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE) 
            && rp->field_list_to == NULL))
   {
     return FALSE;
@@ -22639,7 +23270,7 @@ AcceptRNAQualEditRemoveConvert
 
   fsp = (FilterSetPtr) DialogToPointer (ap->constraints);
   
-  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP)
+  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
     cfd.src_field_list = rp->field_list;
     cfd.dst_field_list = rp->field_list_to;
@@ -22651,6 +23282,10 @@ AcceptRNAQualEditRemoveConvert
     cfd.set_d_str_func = NULL;
     cfd.remove_d_str_func = NULL;
     cfd.fsp = fsp;
+    cfd.strip_name_from_text = rp->strip_name_from_text;
+    cfd.name_field_func = NULL;
+    cfd.text_portion = rp->text_portion;
+
     if (action_choice == AECR_CONVERT)
     {
       if (rp->leave_on_original)
@@ -22666,8 +23301,12 @@ AcceptRNAQualEditRemoveConvert
     {
       cfd.convert_type = CONVERT_TYPE_SWAP;
     }
+    else if (action_choice == AECR_PARSE)
+    {
+      cfd.convert_type = CONVERT_TYPE_PARSE;
+    }
     
-    if (cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY)
+    if (cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY || cfd.convert_type == CONVERT_TYPE_PARSE)
     {
       /* get existing text sample */
       gsp_sum = NULL;
@@ -22790,7 +23429,8 @@ RNAQualApplyEditRemoveConvert
                                "RNA Qualifiers",
                                RNAQualListDialog, TRUE, GetRNAQualSample,
                                TRUE, FALSE, TRUE, FALSE, "Where feature text",
-                               AcceptRNAQualApplyEditRemoveConvert, NULL, NULL);
+                               AcceptRNAQualApplyEditRemoveConvert, NULL, NULL,
+                               CheckFeaturesForPresample);
 }
 
 extern void ApplyRNAQual (IteM i)
@@ -23236,7 +23876,7 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
   sep = GetTopSeqEntryForEntityID (ap->input_entityID);
   if (subtype_list == NULL || (action_choice != AECR_REMOVE && field_list == NULL)
       || (action_choice == AECR_REMOVE && rgp->use_field_list && field_list == NULL)
-      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP) 
+      || ((action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE) 
            && gp->field_list_to == NULL))
   {
     gp = SimpleAECRFree (gp);
@@ -23248,7 +23888,7 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
 
   fsp = (FilterSetPtr) DialogToPointer (ap->constraints);
   
-  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP)
+  if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
     cfd.src_field_list = gp->field_list;
     cfd.dst_field_list = gp->field_list_to;
@@ -23260,6 +23900,9 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
     cfd.set_d_str_func = NULL;
     cfd.remove_d_str_func = NULL;
     cfd.fsp = fsp;
+    cfd.strip_name_from_text = gp->strip_name_from_text;
+    cfd.name_field_func = NULL;
+    cfd.text_portion = gp->text_portion;
     
     if (action_choice == AECR_CONVERT)
     {
@@ -23276,8 +23919,12 @@ static Boolean AcceptGBQualApplyEditRemoveConvert (Pointer userdata)
     {
       cfd.convert_type = CONVERT_TYPE_SWAP;
     }
+    else if (action_choice == AECR_PARSE)
+    {
+      cfd.convert_type = CONVERT_TYPE_PARSE;
+    }
     
-    if (cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY)
+    if (cfd.convert_type == CONVERT_TYPE_MOVE || cfd.convert_type == CONVERT_TYPE_COPY || cfd.convert_type == CONVERT_TYPE_PARSE)
     {
       /* get existing text data */
       gsp_sum = NULL;
@@ -23517,7 +24164,8 @@ GBQualApplyEditRemoveConvert
                                "Import Qualifiers",
                                GBQualListDialog, FALSE, GetGBQualSample,
                                TRUE, FALSE, TRUE, FALSE, "Where feature text",
-                               AcceptGBQualApplyEditRemoveConvert, NULL, NULL);
+                               AcceptGBQualApplyEditRemoveConvert, NULL, NULL,
+                               CheckFeaturesForPresample);
 }
 
 extern void ApplyGBQual (IteM i)
@@ -24288,6 +24936,188 @@ extern void CombineMultipleCDS (IteM i)
                               (HANDLE) ccp->new_cds_grp,
                               (HANDLE) c,
                               NULL);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Update ();
+}
+
+
+static void MoveToProteinSequenceCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  SeqLocPtr         prot_loc;
+  SeqFeatPtr        overlapping_cds, new_sfp;
+  SeqMgrFeatContext cds_context, fcontext;
+  Int4              offset;
+  CdRegionPtr       crp;
+  BioseqPtr         prot_bsp;
+  LogInfoPtr        lip;
+  
+  if (sfp == NULL) {
+    return;
+  }
+  
+  lip = (LogInfoPtr) userdata;
+  
+  overlapping_cds = SeqMgrGetOverlappingCDS(sfp->location, &cds_context);
+  if (overlapping_cds == NULL) {
+    SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, sfp->idx.itemID, 0, sfp, &fcontext);
+    if (lip != NULL && lip->fp != NULL)
+    {
+      fprintf (lip->fp, "No overlapping coding region for %s\n", fcontext.label);
+      lip->data_in_log = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "No overlapping coding region for %s\n", fcontext.label);
+    }
+    return;
+  }
+  
+  prot_bsp = BioseqFindFromSeqLoc(overlapping_cds->product);
+  if (prot_bsp == NULL) {
+    if (lip != NULL && lip->fp != NULL)
+    {
+      fprintf (lip->fp, "No protein product for %s\n", cds_context.label);
+      lip->data_in_log = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "No protein product for %s\n", cds_context.label);
+    }
+    return;
+  }
+  
+  offset = cds_context.left;
+  crp = (CdRegionPtr) overlapping_cds->data.value.ptrvalue;
+  if (crp != NULL) {
+    if (crp->frame == 2)
+    {
+      offset += 1;
+    }
+    else if (crp->frame == 3)
+    {
+      offset += 2;
+    }
+  }
+  
+  prot_loc = BuildProtLoc (overlapping_cds, sfp->location, NULL);
+  if (prot_loc == NULL)
+  {
+    SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, sfp->idx.itemID, 0, sfp, &fcontext);
+    if (lip != NULL && lip->fp != NULL)
+    {
+      fprintf (lip->fp, "Unable to translate coordinates for %s\n", fcontext.label);
+      lip->data_in_log = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "Unable to translate coordinates for %s\n", fcontext.label);
+    }
+  } 
+  else 
+  {
+    new_sfp = CreateNewFeatureOnBioseq (prot_bsp, sfp->data.choice, prot_loc);
+    if (new_sfp != NULL)
+    {
+      new_sfp->data.value.ptrvalue = sfp->data.value.ptrvalue;
+      sfp->data.value.ptrvalue = NULL;
+      sfp->idx.deleteme = TRUE;
+    }
+  }
+  
+}
+
+
+typedef struct maptoprotein {
+  FORM_MESSAGE_BLOCK
+  DialoG feature_selection;
+  DialoG constraints;
+} MapToProteinData, PNTR MapToProteinPtr;
+
+
+static void MapToProteinSequence(ButtoN b)
+{
+  SeqEntryPtr     sep;
+  MapToProteinPtr mtpp;
+  FilterSetPtr    fsp;
+  LogInfoPtr      lip;
+  ValNodePtr      feature_type_list, vnp;
+  Int2            feat_def_choice;
+  
+  mtpp = (MapToProteinPtr) GetObjectExtra (b);
+  if (mtpp == NULL) {
+    return;
+  }
+  
+  feature_type_list = (ValNodePtr) DialogToPointer (mtpp->feature_selection);
+  if (feature_type_list != NULL)
+  {
+    sep = GetTopSeqEntryForEntityID (mtpp->input_entityID); 
+    fsp = DialogToPointer (mtpp->constraints);
+    lip = OpenLog ("Map to Protein Sequence");
+    
+    for (vnp = feature_type_list; vnp != NULL; vnp = vnp->next)
+    {
+      feat_def_choice = vnp->choice;
+      if (feat_def_choice == 255)
+      {
+        feat_def_choice = 0;
+      }
+      OperateOnSeqEntryConstrainedObjects (sep, fsp, MoveToProteinSequenceCallback, 
+                                           NULL, 0, feat_def_choice, 0, lip);
+    }
+    fsp = FilterSetFree (fsp);
+    CloseLog (lip);
+    lip = FreeLog (lip);
+    DeleteMarkedObjects (mtpp->input_entityID, 0, NULL);
+    ObjMgrSetDirtyFlag (mtpp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, mtpp->input_entityID, 0, 0);
+    Update ();
+    Remove (mtpp->form);
+    ValNodeFree (feature_type_list);
+  }
+}
+
+
+extern void MapFeaturesToProteinSequence(IteM i)
+{
+  ButtoN             b;
+  BaseFormPtr        bfp;
+  GrouP              c;
+  GrouP              g;
+  WindoW             w;
+  MapToProteinPtr    mtpp;
+  PrompT             p;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  
+  mtpp = (MapToProteinPtr) MemNew (sizeof (MapToProteinData));
+  if (mtpp == NULL) return;
+  mtpp->input_entityID = bfp->input_entityID;
+  w = MovableModalWindow (-50, -33, -10, -10,
+                          "Map to Protein Sequence",
+                          StdCloseWindowProc);
+  SetObjectExtra (w, mtpp, StdCleanupFormProc);
+  mtpp->form = (ForM) w;
+
+  g = HiddenGroup (w, -1, 0, NULL);
+  p = StaticPrompt (g, "Move features to protein of type", 0, dialogTextHeight, systemFont, 'l');
+
+  mtpp->feature_selection = FeatureSelectionDialog (g, TRUE, NULL, NULL);
+  mtpp->constraints = FilterGroup (g, TRUE, FALSE, FALSE, FALSE, "Where feature text");
+  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) mtpp->feature_selection, (HANDLE) mtpp->constraints, NULL);
+
+  c = HiddenGroup (w, 2, 0, NULL);
+  b = DefaultButton (c, "Accept", MapToProteinSequence);
+  SetObjectExtra (b, mtpp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Select (w);

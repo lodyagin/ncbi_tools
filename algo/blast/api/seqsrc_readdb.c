@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.51 2005/08/05 22:29:10 dondosha Exp $
+/*  $Id: seqsrc_readdb.c,v 1.52 2006/05/04 15:53:12 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Implementation of the BlastSeqSrc interface using readdb
  */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.51 2005/08/05 22:29:10 dondosha Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.52 2006/05/04 15:53:12 camacho Exp $";
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -166,7 +166,7 @@ s_ReaddbGetSequence(void* readdb_handle, void* args)
         return BLAST_SEQSRC_ERROR;
     }
 
-    BlastSetUp_SeqBlkNew(buf, len, 0, &readdb_args->seq, buffer_allocated);
+    BlastSetUp_SeqBlkNew(buf, len, &readdb_args->seq, buffer_allocated);
     /* If there is no sentinel byte, and buffer is allocated, i.e. this is
        the traceback stage of a translated search, set "sequence" to the same 
        position as "sequence_start". */

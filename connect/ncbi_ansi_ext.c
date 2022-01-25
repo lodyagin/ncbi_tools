@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ansi_ext.c,v 6.16 2004/10/08 16:16:24 ivanov Exp $
+/*  $Id: ncbi_ansi_ext.c,v 6.19 2006/03/07 18:15:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,13 +40,30 @@
 extern char* strdup(const char* str)
 {
     size_t size = strlen(str) + 1;
-    char*  res  = (char*) malloc(size);
+    char*   res = (char*) malloc(size);
     if (res)
         memcpy(res, str, size);
     return res;
 }
 
 #endif /*HAVE_STRDUP*/
+
+
+#ifndef HAVE_STRNDUP
+
+extern char* strndup(const char* str, size_t n)
+{
+    const char* end = n   ? memchr(str, '\0', n) : 0;
+    size_t     size = end ? (size_t)(end - str)  : n;
+    char*       res = (char*) malloc(size + 1);
+    if (res) {
+        memcpy(res, str, size);
+        res[size] = '\0';
+    }
+    return res;
+}
+
+#endif /*HAVE_STRNDUP*/
 
 
 #ifndef HAVE_STRCASECMP
@@ -128,6 +145,15 @@ extern char* strncpy0(char* s1, const char* s2, size_t n)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_ansi_ext.c,v $
+ * Revision 6.19  2006/03/07 18:15:14  lavr
+ * Optimize strndup()
+ *
+ * Revision 6.18  2006/03/07 17:54:44  ivanov
+ * Fixed compilation error in strndup
+ *
+ * Revision 6.17  2006/03/07 17:18:51  lavr
+ * +strndup
+ *
  * Revision 6.16  2004/10/08 16:16:24  ivanov
  * Removed extra ")"
  *

@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.180 2006/02/09 18:47:07 camacho Exp $
+/* $Id: blast_options.c,v 1.183 2006/04/25 16:06:53 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,13 +34,14 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.180 2006/02/09 18:47:07 camacho Exp $";
+    "$Id: blast_options.c,v 1.183 2006/04/25 16:06:53 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_filter.h>
 
-const int kUngappedHSPNumMax = 400;
+const int kUngappedHSPNumMax = 400;  /**< Suggested max. number of HSPs for an ungapped search. */
+
 const double kPSSM_NoImpalaScaling = 1.0;
 
 SDustOptions* SDustOptionsFree(SDustOptions* dust_options)
@@ -173,7 +174,8 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
 
        if (filter_options == NULL)
        {
-           Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, "SBlastFilterOptionsValidate: NULL filter_options");
+           Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext, 
+              "SBlastFilterOptionsValidate: NULL filter_options");
            return 1;
        }
 
@@ -182,7 +184,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number != eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, kBlastMessageNoContext,
                    "SBlastFilterOptionsValidate: Repeat filtering only supported with blastn");
                return 1;
            }
@@ -190,7 +192,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
                strlen(filter_options->repeatFilterOptions->database) == 0)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, kBlastMessageNoContext,
                    "SBlastFilterOptionsValidate: No repeat database specified for repeat filtering");
                return 1;
            }
@@ -201,7 +203,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number != eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, kBlastMessageNoContext,
                    "SBlastFilterOptionsValidate: Dust filtering only supported with blastn");
                return 1;
            }
@@ -212,7 +214,7 @@ Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastF
            if (program_number == eBlastTypeBlastn)
            {
                if (blast_message)
-                  Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
+                  Blast_MessageWrite(blast_message, eBlastSevError, kBlastMessageNoContext,
                    "SBlastFilterOptionsValidate: SEG filtering is not supported with blastn");
                return 1;
            }
@@ -315,6 +317,7 @@ BlastInitialWordOptionsNew(EBlastProgramType program,
    /* Except in one special case of greedy gapped extension, we always do 
       ungapped extension. Let the special case unset this option. */
    (*options)->ungapped_extension = TRUE;
+   (*options)->program_number = program;
 
    return 0;
 }
@@ -325,8 +328,6 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
    const BlastInitialWordOptions* options, 
    Blast_Message* *blast_msg)
 {
-   Int4 code=2;
-   Int4 subcode=1;
 
    ASSERT(options);
 
@@ -336,9 +337,9 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
        (!Blast_ProgramIsPhiBlast(program_number)) &&
        options->x_dropoff <= 0.0)
    {
-      Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode,
+      Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                             "x_dropoff must be greater than zero");
-         return (Int2) code;
+         return (Int2) -1;
    }
    
    return 0;
@@ -406,6 +407,8 @@ BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *opti
         (*options)->compositionBasedStats = TRUE;
     }
 
+    (*options)->program_number = program;
+
 	return 0;
 }
 
@@ -471,11 +474,9 @@ BlastExtensionOptionsValidate(EBlastProgramType program_number,
           options->ePrelimGapExt == eGreedyExt ||
           options->eTbackExt == eGreedyTbck)
 		{
-			Int4 code=2;
-			Int4 subcode=1;
-			Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
                             "Greedy extension only supported for BLASTN");
-			return (Int2) code;
+			return (Int2) 2;
 		}
 	}
 
@@ -520,7 +521,10 @@ BlastScoringOptionsNew(EBlastProgramType program_number, BlastScoringOptions* *o
       (*options)->gap_extend = BLAST_GAP_EXTN_NUCL;
    }
    (*options)->decline_align = INT2_MAX;
-   (*options)->gapped_calculation = TRUE;
+   if (program_number != eBlastTypeTblastx) {
+       (*options)->gapped_calculation = TRUE;
+   }
+   (*options)->program_number = program_number;
    
    return 0;
 }
@@ -558,6 +562,8 @@ BLAST_FillScoringOptions(BlastScoringOptions* options,
    if (gap_extend >= 0)
       options->gap_extend = gap_extend;
 
+   options->program_number = program_number;
+
    return 0;
 }
 
@@ -572,11 +578,9 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
    if (program_number == eBlastTypeTblastx && 
               options->gapped_calculation)
    {
-		Int4 code=2;
-		Int4 subcode=1;
-      Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+      Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
          "Gapped search is not allowed for tblastx");
-		return (Int2) code;
+		return (Int2) 2;
    }
 
 	if (program_number == eBlastTypeBlastn ||
@@ -584,20 +588,15 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	{
 		if (options->penalty >= 0)
 		{
-			Int4 code=2;
-			Int4 subcode=1;
-			Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
                             "BLASTN penalty must be negative");
-			return (Int2) code;
+			return (Int2) 2;
 		}
                 if (options->gapped_calculation && options->gap_open > 0 && options->gap_extend == 0) 
                 {
-                        Int4 code=2;
-                        Int4 subcode=1;
-                        Blast_MessageWrite(blast_msg, eBlastSevWarning, 
-                           code, subcode, 
+                        Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
                            "BLASTN gap extension penalty cannot be 0");
-                        return (Int2) code;
+                        return (Int2) 2;
                 }
 	}
 	else
@@ -612,29 +611,23 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 			if (status == 1)
 			{
 				char* buffer;
-				Int4 code=2;
-				Int4 subcode=1;
 
 				buffer = BLAST_PrintMatrixMessage(options->matrix); 
-            Blast_MessageWrite(blast_msg, eBlastSevError,
-                               code, subcode, buffer);
+                                Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext, buffer);
 				sfree(buffer);
-				return (Int2) code;
+				return (Int2) 2;
 				
 			}
 			else if (status == 2)
 			{
 				char* buffer;
-				Int4 code=2;
-				Int4 subcode=1;
 
 				buffer = BLAST_PrintAllowedValues(options->matrix, 
                         options->gap_open, options->gap_extend, 
                         options->decline_align); 
-            Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
-                               buffer);
+                                Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext, buffer);
 				sfree(buffer);
-				return (Int2) code;
+				return (Int2) 2;
 			}
                     }
 	       }
@@ -643,11 +636,9 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	if (program_number != eBlastTypeBlastx && 
        program_number != eBlastTypeTblastn && options->is_ooframe)
 	{
-      Int4 code=2;
-      Int4 subcode=1;
-      Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
-         "Out-of-frame only permitted for blastx and tblastn");
-      return (Int2) code;
+          Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
+             "Out-of-frame only permitted for blastx and tblastn");
+          return (Int2) 2;
 	}
 
 	return 0;
@@ -792,6 +783,8 @@ LookupTableOptionsNew(EBlastProgramType program_number, LookupTableOptions* *opt
        break;
    }
 
+   (*options)->program_number = program_number;
+
    return 0;
 }
 
@@ -922,17 +915,15 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
    const LookupTableOptions* options, Blast_Message* *blast_msg)
 
 {
-   Int4 code=2;
-   Int4 subcode=1;
    const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(program_number);
 
 	if (options == NULL)
 		return 1;
 
     if (options->phi_pattern && !kPhiBlast) {
-        Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+        Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
             "PHI pattern can be specified only for blastp and blastn");
-        return (Int2) code;
+        return (Int2) 2;
     }
 
     /* For PHI BLAST, the subsequent word size tests are not needed. */
@@ -943,51 +934,49 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
         (!Blast_ProgramIsRpsBlast(program_number)) &&
         options->threshold <= 0)
 	{
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                          "Non-zero threshold required");
-		return (Int2) code;
+		return (Int2) 2;
 	}
 
 	if (options->word_size <= 0)
 	{
         if ( !Blast_ProgramIsRpsBlast(program_number)) {
-            Blast_MessageWrite(blast_msg, eBlastSevError, 
-                                       code, subcode, 
+            Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                                      "Word-size must be greater than zero");
-            return (Int2) code;
+            return (Int2) 2;
         }
 	} else if (program_number == eBlastTypeBlastn && options->word_size < 4)
 	{
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
-                         "Word-size must be 4" 
-                         "or greater for nucleotide comparison");
-		return (Int2) code;
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext, 
+                  "Word-size must be 4 or greater for nucleotide comparison");
+		return (Int2) 2;
 	} else if (program_number != eBlastTypeBlastn && options->word_size > 5)
 	{
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                          "Word-size must be less"
                          "than 6 for protein comparison");
-		return (Int2) code;
+		return (Int2) 2;
 	}
 
 	if (program_number != eBlastTypeBlastn && 
        options->lut_type == MB_LOOKUP_TABLE)
 	{
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                          "Megablast lookup table only supported with blastn");
-		return (Int2) code;
+		return (Int2) 2;
 	}
 
    if (program_number == eBlastTypeBlastn && options->mb_template_length > 0) {
       if (!s_DiscWordOptionsValidate(options->word_size,
               options->mb_template_length, options->mb_template_type)) {
-         Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+         Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                             "Invalid discontiguous template parameters");
-         return (Int2) code;
+         return (Int2) 2;
       } else if (options->lut_type != MB_LOOKUP_TABLE) {
-         Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+         Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
             "Invalid lookup table type for discontiguous Mega BLAST");
-         return (Int2) code;
+         return (Int2) 2;
       } 
    }
 	return 0;
@@ -1012,6 +1001,7 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
 
    (*options)->hitlist_size = BLAST_HITLIST_SIZE;
    (*options)->expect_value = BLAST_EXPECT_VALUE;
+   (*options)->program_number = program_number;
 
    return 0;
 
@@ -1049,39 +1039,31 @@ BlastHitSavingOptionsValidate(EBlastProgramType program_number,
 
 	if (options->hitlist_size < 1)
 	{
-		Int4 code=1;
-		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                          "No hits are being saved");
-		return (Int2) code;
+		return (Int2) 2;
 	}
 
 	if (options->expect_value <= 0.0 && options->cutoff_score <= 0)
 	{
-		Int4 code=2;
-		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
          "expect value or cutoff score must be greater than zero");
-		return (Int2) code;
+		return (Int2) 2;
 	}	
 
    if (options->longest_intron != 0 && 
        program_number != eBlastTypeTblastn && 
        program_number != eBlastTypeBlastx) {
-		Int4 code=2;
-		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
          "Uneven gap linking of HSPs is allowed for blastx and tblastn only");
-		return (Int2) code;
+		return (Int2) 2;
    }
 
 	if (options->culling_limit < 0)
 	{
-		Int4 code=2;
-		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, eBlastSevError, code, subcode, 
+		Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                     "culling limit must be greater than or equal to zero");
-		return (Int2) code;
+		return (Int2) 2;
 	}	
 
 	return 0;
@@ -1119,13 +1101,13 @@ Int2 PSIBlastOptionsValidate(const PSIBlastOptions* psi_options,
     }
 
     if (psi_options->pseudo_count <= 0) {
-        Blast_MessageWrite(blast_msg, eBlastSevError, 0, 0,
+        Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                            "Pseudo count must be greater than 0");
         return retval;
     }
 
     if (psi_options->inclusion_ethresh <= 0.0) {
-        Blast_MessageWrite(blast_msg, eBlastSevError, 0, 0,
+        Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
                            "Inclusion threshold must be greater than 0");
         return retval;
     }
@@ -1238,11 +1220,9 @@ static Int2 s_BlastExtensionScoringOptionsValidate(EBlastProgramType program_num
                 ext_options->ePrelimGapExt != eGreedyExt && 
                 ext_options->eTbackExt != eGreedyTbck)
 	    {
-			Int4 code=2;
-			Int4 subcode=1;
-			Blast_MessageWrite(blast_msg, eBlastSevWarning, code, subcode, 
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
                             "Greedy extension must be used if gap existence and extension options are zero");
-			return (Int2) code;
+			return (Int2) 2;
 	    }
 	}
     }
@@ -1289,6 +1269,15 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.183  2006/04/25 16:06:53  camacho
+ * tblastx scoring options must be set to false
+ *
+ * Revision 1.182  2006/04/20 19:28:30  madden
+ * Prototype change for Blast_MessageWrite
+ *
+ * Revision 1.181  2006/03/02 13:28:34  madden
+ * use BlastHspNumMax function, refactor how hsp_num_max is calculated
+ *
  * Revision 1.180  2006/02/09 18:47:07  camacho
  * Correct error reporting when there are errors in validation of filtering
  * options.

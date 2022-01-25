@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.150 $
+* $Revision: 6.152 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.152  2006/03/29 16:04:47  kans
+* in AddNcTitles, do not clear mip->completeness - cannot determine why this was done in the past
+*
+* Revision 6.151  2006/03/08 21:29:47  kans
+* FindNMDefLine calls ReplaceFlyDashPwithDashR if Drosophila melanogaster curated RefSeq
+*
 * Revision 6.150  2006/01/10 22:19:29  kans
 * CreateDefLine calls DoTpaPrefix to handle TPA_exp and TPA_inf
 *
@@ -3336,6 +3342,65 @@ static void FindNMFeats (SeqFeatPtr sfp, Pointer userdata)
   }
 }
 
+static Boolean IsFlyCG (CharPtr str)
+
+{
+  Char  ch;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  if (ch != 'C') return FALSE;
+  str++;
+  ch = *str;
+  if (ch != 'G') return FALSE;
+  str++;
+  ch = *str;
+  while (IS_DIGIT (ch)) {
+    str++;
+    ch = *str;
+  }
+  if (ch != '-') return FALSE;
+  str++;
+  ch = *str;
+  if (ch != 'P') return FALSE;
+  str++;
+  ch = *str;
+  if (IS_ALPHA (ch)) {
+    str++;
+    ch = *str;
+    if (ch == '\0' || ch == ' ' || ch == ',' || ch == ';') return TRUE;
+  }
+
+  return FALSE;
+}
+
+static void ReplaceFlyDashPwithDashR (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  while (StringDoesHaveText (str)) {
+    ch = *str;
+    while (IS_WHITESP (ch)) {
+      str++;
+      ch = *str;
+    }
+    if (IsFlyCG (str)) {
+      ptr = StringStr (str, "-P");
+      if (ptr != NULL) {
+        ptr [1] = 'R';
+        return;
+      }
+    }
+    while (ch != '\0' && (! IS_WHITESP (ch))) {
+      str++;
+      ch = *str;
+    }
+  }
+}
+
 static CharPtr FindNMDefLine (BioseqPtr bsp)
 
 {
@@ -3377,6 +3442,10 @@ static CharPtr FindNMDefLine (BioseqPtr bsp)
     }
   }
   if (is_refseq) {
+    /* special case Drosophila RefSeq NM titles */
+    if (StringICmp (orp->taxname, "Drosophila melanogaster") == 0) {
+      ReplaceFlyDashPwithDashR (buf);
+    }
     ptr = StringStr (buf, "isoform ");
     if (ptr != NULL) {
       *ptr = '\0';
@@ -4928,8 +4997,10 @@ static Boolean AddNcTitles (GatherObjectPtr gop)
   BioseqPtr     bsp;
   Char          buf [512];
   Boolean       is_nc;
+  /*
   MolInfoPtr    mip;
   SeqDescrPtr   sdp;
+  */
   SeqIdPtr      sip;
   CharPtr       str;
   TextSeqIdPtr  tsip;
@@ -4962,6 +5033,7 @@ static Boolean AddNcTitles (GatherObjectPtr gop)
     }
   }
 
+  /*
   for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
     if (sdp->choice == Seq_descr_molinfo) {
       mip = (MolInfoPtr) sdp->data.ptrvalue;
@@ -4972,6 +5044,7 @@ static Boolean AddNcTitles (GatherObjectPtr gop)
       }
     }
   }
+  */
 
   return TRUE;
 }

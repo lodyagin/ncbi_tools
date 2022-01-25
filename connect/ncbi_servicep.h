@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.37 2006/01/11 16:26:10 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.39 2006/03/06 20:28:37 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +47,7 @@ extern "C" {
 typedef struct {
     void        (*Reset)(SERV_ITER iter);
     SSERV_Info* (*GetNextInfo)(SERV_ITER iter, HOST_INFO* host_info);
-    int/*bool*/ (*Update)(SERV_ITER iter, TNCBI_Time now,
-                          const char* text, int code);
+    int/*bool*/ (*Update)(SERV_ITER iter, const char* text, int code);
     int/*bool*/ (*Penalize)(SERV_ITER iter, double penalty);
     void        (*Close)(SERV_ITER iter);
     const char* name;
@@ -65,7 +64,7 @@ struct SSERV_IterTag {
     double            pref;  /* range [0..100] %%                            */
     size_t          n_skip;  /* actual number of servers in the array        */
     size_t          a_skip;  /* number of allocated slots in the array       */
-    SSERV_Info**      skip;  /* servers to skip (followed by names [opt])    */
+    SSERV_Info**      skip;  /* servers to skip (w/names)                    */
     const SSERV_Info* last;  /* last server info taken out                   */
 
     const SSERV_VTable* op;  /* table of virtual functions                   */
@@ -74,12 +73,13 @@ struct SSERV_IterTag {
     unsigned      ismask:1;  /* whether the name is to be treated as a mask  */
     unsigned promiscuous:1;  /* as taken from..                              */
     unsigned reverse_dns:1;  /*            ..types passed..                  */
-    unsigned   stateless:1;   /*                       .. in SERV_*() calls  */
+    unsigned   stateless:1;  /*                        .. in SERV_*() calls  */
     unsigned    external:1;  /* whether this is an external request          */
     const char*        arg;  /* argument to match; original pointer          */
     size_t          arglen;  /* == 0 for NULL pointer above                  */
     const char*        val;  /* value to match; original pointer             */
     size_t          vallen;  /* == 0 for NULL pointer above                  */
+    TNCBI_Time        time;  /* the time of call                             */
 };
 
 
@@ -115,13 +115,14 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
  size_t               n_skip,        /* number of servers in preceding array */
  int/*bool*/          external,      /* whether mapping is not local to NCBI */
  const char*          arg,           /* environment variable name to search  */
- const char*          val            /* environment variable value to match  */
+ const char*          val,           /* environment variable value to match  */
+ HOST_INFO*           hinfo          /* host information to return on match  */
  );
 
 /* same as the above but creates an iterator to get the servers one by one 
  * CAUTION:  Special requirement for "skip" infos in case of a wildcard
- * service is requested, is that they _must_ be created having a name attached
- * (perhaps, empty ""), like with SERV_ReadInfoEx() or SERV_CopyInfoEx() */
+ * service is that they _must_ be created having a name (perhaps, empty "")
+ * attached, like if done by SERV_ReadInfoEx() or SERV_CopyInfoEx() */
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
 (const char*          service,       /* service name (can be a mask)         */
  TSERV_Type           types,
@@ -137,15 +138,14 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
  );
 
 
-/* Return service name the iterator is currently working on.
+/* Return service name, which the iterator is currently working on.
  */
 extern NCBI_XCONNECT_EXPORT const char* SERV_CurrentName(SERV_ITER iter);
 
 
-/* Private interface: update mapper information from the given text
- * (<CR><LF> separated lines, usually taken from HTTP header), and by
- * optionally (if non-zero) using error code provided.
- * NB: non-zero code denotes abnormal state regardless of its value.
+/* Update mapper information from the given text (<CR><LF> separated lines,
+ * usually as taken from HTTP header), and by optionally (if non-zero)
+ * using the HTTP error code provided.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Update
 (SERV_ITER   iter,
@@ -198,6 +198,12 @@ extern NCBI_XCONNECT_EXPORT double SERV_Preference
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep.h,v $
+ * Revision 6.39  2006/03/06 20:28:37  lavr
+ * Comments
+ *
+ * Revision 6.38  2006/03/05 17:47:55  lavr
+ * +SERV_ITER::time, new VT::Update proto, SERV_OpenP() to return HINFO
+ *
  * Revision 6.37  2006/01/11 16:26:10  lavr
  * SERV_Update() and SERV_ITER's VT::Update() have got addt'l "code" argument
  *

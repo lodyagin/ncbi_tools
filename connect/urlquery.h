@@ -29,13 +29,16 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.14 $
+ * $Revision: 6.15 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.h,v $
+ * Revision 6.15  2006/04/15 01:59:01  lavr
+ * +QUERY_OpenServiceQueryEx
+ *
  * Revision 6.14  2006/01/24 20:22:26  lavr
  * The boiler plate and revision log reindented
  *
@@ -124,12 +127,25 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 );
 
 /*
-  Returns connection to NCBI named service.  Pass arguments (if any)
-  via the connection to the service (if successful).  Return NULL on error.
+  Returns connection to NCBI named service.  Pass parameters (if any)
+  via the connection to the service (if successful).  Optionally,
+  arguments may be passed to services that support connections via
+  URLs (note that unlike the service parameters these is no guarantee
+  that the arguments will be passed since the service can be implemented
+  in a non-URL-compatible manner, like e.g. via a standalone server).
+  Return NULL on error.
 */
 
+NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
+  Nlm_CharPtr service, Nlm_CharPtr parameters, Nlm_Uint4 timeoutsec,
+  Nlm_CharPtr arguments
+);
+
+/*
+  Same as QUERY_OpenServiceQueryEx(service, parameters, timeoutsec, 0);
+*/
 NLM_EXTERN CONN QUERY_OpenServiceQuery (
-  Nlm_CharPtr service, Nlm_CharPtr arguments, Nlm_Uint4 timeoutsec
+  Nlm_CharPtr service, Nlm_CharPtr parameters, Nlm_Uint4 timeoutsec
 );
 
 /*

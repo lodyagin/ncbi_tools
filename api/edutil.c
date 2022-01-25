@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.54 $
+* $Revision: 6.56 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.56  2006/04/04 18:00:47  kans
+* SeqLocAddEx properly returns value to &last argument, makes SeqLocMix from DeltaSeqsToSeqLocs
+*
+* Revision 6.55  2006/03/30 19:50:15  kans
+* DeltaSeqsToSeqLocs calls SeqLocAddEx for efficient list usage
+*
 * Revision 6.54  2006/02/07 13:41:29  bollin
 * added function AdjustFeatureForGapChange, which changes a feature to accommodate
 * a change in the length of a gap
@@ -370,15 +376,16 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocPackage (SeqLocPtr head)
 *         if incoming is merged, deletes the incoming SeqLoc
 *
 *****************************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Boolean merge, Boolean do_copy)
+static SeqLocPtr LIBCALL SeqLocAddEx (SeqLocPtr PNTR head, SeqLocPtr PNTR lastp, SeqLocPtr slp, Boolean merge, Boolean do_copy)
 {
-	SeqLocPtr tmp, last, retval = NULL;
+	SeqLocPtr tmp, last = NULL, retval = NULL;
 	Boolean merged = FALSE;   /* intervals were merged */
 
 	if (slp == NULL) return NULL;
 
-	last = NULL;
-	if (* head != NULL)
+    if (lastp != NULL) {
+        last = *lastp;
+    } else if (head != NULL && *head != NULL)
 	{
 		for (tmp = *head; tmp != NULL; tmp = tmp->next)
 		{
@@ -501,12 +508,16 @@ ret:
 		else
 			tmp = slp;
 
-		tmp->next = NULL;
+		if (tmp != NULL) {
+			tmp->next = NULL;
+		}
 
-		if (last != NULL)
+		if (last != NULL) {
 			last->next = tmp;
-		else
+		} else if (head != NULL) {
 			*head = tmp;
+		}
+		last = tmp;
 		retval = tmp;
 	}
 	else
@@ -515,8 +526,28 @@ ret:
 		if (! do_copy)   /* got to free it here */
 			SeqLocFree(slp);
 	}
+	if (lastp != NULL) {
+	    *lastp = last;
+	}
 		
 	return retval;
+}
+
+NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Boolean merge, Boolean do_copy)
+{
+	SeqLocPtr tmp, last;
+
+	if (slp == NULL) return NULL;
+
+	last = NULL;
+	if (* head != NULL)
+	{
+		for (tmp = *head; tmp != NULL; tmp = tmp->next)
+		{
+			last = tmp;
+		}
+	}
+	return SeqLocAddEx (head, &last, slp, merge, do_copy);
 }
 
 /*****************************************************************************
@@ -652,7 +683,7 @@ NLM_EXTERN Int4 LIBCALL ISADeltaSeqsToSeqLoc (SeqLocPtr slp)
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL DeltaSeqsToSeqLocs (DeltaSeqPtr dsp)
 {
-	SeqLocPtr head = NULL, thead=NULL;
+	SeqLocPtr head = NULL, thead = NULL, last = NULL;
 	DeltaSeqPtr curr;
 	SeqInt si;
 	Dbtag db;
@@ -674,14 +705,15 @@ NLM_EXTERN SeqLocPtr LIBCALL DeltaSeqsToSeqLocs (DeltaSeqPtr dsp)
 	oi.id = 1;
 
 	
+	
 	for (curr = dsp; curr != NULL; curr = curr->next)
 	{
 		if (curr->choice == 1)   /* a SeqLoc */
-			SeqLocAdd(&thead, (SeqLocPtr)(curr->data.ptrvalue), TRUE, TRUE);
+			SeqLocAddEx (&thead, &last, (SeqLocPtr)(curr->data.ptrvalue), TRUE, TRUE);
 		else
 		{
-			si.to = ((SeqLitPtr)(curr->data.ptrvalue))->length - 1;
-			SeqLocAdd(&thead, &vn, TRUE, TRUE); 
+			si.to = ((SeqLitPtr) (curr->data.ptrvalue))->length - 1;
+			SeqLocAddEx (&thead, &last, &vn, TRUE, TRUE); 
 		}
 		oi.id++;
 	}

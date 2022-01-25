@@ -31,8 +31,11 @@ Contents: prototypes and defines for Blast formatting utilities
 
 ******************************************************************************/
 
-/* $Revision: 1.5 $ 
+/* $Revision: 1.6 $ 
 * $Log: blfmtutl.h,v $
+* Revision 1.6  2006/04/26 12:42:36  madden
+* BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
+*
 * Revision 1.5  2005/12/29 19:55:04  madden
 * Added functions to print tabular output
 *
@@ -187,6 +190,12 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
         Boolean is_ungapped, Boolean is_ooframe, Boolean believe_query,
         Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted,
         Boolean print_query_info);
+
+
+/* Functions used for printing error messages. */
+
+Uint1 BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id);
+void BlastDeleteUserErrorString(Uint1 err_id);
 
 #ifdef __cplusplus
 }

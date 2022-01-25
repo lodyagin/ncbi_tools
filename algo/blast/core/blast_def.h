@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.65 2006/01/12 20:31:57 camacho Exp $
+/* $Id: blast_def.h,v 1.71 2006/05/04 15:52:51 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,8 +62,17 @@ extern const int kUngappedHSPNumMax;
 #define CODON_LENGTH 3
 #endif
 
-/** for traslated gapped searches, this is the default value in nucleotides of
- *  longest_intron */
+/** For translated gapped searches, this is the default value in
+ * nucleotides of longest_intron (for ungapped translated searches,
+ * the default value of longest_intron is zero, which causes a legacy
+ * method of HSP linking that does not use longest_intron to be
+ * invoked).
+ *
+ * The value 122 corresponds to 40 amino acids: 40 codons * 3
+ * nucleotides per codon + up to 2 frame shifts.  40 amino acids is
+ * the maximum gap size in the untranslated sequence, so
+ * DEFAULT_LONGEST_INTRON makes these two gap sizes equal.
+ */ 
 #ifndef DEFAULT_LONGEST_INTRON
 #define DEFAULT_LONGEST_INTRON 122
 #endif
@@ -107,8 +116,8 @@ void __sfree(void** x);
  * lookup table.
  */
 typedef struct SSeqRange {
-   Int4 left;
-   Int4 right;
+   Int4 left;  /**< left endpoint of range (zero based) */
+   Int4 right;  /**< right endpoint of range (zero based) */
 } SSeqRange;
 
 /** Used to hold a set of positions, mostly used for filtering. 
@@ -150,7 +159,6 @@ typedef struct BLAST_SequenceBlk {
    Uint1* sequence_start; /**< Start of sequence, usually one byte before 
                                sequence as that byte is a NULL sentinel byte.*/
    Int4     length;         /**< Length of sequence. */
-   Int4 context; /**< Context of the query, needed for multi-query searches */
    Int2 frame; /**< Frame of the query, needed for translated searches */
    Int4 oid; /**< The ordinal id of the current sequence */
    Boolean sequence_allocated; /**< TRUE if memory has been allocated for 
@@ -167,22 +175,6 @@ typedef struct BLAST_SequenceBlk {
    Boolean lcase_mask_allocated; /**< TRUE if memory has been allocated for 
                                     lcase_mask */
 } BLAST_SequenceBlk;
-
-/** The context related information
- */
-typedef struct BlastContextInfo {
-    Int4 query_offset;      /**< Offset of this query, strand or frame in the
-                               concatenated super-query. */
-    Int4 query_length;      /**< Length of this query, strand or frame */
-    Int8 eff_searchsp;      /**< Effective search space for this context. */
-    Int4 length_adjustment; /**< Length adjustment for boundary conditions */
-    Int4 query_index;       /**< Index of query (same for all frames) */
-    Int1 frame;             /**< Frame number (-1, -2, -3, 0, 1, 2, or 3) */
-    Boolean is_valid;       /**< Determine if this context is valid or not.
-                              This field should be set only by the setup code
-                              and read by subsequent stages of the BLAST search
-                              */
-} BlastContextInfo;
 
 /** Information about a single pattern occurence in the query. */
 typedef struct SPHIPatternInfo {
@@ -201,19 +193,49 @@ typedef struct SPHIQueryInfo {
     double probability; /**< Probability of the pattern */
 } SPHIQueryInfo;
 
-/** The query related information 
- */
-typedef struct BlastQueryInfo {
-    Int4 first_context;  /**< Index of the first element of the context array */
-    Int4 last_context;   /**< Index of the last element of the context array */
-    int num_queries;     /**< Number of query sequences */
-    BlastContextInfo * contexts; /**< Information per context */
-    Uint4 max_length;    /**< Length of the longest among the concatenated
-                            queries */
-    SPHIQueryInfo* pattern_info; /**< Counts of PHI BLAST pattern
-                                      occurrences, used in PHI BLAST only. */
-} BlastQueryInfo;
+/************************* Progress monitoring/interruptible API *************/
 
+/** Enumeration for the stages in the BLAST search */
+typedef enum EBlastStage {
+    ePrelimSearch,
+    eTracebackSearch
+} EBlastStage;
+
+/** Progress monitoring structure. This is updated by the engine to provided to
+ * the user as an argument to the user-supplied callback function 
+ * (TInterruptFnPtr). This function then can assess whether the search 
+ * should proceed or exit prematurely.
+ * @sa TInterruptFnPtr
+ */
+typedef struct SBlastProgress {
+    EBlastStage stage;      /**< Stage of the BLAST search currently in
+                              progress */
+    void* user_data;        /**< Pointer to user-provided data */
+} SBlastProgress;
+
+/** Prototype for function pointer to determine whether the BLAST search
+ * should proceed or be interrupted. If this function returns true, all 
+ * processing must stop and the search must discard all interim results 
+ * @note In order to avoid undue overhead, this function should not perform any
+ * time consuming operations and should always return (i.e.: it should never 
+ * block)
+ */
+typedef Boolean (*TInterruptFnPtr) (SBlastProgress* progress_info);
+
+/** Allocates and initializes a new SBlastProgress structure.
+ * @param user_data user-provided data (not owned by the resulting structure)
+ * [in]
+ * Implemented in blast_util.c 
+ */
+SBlastProgress* SBlastProgressNew(void* user_data);
+
+/** Deallocates a SBlastProgress structure.
+ * Implemented in blast_util.c */
+SBlastProgress* SBlastProgressFree(SBlastProgress* progress_info);
+
+/** Resets the progress structure to its original state (as if newly allocated)
+ * for a fresh start without touching the user_data field */
+void SBlastProgressReset(SBlastProgress* progress_info);
 
 #ifdef __cplusplus
 }

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.69 $
+* $Revision: 1.74 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -455,6 +455,7 @@ NLM_EXTERN void AddLocusBlock (
   Char               mol [30];
   Int4               nextGi;
   BioseqPtr          nm = NULL;
+  BioseqPtr          nuc;
   ObjectIdPtr        oip;
   OrgNamePtr         onp;
   Uint1              origin;
@@ -847,6 +848,22 @@ NLM_EXTERN void AddLocusBlock (
     StringCpy (div, "PAT");
   }
 
+  /* if protein is encoded by a patent nucleotide, use PAT division */
+
+  if (ISA_aa (bsp->mol)) {
+    cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+    if (cds != NULL) {
+      nuc = BioseqFindFromSeqLoc (cds->location);
+      if (nuc != NULL) {
+        for (sip = nuc->id; sip != NULL; sip = sip->next) {
+          if (sip->choice == SEQID_PATENT) {
+            StringCpy (div, "PAT");
+          }
+        }
+      }
+    }
+  }
+
   /* more complicated code for division, if necessary, goes here */
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_genbank, &dcontext);
@@ -1067,6 +1084,9 @@ NLM_EXTERN void AddLocusBlock (
     if (topol < 0 || topol > 2) {
       topol = 0;
     }
+    if (topol == 0) {
+      topol = 1; /* default to displaying linear if not set */
+    }
     gbseq->topology = StringSave (gbseq_top [topol]);
 
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
@@ -1082,11 +1102,16 @@ NLM_EXTERN void AddLocusBlock (
     }
     if (dp != NULL) {
       DateToFF (date, dp, FALSE);
+      if (StringDoesHaveText (date)) {
+        gbseq->create_date = StringSave (date);
+      }
     }
+    /*
     if (StringHasNoText (date)) {
       StringCpy (date, "01-JAN-1900");
     }
     gbseq->create_date = StringSave (date);
+    */
 
     date [0] = '\0';
     dp = NULL;
@@ -2016,13 +2041,16 @@ NLM_EXTERN void AddProjectBlock (
 
 {
   IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   Char               buf [32];
   UserFieldPtr       curr;
   SeqMgrDescContext  dcontext;
   StringItemPtr      ffstring;
+  GBSeqPtr           gbseq;
   UserObjectPtr      gpuop = NULL;
+  ValNodePtr         head = NULL;
   Uint4              itemID;
   ObjectIdPtr        oip;
   Int4               parentID;
@@ -2037,9 +2065,17 @@ NLM_EXTERN void AddProjectBlock (
   if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
 
   if (! ISA_na (bsp->mol)) return;
   if (awp->format != GENBANK_FMT) return;
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
+  }
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
   while (sdp != NULL) {
@@ -2087,6 +2123,14 @@ NLM_EXTERN void AddProjectBlock (
           /*
           FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
           */
+          if (gbseq != NULL) {
+            if (head == NULL) {
+              sprintf (buf, "%ld", (long) projectID);
+            } else {
+              sprintf (buf, ", %ld", (long) projectID);
+            }
+            ValNodeCopyStr (&head, 0, buf);
+          }
           prefix = ",";
           parentID = 0;
         }
@@ -2110,10 +2154,25 @@ NLM_EXTERN void AddProjectBlock (
     /*
     FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
     */
+    if (gbseq != NULL) {
+      if (head == NULL) {
+        sprintf (buf, "%ld", (long) projectID);
+      } else {
+        sprintf (buf, ", %ld", (long) projectID);
+      }
+      ValNodeCopyStr (&head, 0, buf);
+    }
   }
 
   bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
   FFRecycleString (ajp, ffstring);
+
+  if (gbseq != NULL) {
+    if (head != NULL) {
+      gbseq->project = MergeFFValNodeStrs (head);
+      ValNodeFreeData (head);
+    }
+  }
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
@@ -2986,6 +3045,7 @@ NLM_EXTERN void AddDbsourceBlock (
   SeqIdPtr         id;
   ValNodePtr       list = NULL;
   BioseqPtr        nuc;
+  SeqEntryPtr      sep;
   SeqIdPtr         sip;
   SeqLocPtr        slp;
   CharPtr          str;
@@ -3084,6 +3144,23 @@ NLM_EXTERN void AddDbsourceBlock (
               }
             }
             ValNodeFree (list);
+          } else {
+            sep = GetTopSeqEntryForEntityID (awp->entityID);
+            if (sep != NULL && IS_Bioseq (sep)) {
+              /* special case for coded_by CDS packed on retcode 1 protein */
+              id = SeqLocId (cds->location);
+              if (id != NULL && id->choice == SEQID_GI) {
+                sip = GetSeqIdForGI (id->data.intvalue);
+                if (sip == NULL) {
+                  sip = id;
+                }
+              }
+              if (WriteDbsourceID (sip, buf)) {
+                FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice);
+                FFAddNewLine(ffstring);
+                unknown = FALSE;
+              }
+            }
           }
         } else {
           if (WriteDbsourceID (sip, buf)) {

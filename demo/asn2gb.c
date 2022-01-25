@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.87 $
+* $Revision: 6.88 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "3.1"
+#define ASN2GB_APP_VER "3.2"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -658,6 +658,64 @@ static void CompareFlatFiles (
     SeqEntryAsnWrite (sep, aip, NULL);
     AsnIoClose (aip);
 
+    fsep = FindNthBioseq (sep, 1);
+    if (fsep == NULL || fsep->choice != 1) return;
+    bsp = (BioseqPtr) fsep->data.ptrvalue;
+    if (bsp == NULL) return;
+    SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+
+    arguments [0] = '\0';
+    sprintf (arguments, "-format %s -mode %s -style %s -view %s -nocleanup",
+             fffmt [(int) format], ffmod [(int) mode], ffstl [(int) style], ffvew [(int) format]);
+
+    sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path1);
+    system (cmmd);
+
+    arguments [0] = '\0';
+    sprintf (arguments, "-format %s -mode %s -style %s -view %s",
+             fffmt [(int) format], ffmod [(int) mode], ffstl [(int) style], ffvew [(int) format]);
+
+    sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path2);
+    system (cmmd);
+
+    if (useFfdiff) {
+      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
+      system (cmmd);
+
+      sprintf (cmmd, "rm %s; rm %s", path1, path2);
+      system (cmmd);
+    } else {
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
+      system (cmmd);
+
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
+      system (cmmd);
+
+      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
+      system (cmmd);
+
+      sprintf (cmmd, "cat %s", path3);
+      fpo = popen (cmmd, "r");
+      if (fpo != NULL) {
+        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+          fwrite (buf, 1, ct, fp);
+          fflush (fp);
+        }
+        pclose (fpo);
+      }
+
+      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
+      system (cmmd);
+    }
+
+  } else if (batch == 5) {
+
+    aip = AsnIoOpen (path3, "w");
+    if (aip == NULL) return;
+
+    SeqEntryAsnWrite (sep, aip, NULL);
+    AsnIoClose (aip);
+
     if (FindNucBioseq (sep) != NULL) {
 
       sprintf (cmmd, "./oldasn2gb -i %s -o %s", path3, path1);
@@ -902,7 +960,7 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if ((batch == 1 || batch == 3 || batch == 4 || format != GENBANK_FMT) && extra == NULL) {
+  if ((batch == 1 || batch == 3 || batch == 4 || batch == 5 || format != GENBANK_FMT) && extra == NULL) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
       AsnIoClose (aip);
@@ -988,7 +1046,7 @@ static Int2 HandleMultipleRecords (
           if (batch != 1) {
             printf ("%s\n", buf);
             fflush (stdout);
-            if (batch != 3 && batch != 4) {
+            if (batch != 3 && batch != 4 && batch != 5) {
               if (ofp != NULL) {
                 fprintf (ofp, "%s\n", buf);
                 fflush (ofp);
@@ -1275,7 +1333,7 @@ Args myargs [] = {
     FALSE, 'u', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Batch (1 Report, 2 Sequin/Release, 3 asn2gb/asn2flat, 4 oldasn2gb/newasn2gb)", "0", "0", "4",
+  {"Batch (1 Report, 2 Sequin/Release, 3 asn2gb/asn2flat, 4 asn2flat BSEC/nocleanup, 5 oldasn2gb/newasn2gb)", "0", "0", "5",
     FALSE, 't', ARG_INT, 0.0, 0, NULL},
   {"Input File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},

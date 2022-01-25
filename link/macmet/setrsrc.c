@@ -29,13 +29,14 @@
 *
 * Version Creation Date:   10/4/02
 *
-* $Revision: 1.4 $
+* $Revision: 1.6 $
 *
 * File Description:
 *
 *   Sets type and creator of files to get around a bug that prevents
 *   CodeWarrior from seeing and loading them if they were checked out
-*   directly on Mac OS X
+*   directly on Mac OS X - later bug fixed but still needs to be set
+*   in order to debug file under CodeWarrior
 *
 * Modifications:  
 * --------------------------------------------------------------------------
@@ -54,7 +55,7 @@
 #define DIRDELIMCHAR ':'
 #define DIRDELIMSTRN ":"
 
-static void C2PStr (char *ioStr)
+static void MyC2PStr (char *ioStr)
 
 {
   size_t len = strlen (ioStr);
@@ -65,7 +66,7 @@ static void C2PStr (char *ioStr)
   ioStr [0] = len;
 }
 
-static void P2CStr (StringPtr ioStr)
+static void MyP2CStr (StringPtr ioStr)
 
 {
   Byte len = ioStr [0];
@@ -229,7 +230,7 @@ static ValNdePtr MyDirCatalog (char * pathname)
 
   if (pathname != NULL && pathname [0] != '\0') {
     strncpy (path, pathname, sizeof (path));
-    C2PStr ((char *) path);
+    MyC2PStr ((char *) path);
     memset ((void *) (&pbh), 0, sizeof (HParamBlockRec));
     pbh.volumeParam.ioNamePtr = (StringPtr) path;
     pbh.volumeParam.ioVolIndex = -1;
@@ -237,7 +238,7 @@ static ValNdePtr MyDirCatalog (char * pathname)
     if (err != noErr) return NULL;
     vRefNum = pbh.volumeParam.ioVRefNum;
     strncpy (path, pathname, sizeof (path));
-    C2PStr ((char *) path);
+    MyC2PStr ((char *) path);
     memset ((void *) (&pbc), 0, sizeof (CInfoPBRec));
     pbc.dirInfo.ioNamePtr = (StringPtr) path;
     pbc.dirInfo.ioVRefNum = vRefNum;
@@ -255,7 +256,7 @@ static ValNdePtr MyDirCatalog (char * pathname)
         pbc.dirInfo.ioACUser = 0;
         err = PBGetCatInfo (&pbc, FALSE);
         if (err == noErr) {
-          P2CStr ((StringPtr) path);
+          MyP2CStr ((StringPtr) path);
           if (pbc.dirInfo.ioFlAttrib & 16) {
             ValNdeCopyStr (&vnp, 1, path);
           } else {
@@ -292,9 +293,10 @@ static void SetTypeCreator (char * directory, char * filename, OSType creator, O
 
   strncpy (path, directory, sizeof (path));
   MyFileBuildPath (path, NULL, filename);
-  C2PStr ((char *) path);
+  MyC2PStr ((char *) path);
   fError = HGetFInfo (0, 0, (StringPtr) path, &fInfo);
   if (fError == noErr) {
+    if (fInfo.fdCreator == creator && fInfo.fdType == type) return;
     fInfo.fdCreator = creator;
     fInfo.fdType = type;
     fError = HSetFInfo (0, 0, (StringPtr) path, &fInfo);
@@ -360,7 +362,7 @@ static void MyProgramPath (char * buf, size_t maxsize)
   pirec.processName = NULL;
   pirec.processAppSpec = &apFileSpec;
   GetProcessInformation (&psn, &pirec);
-  P2CStr ((StringPtr) apFileSpec.name);
+  MyP2CStr ((StringPtr) apFileSpec.name);
 
   if (buf != NULL && maxsize > 0) {
     *buf = '\0';
@@ -377,7 +379,7 @@ static void MyProgramPath (char * buf, size_t maxsize)
       block.dirInfo.ioDrDirID = block.dirInfo.ioDrParID;
       nErr = PBGetCatInfo (&block, FALSE);
       if (nErr != noErr) break;
-      P2CStr ((StringPtr) path);
+      MyP2CStr ((StringPtr) path);
       strcat (path, DIRDELIMSTRN);
       strcat (path, temp);
     } while (block.dirInfo.ioDrDirID != fsRtDirID);
@@ -395,13 +397,31 @@ extern int main (void)
   char *     str;
   ValNdePtr  vnp;
 
-  /* original place is inside ncbi or ncbi_cxx directory */
-
   MyProgramPath (path, sizeof (path));
+
+  /* remove program name to get path to program */
+
   ptr = strrchr (path, DIRDELIMCHAR);
   if (ptr != 0) {
     *ptr = '\0';
   }
+
+  /* back out to application bundle directory */
+
+  ptr = strstr (path, ":Contents:MacOS");
+  if (ptr != 0) {
+    *ptr = '\0';
+
+    /* and then to parent directory of application */
+
+    ptr = strrchr (path, DIRDELIMCHAR);
+    if (ptr != 0) {
+      *ptr = '\0';
+    }
+  }
+
+  /* process files within parent directory of program*/
+
   RecurseDir ((char *) path, 0);
 
   /* look for executable in ncbi:link:macmet directory */

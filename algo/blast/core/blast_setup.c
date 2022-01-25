@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.128 2006/01/12 20:35:56 camacho Exp $
+/* $Id: blast_setup.c,v 1.132 2006/05/05 17:46:02 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.128 2006/01/12 20:35:56 camacho Exp $";
+    "$Id: blast_setup.c,v 1.132 2006/05/05 17:46:02 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -54,7 +54,7 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
     Int2 index = 0;
 
     if (sbp == NULL || scoring_options == NULL) {
-        *error_return = Blast_PerrorWithLocation(BLASTERR_INVALIDPARAM);
+        Blast_PerrorWithLocation(error_return, BLASTERR_INVALIDPARAM, -1);
         return 1;
     }
 
@@ -127,6 +127,10 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
    /* For PHI BLAST, the H value is not used, but it is not allowed to be 0, 
       so set it to 1. */
    kbp->H = 1.0;
+
+   /* This is populated so that the checks for valid contexts don't fail,
+    * note that this field is not used at all during a PHI-BLAST search */
+   sbp->sfp[0] = Blast_ScoreFreqNew(sbp->loscore, sbp->hiscore);
 
    /* Ideal Karlin block is filled unconditionally. */
    status = Blast_ScoreBlkKbpIdealCalc(sbp);
@@ -281,7 +285,7 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
        sprintf(buffer, "Matrix %s not allowed in PHI-BLAST\n", options->matrix);
    }
    if (status) 
-       Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, buffer);
+       Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext, buffer);
    else {
        /* Put a copy the Karlin block into the kbp_std array */
        sbp->kbp_std[0] = (Blast_KarlinBlk*) 
@@ -358,7 +362,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
        sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, query_info->last_context + 1);
 
     if (!sbp) {
-        *blast_message = Blast_PerrorWithLocation(BLASTERR_MEMORY);
+       Blast_PerrorWithLocation(blast_message, BLASTERR_MEMORY, -1);
        return 1;
     }
 
@@ -367,7 +371,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
 
     status = Blast_ScoreBlkMatrixInit(program_number, scoring_options, sbp);
     if (status) {
-        *blast_message = Blast_Perror(status);
+        Blast_Perror(blast_message, status, -1);
         return status;
     }
 
@@ -375,15 +379,8 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     if (Blast_ProgramIsPhiBlast(program_number)) {
        status = s_PHIScoreBlkFill(sbp, scoring_options, blast_message);
     } else {
-       if (Blast_ScoreBlkKbpUngappedCalc(program_number, sbp,
-                                         query_blk->sequence, query_info) != 0)
-       {
-          Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, 
-             "Could not calculate ungapped Karlin-Altschul parameters for "
-             "some contexts/frames due to an invalid query sequence or "
-             "its translation. Please verify the query "
-             "sequence(s) and/or filtering options");
-       }
+       status = Blast_ScoreBlkKbpUngappedCalc(program_number, sbp, query_blk->sequence, 
+               query_info, blast_message);
 
        if (scoring_options->gapped_calculation) {
           status = 
@@ -492,7 +489,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     }
 
     if (program_number == eBlastTypeBlastx && scoring_options->is_ooframe) {
-        BLAST_InitDNAPSequence(query_blk, query_info);
+        BLAST_CreateMixedFrameDNATranslation(query_blk, query_info);
     }
 
     /* Find complement of the mask locations, for which lookup table will be
@@ -525,7 +522,9 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     }
 
     if ( (status = s_BlastSetup_Validate(query_info, *sbpp) != 0)) {
-        *blast_message = Blast_Perror(BLASTERR_INVALIDQUERIES);
+        if (*blast_message == NULL) {
+            Blast_Perror(blast_message, BLASTERR_INVALIDQUERIES, -1);
+        }
         return 1;
     }
 

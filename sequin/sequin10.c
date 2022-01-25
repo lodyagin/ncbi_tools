@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.306 $
+* $Revision: 1.310 $
 *
 * File Description: 
 *
@@ -2146,6 +2146,11 @@ static CharPtr GetOrganismDescription (
     {
       return StringSave (taxName);
     }
+  }
+  
+  if (biop->origin == ORG_MUT)
+  {
+    ValNodeAddStr (&strings, 0, StringSave ("Mutant"));
   }
 
   ValNodeAddStr (&strings, 0, StringSave (taxName));
@@ -9561,6 +9566,54 @@ static void BuildDefLineFeatClauseList (
 
 }
 
+
+static Boolean IdenticalExceptForPartialComplete (CharPtr str1, CharPtr str2)
+{
+    CharPtr cp, word_in_first, word_in_second;
+    Int4    first_len, second_len, compare_len;
+    
+    if (StringHasNoText (str1) && StringHasNoText (str2)) {
+        return TRUE;
+    } else if (StringHasNoText (str1) || StringHasNoText (str2)) {
+        return FALSE;
+    }
+    
+    word_in_first = StringISearch (str1, "partial");
+    cp = StringISearch (str1, "complete");
+    if (word_in_first == NULL || (cp != NULL && word_in_first > cp)) {
+        word_in_first = cp;
+        first_len = 8;
+    } else {
+        first_len = 7;
+    }
+    
+    word_in_second = StringISearch (str2, "partial");
+    cp = StringISearch (str2, "complete");
+    if (word_in_second == NULL || (cp != NULL && word_in_second > cp)) {
+        word_in_second = cp;
+        second_len = 8;
+    } else {
+        second_len = 7;
+    }
+    
+    if (word_in_first == NULL && word_in_second == NULL) {
+        if (StringCmp (str1, str2) == 0) {
+            return TRUE;
+        } else {
+            return FALSE;
+        }
+    } else if (word_in_first == NULL || word_in_second == NULL) {
+        return FALSE;
+    } else if ((compare_len = word_in_first - str1) != word_in_second - str2) {
+        return FALSE;
+    } else if (StringNCmp (str1, str2, compare_len) != 0) {
+        return FALSE;
+    } else {
+        return IdenticalExceptForPartialComplete (word_in_first + first_len, word_in_second + second_len);
+    }    
+}
+
+
 static Boolean AreFeatureClausesUnique (ValNodePtr list)
 {
   ValNodePtr vnp1, vnp2;
@@ -9575,7 +9628,7 @@ static Boolean AreFeatureClausesUnique (ValNodePtr list)
     {
       deflist2 = vnp2->data.ptrvalue;
       if (deflist2 == NULL || deflist2->clauselist == NULL
-        || StringCmp (deflist1->clauselist, deflist2->clauselist) == 0)
+        || IdenticalExceptForPartialComplete (deflist1->clauselist, deflist2->clauselist))
       {
         return FALSE;
       }
@@ -9693,7 +9746,7 @@ static void RemoveNucProtSetTitles (SeqEntryPtr sep)
 {
   BioseqSetPtr bssp;
   SeqEntryPtr  this_sep;
-  SeqDescrPtr  sdp, prev = NULL;
+  SeqDescrPtr  sdp, prev = NULL, sdp_next;
   
   if (sep == NULL || ! IS_Bioseq_set (sep))
   {
@@ -9710,8 +9763,9 @@ static void RemoveNucProtSetTitles (SeqEntryPtr sep)
   {
     return;
   }
-  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next)
+  for (sdp = bssp->descr; sdp != NULL; sdp = sdp_next)
   {
+    sdp_next = sdp->next;
     if (sdp->choice == Seq_descr_title)
     {
       if (prev == NULL)

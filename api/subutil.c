@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.62 $
+* $Revision: 6.64 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.64  2006/05/05 19:49:40  kans
+* added StructuredComment user object creation functions
+*
+* Revision 6.63  2006/03/23 19:35:55  kans
+* expand keywords with semicolons in AddGenBankBlockToEntry, not BSEC - already done in ParseTitleIntoGenBank
+*
 * Revision 6.62  2006/02/06 19:00:15  kans
 * added CreateFeatureFetchPolicyUserObject
 *
@@ -2543,6 +2549,51 @@ NLM_EXTERN Boolean SetGeneticCodeForEntry (
 	return TRUE;
 }
 
+static void SubExpandSemicolonedKeyword (ValNodePtr vnp)
+
+{
+  Char        ch;
+  ValNodePtr  lastvnp;
+  ValNodePtr  newvnp;
+  ValNodePtr  nextvnp;
+  CharPtr     ptr;
+  CharPtr     str;
+  CharPtr     tmp;
+
+  if (vnp == NULL) return;
+  str = (CharPtr) vnp->data.ptrvalue;
+  if (StringHasNoText (str)) return;
+  if (StringChr (str, ';') == NULL && StringChr (str, ',') == NULL) return;
+
+  lastvnp = vnp;
+  nextvnp = vnp->next;
+
+  tmp = StringSave (str);
+  str = tmp;
+  vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+  while (StringDoesHaveText (str)) {
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch != ',' && ch != ';') {
+      ptr++;
+      ch = *ptr;
+    }
+    if (ptr != NULL && *ptr != '\0') {
+      *ptr = '\0';
+      ptr++;
+    }
+    TrimSpacesAroundString (str);
+    newvnp = ValNodeCopyStr (NULL, 0, str);
+    if (newvnp != NULL) {
+      newvnp->next = nextvnp;
+      lastvnp->next = newvnp;
+      lastvnp = newvnp;
+    }
+    str = ptr;
+  }
+  MemFree (tmp);
+}
+
 NLM_EXTERN Boolean AddGenBankBlockToEntry (
 	NCBISubPtr submission,
 	SeqEntryPtr entry ,
@@ -2552,7 +2603,7 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 	CharPtr keyword2 ,
 	CharPtr keyword3 )
 {
-	ValNodePtr vnp;
+	ValNodePtr vnp, tmp;
 	GBBlockPtr gbp;
 
 	if ((submission == NULL) || (entry == NULL))
@@ -2569,6 +2620,10 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 	ValNodeCopyStr(&gbp->keywords, 0, keyword1);
 	ValNodeCopyStr(&gbp->keywords, 0, keyword2);
 	ValNodeCopyStr(&gbp->keywords, 0, keyword3);
+
+	for (tmp = gbp->keywords; tmp != NULL; tmp = tmp->next) {
+		SubExpandSemicolonedKeyword (tmp);
+	}
 
 	return TRUE;
 }
@@ -5397,5 +5452,56 @@ NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
 
   uop->data = curr;
   return uop;
+}
+
+/* structured comment user object for flatfile presentation */
+
+NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (void)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("StructuredComment");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN void AddItemStructuredCommentUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || StringHasNoText (field) || StringHasNoText (str)) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "StructuredComment") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (field);
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (str);
+
+  /* link curator at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    uop->data = curr;
+  }
 }
 

@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.h,v 1.24 2005/11/16 14:31:36 madden Exp $
+/* $Id: aa_ungapped.h,v 1.27 2006/03/23 16:00:35 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -91,6 +91,29 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 	                      BlastInitHitList* ungapped_hsps, 
                               BlastUngappedStats* ungapped_stats);
 
+/** Scan a subject sequence for word hits and trigger two-hit extensions
+ * (specialized for RSP blast).
+ *
+ * @param subject the subject sequence [in]
+ * @param query the query sequence [in]
+ * @param lookup_wrap the lookup table [in]
+ * @param diag the diagonal array structure [in/out]
+ * @param matrix the substitution matrix [in]
+ * @param cutoff cutoff score for saving ungapped HSPs [in]
+ * @param dropoff x dropoff [in]
+ * @param ungapped_hsps hsps resulting from the ungapped extension [out]
+ * @param ungapped_stats Various hit counts. Not filled if NULL [out]
+ */
+Int2 BlastRPSWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
+	 		       const BLAST_SequenceBlk* query,
+			       const LookupTableWrap* lookup_wrap,
+			       BLAST_DiagTable* diag,
+			       Int4 ** matrix,
+			       Int4 cutoff,
+			       Int4 dropoff,
+	                       BlastInitHitList* ungapped_hsps, 
+                               BlastUngappedStats* ungapped_stats);
+
 /** Scan a subject sequence for word hits and trigger one-hit extensions.
  *
  * @param subject the subject sequence
@@ -117,10 +140,34 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 	            BlastInitHitList* ungapped_hsps, 
                BlastUngappedStats* ungapped_stats);
 
+/** Scan a subject sequence for word hits and trigger one-hit extensions
+ * (spcialized for RPS blast).
+ *
+ * @param subject the subject sequence
+ * @param query the query sequence
+ * @param lookup_wrap the lookup table
+ * @param diag the diagonal array structure
+ * @param matrix the substitution matrix [in]
+ * @param cutoff cutoff score for saving ungapped HSPs [in]
+ * @param dropoff x dropoff [in]
+ * @param ungapped_hsps hsps resulting from the ungapped extensions [out]
+ * @param ungapped_stats Various hit counts. Not filled if NULL [out]
+ */
+Int2 BlastRPSWordFinder_OneHit(const BLAST_SequenceBlk* subject,
+                               const BLAST_SequenceBlk* query,
+                               const LookupTableWrap* lookup_wrap,
+                               BLAST_DiagTable* diag,
+                               Int4 ** matrix,
+                               Int4 cutoff,
+                               Int4 dropoff,
+                               BlastInitHitList* ungapped_hsps, 
+                               BlastUngappedStats* ungapped_stats);
+
 /**
  * Beginning at s_off and q_off in the subject and query, respectively,
  * extend to the right until the cumulative score becomes negative or
- * drops by at least dropoff.
+ * drops by at least 'dropoff', or the end of at least one sequence 
+ * is reached.
  *
  * @param matrix the substitution matrix [in]
  * @param subject subject sequence [in]
@@ -133,8 +180,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
  * @param s_last_off the rightmost subject offset examined [out]
  * @return The score of the extension
  */
-
-  Int4 BlastAaExtendRight(Int4 ** matrix,
+Int4 BlastAaExtendRight(Int4 ** matrix,
 			const BLAST_SequenceBlk* subject,
 			const BLAST_SequenceBlk* query,
 			Int4 s_off,
@@ -144,7 +190,22 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 	                Int4 maxscore,
 	                Int4* s_last_off);
 
-  Int4 BlastPSSMExtendRight(Int4 ** matrix,
+/**
+ * Identical to BlastAaExtendRight, except the score matrix
+ * is position-specific
+ *
+ * @param matrix the substitution matrix representing query sequence [in]
+ * @param subject subject sequence [in]
+ * @param query_size number of rows in the scoring matrix [in]
+ * @param s_off subject offset [in]
+ * @param q_off query offset [in]
+ * @param dropoff the X dropoff parameter [in]
+ * @param displacement the length of the extension [out]
+ * @param maxscore the score derived from a previous left extension [in]
+ * @param s_last_off the rightmost subject offset examined [out]
+ * @return The score of the extension
+ */
+Int4 BlastPSSMExtendRight(Int4 ** matrix,
 			const BLAST_SequenceBlk* subject,
 			Int4 query_size,
 			Int4 s_off,
@@ -157,8 +218,8 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 
 /**
  * Beginning at s_off and q_off in the subject and query, respectively,
- * extend to the left until the cumulative score becomes negative or
- * drops by at least dropoff.
+ * extend to the left until the cumulative score drops by at least 
+ * 'dropoff', or the end of at least one sequence is reached.
  *
  * @param matrix the substitution matrix [in]
  * @param subject subject sequence [in]
@@ -170,7 +231,6 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
  * @param score the score so far (probably from initial word hit) [in]
  * @return The score of the extension
  */
-
 Int4 BlastAaExtendLeft(Int4 ** matrix,
 		       const BLAST_SequenceBlk* subject,
 		       const BLAST_SequenceBlk* query,
@@ -180,6 +240,19 @@ Int4 BlastAaExtendLeft(Int4 ** matrix,
 		       Int4* displacement,
                        Int4 score);
 
+/**
+ * Identical to BlastAaExtendLeft, except the query is 
+ * represented by a position-specific score matrix.
+ *
+ * @param matrix the substitution matrix representing the query [in]
+ * @param subject subject sequence [in]
+ * @param s_off subject offset [in]
+ * @param q_off query offset [in]
+ * @param dropoff the X dropoff parameter [in]
+ * @param displacement the length of the extension [out]
+ * @param score the score so far (probably from initial word hit) [in]
+ * @return The score of the extension
+ */
 Int4 BlastPSSMExtendLeft(Int4 ** matrix,
 		       const BLAST_SequenceBlk* subject,
 		       Int4 s_off,

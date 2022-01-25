@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_ENCODING__H
 #define ALGO_BLAST_CORE___BLAST_ENCODING__H
 
-/*  $Id: blast_encoding.h,v 1.7 2005/12/19 16:19:18 papadopo Exp $
+/*  $Id: blast_encoding.h,v 1.9 2006/04/28 20:43:41 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -88,6 +88,11 @@ extern const Uint1 AMINOACID_TO_NCBISTDAA[];
 #define BLASTAA_SEQ_CODE 11 /**< == Seq_code_ncbistdaa */
 #define NCBI4NA_SEQ_CODE 4  /**< == Seq_code_ncbi4na */	
 
+/** Sentinel byte for protein sequences */
+extern const Uint1 kProtSentinel;
+/** Sentinel nibble for nucleotide sequences */
+extern const Uint1 kNuclSentinel;
+
 #ifdef __cplusplus
 }
 #endif
@@ -98,6 +103,12 @@ extern const Uint1 AMINOACID_TO_NCBISTDAA[];
 /*
  * ===========================================================================
  * $Log: blast_encoding.h,v $
+ * Revision 1.9  2006/04/28 20:43:41  camacho
+ * Remove C++-style comments
+ *
+ * Revision 1.8  2006/03/31 17:31:49  camacho
+ * Added constants for sentinel values
+ *
  * Revision 1.7  2005/12/19 16:19:18  papadopo
  * add define for size of ncbi2na alphabet
  *

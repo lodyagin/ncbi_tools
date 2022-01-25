@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.105 2006/01/24 18:44:00 papadopo Exp $
+/* $Id: blast_driver.c,v 1.110 2006/04/26 12:48:06 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.105 $
+ * $Revision: 1.110 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.105 2006/01/24 18:44:00 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.110 2006/04/26 12:48:06 madden Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -453,11 +453,11 @@ Int2 Nlm_Main(void)
    FILE *infp, *outfp = NULL;
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
-   Int2 ctr = 1;
+   Int4 ctr = 1;
    Int4 num_queries=0;
    int tabular_output = FALSE;
    BlastTabularFormatData* tf_data = NULL;
-   Boolean believe_defline = FALSE;
+   Boolean believe_query = FALSE;
    Int4 q_from = 0, q_to = 0;
    Blast_SummaryReturn* sum_returns = NULL;
    Boolean phi_blast = FALSE;
@@ -481,7 +481,7 @@ Int2 Nlm_Main(void)
 
    if (status) {
        if (sum_returns->error) {
-           Blast_SummaryReturnsPostError(sum_returns);
+           SBlastMessageErrPost(sum_returns->error);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
        }
        return -1;
@@ -551,8 +551,8 @@ Int2 Nlm_Main(void)
    
    /* For on-the-fly tabular and for ASN.1 output, the believe query defline 
       option must be set to true, otherwise it should be false. */
-   believe_defline = 
-       (tabular_output || myargs[ARG_FORMAT].intvalue == eAlignViewAsnText ||
+   believe_query = 
+       (myargs[ARG_FORMAT].intvalue == eAlignViewAsnText ||
         myargs[ARG_FORMAT].intvalue == eAlignViewAsnBinary);
 
 
@@ -573,7 +573,7 @@ Int2 Nlm_Main(void)
                                        (Boolean) myargs[ARG_HTML].intvalue,
                                        (Boolean) myargs[ARG_GREEDY].intvalue,
                                        (Boolean) myargs[ARG_SHOWGI].intvalue,
-                                       believe_defline);
+                                       believe_query);
 
        if (dbname)
            BLAST_PrintOutputHeader(format_info);
@@ -590,13 +590,13 @@ Int2 Nlm_Main(void)
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 
                    (Uint1)myargs[ARG_STRAND].intvalue, 10000, q_from, q_to, &lcase_mask,
-                   &query_slp, &ctr, &num_queries, believe_defline,
+                   &query_slp, &ctr, &num_queries, believe_query,
                    myargs[ARG_GENCODE].intvalue);
        } else {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na,
                    (Uint1)myargs[ARG_STRAND].intvalue, 0, q_from, q_to, NULL, 
-                   &query_slp, &ctr, &num_queries, believe_defline,
+                   &query_slp, &ctr, &num_queries, believe_query,
                    myargs[ARG_GENCODE].intvalue);
        }
 
@@ -608,6 +608,12 @@ Int2 Nlm_Main(void)
        if (letters_read < 0) {
            ErrPostEx(SEV_FATAL, 1, 0, "Unable to read query sequence(s)\n");
            return -1;
+       }
+
+       if (believe_query && BlastSeqlocsHaveDuplicateIDs(query_slp)) {
+          ErrPostEx(SEV_FATAL, 1, 0, 
+                  "Duplicate IDs detected; please ensure that "
+                  "all query sequence identifiers are unique");
        }
 
        if (tabular_output) {
@@ -626,7 +632,8 @@ Int2 Nlm_Main(void)
            PrintTabularOutputHeader(dbname, NULL, query_slp, 
                                     blast_program, 0, FALSE, outfp);
            
-           tf_data = BlastTabularFormatDataNew(outfp, query_slp, tab_option);
+           tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+                                               tab_option, believe_query);
            tf_data->show_gi = (Boolean) myargs[ARG_SHOWGI].intvalue;
            tf_data->show_accession = (Boolean) myargs[ARG_ACCESSION].intvalue;
        }
@@ -634,8 +641,16 @@ Int2 Nlm_Main(void)
        options->num_cpus = myargs[ARG_THREADS].intvalue;
 
        /* Find repeat mask, if necessary */
-       Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue, 
-                                 &repeat_mask);
+       if ((status = Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue,
+                                &repeat_mask, &sum_returns->error)) != 0)
+       {
+            if (sum_returns && sum_returns->error && sum_returns->error->sev >= SEV_ERROR)
+            {
+                   ErrPostEx(SEV_ERROR, 1, 0, sum_returns->error->message);
+                   return status;
+            }
+       }
+
        /* Combine repeat mask with lower case mask */
        if (repeat_mask)
            lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
@@ -668,7 +683,7 @@ Int2 Nlm_Main(void)
            filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
        /* Post warning or error messages, no matter what the search status was. */
-       Blast_SummaryReturnsPostError(sum_returns);
+       SBlastMessageErrPost(sum_returns->error);
 
        if (!status) {
            if (phi_blast) {

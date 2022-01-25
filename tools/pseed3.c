@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.46 2006/03/01 13:44:28 coulouri Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.47 2006/03/10 15:22:30 papadopo Exp $";
 
-/* $Id: pseed3.c,v 6.46 2006/03/01 13:44:28 coulouri Exp $ */
+/* $Id: pseed3.c,v 6.47 2006/03/10 15:22:30 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.46 $
+$Revision: 6.47 $
 
 $Log: pseed3.c,v $
+Revision 6.47  2006/03/10 15:22:30  papadopo
+when reading multi-line PHI patterns, strip trailing newlines from each line
+
 Revision 6.46  2006/03/01 13:44:28  coulouri
 From Alejandro Schaffer: handle patterns in a case-insensitive fashion. Fixes rt#15144173
 
@@ -1460,13 +1463,26 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
         }
 	/*recognize pattern content by line starting 'PA'*/
 	if (line[0] == 'P' && line[1] == 'A') {
+
+          /* remove newlines */
+          rp = strchr(line, '\n');
+          if (rp)
+            *rp = NULLB;
+
 	  /*skip over spaces*/
 	  for (rp = &line[2]; *rp == ' '; rp++);
 	  /*copy rest of pattern to return parameter stringForPattern*/
 	  strcat(stringForPattern, rp);
 	  while (FileGets(line, BUF_SIZE, fp)) {
 	    if (line[0] == 'P' && line[1] == 'A') {
-	      for (rp = &line[2]; *rp == ' '; rp++);
+
+              /* remove newlines */
+              rp = strchr(line, '\n');
+              if (rp)
+                *rp = NULLB;
+
+	      for (rp = &line[2]; *rp == ' '; rp++)
+                ;
 	      strcat(stringForPattern, rp); 
 	    } 
 	    else {

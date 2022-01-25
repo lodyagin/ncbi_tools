@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.25 2006/01/23 16:39:11 papadopo Exp $
+/* $Id: blast_returns.c,v 1.29 2006/04/26 12:46:00 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Manipulating data returned from BLAST other than Seq-aligns
  */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.25 2006/01/23 16:39:11 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.29 2006/04/26 12:46:00 madden Exp $";
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
@@ -177,7 +177,6 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
        sprintf(buffer, "Length adjustment: %ld", (long) db_stats->hsp_length);
        add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
        
-       /** FIXME: Should this be different for RPS BLAST? */
        sprintf(buffer, "Effective length of query: %ld", 
                (long) db_stats->eff_qlen);
        add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -251,36 +250,64 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
 
 /** Save the Karlin-Altschul parameters calculated in the BLAST search.
  * @param sbp Internal scoring block structure [in]
- * @param context Index into the array of structures containing
+ * @param query_info info about query for use in fetching 
  *                Karlin-Altschul parameters [in]
  * @param sum_returns Returns summary structure [out]
 */
 static void 
-s_SummaryKAParametersFill(const BlastScoreBlk* sbp, Int4 context, 
+s_SummaryKAParametersFill(const BlastScoreBlk* sbp, const BlastQueryInfo* query_info,
                           Blast_SummaryReturn* sum_returns)
 {
    Blast_KarlinBlk* kbp;
+   int index;
+   int context = -1;
 
-   if (!sbp)
+   if (!sbp || !query_info)
       return;
 
+    for (index=query_info->first_context; index<=query_info->last_context; index++)
+       if (query_info->contexts[index].is_valid == TRUE)
+       {
+          context = index;
+          break;
+       }
+ 
    if (sbp->kbp) {
-      kbp = sbp->kbp[context];
-      sum_returns->ka_params = 
-         (BLAST_KAParameters*) calloc(1, sizeof(BLAST_KAParameters));
-      sum_returns->ka_params->Lambda = kbp->Lambda;
-      sum_returns->ka_params->K = kbp->K;
-      sum_returns->ka_params->H = kbp->H;
+        sum_returns->ka_params = 
+             (BLAST_KAParameters*) calloc(1, sizeof(BLAST_KAParameters));
+        if (context >= 0)
+        {
+          kbp = sbp->kbp[context];
+          sum_returns->ka_params->Lambda = kbp->Lambda;
+          sum_returns->ka_params->K = kbp->K;
+          sum_returns->ka_params->H = kbp->H;
+        }
+        else
+        {
+          sum_returns->ka_params->Lambda = -1.0;
+          sum_returns->ka_params->K = -1.0;
+          sum_returns->ka_params->H = -1.0;
+        }
    }
 
    if (sbp->kbp_gap) {
-      kbp = sbp->kbp_gap[context];
-      sum_returns->ka_params_gap = 
-         (BLAST_KAParameters*) malloc(sizeof(BLAST_KAParameters));
-      sum_returns->ka_params_gap->Lambda = kbp->Lambda;
-      sum_returns->ka_params_gap->K = kbp->K;
-      sum_returns->ka_params_gap->H = kbp->H;
-      sum_returns->ka_params_gap->C = kbp->paramC; /* Needed only in PHI BLAST */
+        sum_returns->ka_params_gap = 
+             (BLAST_KAParameters*) calloc(1, sizeof(BLAST_KAParameters));
+        if (context >= 0)
+        {
+          kbp = sbp->kbp_gap[context];
+          sum_returns->ka_params_gap->Lambda = kbp->Lambda;
+          sum_returns->ka_params_gap->K = kbp->K;
+          sum_returns->ka_params_gap->H = kbp->H;
+          sum_returns->ka_params_gap->C = kbp->paramC; /* Needed only in PHI BLAST */
+        }
+        else
+        {
+          sum_returns->ka_params_gap->Lambda = -1.0;
+          sum_returns->ka_params_gap->K = -1.0;
+          sum_returns->ka_params_gap->H = -1.0;
+          sum_returns->ka_params_gap->C = -1.0;
+        }
    }
 }
 
@@ -490,7 +517,7 @@ Blast_SummaryReturnClean(Blast_SummaryReturn* sum_returns)
       sum_returns->search_params = 
           s_SummarySearchParamsFree(sum_returns->search_params);
       sum_returns->diagnostics = Blast_DiagnosticsFree(sum_returns->diagnostics);
-      sum_returns->error = Blast_MessageFree(sum_returns->error);
+      sum_returns->error = SBlastMessageFree(sum_returns->error);
       sum_returns->pattern_info = 
           SPHIQueryInfoFree(sum_returns->pattern_info);
    }
@@ -526,7 +553,7 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
       eff_len_options == NULL || query_info == NULL)
      return -1;
 
-   s_SummaryKAParametersFill(sbp, query_info->first_context, sum_returns);
+   s_SummaryKAParametersFill(sbp, query_info, sum_returns);
    s_SummaryDBStatsFill(program_number, eff_len_options, query_info, 
                             seq_src, &(sum_returns->db_stats));
    
@@ -613,11 +640,8 @@ int Blast_SummaryReturnUpdate(const Blast_SummaryReturn* new_return,
 
     Blast_DiagnosticsUpdate(full_return->diagnostics, new_return->diagnostics);
     
-    if (new_return->error) {
-        full_return->error = (Blast_Message*)
-            BlastMemDup(new_return->error, sizeof(Blast_Message));
-        full_return->error->message = strdup(new_return->error->message);
-    }
+    if (new_return->error)
+        full_return->error = SBlastMessageDup(new_return->error);
 
     full_return->pattern_info = (SPHIQueryInfo*)
         BlastMemDup(new_return->pattern_info, sizeof(SPHIQueryInfo));

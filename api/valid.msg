@@ -204,6 +204,9 @@ $^   CaseDifferenceInSeqID, 57
 Multiple Bioseqs have the same Seq-id except for capitalization. Sequence
 identifiers must be unique in a case-insensitive manner within a record.
 
+$^   DeltaComponentIsGi0, 58
+Delta component refers to gi 0. This indicates an error in database processing of this record.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -346,6 +349,9 @@ The collection date is not in the required format.
 
 $^   BadPCRPrimerSequence, 36
 The PCR primer sequence has illegal characters or non-IUPAC nucleotides.
+
+$^   BadPunctuation, 37
+The title ends with incorrect punctuation marks.
 
 $$ GENERIC, 3
 
@@ -910,6 +916,20 @@ The internal transcribed spacer misc_RNA features should exactly abut the flanki
 $^ FeatureSeqIDCaseDifference, 117
 Feature location and referenced Bioseq have the same Seq-id except for capitalization.
 Sequence identifiers must be unique in a case-insensitive manner within a record.
+
+$^ FeatureLocationIsGi0, 118
+Feature location refers to gi 0. This indicates an error in database processing of this record.
+
+$^ GapFeatureProblem, 119
+Gap features must only cover gaps in the sequence, not actual bases.
+
+$^ PseudoCdsHasProtXref, 120
+A coding region flagged as pseudo has a protein cross reference.  There should be no
+protein product bioseq or protein cross reference on a pseudo CDS.
+
+$^ ErroneousException, 121
+The feature is marked with a specific exception qualifier, but validation indicates
+that a different exception should be used.
 
 $$ SEQ_ALIGN, 6
 

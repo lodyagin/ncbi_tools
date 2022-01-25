@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.97 2006/02/23 17:42:36 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.108 2006/04/21 14:38:12 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,54 +53,64 @@
 #endif
 
 
-static const char* s_GetValue(const char* service, const char* param,
-                              char* value, size_t value_size,
-                              const char* def_value)
+extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
+                                        char* value, size_t value_size,
+                                        const char* def_value)
 {
-    char        key[256];
-    char*       sec;
+    char        buf[256];
     const char* val;
+    char*       s;
 
-    if (!param  ||  !value  ||  value_size <= 0)
+    if (!value  ||  value_size <= 0)
         return 0;
     *value = '\0';
 
+    if (!param  ||  !*param)
+        return 0;
+
     if (service  &&  *service) {
         /* Service-specific inquiry */
-        if (strlen(service) + 1 + sizeof(DEF_CONN_REG_SECTION) +
-            strlen(param) + 1 > sizeof(key))
+        size_t slen = strlen(service);
+        size_t plen = strlen(param) + 1;
+        if (slen + 1 + sizeof(DEF_CONN_REG_SECTION) + plen > sizeof(buf))
             return 0;
+
         /* First, environment search for 'service_CONN_param' */
-        sprintf(key, "%s_" DEF_CONN_REG_SECTION "_%s", service, param);
-        strupr(key);
-        if ((val = getenv(key)) != 0)
+        s = (char*) memcpy(buf, service, slen) + slen;
+        *s++ = '_';
+        memcpy(s, DEF_CONN_REG_SECTION, sizeof(DEF_CONN_REG_SECTION) - 1);
+        s += sizeof(DEF_CONN_REG_SECTION) - 1;
+        *s++ = '_';
+        memcpy(s, param, plen);
+        if ((val = getenv(strupr(buf))) != 0)
             return strncpy0(value, val, value_size - 1);
+
         /* Next, search for 'CONN_param' in '[service]' registry section */
-        sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
-        sec = key + strlen(key) + 1;
-        strupr(key);
-        strcpy(sec, service);
-        strupr(sec);
-        CORE_REG_GET(sec, key, value, value_size, 0);
+        buf[slen++] = '\0';
+        s = buf + slen;
+        CORE_REG_GET(buf, s, value, value_size, 0);
         if (*value)
             return value;
     } else {
         /* Common case. Form 'CONN_param' */
-        if (sizeof(DEF_CONN_REG_SECTION) + strlen(param) + 1 > sizeof(key))
+        size_t plen = strlen(param) + 1;
+        if (sizeof(DEF_CONN_REG_SECTION) + plen > sizeof(buf))
             return 0;
-        sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
-        strupr(key);
+        s = buf;
+        memcpy(s, DEF_CONN_REG_SECTION, sizeof(DEF_CONN_REG_SECTION) - 1);
+        s += sizeof(DEF_CONN_REG_SECTION) - 1;
+        *s++ = '_';
+        memcpy(s, param, plen);
+        s = strupr(buf);
     }
 
     /* Environment search for 'CONN_param' */
-    if ((val = getenv(key)) != 0)
+    if ((val = getenv(s)) != 0)
         return strncpy0(value, val, value_size - 1);
 
     /* Last resort: Search for 'param' in default registry section */
-    strcpy(key, param);
-    strupr(key);
-    CORE_REG_GET(DEF_CONN_REG_SECTION, key, value, value_size, def_value);
-
+    s += sizeof(DEF_CONN_REG_SECTION);
+    CORE_REG_GET(DEF_CONN_REG_SECTION, s, value, value_size, def_value);
     return value;
 }
 
@@ -114,7 +124,7 @@ static const char* s_GetValue(const char* service, const char* param,
 extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 {
 #define REG_VALUE(name, value, def_value) \
-    s_GetValue(service, name, value, sizeof(value), def_value)
+    ConnNetInfo_GetValue(service, name, value, sizeof(value), def_value)
 
     SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(*info) +
                                                 (service  &&  *service
@@ -199,6 +209,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         (strcmp(str, "1") == 0  ||
          strcasecmp(str, "true") == 0  ||
          strcasecmp(str, "yes" ) == 0  ||
+         strcasecmp(str, "on"  ) == 0  ||
          strcasecmp(str, "some") == 0)) {
         info->debug_printout = eDebugPrintout_Some;
     } else if (*str  &&
@@ -213,21 +224,24 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     info->stateless = (*str  &&
                        (strcmp(str, "1") == 0  ||
                         strcasecmp(str, "true") == 0  ||
-                        strcasecmp(str, "yes" ) == 0));
+                        strcasecmp(str, "yes" ) == 0  ||
+                        strcasecmp(str, "on"  ) == 0));
 
     /* firewall mode? */
     REG_VALUE(REG_CONN_FIREWALL, str, DEF_CONN_FIREWALL);
     info->firewall = (*str  &&
                       (strcmp(str, "1") == 0  ||
                        strcasecmp(str, "true") == 0  ||
-                       strcasecmp(str, "yes" ) == 0));
+                       strcasecmp(str, "yes" ) == 0  ||
+                       strcasecmp(str, "on"  ) == 0));
 
     /* prohibit the use of local load balancer? */
     REG_VALUE(REG_CONN_LB_DISABLE, str, DEF_CONN_LB_DISABLE);
     info->lb_disable = (*str  &&
                         (strcmp(str, "1") == 0  ||
                          strcasecmp(str, "true") == 0  ||
-                         strcasecmp(str, "yes" ) == 0));
+                         strcasecmp(str, "yes" ) == 0  ||
+                         strcasecmp(str, "on"  ) == 0));
 
     /* user header (with optional '\r\n' added automagically) */
     REG_VALUE(REG_CONN_HTTP_USER_HEADER, str, DEF_CONN_HTTP_USER_HEADER);
@@ -573,21 +587,27 @@ extern int/*bool*/ ConnNetInfo_AppendArg(SConnNetInfo* info,
                                          const char*   arg,
                                          const char*   val)
 {
-    const char* amp = "&";
+    size_t len, used;
 
     if (!arg || !*arg)
         return 1/*success*/;
-    if (!info->args[0])
-        amp = "";
-    if (strlen(info->args) + strlen(amp) + strlen(arg) +
-        (val ? 1 + strlen(val) : 0) >= sizeof(info->args))
+
+    used = strlen(info->args);
+    len  = strlen(arg);
+    
+    if (used + (used ? 1/*&*/ : 0) + len +
+        (val && *val ? 1/*=*/ + strlen(val) : 0) >= sizeof(info->args)) {
         return 0/*failure*/;
-    strcat(info->args, amp);
-    strcat(info->args, arg);
-    if (!val || !*val)
-        return 1/*success*/;
-    strcat(info->args, "=");
-    strcat(info->args, val);
+    }
+
+    if (used)
+        info->args[used++] = '&';
+    strcpy(info->args + used, arg);
+    if (val && *val) {
+        used += len;
+        info->args[used++] = '=';
+        strcpy(info->args + used, val);
+    }
     return 1/*success*/;
 }
 
@@ -596,25 +616,27 @@ extern int/*bool*/ ConnNetInfo_PrependArg(SConnNetInfo* info,
                                           const char*   arg,
                                           const char*   val)
 {
-    char amp = '&';
-    size_t off;
+    size_t len, off, used;
 
     if (!arg || !*arg)
         return 1/*success*/;
-    if (!info->args[0])
-        amp = '\0';
-    off = strlen(arg) + (val && *val ? 1 + strlen(val) : 0) + (amp ? 1 : 0);
-    if (off + strlen(info->args) >= sizeof(info->args))
+
+    used = strlen(info->args);
+    len  = strlen(arg);
+    off  = len + (val && *val ? 1/*=*/ + strlen(val) : 0) + (used? 1/*&*/ : 0);
+
+    if (off + used >= sizeof(info->args))
         return 0/*failure*/;
-    if (amp)
-        memmove(&info->args[off], info->args, strlen(info->args) + 1);
+
+    if (used)
+        memmove(info->args + off, info->args, used + 1);
     strcpy(info->args, arg);
     if (val && *val) {
-        strcat(info->args, "=");
-        strcat(info->args, val);
+        info->args[len++] = '=';
+        strcpy(info->args + len, val);
     }
-    if (amp)
-        info->args[off - 1] = amp;
+    if (used)
+        info->args[off - 1] = '&';
     return 1/*success*/;
 }
 
@@ -632,7 +654,7 @@ extern void ConnNetInfo_DeleteArg(SConnNetInfo* info,
         if (*a == '&')
             a++;
         arglen = strcspn(a, "&");
-        if (arglen < argnamelen || strncmp(a, arg, argnamelen) != 0 ||
+        if (arglen < argnamelen || strncasecmp(a, arg, argnamelen) != 0 ||
             (a[argnamelen] && a[argnamelen] != '=' && a[argnamelen] != '&'))
             continue;
         if (a[arglen]) {
@@ -653,8 +675,11 @@ extern void ConnNetInfo_DeleteAllArgs(SConnNetInfo* info,
 {
     char* temp;
     char* arg;
-    if (!args || !*args || !(temp = strdup(args)))
+    if (!args || !*args || !(temp = strdup(args))) {
+        if (args && *args)
+            *info->args = '\0';
         return;
+    }
     arg = temp;
     while (*arg) {
         char* end = strchr(arg, '&');
@@ -675,7 +700,7 @@ extern int/*bool*/ ConnNetInfo_PreOverrideArg(SConnNetInfo* info,
 {
     if (!arg || !*arg)
         return 1/*success*/;
-    ConnNetInfo_DeleteArg(info, arg);
+    ConnNetInfo_DeleteAllArgs(info, arg);
     return ConnNetInfo_PrependArg(info, arg, val);
 }
 
@@ -686,7 +711,7 @@ extern int/*bool*/ ConnNetInfo_PostOverrideArg(SConnNetInfo* info,
 {
     if (!arg || !*arg)
         return 1/*success*/;
-    ConnNetInfo_DeleteArg(info, arg);
+    ConnNetInfo_DeleteAllArgs(info, arg);
     return ConnNetInfo_AppendArg(info, arg, val);
 }
 
@@ -698,15 +723,19 @@ static int/*bool*/ s_IsSufficientAddress(const char* addr)
     const char* dot = 0;
 
     for (i = 0; i < len; i++) {
-        if (!isdigit((unsigned char) addr[i]))
-            isip = 0;
         if (addr[i] == '.') {
-            if (++dots > 3)
-                isip = 0;
-            if (isip  &&  dot  &&  &addr[i] - dot > 3)
+            ++dots;
+            if (i  &&  dots <= 3) {
+                if (isip) {
+                    size_t n = (size_t)(&addr[i] - (dot ? dot : addr - 1));
+                    if (n <= 1  ||  n > 4)
+                        isip = 0;
+                }
+            } else
                 isip = 0;
             dot = &addr[i];
-        }
+        } else if (!isdigit((unsigned char) addr[i]))
+            isip = 0;
     }
     if (dots < 3)
         isip = 0;
@@ -911,11 +940,12 @@ extern SOCK URL_Connect
     char        buffer[80];
     size_t      headersize;
     const char* x_args = 0;
+    size_t      user_hdr_len = user_hdr  &&  *user_hdr ? strlen(user_hdr) : 0;
     const char* x_req_r; /* "POST "/"GET " */
 
     /* check the args */
-    if (!host  ||  !*host  ||  !port  ||  !path  ||  !*path  ||
-        (user_hdr  &&  *user_hdr  &&  user_hdr[strlen(user_hdr)-1] != '\n')) {
+    if (!host  ||  !*host  ||  !port  ||
+        (user_hdr  &&  *user_hdr  &&  user_hdr[user_hdr_len - 1] != '\n')) {
         CORE_LOG(eLOG_Error, "[URL_Connect]  Bad arguments");
         assert(0);
         return 0/*error*/;
@@ -967,7 +997,7 @@ extern SOCK URL_Connect
     if (/* {POST|GET} <path>?<args> HTTP/1.0\r\n */
         !BUF_Write(&buf, x_req_r, strlen(x_req_r))            ||
         !BUF_Write(&buf, path,    strlen(path))               ||
-        (x_args
+        (x_args  &&  *x_args
          &&  (!BUF_Write(&buf, X_REQ_Q, sizeof(X_REQ_Q) - 1)  ||
               !BUF_Write(&buf, x_args,  strlen(x_args))))     ||
         !BUF_Write(&buf,       X_REQ_E, sizeof(X_REQ_E) - 1)  ||
@@ -978,8 +1008,8 @@ extern SOCK URL_Connect
         !BUF_Write(&buf, "\r\n", 2)                           ||
 
         /* <user_header> */
-        (user_hdr
-         &&  !BUF_Write(&buf, user_hdr, strlen(user_hdr)))    ||
+        (user_hdr  &&  *user_hdr
+         &&  !BUF_Write(&buf, user_hdr, user_hdr_len))        ||
 
         /* Content-Length: <content_length>\r\n\r\n */
         (req_method != eReqMethod_Get
@@ -1209,14 +1239,15 @@ static EIO_Status s_BUF_IO
  size_t*   n_read,
  EIO_Event what)
 {
+    BUF b;
     switch (what) {
     case eIO_Read:
         *n_read = BUF_Read((BUF) stream, buf, size);
         return *n_read ? eIO_Success : eIO_Closed;
     case eIO_Write:
         assert(stream);
-        return BUF_PushBack((BUF*) &stream, buf, size)
-            ? eIO_Success : eIO_Unknown;
+        b = (BUF) stream;
+        return BUF_PushBack(&b, buf, size) ? eIO_Success : eIO_Unknown;
     default:
         break;
     }
@@ -1819,17 +1850,17 @@ extern unsigned int CRC32_Update(unsigned int checksum,
 
 extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
 {
-#if defined(NCBI_OS_UNIX)  &&  !defined(NCBI_OS_SOLARIS)
-#  ifndef LOGIN_NAME_MAX
-#    ifdef _POSIX_LOGIN_NAME_MAX
-#      define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
-#    else
-#      define LOGIN_NAME_MAX 256
-#    endif
-#  endif
-    char loginbuf[LOGIN_NAME_MAX + 1];
-#endif
 #if defined(NCBI_OS_UNIX)
+#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETLOGIN_R)
+#    ifndef LOGIN_NAME_MAX
+#      ifdef _POSIX_LOGIN_NAME_MAX
+#        define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
+#      else
+#        define LOGIN_NAME_MAX 256
+#      endif
+#    endif
+    char loginbuf[LOGIN_NAME_MAX + 1];
+#  endif
     struct passwd* pw;
 #  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETPWUID_R)
     struct passwd pwd;
@@ -1844,6 +1875,7 @@ extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
     assert(buf  &&  bufsize);
 
 #ifndef NCBI_OS_UNIX
+
 #  ifdef NCBI_OS_MSWIN
     if (GetUserName(loginbuf, &loginbufsize)) {
         assert(loginbufsize < sizeof(loginbuf));
@@ -1856,6 +1888,7 @@ extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
         return buf;
     }
 #  endif
+
 #else /*!NCBI_OS_UNIX*/
 
 #  if defined(NCBI_OS_SOLARIS)  ||  !defined(HAVE_GETLOGIN_R)
@@ -1882,7 +1915,7 @@ extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
 
 #  if defined(NCBI_OS_SOLARIS)  ||  \
     (!defined(HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
-    /* NB:  getpwuid() is MT safe on Solaris, so use it here, if available */
+    /* NB:  getpwuid() is MT-safe on Solaris, so use it here, if available */
 #  ifndef NCBI_OS_SOLARIS
     CORE_LOCK_WRITE;
 #  endif
@@ -1970,6 +2003,38 @@ size_t CONNUTIL_GetVMPageSize(void)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.108  2006/04/21 14:38:12  lavr
+ * ConnNetInfo_GetValue() simplified and sped up considerably
+ *
+ * Revision 6.107  2006/04/21 01:37:17  lavr
+ * SConnNetInfo::lb_disable reinstated along with LB_DISABLE reg/env key
+ *
+ * Revision 6.105  2006/04/20 13:58:32  lavr
+ * Registry keys for new switching scheme for service mappers;
+ * Registry keys for LOCAL service mappers;
+ * ConnNetInfo_GetValue() exported
+ *
+ * Revision 6.104  2006/04/19 02:12:06  lavr
+ * Call DeleteAllArgs when doing argument overrides
+ *
+ * Revision 6.103  2006/04/19 01:38:48  lavr
+ * ConnNetInfo_{Append|Prepend}Arg sped-up considerably
+ *
+ * Revision 6.102  2006/04/11 13:51:23  lavr
+ * URL_Connect():  Relax on parameter checking
+ *
+ * Revision 6.101  2006/03/19 01:40:17  lavr
+ * Yet another fix for s_IsSufficientAddress()
+ *
+ * Revision 6.100  2006/03/17 16:42:33  lavr
+ * BUF_StripToPattern(): Avoid type-punned ptr (and keep off GCC warning)
+ *
+ * Revision 6.99  2006/03/16 20:04:02  lavr
+ * s_IsSufficientAddress():  IP recognition bug fixed
+ *
+ * Revision 6.98  2006/03/07 15:37:19  lavr
+ * CONNUTIL_GetUsername(): Do not define loginbuf, if it's going to be unused
+ *
  * Revision 6.97  2006/02/23 17:42:36  lavr
  * CONNUTIL_GetVMPageSize(): use sysctl() first (fallback to getpagesize())
  *

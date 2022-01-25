@@ -139,6 +139,14 @@ SOURCE=..\..\..\connect\ncbi_lbsmd_stub.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_local.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_local.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_memory_connector.c
 # End Source File
 # Begin Source File

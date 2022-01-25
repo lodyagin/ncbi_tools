@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lb.c,v 1.4 2006/01/11 20:17:13 lavr Exp $
+/*  $Id: ncbi_lb.c,v 1.5 2006/04/05 14:59:57 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,7 +44,7 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
     SLB_Candidate* cand;
     size_t i = 0, n;
 
-    assert(bonus > 1.0);
+    assert(bonus >= 1.0);
     assert(iter  &&  get_candidate);
     if (iter->ismask  ||  iter->promiscuous)
         return 0/*first entry (DISPD: probably) fits*/;

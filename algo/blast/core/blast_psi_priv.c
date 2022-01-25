@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi_priv.c,v 1.58 2006/02/16 18:47:18 camacho Exp $";
+    "$Id: blast_psi_priv.c,v 1.59 2006/04/19 19:16:49 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -658,6 +658,35 @@ s_PSIValidateParticipatingSequences(const _PSIMsa* msa)
     } else {
         return PSI_SUCCESS;
     }
+}
+
+void
+_PSIStructureGroupCustomization(_PSIMsa* msa)
+{
+    Uint4 i;
+    for (i = 0; i < msa->dimensions->query_length; i++) {
+        msa->cell[kQueryIndex][i].letter = 0;
+        msa->cell[kQueryIndex][i].is_aligned = FALSE;
+    }
+    msa->use_sequence[kQueryIndex] = FALSE;
+    _PSIUpdatePositionCounts(msa);
+}
+
+int
+_PSIValidateMSA_StructureGroup(const _PSIMsa* msa)
+{
+    int retval = PSI_SUCCESS;
+
+    if ( !msa ) {
+        return PSIERR_BADPARAM;
+    }
+
+    retval = s_PSIValidateParticipatingSequences(msa);
+    if (retval != PSI_SUCCESS) {
+        return retval;
+    }
+
+    return retval;
 }
 
 int
@@ -2380,6 +2409,9 @@ _PSISaveDiagnostics(const _PSIMsa* msa,
 /*
  * ===========================================================================
  * $Log: blast_psi_priv.c,v $
+ * Revision 1.59  2006/04/19 19:16:49  camacho
+ * Refactoring of structure group customization and addition of validation
+ *
  * Revision 1.58  2006/02/16 18:47:18  camacho
  * + encoding translations for O and J
  *

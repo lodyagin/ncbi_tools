@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.28 $
+* $Revision: 1.29 $
 *
 * File Description: 
 *
@@ -78,8 +78,14 @@ NLM_EXTERN void EntrezSetService (
 
 /* low-level connection functions */
 
+/*
+ EntrezOpenConnection now takes optional request
+ pointer, extracts db, and passes that to load
+ balancer.
+*/
+
 NLM_EXTERN CONN EntrezOpenConnection (
-  void
+  Entrez2RequestPtr e2rq
 );
 
 NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (

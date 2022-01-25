@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/*  $Id: ncbi_comm.h,v 6.12 2006/01/17 20:19:01 lavr Exp $
+/*  $Id: ncbi_comm.h,v 6.13 2006/04/05 14:59:04 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,6 +40,8 @@
 #define HTTP_DISP_FAILURES      "Dispatcher-Failures:"
 #define HTTP_DISP_MESSAGES      "Dispatcher-Messages:"
 #define HTTP_NCBI_MESSAGE       "NCBI-Message:"
+#define LBSM_DEFAULT_TIME       30    /* Exp.time for svc. to be used within */
+#define LBSM_DEFAULT_RATE       1000  /* For SLBSM_Service::info.rate below  */
 #define DISPATCHER_CFGPATH      "/var/etc/lbsmd/"
 #define DISPATCHER_CFGFILE      "servrc.cfg"
 #define DISP_PROTOCOL_VERSION   "1.1"
@@ -62,6 +64,9 @@ typedef unsigned int ticket_t;
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_comm.h,v $
+ * Revision 6.13  2006/04/05 14:59:04  lavr
+ * +LBSM_DEFAULTs
+ *
  * Revision 6.12  2006/01/17 20:19:01  lavr
  * HTTP_DISP_FAILURES split into FAILURES and MESSAGES (new macro)
  *

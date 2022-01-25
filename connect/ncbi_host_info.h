@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFO__H
 #define CONNECT___NCBI_HOST_INFO__H
 
-/*  $Id: ncbi_host_info.h,v 6.5 2003/04/09 19:05:42 siyan Exp $
+/*  $Id: ncbi_host_info.h,v 6.7 2006/03/06 20:23:59 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,12 +59,12 @@ typedef struct SHostInfoTag* HOST_INFO;
 
 /* Return CPU count or -1 if error occurred.
  */
-extern NCBI_XCONNECT_EXPORT int HINFO_CpuCount(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT int HINFO_CpuCount(const HOST_INFO host_info);
 
 
 /* Return task count or -1 if error occurred.
  */
-extern NCBI_XCONNECT_EXPORT int HINFO_TaskCount(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT int HINFO_TaskCount(const HOST_INFO host_info);
 
 
 /* Return non-zero on success and store load averages in the
@@ -73,8 +73,8 @@ extern NCBI_XCONNECT_EXPORT int HINFO_TaskCount(HOST_INFO host_info);
  * (aka BLAST) stored at index [1]. Return 0 on error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_LoadAverage
-(HOST_INFO host_info,
- double    lavg[2]
+(const HOST_INFO host_info,
+ double          lavg[2]
  );
 
 
@@ -85,19 +85,16 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_LoadAverage
  * does not provide such information. Return 0 on error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_Status
-(HOST_INFO host_info,
- double    status[2]
+(const HOST_INFO host_info,
+ double          status[2]
  );
 
 
-/* Return non-zero on success and store BLAST counters in the
- * provided array "blast", with first five entries (indices [0..4])
- * containing task counters, and last 3 entries (indices [5..7])
- * containing queue sizes. Return 0 on error.
+/* Obsolete.  Always returns 0 and does not touch its "blast" argument.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_BLASTParams
-(HOST_INFO    host_info,
- unsigned int blast[8]
+(const HOST_INFO host_info,
+ unsigned int    blast[8]
  );
 
 
@@ -109,7 +106,23 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_BLASTParams
  * host environment remains valid until the handle 'host_info' deleted
  * in the application program.
  */
-extern NCBI_XCONNECT_EXPORT const char* HINFO_Environment(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT const char* HINFO_Environment
+(const HOST_INFO host_info);
+
+
+/* Obtain affinity argument and value that has keyed the service
+ * selection (if affinities have been used at all).  NULL gets returned
+ * as argument if no affinity has been found (in this case value
+ * will be returned 0 as well).  Otherwise, NULL gets returned as
+ * value if there was no particular value matched but the argument
+ * played alone; "" is the value has been used empty, or any other
+ * substring from the host environment that has keyed the decision.
+ */
+extern NCBI_XCONNECT_EXPORT const char* HINFO_AffinityArgument
+(const HOST_INFO host_info);
+
+extern NCBI_XCONNECT_EXPORT const char* HINFO_AffinityArgvalue
+(const HOST_INFO host_info);
 
 
 #ifdef __cplusplus
@@ -123,6 +136,12 @@ extern NCBI_XCONNECT_EXPORT const char* HINFO_Environment(HOST_INFO host_info);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_host_info.h,v $
+ * Revision 6.7  2006/03/06 20:23:59  lavr
+ * Added "const" qualifier to all host-infos when passed to getters
+ *
+ * Revision 6.6  2006/03/05 17:33:15  lavr
+ * +HINFO_AffinityArgument, +HINFO_AffinityArgvalue
+ *
  * Revision 6.5  2003/04/09 19:05:42  siyan
  * Added doxygen support
  *

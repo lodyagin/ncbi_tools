@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.27 2006/02/15 15:12:59 madden Exp $
+/* $Id: blast_api.c,v 1.33 2006/04/26 12:44:37 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -52,6 +52,7 @@
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/dust_filter.h>
+#include <algo/blast/api/blast_message_api.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -193,8 +194,7 @@ s_RPSExtraStructsSetUp(const BlastSeqSrc* seq_src, const SBlastOptions* options,
     if (kDbName == NULL ||
         (status = s_BlastRPSInfoInit(&rps_info, rps_mmap, 
                                      rps_pssm_mmap, kDbName)) != 0) {
-        Blast_MessageWrite(&extra_returns->error, 3, 1, 0,  
-                           "RPS BLAST database setup failed");
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING, "RPS BLAST database setup failed", NULL, FALSE);
         return status;
     }
     *rps_info_out = rps_info;
@@ -288,8 +288,8 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                           options->score_options, sbp, options->eff_len_options,
                           options->ext_options, options->hit_options, 
                           options->db_options)) != 0) {
-            Blast_MessageWrite(&extra_returns->error, 2, 0, 0,
-                "Failed to set up tabular formatting data structure");
+            SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                "Failed to set up tabular formatting data structure", NULL, FALSE);
             return status;
         }
     }
@@ -329,12 +329,12 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
            hsp_stream && extra_returns);
 
     /* Start the formatting thread */
-    if(NlmThreadsAvailable() &&
+    if(tf_data && NlmThreadsAvailable() &&
        (format_thread =
         NlmThreadCreate(Blast_TabularFormatThread, (void*) tf_data))
        == NULL_thread) {
-        Blast_MessageWrite(&extra_returns->error, 2, 0, 0,
-                           "Cannot create thread for formatting tabular output\n");
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                           "Cannot create thread for formatting tabular output\n", NULL, options->believe_query);
         return -1;
     }
 
@@ -375,8 +375,8 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                              ext_options, hit_options, eff_len_options, 
                              db_options, psi_options, sbp, hsp_stream, 
                              rps_info, pattern_blk, results)) != 0) {
-                Blast_MessageWrite(&extra_returns->error, 3, 0, 0,  
-                                   "Traceback engine failed\n");
+                SBlastMessageWrite(&extra_returns->error, SEV_ERROR,
+                                   "Traceback engine failed\n", NULL, options->believe_query);
             }
         }
     } else {
@@ -388,17 +388,17 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                      seq_src, score_options, sbp, lookup_wrap, word_options, 
                      ext_options, hit_options, eff_len_options, psi_options, 
                      db_options, hsp_stream, diagnostics)) != 0) {
-                Blast_MessageWrite(&extra_returns->error, 3, 1, 0,  
-                                   "Preliminary search engine failed\n");
+                SBlastMessageWrite(&extra_returns->error, SEV_ERROR,
+                                   "Preliminary search engine failed\n", NULL, options->believe_query);
             }
         } else { /* Single thread, non-tabular */
             if ((status=Blast_RunFullSearch(kProgram, query, query_info, 
                             seq_src, sbp, score_options, lookup_wrap, 
                             word_options, ext_options, hit_options, 
                             eff_len_options, psi_options, db_options, hsp_stream,
-                            rps_info, diagnostics, results)) != 0) {
-                Blast_MessageWrite(&extra_returns->error, 3, 1, 0,  
-                                   "Blast_RunFullSearch failed\n");
+                            rps_info, diagnostics, results, 0, 0)) != 0) {
+                SBlastMessageWrite(&extra_returns->error, SEV_ERROR,  
+                                    "Blast_RunFullSearch failed\n", NULL, options->believe_query);
             }
         }
     }
@@ -454,6 +454,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     SBlastOptions* rps_options = NULL;
     const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(kProgram);
     const Uint1 kDeallocateMe = 253;
+    Blast_Message *core_msg = NULL;
 
     if (!query_seqloc || !seq_src || !options || !extra_returns) 
         return -1;
@@ -461,14 +462,16 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     if ((status = 
          BLAST_ValidateOptions(kProgram, options->ext_options, score_options, 
                                lookup_options, options->word_options, hit_options, 
-                               &extra_returns->error)) != 0) {
+                               &core_msg)) != 0) {
+         extra_returns->error = Blast_MessageToSBlastMessage(core_msg, NULL, NULL, options->believe_query);
+         core_msg = Blast_MessageFree(core_msg);
+         
         return status;
     }
 
     if (options->program == eBlastTypeBlastn)
     {
          SeqLoc* dust_mask = NULL; /* Dust mask locations */
-         SeqLoc* dust_mask_var = NULL;
          Blast_FindDustSeqLoc(query_seqloc, options, &dust_mask);
          /* Combine dust mask with lower case mask 
             The dust mask will be deallocated by the end of this function
@@ -500,15 +503,20 @@ Blast_RunSearch(SeqLoc* query_seqloc,
 
     if ((status = BLAST_SetUpQuery(kProgram, query_seqloc, query_options, 
                                    masking_locs, &query_info, &query))) {
-        Blast_MessageWrite(&extra_returns->error, 3, 0, 0,  
-                           "BLAST_SetUpQuery returned non-zero status\n");
+        SBlastMessageWrite(&extra_returns->error, SEV_ERROR,  
+                "BLAST_SetUpQuery returned non-zero status\n", NULL, FALSE);
         return status;
     }
 
     status = 
         BLAST_MainSetUp(kProgram, query_options, score_options, query, 
                         query_info, scale_factor, &lookup_segments, &mask_loc,
-                        &sbp, &extra_returns->error);
+                        &sbp, &core_msg);
+    if (core_msg)
+    {
+       extra_returns->error = Blast_MessageToSBlastMessage(core_msg, query_seqloc, query_info, options->believe_query);
+       core_msg = Blast_MessageFree(core_msg);
+    }
 
     if (status)
         return status;
@@ -617,12 +625,12 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
     seq_src = ReaddbBlastSeqSrcAttach(rdfp);
 
     if (seq_src == NULL) {
-        Blast_MessageWrite(&extra_returns->error, 2, 1, 0,  
-                           "Initialization of subject sequences source failed");
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                           "Initialization of subject sequences source failed", NULL, options->believe_query);
     } else {
         char* error_str = BlastSeqSrcGetInitError(seq_src);
         if (error_str)
-            Blast_MessageWrite(&extra_returns->error, 2, 1, 0, error_str); 
+            SBlastMessageWrite(&extra_returns->error, SEV_WARNING, error_str, NULL, options->believe_query); 
     }
 
     /* If there was an error initializing the sequence source, return without 
@@ -640,7 +648,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
 
     if (!status && !tf_data) {
         status = 
-            BLAST_ResultsToSeqAlign(options->program, results, 
+            BLAST_ResultsToSeqAlign(options->program, &results, 
                                     query_seqloc, rdfp, NULL, 
                                     options->score_options->gapped_calculation,
                                     options->score_options->is_ooframe, 
@@ -648,7 +656,6 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
     }
 
     readdb_destruct(rdfp);
-    results = Blast_HSPResultsFree(results);
 
     if (status)
         return status;
@@ -694,7 +701,7 @@ s_PHIResultsToSeqAlign(const BlastHSPResults* results,
                  * call.
                  */
                 status =
-                    BLAST_ResultsToSeqAlign(program, one_phi_results, 
+                    BLAST_ResultsToSeqAlign(program, &one_phi_results, 
                                             query_seqloc, rdfp, NULL, TRUE, 
                                             FALSE, &seqalign_arr);
                 if (seqalign_arr)
@@ -704,7 +711,6 @@ s_PHIResultsToSeqAlign(const BlastHSPResults* results,
                     SBlastSeqalignArrayFree(seqalign_arr);
                 }
                 ValNodeAddPointer(phivnps, pattern_index, seqalign);
-                one_phi_results = Blast_HSPResultsFree(one_phi_results);
             }
         }
         sfree(phi_results);
@@ -735,12 +741,12 @@ PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
     seq_src = ReaddbBlastSeqSrcAttach(rdfp);
 
     if (seq_src == NULL) {
-        Blast_MessageWrite(&extra_returns->error, 2, 1, 0,
-                           "Initialization of subject sequences source failed");
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                           "Initialization of subject sequences source failed", NULL, options->believe_query);
     } else {
         char* error_str = BlastSeqSrcGetInitError(seq_src);
         if (error_str)
-            Blast_MessageWrite(&extra_returns->error, 2, 1, 0, error_str);
+            SBlastMessageWrite(&extra_returns->error, SEV_WARNING, error_str, NULL, options->believe_query);
     }
 
     /* If there was an error initializing the sequence source, return without
@@ -795,12 +801,12 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
     seq_src = MultiSeqBlastSeqSrcInit(subject_seqloc, options->program);
 
     if (seq_src == NULL) {
-        Blast_MessageWrite(&extra_returns->error, 2, 1, 0,  
-                           "Initialization of subject sequences source failed");
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                           "Initialization of subject sequences source failed", NULL, options->believe_query);
     } else {
         char* error_str = BlastSeqSrcGetInitError(seq_src);
         if (error_str)
-            Blast_MessageWrite(&extra_returns->error, 2, 1, 0, error_str); 
+            SBlastMessageWrite(&extra_returns->error, SEV_WARNING, error_str, NULL, options->believe_query); 
     }
 
     /* If there was an error initializing the sequence source, return without 
@@ -818,14 +824,12 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
 
     if (!status) {
         status = 
-            BLAST_ResultsToSeqAlign(options->program, results, query_seqloc, 
+            BLAST_ResultsToSeqAlign(options->program, &results, query_seqloc, 
                                     NULL, subject_seqloc, 
                                     options->score_options->gapped_calculation,
                                     options->score_options->is_ooframe, 
                                     seqalign_arr);
     }
-
-    results = Blast_HSPResultsFree(results);
 
     if (status)
         return status;

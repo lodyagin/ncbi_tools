@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.16 2005/12/12 13:41:35 madden Exp $
+/* $Id: blast_options_api.c,v 1.18 2006/04/26 12:45:28 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -68,7 +68,7 @@ Int2 SBlastOptionsNew(const char* program_name, SBlastOptions** options_out,
                "Program name %s is not supported. The supported programs "
                "are blastn, blastp, blastx, tblastn, tblastx, rpsblast, "
                "rpstblastn\n", program_name);
-       Blast_MessageWrite(&extra_returns->error, 2, 1, 0, message);
+       SBlastMessageWrite(&extra_returns->error, SEV_ERROR, message, NULL, FALSE);
        return -1;
    }
 
@@ -79,8 +79,7 @@ Int2 SBlastOptionsNew(const char* program_name, SBlastOptions** options_out,
    
    if (status) {
        *options_out = NULL;
-       Blast_MessageWrite(&extra_returns->error, 2, 1, 0, 
-                          "Failed to initialize default options\n");
+       SBlastMessageWrite(&extra_returns->error, SEV_ERROR, "Failed to initialize default options\n", NULL, FALSE);
        return status;
    }
 
@@ -103,6 +102,7 @@ Int2 SBlastOptionsNew(const char* program_name, SBlastOptions** options_out,
    options->psi_options = psi_options;
    options->db_options = db_options;
    options->num_cpus = 1;
+   options->believe_query = FALSE;
 
    /* Set default filter string to low complexity filtering. */
    SBlastOptionsSetFilterString(options, "T");
@@ -337,6 +337,26 @@ Boolean SBlastOptionsGetMaskAtHash(const SBlastOptions* options)
            options->query_options->filtering_options);
 
     return options->query_options->filtering_options->mask_at_hash;
+}
+
+Int2 SBlastOptionsSetBelieveQuery(SBlastOptions* options, Boolean believe_query)
+{
+    Int2 status = 0;
+
+    if (!options)
+       return -1;
+
+    options->believe_query = believe_query;
+
+    return status;
+}
+
+Boolean SBlastOptionsGetBelieveQuery(const SBlastOptions* options)
+{
+
+    ASSERT(options);
+
+    return options->believe_query;
 }
 
 /* @} */

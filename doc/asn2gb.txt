@@ -265,7 +265,8 @@ and far product IDs for the /protein_id and /transcript_id accessions.
 #define LOOKUP_FAR_LOCATIONS      32
 #define LOOKUP_FAR_PRODUCTS       64
 #define LOOKUP_FAR_HISTORY       128
-#define LOOKUP_FAR_OTHERS        256
+#define LOOKUP_FAR_INFERENCE     256
+#define LOOKUP_FAR_OTHERS        512
 
 To use PubSeqFetchEnable, the application should #include <pmfapi.h>.
 

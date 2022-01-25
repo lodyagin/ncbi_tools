@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: web_blast.pl,v 1.4 2005/04/22 00:15:36 coulouri Exp $
+# $Id: web_blast.pl,v 1.5 2006/04/27 13:09:23 coulouri Exp $
 #
 # ===========================================================================
 #
@@ -70,12 +70,6 @@ if ($argc < 3)
 
 $program = shift;
 $database = shift;
-
-if ( ($program ne "megablast") && ($argc > 3) )
-    {
-    print "$program does not yet support multiple queries.\n";
-    exit 1;
-    }
 
 if ($program eq "megablast")
     {

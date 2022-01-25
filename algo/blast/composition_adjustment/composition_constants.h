@@ -1,4 +1,4 @@
-/* $Id: composition_constants.h,v 1.5 2006/01/30 14:47:57 gertz Exp $
+/* $Id: composition_constants.h,v 1.6 2006/04/03 17:43:51 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,12 @@
 
 /** Minimum score in a matrix */
 #define COMPO_SCORE_MIN INT2_MIN
+
+/** Number of standard amino acids */
+#define COMPO_NUM_TRUE_AA 20
+
+/** Number of amino acids, including nonstandard ones */
+#define COMPO_PROTEIN_ALPHABET 26
 
 /** An collection of constants that specify all permissible
  * modes of composition adjustment */

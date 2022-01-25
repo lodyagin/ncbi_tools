@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.69 $
+* $Revision: 6.74 $
 *
 * File Description: 
 *
@@ -115,7 +115,7 @@ static void SfpClearFeatIDs (
   ClearFeatIDXrefs (sfp);
 }
 
-NLM_EXTERN void ClearCDSmRNAfeatureIDs (
+NLM_EXTERN void ClearFeatureIDs (
   SeqEntryPtr sep
 )
 
@@ -123,11 +123,20 @@ NLM_EXTERN void ClearCDSmRNAfeatureIDs (
   VisitFeaturesInSep (sep, NULL, SfpClearFeatIDs);
 }
 
+typedef struct idpair {
+  Int4  before;
+  Int4  after;
+} IdPairData, PNTR IdPairPtr;
+
 typedef struct fiddata {
-  Int4  highestID;
+  Int4       highestID;
+  Int4       highestRef;
+  Int4       offset;
+  Int4       count;
+  IdPairPtr  pairs;
 } FidData, PNTR FidDataPtr;
 
-static void FindHighestFeatureID (
+static void FindHighestFeatID (
   SeqFeatPtr sfp,
   Pointer userdata
 )
@@ -138,7 +147,6 @@ static void FindHighestFeatureID (
   SeqFeatXrefPtr  xref;
 
   if (sfp == NULL) return;
-  if (sfp->idx.subtype != FEATDEF_CDS && sfp->idx.subtype != FEATDEF_mRNA) return;
   fip = (FidDataPtr) userdata;
   if (fip == NULL) return;
 
@@ -147,7 +155,7 @@ static void FindHighestFeatureID (
     if (oip != NULL) {
       if (oip->str == NULL) {
         if (oip->id >= fip->highestID) {
-          fip->highestID = oip->id + 1;
+          fip->highestID = oip->id;
         }
       }
     }
@@ -158,15 +166,29 @@ static void FindHighestFeatureID (
     oip = (ObjectIdPtr) xref->id.value.ptrvalue;
     if (oip != NULL) {
       if (oip->str == NULL) {
-        if (oip->id >= fip->highestID) {
-          fip->highestID = oip->id + 1;
+        if (oip->id >= fip->highestRef) {
+          fip->highestRef = oip->id;
         }
       }
     }
   }
 }
 
-static void SfpAssignCDSmRNAfeatureIDs (
+NLM_EXTERN Int4 FindHighestFeatureID (
+  SeqEntryPtr sep
+)
+
+{
+  FidData  fd;
+
+  MemSet ((Pointer) &fd, 0, sizeof (FidData));
+  fd.highestID = 0;
+  fd.highestRef = 0;
+  VisitFeaturesInSep (sep, (Pointer) &fd, FindHighestFeatID);
+  return fd.highestID;
+}
+
+static void SfpAssignFeatIDs (
   SeqFeatPtr sfp,
   Pointer userdata
 )
@@ -176,22 +198,21 @@ static void SfpAssignCDSmRNAfeatureIDs (
   ObjectIdPtr  oip;
 
   if (sfp == NULL) return;
-  if (sfp->idx.subtype != FEATDEF_CDS && sfp->idx.subtype != FEATDEF_mRNA) return;
   fip = (FidDataPtr) userdata;
   if (fip == NULL) return;
 
   if (sfp->id.choice == 3) return;
   oip = ObjectIdNew ();
   if (oip == NULL) return;
+
+  (fip->highestID)++;
   oip->id = fip->highestID;
 
   sfp->id.value.ptrvalue = (Pointer) oip;
   sfp->id.choice = 3;
-
-  (fip->highestID)++;
 }
 
-NLM_EXTERN void AssignCDSmRNAfeatureIDs (
+NLM_EXTERN void AssignFeatureIDs (
   SeqEntryPtr sep
 )
 
@@ -199,9 +220,219 @@ NLM_EXTERN void AssignCDSmRNAfeatureIDs (
   FidData  fd;
 
   MemSet ((Pointer) &fd, 0, sizeof (FidData));
-  fd.highestID = 1;
-  VisitFeaturesInSep (sep, (Pointer) &fd, FindHighestFeatureID);
-  VisitFeaturesInSep (sep, (Pointer) &fd, SfpAssignCDSmRNAfeatureIDs);
+  fd.highestID = 0;
+  fd.highestRef = 0;
+  VisitFeaturesInSep (sep, (Pointer) &fd, FindHighestFeatID);
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpAssignFeatIDs);
+}
+
+static void SfpOffsetFeatIDs (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr   fip;
+  ObjectIdPtr  oip;
+
+  if (sfp == NULL) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+
+  if (sfp->id.choice == 3) {
+    oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        oip->id += fip->offset;
+      }
+    }
+  }
+}
+
+NLM_EXTERN void OffsetFeatureIDs (
+  SeqEntryPtr sep,
+  Int4 offset
+)
+
+{
+  FidData  fd;
+
+  MemSet ((Pointer) &fd, 0, sizeof (FidData));
+  fd.offset = offset;
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpOffsetFeatIDs);
+}
+
+static void SfpOffsetFeatIDXrefs (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr      fip;
+  ObjectIdPtr     oip;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->id.choice != 3) continue;
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        oip->id += fip->offset;
+      }
+    }
+  }
+}
+
+NLM_EXTERN void OffsetFeatureIDXrefs (
+  SeqEntryPtr sep,
+  Int4 offset
+)
+
+{
+  FidData  fd;
+
+  MemSet ((Pointer) &fd, 0, sizeof (FidData));
+  fd.offset = offset;
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpOffsetFeatIDXrefs);
+}
+
+static void SfpMakePairList (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr   fip;
+  Int4         idx;
+  IdPairPtr    ipp;
+  ObjectIdPtr  oip;
+
+  if (sfp == NULL) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+  if (fip->pairs == NULL) return;
+
+  if (sfp->id.choice != 3) return;
+  oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+  if (oip == NULL) return;
+
+  idx = fip->highestID;
+  ipp = &(fip->pairs [idx]);
+
+  (fip->highestID)++;
+  ipp->before = oip->id;
+  ipp->after = fip->highestID;
+}
+
+static int LIBCALLBACK SortPairList (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  IdPairPtr  ipp1 = (IdPairPtr) ptr1;
+  IdPairPtr  ipp2 = (IdPairPtr) ptr2;
+
+  if (ipp1 == NULL || ipp2 == NULL) return 0;
+  if (ipp1->before > ipp2->before) return 1;
+  if (ipp1->before < ipp2->before) return -1;
+  return 0;
+}
+
+static Int4 LookupNewFeatID (
+  FidDataPtr fip,
+  Int4 before
+)
+
+{
+  IdPairPtr  ipp;
+  Int4       L;
+  Int4       mid;
+  Int4       R;
+
+  if (fip == NULL || fip->pairs == NULL || fip->count < 1) return 0;
+
+  L = 0;
+  R = fip->count - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    ipp = &(fip->pairs [mid]);
+    if (ipp->before < before) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (R < fip->count) {
+    ipp = &(fip->pairs [R]);
+    if (ipp->before == before) return ipp->after;
+  }
+
+  return 0;
+}
+
+static void SfpReassignPairList (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr      fip;
+  ObjectIdPtr     oip;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+  if (fip->pairs == NULL) return;
+
+  if (sfp->id.choice == 3) {
+    oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        oip->id = LookupNewFeatID (fip, oip->id);
+      }
+    }
+  }
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->id.choice != 3) continue;
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        oip->id = LookupNewFeatID (fip, oip->id);
+      }
+    }
+  }
+}
+
+NLM_EXTERN void ReassignFeatureIDs (
+  SeqEntryPtr sep
+)
+
+{
+  Int4     count;
+  FidData  fd;
+
+  count = VisitFeaturesInSep (sep, NULL, NULL);
+  if (count < 1) return;
+
+  MemSet ((Pointer) &fd, 0, sizeof (FidData));
+  fd.highestID = 0;
+  fd.highestRef = 0;
+  fd.count = count;
+  fd.pairs = (IdPairPtr) MemNew (sizeof (IdPairData) * (count + 1));
+  if (fd.pairs == NULL) return;
+
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpMakePairList);
+
+  HeapSort (fd.pairs, (size_t) count, sizeof (IdPairData), SortPairList);
+
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpReassignPairList);
+
+  MemFree (fd.pairs);
 }
 
 typedef struct vcmdata {
@@ -368,7 +599,7 @@ NLM_EXTERN void LinkCDSmRNAbyOverlap (
 )
 
 {
-  AssignCDSmRNAfeatureIDs (sep);
+  AssignFeatureIDs (sep);
   VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyOverlap);
 }
 
@@ -515,97 +746,100 @@ static void BspLinkCDSmRNAbyProduct (
         if (cdna->idx.parenttype == OBJ_BIOSEQSET) {
           bssp = (BioseqSetPtr) cdna->idx.parentptr;
           if (bssp == NULL) continue;
-          if (bssp->_class != BioseqseqSet_class_nuc_prot) continue;
-          prot = NULL;
-          if (VisitBioseqsInSet (bssp, (Pointer) &prot, FindProtBsp) != 2) continue;
-          for (sip = prot->id; sip != NULL; sip = sip->next) {
-            MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1);
-
-            /* binary search */
-
-            L = 0;
-            R = numcds - 1;
-            while (L < R) {
-              mid = (L + R) / 2;
-              odp = cdsarray [mid];
-              compare = StringCmp (odp->revstr, buf);
-              if (compare < 0) {
-                L = mid + 1;
-              } else {
-                R = mid;
-              }
-            }
-            odp = cdsarray [R];
-            if (odp != NULL && StringCmp (odp->revstr, buf) == 0) {
-              cds = odp->sfp;
-              if (cds == NULL) continue;
-
-              /* make reciprocal feature ID xrefs */
-
-              if (cds->id.choice == 3) {
-                oip = (ObjectIdPtr) cds->id.value.ptrvalue;
-                if (oip != NULL && oip->str == NULL) {
-                  id = oip->id;
-                  if (id > 0) {
-                    for (xref = mrna->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
-                    if (xref != NULL) {
-                      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
-                      if (oip != NULL) {
-                        if (oip->str != NULL) {
-                          oip->str = MemFree (oip->str);
-                        }
-                        oip->id = id;
-                      }
-                    } else {
-                      xref = SeqFeatXrefNew ();
-                      if (xref != NULL) {
-                        oip = ObjectIdNew ();
-                        if (oip != NULL) {
-                          oip->id = id;
-                          xref->id.choice = 3;
-                          xref->id.value.ptrvalue = (Pointer) oip;
-                          xref->next = mrna->xref;
-                          mrna->xref = xref;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              if (mrna->id.choice == 3) {
-                oip = (ObjectIdPtr) mrna->id.value.ptrvalue;
-                if (oip != NULL && oip->str == NULL) {
-                  id = oip->id;
-                  if (id > 0) {
-                    for (xref = cds->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
-                    if (xref != NULL) {
-                      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
-                      if (oip != NULL) {
-                        if (oip->str != NULL) {
-                          oip->str = MemFree (oip->str);
-                        }
-                        oip->id = id;
-                      }
-                    } else {
-                      xref = SeqFeatXrefNew ();
-                      if (xref != NULL) {
-                        oip = ObjectIdNew ();
-                        if (oip != NULL) {
-                          oip->id = id;
-                          xref->id.choice = 3;
-                          xref->id.value.ptrvalue = (Pointer) oip;
-                          xref->next = cds->xref;
-                          cds->xref = xref;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+          if (bssp->_class == BioseqseqSet_class_nuc_prot) {
+			prot = NULL;
+			if (VisitBioseqsInSet (bssp, (Pointer) &prot, FindProtBsp) == 2) {
+			  for (sip = prot->id; sip != NULL; sip = sip->next) {
+				MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1);
+	
+				/* binary search */
+	
+				L = 0;
+				R = numcds - 1;
+				while (L < R) {
+				  mid = (L + R) / 2;
+				  odp = cdsarray [mid];
+				  compare = StringCmp (odp->revstr, buf);
+				  if (compare < 0) {
+					L = mid + 1;
+				  } else {
+					R = mid;
+				  }
+				}
+				odp = cdsarray [R];
+				if (odp != NULL && StringCmp (odp->revstr, buf) == 0) {
+				  cds = odp->sfp;
+				  if (cds == NULL) continue;
+	
+				  /* make reciprocal feature ID xrefs */
+	
+				  if (cds->id.choice == 3) {
+					oip = (ObjectIdPtr) cds->id.value.ptrvalue;
+					if (oip != NULL && oip->str == NULL) {
+					  id = oip->id;
+					  if (id > 0) {
+						for (xref = mrna->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+						if (xref != NULL) {
+						  oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+						  if (oip != NULL) {
+							if (oip->str != NULL) {
+							  oip->str = MemFree (oip->str);
+							}
+							oip->id = id;
+						  }
+						} else {
+						  xref = SeqFeatXrefNew ();
+						  if (xref != NULL) {
+							oip = ObjectIdNew ();
+							if (oip != NULL) {
+							  oip->id = id;
+							  xref->id.choice = 3;
+							  xref->id.value.ptrvalue = (Pointer) oip;
+							  xref->next = mrna->xref;
+							  mrna->xref = xref;
+							}
+						  }
+						}
+					  }
+					}
+				  }
+	
+				  if (mrna->id.choice == 3) {
+					oip = (ObjectIdPtr) mrna->id.value.ptrvalue;
+					if (oip != NULL && oip->str == NULL) {
+					  id = oip->id;
+					  if (id > 0) {
+						for (xref = cds->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+						if (xref != NULL) {
+						  oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+						  if (oip != NULL) {
+							if (oip->str != NULL) {
+							  oip->str = MemFree (oip->str);
+							}
+							oip->id = id;
+						  }
+						} else {
+						  xref = SeqFeatXrefNew ();
+						  if (xref != NULL) {
+							oip = ObjectIdNew ();
+							if (oip != NULL) {
+							  oip->id = id;
+							  xref->id.choice = 3;
+							  xref->id.value.ptrvalue = (Pointer) oip;
+							  xref->next = cds->xref;
+							  cds->xref = xref;
+							}
+						  }
+						}
+					  }
+					}
+				  }
+				}
+			  }
+			}
           }
         }
+        BioseqUnlock (cdna);
       }
     }
 
@@ -626,7 +860,7 @@ NLM_EXTERN void LinkCDSmRNAbyProduct (
 )
 
 {
-  AssignCDSmRNAfeatureIDs (sep);
+  AssignFeatureIDs (sep);
   VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyProduct);
 }
 

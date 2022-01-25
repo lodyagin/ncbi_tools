@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_LBSMD__H
 #define CONNECT___NCBI_LBSMD__H
 
-/*  $Id: ncbi_lbsmd.h,v 6.10 2005/05/04 16:17:32 lavr Exp $
+/*  $Id: ncbi_lbsmd.h,v 6.13 2006/03/06 20:40:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
  */
 
 #include "ncbi_servicep.h"
+#include <connect/ncbi_heapmgr.h>
 
 
 #ifdef __cplusplus
@@ -44,18 +45,39 @@ extern "C" {
 
 const SSERV_VTable* SERV_LBSMD_Open(SERV_ITER    iter,
                                     SSERV_Info** info,
-                                    HOST_INFO*   host_info);
+                                    HOST_INFO*   host_info,
+                                    int/*bool*/  dispd_to_follow);
 
 
 /* Get configuration file name. Returned '\0'-terminated string
  * is to be free()'d by a caller when no longer needed.
  * Return NULL if no configuration file name is available.
+ * LBSMD_KeepHeapAttached() was set to eOff and there is a cached copy
+ * of LBSM heap kept in-core, it will be released by this call.
  */
-extern NCBI_XCONNECT_EXPORT char* LBSMD_GetConfig(void);
+extern NCBI_XCONNECT_EXPORT const char* LBSMD_GetConfig(void);
 
 
+/* Get (perhaps cached) copy of LBSM heap, which is guaranteed to be
+ * current for given time "time".  If "time" passed as 0, current time
+ * of the day is assumed.  Return NULL if the copy operation cannot
+ * be performed (due to various reasons, including the original
+ * LBSM shmem to be obsolete).
+ * Returned heap (if non-NULL) has a serial number reflecting which
+ * shmem segment has been used to get the snapshot.  The serial number
+ * is negated for older heap structure, which has no dedicated version
+ * entry format (SLBSM_OldEntry is used instead), and has TTLs for entries
+ * instead of expiration times.  The returned copy must be passed to
+ * (MT-locked by the caller) HEAP_Destroy() when no longer needed.
+ * The copy can be cached in-core, the only way to release it is to
+ * call LBSMD_GetConfig() provided that LBSM_KeepHeapAttached() has
+ * been set to eOff (which is the default setting).
+ */
+extern NCBI_XCONNECT_EXPORT HEAP LBSMD_GetHeapCopy(TNCBI_Time time);
+
+
+/* Host info getters */
 typedef const void* LBSM_HINFO;
-
 
 int LBSM_HINFO_CpuCount(LBSM_HINFO hinfo);
 
@@ -69,9 +91,6 @@ int/*bool*/ LBSM_HINFO_LoadAverage(LBSM_HINFO hinfo, double lavg[2]);
 int/*bool*/ LBSM_HINFO_Status(LBSM_HINFO hinfo, double status[2]);
 
 
-int/*bool*/ LBSM_HINFO_BLASTParams(LBSM_HINFO hinfo, unsigned int blast[8]);
-
-
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
@@ -80,6 +99,15 @@ int/*bool*/ LBSM_HINFO_BLASTParams(LBSM_HINFO hinfo, unsigned int blast[8]);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_lbsmd.h,v $
+ * Revision 6.13  2006/03/06 20:40:14  lavr
+ * Added NCBI_XCONNECT_EXPORT attribute to LBSMD_GetHeapCopy()
+ *
+ * Revision 6.12  2006/03/06 20:27:49  lavr
+ * Comments
+ *
+ * Revision 6.11  2006/03/05 17:43:52  lavr
+ * Private API changes; cached HEAP copy; BLAST counters dropped
+ *
  * Revision 6.10  2005/05/04 16:17:32  lavr
  * +<connect/ncbi_service_misc.h>, +LBSMD_GetConfig(), +LBSM_KeepHeapAttached()
  * LBSM_UnLBSMD() added in potential heap detaching places

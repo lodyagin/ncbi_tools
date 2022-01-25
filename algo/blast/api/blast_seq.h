@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.27 2005/09/20 00:04:02 camacho Exp $
+/* $Id: blast_seq.h,v 1.28 2006/04/20 15:33:33 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,14 @@ extern "C" {
  *
  * @{
  */
+
+/** Detect duplicate IDs within a list of query sequences
+ * @param query_seqlocs The list of query sequences [in]
+ * @return TRUE if two or more sequences have duplicate IDs,
+ *          FALSE if all IDs are unique
+ */
+Boolean
+BlastSeqlocsHaveDuplicateIDs(SeqLoc* query_seqlocs);
 
 /** Convert a BlastMaskLoc list to a list of SeqLocs, used for formatting 
  * BLAST results.

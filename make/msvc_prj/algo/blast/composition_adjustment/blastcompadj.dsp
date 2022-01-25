@@ -84,6 +84,10 @@ SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\redo_alignment.c
 
 SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\smith_waterman.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\unified_pvalues.c
+# End Source File
 # End Group
 # Begin Group "Header Files"
 
@@ -123,6 +127,10 @@ SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\redo_alignment.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\smith_waterman.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\composition_adjustment\unified_pvalues.h
 # End Source File
 # End Group
 # End Target

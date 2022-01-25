@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE_MISC__H
 #define CONNECT___NCBI_SERVICE_MISC__H
 
-/*  $Id: ncbi_service_misc.h,v 1.3 2006/01/17 20:17:15 lavr Exp $
+/*  $Id: ncbi_service_misc.h,v 1.6 2006/04/19 14:44:28 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,16 +48,23 @@ extern "C" {
 #endif
 
 
-/* Set default behavior of keeping attached/detaching LBSM heap
- * (if has been attached) upon service iterator closure.
+/* ATTENTION:  NEVER EVER USE THIS CALL
+ *
+ * Current implememtation does pretty good shmem caching, so this call becomes
+ * rather specific and fits only for some special occasions like CAF module.
+ * Is sets default behavior of either keeping attached or detaching LBSM heap
+ * (if it has been attached) upon service iterator closure.
  * By default, on SERV_Close() the heap gets detached, but this may not be
  * desirable in a long-run applications that use service iterators intensively,
- * and would like to avoid rapid successtions of attaching/detaching.
+ * and would like to avoid rapid successions of attaching/detaching.
  * The function returns a setting that has been previously in effect.
  * OnOff == eDefault has no effect but returns the current setting.
+ *
+ * And again:
+ * ATTENTION:  NEVER EVER USE THIS CALL
  */
-
-extern NCBI_XCONNECT_EXPORT ESwitch LBSM_KeepHeapAttached(ESwitch OnOff);
+extern NCBI_XCONNECT_EXPORT
+ESwitch LBSMD_KeepHeapAttached(ESwitch OnOff);
 
 
 #ifdef __cplusplus
@@ -71,6 +78,15 @@ extern NCBI_XCONNECT_EXPORT ESwitch LBSM_KeepHeapAttached(ESwitch OnOff);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_misc.h,v $
+ * Revision 1.6  2006/04/19 14:44:28  lavr
+ * Retire deprecated deprecated LBSM_KeepHeapAttached()
+ *
+ * Revision 1.5  2006/03/16 19:02:08  lavr
+ * Scream about LBSMD_KeepHeapAttached
+ *
+ * Revision 1.4  2006/03/05 17:34:25  lavr
+ * LBSM_KeepHeapAttached -> LBSMD_KeepHeapAttached
+ *
  * Revision 1.3  2006/01/17 20:17:15  lavr
  * DISP_SetMessageHook() moved from ncbi_service_misc.h to
  * ncbi_http_connector.h and renamed to HTTP_SetNcbiMessageHook()

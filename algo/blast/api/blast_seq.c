@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.75 2006/01/19 18:43:32 madden Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.83 2006/05/04 15:53:12 camacho Exp $";
 /*
 * ===========================================================================
 *
@@ -32,6 +32,7 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.75 2006/01/19 18:43:32 madden 
 #include <seqport.h>
 #include <sequtil.h>
 #include <objloc.h>
+#include <readdb.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
@@ -43,6 +44,68 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.75 2006/01/19 18:43:32 madden 
  *
  * @{
  */
+
+
+/** Structure used for hash-based comparison of sequence IDs */
+typedef struct SeqIdHash {
+    SeqId *id;           /**< The ID of this entry */
+    Int4 query_index;    /**< index of query with this ID */
+    Int4 next_id;        /**< Offset of the next hash entry in a chain */
+} SeqIdHash;
+
+Boolean
+BlastSeqlocsHaveDuplicateIDs(SeqLoc* query_seqlocs)
+{
+   Boolean retval = FALSE;
+   const Int4 kNumSeqs = ValNodeLen(query_seqlocs);
+   const Int4 kLog2HashSize = 11;
+   SeqIdHash *id_entries;
+   Uint4 *hashtable;
+   Int4 curr_id_num;
+   SeqLocPtr slp;
+
+   if (kNumSeqs == 1)
+      return FALSE;
+
+   /* allocate hashtable */
+   hashtable = (Uint4 *)calloc(1 << kLog2HashSize, sizeof(Uint4));
+   id_entries = (SeqIdHash *)malloc((kNumSeqs + 1) * sizeof(SeqIdHash));
+
+   for (slp = query_seqlocs, curr_id_num = 1; slp; slp = slp->next) {
+
+       Uint4 hashval;
+       SeqIdPtr id = SeqLocId(slp);
+       Char buffer[64];
+
+       /* hash the ID of the next query sequence */
+       SeqIdLabel(id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
+       hashval = readdb_sequence_hash(buffer, strlen(buffer));
+       hashval = hashval >> (32 - kLog2HashSize);
+       if (hashtable[hashval] != 0) {
+          Int4 offset = hashtable[hashval];
+          /* check the chain of ID's in the resulting hash
+             entry for a duplicate */
+          while (offset != 0) {
+             SeqIdHash *curr_entry = id_entries + offset;
+             if (SeqIdMatch(id, curr_entry->id)) {
+                 retval = TRUE;
+                 goto clean_up;
+             }
+             offset = curr_entry->next_id;
+          }
+       }
+
+       /* no duplicate found; add the ID to the hashtable */
+       id_entries[curr_id_num].id = id;
+       id_entries[curr_id_num].next_id = hashtable[hashval];
+       hashtable[hashval] = curr_id_num++;
+   }
+
+clean_up:
+   sfree(hashtable);
+   sfree(id_entries);
+   return retval;
+}
 
 /** Converts a SeqLocPtr to a BlastSeqLoc, used for formatting.
  * @param slp SeqLocPtr to be converted [in]
@@ -79,34 +142,86 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs,
     BlastMaskLoc* retval = NULL;
     Int4 query_index = 0;
     const unsigned int kNumContexts = BLAST_GetNumberOfContexts(program_number);
-    SeqLocPtr current_query_loc = NULL;
+    const Int4 kLog2HashSize = 11;
+    SeqIdHash *id_entries;
+    Uint4 *hashtable;
+    Int4 curr_id_num = 1;
+    SeqLocPtr query_slp, mask_slp;
 
     if (!mask_seqlocs)
         return NULL;
 
     retval = BlastMaskLocNew(kNumSeqs*kNumContexts);
 
-    for (current_query_loc = query_seqlocs, query_index = 0; 
-         current_query_loc; 
-         current_query_loc = current_query_loc->next, query_index++) {
+    /* create hashtable for query IDs */
+    hashtable = (Uint4 *)calloc(1 << kLog2HashSize, sizeof(Uint4));
+    id_entries = (SeqIdHash *)malloc((kNumSeqs + 1) * sizeof(SeqIdHash));
+ 
+    /* add the ID of each query sequence to the hashtable */
+    for (query_slp = query_seqlocs; query_slp; query_slp = query_slp->next) {
+        Uint4 hashval;
+        SeqIdPtr seq_id = SeqLocId(query_slp);
+        Char buffer[64];
+ 
+        SeqIdLabel(seq_id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
+        hashval = readdb_sequence_hash(buffer, strlen(buffer));
+        hashval = hashval >> (32 - kLog2HashSize);
+ 
+        id_entries[curr_id_num].id = seq_id;
+        id_entries[curr_id_num].query_index = query_index++;
+        id_entries[curr_id_num].next_id = hashtable[hashval];
+        hashtable[hashval] = curr_id_num++;
+    }
+
+    /* for each mask location, find the query sequence containing
+       that mask and add to the list of filter locations for
+       that query. Note that this assumes IDs for all query
+       sequences are unique */
+
+    for (mask_slp = mask_seqlocs; mask_slp; mask_slp = mask_slp->next) {
+       SeqLocPtr current_mask = (SeqLocPtr) mask_slp->data.ptrvalue;
+       Uint4 hashval;
+       SeqIdPtr mask_id;
+       Char buffer[64];
+
+       if (current_mask == NULL)
+           continue;
+
+       mask_id = SeqLocId(current_mask);
+       SeqIdLabel(mask_id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
+       hashval = readdb_sequence_hash(buffer, strlen(buffer));
+       hashval = hashval >> (32 - kLog2HashSize);
+
+       /* examine only the query IDs that hash to the same value */
+       if (hashtable[hashval] != 0) {
+          Int4 offset = hashtable[hashval];
+          while (offset != 0) {
+
+             SeqIdHash *q_entry = id_entries + offset;
+
+             if (SeqIdMatch(mask_id, q_entry->id)) {
+                Int4 context_idx = kNumContexts * q_entry->query_index;
+                retval->seqloc_array[context_idx] = 
+                              s_BlastSeqLocFromSeqLoc(current_mask,
+                                         retval->seqloc_array[context_idx]);
+                break;
+             }
+             offset = q_entry->next_id;
+          }
+       }
+    }
+
+    sfree(hashtable);
+    sfree(id_entries);
+
+    /* iterate through the query sequences and compute
+       the complement of the filtering locations for each */
+
+    for (query_slp = query_seqlocs, query_index = 0; 
+         query_slp; 
+         query_slp = query_slp->next, query_index++) {
 
         const int kCtxIndex = kNumContexts * query_index; /* context index */
-        SeqLocPtr mask_slp = NULL;
-
-        for (mask_slp = mask_seqlocs; mask_slp; mask_slp = mask_slp->next)
-        {
-           SeqLocPtr current_mask = (SeqLocPtr) mask_slp->data.ptrvalue;
-           /* If mask is empty, advance to the next link in the mask chain.
-              If mask Seq-id does not match sequence Seq-id, stay with this mask
-              for the next link in the sequence Seq-loc chain. */
-           if (current_mask && 
-               SeqIdMatch(SeqLocId(current_mask), SeqLocId(current_query_loc))) 
-           {
-               retval->seqloc_array[kCtxIndex] = 
-                     s_BlastSeqLocFromSeqLoc(current_mask,
-                                             retval->seqloc_array[kCtxIndex]);
-           }
-        }
          
         if (retval->seqloc_array[kCtxIndex])
         {
@@ -114,13 +229,13 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs,
                 !Blast_QueryIsTranslated(program_number) &&
                 !Blast_ProgramIsPhiBlast(program_number);
             BlastSeqLoc_RestrictToInterval(&retval->seqloc_array[kCtxIndex], 
-                                           SeqLocStart(current_query_loc), 
-                                           SeqLocStop(current_query_loc));
+                                           SeqLocStart(query_slp), 
+                                           SeqLocStop(query_slp));
             if (kIsNa) {
                 /* N.B.: Unlike in the C++ APIs, this logic is only applied to
                  * non-translated nucleotide queries. See comment for
                  * BlastMaskLocDNAToProtein */
-                Uint1 strand = SeqLocStrand(current_query_loc);
+                Uint1 strand = SeqLocStrand(query_slp);
                 if (strand == Seq_strand_minus) {
                     retval->seqloc_array[kCtxIndex+1] = 
                         retval->seqloc_array[kCtxIndex];
@@ -228,20 +343,12 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
  * @param qinfo  Query info structure containing contexts. [in/out]
  * @param index  Index of the context to fill. [in]
  * @param length Length of this context. [in]
- * @param prog   Program type of this search. [in]
  */
 static void
 s_QueryInfoSetContextInfo(BlastQueryInfo*   qinfo,
                           Uint4             index,
-                          Uint4             length,
-                          EBlastProgramType prog)
+                          Uint4             length)
 {
-    qinfo->contexts[index].frame =
-        BLAST_ContextToFrame(prog, index);
-    
-    qinfo->contexts[index].query_index =
-        Blast_GetQueryIndexFromContext(index, prog);
-    
     if (index) {
         Uint4 prev_loc = qinfo->contexts[index-1].query_offset;
         Uint4 prev_len = qinfo->contexts[index-1].query_length;
@@ -250,10 +357,15 @@ s_QueryInfoSetContextInfo(BlastQueryInfo*   qinfo,
         
         qinfo->contexts[index].query_offset = prev_loc + shift;
         qinfo->contexts[index].query_length = length;
+        if (length == 0)
+            qinfo->contexts[index].is_valid = FALSE;
+
     } else {
         /* First context */
         qinfo->contexts[0].query_offset = 0;
         qinfo->contexts[0].query_length = length;
+        if (length == 0)
+            qinfo->contexts[0].is_valid = FALSE;
     }
 }
 
@@ -314,7 +426,7 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
 
          /* Set the unused initial contexts if any */
          for (frame = 0; frame < first_frame; ++frame) {
-             s_QueryInfoSetContextInfo(query_info, index+frame, 0, program);
+             s_QueryInfoSetContextInfo(query_info, index+frame, 0);
          }
          
          for (frame = first_frame; frame <= last_frame; ++frame) {
@@ -323,30 +435,29 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
 
             s_QueryInfoSetContextInfo(query_info,
                                      index+frame,
-                                     protein_length,
-                                     program);
+                                     protein_length);
          }
 
          /* Set the unused trailing contexts if any */
          for (frame = last_frame + 1; frame < num_frames; ++frame) {
-             s_QueryInfoSetContextInfo(query_info, index+frame, 0, program);
+             s_QueryInfoSetContextInfo(query_info, index+frame, 0);
          }
       } else {
          max_length = MAX(max_length, length);
          
          if (is_na) {
             if (strand == Seq_strand_plus) {
-                s_QueryInfoSetContextInfo(query_info, index,   length, program);
-                s_QueryInfoSetContextInfo(query_info, index+1, 0,      program);
+                s_QueryInfoSetContextInfo(query_info, index,   length);
+                s_QueryInfoSetContextInfo(query_info, index+1, 0);
             } else if (strand == Seq_strand_minus) {
-                s_QueryInfoSetContextInfo(query_info, index,   0,      program);
-                s_QueryInfoSetContextInfo(query_info, index+1, length, program);
+                s_QueryInfoSetContextInfo(query_info, index,   0);
+                s_QueryInfoSetContextInfo(query_info, index+1, length);
             } else {
-                s_QueryInfoSetContextInfo(query_info, index,   length, program);
-                s_QueryInfoSetContextInfo(query_info, index+1, length, program);
+                s_QueryInfoSetContextInfo(query_info, index,   length);
+                s_QueryInfoSetContextInfo(query_info, index+1, length);
             }
          } else {
-             s_QueryInfoSetContextInfo(query_info, index, length, program);
+             s_QueryInfoSetContextInfo(query_info, index, length);
          }
       }
    }
@@ -376,8 +487,13 @@ s_SeqLocReadSequence(SeqLocPtr slp, EBlastEncoding encoding, Uint1** buffer)
 
    switch (encoding) {
    case eBlastEncodingProtein: 
-      for (index = 0; index < size; index++) 
-          buffer_var[index] = AMINOACID_TO_NCBISTDAA[buffer_var[index]];
+      for (index = 0; index < size; index++) {
+         Uint1 letter = buffer_var[index];
+         if (letter == 'U' || letter == 'O' || letter == 'J')
+            buffer_var[index] = AMINOACID_TO_NCBISTDAA['X'];
+         else
+            buffer_var[index] = AMINOACID_TO_NCBISTDAA[letter];
+      }
       break;
    case eBlastEncodingNcbi4na:
       for (index = 0; index < size; index++) 
@@ -620,7 +736,6 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
        query_info == NULL || query_blk == NULL)
       return -1;
 
-
    if ((status = s_QueryInfoSetUp(query_slp, program_number, query_info)))
       return status;
 
@@ -646,7 +761,7 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
    /* Do not count the first and last sentinel bytes in the 
       query length */
    if ((status=BlastSetUp_SeqBlkNew(buffer, buffer_length-2, 
-                                    0, query_blk, TRUE)))
+                                    query_blk, TRUE)))
       return status;
 
    if (masking_locs) {
@@ -691,7 +806,7 @@ Int2 BLAST_SetUpSubject(EBlastProgramType program_number,
    /* Initialize the sequence block, saving the sequence buffer in 
       'sequence_start'. */
    if ((status=BlastSetUp_SeqBlkNew(subject_buffer, buffer_length,
-                                    0, subject, TRUE)))
+                                    subject, TRUE)))
       return status;
 
    /* If subject sequence is nucleotide, create compressed sequence buffer

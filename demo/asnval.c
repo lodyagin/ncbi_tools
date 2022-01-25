@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.21 $
+* $Revision: 1.23 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "2.0"
+#define ASNVAL_APP_VER "2.2"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -263,6 +263,7 @@ typedef struct valflags {
   Boolean  farFetchMRNAproducts;
   Boolean  locusTagGeneralMatch;
   Boolean  validateIDSet;
+  Boolean  ignoreExceptions;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
@@ -479,8 +480,10 @@ static void AccnListLookupFarSeqIDs (
   SeqEntrySetScope (oldsep);
 
   if (nonGi) {
-    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE);
   }
+
+  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
 }
 
 static ValNodePtr DoLockFarComponents (
@@ -652,6 +655,7 @@ static void DoValidation (
   vsp->farFetchMRNAproducts = vfp->farFetchMRNAproducts;
   vsp->locusTagGeneralMatch = vfp->locusTagGeneralMatch;
   vsp->validateIDSet = vfp->validateIDSet;
+  vsp->ignoreExceptions = vfp->ignoreExceptions;
 
   if (ofp == NULL && vfp->outfp != NULL) {
     ofp = vfp->outfp;
@@ -1151,18 +1155,19 @@ static void ProcessOneRecord (
 #define Z_argRemoteCDS    11
 #define M_argMatchTag     12
 #define Y_argCheckOld     13
-#define v_argVerbosity    14
-#define a_argType         15
-#define b_argBinary       16
-#define c_argCompressed   17
-#define r_argRemote       18
-#define k_argLocalFetch   19
-#define l_argLockFar      20
-#define G_argGiLookup     21
-#define T_argThreads      22
-#define L_argLogFile      23
-#define S_argSkipCount    24
-#define C_argMaxCount     25
+#define e_argIgnoreExcept 14
+#define v_argVerbosity    15
+#define a_argType         16
+#define b_argBinary       17
+#define c_argCompressed   18
+#define r_argRemote       19
+#define k_argLocalFetch   20
+#define l_argLockFar      21
+#define G_argGiLookup     22
+#define T_argThreads      23
+#define L_argLogFile      24
+#define S_argSkipCount    25
+#define C_argMaxCount     26
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1193,6 +1198,8 @@ Args myargs [] = {
     TRUE, 'M', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Check Against Old IDs", "F", NULL, NULL,
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Ignore Transcription/Translation Exceptions", "F", NULL, NULL,
+    TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Verbosity", "0", "0", "3",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
@@ -1296,6 +1303,7 @@ Int2 Main (void)
   vfd.farFetchMRNAproducts = (Boolean) myargs [Z_argRemoteCDS].intvalue;
   vfd.locusTagGeneralMatch = (Boolean) myargs [M_argMatchTag].intvalue;
   vfd.validateIDSet = (Boolean) myargs [Y_argCheckOld].intvalue;
+  vfd.ignoreExceptions = (Boolean) myargs [e_argIgnoreExcept].intvalue;
 
   vfd.verbosity = (Int2) myargs [v_argVerbosity].intvalue;
 

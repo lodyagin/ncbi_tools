@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.539 $
+* $Revision: 6.541 $
 *
 * File Description: 
 *
@@ -126,7 +126,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "6.15"
+#define SEQ_APP_VER "6.20"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -1941,6 +1941,9 @@ static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit)
               vsp->farIDsInAlignments = TRUE;
             }
           }
+        }
+        if (useEntrez) {
+          LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
         }
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);

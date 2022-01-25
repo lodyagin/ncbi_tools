@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.82 2006/04/26 12:47:48 madden Exp $";
 
-/* $Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo Exp $
+/* $Id: rpsblast.c,v 6.82 2006/04/26 12:47:48 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,21 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.79 $
+* $Revision: 6.82 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.82  2006/04/26 12:47:48  madden
+* Use SBlastMessage in place of Blast_Message
+*
+* Revision 6.81  2006/04/21 14:34:50  madden
+* BLAST_GetQuerySeqLoc prototype change
+*
+* Revision 6.80  2006/04/20 15:32:37  papadopo
+* if query IDs are actually used, verify that there are no duplicate IDs
+*
 * Revision 6.79  2006/01/23 16:44:06  papadopo
 * change signature of FillHitSavingOptions
 *
@@ -298,6 +307,7 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.79 2006/01/23 16:44:06 papadopo
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/blast_seqalign.h>
+#include <algo/blast/api/blast_message_api.h>
 
 #ifdef PURIFY
 #include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
@@ -440,6 +450,7 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    BlastScoringOptions* score_options = options->score_options;
    BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
    BlastDatabaseOptions* db_options = options->db_options;
+   Blast_Message *core_msg = NULL;
 
    BLAST_FillLookupTableOptions(lookup_options, kProgram, 
                                 FALSE, /* megablast */
@@ -490,7 +501,8 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    /* Validate the options. */
    status = BLAST_ValidateOptions(kProgram, ext_options, score_options, 
                                   lookup_options, word_options, hit_options, 
-                                  &sum_returns->error);
+                                  &core_msg);
+   sum_returns->error = Blast_MessageToSBlastMessage(core_msg, NULL, NULL, FALSE);
 
    return status;
 }
@@ -532,7 +544,7 @@ Int2 Main_New(void)
    EBlastProgramType program_number;
    char* dbname = NULL;
    FILE *infp;
-   Int2 ctr = 1;
+   Int4 ctr = 1;
    Int4 query_from = 0, query_to = 0;
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
@@ -541,6 +553,7 @@ Int2 Main_New(void)
    SeqLoc* lcase_mask = NULL;
    const int kMaxConcatLength = 40000;
    Blast_SummaryReturn* full_sum_returns = NULL;
+   Boolean believe_query = (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue;
 
    /* select protein or nucleotide query, and choose
       the appropriate program type */
@@ -561,11 +574,13 @@ Int2 Main_New(void)
    if (status) {
        options = SBlastOptionsFree(options);
        if (sum_returns->error) {
-           Blast_SummaryReturnsPostError(sum_returns);
+           SBlastMessageErrPost(sum_returns->error);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
        }
        return -1;
    }
+
+   SBlastOptionsSetBelieveQuery(options, believe_query);
 
    /* initialize the database and then the RPS_specific data files */
 
@@ -602,7 +617,7 @@ Int2 Main_New(void)
                                    myargs[OPT_NUM_RESULTS].intvalue,
                                    (Boolean) myargs[OPT_HTML].intvalue,
                                    FALSE, (Boolean) myargs[OPT_SHOW_GI].intvalue,
-                                   (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue);
+                                   believe_query);
 
    BLAST_PrintOutputHeader(format_info);
 
@@ -618,18 +633,24 @@ Int2 Main_New(void)
                BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength, 
                                     query_from, query_to, &lcase_mask,
                                     &query_slp, &ctr, &num_queries, 
-                                    myargs[OPT_BELIEVE_QUERY].intvalue, 0);
+                                    believe_query, 0);
        } else {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength,
                                     query_from, query_to, NULL, 
                                     &query_slp, &ctr, &num_queries, 
-                                    myargs[OPT_BELIEVE_QUERY].intvalue, 0);
+                                    believe_query, 0);
        }
        
        if (letters_read <= 0)
            break;
        
+       if (believe_query && BlastSeqlocsHaveDuplicateIDs(query_slp)) {
+          ErrPostEx(SEV_FATAL, 1, 0, 
+                  "Duplicate IDs detected; please ensure that "
+                  "all query sequence identifiers are unique");
+       }
+
        /* Call database search function. Pass NULL for tabular formatting 
         * structure pointer, because on-the-fly tabular formatting is not
         * allowed for RPS BLAST.
@@ -648,7 +669,7 @@ Int2 Main_New(void)
        
        /* Post warning or error messages, no matter what the search status 
           was. */
-       Blast_SummaryReturnsPostError(sum_returns);
+       SBlastMessageErrPost(sum_returns->error);
 
        if (status != 0) {
            ErrPostEx(SEV_FATAL, 1, 0, "BLAST search failed");

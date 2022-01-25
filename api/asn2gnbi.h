@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.61 $
+* $Revision: 1.62 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -705,7 +705,9 @@ NLM_EXTERN Char link_sp [MAX_WWWBUF];
 NLM_EXTERN void FF_www_db_xref(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  CharPtr db, CharPtr identifier
+  CharPtr db,
+  CharPtr identifier,
+  BioseqPtr bsp
 );
 
 NLM_EXTERN Boolean StringIsJustQuotes (

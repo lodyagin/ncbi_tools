@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.23  2006/04/21 17:59:18  kans
+* added ignoreExceptions flag to vsp - for MrnaTransCheck and CdTransCheck
+*
 * Revision 6.22  2006/02/16 19:34:47  kans
 * use vsp->is_smupd_in_sep to suppress ERR_SEQ_FEAT_FeatureRefersToAccession
 *
@@ -233,6 +236,7 @@ typedef struct validstruct {
 	Boolean validateIDSet;         /* look for gain or loss of general IDs on sequence update */
 	Boolean seqSubmitParent;       /* flag from tbl2asn to suppress no pub message */
 	Boolean justShowAccession;     /* extremely terse output with accession and error type */
+	Boolean ignoreExceptions;      /* report translation and transcription problems even if exception set */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 								   /* this section used for finer error reporting callback */
 	ValidErrorFunc errfunc;

@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.213 2006/01/19 16:08:49 beloslyu Exp $
+#	$Id: makenet.unx,v 6.216 2006/05/03 03:37:42 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -386,7 +386,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -515,6 +515,7 @@ copy :
 	$(SRCCOPY) ../demo/elecpcr.c .
 	$(SRCCOPY) ../demo/asn2fast.c .
 	$(SRCCOPY) ../demo/asn2asn.c .
+	$(SRCCOPY) ../demo/cleanasn.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/udvmain.c .
 	$(SRCCOPY) ../demo/rtestval.c .
@@ -991,6 +992,13 @@ tbl2asn : tbl2asn.c
 	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIBCOMPADJ) \
 		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
 
+# tbl2asn_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
+# should be used only internally within NCBI.
+tbl2asn_psf : tbl2asn.c 
+	$(CC) -DINTERNAL_NCBI_TBL2ASN -g -o tbl2asn_psf $(LDFLAGS) tbl2asn.c $(THREAD_OBJ) $(LIB_PS) \
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
+	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
 # gene2xml program (gene2xml)
 gene2xml :	gene2xml.c
 	$(CC) -g -o gene2xml $(LDFLAGS) gene2xml.c $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
@@ -1090,6 +1098,11 @@ asn2fast : asn2fast.c
 
 asn2asn : asn2asn.c
 	$(CC) -o asn2asn $(LDFLAGS) asn2asn.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# demo program (cleanasn)
+
+cleanasn : cleanasn.c
+	$(CC) -o cleanasn $(LDFLAGS) cleanasn.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (fetchent)
 

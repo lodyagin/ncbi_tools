@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.243 $
+* $Revision: 6.246 $
 *
 * File Description: 
 *
@@ -73,6 +73,10 @@ static char *time_of_compilation = "now";
 #include <alignmgr2.h>
 #include <actutils.h>
 #include <tax3api.h>
+#include <algo/blast/api/blast_options_api.h>
+#include <algo/blast/api/blast_seqalign.h>
+#include <algo/blast/api/blast_api.h>
+
 
 #define CONVERT_TO_JOIN  1
 #define CONVERT_TO_ORDER 2
@@ -7870,41 +7874,104 @@ static CharPtr RNAstrand_strings[] =
 { "Plus", "Minus", "Mixed", "No Hits", "Unexpected", "Parse Error", "In Progress" };
 
 
-static BLAST_OptionsBlkPtr
+static void LimitAlignmentResults (SeqAlignPtr salp, Int4 num_results)
+{
+  Int4        k = 0;
+  SeqAlignPtr tmp_salp, last_salp = NULL;
+  
+  while (salp != NULL && k < num_results)
+  {
+    last_salp = salp;
+    salp = salp->next;
+    k++;
+  }
+  if (last_salp != NULL)
+  {
+    last_salp->next = NULL;
+  }
+  while (salp != NULL)
+  {
+    tmp_salp = salp->next;
+    salp->next = NULL;
+    salp = SeqAlignFree (salp);
+    salp = tmp_salp;
+  }
+}
+
+
+static SBlastOptions*
 RNABlastOptionNew(void)
 
 {
-	BLAST_OptionsBlkPtr options;
+	SBlastOptions* options;
+	Int2           rval;
+	Blast_SummaryReturn *extra_returns;
 
 
-	options = BLASTOptionNew("blastn", TRUE);
+  extra_returns = Blast_SummaryReturnNew();
+  rval = SBlastOptionsNew("blastn", &options,
+                          extra_returns);
+
 	if (options == NULL)
 		return NULL;
 
-	options->expect_value = 1;
-	options->filter_string = StringSave("m L");
-	options->mb_template_length = 18;
-	options->mb_disc_type = MB_WORD_CODING;
-	options->wordsize = 11;
-	options->gap_open = 5;
-	options->gap_extend = 2;
-	options->hitlist_size = 20;
-	options->reward = 1;
-	options->penalty = -2;
-	options->multiple_hits_only  = TRUE;
-	options->window_size = 40;
+  /* This replaces:
+   * options->expect_value = 1; 
+   */
+  SBlastOptionsSetEvalue(options, 1);
+
+  /* This replaces:
+   * options->filter_string = StringSave("m L"); 
+   */
+  SBlastOptionsSetFilterString(options, "m L");
+  
+  /* This replaces the following:
+   * options->mb_template_length = 18;
+   * options->mb_disc_type = MB_WORD_CODING; 
+   * options->is_megablast_search = TRUE;
+   * options->discontinuous = TRUE;
+   */
+  SBlastOptionsSetDiscMbParams(options, 18, MB_WORD_CODING);
+
+  /* This replaces:
+   * options->wordsize = 11; \
+   */
+	SBlastOptionsSetWordSize (options, 11);
 	
+  /* This replaces:
+   * options->hitlist_size = 20; 
+   */
+  options->hit_options->hitlist_size = 20;
+  
+  /* This replaces the following:
+   * options->multiple_hits_only  = TRUE;
+   * options->window_size = 40; 
+   */
+  options->word_options->window_size = 40;
+  
+  /* This replaces the following:
+   * options->reward = 1;
+	 * options->penalty = -3;
+	 * options->gap_open = 5;
+	 * options->gap_extend = 2; 
+	 */
+  SBlastOptionsSetRewardPenaltyAndGapCosts(options, 1, -3, 5, 2, FALSE);
+	
+	extra_returns = Blast_SummaryReturnFree(extra_returns);
 	return options;
 }
+
 
 static Int4
 RNAScreenSequence(BioseqPtr bsp, CharPtr database, SeqAlignPtr PNTR seqalign_ptr)
 
 {
-	BLAST_OptionsBlkPtr blast_options;
-	Boolean delete_options = FALSE;
+	SBlastOptions *blast_options;
 	Int2 retval=0;
-	SeqAlignPtr seqalign;
+	SeqAlignPtr seqalign = NULL;
+	SeqLocPtr   slp;
+	SBlastSeqalignArray* seqalign_arr = NULL;
+	Blast_SummaryReturn *extra_returns;
 
 	if (bsp == NULL)
 		return -1;
@@ -7915,21 +7982,38 @@ RNAScreenSequence(BioseqPtr bsp, CharPtr database, SeqAlignPtr PNTR seqalign_ptr
 	blast_options = RNABlastOptionNew();
 	if (blast_options == NULL)
 		return -1;
+	
+	slp = SeqLocWholeNew(bsp);
+	if (database == NULL) 
+	  database = "16Score";
+	
+	extra_returns = Blast_SummaryReturnNew();
 
-	if (database == NULL)
-		seqalign = BioseqBlastEngine(bsp, "blastn", "16Score", blast_options, NULL, NULL, NULL); 
-	else
-		seqalign = BioseqBlastEngine(bsp, "blastn", database, blast_options, NULL, NULL, NULL); 
+  retval = Blast_DatabaseSearch(slp, database, NULL, blast_options, NULL, &seqalign_arr, NULL, extra_returns);
+	extra_returns = Blast_SummaryReturnFree(extra_returns);
+	blast_options = SBlastOptionsFree(blast_options);  
+	
+	if (retval == 0 && seqalign_arr != NULL && seqalign_arr->num_queries >0)
+	{
+	  seqalign = seqalign_arr->array[0];
+	  seqalign_arr->array[0] = NULL;
+	}
+	
+	seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
+	
+	/* limit results to first 20 alignments, as SMART does */
+	LimitAlignmentResults (seqalign, 20);	
+	
 	if (seqalign)
 	{
 		if (seqalign_ptr)
 			*seqalign_ptr = seqalign;
-	}
+	}	
 
-	blast_options = BLASTOptionDelete(blast_options);
 
 	return retval;
 }
+
 
 typedef struct rnastrandcollection
 {
@@ -9145,5 +9229,109 @@ extern void ParseCollectionDateMonthFirst (IteM i)
 extern void ParseCollectionDateDayFirst (IteM i)
 {
   ParseCollectionDate (i, FALSE);
+}
+
+
+static CharPtr GetIDStringForSeqEntry (SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp = NULL;
+  SeqIdPtr     sip = NULL;
+  Char         id_txt [100];
+  
+  if (sep == NULL || sep->data.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  
+  if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp->_class == BioseqseqSet_class_nuc_prot
+        || bssp->_class == BioseqseqSet_class_segset)
+    {
+      sep = bssp->seq_set;
+      while (sep != NULL && (IS_Bioseq_set (sep) || sep->data.ptrvalue == NULL))
+      {
+        sep = sep->next;
+      }
+      if (sep != NULL)
+      {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+      }
+    }
+  }
+  else if (IS_Bioseq(sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+  }
+  if (bsp == NULL) return NULL;
+  sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+  if (sip == NULL) return NULL;
+  
+  SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+  return StringSave (id_txt);
+}
+
+
+static int LIBCALLBACK SortSeqEntryByIDStr (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  CharPtr     str1;
+  CharPtr     str2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  int         rval = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      str1 = GetIDStringForSeqEntry (vnp1);
+      str2 = GetIDStringForSeqEntry (vnp2);
+      if (str1 != NULL && str2 != NULL) {
+        rval = StringICmp (str1, str2);
+      }
+      str1 = MemFree (str1);
+      str2 = MemFree (str2);
+    }
+  }
+  return rval;
+}
+
+
+extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data)
+{
+  BioseqSetPtr      bssp;
+  OMProcControlPtr  ompcp;
+  ObjMgrDataPtr     omdptop;
+  ObjMgrData        omdata;
+  Uint2             parenttype;
+  Pointer           parentptr;
+  SeqEntryPtr       sep;
+
+  /* Check parameters and get a pointer to the current data */
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL)
+    return OM_MSG_RET_ERROR;
+
+  if (ompcp->input_itemtype != OBJ_BIOSEQSET || ompcp->input_data == NULL) {
+    Message (MSG_ERROR, "Must select Bioseq Set!");
+    return OM_MSG_RET_ERROR;
+  }
+  
+  bssp = (BioseqSetPtr) ompcp->input_data;
+  sep = SeqMgrGetSeqEntryForData (bssp);
+  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
+  GetSeqEntryParent (sep, &parentptr, &parenttype);  
+
+  bssp->seq_set = ValNodeSort (bssp->seq_set, SortSeqEntryByIDStr);
+  
+  
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata); 
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);  
 }
 

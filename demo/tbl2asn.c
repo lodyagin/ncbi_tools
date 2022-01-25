@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.143 $
+* $Revision: 6.149 $
 *
 * File Description: 
 *
@@ -63,8 +63,11 @@
 #include <util/creaders/alnread.h>
 #include <pmfapi.h>
 #include <tax3api.h>
+#ifdef INTERNAL_NCBI_TBL2ASN
+#include <accpubseq.h>
+#endif
 
-#define TBL2ASN_APP_VER "5.5"
+#define TBL2ASN_APP_VER "5.9"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -76,6 +79,8 @@ typedef struct tblargs {
   Boolean  gapped;
   Boolean  phrapace;
   Boolean  genprodset;
+  Boolean  makelinks;
+  Boolean  implicitgaps;
   Boolean  forcelocalid;
   Boolean  gpstonps;
   Boolean  gnltonote;
@@ -2448,6 +2453,26 @@ static SeqEntryPtr FA2SEP (
   return NULL;
 }
 
+static SeqEntryPtr MakeUnk100GapSep (void)
+
+{
+  BioseqPtr    bsp;
+  SeqEntryPtr  sep;
+
+  sep = SeqEntryNew ();
+  if (sep == NULL) return NULL;
+  bsp = BioseqNew ();
+  if (bsp == NULL) return NULL;
+  bsp->repr = Seq_repr_virtual;
+  bsp->mol = Seq_mol_na;
+  bsp->length = 100;
+  bsp->id = SeqIdParse ("lcl|unk100");
+  sep->choice = 1;
+  sep->data.ptrvalue = bsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+  return sep;
+}
+
 static Uint2 ProcessDeltaSet (
   FILE* fp,
   BioSourcePtr src,
@@ -2461,7 +2486,7 @@ static Uint2 ProcessDeltaSet (
   BioseqPtr      bsp, deltabsp;
   BioseqSetPtr   bssp;
   Uint2          entityID;
-  SeqEntryPtr    firstsep, lastsep, nextsep, sep, topsep;
+  SeqEntryPtr    firstsep, lastsep, nextsep, sep, tmp, topsep;
   IntFuzzPtr     ifp;
   Boolean        is_unk100;
   ObjectIdPtr    oip;
@@ -2490,6 +2515,13 @@ static Uint2 ProcessDeltaSet (
   while (sep != NULL) {
     if (firstsep == NULL) {
       firstsep = sep;
+    }
+    if (tbl->implicitgaps && lastsep != NULL) {
+      tmp = MakeUnk100GapSep ();
+      if (tmp != NULL) {
+        ValNodeLink (&lastsep, tmp);
+        lastsep = tmp;
+      }
     }
     if (lastsep != NULL) {
       ValNodeLink (&lastsep, sep);
@@ -4030,14 +4062,11 @@ static void MakeGenomeCenterID (
   center = (CharPtr) userdata;
   if (StringHasNoText (center)) return;
 
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice != SEQID_LOCAL) continue;
-    oip = (ObjectIdPtr) sip->data.ptrvalue;
-    if (oip == NULL) continue;
-    if (StringDoesHaveText (oip->str)) {
-      accn = oip->str;
-    }
-  }
+  for (sip = bsp->id; sip != NULL && sip->choice != SEQID_LOCAL; sip = sip->next) continue;
+  if (sip == NULL) return;
+  oip = (ObjectIdPtr) sip->data.ptrvalue;
+  if (oip == NULL) return;
+  accn = oip->str;
   if (StringHasNoText (accn)) return;
 
   dbt = DbtagNew ();
@@ -4048,7 +4077,12 @@ static void MakeGenomeCenterID (
   dbt->db = StringSave (center);
   dbt->tag = oip;
 
+  sip->data.ptrvalue = ObjectIdFree ((ObjectIdPtr) sip->data.ptrvalue);
+  sip->data.ptrvalue = (Pointer) dbt;
+  sip->choice = SEQID_GENERAL;
+  /*
   ValNodeAddPointer (&(bsp->id), SEQID_GENERAL, (Pointer) dbt);
+  */
   SeqMgrReplaceInBioseqIndex (bsp);
 }
 
@@ -4454,6 +4488,9 @@ static void ProcessOneRecord (
     /*
     SeriousSeqEntryCleanup (sep, NULL, NULL);
     */
+    if (tbl->makelinks) {
+      LinkCDSmRNAbyProduct (sep);
+    }
     if (StringHasNoText (results)) {
       results = directory;
     }
@@ -4891,45 +4928,47 @@ static CharPtr ReadCommentFile (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath    0
-#define r_argOutputPath   1
-#define i_argInputFile    2
-#define o_argOutputFile   3
-#define x_argSuffix       4
-#define t_argTemplate     5
-#define s_argFastaSet     6
-#define w_argWhichClass   7
-#define d_argDeltaSet     8
-#define l_argAlignment    9
-#define z_argGapped      10
-#define e_argPhrapAce    11
-#define g_argGenProdSet  12
-#define a_argAccession   13
-#define C_argCenter      14
-#define n_argOrgName     15
-#define j_argSrcQuals    16
-#define y_argComment     17
-#define Y_argCommentFile 18
-#define c_argFindOrf     19
-#define m_argAltStart    20
-#define k_argConflict    21
-#define v_argValidate    22
-#define b_argGenBank     23
-#define q_argFileID      24
-#define u_argUndoGPS     25
-#define h_argGnlToNote   26
-#define B_argBegGap      27
-#define E_argEndGap      28
-#define G_argMidGap      29
-#define X_argMissing     30
-#define M_argMatch       31
-#define P_argIsProt      32
-#define R_argRemote      33
-#define S_argSmartFeats  34
-#define Q_argSmartTitle  35
-#define U_argUnnecXref   36
-#define L_argLocalID     37
-#define T_argTaxLookup   38
+#define p_argInputPath      0
+#define r_argOutputPath     1
+#define i_argInputFile      2
+#define o_argOutputFile     3
+#define x_argSuffix         4
+#define t_argTemplate       5
+#define s_argFastaSet       6
+#define w_argWhichClass     7
+#define d_argDeltaSet       8
+#define l_argAlignment      9
+#define z_argGapped        10
+#define e_argPhrapAce      11
+#define g_argGenProdSet    12
+#define F_argFeatIdLinks   13
+#define H_argImplicitGaps  14
+#define a_argAccession     15
+#define C_argCenter        16
+#define n_argOrgName       17
+#define j_argSrcQuals      18
+#define y_argComment       19
+#define Y_argCommentFile   20
+#define c_argFindOrf       21
+#define m_argAltStart      22
+#define k_argConflict      23
+#define v_argValidate      24
+#define b_argGenBank       25
+#define q_argFileID        26
+#define u_argUndoGPS       27
+#define h_argGnlToNote     28
+#define B_argBegGap        29
+#define E_argEndGap        30
+#define G_argMidGap        31
+#define X_argMissing       32
+#define M_argMatch         33
+#define P_argIsProt        34
+#define R_argRemote        35
+#define S_argSmartFeats    36
+#define Q_argSmartTitle    37
+#define U_argUnnecXref     38
+#define L_argLocalID       39
+#define T_argTaxLookup     40
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
@@ -4958,6 +4997,10 @@ Args myargs [] = {
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Genomic Product Set", "F", NULL, NULL,
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Feature ID Links", "F", NULL, NULL,
+    TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Implicit Gaps", "F", NULL, NULL,
+    TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Genome center tag", NULL, NULL, NULL,
@@ -5092,6 +5135,10 @@ Int2 Main (void)
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
 
+  if (StringHasNoText(directory) && StringHasNoText(base)) {
+    Message (MSG_FATAL, "You must supply either an input file (-i) or an input directory (-p).\nUse -p . to specify the current directory.\n\n");
+    return 1;
+  }
   remote = (Boolean) myargs [R_argRemote].intvalue;
 
   tbl.fastaset = (Boolean) myargs [s_argFastaSet].intvalue;
@@ -5101,6 +5148,8 @@ Int2 Main (void)
   tbl.gapped = (Boolean) myargs [z_argGapped].intvalue;
   tbl.phrapace = (Boolean) myargs [e_argPhrapAce].intvalue;
   tbl.genprodset = (Boolean) myargs [g_argGenProdSet].intvalue;
+  tbl.makelinks = (Boolean) myargs [F_argFeatIdLinks].intvalue;
+  tbl.implicitgaps = (Boolean) myargs [H_argImplicitGaps].intvalue;
   tbl.forcelocalid = (Boolean) myargs [L_argLocalID].intvalue;
   tbl.gpstonps = (Boolean) myargs [u_argUndoGPS].intvalue;
   tbl.gnltonote = (Boolean) myargs [h_argGnlToNote].intvalue;
@@ -5258,7 +5307,14 @@ Int2 Main (void)
   /* register fetch function */
 
   if (remote) {
+#ifdef INTERNAL_NCBI_TBL2ASN
+    if (! PUBSEQBioseqFetchEnable ("tbl2asn", FALSE)) {
+      Message (MSG_POSTERR, "PUBSEQBioseqFetchEnable failed");
+      return 1;
+    }
+#else
     PubSeqFetchEnable ();
+#endif
   }
 
   /* process one or more records */
@@ -5309,7 +5365,11 @@ Int2 Main (void)
   /* close fetch function */
 
   if (remote) {
+#ifdef INTERNAL_NCBI_TBL2ASN
+    PUBSEQBioseqFetchDisable ();
+#else
     PubSeqFetchDisable ();
+#endif
   }
 
   return 0;

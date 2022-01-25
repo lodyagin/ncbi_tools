@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.59 $
+* $Revision: 6.60 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.60  2006/04/13 20:02:15  kans
+* LookupFarSeqIDs takes inference parameter
+*
 * Revision 6.59  2006/02/16 20:24:32  kans
 * added bad_order and mixed_strand fields to feature index - to be used for get best gene overlap function in cases of trans-splicing
 *
@@ -316,7 +319,7 @@ typedef BioseqPtr (LIBCALLBACK * BSFetchTop)
 
 typedef BioseqPtr (LIBCALLBACK * BSFetch) PROTO((SeqIdPtr sip, Pointer data));
 
-typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history, Boolean others);
+typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history, Boolean inference, Boolean others);
 typedef Int4 (LIBCALLBACK * SeqLenLookupFunc) (Int4 gi);
 typedef CharPtr (LIBCALLBACK * AccnVerLookupFunc) (Int4 gi);
 typedef SeqIdPtr (LIBCALLBACK * SeqIdSetLookupFunc) (Int4 gi);
@@ -1118,6 +1121,7 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
   Boolean products,
   Boolean alignments,
   Boolean history,
+  Boolean inference,
   Boolean others
 );
 

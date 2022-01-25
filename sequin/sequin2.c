@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.586 $
+* $Revision: 6.589 $
 *
 * File Description: 
 *
@@ -88,6 +88,7 @@ static ENUM_ALIST(biomol_nucX_alist)
   {"Other-Genetic",            9},
   {"cRNA",                    11},
   {"Small nucleolar RNA",     12},
+  {"Transcribed RNA",         13},  
 END_ENUM_ALIST
 
 static ENUM_ALIST(biomol_nucGen_alist)
@@ -1528,14 +1529,14 @@ static Int4 MolTypeFromString (CharPtr str)
   }
   for (eap = biomol_nucGen_alist; eap != NULL && eap->name != NULL; eap++)
   {
-    if (StringICmp (eap->name, str) == 0)
+    if (StringsAreEquivalent (eap->name, str))
     {
       return eap->value;
     }
   }
   for (eap = biomol_nucX_alist; eap != NULL && eap->name != NULL; eap++)
   {
-    if (StringICmp (eap->name, str) == 0)
+    if (StringsAreEquivalent (eap->name, str))
     {
       return eap->value;
     }
@@ -26736,6 +26737,39 @@ static void RemoveTaxRef (OrgRefPtr orp)
       prev = (ValNodePtr PNTR) &(vnp->next);
     }
     vnp = next;
+  }
+  
+}
+
+extern void RemoveOldName (OrgRefPtr orp)
+{
+  OrgModPtr prev = NULL, curr, next_mod;
+  
+  if (orp == NULL || orp->orgname == NULL) return;
+  
+  curr = orp->orgname->mod;
+  while (curr != NULL)
+  {
+    next_mod = curr->next;
+    if (curr->subtype == ORGMOD_old_name)
+    {
+      if (prev == NULL)
+      {
+        orp->orgname->mod = curr->next;
+      }
+      else
+      {
+        prev->next = curr->next;
+      }
+      curr->next = NULL;
+      OrgModFree (curr);
+    }
+    else
+    {
+      prev = curr;
+    }
+    
+    curr = next_mod;
   }
   
 }

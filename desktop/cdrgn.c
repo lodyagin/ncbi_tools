@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.87 $
+* $Revision: 6.90 $
 *
 * File Description: 
 *
@@ -1765,9 +1765,11 @@ static void CreateCodeBreakAlist (CdRgnPagePtr cpp)
       cpp->alist [j].value = (UIEnum) 0;
       j++;
       for (i = 65; i <= last; i++) {
+        /*
         if (i == 74 || i == 79) {
           continue;
         }
+        */
         ch = GetSymbolForResidue (sctp, i);
         str = (CharPtr) GetNameForResidue (sctp, i);
         cpp->alist [j].name = StringSave (str);
@@ -3903,7 +3905,6 @@ static void GeneRefPtrToGenePage (DialoG d, Pointer data)
       SafeSetTitle (gpp->desc, grp->desc);
       SafeSetTitle (gpp->maploc, grp->maploc);
       SafeSetTitle (gpp->locus_tag, grp->locus_tag);
-      SafeSetStatus (gpp->pseudo, grp->pseudo);
       PointerToDialog (gpp->db, grp->db);
       PointerToDialog (gpp->syn, grp->syn);
     } else {
@@ -3912,7 +3913,6 @@ static void GeneRefPtrToGenePage (DialoG d, Pointer data)
       SafeSetTitle (gpp->desc, "");
       SafeSetTitle (gpp->maploc, "");
       SafeSetTitle (gpp->locus_tag, "");
-      SafeSetStatus (gpp->pseudo, FALSE);
       PointerToDialog (gpp->db, NULL);
       PointerToDialog (gpp->syn, NULL);
     }
@@ -3935,7 +3935,6 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
       grp->desc = SaveStringFromText (gpp->desc);
       grp->maploc = SaveStringFromText (gpp->maploc);
       grp->locus_tag = SaveStringFromText (gpp->locus_tag);
-      grp->pseudo = GetStatus (gpp->pseudo);
       grp->db = DialogToPointer (gpp->db);
       grp->syn = DialogToPointer (gpp->syn);
     }
@@ -4082,8 +4081,6 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneForm
     StaticPrompt (f, "Locus Tag", 0, dialogTextHeight, programFont, 'l');
     gpp->locus_tag = DialogText (f, "", 15, NULL);
 
-    gpp->pseudo = CheckBox (gpp->geneGrp [x], "PseudoGene", NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) f, (HANDLE) gpp->pseudo, NULL);
     x++;
 
     gpp->geneGrp [x] = HiddenGroup (k, -1, 0, NULL);
@@ -5345,8 +5342,9 @@ static void UserObjectPtrToProtein (DialoG d, Pointer data)
   ValNode        vn;
 
   mup = (MrnaUserPtr) GetObjectExtra (d);
-  uop = (UserObjectPtr) data;
+  /* uop = (UserObjectPtr) data; */
   if (mup != NULL) {
+    uop = FindUopByTag ((UserObjectPtr) data, "MrnaProteinLink");
     if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
       ufp = uop->data;
       if (ufp != NULL && ufp->choice == 1) {
@@ -5491,6 +5489,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
               }
             }
             if (aa > 0 && aa != 255) {
+              /*
               if (aa <= 74) {
                 shift = 0;
               } else if (aa > 79) {
@@ -5498,6 +5497,8 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
               } else {
                 shift = 1;
               }
+              */
+              shift = 0;
               if (aa != '*') {
                 i = aa - (64 + shift);
               } else {
@@ -5632,13 +5633,16 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
             i = GetValue (rpp->AAitem) - 1;
             if (i > 0) {
               trna->aatype = 2;
+              /*
               if (i < 10) {
                 shift = 0;
               } else if (i > 13) {
                 shift = 2;
               } else {
                 shift = 1;
-              } 
+              }
+              */
+              shift = 0;
               trna->aa = (Uint1) i + 64 + shift;
               if (trna->aa == 91) {
                 trna->aa = (Uint1) '*';
@@ -5852,9 +5856,11 @@ static void PopulateAAPopup (PopuP AAitem)
   last = LastResidueInCode (sctp);
   PopupItem (AAitem, " ");
   for (i = 65; i <= last; i++) {
+    /*
     if (i == 74 || i == 79) {
       continue;
     }
+    */
     ch = GetSymbolForResidue (sctp, i);
     str = (CharPtr) GetNameForResidue (sctp, i);
     sprintf (item, "%c    %s", ch, str);

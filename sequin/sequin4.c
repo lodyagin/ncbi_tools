@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.341 $
+* $Revision: 6.351 $
 *
 * File Description: 
 *
@@ -125,6 +125,8 @@ static Int2 LIBCALLBACK CopyMasterSourceToSegments (Pointer data);
 #define REGISTER_SEGREGATE_BY_DESCRIPTOR ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Descriptor","SegregateByDescriptor",0,0,0,0,NULL,CreateSegregateByDescriptorWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_SEGREGATE_BY_MOLECULE_TYPE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Molecule Type","SegregateByMoleculeType",0,0,0,0,NULL,CreateSegregateByMoleculeTypeWindow,PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_REORDER_BY_ID ObjMgrProcLoadEx (OMPROC_FILTER, "Reorder by ID","ReorderByID",0,0,0,0,NULL,ReorderSetByAccession,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_CONVERTSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Convert SeqAlign","ConvertSeqAlign",0,0,0,0,NULL,ConvertToTrueMultipleAlignment,PROC_PRIORITY_DEFAULT, "Alignment")
 
@@ -5169,6 +5171,9 @@ static Int2 CreateOneAlignment
     ValidateSeqAlign (salp_mult, entityID, TRUE, FALSE, TRUE, FALSE, FALSE, &dirty);
     SeqAlignSetFree(salp_head);
     
+    /* index multiple alignment */
+    AlnMgr2IndexSeqAlignEx(salp_mult, FALSE);
+    
     /* break up alignment if it covers gaps of unknown length */
     salp_mult = MakeDiscontiguousAlignments (salp_mult);
     
@@ -7707,7 +7712,7 @@ static Int2 LIBCALLBACK AlignGiToAccnProc (Pointer data)
   ans = Message (MSG_OKC, "Are you sure you want to convert alignment GIs to accessions?");
   if (ans == ANS_CANCEL) return OM_MSG_RET_DONE;
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE);
+  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE);
   MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   gs.seglevels = 1;
   gs.get_feats_location = FALSE;
@@ -7801,7 +7806,7 @@ static Int2 LIBCALLBACK AlignAccnToGiProc (Pointer data)
   ans = Message (MSG_OKC, "Are you sure you want to convert alignment accessions to GIs?");
   if (ans == ANS_CANCEL) return OM_MSG_RET_DONE;
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE);
+  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE);
   MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   gs.seglevels = 1;
   gs.get_feats_location = FALSE;
@@ -7910,7 +7915,7 @@ static SeqAnnotPtr ExtractBlastMrna (SeqAlignPtr sap, Pointer PNTR prevlink)
         annot = SeqAnnotNew ();
         if (annot != NULL) {
           annot->type = 2;
-          adp = ValNodeNew (NULL);
+          adp = AnnotDescrNew (NULL);
           adp->choice = Annot_descr_user;
           annot->desc = adp;
           uop = UserObjectNew ();
@@ -7984,7 +7989,7 @@ static Int2 LIBCALLBACK SeparateMrnaFromNrProc (Pointer data)
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL) return OM_MSG_RET_ERROR;
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE);
+  LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE);
   VisitAnnotsInSep (sep, NULL, FindBlastNR);
   DeleteMarkedObjects (ompcp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
@@ -10388,6 +10393,7 @@ extern void SetupSequinFilters (void)
     /*
     REGISTER_FEAT_INTERVALS_TO_DELTA;
     */
+    REGISTER_REORDER_BY_ID;
     REGISTER_CONVERT_TO_DELTA;
     REGISTER_DELETE_BY_TEXT;
     REGISTER_SEGREGATE_BY_MOLECULE_TYPE;
@@ -11676,7 +11682,7 @@ static CharPtr MoveStateAndAddComma (CharPtr cntry_str, CharPtr state_match, Int
 static void FindCountryName (SubSourcePtr ssp, CharPtr PNTR country_list)
 {
   CharPtr       best_match, state_match;
-  CharPtr       cp, before, newname;
+  CharPtr       cp, before, newname, after;
   Int4          len_cntry, len_qual, len_name;
 
   if (ssp == NULL || ssp->subtype != SUBSRC_country || StringHasNoText (ssp->name))
@@ -11711,42 +11717,41 @@ static void FindCountryName (SubSourcePtr ssp, CharPtr PNTR country_list)
   { 	
   	cp = StringISearch (ssp->name, best_match);
   	len_cntry = StringLen (best_match);
+  	after = cp + len_cntry;
+  	while (isspace (*after) || ispunct(*after)) 
+  	{
+  	  after++;
+  	}
   	
     if (cp != NULL && !isalpha ((Int4)(cp [len_cntry])))
     {
       len_qual = StringLen (ssp->name);
     	if (cp == ssp->name)
     	{
-     	  newname = (CharPtr) MemNew (len_qual + 2);
-     	  sprintf (newname, "%s: ", best_match);
-     	  if (ssp->name [len_cntry] == ':')
-     	  {
-     	    if (ssp->name [len_cntry + 1] == ' ')
-     	    {
-     	      StringCat (newname, ssp->name + len_cntry + 2);
-     	    }
-     	    else
-     	    {
-     	      StringCat (newname, ssp->name + len_cntry + 1);
-     	    }
-     	  }
-     	  else
-     	  {
-     	    StringCat (newname, ssp->name + len_cntry);
-     	  }
+     	  newname = (CharPtr) MemNew (len_cntry + StringLen (after) + 3);
+     	  sprintf (newname, "%s: %s", best_match, after);
       }
       else
       {
-   	    newname = (CharPtr) MemNew (len_qual + 5);
+        /* strip spaces and punctuation from before */
        	*(cp - 1) = 0;
-       	before = StringSave (ssp->name);
-       	StringNCpy (newname, best_match, len_cntry);
-      	newname [len_cntry] = ':';
-      	newname [len_cntry + 1] = ' ';
-    	  StringNCpy (newname + len_cntry + 2, before, StringLen (before));
-        StringCpy (newname + len_cntry + 2 + StringLen (before), cp + len_cntry);
-    	  before = MemFree (before);
-    	  
+       	before = cp - 2;
+       	while (before >= ssp->name  
+       	       && (isspace (*before) || ispunct (*before)))
+       	{
+       	  *before = 0;
+       	  before--;
+       	}
+       	before = ssp->name;
+       	while (isspace (*before) || ispunct(*before))
+       	{
+       	  before++;
+       	}
+       	
+       	newname = (CharPtr) MemNew (len_cntry + StringLen (before) + StringLen (after) + 4);
+       	sprintf (newname, "%s: %s%s%s", best_match, before,
+       	         StringHasNoText (before) || StringHasNoText(after) ? "" : " ",
+       	         after);
       }
       if (state_match != NULL)
       {
@@ -11781,11 +11786,69 @@ static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
   	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
     FixCountryNames (ssp);  	
   	FindCountryName (ssp, list);
-
-  }  
+  }
 }
 
-extern void CountryLookup (IteM i)
+
+static void CapitalizeFirstLetterOfEveryWord (CharPtr pString)
+{
+  CharPtr pCh;
+
+  pCh = pString;
+  if (pCh == NULL) return;
+  if (*pCh == '\0') return;
+  
+  while (*pCh != 0)
+  {
+    /* skip over spaces */
+    while (isspace(*pCh))
+    {
+      pCh++;
+    }
+  
+    /* capitalize first letter after white space */
+    if (isalpha (*pCh))
+    {
+      *pCh = toupper (*pCh);
+    }
+    /* skip over rest of word */
+    while (*pCh != 0 && !isspace (*pCh))
+    {
+      pCh++;
+    }
+  }
+}
+
+
+static void CountryCapitalizationFixup (BioSourcePtr biop, Pointer userdata)
+{
+  SubSourcePtr  ssp;
+  CharPtr       cp;
+
+  if (biop == NULL)
+  {
+  	return;
+  }
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
+  {
+  	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
+    cp = StringChr (ssp->name, ':');
+  	if (cp != NULL)
+  	{
+  	  /* skip colon */
+  	  cp++;
+  	  /* skip over space after colon */
+  	  cp += StringSpn (cp, " \t");
+ 	  
+  	  /* reset capitalization */
+  	  CapitalizeFirstLetterOfEveryWord (cp);
+  	}
+  }  
+
+}
+
+static void CountryLookup (IteM i, Boolean with_cap_fix)
 {
   BaseFormPtr  bfp;
   SeqEntryPtr  sep;
@@ -11804,9 +11867,26 @@ extern void CountryLookup (IteM i)
   list = GetValidCountryList ();
   if (list == NULL) return;
   VisitBioSourcesInSep (sep, list, CountryLookupProc);
+  if (with_cap_fix)
+  {
+    VisitBioSourcesInSep (sep, NULL, CountryCapitalizationFixup);
+  }
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
+
+
+extern void CountryLookupWithoutCapFix (IteM i)
+{
+  CountryLookup (i, FALSE);
+}
+
+
+extern void CountryLookupWithCapFix (IteM i)
+{
+  CountryLookup (i, TRUE);
+}
+
 
 static Int4 ExtractNumber (CharPtr str)
 {
@@ -12106,7 +12186,7 @@ IsParseableInfluenzaAVirusBioSource
     return FALSE;
   }
   
-  if (StringNCmp (biop->org->taxname, desired_name, desired_len) != 0)
+  if (StringNICmp (biop->org->taxname, desired_name, desired_len) != 0)
   {
     return FALSE;
   }
@@ -12341,7 +12421,7 @@ AddStrainAndSerotypeToInfluenzaAVirusNamesCallback
 
   
   if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL
-      || StringNCmp (biop->org->taxname, desired_name, desired_len) != 0) 
+      || StringNICmp (biop->org->taxname, desired_name, desired_len) != 0) 
   {
     return;
   }
@@ -12374,6 +12454,7 @@ AddStrainAndSerotypeToInfluenzaAVirusNamesCallback
   sprintf (strain_serotype_str, "%s (%s(%s))", biop->org->taxname, 
            strain_str, serotype_str);
   SetTaxNameAndRemoveTaxRef (biop->org, strain_serotype_str);
+  RemoveOldName(biop->org);
 }
 
 extern void AddStrainAndSerotypeToInfluenzaAVirusNames (IteM i)
@@ -12394,6 +12475,187 @@ extern void AddStrainAndSerotypeToInfluenzaAVirusNames (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update ();	  	    
+}
+
+
+extern CharPtr FixInfluenzaVirusName (CharPtr orig_name)
+{
+  CharPtr   desired_name = "Influenza A virus";
+  Int4      desired_len = StringLen (desired_name);
+  CharPtr   new_name = NULL, cp, src_cp, dst_cp;
+  
+  if (StringHasNoText(orig_name)
+      || StringNICmp (orig_name, desired_name, desired_len) != 0) 
+  {
+    return NULL;
+  }
+  
+  cp = orig_name + desired_len;
+  if (*cp == 0)
+  {
+    return NULL;
+  }
+  
+  /* allow one space and only one space between virus and the strain/serotype */
+  
+  if (*cp == '(')
+  {
+    new_name = (CharPtr) MemNew (sizeof (Char) * (StringLen (orig_name) + 2));
+    sprintf (new_name, "%s %s", desired_name, cp);
+  }
+  else
+  {
+    new_name = StringSave (orig_name);
+  }
+  
+  dst_cp = new_name + desired_len;
+  
+  if (*dst_cp != ' ')
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  
+  dst_cp++;
+  
+  src_cp = dst_cp;
+  /* skip over spaces */
+  while (isspace (*src_cp))
+  {
+    src_cp++;
+  }
+  if (*src_cp != '(')
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  /* copy first open paren */
+  *dst_cp = *src_cp;
+  dst_cp++;
+  src_cp++;
+  
+  /* skip over spaces */
+  while (*src_cp == ' ' || *src_cp == '\t')
+  {
+    src_cp++;
+  }
+  /* copy to next open paren */
+  while (*src_cp != '(' && *src_cp != 0)
+  {
+    *dst_cp = *src_cp;
+    dst_cp++;
+    src_cp++;
+  }
+  if (*src_cp == 0)
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  /* skip back past spaces */
+  while (*(dst_cp - 1) == ' ' || *(dst_cp - 1) == '\t')
+  {
+    dst_cp --;
+  }
+  /* copy to first close paren */
+  while (*src_cp != ')' && *src_cp != 0)
+  {
+    *dst_cp = *src_cp;
+    dst_cp++;
+    src_cp++;
+  }
+  if (*src_cp == 0)
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  /* skip back past spaces */
+  while (*(dst_cp - 1) == ' ' || *(dst_cp - 1) == '\t')
+  {
+    dst_cp --;
+  }
+  /* copy first close paren */
+  *dst_cp = *src_cp;
+  dst_cp++;
+  src_cp++;
+    /* skip over spaces */
+  while (*src_cp == ' ' || *src_cp == '\t')
+  {
+    src_cp++;
+  }
+  /* copy to second close paren */
+  while (*src_cp != ')' && *src_cp != 0)
+  {
+    *dst_cp = *src_cp;
+    dst_cp++;
+    src_cp++;
+  }
+  if (*src_cp == 0)
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  /* skip back past spaces */
+  while (*(dst_cp - 1) == ' ' || *(dst_cp - 1) == '\t')
+  {
+    dst_cp --;
+  }
+  /* copy second close paren */
+  *dst_cp = *src_cp;
+  dst_cp++;
+  src_cp++;
+  while (*src_cp == ' ' || *src_cp == '\t')
+  {
+      src_cp++;
+  }
+  if (*src_cp != 0)
+  {
+    new_name = MemFree (new_name);
+    return NULL;
+  }
+  *dst_cp = 0;
+  return new_name;
+}
+
+static void 
+FixupInfluenzaAVirusNamesCallback 
+(BioSourcePtr biop,
+ Pointer userdata)
+{
+  CharPtr   new_name;
+  
+  if (biop == NULL || biop->org == NULL)
+  {
+    return;
+  }
+  
+  new_name = FixInfluenzaVirusName (biop->org->taxname);
+
+  if (new_name != NULL)
+  {
+    SetTaxNameAndRemoveTaxRef (biop->org, new_name);
+    RemoveOldName(biop->org);
+  }
+}
+
+
+extern void FixupInfluenzaAVirusNames(IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioSourcesInSep (sep, NULL, FixupInfluenzaAVirusNamesCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();	  	      
 }
 
 /* The following code is used for global publication editing. */

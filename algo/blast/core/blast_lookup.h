@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.28 2005/12/22 14:33:28 papadopo Exp $
+/* $Id: blast_lookup.h,v 1.30 2006/04/27 19:32:48 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -185,15 +185,11 @@ Int4 BlastAaScanSubject(const LookupTableWrap* lookup_wrap,
  * @param lookup_wrap the lookup table [in]
  * @param sequence the subject sequence [in]
  * @param offset the offset in the subject at which to begin scanning [in/out]
- * @param offset_pairs array to which hits will be copied [out]
- * @param array_size length of the offset arrays [in]
  * @return The number of hits found.
  */
 Int4 BlastRPSScanSubject(const LookupTableWrap* lookup_wrap,
                         const BLAST_SequenceBlk *sequence,
-                        Int4* offset,
-                        BlastOffsetPair* NCBI_RESTRICT offset_pairs,
-		        Int4 array_size);
+                        Int4* offset);
 
 /** Create a new protein lookup table.
   * @param opt pointer to lookup table options structure [in]
@@ -312,12 +308,19 @@ typedef struct RPSBackboneCell {
                                           remaining hits begins */
 } RPSBackboneCell;
 
+/** structure used for bucket sorting offsets retrieved
+    from the RPS blast lookup table. */
+typedef struct RPSBucket {
+    Int4 num_filled;    /**< number of offset pairs currently in bucket */
+    Int4 num_alloc;     /**< max number of offset pairs bucket can hold */
+    BlastOffsetPair *offset_pairs; /**< list of offset pairs */
+} RPSBucket;
+
 /** 
  * The basic lookup table structure for RPS blast searches
  */
 typedef struct BlastRPSLookupTable {
     Int4 wordsize;      /**< number of full bytes in a full word */
-    Int4 longest_chain; /**< length of the longest chain on the backbone */
     Int4 mask;          /**< part of index to mask off, that is, 
                              top (wordsize*charsize) bits should be 
                              discarded. */
@@ -334,6 +337,10 @@ typedef struct BlastRPSLookupTable {
     PV_ARRAY_TYPE *pv;     /**< Presence vector bitfield; bit positions that
                                 are set indicate that the corresponding thick
                                 backbone cell contains hits */
+
+    Int4 num_buckets;        /**< number of buckets used to sort offsets
+                                  retrieved from the lookup table */
+    RPSBucket *bucket_array; /**< list of buckets */
 } BlastRPSLookupTable;
   
 /** Create a new RPS blast lookup table.
@@ -342,7 +349,7 @@ typedef struct BlastRPSLookupTable {
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 RPSLookupTableNew(const BlastRPSInfo *rps_info, 
+Int2 RPSLookupTableNew(const BlastRPSInfo *rps_info, 
                        BlastRPSLookupTable* * lut);
 
 /** Free the lookup table. 

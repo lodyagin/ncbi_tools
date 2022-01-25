@@ -228,6 +228,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_posit.c
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_program.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_query_info.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_tune.c
+# End Source File
 # End Group
 
 # Begin Group "Header Files"
@@ -388,6 +396,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_parameters.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_posit.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_query_info.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_tune.h
 # End Source File
 # Begin Source File
 

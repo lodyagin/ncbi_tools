@@ -29,13 +29,32 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.190 $
+* $Revision: 6.196 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.196  2006/04/06 15:41:19  kans
+* added DG to WHICH_db_accession
+*
+* Revision 6.195  2006/04/05 16:45:01  bollin
+* special left-right end handling for circular topology in GetThePointForOffset
+*
+* Revision 6.194  2006/03/30 17:04:53  kans
+* DF is DDBJ CON accession prefix
+*
+* Revision 6.193  2006/03/23 18:31:32  kans
+* added EB as NCBI EST
+*
+* Revision 6.192  2006/03/10 17:27:14  bollin
+* make sure parentptr is BioseqSet in GetEarlierSeqIdPtr
+*
+* Revision 6.191  2006/03/10 17:13:45  bollin
+* changes to GetEarlierSeqIdPtr to handle the situation where one of the Bioseqs
+* has not been indexed.  Fixes bug reported by Serge Bazhin
+*
 * Revision 6.190  2006/02/16 17:19:14  kans
 * better handling of trans splicing in GetThePointForOffset, SeqLocStart (CB)
 *
@@ -847,7 +866,7 @@ static char *this_file = __FILE__;
 #include <seqport.h>
 #include <sqnutils.h> /* prototype for SeqIdFindWorst */
 #include <edutil.h>
-
+#include <subutil.h>
 
 /****  Static variables used for randomized sequence conversions ****/
 
@@ -6625,7 +6644,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 static SeqIdPtr GetEarlierSeqIdPtr (SeqIdPtr sip1, SeqIdPtr sip2)
 {
   BioseqPtr    bsp1, bsp2;
-  BioseqSetPtr bssp;
+  BioseqSetPtr bssp = NULL;
   SeqEntryPtr  sep;
   
   if (sip1 == NULL && sip2 != NULL)
@@ -6655,25 +6674,31 @@ static SeqIdPtr GetEarlierSeqIdPtr (SeqIdPtr sip1, SeqIdPtr sip2)
   {
     return sip1;
   }
-  
-  if (bsp1->idx.parenttype == OBJ_BIOSEQSET
-      && bsp2->idx.parenttype == OBJ_BIOSEQSET
-      && bsp1->idx.parentptr == bsp2->idx.parentptr)
+
+  if (bsp1->idx.parentptr != NULL && bsp2->idx.parentptr != 0 && bsp1->idx.parentptr != bsp2->idx.parentptr)
   {
-    bssp = (BioseqSetPtr) bsp1->idx.parentptr;
-    for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+    return NULL;
+  }
+  if (bsp1->idx.parentptr != NULL && bsp1->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = bsp1->idx.parentptr;
+  } else if (bsp2->idx.parentptr != NULL && bsp2->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = bsp2->idx.parentptr;
+  }
+
+  if (bssp == NULL) return NULL;
+  
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+  {
+    if (sep->data.ptrvalue == bsp1)
     {
-      if (sep->data.ptrvalue == bsp1)
-      {
-        return sip1;
-      }
-      else if (sep->data.ptrvalue == bsp2)
-      {
-        return sip2;
-      }
+      return sip1;
+    }
+    else if (sep->data.ptrvalue == bsp2)
+    {
+      return sip2;
     }
   }
-  return sip1;
+  return NULL;
 }
 
 /*****************************************************************************
@@ -6689,8 +6714,16 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 	Int4    lowest = -1, highest = 0, tmp;
 	SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
 	Boolean   id_same;
+	BioseqPtr bsp;
+	Boolean   is_circular = FALSE;
 
 	pnt = NULL;    /* get first or last single span type in "of"*/
+	
+	bsp = BioseqFind (SeqLocId(of));
+	if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
+	    is_circular = TRUE;
+	}
+	
 	while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
 	{
 	  last_strand = SeqLocStrand (pnt);
@@ -6751,12 +6784,32 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 	switch (which_end)
 	{
 		case SEQLOC_LEFT_END:
-		  target->point = lowest;
-		  target->id = low_sip;
+		  if (is_circular) {
+		    if (all_minus) {
+		      target->point = SeqLocStart (last);
+		      target->id = last_sip;
+		    } else {
+		      target->point = SeqLocStart (first);
+		      target->id = first_sip;
+		    }
+		  } else {
+		    target->point = lowest;
+		    target->id = low_sip;
+		  }
 			break;
 		case SEQLOC_RIGHT_END:
-		  target->point = highest;
-		  target->id = high_sip;
+		  if (is_circular) {
+		    if (all_minus) {
+		      target->point = SeqLocStop (first);
+		      target->id = first_sip;
+		    } else {
+		      target->point = SeqLocStop (last);
+		      target->id = last_sip;
+		    }
+		  } else {  
+		    target->point = highest;
+		    target->id = high_sip;
+		  }
 			break;
 		case SEQLOC_START:
 		  if (all_minus)
@@ -9325,7 +9378,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"DT") == 0) || 
 	      (StringICmp(temp,"DV") == 0) || 
 	      (StringICmp(temp,"DW") == 0) || 
-	      (StringICmp(temp,"DY") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"DY") == 0) || 
+	      (StringICmp(temp,"EB") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9414,7 +9468,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_GENOME;
           } else if ((StringICmp(temp,"AK") == 0))  {     /* DDBJ HTGS */
               retcode = ACCN_DDBJ_HTGS;
-          } else if ((StringICmp(temp,"BA") == 0)) {      /* DDBJ CON division */
+          } else if ((StringICmp(temp,"BA") == 0) || 
+                     (StringICmp(temp,"DF") == 0) || 
+                     (StringICmp(temp,"DG") == 0)) {      /* DDBJ CON division */
               retcode = ACCN_DDBJ_CON;
           } else if ((StringICmp(temp,"BD") == 0) ||
                      (StringICmp(temp,"DD") == 0)) {      /* DDBJ patent division */

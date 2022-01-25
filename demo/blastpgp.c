@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.134 2006/01/24 18:33:51 papadopo Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.135 2006/05/03 14:40:49 madden Exp $";
 
-/* $Id: blastpgp.c,v 6.134 2006/01/24 18:33:51 papadopo Exp $ */
+/* $Id: blastpgp.c,v 6.135 2006/05/03 14:40:49 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,13 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.134 2006/01/24 18:33:51 papadop
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.134 $ 
+ * $Revision: 6.135 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.135  2006/05/03 14:40:49  madden
+ * Changed usage of -t flag to also include specification of whether
+ * unified p-values should be used to calculate the significance of
+ * alignments when composition-based statistics is used. (from Mike Gertz)
+ *
  * Revision 6.134  2006/01/24 18:33:51  papadopo
  * from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
  *
@@ -691,11 +696,15 @@ static Args myargs[] = {
     {"Use lower case filtering of FASTA sequence",                     /* ARG_LCASE */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
     { "Use composition based statistics\n"                             /* ARG_COMP_BASED_STATS */
+      "As first character:\n"
       "0 or F or f: no composition-based statistics\n"
       "1 or T or t: Composition-based statistics as in NAR  29:2994--3005, 2001\n"
       "2: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, conditioned on sequence properties in round 1\n"
-      "3: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, unconditionally in round 1\n",
-
+      "3: Composition-based score adjustment as in Bioinformatics 21:902-911, "
+      "2005, unconditionally in round 1\n"
+      "As second character, if first character is equivalent to 1, 2, or 3:\n"
+      "U or u: unified p-value combining alignment p-value and "
+      "compositional p-value in round 1 only\n",
       "1", NULL, NULL, FALSE, 't', ARG_STRING, 0.0, 0, NULL},
     { "ASN.1 Scoremat input of checkpoint data:\n"
       "0: no scoremat input\n"
@@ -1087,6 +1096,23 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"
                   "based statistics; see -t options\n");
         break;
+    }
+    options->unified_p = 0;
+    if (options->tweak_parameters > eNoCompositionBasedStats) {
+        switch (myargs[ARG_COMP_BASED_STATS].strvalue[1]) {
+        case 'U':
+        case 'u':
+            options->unified_p = 1;
+            ErrPostEx(SEV_WARNING, 1, 0, "unified p-values "
+                      "are currently experimental\n");
+            break;
+        case '\0':
+            break;
+        default:
+            ErrPostEx(SEV_WARNING, 1, 0, "unrecognized second character"
+                      "in value of -t, ignoring it\n");
+            break;
+        }
     }
     if ((options->tweak_parameters > 1) &&
         ((NULL != myargs[ARG_CHECKPOINT_INPUT].strvalue) ||

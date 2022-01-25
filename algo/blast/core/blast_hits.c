@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.184 2006/02/23 18:31:23 madden Exp $
+/* $Id: blast_hits.c,v 1.188 2006/04/05 18:47:42 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.184 2006/02/23 18:31:23 madden Exp $";
+    "$Id: blast_hits.c,v 1.188 2006/04/05 18:47:42 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -69,7 +69,7 @@ Int2 SBlastHitsParametersNew(const BlastHitSavingOptions* hit_options,
        else
             (*retval)->prelim_hitlist_size = hit_options->hitlist_size;
 
-       (*retval)->options = hit_options;
+       (*retval)->hsp_num_max = BlastHspNumMax(scoring_options->gapped_calculation, hit_options);
 
        return 0;
 }
@@ -79,11 +79,12 @@ SBlastHitsParameters* SBlastHitsParametersFree(SBlastHitsParameters* param)
 {
        if (param)
        {
-               param->options = NULL;
                sfree(param);
        }
        return NULL;
 }
+
+
 
 /********************************************************************************
           Functions manipulating BlastHSP's
@@ -147,6 +148,23 @@ Blast_HSPInit(Int4 query_start, Int4 query_end, Int4 subject_start,
    *ret_hsp = new_hsp;
 
    return 0;
+}
+
+Int4 BlastHspNumMax(Boolean gapped_calculation, const BlastHitSavingOptions* options)
+{
+   Int4 retval=0;
+
+   if (options->hsp_num_max <= 0)
+   {
+      if (!gapped_calculation || options->program_number == eBlastTypeTblastx)
+         retval = kUngappedHSPNumMax;
+      else
+         retval = INT4_MAX;
+   }
+   else
+       retval = options->hsp_num_max;
+
+   return retval;
 }
 
 /** Copies all contents of a BlastHSP structure. Used in PHI BLAST for splitting
@@ -667,7 +685,7 @@ Blast_HSPTestIdentityAndLength(EBlastProgramType program_number,
       
    /* Check whether this HSP passes the percent identity and minimal hit 
       length criteria, and delete it if it does not. */
-   if ((hsp->num_ident * 100 < 
+   if ((hsp->num_ident * 100.0 < 
         align_length * hit_options->percent_identity) ||
        align_length < hit_options->min_hit_length) {
       delete_hsp = TRUE;
@@ -2149,7 +2167,7 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
    BlastHSPList* hsp_list = *hsp_list_ptr;
    BlastHSP* hsp, *hsp_var;
    BlastHSP** hspp1,** hspp2;
-   Int4 index, index1;
+   Int4 index, index1, last_index1;
    Int4 hspcnt1, hspcnt2, new_hspcnt = 0;
    BlastHSP** new_hsp_array;
   
@@ -2195,8 +2213,26 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
    qsort(hspp1, hspcnt1, sizeof(BlastHSP*), s_DiagCompareHSPs);
    qsort(hspp2, hspcnt2, sizeof(BlastHSP*), s_DiagCompareHSPs);
 
-   for (index=0; index<hspcnt1; index++) {
-      for (index1 = 0; index1<hspcnt2; index1++) {
+   for (index=last_index1=0; index<hspcnt1; index++) {
+
+      /* scan through hspp2 until an HSP is found whose
+         starting diagonal is less than OVERLAP_DIAG_CLOSE
+         diagonals ahead of the current HSP from hspp1 */
+
+      for (index1 = last_index1; index1<hspcnt2; index1++,last_index1++) {
+         /* Skip already deleted HSPs */
+         if (!hspp2[index1])
+            continue;
+         if (s_DiagCompareHSPs(&hspp1[index], &hspp2[index1]) < 
+             OVERLAP_DIAG_CLOSE) {
+             break;
+         }
+      }
+
+      /* attempt to merge the HSPs in hspp2 until their
+         diagonals occur too far away */
+
+      for (; index1<hspcnt2; index1++) {
          /* Skip already deleted HSPs */
          if (!hspp2[index1])
             continue;
@@ -2269,10 +2305,13 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
 void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset)
 {
    Int4 index;
-   BlastHSP* hsp;
+
+   if (offset == 0) {
+       return;
+   }
 
    for (index=0; index<hsp_list->hspcnt; index++) {
-      hsp = hsp_list->hsp_array[index];
+      BlastHSP* hsp = hsp_list->hsp_array[index];
       hsp->subject.offset += offset;
       hsp->subject.end += offset;
       hsp->subject.gapped_start += offset;
@@ -2861,7 +2900,7 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
 
          if (!(tmp_hsp_list = hsp_list_array[query_index])) {
             hsp_list_array[query_index] = tmp_hsp_list = 
-               Blast_HSPListNew(blasthit_params->options->hsp_num_max);
+               Blast_HSPListNew(blasthit_params->hsp_num_max);
             if (tmp_hsp_list == NULL)
             {
                  sfree(hsp_list_array);

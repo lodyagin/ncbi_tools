@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.31 2006/02/15 15:14:22 madden Exp $
+/* $Id: blast_tabular.c,v 1.32 2006/04/25 17:59:02 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.31 2006/02/15 15:14:22 madden Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.32 2006/04/25 17:59:02 papadopo Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -48,13 +48,15 @@ static char const rcsid[] = "$Id: blast_tabular.c,v 1.31 2006/02/15 15:14:22 mad
 
 BlastTabularFormatData*
 BlastTabularFormatDataNew(FILE* outfp, SeqLoc* query_seqloc,
-                          EBlastTabularFormatOptions format_option)
+                          EBlastTabularFormatOptions format_option,
+                          Boolean believe_query)
 {
    BlastTabularFormatData* tf_data = 
       (BlastTabularFormatData*) calloc(1, sizeof(BlastTabularFormatData));
    tf_data->outfp = outfp;
    tf_data->query_slp = query_seqloc;
    tf_data->format_options = format_option;
+   tf_data->believe_query = believe_query;
 
    return tf_data;
 }
@@ -374,7 +376,8 @@ void* Blast_TabularFormatThread(void* data)
             description. */
          if (tf_data->show_gi || tf_data->show_accession) {
             Blast_SeqIdGetDefLine(subject_id, &subject_buffer, 
-                                  tf_data->show_gi, tf_data->show_accession); 
+                                  tf_data->show_gi, tf_data->show_accession,
+                                  TRUE); 
          } else {
             if ( !(subject_buffer = (char*) malloc(sizeof(char)*SEQIDLEN_MAX)))
                return NULL;
@@ -413,7 +416,8 @@ void* Blast_TabularFormatThread(void* data)
          query_index = 
             Blast_GetQueryIndexFromContext(hsp->context, program);
          Blast_SeqIdGetDefLine(query_id_array[query_index], &query_buffer, 
-                               tf_data->show_gi, tf_data->show_accession);
+                               tf_data->show_gi, tf_data->show_accession,
+                               tf_data->believe_query);
          
          eval_buff_ptr = eval_buff;
          ScoreAndEvalueToBuffers(hsp->bit_score, hsp->evalue, 

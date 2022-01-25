@@ -30,8 +30,18 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.166 $ 
+/* $Revision: 6.168 $ 
 * $Log: blastdef.h,v $
+* Revision 6.168  2006/05/03 14:41:50  madden
+* Added a Boolean field "unified_p" to the BLAST_OptionsBlk
+* structure.  The field indicates whether to use a combination of
+* alignment and compositional p-values when evaluating significance;
+* the field is ignored unless composition-based statistics is on.
+* (from Mike Gertz).
+*
+* Revision 6.167  2006/03/21 22:35:27  camacho
+* Add support for setting database length in BLAST_WizardOptions{Blk,Mask}
+*
 * Revision 6.166  2006/01/24 18:38:15  papadopo
 * from Mike Gertz: Remove #define'd constants that specify the composition adjustment mode.  These have been replaced by an enum in the composition adjustment library
 *
@@ -1140,6 +1150,10 @@ typedef struct _blast_optionsblk {
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
 	Uint1		tweak_parameters, /* For composition-based statistics. */
 			smith_waterman;
+        Boolean         unified_p;    /* use a combination of alignment and 
+                                         compositional p-values when evaluating
+                                         significance; ignored unless 
+                                         composition-based statisics is on. */
         CharPtr         phi_pattern;      /* Pattern for PHI-Blast search */
 	Boolean		use_real_db_size; /* Use real DB size.  meant for use if a list of gis' is submitted, 
 					but statistics should be based upon the real database. */
@@ -1227,6 +1241,7 @@ struct _blast_wizardoptionsblk {
     Int4            required_end;
     Int4            required_start;
     Int2            reward;
+    Int8            db_length;
     Nlm_FloatHi     searchsp_eff;
     Boolean         smith_waterman;
     Uint1           strand_option;
@@ -1271,6 +1286,7 @@ struct _blast_wizardoptionsmask {
     Boolean         required_end;
     Boolean         required_start;
     Boolean         reward;
+    Boolean         db_length;
     Boolean         searchsp_eff;
     Boolean         smith_waterman;
     Boolean         strand_option;

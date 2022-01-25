@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.82 2006/01/13 16:00:02 madden Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.83 2006/04/26 12:47:29 madden Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,9 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.82 2006/01/13 16:00:02 madden Exp
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.83  2006/04/26 12:47:29  madden
+* Use SBlastMessage in place of Blast_Message
+*
 * Revision 6.82  2006/01/13 16:00:02  madden
 * BLAST_TwoSeqLocSets now takes SBlastSeqalignArray rather than SeqAlignPtr, remove unused variable
 *
@@ -910,8 +913,17 @@ Int2 Main_new(void)
                 return 1;
 
         /* Find repeat mask, if necessary */
-        Blast_FindRepeatFilterSeqLoc(slp1, myargs[ARG_FILTER].strvalue, 
-                                  &repeat_mask);
+        if ((status = Blast_FindRepeatFilterSeqLoc(slp1, myargs[ARG_FILTER].strvalue,
+                                &repeat_mask, &extra_returns->error)) != 0)
+        {
+            if (extra_returns && extra_returns->error)
+            {
+                   ErrSev max_sev = SBlastMessageErrPost(extra_returns->error);
+                   if (max_sev >= SEV_ERROR)
+                         return status;
+            }
+        }
+
         /* Combine repeat mask with lower case mask */
         if (repeat_mask)
             lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
@@ -925,7 +937,7 @@ Int2 Main_new(void)
 
         /* Post warning or error messages, no matter what the search status 
            was. */
-        Blast_SummaryReturnsPostError(extra_returns);
+        SBlastMessageErrPost(extra_returns->error);
 
         if (status != 0)
         {

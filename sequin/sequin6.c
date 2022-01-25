@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.243 $
+* $Revision: 6.250 $
 *
 * File Description: 
 *
@@ -5902,6 +5902,7 @@ typedef struct applyformdata {
   TexT           left_end;
   TexT           right_end;
   ButtoN         add_to_seq_with_like_feature;
+  ButtoN         also_add_mRNA_btn;
   ButtoN         leaveDlgUp;
   
   GetSamplePtr   gsp;
@@ -6336,7 +6337,7 @@ static Boolean GapInLocation (Int4 seq_offset, Int4 length, SeqLocPtr loc)
   return gap_in_location;
 }
 
-static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
+static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp, Boolean also_known_gaps)
 {
   DeltaSeqPtr dsp;
   Int4        seq_offset = 0;
@@ -6346,6 +6347,7 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
   SeqIdPtr    sip, before_sip, after_sip;
   Boolean     changed, partial5, partial3;
   SeqLocPtr   before = NULL, after = NULL;
+  Boolean     is_first = TRUE;
 
   if (slp == NULL || bsp == NULL 
       || bsp->repr != Seq_repr_delta
@@ -6385,7 +6387,7 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
     {
       slip = (SeqLitPtr) (dsp->data.ptrvalue);  
       if (slip->seq_data == NULL
-          && slip->fuzz != NULL 
+          && (also_known_gaps || slip->fuzz != NULL)
           && GapInLocation (seq_offset, slip->length, before))
       {
         /* we make a copy of the original location */
@@ -6403,12 +6405,22 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
         after = SeqLocDeleteEx (after, after_sip,
                           0, seq_offset + slip->length - 1,
                           FALSE, &changed, &partial5, &partial3);
+                          
+        /* make not partial on the side where the gap was */
+        SetSeqLocPartial (after, FALSE, partial3);
+        
         /* in the "before" location, we free everything after the
          * beginning of the gap.
          */
         before = SeqLocDeleteEx (before, before_sip, 
                           seq_offset, bsp->length,
                           FALSE, &changed, &partial5, &partial3);
+        
+        /* make not partial on the side where the gap was */
+        if (!is_first) {
+            partial5 = FALSE;
+        }
+        SetSeqLocPartial (before, partial5, FALSE);
         
         /* we're done with these IDs now */                  
         after_sip = SeqIdFree (after_sip);
@@ -6431,8 +6443,11 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
           prev_loc = before;
         }        
         before = after;
+        /* all additional intervals will be 5' complete */
+        is_first = FALSE;
       }
       seq_offset += slip->length;
+      
     }
   }
 
@@ -6440,7 +6455,7 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
   return loc_list;  
 }
 
-static SeqLocPtr RemoveGapsFromLocation (SeqLocPtr slp)
+static SeqLocPtr RemoveGapsFromLocation (SeqLocPtr slp, Boolean also_known_gaps)
 {
   BioseqPtr   bsp;
   SeqIdPtr    sip;
@@ -6469,7 +6484,7 @@ static SeqLocPtr RemoveGapsFromLocation (SeqLocPtr slp)
           && bsp->seq_ext_type == 4
           && bsp->seq_ext != NULL)
   {
-    return RemoveGapsFromDeltaLocation (slp, bsp);
+    return RemoveGapsFromDeltaLocation (slp, bsp, also_known_gaps);
   }
   else
   {
@@ -6635,10 +6650,16 @@ extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata)
   CdRegionPtr crp;
   Boolean     partial5, partial3;
   Uint2       entityID;
+  Boolean     also_known_gaps = FALSE;
+  SeqLocPtr   slp_mix;
   
   if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION)
   {
     return;
+  }
+  
+  if (userdata != NULL) {
+      also_known_gaps = *((BoolPtr)userdata);
   }
 
   gapped_bioseq = (BioseqPtr) userdata;
@@ -6654,7 +6675,7 @@ extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata)
   }
   
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-  sfp->location = RemoveGapsFromLocation (sfp->location);
+  sfp->location = RemoveGapsFromLocation (sfp->location, also_known_gaps);
 
   if (gapped_bioseq != NULL && gapped_bioseq->repr == Seq_repr_delta)
   {
@@ -6726,9 +6747,17 @@ extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata)
     }
     SetProductSequencePartials (protbsp, partial5, partial3);
   }
+  else 
+  {
+    /* make location mixed */
+    slp_mix = ValNodeNew(NULL);
+    slp_mix->choice = SEQLOC_MIX;
+    slp_mix->data.ptrvalue = sfp->location;
+    sfp->location = slp_mix;
+  }
 }
 
-extern void AdjustCDSLocationsForGaps (IteM i)
+static void AdjustCDSLocationsForGapsEx (IteM i, Boolean also_known_gaps)
 {
   BaseFormPtr bfp;
   SeqEntryPtr sep, oldscope;
@@ -6742,12 +6771,25 @@ extern void AdjustCDSLocationsForGaps (IteM i)
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   oldscope = SeqEntrySetScope (sep);
-  VisitFeaturesInSep (sep, NULL, AdjustCDSLocationsForGapsCallback);
+  VisitFeaturesInSep (sep, &also_known_gaps, AdjustCDSLocationsForGapsCallback);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   SeqEntrySetScope (oldscope);
 }
+
+
+extern void AdjustCDSLocationsForGaps (IteM i)
+{
+  AdjustCDSLocationsForGapsEx(i, FALSE);
+}
+
+
+extern void AdjustCDSLocationsForGapsKnownAndUnknown (IteM i)
+{
+  AdjustCDSLocationsForGapsEx(i, TRUE);
+}
+
 
 static ValNodePtr GapLocationsFromNs (BioseqPtr bsp, Int4Ptr gap_sizes)
 
@@ -7032,6 +7074,9 @@ static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePt
     CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
     loc_changed = FALSE;
     sfp->location = RemoveGapLocationsFromSeqLoc (sfp->location, gap_list, bsp, &loc_changed);
+    if (!loc_changed) {
+        return;
+    }
     if (loc_changed)
     {
       AddCDSGapComment (sfp);
@@ -7572,6 +7617,7 @@ static void Apply_AddCDS (Uint2        entityID,
   BioseqPtr          bsp;
   Char               ch;
   CdRegionPtr        crp;
+  RnaRefPtr          rrp;
   ValNodePtr         descr;
   Uint1              frame;
   Int2               genCode;
@@ -7591,7 +7637,7 @@ static void Apply_AddCDS (Uint2        entityID,
   ValNodePtr         vnp;
   SeqEntryPtr        parent_sep;
   SeqEntryPtr        gene_sep;
-  SeqFeatPtr         prot_sfp;
+  SeqFeatPtr         prot_sfp, mRNA_sfp;
 
   /* If necessary then check for duplication before adding */
 
@@ -7784,6 +7830,22 @@ static void Apply_AddCDS (Uint2        entityID,
   /* after the feature has been created, then adjust it for gaps */
   /* Note - this step may result in multiple coding regions being created. */
   AdjustCDSLocationsForGapsCallback (sfp, NULL);
+
+  /* if requested, also add mRNA feature */
+  if (afp->also_add_mRNA_btn != NULL && GetStatus(afp->also_add_mRNA_btn)) {
+    mRNA_sfp = CreateNewFeature (nsep, NULL, SEQFEAT_RNA, NULL); 
+    rrp = RnaRefNew ();
+    if (rrp != NULL) {
+      rrp->type = 2;
+      if (!StringHasNoText(afp->feature_details_data->protName)) {
+          rrp->ext.choice = 1;
+          rrp->ext.value.ptrvalue = StringSave (afp->feature_details_data->protName);
+      }    
+    }
+	mRNA_sfp->data.value.ptrvalue = rrp;
+    SetApplyFeatureLocation (mRNA_sfp, afp);
+    AdjustCDSLocationsForGapsCallback (mRNA_sfp, NULL);
+  }
 
   /* Create a Gene ref feature on the nuc seq or segment */
   /* we can only create a feature where the sep->choice is 1 */
@@ -8537,6 +8599,7 @@ static void CommonApplyToAllProcBfpInfo (Uint2 entityID,
 
   afp->strand_group = NULL;
   afp->add_to_seq_with_like_feature = NULL;
+  afp->also_add_mRNA_btn = NULL;
 
   if (type == ADD_CDS || type == ADD_RRNA || type == ADD_IMP) {
     /* create group to hold feature details */
@@ -8578,6 +8641,8 @@ static void CommonApplyToAllProcBfpInfo (Uint2 entityID,
       if (type == ADD_CDS)
       {
         afp->add_to_seq_with_like_feature = CheckBox (indexer_only_group, "Also add to sequences that already have a CDS", NULL);
+        afp->also_add_mRNA_btn = CheckBox (indexer_only_group, "Also add mRNA", NULL);
+        SetStatus (afp->also_add_mRNA_btn, FALSE);
       }
       else if (type == ADD_RRNA)
       {
@@ -8590,6 +8655,7 @@ static void CommonApplyToAllProcBfpInfo (Uint2 entityID,
       SafeSetStatus (afp->add_to_seq_with_like_feature, TRUE);
       AlignObjects (ALIGN_CENTER, (HANDLE) r2,
                                    (HANDLE) afp->add_to_seq_with_like_feature,
+                                   (HANDLE) afp->also_add_mRNA_btn,
                                    NULL);
     }
     else
@@ -11051,7 +11117,7 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
   CharPtr	str_to_add;
   size_t        len;
   CharPtr	ptr;
-  CharPtr	str;
+  CharPtr	str, tmp_name;
   AddModInfoPtr	ami;
   SubSourcePtr  ssp;
   Boolean       ok_to_add = FALSE;
@@ -11085,7 +11151,10 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
   }
   
   onp = orp->orgname;
-  if (onp == NULL) return;
+  if (onp == NULL && ami->isOrgMod) 
+  {
+    return;
+  }
 
   str_to_add = NULL;
 
@@ -11121,9 +11190,8 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
       }
     }
     influenza = FALSE;
-    if (ami->subtype == 2 && 
-	(StringICmp (orp->taxname, "Influenza A virus") == 0 ||
-        StringICmp (orp->taxname, "Influenza B virus") == 0)) {
+    if (StringICmp (orp->taxname, "Influenza A virus") == 0 ||
+        StringICmp (orp->taxname, "Influenza B virus") == 0) {
       influenza = TRUE;
     }
     len = StringLen (orp->taxname) + StringLen (str_to_add) + 6;
@@ -11150,7 +11218,20 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
       if (influenza) {
         StringCat (str, ")");
       }
+      
+      if (influenza)
+      {
+        tmp_name = FixInfluenzaVirusName (str);
+        if (tmp_name != NULL)
+        {
+          str = MemFree (str);
+          str = tmp_name;
+          tmp_name = NULL;
+        }
+      }
+      
       SetTaxNameAndRemoveTaxRef (biop->org, str);
+      RemoveOldName (biop->org);
     }
   }
 }

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.496 2006/02/15 21:07:28 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.501 2006/05/04 20:07:27 camacho Exp $";
 
-/* $Id: readdb.c,v 6.496 2006/02/15 21:07:28 camacho Exp $ */
+/* $Id: readdb.c,v 6.501 2006/05/04 20:07:27 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.496 $
+* $Revision: 6.501 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,22 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.501  2006/05/04 20:07:27  camacho
+* Report fatal error in case of failure to add sequence to BLAST database because
+* of zero-length sequence and clean up the datababase that was being created.
+*
+* Revision 6.500  2006/04/24 15:50:19  camacho
+* + is_REFSEQ_RNA
+*
+* Revision 6.499  2006/03/16 14:14:23  camacho
+* Fix parsing of locations for fastacmd command line argument (rt # 15151399)
+*
+* Revision 6.498  2006/03/09 21:56:02  camacho
+* Refactored sequence hash function
+*
+* Revision 6.497  2006/03/08 19:06:15  camacho
+* Added definition for maximum number of volumes and FDBCleanUpInProgress, fixes rt ticket 15147600
+*
 * Revision 6.496  2006/02/15 21:07:28  camacho
 * Add validation to fastacmd to reject mixed protein/nucleotide databases
 *
@@ -2006,6 +2022,8 @@ Boolean    isCommonIndex = FALSE;   /* deprecated 05/21/2003 */
 
 /* Global to load the taxonomy databases only once per readdb_new invocation */
 static Boolean taxonomyDbLoaded = FALSE;
+
+const Uint4 kFDBMaxNumVolumes = 100;
 
 /**************************************************************************
 *
@@ -7580,7 +7598,7 @@ Boolean FDBCleanUpRecursively(CharPtr base_name, Char dbtype)
 Boolean FDBCleanUp(FDB_optionsPtr options)
 {
     Boolean alias_file_exists = FALSE, index_file_exists = FALSE;
-    Char filenamebuf[FILENAME_MAX];
+    Char filenamebuf[FILENAME_MAX] = { NULLB };
     MsgAnswer ans;
     Char dbtype;
 
@@ -7591,12 +7609,13 @@ Boolean FDBCleanUp(FDB_optionsPtr options)
 
     /* First look for an alias file */
     sprintf(filenamebuf, "%s.%cal", options->base_name, dbtype);
-    if (FileLength(filenamebuf))
+    if (FileLengthEx(filenamebuf) != -1)
         alias_file_exists = TRUE;
 
     /* Now try an index file */
+    memset((void*) &filenamebuf, 0, sizeof(filenamebuf));
     sprintf(filenamebuf, "%s.%cin", options->base_name, dbtype);
-    if (FileLength(filenamebuf))
+    if (FileLength(filenamebuf) != -1)
         index_file_exists = TRUE;
 
     /* nothing to remove ? */
@@ -7625,6 +7644,30 @@ Boolean FDBCleanUp(FDB_optionsPtr options)
     }
 
     return TRUE;
+}
+
+/* Deletes all volumes of a BLAST databases which is "in progress" (i.e.: being
+ * built). This is necessary for proper clean up in case of errors, specially
+ * if the maximum number of volumes is reached. */
+void FDBCleanUpInProgress(const FDB_options* options)
+{
+    int volume = 0;
+    char base_name[FILENAME_MAX] = { '\0' };
+
+    ASSERT(options);
+    ASSERT(options->volume > 1);
+
+    StringNCpy(base_name, options->base_name, StrLen(options->base_name) - 3);
+
+    for (volume = 0; volume < options->volume; volume++) {
+        FDB_options opts_tmp;
+        memcpy((void*)&opts_tmp, (void*)options, sizeof(*options));
+        opts_tmp.base_name = (char*)MemNew(FILENAME_MAX);
+        sprintf(opts_tmp.base_name, "%s.%02ld", base_name, volume);
+        opts_tmp.clean_opt = eCleanAlways;
+        FDBCleanUp(&opts_tmp);
+        free(opts_tmp.base_name);
+    }
 }
 
 /* Initialize the formatdb structure.
@@ -7793,8 +7836,8 @@ ValNodePtr FDBLoadMembershipsTable(void)
             mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
         } else if (!StringICmp("refseq_rna",buffer)) {
-            mip->criteria = is_REFSEQ;
-            fn_name = "is_REFSEQ";
+            mip->criteria = is_REFSEQ_RNA;
+            fn_name = "is_REFSEQ_RNA";
         } else if (!StringICmp("refseq_protein",buffer)) {
             mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
@@ -8860,7 +8903,14 @@ static Int4 FDBCreateNewVolume(FormatDBPtr fdbp,
 
       if(FormatDBClose(tmp_fdbp))
          return 9;
-      options->volume++;
+      if (++options->volume >= kFDBMaxNumVolumes) {
+          FDBCleanUpInProgress(options);
+          ErrPostEx(SEV_FATAL, 1, 0,
+                    "BLAST database exceeded %d volumes, please adjust the -v "
+                    "option to formatdb (number of bases per volume)",
+                    kFDBMaxNumVolumes);
+          return -1;
+      }
       
       /* When second volume is created, add suffix .00 to all 
          first volume files */
@@ -9082,6 +9132,18 @@ static SI_Record* SI_RecordAddFormatdb_ver_text(SI_Record* srp,
 
 /********* END:    Auxiliary functions to the SI_Record structure ************/
 
+static void s_GetPrintableSequenceId(const SeqIdPtr seqid,
+                                     char* seqid_string,
+                                     char buffer[],
+                                     size_t buffer_sz)
+{
+    if (seqid_string) {
+        StringNCpy_0(buffer, seqid_string, buffer_sz-1);
+    } else {
+        SeqIdWrite(seqid, buffer, PRINTID_FASTA_LONG, buffer_sz-1);
+    }
+}
+
 /* If the bdp parameter is given, the defline, Seq-id, and taxonomy
  * information, is obtained from this parameter and thus the remainder
  * parameters are ignored. */
@@ -9109,8 +9171,11 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
     ASSERT(seq_data_type);
 
     if (SequenceLen <= 0) {
-        ErrLogPrintf("Sequence number %ld has zero-length!\n",
-                     (fdbp->options->total_num_of_seqs + 1));
+        char tmpbuf[128] = { NULLB };
+        s_GetPrintableSequenceId(bdp->seqid, seq_id, tmpbuf, sizeof(tmpbuf));
+        ErrPostEx(SEV_WARNING, 0, 0, 
+          "Cannot add sequence number %ld (%s) because it has zero-length.\n", 
+                  (fdbp->options->total_num_of_seqs + 1), tmpbuf);
         return 1;
     }
     if (fdbp->options->is_protein) {
@@ -9201,6 +9266,17 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
     return status;
 }
 
+Uint4 readdb_sequence_hash(const char* sequence, int sequence_length)
+{
+    Uint4 retval = 0;
+    int i;
+    for (i = 0; i < sequence_length; i++) {
+        retval *= 1103515245;
+        retval += (unsigned long) (sequence[i]) + 12345;
+    }
+    return retval;
+}
+
 /* See comment in readdb.h */
 Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
                      SI_RecordPtr srp,  /* linked list of sequence
@@ -9244,11 +9320,7 @@ Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
         if (FileWrite(tmpbuff, len, 1, fdbp->fd_seq) != (Uint4) 1)
             return 1;
         if (hash == 0 && fdbp->options->dump_info) {
-            int i;
-            for (i = 0; i < len; i++) {
-                hash *= 1103515245;
-                hash += (unsigned long) (tmpbuff[i]) + 12345;
-            }
+            hash = readdb_sequence_hash(tmpbuff, len);
         }
     }
 
@@ -9369,23 +9441,15 @@ Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
 
     return 0;
 }
-
                                               
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp)
 {
     if ( !bdp ) {
-        Char tmpbuf[128];
         ASSERT(fdbp->options->version == FORMATDB_VER_TEXT);
-        SeqIdWrite(bsp->id, tmpbuf, PRINTID_FASTA_LONG, sizeof(tmpbuf)-1);
-
-        if (BioseqGetLen(bsp) <= 0)
-            ErrPostEx(SEV_WARNING, 0, 0, "%s has zero-length sequence\n", tmpbuf);
-
         return FDBAddSequence (fdbp, NULL, &bsp->seq_data_type, 
-                               &bsp->seq_data, bsp->length, tmpbuf, 
+                               &bsp->seq_data, bsp->length, 0,
                                BioseqGetTitle(bsp), 0, 0, 0, 0, 0);
     } else {
-
         ASSERT(fdbp->options->version >= FORMATDB_VER);
         return FDBAddSequence (fdbp, bdp, &bsp->seq_data_type, 
                                &bsp->seq_data, bsp->length, NULL, NULL,
@@ -11040,6 +11104,32 @@ Boolean is_REFSEQ(VoidPtr direc)
     }
 }
 
+/* Criteria for determining whether a sequence belongs in the refseq_rna
+   database. this is a subset of the sequences identified by is_REFSEQ with the
+   additional constraint it is limited to a restricted set of accessions
+   (NM_, NR_, XM_, and XR_). Updated per consensus with TM and SM via email.
+ */
+Boolean is_REFSEQ_RNA(VoidPtr direc)
+{
+    const size_t accession_prefix_length = 3;
+    const char* accession = ((DI_RecordPtr)direc)->acc;
+    const char* accession_prefixes[] = {
+        "NM_", "NR_", "XM_", "XR_", NULL 
+    };
+
+    if (is_REFSEQ(direc)) {
+        Int4 i;
+        for (i = 0; accession_prefixes[i]; i++) {
+            if (StringNCmp(accession_prefixes[i],
+                           accession,
+                           accession_prefix_length) == 0) {
+                return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
+
 Boolean is_CONTIG(VoidPtr direc)
 {
     return (((DI_RecordPtr)direc)->owner == 28);
@@ -11399,40 +11489,79 @@ Fastacmd_PrintDbFullInformation(ReadDBFILEPtr rdfp, CharPtr databases,
     return TRUE;
 }
 
+void Fastacmd_ParseLocations(const char* str, Int4 locations[2])
+{
+    const char* delimiters = " ,;";
+    char* seqlocstr = NULL;
+
+    locations[0] = locations[1] = 0;
+
+    if ( !str ) {
+        return;
+    }
+
+    seqlocstr = StringSave((char*) str);
+
+    locations[0] = 
+        atol(StringTokMT(seqlocstr, (char*) delimiters, &seqlocstr));
+    if (locations[0] < 0) {
+        ErrPostEx(SEV_WARNING, 0, 0, 
+                  "Starting location is negative, setting to 0");
+        locations[0] = 0;
+    }
+
+    if ( !seqlocstr ) {
+        locations[1] = 0;
+    } else {
+        locations[1] = atol(seqlocstr);
+    }
+
+    if (locations[1] < 0) {
+        ErrPostEx(SEV_WARNING, 0, 0, 
+                  "Ending location is negative, setting to 0");
+        locations[1] = 0;
+    }
+}
+
 static SeqLocPtr Fastacmd_ParseSeqLoc(CharPtr str, Uint1 strand, BioseqPtr bsp) 
 {
-    SeqLocPtr slp = NULL;
-    CharPtr delimiters = " ,;";
-    Int4 from = 0, to = -1; /* zero offset */
-    CharPtr seqlocstr = NULL, strp = NULL;
+    Int4 locations[2];
 
-    if (str == NULL)
-        return slp;
+    if (str == NULL) {
+        return NULL;
+    }
 
-    seqlocstr = strp = StringSave(str);
+    Fastacmd_ParseLocations(str, locations);
+    ASSERT(locations[0] >= 0);
+    ASSERT(locations[1] >= 0);
 
-    from = atol(StringTokMT(seqlocstr, delimiters, &seqlocstr)) - 1;
-    if (seqlocstr)
-        to = atol(seqlocstr) - 1;
-
-    from = MAX(from, 0);
-    if (to <= 0) 
-        to = bsp->length - 1;
-    to = MIN(bsp->length - 1, to);
-    if (from >= bsp->length) {
+    /* Sanity check */
+    if (locations[1] > bsp->length) {
         ErrPostEx(SEV_ERROR, 0, 0, "From location cannot be greater "
                 "than %ld. Ignoring sequence location.\n",
                 bsp->length);
-        from = 0; to = bsp->length - 1;
+        locations[0] = 0; locations[1] = bsp->length - 1;
     }
 
+    /* Convert locations to zero-offsets... */
+    if (locations[1] == 0) {
+        locations[1] = bsp->length - 1;
+    } else {
+        locations[1]--;
+    }
+
+    if (locations[0] > 0) {
+        locations[0]--;
+    }
+    
     if (ISA_aa(bsp->mol))  /* for proteins, the strand is irrelevant */
         strand = Seq_strand_unknown;
-    slp = SeqLocIntNew(from, to, strand, SeqIdFindBest(bsp->id, SEQID_GI)); 
 
-    MemFree(strp);
+    ASSERT(locations[0] >= 0);
+    ASSERT(locations[1] >= 0);
+    return SeqLocIntNew(locations[0], locations[1], 
+                       strand, SeqIdFindBest(bsp->id, SEQID_GI)); 
 
-    return slp;
 }
 
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,

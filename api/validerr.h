@@ -59,6 +59,7 @@
 #define ERR_SEQ_INST_InternalNsInSeqRaw  1,55
 #define ERR_SEQ_INST_InternalNsAdjacentToGap  1,56
 #define ERR_SEQ_INST_CaseDifferenceInSeqID  1,57
+#define ERR_SEQ_INST_DeltaComponentIsGi0  1,58
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -96,6 +97,7 @@
 #define ERR_SEQ_DESCR_MissingText  2,34
 #define ERR_SEQ_DESCR_BadCollectionDate  2,35
 #define ERR_SEQ_DESCR_BadPCRPrimerSequence  2,36
+#define ERR_SEQ_DESCR_BadPunctuation  2,37
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -242,6 +244,10 @@
 #define ERR_SEQ_FEAT_SelfReferentialProduct  5,115
 #define ERR_SEQ_FEAT_ITSdoesNotAbutRRNA  5,116
 #define ERR_SEQ_FEAT_FeatureSeqIDCaseDifference  5,117
+#define ERR_SEQ_FEAT_FeatureLocationIsGi0  5,118
+#define ERR_SEQ_FEAT_GapFeatureProblem  5,119
+#define ERR_SEQ_FEAT_PseudoCdsHasProtXref  5,120
+#define ERR_SEQ_FEAT_ErroneousException  5,121
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

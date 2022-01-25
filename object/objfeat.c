@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -2545,7 +2545,7 @@ NLM_EXTERN RnaRefPtr LIBCALL RnaRefAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	AsnTypePtr atp, oldatp;
     RnaRefPtr rrp;
     tRNAPtr trna = NULL;
-    Int2 i;
+    Int2 i = 0;
 
 	if (! loaded)
 	{
@@ -2627,7 +2627,9 @@ NLM_EXTERN RnaRefPtr LIBCALL RnaRefAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     	    }
         	else if (atp == TRNA_EXT_codon_E)
 	        {
-    	        trna->codon[i] = (Uint1)av.intvalue;
+    	        if (i < 6) {
+    	            trna->codon[i] = (Uint1)av.intvalue;
+    	        }
         	    i++;
 	        }
 		}
@@ -4204,16 +4206,20 @@ NLM_EXTERN void LIBCALL SeqFeatIdFree (ChoicePtr cp)
     pnt = cp->value.ptrvalue;
     switch (cp->choice)
     {
+        case 1:     /* gibb id */
+            cp->value.intvalue = 0;
+            break;
         case 2:     /* giim id */
-            GiimFree((GiimPtr)pnt);
+            cp->value.ptrvalue = GiimFree((GiimPtr)pnt);
             break;
         case 3:
-            ObjectIdFree((ObjectIdPtr)pnt);
+            cp->value.ptrvalue = ObjectIdFree((ObjectIdPtr)pnt);
             break;
         case 4:
-            DbtagFree((DbtagPtr)pnt);
+            cp->value.ptrvalue = DbtagFree((DbtagPtr)pnt);
             break;
     }
+    cp->choice = 0;
     return;
 }
 

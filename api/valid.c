@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.726 $
+* $Revision: 6.755 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,93 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.755  2006/05/04 20:31:46  kans
+* ERR_SEQ_FEAT_ErroneousException test for unclassified transcription discrepancy that should be mismatches in transcription
+*
+* Revision 6.754  2006/05/04 20:13:15  kans
+* added ERR_SEQ_FEAT_ErroneousException - used for unclassified translation discrepancy that should be mismatches in translation
+*
+* Revision 6.753  2006/04/24 16:28:10  kans
+* InvalidInferenceValue dropped to warning
+*
+* Revision 6.752  2006/04/21 17:59:18  kans
+* added ignoreExceptions flag to vsp - for MrnaTransCheck and CdTransCheck
+*
+* Revision 6.751  2006/04/17 18:05:09  kans
+* added ERR_SEQ_DESCR_BadPunctuation
+*
+* Revision 6.750  2006/04/14 20:35:40  kans
+* ERR_SEQ_FEAT_UnindexedFeature also reports bioseq identifiers
+*
+* Revision 6.749  2006/04/14 20:18:23  kans
+* CDSmRNAmismatch, CDSwithMultipleMRNAs and CDSwithNoMRNAOverlap tests in ValidateCDSmRNAmatch suppressed if genbank
+*
+* Revision 6.748  2006/04/14 17:06:00  kans
+* ERR_SEQ_FEAT_FeatureLocationIsGi0 prints IDs of Bioseq
+*
+* Revision 6.747  2006/04/14 16:25:35  kans
+* added ERR_SEQ_FEAT_PseudoCdsHasProtXref
+*
+* Revision 6.746  2006/04/12 14:24:02  kans
+* CDSmRNArange and mRNAgeneRange reduced to WARNING level
+*
+* Revision 6.745  2006/04/11 18:04:08  kans
+* IdXrefsNotReciprocal also tests MrnaProteinLink user object against cds->product
+*
+* Revision 6.744  2006/04/11 16:16:57  kans
+* raised obsolete experimental evidence qualifier set message to error
+*
+* Revision 6.743  2006/04/10 15:23:24  kans
+* CDSsLinkedToDifferentMRNAs used to suppress duplicate feature message on otherwise identical CDSs
+*
+* Revision 6.742  2006/04/10 14:56:57  kans
+* report obsolete sfp->exp_ev only if no gi present
+*
+* Revision 6.741  2006/04/07 19:49:06  kans
+* allow 5 letter + 7 digit accessions
+*
+* Revision 6.740  2006/04/06 18:43:50  kans
+* report ERR_SEQ_FEAT_InvalidInferenceValue for new records with only sfp->exp_ev set
+*
+* Revision 6.739  2006/04/05 15:04:11  kans
+* ERR_SEQ_FEAT_BadTrnaAA not reported for pseudo tRNA
+*
+* Revision 6.738  2006/03/30 19:24:56  kans
+* made CheckDeltaForReuse more efficient
+*
+* Revision 6.737  2006/03/27 18:27:01  kans
+* biop->origin == ORG_MUT no longer sets bvsp->is_artificial
+*
+* Revision 6.736  2006/03/27 14:52:34  kans
+* ribosomal rna abutting test now handles same rRNA subtype split across segmented parts
+*
+* Revision 6.735  2006/03/24 18:57:26  kans
+* if estimated_length unknown do not complain about different dash count
+*
+* Revision 6.734  2006/03/24 18:48:05  kans
+* added ERR_SEQ_FEAT_GapFeatureProblem
+*
+* Revision 6.733  2006/03/17 16:50:41  kans
+* added INTERNAL_SPACER_X to ITS-rRNA adjacency tests
+*
+* Revision 6.732  2006/03/10 13:38:48  kans
+* raised DeltaComponentIsGi0 and FeatureLocationIsGi0 from ERROR to REJECT
+*
+* Revision 6.731  2006/03/09 13:55:35  kans
+* replace qualifier can have * for termination in protein sequence
+*
+* Revision 6.730  2006/03/08 19:42:27  kans
+* do not call BioseqLockById on 0 or negative gi number
+*
+* Revision 6.729  2006/03/07 21:34:28  kans
+* checks for gi 0 now also check for negative value
+*
+* Revision 6.728  2006/03/07 21:15:59  kans
+* added ERR_SEQ_INST_DeltaComponentIsGi0 and ERR_SEQ_FEAT_FeatureLocationIsGi0
+*
+* Revision 6.727  2006/03/07 17:00:36  kans
+* ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct and ERR_SEQ_FEAT_PseudoCdsHasProduct are now ERROR
+*
 * Revision 6.726  2006/02/27 17:49:34  kans
 * added adjusted for low-quality genome exception for RefSeq models
 *
@@ -2464,6 +2551,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         validateIDSet;
   Boolean         seqSubmitParent;
   Boolean         justShowAccession;
+  Boolean         ignoreExceptions;
   Int2            validationLimit;
   ValidErrorFunc  errfunc;
   Pointer         userdata;
@@ -2498,6 +2586,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   validateIDSet = vsp->validateIDSet;
   seqSubmitParent = vsp->seqSubmitParent;
   justShowAccession = vsp->justShowAccession;
+  ignoreExceptions = vsp->ignoreExceptions;
   validationLimit = vsp->validationLimit;
   errfunc = vsp->errfunc;
   userdata = vsp->userdata;
@@ -2529,6 +2618,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->validateIDSet = validateIDSet;
   vsp->seqSubmitParent = seqSubmitParent;
   vsp->justShowAccession = justShowAccession;
+  vsp->ignoreExceptions = ignoreExceptions;
   vsp->validationLimit = validationLimit;
   vsp->errfunc = errfunc;
   vsp->userdata = userdata;
@@ -2810,7 +2900,8 @@ static CharPtr err1Label [] = {
   "LeadingX",
   "InternalNsInSeqRaw",
   "InternalNsAdjacentToGap",
-  "CaseDifferenceInSeqID"
+  "CaseDifferenceInSeqID",
+  "DeltaComponentIsGi0"
 };
 
 static CharPtr err2Label [] = {
@@ -2850,7 +2941,8 @@ static CharPtr err2Label [] = {
   "FastaBracketTitle",
   "MissingText",
   "BadCollectionDate",
-  "BadPCRPrimerSequence"
+  "BadPCRPrimerSequence",
+  "BadPunctuation"
 };
 
 static CharPtr err3Label [] = {
@@ -3005,7 +3097,11 @@ static CharPtr err5Label [] = {
   "FeatureRefersToAccession",
   "SelfReferentialProduct",
   "ITSdoesNotAbutRRNA",
-  "FeatureSeqIDCaseDifference"
+  "FeatureSeqIDCaseDifference",
+  "FeatureLocationIsGi0",
+  "GapFeatureProblem",
+  "PseudoCdsHasProtXref",
+  "ErroneousException"
 };
 
 static CharPtr err6Label [] = {
@@ -3670,7 +3766,12 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
           }
           if (vsp->useSeqMgrIndexes) {
             if (SeqMgrGetDesiredFeature (gcp->entityID, NULL, 0, 0, sfp, &context) == NULL) {
-              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_UnindexedFeature, "Feature is not indexed");
+              StringCpy (buf, "?");
+              bsp = vsp->bsp;
+              if (bsp != NULL) {
+                SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf) - 1);
+              }
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_UnindexedFeature, "Feature is not indexed on Bioseq %s", buf);
             } else {
               bsp = BioseqFindFromSeqLoc (sfp->location);
               if (bsp != NULL) {
@@ -6058,6 +6159,7 @@ static void CheckDeltaForReuse (ValidStructPtr vsp, GatherContextPtr gcp, Bioseq
 {
   Char          buf [80];
   ValNodePtr    head = NULL;
+  ValNodePtr    last = NULL;
   ReuseDataPtr  lastrdp = NULL;
   ReuseDataPtr  rdp;
   SeqIntPtr     sintp;
@@ -6082,7 +6184,11 @@ static void CheckDeltaForReuse (ValidStructPtr vsp, GatherContextPtr gcp, Bioseq
     rdp->seqidstr = StringSave (buf);
     rdp->from = sintp->from;
     rdp->to = sintp->to;
-    ValNodeAddPointer (&head, 0, (Pointer) rdp);
+    vnp = ValNodeAddPointer (&last, 0, (Pointer) rdp);
+    if (head == NULL) {
+      head = vnp;
+    }
+    last = vnp;
   }
 
   if (head == NULL) return;
@@ -6306,6 +6412,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
         } else if (numletters == 4 && numdigits == 8 && ISA_na (bsp->mol) &&
                    (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
         } else if (numletters == 4 && numdigits == 9 && ISA_na (bsp->mol) &&
+                   (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
+        } else if (numletters == 5 && numdigits == 7 && ISA_na (bsp->mol) &&
                    (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
         } else {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadSeqIdFormat, "Bad accession %s", tsip->accession);
@@ -7047,6 +7155,10 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
         switch (vnp->choice) {
         case 1:                /* SeqLocPtr */
           slp = (SeqLocPtr) (vnp->data.ptrvalue);
+          sip3 = SeqLocId (slp);
+          if (sip3 != NULL && sip3->choice == SEQID_GI && sip3->data.intvalue <= 0) {
+            ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_DeltaComponentIsGi0, "Delta component is gi|0");
+          }
           len2 = SeqLocLen (slp);
           if (len2 < 0)
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "-1 length on seq-loc of delta seq_ext");
@@ -9384,7 +9496,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
   ValNodePtr      vnp, vnp2;
   OrgRefPtr       this_org = NULL, that_org = NULL;
   int             tmpval;
-  Char            buf1[20], buf2[20];
+  Char            buf1[20], buf2[20], ch;
   EMBLBlockPtr    ebp;
   GBBlockPtr      gbp;
   ValNodePtr      keywords = NULL;
@@ -9400,6 +9512,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
   Boolean         tpa_inf;
   BioseqPtr       bsp;
   DatePtr         dp;
+  size_t          len;
   SeqMgrFeatContext  fcontext;
   static char    *badmod = "Inconsistent GIBB-mod [%d] and [%d]";
 
@@ -9658,6 +9771,21 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
    for (vnp2 = vnp->next; vnp2 != NULL; vnp2 = vnp2->next) {
       if (vnp2->choice == Seq_descr_title) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_MultipleTitles, "Undesired multiple title descriptors");
+      }
+    }
+    len = StringLen (str);
+    if (len > 4) {
+      ch = str [len - 1];
+      while (ch == ' ' && len > 4) {
+        len--;
+        ch = str [len - 1];
+      }
+      if (ch == '.' && len > 4) {
+        len--;
+        ch = str [len - 1];
+      }
+      if (ch == '.' || ch == ',' || ch == ';' || ch == ':') {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadPunctuation, "Title descriptor ends in bad punctuation");
       }
     }
     break;
@@ -10413,33 +10541,68 @@ static Boolean IdXrefsAreReciprocal (
   return FALSE;
 }
 
-static Boolean IdXrefsNotReciprocal (
+static Int2 IdXrefsNotReciprocal (
   SeqFeatPtr cds,
   SeqFeatPtr mrna
 )
 
 {
-  SeqFeatXrefPtr  xref;
+  Int4            giu = 0, gip = 0;
   SeqFeatPtr      matchsfp;
+  ObjectIdPtr     oip;
+  SeqIdPtr        sip;
+  CharPtr         tmp;
+  UserFieldPtr    ufp;
+  UserObjectPtr   uop;
+  SeqFeatXrefPtr  xref;
 
-  if (cds == NULL || mrna == NULL) return FALSE;
-  if (cds->id.choice != 3 || mrna->id.choice != 3) return FALSE;
+  if (cds == NULL || mrna == NULL) return 0;
+  if (cds->id.choice != 3 || mrna->id.choice != 3) return 0;
 
   for (xref = cds->xref; xref != NULL; xref = xref->next) {
     if (xref->id.choice != 0) {
       matchsfp = SeqMgrGetFeatureByFeatID (cds->idx.entityID, NULL, NULL, xref, NULL);
-      if (matchsfp != mrna) return TRUE;
+      if (matchsfp != mrna) return 1;
     }
   }
 
   for (xref = mrna->xref; xref != NULL; xref = xref->next) {
     if (xref->id.choice != 0) {
       matchsfp = SeqMgrGetFeatureByFeatID (mrna->idx.entityID, NULL, NULL, xref, NULL);
-      if (matchsfp != cds) return TRUE;
+      if (matchsfp != cds) return 1;
     }
   }
 
-  return FALSE;
+  if (cds->product == NULL) return 0;
+  if (mrna->ext == NULL) return 0;
+  uop = FindUopByTag (mrna->ext, "MrnaProteinLink");
+  if (uop == NULL) return 0;
+  sip = SeqLocId (cds->product);
+  if (sip == NULL) return 0;
+  if (sip->choice == SEQID_GI) {
+    gip = (Int4) sip->data.intvalue;
+  } else {
+    gip = GetGIForSeqId (sip);
+  }
+  if (gip == 0) return 0;
+  ufp = uop->data;
+  if (ufp == NULL || ufp->choice != 1) return 0;
+  oip = ufp->label;
+  if (oip == NULL || StringICmp (oip->str, "protein seqID") != 0) return 0;
+  tmp = (CharPtr) ufp->data.ptrvalue;
+  if (StringHasNoText (tmp)) return 0;
+  sip = MakeSeqID (tmp);
+  if (sip == NULL) return 0;
+  if (sip->choice == SEQID_GI) {
+    giu = (Int4) sip->data.intvalue;
+  } else {
+    giu = GetGIForSeqId (sip);
+  }
+  SeqIdFree (sip);
+  if (giu == 0) return 0;
+  if (gip != giu) return 2;
+
+  return 0;
 }
 
 static Boolean LIBCALLBACK FindSingleMrnaProc (
@@ -10538,10 +10701,12 @@ static void ValidateCDSmRNAmatch (
   Boolean            goOn, pseudo;
   GeneRefPtr         grp;
   Int2               i, j, k, numfeats, tmpnumcds, tmpnummrna, count;
+  Boolean            is_genbank = FALSE;
   LpData             ld;
   Int4               num_repeat_regions;
   Uint2              olditemtype = 0;
   Uint2              olditemid = 0;
+  Int2               recip;
   VoidPtr            repeat_region_array;
   SeqFeatPtr         rpt_region;
   ErrSev             sev = /* SEV_INFO */ SEV_WARNING;
@@ -10564,13 +10729,15 @@ static void ValidateCDSmRNAmatch (
   }
   */
 
-  repeat_region_array = SeqMgrBuildFeatureIndex (bsp, &num_repeat_regions, 0, FEATDEF_repeat_region);
-
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       sev = SEV_WARNING;
+    } else if (sip->choice == SEQID_GENBANK) {
+      is_genbank = TRUE;
     }
   }
+
+  repeat_region_array = SeqMgrBuildFeatureIndex (bsp, &num_repeat_regions, 0, FEATDEF_repeat_region);
 
   if (numgene > 0 && numcds > 0 && nummrna > 0) {
     numfeats = numcds + nummrna;
@@ -10613,7 +10780,7 @@ static void ValidateCDSmRNAmatch (
               tmpnummrna++;
             }
           }
-          if (tmpnumcds > 0 && tmpnummrna > 1 && tmpnumcds != tmpnummrna) {
+          if (tmpnumcds > 0 && tmpnummrna > 1 && tmpnumcds != tmpnummrna && (! is_genbank)) {
 
             if (gcp != NULL) {
               gcp->itemID = gene->idx.itemID;
@@ -10677,7 +10844,8 @@ static void ValidateCDSmRNAmatch (
           if (vdp != NULL) {
             vdp->accounted_for = TRUE;
             goOn = TRUE;
-            if (IdXrefsNotReciprocal (sfp, ld.mrna)) {
+            recip = IdXrefsNotReciprocal (sfp, ld.mrna);
+            if (recip == 1) {
               if (gcp != NULL) {
                 gcp->itemID = sfp->idx.itemID;
                 gcp->thistype = OBJ_SEQFEAT;
@@ -10685,6 +10853,14 @@ static void ValidateCDSmRNAmatch (
               vsp->descr = NULL;
               vsp->sfp = sfp;
               ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_SeqFeatXrefProblem, "CDS/mRNA unambiguous pair have erroneous cross-references");
+            } else if (recip == 2) {
+              if (gcp != NULL) {
+                gcp->itemID = ld.mrna->idx.itemID;
+                gcp->thistype = OBJ_SEQFEAT;
+              }
+              vsp->descr = NULL;
+              vsp->sfp = ld.mrna;
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_SeqFeatXrefProblem, "MrnaProteinLink inconsistent with feature ID cross-references");
             }
           }
         } else {
@@ -10698,7 +10874,7 @@ static void ValidateCDSmRNAmatch (
   }
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
-  while (sfp != NULL) {
+  while (sfp != NULL && (! is_genbank)) {
     vdp = (VvmDataPtr) sfp->idx.scratch;
     if (vdp != NULL) {
       count = vdp->num_mrnas;
@@ -10857,6 +11033,38 @@ static Int2 WhichRNA (SeqFeatPtr sfp)
   return 0;
 }
 
+static Boolean CDSsLinkedToDifferentMRNAs (SeqFeatPtr sfp, SeqFeatPtr last)
+
+{
+  SeqFeatPtr      mrna1 = NULL, mrna2 = NULL;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL || last == NULL) return FALSE;
+  if (sfp->idx.subtype != FEATDEF_CDS || last->idx.subtype != FEATDEF_CDS) return FALSE;
+
+  for (xref = sfp->xref; xref != NULL && mrna1 == NULL; xref = xref->next) {
+    if (xref->id.choice != 0) {
+      mrna1 = SeqMgrGetFeatureByFeatID (sfp->idx.entityID, NULL, NULL, xref, NULL);
+      if (mrna1 != NULL && mrna1->idx.subtype != FEATDEF_mRNA) {
+        mrna1 = NULL;
+      }
+    }
+  }
+
+  for (xref = last->xref; xref != NULL && mrna2 == NULL; xref = xref->next) {
+    if (xref->id.choice != 0) {
+      mrna2 = SeqMgrGetFeatureByFeatID (last->idx.entityID, NULL, NULL, xref, NULL);
+      if (mrna2 != NULL && mrna2->idx.subtype != FEATDEF_mRNA) {
+        mrna2 = NULL;
+      }
+    }
+  }
+
+  if (mrna1 != NULL && mrna2 != NULL && mrna1 != mrna2) return TRUE;
+
+  return FALSE;
+}
+
 static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bvsp)
 
 {
@@ -10924,6 +11132,15 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   CharPtr            except_text = NULL;
   ValNodePtr         vnp, cds_prod_head = NULL, mrna_prod_head = NULL,
                      lastcdsprod = NULL, lastmrnaprod = NULL;
+  StreamCache        sc;
+  Int2               res;
+  Int4               dashes;
+  Int4               Ns;
+  Int4               realBases;
+  Int4               estimated_length;
+  Int4               loclen;
+  GBQualPtr          gbq;
+  long int           val;
 
   gcp = bvsp->gcp;
   vsp = bvsp->vsp;
@@ -11222,6 +11439,8 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
               /* do not report if both have dbxrefs and they are different */
             } else if (featdeftype == FEATDEF_variation && ReplaceQualsDiffer (sfp->qual, last->qual)) {
               /* do not report if both have replace quals and they are different */
+            } else if (CDSsLinkedToDifferentMRNAs (sfp, last)) {
+              /* do not report if CDSs are linked to two different mRNAs */
             } else if (fcontext.sap == sap) {
               if (samelabel) {
                 ValidErr (vsp, severity, ERR_SEQ_FEAT_FeatContentDup, "Duplicate feature");
@@ -11507,6 +11726,8 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
       left = fcontext.left;
       right = fcontext.right;
       strand = fcontext.strand;
+      partialL = fcontext.partialL;
+      partialR = fcontext.partialR;
       sfp = SeqMgrGetNextFeature (bsp, last, SEQFEAT_RNA, 0, &fcontext);
       while (sfp != NULL) {
         thisrnatype = WhichRNA (sfp);
@@ -11518,10 +11739,11 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                 if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
                     (lastrnatype == TRANSFER_RNA && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
                   /* okay in mitochondria */
-                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_2) ||
+                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && (thisrnatype == INTERNAL_SPACER_2 || thisrnatype == INTERNAL_SPACER_X)) ||
                     (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == MIDDLE_RIBOSOMAL_SUBUNIT) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_1) ||
-                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11534,10 +11756,11 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                 if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
                     (lastrnatype == TRANSFER_RNA && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
                   /* okay in mitochondria */
-                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_1) ||
+                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && (thisrnatype == INTERNAL_SPACER_1 || thisrnatype == INTERNAL_SPACER_X)) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_2) ||
                     (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == MIDDLE_RIBOSOMAL_SUBUNIT) ||
-                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11559,10 +11782,11 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                   vsp->descr = NULL;
                   vsp->sfp = sfp;
                   ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ITSdoesNotAbutRRNA, "tRNA overlaps adjacent rRNA component");
-                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_2) ||
+                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && (thisrnatype == INTERNAL_SPACER_2 || thisrnatype == INTERNAL_SPACER_X)) ||
                     (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == MIDDLE_RIBOSOMAL_SUBUNIT) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_1) ||
-                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11575,10 +11799,11 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                 if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
                     (lastrnatype == TRANSFER_RNA && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
                   /* okay in mitochondria */
-                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_1) ||
+                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && (thisrnatype == INTERNAL_SPACER_1 || thisrnatype == INTERNAL_SPACER_X)) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype == INTERNAL_SPACER_2) ||
                     (lastrnatype == INTERNAL_SPACER_1 && thisrnatype == MIDDLE_RIBOSOMAL_SUBUNIT) ||
-                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11591,13 +11816,16 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
             } else {
               /* abuts */
               if (strand == Seq_strand_minus) {
-                if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
+                if (lastrnatype == thisrnatype && partialL && fcontext.partialR && bsp->repr == Seq_repr_seg) {
+                  /* okay in segmented set */
+                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
                     (lastrnatype == TRANSFER_RNA && thisrnatype == SMALL_RIBOSOMAL_SUBUNIT)) {
                   /* okay in mitochondria */
-                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && thisrnatype != INTERNAL_SPACER_2) ||
+                } else if ((lastrnatype == LARGE_RIBOSOMAL_SUBUNIT && (thisrnatype != INTERNAL_SPACER_2 && thisrnatype != INTERNAL_SPACER_X)) ||
                     (lastrnatype == INTERNAL_SPACER_2 && thisrnatype != MIDDLE_RIBOSOMAL_SUBUNIT) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype != INTERNAL_SPACER_1) ||
-                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype != SMALL_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_1 && thisrnatype != SMALL_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype != SMALL_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11607,13 +11835,16 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                   ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ITSdoesNotAbutRRNA, "Problem with order of abutting rRNA components");
                 }
               } else {
-                if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
+                if (lastrnatype == thisrnatype && partialR && fcontext.partialL && bsp->repr == Seq_repr_seg) {
+                  /* okay in segmented set */
+                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype == TRANSFER_RNA) ||
                     (lastrnatype == TRANSFER_RNA && thisrnatype == LARGE_RIBOSOMAL_SUBUNIT)) {
                   /* okay in mitochondria */
-                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && thisrnatype != INTERNAL_SPACER_1) ||
+                } else if ((lastrnatype == SMALL_RIBOSOMAL_SUBUNIT && (thisrnatype != INTERNAL_SPACER_1 && thisrnatype != INTERNAL_SPACER_X)) ||
                     (lastrnatype == MIDDLE_RIBOSOMAL_SUBUNIT && thisrnatype != INTERNAL_SPACER_2) ||
                     (lastrnatype == INTERNAL_SPACER_1 && thisrnatype != MIDDLE_RIBOSOMAL_SUBUNIT) ||
-                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype != LARGE_RIBOSOMAL_SUBUNIT)) {
+                    (lastrnatype == INTERNAL_SPACER_2 && thisrnatype != LARGE_RIBOSOMAL_SUBUNIT) ||
+                    (lastrnatype == INTERNAL_SPACER_X && thisrnatype != LARGE_RIBOSOMAL_SUBUNIT)) {
                   if (gcp != NULL) {
                     gcp->itemID = fcontext.itemID;
                     gcp->thistype = OBJ_SEQFEAT;
@@ -11630,6 +11861,8 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
         left = fcontext.left;
         right = fcontext.right;
         strand = fcontext.strand;
+        partialL = fcontext.partialL;
+        partialR = fcontext.partialR;
         lastrnatype = thisrnatype;
         sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, 0, &fcontext);
       }
@@ -11676,6 +11909,65 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
       }
     }
   }
+
+  if (ISA_na (bsp->mol)) {
+    sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_gap, &fcontext);
+    while (sfp != NULL) {
+      estimated_length = 0;
+      for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+        if (StringICmp (gbq->qual, "estimated_length") != 0) continue;
+        if (StringHasNoText (gbq->val)) continue;
+        if (StringICmp (gbq->val, "unknown") == 0) continue;
+        if (sscanf (gbq->val, "%ld", &val) == 1) {
+          estimated_length = val;
+        }
+      }
+      if (StreamCacheSetup (NULL, sfp->location, EXPAND_GAPS_TO_DASHES, &sc)) {
+        dashes = 0;
+        Ns = 0;
+        realBases = 0;
+        while ((res = StreamCacheGetResidue (&sc)) != '\0') {
+          if (IS_LOWER (res)) {
+            res = TO_UPPER (res);
+          }
+          if (res == '-') {
+            dashes++;
+          } else if (res == 'N') {
+            Ns++;
+          } else {
+            realBases++;
+          }
+        }
+        if (gcp != NULL) {
+          gcp->itemID = fcontext.itemID;
+          gcp->thistype = OBJ_SEQFEAT;
+        }
+        vsp->descr = NULL;
+        vsp->sfp = sfp;
+        loclen = SeqLocLen (sfp->location);
+        if (estimated_length > 0 && estimated_length != loclen) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_GapFeatureProblem, "Gap feature estimated_length %ld does not match %ld feature length",
+                    (long) estimated_length, (long) loclen);
+        } else if (realBases > 0 && Ns > 0) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_GapFeatureProblem, "Gap feature over %ld real bases and %ld Ns", (long) realBases, (long) Ns);
+        } else if (realBases > 0) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_GapFeatureProblem, "Gap feature over %ld real bases", (long) realBases);
+        } else if (Ns > 0) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_GapFeatureProblem, "Gap feature over %ld Ns", (long) Ns);
+        } else if (estimated_length > 0 && dashes != estimated_length) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_GapFeatureProblem, "Gap feature estimated_length %ld does not match %ld gap characters",
+                    (long) estimated_length, (long) dashes);
+        }
+      }
+      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_gap, &fcontext);
+    }
+  }
+  if (gcp != NULL) {
+    gcp->itemID = olditemid;
+    gcp->thistype = olditemtype;
+  }
+  vsp->descr = NULL;
+  vsp->sfp = NULL;
 
   lastbiop = NULL;
   lastsfp = NULL;
@@ -11972,7 +12264,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
             bvs.is_syn_constr = TRUE;
           }
         }
-        if (biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_MUT || biop->origin == ORG_SYNTHETIC) {
+        if (biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_SYNTHETIC) {
           bvs.is_artificial = TRUE;
         }
         for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
@@ -12538,13 +12830,13 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
             } else if (ISA_aa (bsp->mol)) {
               just_prt_letters = TRUE;
               for (ptr = gbqual->val, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
-                if (StringChr ("acdefghiklmnpqrstuvwy", ch) == NULL) {
+                if (StringChr ("acdefghiklmnpqrstuvwy*", ch) == NULL) {
                   just_prt_letters = FALSE;
                 }
               }
               if (!just_prt_letters) {
                 ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue,
-                          "%s is not a legal value for qualifier %s - should only be composed of acdefghiklmnpqrstuvwy amino acids",
+                          "%s is not a legal value for qualifier %s - should only be composed of acdefghiklmnpqrstuvwy* amino acids",
                           gbqual->val, gbqual->qual);
               }
             }
@@ -12929,7 +13221,10 @@ static Boolean PartialAtSpliceSiteOrGap (SeqLocPtr head, Uint2 slpTag, BoolPtr i
     return FALSE;
   acceptor = SeqLocStart (slp);
   donor = SeqLocStop (slp);
-  bsp = BioseqLockById (sip);
+  bsp = NULL;
+  if (sip != NULL && (sip->choice != SEQID_GI || sip->data.intvalue > 0)) {
+    bsp = BioseqLockById (sip);
+  }
   if (bsp == NULL)
     return FALSE;
   len = bsp->length;
@@ -13112,6 +13407,8 @@ static void CheckTrnaCodons (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
     }
   }
 
+  if (sfp->pseudo) return;
+
   if (aa > 0 && aa != 255) {
     /* - no gaps now that O and J are added
     if (aa <= 74) {
@@ -13133,7 +13430,7 @@ static void CheckTrnaCodons (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
       ValidErr (vsp, sev, ERR_SEQ_FEAT_BadTrnaAA, "Invalid tRNA amino acid");
     }
   } else {
-    ValidErr (vsp, sev, ERR_SEQ_FEAT_BadTrnaAA, "Invalid tRNA amino acid");
+    ValidErr (vsp, sev, ERR_SEQ_FEAT_BadTrnaAA, "Missing tRNA amino acid");
   }
 }
 
@@ -13439,7 +13736,7 @@ static void CheckForBadGeneOverlap (ValidStructPtr vsp, SeqFeatPtr sfp)
   SeqMgrFeatContext fcontext;
   SeqFeatPtr      gene, operon;
   GeneRefPtr      grp;
-  ErrSev          sev = SEV_ERROR;
+  ErrSev          sev = /* SEV_ERROR */ SEV_WARNING;
 
   if (sfp == NULL)
     return;
@@ -13469,7 +13766,7 @@ static void CheckForBadMRNAOverlap (ValidStructPtr vsp, SeqFeatPtr sfp)
 {
   SeqMgrFeatContext fcontext;
   SeqFeatPtr      mrna;
-  ErrSev          sev = SEV_ERROR;
+  ErrSev          sev = /* SEV_ERROR */ SEV_WARNING;
 
   if (sfp == NULL)
     return;
@@ -14630,6 +14927,8 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   Boolean         bypassGeneTest;
   Boolean         dicistronic = FALSE;
   Int2            inferenceCode;
+  Boolean         hasInference = FALSE;
+  Boolean         hasExperiment = FALSE;
   Boolean         accn_seqid;
 
 
@@ -14950,10 +15249,13 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       }
       if (pseudo && sfp->product != NULL) {
         if (ovgenepseudo) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct, "A coding region overlapped by a pseudogene should not have a product");
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct, "A coding region overlapped by a pseudogene should not have a product");
         } else {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a product");
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProtXref, "A pseudo coding region should not have a product");
         }
+      }
+      if (pseudo && SeqMgrGetProtXref (sfp) != NULL) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a protein xref");
       }
       if (codonqual) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_CodonQualifierUsed, "Use the proper genetic code, if available, or set transl_excepts on specific codons");
@@ -15344,6 +15646,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       }
   	}
   	if (StringICmp (gbq->qual, "inference") == 0) {
+  	  hasInference = TRUE;
   	  inferenceCode = ValidateInferenceQualifier (gbq->val, TRUE);
   	  if (inferenceCode != VALID_INFERENCE) {
   	    if (inferenceCode < VALID_INFERENCE || inferenceCode > ACC_VERSION_NOT_PUBLIC) {
@@ -15351,7 +15654,13 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   	    }
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidInferenceValue, "Inference qualifier problem - %s", infMessage [(int) inferenceCode]);
   	  }
+  	} else if (StringICmp (gbq->val, "experiment") == 0) {
+  	  hasExperiment = TRUE;
   	}
+  }
+  if (sfp->exp_ev > 0 && (! hasInference) && (! hasExperiment) && (! vsp->feat_loc_has_gi)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidInferenceValue,
+              "Inference or experiment qualifier missing but obsolete experimental evidence qualifier set");
   }
 
   if (sfp->product != NULL) {
@@ -15622,7 +15931,8 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   CharPtr         farstr = "";
   ErrSev          fetchsev;
   GatherContextPtr  gcp;
-  Boolean         has_errors = FALSE, unclassified_except = FALSE, mismatch_except = FALSE;
+  Boolean         has_errors = FALSE, unclassified_except = FALSE,
+                  mismatch_except = FALSE, other_than_mismatch = FALSE;
   Int2            i;
   Boolean         is_refseq = FALSE;
   Int4            mismatch, total;
@@ -15643,7 +15953,7 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   if (sfp->product == NULL)
     return;
 
-  if (sfp->excpt && (! StringHasNoText (sfp->except_text))) {
+  if (sfp->excpt && (! vsp->ignoreExceptions) && (! StringHasNoText (sfp->except_text))) {
     for (i = 0; bypass_mrna_trans_check [i] != NULL; i++) {
       if (StringISearch (sfp->except_text,  bypass_mrna_trans_check [i]) != NULL) {
         report_errors = FALSE;  /* biological exception */
@@ -15690,7 +16000,9 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       }
     }
     if (bsp == NULL && vsp->farFetchMRNAproducts) {
-      bsp = BioseqLockById (sip);
+      if (sip != NULL && (sip->choice != SEQID_GI || sip->data.intvalue > 0)) {
+        bsp = BioseqLockById (sip);
+      }
       if (bsp != NULL) {
         unlockProd = TRUE;
         farstr = "(far) ";
@@ -15720,6 +16032,7 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   pdseq = GetSequenceByFeature (&sf);
   if (pdseq == NULL) {
     has_errors = TRUE;
+    other_than_mismatch = TRUE;
     if (report_errors || unclassified_except) {
       fetchsev = SEV_ERROR;
       if (sip->choice != SEQID_GI) {
@@ -15748,18 +16061,21 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         }
         if (counta < 19 * countnona) {
           has_errors = TRUE;
+          other_than_mismatch = TRUE;
           if (report_errors) {
             ValidErr (vsp, sev, ERR_SEQ_FEAT_TranscriptLen, "Transcript length [%ld] less than %sproduct length [%ld], and tail < 95%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
           plen = mlen; /* even if it fails polyA test, allow base-by-base comparison on common length */
         } else if (counta > 0 && countnona == 0) {
           has_errors = TRUE;
+          other_than_mismatch = TRUE;
           if (report_errors) {
             ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail is 100%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
           plen = mlen; /* if it passes polyA test, allow base-by-base comparison on common length */
         } else {
           has_errors = TRUE;
+          other_than_mismatch = TRUE;
           if (report_errors) {
             ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail >= 95%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
@@ -15767,6 +16083,7 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         }
       } else {
         has_errors = TRUE;
+        other_than_mismatch = TRUE;
         if (report_errors) {
           ValidErr (vsp, sev, ERR_SEQ_FEAT_TranscriptLen, "Transcript length [%ld] greater than %sproduct length [%ld]", (long) mlen, farstr, (long) plen);
         }
@@ -15807,6 +16124,8 @@ erret:
   if (! report_errors) {
     if (! has_errors) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnnecessaryException, "mRNA has exception but passes transcription test");
+    } else if (unclassified_except && (! other_than_mismatch)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ErroneousException, "mRNA has unclassified exception but only difference is mismatches");
     }
   }
 }
@@ -15952,7 +16271,8 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   Boolean         transl_except = FALSE, prot_ok = TRUE, is_nc = FALSE,
                   has_errors = FALSE, report_errors = TRUE,
                   unclassified_except = FALSE, mismatch_except = FALSE,
-                  frameshift_except = FALSE, rearrange_except = FALSE;
+                  frameshift_except = FALSE, rearrange_except = FALSE,
+                  other_than_mismatch = FALSE;
   CharPtr         nuclocstr, farstr = "";
   CodeBreakPtr    cbp;
   Int4            pos1, pos2, pos;
@@ -15973,7 +16293,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   if (sfp == NULL)
     return;
 
-  if (sfp->excpt && (! StringHasNoText (sfp->except_text))) {
+  if (sfp->excpt && (! vsp->ignoreExceptions) && (! StringHasNoText (sfp->except_text))) {
     for (i = 0; bypass_cds_trans_check [i] != NULL; i++) {
       if (StringISearch (sfp->except_text,  bypass_cds_trans_check [i]) != NULL) {
         report_errors = FALSE;  /* biological exception */
@@ -16037,6 +16357,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   newprot = ProteinFromCdRegionExEx (sfp, TRUE, FALSE, &alt_start);   /* include stop codons, do not remove trailing X/B/Z */
   if (newprot == NULL) {
     has_errors = TRUE;
+    other_than_mismatch = TRUE;
     if (report_errors || unclassified_except) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_CdTransFail, "Unable to translate");
     }
@@ -16058,6 +16379,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     }
     if (sev > SEV_NONE) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, sev, ERR_SEQ_FEAT_AltStartCodon, "Alternative start codon used");
       }
@@ -16127,6 +16449,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         pos = 0;
       if ((pos1 % 3) != pos) {
         has_errors = TRUE;
+        other_than_mismatch = TRUE;
         if (report_errors) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TranslExceptPhase, "transl_except qual out of frame.");
         }
@@ -16144,6 +16467,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         sev = SEV_ERROR;
       }
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "Suspicious CDS location - frame > 1 but not 5' partial");
       }
@@ -16153,6 +16477,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         sev = SEV_ERROR;
       }
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "Suspicious CDS location - frame > 1 and not at consensus splice site");
       }
@@ -16199,6 +16524,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   if (stop_count > 0) {
     if (got_dash) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       sev = SEV_ERROR;
       if (unclassified_except) {
         sev = SEV_WARNING;
@@ -16209,6 +16535,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       }
     } else {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       sev = SEV_ERROR;
       if (unclassified_except) {
         sev = SEV_WARNING;
@@ -16248,6 +16575,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       goto erret;
   } else if (got_dash) {
     has_errors = TRUE;
+    other_than_mismatch = TRUE;
     if (report_errors) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
     }
@@ -16259,7 +16587,9 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   if (protid != NULL) {
     prot1seq = BioseqFind (protid);
     if (prot1seq == NULL && vsp->farFetchCDSproducts) {
-      prot1seq = BioseqLockById (protid);
+      if (protid != NULL && (protid->choice != SEQID_GI || protid->data.intvalue > 0)) {
+        prot1seq = BioseqLockById (protid);
+      }
       if (prot1seq != NULL) {
         unlockProd = TRUE;
         farstr = "(Far) ";
@@ -16292,6 +16622,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         }
         if (sev != SEV_NONE) {
           has_errors = TRUE;
+          other_than_mismatch = TRUE;
           if (report_errors) {
             ValidErr (vsp, sev, ERR_SEQ_FEAT_NoProtein, "No protein Bioseq given");
           }
@@ -16377,11 +16708,13 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         } else if (i == 0) {
           if ((sfp->partial) && (!no_beg) && (!no_end)) { /* ok, it's partial */
             has_errors = TRUE;
+            other_than_mismatch = TRUE;
             if (report_errors) {
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "Start of location should probably be partial");
             }
           } else if (residue1 == '-') {
             has_errors = TRUE;
+            other_than_mismatch = TRUE;
             if (report_errors) {
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
             }
@@ -16427,6 +16760,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     */
   } else {
     has_errors = TRUE;
+    other_than_mismatch = TRUE;
     if (report_errors) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_TransLen, "Given protein length [%ld] does not match %stranslation length [%ld]", prot1len, farstr, len);
     }
@@ -16436,11 +16770,13 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     if ((!no_beg) && (!no_end)) {       /* just didn't label */
       if (!got_stop) {
         has_errors = TRUE;
+        other_than_mismatch = TRUE;
         if (report_errors) {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial");
         }
       } else {
         has_errors = TRUE;
+        other_than_mismatch = TRUE;
         if (report_errors) {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial");
         }
@@ -16458,16 +16794,19 @@ erret:
   if (show_stop) {
     if ((!got_stop) && (!no_end)) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_NoStop, "Missing stop codon");
       }
     } else if ((got_stop) && (no_end)) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "Got stop codon, but 3'end is labeled partial");
       }
     } else if ((got_stop) && (!no_end) && (ragged)) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       sev = SEV_ERROR;
       if (unclassified_except) {
         sev = SEV_WARNING;
@@ -16481,6 +16820,7 @@ erret:
   if (!prot_ok) {
     if (transl_except) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TranslExcept, "Unparsed transl_except qual. Skipped");
       }
@@ -16488,6 +16828,7 @@ erret:
   } else {
     if (transl_except) {
       has_errors = TRUE;
+      other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TranslExcept, "Unparsed transl_except qual (but protein is okay). Skipped");
       }
@@ -16508,6 +16849,8 @@ erret:
       if ((! frameshift_except) && (! rearrange_except)) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnnecessaryException, "CDS has exception but passes translation test");
       }
+    } else if (unclassified_except && (! other_than_mismatch)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ErroneousException, "CDS has unclassified exception but only difference is mismatches");
     }
   }
 }
@@ -16653,7 +16996,10 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 
     if ((ctr == 1) || (!SeqIdMatch (sip, last_sip))) {
       /* spp = SeqPortFree (spp); */
-      bsp = BioseqLockById (sip);
+      bsp = NULL;
+      if (sip != NULL && (sip->choice != SEQID_GI || sip->data.intvalue > 0)) {
+        bsp = BioseqLockById (sip);
+      }
       if (bsp == NULL)
         break;
       len = bsp->length;
@@ -16931,11 +17277,36 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
   SeqIdPtr        id1 = NULL, id2;
   BioseqPtr       bsp;
   SeqFeatPtr      sfp = NULL;
+  Int2            zeroGi = 0;
+  Char            buf [32];
+  SeqIdPtr        sip;
 
   if (slp == NULL)
     return;
 
   sfp = vsp->sfp;
+
+  tmp = NULL;
+  while ((tmp = SeqLocFindNext (slp, tmp)) != NULL) {
+    sip = SeqLocId (tmp);
+    if (sip != NULL && sip->choice == SEQID_GI && sip->data.intvalue <= 0) {
+      zeroGi++;
+    }
+  }
+  if (zeroGi > 0) {
+    StringCpy (buf, "?");
+    bsp = vsp->bsp;
+    if (bsp != NULL) {
+      SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf) - 1);
+    }
+    if (zeroGi > 1) {
+      ValidErr (vsp, SEV_REJECT, ERR_SEQ_FEAT_FeatureLocationIsGi0, "Feature has %d gi|0 locations on Bioseq %s",
+                (int) zeroGi, buf);
+    } else if (zeroGi > 0) {
+      ValidErr (vsp, SEV_REJECT, ERR_SEQ_FEAT_FeatureLocationIsGi0, "Feature has %d gi|0 location on Bioseq %s",
+                (int) zeroGi, buf);
+    }
+  }
 
   bsp = BioseqFindFromSeqLoc (slp);
   if (bsp != NULL && bsp->topology == 2) {

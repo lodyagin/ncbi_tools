@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.22 $  $Date: 2005/04/20 14:30:55 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.26 $  $Date: 2006/04/21 14:36:35 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,18 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.26  2006/04/21 14:36:35  lavr
+ * Debug printout data to trigger on 'ALL'
+ *
+ * Revision 6.25  2006/04/21 14:30:50  ucko
+ * Fix typo in previous revision, and restore log entry for R6.23.
+ *
+ * Revision 6.24  2006/04/21 01:42:56  lavr
+ * SConnNetInfo::lb_disable reinstated
+ *
+ * Revision 6.23  2006/04/20 14:35:57  lavr
+ * Compatibility mode for SRV_NO_LB_DIRECT (SConnNetInfo::lb_disable retired)
+ *
  * Revision 6.22  2005/04/20 14:30:55  lavr
  * Allow zero timeout -- final
  *
@@ -269,21 +281,25 @@ static NI_HandPtr s_GenericGetService
     /* alternate debug printout request */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_DEBUG_PRINTOUT,
                    str, sizeof(str), "");
-    if (*str  &&  (StringICmp(str, "1"   ) == 0 ||
+    if (*str  &&  (StringCmp (str, "1"   ) == 0 ||
                    StringICmp(str, "true") == 0 ||
                    StringICmp(str, "yes" ) == 0 ||
+                   StringICmp(str, "on"  ) == 0 ||
                    StringICmp(str, "some") == 0)) {
         net_info->debug_printout = eDebugPrintout_Some;
     }
-    if (*str  &&   StringICmp(str, "data") == 0)
+    if (*str  &&  (StringICmp(str, "data") == 0 ||
+                   StringICmp(str, "all" ) == 0)) {
         net_info->debug_printout = eDebugPrintout_Data;
+    }
 
     /* whether to prohibit the use of local LBSMD */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,
                    str, sizeof(str), "");
-    if (*str  &&  (StringICmp(str, "0"    ) != 0 &&
-                   StringICmp(str, "false") != 0 &&
-                   StringICmp(str, "no"   ) != 0)) {
+    if (*str  &&  (StringCmp (str, "1"   ) == 0 ||
+                   StringICmp(str, "true") == 0 ||
+                   StringICmp(str, "yes" ) == 0 ||
+                   StringICmp(str, "on"  ) == 0)) {
         net_info->lb_disable = 1/*true*/;
     }
 

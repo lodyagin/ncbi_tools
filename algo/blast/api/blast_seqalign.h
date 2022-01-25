@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.28 2006/02/15 15:13:47 madden Exp $
+/* $Id: blast_seqalign.h,v 1.30 2006/03/29 21:43:30 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -68,7 +68,7 @@ SBlastSeqalignArray* SBlastSeqalignArrayFree(SBlastSeqalignArray* array);
 
 /** Convert BLAST results structure to a list of SeqAlign's.
  * @param program_number Type of BLAST program [in]
- * @param results The BLAST results [in]
+ * @param results_ptr The BLAST results, will be deleted as SeqAlign is built [in|out]
  * @param query_slp List of query SeqLoc's [in]
  * @param rdfp Pointer to a BLAST database structure [in]
  * @param subject_slp List of subject sequences locations [in]
@@ -77,7 +77,7 @@ SBlastSeqalignArray* SBlastSeqalignArrayFree(SBlastSeqalignArray* array);
  * @param seqalign_arr object with resulting SeqAligns [out]
  */
 Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number, 
-        BlastHSPResults* results, SeqLocPtr query_slp, 
+        BlastHSPResults** results_ptr, SeqLocPtr query_slp, 
         ReadDBFILE* rdfp, SeqLoc* subject_slp, 
         Boolean is_gapped, Boolean is_ooframe, SBlastSeqalignArray* *seqalign_arr);
 
@@ -87,7 +87,6 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
  * @param esp Link in editing script where to start collecting the data. [in]
  * @param start first element of EditScript to use [in]
  * @param number number of elements of EditScript to use [in]
- * @param numseg Number of segments in the alignment [in]
  * @param query_length Length of query sequence [in]
  * @param subject_length Length of subject sequence [in]
  * @param translate1 Is query translated? [in]

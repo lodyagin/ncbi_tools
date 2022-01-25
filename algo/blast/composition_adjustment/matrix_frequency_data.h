@@ -1,4 +1,4 @@
-/* $Id: matrix_frequency_data.h,v 1.4 2006/01/30 14:47:57 gertz Exp $
+/* $Id: matrix_frequency_data.h,v 1.5 2006/04/03 17:43:51 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,9 +36,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** Number of standard amino acids */
-#define COMPO_NUM_TRUE_AA 20
 
 /**
  * Get joint probabilities for the named matrix.

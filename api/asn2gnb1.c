@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.97 2006/02/23 16:38:54 kans Exp $
+* $Id: asn2gnb1.c,v 1.101 2006/05/03 18:05:39 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.97 $
+* $Revision: 1.101 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -3320,8 +3320,8 @@ static void MakeGapFeats (
   gapvnp = (ValNodePtr PNTR) userdata;
   sip = SeqIdFindBest (bsp->id, 0);
   if (sip == NULL) return;
-  /* suppress on far delta contigs for now */
-  if (! DeltaLitOnly (bsp)) return;
+  /* no longer suppress on far delta contigs */
+  /* if (! DeltaLitOnly (bsp)) return; */
 
   for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
     if (vnp->choice == 1) {
@@ -3477,6 +3477,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          lockFarProd;
   Boolean          lookupFarComp;
   Boolean          lookupFarHist;
+  Boolean          lookupFarInf;
   Boolean          lookupFarLocs;
   Boolean          lookupFarOthers;
   Boolean          lookupFarProd;
@@ -3625,7 +3626,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   gapvnp = NULL;
   if (format != FTABLE_FMT) {
-    if (isG || isTPG || isOnlyLocal || isRefSeq || (isGeneral && (! isGED))) {
+    if (isGED /* was isG */ || isTPG || isOnlyLocal || isRefSeq || (isGeneral && (! isGED))) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
         VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeGapFeats);
       }
@@ -3717,13 +3718,14 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   lookupFarLocs = (Boolean) ((locks & LOOKUP_FAR_LOCATIONS) != 0);
   lookupFarProd = (Boolean) ((locks & LOOKUP_FAR_PRODUCTS) != 0);
   lookupFarHist = (Boolean) ((locks & LOOKUP_FAR_HISTORY) != 0);
+  lookupFarInf = (Boolean) ((locks & LOOKUP_FAR_INFERENCE) != 0);
   lookupFarOthers = (Boolean) ((locks & LOOKUP_FAR_OTHERS) != 0);
 
-  if (lookupFarComp || lookupFarLocs || lookupFarProd || lookupFarHist || lookupFarOthers) {
+  if (lookupFarComp || lookupFarLocs || lookupFarProd || lookupFarHist || lookupFarInf || lookupFarOthers) {
 
     /* lookukp all far SeqIDs in advance */
 
-    LookupFarSeqIDs (sep, lookupFarComp, lookupFarLocs, lookupFarProd, FALSE, lookupFarHist, lookupFarOthers);
+    LookupFarSeqIDs (sep, lookupFarComp, lookupFarLocs, lookupFarProd, FALSE, lookupFarHist, lookupFarInf, lookupFarOthers);
   }
 
   ajp->showFarTransl = (Boolean) ((flags & FAR_TRANS_MASK) == SHOW_FAR_TRANSLATION);
@@ -5694,6 +5696,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   Boolean            lockFarProd;
   Boolean            lookupFarComp;
   Boolean            lookupFarHist;
+  Boolean            lookupFarInf;
   Boolean            lookupFarLocs;
   Boolean            lookupFarOthers;
   Boolean            lookupFarProd;
@@ -5749,11 +5752,12 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   lookupFarLocs = (Boolean) ((locks & LOOKUP_FAR_LOCATIONS) != 0);
   lookupFarProd = (Boolean) ((locks & LOOKUP_FAR_PRODUCTS) != 0);
   lookupFarHist = (Boolean) ((locks & LOOKUP_FAR_HISTORY) != 0);
+  lookupFarInf = (Boolean) ((locks & LOOKUP_FAR_INFERENCE) != 0);
   lookupFarOthers = (Boolean) ((locks & LOOKUP_FAR_OTHERS) != 0);
 
-  if (lookupFarComp || lookupFarLocs || lookupFarProd || lookupFarHist || lookupFarOthers) {
-    locks = locks ^ (LOOKUP_FAR_COMPONENTS | LOOKUP_FAR_LOCATIONS | LOOKUP_FAR_PRODUCTS | LOOKUP_FAR_HISTORY | LOOKUP_FAR_OTHERS);
-    LookupFarSeqIDs (sep, lookupFarComp, lookupFarLocs, lookupFarProd, FALSE, lookupFarHist, lookupFarOthers);
+  if (lookupFarComp || lookupFarLocs || lookupFarProd || lookupFarHist || lookupFarInf || lookupFarOthers) {
+    locks = locks ^ (LOOKUP_FAR_COMPONENTS | LOOKUP_FAR_LOCATIONS | LOOKUP_FAR_PRODUCTS | LOOKUP_FAR_HISTORY | LOOKUP_FAR_INFERENCE | LOOKUP_FAR_OTHERS);
+    LookupFarSeqIDs (sep, lookupFarComp, lookupFarLocs, lookupFarProd, FALSE, lookupFarHist, lookupFarInf, lookupFarOthers);
   }
 
   ProfilerSetStatus (TRUE);

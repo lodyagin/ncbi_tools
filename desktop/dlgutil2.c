@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.104 $
+* $Revision: 6.108 $
 *
 * File Description: 
 *
@@ -1020,7 +1020,8 @@ static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductG
       qual == GBQUAL_inference) {
     return FALSE;
   }
-  if (qual == GBQUAL_map && (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region)) return FALSE;
+  if (qual == GBQUAL_map && (sfp == NULL ||
+      (sfp->idx.subtype != FEATDEF_repeat_region && sfp->idx.subtype != FEATDEF_gap))) return FALSE;
   if (qual == GBQUAL_operon && (sfp == NULL || sfp->idx.subtype != FEATDEF_operon)) return FALSE;
   if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
     if (qual == GBQUAL_usedin) {
@@ -1256,7 +1257,9 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
   GBQualPtr       gbq;
   Boolean         hasillegal;
   Int2            i;
+  ImpFeatPtr      imp;
   Int2            index;
+  Boolean         is_gap = FALSE;
   Int2            j;
   Int2            max;
   Int2            num;
@@ -1277,6 +1280,13 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
     fpf->todialog = GBQualPtrToFieldPage;
     fpf->fromdialog = FieldPageToGBQualPtr;
     fpf->testdialog = NULL;
+
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_IMP) {
+      imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+      if (imp != NULL && StringICmp (imp->key, "gap") == 0) {
+        is_gap = TRUE;
+      }
+    }
 
     gbq = NULL;
     if (sfp != NULL) {
@@ -1369,6 +1379,11 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
         ppt = StaticPrompt (g, fpf->fields [j], max, dialogTextHeight, programFont, 'l');
         if (ParFlat_GBQual_names [i].gbclass != Class_none) {
           fpf->values [j] = DialogText (g, "", 20, NULL);
+          /*
+          if (i == GBQUAL_estimated_length && is_gap) {
+            Disable (fpf->values [j]);
+          }
+          */
         } else {
           fpf->boxes [j] = CheckBox (g, "", NULL);
           AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) fpf->boxes [j], NULL);
@@ -5969,7 +5984,7 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
     str = NULL;
     if (best > 0 && inferencePrefix [best] != NULL) {
       iep->prefix = MemFree (iep->prefix);
-      iep->prefix =  GetEnumName ((UIEnum) best, inference_alist);
+      iep->prefix = StringSave(GetEnumName ((UIEnum) best, inference_alist));
 
       if (rest != NULL) {
         ch = *rest;

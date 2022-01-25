@@ -1,4 +1,4 @@
-/* $Id: blast_returns.h,v 1.13 2005/06/02 20:38:51 dondosha Exp $
+/* $Id: blast_returns.h,v 1.14 2006/04/26 12:46:00 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,7 @@ extern "C" {
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_diagnostics.h>   
+#include <algo/blast/api/blast_message_api.h>   
 #include <blfmtutl.h>
 
 /** @addtogroup CToolkitAlgoBlast
@@ -110,7 +111,7 @@ typedef struct Blast_SummaryReturn {
     Blast_DatabaseStats* db_stats; /**< database numbers and adjustments */
     Blast_SearchParams* search_params;/**< parameters used in search. */
     BlastDiagnostics* diagnostics; /**< diagnositics from engine. */
-    Blast_Message* error;          /**< Error or warning message. */
+    SBlastMessage* error;          /**< Error or warning message. */
     SPHIQueryInfo* pattern_info; /**< In PHI BLAST only: information about 
                                           pattern occurrences in query. */
 } Blast_SummaryReturn;

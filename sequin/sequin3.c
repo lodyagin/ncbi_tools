@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.665 $
+* $Revision: 6.678 $
 *
 * File Description: 
 *
@@ -773,7 +773,34 @@ static void AssignFeatIDs (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  AssignCDSmRNAfeatureIDs (sep);
+  AssignFeatureIDs (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ObjMgrDeSelect (0, 0, 0, 0, NULL);
+  Update ();
+}
+
+static void ReassignFeatIDs (IteM i)
+
+{
+  MsgAnswer    ans;
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  ans = Message (MSG_OKC, "Are you sure you want to reassign feature identifiers?");
+  if (ans == ANS_CANCEL) return;
+
+  ReassignFeatureIDs (sep);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -800,7 +827,7 @@ static void ClearFeatIDsAndLinks (IteM i)
   ans = Message (MSG_YN, "Are you sure you want to remove feature IDs and links?");
   if (ans == ANS_NO) return;
 
-  ClearCDSmRNAfeatureIDs (sep);
+  ClearFeatureIDs (sep);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -903,7 +930,7 @@ static void LinkSelected (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  AssignCDSmRNAfeatureIDs (sep);
+  AssignFeatureIDs (sep);
 
   ssp = ObjMgrGetSelected ();
   if (ssp == NULL) {
@@ -16877,6 +16904,7 @@ ReplaceItemPair AbbreviationList[] = {
  { "bac", "BAC" },
  { "caenorhabditis elegans", "Caenorhabditis elegans" },
  { "cdna", "cDNA" },
+ { "cdnas", "cDNAs" },
  { "coi", "COI" },
  { "coii", "COII" },
  { "danio rerio", "Danio rerio" },
@@ -17071,17 +17099,12 @@ static void FixOrgNamesInString (CharPtr str, ValNodePtr org_names)
 }
 
 
-static void 
-FixCapitalizationInTitle 
-(CharPtr PNTR pTitle,
- Boolean      first_is_upper,
- ValNodePtr   org_names)
+extern void ResetCapitalization (Boolean first_is_upper, CharPtr pString)
 {
   CharPtr pCh;
   Boolean was_digit = FALSE;
 
-  if (pTitle == NULL) return;
-  pCh = *pTitle;
+  pCh = pString;
   if (pCh == NULL) return;
   if (*pCh == '\0') return;
   
@@ -17121,7 +17144,18 @@ FixCapitalizationInTitle
       *pCh = tolower (*pCh);
     }
     pCh++;
-  }
+  }  
+}
+
+
+static void 
+FixCapitalizationInTitle 
+(CharPtr PNTR pTitle,
+ Boolean      first_is_upper,
+ ValNodePtr   org_names)
+{
+  if (pTitle == NULL) return;
+  ResetCapitalization (first_is_upper, *pTitle);
   FixAbbreviationsInElement (pTitle);
   FixOrgNamesInString (*pTitle, org_names);
 }
@@ -17746,8 +17780,8 @@ static void FixDeltaSeqDataLenCallback (BioseqPtr bsp, Pointer userdata)
 
 static void FixDeltaSeqDataLen (IteM i)
 {
-  BaseFormPtr       bfp;
-  SeqEntryPtr       sep;
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
   
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -17758,6 +17792,118 @@ static void FixDeltaSeqDataLen (IteM i)
   
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   VisitBioseqsInSep (sep, NULL, FixDeltaSeqDataLenCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();	  
+}
+
+static void InstantiateGapFeatCallback (BioseqPtr bsp, Pointer userdata)
+
+{
+  Char        buf [32];
+  Int4        currpos = 0;
+  IntFuzzPtr  fuzz;
+  ImpFeatPtr  ifp;
+  SeqLitPtr   litp;
+  SeqFeatPtr  sfp;
+  SeqIdPtr    sip;
+  SeqLocPtr   slp;
+  ValNodePtr  vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4) return;
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return;
+  /* suppress on far delta contigs for now */
+  if (! DeltaLitOnly (bsp)) return;
+
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) {
+      slp = (SeqLocPtr) vnp->data.ptrvalue;
+      if (slp == NULL) continue;
+      currpos += SeqLocLen (slp);
+    }
+    if (vnp->choice == 2) {
+      litp = (SeqLitPtr) vnp->data.ptrvalue;
+      if (litp == NULL) continue;
+      if (litp->seq_data == NULL && litp->length > 0) {
+        ifp = ImpFeatNew ();
+        if (ifp == NULL) continue;
+        ifp->key = StringSave ("gap");
+        fuzz = litp->fuzz;
+        sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_IMP, NULL);
+        if (sfp == NULL) continue;
+        sfp->data.choice = SEQFEAT_IMP;
+        sfp->data.value.ptrvalue = (Pointer) ifp;
+        if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
+          AddQualifierToFeature (sfp, "estimated_length", "unknown");
+          sfp->location = SeqLocFree (sfp->location);
+          sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+        } else {
+          sprintf (buf, "%ld", (long) litp->length);
+          AddQualifierToFeature (sfp, "estimated_length", buf);
+          sfp->location = SeqLocFree (sfp->location);
+          sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+        }
+      }
+      currpos += litp->length;
+    }
+  }
+}
+
+static void InstantiateGapFeatures (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitBioseqsInSep (sep, NULL, InstantiateGapFeatCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();	  
+}
+
+static void RemoveGapFeatCallback (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  GBQualPtr  gbq;
+
+  if (sfp == NULL) return;
+  if (sfp->idx.subtype != FEATDEF_gap) return;
+  if (StringDoesHaveText (sfp->comment)) return;
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "estimated_length") != 0) return;
+  }
+  sfp->idx.deleteme = TRUE;
+}
+
+static void RemoveUnnecessaryGapFeatures (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitFeaturesInSep (sep, NULL, RemoveGapFeatCallback);
+
+  ObjMgrSelect (0, 0, 0, 0, NULL);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update ();	  
@@ -18019,7 +18165,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 {
   IteM  i;
   MenU  s;
-  MenU  x, y;
+  MenU  x, y, z;
 
   s = SubMenu (m, "Def Line/ D");
   x = SubMenu (s, "Automatic Def Line");
@@ -18065,32 +18211,38 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   s = SubMenu (m, "Organism/ G");
   i = CommandItem (s, "Parse Text", ParseDefLineToSourceQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Parse File to Source", ParseFileToSource);
-  SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Parse ATCC Strain to Xref", AtccStrainToXref);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  i = CommandItem (s, "Append Modifier to Organism", AddModToOrg);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
   i = CommandItem (s, "Trim Organism Name", TrimOrganismName);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Genus-Species Fixup", GenSpecTaxonFixup);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Prefix Authority with Organism", PrefixAuthorityWithOrganism);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Append Modifier to Organism", AddModToOrg);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Parse Trinomial into Subspecies", ParseTrinomial);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  i = CommandItem (s, "Genus-Species Fixup", GenSpecTaxonFixup);
+  x = SubMenu (s, "Country Fixup");
+  i = CommandItem (x, "Do Not Fix Capitalization After Colon", CountryLookupWithoutCapFix);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Fix Capitalization After Colon", CountryLookupWithCapFix);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  i = CommandItem (s, "Country Fixup", CountryLookup);
+  x = SubMenu (s, "Parse CollectionDate formats");
+  i = CommandItem (x, "Month First", ParseCollectionDateMonthFirst);
   SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  i = CommandItem (s, "Set Source Focus", SetSourceFocus);
+  i = CommandItem (x, "Day First", ParseCollectionDateDayFirst);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Clear Source Focus", ClearSourceFocus);
+    SeparatorItem (s);
+  x = SubMenu (s, "Source Focus");
+  i = CommandItem (x, "Set", SetSourceFocus);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Clear", ClearSourceFocus);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Consolidate Organism Notes", ConsolidateOrganismNotes);
@@ -18101,12 +18253,15 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Without semicolons", ConsolidateLikeModifiersWithoutSemicolons);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  i = CommandItem (s, "Load Organism Modifiers from File", LoadOrganismModifierTable);
+  x = SubMenu(s, "Parse Organism Modifiers");
+  i = CommandItem (x, "Load From File", LoadOrganismModifierTable);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Export Organism Modifiers to File", ExportOrganismTable);
+  i = CommandItem (x, "Export To File", ExportOrganismTable);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Export Last Lineage Table", ExportLastLineage);
+  i = CommandItem (x, "Export Last Lineage Table", ExportLastLineage);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Parse File to Source", ParseFileToSource);
+  SetObjectExtra (i, bfp, NULL);  
   SeparatorItem (s);
   x = SubMenu (s, "Add Type Strain Comments");
   i = CommandItem (x, "To All", AddTypeStrainCommentsToAll);
@@ -18115,11 +18270,13 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   x = SubMenu (s, "Influenza Virus Names");
-  i = CommandItem (x, "Parse Strain and Serotype from Influenza A Virus Organisms",
+  i = CommandItem (x, "Parse Strain,Serotype from Names",
                    ParseInfluenzaAVirusNames);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Add Strain and Serotype to Influenza A Virus Organism Names",
+  i = CommandItem (x, "Add Strain,Serotype to Names",
                    AddStrainAndSerotypeToInfluenzaAVirusNames);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Fixup Organism Names", FixupInfluenzaAVirusNames);
   SetObjectExtra (i, bfp, NULL);
 
   s = SubMenu (m, "Apply/ A");
@@ -18629,13 +18786,6 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   
   SeparatorItem (s);
-  x = SubMenu (s, "Parse CollectionDate formats");
-  i = CommandItem (x, "Month First", ParseCollectionDateMonthFirst);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Day First", ParseCollectionDateDayFirst);
-  SetObjectExtra (i, bfp, NULL);
-  
-  SeparatorItem (s);
   i = CommandItem (s, "Renormalize Nuc-Prot Sets", RenormalizeNucProtSetsMenuItem);
   SetObjectExtra (i, bfp, NULL);
   
@@ -18712,6 +18862,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Package Proteins on Nucleotides", PackageOnNucs);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  
+  i = CommandItem (s, "Map Features to Protein Sequences", MapFeaturesToProteinSequence);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  
   x = SubMenu (s, "Gap Functions");
   y = SubMenu (x, "Create");
   i = CommandItem (y, "Delta or Segmented Sequence to Raw Sequence", SegSeqToRawSeq);
@@ -18736,7 +18891,10 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (y, "Combine Adjacent Gaps", CombineAdjacentGaps);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (y);
-  i = CommandItem (y, "Adjust CDS Locations for Gaps", AdjustCDSLocationsForGaps);
+  z = SubMenu (y, "Adjust CDS Locations for Gaps");
+  i = CommandItem (z, "Unknown Length Gaps Only", AdjustCDSLocationsForGaps);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (z, "Known and Unknown Length Gaps", AdjustCDSLocationsForGapsKnownAndUnknown);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (y, "Trim Coding Regions and mRNAs for Known Gaps", AdjustCodingRegionsEndingInGap);
   SetObjectExtra (i, bfp, NULL);
@@ -18746,6 +18904,14 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (y, "Fix Delta SeqDataLen", FixDeltaSeqDataLen);
   SetObjectExtra (i, bfp, NULL);
   
+  SeparatorItem (s);
+  x = SubMenu (s, "Gap Features");
+  i = CommandItem (x, "Instantiate from Delta Instructions", InstantiateGapFeatures);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (x);
+  i = CommandItem (x, "Remove Unnecessary Gap Features", RemoveUnnecessaryGapFeatures);
+  SetObjectExtra (i, bfp, NULL);
+
   SeparatorItem (s);
   x = SubMenu (s, "Generate GenProdSet Redundancy");
   i = CommandItem (x, "With Descriptor Propagation", MakeRedundantGPSwithProp);
@@ -18884,7 +19050,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   }
 
   s = SubMenu (m, "Link/ K");
-  i = CommandItem (s, "Assign Feature IDs to CDS and mRNA", AssignFeatIDs);
+  i = CommandItem (s, "Assign Feature IDs", AssignFeatIDs);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Clear Feature IDs and Links", ClearFeatIDsAndLinks);
   SetObjectExtra (i, bfp, NULL);
@@ -18898,6 +19064,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Show Linked CDS or mRNA Feature", SelCDSmRNALink);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Reassign Feature IDs", ReassignFeatIDs);
   SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (m);

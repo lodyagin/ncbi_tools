@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.98 $
+* $Revision: 1.106 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1495,6 +1495,7 @@ static Int2 ValidateAccnInternal (
     if (numAlpha == 2 && numDigits == 6) return 0;
     if (numAlpha == 3 && numDigits == 5) return 0;
     if (numAlpha == 4 && numDigits == 8) return 0;
+    if (numAlpha == 5 && numDigits == 7) return 0;
   } else if (numUndersc == 1) {
     if (numAlpha != 2 || (numDigits != 6 && numDigits != 8 && numDigits != 9)) return -2;
     if (accession [0] == 'N' || accession [0] == 'X' || accession [0] == 'Z') {
@@ -3313,8 +3314,21 @@ static void FormatFeatureBlockQuals (
             pmid = (Int4) vnp->data.intvalue;
             if (pmid > 0) {
               sprintf (numbuf, "%ld", (long) pmid);
+              FFAddOneString(ffstring, "/citation=[PUBMED ", FALSE, TRUE, TILDE_TO_SPACES);
+              if (GetWWW (ajp)) {
+
+                FFAddTextToString(ffstring, "<a href=", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
+                FFAddTextToString(ffstring, NULL, numbuf, ">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              } else {
+                FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
+              /*
               FFAddTextToString(ffstring, "/citation=[PUBMED ", numbuf, "]",
                                 FALSE, TRUE, TILDE_TO_SPACES);
+              */
               FFAddOneChar(ffstring, '\n', FALSE);
             }
           }
@@ -3380,7 +3394,7 @@ static void FormatFeatureBlockQuals (
               }
               if (okay) {
                 FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
-                FF_www_db_xref(ajp, ffstring, dbt->db, buf);
+                FF_www_db_xref(ajp, ffstring, dbt->db, buf, bsp);
                 FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
               }
             }
@@ -3423,7 +3437,7 @@ static void FormatFeatureBlockQuals (
                 }
                 sprintf (seqid, "%ld", (long) sip->data.intvalue);
                 FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
-                FF_www_db_xref(ajp, ffstring, "GI", seqid);
+                FF_www_db_xref(ajp, ffstring, "GI", seqid, bsp);
                 FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
               } else if (sip->choice == SEQID_GENERAL) {
                 dbt = (DbtagPtr) sip->data.ptrvalue;
@@ -3455,6 +3469,11 @@ static void FormatFeatureBlockQuals (
             if (sip->choice == SEQID_GI) {
               gi = sip->data.intvalue;
               if (GetAccnVerFromServer (gi, seqid)) {
+#ifdef OS_UNIX
+  if (getenv ("ASN2GB_PSF_DEBUG") != NULL) {
+    printf ("GetAccnVerFromServer returned %s\n", seqid);
+  }
+#endif
                 if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
@@ -3466,6 +3485,11 @@ static void FormatFeatureBlockQuals (
               } else {
                 sip = GetSeqIdForGI (gi);
                 if (sip != NULL && SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+#ifdef OS_UNIX
+  if (getenv ("ASN2GB_PSF_DEBUG") != NULL) {
+    printf ("GetSeqIdForGI returned %s\n", seqid);
+  }
+#endif
                   if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                     FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
@@ -3487,7 +3511,7 @@ static void FormatFeatureBlockQuals (
 
               sprintf (seqid, "%ld", (long) gi);
               FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
-              FF_www_db_xref(ajp, ffstring, "GI", seqid);
+              FF_www_db_xref(ajp, ffstring, "GI", seqid, bsp);
               FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
             } else if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
               if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
@@ -3503,7 +3527,7 @@ static void FormatFeatureBlockQuals (
               if (gi > 0) {
                 sprintf (seqid, "%ld", (long) gi);
                 FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
-                FF_www_db_xref(ajp, ffstring, "GI", seqid);
+                FF_www_db_xref(ajp, ffstring, "GI", seqid, bsp);
                 FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
               }
             }
@@ -4201,11 +4225,10 @@ static void FormatFeatureBlockQuals (
 }
 
 
-
 static void FF_asn2gb_www_featkey (
   StringItemPtr ffstring,
   CharPtr key,
-  SeqLocPtr slp,
+  SeqFeatPtr sfp,
   Int4 from,
   Int4 to,
   Uint1 strand,
@@ -4213,13 +4236,21 @@ static void FF_asn2gb_www_featkey (
 )
 
 {
-  BioseqPtr  bsp;
-  Int4       gi = 0;
-  SeqIdPtr   sip;
-  Boolean    is_aa = FALSE;
-  Char gi_buf[16];
-  Char itemID_buf[16];
+  BioseqPtr    bsp;
+  Char         buf [16];
+  Int4         featID = 0;
+  Int4         ffrom = 0;
+  Int4         fto = 0;
+  Int4         gi = 0;
+  Char         gi_buf[16];
+  Boolean      is_aa = FALSE;
+  ObjectIdPtr  oip;
+  SeqIntPtr    sintp;
+  SeqIdPtr     sip;
+  SeqLocPtr    slp;
 
+  if (sfp == NULL) return;
+  slp = sfp->location;
   bsp = BioseqFindFromSeqLoc (slp);
   if (bsp != NULL) {
     is_aa = ISA_aa (bsp->mol);
@@ -4228,19 +4259,47 @@ static void FF_asn2gb_www_featkey (
         gi = (Int4) sip->data.intvalue;
       }
     }
+  } else {
+    if (sfp->id.choice == 3) {
+      oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+      if (oip != NULL && oip->str == NULL) {
+        featID = oip->id;
+      }
+    }
+    if (slp->choice == SEQLOC_INT) {
+      sintp = (SeqIntPtr) slp->data.ptrvalue;
+      if (sintp != NULL) {
+        ffrom = sintp->from + 1;
+        fto = sintp->to + 1;
+        sip = sintp->id;
+        if (sip->choice == SEQID_GI) {
+          gi = (Int4) sip->data.intvalue;
+        }
+      }
+    }
   }
 
-  sprintf(gi_buf, "%ld", (long)gi);
-  sprintf(itemID_buf, "%ld", (long)itemID);
-
+  sprintf (gi_buf, "%ld", (long)gi);
 
   FFAddOneString(ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, link_feat, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
-  if (itemID > 0) {
+  if (featID > 0) {
+    sprintf (buf, "%ld", (long) featID);
+    FFAddOneString(ffstring, "&featID=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+  } else if (ffrom > 0 && fto > 0) {
+    sprintf (buf, "%ld", (long) ffrom);
+    FFAddOneString(ffstring, "&from=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+    sprintf (buf, "%ld", (long) fto);
+    FFAddOneString(ffstring, "&to=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+  } else if (itemID > 0) {
+    sprintf (buf, "%ld", (long) itemID);
     FFAddOneString(ffstring, "&itemID=", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, itemID_buf, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
   }
   
 
@@ -4353,8 +4412,11 @@ static void AddIntervalsToGbfeat (
   Char           accn [41];
   SeqLocPtr      copy = NULL;
   Int4           from;
+  IntFuzzPtr     fuzz;
   GBIntervalPtr  gbint;
   Int4           gi;
+  Boolean        interbp;
+  Boolean        iscomp;
   GBIntervalPtr  last = NULL;
   Int4           point;
   SeqIntPtr      sint;
@@ -4375,6 +4437,8 @@ static void AddIntervalsToGbfeat (
     from = 0;
     to = 0;
     point = 0;
+    iscomp = FALSE;
+    interbp = FALSE;
     sip = NULL;
     switch (slp->choice) {
       case SEQLOC_WHOLE :
@@ -4398,6 +4462,9 @@ static void AddIntervalsToGbfeat (
             from = to;
             to = swap;
           }
+          if (sint->strand == Seq_strand_minus) {
+            iscomp = TRUE;
+          }
         }
         break;
       case SEQLOC_PNT :
@@ -4405,6 +4472,25 @@ static void AddIntervalsToGbfeat (
         if (spp != NULL) {
           point = spp->point + 1;
           sip = spp->id;
+          if (spp->strand == Seq_strand_minus) {
+            iscomp = TRUE;
+          }
+          fuzz = spp->fuzz;
+          if (fuzz != NULL) {
+            if (fuzz->choice == 4) {
+              if (fuzz->a == 3) { /* space to right */
+                from = point;
+                to = point + 1;
+                point = 0;
+                interbp = TRUE;
+              } else if (fuzz->a == 4 && point > 1) { /* space to left */
+                from = point - 1;
+                to = point;
+                point = 0;
+                interbp = TRUE;
+              }
+            }
+          }
         }
         break;
       default :
@@ -4431,6 +4517,8 @@ static void AddIntervalsToGbfeat (
           gbint->from = from;
           gbint->to = to;
           gbint->point = point;
+          gbint->iscomp = iscomp;
+          gbint->interbp = interbp;
           gbint->accession = StringSave (accn);
           if (gbfeat->intervals == NULL) {
             gbfeat->intervals = gbint;
@@ -4800,7 +4888,7 @@ static CharPtr FormatFeatureBlockEx (
   Choice             cbaa;
   CodeBreakPtr       cbp;
   BioseqPtr          cdna;
-  SeqFeatPtr         cds;
+  SeqFeatPtr         cds = NULL;
   Char               ch;
   Uint1              code = Seq_code_ncbieaa;
   CdRegionPtr        crp;
@@ -5065,7 +5153,7 @@ static CharPtr FormatFeatureBlockEx (
 	if (ajp->ajp.slp != NULL) {
 	  FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
 	} else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
-	  FF_asn2gb_www_featkey (ffstring, key, sfp->location, fcontext->left + 1, fcontext->right + 1, fcontext->strand, itemID);
+	  FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1, fcontext->strand, itemID);
 	} else {
 	  FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
 	}
@@ -5111,6 +5199,15 @@ static CharPtr FormatFeatureBlockEx (
 	if (gbseq != NULL) {
 	  if (gbfeat != NULL) {
 		gbfeat->location = StringSave (str);
+	    if (StringDoesHaveText (str)) {
+	      if (StringStr (str, "join") != NULL) {
+	        gbfeat->operator__ = StringSave ("join");
+	      } else if (StringStr (str, "order") != NULL) {
+	        gbfeat->operator__ = StringSave ("order");
+	      }
+	    }
+		gbfeat->partial5 = fcontext->partialL;
+		gbfeat->partial3 = fcontext->partialR;
 		if (ajp->masterStyle) {
 		  AddIntervalsToGbfeat (gbfeat, location, target);
 		} else {
@@ -5228,6 +5325,9 @@ static CharPtr FormatFeatureBlockEx (
       } else if (StringDoesHaveText (grp->locus)) {
         gene_for_old_locus_tag = SeqMgrGetFeatureByLabel (bsp_for_old_locus_tag, grp->locus_tag, SEQFEAT_GENE, 0, &gcontext);
       }
+    }
+    if (grp == NULL && ifp->mapToNuc && cds != NULL) {
+      grp = SeqMgrGetGeneXref (cds);
     }
     if (grp == NULL && featdeftype != FEATDEF_primer_bind) {
       gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locforgene);

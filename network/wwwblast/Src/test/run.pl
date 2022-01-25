@@ -20,7 +20,7 @@ my $app = $ARGV[0];
 my $diff = 'diff -w';
 my $time = &GetTimeCmd();
 
-my $oldbin = "/net/blast012/export/home/web/public/htdocs/BLAST/bl2seq/$app";
+my $oldbin = "/net/blast152/export/home/web/public/htdocs/BLAST/bl2seq/$app";
 #my $oldbin = "../wblast2.REAL.old";
 
 chomp(my $basedir = `pwd`);

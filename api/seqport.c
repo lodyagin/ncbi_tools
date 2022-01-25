@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.147 $
+* $Revision: 6.150 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.150  2006/03/22 15:31:32  kans
+* SeqPortStreamSeqLoc gives unique message when bailing on gi 0 as opposed to failure after trying to load
+*
+* Revision 6.149  2006/03/07 21:34:28  kans
+* checks for gi 0 now also check for negative value
+*
+* Revision 6.148  2006/03/07 20:02:01  kans
+* SeqPortStreamSeqLoc immediately treats gi 0 as an error
+*
 * Revision 6.147  2006/01/23 13:01:41  bollin
 * when converting sequences from raw to delta, adjust any alignments that the
 * sequence may be part of.
@@ -2977,6 +2986,21 @@ static Int4 SeqPortStreamSeqLoc (
 
   sip = SeqLocId (slp);
   if (sip == NULL) return 0;
+
+  if (sip->choice == SEQID_GI && sip->data.intvalue <= 0) {
+
+    /* gi 0 or negative is always a data error, just report and bail */
+
+    SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
+    if (parentID != NULL) {
+      SeqIdWrite (parentID, pid, PRINTID_FASTA_LONG, sizeof (pid) - 1);
+      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream ignoring Bioseq %s component of %s", buf, pid);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream ignoring Bioseq %s", buf);
+    }
+    sdp->failed = TRUE;
+    return 0;
+  }
 
   bsp = BioseqLockById (sip);
 

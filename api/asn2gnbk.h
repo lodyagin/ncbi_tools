@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -131,7 +131,8 @@ typedef unsigned long LckType;
 #define LOOKUP_FAR_LOCATIONS      32
 #define LOOKUP_FAR_PRODUCTS       64
 #define LOOKUP_FAR_HISTORY       128
-#define LOOKUP_FAR_OTHERS        256
+#define LOOKUP_FAR_INFERENCE     256
+#define LOOKUP_FAR_OTHERS        512
 
 /* bit flags for unusual customized reports */
 

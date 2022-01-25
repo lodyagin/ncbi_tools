@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.259 $
+* $Revision: 6.263 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.263  2006/04/13 20:02:15  kans
+* LookupFarSeqIDs takes inference parameter
+*
+* Revision 6.262  2006/04/05 17:18:23  kans
+* IndexSegmentedParts uses Int4 for numsegs to avoid overflow to negative number, failure to MemNew
+*
+* Revision 6.261  2006/03/21 15:32:13  kans
+* set ignore flag on generated gaps in IndexRecordedFeatures, not as side effect of sorting callback
+*
+* Revision 6.260  2006/03/20 22:53:44  kans
+* sort flatfile-generated gap feature last, set ignore flag
+*
 * Revision 6.259  2006/02/17 19:05:05  kans
 * special case coded_by only for CDS feature on isolated protein bioseq
 *
@@ -7123,6 +7135,16 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
     return 1;
   }
 
+  /* if identical gap ranges, use itemID to put flatfile-generated gap feature last */
+
+  if (sp1->subtype == FEATDEF_gap && sp2->subtype == FEATDEF_gap) {
+    if (sp1->itemID > sp2->itemID) {
+      return 1;
+    } else if (sp1->itemID < sp2->itemID) {
+      return -1;
+    }
+  }
+
   /* if identical cds ranges, compare codon_start */
 
   if (sp1->subtype == FEATDEF_CDS && sp2->subtype == FEATDEF_CDS) {
@@ -7295,6 +7317,16 @@ static int LIBCALLBACK SortFeatItemListByRev (VoidPtr vp1, VoidPtr vp2)
     return 1;
   }
 
+  /* if identical gap ranges, use itemID to put flatfile-generated gap feature last */
+
+  if (sp1->subtype == FEATDEF_gap && sp2->subtype == FEATDEF_gap) {
+    if (sp1->itemID > sp2->itemID) {
+      return 1;
+    } else if (sp1->itemID < sp2->itemID) {
+      return -1;
+    }
+  }
+
   /* if identical cds ranges, compare codon_start */
 
   if (sp1->subtype == FEATDEF_CDS && sp2->subtype == FEATDEF_CDS) {
@@ -7431,8 +7463,8 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
   BioseqPtr         bsp;
   BioseqExtraPtr    bspextra;
   BioseqSetPtr      bssp;
-  Int2              i;
-  Int2              numsegs = 0;
+  Int4              i;
+  Int4              numsegs = 0;
   ObjMgrDataPtr     omdp;
   SMSeqIdxPtr PNTR  partsByLoc;
   SMSeqIdxPtr PNTR  partsBySeqId;
@@ -7534,7 +7566,7 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
 *
 *****************************************************************************/
 
-static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
+static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 baseItemID)
 
 {
   BioseqPtr           bsp;
@@ -7553,6 +7585,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
   Int4                i;
   Int4                j;
   SMFeatItemPtr       item;
+  SMFeatItemPtr       last;
   BioseqPtr           nuc;
   Int4                numfeats;
   Int4                numgenes;
@@ -7568,7 +7601,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-      IndexRecordedFeatures (sep, dorevfeats);
+      IndexRecordedFeatures (sep, dorevfeats, baseItemID);
     }
     return;
   }
@@ -7640,6 +7673,25 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
           item = featsByPos [i];
           if (item != NULL) {
             item->index = i;
+          }
+        }
+
+        /* gap feature in record overrides flatfile-generated feature */
+
+        if (baseItemID > 0) {
+          last = featsByPos [0];
+          for (i = 1; i < numfeats; i++) {
+            item = featsByPos [i];
+            if (item != NULL && last != NULL) {
+              if (last->subtype == FEATDEF_gap && item->subtype == FEATDEF_gap) {
+                if (last->left == item->left && last->right == item->right) {
+                  if (item->itemID >= baseItemID) {
+                    item->ignore = TRUE;
+                  }
+                }
+              }
+            }
+            last = item;
           }
         }
 
@@ -8338,6 +8390,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
 {
   AdpBspPtr           abp;
   AnnotDescPtr PNTR   annotDescByID;
+  Uint4               baseItemID = 0;
   BioseqPtr           bsp;
   BioseqExtraPtr      bspextra;
   Int4                count;
@@ -8414,6 +8467,19 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
 
   AssignIDsInEntityEx (entityID, 0, NULL, extra);
 
+  /* get first feature itemID in remote feature tables (including generated gaps) */
+
+  for (vnp = extra; vnp != NULL && baseItemID == 0; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp == NULL) continue;
+    for (sap = bsp->annot; sap != NULL && baseItemID == 0; sap = sap->next) {
+      if (sap->type != 1) continue;
+      for (sfp = (SeqFeatPtr) sap->data; sfp != NULL && baseItemID == 0; sfp = sfp->next) {
+        baseItemID = sfp->idx.itemID;
+      }
+    }
+  }
+
   /* set scope for FindAppropriateBioseq, FindFirstLocalBioseq */
 
   oldscope = SeqEntrySetScope (sep);
@@ -8481,7 +8547,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
 
   /* finish building array of sorted features on each indexed bioseq */
 
-  IndexRecordedFeatures (sep, dorevfeats);
+  IndexRecordedFeatures (sep, dorevfeats, baseItemID);
 
   /* set best protein feature for segmented protein bioseqs and their parts */
 
@@ -11163,6 +11229,7 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
   Boolean products,
   Boolean alignments,
   Boolean history,
+  Boolean inference,
   Boolean others
 )
 
@@ -11175,7 +11242,7 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
   func = smp->seq_id_precache_func;
   SeqMgrUnlock ();
   if (func == NULL) return 0;
-  return (*func) (sep, components, locations, products, alignments, history, others);
+  return (*func) (sep, components, locations, products, alignments, history, inference, others);
 }
 
 /*****************************************************************************

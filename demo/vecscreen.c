@@ -25,6 +25,9 @@
 **************************************************************************/
 /* $Revision 1.0 $  
 * $Log: vecscreen.c,v $
+* Revision 6.8  2006/04/10 19:21:21  madden
+* Add call to FileClose for outfp
+*
 * Revision 6.7  2004/06/30 19:19:39  kans
 * include <blfmtutl.h>
 *
@@ -340,6 +343,7 @@ Int2 Main (void)
 		fprintf(outfp, "</BODY>\n</HTML>\n");
 
 	FileClose(infp);
+        FileClose(outfp);
 
 	return 0;
 }

@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.178 2006/01/23 16:44:06 papadopo Exp $";
-/* $Id: megablast.c,v 6.178 2006/01/23 16:44:06 papadopo Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.186 2006/04/26 12:47:48 madden Exp $";
+/* $Id: megablast.c,v 6.186 2006/04/26 12:47:48 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,32 @@ static char const rcsid[] = "$Id: megablast.c,v 6.178 2006/01/23 16:44:06 papado
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.186  2006/04/26 12:47:48  madden
+ * Use SBlastMessage in place of Blast_Message
+ *
+ * Revision 6.185  2006/04/25 18:00:19  papadopo
+ * change signature of BlastTabularFormatDataNew
+ *
+ * Revision 6.184  2006/04/21 17:36:06  papadopo
+ * do not automatically believe the query ID if tabular output is selected
+ *
+ * Revision 6.183  2006/04/21 14:34:50  madden
+ * BLAST_GetQuerySeqLoc prototype change
+ *
+ * Revision 6.182  2006/04/20 15:32:37  papadopo
+ * if query IDs are actually used, verify that there are no duplicate IDs
+ *
+ * Revision 6.181  2006/04/04 13:13:10  madden
+ * 1.) Add range check to ARG_FORMAT argument.
+ * 2.) Rework error reporting so as to not truncate results if there is a warning.
+ * 3.) prototype change for BlastPrintLogReport
+ *
+ * Revision 6.180  2006/03/20 21:38:14  coulouri
+ * revert to old engine if -Q option is specified
+ *
+ * Revision 6.179  2006/03/06 21:12:37  madden
+ * Changed default on maxquery and every-base options
+ *
  * Revision 6.178  2006/01/23 16:44:06  papadopo
  * change signature of FillHitSavingOptions
  *
@@ -589,6 +615,7 @@ static char const rcsid[] = "$Id: megablast.c,v 6.178 2006/01/23 16:44:06 papado
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/repeats_filter.h>
+#include <algo/blast/api/blast_message_api.h>
 #include <algo/blast/core/blast_setup.h>
 #endif
 
@@ -1091,7 +1118,7 @@ static Args myargs [] = {
   { "Expectation value", 
 	"10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* ARG_EVALUE */
   { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines,\n10 ASN, text\n11 ASN, binary", 
-        "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* ARG_FORMAT */
+        "0", "0", "11", FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* ARG_FORMAT */
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* ARG_OUT */
   { "Filter query sequence",
@@ -1117,7 +1144,7 @@ static Args myargs [] = {
   { "Believe the query defline",
         "F", NULL, NULL, TRUE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},/* ARG_BELIEVEQUERY */
   { "Maximal total length of queries for a single search",
-        "20000000", NULL, NULL, FALSE, 'M', ARG_INT, 0.0, 0, NULL},/* ARG_MAXQUERY */
+        "5000000", NULL, NULL, FALSE, 'M', ARG_INT, 0.0, 0, NULL},/* ARG_MAXQUERY */
   { "Word size (length of best perfect match)", 
         "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},      /* ARG_WORDSIZE */
   { "Effective length of the database (use zero for the real size)", 
@@ -1157,8 +1184,8 @@ static Args myargs [] = {
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
   { "Length of a discontiguous word template (contiguous word if 0)",
 	"0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL},       /* ARG_TEMPL_LEN */
-  {"Generate words for every base of the database (default is every 4th base; may only be used with discontiguous words)",
-        "F", NULL, NULL, TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_EVERYBASE */
+  {"Generate words for every base of the database (default is every base; may only be used with discontiguous words)",
+        "T", NULL, NULL, TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_EVERYBASE */
   {"Use non-greedy (dynamic programming) extension for affine gap scores",
         "F", NULL, NULL, TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_DYNAMIC */
   { "Type of a discontiguous word template (0 - coding, 1 - optimal, 2 - two simultaneous",
@@ -1312,7 +1339,8 @@ static Int2 Main_old (void)
         options->window_size = myargs[ARG_WINDOW].intvalue;
 #ifdef DO_NOT_SUPPRESS_BLAST_OP        
         options->mb_template_length = myargs[ARG_TEMPL_LEN].intvalue;
-        options->mb_one_base_step = (Boolean) myargs[ARG_EVERYBASE].intvalue;
+        if (myargs[ARG_TEMPL_LEN].intvalue != 0)
+            options->mb_one_base_step = (Boolean) myargs[ARG_EVERYBASE].intvalue;
         options->mb_disc_type = myargs[ARG_TEMPL_TYPE].intvalue;
 #endif
         lcase_masking = (Boolean) myargs[ARG_LCASE].intvalue;
@@ -1825,6 +1853,7 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    const Int4 diag_separation = 6;
    const EBlastProgramType kProgram = eBlastTypeBlastn; 
    Int2 status = 0;
+   Blast_Message* core_msg = NULL;
 
    if (myargs[ARG_DYNAMIC].intvalue != 0) 
        greedy = FALSE; 
@@ -1854,7 +1883,7 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    lookup_options->mb_template_type = 
       (Uint1) myargs[ARG_TEMPL_TYPE].intvalue;
 
-   if (myargs[ARG_EVERYBASE].intvalue)
+   if (myargs[ARG_EVERYBASE].intvalue && myargs[ARG_TEMPL_LEN].intvalue != 0)
       lookup_options->full_byte_scan = FALSE;
    
    BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
@@ -1900,7 +1929,8 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    /* Validate the options. */
    status = BLAST_ValidateOptions(kProgram, ext_options, score_options, 
                                   lookup_options, word_options, hit_options, 
-                                  &sum_returns->error);
+                                  &core_msg);
+   sum_returns->error = Blast_MessageToSBlastMessage(core_msg, NULL, NULL, FALSE);
 
    return status;
 }
@@ -1915,7 +1945,7 @@ static Int2 Main_new(void)
    SeqLoc* lcase_mask = NULL;
    FILE *infp=NULL, *outfp=NULL;
    SBlastOptions* options = NULL;
-   Int2 ctr = 1;
+   Int4 ctr = 1;
    Int4 num_queries_total=0;  /* total number of queries read. */
    Boolean tabular_output = FALSE;
    BlastTabularFormatData* tf_data = NULL;
@@ -1937,7 +1967,7 @@ static Int2 Main_new(void)
    if (status) {
        options = SBlastOptionsFree(options);
        if (sum_returns->error) {
-           Blast_SummaryReturnsPostError(sum_returns);
+           SBlastMessageErrPost(sum_returns->error);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
        }
        return -1;
@@ -1950,6 +1980,8 @@ static Int2 Main_new(void)
        ErrPostEx(SEV_FATAL, 1, 0, "Unsupported value for the -m option");
 
    believe_query = (Boolean) myargs[ARG_BELIEVEQUERY].intvalue;
+
+   SBlastOptionsSetBelieveQuery(options, believe_query);
 
    /* If ASN.1 output is requested and believe_query is not set to TRUE,
       exit with an error. */
@@ -1986,9 +2018,6 @@ static Int2 Main_new(void)
                 myargs[ARG_OUT].strvalue);
             return (1);
        }
-       /* If tabular output is requested, automatically set believe_query to
-          TRUE, to guarantee meaningful sequence ids in the output. */
-       believe_query = TRUE;
    }
 
 
@@ -2029,6 +2058,12 @@ static Int2 Main_new(void)
            return -1;
       }
 
+      if (believe_query && BlastSeqlocsHaveDuplicateIDs(query_slp)) {
+         ErrPostEx(SEV_FATAL, 1, 0, 
+                 "Duplicate IDs detected; please ensure that "
+                 "all query sequence identifiers are unique");
+      }
+
       num_queries_total += num_queries;
 
       if (tabular_output) {
@@ -2039,14 +2074,24 @@ static Int2 Main_new(void)
           /* Print the header of tabular output. */
           PrintTabularOutputHeader(myargs[ARG_DB].strvalue, NULL, query_slp, 
                                    program_name, 0, believe_query, outfp);
-          tf_data = BlastTabularFormatDataNew(outfp, query_slp, tab_option);
+          tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+                                              tab_option, believe_query);
           tf_data->show_gi = (Boolean) myargs[ARG_SHOWGIS].intvalue;
           tf_data->show_accession = !((Boolean) myargs[ARG_FULLID].intvalue);
       }
 
       /* Find repeat mask, if necessary */
-      Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue, 
-                                &repeat_mask);
+      if ((status = Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue,
+                                &repeat_mask, &sum_returns->error)) != 0)
+      {
+            if (sum_returns && sum_returns->error)
+            {
+                   ErrSev max_sev = SBlastMessageErrPost(sum_returns->error);
+                   if (max_sev >= SEV_ERROR)
+                         return status;
+            }
+      }
+
       /* Combine repeat mask with lower case mask */
       if (repeat_mask)
           lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
@@ -2055,11 +2100,18 @@ static Int2 Main_new(void)
       if((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
                                &seqalign_arr, &filter_loc, sum_returns)) != 0)
       {
-           if (sum_returns && sum_returns->error)
-               ErrPostEx(SEV_ERROR, 1, 0, sum_returns->error->message);
-           else
-               ErrPostEx(SEV_ERROR, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
-           return status;
+            /* Jump out if fatal error or unknown reason for exit. */
+            if (sum_returns && sum_returns->error)
+            {
+                ErrSev max_severity = SBlastMessageErrPost(sum_returns->error);
+                if (max_severity >= SEV_ERROR)
+                   return status;
+            }
+            else if (!sum_returns || !sum_returns->error)
+            {
+                   ErrPostEx(SEV_ERROR, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
+                   return status;
+            }
       }
 
       /* Deallocate the data structure used for tabular formatting. */
@@ -2074,7 +2126,7 @@ static Int2 Main_new(void)
           filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
       /* Post warning or error messages, no matter what the search status was. */
-      Blast_SummaryReturnsPostError(sum_returns);
+      SBlastMessageErrPost(sum_returns->error);
 
       if (!status && !tabular_output) {
           if (myargs[ARG_ASNOUT].strvalue) {
@@ -2122,14 +2174,13 @@ static Int2 Main_new(void)
    if (!tabular_output)
    {
        if (align_view < eAlignViewXml && myargs[ARG_LOGINFO].intvalue)
-           BlastPrintLogReport(format_info);
+           BlastPrintLogReport(format_info->outfp, format_info->num_formatted);
        format_info = BlastFormattingInfoFree(format_info);       
    }
    else
    {
       if (myargs[ARG_LOGINFO].intvalue)
-           fprintf(outfp, "Mega BLAST run finished, processed %ld queries\n", 
-                   (long) num_queries_total);
+           BlastPrintLogReport(outfp, num_queries_total);
       FileClose(outfp);
    }
 
@@ -2198,8 +2249,8 @@ Int2 Nlm_Main(void)
                       myargs[ARG_GILIST].strvalue == NULL)
           use_new_engine = readdb_use_new_blast(myargs[ARG_DB].strvalue);
 
-   if ((myargs[ARG_EVERYBASE].intvalue == 1) && (myargs[ARG_TEMPL_LEN].intvalue == 0))
-      ErrPostEx(SEV_FATAL, 1, 0, "Single base scanning may only be used with discontiguous words."); 
+    if (myargs[ARG_MASKEDQUERY].strvalue)
+        use_new_engine = FALSE;
 
     if (use_new_engine)
     	return Main_new();

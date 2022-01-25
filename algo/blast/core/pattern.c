@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.18 2005/11/16 14:27:04 madden Exp $
+/* $Id: pattern.c,v 1.19 2006/05/03 18:11:09 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,7 +56,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: pattern.c,v 1.18 2005/11/16 14:27:04 madden Exp $";
+    "$Id: pattern.c,v 1.19 2006/05/03 18:11:09 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/pattern.h>
@@ -491,7 +491,7 @@ SPHIQueryInfo* SPHIQueryInfoNew()
         return NULL;
     pattern_info->allocated_size = kMinPhiLookupSize;
     if ((pattern_info->occurrences = 
-         (SPHIPatternInfo*) malloc(kMinPhiLookupSize*sizeof(SPHIPatternInfo)))
+         (SPHIPatternInfo*) calloc(kMinPhiLookupSize, sizeof(SPHIPatternInfo)))
         == NULL)
         return NULL;
     return pattern_info;

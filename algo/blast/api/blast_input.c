@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_input.c,v 1.23 2005/08/08 15:51:41 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.24 2006/04/21 14:33:44 madden Exp $";
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,16 +50,17 @@ Int4
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, 
                      Int4 max_total_length, Int4 start, Int4 end, 
                      SeqLoc** lcase_mask, SeqLocPtr* query_slp, 
-                     Int2Ptr ctr, Int4* num_queries, Boolean believe_query,
+                     Int4Ptr ctr, Int4* num_queries, Boolean believe_query,
                      Int4 genetic_code)
 {
    Int4 total_length=0; /* total number of letters read this call, also final 
                            return value. */
    SeqEntryPtr sep;
    SeqLocPtr mask_slp, last_slp;
-   char prefix[2];     /* for FastaToSeqEntryForDb */
-   Int4 query_index = 0;  /* total number of sequence read. */
+   char prefix[4];     /* for FastaToSeqEntryForDb */
+   Int4 query_index = 0;  /* number of sequences read. */
    ValNodePtr vnp=NULL; /* used to keep lower-case masking SeqLoc's */
+   Int2 query_count;    /* Query count on this call for FastaToSeqEntryForDb */
 
    if (!query_slp)
    {
@@ -88,10 +89,12 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
    if (lcase_mask) /* Make sure we don't get old (possibly freed) locations. */
      *lcase_mask = NULL;
    
-   StrCpy(prefix, "");
+   /* This is a workaround on the Int2 ctr input for FastaToSeqEntryForDb */
+   sprintf(prefix, "%ld", (long) (*ctr/MAX_NUM_QUERIES));
+   query_count = *ctr%MAX_NUM_QUERIES;
    
    while ((sep=FastaToSeqEntryForDb(infp, query_is_na, NULL, believe_query, prefix, 
-                                    ctr, (lcase_mask ? &mask_slp : NULL))) != NULL)
+                                    &query_count, (lcase_mask ? &mask_slp : NULL))) != NULL)
    {
       BioseqPtr query_bsp;
       Int4 from, to;
@@ -107,9 +110,10 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
       } else {
          SeqEntryExplore(sep, &query_bsp, FindProt);
       }
-      
+
       if (query_bsp == NULL) {
          ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+         *ctr += query_index;
          return -1;
       }
 
@@ -167,6 +171,8 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
 
    if (num_queries)
       *num_queries = query_index;
+
+   *ctr += query_index;
 
    return total_length;
 }

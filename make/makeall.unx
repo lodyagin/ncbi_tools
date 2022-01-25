@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.269 2005/12/16 16:04:43 lavr Exp $
+#	$Id: makeall.unx,v 6.274 2006/05/03 14:41:13 madden Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -179,7 +179,7 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_http_connector.c ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
 	ncbi_host_info.c ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_ftp_connector.c ncbi_dispd.c \
-	ncbi_lb.c ncbi_socket_connector.c urlquery.c binary.c \
+	ncbi_lb.c ncbi_local.c ncbi_socket_connector.c urlquery.c binary.c \
 	ncbi_sendmail.c asn_connection.c raw_scoremat.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
 
@@ -259,7 +259,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 SRCCOMPADJ = matrix_frequency_data.c compo_mode_condition.c \
 	     composition_adjustment.c nlm_linear_algebra.c \
              optimize_target_freq.c compo_heap.c smith_waterman.c \
-             redo_alignment.c
+             redo_alignment.c unified_pvalues.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -292,12 +292,13 @@ SRC60 = aa_ungapped.c blast_diagnostics.c blast_dust.c blast_engine.c \
     mb_lookup.c ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
     lookup_util.c blast_encoding.c blast_psi.c blast_psi_priv.c blast_kappa.c \
     matrix_freq_ratios.c blast_hspstream.c blast_parameters.c blast_posit.c \
-    phi_gapalign.c blast_program.c
+    phi_gapalign.c blast_program.c blast_query_info.c blast_tune.c
 
 SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
         blast_options_api.c blast_prelim.c blast_returns.c blast_seq.c \
         blast_seqalign.c blast_tabular.c hspstream_queue.c repeats_filter.c \
-        seqsrc_multiseq.c seqsrc_readdb.c twoseq_api.c dust_filter.c
+        seqsrc_multiseq.c seqsrc_readdb.c twoseq_api.c dust_filter.c \
+        blast_message_api.c
 
 # objects needed for versions of asntool and entrez
 
@@ -316,7 +317,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_http_connector.o ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
 	ncbi_host_info.o ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_ftp_connector.o ncbi_dispd.o \
-	ncbi_lb.o ncbi_socket_connector.o urlquery.o binary.o \
+	ncbi_lb.o ncbi_local.o ncbi_socket_connector.o urlquery.o binary.o \
 	ncbi_sendmail.o asn_connection.o raw_scoremat.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
 
@@ -408,7 +409,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 OBJCOMPADJ = matrix_frequency_data.o compo_mode_condition.o \
 	     composition_adjustment.o nlm_linear_algebra.o \
              optimize_target_freq.o compo_heap.o smith_waterman.o \
-             redo_alignment.o
+             redo_alignment.o unified_pvalues.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -446,12 +447,13 @@ OBJ60 = aa_ungapped.o blast_diagnostics.o blast_dust.o blast_engine.o blast_exte
     mb_lookup.o ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
     lookup_util.o blast_encoding.o blast_psi.o blast_psi_priv.o blast_kappa.o \
     matrix_freq_ratios.o blast_hspstream.o blast_parameters.o blast_posit.o \
-    phi_gapalign.o blast_program.o
+    phi_gapalign.o blast_program.o blast_query_info.o blast_tune.o
 
 OBJ61 = blast_api.o blast_input.o blast_format.o blast_mtlock.o \
         blast_options_api.o blast_prelim.o blast_returns.o blast_seq.o \
         blast_seqalign.o blast_tabular.o hspstream_queue.o repeats_filter.o \
-        seqsrc_multiseq.o seqsrc_readdb.o twoseq_api.o dust_filter.o
+        seqsrc_multiseq.o seqsrc_readdb.o twoseq_api.o dust_filter.o \
+        blast_message_api.o
 
 
 # NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
@@ -691,6 +693,7 @@ copy :
 	$(SRCCOPY) ../connect/ncbi_servicep.h .
 	$(SRCCOPY) ../connect/ncbi_dispd.h .
 	$(SRCCOPY) ../connect/ncbi_lbsmd.h .
+	$(SRCCOPY) ../connect/ncbi_local.h .
 	$(SRCCOPY) ../connect/ncbi_lb.h .
 	$(SRCCOPY) ../connect/*.h ../include
 	-mkdir ../include/connect

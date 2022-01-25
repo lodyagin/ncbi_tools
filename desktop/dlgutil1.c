@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.97 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -3250,12 +3250,45 @@ static void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
   }
 }
 
+
+static Boolean HasDisqualifyingUserObjects(SeqAnnotPtr sap)
+{
+  AnnotDescrPtr desc;
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+  
+  if (sap == NULL) {
+    return FALSE;
+  }
+  
+  desc = sap->desc;
+  while (desc != NULL) {
+    if (desc->choice == Annot_descr_user) {
+      uop = (UserObjectPtr) desc->data.ptrvalue;
+      while(uop) {
+        if(uop->type) {
+          oip = uop->type;
+          if(StringCmp(oip->str, "Hist Seqalign") == 0
+             || StringCmp (oip->str, "Blast Type") == 0) {
+            return TRUE;
+          }
+        }
+        uop = uop->next;
+      }
+    }
+    desc = desc->next;
+  }
+  return FALSE;
+}
+
+
 static void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata)
 {
   SeqAlignPtr PNTR salp_list;
   SeqAlignPtr salp, last_salp;
   
-  if (sap == NULL || sap->type != 2 || userdata == NULL) 
+  if (sap == NULL || sap->type != 2 || userdata == NULL || HasDisqualifyingUserObjects(sap)) 
   {
     return;
   }

@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_PROGRAM__H
 #define ALGO_BLAST_CORE___BLAST_PROGRAM__H
 
-/* $Id: blast_program.h,v 1.2 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_program.h,v 1.3 2006/03/22 18:46:18 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,7 +59,7 @@ extern "C" {
 #define PSSM_QUERY_MASK         (0x1<<6)
 /** This bit is on if the subject is a PSSM (RPS-BLAST) */
 #define PSSM_SUBJECT_MASK       (0x1<<7)
-/* This bit is on if the query includes a pattern (PHI-BLAST) */
+/** This bit is on if the query includes a pattern (PHI-BLAST) */
 #define PATTERN_QUERY_MASK      (0x1<<8)
 
 /******************** Main BLAST program definitions ***********************/

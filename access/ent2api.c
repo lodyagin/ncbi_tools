@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.85 $
+* $Revision: 1.92 $
 *
 * File Description: 
 *
@@ -101,13 +101,86 @@ NLM_EXTERN void EntrezSetService (
 
 /* low-level connection functions */
 
+static CharPtr GetDbFromE2Request (Entrez2RequestPtr e2rq)
+
+{
+  Entrez2BooleanExpPtr   e2be;
+  Entrez2EvalBooleanPtr  e2eb;
+  Entrez2HierQueryPtr    e2hq;
+  Entrez2IdPtr           e2id;
+  Entrez2IdListPtr       e2il;
+  Entrez2TermPosPtr      e2tp;
+  Entrez2TermQueryPtr    e2tq;
+  ValNodePtr             vnp;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+
+  switch (vnp->choice) {
+    case E2Request_get_info :
+      break;
+    case E2Request_eval_boolean :
+      e2eb = (Entrez2EvalBooleanPtr) vnp->data.ptrvalue;
+      if (e2eb == NULL) return NULL;
+      e2be = e2eb->query;
+      if (e2be == NULL) return NULL;
+      if (StringDoesHaveText (e2be->db)) return e2be->db;
+      break;
+    case E2Request_get_docsum :
+      e2il = (Entrez2IdListPtr) vnp->data.ptrvalue;
+      if (e2il == NULL) return NULL;
+      if (StringDoesHaveText (e2il->db)) return e2il->db;
+      break;
+    case E2Request_get_term_pos :
+      e2tq = (Entrez2TermQueryPtr) vnp->data.ptrvalue;
+      if (e2tq == NULL) return NULL;
+      if (StringDoesHaveText (e2tq->db)) return e2tq->db;
+      break;
+    case E2Request_get_term_list :
+      e2tp = (Entrez2TermPosPtr) vnp->data.ptrvalue;
+      if (e2tp == NULL) return NULL;
+      if (StringDoesHaveText (e2tp->db)) return e2tp->db;
+      break;
+    case E2Request_get_term_hierarchy :
+      e2hq = (Entrez2HierQueryPtr) vnp->data.ptrvalue;
+      if (e2hq == NULL) return NULL;
+      if (StringDoesHaveText (e2hq->db)) return e2hq->db;
+      break;
+    case E2Request_get_links :
+      break;
+    case E2Request_get_linked :
+      break;
+    case E2Request_get_link_counts :
+      e2id = (Entrez2IdPtr) vnp->data.ptrvalue;
+      if (e2id == NULL) return NULL;
+      if (StringDoesHaveText (e2id->db)) return e2id->db;
+      break;
+    default :
+      break;
+  }
+
+  return NULL;
+}
+
 NLM_EXTERN CONN EntrezOpenConnection (
-  void
+  Entrez2RequestPtr e2rq
 )
 
 {
-  return QUERY_OpenServiceQuery
-    (StringHasNoText (e2_service) ? "Entrez2" : e2_service, NULL, 30);
+  Char     arg [128];
+  CharPtr  db;
+
+  db = GetDbFromE2Request (e2rq);
+  if (StringDoesHaveText (db) && StringLen (db) < 100) {
+    StrCpy (arg,    "DB=");
+    StrCpy (arg + 3, db);
+  } else
+    *arg = '\0';
+
+  return QUERY_OpenServiceQueryEx
+    (StringHasNoText (e2_service) ? "Entrez2" : e2_service, NULL, 30, arg);
 }
 
 #ifdef OS_MAC
@@ -186,7 +259,7 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
 #endif
 
-  conn = EntrezOpenConnection ();
+  conn = EntrezOpenConnection (e2rq);
 
   if (conn == NULL) return NULL;
 
@@ -249,7 +322,7 @@ NLM_EXTERN Boolean EntrezAsynchronousQuery (
 
   if (e2rq == NULL) return FALSE;
 
-  conn = EntrezOpenConnection ();
+  conn = EntrezOpenConnection (e2rq);
 
   if (conn == NULL) return FALSE;
 
@@ -1233,6 +1306,12 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Library") == 0 && StringICmp (str, "Library Class") == 0) {
             } else if (StringICmp (last, "Sequence") == 0 && StringICmp (str, "Sequence Count") == 0) {
             } else if (StringICmp (last, "Journal") == 0 && StringICmp (str, "Journal List Identifier") == 0) {
+            } else if (StringICmp (last, "CompoundID") == 0 && StringICmp (str, "CompoundIDActive") == 0) {
+            } else if (StringICmp (last, "MeSHDescription") == 0 && StringICmp (str, "MeSHDescriptionActive") == 0) {
+            } else if (StringICmp (last, "MeSHTerm") == 0 && StringICmp (str, "MeSHTermActive") == 0) {
+            } else if (StringICmp (last, "PharmAction") == 0 && StringICmp (str, "PharmActionActive") == 0) {
+            } else if (StringICmp (last, "SubstanceID") == 0 && StringICmp (str, "SubstanceIDActive") == 0) {
+            } else if (StringICmp (last, "Synonym") == 0 && StringICmp (str, "SynonymActive") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

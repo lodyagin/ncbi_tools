@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: repeats_filter.c,v 1.12 2005/09/20 18:27:50 kans Exp $";
+static char const rcsid[] = "$Id: repeats_filter.c,v 1.14 2006/04/26 12:46:47 madden Exp $";
 
 /*
  * ===========================================================================
@@ -166,7 +166,8 @@ s_FillMaskLocFromBlastHSPResults(SeqLoc* query_seqloc, BlastHSPResults* results,
 Int2
 Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
                              const char* filter_string, 
-                             SeqLoc* *mask_loc)
+                             SeqLoc* *mask_loc,
+                             SBlastMessage **message)
 {
     char* repeat_database = NULL;
     SBlastOptions* options = NULL;
@@ -178,6 +179,7 @@ Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
     BlastHSPResults* results = NULL;
     SBlastFilterOptions* filtering_options = NULL;
 
+    ASSERT(message);
     if (filter_string == NULL)
        return 0;
     
@@ -202,18 +204,21 @@ Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
     seq_src = ReaddbBlastSeqSrcInit(repeat_database, FALSE, 0, 0);
     
     if (!seq_src) {
-        Blast_MessageWrite(&sum_returns->error, 2, 1, 0,  
-                           "Initialization of subject sequences source failed");
+        SBlastMessageWrite(&sum_returns->error, SEV_ERROR, 
+           "Initialization of subject sequences source failed", NULL, FALSE);
     } else {
         char* error_str = BlastSeqSrcGetInitError(seq_src);
         if (error_str)
-            Blast_MessageWrite(&sum_returns->error, 2, 1, 0, error_str); 
+           SBlastMessageWrite(&sum_returns->error, SEV_ERROR, error_str, NULL, FALSE); 
     }
 
     /* If there was an error initializing the sequence source, return without 
        doing the search. */
     if (sum_returns->error) {
         *mask_loc = NULL;
+        *message = sum_returns->error;
+        sum_returns->error = NULL;
+        Blast_SummaryReturnFree(sum_returns);
         filtering_options = SBlastFilterOptionsFree(filtering_options);
         return -1;
     }

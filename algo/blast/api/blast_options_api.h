@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.h,v 1.10 2005/12/27 14:48:59 madden Exp $
+/* $Id: blast_options_api.h,v 1.11 2006/04/26 12:45:28 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -67,6 +67,7 @@ typedef struct SBlastOptions {
                                          code */
     int num_cpus; /**< Number of CPUs to use for preliminary stage of the 
                      search. */
+    Boolean believe_query; /**< if TRUE then we are using user Query ID. */
 } SBlastOptions;
 
 /** Allocates all core options structures and initializes them with default 
@@ -170,6 +171,20 @@ Int2 SBlastOptionsSetFilterString(SBlastOptions* options, const char* str);
  * @return Boolean value of the masking at hash option.
  */
 Boolean SBlastOptionsGetMaskAtHash(const SBlastOptions* options);
+
+
+/** sets believe_query flag on SBlastOptions.
+ * @param options Object to be modified [in]
+ * @param believe_query specifies that query ID was parsed [in]
+ * @return zero on success.
+ */
+Int2 SBlastOptionsSetBelieveQuery(SBlastOptions* options, Boolean believe_query);
+
+/** Gets believe_query field of SBlastOptions.
+ * @param options Object to be queried for information [in]
+ * @return TRUE if query ID was parsed, otherwise FALSE.
+ */
+Boolean SBlastOptionsGetBelieveQuery(const SBlastOptions* options);
 
 /* @} */
 

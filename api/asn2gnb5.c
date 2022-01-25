@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.54 $
+* $Revision: 1.64 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -281,6 +281,12 @@ static Char link_hprd [MAX_WWWBUF];
 static Char link_uspto [MAX_WWWBUF];
 #define DEF_LINK_USPTO "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber="
 
+static Char link_vector [MAX_WWWBUF];
+#define DEF_LINK_VECTOR "http://www.vectorbase.org/Genome/BRCGene/?"
+
+static Char link_mirbase [MAX_WWWBUF];
+#define DEF_LINK_MIRBASE "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="
+
 
 /* www utility functions */
 
@@ -308,8 +314,6 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_EV", DEF_LINK_EV, ev_link, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_EC", DEF_LINK_EC, ec_link, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECAMBIG", DEF_LINK_ECAMBIG, ec_ambig, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FF", DEF_LINK_FF, link_ff, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MUID", DEF_LINK_MUID, link_muid, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FF", DEF_LINK_FF, link_ff, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_MUID", DEF_LINK_MUID, link_muid, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ACE", DEF_LINK_ACE, link_ace, MAX_WWWBUF);
@@ -371,6 +375,8 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HPRD", DEF_LINK_HPRD, link_hprd, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_USPTO", DEF_LINK_USPTO, link_uspto, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VECTOR", DEF_LINK_VECTOR, link_vector, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MIRBASE", DEF_LINK_MIRBASE, link_mirbase, MAX_WWWBUF);
 }
 
 
@@ -670,6 +676,39 @@ static void FF_www_db_xref_hprd (
   FF_www_db_xref_std (ffstring, db, identifier, link);
 }
 
+static void FF_www_db_xref_vector (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier,
+  BioseqPtr bsp,
+  CharPtr link
+)
+{
+  Char     ch;
+  Char     buf [512], tax [256];
+  CharPtr  ptr;
+
+  StringCpy (buf, link);
+  if (bsp != NULL) {
+    if (BioseqToGeneticCode (bsp, NULL, NULL, NULL, tax, sizeof (tax), NULL)) {
+      ptr = tax;
+      ch = *ptr;
+      while (ch != '\0') {
+        if (IS_WHITESP (ch)) {
+          *ptr = '_';
+        }
+        ptr++;
+        ch = *ptr;
+      }
+      StringCat (buf, "org=");
+      StringCat (buf, tax);
+      StringCat (buf, "&");
+    }
+  }
+  StringCat (buf, "gene=");
+  FF_www_db_xref_std (ffstring, db, identifier, buf);
+}
+
 static void FF_www_db_xref_null (
   StringItemPtr ffstring,
   CharPtr db,
@@ -688,7 +727,9 @@ static void FF_www_db_xref_null (
 static void Do_www_db_xref(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  CharPtr db, CharPtr identifier
+  CharPtr db,
+  CharPtr identifier,
+  BioseqPtr bsp
 )
 {
   if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
@@ -813,6 +854,10 @@ static void Do_www_db_xref(
     FF_www_db_xref_null(ffstring, db, identifier, link_bold);
   } else if ( StringCmp(db , "HPRD") == 0) {
     FF_www_db_xref_hprd(ffstring, db, identifier, link_hprd);
+  } else if ( StringCmp(db , "VectorBase") == 0) {
+    FF_www_db_xref_vector(ffstring, db, identifier, bsp, link_vector);
+  } else if ( StringCmp(db , "miRBase") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_mirbase);
 
   } else {  
     /* default: no link just the text */
@@ -823,13 +868,15 @@ static void Do_www_db_xref(
 NLM_EXTERN void FF_www_db_xref(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  CharPtr db, CharPtr identifier
+  CharPtr db,
+  CharPtr identifier,
+  BioseqPtr bsp
 )
 {
   if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
   
   if ( GetWWW(ajp) ) {
-    Do_www_db_xref (ajp, ffstring, db, identifier);
+    Do_www_db_xref (ajp, ffstring, db, identifier, bsp);
   } else { /* not in www mode */
     if (StringCmp(db , "MGD") == 0 || StringCmp(db , "MGI") == 0) {
       if (StringNICmp (identifier, "MGI:", 4) == 0) {
@@ -885,7 +932,7 @@ NLM_EXTERN CharPtr asn2gnbk_dbxref (
   }
   ajp->www = TRUE;
 
-  Do_www_db_xref (ajp, ffstring, dbt->db, buf);
+  Do_www_db_xref (ajp, ffstring, dbt->db, buf, NULL);
 
   ajp->www = FALSE;
 
@@ -1082,6 +1129,7 @@ NLM_EXTERN CharPtr GetAuthorsString (
 
 {
   AuthorPtr    ap;
+  ValNodePtr   clist;
   ValNodePtr   conslist;
   Int2         count;
   ValNodePtr   head = NULL;
@@ -1151,23 +1199,33 @@ NLM_EXTERN CharPtr GetAuthorsString (
       prefix = ", ";
     }
 
+    prefix = NULL;
+    clist = NULL;
     for (vnp = conslist; vnp != NULL; vnp = vnp->next) {
       str = NULL;
       pid = (PersonIdPtr) vnp->data.ptrvalue;
       if (pid->choice == 5) {
-        str = MakeSingleAuthorString (format, NULL, (CharPtr) pid->data, NULL, NULL, index, NULL);
-        if ((! StringHasNoText (str)) && consortP != NULL && *consortP == NULL) {
-          *consortP = StringSave (str);
+        str = MakeSingleAuthorString (format, prefix, (CharPtr) pid->data, NULL, NULL, index, NULL);
+        if (str != NULL) {
+          ValNodeAddStr (&clist, 0, str);
         }
-
-        /* optionally populate gbseq for XML-ized GenBank format */
-
-        if (gbref != NULL) {
-          gbref->consortium = StringSave (str);
-        }
-
-        str = MemFree (str);
+        prefix = "; ";
       }
+    }
+    if (clist != NULL) {
+      str = MergeFFValNodeStrs (clist);
+      if ((! StringHasNoText (str)) && consortP != NULL && *consortP == NULL) {
+        *consortP = StringSave (str);
+      }
+
+      /* optionally populate gbseq for XML-ized GenBank format */
+
+      if (gbref != NULL) {
+        gbref->consortium = StringSave (str);
+      }
+
+      str = MemFree (str);
+      ValNodeFreeData (clist);
     }
 
     ValNodeFree (pidlist);
@@ -3254,15 +3312,25 @@ static CharPtr remarksText [] = {
 static void AddReferenceToGbseq (
   GBSeqPtr gbseq,
   GBReferencePtr gbref,
-  CharPtr str
+  CharPtr str,
+  RefBlockPtr rbp,
+  BioseqPtr bsp
 )
 
 {
-  CharPtr  copy;
-  CharPtr  ptr;
-  CharPtr  ref;
+  Char            buf [32];
+  CharPtr         copy;
+  ValNodePtr      head = NULL;
+  IntRefBlockPtr  irp;
+  SeqLocPtr       loc;
+  CharPtr         ptr;
+  CharPtr         ref;
+  SeqLocPtr       slp;
+  Int4            start;
+  Int4            stop;
+  CharPtr         tmp;
 
-  if (gbseq == NULL || gbref == NULL || StringHasNoText (str)) return;
+  if (gbseq == NULL || gbref == NULL || StringHasNoText (str) || rbp == NULL || bsp == NULL) return;
 
   copy = StringSave (str);
 
@@ -3277,7 +3345,13 @@ static void AddReferenceToGbseq (
     ref = copy + 12;
     ptr = StringStr (ref, "\n  AUTHORS");
     if (ptr == NULL) {
+      ptr = StringStr (ref, "\n  CONSRTM");
+    }
+    if (ptr == NULL) {
       ptr = StringStr (ref, ")\n");
+      if (ptr != NULL) {
+        ptr++;
+      }
     }
     if (ptr != NULL) {
       *ptr = '\0';
@@ -3300,6 +3374,36 @@ static void AddReferenceToGbseq (
   Asn2gnbkCompressSpaces (gbref->journal);
 
   MemFree (copy);
+
+  if (rbp->sites == 1 || rbp->sites == 2) {
+    gbref->position = StringSave ("sites");
+  } else if (rbp->sites == 3) {
+  } else {
+    irp = (IntRefBlockPtr) rbp;
+    loc = irp->loc;
+    if (loc != NULL) {
+      slp = SeqLocFindNext (loc, NULL);
+      while (slp != NULL) {
+        start = SeqLocStart (slp) + 1;
+        stop = SeqLocStop (slp) + 1;
+        if (head == NULL) {
+          sprintf (buf, "%ld..%ld", (long) start, (long) stop);
+        } else {
+          sprintf (buf, "; %ld..%ld", (long) start, (long) stop);
+        }
+        ValNodeCopyStr (&head, 0, buf);
+        slp = SeqLocFindNext (loc, slp);
+      }
+      tmp = MergeFFValNodeStrs (head);
+      ValNodeFreeData (head);
+      gbref->position = tmp;
+    } else {
+      start = 1;
+      stop = bsp->length;
+      sprintf (buf, "%ld..%ld", (long) start, (long) stop);
+      gbref->position = StringSave (buf);
+    }
+  }
 }
 
 static Boolean IsCitSub (
@@ -3381,6 +3485,8 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   Int4               pmid = 0;
   CharPtr            prefix = NULL;
   RefBlockPtr        rbp;
+  ValNodePtr         remarks = NULL;
+  CharPtr            remprefix = NULL;
   SubmitBlockPtr     sbp;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp = NULL;
@@ -3631,10 +3737,6 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   /* print author list */
 
-  FFRecycleString(ajp, temp);
-  temp = FFGetString(ajp);
-  FFStartPrint(temp, afp->format, 2, 12, "AUTHORS", 12, 5, 5, "RA", FALSE);
-
   str = NULL;
   consortium = NULL;
 
@@ -3644,36 +3746,42 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     TrimSpacesAroundString (str);
   }
 
-  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    suffix = NULL;
-    trailingPeriod = TRUE;
-  } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
-    trailingPeriod = FALSE;
-    len = StringLen (str);
-    if (len > 0 && str [len - 1] != '.') {
-      suffix = ".;";
+  if (str != NULL || StringHasNoText (consortium)) {
+    FFRecycleString(ajp, temp);
+    temp = FFGetString(ajp);
+    FFStartPrint(temp, afp->format, 2, 12, "AUTHORS", 12, 5, 5, "RA", FALSE);
+
+    if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+      suffix = NULL;
+      trailingPeriod = TRUE;
+    } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
+      trailingPeriod = FALSE;
+      len = StringLen (str);
+      if (len > 0 && str [len - 1] != '.') {
+        suffix = ".;";
+      } else {
+        suffix = ";";
+      }
+    }
+
+    /* if no authors were found, period will still be added by this call */
+    if (str != NULL) {
+      FFAddTextToString(temp, NULL, str, suffix, trailingPeriod, FALSE, TILDE_TO_SPACES);
+    } else if (StringHasNoText (consortium)) {
+      if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+        FFAddOneChar(temp, '.', FALSE);
+      } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
+        FFAddOneChar(temp, ';', FALSE);
+      }    
+    }
+
+    if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      suffix = ";";
+      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RA");
     }
   }
-
-  /* if no authors were found, period will still be added by this call */
-  if (str != NULL) {
-    FFAddTextToString(temp, NULL, str, suffix, trailingPeriod, FALSE, TILDE_TO_SPACES);
-  } else {
-    if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFAddOneChar(temp, '.', FALSE);
-    } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
-      FFAddOneChar(temp, ';', FALSE);
-    }    
-  }
-
   MemFree (str);
-  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
-  } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RA");
-  }
 
   /* print consortium */
 
@@ -3857,7 +3965,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
     if (gbseq != NULL) {
       if (gbref != NULL) {
-        AddReferenceToGbseq (gbseq, gbref, str);
+        AddReferenceToGbseq (gbseq, gbref, str, rbp, bsp);
       }
     }
 
@@ -3890,6 +3998,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         FFRecycleString(ajp, temp);
         temp = FFGetString(ajp);
 
+        if (remprefix != NULL) {
+          ValNodeCopyStr (&remarks, 0, remprefix);
+        }
+        ValNodeCopyStr (&remarks, 0, pdp->comment);
+        remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, pdp->comment, FALSE, TRUE, TILDE_EXPAND);
         /* AddCommentWithURLlinks(ajp, temp, NULL, pdp->comment, NULL); */
@@ -3898,7 +4011,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
         if (gbseq != NULL) {
           if (gbref != NULL) {
+            /*
             gbref->remark = StringSave (pdp->comment);
+            */
           }
         }
 
@@ -3922,6 +4037,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       temp = FFGetString(ajp);
 
       sprintf (buf, "GenBank staff at the National Library of Medicine created this entry [NCBI gibbsq %ld] from the original journal article.", (long) gibbsq);
+      if (remprefix != NULL) {
+        ValNodeCopyStr (&remarks, 0, remprefix);
+      }
+      ValNodeCopyStr (&remarks, 0, buf);
+      remprefix = "; ";
       FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
       FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
       FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
@@ -3938,6 +4058,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         temp = FFGetString(ajp);
 
         sprintf (buf, "This sequence comes from %s", str);
+        if (remprefix != NULL) {
+          ValNodeCopyStr (&remarks, 0, remprefix);
+        }
+        ValNodeCopyStr (&remarks, 0, buf);
+        remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, buf, TRUE, TRUE, TILDE_EXPAND);
         FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
@@ -3948,7 +4073,12 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         FFRecycleString(ajp, temp);
         temp = FFGetString(ajp);
 
-        FFStartPrint (temp ,afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+        if (remprefix != NULL) {
+          ValNodeCopyStr (&remarks, 0, remprefix);
+        }
+        ValNodeCopyStr (&remarks, 0, "Polyadenylate residues occurring in the figure were omitted from the sequence.");
+        remprefix = "; ";
+        FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, "Polyadenylate residues occurring in the figure were omitted from the sequence.", TRUE, TRUE, TILDE_EXPAND);
         FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
@@ -3963,6 +4093,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         temp = FFGetString(ajp);
 
         sprintf (buf, "Map location: %s", str);
+        if (remprefix != NULL) {
+          ValNodeCopyStr (&remarks, 0, remprefix);
+        }
+        ValNodeCopyStr (&remarks, 0, buf);
+        remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, buf, TRUE, TRUE, TILDE_EXPAND);
         FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
@@ -3984,6 +4119,17 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
                 FFRecycleString(ajp, temp);
                 temp = FFGetString(ajp);
 
+                len = StringLen (crp->exp) + 20;
+                str = MemNew (sizeof (Char) * len);
+                if (str != NULL) {
+                  sprintf (str, "Erratum:[%s]", crp->exp);
+                  if (remprefix != NULL) {
+                    ValNodeCopyStr (&remarks, 0, remprefix);
+                  }
+                  ValNodeCopyStr (&remarks, 0, str);
+                  remprefix = "; ";
+                  str = MemFree (str);
+                }
                 FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
                 FFAddOneString (temp, "Erratum:", FALSE, FALSE, TILDE_TO_SPACES);
                 FFAddTextToString (temp, "[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
@@ -4000,6 +4146,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
             FFRecycleString(ajp, temp);
             temp = FFGetString(ajp);
 
+            if (remprefix != NULL) {
+              ValNodeCopyStr (&remarks, 0, remprefix);
+            }
+            ValNodeCopyStr (&remarks, 0, csp->descr);
+            remprefix = "; ";
             FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
             /* FFAddOneString (temp, csp->descr, FALSE, TRUE, TILDE_EXPAND); */
             AddCommentWithURLlinks(ajp, temp, NULL, csp->descr, NULL);
@@ -4016,9 +4167,14 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   if (gbseq != NULL) {
     if (gbref != NULL) {
-      AddReferenceToGbseq (gbseq, gbref, str);
+      if (remarks != NULL) {
+        gbref->remark = MergeFFValNodeStrs (remarks);
+      }
+
+      AddReferenceToGbseq (gbseq, gbref, str, rbp, bsp);
     }
   }
+  ValNodeFreeData (remarks);
 
   FFRecycleString(ajp, ffstring);
   FFRecycleString(ajp, temp);

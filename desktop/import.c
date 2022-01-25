@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.54 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -138,6 +138,28 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
       }
       curr = FeatDefFindNext (curr, &key, &label, FEATDEF_ANY, TRUE);
     }
+    ap->name = NULL;
+  }
+  return alist;
+}
+
+static EnumFieldAssocPtr gap_featdef_alist (void)
+
+{
+  EnumFieldAssocPtr  alist;
+  EnumFieldAssocPtr  ap;
+
+  alist = MemNew (sizeof (EnumFieldAssoc) * (4));
+  if (alist == NULL) {
+    Message (MSG_ERROR, "in gap_featdef_alist: no room");
+  } else {
+    ap = alist;
+    ap->name = StringSave ("     ");
+    ap->value = (UIEnum) 0;
+    ap++;
+    ap->name = StringSave ("gap");
+    ap->value = (UIEnum) FEATDEF_gap;
+    ap++;
     ap->name = NULL;
   }
   return alist;
@@ -320,7 +342,8 @@ static void ChangeKey (Handle obj)
   }
 }
 
-static DialoG CreateImportDialog (GrouP h, CharPtr title, ImprtFormPtr ifp, Boolean allowPeptideFeats)
+static DialoG CreateImportDialog (GrouP h, CharPtr title, ImprtFormPtr ifp,
+                                  Boolean allowPeptideFeats, SeqFeatPtr sfp, Boolean is_gap)
 
 {
   EnumFieldAssocPtr  ap;
@@ -357,7 +380,11 @@ static DialoG CreateImportDialog (GrouP h, CharPtr title, ImprtFormPtr ifp, Bool
     */
 
     ipp->ifp = ifp;
-    ipp->alist = import_featdef_alist (FALSE, allowPeptideFeats, FALSE);
+    if (is_gap) {
+      ipp->alist = gap_featdef_alist ();
+    } else {
+      ipp->alist = import_featdef_alist (FALSE, allowPeptideFeats, FALSE);
+    }
 
     ppt = StaticPrompt (m, "Changing feature key will recreate the window.",
                         0, 0, programFont, 'c');
@@ -374,7 +401,11 @@ static DialoG CreateImportDialog (GrouP h, CharPtr title, ImprtFormPtr ifp, Bool
     x = StaticPrompt (f, "Key", 0, 0, programFont, 'l');
 #endif
     if (usePopup) {
-      ipp->key = (Handle) PopupList (f, TRUE, (PupActnProc) ChangeKey);
+      if (is_gap) {
+        ipp->key = (Handle) PopupList (f, TRUE, (PupActnProc) ChangeKey);
+      } else {
+        ipp->key = (Handle) PopupList (f, TRUE, (PupActnProc) ChangeKey);
+      }
       SetObjectExtra (ipp->key, ifp, NULL);
       InitEnumPopup ((PopuP) ipp->key, ipp->alist, NULL);
       SetEnumPopup ((PopuP) ipp->key, ipp->alist, (UIEnum) 0);
@@ -577,6 +608,8 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
   GrouP              h;
   Boolean            hasGeneControl;
   ImprtFormPtr       ifp;
+  ImpFeatPtr         imp;
+  Boolean            is_gap = FALSE;
   GrouP              s;
   StdEditorProcsPtr  sepp;
   WindoW             w;
@@ -611,6 +644,13 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
 
     g = HiddenGroup (w, -1, 0, NULL);
     SetGroupSpacing (g, 3, 10);
+
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_IMP) {
+      imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+      if (imp != NULL && StringICmp (imp->key, "gap") == 0) {
+        is_gap = TRUE;
+      }
+    }
 
     ifp->sep = sep;
     importFormTabs [0] = NULL;
@@ -647,7 +687,7 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
         StringICmp (title, "variation") == 0) {
       allowProductGBQual = TRUE;
     }
-    ifp->data = CreateImportDialog (s, NULL, ifp, allowPeptideFeats);
+    ifp->data = CreateImportDialog (s, NULL, ifp, allowPeptideFeats, sfp, is_gap);
     x = HiddenGroup (s, -1, 0, NULL);
     if (StringICmp (importFormTabs [0], "source") == 0) {
       z = HiddenGroup (x, -4, 0, NULL);

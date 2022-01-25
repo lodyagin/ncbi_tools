@@ -1,4 +1,4 @@
-/* $Id: blast_message.c,v 1.20 2006/01/12 20:33:06 camacho Exp $
+/* $Id: blast_message.c,v 1.23 2006/04/20 19:27:22 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,20 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_message.c,v 1.20 2006/01/12 20:33:06 camacho Exp $";
+    "$Id: blast_message.c,v 1.23 2006/04/20 19:27:22 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_message.h>
 
+/** Declared in blast_message.h as extern const. */
+const int kBlastMessageNoContext = -1;
+
+/** Allocate a new SMessageOrigin structure
+ * @param filename name of the file [in]
+ * @param lineno line number in the file above [in]
+ * @return newly allocated structure or NULL in case of memory allocation
+ * failure.
+ */
 SMessageOrigin* SMessageOriginNew(char* filename, unsigned int lineno)
 {
     SMessageOrigin* retval = NULL;
@@ -54,6 +63,10 @@ SMessageOrigin* SMessageOriginNew(char* filename, unsigned int lineno)
     return retval;
 }
 
+/** Deallocate a SMessageOrigin structure
+ * @param msgo structure to deallocate [in]
+ * @return NULL
+ */
 SMessageOrigin* SMessageOriginFree(SMessageOrigin* msgo)
 {
     if (msgo) {
@@ -66,29 +79,55 @@ SMessageOrigin* SMessageOriginFree(SMessageOrigin* msgo)
 Blast_Message* 
 Blast_MessageFree(Blast_Message* blast_msg)
 {
+        Blast_Message* var_msg = NULL;
+        Blast_Message* next = NULL;
+
 	if (blast_msg == NULL)
 		return NULL;
 
-	sfree(blast_msg->message);
-    blast_msg->origin = SMessageOriginFree(blast_msg->origin);
-
-	sfree(blast_msg);
+        var_msg = blast_msg;
+        while (var_msg)
+        {
+	     sfree(var_msg->message);
+             var_msg->origin = SMessageOriginFree(var_msg->origin);
+             next = var_msg->next;
+	     sfree(var_msg);
+             var_msg = next;
+        }
+        
 	return NULL;
 }
 
 Int2 
 Blast_MessageWrite(Blast_Message* *blast_msg, EBlastSeverity severity, 
-                   Int4 code,	Int4 subcode, const char *message)
+                   int context, const char *message)
 {
+        Blast_Message* new_msg = NULL;
+
 	if (blast_msg == NULL)
-		return 1;
+	     return 1;
 
-	*blast_msg = (Blast_Message*) calloc(1, sizeof(Blast_Message));
+	 new_msg = (Blast_Message*) calloc(1, sizeof(Blast_Message));
+         if (new_msg == NULL)
+             return -1;
 
-	(*blast_msg)->severity = severity;
-	(*blast_msg)->code = code;
-	(*blast_msg)->subcode = subcode;
-	(*blast_msg)->message = strdup(message);
+	new_msg->severity = severity;
+	new_msg->context = context;
+	new_msg->message = strdup(message);
+
+        if (*blast_msg)
+        {
+           Blast_Message* var_msg = *blast_msg;
+           while (var_msg->next)
+           {
+                 var_msg = var_msg->next;
+           }
+           var_msg->next = new_msg;
+        }
+        else
+        {
+           *blast_msg = new_msg;
+        }
 
 	return 0;
 }
@@ -104,50 +143,65 @@ Blast_MessagePost(Blast_Message* blast_msg)
 	return 0;
 }
 
-Blast_Message*
-Blast_Perror(Int2 error_code)
+void
+Blast_Perror(Blast_Message* *msg, Int2 error_code, int context)
 {
-    return Blast_PerrorEx(error_code, NULL, -1);
+    Blast_PerrorEx(msg, error_code, NULL, -1, context);
+    return;
 }
 
-Blast_Message* Blast_PerrorEx(Int2 error_code, 
+void 
+Blast_PerrorEx(Blast_Message* *msg,
+                              Int2 error_code, 
                               const char* file_name, 
-                              int lineno)
+                              int lineno,
+                              int context)
 {
-    Blast_Message* retval = (Blast_Message*) calloc(1, sizeof(Blast_Message));
+    Blast_Message* new_msg = (Blast_Message*) calloc(1, sizeof(Blast_Message));
+    ASSERT(msg);
 
     switch (error_code) {
 
     case BLASTERR_IDEALSTATPARAMCALC:
-        retval->message = strdup("Failed to calculate ideal Karlin-Altschul "
+        new_msg->message = strdup("Failed to calculate ideal Karlin-Altschul "
                                  "parameters");
-        retval->severity = eBlastSevError;
+        new_msg->severity = eBlastSevError;
+        new_msg->context = context;
         break;
     case BLASTERR_REDOALIGNMENTCORE_NOTSUPPORTED:
-        retval->message = strdup("Composition based statistics or "
+        new_msg->message = strdup("Composition based statistics or "
                                  "Smith-Waterman not supported for your "
                                  "program type");
-        retval->severity = eBlastSevError;
+        new_msg->severity = eBlastSevError;
+        new_msg->context = context;
+        break;
+    case BLASTERR_INTERRUPTED:
+        new_msg->message = strdup("BLAST search interrupted at user's request");
+        new_msg->severity = eBlastSevInfo;
+        new_msg->context = context;
         break;
 
     /* Fatal errors */
     case BLASTERR_MEMORY:
-        retval->message = strdup("Out of memory");
-        retval->severity = eBlastSevFatal;
+        new_msg->message = strdup("Out of memory");
+        new_msg->severity = eBlastSevFatal;
+        new_msg->context = context;
         break;
     case BLASTERR_INVALIDPARAM:
-        retval->message = strdup("Invalid argument to function");
-        retval->severity = eBlastSevFatal;
+        new_msg->message = strdup("Invalid argument to function");
+        new_msg->severity = eBlastSevFatal;
+        new_msg->context = context;
         break;
     case BLASTERR_INVALIDQUERIES:
-        retval->message = strdup("search cannot proceed due to errors in all "
+        new_msg->message = strdup("search cannot proceed due to errors in all "
                                  "contexts/frames of query sequences");
-        retval->severity = eBlastSevFatal;
+        new_msg->severity = eBlastSevFatal;
+        new_msg->context = context;
         break;
 
     /* No error, just free the structure */
     case 0:
-        retval = Blast_MessageFree(retval);
+        new_msg = Blast_MessageFree(new_msg);
         break;
 
     /* Unknown error */
@@ -155,24 +209,46 @@ Blast_Message* Blast_PerrorEx(Int2 error_code,
         {
             char buf[512];
             snprintf(buf, sizeof(buf) - 1, "Unknown error code %d", error_code);
-            retval->message = strdup(buf);
-            retval->severity = eBlastSevError;
+            new_msg->message = strdup(buf);
+            new_msg->severity = eBlastSevError;
+            new_msg->context = context;
         }
         break;
     }
 
     if (file_name && lineno > 0) {
-        retval->origin = SMessageOriginNew((char*) file_name, 
+        new_msg->origin = SMessageOriginNew((char*) file_name, 
                                            (unsigned int) lineno);
     }
 
-    return retval;
+    if (*msg)
+    {
+          Blast_Message* var = *msg;
+          while (var->next)
+              var = var->next;
+          var->next = new_msg;
+    }
+    else
+    {
+           *msg = new_msg;
+    }
+
+    return;
 }
 
 /*
  * ===========================================================================
  *
  * $Log: blast_message.c,v $
+ * Revision 1.23  2006/04/20 19:27:22  madden
+ * Implement linked list of Blast_Message, remove code and subcode
+ *
+ * Revision 1.22  2006/03/29 13:59:53  camacho
+ * Doxygen fixes
+ *
+ * Revision 1.21  2006/03/21 21:00:52  camacho
+ * + interruptible api support
+ *
  * Revision 1.20  2006/01/12 20:33:06  camacho
  * + SMessageOrigin structure, Blast_PerrorEx function, and error codes
  *

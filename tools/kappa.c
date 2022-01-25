@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.83 2006/01/30 15:53:09 madden Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.84 2006/05/03 14:42:15 madden Exp $";
 
-/* $Id: kappa.c,v 6.83 2006/01/30 15:53:09 madden Exp $ 
+/* $Id: kappa.c,v 6.84 2006/05/03 14:42:15 madden Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@ functions in this file have a 'Kappa_' prefix.  Please adhere to this
 convention to avoid a name clash with functions in blast_kappa.c (the
 name clash can matter in debuggers and search engines.)
 
- $Revision: 6.83 $
+ $Revision: 6.84 $
 
  Revision 6.75  2005/11/07 15:28:56  coulouri
  From Mike Gertz:
@@ -480,7 +480,26 @@ name clash can matter in debuggers and search engines.)
 #include <algo/blast/composition_adjustment/compo_heap.h>
 #include <algo/blast/composition_adjustment/smith_waterman.h>
 #include <algo/blast/composition_adjustment/redo_alignment.h>
+#include <algo/blast/composition_adjustment/unified_pvalues.h>
 
+
+/** Define KAPPA_PRINT_DIAGNOSTICS to be true to turn on printing of
+ * diagnostic information from some routines.
+ *
+ * This macro is usually used as part of a C-conditional
+ * @code
+ * if (KAPPA_PRINT_DIAGNOSTICS) {
+ *     perform expensive tests
+ * }
+ * @endcode
+ *
+ * The C compiler will then validate the code that prints the
+ * diagnostics, but will almost always strip the code if
+ * KAPPA_PRINT_DIAGNOSTICS is false.
+ */
+#ifndef KAPPA_PRINT_DIAGNOSTICS
+#define KAPPA_PRINT_DIAGNOSTICS 0
+#endif
 
 /**
  * Create a score set from the data in an HSP.
@@ -597,6 +616,90 @@ Kappa_SeqAlignsFromHitlist(
 
 
 /**
+ * Adjusts the E-values in a BLAST_HitList to be composites of
+ * a composition-based P-value and a score/alignment-based P-value
+ *
+ * @param hitlist           the hitlist whose E-values need to be adjusted
+ * @param comp_p_value      P-value from sequence composition
+ * @param search            is the structure with all the information about
+ *                          the search
+ * @param LambdaRatio       the ratio between the observed value of Lambda
+ *                          and the predicted value of lambda (used to print
+ *                          diagnostics)
+ * @param subject_id        the subject id of this sequence (used to print
+ *                          diagnostics)
+ **/
+static void
+Kappa_AdjustEvaluesForComposition(
+  BLAST_HitListPtr hitlist,
+  Nlm_FloatHi comp_p_value,
+  BlastSearchBlkPtr search,
+  Nlm_FloatHi LambdaRatio,
+  Int4 subject_id)
+{
+  int        hsp_index;
+
+  for (hsp_index = 0;  hsp_index < hitlist->hspcnt;  hsp_index++) {
+    /* for all HSPs */
+    BLAST_HSPPtr hsp;         /* HSP for this iteration */
+    double align_p_value;     /* P-value for the alignment score */
+    double combined_p_value;  /* combination of two P-values */
+    double old_e_value;       /* alignment E-value */
+    double db_to_sequence_scale;  /* scale factor for converting a database
+                                     e-value to a sequence e-value */
+
+    hsp = hitlist->hsp_array[hsp_index];
+    old_e_value = hsp->evalue;
+    /* Convert the database E-value to the sequence E-value */
+    db_to_sequence_scale =
+      (MAX((search->subject->length - search->length_adjustment), 1.0))/
+      search->dblen_eff;
+    hsp->evalue *= db_to_sequence_scale;
+
+    align_p_value = BlastKarlinEtoP(hsp->evalue);
+    combined_p_value = Blast_Overall_P_Value(comp_p_value,align_p_value);
+    hsp->evalue = BlastKarlinPtoE(combined_p_value);
+    hsp->evalue /= db_to_sequence_scale;
+
+    if (KAPPA_PRINT_DIAGNOSTICS) {
+      int    sequence_gi; /*GI of a sequence*/
+
+      if (search->rdfp) {
+        SeqIdPtr sip; /*used to extract sequence from database*/
+        char    *sname = NULL; /*string for defline*/
+        char    *buff = NULL; /*string for defline*/
+        char    *string_descriptor = NULL; /*string for defline*/
+
+        sname = (char *) malloc(SeqIdBufferSize * sizeof(Char));
+        buff = (char *) malloc(SeqIdBufferSize * sizeof(Char));
+        string_descriptor =
+          (char *) malloc(SeqIdBufferSize * sizeof(Char));
+        sip = NULL;
+        readdb_get_defline(search->rdfp,subject_id,&sname);
+        readdb_get_descriptor(search->rdfp, subject_id, &sip,
+                              &string_descriptor);
+        if (sip)
+          SeqIdWrite(sip, buff, PRINTID_FASTA_LONG, sizeof(buff));
+        (void) GetAccessionFromSeqId(SeqIdFindBest(sip,SEQID_GI),
+                                     &sequence_gi, &sname);
+        sip = SeqIdSetFree(sip);
+        free(string_descriptor);
+        free(buff);
+        free(sname);
+      } else {
+        sequence_gi = (-1);
+      }
+      printf("GI %d Lambda ratio %e comp. p-value %e; "
+             "adjust E-value of query length %d match length "
+             "%d from %e to %e\n",
+             sequence_gi, LambdaRatio, comp_p_value,
+             search->context[0].query->length,
+             search->subject->length, old_e_value, hsp->evalue);
+    } /* end if (KAPPA_PRINT_DIAGNOSTICS) */
+  } /* end for all HSPs */
+}
+
+/**
  * Converts a list of objects of type BlastCompo_Alignment to an
  * new object of type BLAST_HitList and returns the result. Conversion
  * in this direction is lossless.  The list passed to this routine is
@@ -673,32 +776,38 @@ Kappa_SortedHitlistFromAligns(
 
 
 /**
- * Calculate expect values for a list of alignments and remove those 
- * that don't meet an evalue cutoff from the list.
- * 
+ * Calculate expect values for a list of alignments and remove those
+ * that don't meet an e-value cutoff from the list.
+ *
  * @param *pbestScore      the largest score observed in the list
- * @param *pbestEvalue     the best (smallest) evalue observed in the
+ * @param *pbestEvalue     the best (smallest) e-value observed in the
  *                         list
- * @param full_subject_length   the untranslated length of the subject 
+ * @param full_subject_length   the untranslated length of the subject
  *                              sequence
- * @param search           contains search parameters used to compute 
- *                         evalues and the evalue cutoff
- * @param do_link_hsps     use hsp linking when computing evalues
+ * @param search           contains search parameters used to compute
+ *                         e-values and the e-value cutoff
+ * @param do_link_hsps     use hsp linking when computing e-values
+ * @param pvalueForThisPair  composition p-value
+ * @param LambdaRatio        lambda ratio, if available
+ * @param subject_id         index of subject
  */
 static void
 Kappa_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
                              int full_subject_length,
                              BlastSearchBlkPtr search,
-                             int do_link_hsps)
+                             int do_link_hsps,
+                             double pvalueForThisPair,
+                             double LambdaRatio,
+                             int subject_id)
 {
   BLAST_HitListPtr hitlist; /* a hitlist containing the newly-computed
                                    * alignments */
-  Nlm_FloatHi bestEvalue;   /* best evalue among alignments in the
+  Nlm_FloatHi bestEvalue;   /* best e-value among alignments in the
                                      hitlist */
   Int4 bestScore;           /* best score among alignments in the
                                hitlist */
   Int4 hsp_index;           /* index of the current HSP */
-  
+
   hitlist = search->current_hitlist;
   search->subject->length  = full_subject_length;
   if (do_link_hsps) {
@@ -706,9 +815,12 @@ Kappa_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
   } else {
     BlastGetNonSumStatsEvalue(search);
   }
+  if ((0 <= pvalueForThisPair) && (pvalueForThisPair <= 1))
+    Kappa_AdjustEvaluesForComposition(hitlist, pvalueForThisPair,
+                                      search, LambdaRatio, subject_id);
   BlastReapHitlistByEvalue(search);
-  /* Find the evalue of the best alignment in the list -- the list
-   * is typically sorted by score and not by evalue, so a search is
+  /* Find the e-value of the best alignment in the list -- the list
+   * is typically sorted by score and not by e-value, so a search is
    * necessary. */
   bestEvalue = DBL_MAX;
   bestScore  = 0;
@@ -841,8 +953,8 @@ Kappa_GetStartFreqRatios(Nlm_FloatHi ** returnRatios,
  * @param nonposMatrix      is the underlying position-independent matrix,
  *                          used to fill positions where frequencies are
  *                          irrelevant
- * @param matrixName        name of the postion-independent matrix
- * @param posFreq           frequecy ratios for the position-dependent
+ * @param matrixName        name of the position-independent matrix
+ * @param posFreq           frequency ratios for the position-dependent
  *                          matrix
  * @param query             query sequence data
  * @param queryLength       length of the query
@@ -1470,7 +1582,7 @@ Kappa_NewAlignmentUsingXdrop(BlastCompo_Alignment ** pnewAlign,
 { 
   /* General search parameters */
   BlastSearchBlkPtr search = gapping_params->context;
-  /* Specific parameeters used for gapped alignments */
+  /* Specific parameters used for gapped alignments */
   GapAlignBlkPtr gap_align = search->gap_align;
   /* the translation frame */
   int frame = subject_range->context;
@@ -1560,7 +1672,7 @@ typedef struct Kappa_SearchParameters {
   int           gap_x_dropoff_final;
   BLAST_Score **origMatrix;     /**< The original matrix values */
   /** a matrix.  Each row represents a query and each column
-       represents the probabilties of a particular residue */
+       represents the probabilities of a particular residue */
   GapAlignBlkPtr orig_gap_align;
   Nlm_FloatHi original_expect_value;    /**< expect value on entry */
   BLAST_KarlinBlkPtr kbp_gap_orig;  /**< copy of the original gapped
@@ -1856,8 +1968,8 @@ Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
       ErrPostEx(SEV_FATAL, 1, 0, "blastpgp: Cannot adjust parameters "
                 "for matrix %s\n", matrixName);
     }
-    Blast_Int4MatrixFromFreq(self->startMatrix, PROTEIN_ALPHABET,
-                             freqRatios->data, self->ungappedLambda);
+    Blast_Int4MatrixFromFreq(self->startMatrix, freqRatios->data,
+                             self->ungappedLambda);
     freqRatios = PSIMatrixFrequencyRatiosFree(freqRatios);
   }
   self->matrixName = strdup(matrixName);
@@ -1868,7 +1980,7 @@ Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
  * Record information about all queries in the concatenated query.
  *
  * @param *pquery       a new list of BlastCompo_QueryInfo objects
- * @param *pnumQueries  the lenght of *pquery
+ * @param *pnumQueries  the length of *pquery
  * @param *maxLength    the length of the longest query
  * @param search        a search block, which is used to obtain the 
  *                      query information */
@@ -2125,15 +2237,26 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                   of the sole query if query
                                   concatenation is not in use */
   Int4 maxQueryLength;         /* the greatest length among all queries */
-  BlastCompo_Alignment * incoming_aligns;  /* existing algnments for a match */
+  BlastCompo_Alignment * incoming_aligns;  /* existing alignments for a match */
   BlastCompo_QueryInfo * query_info = NULL;
   Blast_RedoAlignParams * redo_align_params;
   double Lambda, logK;
+  double pvalueForThisPair = (-1); /*p-value for this match
+                                     for composition; -1 == no adjustment*/
+  double LambdaRatio; /*lambda ratio*/
+  int compositionTestIndex = options->unified_p;
+                              /*which test function do we use to see if
+                               a composition-adjusted p-value is desired*/
+
   /* the composition adjustment mode, obtained from adjustParameters
      (we don't make adjustParameters itself an enum so that only
      kappa.c depends on the header that defines ECompoAdjustModes) */
   ECompoAdjustModes compo_adjust_mode;  
 
+  if (search->positionBased) {
+    /* Can't use a compositional P-value with position based searches */
+    compositionTestIndex = 0;
+  }
   /**** Validate parameters *************/
   if (0 > adjustParameters || eNumCompoAdjustModes <= adjustParameters) {
       /* Unknown composition adjustment mode */
@@ -2159,7 +2282,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
   }
   if (compo_adjust_mode > 1 &&
       !Blast_FrequencyDataIsAvailable(options->matrix)) {
-    Char* msg = "Unsupported matrix for compostion-based"
+    Char* msg = "Unsupported matrix for composition-based"
       " matrix adjustment";
     BlastConstructErrorMessage("RedoAlignmentCore", msg, 3,
                                &(search->error_return));
@@ -2219,7 +2342,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
     if (NRrecord == NULL) {
       ErrPostEx(SEV_FATAL, E_NoMemory, 0, "Failed to allocate memory");
     }
-    /* We already checke that the frequency data is available for
+    /* We already checked that the frequency data is available for
      * options->matrix, so this call can't fail */
     (void) Blast_CompositionWorkspaceInit(NRrecord, options->matrix);
   }
@@ -2256,13 +2379,16 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                         Lambda, logK,
                                         &matchingSeq, query_info, numQueries,
                                         matrix, NRrecord, &forbidden,
-                                        significantMatches);
+                                        significantMatches,
+					&pvalueForThisPair,
+					compositionTestIndex, &LambdaRatio);
     } else {
       status =
         Blast_RedoOneMatch(alignments, redo_align_params, incoming_aligns,
                            thisMatch->hspcnt, Lambda, &matchingSeq,
                            ccat_query_length, query_info, numQueries,
-                           matrix, NRrecord);
+                           matrix, NRrecord, &pvalueForThisPair,
+                           compositionTestIndex, &LambdaRatio);
     }
     if (status != 0) {
       ErrPostEx(SEV_FATAL, E_NoMemory, 0, "Failed to allocate memory");
@@ -2270,7 +2396,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
     for (query_index = 0;  query_index < numQueries;  query_index++) {
       /* Loop over queries */
       if( alignments[query_index] != NULL) { /* alignments were found */
-        Nlm_FloatHi bestEvalue;   /* best evalue among alignments in the
+        Nlm_FloatHi bestEvalue;   /* best e-value among alignments in the
                                      hitlist */
         Int4 bestScore;           /* best score among alignments in the
                                      hitlist */        
@@ -2291,7 +2417,9 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
         }
         Kappa_HitlistEvaluateAndPurge(&bestScore, &bestEvalue,
                                       matchingSeq.length,
-                                      search, redo_align_params->do_link_hsps);
+                                      search, redo_align_params->do_link_hsps,
+				      pvalueForThisPair, LambdaRatio,
+				      thisMatch->subject_id);
         if (bestEvalue <= search->pbp->cutoff_e &&
             BlastCompo_HeapWouldInsert(&significantMatches[query_index],
                                        bestEvalue, bestScore,

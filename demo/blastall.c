@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.171 2006/01/24 18:33:44 papadopo Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.177 2006/04/26 12:47:48 madden Exp $";
 
-/* $Id: blastall.c,v 6.171 2006/01/24 18:33:44 papadopo Exp $
+/* $Id: blastall.c,v 6.177 2006/04/26 12:47:48 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,25 @@ static char const rcsid[] = "$Id: blastall.c,v 6.171 2006/01/24 18:33:44 papadop
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.177  2006/04/26 12:47:48  madden
+ * Use SBlastMessage in place of Blast_Message
+ *
+ * Revision 6.176  2006/04/25 18:00:19  papadopo
+ * change signature of BlastTabularFormatDataNew
+ *
+ * Revision 6.175  2006/04/21 14:34:50  madden
+ * BLAST_GetQuerySeqLoc prototype change
+ *
+ * Revision 6.174  2006/04/20 15:32:36  papadopo
+ * if query IDs are actually used, verify that there are no duplicate IDs
+ *
+ * Revision 6.173  2006/04/04 13:13:48  madden
+ * 1.) Add range check to ARG_FORMAT argument.
+ * 2.) Rework error reporting so as to not truncate results if there is a warning.
+ *
+ * Revision 6.172  2006/03/08 15:41:26  coulouri
+ * tune query concatenation limits
+ *
  * Revision 6.171  2006/01/24 18:33:44  papadopo
  * from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
  *
@@ -883,7 +902,7 @@ static Args myargs[] = {
     { "Expectation value (E)",  
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},    /* ARG_EVALUE */
     { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines\n10 ASN, text\n11 ASN, binary", /* 4 */
-      "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},         /* ARG_FORMAT */
+      "0", "0", "11", FALSE, 'm', ARG_INT, 0.0, 0, NULL},         /* ARG_FORMAT */
     { "BLAST report Output File", 
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL}, /* ARG_OUT */
     { "Filter query sequence (DUST with blastn, SEG with others)", 
@@ -1242,9 +1261,6 @@ Int4** LIBCALL BlastMatrixConvert(Int4** old)
    return new;
 }
 
-
-#define BLASTALL_MAXQUERY 5000000
-
 Int2 Main_new (void)
 
 {
@@ -1257,18 +1273,20 @@ Int2 Main_new (void)
    FILE *infp=NULL, *outfp=NULL;
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
-   Int2 ctr = 1;
+   Int4 ctr = 1;
    Boolean tabular_output = FALSE;
    Blast_SummaryReturn* sum_returns = Blast_SummaryReturnNew();
    Blast_SummaryReturn* full_sum_returns = NULL;
    char* blast_program = myargs[ARG_PROGRAM].strvalue;
    char* dbname = myargs[ARG_DB].strvalue;
+   Int4 maxquery = 0; /* maximum number of bases/residues to concatenate per
+                         database pass */
 
    status = SBlastOptionsNew(blast_program, &options, sum_returns);
 
    if (status) {
        if (sum_returns->error) {
-           Blast_SummaryReturnsPostError(sum_returns);
+           SBlastMessageErrPost(sum_returns->error);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
        }
        return -1;
@@ -1277,18 +1295,38 @@ Int2 Main_new (void)
    s_FillOptions(options);
    program_number = options->program;
 
+   switch(program_number) {
+       case eBlastTypeBlastn:
+           maxquery = 40000;
+           break;
+       case eBlastTypeTblastn:
+           maxquery = 20000;
+           break;
+       case eBlastTypeBlastp:
+       case eBlastTypeBlastx:
+       case eBlastTypeTblastx:
+       default:
+           maxquery = 10000;
+   }
+
    BlastGetTypes(myargs[ARG_PROGRAM].strvalue, &query_is_na, &db_is_na);
 
    if (myargs[ARG_BELIEVEQUERY].intvalue != 0)
         believe_query = TRUE;
 
+   SBlastOptionsSetBelieveQuery(options, believe_query);
+
    if (myargs[ARG_FORMAT].intvalue == 8 && myargs[ARG_USEMEGABLAST].intvalue)
         tabular_output = TRUE;
 
    if (!tabular_output) {
-       BlastFormattingInfoNew(myargs[ARG_FORMAT].intvalue, options,
+       Int2 finfo_status = BlastFormattingInfoNew(myargs[ARG_FORMAT].intvalue, options,
                               blast_program, dbname,
                               myargs[ARG_OUT].strvalue, &format_info);
+       if (finfo_status != 0)
+       {
+           ErrPostEx(SEV_FATAL, 1, 0, "BlastFormattingInfoNew returned non-zero status");
+       }
 
        /* Pass TRUE for the "is megablast" argument. Since megablast is always
           gapped, pass FALSE for the "is ungapped" argument. */
@@ -1313,7 +1351,7 @@ Int2 Main_new (void)
        }
        believe_query = TRUE;
        /* FetchEnable/Disable called in blast_format.c for non-tabular output. */
-       ReadDBBioseqFetchEnable ("megablast", myargs[ARG_DB].strvalue, db_is_na, TRUE);
+       ReadDBBioseqFetchEnable ("blastall", myargs[ARG_DB].strvalue, db_is_na, TRUE);
    }
 
 
@@ -1338,12 +1376,12 @@ Int2 Main_new (void)
 
       if ((Boolean)myargs[ARG_LCASE].intvalue) {
          letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na, 
-                   myargs[ARG_STRAND].intvalue, BLASTALL_MAXQUERY, start, end,
+                   myargs[ARG_STRAND].intvalue, maxquery, start, end,
                    &lcase_mask, &query_slp, &ctr, &num_queries, believe_query,
                    myargs[ARG_QGENETIC_CODE].intvalue);
       } else {
          letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na,
-                   myargs[ARG_STRAND].intvalue, BLASTALL_MAXQUERY, start, end, 
+                   myargs[ARG_STRAND].intvalue, maxquery, start, end, 
                    NULL, &query_slp, &ctr, &num_queries, believe_query,
                    myargs[ARG_QGENETIC_CODE].intvalue);
       }
@@ -1355,6 +1393,12 @@ Int2 Main_new (void)
       {
 	   ErrPostEx(SEV_FATAL, 1, 0, "BLAST_GetQuerySeqLoc returned an error\n");
            return -1;
+      }
+
+      if (believe_query && BlastSeqlocsHaveDuplicateIDs(query_slp)) {
+         ErrPostEx(SEV_FATAL, 1, 0, 
+                 "Duplicate IDs detected; please ensure that "
+                 "all query sequence identifiers are unique");
       }
 
       if (tabular_output) {
@@ -1373,7 +1417,8 @@ Int2 Main_new (void)
            PrintTabularOutputHeader(dbname, NULL, query_slp, 
                                     blast_program, 0, FALSE, outfp);
            
-           tf_data = BlastTabularFormatDataNew(outfp, query_slp, tab_option);
+           tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+                                               tab_option, believe_query);
            tf_data->show_gi = (Boolean) myargs[ARG_SHOWGIS].intvalue;
            tf_data->show_accession = TRUE;
       }
@@ -1381,8 +1426,17 @@ Int2 Main_new (void)
       options->num_cpus = myargs[ARG_THREADS].intvalue;
 
       /* Find repeat mask, if necessary */
-      Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue,
-                                &repeat_mask);
+      if ((status = Blast_FindRepeatFilterSeqLoc(query_slp, myargs[ARG_FILTER].strvalue,
+                                &repeat_mask, &sum_returns->error)) != 0)
+      {
+            if (sum_returns && sum_returns->error)
+            {
+                   ErrSev max_sev = SBlastMessageErrPost(sum_returns->error);
+                   if (max_sev >= SEV_ERROR)
+                         return status;
+            }
+      }
+
       /* Combine repeat mask with lower case mask */
       if (repeat_mask)
           lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
@@ -1392,11 +1446,18 @@ Int2 Main_new (void)
                                     tf_data, &seqalign_arr, &filter_loc, 
                                     sum_returns)) != 0)
       {
-          if (sum_returns && sum_returns->error)
-              ErrPostEx(SEV_FATAL, 1, 0, sum_returns->error->message);
-          else
-              ErrPostEx(SEV_FATAL, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
-           return status;
+            /* Jump out if fatal error or unknown reason for exit. */
+            if (sum_returns && sum_returns->error)
+            {
+                ErrSev max_severity = SBlastMessageErrPost(sum_returns->error);
+                if (max_severity >= SEV_ERROR)
+                   return status;
+            }
+            else if (!sum_returns || !sum_returns->error)
+            {
+                   ErrPostEx(SEV_ERROR, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
+                   return status;
+            }
       }
 
        /* Deallocate the formatting thread data structure. */
@@ -1412,7 +1473,7 @@ Int2 Main_new (void)
            filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
        /* Post warning or error messages, no matter what the search status was. */
-       Blast_SummaryReturnsPostError(sum_returns);
+       SBlastMessageErrPost(sum_returns->error);
 
        if (!status && !tabular_output) {
 /*   FIXME:
@@ -1425,8 +1486,6 @@ Int2 Main_new (void)
                               blast_program, dbname,
                               myargs[ARG_ASNOUT].strvalue, &asn_format_info);
 
-                   /* Pass TRUE for the "is megablast" argument. Since megablast is always
-                      gapped, pass FALSE for the "is ungapped" argument. */
                    BlastFormattingInfoSetUpOptions(asn_format_info,
                                        myargs[ARG_DESCRIPTIONS].intvalue,
                                        myargs[ARG_ALIGNMENTS].intvalue,

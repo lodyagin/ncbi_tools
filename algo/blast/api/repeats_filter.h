@@ -1,4 +1,4 @@
-/* $Id: repeats_filter.h,v 1.4 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: repeats_filter.h,v 1.5 2006/04/26 12:46:47 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -39,6 +39,7 @@ extern "C" {
 #endif
 
 #include <objloc.h>
+#include <algo/blast/api/blast_message_api.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -51,11 +52,13 @@ extern "C" {
  * @param filter_string Filtering option for a BLAST search, e.g. 
  *                      "m L;R -d rodents.lib" [in]
  * @param mask_loc List of repeat mask locations [out]
+ * @param message Used to send back error messages [out]
  * @return Status.
  */
 Int2 Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc, 
                                   const char* filter_string, 
-                                  SeqLoc* *mask_loc);
+                                  SeqLoc* *mask_loc,
+                                  SBlastMessage **message);
 
 /* @} */
 

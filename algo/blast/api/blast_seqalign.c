@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.56 2006/02/15 15:15:03 madden Exp $
+/* $Id: blast_seqalign.c,v 1.57 2006/03/21 15:27:58 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Conversion of BLAST results to the SeqAlign form
  */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.56 2006/02/15 15:15:03 madden Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.57 2006/03/21 15:27:58 madden Exp $";
 
 #include <algo/blast/api/blast_seqalign.h>
 
@@ -1312,7 +1312,7 @@ s_HSPListToSeqAlignGapped(EBlastProgramType program_number,
 }
 
 Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number, 
-        BlastHSPResults* results, SeqLocPtr query_slp, 
+        BlastHSPResults** results_ptr, SeqLocPtr query_slp, 
         ReadDBFILE* rdfp, SeqLoc* subject_slp,
         Boolean is_gapped, Boolean is_ooframe, 
         SBlastSeqalignArray* *seqalign_arr)
@@ -1320,8 +1320,13 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
    Int4 query_index, subject_index;
    SeqLocPtr slp = query_slp;
    SeqIdPtr query_id, subject_id = NULL;
-   Int4 subject_length = 0;
    SeqLoc** subject_loc_array = NULL;
+   BlastHSPResults* results = NULL;
+   
+   if (results_ptr == NULL)
+      return 0;
+
+   results = *results_ptr;
    
    if (!results || results->num_queries <= 0)
       return 0;
@@ -1354,6 +1359,7 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
       for (subject_index = 0; subject_index < hit_list->hsplist_count;
            ++subject_index) {
          SeqAlignPtr seqalign = NULL;
+         Int4 subject_length = 0;
          BlastHSPList* hsp_list = hit_list->hsplist_array[subject_index];
          if (!hsp_list)
             continue;
@@ -1407,8 +1413,11 @@ Int2 BLAST_ResultsToSeqAlign(EBlastProgramType program_number,
          }
       }
       (*seqalign_arr)->array[query_index] = head_seqalign;
+      results->hitlist_array[query_index] = Blast_HitListFree(results->hitlist_array[query_index]);
    }
 
+   results = Blast_HSPResultsFree(results);
+   *results_ptr = NULL;
    sfree(subject_loc_array);
 
    return 0;

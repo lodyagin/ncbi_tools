@@ -31,7 +31,7 @@
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: redo_alignment.c,v 1.6 2006/01/30 14:45:44 gertz Exp $";
+    "$Id: redo_alignment.c,v 1.9 2006/05/03 14:10:39 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <stdlib.h>
@@ -64,7 +64,7 @@ static char const rcsid[] =
 #define COMPO_INTENSE_DEBUG 0
 #endif
 
-/** by what factor might initially reported E-value exceed true Evalue */
+/** by what factor might initially reported E-value exceed true E-value */
 #define EVALUE_STRETCH 5
 
 /** -1/0/1 if a is less than/greater than/equal to b */
@@ -830,7 +830,7 @@ s_GetSubjectComposition(Blast_AminoAcidComposition * subject_composition,
 
 
 /**
- * Compute an evalue from a score and a set of statistical parameters
+ * Compute an e-value from a score and a set of statistical parameters
  */
 static double
 s_EvalueFromScore(int score, double Lambda, double logK, double searchsp)
@@ -951,7 +951,10 @@ Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
                    BlastCompo_MatchingSequence * matchingSeq,
                    int ccat_query_length, BlastCompo_QueryInfo query_info[],
                    int numQueries, int ** matrix,
-                   Blast_CompositionWorkspace * NRrecord)
+                   Blast_CompositionWorkspace * NRrecord,
+                   double *pvalueForThisPair,
+                   int compositionTestIndex,
+                   double *LambdaRatio)
 {
     int status = 0;                  /* return status */
     s_WindowInfo **windows;      /* array of windows */
@@ -964,13 +967,12 @@ Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
     /* fields of params, as local variables */
     Blast_MatrixInfo * scaledMatrixInfo = params->matrix_info;
     ECompoAdjustModes compo_adjust_mode = params->compo_adjust_mode;
-    int positionBased = params->positionBased;
     int RE_pseudocounts = params->RE_pseudocounts;
     int subject_is_translated = params->subject_is_translated;
     BlastCompo_GappingParams * gapping_params = params->gapping_params;
     const Blast_RedoAlignCallbacks * callbacks = params->callbacks;
 
-    assert((int) compo_adjust_mode < 2 || !positionBased);
+    assert((int) compo_adjust_mode < 2 || !params->positionBased);
     for (query_index = 0;  query_index < numQueries;  query_index++) {
         alignments[query_index] = NULL;
     }
@@ -1028,7 +1030,10 @@ Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
                                            scaledMatrixInfo, compo_adjust_mode,
                                            RE_pseudocounts, NRrecord,
                                            &matrix_adjust_rule,
-                                           callbacks->calc_lambda);
+                                           callbacks->calc_lambda,
+                                           pvalueForThisPair,
+                                           compositionTestIndex,
+                                           LambdaRatio);
                     if (adjust_search_failed < 0) { /* fatal error */
                         status = adjust_search_failed;
                         goto window_index_loop_cleanup;
@@ -1043,8 +1048,14 @@ Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
                                            &subject, &window->subject_range,
                                            matchingSeq->length,
                                            gapping_params);
-                    s_WithDistinctEnds(&newAlign, &alignments[query_index],
-                                       callbacks->free_align_traceback);
+                    if (newAlign->score >= params->cutoff_s) {
+                        s_WithDistinctEnds(&newAlign, &alignments[query_index],
+                                           callbacks->free_align_traceback);
+                    } else {
+                        BlastCompo_AlignmentsFree(&newAlign,
+                                                  callbacks->
+                                                  free_align_traceback);
+                    }
                 }
             } /* end if in_align is not contained...*/
         } /* end for all alignments in this window */
@@ -1083,7 +1094,10 @@ Blast_RedoOneMatchSmithWaterman(BlastCompo_Alignment ** alignments,
                                 int ** matrix,
                                 Blast_CompositionWorkspace * NRrecord,
                                 Blast_ForbiddenRanges * forbidden,
-                                BlastCompo_Heap * significantMatches)
+                                BlastCompo_Heap * significantMatches,
+                                double *pvalueForThisPair,
+                                int compositionTestIndex,
+                                double *LambdaRatio)
 {
     int status = 0;                     /* status return value */
     s_WindowInfo **windows = NULL;  /* array of windows */
@@ -1154,10 +1168,13 @@ Blast_RedoOneMatchSmithWaterman(BlastCompo_Alignment ** alignments,
             adjust_search_failed =
                 Blast_AdjustScores(matrix,
                                    query_composition, query->length,
-                                   &subject_composition, subject.length, 
+                                   &subject_composition, subject.length,
                                    scaledMatrixInfo, compo_adjust_mode,
                                    RE_pseudocounts, NRrecord,
-                                   &matrix_adjust_rule, callbacks->calc_lambda);
+                                   &matrix_adjust_rule, callbacks->calc_lambda,
+                                   pvalueForThisPair,
+                                   compositionTestIndex,
+                                   LambdaRatio);
             if (adjust_search_failed < 0) { /* fatal error */
                 status = adjust_search_failed;
                 goto window_index_loop_cleanup;

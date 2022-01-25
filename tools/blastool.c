@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.287 2005/12/29 19:56:06 madden Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.290 2006/04/26 12:42:36 madden Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,17 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.287 $
+* $Revision: 6.290 $
 * $Log: blastool.c,v $
+* Revision 6.290  2006/04/26 12:42:36  madden
+* BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
+*
+* Revision 6.289  2006/03/21 22:35:27  camacho
+* Add support for setting database length in BLAST_WizardOptions{Blk,Mask}
+*
+* Revision 6.288  2006/03/02 21:01:54  camacho
+* Use lowercase masking in BLAST_Wizard
+*
 * Revision 6.287  2005/12/29 19:56:06  madden
 * Moved functions to print tabular output to blfmtutl
 *
@@ -946,9 +955,6 @@ Contents: Utilities for BLAST
 
 int (*blastool_fprintf)(FILE*, const char *, ...) = fprintf;
 #define fprintf blastool_fprintf
-
-/* Mutex for assignment of db seqs to search. */
-TNlmMutex err_message_mutex=NULL;
 
 typedef struct _FilterAlign {
     SeqAlignPtr  sap;
@@ -4519,91 +4525,6 @@ SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct,
     return head;
 }
 
-#define BLAST_ERROR_BULEN 50
-/*
-	The following functions fill a the Error user string with
-	text to identify BLAST and the entry being worked on.
-	The SeqIdPtr is used to make a FASTA id, which is appended
-	to string.
-
-	A Uint1 is returned, which allows Nlm_ErrUserDelete to delete
-	this error string when it's done.
-*/
-
-Uint1
-BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
-
-{
-	BioseqPtr bsp;
-	Char buffer[2*BLAST_ERROR_BULEN+1], textid[BLAST_ERROR_BULEN+1];
-	CharPtr buf_start, ptr, title;
-	Int2 length=0, index;
-	Uint1 retval=0;
-
-	buffer[0] = NULLB;
-	ptr = buf_start = &buffer[0];
-
-	if (string)
-		StringNCpy_0(ptr, string, BLAST_ERROR_BULEN);
-
-	if (sip != NULL)
-	{
-	    bsp = BioseqLockById(sip);
-	    if(bsp)
-	    {
-		if (use_id)
-			sip = bsp->id;
-		else
-			title = BioseqGetTitle(bsp);
-	    }
-
-	    if (string)
-	    {
-	    	length = StringLen(string);
-	    	if (length > BLAST_ERROR_BULEN)
-			length = BLAST_ERROR_BULEN;
-	    }
-
-	    ptr += length;
-
-	    if (use_id)
-	    {
-    	    	SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, BLAST_ERROR_BULEN-1);
-	    	StringNCpy_0(ptr, textid, BLAST_ERROR_BULEN-1);
-	    }
-	    else if (title)
-	    {
-		for (index=0; index<BLAST_ERROR_BULEN-1; index++)
-		{
-			if (title[index] == NULLB || title[index] == ' ')
-			{
-				break;
-			}
-			*ptr = title[index];
-			ptr++;
-		}
-		*ptr = NULLB;
-	    }
-	    BioseqUnlock(bsp);
-	    StringCpy(ptr+StringLen(ptr), ":");
-	}
-	NlmMutexLockEx(&err_message_mutex);
-	retval = Nlm_ErrUserInstall (buf_start, 0);
-	NlmMutexUnlock(err_message_mutex);
-
-	return retval;
-}
-
-void
-BlastDeleteUserErrorString(Uint1 err_id)
-
-{
-	NlmMutexLockEx(&err_message_mutex);
-	Nlm_ErrUserDelete(err_id);
-	NlmMutexUnlock(err_message_mutex);
-	return;
-}
-
 Int4
 BlastGetNumIdentical(Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
                      Int4 s_start, Int4 length, Boolean reverse)
@@ -6282,6 +6203,7 @@ BLAST_WizardOptionsMaskInit(BLAST_WizardOptionsMaskPtr mask)
     mask->required_end              = FALSE;
     mask->required_start            = FALSE;
     mask->reward                    = FALSE;
+    mask->db_length                 = FALSE;
     mask->searchsp_eff              = FALSE;
     mask->smith_waterman            = FALSE;
     mask->strand_option             = FALSE;
@@ -6407,6 +6329,8 @@ BLAST_Wizard(
         out->reward = options->reward;
     if(mask->wordsize)
         out->wordsize = options->wordsize;
+    if(mask->db_length)
+        out->db_length = options->db_length;
     if(mask->searchsp_eff)
         out->searchsp_eff = options->searchsp_eff;
     if(mask->hsp_range_max)
@@ -6572,6 +6496,10 @@ BLAST_Wizard(
     if(options->gilist) {
         out->gilist = options->gilist; /* take ownership */
         options->gilist = 0;
+    }
+    if (options->query_lcase_mask) {
+        out->query_lcase_mask = options->query_lcase_mask;  /* take ownership */
+        options->query_lcase_mask = 0;
     }
 end:
     if(*error) {

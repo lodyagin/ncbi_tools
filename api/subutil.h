@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,9 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.54  2006/05/05 19:49:40  kans
+* added StructuredComment user object creation functions
+*
 * Revision 6.53  2006/02/06 19:00:15  kans
 * added CreateFeatureFetchPolicyUserObject
 *
@@ -1706,6 +1709,16 @@ NLM_EXTERN UserObjectPtr CreateAnnotDescCommentPolicyUserObject (
 
 NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
   CharPtr policy
+);
+
+/* structured comment user object for flatfile presentation */
+
+NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (void);
+
+NLM_EXTERN void AddItemStructuredCommentUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
 );
 
 

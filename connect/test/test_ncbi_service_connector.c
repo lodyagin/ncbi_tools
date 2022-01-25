@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_service_connector.c,v 6.35 2006/01/12 18:13:36 lavr Exp $
+/*  $Id: test_ncbi_service_connector.c,v 6.37 2006/04/23 18:28:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,7 +47,6 @@ int main(int argc, const char* argv[])
     SConnNetInfo* net_info;
     CONNECTOR connector;
     EIO_Status status;
-    STimeout* timeout;
     char ibuf[1024];
     CONN conn;
     size_t n;
@@ -55,7 +54,8 @@ int main(int argc, const char* argv[])
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
-    CORE_SetLOGFormatFlags(fLOG_Full | fLOG_DateTime);
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     net_info = ConnNetInfo_Create(service);
@@ -66,7 +66,6 @@ int main(int argc, const char* argv[])
         obuf[++n]              = 0;
     }
     strcpy(net_info->args, "testarg=val&service=none&platform=none&address=2");
-    timeout = net_info->timeout;
 
     connector = SERVICE_CreateConnectorEx(service, fSERV_Any, net_info, 0);
 
@@ -104,7 +103,7 @@ int main(int argc, const char* argv[])
     }
 
     for (;;) {
-       if (CONN_Wait(conn, eIO_Read, timeout) != eIO_Success) {
+       if (CONN_Wait(conn, eIO_Read, net_info->timeout) != eIO_Success) {
             CONN_Close(conn);
             CORE_LOG(eLOG_Fatal, "Error waiting for reading");
         }
@@ -125,6 +124,8 @@ int main(int argc, const char* argv[])
             break;
         }
     }
+
+    ConnNetInfo_Destroy(net_info);
     CONN_Close(conn);
 
 #if 0
@@ -152,8 +153,6 @@ int main(int argc, const char* argv[])
         CORE_LOG(eLOG_Fatal, "Error reading from service ID1");
     }
 
-    
-    ConnNetInfo_Destroy(net_info);
     CORE_LOGF(eLOG_Note, ("%d bytes read from service ID1", n));
     CONN_Close(conn);
 #endif
@@ -166,6 +165,12 @@ int main(int argc, const char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_service_connector.c,v $
+ * Revision 6.37  2006/04/23 18:28:44  lavr
+ * Do not destroy SConnNetInfo prematurely; timeout is still in use
+ *
+ * Revision 6.36  2006/04/20 14:01:58  lavr
+ * Cleanup to demonstrate no leaks; use short diag format
+ *
  * Revision 6.35  2006/01/12 18:13:36  lavr
  * Add arguments to show that they must be replaced by standard ones
  *

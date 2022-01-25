@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi.c,v 1.30 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_psi.c,v 1.31 2006/04/19 19:16:49 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -144,22 +144,18 @@ PSICreatePssmWithDiagnostics(const PSIMsa* msap,                    /* [in] */
         return status;
     }
 
-    /*** Enable structure group customization if needed ***/
+    /*** Enable structure group customization if needed and validate the
+     * multiple sequence alignment data ***/
     if (options->nsg_compatibility_mode) {
-        Uint4 i;
-        for (i = 0; i < msa->dimensions->query_length; i++) {
-            msa->cell[kQueryIndex][i].letter = 0;
-            msa->cell[kQueryIndex][i].is_aligned = FALSE;
-        }
-        msa->use_sequence[kQueryIndex] = FALSE;
-        _PSIUpdatePositionCounts(msa);
+        _PSIStructureGroupCustomization(msa);
+        status = _PSIValidateMSA_StructureGroup(msa);
     } else {
         status = _PSIValidateMSA(msa);
-        if (status != PSI_SUCCESS) {
-            s_PSICreatePssmCleanUp(pssm, msa, aligned_block, seq_weights,
-                                  internal_pssm);
-            return status;
-        }
+    }
+    if (status != PSI_SUCCESS) {
+        s_PSICreatePssmCleanUp(pssm, msa, aligned_block, seq_weights,
+                              internal_pssm);
+        return status;
     }
 
     status = _PSIComputeAlignmentBlocks(msa, aligned_block);

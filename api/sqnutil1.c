@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.369 $
+* $Revision: 6.376 $
 *
 * File Description: 
 *
@@ -2685,9 +2685,7 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
   Int2        choice = 0;
   GeneRefPtr  grp;
 
-  if (StringICmp (gbq->qual, "pseudo") == 0) {
-    choice = 1;
-  } else if (StringICmp (gbq->qual, "map") == 0) {
+  if (StringICmp (gbq->qual, "map") == 0) {
     choice = 2;
   } else if (StringICmp (gbq->qual, "allele") == 0) {
     choice = 3;
@@ -2698,9 +2696,6 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
     grp = (GeneRefPtr) sfp->data.value.ptrvalue;
     if (grp == NULL) return FALSE;
     switch (choice) {
-      case 1 :
-        grp->pseudo = TRUE;
-        break;
       case 2 :
         if (grp->maploc != NULL) return FALSE;
         if (StringHasNoText (gbq->val)) return FALSE;
@@ -2785,6 +2780,7 @@ extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset)
 
 {
   Int4       diff;
+  Int2       j;
   Boolean    locmap;
   int        num_errs;
   CharPtr    pos;
@@ -2809,6 +2805,12 @@ extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset)
     rrp->ext.choice = 2;
     trp = (tRNAPtr) MemNew (sizeof (tRNA));
     rrp->ext.value.ptrvalue = (Pointer) trp;
+    if (trp != NULL) {
+      trp->aatype = 2;
+      for (j = 0; j < 6; j++) {
+        trp->codon [j] = 255;
+      }
+    }
   }
   if (rrp->ext.choice != 2) return FALSE;
 
@@ -5201,7 +5203,8 @@ static void FixOldDbxrefs (ValNodePtr vnp)
         dbt->db = MemFree (dbt->db);
         dbt->db = StringSave ("SubtiList");
       }
-      if (StringICmp (dbt->db, "Swiss-Prot") == 0) {
+      if (StringICmp (dbt->db, "Swiss-Prot") == 0 ||
+          StringICmp (dbt->db, "SWISSPROT") == 0) {
         dbt->db = MemFree (dbt->db);
         dbt->db = StringSave ("UniProt/Swiss-Prot");
       } else if (StringICmp (dbt->db, "TrEMBL") == 0) {
@@ -7658,6 +7661,7 @@ NLM_EXTERN void CleanUpSeqFeat (
   BioseqPtr     bsp;
   CodeBreakPtr  cbp;
   CdRegionPtr   crp;
+  GeneRefPtr    grp;
   Boolean       hasNulls;
   SeqIdPtr      id;
   ImpFeatPtr    ifp;
@@ -7774,7 +7778,15 @@ NLM_EXTERN void CleanUpSeqFeat (
   CleanupSeqLoc (sfp->location);
   strand = SeqLocStrand (sfp->location);
   id = SeqLocId (sfp->location);
-  if (sfp->data.choice == SEQFEAT_CDREGION) {
+  if (sfp->data.choice == SEQFEAT_GENE) {
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+    if (grp != NULL) {
+      if (grp->pseudo) {
+        sfp->pseudo = TRUE;
+        grp->pseudo = FALSE;
+      }
+    }
+  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
 	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
 	if (crp != NULL) {
 	  crp->code_break = SortCodeBreaks (sfp, crp->code_break);
@@ -7797,6 +7809,12 @@ NLM_EXTERN void CleanUpSeqFeat (
 	}
   } else if (sfp->data.choice == SEQFEAT_RNA) {
 	rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+    if (rrp != NULL) {
+      if (rrp->pseudo) {
+        sfp->pseudo = TRUE;
+        rrp->pseudo = FALSE;
+      }
+    }
 	if (rrp != NULL && rrp->ext.choice == 2) {
 	  trp = (tRNAPtr) rrp->ext.value.ptrvalue;
 	  if (trp != NULL && trp->anticodon != NULL) {
@@ -9825,6 +9843,40 @@ NLM_EXTERN Int4 VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, Visi
     index++;
   }
   return index;
+}
+
+typedef struct uopdata {
+  UserObjectPtr  rsult;
+  CharPtr        tag;
+} UopData, PNTR UopDataPtr;
+
+static void FindUopProc (
+  UserObjectPtr uop,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+  UopDataPtr   udp;
+
+  if (uop == NULL || userdata == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  udp = (UopDataPtr) userdata;
+  if (StringICmp (oip->str, udp->tag) != 0) return;
+  udp->rsult = uop;
+}
+
+NLM_EXTERN UserObjectPtr FindUopByTag (UserObjectPtr top, CharPtr tag)
+
+{
+  UopData  ud;
+
+  if (top == NULL || StringHasNoText (tag)) return NULL;
+  ud.rsult = NULL;
+  ud.tag = tag;
+  VisitUserObjectsInUop (top, (Pointer) &ud, FindUopProc);
+  return ud.rsult;
 }
 
 NLM_EXTERN UserObjectPtr CombineUserObjects (UserObjectPtr origuop, UserObjectPtr newuop)

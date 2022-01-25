@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.97 2005/09/30 14:54:32 camacho Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.100 2006/05/04 20:07:27 camacho Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,21 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.97 2005/09/30 14:54:32 camacho 
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.97 $
+   $Revision: 6.100 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.100  2006/05/04 20:07:27  camacho
+   Report fatal error in case of failure to add sequence to BLAST database because
+   of zero-length sequence and clean up the datababase that was being created.
+
+   Revision 6.99  2006/03/14 14:36:46  camacho
+   Logging changes
+
+   Revision 6.98  2006/03/08 19:06:12  camacho
+   Moved definition for maximum number of volumes to readdb.[ch], fixes rt ticket 15147600
+
    Revision 6.97  2005/09/30 14:54:32  camacho
    Enable recognition of the formatdb configuration file to allow users to set the
    membership and link bits in the ASN.1 deflines.
@@ -483,7 +493,6 @@ enum {
 
 /* Fasta file delimiters */
 #define DELIM " "
-#define MAX_VOLUMES 99
 
 Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
         bases_per_vol, Int4Ptr num_inputs)
@@ -506,7 +515,7 @@ Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
     if (!is_prot)
         predicted_dblength /= READDB_COMPRESSION_RATIO;
 
-    if ((predicted_dblength/bases_per_vol) > (MAX_VOLUMES - 10)) {
+    if ((predicted_dblength/bases_per_vol) > (kFDBMaxNumVolumes - 10)) {
         ErrPostEx(SEV_ERROR, 0, 0, "Using %s bases per volume will exceed "
                 "the maximum number\nof volumes formatdb can create.\n"
                 "Please increase this value or do not set it at all.\n",
@@ -561,7 +570,7 @@ Int2 Main(void)
         return 1;
 
     if (!SeqEntryLoad())
-        return 0;
+        return 1;
     
     if (!ErrSetLog(dump_args[logfile_arg].strvalue))
         ErrShow();
@@ -719,7 +728,7 @@ Int2 Main(void)
             sprintf(tmpbuf2, "%s.%cal", options->alias_file_name,
                     options->is_protein ? 'p' : 'n');
             FileRename(tmpbuf1, tmpbuf2);
-            ErrLogPrintf("Renamed %s to %s\n", tmpbuf1, tmpbuf2);
+            ErrLogPrintf("SUCCESS: Renamed %s to %s\n", tmpbuf1, tmpbuf2);
         } else { /* multi-volume database */
             Char *p = FD_ConstructMultivolumeDBList(options->alias_file_name,
                     rdfp_ctr);
@@ -730,7 +739,7 @@ Int2 Main(void)
              */
             FD_CreateAliasFileEx(options->db_title, options->alias_file_name,
                     0, options->is_protein, p, 0, 0, 0, 0, NULL, NULL);
-            ErrLogPrintf("Created wrapper alias file %s for %s\n",
+            ErrLogPrintf("SUCCESS: Created wrapper alias file %s for %s\n",
                     options->alias_file_name, p);
             p = MemFree(p);
         }
@@ -743,7 +752,7 @@ Int2 Main(void)
         /*** Convert text gi list to binary format ***/
         Int4 ngis;
         ngis = readdb_MakeGiFileBinary(options->gi_file, options->gi_file_bin);
-        ErrLogPrintf("Converted %ld gi(s) to binary format on %s\n",
+        ErrLogPrintf("SUCCESS: Converted %ld gi(s) to binary format on %s\n",
                 ngis, options->gi_file_bin);
         FDBOptionsFree(options);
         return 0;
@@ -835,7 +844,13 @@ Int2 Main(void)
              }
              
              bdp = FDBGetDefAsnFromBioseq(bsp, taxid_tbl);
-             FDBAddBioseq(fdbp, bsp, bdp);             
+             if ( FDBAddBioseq(fdbp, bsp, bdp) ) {
+                 options->clean_opt = eCleanAlways;
+                 FDBCleanUp(options);
+                 ErrPostEx(SEV_FATAL, 1, 0, 
+                   "Fatal error when adding sequence to BLAST database.");
+                 return 1;
+             }
              bdp = BlastDefLineSetFree(bdp);
              SeqEntryFree(sep);
           }
@@ -1031,7 +1046,12 @@ Int2 Main(void)
         options->linkbit_listp = FDBDestroyLinksTable(options->linkbit_listp);
         options->memb_tblp = FDBDestroyMembershipsTable(options->memb_tblp);
     }
-    FDBOptionsFree(options);
+
+    ErrLogPrintf("SUCCESS: formatted database %s\n",
+            options->alias_file_name ? 
+            options->alias_file_name : options->base_name);
+
+    options = FDBOptionsFree(options);
 
     return 0;
     

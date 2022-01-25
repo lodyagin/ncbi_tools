@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.244 $
+* $Revision: 6.251 $
 *
 * File Description: 
 *
@@ -1562,18 +1562,19 @@ NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp)
   return MemFree (stp);
 }
 
-static Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2)
+extern Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2)
 
 {
   Char  ch1, ch2;
 
+  if (StringHasNoText (str1) && StringHasNoText (str2)) return TRUE;
   if (StringHasNoText (str1) || StringHasNoText (str2)) return FALSE;
 
   ch1 = *str1;
   ch2 = *str2;
   while (ch1 != '\0' && ch2 != '\0') {
     if (TO_LOWER (ch1) != TO_LOWER (ch2)) {
-      if ((ch1 != '-' && ch1 != '_') || (ch2 != '_' && ch2 != '-')) return FALSE;
+      if ((ch1 != '-' && ch1 != '_' && ch1 != ' ') || (ch2 != '_' && ch2 != '-' && ch2 != ' ')) return FALSE;
     }
     str1++;
     str2++;
@@ -1582,7 +1583,7 @@ static Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2)
   }
 
   if (TO_LOWER (ch1) != TO_LOWER (ch2)) {
-    if ((ch1 != '-' && ch1 != '_') || (ch2 != '_' && ch2 != '-')) return FALSE;
+    if ((ch1 != '-' && ch1 != '_' && ch1 != ' ') || (ch2 != '_' && ch2 != '-' && ch2 != ' ')) return FALSE;
   }
 
   return TRUE;
@@ -2432,6 +2433,74 @@ NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (
     }
     MemFree (tmp);
   }
+
+  return uop;
+}
+
+NLM_EXTERN UserObjectPtr ParseStringIntoStructuredComment (
+  UserObjectPtr uop,
+  CharPtr str,
+  CharPtr prefix,
+  CharPtr suffix
+)
+
+{
+  Char     ch;
+  CharPtr  field;
+  CharPtr  item;
+  CharPtr  last;
+  CharPtr  ptr;
+  CharPtr  tmp;
+
+  if (uop == NULL) {
+    uop = CreateStructuredCommentUserObject ();
+    if (uop == NULL) return uop;
+  }
+  if (str == NULL) return uop;
+
+  tmp = StringSave (str);
+  if (tmp == NULL) return uop;
+
+  last = tmp;
+  if (StringDoesHaveText (prefix)) {
+    ptr = StringStr (last, prefix);
+    if (ptr != NULL) {
+      last = ptr + StringLen (prefix);
+    }
+  }
+  if (StringDoesHaveText (suffix)) {
+    ptr = StringStr (last, suffix);
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+  }
+
+  ptr = last;
+  ch = *ptr;
+  while (ch != '\0') {
+    field = last;
+    ptr = StringChr (last, '=');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+      item = ptr;
+      last = StringChr (ptr, ';');
+      if (last != NULL) {
+        *last = '\0';
+        last++;
+        ch = *last;
+      } else {
+        ch = '\0';
+      }
+      TrimSpacesAroundString (field);
+      TrimSpacesAroundString (item);
+      AddItemStructuredCommentUserObject (uop, field, item);
+    } else {
+      ch = '\0';
+    }
+  }
+
+  MemFree (tmp);
 
   return uop;
 }
@@ -4934,6 +5003,63 @@ static Boolean InvalidInference (CharPtr str)
   return TRUE;
 }
 
+static void ParseCodonRecognized (CharPtr val, tRNAPtr trp)
+
+{
+  Char        buf [256];
+  Char        codon [16];
+  ValNodePtr  head = NULL;
+  Int2        i;
+  Int2        j;
+  CharPtr     ptr;
+  CharPtr     str;
+  tRNA        tr;
+  ValNodePtr  vnp;
+
+  if (trp == NULL) return;
+  for (j = 0; j < 6; j++) {
+    trp->codon [j] = 255;
+  }
+  if (StringHasNoText (val)) return;
+
+  MemSet ((Pointer) &tr, 0, sizeof (tRNA));
+
+  StringNCpy_0 (buf, val, sizeof (buf));
+  str = buf;
+  while (StringDoesHaveText (str)) {
+    ptr = StringChr (str, ',');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+    }
+    TrimSpacesAroundString (str);
+    if (StringDoesHaveText (str)) {
+      for (j = 0; j < 6; j++) {
+        tr.codon [j] = 255;
+      }
+      StringCpy (codon, str);
+      for (i = 0; i < 3; i++) {
+        if (codon [i] == 'U') {
+          codon [i] = 'T';
+        }
+      }
+      ParseDegenerateCodon (&tr, (Uint1Ptr) codon);
+      for (i = 0; i < 6; i++) {
+        if (tr.codon [i] == 255) continue;
+        ValNodeAddInt (&head, 0, (long) tr.codon [i]);
+      }
+    }
+    str = ptr;
+  }
+  if (head == NULL) return;
+
+  head = ValNodeSort (head, SortByIntvalue);
+  head = UniqueIntValNode (head);
+  for (vnp = head, j = 0; vnp != NULL && j < 6; vnp = vnp->next, j++) {
+    trp->codon [j] = (Uint1) vnp->data.intvalue;
+  }
+}
+
 static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, Int4 offset)
 
 {
@@ -5061,6 +5187,20 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
                (StringCmp (qual, "codon_recognized") == 0 || StringCmp (qual, "codons_recognized") == 0)) {
       rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
       if (rrp != NULL && rrp->type == 3) {
+        if (rrp->ext.choice == 0 && rrp->ext.value.ptrvalue == NULL) {
+          rrp->ext.choice = 2;
+          trna = (tRNAPtr) MemNew (sizeof (tRNA));
+          rrp->ext.value.ptrvalue = (Pointer) trna;
+          if (trna != NULL) {
+            trna->aatype = 2;
+            for (j = 0; j < 6; j++) {
+              trna->codon [j] = 255;
+            }
+          }
+        }
+        trna = (tRNAPtr) rrp->ext.value.ptrvalue;
+        ParseCodonRecognized (val, trna);
+        /*
         StringNCpy_0 ((CharPtr) codon, val, sizeof (codon));
         if (StringLen ((CharPtr) codon) == 3) {
           for (j = 0; j < 3; j++) {
@@ -5068,11 +5208,11 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
               codon [j] = 'T';
             }
           }
-          trna = (tRNAPtr) rrp->ext.value.ptrvalue;
           if (trna != NULL) {
             ParseDegenerateCodon (trna, (Uint1Ptr) codon);
           }
         }
+        */
       }
     } else if (ifp != NULL && StringICmp (ifp->key, "variation") == 0 && ParseQualIntoSnpUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "STS") == 0 && ParseQualIntoStsUserObject (sfp, qual, val)) {
@@ -5106,6 +5246,9 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       sfp->comment = MemFree (sfp->comment);
       sfp->comment = str;
     }
+    return;
+  } else if (qnum == GBQUAL_pseudo) {
+    sfp->pseudo = TRUE;
     return;
   } else if ((qnum == GBQUAL_gene || qnum == GBQUAL_locus_tag) && sfp->data.choice != SEQFEAT_GENE) {
     if (StringCmp (val, "-") == 0) {
@@ -5203,7 +5346,7 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
     }
 
   } else if (sfp->data.choice == SEQFEAT_GENE) {
-    if (qnum == GBQUAL_gene || qnum == GBQUAL_pseudo || qnum == GBQUAL_allele || qnum == GBQUAL_map || qnum == GBQUAL_locus_tag) {
+    if (qnum == GBQUAL_gene || qnum == GBQUAL_allele || qnum == GBQUAL_map || qnum == GBQUAL_locus_tag) {
       if (qnum == GBQUAL_gene) {
         grp = (GeneRefPtr) sfp->data.value.ptrvalue;
         if (grp != NULL) {
@@ -5218,11 +5361,6 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
           } else {
             ValNodeCopyStr (&(grp->syn), 0, val);
           }
-        }
-      } else if (qnum == GBQUAL_pseudo) {
-        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-        if (grp != NULL) {
-          grp->pseudo = TRUE;
         }
       } else if (qnum == GBQUAL_allele) {
         grp = (GeneRefPtr) sfp->data.value.ptrvalue;
@@ -5280,8 +5418,6 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
         }
       }
       return;
-    } else if (qnum == GBQUAL_pseudo) {
-      sfp->pseudo = TRUE;
     }
   } else if (sfp->data.choice == SEQFEAT_PROT) {
     if (qnum == GBQUAL_function || qnum == GBQUAL_EC_number || qnum == GBQUAL_product) {
@@ -5304,14 +5440,19 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       if (rrp->type == 3) {
         aa = ParseTRnaString (val, &justTrnaText, codon, FALSE);
         if (aa != 0) {
-          rrp->ext.choice = 2;
-          trna = (tRNAPtr) MemNew (sizeof (tRNA));
-          rrp->ext.value.ptrvalue = (Pointer) trna;
-          if (trna != NULL) {
-            trna->aatype = 2;
-            for (j = 0; j < 6; j++) {
-              trna->codon [j] = 255;
+          if (rrp->ext.choice == 0 && rrp->ext.value.ptrvalue == NULL) {
+            rrp->ext.choice = 2;
+            trna = (tRNAPtr) MemNew (sizeof (tRNA));
+            rrp->ext.value.ptrvalue = (Pointer) trna;
+            if (trna != NULL) {
+              trna->aatype = 2;
+              for (j = 0; j < 6; j++) {
+                trna->codon [j] = 255;
+              }
             }
+          }
+          trna = (tRNAPtr) rrp->ext.value.ptrvalue;
+          if (trna != NULL) {
             if (justTrnaText) {
               for (j = 0; j < 6; j++) {
                 trna->codon [j] = codon [j];
@@ -5357,9 +5498,6 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       return;
     } else if (qnum == GBQUAL_anticodon) {
       if (ParseAnticodon (sfp, val, offset)) return;
-    } else if (qnum == GBQUAL_pseudo) {
-      sfp->pseudo = TRUE;
-      return;
     }
   } else if (sfp->data.choice == SEQFEAT_BIOSRC) {
     if (ParseQualIntoBioSource (sfp, qual, val)) return;
@@ -8555,6 +8693,8 @@ NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_le
   Int2         bs_max = 0, bs_min = 0;
   Int4         new_pos, old_pos;
   Int2         val;
+  Int4         loc_stop;
+  Boolean      changed = FALSE;
   
   if (sgp == NULL || num_to_trim < 1)
   {
@@ -8605,6 +8745,7 @@ NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_le
     sgp->numval = new_len;
     sgp->max.realvalue = fhmax;
     sgp->min.realvalue = fhmin;
+    changed = TRUE;
   }
   else if (sgp->flags[2] == 2)
   {
@@ -8640,6 +8781,7 @@ NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_le
     sgp->numval = new_len;
     sgp->max.intvalue = intmax;
     sgp->min.intvalue = intmin;
+    changed = TRUE;
   }
   else if (sgp->flags[2] == 3)
   {
@@ -8680,6 +8822,14 @@ NLM_EXTERN void TrimSeqGraph (SeqGraphPtr sgp, Int4 num_to_trim, Boolean from_le
     sgp->numval = new_len;
     sgp->max.intvalue = bs_max;
     sgp->min.intvalue = bs_min;
+    changed = TRUE;
+  }
+  if (changed) 
+  {
+    loc_stop = SeqLocStop (sgp->loc);  
+    sgp->loc = SeqLocDelete (sgp->loc, SeqLocId (sgp->loc), 
+                             loc_stop - num_to_trim + 1, 
+                             loc_stop, FALSE, &changed);
   }
 }
 

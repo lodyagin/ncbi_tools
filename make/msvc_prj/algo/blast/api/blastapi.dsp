@@ -66,6 +66,10 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_message_api.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_mtlock.c
 # End Source File
 # Begin Source File
@@ -94,15 +98,15 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\repeats_filter.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.c
 # End Source File
 # Begin Source File
 
@@ -134,6 +138,10 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_message_api.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_mtlock.h
 # End Source File
 # Begin Source File
@@ -162,15 +170,15 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\repeats_filter.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.h
 # End Source File
 # Begin Source File
 

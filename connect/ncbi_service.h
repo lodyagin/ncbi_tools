@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.45 2006/01/03 19:57:59 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.47 2006/04/20 19:27:18 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,14 +61,18 @@ typedef struct SSERV_IterTag* SERV_ITER;
 
 /* Create an iterator for sequential server lookup.
  * Connection information 'net_info' can be a NULL pointer, which means not to
- * make any network connections (only LBSMD will be consulted).  If 'net_info'
- * is not NULL, LBSMD is consulted first (unless 'net_info->lb_disable'
- * is non-zero, meaning to skip LBSMD), and then DISPD is consulted (using
- * the connection information provided) but only if mapping with LBSMD (if
- * any occurred) has failed.  This scheme permits to use any combination of
- * the service mappers (local/network-based).  Note that if 'net_info' is
- * not NULL then non-zero value of 'net_info->stateless' forces 'types' to
- * have the 'fSERV_StatelessOnly' bit set implicitly.
+ * make any network connections (only LOCAL/LBSMD mappers will be consulted).
+ * If 'net_info' is not NULL, LOCAL/LBSMD are consulted first, and then DISPD
+ * is consulted last (using the connection information provided) but only if
+ * mapping with LOCAL/LBSMD (if any occurred) has failed.  Registry
+ * section [CONN], keys LOCAL_DISABLE, LBSMD_DISABLE, and DISPD_DISABLE
+ * (which can be overridden from the environment variables CONN_LOCAL_DISABLE,
+ * CONN_LBSMD_DISABLE, and CONN_DISPD_DISABLE, respectively) can be used to
+ * skip respective service mappers.  This scheme permits to use any
+ * combination of the service mappers (local/lbsmd/network-based).
+ * Note that if 'net_info' is not NULL then non-zero value of
+ * 'net_info->stateless' forces 'types' to have the 'fSERV_StatelessOnly'
+ * bit set implicitly.
  * NB: 'nbo' in comments denotes parameters coming in network byte order;
  *     'hbo' stands for 'host byte order'.
  */
@@ -125,16 +129,18 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_Open
 /* Get the next server meta-address, optionally accompanied by host
  * environment, specified in LBSMD configuration file on that host.
  * Return 0 if no more servers were found for the service requested
- * (parameter 'host_info' remains untouched in this case).
+ * (the pointer to 'host_info' remains untouched in this case).
  * Only when completing successfully, i.e. returning non-NULL info,
- * this function can also provide the host information as follows: if
+ * this function can also provide host information as follows: if
  * 'host_info' parameter is passed as a non-NULL pointer, then a copy of the
- * host information is allocated, and pointer to it is stored in 'host_info'.
+ * host information is allocated, and the pointer is stored at *host_info.
  * Using this information, various host parameters like load, host
  * environment, number of CPUs can be retrieved (see ncbi_host_info.h).
+ * Resulting DNS server info (only if coming out first) may contain 0
+ * in the host field to donote that the name is known but is currently down. 
  * NOTE:  Application program should NOT destroy the returned server info:
  *        it will be freed automatically upon iterator destruction.
- *        On the other hand, the returned host information has to be
+ *        On the other hand, returned host information has to be
  *        explicitly free()'d when no longer needed.
  * NOTE:  Returned server info is valid only until either of the two events:
  *        1) SERV_GetNextInfo[Ex] is called for the same iterator again;
@@ -156,7 +162,7 @@ extern NCBI_XCONNECT_EXPORT const SSERV_Info* SERV_GetNextInfo
  * a single entry (the first one), and which is not interested in iterating
  * over all available entries.  Both returned server info and environment have
  * to be explicitly free()'d by the application when no longer needed.
- * Note that the host environment is supplied only if the function
+ * Note that the host environment is provided only (if at all) if the function
  * returns a non-NULL result.
  */
 extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoEx
@@ -213,6 +219,12 @@ extern NCBI_XCONNECT_EXPORT void SERV_Close
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.47  2006/04/20 19:27:18  lavr
+ * More comments for SERV_Open*() family of calls
+ *
+ * Revision 6.46  2006/03/06 20:24:44  lavr
+ * Comments
+ *
  * Revision 6.45  2006/01/03 19:57:59  lavr
  * Bump client revision to 6.210
  *

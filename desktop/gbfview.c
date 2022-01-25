@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.87 $
+* $Revision: 6.91 $
 *
 * File Description: 
 *
@@ -43,7 +43,9 @@
 */
 
 #include <bspview.h>
+#include <objsub.h>
 #include <asn2gnbp.h>
+#include <asn2gnbi.h>
 #include <tofasta.h>
 #include <explore.h>
 
@@ -55,6 +57,11 @@ typedef struct docdescrstruct {
   Int2   docitem;
 } DocDescrStruct, PNTR DocDescrPtr;
 
+#define NOT_A_CDS     0
+#define CDS_UNTESTED  1
+#define CDS_OKAY      2
+#define CDS_INVALID   3
+
 typedef struct flatstruct {
   Asn2gbJobPtr       ajp;
   BaseBlockPtr PNTR  paragraphs;
@@ -62,19 +69,20 @@ typedef struct flatstruct {
   SeqEntryPtr        sep;
   Int4               numdescr;
   DocDescrPtr        descr;
+  Uint1Ptr           cdsstatus;
 } FlatStruct, PNTR FlatStructPtr;
 
 static Boolean GetIDsFromDoc (DoC d, Int2 item, Uint2Ptr entityPtr,
-                              Uint2Ptr itemPtr, Uint2Ptr typePtr)
+                              Uint4Ptr itemPtr, Uint2Ptr typePtr)
 
 {
   BaseBlockPtr       bbp;
   BioseqViewPtr      bvp;
   Pointer            dataPtr;
-  unsigned int       entityID;
+  Uint2              entityID;
   FlatStructPtr      fsp;
-  unsigned int       itemID;
-  unsigned int       itemtype;
+  Uint4              itemID;
+  Uint2              itemtype;
   Boolean            okay;
   BaseBlockPtr PNTR  paragraphs;
 
@@ -118,7 +126,7 @@ static void DrawIcon (DoC d, RectPtr r, Int2 item, Int2 firstLine)
 {
   BioseqViewPtr  bvp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   RecT           rct;
   SelStructPtr   sel;
@@ -137,6 +145,187 @@ static void DrawIcon (DoC d, RectPtr r, Int2 item, Int2 firstLine)
       }
     }
   }
+}
+
+static DocDescrPtr FindFFPDocDescr (DocDescrPtr doscr, Int4 numdescr,
+                                    Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+
+{
+  DocDescrPtr  dsp;
+  Int4         L, R, mid;
+  DocDescrPtr  rsult;
+
+  L = 0;
+  R = numdescr - 1;
+  while (L <= R) {
+    mid = (L + R) / 2;
+    dsp = &(doscr [mid]);
+    if (dsp == NULL) return NULL;
+    if (dsp->entityID > entityID) {
+      R = mid - 1;
+    } else if (dsp->entityID < entityID) {
+      L = mid + 1;
+    } else if (dsp->itemtype > itemtype) {
+      R = mid - 1;
+    } else if (dsp->itemtype < itemtype) {
+      L = mid + 1;
+    } else if (dsp->itemID > itemID) {
+      R = mid - 1;
+    } else if (dsp->itemID < itemID) {
+      L = mid + 1;
+    } else {
+      rsult = dsp;
+      /* scan to first paragraph for item */
+      while (mid >= 0) {
+        dsp = &(doscr [mid]);
+        if (dsp != NULL) {
+          if (dsp->entityID == entityID &&
+              dsp->itemtype == itemtype &&
+              dsp->itemID == itemID) {
+            rsult = dsp;
+          }
+        }
+        mid--;
+      }
+      return rsult;
+    }
+  }
+
+  return NULL;
+}
+
+static Boolean OverlapgGeneIsPseudo (SeqFeatPtr sfp)
+
+{
+  SeqFeatPtr      gene;
+  GeneRefPtr      grp;
+
+  if (sfp == NULL)
+    return FALSE;
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) {
+    if (grp->pseudo)
+      return TRUE;
+    return FALSE;
+  }
+  gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+  if (gene != NULL) {
+    if (gene->pseudo)
+      return TRUE;
+    grp = (GeneRefPtr) gene->data.value.ptrvalue;
+    if (grp != NULL) {
+      if (grp->pseudo)
+        return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static CharPtr bypass_cds_check [] = {
+  "RNA editing",
+  "reasons given in citation",
+  "artificial frameshift",
+  "rearrangement required for product",
+  "unclassified translation discrepancy",
+  "mismatches in translation",
+  "adjusted for low-quality genome",
+  NULL
+};
+
+static Boolean CdsIsInvalid (SeqFeatPtr sfp)
+
+{
+  ByteStorePtr  bs;
+  BioseqPtr     bsp;
+  Char          ch;
+  CdRegionPtr   crp;
+  Int2          i;
+  CharPtr       ptr, str1, str2;
+
+  if (sfp->pseudo) return FALSE;
+  if (OverlapgGeneIsPseudo (sfp)) return FALSE;
+
+  crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
+  if (crp != NULL && crp->conflict) return FALSE;
+
+  if (sfp->excpt && StringDoesHaveText (sfp->except_text)) {
+    for (i = 0; bypass_cds_check [i] != NULL; i++) {
+      if (StringISearch (sfp->except_text,  bypass_cds_check [i]) != NULL) return FALSE;
+    }
+  }
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  str1 = GetSequenceByBsp (bsp);
+  if (str1 != NULL) {
+    ptr = str1;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '-' || ch == '*') {
+        MemFree (str1);
+        return TRUE;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+  }
+  bs = TransTableTranslateCdRegion (NULL, sfp, FALSE, FALSE, FALSE);
+  str2 = (CharPtr) BSMerge (bs, NULL);
+  BSFree (bs);
+
+  if (str1 != NULL && str2 != NULL && StringCmp (str1, str2) != 0) {
+    MemFree (str1);
+    MemFree (str2);
+    return TRUE;
+  }
+
+  MemFree (str1);
+  MemFree (str2);
+
+  return FALSE;
+}
+
+static Boolean ColorIcon (
+  DoC d,
+  Int2 item,
+  Int2 row, 
+  Int2 col
+)
+
+{
+  SeqMgrFeatContext  context;
+  Uint2              entityID;
+  FlatStructPtr      fsp;
+  Uint4              itemID;
+  Uint2              itemtype;
+  SeqFeatPtr         sfp;
+  Uint1              status;
+
+  fsp = (FlatStructPtr) GetDocData (d);
+  if (fsp == NULL) return FALSE;
+
+  status = fsp->cdsstatus [item - 1];
+  if (status == NOT_A_CDS) return FALSE;
+  if (status == CDS_OKAY) return FALSE;
+
+  if (status == CDS_UNTESTED) {
+    if (GetIDsFromDoc (d, item, &entityID, &itemID, &itemtype) && itemtype == OBJ_SEQFEAT) {
+      sfp = SeqMgrGetDesiredFeature (entityID, NULL, itemID, 0, NULL, &context);
+      if (sfp != NULL && sfp->idx.subtype == FEATDEF_CDS) {
+        if (CdsIsInvalid (sfp)) {
+          status = CDS_INVALID;
+          fsp->cdsstatus [item - 1] = status;
+        }
+      }
+    }
+  }
+
+  if (status == CDS_INVALID) {
+    Red ();
+    return TRUE;
+  }
+
+  fsp->cdsstatus [item - 1] = CDS_OKAY;
+  return FALSE;
 }
 
 static void ClickIcon (DoC d, PoinT pt)
@@ -368,7 +557,7 @@ static void ReleaseIcon (DoC d, PoinT pt)
   Uint2          entityID;
   Boolean        handled;
   Int2           item;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   Int2           row;
   SeqEntryPtr    sep;
@@ -471,6 +660,7 @@ static void DocFreeFlat (DoC d, VoidPtr data)
     fsp = (FlatStructPtr) data;
     fsp->ajp = asn2gnbk_cleanup (fsp->ajp);
     MemFree (fsp->descr);
+    MemFree (fsp->cdsstatus);
     MemFree (fsp);
   }
 }
@@ -524,18 +714,6 @@ static CharPtr FFPrintFunc (DoC d, Int2 index, Pointer data)
   BioseqUnlock (bsp);
   ErrSetMessageLevel (level);
   return str;
-}
-
-static Boolean DeltaLitOnly (BioseqPtr bsp)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
 }
 
 static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
@@ -798,9 +976,11 @@ static Boolean PopulateFF (
   BlockType       blocktype;
   BioseqSetPtr    bssp;
   BioseqViewPtr   bvp;
+  Uint1Ptr        cdsstatus;
   DocDescrPtr     doscr;
   DocDescrPtr     doscrp;
   Int2            estimate;
+  FeatBlockPtr    fbp;
   FonT            fnt;
   FlatStructPtr   fsp;
   Int4            index;
@@ -848,8 +1028,10 @@ static Boolean PopulateFF (
         }
         doscrp = (DocDescrPtr) MemNew (sizeof (DocDescrStruct) * (size_t) (fsp->numdescr + 1));
         fsp->descr = doscrp;
+        cdsstatus = (Uint1Ptr) MemNew (sizeof (Uint1) * (size_t) (fsp->numdescr + 1));
+        fsp->cdsstatus = cdsstatus;
         fsp->numdescr = 0;
-        if (doscrp != NULL) {
+        if (doscrp != NULL && cdsstatus != NULL) {
           for (index = 0; index < fsp->numParagraphs; index++) {
             bbp = fsp->paragraphs [index];
             if (bbp != NULL) {
@@ -858,6 +1040,12 @@ static Boolean PopulateFF (
               doscr->itemID = bbp->itemID;
               doscr->itemtype = bbp->itemtype;
               doscr->docitem = index + 1;
+              if (bbp->blocktype == FEATURE_BLOCK) {
+                fbp = (FeatBlockPtr) bbp;
+                if (fbp->featdeftype == FEATDEF_CDS) {
+                  cdsstatus [index] = CDS_UNTESTED;
+                }
+              }
               (fsp->numdescr)++;
             }
           }
@@ -893,6 +1081,44 @@ static void LookForTpa (
   *hastpaP = TRUE;
 }
 
+static void LookForFarBsp (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  doColorsP;
+
+  if (bsp == NULL) return;
+  doColorsP = (BoolPtr) userdata;
+  if (doColorsP == NULL) return;
+
+  if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
+    *doColorsP = FALSE;
+  } else if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+    *doColorsP = FALSE;
+  }
+}
+
+static void LookForFarProds (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  doColorsP;
+
+  if (sfp == NULL) return;
+  doColorsP = (BoolPtr) userdata;
+  if (doColorsP == NULL) return;
+
+  if (sfp->idx.subtype != FEATDEF_CDS) return;
+  if (sfp->product == NULL) return;
+  if (BioseqFindFromSeqLoc (sfp->product) == NULL) {
+    *doColorsP = FALSE;
+  }
+}
+
 static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 
 {
@@ -900,6 +1126,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   SeqMgrFeatContext  context;
   CstType            custom = 0;
   DoC                doc;
+  Boolean            doColors;
   Boolean            doLockFarComponents = FALSE;
   Uint2              entityID;
   Int4               feats_with_product_count;
@@ -1092,7 +1319,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     if (lookupFar) {
       hastpaaligns = FALSE;
       VisitDescriptorsInSep (sep, (Pointer) &hastpaaligns, LookForTpa);
-      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, FALSE, hastpaaligns, TRUE);
+      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, FALSE, hastpaaligns, FALSE, TRUE);
     }
   }
 
@@ -1161,6 +1388,18 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     FileRemove (path);
   } else {
     if (PopulateFF (doc, sep, bsp, usethetop, format, mode, style, flags, custom)) {
+      doColors = TRUE;
+      /*
+      VisitBioseqsInSep (topsep, (Pointer) &doColors, LookForFarBsp);
+      if (doColors) {
+        VisitFeaturesInSep (topsep, (Pointer) &doColors, LookForFarProds);
+      }
+      if (doColors) {
+        SetDocShade (doc, DrawIcon, NULL, NULL, ColorIcon);
+      } else {
+        SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
+      }
+      */
       SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
       SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
       SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
@@ -1887,54 +2126,6 @@ static void ShowGBSeq (BioseqViewPtr bvp, Boolean show)
   }
 }
 
-static Int2 FindFFParagraph (DocDescrPtr doscr, Int4 numdescr,
-                             Uint2 entityID, Uint2 itemID, Uint2 itemtype)
-
-{
-  DocDescrPtr  dsp;
-  Int4         L, R, mid;
-  Int2         rsult;
-
-  L = 0;
-  R = numdescr - 1;
-  while (L <= R) {
-    mid = (L + R) / 2;
-    dsp = &(doscr [mid]);
-    if (dsp == NULL) return 0;
-    if (dsp->entityID > entityID) {
-      R = mid - 1;
-    } else if (dsp->entityID < entityID) {
-      L = mid + 1;
-    } else if (dsp->itemtype > itemtype) {
-      R = mid - 1;
-    } else if (dsp->itemtype < itemtype) {
-      L = mid + 1;
-    } else if (dsp->itemID > itemID) {
-      R = mid - 1;
-    } else if (dsp->itemID < itemID) {
-      L = mid + 1;
-    } else {
-      rsult = dsp->docitem;
-      /* scan to first paragraph for item */
-      while (mid >= 0) {
-        dsp = &(doscr [mid]);
-        if (dsp != NULL) {
-          if (dsp->entityID == entityID &&
-              dsp->itemtype == itemtype &&
-              dsp->itemID == itemID) {
-            rsult = dsp->docitem;
-          }
-        }
-        mid--;
-      }
-      return rsult;
-    }
-  }
-
-  return 0;
-}
-
-
 static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
                             Uint2 selitemtype, SeqLocPtr region,
                             Boolean select, Boolean scrollto)
@@ -1942,9 +2133,10 @@ static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemI
 {
   Int2           bottom = 0;
   DoC            doc;
+  DocDescrPtr    dsp;
   FlatStructPtr  fsp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   Int2           item;
   Boolean        needToScroll;
@@ -1988,8 +2180,12 @@ static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemI
         item++;
       }
     }
-    scrollhere = FindFFParagraph (fsp->descr, fsp->numdescr,
-                                  selentityID, selitemID, selitemtype);
+    dsp = FindFFPDocDescr (fsp->descr, fsp->numdescr,
+                           selentityID, selitemID, selitemtype);
+    scrollhere = 0;
+    if (dsp != NULL) {
+      scrollhere = dsp->docitem;
+    }
     if (scrollhere > 0) {
       if (ItemIsVisible (doc, scrollhere, &top, &bottom, NULL)) {
         needToScroll = FALSE;

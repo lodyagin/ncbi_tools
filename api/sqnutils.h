@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.134 $
+* $Revision: 6.140 $
 *
 * File Description: 
 *
@@ -233,9 +233,15 @@ NLM_EXTERN void ResynchPeptidePartials (SeqFeatPtr sfp, Pointer userdata);
 NLM_EXTERN void ClearFeatIDs (SeqFeatPtr sfp);
 NLM_EXTERN void ClearFeatIDXrefs (SeqFeatPtr sfp);
 
-NLM_EXTERN void ClearCDSmRNAfeatureIDs (SeqEntryPtr sep);
+NLM_EXTERN void ClearFeatureIDs (SeqEntryPtr sep);
+NLM_EXTERN Int4 FindHighestFeatureID (SeqEntryPtr sep);
 
-NLM_EXTERN void AssignCDSmRNAfeatureIDs (SeqEntryPtr sep);
+NLM_EXTERN void AssignFeatureIDs (SeqEntryPtr sep);
+
+NLM_EXTERN void OffsetFeatureIDs (SeqEntryPtr sep, Int4 offset);
+NLM_EXTERN void OffsetFeatureIDXrefs (SeqEntryPtr sep, Int4 offset);
+
+NLM_EXTERN void ReassignFeatureIDs (SeqEntryPtr sep);
 
 NLM_EXTERN void LinkCDSmRNAbyOverlap (SeqEntryPtr sep);
 
@@ -263,6 +269,8 @@ NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
 
 NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip);
 NLM_EXTERN void ReadCompletenessFromString (CharPtr str, MolInfoPtr mip);
+
+extern Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2);
 
 /* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
 
@@ -310,6 +318,15 @@ NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
 NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (
   SqnTagPtr stp,
   UserObjectPtr uop
+);
+
+/* structured comment user object for flatfile presentation */
+
+NLM_EXTERN UserObjectPtr ParseStringIntoStructuredComment (
+  UserObjectPtr uop,
+  CharPtr str,
+  CharPtr prefix,
+  CharPtr suffix
 );
 
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
@@ -623,6 +640,10 @@ NLM_EXTERN Int4 VisitUserFieldsInUop (UserObjectPtr uop, Pointer userdata, Visit
 
 typedef void (*VisitUserObjectFunc) (UserObjectPtr uop, Pointer userdata);
 NLM_EXTERN Int4 VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, VisitUserObjectFunc callback);
+
+/* explores sub UserObjects including "CombinedFeatureUserObjects" and finds by label  */
+
+NLM_EXTERN UserObjectPtr FindUopByTag (UserObjectPtr top, CharPtr tag);
 
 /* creates "CombinedFeatureUserObjects" sfp->ext to combine two user objects */
 

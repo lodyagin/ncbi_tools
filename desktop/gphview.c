@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.66 $
+* $Revision: 6.67 $
 *
 * File Description:
 *
@@ -999,7 +999,7 @@ static void PopulateGraphic (BioseqViewPtr bvp)
   svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
   if (svpp != NULL && svpp->lockFarComponents) {
     sep = GetTopSeqEntryForEntityID (entityID);
-    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE);
   }
 
   sep = GetBestTopParentForData (entityID, bvp->bsp);
@@ -3922,7 +3922,7 @@ static void PopulateAsn2GphGraphic (
   if (svpp != NULL && svpp->lockFarComponents) {
     entityID = ObjMgrGetEntityIDForPointer (bsp);
     sep = GetTopSeqEntryForEntityID (entityID);
-    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE);
   }
 
   if (bvp->scaleNotCalculated) {

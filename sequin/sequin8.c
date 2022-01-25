@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.343 $
+* $Revision: 6.356 $
 *
 * File Description: 
 *
@@ -401,13 +401,14 @@ extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos)
   }
 }
 
-extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
+extern Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
 {
   Uint1          strand;
   SeqLocPtr      slp_to_change, slp_index;
   Int4           extent_to_change;
   Int4           start, stop;
   SeqIdPtr       sip;
+  Int4           start_diff = 0;
   
   if (slp == NULL || bsp == NULL) return;
 
@@ -466,14 +467,25 @@ extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
       start = 0;
       stop = GetOffsetInBioseq (slp_to_change, bsp, SEQLOC_STOP);
     }
+    if (end5) {
+        if (strand == Seq_strand_minus) {
+            start_diff = bsp->length - 1 - GetOffsetInBioseq(slp_to_change, bsp, SEQLOC_START);
+        } else {
+            start_diff = GetOffsetInBioseq(slp_to_change, bsp, SEQLOC_START);
+        }
+    }
+    
     expand_seq_loc (start, stop, strand, slp_to_change);
   }
+  return start_diff;
 }
 
 static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
 {
-  BioseqPtr bsp;
-  Boolean   partial3, partial5;
+  BioseqPtr   bsp;
+  Boolean     partial3, partial5;
+  Int4        start_diff;
+  CdRegionPtr crp;
 
   if (sfp == NULL) return;
   bsp = BioseqFindFromSeqLoc (sfp->location);
@@ -481,7 +493,16 @@ static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   if (partial5)
   {
-    ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+    start_diff = ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+    if (start_diff > 0 && sfp->data.choice == SEQFEAT_CDREGION) {
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp != NULL) {
+          if (crp->frame == 0) {
+              crp->frame = 1;
+          }
+          crp->frame = (crp->frame + start_diff - 1) % 3 + 1;
+      }
+    }
   }
   if (partial3)
   {
@@ -492,7 +513,7 @@ static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
 extern void ExtendPartialFeatures (IteM i)
 {
   BaseFormPtr       bfp;
-  SeqEntryPtr       sep;
+  SeqEntryPtr       sep, old_scope;
   SelStructPtr      sel;
   SeqFeatPtr        sfp;
   SeqMgrFeatContext fcontext;
@@ -508,6 +529,7 @@ extern void ExtendPartialFeatures (IteM i)
   sel = ObjMgrGetSelected ();
   WatchCursor ();
   Update ();
+  old_scope = SeqEntrySetScope(sep);
   if (sel == NULL)
   {
     VisitFeaturesInSep (sep, NULL, ExtendOnePartialFeature);
@@ -528,6 +550,7 @@ extern void ExtendPartialFeatures (IteM i)
       sel = sel->next;
     }
   }
+  SeqEntrySetScope(old_scope);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -8436,7 +8459,6 @@ static void ConvertGapFeaturesToUnknownCallback (BioseqPtr bsp, Pointer userdata
       slip = (SeqLitPtr) (dsp->data.ptrvalue);
       add_len = slip->length;
       if (slip->seq_data == NULL
-          && slip->length != 100
           && slip->length >= cgtup->start_unknown)
       {
         len_diff = slip->length - 100;
@@ -8448,7 +8470,9 @@ static void ConvertGapFeaturesToUnknownCallback (BioseqPtr bsp, Pointer userdata
         slip->fuzz = IntFuzzNew();
         slip->fuzz->choice = 4;
         
-        FixDeltaFeatures (bsp, offset, len_diff);  
+        if (len_diff > 0) {
+            FixDeltaFeatures (bsp, offset, len_diff);
+        }
         add_len -= len_diff;      
       }
     }
@@ -9295,6 +9319,7 @@ typedef enum {
   DISC_SHORT_CONTIG,
   DISC_INCONSISTENT_BIOSRC,
   DISC_SUSPECT_PRODUCT_NAME,
+  DISC_INCONSISTENT_BIOSRC_DEFLINE,
   MAX_DISC_TYPE
 } DiscrepancyType;
 
@@ -9323,6 +9348,7 @@ static void AddOverlappingCodingRegionDiscrepancies (SeqEntryPtr sep, ValNodePtr
 static void FindShortContigs (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
 static void FindNonmatchingContigSources (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
 static void FindSuspectProductNames (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
+static void FindInconsistentSourceAndDefline (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
 
 const DiscrepancyInfoData discrepancy_info_list[] = 
 {
@@ -9345,7 +9371,8 @@ const DiscrepancyInfoData discrepancy_info_list[] =
   { "Overlapping CDS", "OVERLAPPING_CDS", AddOverlappingCodingRegionDiscrepancies },
   { "Short Contig", "SHORT_CONTIG", FindShortContigs },
   { "Inconsistent BioSource", "INCONSISTENT_BIOSOURCE", FindNonmatchingContigSources },
-  { "Suspect Product Name", "SUSPECT_PRODUCT_NAMES", FindSuspectProductNames }
+  { "Suspect Product Name", "SUSPECT_PRODUCT_NAMES", FindSuspectProductNames },
+  { "Inconsistent Source And Definition Line", "INCONSISTENT_SOURCE_DEFLINE", FindInconsistentSourceAndDefline }
     
 };
 
@@ -9466,13 +9493,43 @@ static void SaveDiscrepancyConfig (DiscrepancyConfigPtr dcp)
 }
 
 
+static void UnselectDiscrepancyList(ButtoN b)
+{
+  ButtoN *test_options;
+  Int4    i;
+  
+  test_options = (ButtoN *) GetObjectExtra (b);
+  if (test_options != NULL)
+  {
+    for (i = 0; i < MAX_DISC_TYPE; i++)
+    {
+      SetStatus (test_options[i], FALSE);
+    }
+  }
+}
+
+static void SelectDiscrepancyList(ButtoN b)
+{
+  ButtoN *test_options;
+  Int4    i;
+  
+  test_options = (ButtoN *) GetObjectExtra (b);
+  if (test_options != NULL)
+  {
+    for (i = 0; i < MAX_DISC_TYPE; i++)
+    {
+      SetStatus (test_options[i], TRUE);
+    }
+  }
+}
+
 /* This function returns TRUE if there was a change to the discrepancy config,
  * FALSE otherwise.
  */
 static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
 {
   WindoW                w;
-  GrouP                 h, g, c;
+  GrouP                 h, g, k, c;
   ButtoN                b, use_feature_table_format_btn;
   ModalAcceptCancelData acd;
   Int4                  i;
@@ -9502,12 +9559,18 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
   use_feature_table_format_btn = CheckBox (h, "Use feature table format for features in report", NULL);
   SetStatus (use_feature_table_format_btn, dcp->use_feature_table_format);
   
+  k = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (k, "Select All", SelectDiscrepancyList);
+  SetObjectExtra (b, test_options, NULL);
+  b = PushButton (k, "Unselect All", UnselectDiscrepancyList);
+  SetObjectExtra (b, test_options, NULL);  
+  
   c = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (c, "Accept", ModalAcceptButton);
   SetObjectExtra (b, &acd, NULL);
   b = PushButton (c, "Cancel", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) use_feature_table_format_btn, (HANDLE) k, (HANDLE) c, NULL);
   
   Show(w); 
   Select (w);
@@ -10021,7 +10084,7 @@ static void FindMissingAndInconsistentProteinIDsCallback (BioseqPtr bsp, Pointer
 {
   SeqIdPtr              sip;
   MissInconstProtIDsPtr mipip;
-  DbtagPtr              dbt;
+  DbtagPtr              dbt = NULL;
   PrefixCheckPtr        pcp;
   ValNodePtr            vnp;
   
@@ -10032,18 +10095,24 @@ static void FindMissingAndInconsistentProteinIDsCallback (BioseqPtr bsp, Pointer
   
   mipip = (MissInconstProtIDsPtr) userdata;
   
-  for (sip = bsp->id; sip != NULL && sip->choice != SEQID_GENERAL; sip = sip->next)
+  for (sip = bsp->id; sip != NULL && dbt == NULL; sip = sip->next)
   {
-    
+    if (sip->choice == SEQID_GENERAL)
+    {
+      dbt = (DbtagPtr) sip->data.ptrvalue;
+      if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0)
+      {
+        dbt = NULL;
+      }
+    }
   }
-  if (sip == NULL || sip->data.ptrvalue == NULL)
+  if (dbt == NULL)
   {
     ValNodeAddPointer (&(mipip->missing_list), OBJ_BIOSEQ, bsp);
   }
   else
   {  
     /* look for inconsistent prefixes */
-    dbt = (DbtagPtr) sip->data.ptrvalue;
     pcp = NULL;
     for (vnp = mipip->inconsistent_list; vnp != NULL && pcp == NULL; vnp = vnp->next)
     {
@@ -10888,9 +10957,54 @@ static void ECNumberNoteDiscrepancyCallback (ValNodePtr item_list, Pointer userd
 }
 
 
+static Boolean ECNumberInText (CharPtr text) 
+{
+  CharPtr cp_num, cp_dash, cp_start;
+  Int4    nums_found = 0;
+  
+  if (StringHasNoText (text)) {
+      return FALSE;
+  }
+  
+  cp_num = text + StrCSpn (text, "1234567890");
+  cp_dash = StringStr (text, "-");
+  if (cp_dash == NULL || cp_dash > cp_num) {
+    cp_start = cp_num;
+  } else {
+    cp_start = cp_dash;
+  }
+  
+  while (*cp_start != 0) {
+    nums_found++;
+    while (isdigit (*cp_start) || *cp_start == '-') {
+      cp_start++;
+    }
+    if (*cp_start != '.') {
+      if (nums_found == 4) {
+        return TRUE;
+      } else {
+        return ECNumberInText (cp_start);
+      }
+    } else {
+      cp_start ++;
+    }
+  }    
+  if (nums_found == 4) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
 static void FindECNumberNotes (SeqFeatPtr sfp, Pointer userdata)
 {
   ValNodePtr PNTR    ec_number_features;
+  BioseqPtr          prot_bsp;
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         prot_sfp;
+  ProtRefPtr         prp;
+  ValNodePtr         vnp;
   
   if (sfp == NULL || userdata == NULL || StringHasNoText (sfp->comment))
   {
@@ -10899,17 +11013,35 @@ static void FindECNumberNotes (SeqFeatPtr sfp, Pointer userdata)
   
   ec_number_features = (ValNodePtr PNTR) userdata;
   
-  if (StringISearch (sfp->comment, "ec_number") != NULL)
+  if (ECNumberInText (sfp->comment))
   {
     ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
   }
+  else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->product != NULL) 
+  {
+    prot_bsp = BioseqFindFromSeqLoc(sfp->product);
+    prot_sfp = SeqMgrGetNextFeature(prot_bsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &fcontext);
+    if (prot_sfp != NULL && prot_sfp->data.value.ptrvalue != NULL) {
+      prp = (ProtRefPtr) prot_sfp->data.value.ptrvalue;
+      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+        if (ECNumberInText (vnp->data.ptrvalue)) {
+          ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
+          return;
+        }
+      }
+      if (ECNumberInText (prp->desc)) {
+        ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
+        return;
+      }
+    }
+  }  
 }
 
 static void AddECNumberNoteDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
 {
   ValNodePtr ec_number_features = NULL;
   DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d features have EC numbers in notes.";
+  CharPtr            bad_fmt = "%d features have EC numbers in notes or products.";
   
   if (discrepancy_list == NULL) return;
   
@@ -10948,26 +11080,19 @@ static void FindPseudoDiscrepanciesCallback (SeqFeatPtr sfp, Pointer userdata)
   }
   
   grp = SeqMgrGetGeneXref (sfp);
-  if (grp == NULL)
+  if (grp != NULL)
   {
-    gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
-    if (gene_sfp == NULL)
-    {
-      return;
-    }
-    else
-    {
-      grp = (GeneRefPtr) gene_sfp->data.value.ptrvalue;
-      if (grp == NULL)
-      {
-        return;
-      }
-    }
+    return;
   }
   
-  if ((sfp->pseudo && (! grp->pseudo || (gene_sfp != NULL && ! gene_sfp->pseudo)))
-      || (!sfp->pseudo && (grp->pseudo || (gene_sfp != NULL && gene_sfp->pseudo)))
-      || (gene_sfp != NULL && ((grp->pseudo && !gene_sfp->pseudo) || (!grp->pseudo && gene_sfp->pseudo))))
+  gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
+  if (gene_sfp == NULL)
+  {
+    return;
+  }
+  
+  if ((sfp->pseudo && ! gene_sfp->pseudo)
+      || (!sfp->pseudo && gene_sfp->pseudo))
   {
     pseudo_features = (ValNodePtr PNTR) userdata;
     ValNodeAddPointer (pseudo_features, OBJ_SEQFEAT, sfp);
@@ -11359,7 +11484,7 @@ static void FindShortContigsCallback (BioseqPtr bsp, Pointer userdata)
 {
   ValNodePtr PNTR bioseq_list;
   
-  if (bsp == NULL || !ISA_na (bsp->mol) || userdata == NULL || bsp->length > 200)
+  if (bsp == NULL || !ISA_na (bsp->mol) || userdata == NULL || bsp->length >= 200)
   {
     return;
   }
@@ -11516,6 +11641,7 @@ static CharPtr suspect_product_names[] =
 {
 "Similar to",
 "Related to",
+"interrupt",
 "Homolog",
 "Homologue",
 "Fragment",
@@ -11523,29 +11649,59 @@ static CharPtr suspect_product_names[] =
 "Intein",
 "COG",
 "N-terminal",
+"N terminal",
 "C-terminal",
+"C terminal",
+"N-terminus",
+"C-terminus",
 "Chloroplast",
 "Mitochondrial",
 "Brackets or parenthesis [] ()",
+"ending with period or comma",
 "ortholog",
 "orthologue",
 "paralog",
 "paralogue",
 "bifunctional",
 "pseudogene",
+"frame shift",
+"protien",
+"partial",
+"B.subtilis",
+"E.coli",
+"Escherichia",
+"coli",
+"Bacillus",
+"Subtilis",
+"Staphlococcus",
+"aureus",
+"Salmonella",
+"Streptococcus",
+"Staphlococcal",
+"streptococcal",
+"Helicobacter",
+"pylori",
+"Campylobacter",
+"Jejuni",
+"Yersinia",
+"Pestis",
+"Rhodobacter",
+"sphaeroides",
 };
 
 const int num_suspect_product_names = sizeof (suspect_product_names) / sizeof (CharPtr);
 
-const int brackets_name = 12;
+const int brackets_name = 17;
+const int end_with_punct_name = 18;
 
 
 static void FindSuspectProductNamesCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   ValNodePtr PNTR feature_list;
-  Int4            k;
+  Int4            k, len;
   ProtRefPtr      prp;
   ValNodePtr      vnp;
+  CharPtr         str;
   
   if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT || sfp->data.value.ptrvalue == NULL
       || userdata == NULL)
@@ -11566,6 +11722,19 @@ static void FindSuspectProductNamesCallback (SeqFeatPtr sfp, Pointer userdata)
             || StringChr (vnp->data.ptrvalue, ']') != NULL
             || StringChr (vnp->data.ptrvalue, '(') != NULL
             || StringChr (vnp->data.ptrvalue, ')') != NULL)
+        {
+          ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
+          break;
+        }
+      }
+    }
+    else if (k == end_with_punct_name)
+    {
+      for (vnp = prp->name; vnp != NULL; vnp = vnp->next)
+      {
+        len = StringLen (vnp->data.ptrvalue);
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (str[len - 1] == '.' || str[len - 1] == ',')
         {
           ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
           break;
@@ -11673,6 +11842,118 @@ static void FindSuspectProductNames (SeqEntryPtr sep, ValNodePtr PNTR discrepanc
 
   MemFree (feature_list);
 }
+
+
+static DiscrepancyItemPtr InconsistentSourceDefline (SeqDescrPtr biop_sdp, SeqDescrPtr title_sdp)
+{
+  DiscrepancyItemPtr dip = NULL;
+  CharPtr            bad_fmt = "Organism description not found in definition line: %s.";
+  BioSourcePtr       biop;
+  CharPtr            desc = NULL;
+
+  if (biop_sdp == NULL || title_sdp == NULL)
+  {
+    return NULL;
+  }
+  
+  biop = (BioSourcePtr) biop_sdp->data.ptrvalue;
+  if (biop != NULL && biop->org != NULL && !StringHasNoText (biop->org->taxname))
+  {
+    desc = biop->org->taxname;
+  }
+  else
+  {
+    desc = title_sdp->data.ptrvalue;
+  }
+  if (StringHasNoText (desc)) {
+    return NULL;
+  }
+  
+  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
+  if (dip != NULL)
+  {
+    dip->disc_type = DISC_INCONSISTENT_BIOSRC_DEFLINE;
+    dip->description = (CharPtr)MemNew (StringLen (bad_fmt) + StringLen (desc));
+    sprintf (dip->description, bad_fmt, desc);
+    dip->callback_func = NULL;
+    dip->datafree_func = NULL;
+    dip->callback_data = NULL;
+    dip->item_list = NULL;
+    ValNodeAddPointer (&(dip->item_list), OBJ_SEQDESC, biop_sdp);
+    ValNodeAddPointer (&(dip->item_list), OBJ_SEQDESC, title_sdp);
+  }      
+  return dip;
+}
+
+
+static void FindInconsistentSourceAndDeflineCallback (BioseqPtr bsp, Pointer userdata)
+{
+  DiscrepancyItemPtr dip;
+  ValNodePtr PNTR discrepancy_list;
+  SeqDescrPtr        biop_sdp, title_sdp;
+  SeqMgrDescContext  context;
+  BioSourcePtr       biop;
+  
+  discrepancy_list = (ValNodePtr PNTR) userdata;
+  if (bsp == NULL || discrepancy_list == NULL) return;
+  
+  biop_sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_source, &context);
+  if (biop_sdp == NULL || biop_sdp->data.ptrvalue == NULL)
+  {
+    return;
+  }
+  biop = (BioSourcePtr) biop_sdp->data.ptrvalue;
+  if (biop->org == NULL)
+  {
+    return;
+  }
+  if (StringHasNoText (biop->org->taxname)) 
+  {
+    return;
+  }
+  
+  title_sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_title, &context);
+  if (title_sdp == NULL) return;
+  
+  if (StringStr (title_sdp->data.ptrvalue, biop->org->taxname) == NULL)
+  {
+    dip = InconsistentSourceDefline (biop_sdp, title_sdp);
+    if (dip != NULL)
+    {
+      ValNodeAddPointer (discrepancy_list, 0, dip);
+    }
+  }
+}
+
+
+static void FindInconsistentSourceAndDefline (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
+{  
+  ValNodePtr disc_pairs = NULL;
+  CharPtr    bad_fmt = "%d sources do not match definition lines.";
+  DiscrepancyItemPtr dip;
+  
+  if (discrepancy_list == NULL) return;
+
+  VisitBioseqsInSep (sep, &disc_pairs, FindInconsistentSourceAndDeflineCallback);
+
+  if (disc_pairs == NULL) 
+  {
+    return;
+  }
+  else if (disc_pairs->next == NULL)
+  {
+    ValNodeLink (discrepancy_list, disc_pairs);
+  }
+  else
+  {
+    dip = NewDiscrepancyItem (DISC_INCONSISTENT_BIOSRC_DEFLINE, bad_fmt, disc_pairs);
+    dip->item_list = NULL;
+    dip->subcategories = disc_pairs;
+    
+    ValNodeAddPointer (discrepancy_list, 0, dip);
+  }
+}
+
 
 static void SetDiscrepancyLevels (ValNodePtr discrepancy_list, Int4 level)
 {
@@ -12325,7 +12606,7 @@ static BioseqPtr GetFirstBioseqInSeqEntry (SeqEntryPtr sep)
   BioseqPtr    bsp = NULL;
   BioseqSetPtr bssp;
   
-  if (sep == NULL | sep->data.ptrvalue == NULL)
+  if (sep == NULL || sep->data.ptrvalue == NULL)
   {
     return NULL;
   }

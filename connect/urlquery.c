@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.35 2006/01/19 21:11:15 lavr Exp $
+/* $Id: urlquery.c,v 6.39 2006/04/19 02:11:23 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,25 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.35 $
+ * $Revision: 6.39 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.c,v $
+ * Revision 6.39  2006/04/19 02:11:23  lavr
+ * QUERY_OpenServiceQuery: Use PostOverrideArg instead of AppendArg
+ *
+ * Revision 6.38  2006/04/19 01:41:52  lavr
+ * QUERY_OpenServiceQuery(): Take advantage of ConnNetInfo_*Arg API
+ *
+ * Revision 6.37  2006/04/17 16:47:50  lavr
+ * QUERY_OpenServiceQueryEx not to override but append argument in net_info
+ *
+ * Revision 6.36  2006/04/15 01:59:01  lavr
+ * +QUERY_OpenServiceQueryEx
+ *
  * Revision 6.35  2006/01/19 21:11:15  lavr
  * QUERY_SendQuery() to return EIO_Status
  *
@@ -237,33 +249,35 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 }
 
 
-NLM_EXTERN CONN QUERY_OpenServiceQuery (
+NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
   Nlm_CharPtr service,
-  Nlm_CharPtr arguments,
-  Nlm_Uint4   timeoutsec
+  Nlm_CharPtr parameters,
+  Nlm_Uint4   timeoutsec,
+  Nlm_CharPtr arguments
 )
 {
   CONN           conn;
   CONNECTOR      connector;
   size_t         n_written;
-  size_t         args_len;
-  SConnNetInfo*  info;
+  SConnNetInfo*  net_info;
   EIO_Status     status;
 
   /* fill in connection info fields and create the connection */
-  info = ConnNetInfo_Create (service);
-  ASSERT ( info );
+  net_info = ConnNetInfo_Create (service);
+  ASSERT ( net_info );
 
   if (timeoutsec == (Nlm_Uint4)(-1)) {
-    info->timeout  = 0;
+    net_info->timeout  = 0;
   } else if ( timeoutsec ) {
-    info->tmo.sec  = timeoutsec;
-    info->tmo.usec = 0;
-    info->timeout  = &info->tmo;
+    net_info->tmo.sec  = timeoutsec;
+    net_info->tmo.usec = 0;
+    net_info->timeout  = &net_info->tmo;
   }
+  ConnNetInfo_PostOverrideArg(net_info, arguments, 0);
 
-  connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
-  ConnNetInfo_Destroy (info);
+  connector = SERVICE_CreateConnectorEx (service, fSERV_Any, net_info, 0);
+
+  ConnNetInfo_Destroy (net_info);
 
   if (connector == NULL) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in SERVICE_CreateConnectorEx");
@@ -271,17 +285,26 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   } else if ((status = CONN_Create (connector, &conn)) != eIO_Success) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");
     ASSERT (conn == NULL);
-  } else if (! StringHasNoText (arguments)) {
-    args_len = StringLen (arguments);
-    status = CONN_Write (conn, arguments, args_len, &n_written, eIO_WritePersist);
+  } else if (! StringHasNoText (parameters)) {
+    status = CONN_Write (conn, parameters, StringLen (parameters), &n_written, eIO_WritePersist);
     if (status != eIO_Success) {
-      ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write arguments in CONN_Write");
+      ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write service parameters in CONN_Write");
       CONN_Close (conn);
       conn = NULL;
     }
   }
 
   return conn;
+}
+
+
+NLM_EXTERN CONN QUERY_OpenServiceQuery (
+  Nlm_CharPtr service,
+  Nlm_CharPtr parameters,
+  Nlm_Uint4   timeoutsec
+)
+{
+  return QUERY_OpenServiceQueryEx (service, parameters, timeoutsec, 0);
 }
 
 

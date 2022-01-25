@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.85 $
+* $Revision: 1.87 $
 *
 * File Description: 
 *
@@ -2174,6 +2174,7 @@ NLM_EXTERN Int4 AccnListPreLoadSeqIdGiCache (
 typedef struct fariddata {
   ValNodePtr  gis;
   ValNodePtr  accns;
+  ValNodePtr  strs;
 } FarIdData, PNTR FarIDPtr;
 
 
@@ -2387,6 +2388,95 @@ static void LookupOthers (SeqDescrPtr sdp, Pointer userdata)
   }
 }
 
+static CharPtr inferencePrefix [] = {
+  "",
+  "similar to sequence",
+  "similar to AA sequence",
+  "similar to DNA sequence",
+  "similar to RNA sequence",
+  "similar to RNA sequence, mRNA",
+  "similar to RNA sequence, EST",
+  "similar to RNA sequence, other RNA",
+  "profile",
+  "nucleotide motif",
+  "protein motif",
+  "ab initio prediction",
+  NULL
+};
+
+static void LookupInference (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int2        accnv, best, j;
+  Char        ch;
+  FarIDPtr    fip;
+  GBQualPtr   gbq;
+  size_t      len;
+  CharPtr     rest;
+  CharPtr     str;
+  CharPtr     tmp;
+  ValNodePtr  vnp;
+
+  if (sfp == NULL || userdata == NULL) return;
+  fip = (FarIDPtr) userdata;
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "inference") != 0) continue;
+    if (StringHasNoText (gbq->val)) continue;
+
+    rest = NULL;
+    best = -1;
+    for (j = 0; inferencePrefix [j] != NULL; j++) {
+      len = StringLen (inferencePrefix [j]);
+      if (StringNICmp (gbq->val, inferencePrefix [j], len) != 0) continue;
+      rest = gbq->val + len;
+      best = j;
+    }
+    if (best < 0 || inferencePrefix [best] == NULL) continue;
+    if (rest == NULL) continue;
+
+    ch = *rest;
+    while (IS_WHITESP (ch)) {
+      rest++;
+      ch = *rest;
+    }
+    if (StringNICmp (rest, "(same species)", 14) == 0) {
+      rest += 14;
+    }
+    ch = *rest;
+    while (IS_WHITESP (ch) || ch == ':') {
+      rest++;
+      ch = *rest;
+    }
+    if (StringHasNoText (rest)) continue;
+
+    str = StringSave (rest);
+    tmp = StringChr (str, ':');
+    if (tmp != NULL) {
+      *tmp = '\0';
+      tmp++;
+      TrimSpacesAroundString (str);
+      TrimSpacesAroundString (tmp);
+      if (StringDoesHaveText (tmp)) {
+        if (StringICmp (str, "INSD") == 0 || StringICmp (str, "RefSeq") == 0) {
+          accnv = ValidateAccnDotVer (tmp);
+          if (accnv == 0) {
+            ReplaceSpacesWithPluses (tmp);
+            vnp = ValNodeCopyStr (NULL, 0, tmp);
+            if (fip->strs == NULL) {
+              fip->strs = vnp;
+            } else {
+              vnp->next = fip->strs;
+              fip->strs = vnp;
+            }
+          }
+        }
+      }
+    }
+    MemFree (str);
+  }
+}
+
 static Boolean GiExists (
   Int4 gi
 )
@@ -2476,6 +2566,42 @@ static ValNodePtr FilterCachedAccns (
     } else {
       prev = (Pointer PNTR) &(vnp->next);
     }
+    vnp = next;
+  }
+
+
+  return top;
+}
+
+static ValNodePtr FilterCachedStrs (
+  ValNodePtr head
+)
+
+{
+  ValNodePtr    next;
+  Pointer PNTR  prev;
+  SeqIdPtr      sip;
+  CharPtr       str;
+  ValNodePtr    top;
+  ValNodePtr    vnp;
+
+  if (head == NULL) return NULL;
+  top = head;
+
+  prev = (Pointer PNTR) &top;
+  vnp = top;
+  while (vnp != NULL) {
+    next = vnp->next;
+    str = (CharPtr) vnp->data.ptrvalue;
+    sip = SeqIdFromAccessionDotVersion (str);
+    if (sip != NULL && SipExists (sip)) {
+      *(prev) = next;
+      vnp->next = NULL;
+      ValNodeFree (vnp);
+    } else {
+      prev = (Pointer PNTR) &(vnp->next);
+    }
+    SeqIdFree (sip);
     vnp = next;
   }
 
@@ -2575,6 +2701,7 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   Boolean products,
   Boolean alignments,
   Boolean history,
+  Boolean inference,
   Boolean others
 )
 
@@ -2609,6 +2736,9 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   }
   if (history) {
     VisitBioseqsInSep (sep, (Pointer) &fid, LookupHistory);
+  }
+  if (inference) {
+    VisitFeaturesInSep (sep, (Pointer) &fid, LookupInference);
   }
   if (others) {
     VisitDescriptorsInSep (sep, (Pointer) &fid, LookupOthers);
@@ -2665,8 +2795,33 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
     }
   }
 
+  if (fid.strs != NULL) {
+    fid.strs = ValNodeSort (fid.strs, SortVnpByString);
+    fid.strs = UniqueValNode (fid.strs);
+    fid.strs = FilterCachedStrs (fid.strs);
+    num = ValNodeLen (fid.strs);
+
+    if (num > 0) {
+      accns = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num + 2));
+      if (accns != NULL) {
+        for (vnp = fid.strs, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+          accn = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (accn)) continue;
+          accns [i] = accn;
+        }
+        total += AccnListPreLoadSeqIdGiCache (accns);
+        MemFree (accns);
+      }
+    }
+
+    for (vnp = fid.strs; vnp != NULL; vnp = vnp->next) {
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+    }
+  }
+
   ValNodeFree (fid.gis);
   ValNodeFree (fid.accns);
+  ValNodeFree (fid.strs);
 
   SeqEntrySetScope (oldsep);
   return total;

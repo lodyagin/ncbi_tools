@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.24 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.25 2006/04/12 22:00:28 jianye Exp $";
 
-/* $Id: taxblast.c,v 6.24 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: taxblast.c,v 6.25 2006/04/12 22:00:28 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.24 2005/07/28 14:57:10 coulouri
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.25  2006/04/12 22:00:28  jianye
+* getting evalue from sum_e
+*
 * Revision 6.24  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -511,7 +514,8 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
             score = score->next) {
             if (strcmp("score", score->id->str)==0) {
                 scores[0] = score->value.intvalue;
-	    } else if (strcmp("e_value", score->id->str)==0) {
+	    } else if (strcmp("e_value", score->id->str)==0 || 
+                       strcmp("sum_e", score->id->str)==0) {
                 e_values[0] = score->value.realvalue;
             } else if (strcmp("bit_score", score->id->str)==0) {
                 bit_scores[0] = score->value.realvalue;

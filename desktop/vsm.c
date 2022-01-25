@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -2453,7 +2453,8 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 					vsmgp->currline--;
 				}
 				if (vsmp != NULL && vsmp->extraLevel && sfp->data.choice == SEQFEAT_RNA && sfp->ext != NULL) {
-					uop = sfp->ext;
+					/* uop = sfp->ext; */
+					uop = FindUopByTag (sfp->ext, "MrnaProteinLink");
 					if (uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
 						ufp = uop->data;
 						if (ufp != NULL && ufp->choice == 1) {
