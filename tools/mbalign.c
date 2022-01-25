@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.3 1999/11/24 20:38:09 shavirin Exp $
+/* $Id: mbalign.c,v 6.10 2000/04/19 18:53:31 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,33 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.3 $
+* $Revision: 6.10 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.10  2000/04/19 18:53:31  dondosha
+* Bug fix: allow to extend through gap and masked characters, but not end-points
+*
+* Revision 6.9  2000/04/07 18:52:32  dondosha
+* Do not allocate new space for flast_d[0,1] every time
+*
+* Revision 6.8  2000/04/05 16:30:07  dondosha
+* Fixed a bug that allowed crossing the end of a strand or query
+*
+* Revision 6.7  2000/03/30 20:38:33  dondosha
+* Returned one modification from 6.5 that was lost in 6.6
+*
+* Revision 6.6  2000/03/29 22:03:14  dondosha
+* Made edit_script_new and edit_script_append public for use in MegaBlastNtWordExtend
+*
+* Revision 6.5  2000/02/01 22:42:11  dondosha
+* Moved some definitions to mbalign.h; added 3 new routines
+*
+* Revision 6.4  2000/01/26 16:39:18  beloslyu
+* change space_t to space_type because HP-UX compiler got confused with ANSI C space_t
+*
 * Revision 6.3  1999/11/24 20:38:09  shavirin
 * Added possibility to produce Traditional Blast Output.
 *
@@ -52,34 +73,8 @@
 */
 
 #include <mbutils.h>
-
-
-enum {
-    EDIT_OP_MASK = 0x3,
-    EDIT_OP_ERR  = 0x0,
-    EDIT_OP_INS  = 0x1,
-    EDIT_OP_DEL  = 0x2,
-    EDIT_OP_REP  = 0x3
-};
-
-enum {         /* half of the (fixed) match score */
-    ERROR_FRACTION=2,  /* 1/this */
-    MAX_SPACE=1000000,
-    sC = 0, sI = 1, sD = 2, LARGE=100000000
-};
-
-#define ICEIL(x,y) ((((x)-1)/(y))+1)
-
-/* ----- pool allocator ----- */
-typedef struct three {
-    Int4 I, C, D;
-} three_val;
-
-typedef struct space_struct {
-    three_val *space_array;
-    Int4 used, size;
-} space_t, *space_ptr;
-
+#include <mbalign.h>
+#include <blastdef.h>
 
 /* -------- From original file edit.c ------------- */
 
@@ -184,7 +179,8 @@ static Int4 edit_script_more(edit_script_t *data, Uint4 op, Uint4 k)
 
     return 0;
 }
-static edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et)
+/* External */
+edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et)
 {
     edit_op_t *op;
     
@@ -194,7 +190,8 @@ static edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et)
     return es;
 }
 
-static edit_script_t *edit_script_new(void)
+/* External */
+edit_script_t *edit_script_new(void)
 {
     edit_script_t *es = MemNew(sizeof(*es));
     if (!es)
@@ -258,21 +255,21 @@ Int4 es_indel_len(edit_script_t *S, Int4Ptr n, Int4Ptr i, Int4Ptr j)
     }
 }
 
-static Int4 edit_script_del(edit_script_t *data, Uint4 k)
+Int4 edit_script_del(edit_script_t *data, Uint4 k)
 {
     return edit_script_more(data, EDIT_OP_DEL, k);
 }
 
-static Int4 edit_script_ins(edit_script_t *data, Uint4 k)
+Int4 edit_script_ins(edit_script_t *data, Uint4 k)
 {
     return edit_script_more(data, EDIT_OP_INS, k);
 }
-static Int4 edit_script_rep(edit_script_t *data, Uint4 k)
+Int4 edit_script_rep(edit_script_t *data, Uint4 k)
 {
     return edit_script_more(data, EDIT_OP_REP, k);
 }
 
-static edit_script_t *edit_script_reverse_inplace(edit_script_t *es)
+edit_script_t *edit_script_reverse_inplace(edit_script_t *es)
 {
     Uint4 i;
     const Uint4 num = es->num;
@@ -289,12 +286,12 @@ static edit_script_t *edit_script_reverse_inplace(edit_script_t *es)
 
 /* -------- From original file galign.c --------- */
 
-static space_ptr new_space(Int4 MAX_D)
+space_ptr new_space(Int4 MAX_D)
 {
     space_ptr p;
     Int4 amount;
     
-    p = Nlm_Malloc(sizeof(space_t));
+    p = Nlm_Malloc(sizeof(space_type));
     amount = MAX_SPACE;
     p->space_array = Nlm_Malloc(sizeof(three_val)*amount);
     p->used = 0; 
@@ -303,13 +300,13 @@ static space_ptr new_space(Int4 MAX_D)
     return p;
 }
 
-static void free_space(space_ptr sp)
+void free_space(space_ptr sp)
 {
     sp->space_array = MemFree(sp->space_array);
     sp = MemFree(sp);
 }
 
-static three_val *get_space(space_ptr S, Int4 amount)
+three_val *get_space(space_ptr S, Int4 amount)
 {
     three_val *s = S->space_array+S->used;
     if (amount < 0) 
@@ -412,7 +409,7 @@ static int get_lastD(three_val **flast_d, Int4Ptr lower, Int4Ptr upper,
 /* --- From file align.c --- */
 /* ----- */
 
-static Int4 get_last(Int4 **flast_d, Int4 d, Int4 diag, Int4 *row1)
+Int4 get_last(Int4 **flast_d, Int4 d, Int4 diag, Int4 *row1)
 {
     if (flast_d[d-1][diag-1] > MAX(flast_d[d-1][diag], flast_d[d-1][diag+1])) {
         *row1 = flast_d[d-1][diag-1];
@@ -1082,5 +1079,213 @@ SeqAlignPtr MBCreateSeqAlign(gal_t *galp, SeqIdPtr subject_id,
     
     return sap;
 }
+
+BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
+{
+   Int4 max_d, Xdrop, d_diff;
+
+   if (search == NULL) 
+      return search;
+
+   max_d = (Int4) (search->context->query->length/
+				   ERROR_FRACTION + 1);
+   Xdrop = -2*search->pbp->dropoff_2nd_pass;
+   d_diff = ICEIL(Xdrop+search->sbp->reward, 
+		  2*(-search->sbp->penalty+search->sbp->reward));
+
+   search->abmp = (GreedyAlignMemPtr) Nlm_Malloc(sizeof(GreedyAlignMem));
+   search->abmp->flast_d = (Int4 **) Nlm_Malloc((max_d + 2) * sizeof(Int4 *));
+   search->abmp->flast_d[0] = Nlm_Malloc((max_d + max_d + 6) * sizeof(Int4) * 2);
+   search->abmp->flast_d[1] = search->abmp->flast_d[0] + max_d + max_d + 6;
+   search->abmp->max_row_free = Nlm_Malloc(sizeof(Int4) * (max_d + 1 + d_diff));
+   
+   return search;
+}
+
+GreedyAlignMemPtr GreedyAlignMemFree(GreedyAlignMemPtr abmp)
+{
+   free(abmp->flast_d[0]);
+   free(abmp->max_row_free);
+   free(abmp->flast_d);
+   free(abmp);
+   return abmp;
+}
+
+/*
+	Version to search a packed nucl. sequence against
+an unpacked sequence.  s2 is the packed nucl. sequence.
+len2 corresponds to the unpacked (true) length.
+
+ * Basic O(ND) time, O(N) space, alignment function. 
+ * Parameters:
+ *   s1, len1        - first sequence and its length
+ *   s2, len2        - second sequence and its length
+ *   reverse         - direction of alignment
+ *   xdrop_threshold -
+ *   mismatch_cost   -
+ *   e1, e2          - endpoint of the computed alignment
+ *   edit_script     -
+ */
+Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
+			     const UcharPtr s2, Int4 len2,
+			     Boolean reverse, Int4 xdrop_threshold, 
+			     Int4 match_cost, Int4 mismatch_cost,
+			     Int4 *e1, Int4 *e2, GreedyAlignMemPtr abmp, 
+			     edit_script_t *S)
+{
+    Int4 col,			/* column number */
+        d,				/* current distance */
+        k,				/* current diagonal */
+        flower, fupper,            /* boundaries for searching diagonals */
+        row,		        /* row number */
+        MAX_D, 			/* maximum cost */
+        ORIGIN,
+        return_val = 0;
+    Int4 **flast_d = abmp->flast_d; /* rows containing the last d */
+    Int4 *max_row;		/* reached for cost d=0, ... len1.  */
+    
+    Int4 X_pen = xdrop_threshold;
+    Int4 M_half = match_cost/2;
+    Int4 Op_cost = mismatch_cost + M_half*2;
+    Int4 D_diff = ICEIL(X_pen+M_half, Op_cost);
+    
+    Int4 /**max_row_free,*/ x, cur_max, b_diag = 0, best_diag = INT_MAX/2;
+    Int4 *max_row_free = abmp->max_row_free;
+    Char nlower = 0, nupper = 0;
+    space_ptr space;
+    
+    MAX_D = (Int4) (len1/ERROR_FRACTION + 1);
+    ORIGIN = MAX_D + 2;
+    *e1 = *e2 = 0;
+    
+    if (reverse)
+	for (row = 0; row < len2 && row < len1 && (s1[len1-1-row] == READDB_UNPACK_BASE_N(s2[(len2-1-row)/4], row%4)); row++)
+	    /*empty*/ ;
+    else
+	for (row = 0; row < len2 && row < len1 && (s1[row] == READDB_UNPACK_BASE_N(s2[row/4], (3-(row%4)))); row++)
+	    /*empty*/ ;
+    
+    *e1 = row;
+    *e2 = row;
+    if (row == len1) {
+        if (S != NULL)
+            edit_script_rep(S, row);
+	/* hit last row; stop search */
+	return 0;
+    }
+    if (S==NULL) 
+       space = 0;
+    else 
+       space = new_space(MAX_D);
+    
+    max_row = max_row_free + X_pen/Op_cost;
+    for (k = 0; k < D_diff; k++)
+	max_row_free[k] = 0;
+    
+    flast_d[0][ORIGIN] = row;
+    max_row[0] = (row + row)*M_half;
+    
+    flower = ORIGIN - 1;
+    fupper = ORIGIN + 1;
+
+    d = 1;
+    while (d <= MAX_D) {
+	Int4 fl0, fu0;
+	flast_d[d - 1][flower - 1] = flast_d[d - 1][flower] = -1;
+	flast_d[d - 1][fupper] = flast_d[d - 1][fupper + 1] = -1;
+	x = max_row[d - D_diff] + Op_cost * d - X_pen;
+	x = ICEIL(x, M_half);	
+	cur_max = 0;
+	fl0 = flower;
+	fu0 = fupper;
+	for (k = fl0; k <= fu0; k++) {
+	   row = MAX(flast_d[d - 1][k + 1], flast_d[d - 1][k]) + 1;
+	   row = MAX(row, flast_d[d - 1][k - 1]);
+	    col = row + k - ORIGIN;
+	    if (row + col >= x)
+		fupper = k;
+	    else {
+		if (k == flower)
+		    flower++;
+		else
+		    flast_d[d][k] = -1;
+		continue;
+	    }
+	    /* Slide down the diagonal. Don't do this if reached 
+	       the end point, which has value 0x08 */
+	    if (reverse) {
+	       if (s1[len1 - row] != 0x08) {
+		  while (row < len1 && col < len2 && s1[len1-1-row] == READDB_UNPACK_BASE_N(s2[(len2-1-col)/4], col%4)) {
+		     ++row;
+		     ++col;
+		  }
+	       } else 
+		  row--;
+	    } else if (s1[row-1] != 0x08) { 
+	       while (row < len1 && col < len2 && s1[row] == READDB_UNPACK_BASE_N(s2[col/4], (3-col%4))) {
+		    ++row;
+		    ++col;
+		}
+	    } else
+	       row--;
+	    flast_d[d][k] = row;
+	    if (row + col > cur_max) {
+		cur_max = row + col;
+		b_diag = k;
+	    }
+	    if (row == len1) {
+		flower = k+1; nlower = 1;
+	    }
+	    if (col == len2) {
+		fupper = k-1; nupper = 1;
+	    }
+	}
+	k = cur_max*M_half - d * Op_cost;
+	if (max_row[d - 1] < k) {
+	    max_row[d] = k;
+	    return_val = d;
+	    best_diag = b_diag;
+	    *e1 = flast_d[d][b_diag];
+	    *e2 = (*e1)+b_diag-ORIGIN;
+	} else {
+	    max_row[d] = max_row[d - 1];
+	}
+	if (flower > fupper)
+	    break;
+	d++;
+	if (!nlower) flower--; 
+	if (!nupper) fupper++;
+	if (S==NULL)
+	   flast_d[d] = flast_d[d - 2];
+	else 
+	   flast_d[d] = (Int4 *) get_space(space, fupper-flower+5)-flower+2;
+    }
+    
+    if (S!=NULL) { /*trace back*/
+        Int4 row1, col1, diag1, diag;
+        d = return_val; diag = best_diag;
+        row = *e1; col = *e2;
+        while (d > 0) {
+            diag1 = get_last(flast_d, d, diag, &row1);
+            col1 = row1+diag1-ORIGIN;
+            if (diag1 == diag) {
+                if (row-row1 > 0) edit_script_rep(S, row-row1);
+            } else if (diag1 < diag) {
+                if (row-row1 > 0) edit_script_rep(S, row-row1);
+                edit_script_ins(S,1);
+            } else {
+                if (row-row1-1> 0) edit_script_rep(S, row-row1-1);
+                edit_script_del(S, 1);
+            }
+            d--; diag = diag1; col = col1; row = row1;
+        }
+        edit_script_rep(S, flast_d[0][ORIGIN]);
+        if (!reverse) 
+            edit_script_reverse_inplace(S);
+        free_space(space);
+    }
+    return return_val;
+}
+
 
 /* ------------------------------------------------------------ */

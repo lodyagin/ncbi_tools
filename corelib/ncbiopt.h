@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $RCSfile: ncbiopt.h,v $  $Revision: 6.2 $  $Date: 1999/08/25 18:21:36 $
+/*  $RCSfile: ncbiopt.h,v $  $Revision: 6.3 $  $Date: 2000/03/20 16:04:38 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.3  2000/03/20 16:04:38  vakatov
+* [__GNUC__]  Fixed for absent #LONG_LONG_***
+*
 * Revision 6.2  1999/08/25 18:21:36  vakatov
 * Int8 for OS_UNIX_AIX
 *
@@ -176,7 +179,7 @@
 #        define UINT4_MAX UINT_MAX
 #      endif
 
-#    elif defined(__GNUC__)
+#    elif defined(__GNUC__)  &&  defined(LONG_LONG_MIN)
 #      define INT8_MIN  LONG_LONG_MIN
 #      define INT8_MAX  LONG_LONG_MAX
 #      define UINT8_MAX ULONG_LONG_MAX

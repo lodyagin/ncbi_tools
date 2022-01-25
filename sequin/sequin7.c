@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.68 $
+* $Revision: 6.72 $
 *
 * File Description: 
 *
@@ -1115,6 +1115,7 @@ typedef struct fa2htgsform {
   ButtoN             update;
   TexT               accession;
   TexT               knownlength;
+  TexT               gaplength;
   TexT               remark;
   TexT               clone;
   TexT               strain;
@@ -1415,16 +1416,18 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   CharPtr seqname = NULL, accession = NULL, orgname = NULL;
   CharPtr clone = NULL, strain = NULL, chromosome = NULL;
   CharPtr remark = NULL, title = NULL, seqbuf = NULL;
-  Int4 length = 0, cumlength = 0;
+  Int4 length = 0, cumlength = 0, gaplen;
   BioseqPtr bsp;
   BioseqSetPtr bssp;
   SeqLitPtr slp;
   ValNodePtr vnp, PNTR prevpnt, next, extra_accs;
-  Boolean lastwasraw, draft;
+  Boolean lastwasraw, draft, usedelta = FALSE;
   Char str [64];
   long int val;
   Int2 index = 0;
   ValNodePtr rescuedsgps = NULL;
+  ValNodePtr seqlitlist = NULL;
+  IntFuzzPtr ifp;
   ObjectIdPtr    oip;
   UserFieldPtr   ufp;
   UserObjectPtr  uop;
@@ -1455,6 +1458,15 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
     }
   }
 
+  gaplen = 0;
+/* now usually filling in with gaps of 100 bases */
+  GetTitle (ffp->gaplength, str, sizeof (str));
+  if (! StringHasNoText (str)) {
+    if (sscanf (str, "%ld", &val) == 1 && val > 0) {
+      gaplen = (Int4) val;
+    }
+  }
+
 /* modified from fa2htgs */
    oldsep = (SeqEntryPtr)(ssp->data);  /* clear out template */
    ssp->data = NULL;
@@ -1471,6 +1483,11 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
 
    cumlength = 0;
    index = 0;
+
+   sep = ffp->seplist;
+   if (sep != NULL && sep->next != NULL) {
+     usedelta = TRUE;
+   }
 
    if (ffp->buildContig) {
      ssp->data = (Pointer) ffp->seplist;
@@ -1503,7 +1520,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
      }
 
    }
-   else if (htgs_phase < 3)
+   else if (htgs_phase < 3 || usedelta)
    {
       the_entry = AddDeltaSeqOnlyToSubmission (
                         nsp,
@@ -1527,8 +1544,10 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
          if (bsp->repr == Seq_repr_raw)
          {
             if (lastwasraw) {
-               AddGapToDeltaSeq(nsp, the_entry, 0);
+               slp = AddFakeGapToDeltaSeq(nsp, the_entry, gaplen);
+               ValNodeAddPointer (&seqlitlist, 0, (Pointer) slp);
                index++;
+               cumlength += gaplen;
             }
             BioseqRawConvert(bsp, Seq_code_iupacna);
             seqbuf = BSMerge((ByteStorePtr)(bsp->seq_data), NULL);
@@ -1692,6 +1711,16 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
      }
    }
    rescuedsgps = ValNodeFreeData (rescuedsgps);
+
+   for (vnp = seqlitlist; vnp != NULL; vnp = vnp->next) {
+     slp = (SeqLitPtr) vnp->data.ptrvalue;
+     if (slp != NULL) {
+       ifp = IntFuzzNew();
+       ifp->choice = 4;    /* lim - unk*/
+       slp->fuzz = ifp;
+     }
+   }
+   seqlitlist = ValNodeFree (seqlitlist);
 
    MemFree (nsp);
 
@@ -2035,12 +2064,21 @@ static void PhrapOrderChosen (ButtoN b)
       okay = TRUE;
     }
   }
+  /* if no contigs selected, use all in order */
+  if (! okay) {
+    for (j = 0, sep = ffp->seplist; j < count && sep != NULL; j++, sep = sep->next) {
+      order [j] = sep;
+    }
+    okay = TRUE;
+  }
+  /*
   if (! okay) {
     Message (MSG_ERROR, "You must select at least one contig");
     MemFree (order);
     MemFree (collision);
     return;
   }
+  */
 
   /* use spreadsheet to reorder ffp->seplist, delete unwanted items */
 
@@ -2387,6 +2425,10 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
   StaticPrompt (g, "Length", 0, dialogTextHeight, programFont, 'l');
   ffp->knownlength = DialogText (g, "", 10, NULL);
   SetObjectExtra (ffp->knownlength, ffp, NULL);
+
+  StaticPrompt (g, "Gap Length", 0, dialogTextHeight, programFont, 'l');
+  ffp->gaplength = DialogText (g, "100", 10, NULL);
+  SetObjectExtra (ffp->gaplength, ffp, NULL);
 
   ffp->update = CheckBox (g, "Update", SetFa2htgsUpdate);
   SetObjectExtra (ffp->update, ffp, NULL);
@@ -5530,6 +5572,117 @@ static void CheckSeqAlignCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, 
   }
 }
 
+/* RemoveMultipleTitles currently removes FIRST title in chain */
+
+static void RemoveMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  SeqDescrPtr    descr = NULL;
+  SeqDescrPtr    lasttitle = NULL;
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    descr = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    descr = bssp->descr;
+  } else return;
+  for (sdp = descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_title) continue;
+    if (lasttitle != NULL) {
+      if (lasttitle->extended != 0) {
+        ovp = (ObjValNodePtr) lasttitle;
+        ovp->idx.deleteme = TRUE;
+      }
+      lasttitle = sdp;
+    } else {
+      lasttitle = sdp;
+    }
+  }
+}
+
+typedef struct featcount {
+  Boolean     is_mRNA;
+  BioseqPtr   bsp;
+  Int2        numRNAs;
+  SeqFeatPtr  gene;
+  Int4        numGene;
+  Int4        numCDS;
+} FeatCount, PNTR FeatCountPtr;
+
+static void CountGenesAndCDSs (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  FeatCountPtr  fcp;
+
+  fcp = (FeatCountPtr) userdata;
+  if (sfp->data.choice == SEQFEAT_GENE) {
+    (fcp->numGene)++;
+    fcp->gene = sfp;
+  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
+    (fcp->numCDS)++;
+  }
+}
+
+static void LookForMrna (BioseqPtr bsp, Pointer userdata)
+
+{
+  FeatCountPtr  fcp;
+  MolInfoPtr    mip;
+  SeqDescrPtr   sdp;
+
+  if (bsp == NULL || bsp->length == 0) return;
+  if (! ISA_na (bsp->mol)) return;
+  fcp = (FeatCountPtr) userdata;
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_molinfo) continue;
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
+      fcp->is_mRNA = TRUE;
+      fcp->bsp = bsp;
+      (fcp->numRNAs)++;
+      return;
+    }
+  }
+}
+
+static void ExtendSingleGeneOnMRNA (SeqEntryPtr sep, Pointer userdata)
+
+{
+  FeatCount   fc;
+  SeqIntPtr   sintp;
+  ValNodePtr  vnp;
+
+  fc.is_mRNA = FALSE;
+  fc.bsp = NULL;
+  fc.numRNAs = 0;
+  VisitBioseqsInSep (sep, (Pointer) &fc, LookForMrna);
+  if (! fc.is_mRNA) return;
+  fc.gene = NULL;
+  fc.numGene = 0;
+  fc.numCDS = 0;
+  VisitFeaturesInSep (sep, (Pointer) &fc, CountGenesAndCDSs);
+  if (fc.numGene == 1 && fc.numCDS < 2 && fc.numRNAs == 1 &&
+      fc.bsp != NULL && fc.gene != NULL) {
+    if (fc.bsp != BioseqFindFromSeqLoc (fc.gene->location)) return;
+    for (vnp = fc.gene->location; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice != SEQLOC_INT) continue;
+      sintp = (SeqIntPtr) vnp->data.ptrvalue;
+      if (sintp == NULL) continue;
+      if (sintp->from != 0 || sintp->to != fc.bsp->length - 1) {
+        sintp->from = 0;
+        sintp->to = fc.bsp->length - 1;
+      }
+    }
+  }
+}
+
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon);
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon)
 
@@ -5553,10 +5706,15 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     StripTitleFromProtsInNucProts (sep);
     move_cds (sep); /* move CDS features to nuc-prot set */
   }
-  ExtendGeneFeatIfOnMRNA (0, sep); /* gene on mRNA is full length */
+  /* ExtendGeneFeatIfOnMRNA (0, sep); */ /* gene on mRNA is full length */
+  VisitElementsInSep (sep, NULL, ExtendSingleGeneOnMRNA); /* needs < 2 CDS */
   RemoveBioSourceOnPopSet (sep, NULL);
   /* SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback); */
-  SeqEntryExplore (sep, NULL, DeleteMultipleTitles);
+  SeqEntryExplore (sep, NULL, DeleteMultipleTitles); /* do it old way in Sequin */
+  /*
+  SeqEntryExplore (sep, NULL, RemoveMultipleTitles);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+  */
   SeqEntryPack (sep);
   if (indexerVersion) {
     ConvertAccInDefToLocalIdProc (sep); /* if title is accXNNNNN, convert to seqID */
@@ -5578,6 +5736,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     EntryMergeDupBioSources (sep);
     GetRidOfEmptyFeatsDescStrings (0, sep);
     GetRidOfLocusInSeqIds (0, sep);
+    BasicSeqEntryCleanup (sep);
     ErrSetMessageLevel (sev);
     return rsult;
   }
@@ -5598,6 +5757,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
       Message (MSG_ERROR, "Couldn't connect to Taxon");
       MonitorFree (mon);
       Update ();
+      BasicSeqEntryCleanup (sep);
       ErrSetMessageLevel (sev);
       return 0;
     }
@@ -5632,6 +5792,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   EntryMergeDupBioSources (sep);
   GetRidOfEmptyFeatsDescStrings (0, sep);
   GetRidOfLocusInSeqIds (0, sep);
+  BasicSeqEntryCleanup (sep);
   ErrSetMessageLevel (sev);
   ErrClear ();
   ErrShow ();

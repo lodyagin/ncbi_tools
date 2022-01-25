@@ -30,8 +30,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform both local and global banded alignments.
 
 ****************************************************************************/
-/* $Revision: 6.14 $ */
+/* $Revision: 6.15 $ */
 /* $Log: bandalgn.c,v $
+/* Revision 6.15  2000/02/10 22:47:06  vakatov
+/* DLL'zation for MSVC on PC, Win-NT
+/*
 /* Revision 6.14  1999/09/01 21:46:49  chappey
 /* SeqPortFree in load_data
 /*
@@ -108,9 +111,10 @@ Contents: Functions to perform both local and global banded alignments.
 #include <salutil.h>
 #include <bandalgn.h>
 
-PSUGapOptionsPtr LIBCALL
+
+NLM_EXTERN PSUGapOptionsPtr
 PSUGapOptionsDelete(PSUGapOptionsPtr options)
-     
+
 {
   options = MemFree(options);
   
@@ -121,7 +125,7 @@ PSUGapOptionsDelete(PSUGapOptionsPtr options)
 	Create the PSUGapOptionsPtr and fill in with default values.
 */
 
-PSUGapOptionsPtr LIBCALL
+NLM_EXTERN PSUGapOptionsPtr
 PSUGapOptionsCreate(Uint1 search_type)
 
 {
@@ -150,7 +154,7 @@ PSUGapOptionsCreate(Uint1 search_type)
 */
 
 
-GlobalBandStructPtr LIBCALL
+NLM_EXTERN GlobalBandStructPtr
 GlobalBandStructDelete(GlobalBandStructPtr gbsp)
 
 {
@@ -170,7 +174,7 @@ GlobalBandStructDelete(GlobalBandStructPtr gbsp)
 	Create the GlobalBandStructPtr and defaults for a search_type.
 */
 
-GlobalBandStructPtr LIBCALL
+NLM_EXTERN GlobalBandStructPtr
 GlobalBandStructCreate(Uint1 search_type)
 
 {
@@ -194,7 +198,7 @@ GlobalBandStructCreate(Uint1 search_type)
 /*
         Performs a global alignment, producing a SeqAlign.
 */
-SeqAlignPtr LIBCALL 
+NLM_EXTERN SeqAlignPtr
 GlobalBandToSeqAlign (GlobalBandStructPtr gbsp)
 {
 
@@ -239,7 +243,7 @@ GlobalBandToSeqAlign (GlobalBandStructPtr gbsp)
         can be made into a SeqAlign.
 */
 
-Boolean LIBCALL 
+NLM_EXTERN Boolean
 GlobalBandToEditBlock(GlobalBandStructPtr gbsp)
 {
   GapXEditBlockPtr edit_block;
@@ -328,7 +332,7 @@ GlobalBandToEditBlock(GlobalBandStructPtr gbsp)
 	Does not delete the sequence or the ID's.
 */
 
-LocalBandStructPtr LIBCALL
+NLM_EXTERN LocalBandStructPtr
 LocalBandStructDelete(LocalBandStructPtr lbsp)
 
 {
@@ -348,7 +352,7 @@ LocalBandStructDelete(LocalBandStructPtr lbsp)
 	Create the LocalBandStructPtr and defaults for a search_type.
 */
 
-LocalBandStructPtr LIBCALL
+NLM_EXTERN LocalBandStructPtr
 LocalBandStructCreate(Uint1 search_type)
 
 {
@@ -372,7 +376,7 @@ LocalBandStructCreate(Uint1 search_type)
 /*
         Performs local alignment, producing a SeqAlign.
 */
-SeqAlignPtr LIBCALL 
+NLM_EXTERN SeqAlignPtr
 LocalBandToSeqAlign (LocalBandStructPtr lbsp)
 {
 
@@ -416,7 +420,7 @@ LocalBandToSeqAlign (LocalBandStructPtr lbsp)
         can be made into a SeqAlign.
 */
 
-Boolean LIBCALL 
+NLM_EXTERN Boolean
 LocalBandToEditBlock(LocalBandStructPtr lbsp)
 {
   GapXEditBlockPtr edit_block;
@@ -453,7 +457,7 @@ LocalBandToEditBlock(LocalBandStructPtr lbsp)
   return TRUE;
 }
 
-Int4 LIBCALL
+Int4
 BAND_LOCAL_ALIGN(Uint1Ptr A, Uint1Ptr B,
 		 Int4 M, Int4 N,
 		 Int4Ptr PNTR matrix, PSUGapOptionsPtr options,
@@ -701,7 +705,7 @@ static Uint1 HSblastna_to_ncbi4na[] = {   1, /* A, 0 */
                                  0, /* Gap, 15 */
                         };
 
-void SetGlobaltOptions(GlobalBandStructPtr gbsp, Int4 lg1_ext, Int4 rg1_ext, Int4 lg2_ext, Int4 rg2_ext, Int4 lg1_open, Int4 lg2_open, Int4 rg1_open, Int4 rg2_open, Int2 gopen, Int2 gext)
+NLM_EXTERN void SetGlobaltOptions(GlobalBandStructPtr gbsp, Int4 lg1_ext, Int4 rg1_ext, Int4 lg2_ext, Int4 rg2_ext, Int4 lg1_open, Int4 lg2_open, Int4 rg1_open, Int4 rg2_open, Int2 gopen, Int2 gext)
 {
 	PSUGapOptionsPtr opt;
 
@@ -719,7 +723,7 @@ void SetGlobaltOptions(GlobalBandStructPtr gbsp, Int4 lg1_ext, Int4 rg1_ext, Int
 	opt->rg2_open = rg2_open;
 }
 
-static Int4Ptr PNTR LIBCALL BlastStyleMatCreate(void){
+static Int4Ptr PNTR BlastStyleMatCreate(void){
 /* Allocate Matrix as one contigous memory block to increase cache-hits&speed
  */
   Int4Ptr PNTR matrix;
@@ -731,7 +735,7 @@ static Int4Ptr PNTR LIBCALL BlastStyleMatCreate(void){
    return matrix;
 }
 
-Int2 ChangeGlobalBandMatrix(GlobalBandStructPtr gbsp, Boolean is_prot, CharPtr matrix_name, Int4 penalty, Int4 reward)
+NLM_EXTERN Int2 ChangeGlobalBandMatrix(GlobalBandStructPtr gbsp, Boolean is_prot, CharPtr matrix_name, Int4 penalty, Int4 reward)
 {
    BLAST_ScoreBlkPtr   sbp;
    Int4                i, j;
@@ -852,7 +856,7 @@ static Uint1Ptr load_data (SeqLocPtr slp,Boolean is_prot)
   return seq;
 }
 
-GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR W, Boolean is_prot, Int2 method)
+NLM_EXTERN GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR W, Boolean is_prot, Int2 method)
 {
 	GlobalBandStructPtr gbsp;
 	Uint1Ptr seq1,seq2;
@@ -918,7 +922,7 @@ GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR
    */
 
 
-void SetLowUpFromBlast(PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 width, SeqLocPtr slp1, SeqLocPtr slp2)
+NLM_EXTERN void SetLowUpFromBlast(PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 width, SeqLocPtr slp1, SeqLocPtr slp2)
 {
 	BLAST_OptionsBlkPtr options;
 	SeqAlignPtr seqalign, sap;
@@ -1068,7 +1072,7 @@ void SetLowUpFromBlast(PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 wi
 }
 
 
-SeqAlignPtr GlobalBandByLoc(GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr slp2,  Boolean is_prot, Int2 band_method)
+NLM_EXTERN SeqAlignPtr GlobalBandByLoc(GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr slp2,  Boolean is_prot, Int2 band_method)
 {
 	PSUGapOptionsPtr opt;
 	SeqAlignPtr seqalign;
@@ -1083,7 +1087,7 @@ SeqAlignPtr GlobalBandByLoc(GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr 
 	return seqalign;
 }
 
-SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2)
+NLM_EXTERN SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2)
 {
    DenseSegPtr   dsp;
    Int4          index1;
@@ -1157,7 +1161,7 @@ SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1
    return sap;
 }
 
-SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, Uint1 strand1, Uint1 strand2)
+NLM_EXTERN SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, Uint1 strand1, Uint1 strand2)
 {
    DenseSegPtr   dsp;
    Int4Ptr       n_starts, n_lens;
@@ -1261,7 +1265,7 @@ SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 st
 
 /* doesn't work for minus strands in SeqAlign */
 /* deals with segtypes 1 and 2 only*/
-void GetAlignExtremes(SeqAlignPtr sap, Int4Ptr xx1, Int4Ptr yy1, Int4Ptr xx2, Int4Ptr yy2)
+NLM_EXTERN void GetAlignExtremes(SeqAlignPtr sap, Int4Ptr xx1, Int4Ptr yy1, Int4Ptr xx2, Int4Ptr yy2)
 {
 	DenseDiagPtr  	ddp;
 	DenseSegPtr		dsp;

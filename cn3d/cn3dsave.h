@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,12 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.h,v $
+* Revision 6.3  2000/03/22 23:17:50  thiessen
+* added ability to save ARS in ASN1
+*
+* Revision 6.2  2000/03/08 21:46:15  lewisg
+* cn3d saves viewport, misc bugs
+*
 * Revision 6.1  1999/10/29 14:15:30  thiessen
 * ran all Cn3D source through GNU Indent to prettify
 *
@@ -64,7 +70,8 @@
 extern "C" {
 #endif
 
-MenU LIBCALL Cn3D_SaveSub(MenU m);
+NLM_EXTERN void Cn3D_SaveBiostruc(IteM i);
+NLM_EXTERN void Cn3D_GetRenderSettingsFromBiostruc(PDNMS pdnms);
 
 #ifdef __cplusplus
 }

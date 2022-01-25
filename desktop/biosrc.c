@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -122,7 +122,7 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Nucleomorph",         15},
   {"Apicoplast",          16},
   {"Leucoplast",          17},
-  {"Protoplast",          18},
+  {"Proplastid",          18},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
@@ -143,7 +143,7 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Nucleomorph",         15},
   {"Apicoplast",          16},
   {"Leucoplast",          17},
-  {"Protoplast",          18},
+  {"Proplastid",          18},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_origin_alist)
@@ -400,7 +400,7 @@ extern void SetupGeneticCodes (void)
         }
       }
       if (id != 7 && id != 8) {
-        if (id > 0 && id < 20) {
+        if (id > 0 /* && id < 30 */ ) {
           i = 0;
           if (StringLen (str + i) > 0 && index < NUM_GENETIC_CODES - 1) {
             ch = str [i];

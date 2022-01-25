@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.38 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
@@ -155,6 +155,10 @@ NLM_EXTERN SeqLocPtr SeqLocMerge (BioseqPtr target,
                                   Boolean single_interval, Boolean fuse_joints,
                                   Boolean add_null);
 
+NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
+                                    Boolean single_interval, Boolean fuse_joints,
+                                    Boolean merge_overlaps, Boolean add_null);
+
 NLM_EXTERN Boolean CheckSeqLocForPartial (SeqLocPtr location, BoolPtr p5ptr, BoolPtr p3ptr);
 NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean partial3);
 NLM_EXTERN void FreeAllFuzz (SeqLocPtr location);
@@ -214,6 +218,7 @@ NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
 NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
+NLM_EXTERN Boolean SerialNumberInString (CharPtr str);
 
 /* for sorting and uniquing valnode list by (charptr) data.ptrvalue */
 
@@ -262,6 +267,12 @@ of contigs, and returns a SeqEntryList in the desired order, with all other cont
 
 NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs);
 
+NLM_EXTERN void PrintQualityScores (BioseqPtr bsp, FILE *fp);
+
+typedef void (*QualityWriteFunc) (CharPtr buf, Uint4 buflen, Pointer userdata);
+
+NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, QualityWriteFunc callback);
+
 /* ReadContigList builds a far segmented bioseq from a table of accessions, starts, stops,
 lengths, and (optional) strands.  Gaps of a given length (with 0 start and stop) are also
 allowed. */
@@ -304,6 +315,11 @@ require reindexing) */
 
 NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep);
 
+/* CautiousSeqEntryCleanup is a gradual consolidation and replacement of functions in SeriousSeqEntryCleanup,
+which does change the itemID structure, and is intended to be safe for a retrofit of the ID database */
+
+NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+
 /* general purpose text finite state machine */
 /* based on Practical Algorithms for Programmers by Binstock and Rex */
 
@@ -314,6 +330,54 @@ NLM_EXTERN TextFsaPtr TextFsaNew (void);
 NLM_EXTERN void TextFsaAdd (TextFsaPtr tbl, CharPtr word);
 NLM_EXTERN Int2 TextFsaNext (TextFsaPtr tbl, Int2 currState, Char ch, ValNodePtr PNTR matches);
 NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl);
+
+/* very simple explore functions - VisitOn only does one chain, VisitIn goes into set components */
+
+typedef void (*VisitDescriptorsFunc) (SeqDescrPtr sdp, Pointer userdata);
+NLM_EXTERN void VisitDescriptorsOnBsp (BioseqPtr bsp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN void VisitDescriptorsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN void VisitDescriptorsInSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN void VisitDescriptorsOnSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN void VisitDescriptorsInSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
+
+typedef void (*VisitFeaturesFunc) (SeqFeatPtr sfp, Pointer userdata);
+NLM_EXTERN void VisitFeaturesOnBsp (BioseqPtr bsp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN void VisitFeaturesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN void VisitFeaturesInSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN void VisitFeaturesOnSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN void VisitFeaturesInSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
+
+typedef void (*VisitAlignmentsFunc) (SeqAlignPtr sap, Pointer userdata);
+NLM_EXTERN void VisitAlignmentsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN void VisitAlignmentsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN void VisitAlignmentsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN void VisitAlignmentsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN void VisitAlignmentsInSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
+
+typedef void (*VisitGraphsFunc) (SeqGraphPtr sgp, Pointer userdata);
+NLM_EXTERN void VisitGraphsOnBsp (BioseqPtr bsp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN void VisitGraphsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN void VisitGraphsInSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN void VisitGraphsOnSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN void VisitGraphsInSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
+
+typedef void (*VisitBioseqsFunc) (BioseqPtr bsp, Pointer userdata);
+NLM_EXTERN void VisitBioseqsInSep (SeqEntryPtr sep, Pointer userdata, VisitBioseqsFunc callback);
+NLM_EXTERN void VisitBioseqsInSet (BioseqSetPtr bssp, Pointer userdata, VisitBioseqsFunc callback);
+
+typedef void (*VisitSetsFunc) (BioseqSetPtr bssp, Pointer userdata);
+NLM_EXTERN void VisitSetsInSep (SeqEntryPtr sep, Pointer userdata, VisitSetsFunc callback);
+NLM_EXTERN void VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFunc callback);
+
+/* visits components of pop/phy/mut/genbank sets, callback is at most nuc-prot set, can then call above functions */
+
+typedef void (*VisitElementsFunc) (SeqEntryPtr sep, Pointer userdata);
+NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback);
+
+/* function to scan binary ASN.1 file of entire release as Bioseq-set, simple explore from successive top seps */
+
+typedef void (*ScanBioseqSetFunc) (SeqEntryPtr sep, Pointer userdata);
+NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Pointer userdata, ScanBioseqSetFunc callback);
 
 
 #ifdef __cplusplus

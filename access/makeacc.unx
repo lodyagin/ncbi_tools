@@ -1,0 +1,3 @@
+asntool -m entrez2.asn -o asnent2.h
+mv asnent2.h ../asnstat
+asntool -m entrez2.asn -G -B objent2 -K asnent2.h

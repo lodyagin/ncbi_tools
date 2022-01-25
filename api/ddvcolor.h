@@ -1,4 +1,4 @@
-/*   $Id: ddvcolor.h,v 1.13 1999/12/29 22:55:02 lewisg Exp $
+/*   $Id: ddvcolor.h,v 1.17 2000/02/15 22:40:57 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,31 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: ddvcolor.h,v 1.13 1999/12/29 22:55:02 lewisg Exp $
+* File Name:  $Id: ddvcolor.h,v 1.17 2000/02/15 22:40:57 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   6/2/99
 *
-* $Revision: 1.13 $
+* $Revision: 1.17 $
 *
 * File Description: Shared color information for viewers
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcolor.h,v $
+* Revision 1.17  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 1.16  2000/02/10 15:51:58  lewisg
+* cn3d responds and send correct update messages.  many coloring bug fixes
+*
+* Revision 1.15  2000/02/10 14:15:18  durand
+* add a function to build Feature colors table
+*
+* Revision 1.14  2000/01/28 19:25:39  lewisg
+* columnwise binary search on color data
+*
 * Revision 1.13  1999/12/29 22:55:02  lewisg
 * get rid of seqalign id
 *
@@ -171,7 +183,13 @@ typedef struct _DDV_MediaInfo {
 DDV_Id Id;  /* the id for either sequence or alignment row */ 
 ValNode *pvnColor;  /* ValNode list of DDV_Color associated with the object */
 Boolean fVisible;  /* is the sequence visible? */
+B_Global *pSearchColor; /* used to search  pvnColor structure by position */
 } DDV_MediaInfo;
+
+/*bag to put various "standard color tables"*/
+typedef struct _DDV_SpecialColor {
+	DDV_ColorCell * pFeatColorTable;/*Table of color for features; max size=FEATDEF_MAX*/
+} DDV_SpecialColor;
 
 /*****************************************************************************
 *
@@ -180,8 +198,8 @@ Boolean fVisible;  /* is the sequence visible? */
 *****************************************************************************/
 
 typedef struct _DDV_ColorGlobal {
-ValNode *pvnMediaInfo;  /* ValNode list of DDV_MediaInfo */
-SeqId *MasterSeqId;  /* this refers to the master sequence */
+ValNode *pvnMediaInfo;   /* ValNode list of DDV_MediaInfo */
+SeqId *MasterSeqId;      /* this refers to the master sequence */
 Boolean fColorByMaster;  /* use only the master sequence to color */
 Boolean fDefaultColor;   /* fDefaultColor means run the default coloration */
 ValNode *pvnColorQueue;  /* Valnode list of DDV_ColorQueue */
@@ -193,6 +211,9 @@ ValNode *pvnSpecialColors;  /* ValNode list of DDV_ColorEntries.  used for
                             highlight, secondary structure, etc. */
 B_Global *pSearchMI;      /* used to search the MediaInfo structure for sips */
 B_Global *pSearchMIRow;      /* used to search the MediaInfo structure for sips */
+DDV_SpecialColor SpeClr;  /*"standard color tables"*/
+ValNode *pvnUser2Row;     /* associates user keys with rows */
+void *pObject;            /* pointer to the object we are coloring */
 } DDV_ColorGlobal;
 
 /*****************************************************************************
@@ -234,6 +255,20 @@ struct _DDV_ColorQueue * next; /* these are used to sort the color functions */
 struct _DDV_ColorQueue * prev;  /* *not* for storing them together. */
 } DDV_ColorQueue;
 
+
+/*****************************************************************************
+*
+*   get a color for a Feature. 
+*
+*****************************************************************************/
+NLM_EXTERN DDV_ColorCell DDV_GetFeatColor(DDV_ColorGlobal* pColorGlobal, Int1 idx);
+
+/*****************************************************************************
+*
+*   setup a DDV_ColorCell with r,g,b values. 
+*
+*****************************************************************************/
+NLM_EXTERN DDV_ColorCell DDV_GetColorRGB(Uint1 r, Uint1 g, Uint1 b);
 
 /*****************************************************************************
 *
@@ -557,11 +592,16 @@ NLM_EXTERN void DDV_LoadSSColor
 /*****************************************************************************
 *
 *   Returns a new DDV_ColorGlobal structure.
-*   Returns NULL on failure
+*   Returns NULL on failure.
+*
+*   Parameters: fDefaultColor, sets everything to the default color before
+*                              executing color functions
+*               pObject, the object this structure is coloring. can be NULL.
 *
 *****************************************************************************/
 
-NLM_EXTERN DDV_ColorGlobal * DDV_CreateColorGlobal(Boolean fDefaultColor);
+NLM_EXTERN DDV_ColorGlobal * DDV_CreateColorGlobal(Boolean fDefaultColor,
+                                                   void *pObject);
 
 /*****************************************************************************
 *
@@ -581,6 +621,14 @@ NLM_EXTERN Int4 DDV_DeleteColorGlobal(DDV_ColorGlobal *pColorGlobal);
 *****************************************************************************/
 
 NLM_EXTERN Int4 DDV_ClearColor(DDV_ColorGlobal *pColorGlobal);
+
+/*****************************************************************************
+*
+*   Clears all the colors to the default
+*
+*****************************************************************************/
+
+NLM_EXTERN Int4 DDV_Clear2Default(DDV_ColorGlobal *pColorGlobal);
 
 /*****************************************************************************
 *

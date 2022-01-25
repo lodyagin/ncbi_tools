@@ -29,7 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -45,6 +46,25 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.15  2000/04/03 23:33:36  tatiana
+ * added showSeqLoc for GenBank region view
+ *
+ * Revision 6.14  2000/03/20 23:38:39  aleksey
+ * Finally submitted the changes which have been made by serge bazhin
+ * and been kept in my local directory.
+ *
+ * These changes allow to establish user callback functions
+ * in 'Asn2ffJobPtr' structure which are called within
+ * 'SeqEntryToFlatAjp' function call.
+ * The new members are:
+ * user_data       - pointer to a user context for passing data
+ * ajp_count_index - user defined function
+ * ajp_print_data  - user defined function
+ * ajp_print_index - user defined function
+ *
+ * Revision 6.13  2000/02/09 19:34:38  kans
+ * added forgbrel flag to Asn2ffJobPtr, currently used to suppress PUBMED line, which was not formally announced in release notes
+ *
  * Revision 6.12  1999/11/05 14:54:04  tatiana
  * EMBL_PREFNUM increased to 5
  *
@@ -277,6 +297,7 @@ typedef struct organizefeat {
 	Int2 biosrcsize;	/* Number of sorted ImpFeat's with key "source" */
 	SortStructPtr Biosrclist;	
 	Boolean useSeqMgrIndexes;  /* new style indexing to eliminate nested gathers */
+	Boolean showSeqLoc;  /* GenBank view for a region, skip truncated check */
 } OrganizeFeat, PNTR OrganizeFeatPtr;
 
 /*****************************************************************************
@@ -397,7 +418,12 @@ typedef struct asn2ff_job {
 	ByteStorePtr byte_st;
 	Boolean contig_view;	/* CONTIG line and features*/
 	Boolean bankit; /* show Bankit comments*/
-	
+	Boolean forgbrel;
+	Pointer user_data;
+	Int4 (*ajp_print_data)(struct asn2ff_job *ajp, CharPtr str,
+                               Pointer user_data);
+	Int4 (*ajp_print_index)(struct asn2ff_job *ajp, Pointer user_data);
+	Int4 (*ajp_count_index)(struct asn2ff_job *ajp, Int4 num, Pointer user_data);
 } Asn2ffJob, PNTR Asn2ffJobPtr;
 
 

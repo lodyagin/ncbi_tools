@@ -33,6 +33,12 @@
 *
 * Modifications:
 * $Log: cn3dmsg.h,v $
+* Revision 6.55  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.54  2000/02/07 20:17:37  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.53  2000/01/06 00:04:42  lewisg
 * selection bug fixes, update message outbound, animation APIs moved to vibrant
 *
@@ -193,9 +199,7 @@ Parameters: sap, the SeqAnnot pointer
 
 *****************************************************************************/
 
-void Cn3D_RegisterSeqAnnot(SeqAnnot * sap);
-
-SeqAnnot *Cn3D_MakeFakeAnnot(SeqEntry *sep);
+void Cn3D_RegisterSeqAnnot(SeqAnnot *sap, Boolean Neat, Boolean IBM);
 
 
 extern Int2 LIBCALLBACK SeqStrucMediaFunc PROTO((Pointer data));

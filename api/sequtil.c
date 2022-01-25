@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.45 $
+* $Revision: 6.49 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.49  2000/03/29 15:53:50  sicotte
+* Added BB predix for DDBJ EST to WHICH_db_accession
+*
+* Revision 6.48  2000/02/17 17:29:52  sicotte
+* Added BA prefix for DDBJ CON division
+*
+* Revision 6.47  2000/02/11 21:09:52  madden
+* Check for NULL SeqAlignPtr before dereferencing
+*
+* Revision 6.46  2000/02/04 16:13:16  kans
+* added prefix parameter to MakeNewProteinSeqIdEx
+*
 * Revision 6.45  1999/12/22 15:46:19  sicotte
 * Added prefix AZ
 *
@@ -3530,7 +3542,7 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 *   	
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, Int2Ptr ctrptr)
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr)
 {
 	Char buf[40];
 	CharPtr tmp;
@@ -3542,6 +3554,7 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, 
 	ValNode vn;
 	TextSeqId tsi;
 	ValNodePtr altid;
+	size_t len;
 
 	          /* create a possible GenBankStyle id as well */
 	altid = &vn;
@@ -3577,7 +3590,14 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, 
 		*tmp = '\0';
 	}
 	else
-		tmp = StringMove(buf, "tmpseq_");
+	{
+		len = StringLen (prefix);
+		if (len > 0 && len < 32) {
+			tmp = StringMove(buf, prefix);
+		} else {
+			tmp = StringMove(buf, "tmpseq_");
+		}
+	}
 
 	newid = ValNodeNew(NULL);
 	oid = ObjectIdNew();
@@ -3611,7 +3631,7 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, 
 
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId (SeqLocPtr slp, SeqIdPtr sip)
 {
-	return MakeNewProteinSeqIdEx (slp, sip, NULL);
+	return MakeNewProteinSeqIdEx (slp, sip, NULL, NULL);
 }
 
 /*****************************************************************************
@@ -6864,6 +6884,9 @@ TxGetIdFromSeqAlign(SeqAlignPtr seqalign, Boolean subject)
     DenseSegPtr dsp;
     StdSegPtr ssp;
     SeqIdPtr sip;
+
+    if (seqalign == NULL)
+	return NULL;
     
     sip = NULL;
     switch (seqalign->segtype) {
@@ -7564,7 +7587,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
-                     (StringICmp(temp,"AV") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"AV") == 0) ||
+                     (StringICmp(temp,"BB") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
@@ -7573,6 +7597,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_GENOME;
           } else if ((StringICmp(temp,"AK") == 0))  {     /* DDBJ HTGS */
               retcode = ACCN_DDBJ_HTGS;
+          } else if ((StringICmp(temp,"BA") == 0)) {      /* DDBJ CON division */
+              retcode = ACCN_DDBJ_CON;
+
           } else {
               retval = FALSE;
               break;

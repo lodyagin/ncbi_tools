@@ -31,9 +31,15 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.124 $
+ * $Revision: 6.126 $
  *
  * $Log: vecscrn.h,v $
+ * Revision 6.126  2000/03/30 21:04:16  madden
+ * Added function VSMakeCombinedSeqLoc
+ *
+ * Revision 6.125  2000/01/27 14:24:17  egorov
+ * Fix C++ compilation problem
+ *
  * Revision 6.124  2000/01/20 18:32:36  madden
  * Removed VSMakeDisplaySeqLoc
  *
@@ -95,7 +101,7 @@ recommended procedure.
         The 'color' buffer will hold the color in the format of RRGGBB (e.g., "00FF00").
 */
 
-Boolean LIBCALL VSGetLabels PROTO((Int2 class, CharPtr PNTR short_desc, CharPtr PNTR long_desc, CharPtr PNTR color));
+Boolean LIBCALL VSGetLabels PROTO((Int2 Class, CharPtr PNTR short_desc, CharPtr PNTR long_desc, CharPtr PNTR color));
 
 /*
         BlastOptionNew function used for VecScreen screening.
@@ -113,6 +119,18 @@ VSOptionsPtr LIBCALL VSOptionsFree PROTO((VSOptionsPtr options));
         filled in.
 */
 VSOptionsPtr LIBCALL VSOptionsNew PROTO((void));
+
+/*
+        For a give SeqAlignPtr, make and merge SeqLoc's corresponding to these.
+
+	This function calls VSMakeSeqLoc and VSCombineSeqLoc.
+
+        Note: if 'options' is NULL, default values will be used.  This is STRONGLY recommended.
+*/
+
+Int2 LIBCALL
+VSMakeCombinedSeqLoc PROTO((SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, Int4 length, VSOptionsPtr options));
+
 
 /*
         Scans the SeqAlignPtr's, producing SeqLocPtr's as specified.

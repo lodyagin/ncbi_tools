@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.99 2000/01/19 21:54:31 madden Exp $
+/* $Id: txalign.c,v 6.107 2000/04/25 18:13:43 shavirin Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,39 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.99 $
+* $Revision: 6.107 $
 *
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.107  2000/04/25 18:13:43  shavirin
+* Do not link to anything ids with BL_ORD_ID.
+*
+* Revision 6.106  2000/04/04 21:52:50  madden
+* Roll-back last change
+*
+* Revision 6.105  2000/04/03 17:45:42  shavirin
+* Changed way to print multiple deflines. Removed define to print
+* old Entrez links.
+*
+* Revision 6.104  2000/03/24 16:04:24  shavirin
+* Added hack for Drosophila BLAST page.
+*
+* Revision 6.103  2000/03/23 15:02:12  shavirin
+* Added possibility to use environment variables in the function
+* make_dumpgnl_links()
+*
+* Revision 6.102  2000/03/14 17:16:11  shavirin
+* Cleared AlignSum buffer in the function FormatScoreFromSeqAlign
+*
+* Revision 6.101  2000/03/07 21:58:40  shavirin
+* Now will use PSSM Matrix to show positives in PSI Blast
+*
+* Revision 6.100  2000/03/02 16:25:09  shavirin
+* Fixed bug with very long deflines in FilterTheDefline() function.
+*
 * Revision 6.99  2000/01/19 21:54:31  madden
 * Moved vecscreen stuff to vecscrn.[ch]
 *
@@ -97,7 +123,7 @@
 
 #define NEW_ENTREZ_LINKS 1
 
-#define BUFFER_LENGTH 1024
+#define BUFFER_LENGTH 2048
 #define MIN_INS_SPACE 50
 #define MAX_GI_NUM    10
 #define MAX_DB_NUM    10
@@ -542,264 +568,233 @@ static AlignNodePtr get_master_align_node PROTO((ValNodePtr anp_list));
 *	return TRUE for success, FALSE for fail
 *
 *****************************************************************************/
-NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, 
-	Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, 
-	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
+/* This modification of the function to pass position-specific matrix */
+NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)), CharPtr db_name, CharPtr www_blast_type, Int4Ptr PNTR posMatrix)
 {
-	return ShowTextAlignFromAnnot2(hannot, line_len, fp, featureOrder,
-		groupOrder, option, matrix, mask_loc, fmt_score_func, NULL, NULL);
-}
-
-NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, 
-	Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, 
-	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
-	CharPtr db_name, CharPtr www_blast_type)
-{
-	SeqAlignPtr align, h_align, n_align, prev;
-	SeqLocPtr m_loc;
-	Boolean retval, matrix_loaded=FALSE;
-	SeqIdPtr m_sip;
-	Int4 m_start, m_stop, t_start, t_stop;
-	ValNodePtr anp_node, curr_list;
-	ValNodePtr annot_head;
-	Uint1 style;
-	SeqAnnotPtr annot;
-	Boolean master;
-	Boolean flat_insert;
-	Uint1 m_strand;
-	Uint1 annot_type;
-	Char annotDB[101];
-	Uint2 order;
-	Uint1   blast_type;
-	Boolean load_matrix;
-	ValNodePtr bs_list;	/*store the ByteStores that were masked master seqences*/
-	BioseqPtr m_bsp;
-	Int1 frame;
-	Uint1 code;
-	Uint1 repr;
-	ByteStorePtr seq_data;
-
-
-	annot = hannot;
-	flat_insert = (Boolean)(option & TXALIGN_FLAT_INS); 
-	/* flat_insert = TRUE; */
-	master = (Boolean)(option & TXALIGN_MASTER);
-	if(annot->type != 2)
-		return FALSE;
-	m_start = -1;
-	m_stop = -1;
-	m_sip = NULL;
-	annot = hannot;
-	while(annot)
-	{
-		if(annot->type == 2)
-		{
-			align = (SeqAlignPtr) annot->data;
-			if(m_sip == NULL)
-				m_sip = make_master(align);
-			if(m_sip != NULL)
-			{
-				get_boundary(m_sip, &t_start, &t_stop, align);
-				if(m_start == -1 || m_start > t_start)
-					m_start = t_start;
-				if(m_stop == -1 || m_stop < t_stop)
-					m_stop = t_stop;
-			}
-		}
-		annot = annot->next;
-	}
-	if(m_sip == NULL || m_start == -1 || m_stop == -1)
-		return FALSE;
-
-	if(master)
-		style = COLLECT_MP;
-	else
-		style = COLLECT_MD;
-	anp_node = NULL;
-	m_loc = SeqLocIntNew(m_start, m_stop, Seq_strand_plus, m_sip);
-	annot = hannot;
-	load_matrix = FALSE;	/*if there is any protein sequence, set the load_matrix to TRUE*/
-	while(annot)
-	{
-		if(annot->type == 2)
-		{
-			annotDB[0] = '\0';
-			blast_type = get_align_annot_qual(annot, annotDB, 100, &annot_type);
-			if(blast_type == ALIGN_BLASTX || blast_type == ALIGN_TBLASTN 
-				|| blast_type == ALIGN_TBLASTX)
-				load_matrix = TRUE;
-			if(blast_type == ALIGN_TBLASTX || 
-				(blast_type == ALIGN_BLASTX && annot_type == ANNOT_BLAST
-				&& (option & TXALIGN_BLASTX_SPECIAL)))
-			{	/*!!!!!!!this messes up all the itemIDs and entityIDs !!!!!!*/
-				align = (SeqAlignPtr) annot->data;
-				prev = NULL;
-				h_align = NULL;
-				order = 0;
-				while(align)
-				{
-					++order;
-					n_align = align->next;
-					align->next = NULL;
-					if(get_align_ends(align, m_sip, &m_start, &m_stop, &m_strand))
-					{
-						/* sint = m_loc->data.ptrvalue;
-						sint->strand = m_strand; */
-						update_seq_loc(m_start, m_stop, m_strand, m_loc); 
-						style = COLLECT_MD;
-						master = FALSE;
-
-						annot->data = align;
-						curr_list  = CollAlignFromSeqAnnot(annot, m_loc, 
-							featureOrder, groupOrder, style, FALSE, master, flat_insert);
-						if(curr_list != NULL)
-						{
-							modify_kludge_itemID (curr_list, order);
-							ValNodeLink(&anp_node, curr_list);
-						}
-					}
-					if(prev == NULL)
-						h_align = align;
-					else
-						prev->next = align;
-					prev = align;
-					align = n_align;
-				}
-				annot->data = h_align;
-			}
-			else
-			{
-				curr_list  = CollAlignFromSeqAnnot(annot, m_loc, featureOrder, groupOrder, style, FALSE, master, flat_insert);
-				if(curr_list != NULL)
-					ValNodeLink(&anp_node, curr_list);
-			}
-		}
-		annot = annot->next;
-	}
-	SeqLocFree(m_loc);
-	if(anp_node == NULL)
-		return FALSE;
-
-	m_bsp = BioseqLockById(m_sip);
-	if(m_bsp == NULL)
-	{
-		FreeAlignNode(anp_node);
-		return FALSE;
-	}
-
-	if(mask_loc != NULL)
-		bs_list = CreateMaskByteStore (mask_loc);
-	else
-		bs_list = NULL;
-
-	repr = m_bsp->repr;
-	seq_data = m_bsp->seq_data;
-	code = m_bsp->seq_data_type;
-
-	if(matrix == NULL && (option & TXALIGN_MATRIX_VAL || load_matrix))
-	{
-		matrix = load_default_matrix();
-		matrix_loaded = TRUE;
-	}
-
-	if(fmt_score_func != NULL) {
-            free_buff();
-            init_buff_ex(MAX(80, line_len + 23 + 12));
+    SeqAlignPtr align, h_align, n_align, prev;
+    SeqLocPtr m_loc;
+    Boolean retval, matrix_loaded=FALSE;
+    SeqIdPtr m_sip;
+    Int4 m_start, m_stop, t_start, t_stop;
+    ValNodePtr anp_node, curr_list;
+    ValNodePtr annot_head;
+    Uint1 style;
+    SeqAnnotPtr annot;
+    Boolean master;
+    Boolean flat_insert;
+    Uint1 m_strand;
+    Uint1 annot_type;
+    Char annotDB[101];
+    Uint2 order;
+    Uint1   blast_type;
+    Boolean load_matrix;
+    ValNodePtr bs_list;	/*store the ByteStores that were masked master seqences*/
+    BioseqPtr m_bsp;
+    Int1 frame;
+    Uint1 code;
+    Uint1 repr;
+    ByteStorePtr seq_data;
+    
+    
+    annot = hannot;
+    flat_insert = (Boolean)(option & TXALIGN_FLAT_INS); 
+    /* flat_insert = TRUE; */
+    master = (Boolean)(option & TXALIGN_MASTER);
+    if(annot->type != 2)
+        return FALSE;
+    m_start = -1;
+    m_stop = -1;
+    m_sip = NULL;
+    annot = hannot;
+    while(annot) {
+        if(annot->type == 2) {
+            align = (SeqAlignPtr) annot->data;
+            if(m_sip == NULL)
+                m_sip = make_master(align);
+            if(m_sip != NULL) {
+                get_boundary(m_sip, &t_start, &t_stop, align);
+                if(m_start == -1 || m_start > t_start)
+                    m_start = t_start;
+                if(m_stop == -1 || m_stop < t_stop)
+                    m_stop = t_stop;
+            }
         }
-	if(master)
-	{
-		frame = get_alignment_frame(anp_node, m_bsp);
-		if(frame != -1 && bs_list != NULL)
-		{
-			load_master_translate_frame(anp_node, m_bsp->length, m_bsp);
-
-			if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame))
-			{
-				m_bsp->repr = repr;
-				m_bsp->seq_data = seq_data;
-				m_bsp->seq_data_type = code;
-			}
-		}
-		retval = ShowAlignNodeText2(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
-		FreeAlignNode(anp_node);
-	}
-	else
-	{
-		annot_head = NULL;
-		if(fmt_score_func != NULL)
-			LoadFollowerForSameId(anp_node);
-		while(anp_node)
-		{
-			if(anp_node->choice == OBJ_SEQANNOT)
-			{
-				if(annot_head != NULL)
-				{
-					annot_head->next = NULL;
-					FreeAlignNode(annot_head);
-				}
-				annot_head = anp_node;
-				anp_node = anp_node->next;
-			}
-			else
-			{
-				curr_list = ExtractCurrentAlignNode(&anp_node);
-				if(curr_list)
-				{
-					if(annot_head != NULL)
-					{
-						annot_head->next = curr_list;
-						load_master_translate_frame(annot_head, m_bsp->length, m_bsp);
-						frame = get_alignment_frame(annot_head, m_bsp);
-					}
-					else
-						frame = 0;
-					if(frame != -1 && bs_list != NULL)
-					{
-						if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame))
-						{
-							m_bsp->repr = repr;
-							m_bsp->seq_data = seq_data;
-							m_bsp->seq_data_type = code;
-						}
-					}
-
-					if(annot_head != NULL)
-					{
-						retval = ShowAlignNodeText2(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
-						annot_head->next = NULL;
-					}
-					
-					else
-						retval = ShowAlignNodeText2(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
-					if(retval == TRUE)
-						fprintf(fp, "\n\n");
-					FreeAlignNode(curr_list);
-				}
-			}
-		}
-		if(annot_head != NULL)
-		{
-			annot_head->next = NULL;
-			FreeAlignNode(annot_head);
-		}
-	}
-
-	m_bsp->repr = repr;
-	m_bsp->seq_data = seq_data;
-	m_bsp->seq_data_type = code;
-
-	if (matrix_loaded)
-		free_default_matrix(matrix);
-
-	if(fmt_score_func != NULL)
-		free_buff();
-	if(bs_list != NULL)
-		FreeByteStoreList (bs_list);
-	BioseqUnlock(m_bsp);
-	return retval;
+        annot = annot->next;
+    }
+    if(m_sip == NULL || m_start == -1 || m_stop == -1)
+        return FALSE;
+    
+    if(master)
+        style = COLLECT_MP;
+    else
+        style = COLLECT_MD;
+    anp_node = NULL;
+    m_loc = SeqLocIntNew(m_start, m_stop, Seq_strand_plus, m_sip);
+    annot = hannot;
+    load_matrix = FALSE;	/*if there is any protein sequence, set the load_matrix to TRUE*/
+    while(annot) {
+        if(annot->type == 2) {
+            annotDB[0] = '\0';
+            blast_type = get_align_annot_qual(annot, annotDB, 100, &annot_type);
+            if(blast_type == ALIGN_BLASTX || blast_type == ALIGN_TBLASTN 
+               || blast_type == ALIGN_TBLASTX)
+                load_matrix = TRUE;
+            if(blast_type == ALIGN_TBLASTX || 
+               (blast_type == ALIGN_BLASTX && annot_type == ANNOT_BLAST
+                && (option & TXALIGN_BLASTX_SPECIAL))) { /*!!!!!!!this messes up all the itemIDs and entityIDs !!!!!!*/
+                align = (SeqAlignPtr) annot->data;
+                prev = NULL;
+                h_align = NULL;
+                order = 0;
+                while(align) {
+                    ++order;
+                    n_align = align->next;
+                    align->next = NULL;
+                    if(get_align_ends(align, m_sip, &m_start, &m_stop, &m_strand)) {
+                        /* sint = m_loc->data.ptrvalue;
+                           sint->strand = m_strand; */
+                        update_seq_loc(m_start, m_stop, m_strand, m_loc); 
+                        style = COLLECT_MD;
+                        master = FALSE;
+                        
+                        annot->data = align;
+                        curr_list  = CollAlignFromSeqAnnot(annot, m_loc, 
+                                                           featureOrder, groupOrder, style, FALSE, master, flat_insert);
+                        if(curr_list != NULL) {
+                            modify_kludge_itemID (curr_list, order);
+                            ValNodeLink(&anp_node, curr_list);
+                        }
+                    }
+                    if(prev == NULL)
+                        h_align = align;
+                    else
+                        prev->next = align;
+                    prev = align;
+                    align = n_align;
+                }
+                annot->data = h_align;
+            } else {
+                curr_list  = CollAlignFromSeqAnnot(annot, m_loc, featureOrder, groupOrder, style, FALSE, master, flat_insert);
+                if(curr_list != NULL)
+                    ValNodeLink(&anp_node, curr_list);
+            }
+        }
+        annot = annot->next;
+    }
+    SeqLocFree(m_loc);
+    if(anp_node == NULL)
+        return FALSE;
+    
+    m_bsp = BioseqLockById(m_sip);
+    if(m_bsp == NULL) {
+        FreeAlignNode(anp_node);
+        return FALSE;
+    }
+    
+    if(mask_loc != NULL)
+        bs_list = CreateMaskByteStore (mask_loc);
+    else
+        bs_list = NULL;
+    
+    repr = m_bsp->repr;
+    seq_data = m_bsp->seq_data;
+    code = m_bsp->seq_data_type;
+    
+    if(matrix == NULL && (option & TXALIGN_MATRIX_VAL || load_matrix)) {
+        matrix = load_default_matrix();
+        matrix_loaded = TRUE;
+    }
+    
+    if(fmt_score_func != NULL) {
+        free_buff();
+        init_buff_ex(MAX(80, line_len + 23 + 12));
+    }
+    if(master) {
+        frame = get_alignment_frame(anp_node, m_bsp);
+        if(frame != -1 && bs_list != NULL) {
+            load_master_translate_frame(anp_node, m_bsp->length, m_bsp);
+            
+            if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame)) {
+                m_bsp->repr = repr;
+                m_bsp->seq_data = seq_data;
+                m_bsp->seq_data_type = code;
+            }
+        }
+        retval = ShowAlignNodeText2(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type, posMatrix);
+        FreeAlignNode(anp_node);
+    } else {
+        annot_head = NULL;
+        if(fmt_score_func != NULL)
+            LoadFollowerForSameId(anp_node);
+        while(anp_node) {
+            if(anp_node->choice == OBJ_SEQANNOT) {
+                if(annot_head != NULL) {
+                    annot_head->next = NULL;
+                    FreeAlignNode(annot_head);
+                }
+                annot_head = anp_node;
+                anp_node = anp_node->next;
+            } else {
+                curr_list = ExtractCurrentAlignNode(&anp_node);
+                if(curr_list) {
+                    if(annot_head != NULL) {
+                        annot_head->next = curr_list;
+                        load_master_translate_frame(annot_head, m_bsp->length, m_bsp);
+                        frame = get_alignment_frame(annot_head, m_bsp);
+                    } else
+                        frame = 0;
+                    if(frame != -1 && bs_list != NULL) {
+                        if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame)) {
+                            m_bsp->repr = repr;
+                            m_bsp->seq_data = seq_data;
+                            m_bsp->seq_data_type = code;
+                        }
+                    }
+                    
+                    if(annot_head != NULL) {
+                        retval = ShowAlignNodeText2(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type, posMatrix);
+                        annot_head->next = NULL;
+                    } else
+                        retval = ShowAlignNodeText2(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type, posMatrix);
+                    if(retval == TRUE)
+                        fprintf(fp, "\n\n");
+                    FreeAlignNode(curr_list);
+                }
+            }
+        }
+        if(annot_head != NULL) {
+            annot_head->next = NULL;
+            FreeAlignNode(annot_head);
+        }
+    }
+    
+    m_bsp->repr = repr;
+    m_bsp->seq_data = seq_data;
+    m_bsp->seq_data_type = code;
+    
+    if (matrix_loaded)
+        free_default_matrix(matrix);
+    
+    if(fmt_score_func != NULL)
+        free_buff();
+    if(bs_list != NULL)
+        FreeByteStoreList (bs_list);
+    BioseqUnlock(m_bsp);
+    return retval;
 }
-		
 
+NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
+{
+    return ShowTextAlignFromAnnot2(hannot, line_len, fp, featureOrder, groupOrder, option, matrix, mask_loc, fmt_score_func, NULL, NULL);
+
+}
+NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)), CharPtr db_name, CharPtr www_blast_type)
+{
+    return ShowTextAlignFromAnnot3(hannot, line_len, fp, featureOrder,
+                                   groupOrder, option, matrix, mask_loc, 
+                                   fmt_score_func, db_name, www_blast_type,
+                                   NULL); 
+}		
 
 /*************************************************************************
 *
@@ -956,10 +951,7 @@ static SeqIdPtr get_seqid_for_textbuf(TextAlignBufPtr tdp, CharPtr HTML_db,
 *	return the buffer
 *
 ******************************************************************/
-static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, 
-		Boolean is_html, Int4 label_size, Int4 num_size, Boolean compress, 
-		Int4Ptr PNTR matrix, Int4 stop_val, Int4 line_len, Boolean show_strand,
-		Boolean strip_semicolon, SeqIdPtr *already_linked)
+static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean is_html, Int4 label_size, Int4 num_size, Boolean compress, Int4Ptr PNTR matrix, Int4 stop_val, Int4 line_len, Boolean show_strand, Boolean strip_semicolon, SeqIdPtr *already_linked)
 {
 	Boolean already_done;
 	TextAlignBufPtr tdp;
@@ -1076,10 +1068,10 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 					res = tdp->buf[i];
 					if(tdp->matrix_val[i] > 0)
 					{
-						if(tdp->matrix_val[i] == matrix[res][res])
-							matrix_buf[i+num_empty] = res;
-						else
-							matrix_buf[i+num_empty] = '+';
+                                            if(tdp->matrix_val[i] == matrix[res][res] || tdp->matrix_val[i] == INT2_MAX)
+                                                matrix_buf[i+num_empty] = res;
+                                            else
+                                                matrix_buf[i+num_empty] = '+';
 					}	
 				}
 			}
@@ -1837,133 +1829,130 @@ static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
 
 static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 {
-	SeqInt msi, tsi;
-	SeqIntPtr sint;
-	SeqLoc sl;
-	Int2 i, k;
-	Int2 dim;
-	Int2 m_order, t_order;	/*order of the master and the target sequence*/
-	Int4 index;
-	Int4 j, val, t_val;
-	Uint1 m_res, t_res;
-	SeqIdPtr sip;
-	SeqPortPtr m_spp, t_spp;
+    SeqInt msi, tsi;
+    SeqIntPtr sint;
+    SeqLoc sl;
+    Int2 i, k;
+    Int2 dim;
+    Int2 m_order, t_order;	/*order of the master and the target sequence*/
+    Int4 index;
+    Int4 j, val, t_val;
+    Uint1 m_res, t_res, stdaa_res;
+    SeqIdPtr sip;
+    SeqPortPtr m_spp, t_spp;
+    SeqMapTablePtr smtp;
+    
+    
+    if(dsp == NULL || asp == NULL)
+        return FALSE;
+    
+    if(asp->posMatrix != NULL) { 
+        if((smtp = SeqMapTableFindObj(Seq_code_ncbistdaa, 
+                                      Seq_code_ncbieaa)) == NULL)
+            return FALSE;
+    }
+    
+    m_order = -1;
+    t_order = -1;
+    dim = 0;
+    for(i = 0, sip = dsp->ids; sip != NULL; sip = sip->next, ++i) {
+        if(SeqIdMatch(sip, asp->master_sip) && m_order == -1)
+            m_order = i;
+        else if(SeqIdMatch(sip, asp->target_sip) && t_order == -1)
+            t_order = i;
+        ++dim;
+    }
+    
+    if(m_order == -1 || t_order == -1)
+        return FALSE;
+    
+    msi.id = asp->master_sip;
+    msi.from = -1;
+    msi.to = -1;
+    msi.strand = (dsp->strands == NULL) ? 0 : dsp->strands[m_order];
+    
+    tsi.id = asp->target_sip;
+    tsi.from = -1;
+    tsi.to = -1;
+    tsi.strand = (dsp->strands == NULL) ? 0 : dsp->strands[t_order];
+    
+    for(i = 0; i<dsp->numseg; ++i) {
+        for(k = 0; k<dim; ++k) {
+            val = dsp->starts[i*dim + k];
+            if(val != -1 && (k == m_order || k == t_order)) {
+                sint = (k == m_order) ? (&msi) : (&tsi);
+                if(sint->from == -1 || sint->from > val)
+                    sint->from = val;
+                if(sint->to == -1 || sint->to < (val + dsp->lens[i] -1))
+                    sint->to = val + dsp->lens[i] -1;
+            }
+        }
+    }
+    
+    if (asp->is_aa) {
+        asp->m_strand = Seq_strand_unknown;
+        asp->t_strand = Seq_strand_unknown;
+    } else {
+        asp->m_strand = dsp->strands[m_order];
+        asp->t_strand = dsp->strands[t_order];
+    }
+    asp->m_frame_set = FALSE;
+    asp->t_frame_set = FALSE;
+    
+    sl.choice = SEQLOC_INT;
+    sl.data.ptrvalue = &msi;
+    m_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
+    
+    sl.choice = SEQLOC_INT;
+    sl.data.ptrvalue = &tsi;
+    t_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
+    
+    for(i = 0; i<dsp->numseg; ++i) {
+        val = dsp->starts[i*dim + m_order];
+        t_val = dsp->starts[i*dim + t_order];
+        if(val == -1 || t_val == -1) {
+            asp->gaps += dsp->lens[i];
+            if(val != -1) {
+                index = dsp->lens[i];
+                while (index > 0) {
+                    index--;
+                    m_res = SeqPortGetResidue(m_spp);
+                }
+            }
+            if(t_val != -1) {
+                index = dsp->lens[i];
+                while (index > 0) {
+                    index--;
+                    t_res = SeqPortGetResidue(t_spp);
+                }
+            }
+        } else {
+            for(j = 0; j<dsp->lens[i]; ++j) {
+                m_res = SeqPortGetResidue(m_spp);
+                t_res = SeqPortGetResidue(t_spp);
+                if(m_res == t_res)
+                    ++(asp->identical);
+                else if(asp->matrix != NULL && asp->is_aa) {
+                    if (IS_residue(m_res) && IS_residue(t_res)) {
 
-
-	if(dsp == NULL || asp == NULL)
-		return FALSE;
-	m_order = -1;
-	t_order = -1;
-	dim = 0;
-	for(i = 0, sip = dsp->ids; sip != NULL; sip = sip->next, ++i)
-	{
-		if(SeqIdMatch(sip, asp->master_sip) && m_order == -1)
-			m_order = i;
-		else if(SeqIdMatch(sip, asp->target_sip) && t_order == -1)
-			t_order = i;
-		++dim;
-	}
-
-	if(m_order == -1 || t_order == -1)
-		return FALSE;
-
-	msi.id = asp->master_sip;
-	msi.from = -1;
-	msi.to = -1;
-	msi.strand = (dsp->strands == NULL) ? 0 : dsp->strands[m_order];
-	
-	tsi.id = asp->target_sip;
-	tsi.from = -1;
-	tsi.to = -1;
-	tsi.strand = (dsp->strands == NULL) ? 0 : dsp->strands[t_order];
-
-	for(i = 0; i<dsp->numseg; ++i)
-	{
-		for(k = 0; k<dim; ++k)
-		{
-			val = dsp->starts[i*dim + k];
-			if(val != -1 && (k == m_order || k == t_order))
-			{
-				sint = (k == m_order) ? (&msi) : (&tsi);
-				if(sint->from == -1 || sint->from > val)
-					sint->from = val;
-				if(sint->to == -1 || sint->to < (val + dsp->lens[i] -1))
-					sint->to = val + dsp->lens[i] -1;
-			}
-		}
-	}
-
-	if (asp->is_aa)
-	{
-		asp->m_strand = Seq_strand_unknown;
-		asp->t_strand = Seq_strand_unknown;
-	}
-	else
-	{
-		asp->m_strand = dsp->strands[m_order];
-		asp->t_strand = dsp->strands[t_order];
-	}
-	asp->m_frame_set = FALSE;
-	asp->t_frame_set = FALSE;
-
-	sl.choice = SEQLOC_INT;
-	sl.data.ptrvalue = &msi;
-	m_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-
-	sl.choice = SEQLOC_INT;
-	sl.data.ptrvalue = &tsi;
-	t_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-
-	for(i = 0; i<dsp->numseg; ++i)
-	{
-		val = dsp->starts[i*dim + m_order];
-		t_val = dsp->starts[i*dim + t_order];
-		if(val == -1 || t_val == -1)
-		{
-			asp->gaps += dsp->lens[i];
-			if(val != -1)
-			{
-				index = dsp->lens[i];
-				while (index > 0)
-				{
-					index--;
-					m_res = SeqPortGetResidue(m_spp);
-				}
-			}
-			if(t_val != -1)
-			{
-				index = dsp->lens[i];
-				while (index > 0)
-				{
-					index--;
-					t_res = SeqPortGetResidue(t_spp);
-				}
-			}
-		}
-		else
-		{
-			for(j = 0; j<dsp->lens[i]; ++j)
-			{
-				m_res = SeqPortGetResidue(m_spp);
-				t_res = SeqPortGetResidue(t_spp);
-				if(m_res == t_res)
-					++(asp->identical);
-				else if(asp->matrix != NULL && asp->is_aa)
-				{
-					if (IS_residue(m_res) && IS_residue(t_res))
-					{
-						if(asp->matrix[m_res][t_res] >0)
-							++(asp->positive);
-					}
-				}
-			}
-
-		}
-		asp->totlen += dsp->lens[i];
-	}
-	SeqPortFree(m_spp);
-	SeqPortFree(t_spp);
-	return TRUE;
+                        if(asp->posMatrix != NULL) {
+                            stdaa_res = SeqMapTableConvert(smtp, t_res);
+                            if(asp->posMatrix[val+j][stdaa_res] > 0)
+                                ++(asp->positive);
+                        } else {
+                            if(asp->matrix[m_res][t_res] >0)
+                                ++(asp->positive);
+                        }
+                    }
+                }
+            }
+            
+        }
+        asp->totlen += dsp->lens[i];
+    }
+    SeqPortFree(m_spp);
+    SeqPortFree(t_spp);
+    return TRUE;
 }
 
 /*
@@ -2745,517 +2734,451 @@ get_seq_id(SeqAlignPtr sap, Int2 index)
 *	return TRUE for success, FALSE for fail
 *
 ************************************************************************/
-NLM_EXTERN Boolean ShowAlignNodeText(ValNodePtr anp_list, Int2 num_node, Int4 line_len, 
-						  FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, 
-						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
+NLM_EXTERN Boolean ShowAlignNodeText(ValNodePtr anp_list, Int2 num_node, Int4 line_len, FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
 {
-	return ShowAlignNodeText2(anp_list, num_node, line_len, fp, left, right,
-		option, matrix, fmt_score_func, NULL, NULL);
+    return ShowAlignNodeText2(anp_list, num_node, line_len, fp, left, right,
+                              option, matrix, fmt_score_func, NULL, NULL, NULL);
 }
 
-NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 line_len, 
-						  FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, 
-						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
-						  CharPtr db_name, CharPtr blast_type)
+NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 line_len, FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)), CharPtr db_name, CharPtr blast_type, Int4Ptr PNTR posMatrix)
 {
+    CharPtr bar, sep_bar;
+    CharPtr num_str;
+    Int4 i, j;
+    Int4 num;
+    
+    Int4 c_start, c_stop;
+    CharPtr m_buf, cm_buf;		/*text for the master sequence*/
+    BioseqPtr m_bsp;
+    Int4 m_len;			/*length of the master sequence*/
+    
+    ValNodePtr list;	/*list of DrawText*/
+    AlignNodePtr anp, master_anp;
+    Int4Ptr p_stop;
+    Boolean is_end, strip_semicolon=TRUE;
+    CharPtr docbuf, master_docbuf;
+    Uint1 all_frame[6];
+    SeqFeatPtr fake_cds;
+    Int1 frame;
+    Uint1 align_type;
+    ValNodePtr curr;
+    ValNodePtr c_list, PNTR pc_list;
+    ValNodePtr a_list;
+    Boolean is_html;
+    Int4Ptr PNTR t_matrix;
+    Boolean compress;
+    Int4 last_pos;
+    Boolean load_last_pos;
+    ValNodePtr id_list;
+    BioseqPtr bsp;
+    SeqAlignPtr align;
+    ScorePtr sp;
+    AlignStatOption aso;
+    AlignSum as;
+    AlignSumPtr asp;
+    Boolean reverse_display;
+    Boolean has_data;
+    Boolean show_score;
+    Int4 max_label_size;
+    Int4 max_num_size;
+    Int4 empty_space;
+    Boolean show_strand;
+    Boolean has_tblastx;
+    SeqIdPtr already_linked=NULL;
+    
+    
+    if(anp_list == NULL)
+        return FALSE;
+    
+    /*for tblastx, only one Seq-annot at time*/
+    if(illegal_tblastx_anp (anp_list, &has_tblastx))
+        return FALSE;
+    
+    /*for alignment that is not a same-molecule, needs to have a master*/
+    master_anp = get_master_align_node(anp_list);
+    if(master_anp == NULL) {
+        Message(MSG_ERROR, "Fail to the master AlignNode");
+        return FALSE;
+    }
+    is_html = (Boolean)(option & TXALIGN_HTML);
+    load_last_pos = (Boolean)(option & TXALIGN_END_NUM);
+    
+    
+    /* for hard line old blast user only!!!!! */
+    if(option & TXALIGN_SHOW_QS)
+        convert_label_to_query_subject (anp_list);
+    else if(option & TXALIGN_SHOW_GI)
+        convert_label_to_gi(anp_list);
+    
+    compress = (Boolean)(option & TXALIGN_COMPRESS);
+    if(compress)
+        max_num_size = get_max_coordinates_len (anp_list, &max_label_size);
+    else {
+        max_num_size = POS_SPACE;
+        max_label_size = B_SPACE;
+    }
 
-	CharPtr bar, sep_bar;
-	CharPtr num_str;
-	Int4 i, j;
-	Int4 num;
+    /* for display of the traditional regular blastX output */
+    reverse_display = FALSE;
+    if(option & TXALIGN_BLASTX_SPECIAL) {
+        reverse_display = reverse_blastx_order (anp_list);
+        if(reverse_display)
+            change_blastx_master(anp_list, &master_anp);
+    } 
+    
+    if(has_tblastx)
+        modify_tblastx_value (anp_list, 3, TRUE);
+    if(left == -1)
+        left = master_anp->extremes.left;
+    if(right == -1)
+        right = master_anp->extremes.right;
+    if(left > master_anp->extremes.right || right < master_anp->extremes.left) {
+        if(reverse_display)
+            revert_blastx_alignment (anp_list, master_anp);
+        return FALSE;
+    }
+    
+    /*check for the molecule type of not-normal DNA-protein alignment*/
+    fake_cds = NULL;
+    frame = 0;
+    m_bsp = BioseqLockById(master_anp->sip);
+    if(m_bsp == NULL) {
+        if(reverse_display)
+            revert_blastx_alignment (anp_list, master_anp);
+        return FALSE;
+    }
+    
+    if(m_bsp->mol!= Seq_mol_aa) { /*a nucleotide sequence*/
+        m_len = m_bsp->length;
+        fake_cds = make_fake_cds(m_bsp, 0, m_bsp->length-1, Seq_strand_plus);
+        load_master_translate_frame(anp_list, m_len, m_bsp);
+    }
+    
+    
+    ObjMgrSetHold();
+    left = MAX(left, master_anp->extremes.left);
+    right = MIN(right, master_anp->extremes.right);
+    
+    
+    for(curr=anp_list, i=0; curr!=NULL; curr= curr->next) {	/*initiate the position*/
+	
+        if(curr->choice != OBJ_SEQANNOT) {
+            anp = (AlignNodePtr) curr->data.ptrvalue;
+            anp->align_num = i;
+            ++i;
+        }
+    }
+    p_stop = (Int4Ptr) MemNew((size_t)(i) * sizeof(Int4));
+    for(j=0; j<i; ++j)
+        p_stop[j] = -1;
+    if(compress) {
+        empty_space = max_num_size + 1 + max_label_size + 1;
+        if(option & TXALIGN_SHOW_STRAND) {
+            empty_space += STRAND_SPACE;
+            show_strand = TRUE;
+        } else
+            show_strand = FALSE;
+    } else {
+        empty_space = get_num_empty_space(compress);
+        show_strand = TRUE;
+    }
+    
+    make_scale_bar_str(&bar, &num_str, compress? empty_space : empty_space+1, line_len);
+    num = line_len + empty_space;
+    sep_bar = (CharPtr) MemGet((size_t)(num+1)*sizeof(Char), MGET_ERRPOST);
+    MemSet((Pointer)sep_bar, '-',(size_t)num* sizeof(Char));
+    sep_bar[num] = '\0';
+    
+    if(is_html)
+        fprintf(fp, "<PRE>\n");
+    c_start = left;
+    
+    /*format the summary for the score */
+    if(fmt_score_func != NULL) {
+        aso.indent_len = (Int2)empty_space;
+        aso.line_len = (Int2)(line_len + empty_space);
+        aso.html_hot_link_relative = FALSE;
+        if (option & TXALIGN_NO_ENTREZ)
+            aso.no_entrez = TRUE;
+        else
+            aso.no_entrez = FALSE;
+        
+        if (option & TXALIGN_NO_DUMPGNL)
+            aso.no_dumpgnl = TRUE;
+        else
+            aso.no_dumpgnl = FALSE;
+        
+        if (option & TXALIGN_HTML) {
+            aso.html_hot_link = TRUE;
+            if (option & TXALIGN_HTML_RELATIVE)
+                aso.html_hot_link_relative = TRUE;
+        } else {
+            aso.html_hot_link = FALSE;
+        }
+        if (option & TXALIGN_SHOW_GI)
+            aso.show_gi = TRUE;
+        else
+            aso.show_gi = FALSE;
+        aso.fp = fp;
+        aso.buf = NULL;
+        id_list = NULL;
+        aso.segs = NULL;
+        if (blast_type == NULL) {
+            aso.blast_type = StringSave("UNFIN_GEN");
+        } else {
+            aso.blast_type = StringSave(blast_type);
+            StringUpper(aso.blast_type);
+        }
+        for(curr = anp_list; curr != NULL; curr = curr->next) {
+            if(curr->choice != OBJ_SEQANNOT) {
+                anp = (AlignNodePtr) curr->data.ptrvalue;
+                show_score = FALSE;
+                if((reverse_display && anp == master_anp) || (!reverse_display && anp != master_anp)) {
+                    if(!check_bsp_id(&id_list, anp->sip))
+                        show_score = TRUE;
+                }
+                if(show_score) {
+                    /*the first time it sees the Bioseq*/
+                    bsp = BioseqLockById(anp->sip);
+                    align = NULL;
+                    GatherItem(anp->entityID, anp->itemID, (Uint2)(curr->choice), (Pointer)(&align), find_align_proc);
+                    if(align != NULL) {
+                        if(align->segtype == 1 || align->segtype == 2 || align->segtype == 3 || align->segtype == 5) {
+                            as.matrix = matrix;
+                            as.posMatrix = posMatrix;
+                            as.master_sip = master_anp->sip;
+                            as.target_sip = anp->sip;
+                            as.is_aa = (m_bsp->mol == Seq_mol_aa);
+                            asp = &as;
+                        } else
+                            asp = NULL;
+                        sp = find_score_in_align(align, anp->chain, asp);
+                        if(sp != NULL) {
+                            aso.follower = anp->follower;
+                            aso.bsp = bsp;
+                            aso.sp = sp;
+                            aso.db_name = db_name;
+                            if(asp != NULL) {
+                                aso.gaps = asp->gaps;
+                                aso.positive = asp->positive;
+                                aso.identical = asp->identical;
+                                aso.align_len = asp->totlen;
+                                if (asp->m_frame_set) {
+                                    if (asp->m_strand == Seq_strand_minus)
+                                        aso.m_frame = asp->m_frame;
+                                    else
+                                        aso.m_frame = 1+(asp->m_frame)%3;
+                                } else {
+                                    aso.m_frame = 255;
+                                }
+                                if (asp->t_frame_set) {
+                                    if (asp->t_strand == Seq_strand_minus)
+                                        aso.t_frame = asp->t_frame;
+                                    else
+                                        aso.t_frame = 1+(asp->t_frame)%3;
+                                } else {
+                                    aso.t_frame = 255;
+                                }
+                                aso.m_strand = asp->m_strand;
+                                aso.t_strand = asp->t_strand;
+                            } else {
+                                aso.align_len = 0;
+                            }
 
-	Int4 c_start, c_stop;
-	CharPtr m_buf, cm_buf;		/*text for the master sequence*/
-	BioseqPtr m_bsp;
-	Int4 m_len;			/*length of the master sequence*/
+                            {{
+                                SeqAlignPtr sap;
+                                size_t size = 0;
+                                size_t used = 0;
+                                
+                                aso.segs = NULL;
+                                for (sap = align; sap != NULL; sap = sap->next) {
+                                    if (SeqIdMatch(TxGetSubjectIdFromSeqAlign(align), TxGetSubjectIdFromSeqAlign(sap))) {
+                                        if (aso.segs != NULL) {
+                                            StringAppend(&aso.segs, &size, ",", &used);
+                                        }
+                                        SeqAlignSegsStr(sap, 1, &aso.segs, &size, &used);
+                                    } else
+                                        break;
+                                }
+                                if (aso.segs == NULL) {
+                                    /**
+                                     * Something is really wrong if we're here
+                                     */
+                                    aso.segs = StringSave("");
+                                }
+                            }}
+                            fmt_score_func(&aso);
+                        }
+                        aso.segs = (CharPtr) MemFree(aso.segs);
+                    }
+                    if(bsp != NULL)
+                        BioseqUnlock(bsp);
+                }
+            }
+        }
+        aso.blast_type = (CharPtr) MemFree(aso.blast_type);
+        ValNodeFree(id_list);
+    }
+    
+    pc_list = (ValNodePtr *) MemNew((size_t)(ALIGN_MAX_TYPE +1) * sizeof(ValNodePtr));
+    has_data = FALSE;
 
-	ValNodePtr list;	/*list of DrawText*/
-	AlignNodePtr anp, master_anp;
-	Int4Ptr p_stop;
-	Boolean is_end, strip_semicolon=TRUE;
-	CharPtr docbuf, master_docbuf;
-	Uint1 all_frame[6];
-	SeqFeatPtr fake_cds;
-	Int1 frame;
-	Uint1 align_type;
-	ValNodePtr curr;
-	ValNodePtr c_list, PNTR pc_list;
-	ValNodePtr a_list;
-	Boolean is_html;
-	Int4Ptr PNTR t_matrix;
-	Boolean compress;
-	Int4 last_pos;
-	Boolean load_last_pos;
-	ValNodePtr id_list;
-	BioseqPtr bsp;
-	SeqAlignPtr align;
-	ScorePtr sp;
-	AlignStatOption aso;
-	AlignSum as;
-	AlignSumPtr asp;
-	Boolean reverse_display;
-	Boolean has_data;
-	Boolean show_score;
-	Int4 max_label_size;
-	Int4 max_num_size;
-	Int4 empty_space;
-	Boolean show_strand;
-	Boolean has_tblastx;
-	SeqIdPtr already_linked=NULL;
-
-
-	if(anp_list == NULL)
-		return FALSE;
-
-	/*for tblastx, only one Seq-annot at time*/
-	if(illegal_tblastx_anp (anp_list, &has_tblastx))
-		return FALSE;
-
-	/*for alignment that is not a same-molecule, needs to have a master*/
-	master_anp = get_master_align_node(anp_list);
-	if(master_anp == NULL)
-	{
-		Message(MSG_ERROR, "Fail to the master AlignNode");
-		return FALSE;
+    for(i = 0; i<=ALIGN_MAX_TYPE; ++i) {
+        pc_list[i]= get_anp_list_for_aligntype(anp_list, (Uint1)i, left, right);
+        if(pc_list[i] != NULL)
+            has_data = TRUE;
+    }
+    
+    if(option & TXALIGN_SHOW_QS) {
+        is_html = FALSE;
+        strip_semicolon = FALSE;
+    }
+    master_docbuf = NULL;
+    if(has_data) {
+	while(c_start <= right)	{ /*process line by line*/
+            
+            c_stop = MIN(right, (c_start+line_len -1));
+            m_buf = NULL;
+            is_end = FALSE;
+            docbuf = NULL;
+            
+            /*process the master sequence*/
+            if(has_tblastx)
+                list = ProcessTextAlignNode(master_anp, c_start, c_stop, &(p_stop[master_anp->align_num]), NULL, line_len, -1, option, matrix);
+            else
+                list = ProcessTextAlignNode(master_anp, c_start, c_stop, &(p_stop[master_anp->align_num]), NULL, line_len, 0, option, NULL);
+            if(list != NULL) {
+                if(option & TXALIGN_SHOW_RULER) {
+                    fprintf(fp, "%s\n", num_str);	/*show scale*/
+                    fprintf(fp, "%s\n", bar);
+                }
+                last_pos = load_last_pos ? p_stop[master_anp->align_num] : -1;
+                docbuf = DrawTextToBuffer(list, &m_buf, is_html, max_label_size, max_num_size, compress, matrix, last_pos, line_len, show_strand, strip_semicolon, &already_linked);
+                if(docbuf !=NULL) {
+                    if(reverse_display)
+                        master_docbuf = docbuf;
+                    else {
+                        fprintf(fp, "%s", docbuf);
+                        MemFree(docbuf);
+                    }
+                }
+                list = FreeTextAlignList(list);
+            }
+            
+            for(align_type = 0; align_type <= ALIGN_MAX_TYPE; ++align_type) {
+                c_list = pc_list[align_type];
+                if(c_list != NULL) {
+                    if(align_type == ALIGN_DNA_TO_PROT) {
+                        /*process the hit protein sequence*/
+                        if(get_current_master_frame(c_list, c_start, c_stop, all_frame)) {
+                            list = NULL;
+                            for(j = 0; j<6; ++j) {
+                                frame = all_frame[j];
+                                if(frame > 0) {
+                                    /*translate the master sequence in the specified frame*/
+                                    cm_buf = translate_faked_cds(fake_cds, frame, c_start, c_stop, m_len, master_anp); 
+                                    list = load_fake_protein_buf(cm_buf, frame, master_anp);
+                                    docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, matrix, -1, line_len, show_strand, strip_semicolon, &already_linked);
+                                    if(docbuf != NULL) {
+                                        modify_separation_bar(sep_bar, num, frame);
+                                        fprintf(fp, "%s\n", sep_bar);
+                                        fprintf(fp, "%s", docbuf);
+                                        MemFree(docbuf);
+                                    }
+                                    FreeTextAlignList(list);
+                                    
+                                    for(curr = c_list; curr != NULL; curr = curr->next) {
+                                        a_list = (ValNodePtr) curr->data.ptrvalue;
+                                        anp = (AlignNodePtr) a_list->data.ptrvalue;
+                                        if(anp != master_anp) {
+                                            list = ProcessTextAlignNode(anp, c_start, c_stop, &(p_stop[anp->align_num]), cm_buf, line_len, frame, option, matrix);
+                                            if(list != NULL) {
+                                                docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, matrix, -1, line_len, show_strand, strip_semicolon, &already_linked);
+                                                if(docbuf != NULL) {
+                                                    fprintf(fp, "%s", docbuf);
+                                                    MemFree(docbuf);
+                                                }
+                                                FreeTextAlignList(list);
+                                            }
+                                        }
+                                    }
+                                    MemFree(cm_buf);
+                                } /*end of frame > 0 */
+                            }
+                        }
+                    } else {
+                        if(align_type == ALIGN_PROT_TO_DNA || align_type == ALIGN_TDNA_TO_TDNA)
+                            frame = -1;
+                        else
+                            frame = 0;
+                        if(frame == 0 && m_bsp->mol != Seq_mol_aa)
+                            t_matrix = NULL;
+                        else
+                            t_matrix = matrix;
+                        is_end = FALSE;
+                        for(curr = c_list; curr !=NULL; curr = curr->next) {
+                            a_list = (ValNodePtr) curr->data.ptrvalue;
+                            anp = (AlignNodePtr) a_list->data.ptrvalue;
+                            if(anp != master_anp) {
+                                /*generate the DrawText buffer*/
+                                if(align_type == ALIGN_NORMAL && m_bsp->mol != Seq_mol_aa)
+                                    /*DNA alignment */
+                                    list = ProcessTextAlignNode(anp, c_start, c_stop, &(p_stop[anp->align_num]), m_buf, line_len, frame, option, NULL);
+                                else
+                                    list = ProcessTextAlignNode2(anp, c_start, c_stop, &(p_stop[anp->align_num]), m_buf, line_len, frame, option, t_matrix, posMatrix, master_anp->seqpos);
+                                
+                                last_pos = load_last_pos ? p_stop[anp->align_num] : -1;
+                                if(list != NULL) {
+                                    /*DrawTextList(list, fp);*/
+                                    docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, t_matrix, last_pos, line_len, show_strand, strip_semicolon, &already_linked);
+                                    if(docbuf !=NULL) {
+                                        if(reverse_display) {
+                                            reverse_print(fp, docbuf);
+                                            fprintf(fp, "%s", master_docbuf);
+                                            MemFree(master_docbuf);
+                                        } else
+                                            fprintf(fp, "%s", docbuf);
+                                        MemFree(docbuf);
+                                    }
+                                    list = FreeTextAlignList(list);
+                                }
+                            }
+                        }
+                    }	/*end of else*/
+                }
+            }
+            
+            if(m_buf != NULL)
+                MemFree(m_buf);
+            if(c_stop < right)
+                fprintf(fp, "\n"); 
+            c_start = c_stop+1;
 	}
-	is_html = (Boolean)(option & TXALIGN_HTML);
-	load_last_pos = (Boolean)(option & TXALIGN_END_NUM);
-		
-
-	/* for hard line old blast user only!!!!! */
-	if(option & TXALIGN_SHOW_QS)
-		convert_label_to_query_subject (anp_list);
-	else if(option & TXALIGN_SHOW_GI)
-		convert_label_to_gi(anp_list);
-
-
-	compress = (Boolean)(option & TXALIGN_COMPRESS);
-	if(compress)
-		max_num_size = get_max_coordinates_len (anp_list, &max_label_size);
-	else
-	{
-		max_num_size = POS_SPACE;
-		max_label_size = B_SPACE;
-	}
-
-
-	/* for display of the traditional regular blastX output */
-	reverse_display = FALSE;
-	if(option & TXALIGN_BLASTX_SPECIAL)
-	{
-		reverse_display = reverse_blastx_order (anp_list);
-		if(reverse_display)
-			change_blastx_master(anp_list, &master_anp);
-	} 
-			
-	if(has_tblastx)
-		modify_tblastx_value (anp_list, 3, TRUE);
-	if(left == -1)
-		left = master_anp->extremes.left;
-	if(right == -1)
-		right = master_anp->extremes.right;
-	if(left > master_anp->extremes.right || right < master_anp->extremes.left)
-	{
-		if(reverse_display)
-			revert_blastx_alignment (anp_list, master_anp);
-		return FALSE;
-	}
-
-	/*check for the molecule type of not-normal DNA-protein alignment*/
-	fake_cds = NULL;
-	frame = 0;
-	m_bsp = BioseqLockById(master_anp->sip);
-	if(m_bsp == NULL)
-	{
-		if(reverse_display)
-			revert_blastx_alignment (anp_list, master_anp);
-		return FALSE;
-	}
-
-	if(m_bsp->mol!= Seq_mol_aa) /*a nucleotide sequence*/
-	{
-		m_len = m_bsp->length;
-		fake_cds = make_fake_cds(m_bsp, 0, m_bsp->length-1, Seq_strand_plus);
-		load_master_translate_frame(anp_list, m_len, m_bsp);
-	}
-
-
-	ObjMgrSetHold();
-	left = MAX(left, master_anp->extremes.left);
-	right = MIN(right, master_anp->extremes.right);
-
-
-	for(curr=anp_list, i=0; curr!=NULL; curr= curr->next)	/*initiate the position*/
-	{
-		if(curr->choice != OBJ_SEQANNOT)
-		{
-			anp = (AlignNodePtr) curr->data.ptrvalue;
-			anp->align_num = i;
-			++i;
-		}
-	}
-	p_stop = (Int4Ptr) MemNew((size_t)(i) * sizeof(Int4));
-	for(j=0; j<i; ++j)
-		p_stop[j] = -1;
-	if(compress)
-	{
-		empty_space = max_num_size + 1 + max_label_size + 1;
-		if(option & TXALIGN_SHOW_STRAND)
-		{
-			empty_space += STRAND_SPACE;
-			show_strand = TRUE;
-		}
-		else
-			show_strand = FALSE;
-	}
-	else
-	{
-		empty_space = get_num_empty_space(compress);
-		show_strand = TRUE;
-	}
-
-	make_scale_bar_str(&bar, &num_str, compress? empty_space : empty_space+1, line_len);
-	num = line_len + empty_space;
-	sep_bar = (CharPtr) MemGet((size_t)(num+1)*sizeof(Char), MGET_ERRPOST);
-	MemSet((Pointer)sep_bar, '-',(size_t)num* sizeof(Char));
-	sep_bar[num] = '\0';
-
-	if(is_html)
-		fprintf(fp, "<PRE>\n");
-	c_start = left;
-
-	/*format the summary for the score */
-	if(fmt_score_func != NULL)
-	{
-		aso.indent_len = (Int2)empty_space;
-		aso.line_len = (Int2)(line_len + empty_space);
-		aso.html_hot_link_relative = FALSE;
-		if (option & TXALIGN_NO_ENTREZ)
-			aso.no_entrez = TRUE;
-		else
-			aso.no_entrez = FALSE;
-
-		if (option & TXALIGN_NO_DUMPGNL)
-			aso.no_dumpgnl = TRUE;
-		else
-			aso.no_dumpgnl = FALSE;
-
-		if (option & TXALIGN_HTML)
-		{
-			aso.html_hot_link = TRUE;
-			if (option & TXALIGN_HTML_RELATIVE)
-				aso.html_hot_link_relative = TRUE;
-		}
-		else
-		{
-			aso.html_hot_link = FALSE;
-		}
-		if (option & TXALIGN_SHOW_GI)
-			aso.show_gi = TRUE;
-		else
-			aso.show_gi = FALSE;
-		aso.fp = fp;
-		aso.buf = NULL;
-		id_list = NULL;
-		aso.segs = NULL;
-		if (blast_type == NULL) {
-			aso.blast_type = StringSave("UNFIN_GEN");
-		}
-		else {
-			aso.blast_type = StringSave(blast_type);
-			StringUpper(aso.blast_type);
-		}
-		for(curr = anp_list; curr != NULL; curr = curr->next)
-		{
-			if(curr->choice != OBJ_SEQANNOT)
-			{
-				anp = (AlignNodePtr) curr->data.ptrvalue;
-				show_score = FALSE;
-				if((reverse_display && anp == master_anp) || (!reverse_display && anp != master_anp))
-				{
-					if(!check_bsp_id(&id_list, anp->sip))
-						show_score = TRUE;
-				}
-				if(show_score)
-				{
-					/*the first time it sees the Bioseq*/
-					bsp = BioseqLockById(anp->sip);
-					align = NULL;
-					GatherItem(anp->entityID, anp->itemID, (Uint2)(curr->choice), (Pointer)(&align), find_align_proc);
-					if(align != NULL)
-					{
-						if(align->segtype == 1 || align->segtype == 2 || align->segtype == 3 || align->segtype == 5)
-						{
-							as.matrix = matrix;
-							as.master_sip = master_anp->sip;
-							as.target_sip = anp->sip;
-							as.is_aa = (m_bsp->mol == Seq_mol_aa);
-							asp = &as;
-						}
-						else
-							asp = NULL;
-						sp = find_score_in_align(align, anp->chain, asp);
-						if(sp != NULL)
-						{
-							aso.follower = anp->follower;
-							aso.bsp = bsp;
-							aso.sp = sp;
-							aso.db_name = db_name;
-							if(asp != NULL)
-							{
-								aso.gaps = asp->gaps;
-								aso.positive = asp->positive;
-								aso.identical = asp->identical;
-								aso.align_len = asp->totlen;
-								if (asp->m_frame_set)
-								{
-								    if (asp->m_strand == Seq_strand_minus)
-									aso.m_frame = asp->m_frame;
-								    else
-									aso.m_frame = 1+(asp->m_frame)%3;
-								}
-								else
-								{
-									aso.m_frame = 255;
-								}
-								if (asp->t_frame_set)
-								{
-								    if (asp->t_strand == Seq_strand_minus)
-									aso.t_frame = asp->t_frame;
-								    else
-									aso.t_frame = 1+(asp->t_frame)%3;
-								}
-								else
-								{
-									aso.t_frame = 255;
-								}
-								aso.m_strand = asp->m_strand;
-								aso.t_strand = asp->t_strand;
-							}
-							else {
-								aso.align_len = 0;
-							}
-							{{
-								SeqAlignPtr sap;
-								size_t size = 0;
-								size_t used = 0;
-
-								aso.segs = NULL;
-								for (sap = align; sap != NULL; sap = sap->next) {
-									if (SeqIdMatch(TxGetSubjectIdFromSeqAlign(align), TxGetSubjectIdFromSeqAlign(sap))) {
-										if (aso.segs != NULL) {
-											StringAppend(&aso.segs, &size, ",", &used);
-										}
-										SeqAlignSegsStr(sap, 1, &aso.segs, &size, &used);
-									}
-									else
-										break;
-								}
-								if (aso.segs == NULL) {
-									/**
-									 * Something is really wrong if we're here
-									 */
-									aso.segs = StringSave("");
-								}
-							}}
-							fmt_score_func(&aso);
-						}
-						aso.segs = (CharPtr) MemFree(aso.segs);
-					}
-					if(bsp != NULL)
-						BioseqUnlock(bsp);
-				}
-			}
-		}
-		aso.blast_type = (CharPtr) MemFree(aso.blast_type);
-		ValNodeFree(id_list);
-	}
-
-	pc_list = (ValNodePtr *) MemNew((size_t)(ALIGN_MAX_TYPE +1) * sizeof(ValNodePtr));
-	has_data = FALSE;
-	for(i = 0; i<=ALIGN_MAX_TYPE; ++i)
-	{
-		pc_list[i]= get_anp_list_for_aligntype(anp_list, (Uint1)i, left, right);
-		if(pc_list[i] != NULL)
-			has_data = TRUE;
-	}
-
-	if(option & TXALIGN_SHOW_QS)
-	{
-		is_html = FALSE;
-		strip_semicolon = FALSE;
-	}
-	master_docbuf = NULL;
-	if(has_data)
-	{
-	while(c_start <= right)	/*process line by line*/
-	{
-		c_stop = MIN(right, (c_start+line_len -1));
-		m_buf = NULL;
-		is_end = FALSE;
-		docbuf = NULL;
-
-		/*process the master sequence*/
-		if(has_tblastx)
-			list = ProcessTextAlignNode(master_anp, c_start, c_stop, &(p_stop[master_anp->align_num]), NULL, line_len, -1, option, matrix);
-		else
-			list = ProcessTextAlignNode(master_anp, c_start, c_stop, &(p_stop[master_anp->align_num]), NULL, line_len, 0, option, NULL);
-		if(list != NULL)
-		{
-			if(option & TXALIGN_SHOW_RULER)
-			{
-				fprintf(fp, "%s\n", num_str);	/*show scale*/
-				fprintf(fp, "%s\n", bar);
-			}
-			last_pos = load_last_pos ? p_stop[master_anp->align_num] : -1;
-			docbuf = DrawTextToBuffer(list, &m_buf, is_html, max_label_size, max_num_size, compress, matrix, last_pos, line_len, show_strand, strip_semicolon, &already_linked);
-			if(docbuf !=NULL)
-			{
-				if(reverse_display)
-					master_docbuf = docbuf;
-				else
-				{
-					fprintf(fp, "%s", docbuf);
-					MemFree(docbuf);
-				}
-			}
-			list = FreeTextAlignList(list);
-		}
-
-		for(align_type = 0; align_type <= ALIGN_MAX_TYPE; ++align_type)
-		{
-			c_list = pc_list[align_type];
-			if(c_list != NULL)
-			{
-				if(align_type == ALIGN_DNA_TO_PROT)
-				{
-					/*process the hit protein sequence*/
-					if(get_current_master_frame(c_list, c_start, c_stop, all_frame))
-					{
-						list = NULL;
-						for(j = 0; j<6; ++j)
-						{
-							frame = all_frame[j];
-							if(frame > 0)
-							{
-								/*translate the master sequence in the specified frame*/
-								cm_buf = translate_faked_cds(fake_cds, frame, c_start, c_stop, m_len, master_anp); 
-								list = load_fake_protein_buf(cm_buf, frame, master_anp);
-								docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, matrix, -1, line_len, show_strand, strip_semicolon, &already_linked);
-								if(docbuf != NULL)
-								{
-									modify_separation_bar(sep_bar, num, frame);
-									fprintf(fp, "%s\n", sep_bar);
-									fprintf(fp, "%s", docbuf);
-									MemFree(docbuf);
-								}
-								FreeTextAlignList(list);
-
-								for(curr = c_list; curr != NULL; curr = curr->next)
-								{
-									a_list = (ValNodePtr) curr->data.ptrvalue;
-									anp = (AlignNodePtr) a_list->data.ptrvalue;
-									if(anp != master_anp)
-									{
-										list = ProcessTextAlignNode(anp, c_start, c_stop, &(p_stop[anp->align_num]), cm_buf, line_len, frame, option, matrix);
-										if(list != NULL)
-										{
-	docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, matrix, -1, line_len, show_strand, strip_semicolon, &already_linked);
-											if(docbuf != NULL)
-											{
-												fprintf(fp, "%s", docbuf);
-												MemFree(docbuf);
-											}
-											FreeTextAlignList(list);
-										}
-									}
-								}
-								MemFree(cm_buf);
-							} /*end of frame > 0 */
-						}
-					}
-				}
-				else
-				{
-					if(align_type == ALIGN_PROT_TO_DNA || align_type == ALIGN_TDNA_TO_TDNA)
-						frame = -1;
-					else
-						frame = 0;
-					if(frame == 0 && m_bsp->mol != Seq_mol_aa)
-						t_matrix = NULL;
-					else
-						t_matrix = matrix;
-					is_end = FALSE;
-					for(curr = c_list; curr !=NULL; curr = curr->next)
-					{
-						a_list = (ValNodePtr) curr->data.ptrvalue;
-						anp = (AlignNodePtr) a_list->data.ptrvalue;
-						if(anp != master_anp)
-						{
-							/*generate the DrawText buffer*/
-							if(align_type == ALIGN_NORMAL && m_bsp->mol != Seq_mol_aa)
-							/*DNA alignment */
-								list = ProcessTextAlignNode(anp, c_start, c_stop, &(p_stop[anp->align_num]), m_buf, line_len, frame, option, NULL);
-							else
-								list = ProcessTextAlignNode(anp, c_start, c_stop, &(p_stop[anp->align_num]), m_buf, line_len, frame, option, t_matrix);
-
-							last_pos = load_last_pos ? p_stop[anp->align_num] : -1;
-							if(list != NULL)
-							{
-								/*DrawTextList(list, fp);*/
-								docbuf = DrawTextToBuffer(list, NULL, is_html, max_label_size, max_num_size, compress, t_matrix, last_pos, line_len, show_strand, strip_semicolon, &already_linked);
-								if(docbuf !=NULL)
-								{
-									if(reverse_display)
-									{
-										reverse_print(fp, docbuf);
-										fprintf(fp, "%s", master_docbuf);
-										MemFree(master_docbuf);
-									}
-									else
-										fprintf(fp, "%s", docbuf);
-									MemFree(docbuf);
-								}
-								list = FreeTextAlignList(list);
-							}
-						}
-					}
-				}	/*end of else*/
-			}
-		}
-
-		if(m_buf != NULL)
-			MemFree(m_buf);
-		if(c_stop < right)
-			fprintf(fp, "\n"); 
-		c_start = c_stop+1;
-	}
-	}
-	for(i = 0; i<=ALIGN_MAX_TYPE; ++i)
-	{
-		if(pc_list[i] != NULL)
-			ValNodeFree(pc_list[i]);
-	}
-	MemFree(pc_list);
-
-	if(option & TXALIGN_HTML)
-	    fprintf(fp, "</PRE>\n");
-
-	already_linked = ValNodeFree(already_linked);
-
-	if(fake_cds != NULL)
-		SeqFeatFree(fake_cds);
-	BioseqUnlock(m_bsp);
-	if(has_tblastx)
-		modify_tblastx_value (anp_list, 3, FALSE);
-	MemFree(num_str);
-	MemFree(sep_bar);
-	MemFree(bar);
-	MemFree(p_stop);
-	ObjMgrClearHold();
-	if(reverse_display)
-		revert_blastx_alignment (anp_list, master_anp);
-	return has_data;
+    }
+    for(i = 0; i<=ALIGN_MAX_TYPE; ++i) {
+        if(pc_list[i] != NULL)
+            ValNodeFree(pc_list[i]);
+    }
+    MemFree(pc_list);
+    
+    if(option & TXALIGN_HTML)
+        fprintf(fp, "</PRE>\n");
+    
+    already_linked = ValNodeFree(already_linked);
+    
+    if(fake_cds != NULL)
+        SeqFeatFree(fake_cds);
+    BioseqUnlock(m_bsp);
+    if(has_tblastx)
+        modify_tblastx_value (anp_list, 3, FALSE);
+    MemFree(num_str);
+    MemFree(sep_bar);
+    MemFree(bar);
+    MemFree(p_stop);
+    ObjMgrClearHold();
+    if(reverse_display)
+        revert_blastx_alignment (anp_list, master_anp);
+    return has_data;
 }
 				
 	
@@ -3287,195 +3210,200 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 *
 *****************************************************************************/
 
-static Boolean load_text(BioseqPtr bsp, Int4 pos1, Int4 pos2, CharPtr l_seq, 
-			Int4Ptr l_pos, CharPtr mbuf, Int2 maxlen, Int2 spacing, Boolean translate, 
-			Boolean mismatch, Int2Ptr matrix_val, Int4Ptr PNTR matrix, Uint1 strand)
+static Boolean load_text(BioseqPtr bsp, Int4 pos1, Int4 pos2, CharPtr l_seq, Int4Ptr l_pos, CharPtr mbuf, Int2 maxlen, Int2 spacing, Boolean translate, Boolean mismatch, Int2Ptr matrix_val, Int4Ptr PNTR matrix, Uint1 strand, Int4Ptr PNTR posMatrix, Int4 q_start)
 {
-	SeqPortPtr spp = NULL;
-	ByteStorePtr b_store = NULL;
-	Uint1 code;
-	Int4 start, stop;
-	Uint1 m_res, res;
-	Int2 i;
-	Int2 val;
-	Int4 length, s_len;
-	Int2 c_pos;
-	Char temp[100];
-	Boolean protein;
-	Boolean overflow;
-	Boolean reverse;
-	Boolean is_real;
-	SeqFeatPtr fake_cds;
-	Boolean check_neg;	/*if aa is negative, load it as lower case char*/
+    SeqPortPtr spp = NULL;
+    ByteStorePtr b_store = NULL;
+    Uint1 code;
+    Int4 start, stop;
+    Uint1 m_res, t_res, stdaa_res;
+    Int2 i;
+    Int2 val;
+    Int4 length, s_len;
+    Int2 c_pos;
+    Char temp[100];
+    Boolean protein;
+    Boolean overflow;
+    Boolean reverse;
+    Boolean is_real;
+    SeqFeatPtr fake_cds;
+    Boolean check_neg;	/*if aa is negative, load it as lower case char*/
+    SeqMapTablePtr smtp;
+    
+    if(*l_pos >= maxlen )
+        return FALSE;
 
-	if(*l_pos >= maxlen )
-		return FALSE;
-	protein = (bsp->mol == Seq_mol_aa);
-	reverse = FALSE;
-	if(protein)
-		code = Seq_code_ncbieaa;
-	else
-		code = Seq_code_iupacna;
-	check_neg = (matrix_val == NULL && matrix != NULL);
-	if(strand == Seq_strand_minus)	/*on the minus strand*/
-	{
-		start = -pos2;
-		stop = -pos1;
-		if(protein)
-		{
-			strand = Seq_strand_plus;
-			reverse = TRUE;
-		}
+    /* posMatrix uses NCBIstdaa encoding */
+    
+    if(posMatrix != NULL) { 
+        if((smtp = SeqMapTableFindObj(Seq_code_ncbistdaa, 
+                                      Seq_code_ncbieaa)) == NULL)
+            return FALSE;
+    }
 
-	}
-	else
-	{
-		start = pos1;
-		stop = pos2;
-	}
-	if(translate)
-	{
-		fake_cds = make_fake_cds(bsp, start, stop, strand);
-		b_store = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
-		SeqFeatFree(fake_cds);
-		if(b_store == NULL)
-			return FALSE;
-		length = (stop - start +1)/3;
-		BSSeek(b_store, 0, SEEK_SET);
-	}
-	else
-	{
-		spp = SeqPortNew(bsp, start, stop, strand, code);
-		length = stop - start +1;
-	}
-	c_pos = (Int2)(*l_pos);
-	overflow = (c_pos >= maxlen);
-	if(maxlen>0 && (length > maxlen))	/*large insertions*/
-	{
-		for(i =0; i<5 && !overflow; ++i)
-		{
-			if(translate)
-				l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
-			else
-			{
-				if(reverse)
-					SeqPortSeek(spp, length-1 -i, SEEK_SET);
-				l_seq[c_pos++] = SeqPortGetResidue(spp);
-			}
-			overflow = (c_pos >= maxlen);
-		}
-		for(i =0; i<3 && !overflow; ++i)
-		{
-			l_seq[c_pos++] = '.';
-			overflow = (c_pos >= maxlen);
-		}
-		if(!overflow)
-		{
-			if(translate)
-				BSSeek(b_store, length-1, SEEK_SET);
-			else if(!reverse)
-				SeqPortSeek(spp, length-5, SEEK_SET);
-			for(i =0; i<5 && !overflow; ++i)
-			{
-				if(translate)
-					l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
-				else
-				{
-					if(reverse)
-						SeqPortSeek(spp, 4-i, SEEK_SET);
-					l_seq[c_pos++] = SeqPortGetResidue(spp);
-				}
-				overflow = (c_pos >= maxlen);
-			}
-		}
-		if(overflow)
-			l_seq[maxlen-1] = '\0';
-		else
-			l_seq[c_pos] = '\0';
-		sprintf(temp, "(length=%ld)", (long) length);
-		s_len = StringLen(temp);
-		StringCat(l_seq, temp);
-		*l_pos = c_pos+s_len;
-	}
-	else
-	{
-		if(translate)
-		{
-			while((val = BSGetByte(b_store)) != EOF) 
-			{
-				res = (Uint1)val;
-				l_seq[c_pos]= res;
-				if(mbuf != NULL)
-				{
-					m_res = mbuf[c_pos];
-					if(matrix_val && matrix)
-						matrix_val[c_pos] = (Int2)matrix[m_res][res];
-					if(mismatch && res == m_res)
-						l_seq[c_pos] = '.';
-					else if(check_neg && matrix[res][m_res] < 0)
-						l_seq[c_pos] = TO_LOWER(res);
-				}
-				c_pos += spacing;
-				if(c_pos >= maxlen)
-				{
-					c_pos = maxlen;
-					break;
-				}
-			}
-		}
-		else
-		{
-			if(reverse)
-				SeqPortSeek(spp, length-1, SEEK_SET);
-			s_len = 0;
-			while((res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
-			{
-				is_real = IS_ALPHA(res);
-				if(is_real || res == '*' || res == '-')
-				{
-					if(is_real && !protein)
-						res = TO_LOWER(res);
-					l_seq[c_pos] = res;
-					if(mbuf != NULL)
-					{
-						m_res = mbuf[c_pos];
-						if(matrix_val)
-						{
-							if(matrix)
-								matrix_val[c_pos] = (Int2)matrix[m_res][res];
-							else if(res == m_res)
-								matrix_val[c_pos] = '|';
-						}
-						if(mismatch && res == m_res)
-							l_seq[c_pos] = '.';
-						else if(check_neg && matrix[res][m_res] < 0)
-							l_seq[c_pos] = TO_LOWER(res);
-					}
-					c_pos += spacing;
-					if(c_pos >= maxlen)
-					{
-						c_pos = maxlen;
-						break;
-					}
-					++s_len;
-				}
-				if(reverse)
-				{
-					if(s_len == length)
-						break;
-					else
-						SeqPortSeek(spp, length -1 - s_len, SEEK_SET);
-				}
-			}
-		}
-		*l_pos = c_pos;
-	}
+    protein = (bsp->mol == Seq_mol_aa);
+    reverse = FALSE;
+    if(protein)
+        code = Seq_code_ncbieaa;
+    else
+        code = Seq_code_iupacna;
+    check_neg = (matrix_val == NULL && matrix != NULL);
+    if(strand == Seq_strand_minus) {	/*on the minus strand*/
+        start = -pos2;
+        stop = -pos1;
+        if(protein) {
+            strand = Seq_strand_plus;
+            reverse = TRUE;
+        }
+        
+    } else {
+        start = pos1;
+        stop = pos2;
+    }
+    if(translate) {
+        fake_cds = make_fake_cds(bsp, start, stop, strand);
+        b_store = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
+        SeqFeatFree(fake_cds);
+        if(b_store == NULL)
+            return FALSE;
+        length = (stop - start +1)/3;
+        BSSeek(b_store, 0, SEEK_SET);
+    } else {
+        spp = SeqPortNew(bsp, start, stop, strand, code);
+        length = stop - start +1;
+    }
+    c_pos = (Int2)(*l_pos);
+    overflow = (c_pos >= maxlen);
+    if(maxlen>0 && (length > maxlen)) {	/*large insertions*/
+	
+        for(i =0; i<5 && !overflow; ++i) {
+            if(translate)
+                l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
+            else {
+                if(reverse)
+                    SeqPortSeek(spp, length-1 -i, SEEK_SET);
+                l_seq[c_pos++] = SeqPortGetResidue(spp);
+            }
+            overflow = (c_pos >= maxlen);
+        }
+        for(i =0; i<3 && !overflow; ++i) {
+            l_seq[c_pos++] = '.';
+            overflow = (c_pos >= maxlen);
+        }
+        if(!overflow) {
+            if(translate)
+                BSSeek(b_store, length-1, SEEK_SET);
+            else if(!reverse)
+                SeqPortSeek(spp, length-5, SEEK_SET);
+            for(i =0; i<5 && !overflow; ++i) {
+                if(translate)
+                    l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
+                else {
+                    if(reverse)
+                        SeqPortSeek(spp, 4-i, SEEK_SET);
+                    l_seq[c_pos++] = SeqPortGetResidue(spp);
+                }
+                overflow = (c_pos >= maxlen);
+            }
+        }
+        if(overflow)
+            l_seq[maxlen-1] = '\0';
+        else
+            l_seq[c_pos] = '\0';
+        sprintf(temp, "(length=%ld)", (long) length);
+        s_len = StringLen(temp);
+        StringCat(l_seq, temp);
+        *l_pos = c_pos+s_len;
+    } else {
+        if(translate) {
+            while((val = BSGetByte(b_store)) != EOF) {
+                t_res = (Uint1)val;
+                l_seq[c_pos]= t_res;
+                if(mbuf != NULL) {
+                    m_res = mbuf[c_pos];
+                    if(matrix_val && matrix)
+                        matrix_val[c_pos] = (Int2)matrix[m_res][t_res];
+                    if(mismatch && t_res == m_res)
+                        l_seq[c_pos] = '.';
+                    else if(check_neg && matrix[t_res][m_res] < 0)
+                        l_seq[c_pos] = TO_LOWER(t_res);
+                }
+                c_pos += spacing;
+                if(c_pos >= maxlen) {
+                    c_pos = maxlen;
+                    break;
+                }
+            }
+        } else {
+            if(reverse)
+                SeqPortSeek(spp, length-1, SEEK_SET);
+            s_len = 0;
+            while((t_res = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+                is_real = IS_ALPHA(t_res);
+                if(is_real || t_res == '*' || t_res == '-') {
+                    if(is_real && !protein)
+                        t_res = TO_LOWER(t_res);
+                    l_seq[c_pos] = t_res;
+                    if(mbuf != NULL) {
+                        m_res = mbuf[c_pos];
+                        if(matrix_val) {
+                            if(matrix) {
+                                if(posMatrix != NULL) {
+                                    if(t_res == m_res) /* complete match */
+                                        matrix_val[c_pos] = INT2_MAX;
+                                    else {
+                                        stdaa_res = SeqMapTableConvert(smtp, t_res);
+                                        matrix_val[c_pos] = (Int2)posMatrix[c_pos + q_start][stdaa_res];
 
-	if(translate)
-		BSFree(b_store);
-	else
-		SeqPortFree(spp);
-	return TRUE;
+                                        /* 
+                                     if(posMatrix[c_pos + q_start][t_res] == 
+                                     matrix[t_res][t_res]) {
+                                     printf("Got it!");
+                                     } */
+
+                                    }
+                                } else {
+                                    matrix_val[c_pos] = (Int2)matrix[m_res][t_res];
+                                }
+                                
+                            } else if(t_res == m_res)
+                                matrix_val[c_pos] = '|';
+                        }
+                        
+                        if(mismatch && t_res == m_res)
+                            l_seq[c_pos] = '.';
+                        else if(posMatrix != NULL) {
+                            stdaa_res = SeqMapTableConvert(smtp, m_res);
+                            if(check_neg && posMatrix[c_pos + q_start][stdaa_res] < 0)
+                                l_seq[c_pos] = TO_LOWER(t_res);
+                        } else { /*regular BLOSSUM62*/
+                            if(check_neg && matrix[t_res][m_res] < 0)
+                                l_seq[c_pos] = TO_LOWER(t_res);
+                        }
+                    }
+                    c_pos += spacing;
+                    if(c_pos >= maxlen) {
+                        c_pos = maxlen;
+                        break;
+                    }
+                    ++s_len;
+                }
+                if(reverse) {
+                    if(s_len == length)
+                        break;
+                    else
+                        SeqPortSeek(spp, length -1 - s_len, SEEK_SET);
+                }
+            }
+        }
+        *l_pos = c_pos;
+    }
+    
+    if(translate)
+        BSFree(b_store);
+    else
+        SeqPortFree(spp);
+    return TRUE;
 }
 
 /*##########################################################################
@@ -3861,259 +3789,238 @@ static Int4 map_position_by_spacing(Int4 distance, Int4 spacing, Boolean is_head
 *
 *
 ************************************************************************/
-NLM_EXTERN ValNodePtr ProcessTextAlignNode(AlignNodePtr anp, Int4 m_left, Int4 m_right, 
-			Int4Ptr p_stop, CharPtr m_buf, Int4 line_len, Int1 m_frame, 
-			Uint4 option, Int4Ptr PNTR matrix)
+
+NLM_EXTERN ValNodePtr ProcessTextAlignNode2(AlignNodePtr anp, Int4 m_left, Int4 m_right, Int4Ptr p_stop, CharPtr m_buf, Int4 line_len, Int1 m_frame, Uint4 option, Int4Ptr PNTR matrix, Int4Ptr PNTR posMatrix, Int4 q_start)
 {
-	Int4 maxlen;
-	Int4 g_left, g_right;
-	Int4 len;		/*length of the segment*/
-	CharPtr l_seq;	/*the buffer for the sequence*/
-	Int2Ptr matrix_val;	/*value of each residue in alignment matrix*/
-	Int4 l_pos;		/*the start position on the line*/	
-	Int4 offset;
-	BioseqPtr bsp;
-	SeqEntryPtr sep;
+    Int4 maxlen;
+    Int4 g_left, g_right;
+    Int4 len;		/*length of the segment*/
+    CharPtr l_seq;	/*the buffer for the sequence*/
+    Int2Ptr matrix_val;	/*value of each residue in alignment matrix*/
+    Int4 l_pos;		/*the start position on the line*/	
+    Int4 offset;
+    BioseqPtr bsp;
+    SeqEntryPtr sep;
+    
+    AlignSegPtr asp;
+    Int4 seq_offset, off_len;
+    Int4 seq_start, seq_stop;
+    Int4 s_start, s_stop;	/*for marking the position on one line*/
+    CharPtr str;
+    
+    ValNodePtr head = NULL, ins_node;
+    ValNodePtr fbuf_list = NULL;
+    TextAlignBufPtr tdp;
+    Boolean is_aa;
+    Int4 spacing;
+    Boolean translate;
+    Int4 seq_expand;
+    Boolean show_mismatch;
+    Boolean set_matrix;
+    Uint1 strand;
+    
+    
+    if(m_frame > 6 || m_frame < -1)	/*check the m_frame. -1 for translate the hits*/
+        return NULL;
+    
+    
+    g_left = anp->extremes.left;
+    g_right = anp->extremes.right;
+    if(m_left > g_right || m_right < g_left)/*no overlap*/ {
+        if(m_frame > 0) {
+            if(anp->m_frame != m_frame)
+                return NULL;
+            if(m_buf == NULL)
+                return NULL;
+        }
+        if(option & TXALIGN_BLUNT_END) {
+            maxlen = m_right - m_left +1;
+            l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), MGET_ERRPOST);
+            MemSet((Pointer)l_seq, '-',(size_t)(maxlen) * sizeof(Char));
+            l_seq[maxlen] = '\0';
+            tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+            tdp->pos = *p_stop;
+            tdp->strand = anp->extremes.strand;
+            tdp->label = StringSave(anp->label);
+            tdp->buf = l_seq;
+            tdp->matrix_val = NULL;
+            tdp->itemID = anp->itemID;
+            tdp->feattype = 0;
+            tdp->subtype = 0;
+            tdp->entityID = anp->entityID;
+            tdp->seqEntityID = anp->seq_entityID;
+            tdp->bsp_itemID = anp->bsp_itemID;
+            ValNodeAddPointer(&head, 0, tdp);
+            return head;
+        }
+        else
+            return NULL;
+    }
+    
+    strand = Seq_strand_plus;
+    if(anp->seqpos < 0)
+        strand = Seq_strand_minus;
+    else if(anp->seqpos == 0 && anp->extremes.strand == Seq_strand_minus)
+        strand = Seq_strand_minus;
+    
+    l_pos = 0;
+    spacing = 1;
+    offset = 0;
+    if(m_frame > 0) {
+        if(anp->m_frame != m_frame)
+            return NULL;
+        if(m_buf == NULL)
+            return NULL;
+        /*add the empty space to reflect the reading frame*/
+        for(str = m_buf; *str != '\n' && *str != '\0'; ++str) {
+            if(IS_WHITESP(*str))
+                ++offset;
+            else
+                break;
+        }
+        spacing = 3;
+    }
+    if(m_left < g_left) {
+        l_pos += (g_left - m_left);
+        if(m_frame > 0)
+            ++l_pos;
+    } else
+        l_pos += offset;
+    
+    bsp = BioseqLockById(anp->sip);
+    if(bsp == NULL)
+        return NULL;
+    is_aa = (bsp->mol == Seq_mol_aa);
+    if((m_frame > 0 && !is_aa) || (m_frame == -1 && is_aa)) {
+        BioseqUnlock(bsp);
+        return NULL;
+    }
+    if(anp->seq_entityID == 0) {
+        sep = SeqEntryFind(bsp->id);
+        anp->seq_entityID = SeqMgrGetEntityIDForSeqEntry(sep);
+    }
+    if(anp->bsp_itemID == 0)
+        anp->bsp_itemID = get_bioseq_itemID(bsp, anp->seq_entityID);
+    
+    if(m_frame == -1) {
+        translate = TRUE;
+        seq_expand = 3;
+    } else {
+        translate = FALSE;
+        seq_expand = 1;
+    }
+    
+    maxlen = m_right - m_left +1;
+    l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), 
+                             MGET_ERRPOST);
+    if(option & TXALIGN_BLUNT_END)
+        MemSet((Pointer)l_seq, '-',(size_t)maxlen * sizeof(Char));
+    else
+        MemSet((Pointer)l_seq, ' ',(size_t)maxlen * sizeof(Char));
+    l_seq[maxlen] = '\0';
+    
+    
+    set_matrix = FALSE;
+    if(m_frame == 0 && bsp->mol != Seq_mol_aa) { /*DNA-DNA alignment*/
+        if(option & TXALIGN_MATRIX_VAL)
+            set_matrix = TRUE;
+    } else {
+        if(matrix != NULL && (option & TXALIGN_MATRIX_VAL))
+            set_matrix = TRUE;
+    }
+    if(set_matrix) {
+        matrix_val = (Int2Ptr) MemGet((size_t)(maxlen+1)*sizeof(Int2), MGET_ERRPOST);
+        MemSet((Pointer)matrix_val, 0,(size_t)maxlen * sizeof(Int2));
+    } else
+        matrix_val = NULL;
+    show_mismatch = (Boolean)(option & TXALIGN_MISMATCH);
+    
+    
+    /*process  the GAPs and the DIAGs segs*/
+    s_start = -1;
+    s_stop = -1;
+    off_len = 0;
+    for(asp = anp->segs; asp !=NULL; asp = asp->next) { 
+        g_left = asp->gr.left;
+        g_right = asp->gr.right;
+        if(!(g_left > m_right || g_right < m_left)) {
+            switch(asp->type) {
+            case GAP_SEG:
+                g_left = MAX(m_left, g_left);
+                g_right = MIN(m_right, g_right);
+                len = g_right - g_left +1;
+                MemSet((Pointer)(l_seq +l_pos), '-',(size_t)len * sizeof(Char));
+                l_pos += len;
+                break;
+                
+            case REG_SEG:
+            case DIAG_SEG:
+            case STD_SEG:	/* Std-seg only works if the m_frame != 0 */
+                if(m_left > g_left)
+                    len = off_len + m_left - g_left;
+                else
+                    len = off_len;
+                seq_offset = map_position_by_spacing(len, spacing, TRUE) * seq_expand;
+                seq_start = anp->seqpos + seq_offset;
+                g_left = MAX(m_left, g_left);
+                g_right = MIN(m_right, g_right);
+                len += (g_right - g_left);
+                seq_stop = anp->seqpos + map_position_by_spacing(len, spacing, FALSE) * seq_expand + seq_expand -1;
+                
+                if(seq_start <= seq_stop) {	/*the order of start and stop is reversed*/
+                    if(s_start == -1)	/*record the end point*/
+                        s_start = ABS(seq_start);
+                    s_stop = ABS(seq_stop);
+                    
+                    if(m_frame == 0)
+                        fbuf_list = collect_feature_buf(asp->cnp, g_left, g_right, seq_start, l_pos, fbuf_list, maxlen, is_aa);	/*check the features first*/
+                    load_text(bsp, seq_start, seq_stop, l_seq, &l_pos, m_buf, (Int2)maxlen, 
+                              (Int2)spacing, translate, show_mismatch, matrix_val, matrix, strand, posMatrix, q_start);
+                    
+                }
+                break;
+                
+            default:
+                break;
+            }
+        }
+        if(asp->type == INS_SEG)
+            off_len += (asp->gr.right * spacing);
+        if(asp->type == REG_SEG || asp->type == DIAG_SEG || asp->type == STD_SEG)
+            off_len+=(asp->gr.right - asp->gr.left +1);
+    }
+    
+    
+    /*the first segment in the layout is a gap segment*/
+    if(s_start == -1)
+        s_start = *p_stop;
+    if(s_stop == -1)	/*gap across the entire region*/
+        s_stop = *p_stop;
+    *p_stop = s_stop	/*update the stop value*/;
+    tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+    tdp->pos = s_start+1;
+    tdp->strand = anp->extremes.strand;
+    tdp->label = StringSave(anp->label);
+    tdp->buf = l_seq;
+    tdp->matrix_val = matrix_val;
+    tdp->itemID = anp->itemID;
+    tdp->feattype = 0;
+    tdp->subtype = 0;
+    tdp->entityID = anp->entityID;
+    tdp->seqEntityID = anp->seq_entityID;
+    tdp->bsp_itemID = anp->bsp_itemID;
+    ValNodeAddPointer(&head, 0, tdp);
+    ValNodeLink(&head, fbuf_list);
+    
+    ins_node = ProcessTextInsertion(anp, m_left, m_right, bsp, line_len, m_frame);
+    ValNodeLink(&head, ins_node);
+    BioseqUnlock(bsp);
+    return head;
+}
 
-	AlignSegPtr asp;
-	Int4 seq_offset, off_len;
-	Int4 seq_start, seq_stop;
-	Int4 s_start, s_stop;	/*for marking the position on one line*/
-	CharPtr str;
-
-
-	ValNodePtr head = NULL, ins_node;
-	ValNodePtr fbuf_list = NULL;
-	TextAlignBufPtr tdp;
-	Boolean is_aa;
-	Int4 spacing;
-	Boolean translate;
-	Int4 seq_expand;
-	Boolean show_mismatch;
-	Boolean set_matrix;
-	Uint1 strand;
-
-
-	if(m_frame > 6 || m_frame < -1)	/*check the m_frame. -1 for translate the hits*/
-		return NULL;
-
-
-	g_left = anp->extremes.left;
-	g_right = anp->extremes.right;
-	if(m_left > g_right || m_right < g_left)/*no overlap*/
-	{
-		if(m_frame > 0)
-		{
-			if(anp->m_frame != m_frame)
-				return NULL;
-			if(m_buf == NULL)
-				return NULL;
-		}
-		if(option & TXALIGN_BLUNT_END)
-		{
-			maxlen = m_right - m_left +1;
-			l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), MGET_ERRPOST);
-			MemSet((Pointer)l_seq, '-',(size_t)(maxlen) * sizeof(Char));
-			l_seq[maxlen] = '\0';
-			tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
-			tdp->pos = *p_stop;
-			tdp->strand = anp->extremes.strand;
-			tdp->label = StringSave(anp->label);
-			tdp->buf = l_seq;
-			tdp->matrix_val = NULL;
-			tdp->itemID = anp->itemID;
-			tdp->feattype = 0;
-			tdp->subtype = 0;
-			tdp->entityID = anp->entityID;
-			tdp->seqEntityID = anp->seq_entityID;
-			tdp->bsp_itemID = anp->bsp_itemID;
-			ValNodeAddPointer(&head, 0, tdp);
-			return head;
-		}
-		else
-			return NULL;
-	}
-
-	strand = Seq_strand_plus;
-	if(anp->seqpos < 0)
-		strand = Seq_strand_minus;
-	else if(anp->seqpos == 0 && anp->extremes.strand == Seq_strand_minus)
-		strand = Seq_strand_minus;
-
-	l_pos = 0;
-	spacing = 1;
-	offset = 0;
-	if(m_frame > 0)
-	{
-		if(anp->m_frame != m_frame)
-			return NULL;
-		if(m_buf == NULL)
-			return NULL;
-		/*add the empty space to reflect the reading frame*/
-		for(str = m_buf; *str != '\n' && *str != '\0'; ++str)
-		{
-			if(IS_WHITESP(*str))
-				++offset;
-			else
-				break;
-		}
-		spacing = 3;
-	}
-	if(m_left < g_left)
-	{
-		l_pos += (g_left - m_left);
-		if(m_frame > 0)
-			++l_pos;
-	}
-	else
-		l_pos += offset;
-
-	bsp = BioseqLockById(anp->sip);
-	if(bsp == NULL)
-		return NULL;
-	is_aa = (bsp->mol == Seq_mol_aa);
-	if((m_frame > 0 && !is_aa) || (m_frame == -1 && is_aa))
-	{
-		BioseqUnlock(bsp);
-		return NULL;
-	}
-	if(anp->seq_entityID == 0)
-	{
-		sep = SeqEntryFind(bsp->id);
-		anp->seq_entityID = SeqMgrGetEntityIDForSeqEntry(sep);
-	}
-	if(anp->bsp_itemID == 0)
-		anp->bsp_itemID = get_bioseq_itemID(bsp, anp->seq_entityID);
-
-	if(m_frame == -1)
-	{
-		translate = TRUE;
-		seq_expand = 3;
-	}
-	else
-	{
-		translate = FALSE;
-		seq_expand = 1;
-	}
-
-
-	maxlen = m_right - m_left +1;
-	l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), 
-                                 MGET_ERRPOST);
-	if(option & TXALIGN_BLUNT_END)
-		MemSet((Pointer)l_seq, '-',(size_t)maxlen * sizeof(Char));
-	else
-		MemSet((Pointer)l_seq, ' ',(size_t)maxlen * sizeof(Char));
-	l_seq[maxlen] = '\0';
-
-	
-	set_matrix = FALSE;
-	if(m_frame == 0 && bsp->mol != Seq_mol_aa)	/*DNA-DNA alignment*/
-	{
-		if(option & TXALIGN_MATRIX_VAL)
-			set_matrix = TRUE;
-	}
-	else
-	{
-		if(matrix != NULL && (option & TXALIGN_MATRIX_VAL))
-			set_matrix = TRUE;
-	}
-	if(set_matrix)
-	{
-		matrix_val = (Int2Ptr) MemGet((size_t)(maxlen+1)*sizeof(Int2), MGET_ERRPOST);
-		MemSet((Pointer)matrix_val, 0,(size_t)maxlen * sizeof(Int2));
-	}
-	else
-		matrix_val = NULL;
-	show_mismatch = (Boolean)(option & TXALIGN_MISMATCH);
-
-
-	/*process  the GAPs and the DIAGs segs*/
-	s_start = -1;
-	s_stop = -1;
-	off_len = 0;
-	for(asp = anp->segs; asp !=NULL; asp = asp->next)
-	{ 
-		g_left = asp->gr.left;
-		g_right = asp->gr.right;
-		if(!(g_left > m_right || g_right < m_left))
-		{
-			switch(asp->type)
-			{
-				case GAP_SEG:
-					g_left = MAX(m_left, g_left);
-					g_right = MIN(m_right, g_right);
-					len = g_right - g_left +1;
-					MemSet((Pointer)(l_seq +l_pos), '-',(size_t)len * sizeof(Char));
-					l_pos += len;
-					break;
-
-				case REG_SEG:
-				case DIAG_SEG:
-				case STD_SEG:	/* Std-seg only works if the m_frame != 0 */
-					if(m_left > g_left)
-						len = off_len + m_left - g_left;
-					else
-						len = off_len;
-					seq_offset = map_position_by_spacing(len, spacing, TRUE) * seq_expand;
-					seq_start = anp->seqpos + seq_offset;
-					g_left = MAX(m_left, g_left);
-					g_right = MIN(m_right, g_right);
-					len += (g_right - g_left);
-					seq_stop = anp->seqpos + map_position_by_spacing(len, spacing, FALSE) * seq_expand + seq_expand -1;
-
-					if(seq_start <= seq_stop)	/*the order of start and stop is reversed*/
-					{
-						if(s_start == -1)	/*record the end point*/
-							s_start = ABS(seq_start);
-						s_stop = ABS(seq_stop);
-	
-						if(m_frame == 0)
-							fbuf_list = collect_feature_buf(asp->cnp, g_left, g_right, seq_start, l_pos, fbuf_list, maxlen, is_aa);	/*check the features first*/
-						load_text(bsp, seq_start, seq_stop, l_seq, &l_pos, m_buf, (Int2)maxlen, 
-						(Int2)spacing, translate, show_mismatch, matrix_val, matrix, strand);
-
-					}
-					break;
-
-				default:
-					break;
-			}
-		}
-		if(asp->type == INS_SEG)
-			off_len += (asp->gr.right * spacing);
-		if(asp->type == REG_SEG || asp->type == DIAG_SEG || asp->type == STD_SEG)
-			off_len+=(asp->gr.right - asp->gr.left +1);
-	}
-
-
-	/*the first segment in the layout is a gap segment*/
-	if(s_start == -1)
-		s_start = *p_stop;
-	if(s_stop == -1)	/*gap across the entire region*/
-		s_stop = *p_stop;
-	*p_stop = s_stop	/*update the stop value*/;
-	tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
-	tdp->pos = s_start+1;
-	tdp->strand = anp->extremes.strand;
-	tdp->label = StringSave(anp->label);
-	tdp->buf = l_seq;
-	tdp->matrix_val = matrix_val;
-	tdp->itemID = anp->itemID;
-	tdp->feattype = 0;
-	tdp->subtype = 0;
-	tdp->entityID = anp->entityID;
-	tdp->seqEntityID = anp->seq_entityID;
-	tdp->bsp_itemID = anp->bsp_itemID;
-	ValNodeAddPointer(&head, 0, tdp);
-	ValNodeLink(&head, fbuf_list);
-
-	ins_node = ProcessTextInsertion(anp, m_left, m_right, bsp, line_len, m_frame);
-	ValNodeLink(&head, ins_node);
-	BioseqUnlock(bsp);
-	return head;
-
-
+NLM_EXTERN ValNodePtr ProcessTextAlignNode(AlignNodePtr anp, Int4 m_left, Int4 m_right, Int4Ptr p_stop, CharPtr m_buf, Int4 line_len, Int1 m_frame, Uint4 option, Int4Ptr PNTR matrix)
+{
+    return ProcessTextAlignNode2(anp, m_left, m_right, p_stop, m_buf, line_len, m_frame, option, matrix, NULL, 0);
 }
 	
 static void add_empty_space(CharPtr buf, Int4 maxlen)
@@ -4302,7 +4209,7 @@ static ValNodePtr ProcessTextInsertion(AlignNodePtr anp, Int4 m_left, Int4 m_rig
 			   else
 			      fbuf_list = collect_feature_buf(asp->cnp, g_left, g_right, seq_start, l_pos, fbuf_list, len, is_aa);
 
-			   load_text(bsp, seq_start, seq_stop, ins_seq, &l_pos, NULL, (Int2)len, 1, translate, FALSE, NULL, NULL, strand);
+			   load_text(bsp, seq_start, seq_stop, ins_seq, &l_pos, NULL, (Int2)len, 1, translate, FALSE, NULL, NULL, strand, NULL, 0);
 			}
 
 		}
@@ -4373,7 +4280,6 @@ static Int4 webb_blosum62[WEBB_asize][WEBB_asize] = {
    {-1, 0, 0, 1,-3, 3, 4,-2, 0,-3,-3, 1,-1,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1 },
    { 0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2, 0, 0,-2,-1,-1,-1,-1,-1 },
  };
-
 
 NLM_EXTERN Int4Ptr PNTR load_default_matrix (void)
 {
@@ -4541,7 +4447,7 @@ FilterTheDefline (BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 
 	bsp_title = BioseqGetTitle(bsp);
 	bsp_title_ptr = bsp_title;
 	/* This is the longest it could be, this could be done more efficiently. */
-	title = (CharPtr) MemNew((10+StringLen(bsp_title))*sizeof(Char));
+	title = (CharPtr) MemNew((256+StringLen(bsp_title))*sizeof(Char));
 	title_ptr = title;
 	*titlepp = title;
 
@@ -4848,7 +4754,7 @@ SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size, size_t 
 	* links to incomplete genomes
 **/
 static void
-make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp)
+make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer)
 {
 	Char gnl[256];
 	CharPtr str;
@@ -4858,8 +4764,32 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
 	Char passwd[128];
 	Char tool_url[128];
 
-	GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, sizeof(passwd));
-	GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
+        /* We do need to make security protected link to BLAST gnl */
+        if (StringStr(sip_buffer, "gnl|BL_ORD_ID") != NULL)
+            return;
+
+        str = NULL;
+#ifdef OS_UNIX
+        str = getenv("DUMPGNL_PASSWD");
+#endif
+        if(str != NULL) {
+            StringCpy(passwd, str);
+        } else {
+            GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, 
+                        sizeof(passwd));
+        }
+        
+        str = NULL;
+#ifdef OS_UNIX
+        str = getenv("DUMPGNL_TOOL_URL");
+#endif
+        if(str != NULL) {
+            StringCpy(tool_url, str);
+        } else {
+            GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, 
+                        sizeof(tool_url));
+        }
+        
 	/*
 	 * Need to protect start and stop positions
 	 * to avoid web users sending us hand-made URLs
@@ -4924,6 +4854,10 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
         NewContLine();
         NewContLine();
         return FALSE;
+    }
+    
+    if(!StringICmp(blast_type, "fruitfly")) {
+        fprintf(stdout, "<IMG SRC=\"/BLAST/images/map_mark.gif\" BORDER=0> - please follow this image for the map location of the sequence<P>\n");
     }
     
     asn2ff_set_output(outfp, NULL);
@@ -5070,7 +5004,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
         blast_type = StringSave(blast_type);
         StringUpper(blast_type);
     }
-    
+        
     txsp = txsp_head;
     while (txsp) {
         found_next_one = FALSE;
@@ -5137,16 +5071,24 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 
                 } else {
                     if (countdescr == -1 || countdescr > 0)
-#if(NEW_ENTREZ_LINKS)
+   if(!StringICmp(blast_type, "fruitfly")) {
+       sprintf(HTML_buffer, 
+               "<a href=\"http://www.ncbi.nlm.nih.gov\">"
+               "<IMG SRC=\"/BLAST/images/map_mark.gif\" BORDER=0></a>"
+               "&nbsp;&nbsp;<a href=\"%s?"
+               "cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\">", 
+               NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt);
+   } else {
+#if (NEW_ENTREZ_LINKS)
    sprintf(HTML_buffer, 
            "<a href=\"%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\">", 
            NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt);
 #else
    sprintf(HTML_buffer, 
            "<a href=\"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-           "uid=%08ld\">", options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
-           HTML_database,  (long) gi);
+           "uid=%08ld\">", options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF, HTML_database,  (long) gi);
 #endif
+   }
                 }
 
                 if (options & TXALIGN_NEW_GIF && (countdescr == -1 || countdescr > 0)) {
@@ -5167,6 +5109,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                 }
                 fprintf(outfp, "%s", HTML_buffer);
                 make_link = TRUE;
+                /* If not SEQID_GI */
             } else if (bestid != NULL && (bestid->choice == SEQID_GENERAL && !(options & TXALIGN_NO_DUMPGNL)) || (options & TXALIGN_NO_ENTREZ))
                 {
                     if (bestid->choice != SEQID_GENERAL && bestid->choice != SEQID_OTHER)
@@ -5184,10 +5127,10 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                                 
                             }
                         } else {
-                            make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp);
+                            make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id);
                         }
                     } else
-                        make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp);
+                        make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id);
                     make_link = TRUE;
                 }
         }
@@ -5215,6 +5158,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
         
         found_gnl_id = FALSE;
         /* Check for an ID of type general from BLAST */
+
         if (StringNCmp(buffer, "gnl|BL_ORD_ID", 13) == 0) {
             ptr = buffer;
             /* look for end of gnl ID. */
@@ -5225,8 +5169,9 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                 ptr++;
             ptr_start = ptr;
             found_gnl_id = TRUE;
+            make_link = FALSE;
         }
-        
+
         if (StringNCmp(ptr, "lcl|", 4) == 0) {
             ptr_start += 4;
         }
@@ -5460,6 +5405,7 @@ NLM_EXTERN Boolean FormatScoreFromSeqAlign
     AlignSum as;
 
     asop = (AlignStatOptionPtr) MemNew(sizeof(AlignStatOption));
+    MemSet(&as, 0, sizeof(AlignSum));
 
     empty_space = 12; line_len = 60; /* TO BE DETERMINED !!!! */
 
@@ -5632,10 +5578,10 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                             }
                         } else {
                             /** * links to incomplete genomes */
-                            make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, ISA_na(bsp->mol), asop->fp);
+                            make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, ISA_na(bsp->mol), asop->fp, buffer);
                         }
                     } else {
-                        make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, ISA_na(bsp->mol), asop->fp);
+                        make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, ISA_na(bsp->mol), asop->fp, buffer);
                     }
                     make_link = TRUE;
                 }
@@ -5672,6 +5618,8 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
         if (StringNCmp(buffer, "gnl|BL_ORD_ID", 13) != 0) {
             fprintf(asop->fp, "%s", ptr);
             found_gnl_id = FALSE;
+        } else {
+            make_link = FALSE;
         }
         
         if (asop->html_hot_link == TRUE && make_link == TRUE) {

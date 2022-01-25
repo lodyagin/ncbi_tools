@@ -43,7 +43,7 @@ void ChkSegset (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	BioseqSetPtr 	bssp, tmp;
 	BioseqPtr		bsp;
 	SeqEntryPtr	 	segsep, parts;
-	ValNodePtr	 	vnp = NULL, set_vnp = NULL;
+	ValNodePtr	 	vnp = NULL, set_vnp = NULL, upd_date_vnp = NULL;
     ValNodePtr    	org, modif, mol, date, v /*, title */;
     SeqAnnotPtr		sap = NULL;
     SeqFeatPtr		tmp_sfp, sfp0, sfp;
@@ -167,6 +167,7 @@ void ChkSegset (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		}
 		if (v->choice == Seq_descr_update_date) {
 			is_date = TRUE;
+			upd_date_vnp = v;
 		}
 	}
 /*	
@@ -175,16 +176,35 @@ void ChkSegset (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	}
 */
 	if (!is_modif) {
-		set_vnp = tie_next(set_vnp, modif);
+		if (set_vnp != NULL) {
+			set_vnp = tie_next(set_vnp, modif);
+		} else {
+			ValNodeLink (&(bssp->descr), modif);
+		}
 	}
 	if (!is_org) {
-		set_vnp = tie_next(set_vnp, org);
+		if (set_vnp != NULL) {
+			set_vnp = tie_next(set_vnp, org);
+		} else {
+			ValNodeLink (&(bssp->descr), org);
+		}
 	}
 	if (!is_mol) {
-		set_vnp = tie_next(set_vnp, mol);
+		if (set_vnp != NULL) {
+			set_vnp = tie_next(set_vnp, mol);
+		} else {
+			ValNodeLink (&(bssp->descr), mol);
+		}
 	}
 	if (!is_date) {
-		set_vnp = tie_next(set_vnp, date);
+		if (set_vnp != NULL) {
+			set_vnp = tie_next(set_vnp, date);
+		} else {
+			ValNodeLink (&(bssp->descr), date);
+		}
+	} else if (upd_date_vnp != NULL && date != NULL) {
+		upd_date_vnp->data.ptrvalue = DateFree ((DatePtr) upd_date_vnp->data.ptrvalue);
+		upd_date_vnp->data.ptrvalue = DateDup ((DatePtr) date->data.ptrvalue);
 	}
 	SrchSegSeqMol(parts);
 	
@@ -406,6 +426,8 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	ValNodePtr	 descr = NULL, vnp;
 	Boolean 	 is_org = FALSE, is_modif = FALSE, is_title = FALSE;
 	Boolean 	 is_date = FALSE, is_pub = FALSE;
+	CharPtr      npstitle = NULL, seqtitle = NULL;
+	Char         ch;
 
 	if (IS_Bioseq(sep)) {
 		return;
@@ -429,6 +451,7 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		for (vnp = bssp->descr; vnp!= NULL; vnp= vnp->next) {
 			if (vnp->choice == Seq_descr_title) {
 				is_title = TRUE;
+				npstitle = (CharPtr) vnp->data.ptrvalue;
 			}
 			if (vnp->choice == Seq_descr_org) {
 				is_org = TRUE;
@@ -444,10 +467,27 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 			}
 		*/
 		}
+		/* look for old style nps title, remove if based on nucleotide title, also remove exact duplicate */
+		if (npstitle != NULL) {
+			seqtitle = SeqEntryGetTitle (seqsep);
+			if (seqtitle != NULL) {
+				ch = *npstitle;
+				while (ch != '\0' && ch == *seqtitle) {
+					npstitle++;
+					ch = *npstitle;
+					seqtitle++;
+				}
+				if (ch == '\0' || StringCmp (npstitle, ", and translated products") == 0) {
+					vnp = ValNodeExtractList (&(bssp->descr), Seq_descr_title);
+				}
+			}
+		}
+		/*
 		if (!is_title) {
 			   vnp = ValNodeExtractList(&descr, Seq_descr_title);
 			bssp->descr = ValNodeLink(&(bssp->descr), vnp);
 		}
+		*/
 		if (!is_modif && check_GIBB(descr)) {
 			   vnp = ValNodeExtractList(&descr, Seq_descr_modif);
 			bssp->descr = ValNodeLink(&(bssp->descr), vnp);
@@ -1134,7 +1174,7 @@ Boolean CheckSegDescrChoice(SeqEntryPtr sep, Uint1 choice)
        		same = FALSE;
        }
    }
-	if (same == FALSE && no_choice == TRUE) {
+	if (same == FALSE && no_choice == TRUE && choice != Seq_descr_update_date) {
 		same = TRUE;
 	}
    return (same);
@@ -2438,14 +2478,20 @@ extern void NormalizeSegSeqMolInfo (SeqEntryPtr sep)
 static void CollectPseudoCdsProducts (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
-  BioseqPtr        bsp;
-  BioseqSetPtr     bssp;
-  BioseqPtr        product;
-  Boolean          pseudo;
-  GBQualPtr        gbqual;
-  SeqAnnotPtr      sap;
-  SeqFeatPtr       sfp;
-  ValNodePtr PNTR  vnpp;
+  BioseqContextPtr  bcp;
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp;
+  CharPtr           label;
+  size_t            len;
+  BioseqPtr         product;
+  SeqFeatPtr        prot;
+  ProtRefPtr        prp;
+  Boolean           pseudo;
+  GBQualPtr         gbqual;
+  SeqAnnotPtr       sap;
+  SeqFeatPtr        sfp;
+  CharPtr           str;
+  ValNodePtr PNTR   vnpp;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
   vnpp = (ValNodePtr PNTR) mydata;
@@ -2477,6 +2523,36 @@ static void CollectPseudoCdsProducts (SeqEntryPtr sep, Pointer mydata, Int4 inde
             if (product != NULL) {
               ValNodeAddPointer (vnpp, 0, (Pointer) product);
               sfp->product = SeqLocFree (sfp->product);
+              prot = SeqMgrGetBestProteinFeature (product, NULL);
+              if (prot == NULL) {
+                bcp = BioseqContextNew (product);
+                prot = BioseqContextGetSeqFeat (bcp, SEQFEAT_PROT, NULL, NULL, 0);
+                BioseqContextFree (bcp);
+              }
+              if (prot != NULL) {
+                prp = (ProtRefPtr) prot->data.value.ptrvalue;
+                if (prp != NULL) {
+                  label = NULL;
+                  if (prp->name != NULL) {
+                    label = prp->name->data.ptrvalue;
+                  } else if (prp->desc != NULL) {
+                    label = prp->desc;
+                  }
+                  if (label != NULL) {
+                    if (sfp->comment == NULL) {
+                      sfp->comment = StringSaveNoNull (label);
+                    } else {
+                      len = StringLen (sfp->comment) + StringLen (label) + 5;
+                      str = MemNew (sizeof (Char) * len);
+                      StringCpy (str, sfp->comment);
+                      StringCat (str, "; ");
+                      StringCat (str, label);
+                      sfp->comment = MemFree (sfp->comment);
+                      sfp->comment = str;
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -3076,6 +3152,117 @@ static Boolean MarkMovedGeneGbquals (GatherObjectPtr gop)
   return TRUE;
 }
 
+/* RemoveMultipleTitles currently removes FIRST title in chain */
+
+static void RemoveMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  SeqDescrPtr    descr = NULL;
+  SeqDescrPtr    lasttitle = NULL;
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    descr = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    descr = bssp->descr;
+  } else return;
+  for (sdp = descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_title) continue;
+    if (lasttitle != NULL) {
+      if (lasttitle->extended != 0) {
+        ovp = (ObjValNodePtr) lasttitle;
+        ovp->idx.deleteme = TRUE;
+      }
+      lasttitle = sdp;
+    } else {
+      lasttitle = sdp;
+    }
+  }
+}
+
+typedef struct featcount {
+  Boolean     is_mRNA;
+  BioseqPtr   bsp;
+  Int2        numRNAs;
+  SeqFeatPtr  gene;
+  Int4        numGene;
+  Int4        numCDS;
+} FeatCount, PNTR FeatCountPtr;
+
+static void CountGenesAndCDSs (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  FeatCountPtr  fcp;
+
+  fcp = (FeatCountPtr) userdata;
+  if (sfp->data.choice == SEQFEAT_GENE) {
+    (fcp->numGene)++;
+    fcp->gene = sfp;
+  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
+    (fcp->numCDS)++;
+  }
+}
+
+static void LookForMrna (BioseqPtr bsp, Pointer userdata)
+
+{
+  FeatCountPtr  fcp;
+  MolInfoPtr    mip;
+  SeqDescrPtr   sdp;
+
+  if (bsp == NULL || bsp->length == 0) return;
+  if (! ISA_na (bsp->mol)) return;
+  fcp = (FeatCountPtr) userdata;
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_molinfo) continue;
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
+      fcp->is_mRNA = TRUE;
+      fcp->bsp = bsp;
+      (fcp->numRNAs)++;
+      return;
+    }
+  }
+}
+
+static void ExtendSingleGeneOnMRNA (SeqEntryPtr sep, Pointer userdata)
+
+{
+  FeatCount   fc;
+  SeqIntPtr   sintp;
+  ValNodePtr  vnp;
+
+  fc.is_mRNA = FALSE;
+  fc.bsp = NULL;
+  fc.numRNAs = 0;
+  VisitBioseqsInSep (sep, (Pointer) &fc, LookForMrna);
+  if (! fc.is_mRNA) return;
+  fc.gene = NULL;
+  fc.numGene = 0;
+  fc.numCDS = 0;
+  VisitFeaturesInSep (sep, (Pointer) &fc, CountGenesAndCDSs);
+  if (fc.numGene == 1 && fc.numCDS < 2 && fc.numRNAs == 1 &&
+      fc.bsp != NULL && fc.gene != NULL) {
+    if (fc.bsp != BioseqFindFromSeqLoc (fc.gene->location)) return;
+    for (vnp = fc.gene->location; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice != SEQLOC_INT) continue;
+      sintp = (SeqIntPtr) vnp->data.ptrvalue;
+      if (sintp == NULL) continue;
+      if (sintp->from != 0 || sintp->to != fc.bsp->length - 1) {
+        sintp->from = 0;
+        sintp->to = fc.bsp->length - 1;
+      }
+    }
+  }
+}
+
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
 
 {
@@ -3102,9 +3289,14 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   /* MoveProtGBQualProductToName (sep); */ /* move prot gbqual product to prot-ref.name */
   /* MoveCdsGBQualProductToName (sep); */ /* move cds gbqual product to prot-ref.name */
   /* MoveFeatGBQualsToFields (sep); */ /* move feature partial, exception to fields */
-  ExtendGeneFeatIfOnMRNA (0, sep); /* gene on mRNA is full length */
+  /* ExtendGeneFeatIfOnMRNA (0, sep); */ /* gene on mRNA is full length */
+  VisitElementsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
   RemoveBioSourceOnPopSet (sep, NULL);
+  /*
   SeqEntryExplore (sep, NULL, DeleteMultipleTitles);
+  */
+  SeqEntryExplore (sep, NULL, RemoveMultipleTitles);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
   LoopSeqEntryToAsn3 (sep, TRUE, FALSE, taxfun, taxmerge);
   /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
   MovePopPhyMutPubs (sep);
@@ -3125,6 +3317,7 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
     GatherObjectsInEntity (entityID, 0, NULL, DeleteBadMarkedGeneXrefs, NULL, objMgrFilter);
     SeqMgrClearFeatureIndexes (entityID, NULL);
   }
+  BasicSeqEntryCleanup (sep);
   ErrSetMessageLevel (msev);
   ErrSetLogLevel (lsev);
 }

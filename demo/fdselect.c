@@ -1,4 +1,4 @@
-/* $Id: fdselect.c,v 6.1 1999/09/13 16:20:00 shavirin Exp $ */
+/* $Id: fdselect.c,v 6.2 2000/03/13 18:37:37 madden Exp $ */
 /*****************************************************************************
 
   
@@ -31,11 +31,14 @@
    
    Version Creation Date: 09/13/99
 
-   $Revision: 6.1 $
+   $Revision: 6.2 $
 
    File Description:  Create few subsets of FASTA database.
 
    $Log: fdselect.c,v $
+   Revision 6.2  2000/03/13 18:37:37  madden
+   Added insert_ctrlA Boolean to readdb_get_bioseq_ex
+
    Revision 6.1  1999/09/13 16:20:00  shavirin
    Initial version.
 
@@ -436,7 +439,7 @@ VoidPtr NewDBThread(VoidPtr data)
         if((seqnum = ndbp->glp->seq_num[i]) == -1)
             continue;
         
-        bsp = readdb_get_bioseq_ex(rdfp, seqnum, FALSE);        
+        bsp = readdb_get_bioseq_ex(rdfp, seqnum, FALSE, FALSE);        
         FDBAddBioseq(fdbp, bsp);
 
         SeqIdSetFree(bsp->id);

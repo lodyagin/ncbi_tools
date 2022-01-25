@@ -201,13 +201,15 @@ beginning of the sequence data.</b> The actual sequence is usually broken every
 <b>Segmented Nucleotide Sets</b>
 
 <p align="justify">
-A segmented nucleotide entry is a set of non-contiguous genomic DNA sequences,
-for example, encoding exons along with fragments of their flanking introns.
-Segmented sets apply only to incomplete genomic DNA sequences, not ungapped
-genomic DNA sequences or mRNA sequences. In order to import nucleotides in a
-segmented set, each individual sequence must be in FASTA format with an
-appropriate definition line, and all sequences should be in the same file. The
-file containing the sequences is imported into Sequin as described later.
+A segmented nucleotide entry is a set of non-contiguous sequences which has a
+defined order and orientation.  For example, a genomic DNA segmented set could
+include encoding exons along with fragments of their flanking introns.  An
+example of an mRNA segmented pair of records would be the 5' and 3' ends of an
+mRNA where the middle region has not been sequenced.  In order to import
+nucleotides in a segmented set, each individual sequence must be in FASTA
+format with an appropriate definition line, and all sequences should be in the
+same file.  The file containing the sequences is imported into Sequin as
+described later.
 
 <p align="left">
 <b>Population, Phylogenetic or Mutation Studies</b>
@@ -1388,7 +1390,7 @@ will result in a GenBank flatfile containing:
 <CENTER>
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk</A></P>
-<P CLASS=medium1>Revised September 9, 1999
+<P CLASS=medium1>Revised March 27, 2000
 
 </CENTER>
 

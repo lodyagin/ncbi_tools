@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.42 $
+* $Revision: 6.44 $
 *
 * File Description:
 *
@@ -861,6 +861,7 @@ static void GenomicSentinelProc (BigScalar calldata, PrimDrawContext pdc)
   BioseqViewPtr  bvp;
   ValNodePtr     curr;
   Uint2          entityID;
+  Boolean        forceSeglevelsTo1 = TRUE;
   GlobalBspPtr   gbp;
   ValNodePtr     graphs;
   /* SeqEntryPtr    oldscope; */
@@ -910,6 +911,9 @@ static void GenomicSentinelProc (BigScalar calldata, PrimDrawContext pdc)
 
   bsp = bvp->bsp;
   sep = SeqMgrGetSeqEntryForData (bsp);
+  if (IsADeltaBioseq (sep)) {
+    forceSeglevelsTo1 = FALSE;
+  }
   entityID = ObjMgrGetEntityIDForChoice (sep);
   if (entityID > 0) {
     sep = GetBestTopParentForData (entityID, bsp);
@@ -917,7 +921,7 @@ static void GenomicSentinelProc (BigScalar calldata, PrimDrawContext pdc)
   }
 
   ViewerBox (bvp->vwr, NULL, NULL, NULL, &scaleX, &scaleY);
-  pic = DrawSequinMapEx (slp_list, sep, scaleX, NULL, NULL, TRUE, bvp->tempResultList);
+  pic = DrawSequinMapEx (slp_list, sep, scaleX, NULL, NULL, forceSeglevelsTo1, bvp->tempResultList);
   ChangeAddPrimOrder (ADD_TO_TAIL);
   prim = (BasePPtr) pic;
   prim->code = SEGMENT;
@@ -997,8 +1001,7 @@ static void PopulateGraphic (BioseqViewPtr bvp)
   }
   isGenome = FALSE;
   if (IsAGenomeRecord (sep) ||
-      IsSegmentedBioseqWithoutParts (sep) ||
-      IsADeltaBioseq (sep)) {
+      IsSegmentedBioseqWithoutParts (sep)) {
     isGenome = TRUE;
     if (bvp->isGenome) {
       if (IS_Bioseq_set (sep)) {
@@ -1009,6 +1012,22 @@ static void PopulateGraphic (BioseqViewPtr bvp)
         }
       }
     }
+
+  } else if (IsADeltaBioseq (sep)) {
+    /*
+    isGenome = FALSE;
+    if (bvp->isGenome) {
+      if (IS_Bioseq_set (sep)) {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if (bssp != NULL && bssp->_class == BioseqseqSet_class_equiv) {
+          PopulateSimpleGraphic (bvp);
+          return;
+        }
+      }
+    }
+    */
+    PopulateSimpleGraphic (bvp);
+    return;
 
   } else {
     PopulateSimpleGraphic (bvp);

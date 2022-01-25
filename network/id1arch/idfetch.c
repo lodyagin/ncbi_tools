@@ -26,6 +26,12 @@
 * Author Karl Sirotkin
 *
 $Log: idfetch.c,v $
+Revision 1.4  2000/03/31 18:35:58  yaschenk
+Adding Jonathan's logic for FF and FASTA
+
+Revision 1.3  2000/03/30 20:43:51  yaschenk
+adding AsnIoReset between Entries
+
 Revision 1.2  1999/11/02 18:27:43  yaschenk
 adding -G parameter to idfetch
 
@@ -63,6 +69,12 @@ syncing sampson from mutant for procs. taking source from sampson. this is now c
 *
 * RCS Modification History:
 * $Log: idfetch.c,v $
+* Revision 1.4  2000/03/31 18:35:58  yaschenk
+* Adding Jonathan's logic for FF and FASTA
+*
+* Revision 1.3  2000/03/30 20:43:51  yaschenk
+* adding AsnIoReset between Entries
+*
 * Revision 1.2  1999/11/02 18:27:43  yaschenk
 * adding -G parameter to idfetch
 *
@@ -88,6 +100,7 @@ syncing sampson from mutant for procs. taking source from sampson. this is now c
 #include <asn2ff.h>
 #include <tofasta.h>
 #include <ni_types.h>
+#include <sqnutils.h>
 
 static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex);
 
@@ -407,17 +420,49 @@ IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 	SeqEntryPtr	sep=NULL;
 	Int4		status,gi_state;
 	SeqIdPtr	sip_ret=NULL;
+	SeqId		si={SEQID_GI,0,0};
 	ID1SeqHistPtr	ishp=NULL;
 	Char		buf[200],user_string[100];
 	ErrStrId        utag;
 	Boolean		retval=TRUE;
+	BioseqPtr	bsp=NULL;
+	Uint2		entityID;
+	Uint1		group_segs;
 
 	sprintf(user_string,"GI=%d|db=%s|ent=%d|",gi,db?db:"NULL",ent);
 	utag=ErrUserInstall(user_string,0);
 
 	switch(myargs[infotypearg].intvalue){
 		case 0:
-			sep = ID1ArchSeqEntryGet (gi,db,ent,&status,maxplex);
+			if(maxplex == 1 && myargs[outtypearg].intvalue != 1 && myargs[outtypearg].intvalue != 2){
+				si.data.intvalue=gi;
+				if(bsp=BioseqLockById(&si)){
+					sep = ObjMgrGetChoiceForData (bsp);
+					switch(myargs[outtypearg].intvalue){
+					 case 3:
+					 case 4:
+						if (bsp->repr == Seq_repr_seg) {
+							entityID = ObjMgrGetEntityIDForChoice (sep);
+							sep = GetBestTopParentForData (entityID, bsp);
+						}
+						break;
+					 case 5:
+						if (ISA_na (bsp->mol)) {
+							group_segs = 0;
+							if (bsp->repr == Seq_repr_seg) {
+								group_segs = 1;
+							} else if (bsp->repr == Seq_repr_delta) {
+								group_segs = 3;
+							}
+						} else {
+							group_segs=0;
+						}
+						break;
+					}
+				}
+			} else {
+				sep = ID1ArchSeqEntryGet (gi,db,ent,&status,maxplex);
+			}
 			if (!sep){
 				switch(status){
 				 case 1:
@@ -462,6 +507,7 @@ IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 			switch(myargs[infotypearg].intvalue){
 			 case 0:
 				SeqEntryAsnWrite(sep, asnout, NULL);
+				AsnIoReset(asnout);
 				break;
 			}
 			break;
@@ -484,8 +530,12 @@ IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 		 case 5:
 			switch(myargs[infotypearg].intvalue){
                          case 0:
-				SeqEntryToFasta(sep, fp, TRUE);  /* nuc acids */
-				SeqEntryToFasta(sep, fp, FALSE); /* proteins */
+				if(bsp){
+					SeqEntrysToFasta (sep, fp, ISA_na (bsp->mol), group_segs);
+				} else {
+					SeqEntryToFasta(sep, fp, TRUE);  /* nuc acids */
+					SeqEntryToFasta(sep, fp, FALSE); /* proteins */
+				}
 				break;
 			 case 2:
 				SeqIdWrite(sip_ret,buf,PRINTID_FASTA_LONG,sizeof(buf) - 1);
@@ -500,7 +550,11 @@ IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 		}
 	}
 DONE:
-	if(sep)		SeqEntryFree(sep);
+	if(bsp){
+		BioseqUnlock(bsp);
+	} else if(sep){
+		SeqEntryFree(sep);
+	}
 	if(sip_ret)	SeqIdFree(sip_ret);
 	if(ishp)	ID1SeqHistFree(ishp);
 	ErrUserDelete(utag);

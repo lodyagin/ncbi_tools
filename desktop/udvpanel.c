@@ -29,13 +29,70 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.22 $
+* $Revision: 6.41 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.41  2000/04/20 23:27:43  lewisg
+* misc bug fixes
+*
+* Revision 6.40  2000/04/17 21:46:56  lewisg
+* do not do double index on viewmgr update, rename menus
+*
+* Revision 6.39  2000/04/13 13:58:02  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.38  2000/04/11 13:19:26  durand
+* added UDV_LoadSpecificEditor for Sequin
+*
+* Revision 6.37  2000/04/10 21:41:27  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 6.36  2000/04/05 21:54:17  kans
+* resize udvpanel, get vdp directly from slate
+*
+* Revision 6.35  2000/04/05 21:13:20  kans
+* more changes to allow udv panel to be added to Sequin viewer
+*
+* Revision 6.34  2000/03/31 13:51:22  durand
+* added UDV_InitForSequin()
+*
+* Revision 6.33  2000/03/30 19:54:09  kans
+* initial work to get UDV and DDV into Sequin viewer
+*
+* Revision 6.32  2000/03/22 20:37:29  durand
+* added system menus to slave UDV
+*
+* Revision 6.31  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.30  2000/03/07 17:34:14  durand
+* avoid udv sending an OM_MSG_FLUSH message when it runs as a slave
+*
+* Revision 6.29  2000/03/06 14:00:47  durand
+* first release of the Summary viewer done
+*
+* Revision 6.28  2000/03/02 15:47:52  durand
+* use MovableModalWindow for dialog boxes
+*
+* Revision 6.27  2000/02/19 01:23:59  lewisg
+* use ibm, add row tracking code, various bug fixes
+*
+* Revision 6.26  2000/02/16 22:38:29  durand
+* fixed some wierd behaviours of features selections
+*
+* Revision 6.25  2000/02/15 22:40:58  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 6.24  2000/02/11 15:40:29  durand
+* replaced ObjMgrSendMsg by ObjMgrSelect calls for features selection
+*
+* Revision 6.23  2000/02/07 20:17:37  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.22  2000/01/24 16:15:22  durand
 * add loader function for the genome viewer
 *
@@ -100,8 +157,9 @@
 
 #include <udviewer.h>
 #include <samutil.h>
+#include <viewmgr.h>
 #ifdef UDV_GENOME
-#include <genview.h>
+#include <udvgv.h>
 #endif
 
 /*local text*/
@@ -172,8 +230,9 @@ static void UDV_ReLocateRcParaGList(RecT rcP,Boolean ShowTop,Boolean ShowTick,
 			Boolean ShowBlank,Int4Ptr nTotL,ValNodePtr ParaG_head);
 static void ShowFeaturesListDlg(IteM i);
 static void UDV_SearchFeatForKey(IteM i);
+static void UDV_ShowReverseComplement(IteM i);
 static void  UDV_analyse_buffer(UnDViewerGraphDataPtr GrData,
-		ValNodePtr ParaG_list,BspInfoPtr bsp_i,Uint2 ActionType);
+		ValNodePtr ParaG_list,BspInfoPtr bsp_i,Uint2 ActionType,Boolean bReverse);
 #ifdef UDV_GENOME
 static void UDV_GenViewProc(IteM I);
 #endif
@@ -293,7 +352,8 @@ ValNodePtr   bsp_vnp=NULL,vnp;
   Return value : TRUE if bsp_pos is selected
 
 *******************************************************************************/
-NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos)
+NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos,
+		Int4 bspLength,Boolean bDisplayRevComp)
 {
 Boolean    bSelected=FALSE;
 ValNodePtr vnp;
@@ -307,6 +367,12 @@ Int4 bsp_start,bsp_stop;
 		slp=(SeqLocPtr)vnp->data.ptrvalue;
 		bsp_start=SeqLocStart(slp);
 		bsp_stop=SeqLocStop(slp);
+		if (bDisplayRevComp){
+			bsp_start=UDV_RevertBioSeqCoord(bsp_start,bspLength);
+			bsp_stop=UDV_RevertBioSeqCoord(bsp_stop,bspLength);
+			if (bsp_stop<bsp_start)
+				swap(&bsp_start,&bsp_stop);
+		}
 		if (bsp_pos>=bsp_start && bsp_pos<=bsp_stop){
 			bSelected=TRUE;
 			break;
@@ -506,6 +572,14 @@ Uint2         bsp_eID,bsp_iID;
 		uptdated*/
 		bsp_start=SeqLocStart(slp);
 		bsp_stop=SeqLocStop(slp);
+		/*when udv displays a reverse/complement sequence, bsp_coords are
+		actually display coords. */
+		if (vdp->bDisplayRevComp){
+			bsp_start=UDV_RevertBioSeqCoord(bsp_start,vdp->bsp_i.bspLength);
+			bsp_stop=UDV_RevertBioSeqCoord(bsp_stop,vdp->bsp_i.bspLength);
+			if (bsp_stop<bsp_start)
+				swap(&bsp_start,&bsp_stop);
+		}
 		if (bsp_start<=to_bsp && bsp_stop>=from_bsp){
 			vnp_start=UDV_GetParaGNodeGivenPos(vdp->ParaG,bsp_start);
 			vnp=vnp_start;
@@ -542,7 +616,15 @@ Uint2         bsp_eID,bsp_iID;
 static Int2 UDV_MSG_FLUSH(ViewerDialogDataPtr vdp,OMMsgStructPtr ommsp)
 {
 Uint2  bsp_eID,bsp_iID;
-	
+ViewerMainPtr vmp;
+
+	/*standalone UDV : doesn't answer this message*/
+	if (vdp->Parent){
+		vmp = (ViewerMainPtr)GetObjectExtra(vdp->Parent);
+		if (vmp && vmp->AutonomeViewer==TRUE) 
+			return(OM_MSG_RET_OK);
+	}	
+
 	/*Am I concern by that Bioseq ?*/
 	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
 	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
@@ -572,6 +654,7 @@ static Int2 LIBCALLBACK UDV_OM_MsgFunc (OMMsgStructPtr ommsp)
 OMUserDataPtr omudp;
 /*BioseqPtr bsp;*/
 ViewerDialogDataPtr vdp;
+ViewerMainPtr vmp;
    
 	omudp = (OMUserDataPtr)(ommsp->omuserdata);
 	vdp = (ViewerDialogDataPtr)(omudp->userdata.ptrvalue);
@@ -599,17 +682,29 @@ ViewerDialogDataPtr vdp;
 		case OM_MSG_SELECT:
 			/*Click Feat ?*/
 			if (ommsp->itemtype==OBJ_SEQFEAT) {
-
 				UDV_select_feature(vdp->UnDViewer,vdp,ommsp->entityID,
-					ommsp->itemID,
-					(Boolean)(vdp->ClickFeatFromDlg ? TRUE : FALSE));
+					ommsp->itemID,TRUE);
+					/*(Boolean)(vdp->ClickFeatFromDlg ? TRUE : FALSE));*/
+				if (!vdp->ClickFeatFromDlg){
+					if (vdp->Parent) 
+						vmp=(ViewerMainPtr)GetObjectExtra(vdp->Parent);
+					if (vmp && vmp->hFeatDlg){/*update Features List Dlg if needed;
+						to do : convert this Feature ListBox to a real Viewer able
+						to play with ObjMgr*/
+						UDV_SelectFeatInFeatDlg(vmp,ommsp->entityID,ommsp->itemID);
+					}
+				}
+				vdp->ClickFeatFromDlg=FALSE;
 			}
 			else if (ommsp->itemtype==OBJ_BIOSEQ){
 				UDV_MSG_SELECT(vdp,ommsp,TRUE);
 			}
 			break;
 		case OM_MSG_DESELECT: 
-			if (ommsp->itemtype==OBJ_BIOSEQ){
+			if (ommsp->itemtype==OBJ_SEQFEAT) {
+				UDV_deselect_feature(vdp);
+			}
+			else if (ommsp->itemtype==OBJ_BIOSEQ){
 				UDV_MSG_SELECT(vdp,ommsp,FALSE);
 			}
 			break;
@@ -663,7 +758,7 @@ UdvGlobalsPtr       ugp=NULL;
 RecT                rcP;
 WindoW              temport;
 SAM_ViewGlobal      *vgp=NULL;
-
+Uint2               eID, iID;
 
     vgp = GetAppProperty(SAM_ViewString);
 
@@ -675,9 +770,40 @@ SAM_ViewGlobal      *vgp=NULL;
 		return OM_MSG_RET_ERROR;
 	}
 
+	/*initialize the viewer windows (viewer and info panels)*/
+	/*autonomous viewer ?*/
+	ugp=(UdvGlobalsPtr)GetAppProperty("UdvGlobals");
+	if (ugp) vmp=ugp->vmp;
+
+    	/*if w and/or vmp are NULL, they'll be initialized in this function*/
+	if (vmp || ((vmp = (ViewerMainPtr)GetAppProperty("nonautonomous")) != NULL)) {/*reuse the viewer if already there*/
+		w=vmp->hWndMain;
+		if (!CreateUDVpanel(w,&vmp, vgp)) 
+			return OM_MSG_RET_ERROR;
+	}
+    else {/*for each call, create a new viewer window*/
+		/*non-autonomous viewer*/
+		if (!CreateUDVpanel(w,&vmp, vgp)) return OM_MSG_RET_ERROR;
+	}
+
+	/*init specific data for the ObjMgr msg loop*/	
+	vdp=vmp->vdp;
+	if (!vdp) return OM_MSG_RET_ERROR;
+
 	switch (ompcp->input_itemtype) {
 		case OBJ_BIOSEQ :
 			bsp = (BioseqPtr) ompcp->input_data;
+            UDV_CreateOneFeatureIndex(0, bsp, vdp->bDisplayRevComp);
+			break;
+        case OBJ_BIOSEQSET:
+            UDV_CreateOneFeatureIndex(ompcp->input_entityID, NULL, vdp->bDisplayRevComp);
+            vmp->BspTable = NULL;
+            SeqMgrExploreBioseqs (ompcp->input_entityID, NULL, (Pointer) &vmp->BspTable, 
+			SearchBioseq, TRUE, TRUE, TRUE);
+            if(vmp->BspTable == NULL) return OM_MSG_RET_ERROR;
+            UDV_DecodeIdxFeat ((Uint4)vmp->BspTable->data.intvalue,&eID,&iID);
+	        bsp=GetBioseqGivenIDs (eID, iID, OBJ_BIOSEQ);
+            if(bsp == NULL) return OM_MSG_RET_ERROR;
 			break;
 		case 0 :
 			return OM_MSG_RET_ERROR;
@@ -690,29 +816,18 @@ SAM_ViewGlobal      *vgp=NULL;
 		return OM_MSG_RET_ERROR;
 	}
 
-	/*initialize the viewer windows (viewer and info panels)*/
-	/*autonomous viewer ?*/
-	ugp=(UdvGlobalsPtr)GetAppProperty("UdvGlobals");
-	if (ugp) vmp=ugp->vmp;
-
-	/*if w and/or vmp are NULL, they'll be initialized in this function*/
-	if (vmp) {/*reuse the viewer if already there*/
-		w=vmp->hWndMain;
-		if (!CreateUDVpanel(w,&vmp, vgp)) 
-			return OM_MSG_RET_ERROR;
-	}
-	else{/*for each call, create a new viewer window*/
-		/*non-autonomous viewer*/
-		if (!CreateUDVpanel(w,&vmp, vgp)) return OM_MSG_RET_ERROR;
-		UDV_CreateOneFeatureIndex(0, bsp);
-	}
-
-	/*init specific data for the ObjMgr msg loop*/	
-	vdp=vmp->vdp;
-	if (!vdp) return OM_MSG_RET_ERROR;
-
 	vdp->procid=ompcp->proc->procid;
 	vdp->proctype=ompcp->proc->proctype;
+	vdp->userkey=OMGetNextUserKey ();
+    if( vgp != NULL ) {
+        if (vgp->MasterViewer == SAMVIEWDDV) {
+            vdp->vgp = MemNew(sizeof(SAM_ViewGlobal));
+            MemCpy(vdp->vgp, vgp, sizeof(SAM_ViewGlobal));
+            ViewMgr_SetRow(vgp->pCGlobal, vdp->userkey, vgp->Row);
+        }
+        else vdp->vgp = NULL;
+    }
+    else vdp->vgp = NULL;
 	
 	if (UDV_init_bsp_forViewer(vmp->vdp->UnDViewer,bsp,ompcp->input_entityID,
 		ompcp->input_itemID,ompcp->input_itemtype,vdp)){
@@ -737,7 +852,6 @@ SAM_ViewGlobal      *vgp=NULL;
 	InvalRect(&rcP);
 	RestorePort(temport);
 
-	vdp->userkey=OMGetNextUserKey ();
 	omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, 
 			OMPROC_VIEW, vdp->userkey);
 	if (omudp != NULL) {
@@ -808,8 +922,18 @@ WindoW				hWinMain;
 *******************************************************************************/
 NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr vdp,Boolean final)
 {
+ViewerMainPtr vmp;
 
 	if (vdp){
+		/*a call to close all the internal UDV viewers (Genome Viewer for example)*/
+		/*standalone UDV : doesn't answer this message*/
+		if (vdp->Parent){
+			vmp = (ViewerMainPtr)GetObjectExtra(vdp->Parent);
+			if (vmp && vmp->AutonomeViewer==TRUE) 
+				ObjMgrSendMsg(OM_MSG_FLUSH, vdp->bsp_i.bsp_entityID, 
+					vdp->bsp_i.bsp_itemID, OBJ_BIOSEQ);
+		}	
+	
 		/*free some user data of Obj Mgr*/
 		if (vdp->userkey>0) {
 			if (vdp->bsp_i.bsp_entityID>0){
@@ -835,6 +959,7 @@ NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr vdp,Boolean final)
 		memset(&vdp->Old_Item_select,(Uint2)-1,sizeof(UDV_Item_Select));
 		if (!final) UnDViewerVScrlUpdate(vdp->UnDViewer,TRUE,0);
 		vdp->ClickFeatFromDlg=FALSE;
+		vdp->bDisplayRevComp=FALSE;
 	}
 
 	return(NULL);
@@ -859,11 +984,13 @@ ViewerMainPtr vmp=(ViewerMainPtr)data;
 	/*if (vmp->the_set) SeqEntryFree(vmp->the_set);	*/
 	if (vmp->BspTable) ValNodeFree(vmp->BspTable);
  	
+	UDV_FreeVDPstruct(vmp->vdp,TRUE);
+
 	/*done only for Autonomous viewer*/
 	if (vmp->dataptr) ObjMgrFree(vmp->datatype,vmp->dataptr);
 
-	UDV_FreeVDPstruct(vmp->vdp,TRUE);
 	if (vmp->vdp->udv_graph.pClr) MemFree(vmp->vdp->udv_graph.pClr);
+    MemFree(vmp->vdp->vgp);
 	MemFree(vmp->vdp);
 	MemFree(vmp);
 }
@@ -909,6 +1036,7 @@ NLM_EXTERN void  UDV_set_PullMenus(UDVMainMenuPtr mmp,Boolean enable)
 		Enable(mmp->ShowFeature);
 		Enable(mmp->ShowFeatureList);
 		Enable(mmp->SearchForFeature);
+		Enable(mmp->ShowRevComp);
 		Enable(mmp->RefreshScreen);
 		Enable(mmp->HelpAbout);
 	}
@@ -921,6 +1049,7 @@ NLM_EXTERN void  UDV_set_PullMenus(UDVMainMenuPtr mmp,Boolean enable)
 		Disable(mmp->ShowFeature);
 		Disable(mmp->ShowFeatureList);
 		Disable(mmp->SearchForFeature);
+		Disable(mmp->ShowRevComp);
 		Disable(mmp->RefreshScreen);
 		Disable(mmp->HelpAbout);
 	}
@@ -941,6 +1070,8 @@ NLM_EXTERN void  UDV_set_PullMenus(UDVMainMenuPtr mmp,Boolean enable)
 *******************************************************************************/
 NLM_EXTERN void  UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable)
 {
+
+	SetStatus(mmp->ShowRevComp,FALSE);	
 	if (enable){
 		if (mmp->FileClose) Enable(mmp->FileClose);
 		Enable(mmp->ShowFeature);
@@ -948,6 +1079,7 @@ NLM_EXTERN void  UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable)
 		Enable(mmp->SearchForFeature);
 		Enable(mmp->ScalePos);
 		Enable(mmp->RefreshScreen);
+		Enable(mmp->ShowRevComp);
 		if (mmp->ListSequence) Enable(mmp->ListSequence);
 	}
 	else{
@@ -957,6 +1089,7 @@ NLM_EXTERN void  UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable)
 		Disable(mmp->SearchForFeature);
 		Disable(mmp->ScalePos);
 		Disable(mmp->RefreshScreen);
+		Disable(mmp->ShowRevComp);
 		if (mmp->ListSequence) Disable(mmp->ListSequence);
 	}
 }
@@ -1205,7 +1338,7 @@ WindoW				temport;
 	UnDViewerVScrlUpdate(p,FALSE,CurPos);
 	
 	/*create new buffer*/
-	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL);
+	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL,vdp->bDisplayRevComp);
 
 	/*Redraw*/
 	InvalRect(&rcP);
@@ -1223,7 +1356,8 @@ WindoW				temport;
   Return value : none 
 
 *******************************************************************************/
-NLM_EXTERN void  UDV_SetupMenus(WindoW w,Boolean isEntrezOk)
+NLM_EXTERN void  UDV_SetupMenus(WindoW w,Boolean isEntrezOk,
+                                SAM_ViewGlobal *vgp)
 {
 MenU			m,s;	/*temp variable*/
 ChoicE			c;	/* " */
@@ -1247,12 +1381,30 @@ UdvGlobalsPtr   ugp;
 
 		vmp->MainMenu.FileClose=CommandItem(m,"Close",UDV_FileClose);
 		SeparatorItem(m);
-		vmp->MainMenu.ListSequence=
-			CommandItem(m,"Sequence list...",UDV_CreateListBioseqDlg);
-		SeparatorItem(m);
 	}
+	vmp->MainMenu.ListSequence=
+			CommandItem(m,"Sequence list...",UDV_CreateListBioseqDlg);
+    SeparatorItem(m);
 	vmp->MainMenu.QuitViewer=CommandItem(m,"Quit/Q",QuitProc);
 
+    if(vgp != NULL) {
+        if(vgp->MasterViewer == SAMVIEWCN3D) {
+            vmp->MainMenu.Align = PulldownMenu(w, "Alignment/A");
+            if (vgp->NetStartProc) {
+                vmp->MainMenu.AlignBlast = SubMenu(vmp->MainMenu.Align, "Align to");
+                vmp->MainMenu.BlastFile = CommandItem(vmp->MainMenu.AlignBlast,
+                    "FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
+                vmp->MainMenu.BlastNet = CommandItem(vmp->MainMenu.AlignBlast,
+                    "Network Download...", (Nlm_ItmActnProc)vgp->BlastNet);
+                vmp->MainMenu.BlastMany = CommandItem(vmp->MainMenu.Align, 
+                    "Blast...", (Nlm_ItmActnProc)vgp->BlastMany);
+            } else {
+                vmp->MainMenu.BlastFile = CommandItem(vmp->MainMenu.Align,
+                    "Align FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
+            }
+        }
+    }
+    
 	/*Options menu*/
 	m=PulldownMenu(w,"Options");
 	vmp->MainMenu.Options=m;
@@ -1265,6 +1417,12 @@ UdvGlobalsPtr   ugp;
 			UDV_SearchFeatForKey);
 	SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
 	SeparatorItem(m);
+
+    if(vgp == NULL) {
+		vmp->MainMenu.ShowRevComp=StatusItem(m,"Show reverse complement",
+			UDV_ShowReverseComplement);
+		SeparatorItem(m);
+	}
 	vmp->MainMenu.ScalePos=SubMenu(m,"Scale position");
 
 	c=ChoiceGroup(vmp->MainMenu.ScalePos,ScalePosChoiceProc);
@@ -1280,7 +1438,7 @@ UdvGlobalsPtr   ugp;
 		vmp->MainMenu.ConfigNet=CommandItem(m,"Network...",ugp->NetCfgMenuProc);
 	}	
 #ifdef UDV_GENOME
-	CommandItem(m,"Load Genome Viewer...",UDV_GenViewProc);
+	CommandItem(m,"Overview...",UDV_GenViewProc);
 #endif
 	/*Help menu*/
 	m=PulldownMenu(w,"Help");
@@ -1396,7 +1554,7 @@ Boolean 			IsGoUp=FALSE;
 		/*Create a new Buffer ?*/
 		UDV_analyse_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,
 			(Uint2)(IsGoUp==TRUE ? BUFFER_REPOP_VCRL_LUP : 
-				BUFFER_REPOP_VCRL_LDN));	
+				BUFFER_REPOP_VCRL_LDN),vdp->bDisplayRevComp);	
 		
 		/*move and redraw*/
 		ScrollRect (&rcP, 0, (Int2)((oldval-newval)*
@@ -1406,7 +1564,7 @@ Boolean 			IsGoUp=FALSE;
 		/*Create a new Buffer ?*/
 		UDV_analyse_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,
 			(Uint2)(IsGoUp==TRUE ? BUFFER_REPOP_VCRL_PUP : 
-				BUFFER_REPOP_VCRL_PDN));	
+				BUFFER_REPOP_VCRL_PDN),vdp->bDisplayRevComp);	
 
 		/*redraw*/
 		/*rcP.left=0;
@@ -1432,7 +1590,7 @@ Boolean 			IsGoUp=FALSE;
   Return value : none 
 
 *******************************************************************************/
-static void UnDViewerVScrlProc (BaR sb, SlatE s, Int4 newval, 
+NLM_EXTERN void UnDViewerVScrlProc (BaR sb, SlatE s, Int4 newval, 
 			Int4 oldval)
 {
 WindoW 				w;
@@ -1440,15 +1598,20 @@ ViewerDialogDataPtr vdp;
 ViewerMainPtr 		vmp;	
 
 	/*get the parent Window of the Panel*/
+	/*
 	w=ParentWindow(s);
 
 	if (w==NULL) return;	
+	*/
 	
 	/*get some usefull data...*/
+	/*
 	vmp = (ViewerMainPtr) GetObjectExtra (w);
 	if (vmp==NULL) return;
 	
 	vdp=vmp->vdp;
+	*/
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (s);
 
 	UDV_VScroll((PaneL)s,vdp,newval,oldval);
 }
@@ -1642,7 +1805,7 @@ WindoW				temport;
 	UnDViewerVScrlUpdate(p,FALSE,CurPos);
 	
 	/*create new buffer*/
-	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL);
+	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL,vdp->bDisplayRevComp);
 	InvalRect(&rcP);
 	RestorePort(temport);
 	Update();
@@ -1785,7 +1948,7 @@ WindoW		temport;
 	UnDViewerVScrlUpdate(p,TRUE,0);
 
 	/*create sequence buffer*/
-	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL);
+	UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL,vdp->bDisplayRevComp);
 	
 	/*redraw the viewer*/
 	rcP.top=0;rcP.left=0;
@@ -1915,20 +2078,6 @@ Char          szRange[100];
 		vmp->vdp->udt.status=UDV_SET_TIMER;
 		vmp->vdp->udt.pos=iValue-1;
 
-/*		else{
-			if (old_ivalue>=from_bsp && old_ivalue<=to_bsp && old_ivalue!=(-1)){
-				vnp_old=UDV_GetLineNumGivenPos(vmp->vdp->ParaG,old_ivalue-1,
-						&old_line_num);
-				if (vnp_old){
-					pgp=(ParaGPtr)vnp_old->data.ptrvalue;
-					UDV_InvalRegion(vmp->vdp->UnDViewer,&(vmp->vdp->udv_graph),
-						 pgp,pgp->StartLetter,pgp->StopLetter,FALSE);
-				}
-			}
-			pgp=(ParaGPtr)vnp->data.ptrvalue;
-			UDV_InvalRegion(vmp->vdp->UnDViewer,&(vmp->vdp->udv_graph),
-				 pgp,pgp->StartLetter,pgp->StopLetter,FALSE);
-		}*/
 	}
 	else{
 		sprintf(szRange,"Please enter a value in the range\n[1..%i].",
@@ -2015,8 +2164,15 @@ PaneL  pnl;
 				 UDV_draw_viewer,UnDViewerVScrlProc,NULL,
 				 sizeof(ViewerDialogDataPtr),NULL,NULL);
 		}
-	}
-	else{
+        else {
+            pnl = AutonomousPanel4 (g, 
+                (Int2)2*((screenRect.right-screenRect.left)-Margins)/3, 
+                (Int2)2*((screenRect.bottom-screenRect.top)-Margins)/3, 
+                UDV_draw_viewer,UnDViewerVScrlProc,NULL,
+                sizeof(ViewerDialogDataPtr),NULL,NULL);
+        }
+    }
+    else{
 		pnl = AutonomousPanel4 (g, 
 			(Int2)2*((screenRect.right-screenRect.left)-Margins)/3, 
 			(Int2)2*((screenRect.bottom-screenRect.top)-Margins)/3, 
@@ -2032,6 +2188,8 @@ PaneL  pnl;
 
 	SetPanelClick(pnl,UDV_ClickProc,
 		UDV_DragProc,UDV_HoldProc,UDV_ReleaseProc);
+	vmp->vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
+
 	SetWindowTimer(w,UDV_TimerProc);
 
 	AlignObjects(ALIGN_RIGHT, (HANDLE) pnl, (HANDLE) StatusGroup, NULL);
@@ -2044,6 +2202,134 @@ PaneL  pnl;
 	vmp->vdp->Parent=w;
 
 	return(TRUE);
+}
+
+/*******************************************************************************
+
+  Function : UDV_InitForSequin()
+  
+  Purpose : initialize udv data structure to start UDV from Sequin
+  
+  Note : before entering this function, udvPanel must have a correct size
+      (this is because this function calls UDV_Init_GraphData() ).
+	  
+  Return value : FALSE if failure 
+
+*******************************************************************************/
+NLM_EXTERN Boolean UDV_InitForSequin(PaneL udvPanel, BioseqViewPtr bvp)
+{
+ViewerDialogDataPtr vdp;
+Uint2 eID, iID;
+
+	vdp=(ViewerDialogDataPtr)MemNew(sizeof(ViewerDialogData));
+	if (vdp==NULL) 
+		return(FALSE);
+
+	vdp->bvp = bvp;
+
+	/*FonT & FonT size*/
+	if (bvp != NULL && bvp->displayFont!=NULL){
+		vdp->udv_graph.udv_font.hFnt = bvp->displayFont;
+	}
+	else{
+		if (!UDV_InitFont(&(vdp->udv_graph.udv_font))) 
+			return(FALSE);
+	}
+
+	SelectFont(vdp->udv_graph.udv_font.hFnt);
+	UDV_FontDim(&(vdp->udv_graph.udv_font.cxChar),
+			&(vdp->udv_graph.udv_font.cyChar));
+
+	/*compute Feature Color Palette*/
+	vdp->udv_graph.pClr=UDV_BuildFeatColorTable();
+	UDV_Build_Other_Colors(&(vdp->udv_graph));
+	
+	/*compute layout letters for NA and AA*/
+	UDV_Build_NA_LayoutPalette(&(vdp->udv_graph));
+	UDV_Build_AA_LayoutPalette(&(vdp->udv_graph));			
+
+	vdp->udv_graph.udv_font.LineHeight=
+				UDV_ComputeLineHeight(vdp->udv_graph.udv_font.cyChar);
+
+	/*attach data to udvPanel*/
+	SetObjectExtra (udvPanel, (Pointer) vdp, NULL);
+
+	/*set up the mouse callbacks*/
+	SetPanelClick(udvPanel,UDV_ClickProc,
+		UDV_DragProc,UDV_HoldProc,UDV_ReleaseProc);
+
+	/*save udvPanel handle*/
+	vdp->UnDViewer=udvPanel;
+
+	/*general graph data init; scale pos, etc.*/
+	UDV_Init_GraphData(vdp->UnDViewer,&vdp->udv_graph);
+
+	/*build the display*/
+	eID = ObjMgrGetEntityIDForPointer (bvp->bsp);
+	iID = GetItemIDGivenPointer (eID, OBJ_BIOSEQ, bvp->bsp);
+	UDV_init_bsp_forViewer (bvp->udv, bvp->bsp, eID, iID, OBJ_BIOSEQ, vdp);
+
+	return(TRUE);
+}
+
+static void PopulateUDV (BioseqViewPtr bvp)
+
+{
+  if (bvp == NULL) return;
+  UDV_InitForSequin (bvp->udv, bvp);
+}
+
+static void ShowUDV (BioseqViewPtr bvp, Boolean show)
+
+{
+  if (bvp == NULL) return;
+  if (show) {
+    SafeShow (bvp->udv);
+    SafeShow (bvp->udvParentGrp);
+    EnableDisableLegendItem (bvp, FALSE);
+    SafeHide (bvp->findGeneGrp);
+    SafeShow (bvp->clickMe);
+  } else {
+    SafeHide (bvp->udvParentGrp);
+    SafeHide (bvp->udv);
+    Reset (bvp->udv);
+    SafeHide (bvp->styleControlGrp);
+    SafeHide (bvp->scaleControlGrp);
+    EnableDisableLegendItem (bvp, FALSE);
+    SafeHide (bvp->findGeneGrp);
+    SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->clickMe);
+  }
+}
+
+static void SelectUDV (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+                       Uint2 selitemtype, SeqLocPtr region,
+                       Boolean select, Boolean scrollto)
+
+{
+}
+
+static void ResizeUDV (BioseqViewPtr bvp)
+
+{
+  ViewerDialogDataPtr  vdp;
+
+  if (bvp == NULL) return;
+  vdp = (ViewerDialogDataPtr) GetObjectExtra (bvp->udv);
+  UDV_resize_viewer (bvp->udv, vdp);
+}
+
+BioseqPageData udvPageData = {
+  "Sequence", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateUDV, ShowUDV, SelectUDV,
+  NULL, NULL,
+  NULL, NULL, ResizeUDV, NULL
+};
+
+static void UDV_SlaveQuit(WindoW w)
+{
+	Remove(w);
 }
 
 /*******************************************************************************
@@ -2086,7 +2372,15 @@ WindoW				hParent;
                     (Int2)(-10),
                     (Int2)(-10),
                     szAppName, 
-                    NULL,
+                    UDV_SlaveQuit,
+                    UDV_WinMainResize);
+            }
+            else {
+                hParent=DocumentWindow(Margins,Margins,
+                    (Int2)(-10),
+                    (Int2)(-10),
+                    szAppName, 
+                    UDV_SlaveQuit,
                     UDV_WinMainResize);
             }
         }
@@ -2095,7 +2389,7 @@ WindoW				hParent;
                 (Int2)(-10),
                 (Int2)(-10),
 				szAppName, 
-				NULL,
+				UDV_SlaveQuit,
 				UDV_WinMainResize);
         }
 
@@ -2111,7 +2405,7 @@ WindoW				hParent;
 		(*vmp)->AutonomeViewer=FALSE;
 
 		/*menus*/
-		UDV_SetupMenus(hParent,FALSE);
+		UDV_SetupMenus(hParent,FALSE, vgp);
 		UDV_set_MainMenus(&((*vmp)->MainMenu),FALSE);
 		UDV_set_MainControls(*vmp,FALSE);
 		/*create the windows*/
@@ -2147,7 +2441,8 @@ WindoW				hParent;
 
 *******************************************************************************/
 NLM_EXTERN void  UDV_create_buffer(UnDViewerGraphDataPtr GrData,
-		ValNodePtr ParaG_list,BspInfoPtr bsp_i,ValNodePtr StartScan)
+		ValNodePtr ParaG_list,BspInfoPtr bsp_i,ValNodePtr StartScan,
+		Boolean bReverse)
 {
 ParaGPtr 	pgp=NULL;
 ValNodePtr 	vnp=NULL,vnp2=NULL;
@@ -2210,9 +2505,16 @@ SeqIdPtr 	sip;
 	sip=SeqIdFindBest(bsp_i->bsp->id,0);
 	if (sip==NULL) sip=bsp_i->bsp->id;
 
-	bsp_i->SeqBuf=UDV_Read_Sequence (sip,bsp_i->StartBuf,bsp_i->StopBuf, 
-		(Boolean)(!bsp_i->bspMolNuc),bsp_i->LengthBuf);
-
+	if (bReverse){
+		bsp_i->SeqBuf=UDV_Read_SequenceEx (sip,
+			bsp_i->bspLength-1-bsp_i->StopBuf,bsp_i->bspLength-1-bsp_i->StartBuf, 
+			(Boolean)(!bsp_i->bspMolNuc),bsp_i->LengthBuf,Seq_strand_minus);
+	}
+	else{
+ 		bsp_i->SeqBuf=UDV_Read_Sequence (sip,bsp_i->StartBuf,bsp_i->StopBuf, 
+			(Boolean)(!bsp_i->bspMolNuc),bsp_i->LengthBuf);
+	}
+	
 	/*find the ParaG where bsp_i->StartBuf is Located*/
 	if (StartScan==NULL) vnp=ParaG_list;
 	else vnp=StartScan;
@@ -2240,7 +2542,8 @@ SeqIdPtr 	sip;
 
 *******************************************************************************/
 static void  UDV_analyse_buffer(UnDViewerGraphDataPtr GrData,
-		ValNodePtr ParaG_list,BspInfoPtr bsp_i,Uint2 ActionType)
+		ValNodePtr ParaG_list,BspInfoPtr bsp_i,Uint2 ActionType,
+		Boolean bReverse)
 {
 ParaGPtr pgp=NULL;
 ValNodePtr vnp=NULL,vnp2=NULL;
@@ -2266,7 +2569,7 @@ Int4 start_seq=0,stop_seq=0,stop=0;
 		}
 		
 		if (start_seq<=bsp_i->StartBuf){
-			UDV_create_buffer(GrData,ParaG_list,bsp_i,NULL);
+			UDV_create_buffer(GrData,ParaG_list,bsp_i,NULL,bReverse);
 			return;
 		}
 	}
@@ -2289,7 +2592,7 @@ Int4 start_seq=0,stop_seq=0,stop=0;
 			}
 		}
 		if (stop_seq>=bsp_i->StopBuf-GrData->udv_panel.nCharByLine){
-			UDV_create_buffer(GrData,ParaG_list,bsp_i,vnp);
+			UDV_create_buffer(GrData,ParaG_list,bsp_i,vnp,bReverse);
 		}
 	}
 }
@@ -2508,7 +2811,7 @@ MIDataPtr mid=(MIDataPtr)data;
 			if (vmp==NULL) break;
 			if (fldp==NULL) break;
 			vmp->vdp->ClickFeatFromDlg=TRUE;
-			ObjMgrSendMsg(OM_MSG_SELECT,fldp->eID,fldp->iID,OBJ_SEQFEAT);
+			ObjMgrSelect(fldp->eID,fldp->iID,OBJ_SEQFEAT,0,NULL);
 			break;
 		}
 	}
@@ -3104,13 +3407,13 @@ MsgAnswer			nRet;
 	if (!fksd) return;
 	MemSet(fksd,0,sizeof(FKSData));		
 
-    w = FixedWindow(-30, -20,  -10,  -10, 
+    w = MovableModalWindow(-30, -20,  -10,  -10, 
 				"OneD-Viewer - Find Features",  NULL);
 	g1=HiddenGroup(w,0,2,NULL);
 
 	SetGroupSpacing(g1,10,10);
 	g2=HiddenGroup(g1,2,0,NULL);
-	t1=StaticPrompt(g2,"Keyword :",0,0,NULL,'l');
+	t1=StaticPrompt(g2,"Keyword :",0,0,systemFont,'l');
     t2=DialogText(g2,"",20, UDV_FeatKeySearchTextProc);
 
 	AlignObjects(ALIGN_MIDDLE,(HANDLE) t1, (HANDLE) t2, NULL);
@@ -3153,8 +3456,87 @@ ViewerMainPtr vmp;
 	if (vmp==NULL) return;
 	if (vmp->vdp==NULL) return;
 	
-	GV_LoadGenomeViewer(vmp->vdp->bsp_i.bsp_entityID,
-		vmp->vdp->bsp_i.bsp_itemID,OBJ_BIOSEQ);
+	GatherSpecificProcLaunch(vmp->GVprocid, "GV_MOD", OMPROC_VIEW, FALSE, 
+		vmp->vdp->bsp_i.bsp_entityID,vmp->vdp->bsp_i.bsp_itemID,OBJ_BIOSEQ);
+
 }
 #endif
+
+/*******************************************************************************
+
+  Function : UDV_LoadSpecificEditor()
+  
+  Purpose : load an editor given entityID, itemID, itemtype
+
+*******************************************************************************/
+NLM_EXTERN void UDV_LoadSpecificEditor(BioseqViewPtr bvp, Uint2 entityID, 
+		Uint2 itemID, Uint2 itemtype)
+{
+SeqEntryPtr sep;
+
+	if (bvp==NULL) return;
+	
+	sep = GetTopSeqEntryForEntityID (entityID);
+	
+	if (bvp->launchSubviewers) {
+		WatchCursor ();
+		Update ();
+		LaunchNewBioseqViewer (bvp->bsp, entityID, itemID, itemtype);
+		ArrowCursor ();
+		Update ();
+	} else if (LaunchViewerNotEditor (bvp, sep, entityID, itemID, itemtype)) {
+		WatchCursor ();
+		Update ();
+		LaunchNewBioseqViewer (bvp->bsp, entityID, itemID, itemtype);
+		ArrowCursor ();
+		Update ();
+	} else if (bvp->launchEditors) {
+		WatchCursor ();
+		Update ();
+		GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID,
+	    	  itemtype, 0, 0, itemtype, 0);
+		ArrowCursor ();
+		Update ();
+	}
+}
+
+/*******************************************************************************
+
+  Function : UDV_ShowReverseComplement()
+  
+  Purpose : callback of the Options|ShowRevComp 
+  
+  Parameters : i; command item
+  
+  Return value : none 
+
+*******************************************************************************/
+static void UDV_ShowReverseComplement(IteM i)
+{
+ViewerMainPtr 		vmp;
+ViewerDialogDataPtr vdp;
+WindoW				hWinMain;
+
+	hWinMain=(WindoW)ParentWindow(i);
+	if (!hWinMain) return;
+	vmp = (ViewerMainPtr) GetObjectExtra (hWinMain);
+	if (vmp==NULL) return;
+	vdp = vmp->vdp;
+	if (vdp == NULL) return;
+	if (!vdp->bsp_i.bspMolNuc) return;
+	
+	/*switch the seq. direction*/
+	WatchCursor();
+	if (GetStatus(i))
+		vdp->bDisplayRevComp = TRUE;
+	else
+		vdp->bDisplayRevComp = FALSE;
+	/*rebuilt the Feature Index*/
+	SeqMgrClearFeatureIndexes(0,vdp->bsp_i.bsp);
+	SeqMgrIndexFeaturesEx (0, vdp->bsp_i.bsp, vdp->bDisplayRevComp);
+	
+	/*rebuilt the display*/
+	UDV_resize_viewer(vdp->UnDViewer,vdp);	
+	ArrowCursor ();
+}
 

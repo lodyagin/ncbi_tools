@@ -31,6 +31,9 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2mage.c,v $
+ * Revision 6.10  2000/01/31 19:59:12  lewisg
+ * fix output of date in pdb header
+ *
  * Revision 6.9  1999/10/13 20:19:35  zimmerma
  * DZ: Removed use of temporary files - html output redirected to stdout
  *
@@ -162,10 +165,10 @@ void LIBCALL AlignKinHeader(PDNMS pdnmsThis,  FILE *pFile, Boolean master)
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
 	
-   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%2d\n\n",
+   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%02d\n\n",
                    (int) depday,
                    NCBI_months[pbssThis->database_entry_date->data[2]-1],
-                   (int) depyear);
+                   (int) depyear%100);
      }
   fprintf(pFile,"Class:\n%s\n\n", pmsdThis->pcPdbClass);
   fflush(pFile);

@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.c,v 1.23 1999/12/29 22:55:03 lewisg Exp $
+/*  $Id: ddvcreate.c,v 1.45 2000/04/21 23:00:50 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,79 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.23 $
+* $Revision: 1.45 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.c,v $
+* Revision 1.45  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.44  2000/04/19 19:08:23  hurwitz
+* problem with justification of flanking unaligned regions fixed
+*
+* Revision 1.43  2000/04/19 15:45:50  hurwitz
+* can create display for a block
+*
+* Revision 1.42  2000/04/06 17:59:50  durand
+* fixed a conflict between BLAST and DDV in the use of the function DDV_SetSTyle
+*
+* Revision 1.41  2000/04/04 19:08:00  durand
+* add new BLAST color schemas; fixed a bug in DDV_PopulateDisplayForDisc
+*
+* Revision 1.40  2000/03/31 21:33:07  durand
+* added new default color schemas for BLAST
+*
+* Revision 1.39  2000/03/28 21:20:07  shavirin
+* Adjusted for correct structure of BLAST location mask.
+*
+* Revision 1.38  2000/03/28 17:08:17  durand
+* removed debugging code lines
+*
+* Revision 1.37  2000/03/27 14:19:28  durand
+* fixed bugs in BLAST outputs
+*
+* Revision 1.36  2000/03/21 19:26:45  durand
+* adapt ddvcreate to be used by pgppop
+*
+* Revision 1.35  2000/03/20 13:46:23  durand
+* fixed a bug in BLAST functions; added DDV_BLAST_COLOR0 to produce a BLAST output without any layout
+*
+* Revision 1.34  2000/02/28 16:52:47  durand
+* wrote a new manager for unaligned regions
+*
+* Revision 1.33  2000/02/23 21:34:29  durand
+* allow custom display of gap characters
+*
+* Revision 1.32  2000/02/23 19:49:33  durand
+* use row number instead of SeqId for coloring
+*
+* Revision 1.31  2000/02/17 15:54:56  durand
+* use ~ for an unaligned gap and - for an aligned gap
+*
+* Revision 1.30  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 1.29  2000/02/14 16:49:33  durand
+* add new options for BLAST output
+*
+* Revision 1.28  2000/02/11 13:58:21  wheelan
+* bug fix for unaligned region of length 0 (Durand)
+*
+* Revision 1.27  2000/02/07 14:03:35  durand
+* replace BioseqUnlockById by BioseqUnlock
+*
+* Revision 1.26  2000/02/05 01:32:22  lewisg
+* add viewmgr, move place freeing is done in ddv, modify visual c++ projects
+*
+* Revision 1.25  2000/02/02 14:44:30  durand
+* added function to create data structure for block editor, fixed some bugs
+*
+* Revision 1.24  2000/01/26 13:38:54  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.23  1999/12/29 22:55:03  lewisg
 * get rid of seqalign id
 *
@@ -122,10 +188,13 @@ typedef struct ddvdataforcolorfunc{
 	SeqIdPtr sip;
 	Int4     from;
 	Int4     to;
+	Int4     row;
 	Uint1    strand;
 	Boolean  IsUnAligned;
 	Uint1    style;
 	Uint1    rgb[3];
+	Uint1    UAstyle;
+	Uint1    UArgb[3];
 } DDVDataForColorFunc, PNTR DDVDataForColorFuncPtr;
 
 #define MAX_NCBIstdaa 26
@@ -238,7 +307,6 @@ DDVCOL_HOTPINK,/* G T A or C */
 DDVCOL_GRAY /*?, but MAX_NCBI4na==17, see mmdbapi2.h*/
 };
 
-
 extern void display_ParaG_content(MsaParaGPopListPtr mpplp,Int2 LineSize)
 {
 BioseqPtr bsp_debug=NULL;
@@ -246,7 +314,7 @@ Char                    szBuf[15];
 ParaGPtr                pgp;
 MsaTxtDispPtr mtdp;
 ValNodePtr    vnp,vnp2;
-Uint4 j,k,size;
+Uint4 j,k,size,sum;
 FILE *fp;
 Boolean bClose=TRUE;
 Int4 i;
@@ -281,16 +349,18 @@ Int4 i;
                                 fprintf(fp,"  ->ParaG[%d] , range (%7d..%7d):\n",k++,size,size+LineSize-1);
                                 size+=LineSize;
                                 vnp2=pgp->ptxtList;
-                                j=1;
+                                j=1;sum=0;
                                 while(vnp2){
                                         mtdp=(MsaTxtDispPtr)vnp2->data.ptrvalue;
                                         if (mtdp){
-                                        fprintf(fp,"    (%4u): range(%7d..%7d) , Gap: %2d, IDs (%4d,%4d) , Strand(%d)\n",
-                                                j++,mtdp->from,mtdp->to,mtdp->IsGap,mtdp->SegID,mtdp->BspID,
+                                        fprintf(fp,"    (%4u): range(%7d..%7d) (%2d), Gap: %2d, Strand(%d)\n",
+                                                j++,mtdp->from,mtdp->to,mtdp->to-mtdp->from+1,mtdp->IsGap,
                                                 mtdp->strand);
                                         }
+										sum+=(mtdp->to-mtdp->from+1);
                                         vnp2=vnp2->next;
                                 }
+								fprintf (fp,"            Total = %d.\n",sum);
                         }
                         vnp=vnp->next;
                 }
@@ -300,10 +370,11 @@ Int4 i;
 
 }
 
-static Boolean DDV_CreateDisplayFromIndex_1(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, Int2 LineSize)
+static Boolean DDV_CreateDisplayFromIndex_1(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, Int2 LineSize,
+		Int4 start,Int4 stop)
 {
    AlnMsgPtr      amp;
-   Int4           i;
+   Int4           i,from,to;
    Boolean        more;
    MsaTxtDispPtr  mtdp;
    Int4           n;
@@ -320,19 +391,32 @@ static Boolean DDV_CreateDisplayFromIndex_1(SeqAlignPtr sap, MsaParaGPopListPtr 
 		
    amp = AlnMsgNew();
    vnp_list = (ValNodePtr PNTR)MemNew((mpplp->nBsp)*sizeof(ValNodePtr));
+	if (start!=(Int4)-1){
+		from=start;
+	}
+	else{
+		from=0;
+	}
+	if (stop!=(Int4)-1){
+		to=stop+1;
+	}
+	else{
+		to=mpplp->LengthAli;
+	}
+
    for (n = 1; n<=(mpplp->nBsp); n++)
    {
       vnp_para = vnp_para_head = NULL;
       sip = AlnMgrGetNthSeqIdPtr(mpplp->sap, n);
-      for (i = 0; i<mpplp->LengthAli; i+=LineSize)
+      for (i = from; i<to; i+=LineSize)
       {
          amp = AlnMsgReNew(amp);
          pgp = (ParaGPtr)MemNew(sizeof(ParaG));
          pgp->StartLine = n - 1;
          pgp->nLines = 1;
          pgp->StartLetter = amp->from_m = i;
-         if (i + LineSize >= mpplp->LengthAli)
-            pgp->StopLetter = amp->to_m = mpplp->LengthAli - 1;
+         if (i + LineSize >= to)
+            pgp->StopLetter = amp->to_m = to - 1;
          else
             pgp->StopLetter = amp->to_m = i + LineSize -1;
          pgp->sip = sip;
@@ -367,7 +451,7 @@ static Boolean DDV_CreateDisplayFromIndex_1(SeqAlignPtr sap, MsaParaGPopListPtr 
       vnp_list[n-1]=vnp_para_head;
    }
    mpplp->TableHead = vnp_list;
-   display_ParaG_content(mpplp,LineSize);
+   /*display_ParaG_content(mpplp,LineSize);*/
    DDV_LocateParaG(mpplp->TableHead,mpplp->nBsp);
    return TRUE;
 }
@@ -501,17 +585,17 @@ static Boolean DDV_CreateDisplayFromIndex_2(SeqAlignPtr sap, MsaParaGPopListPtr 
       vnp_list[n-1]=vnp_para_head;
    }
    mpplp->TableHead = vnp_list;
-   display_ParaG_content(mpplp,LineSize);
+   /*display_ParaG_content(mpplp,LineSize);*/
    DDV_LocateParaG(mpplp->TableHead,mpplp->nBsp);
    return TRUE;
 }
 
-NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
-		Int2 LineSize, DDV_Disp_OptPtr ddop)
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop)
 {
    AMAlignIndexPtr  amaip;
    AlnMsgPtr        amp;
-   Int4             i;
+   Int4             i,from,to;
    Boolean          more;
    MsaTxtDispPtr    mtdp;
    Int4             n;
@@ -541,26 +625,20 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
       amaip = (AMAlignIndexPtr)sap->saip;
       if (sap->type == SAT_PARTIAL || (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_SEGMENTED_MASTERSLAVE))
       {
-         /*mpplp->sap = sap;
-         if (sap->type == SAT_PARTIAL)
-            mpplp->LengthAli = AlnMgrGetAlnLength(mpplp->sap, FALSE)+SPACER_TXT_BLANK*(amaip->alnsaps-1);
-         else
-            mpplp->LengthAli = AlnMgrGetAlnLength(mpplp->sap, FALSE) + SPACER_TXT_BLANK*(amaip->numseg-1);
-         mpplp->nBsp = AlnMgrGetNumRows(mpplp->sap);
-         mpplp->DisplayType = DDV_DISP_HORZ;*/
-         if (!DDV_CreateDisplay_DiscAlign(sap,mpplp,LineSize,
-				ddop))
-         /*if (!DDV_CreateDisplayFromIndex_2(mpplp->sap, mpplp, LineSize))*/
+         if (!DDV_CreateDisplay_DiscAlign(sap,mpplp,LineSize,ddop))
             return FALSE;
          else
             return TRUE;
       } else if (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_MASTERSLAVE)
       {
          mpplp->sap = sap;
-         mpplp->LengthAli = AlnMgrGetAlnLength(mpplp->sap, FALSE);
+         if (start==(Int4)-1 && stop==(Int4)-1)
+			 mpplp->LengthAli = AlnMgrGetAlnLength(mpplp->sap, FALSE);
+		else
+			mpplp->LengthAli=stop-start+1;
          mpplp->nBsp = AlnMgrGetNumRows(mpplp->sap);
          mpplp->DisplayType = DDV_DISP_HORZ;
-         if (!DDV_CreateDisplayFromIndex_1(sap, mpplp,LineSize))
+         if (!DDV_CreateDisplayFromIndex_1(sap, mpplp,LineSize,start,stop))
             return FALSE;
          else
             return TRUE;
@@ -573,7 +651,18 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
    mpplp->DisplayType = DDV_DISP_HORZ;
    amp = AlnMsgNew();
    vnp_list = (ValNodePtr PNTR)MemNew((mpplp->nBsp)*sizeof(ValNodePtr));
-   
+	if (start!=(Int4)-1){
+		from=start;
+	}
+	else{
+		from=0;
+	}
+	if (stop!=(Int4)-1){
+		to=stop+1;
+	}
+	else{
+		to=mpplp->LengthAli;
+	}
    for (n = 1; n<=(mpplp->nBsp); n++)
    {
       vnp_para = vnp_para_head = NULL;
@@ -581,17 +670,17 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
 	  amp->to_m=-1;
       amp = AlnMsgReNew(amp);
       last = FALSE;
-      for (i = 0; i<mpplp->LengthAli; i+=LineSize)
+      for (i = from; i<to; i+=LineSize)
       {
          amp->place = 0;
          pgp = (ParaGPtr)MemNew(sizeof(ParaG));
          pgp->StartLine = n - 1;
          pgp->nLines = 1;
          pgp->StartLetter = i;
-         if (i + LineSize >= mpplp->LengthAli)
+         if (i + LineSize >= to)
          {
             last = TRUE;
-            pgp->StopLetter = mpplp->LengthAli;
+            pgp->StopLetter = to;
          }
          else
             pgp->StopLetter = i + LineSize -1;
@@ -604,8 +693,8 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
                  amp->from_m = 0;
 	 amp->to_m = amp->from_m + LineSize -1;
          amp->row_num = n;
-         if (amp->to_m > mpplp->LengthAli)
-            amp->to_m = mpplp->LengthAli - 1;
+         if (amp->to_m > to)
+            amp->to_m = to - 1;
          more = TRUE;
          vnp = vnp_head = NULL;
 		 PopulateTo=0;
@@ -635,33 +724,33 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
       vnp_list[n-1]=vnp_para_head;
    }
    mpplp->TableHead = vnp_list;
-   display_ParaG_content(mpplp,LineSize);
+   /*display_ParaG_content(mpplp,LineSize);*/
    DDV_LocateParaG(mpplp->TableHead,mpplp->nBsp);
    return TRUE;
 }
 
-
-/*******************************************************************************
-
-  Function : DDV_CreateDisplay_DiscAlign()
-  
-  Purpose : create a display for a Disc. SeqAlign
-
-  Note :	Style : is used to determine how to display an unaligned region
-			Justification : in case where we want to display the sequence
-				  in an UA region, this parameter tells the function how to
-				  justify the sequence.
-
-  Return value : FALSE if failure
-
-*******************************************************************************/
-NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
-		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop)
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop)
 {
-Int4            TotLength,cumulpop,StartLetter,n,nPgp,from_bsp,to_bsp,MaxLength,
-                BspLength,BspStart,BspStop,nBsp,AbsPos;
+	return(DDV_CreateDisplayFromIndex_EX( sap,  mpplp, 
+		 LineSize,  ddop, (Int4) -1,  (Int4) -1));
+}
+
+
+static Boolean DDV_PopulateDisplayForDisc(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
+	Int4 nBsp,Int4 LineSize,DDV_Disp_OptPtr ddop,Int4 TotLength,ValNodePtr vnp_head,
+  Boolean OverrideDiscJustification)
+{
+/*-------------------------------------------------------------
+  Added OverrideDiscJustification:
+  Set this true for single block alignment.  In that case,
+  the first unaligned region will be right-justified and
+  the second unaligned region will be left-justified.
+-------------------------------------------------------------*/
+Int4            cumulpop,StartLetter,n,nPgp,from_bsp,to_bsp,MaxLength,
+                BspLength,BspStart,BspStop,AbsPos;
 Boolean         more,bFirstMtdp,bFirstPgp,IsGap;
-ValNodePtr      vnp,vnp2,vnp3,vnp_head,vnp_para,vnp_mtdp;
+ValNodePtr      vnp,vnp2,vnp3,vnp_para,vnp_mtdp;
 ValNodePtr PNTR vnp_list;
 ParaGPtr        pgp;
 SeqIdPtr        sip;
@@ -669,14 +758,8 @@ DescriDispPtr   ddp;
 MsaTxtDispPtr   mtdp_pgp;
 AlnMsgPtr       amp;
 UAMsgPtr        uamp;
-Uint1           strand,strand_tmp;
-
-	/*descriptor*/
-	nBsp = AlnMgrGetNumRows(sap);
-	vnp_head=UABuildDescriptor(sap,nBsp,LineSize,ddop,&TotLength,
-		ddop->ShowLeftTail,ddop->ShowRightTail);
-	if (vnp_head==NULL)
-		return(FALSE);
+Uint1           strand, strand_tmp, Justification;
+Int4            PassCount;
 
 	/*now, use the previous descriptor to build the ParaG List*/
 	mpplp->sap=sap;
@@ -702,6 +785,7 @@ Uint1           strand,strand_tmp;
 		StartLetter=0;AbsPos=0;/*disp coord*/
 		nPgp=0;
 		vnp=vnp_head;
+    PassCount = 0;
 		while(vnp){
 			ddp=(DescriDispPtr)vnp->data.ptrvalue;
 			if (ddp->TextStyle==MSA_TXT_STYLE_REG_ALIGN){/*aligned*/
@@ -722,7 +806,7 @@ Uint1           strand,strand_tmp;
 					if (mtdp_pgp->IsGap){/*disp coord*/
 						mtdp_pgp->from=AbsPos;
 						mtdp_pgp->to=mtdp_pgp->from+(amp->to_b-amp->from_b);
-						mtdp_pgp->TextStyle = MSA_TXT_STYLE_GAP;
+						mtdp_pgp->TextStyle = ddop->AGapStyle;
 					}
 					else{/*BSP coord*/
 						mtdp_pgp->from = amp->from_b;
@@ -766,22 +850,6 @@ Uint1           strand,strand_tmp;
 						}
 						break;
 					case MSA_TXT_STYLE_2:/*display the unaligned sequence*/
-						/*init the analysis process of an UA region*/
-						switch(ddp->UAnum){
-							case (Int4)-1:/*left tail*/
-								uamp=UAMgrIntUAMsg(ddp->from, ddp->to, 
-									DISP_JUST_RIGHT, strand);
-								break;
-							case (Int4)-2:/*right tail*/
-								uamp=UAMgrIntUAMsg(ddp->from, ddp->to, 
-									DISP_JUST_LEFT, strand);
-								break;
-							default:/*within SAP*/
-								uamp=UAMgrIntUAMsg(ddp->from, ddp->to, 
-									ddop->DiscJustification, strand);
-								break;
-						}
-						
 						MaxLength=ddp->UAMaxlength;
 						
 						if (ddp->UAnum>0){/*within SAP*/
@@ -789,24 +857,48 @@ Uint1           strand,strand_tmp;
 								&BspStop);
 						}
 						else{/*Tails of the SAP*/
-							AlnMgrGetNthRowTail(sap,n,
+							if (AlnMgrGetNthRowTail(sap,n,
 								(Uint1)(ddp->UAnum==(Int4)-1 ? LEFT_TAIL : RIGHT_TAIL),
-								&BspStart,&BspStop,&strand_tmp);
+								&BspStart,&BspStop,&strand_tmp)==FALSE){
+								BspStart=(Int4)-1;
+								BspStop=(Int4)-1;
+								BspLength=0;
+							}
 						
 						}
 												
 						if (BspStart!=(Int4)-1 && BspStop!=(Int4)-1){
 							BspLength=BspStop-BspStart+1;
 						}
+						/*init the analysis process of an UA region*/
+						switch(ddp->UAnum){
+							case (Int4)-1:/*left tail*/
+								uamp=UAMgrIntUAMsg(MaxLength,BspLength,BspStart,BspStop, 
+									ddp->from,ddp->to,DISP_JUST_RIGHT, strand);
+								break;
+							case (Int4)-2:/*right tail*/
+								uamp=UAMgrIntUAMsg(MaxLength,BspLength,BspStart,BspStop, 
+									ddp->from,ddp->to,DISP_JUST_LEFT, strand);
+								break;
+							default:/*within SAP*/
+                Justification = ddop->DiscJustification;
+                if (OverrideDiscJustification) {
+                  if (PassCount==0) {Justification = DISP_JUST_RIGHT;}
+                  if (PassCount==2) {Justification = DISP_JUST_LEFT;}
+                }
+								uamp=UAMgrIntUAMsg(MaxLength,BspLength,BspStart,BspStop, 
+									ddp->from,ddp->to, Justification, strand);
+								break;
+						}
 						/*analyse the content of the UA region*/
-						while(UAMgrGetNextUAbit(uamp,MaxLength,BspLength,BspStart,BspStop)){
+						while(UAMgrGetNextUAbit(uamp, BspStart, BspStop)){
 							/*get data*/
 							UAMgrUAMsgGetInfo(uamp,&from_bsp,&to_bsp,&IsGap);
 							/*list of TxT descriptors*/
 							mtdp_pgp = (MsaTxtDispPtr)MemNew(sizeof(MsaTxtDisp));
 							mtdp_pgp->IsGap = IsGap;
 							if (mtdp_pgp->IsGap){/*disp coord*/
-								mtdp_pgp->TextStyle = MSA_TXT_STYLE_GAP;
+								mtdp_pgp->TextStyle = ddop->UAGapStyle;
 								mtdp_pgp->from=AbsPos;
 								mtdp_pgp->to=mtdp_pgp->from+(to_bsp-from_bsp);
 							}
@@ -857,6 +949,7 @@ Uint1           strand,strand_tmp;
 				nPgp++;
 			}
 			vnp=vnp->next;
+      PassCount++;
 		}/*while() on the descriptor list*/
 		vnp_list[n-1]=vnp_para;
 	}/*for() on the bsp */
@@ -866,12 +959,153 @@ Uint1           strand,strand_tmp;
 
 	mpplp->TableHead = vnp_list;
 	/*just for debugging purpose*/
-	display_ParaG_content(mpplp,LineSize);
+	/*display_ParaG_content(mpplp,LineSize);*/
 	DDV_LocateParaG(mpplp->TableHead,mpplp->nBsp);
 	MemFree(amp);
 
 	return(TRUE);
 }
+
+/*******************************************************************************
+
+  Function : DDV_CreateDisplay_DiscAlign()
+  
+  Purpose : create a display for a Disc. SeqAlign
+
+  Return value : FALSE if failure
+
+*******************************************************************************/
+NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop)
+{
+Int4 nBsp,TotLength;
+ValNodePtr vnp_head;
+
+	/*descriptor*/
+	nBsp = AlnMgrGetNumRows(sap);
+	vnp_head=UABuildDescriptor(sap,nBsp,LineSize,ddop,&TotLength,
+		ddop->ShowLeftTail,ddop->ShowRightTail);
+	if (vnp_head==NULL)
+		return(FALSE);
+
+	/*build the display*/
+	return(DDV_PopulateDisplayForDisc(sap,mpplp,nBsp,LineSize,ddop,
+		TotLength,vnp_head, FALSE));
+}
+
+/*******************************************************************************
+
+  Function : DDV_CreateDisplay_DiscAlign()
+  
+  Purpose : create a display for a Disc. SeqAlign
+
+  Return value : FALSE if failure
+
+*******************************************************************************/
+NLM_EXTERN Boolean DDV_BuildDisp_BlockEditor(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int4 block_num)
+{
+Int4 nBsp,TotLength;
+ValNodePtr vnp_head;
+DDV_Disp_Opt ddo;
+
+	/*descriptor*/
+	nBsp = AlnMgrGetNumRows(sap);
+	vnp_head=UABuildDescriptorForBlockEditor(sap,nBsp, 
+			block_num,LIMIT_EDITOR_SIZE,&TotLength);
+	
+	if (vnp_head==NULL)
+		return(FALSE);
+
+	DDV_InitDDESAPdispStyles(&ddo);
+	/*build the display*/
+	return(DDV_PopulateDisplayForDisc(sap,mpplp,nBsp,LIMIT_EDITOR_SIZE,&ddo,
+		TotLength,vnp_head, FALSE));
+}
+
+/*******************************************************************************
+
+  Function : UABitDescrInit()
+  
+  Purpose : init a UABitDescr data block
+  
+  Return value : -
+
+*******************************************************************************/
+static void UABitDescrInit(UABitDescrPtr ubd,Int4 Start,Int4 Stop,Boolean IsGap)
+{
+	ubd->from=Start;
+	ubd->to=Stop;
+	ubd->IsGap=IsGap;
+}
+
+/*******************************************************************************
+
+  Function : UAMgrInitBitList()
+  
+  Purpose : init the descriptor of an UA region
+  
+  Return value : -
+
+*******************************************************************************/
+static void UAMgrInitBitList(UAMsgPtr uamp, Int4 MaxLength, Int4 BspLength,
+		Int4 BspStart,Int4 BspStop)
+{
+Int4 halfBspLengthSeqL,halfBspLengthSeqR,halfBspLengthDesc,start_middle,stop_middle;
+
+	/*just a gap*/
+	if (BspStart==(Int4)-1 && BspStop==(Int4)-1){
+		UABitDescrInit(&uamp->ubd[0],0,MaxLength-1,TRUE);
+		UABitDescrInit(&uamp->ubd[1],(Int4)-1,(Int4)-1,FALSE);
+		UABitDescrInit(&uamp->ubd[2],(Int4)-1,(Int4)-1,FALSE);
+		return;
+	}
+	/*only sequence*/
+	if (BspLength==MaxLength){
+		UABitDescrInit(&uamp->ubd[0],BspStart,BspStop,FALSE);
+		UABitDescrInit(&uamp->ubd[1],(Int4)-1,(Int4)-1,FALSE);
+		UABitDescrInit(&uamp->ubd[2],(Int4)-1,(Int4)-1,FALSE);
+		return;
+	}
+	/*additional data for DISP_JUST_CENTER and DISP_JUST_SPLIT*/
+	if (uamp->DispType==DISP_JUST_CENTER || uamp->DispType==DISP_JUST_SPLIT){
+		halfBspLengthSeqL=BspLength/2;
+		halfBspLengthSeqR=BspLength-halfBspLengthSeqL;
+		halfBspLengthDesc=MaxLength/2;
+		start_middle=halfBspLengthDesc-halfBspLengthSeqL;
+		stop_middle=start_middle+BspLength;
+	}
+
+	/*only one sequence letter and DISP_JUST_SPLIT : use DISP_JUST_LEFT*/
+	if (BspStart==BspStop && uamp->DispType==DISP_JUST_SPLIT){
+		uamp->DispType=DISP_JUST_LEFT;
+	}
+
+	switch(uamp->DispType){
+		case DISP_JUST_RIGHT:
+			UABitDescrInit(&uamp->ubd[0],0,MaxLength-BspLength-1,TRUE);
+			UABitDescrInit(&uamp->ubd[1],BspStart,BspStop,FALSE);
+			UABitDescrInit(&uamp->ubd[2],(Int4)-1,(Int4)-1,FALSE);
+			break;
+		case DISP_JUST_CENTER:
+			UABitDescrInit(&uamp->ubd[0],0,start_middle-1,TRUE);
+			UABitDescrInit(&uamp->ubd[1],BspStart,BspStop,FALSE);
+			UABitDescrInit(&uamp->ubd[2],stop_middle,MaxLength-1,TRUE);
+			break;
+		case DISP_JUST_SPLIT:
+			UABitDescrInit(&uamp->ubd[0],BspStart,BspStart+halfBspLengthSeqL-1,FALSE);
+			UABitDescrInit(&uamp->ubd[1],halfBspLengthSeqL,MaxLength-halfBspLengthSeqR-1,TRUE);
+			UABitDescrInit(&uamp->ubd[2],BspStart+halfBspLengthSeqL,BspStop,FALSE);
+			break;
+		case DISP_JUST_LEFT:
+			UABitDescrInit(&uamp->ubd[0],BspStart,BspStop,FALSE);
+			UABitDescrInit(&uamp->ubd[1],BspLength,MaxLength-1,TRUE);
+			UABitDescrInit(&uamp->ubd[2],(Int4)-1,(Int4)-1,FALSE);
+		default:
+			break;
+	}
+}
+
 
 /*******************************************************************************
 
@@ -885,17 +1119,18 @@ Uint1           strand,strand_tmp;
   Return value : -
 
 *******************************************************************************/
-NLM_EXTERN UAMsgPtr UAMgrIntUAMsg(Int4 from, Int4 to, Uint1 DispType, Uint1 strand)
+NLM_EXTERN UAMsgPtr UAMgrIntUAMsg( Int4 MaxLength, Int4 BspLength,
+		Int4 BspStart,Int4 BspStop,Int4 ddpFrom ,Int4 ddpTo , Uint1 DispType, Uint1 strand)
 {
 UAMsgPtr uamp=NULL;
 
 	uamp=(UAMsgPtr)MemNew(sizeof(UAMsg));
 	if (uamp){
-		uamp->from_ua=from;
-		uamp->to_ua=to;
 		uamp->DispType=DispType;
 		uamp->strand=strand;
-		uamp->CurrentPos=(Int4)-1;
+		uamp->from_a=uamp->currentPos=ddpFrom;
+		uamp->to_a=ddpTo;
+		UAMgrInitBitList(uamp,MaxLength,BspLength,BspStart,BspStop);
 	}
 	return(uamp);
 }
@@ -940,129 +1175,57 @@ NLM_EXTERN void UAMgrUAMsgGetInfo(UAMsgPtr uamp,Int4Ptr from_bsp, Int4Ptr to_bsp
   Function : UAMgrGetNextUAbit()
   
   Purpose : analytical function to retrieve information about an unaligned
-            region. uamp must init. before entering this function.
+            region. uamp must be init. before entering this function.
     
-  Return value : -
-
 *******************************************************************************/
-NLM_EXTERN Boolean UAMgrGetNextUAbit(UAMsgPtr uamp, Int4 MaxLength, Int4 BspLength,
-		Int4 BspStart,Int4 BspStop)
+NLM_EXTERN Boolean UAMgrGetNextUAbit(UAMsgPtr uamp,Int4 BspStart,Int4 BspStop)
 {
-Int4 start,stop,diff,diff2,halfBspLength,max,tmp;
-
-	/*means we are outside the scanned region*/
-	if (uamp->CurrentPos>uamp->to_ua) 
-		return(FALSE);
+Uint1 i;
+Int4  from_a,to_a,cumul=0,diff,tmp;
 	
-	/*first time we enter that function*/
-	if (uamp->CurrentPos==(Int4)-1){
-		uamp->CurrentPos=uamp->from_ua;
-	}
-
-	diff2=0;
-	
-	if (BspStart!=(Int4)-1 && BspStop!=(Int4)-1){
-		halfBspLength=BspLength/2;
-		
-		/*compute start and stop (UA coord system) of the sequence. It depends
-		on the display option*/
-		switch(uamp->DispType){
-			case DISP_JUST_RIGHT:
-				start=MaxLength-BspLength;
-				stop=MaxLength-1;
-				break;
-			case DISP_JUST_CENTER:
-				start=MaxLength/2-BspLength/2;
-				stop=start+BspLength-1;
-				break;
-			case DISP_JUST_SPLIT:
-				/*particular case; we have to deal with two BSP segments (one is
-				left-justified, the other is right-justified). The Bioseq is splitted
-				in two equal pieces : halfBspLength*/
-				/*they are two exceptions here : don't split if BspLength==
-				MaxLength and if BspLength==1; use DISP_JUST_LEFT instead*/
-				if (BspLength!=MaxLength && BspLength!=1){
-					/*here we compute the position of the GAP */
-					start=halfBspLength;
-					stop=MaxLength-halfBspLength-2;
-					/*look if we are in one of the two BSP segments or in the gap*/
-					if(uamp->from_ua<start){
-						/*left aligned segment*/
-						start=0;
-						stop=halfBspLength-1;
-						diff2=0;
-					}
-					else if (uamp->to_ua>stop){
-						/*right aligned segment*/
-						start=MaxLength-halfBspLength;
-						stop=MaxLength-1;
-						diff2=halfBspLength;
-					}
-					else{
-						/*he, he, he : we are in the gap !*/
-						start=(Int4)-1;
-						stop=(Int4)-1;
-					}
-				}
-				else{
-					start=0;
-					stop=BspLength-1;
-				}
-				break;
-			case DISP_JUST_LEFT:
-			default:
-				start=0;
-				stop=BspLength-1;
-				break;
-		}
-	}
-	else{
-		/*he, he, he : we are in the gap !*/
-		start=(Int4)-1;
-		stop=(Int4)-1;
-	}
-	
-	/*are we in the sequence*/
-	if (start<=uamp->CurrentPos && uamp->CurrentPos<=stop){
-		/*compute the BSP coordinates*/
-		uamp->from_r=BspStart+(uamp->CurrentPos-start);
-		if (uamp->DispType==DISP_JUST_SPLIT)
-			uamp->from_r+=diff2;
-		max=MIN(uamp->to_ua,stop);
-		uamp->to_r=uamp->from_r+(max-uamp->CurrentPos);
-		/*if minus strand (nuc. only); reverse the values*/
-		if (uamp->strand==Seq_strand_minus){
-			diff=uamp->to_r-uamp->from_r;
-			uamp->from_r=uamp->from_r+(BspStop-uamp->from_r)-(uamp->from_r-BspStart);
-			uamp->to_r=uamp->from_r-diff;
-			tmp=uamp->to_r;
-			uamp->to_r=uamp->from_r;
-			uamp->from_r=tmp;
-		}
-		uamp->IsGap=FALSE;
-		/*this will be used on the next function call*/
-		uamp->CurrentPos=max+1;
-	}
-	/*he, he, he : we are in the gap !*/
-	else{
-		uamp->from_r=uamp->CurrentPos;
-		/*be carefull : the right side of this segment could be in the
-		middle of a gap...*/
-		if (uamp->from_r<start){
-			if (start<=uamp->to_ua){
-				uamp->to_r=start-1;
-				uamp->CurrentPos=start;
+	if (uamp->currentPos>uamp->to_a) return(FALSE);
+	for (i=0;i<3;i++){
+		if (uamp->ubd[i].from!=(Int4)-1 && uamp->ubd[i].to!=(Int4)-1){
+			if (uamp->ubd[i].IsGap){/*disp coord*/
+				from_a=uamp->ubd[i].from;
+				to_a=uamp->ubd[i].to;
+			}
+			else{/*switch bsp coord to disp coord*/
+				from_a=cumul;
+				to_a=uamp->ubd[i].to-uamp->ubd[i].from+cumul;
+			}
+			if (uamp->currentPos>=from_a && uamp->currentPos<=to_a){
+				if (uamp->ubd[i].IsGap)
+					uamp->from_r=uamp->currentPos;
+				else
+					uamp->from_r=uamp->ubd[i].from+uamp->currentPos-cumul;
 			}
 			else{
-				uamp->to_r=uamp->to_ua;
-				uamp->CurrentPos=uamp->to_r+1;
+				cumul+=(to_a-from_a+1);
+				continue;
 			}
+			if (uamp->to_a>=from_a && uamp->to_a<=to_a){
+				uamp->to_r=_min_(uamp->to_a,to_a);
+				if (!uamp->ubd[i].IsGap)
+					uamp->to_r+=uamp->ubd[i].from-cumul;
+			}
+			else{
+				uamp->to_r=uamp->ubd[i].to;
+			}
+			uamp->currentPos+=(uamp->to_r-uamp->from_r+1);
+			uamp->IsGap=uamp->ubd[i].IsGap;
+			break;
 		}
-		else{
-			uamp->to_r=uamp->to_ua;
-			uamp->CurrentPos=uamp->to_r+1;
-		}
-		uamp->IsGap=TRUE;
+	}
+
+	/*if minus strand (nuc. only); reverse the values*/
+	if (uamp->strand==Seq_strand_minus && !uamp->IsGap){
+		diff=uamp->to_r-uamp->from_r;
+		uamp->from_r=uamp->from_r+(BspStop-uamp->from_r)-(uamp->from_r-BspStart);
+		uamp->to_r=uamp->from_r-diff;
+		tmp=uamp->to_r;
+		uamp->to_r=uamp->from_r;
+		uamp->from_r=tmp;
 	}
 	
 	return(TRUE);
@@ -1100,16 +1263,24 @@ Int4       i;
 				bsp_iID = GetItemIDGivenPointer (bsp_eID, 
 						OBJ_BIOSEQ, (Pointer) bsp);	
 				entitiesTbl[i]=UDV_EncodeIdxFeat(bsp_eID,bsp_iID);
-				BioseqUnlockById(pgp->sip);
+				BioseqUnlock(bsp);
 			}
 		}
 	}
 	return(entitiesTbl);
 }
 
-static ValNodePtr DDV_BuildTailDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
-	DDV_Disp_OptPtr ddop, Uint1 which_tail,Int4Ptr TotLength,
-	Int4Ptr cumulpop)
+/*******************************************************************************
+
+  Function : DDV_BuildTailDescriptor()
+  
+  Purpose : build a descriptor for the unaligned left/right tails of a SeqAlign
+    
+  Return value : the descriptor (see also TotLength; total size of the tail)
+
+*******************************************************************************/
+NLM_EXTERN ValNodePtr DDV_BuildTailDescriptor(SeqAlignPtr sap, Int4 nBsp, 
+	Int2 LineSize,Uint1 which_tail,Int4Ptr TotLength,Int4Ptr cumulpop)
 {
 Int4            startcopy,stopcopy,pop,i,MaxLength,start,stop;
 Boolean         bError;
@@ -1207,15 +1378,11 @@ DescriDispPtr   ddp;
 	bError=FALSE;
 	vnp_head=NULL;
 	*TotLength=0;
-	/*MaxLength=0;*/
-
 
 	/*build UnAligned left part, if needed*/
 	if (AddLeftUAPart && ddop->DispDiscStyle!=MSA_TXT_STYLE_1){
-		vnp_head=DDV_BuildTailDescriptor(sap,nBsp,LineSize,ddop,LEFT_TAIL,TotLength,
+		vnp_head=DDV_BuildTailDescriptor(sap,nBsp,LineSize,LEFT_TAIL,TotLength,
 			&cumulpop);
-		/*if (vnp_head==NULL) 
-			goto erreur;*/
 		/*get the last node; will be used in the SAP loop (see below)*/
 		if (vnp_head){
 			vnp=vnp_head;
@@ -1233,7 +1400,7 @@ DescriDispPtr   ddp;
 
 		startcopy=0;
 
-		if (length<0){
+		if (length<=0){
 			bUnAligned=TRUE;
 			switch(ddop->DispDiscStyle){/*user's display choice*/
 				case MSA_TXT_STYLE_1:/*put a spacer between 2 align blocks*/
@@ -1249,11 +1416,6 @@ DescriDispPtr   ddp;
 			bUnAligned=FALSE;
 			stopcopy=length;
 		} 
-		else {
-			bUnAligned=TRUE;
-			stopcopy=length;
-			UAnum++;
-		}
 
 		*TotLength+=(stopcopy-startcopy);/*to be used for the display coord. system*/
 		
@@ -1302,7 +1464,7 @@ DescriDispPtr   ddp;
 
 	/*build UnAligned right part, if needed*/
 	if (AddRightUAPart && ddop->DispDiscStyle!=MSA_TXT_STYLE_1){
-		vnp2=DDV_BuildTailDescriptor(sap,nBsp,LineSize,ddop,RIGHT_TAIL,TotLength,
+		vnp2=DDV_BuildTailDescriptor(sap,nBsp,LineSize,RIGHT_TAIL,TotLength,
 			&cumulpop);
 		/*add vnp2 at the end of vnp_head*/
 		if (vnp2) {
@@ -1312,14 +1474,11 @@ DescriDispPtr   ddp;
 			}
 			vnp->next=vnp2;
 		}
-		/*else{
-			vnp_head=ValNodeFreeData(vnp_head);
-		}*/
 	}
 
-/*debug only : print the content of the descriptor*/
+/*debug only : print the content of the descriptor
 
-/*	vnp=vnp_head;
+	vnp=vnp_head;
 	while(vnp){
 		ddp=(DescriDispPtr)vnp->data.ptrvalue;
 		printf("[%4i..%4i],%2i (%4i) ; ",ddp->from,ddp->to,ddp->TextStyle,
@@ -1332,8 +1491,153 @@ DescriDispPtr   ddp;
 		}
 		vnp=vnp->next;
 	}
-*/
-/*debug only - end*/
+
+debug only - end*/
+
+erreur :
+	return(vnp_head);
+}
+
+/*******************************************************************************
+
+  Function : UABuildDescriptorForBlockEditor()
+  
+  Purpose : build the descriptor of a SeqAlign for the block editor; i.e. the 
+  		descriptor contains the information about one aligned block along with
+		its two adjacent unaligned regions. See also the 'purpose' fo the function 
+		UABuildDescriptor() above.
+    
+  Return value : the descriptor (see also TotLength; total size of the SeqAlign,
+	  display coordinates)
+
+*******************************************************************************/
+NLM_EXTERN ValNodePtr UABuildDescriptorForBlockEditor(SeqAlignPtr sap, Int4 nBsp, 
+	Int4 block_num,Int4 LineSize,Int4Ptr TotLength)
+{
+Int4            length,r,cumulpop,StartLetter,startcopy,stopcopy,pop,UAnum,nBlock,
+				blockNum;
+Boolean         bUnAligned,bError,bPopNow;
+ValNodePtr      vnp,vnp_head,vnp2;
+DescriDispPtr   ddp;
+
+
+	/*test if we have a Discontinuous SeqAlign*/
+	if (!AlnMgrIsSAPDiscAli(sap)) return(NULL);
+	
+	/*get the number of block(s)*/
+	nBlock=AlnMgrGetNumSegments(sap);
+	if (block_num<0 || block_num>nBlock-1){
+		return(NULL);
+	}
+	r=cumulpop=UAnum=blockNum=0;
+	StartLetter=0;/*align coord*/
+	bError=FALSE;
+	vnp_head=NULL;
+	*TotLength=0;
+	/*if the user wants to edit the first block (block_num==0), I have
+	to use a special function to create the left-side part of the 
+	descriptor*/
+	if (block_num==0){
+		vnp_head=DDV_BuildTailDescriptor(sap,nBsp,LIMIT_EDITOR_SIZE,
+			LEFT_TAIL,TotLength,&cumulpop);
+		if (vnp_head){
+			vnp=vnp_head;
+			while(vnp->next){
+				vnp=vnp->next;
+			}
+		}
+	}
+
+	while(AlnMgrGetNextLengthBit(sap,&length,&r)){
+
+		bPopNow=FALSE;
+		startcopy=0;
+
+		/*unaligned region ?*/
+		if (length<=0){
+			/*region adjacent to the block of interest ?*/
+			if (UAnum==block_num-1 || UAnum==block_num){
+				bUnAligned=TRUE;
+				stopcopy=ABS(length);
+				bPopNow=TRUE;
+			}
+			UAnum++;
+		}
+		else{/*aligned region*/
+			if (blockNum==block_num){
+				bUnAligned=FALSE;
+				stopcopy=length;
+				bPopNow=TRUE;
+			}
+			else{
+				StartLetter+=length;
+			}
+			blockNum++;
+		}
+		
+		if (!bPopNow) continue;
+		
+		*TotLength+=(stopcopy-startcopy);/*to be used for the display coord. system*/
+		
+		while(startcopy<stopcopy){
+			/*store data*/
+			pop=_min_(stopcopy-startcopy,LineSize-cumulpop);
+			ddp=(DescriDispPtr)MemNew(sizeof(DescriDisp));
+			if (ddp==NULL) {
+				bError=TRUE;break;
+			}
+			if (bUnAligned==FALSE){
+				ddp->from=StartLetter;/*use align coord*/
+				ddp->to=ddp->from+pop-1;
+				ddp->TextStyle=MSA_TXT_STYLE_REG_ALIGN;
+				StartLetter+=pop;
+			}
+			else{
+				ddp->from=startcopy;/*use relative coord, i.e. UA coord system*/
+				ddp->to=ddp->from+pop-1;
+				ddp->TextStyle=MSA_TXT_STYLE_REG_UNALIGN;
+				ddp->UAnum=UAnum;/*UA region number*/
+				ddp->UAMaxlength=stopcopy;
+			}			
+			/*create a new node*/
+			if (vnp_head==NULL) {
+				vnp_head=ValNodeAddPointer(NULL,0,(Pointer)ddp);
+				vnp=vnp_head;
+			}
+			else vnp=ValNodeAddPointer(&vnp,0,(Pointer)ddp);
+
+			if (!vnp){
+				bError=TRUE;
+				break;
+			}
+			cumulpop+=pop;
+			if (cumulpop==LineSize) cumulpop=0;
+			startcopy+=pop;
+		}
+		if (bError) break;
+	}
+
+	/*oups...*/
+	if (bError){
+		vnp_head=ValNodeFreeData(vnp_head);
+		goto erreur;
+	}
+
+	
+	/*if the user wants to edit the last block (block_num==nBlock-1), I have
+	to use a special function to create the right-side part of the 
+	descriptor*/
+	if (block_num==nBlock-1){
+		vnp2=DDV_BuildTailDescriptor(sap,nBsp,LIMIT_EDITOR_SIZE,
+			RIGHT_TAIL,TotLength,&cumulpop);
+		if (vnp2) {
+			vnp=vnp_head;
+			while(vnp->next){
+				vnp=vnp->next;
+			}
+			vnp->next=vnp2;
+		}
+	}
 
 erreur :
 	return(vnp_head);
@@ -1428,7 +1732,7 @@ Char       DefLine[255];
 				fprintf(fp,"%s\n",DefLine);
 				bFirst=FALSE;
 			}
-			BioseqUnlockById(sip);
+			BioseqUnlock(bsp);
 			szSeq=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+2)*sizeof(Char));
 			if (!szSeq) return;/*todo : error msg for the user*/
 			DDV_GetSequenceFromParaG(pgp,&szSeq,bspLength,IsAA,NULL,NULL,NULL);
@@ -1510,7 +1814,7 @@ ByteStorePtr   PNTR byteSpp;
 DDV_ColorGlobal *layout;
 DDV_Disp_Opt   ddo;
 Boolean        bUseLayout;
-Uint1          what,mask_style;
+Uint1          what;
 
 	MemSet(&mppl,0,sizeof(MsaParaGPopList));
 	layout=NULL;
@@ -1536,28 +1840,31 @@ Uint1          what,mask_style;
 	
 	/*create the layout*/
 	if (bUseLayout){
-		layout = DDV_CreateColorGlobal(TRUE);
+		layout = DDV_CreateColorGlobal(TRUE, (void *)sap);
 		if (layout){
 			if (dobp->LayoutType&DDV_USE_STDCLR){
 				DDV_InitColour_When_Start(sap,&mppl,&layout, FALSE);
 			}
-			if (dobp->LayoutType&DDV_USE_UALAYOUT){
+			if (dobp->LayoutType&DDV_USE_UALAYOUT || dobp->LayoutType&DDV_USE_NOMLAYOUT){
 				DDV_LayoutUAregion(sap,&mppl,&layout,
+					dobp->normlayout.rgb,dobp->normlayout.style,
 					dobp->UAlayout.rgb,dobp->UAlayout.style);
 			}
 			if (dobp->LayoutType&DDV_USE_ISOLAYOUT){
 				DDV_LayoutISOColors(layout,mppl.TableHead,mppl.nBsp,
 					0,TRUE,matrix,dobp->ISOlayout.clr_ident,
-					dobp->ISOlayout.clr_simil,dobp->ISOlayout.clr_other);
+					dobp->ISOlayout.clr_simil,dobp->ISOlayout.clr_other,
+					dobp->ISOlayout.sty_ident,
+					dobp->ISOlayout.sty_simil,dobp->ISOlayout.sty_other);
 			}
 			if (dobp->LayoutType&DDV_USE_GAPLAYOUT){
-				DDV_LayoutGap(layout,mppl.TableHead[0],mppl.TableHead[1],
+				DDV_LayoutGap(layout,mppl.TableHead[0],mppl.TableHead[1],1,
 					dobp->GAPlayout.style,dobp->GAPlayout.rgb);
-				DDV_LayoutGap(layout,mppl.TableHead[1],mppl.TableHead[0],
+				DDV_LayoutGap(layout,mppl.TableHead[1],mppl.TableHead[0],0,
 					dobp->GAPlayout.style,dobp->GAPlayout.rgb);
 			}
 			if (dobp->LayoutType&DDV_USE_MASKLAYOUT){
-				DDV_LayoutMaskRegions(layout,mppl.TableHead[0],mask,
+				DDV_LayoutMaskRegions(layout,mppl.TableHead[0],mask,0,
 					dobp->MASKlayout.style,dobp->MASKlayout.rgb);
 			}
 		}
@@ -1575,6 +1882,332 @@ Uint1          what,mask_style;
 	return(TRUE);
 }
 
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaZero()
+  
+  Purpose : BLAST color sheme 0 : standard b&w BLAST output
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaZero(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=FALSE;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaOne()
+  
+  Purpose : BLAST color sheme 1 :
+              - masked regions in lowe case,
+			  - everything else in upper case.
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaOne(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaTwo()
+  
+  Purpose : BLAST color sheme 2 :
+              - masked regions in lower case, gray letters,
+			  - UnAligned regions in italic,
+			  - everything else in upper case.
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaTwo(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT|DDV_USE_NOMLAYOUT;
+	dobp->LayoutType|=DDV_USE_UALAYOUT;
+
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->normlayout.style=DDV_TXTSTYLE_BOLD;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
+	dobp->MASKlayout.rgb[0]=102;
+	dobp->MASKlayout.rgb[1]=102;
+	dobp->MASKlayout.rgb[2]=102;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaThree()
+  
+  Purpose : BLAST color sheme 3 :
+              - masked regions in lower case, gray letters,
+			  - UnAligned regions in italic,
+			  - Identity/Similarity colors
+			  - everything else in upper case.
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaThree(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT;
+	dobp->LayoutType|=DDV_USE_UALAYOUT;
+	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
+
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;/*|DDV_TXTSTYLE_COLOR;
+	dobp->MASKlayout.rgb[0]=102;
+	dobp->MASKlayout.rgb[1]=102;
+	dobp->MASKlayout.rgb[2]=102;
+*/
+	dobp->ISOlayout.clr_ident=DDVCOL_ORANGE;
+	dobp->ISOlayout.clr_simil=DDVCOL_BLUE;
+	dobp->ISOlayout.clr_other=DDVCOL_BLACK;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaFour()
+  
+  Purpose : BLAST color sheme 4 = BLAST color schema 3 but with different colors
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaFour(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT;
+	dobp->LayoutType|=DDV_USE_UALAYOUT;
+	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
+
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
+	dobp->MASKlayout.rgb[0]=102;
+	dobp->MASKlayout.rgb[1]=102;
+	dobp->MASKlayout.rgb[2]=102;
+
+	dobp->ISOlayout.clr_ident=DDVCOL_BLUE;
+	dobp->ISOlayout.clr_simil=DDVCOL_BROWN;
+	dobp->ISOlayout.clr_other=DDVCOL_RED;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaFive()
+  
+  Purpose : BLAST color sheme 5 = BLAST color schema 3 but with different colors
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaFive(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT;
+	dobp->LayoutType|=DDV_USE_UALAYOUT;
+	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
+
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
+	dobp->MASKlayout.rgb[0]=102;
+	dobp->MASKlayout.rgb[1]=102;
+	dobp->MASKlayout.rgb[2]=102;
+
+	dobp->ISOlayout.clr_ident=DDVCOL_RED;
+	dobp->ISOlayout.clr_simil=DDVCOL_BLUE;
+	dobp->ISOlayout.clr_other=DDVCOL_BLACK;
+}
+
+/*******************************************************************************
+
+  Function : DDV_BlastGetColorSchemaSix()
+  
+  Purpose : BLAST color sheme 6 = BLAST color schema 3 but with different colors
+  
+*******************************************************************************/
+static void DDV_BlastGetColorSchemaSix(DDVOptionsBlockPtr dobp)
+{
+	memset(dobp,0,sizeof(DDVOptionsBlock));
+	
+	dobp->bUseLayout=TRUE;
+
+	dobp->LayoutType=DDV_USE_MASKLAYOUT;
+	dobp->LayoutType|=DDV_USE_UALAYOUT;
+	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
+
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+
+	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;/*|DDV_TXTSTYLE_COLOR;
+	dobp->MASKlayout.rgb[0]=102;
+	dobp->MASKlayout.rgb[1]=102;
+	dobp->MASKlayout.rgb[2]=102;
+*/
+	dobp->ISOlayout.clr_ident=DDVCOL_ORANGE;
+	dobp->ISOlayout.clr_simil=DDVCOL_BLUE;
+	dobp->ISOlayout.clr_other=DDVCOL_BLACK;
+
+	dobp->ISOlayout.sty_ident=DDV_TXTSTYLE_BOLD;
+}
+
+/*******************************************************************************
+
+  Function : DDV_DisplayBlastPairList()
+  
+  Purpose : function to display a BLAST output.
+  
+  Parameters : 	sap; seqalign
+			    mask; list of masked regions in the query
+				fp; output file;
+				is_na; TRUE means nuc sequence
+				tx_option; some display options
+				ColorSchema; one of the available color schemes
+				
+  Return value : FALSE if failure
+
+*******************************************************************************/
+NLM_EXTERN Boolean DDV_DisplayBlastPairList(SeqAlignPtr sap, ValNodePtr mask,
+	FILE *fp, Boolean is_na, Uint4 tx_option,Uint1 ColorSchema)
+{
+DDVOptionsBlock dob;
+SeqAlignPtr     sap4;
+SeqIdPtr        new_id = NULL, old_id = NULL;    
+Int4Ptr PNTR    matrix;
+Uint4           option,i;
+Boolean         bRet, follower= FALSE;
+
+    if (!sap || !fp) 
+        return(FALSE);
+    
+	/*get the matrix*/
+    if (is_na == FALSE){
+        matrix=load_default_matrix();
+        if (!matrix)
+            return(FALSE);
+    } else {
+        matrix=NULL;
+    }
+    
+    /*init display format*/
+	option =VIEW_FULLSEQ;
+	if (ColorSchema==DDV_BLAST_COLOR0)    
+		option|=DISP_FULL_TXT;
+	else
+		option|=DISP_FULL_HTML;
+    option|=DISP_BSP_COORD;
+    option|=SEQNAME_BLAST_STD;
+	option|=DISP_NOLINKONNAME;
+    option|=DISP_BLAST_STD;
+    option|=DISPE_COLOR;
+
+	/*get the color scheme layout*/
+        /*note that the following functions will set to 0 the entire dob structure, before
+          filling in its content with the layout information. All subsequent init. of dob
+          should be done after the following switch()*/
+	switch(ColorSchema){
+		case DDV_BLAST_COLOR0:
+			option|=DISP_BLAST_MIDLINE;
+			DDV_BlastGetColorSchemaZero(&dob);
+			break;
+		case DDV_BLAST_COLOR1:
+			option|=DISP_BLAST_MIDLINE;
+			DDV_BlastGetColorSchemaOne(&dob);
+			break;
+		case DDV_BLAST_COLOR2:
+			option|=DISP_BLAST_MIDLINE;
+			DDV_BlastGetColorSchemaTwo(&dob);
+			break;
+		case DDV_BLAST_COLOR3:
+			DDV_BlastGetColorSchemaThree(&dob);
+			break;
+		case DDV_BLAST_COLOR4:
+			DDV_BlastGetColorSchemaFour(&dob);
+			break;
+		case DDV_BLAST_COLOR5:
+			DDV_BlastGetColorSchemaFive(&dob);
+			break;
+		case DDV_BLAST_COLOR6:
+			DDV_BlastGetColorSchemaSix(&dob);
+			break;
+	}
+
+    dob.LineSize=(Int2)60;
+    dob.matrix=matrix;
+    bRet=TRUE;
+    sap4=sap;
+
+    while(sap4) {
+        /*build the Index*/
+        if (sap4->segtype == SAS_DISC){
+            if (!sap4 || !AlnMgrIndexSingleSeqAlign(sap4)){
+                bRet=FALSE;
+                break;
+            }
+        }
+        else{
+            if (!sap4 || !AlnMgrIndexSingleChildSeqAlign(sap4)){
+                bRet=FALSE;
+                break;
+            }
+        }
+							
+        if (option&DISP_FULL_HTML){
+			fprintf(fp,"<pre>\n");
+		}
+        /* Attempt to print score for the alignment */
+        new_id = TxGetSubjectIdFromSeqAlign(sap4);
+        if(old_id != NULL) {
+            if(SeqIdMatch(new_id, old_id))
+                follower = TRUE;
+        }
+		
+		/*separator*/
+		if (option&DISP_FULL_HTML)
+			fprintf(fp,"<HR WIDTH=\"400\">");
+
+        old_id = new_id;
+        if(!FormatScoreFromSeqAlign(sap4, tx_option, fp, matrix, follower)){
+            bRet=FALSE;
+            break;
+        }
+        follower = FALSE;
+        if (option&DISP_FULL_HTML){
+			fprintf(fp,"</pre>\n");
+		}
+
+        /*display a SeqAlign*/
+		if (!DDV_DisplayNewBLAST(sap4, mask, matrix, option, (Pointer) &dob, fp)){
+            bRet=FALSE;
+            break;
+        }
+        sap4 = sap4->next;
+    }
+    
+    if (matrix){
+        for(i = 0; i<TX_MATRIX_SIZE; ++i)
+            MemFree(matrix[i]);
+        MemFree(matrix);
+    } 
+    
+    return(bRet);
+	
+}
 
 /*******************************************************************************
 
@@ -1591,7 +2224,7 @@ Uint1          what,mask_style;
   Return value : -
 
 *******************************************************************************/
-NLM_EXTERN Boolean DDV_DisplayBlastSAP(SeqAlignPtr sap, ValNodePtr mask,
+static Boolean DDV_DisplayBlastSAP(SeqAlignPtr sap, ValNodePtr mask,
 	FILE *fp, Boolean is_na, Uint4 tx_option)
 {
 DDVOptionsBlock dob;
@@ -1599,7 +2232,7 @@ SeqAlignPtr     sap4;
 SeqIdPtr        new_id = NULL, old_id = NULL;    
 Int4Ptr PNTR    matrix;
 Uint4           option,i;
-Boolean         bRet,bUseLayout, follower= FALSE;
+Boolean         bRet, follower= FALSE;
 
     if (!sap || !fp) 
         return(FALSE);
@@ -1727,6 +2360,8 @@ NLM_EXTERN void DDV_InitDefSAPdispStyles(DDV_Disp_OptPtr ddop)
 	ddop->DispDiscStyle=MSA_TXT_STYLE_1;
 	ddop->SpacerSize=SPACER_TXT_BLANK;
     ddop->DiscJustification=DISP_JUST_CENTER;
+	ddop->UAGapStyle=MSA_TXT_STYLE_UAGAP;
+	ddop->AGapStyle=MSA_TXT_STYLE_GAP;
 
 	/*ruler style*/
 	ddop->RulerStyle=RulerStyle_Continue_Start;
@@ -1751,6 +2386,34 @@ NLM_EXTERN void DDV_InitCn3DSAPdispStyles(DDV_Disp_OptPtr ddop)
 	ddop->DispDiscStyle=MSA_TXT_STYLE_2;
 	ddop->SpacerSize=0;
     ddop->DiscJustification=DISP_JUST_SPLIT;
+	ddop->UAGapStyle=MSA_TXT_STYLE_GAP;
+	ddop->AGapStyle=MSA_TXT_STYLE_GAP;
+
+	/*ruler style*/
+	ddop->RulerStyle=RulerStyle_Continue_Start;
+}
+
+/*******************************************************************************
+
+  Function : DDV_InitDDESAPdispStyles()
+  
+  Purpose : set the styles for DDE (i.e. DDV used as an editor).
+  
+  Return value : -
+
+*******************************************************************************/
+NLM_EXTERN void DDV_InitDDESAPdispStyles(DDV_Disp_OptPtr ddop)
+{
+	/*use colors*/
+	ddop->bUseColors=TRUE;
+	/*disc SAP styles*/
+	ddop->ShowLeftTail=TRUE;
+	ddop->ShowRightTail=TRUE;
+	ddop->DispDiscStyle=MSA_TXT_STYLE_2;
+	ddop->SpacerSize=0;
+    ddop->DiscJustification=DISP_JUST_LEFT;
+	ddop->UAGapStyle=MSA_TXT_STYLE_UAGAP;
+	ddop->AGapStyle=MSA_TXT_STYLE_GAP;
 
 	/*ruler style*/
 	ddop->RulerStyle=RulerStyle_Continue_Start;
@@ -1804,21 +2467,38 @@ Uint2	   i=0;
   Return value : -.
 
 *******************************************************************************/
-static void DDV_SetStyle(DDV_ColorCell * dccp,Uint1 style, Uint1 *rgb)
+static void DDV_SetStyle(DDV_ColorCell * dccp,Uint1 style, Uint1 *rgb,
+	Boolean bAllowReset)
 {
-	if (style&DDV_TXTSTYLE_ITALIC)
+	if (style&DDV_TXTSTYLE_ITALIC){
 		dccp->UseItalic=TRUE;
-    else dccp->UseItalic=FALSE;
-	if (style&DDV_TXTSTYLE_BOLD)
+	}
+    else if (bAllowReset){
+			dccp->UseItalic=FALSE;
+	}
+	
+	if (style&DDV_TXTSTYLE_BOLD){
 		dccp->UseBold=TRUE;
-    else dccp->UseBold=FALSE;
-	if (style&DDV_TXTSTYLE_UNDERLINE)
+	}
+    else if (bAllowReset){
+		dccp->UseBold=FALSE;
+	}
+	
+	if (style&DDV_TXTSTYLE_UNDERLINE){
 		dccp->UseUnderline=TRUE;
-    else dccp->UseUnderline=FALSE;
-	if (style&DDV_TXTSTYLE_LOWERCASE)
+	}
+	else if (bAllowReset){
+    	dccp->UseUnderline=FALSE;
+	}
+	
+	if (style&DDV_TXTSTYLE_LOWERCASE){
 		dccp->LowerCase=TRUE;
-    else dccp->LowerCase=FALSE;
-	if (style&DDV_TXTSTYLE_COLOR){
+	}
+	else if(bAllowReset) {
+    	dccp->LowerCase=FALSE;
+	}
+	
+	if (style&DDV_TXTSTYLE_COLOR && rgb){
 		dccp->rgb[0]=rgb[0];
 		dccp->rgb[1]=rgb[1];
 		dccp->rgb[2]=rgb[2];
@@ -1831,6 +2511,9 @@ static void DDV_SetStyle(DDV_ColorCell * dccp,Uint1 style, Uint1 *rgb)
   
   Purpose : set the standard colours for a nuc or prot sequence; 
      or the same function can be used to layout UnAligned regions
+
+  Note: For performance issue this function set up the layout of
+		 both aligned and unaligned regions at the same time
     
   Return value : -
 
@@ -1848,7 +2531,6 @@ Uint1Ptr               SeqBuf;
 Int2                   len;
 Uint1                  idx;
 DDV_ColorCell *        dccp;
-Uint1                  rgb[3];
 
 	ddfcfp=(DDVDataForColorFuncPtr)pData;
 	
@@ -1861,7 +2543,9 @@ Uint1                  rgb[3];
 		IsAA=ISA_aa(bsp->mol);
 		BioseqUnlock(bsp);
 	}
-	
+	else return;
+
+
 	/*compute the ends of the bioseq's region we want to analyse*/
 	if (ddfcfp->from!=(Int4)-1)
 		from=ddfcfp->from;
@@ -1875,7 +2559,7 @@ Uint1                  rgb[3];
 
 	to=from+read_buf_size-1;
 	if (to>limit) to=limit;
-	
+
 	/*read the sequence by chunk of 'read_buf_size' letters*/
 	while(TRUE){
 		len=(Int2)(to-from+1);
@@ -1889,7 +2573,7 @@ Uint1                  rgb[3];
 				else
 					dp=from+i;
 				/*first, query Color Manager*/
-                dccp=DDV_GetColor(pColorGlobal,ddfcfp->sip,-1,dp);
+                dccp=DDV_GetColor(pColorGlobal,NULL,ddfcfp->row+1,dp);
                 if (!dccp) return;
                 if(what & DDV_USE_STDCLR) {
                     if (IsAA) 
@@ -1897,17 +2581,19 @@ Uint1                  rgb[3];
                     else
                         idx=DDV_STD_NAColor[*(SeqBuf+i)];/*NA*/
                     
-                    if (ddfcfp->IsUnAligned)DDV_SetStyle(dccp,ddfcfp->style 
-                        | DDV_TXTSTYLE_LOWERCASE,ddfcfp->rgb);
-                    else DDV_SetStyle(dccp,ddfcfp->style,DDV_PaletteRGB[idx]);
+                    if (ddfcfp->IsUnAligned)
+						DDV_SetStyle(dccp,ddfcfp->UAstyle,DDV_PaletteRGB[idx],TRUE);
+                    else 
+						DDV_SetStyle(dccp,ddfcfp->style,DDV_PaletteRGB[idx],TRUE);
                 }
                 else if(what & DDV_USE_UALAYOUT) {
-                    if (ddfcfp->IsUnAligned)DDV_SetStyle(dccp,ddfcfp->style 
-                        | DDV_TXTSTYLE_LOWERCASE,ddfcfp->rgb);
-                    else DDV_SetStyle(dccp,ddfcfp->style,DDV_PaletteRGB[DDVCOL_BLACK]);
+                    if (ddfcfp->IsUnAligned)
+						DDV_SetStyle(dccp,ddfcfp->UAstyle,ddfcfp->UArgb,TRUE);
+                    else 
+						DDV_SetStyle(dccp,ddfcfp->style,DDV_PaletteRGB[DDVCOL_BLACK],TRUE);
                 }				
                 /*set the colour*/
-                DDV_SetColor(pColorGlobal, ddfcfp->sip, -1, dp, dccp);
+                DDV_SetColor(pColorGlobal, NULL, ddfcfp->row+1, dp, dccp);
             }
             MemFree(SeqBuf);
         }
@@ -1934,30 +2620,28 @@ Uint1                  rgb[3];
         NoColor; don't color the bsp's, but do change the case.
 		
   Note : usually, this function is called when DDV loads a SeqAlign
+         For performance issue this function set up the layout of
+		 both aligned and unaligned regions at the same time
   
   Return value : FALSE is failure.
 
 *******************************************************************************/
 static Boolean DDV_InitColourSAP(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
-	DDV_ColorGlobal * * gclr,Uint1 what,Uint1 * pRGB,Uint1 style)
+	DDV_ColorGlobal * * gclr,Uint1 what,Uint1 * pRGB,Uint1 style,
+	Uint1 * pUARGB,Uint1 UAstyle)
 {
 DDVDataForColorFunc  ddfcf;
 SeqIdPtr             sip;
 ValNodePtr           vnp,vnp2;
 ParaGPtr             pgp;
 MsaTxtDispPtr        mtdp;
-Boolean              cont,bAligned;
 Int4                 n;
-Int4                 start;
-Int4                 stop;
-Int4                 tmp;
-Int4                 nRow;
 
     if (!sap)
     return (FALSE);
 
     if (!(*gclr)){
-        *gclr = DDV_CreateColorGlobal(FALSE);
+        *gclr = DDV_CreateColorGlobal(FALSE, (void *) sap);
         if (!(*gclr))
             return(FALSE);
     }
@@ -1975,9 +2659,11 @@ Int4                 nRow;
                         ddfcf.sip=sip;
                         ddfcf.from=mtdp->from;
                         ddfcf.to=mtdp->to;
+                        ddfcf.row=n;
                         ddfcf.strand=mtdp->strand;
                         ddfcf.IsUnAligned=mtdp->IsUnAligned;
                         ddfcf.style=style;
+                        ddfcf.UAstyle=UAstyle;
                         if (pRGB){
                             ddfcf.rgb[0]=pRGB[0];
                             ddfcf.rgb[1]=pRGB[1];
@@ -1987,6 +2673,16 @@ Int4                 nRow;
                             ddfcf.rgb[0]=0;
                             ddfcf.rgb[1]=0;
                             ddfcf.rgb[2]=0;
+                        }
+                        if (pUARGB){
+                            ddfcf.UArgb[0]=pUARGB[0];
+                            ddfcf.UArgb[1]=pUARGB[1];
+                            ddfcf.UArgb[2]=pUARGB[2];
+                        }
+                        else{
+                            ddfcf.UArgb[0]=0;
+                            ddfcf.UArgb[1]=0;
+                            ddfcf.UArgb[2]=0;
                         }
                         DDV_SetStd_AA_UA_ClrEx(*gclr, (Pointer)&ddfcf, NULL, what);
                     }
@@ -2009,9 +2705,11 @@ Int4                 nRow;
 NLM_EXTERN Boolean DDV_InitColour_When_Start(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
 	DDV_ColorGlobal * * gclr, Boolean NoColor)
 {
-    if(NoColor) return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_STDCLR,NULL,0));
-    else return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_STDCLR,NULL,
-        DDV_TXTSTYLE_COLOR));
+    if(NoColor) 
+		return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_STDCLR,NULL,0,NULL,0));
+    else 
+		return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_STDCLR,NULL,
+        	DDV_TXTSTYLE_COLOR,NULL,DDV_TXTSTYLE_COLOR|DDV_TXTSTYLE_LOWERCASE));
 }
 
 /*******************************************************************************
@@ -2022,9 +2720,9 @@ NLM_EXTERN Boolean DDV_InitColour_When_Start(SeqAlignPtr sap,MsaParaGPopListPtr 
   
 *******************************************************************************/
 NLM_EXTERN Boolean DDV_LayoutUAregion(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
-	DDV_ColorGlobal * * gclr,Uint1 * pRGB,Uint1 style)
+	DDV_ColorGlobal * * gclr,Uint1 * pRGB,Uint1 style,Uint1 * pUARGB,Uint1 UAstyle)
 {
-	return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_UALAYOUT,pRGB,style));
+	return(DDV_InitColourSAP(sap,mpplp,gclr,DDV_USE_UALAYOUT,pRGB,style,pUARGB,UAstyle));
 }
 
 
@@ -2101,8 +2799,8 @@ MsaTxtDispPtr mtdp;
   Return value : -.
 
 *******************************************************************************/
-NLM_EXTERN void DDV_LayoutGap(DDV_ColorGlobal *pcg,
-	ValNodePtr vnp_seq1,ValNodePtr vnp_seq2,Uint1 style,Uint1 *rgb)
+NLM_EXTERN void DDV_LayoutGap(DDV_ColorGlobal *pcg,ValNodePtr vnp_seq1,
+		ValNodePtr vnp_seq2,Int4 row2,Uint1 style,Uint1 *rgb)
 {
 DDV_ColorCell * dccp;
 ValNodePtr      vnp1,vnp2,vnp3,vnp4;
@@ -2130,16 +2828,16 @@ DDV_ColorCell   dcc;
 				for (i=from;i<to;i++){
 					bsp_coord=(Int4)DDV_GetBspCoordGivenDispCoord(pgp2,(Int4)i);
 					if (bsp_coord>=0){
-						dccp=DDV_GetColor(pcg,pgp2->sip,-1,bsp_coord);
+						dccp=DDV_GetColor(pcg,NULL,row2+1,bsp_coord);
 						if (dccp){/*if there is already a color, just
 						  update the required parameter*/
-							DDV_SetStyle(dccp,style,rgb);
-							DDV_SetColor(pcg,pgp2->sip,-1,bsp_coord,dccp);
+							DDV_SetStyle(dccp,style,rgb,FALSE);
+							DDV_SetColor(pcg,NULL,row2+1,bsp_coord,dccp);
 						}
 						else{/*otherwise, set up a new layout for that letter*/
 							memset(&dcc,0,sizeof(DDV_ColorCell));
-							DDV_SetStyle(&dcc,style,rgb);
-							DDV_SetColor(pcg, pgp2->sip, -1, bsp_coord, &dcc);
+							DDV_SetStyle(&dcc,style,rgb,FALSE);
+							DDV_SetColor(pcg, NULL, row2+1, bsp_coord, &dcc);
 						}
 					}
 				}
@@ -2164,55 +2862,64 @@ DDV_ColorCell   dcc;
 
 *******************************************************************************/
 NLM_EXTERN void DDV_LayoutMaskRegions(DDV_ColorGlobal *pcg,
-	ValNodePtr vnp_query,ValNodePtr mask,Uint1 style,Uint1 *rgb)
+	ValNodePtr vnp_query,ValNodePtr mask,Int4 row,Uint1 style,Uint1 *rgb)
 {
-DDV_ColorCell * dccp;
-ValNodePtr      vnp;
-ParaGPtr        pgp;
-SeqIdPtr        sip;
-SeqLocPtr       slp;
-Int4            i,bsp_coord,bsp_start,bsp_stop,mask_start,mask_stop,scan_from,
-                scan_to;
-DDV_ColorCell   dcc;
+    DDV_ColorCell * dccp;
+    ValNodePtr      vnp;
+    SeqLocPtr       slp;
+    Int4            i,bsp_start,bsp_stop,mask_start,mask_stop,scan_from,
+        scan_to;
+    DDV_ColorCell   dcc;
+    
+    if (pcg==NULL || vnp_query==NULL || mask==NULL) return;
+    
+    /*get sequence range*/
+    UDV_GetBspRangeinPGPList(vnp_query,&bsp_start,&bsp_stop);
+    
+    /*scan the mask list*/
+    vnp=mask;
+    while(vnp) {
+        slp=(SeqLocPtr)vnp->data.ptrvalue;
+        
+        if(slp == NULL) 
+            return;
+        
+        if(slp->choice == SEQLOC_PACKED_INT)
+            slp = slp->data.ptrvalue;
+        else if (slp->choice != SEQLOC_INT)
+            return;
+        
+        while(slp) {
 
-	if (pcg==NULL || vnp_query==NULL || mask==NULL) return;
-
-	/*get the sip*/
-	pgp=(ParaGPtr)vnp_query->data.ptrvalue;
-	if (!pgp) return;
-	sip=pgp->sip;
-
-	/*get query sequence range*/
-	UDV_GetBspRangeinPGPList(vnp_query,&bsp_start,&bsp_stop);
-
-	/*scan the mask list*/
-	vnp=mask;
-	while(vnp){
-		slp=(SeqLocPtr)vnp->data.ptrvalue;
-		if (slp){
-			mask_start=SeqLocStart(slp);
-			mask_stop=SeqLocStop(slp);
-			/*check if the masked region is in the bsp range*/
-			if (mask_stop>=bsp_start && mask_start<=bsp_stop){
-				scan_from=_max_(mask_start,bsp_start);
-				scan_to=_min_(mask_stop,bsp_stop)+1;
-				for(i=scan_from;i<scan_to;i++){
-					dccp=DDV_GetColor(pcg,sip,-1,i);
-					if (dccp){/*if there is already a color, just
-					  update the LowerCase parameter*/
-						DDV_SetStyle(dccp,style,rgb);
-						DDV_SetColor(pcg,sip,-1,i,dccp);
-					}
-					else{/*otherwies, set a new layout for that letter*/
-						memset(&dcc,0,sizeof(DDV_ColorCell));
-						DDV_SetStyle(&dcc,style,rgb);
-						DDV_SetColor(pcg, sip, -1, i, &dcc);
-					}
-				}
-			}
-		}
-		vnp=vnp->next;
-	}
+            if(slp->choice != SEQLOC_INT) {
+                slp = slp->next;
+                continue;
+            }
+            
+            mask_start=SeqLocStart(slp);
+            mask_stop=SeqLocStop(slp);
+            
+            /*check if the masked region is in the bsp range*/
+            if (mask_stop>=bsp_start && mask_start<=bsp_stop){
+                scan_from=_max_(mask_start,bsp_start);
+                scan_to=_min_(mask_stop,bsp_stop)+1;
+                for(i=scan_from;i<scan_to;i++) {
+                    dccp=DDV_GetColor(pcg,NULL,row+1,i);
+                    if (dccp){/*if there is already a color, just
+                                update the LowerCase parameter*/
+                        DDV_SetStyle(dccp,style,rgb,FALSE);
+                        DDV_SetColor(pcg,NULL,row+1,i,dccp);
+                    } else{/*otherwies, set a new layout for that letter*/
+                        memset(&dcc,0,sizeof(DDV_ColorCell));
+                        DDV_SetStyle(&dcc,style,rgb,FALSE);
+                        DDV_SetColor(pcg, NULL, row+1, i, &dcc);
+                    }
+                }
+            }
+            slp = slp->next;
+        }
+        vnp=vnp->next;
+    }
 }
 
 /*******************************************************************************
@@ -2222,7 +2929,8 @@ DDV_ColorCell   dcc;
   Purpose : layout the colors for ident/simil/other (I/S/O).
   
 *******************************************************************************/
-static void DDV_SetISOClr(DDV_ColorGlobal * pcg, ParaGPtr pgp,Int4 disp_coord, Uint1 idx)
+static void DDV_SetISOClr(DDV_ColorGlobal * pcg, ParaGPtr pgp,Int4 disp_coord, 
+		Int4 row, Uint1 idx,Uint1 sty)
 {					
 DDV_ColorCell * dccp;
 DDV_ColorCell   dcc;
@@ -2230,20 +2938,22 @@ Int4            bsp_coord;
 
 	bsp_coord=DDV_GetBspCoordGivenDispCoord(pgp,disp_coord);
 	if (bsp_coord>=0){
-		dccp=DDV_GetColor(pcg,pgp->sip,-1,bsp_coord);
+		dccp=DDV_GetColor(pcg,NULL,row+1,bsp_coord);
 		if (dccp){/*if there is already a color, just
 		  update the required parameter*/
 			dccp->rgb[0]=DDV_PaletteRGB[idx][0];
 			dccp->rgb[1]=DDV_PaletteRGB[idx][1];
 			dccp->rgb[2]=DDV_PaletteRGB[idx][2];
-			DDV_SetColor(pcg,pgp->sip,-1,bsp_coord,dccp);
+			DDV_SetStyle(dccp,sty,NULL,FALSE);
+			DDV_SetColor(pcg,NULL,row+1,bsp_coord,dccp);
 		}
 		else{/*otherwise, set up a new layout for that letter*/
 			memset(&dcc,0,sizeof(DDV_ColorCell));
 			dcc.rgb[0]=DDV_PaletteRGB[idx][0];
 			dcc.rgb[1]=DDV_PaletteRGB[idx][1];
 			dcc.rgb[2]=DDV_PaletteRGB[idx][2];
-			DDV_SetColor(pcg, pgp->sip, -1, bsp_coord, &dcc);
+			DDV_SetStyle(&dcc,sty,NULL,FALSE);
+			DDV_SetColor(pcg, NULL, row+1, bsp_coord, &dcc);
 		}
 	}
 }
@@ -2259,7 +2969,7 @@ Int4            bsp_coord;
 *******************************************************************************/
 NLM_EXTERN void DDV_LayoutISOColors(DDV_ColorGlobal *pcg,ValNodePtr * row_list,Int4 nRow,
 	Int4 Master,Boolean bSetMaster,Int4Ptr * matrix,Uint1 IdentClr,Uint1 SimilClr,
-	Uint1 OtherClr)
+	Uint1 OtherClr,Uint1 IdentSty,Uint1 SimilSty,Uint1 OtherSty)
 {
 ValNodePtr * row;
 ValNodePtr vnp;
@@ -2268,7 +2978,7 @@ CharPtr   szQuery,szComp;
 BioseqPtr bsp;
 Boolean   IsAA;
 Int4      i,j,len,bspLength;
-Uint1     idx;
+Uint1     idx,sty;
 
 	row=(ValNodePtr *)MemNew(nRow*sizeof(ValNodePtr));
 	if (!row) return;
@@ -2286,7 +2996,7 @@ Uint1     idx;
 		if (!bsp) goto error;
 		bspLength=BioseqGetLen(bsp);
 		IsAA=ISA_aa(bsp->mol);
-		BioseqUnlockById(pgpQuery->sip);
+		BioseqUnlock(bsp);
 		if (!DDV_GetSequenceFromParaG(pgpQuery,&szQuery,bspLength,IsAA,NULL,
 				NULL,NULL)) goto error;
 		/*lopp on each row, get the sequence, set the colors*/
@@ -2299,16 +3009,19 @@ Uint1     idx;
 				for (j=0;j<len;j++){
 					if (isalpha(szComp[j]) || szComp[j]=='|'){
 						idx=IdentClr;
+						sty=IdentSty;
 					}
 					else if (szComp[j]=='+'){
 						idx=SimilClr;
+						sty=SimilSty;
 					}
 					else{
 						idx=OtherClr;
+						sty=OtherSty;
 					}
-					DDV_SetISOClr(pcg,pgpSubject,pgpSubject->StartLetter+j,idx);
+					DDV_SetISOClr(pcg,pgpSubject,pgpSubject->StartLetter+j,i,idx,sty);
 					if (bSetMaster)
-						DDV_SetISOClr(pcg,pgpQuery,pgpQuery->StartLetter+j,idx);
+						DDV_SetISOClr(pcg,pgpQuery,pgpQuery->StartLetter+j,0,idx,sty);
 				}
 				MemFree(szComp);
 			}
@@ -2323,3 +3036,239 @@ error:
 	if (szQuery) MemFree(szQuery);
 }
 
+
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 BlockIndex) {
+/*----------------------------------------------------------------------------
+*  allocate and fill the paragraphs for displaying 1 block of a
+*  sequence alignment, plus the flanking unaligned regions.
+*  BlockIndex is a 0-based block count.
+*
+*  This function works by making a linked-list of 3 DescriDisp's:
+*  head --> node1 --> node2 --> node3
+*            ||        ||        ||
+*            \/        \/        \/
+*         unaligned  aligned  unaligned
+*
+*  This is a descriptor for the display.  This descriptor is passed
+*  to DDV_PopulateDisplayForDisc to create the paragraphs.
+*  Each node is easy to construct:
+*
+*
+*                           Aligned (A)                UnAligned (UA)
+*                           -----------                --------------
+*  from:                SeqAlign coords                             0
+*  to:                     "       "                         length-1
+*  TextStyle:   MSA_TXT_STYLE_REG_ALIGN     MSA_TXT_STYLE_REG_UNALIGN
+*  UAnum:                             0             (explained below)
+*  UAMaxLength:                       0                        length
+*
+*
+*  UAnum, for unaligned regions, is determined as shown here:
+*
+*  BlockIndex:               0                1                2
+*               |<--UA-->|<--A-->|<--UA-->|<--A-->|<--UA-->|<--A-->|<--UA-->|
+*  UAnum:           -1                1                2               -2
+*  where -1 and -2 are for the LEFT_TAIL and RIGHT_TAIL, respectively.
+*
+*
+*  return a pointer to the paragraph list.
+*  return NULL for unsuccessful completion.
+*---------------------------------------------------------------------------*/
+  ValNodePtr          head = NULL;
+  DescriDispPtr       ddp1, ddp2, ddp3;
+  Int4                i, NumRows, NumBlocks, Size, SaveSize, start, stop;
+  Int4                TotalLength=0;
+  Uint1               strand;
+  DDV_Disp_Opt        DisplayOptions;
+  MsaParaGPopListPtr  pPopList;
+
+  /* index the seq align */
+  if (!AlnMgrIndexSeqAlign(sap)) {
+    return(NULL);
+  }
+
+  NumRows = AlnMgrGetNumRows(sap);
+  NumBlocks = AlnMgrGetNumSegments(sap);
+  if ((BlockIndex < 0) || (BlockIndex >= NumBlocks)) {
+    return(NULL);
+  }
+
+  /* figure out the length of the unaligned region preceeding the block */
+  SaveSize = 0;
+  for (i=0; i<NumRows; i++) {
+    if (BlockIndex == 0) {
+      AlnMgrGetNthRowTail(sap, i+1, LEFT_TAIL, &start, &stop, &strand);
+    }
+    else {
+      AlnMgrGetNthUnalignedForNthRow(sap, BlockIndex, i+1, &start, &stop);
+    }
+    if ((start == -1) && (stop == -1)) {Size = 0;}
+    else                               {Size = (stop-start)+1;}
+    if (Size > SaveSize) {SaveSize = Size;}
+  }
+  TotalLength += SaveSize;
+
+  /* make a node for this region */
+  ddp1 = MemNew(sizeof(DescriDisp));
+  ddp1->from = 0;
+  ddp1->to = SaveSize - 1;
+  ddp1->TextStyle = MSA_TXT_STYLE_REG_UNALIGN;
+  /* set UAnum to -1 for LEFT_TAIL */
+  ddp1->UAnum = (BlockIndex == 0) ? -1 : BlockIndex;
+  ddp1->UAMaxlength = SaveSize;
+  ddp1->strand = strand;
+  ddp1->IsGap = FALSE;
+
+  /* add it to the linked list */
+  ValNodeAddPointer(&head, 0, ddp1);
+
+  /* make node for aligned block and add it to linked list */
+  AlnMgrGetNthSegmentRange(sap, BlockIndex+1, &start, &stop);
+  ddp2 = MemNew(sizeof(DescriDisp));
+  ddp2->from = start;
+  ddp2->to = stop;
+  ddp2->TextStyle = MSA_TXT_STYLE_REG_ALIGN;
+  ddp2->UAnum = 0;
+  ddp2->UAMaxlength = 0;
+  ddp2->strand = strand;
+  ddp2->IsGap = FALSE;
+  ValNodeAddPointer(&head, 0, ddp2);
+  TotalLength += (stop - start) + 1;
+
+  /* figure out the length of the unaligned region following the block */
+  SaveSize = 0;
+  for (i=0; i<NumRows; i++) {
+    if (BlockIndex == (NumBlocks-1)) {
+      AlnMgrGetNthRowTail(sap, i+1, RIGHT_TAIL, &start, &stop, &strand);
+    }
+    else {
+      AlnMgrGetNthUnalignedForNthRow(sap, BlockIndex+1, i+1, &start, &stop);
+    }
+    if ((start == -1) && (stop == -1)) {Size = 0;}
+    else                               {Size = (stop-start)+1;}
+    if (Size > SaveSize) {SaveSize = Size;}
+  }
+  TotalLength += SaveSize;
+
+  /* make a node for this region */
+  ddp3 = MemNew(sizeof(DescriDisp));
+  ddp3->from = 0;
+  ddp3->to = SaveSize - 1;
+  ddp3->TextStyle = MSA_TXT_STYLE_REG_UNALIGN;
+  /* set UAnum to -2 for RIGHT_TAIL */
+  ddp3->UAnum = (BlockIndex == (NumBlocks-1)) ? -2 : BlockIndex + 1;
+  ddp3->UAMaxlength = SaveSize;
+  ddp3->strand = strand;
+  ddp3->IsGap = FALSE;
+
+  /* add it to the linked list */
+  ValNodeAddPointer(&head, 0, ddp3);
+
+  /* create the paragraphs from the descriptor */
+  pPopList = MemNew(sizeof(MsaParaGPopList));
+  DDV_InitDDESAPdispStyles(&DisplayOptions);
+  if (DDV_PopulateDisplayForDisc(sap, pPopList, NumRows, TotalLength+10,
+                                 &DisplayOptions, TotalLength, head, TRUE)) {
+    return(pPopList);
+  }
+  else {
+    return(NULL);
+  }
+}
+
+
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int4 UAIndex) {
+/*----------------------------------------------------------------------------
+*  allocate and fill the paragraphs for displaying 1 unaligned
+*  region of a sequence alignment.  UAIndex is a 0-based count.
+*  (UA = unaligned)
+*
+*  This function works by making a linked-list of just 1 DescriDisp.
+*  This is a descriptor for the display.  This descriptor is passed
+*  to DDV_PopulateDisplayForDisc to create the paragraphs.
+*
+*  Each node is easy to construct:
+*
+*                             UnAligned (UA)
+*                ---------------------------
+*  from:                                   0
+*  to:                              length-1
+*  TextStyle:      MSA_TXT_STYLE_REG_UNALIGN
+*  UAnum:                  (explained below)
+*  UAMaxLength:                       length
+*
+*  UAnum is determined as shown here:
+*
+*  UAIndex:           0                1                2                3
+*                |<--UA-->|<--A-->|<--UA-->|<--A-->|<--UA-->|<--A-->|<--UA-->|
+*  UAnum:            -1                1                2               -2
+*  where -1 and -2 are for the LEFT_TAIL and RIGHT_TAIL, respectively.
+*
+*  return a pointer to the paragraph list.
+*  return NULL for unsuccessful completion.
+*---------------------------------------------------------------------------*/
+  ValNodePtr          head = NULL;
+  DescriDispPtr       ddp1;
+  Int4                NumRows, NumBlocks;
+  Int4                i, Size, SaveSize, start, stop;
+  Int4                TotalLength=0;
+  Uint1               strand;
+  DDV_Disp_Opt        DisplayOptions;
+  MsaParaGPopListPtr  pPopList;
+
+  /* index the seq align */
+  if (!AlnMgrIndexSeqAlign(sap)) {
+    return(NULL);
+  }
+
+  NumRows = AlnMgrGetNumRows(sap);
+  NumBlocks = AlnMgrGetNumSegments(sap);
+  if ((UAIndex < 0) || (UAIndex > NumBlocks)) {
+    return(NULL);
+  }
+
+  /* figure out the length of the unaligned region preceeding the block */
+  SaveSize = 0;
+  for (i=0; i<NumRows; i++) {
+    if (UAIndex == 0) {
+      AlnMgrGetNthRowTail(sap, i+1, LEFT_TAIL, &start, &stop, &strand);
+    }
+    else if (UAIndex == NumBlocks) {
+      AlnMgrGetNthRowTail(sap, i+1, RIGHT_TAIL, &start, &stop, &strand);
+    }
+    else {
+      AlnMgrGetNthUnalignedForNthRow(sap, UAIndex, i+1, &start, &stop);
+    }
+    if ((start == -1) && (stop == -1)) {Size = 0;}
+    else                               {Size = (stop-start)+1;}
+    if (Size > SaveSize) {SaveSize = Size;}
+  }
+  TotalLength += SaveSize;
+
+  /* make a node for this region */
+  ddp1 = MemNew(sizeof(DescriDisp));
+  ddp1->from = 0;
+  ddp1->to = SaveSize - 1;
+  ddp1->TextStyle = MSA_TXT_STYLE_REG_UNALIGN;
+  /* set UAnum to -1 for LEFT_TAIL, -2 for RIGHT_TAIL, or UAIndex */
+  if (UAIndex == 0)              {ddp1->UAnum = -1;}
+  else if (UAIndex == NumBlocks) {ddp1->UAnum = -2;}
+  else                           {ddp1->UAnum = UAIndex;}
+  ddp1->UAMaxlength = SaveSize;
+  ddp1->strand = strand;
+  ddp1->IsGap = FALSE;
+
+  /* add it to the linked list */
+  ValNodeAddPointer(&head, 0, ddp1);
+
+  /* create the paragraphs from the descriptor */
+  pPopList = MemNew(sizeof(MsaParaGPopList));
+  DDV_InitDDESAPdispStyles(&DisplayOptions);
+  if (DDV_PopulateDisplayForDisc(sap, pPopList, NumRows, TotalLength+10,
+                                 &DisplayOptions, TotalLength, head, FALSE)) {
+    return(pPopList);
+  }
+  else {
+    return(NULL);
+  }
+}

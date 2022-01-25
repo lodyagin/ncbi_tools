@@ -1811,7 +1811,8 @@ static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, Int4 length, Int4 
   DenseDiagPtr ddp, 
                ddptmp;
 
-
+  if (salp == NULL)
+     return ret;
   if (salp->segtype==2) {
      for (tmp=salp; tmp!=NULL; tmp=tmp->next)
      {
@@ -2024,6 +2025,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
               if (dbsip!=NULL) {
                  totlendb = getlengthforid(dbsip); 
                  totlenlcl = getlengthforid(lclsip);
+                 if (totlendb > 0 && totlenlcl > 0) {
                   
                  slp1 = SeqLocIntNew (0, totlenlcl-1, Seq_strand_both, lclsip);
                  slp2 = SeqLocIntNew (0, totlendb-1, Seq_strand_both, dbsip);
@@ -2086,7 +2088,18 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  }
                  if (seqalign)
                     seqalign = SeqAlignFree (seqalign);
-              } 
+              } else {
+                 if (totlendb == 0) {
+                   SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                   ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                   sip->next = next;
+                 } else if (totlenlcl == 0) {
+                   SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                   ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                   sip->next = next;
+                 }
+              }
+              }
               else {
                  SeqIdWrite (sip, strLog, PRINTID_TEXTID_ACCESSION, 50);
                  ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);

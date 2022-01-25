@@ -29,444 +29,13 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.68 $
+* $Revision: 6.85 $
+* $Revision: 6.85 $
 *
 * File Description:  files that go with "asn2ff"
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: asn2ff1.c,v $
-* Revision 6.68  2000/01/20 19:08:07  tatiana
-* show_gi set to FALSE in SeqEntryToFlatEx
-*
-* Revision 6.67  2000/01/11 17:19:40  tatiana
-* Feature indexing added to SeqEntryToStrArrayEx()
-*
-* Revision 6.65  1999/12/13 22:42:20  tatiana
-* seqblks_num casted to Int4, GetGIs() called regardless of show_gi
-*
-* Revision 6.64  1999/12/10 01:52:23  kans
-* on setup, makes entityID/itemID/itemtype available in pap array for descriptors, features, and now bioseqs (TT), needed for Sequin speedup
-*
-* Revision 6.63  1999/10/07 14:37:36  bazhin
-* Removed memory leaks.
-*
-* Revision 6.62  1999/09/29 16:55:58  tatiana
-* remove extra PrintLastLine call
-*
-* Revision 6.61  1999/09/27 20:14:36  tatiana
-* check for ajp added in ListStrArray
-*
-* Revision 6.60  1999/09/23 18:06:28  tatiana
-* contig_view added to ajp
-*
-* Revision 6.59  1999/08/31 18:36:00  tatiana
-* protection for NULL pointer added in SeqEntryToStringArrayEx()
-*
-* Revision 6.58  1999/08/31 14:27:54  tatiana
-* SeqEntryToStrArrayEx() added which return a link list of strings
-*
-* Revision 6.57  1999/08/30 17:01:55  tatiana
-* print_taxinfo() checks for mgcode
-*
-* Revision 6.56  1999/07/27 15:05:30  tatiana
-* cleaning meemory leaks in SeqEntryToFlatAjp()
-*
-* Revision 6.55  1999/06/16 17:27:22  kans
-* set show_version flag
-*
-* Revision 6.54  1999/05/10 21:38:52  tatiana
-* hot link removed from ACCESSION
-*
-* Revision 6.53  1999/04/23 20:42:30  tatiana
-* a bug for slp view is fixed in CheckSeqPort
-*
-* Revision 6.52  1999/04/09 21:19:34  bazhin
-* Added functions "AjpToByteStore()" and "asn2ff_print_bs()".
-*
-* Revision 6.51  1999/04/07 20:52:06  tatiana
-* fix SeqEntryToFlatEx() to handle complex sets correctly
-*
-* Revision 6.50  1999/04/06 15:01:46  tatiana
-* PrintSequence() fixed for slp view
-*
-* Revision 6.49  1999/04/02 19:48:10  tatiana
-* asn2ffgr_setup added
-*
-* Revision 6.48  1999/04/02 18:08:52  kans
-* removed LinkStr typedef, now in asn2ffg.h
-*
-* Revision 6.47  1999/03/23 17:34:36  tatiana
-* use show_gi parameter when GetGis() is called
-*
-* Revision 6.46  1999/03/22 23:31:08  tatiana
-* accession.version modifications
-*
-* Revision 6.45  1998/11/10 15:14:00  bazhin
-* Macro NUM_OF_ESTIMATES and static array of integers "line_estimate"
-* moved in from "asn2ffg.h".
-*
-* Revision 6.44  1998/11/05 16:12:46  bazhin
-* Added 4th parameter "Boolean show_gi" to SeqEntryToGBFlatNoSeq()
-* function. It will say do or does not print GI number into output
-* flatfile. Same for error messages related to missing GIs.
-*
-* Revision 6.43  1998/10/14 16:47:56  tatiana
-* check for Seq_repr_seg in SeqEntryToFlatEx()
-*
-* Revision 6.42  1998/10/08 15:53:26  tatiana
-* check for NULL added in get_pubs()
-*
-* Revision 6.41  1998/09/28 18:17:12  bazhin
-* Added new function
-* "CharPtr PNTR SeqEntryToStrArray(SeqEntryPtr sep, Uint1 format, Uint1 mode)",
-* which works like SeqEntryToFlat(), but prints flat entry into memory
-* as an array of strings instead of printing into file on disc. It returns
-* that array.
-*
-* Revision 6.40  1998/09/23 23:47:00  tatiana
-* MI_TECH_fli_cdna added to keywords
-*
-* Revision 6.39  1998/09/15 16:04:51  tatiana
-* removed redundant MemFree in seqEntryToFlatAjp
-*
-* Revision 6.38  1998/09/14 16:37:57  tatiana
-* SeqEntryToFlatAjp added
-*
-* Revision 6.37  1998/09/11 19:10:58  tatiana
-* set error_msgs to TRUE
-*
-* Revision 6.36  1998/09/08 20:41:42  tatiana
-* made non-static Asn2ffJobCreate
-*
-* Revision 6.35  1998/08/21 16:56:17  shavirin
-* Added new function SeqEntryToGBFlatNoSeq()
-*
-* Revision 6.34  1998/07/27 19:58:22  kans
-* SeqEntryToFlatEx was not returning at proper place when nesting pop/phy/mut sets
-*
-* Revision 6.33  1998/07/16 16:06:51  kans
-* use ObjMgrGetEntityIDForChoice instead of ObjMgrGetEntityIDForPointer for SeqEntryPtr
-*
-* Revision 6.32  1998/07/16 14:44:48  kans
-* handles segmented sets within pop/phy sets (Tatiana)
-*
-* Revision 6.31  1998/07/15 22:07:12  kans
-* implemented sequence manager indexes for non-segmented nucleotides
-*
-* Revision 6.30  1998/06/15 14:56:38  tatiana
-* UNIX compiler warnings fixed
-*
-* Revision 6.29  1998/05/11 21:58:15  tatiana
-* some functions moved to asn2ff6.c
-*
-* Revision 6.28  1998/05/08 21:54:58  tatiana
-* SeqEntryToPartRpt() added
-*
-* Revision 6.27  1998/05/05 16:56:45  kans
-* MakeBaseLocAwp needed to initialize tsip
-*
-* Revision 6.26  1998/05/05 15:35:28  tatiana
-* added SEQID_OTHER to MakeLocus()
-*
-* Revision 6.25  1998/04/30 21:36:48  tatiana
-* *** empty log message ***
-*
-* Revision 6.22  1998/04/15 19:11:49  tatiana
-*  GetAppProperty added
-*
-* Revision 6.21  1998/03/27 23:04:30  tatiana
-* memory leaks cleanup
-*
-* Revision 6.20  1998/03/24 16:42:57  tatiana
-* a bug fixed in SeqSubmitToFlat()
-*
-* Revision 6.19  1998/03/20 03:07:51  kans
-* genpept in sequin_mode can use local ID for locus
-*
-* Revision 6.18  1998/03/09 21:40:40  tatiana
-* accession length increased to 60
-*
-* Revision 6.16  1998/02/12 14:15:53  kans
-* switch to StringNCpy_0 was truncating division code in locus line to two characters
-*
-* Revision 6.15  1998/02/11 19:29:59  tatiana
-* cleaning memory leaks
-*
-* Revision 6.14  1998/02/11 18:27:20  tatiana
-* StringNCpy changed to StringNCpy_0
-*
-* Revision 6.12  1998/02/03 21:28:07  tatiana
-* fixed SeqLocToFlat and SeqEntryToFlatEx
-*
-* Revision 6.11  1998/01/16 19:00:02  tatiana
-* improved the perfomance in SeqEntryToFlatEx
-*
-* Revision 6.10  1998/01/16 18:27:06  tatiana
-* fix mol-type in LOCUS line
-*
-* Revision 6.8  1998/01/08 23:25:16  tatiana
-* restore the usage of -h parameter
-*
-* Revision 6.7  1998/01/06 23:52:51  tatiana
-* fixed start position in CheckSeqPort()
-*
-* Revision 6.6  1997/12/30 21:46:05  tatiana
-* fixed scRNA in PrintLocus()
-*
-* Revision 6.4  1997/11/10 18:04:52  tatiana
-* changes in SeqLocToFlat
-*
-* Revision 6.3  1997/11/03 20:47:12  shavirin
-* Removed memory leak
-*
-* Revision 6.2  1997/10/23 16:56:15  tatiana
-* changes in get_pub allow to gather CitSub directly from SeqSubmit
-*
-* Revision 6.1  1997/09/12 20:03:31  tatiana
-* added source feature in genome_view
-*
-* Revision 6.0  1997/08/25 18:04:38  madden
-* Revision changed to 6.0
-*
-* Revision 5.57  1997/08/06 22:47:35  tatiana
-*  changes in CheckSeqPort() for printing a region
-*
-* Revision 5.55  1997/07/29 20:52:43  tatiana
-* Array bounds write fixed in GetFlatRetract()
-*
-* Revision 5.54  1997/07/29 16:16:34  tatiana
-* *** empty log message ***
-*
-* Revision 5.53  1997/07/29 15:50:07  tatiana
-* SeqEntryToFlatEx will work for GENPEPT format, asn2gp_setup modofied
-*
-* Revision 5.52  1997/07/28 19:03:53  vakatov
-* [WIN32,MSVC++]  Restored lost "NCBIOBJ.LIB" pro-DLL modifications
-*
-* Revision 5.51  1997/07/24 18:58:58  tatiana
-* memory corruption fixed in asn2ff_cleanup()
-*
-* Revision 5.50  1997/07/24 16:50:19  tatiana
-*  fixed bugs in sequence printing
-*
-* Revision 5.48  1997/07/16 20:52:37  tatiana
-* PrintGenome() moved to wprint.c
-*
-* Revision 5.45  1997/06/19 18:36:52  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
- * Revision 5.42  1997/03/13  15:44:59  tatiana
- * added asn2hp_setup
- *
- * Revision 5.40  1997/02/03  15:23:43  tatiana
- * a bug fixed in asn2ff_print (AsnIoClose removed)
- *
- * Revision 5.39  1997/01/31  17:18:50  tatiana
- * SeqSubmitToFlat changed for EBI
- *
- * Revision 5.38  1997/01/27  19:13:39  tatiana
- * more changes to SeqSubmitToFlat()
- *
- * Revision 5.37  1997/01/27  18:34:14  tatiana
- * SeqSubmitToFlat() changed to produce EBI submissions
- *
- * Revision 5.36  1997/01/16  23:04:11  tatiana
- * a typo fixed in PrintOrganismLine()
- *
- * Revision 5.35  1997/01/13  22:34:15  tatiana
- * show_gene = TRUE
- *
- * Revision 5.34  1997/01/07  20:54:38  tatiana
- * asn2ff_setup fixed for targeted bioseq in segmented set
- *
- * Revision 5.32  1996/12/17  22:52:19  tatiana
- * added AddKeywords()
- *
- * Revision 5.31  1996/11/19  22:46:48  tatiana
- * global Boolean Template_load added
- *
- * Revision 5.29  1996/11/01  17:51:53  tatiana
- * GetDefline added to embl and GenPept formats
- *
- * Revision 5.27  1996/10/25  22:10:12  tatiana
- * HTG division is legal
- *
- * Revision 5.26  1996/09/18  20:20:18  tatiana
- * positions fixed in PrintGenome
- *
- * Revision 5.25  1996/09/17  14:58:10  tatiana
- * SeqSubmitToFlat needs show_gene argument
- *
- * Revision 5.24  1996/09/12  17:51:29  tatiana
- * a bug fixed in PrintSourceFeat
- *
- * Revision 5.23  1996/09/09  13:36:02  kans
- * moved BioseqGetGBDivCode from toasn.[ch] to asn2ff.h/asn2ff6.c
- *
- * Revision 5.22  1996/09/06  21:05:10  tatiana
- * change name GBGetDivision to BioseqGetGBDivCode
- *
- * Revision 5.21  1996/09/06  20:56:34  tatiana
- * GetDivision changed to call new function BioseqGetGBDivCode
- *
- * Revision 5.20  1996/09/03  19:49:25  tatiana
- * asn2ff_cleanup changed to free new_loc from Gather
- *
- * Revision 5.19  1996/08/27  22:51:40  tatiana
- * add ajp->only_one for gathering pubs
- *
- * Revision 5.18  1996/08/27  22:11:53  tatiana
- * change GetDivision to keep PAT and SYN from GBBlock
- *
- * Revision 5.17  1996/08/27  19:12:40  tatiana
- * calls SeqIdSelect before SeqIdWrite in GetLocusPartsAwp to get the best ID for accession number and locus name
- *
- * Revision 5.16  1996/08/22  18:46:08  tatiana
- * bug fixed
- *
- * Revision 5.15  1996/08/16  20:31:14  tatiana
- * CreateDefLine() call added
- *
- * Revision 5.14  1996/08/09  17:30:22  tatiana
- * ErrPostEx changed to ErrpostStr for const strings
- *
- * Revision 5.13  1996/08/06  20:30:46  kans
- * SeqIdFindBest called to handle local IDs and genbank IDs coexisting
- *
- * Revision 5.12  1996/07/31  19:06:13  tatiana
- * empty KEYWORD are not mapped to GBBlock in sequin
- *
- * Revision 5.11  1996/07/31  16:31:55  tatiana
- * fix in PrintGBOrganismLine
- *
- * Revision 5.10  1996/07/31  15:23:24  tatiana
- * minor change in PrintDefifnitionLine
- *
- * Revision 5.9  1996/07/30  16:36:40  tatiana
- * PrintDefinitionLine changed for htgs
- *
- * Revision 5.7  1996/07/19  21:37:42  tatiana
- * HTG keywords and deflines added
- *
- * Revision 5.4  1996/07/03  20:59:29  tatiana
- * need to free gbp->descr in GetDivision
- *
- * Revision 5.3  1996/07/02  19:42:52  tatiana
- * support for delta sequence added
- *
- * Revision 5.2  1996/06/14  18:02:56  tatiana
- * GetDivision changes
- *
- * Revision 5.1  1996/06/11  15:26:00  tatiana
- * add PrintNID
- *
- * Revision 4.43  1996/05/16  20:55:44  tatiana
- * source_info added to GBEntry structure
- *
- * Revision 4.42  1996/05/06  16:09:14  tatiana
- * a bug fixed in PrintKeyword()
- *
- * Revision 4.41  1996/05/02  20:32:51  tatiana
- * muid from PUB_Medline added
- *
- * Revision 4.40  1996/05/02  17:42:52  tatiana
- * GetSubmitDescr() added that will show CitSub.descr in REMARK
- *
- * Revision 4.39  1996/04/29  18:47:42  tatiana
- * create independent paragraph for each comment block
- *
- * Revision 4.39  1996/04/29  18:47:42  tatiana
- * create independent paragraph for each comment block
- *
- * Revision 4.38  1996/04/15  14:35:35  tatiana
- * memory leaks cleaning
- *
- * Revision 4.37  1996/04/12  03:42:23  tatiana
- *  : a bug fixed
- *
- * Revision 4.36  1996/04/10  22:50:47  kans
- * source and organism lines split, feature line has null gbp->descr,
- * comment and region, etc., in separate paragraphs (TT)
- *
- * Revision 4.34  1996/04/09  14:03:01  tatiana
- * print COMMENT in blocks
- *
- * Revision 4.33  1996/03/25  22:24:59  tatiana
- * a bug fixed in ValidateAccession
- *
- * Revision 4.32  1996/03/25  17:47:28  tatiana
- * 2+6 accession handling
- *
- * Revision 4.31  1996/03/18  23:37:33  tatiana
- * fix a bug in PrintOrganism to take correct taxin id for www hotlink
- *
- * Revision 4.30  1996/03/12  21:35:41  tatiana
- * GetRetract() added to handle Medline erratum
- *
- * Revision 4.29  1996/02/28  04:53:06  ostell
- * changes to support segmented master seeuquences
- *
- * Revision 4.28  1996/02/26  03:45:24  ostell
- * fixed usage of GatherDescrListByChoice and changed function to allocate
- * first DescrStruct instead using static storage
- *
- * Revision 4.25  1996/02/18  21:14:53  tatiana
- * memory leaks cleaned up, GetPubNum() added
- *
- * Revision 4.23  1996/02/15  15:50:07  tatiana
- * Gather for temp load items added
- *
- * Revision 4.21  1995/12/20  22:37:01  tatiana
- * NID field turned on!
- *
- * Revision 4.20  1995/12/18  20:58:54  tatiana
- * a bug fixed in CheckXrefLine (using DescrStruct)
- *
- * Revision 4.19  1995/12/15  19:38:08  kans
- * bioseq is selectable in flat file (TT)
- *
- * Revision 4.18  1995/12/14  19:13:33  kans
- * fixed GatherDescrListByChoice
- *
- * Revision 4.17  1995/12/13  16:30:04  tatiana
- * itemID ... added to descriptors
- *
- * Revision 4.15  1995/12/05  22:18:30  tatiana
- * a bug fixed in CheckXrefLine()
- *
- * Revision 4.14  1995/12/05  17:16:49  tatiana
- * bug fixed.
- *
- * Revision 4.13  1995/12/05  16:35:57  kans
- * ajp->asn2ffwep could dangle in asn2ff_setup and asn2ff_cleanup (TT)
- *
- * Revision 4.12  1995/11/29  15:47:07  tatiana
- * a big fixed in GetDivision
- *
- * Revision 4.11  1995/11/22  18:58:56  tatiana
- * memory leaks cleanup
- *
- * Revision 4.10  1995/11/21  17:51:35  tatiana
- * changes in FFPrintArray
- *
- * Revision 4.9  1995/11/17  21:28:35  kans
- * asn2ff now uses gather (Tatiana)
- *
- * Revision 4.1  1995/07/31  19:46:39  tatiana
- * accept /transl_table from taxon in RELEASE mode
- *
- * Revision 1.56  1995/07/17  19:33:20  kans
- * parameters combined into Asn2ffJobPtr structure
- *
- * Revision 1.46  1995/06/19  21:40:02  kans
- * Tatiana's first major reorganization, moving printing, adding HTML
- *
- * Revision 1.44  1995/05/22  14:51:08  tatiana
- * remove old MatchNAFeatToGene function and add ASN2FF_SHOW_ALL_PUBS
- *
- * Revision 1.43  1995/05/19  21:25:06  kans
- * gene match code moved to sequtil (ostell)
 * ==========================================================================
 */
 
@@ -482,6 +51,7 @@
 #include <subutil.h>
 #include <explore.h>
 #include <objfdef.h>
+#include <sqnutils.h>
 
 #ifdef ENABLE_ENTREZ
 #include <accentr.h>
@@ -715,7 +285,8 @@ NLM_EXTERN Boolean asn2ff_print (Asn2ffJobPtr ajp)
 	Boolean 	 result = FALSE, hold = TRUE;
 	DescrStructPtr	dsp = NULL;
 
-	if ((ajp->sep == NULL && ajp->slp == NULL) || ajp->fp == NULL)
+	if ((ajp->sep == NULL && ajp->slp == NULL) ||
+            (ajp->fp == NULL && ajp->ajp_print_data == NULL))
 		return FALSE;
 	if (ajp->no_hold)
 		hold = FALSE;
@@ -723,19 +294,26 @@ NLM_EXTERN Boolean asn2ff_print (Asn2ffJobPtr ajp)
 		ObjMgrSetHold();   /* hold any autoloaded records in memory */
 
     pap_size = asn2ff_setup (ajp, &pap);
-    if (ajp->ssp && ajp->format == EMBL_FMT) {
+    if(ajp->ajp_count_index != NULL)
+        (*ajp->ajp_count_index)(ajp, pap_size, ajp->user_data);
+
+    if (ajp->ssp && ajp->format == EMBL_FMT && ajp->fp != NULL) {
 		aip = AsnIoNew(ASNIO_TEXT_OUT, ajp->fp, NULL, NULL, NULL);
 		SubmitBlockAsnWrite(ajp->ssp->sub, aip, NULL);
 		AsnIoFlush(aip);
 		AsnIoReset(aip);
     }
     if (pap_size > 0) {
-		head_www(ajp->fp, ajp->sep);
+		if(ajp->fp != NULL)
+			head_www(ajp->fp, ajp->sep);
 		asn2ff_set_output (NULL, "\n");
 		for (index = 0; index < pap_size; index++) {
 			string = FFPrint (pap, index, pap_size);
 			if (string != NULL && *string != '\0') {
-				ff_print_string (ajp->fp, string, "\n");
+				if(ajp->fp != NULL)
+					ff_print_string (ajp->fp, string, "\n");
+				if(ajp->ajp_print_data != NULL)
+					(*ajp->ajp_print_data)(ajp, string, ajp->user_data);
 				string = (char *)MemFree (string);
 			} else if (ajp->null_str) {
 				ErrPostStr(SEV_WARNING, ERR_PRINT_NullString, 
@@ -745,10 +323,14 @@ NLM_EXTERN Boolean asn2ff_print (Asn2ffJobPtr ajp)
 				pap[index].descr = (DescrStructPtr)MemFree(pap[index].descr);
 			}
 		}
-		tail_www(ajp->fp);
+                
+		if(ajp->fp != NULL)
+			tail_www(ajp->fp);
 		result = TRUE;
 		MemFree(pap);
 	}
+	if(ajp->ajp_print_index != NULL)
+		(*ajp->ajp_print_index)(ajp, ajp->user_data);
 	free_buff();
 	asn2ff_cleanup (ajp); 
 	if (hold)
@@ -965,6 +547,97 @@ NLM_EXTERN CharPtr PNTR SeqEntryToStrArray(SeqEntryPtr sep, Uint1 format,
     return(res);
 }
 
+/**********************************************************/
+static LinkStrPtr AjpToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
+                               LinkStrPtr lsp)
+{
+    BioseqSetPtr bssp;
+
+    if(sep == NULL)
+        return(lsp);
+
+    if(IS_Bioseq_set(sep) != 0 && ajp->id_print == NULL)
+    {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
+           bssp->_class == 14 || bssp->_class == 15))
+        {
+            for(sep = bssp->seq_set; sep != NULL; sep = sep->next)
+            {
+                lsp = AjpToLinkStr(ajp, sep, lsp);
+            }
+            return(lsp);
+        }
+    }
+    if(ajp == NULL)
+        return(lsp);
+
+    ajp->sep = sep;
+
+    lsp = asn2ff_print_to_mem(ajp, lsp);
+
+    return(lsp);
+}
+
+/**********************************************************/
+NLM_EXTERN CharPtr PNTR AjpToStrArray(Asn2ffJobPtr ajp)
+{
+    StdPrintOptionsPtr Spop = NULL;
+    LinkStrPtr         lsp;
+    LinkStrPtr         tlsp;
+    CharPtr PNTR       res;
+    CharPtr PNTR       tres;
+    Int4               num;
+
+    if(ajp == NULL || ajp->sep == NULL)
+        return(NULL);
+
+    if(ajp->format == GENPEPT_FMT)
+    {
+        if(Template_load == FALSE)
+        {
+            PrintTemplateSetLoad("asn2ff.prt");
+            Template_load = TRUE;
+        }
+        Spop = StdPrintOptionsNew(NULL);
+        if(Spop == NULL)
+        {
+            ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
+            return(NULL);
+        }
+        Spop->newline = "~";
+        Spop->indent = "";
+        ajp->Spop = Spop;
+    }
+
+    lsp = (LinkStrPtr) MemNew(sizeof(LinkStr));
+    lsp->next = NULL;
+    lsp->line = NULL;
+    AjpToLinkStr(ajp, ajp->sep, lsp);
+    tlsp = lsp;
+    lsp = lsp->next;
+    MemFree(tlsp);
+
+    if(ajp->Spop != NULL)
+        StdPrintOptionsFree(ajp->Spop);
+
+    for(tlsp = lsp, num = 1; tlsp != NULL; tlsp = tlsp->next, num++)
+        continue;
+
+    if(num == 1)
+        return(NULL);
+
+    res = (CharPtr PNTR) MemNew(sizeof(CharPtr) * num);
+    for(tres = res; lsp != NULL; lsp = tlsp, tres++)
+    {
+        tlsp = lsp->next;
+        *tres = lsp->line;
+        MemFree(lsp);
+    }
+    *tres = NULL;
+    return(res);
+}
+
 /**********************************************************
 *	This function allocates memory for the linked list
 ***********************************************************/
@@ -1026,8 +699,10 @@ NLM_EXTERN LinkStrPtr SeqEntryToStrArrayEx(SeqEntryPtr sep, Uint1 format,
         }
     }
 	ajp = Asn2ffJobCreate(sep, NULL, NULL, NULL, format, RELEASE_MODE, Spop);
-	ajp->entityID = ObjMgrGetEntityIDForPointer (ajp->slp);
-	SeqMgrIndexFeatures (ajp->entityID, NULL);
+	/* ajp->entityID = ObjMgrGetEntityIDForPointer (ajp->slp); */ /* entityID already set - slp is NULL */
+	if (SeqMgrFeaturesAreIndexed (ajp->entityID) == 0) {
+		SeqMgrIndexFeatures (ajp->entityID, NULL);
+	}
 	ajp->useSeqMgrIndexes = TRUE;
 	ajp->contig_view = FALSE;
 	if (gi > 0) {
@@ -1058,6 +733,109 @@ NLM_EXTERN LinkStrPtr SeqEntryToStrArrayEx(SeqEntryPtr sep, Uint1 format,
 			}
     		if (bsp->repr == Seq_repr_seg && ajp->contig_view == FALSE) {
 				ajp->id_print = NULL;
+			}
+			if (bsp->repr != Seq_repr_seg) {
+				sep = SeqMgrGetSeqEntryForData((Pointer)bsp);
+			}
+		}
+	}
+    lsp = (LinkStrPtr) MemNew(sizeof(LinkStr));
+    lsp->next = NULL;
+    lsp->line = NULL;
+    SeqEntryToLinkStr(ajp, sep, lsp, format, RELEASE_MODE);
+    tlsp = lsp;
+    lsp = lsp->next;
+    MemFree(tlsp);
+
+	if(Spop != NULL) {
+    	StdPrintOptionsFree(Spop);
+	}
+    return (lsp);
+}
+
+/**********************************************************/
+NLM_EXTERN LinkStrPtr SeqEntryToStrArrayQEx(SeqEntryPtr sep,  Uint1 format, Int4 gi, Boolean is_html)
+{
+    StdPrintOptionsPtr	Spop = NULL;
+    LinkStrPtr   lsp;
+    LinkStrPtr   tlsp;
+    CharPtr PNTR res;
+    CharPtr PNTR tres;
+    Int4         num;
+	Asn2ffJobPtr ajp;
+	ValNodePtr v;
+	BioseqPtr bsp;
+	SeqIdPtr sip;
+	SeqLocPtr slp;
+	TextSeqIdPtr tsip;
+
+	
+    if (is_html) {
+    	init_www();
+    }
+    if(format == GENPEPT_FMT) {
+        if(Template_load == FALSE) {
+            PrintTemplateSetLoad("asn2ff.prt");
+            Template_load = TRUE;
+        }
+        Spop = StdPrintOptionsNew(NULL);
+        if(Spop != NULL) {
+            Spop->newline = "~";
+            Spop->indent = "";
+        } else {
+            ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
+            return NULL;
+        }
+    }
+	ajp = Asn2ffJobCreate(sep, NULL, NULL, NULL, format, RELEASE_MODE, Spop);
+	/* ajp->entityID = ObjMgrGetEntityIDForPointer (ajp->slp); */ /* entityID already set - slp is NULL */
+	if (SeqMgrFeaturesAreIndexed (ajp->entityID) == 0) {
+		SeqMgrIndexFeatures (ajp->entityID, NULL);
+	}
+	ajp->useSeqMgrIndexes = TRUE;
+	ajp->contig_view = FALSE;
+	/*if (is_html && gi > 0) {*/
+	if (gi > 0) {
+		ajp->show_version = TRUE;
+		v = ValNodeNew(NULL);
+		v->choice = SEQID_GI;
+		v->data.intvalue = gi;
+		if ((bsp = BioseqFind(v)) != NULL) {
+			if (bsp->repr == Seq_repr_seg) {
+				 if ((slp = bsp->seq_ext) != NULL) {
+					if (BioseqFindCore(SeqLocId(slp)) == NULL) {
+						ajp->genome_view = TRUE;
+    					ajp->only_one = TRUE;
+					}
+				}
+			}
+		}
+		ajp->id_print = v;
+		if (v != NULL) {
+			ajp->gb_style = FALSE;
+			if ((bsp = BioseqFind(v)) == NULL) {
+				ErrPostEx(SEV_FATAL, 0, 0, "BioseqFind failed for %ld", gi);
+				return NULL;
+			}
+    		if (bsp->repr == Seq_repr_seg) {
+				ajp->gb_style = TRUE;
+			}
+			for (sip=bsp->id; sip; sip=sip->next) {
+				if (sip->choice == SEQID_OTHER) {
+					tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+					if (StringNCmp(tsip->accession, "NT_", 3) == 0) {
+						ajp->contig_view = TRUE;
+						ajp->genome_view = TRUE;
+						ajp->show_seq = FALSE;
+						break;
+					}
+				}
+			}
+    		if (bsp->repr == Seq_repr_seg && ajp->contig_view == FALSE) {
+				ajp->id_print = NULL;
+			}
+			if (bsp->repr != Seq_repr_seg) {
+				sep = SeqMgrGetSeqEntryForData((Pointer)bsp);
 			}
 		}
 	}
@@ -1461,7 +1239,7 @@ NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Ui
 		StdPrintOptionsFree(ajp->Spop);
 		MemFree(ajp);
 	
-		return FALSE;
+		return rsult;
 	} 
 	if (IS_Bioseq_set (sep)) {
 	    bssp = (BioseqSetPtr) sep->data.ptrvalue;
@@ -1561,6 +1339,7 @@ NLM_EXTERN Boolean SeqGenomeToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, U
 	ajp->ignore_top = TRUE;
 	ajp->genome_view = TRUE;
 	ajp->map_view = map_view;
+	ajp->forgbrel = FALSE;
 
 	rsult = asn2ff_print(ajp);
 	MemFree(ajp);
@@ -1602,6 +1381,22 @@ NLM_EXTERN Boolean SeqLocToFlat (SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mo
 	return rsult;
 }
 
+static void ChangeObsoleteImpFeats (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  ImpFeatPtr  ifp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_IMP) return;
+  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+  if (ifp != NULL &&
+      (StringCmp (ifp->key, "allele") == 0 ||
+       StringCmp (ifp->key, "mutation") == 0)) {
+    ifp->key = MemFree (ifp->key);
+    ifp->key = StringSave ("variation");
+    sfp->idx.subtype = FEATDEF_variation;
+  }
+}
+
 
 /***************************************************************************
 *
@@ -1619,6 +1414,22 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	GatherScope gs;
 	Uint1 focus;
 	BioseqPtr bsp;
+	SeqEntryPtr sep = NULL;
+
+/*	if (ajp->sep != NULL) {
+	  sep = ajp->sep;
+	} else if (ajp->ssp != NULL & ajp->ssp->datatype == 1) {
+	  sep = (SeqEntryPtr) ajp->ssp->data;
+	} else if (ajp->entityID > 0 && ajp->slp == NULL) {
+	  sep = GetTopSeqEntryForEntityID (ajp->entityID);
+	}
+
+	if (sep != NULL) {
+		VisitFeaturesInSep (sep, NULL, ChangeObsoleteImpFeats);
+	} 
+
+*/
+	ajp->show_gi = FALSE; /* displayed two obsolete line types - should always be FALSE */
 
   	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
 	MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
@@ -1632,9 +1443,9 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 		ajp->gb_style = FALSE;
 	set_flags(ajp);
 
+
 	flat2asn_install_accession_user_string("SET-UP");
 	flat2asn_install_locus_user_string("SET-UP");
-	
 
 	ajp->sfp_out = 	MakeSyntheticSeqFeat();
 	awp = (Asn2ffWEPtr) MemNew(sizeof(Asn2ffWE));
@@ -1657,6 +1468,7 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
       	ajp->useSeqMgrIndexes = TRUE;
 	  }
 	}
+
 	if (ajp->entityID != 0) {
 		if (ajp->slp != NULL) {
 			SeqMgrIndexFeatures (ajp->entityID, NULL);
@@ -1677,6 +1489,9 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 			}
 			return 0;
 		}
+		if (ajp->forgbrel && awp->seg == NULL && ajp->genome_view == TRUE) {
+			return 0;
+		}
 		if (awp->seg == NULL && awp->parts == NULL) {
 			awp->total_seg = 0;
 			if (awp->gbp) {
@@ -1693,6 +1508,7 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 				ajp->useSeqMgrIndexes = TRUE;  /* initial use of new indexes */
 			}
 		}
+/*
 		if (ajp->slp != NULL) {
 			if (awp->gbp) {
 				if (ajp->slp->choice == SEQLOC_MIX || ajp->slp->choice == SEQLOC_PACKED_INT) {
@@ -1702,10 +1518,12 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 				}
 			}
 		}
+*/
 		ajp->asn2ffwep = awp;
 		if (ajp->mode != DIRSUB_MODE)
 			GetGIs(ajp);
 	}
+
 	init_buff();
 	ajp->pseudo = FALSE;
 	if (ajp->format == SELECT_FMT) {    /* quick fix 07.17.95 change later */
@@ -2422,7 +2240,7 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 						(Uint1)0, (Uint1)0, line_estimate[9], 
 								A2F_SEQUENCE, gbp);
 					}
-				}
+				} 
 			} else {
 				LoadPap(pap, PrintLastLine, ajp, 0, (Uint1)0, (Uint1)0, 
 					line_estimate[0], A2F_OTHER, gbp);
@@ -3527,8 +3345,9 @@ void PrintAccessLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	}
 	if (ajp->ssp && ajp->hup) {
 		ff_AddChar(';');
+	} else  if (ajp->slp)  {
+		www_accession(gbp->accession); 
 	} else {
-	/*	www_accession(gbp->accession);*/
 		ff_AddString(gbp->accession);
 	}
 	if (ajp->slp == NULL) {
@@ -4883,7 +4702,7 @@ void PrintBaseCount (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		} else {
 			spp = SeqPortNew(gbp->bsp, 0, -1, 0, Seq_code_iupacna);
 		}
-		if (bsp->repr == Seq_repr_delta) {
+		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
 			SeqPortSet_do_virtual(spp, TRUE);
 		}
 		while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
@@ -4998,7 +4817,7 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		ptr += StringLen(ptr);
 		CheckSeqPort(ajp, gbp, start);
 		spp = gbp->spp;
-		if (bsp->repr == Seq_repr_delta) {
+		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
 			SeqPortSet_do_virtual(spp, TRUE);
 		}
 		if (stop == -1)
@@ -5013,7 +4832,9 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 				inner_stop = index+9;
 			}
 			for (inner_index=index; inner_index<=inner_stop; inner_index++) {
-				residue=SeqPortGetResidue(spp);
+				if ((residue=SeqPortGetResidue(spp)) == SEQPORT_EOF) {
+                    break;
+               }
 /*********/
 				if (ajp->only_one) {
 					if (residue == SEQPORT_VIRT) {
@@ -5027,6 +4848,11 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 				}
 /**********/		
 				if ( !IS_residue(residue) && residue != INVALID_RESIDUE) {
+					if (residue != SEQPORT_EOF) {
+						inner_index--;
+						continue;
+					}
+					inner_index--;
 					continue;
 				}
 				if (residue == INVALID_RESIDUE) {

@@ -31,9 +31,12 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.124 $
+ * $Revision: 6.125 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.125  2000/03/30 21:04:16  madden
+ * Added function VSMakeCombinedSeqLoc
+ *
  * Revision 6.124  2000/01/21 16:47:49  kans
  * use ValNodeSort instead of original jz SortValNode
  *
@@ -766,6 +769,46 @@ VSCombineSeqLoc(ValNodePtr PNTR vnp, Int4 query_length, VSOptionsPtr options)
 	return TRUE;
 }
 
+/*
+	For a give SeqAlignPtr, make and merge SeqLoc's corresponding to these.
+
+	This function calls VSMakeSeqLoc and VSCombineSeqLoc.
+
+	Note: if 'options' is NULL, default values will be used.  This is STRONGLY recommended.
+*/
+
+Int2 LIBCALL
+VSMakeCombinedSeqLoc(SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, Int4 length, VSOptionsPtr options)
+{
+	Boolean delete_options=FALSE;
+	Int2 retval=0;
+	ValNodePtr var;
+
+	if (seqalign_ptr == NULL || *seqalign_ptr == NULL || vnpp == NULL)
+		return 0;
+	
+	if (options == NULL)
+	{
+		options = VSOptionsNew();
+		delete_options = TRUE;
+	}
+
+	VSMakeSeqLoc(seqalign_ptr, vnpp, length, options);
+	VSCombineSeqLoc(vnpp, length, options);
+	retval = INT2_MAX;
+	var = *vnpp;
+	while (var)
+	{
+		retval = MIN(retval, (Int2) var->choice);
+		var = var->next;
+	}
+
+	if (delete_options)
+		options = VSOptionsFree(options);
+
+	return retval;
+}
+
 /* 
 Performs VecScreen for stand-alone application.
 
@@ -807,15 +850,8 @@ VSScreenSequence(BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlign
 		seqalign = BioseqBlastEngine(bsp, "blastn", database, blast_options, other_returns, error_returns, NULL); 
 	if (seqalign)
 	{
-		VSMakeSeqLoc(&seqalign, vnpp, bsp->length, options);
-		VSCombineSeqLoc(vnpp, bsp->length, options);
-		retval = INT2_MAX;
-		var = *vnpp;
-		while (var)
-		{
-			retval = MIN(retval, (Int2) var->choice);
-			var = var->next;
-		}
+		retval = VSMakeCombinedSeqLoc(&seqalign, vnpp, bsp->length, options);
+
 		if (seqalign_ptr)
 			*seqalign_ptr = seqalign;
 	}

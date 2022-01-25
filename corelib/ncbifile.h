@@ -1,3 +1,6 @@
+#ifndef _NCBIFILE_
+#define _NCBIFILE_
+
 /*   ncbifile.h
 * ===========================================================================
 *
@@ -29,19 +32,18 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   	prototypes for portable file routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-*
-*
 * $Log: ncbifile.h,v $
+* Revision 6.4  2000/03/08 17:55:48  vakatov
+* Use Int8 for the file size.
+* Also, get rid of the WIN16 code, do other cleanup.
+*
 * Revision 6.3  1998/06/26 20:39:43  vakatov
 * Added FilePathFind() -- complimentary to FileNameFind()
 *
@@ -51,28 +53,12 @@
 * Revision 6.1  1998/05/24 19:20:58  kans
 * added Nlm_DirCatalog (Mac implementation only so far)
 *
-* Revision 6.0  1997/08/25 18:15:33  madden
-* Revision changed to 6.0
-*
 * Revision 5.1  1996/12/03 21:48:33  vakatov
 * Adopted for 32-bit MS-Windows DLLs
 *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.11  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
-*
+* 04-15-93 Schuler     Changed _cdecl to LIBCALL
 * ==========================================================================
 */
-
-#ifndef _NCBIFILE_
-#define _NCBIFILE_
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -81,34 +67,35 @@
 #define NLM_EXTERN extern
 #endif
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef FILE * (LIBCALLBACK *Nlm_FileOpenHook) PROTO((const char *filename, const char *mode));
 
-NLM_EXTERN FILE * LIBCALL Nlm_FileOpen PROTO((const char *filename, const char *mode));
-NLM_EXTERN void LIBCALL Nlm_FileClose PROTO((FILE *stream));
-NLM_EXTERN size_t LIBCALL Nlm_FileRead PROTO((void *ptr, size_t size, size_t n, FILE *stream));
-NLM_EXTERN size_t LIBCALL Nlm_FileWrite PROTO((const void *ptr, size_t size, size_t n, FILE *stream));
-NLM_EXTERN int LIBCALL Nlm_FilePuts PROTO((const char *ptr, FILE * fp));
-NLM_EXTERN char * LIBCALL Nlm_FileGets PROTO((char *ptr, size_t size, FILE * fp));
-NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FileBuildPath PROTO((Nlm_CharPtr root, Nlm_CharPtr sub_path, Nlm_CharPtr filename));
-NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FileNameFind PROTO((Nlm_CharPtr pathname));
-NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FilePathFind PROTO((const Nlm_Char* fullname));
-NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLength PROTO((Nlm_CharPtr fileName));
+typedef FILE* (LIBCALLBACK *Nlm_FileOpenHook)
+       (const char *filename, const char *mode);
+
+NLM_EXTERN FILE* LIBCALL Nlm_FileOpen(const char *filename, const char *mode);
+NLM_EXTERN void LIBCALL Nlm_FileClose(FILE *stream);
+NLM_EXTERN size_t LIBCALL Nlm_FileRead(void *ptr, size_t size, size_t n, FILE *stream);
+NLM_EXTERN size_t LIBCALL Nlm_FileWrite(const void *ptr, size_t size, size_t n, FILE *stream);
+NLM_EXTERN int LIBCALL Nlm_FilePuts(const char *ptr, FILE * fp);
+NLM_EXTERN char * LIBCALL Nlm_FileGets(char *ptr, size_t size, FILE * fp);
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FileBuildPath(Nlm_CharPtr root, Nlm_CharPtr sub_path, Nlm_CharPtr filename);
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FileNameFind(Nlm_CharPtr pathname);
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FilePathFind(const Nlm_Char* fullname);
+NLM_EXTERN Nlm_Int8 LIBCALL Nlm_FileLength(Nlm_CharPtr fileName);
 /* Nlm_FileLengthEx() returns -1 if the file does not exist) */
-NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLengthEx PROTO((const Nlm_Char* fileName));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FileRemove PROTO((Nlm_CharPtr fileName));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FileRename PROTO((Nlm_CharPtr oldFileName, Nlm_CharPtr newFileName));
-NLM_EXTERN void LIBCALL Nlm_FileCreate PROTO((Nlm_CharPtr fileName, Nlm_CharPtr type, Nlm_CharPtr creator));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CreateDir PROTO((Nlm_CharPtr pathname));
+NLM_EXTERN Nlm_Int8 LIBCALL Nlm_FileLengthEx(const Nlm_Char* fileName);
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FileRemove(Nlm_CharPtr fileName);
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FileRename(Nlm_CharPtr oldFileName, Nlm_CharPtr newFileName);
+NLM_EXTERN void LIBCALL Nlm_FileCreate(Nlm_CharPtr fileName, Nlm_CharPtr type, Nlm_CharPtr creator);
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CreateDir(Nlm_CharPtr pathname);
 NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname);
-NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam PROTO((Nlm_CharPtr s));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_EjectCd PROTO((Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr rawDeviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_MountCd PROTO((Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd));
-NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook PROTO((Nlm_FileOpenHook hook));
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam(Nlm_CharPtr s);
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_EjectCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr rawDeviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd);
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_MountCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd);
+NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook(Nlm_FileOpenHook hook);
 
 #define FileOpen Nlm_FileOpen
 #define FileClose Nlm_FileClose
@@ -130,10 +117,10 @@ NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook PROTO((Nlm_FileOpenHook hook));
 #define EjectCd Nlm_EjectCd
 #define MountCd Nlm_MountCd
 
-#ifdef __cplusplus
-}
-#endif
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT
@@ -142,5 +129,4 @@ NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook PROTO((Nlm_FileOpenHook hook));
 #define NLM_EXTERN
 #endif
 
-#endif
-
+#endif /* _NCBIFILE_ */

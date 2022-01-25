@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.91 $
+* $Revision: 6.94 $
 *
 * File Description: 
 *
@@ -1347,6 +1347,16 @@ static Boolean seq_char (Char car, Char missingchar, Char gapchar)
   return FALSE;
 }
 
+static Boolean seqa_char (Char car, Char missingchar, Char gapchar)
+{
+  if (car >= 'A' && car <= 'Z') return TRUE;
+  if (car >= 'a' && car <= 'z') return TRUE;
+  if (car == missingchar) return TRUE;
+  if (car == gapchar) return TRUE;
+  if (car == '*') return TRUE;
+  return FALSE;
+}
+
 
 static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, Int2 *offset, Int2 *offset_line)
 
@@ -1369,6 +1379,7 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
   Boolean    first;
   Char       gapchar = '-';
   Char       missingchar = '?';
+  CharPtr    ptr;
 
   if ( (fp = FileOpen (path, "r")) == NULL) {
          return NULL;
@@ -1473,7 +1484,10 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
         if (n_seq>0 && lg_seq>-1 && seq_line (str)) {
            if (seq_char(str[0], missingchar, gapchar) 
            && seq_char(str[1], missingchar, gapchar) 
-           && seq_char(str[2], missingchar, gapchar)) {
+           && seq_char(str[2], missingchar, gapchar) 
+           && seq_char(str[3], missingchar, gapchar) 
+           && seq_char(str[4], missingchar, gapchar) 
+           && seq_char(str[5], missingchar, gapchar)) {
               leftmargin = 0;
               found_seq = TRUE;
               break;
@@ -1493,6 +1507,98 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
         str = FGetLine (fp);
      }
      if (!found_seq) 
+        n_seq = 0;
+     else
+        leftmargin++;
+  } else if (align_format == SALSAA_NEXUS)
+  {
+     found_seq = FALSE;
+     lg_seq = 0;
+     n_seq = 0;
+     while (str) {
+        /* the following break statement bypassed sequence reading */
+        /*
+        tmp = StringStr(str, "MATRIX");
+        if (tmp == NULL)
+           tmp = StringStr(str, "matrix");
+        if (tmp != NULL) {
+           break;
+        }
+        */
+        if (n_seq == 0) {
+           tmp = StringStr(str, "NTAX");
+           if (tmp == NULL)
+              tmp = StringStr(str, "ntax");
+           if (tmp != NULL) {
+              while (tmp!='\0' && !isdigit (*tmp))
+                 tmp++;
+              if (tmp!='\0')
+                 n_seq = (Int2) atoi(tmp);
+           }
+        }
+        if (lg_seq == 0) {
+           tmp = StringStr(str, "NCHAR");
+           if (tmp == NULL)
+              tmp = StringStr(str, "nchar");
+           if (tmp != NULL) {
+              while (tmp!='\0' && !isdigit (*tmp))
+                 tmp++;
+              if (tmp!='\0')
+                 lg_seq = (Int4) atol(tmp);
+           }
+        }
+        tmp = StringStr(str, "GAP=");
+        if (tmp == NULL)
+           tmp = StringStr(str, "gap=");
+        if (tmp != NULL) {
+           while (*tmp!='\0' && *tmp!='\n' && *tmp!='=')
+              tmp++;
+           if (*tmp!='\0' && *tmp!='\n')
+              tmp++;
+           while (*tmp!='\0' && *tmp!='\n' && *tmp==' ')
+              tmp++;
+           if (*tmp!='\0' && *tmp!='\n')
+              gapchar = *tmp;
+        }
+        tmp = StringStr(str, "MISSING=");
+        if (tmp == NULL)
+           tmp = StringStr(str, "missing=");
+        if (tmp != NULL) {
+           while (*tmp!='\0' && *tmp!='\n' && *tmp!='=')
+              tmp++;
+           if (*tmp!='\0' && *tmp!='\n')
+              tmp++;
+           while (*tmp!='\0' && *tmp!='\n' && *tmp==' ')
+              tmp++;
+           if (*tmp!='\0' && *tmp!='\n')
+              missingchar = *tmp;
+        }
+        if (n_seq>0 && lg_seq>-1 && seq_line (str)) {
+           if (seqa_char(str[0], missingchar, gapchar)
+           && seqa_char(str[1], missingchar, gapchar)
+           && seqa_char(str[2], missingchar, gapchar)
+           && seqa_char(str[3], missingchar, gapchar)
+           && seqa_char(str[4], missingchar, gapchar)
+           && seqa_char(str[5], missingchar, gapchar)) {
+              leftmargin = 0;
+              found_seq = TRUE;
+              break;
+           }
+           for (leftmargin = 0; leftmargin<MAXSTR-1; leftmargin++) {
+              if (str[leftmargin] == ' '
+              && seqa_char(str[leftmargin+1], missingchar, gapchar)) {
+                 found_seq = TRUE;
+                 break;
+              }
+           }
+           break;
+        }
+        top_lines++;
+        if (str)
+           MemFree (str);
+        str = FGetLine (fp);
+     }
+     if (!found_seq)
         n_seq = 0;
      else
         leftmargin++;
@@ -1546,6 +1652,10 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
   first = TRUE;
   while (str)
   {
+     ptr = StringChr (str, '[');
+     if (ptr != NULL) {
+        *ptr = '\0';
+     }
      strlens = StringLen (str);
      if (strlens > 0) {
            if (str[0] == ';' || (tmp = StringStr(str, "end;"))!=NULL || (tmp = StringStr(str, "END;"))!=NULL || (tmp = StringStr(str, "gap data"))!=NULL)

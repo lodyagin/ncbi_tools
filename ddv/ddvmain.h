@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.h,v 1.16 2000/01/12 21:52:17 durand Exp $
+/*  $Id: ddvmain.h,v 1.31 2000/04/26 21:54:27 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,58 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.16 $
+* $Revision: 1.31 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.h,v $
+* Revision 1.31  2000/04/26 21:54:27  hurwitz
+* added save function to tell AlnMgr about edits made in DDE
+*
+* Revision 1.30  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.29  2000/04/18 19:50:24  lewisg
+* add deselect menu item
+*
+* Revision 1.28  2000/04/17 13:30:43  durand
+* removed g_hParent and unused functions DDV_LaunchAlignViewer and DDV_LaunchAlignEditor
+*
+* Revision 1.27  2000/04/10 21:41:26  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 1.26  2000/04/10 20:58:42  hurwitz
+* added GUI controls for DeleteBlock in DDE
+*
+* Revision 1.25  2000/04/07 16:21:08  hurwitz
+* made delete block faster, added delete block to edit menu
+*
+* Revision 1.24  2000/03/27 22:15:05  lewisg
+* add show/hide row dialog
+*
+* Revision 1.23  2000/03/25 00:22:09  hurwitz
+* put DDE_StackPtr in DDV_Main, add to stack inside DDE api's, added insert char, delete char, home and end keyboard control
+*
+* Revision 1.22  2000/03/14 22:08:21  hurwitz
+* undo and redo working properly, restore-original function added
+*
+* Revision 1.21  2000/03/10 23:01:43  hurwitz
+* added undo and redo functions, first pass
+*
+* Revision 1.20  2000/03/06 22:45:58  hurwitz
+* can shift right boundary of an aligned block left and right, DDVRuler updates added
+*
+* Revision 1.19  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 1.18  2000/02/04 16:05:41  durand
+* add click action to select a row
+*
+* Revision 1.17  2000/01/26 13:38:55  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.16  2000/01/12 21:52:17  durand
 * add import function; update menus when DDV is loaded from Cn3D
 *
@@ -123,9 +168,6 @@ extern "C" {
 #include <pgppop.h>
 #include <ddvcolor.h>
 #include <ddvcreate.h>
-#ifdef _DDVEDIT
-#include <samedit.h>
-#endif /* _DDVEDIT */
 
 
 
@@ -147,9 +189,11 @@ extern "C" {
 /*caret style */
 #define DDV_CARET_BAR 1
 /*mouse mode*/
-#define DDV_MOUSEMODE_QUERY  0
-#define DDV_MOUSEMODE_SELECT 1
-#define DDV_MOUSEMODE_EDIT   2
+#define DDV_MOUSEMODE_QUERY         0
+#define DDV_MOUSEMODE_SELECT        1
+#define DDV_MOUSEMODE_EDIT          2
+#define DDV_MOUSEMODE_CREATEBLOCK   3
+#define DDV_MOUSEMODE_LAUNCHEDITOR  4
 
 /*timer control*/
 #define DDV_SET_TIMER 1
@@ -172,6 +216,12 @@ typedef struct ddvcaretinfo{
 	Uint1 style; /*see DDV_CARET_* defines */
 } DDVCaretInfo, PNTR DDVCaretInfoPtr;
 
+/*used to remember the selected row (editor mode only)*/
+typedef struct ddveditrowinfo{
+	Int4  curEditRow;/*zero-based values; row for applying delete, move*/
+	Int4  curMasterRow;/*zero-based values; this row is the master*/
+} DDVEditRowInfo, PNTR DDVEditRowInfoPtr;
+
 typedef struct ddv_global{
 	DDV_ColorGlobal * colorp;
 } DDV_Global, PNTR DDV_GlobalPtr;
@@ -182,20 +232,39 @@ typedef struct ddvmenu {
 	IteM FileOpen;/*open file command*/
 	IteM EntrezOpen;/*open from ID1 command*/
 	IteM FileClose;/*close file command*/
+  IteM SaveEdits;/* save changes made in editor*/
 	IteM FileExport;/*export a seqalign*/
     IteM ImportSeq;/* import a sequence */
     IteM ImportNucSeqAlign;/* import a nuc SeqAlign */
     IteM ImportProtSeqAlign;/* import a prot SeqAlign */
+    IteM Hide;/* show/hide dialog */
 	IteM QuitViewer;/*close the viewer*/
+	/*Edit menu*/
+	MenU Edit;
+	IteM DeleteRow;
+	IteM MoveRowLeft;
+	IteM MoveRowRight;
+  IteM LeftBoundaryLeft;
+  IteM LeftBoundaryRight;
+  IteM RightBoundaryLeft;
+  IteM RightBoundaryRight;
+  IteM DeleteBlock;
+  IteM CreateBlock;
+  IteM Prev;
+  IteM Next;
+  IteM Orig;
+    /*Align menu */
+    MenU Align;
+    MenU AlignBlast;
+    IteM Deselect;
+    IteM BlastFile;
+    IteM BlastNet;
 	/*Options menu*/
 	MenU Options;
 	IteM DispStyles;/*display styles*/
 	ChoicE MouseMode;/*mouse mode (query, selection, edit)*/
 	IteM ConfigNet;/*Entrez Network Conf. dlg*/
-#ifdef _DDVEDIT
-    MenU Edit;
-	IteM EditInsert;
-#endif /* _DDVEDIT */
+  IteM LaunchEditor;
 	} DdvMenu, PNTR DdvMenuPtr;
 
 typedef struct ddvmsadata {
@@ -240,33 +309,25 @@ typedef struct ddvtimerdata {
 
 typedef struct ddvmain {
     WindoW             hParent;
-	PaneL              hWndDDV;/*panel's handle*/
-	Boolean	           bEditor;/*true if use DDV with editor functions*/
-	UnDViewerGraphData GrData;/*graphical data*/
-	DdvMSAData         MSA_d;/*data to display*/
-	DDV_Global         Globals;/*shared color data, among others*/
-	UDV_mouse_select   ms;/*mouse selection info*/
-	DDV_Disp_Opt       ddo;
-	DDVCaretInfo       dci;/*caret position and style (editor only)*/
-	DdvTimerData       dtd;/*last goto position*/
-	Uint1              MouseMode;
-	Uint2              userkey;
-	Uint2              procid;
-	Uint2              proctype;
+    PaneL              hWndDDV;/*panel's handle*/
+    UnDViewerGraphData GrData;/*graphical data*/
+    DdvMSAData         MSA_d;/*data to display*/
+    DDV_Global         Globals;/*shared color data, among others*/
+    UDV_mouse_select   ms;/*mouse selection info*/
+    DDV_Disp_Opt       ddo;
+    DDVCaretInfo       dci;/*caret position and style (editor only)*/
+    DDVEditRowInfo     deri;/*some rows info to apply edit commands*/
+    DdvTimerData       dtd;/*last goto position*/
+    Uint1              MouseMode;
+    Uint1              SavedMouseMode;
+    Uint2              userkey;
+    Uint2              procid;
+    Uint2              proctype;
     Int4               MasterViewer;/*the viewer launching ddv*/
-#ifdef _DDVEDIT
-    SAM_EditGlobal     *editGlobal;
-    Int4 Row;
-#endif /* _DDVEDIT */
+    Boolean	           bEditor;/*true if use DDV with editor functions*/
+    DDE_StackPtr       dsp;/*data for editor*/
 	} DdvMain, PNTR DdvMainPtr;
 
-/******************************************************************************
-
-	Global varaibles
-
-******************************************************************************/
-/*main window handle; initialize in ddvmain.c; used only by standalone DDV*/
-extern WindoW g_hParent;
 
 #ifdef __cplusplus
 }

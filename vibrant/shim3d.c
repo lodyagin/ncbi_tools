@@ -29,13 +29,70 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.47 $
+* $Revision: 6.66 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.66  2000/04/20 18:53:57  thiessen
+* misc tweaks/fixes
+*
+* Revision 6.65  2000/04/20 17:47:18  thiessen
+* tweak OpenGL drawing region position
+*
+* Revision 6.64  2000/04/19 17:56:46  thiessen
+* added background color in OpenGL
+*
+* Revision 6.63  2000/04/17 15:54:27  thiessen
+* add cylinder arrows; misc graphics tweaks
+*
+* Revision 6.62  2000/04/03 18:23:46  thiessen
+* add arrowheads to strand bricks
+*
+* Revision 6.61  2000/03/27 14:47:31  thiessen
+* widen logo slightly
+*
+* Revision 6.60  2000/03/24 20:34:59  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 6.59  2000/03/24 19:59:20  thiessen
+* draw new logo in OpenGL
+*
+* Revision 6.58  2000/03/22 23:42:22  lewisg
+* timing loop for animation
+*
+* Revision 6.57  2000/03/15 16:59:53  thiessen
+* fix highlighting, other minor bugs
+*
+* Revision 6.56  2000/03/09 17:55:18  thiessen
+* changes to palette handling for 8-bit OpenGL
+*
+* Revision 6.55  2000/03/08 21:46:13  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.54  2000/03/06 18:35:22  thiessen
+* fixes for 8-bit color
+*
+* Revision 6.53  2000/02/28 19:53:08  kans
+* if macintosh, include <gl.h> and <glu.h>, not equivalent <GL/gl.h> and <GL/glu.h>
+*
+* Revision 6.52  2000/02/26 13:30:41  thiessen
+* capped cylinders and worms for visible ends
+*
+* Revision 6.51  2000/02/26 00:01:41  thiessen
+* OpenGL improvements, progress on cleanup of Show/Hide
+*
+* Revision 6.50  2000/02/16 14:01:40  thiessen
+* warning on OGL color black or alpha 0 (if _DEBUG)
+*
+* Revision 6.49  2000/02/10 17:48:10  thiessen
+* added OGL zoom out
+*
+* Revision 6.48  2000/01/25 22:58:13  thiessen
+* added animation of conf-ensembles
+*
 * Revision 6.47  2000/01/19 15:22:33  thiessen
 * working off-screen GL rendering and PNG output on Mac
 *
@@ -203,12 +260,22 @@
 *  causes all sorts of name collisions.
 */
 
+#if defined(macintosh)
+#include <gl.h>
+#include <glu.h>
+#else
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
 
 #ifdef _PNG
 #include <png.h> /* must go berore ncbi headers */
 #endif
+
+/* from ncbimisc.h */
+#include <ncbi.h>
+NLM_EXTERN void LIBCALL Nlm_HeapSort PROTO((VoidPtr base, size_t nel, size_t width,
+                                           int (LIBCALLBACK *cmp) (VoidPtr, VoidPtr) ));
 
 #endif                          /* _OPENGL */
 
@@ -358,13 +425,17 @@ void OGL_CreateCTransform(Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
 
 #ifdef _OPENGL
 
-/* flag to tell redrawer that camera has changed */
-static Nlm_Boolean OGL_NeedCameraSetup = FALSE;
+
+static Nlm_VoidPtr OGL_CurrentName = NULL;
+
+
 
 /* define this to do (frequent) checking of GL error status - but this is
    very expensive, so be sure to turn off for production! */
-/* #define DEBUG_GL /* */
-
+/* #define DEBUG_GL 1 /* */
+#if defined(_DEBUG) && !defined(DEBUG_GL)
+#define DEBUG_GL 1
+#endif
 
 /* for now, just print warning if any GL error flag is set */
 static Boolean OGL_CheckForErrors(void)
@@ -375,7 +446,7 @@ static Boolean OGL_CheckForErrors(void)
 
     while ((errCode = glGetError()) != GL_NO_ERROR) {
         errString = gluErrorString(errCode);
-        printf("OpenGL error: %s\n",errString);
+        Message(MSG_POST, "OpenGL error: %s", errString);
         hadErrors = TRUE;
     }
     return hadErrors;
@@ -453,25 +524,31 @@ void OGL_SetColor(TOGL_Data * OGL_Data, DDV_ColorCell * color, GLenum type,
                   GLfloat alpha)
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering SetColor");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering SetColor");
 #endif
 
     if (!OGL_Data) return;
     if (OGL_Data->IndexMode == FALSE ) {
         static GLfloat pr, pg, pb, pa;
         static GLenum pt = GL_NONE;
-        static GLfloat rgb[4] = { 0.0, 0.0, 0.0, 1.0 };
+        static GLfloat rgb[4];
 
         if (!color) {
             glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, Color_Off);
             pt = GL_NONE;
             return;
         }
-
         ColorCell2Array(rgb, color);
+
+#ifdef _DEBUG
+        if (rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0)
+            Message(MSG_POST, "Warning: OGL_Setcolor request color (0,0,0)");
+        if (alpha == 0.0)
+            Message(MSG_POST, "Warning: OGL_SetColor request alpha 0.0");
+#endif
+
         rgb[3] = alpha;
-        if (rgb[0] != pr || rgb[1] != pg || rgb[2] != pb || rgb[3] != pa
-                || type != pt) {
+        if (rgb[0] != pr || rgb[1] != pg || rgb[2] != pb || rgb[3] != pa || type != pt) {
             if (type != pt) {
                 if (type == GL_DIFFUSE) {
                     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, Color_MostlyOff);
@@ -498,6 +575,7 @@ void OGL_SetColor(TOGL_Data * OGL_Data, DDV_ColorCell * color, GLenum type,
         ValNodePtr PaletteIndex;
         GLint indx[3];
         static GLint pi0 = -1, pi1, pi2;
+        static GLint pt;
 
         if (!color) {
             pi0 = -1;
@@ -505,8 +583,10 @@ void OGL_SetColor(TOGL_Data * OGL_Data, DDV_ColorCell * color, GLenum type,
         }
 
         PaletteIndex = OGL_SearchPaletteIndex(OGL_Data->PaletteIndex, color);
-        if (!PaletteIndex)
+        if (!PaletteIndex) {
+            Message(MSG_POST, "Couldn't find color in PaletteIndex!");
             return;
+        }
         if (type == GL_DIFFUSE) {
             indx[0] = ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->Begin;
             indx[1] = ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->End;
@@ -516,19 +596,27 @@ void OGL_SetColor(TOGL_Data * OGL_Data, DDV_ColorCell * color, GLenum type,
             indx[1] = ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->End;
             indx[2] = ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->End;
         } else {
-            printf("don't know how to handle material type %i\n",type);
+            Message(MSG_POST, "don't know how to handle material type %i\n",type);
         }
 
-        if (indx[0] != pi0 || indx[1] != pi1 || indx[2] != pi2) {
+#ifdef WIN32
+        /* on Windows, need to skip over the first ten static palette colors */
+        indx[0] += 10;
+        indx[1] += 10;
+        indx[2] += 10;
+#endif
+
+        if (indx[0] != pi0 || indx[1] != pi1 || indx[2] != pi2 || type != pt) {
             glMaterialiv(GL_FRONT_AND_BACK, GL_COLOR_INDEXES, indx);
             pi0 = indx[0];
             pi1 = indx[1];
             pi2 = indx[2];
+            pt = type;
         }
     }
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving SetColor");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving SetColor");
 #endif
 }
 
@@ -570,87 +658,170 @@ void OGL_AddQuad3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 }
 
 void OGL_AddBrick3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
-                   Nlm_FloatHi * v1, Nlm_FloatHi * v2, Nlm_FloatHi * v3,
-                   Nlm_FloatHi * v4, Nlm_FloatHi thickness)
+                    Nlm_FloatHi * Nterm, Nlm_FloatHi * Cterm,
+                    Nlm_FloatHi * norm, Nlm_FloatHi width,
+                    Nlm_FloatHi thickness, Nlm_Boolean doArrow)
 {
-    Nlm_FloatHi *Normal, c1[3], c2[3], c3[3], c4[3],
-        c5[3], c6[3], c7[3], c8[3];
+    static const double arrowLen = 2.8, arrowWidthProp = 1.6;
+    
+    GLdouble c000[3], c001[3], c010[3], c011[3],
+             c100[3], c101[3], c110[3], c111[3], n[3];
+    Nlm_FloatHi a[3], *h;
     int i;
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering AddBrick");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering AddBrick");
 #endif
 
-    if (v1 == NULL || v2 == NULL || v3 == NULL || v4 == NULL
-        || OGL_Data == NULL || color == NULL)
+    if (Nterm == NULL || Cterm == NULL || norm == NULL ||
+        OGL_Data == NULL || color == NULL ||
+        width*thickness == 0.0)
         return;
 
     OGL_SetColor(OGL_Data, color, GL_DIFFUSE, 1.0);
 
-    glBegin(GL_QUADS);
-    Normal = OGL_MakeNormal(v1, v2, v4);
-    if (!Normal) return;
+    /* in this brick's world coordinates, the long axis (N-C direction) is
+       along +Z, with N terminus at Z=0; width is in the X direction, and
+       thickness in Y. Arrowhead at C-terminus, of course. */
+           
+    OGL_Normalize(norm);
 
     for (i=0; i<3; i++) {
-        c1[i] = v1[i] + Normal[i] * thickness / 2.0;
-        c2[i] = v2[i] + Normal[i] * thickness / 2.0;
-        c3[i] = v3[i] + Normal[i] * thickness / 2.0;
-        c4[i] = v4[i] + Normal[i] * thickness / 2.0;
-        c5[i] = v1[i] - Normal[i] * thickness / 2.0;
-        c6[i] = v2[i] - Normal[i] * thickness / 2.0;
-        c7[i] = v3[i] - Normal[i] * thickness / 2.0;
-        c8[i] = v4[i] - Normal[i] * thickness / 2.0;
+        a[i] = Cterm[i] - Nterm[i];
+    }
+    OGL_Normalize(a);
+    h = OGL_CrossProduct(norm, a);
+    if (!h) return;
+
+    if (doArrow)
+        for (i=0; i<3; i++)
+            Cterm[i] -= a[i] * arrowLen;
+            
+    for (i=0; i<3; i++) {
+        c000[i] = Nterm[i] - h[i]*width/2 - norm[i]*thickness/2;
+        c001[i] = Cterm[i] - h[i]*width/2 - norm[i]*thickness/2;
+        c010[i] = Nterm[i] - h[i]*width/2 + norm[i]*thickness/2;
+        c011[i] = Cterm[i] - h[i]*width/2 + norm[i]*thickness/2;
+        c100[i] = Nterm[i] + h[i]*width/2 - norm[i]*thickness/2;
+        c101[i] = Cterm[i] + h[i]*width/2 - norm[i]*thickness/2;
+        c110[i] = Nterm[i] + h[i]*width/2 + norm[i]*thickness/2;
+        c111[i] = Cterm[i] + h[i]*width/2 + norm[i]*thickness/2;
     }
 
-    glNormal3dv(Normal);
-    glVertex3dv(c1);
-    glVertex3dv(c2);
-    glVertex3dv(c3);
-    glVertex3dv(c4);
+    glBegin(GL_QUADS);
 
-    for (i=0; i<3; i++) Normal[i] = -Normal[i];
-    glNormal3dv(Normal);
-    glVertex3dv(c5);
-    glVertex3dv(c6);
-    glVertex3dv(c7);
-    glVertex3dv(c8);
+    for (i=0; i<3; i++) n[i] = norm[i];
+    glNormal3dv(n);
+    glVertex3dv(c010);
+    glVertex3dv(c011);
+    glVertex3dv(c111);
+    glVertex3dv(c110);
 
-    for (i=0; i<3; i++) Normal[i] = v1[i] - v4[i];
-    OGL_Normalize(Normal);
-    glNormal3dv(Normal);
-    glVertex3dv(c1);
-    glVertex3dv(c2);
-    glVertex3dv(c6);
-    glVertex3dv(c5);
+    for (i=0; i<3; i++) n[i] = -norm[i];
+    glNormal3dv(n);
+    glVertex3dv(c000);
+    glVertex3dv(c100);
+    glVertex3dv(c101);
+    glVertex3dv(c001);
 
-    for (i=0; i<3; i++) Normal[i] = -Normal[i];
-    glNormal3dv(Normal);
-    glVertex3dv(c3);
-    glVertex3dv(c4);
-    glVertex3dv(c8);
-    glVertex3dv(c7);
+    for (i=0; i<3; i++) n[i] = h[i];
+    glNormal3dv(n);
+    glVertex3dv(c100);
+    glVertex3dv(c110);
+    glVertex3dv(c111);
+    glVertex3dv(c101);
 
-    for (i=0; i<3; i++) Normal[i] = v2[i] - v1[i];
-    OGL_Normalize(Normal);
-    glNormal3dv(Normal);
-    glVertex3dv(c2);
-    glVertex3dv(c3);
-    glVertex3dv(c7);
-    glVertex3dv(c6);
+    for (i=0; i<3; i++) n[i] = -h[i];
+    glNormal3dv(n);
+    glVertex3dv(c000);
+    glVertex3dv(c001);
+    glVertex3dv(c011);
+    glVertex3dv(c010);
 
-    for (i=0; i<3; i++) Normal[i] = -Normal[i];
-    glNormal3dv(Normal);
-    glVertex3dv(c4);
-    glVertex3dv(c1);
-    glVertex3dv(c5);
-    glVertex3dv(c8);
+    for (i=0; i<3; i++) n[i] = -a[i];
+    glNormal3dv(n);
+    glVertex3dv(c000);
+    glVertex3dv(c010);
+    glVertex3dv(c110);
+    glVertex3dv(c100);
+
+    if (!doArrow) {
+        for (i=0; i<3; i++) n[i] = a[i];
+        glNormal3dv(n);
+        glVertex3dv(c001);
+        glVertex3dv(c101);
+        glVertex3dv(c111);
+        glVertex3dv(c011);
+
+    } else {
+        GLdouble FT[3], LT[3], RT[3], FB[3], LB[3], RB[3];
+        Nlm_FloatHi *nL, *nR;
+    
+        for (i=0; i<3; i++) {
+            FT[i] = Cterm[i] + norm[i]*thickness/2 + a[i]*arrowLen;
+            LT[i] = Cterm[i] + norm[i]*thickness/2 + h[i]*arrowWidthProp*width/2;
+            RT[i] = Cterm[i] + norm[i]*thickness/2 - h[i]*arrowWidthProp*width/2;
+            FB[i] = Cterm[i] - norm[i]*thickness/2 + a[i]*arrowLen;
+            LB[i] = Cterm[i] - norm[i]*thickness/2 + h[i]*arrowWidthProp*width/2;
+            RB[i] = Cterm[i] - norm[i]*thickness/2 - h[i]*arrowWidthProp*width/2;
+        }
+
+        for (i=0; i<3; i++) n[i] = -a[i];
+        glNormal3dv(n);
+        glVertex3dv(c111);
+        glVertex3dv(LT);
+        glVertex3dv(LB);
+        glVertex3dv(c101);
+
+        glVertex3dv(c011);
+        glVertex3dv(c001);
+        glVertex3dv(RB);
+        glVertex3dv(RT);
+
+        for (i=0; i<3; i++) h[i] = FT[i] - LT[i];
+        if (!(nL = OGL_CrossProduct(norm, h))) return;
+        OGL_Normalize(nL);
+        for (i=0; i<3; i++) n[i] = nL[i];
+        glNormal3dv(n);
+        glVertex3dv(FT);
+        glVertex3dv(FB);
+        glVertex3dv(LB);
+        glVertex3dv(LT);
+        MemFree(nL);
+
+        for (i=0; i<3; i++) h[i] = FT[i] - RT[i];
+        if (!(nR = OGL_CrossProduct(h, norm))) return;
+        OGL_Normalize(nR);
+        for (i=0; i<3; i++) n[i] = nR[i];
+        glNormal3dv(n);
+        glVertex3dv(FT);
+        glVertex3dv(RT);
+        glVertex3dv(RB);
+        glVertex3dv(FB);
+        MemFree(nR);
+
+        glEnd();
+        glBegin(GL_TRIANGLES);
+        
+        for (i=0; i<3; i++) n[i] = norm[i];
+        glNormal3dv(n);
+        glVertex3dv(FT);
+        glVertex3dv(LT);
+        glVertex3dv(RT);
+        
+        for (i=0; i<3; i++) n[i] = -norm[i];
+        glNormal3dv(n);
+        glVertex3dv(FB);
+        glVertex3dv(RB);
+        glVertex3dv(LB);
+    }
 
     glEnd();
 
-    MemFree(Normal);
+    MemFree(h);
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving AddBrick");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving AddBrick");
 #endif
 }
 
@@ -680,26 +851,23 @@ void OGL_AddTri3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 
 
 void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
-                       Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
-                       Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
-                       Nlm_FloatHi radius, Nlm_Int4 sides)
+                       Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1, Nlm_Boolean cap1,
+                       Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2, Nlm_Boolean cap2,
+                       Nlm_FloatHi radius, Nlm_Int4 sides, Nlm_Boolean doArrow)
                         /* create a cylinder with given endcaps and radius */
 {
+    static const double arrowLen = 4.0,
+        arrowWidthPropBase = 1.2, arrowWidthPropTip = 0.4;
+
     Nlm_Int4 iCount;
     GLdouble length;
-    Boolean capped=FALSE;
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering AddCylinder");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering AddCylinder");
 #endif
 
     if (OGL_Data == NULL || color == NULL)
         return;
-
-    if (radius < 0.0) {
-        capped = TRUE;
-        radius = -radius;
-    }
 
     OGL_SetColor(OGL_Data, color, GL_DIFFUSE, 1.0);
 
@@ -713,7 +881,7 @@ void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
     if (length < 0.000001) return;
 
     /* to translate into place */
-    glTranslated(x1,y1,z1);
+    glTranslated(x1, y1, z1);
 
     /* to rotate from initial position, so bond points right direction;
        handle special case where both ends share ~same x,y */
@@ -726,13 +894,32 @@ void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                   y1 - y2, x2 - x1, 0.0);
     }
 
+    if (doArrow) length -= arrowLen;
     gluCylinder(OGL_qobj, radius, radius, length, sides, 1);
 
-    if (capped) {
+    if (cap1) {
         glPushMatrix();
         glRotated(180.0, 0.0, 1.0, 0.0);
         gluDisk(OGL_qobj, 0.0, radius, sides, 1);
         glPopMatrix();
+    }
+    if (doArrow) {
+        glPushMatrix();
+        glTranslated(0.0, 0.0, length);
+        if (arrowWidthPropBase > 1.0) {
+            glPushMatrix();
+            glRotated(180.0, 0.0, 1.0, 0.0);
+            gluDisk(OGL_qobj, 0.0, radius*arrowWidthPropBase, sides, 1);
+            glPopMatrix();
+        }
+        gluCylinder(OGL_qobj, radius*arrowWidthPropBase,
+            radius*arrowWidthPropTip, arrowLen, sides, 10);
+        if (arrowWidthPropTip > 0.0) {
+            glTranslated(0.0, 0.0, arrowLen);
+            gluDisk(OGL_qobj, 0.0, radius*arrowWidthPropTip, sides, 1);
+        }
+        glPopMatrix();
+    } else if (cap2) {
         glPushMatrix();
         glTranslated(0.0, 0.0, length);
         gluDisk(OGL_qobj, 0.0, radius, sides, 1);
@@ -742,7 +929,7 @@ void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
     glPopMatrix();
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving AddCylinder");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving AddCylinder");
 #endif
 }
 
@@ -753,7 +940,7 @@ void OGL_AddLine3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                     /* draw a single line */
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering AddLine");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering AddLine");
 #endif
 
     if (OGL_Data == NULL || color == NULL)
@@ -767,9 +954,159 @@ void OGL_AddLine3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
     glEnd();
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving AddLine");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving AddLine");
 #endif
 }
+
+
+typedef struct _TransparentSphereData {
+    DDV_ColorCell color;
+    Nlm_FloatHi x, y, z, radius, alpha, distFromCamera;
+    Nlm_Int4 slices, stacks;
+    Nlm_Int1 layer;
+    Nlm_VoidPtr name;
+    struct _TransparentSphereData *next;
+} TransparentSphereData, PNTR TransparentSphereDataPtr;
+
+static TransparentSphereDataPtr OGL_transSpheresTail = NULL,
+                                OGL_transSpheresHead = NULL,
+                                *OGL_transSpheresList = NULL;
+
+int LIBCALLBACK OGL_DistCompareFunc(Nlm_VoidPtr va, Nlm_VoidPtr vb)
+{
+    TransparentSphereDataPtr a = *((TransparentSphereDataPtr *) va),
+                             b = *((TransparentSphereDataPtr *) vb);
+    
+    if (a->distFromCamera > b->distFromCamera) return -1;
+    else if (a->distFromCamera < b->distFromCamera) return 1;
+	else return 0;
+}
+
+Nlm_Boolean OGL_GetLayer(TOGL_Data *, Nlm_Int4);
+
+static void OGL_RenderTransparentSpheres(TOGL_Data *OGL_Data)
+{
+#ifdef DEBUG_GL
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering OGL_RenderTransparentSpheres");
+#endif
+
+    if (OGL_Data && OGL_transSpheresHead) {
+        TransparentSphereDataPtr sph;
+        int i, n, iList;
+        GLdouble *m = (GLdouble *) OGL_Data->ModelMatrix;
+        Nlm_FloatHi x, y, z;
+        Nlm_Boolean show;
+
+        /* make an array of pointers to sphere data; sort by distance from camera */
+        for (n=0, sph=OGL_transSpheresHead; sph; n++, sph = sph->next) {
+            x = m[0]*sph->x + m[4]*sph->y +  m[8]*sph->z + m[12];
+            y = m[1]*sph->x + m[5]*sph->y +  m[9]*sph->z + m[13];
+            z = m[2]*sph->x + m[6]*sph->y + m[10]*sph->z + m[14];
+            sph->distFromCamera =
+                sqrt((x * x) + (y * y) +
+                     ((z - OGL_Data->CameraDistance) * 
+                      (z - OGL_Data->CameraDistance)))
+                - sph->radius;
+        }
+        if (!OGL_transSpheresList) {
+            OGL_transSpheresList = (TransparentSphereDataPtr *)
+                MemNew(n * sizeof(TransparentSphereDataPtr));
+            if (!OGL_transSpheresList) return;
+            for (n=0, sph=OGL_transSpheresHead; sph; n++, sph=sph->next)
+                OGL_transSpheresList[n] = sph;
+        }
+        Nlm_HeapSort((Nlm_VoidPtr) OGL_transSpheresList, n,
+                     sizeof(TransparentSphereDataPtr), OGL_DistCompareFunc);
+
+        /* turn on blending */
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        /* render the spheres in order, and only for turned-on layers */
+        for (i = 0; i < n; i++) {
+            show = FALSE;
+            if (OGL_Data->Layers->SelectedLayer) {
+                if (OGL_Data->Layers->SelectedLayer - OGL_Data->Layers->FirstLayer == 
+                    OGL_transSpheresList[i]->layer) {
+                    show = TRUE;
+                }
+            } else {
+                for (iList = OGL_Data->Layers->FirstLayer;
+                     iList <= OGL_Data->Layers->LastLayer;
+                     iList++) {
+                    if (iList - OGL_Data->Layers->FirstLayer == OGL_transSpheresList[i]->layer &&
+                        OGL_GetLayer(OGL_Data, iList - OGL_Data->Layers->FirstLayer)) {
+                        show = TRUE;
+                        break;
+                    }
+                }
+            }
+            if (show) {
+                OGL_LoadName(OGL_transSpheresList[i]->name);
+                OGL_SetColor(OGL_Data, &(OGL_transSpheresList[i]->color),
+                             GL_DIFFUSE, OGL_transSpheresList[i]->alpha);
+                glPushMatrix();
+                glTranslated(OGL_transSpheresList[i]->x, OGL_transSpheresList[i]->y,
+                             OGL_transSpheresList[i]->z);
+                gluSphere(OGL_qobj, OGL_transSpheresList[i]->radius,
+                          OGL_transSpheresList[i]->slices, OGL_transSpheresList[i]->stacks);
+                glPopMatrix();
+            }
+        }
+
+        /* blending back off now */
+        glDisable(GL_BLEND);
+    }
+
+#ifdef DEBUG_GL
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving OGL_RenderTransparentSpheres");
+#endif
+}
+
+static Nlm_Int1 OGL_currentLayer;
+
+static void OGL_AddTransparentSphere(DDV_ColorCell * color,
+                     Nlm_FloatHi x, Nlm_FloatHi y, Nlm_FloatHi z,
+                     Nlm_FloatHi radius, Nlm_Int4 slices, Nlm_Int4 stacks,
+                     Nlm_FloatHi alpha, Nlm_VoidPtr name)
+{
+    TransparentSphereDataPtr newSphere = (TransparentSphereDataPtr)
+        MemNew(sizeof(TransparentSphereData));
+    if (newSphere) {
+        DDV_CopyColorCell(&(newSphere->color), color);
+        newSphere->x = x;
+        newSphere->y = y;
+        newSphere->z = z;
+        newSphere->radius = radius;
+        newSphere->slices = slices;
+        newSphere->stacks = stacks;
+        newSphere->alpha = alpha;
+        newSphere->layer = OGL_currentLayer;
+        newSphere->name = name;
+        newSphere->next = NULL;
+        if (OGL_transSpheresTail)
+            OGL_transSpheresTail = OGL_transSpheresTail->next = newSphere;
+        else
+            OGL_transSpheresTail = OGL_transSpheresHead = newSphere;
+    }
+}
+
+void OGL_ClearTransparentSpheres(void)
+{
+    TransparentSphereDataPtr sph = OGL_transSpheresHead, tmp;
+    
+    while (sph) {
+        tmp = sph->next;
+        MemFree(sph);
+        sph = tmp;
+    }
+    OGL_transSpheresHead = OGL_transSpheresTail = NULL;
+    if (OGL_transSpheresList) {
+        MemFree(OGL_transSpheresList);
+        OGL_transSpheresList = NULL;
+    }
+}
+
 
 void OGL_AddSphere3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                      Nlm_FloatHi x, Nlm_FloatHi y, Nlm_FloatHi z,
@@ -778,34 +1115,25 @@ void OGL_AddSphere3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                       /* draws a sphere */
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering AddSphere");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering AddSphere");
 #endif
 
     if (OGL_Data == NULL || color == NULL)
         return;
 
-    OGL_SetColor(OGL_Data, color, GL_DIFFUSE, alpha);
-
-    glPushMatrix();
-    glTranslated(x, y, z);
-    if(alpha < 1.0) {
-        glEnable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glCullFace(GL_FRONT);
+    if(!OGL_Data->IndexMode && alpha < 1.0) /* no transparency in index mode */
+        OGL_AddTransparentSphere(color, x, y, z, radius, slices, stacks,
+                                 alpha, OGL_CurrentName);
+    else {
+        OGL_SetColor(OGL_Data, color, GL_DIFFUSE, 1.0);
+        glPushMatrix();
+        glTranslated(x, y, z);
         gluSphere(OGL_qobj, radius, slices, stacks);
-        glCullFace(GL_BACK);
+        glPopMatrix();
     }
-    gluSphere(OGL_qobj, radius, slices, stacks);
-    if(alpha < 1.0) {
-        glDisable(GL_BLEND);
-        glDisable(GL_CULL_FACE);
-    }
-
-    glPopMatrix();
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving AddSphere");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving AddSphere");
 #endif
 }
 
@@ -848,7 +1176,7 @@ void OGL_AddText3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 void OGL_Start(TOGL_Data * OGL_Data, Nlm_Int1 List)
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering OGL_Start");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering OGL_Start");
 #endif
 
     if (OGL_Data == NULL)
@@ -858,13 +1186,14 @@ void OGL_Start(TOGL_Data * OGL_Data, Nlm_Int1 List)
     if (List >= OGLMAXLAYERS)
         return;
     glNewList(List + OGL_Data->Layers->FirstLayer, GL_COMPILE);
-    OGL_SetLayer(OGL_Data, List + OGL_Data->Layers->FirstLayer, TRUE);
+    OGL_SetLayer(OGL_Data, List, TRUE);
+    OGL_currentLayer = List;
 
     /* clear all color states */
-    OGL_SetColor(OGL_Data,NULL,GL_NONE, 1.0);
+    OGL_SetColor(OGL_Data, NULL, GL_NONE, 1.0);
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving OGL_Start");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving OGL_Start");
 #endif
 }
 
@@ -872,11 +1201,11 @@ void OGL_End()
 /* end a display list */
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering OGL_End");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering OGL_End");
 #endif
     glEndList();
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving OGL_End");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving OGL_End");
 #endif
 }
 
@@ -898,7 +1227,7 @@ void OGL_SetLayer(TOGL_Data * OGL_Data, Nlm_Int4 i, Nlm_Boolean Status)
 {
     if (OGL_Data == NULL)
         return;
-    OGL_Data->Layers->IsOn[i - OGL_Data->Layers->FirstLayer] = Status;
+    OGL_Data->Layers->IsOn[i] = Status;
     return;
 }
 
@@ -907,7 +1236,7 @@ Nlm_Boolean OGL_GetLayer(TOGL_Data * OGL_Data, Nlm_Int4 i)
 {
     if (OGL_Data == NULL)
         return FALSE;
-    return OGL_Data->Layers->IsOn[i - OGL_Data->Layers->FirstLayer];
+    return OGL_Data->Layers->IsOn[i];
 }
 
 
@@ -926,6 +1255,7 @@ void OGL_AllLayerOnProc(TOGL_Data * OGL_Data)
     if (OGL_Data == NULL)
         return;
     OGL_Data->Layers->SelectedLayer = 0;
+    OGL_SetLayers(OGL_Data, TRUE);
     return;
 }
 
@@ -947,6 +1277,8 @@ void OGL_PrevLayerProc(TOGL_Data * OGL_Data)
     if (OGL_Data->Layers->SelectedLayer) {
         if (OGL_Data->Layers->SelectedLayer > OGL_Data->Layers->FirstLayer)
             OGL_Data->Layers->SelectedLayer--;
+        else
+            OGL_Data->Layers->SelectedLayer = OGL_Data->Layers->LastLayer;
     } else
         OGL_Data->Layers->SelectedLayer = OGL_Data->Layers->FirstLayer;
 
@@ -962,6 +1294,8 @@ void OGL_NextLayerProc(TOGL_Data * OGL_Data)
     if (OGL_Data->Layers->SelectedLayer) {
         if (OGL_Data->Layers->SelectedLayer < OGL_Data->Layers->LastLayer)
             OGL_Data->Layers->SelectedLayer++;
+        else
+            OGL_Data->Layers->SelectedLayer = OGL_Data->Layers->FirstLayer;
     } else
         OGL_Data->Layers->SelectedLayer = OGL_Data->Layers->FirstLayer;
 
@@ -992,17 +1326,17 @@ void OGL_Play(TOGL_Data * OGL_Data)
 
 
 ValNodePtr OGL_SearchPaletteIndex(ValNodePtr PaletteIndex,
-                                  DDV_ColorCell * ColorCell)
+                                  DDV_ColorCell * pColorCell)
 {
-    if (PaletteIndex == NULL || ColorCell == NULL)
+    if (PaletteIndex == NULL || pColorCell == NULL)
         return NULL;
     for (; PaletteIndex; PaletteIndex = PaletteIndex->next)
         if (((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->
-            ColorCell.rgb[0] == ColorCell->rgb[0]
+            ColorCell.rgb[0] == pColorCell->rgb[0]
             && ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->
-            ColorCell.rgb[1] == ColorCell->rgb[1]
+            ColorCell.rgb[1] == pColorCell->rgb[1]
             && ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->
-            ColorCell.rgb[2] == ColorCell->rgb[2]) {
+            ColorCell.rgb[2] == pColorCell->rgb[2]) {
             return PaletteIndex;
         }
     return NULL;
@@ -1055,7 +1389,7 @@ static void OGL_Move3D(TOGL_Data * OGL_Data, Nlm_Int2 dx, Nlm_Int2 dy)
     OGL_Data->CameraDirection[0] -= dx * pixelSize;
     OGL_Data->CameraDirection[1] += dy * pixelSize;
 
-    OGL_NeedCameraSetup = TRUE;
+    OGL_Data->NeedCameraSetup = TRUE;
 }
 
 
@@ -1089,9 +1423,22 @@ static void OGL_Zoom3D(TOGL_Data * OGL_Data, Nlm_Int2 x1, Nlm_Int2 y1,
     zoom = ((Nlm_FloatHi) abs(y1 - y2)) / viewport[3];
     OGL_Data->CameraAngle = atan(zoom * tan(OGL_Data->CameraAngle));
 
-    OGL_NeedCameraSetup = TRUE;
+    OGL_Data->NeedCameraSetup = TRUE;
 }
 
+NLM_EXTERN void OGL_ZoomOut(TOGL_Data *OGL_Data)
+{
+    OGL_Data->CameraAngle *= 1.5;
+    OGL_Data->NeedCameraSetup = TRUE;
+    OGL_DrawViewer3D(OGL_Data);
+}
+
+NLM_EXTERN void OGL_ZoomIn(TOGL_Data *OGL_Data)
+{
+    OGL_Data->CameraAngle /= 1.5;
+    OGL_Data->NeedCameraSetup = TRUE;
+    OGL_DrawViewer3D(OGL_Data);
+}
 
 /*
  *  Rotation
@@ -1114,7 +1461,7 @@ static void OGL_Rotate(TOGL_Data * OGL_Data, Nlm_Int4 dAngle,
                        OGL_enumRotate3D pivot)
 {
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering OGL_Rotate");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering OGL_Rotate");
 #endif
 
     if (!dAngle)
@@ -1141,7 +1488,7 @@ static void OGL_Rotate(TOGL_Data * OGL_Data, Nlm_Int4 dAngle,
     glGetDoublev(GL_MODELVIEW_MATRIX, (GLdouble *) OGL_Data->ModelMatrix);
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving OGL_Rotate");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving OGL_Rotate");
 #endif
 }
 
@@ -1594,6 +1941,8 @@ void OGL_LoadName(Nlm_VoidPtr PtrValue)
 
     for (i = 0; i < sizeof(Nlm_VoidPtr) / sizeof(GLuint); i++)
         glPushName((GLuint) (((long) PtrValue) >> (i * sizeof(GLuint) * 8))); /* 64 bits? */
+
+    OGL_CurrentName = PtrValue;
 }
 
 
@@ -1981,6 +2330,7 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
     OGL_Data->ModelMatrix = (Nlm_VoidPtr) MemNew(16 * sizeof(GLdouble));
     if (OGL_Data->ModelMatrix == NULL)
         return NULL;
+    OGL_Data->NeedCameraSetup = FALSE;
 
     OGL_Data->Layers = (TOGL_Layers *) MemNew(sizeof(TOGL_Layers));
     if (OGL_Data->Layers == NULL)
@@ -1993,10 +2343,10 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
     OGL_SetLayers(OGL_Data, FALSE); /* null all the layers out */
 
     OGL_Data->IsPlaying = FALSE; /* animation off */
+    OGL_Data->Tick = 0.01;
     OGL_Data->ParentWindow = Nlm_ParentWindow((Nlm_Handle) prnt);
     OGL_Data->PaletteExpanded = NULL;
     OGL_Data->PaletteIndex = NULL;
-    OGL_Data->NewPalette = FALSE;
 
     OGL_Data->SelectMode = FALSE;
     OGL_Data->SelectBuffer =
@@ -2082,7 +2432,7 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
         gluQuadricNormals(OGL_qobj, GLU_SMOOTH);
         gluQuadricOrientation(OGL_qobj, GLU_OUTSIDE);
     }
-    
+
     return OGL_Data;
 }
 
@@ -2097,14 +2447,12 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
     GLint Viewport[4];
     static GLint prevW = -1, prevH = -1;
     GLfloat LightPosition[4], aspect;
-    int i;
-    Nlm_Uint1 *red, *green, *blue;
     Nlm_Int4 TotalColors;
     Nlm_Uint4 iList;
-    ValNodePtr Palette, PaletteIndex;
+    int i;
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error entering DrawViewer3D");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error entering DrawViewer3D");
 #endif
 
     if (OGL_Data == NULL) return;
@@ -2124,59 +2472,27 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
         AGLContext ctx = aglGetCurrentContext();
         Nlm_GetRect((Nlm_GraphiC) OGL_Data->Panel, &r);
         wrect[0] = r.left;
-        wrect[1] = r.top - Nlm_hScrollBarHeight;
-        wrect[2] = r.right - r.left + 1;
-        wrect[3] = r.bottom - r.top + 1;
+        wrect[1] = r.top - Nlm_hScrollBarHeight  - 4; /* this last column is simply tweaks */
+        wrect[2] = r.right - r.left + 1          - 2; /* to make window position look nice */
+        wrect[3] = r.bottom - r.top + 1          - 3;
         aglSetInteger(ctx, AGL_BUFFER_RECT, wrect);
         aglEnable(ctx, AGL_BUFFER_RECT);
     }
 #endif
 
+    /* set background color */
     if (OGL_Data->IndexMode) {
         TotalColors = ValNodeLen(OGL_Data->PaletteExpanded);
-        if (TotalColors && OGL_Data->NewPalette) {
-            OGL_Data->NewPalette = FALSE;
-            red = Calloc((size_t) TotalColors + 1, sizeof(Uint1));
-            blue = Calloc((size_t) TotalColors + 1, sizeof(Uint1));
-            green = Calloc((size_t) TotalColors + 1, sizeof(Uint1));
-
-            red[0] = OGL_Data->Background.rgb[0];
-            green[0] = OGL_Data->Background.rgb[1];
-            blue[0] = OGL_Data->Background.rgb[2];
-
-            for (Palette = OGL_Data->PaletteExpanded, i = 1; Palette;
-                 Palette = Palette->next, i++) {
-                red[i] =
-                    ((DDV_ColorCell *) (Palette->data.ptrvalue))->rgb[0];
-                green[i] =
-                    ((DDV_ColorCell *) (Palette->data.ptrvalue))->rgb[1];
-                blue[i] =
-                    ((DDV_ColorCell *) (Palette->data.ptrvalue))->rgb[2];
-            }
-
-            Nlm_Set3DColorMap(OGL_Data->Panel, (Uint1) (TotalColors + 1),
-                              red, green, blue);
-
-            /* increment the palette index to allow for the background */
-            for (PaletteIndex = OGL_Data->PaletteIndex; PaletteIndex;
-                 PaletteIndex = PaletteIndex->next) {
-                ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->
-                    Begin += 1;
-                ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->
-                    End += 1;
-            }
-
-            MemFree(red);
-            MemFree(green);
-            MemFree(blue);
-        }
-        glClearIndex(0.0);
+#ifdef WIN32
+        glClearIndex((GLfloat) (TotalColors + 10));
+#else
+        glClearIndex((GLfloat) TotalColors);
+#endif
 
     } else {
-        static GLfloat Background[] = { 0.0, 0.0, 0.0, 1.0 };
-        ColorCell2Array(Background, &OGL_Data->Background);
-        glClearColor(Background[0], Background[1], Background[2],
-                     Background[3]);
+        glClearColor(1.0*OGL_Data->Background.rgb[0]/255, 
+                     1.0*OGL_Data->Background.rgb[1]/255, 
+                     1.0*OGL_Data->Background.rgb[2]/255, 1.0);
     }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2185,14 +2501,14 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
 
     /* only do this (expensive) stuff if we have to */
     if (Viewport[2] != prevW || Viewport[3] != prevH ||
-        OGL_Data->SelectMode || OGL_NeedCameraSetup) {
+        OGL_Data->SelectMode || OGL_Data->NeedCameraSetup) {
 
         prevW = Viewport[2];
         prevH = Viewport[3];
         if (OGL_Data->SelectMode)
-            OGL_NeedCameraSetup = TRUE; /* will need to redo camera next time */
+            OGL_Data->NeedCameraSetup = TRUE; /* will need to redo camera next time */
         else
-            OGL_NeedCameraSetup = FALSE;
+            OGL_Data->NeedCameraSetup = FALSE;
 
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
@@ -2230,6 +2546,7 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
         LightPosition[3] = 0.0;  /* directional light (faster) when 0.0 */
         glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
 
+
         if (OGL_Data->IndexMode == FALSE) {
             glLightfv(GL_LIGHT0, GL_AMBIENT, Color_Off);
             glLightfv(GL_LIGHT0, GL_DIFFUSE, Color_MostlyOn);
@@ -2242,7 +2559,7 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
         } else { /* color index mode */
             glLightfv(GL_LIGHT0, GL_AMBIENT, Color_Off);
             glLightfv(GL_LIGHT0, GL_DIFFUSE, Color_On);
-            glLightfv(GL_LIGHT0, GL_SPECULAR, Color_MostlyOff);
+            glLightfv(GL_LIGHT0, GL_SPECULAR, Color_Off);
         }
 
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, Color_On); /* global ambience */
@@ -2251,6 +2568,11 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
 
         glShadeModel(GL_SMOOTH);
         glEnable(GL_DEPTH_TEST);
+
+        /* turn on culling to speed rendering */
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glFrontFace(GL_CCW);
     }
 
     glLoadIdentity();
@@ -2262,15 +2584,21 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
     } else {
         for (iList = OGL_Data->Layers->FirstLayer;
              iList <= OGL_Data->Layers->LastLayer; iList++) {
-            if (OGL_GetLayer(OGL_Data, iList)) {
+            if (OGL_GetLayer(OGL_Data, iList - OGL_Data->Layers->FirstLayer)) {
                 glCallList(iList);
             }
         }
     }
 
-    glFlush();
+    /* display transparent spheres */
+    if (!OGL_Data->IndexMode) {
+        OGL_SetColor(OGL_Data, NULL, GL_NONE, 1.0); /* clear all color states */
+        OGL_RenderTransparentSpheres(OGL_Data);
+    }
 
     OGL_CheckForErrors(); /* check GL error status */
+
+    glFlush();
 
     if (OGL_Data->SelectMode)
         OGL_Data->SelectHits = glRenderMode(GL_RENDER);
@@ -2278,16 +2606,18 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
     else { /* regular rendering mode */
         /* swap when double buffering */
 #if defined(WIN32)
-        SwapBuffers(wglGetCurrentDC());
+        wglSwapLayerBuffers(wglGetCurrentDC(), WGL_SWAP_MAIN_PLANE);/**/
+        /*SwapBuffers(wglGetCurrentDC());/**/
 #elif defined(WIN_MOTIF)
         glXSwapBuffers((Display *) OGL_Data->display, glXGetCurrentDrawable());
 #elif defined(WIN_MAC)
         aglSwapBuffers(aglGetCurrentContext());
 #endif
+
     }
 
 #ifdef DEBUG_GL
-    if (OGL_CheckForErrors()) puts("GL error leaving DrawViewer3D");
+    if (OGL_CheckForErrors()) Message(MSG_POST, "GL error leaving DrawViewer3D");
 #endif
 }
 
@@ -2316,7 +2646,7 @@ void OGL_Reset(TOGL_Data * OGL_Data)
     OGL_Data->CameraAngle = 2.0 *
         atan((fabs(OGL_Data->BoundBox.y[0] - OGL_Data->BoundBox.y[1]) / 2.0) /
               OGL_Data->CameraDistance);
-    OGL_NeedCameraSetup = TRUE;
+    OGL_Data->NeedCameraSetup = TRUE;
 
     /* translate model so origin is at bounding box center */
     glMatrixMode(GL_MODELVIEW);
@@ -2381,13 +2711,9 @@ Boolean OGL_SetPosition3D(TOGL_Data * OGL_Data, Nlm_RectPtr rect)
 void OGL_ClearOGL_Data(TOGL_Data * OGL_Data)
 /* clear the transforms and bound box in OGL_Data structure */
 {
-    Nlm_Int4 i;
-
     if (OGL_Data == NULL)
         return;
-    /*for (i = 0; i < 3; i++) {
-        OGL_Data->Translate[i] = 0.0;
-    }*/
+
     OGL_ClearBoundBox(&(OGL_Data->BoundBox));
     OGL_Data->MaxSize = 2.0 * OGL_DEFAULT_SIZE;
     OGL_Data->Background.rgb[0] = 0;
@@ -2432,14 +2758,27 @@ NLM_EXTERN void OGL_StopPlaying(TOGL_Data *pOGL_Data)
 NLM_EXTERN void OGL_StartPlaying(TOGL_Data *pOGL_Data)
 {
 #ifndef WIN_MAC
+    Nlm_StopWatchPtr pStopwatch;
+    Nlm_FloatHi newtime;
+
     pOGL_Data->IsPlaying = TRUE;
+    pStopwatch = Nlm_StopWatchNew();
+    Nlm_StopWatchStart(pStopwatch);
     while (!Nlm_QuittingProgram() && OGL_IsPlaying(pOGL_Data)) {
         OGL_Play(pOGL_Data);
         OGL_DrawViewer3D(pOGL_Data);
-
+        if(pOGL_Data->Tick != 0.0L) {
+            do {
+                Nlm_StopWatchStop(pStopwatch);
+                newtime = Nlm_GetElapsedTime(pStopwatch);
+                if (Nlm_EventAvail()) Nlm_ProcessAnEvent();
+            } while (newtime < pOGL_Data->Tick);
+            Nlm_StopWatchStart(pStopwatch);
+        }
         while (Nlm_EventAvail())
             Nlm_ProcessAnEvent();
     }
+    Nlm_StopWatchFree(pStopwatch);
 #endif
 }
 
@@ -2557,7 +2896,7 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
 
     currentXErrHandler = XSetErrorHandler(OGL_XErrorHandler);
     gotAnXError = FALSE;
-    
+
     /* first, try to get a non-doublebuffered visual, to economize on memory */
     nAttribs = 0;
     attribs[nAttribs++] = GLX_USE_GL;
@@ -2573,16 +2912,16 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
     glGetIntegerv(GL_DEPTH_BITS, &glSize);
     attribs[nAttribs++] = glSize;
     attribs[nAttribs++] = None;
-    visinfo = glXChooseVisual((Display *) OGL_Data->display, 
-                              DefaultScreen((Display *) OGL_Data->display), 
+    visinfo = glXChooseVisual((Display *) OGL_Data->display,
+                              DefaultScreen((Display *) OGL_Data->display),
                               attribs);
-    
+
     /* if that fails, just revert to the one used for the regular window */
-    if (visinfo) 
+    if (visinfo)
         localVI = TRUE;
     else
         visinfo = (XVisualInfo *) (OGL_Data->visinfo);
-    
+
     xPixmap = XCreatePixmap((Display *) OGL_Data->display,
         RootWindow((Display *) OGL_Data->display, Nlm_currentXScreen),
         viewport[2], viewport[3], visinfo->depth);
@@ -2659,16 +2998,16 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
 
 #elif defined(WIN_MAC)
 	currentCtx = aglGetCurrentContext();
-	
+
 	/* Mac pixels seem to always be 32-bit */
 	bytesPerPixel = 4;
-	
+
 	base = (Nlm_Uchar *) MemNew(viewport[2] * viewport[3] * bytesPerPixel);
 	if (!base) {
     	Message(MSG_ERROR, "Failed to allocate image buffer");
     	goto cleanup;
 	}
-	
+
 	/* create an off-screen rendering context (NOT doublebuffered) */
 	attrib[na++] = AGL_OFFSCREEN;
 	attrib[na++] = AGL_RGBA;
@@ -2693,9 +3032,9 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
     	Message(MSG_ERROR, "aglCreateContext failed");
     	goto cleanup;
     }
-    
+
     /* attach off-screen buffer to this context */
-    if (!aglSetOffScreen(ctx, viewport[2], viewport[3], 
+    if (!aglSetOffScreen(ctx, viewport[2], viewport[3],
                          bytesPerPixel * viewport[2], base)) {
     	Message(MSG_ERROR, "aglSetOffScreen failed");
     	goto cleanup;
@@ -2763,7 +3102,7 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
     row_monitor = Nlm_MonitorStrNewEx("PNG Progress", 20, FALSE);
     Nlm_MonitorStrValue(row_monitor, "Rendering to off-screen buffer...");
     Nlm_Update();
-    OGL_NeedCameraSetup = TRUE;
+    OGL_Data->NeedCameraSetup = TRUE;
 #ifdef WIN_MAC
     drawingOffscreen = TRUE; /* signal redraw not to use agl buffer rect */
 #endif
@@ -2850,7 +3189,7 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
 	if (ctx) aglDestroyContext(ctx);
 	if (fmt) aglDestroyPixelFormat(fmt);
 	if (base) MemFree(base);
-	
+
 #endif
 
     if (row) MemFree(row);
@@ -2867,6 +3206,128 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
 
 #endif /* _PNG */
 
+
+/* create display list with logo */
+NLM_EXTERN void OGL_DrawLogo(TOGL_Data *OGL_Data)
+{
+    DDV_ColorCell colorCell;
+    Uint1 logoColor[3] = { 100, 240, 150 };
+    int i, n, s, g;
+
+#define LOGO_SIDES 36
+    int segments = 180;
+    GLdouble bigRad = 12.0, height = 24.0,
+        minRad = 0.1, maxRad = 2.0,
+        ringPts[LOGO_SIDES * 3], *pRingPts = ringPts,
+        prevRing[LOGO_SIDES * 3], *pPrevRing = prevRing, *tmp,
+        ringNorm[LOGO_SIDES * 3], *pRingNorm = ringNorm,
+        prevNorm[LOGO_SIDES * 3], *pPrevNorm = prevNorm,
+        PI = acos(-1), length,
+        startRad, midRad, phase, currentRad, CR[3], H[3], V[3];
+
+    if (!OGL_Data || OGL_Data->IndexMode) return;
+
+    /* set up initial camera */
+    OGL_Data->CameraDistance = 200.0;
+    OGL_Data->CameraDirection[0] = 0.0;
+    OGL_Data->CameraDirection[1] = 0.0;
+    OGL_Data->CameraAngle = acos(-1) / 14;
+    OGL_Data->NeedCameraSetup = TRUE;
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glGetDoublev(GL_MODELVIEW_MATRIX, (GLdouble *) OGL_Data->ModelMatrix);
+
+    glNewList(1, GL_COMPILE);
+
+    /* create logo */
+    DDV_SetColorInCell(&colorCell, logoColor);
+    OGL_SetColor(OGL_Data, &colorCell, GL_DIFFUSE, 1.0);
+
+    for (n = 0; n < 2; n++) { /* helix strand */
+        if (n == 0) {
+            startRad = maxRad;
+            midRad = minRad;
+            phase = 0;
+        } else {
+            startRad = minRad;
+            midRad = maxRad;
+            phase = PI;
+        }
+        for (g = 0; g <= segments; g++) { /* segment (bottom to top) */
+
+            if (g < segments/2)
+                currentRad = startRad + (midRad - startRad) *
+                    (0.5 - 0.5 * cos(PI * g / (segments/2)));
+            else
+                currentRad = midRad + (startRad - midRad) *
+                    (0.5 - 0.5 * cos(PI * (g - segments/2) / (segments/2)));
+
+            CR[1] = height * g / segments - height/2;
+            if (g > 0) phase += PI * 2 / segments;
+            CR[2] = bigRad * cos(phase);
+            CR[0] = bigRad * sin(phase);
+
+            /* make a strip around the strand circumference */
+            for (s = 0; s < LOGO_SIDES; s++) {
+                V[0] = CR[0];
+                V[2] = CR[2];
+                V[1] = 0;
+                length = sqrt(V[0]*V[0] + V[1]*V[1] + V[2]*V[2]);
+                for (i = 0; i < 3; i++) V[i] /= length;
+                H[0] = H[2] = 0;
+                H[1] = 1;
+                for (i = 0; i < 3; i++) {
+                    pRingNorm[3*s + i] = V[i] * cos(PI * 2 * s / LOGO_SIDES) +
+                                         H[i] * sin(PI * 2 * s / LOGO_SIDES);
+                    pRingPts[3*s + i] = CR[i] + pRingNorm[3*s + i] * currentRad;
+                }
+            }
+            if (g > 0) {
+                glBegin(GL_TRIANGLE_STRIP);
+                for (s = 0; s < LOGO_SIDES; s++) {
+                    glNormal3d(pPrevNorm[3*s], pPrevNorm[3*s + 1], pPrevNorm[3*s + 2]);
+                    glVertex3d(pPrevRing[3*s], pPrevRing[3*s + 1], pPrevRing[3*s + 2]);
+                    glNormal3d(pRingNorm[3*s], pRingNorm[3*s + 1], pRingNorm[3*s + 2]);
+                    glVertex3d(pRingPts[3*s], pRingPts[3*s + 1], pRingPts[3*s + 2]);
+                }
+                glNormal3d(pPrevNorm[0], pPrevNorm[1], pPrevNorm[2]);
+                glVertex3d(pPrevRing[0], pPrevRing[1], pPrevRing[2]);
+                glNormal3d(pRingNorm[0], pRingNorm[1], pRingNorm[2]);
+                glVertex3d(pRingPts[0], pRingPts[1], pRingPts[2]);
+                glEnd();
+            }
+            
+            /* cap the ends */
+            glBegin(GL_POLYGON);
+            if ((g == 0 && n == 0) || (g == segments && n == 1))
+                glNormal3d(-1, 0, 0);
+            else
+                glNormal3d(1, 0, 0);
+            if (g == 0) {
+                for (s = 0; s < LOGO_SIDES; s++)
+                    glVertex3d(pRingPts[3*s], pRingPts[3*s + 1], pRingPts[3*s + 2]);
+            } else if (g == segments) {
+                for (s = LOGO_SIDES - 1; s >= 0; s--)
+                    glVertex3d(pRingPts[3*s], pRingPts[3*s + 1], pRingPts[3*s + 2]);
+            }
+            glEnd();
+
+            /* switch pointers to store previous ring */
+            tmp = pPrevRing;
+            pPrevRing = pRingPts;
+            pRingPts = tmp;
+            tmp = pPrevNorm;
+            pPrevNorm = pRingNorm;
+            pRingNorm = tmp;
+        }
+    }
+
+    glEndList();
+
+    OGL_Data->Layers->SelectedLayer = 1; /* fool DrawViewer3D into thinking there's a single structure */
+    OGL_DrawViewer3D(OGL_Data);
+}
+
 #endif                          /* _OPENGL */
 
 
@@ -2878,7 +3339,8 @@ void Nlm_AddHalfWorm3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                        Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
                        Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
                        Nlm_FloatHi x3, Nlm_FloatHi y3, Nlm_FloatHi z3,
-                       Nlm_FloatHi radius, Nlm_Int4 segments, Nlm_Int4 sides)
+                       Nlm_Boolean cap1, Nlm_Boolean cap2, Nlm_FloatHi radius,
+                       Nlm_Int4 segments, Nlm_Int4 sides)
 #else
 typedef Nlm_FloatLo GLfloat;
 typedef Nlm_FloatHi GLdouble;
@@ -2904,10 +3366,10 @@ void Nlm_AddHalfWorm3D(Nlm_Picture3D pic,
      * The Hermite matrix Mh.
      */
     static Nlm_FloatHi Mh[4][4] = {
-        {2, -2, 1, 1},
-        {-3, 3, -2, -1},
-        {0, 0, 1, 0},
-        {1, 0, 0, 0}
+        { 2, -2,  1,  1},
+        {-3,  3, -2, -1},
+        { 0,  0,  1,  0},
+        { 1,  0,  0,  0}
     };
     /*
      * Variables that affect the curve shape
@@ -3047,10 +3509,6 @@ void Nlm_AddHalfWorm3D(Nlm_Picture3D pic,
             dQtz =
                 T[0] * MG[0][2] + T[1] * MG[1][2] +
                 MG[2][2] /* *T[2] + T[3]*MG[3][2] */ ;
-            /*
-               len = sqrt(dQtx*dQtx + dQty*dQty + dQtz*dQtz);
-               dQtx /= len; dQty /= len; dQtz /= len;
-             */
 
             /* use cross prod't of [1,0,0] x normal as horizontal */
             Hx = 0.0;
@@ -3110,18 +3568,43 @@ void Nlm_AddHalfWorm3D(Nlm_Picture3D pic,
             if (i > 0) {
                 glBegin(GL_TRIANGLE_STRIP);
                 for (j = 0; j < sides; j++) {
-                    glNormal3d(pNx[j], pNy[j], pNz[j]);
-                    glVertex3d(pCx[j], pCy[j], pCz[j]);
                     k = j + offset;
-                    if (k >= sides)
-                        k -= sides;
+                    if (k >= sides) k -= sides;
                     glNormal3d(Nx[k], Ny[k], Nz[k]);
                     glVertex3d(Cx[k], Cy[k], Cz[k]);
+                    glNormal3d(pNx[j], pNy[j], pNz[j]);
+                    glVertex3d(pCx[j], pCy[j], pCz[j]);
                 }
-                glNormal3d(pNx[0], pNy[0], pNz[0]);
-                glVertex3d(pCx[0], pCy[0], pCz[0]);
                 glNormal3d(Nx[offset], Ny[offset], Nz[offset]);
                 glVertex3d(Cx[offset], Cy[offset], Cz[offset]);
+                glNormal3d(pNx[0], pNy[0], pNz[0]);
+                glVertex3d(pCx[0], pCy[0], pCz[0]);
+                glEnd();
+            }
+
+            /* put caps on the end */
+            if (cap1 && i == 0) {
+                glBegin(GL_POLYGON);
+                len = sqrt(dQtx*dQtx + dQty*dQty + dQtz*dQtz);
+                dQtx /= len; dQty /= len; dQtz /= len;
+                glNormal3d(-dQtx, -dQty, -dQtz);
+                for (j = sides - 1; j >= 0; j--) {
+                    k = j + offset;
+                    if (k >= sides) k -= sides;
+                    glVertex3d(Cx[k], Cy[k], Cz[k]);
+                }
+                glEnd();
+            }
+            else if (cap2 && i == segments) {
+                glBegin(GL_POLYGON);
+                len = sqrt(dQtx*dQtx + dQty*dQty + dQtz*dQtz);
+                dQtx /= len; dQty /= len; dQtz /= len;
+                glNormal3d(dQtx, dQty, dQtz);
+                for (j = 0; j < sides; j++) {
+                    k = j + offset;
+                    if (k >= sides) k -= sides;
+                    glVertex3d(Cx[k], Cy[k], Cz[k]);
+                }
                 glEnd();
             }
 

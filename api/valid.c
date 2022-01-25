@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.95 $
+* $Revision: 6.100 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.100  2000/03/14 13:33:33  kans
+* NCBISubValidate sets indexing, adds AppProperty to shut off specific messages to be decided later
+*
+* Revision 6.99  2000/02/18 21:25:34  kans
+* added ERR_SEQ_DESCR_SerialInComment and ERR_SEQ_FEAT_SerialInComment
+*
+* Revision 6.98  2000/02/14 15:00:19  kans
+* added vsp->farIDsInAlignments for use by alignment validator
+*
+* Revision 6.97  2000/02/08 19:10:42  kans
+* delta seq okay for htgs_3
+*
+* Revision 6.96  2000/01/26 23:14:46  kans
+* added ERR_SEQ_INST_DuplicateSegmentReferences
+*
 * Revision 6.95  2000/01/14 21:14:02  kans
 * added ERR_SEQ_FEAT_OverlappingPeptideFeat
 *
@@ -547,6 +562,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	Boolean useSeqMgrIndexes;
 	Boolean suppressContext;
 	Boolean validateAlignments;
+	Boolean farIDsInAlignments;
 
 	if (vsp == NULL) return;
 
@@ -560,6 +576,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	useSeqMgrIndexes = vsp->useSeqMgrIndexes;
 	suppressContext = vsp->suppressContext;
 	validateAlignments = vsp->validateAlignments;
+	farIDsInAlignments = vsp->farIDsInAlignments;
 	MemSet((VoidPtr)vsp, 0, sizeof(ValidStruct));
 	vsp->errbuf = errbuf;
 	vsp->cutoff = cutoff;
@@ -571,6 +588,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	vsp->useSeqMgrIndexes = useSeqMgrIndexes;
 	vsp->suppressContext = suppressContext;
 	vsp->validateAlignments = validateAlignments;
+	vsp->farIDsInAlignments = farIDsInAlignments;
 	return;
 }
 
@@ -1588,7 +1606,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 	Int2 residue, x, termination;
 	Int4 len, divisor = 1, len2;
 	ValNode head;
-	ValNodePtr vnp, vnp2;
+	ValNodePtr vnp, vnp2, idlist;
 	BioseqContextPtr bcp;
 	Boolean got_partial, is_invalid;
 	int seqtype, terminations;
@@ -1610,7 +1628,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 	SeqMgrFeatContext protctxt;
 	CharPtr protlbl;
 	TextSeqIdPtr tsip;
-	CharPtr ptr;
+	CharPtr ptr, last, str;
+	Uint1 lastchoice;
 	Char ch;
 	Boolean multitoken;
 
@@ -1986,6 +2005,38 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 			ValidErr(vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong,"Bioseq.seq_data is larger [%ld] than given length [%ld]",(long)(len), (long)bsp->length);
 		}
 		
+		vnp = NULL;
+		idlist = NULL;
+		while ((vnp = SeqLocFindNext (&head, vnp)) != NULL) {
+			sip1 = SeqLocId (vnp);
+			if (sip1 != NULL) {
+				SeqIdWrite (sip1, buf1, PRINTID_FASTA_SHORT, 40);
+				ValNodeCopyStr (&idlist, vnp->choice, buf1);
+			}
+		}
+		if (idlist != NULL) {
+			idlist = ValNodeSort (idlist, SortVnpByString);
+			last = (CharPtr) idlist->data.ptrvalue;
+			lastchoice = (Uint1) idlist->choice;
+			vnp = idlist->next;
+			while (vnp != NULL) {
+				str = (CharPtr) vnp->data.ptrvalue;
+				if (StringICmp (last, str) == 0) {
+					if (vnp->choice == lastchoice && lastchoice == SEQLOC_WHOLE) {
+						ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_DuplicateSegmentReferences,
+								"Segmented sequence has multiple references to %s\n", str);
+					} else {
+						ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_DuplicateSegmentReferences,
+								"Segmented sequence has multiple references to %s that are not SEQLOC_WHOLE\n", str);
+					}
+				} else {
+					last = (CharPtr) vnp->data.ptrvalue;
+					lastchoice = (Uint1) vnp->choice;
+				}
+				vnp = vnp->next;
+			}
+			ValNodeFreeData (idlist);
+		}
 
 		vsp->bsp_partial_val = SeqLocPartialCheck((SeqLocPtr)(&head));
 		if ((vsp->bsp_partial_val) && (ISA_aa(bsp->mol)))
@@ -2128,7 +2179,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 		if (vnp != NULL) {
 			mip = (MolInfoPtr) vnp->data.ptrvalue;
 			if (mip != NULL) {
-				if (mip->tech != MI_TECH_htgs_0 && mip->tech != MI_TECH_htgs_1 && mip->tech != MI_TECH_htgs_2) {
+				if (mip->tech != MI_TECH_htgs_0 && mip->tech != MI_TECH_htgs_1 && mip->tech != MI_TECH_htgs_2 && mip->tech != MI_TECH_htgs_3) {
 					ValidErr(vsp, SEV_ERROR, ERR_SEQ_INST_BadDeltaSeq,"Delta seq technique should not be [%d]",(int)(mip->tech));
 				}
 			}
@@ -2359,6 +2410,7 @@ static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, Va
 	Uint2 olditemtype;
 	Uint2 olditemid;
 	RnaRefPtr rrp;
+	CharPtr str;
 
 	vsp->descr = NULL;
 	vsp->sfp = sfp;
@@ -2452,6 +2504,11 @@ static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, Va
 		(sfp->cit != NULL))
 		bvsp->got_a_pub = TRUE;
 
+	str = (CharPtr) sfp->comment;
+	if (SerialNumberInString (str)) {
+		ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_SerialInComment,
+				"Feature comment may refer to reference by serial number - attach reference specific comments to the reference REMARK instead.");
+	}
 
 	if (gcp != NULL) {
 		gcp->itemID = olditemid;
@@ -2849,6 +2906,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 	Uint2 olditemid;
 	BioSourcePtr biop;
 	GatherContextPtr gcp = NULL;
+	CharPtr str;
 	static char * badmod = "Inconsistent GIBB-mod [%d] and [%d]";
 
 	vsp->sfp = NULL;
@@ -2981,6 +3039,13 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 			if (! bvsp->is_aa)
 			{
 				ValidErr(vsp, SEV_ERROR,ERR_SEQ_DESCR_InvalidForType, "Nucleic acid with protein sequence method");
+			}
+			break;
+		case Seq_descr_comment:
+			str = (CharPtr) vnp->data.ptrvalue;
+			if (SerialNumberInString (str)) {
+				ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_SerialInComment,
+						"Comment may refer to reference by serial number - attach reference specific comments to the reference REMARK instead.");
 			}
 			break;
 		case Seq_descr_genbank:
@@ -4751,6 +4816,9 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 	Uint2 partialflag;
 
 	if (sfp == NULL) return;
+
+	if (GetAppProperty ("NcbiSubutilValidation") != NULL) return; /* suppress if NCBISubValidate */
+
 
 	if (sfp->excpt)		 /* biological exception */
 		return;

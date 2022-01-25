@@ -1,4 +1,4 @@
-/* $Id: wwwutils.c,v 6.9 1999/09/29 19:08:29 shavirin Exp $
+/* $Id: wwwutils.c,v 6.10 2000/03/16 16:34:47 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   This file contains functions to read and process HTTP 
@@ -38,6 +38,9 @@
 *   
 *---------------------------------------------------------------------------
 * $Log: wwwutils.c,v $
+* Revision 6.10  2000/03/16 16:34:47  shavirin
+* Removed check for NetscapeOK in case of mutipart/form-data protocol.
+*
 * Revision 6.9  1999/09/29 19:08:29  shavirin
 * Added new functions: WWWGetLastValueByName and WWWFindNameEx
 *
@@ -487,6 +490,8 @@ NLM_EXTERN WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries,
 
   if(WWWBuffer_in == NULL || WWWBuffer_in[0] == NULLB)
     return NULL;
+
+  NetscapeOK = TRUE; /* Forget it... all browsers should handle it */
   
   if ((entries = (WWWEntryPtr*)MemNew(sizeof(WWWEntryPtr)*MAX_WWW_ENTRIES)) == NULL)
       return NULL;

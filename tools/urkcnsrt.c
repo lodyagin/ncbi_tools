@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: consort
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkcnsrt.c,v $
+* Revision 6.20  2000/02/09 20:29:04  kans
+* changed FindNuc to avoid linker conflicts on newer alpha compiler
+*
 * Revision 6.19  1999/04/02 20:13:17  kans
 * cast added
 *
@@ -741,7 +744,7 @@ static Boolean getgblcdn (GatherContextPtr gcp)
   return TRUE;
 }
 
-static void FindNuc (SeqEntryPtr sep, Pointer data, Int4 index,
+static void UrkcnsrtFindNuc (SeqEntryPtr sep, Pointer data, Int4 index,
                      Int2 indent)
 {
   BioseqPtr PNTR bspp;
@@ -772,7 +775,7 @@ extern TreeNodePtr ConsortSeqEntry (SeqEntryPtr sep)
   static GatherCDS    gcds;
   GatherCDSPtr        gcdsp;
 
-  SeqEntryExplore (sep, &bsp, FindNuc);
+  SeqEntryExplore (sep, &bsp, UrkcnsrtFindNuc);
   if (bsp == NULL)
     return NULL;
 
@@ -858,7 +861,7 @@ extern Int4Ptr ConformSeqEntry (SeqEntryPtr sep)
   GatherCDSPtr        gcdsp;
 
   bsp = NULL;
-  SeqEntryExplore (sep, &bsp, FindNuc);
+  SeqEntryExplore (sep, &bsp, UrkcnsrtFindNuc);
   if (bsp == NULL)
     return NULL;
 

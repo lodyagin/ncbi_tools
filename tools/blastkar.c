@@ -47,8 +47,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.37 $
+ * $Revision: 6.40 $
  * $Log: blastkar.c,v $
+ * Revision 6.40  2000/04/17 20:41:37  madden
+ * Added BLAST_MatrixFetch
+ *
+ * Revision 6.39  2000/03/27 20:28:19  shavirin
+ * Added mulithred-safe protection to the function BlastScoreBlkMatRead()
+ *
+ * Revision 6.38  2000/02/24 16:39:03  shavirin
+ * Added check for existence of matrix file in BlastScoreBlkMatFill().
+ *
  * Revision 6.37  2000/01/11 21:23:13  shavirin
  * Increased size of index from Int2 to Int4 in BlastPSIMaxScoreGet() function
  *
@@ -1028,98 +1037,127 @@ Int2 LIBCALL
 BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
 
 {
-	Char string[PATH_MAX], alphabet_type[3];
-	CharPtr matrix_dir;
-	Int2 status;
-	FILE *fp;
+    Char string[PATH_MAX], alphabet_type[3];
+    CharPtr matrix_dir;
+    Int2 status;
+    FILE *fp;
+    
+    status=0;
+    
+    fp = NULL;
+    if (sbp->read_in_matrix) {
+        /* Convert matrix name to upper case. */
+        matrix = Nlm_StrUpper(matrix);
+        
+        sbp->name = StringSave(matrix);	/* Save the name of the matrix. */
 
-	status=0;
+        if(FileLength(matrix) > 0)
+            fp = FileOpen(matrix, "r");
+        
+        if (fp == NULL) {
+            if(FindPath("ncbi", "ncbi", "data", string, PATH_MAX)) {
+                StringCat(string, matrix);
+                if(FileLength(string) > 0)
+                    fp = FileOpen(string, "r");
+            }
+        }
+        /* Trying to use local "data" directory */
 
-	fp = NULL;
-	if (sbp->read_in_matrix)
-	{
-		/* Convert matrix name to upper case. */
-		matrix = Nlm_StrUpper(matrix);
-
-		sbp->name = StringSave(matrix);	/* Save the name of the matrix. */
-
-		fp = FileOpen(matrix, "r");
-
-		if (fp == NULL)
-		{
-			if(FindPath("ncbi", "ncbi", "data", string, PATH_MAX))
-			{
-				StringCat(string, matrix);
-				fp = FileOpen(string, "r");
-			}
-		}
-			
+        if(fp == NULL) {
+            sprintf(string, "data/%s", matrix);
+            if(FileLength(string) > 0)
+                fp = FileOpen(string, "r");
+        }
+ 
 #ifdef OS_UNIX
-		/* Get the matrix locations from the environment for UNIX. */
-		if (fp == NULL)
-		{
-			if (sbp->protein_alphabet)
-				Nlm_StringNCpy(alphabet_type, "aa", 2);
-			else
-				Nlm_StringNCpy(alphabet_type, "nt", 2);
-			alphabet_type[2] = NULLB;
+        /* Get the matrix locations from the environment for UNIX. */
+        if (fp == NULL) {
+            if (sbp->protein_alphabet)
+                Nlm_StringNCpy(alphabet_type, "aa", 2);
+            else
+                Nlm_StringNCpy(alphabet_type, "nt", 2);
+            alphabet_type[2] = NULLB;
+            
+            matrix_dir = getenv("BLASTMAT");
+            if (matrix_dir != NULL) {
+                sprintf(string, "%s%s%s%s%s", matrix_dir, DIRDELIMSTR,alphabet_type, DIRDELIMSTR, matrix); 
+            } else {
+                sprintf(string, "%s%s%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, alphabet_type, DIRDELIMSTR, matrix); 
+            }
 
-			matrix_dir = getenv("BLASTMAT");
-			if (matrix_dir != NULL)
-			{
-				sprintf(string, "%s%s%s%s%s", matrix_dir, DIRDELIMSTR,alphabet_type, DIRDELIMSTR, matrix); 
-			}
-			else
-			{
-				sprintf(string, "%s%s%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, alphabet_type, DIRDELIMSTR, matrix); 
-			}
-			fp = FileOpen(string, "r");
-			/* Try again without "aa" or "nt" */
-			if (fp == NULL)
-			{
-				if (matrix_dir != NULL)
-				{
-					sprintf(string, "%s%s%s", matrix_dir, DIRDELIMSTR, matrix); 
-				}
-				else
-				{
-					sprintf(string, "%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, matrix); 
-				}
-				fp = FileOpen(string, "r");
-			}
-		}
+            if(FileLength(string) > 0)
+                fp = FileOpen(string, "r");
+            
+            /* Try again without "aa" or "nt" */
+            if (fp == NULL) {
+                if (matrix_dir != NULL) {
+                    sprintf(string, "%s%s%s", matrix_dir, DIRDELIMSTR, matrix); 
+                } else {
+                    sprintf(string, "%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, matrix); 
+                }
+
+                if(FileLength(string) > 0)
+                    fp = FileOpen(string, "r");
+            }
+        }
 #endif
-		if (fp == NULL)
-		{
-			ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", matrix);
-			return 4;
-		}
-
-		if((status=BlastScoreBlkMatRead(sbp, fp)) != 0)
-		{
-			FileClose(fp);
-			return status;
-		}
-		FileClose(fp);
-	}
-	else
-	{
-		if((status=BlastScoreBlkMatCreate(sbp)) != 0)
-			return status;
-	}
-	
-	if((status=BlastScoreBlkMaxScoreSet(sbp)) != 0)
-		return status;
-
-	return status;
+        if (fp == NULL) {
+            ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", matrix);
+            return 4;
+        }
+        
+        if((status=BlastScoreBlkMatRead(sbp, fp)) != 0) {
+            FileClose(fp);
+            return status;
+        }
+        FileClose(fp);
+    } else {
+        if((status=BlastScoreBlkMatCreate(sbp)) != 0)
+            return status;
+    }
+    
+    if((status=BlastScoreBlkMaxScoreSet(sbp)) != 0)
+        return status;
+    
+    return status;
 }
 
 /*
-	Calculate the Karlin parameters.  This function should be called once
-	for each context, or frame translated.
+	Return the specified matrix.  Do this by setting up the ScoreBlkPtr
+	and then fetching the matrix from disk.
+*/
 
-	The rfp and stdrfp are calculated for each context, this should be
-	fixed. 
+BLAST_MatrixPtr LIBCALL
+BLAST_MatrixFetch(CharPtr matrix_name)
+
+{
+	BLAST_MatrixPtr matrix;
+	BLAST_ScoreBlkPtr sbp;
+
+	if (matrix_name == NULL)
+		return NULL;
+
+	sbp = BLAST_ScoreBlkNew(Seq_code_ncbistdaa, 1);
+
+	/* Read in for protein. */
+	sbp->read_in_matrix = TRUE;
+
+	BlastScoreBlkMatFill(sbp, matrix_name);
+
+	matrix = BLAST_MatrixFill(sbp, FALSE);
+
+	sbp = BLAST_ScoreBlkDestruct(sbp);	
+
+	return matrix;
+}
+
+
+/*
+  Calculate the Karlin parameters.  This function should be called once
+  for each context, or frame translated.
+  
+  The rfp and stdrfp are calculated for each context, this should be
+  fixed. 
 */
 
 Int2 LIBCALL
@@ -1252,151 +1290,172 @@ static Char ASCII_TO_BLASTNA_CONVERT[128]={
 Int2 LIBCALL
 BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
 {
-	Char	buf[512+3];
-	Char	temp[512];
-	CharPtr	cp, lp;
-	Char		ch;
-	BLAST_ScorePtr PNTR	matrix;
-	BLAST_ScorePtr	m;
-	BLAST_Score	score;
-	Int2		a1cnt = 0, a2cnt = 0;
-	Char    a1chars[BLAST_MAX_ALPHABET], a2chars[BLAST_MAX_ALPHABET];
-	long	lineno = 0;
-	Nlm_FloatHi	xscore;
-	register int	index1, index2, total;
-	SeqCodeTablePtr sctp;
-	SeqMapTablePtr smtp=NULL;
-	Int2 status;
+    Char	buf[512+3];
+    Char	temp[512];
+    CharPtr	cp, lp;
+    Char		ch;
+    BLAST_ScorePtr PNTR	matrix;
+    BLAST_ScorePtr	m;
+    BLAST_Score	score;
+    Int2		a1cnt = 0, a2cnt = 0;
+    Char    a1chars[BLAST_MAX_ALPHABET], a2chars[BLAST_MAX_ALPHABET];
+    long	lineno = 0;
+    Nlm_FloatHi	xscore;
+    register int	index1, index2, total;
+    SeqCodeTablePtr sctp;
+    SeqMapTablePtr smtp=NULL;
+    Int2 status;
+    static TNlmMutex read_matrix_mutex;
 
-	matrix = sbp->matrix;	
-
-	if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-	  sctp = SeqCodeTableFindObj(sbp->alphabet_code);
-	  if(sctp==NULL) {
+    NlmMutexInit(&read_matrix_mutex);
+    NlmMutexLock(read_matrix_mutex);
+    
+    matrix = sbp->matrix;	
+    
+    if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
+        sctp = SeqCodeTableFindObj(sbp->alphabet_code);
+        if(sctp == NULL) {
+            NlmMutexUnlock(read_matrix_mutex); 
 	    return 1;
-	  }
-	  total = sctp->start_at + sctp->num;
-	  for (index1 = sctp->start_at; index1 < total; index1++)
-	        for (index2 = sctp->start_at; index2 < total; index2++)
-			matrix[index1][index2] = BLAST_SCORE_MIN;
+        }
 
-	  if (sbp->alphabet_code != Seq_code_ncbieaa)
-	    {
-	      smtp = SeqMapTableFind(sbp->alphabet_code, Seq_code_ncbieaa);
-	      if (smtp == NULL)
-		{
-			return 1;
-		}
-	    }
-	} else {
-	  /* Fill-in all the defaults ambiguity and normal codes */
-	  status=BlastScoreBlkMatCreate(sbp); 
-	  if(status != 0);
-	    return status;
-	}
+        total = sctp->start_at + sctp->num;
+        for (index1 = sctp->start_at; index1 < total; index1++)
+            for (index2 = sctp->start_at; index2 < total; index2++)
+                matrix[index1][index2] = BLAST_SCORE_MIN;
+        
+        if (sbp->alphabet_code != Seq_code_ncbieaa) {
+            smtp = SeqMapTableFind(sbp->alphabet_code, Seq_code_ncbieaa);
+            if (smtp == NULL) {
+                NlmMutexUnlock(read_matrix_mutex); 
+                return 1;
+            }
+        }
+    } else {
+        /* Fill-in all the defaults ambiguity and normal codes */
+        status=BlastScoreBlkMatCreate(sbp); 
+        if(status != 0);
+        NlmMutexUnlock(read_matrix_mutex); 
+        return status;
+    }
+    
+    /* Read the residue names for the second alphabet */
+    while (Nlm_FileGets(buf, sizeof(buf), fp) != NULL) {
+        ++lineno;
+        if (Nlm_StrChr(buf, '\n') == NULL) {
+            NlmMutexUnlock(read_matrix_mutex); 
+            return 2;
+        }
 
-	/* Read the residue names for the second alphabet */
-	while (Nlm_FileGets(buf, sizeof(buf), fp) != NULL) {
-		++lineno;
-		if (Nlm_StrChr(buf, '\n') == NULL)
-			return 2;
-		if (buf[0] == COMMENT_CHR) {
-			/* save the comment line in a linked list */
-			*Nlm_StrChr(buf, '\n') = NULLB;
-			ValNodeCopyStr(&sbp->comments, 0, buf+1);
-			continue;
-		}
-		if ((cp = Nlm_StrChr(buf, COMMENT_CHR)) != NULL)
-			*cp = NULLB;
-		lp = (CharPtr)Nlm_StrTok(buf, TOKSTR);
-		if (lp == NULL) /* skip blank lines */
-			continue;
-		while (lp != NULL)
-		{
-		
-			if (smtp)
-				ch = SeqMapTableConvert(smtp,  *lp);
-			else {
-			  if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-				ch = *lp;
-                          } else {
-				ch = ASCII_TO_BLASTNA_CONVERT[toupper(*lp)];
-			  }
-			}
-			a2chars[a2cnt++] = ch;
-			lp = (CharPtr)Nlm_StrTok(NULL, TOKSTR);
-		}
+        if (buf[0] == COMMENT_CHR) {
+            /* save the comment line in a linked list */
+            *Nlm_StrChr(buf, '\n') = NULLB;
+            ValNodeCopyStr(&sbp->comments, 0, buf+1);
+            continue;
+        }
+        if ((cp = Nlm_StrChr(buf, COMMENT_CHR)) != NULL)
+            *cp = NULLB;
+        lp = (CharPtr)Nlm_StrTok(buf, TOKSTR);
+        if (lp == NULL) /* skip blank lines */
+            continue;
+        while (lp != NULL) {
+            
+            if (smtp)
+                ch = SeqMapTableConvert(smtp,  *lp);
+            else {
+                if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
+                    ch = *lp;
+                } else {
+                    ch = ASCII_TO_BLASTNA_CONVERT[toupper(*lp)];
+                }
+            }
+            a2chars[a2cnt++] = ch;
+            lp = (CharPtr)Nlm_StrTok(NULL, TOKSTR);
+        }
+        
+        break;	/* Exit loop after reading one line. */
+    }
+    
+    if (a2cnt <= 1) { 
+        NlmMutexUnlock(read_matrix_mutex); 
+        return 2;
+    }
 
-		break;	/* Exit loop after reading one line. */
-	}
+    if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
+        sbp->mat_dim2 = a2cnt;
+    }
+    while (Nlm_FileGets(buf, sizeof(buf), fp) != NULL)  {
+        ++lineno;
+        if ((cp = Nlm_StrChr(buf, '\n')) == NULL) {
+            NlmMutexUnlock(read_matrix_mutex); 
+            return 2;
+        }
+        if ((cp = Nlm_StrChr(buf, COMMENT_CHR)) != NULL)
+            *cp = NULLB;
+        if ((lp = (CharPtr)Nlm_StrTok(buf, TOKSTR)) == NULL)
+            continue;
+        ch = *lp;
+        cp = (CharPtr) lp;
+        if ((cp = Nlm_StrTok(NULL, TOKSTR)) == NULL) {
+            NlmMutexUnlock(read_matrix_mutex); 
+            return 2;
+        }
+        if (a1cnt >= DIM(a1chars)) {
+            NlmMutexUnlock(read_matrix_mutex); 
+            return 2;
+        }
 
-	if (a2cnt <= 1)
-	{
-		return 2;
-	}
-	if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-	  sbp->mat_dim2 = a2cnt;
-	}
-	while (Nlm_FileGets(buf, sizeof(buf), fp) != NULL) 
-	{
-		++lineno;
-		if ((cp = Nlm_StrChr(buf, '\n')) == NULL)
-			return 2;
-		if ((cp = Nlm_StrChr(buf, COMMENT_CHR)) != NULL)
-			*cp = NULLB;
-		if ((lp = (CharPtr)Nlm_StrTok(buf, TOKSTR)) == NULL)
-			continue;
-		ch = *lp;
-		cp = (CharPtr) lp;
-		if ((cp = Nlm_StrTok(NULL, TOKSTR)) == NULL)
-			return 2;
-		if (a1cnt >= DIM(a1chars))
-			return 2;
-
-		if (smtp) {
-			ch = SeqMapTableConvert(smtp,  ch);
-
-		} else {
-			  if (sbp->alphabet_code == BLASTNA_SEQ_CODE) {
-				ch = ASCII_TO_BLASTNA_CONVERT[toupper(ch)];
-			  }
-		}
-		a1chars[a1cnt++] = ch;
-		m = &matrix[(int)ch][0];
-		index2 = 0;
-		while (cp != NULL)
-		{
-			if (index2 >= a2cnt)
-				return 2;
-			Nlm_StrCpy(temp, cp);
-
-			if (Nlm_StrICmp(temp, "na") == 0) 
-			{
-				score = BLAST_SCORE_1MIN;
-			}
-			else 
-			{
-				if (sscanf(temp, "%lg", &xscore) != 1)
-					return 2;
+        if (smtp) {
+            ch = SeqMapTableConvert(smtp,  ch);
+            
+        } else {
+            if (sbp->alphabet_code == BLASTNA_SEQ_CODE) {
+                ch = ASCII_TO_BLASTNA_CONVERT[toupper(ch)];
+            }
+        }
+        a1chars[a1cnt++] = ch;
+        m = &matrix[(int)ch][0];
+        index2 = 0;
+        while (cp != NULL) {
+            if (index2 >= a2cnt) {
+                NlmMutexUnlock(read_matrix_mutex); 
+                return 2;
+            }
+            Nlm_StrCpy(temp, cp);
+            
+            if (Nlm_StrICmp(temp, "na") == 0)  {
+                score = BLAST_SCORE_1MIN;
+            } else  {
+                if (sscanf(temp, "%lg", &xscore) != 1) {
+                    NlmMutexUnlock(read_matrix_mutex); 
+                    return 2;
+                }
 				/*xscore = MAX(xscore, BLAST_SCORE_1MIN);*/
-				if (xscore > BLAST_SCORE_1MAX || xscore < BLAST_SCORE_1MIN)
-					return 2;
-				xscore += (xscore >= 0. ? 0.5 : -0.5);
-				score = (BLAST_Score)xscore;
-			}
-
-			m[(int)a2chars[index2++]] = score;
-
-			cp = Nlm_StrTok(NULL, TOKSTR);
-		}
-	}
-
-	if (a1cnt <= 1)
-		return 2;
-	if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-	        sbp->mat_dim1 = a1cnt;
-	}
-	return 0;
+                if (xscore > BLAST_SCORE_1MAX || xscore < BLAST_SCORE_1MIN) {
+                    NlmMutexUnlock(read_matrix_mutex); 
+                    return 2;
+                }
+                xscore += (xscore >= 0. ? 0.5 : -0.5);
+                score = (BLAST_Score)xscore;
+            }
+            
+            m[(int)a2chars[index2++]] = score;
+            
+            cp = Nlm_StrTok(NULL, TOKSTR);
+        }
+    }
+    
+    if (a1cnt <= 1) {
+        NlmMutexUnlock(read_matrix_mutex); 
+        return 2;
+    }
+    
+    if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
+        sbp->mat_dim1 = a1cnt;
+    }
+    
+    NlmMutexUnlock(read_matrix_mutex); 
+    return 0;
 }
 
 Int2 LIBCALL

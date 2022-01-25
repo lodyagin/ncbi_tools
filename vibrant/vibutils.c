@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.30  2000/02/23 16:21:55  kans
+* switched to Churchill fix for nav services file dialogs
+*
+* Revision 6.29  2000/02/22 16:47:59  kans
+* get input/output file name dialog accidentally failed for powerpc without nav services
+*
 * Revision 6.28  2000/01/07 00:22:47  thiessen
 * fixes for LessTif and OpenGL X visual selection
 *
@@ -4451,13 +4457,7 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
-#ifdef PROC_PPC
-  if (Nlm_usesMacNavServices) {
-    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
-  }
-  return FALSE;
-#endif
-#ifdef PROC_MC680X0
+//#ifdef PROC_MC680X0
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   SFTypeList     fTypeList;
@@ -4473,6 +4473,12 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   PenState       state;
   Nlm_Char       str [5];
   Nlm_PoinT      where;
+
+#ifdef PROC_PPC
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
+  }
+#endif
 
   where.x = 90;
   where.y = 100;
@@ -4520,8 +4526,8 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   }
   Nlm_Update ();
   return rsult;
-#endif
-#endif
+//#endif
+#endif	// ifdef WIN_MAC
 
 #ifdef WIN_MSWIN
   char  szDirName [256];
@@ -4791,13 +4797,8 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
-#ifdef PROC_PPC
-  if (Nlm_usesMacNavServices) {
-    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
-  }
-  return FALSE;
-#endif
-#ifdef PROC_MC680X0
+//#endif
+//#ifdef PROC_MC680X0
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   unsigned char  original [256];
@@ -4810,6 +4811,12 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   GrafPtr        tempPort;
   PenState       state;
   Nlm_PoinT      where;
+
+#ifdef PROC_PPC
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
+  }
+#endif
 
   where.x = 90;
   where.y = 100;
@@ -4841,8 +4848,7 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   }
   Nlm_Update ();
   return rsult;
-#endif
-#endif
+#endif // ifdef WIN_MAC
 
 #ifdef WIN_MSWIN
   FILE  *f;

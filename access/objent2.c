@@ -31,7 +31,7 @@ objent2AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.8 at Aug 16, 1999 11:49 AM
+*    Generated using ASNCODE Revision: 6.8 at Apr 6, 2000  5:13 PM
 *
 **************************************************/
 
@@ -1168,7 +1168,7 @@ E2RequestFree(ValNodePtr anp)
       Entrez2TermPosFree(anp -> data.ptrvalue);
       break;
    case E2Request_get_term_hierarchy:
-      Entrez2TermQueryFree(anp -> data.ptrvalue);
+      Entrez2HierQueryFree(anp -> data.ptrvalue);
       break;
    case E2Request_get_links:
       Entrez2GetLinksFree(anp -> data.ptrvalue);
@@ -1260,7 +1260,7 @@ E2RequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    }
    else if (atp == E2REQUEST_get_term_hierarchy) {
       choice = E2Request_get_term_hierarchy;
-      func = (AsnReadFunc) Entrez2TermQueryAsnRead;
+      func = (AsnReadFunc) Entrez2HierQueryAsnRead;
    }
    else if (atp == E2REQUEST_get_links) {
       choice = E2Request_get_links;
@@ -1357,7 +1357,7 @@ E2RequestAsnWrite(E2RequestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       break;
    case E2Request_get_term_hierarchy:
       writetype = E2REQUEST_get_term_hierarchy;
-      func = (AsnWriteFunc) Entrez2TermQueryAsnWrite;
+      func = (AsnWriteFunc) Entrez2HierQueryAsnWrite;
       break;
    case E2Request_get_links:
       writetype = E2REQUEST_get_links;
@@ -1914,6 +1914,194 @@ Entrez2TermPosAsnWrite(Entrez2TermPosPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, ENTREZ2_TERM_POS_first_term_pos,  &av);
    av.intvalue = ptr -> number_of_terms;
    retval = AsnWrite(aip, TERM_POS_number_of_terms,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Entrez2HierQueryNew()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2HierQueryPtr LIBCALL
+Entrez2HierQueryNew(void)
+{
+   Entrez2HierQueryPtr ptr = MemNew((size_t) sizeof(Entrez2HierQuery));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Entrez2HierQueryFree()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2HierQueryPtr LIBCALL
+Entrez2HierQueryFree(Entrez2HierQueryPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> db);
+   MemFree(ptr -> field);
+   MemFree(ptr -> term);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Entrez2HierQueryAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2HierQueryPtr LIBCALL
+Entrez2HierQueryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Entrez2HierQueryPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Entrez2HierQuery ::= (self contained) */
+      atp = AsnReadId(aip, amp, ENTREZ2_HIER_QUERY);
+   } else {
+      atp = AsnLinkType(orig, ENTREZ2_HIER_QUERY);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Entrez2HierQueryNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ENTREZ2_HIER_QUERY_db) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> db = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ENTREZ2_HIER_QUERY_field) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ENTREZ2_HIER_QUERY_term) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> term = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ENTREZ2_HIER_QUERY_txid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> txid = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Entrez2HierQueryFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Entrez2HierQueryAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Entrez2HierQueryAsnWrite(Entrez2HierQueryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ENTREZ2_HIER_QUERY);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> db != NULL) {
+      av.ptrvalue = ptr -> db;
+      retval = AsnWrite(aip, ENTREZ2_HIER_QUERY_db,  &av);
+   }
+   if (ptr -> field != NULL) {
+      av.ptrvalue = ptr -> field;
+      retval = AsnWrite(aip, ENTREZ2_HIER_QUERY_field,  &av);
+   }
+   if (ptr -> term != NULL) {
+      av.ptrvalue = ptr -> term;
+      retval = AsnWrite(aip, ENTREZ2_HIER_QUERY_term,  &av);
+   }
+   av.intvalue = ptr -> txid;
+   retval = AsnWrite(aip, ENTREZ2_HIER_QUERY_txid,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -2683,7 +2871,7 @@ E2ReplyFree(ValNodePtr anp)
       Entrez2TermListFree(anp -> data.ptrvalue);
       break;
    case E2Reply_get_term_hierarchy:
-      Entrez2TermNodeFree(anp -> data.ptrvalue);
+      Entrez2HierNodeFree(anp -> data.ptrvalue);
       break;
    case E2Reply_get_links:
       Entrez2LinkSetFree(anp -> data.ptrvalue);
@@ -2782,7 +2970,7 @@ E2ReplyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    }
    else if (atp == E2REPLY_get_term_hierarchy) {
       choice = E2Reply_get_term_hierarchy;
-      func = (AsnReadFunc) Entrez2TermNodeAsnRead;
+      func = (AsnReadFunc) Entrez2HierNodeAsnRead;
    }
    else if (atp == E2REPLY_get_links) {
       choice = E2Reply_get_links;
@@ -2883,7 +3071,7 @@ E2ReplyAsnWrite(E2ReplyPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       break;
    case E2Reply_get_term_hierarchy:
       writetype = E2REPLY_get_term_hierarchy;
-      func = (AsnWriteFunc) Entrez2TermNodeAsnWrite;
+      func = (AsnWriteFunc) Entrez2HierNodeAsnWrite;
       break;
    case E2Reply_get_links:
       writetype = E2REPLY_get_links;
@@ -3593,14 +3781,14 @@ erret:
 
 /**************************************************
 *
-*    Entrez2TermNodeNew()
+*    Entrez2HierNodeNew()
 *
 **************************************************/
 NLM_EXTERN 
-Entrez2TermNodePtr LIBCALL
-Entrez2TermNodeNew(void)
+Entrez2HierNodePtr LIBCALL
+Entrez2HierNodeNew(void)
 {
-   Entrez2TermNodePtr ptr = MemNew((size_t) sizeof(Entrez2TermNode));
+   Entrez2HierNodePtr ptr = MemNew((size_t) sizeof(Entrez2HierNode));
 
    return ptr;
 
@@ -3609,19 +3797,19 @@ Entrez2TermNodeNew(void)
 
 /**************************************************
 *
-*    Entrez2TermNodeFree()
+*    Entrez2HierNodeFree()
 *
 **************************************************/
 NLM_EXTERN 
-Entrez2TermNodePtr LIBCALL
-Entrez2TermNodeFree(Entrez2TermNodePtr ptr)
+Entrez2HierNodePtr LIBCALL
+Entrez2HierNodeFree(Entrez2HierNodePtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
    MemFree(ptr -> cannonical_form);
-   AsnGenericBaseSeqOfFree(ptr -> lineage ,ASNCODE_PTRVAL_SLOT);
+   AsnGenericUserSeqOfFree(ptr -> lineage, (AsnOptFreeFunc) Entrez2TermFree);
    AsnGenericUserSeqOfFree(ptr -> children, (AsnOptFreeFunc) Entrez2TermFree);
    return MemFree(ptr);
 }
@@ -3629,18 +3817,18 @@ Entrez2TermNodeFree(Entrez2TermNodePtr ptr)
 
 /**************************************************
 *
-*    Entrez2TermNodeAsnRead()
+*    Entrez2HierNodeAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-Entrez2TermNodePtr LIBCALL
-Entrez2TermNodeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+Entrez2HierNodePtr LIBCALL
+Entrez2HierNodeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   Entrez2TermNodePtr ptr;
+   Entrez2HierNodePtr ptr;
 
    if (! loaded)
    {
@@ -3653,17 +3841,17 @@ Entrez2TermNodeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* Entrez2TermNode ::= (self contained) */
-      atp = AsnReadId(aip, amp, ENTREZ2_TERM_NODE);
+   if (orig == NULL) {         /* Entrez2HierNode ::= (self contained) */
+      atp = AsnReadId(aip, amp, ENTREZ2_HIER_NODE);
    } else {
-      atp = AsnLinkType(orig, ENTREZ2_TERM_NODE);
+      atp = AsnLinkType(orig, ENTREZ2_HIER_NODE);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = Entrez2TermNodeNew();
+   ptr = Entrez2HierNodeNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -3674,39 +3862,46 @@ Entrez2TermNodeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == TERM_NODE_cannonical_form) {
+   if (atp == HIER_NODE_cannonical_form) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       ptr -> cannonical_form = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == ENTREZ2_TERM_NODE_lineage_count) {
+   if (atp == ENTREZ2_HIER_NODE_lineage_count) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       ptr -> lineage_count = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == ENTREZ2_TERM_NODE_lineage) {
-      ptr -> lineage = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+   if (atp == ENTREZ2_HIER_NODE_lineage) {
+      ptr -> lineage = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Entrez2TermAsnRead, (AsnOptFreeFunc) Entrez2TermFree);
       if (isError && ptr -> lineage == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == ENTREZ2_TERM_NODE_child_count) {
+   if (atp == ENTREZ2_HIER_NODE_child_count) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       ptr -> child_count = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == ENTREZ2_TERM_NODE_children) {
+   if (atp == ENTREZ2_HIER_NODE_children) {
       ptr -> children = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Entrez2TermAsnRead, (AsnOptFreeFunc) Entrez2TermFree);
       if (isError && ptr -> children == NULL) {
          goto erret;
       }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ENTREZ2_HIER_NODE_is_ambiguous) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_ambiguous = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -3721,7 +3916,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = Entrez2TermNodeFree(ptr);
+   ptr = Entrez2HierNodeFree(ptr);
    goto ret;
 }
 
@@ -3729,11 +3924,11 @@ erret:
 
 /**************************************************
 *
-*    Entrez2TermNodeAsnWrite()
+*    Entrez2HierNodeAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-Entrez2TermNodeAsnWrite(Entrez2TermNodePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+Entrez2HierNodeAsnWrite(Entrez2HierNodePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -3750,7 +3945,7 @@ Entrez2TermNodeAsnWrite(Entrez2TermNodePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, ENTREZ2_TERM_NODE);   /* link local tree */
+   atp = AsnLinkType(orig, ENTREZ2_HIER_NODE);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -3762,14 +3957,16 @@ Entrez2TermNodeAsnWrite(Entrez2TermNodePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    if (ptr -> cannonical_form != NULL) {
       av.ptrvalue = ptr -> cannonical_form;
-      retval = AsnWrite(aip, TERM_NODE_cannonical_form,  &av);
+      retval = AsnWrite(aip, HIER_NODE_cannonical_form,  &av);
    }
    av.intvalue = ptr -> lineage_count;
-   retval = AsnWrite(aip, ENTREZ2_TERM_NODE_lineage_count,  &av);
-   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> lineage ,ASNCODE_PTRVAL_SLOT, aip, ENTREZ2_TERM_NODE_lineage, ENTREZ2_TERM_NODE_lineage_E);
+   retval = AsnWrite(aip, ENTREZ2_HIER_NODE_lineage_count,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> lineage, (AsnWriteFunc) Entrez2TermAsnWrite, aip, ENTREZ2_HIER_NODE_lineage, ENTREZ2_HIER_NODE_lineage_E);
    av.intvalue = ptr -> child_count;
-   retval = AsnWrite(aip, ENTREZ2_TERM_NODE_child_count,  &av);
-   AsnGenericUserSeqOfAsnWrite(ptr -> children, (AsnWriteFunc) Entrez2TermAsnWrite, aip, ENTREZ2_TERM_NODE_children, ENTREZ2_TERM_NODE_children_E);
+   retval = AsnWrite(aip, ENTREZ2_HIER_NODE_child_count,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> children, (AsnWriteFunc) Entrez2TermAsnWrite, aip, ENTREZ2_HIER_NODE_children, ENTREZ2_HIER_NODE_children_E);
+   av.boolvalue = ptr -> is_ambiguous;
+   retval = AsnWrite(aip, ENTREZ2_HIER_NODE_is_ambiguous,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4993,6 +5190,13 @@ Entrez2DocsumAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> no_authors = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_DOCSUM_taxid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> taxid = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -5106,6 +5310,8 @@ Entrez2DocsumAsnWrite(Entrez2DocsumPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, ENTREZ2_DOCSUM_translated_title,  &av);
    av.boolvalue = ptr -> no_authors;
    retval = AsnWrite(aip, ENTREZ2_DOCSUM_no_authors,  &av);
+   av.intvalue = ptr -> taxid;
+   retval = AsnWrite(aip, ENTREZ2_DOCSUM_taxid,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -5206,6 +5412,13 @@ Entrez2TermAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> term = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_TERM_txid) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> txid = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == ENTREZ2_TERM_count) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -5275,6 +5488,8 @@ Entrez2TermAsnWrite(Entrez2TermPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> term;
       retval = AsnWrite(aip, ENTREZ2_TERM_term,  &av);
    }
+   av.intvalue = ptr -> txid;
+   retval = AsnWrite(aip, ENTREZ2_TERM_txid,  &av);
    av.intvalue = ptr -> count;
    retval = AsnWrite(aip, ENTREZ2_TERM_count,  &av);
    av.boolvalue = ptr -> is_leaf_node;

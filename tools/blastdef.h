@@ -31,8 +31,50 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.73 $ 
+/* $Revision: 6.87 $ 
 * $Log: blastdef.h,v $
+* Revision 6.87  2000/04/21 20:48:05  madden
+* Change version and date
+*
+* Revision 6.86  2000/04/06 14:47:10  madden
+* Added original_expect_value
+*
+* Revision 6.85  2000/04/03 21:20:03  dondosha
+* Added option and parameter is_neighboring
+*
+* Revision 6.84  2000/03/31 19:10:44  dondosha
+* Changed some names related to MegaBlast
+*
+* Revision 6.83  2000/03/13 21:01:24  dondosha
+* Added boolean option sort_gi_list to options block structure
+*
+* Revision 6.82  2000/02/29 18:17:23  shavirin
+* Variable query_dna_mask changed to query_lcase_mask.
+*
+* Revision 6.81  2000/02/18 15:30:36  shavirin
+* Added parameter query_dna_mask into options and parameters.
+*
+* Revision 6.80  2000/02/17 21:23:09  shavirin
+* Added parameter is_rps_blast.
+*
+* Revision 6.79  2000/02/17 19:00:44  shavirin
+* Removed theCacheSize parameter from everywhere.
+*
+* Revision 6.78  2000/02/15 19:06:09  shavirin
+* Added parameter filter_string into BLAST_ParameterBlk structure.
+*
+* Revision 6.77  2000/02/02 18:21:51  madden
+* Add LinkHelpStruct definition
+*
+* Revision 6.76  2000/02/02 16:52:43  dondosha
+* Added option one_line_results to BLAST_OptionsBlk and BLAST_ParameterBlk
+*
+* Revision 6.75  2000/02/01 18:02:22  dondosha
+* Added greedy alignment option to BLAST_OptionsBlk and query context offsets array to BlastSearchBlk
+*
+* Revision 6.74  2000/01/26 22:00:52  madden
+* Added subject_index field to SWResults
+*
 * Revision 6.73  2000/01/20 19:12:00  madden
 * Change BLAST version and date
 *
@@ -622,10 +664,11 @@ extern "C" {
 #include <sequtil.h>
 #include <readdb.h>
 #include <gapxdrop.h>
+#include <mbalign.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.11"
-#define BLAST_RELEASE_DATE "Jan-20-2000"
+#define BLAST_ENGINE_VERSION "2.0.12"
+#define BLAST_RELEASE_DATE "Apr-21-2000"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -728,8 +771,8 @@ typedef struct _blast_prune_hits_from_sap {
 typedef struct _blast_optionsblk {
 	Nlm_FloatHi gap_decay_rate,	/* decay rate. */
 		    gap_prob;	/* Prob of decay. */
-	Int4	gap_size,	/* Small gap size. */
-		window_size, 	/* Multiple Hits window size (zero for single hit algorithm) */
+        Int4	    gap_size,	/* Small gap size. */
+		    window_size,/* Multiple Hits window size (zero for single hit algorithm) */
 		threshold_first, /* Threshold for extending hits (preliminary pass), zero if one-pass algorithm is used. */ 
 		threshold_second;/* Threshold for extending hits (second pass) */
 	Nlm_FloatHi	expect_value, 	/* Expectation value (E) */
@@ -794,20 +837,27 @@ typedef struct _blast_optionsblk {
 	Int4		first_db_seq,		/* 1st sequence in db to be compared. */
 			final_db_seq;		/* Final sequence to be compared. */
 	CharPtr		entrez_query;	/* user specified Entrez query to make selection from databases */
-	CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
+        CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
 	Uint1		strand_option;	/* BLAST_TOP_STRAND, BLAST_BOTTOM_STRAND, or BLAST_BOTH_STRAND.  used by blast[nx] and tblastx */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
 	Boolean		tweak_parameters, /* For impala related stuff. */
 			smith_waterman;
-        CharPtr         phi_pattern;    /* Pattern for PHI-Blast search */
+        CharPtr         phi_pattern;      /* Pattern for PHI-Blast search */
 	Boolean		use_real_db_size; /* Use real DB size.  meant for use if a list of gis' is submitted, 
 					but statistics should be based upon the real database. */
-        Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
-        Int4 max_num_patterns;     /* Maximum number of patterns to be used in PHI-Blast search */
-        Int4 theCacheSize; /* Size of cache to be used while building lookup
-                              table */
-	Boolean no_check_score;
-	} BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
+        Boolean         use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
+        Int4            max_num_patterns; /* Maximum number of patterns to be used in PHI-Blast search */
+	Boolean         no_check_score;
+        Boolean         is_megablast_search; /* Is this a MegaBlast search? */
+        Boolean         one_line_results; /* Print simple one line results for
+				      megablast */
+        Boolean         is_rps_blast;     /* If this RPS Blast ? */
+        SeqLocPtr       query_lcase_mask; /* Masking of input DNA regions */
+        Boolean         sort_gi_list;     /* Should the gi list be sorted? */
+        Boolean         is_neighboring;   /* Is this a neighboring task? */
+	Nlm_FloatHi original_expect_value;/* Used to change the E-value threshold for 
+			part of a BLAST-KAPPA run and to restore it to the original threshold for the final output. */
+      } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
 
@@ -884,9 +934,14 @@ typedef struct _blast_parameterblk {
 			final_db_seq;		/* Final sequence to be compared. */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
         Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
-         Int4 theCacheSize; /* Size of cache to be used while building lookup
-                               table */
 	Boolean no_check_score;
+        Boolean is_megablast_search;  /* Is this a MegaBlast search? */
+        Boolean one_line_results;  /* Print simple one line results for
+				      megablast */
+        CharPtr filter_string;  /* String specifying the type of filtering and filter options. - used with Translated RPS Blast */
+        Boolean is_rps_blast;      /* If this RPS Blast ? */
+        SeqLocPtr  query_lcase_mask; /* Masking of input DNA regions */
+        Boolean is_neighboring;    /* Is this a neighboring task? */ 
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
@@ -980,6 +1035,7 @@ typedef struct _blast_hsp_link {
 	Int4	sum[BLAST_NUMBER_OF_ORDERING_METHODS]; 
 		/* Sum-Score of HSP, multiplied by the appropriate Lambda. */
 	Nlm_FloatHi	xsum[BLAST_NUMBER_OF_ORDERING_METHODS]; 
+	Int4 changed;
 	} BLAST_HSP_LINK, PNTR BLAST_HSP_LINKPtr;
 /*
 	BLAST_NUMBER_OF_ORDERING_METHODS tells how many methods are used
@@ -1008,7 +1064,23 @@ typedef struct _blast_hsp {
 		Int2		context;	/* Context number of query */
                 GapXEditBlockPtr gap_info; /* ALL gapped alignment is here */
 		Int4 num_ref;
+		Int4 linked_to;
 	} BLAST_HSP, PNTR BLAST_HSPPtr;
+
+/* The helper arrays contains the info used frequently in the inner for loops. -cfj
+ * One array of helpers will be allocated for each thread. See comments preceding
+ * link_hsps in blast.c for more info.
+ */
+
+typedef struct link_help_struct{
+  BLAST_HSPPtr ptr;
+  Int4 q_off_trim;
+  Int4 s_off_trim;
+  Int4 sum[BLAST_NUMBER_OF_ORDERING_METHODS];
+  Int4 maxsum1;
+  Int4 next_larger;
+} LinkHelpStruct;
+
 
 typedef struct _blast_hitlist {
 	struct _blast_hitlist	PNTR next;
@@ -1021,6 +1093,9 @@ typedef struct _blast_hitlist {
 					    alignment etc. */
 	Boolean		do_not_reallocate; /* Don't reallocate the HSP's, probably because
                        		   there is no more memory for this. */
+        	/* added -cfj */
+        LinkHelpStruct *lh_helper;
+        Int4 lh_helper_size;
 	} BLAST_HitList, PNTR BLAST_HitListPtr;
 
 /*
@@ -1186,6 +1261,7 @@ typedef struct SWResults {
     SeqIdPtr subject_id;  /*used to display the sequence in alignment*/
     struct SWResults *next;
     Boolean isFirstAlignment;
+    Int4 subject_index;  /* needed to break ties on rare occasions */
 } SWResults;
     
 /* Average sizes of protein and nucl. sequences. */
@@ -1280,7 +1356,6 @@ typedef struct _blast_matrix_rescale {
                 	K_ideal;
 } BlastMatrixRescale, *BlastMatrixRescalePtr;
 	
-		
 		
 /*
 	The central structure for the BLAST search.  This structure
@@ -1523,6 +1598,8 @@ a field is allocated, then it's bit is non-zero.
         semid;                  /* Here will be stored ID of load-ballance semaphore */
     /* Callback for the queueing system. */
     int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
+   GreedyAlignMemPtr abmp;
+   Int4 PNTR query_context_offsets;
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
     
 

@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.58 2000/01/07 22:01:04 shavirin Exp $ */
+/* $Id: blastpgp.c,v 6.64 2000/03/29 17:32:55 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -23,71 +23,87 @@
 * of the author(s) as the source of the software or data would be         *
 * appreciated.                                                            *
 *                                                                         *
-**************************************************************************/
-/* $Revision: 6.58 $ */ 
-/* $Log: blastpgp.c,v $
-/* Revision 6.58  2000/01/07 22:01:04  shavirin
-/* Fixed problem with printing alignment.
-/*
-/* Revision 6.57  1999/12/21 21:34:05  shavirin
-/* Fixed some memory leaks.
-/*
-/* Revision 6.56  1999/11/08 19:12:41  shavirin
-/* Fixed minor SGI warning.
-/*
-/* Revision 6.55  1999/10/21 20:27:52  shavirin
-/* Fixed bug resulted in failue to print out seqannot. (-O)
-/*
-/* Revision 6.53  1999/10/14 15:52:51  shavirin
-/* Added possibility to make search by list of gis. Fixed some bugs.
-/*
-/* Revision 6.52  1999/10/05 17:41:08  shavirin
-/* Corrected in accordance to blast.c changes.
-/*
-/* Revision 6.51  1999/09/24 16:06:15  shavirin
-/* Matrix is set to NULL if no matrix calculation produced.
-/*
-/* Revision 6.50  1999/09/22 17:53:25  shavirin
-/* Now functions will collect messages in ValNodePtr before printing out.
-/*
-/* Revision 6.49  1999/09/21 16:01:46  shavirin
-/* Rearanged all file. Main function was disintegrated into few small
-/* functions.
-/*
-/* Revision 6.48  1999/08/27 18:17:42  shavirin
-/* Added new parameter to command line - decline_align.
-/*
-/* Revision 6.47  1999/08/26 14:58:06  madden
-/* Use float for db length
-/*
-/* Revision 6.46  1999/08/04 13:26:49  madden
-/* Added -B option
-/*
-/* Revision 6.45  1999/03/31 16:58:04  madden
-/* Removed static FindProt and FindNuc
-/*
-/* Revision 6.44  1999/03/24 18:16:33  madden
-/* zero-out groupOrder and featureOrder
-/*
-/* Revision 6.43  1999/03/21 19:43:23  madden
-/* Added -Q option to store ASCII version of last position-specific matrix in a file
-/*
-/* Revision 6.42  1999/03/04 14:17:20  egorov
-/* Added new parameter to BlastMaskTheResidues() function for correct masking
-/* when query is seqloc.  The paramter is not used in this file and is 0.
-/*
-/* Revision 6.41  1999/02/18 21:13:11  madden
-/* Check for non-pattern search before call to BlastPruneSapStructDestruct
-/*
-/* Revision 6.40  1999/02/10 21:12:27  madden
-/* Added HTML and GI list option, fixed filtering
-/*
-/* Revision 6.39  1999/01/22 17:24:51  madden
-/* added line breaks for alignment views
-/*
-/* Revision 6.38  1998/12/29 20:03:14  kans
-/* calls UseLocalAsnloadDataAndErrMsg at startup
-/*
+**************************************************************************
+ * $Revision: 6.64 $ 
+ * $Log: blastpgp.c,v $
+ * Revision 6.64  2000/03/29 17:32:55  madden
+ * Commented out yet another call to ObjMgrFreeCache
+ *
+ * Revision 6.63  2000/03/27 21:32:00  shavirin
+ * Use function ShowTextAlignFromAnnot2 instead of ShowTextAlignFromAnnot3
+ *
+ * Revision 6.62  2000/03/23 15:30:22  shavirin
+ * Removed call to ObjMgrFreeCache()
+ *
+ * Revision 6.61  2000/03/07 21:59:07  shavirin
+ * Now will use PSSM Matrix to show positives in PSI Blast
+ *
+ * Revision 6.60  2000/03/02 21:06:09  shavirin
+ * Added -U option, that allows to consider low characters in FASTA files
+ * as filtered regions (for blastn, blastp and tblastn).
+ *
+ * Revision 6.58  2000/01/07 22:01:04  shavirin
+ * Fixed problem with printing alignment.
+ *
+ * Revision 6.57  1999/12/21 21:34:05  shavirin
+ * Fixed some memory leaks.
+ *
+ * Revision 6.56  1999/11/08 19:12:41  shavirin
+ * Fixed minor SGI warning.
+ *
+ * Revision 6.55  1999/10/21 20:27:52  shavirin
+ * Fixed bug resulted in failue to print out seqannot. (-O)
+ *
+ * Revision 6.53  1999/10/14 15:52:51  shavirin
+ * Added possibility to make search by list of gis. Fixed some bugs.
+ *
+ * Revision 6.52  1999/10/05 17:41:08  shavirin
+ * Corrected in accordance to blast.c changes.
+ *
+ * Revision 6.51  1999/09/24 16:06:15  shavirin
+ * Matrix is set to NULL if no matrix calculation produced.
+ *
+ * Revision 6.50  1999/09/22 17:53:25  shavirin
+ * Now functions will collect messages in ValNodePtr before printing out.
+ *
+ * Revision 6.49  1999/09/21 16:01:46  shavirin
+ * Rearanged all file. Main function was disintegrated into few small
+ * functions.
+ *
+ * Revision 6.48  1999/08/27 18:17:42  shavirin
+ * Added new parameter to command line - decline_align.
+ *
+ * Revision 6.47  1999/08/26 14:58:06  madden
+ * Use float for db length
+ *
+ * Revision 6.46  1999/08/04 13:26:49  madden
+ * Added -B option
+ *
+ * Revision 6.45  1999/03/31 16:58:04  madden
+ * Removed static FindProt and FindNuc
+ *
+ * Revision 6.44  1999/03/24 18:16:33  madden
+ * zero-out groupOrder and featureOrder
+ *
+ * Revision 6.43  1999/03/21 19:43:23  madden
+ * Added -Q option to store ASCII version of last position-specific matrix in a file
+ *
+ * Revision 6.42  1999/03/04 14:17:20  egorov
+ * Added new parameter to BlastMaskTheResidues() function for correct masking
+ * when query is seqloc.  The paramter is not used in this file and is 0.
+ *
+ * Revision 6.41  1999/02/18 21:13:11  madden
+ * Check for non-pattern search before call to BlastPruneSapStructDestruct
+ *
+ * Revision 6.40  1999/02/10 21:12:27  madden
+ * Added HTML and GI list option, fixed filtering
+ *
+ * Revision 6.39  1999/01/22 17:24:51  madden
+ * added line breaks for alignment views
+ *
+ * Revision 6.38  1998/12/29 20:03:14  kans
+ * calls UseLocalAsnloadDataAndErrMsg at startup
+ *
  * Revision 6.37  1998/12/17 21:54:39  madden
  * Added call to BlastPruneHitsFromSeqAlign for other than first round
  *
@@ -397,7 +413,9 @@ static Args myargs [] = {
     { "Input Alignment File for PSI-BLAST Restart", /* 39 */
       NULL, NULL, NULL, TRUE, 'B', ARG_FILE_IN, 0.0, 0, NULL},
     { "Restrict search of database to list of GI's", /* 40 */
-	NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
+      NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
+    {"Use lower case filtering of FASTA sequence",    /* 41 */
+     "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
     /*    { "Cost to decline alignment",  41 
           "10000", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}  */
 };
@@ -519,25 +537,31 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
             return NULL;
         }
     }
-    
-    if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, 
-                                bop->believe_query)) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
-        return NULL;
+
+    options = BLASTOptionNew("blastp", (Boolean)myargs[14].intvalue);
+    bop->options = options;
+
+    if(myargs[41].intvalue) {
+        if((sep = FastaToSeqEntryForDb (bop->infp, FALSE, NULL, bop->believe_query, NULL, NULL, &options->query_lcase_mask)) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
+            return NULL;
+        }
+    } else {
+        if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, bop->believe_query)) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
+            return NULL;
+        }
     }
     
     SeqEntryExplore(sep, &bop->query_bsp, FindProt);    
-    sep->data.ptrvalue = NULL;
-    SeqEntryFree(sep);
+    /*    sep->data.ptrvalue = NULL;
+          SeqEntryFree(sep); */
     
     if (bop->query_bsp == NULL) {
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
         return NULL;
     }    
     
-    options = BLASTOptionNew("blastp", (Boolean)myargs[14].intvalue);
-    bop->options = options;
-
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, myargs[25].strvalue, 0, 0);
 
@@ -661,6 +685,9 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         
         /* FASTA defline not parsed, ignore the "lcl|tempseq" ID. */
         bop->query_bsp->id = SeqIdSetFree(bop->query_bsp->id);
+
+        BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, 
+                                 bop->fake_bsp->id);
     }
     
     return bop;
@@ -943,38 +970,42 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
 
     free_buff();
 
-
-    
-#ifdef OLD_ALIGNMENT
-        prune = BlastPruneHitsFromSeqAlign(head, bop->number_of_alignments, 
-                                           prune);
-
-        if(!DDV_DisplayBlastSAP(prune->sap, bop->outfp, 
-                                FALSE, bop->align_options)) {
-            fprintf(bop->outfp, 
-                    "\n\n!!!\n   "
-                    "    --------  Failure to print alignment...  --------"
-                    "\n!!!\n\n");
-            fflush(bop->outfp);
-        }
-#else
     if (!(bop->options->isPatternSearch)) {
         prune = BlastPruneHitsFromSeqAlign(head, bop->number_of_alignments, 
                                            prune);
         seqannot->data = prune->sap;
 
+#ifdef SHOW_TEXT_ALIGN_PSSM
         if (myargs[5].intvalue != 0) {
-            ShowTextAlignFromAnnot(seqannot, 60, bop->outfp, 
-                                   bop->featureOrder, bop->groupOrder, 
-                                   bop->align_options, NULL, 
-                                   search->mask, NULL);
+            ShowTextAlignFromAnnot3(seqannot, 60, bop->outfp, 
+                                    bop->featureOrder, bop->groupOrder, 
+                                    bop->align_options, NULL, 
+                                    search->mask, NULL, NULL, NULL,
+                                    thisPassNum > 1 ?
+                                    search->sbp->posMatrix : NULL);
         } else {
-            ShowTextAlignFromAnnot(seqannot, 60, bop->outfp, 
-                                   bop->featureOrder, bop->groupOrder, 
-                                   bop->align_options, NULL, 
-                                   search->mask, FormatScoreFunc);
+            ShowTextAlignFromAnnot3(seqannot, 60, bop->outfp, 
+                                    bop->featureOrder, bop->groupOrder, 
+                                    bop->align_options, NULL, 
+                                    search->mask, FormatScoreFunc, NULL,
+                                    NULL, thisPassNum > 1 ?
+                                    search->sbp->posMatrix : NULL);
         }
-
+#else
+        if (myargs[5].intvalue != 0) {
+            ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
+                                    bop->featureOrder, bop->groupOrder, 
+                                    bop->align_options, NULL, 
+                                    search->mask, NULL, 
+                                    NULL, NULL);
+        } else {
+            ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
+                                    bop->featureOrder, bop->groupOrder, 
+                                    bop->align_options, NULL, 
+                                    search->mask, FormatScoreFunc, 
+                                    NULL, NULL);
+        }
+#endif
         /* seqannot->data = head; */
 
     } else {
@@ -998,15 +1029,13 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
         }
     }
 
-#endif
-
     if (!(bop->options->isPatternSearch)) {
         prune = BlastPruneSapStructDestruct(prune);
     }
 
     search->positionBased = TRUE;
     ObjMgrClearHold();
-    ObjMgrFreeCache(0);
+    /* ObjMgrFreeCache(0); */
 
     seqannot->data = NULL;
     seqannot = SeqAnnotFree(seqannot);
@@ -1206,6 +1235,12 @@ Int2 Main (void)
 
         /*AAS*/
         search->positionBased = TRUE;
+
+        /* Here is all BLAST formating of the main output done */
+        PGPFormatMainOutput(head, bop, search, thisPassNum,
+                            lastSeqAligns, numLastSeqAligns, 
+                            seed_seqloc, posSearch->posRepeatSequences);
+
         if (alreadyRecovered) {
             posCheckpointFreeMemory(posSearch, compactSearch->qlength);
             alreadyRecovered = FALSE;
@@ -1248,11 +1283,6 @@ Int2 Main (void)
         } else {
             search->sbp->posMatrix = NULL;
         }
-
-        /* Here is all BLAST formating of the main output done */
-        PGPFormatMainOutput(head, bop, search, thisPassNum,
-                            lastSeqAligns, numLastSeqAligns, 
-                            seed_seqloc, posSearch->posRepeatSequences);
         
         if (ALL_ROUNDS && thisPassNum > 1) {
             MemFree(posSearch->posRepeatSequences);
@@ -1290,7 +1320,9 @@ Int2 Main (void)
     bop->options = BLASTOptionDelete(bop->options);
     search = BlastSearchBlkDestruct(search);
     
+/*
     ObjMgrFreeCache(0);
+*/
     FileClose(bop->infp);
     PGPFreeBlastOptions(bop);
     

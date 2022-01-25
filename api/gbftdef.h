@@ -3,6 +3,9 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.7  2000/02/02 21:02:41  tatiana
+* new type for /number added
+*
 * Revision 6.6  2000/01/21 21:06:44  kans
 * reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
 *
@@ -169,11 +172,13 @@
 #define  Class_flabel_base       14
 #define  Class_flabel_dbname     15
 #define  Class_note              16
+#define  Class_number            17
 
 
 #define  ParFlat_Stoken_type            1
 #define  ParFlat_BracketInt_type        2
 #define  ParFlat_Integer_type           3      
+#define  ParFlat_Number_type            4      
 
 /*********************************************************************/
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/29/99
 *
-* $Revision: 6.21 $
+* $Revision: 6.29 $
 *
 * File Description:
 *  header file for shims to replace Viewer3D with OpenGL
@@ -37,6 +37,30 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.h,v $
+* Revision 6.29  2000/04/17 15:54:27  thiessen
+* add cylinder arrows; misc graphics tweaks
+*
+* Revision 6.28  2000/04/03 18:23:47  thiessen
+* add arrowheads to strand bricks
+*
+* Revision 6.27  2000/03/24 20:35:00  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 6.26  2000/03/22 23:42:22  lewisg
+* timing loop for animation
+*
+* Revision 6.25  2000/03/09 17:55:18  thiessen
+* changes to palette handling for 8-bit OpenGL
+*
+* Revision 6.24  2000/03/08 21:46:13  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.23  2000/02/26 13:30:41  thiessen
+* capped cylinders and worms for visible ends
+*
+* Revision 6.22  2000/02/10 18:18:23  lewisg
+* add proto for ZoomOut
+*
 * Revision 6.21  2000/01/14 21:40:39  lewisg
 * add translucent spheres, ion labels, new cpk, fix misc bugs
 *
@@ -136,7 +160,7 @@ extern Nlm_FloatHi *OGL_CrossProduct(Nlm_FloatHi * v1, Nlm_FloatHi * v2);
 #define OGL_SQR(oglx) ((oglx)*(oglx))
 
 
-/* vibrant version of this function */
+/* viewer3d version of this function */
 #ifndef _OPENGL
 extern void Nlm_AddHalfWorm3D(Nlm_Picture3D pic,
                               Nlm_Segment3D segment, BigScalar userData,
@@ -228,6 +252,7 @@ typedef struct _OGL_Data
     Nlm_FloatLo CameraDistance; /* distance (on Z-axis) from origin */
     Nlm_FloatLo CameraAngle;    /* in radians */
     Nlm_FloatLo CameraDirection[2]; /* point in Z=0 plane camera points at */
+    Nlm_Boolean NeedCameraSetup; /* flag to tell redrawer that camera has changed */
 
     Nlm_FloatLo MaxSize;        /* biggest side of the bound box */
     TOGL_BoundBox BoundBox;     /* the containing box of the molecule */
@@ -235,12 +260,12 @@ typedef struct _OGL_Data
     Nlm_PaneL Panel;            /* needed to set palette */
     ValNodePtr PaletteExpanded; /* the palette itself */
     ValNodePtr PaletteIndex;    /* palette index. type is TOGL_PaletteIndex */
-    Nlm_Boolean NewPalette;     /* is the palette new? */
     Nlm_BaR Z_rotate;           /* z rotation scroll bar */
     MAPtr ma;
     MA_GroupPtr ma_std_group[MouseOGL_NumStd];
     Nlm_VoidPtr ModelMatrix;    /* temporary copy of modelview matrix */
     Nlm_Boolean IsPlaying;      /* is the animation running? */
+    Nlm_FloatHi Tick;           /* number of seconds per image in animation */
     TOGL_Layers_ *Layers;       /* the layers and their state */
     Nlm_Int4 SpaceWidth;        /* width of space character */
     Nlm_Int4 SpaceHeight;       /* height of space character */
@@ -268,8 +293,8 @@ extern void Nlm_AddHalfWorm3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                               Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
                               Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
                               Nlm_FloatHi x3, Nlm_FloatHi y3, Nlm_FloatHi z3,
-                              Nlm_FloatHi radius, 
-                              Nlm_Int4 segments, Nlm_Int4 sides);
+                              Nlm_Boolean cap1, Nlm_Boolean cap2,
+                              Nlm_FloatHi radius, Nlm_Int4 segments, Nlm_Int4 sides);
 
 extern void OGL_Normalize(Nlm_FloatHi * v);
 extern Nlm_FloatHi *OGL_MakeNormal(Nlm_FloatHi * origin, Nlm_FloatHi * v1,
@@ -279,21 +304,24 @@ extern void OGL_AddQuad3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                           Nlm_FloatHi * v1, Nlm_FloatHi * v2,
                           Nlm_FloatHi * v3, Nlm_FloatHi * v4);
 extern void OGL_AddBrick3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
-                          Nlm_FloatHi * v1, Nlm_FloatHi * v2,
-                          Nlm_FloatHi * v3, Nlm_FloatHi * v4,
-                          Nlm_FloatHi thickness);
+                          Nlm_FloatHi * Nterm, Nlm_FloatHi * Cterm,
+                          Nlm_FloatHi * norm, Nlm_FloatHi width, 
+                          Nlm_FloatHi thickness, Nlm_Boolean doArrow);
 extern void OGL_AddTri3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                          Nlm_FloatHi * v1, Nlm_FloatHi * v2,
                          Nlm_FloatHi * v3, Nlm_FloatHi * Normal);
+NLM_EXTERN void OGL_ZoomOut(TOGL_Data *OGL_Data);
+NLM_EXTERN void OGL_ZoomIn(TOGL_Data *OGL_Data);
 
 extern void OGL_ClearBoundBox(TOGL_BoundBox *);
 extern void OGL_ClearOGL_Data(TOGL_Data *);
 extern void OGL_DrawViewer3D(TOGL_Data *);
 extern void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
-                              Nlm_FloatHi x1, Nlm_FloatHi y1,
-                              Nlm_FloatHi z1, Nlm_FloatHi x2,
-                              Nlm_FloatHi y2, Nlm_FloatHi z2,
-                              Nlm_FloatHi radius, Nlm_Int4 sides);
+                              Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
+                              Nlm_Boolean cap1,
+                              Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
+                              Nlm_Boolean cap2, Nlm_FloatHi radius, 
+                              Nlm_Int4 sides, Nlm_Boolean doArrow);
 extern void OGL_AddLine3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                           Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
                           Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2);
@@ -334,6 +362,7 @@ extern void OGL_SetSelectPoint(TOGL_Data * OGL_Data, Nlm_PoinT Point);
 NLM_EXTERN Nlm_Boolean OGL_IsPlaying(TOGL_Data *pOGL_Data);
 NLM_EXTERN void OGL_StopPlaying(TOGL_Data *pOGL_Data);
 NLM_EXTERN void OGL_StartPlaying(TOGL_Data *pOGL_Data);
+NLM_EXTERN void OGL_DrawLogo(TOGL_Data *OGL_Data);
 
 #ifdef _PNG
 void Nlm_SaveImagePNG(Nlm_Char *defname); /* for PNG export */

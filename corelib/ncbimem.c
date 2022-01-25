@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.17  2000/03/08 17:55:49  vakatov
+* Use Int8 for the file size.
+* Also, get rid of the WIN16 code, do other cleanup.
+*
 * Revision 6.16  1999/11/05 21:48:48  vakatov
 * [MMAP_AVAIL]  cast to get rid of a warning on the pointer comparison
 *
@@ -156,31 +160,6 @@
 #endif
 
 
-
-#ifdef WIN16
-
-struct heapnode
-{
-    struct heapnode *next;
-    HGLOBAL hSeg;
-    WORD    wSeg;
-    WORD    wFree;
-    int     nItems;
-    int     sn;
-};
-
-size_t	g_nMemHeap = ((size_t)4*KBYTE);
-#define HEAPSIZE	g_nMemHeap
-size_t	g_nMemThresh = ((size_t)128);
-#define THRESHOLD	g_nMemThresh
-
-struct heapnode  headFirst;
-struct heapnode *headPtr = &headFirst;
-
-static BOOL NEAR  HeapNew(struct heapnode *pNode);
-static VOID NEAR  HeapFree(struct heapnode *pNode);
-
-#endif  /* WIN16 */
 
 short	g_bBadPtr;
 
@@ -703,7 +682,6 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_HandUnlock (Nlm_Handle hnd)
 
 
 
-
 #ifdef WIN_MAC
 #ifdef USE_MAC_MEMORY
 /*****************************************************************************
@@ -751,355 +729,6 @@ void mac_Free (void *ptr)
 #endif
 
 
-
-#ifdef WIN16
-/*****************************************************************************
-*
-*   Windows-specific functions:
-*
-*   win16_Malloc     Windows version of malloc
-*   win16_Calloc     Windows version of calloc
-*   win16_Realloc    Windows version of realloc
-*   win16_Free       Windows version of free
-*
-*   The following fucntions are not exported.
-*
-*   HeapNew     allocates an auxilliary local heap
-*   HeapFree    frees an auxilliary local heap
-*
-*****************************************************************************/
-
-LPVOID LIBCALL  win16_Malloc (size_t size)
-{
-	struct heapnode *pNode;
-	WORD      wSeg, wSize, wFree, wOfs;
-	HGLOBAL   hSeg;
-	LPVOID    pMem;
-
-    if (size == 0)  return NULL;
-
-   /*
-    * Two allocation strategies are used depending on the reguested
-    * size of the new block.  Large objects (size >= THRESHOLD) are
-    * allocated as independent blocks from the global heap in the
-    * usual way and then locked.  Small objects (lSize < THRESHOLD)
-    * are allocated from auxilliary local heaps that are created as
-    * needed.  References to these heaps are maintained in a linked
-    * list structure (located in the default data segment).
-    */
-
-    if (size < THRESHOLD)
-    {
-        wSize = (WORD)size;
-
-        for (pNode=headPtr; pNode; pNode=pNode->next)
-        {
-
-           /*
-            * If the current node is empty, we allocate a new heap.
-            * On failure, break out of the loop to do an error return.
-            */
-
-            if ((wSeg = pNode->wSeg) ==0)
-            {
-                if (!HeapNew (pNode))  break;
-                wSeg = pNode->wSeg;
-            }
-
-            if (wSize <= pNode->wFree)
-            {
-
-               /*
-                * Attempt to allocate memory from this node's heap.  To do
-                * this, we need to switch the DS register to the heap's
-                * segment, then do a LocalAlloc, and of course restore
-                * the DS register afterwards (some assembly required).
-                * If this is successful, we construct a far pointer to the
-                * allocated block and return it as the function result.
-                * Otherwise, we continue around the cycle...
-                */
-
-                _asm {
-                	push  ds
-                    mov   ax, wSeg
-                    mov   ds, ax
-                }
-
-                wOfs = (WORD) LocalAlloc(LMEM_FIXED, wSize);
-                wFree = LocalCompact(0);
-
-                _asm {
-               		pop   ds
-                }
-
-                if (wOfs)
-                {
-                    pNode->nItems +=1;
-                    pNode->wFree = wFree;
-                    pMem = (LPVOID) MAKELONG(wOfs, wSeg);
-                    return  pMem;
-                }
-            }
-
-           /*
-            * If we are at the end of the chain, create a new node and
-            * add it to the chain.  The new node becomes the current
-            * node in the next loop iteration.  If the allocation fails
-            * we will drop out of the loop and do an error return.
-            */
-
-            if ( ! pNode->next )
-			{
-                pNode->next = (struct heapnode*) calloc(sizeof(struct heapnode),1);
-				pNode->next->sn = pNode->sn +1;
-			}
-        }
-
-        return  NULL;
-    }
-	else 
-	{
-		/* 
-	    	 *  Large memory objects are allocated from the global heap as
-		 *  independent moveable blocks.  They are then locked to generate 
-		 *  the far pointer and they remain locked until freed.
-		 */
-
-	    if ((hSeg = GlobalAlloc(GMEM_MOVEABLE,size)) != NULL) 
-    	{
-        	pMem = GlobalLock(hSeg);
-			ASSERT(OFFSETOF(pMem)==0);
-        	return  pMem;
-	    }
-	}
-    return NULL;
-}
-
-
-LPVOID LIBCALL  win16_Calloc (size_t items, size_t size)
-{
-    LPVOID ptr;
-    unsigned long bytes = (unsigned long) items * size;
-
-     if (bytes > (unsigned long) SIZE_MAX)  return NULL;
-
-    if ((ptr = win16_Malloc((size_t) bytes)) != NULL)
-        _fmemset(ptr,0,(size_t) bytes);
-
-    return ptr;
-}
-
-
-LPVOID LIBCALL  win16_Realloc (LPVOID pMem, size_t size)
-{
-    WORD wSeg1 = SELECTOROF(pMem);
-    HGLOBAL   hSeg1, hSeg2;
-
-    if (size ==0) 
-    {
-        win16_Free(pMem);
-        return NULL;
-    }
-
-	if (OFFSETOF(pMem) ==0) 
-	{
-       /*
-        *  The existing block was not allocated from one of the
-        *  auxilliary local heaps, so it must be an independent
-        *  global block.  Use the normal GlobalReAlloc strategy.
-        */
-
-		hSeg1 = (HGLOBAL) LOWORD(GlobalHandle(wSeg1));
-		GlobalUnlock (hSeg1);
-		if ((hSeg2 = GlobalReAlloc(hSeg1,size,GMEM_MOVEABLE)) != NULL)
-			return GlobalLock(hSeg2);
-			/*
-		else
-			pMem = NULL;
-		return  pMem;
-		*/
-	}
-	else
-	{
-	    struct heapnode *pNode;
-	    WORD      wSize1, wOfs1;
-	    WORD      wSize2, wOfs2, wFree;
-	    LPVOID    pMem2;
-        
-       /*
-        *  Scan the linked list to see if the segment of the pointer
-        *  to be freed matches any of the auxilliary local heaps.
-        *  If so, LocalFree from that heap.  Otherwise we assume that
-        *  it is a normal global memory object and GlobalFree.
-        */
-
-        for (pNode=headPtr; pNode; pNode=pNode->next) 
-        {
-            if (pNode->wSeg == wSeg1)
-			{
-         	   wSize2 = (WORD) size;
-            	wOfs1 = LOWORD((DWORD)pMem);
-
-	            _asm {
-    	        	push  ds
-        	        mov   ax, wSeg1
-            	    mov   ds, ax   
-	            }
-
-    	        wSize1 = LocalSize((HLOCAL)wSeg1);
-        	    wOfs2 = (WORD) LocalReAlloc((HLOCAL)wOfs1,wSize2,LMEM_MOVEABLE);
-            	wFree = LocalCompact(0);
-
-	            _asm { 
-    	        	pop   ds 
-        	    }
-
-            	if (wOfs2)     /* successfully realloc'ed within same heap */
-				{
-    	            pNode->wFree = wFree;
-        	        pMem = (LPVOID) MAKELONG(wOfs2,wSeg1);
-            	    return  pMem;
-	            }
-
-    	       /*
-        	    *  We couldn't realloc the object within the same heap, so
-            	*  we will now attempt to allocate a new pointer and copy
-	            *  contents of the existing block to the new one.  If
-    	        *  successful, the old block is freed.
-        	    */
-
-            	if ((pMem2 = win16_Malloc(size)) != NULL) 
-	            {
-    	            _fmemcpy(pMem2,pMem,MIN(wSize1,wSize2));
-        	        win16_Free(pMem);
-            	}
-	            return  pMem2;
-    	    }
-		}
-    }
-
-    return NULL;
-}
-
-
-VOID LIBCALL  win16_Free (LPVOID pMem)
-{
-	WORD wSeg = SELECTOROF(pMem);
-	WORD wOfs = OFFSETOF(pMem);
-
-	g_bBadPtr = FALSE;
-
-	if (wOfs ==0)
-	{
-		HGLOBAL hSeg = (HGLOBAL) LOWORD(GlobalHandle(wSeg));
-		if (GlobalSize(hSeg))
-		{
-			GlobalUnlock(hSeg);
-			GlobalFree(hSeg);
-			return;
-		}
-	}
-	else
-	{
-		struct heapnode *pNode;
-        
-        /*
-         *  Scan the linked list to see if the segment of the pointer
-         *  to be freed matches any of the auxilliary local heaps.
-         *  If so, LocalFree from that heap.  Otherwise we assume that
-         *  it is a normal global memory object and GlobalFree.
-         */
-
-        for (pNode=headPtr; pNode; pNode=pNode->next) 
-        {
-            if (pNode->wSeg == wSeg)
-			{
-		    	WORD wFree;
-
-	           	_asm {
-	           		push  ds
-    	       		mov   ax, wSeg
-        	        mov   ds, ax   
-           		}
-
-				if (LocalSize((HLOCAL)wOfs))
-				{
-		            wOfs = (WORD) LocalFree((HLOCAL)wOfs);
-    		        wFree = LocalCompact(0);
-				}
-
-        	   	_asm { 
-           			pop   ds 
-	           	}
-
-    	        if (wOfs == NULL)         /* NULL means success here */
-				{
-            	    pNode->nItems -= 1;
-                	pNode->wFree = wFree;
-	                if (pNode->nItems ==0)  
-					{
-        	            HeapFree(pNode);  /* free the heap, but keep the node */
-					}
-					return;
-	            }
-	            goto BAD_POINTER;
-			}
-        }
-	    goto BAD_POINTER;
-    }
-    
-    
-BAD_POINTER :
-	g_bBadPtr = TRUE;
-	TRACE("win16_Free(%04X:%04X)  *** invalid pointer ***\n",wSeg,wOfs);
-}
-
-
-static BOOL NEAR  HeapNew (struct heapnode *pNode)
-{
-	HGLOBAL hMem;
-
-	pNode->nItems = 0;
-	pNode->hSeg = NULL;
-	pNode->wSeg = NULL;
-    if ((hMem = GlobalAlloc(GMEM_MOVEABLE,HEAPSIZE)) != NULL) 
-    {
-	    LPSTR pMem = GlobalLock(hMem);
-        WORD  wSeg = SELECTOROF(pMem);
-        WORD  wSize = (WORD) GlobalSize(hMem) -16;
-
-        if (LocalInit(wSeg,0,wSize)) 
-        {
-            pNode->hSeg = hMem;
-            pNode->wSeg = wSeg;
-            pNode->wFree = wSize;
-	        GlobalUnlock(hMem);    /* remove LocalInit's lock */
-
-			return TRUE;
-        }
-		GlobalUnlock(hMem);
-		GlobalFree(hMem);	
-    }
-	TRACE("HeapNew: ** unable to allocate %ld bytes\n",HEAPSIZE);
-    return FALSE;
-}
-
-static VOID NEAR  HeapFree (struct heapnode *pNode)
-{   
-    HGLOBAL hMem;
-
-    if (pNode->nItems==0 && ((hMem=pNode->hSeg) != NULL)) 
-    {
-        GlobalUnlock(hMem);
-        GlobalFree(hMem);
-        pNode->hSeg = NULL;
-        pNode->wSeg = 0;
-    }
-}
-
-
-#endif /* WIN16 */
-
 
 #ifdef _WINDLL
 /*****************************************************************************
@@ -1133,19 +762,11 @@ void * dll_Malloc (size_t bytes)
 
 void   dll_Free (void *pMem)
 {
-	HGLOBAL hMem;
-#ifdef WIN16
-	DWORD dwHandle = GlobalHandle(SELECTOROF(pMem));
-	hMem = (HGLOBAL)LOWORD(dwHandle);
-#else
-	hMem = GlobalHandle(pMem);
-#endif
-
+	HGLOBAL hMem = GlobalHandle(pMem);
 	GlobalUnlock(hMem);
 	GlobalFree(hMem);
 }
-
-#endif
+#endif /* _WINDLL */
 
 
 /*********************************************************************
@@ -1219,7 +840,7 @@ NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name)
       mem_mapp->mmp_begin = mmap(NULL, mem_mapp->file_size, PROT_READ,
                                  MAP_SHARED, fd, 0);
       close(fd);
-      if ((void *) mem_mapp->mmp_begin == (void *) MAP_FAILED)
+      if ((void*) mem_mapp->mmp_begin == (void*) MAP_FAILED)
         break;
     }}
 #endif

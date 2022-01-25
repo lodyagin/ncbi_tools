@@ -1,4 +1,4 @@
-/* $Id: mbutils.h,v 6.7 1999/11/26 19:42:21 shavirin Exp $
+/* $Id: mbutils.h,v 6.8 2000/03/29 21:58:01 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         Main file for Mega Blast program
 *
 * $Log: mbutils.h,v $
+* Revision 6.8  2000/03/29 21:58:01  dondosha
+* Added prototypes for edit_script_new and edit_script_append
+*
 * Revision 6.7  1999/11/26 19:42:21  shavirin
 * Fixed warnings of windows compiler.
 *
@@ -109,6 +112,8 @@ typedef struct {
     edit_op_t last;                 /* most recent operation added */
 } edit_script_t;
 edit_script_t *edit_script_free(edit_script_t *es);
+edit_script_t *edit_script_new();
+edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et);
 
 /* ----  End from original file edit.h ---- */
 

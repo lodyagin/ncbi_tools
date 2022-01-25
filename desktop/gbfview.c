@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.27 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -655,21 +655,22 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
 static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene)
 
 {
-  BioseqPtr    bsp;
-  DoC          doc;
-  Uint2        entityID;
-  FILE         *fp;
-  Int2         into;
-  Int2         item;
-  ErrSev       level;
-  Uint1        mode;
-  SeqEntryPtr  oldsep;
-  Char         path [PATH_MAX];
-  BaR          sb = NULL;
-  SeqEntryPtr  sep;
-  Int4         startsAt;
-  SeqEntryPtr  topsep;
-  TexT         txt;
+  Asn2ffJobPtr  ajp;
+  BioseqPtr     bsp;
+  DoC           doc;
+  Uint2         entityID;
+  FILE          *fp;
+  Int2          into;
+  Int2          item;
+  ErrSev        level;
+  Uint1         mode;
+  SeqEntryPtr   oldsep;
+  Char          path [PATH_MAX];
+  BaR           sb = NULL;
+  SeqEntryPtr   sep;
+  Int4          startsAt;
+  SeqEntryPtr   topsep;
+  TexT          txt;
 
   if (bvp == NULL) return;
   if (bvp->hasTargetControl) {
@@ -733,21 +734,48 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
   if (bvp->useScrollText) {
-    TmpNam (path);
-    fp = FileOpen (path, "w");
-    if (fp != NULL) {
-      level = ErrSetMessageLevel (SEV_MAX);
-      if (SeqEntryToFlat (sep, fp, format, mode)) {
-        FileClose (fp);
-        if (! FileToScrollText (txt, path)) {
-          SetTitle (txt, "(Text is too large to be displayed in this control.)");
+    ajp = MemNew (sizeof (Asn2ffJob));
+    if (ajp != NULL) {
+      TmpNam (path);
+      fp = FileOpen (path, "w");
+      if (fp != NULL) {
+        level = ErrSetMessageLevel (SEV_MAX);
+        ajp->sep = sep;
+        ajp->mode = mode;
+        ajp->format = format;
+        ajp->show_version = TRUE;
+        ajp->gb_style = TRUE;
+        ajp->show_seq = TRUE;
+        ajp->show_gi = TRUE;
+        ajp->error_msgs = FALSE;
+        ajp->non_strict = TRUE;
+        ajp->Spop = spop;
+        ajp->show_gene = show_gene;
+        if (IsAGenomeRecord (sep) ||
+            IsSegmentedBioseqWithoutParts (sep)) {
+          ajp->only_one = TRUE;
+          ajp->genome_view = TRUE;
+        } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
+          ajp->only_one = TRUE;
+          ajp->genome_view = TRUE;
         }
-      } else {
-        FileClose (fp);
+        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+          ajp->bankit = TRUE;
+        }
+        ajp->fp = fp;
+        if (SeqEntryToFlatAjp (ajp, sep, fp, format, mode)) {
+          FileClose (fp);
+          if (! FileToScrollText (txt, path)) {
+            SetTitle (txt, "(Text is too large to be displayed in this control.)");
+          }
+        } else {
+          FileClose (fp);
+        }
+        ErrSetMessageLevel (level);
       }
-      ErrSetMessageLevel (level);
+      FileRemove (path);
     }
-    FileRemove (path);
+    MemFree (ajp);
   } else {
     PopulateFF (doc, sep, bsp, format, mode, show_gene);
     SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
@@ -910,6 +938,102 @@ static void PopulateFasta (BioseqViewPtr bvp)
       }
     } else {
       FileClose (fp);
+    }
+  }
+  FileRemove (path);
+  ArrowCursor ();
+  Update ();
+}
+
+static void PrintQualScoresProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr  bsp;
+  FILE       *fp;
+
+  if (! IS_Bioseq (sep)) return;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL) return;
+  fp = (FILE*) mydata;
+  PrintQualityScores (bsp, fp);
+}
+
+static void PopulateQuality (BioseqViewPtr bvp)
+
+{
+  BioseqPtr    bsp;
+  DoC          doc;
+  Uint2        entityID;
+  FonT         fnt;
+  FILE         *fp;
+  Int2         into;
+  Int2         item;
+  Char         path [PATH_MAX];
+  BaR          sb = NULL;
+  SeqEntryPtr  sep;
+  Int4         startsAt;
+  TexT         txt;
+
+  if (bvp == NULL) return;
+  doc = NULL;
+  txt = NULL;
+  bsp = bvp->bsp;
+  if (bvp->useScrollText) {
+    txt = bvp->text;
+    Reset (txt);
+    Update ();
+  } else {
+    doc = bvp->doc;
+    GetScrlParams (doc, NULL, &item, &into);
+    sb = GetSlateVScrollBar ((SlatE) doc);
+    Reset (doc);
+    SetDocShade (doc, NULL, NULL, NULL, NULL);
+    SetDocProcs (doc, NULL, NULL, NULL, NULL);
+    SetDocCache (doc, NULL, NULL, NULL);
+    Update ();
+    SetDocAutoAdjust (doc, FALSE);
+  }
+  if (bsp == NULL) return;
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (bvp->hasTargetControl) {
+    if (bvp->viewWholeEntity) {
+      entityID = ObjMgrGetEntityIDForChoice (sep);
+      sep = GetTopSeqEntryForEntityID (entityID);
+    }
+  } else {
+    if (ISA_na (bsp->mol) || bsp->repr == Seq_repr_seg) {
+      entityID = ObjMgrGetEntityIDForChoice (sep);
+      sep = GetBestTopParentForData (entityID, bsp);
+    }
+  }
+  if (sep == NULL) return;
+
+  WatchCursor ();
+  ffColFmt.pixWidth = screenRect.right - screenRect.left;
+  ffColFmt.pixInset = 8;
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  if (fp != NULL) {
+    fnt = programFont;
+    if (bvp != NULL && bvp->displayFont != NULL) {
+      fnt = bvp->displayFont;
+    }
+    SeqEntryExplore (sep, (Pointer) fp, PrintQualScoresProc);
+    FileClose (fp);
+    if (bvp->useScrollText) {
+      if (! FileToScrollText (txt, path)) {
+        SetTitle (txt, "(Text is too large to be displayed in this control.)");
+      }
+    } else {
+      DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
+      SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
+      SetDocAutoAdjust (doc, FALSE);
+      ForceFormat (doc, item);
+      SetDocAutoAdjust (doc, TRUE);
+      AdjustDocScroll (doc);
+      GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
+      CorrectBarValue (sb, startsAt + into);
+      UpdateDocument (doc, 0, 0);
     }
   }
   FileRemove (path);
@@ -1462,6 +1586,13 @@ BioseqPageData gnptPageData = {
 BioseqPageData fstaPageData = {
   "FASTA", TRUE, TRUE, FALSE, FALSE, -1,
   PopulateFasta, ShowFastaOrAsn, NULL,
+  CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
+  ExportFlatFileFastaOrAsn, NULL, ResizeFlatFileFastaOrAsn, NULL
+};
+
+BioseqPageData qualPageData = {
+  "Quality", TRUE, TRUE, FALSE, FALSE, -1,
+  PopulateQuality, ShowFastaOrAsn, NULL,
   CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
   ExportFlatFileFastaOrAsn, NULL, ResizeFlatFileFastaOrAsn, NULL
 };

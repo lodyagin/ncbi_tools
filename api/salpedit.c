@@ -4246,12 +4246,12 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignListReverseStrand (SeqAlignPtr salp)
                      else if (*strandp != Seq_strand_minus)
                          *strandp = Seq_strand_minus;
                  }
+             ddp_next = ddp->next;
 	     if(salptmp->type==3 || salptmp->type==1) { 
-                 ddp_next = ddp->next;
                  ddp->next = ddp_prev;
                  ddp_prev =ddp;
-                 ddp = ddp_next;
 	     }
+             ddp = ddp_next;
         }
         if(salptmp->type==3 || salptmp->type==1)
 	      salptmp->segs = ddp_prev;

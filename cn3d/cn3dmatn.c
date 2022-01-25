@@ -33,6 +33,12 @@
 *
 * Modifications:
 * $Log: cn3dmatn.c,v $
+* Revision 6.93  2000/03/14 16:20:56  lewisg
+* bug fix: selection on non-aligned residues
+*
+* Revision 6.92  2000/02/28 14:47:58  thiessen
+* fixed "show selected only" in show/hide
+*
 * Revision 6.91  2000/01/11 01:16:46  lewisg
 * fix color selection in Cn3D, other misc. bugs
 *
@@ -326,8 +332,8 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
 
     if (pmmdThis == NULL)return;
 
-    if(pmmdThis->pSeqId) {
-        entityID = BioseqFindEntity(pmmdThis->pSeqId, &itemID);
+    entityID = BioseqFindEntity(pmmdThis->pSeqId, &itemID);
+    if(pmmdThis->pSeqId && entityID != 0) {
         from = pdnmgThis->choice - 1;
         to = pdnmgThis->choice - 1;
         slp = SeqLocIntNew(from, to, 0, pmmdThis->pSeqId);
@@ -339,7 +345,6 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
             ObjMgrDeSelect(entityID, itemID, OBJ_BIOSEQ, OM_REGION_SEQLOC,
             slp);
         ObjMgrSendMsg(OM_MSG_MOUSEUP, entityID, itemID, OBJ_BIOSEQ);
-
     }
     else {
         fnPreCHLresidue(pdnmgThis, highlight);
@@ -375,6 +380,7 @@ void LIBCALLBACK Cn3DCheckAndDoHighlight(PFB pfbThis, Int4 iModel,
 /*-----------------------------------------------*/
 void Cn3dObjMgrGetSelected(void)
 {
+#ifndef _OPENGL
     PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
     PMSD pmsdMaster = NULL, pmsdSlave = NULL;
 
@@ -400,5 +406,5 @@ void Cn3dObjMgrGetSelected(void)
             pdnmsSlave = pdnmsSlave->next;
         }
     }
-
+#endif
 }

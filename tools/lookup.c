@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,39 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.31  2000/04/10 17:27:15  madden
+* Deallocate old lookup table memory before search
+*
+* Revision 6.30  2000/04/03 13:07:51  madden
+* Fixed memory leak
+*
+* Revision 6.29  2000/03/07 21:59:53  madden
+* Add return value of NULL for MegaBlastLookupTableDestruct
+*
+* Revision 6.28  2000/03/03 18:07:34  dondosha
+* Added routine MegaBlastLookupTableDup plus cosmetic changes related to MegaBlast
+*
+* Revision 6.27  2000/03/02 17:24:34  dondosha
+* Fixed handling of lower case masking in MegaBlast
+*
+* Revision 6.26  2000/02/23 20:41:39  dondosha
+* Removed extern declaration for MegaBlastBuildLookupTable - now included from blast.h
+*
+* Revision 6.25  2000/02/17 19:02:10  shavirin
+* Removed all references to absolete theCacheSize variable.
+*
+* Revision 6.24  2000/02/12 21:18:57  kans
+* added prototype for MegaBlastBuildLookupTable - implemented in lookup.c, called from mblast.c
+*
+* Revision 6.23  2000/02/11 20:54:28  dondosha
+* Added functions related to Webb Miller s lookup table
+*
+* Revision 6.22  2000/02/03 21:17:03  dondosha
+* Fixed bug in lookup_new
+*
+* Revision 6.21  2000/02/01 21:08:48  dondosha
+* Added mb_make_mod_lt and mb_lookup_position_aux_destruct - modifications for megablast
+*
 * Revision 6.20  2000/01/11 18:37:08  shavirin
 * Added define DYNAMIC_CACHE to distinduish dynamic and static lookup.
 *
@@ -184,7 +217,7 @@ Detailed Contents:
 */
 
 #include <ncbi.h>
-#include <lookup.h>
+#include <blast.h> /* this already includes lookup.h */
 
 /* mod_lt[] is a modified lookup table.  -cfj
  * It contains the same info that is accessible via lookup->position, but in a form that reduces the
@@ -204,126 +237,7 @@ Detailed Contents:
  * into the orginal lookup table.
  */
 
-#ifdef DYNAMIC_CACHE
 void make_mod_lt(LookupTablePtr lookup)
-#else
-void make_mod_lt_new(LookupTablePtr lookup)
-#endif
-{
-    Int4 index, j, pv_size;
-    Uint4 len;
-    OrigLookupPositionPtr PNTR lookup_pos;
-    OrigLookupPositionPtr list;
-    ModLookupPositionPtr next_free;
-    PV_ARRAY_TYPE *pv_array=NULL;
-    Uint4Ptr theTable;
-    Int4 theCacheSize, theArraySize;
-
-    theTable = lookup->theTable;
-    theCacheSize = lookup->theCacheSize;
-    theArraySize = theCacheSize + 1;
-    
-    if(lookup->theCacheSize < 3) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Invalid Cache size for lookup table %d", 
-                  lookup->theCacheSize);
-        return;
-    }
-    
-    len = lookup->array_size;
-    lookup_pos = lookup->position;
-    
-    /* Add 1 to silence purify messages. */
-    /* Initial allocation - more, than necessary though */
-    
-    next_free = MemNew((1+lookup->num_pos_added)*sizeof(ModLookupPosition));
-    lookup->mod_lookup_table_size = 0;
-    
-    if (next_free == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Unable to allocate lookup->position");
-        return;
-    }
-    lookup->mod_lookup_table_memory = next_free;
-    
-    
-    /* pv_array is an array of 'presence bits', one bit per entry 
-       in the lookup table, packed 64bits per Uint8 (on a 64-bit binary); 
-       otherwise a Uint4 is used. It can be used to quickly see if there 
-       is an entry in the lookup table. It's used on short-to-medium 
-       length queries since most lookups will be empty. -cfj
-    */
-    
-    if (lookup->num_unique_pos_added < PV_ARRAY_FACTOR*lookup->array_size) {
-	pv_size = (lookup->array_size+PV_ARRAY_MASK)/(PV_ARRAY_MASK+1);    /* Size measured in PV_ARRAY_TYPE's */
-	pv_array = MemNew(pv_size*PV_ARRAY_BYTES);
-    }
-
-    /* ---------
-       Elements in the Table references as:
-       
-       *(theTable + theArraySize*index) == .num_used
-       
-       if(.num_used <= theCasheSize)
-       *(theTable + theArraySize*index + [1...theCasheSize]) == .entries
-       else
-       *(theTable + theArraySize*index + [1...theCasheSize-2]) == .entries
-       *(theTable + theArraySize*index + [1...theCasheSize-1]) &
-       *(theTable + theArraySize*index + [1...theCasheSize]) == address of
-       extended memory chunk
-       ----------- */
-    
-    /* Walk through table, copying info into mod_lt[] */
-    for(index = 0; index < len; index++) {
-        if(lookup_pos[index] == NULL) {
-            *(theTable + theArraySize*index) = 0;    
-        } else {
-            /* count num entries */
-            int count=0;
-            list = lookup_pos[index];
-            
-            if (pv_array)
-                pv_array[(index>>PV_ARRAY_BTS)] |= (((PV_ARRAY_TYPE) 1)<<(index&PV_ARRAY_MASK));
-            
-            while (list != NULL) {
-                count++;
-                list = list->next;
-            }
-            
-            if(count <= theCacheSize) {
-                list = lookup_pos[index];
-                *(theTable + theArraySize*index) = count;
-                for(j = 0;j < count; j++){
-                    hinfo_set(theTable + theArraySize*index + j + 1, list->position, list->context);
-                    list = list->next;
-                }	    
-            } else {
-                ModLookupPositionPtr * lpp= (ModLookupPositionPtr *)(theTable + theArraySize*index + theCacheSize - 1);
-                list=lookup_pos[index];
-                *(theTable + theArraySize*index) = count;
-                for(j = 0;j < theCacheSize-2;j++) {
-                    
-                    hinfo_set(theTable + theArraySize*index + j + 1, list->position, list->context);
-                    list = list->next;
-                    *lpp  = next_free;
-                }
-                for(j = theCacheSize-2; j < count; j++){
-                    hinfo_set(next_free,list->position,list->context);
-                    next_free++;
-                    lookup->mod_lookup_table_size++;
-                    list = list->next;
-                }
-            }
-        }
-    }
-    
-    lookup->pv_array = pv_array;
-
-    return;
-}
-#ifdef DYNAMIC_CACHE
-void make_mod_lt_old(LookupTablePtr lookup)
-#else
-void make_mod_lt(LookupTablePtr lookup)
-#endif
 {
     Int4 index, j, pv_size;
     Uint4 len;
@@ -385,7 +299,7 @@ void make_mod_lt(LookupTablePtr lookup)
                 list = lookup_pos[index];
                 mod_lt[index].num_used=count;
                 for(j=0;j<count;j++){
-                    hinfo_set(&mod_lt[index].entries[j],list->position,list->context);
+		    hinfo_set(&mod_lt[index].entries[j],list->position,list->context);
                     list = list->next;
                 }	    
             } else {
@@ -396,7 +310,91 @@ void make_mod_lt(LookupTablePtr lookup)
                 list = list->next;
                 *lpp  = next_free;
                 for(j = 1; j < count; j++){
-                    hinfo_set(next_free,list->position,list->context);
+		    hinfo_set(next_free,list->position,list->context);
+                    next_free++;
+                    lookup->mod_lookup_table_size++;
+                    list = list->next;
+                }
+            }
+        }
+    }
+
+    lookup->pv_array = pv_array;
+}
+void mb_make_mod_lt(LookupTablePtr lookup)
+{
+    Int4 index, j, pv_size;
+    Uint4 len;
+    OrigLookupPositionPtr PNTR lookup_pos;
+    OrigLookupPositionPtr list;
+    ModLookupPositionPtr next_free;
+    PV_ARRAY_TYPE *pv_array=NULL;
+    
+    
+    ModLAEntry *mod_lt;
+    mod_lt=lookup->mod_lt;
+    
+    len = lookup->array_size;
+    lookup_pos = lookup->position;
+    
+    /* Add 1 to silence purify messages. */
+    /* Initial allocation - more, than necessary though */
+
+    next_free = MemNew((1+lookup->num_pos_added)*sizeof(ModLookupPosition));
+    lookup->mod_lookup_table_size = 0;
+    
+    if (next_free == NULL){
+        ErrPostEx(SEV_ERROR, 0, 0, "Unable to allocate lookup->position");
+        return;
+    }
+    lookup->mod_lookup_table_memory = next_free;
+    
+    
+    /* pv_array is an array of 'presence bits', one bit per entry 
+       in the lookup table, packed 64bits per Uint8 (on a 64-bit binary); 
+       otherwise a Uint4 is used. It can be used to quickly see if there 
+       is an entry in the lookup table. It's used on short-to-medium 
+       length queries since most lookups will be empty. -cfj
+    */
+    
+    if (lookup->num_unique_pos_added < PV_ARRAY_FACTOR*lookup->array_size) {
+	pv_size = (lookup->array_size+PV_ARRAY_MASK)/(PV_ARRAY_MASK+1);    /* Size measured in PV_ARRAY_TYPE's */
+	pv_array = MemNew(pv_size*PV_ARRAY_BYTES);
+    }
+    
+    /* Walk through table, copying info into mod_lt[] */
+    for(index = 0; index < len; index++) {
+        if(lookup_pos[index] == NULL){
+            mod_lt[index].num_used = 0;
+        } else {
+            /* count num entries */
+            int count=0;
+            list = lookup_pos[index];
+            
+            if (pv_array)
+                pv_array[(index>>PV_ARRAY_BTS)] |= (((PV_ARRAY_TYPE) 1)<<(index&PV_ARRAY_MASK));
+            
+            while (list != NULL){
+                count++;
+                list = list->next;
+            }
+            
+            if (count<=3) {
+                list = lookup_pos[index];
+                mod_lt[index].num_used=count;
+                for(j=0;j<count;j++){
+		    mod_lt[index].entries[j] = list->position;
+                    list = list->next;
+                }	    
+            } else {
+                ModLookupPositionPtr * lpp= (ModLookupPositionPtr *) &mod_lt[index].entries[1];
+                list=lookup_pos[index];
+                mod_lt[index].num_used=count;
+                mod_lt[index].entries[0] = list->position;
+                list = list->next;
+                *lpp  = next_free;
+                for(j = 1; j < count; j++){
+		   *next_free = list->position;
                     next_free++;
                     lookup->mod_lookup_table_size++;
                     list = list->next;
@@ -428,6 +426,8 @@ static VoidPtr lookup_deallocate_memory (LookupTablePtr lookup)
         MemFree(mem_struct);
         mem_struct = next;
     }
+
+    lookup->mem_struct_start = NULL;
 
     return NULL;
 }
@@ -508,7 +508,7 @@ static VoidPtr lookup_get_memory (LookupTablePtr lookup, size_t required)
   bits the highest num_of_bits to zero).
 */
 LookupTablePtr LIBCALL
-lookup_new(Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize, Int4 theCacheSize)
+lookup_new(Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize)
      
 {
     Int4 num_of_bits;
@@ -518,7 +518,7 @@ lookup_new(Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize, Int4 theCac
     num_of_bits = Nlm_Nint(log((Nlm_FloatHi)alphabet_size)/NCBIMATH_LN2);
 
     /* 32 bits is 4 bytes */ 
-    if (num_of_bits*wordsize > 32) {
+    if (num_of_bits*reduced_wordsize > 32) {
         ErrPostEx(SEV_ERROR, 0, 0, "alphabet times wordsize > 32");
         return NULL;
     }
@@ -536,7 +536,6 @@ lookup_new(Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize, Int4 theCac
     lookup->mask = (Int4) Nlm_Powi(2.0, (num_of_bits*(reduced_wordsize-1))) - 1;
     lookup->mod_lt = NULL;    /* will be allocated when built */
     lookup->theTable = NULL;  /* will be allocated when built */
-    lookup->theCacheSize = theCacheSize;
     
     lookup->position = (OrigLookupPositionPtr PNTR) MemNew((lookup->array_size)*sizeof(OrigLookupPositionPtr)); 
     if (lookup->position == NULL) {
@@ -573,6 +572,7 @@ lookup_destruct(LookupTablePtr lookup)
     if (lookup->mod_lookup_table_memory)
         MemFree(lookup->mod_lookup_table_memory);
     lookup_deallocate_memory(lookup);
+    lookup = MegaBlastLookupTableDestruct(lookup);
     lookup = MemFree(lookup);
     
     return lookup;
@@ -601,13 +601,35 @@ lookup_position_aux_destruct(LookupTablePtr lookup)
     
     /* create the new lookup table, Add 1 to silence purify messages. */
     
-#ifdef DYNAMIC_CACHE
-    lookup->theTable = (Uint4Ptr) MemNew((1+lookup->array_size)*sizeof(Uint4)*(1 + lookup->theCacheSize));
-#else
     lookup->mod_lt = (ModLAEntry PNTR) MemNew((1+lookup->array_size)*sizeof(ModLAEntry)); 
-#endif
     
     make_mod_lt(lookup);
+    
+    /* deallocate parts of the old table no longer needed */
+    if(lookup->position) 
+	lookup->position = MemFree(lookup->position);
+    lookup_deallocate_memory(lookup);
+    
+    return TRUE;
+}
+
+Boolean
+mb_lookup_position_aux_destruct(LookupTablePtr lookup)
+     
+{
+    if (lookup == NULL)
+        return FALSE;
+    
+    if(lookup->position_aux) 
+        lookup->position_aux = MemFree(lookup->position_aux);
+    
+    
+    /* create the new lookup table, Add 1 to silence purify messages. */
+    
+    lookup->mod_lt = (ModLAEntry PNTR) MemNew((1+lookup->array_size)*sizeof(ModLAEntry)); 
+    
+    mb_make_mod_lt(lookup);
+    
     
     /* deallocate parts of the old table no longer needed */
     if(lookup->position) lookup->position = MemFree(lookup->position);
@@ -728,7 +750,7 @@ lookup_find_init(LookupTablePtr lookup, Int4 PNTR lookup_index, Uint1Ptr string)
 */
 
 BLAST_WordFinderPtr
-BLAST_WordFinderNew (Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down, Int4 theCacheSize)
+BLAST_WordFinderNew (Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down)
      
 {
     BLAST_WordFinderPtr wfp;
@@ -743,13 +765,13 @@ BLAST_WordFinderNew (Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, 
         if (compression_ratio > 1) {
             if (round_down) {
                 reduced_wordsize = (Int2) MIN(2, ((wordsize-3)/compression_ratio));
-                wfp->lookup = lookup_new(alphabet_size, (Int2) ((wordsize-3)/compression_ratio), (Int2) reduced_wordsize, theCacheSize);
+                wfp->lookup = lookup_new(alphabet_size, (Int2) ((wordsize-3)/compression_ratio), (Int2) reduced_wordsize);
             } else {
                 reduced_wordsize = wordsize/compression_ratio;
-                wfp->lookup = lookup_new(alphabet_size, (wordsize/compression_ratio), (Int2) reduced_wordsize, theCacheSize);
+                wfp->lookup = lookup_new(alphabet_size, (wordsize/compression_ratio), (Int2) reduced_wordsize);
             }
         } else {
-            wfp->lookup = lookup_new(alphabet_size, (Int2) (wordsize/compression_ratio), 0, theCacheSize);
+            wfp->lookup = lookup_new(alphabet_size, (Int2) (wordsize/compression_ratio), 0);
         }
         wfp->compression_ratio = compression_ratio;
         wfp->wordsize = wordsize;
@@ -771,3 +793,95 @@ BLAST_WordFinderDestruct (BLAST_WordFinderPtr wfp)
     return wfp;
 }
 
+Boolean
+MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
+{
+   LookupTablePtr lookup = search->wfp->lookup;
+   Int4 query_length = search->context[search->first_context].query->length;
+   register Uint1Ptr seq, pos;
+   register Int4 index;
+   register Int4 ecode;
+   register Int4 mask;
+   Uint1 val, nuc_mask = 0xfc;
+
+    if (lookup == NULL)
+        return FALSE;
+    
+    if(lookup->position_aux) 
+        lookup->position_aux = MemFree(lookup->position_aux);
+    
+    lookup->mb_lt = (MbLookupTablePtr) MemNew(sizeof(MbLookupTable));
+    
+   if (lookup->wordsize<3) 
+      lookup->mb_lt->width = 2;
+   else
+      lookup->mb_lt->width = 3;
+   lookup->mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
+   lookup->mb_lt->max_positions = 0; /* Do we want to use this at all? */
+   lookup->mb_lt->hashsize = (1<<(8*lookup->mb_lt->width)); 
+   mask = lookup->mb_lt->mask = (1 << (8*lookup->mb_lt->width - 2)) - 1;
+
+   lookup->mb_lt->hashtable = (Int4Ptr)
+      MemNew(lookup->mb_lt->hashsize*sizeof(Int4));
+
+   lookup->mb_lt->next_pos = (Int4Ptr) MemNew(query_length*sizeof(Int4));
+
+   seq = search->context[search->first_context].query->sequence_start;
+   pos = search->context[search->first_context].query->sequence;
+   ecode = 0;
+   for (index = 1; index < lookup->mb_lt->width*READDB_COMPRESSION_RATIO; ++index)
+      ecode = (ecode << 2) + (Int4) (*++seq);
+
+    while (index <= query_length) {
+       val = *++seq;
+       if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
+	  ecode = 0;
+	  pos = seq + READDB_COMPRESSION_RATIO*lookup->mb_lt->width;
+	  if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
+	     *seq &= 0x03;
+       } else {
+	  /* get next base */
+	  ecode = ((ecode & mask) << 2) + val;
+	  if (seq >= pos) {
+	     lookup->mb_lt->next_pos[index] = lookup->mb_lt->hashtable[ecode];
+	     lookup->mb_lt->hashtable[ecode] = index;
+	  }
+       }
+       index++;
+    }
+    lookup->mb_lt->mask = (1 << (lookup->mb_lt->width*8 - 8)) - 1;
+    lookup->mb_lt->estack = 
+       (MbStackPtr) MemNew(MBSTACK_SIZE*sizeof(MbStack));
+
+    return TRUE;
+}
+
+LookupTablePtr
+MegaBlastLookupTableDestruct(LookupTablePtr lookup)
+{
+   if (!lookup->mb_lt)
+      return lookup;
+   if (lookup->mb_lt->hashtable)
+      MemFree(lookup->mb_lt->hashtable);
+   if (lookup->mb_lt->next_pos)
+      MemFree(lookup->mb_lt->next_pos);
+   if (lookup->mb_lt->estack)
+      MemFree(lookup->mb_lt->estack);
+   MemFree(lookup->mb_lt);
+   return lookup;
+}
+
+
+LookupTablePtr MegaBlastLookupTableDup(LookupTablePtr lookup)
+{
+   /* The only piece that actually needs to be duplicated is estack array */
+   LookupTablePtr new_lookup = 
+      (LookupTablePtr) MemDup(lookup, sizeof(LookupTable));
+
+   new_lookup->mb_lt = 
+      (MbLookupTablePtr) MemDup(lookup->mb_lt, sizeof(MbLookupTable));
+   new_lookup->mb_lt->estack = 
+       (MbStackPtr) MemNew(MBSTACK_SIZE*sizeof(MbStack));
+
+   return new_lookup;
+}

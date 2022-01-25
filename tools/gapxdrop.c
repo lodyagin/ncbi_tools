@@ -32,8 +32,20 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.25 $ 
+/* $Revision: 6.29 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.29  2000/03/29 21:54:28  dondosha
+* Made GapXEditScriptNew public for use in MegaBlastFillHspGapInfo
+*
+* Revision 6.28  2000/02/16 21:45:42  shavirin
+* Fixed memory leaks in GXEMakeSeqAlign() function.
+*
+* Revision 6.27  2000/02/11 21:12:43  shavirin
+* Fixed creating reversed seqalign (gaps).
+*
+* Revision 6.26  2000/02/10 16:41:02  shavirin
+* Fixed creation of seqalign in case of reversed tblastn case.
+*
 * Revision 6.25  1999/12/17 20:47:04  egorov
 * Fix 'gcc -Wall' warnings
 *
@@ -893,7 +905,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	new one.
 
 */
-static GapXEditScriptPtr 
+GapXEditScriptPtr 
 GapXEditScriptNew(GapXEditScriptPtr old)
 
 {
@@ -1045,6 +1057,7 @@ GapAlignBlkDelete(GapAlignBlkPtr gap_align)
 		return NULL;
 
 	gap_align->state_struct = GapXDropStateDestroy(gap_align->state_struct);
+
 	gap_align = MemFree(gap_align);
 
 	return gap_align;
@@ -1350,6 +1363,7 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
     SeqLocPtr slp, slp1, slp2;
     SeqIntPtr seq_int1;
     Int4 index;
+    Boolean tmp_value;
 
     sap = SeqAlignNew();
     
@@ -1374,11 +1388,18 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
         dsp->lens = length;
         sap->segs = dsp;
         sap->next = NULL;
-    } else {
+    } else { /****/
         sap->type = SAT_PARTIAL; /**partial for gapped translating search. */
         sap->segtype = SAS_STD;  /**use stdseg to store the alignment**/
         sseg_head = NULL;
         sseg_old = NULL;
+
+        if(reverse) {  /* Reverting translation flags */
+            tmp_value = translate1;
+            translate1 = translate2;
+            translate2 = tmp_value;
+        }
+        
         for (index=0; index<numseg; index++) {
             sseg = StdSegNew();
             sseg->dim = 2;
@@ -1392,6 +1413,7 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
                 sseg->ids = SeqIdDup(query_id);
                 sseg->ids->next = SeqIdDup(subject_id);
             }
+
             slp1 = NULL;
             if (start[2*index] != -1) {
                 seq_int1 = SeqIntNew();
@@ -1401,10 +1423,20 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
                 else
                     seq_int1->to = start[2*index] + length[index] - 1;
                 seq_int1->strand = strands[2*index];
-                seq_int1->id = SeqIdDup(query_id);
+
+                if(reverse) { 
+                    seq_int1->id = SeqIdDup(subject_id);
+                } else {
+                    seq_int1->id = SeqIdDup(query_id);
+                }
+
                 ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
             } else {
-                ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(query_id));
+                if(reverse) { 
+                    ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(subject_id));
+                } else {
+                    ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(query_id));
+                }
             }
             slp2 = NULL;
             if (start[2*index+1] != -1) {
@@ -1415,19 +1447,33 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
                 else
                     seq_int1->to = start[2*index+1] + length[index] - 1;
                 seq_int1->strand = strands[2*index+1];
-                seq_int1->id = SeqIdDup(subject_id);
+
+                if(reverse) { 
+                    seq_int1->id = SeqIdDup(query_id);
+                } else {
+                    seq_int1->id = SeqIdDup(subject_id);
+                }
+
                 ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int1);
             } else {
-                ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(subject_id));
+                if(reverse) { 
+                    ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(query_id));
+                } else {
+                    ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(subject_id));
+                }
             }
-            
-            if (reverse) {
-                slp = slp2;
-                slp2->next = slp1;
-            } else {
-                slp = slp1;
-                slp1->next = slp2;
-            }
+            /*
+              if (reverse) {
+              slp = slp2;
+              slp2->next = slp1;
+              } else {
+              slp = slp1;
+              slp1->next = slp2;
+              } */
+
+            slp = slp1;
+            slp1->next = slp2;
+
             sseg->loc = slp;
             
             if (sseg_old)
@@ -1436,6 +1482,10 @@ static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
         }
         sap->segs = sseg_head;
         sap->next = NULL;
+        
+        MemFree(start);
+        MemFree(length);
+        MemFree(strands);
     }
 
     return sap;

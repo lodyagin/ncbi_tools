@@ -1,3 +1,7 @@
+!!!  For the latest version of this document see in:
+!!!		  http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html
+
+
 Dear Colleague,
 
 Problems connecting NCBI databases may be due to the 
@@ -229,10 +233,29 @@ Ports to open
 firewall port 5853      ------> 130.14.22.1
 firewall port 5859      ------> 130.14.22.2
 firewall port 5840      ------> 130.14.22.8
-firewall port 5845      ------> 130.14.22.12
+firewall port 5845      ------> 130.14.22.12  (can be accessed only from NCBI!)
+firewall port 5810      ------> 130.14.22.30
+firewall port 5812      ------> 130.14.22.31
+firewall port 5811      ------> 130.14.22.32
 
 The firewall port number should be mapped to the same port 
 number on the external host.
+
+
+TROUBLESHOOTING:  You can test if these ports are accessible from
+your host by just running, for example (see the "Ports to open" list
+above):
+  telnet 130.14.22.1 5853
+and entering a line of arbitrary text in the telnet session.
+If everything is fine, your TELNET session will look as follows:
+
+| > telnet 130.14.22.1 5853
+| Trying 130.14.22.1...
+| Connected to 130.14.22.1.
+| Escape character is '^]'.
+| test
+| NCBI Firewall Daemon:  Invalid ticket. Connection closed.
+| Connection closed by foreign host.
 
 
 

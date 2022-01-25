@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.31 2000/01/18 22:49:16 lewisg Exp $
+/*  $Id: ddvopen.c,v 1.61 2000/04/21 23:00:50 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.31 $
+* $Revision: 1.61 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,96 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.61  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.60  2000/04/20 23:27:43  lewisg
+* misc bug fixes
+*
+* Revision 1.59  2000/04/19 15:45:50  hurwitz
+* can create display for a block
+*
+* Revision 1.58  2000/04/17 13:30:43  durand
+* removed g_hParent and unused functions DDV_LaunchAlignViewer and DDV_LaunchAlignEditor
+*
+* Revision 1.57  2000/04/11 14:08:33  durand
+* removed a debug line
+*
+* Revision 1.56  2000/04/10 20:33:40  lewisg
+* fix show/hide for blast multiple, make blast multiple API generic
+*
+* Revision 1.55  2000/04/10 19:53:14  durand
+* allowed ddv to display NULL SeqAlign
+*
+* Revision 1.54  2000/04/08 00:37:32  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 1.53  2000/04/07 15:03:08  durand
+* added use of UPDATE_TYPE_NEWSEQ; DDV now rebuilt EntitiesTable after an update msg
+*
+* Revision 1.52  2000/04/04 17:51:54  lewisg
+* fix various seq import bugs
+*
+* Revision 1.51  2000/03/29 23:38:06  lewisg
+* hide/show, fixes to saving and opening
+*
+* Revision 1.50  2000/03/29 19:26:10  lewisg
+* use blast2seqs instead of bandalign
+*
+* Revision 1.49  2000/03/27 22:15:06  lewisg
+* add show/hide row dialog
+*
+* Revision 1.48  2000/03/27 18:07:48  hurwitz
+* page up and page down working, give panel focus on launch
+*
+* Revision 1.47  2000/03/24 20:34:58  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 1.46  2000/03/22 20:31:34  durand
+* added system menus for slave DDV
+*
+* Revision 1.45  2000/03/21 14:21:46  durand
+* fixed a problem with menus setup
+*
+* Revision 1.44  2000/03/20 19:26:53  kans
+* need to create menus before other window contents - Mac menu bar for windows is actually in content area
+*
+* Revision 1.43  2000/03/16 14:11:59  durand
+* set corretly mouse mode menu
+*
+* Revision 1.42  2000/03/02 21:11:06  lewisg
+* use bandalign for import sequence, make standalone ddv use viewmgr, make dialogs modal, send color update
+*
+* Revision 1.41  2000/03/02 15:43:10  durand
+* use MovableModalWindow for dialog boxes
+*
+* Revision 1.40  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 1.39  2000/02/28 20:15:32  durand
+* if DDV is started from Cn3D, DDV doesn't set up anymore letters layout
+*
+* Revision 1.38  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 1.37  2000/02/07 21:14:08  durand
+* added a generic answer to Update messages
+*
+* Revision 1.36  2000/02/07 14:03:35  durand
+* replace BioseqUnlockById by BioseqUnlock
+*
+* Revision 1.35  2000/02/05 01:32:22  lewisg
+* add viewmgr, move place freeing is done in ddv, modify visual c++ projects
+*
+* Revision 1.34  2000/02/04 16:05:40  durand
+* add click action to select a row
+*
+* Revision 1.33  2000/02/02 14:44:32  durand
+* added function to create data structure for block editor, fixed some bugs
+*
+* Revision 1.32  2000/01/26 13:38:53  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.31  2000/01/18 22:49:16  lewisg
 * send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
 *
@@ -184,15 +274,15 @@
 #include <objmgr.h>
 #include <gather.h>
 #include <ddvcolor.h>
-#ifdef _DDVEDIT
-#include <samedit.h>
-#endif /* _DDVEDIT */
 #include <samutil.h>
 #include <accutils.h>
 #include <blast.h>
+#include <viewmgr.h>
+#include <actutils.h>
 
 
-extern WindoW g_hParent = NULL;
+/*extern WindoW g_hParent = NULL;*/
+static void DDV_RegisterMsgFuncOnBsp(Uint2 bsp_eID,DdvMainPtr dmp);
 
 /*local struct used only by the Download sequence dialog box*/
 	typedef struct ddvnetopen {
@@ -316,7 +406,7 @@ Boolean   bRet=FALSE;
 				OBJ_BIOSEQ, (Pointer) bsp);	
 	
 		if (bsp_eID==eID && bsp_iID==iID) bRet=TRUE;
-		BioseqUnlockById(pgp->sip);
+		BioseqUnlock(bsp);
 	}
 	return(bRet);
 }
@@ -380,9 +470,12 @@ Uint2     bsp_eID,bsp_iID;
 					((*nFound)+1)*sizeof(Int4), (*nFound)*sizeof(Int4));
 			}
 			if (!pList) {*nFound=0;return(NULL);}
+
+
 			pList[*nFound]=i+1;
 			(*nFound)++;
 		}
+
 	}
 	return(pList);
 }
@@ -401,6 +494,7 @@ static Int2 DDV_MSG_SELECT(OMMsgStructPtr ommsp,Boolean IsSelectMsg)
 DdvMainPtr    dmp;  /*DDV panel data*/
 OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 Int4Ptr       bsp_List=NULL;
+ParaGPtr      pgp;
 
 Boolean       bRet;
 SeqLocPtr     slp;
@@ -442,10 +536,18 @@ Int4          from_col,to_col,from_row,to_row,bsp_start,bsp_stop,nBspInstances=0
 				SeqLocStart(slp));
 			bsp_stop=DDV_GetDispCoordGivenBspCoord(dmp->MSA_d.pgp_l.TableHead[row_num],
 				SeqLocStop(slp));
-			if (bsp_start!=(Int4)-1 && bsp_stop!=(Int4)-1)
+			if (bsp_start!=(Int4)-1 && bsp_stop!=(Int4)-1){
+				pgp=(ParaGPtr)(dmp->MSA_d.pgp_l.TableHead[row_num]->data.ptrvalue);
+
+				row_num=pgp->StartLine+
+
+						(pgp->ScaleStyle==SCALE_POS_NONE ? (Int4)0 : (Int4)1);
+
 				DDV_InvalRegion(dmp->hWndDDV,&(dmp->GrData),
 					_max_(bsp_start,from_col),_min_(bsp_stop,to_col),
-					bsp_List[i],IsSelectMsg);
+					row_num,IsSelectMsg);
+
+			}
 		}
 		slp=slp->next;
 	}
@@ -529,6 +631,8 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 		DDV_DeleteDisplayList(&dmp->MSA_d.pgp_l);
 	if (dmp->MSA_d.pgp_l.RulerDescr) 
 		ValNodeFreeData(dmp->MSA_d.pgp_l.RulerDescr);
+	if (dmp->MSA_d.pgp_l.entitiesTbl) 
+		MemFree(dmp->MSA_d.pgp_l.entitiesTbl);
 	dmp->MSA_d.pgp_l.TableHead=NULL;
 	dmp->MSA_d.pgp_l.RulerDescr=NULL;
 	/*rebuild a new one*/
@@ -536,17 +640,75 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 		&(dmp->MSA_d.pgp_l),ParaG_Size,&(dmp->ddo))) 
 		return(OM_MSG_RET_ERROR);
 
+	dmp->MSA_d.pgp_l.entitiesTbl=
+		DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
+			dmp->MSA_d.pgp_l.nBsp);
+	if (!dmp->MSA_d.pgp_l.entitiesTbl)
+		return(OM_MSG_RET_ERROR);	
 	/*build the Master Ruler descriptor*/
 	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
 
 	/*delete old tables*/
-    if(dmp->MasterViewer == SAMVIEWCN3D) {
+    if(dmp->MasterViewer != SAMVIEWCN3D) {
+        DDV_ClearColor(dmp->Globals.colorp);
+        /*build new tables*/
         if (!DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
-            &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), TRUE)){
+            &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE)){
             dmp->ddo.bUseColors=FALSE;
         }
     }
-    else {
+    
+    DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
+	DDV_WhatSize(dmp);
+	DDV_SetupWin(dmp->hWndDDV,TRUE,NULL);
+	Update();
+
+    return(OM_MSG_RET_OK);
+}
+/*******************************************************************************
+
+  Function : DDV_MSG_UPDATE_ViewMgr()
+  
+  Purpose : rebuilt a display after update message from the ViewMgr
+  
+  Return value : OM_MSG_RET_OK if success
+
+*******************************************************************************/
+static Int2 DDV_MSG_UPDATE_ViewMgr(OMMsgStructPtr ommsp)
+{
+DdvMainPtr    dmp;  /*DDV panel data*/
+OMUserDataPtr omudp;/*user data set when registering DDV panel*/
+
+	omudp = (OMUserDataPtr)(ommsp->omuserdata);
+	if (omudp == NULL) return(OM_MSG_RET_ERROR);
+
+	dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
+	if (dmp == NULL) return(OM_MSG_RET_ERROR);
+	
+    /*delete the current display*/
+	if (dmp->MSA_d.pgp_l.TableHead) 
+		DDV_DeleteDisplayList(&dmp->MSA_d.pgp_l);
+	if (dmp->MSA_d.pgp_l.RulerDescr) 
+		ValNodeFreeData(dmp->MSA_d.pgp_l.RulerDescr);
+	if (dmp->MSA_d.pgp_l.entitiesTbl) 
+		MemFree(dmp->MSA_d.pgp_l.entitiesTbl);
+	dmp->MSA_d.pgp_l.TableHead=NULL;
+	dmp->MSA_d.pgp_l.RulerDescr=NULL;
+	/*rebuild a new one*/
+	if (!DDV_CreateDisplayFromIndex(dmp->MSA_d.pgp_l.sap,
+		&(dmp->MSA_d.pgp_l),ParaG_Size,&(dmp->ddo))) 
+		return(OM_MSG_RET_ERROR);
+
+	dmp->MSA_d.pgp_l.entitiesTbl=
+		DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
+			dmp->MSA_d.pgp_l.nBsp);
+	if (!dmp->MSA_d.pgp_l.entitiesTbl)
+		return(OM_MSG_RET_ERROR);	
+	/*build the Master Ruler descriptor*/
+	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
+
+	/*delete old tables*/
+    if(dmp->MasterViewer != SAMVIEWCN3D) {
         DDV_ClearColor(dmp->Globals.colorp);
         /*build new tables*/
         if (!DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
@@ -618,6 +780,9 @@ Boolean     bResetScrolls=FALSE,
 			DDV_DeleteDisplayList(&dmp->MSA_d.pgp_l);
 		if (dmp->MSA_d.pgp_l.RulerDescr) 
 			ValNodeFreeData(dmp->MSA_d.pgp_l.RulerDescr);
+		if (dmp->MSA_d.pgp_l.entitiesTbl) 
+			MemFree(dmp->MSA_d.pgp_l.entitiesTbl);
+
 		dmp->MSA_d.pgp_l.TableHead=NULL;
 		dmp->MSA_d.pgp_l.RulerDescr=NULL;
 		/*rebuild a new one*/
@@ -625,18 +790,17 @@ Boolean     bResetScrolls=FALSE,
 			&(dmp->MSA_d.pgp_l),ParaG_Size,&(dmp->ddo))) 
 			return(OM_MSG_RET_ERROR);
 
+		dmp->MSA_d.pgp_l.entitiesTbl=
+			DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
+				dmp->MSA_d.pgp_l.nBsp);
+		if (!dmp->MSA_d.pgp_l.entitiesTbl)
+			return(OM_MSG_RET_ERROR);	
 		/*build the Master Ruler descriptor*/
 		dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
 
 		/*init the colours*/
 		if(bUpdateColors){
-            if( dmp->MasterViewer == SAMVIEWCN3D ) {
-                if (!DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
-                    &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp),TRUE)){
-                    dmp->ddo.bUseColors=FALSE;
-                }
-            }
-            else {
+            if(dmp->MasterViewer != SAMVIEWCN3D ) {
                 /*delete old tables*/
                 DDV_ClearColor(dmp->Globals.colorp);
                 /*build new tables*/
@@ -714,6 +878,11 @@ static Int2 DDV_MSG_FLUSH(OMMsgStructPtr ommsp)
 {
 DdvMainPtr    dmp;  /*DDV panel data*/
 OMUserDataPtr omudp;/*user data set when registering DDV panel*/
+/*ParaGPtr pgp;
+BioseqPtr bsp;
+Int4 i;
+Uint2 bsp_eID;*/
+
 
 	omudp = (OMUserDataPtr)(ommsp->omuserdata);
 	if (omudp == NULL) return(OM_MSG_RET_ERROR);
@@ -721,14 +890,81 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 	dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
 	if (dmp == NULL) return(OM_MSG_RET_ERROR);
 	
-	if (dmp->MSA_d.entityID==ommsp->entityID &&
-		((dmp->MSA_d.itemID==ommsp->itemID && ommsp->itemtype==OBJ_SEQALIGN)
-         ||(ommsp->itemID == 0 && ommsp->itemtype==0))){
-		Remove(dmp->hParent);
-	}
+    if (dmp->MSA_d.entityID==ommsp->entityID &&
+        ((dmp->MSA_d.itemID==ommsp->itemID && ommsp->itemtype==OBJ_SEQALIGN)
+        ||(ommsp->itemID == 0 && ommsp->itemtype==0))){
+        Remove(dmp->hParent);
+        DDV_CleanupDDVPdata_g(dmp);
+       /* for(i=0;i<dmp->MSA_d.pgp_l.nBsp;i++){
+            pgp=(ParaGPtr)(dmp->MSA_d.pgp_l.TableHead[i]->data.ptrvalue);
+            bsp=BioseqLockById(pgp->sip);
+            if (bsp != NULL){
+                bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)bsp);
+                BioseqUnlock(bsp);
+                if (bsp_eID>0 && bsp_eID!=dmp->MSA_d.entityID){
+                    ObjMgrFreeUserData(bsp_eID,dmp->procid,dmp->proctype,dmp->userkey);
+                }
+            }
+        }
+        
+        ObjMgrFreeUserData(dmp->MSA_d.entityID,dmp->procid,dmp->proctype,dmp->userkey);*/
+    }
 	return(OM_MSG_RET_OK);
 }
 
+/*******************************************************************************
+
+  Function : DDV_SimpleUpdateAnswer()
+  
+  Purpose : simple answer to an Update Msg; just redraw the window
+  
+  Parameters : see Toolkit
+  
+  Return value : see Toolkit 
+
+*******************************************************************************/
+static void DDV_SimpleUpdateAnswer(OMMsgStructPtr ommsp)
+{		            
+RecT   rcP;
+WindoW temport;
+DdvMainPtr    dmp;  /*DDV panel data*/
+OMUserDataPtr omudp;/*user data set when registering DDV panel*/
+
+	omudp = (OMUserDataPtr)(ommsp->omuserdata);
+	if (omudp == NULL) return;
+
+	dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
+	if (dmp == NULL) return;
+	
+	temport=SavePort(ParentWindow(dmp->hWndDDV));
+	Select(dmp->hWndDDV);
+	
+	ObjectRect(dmp->hWndDDV,&rcP);
+	InvalRect(&rcP);
+	RestorePort(temport);
+}
+
+/*******************************************************************************
+
+  Function : DDV_UpdateRegMsgFunc()
+  
+  Purpose : register a MsgCallback in response to an OM_MSG_UPDATE, after 
+          SeqImport
+  
+*******************************************************************************/
+static void DDV_UpdateRegMsgFunc(OMMsgStructPtr ommsp,Uint2 bsp_eID)
+{
+DdvMainPtr    dmp;  /*DDV panel data*/
+OMUserDataPtr omudp;/*user data set when registering DDV panel*/
+
+	omudp = (OMUserDataPtr)(ommsp->omuserdata);
+	if (omudp == NULL) return;
+
+	dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
+	if (dmp == NULL) return;
+
+	DDV_RegisterMsgFuncOnBsp(bsp_eID,dmp);		
+}
 
 /*******************************************************************************
 
@@ -756,8 +992,13 @@ Int2 nRet=OM_MSG_RET_OK;
 			
 			dump = (DDVUpdateMSGPtr)(ommsp->procmsgdata);
 			
-			if (!dump)
+			/*generic UPDATE msg*/
+			if (!dump){
+				DDV_SimpleUpdateAnswer(ommsp);
 				break;
+			}
+
+			/*specific UPDATE msg*/
             switch(dump->type){
                 case UPDATE_TYPE_LAYOUT:{
                     DDVUpdateLayoutDataPtr dumdp;
@@ -773,28 +1014,18 @@ Int2 nRet=OM_MSG_RET_OK;
                 case UPDATE_TYPE_EDIT_DELBSP:
                     nRet=DDV_MSG_UPDATE_DelBSP(ommsp);
                     break;
+                case UPDATE_TYPE_VIEWMGR:
+                    nRet=DDV_MSG_UPDATE_ViewMgr(ommsp);
+                    break;
 				case UPDATE_TYPE_CARETPOS:
 					nRet=DDV_MSG_UPDATE_CaretPos(ommsp);
 					break;
-                default :{
-		            RecT   rcP;
-		            WindoW temport;
-                    DdvMainPtr    dmp;  /*DDV panel data*/
-                    OMUserDataPtr omudp;/*user data set when registering DDV panel*/
-
-	                omudp = (OMUserDataPtr)(ommsp->omuserdata);
-	                if (omudp == NULL) return(OM_MSG_RET_ERROR);
-
-	                dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
-	                if (dmp == NULL) return(OM_MSG_RET_ERROR);
-		            
-		            temport=SavePort(ParentWindow(dmp->hWndDDV));
-		            Select(dmp->hWndDDV);
-		            
-		            ObjectRect(dmp->hWndDDV,&rcP);
-		            InvalRect(&rcP);
-		            RestorePort(temport);
-                }
+                case UPDATE_TYPE_NEWSEQ:
+					if (dump->data)
+						DDV_UpdateRegMsgFunc(ommsp,*((Uint2 *)dump->data));
+					break;
+				default :
+					DDV_SimpleUpdateAnswer(ommsp);
             }
 			
 			break;
@@ -821,6 +1052,26 @@ Int2 nRet=OM_MSG_RET_OK;
 	}
 
 	return (nRet);
+}
+
+/*******************************************************************************
+
+  Function : DDV_RegisterMsgFuncOnBsp()
+  
+  Purpose : register a MsgFunc for a bsp. 
+  
+*******************************************************************************/
+static void DDV_RegisterMsgFuncOnBsp(Uint2 bsp_eID,DdvMainPtr dmp)
+{
+OMUserDataPtr omudp;
+
+	if (bsp_eID==0 || dmp==NULL) return;
+	
+    omudp = ObjMgrAddUserData (bsp_eID,dmp->procid,dmp->proctype,dmp->userkey);
+    if (omudp != NULL) {
+    	omudp->messagefunc = DDV_OM_MsgFunc;
+		omudp->userdata.ptrvalue = (Pointer)dmp;
+	}
 }
 
 /*******************************************************************************
@@ -880,14 +1131,10 @@ Uint2         bsp_eID;
 					bFound=FALSE;
 				}
 				if (bFound==FALSE){
-    				omudp = ObjMgrAddUserData (bsp_eID,procID,procType,userkey);
-    				if (omudp != NULL) {
-    					omudp->messagefunc = DDV_OM_MsgFunc;
-						omudp->userdata.ptrvalue = (Pointer)dmp;
-					}
+					DDV_RegisterMsgFuncOnBsp(bsp_eID,dmp);
 				}
 			}
-			BioseqUnlockById(pgp->sip);
+			BioseqUnlock(bsp);
 		}
 	}
 }
@@ -919,30 +1166,66 @@ static Boolean DDV_StartPanel_Slave(DdvMainPtr dmp,SeqAlignPtr sap,
 		Uint2 input_entityID,Uint2 input_itemID,Boolean bEditor)
 {
 DDV_ColorGlobal * dcgp;
+Boolean  DebugDDE;
+MsaParaGPopListPtr  mpplp;
 	
 	WatchCursor();
 
 	/*get the SeqAlign and build a default display structure*/
-	if (!AlnMgrIndexSeqAlign(sap))
-		return (FALSE);
-
-#ifdef _DDVEDIT
-    dmp->editGlobal = SAM_NewEditGlobal(TRUE, TRUE, TRUE, sap);
-#endif /* _DDVEDIT */
-
-	if (!DDV_CreateDisplayFromIndex(sap,&(dmp->MSA_d.pgp_l),ParaG_Size,
-		&(dmp->ddo))) return(FALSE);
-	dmp->MSA_d.pgp_l.entitiesTbl=
-		DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
-		dmp->MSA_d.pgp_l.nBsp);
-	if (!dmp->MSA_d.pgp_l.entitiesTbl) return(FALSE);
+	if (ViewMgr_Attach(sap, FALSE, FALSE, input_entityID,
+        input_itemID) < 1) return (FALSE);
 	
-	/*build the Master Ruler descriptor*/
-	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(sap,&(dmp->ddo));
-	
+	/*if we have a NULL SeqAlign, switch the display style to show
+	the sequences, not a spacer*/
+	if (AlnMgrIsSAPNULL(sap)){
+		dmp->ddo.DispDiscStyle=MSA_TXT_STYLE_2;
+		dmp->ddo.SpacerSize=SPACER_TXT_BLANK;
+    	dmp->ddo.DiscJustification=DISP_JUST_LEFT;
+	}
+
+  /* for testing editor functions */
+  if (bEditor) {
+    dmp->dsp = (DDE_StackPtr) GetAppProperty("ddeinterndata");
+    if (dmp->dsp == NULL) {
+  /*    mpplp = DDE_CreateDisplayForBlock(sap, 1); */
+      mpplp = DDE_CreateDisplayForUnAligned(sap, 4);
+      if (mpplp == NULL) {return(FALSE);}
+      mpplp->entitiesTbl = DDV_BuildBspEntitiesTbl(mpplp->TableHead, mpplp->nBsp);
+      if (!mpplp->entitiesTbl) {return(FALSE);}
+      mpplp->RulerDescr = DDV_ComputeRuler(sap, &(dmp->ddo));
+      dmp->dsp = DDE_NewStack(mpplp);
+    }
+    else {
+      mpplp = dmp->dsp->pEdit->pPopList;
+    }
+    MemCopy(&(dmp->MSA_d.pgp_l),mpplp,sizeof(MsaParaGPopList));
+  }
+  else {
+	  if (!DDV_CreateDisplayFromIndex(sap,&(dmp->MSA_d.pgp_l),ParaG_Size,
+		  &(dmp->ddo))) return(FALSE);
+	  dmp->MSA_d.pgp_l.entitiesTbl=
+		  DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
+		  dmp->MSA_d.pgp_l.nBsp);
+	  if (!dmp->MSA_d.pgp_l.entitiesTbl) return(FALSE);
+	  /*build the Master Ruler descriptor*/
+	  dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(sap,&(dmp->ddo));
+  }
+
 	dmp->MSA_d.entityID=input_entityID;
 	dmp->MSA_d.itemID=input_itemID;
-		
+
+/*
+#if defined(_DEBUG_DDE)
+{
+  MsaParaGPopListPtr  mpplp;
+  mpplp = DDV_CreateDataForEditor(&(dmp->MSA_d.pgp_l), 0, dmp->MSA_d.pgp_l.LengthAli-1);
+	MemCopy(&(dmp->MSA_d.pgp_l),mpplp,sizeof(MsaParaGPopList));
+  dmp->dsp = DDE_NewStack(mpplp);
+}
+#endif
+*/
+
+
 	/*get the color stuff from the sap object. Usually I can do that
 	when DDV is loaded from Cn3D*/
 	dcgp=DDV_GetColorGlobalEx((Pointer) sap);
@@ -954,13 +1237,7 @@ DDV_ColorGlobal * dcgp;
 			dmp->ddo.bUseColors=FALSE;
 		}
 	}
-    else dmp->Globals.colorp = dcgp;
-
-    if(dmp->MasterViewer == SAMVIEWCN3D) {
-        if (!DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,&(dmp->MSA_d.pgp_l),
-            &(dmp->Globals.colorp),TRUE)) dmp->ddo.bUseColors=FALSE;
-    }
-        
+    else dmp->Globals.colorp = dcgp;        
 
 	/*set the initial position of the caret (edit mode)*/
 	dmp->dci.old_row=1;
@@ -968,12 +1245,15 @@ DDV_ColorGlobal * dcgp;
 	dmp->dci.old_col=0;
 	dmp->dci.new_col=0;
 	
+
 	/*relation between align size and display type; compute nTotLines for example*/
 	DDV_WhatSize(dmp);
 
 	ArrowCursor();
 	DDV_SetupWin (dmp->hWndDDV,TRUE,NULL);
 	/*Update();*/
+
+  CaptureSlateFocus((SlatE)dmp->hWndDDV);
 	return(TRUE);
 }
 
@@ -992,12 +1272,11 @@ DDV_ColorGlobal * dcgp;
   Return value : see Toolkit 
 
 *******************************************************************************/
-extern Int2 LIBCALLBACK DDV_ObjRegMasterDDV (Pointer data)
+static Int2 DDV_ObjRegMasterDDV (Pointer data,Boolean bEditor)
 {
 OMProcControlPtr    ompcp;
 SeqAlignPtr			sap=NULL;
 OMUserDataPtr       omudp;
-DdvMainWinPtr 		mWin_d;
 DdvMainPtr          dmp;
 
 	/*retrieve data*/
@@ -1020,22 +1299,19 @@ DdvMainPtr          dmp;
 		ErrPostEx (SEV_ERROR, 0, 0, "Data NULL [2]");
 		return OM_MSG_RET_ERROR;
 	}
-
-	/*get the DDV main window data*/
-	if (!g_hParent) goto error;
-	mWin_d = (DdvMainWinPtr) GetObjectExtra (g_hParent);
 	
-	/*build the DDV panel (its parent is g_hParent)*/
-	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+	dmp = (DdvMainPtr) GetAppProperty("ddvinterndata");
+	if (!dmp) goto error;
 	if (!DDV_StartPanel_Slave(dmp,sap,ompcp->input_entityID,
-		ompcp->input_itemID,TRUE)) goto error;
+		ompcp->input_itemID,bEditor)) goto error;
+	
 	
 	/*attach a Msg Func on the current seqalign*/
 	dmp->userkey=OMGetNextUserKey();
 	dmp->procid=ompcp->proc->procid;
 	dmp->proctype=ompcp->proc->proctype;
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, 
-		OMPROC_EDIT,dmp->userkey);
+		(bEditor==TRUE ? OMPROC_EDIT : OMPROC_VIEW),dmp->userkey);
     if (omudp == NULL) 
 		goto error;
     omudp->messagefunc =  DDV_OM_MsgFunc;
@@ -1050,10 +1326,42 @@ DdvMainPtr          dmp;
 
 error:
 	/*show the logo window*/
-	mWin_d->Show_logo=TRUE;
+	/*mWin_d->Show_logo=TRUE;*/
 	Update ();
 	ArrowCursor();
 	return(OM_MSG_RET_ERROR);
+}
+
+/*******************************************************************************
+
+  Function : DDV_ObjRegMasterEditDDV()
+  
+  Purpose : call by ObjMgr to start DDV as a standalone editor
+  
+  Parameters : see Toolkit
+  
+  Return value : see Toolkit 
+
+*******************************************************************************/
+extern Int2 LIBCALLBACK DDV_ObjRegMasterEditDDV (Pointer data)
+{
+	return(DDV_ObjRegMasterDDV(data,TRUE));
+}
+
+/*******************************************************************************
+
+  Function : DDV_ObjRegMasterViewDDV()
+  
+  Purpose : call by ObjMgr to start DDV as a standalone viewer
+  
+  Parameters : see Toolkit
+  
+  Return value : see Toolkit 
+
+*******************************************************************************/
+extern Int2 LIBCALLBACK DDV_ObjRegMasterViewDDV (Pointer data)
+{
+	return(DDV_ObjRegMasterDDV(data,FALSE));
 }
 
 
@@ -1100,15 +1408,21 @@ SAM_ViewGlobal      *vgp;
 	/*start the slave module*/
     /* get parameters from launching program */
     vgp = GetAppProperty(SAM_ViewString);
-    if(vgp == NULL) hParent=DDV_StartMainWin_Slave(NULL);
-    else hParent=DDV_StartMainWin_Slave(vgp);
+    if(vgp == NULL) hParent=DDV_StartMainWin_Slave(NULL,bEditor);
+    else hParent=DDV_StartMainWin_Slave(vgp,bEditor);
 
 	if (hParent){
 		RealizeWindow(hParent);
-		Show(hParent);
-		mWin_d=(DdvMainWinPtr)GetObjectExtra(hParent);
-		dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+        Show(hParent);
+        mWin_d=(DdvMainWinPtr)GetObjectExtra(hParent);
+        dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
         if(vgp != NULL) dmp->MasterViewer = vgp->MasterViewer;
+
+        if(dmp->MasterViewer == SAMVIEWCN3D) {
+            mWin_d->UseNetwork = TRUE;
+            mWin_d->NetStartProc = vgp->NetStartProc;
+        }
+        
         if (!DDV_StartPanel_Slave(dmp,sap,ompcp->input_entityID,
             ompcp->input_itemID,bEditor)) 
             goto error;
@@ -1391,6 +1705,7 @@ Boolean				isBinary;
 FILE				*fp;
 ValNodePtr 			vnp_ali=NULL;
 Uint2 				nRet=DVV_MSG_M_OK,The_entityID;
+Int2				procval;
 
 	hOpenDlg=(WindoW)ParentWindow(g);
 
@@ -1445,8 +1760,12 @@ Uint2 				nRet=DVV_MSG_M_OK,The_entityID;
 				sap=(SeqAlignPtr)vnp_ali->data.ptrvalue;
 				entityID=sap->idx.entityID;
 				itemID=sap->idx.itemID;
-				GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, 
-					OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+				SetAppProperty("ddvinterndata",(void *)dmp);
+				procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, 
+					entityID, itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+				if (procval=OM_MSG_RET_ERROR)
+					mWin_d->Show_logo=TRUE;
+				RemoveAppProperty("ddvinterndata");
 			}
 			FileClose(fp);
 		}
@@ -1488,7 +1807,7 @@ TexT				t1;
 	if (!dfodp) return;
 	MemSet(dfodp,0,sizeof(DlgFileOpenData));
 
-    hOpenDlg = FixedWindow(-30, -20,  -10,  -10, 
+    hOpenDlg = MovableModalWindow(-30, -20,  -10,  -10, 
 				"DDV - Open a local file",  NULL);
     g = NormalGroup(hOpenDlg, 2, 1, "File name:",  systemFont, NULL);
     SetGroupMargins(g, 10, 10);
@@ -1593,7 +1912,7 @@ static void DDV_NetOpen_okProc(ButtoN g)
 WindoW			hOpenDlg;
 DDVNetOpenPtr 	dnop;
 Char 			szAccess[50]={""};
-Int2			AccessType;
+Int2			AccessType,procval;
 Int4			uid=0;
 DdvMainWinPtr 	mWin_d;
 ValNodePtr      vnp_ali;
@@ -1671,8 +1990,12 @@ Uint2           The_entityID;
 			sap=(SeqAlignPtr)vnp_ali->data.ptrvalue;
 			entityID=sap->idx.entityID;
 			itemID=sap->idx.itemID;
-			GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, 
-				OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+			SetAppProperty("ddvinterndata",(void *)dmp);
+			procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, 
+				entityID, itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+			if (procval=OM_MSG_RET_ERROR)
+				mWin_d->Show_logo=TRUE;
+			RemoveAppProperty("ddvinterndata");
 		}
 	}
 
@@ -1747,7 +2070,7 @@ DDVNetOpenPtr       dnopp;
 		if (!mWin_d->NetStartProc(mWin_d->UseNetwork)) return;
 	}
 
-    hOpenDlg = FixedWindow(-30, -20,  -10,  -10, 
+    hOpenDlg = MovableModalWindow(-30, -20,  -10,  -10, 
 				"DDV - Fetch a network entry",  NULL);
 	SetGroupSpacing (hOpenDlg, 10, 10);
 	
@@ -1786,82 +2109,9 @@ DDVNetOpenPtr       dnopp;
 	Update ();
 }
 
-/*******************************************************************************
-
-  Function : DDV_LaunchAlignEditor()
-  
-  Purpose : load DDV as an editor
-  
-  Parameters : entityID  OR  sap; identifier of a SeqAlign
-  
-  Note:  DO NOT use entityID and sap at a same time.
-  
-  Return value : none 
-
-*******************************************************************************/
-extern void DDV_LaunchAlignEditor (Uint2 entityID,SeqAlignPtr sap)
+static void DDV_SlaveQuit(WindoW w)
 {
-Uint2 itemID,options;
-ObjMgrDataPtr   omdp;
-
-	if (sap==NULL && entityID==0) return;
-	
-	if (sap) {/*given sap, get eID & iID*/
-		entityID = ObjMgrRegister (OBJ_SEQALIGN, (Pointer) sap);
-		if (entityID==0) return;
-		itemID = GetItemIDGivenPointer (entityID, OBJ_SEQALIGN, (Pointer) sap);
-	}
-	else{/*given eID, get iID*/
-		omdp = ObjMgrGetData (entityID);
-		if (!omdp) return;
-		itemID = GetItemIDGivenPointer (entityID, 
-				OBJ_SEQALIGN, (Pointer) omdp->dataptr);
-
-	}
-	options = ObjMgrGetOptions(entityID);
-	options |= OM_OPT_FREE_IF_NO_VIEW;
-	ObjMgrSetOptions(options, entityID);
-	GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, 
-		OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
-}
-
-/*******************************************************************************
-
-  Function : DDV_LaunchAlignViewer()
-  
-  Purpose : load DDV as a simple viewer 
-  
-  Parameters : entityID  OR  sap; identifier of a SeqAlign
-  
-  Note:  DO NOT use entityID and sap at a same time.
-  
-  Return value : none 
-
-*******************************************************************************/
-extern void DDV_LaunchAlignViewer (Uint2 entityID,SeqAlignPtr sap)
-{
-Uint2 itemID,options;
-ObjMgrDataPtr   omdp;
-
-	if (sap==NULL && entityID==0) return;
-
-	if (sap) {/*given sap, get eID & iID*/
-		entityID = ObjMgrRegister (OBJ_SEQALIGN, (Pointer) sap);
-		if (entityID==0) return;
-		itemID = GetItemIDGivenPointer (entityID, OBJ_SEQALIGN, (Pointer) sap);
-	}
-	else{/*given eID, get iID*/
-		omdp = ObjMgrGetData (entityID);
-		if (!omdp) return;
-		itemID = GetItemIDGivenPointer (entityID, 
-				OBJ_SEQALIGN, (Pointer) omdp->dataptr);
-
-	}
-	options = ObjMgrGetOptions(entityID);
-	options |= OM_OPT_FREE_IF_NO_VIEW;
-	ObjMgrSetOptions(options, entityID);
-	GatherProcLaunch (OMPROC_VIEW, FALSE, entityID, itemID, 
-		OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+	Remove(w);
 }
 
 /*******************************************************************************
@@ -1877,7 +2127,7 @@ ObjMgrDataPtr   omdp;
   Return value : handle to the DDV main window
 
 *******************************************************************************/
-extern WindoW DDV_StartMainWin_Slave(SAM_ViewGlobal *vgp)
+extern WindoW DDV_StartMainWin_Slave(SAM_ViewGlobal *vgp,Boolean bEditor)
 {
 Int2	Margins;
 DdvMainWinPtr mWin_d;
@@ -1893,26 +2143,26 @@ Boolean bRet;
     if(vgp == NULL)
         w=DocumentWindow(Margins,Margins ,-10, -10,
            szAppName, 
-           NULL,
+           DDV_SlaveQuit,
            DDV_WinMainResize);
     else
         w=DocumentWindow(vgp->Rect.left,vgp->Rect.top ,-10, -10,
             szAppName, 
-            NULL,
+            DDV_SlaveQuit,
             DDV_WinMainResize);
 
 	if (!w) return(NULL);
 
 	SetObjectExtra (w, (Pointer) mWin_d, (FreeProc)DDV_WinMainCleanup);
 	mWin_d->hWndMain=w;
-	/*this is a slave  editor/viewer*/
+	/*this is a slave editor/viewer*/
 	mWin_d->AutonomeViewer=FALSE;
-	/*mWin_d->bEditor=bEditor;*//*editor or viewer ?*//*todo*/
 
 	/*init menu*/
-	DDV_SetupMenus(w,FALSE);
+	/*DDV_SetupMenus(w,FALSE,bEditor);*/
+
 	/*build GUI*/
-	bRet=DDV_CreateViewerPanel(w,mWin_d, vgp);
+	bRet=DDV_CreateViewerPanel(w,mWin_d, vgp, bEditor);
 
 	if (!bRet) return(NULL);
 
@@ -1929,7 +2179,7 @@ NLM_EXTERN Int4 DDV_Accession2Gi (CharPtr string, DocType type)
    Int4 gi;
 
    if (!EntrezIsInited ()) {
-       Message (MSG_OK, "Network connection to Entrez unavailable");
+       Message (MSG_ERROR, "Network connection to Entrez unavailable");
        return 0;
    }
 
@@ -1957,6 +2207,17 @@ static Boolean DDV_DigitsOnly(Char* str)
     return TRUE;
 }
 
+/*******************************************************************************
+
+  Function : DDV_ImportEnableProc
+  
+  Purpose : this function does the actual bioseq import.  note that it doesn't
+            require a vibrant dialog to operate, only that idp is filled out
+  
+  Return value : none 
+
+*******************************************************************************/
+
 static void DDV_ImportEnableProc(TexT t)
 {
     Char str[32];
@@ -1979,17 +2240,103 @@ static void DDV_ImportEnableProc(TexT t)
     return;
 }
 
-static void DDV_ImportAcceptProc(ButtoN b)
+/*******************************************************************************
+
+  Function : DDV_DoAlign
+  
+  Purpose : this function does the actual bioseq import.  note that it doesn't
+            require a vibrant dialog to operate, only that idp is filled out
+  
+  Return value : none 
+
+*******************************************************************************/
+
+NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
 {
     Char str[32];
-    Char out[32];
+    Bioseq *bsp1 = NULL, *bsp2 = NULL;
+    SeqId si;
+    SeqAlign *sap;
+    Int4 value, i;
+    ValNode *pvn;
+    
+    if(idp->mode & DDVIMP2SE) {
+        value = GetValue(idp->DDV_lsip); /*one-base value*/
+        for(pvn = idp->pvnSips, i = 1; i != value && pvn != NULL;
+        i++, pvn = pvn->next);
+        if(pvn != NULL)
+            bsp1 = BioseqLockById((SeqId *)pvn->data.ptrvalue);
+    } else bsp1 = BioseqLockById(idp->sip);
+    if (bsp1 == NULL) {
+        Message (MSG_ERROR, "Unable to load sequence");
+        goto out2;
+    }
+    
+    if(idp->mode & DDVIMPNET) {
+        si.choice = SEQID_GI;
+        if(ISA_aa(bsp1->mol)) idp->AAorNN = TYP_AA;
+        else idp->AAorNN = TYP_NT;
+        GetTitle(idp->DDV_tAccession, str, sizeof(str));
+        if(GetValue(idp->DDV_gAccType) == 1) si.data.intvalue = 
+            DDV_Accession2Gi(str, idp->AAorNN);
+        else si.data.intvalue = atoi(str);
+        if (si.data.intvalue <= 0) {
+            Message (MSG_ERROR, "Unable to understand accession");
+            goto out2;
+        }
+        bsp2 = BioseqLockById(&si);
+    } else bsp2 = BioseqLockById((SeqId *)idp->sipslave->data.ptrvalue);
+    if(bsp2 == NULL) {
+        Message (MSG_ERROR, "Unable to load sequence");
+        BioseqUnlock(bsp1);
+        goto out2;
+    }
+    idp->bsp = bsp2;
+    
+    if(ISA_aa(bsp1->mol) != ISA_aa(bsp2->mol) ||
+        ISA_na(bsp1->mol) != ISA_na(bsp1->mol)) {
+        Message (MSG_ERROR, "Sequences to be aligned not of same type");
+        BioseqUnlock(bsp1);
+        BioseqUnlock(bsp2);
+        goto out2;
+    }
+    
+/*    sap = ACT_GlobalAlignSimple(bsp1, bsp2, TRUE); */
+    if(ISA_aa(bsp1->mol))
+        sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE, "blastp");
+    else 
+        sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE, "blastn");
+    BioseqUnlock(bsp1);
+    BioseqUnlock(bsp2);
+    
+    if(sap == NULL) {
+        Message (MSG_OK, "Not able to align the sequence");
+        goto out2;
+    }
+    
+    SAM_ReplaceGI(sap);
+    if(idp->callback) idp->callback(idp, idp->sap, sap);
+    
+out2:
+    MemFree(idp->userdata);
+    ValNodeFree(idp->pvnSips); /* don't free the data */
+    ValNodeFree(idp->sipslave);
+}
+
+/*******************************************************************************
+
+  Function : DDV_ImportAcceptProc
+  
+  Purpose : fired by clicking OK in the bioseq import dialog
+  
+  Return value : none 
+
+*******************************************************************************/
+
+static void DDV_ImportAcceptProc(ButtoN b)
+{
     WindoW hImportDlg;
     DDV_ImportDialog *idp;
-    Bioseq *bsp1, *bsp2;
-    SeqId si;
-    Uint1 align_type;
-    SeqAlign *sap, *sap_tmp;
-    Uint2 entityID, itemID;
 
 	hImportDlg= (WindoW)ParentWindow(b);
 	if(hImportDlg == NULL) goto out;	
@@ -1997,46 +2344,43 @@ static void DDV_ImportAcceptProc(ButtoN b)
 	if(idp == NULL) goto out;
 
     WatchCursor();
-    GetTitle(idp->DDV_tAccession, str, sizeof(str));
-
-    si.choice = SEQID_GI;
-    if(GetValue(idp->DDV_gAccType) == 1) si.data.intvalue = 
-        DDV_Accession2Gi(str, idp->AAorNN);
-    else si.data.intvalue = atoi(str);
-
-    if (si.data.intvalue <= 0) goto out;
-
-    bsp1 = BioseqLockById(idp->sip);
-    bsp2 = BioseqLockById(&si);
-
-    if(idp->AAorNN == TYP_AA) sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE,
-                         "blastp");
-    else sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE, "blastn");
-
-    if(sap == NULL) goto out;
-
-    for (sap_tmp = (SeqAlignPtr)idp->sap->segs; sap_tmp->next != NULL;
-    sap_tmp = sap_tmp->next);
-    
-    sap_tmp->next = sap;
-    sap->next = NULL;
-
-    AlnMgrReIndexSeqAlign(idp->sap);
-    entityID=ObjMgrGetEntityIDForPointer((Pointer)idp->sap);
-    itemID=GetItemIDGivenPointer (entityID, 
-        OBJ_SEQALIGN, (Pointer) idp->sap);	
-    
-    ObjMgrSendProcMsg(OM_MSG_UPDATE, entityID, itemID,
-        OBJ_SEQALIGN,0,0,idp->userdata);
-    MemFree(idp->userdata);
-    
-out:
+    DDV_DoAlign(idp);
     ArrowCursor();
 
-    Remove(idp->DDV_wImport);
-
+out:
+    Remove(hImportDlg);
     return;
 }
+
+/*******************************************************************************
+
+  Function : DDV_ImportCB
+  
+  Purpose : callback for import bioseq dialog.  used to clean up after the
+            import
+  
+  Return value : none 
+
+*******************************************************************************/
+
+NLM_EXTERN void DDV_ImportCB(DDV_ImportDialog *idp, SeqAlign *salpdest,
+                             SeqAlign *salp)
+{
+    if (salpdest == NULL || salp == NULL) return;
+    SeqAlignSetFree(salp->next);
+    salp->next = NULL;
+    ViewMgr_Add(salpdest, salp);
+}
+
+/*******************************************************************************
+
+  Function : DDV_ImportCancelProc
+  
+  Purpose : cancel function for the import bioseq dialog
+  
+  Return value : none 
+
+*******************************************************************************/
 
 static void DDV_ImportCancelProc(ButtoN b)
 {
@@ -2053,79 +2397,41 @@ static void DDV_ImportCancelProc(ButtoN b)
     return;
 }
 
+/*******************************************************************************
+
+  Function : DDV_ImportBioseqDlg
+  
+  Purpose : dialog to import a bioseq into a seqalign.  Note that it has
+            several modes listed in ddvopen.h
+  
+  Return value : none 
+
+*******************************************************************************/
 
 NLM_EXTERN void DDV_ImportBioseqDlg(DDV_ImportDialog *idp)
 {
     GrouP g, hg;
     ButtoN b;
+    DDVUpdateMSG  *dump;
+    ValNode *pvn;
+    Char szName[21]={""};
 
     if(idp == NULL) return;
-    if (!EntrezIsInited ()) {
+    if (!EntrezIsInited () && idp->mode & DDVIMPNET) {
         Message (MSG_OK, "Network connection to Entrez unavailable");
         return;
     }
-
-    if(idp->sap->saip == NULL) {
-        Message (MSG_OK, "The seqalign must be indexed");
-        return;
-    }
     
-    idp->DDV_wImport =
-        FixedWindow(-30, -20, -10, -10, "Import sequence using BLAST",
-                    NULL);
-    Nlm_SetObjectExtra (idp->DDV_wImport, (Nlm_VoidPtr)idp, StdCleanupExtraProc);
-    hg = HiddenGroup(idp->DDV_wImport, 3, 0, NULL);
-    SetGroupSpacing(hg, 30, 30);
-    g = NormalGroup(hg, 1, 0, " Enter sequence identifier:", systemFont, NULL);
-    SetGroupMargins(g, 10, 15);
-    idp->DDV_tAccession = DialogText(g, "", 10, (TxtActnProc) DDV_ImportEnableProc);
-    idp->DDV_gAccType =
-        NormalGroup(hg, 1, 2, " accession type", systemFont, NULL);
-    SetGroupMargins(idp->DDV_gAccType, 10, 10);
-    RadioButton(idp->DDV_gAccType, "Accession");
-    RadioButton(idp->DDV_gAccType, "gi");
+    /* check if we have the right data for each mode */
+    if(idp->mode == DDVIMPSE2SA 
+        && (idp->sip == NULL || idp->sap == NULL || idp->sipslave == NULL)) return;
+    else if (idp->mode == DDVIMPSE2SE 
+        && (idp->pvnSips == NULL || idp->sipslave == NULL)) return;
+    else if (idp->mode == DDVIMPNET2SA 
+        && (idp->sap == NULL || idp->sip == NULL)) return;
+    else if (idp->mode == DDVIMPNET2SE  
+        && idp->pvnSips == NULL) return;
 
-    g = HiddenGroup(hg, 1, 2, NULL);
-    SetGroupSpacing(g, 15, 15);
-    idp->DDV_bImportAccept =
-        DefaultButton(g, "OK", (BtnActnProc) DDV_ImportAcceptProc);
-    b = PushButton(g, "Cancel", (BtnActnProc) DDV_ImportCancelProc);
-
-
-    SetValue(idp->DDV_gAccType, 1);
-    Disable(idp->DDV_bImportAccept);
-    Select(idp->DDV_tAccession);
-    Show(idp->DDV_wImport);
-    return;
-}
-
-NLM_EXTERN void DDV_ImportBioseq(IteM i)
-{
-    DDV_ImportDialog *idp;
-    DdvMainPtr    dmp;  /*DDV panel data*/
-    DdvMainWinPtr mWin_d;
-    WindoW		  hWinMain;
-    DDVUpdateMSG  *dump;
-
-    idp = MemNew(sizeof(DDV_ImportDialog));
-    if(idp == NULL) return;
-
-	hWinMain=(WindoW)ParentWindow(i);
-	if (hWinMain==NULL) return;
-	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
-	if (mWin_d==NULL) return;
-	if (mWin_d->hWndDDV==NULL) return;
-	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
-	if (dmp==NULL) return;
-
-    if(dmp->MSA_d.pgp_l.sap == NULL) return;
-
-    idp->sap = dmp->MSA_d.pgp_l.sap;
-
-    idp->sip = AlnMgrFindMaster(idp->sap);
-    if(idp->sip == NULL) return;
-
-    idp->AAorNN = TYP_AA;
     idp->DDV_wImport = NULL;
     idp->DDV_gAccType = NULL;
     idp->DDV_bImportAccept = NULL;
@@ -2138,12 +2444,95 @@ NLM_EXTERN void DDV_ImportBioseq(IteM i)
     idp->userdata = dump;
     dump->data = NULL;
 	dump->type=UPDATE_TYPE_EDIT_DELBSP;
+
+    idp->DDV_wImport = MovableModalWindow(-30, -20, -10, -10,
+        "Import sequence using BLAST", NULL);
+    Nlm_SetObjectExtra (idp->DDV_wImport, (Nlm_VoidPtr)idp, StdCleanupExtraProc);
+
+    if(idp->mode & DDVIMP2SE) {
+        hg = HiddenGroup(idp->DDV_wImport, 1, 4, NULL);
+        g = NormalGroup(hg, 1, 2, "Choose sequence to align to:", systemFont, NULL);
+        idp->DDV_lsip = SingleList(g,10,6,NULL);
+
+        for(pvn = idp->pvnSips; pvn != NULL; pvn = pvn->next) {
+            SeqIdWrite((SeqId *)pvn->data.ptrvalue,szName,
+                PRINTID_TEXTID_ACCESSION, 10);
+            ListItem(idp->DDV_lsip, szName);
+        }
+        SetValue(idp->DDV_lsip, 1);
+    } else hg = HiddenGroup(idp->DDV_wImport, 1, 3, NULL);
+
+    if(idp->mode & DDVIMPNET) {
+        g = NormalGroup(hg, 1, 2, " Enter sequence identifier:", systemFont, NULL);
+        idp->DDV_tAccession = DialogText(g, "", 10, (TxtActnProc) DDV_ImportEnableProc);
+        idp->DDV_gAccType =
+            NormalGroup(hg, 1, 2, " accession type", systemFont, NULL);
+        RadioButton(idp->DDV_gAccType, "Accession");
+        RadioButton(idp->DDV_gAccType, "gi");
+    }
+
+    g = HiddenGroup(hg, 2, 1, NULL);
+    SetGroupSpacing(g, 15, 15);
+    idp->DDV_bImportAccept =
+        DefaultButton(g, "OK", (BtnActnProc) DDV_ImportAcceptProc);
+    b = PushButton(g, "Cancel", (BtnActnProc) DDV_ImportCancelProc);
+
+    if(idp->mode & DDVIMPNET) {
+        SetValue(idp->DDV_gAccType, 1);
+        Disable(idp->DDV_bImportAccept);
+        Select(idp->DDV_tAccession);
+    }
+    Show(idp->DDV_wImport);
+    return;
+}
+
+/*******************************************************************************
+
+  Function : DDV_ImportBioseq
+  
+  Purpose : sets up dialog to import a bioseq into a seqalign
+  
+  Return value : none 
+
+*******************************************************************************/
+
+NLM_EXTERN void DDV_ImportBioseq(IteM i)
+{
+    DDV_ImportDialog *idp;
+    DdvMainPtr    dmp;  /*DDV panel data*/
+    DdvMainWinPtr mWin_d;
+    WindoW		  hWinMain;
+
+    idp = MemNew(sizeof(DDV_ImportDialog));
+    if(idp == NULL) return;
+
+	hWinMain=(WindoW)ParentWindow(i);
+	if (hWinMain==NULL) return;
+	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+	if (mWin_d==NULL) return;
+
+    if (mWin_d->NetStartProc) mWin_d->NetStartProc(mWin_d->UseNetwork);
+
+	if (mWin_d->hWndDDV==NULL) return;
+	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+	if (dmp==NULL) return;
+
+    if(dmp->MSA_d.pgp_l.sap == NULL) return;
+
+    idp->sap = dmp->MSA_d.pgp_l.sap;
+    idp->sip = AlnMgrFindMaster(idp->sap);
+    if(idp->sip == NULL) {
+        Message (MSG_ERROR, "Alignment must have master sequence");
+        MemFree(idp);
+        return;
+    }
+
+    idp->callback = DDV_ImportCB;
+    idp->mode = DDVIMPNET2SA;
+
     DDV_ImportBioseqDlg(idp);
 }
-/*
-blastp align_type = 2
-blastn align_type = 1
-*/
+
 
 NLM_EXTERN SeqAlign *DDV_Blast2Seqs(Bioseq *bsp1, Bioseq *bsp2, Boolean gapped,
                          Char *progname)
@@ -2159,6 +2548,7 @@ NLM_EXTERN SeqAlign *DDV_Blast2Seqs(Bioseq *bsp1, Bioseq *bsp2, Boolean gapped,
     BLASTOptionDelete(options);
     return salp;
 }
+
 
 /*******************************************************************************
 
@@ -2178,6 +2568,7 @@ SeqEntryPtr   sep;
 ValNodePtr    vnp_ali;
 SeqAlignPtr   sap;
 Uint2 		  The_entityID,entityID,itemID;
+Int2		  procval;
 
 	hWinMain=(WindoW)ParentWindow(i);
 	
@@ -2209,8 +2600,12 @@ Uint2 		  The_entityID,entityID,itemID;
 			sap=(SeqAlignPtr)vnp_ali->data.ptrvalue;
 			entityID=sap->idx.entityID;
 			itemID=sap->idx.itemID;
-			GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, 
+			SetAppProperty("ddvinterndata",(void *)dmp);
+			procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, entityID, itemID, 
 				OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+			if (procval=OM_MSG_RET_ERROR)
+				mWin_d->Show_logo=TRUE;
+			RemoveAppProperty("ddvinterndata");
 		}
 	}
 	else{
@@ -2227,3 +2622,381 @@ extern void DDV_ImportProtSeqAlign(IteM i)
 {
 	DDV_ImportSeqAlign(TRUE,i);
 }
+
+static void DDV_SetHideList(DDV_HideDialog *hdp)
+{
+    int i;
+    
+    for(i = 1; i <= hdp->numrows; i++) {
+        if(ViewMgr_TRow2VRow(hdp->salp, i) > 0) 
+            SetItemStatus(hdp->DDV_lsip, i, TRUE);
+        else SetItemStatus(hdp->DDV_lsip, i, FALSE);
+    }
+    SetItemStatus(hdp->DDV_lsip, hdp->amaip->master, TRUE);
+}
+
+static void DDV_HideList(Nlm_LisT l)
+{
+    WindoW hHideDlg;
+    DDV_HideDialog *hdp;
+    Int4 i, count = 0;
+    Boolean status;
+
+	hHideDlg = (WindoW)ParentWindow(l);
+	if(hHideDlg == NULL) return;	
+	hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
+    if(hdp == NULL) return;
+    
+    for(i = 1; i <= hdp->numrows; i++)
+        if(GetItemStatus(hdp->DDV_lsip, i)) count++;
+        
+    if(count < 2 || !GetItemStatus(hdp->DDV_lsip, 1)) {
+        DDV_SetHideList(hdp);
+        return;
+    }
+        
+    for(i = 1; i <= hdp->numrows; i++) {
+        status = GetItemStatus(hdp->DDV_lsip, i);
+    ViewMgr_SetHidden(hdp->salp, !status, i);
+    }
+    ViewMgr_Update(hdp->salp);
+    DDV_SetHideList(hdp);
+}
+
+static void DDV_HideAcceptProc(ButtoN b)
+{
+    WindoW hHideDlg;
+    DDV_HideDialog *hdp;
+
+	hHideDlg = (WindoW)ParentWindow(b);
+	if(hHideDlg == NULL) return;	
+	hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
+	if(hdp == NULL) return;
+    MemFree(hdp->userdata);
+    Remove(hdp->DDV_wHide);
+}
+/*******************************************************************************
+
+  Function : DDV_HideDlg
+  
+  Purpose : dialog to import a bioseq into a seqalign.  Note that it has
+            several modes listed in ddvopen.h
+  
+  Return value : none 
+
+*******************************************************************************/
+
+NLM_EXTERN void DDV_HideDlg(DDV_HideDialog *hdp)
+{
+    GrouP g, hg;
+    ButtoN b;
+    DDVUpdateMSG  *dump;
+    Char szName[181], szName2[161];
+    Int4 i;
+    SeqId *sip;
+    Bioseq *bsp;
+
+    if(hdp == NULL) return;
+    hdp->DDV_wHide = NULL;
+    
+    hdp->target = ViewMgr_GetBeginIndexed(hdp->salp);
+
+    if(hdp->target == NULL) return;
+    if( AlnMgrCheckAlignForParent(hdp->target) != AM_PARENT) return;
+    hdp->amaip = (AMAlignIndexPtr)(hdp->target->saip);
+    if (!hdp->amaip) return;
+    
+    dump = MemNew(sizeof(DDVUpdateMSG));
+    if(dump == NULL) {
+        MemFree(hdp);
+        return;
+    }
+    hdp->userdata = dump;
+    dump->data = NULL;
+	dump->type=UPDATE_TYPE_EDIT_DELBSP;
+
+    hdp->DDV_wHide = MovableModalWindow(-30, -20, -10, -10,
+        "Hide/Show Sequences", NULL);
+    /* need to do something more than std cleanup.  also for blast dialog */
+    Nlm_SetObjectExtra (hdp->DDV_wHide, (void *)hdp, StdCleanupExtraProc);
+    
+    hg = HiddenGroup(hdp->DDV_wHide, 1, 2, NULL);
+    g = NormalGroup(hg, 1, 2, "Choose sequences to show:", systemFont, NULL);
+    hdp->DDV_lsip = MultiList(g,40, 6, DDV_HideList);
+
+    hdp->numrows = AlnMgrGetNumRows(hdp->target);
+
+    for(i = 1; i <= hdp->numrows; i++) {
+        sip = AlnMgrGetNthSeqIdPtr(hdp->target, i);
+        if(sip == NULL) continue;
+        bsp=BioseqLockById(sip);
+        if(bsp == NULL) continue;
+        sip = SeqIdFindBestAccession(bsp->id);
+        SeqIdWrite(sip, szName, PRINTID_TEXTID_ACCESSION, 10);
+        CreateDefLine(NULL,bsp,szName2,157,0,NULL,NULL);
+        BioseqUnlock(bsp);
+        StrNCat(szName, " - ", 180);
+        StrNCat(szName, szName2, 180);
+        ListItem(hdp->DDV_lsip, szName);
+    }   
+    DDV_SetHideList(hdp);
+
+    g = HiddenGroup(hg, 2, 1, NULL);
+    SetGroupSpacing(g, 15, 15);
+    b = DefaultButton(g, "OK", (BtnActnProc) DDV_HideAcceptProc);
+
+    Show(hdp->DDV_wHide);
+    return;
+}
+
+NLM_EXTERN void DDV_HideDlgItem(IteM i)
+{
+    DDV_HideDialog *hdp;
+    DdvMainPtr    dmp;  /*DDV panel data*/
+    DdvMainWinPtr mWin_d;
+    WindoW		  hWinMain;
+
+    hdp = MemNew(sizeof(DDV_HideDialog));
+    if(hdp == NULL) return;
+
+	hWinMain=(WindoW)ParentWindow(i);
+	if (hWinMain==NULL) return;
+	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+	if (mWin_d==NULL) return;
+
+	if (mWin_d->hWndDDV==NULL) return;
+	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+	if (dmp==NULL) return;
+
+    if(dmp->MSA_d.pgp_l.sap == NULL) return;
+
+    hdp->salp = dmp->MSA_d.pgp_l.sap;
+
+    DDV_HideDlg(hdp);
+}
+
+
+/*******************************************************************************
+
+  Function : DDV_GetCharBufferForEditor()
+  
+  Purpose : get a char buffer from a row of a SeqAlign, given display coords
+
+  Return value : an allocated char buffer ready for use by the editor. Null if
+  failure
+
+*******************************************************************************/
+NLM_EXTERN void DDV_GetCharBufferForEditor(ParaGPtr pgp,CharPtr szEditSeq)
+{
+BioseqPtr  bsp;
+Int4       bspLength;
+Boolean    IsAA;
+
+	/*get sequence size and type*/
+	bsp=BioseqLockById(pgp->sip);
+	if (!bsp) return;
+	bspLength=BioseqGetLen(bsp);
+	IsAA=ISA_aa(bsp->mol);
+	BioseqUnlock(bsp);
+
+	/*get the sequence*/
+	DDV_GetSequenceFromParaG(pgp,&szEditSeq,bspLength,IsAA,NULL,NULL,NULL);
+	
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetMtdpListForEditor()
+  
+  Purpose : get the descriptor for a row of a SeqAlign, given display coords
+
+  Note : in plain english, this function creates the pTxtList ValNode for
+     a ParaG designed to be used in the editor.
+	 
+  Return value : a valnode ready for use by the editor. Null if
+  failure. 
+
+*******************************************************************************/
+NLM_EXTERN ValNodePtr DDV_GetMtdpListForEditor(ValNodePtr row,Int4 from_disp,
+		Int4 to_disp)
+{
+MsaTxtDispPtr mtdp,new_mtdp,prev_mtdp;
+ValNodePtr vnp,vnp2,vnp3,vnpTxt;
+ParaGPtr   pgp;
+Int4       cumulMtdp,beginCopy,endCopy,mtdp_size,mtdp_from_disp,
+           mtdp_to_disp,mtdp_from,mtdp_to;
+Boolean    bPop;
+
+
+	
+	prev_mtdp=NULL;
+	vnpTxt=NULL;
+	for (vnp=row;vnp!=NULL;vnp=vnp->next){
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		/*not yet in the first ParaG ?*/
+		if (pgp->StopLetter<from_disp) {
+			continue;
+		}
+		/*get the mtdp nodes*/
+		cumulMtdp=0;
+		for(vnp2=pgp->ptxtList;vnp2!=NULL;vnp2=vnp2->next){
+			mtdp=(MsaTxtDispPtr)vnp2->data.ptrvalue;
+			mtdp_size=mtdp->to-mtdp->from+1;
+			/*convert mtdp coordinates (can Bioseq coord, gap coord, etc.)
+			to display coordinates*/
+			mtdp_from_disp=pgp->StartLetter+cumulMtdp;
+			mtdp_to_disp=mtdp_from_disp+mtdp_size-1;
+			if (mtdp_to_disp<from_disp) {
+				cumulMtdp+=mtdp_size;
+				continue;
+			}
+			beginCopy=_max_(from_disp,mtdp_from_disp);
+			endCopy=_min_(mtdp_to_disp,to_disp);
+
+			/*convert display coordinates back to mtdp coordinates*/
+			mtdp_from=mtdp->from+(beginCopy-mtdp_from_disp);
+			mtdp_to=mtdp->from+(endCopy-mtdp_from_disp);
+
+			/*in order to merge nodes of same type, i keep track of
+			the previous populated mtdp node. Same style==yes, then
+			just extend to the right the previous node*/
+			if (prev_mtdp){
+				if (prev_mtdp->TextStyle==mtdp->TextStyle){
+					prev_mtdp->to=mtdp_to;
+					bPop=TRUE;
+				}
+				else{
+					bPop=FALSE;
+				}
+			}
+			else{
+				bPop=FALSE;
+			}
+			if (!bPop){
+				new_mtdp=(MsaTxtDispPtr)MemNew(sizeof(MsaTxtDisp));
+				if (!new_mtdp) goto erreur;
+				MemCopy(new_mtdp,mtdp,sizeof(MsaTxtDisp));
+				new_mtdp->from=mtdp_from;
+				new_mtdp->to=mtdp_to;
+				if (!vnpTxt){
+					vnp3=ValNodeAddPointer(&vnpTxt,0,(Pointer)new_mtdp);
+				}
+				else{
+					vnp3=ValNodeAddPointer(&vnp3,0,(Pointer)new_mtdp);
+				}
+				prev_mtdp=new_mtdp;
+			}
+			if (mtdp_to_disp>=to_disp) break;
+			cumulMtdp+=mtdp_size;
+		}
+		/*done ?*/
+		if (pgp->StopLetter>=to_disp) break;
+	}
+	return(vnpTxt);
+
+erreur:
+	if (vnpTxt){
+		DDV_DeleteTxtList(&vnpTxt);
+	}
+	return(NULL);
+}
+
+/*******************************************************************************
+
+  Function : DDV_CreateDataForEditor()
+  
+  Purpose : create a MsaParaGPopListPtr intended to be used by the editor
+
+  Return value : an allocated data block ready for use by the editor. Null if
+  failure
+
+*******************************************************************************/
+NLM_EXTERN MsaParaGPopListPtr DDV_CreateDataForEditor(MsaParaGPopListPtr mpplp, 
+	Int4 from_disp,Int4 to_disp)
+{
+MsaParaGPopListPtr new_mpplp;
+
+ParaGPtr           pgp,old_pgp;
+Int4               i,iNewAliSize,diff;
+
+	if (from_disp<0 || from_disp>=mpplp->LengthAli || from_disp>to_disp ||
+		to_disp<0 || to_disp>=mpplp->LengthAli){
+		return(NULL);
+	}
+	
+	diff=to_disp-from_disp;
+	iNewAliSize = diff+50;
+
+	if (iNewAliSize<1 || iNewAliSize>LIMIT_EDITOR_SIZE)
+		return(NULL);
+
+	new_mpplp=(MsaParaGPopListPtr)MemNew(sizeof(MsaParaGPopList));
+	if (!new_mpplp) return(NULL);
+	
+	/*table of ParaG list (each cell of that table corresponds to one row
+	of the seqalign to display*/
+	new_mpplp->TableHead=(ValNodePtr *)MemNew(mpplp->nBsp*sizeof(ValNodePtr));
+	if (!new_mpplp->TableHead) {
+		MemFree(new_mpplp);
+		return(NULL);
+	}
+	/*allocate the new ParaG list; for the editor there is a single ParaG for
+	each row (for the viewer there are usually n ParaGs for each row. For the
+	editor, the ParaG size = to_disp-from_disp+50 (whereas in the viewer a
+	ParaG size = ParaG_Size (usually 70; see pgppop.h)*/
+	for (i=0;i<mpplp->nBsp;i++){
+		/*allocations*/
+		pgp=(ParaGPtr)MemNew(sizeof(ParaG));
+		if (!pgp) goto erreur;
+		pgp->szEditSeq=(CharPtr)MemNew(iNewAliSize*sizeof(Char));
+		if (pgp->szEditSeq==NULL) goto erreur;
+		/*get the ParaG line descriptor */
+		pgp->ptxtList=DDV_GetMtdpListForEditor(mpplp->TableHead[i],from_disp,
+				to_disp);
+		if (!pgp->ptxtList) goto erreur;
+		/*get the char buffer*/
+                old_pgp=(ParaGPtr)mpplp->TableHead[i]->data.ptrvalue;
+                pgp->sip = old_pgp->sip;
+		DDV_GetCharBufferForEditor(pgp,pgp->szEditSeq);
+		if (*(pgp->szEditSeq)=='\0') goto erreur;
+		/*copy/init values*/
+		pgp->StartLetter = 0;
+		pgp->StopLetter = diff;
+		pgp->NumOrder = i;
+		pgp->StartLine = i;
+		pgp->nLines = 1;
+		pgp->ScaleStyle=SCALE_POS_NONE;
+		/*store pgp*/
+                new_mpplp->TableHead[i]=(ValNodePtr)MemNew(sizeof(ValNode));
+                if (!new_mpplp->TableHead[i]) goto erreur;
+		new_mpplp->TableHead[i]->data.ptrvalue=(Pointer)pgp;
+	}
+
+	/*seqali size and type*/
+	new_mpplp->LengthAli=diff+1;
+	new_mpplp->nBsp=mpplp->nBsp;
+	new_mpplp->sap=mpplp->sap;
+	new_mpplp->DisplayType=mpplp->DisplayType;
+	
+	/*entities table*/
+	new_mpplp->entitiesTbl=(Uint4Ptr)MemNew(new_mpplp->nBsp*sizeof(Uint4));
+	if (new_mpplp->entitiesTbl==NULL) goto erreur;
+	MemCopy(new_mpplp->entitiesTbl,mpplp->entitiesTbl,
+		new_mpplp->nBsp*sizeof(Uint4));
+	/*ruler descriptor*/
+	new_mpplp->RulerDescr=DDV_GetRulerForEditor(mpplp->RulerDescr,from_disp,
+			to_disp);
+	if (new_mpplp->RulerDescr==NULL) goto erreur;
+	return(new_mpplp);	
+	
+erreur : /*serious problem*/	
+	if (new_mpplp->entitiesTbl) 
+		MemFree(new_mpplp->entitiesTbl);
+	if (new_mpplp->RulerDescr)
+		ValNodeFreeData(new_mpplp->RulerDescr);
+	DDV_DeleteDisplayList(new_mpplp);
+	MemFree(new_mpplp);
+	return(NULL);
+}
+
+

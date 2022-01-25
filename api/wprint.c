@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.30 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -45,6 +45,24 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.36  2000/03/23 14:45:53  tatiana
+ * added links for MGD, FBgn, FBan
+ *
+ * Revision 6.35  2000/03/20 17:47:51  kans
+ * changed rice link
+ *
+ * Revision 6.34  2000/03/09 22:16:56  kans
+ * changed rice link
+ *
+ * Revision 6.33  2000/02/29 15:33:15  tatiana
+ * RiceGenes URL changed
+ *
+ * Revision 6.32  2000/02/25 21:52:03  kans
+ * changed flybase link to indiana university url
+ *
+ * Revision 6.31  2000/02/24 17:53:56  kans
+ * added dbSNP and RATMAP to dbxref
+ *
  * Revision 6.30  2000/01/11 17:14:13  tatiana
  * check for web symbols added in PrintComment
  *
@@ -294,6 +312,11 @@ static Char link_pdb[MAX_WWWBUF];
 static Char link_gdb_map[MAX_WWWBUF];
 static Char link_omim[MAX_WWWBUF];
 static Char link_locus[MAX_WWWBUF];
+static Char link_snp[MAX_WWWBUF];
+static Char link_ratmap[MAX_WWWBUF];
+static Char link_mgd[MAX_WWWBUF];
+static Char link_fly_fban[MAX_WWWBUF];
+static Char link_fly_fbgn[MAX_WWWBUF];
 
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 #ifdef OLDQUERY
@@ -306,11 +329,22 @@ static Char link_locus[MAX_WWWBUF];
 
 #define DEF_LINK_TAX "/htbin-post/Taxonomy/wgetorg?"
 #define DEF_LINK_CODE "/htbin-post/Taxonomy/wprintgc?"
+
+#define DEF_LINK_MGD "http://www.informatics.jax.org/searches/accession_report.cgi?id="
+#define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
+#define DEF_LINK_FBAN "http://www.fruitfly.org/cgi-bin/annot/fban?"
+
+/*
 #define DEF_LINK_FLY "/cgi-bin/Entrez/referer?http://morgan.harvard.edu/htbin-post/gene.script%3f"
+*/
+#define DEF_LINK_FLY "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 #define DEF_LINK_SGD "/cgi-bin/Entrez/referer?http://genome-www.stanford.edu/cgi-bin/dbrun/SacchDB%3ffind+SGDID+"
 #define DEF_LINK_GDB "http://gdbwww.gdb.org/gdb-bin/genera/genera/hgd/DBObject/GDB:"
 #define DEF_LINK_CK "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="
-#define DEF_LINK_RICE "http://geneous.cit.cornell.edu/cgi-bin/webace?db=ricegenes&class=Probe&object="
+/*
+#define DEF_LINK_RICE "http://genome.cornell.edu:80/cgi-bin/webace?db=ricegenes&class=Probe&object="
+*/
+#define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Probe&object="
 #define DEF_LINK_SP "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/sprot-search-ac%3f"
 #define DEF_LINK_PDB "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/get-pdb-entry%3f"
 #define DEF_LINK_GDB_PREFIX "http://gdbwww.gdb.org/gdb-bin/gdb/browser/bin/locq?ACTION=query&cyto="
@@ -319,6 +353,8 @@ static Char link_locus[MAX_WWWBUF];
 
 #define DEF_LINK_OMIM "/htbin-post/Omim/dispmim?"
 #define DEF_LINK_LOCUS "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="
+#define DEF_LINK_SNP "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="
+#define DEF_LINK_RATMAP "http://ratmap.gen.gu.se/action.lasso?-database=RATMAPfmPro&-layout=Detail&-response=/RM/Detail+Format.html&-search&-recid="
 /* now other data bases are linked to Entrez. may be changed later 
 static char *link_epd = 
 "/htbin-post/Entrez/query";
@@ -390,6 +426,16 @@ NLM_EXTERN void LIBCALL init_www(void)
 		link_omim, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_LOCUS", DEF_LINK_LOCUS, 
 		link_locus, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_SNP", DEF_LINK_SNP, 
+		link_snp, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_RATMAP", DEF_LINK_RATMAP, 
+		link_ratmap, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_MGD", DEF_LINK_MGD, 
+		link_mgd, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_FBGN", DEF_LINK_FBGN, 
+		link_fly_fbgn, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_FBAN", DEF_LINK_FBAN, 
+		link_fly_fban, MAX_WWWBUF);
 
 }
 
@@ -823,6 +869,44 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			str = pp+1;
 			
 		}
+		if (( p = StringStr(str, "FLYBASE:FBa")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("FLYBASE:");
+			l = StringLen(link_fly_fban) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_fly_fban, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "FLYBASE:FBgn")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("FLYBASE:");
+			l = StringLen(link_fly_fbgn) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_fly_fbgn, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
 		if (( p = StringStr(str, "PID:g")) != NULL) {
 			nothing = FALSE;
 			p += StringLen("PID:g");
@@ -979,6 +1063,63 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			ll = StringLen(prefix); 
 			s = (CharPtr)MemNew(l + ll);
 			sprintf(s, prefix, link_rice, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "dbSNP:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("dbSNP:");
+			l = StringLen(link_snp) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_snp, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "RATMAP:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("RATMAP:");
+			l = StringLen(link_ratmap) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_ratmap, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "MGD:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("MGD:");
+			l = StringLen(link_mgd) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_mgd, p);
 			AddLink(s);
 			MemFree(s);
 			ff_AddString(p);

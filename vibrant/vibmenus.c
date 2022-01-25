@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.10  2000/02/07 20:17:35  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.9  1999/12/30 16:47:09  kans
 * Carbon changes (Churchill)
 *
@@ -3239,7 +3242,7 @@ static void Nlm_SetMenuItem (Nlm_MenU m, Nlm_ItemTool itool,
   h = Nlm_GetMenuHandle ((Nlm_MenU) m);
   id = Nlm_ItemToID ((Nlm_MenU) m, item);
   Nlm_StringNCpy_0(temp, itemName, sizeof(temp));
-  ModifyMenu (h, id, MF_CHANGE | MF_BYCOMMAND | MF_STRING, item, temp);
+  ModifyMenu (h, id, /*MF_CHANGE |*/ MF_BYCOMMAND | MF_STRING, item, temp);
   wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) m);
   DrawMenuBar (wptr);
 #endif
@@ -4820,6 +4823,7 @@ static void Nlm_NewFloatingPopup (Nlm_MenU m, Nlm_CharPtr title, Nlm_RectPtr mr)
   Nlm_PopupTool   c;
   Nlm_RecT        r;
   Nlm_WindowTool  wptr;
+  Nlm_FntPtr      fntptr;
 #endif
 
 #ifdef WIN_MAC
@@ -4848,6 +4852,10 @@ static void Nlm_NewFloatingPopup (Nlm_MenU m, Nlm_CharPtr title, Nlm_RectPtr mr)
   if (nextMenuNum < 32767) {
     nextMenuNum++;
   }
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(c, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
+
 #endif
 #ifdef WIN_MOTIF
 #endif
@@ -4945,6 +4953,7 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
 #ifdef WIN_MSWIN
   Nlm_RecT        r;
   Nlm_WindowTool  wptr;
+  Nlm_FntPtr      fntptr;
 #endif
 
 #ifdef WIN_MAC
@@ -4973,6 +4982,10 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
     Nlm_Message (MSG_ERROR, "PopupProc subclass error");
   }
   SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewPopupProc);
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(c, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
+
 #endif
 
   if (nextMenuNum < 32767)

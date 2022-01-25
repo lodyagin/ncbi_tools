@@ -8,9 +8,10 @@
 
 	11/16/95	Harmon		Created
 	  3/1/96	Kans		Consolidated
+	 4/19/00	Kans		Include files now found in situ in ncbi directory
 	
-	Before running this file, run the copyhdrs.met AppleScript, and build the libraries
-	with makeall.met and makenet.met.
+	Before running this file, build the libraries with makeall.met and makenet.met
+	AppleScripts.
 
 	In order to compile for 68K, change the MASTER property.
 
@@ -34,15 +35,13 @@ global SUFFIX
 global HARDDISK
 global METRO
 global METROWERKSCW
+global OGLSDK
 
 global NCBISOURCE
-global ENCRYPTSOURCE
-
-global INCLUDEFILES
 global LIBRARIES
 global BUILDTEST
 
-global DOENCRYPT
+global DOOPENGL
 
 (* ==== The following steps populate and build the programs ==== *)
 
@@ -50,10 +49,12 @@ with timeout of 60000 seconds
 	
 	DoSetGlobals()
 	
-	CreateCn3D()
+	CreateCn3Dv3d()
+	if DOOPENGL = "TRUE" then
+		CreateCn3D()
+	end if
 	CreateNENTREZ()
 	CreateSEQUIN()
-	CreatePOWBLAST()
 	CreateBLASTCL3()	
 	CreateFORMATDB()
 	CreateBLASTALL()
@@ -81,25 +82,24 @@ on DoSetGlobals()
 		set HARDDISK to startup disk as string
 		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
+		set OGLSDK to METRO & "OpenGL SDK:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
-		set ENCRYPTSOURCE to NCBISOURCE & "network:encrypt:rsaref:" as string
 		
-		set INCLUDEFILES to NCBISOURCE & "include:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
 		set BUILDTEST to NCBISOURCE & "build:" as string
 		
-		if (exists (folder ENCRYPTSOURCE)) then
-			set DOENCRYPT to "TRUE"
+		if MASTER = "PPC" and (exists (folder OGLSDK)) then
+			set DOOPENGL to "TRUE"
 		else
-			set DOENCRYPT to "FALSE"
+			set DOOPENGL to "FALSE"
 		end if
 		
 	end tell
 end DoSetGlobals
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Target ===== *)
 		if MASTER = "PPC" then
@@ -227,7 +227,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -235,14 +235,15 @@ on DoSetPaths1()
 		-- We want to find the NCBI "all.h" first.
 		Set Preferences of panel "Access Paths" to {System Paths:{}} -- This removes the compiler default folder
 		
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
+		Set Preferences of panel "Access Paths" to {Convert Paths:true}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}} -- Added for speed
 		
 	end tell
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
@@ -255,7 +256,7 @@ on DoSetPaths2()
 end DoSetPaths2
 
 on AddLibraries()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		if MASTER = "PPC" then
 			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL C.PPC.Lib"} To Segment 1
@@ -278,13 +279,15 @@ on AddLibraries()
 end AddLibraries
 
 on CompilePrograms()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
-		open (BUILDTEST & "cn3dOGL" & SUFFIX & ".µ")
-		Make Project
-		Close Project
+		if DOOPENGL = "TRUE" then
+			open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
+			Make Project
+			Close Project
+		end if
 		
-		open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
+		open (BUILDTEST & "cn3dv3d" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -293,10 +296,6 @@ on CompilePrograms()
 		Close Project
 		
 		open (BUILDTEST & "sequin" & SUFFIX & ".µ")
-		Make Project
-		Close Project
-		
-		open (BUILDTEST & "powblast" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -322,7 +321,7 @@ end CompilePrograms
 (* ==== This section populates the programs ==== *)
 
 on CreateNENTREZ()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "nentrez" & SUFFIX & ".µ"}
 		
@@ -330,11 +329,11 @@ on CreateNENTREZ()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"nentrez"}
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Entrez"}
 			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
 			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"nentrez"}
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"entrez"}
 			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
 			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		end if
@@ -353,7 +352,8 @@ on CreateNENTREZ()
 		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -371,7 +371,7 @@ on CreateNENTREZ()
 end CreateNENTREZ
 
 on CreateSEQUIN()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "sequin" & SUFFIX & ".µ"}
 		
@@ -379,7 +379,7 @@ on CreateSEQUIN()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"sequin"}
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Sequin"}
 			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
 			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		else if MASTER = "68K" then
@@ -427,20 +427,20 @@ on CreateSEQUIN()
 	end tell
 end CreateSEQUIN
 
-on CreateCn3D()
-	tell application "CodeWarrior IDE 4.0"
+on CreateCn3Dv3d()
+	tell application "CodeWarrior IDE 4.0.4"
 		
-		Create Project {BUILDTEST & "cn3d" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "cn3dv3d" & SUFFIX & ".µ"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3d"}
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3dv3d"}
 			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
 			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
 		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3d"}
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3dv3d"}
 			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
 			Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
 		end if
@@ -459,7 +459,7 @@ on CreateCn3D()
 		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -474,108 +474,72 @@ on CreateCn3D()
 		Reset File Paths
 		Close Project
 		
+	end tell
+end CreateCn3Dv3d
+
+on CreateCn3D()
+	tell application "CodeWarrior IDE 4.0.4"
 		
-		Create Project {BUILDTEST & "cn3dOGL" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3dOGL"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3dOGL"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+		if DOOPENGL = "TRUE" then
+			Create Project {BUILDTEST & "cn3d" & SUFFIX & ".µ"}
+			
+			my DoSetPreferences()
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+			
+			if MASTER = "PPC" then
+				Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Cn3D"}
+				Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+				Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+			else if MASTER = "68K" then
+				Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"Cn3D"}
+				Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+				Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+			end if
+			
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Libraries:", origin:absolute}}}
+			if DOPNG = "TRUE" then
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:mac:", origin:absolute}}}
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:mac:", origin:absolute}}}
+			end if
+			my DoSetPaths2()
+			
+			set segmentCounter to 1
+			
+			my AddLibraries()
+			
+			set segmentCounter to segmentCounter + 1
+			
+			Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+			Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrantOGL" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+			Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3dOGL" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
+			Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+			Add Files {METRO & "OpenGL SDK:Libraries:OpenGLLibraryStub", METRO & "OpenGL SDK:Libraries:OpenGLUtilityStub"} To Segment segmentCounter
+			if DOPNG = "TRUE" then
+				Add Files {METRO & "zlib:mac:zlib.ppc.Lib", METRO & "libpng:mac:png.ppc.Lib"} To Segment segmentCounter
+			end if
+			
+			set segmentCounter to segmentCounter + 1
+			
+			set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
+				
+			Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
+			
+			set segmentCounter to segmentCounter + 1
+			
+			Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
+			
+			Reset File Paths
+			Close Project
 		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Libraries:", origin:absolute}}}
-		if DOPNG = "TRUE" then
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:mac:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:mac:", origin:absolute}}}
-		end if
-		my DoSetPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrantOGL" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3dOGL" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
-		Add Files {METRO & "OpenGL SDK:Libraries:OpenGLLibraryStub", METRO & "OpenGL SDK:Libraries:OpenGLUtilityStub"} To Segment segmentCounter
-		if DOPNG = "TRUE" then
-			Add Files {METRO & "zlib:mac:zlib.ppc.Lib", METRO & "libpng:mac:png.ppc.Lib"} To Segment segmentCounter
-		end if
-		
-		set segmentCounter to segmentCounter + 1
-		
-		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
-		
-		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
 		
 	end tell
 end CreateCn3D
 
-on CreatePOWBLAST()
-	tell application "CodeWarrior IDE 4.0"
-		
-		Create Project {BUILDTEST & "powblast" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"powblast"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"powblast"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "ncbiNacc" & SUFFIX, LIBRARIES & "netcli" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "demo:powblast.c", NCBISOURCE & "demo:pblproc.c"} To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreatePOWBLAST
-
 on CreateBLASTCL3()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "blastcl3" & SUFFIX & ".µ"}
 		
@@ -617,7 +581,7 @@ on CreateBLASTCL3()
 end CreateBLASTCL3
 
 on CreateFORMATDB()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
 		
@@ -660,7 +624,7 @@ on CreateFORMATDB()
 end CreateFORMATDB
 
 on CreateBLASTALL()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
 		
@@ -703,7 +667,7 @@ on CreateBLASTALL()
 end CreateBLASTALL
 
 on CreateBLASTPGP()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
 		

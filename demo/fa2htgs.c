@@ -30,7 +30,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 26
+#define NUMARG 27
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -58,6 +58,7 @@ Args myargs[NUMARG] = {
    {"Coordinates are on the resulting sequence ?","F", NULL ,NULL ,TRUE,'X',ARG_BOOLEAN,0.0,0,NULL},
    {"HTGS_DRAFT sequence?","F", NULL ,NULL ,TRUE,'D',ARG_BOOLEAN,0.0,0,NULL},
    {"Strain name?",NULL, NULL ,NULL ,TRUE,'S',ARG_STRING,0.0,0,NULL},
+   {"Gap length","100", "0" ,"1000000000" ,FALSE,'b',ARG_INT,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -306,6 +307,82 @@ static void OffsetAndLinkSeqGraph (BioseqPtr bsp, SeqGraphPtr sgp, Int2 index)
   }
 }
 
+static CharPtr LIBCALL TrimWhitespaceAroundString (CharPtr str)
+
+{
+  Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  CharPtr  dst;
+  CharPtr  ptr;
+
+  if (str != NULL && str [0] != '\0') {
+    dst = str;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch <= ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    while (ch != '\0') {
+      *dst = ch;
+      dst++;
+      ptr++;
+      ch = *ptr;
+    }
+    *dst = '\0';
+    dst = NULL;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch > ' ') {
+        dst = NULL;
+      } else if (dst == NULL) {
+        dst = ptr;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    if (dst != NULL) {
+      *dst = '\0';
+    }
+  }
+  return str;
+}
+
+static CharPtr ReadSingleStringFromFile (CharPtr filename)
+
+{
+  Char     ch;
+  FILE     *fp;
+  Int8     len;
+  CharPtr  ptr;
+  CharPtr  str = NULL;
+
+  if (StringHasNoText (filename)) return NULL;
+  len = FileLength (filename);
+  if (len < 1) return NULL;
+  fp = FileOpen (filename, "r");
+  if (fp == NULL) return NULL;
+  str = MemNew ((size_t) (len + 100));
+  if (str == NULL) return NULL;
+  if (fgets (str, (size_t) (len + 50), fp) == NULL) {
+    FileClose (fp);
+    return NULL;
+  }
+  FileClose (fp);
+  TrimWhitespaceAroundString (str);
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '\r' || ch == '\n') {
+      str = MemFree (str);
+      return NULL;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  return str;
+}
+
 /*****************************************************************************
 *
 *   Main program loop to read, process, write SeqEntrys
@@ -325,16 +402,18 @@ Int2 Main(void)
       seqname, strain, chromosome, title, extra_ac, clone_lib, map,
       comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname;
    Char  instr[120];
-   Int4   totalen, filelen, len, length = 0, cumlength = 0;
+   Int4   totalen, filelen, len, length = 0, cumlength = 0, gaplen;
    SeqLitPtr slp;
    Int2 errs;
    BioseqSetPtr bssp;
    ValNodePtr vnp, PNTR prevpnt, next;
-   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster, htgsDraft;
+   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster, htgsDraft, usedelta = FALSE;
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL;
+   ValNodePtr seqlitlist = NULL;
+   IntFuzzPtr ifp;
 
-   CharPtr tool_ver = "fa2htgs 1.7";
+   CharPtr tool_ver = "fa2htgs 1.8";
 
                /* check command line arguments */
 
@@ -370,6 +449,7 @@ Int2 Main(void)
    coordsOnMaster = (Boolean) myargs[23].intvalue;
    htgsDraft = (Boolean) myargs[24].intvalue;
    strain = myargs[25].strvalue;
+   gaplen = myargs[26].intvalue;
 
    UseLocalAsnloadDataAndErrMsg (); /* finds data directory without a .ncbirc file */
 
@@ -425,58 +505,62 @@ Int2 Main(void)
                         /* open comment file */
    if (comment_fname != NULL) {
 
-      if ((cfp = FileOpen (comment_fname, "r")) == NULL)
-      {
-         ErrPostEx(SEV_ERROR,0,0, "Can't open %s", comment_fname);
-         ErrShow();
-         return 1;
-      }
-      /* rules for building the comment string a file:
-         -- maximum 100 characters per line
-         -- insert a " " to concatnate lines
-         -- insert a "~" to concatnate lines if
-            it is a blank line or there are leading
-            spaces in the beginning of the line
-                                 Hsiu-Chuan Chen 1-30-98
-      */ 
+      comment_fstr = ReadSingleStringFromFile (comment_fname);
+      if (comment_fstr == NULL) {
 
-      filelen = FileLength (comment_fname);
-      filelen = filelen + 1000;
-      comment_fstr = MemNew (filelen);
-      totalen = 0;
-      while (fgets (instr, 110, cfp) != NULL)
-      {
-          len = StringLen (instr);
-          while (len > 0 && instr[len-1] == '\n')
-          {
-             instr[len-1] = '\0';
+         if ((cfp = FileOpen (comment_fname, "r")) == NULL)
+         {
+            ErrPostEx(SEV_ERROR,0,0, "Can't open %s", comment_fname);
+            ErrShow();
+            return 1;
+         }
+         /* rules for building the comment string a file:
+            -- maximum 100 characters per line
+            -- insert a " " to concatnate lines
+            -- insert a "~" to concatnate lines if
+               it is a blank line or there are leading
+               spaces in the beginning of the line
+                                    Hsiu-Chuan Chen 1-30-98
+         */ 
+
+         filelen = FileLength (comment_fname);
+         filelen = filelen + 1000;
+         comment_fstr = MemNew (filelen);
+         totalen = 0;
+         while (fgets (instr, 110, cfp) != NULL)
+         {
              len = StringLen (instr);
-          }
+             while (len > 0 && instr[len-1] == '\n')
+             {
+                instr[len-1] = '\0';
+                len = StringLen (instr);
+             }
 
-          totalen = totalen + len + 2;
-          if (totalen > filelen)
-          {
-             filelen = filelen + 1000;
-             newstr = MemNew (filelen);
-             StringCpy (newstr, comment_fstr);
-             MemFree (comment_fstr);
+             totalen = totalen + len + 2;
+             if (totalen > filelen)
+             {
+                filelen = filelen + 1000;
+                newstr = MemNew (filelen);
+                StringCpy (newstr, comment_fstr);
+                MemFree (comment_fstr);
 
-             comment_fstr = newstr;
-          }
+                comment_fstr = newstr;
+             }
 
-          if (comment_fstr != NULL)
-          {
-             if (instr[0] == '\0' || instr[0] == ' ')
-                StringCat (comment_fstr, "~");
+             if (comment_fstr != NULL)
+             {
+                if (instr[0] == '\0' || instr[0] == ' ')
+                   StringCat (comment_fstr, "~");
+                else
+                   StringCat (comment_fstr, " ");
+
+                StringCat (comment_fstr, instr);
+             }
              else
-                StringCat (comment_fstr, " ");
+                StringCpy (comment_fstr, instr);
 
-             StringCat (comment_fstr, instr);
-          }
-          else
-             StringCpy (comment_fstr, instr);
-
-      } /* while */
+         } /* while */
+      }
    }
                         /* open template file */
    if ((aip = AsnIoOpen (myargs[1].strvalue, "r")) == NULL)
@@ -518,6 +602,11 @@ Int2 Main(void)
       }
    }
 
+   sep = sep_list;
+   if (sep != NULL && sep->next != NULL) {
+     usedelta = TRUE;
+   }
+
    cumlength = 0;
    index = 0;
    if (accn_fname != NULL) {
@@ -553,7 +642,7 @@ Int2 Main(void)
       cumlength += bsp->length;
       SeqEntryFree(sep);
       }
-   } else if (htgs_phase < 3)
+   } else if (htgs_phase < 3 || usedelta)
    {
       the_entry = AddDeltaSeqOnlyToSubmission (
                         nsp,
@@ -577,8 +666,10 @@ Int2 Main(void)
          if (bsp->repr == Seq_repr_raw)
          {
             if (lastwasraw) {
-               AddGapToDeltaSeq(nsp, the_entry, 0);
+               slp = AddFakeGapToDeltaSeq(nsp, the_entry, gaplen);
+               ValNodeAddPointer (&seqlitlist, 0, (Pointer) slp);
                index++;
+               cumlength += gaplen;
             }
             BioseqRawConvert(bsp, Seq_code_iupacna);
             seqbuf = BSMerge((ByteStorePtr)(bsp->seq_data), NULL);
@@ -672,8 +763,8 @@ Int2 Main(void)
 
    if (comment_fstr != NULL)
    {
-      ValNodeCopyStr (&(bsp->descr), Seq_descr_comment, comment_fstr);
-      MemFree (comment_fstr);
+      SeqDescrAddPointer (&(bsp->descr), Seq_descr_comment, comment_fstr);
+      comment_fstr = NULL;
    } 
    
    SeqEntryFree(oldsep);
@@ -714,6 +805,16 @@ Int2 Main(void)
      }
    }
    rescuedsgps = ValNodeFreeData (rescuedsgps);
+
+   for (vnp = seqlitlist; vnp != NULL; vnp = vnp->next) {
+     slp = (SeqLitPtr) vnp->data.ptrvalue;
+     if (slp != NULL) {
+       ifp = IntFuzzNew();
+       ifp->choice = 4;    /* lim - unk*/
+       slp->fuzz = ifp;
+     }
+   }
+   seqlitlist = ValNodeFree (seqlitlist);
 
    errs = NCBISubValidate(nsp, NULL);
 

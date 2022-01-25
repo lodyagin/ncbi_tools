@@ -1,4 +1,4 @@
-# $Id: make_gen.dos,v 6.11 1999/12/01 19:07:29 vakatov Exp $
+# $Id: make_gen.dos,v 6.12 2000/01/31 20:17:20 beloslyu Exp $
 ########################################################################
 #  This file specifies attributes common for the NCBI toolkit
 #  makefiles "makeall.dos", "makedemo.dos", "makenet.dos",
@@ -180,9 +180,6 @@ LIB11 = $(LIBPATH)\$(XLIB11).lib
 
 XLIB15= netclie
 LIB15 = $(LIBPATH)\$(XLIB15).lib
-
-XLIB21= ncbibls2
-LIB21 = $(LIBPATH)\$(XLIB21).lib
 
 XLIB22= ncbimmdb
 LIB22 = $(LIBPATH)\$(XLIB22).lib

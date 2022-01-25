@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.129 $
+* $Revision: 6.130 $
 *
 * File Description:
 *
@@ -5525,7 +5525,10 @@ static CharPtr style2Txt = "\
 
 static CharPtr nolongersupportedmessage =
 "This function has been superseded.  Use File->Open to read the\n\
-5-column feature table format described in the Sequin Quick Guide.";
+5-column feature table format described in the Sequin Quick Guide.\n\
+However, if you have data in the old form, you can still use this\n\
+function, but please tell submitters to use the new 5-column format\n\
+in the future.  Continue?";
 
 void AutoParseFeatureTableProc (IteM i)
 
@@ -5555,7 +5558,7 @@ void AutoParseFeatureTableProc (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  if (Message (MSG_OK, nolongersupportedmessage) == ANS_OK) return; /* forces return */
+  if (Message (MSG_YN, nolongersupportedmessage) == ANS_NO) return;
 
   w = NULL;
   ppp = MemNew (sizeof (PreParseData));

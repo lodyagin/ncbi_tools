@@ -25,11 +25,11 @@
 *
 * File Name:  ncbilcl.h
 *
-* Author:  Gish, Kans, Ostell, Schuler, Epstein
+* Author:  Gish, Kans, Ostell, Schuler, Epstein, Vakatov
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.3  2000/02/10 16:36:32  vakatov
+* Added _SVID_SOURCE
+*
 * Revision 6.2  1999/07/12 05:50:49  vakatov
 * Avoid redefinition of #_REENTRANT
 *
@@ -71,6 +74,10 @@
 #ifndef _REENTRANT
 #define _REENTRANT
 #endif
+
+/* good for the EGCS C/C++ compiler on Linux(e.g. putenv(), tempnam() proto) */
+#define _SVID_SOURCE 1
+
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.45 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -4307,6 +4307,9 @@ static void DoOneParseItem (Uint2 entityID, SeqEntryPtr sep, ParseFormPtr pfp, B
       for (sip = bsp->id; sip != NULL; sip = sip->next) {
         if (sip->choice == SEQID_LOCAL) {
           SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+          if (StringNICmp (str, "tmpseq_", 7) == 0 ||
+              StringNICmp (str, "segseq_", 7) == 0 ||
+              StringNICmp (str, "SEG_dna", 7) == 0) return;
         }
       }
     }
@@ -5792,6 +5795,10 @@ extern void SetupNewPublicationsMenu (MenU m, BaseFormPtr bfp)
   }
 }
 
+#ifdef WIN_MAC
+extern IteM  addSecondaryItem;
+#endif
+
 extern void SetupEditSecondary (MenU m, BaseFormPtr bfp)
 
 {
@@ -5824,6 +5831,11 @@ extern void SetupEditSecondary (MenU m, BaseFormPtr bfp)
                   nop->bfp = bfp;
                 }
                 SetObjectExtra (i, (Pointer) nop, StdCleanupExtraProc);
+#ifdef WIN_MAC
+                if (addSecondaryItem == NULL) {
+                  addSecondaryItem = i;
+                }
+#endif
                 return;
               }
             }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.45 $
+* $Revision: 6.59 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,48 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.59  2000/04/26 21:27:30  kans
+* more changes to genome defline, cleanup of its code
+*
+* Revision 6.58  2000/04/22 00:13:48  kans
+* nc_ genome titles handles genomic or other_genetic (usually plasmids), and lower cases any Plasmid or Element text in the defline (JK and TW)
+*
+* Revision 6.57  2000/04/04 17:02:44  kans
+* cleanup keywords is now also part of NC_Cleanup
+*
+* Revision 6.56  2000/04/03 22:09:26  kans
+* added ClearGenBankKeywords for RefSeq processing
+*
+* Revision 6.55  2000/03/29 22:00:23  kans
+* added NC_Cleanup function used internally for genome RefSeq processing
+*
+* Revision 6.54  2000/03/22 13:08:27  madden
+* Enlarged buffer for definition lines
+*
+* Revision 6.53  2000/03/10 17:07:41  kans
+* do not read dash into sequence (SW)
+*
+* Revision 6.52  2000/03/02 18:13:48  kans
+* improvements to complete chromosome defline
+*
+* Revision 6.51  2000/03/01 19:09:33  shavirin
+* Added parameter SeqIdPtr into function FastaReadSequenceInternalEx().
+*
+* Revision 6.50  2000/02/28 16:04:05  kans
+* After CreateDefLine calls FindProtDefLine, if the organism parameter is NULL it does an indexed search for BioSource, using the results to set organism - this will simplify production of BLAST deflines
+*
+* Revision 6.49  2000/02/17 17:20:57  sicotte
+* Add Reading of Lowercase Characters as SeqLoc for inputting masking informatioin. Use FastaToSeqEntryForDb or FastaToSeqEntryInternalEx
+*
+* Revision 6.48  2000/02/04 16:38:28  kans
+* added FastaToSeqEntryForDb and FastaToSeqEntryInternalEx, giving control over generation of unique SeqID
+*
+* Revision 6.47  2000/02/01 23:22:48  kans
+* indexed get descr now copies values to iip if not NULL
+*
+* Revision 6.46  2000/02/01 19:43:39  kans
+* FindProtDefLine calls indexed explore functions first to avoid multiple targeted gathers
+*
 * Revision 6.45  2000/01/16 19:08:55  kans
 * MakeCompleteChromTitle handles plasmids, does not need completedness flag set, does not override existing title descriptor in CreateDefLine
 *
@@ -403,6 +445,8 @@
 #include <sqnutils.h>  /* MakeSeqID */
 #include <subutil.h>   /* MOLECULE_TYPE_GENOMIC */
 #include <explore.h>
+#include <objloc.h>
+#define SeqLocNew(_a) ValNodeNew((_a))
 
 static Uint1 na_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
  	255, /* 0 = not set */
@@ -442,6 +486,7 @@ static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
 	50  /* 15 = pdb */
     };
 
+#define FASTA_BUFFER_LEN 25000
 #define PATENT_ORDER 110         /* order for any patent */
 
 /*****************************************************************************
@@ -689,13 +734,13 @@ NLM_EXTERN Boolean SeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, U
 {
     FastaDat tfa;
     MyFsa mfa;
-    Char buf[255];
+    Char buf[FASTA_BUFFER_LEN+1];
     
     if ((sep == NULL) || (fp == NULL))
         return FALSE;
     
     mfa.buf = buf;
-    mfa.buflen = 254;
+    mfa.buflen = FASTA_BUFFER_LEN;
     mfa.seqlen = 70;
     mfa.mydata = (Pointer)fp;
     mfa.myfunc = FastaFileFunc;
@@ -821,13 +866,13 @@ NLM_EXTERN Boolean BioseqRawToFastaExtra (BioseqPtr bsp, FILE *fp, Int2 line_len
 
 {
     MyFsa mfa;
-    Char buf[255];
+    Char buf[FASTA_BUFFER_LEN+1];
 
     if ((bsp == NULL) || (fp == NULL))
         return FALSE;
 
 	mfa.buf = buf;
-	mfa.buflen = 254;
+	mfa.buflen = FASTA_BUFFER_LEN;
 	mfa.seqlen = line_length;
 	mfa.mydata = (Pointer)fp;
 	mfa.myfunc = FastaFileFunc;
@@ -873,13 +918,13 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 
 {
 	MyFsa mfa;
-	Char buf[255];
+	Char buf[FASTA_BUFFER_LEN+1];
 
     if ((bsp == NULL) || (fp == NULL))
         return FALSE;
 
 	mfa.buf = buf;
-	mfa.buflen = 254;
+	mfa.buflen = FASTA_BUFFER_LEN;
 	mfa.seqlen = 80;
 	mfa.mydata = (Pointer)fp;
 	mfa.myfunc = FastaFileFunc;
@@ -1029,13 +1074,24 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 
 /********* DEFINES *********/
 
-#define FASTA_MEM_IO  1   /* type of reading from buffer in memory */
-#define FASTA_FILE_IO 2   /* type of reading from file */
 #define FTSE_BUFF_CHUNK 4096
 #define BIOSEQ 1
 
 /********* INTERNAL FUNCTIONS *********/
 
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
+(
+ VoidPtr input,          /* input pointer (file or memory) */
+ Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char, /* returned pointer to next FASTA sequence */
+ Boolean is_na,          /* type of sequence */
+ CharPtr PNTR errormsg,  /* error messge for debugging */
+ Boolean parseSeqId,     /* Parse SeqID from def line */
+ CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+ CharPtr prefix,         /* prefix for localID if not parsable */
+ Int2Ptr ctrptr,         /* starting point for constructing unique ID */
+ SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information */
+ );
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
 (
  VoidPtr input,          /* input pointer (file or memory) */
@@ -1057,6 +1113,20 @@ static Boolean FastaReadSequenceInternal
  CharPtr PNTR errormsg,  /* error messge for debugging */
  CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
  );
+static Boolean FastaReadSequenceInternalEx
+(
+ VoidPtr input,          /* input pointer (file or memory) */
+ Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR last_char, /* returned pointer to next FASTA sequence */
+ Boolean is_na,          /* type of sequence */
+ Int4Ptr seq_length,     /* Returned length of sequence in residues */
+ ByteStorePtr PNTR,      /* Returned pointer to sequence ByteStore */
+ CharPtr PNTR errormsg,  /* error messge for debugging */
+ CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+ SeqLocPtr PNTR mask_ptr,/* Pointer to a SeqLoc to Fill with Masking information */
+ SeqIdPtr sip            /* SeqId of current sequence used for Masking Info */
+ );
+
 static Int4 FastaReadSequenceChunk
 ( 
  VoidPtr input,          /* input pointer (file or memory) */
@@ -1104,6 +1174,29 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryEx
 {
   return FastaToSeqEntryInternal((void *)fp, FASTA_FILE_IO,
                                  NULL,is_na, errormsg, parseSeqId, NULL);	 
+}
+
+/*****************************************************************************
+*
+*   SeqEntryPtr FastaToSeqEntryForDb() - function to return SeqEntryPtr from
+*                                     file with error handling and with control
+*                                     over generation of unique SeqIDs
+*
+*****************************************************************************/
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryForDb 
+  (
+    FILE *fp,               /* file to get sequence from */
+    Boolean is_na,          /* type of sequence */
+    CharPtr PNTR errormsg,  /* error message for debugginq */
+    Boolean parseSeqId,     /* Parse SeqID from def line */
+    CharPtr prefix,         /* prefix for localID if not parsable */
+    Int2Ptr ctrptr,         /* starting point for constructing unique ID */
+    SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information from lowercased letters */
+  )
+{
+  return FastaToSeqEntryInternalEx ((void *) fp, FASTA_FILE_IO,
+                                 NULL, is_na, errormsg, parseSeqId,
+                                 NULL, prefix, ctrptr, mask_ptr);	 
 }
 
 /*****************************************************************************
@@ -1255,6 +1348,30 @@ static Boolean FastaReadSequenceInternal
  CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
 )
 {
+    return FastaReadSequenceInternalEx(input,type,next_char,is_na,seq_length,bs_out,errormsg,special_symbol,NULL, NULL);
+}
+/*****************************************************************************
+*
+*   Boolean FastaReadSequenceInternalEx() - read sequence from
+*                                         file or buffer for internal use
+*                                         and Create Masked SeqLoc of Lowercase sequences.
+*
+*****************************************************************************/
+
+static Boolean FastaReadSequenceInternalEx
+(
+ VoidPtr input,            /* input pointer (file or memory) */
+ Int4 type,                /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char,   /* returned pointer to next FASTA sequence */
+ Boolean is_na,            /* type of sequence */
+ Int4Ptr seq_length,       /* Returned length of sequence in residues */
+ ByteStorePtr PNTR bs_out, /* Returned pointer to sequence ByteStore */
+ CharPtr PNTR errormsg,    /* error message for debugging */
+ CharPtr special_symbol,   /* Returns special symbol if no SeqEntry */
+ SeqLocPtr PNTR mask_ptr,  /* Pointer to a SeqLoc to Fill with Masking information */
+ SeqIdPtr sip            /* SeqId of current sequence used for Masking Info */
+)
+{
     SeqMapTablePtr smtp;
     Uint1Ptr       in_buff, out_buff;
     CharPtr        ptr, chptr;
@@ -1264,8 +1381,12 @@ static Boolean FastaReadSequenceInternal
     CharPtr        badchar = NULL;
     Int4           in_index, out_index, total_read, badchars = 0;
     Int4           total_length = 0;
+    Int4           mask_to;
     Char           tmp[32];
+    ValNodePtr     mask_head,mask,mask_new;
+    SeqIntPtr      mask_sint;
     Boolean        Second, skip_to_eol, last_was_star;
+    Boolean        this_char_masked;
     
     if (input == NULL)     /* empty input */
         return FALSE;
@@ -1306,6 +1427,11 @@ static Boolean FastaReadSequenceInternal
     last_was_star = FALSE;
     in_index = out_index = total_read = 0;
 
+    if(mask_ptr) {
+        mask_head=mask=NULL;
+        mask_sint=NULL;
+        this_char_masked=FALSE;
+    }
     while(TRUE) {
         if (in_index == total_read) {
             if((total_read = FastaReadSequenceChunk(input, type, 
@@ -1321,24 +1447,52 @@ static Boolean FastaReadSequenceInternal
       	byte_from = in_buff[in_index];
       	in_index++;
         if ((! is_na) && (! last_was_star) && byte_from == '*') {
-        	last_was_star = TRUE;
+            last_was_star = TRUE;
         } else if(byte_from != ';' && !skip_to_eol) {
+            if(mask_ptr) {
+                if(IS_LOWER(byte_from)) {
+                    if(this_char_masked) {
+                        mask_to++;
+                    } else { /* First lowercase character in this segment */
+                        this_char_masked = TRUE;
+                        /* save previous segment if any */
+                        mask_new = ValNodeNew(NULL);
+                        mask_new->choice = SEQLOC_INT;
+                        if(mask_sint) {
+                            mask_sint->to = mask_to;                     
+                            mask->next = mask_new;
+                        } else {
+                            mask_head = mask_new;
+                        }
+                        mask = mask_new;
+                        mask_sint = SeqIntNew();
+                        mask_sint->from = total_length;
+                        mask_sint->to = total_length;
+                        mask_to = total_length;
+                        mask_sint->strand = Seq_strand_both;
+                        mask_sint->id = SeqIdDup(sip);
+                        mask_new->data.ptrvalue = mask_sint;
+                    }
+                } else {
+                    this_char_masked = FALSE;
+                }
+            }
             byte_from = TO_UPPER (byte_from);
                 
             if (is_na && byte_from == 'U') byte_from = 'T';
                 
             if((uch = SeqMapTableConvert(smtp, byte_from)) != 
-               INVALID_RESIDUE) {
+               INVALID_RESIDUE && byte_from != '-') {
                 if (last_was_star) {
                 	total_length++;
                 	out_buff[out_index] = SeqMapTableConvert(smtp, '*');
                 	out_index++;
                 	if(out_index == FTSE_BUFF_CHUNK) {
                 		if(BSWrite(*bs_out, out_buff, out_index) != out_index) {
-                			MemFree (badchar);
+                			MemFree(badchar);
                 			MemFree(in_buff);
-                			MemFree(out_buff);                
-                			return FALSE;                
+                			MemFree(out_buff);
+                			return FALSE;
                 		}
                 		out_index = 0;
                 	}
@@ -1444,10 +1598,23 @@ static Boolean FastaReadSequenceInternal
     MemFree (badchar);
     MemFree(in_buff);
     MemFree(out_buff);
+
+    if(mask_ptr && mask_head) {
+        SeqLocPtr slp;
+        if(mask_sint) {
+            mask_sint->to = mask_to;                     
+            mask->next = NULL;
+        }
+        slp = SeqLocNew(NULL);
+        slp->choice = SEQLOC_PACKED_INT;
+        slp->data.ptrvalue = mask_head;
+        *mask_ptr = slp;
+    }
+
     return TRUE;
 }
 
-NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
 (
  VoidPtr input,          /* input pointer (file or memory) */
  Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
@@ -1455,9 +1622,11 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
  Boolean is_na,          /* type of sequence */
  CharPtr PNTR errormsg,  /* error messge for debugging */
  Boolean parseSeqId,     /* Parse SeqID from def line */
- CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
+ CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+ CharPtr prefix,         /* prefix for localID if not parsable */
+ Int2Ptr ctrptr,         /* starting point for constructing unique ID */
+ SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information */
  )
-
 {
     SeqEntryPtr    sep = NULL;
     BioseqPtr      bsp = NULL;
@@ -1618,7 +1787,7 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
             }
             
             if (bsp->id == NULL) 
-                bsp->id = MakeNewProteinSeqId (NULL, NULL);
+                bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
             if (chptr != NULL) {
                 if((vnp = SeqDescrNew(NULL)) != NULL) {
                     vnp->choice = Seq_descr_title;
@@ -1644,17 +1813,18 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
         
     } else {  /* if ch == '>' EMPTY DEFLINE */ 
         /* Defline is upsent - creating default defline */
-        bsp->id = MakeNewProteinSeqId (NULL, NULL);
+        bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
 
         if(type == FASTA_FILE_IO)
             ungetc(ch, fd);
     }
         
     /* OK, now processing sequence */
-        
-    if(!FastaReadSequenceInternal(input, type, next_char, is_na,
-                                  &bsp->length, &bsp->seq_data,
-                                  errormsg, special_symbol)) {
+    
+    if(!FastaReadSequenceInternalEx(input, type, next_char, is_na,
+                                    &bsp->length, &bsp->seq_data,
+                                    errormsg, special_symbol, 
+                                    mask_ptr, bsp->id)) {
         ErrPostEx(SEV_FATAL, 0, 0, "Failure to read sequence. "
                   "FastaToSeqEntry() failed.\n");
         return NULL;
@@ -1662,6 +1832,22 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
     
     BioseqPack(bsp);     /* Trying to pack Bioseq more */
     return sep;
+}
+
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
+(
+ VoidPtr input,          /* input pointer (file or memory) */
+ Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char, /* returned pointer to next FASTA sequence */
+ Boolean is_na,          /* type of sequence */
+ CharPtr PNTR errormsg,  /* error messge for debugging */
+ Boolean parseSeqId,     /* Parse SeqID from def line */
+ CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
+ )
+
+{
+	return FastaToSeqEntryInternalEx (input, type, next_char, is_na, errormsg,
+                                          parseSeqId, special_symbol, NULL, NULL,NULL);
 }
 
 /*****************************************************************************
@@ -1962,6 +2148,24 @@ static Boolean GetFeatGenes (GatherContextPtr gcp)
 	return TRUE;
 }
 
+static ValNodePtr IndexedGatherDescrOnBioseq (ItemInfoPtr iip, BioseqPtr bsp, Uint1 choice)
+
+{
+	SeqMgrDescContext  dcontext;
+	SeqDescrPtr        sdp;
+
+	sdp = SeqMgrGetNextDescriptor (bsp, NULL, choice, &dcontext);
+	if (ISA_aa(bsp->mol) && !is_pdb(bsp)) {
+		if (dcontext.level != 0) return NULL;
+	}
+	if (iip != NULL) {
+		iip->entityID = dcontext.entityID;
+		iip->itemID = dcontext.itemID;
+		iip->itemtype = OBJ_SEQDESC;
+	}
+	return sdp;
+}
+
 static ValNodePtr GatherDescrOnBioseq(ItemInfoPtr iip, BioseqPtr bsp, Uint1 choice)
 {
 	ValNodePtr   vnp;
@@ -1970,7 +2174,12 @@ static ValNodePtr GatherDescrOnBioseq(ItemInfoPtr iip, BioseqPtr bsp, Uint1 choi
 	SeqLocPtr    slp = NULL;
 	Uint2        bspID;
 	DescrInfoPtr dsp;
+	Uint2 entityID;
 
+	entityID = ObjMgrGetEntityIDForPointer (bsp);
+	if (SeqMgrFeaturesAreIndexed (entityID)) {
+		return IndexedGatherDescrOnBioseq (iip, bsp, choice);
+	}
 	dsp = (DescrInfoPtr) MemNew(sizeof(DescrInfo));
 	dsp->choice = choice;
 	dsp->bsp = bsp;
@@ -2094,7 +2303,11 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 	if (bsp == NULL) {
 		return NULL;
 	}
-	if ((sfp = GatherSeqFeatProt(bsp)) != NULL) {
+	sfp = SeqMgrGetBestProteinFeature (bsp, NULL);
+	if (sfp == NULL) {
+		sfp = GatherSeqFeatProt(bsp);
+	}
+	if (sfp != NULL) {
 		prp = (ProtRefPtr) sfp->data.value.ptrvalue;
 		if (prp && prp->name) {
 			for (vnp=prp->name; vnp; vnp=vnp->next) {
@@ -2116,7 +2329,11 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 		}
 	} 
 	if (title == NULL) {
-		if ((sfp = GatherProtCDS(bsp)) != NULL) {
+		sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+		if (sfp == NULL) {
+			sfp = GatherProtCDS(bsp);
+		}
+		if (sfp != NULL) {
 			loc = sfp->location;
 			for (xref = sfp->xref; xref; xref=xref->next) {
 				if (xref->data.choice == SEQFEAT_GENE) {
@@ -2140,21 +2357,24 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 				}
 			}
 			if (title == NULL) {
-				vnp = GatherGenesForCDS(loc);
-				for (v=vnp; v; v=v->next) {
-					f = (SeqFeatPtr) v->data.ptrvalue;
-					diff_current = SeqLocAinB(loc, f->location);
-					if (! diff_current) {
-						best_gene = f;
-						break;
-					} else if (diff_current > 0) {
-						if ((diff_lowest == -1) || (diff_current<diff_lowest)) {
-							diff_lowest = diff_current;
+				best_gene = SeqMgrGetOverlappingGene (loc, NULL);
+				if (best_gene == NULL) {
+					vnp = GatherGenesForCDS(loc);
+					for (v=vnp; v; v=v->next) {
+						f = (SeqFeatPtr) v->data.ptrvalue;
+						diff_current = SeqLocAinB(loc, f->location);
+						if (! diff_current) {
 							best_gene = f;
+							break;
+						} else if (diff_current > 0) {
+							if ((diff_lowest == -1) || (diff_current<diff_lowest)) {
+								diff_lowest = diff_current;
+								best_gene = f;
+							}
 						}
 					}
+					ValNodeFree(vnp);
 				}
-				ValNodeFree(vnp);
 				if (best_gene != NULL) {
 					grp = (GeneRefPtr) best_gene->data.value.ptrvalue;
 					if (grp) {
@@ -2190,6 +2410,7 @@ static CharPtr SimpleSegSeqTitle (BioseqPtr bsp)
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  gcontext;
   SeqFeatPtr         gene;
+  GeneRefPtr         grp;
   size_t             len;
   CharPtr            locus = NULL;
   ObjMgrDataPtr      omdp;
@@ -2198,7 +2419,9 @@ static CharPtr SimpleSegSeqTitle (BioseqPtr bsp)
   CharPtr            organism = NULL;
   CharPtr            product = NULL;
   SeqDescrPtr        sdp;
+  CharPtr            str;
   CharPtr            title;
+  ValNodePtr         vnp;
 
   if (bsp == NULL) return NULL;
 
@@ -2229,9 +2452,25 @@ static CharPtr SimpleSegSeqTitle (BioseqPtr bsp)
       complete = "gene, partial cds";
     }
     product = ccontext.label;
-    gene = SeqMgrGetOverlappingGene (cds->location, &gcontext);
-    if (gene != NULL) {
-      locus = gcontext.label;
+    grp = SeqMgrGetGeneXref (cds);
+    if (grp != NULL) {
+      if (! StringHasNoText (grp->locus)) {
+        locus = grp->locus;
+      } else {
+        vnp = grp->syn;
+        if (vnp != NULL) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (! StringHasNoText (str)) {
+            locus = str;
+          }
+        }
+      }
+    }
+    if (locus == NULL) {
+      gene = SeqMgrGetOverlappingGene (cds->location, &gcontext);
+      if (gene != NULL) {
+        locus = gcontext.label;
+      }
     }
   }
 
@@ -2348,7 +2587,74 @@ static CharPtr UseOrgMods(BioseqPtr bsp)
 	return def;
 }
 
-static CharPtr MakeCompleteChromTitle (BioseqPtr bsp)
+static CharPtr organelleByItself [] = {
+  NULL,
+  NULL,
+  "chloroplast",
+  "chromoplast",
+  "kinetoplast",
+  "mitochondrion",
+  "plastid",
+  "macronuclear",
+  "extrachrom",
+  "plasmid", 
+  NULL,
+  NULL,
+  "cyanelle",
+  "proviral",
+  "virion",
+  "nucleomorph",
+  "apicoplast",
+  "leucoplast",
+  "protoplast"
+};
+
+static CharPtr organelleWithPlasmid [] = {
+  NULL,
+  NULL,
+  "chloroplast",
+  "chromoplast",
+  "kinetoplast",
+  "mitochondrial",
+  "plastid",
+  "macronuclear",
+  "extrachrom",
+  "plasmid", 
+  NULL,
+  NULL,
+  "cyanelle",
+  "proviral",
+  "virion",
+  "nucleomorph",
+  "apicoplast",
+  "leucoplast",
+  "protoplast"
+};
+
+static void LowercasePlasmidOrElement (CharPtr def)
+
+{
+  CharPtr  ptr;
+
+  if (StringHasNoText (def)) return;
+  def++;
+  ptr = StringISearch (def, "plasmid");
+  while (ptr != NULL) {
+    if (*ptr == 'P') {
+      *ptr = 'p';
+    }
+    ptr = StringISearch (ptr + 7, "plasmid");
+  }
+  ptr = StringISearch (def, "element");
+  while (ptr != NULL) {
+    if (*ptr == 'E') {
+      *ptr = 'e';
+    }
+    ptr = StringISearch (ptr + 7, "element");
+  }
+}
+
+static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 
 {
 	ItemInfoPtr   iip = NULL;
@@ -2356,10 +2662,11 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp)
 	BioSourcePtr  biop;
 	OrgRefPtr     orp;
 	SubSourcePtr  ssp;
-	CharPtr       name = NULL, chr = NULL, pls = NULL, def = NULL;
-	Int2          deflen = 40; /* starts with space for all fixed text */
-	Boolean       mito;
+	CharPtr       name = NULL, chr = NULL, orgnl = NULL, pls = NULL, def = NULL;
+	Int2          deflen = 60; /* starts with space for all fixed text */
+	Char          ch;
 	Boolean       plasmid;
+	Uint1         genome;
 		
 	if (bsp == NULL) {
 		return NULL;
@@ -2377,7 +2684,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp)
     }
 	name = orp->taxname;
 	deflen += StringLen(orp->taxname);
-	mito = (Boolean) (biop->genome == GENOME_kinetoplast || biop->genome == GENOME_mitochondrion);
+	genome = biop->genome;
 	plasmid = (Boolean) (biop->genome == GENOME_plasmid);
 
 	for (ssp = biop->subtype; ssp; ssp=ssp->next) {
@@ -2393,50 +2700,85 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp)
 			}
 		}
 	}
+	if (genome < 19) {
+		if (pls != NULL) {
+			orgnl = organelleWithPlasmid [genome];
+		} else {
+			orgnl = organelleByItself [genome];
+		}
+	}
 
 	def = (CharPtr) MemNew(deflen+1);
-	if (plasmid) {
+	if (StringISearch (name, "plasmid") != NULL) {
+		StringCat(def, name);
+		StringCat (def, ", complete sequence");
+		ch = *def;
+		*def = TO_UPPER (ch);
+		LowercasePlasmidOrElement (def);
+		return def;
+	} else if (plasmid) {
 		if (name && (! pls)) {
 			StringCat (def, name);
-			StringCat (def, " Plasmid complete sequence");
+			StringCat (def, " unnamed plasmid, complete sequence");
+			ch = *def;
+			*def = TO_UPPER (ch);
 			return def;
-		}
-		if (pls) {
-			if (StringNICmp (pls, "Plasmid ", 8) != 0) {
-				StringCat(def, "Plasmid ");
-			}
-			StringCat(def, pls);
-			StringCat (def, " complete sequence");
-			return def;
-		}
-	} else {
-		if (name) {
-			StringCat(def, name);
 		}
 		if (pls) {
 			if (name) {
+				StringCat (def, name);
 				StringCat (def, " ");
 			}
-			if (mito) {
-				StringCat (def, "Mitochondrial ");
+			if (StringISearch (pls, "plasmid") == NULL && StringISearch (pls, "element") == NULL) {
+				StringCat(def, "plasmid ");
 			}
-			if (StringNICmp (pls, "Plasmid ", 8) != 0) {
-				StringCat(def, "Plasmid ");
-			}
-			StringCat(def, pls);
-			StringCat (def, " complete sequence");
+			StringCat (def, pls);
+			StringCat (def, ", complete sequence");
+			ch = *def;
+			*def = TO_UPPER (ch);
+			LowercasePlasmidOrElement (def);
 			return def;
 		}
+	} else if (pls) {
+		if (name) {
+		 	StringCat (def, name);
+			StringCat (def, " ");
+		}
+		if (orgnl != NULL) {
+			StringCat (def, orgnl);
+			StringCat (def, " ");
+		}
+		if (StringISearch (pls, "plasmid") == NULL && StringISearch (pls, "element") == NULL) {
+			StringCat (def, "plasmid ");
+		}
+		StringCat (def, pls);
+		StringCat (def, ", complete sequence");
+		ch = *def;
+		*def = TO_UPPER (ch);
+		LowercasePlasmidOrElement (def);
+		return def;
+	} else if (name) {
+		StringCat (def, name);
 	}
-	if (mito) {
-		StringCat (def, " mitochondrion, complete genome");
+	if (orgnl != NULL) {
+		StringCat (def, " ");
+		StringCat (def, orgnl);
+		StringCat (def, ", complete genome");
+		ch = *def;
+		*def = TO_UPPER (ch);
 		return def;
 	}
-	StringCat (def, " complete chromosome");
-	if (chr && (! mito)) {
-		StringCat (def, " ");
+	if (chr != NULL) {
+		StringCat (def, " chromosome ");
 		StringCat(def, chr);
+		StringCat (def, ", complete sequence");
+		ch = *def;
+		*def = TO_UPPER (ch);
+		return def;
 	}
+	StringCat (def, ", complete genome");
+	ch = *def;
+	*def = TO_UPPER (ch);
 	return def;
 }
 
@@ -2474,6 +2816,12 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	SeqIdPtr sip;
 	TextSeqIdPtr tsip;
 	ItemInfo ii;
+	BioSourcePtr biop;
+	OrgRefPtr orp;
+	CharPtr taxname = NULL;
+	SeqMgrDescContext dcontext;
+	SeqMgrFeatContext fcontext;
+	SeqFeatPtr sfp, src;
 
 	if ((bsp == NULL) || (buf == NULL) || buflen == 0) return FALSE;
 
@@ -2527,8 +2875,8 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		if (vnp != NULL) {
 			mip = (MolInfoPtr) vnp->data.ptrvalue;
 			if (mip != NULL &&
-			    mip->biomol == MOLECULE_TYPE_GENOMIC /* && mip->completeness == 1 */) {
-				title = MakeCompleteChromTitle (bsp);
+			    (mip->biomol == MOLECULE_TYPE_GENOMIC || mip->biomol == MOLECULE_TYPE_OTHER_GENETIC_MATERIAL) /* && mip->completeness == 1 */) {
+				title = MakeCompleteChromTitle (bsp, mip->biomol);
 				organism = NULL;
 				if (iip != NULL) {
 					iip->entityID = ii.entityID;
@@ -2581,9 +2929,49 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		if (vnp == NULL) {
 			if (ISA_aa(bsp->mol)) {
 				title = FindProtDefLine(bsp);
+				vnp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+				if (vnp != NULL && organism == NULL) {
+					biop = (BioSourcePtr) vnp->data.ptrvalue;
+					if (biop != NULL) {
+						orp = biop->org;
+						if (orp != NULL) {
+							taxname = orp->taxname;
+						}
+					}
+					sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+					if (sfp != NULL) {
+						src = SeqMgrGetOverlappingSource (sfp->location, &fcontext);
+						if (src != NULL) {
+							biop = (BioSourcePtr) src->data.value.ptrvalue;
+							if (biop != NULL) {
+								orp = biop->org;
+								if (orp != NULL) {
+									taxname = orp->taxname;
+								}
+							}
+						}
+					}
+				}
 			}
 			if (title != NULL) {
+				/*
+				if (! StringHasNoText (taxname)) {
+					diff = LabelCopy(buf, taxname, buflen);
+					buflen -= diff;
+					buf += diff;
+					diff = LabelCopy(buf, " ", buflen);
+					buflen -= diff;
+					buf += diff;
+					diff = LabelCopy(buf, title, buflen);
+				} else {
+					diff = LabelCopy(buf, title, buflen);
+				}
+				*/
 				diff = LabelCopy(buf, title, buflen);
+				if (organism == NULL && taxname != NULL) {
+					organism = taxname;
+					iip = NULL;
+				}
 			} else if (!htg_tech) {
 				if (bsp->repr == Seq_repr_seg) {
 					title = SimpleSegSeqTitle (bsp);
@@ -2832,3 +3220,142 @@ NLM_EXTERN Boolean FastaSeqLine(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boole
 	else
 		return FALSE;
 }
+
+/*****************************************************************************
+*
+*   NC_Cleanup (entityID, ptr)
+*     internal function for genome RefSeq processing
+*
+*****************************************************************************/
+
+static Boolean RemoveAllTitles (GatherObjectPtr gop)
+{
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+
+  if (gop == NULL ||
+      gop->itemtype != OBJ_SEQDESC ||
+      gop->subtype != Seq_descr_title) return TRUE;
+
+  sdp = (SeqDescrPtr) gop->dataptr;
+  if (sdp == NULL || sdp->extended == 0) return TRUE;
+
+  ovp = (ObjValNodePtr) sdp;
+  ovp->idx.deleteme = TRUE;
+  return TRUE;
+}
+
+static Boolean AddNcTitles (GatherObjectPtr gop)
+{
+  BioseqPtr     bsp;
+  Char          buf [512];
+  Boolean       is_nc;
+  MolInfoPtr    mip;
+  SeqDescrPtr   sdp;
+  SeqIdPtr      sip;
+  CharPtr       str;
+  TextSeqIdPtr  tsip;
+
+  if (gop == NULL ||
+      gop->itemtype != OBJ_BIOSEQ) return TRUE;
+
+  bsp = (BioseqPtr) gop->dataptr;
+  if (bsp == NULL) return TRUE;
+
+  is_nc = FALSE;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip != NULL && tsip->accession != NULL) {
+        if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
+          is_nc = TRUE;
+        }
+      }
+    }
+  }
+  if (! is_nc) return TRUE;
+
+  if (CreateDefLine (NULL, bsp, buf, sizeof (buf), 0, NULL, NULL)) {
+    if (! StringHasNoText (buf)) {
+      str = StringSaveNoNull (buf);
+      if (str != NULL) {
+        SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+      }
+    }
+  }
+
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice == Seq_descr_molinfo) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+      if (mip != NULL &&
+          mip->biomol == MOLECULE_TYPE_GENOMIC &&
+          mip->completeness == 1) {
+        mip->completeness = 0;
+      }
+    }
+  }
+
+  return TRUE;
+}
+
+static void ClearKeywordsProc (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  GBBlockPtr     gbp;
+  ObjValNodePtr  ovn;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_genbank) return;
+  gbp = (GBBlockPtr) sdp->data.ptrvalue;
+  if (gbp == NULL) return;
+  gbp->keywords = ValNodeFreeData (gbp->keywords);
+  if (gbp->extra_accessions == NULL && gbp->source == NULL &&
+      gbp->keywords == NULL && gbp->origin == NULL &&
+      gbp->date == NULL && gbp->entry_date == NULL &&
+      gbp->div == NULL && gbp->taxonomy == NULL) {
+  }
+  if (sdp->extended == 0) return;
+  ovn = (ObjValNodePtr) sdp;
+  ovn->idx.deleteme = TRUE;
+}
+
+NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr)
+
+{
+  SeqEntryPtr  sep;
+
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID == 0) return;
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitDescriptorsInSep (sep, NULL, ClearKeywordsProc);
+  DeleteMarkedObjects (entityID, 0, NULL);
+}
+
+NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr)
+
+{
+  Boolean      objMgrFilt [OBJ_MAX];
+  SeqEntryPtr  sep;
+
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID == 0) return;
+
+  AssignIDsInEntity (entityID, 0, NULL);
+
+  MemSet ((Pointer) objMgrFilt, FALSE, sizeof (objMgrFilt));
+  objMgrFilt [OBJ_SEQDESC] = TRUE;
+  GatherObjectsInEntity (entityID, 0, NULL, RemoveAllTitles, NULL, objMgrFilt);
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitDescriptorsInSep (sep, NULL, ClearKeywordsProc);
+
+  DeleteMarkedObjects (entityID, 0, NULL);
+
+  MemSet ((Pointer) objMgrFilt, FALSE, sizeof (objMgrFilt));
+  objMgrFilt [OBJ_BIOSEQ] = TRUE;
+  GatherObjectsInEntity (entityID, 0, NULL, AddNcTitles, NULL, objMgrFilt);
+}
+

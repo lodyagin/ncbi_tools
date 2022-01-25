@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.48 2000/01/05 18:37:19 thiessen Exp $
+# $Id: makenet.dos,v 6.56 2000/04/13 18:18:44 vakatov Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -24,7 +24,6 @@ OBJ15 = +ncbiurl.obj +ni_msg.obj +ni_lib.obj +ni_error.obj \
 	+ni_encr.obj +desc.obj +digit.obj +digitas.obj +md2c.obj +md5c.obj +nn.obj \
 	+prime.obj +r_encode.obj +r_enhanc.obj +r_keygen.obj +r_random.obj \
 	+r_stdlib.obj +rsa.obj
-#OBJ21 = +objblst2.obj +netblap2.obj +blstout2.obj +blast2.obj
 OBJ31 = +netcnfg.obj +trmlst.obj +docsum.obj
 OBJ36 = +objblst3.obj +netblap3.obj
 OBJ40 = +objtax1.obj +taxutil.obj +tc2proc.obj +txcdproc.obj \
@@ -59,19 +58,17 @@ CNSRTV_EXE   = cnsrtv.___
 CNSGNV_EXE   = cnsgnv.___
 
 ENTREZCF_EXE = entrezcf.___
-#BLASTCLI_EXE = blastcli.___
 NETENTCF_EXE = netentcf.___
 NENTREZ_EXE  = nentrez.___
 SEQUIN_EXE   = sequin.___
 VCLIENT_EXE  = vclient.___
-#POWBLAST_EXE = powblast.___
-CN3D_EXE     = cn3d.__
+CN3D_EXE     = cn3d_v3d.__
 DDV_EXE      = ddv.__
 UDV_EXE      = udv.__
 !ifdef OPENGL
 NENTREZ_OGL_EXE = nentrez_ogl.___
 SEQUIN_OGL_EXE  = sequin_ogl.___
-CN3D_OGL_EXE    = cn3d_ogl.__
+CN3D_OGL_EXE    = cn3d.__
 !endif
 !endif
 
@@ -131,9 +128,6 @@ copy :
 	copy ..\demo\entrez.c .
 	copy ..\demo\entrezcf.c .
 	copy ..\demo\netentcf.c .
-#	copy ..\demo\powblast.c .
-	copy ..\demo\pblproc.c .
-	copy ..\demo\pblproc.h $(INCPATH)
 	copy ..\demo\ccpv.c .
 	copy ..\demo\ccp.c .
 	copy ..\demo\dustv.c .
@@ -161,7 +155,7 @@ copy :
 !ifdef OPENGL
 	copy nentrez.rc nentrez_ogl.rc
 	copy sequin.rc sequin_ogl.rc
-	copy cn3d.rc cn3d_ogl.rc
+	copy cn3d.rc cn3d_v3d.rc
 !endif
 !endif
 ##########################################################
@@ -251,17 +245,6 @@ $(INCLUDE_LIB)
 <<
 !endif
 ##########################################################
-#!ifdef XLIB21
-#$(XLIB21):
-#	$(MAKE) -f <<
-#$(INCLUDE_GEN)
-#LIB_NAME = $(XLIB21)
-#LIB_OBJ = $(OBJ21)
-#LIB_LIB =
-#$(INCLUDE_LIB)
-#<<
-#!endif
-##########################################################
 !ifdef XLIB31
 $(XLIB31):
 	$(MAKE) -f <<
@@ -326,18 +309,6 @@ $(INCLUDE_EXE)
 <<
 !endif
 ###################################################
-#!ifdef BLASTCLI_EXE
-#$(BLASTCLI_EXE):
-#	$(MAKE) -f <<
-#$(INCLUDE_GEN)
-#TEST_NAME = blastcli
-#TEST_OBJ = blastcli.obj
-#TEST_LIB = $(LIB21) $(LIB23) $(NETCLILIB) $(LIB4) $(LIB2) $(LIB1)
-#RES = 1
-#$(INCLUDE_EXE)
-#<<
-#!endif
-##################################################
 !ifdef BLASTCL3_EXE
 $(BLASTCL3_EXE):
 	$(MAKE) -f <<
@@ -368,7 +339,7 @@ $(NENTREZ_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = nentrez
 TEST_OBJ = entrez.obj
-TEST_LIB = $(LIB31) $(LIB30) $(LIB20) $(LIB23) $(LIB22) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB36) $(LIB23) $(LIB22) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -381,25 +352,13 @@ $(NENTREZ_OGL_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = nentrez_ogl
 TEST_OBJ = entrez.obj
-TEST_LIB = $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB23) $(LIB22) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB36) $(LIB23) $(LIB22) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
 RES = 1
 $(INCLUDE_EXE)
 <<
 !endif
-###########################################################
-#!ifdef POWBLAST_EXE
-#$(POWBLAST_EXE):
-#	$(MAKE) -f <<
-#$(INCLUDE_GEN)
-#TEST_NAME = powblast
-#TEST_OBJ = powblast.obj pblproc.obj
-#TEST_LIB = $(LIB21) $(LIB23) $(LIB20) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
-#RES = 1
-#$(INCLUDE_EXE)
-#<<
-#!endif
 ##########################################################
 !ifdef VCLIENT_EXE
 $(VCLIENT_EXE):
@@ -446,9 +405,9 @@ $(INCLUDE_EXE)
 $(CN3D_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
-TEST_NAME = cn3d
+TEST_NAME = cn3d_v3d
 TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -459,9 +418,9 @@ $(INCLUDE_EXE)
 $(CN3D_OGL_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
-TEST_NAME = cn3d_ogl
+TEST_NAME = cn3d
 TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
 RES = 1
@@ -475,7 +434,7 @@ $(DDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = ddv
 TEST_OBJ = ddvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB36) $(LIB20) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -488,7 +447,7 @@ $(UDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = udv
 TEST_OBJ = udvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB36) $(LIB20) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

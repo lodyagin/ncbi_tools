@@ -11,8 +11,9 @@
 	10/11/95	Corarito	Modified for CW7
 	11/22/95	Harmon		CopyHdrs script must be run first
 	 2/18/96	Kans		Consolidated all 68K/PPC scripts
+	 4/19/00	Kans		Include files now found in situ in ncbi directory
 
-	Before running this file, run the copyhdrs.met and makeall.met AppleScripts.
+	Before running this file, run the makeall.met AppleScript.
 
 	In order to compile for 68K, change the MASTER property.
 
@@ -36,15 +37,12 @@ global SUFFIX
 global HARDDISK
 global METRO
 global METROWERKSCW
+global OGLSDK
 
 global NCBISOURCE
-global ENCRYPTSOURCE
-
-global INCLUDEFILES
 global LIBRARIES
-global BUILDTEST
 
-global DOENCRYPT
+global DOOPENGL
 
 (* ==== These subroutines set paths and other preferences during population ==== *)
 
@@ -62,25 +60,22 @@ on DoSetGlobals()
 		set HARDDISK to startup disk as string
 		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
+		set OGLSDK to METRO & "OpenGL SDK:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
-		set ENCRYPTSOURCE to NCBISOURCE & "network:encrypt:rsaref:" as string
-		
-		set INCLUDEFILES to NCBISOURCE & "include:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
-		set BUILDTEST to NCBISOURCE & "build:" as string
 		
-		if (exists (folder ENCRYPTSOURCE)) then
-			set DOENCRYPT to "TRUE"
+		if MASTER = "PPC" and (exists (folder OGLSDK)) then
+			set DOOPENGL to "TRUE"
 		else
-			set DOENCRYPT to "FALSE"
+			set DOOPENGL to "FALSE"
 		end if
 		
 	end tell
 end DoSetGlobals
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Target ===== *)
 		if MASTER = "PPC" then
@@ -208,7 +203,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -216,14 +211,15 @@ on DoSetPaths1()
 		-- We want to find the NCBI "all.h" first.
 		Set Preferences of panel "Access Paths" to {System Paths:{}} -- This removes the compiler default folder
 		
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
+		Set Preferences of panel "Access Paths" to {Convert Paths:true}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}} -- Added for speed
 		
 	end tell
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
@@ -236,15 +232,19 @@ on DoSetPaths2()
 end DoSetPaths2
 
 on DoCompileLibraries()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
-		open (LIBRARIES & "vibrantOGL" & SUFFIX & ".µ")
-		Make Project
-		Close Project
+		if DOOPENGL = "TRUE" then
+			open (LIBRARIES & "vibrantOGL" & SUFFIX & ".µ")
+			Make Project
+			Close Project
+		end if
 		
-		open (LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ")
-		Make Project
-		Close Project
+		if DOOPENGL = "TRUE" then
+			open (LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ")
+			Make Project
+			Close Project
+		end if
 		
 		open (LIBRARIES & "ncbiNacc" & SUFFIX & ".µ")
 		Make Project
@@ -278,12 +278,6 @@ on DoCompileLibraries()
 		Make Project
 		Close Project
 		
-		if DOENCRYPT = "TRUE" then
-			open (LIBRARIES & "netcliE" & SUFFIX & ".µ")
-			Make Project
-			Close Project
-		end if
-		
 	end tell
 end DoCompileLibraries
 
@@ -292,71 +286,75 @@ end DoCompileLibraries
 with timeout of 60000 seconds
 	my DoSetGlobals()
 	
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		activate
 		
 		(* ==== This subsection populates all the libraries with the appropriate source files ==== *)
 		
 		(* ================================================================================ *)
-		Create Project {LIBRARIES & "vibrantOGL" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "PPC Project" to {File Name:"vibrantOGLppc"}
-		Set Preferences of panel "68K Project" to {File Name:"vibrantOGL68k"}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "vibrant:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
-		if DOPNG = "TRUE" then
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
-		else if DOPNG = "FALSE" then
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+		if DOOPENGL = "TRUE" then
+			Create Project {LIBRARIES & "vibrantOGL" & SUFFIX & ".µ"}
+			
+			my DoSetPreferences()
+			Set Preferences of panel "PPC Project" to {File Name:"vibrantOGLppc"}
+			Set Preferences of panel "68K Project" to {File Name:"vibrantOGL68k"}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "vibrant:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
+			if DOPNG = "TRUE" then
+				Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
+			else if DOPNG = "FALSE" then
+				Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+			end if
+			my DoSetPaths2()
+			
+			set NCBIVIBRANT to NCBISOURCE & "vibrant:" as string
+			
+			Add Files {NCBIVIBRANT & "ncbidraw.c", NCBIVIBRANT & "vibbutns.c", NCBIVIBRANT & "vibextra.c", NCBIVIBRANT & "vibfiles.c", NCBIVIBRANT & "vibforms.c"} To Segment 1
+			Add Files {NCBIVIBRANT & "vibgroup.c", NCBIVIBRANT & "viblists.c", NCBIVIBRANT & "vibmenus.c", NCBIVIBRANT & "vibprmpt.c", NCBIVIBRANT & "vibsbars.c"} To Segment 1
+			Add Files {NCBIVIBRANT & "vibslate.c", NCBIVIBRANT & "vibtexts.c", NCBIVIBRANT & "vibutils.c", NCBIVIBRANT & "vibwndws.c"} To Segment 1
+			
+			Add Files {NCBIVIBRANT & "document.c", NCBIVIBRANT & "drawing.c", NCBIVIBRANT & "mapping.c", NCBIVIBRANT & "palette.c", NCBIVIBRANT & "picture.c"} To Segment 2
+			Add Files {NCBIVIBRANT & "table.c", NCBIVIBRANT & "viewer.c", NCBIVIBRANT & "diagnost.c", NCBIVIBRANT & "image.c", NCBIVIBRANT & "pictur3d.c"} To Segment 2
+			Add Files {NCBIVIBRANT & "prim3d1.c", NCBIVIBRANT & "prim3d2.c", NCBIVIBRANT & "prim3d3.c", NCBIVIBRANT & "prim3d4.c", NCBIVIBRANT & "prim3d5.c"} To Segment 2
+			Add Files {NCBIVIBRANT & "viewer3d.c", NCBIVIBRANT & "vibmouse.c", NCBIVIBRANT & "imagelst.c", NCBIVIBRANT & "treeview.c", NCBIVIBRANT & "shim3d.c"} To Segment 2
+			Add Files {NCBIVIBRANT & "odlbox.c"} To Segment 2
+			
+			Reset File Paths
+			Close Project
 		end if
-		my DoSetPaths2()
-		
-		set NCBIVIBRANT to NCBISOURCE & "vibrant:" as string
-		
-		Add Files {NCBIVIBRANT & "ncbidraw.c", NCBIVIBRANT & "vibbutns.c", NCBIVIBRANT & "vibextra.c", NCBIVIBRANT & "vibfiles.c", NCBIVIBRANT & "vibforms.c"} To Segment 1
-		Add Files {NCBIVIBRANT & "vibgroup.c", NCBIVIBRANT & "viblists.c", NCBIVIBRANT & "vibmenus.c", NCBIVIBRANT & "vibprmpt.c", NCBIVIBRANT & "vibsbars.c"} To Segment 1
-		Add Files {NCBIVIBRANT & "vibslate.c", NCBIVIBRANT & "vibtexts.c", NCBIVIBRANT & "vibutils.c", NCBIVIBRANT & "vibwndws.c"} To Segment 1
-		
-		Add Files {NCBIVIBRANT & "document.c", NCBIVIBRANT & "drawing.c", NCBIVIBRANT & "mapping.c", NCBIVIBRANT & "palette.c", NCBIVIBRANT & "picture.c"} To Segment 2
-		Add Files {NCBIVIBRANT & "table.c", NCBIVIBRANT & "viewer.c", NCBIVIBRANT & "diagnost.c", NCBIVIBRANT & "image.c", NCBIVIBRANT & "pictur3d.c"} To Segment 2
-		Add Files {NCBIVIBRANT & "prim3d1.c", NCBIVIBRANT & "prim3d2.c", NCBIVIBRANT & "prim3d3.c", NCBIVIBRANT & "prim3d4.c", NCBIVIBRANT & "prim3d5.c"} To Segment 2
-		Add Files {NCBIVIBRANT & "viewer3d.c", NCBIVIBRANT & "vibmouse.c", NCBIVIBRANT & "imagelst.c", NCBIVIBRANT & "treeview.c", NCBIVIBRANT & "shim3d.c"} To Segment 2
-		Add Files {NCBIVIBRANT & "odlbox.c"} To Segment 2
-		
-		Reset File Paths
-		Close Project
 		
 		
 		(* ================================================================================ *)
-		Create Project {LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "PPC Project" to {File Name:"ncbicn3dOGLppc"}
-		Set Preferences of panel "68K Project" to {File Name:"ncbicn3dOGL68k"}
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
-		if DOPNG = "TRUE" then
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
-		else if DOPNG = "FALSE" then
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+		if DOOPENGL = "TRUE" then
+			Create Project {LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ"}
+			
+			my DoSetPreferences()
+			Set Preferences of panel "PPC Project" to {File Name:"ncbicn3dOGLppc"}
+			Set Preferences of panel "68K Project" to {File Name:"ncbicn3dOGL68k"}
+			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
+			if DOPNG = "TRUE" then
+				Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
+				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
+			else if DOPNG = "FALSE" then
+				Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+			end if
+			my DoSetPaths2()
+			
+			set NCBICN3D to NCBISOURCE & "cn3d:" as string
+			
+			Add Files {NCBICN3D & "algorend.c", NCBICN3D & "cn3dwin.c", NCBICN3D & "cn3dentr.c", NCBICN3D & "cn3dmsel.c", NCBICN3D & "cn3dopen.c"} To Segment 1
+			Add Files {NCBICN3D & "cn3dsave.c", NCBICN3D & "cn3dxprt.c"} To Segment 1
+			Add Files {NCBICN3D & "cn3dmsg.c", NCBICN3D & "cn3dmatn.c", NCBICN3D & "cn3dmodl.c", NCBICN3D & "cn3dshim.c"} To Segment 1
+			Add Files {NCBICN3D & "cn3dmesh.c", NCBICN3D & "cn3dstyl.c", NCBICN3D & "seqcons.c"} To Segment 1
+			
+			Reset File Paths
+			Close Project
 		end if
-		my DoSetPaths2()
-		
-		set NCBICN3D to NCBISOURCE & "cn3d:" as string
-		
-		Add Files {NCBICN3D & "algorend.c", NCBICN3D & "cn3dwin.c", NCBICN3D & "cn3dentr.c", NCBICN3D & "cn3dmsel.c", NCBICN3D & "cn3dopen.c"} To Segment 1
-		Add Files {NCBICN3D & "cn3dsave.c", NCBICN3D & "cn3dxprt.c"} To Segment 1
-		Add Files {NCBICN3D & "cn3dmsg.c", NCBICN3D & "cn3dmatn.c", NCBICN3D & "cn3dmodl.c", NCBICN3D & "cn3dshim.c"} To Segment 1
-		Add Files {NCBICN3D & "cn3dmesh.c"} To Segment 1
-		
-		Reset File Paths
-		Close Project
 		
 		
 		(* ================================================================================ *)
@@ -511,35 +509,6 @@ with timeout of 60000 seconds
 		Reset File Paths
 		Close Project
 		
-		
-		(* ================================================================================ *)
-		if DOENCRYPT = "TRUE" then
-			Create Project {LIBRARIES & "netcliE" & SUFFIX & ".µ"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"netcliEppc"}
-			Set Preferences of panel "68K Project" to {File Name:"netcliE68k"}
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-			Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:nsclilib:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:ENCRYPTSOURCE & "source:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			set NCBINSCLILIB to NCBISOURCE & "network:nsclilib:" as string
-			
-			Add Files {NCBINSCLILIB & "ncbicli.c", NCBINSCLILIB & "ncbisock.c", NCBINSCLILIB & "ncbiurl.c", NCBINSCLILIB & "ncbibuf.c"} To Segment 1
-			Add Files {NCBINSCLILIB & "ni_disp.c", NCBINSCLILIB & "ni_encrs.c", NCBINSCLILIB & "ni_error.c", NCBINSCLILIB & "ni_lib_.c"} To Segment 1
-			Add Files {NCBINSCLILIB & "ni_macdv.c", NCBINSCLILIB & "ni_msg.c", NCBINSCLILIB & "ni_www.c", NCBINSCLILIB & "ni_debug.c"} To Segment 1
-			
-			Add Files {ENCRYPTSOURCE & "source:desc.c", ENCRYPTSOURCE & "source:digit.c", ENCRYPTSOURCE & "source:digitas.c"} To Segment 1
-			Add Files {ENCRYPTSOURCE & "source:md2c.c", ENCRYPTSOURCE & "source:md5c.c", ENCRYPTSOURCE & "source:nn.c"} To Segment 1
-			Add Files {ENCRYPTSOURCE & "source:prime.c", ENCRYPTSOURCE & "source:rsa.c", ENCRYPTSOURCE & "source:r_encode.c"} To Segment 1
-			Add Files {ENCRYPTSOURCE & "source:r_enhanc.c", ENCRYPTSOURCE & "source:r_keygen.c", ENCRYPTSOURCE & "source:r_random.c"} To Segment 1
-			Add Files {ENCRYPTSOURCE & "source:r_stdlib.c"} To Segment 2
-			
-			Reset File Paths
-			Close Project
-		end if
 		
 		(* ==== This subsection compiles the newly-populated libraries ==== *)
 		

@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.16 1999/12/18 15:27:50 egorov Exp $
+/* $Id: ncbisam.c,v 6.17 2000/02/11 21:14:07 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.17  2000/02/11 21:14:07  madden
+* Allocate MasterPos of correct (smaller) size
+*
 * Revision 6.16  1999/12/18 15:27:50  egorov
 * Fix NT compilation problem
 *
@@ -687,14 +690,13 @@ static ISAMErrorCode ISAMMakeStringIndex(
     
     /* Obtain the term offsets; select the sample terms. */
     
-    MasterPos = (Int4 *)MemNew(sizeof(Int4) * (data->NumTerms + 1));
+    MasterPos = (Int4 *)Nlm_Malloc(sizeof(Int4) * (((data->NumTerms+1)/(data->PageSize))+2));
     
     Pos = TermCount = SampleCount = 0;
     
     while(ISAMReadLine(data) > 0) {
-        if (TermCount++ % data->PageSize == 0) {
-            MasterPos[SampleCount++] = SwapUint4(Pos);
-        }
+        if (TermCount++ % data->PageSize == 0) 
+            	MasterPos[SampleCount++] = SwapUint4(Pos);
         
         Pos = ftell(data->db_fd);
     }

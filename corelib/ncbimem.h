@@ -1,3 +1,6 @@
+#ifndef _NCBIMEM_
+#define _NCBIMEM_
+
 /*   ncbimem.h
 * ===========================================================================
 *
@@ -29,23 +32,18 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   	prototypes for ncbi memory functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-* 9-19-91  Schuler     Modified existing prototypes for ANSI-resemblance
-* 9-19-91  Schuler     Added new prototypes for Windows ANSI-like functions
-* 9-19-91  Schuler     Changed all functions to _cdecl calling convention
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 05-21-93 Schuler     Nlm_MemFreeTrace added for debugging MemFree
-* 06-14-93 Schuler     Added dll_Malloc and dll_Free
-*
 * $Log: ncbimem.h,v $
+* Revision 6.5  2000/03/08 17:55:49  vakatov
+* Use Int8 for the file size.
+* Also, get rid of the WIN16 code, do other cleanup.
+*
 * Revision 6.4  1998/06/23 16:30:03  vakatov
 * MemMapInit(): return zero-filled structure(not a NULL) if file is empty
 *
@@ -70,30 +68,23 @@
 * Revision 5.4  1997/01/06 22:26:54  vakatov
 * [WIN16,WIN32][_DEBUG]  MemFree --> Nlm_MemFreeTrace (included [_CONSOLE])
 *
- * Revision 5.3  1996/12/13  19:12:42  epstein
- * add MMAP_AVAIL definition
- *
- * Revision 5.2  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.1  1996/08/29  20:50:44  madden
- * Added functions for memory-mapping.
- *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.15  1995/05/15  18:45:58  ostell
- * added Log line
- *
+* Revision 5.3  1996/12/13  19:12:42  epstein
+* add MMAP_AVAIL definition
 *
+* Revision 5.2  1996/12/03  21:48:33  vakatov
+* Adopted for 32-bit MS-Windows DLLs
 *
+* Revision 5.1  1996/08/29  20:50:44  madden
+* Added functions for memory-mapping.
+*
+* 9-19-91  Schuler     Modified existing prototypes for ANSI-resemblance
+* 9-19-91  Schuler     Added new prototypes for Windows ANSI-like functions
+* 9-19-91  Schuler     Changed all functions to _cdecl calling convention
+* 04-15-93 Schuler     Changed _cdecl to LIBCALL
+* 05-21-93 Schuler     Nlm_MemFreeTrace added for debugging MemFree
+* 06-14-93 Schuler     Added dll_Malloc and dll_Free
 * ==========================================================================
 */
-#ifndef _NCBIMEM_
-#define _NCBIMEM_
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -102,45 +93,37 @@
 #define NLM_EXTERN extern
 #endif
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ======== PROTOTYPES ======== */
 
-NLM_EXTERN void * LIBCALL Nlm_MemNew PROTO((size_t size));
-NLM_EXTERN void * LIBCALL Nlm_MemGet PROTO((size_t size, unsigned int flags));
-NLM_EXTERN void * LIBCALL Nlm_MemMore PROTO((void *ptr, size_t size));
-NLM_EXTERN void * LIBCALL Nlm_MemExtend PROTO((void *ptr, size_t size, size_t oldsize));
-NLM_EXTERN void * LIBCALL Nlm_MemFree PROTO((void *ptr));
-NLM_EXTERN void * LIBCALL Nlm_MemCopy PROTO((void *dst, const void *src, size_t bytes));
-NLM_EXTERN void * LIBCALL Nlm_MemMove PROTO((void *dst, const void *src, size_t bytes));
-NLM_EXTERN void * LIBCALL Nlm_MemFill PROTO((void *ptr, int value, size_t bytes));
-NLM_EXTERN void * LIBCALL Nlm_MemDup PROTO((const void *orig, size_t size));
+NLM_EXTERN void* LIBCALL Nlm_MemNew(size_t size);
+NLM_EXTERN void* LIBCALL Nlm_MemGet(size_t size, unsigned int flags);
+NLM_EXTERN void* LIBCALL Nlm_MemMore(void* ptr, size_t size);
+NLM_EXTERN void* LIBCALL Nlm_MemExtend(void* ptr, size_t size, size_t oldsize);
+NLM_EXTERN void* LIBCALL Nlm_MemFree(void* ptr);
+NLM_EXTERN void* LIBCALL Nlm_MemCopy(void* dst, const void* src, size_t bytes);
+NLM_EXTERN void* LIBCALL Nlm_MemMove(void* dst, const void* src, size_t bytes);
+NLM_EXTERN void* LIBCALL Nlm_MemFill(void* ptr, int value, size_t bytes);
+NLM_EXTERN void* LIBCALL Nlm_MemDup(const void* orig, size_t size);
 
 #if defined(OS_MAC) || defined(OS_MSWIN) || defined(MSC_VIRT)
-NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandNew PROTO((size_t size));
-NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandGet PROTO((size_t size, Nlm_Boolean clear_out));
-NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandMore PROTO((Nlm_Handle hnd, size_t size));
-NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandFree PROTO((Nlm_Handle hnd));
-NLM_EXTERN void *LIBCALL Nlm_HandLock PROTO((Nlm_Handle hnd));
-NLM_EXTERN void *LIBCALL Nlm_HandUnlock PROTO((Nlm_Handle hnd));
+NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandNew(size_t size);
+NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandGet(size_t size, Nlm_Boolean clear_out);
+NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandMore(Nlm_Handle hnd, size_t size);
+NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandFree(Nlm_Handle hnd);
+NLM_EXTERN void* LIBCALL Nlm_HandLock(Nlm_Handle hnd);
+NLM_EXTERN void* LIBCALL Nlm_HandUnlock(Nlm_Handle hnd);
 #endif
 
-#ifdef WIN16
-NLM_EXTERN void *  LIBCALL win16_Malloc (size_t bytes);
-NLM_EXTERN void *  LIBCALL win16_Calloc (size_t items, size_t size);
-NLM_EXTERN void *  LIBCALL win16_Realloc (void *ptr, size_t size);
-NLM_EXTERN void    LIBCALL win16_Free (void *ptr);
-#endif
 
 #ifdef WIN_MAC
 #ifdef USE_MAC_MEMORY
-NLM_EXTERN void *mac_Malloc  PROTO((size_t size));
-NLM_EXTERN void *mac_Calloc  PROTO((size_t nmemb, size_t size));
-NLM_EXTERN void *mac_Realloc PROTO((void *ptr, size_t size));
-NLM_EXTERN void  mac_Free    PROTO((void *ptr));
+NLM_EXTERN void* mac_Malloc (size_t size);
+NLM_EXTERN void* mac_Calloc (size_t nmemb, size_t size);
+NLM_EXTERN void* mac_Realloc(void* ptr, size_t size);
+NLM_EXTERN void  mac_Free   (void* ptr);
 #endif
 #endif
 
@@ -163,19 +146,11 @@ NLM_EXTERN Nlm_Boolean Nlm_SetHeapLimit(size_t curr, size_t add, size_t max);
 NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 
 
+
 /* ========= MACROS ======== */
 
+
 /* low-level ANSI-style functions */
-#ifdef WIN16
-#define Nlm_Malloc  win16_Malloc
-#define Nlm_Calloc  win16_Calloc
-#define Nlm_Realloc win16_Realloc
-#define Nlm_Free    win16_Free
-#define Nlm_MemSet  _fmemset
-#define Nlm_MemCpy  _fmemcpy
-#define Nlm_MemChr  _fmemchr
-#define Nlm_MemCmp  _fmemcmp
-#else
 #ifdef USE_MAC_MEMORY
 #define Nlm_Malloc  mac_Malloc
 #define Nlm_Calloc  mac_Calloc
@@ -195,7 +170,7 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 #define Nlm_MemChr  memchr
 #define Nlm_MemCmp  memcmp
 #endif
-#endif
+
 
 
 #ifdef OS_UNIX_SOL
@@ -252,20 +227,19 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 
 
 #if defined(_DEBUG)  &&  defined(OS_MSWIN)
-NLM_EXTERN void * LIBCALL Nlm_MemFreeTrace (void *, const char*, const char*, int);
+NLM_EXTERN void* LIBCALL Nlm_MemFreeTrace (void* , const char*, const char*, int);
 #undef MemFree
 #define MemFree(_ptr_)  Nlm_MemFreeTrace(_ptr_,THIS_MODULE,THIS_FILE,__LINE__)
 #endif
 
 
 #ifdef _WINDLL
-NLM_EXTERN void * dll_Malloc (size_t bytes);
-NLM_EXTERN void   dll_Free (void *pMem);
+NLM_EXTERN void* dll_Malloc(size_t bytes);
+NLM_EXTERN void  dll_Free  (void*  pMem);
 #else
-#define dll_Malloc(x)	(void*)Nlm_Malloc(x)
-#define dll_Free(x)	Nlm_Free((void*)(x))
+#define dll_Malloc(x)	(void*) Nlm_Malloc(x)
+#define dll_Free(x)	   Nlm_Free((void*) (x))
 #endif
-
 
 
 /* flags for MemGet */
@@ -278,40 +252,45 @@ NLM_EXTERN void   dll_Free (void *pMem);
 #define MG_MAXALLOC 0x0002
 #define MG_ERRPOST  MGET_ERRPOST
 
-/* structures for memory-mapping. */
+
+
+/****************************************************************************
+ * Memory mapping
+ */
 
 /* This structure is allocated and filled by Nlm_MemMapInit.
-The Nlm_Handle's are used by WIN32, "file_size" is used by
-UNIX memory mapping when the the files are unmapped. */
-
+   The Nlm_Handle's are used by WIN32, "file_size" is used by
+   UNIX memory mapping when the the files are unmapped. */
 typedef struct _nlm_mem_map
 {
 #ifdef WIN32
   Nlm_Handle hMap;
 #endif
-  Nlm_Int4    file_size;
+  Nlm_Int8    file_size;
   Nlm_CharPtr mmp_begin;
 } Nlm_MemMap, PNTR Nlm_MemMapPtr;
 
-/* prototypes for memory-mapping. */
 
-/* Used to determine if memory-mapping is supported by the NCBI toolkit. */
-NLM_EXTERN Nlm_Boolean Nlm_MemMapAvailable PROTO((void));
+/* Determine if memory-mapping is supported by the NCBI toolkit
+ */
+NLM_EXTERN Nlm_Boolean Nlm_MemMapAvailable(void);
+
 
 /* Initializes the memory mapping on file "name"
  * Return NULL on error
  * NOTE:  return non-NULL zero-filled structure if the file has zero length
  */
-NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit PROTO((const Nlm_Char PNTR name));
+NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name);
 
-/* Closes the memory mapping. */
-NLM_EXTERN void Nlm_MemMapFini PROTO((Nlm_MemMapPtr mem_mapp));
+
+/* Close the memory mapping
+ */
+NLM_EXTERN void Nlm_MemMapFini(Nlm_MemMapPtr mem_mapp);
 
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
-
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT
@@ -320,4 +299,4 @@ NLM_EXTERN void Nlm_MemMapFini PROTO((Nlm_MemMapPtr mem_mapp));
 #define NLM_EXTERN
 #endif
 
-#endif
+#endif /* _NCBIMEM_ */

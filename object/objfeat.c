@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1828,9 +1828,12 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "{ name \"Chlorophycean Mitochondrial\" , id 16 ,\n" \
 "ncbieaa  \"FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Trematode Mitochondrial\" , id 23 ,\n" \
+"{ name \"Trematode Mitochondrial\" , id 21 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M---------------M------------\" } };\n";
+"sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
+"{ name \"TAG-Leu,TCA-stop\" , id 22 ,\n" \
+"ncbieaa  \"FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } };\n";
 #endif
 
 /*****************************************************************************

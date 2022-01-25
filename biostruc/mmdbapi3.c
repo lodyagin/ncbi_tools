@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/06/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: FlatFile Generators for PDB & Kinemage
 *
@@ -44,6 +44,12 @@
 *
 *
 * $Log: mmdbapi3.c,v $
+* Revision 6.13  2000/03/31 22:30:47  lewisg
+* fix output of CONECT, create intrabond traverser, misc bugs
+*
+* Revision 6.12  2000/01/31 19:59:12  lewisg
+* fix output of date in pdb header
+*
 * Revision 6.11  2000/01/18 22:49:16  lewisg
 * send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
 *
@@ -654,7 +660,7 @@ CharPtr LIBCALL AuthorListPDB(BiostrucPtr pbsThis)
 void LIBCALL WritePDBHeader(PDNMS pdnmsThis,  FILE *pFile)
 {
 
-   Int4 i, depyear, depday, chrcnt, prevcnt, linecnt, back, first, adjust;
+   Int4 i, depyear, depday, depmon, chrcnt, prevcnt, linecnt, back, first, adjust;
    CharPtr cmpnd, src;
    Char lastchr, nextchr;
    Boolean lastok, nextok;
@@ -683,14 +689,20 @@ void LIBCALL WritePDBHeader(PDNMS pdnmsThis,  FILE *pFile)
       fprintf(pFile," ");
    }
    fflush(pFile);
-   depyear = pbssThis->database_entry_date->data[1];
-   depday = pbssThis->database_entry_date->data[3];
+   if(pbssThis) {
+      depyear = pbssThis->database_entry_date->data[1];
+      depday = pbssThis->database_entry_date->data[3];
+      depmon = pbssThis->database_entry_date->data[2];
+   } else {
+       depyear = depday = 0;
+       depmon = 1;
+   }
    if (!pmsdThis->pcPDBName) pmsdThis->pcPDBName = StringSave("1UNK");
 
-   fprintf(pFile,"%2d-%3s-%2d   %s      %s\n",
+   fprintf(pFile,"%2d-%3s-%02d   %s      %s\n",
                    (int) depday,
-                   NCBI_months[pbssThis->database_entry_date->data[2]-1],
-                   (int) depyear,
+                   NCBI_months[depmon-1],
+                   (int) depyear%100,
                    pmsdThis->pcPDBName,
                    pmsdThis->pcPDBName);
 
@@ -1494,11 +1506,16 @@ void LIBCALLBACK PDBConnect(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr)
                  (pmmdFrom->bWhat == (Byte) AM_POLY) ||
 		(pmmdFrom->bWhat == (Byte) AM_SOL) ||
 		(pmmdFrom->bWhat == (Byte) AM_ION) ||
+		(pmmdFrom->bWhat == (Byte) AM_WAT) ||
 		(pmmdTo->bWhat == (Byte) AM_HET) ||
                 (pmmdTo->bWhat == (Byte) AM_POLY) ||
 		(pmmdTo->bWhat == (Byte) AM_SOL) ||
+		(pmmdTo->bWhat == (Byte) AM_WAT) ||
 		(pmmdTo->bWhat == (Byte) AM_ION)) ) return;
 	   }
+      /* get rid of solvent solvent bonds */
+      if((pmmdFrom->bWhat == (Byte) AM_SOL || pmmdFrom->bWhat == (Byte) AM_WAT)
+          && (pmmdFrom->bWhat == (Byte) AM_SOL || pmmdFrom->bWhat == (Byte) AM_WAT)) return;
 	  if (iIndex == 0) /* don't connect the backbone stupid */
 	    {
   	     if ((pmbdThis->pmadFrom->bWhat & (Byte) AM_BACKBONE) ||
@@ -1560,7 +1577,7 @@ void LIBCALL WritePDBConnect(PDNMS pdnmsThis,  Int2 iModel, FILE *pFile)
          0, pFile, PDBConnect);
 
   /* HET pass */
-   iTest = TraverseOneModel(pdnmsThis, TRAVERSE_BOND, iModel,
+   iTest = TraverseOneModel(pdnmsThis, TRAVERSE_INTRABOND, iModel,
          1, pFile,  PDBConnect);
    return;
 }
@@ -1860,10 +1877,10 @@ void LIBCALL WriteKinHeader(PDNMS pdnmsThis,  FILE *pFile)
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
 
-   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%2d\n\n",
+   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%02d\n\n",
                    (int) depday,
                    NCBI_months[pbssThis->database_entry_date->data[2]-1],
-                   (int) depyear);
+                   (int) depyear%100);
      }
   fprintf(pFile,"Class:\n%s\n\n", pmsdThis->pcPdbClass);
   fflush(pFile);
@@ -3299,10 +3316,10 @@ static void WriteStrucHTMLHeader(PDNMS pdnmsThis,  FILE *pFile)
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
 
-   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%2d\n\n",
+   	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%02d\n\n",
                    (int) depday,
                    NCBI_months[pbssThis->database_entry_date->data[2]-1],
-                   (int) depyear);
+                   (int) depyear%100);
      }
   fprintf(pFile,"Class:\n%s\n\n", pmsdThis->pcPdbClass);
   fflush(pFile);

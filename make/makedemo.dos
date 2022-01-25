@@ -44,6 +44,7 @@ BL2SEQ_EXE   = bl2seq.___
 MEGABLST_EXE = megablst.___
 FA2HTGS_EXE  = fa2htgs.___
 VECSCREEN_EXE  = vecscreen.___
+GIL2BIN_EXE  = gil2bin.___
 !endif
 
 
@@ -77,7 +78,8 @@ $(COPYMAT_EXE)  \
 $(IMPALA_EXE)   \
 $(BL2SEQ_EXE)	\
 $(MEGABLST_EXE) \
-$(VECSCREEN_EXE) 
+$(VECSCREEN_EXE) \
+$(GIL2BIN_EXE)
 
 
 ##################################################
@@ -280,9 +282,8 @@ $(T_SOCKET_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
 TEST_NAME = test_ncbi_socket
-TEST_OBJ = test_ncbi_socket.obj ncbi_socket.obj ncbi_buffer.obj
+TEST_OBJ = test_ncbi_socket_.obj $(LIB1)
 TEST_LIB = 
-TEST_OPT = -DNCBI_C
 MAIN_OBJ =
 $(INCLUDE_EXE)
 <<
@@ -434,6 +435,19 @@ MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = vecscreen
 TEST_OBJ = vecscreen.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef GIL2BIN_EXE
+$(GIL2BIN_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = gil2bin
+TEST_OBJ = gil2bin.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

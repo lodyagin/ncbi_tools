@@ -28,13 +28,58 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.33 $
+* $Revision: 6.48 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.48  2000/04/22 15:53:41  wheelan
+* added AlnMgrIndexLite
+*
+* Revision 6.47  2000/04/10 19:33:27  wheelan
+* added AlnMgrIsSAPNULL
+*
+* Revision 6.46  2000/04/05 17:41:47  wheelan
+* added AlnMgrAddBlock and AlnMgrReplaceBlock
+*
+* Revision 6.45  2000/04/03 12:50:44  wheelan
+* added AlnMgrGetSubAlignSpecial
+*
+* Revision 6.44  2000/03/17 14:25:25  wheelan
+* changes to AlnMgrGetSubAlign
+*
+* Revision 6.43  2000/03/03 19:58:36  wheelan
+* added AlnMgrDupTopNByScore
+*
+* Revision 6.42  2000/02/28 17:18:15  wheelan
+* Added AlnMgrTossNeatRows for Cn3D
+*
+* Revision 6.41  2000/02/23 18:44:21  wheelan
+* added AlnMgrNeatlyIndex for structure alignments
+*
+* Revision 6.40  2000/02/16 15:47:38  wheelan
+* changed behavior of AlnMgrMakeMultByIntersectOnMaster
+*
+* Revision 6.39  2000/02/11 17:30:50  kans
+* AlnMgrForcePairwiseContinuous moved to tools/actutils (SW)
+*
+* Revision 6.38  2000/02/09 20:22:25  wheelan
+* added structure for AlnMgrDeleteNthRow
+*
+* Revision 6.37  2000/02/07 16:14:29  wheelan
+* added AlnMgrTruncateSAP for structure-based indexing
+*
+* Revision 6.36  2000/02/02 14:37:30  wheelan
+* added AlnMgrGetNthAlignedSegInNthRow and AlnMgrGetNthSegmentRange to make alignment editing easier
+*
+* Revision 6.35  2000/01/31 16:08:34  wheelan
+* added unpacking functions, and AlnMgrMakeMultByIntersectOnMaster (does not work yet
+*
+* Revision 6.34  2000/01/29 14:02:12  wheelan
+* added AlnMgrDeleteHidden and AlnMgrForcePairwiseContinuous
+*
 * Revision 6.33  2000/01/12 17:43:20  wheelan
 * added AlnMgrGetNumSegments, AlnMgrDeleteRow
 *
@@ -174,6 +219,8 @@ extern "C" {
 /* values for amaip->mstype */
 #define AM_MASTERSLAVE 1
 #define AM_SEGMENTED_MASTERSLAVE 2
+#define AM_NEATINDEX 3
+#define AM_LITE 4
 
 /* values for AlnMgrGetNthRowTail */
 #define LEFT_TAIL 1
@@ -307,9 +354,11 @@ typedef struct messagestruct {
    Int4      len_left;
    Boolean   send_space;
    Uint2     place;
+   Boolean   flag;
 } AlnMsg, PNTR AlnMsgPtr;
 
 NLM_EXTERN AlnMsgPtr AlnMsgNew(void);
+NLM_EXTERN AlnMsgPtr AlnMsgFree(AlnMsgPtr amp);
 NLM_EXTERN AlnMsgPtr AlnMsgReNew(AlnMsgPtr amp);
 
 /* used by AlnMgrMakeMultSegments */
@@ -319,12 +368,18 @@ typedef struct am_tinyinfo {
    Uint4  numgap;
    Uint2  which;
    Int4   numsap;
+   struct am_tinyinfo PNTR next;
 } AMTinyInfo, PNTR AMTinyInfoPtr;
 
 typedef struct am_aligninfo {
    SeqAlignPtr  align;
    Int4 align_len;
 } AMAlignInfo, PNTR AMAlignInfoPtr;
+
+typedef struct am_alignkeeper {
+   SeqAlignPtr  align;
+   Boolean      delete;
+} AMAlnKeeper, PNTR AMAlnKeeperPtr;
 
 
 /* used by AlnMgrMakeSegmentedMasterSlave */
@@ -353,6 +408,12 @@ typedef struct am_siplist {
    Int4      first_row;
    struct am_siplist PNTR next;
 } AMsiplist, PNTR AMsiplistPtr;
+
+typedef struct am_bittystruct {
+   Int4  num1;
+   Int4  num2;
+   struct am_bittystruct PNTR next;
+} AMBitty, PNTR AMBittyPtr;
 
 NLM_EXTERN SeqAlignIndexPtr SeqAlignIndexNew(void);
 
@@ -383,6 +444,40 @@ NLM_EXTERN Boolean AlnMgrReIndexSeqAlign(SeqAlignPtr sap);
 *
 ********************************************************************************/
 NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap);
+
+/**********************************************************************
+*
+*  AlnMgrIndexLite disassembles the input alignment, indexes all child
+*  alignments, and then puts them in the amaip->saps array.  It does
+*  not attempt to create alignment coordinates across the whole set.
+*  This is useful to keep sets of child alignments together (managing
+*  BLAST hits, for example) when creating an overall alignment is
+*  unnecessary.  This alignment can be freed normally, but many 
+*  alignmgr functions will not work on the parent alignment (they 
+*  will work on the child alignments).
+*
+**********************************************************************/
+NLM_EXTERN Boolean AlnMgrIndexLite(SeqAlignPtr sap);
+
+/***************************************************************************
+*
+*  AlnMgrUnpackSeqAlign rearranges any seqalign (except alignments with
+*  more than two levels of nested discontinuous alignments) to a simple
+*  discontinuous alignment or a linked list of alignments.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgrUnpackSeqAlign(SeqAlignPtr sap);
+
+
+/***************************************************************************
+*
+*  AlnMgrRearrangeUnpacked transforms all child seqaligns into dense-seg
+*  types, requiring some rearrangement for dense-diag sets.  This function
+*  presumes that AlnMgrUnpackSeqAlign has already been called on the
+*  alignment.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgrRearrangeUnpacked(SeqAlignPtr sap);
 
 
 /***************************************************************************
@@ -421,6 +516,7 @@ NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsBySapList(AMAlignIndexPtr amaip);
 NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsByRow(AMAlignIndexPtr amaip);
 
 NLM_EXTERN Boolean AlnMgrMakeMultipleByScore(SeqAlignPtr sap);
+NLM_EXTERN SeqAlignPtr AlnMgrDupTopNByScore(SeqAlignPtr sap, Int4 n);
 
 
 /**********************************************************************
@@ -533,6 +629,22 @@ NLM_EXTERN SeqIdPtr AlnMgrGetNthSeqIdPtr(SeqAlignPtr sap, Int4 n);
 NLM_EXTERN void AlnMgrGetNthSeqRangeInSA(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
 NLM_EXTERN Int4 AlnMgrGetNumSegments(SeqAlignPtr sap);
 
+/***************************************************************************
+*
+*  AlnMgrGetNthAlignedSegInNthRow is similar to AlnMgrGetNextAlignBit,
+*  but it takes an extra argument -- the number (1-based) of the segment
+*  for which you want the alignment.  Fill in the AlnMsg structure as for
+*  AlnMgrGetNextAlignBit, but leave out the from_m and to_m; and as usual,
+*  don't modify the AlnMsg structure in between calls, and call AlnMsgReNew
+*  for a new segment.  The from_b and to_b fields will work as in 
+*  AlnMgrGetNextAlnBit -- if there is a gap, these are alignment coordinates;
+*  otherwise they're sequence coordinates.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgrGetNthAlignedSegInNthRow(SeqAlignPtr sap, AlnMsgPtr amp, Int4 segnum);
+
+NLM_EXTERN Boolean AlnMgrGetNthSegmentRange(SeqAlignPtr sap, Int4 n, Int4Ptr from, Int4Ptr to);
+
 /********************************************************************************
 *
 *  AlnMgrGetNextNthSeqRange is called recursively to return the lengths of
@@ -611,6 +723,72 @@ NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlign(SeqAlignPtr sap, Uint4 pos, Int4 row_n
 *
 ***********************************************************************/
 NLM_EXTERN Boolean AlnMgrMakeFakeMultiple(SeqAlignPtr sap);
+
+/**********************************************************************
+*
+*  AlnMgrNeatlyIndex is a very specialized function for structure
+*  alignments and other alignments that have an implied row order.
+*  It puts an index on the first seqalign in the set, and that index
+*  only designates which seqaligns belong in which rows.  The input
+*  alignments are not changed at all, and only the first alignment is
+*  indexed.  This alignment cannot be displayed or accessed; it's only
+*  a way to designate rows.
+*
+**********************************************************************/
+NLM_EXTERN Boolean AlnMgrNeatlyIndex(SeqAlignPtr sap);
+
+/**********************************************************************
+*
+*  AlnMgrTossNeatRows is called to create a subset of the NeatlyIndexed
+*  alignment, only containing certain rows.  The array throwarray, of
+*  length len, contains the (1-based) numbers of the rows to be left
+*  out.  The function returns a duplicated alignment, which is not
+*  yet indexed.  This function assumes a very strict row structure --
+*  each row is represented by a single seqalign or seqalign set, and
+*  the first row is the master.
+*
+**********************************************************************/
+NLM_EXTERN SeqAlignPtr AlnMgrTossNeatRows(SeqAlignPtr sap, Int4Ptr throwarray, Int4 len);
+
+/***************************************************************************
+*
+*   AlnMgrMakeMultByIntersectOnMaster is a specialized function that 
+*   truncates the segments of segmented master-slave alignments to
+*   force them to line up:
+*
+*   Master   XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+*   seq1        XXXXXXXX       XXXXXXXXXXXXXX
+*   seq2       XXXXXXXXXX        XXXXXXX
+*   seq3          XXXXXXXXXXXXXXXXXXXXXXX
+*
+*   becomes
+*
+*   Master        XXXXXX         XXXXXXX
+*   seq1          XXXXXX         XXXXXXX
+*   seq2          XXXXXX         XXXXXXX
+*   seq3          XXXXXX         XXXXXXX
+*
+*   This indexing is different from the other type -- the input
+*   alignments may actually be truncated, instead of just rearranged.
+*   If allinblock is TRUE, then the function throws away any blocks that
+*   have a missing sequence.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgrMakeMultByIntersectOnMaster(SeqAlignPtr sap, Boolean allinblock);
+
+/***************************************************************************
+*
+*   AlnMgrTruncateSAP truncates a given seqalign to contain only the
+*   bioseq coordinates from start to stop on the indicated row.  Anything
+*   before those coordinates is discarded; anything remaining afterwards
+*   is made into another seqalign and put in sap->next (the original next,
+*   if any, is now at sap->next->next). Doesn't work on parent seqaligns.
+*   The function returns TRUE if the orignal alignment extended past stop.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgrTruncateSAP(SeqAlignPtr sap, Int4 start, Int4 stop, Int4 row);
+
+
 NLM_EXTERN void AlnMgrMakeAlignCoords(SeqAlignPtr sap);
 NLM_EXTERN Boolean AlnMgrMergeIntoMSMultByMaster(AMAlignIndexPtr amaip, Int4Ptr lens, Uint4Ptr numseg);
 NLM_EXTERN Boolean AlnMgrMergeSegments(Int4Ptr lens, SeqAlignPtr sap, SeqIdPtr master, Int4Ptr where, Int4 which);
@@ -669,7 +847,15 @@ NLM_EXTERN Boolean AlnMgrForceMasterSlave(SeqAlignPtr sap);
 NLM_EXTERN void AlnMgrSetMaster(SeqAlignPtr sap, SeqIdPtr master);
 NLM_EXTERN void AlnMgrMakeMasterPlus(SeqAlignPtr sap);
 
+/***************************************************************************
+*
+*  AlnMgrGetSubAlign returns a flattened multiple or pairwise alignment
+*  corresponding to the indexed input alignment.  To get the entire
+*  alignment, set from = 0 and to = -1.  (SUBALIGN)
+*
+***************************************************************************/
 NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master, Int4 from, Int4 to);
+NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlignSpecial(SeqAlignPtr sap, Int4 master, Int4 from, Int4 to);
 
 /********************************************************************************
 *
@@ -684,8 +870,30 @@ NLM_EXTERN SeqAlignIndexPtr AlnMgrCopyIndexesForChildSeqAlign(SeqAlignPtr sap);
 NLM_EXTERN SASeqDatPtr  AlnMgrCopySASeqDat(SASeqDatPtr ssdp);
 NLM_EXTERN SeqAlignPtr AlnMgrCopyAndIndexSingleAlignment(SeqAlignPtr sap);
 NLM_EXTERN Boolean AlnMgrCopyIndexedParentIntoSap(SeqAlignPtr sap, SeqAlignPtr target);
+
+/**********************************************************************
+*
+*  AlnMgrDeleteChildByPointer removes the specified child seqalign
+*  from the set.  Note that this function does not reindex the seqalign;
+*  the calling function must do that if the return is TRUE (use 
+*  AlnMgrReIndexSeqAlign).
+*
+**********************************************************************/
 NLM_EXTERN Boolean AlnMgrDeleteChildByPointer(SeqAlignPtr parent, SeqAlignPtr child);
-NLM_EXTERN void AlnMgrDeleteRow(SeqAlignPtr sap, Int4 row);
+
+/**********************************************************************
+*
+*  AlnMgrDeleteNthRow deletes the specified row from either a parent 
+*  or a child seqalign.  Note that with a parent seqalign, this may
+*  result in the deletion of a child seqalign.  The function does NOT
+*  reindex the alignment; the calling function must do that upon a 
+*  TRUE return (use AlnMgrReIndexSeqAlign).
+*
+**********************************************************************/
+NLM_EXTERN Boolean AlnMgrDeleteNthRow(SeqAlignPtr sap, Int4 row);
+NLM_EXTERN void AlnMgrDeleteHidden(SeqAlignPtr sap, Boolean UseOM);
+NLM_EXTERN Boolean AlnMgrReplaceBlock(SeqAlignPtr sap, DenseSegPtr new_block, Int4 block_num);
+NLM_EXTERN Boolean AlnMgrAddBlock(SeqAlignPtr sap, DenseSegPtr new_block);
 
 /********************************************************************************
 *
@@ -693,6 +901,8 @@ NLM_EXTERN void AlnMgrDeleteRow(SeqAlignPtr sap, Int4 row);
 * 
 ********************************************************************************/ 
 NLM_EXTERN  Boolean AlnMgrIsSAPDiscAli(SeqAlignPtr sap);
+
+NLM_EXTERN Boolean AlnMgrIsSAPNULL(SeqAlignPtr sap);
 
 
 #ifdef __cplusplus

@@ -34,6 +34,22 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.15  2000/02/29 16:27:39  shavirin
+Added protection against matrix with scaleFactor != 1 for RPS Blast
+
+Revision 6.14  2000/02/28 21:08:34  shavirin
+This fixes DEC Alpha problems of RPS Blast.
+
+Revision 6.13  2000/02/28 19:06:47  shavirin
+Added comments for RPS Blast functions.
+Removed unused code.
+
+Revision 6.12  2000/02/22 19:29:06  shavirin
+Fixed DEC Alpha specific bug in the function RPSCreateLookupFile().
+
+Revision 6.11  2000/02/17 19:11:15  shavirin
+Removed reference to theCacheSize.
+
 Revision 6.10  2000/01/13 15:27:10  shavirin
 Added concatenation of files into single file (for later formatdb).
 
@@ -79,8 +95,6 @@ static Args myargs [] = {
       "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create RPS mem map file(s)", /* 2 */
       "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Cache size for lookup table (RPS Blast)", /* 3 */
-      "3", NULL, NULL, FALSE, 's', ARG_INT, 0.0, 0, NULL},
 }; 
 
 /*counts the number of items in sequencesFile and matricesFile, assumed to
@@ -259,7 +273,8 @@ static void readAllMatrices(FILE *matrixnamefp, ScoreRow *combinedMatrix,
 
 /*findTotalLength scans matrixAuxiliaryFile to find the
   total  number of positions among all the position-specific matrices*/
-static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles)
+static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles,
+                            Nlm_FloatHiPtr scalingFactor)
 {
     Int4 maxLength; /*maximum length of sequence*/
     Int4 thisLength; /*length of next sequence*/
@@ -269,7 +284,6 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles)
     Nlm_FloatHi Kungapped, Hungapped; /*two values to read*/
     Char * underlyingMatrixName; /*name of matrix to read*/
     Int4 gap_open, gap_extend; /*gap costs to skip over in reading*/
-    Nlm_FloatHi scalingFactor; /*matrix scale to skip over in reading*/
     
     underlyingMatrixName = MemNew(MAXLINELEN * sizeof(Char));
     fscanf(matrixAuxiliaryFile,"%s",underlyingMatrixName);
@@ -279,7 +293,7 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles)
     fscanf(matrixAuxiliaryFile, "%le", &Hungapped);
     fscanf(matrixAuxiliaryFile, "%d", &maxLength);
     fscanf(matrixAuxiliaryFile, "%d", &dbLength);
-    fscanf(matrixAuxiliaryFile, "%lf", &scalingFactor);
+    fscanf(matrixAuxiliaryFile, "%lf", scalingFactor);
     totalLength = 0;
     for (i = 0; i < numProfiles; i++) {
         fscanf(matrixAuxiliaryFile, "%d", &thisLength);
@@ -293,6 +307,11 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles)
 #define RPS_THRESHOLD 11
 #define RPS_WORDSIZE  3
 
+/* -- SSH --
+   Updates absolute pointers of the lookup table to relative pointers -
+   pointers relative to the start of "mod_lookup_table_memory" chunk 
+   RPS Blast will calculate real pointers in run time using these values
+*/
 Boolean RPSUpdatePointers(LookupTablePtr lookup)
 {
     ModLAEntry * mod_lt;
@@ -317,7 +336,10 @@ Boolean RPSUpdatePointers(LookupTablePtr lookup)
     
     return TRUE;
 }
-
+/* -- SSH --
+   Write lookup table to the disk into file "*.loo", which will be
+   used memory-mapped during RPS Blast search 
+*/
 Boolean RPSDumpLookupTable(LookupTablePtr lookup, FILE *fd)
 {
 
@@ -332,14 +354,18 @@ Boolean RPSDumpLookupTable(LookupTablePtr lookup, FILE *fd)
     
     return TRUE;
 }
-
+/* -- SSH --
+   Create lookup table for the large sequence, that represented
+   by all collection of PSSM matrixes and dump this table to disk
+   Used by RPS Blast.
+*/
 Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
                             Int4Ptr seqlens, CharPtr filename, 
-                            Int4 TheCacheSize)
+                            Nlm_FloatHi scalingFactor)
 {
     LookupTablePtr lookup;
     BlastAllWordPtr all_words;
-    Int4 start, len, i, header_size, all_length, magicNumber;
+    Int4 start, len, i, j, header_size, all_length, magicNumber;
     FILE *fd;
     Int4Ptr offsets;
     BLAST_ScorePtr PNTR posMatrix;
@@ -349,7 +375,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
         return FALSE;
     
     num_lookups = 1; /* Single lookup table for all set */
-    lookup = lookup_new(PRO_ALPHABET_SIZE, 3, 0, TheCacheSize);
+    lookup = lookup_new(PRO_ALPHABET_SIZE, 3, 0);
 
     all_words = BlastPopulateAllWordArrays(3, PRO_ALPHABET_SIZE);
 
@@ -365,7 +391,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     
     all_length = seqlens[numProfiles] - seqlens[0];
     
-    posMatrix = MemNew((all_length + 1) * sizeof(BLAST_Score));
+    posMatrix = MemNew((all_length + 1) * sizeof(BLAST_Score *));
     for (i = 0; i < all_length; i++) {
         posMatrix[i] = (BLAST_Score *) &(combinedMatrix[i][0]);
     }
@@ -375,34 +401,14 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
         posMatrix[all_length][i] = -INT2_MAX;
     }
-#if 0
-    for(i = 0; i < numProfiles; i++) {
-        
-        offsets[i] = ftell(fd);
 
-        start = seqlens[i];
-        len = seqlens[i+1] - seqlens[i];
-
-        if(BlastNewFindWordsEx(lookup, &posMatrix[start], 0, len, all_words, 
-                               RPS_THRESHOLD, RPS_WORDSIZE, 0) < 0) {
-            ErrPostEx(SEV_ERROR, 0,0, "Failure to create llokup table");
-            return FALSE;
-        }
-        
-        lookup_position_aux_destruct(lookup);
-
-        RPSDumpLookupTable(lookup, fd);
-        
-        lookup = lookup_destruct(lookup);
-        lookup = lookup_new(PRO_ALPHABET_SIZE, 3, 0);
-    }
-#else
     offsets[0] = ftell(fd);
     
     start = seqlens[0]; /* 0 */
     
     if(BlastNewFindWordsEx(lookup, &posMatrix[start], 0, all_length, 
-                           all_words, RPS_THRESHOLD, RPS_WORDSIZE, 0) < 0) {
+                           all_words, RPS_THRESHOLD * scalingFactor, 
+                           RPS_WORDSIZE, 0) < 0) {
         ErrPostEx(SEV_ERROR, 0,0, "Failure to create llokup table");
         return FALSE;
     }
@@ -411,12 +417,10 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     
     RPSDumpLookupTable(lookup, fd);
     
-    /*    lookup = lookup_new(PRO_ALPHABET_SIZE, 3, 0); */
     i = 1;
-#endif
-
+    
     offsets[i] = ftell(fd); /* Last offset also recorded */
-
+    
     fseek(fd, 0, SEEK_SET);
     magicNumber = RPS_MAGIC_NUMBER;
     FileWrite(&magicNumber, sizeof(Int4), 1, fd); /* header[0] */
@@ -431,18 +435,29 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     FileWrite(offsets, sizeof(Int4), num_lookups + 1, fd);
     FileClose(fd);
     
+    if (scalingFactor != 1.0) {
+        for(j = 0; j < all_length; j++) {
+            for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
+                combinedMatrix[j][i] /= scalingFactor;
+            }
+        }
+    }
+
     /* Final memory cleenup */
     
     lookup = lookup_destruct(lookup);
-
-    MemFree(posMatrix[numProfiles]);
+    
+    MemFree(posMatrix[all_length]);
     MemFree(posMatrix);
 
     BlastAllWordDestruct(all_words);
     
     return TRUE;
 }
-
+/* -- SSH --
+   Create file <database_name> (without extention), which is concatenation
+   of all FASTA files used. Used by RPS Blast.
+*/
 Boolean RPSConcatSequences(FILE *sfp, CharPtr fastaname)
 {
     FILE *fasta_fp, *fd;
@@ -503,6 +518,7 @@ Int2  Main(void)
                              to reach other directories indirectly*/
 
     Int4Ptr seqlens;
+    Nlm_FloatHi scalingFactor; /*matrix scale to skip over in reading*/
 
     if (! GetArgs ("copymatrices", NUMARG, myargs)) {
         return (1);
@@ -535,7 +551,7 @@ Int2  Main(void)
         return (1);
     }
 
-    /* Name of matrix file depends on program - RPS or Impala */
+    /* -- SSH -- Name of matrix file depends on program - RPS or Impala */
     
     if((Boolean) myargs[2].intvalue) {
         sprintf(bigFileName, "%s.rps", profilesFileName);
@@ -547,13 +563,13 @@ Int2  Main(void)
     }
     
     numProfiles =  countProfiles(sequencesfp, matrixnamefp);
-    totalProfileLength = findTotalLength(auxiliaryfp, numProfiles);
-
-    /* Additional line in matrix with -INT2_MAX values */
+    totalProfileLength = findTotalLength(auxiliaryfp, numProfiles, 
+                                         &scalingFactor);
+    
+    /* -- SSH -- Additional line in matrix with -INT2_MAX values */
     if((Boolean) myargs[2].intvalue) {
         totalProfileLength += numProfiles;
     }
-
 
     combinedMatrix = allocateMatrix(totalProfileLength);
     if (NULL == combinedMatrix) {
@@ -561,7 +577,7 @@ Int2  Main(void)
         return (1);
         
     }
-
+    /* -- SSH -- RPS Blast data */
     if ((Boolean) myargs[2].intvalue) {
         seqlens = (Int4Ptr) MemNew((numProfiles +1) * sizeof(Int4));
     } else {
@@ -571,7 +587,7 @@ Int2  Main(void)
     readAllMatrices(matrixnamefp, combinedMatrix, numProfiles,
                     directoryPrefix, seqlens);
     
-    /* For RPS Blast some additional info will be added to the file */
+    /* -- SSH -- For RPS Blast additional info will be added to the file */
     if ((Boolean) myargs[2].intvalue) {
         Int4 magicNumber = RPS_MAGIC_NUMBER;
         FileWrite(&magicNumber, sizeof(Int4), 1, bigmatrixfile);
@@ -580,7 +596,7 @@ Int2  Main(void)
         
         sprintf(lookupName, "%s.loo", profilesFileName);
         RPSCreateLookupFile(combinedMatrix, numProfiles, seqlens, lookupName,
-                            myargs[3].intvalue);
+                            scalingFactor);
 
         if(!RPSConcatSequences(sequencesfp, profilesFileName)) {
             ErrPostEx(SEV_ERROR, 0,0, "Failure to concatenate sequences");

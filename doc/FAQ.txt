@@ -9,9 +9,9 @@ In case of any questions don't hesitate to ask us at
 Q. Where can I download the binaries of NCBI toolkit?
 A. The binaries of NCBI toolkit may be downloaded at:
 	BLAST:		ftp://ncbi.nlm.nih.gov/blast/executables/
-	SEQUIN:		ftp://ncbi.nlm.nih.gov/sequin/CURRENT/
-	FA2HTGS:	ftp://ncbi.nlm.nih.gov/fa2htgs/CURRENT/
-	ENTREZ:		ftp://ncbi.nlm.nih.gov/entrez/CURRENT/
+	SEQUIN:		ftp://ncbi.nlm.nih.gov/sequin/
+	FA2HTGS:	ftp://ncbi.nlm.nih.gov/fa2htgs/
+	ENTREZ:		ftp://ncbi.nlm.nih.gov/entrez/
 	CN3D:		ftp://ncbi.nlm.nih.gov/cn3d/
 
 Currently NCBI prepares the binaries for the following platforms:
@@ -55,10 +55,15 @@ A. Read the file ftp://ncbi.nlm.nih.gov/toolbox/readme.unx
 	./ncbi/make/makedis.csh - |& tee out.makedis.csh
    The new binaries and libraries will be in ncbi/build subdirectory
 
+Q. May I build toolkit on Solaris/Intel or Solaris/Sparc using GNU C?
+A. Yes, just copy the file ./ncbi/platform/solaris-gcc.ncbi.mk
+   instead of ./ncbi/platform/solarisintel.ncbi.mk (for Solaris/Intel)
+   or ./ncbi/platform/solaris.ncbi.mk (for Solaris/Sparc).
+
 Q. How can I build toolkit on Linux with Vibrant library?
 A. You should purchase Motif for Linux. For example look at:
 	http://www.redhat.com/online_orders.phtml?pid=RH2110
-As alternative to Motif there is free clone which is called Lesstif
+As an alternative to Motif there is free clone which is called Lesstif
 which can be obtained at http://www.lesstif.org/
 We didn't check it work yet, so you can use Lesstif for your own risk.
 Besides that the X11R6 development toolkit should be installed.

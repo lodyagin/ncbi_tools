@@ -1,4 +1,4 @@
-/*  $Id: pgppop.h,v 6.27 1999/12/20 14:37:54 durand Exp $
+/*  $Id: pgppop.h,v 6.33 2000/03/31 21:33:22 durand Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.27 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: pgppop.h,v $
+* Revision 6.33  2000/03/31 21:33:22  durand
+* added new default color schemas for BLAST
+*
+* Revision 6.32  2000/03/28 13:32:29  durand
+* update DDV_DisplayDefaultAlign to receive a pre-initialized DDV_Disp_Opt data structure
+*
+* Revision 6.31  2000/03/27 14:19:14  durand
+* fixed bugs in BLAST outputs
+*
+* Revision 6.30  2000/03/21 19:26:48  durand
+* pgppop now uses AlignMgr
+*
+* Revision 6.29  2000/02/15 15:31:46  lewisg
+* move DDVRulerDescr to pgppop
+*
+* Revision 6.28  2000/02/14 16:39:56  durand
+* add new output options for BLAST
+*
 * Revision 6.27  1999/12/20 14:37:54  durand
 * transfer some PopSet Viewer functions from here to wwwddv.c; update the code to better use Color Manager for BLAST outputs
 *
@@ -201,11 +219,12 @@ extern "C" {
 
 /*used by the layout manager (see DDVOptionsBlock
   data structure in this file*/
-#define DDV_USE_STDCLR      ((Uint1)1)/*use standard aa or na colors*/
-#define DDV_USE_UALAYOUT    ((Uint1)2)/*layout the UA regions*/
-#define DDV_USE_GAPLAYOUT   ((Uint1)4)/*layout the GAP*/
-#define DDV_USE_MASKLAYOUT  ((Uint1)8)/*layout masked regions*/
-#define DDV_USE_ISOLAYOUT   ((Uint1)16)/*layout ident/simil/other*/
+#define DDV_USE_STDCLR      ((Uint1)1)/*use standard aa or na colors-mainly used by DDV itself*/
+#define DDV_USE_NOMLAYOUT   ((Uint1)2)/*layout the Aligned regions*/
+#define DDV_USE_UALAYOUT    ((Uint1)4)/*layout the UA regions*/
+#define DDV_USE_GAPLAYOUT   ((Uint1)8)/*layout the GAP*/
+#define DDV_USE_MASKLAYOUT  ((Uint1)16)/*layout masked regions*/
+#define DDV_USE_ISOLAYOUT   ((Uint1)32)/*layout ident/simil/other*/
 
 /*used to set the layout for letters (initially designed for new BLAST outputs*/
 /*note: it's possible to combine all the values*/
@@ -215,6 +234,14 @@ extern "C" {
 #define DDV_TXTSTYLE_LOWERCASE  ((Uint1)8)
 #define DDV_TXTSTYLE_COLOR      ((Uint1)16)
 	
+
+typedef struct ddvrulerdescr{
+	Int4    disp_start;/*start in display coordinate*/
+	Int4    disp_stop;/*stop in display coordinate*/
+	Int4    align_start;/*start in align coordinate*/
+	Boolean bUnAligned;
+} DDVRulerDescr, PNTR DDVRulerDescrPtr;
+
 /*****************************************************************************
 	Populated lists of the elements ready for the display
 	
@@ -268,11 +295,29 @@ typedef struct ddvextlayout{
 	Uint1 clr_ident;
 	Uint1 clr_simil;
 	Uint1 clr_other;
+	Uint1 sty_ident;
+	Uint1 sty_simil;
+	Uint1 sty_other;
 }DDVExtLayout, PNTR DDVExtLayoutPtr;
 
 /*****************************************************************************
-	data block for enhanced display options
+	data blocks for enhanced display options
 *****************************************************************************/
+typedef struct ddv_disp_opt{
+	/*color display ?*/
+	Boolean bUseColors;
+	/*styles for a disc. seqalign*/
+	Boolean ShowLeftTail;
+	Boolean ShowRightTail;
+	Uint1   DispDiscStyle;
+	Uint1   SpacerSize;
+    Uint1   DiscJustification;
+	Uint1   UAGapStyle;
+	Uint1   AGapStyle;
+	/*this field is here because it's closely related to the SeqAlign*/
+	Uint1   RulerStyle; /*for bioseq coord system; used only when rebuild the display*/
+	}DDV_Disp_Opt, PNTR DDV_Disp_OptPtr;
+
 typedef struct ddvoptionsblock{	
 	Int2          LineSize;/*size of a sequence line*/
 	ByteStorePtr PNTR byteSpp;/*use this to store the formatted align as a
@@ -281,10 +326,13 @@ typedef struct ddvoptionsblock{
 	Int4Ptr PNTR  matrix;
 	Boolean       bUseLayout;
 	Uint1         LayoutType;
+	DDVExtLayout  normlayout;
 	DDVExtLayout  UAlayout;
 	DDVExtLayout  GAPlayout;
 	DDVExtLayout  MASKlayout;
 	DDVExtLayout  ISOlayout;
+	/*additional styles*/
+	DDV_Disp_OptPtr ddop;
 	} DDVOptionsBlock, PNTR DDVOptionsBlockPtr;
 	
 /*************************************************************************
@@ -326,6 +374,8 @@ typedef struct ddvoptionsblock{
 #define DISPE_TABLE ((Uint4)1048576)
 		/*BLAST only : if set, display the middle line between query & subject*/
 #define DISP_BLAST_MIDLINE ((Uint4)2097152)
+		/*don't add a hot libk on the acc. number*/
+#define DISP_NOLINKONNAME ((Uint4)4194304)
 
 #define DDV_AddBlank(_diff, _fp) \
 do { Int4 _i;  for (_i=0; _i<(Int4)_diff; _i++) fprintf(_fp," "); } while(0)
@@ -364,22 +414,12 @@ NLM_EXTERN Boolean DDV_PopDisplay2(SABlockPtr sabp,MsaParaGPopListPtr mpplp,
 NLM_EXTERN Boolean DDV_GetSequenceFromParaG(ParaGPtr pgp,
 		CharPtr PNTR szSequence,Int4 bspLength,Boolean IsAA,Uint1 PNTR bsp_strand,
 		Int4 PNTR bsp_start,Int4 PNTR bsp_stop);
-NLM_EXTERN Boolean DDV_GetFullFASTAforIdxAli(SABlockPtr sabp,FILE *fp);
+NLM_EXTERN Boolean DDV_GetFullFASTAforIdxAli(SeqAlignPtr sap,FILE *fp);
 NLM_EXTERN Boolean DDV_GetFullGapFASTAforIdxAli(MsaParaGPopListPtr mpplp,FILE *fp);
 NLM_EXTERN void DDV_PrintStudyName(CharPtr szPopSetName,CharPtr szPopSetAuth,
 		CharPtr szJournalTitle,Int4 pmid,FILE *fp);
-/*NLM_EXTERN void PrintHTML_Header(Uint4 type,FILE *fp);
-NLM_EXTERN void PrintHTML_Tail(Uint4 type,FILE *fp);
-NLM_EXTERN void PrintPopContHeader(URLDataPtr udp,FILE *fp,Uint2 nDNA,Uint2 nProt);
-NLM_EXTERN void PrintPopSizeAliTable(Int4 sapLength,Int4 sapNumBioseqs,FILE *fp);
-NLM_EXTERN void PrintPopRightContent(URLDataPtr udp,Int4 sapLength,Int4 sapNumBioseqs,FILE *fp,
-		Int4 numBlockAffich,Int2 LineSize);
-NLM_EXTERN void PrintPopulationTail(Uint4 type,FILE *fp);
-NLM_EXTERN void PrintPopulationHeadG(Uint4 type,FILE *fp);
-NLM_EXTERN void PrintPopulationBar(CharPtr db,FILE *fp);*/
 NLM_EXTERN void	DDV_GetArticleInfo(SeqEntryPtr sep,CharPtr szPopSetName,
 	CharPtr szPopSetAuth,CharPtr szJournalTitle,Int4Ptr pmid);
-/*NLM_EXTERN void DDV_GetBspList(SeqEntryPtr sep,FILE *fp);*/
 NLM_EXTERN Boolean DDV_DisplayDefaultAlign(SeqAlignPtr sap,Int4 gi,Int4 from,Int4 to,
 		Uint4 disp_format,Pointer disp_data,FILE *fp);
 NLM_EXTERN CharPtr DDV_ReadSeqGivenSpp(SeqPortPtr spp,Int4 from,Int4 to,Uint1 strand,
@@ -394,8 +434,6 @@ NLM_EXTERN Boolean DDV_CreateDisplay(SeqAlignPtr sap,MsaParaGPopListPtr mpplp);
 NLM_EXTERN Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
                          Uint4 disp_format);
 NLM_EXTERN void	DDV_GetEntryBioSource(SeqEntryPtr sep,ValNodePtr PNTR vnpp);
-/*NLM_EXTERN void DDV_ToolsScript(SeqEntryPtr sep, Uint4 disp_format,FILE *fp, 
-	Boolean ForToolbar);*/
 
 NLM_EXTERN void DDV_PrintPopSetSummary(SeqEntryPtr sep, Int4 gi, FILE *FileOut);
 NLM_EXTERN void DDV_SearchAli(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
@@ -410,6 +448,8 @@ NLM_EXTERN ByteStorePtr SeqAlignToBS (Uint2 entity);
 NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp,Int4 disp_pos);
 NLM_EXTERN Int4 DDV_GetBspCoordGivenPgpList(ValNodePtr ParaG_List,Int4 disp_pos);
 NLM_EXTERN Int4 DDV_GetDispCoordGivenBspCoord(ValNodePtr vnp_head,Int4 bsp_pos);
+NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrNew(DDVRulerDescrPtr pRulerDescr);
+NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrFree(DDVRulerDescrPtr pRulerDescr);
 
 
 #ifdef __cplusplus

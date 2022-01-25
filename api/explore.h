@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -143,6 +143,7 @@ typedef struct seqmgrfeatcontext {
 *****************************************************************************/
 
 NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr));
+
 
 /*****************************************************************************
 *
@@ -391,6 +392,13 @@ NLM_EXTERN time_t LIBCALL SeqMgrFeaturesAreIndexed PROTO((Uint2 entityID));
 
 NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes PROTO((Uint2 entityID, Pointer ptr));
 
+/*****************************************************************************
+*
+*   SeqMgrIndexFeaturesEx allows indexing on opposite strand for upside-down Web views
+*
+*****************************************************************************/
+
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (Uint2 entityID, Pointer ptr, Boolean flip);
 
 
 #ifdef __cplusplus

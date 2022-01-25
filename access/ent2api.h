@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.8 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -64,6 +64,14 @@ extern "C" {
 
 NLM_EXTERN void EntrezSetProgramName (
   CharPtr progname
+);
+
+/* for development testing, later to override ncbi named service */
+
+NLM_EXTERN void EntrezSetServer (
+  CharPtr host_machine,
+  Uint2 host_port,
+  CharPtr host_path
 );
 
 /* connection functions */
@@ -112,8 +120,6 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   Boolean return_parsed,
   CharPtr db,
   CharPtr query_string,
-  Boolean do_not_explode,
-  Boolean do_not_translate,
   Int4 begin_date,
   Int4 end_date,
   CharPtr type_date,
@@ -166,7 +172,8 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermListRequest (
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermHierarchyRequest (
   CharPtr db,
   CharPtr field,
-  CharPtr term
+  CharPtr term,
+  Int4 txid
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinksRequest (
@@ -220,7 +227,7 @@ NLM_EXTERN Entrez2TermListPtr EntrezExtractTermListReply (
   Entrez2ReplyPtr e2ry
 );
 
-NLM_EXTERN Entrez2TermNodePtr EntrezExtractTermNodeReply (
+NLM_EXTERN Entrez2HierNodePtr EntrezExtractHierNodeReply (
   Entrez2ReplyPtr e2ry
 );
 

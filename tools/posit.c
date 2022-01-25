@@ -30,10 +30,13 @@ Author: Alejandro Schaffer
 
 Contents: utilities for position-based BLAST.
 
-$Revision: 6.38 $ 
+$Revision: 6.39 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.39  2000/03/02 21:47:07  shavirin
+ * Added missing variable for POSIT_DEBUG case
+ *
  * Revision 6.38  1999/12/16 19:18:00  egorov
  * Code cleanup
  *
@@ -914,7 +917,7 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
        }
        prevSeqAlign = curSeqAlign;
        s = MemFree(s);
-   } /*closes the while loop over seqAligns*/
+   } /*closes the for loop over seqAligns*/
 }
 
 static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * compactSearch)
@@ -1616,19 +1619,23 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 
 void LIBCALL posPrintInformation(posSearchItems *posSearch, BlastSearchBlkPtr search, Int4 passNum)
 {
-  Int4 querySize;
-
-  querySize = search->context[0].query->length;
-
-/* Used ifdef until final decision is made on output. */
+    Int4 querySize;
+    
+    querySize = search->context[0].query->length;
+    
+    /* Used ifdef until final decision is made on output. */
 #ifdef POSIT_DEBUG
-  printf("\nInformation content by position for pass %d\n", passNum);
-  for(c = 0; c < querySize; c++)
-    printf(" %5d", c); 
-  printf("\n");
-  for(c = 0; c < querySize; c++)
-    printf(" %5.2lf", posSearch->posInformation[c]); 
-  printf("\n");
+    {{
+        Int4 c;
+        
+        printf("\nInformation content by position for pass %d\n", passNum);
+        for(c = 0; c < querySize; c++)
+            printf(" %5d", c); 
+        printf("\n");
+        for(c = 0; c < querySize; c++)
+            printf(" %5.2lf", posSearch->posInformation[c]); 
+        printf("\n");
+    }}
 #endif
 }   
  

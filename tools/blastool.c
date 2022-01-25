@@ -32,8 +32,29 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.74 $
+* $Revision: 6.81 $
 * $Log: blastool.c,v $
+* Revision 6.81  2000/04/18 16:29:27  madden
+* Free gifile name
+*
+* Revision 6.80  2000/04/10 19:58:06  dondosha
+* Added BlastSeqLocFillDoubleIntRev to fill mask locations for concatenated reverse strand in blastn
+*
+* Revision 6.79  2000/03/31 19:10:57  dondosha
+* Changed some names related to MegaBlast
+*
+* Revision 6.78  2000/03/30 21:45:36  madden
+* Make BlastDeleteHeap non-static
+*
+* Revision 6.77  2000/03/14 13:44:01  madden
+* Set default of sort_gi_list to TRUE
+*
+* Revision 6.76  2000/03/01 20:45:15  shavirin
+* Clear some memory in BLASTOptionsDelete() function
+*
+* Revision 6.75  2000/02/23 20:45:45  dondosha
+* Modified heap operations for blastn to handle concatenated contexts
+*
 * Revision 6.74  2000/01/21 22:24:09  madden
 * Use Nlm_Int8tostr in place of Ltostr
 *
@@ -1132,6 +1153,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 	options->entrez_query = NULL;
 	options->gifile = NULL;
 	options->gilist = NULL;
+	options->sort_gi_list = TRUE;
 
 	if (gapped)
 	{
@@ -1275,6 +1297,11 @@ BLASTOptionDelete(BLAST_OptionsBlkPtr options)
         MemFree(options->program_name);
     
     MemFree(options->filter_string);
+
+    MemFree(options->gifile);
+
+    if(options->query_lcase_mask != NULL)
+        SeqLocSetFree(options->query_lcase_mask);
     
     options = MemFree(options);
     return options;
@@ -2126,6 +2153,49 @@ BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
 	return vnp;
 }
 
+ValNodePtr
+BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_length)
+
+{
+   Int4 count, index, start, stop;
+   BlastDoubleInt4Ptr list_pri, *list_ptr_pri;
+   SeqLocPtr slp;
+   ValNodePtr vnp;
+   
+   vnp = location;
+   if (mask_slp == NULL) {
+      if (!vnp) {
+	 ValNodeAddInt(&vnp, 1, -1);
+	 ValNodeAddInt(&vnp, 0, max_length);
+      }
+      return vnp;
+   }
+   
+   count = BlastSeqLocCount (mask_slp);
+   list_pri = (BlastDoubleInt4Ptr) MemNew(count*sizeof(BlastDoubleInt4)); 
+   list_ptr_pri = (BlastDoubleInt4Ptr PNTR) MemNew(count*sizeof(BlastDoubleInt4Ptr)); 
+   
+   index=0;
+   while (mask_slp) {
+      slp=NULL;
+      while((slp = SeqLocFindNext(mask_slp, slp))!=NULL) {
+	 start = 2*max_length - SeqLocStop(slp);
+	 stop = 2*max_length - SeqLocStart(slp);
+	 
+	 list_pri[index].gi = start;
+	 list_pri[index].ordinal_id = stop;
+	 list_ptr_pri[index] = &(list_pri[index]);
+	 index++;
+      }
+      mask_slp = mask_slp->next;
+   }
+   
+   HeapSort(list_ptr_pri, count, sizeof(BlastHitRangePtr PNTR), list_ptr_compare);
+   BlastIntervalSort(list_ptr_pri, 0, count, slp_callback, (VoidPtr) &vnp);
+   
+   return vnp;
+}
+
 
 
 static Boolean
@@ -2211,7 +2281,7 @@ BlastInsertHeap(BLASTHeapPtr which_heap, BLASTResultHspPtr hp)
   heap[index] = hp;
 } 
 
-static Int4
+Int4
 BlastDeleteHeap(BLASTHeapPtr which_heap, Int4 position)
 {
   Int4 last, return_value;
@@ -2262,7 +2332,7 @@ BlastDeleteWholeHeap(BlastSearchBlkPtr search, BLASTHeapPtr which_heap)
   if (which_heap->prev) which_heap->prev->next = which_heap->next;
   else search->result_struct->heap_ptr = which_heap->next;
   for (i = 0; i < which_heap->num_in_heap; i++) {
-    which_heap->heap[i]->point_back->num_ref -= 1;
+     which_heap->heap[i]->point_back->num_ref -= 1;
   }
   which_heap->heap = MemFree(which_heap->heap);
   which_heap = MemFree(which_heap);
@@ -2305,7 +2375,8 @@ BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitl
     BLASTResultHspPtr PNTR heap, hsp;
     BLASTResultHspPtr hsp_array;
     Int4 index, hsp_range_max;
-    Int4 begin, end, hspcnt;
+    Int4 begin, end, hspcnt, query_length;
+    Int2 context;
     Boolean hsp_deleted, new_inserted;
     BLASTHeapPtr hp;
 
@@ -2317,10 +2388,26 @@ BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitl
     hspcnt = result_hitlist->hspcnt;
     hsp_array = result_hitlist->hsp_array;
 
+    if (search->prog_number==blast_type_blastn && 
+	!search->pbp->is_megablast_search)
+       query_length = search->query_context_offsets[1] - 1;
+
     for (index = 0; index < hspcnt; index++) {
-      hsp = &hsp_array[index];    
-      begin = hsp->query_offset;
-      end = (hsp->query_offset+hsp->query_length-1);
+      hsp = &hsp_array[index];
+      if (search->prog_number==blast_type_blastn && 
+	  !search->pbp->is_megablast_search) {
+	 context = hsp->query_offset / query_length;
+	 if (context == 0) {
+	    begin = hsp->query_offset;
+	    end = (hsp->query_offset+hsp->query_length-1);
+	 } else {
+	    end = 2*query_length - hsp->query_offset;
+	    begin = end - hsp->query_length + 1;
+	 }
+      } else {
+	 begin = hsp->query_offset;
+	 end = (hsp->query_offset+hsp->query_length-1);
+      }
       for (hp = search->result_struct->heap_ptr; hp; hp = hp->next) 
 	if (hp->cutvalue >= begin) break;
       if (hp->num_in_heap < hsp_range_max || small(hp->heap[0], hsp)) {
@@ -2383,7 +2470,8 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
     BLASTResultHspPtr PNTR heap, hsp;
     BLASTResultHspPtr hsp_array;
     Int4 index, block_width, hsp_range_max;
-    Int4 begin, end, i, hspcnt;
+    Int4 begin, end, i, hspcnt, query_length;
+    Int2 context;
     BLASTHeapPtr hp;
 
     if (search->pbp->perform_culling == FALSE)  /* Culling is turned off. */
@@ -2394,10 +2482,25 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
     hspcnt = result_hitlist->hspcnt;
     hsp_array = result_hitlist->hsp_array;
 
+    if (search->prog_number==blast_type_blastn)
+       query_length = search->query_context_offsets[1] - 1;
+    
     for (index = 0; index < hspcnt; index++) {
       hsp = &hsp_array[index];
-      begin = hsp->query_offset;
-      end = hsp->query_offset+hsp->query_length-1;
+      if (search->prog_number==blast_type_blastn && 
+	  !search->pbp->is_megablast_search) {
+	 context = hsp->query_offset / query_length;
+	 if (context == 0) {
+	    begin = hsp->query_offset;
+	    end = (hsp->query_offset+hsp->query_length-1);
+	 } else {
+	    end = 2*query_length - hsp->query_offset;
+	    begin = end - hsp->query_length + 1;
+	 }
+      } else {
+	 begin = hsp->query_offset;
+	 end = (hsp->query_offset+hsp->query_length-1);
+      }
       if (hsp->back_left) {
 	hp = hsp->back_left->next;
 	if (BlastPossibleDeleteWholeHeap(search, &hp, hsp)) continue;

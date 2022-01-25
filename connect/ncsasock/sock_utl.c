@@ -14,6 +14,12 @@
 *
 * RCS Modification History:
 * $Log: sock_utl.c,v $
+* Revision 6.3  2000/03/21 00:19:20  kans
+* need OpenResolver and CloseResolver even for PPC
+*
+* Revision 6.2  2000/03/20 21:49:05  kans
+* initial work on OpenTransport (Churchill)
+*
 * Revision 6.1  1997/12/12 22:39:23  kans
 * DisposPtr now DisposePtr
 *
@@ -70,7 +76,11 @@ long errno_long; /* same as errno, but of known length */
  */
 int sock_init()
 {
+#if TARGET_CPU_68K == 1
 	OSErr io;
+#else
+	OSErr io;
+#endif
 	int i;
 	
 	if (sockets != NULL)
@@ -116,7 +126,13 @@ int sock_init()
 	dprintf("sock_init: loading name server resolver\n");
 #endif
 
+#if TARGET_CPU_68K == 1
+	// We only need to do this for 68K targets...
 	io = OpenResolver(NULL);
+#else
+	// Actually it fails if not done for PPC targets
+	io = OpenResolver(NULL);
+#endif
 	
 #if SOCK_UTIL_DEBUG >= 1
 	if (io != noErr)
@@ -169,9 +185,15 @@ void sock_close_all()
 	DisposePtr((Ptr)streams);
 	DisposePtr((Ptr)pbList);
 	
+#if TARGET_CPU_68K == 1
 	/* release name server resources */
 	(void) CloseResolver();
+#else
+	(void) CloseResolver();
+#endif
+
 }
+
 
 /*
  *	sock_free_fd()

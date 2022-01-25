@@ -34,6 +34,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.55  2000/03/20 18:18:33  thiessen
+* fixed header problem causing network unavailability
+*
+* Revision 6.54  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.53  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.52  2000/02/17 15:41:11  thiessen
+* added CSC algorithm selection submenu
+*
 * Revision 6.51  2000/01/11 01:16:46  lewisg
 * fix color selection in Cn3D, other misc. bugs
 *
@@ -206,7 +218,8 @@
 #include <salmedia.h>
 #include <sqnutils.h>
 #include <ddvmain.h>
-#include <cn3dshim.h>
+
+/* note - this module shouldn't include any headers that have #ifdef _OPENGL blocks! */
 
 extern void Cn3D_SaveActiveCam(void);
 extern Nlm_Boolean Nlm_Call_SetPosition3D(Nlm_RecT *);
@@ -247,10 +260,10 @@ static void NetConfigureProc(IteM i)
  {
     Boolean netCurrentlyOn = FALSE;
 
-    if (Cn3D_ColorData.UseEntrez) ShowNetConfigForm(NULL,
-        NULL, ConfigAccepted, ConfigCancelled, ConfigTurnedOff, TRUE);
-    else ShowNetConfigForm(NULL, NULL, ConfigAccepted, ConfigCancelled,
-                      ConfigTurnedOff, FALSE);
+    if (Cn3D_UsingEntrez())
+        ShowNetConfigForm(NULL, NULL, ConfigAccepted, ConfigCancelled, ConfigTurnedOff, TRUE);
+    else
+        ShowNetConfigForm(NULL, NULL, ConfigAccepted, ConfigCancelled, ConfigTurnedOff, FALSE);
 }
 
 
@@ -301,6 +314,7 @@ static void Cn3D_PrintImage(Char * str)
         pmldOne->bSelected &= (Byte) 0xFE;
 
     Cn3D_ResetActiveStrucProc();
+    Cn3D_Redraw(TRUE);          /* always a new structure */
 
     return;
 }
@@ -318,8 +332,11 @@ Int2 Main(void)
     ErrSetFatalLevel(SEV_MAX);
 
     UseLocalAsnloadDataAndErrMsg();
-    if (!OpenMMDBAPI(0, NULL))
+    if (!OpenMMDBAPI(0, NULL)) {
+        /* make user hit OK, so has time to read MMDBAPI's error postings */
+        Message(MSG_ERROR, "Unable to open MMDB-API");
         return 1;
+    }
 
     SeqAsnLoad();
 
@@ -336,11 +353,9 @@ Int2 Main(void)
     /*register the sequence and alignment viewers */
     REGISTER_UDV_AUTONOMOUS;    /* udv */
     REG_DDV_SLA_VIEW;           /* ddv */
+    REGISTER_UDV_SEQENTRY;      /* udv launch seqentry */
 
-    if(Cn3D_UseNetwork()) Cn3D_ColorData.UseEntrez = TRUE;
-    else Cn3D_ColorData.UseEntrez = FALSE;
-    Cn3D_ColorData.EntrezOn = FALSE;
-
+    Cn3D_CheckNetworkUse();
 
     www = Cn3DWin(NULL, NULL, NetConfigureProc, TRUE);
     if (www) {
@@ -400,8 +415,7 @@ Int2 Main(void)
 
 
     /* to do: delete OGL global information in viewer3D.  lyg */
-
-    if (Cn3D_ColorData.EntrezOn) {
+    if (Cn3D_EntrezOn()) {
         EntrezBioseqFetchDisable();
         EntrezFini();
     }

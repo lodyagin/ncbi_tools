@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -64,12 +64,16 @@ typedef struct bioseqviewdata {
   DoC             doc;
   TexT            text;
   PaneL           pnl;
+  PaneL           udv;
+  PaneL           ddv;
   GrouP           styleControlGrp;
   GrouP           scaleControlGrp;
   GrouP           findGeneGrp;
   GrouP           docTxtControlGrp;
   GrouP           modeControlGrp;
   GrouP           pnlParentGrp;
+  GrouP           udvParentGrp;
+  GrouP           ddvParentGrp;
   PrompT          clickMe;
 
   Boolean         useScrollText;
@@ -141,7 +145,7 @@ typedef struct bioseqpagedata {
   BioseqSelectProc       highlight;
   BioseqViewProc         toClipboard;
   BioseqViewProc         print;
-  BioseqExportProc       export;
+  BioseqExportProc       exprt;
   BioseqExportProc       togif;
   BioseqViewProc         resize;
   struct bioseqpagedata  PNTR next;
@@ -154,6 +158,8 @@ extern BioseqPageData sumPageData;
 extern BioseqPageData gphPageData;
 extern BioseqPageData alnPageData;
 extern BioseqPageData seqPageData;
+extern BioseqPageData udvPageData;
+extern BioseqPageData ddvPageData;
 
 extern BioseqPageData gbgnPageData;
 extern BioseqPageData gnbkPageData;
@@ -162,6 +168,7 @@ extern BioseqPageData ddbjPageData;
 extern BioseqPageData gnptPageData;
 
 extern BioseqPageData fstaPageData;
+extern BioseqPageData qualPageData;
 extern BioseqPageData asnPageData;
 extern BioseqPageData dskPageData;
 
@@ -245,6 +252,7 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bfp, GrpActnProc createToolBa
 extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId);
 
 extern BioseqViewPtr GetBioseqViewPtrFromBaseFormPtr (BaseFormPtr fp);
+NLM_EXTERN void Nlm_LaunchWebPage (Char *url);
 
 extern Boolean BioseqViewCanSaveFasta (ForM f, Boolean nucs, Boolean prots, Boolean onlyTarget);
 extern Boolean ExportBioseqViewFasta (ForM f, CharPtr filename, Boolean nucs, Boolean prots, Boolean onlyTarget);

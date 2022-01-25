@@ -11,8 +11,10 @@
 	10/11/95	Corarito	Modified for CW7
 	11/22/95	Harmon		CopyHdrs script must be run first
 	 2/18/96	Kans		Consolidated all 68K/PPC scripts
+	 3/15/00	Churchill   Modified for OpenTransport work in progress
+	 4/19/00	Kans		Only need to copy ncbilcl.met to ncbilcl.h
 
-	Before running this file, run the copyhdrs.met AppleScript.
+	This file now subsumes the functions of the old copyhdrs.met AppleScript.
 
 	In order to compile for 68K, change the MASTER property.
 
@@ -33,15 +35,14 @@ global SUFFIX
 global HARDDISK
 global METRO
 global METROWERKSCW
+global OTLIB
 
 global NCBISOURCE
-global ENCRYPTSOURCE
-
-global INCLUDEFILES
 global LIBRARIES
 global BUILDTEST
 
-global DOENCRYPT
+global INCLUDEFILES
+global DOOPENTPT
 
 (* ==== These subroutines set paths and other preferences during population ==== *)
 
@@ -59,25 +60,65 @@ on DoSetGlobals()
 		set HARDDISK to startup disk as string
 		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
+		set OTLIB to METROWERKSCW & "MacOS Support:OpenTransport:Open Tpt Client Developer:PPC Libraries:"
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
-		set ENCRYPTSOURCE to NCBISOURCE & "network:encrypt:rsaref:" as string
 		
 		set INCLUDEFILES to NCBISOURCE & "include:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
 		set BUILDTEST to NCBISOURCE & "build:" as string
 		
-		if (exists (folder ENCRYPTSOURCE)) then
-			set DOENCRYPT to "TRUE"
+		if MASTER = "PPC" and (exists (folder OTLIB)) then
+			set DOOPENTPT to "TRUE"
+		else if MASTER = "PPC" then
+			set DOOPENTPT to "FALSE"
+			display dialog "Did not find OpenTransport folder inside MacOS Support folder" & return & Â
+				return & "Will use MacTCP interfaces to build networking" & return Â
+				buttons "OK" default button 1
 		else
-			set DOENCRYPT to "FALSE"
+			set DOOPENTPT to "FALSE"
 		end if
 		
 	end tell
 end DoSetGlobals
 
+on CreateFolders()
+	tell application "Finder"
+		
+		if not (exists (folder INCLUDEFILES)) then
+			make new folder at folder NCBISOURCE with properties {name:"include"}
+		end if
+		
+		if not (exists (folder LIBRARIES)) then
+			make new folder at folder NCBISOURCE with properties {name:"lib"}
+		end if
+		
+		if not (exists (folder BUILDTEST)) then
+			make new folder at folder NCBISOURCE with properties {name:"build"}
+		end if
+		
+	end tell
+end CreateFolders
+
+on CopyPrefixes()
+	tell application "Finder"
+		
+		if (exists (file "ncbilcl.met" of folder INCLUDEFILES)) then
+			delete file "ncbilcl.met" of (folder INCLUDEFILES)
+		end if
+		
+		if (exists (file "ncbilcl.h" of (folder INCLUDEFILES))) then
+			delete file "ncbilcl.h" of (folder INCLUDEFILES)
+		end if
+		
+		copy {file "ncbilcl.met" of (folder "corelib" of folder NCBISOURCE)} to {folder INCLUDEFILES}
+		set name of file "ncbilcl.met" of (folder INCLUDEFILES) to "ncbilcl.h"
+		
+	end tell
+end CopyPrefixes
+
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Target ===== *)
 		if MASTER = "PPC" then
@@ -205,7 +246,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -213,14 +254,15 @@ on DoSetPaths1()
 		-- We want to find the NCBI "all.h" first.
 		Set Preferences of panel "Access Paths" to {System Paths:{}} -- This removes the compiler default folder
 		
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
+		Set Preferences of panel "Access Paths" to {Convert Paths:true}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE, recursive:true, origin:absolute}}} -- Added for speed
 		
 	end tell
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
@@ -228,16 +270,25 @@ on DoSetPaths2()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Universal:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Profiler:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MSL:MSL_C:", recursive:true, origin:shell relative}}}
+		if DOOPENTPT = "TRUE" then
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:OpenTransport:", recursive:true, origin:shell relative}}}
+		end if
 		
 	end tell
 end DoSetPaths2
 
 on DoCompileLibraries()
-	tell application "CodeWarrior IDE 4.0"
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		open (LIBRARIES & "ncsasock" & SUFFIX & ".µ")
 		Make Project
 		Close Project
+		
+		if DOOPENTPT = "TRUE" then
+			open (LIBRARIES & "ncsasockOT" & SUFFIX & ".µ")
+			Make Project
+			Close Project
+		end if
 		
 		open (LIBRARIES & "ncbi" & SUFFIX & ".µ")
 		Make Project
@@ -287,7 +338,10 @@ end DoCompileLibraries
 with timeout of 60000 seconds
 	my DoSetGlobals()
 	
-	tell application "CodeWarrior IDE 4.0"
+	my CreateFolders()
+	my CopyPrefixes()
+	
+	tell application "CodeWarrior IDE 4.0.4"
 		
 		activate
 		
@@ -317,12 +371,36 @@ with timeout of 60000 seconds
 		
 		
 		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncsasockOT" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncsasockOTppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncsasocOT68k"}
+		Set Preferences of panel "PPC CodeGen" to {Struct Alignment:Align_68k}
+		Set Preferences of panel "68K CodeGen" to {Four Bytes Ints:true}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "connect:ncsasock:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		set NCSASOCK to NCBISOURCE & "connect:ncsasock:" as string
+		
+		Add Files {NCSASOCK & "dprintf.c", NCSASOCK & "OTnetdb.c", NCSASOCK & "rexec.c", NCSASOCK & "socket.c", NCSASOCK & "sock_std.c", NCSASOCK & "sock_tcp.c"} To Segment 1
+		Add Files {NCSASOCK & "sock_udp.c", NCSASOCK & "OTsock_utl.c", NCSASOCK & "syslog.c", NCSASOCK & "OTtcpglue.c", NCSASOCK & "unixlib.c"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:ThreadsLib"} To Segment 1
+		Add Files {OTLIB & "OpenTransportAppPPC.o", OTLIB & "OpenTptInetPPC.o"} To Segment 1
+		Add Files {OTLIB & "OpenTransportLib", OTLIB & "OpenTptInternetLib"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
 		Create Project {LIBRARIES & "ncbi" & SUFFIX & ".µ"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "PPC Project" to {File Name:"ncbippc"}
 		Set Preferences of panel "68K Project" to {File Name:"ncbi68k"}
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"ncbic.pfx"}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "corelib:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "connect:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "asnlib:", origin:absolute}}}
@@ -340,7 +418,8 @@ with timeout of 60000 seconds
 		
 		Add Files {NCBICONNECT & "connectn.c", NCBICONNECT & "connutil.c", NCBICONNECT & "con_url.c", NCBICONNECT & "con_sock.c"} To Segment 2
 		Add Files {NCBICONNECT & "con_stateless.c", NCBICONNECT & "ncbibuf.c", NCBICONNECT & "ncbi_buffer.c"} To Segment 2
-		Add Files {NCBICONNECT & "ncbisock.c", NCBICONNECT & "ncbi_socket.c", NCBICONNECT & "urlquery.c"} To Segment 2
+		Add Files {NCBICONNECT & "ncbisock.c", NCBICONNECT & "ncbi_socket_.c", NCBICONNECT & "ncbi_core.c", NCBICONNECT & "ncbi_util.c"} To Segment 2
+		Add Files {NCBICONNECT & "urlquery.c"} To Segment 2
 		
 		set NCBIASNLIB to NCBISOURCE & "asnlib:" as string
 		
@@ -361,6 +440,7 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "object:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "access:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "api:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "ddv:", origin:absolute}}}
 		my DoSetPaths2()
 		
 		set NCBIOBJECT to NCBISOURCE & "object:" as string
@@ -380,11 +460,16 @@ with timeout of 60000 seconds
 		Add Files {NCBIAPI & "codon.c", NCBIAPI & "edutil.c", NCBIAPI & "ffprint.c", NCBIAPI & "findrepl.c", NCBIAPI & "ftusrstr.c", NCBIAPI & "gather.c"} To Segment 3
 		Add Files {NCBIAPI & "gbfeat.c", NCBIAPI & "gbftglob.c", NCBIAPI & "gbparint.c", NCBIAPI & "jzcoll.c", NCBIAPI & "jzmisc.c", NCBIAPI & "lsqfetch.c"} To Segment 3
 		Add Files {NCBIAPI & "maputil.c", NCBIAPI & "mconsist.c", NCBIAPI & "objmgr.c", NCBIAPI & "prtutil.c", NCBIAPI & "satutil.c", NCBIAPI & "seqmgr.c"} To Segment 3
-		Add Files {NCBIAPI & "seqport.c", NCBIAPI & "sequtil.c", NCBIAPI & "simple.c", NCBIAPI & "sqnutil1.c", NCBIAPI & "sqnutil2.c", NCBIAPI & "subutil.c"} To Segment 3
+		Add Files {NCBIAPI & "seqport.c", NCBIAPI & "sequtil.c", NCBIAPI & "simple.c"} To Segment 3
+		Add Files {NCBIAPI & "sqnutil1.c", NCBIAPI & "sqnutil2.c", NCBIAPI & "sqnutil3.c", NCBIAPI & "subutil.c"} To Segment 3
 		Add Files {NCBIAPI & "tofasta.c", NCBIAPI & "tofile.c", NCBIAPI & "tomedlin.c", NCBIAPI & "txalign.c", NCBIAPI & "utilpars.c", NCBIAPI & "utilpub.c"} To Segment 3
 		Add Files {NCBIAPI & "salpstat.c", NCBIAPI & "salpedit.c", NCBIAPI & "valid.c", NCBIAPI & "alignmgr.c", NCBIAPI & "alignval.c", NCBIAPI & "wprint.c"} To Segment 3
 		Add Files {NCBIAPI & "salpacc.c", NCBIAPI & "salprop.c", NCBIAPI & "salsap.c", NCBIAPI & "salstruc.c", NCBIAPI & "salutil.c"} To Segment 3
-		Add Files {NCBIAPI & "udvseq.c", NCBIAPI & "blocks.c", NCBIAPI & "pgppop.c", NCBIAPI & "samutil.c", NCBIAPI & "ddvcolor.c"} To Segment 3
+		Add Files {NCBIAPI & "udvseq.c", NCBIAPI & "blocks.c", NCBIAPI & "pgppop.c", NCBIAPI & "samutil.c", NCBIAPI & "ddvcolor.c", NCBIAPI & "viewmgr.c"} To Segment 3
+		
+		set NCBIDDV to NCBISOURCE & "ddv:" as string
+		
+		Add Files {NCBIDDV & "ddvcreate.c"} To Segment 4
 		
 		Reset File Paths
 		Close Project
@@ -496,7 +581,7 @@ with timeout of 60000 seconds
 		
 		set NCBIDDV to NCBISOURCE & "ddv:" as string
 		
-		Add Files {NCBIDDV & "ddvclick.c", NCBIDDV & "ddvcreate.c", NCBIDDV & "ddvgraph.c", NCBIDDV & "ddvopen.c", NCBIDDV & "ddvpanel.c"} To Segment 1
+		Add Files {NCBIDDV & "ddvclick.c", NCBIDDV & "ddvgraph.c", NCBIDDV & "ddvopen.c", NCBIDDV & "ddvpanel.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -517,14 +602,14 @@ with timeout of 60000 seconds
 		Add Files {NCBITOOLS & "stsutil.c", NCBITOOLS & "sec.c", NCBITOOLS & "sim2.c", NCBITOOLS & "sim3.c", NCBITOOLS & "sim4.c", NCBITOOLS & "simutil.c"} To Segment 1
 		Add Files {NCBITOOLS & "slist.c", NCBITOOLS & "suggadj.c", NCBITOOLS & "suggest.c", NCBITOOLS & "suggslp.c", NCBITOOLS & "tfuns.c"} To Segment 1
 		Add Files {NCBITOOLS & "toasn3.c", NCBITOOLS & "toporg.c", NCBITOOLS & "blast.c", NCBITOOLS & "blastutl.c", NCBITOOLS & "blastool.c"} To Segment 1
-		Add Files {NCBITOOLS & "splutil.c", NCBITOOLS & "gapxdrop.c", NCBITOOLS & "bandalg0.c", NCBITOOLS & "bandalg1.c", NCBITOOLS & "bandalg2.c"} To Segment 1
+		Add Files {NCBITOOLS & "splutil.c", NCBITOOLS & "actutils.c", NCBITOOLS & "gapxdrop.c", NCBITOOLS & "bandalg0.c", NCBITOOLS & "bandalg1.c", NCBITOOLS & "bandalg2.c"} To Segment 1
 		Add Files {NCBITOOLS & "bandalg3.c", NCBITOOLS & "bandalg4.c", NCBITOOLS & "bandalg5.c", NCBITOOLS & "bandalgn.c", NCBITOOLS & "blastkar.c"} To Segment 1
 		Add Files {NCBITOOLS & "lookup.c", NCBITOOLS & "posit.c", NCBITOOLS & "readdb.c", NCBITOOLS & "ncbisam.c", NCBITOOLS & "ncbisort.c"} To Segment 1
 		Add Files {NCBITOOLS & "salign.c", NCBITOOLS & "salptool.c"} To Segment 1
 		Add Files {NCBITOOLS & "urkutil.c", NCBITOOLS & "urkpcc.c", NCBITOOLS & "urkptpf.c", NCBITOOLS & "urkepi.c", NCBITOOLS & "urkfltr.c"} To Segment 1
 		Add Files {NCBITOOLS & "urkdust.c", NCBITOOLS & "urksigu.c", NCBITOOLS & "seg.c", NCBITOOLS & "urkbias.c", NCBITOOLS & "urkcnsrt.c"} To Segment 1
 		Add Files {NCBITOOLS & "urktree.c", NCBITOOLS & "pattern1.c", NCBITOOLS & "pseed3.c", NCBITOOLS & "impatool.c", NCBITOOLS & "posit2.c", NCBITOOLS & "newkar.c"} To Segment 1
-		Add Files {NCBITOOLS & "mbalign.c", NCBITOOLS & "mbutils.c", NCBITOOLS & "vecscrn.c"} To Segment 1
+		Add Files {NCBITOOLS & "mbalign.c", NCBITOOLS & "mbutils.c", NCBITOOLS & "mblast.c", NCBITOOLS & "vecscrn.c"} To Segment 1
 		Reset File Paths
 		Close Project
 		
@@ -563,7 +648,7 @@ with timeout of 60000 seconds
 		Add Files {NCBICN3D & "algorend.c", NCBICN3D & "cn3dwin.c", NCBICN3D & "cn3dentr.c", NCBICN3D & "cn3dmsel.c", NCBICN3D & "cn3dopen.c"} To Segment 1
 		Add Files {NCBICN3D & "cn3dsave.c", NCBICN3D & "cn3dxprt.c"} To Segment 1
 		Add Files {NCBICN3D & "cn3dmsg.c", NCBICN3D & "cn3dmatn.c", NCBICN3D & "cn3dmodl.c", NCBICN3D & "cn3dshim.c"} To Segment 1
-		Add Files {NCBICN3D & "cn3dmesh.c"} To Segment 1
+		Add Files {NCBICN3D & "cn3dmesh.c", NCBICN3D & "cn3dstyl.c", NCBICN3D & "seqcons.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project

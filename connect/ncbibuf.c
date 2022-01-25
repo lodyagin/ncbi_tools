@@ -1,4 +1,4 @@
-/*  $Id: ncbibuf.c,v 6.6 1999/10/12 16:40:26 vakatov Exp $
+/*  $Id: ncbibuf.c,v 6.7 2000/02/25 16:45:54 vakatov Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,10 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbibuf.c,v $
+ * Revision 6.7  2000/02/25 16:45:54  vakatov
+ * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+ * the C++ toolkits, and even to use them in a "standalone" fashion
+ *
  * Revision 6.6  1999/10/12 16:40:26  vakatov
  * Deleted all test code as there is one in "test/test_ncbi_buffer.c" now
  *
@@ -71,7 +75,7 @@
  * be #include'd in one source module! */
 #undef NCBIBUF__H
 
-#include <ncbi_buffer.h>
+#include <connect/ncbi_buffer.h>
 
 
 NLM_EXTERN Nlm_Uint4 Nlm_BUF_SetChunkSize

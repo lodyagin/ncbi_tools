@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.h,v 1.3 1999/12/07 21:40:14 durand Exp $
+/*  $Id: ddvclick.h,v 1.4 2000/04/05 20:52:35 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.h,v $
+* Revision 1.4  2000/04/05 20:52:35  hurwitz
+* added GUI control for shifting left and right alignment boundaries
+*
 * Revision 1.3  1999/12/07 21:40:14  durand
 * add mouse modes menu and caret facility for the editor
 *
@@ -96,6 +99,10 @@ NLM_EXTERN void DDV_DragProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_HoldProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_ReleaseProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_KeyboardProc (SlatE s, Char ch);
+NLM_EXTERN Int4 DDV_GetHPixelPosGivenColNumber(DdvMainPtr dmp, RecT rc, Int4 Col);
+NLM_EXTERN Int4 DDV_GetVPixelPosGivenRowNumber(DdvMainPtr dmp, RecT rc, Int4 Row);
+NLM_EXTERN void DDV_GetVPixelPosOfEmptySpace(DdvMainPtr dmp, RecT rc, Int4* pTop, Int4* pBot);
+NLM_EXTERN Int4 DDV_GetColNumberGivenMousePos(DdvMainPtr dmp, RecT rc, PoinT pt);
 
 #ifdef __cplusplus
 }

@@ -30,6 +30,7 @@
 #define ERR_SEQ_INST_ConflictingBiomolTech  1,26
 #define ERR_SEQ_INST_SeqIdNameHasSpace  1,27
 #define ERR_SEQ_INST_IdOnMultipleBioseqs  1,28
+#define ERR_SEQ_INST_DuplicateSegmentReferences  1,29
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -43,6 +44,7 @@
 #define ERR_SEQ_DESCR_NoTaxonID  2,10
 #define ERR_SEQ_DESCR_InconsistentBioSources  2,11
 #define ERR_SEQ_DESCR_MissingLineage  2,12
+#define ERR_SEQ_DESCR_SerialInComment  2,13
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -97,6 +99,7 @@
 #define ERR_SEQ_FEAT_CDSgeneRange  5,35
 #define ERR_SEQ_FEAT_CDSmRNArange  5,36
 #define ERR_SEQ_FEAT_OverlappingPeptideFeat  5,37
+#define ERR_SEQ_FEAT_SerialInComment  5,38
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

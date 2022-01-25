@@ -13,7 +13,7 @@ static Boolean loaded = FALSE;
 #define NLM_EXTERN_LOADS {}
 #endif
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 objmmdb3AsnLoad(void)
 {
 
@@ -31,8 +31,8 @@ objmmdb3AsnLoad(void)
 
 
 /**************************************************
-*    Generated object loaders for Module MMDB-features
-*    Generated using ASNCODE Revision: 4.2 at Aug 14, 1996  5:26 PM
+*    Generated object loaders for Module MMDB-Features
+*    Generated using ASNCODE Revision: 6.8 at Mar 6, 2000  9:42 AM
 *
 **************************************************/
 
@@ -42,7 +42,7 @@ objmmdb3AsnLoad(void)
 *    BiostrucFeatureSetNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeatureSetPtr LIBCALL
 BiostrucFeatureSetNew(void)
 {
@@ -58,7 +58,7 @@ BiostrucFeatureSetNew(void)
 *    BiostrucFeatureSetFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeatureSetPtr LIBCALL
 BiostrucFeatureSetFree(BiostrucFeatureSetPtr ptr)
 {
@@ -77,7 +77,7 @@ BiostrucFeatureSetFree(BiostrucFeatureSetPtr ptr)
 *    BiostrucFeatureSetAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeatureSetPtr LIBCALL
 BiostrucFeatureSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -163,7 +163,7 @@ erret:
 *    BiostrucFeatureSetAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BiostrucFeatureSetAsnWrite(BiostrucFeatureSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -212,7 +212,7 @@ erret:
 *    ChemGraphPntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ChemGraphPntrsPtr LIBCALL
 ChemGraphPntrsFree(ValNodePtr anp)
 {
@@ -246,7 +246,7 @@ ChemGraphPntrsFree(ValNodePtr anp)
 *    ChemGraphPntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ChemGraphPntrsPtr LIBCALL
 ChemGraphPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -331,7 +331,7 @@ erret:
 *    ChemGraphPntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ChemGraphPntrsAsnWrite(ChemGraphPntrsPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
 {
@@ -397,7 +397,7 @@ erret:
 *    AtomPntrsNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 AtomPntrsPtr LIBCALL
 AtomPntrsNew(void)
 {
@@ -413,7 +413,7 @@ AtomPntrsNew(void)
 *    AtomPntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 AtomPntrsPtr LIBCALL
 AtomPntrsFree(AtomPntrsPtr ptr)
 {
@@ -433,7 +433,7 @@ AtomPntrsFree(AtomPntrsPtr ptr)
 *    AtomPntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 AtomPntrsPtr LIBCALL
 AtomPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -526,7 +526,7 @@ erret:
 *    AtomPntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 AtomPntrsAsnWrite(AtomPntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -576,7 +576,7 @@ erret:
 *    ChemGraphAlignmentNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ChemGraphAlignmentPtr LIBCALL
 ChemGraphAlignmentNew(void)
 {
@@ -593,7 +593,7 @@ ChemGraphAlignmentNew(void)
 *    ChemGraphAlignmentFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ChemGraphAlignmentPtr LIBCALL
 ChemGraphAlignmentFree(ChemGraphAlignmentPtr ptr)
 {
@@ -615,7 +615,7 @@ ChemGraphAlignmentFree(ChemGraphAlignmentPtr ptr)
 *    ChemGraphAlignmentAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ChemGraphAlignmentPtr LIBCALL
 ChemGraphAlignmentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -722,7 +722,7 @@ erret:
 *    ChemGraphAlignmentAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ChemGraphAlignmentAsnWrite(ChemGraphAlignmentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -774,7 +774,7 @@ erret:
 *    SphereNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 SpherePtr LIBCALL
 SphereNew(void)
 {
@@ -790,7 +790,7 @@ SphereNew(void)
 *    SphereFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 SpherePtr LIBCALL
 SphereFree(SpherePtr ptr)
 {
@@ -809,7 +809,7 @@ SphereFree(SpherePtr ptr)
 *    SphereAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 SpherePtr LIBCALL
 SphereAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -888,7 +888,7 @@ erret:
 *    SphereAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 SphereAsnWrite(SpherePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -943,7 +943,7 @@ erret:
 *    ConeNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ConePtr LIBCALL
 ConeNew(void)
 {
@@ -959,7 +959,7 @@ ConeNew(void)
 *    ConeFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ConePtr LIBCALL
 ConeFree(ConePtr ptr)
 {
@@ -979,7 +979,7 @@ ConeFree(ConePtr ptr)
 *    ConeAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ConePtr LIBCALL
 ConeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1065,7 +1065,7 @@ erret:
 *    ConeAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ConeAsnWrite(ConePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -1125,7 +1125,7 @@ erret:
 *    CylinderNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 CylinderPtr LIBCALL
 CylinderNew(void)
 {
@@ -1141,7 +1141,7 @@ CylinderNew(void)
 *    CylinderFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 CylinderPtr LIBCALL
 CylinderFree(CylinderPtr ptr)
 {
@@ -1161,7 +1161,7 @@ CylinderFree(CylinderPtr ptr)
 *    CylinderAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 CylinderPtr LIBCALL
 CylinderAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1247,7 +1247,7 @@ erret:
 *    CylinderAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 CylinderAsnWrite(CylinderPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -1307,7 +1307,7 @@ erret:
 *    BrickNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 BrickPtr LIBCALL
 BrickNew(void)
 {
@@ -1323,7 +1323,7 @@ BrickNew(void)
 *    BrickFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BrickPtr LIBCALL
 BrickFree(BrickPtr ptr)
 {
@@ -1348,7 +1348,7 @@ BrickFree(BrickPtr ptr)
 *    BrickAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BrickPtr LIBCALL
 BrickAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1469,7 +1469,7 @@ erret:
 *    BrickAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BrickAsnWrite(BrickPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -1554,7 +1554,7 @@ erret:
 *    TransformNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransformPtr LIBCALL
 TransformNew(void)
 {
@@ -1570,7 +1570,7 @@ TransformNew(void)
 *    TransformFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransformPtr LIBCALL
 TransformFree(TransformPtr ptr)
 {
@@ -1588,7 +1588,7 @@ TransformFree(TransformPtr ptr)
 *    TransformAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransformPtr LIBCALL
 TransformAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1667,7 +1667,7 @@ erret:
 *    TransformAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 TransformAsnWrite(TransformPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -1715,7 +1715,7 @@ erret:
 *    BiostrucFeatureSetDescrFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeatureSetDescrPtr LIBCALL
 BiostrucFeatureSetDescrFree(ValNodePtr anp)
 {
@@ -1752,7 +1752,7 @@ BiostrucFeatureSetDescrFree(ValNodePtr anp)
 *    BiostrucFeatureSetDescrAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeatureSetDescrPtr LIBCALL
 BiostrucFeatureSetDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1850,7 +1850,7 @@ erret:
 *    BiostrucFeatureSetDescrAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BiostrucFeatureSetDescrAsnWrite(BiostrucFeatureSetDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
 {
@@ -1920,7 +1920,7 @@ erret:
 *    BiostrucFeatureNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeaturePtr LIBCALL
 BiostrucFeatureNew(void)
 {
@@ -1936,7 +1936,7 @@ BiostrucFeatureNew(void)
 *    BiostrucFeatureFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeaturePtr LIBCALL
 BiostrucFeatureFree(BiostrucFeaturePtr ptr)
 {
@@ -1996,7 +1996,7 @@ Location_locationFree(ValNodePtr anp)
 *    BiostrucFeatureAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucFeaturePtr LIBCALL
 BiostrucFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -2043,6 +2043,7 @@ BiostrucFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> id = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == BIOSTRUC_FEATURE_name) {
@@ -2057,7 +2058,7 @@ BiostrucFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> type = av.intvalue;
-      ptr -> OBbits__ |= 1<<0;
+      ptr -> OBbits__ |= 1<<1;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == BIOSTRUC_FEATURE_property) {
@@ -2190,7 +2191,7 @@ erret:
 *    BiostrucFeatureAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BiostrucFeatureAsnWrite(BiostrucFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -2218,13 +2219,14 @@ BiostrucFeatureAsnWrite(BiostrucFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   av.intvalue = ptr -> id;
-   retval = AsnWrite(aip, BIOSTRUC_FEATURE_id,  &av);
+   if (ptr -> id || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> id;
+      retval = AsnWrite(aip, BIOSTRUC_FEATURE_id,  &av);
+   }
    if (ptr -> name != NULL) {
       av.ptrvalue = ptr -> name;
       retval = AsnWrite(aip, BIOSTRUC_FEATURE_name,  &av);
    }
-   if (ptr -> type || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> type;
+   if (ptr -> type || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> type;
       retval = AsnWrite(aip, BIOSTRUC_FEATURE_type,  &av);
    }
    if (ptr -> Property_property != NULL) {
@@ -2546,7 +2548,7 @@ Property_propertyFree(ValNodePtr anp)
 *    ColorPropNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ColorPropPtr LIBCALL
 ColorPropNew(void)
 {
@@ -2562,7 +2564,7 @@ ColorPropNew(void)
 *    ColorPropFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ColorPropPtr LIBCALL
 ColorPropFree(ColorPropPtr ptr)
 {
@@ -2580,7 +2582,7 @@ ColorPropFree(ColorPropPtr ptr)
 *    ColorPropAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ColorPropPtr LIBCALL
 ColorPropAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -2676,7 +2678,7 @@ erret:
 *    ColorPropAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ColorPropAsnWrite(ColorPropPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -2734,7 +2736,7 @@ erret:
 *    CameraNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 CameraPtr LIBCALL
 CameraNew(void)
 {
@@ -2750,7 +2752,7 @@ CameraNew(void)
 *    CameraFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 CameraPtr LIBCALL
 CameraFree(CameraPtr ptr)
 {
@@ -2758,15 +2760,7 @@ CameraFree(CameraPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   ModelSpacePointFree(ptr -> x);
-   ModelSpacePointFree(ptr -> y);
-   ModelSpacePointFree(ptr -> z);
-   ModelSpacePointFree(ptr -> up);
-   ModelSpacePointFree(ptr -> fore);
-   ModelSpacePointFree(ptr -> norm);
-   ModelSpacePointFree(ptr -> center);
-   RealValueFree(ptr -> tooclose);
-   RealValueFree(ptr -> toofar);
+   GLMatrixFree(ptr -> modelview);
    return MemFree(ptr);
 }
 
@@ -2776,7 +2770,7 @@ CameraFree(CameraPtr ptr)
 *    CameraAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 CameraPtr LIBCALL
 CameraAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -2818,71 +2812,43 @@ CameraAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == CAMERA_mode) {
+   if (atp == CAMERA_x) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> mode = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == CAMERA_x) {
-      ptr -> x = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
+      ptr -> x = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == CAMERA_y) {
-      ptr -> y = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
+      ptr -> y = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CAMERA_z) {
-      ptr -> z = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == CAMERA_distance) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
+      ptr -> distance = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CAMERA_up) {
-      ptr -> up = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == CAMERA_angle) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
+      ptr -> angle = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CAMERA_fore) {
-      ptr -> fore = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == CAMERA_scale) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
+      ptr -> scale = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CAMERA_norm) {
-      ptr -> norm = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == CAMERA_center) {
-      ptr -> center = ModelSpacePointAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == CAMERA_tooclose) {
-      ptr -> tooclose = RealValueAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == CAMERA_toofar) {
-      ptr -> toofar = RealValueAsnRead(aip, atp);
+   if (atp == CAMERA_modelview) {
+      ptr -> modelview = GLMatrixAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -2911,7 +2877,7 @@ erret:
 *    CameraAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 CameraAsnWrite(CameraPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -2939,50 +2905,18 @@ CameraAsnWrite(CameraPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   av.intvalue = ptr -> mode;
-   retval = AsnWrite(aip, CAMERA_mode,  &av);
-   if (ptr -> x != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> x, aip, CAMERA_x)) {
-         goto erret;
-      }
-   }
-   if (ptr -> y != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> y, aip, CAMERA_y)) {
-         goto erret;
-      }
-   }
-   if (ptr -> z != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> z, aip, CAMERA_z)) {
-         goto erret;
-      }
-   }
-   if (ptr -> up != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> up, aip, CAMERA_up)) {
-         goto erret;
-      }
-   }
-   if (ptr -> fore != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> fore, aip, CAMERA_fore)) {
-         goto erret;
-      }
-   }
-   if (ptr -> norm != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> norm, aip, CAMERA_norm)) {
-         goto erret;
-      }
-   }
-   if (ptr -> center != NULL) {
-      if ( ! ModelSpacePointAsnWrite(ptr -> center, aip, CAMERA_center)) {
-         goto erret;
-      }
-   }
-   if (ptr -> tooclose != NULL) {
-      if ( ! RealValueAsnWrite(ptr -> tooclose, aip, CAMERA_tooclose)) {
-         goto erret;
-      }
-   }
-   if (ptr -> toofar != NULL) {
-      if ( ! RealValueAsnWrite(ptr -> toofar, aip, CAMERA_toofar)) {
+   av.intvalue = ptr -> x;
+   retval = AsnWrite(aip, CAMERA_x,  &av);
+   av.intvalue = ptr -> y;
+   retval = AsnWrite(aip, CAMERA_y,  &av);
+   av.intvalue = ptr -> distance;
+   retval = AsnWrite(aip, CAMERA_distance,  &av);
+   av.intvalue = ptr -> angle;
+   retval = AsnWrite(aip, CAMERA_angle,  &av);
+   av.intvalue = ptr -> scale;
+   retval = AsnWrite(aip, CAMERA_scale,  &av);
+   if (ptr -> modelview != NULL) {
+      if ( ! GLMatrixAsnWrite(ptr -> modelview, aip, CAMERA_modelview)) {
          goto erret;
       }
    }
@@ -3003,7 +2937,7 @@ erret:
 *    BiostrucScriptFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucScriptPtr LIBCALL
 BiostrucScriptFree(BiostrucScriptPtr ptr)
 {
@@ -3021,7 +2955,7 @@ BiostrucScriptFree(BiostrucScriptPtr ptr)
 *    BiostrucScriptAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucScriptPtr LIBCALL
 BiostrucScriptAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -3078,7 +3012,7 @@ erret:
 *    BiostrucScriptAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BiostrucScriptAsnWrite(BiostrucScriptPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -3117,7 +3051,7 @@ erret:
 *    RegionPntrsNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionPntrsPtr LIBCALL
 RegionPntrsNew(void)
 {
@@ -3133,7 +3067,7 @@ RegionPntrsNew(void)
 *    RegionPntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionPntrsPtr LIBCALL
 RegionPntrsFree(RegionPntrsPtr ptr)
 {
@@ -3182,7 +3116,7 @@ Region_regionFree(ValNodePtr anp)
 *    RegionPntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionPntrsPtr LIBCALL
 RegionPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -3350,7 +3284,7 @@ erret:
 *    RegionPntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RegionPntrsAsnWrite(RegionPntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -3462,7 +3396,7 @@ erret:
 *    RegionSimilarityNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionSimilarityPtr LIBCALL
 RegionSimilarityNew(void)
 {
@@ -3479,7 +3413,7 @@ RegionSimilarityNew(void)
 *    RegionSimilarityFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionSimilarityPtr LIBCALL
 RegionSimilarityFree(RegionSimilarityPtr ptr)
 {
@@ -3499,7 +3433,7 @@ RegionSimilarityFree(RegionSimilarityPtr ptr)
 *    RegionSimilarityAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionSimilarityPtr LIBCALL
 RegionSimilarityAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -3592,7 +3526,7 @@ erret:
 *    RegionSimilarityAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RegionSimilarityAsnWrite(RegionSimilarityPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -3642,7 +3576,7 @@ erret:
 *    OtherFeatureNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 OtherFeaturePtr LIBCALL
 OtherFeatureNew(void)
 {
@@ -3658,7 +3592,7 @@ OtherFeatureNew(void)
 *    OtherFeatureFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 OtherFeaturePtr LIBCALL
 OtherFeatureFree(OtherFeaturePtr ptr)
 {
@@ -3676,7 +3610,7 @@ OtherFeatureFree(OtherFeaturePtr ptr)
 *    OtherFeatureAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 OtherFeaturePtr LIBCALL
 OtherFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -3762,7 +3696,7 @@ erret:
 *    OtherFeatureAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 OtherFeatureAsnWrite(OtherFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -3816,7 +3750,7 @@ erret:
 *    ResiduePntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResiduePntrsPtr LIBCALL
 ResiduePntrsFree(ValNodePtr anp)
 {
@@ -3847,7 +3781,7 @@ ResiduePntrsFree(ValNodePtr anp)
 *    ResiduePntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResiduePntrsPtr LIBCALL
 ResiduePntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -3932,7 +3866,7 @@ erret:
 *    ResiduePntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ResiduePntrsAsnWrite(ResiduePntrsPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
 {
@@ -3993,7 +3927,7 @@ erret:
 *    MoleculePntrsNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 MoleculePntrsPtr LIBCALL
 MoleculePntrsNew(void)
 {
@@ -4009,7 +3943,7 @@ MoleculePntrsNew(void)
 *    MoleculePntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 MoleculePntrsPtr LIBCALL
 MoleculePntrsFree(MoleculePntrsPtr ptr)
 {
@@ -4027,7 +3961,7 @@ MoleculePntrsFree(MoleculePntrsPtr ptr)
 *    MoleculePntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 MoleculePntrsPtr LIBCALL
 MoleculePntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -4106,7 +4040,7 @@ erret:
 *    MoleculePntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 MoleculePntrsAsnWrite(MoleculePntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -4154,7 +4088,7 @@ erret:
 *    ResidueExplicitPntrsNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueExplicitPntrsPtr LIBCALL
 ResidueExplicitPntrsNew(void)
 {
@@ -4170,7 +4104,7 @@ ResidueExplicitPntrsNew(void)
 *    ResidueExplicitPntrsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueExplicitPntrsPtr LIBCALL
 ResidueExplicitPntrsFree(ResidueExplicitPntrsPtr ptr)
 {
@@ -4189,7 +4123,7 @@ ResidueExplicitPntrsFree(ResidueExplicitPntrsPtr ptr)
 *    ResidueExplicitPntrsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueExplicitPntrsPtr LIBCALL
 ResidueExplicitPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -4275,7 +4209,7 @@ erret:
 *    ResidueExplicitPntrsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ResidueExplicitPntrsAsnWrite(ResidueExplicitPntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -4324,7 +4258,7 @@ erret:
 *    ResidueIntervalPntrNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueIntervalPntrPtr LIBCALL
 ResidueIntervalPntrNew(void)
 {
@@ -4340,7 +4274,7 @@ ResidueIntervalPntrNew(void)
 *    ResidueIntervalPntrFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueIntervalPntrPtr LIBCALL
 ResidueIntervalPntrFree(ResidueIntervalPntrPtr ptr)
 {
@@ -4357,7 +4291,7 @@ ResidueIntervalPntrFree(ResidueIntervalPntrPtr ptr)
 *    ResidueIntervalPntrAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ResidueIntervalPntrPtr LIBCALL
 ResidueIntervalPntrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -4443,7 +4377,7 @@ erret:
 *    ResidueIntervalPntrAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ResidueIntervalPntrAsnWrite(ResidueIntervalPntrPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -4494,7 +4428,7 @@ erret:
 *    RegionCoordinatesNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionCoordinatesPtr LIBCALL
 RegionCoordinatesNew(void)
 {
@@ -4510,7 +4444,7 @@ RegionCoordinatesNew(void)
 *    RegionCoordinatesFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionCoordinatesPtr LIBCALL
 RegionCoordinatesFree(RegionCoordinatesPtr ptr)
 {
@@ -4528,7 +4462,7 @@ RegionCoordinatesFree(RegionCoordinatesPtr ptr)
 *    RegionCoordinatesAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionCoordinatesPtr LIBCALL
 RegionCoordinatesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -4615,7 +4549,7 @@ erret:
 *    RegionCoordinatesAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RegionCoordinatesAsnWrite(RegionCoordinatesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -4666,7 +4600,7 @@ erret:
 *    RegionBoundaryFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionBoundaryPtr LIBCALL
 RegionBoundaryFree(ValNodePtr anp)
 {
@@ -4703,7 +4637,7 @@ RegionBoundaryFree(ValNodePtr anp)
 *    RegionBoundaryAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RegionBoundaryPtr LIBCALL
 RegionBoundaryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -4792,7 +4726,7 @@ erret:
 *    RegionBoundaryAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RegionBoundaryAsnWrite(RegionBoundaryPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
 {
@@ -4862,7 +4796,7 @@ erret:
 *    AlignStatsNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 AlignStatsPtr LIBCALL
 AlignStatsNew(void)
 {
@@ -4878,7 +4812,7 @@ AlignStatsNew(void)
 *    AlignStatsFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 AlignStatsPtr LIBCALL
 AlignStatsFree(AlignStatsPtr ptr)
 {
@@ -4896,7 +4830,7 @@ AlignStatsFree(AlignStatsPtr ptr)
 *    AlignStatsAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 AlignStatsPtr LIBCALL
 AlignStatsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5032,7 +4966,7 @@ erret:
 *    AlignStatsAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 AlignStatsAsnWrite(AlignStatsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -5105,7 +5039,7 @@ erret:
 *    ModelSpacePointNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 ModelSpacePointPtr LIBCALL
 ModelSpacePointNew(void)
 {
@@ -5121,7 +5055,7 @@ ModelSpacePointNew(void)
 *    ModelSpacePointFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 ModelSpacePointPtr LIBCALL
 ModelSpacePointFree(ModelSpacePointPtr ptr)
 {
@@ -5138,7 +5072,7 @@ ModelSpacePointFree(ModelSpacePointPtr ptr)
 *    ModelSpacePointAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 ModelSpacePointPtr LIBCALL
 ModelSpacePointAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5231,7 +5165,7 @@ erret:
 *    ModelSpacePointAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 ModelSpacePointAsnWrite(ModelSpacePointPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -5284,7 +5218,7 @@ erret:
 *    RealValueNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 RealValuePtr LIBCALL
 RealValueNew(void)
 {
@@ -5300,7 +5234,7 @@ RealValueNew(void)
 *    RealValueFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RealValuePtr LIBCALL
 RealValueFree(RealValuePtr ptr)
 {
@@ -5317,7 +5251,7 @@ RealValueFree(RealValuePtr ptr)
 *    RealValueAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RealValuePtr LIBCALL
 RealValueAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5396,7 +5330,7 @@ erret:
 *    RealValueAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RealValueAsnWrite(RealValuePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -5445,7 +5379,7 @@ erret:
 *    MoveFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 MovePtr LIBCALL
 MoveFree(ValNodePtr anp)
 {
@@ -5476,7 +5410,7 @@ MoveFree(ValNodePtr anp)
 *    MoveAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 MovePtr LIBCALL
 MoveAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5557,7 +5491,7 @@ erret:
 *    MoveAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 MoveAsnWrite(MovePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
 {
@@ -5619,7 +5553,7 @@ erret:
 *    RotMatrixNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 RotMatrixPtr LIBCALL
 RotMatrixNew(void)
 {
@@ -5635,7 +5569,7 @@ RotMatrixNew(void)
 *    RotMatrixFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 RotMatrixPtr LIBCALL
 RotMatrixFree(RotMatrixPtr ptr)
 {
@@ -5652,7 +5586,7 @@ RotMatrixFree(RotMatrixPtr ptr)
 *    RotMatrixAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 RotMatrixPtr LIBCALL
 RotMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5787,7 +5721,7 @@ erret:
 *    RotMatrixAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 RotMatrixAsnWrite(RotMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -5852,7 +5786,7 @@ erret:
 *    TransMatrixNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransMatrixPtr LIBCALL
 TransMatrixNew(void)
 {
@@ -5868,7 +5802,7 @@ TransMatrixNew(void)
 *    TransMatrixFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransMatrixPtr LIBCALL
 TransMatrixFree(TransMatrixPtr ptr)
 {
@@ -5885,7 +5819,7 @@ TransMatrixFree(TransMatrixPtr ptr)
 *    TransMatrixAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 TransMatrixPtr LIBCALL
 TransMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -5978,7 +5912,7 @@ erret:
 *    TransMatrixAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 TransMatrixAsnWrite(TransMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -6028,10 +5962,306 @@ erret:
 
 /**************************************************
 *
+*    GLMatrixNew()
+*
+**************************************************/
+NLM_EXTERN 
+GLMatrixPtr LIBCALL
+GLMatrixNew(void)
+{
+   GLMatrixPtr ptr = MemNew((size_t) sizeof(GLMatrix));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GLMatrixFree()
+*
+**************************************************/
+NLM_EXTERN 
+GLMatrixPtr LIBCALL
+GLMatrixFree(GLMatrixPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GLMatrixAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GLMatrixPtr LIBCALL
+GLMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GLMatrixPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GLMatrix ::= (self contained) */
+      atp = AsnReadId(aip, amp, GL_MATRIX);
+   } else {
+      atp = AsnLinkType(orig, GL_MATRIX);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GLMatrixNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GL_MATRIX_scale) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> scale = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m11) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m11 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m12) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m12 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m13) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m13 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m14) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m14 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m21) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m21 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m22) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m22 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m23) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m23 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m24) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m24 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m31) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m31 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m32) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m32 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m33) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m33 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m34) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m34 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m41) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m41 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m42) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m42 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m43) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m43 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GL_MATRIX_m44) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m44 = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GLMatrixFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GLMatrixAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GLMatrixAsnWrite(GLMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GL_MATRIX);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> scale;
+   retval = AsnWrite(aip, GL_MATRIX_scale,  &av);
+   av.intvalue = ptr -> m11;
+   retval = AsnWrite(aip, GL_MATRIX_m11,  &av);
+   av.intvalue = ptr -> m12;
+   retval = AsnWrite(aip, GL_MATRIX_m12,  &av);
+   av.intvalue = ptr -> m13;
+   retval = AsnWrite(aip, GL_MATRIX_m13,  &av);
+   av.intvalue = ptr -> m14;
+   retval = AsnWrite(aip, GL_MATRIX_m14,  &av);
+   av.intvalue = ptr -> m21;
+   retval = AsnWrite(aip, GL_MATRIX_m21,  &av);
+   av.intvalue = ptr -> m22;
+   retval = AsnWrite(aip, GL_MATRIX_m22,  &av);
+   av.intvalue = ptr -> m23;
+   retval = AsnWrite(aip, GL_MATRIX_m23,  &av);
+   av.intvalue = ptr -> m24;
+   retval = AsnWrite(aip, GL_MATRIX_m24,  &av);
+   av.intvalue = ptr -> m31;
+   retval = AsnWrite(aip, GL_MATRIX_m31,  &av);
+   av.intvalue = ptr -> m32;
+   retval = AsnWrite(aip, GL_MATRIX_m32,  &av);
+   av.intvalue = ptr -> m33;
+   retval = AsnWrite(aip, GL_MATRIX_m33,  &av);
+   av.intvalue = ptr -> m34;
+   retval = AsnWrite(aip, GL_MATRIX_m34,  &av);
+   av.intvalue = ptr -> m41;
+   retval = AsnWrite(aip, GL_MATRIX_m41,  &av);
+   av.intvalue = ptr -> m42;
+   retval = AsnWrite(aip, GL_MATRIX_m42,  &av);
+   av.intvalue = ptr -> m43;
+   retval = AsnWrite(aip, GL_MATRIX_m43,  &av);
+   av.intvalue = ptr -> m44;
+   retval = AsnWrite(aip, GL_MATRIX_m44,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    BiostrucScriptStepNew()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucScriptStepPtr LIBCALL
 BiostrucScriptStepNew(void)
 {
@@ -6048,7 +6278,7 @@ BiostrucScriptStepNew(void)
 *    BiostrucScriptStepFree()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucScriptStepPtr LIBCALL
 BiostrucScriptStepFree(BiostrucScriptStepPtr ptr)
 {
@@ -6068,7 +6298,7 @@ BiostrucScriptStepFree(BiostrucScriptStepPtr ptr)
 *    BiostrucScriptStepAsnRead()
 *
 **************************************************/
-
+NLM_EXTERN 
 BiostrucScriptStepPtr LIBCALL
 BiostrucScriptStepAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -6190,7 +6420,7 @@ erret:
 *    BiostrucScriptStepAsnWrite()
 *
 **************************************************/
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BiostrucScriptStepAsnWrite(BiostrucScriptStepPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;

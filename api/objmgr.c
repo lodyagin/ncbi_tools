@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.27 $
+* $Revision: 6.30 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,25 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.30  2000/03/27 23:10:23  kans
+* initial readlock/lookup/unlock removed from ObjMgrDelete by request of EY
+*
+* Revision 6.29  2000/03/23 17:45:44  madden
+* Use ObjMgrWriteLock instead of ObjMgrReadLock in ObjMgrFreeCache
+*
+* Revision 6.28  2000/03/20 23:38:40  aleksey
+* Finally submitted the changes which have been made by serge bazhin
+* and been kept in my local directory.
+*
+* These changes allow to establish user callback functions
+* in 'Asn2ffJobPtr' structure which are called within
+* 'SeqEntryToFlatAjp' function call.
+* The new members are:
+* user_data       - pointer to a user context for passing data
+* ajp_count_index - user defined function
+* ajp_print_data  - user defined function
+* ajp_print_index - user defined function
+*
 * Revision 6.27  1999/10/20 17:17:37  lewisg
 * delete rest of userdata when using OM_OPT_FREE_IF_NO_VIEW in ObjMgrFreeUserDataFunc
 *
@@ -1444,18 +1463,6 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	Int2 i, j;
 	Boolean retval = FALSE;
 
-	omp = ObjMgrReadLock(); /* (EY) */
-	i = ObjMgrLookup(omp, data);
-	ObjMgrUnlock(); /* (EY) */
-	if (i < 0)  /* not found */
-	{
-	   /***	may not be registered with objmgr ***
-		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrDelete: pointer [%ld] type [%d] not found",
-			(long)data, (int)type);
-		***/
-		return retval;
-	}
-
 	omp = ObjMgrWriteLock();  /* really remove the entity */
 	i = ObjMgrLookup(omp, data);  /* make sure it is still current */
 	if (i < 0)  /* not found */
@@ -1944,10 +1951,12 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 	VoidPtr retval;
 
 	while (more_to_go)
-	{
-		omp = ObjMgrReadLock();
-		more_to_go = ObjMgrFreeCacheFunc(omp, type, &rettype, &retval);
-		ObjMgrUnlock();
+        {
+           omp = ObjMgrWriteLock();
+/*
+                omp = ObjMgrReadLock ();
+*/
+                more_to_go = ObjMgrFreeCacheFunc(omp, type, &rettype, &retval);
 		if (more_to_go)
 		{
 			switch (rettype)
@@ -1965,6 +1974,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 				break;
 			}
 		}
+		ObjMgrUnlock();
 	}
 
 	return TRUE;

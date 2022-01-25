@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.10 $
+* $Revision: 6.16 $
 *
 * File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.16  2000/04/13 13:58:03  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.15  2000/04/10 20:33:40  lewisg
+* fix show/hide for blast multiple, make blast multiple API generic
+*
+* Revision 6.14  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.13  2000/03/06 19:54:40  durand
+* updated the function AccessionToGi_Entrez
+*
+* Revision 6.12  2000/03/02 15:47:51  durand
+* use MovableModalWindow for dialog boxes
+*
+* Revision 6.11  2000/02/16 14:49:39  durand
+* replace GatherProcLaunch by GatherSpecificProcLaunch
+*
 * Revision 6.10  2000/01/11 15:03:19  durand
 * remove network stuff
 *
@@ -66,6 +84,9 @@
 */
 
 #include <udviewer.h>
+#include <blast.h>
+#include <netblap3.h>
+
 
 	typedef struct dlgfileopendata {/*use to manage the FileOpen dialog box*/
 		WindoW 		parent;			/*main window of the application*/
@@ -92,7 +113,7 @@
 
 	static Char szAppName[]="OneD-Viewer";
 
-	static Uint1 DataBaseID[]={
+	static Uint1 UDV_DataBaseID[]={
 				SEQID_GENBANK,
 				SEQID_EMBL,
 				SEQID_PIR,
@@ -165,7 +186,7 @@ WindoW 	w;
   Return value : none 
 
 *******************************************************************************/
-static Boolean LIBCALLBACK SearchBioseq (BioseqPtr bsp, 
+NLM_EXTERN Boolean LIBCALLBACK SearchBioseq (BioseqPtr bsp, 
 			SeqMgrBioseqContextPtr context)
 {
 ValNodePtr PNTR	BspTable;
@@ -198,7 +219,7 @@ ValNodePtr PNTR	BspTable;
 *******************************************************************************/
 NLM_EXTERN Boolean  UDV_analyze_SEP_for_open(FILE *fp,SeqEntryPtr the_set,
 	ViewerMainPtr vmp,WindoW w)
-{	
+{
 BioseqPtr 	bsp;
 Boolean 	bRet=TRUE,bReadOk=FALSE;
 Pointer     dataptr;
@@ -262,10 +283,15 @@ WindoW      temport;
 	}
 	
 	if (bReadOk){
+		Boolean bReverse;
 		/*compute the global Feature Index*/
 		MonitorStrValue (mon, "Building Feature index...");
 		Update ();
-		UDV_CreateOneFeatureIndex(entityID,NULL);						
+		if (vmp->vdp)
+			bReverse=vmp->vdp->bDisplayRevComp;
+		else
+			bReverse=FALSE;
+		UDV_CreateOneFeatureIndex(entityID,NULL,bReverse);						
 		/*scan the BSPs*/
 		SeqMgrExploreBioseqs (entityID, NULL, (Pointer) &vmp->BspTable, 
 			SearchBioseq, TRUE, TRUE, TRUE);
@@ -291,8 +317,14 @@ WindoW      temport;
 		ArrowCursor();
 		MonitorFree (mon);
 		vmp->Show_logo=FALSE;	
-		GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
-			OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
+		if (vmp->UDVprocid!=0){
+			GatherSpecificProcLaunch(vmp->UDVprocid, "OneD-Viewer", 
+				OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ);
+		}
+		else{
+			GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
+				OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
+		}
 
 		temport=SavePort(vmp->hWndMain);
 		Select(vmp->vdp->UnDViewer);
@@ -339,7 +371,7 @@ Uint1 		Choice;
 	sip=(SeqIdPtr)ValNodeNew(NULL);
 	if (!sip) return(0);
 
-	Choice=DataBaseID[type-1];
+	Choice=UDV_DataBaseID[type-1];
 
 	switch(Choice){
 		case SEQID_GENBANK:
@@ -358,9 +390,11 @@ Uint1 		Choice;
 			/*try to retrieve an uid; to avoid the user to know whether string
 			is an accession or a name, this function tests both*/
 			tsip->name=StringSave(string);
-			tsip->accession=StringSave(string);
 			uid=GetGIForSeqId(sip);
-			
+			if (uid==0){
+				*tsip->name='\0';
+				tsip->accession=StringSave(string);
+			}
 			TextSeqIdFree(tsip);
 			break;
 		}
@@ -582,7 +616,7 @@ UdvGlobalsPtr ugp;
 		if (!ugp->NetStartProc(vmp->UseNetwork)) return;
 	}
 
-	w = FixedWindow (-50, -33, -10, -10, "Download From NCBI", NULL);
+	w = MovableModalWindow (-50, -33, -10, -10, "Download From NCBI", NULL);
 
 	if (w==NULL) return;
 
@@ -836,7 +870,7 @@ TexT				t1;
 	if (!dfodp) return;
 	MemSet(dfodp,0,sizeof(DlgFileOpenData));
 
-    hOpenDlg = FixedWindow(-30, -20,  -10,  -10, 
+    hOpenDlg = MovableModalWindow(-30, -20,  -10,  -10, 
 				"OneD-Viewer - Open a local file",  NULL);
     g = NormalGroup(hOpenDlg, 2, 1, "File name:",  systemFont, NULL);
     SetGroupMargins(g, 10, 10);
@@ -1003,8 +1037,20 @@ Char 				szBuf[255]={""};
 		UDV_set_MainMenus(&vmp->MainMenu,FALSE);
 		UDV_set_MainControls(vmp,FALSE);
 		
-		GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
-			OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
+		if (vmp->UDVprocid!=0){
+			GatherSpecificProcLaunch(vmp->UDVprocid, "OneD-Viewer", 
+				OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ);
+		}
+        else if (vmp->GVprocid==0){
+            SetAppProperty("nonautonomous",(void *)vmp);
+			GatherSpecificProcLaunch(vmp->UDVprocid, "OneD-Viewer", 
+				OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ);
+            RemoveAppProperty("nonautonomous");
+		}
+		else{
+			GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
+				OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
+		}
 	
 		temport=SavePort(ucsp->hWndMain);
 		Select(vdp->UnDViewer);
@@ -1132,4 +1178,216 @@ Uint2			eID,iID;
 		RealizeWindow(d);
 		Show(d);
 	}
+}
+
+
+static MonitorPtr blastmon = NULL; /* ugh.  used below */
+
+/*****************************************************************************
+
+Function: UDV_BlastCallback
+
+Purpose: creates, updates and deletes blast status dialog
+
+*****************************************************************************/
+static Boolean LIBCALLBACK UDV_BlastCallback (BlastResponse *brp,
+                                               Boolean *cancel)
+{
+    BlastProgressPtr bpp;
+    Int4 completed = 0;
+    Boolean retval;
+    
+    *cancel=FALSE;
+    switch (brp->choice) {
+    case BlastResponse_start:
+        if (blastmon != NULL) {
+            MonitorFree (blastmon);
+            blastmon = NULL;
+        }
+        bpp = (BlastProgressPtr) brp->data.ptrvalue;
+        if (bpp != NULL) {
+            completed = bpp->completed;
+        }
+        if (completed == 0) {
+            completed = 100;
+        }
+        blastmon = MonitorIntNew ("BLAST", 0, completed);
+        return TRUE;
+    case BlastResponse_progress:
+        if (blastmon != NULL) {
+            bpp = (BlastProgressPtr) brp->data.ptrvalue;
+            if (bpp != NULL) {
+                completed = bpp->completed;
+            }
+            retval = MonitorIntValue (blastmon, completed);
+            if (retval == FALSE) {
+                *cancel = TRUE;
+                MonitorFree (blastmon);
+                blastmon = NULL;
+                return FALSE;
+            }
+        }
+        return TRUE;
+    case BlastResponse_queued:
+        return TRUE;
+    case BlastResponse_done:
+        if (blastmon != NULL) {
+            MonitorFree (blastmon);
+            blastmon = NULL;
+        }
+        return TRUE;
+    default:
+        break;
+    }
+    return FALSE;
+}
+
+/*****************************************************************************
+
+Function: UDV_BlastDlgOK
+
+Purpose: OK button for UDV_BlastDlg
+
+*****************************************************************************/
+static void UDV_BlastDlgOK(ButtoN g)
+{
+    UDV_BlastDlgData *bddp;
+    Int2 value;
+    WindoW hOpenDlg;
+    BLAST_OptionsBlkPtr options;
+    Int4 i;
+    ValNode *pvn;
+    Bioseq* bsp;
+    BlastNet3Hptr bl3hp;
+    BlastResponsePtr bl3rp;
+    Char str[32], *program;
+
+    hOpenDlg=(WindoW)ParentWindow(g);
+    if (!hOpenDlg) return;
+    
+    bddp=(UDV_BlastDlgData *)GetObjectExtra (hOpenDlg);
+    if (bddp == NULL) {
+        ValNodeFree(bddp->pvnSips);
+        Remove(hOpenDlg);
+        return;
+    }
+    
+    BlastInit("udv 1.0", &bl3hp, &bl3rp);
+    value = GetValue(bddp->bsp_list); /*one-base value*/
+
+    for(pvn = bddp->pvnSips, i = 1; i != value && pvn != NULL;
+        i++, pvn = pvn->next);
+
+    if(pvn == NULL) {
+        ValNodeFree(bddp->pvnSips);
+        Remove(hOpenDlg);
+        return;
+    }
+
+    bsp = BioseqLockById((SeqId *)pvn->data.ptrvalue);
+
+    if(bsp == NULL) {
+        ValNodeFree(bddp->pvnSips);
+        Remove(hOpenDlg);
+        return;
+    }
+
+    if(ISA_aa(bsp->mol)) program = "blastp";
+    else program = "blastn";
+
+    options = BLASTOptionNew (program, GetStatus(bddp->bGap));
+    GetTitle(bddp->tMax, str, sizeof(str));
+    options->hitlist_size = atoi(str);
+    if (options->hitlist_size == 0) options->hitlist_size = 20;
+/*    GetTitle(bddp->tExpect, str, sizeof(str));
+    options->expect_value = atof(str);
+    if (options->expect_value == 0.0) options->expect_value = 0.001;*/
+    
+    Remove(hOpenDlg);
+
+    bddp->salp = BlastBioseqNet(bl3hp, bsp, program, "nr",
+        options, NULL, NULL, UDV_BlastCallback);
+    BLASTOptionDelete(options);
+    BioseqUnlock(bsp);
+    ValNodeFree(bddp->pvnSips);
+    if(bddp->salp == NULL) return;
+
+    if(bddp->callback) bddp->callback(bddp);   
+}
+
+/*****************************************************************************
+
+Function: UDV_BlastDlgCancel
+
+Purpose: cancel button for UDV_BlastDlg
+  
+*****************************************************************************/
+static void UDV_BlastDlgCancel(ButtoN g)
+{	
+    WindoW hOpenDlg;
+    UDV_BlastDlgData *bddp;
+    
+    hOpenDlg=(WindoW)ParentWindow(g);
+    if (!hOpenDlg) return;
+    
+    bddp = (UDV_BlastDlgData *)GetObjectExtra (hOpenDlg);
+    if (bddp != NULL) ValNodeFree(bddp->pvnSips);
+    
+    Remove(hOpenDlg);
+}
+
+/*****************************************************************************
+
+Function: UDV_BlastDlg
+
+Purpose: Creates blast many dialog
+  
+*****************************************************************************/
+NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp)
+{
+    GrouP h2,h,h1, h3, h4, h5;
+    WindoW d;
+    Char szName[21]={""};
+    ValNode *pvn;
+
+    if(bddp == NULL) return;
+
+    d = MovableModalWindow(-50, -33 ,-10, -10, "Blast", NULL);
+    if (d != NULL){
+        /*create some controls*/
+        h = HiddenGroup(d, 1, 5,  NULL);
+        h1 = HiddenGroup(h, 1, 2,  NULL);
+        StaticPrompt(h1,"Choose a sequence :",0,0,systemFont,'l');
+        
+        bddp->bsp_list = SingleList(h1,20,6,NULL);
+
+        h3 = HiddenGroup(h, 1, 1, NULL);
+        bddp->bGap = CheckBox(h3, "Gapped", NULL);
+        SetStatus(bddp->bGap, TRUE);
+
+        h4 = HiddenGroup(h, 2, 1, NULL);
+/*        StaticPrompt(h4,"Expectation value:",0,0,systemFont,'l');
+        bddp->tExpect = DialogText(h4, "0.01", 8, (TxtActnProc) NULL); */
+        StaticPrompt(h4,"Maximum # of segments:",0,0,systemFont,'l');
+        bddp->tMax = DialogText(h4, "20", 5, (TxtActnProc) NULL);
+        
+        h2 = HiddenGroup(h, 2, 1, NULL);
+        PushButton(h2, "Ok", UDV_BlastDlgOK);
+        PushButton(h2, "Cancel", UDV_BlastDlgCancel);
+
+        h5 = HiddenGroup(h, 1, 1, NULL);
+        StaticPrompt(h5,"Warning: may take several minutes!",0,0,systemFont,'l');
+
+        /*fill in the list box*/
+        for(pvn = bddp->pvnSips; pvn != NULL; pvn = pvn->next) {
+            SeqIdWrite((SeqId *)pvn->data.ptrvalue,szName,
+                PRINTID_TEXTID_ACCESSION,20);
+            ListItem(bddp->bsp_list, szName);
+        }
+        SetValue(bddp->bsp_list,1);
+        
+        SetObjectExtra (d, (Pointer) bddp, StdCleanupExtraProc);
+        RealizeWindow(d);
+        Show(d);
+    }
 }

@@ -46,7 +46,13 @@
     <!-- right content column  --> 
     <td width="460"> 
       <p>&nbsp;</p>
-   
+
+			 <p>
+				<i>Last modified:</i> $Date: 2000/03/20 22:21:11 $<br>
+				<i>Latest version: </i>
+				<a href="http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html">
+				  http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html</a>
+
 
       <p> When first downloaded, your NCBI application runs in stand-alone mode, 
         without access to the network. However, your program can also be configured 
@@ -112,12 +118,41 @@ Firewall Port        IP Address
     5853            130.14.22.1
     5859            130.14.22.2
     5840            130.14.22.8
-    5845            130.14.22.12
+    5845            130.14.22.12  (cannot be accessed from outside NCBI!)
+    5810            130.14.22.30
+    5812            130.14.22.31
+    5811            130.14.22.32
 </pre>
 
 <p>
 If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
+
+<p>
+TROUBLESHOOTING:  You can test if these ports are accessible from
+your host by just running, for example (see the "Ports to open" list
+above):
+<pre>
+  telnet 130.14.22.1 5853
+</pre>
+and entering a line of arbitrary text in the telnet session.
+If everything is fine, your TELNET session will look as follows
+(the line "test" is your input here):
+
+<pre>
+| > telnet 130.14.22.1 5853
+| Trying 130.14.22.1...
+| Connected to 130.14.22.1.
+| Escape character is '^]'.
+| test
+| NCBI Firewall Daemon:  Invalid ticket. Connection closed.
+| Connection closed by foreign host.
+</pre>
+
+<p>
+There is also an auxiliary UNIX shell script
+<a href="fwd_check.sh">fwd_check.sh</a> to check all of the above
+addresses.
 
 <p>
 Note: Old NCBI clients used different application configuration settings and

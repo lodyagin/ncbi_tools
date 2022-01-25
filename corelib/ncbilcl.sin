@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,10 @@
 *
 *
 * $Log: ncbilcl.sin,v $
+* Revision 6.2  2000/04/12 19:29:47  vakatov
+* Switched the default thread lib from "Solaris native"(-lthread) to
+* "POSIX"(-lpthread)
+*
 * Revision 6.1  1998/10/27 15:18:21  vakatov
 * +  #define OS_UNIX_SOL
 *
@@ -84,14 +88,16 @@
 #define SYSV_STREAMS_AVAIL	/* System V STREAMS module available */
 
 #ifdef MPROC_AVAIL
-/* For Solaris, _REENTRANT must be defined when compiling all modules or none */
-#ifndef _REENTRANT
-#define _REENTRANT
+/* For Solaris, _REENTRANT must be defined when compiling all modules or none*/
+#  ifndef _REENTRANT
+#    define _REENTRANT
+#  endif
+/* Use POSIX thread library by default */
+#  if !defined(POSIX_THREADS_AVAIL)  &&  !defined(SOLARIS_THREADS_AVAIL)
+#    define POSIX_THREADS_AVAIL
+#  endif
 #endif
-#ifndef POSIX_THREADS_AVAIL
-#define SOLARIS_THREADS_AVAIL
-#endif
-#endif
+
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

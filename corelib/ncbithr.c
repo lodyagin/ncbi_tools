@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.24 1999/11/08 17:03:05 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.25 2000/03/01 19:44:44 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,12 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.25  2000/03/01 19:44:44  vakatov
+* NlmMutexUnlock() -- fixed by Haruna N. Cofer (Applications - Chem/Bio,
+* SGI; haruna@sgi.com) for an intermittent deadlock happening on SGI/IRIX
+* and caused by the swapping of two adjacent operators in s_MutexLock()
+* by the C compiler optimizer (when compiled with "-O" flag). Thanks, Haruna!
+*
 * Revision 6.24  1999/11/08 17:03:05  vakatov
 * [POSIX] NlmThreadCreateEx() -- fixed a bug leading to the thread
 * handle corruption on { BIG_ENDIAN, 64-bit pointer, 32-bit pthread_t}
@@ -1748,6 +1754,7 @@ static Int4 s_MutexLock(TNlmMutex theMutex, Nlm_Boolean no_block)
 #endif
 
   if (err_code == 0) {
+    /* surprise! -- these two can be swapped by optimizer (see R6.25) */
     theMutex->owner   = owner;
     theMutex->counter = 1;
   }
@@ -1819,6 +1826,7 @@ NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex)
   if (--theMutex->counter != 0)
     return 0;
 
+  theMutex->owner = 0;
 #if defined(SOLARIS_THREADS_AVAIL)
   err_code = mutex_unlock(&theMutex->mutex);
 #elif defined(POSIX_THREADS_AVAIL)
@@ -1834,8 +1842,10 @@ NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex)
           (long)err_code);
 #endif
 
-  if (err_code != 0)
+  if (err_code != 0) {
+    theMutex->owner = NlmThreadSelf();
     theMutex->counter++;
+  }
 #endif /* ndef NO_MUTEX */
 
   X_ASSERT ( err_code == 0 );

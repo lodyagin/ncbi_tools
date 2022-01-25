@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.46 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.47  2000/04/03 21:05:53  lewisg
+* fix launch of cn3d from sequin
+*
 * Revision 6.46  2000/01/04 15:55:50  lewisg
 * don't hang on disconnected network and fix memory leak/hang at exit
 *
@@ -230,7 +233,10 @@
 #ifndef WIN16
 #include <cn3dmain.h>
 #include <cn3dopen.h>  /* added by lyg */
+#include <algorend.h>
 #include <cn3dentr.h>
+#include <udviewer.h>
+#include <ddvopen.h>
 #endif
 
 #include <blast.h>
@@ -4045,6 +4051,7 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
   Int4         complexity;
   Int2         maxModels;
   PDNMS        pdnms;
+  PMSD         pmsd;
   WindoW       w;
 
   if (! BiostrucAvail ()) {
@@ -4063,6 +4070,12 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
     return;
   }
 /*  ClearStructures (); lyg */
+  ObjMgrProcLoad(OMPROC_VIEW,
+		"OneD-Viewer SE", "SingleSeqViewer SE", OBJ_BIOSEQSET, 0, OBJ_BIOSEQSET, 0,
+		NULL, UDV_ObjRegAutonomous, -10000);
+  ObjMgrProcLoad(OMPROC_VIEW, 
+		"DDV", "MSA_Viewer", OBJ_SEQALIGN, 0, OBJ_SEQALIGN, 0,
+		NULL, DDV_ObjRegSlaveViewDDV, -10000);
   w = (WindoW) Cn3DWin_Entrez(NULL, TRUE);
   if (w != NULL) {
     Cn3D_OpenStart();
@@ -4074,6 +4087,10 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
       Message (MSG_OK, "Unable to convert this biostruc to a modelstruc.");
       return;
     }
+    pmsd = (PMSD) pdnms->data.ptrvalue;
+    MMDB_OpenTraverse(pmsd);
+    Cn3D_SetPars(NewStructureRenderSet(), pdnms);
+
     Cn3D_OpenEnd();
     Show (w);
     Select (w);

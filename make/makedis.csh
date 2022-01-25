@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.40 2000/01/31 17:55:34 beloslyu Exp $
+# $Id: makedis.csh,v 1.42 2000/04/13 14:14:42 thiessen Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -195,7 +195,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 	set NET_VIB=(BLIB31=libvibnet.a \
 		VIBLIBS=\"$NCBI_DISTVIBLIBS $OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin Nentrez Cn3D udv ddv blastcl3 $OGL_TARGETS\") 
+		VIB=\"Psequin Nentrez Cn3Dv3d udv ddv blastcl3 blast.REAL $OGL_TARGETS\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -204,7 +204,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3\") 
+	set NET_VIB=(VIB=\"blastcl3 blast.REAL\") 
 endif
 
 set CMD='make $MFLG \

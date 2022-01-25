@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.68 $
+* $Revision: 6.74 $
 *
 * File Description: 
 *
@@ -65,6 +65,12 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <explore.h>
+#include <udviewer.h>
+#include <udvdef.h>
+#include <udvseq.h>
+#include <ddvmain.h>
+#include <ddvpanel.h>
+#include <ddvgraph.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -661,7 +667,7 @@ extern void LIBCALL AddBioseqPageToList (BioseqPagePtr PNTR head, BioseqPagePtr 
   newbpp->highlight = bpp->highlight;
   newbpp->toClipboard = bpp->toClipboard;
   newbpp->print = bpp->print;
-  newbpp->export = bpp->export;
+  newbpp->exprt = bpp->exprt;
   newbpp->togif = bpp->togif;
   newbpp->resize = bpp->resize;
   newbpp->next = NULL;
@@ -1085,6 +1091,13 @@ static void ResizeViewForm (WindoW w)
     SetPosition (bfp->bvd.pnl, &s);
     AdjustPrnt (bfp->bvd.pnl, &s, FALSE);
   }
+  if (bfp->bvd.udv != NULL) {
+    GetPosition (bfp->bvd.udv, &s);
+    s.right = width - 10;
+    s.bottom = bottom;
+    SetPosition (bfp->bvd.udv, &s);
+    AdjustPrnt (bfp->bvd.udv, &s, FALSE);
+  }
   /*
   if (bfp->bvd.vwr != NULL) {
     if (Visible (bfp->bvd.vwr) && AllParentsVisible (bfp->bvd.vwr)) {
@@ -1353,9 +1366,9 @@ static void LIBCALL ExportBioseqViewFormToFile (Pointer formDataPtr, CharPtr fil
   if (bfp == NULL || bfp->bvd.bsp == NULL) return;
   bpp = bfp->currentBioseqPage;
   if (bpp == NULL) return;
-  if (bpp->export != NULL) {
+  if (bpp->exprt != NULL) {
     GetTitle (bfp->form, dfault, sizeof (dfault));
-    bpp->export (&(bfp->bvd), NULL, dfault);
+    bpp->exprt (&(bfp->bvd), NULL, dfault);
   }
 }
 
@@ -1604,7 +1617,7 @@ static void SetBioseqImportExportItems (BioseqViewFormPtr bfp)
   bpp = bfp->currentBioseqPage;
   if (bpp == NULL) return;
   exportItm = FindFormMenuItem ((BaseFormPtr) bfp, VIB_MSG_EXPORT);
-  if (bpp->export != NULL) {
+  if (bpp->exprt != NULL) {
     tmp = StringMove (str, "Export ");
     StringNCpy_0 (tmp, bpp->label, sizeof (str) - 12);
     StringCat (tmp, "...");
@@ -2121,6 +2134,40 @@ static void BioseqFormMessage (ForM f, Int2 mssg)
         break;
     }
   }
+}
+
+/* 
+Nlm_LaunchWebPage tries to launch a web page given by the complete url
+(including "http://")
+*/
+
+NLM_EXTERN void Nlm_LaunchWebPage (Char *url)
+{
+#ifdef WIN_MOTIF
+    CharPtr            argv [8];
+    int child;
+#endif
+    if(url == NULL) return;
+#ifdef WIN_MAC
+    Nlm_SendURLAppleEvent (url, "MOSS", NULL);
+#endif
+#ifdef WIN_MSWIN
+    if (! Nlm_MSWin_OpenDocument (url)) {
+        Message (MSG_POST, "Unable to launch browser");
+    }
+#endif
+#ifdef WIN_MOTIF
+  argv [0] = "netscape";
+  argv [1] = url;
+  argv [2] = NULL;
+  child = fork();
+  if(child == 0) {
+     if (execvp ("netscape", argv) == -1) {
+        Message (MSG_POST, "Unable to launch netscape");
+        exit(-1);
+    }
+  }
+#endif
 }
 
 static void LaunchPubSeqArticle (ButtoN b)
@@ -2774,6 +2821,20 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     SetObjectExtra (bfp->bvd.pnl, (Pointer) &(bfp->bvd), NULL);
     Hide (bfp->bvd.pnl);
     Hide (bfp->bvd.pnlParentGrp);
+
+    bfp->bvd.udvParentGrp = HiddenGroup (h, -1, 0, NULL);
+    bfp->bvd.udv = AutonomousPanel4 (bfp->bvd.udvParentGrp, pixwidth, pixheight,
+                                     UDV_draw_viewer, UnDViewerVScrlProc, NULL,
+                                     sizeof (ViewerDialogDataPtr), NULL, NULL);
+    SetObjectExtra (bfp->bvd.udvParentGrp, (Pointer) &(bfp->bvd), NULL);
+    Hide (bfp->bvd.udvParentGrp);
+
+    bfp->bvd.ddvParentGrp = HiddenGroup (h, -1, 0, NULL);
+    bfp->bvd.ddv = AutonomousPanel4 (bfp->bvd.ddvParentGrp, pixwidth, pixheight,
+                                     DDV_DrawViewer, DDV_VScrlProc, DDV_HScrlProc,
+                                     sizeof (DdvMainPtr), NULL, NULL);
+    SetObjectExtra (bfp->bvd.ddvParentGrp, (Pointer) &(bfp->bvd), NULL);
+    Hide (bfp->bvd.ddvParentGrp);
 
     if (makeControls != NULL) {
       if (bsp == NULL) {

@@ -1,4 +1,4 @@
-# $Id: make_exe.dos,v 6.6 1999/11/26 16:03:19 vakatov Exp $
+# $Id: make_exe.dos,v 6.7 2000/02/25 16:46:00 vakatov Exp $
 ########################################################################
 #  This file describes rules to build NCBI-toolkit-based application.
 #  Below is an example of using this file(along with another template
@@ -53,6 +53,16 @@ $(TEST_RES): $(TEST_RC) $(RES_DEP)
 	$(RC) -r -I$(INCPATH) -I$(LIBPATH) $(TEST_RC)
 !endif
 
+
+#############################################################################
+# special rules to build some of the NCBI toolkit object files
+test_ncbi_socket_.obj:  test_ncbi_socket_.c test_ncbi_socket.c
+	$(CC) @<<
+$(CFLAGS) test_ncbi_socket_.c
+<<
+
+
+#############################################################################
 
 copy:   $(TEST_EXE)
 nocopy: $(TEST_EXE)

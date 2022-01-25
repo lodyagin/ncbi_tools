@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.20 $
+* $Revision: 6.24 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -51,16 +51,9 @@
 #include <satutil.h>
 
 #include <txalign.h>
-/**
-#include <pgppop.h>
-**/
 #include <salpacc.h>
-#include <blastpri.h>
 #include <alignval.h>
 #include <valid.h>
-/*
-#include <validerr.h>
-*/
 
 
 
@@ -160,25 +153,26 @@ parameters(id, idcontext, Intvalue)
 ******************************************************************/ 
 
 static Boolean useValErr = FALSE;
+static Boolean useLockByID = FALSE;
 static ValidStructPtr useVsp = NULL;
 
 static BioseqPtr AlignValBioseqLockById (SeqIdPtr sid)
 
 {
-  if (useValErr) {
-    return BioseqFindCore (sid);
-  } else {
+  if (useLockByID) {
     return BioseqLockById (sid);
+  } else {
+    return BioseqFindCore (sid);
   }
 }
 
 static Boolean AlignValBioseqUnlockById (SeqIdPtr sid)
 
 {
-  if (useValErr) {
-    return TRUE;
-  } else {
+  if (useLockByID) {
     return BioseqUnlockById (sid);
+  } else {
+    return TRUE;
   }
 }
 
@@ -226,7 +220,7 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
       for (c=0; c<segment; c++)
       {
          if ((j = dsp->starts[(dsp->dim*c)+i])>0)
-            pos+=j;
+            pos=j;
       }
       return pos;
    } else if (sap->segtype == SAS_DENDIAG)
@@ -357,22 +351,21 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the sequence start is greater than the total sequence length.  Look for extra characters in the alignment, or formatting errors\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_End_Less_Than_Zero:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s\n", (long) Intvalue, buf, buf3);
+      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error\n", (long) Intvalue, buf, buf3);
       break;
 
     case Err_End_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the sequence end point is greater than the total sequence length.  Look for extra characters in the alignment, or formatting errors\n", buf, (long) Intvalue, (long) pos, buf3);
-
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_Len_Less_Than_Zero:
@@ -386,14 +379,14 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "Segment length is greater than total bioseq length in segment %ld (near sequence %d) for sequence ID: %s in the context of %s.  Look for extra or invalid characters in this or nearby segments\n", (long) Intvalue, (long) pos, buf, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
       break; 
  
     case Err_Sum_Len_Start:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
-      sprintf(string2, "The endpoint of segment %ls (near sequence position %ld) is greater than total bioseq length for sequence ID: %s in the context of %s.  Look for extra or invalid characters, or formatting errors\n",  (long) Intvalue, (long) pos, buf, buf3); 
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_SeqAlign_DimSeqId_Not_Match:
@@ -2037,11 +2030,13 @@ NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntry
   Boolean        rsult;
 
   if (vsp == NULL || sep == NULL) return FALSE;
+  useLockByID = vsp->farIDsInAlignments;
   useValErr = TRUE;
   useVsp = vsp;
   vsp->gcp = &gc;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
   rsult = ValidateSeqAlignInSeqEntry (sep, FALSE, FALSE, TRUE, FALSE, FALSE);
+  useLockByID = TRUE;
   useValErr = FALSE;
   useVsp = NULL;
   return rsult;

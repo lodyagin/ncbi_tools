@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,15 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.56  2000/03/13 18:36:38  madden
+* Added insert_ctrlA Boolean to readdb_get_bioseq_ex
+*
+* Revision 6.55  2000/03/10 18:52:11  madden
+* Add prototype for readdb_get_filebits
+*
+* Revision 6.54  2000/02/09 19:35:52  madden
+* Added readdb_MakeGiFileBinary
+*
 * Revision 6.53  2000/01/12 21:03:52  egorov
 * 1. Introduce Fastacmd API function - Fastacmd_Search
 * 2. Rearrange order of functions to have Fastacmd, ID1, and CommonIndex stuff separate.
@@ -400,6 +409,9 @@ belong to the same sequence. */
 /* version of formatdb. */
 #define FORMATDB_VER 3
 
+/* 'Magic' number at the beginning of a binary gi list that indicates it is binary. */
+#define READDB_MAGIC_NUMBER UINT4_MAX
+
 /****************************************************************************/
 /* TYPEDEFS */
 /****************************************************************************/
@@ -691,7 +703,7 @@ Int4 LIBCALL readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string,
 Gets a BioseqPtr containing the sequence in sequence_number.
 */
 BioseqPtr LIBCALL readdb_get_bioseq PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number));
-BioseqPtr LIBCALL readdb_get_bioseq_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Boolean use_objmgr));
+BioseqPtr LIBCALL readdb_get_bioseq_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Boolean use_objmgr, Boolean insert_ctrlA));
 
 /*
 Get the length of the sequence.
@@ -783,6 +795,13 @@ Boolean LIBCALL readdb_parse_db_names PROTO((CharPtr PNTR filenames, CharPtr buf
 Get the version of formatdb used on this database. 
 */
 Int4 LIBCALL readdb_get_formatdb_version PROTO((ReadDBFILEPtr rdfp));
+
+/*
+	returns the 'filebits' associated with a certain ordinal number.
+	This is done by going to the rdfp for that ordinal id and
+	gathering the filebits.
+*/
+Boolean LIBCALL readdb_get_filebits PROTO((ReadDBFILEPtr rdfp, Int4 ordinal_id, Uint2Ptr filebit, Uint2Ptr aliasfilebit));
 
 /* For the BioseqFetch functions. */
 
@@ -935,6 +954,7 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
 
+Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr output_file));
 #ifdef __cplusplus
 }
 #endif

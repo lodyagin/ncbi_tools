@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.85 2000/01/20 13:20:44 madden Exp $
+# $Id: makeall.dos,v 6.99 2000/03/21 19:26:51 durand Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -24,7 +24,8 @@ OBJ1  = \
 	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
 	+ncbibuf.obj +connectn.obj +connutil.obj \
    +con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj \
-   +binary.obj  +ncbi_socket.obj +ncbi_buffer.obj
+   +binary.obj  +ncbi_socket_.obj +ncbi_buffer.obj \
+   +ncbi_core.obj +ncbi_util.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
@@ -40,10 +41,11 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +salprop.obj \
+	+txalign.obj +sqnutil1.obj +sqnutil2.obj +sqnutil3.obj +salpacc.obj +salprop.obj \
 	+udvseq.obj \
 	+salsap.obj +salstruc.obj +salutil.obj +salpedit.obj +salpstat.obj \
-	+blocks.obj +pgppop.obj +samutil.obj +objalignloc.obj +ddvcolor.obj
+	+blocks.obj +pgppop.obj +samutil.obj +objalignloc.obj +ddvcolor.obj \
+	+viewmgr.obj +ddvcreate.obj 
 
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
@@ -74,7 +76,7 @@ OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+seqpcc.obj \
 	+seqanal.obj +aacomp.obj +seqscrl.obj \
 	+mapgene.obj +prtgene.obj \
-	+ddvclick.obj +ddvcreate.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
+	+ddvclick.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
 
 OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
 	+mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj +mmdbapi4.obj \
@@ -84,8 +86,8 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+sim2.obj +sim3.obj +sim4.obj +simutil.obj +slist.obj +sec.obj +tfuns.obj \
 	+toasn3.obj +toporg.obj +pobutil.obj +stsutil.obj +suggadj.obj \
 	+suggest.obj +suggslp.obj +blast.obj +blastutl.obj \
-	+blastool.obj +blastasn.obj +blastkar.obj \
-	+splutil.obj +gapxdrop.obj +lookup.obj +readdb.obj \
+	+blastool.obj +blastkar.obj \
+	+splutil.obj +actutils.obj +gapxdrop.obj +lookup.obj +readdb.obj \
 	+posit.obj +ncbisam.obj \
 	+bandalg0.obj +bandalg1.obj +bandalg2.obj +bandalg3.obj \
 	+bandalg4.obj +bandalg5.obj +bandalgn.obj +ncbisort.obj \
@@ -93,14 +95,16 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
-	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj +vecscrn.obj
+	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj +vecscrn.obj \
+	+mblast.obj
 
 OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
 	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
 
 OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
 	+cn3dxprt.obj +cn3dwin.obj  +cn3dentr.obj +cn3dmesh.obj \
-	+cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj
+	+cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj \
+	+cn3dstyl.obj +seqcons.obj
 
 
 ### OpenGL versions of LIB4(vibrant.lib) and LIB30(ncbicn3d.lib)
@@ -155,6 +159,7 @@ copy_reg:
 	echo "NO COPY"
 !else
 	-mkdir $(INCPATH)
+	-mkdir $(INCPATH)\connect
 	-mkdir $(LIBPATH)
 	-copy *.dos $(LIBPATH)
 	-copy *.bat $(LIBPATH)
@@ -174,6 +179,8 @@ copy_reg:
 	copy ..\asnlib\*.c .
 	copy ..\connect\*.c .
 	copy ..\connect\*.h $(INCPATH)
+	$(DEL) ..\include\ncbi_*.h
+	copy ..\connect\ncbi_*.h $(INCPATH)\connect
 	copy ..\object\*.c .
 	copy ..\object\*.h $(INCPATH)
 	copy ..\access\*.c .
@@ -187,8 +194,6 @@ copy_reg:
 	copy ..\biostruc\*.c .
 	copy ..\tools\*.h $(INCPATH)
 	copy ..\tools\*.c .
-	copy ..\network\blast2\client\*.h $(INCPATH)
-	copy ..\network\blast2\client\*.c .
 	copy ..\link\mswin\*.rc .
 	copy ..\link\mswin\*.ico .
 	copy ..\link\mswin\ncbirc.h .

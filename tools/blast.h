@@ -32,8 +32,26 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.22 $ 
+/* $Revision: 6.28 $ 
 * $Log: blast.h,v $
+* Revision 6.28  2000/03/31 17:01:26  dondosha
+* Added explanation for use of blastx in two sequences search
+*
+* Revision 6.27  2000/03/24 17:01:27  kans
+* added BLASTUpdateSeqIdInSeqInt - needed to compile blastall.c on Mac, which requires prototypes
+*
+* Revision 6.26  2000/02/23 20:37:45  dondosha
+* Added prototype for MegaBlastBuildLookupTable and BlastNtWordExtend
+*
+* Revision 6.25  2000/02/11 16:40:53  egorov
+* The parse_blast_options is made public.
+*
+* Revision 6.24  2000/02/01 18:04:59  dondosha
+* Added prototype for GreedyAlignMemAlloc
+*
+* Revision 6.23  2000/01/26 22:01:57  madden
+* Add function BlastGetProgramName
+*
 * Revision 6.22  2000/01/14 18:27:45  shavirin
 * Added definitions of WordExtend* functions.
 *
@@ -341,11 +359,12 @@ void LIBCALL do_the_blast_run PROTO((BlastSearchBlkPtr search));
 
 Int2 LIBCALL BlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_seq, Int4 effective_length));
 
+void BLASTUpdateSeqIdInSeqInt(SeqLocPtr mask, SeqIdPtr sip);
+
 /*
-	Blast two sequences and return a SeqAlign.
+	Blast two sequences and return a SeqAlign. For blastx program first
+	sequence must be nucleotide, second protein.
 */
-
-
 SeqAlignPtr LIBCALL BlastTwoSequences PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options));
 
 SeqAlignPtr LIBCALL BlastTwoSequencesByLoc PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options));
@@ -401,6 +420,8 @@ Boolean BlastPrintVersionInfoEx PROTO((CharPtr program, Boolean html, CharPtr ve
 CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
 
 Uint1 LIBCALL BlastGetProgramNumber PROTO((CharPtr blast_program));
+CharPtr LIBCALL BlastGetProgramName PROTO((Uint1 number));
+
 
 
 BlastHitRangePtr LIBCALL BlastHitRangeDestruct PROTO((BlastHitRangePtr old));
@@ -418,6 +439,16 @@ BLAST_ExtendWordPtr LIBCALL BLAST_ExtendWordDestruct (BLAST_ExtendWordPtr ewp);
 
 
 void LIBCALL updateLambdaK PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent));
+
+BlastSearchBlkPtr GreedyAlignMemAlloc PROTO((BlastSearchBlkPtr search));
+
+Boolean parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
+	CharPtr PNTR error_message, CharPtr PNTR database);
+
+Int2
+BlastNtWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag real_diag, Int2 context));
+
+Boolean MegaBlastBuildLookupTable PROTO((BlastSearchBlkPtr search));
 
 #ifdef OS_UNIX
 Boolean HeyIAmInMemory(Int4 program);

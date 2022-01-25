@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.25 $
+* $Revision: 6.30 $
 *
 * File Description: Main entry point for Cn3d 
 *                   
@@ -37,6 +37,21 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.h,v $
+* Revision 6.30  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.29  2000/03/06 15:33:53  lewisg
+* add new hydrophobic palette, update visual c++ project to move seqcons
+*
+* Revision 6.28  2000/03/01 16:17:55  thiessen
+* improved handling of colors; many small fixes
+*
+* Revision 6.27  2000/02/10 17:47:02  thiessen
+* added: color-by-sequence-conservation menu item, zoom-out to OpenGL, misc fixes
+*
+* Revision 6.26  2000/02/10 15:51:58  lewisg
+* cn3d responds and send correct update messages.  many coloring bug fixes
+*
 * Revision 6.25  2000/01/18 22:49:16  lewisg
 * send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
 *
@@ -160,11 +175,9 @@
 #define CN3D_COLOR_TURN 2
 #define CN3D_COLOR_COIL 3
 /* total number of colors in fixed palette */
-#define CN3D_COLOR_MAX 37
+#define CN3D_COLOR_MAX 54
 /* total number of colors allowed in indexed palettes. keep room for background */
 #define CN3D_MAX_PALETTE 100
-/* the number of color functions used by Cn3D*/
-#define CN3DFUNCNUM 10
 
 #include <vibrant.h>
 
@@ -205,19 +218,15 @@ extern void LIBCALL Cn3D_EnableMenus(void);
 extern Boolean LIBCALL readErrors(void);
 
 NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New);
+NLM_EXTERN void LIBCALL Cn3D_RedrawEx(Boolean New);
+NLM_EXTERN void Cn3D_RedrawNUpdate(Boolean New);
 NLM_EXTERN void LIBCALL Cn3D_ResetActiveStrucProc(void);
 extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
                               ItmActnProc netconfig, Boolean StandAlone);
 
-/*extern void LaunchAlignViewer (SeqAlignPtr salp);*/
 extern Boolean LIBCALL VASTInit(void);
 extern BiostrucAnnotSetPtr LIBCALL VASTBsAnnotSetGet(Int4 uid);
 extern void Cn3DResizeProc(WindoW w);
-
-/* for salsa */
-/*extern Int2 LIBCALLBACK AlgViewFunc (Pointer data); 
-extern Int2 LIBCALLBACK AlgEditFunc (Pointer data);
-extern Int2 LIBCALLBACK SeqEditFunc PROTO((Pointer data)); */
 
 #ifdef __cplusplus
 }

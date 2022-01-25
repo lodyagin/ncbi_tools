@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.14 $ 
+/* $Revision: 6.15 $ 
 * $Log: blastkar.h,v $
+* Revision 6.15  2000/04/17 20:41:37  madden
+* Added BLAST_MatrixFetch
+*
 * Revision 6.14  1999/12/22 21:06:35  shavirin
 * Added new function BlastPSIMaxScoreGet().
 *
@@ -475,6 +478,9 @@ BLAST_ScoreFreqPtr BlastScoreFreqDestruct PROTO((BLAST_ScoreFreqPtr sfp));
 BLAST_MatrixPtr LIBCALL BLAST_MatrixDestruct PROTO((BLAST_MatrixPtr blast_matrix));
 
 BLAST_MatrixPtr LIBCALL BLAST_MatrixFill PROTO((BLAST_ScoreBlkPtr sbp, Boolean positionBased));
+
+BLAST_MatrixPtr LIBCALL BLAST_MatrixFetch PROTO((CharPtr matrix_name));
+
 
 Int2 LIBCALL BlastGetStdAlphabet PROTO((Uint1 alphabet_code, Uint1Ptr residues, Int4 residues_size));
 /*

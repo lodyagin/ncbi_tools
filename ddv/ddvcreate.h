@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.h,v 1.15 1999/12/20 20:20:41 lewisg Exp $
+/*  $Id: ddvcreate.h,v 1.27 2000/04/21 23:00:50 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,49 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.15 $
+* $Revision: 1.27 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.h,v $
+* Revision 1.27  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.26  2000/04/19 15:45:50  hurwitz
+* can create display for a block
+*
+* Revision 1.25  2000/03/31 21:33:07  durand
+* added new default color schemas for BLAST
+*
+* Revision 1.24  2000/03/28 13:33:27  durand
+* moved DDV_Disp_Opt data structure to pgppop.h
+*
+* Revision 1.23  2000/03/21 19:26:45  durand
+* adapt ddvcreate to be used by pgppop
+*
+* Revision 1.22  2000/03/20 13:46:23  durand
+* fixed a bug in BLAST functions; added DDV_BLAST_COLOR0 to produce a BLAST output without any layout
+*
+* Revision 1.21  2000/02/28 16:52:47  durand
+* wrote a new manager for unaligned regions
+*
+* Revision 1.20  2000/02/23 21:34:29  durand
+* allow custom display of gap characters
+*
+* Revision 1.19  2000/02/23 19:49:33  durand
+* use row number instead of SeqId for coloring
+*
+* Revision 1.18  2000/02/14 16:49:34  durand
+* add new options for BLAST output
+*
+* Revision 1.17  2000/02/02 14:44:31  durand
+* added function to create data structure for block editor, fixed some bugs
+*
+* Revision 1.16  2000/01/26 13:38:55  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.15  1999/12/20 20:20:41  lewisg
 * allow cn3d to do color and ddv to do case when both are running
 *
@@ -116,15 +152,22 @@ extern "C" {
   structure
 
 *******************************************************************************/
+typedef struct uabitdescr{
+	Int4    from;
+	Int4    to;
+	Boolean IsGap;
+} UABitDescr, PNTR UABitDescrPtr;
+
 typedef struct uamsg{ /*UnAligned Messaging structure*/
-	Int4    from_ua;/*UA coord system (always 0->UA max lenght*/
-	Int4    to_ua;
-	Int4    from_r; /*BSP coord.*/
+	Int4    from_a; /*asked coord.*/
+	Int4    to_a;
+	Int4    from_r; /*returned coord.*/
 	Int4    to_r;
-	Int4    CurrentPos; /*for internal use only*/
+	Int4    currentPos;
 	Uint1   DispType;
 	Uint1   strand;
 	Boolean IsGap;
+	UABitDescr ubd[3];
 } UAMsg, PNTR UAMsgPtr;
 
 typedef struct descridisp {
@@ -137,19 +180,6 @@ typedef struct descridisp {
         Uint1           strand;
 } DescriDisp, PNTR DescriDispPtr;
 
-typedef struct ddv_disp_opt{
-	/*color display ?*/
-	Boolean bUseColors;
-	/*styles for a disc. seqalign*/
-	Boolean ShowLeftTail;
-	Boolean ShowRightTail;
-	Uint1   DispDiscStyle;
-	Uint1   SpacerSize;
-    Uint1   DiscJustification;
-	/*this field is here because it's closely related to the SeqAlign*/
-	Uint1   RulerStyle; /*for bioseq coord system; used only when rebuild the display*/
-	}DDV_Disp_Opt, PNTR DDV_Disp_OptPtr;
-
 /*******************************************************************************
 
   defines
@@ -158,6 +188,16 @@ typedef struct ddv_disp_opt{
 #define RulerStyle_One_Start      ((Uint1)1)
 #define RulerStyle_Continue_Start ((Uint1)2)
 
+/*size limit of a seqalign for edition (number of columns)*/
+#define LIMIT_EDITOR_SIZE 10000
+
+#define DDV_BLAST_COLOR0 0
+#define DDV_BLAST_COLOR1 1
+#define DDV_BLAST_COLOR2 2
+#define DDV_BLAST_COLOR3 3
+#define DDV_BLAST_COLOR4 4
+#define DDV_BLAST_COLOR5 5
+#define DDV_BLAST_COLOR6 6
 
 /*******************************************************************************
 
@@ -166,19 +206,28 @@ typedef struct ddv_disp_opt{
 *******************************************************************************/
 NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
 		Int2 LineSize, DDV_Disp_OptPtr ddop);
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop);
 NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
 		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop);
-NLM_EXTERN UAMsgPtr UAMgrIntUAMsg(Int4 from, Int4 to, Uint1 DispType, Uint1 strand);
+NLM_EXTERN Boolean DDV_BuildDisp_BlockEditor(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int4 block_num);
+NLM_EXTERN UAMsgPtr UAMgrIntUAMsg( Int4 MaxLength, Int4 BspLength,
+		Int4 BspStart,Int4 BspStop, Int4 ddpFrom, Int4 ddpTo,Uint1 DispType, Uint1 strand);
 NLM_EXTERN UAMsgPtr UAMgrDelUAMsg(UAMsgPtr PNTR uamp);
 NLM_EXTERN void UAMgrUAMsgGetInfo(UAMsgPtr uamp,Int4Ptr from_bsp, Int4Ptr to_bsp, 
 		BoolPtr IsGap);
-NLM_EXTERN Boolean UAMgrGetNextUAbit(UAMsgPtr uamp, Int4 MaxLength, Int4 BspLength,
-		Int4 BspStart,Int4 BspStop);
+NLM_EXTERN Boolean UAMgrGetNextUAbit(UAMsgPtr uamp,Int4 BspStart,Int4 BspStop);
 NLM_EXTERN ValNodePtr UABuildDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
 	DDV_Disp_OptPtr ddop, Int4Ptr TotLength,Boolean AddLeftUAPart,
 	Boolean AddRightUAPart);
+NLM_EXTERN ValNodePtr UABuildDescriptorForBlockEditor(SeqAlignPtr sap, Int4 nBsp, 
+	Int4 block_num,Int4 LineSize,Int4Ptr TotLength);
+NLM_EXTERN ValNodePtr DDV_BuildTailDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
+	Uint1 which_tail,Int4Ptr TotLength,Int4Ptr cumulpop);
 NLM_EXTERN void DDV_InitDefSAPdispStyles(DDV_Disp_OptPtr ddop);
 NLM_EXTERN void DDV_InitCn3DSAPdispStyles(DDV_Disp_OptPtr ddop);
+NLM_EXTERN void DDV_InitDDESAPdispStyles(DDV_Disp_OptPtr ddop);
 NLM_EXTERN Uint4Ptr DDV_BuildBspEntitiesTbl(ValNodePtr PNTR TableHead,Int4 nBsp);
 
 /*export functions*/
@@ -188,21 +237,26 @@ NLM_EXTERN void DDV_DumpSAPInFastaFile(MsaParaGPopListPtr mpplp,DDVOptionsBlockP
 		FILE *hFile,Boolean bPrintGap);
 
 /*BLAST stuffs; function to build new outputs*/
-NLM_EXTERN Boolean DDV_DisplayBlastSAP(SeqAlignPtr sap, ValNodePtr mask,
-	FILE *fp, Boolean is_na, Uint4 tx_option);
+NLM_EXTERN Boolean DDV_DisplayBlastPairList(SeqAlignPtr sap, ValNodePtr mask,
+	FILE *fp, Boolean is_na, Uint4 tx_option,Uint1 ColorScheme);
 
 /*layout manager stuff*/
 NLM_EXTERN Boolean DDV_InitColour_When_Start(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
 	DDV_ColorGlobal * * gclr, Boolean NoColor);
 NLM_EXTERN Boolean DDV_LayoutUAregion(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
-	DDV_ColorGlobal * * gclr,Uint1 * pRGB,Uint1 style);
-NLM_EXTERN void DDV_LayoutGap(DDV_ColorGlobal *pcg,
-	ValNodePtr vnp_seq1,ValNodePtr vnp_seq2,Uint1 style,Uint1 *rgb);
+	DDV_ColorGlobal * * gclr,Uint1 * pRGB,Uint1 style,Uint1 * pUARGB,
+	Uint1 UAstyle);
+NLM_EXTERN void DDV_LayoutGap(DDV_ColorGlobal *pcg,ValNodePtr vnp_seq1,
+		ValNodePtr vnp_seq2,Int4 row2,Uint1 style,Uint1 *rgb);
 NLM_EXTERN void DDV_LayoutMaskRegions(DDV_ColorGlobal *pcg,
-	ValNodePtr vnp_query,ValNodePtr mask,Uint1 style,Uint1 *rgb);
+	ValNodePtr vnp_query,ValNodePtr mask,Int4 row,Uint1 style,Uint1 *rgb);
 NLM_EXTERN void DDV_LayoutISOColors(DDV_ColorGlobal *pcg,ValNodePtr * row_list,Int4 nRow,
 	Int4 Master,Boolean bSetMaster,Int4Ptr * matrix,Uint1 IdentClr,Uint1 SimilClr,
-	Uint1 OtherClr);
+	Uint1 OtherClr,Uint1 IdentSty,Uint1 SimilSty,Uint1 OtherSty);
+
+/* create display for a single aligned block or an unaligned region */
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 BlockIndex);
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int4 UAIndex);
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -53,6 +53,12 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.35  2000/04/13 14:17:32  ostell
+* fixed support for lim->tr. FlatLocHalfCaret alwasy assume lim->tl
+*
+* Revision 6.34  2000/04/03 23:28:19  tatiana
+* added showSeqLoc for web feature view
+*
 * Revision 6.33  2000/01/21 17:17:52  kans
 * MatchAAGeneToFeat now calls SeqMgrGetOverlappingGene on CDS first, avoids multiple targeted gathers, just like MatchNAGeneToFeat has done since feature indexing was first implemented
 *
@@ -351,9 +357,15 @@ NLM_EXTERN CharPtr FlatLocHalfCaret
 					(long) (base +base*( (double) fuzz -> a/1000.0 )));
 				break;
 			case 4:
-				if (base > 1){
-					sprintf(localbuf,"%ld^%ld", (long) (base-1), (long) base);
-				}else{
+				if (fuzz->a == 3) /* space to right */
+				{
+					sprintf(localbuf, "%ld^%ld", (long)(base), (long)(base+1));
+				}
+				else if ((fuzz->a == 4) && (base > 1))   /* space to left */
+				{
+					sprintf(localbuf, "%ld^%ld", (long)(base-1), (long)(base));
+				}
+				else{
 					index = (Uint1) fuzz -> a;
 					if (index > 4) index = 0;
 					sprintf(localbuf,"%s%ld", 
@@ -1739,7 +1751,8 @@ static Boolean get_feats (GatherContextPtr gcp)
 	r_trunc = gr.r_trunc;
 	if (sfp->data.choice != SEQFEAT_CDREGION && 
 					sfp->data.choice != SEQFEAT_GENE) {
-		if ((!ofp->embl_feat && ASN2FF_SHOW_GB_STYLE) && r_trunc) {
+		if ((!ofp->embl_feat && ASN2FF_SHOW_GB_STYLE 
+					&& !(ofp->showSeqLoc)) && r_trunc) {
 			return TRUE;
 		}
 	}
@@ -1754,7 +1767,8 @@ static Boolean get_feats (GatherContextPtr gcp)
 				ofp->sfpGenesize, bsp, ofp->seg_bsp, gcp->entityID, 
 					gcp->itemID, gcp->thistype, gcp->new_loc, NULL, 0, temp);
 			if (ofp->show_gene) {
-				if (r_trunc && !ofp->embl_feat && ASN2FF_SHOW_GB_STYLE) {
+				if (r_trunc && !ofp->embl_feat && ASN2FF_SHOW_GB_STYLE
+				 					&& !(ofp->showSeqLoc)) {
 					break;
 				}
 			    ofp->List = EnlargeSortList(ofp->List, ofp->sfpListsize);
@@ -1857,7 +1871,8 @@ static Boolean get_feats (GatherContextPtr gcp)
 		}
 		break;
 	case SEQFEAT_CDREGION:
-		if (r_trunc != TRUE || ofp->embl_feat || !ASN2FF_SHOW_GB_STYLE) {
+		if (r_trunc != TRUE || ofp->embl_feat || ofp->showSeqLoc
+										 || !ASN2FF_SHOW_GB_STYLE) {
 			ofp->List = EnlargeSortList(ofp->List, ofp->sfpListsize);
 	    	ofp->sfpListsize = StoreFeatTemp(ofp->List, sfp, 
 		   		 ofp->sfpListsize, bsp, ofp->seg_bsp, gcp->entityID, 
@@ -2476,6 +2491,7 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 	}
 	ofp->bsp = bsp;
+	ofp->showSeqLoc = (ajp->slp) ? TRUE : FALSE;
 	ofp->useSeqMgrIndexes = ajp->useSeqMgrIndexes;
 	ofp->seg_bsp = ajp->asn2ffwep->seg;
 	ofp->format = ajp->format;

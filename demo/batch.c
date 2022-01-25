@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.16 1999/10/21 21:10:04 shavirin Exp $
+/* $Id: batch.c,v 6.17 2000/02/03 21:00:38 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.17  2000/02/03 21:00:38  beloslyu
+* fix the NCBI_Date initialization
+*
 * Revision 6.16  1999/10/21 21:10:04  shavirin
 * Added possibility to retrive RefSeq accessions.
 *
@@ -502,7 +505,7 @@ BGenBankPtr BGenBankInit(void)
 
     Char  release[] = "Nbatch Dump";
     Char  date_time[128];
-    NCBI_Date       date={{0,0,0,0},NULL};
+    NCBI_Date       date={{0,0,0,0,255,255,255},NULL};
     DataVal dv;
 
     bgbp = (BGenBank*)MemNew(sizeof(BGenBank));

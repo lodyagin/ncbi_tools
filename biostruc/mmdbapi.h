@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   09/18/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: General Header with Macros for MMDBAPI.
 *
@@ -38,6 +38,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdbapi.h,v $
+* Revision 6.5  2000/03/01 16:16:45  thiessen
+* modified backbone definitions, added AM_PARTIALBACKBONE
+*
 * Revision 6.4  1999/03/05 22:44:00  vakatov
 * Made ClearStructures() function be NLM_EXTERN -- for the DLL build on PC
 *
@@ -186,10 +189,10 @@ typedef struct NLM_mmdbapi
 
 /* use these when IsAtomNode(pfb) == TRUE */
 #define IsAtomBackBone(pfb)     ((pfb)->bWhat & (Byte) AM_BACKBONE)
+#define IsAtomPartialBackBone(pfb)    ((pfb)->bWhat & (Byte) AM_PARTIALBACKBONE)
 #define IsAtomCAlpha(pfb)       ((pfb)->bWhat & (Byte) AM_CALPHA)
 #define IsAtomPAlpha(pfb)       ((pfb)->bWhat & (Byte) AM_PALPHA)
 #define IsAtomAlpha(pfb)       (((pfb)->bWhat & (Byte) AM_CALPHA)  ||  ((pfb)->bWhat & (Byte) AM_PALPHA))
-#define IsAtomOCarbonyl(pfb)    ((pfb)->bWhat & (Byte) AM_OCARBNYL)
 #define IsAtomCBeta(pfb)        ((pfb)->bWhat & (Byte) AM_CBETA)
 #define IsAtomNBeta(pfb)        ((pfb)->bWhat & (Byte) AM_NBETA)
 #define IsAtomBeta(pfb)	       (((pfb)->bWhat & (Byte) AM_CBETA) || ((pfb)->bWhat & (Byte) AM_NBETA))

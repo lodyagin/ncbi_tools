@@ -121,3 +121,12 @@ Nlm_FloatHi scalingFactor));
 void  LIBCALL impalaMakeFileNames PROTO((Char * matrixDbName, Char * auxiliaryFileName, Char * mmapFileName, Char * seqFileName, Char *matrixFileName, Char * ckptFileName,  Char *directoryPrefix));
 
 Boolean LIBCALL IMPALAPrintHelp PROTO((Boolean html, Int4 line_length, Char * programName, FILE *outfp));
+
+Nlm_FloatHi LIBCALL IMPALAfindUngappedLambda PROTO((Char *matrixName));
+
+void LIBCALL IMPALAfillResidueProbability PROTO((Uint1Ptr sequence, Int4 length, Nlm_FloatHi * resProb));
+
+BLAST_ScoreFreqPtr LIBCALL IMPALAfillSfp PROTO((BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArray, Nlm_FloatHi *scoreArray,  BLAST_ScoreFreqPtr return_sfp, Int4 range));
+
+
+

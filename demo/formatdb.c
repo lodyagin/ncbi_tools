@@ -30,11 +30,17 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.33 $
+   $Revision: 6.35 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.35  2000/02/17 17:20:59  sicotte
+   Change Calling convention for FastaToSeqEntryForDb
+
+   Revision 6.34  2000/02/04 21:52:58  madden
+   Use FastaToSeqEntryForDb
+
    Revision 6.33  1999/12/21 18:31:38  madden
    Fixed bug with writing alias file.
 
@@ -311,6 +317,7 @@ Int2 Main(void)
     FormatDBPtr	fdbp;
     FDB_optionsPtr options;
     BioseqPtr bsp;
+    Int2 id_ctr=1;
     Int4 count = 0, volume = 0;
     Char basename[128], filenamebuf[128];
     FILE *fd;
@@ -345,9 +352,9 @@ Int2 Main(void)
             return 3;
         
         /* Get sequences */
-        while ((sep = FastaToSeqEntryEx(fd, 
+        while ((sep = FastaToSeqEntryForDb(fd, 
                                         (Boolean)!options->is_protein,
-                                        NULL, options->parse_mode)) != NULL) {
+                                        NULL, options->parse_mode, basename, &id_ctr,NULL)) != NULL) {
             
             if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
                 ErrLogPrintf("Error in readind Bioseq Formating failed.\n");

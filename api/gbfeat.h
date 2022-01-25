@@ -2,6 +2,9 @@
 * gbfeat.h:
 *
 * $Log: gbfeat.h,v $
+* Revision 6.2  2000/02/02 21:03:12  tatiana
+* CkNumberType() added
+*
 * Revision 6.1  1998/02/10 17:00:25  tatiana
 * GBQualValidToAdd(0 added
 *
@@ -111,6 +114,8 @@ NLM_EXTERN void DeleteGBQualFromList PROTO((GBQualPtr PNTR gbqp, GBQualPtr curq,
 NLM_EXTERN CharPtr CkBracketType PROTO((CharPtr str));
 
 NLM_EXTERN CharPtr CkLabelType PROTO((CharPtr str));
+
+NLM_EXTERN CharPtr CkNumberType PROTO((CharPtr str));
 
 NLM_EXTERN GBQualPtr tie_qual PROTO((GBQualPtr head, GBQualPtr next));
 

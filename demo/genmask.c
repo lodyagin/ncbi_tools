@@ -1,4 +1,4 @@
-/*  $RCSfile: genmask.c,v $  $Revision: 6.4 $  $Date: 1999/12/17 21:34:37 $
+/*  $RCSfile: genmask.c,v $  $Revision: 6.7 $  $Date: 2000/02/23 15:09:15 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: genmask.c,v $
+* Revision 6.7  2000/02/23 15:09:15  egorov
+* Bug fixed.  Put Int4 word, but not just one byte at the end.
+*
+* Revision 6.6  2000/02/18 18:42:37  egorov
+* Make -t option OPTIONAL
+*
+* Revision 6.5  2000/02/17 19:33:53  egorov
+* Add -t (database title) option
+*
 * Revision 6.4  1999/12/17 21:34:37  egorov
 * Add support for the 'month' subset
 *
@@ -68,7 +77,7 @@
 #include <sqnutils.h>
 #include <readdb.h>
 
-#define NUMARG 6
+#define NUMARG 7
 
 static Args myargs [NUMARG] = {
     { "DI file name",
@@ -83,6 +92,8 @@ static Args myargs [NUMARG] = {
 	FALSE, NULL, NULL, FALSE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
     { "GI threshold for 'month' subset", 
 	0, NULL, NULL, TRUE, 'g', ARG_INT, 0.0, 0, NULL},
+    { "Database title",
+	NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
 };
 
 /* maximum number of sequences in a database */
@@ -116,7 +127,9 @@ Int2 Main (void)
     CharPtr		subset;
     Char		TmpBuf[1024];
     GenMaskStruct	gms;
-	Int4		gi_threshold;
+    Int4		gi_threshold;
+    char		*dbtitle;
+
 
     printf("\nRead input parameters");
 
@@ -130,6 +143,11 @@ Int2 Main (void)
     subset = myargs [3].strvalue;
     is_prot = myargs [4].intvalue;
     gi_threshold = myargs [5].intvalue;
+    dbtitle = myargs [6].strvalue;
+
+    if (!dbtitle) {
+	dbtitle = db_file;
+    }
 
     if (getenv("BLASTDB")) {
 	strcpy(TmpBuf, getenv("BLASTDB"));
@@ -159,7 +177,7 @@ Int2 Main (void)
     printf("\nGenerate alias file");
     falias = FileOpen(alias_file, "w");
     fprintf(falias, "# This is program generated alias file\n#\n");
-    fprintf(falias, "TITLE    This is a subset of %s database for %s\n", db_file, subset);
+    fprintf(falias, "TITLE    %s\n", dbtitle);
     fprintf(falias, "DBLIST   %s\n", db_file);
     fprintf(falias, "OIDLIST  %s\n", mask_file);
     fprintf(falias, "LENGTH   %ld\n", gms.dblen);
@@ -172,7 +190,7 @@ Int2 Main (void)
     printf("\nWrite mask file to disk");
     fmask = FileOpen(mask_file, "w");
     FileWrite (&gms.maxoid, sizeof(Int4), 1, fmask);
-    FileWrite (memmask, gms.maxoid/8 + 1, 1, fmask);
+    FileWrite (memmask, gms.maxoid/8 + 5, 1, fmask);
     FileClose(fmask);
     printf("\n%ld sequences found\nTotal length is %ld\n", gms.count, gms.dblen);
     printf("\nDone\n");

@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.89 2000/01/20 15:50:03 beloslyu Exp $
+#	$Id: makenet.unx,v 6.100 2000/04/13 14:10:29 thiessen Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -71,7 +71,7 @@ THREAD_OBJ =
 VIBLIBS = 
 VIBFLAG = -I/am/Motif/include -DWIN_MOTIF
 VIBFLAG =
-VIB = Cn3D vclient Nentrez ddv udv
+VIB = Cn3Dv3d vclient Nentrez ddv udv
 VIB =
 VIBLIBS= -lXm -lXmu -lXt -lX11
 VIBLIBS=
@@ -97,7 +97,6 @@ BLIB15 = libnetcliE.a
 BLIB16 = libnetcliS.a
 BLIB17 = libnetcliES.a
 BLIB19 = libncbispel.a
-#BLIB21 = libncbibls2.a
 BLIB23 = libncbitool.a
 BLIB24 = libncbisugg.a
 BLIB25 = libncbiwww.a
@@ -105,7 +104,8 @@ BLIB25 = libncbiwww.a
 #BLIB26 = libncbitax1.a
 BLIB27 = libncbimsc1.a
 # client tax library
-BLIB29 = libncbitxc1.a
+# libncbitxc1 is disabled as per Vladmir Soussov 03/29/2000
+#BLIB29 = libncbitxc1.a
 BLIB30 = libncbicn3d.a
 BLIB3000 = libncbicn3dOGL.a
 ULIB31 = libvibnet.a
@@ -183,14 +183,15 @@ LIB17 = -lnetcliES
 LIB19 = -lncbispel
 # LIB20 is for the NCBI desktop utilities
 LIB20 = -lncbidesk
-#LIB21 = -lncbibls2
 LIB22 = -lncbimmdb
 LIB23 = -lncbitool
 LIB24 = -lncbisugg
 LIB25 = -lncbiwww
 #LIB26 = -lncbitax1
 LIB27 = -lncbimsc1
-LIB29 = -lncbitxc1
+# libncbitxc1 is disabled as per Vladmir Soussov 03/29/2000
+#LIB29 = -lncbitxc1
+LIB29 = 
 LIB30 = -lncbicn3d
 LIB3000 = -lncbicn3dOGL
 LIB31 = -lvibnet
@@ -306,8 +307,6 @@ SRC17 = ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCSOCKS) \
 
 SRC19 = objspell.c spellapi.c
 
-#SRC21 = objblst2.c netblap2.c blstout2.c blast2.c blastasn.c
-
 SRC24 = suggadj.c suggapi.c suggen.c suggest.c suggslp.c
 
 SRC25 = www.c wtoolbar.c querydb.c
@@ -378,8 +377,6 @@ OBJ17 = $(OBJ17BASE) $(OBJSOCKS) $(OBJRSAREF)
 
 OBJ19 = objspell.o spellapi.o
 
-#OBJ21 = objblst2.o netblap2.o blstout2.o blast2.o blastasn.o
-
 OBJ24 = suggadj.o suggapi.o suggen.o suggest.o suggslp.o
 
 OBJ25 = www.o wtoolbar.o querydb.o
@@ -432,8 +429,6 @@ OBJENCRUTIL =   encrutil.o
 
 OBJECHOD =	echoserv.o
 
-OBJENTSRV =	srventr.o
-
 EXEDISPD =	dispd
 
 EXENCBID =	ncbid
@@ -443,8 +438,6 @@ EXESVBROKER =   svbroker
 EXEENCRUTIL =	encrutil
 
 EXEECHOD =	echoserv
-
-EXEENTSRV =	srventr
 
 EXESUGGSRV =	suggsrv
 
@@ -476,8 +469,6 @@ SRCENCRUTIL =	encrutil.c
 
 SRCECHOD =	echoserv.c
 
-SRCENTSRV =	srventr.c
-
 SRCUTILCOPY = ../demo/srchnt.c ../demo/srchaa.c ../demo/mts.c ../demo/sigme.c \
 	../demo/dst.c ../demo/ccp.c ../demo/epi.c ../demo/twop.c \
 	../demo/cnsrt.c ../demo/cnsgn.c \
@@ -503,13 +494,17 @@ CLIENTS =
 SERV_SRC = $(SRCDISPD) $(SRCNCBID) $(SRCECHOD) $(SRCENTSRV) $(SRCSVBROKER) \
 	$(SRCENCRUTIL)
 
-SERVERS = $(EXEDISPD) $(EXENCBID) $(EXEECHOD) $(EXEENTSRV) $(EXESVBROKER) \
+SERVERS = $(EXEDISPD) $(EXENCBID) $(EXEECHOD) $(EXESVBROKER) \
 	$(EXEENCRUTIL) $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXESESSION) \
 	$(EXEPSEQUIN) $(EXENQUERY)
 
 ## All things to make
 ##
-all : copy .WAIT nocopy
+all : ln-if-absent copy .WAIT nocopy
+
+ln-if-absent:	../make/ln-if-absent
+	rm -f ln-if-absent
+	ln -s ../make/ln-if-absent .
 
 nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) \
    $(NCBI_ENCR)$(NCBI_SOCKS) $(BLIB7) \
@@ -542,9 +537,8 @@ S : $(BLIB16)
 ES : $(BLIB17)
 
 
-others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB29) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
-#others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB29) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
-#others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB21) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB29) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
+others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
+#others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
 
 
 ## To clean out the directory without removing make
@@ -623,8 +617,6 @@ copy :
 	-$(SRCCOPY) ../network/id0arch/client/*.c .
 	-$(SRCCOPY) ../network/id1arch/*.h ../include
 	-$(SRCCOPY) ../network/id1arch/*.c .
-	-$(SRCCOPY) ../network/blast2/client/*.h ../include
-	-$(SRCCOPY) ../network/blast2/client/*.c .
 	-$(SRCCOPY) ../network/spell/client/*.h ../include
 	-$(SRCCOPY) ../network/spell/client/*.c .
 	-$(SRCCOPY) ../network/suggest/client/*.h ../include
@@ -668,11 +660,7 @@ copy :
 	$(SRCCOPY) ../demo/elecpcr.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/genget.c .
-	$(SRCCOPY) ../demo/powblast.c .
-	$(SRCCOPY) ../demo/pblcmd.c .
-	$(SRCCOPY) ../demo/pblproc.c .
 	$(SRCCOPY) ../demo/udvmain.c .
-	$(SRCCOPY) ../demo/pblproc.h ../include
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -762,16 +750,6 @@ objspell.o : objspell.c
 	$(CC) $(CFLAGS) objspell.c
 spellapi.o : spellapi.c
 	$(CC) $(CFLAGS) spellapi.c
-objblst2.o : objblst2.c
-	$(CC) $(CFLAGS) objblst2.c
-blstout2.o : blstout2.c
-	$(CC) $(CFLAGS) blstout2.c
-netblap2.o : netblap2.c
-	$(CC) $(CFLAGS) netblap2.c
-blast2.o : blast2.c
-	$(CC) $(CFLAGS) blast2.c
-blastasn.o : blastasn.c
-	$(CC) $(CFLAGS) blastasn.c
 suggadj.o : suggadj.c
 	$(CC) $(CFLAGS) suggadj.c
 suggapi.o : suggapi.c
@@ -948,12 +926,6 @@ $(BLIB19) : $(OBJ19)
 	$(LIBCOPY) $(BLIB19) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB19)
 
-#$(BLIB21) : $(OBJ21)
-#	- rm -f $(BLIB21)
-#	$(AR) cru $(BLIB21) $(OBJ21)
-#	$(LIBCOPY) $(BLIB21) $(NCBI_LIBDIR)
-#	$(RAN) $(NCBI_LIBDIR)/$(BLIB21)
-
 $(BLIB24) : $(OBJ24)
 	- rm -f $(BLIB24)
 	$(AR) cru $(BLIB24) $(OBJ24)
@@ -978,11 +950,11 @@ $(BLIB27) : $(OBJ27)
 	$(LIBCOPY) $(BLIB27) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB27)
 
-$(BLIB29) : $(OBJ29)
-	- rm -f $(BLIB29)
-	$(AR) cru $(BLIB29) $(OBJ29)
-	$(LIBCOPY) $(BLIB29) $(NCBI_LIBDIR)
-	$(RAN) $(NCBI_LIBDIR)/$(BLIB29)
+#$(BLIB29) : $(OBJ29)
+#	- rm -f $(BLIB29)
+#	$(AR) cru $(BLIB29) $(OBJ29)
+#	$(LIBCOPY) $(BLIB29) $(NCBI_LIBDIR)
+#	$(RAN) $(NCBI_LIBDIR)/$(BLIB29)
 
 $(BLIB35) : $(OBJ35)
 	- rm -f $(BLIB35)
@@ -1106,32 +1078,34 @@ idload_lib.o : idload_lib.c
 netentcf : netentcf.c $(ULIB31)
 	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB20) $(LIB4) $(LIB23) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
-Cn3D    : $(OBJCN3D) $(BENTREZLIBS) netentcf
-	$(CC) -o Cn3D $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB30) $(LIB20) \
-		$(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
+# old viewer3D version
+Cn3Dv3d    : $(OBJCN3D) $(BENTREZLIBS) netentcf
+	$(CC) -o Cn3Dv3d $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB30) $(LIB20) \
+		$(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
 		$(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
-Cn3DOGL : $(OBJCN3D) $(BENTREZLIBS) netentcf
-	$(CC) -o Cn3DOGL $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB3000) $(LIB20) \
-		$(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
+# new (current) OpenGL version
+Cn3D : $(OBJCN3D) $(BENTREZLIBS) netentcf
+	$(CC) -o Cn3D $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB3000) $(LIB20) \
+		$(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
 		$(LIB400) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 ddv    : $(OBJDDV)
-	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) \
+	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) $(LIB36) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
 	$(VIBLIBS) $(OTHERLIBS)
 
 udv    : $(OBJUDV)
 	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) \
-	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
-	$(VIBLIBS) $(OTHERLIBS)
+	$(LIB36) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) \
+	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 Nentrez : entrez.c $(ULIB31) netentcf
-	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # left this in (Tentrez) for script backwards compatibility
 Tentrez : entrez.c $(ULIB31) netentcf
-	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 
 # sample network services client (non-Vibrant) - see catalogc.c Makefile
@@ -1161,11 +1135,6 @@ svbroker : $(OBJSVBROKER) $(BSRVNETCLILIB)
 
 encrutil : $(OBJENCRUTIL) $(BNETCLILIB)
 	$(CC) -o encrutil $(LDFLAGS) $(OBJENCRUTIL) $(NETCLILIB) $(LIB1) $(OTHERLIBS)
-
-# Entrez network server
-
-#srventr : srventr.c $(BSRVNETCLILIB) $(BLIB7) $(BLIB13) $(BLIB21)
-#	$(CC) -o srventr $(LDFLAGS) srventr.c $(LIB22) $(LIB5) $(LIB7) $(LIB13) $(LIB21) $(LIB23) $(SRVNETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # sample network services server
 
@@ -1213,24 +1182,9 @@ id0test: id0test.c $(BNETCLILIB) $(BLIB13)
 idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
 	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
-# emulates standalone BLAST program
-# clients for blast2, "-DBLASTCLI_WITH_VIBRANT" for vibrant interface. 
-#blastcli: blastcli.c $(BNETCLILIB) $(BLIB21)
-#	$(CC) -g -o blastcli $(LDFLAGS) blastcli.c -DBLASTCLI_WITH_VIBRANT $(LIB23) $(LIB4) $(LIB21) $(NETCLILIB) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
-#blastcl2: blastcl2.c $(BNETCLILIB) $(BLIB21)
-#	$(CC) -g -o blastcl2 $(LDFLAGS) blastcl2.c $(LIB23) $(LIB21) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
-
 # gapped BLAST client
 blastcl3: blastcl3.c $(BNETCLILIB) $(BLIB36)
 	$(CC) -g -o blastcl3 $(LDFLAGS) blastcl3.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
-
-#pblcmd: pblcmd.c $(BNETCLILIB) $(BLIB21)
-#	$(CC) -g -o pblcmd $(LDFLAGS) pblcmd.c pblproc.c $(LIB8) $(LIB7) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
-
-#.NO_PARALLEL:	powblast
-
-#powblast: powblast.c $(BNETCLILIB) $(BLIB21)
-#	$(CC) -g -o powblast $(LDFLAGS) powblast.c pblproc.c $(LIB4) $(LIB8) $(LIB7) $(LIB20) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)
@@ -1384,7 +1338,15 @@ Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
 session : $(SRCSESSION) $(BSRVNETCLILIB)
 	$(CC) -o session $(LDFLAGS) $(SRCSESSION) $(SRVNETCLILIB) $(LIB1) $(OTHERLIBS)
 
+salogif.o:	salogif.c
+	$(CC) $(CFLAGS) salogif.c
 
+wwwblast.o:	wwwblast.c
+	$(CC) $(CFLAGS) wwwblast.c
+
+blast.REAL:	wwwblast.o salogif.o $(THREAD_OBJ)
+	$(CC) $(LDFLAGS) wwwblast.o salogif.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	
 #test_ncbi_socket
 
 test_ncbi_socket : test_ncbi_socket.c

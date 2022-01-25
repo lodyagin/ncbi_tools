@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.h,v 1.12 2000/01/12 21:52:17 durand Exp $
+/*  $Id: ddvopen.h,v 1.17 2000/04/17 13:30:42 durand Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.12 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.h,v $
+* Revision 1.17  2000/04/17 13:30:42  durand
+* removed g_hParent and unused functions DDV_LaunchAlignViewer and DDV_LaunchAlignEditor
+*
+* Revision 1.16  2000/04/08 00:37:32  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 1.15  2000/03/27 22:15:08  lewisg
+* add show/hide row dialog
+*
+* Revision 1.14  2000/03/24 20:34:58  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 1.13  2000/01/26 13:38:54  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.12  2000/01/12 21:52:17  durand
 * add import function; update menus when DDV is loaded from Cn3D
 *
@@ -110,6 +125,8 @@ extern "C" {
 #include <udviewer.h>
 #include <samutil.h>
 #include <accentr.h>
+#include <pgppop.h>
+#include <alignmgr.h>
 
 /******************************************************************************
 
@@ -132,7 +149,10 @@ extern "C" {
 	/*use only by the standalone version of DDV */
 #define REG_DDV_AUTO_EDIT ObjMgrProcLoad(OMPROC_EDIT, \
 		"DDV", "MSA_Editor", OBJ_SEQALIGN, 0, OBJ_SEQALIGN, 0, \
-		NULL, DDV_ObjRegMasterDDV, 0)	
+		NULL, DDV_ObjRegMasterEditDDV, 0)	
+#define REG_DDV_AUTO_VIEW ObjMgrProcLoad(OMPROC_VIEW, \
+		"DDV", "MSA_Viewer", OBJ_SEQALIGN, 0, OBJ_SEQALIGN, 0, \
+		NULL, DDV_ObjRegMasterViewDDV, 0)	
 
 	/*slave 1 : the editor in a separate window*/
 #define REG_DDV_SLA_EDIT ObjMgrProcLoad(OMPROC_EDIT, \
@@ -186,6 +206,10 @@ typedef struct ddvupdatelayoutdata{
 	PaneL   ddv_panel;
 	}DDVUpdateLayoutData, PNTR DDVUpdateLayoutDataPtr;
 
+struct _DDV_ImportDialog;
+typedef void (*DDV_ImportProcCB)(struct _DDV_ImportDialog *idp, SeqAlign *salpdest,
+                                 SeqAlign *salp);
+
 /* for the BLAST import dialog */
 typedef struct _DDV_ImportDialog {
     DocType AAorNN; /* is this of TYP_AA or TYP_NA */
@@ -193,27 +217,57 @@ typedef struct _DDV_ImportDialog {
     GrouP DDV_gAccType; /*the type of accession*/
     ButtoN DDV_bImportAccept; /*accept button*/
     TexT DDV_tAccession; /* the accession */
+    LisT DDV_lsip;  /* list box of sips */
     SeqId *sip;  /* the master sequence */
     SeqAlign *sap; /* the seqalign to add to */
+    SeqId *sipslave;  /* the slave sequence if it exists */
     void *userdata; /* for the update message */
+    DDV_ImportProcCB callback;  /* called after alignment created */
+    ValNode *pvnSips;  /* list of sips to blast against */
+    Int4 mode; /* see below */
+    SeqEntry *sep;  /* used to pass new seqentry to call back */
+    Bioseq *bsp; /* the bioseq being added */
 } DDV_ImportDialog;
 
+/* import to sequence to seqalign */
+#define DDVIMPSE2SA 0x0
+/* import sequence to sequence */
+#define DDVIMPSE2SE 0x1
+#define DDVIMP2SE 0x1
+/* import net sequence to seqalign */
+#define DDVIMPNET2SA 0x2
+#define DDVIMPNET 0x2
+/* import net sequence to sequence */
+#define DDVIMPNET2SE 0x3
+
+struct _DDV_HideDialog;
+typedef void (*DDV_HideProcCB)(struct _DDV_HideDialog *hdp);
+
+typedef struct _DDV_HideDialog {
+    WindoW DDV_wHide; /*the show/hide dialog*/
+    LisT DDV_lsip;  /* multilist box of sips */
+    SeqAlign *salp; /* the seqalign that is shown/hid */
+    SeqAlign *target; /* the original seqalign */
+    AMAlignIndexPtr amaip; /* target index */
+    void *userdata; /* for the update message */
+    DDV_HideProcCB callback;  /* called on every show/hide */
+    Int4 numrows;  /* true number of rows in target seqalign */
+} DDV_HideDialog;
 
 /******************************************************************************
 
 	Extern functions
 
 ******************************************************************************/
-extern Int2 LIBCALLBACK DDV_ObjRegMasterDDV (Pointer data);
+extern Int2 LIBCALLBACK DDV_ObjRegMasterEditDDV (Pointer data);
+extern Int2 LIBCALLBACK DDV_ObjRegMasterViewDDV (Pointer data);
 extern Int2 LIBCALLBACK DDV_ObjRegSlaveEditDDV (Pointer data);
 extern Int2 LIBCALLBACK DDV_ObjRegSlaveViewDDV (Pointer data);
 extern void DDV_OpenFile(IteM i);
 extern void DDV_OpenNetwork(IteM i);
 extern ValNodePtr DDV_GetAndCheckSeqAlign(FILE *fp,Int4 gi,SeqEntryPtr sep2,
 	UdvFetchSeqEntryProc fetchSepProc,DdvOpenDataPtr dodp,Uint2Ptr entityID);
-extern void DDV_LaunchAlignEditor (Uint2 entityID,SeqAlignPtr sap);
-extern void DDV_LaunchAlignViewer (Uint2 entityID,SeqAlignPtr sap);
-extern WindoW DDV_StartMainWin_Slave(SAM_ViewGlobal *vgp);
+extern WindoW DDV_StartMainWin_Slave(SAM_ViewGlobal *vgp,Boolean bEditor);
 
 extern ValNodePtr DDV_GetSelectedRegions(SelStructPtr om_slp, Uint2 bsp_eID,
 	Uint2 bsp_iID);
@@ -222,10 +276,20 @@ extern Boolean DDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos);
 NLM_EXTERN Int4 DDV_Accession2Gi (CharPtr string, DocType type);
 NLM_EXTERN void DDV_ImportBioseqDlg(DDV_ImportDialog *idp);
 NLM_EXTERN void DDV_ImportBioseq(IteM i);
+NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp);
+NLM_EXTERN void DDV_ImportCB(DDV_ImportDialog *idp, SeqAlign *salpdest,
+                             SeqAlign *salp);
 NLM_EXTERN SeqAlign *DDV_Blast2Seqs(Bioseq *bsp1, Bioseq *bsp2, Boolean gapped,
                          Char *progname);
 extern void DDV_ImportNucSeqAlign(IteM i);
 extern void DDV_ImportProtSeqAlign(IteM i);
+NLM_EXTERN void DDV_HideDlgItem(IteM i);
+NLM_EXTERN void DDV_HideDlg(DDV_HideDialog *hdp);
+NLM_EXTERN void DDV_GetCharBufferForEditor(ParaGPtr pgp,CharPtr szEditSeq);
+NLM_EXTERN ValNodePtr DDV_GetMtdpListForEditor(ValNodePtr row,Int4 from_disp,
+		Int4 to_disp);
+NLM_EXTERN MsaParaGPopListPtr DDV_CreateDataForEditor(MsaParaGPopListPtr mpplp, 
+	Int4 from_disp,Int4 to_disp);
 
 
 #ifdef __cplusplus

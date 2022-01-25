@@ -25,6 +25,9 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.5  2000/04/10 15:23:33  dondosha
+* Added option to use MegaBlast for search
+*
 * Revision 6.2  1999/11/26 20:16:11  vakatov
 * Added <sqnutils.h> to pick up proto of 'UseLocalAsnloadDataAndErrMsg()'
 *
@@ -44,15 +47,15 @@
 #include <sqnutils.h>
 
 		
-#define NUMARG 18
+#define NUMARG 19
 
 static Args myargs [NUMARG] = {
   { "First sequence",
 	NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   { "Second sequence",
 	NULL, NULL, NULL, FALSE, 'j', ARG_FILE_IN, 0.0, 0, NULL},
-  { "blastp? (blastn otherwise)",
-        "T", NULL, NULL, FALSE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Program name: blastp, blastn, blastx. For blastx 1st argument should be nucleotide",
+        "blastp", NULL, NULL, FALSE, 'p', ARG_STRING, 0.0, 0, NULL},
   { "Gapped",
         "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
   { "alignment output file",
@@ -82,7 +85,9 @@ static Args myargs [NUMARG] = {
   { "Query strands to search against database (blastn only).  3 is both, 1 is top, 2 is bottom",
         "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
   { "Produce HTML output",
-        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL}
+        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Use Mega Blast for search",
+        "F", NULL, NULL, FALSE, 'm', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
@@ -93,7 +98,7 @@ Int2 Main (void)
 	BioseqPtr fake_bsp, fake_subject_bsp, query_bsp, subject_bsp;
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
 	BLAST_OptionsBlkPtr options;
-	Boolean is_na;
+	Boolean seq1_is_na, seq2_is_na;
 	CharPtr ret_buffer=NULL, params_buffer=NULL;
         DbtagPtr        dbtagptr;
 	Uint1 align_type;
@@ -121,18 +126,17 @@ Int2 Main (void)
         blast_inputfile = myargs [0].strvalue;
         blast_inputfile1 = myargs [1].strvalue;
         blast_outputfile = myargs [4].strvalue;
-	if (myargs[2].intvalue)
-	{
-        	program_name = StringSave("blastp");
-		align_type = 2;
-		is_na = FALSE;
+
+	program_name = StringSave(myargs[2].strvalue);
+	if (StringCmp(program_name, "blastn") && 
+	    StringCmp(program_name, "blastp") && 
+	    StringCmp(program_name, "blastx")) {
+		ErrPostEx(SEV_FATAL, 0, 0, "Program name must be blastn, blastp or blastx\n");
+		return (1);
 	}
-	else
-	{
-        	program_name = StringSave("blastn");
-		align_type = 1;
-		is_na = TRUE;
-	}
+	   
+
+	align_type = BlastGetTypes(program_name, &seq1_is_na, &seq2_is_na);
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
@@ -153,11 +157,11 @@ Int2 Main (void)
 	}
 
 
-	sep = FastaToSeqEntry(infp, is_na);
+	sep = FastaToSeqEntry(infp, seq1_is_na);
 	if (sep != NULL)
 	{
 		query_bsp = NULL;
-		if (is_na)
+		if (seq1_is_na)
 		{
 			SeqEntryExplore(sep, &query_bsp, FindNuc);
 		}
@@ -176,14 +180,14 @@ Int2 Main (void)
 	}
 
 	if (myargs[6].strvalue != NULL || myargs[17].intvalue != 0)
-		sep1 = FastaToSeqEntry(infp1, is_na);
+		sep1 = FastaToSeqEntry(infp1, seq2_is_na);
 	else
-		sep1 = FastaToSeqEntryEx(infp1, is_na, NULL, FALSE);
+		sep1 = FastaToSeqEntryEx(infp1, seq2_is_na, NULL, FALSE);
 	
 	if (sep1 != NULL)
 	{
 		subject_bsp = NULL;
-		if (is_na)
+		if (seq2_is_na)
 		{
 			SeqEntryExplore(sep1, &subject_bsp, FindNuc);
 		}
@@ -244,6 +248,7 @@ Int2 Main (void)
 	options->matrix = myargs[11].strvalue;
 
 	options->strand_option = myargs[16].intvalue;
+	options->is_megablast_search = (Boolean) myargs[18].intvalue;
 
 	if (myargs[6].strvalue || myargs[17].intvalue)
 		seqalign = BlastTwoSequencesEx(query_bsp, subject_bsp, NULL, options, &other_returns, &error_returns);
@@ -287,14 +292,18 @@ Int2 Main (void)
 		}	
 
 
-	align_options = 200;
-	align_options += TXALIGN_SHOW_QS;
+    align_options = 0;
+    align_options += TXALIGN_MATRIX_VAL;
+    align_options += TXALIGN_SHOW_QS;
+    align_options += TXALIGN_COMPRESS;
+    align_options += TXALIGN_END_NUM;
+    if (StringICmp("blastx", program_name) == 0) {
+        align_options += TXALIGN_BLASTX_SPECIAL;
+    }
 
-        if (myargs[17].intvalue)
-        {
-                align_options += TXALIGN_HTML;
-        }
-
+    if (myargs[17].intvalue)
+       align_options += TXALIGN_HTML;
+	
       	seqannot = SeqAnnotNew();
         seqannot->type = 2;
 	AddAlignInfoToSeqAnnot(seqannot, align_type);

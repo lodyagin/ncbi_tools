@@ -1,4 +1,4 @@
-# $Id: make_lib.dos,v 6.8 1999/11/26 16:03:21 vakatov Exp $
+# $Id: make_lib.dos,v 6.9 2000/02/25 16:46:00 vakatov Exp $
 ########################################################################
 #  This file describes rules to build NCBI-toolkit-based library.
 #  Below is an example of using this file(along with another template
@@ -64,9 +64,9 @@ regex.obj:  regex.c
 -DREGEX_NCBI -DREGEX_MALLOC $(XCFLAGS) $*.c
 <<
 ###
-ncbi_socket.obj:  ncbi_socket.c
+ncbi_socket_.obj:  ncbi_socket_.c ncbi_socket.c
 	$(CC) @<<
--DNCBI_C $(XCFLAGS) $*.c
+$(XCFLAGS) ncbi_socket_.c
 <<
 ###
 ncbidrwg.c:  ncbidraw.c

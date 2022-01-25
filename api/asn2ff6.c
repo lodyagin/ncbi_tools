@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.27  2000/02/09 19:34:39  kans
+* added forgbrel flag to Asn2ffJobPtr, currently used to suppress PUBMED line, which was not formally announced in release notes
+*
+* Revision 6.26  2000/01/28 17:56:48  kans
+* show_gi always FALSE to suppress NID and PID, added support for PUBMED line in GenBank format
+*
 * Revision 6.25  2000/01/18 17:09:24  tatiana
 * NP added to ValidateAccession
 *
@@ -1596,6 +1602,32 @@ static Int4 GetMuid(ValNodePtr equiv)
 
 }	/* GetMuid */
 
+static Int4 GetPmid(ValNodePtr equiv)
+{
+	Int4 pmid=0;
+	ValNodePtr newpub, the_pub;
+	MedlineEntryPtr ml;
+	
+	if (equiv->choice == PUB_Equiv)
+		newpub = equiv->data.ptrvalue;
+	else
+		newpub = equiv;
+
+	for (the_pub = newpub; the_pub; the_pub = the_pub -> next) {
+		if (the_pub->choice == PUB_PMid) {
+			pmid = the_pub->data.intvalue;
+			break;
+		}
+		if (the_pub->choice == PUB_Medline) {
+			ml = (MedlineEntryPtr) the_pub -> data.ptrvalue;
+			pmid = ml->pmid;
+		}
+	}
+
+	return pmid;
+
+}	/* GetPmid */
+
 /***************************************************************************
 * SeqLocPtr GetBaseRangeForCitation (SeqLocPtr loc, SeqLocPtr slp, Int4Ptr start, Int4Ptr stop)
 *
@@ -1686,7 +1718,7 @@ void GB_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 	CharPtr authors=NULL,title=NULL,journal=NULL,string_start, string, retract;
 	CharPtr descr = NULL;
 	Int2 i;
-	Int4 gibbsq, muid, pat_seqid=0, start=0, stop=0;
+	Int4 gibbsq, muid, pmid, pat_seqid=0, start=0, stop=0;
 	PubdescPtr pdp;
 	SeqFeatPtr sfp;
 	SeqLocPtr loc, slp;
@@ -1824,6 +1856,16 @@ void GB_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 		www_muid(muid);
 		ff_EndPrint();
 	}
+	if (! ajp->forgbrel) { /* suppress for now in GenBank bulk release */
+	pmid = GetPmid (psp->pub);
+	if (pmid > 0) {
+		ff_StartPrint(3, 12, ASN2FF_GB_MAX, NULL);
+		ff_AddString("PUBMED");
+		TabToColumn(13);
+		www_muid(pmid);
+		ff_EndPrint();
+	}
+	}
 
 	tag = FALSE;
 	pdp = psp->descr;
@@ -1940,7 +1982,7 @@ void GR_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 	CharPtr authors=NULL,title=NULL,journal=NULL,string_start, string, retract;
 	CharPtr descr = NULL;
 	Int2 i;
-	Int4 gibbsq, muid, pat_seqid=0, start=0, stop=0;
+	Int4 gibbsq, muid, pmid, pat_seqid=0, start=0, stop=0;
 	PubdescPtr pdp;
 	SeqFeatPtr sfp;
 	SeqLocPtr loc, slp;
@@ -2010,6 +2052,16 @@ void GR_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 		www_muid(muid);
 		ff_EndPrint();
 	}
+	pmid = GetPmid (psp->pub); /* not sure what GR format should be generating */
+	/*
+	if (pmid > 0) {
+		ff_StartPrint(3, 12, ASN2FF_GB_MAX, NULL);
+		ff_AddString("<BR>");
+		TabToColumn(13);
+		www_muid(pmid);
+		ff_EndPrint();
+	}
+	*/
 
 
 	if (authors)

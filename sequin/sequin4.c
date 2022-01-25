@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.122 $
+* $Revision: 6.124 $
 *
 * File Description: 
 *
@@ -133,6 +133,8 @@
 #define REGISTER_DESKTOP_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Desktop Report", "DesktopReport", 0, 0, 0, 0, NULL, DesktopReportFunc, PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_DESCRIPTOR_PROPAGATE ObjMgrProcLoadEx (OMPROC_FILTER, "Descriptor Propagate", "DescriptorPropagate", 0, 0, 0, 0, NULL, DoDescriptorPropagate, PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_CLEAR_SEQENTRYSCOPE ObjMgrProcLoadEx (OMPROC_FILTER, "Clear SeqEntry Scope", "ClearSeqEntryScope", 0, 0, 0, 0, NULL, DoClearSeqEntryScope, PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_SEQUIN_PROT_TITLES ObjMgrProcLoadEx (OMPROC_FILTER,"Sequin Style Protein Titles","SequinStyleProteinTitles",0,0,0,0,NULL,MakeSequinProteinTitles,PROC_PRIORITY_DEFAULT, "Misc")
 extern Int2 LIBCALLBACK MakeSequinProteinTitles (Pointer data);
@@ -4532,6 +4534,30 @@ static Int2 LIBCALLBACK DoDescriptorPropagate (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static void ReindexBioseqs (BioseqPtr bsp, Pointer userdata)
+
+{
+  SeqMgrReplaceInBioseqIndex (bsp);
+}
+
+static Int2 LIBCALLBACK DoClearSeqEntryScope (Pointer data)
+
+{
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       sep;
+
+  SeqEntrySetScope (NULL);
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp != NULL) {
+    sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+    if (sep != NULL) {
+      VisitBioseqsInSep (sep, NULL, ReindexBioseqs);
+    }
+  }
+  SeqEntrySetScope (NULL);
+  return OM_MSG_RET_DONE;
+}
+
 extern void SetupSequinFilters (void)
 
 {
@@ -4548,6 +4574,7 @@ extern void SetupSequinFilters (void)
   }
 
   if (indexerVersion) {
+    REGISTER_CLEAR_SEQENTRYSCOPE;
     REGISTER_SEQUIN_CACHE_ACCN;
     REGISTER_SEQUIN_GI_TO_ACCN;
     REGISTER_REFGENEUSER_DESC_EDIT;

@@ -1,5 +1,5 @@
 #
-# $Id: solaris.ncbi.mk,v 1.6 1999/11/24 20:27:45 thiessen Exp $
+# $Id: solaris.ncbi.mk,v 1.7 2000/04/13 14:10:45 thiessen Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
@@ -72,7 +72,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3DOGL
+#OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

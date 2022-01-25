@@ -4,6 +4,12 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.11  2000/04/03 17:37:20  tatiana
+* evidence added to STS qualifiers
+*
+* Revision 6.10  2000/02/02 21:02:33  tatiana
+* new type for /number added
+*
 * Revision 6.8  2000/01/21 21:06:44  kans
 * reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
 *
@@ -111,7 +117,7 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"lab_host", Class_text}, {"map", Class_text}, 
  {"macronuclear", Class_none}, {"mitochondrion", Class_none}, 
  {"mod_base", Class_token}, {"note", Class_note},
- {"number", Class_int}, {"organism", Class_text}, 
+ {"number", Class_number}, {"organism", Class_text}, 
  {"partial", Class_none}, {"PCR_conditions", Class_text}, 
  {"pop_variant", Class_text}, {"phenotype", Class_text},
   {"plasmid", Class_text}, {"product", Class_text}, 
@@ -513,10 +519,10 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"STS",  0, {-1, -1, -1, -1, -1}, 9,
+   {"STS",  0, {-1, -1, -1, -1, -1}, 10,
      {GBQUAL_citation, GBQUAL_standard_name, GBQUAL_db_xref, GBQUAL_gene,
       GBQUAL_label, GBQUAL_usedin, GBQUAL_note, GBQUAL_partial, GBQUAL_map, 
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      GBQUAL_evidence, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"TATA_signal",  0, {-1, -1, -1, -1, -1}, 9,

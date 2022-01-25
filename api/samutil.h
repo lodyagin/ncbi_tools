@@ -1,4 +1,4 @@
-/*   $Id: samutil.h,v 1.9 2000/01/24 20:54:35 vakatov Exp $
+/*   $Id: samutil.h,v 1.37 2000/04/26 21:53:22 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,100 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.h,v 1.9 2000/01/24 20:54:35 vakatov Exp $
+* File Name:  $Id: samutil.h,v 1.37 2000/04/26 21:53:22 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.9 $
+* $Revision: 1.37 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.h,v $
+* Revision 1.37  2000/04/26 21:53:22  hurwitz
+* added save function to tell AlnMgr about edits made in DDE
+*
+* Revision 1.36  2000/04/21 23:00:51  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.35  2000/04/13 18:57:03  hurwitz
+* for DDE: many bug fixes, also get rid of columns that are all unaligned gaps
+*
+* Revision 1.34  2000/04/10 21:41:25  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 1.33  2000/04/07 16:21:09  hurwitz
+* made delete block faster, added delete block to edit menu
+*
+* Revision 1.32  2000/04/05 20:52:35  hurwitz
+* added GUI control for shifting left and right alignment boundaries
+*
+* Revision 1.31  2000/04/03 22:26:31  hurwitz
+* can now shift a row with click and drag
+*
+* Revision 1.30  2000/03/29 20:02:48  hurwitz
+* keep track of master during move row operations
+*
+* Revision 1.29  2000/03/28 21:03:14  hurwitz
+* added gui control to re-order rows
+*
+* Revision 1.28  2000/03/25 00:22:10  hurwitz
+* put DDE_StackPtr in DDV_Main, add to stack inside DDE api's, added insert char, delete char, home and end keyboard control
+*
+* Revision 1.27  2000/03/23 00:00:00  hurwitz
+* DDE api's are called with stack now
+*
+* Revision 1.26  2000/03/20 22:22:48  hurwitz
+* added more checks to verify subroutine, 1 bug fix
+*
+* Revision 1.25  2000/03/16 15:51:32  hurwitz
+* added function to create an aligned block
+*
+* Revision 1.24  2000/03/14 22:08:21  hurwitz
+* undo and redo working properly, restore-original function added
+*
+* Revision 1.23  2000/03/10 23:01:43  hurwitz
+* added undo and redo functions, first pass
+*
+* Revision 1.22  2000/03/09 22:28:40  hurwitz
+* added shift block and delete block, a bug fix too
+*
+* Revision 1.21  2000/03/08 22:02:07  hurwitz
+* added verify function, debugging, handle align_start != 0
+*
+* Revision 1.20  2000/03/06 22:45:58  hurwitz
+* can shift right boundary of an aligned block left and right, DDVRuler updates added
+*
+* Revision 1.19  2000/03/01 22:49:40  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 1.18  2000/02/29 21:13:06  hurwitz
+* added low level functions for shifting left and right the left alignment boundary
+*
+* Revision 1.17  2000/02/28 16:28:39  hurwitz
+* added functions for deleting an aligned gap
+*
+* Revision 1.16  2000/02/24 23:37:00  hurwitz
+* added ability to insert gaps
+*
+* Revision 1.15  2000/02/18 16:06:22  hurwitz
+* for editing multiple sequence alignments: shift row right now working
+*
+* Revision 1.14  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 1.13  2000/02/15 17:44:12  hurwitz
+* reverted to 1.11
+*
+* Revision 1.11  2000/02/14 23:09:08  hurwitz
+* got rid of calls to DDV_RulerDescrNew() because of library conflicts
+*
+* Revision 1.10  2000/02/14 20:58:57  hurwitz
+* added functions for editing multiple sequence alignments: hide/show row, move row, shift row left
+*
 * Revision 1.9  2000/01/24 20:54:35  vakatov
 * SAM_ViewString::  made #define to fix for the DLL build on PC
 *
@@ -85,6 +166,7 @@
 #include <sequtil.h>
 #include <objgen.h>
 #include <objalignloc.h>
+#include <pgppop.h>    /*-- dih*/
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -108,7 +190,12 @@ extern "C" {
 #define SAM_BACKLAP 0x20
 
 #define ThrowError if(!Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG,0,0,0)) goto error
-
+#define ErrorReturn(error, string, retval) {Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG,0,0,0); \
+    Nlm_ErrPostEx((error), 0, 0, (string)); Nlm_ErrShow(); return(retval);}
+#define ErrorReturnVoid(error, string) {Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG,0,0,0); \
+    Nlm_ErrPostEx((error), 0, 0, (string)); Nlm_ErrShow(); return;}
+    
+typedef Boolean (*StartNetworkProc) (Boolean UseNetwork);
 typedef SeqEntryPtr (*SAM_SeqFetchProc) (Int4 uid, Int2 retcode);
 
 /* same as Vibrant RecT */
@@ -133,8 +220,202 @@ typedef  struct  _SAM_ViewerGlobal {
   SAM_RecT Rect;  /* where the master viewer wants the called viewer to go */
   SAM_SeqFetchProc  FetchProc;  /* the fetch function the master has set */
   Int4 MasterViewer;  /* the name of the master viewer */
+  DDV_ColorGlobal *pCGlobal;
+  Int4 Row;
+  StartNetworkProc NetStartProc;
+  void *BlastFile;
+  void *BlastNet;
+  void *BlastMany;
 } SAM_ViewGlobal, PNTR SAM_ViewGlobalPtr;
 
+
+/*----------------------------------------------------------------------------
+*  This is where I'm going to put my code for now...   Dave Hurwitz
+*                                                      1/21/00
+*
+*  These are the structutes and functions needed for the multiple
+*  alignment editor.  Perhaps it will be called DDE (as opposed to
+*  DDV).  (2-d editor, rather than 2-d viewer).
+*
+*  These functions will make use of a MsaParaGPopList, which in
+*  turn points to a list of ParaG's.  Each ParaG describes a single
+*  row, or sequence.  Each MsaParaGPopList describes all the sequences
+*  that are being edited.
+*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------
+*  this structure has info for multiple sequence alignment and editing.
+*---------------------------------------------------------------------------*/
+typedef struct DDE_info {
+  MsaParaGPopListPtr  pPopList;      /* the paragraphs as they're edited */
+  Boolean*            pVisible;      /* whether each original row is visible */
+  Int4*               pRowOrder;     /* order original (incl invisible) rows are displayed */
+  Int4*               pRowOrderLUT;  /* look-up-table: on-screen -> original rows */
+  Int4                TotalNumRows;  /* row count -- all rows, visible and invisible */
+} DDE_Info, PNTR DDE_InfoPtr;
+
+/*----------------------------------------------------------------------------
+*  this structure has info for keeping a history of edit changes.
+*---------------------------------------------------------------------------*/
+#define DDE_STACK_SIZE  300          /* stack size -- arbitrary */
+typedef struct DDE_stack {
+  DDE_InfoPtr*  pArray;              /* array of DDE_InfoPtr's */
+  DDE_InfoPtr   pOrig;               /* pointer to original structure */
+  DDE_InfoPtr   pEdit;               /* pointer to structure being edited */
+  Int4          NumInStack;          /* number of items in the stack */
+  Int4          NumFromStart;        /* number of items from start to StackIndex */
+  Int4          StackIndex;          /* next available slot on stack */
+  Int4          StackMin;            /* can back up until here */
+  Int4          StackMax;            /* can advance until here */
+  Int4          FromRow;             /* row that's moving */
+  Int4          SaveRow;             /* last drawn underline */
+  Int4          FromCol;             /* for calculating num chars shifting left/right */
+  Int4          SaveCol;             /* for last drawn dotted box */
+  Int4          BlockIndex;          /* record of block that's being adjusted */
+  Int4          LeftBoundary;        /* record of whether Left or Right boundary shift */
+  Int4          LaunchBlock;         /* record of block editor was launched on */
+  Int4          NumBlocks;           /* num blocks at last save */
+} DDE_Stack, PNTR DDE_StackPtr;
+
+/*=====================================================================
+*  these are the public member functions of DDE_Info.
+*======================================================================*/
+NLM_EXTERN DDE_StackPtr DDE_NewStack(MsaParaGPopListPtr pPopList);
+NLM_EXTERN DDE_StackPtr DDE_FreeStack(DDE_StackPtr pStack);
+NLM_EXTERN Boolean DDE_RestoreRowOrder(DDE_StackPtr pStack, Boolean Save);
+NLM_EXTERN Boolean DDE_HideRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_HideNewRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_ShowRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_ShowNewRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_MoveRow(DDE_StackPtr pStack, Int4 From, Int4 To, Boolean Save);
+NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Boolean Save);
+NLM_EXTERN Boolean DDE_InsertGap(DDE_StackPtr pStack, Int4 Row, Int4 Pos, Boolean Save);
+NLM_EXTERN Boolean DDE_RemoveGap(DDE_StackPtr pStack, Int4 Row, Int4 Pos, Boolean Save);
+NLM_EXTERN Boolean DDE_ShiftLeftBoundary(DDE_StackPtr pStack, Int4 BlockIndex, Int4 NumChars, Boolean Save);
+NLM_EXTERN Boolean DDE_ShiftRightBoundary(DDE_StackPtr pStack, Int4 BlockIndex, Int4 NumChars, Boolean Save);
+NLM_EXTERN void DDE_ShiftBlock(DDE_StackPtr pStack, Int4 BlockIndex, Int4 NumChars, Boolean Save);
+NLM_EXTERN void DDE_CreateBlock(DDE_StackPtr pStack, Int4 Left, Int4 Right, Boolean Save);
+NLM_EXTERN Boolean DDE_DeleteBlock(DDE_StackPtr pStack, Int4 BlockIndex, Boolean Save);
+NLM_EXTERN Boolean DDE_Select(DDE_StackPtr pStack, Int4 Row, Int4 Left, Int4 Right, Boolean Save);
+NLM_EXTERN Boolean DDE_DeSelect(DDE_StackPtr pStack, Int4 Row, Int4 Left, Int4 Right, Boolean Save);
+NLM_EXTERN Boolean DDE_SelectCol(DDE_StackPtr pStack, Int4 ColStart, Int4 ColStop, Boolean Save);
+NLM_EXTERN Boolean DDE_DeSelectCol(DDE_StackPtr pStack, Int4 ColStart, Int4 ColStop, Boolean Save);
+NLM_EXTERN Boolean DDE_Add(DDE_StackPtr pStack);
+NLM_EXTERN Boolean DDE_Prev(DDE_StackPtr pStack);
+NLM_EXTERN Boolean DDE_Next(DDE_StackPtr pStack);
+NLM_EXTERN void DDE_GetOriginal(DDE_StackPtr pStack, Boolean Save);
+NLM_EXTERN Int4 DDE_GetIndexOfMaster(DDE_StackPtr pStack);
+NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Int4 DDE_GetAlignStop(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Int4 DDE_GetNumBlocks(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Boolean DDE_IsColValid(MsaParaGPopListPtr pPopList, Int4 Col,
+                                  Int4 PNTR pBlockIndex, Boolean PNTR pUnAligned);
+NLM_EXTERN Int4    DDE_GetNumSegmentsInBlock(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Boolean DDE_CreateArraysForDenseSeg(DDE_InfoPtr pEditInfo, Int4 BlockIndex,
+                                               Int4 PNTR pStarts, Int4 PNTR pLens);
+
+/*=====================================================================
+*  here are some helper functions
+*======================================================================*/
+NLM_EXTERN DDE_InfoPtr  DDE_New(MsaParaGPopListPtr pPopList);
+NLM_EXTERN DDE_InfoPtr  DDE_Free(DDE_InfoPtr pEditInfo);
+NLM_EXTERN DDE_InfoPtr  DDE_Copy(DDE_InfoPtr pEditInfo);
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList);
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList);
+NLM_EXTERN ParaGPtr    DDE_ParaGNew(ParaGPtr pParaG);
+NLM_EXTERN ParaGPtr    DDE_ParaGFree(ParaGPtr pParaG);
+NLM_EXTERN Int4        DDE_GetNumVisibleRows(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Int4        DDE_GetDisplayRow(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN Int4        DDE_GetInsertRow(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN Boolean     DDE_IsBefore(DDE_InfoPtr pEditInfo, Int4 Row1, Int4 Row2);
+NLM_EXTERN ParaGPtr    DDE_GetParaGPtr(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN void        DDE_SetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr vnp);
+NLM_EXTERN ValNodePtr  DDE_AddMsaTxtNode(ValNodePtr ptxtList, Int4 from, Int4 to,
+                            Boolean IsGap, Boolean IsUnAligned, Boolean Before);
+NLM_EXTERN ValNodePtr  DDE_AddRulerDescrNode(ValNodePtr pRulerDescr, Int4 DispStart,
+                            Int4 DispStop, Int4 AlignStart, Boolean IsUnAligned, Boolean Before);
+NLM_EXTERN void        DDE_IncDisplayCoords(ValNodePtr ptxtList);
+NLM_EXTERN void        DDE_DecDisplayCoords(ValNodePtr ptxtList);
+NLM_EXTERN ValNodePtr  DDE_AddAGap(DDE_InfoPtr pEditInfo, Int4 Row,
+                            ValNodePtr ptxtList, Boolean Before, Boolean ForceUnAligned);
+NLM_EXTERN ValNodePtr  DDE_AddGapAndSplitNode(ValNodePtr pInsertNode, Int4 Offset, Int4 Pos);
+NLM_EXTERN ValNodePtr  DDE_RemoveAGap(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr pRemoveNode,
+                                      Boolean* pNodeDeleted);
+NLM_EXTERN Int4        DDE_GetGapIndex(ValNodePtr ptxtList, ValNodePtr pMidttxtList,
+                            Boolean Before);
+NLM_EXTERN ValNodePtr  DDE_GetPrevVNP(ValNodePtr head, ValNodePtr curr);
+NLM_EXTERN ValNodePtr  DDE_GetMsaTxtNode(ValNodePtr head, Int4 DispCoord, Int4 PNTR pOffset);
+NLM_EXTERN Boolean     DDE_ShiftRowLeft1(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr ptxtList,
+                                         Boolean OkToAddGaps);
+NLM_EXTERN Boolean     DDE_ShiftRowRight1(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr ptxtList,
+                                          ValNodePtr prev_vnp, Boolean InsertLeftGap);
+NLM_EXTERN void        DDE_AddGapToStartOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMakeRuler);
+NLM_EXTERN void        DDE_AddGapToEndOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMakeRuler);
+NLM_EXTERN Boolean     DDE_RemoveGapFromStartOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMakeRuler);
+NLM_EXTERN Boolean     DDE_RemoveGapFromEndOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMakeRuler);
+NLM_EXTERN Boolean     DDE_CleanEnds(DDE_InfoPtr);
+NLM_EXTERN Boolean     DDE_IsLeftAlignedGap(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_IsLeftAlignedGapList(ValNodePtr ptxtList, Boolean DeleteIt);
+NLM_EXTERN Boolean     DDE_IsRightAlignedGap(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_IsTerminalRightAlignedGap(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_IsRightAlignedGapList(ValNodePtr PNTR pptxtList, Boolean DeleteIt);
+NLM_EXTERN Boolean     DDE_LeftMerge(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_LeftAddNode(ValNodePtr ptxtList, Boolean PNTR pNodeDeletedToo);
+NLM_EXTERN void        DDE_LeftMergeAndAddNodeList(ValNodePtr ptxtList, Boolean AfterGap);
+NLM_EXTERN Boolean     DDE_RightMerge(ValNodePtr PNTR pptxtList, Boolean PNTR pHeadChanged);
+NLM_EXTERN Boolean     DDE_RightAddNode(ValNodePtr PNTR pptxtList, Boolean PNTR pHeadChanged);
+NLM_EXTERN Boolean     DDE_RightMergeAndAddNodeList(ValNodePtr PNTR pptxtList);
+NLM_EXTERN void        DDE_ShiftLeftList(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr ptxtList,
+                                         Boolean AfterGap, Boolean LastCharIsUnAligned);
+NLM_EXTERN Boolean     DDE_ShiftRightList(ValNodePtr PNTR pptxtList, ValNodePtr StopNode,
+                                          Boolean FirstCharIsUnAligned, Boolean InsertLeftGap,
+                                          Boolean OkToShrinkLastNode);
+NLM_EXTERN ValNodePtr  DDE_GetLastVNP(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_FirstColumnIsAligned(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Boolean     DDE_LastColumnIsAligned(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Boolean     DDE_IsStartOfAlignment(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_IsEndOfAlignment(ValNodePtr ptxtList);
+NLM_EXTERN Boolean     DDE_ShiftLeftBoundaryLeft1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Boolean     DDE_ShiftLeftBoundaryRight1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Boolean     DDE_ShiftRightBoundaryLeft1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Boolean     DDE_ShiftRightBoundaryRight1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN void        DDE_ReMakeRuler(DDE_InfoPtr pEditInfo);
+NLM_EXTERN ValNodePtr  DDE_ReMakeRulerForRow(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN Boolean     DDE_AreIdenticalRulers(ValNodePtr pRuler1, ValNodePtr pRuler2);
+NLM_EXTERN Boolean     DDE_AreIdenticalRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2);
+NLM_EXTERN Boolean     DDE_MergeNodes(ValNodePtr ptxtList);
+NLM_EXTERN void        DDE_MergeNodesLists(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Int4        DDE_GetFirstAlignIndex(DDE_InfoPtr pEditInfo);
+NLM_EXTERN void        DDE_Verify(DDE_InfoPtr pEditInfo);
+NLM_EXTERN ValNodePtr  DDE_SplitNode(ValNodePtr ptxtList, Int4 Offset);
+NLM_EXTERN void        DDE_SetTextStyle(MsaTxtDispPtr msap);
+NLM_EXTERN Boolean     DDE_GetColStatusForRow(DDE_InfoPtr pEditInfo, Int4 Row, Int4 Col,
+                                              Boolean PNTR pUnAligned, Boolean PNTR pGap);
+NLM_EXTERN Boolean     DDE_GetGapStatusOfRows(DDE_InfoPtr pEditInfo, Boolean PNTR pGapArray,
+                                              Int4 Col);
+NLM_EXTERN Boolean     DDE_AreArraysSame(Boolean PNTR pArray1, Boolean PNTR pArray2, Int4 Size);
+NLM_EXTERN Boolean     DDE_GetAlignIndices(DDE_InfoPtr pEditInfo, Int4 PNTR pIndices, Int4 Col);
+NLM_EXTERN Boolean     DDE_AddIndicesToArray(Int4 PNTR pArray, Int4 PNTR pIndices,
+                                             Int4 Size, Int4 ArrayIndex);
+
+/*----------------------------------------------------------------------------
+*  This is the end of my code -- Dave Hurwitz
+*----------------------------------------------------------------------------*/
+
+/*****************************************************************************
+
+Function: SAM_ReplaceGI()
+
+Purpose: Tries to replace all gi's in a seqalign with the best accession ID's
+  
+Parameters: salp, the seqalign to be worked over.
+
+Returns: This function only works on a non-indexed list of seqaligns
+
+*****************************************************************************/
+
+NLM_EXTERN void SAM_ReplaceGI(SeqAlign *salp);
 
 /*****************************************************************************
 

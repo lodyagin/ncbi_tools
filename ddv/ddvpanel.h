@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.h,v 1.10 2000/01/10 15:09:45 durand Exp $
+/*  $Id: ddvpanel.h,v 1.21 2000/04/21 23:00:50 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,46 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.10 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.h,v $
+* Revision 1.21  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.20  2000/04/10 21:41:26  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 1.19  2000/04/10 20:58:42  hurwitz
+* added GUI controls for DeleteBlock in DDE
+*
+* Revision 1.18  2000/04/07 16:21:08  hurwitz
+* made delete block faster, added delete block to edit menu
+*
+* Revision 1.17  2000/03/21 14:21:47  durand
+* fixed a problem with menus setup
+*
+* Revision 1.16  2000/03/14 22:08:21  hurwitz
+* undo and redo working properly, restore-original function added
+*
+* Revision 1.15  2000/03/10 23:01:43  hurwitz
+* added undo and redo functions, first pass
+*
+* Revision 1.14  2000/03/06 22:45:58  hurwitz
+* can shift right boundary of an aligned block left and right, DDVRuler updates added
+*
+* Revision 1.13  2000/02/08 14:10:43  durand
+* made extern the functions DDV_UpdateHScrollVal and
+*
+* Revision 1.12  2000/02/04 16:05:41  durand
+* add click action to select a row
+*
+* Revision 1.11  2000/01/26 13:38:55  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.10  2000/01/10 15:09:45  durand
 * Use Entrez instead of ID1
 *
@@ -132,6 +165,19 @@ typedef struct ddvexporttextemsg {/*used by the Display Styles Dlg box*/
 
 #define DDV_DEFAULT_PARAG_SIZE 70
 
+#define MOVE_ROW_LEFT              0
+#define MOVE_ROW_RIGHT             1
+#define MOVE_LEFT_BOUNDARY_LEFT    2
+#define MOVE_LEFT_BOUNDARY_RIGHT   3
+#define MOVE_RIGHT_BOUNDARY_LEFT   4
+#define MOVE_RIGHT_BOUNDARY_RIGHT  5
+#define DDE_PREV                   6
+#define DDE_NEXT                   7
+#define DDE_ORIG                   8
+#define DDE_DELETE_BLOCK           9
+#define DDE_CREATE_BLOCK          10
+#define DDE_LAUNCH_EDITOR         11
+
 /******************************************************************************
 
 	Global varaibles
@@ -151,13 +197,16 @@ extern void DDV_InitPanelData(UDVPanelDataPtr pdp);
 extern void DDV_SetupWin (PaneL p,Boolean bInit,RecT PNTR rcPp);
 extern void DDV_Resize_DDV (PaneL Viewer,RecT PNTR rcP);
 extern void DDV_WinMainResize (WindoW w);
+extern void DDV_UpdateVScrollVal(PaneL p,Boolean bInit,Int4 CurPos);
+extern void DDV_UpdateHScrollVal(PaneL p,Boolean bInit,Int4 CurPos);
 extern void DDV_VHScrl(PaneL p,UnDViewerGraphDataPtr gdp, Int4 newval, Int4 oldval,
 	Boolean IsVscroll);
 extern void DDV_VScrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
 extern void DDV_HScrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
 extern Boolean DDV_CreateViewerPanel(WindoW w,DdvMainWinPtr dmwp,
-                                     SAM_ViewGlobal *vgp);
-extern void DDV_SetupMenus(WindoW w,Boolean isID1Ok);
+	SAM_ViewGlobal *vgp,Boolean bEditor);
+extern void DDV_SetupMenus(WindoW w,DdvMainPtr dmp,Boolean isID1Ok,Boolean bEditor,
+                           SAM_ViewGlobal *vgp);
 extern void DDV_WinMainResize (WindoW w);
 extern void DDV_WinMainCleanup (GraphiC g, VoidPtr data);
 extern void DDV_WinMainProgQuit(WindoW w);

@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.17 $
+* $Revision: 6.30 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,45 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.c,v $
+* Revision 6.30  2000/04/19 17:56:48  thiessen
+* added background color in OpenGL
+*
+* Revision 6.29  2000/04/17 15:54:26  thiessen
+* add cylinder arrows; misc graphics tweaks
+*
+* Revision 6.28  2000/04/12 19:53:37  lewisg
+* sequence saving uses genbank class
+*
+* Revision 6.27  2000/04/08 00:37:30  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 6.26  2000/03/29 23:38:06  lewisg
+* hide/show, fixes to saving and opening
+*
+* Revision 6.25  2000/03/28 19:28:13  lewisg
+* prep new imported sa
+*
+* Revision 6.24  2000/03/27 22:15:05  lewisg
+* add show/hide row dialog
+*
+* Revision 6.23  2000/03/23 14:53:04  thiessen
+* fix bug in viewer3d camera; added conservation color algorithm to ARS
+*
+* Revision 6.22  2000/03/22 23:17:50  thiessen
+* added ability to save ARS in ASN1
+*
+* Revision 6.21  2000/03/21 21:41:03  lewisg
+* enable saving of full cdd's, visual c++ updates
+*
+* Revision 6.20  2000/03/17 22:48:59  thiessen
+* fix for multi-chain / multi-model features ; added feature-move ; misc bug fixes
+*
+* Revision 6.19  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.18  2000/02/19 21:25:57  thiessen
+* split of cn3dmodl into cn3dmodl and cn3dstyl
+*
 * Revision 6.17  1999/11/22 14:46:44  thiessen
 * moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
 *
@@ -114,7 +153,6 @@
 #include <mmdbapi1.h>
 #include <cn3dmain.h>
 #include <algorend.h>
-#include <cn3dmodl.h>
 #include <cn3dsave.h>
 #include <cn3dmsel.h>
 #include <cn3dmsg.h>
@@ -122,6 +160,13 @@
 #include <objmime.h>
 #include <cn3dopen.h>
 #include <cn3dshim.h>
+#include <cn3dmodl.h>
+#include <cn3dstyl.h>
+#include <alignmgr.h>
+
+
+static void Cn3D_AddGlobalRenderSettingsToBiostruc(PDNMS pdnms);
+static void Cn3D_RemoveGlobalRenderSettingsFromBiostruc(PDNMS pdnms);
 
 static Boolean Cn3D_Save_InUse = FALSE;
 
@@ -145,6 +190,48 @@ static void Cn3D_AsnEnableProc(TexT t)
     return;
 }
 
+#ifdef _OPENGL
+
+
+static void Cn3D_AddMatrix(void)
+{
+    PMSD pmsdThis;
+    PDNMS pdnmsMaster;
+    BiostrucFeatureSetPtr bsfsp = NULL, bsfsp_new = NULL;
+    BiostrucFeature *bsfp;
+    Camera *camera;
+
+    pdnmsMaster = GetSelectedModelstruc();
+    if(pdnmsMaster == NULL) return;
+    pmsdThis = pdnmsMaster->data.ptrvalue;
+    bsfp = Cn3D_FindFeature(pmsdThis->pbsBS->features,
+        Feature_type_camera, 1);
+
+    if(bsfp == NULL) {
+        bsfsp = Cn3D_AddFeatureSet(&pmsdThis->pbsBS->features);
+        if(bsfsp == NULL) return;
+        bsfp = BiostrucFeatureNew();
+        if(bsfp == NULL) return;
+        bsfsp->features = bsfp;
+        bsfp->type = Feature_type_camera;
+        camera = CameraNew();
+        camera->modelview = GLMatrixNew();
+        ValNodeAddPointer(&bsfp->Property_property,
+            Property_property_camera, camera);
+    }
+    else camera = (Camera *)bsfp->Property_property->data.ptrvalue;
+
+    Cn3D_Matrix2Asn(camera->modelview, Cn3D_ColorData.OGL_Data->ModelMatrix);
+    camera->scale = (Int4)VIEWSCALE;
+    camera->distance = (Int4)(Cn3D_ColorData.OGL_Data->CameraDistance * camera->scale);
+    camera->angle = (Int4)(Cn3D_ColorData.OGL_Data->CameraAngle * camera->scale);
+    camera->x = (Int4)(Cn3D_ColorData.OGL_Data->CameraDirection[0] * camera->scale);
+    camera->y = (Int4)(Cn3D_ColorData.OGL_Data->CameraDirection[1] * camera->scale);
+}
+
+#endif /* _OPENGL */
+
+
 static void Cn3D_AsnBrowseProc(ButtoN b)
 {
     Char dfault[32];
@@ -157,6 +244,102 @@ static void Cn3D_AsnBrowseProc(ButtoN b)
         Cn3D_AsnEnableProc(NULL);
     }
     return;
+}
+
+static ValNode *Cn3D_GetSubSet(ValNode *pvnsep, SeqAnnot *sap)
+{
+    BioseqSet *bssp;
+    SeqAlign *salp = NULL;
+    Int4 i, n;
+    SeqId *sip = NULL, *isip;
+    SeqEntry *sep = NULL, *isep;
+    ValNode *pvn, *pvnPrev;
+
+    if(sap == NULL) return NULL;
+    if(sap) salp = sap->data;
+    if(salp) {
+        sep = SeqEntryNew();
+        bssp = BioseqSetNew();
+        if (bssp == NULL) return NULL;
+        bssp->_class = BioseqseqSet_class_genbank;
+        sep->data.ptrvalue = bssp;
+        sep->choice = 2;
+
+        pvnPrev = NULL;
+        for(pvn = ((BioseqSet *)pvnsep->data.ptrvalue)->seq_set;
+                pvn != NULL; pvn = pvn->next) {
+            isep = SeqEntryNew();
+            isep->choice = pvn->choice;
+            isep->data.ptrvalue = pvn->data.ptrvalue;
+            if(pvnPrev) pvnPrev->next = isep;
+            else bssp->seq_set = isep;
+            pvnPrev = isep;
+        }
+
+        salp = ViewMgr_GetBeginIndexed(salp);
+        if(salp == NULL) return NULL;
+        sip = AlnMgrGetUniqueSeqs(salp, &n);
+        for(i = 1, isip = sip->next; i < n; i++, isip = isip->next) {
+            isep->next = SeqEntryNew();
+            isep = isep->next;
+            isep->data.ptrvalue = BioseqLockById(isip);
+            isep->choice = 1;
+            BioseqUnlock((Bioseq *)isep->data.ptrvalue);
+        }
+        SeqIdSetFree(sip);
+        isep->next = NULL;
+        return sep;  /* need cleanup */
+    }
+    return NULL;
+}
+
+static void Cn3D_ClearSubSet(ValNode * sep)
+{
+    BioseqSet *bssp;
+    
+    if(sep) {
+        if(sep->data.ptrvalue) {
+            bssp = (BioseqSet *)sep->data.ptrvalue;
+            bssp->seq_set = ValNodeFree(bssp->seq_set);
+            sep->data.ptrvalue = BioseqSetFree(bssp);
+        }
+        ValNodeFree(sep);
+    }
+}
+
+static SeqAnnot * Cn3D_MakeSaveAnnot(SeqAnnot *sap)
+{
+    SeqAlign *salp;
+    SeqAnnot *sapout, *saphead = NULL;
+
+    /* index the seq aligns */
+    for (; sap != NULL; sap = sap->next) {
+        if (sap->data == NULL) continue;
+        if(saphead == NULL) saphead = sapout = SeqAnnotNew();
+        else {
+            sapout->next = SeqAnnotNew();
+            sapout = sapout->next;
+        }
+        salp = sap->data;
+        sapout->data = ViewMgr_GetBegin(salp);
+        sapout->desc = sap->desc;
+        sapout->type = sap->type;
+    }
+    return saphead;
+}
+
+static void Cn3D_ClearSaveAnnot(SeqAnnot *sap)
+{
+    SeqAnnot *sapprev;
+
+    while (sap != NULL) {
+        sap->data = NULL;
+        sap->desc = NULL;
+        sap->type = 0;
+        sapprev = sap;
+        sap = sap->next;
+        SeqAnnotFree(sapprev);
+    }
 }
 
 static void Cn3D_ExportAsnNow(ButtoN b)
@@ -189,7 +372,9 @@ static void Cn3D_ExportAsnNow(ButtoN b)
 /*   if (GetStatus(Cn3D_bFeatOn) == FALSE)
        bSave = (Byte) (bSave | (Byte) NOT_FEATURES);  */
     /* save feature always for now -yanli */
-
+#ifdef _OPENGL
+    Cn3D_AddMatrix();
+#endif
     if (GetValue(Cn3D_gBinAscii) == 2)
         bSave = (Byte) (bSave | (Byte) SAVE_BINARY);
 
@@ -203,7 +388,6 @@ static void Cn3D_ExportAsnNow(ButtoN b)
     pdnmsMaster = GetSelectedModelstruc();
     iTest =
         WriteAsnModelList(pdnmsMaster, iCount, i2Vec, path, bSave, iCn3d);
-    pdnmsMaster = (PDNMS) Cn3DAddUserDefinedFeature(pdnmsMaster);
     if (!iTest) {
         ErrClear();
         ErrPostEx(SEV_FATAL, 0, 0,
@@ -211,6 +395,8 @@ static void Cn3D_ExportAsnNow(ButtoN b)
         ErrShow();
 
     }
+    Cn3D_AddGlobalRenderSettingsToBiostruc(pdnmsMaster);
+    Cn3DAddUserDefinedFeatureToBiostruc(pdnmsMaster);
 
     pmsdMaster = pdnmsMaster->data.ptrvalue;
 
@@ -233,11 +419,12 @@ static void Cn3D_ExportAsnNow(ButtoN b)
         mime->choice = NcbiMimeAsn1_strucseqs;
         bsssp = BiostrucSeqsNew();
         bsssp->structure = pmsdMaster->pbsBS;
-        bsssp->sequences = Cn3D_ColorData.pvnsep;
-        /* ValNodeAddPointer(bsssp->seqalign, 0, Cn3D_ColorData.sap); */
-        bsssp->seqalign = Cn3D_ColorData.sap;
+        bsssp->sequences = Cn3D_GetSubSet(Cn3D_ColorData.pvnsep, Cn3D_ColorData.sap);
+        bsssp->seqalign = Cn3D_MakeSaveAnnot(Cn3D_ColorData.sap);
         mime->data.ptrvalue = bsssp;
         NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+        Cn3D_ClearSaveAnnot(bsssp->seqalign);
+        Cn3D_ClearSubSet(bsssp->sequences);
         break;
     case NcbiMimeAsn1_alignstruc:
         mime->choice = NcbiMimeAsn1_alignstruc;
@@ -317,24 +504,28 @@ static void Cn3D_ExportAsnNow(ButtoN b)
                 bsSlaveTail = bsSlaveTail->next;
                 bsSlaveTail->next = NULL;
             }
-            pdnmsSlave = (PDNMS) Cn3DAddUserDefinedFeature(pdnmsSlave);
+            pdnmsSlave = (PDNMS) Cn3DAddUserDefinedFeatureToBiostruc(pdnmsSlave);
             pdnmsSlave = pdnmsSlave->next;
         }
         bsap->slaves = bsSlaveHead;
-        bsap->sequences = Cn3D_ColorData.pvnsep;
+        bsap->sequences = Cn3D_GetSubSet(Cn3D_ColorData.pvnsep, Cn3D_ColorData.sap);
         bsap->alignments = pmsdMaster->psaStrucAlignment;
-        /* ValNodeAddPointer(bsap->seqalign, 0, Cn3D_ColorData.sap); */
-        bsap->seqalign = Cn3D_ColorData.sap;
+        bsap->seqalign = Cn3D_MakeSaveAnnot(Cn3D_ColorData.sap);
         mime->data.ptrvalue = bsap;
         NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+        Cn3D_ClearSaveAnnot(bsap->seqalign);
+        Cn3D_ClearSubSet(bsap->sequences);
         break;
     }
 
     aip = AsnIoClose(aip);
 
+    Cn3DRemoveUserDefinedFeatureFromBiostruc(pdnmsMaster);
+    Cn3D_RemoveGlobalRenderSettingsFromBiostruc(pdnmsMaster);
     FreeRedundantAsn(pdnmsMaster);
     pdnmsSlave = pmsdMaster->pdnmsSlaves;
     while (pdnmsSlave) {
+        Cn3DRemoveUserDefinedFeatureFromBiostruc(pdnmsSlave);
         FreeRedundantAsn(pdnmsSlave);
         pdnmsSlave = pdnmsSlave->next;
     }
@@ -358,7 +549,7 @@ static void Cn3D_CancelAsn(ButtoN b)
 
 
 
-static void Cn3D_SaveBiostruc(IteM i)
+NLM_EXTERN void Cn3D_SaveBiostruc(IteM i)
 {
     PDNMS pdnmsThis = NULL;
     PMSD pmsdThis = NULL;
@@ -529,9 +720,6 @@ static void Cn3D_SaveDictionary(IteM i)
     return;
 }
 
-
-
-
 MenU LIBCALL Cn3D_SaveSub(MenU m)
 {
     IteM i;
@@ -542,4 +730,394 @@ MenU LIBCALL Cn3D_SaveSub(MenU m)
     /* i = CommandItem (s, "Feature-set/F", NULL); */
     i = CommandItem(s, "Dictionary/D", Cn3D_SaveDictionary);
     return s;
+}
+
+/*------------------------------------------------------------------------------
+ * stuff below implements save/read of an ARS structure to/from ASN1
+ *------------------------------------------------------------------------------*/
+
+typedef struct _ARSDataFieldInfo {
+    Int1 type;
+    CharPtr description;
+} ARSDataFieldInfo, PNTR ARSDataFieldInfoPtr;
+
+enum { /* possible types for data in PARS structure */
+    TYPE_BOOLEAN = 1,
+    TYPE_INT2,
+    TYPE_UINT1PTR_3 /* pointer to array of 3 Uint1's */
+};
+
+
+/* map of ARS stucture, with description and type for each field */
+static ARSDataFieldInfo ARSFieldData[] = {
+    { TYPE_BOOLEAN,     "Display Hydrogens" } ,
+    { TYPE_UINT1PTR_3,  "Background Color" } ,
+    { TYPE_INT2,        "Conservation Color Algorithm" } ,
+    { TYPE_BOOLEAN,     "Display Protein Virtual Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Protein Partial Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Protein Complete Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Protein Residues" } ,
+    { TYPE_INT2,        "Protein Backbone Rendering Style" } ,
+    { TYPE_INT2,        "Protein Backbone Color Scheme" } ,
+    { TYPE_INT2,        "Protein Residue Rendering Style" } ,
+    { TYPE_INT2,        "Protein Residue Color Scheme" } ,
+    { TYPE_UINT1PTR_3,  "Protein Backbone Custom Color" } ,
+    { TYPE_UINT1PTR_3,  "Protein Residue Custom Color" } ,
+    { TYPE_INT2,        "Protein Label Interval" } ,
+    { TYPE_INT2,        "Protein Label Justification" } ,
+    { TYPE_INT2,        "Protein Label Style" } ,
+    { TYPE_INT2,        "Protein Label Scale" } ,
+    { TYPE_BOOLEAN,     "Display Protein Termini Labels" } ,
+    { TYPE_INT2,        "Protein Termini Label Justification" } ,
+    { TYPE_INT2,        "Protein Termini Label Style" } ,
+    { TYPE_INT2,        "Protein Termini Label Scale" } ,
+    { TYPE_BOOLEAN,     "Display Nucleotide Virtual Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Nucleotide Partial Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Nucleotide Complete Backbone" } ,
+    { TYPE_BOOLEAN,     "Display Nucleotide Residues" } ,
+    { TYPE_INT2,        "Nucleotide Backbone Rendering Style" } ,
+    { TYPE_INT2,        "Nucleotide Backbone Color Scheme" } ,
+    { TYPE_INT2,        "Nucleotide Residue Rendering Style" } ,
+    { TYPE_INT2,        "Nucleotide Residue Color Scheme" } ,
+    { TYPE_UINT1PTR_3,  "Nucleotide Backbone Custom Color" } ,
+    { TYPE_UINT1PTR_3,  "Nucleotide Residue Custom Color" } ,
+    { TYPE_INT2,        "Nucleotide Label Interval" } ,
+    { TYPE_INT2,        "Nucleotide Label Justification" } ,
+    { TYPE_INT2,        "Nucleotide Label Style" } ,
+    { TYPE_INT2,        "Nucleotide Label Scale" } ,
+    { TYPE_BOOLEAN,     "Display Nucleotide Termini Labels" } ,
+    { TYPE_INT2,        "Nucleotide Termini Label Justification" } ,
+    { TYPE_INT2,        "Nucleotide Termini Label Style" } ,
+    { TYPE_INT2,        "Nucleotide Termini Label Scale" } ,
+    { TYPE_BOOLEAN,     "Display Heterogens" } ,
+    { TYPE_INT2,        "Heterogen Rendering Style" } ,
+    { TYPE_INT2,        "Heterogen Color Scheme" } ,
+    { TYPE_BOOLEAN,     "Display Ions" } ,
+    { TYPE_INT2,        "Ion Rendering Style" } ,
+    { TYPE_INT2,        "Ion Color Scheme" } ,
+    { TYPE_BOOLEAN,     "Display Ion Labels" } ,
+    { TYPE_BOOLEAN,     "Display Connections" } ,
+    { TYPE_INT2,        "Connection Rendering Style" } ,
+    { TYPE_INT2,        "Connection Color Scheme" } ,
+    { TYPE_BOOLEAN,     "Display Solvent" } ,
+    { TYPE_INT2,        "Solvent Rendering Style" } ,
+    { TYPE_INT2,        "Solvent Color Scheme" } ,
+    { TYPE_BOOLEAN,     "Display 3D Objects" } ,
+    { TYPE_INT2,        "3D Object Color Scheme" } ,
+    { TYPE_INT2,        "3D Object Arrows" } ,
+    { 0,                NULL }
+};
+
+
+static VoidPtr Cn3D_GetARSFieldAddress(PARS pars, CharPtr descr)
+{
+    switch (descr[0]) { /* crude hash */
+    case 'D':
+        if (StrCmp(descr, "Display 3D Objects") == 0) return ((VoidPtr) &(pars->ObjectOn));
+        else if (StrCmp(descr, "Display Connections") == 0) return ((VoidPtr) &(pars->ConnectOn));
+        else if (StrCmp(descr, "Display Heterogens") == 0) return ((VoidPtr) &(pars->HeterogensOn));
+        else if (StrCmp(descr, "Display Hydrogens") == 0) return ((VoidPtr) &(pars->HydrogensOn));
+        else if (StrCmp(descr, "Display Ion Labels") == 0) return ((VoidPtr) &(pars->IonLabelOn));
+        else if (StrCmp(descr, "Display Ions") == 0) return ((VoidPtr) &(pars->IonsOn));
+        else if (StrCmp(descr, "Display Nucleotide Complete Backbone") == 0) return ((VoidPtr) &(pars->NTCompleteBBOn));
+        else if (StrCmp(descr, "Display Nucleotide Partial Backbone") == 0) return ((VoidPtr) &(pars->NTPartialBBOn));
+        else if (StrCmp(descr, "Display Nucleotide Residues") == 0) return ((VoidPtr) &(pars->NTResiduesOn));
+        else if (StrCmp(descr, "Display Nucleotide Termini Labels") == 0) return ((VoidPtr) &(pars->NTTermLabelOn));
+        else if (StrCmp(descr, "Display Nucleotide Virtual Backbone") == 0) return ((VoidPtr) &(pars->NTVirtualBBOn));
+        else if (StrCmp(descr, "Display Protein Complete Backbone") == 0) return ((VoidPtr) &(pars->PCompleteBBOn));
+        else if (StrCmp(descr, "Display Protein Partial Backbone") == 0) return ((VoidPtr) &(pars->PPartialBBOn));
+        else if (StrCmp(descr, "Display Protein Residues") == 0) return ((VoidPtr) &(pars->PResiduesOn));
+        else if (StrCmp(descr, "Display Protein Termini Labels") == 0) return ((VoidPtr) &(pars->PTermLabelOn));
+        else if (StrCmp(descr, "Display Protein Virtual Backbone") == 0) return ((VoidPtr) &(pars->PVirtualBBOn));
+        else if (StrCmp(descr, "Display Solvent") == 0) return ((VoidPtr) &(pars->SolventOn));
+        break;
+    case 'P':
+        if (StrCmp(descr, "Protein Backbone Color Scheme") == 0) return ((VoidPtr) &(pars->PBBColor));
+        else if (StrCmp(descr, "Protein Backbone Custom Color") == 0) return ((VoidPtr) &(pars->PBBColRGB));
+        else if (StrCmp(descr, "Protein Backbone Rendering Style") == 0) return ((VoidPtr) &(pars->PBBRender));
+        else if (StrCmp(descr, "Protein Label Interval") == 0) return ((VoidPtr) &(pars->PBBLabelInterval));
+        else if (StrCmp(descr, "Protein Label Justification") == 0) return ((VoidPtr) &(pars->PBBLabelJust));
+        else if (StrCmp(descr, "Protein Label Scale") == 0) return ((VoidPtr) &(pars->PBBLabelScale));
+        else if (StrCmp(descr, "Protein Label Style") == 0) return ((VoidPtr) &(pars->PBBLabelStyle));
+        else if (StrCmp(descr, "Protein Residue Color Scheme") == 0) return ((VoidPtr) &(pars->PResColor));
+        else if (StrCmp(descr, "Protein Residue Custom Color") == 0) return ((VoidPtr) &(pars->PResColRGB));
+        else if (StrCmp(descr, "Protein Residue Rendering Style") == 0) return ((VoidPtr) &(pars->PResRender));
+        else if (StrCmp(descr, "Protein Termini Label Justification") == 0) return ((VoidPtr) &(pars->PTermLabelJust));
+        else if (StrCmp(descr, "Protein Termini Label Scale") == 0) return ((VoidPtr) &(pars->PTermLabelScale));
+        else if (StrCmp(descr, "Protein Termini Label Style") == 0) return ((VoidPtr) &(pars->PTermLabelStyle));
+        break;
+    case 'N':
+        if (StrCmp(descr, "Nucleotide Backbone Color Scheme") == 0) return ((VoidPtr) &(pars->NTBBColor));
+        else if (StrCmp(descr, "Nucleotide Backbone Custom Color") == 0) return ((VoidPtr) &(pars->NTBBColRGB));
+        else if (StrCmp(descr, "Nucleotide Backbone Rendering Style") == 0) return ((VoidPtr) &(pars->NTBBRender));
+        else if (StrCmp(descr, "Nucleotide Label Interval") == 0) return ((VoidPtr) &(pars->NTBBLabelInterval));
+        else if (StrCmp(descr, "Nucleotide Label Justification") == 0) return ((VoidPtr) &(pars->NTBBLabelJust));
+        else if (StrCmp(descr, "Nucleotide Label Scale") == 0) return ((VoidPtr) &(pars->NTBBLabelScale));
+        else if (StrCmp(descr, "Nucleotide Label Style") == 0) return ((VoidPtr) &(pars->NTBBLabelStyle));
+        else if (StrCmp(descr, "Nucleotide Residue Color Scheme") == 0) return ((VoidPtr) &(pars->NTResColor));
+        else if (StrCmp(descr, "Nucleotide Residue Custom Color") == 0) return ((VoidPtr) &(pars->NTResColRGB));
+        else if (StrCmp(descr, "Nucleotide Residue Rendering Style") == 0) return ((VoidPtr) &(pars->NTResRender));
+        else if (StrCmp(descr, "Nucleotide Termini Label Justification") == 0) return ((VoidPtr) &(pars->NTTermLabelJust));
+        else if (StrCmp(descr, "Nucleotide Termini Label Scale") == 0) return ((VoidPtr) &(pars->NTTermLabelScale));
+        else if (StrCmp(descr, "Nucleotide Termini Label Style") == 0) return ((VoidPtr) &(pars->NTTermLabelStyle));
+        break;
+    default:
+        if (StrCmp(descr, "3D Object Color Scheme") == 0) return ((VoidPtr) &(pars->ObjectColor));
+        else if (StrCmp(descr, "3D Object Arrows") == 0) return ((VoidPtr) &(pars->ObjectArrows));
+        else if (StrCmp(descr, "Background Color") == 0) return ((VoidPtr) &(pars->BGColRGB));
+        else if (StrCmp(descr, "Connection Color Scheme") == 0) return ((VoidPtr) &(pars->ConnectColor));
+        else if (StrCmp(descr, "Connection Rendering Style") == 0) return ((VoidPtr) &(pars->ConnectRender));
+        else if (StrCmp(descr, "Conservation Color Algorithm") == 0) return ((VoidPtr) &(pars->ConsColAlg));
+        else if (StrCmp(descr, "Heterogen Color Scheme") == 0) return ((VoidPtr) &(pars->HetColor));
+        else if (StrCmp(descr, "Heterogen Rendering Style") == 0) return ((VoidPtr) &(pars->HetRender));
+        else if (StrCmp(descr, "Ion Color Scheme") == 0) return ((VoidPtr) &(pars->IonColor));
+        else if (StrCmp(descr, "Ion Rendering Style") == 0) return ((VoidPtr) &(pars->IonRender));
+        else if (StrCmp(descr, "Solvent Color Scheme") == 0) return ((VoidPtr) &(pars->SolventColor));
+        else if (StrCmp(descr, "Solvent Rendering Style") == 0) return ((VoidPtr) &(pars->SolventRender));
+    }
+    Message(MSG_POST, "Unrecognized ARS field %s", descr);
+    return NULL;
+}
+
+static int Cn3D_GetARSFieldType(CharPtr descr)
+{
+    int i;
+    for (i = 0; ARSFieldData[i].description != NULL; i++) {
+        if (StrCmp(descr, ARSFieldData[i].description) == 0)
+            return ARSFieldData[i].type;
+    }
+    Message(MSG_POST, "Unrecognized ARS field %s", descr);
+    return -1;
+}
+
+/* returns field as a new string - should be freed by caller */
+static CharPtr Cn3D_GetARSFieldContentsAsString(PARS pars, CharPtr descr)
+{
+    int type;
+    VoidPtr address;
+    Char str[32];
+    CharPtr copy;
+
+    address = Cn3D_GetARSFieldAddress(pars, descr);
+    type = Cn3D_GetARSFieldType(descr);
+    if (!address || type < 0) {
+        Message(MSG_POST, "Unrecognised ARS field %s", descr);
+        return NULL;
+    }
+
+    switch (type) {
+    case TYPE_BOOLEAN:
+        if (*((Boolean *) address) == TRUE)
+            StrCpy(str, "True");
+        else
+            StrCpy(str, "False");
+        break;
+    case TYPE_INT2:
+        sprintf(str, "%i", *((Int2 *) address));
+        break;
+    case TYPE_UINT1PTR_3:
+        sprintf(str, "%i %i %i", ((Uint1 *) address)[0],
+            ((Uint1 *) address)[1], ((Uint1 *) address)[2]);
+        break;
+    default:
+        Message(MSG_ERROR, "Invalid ARS type (%i) for %s", type, descr);
+        return NULL;
+    }
+    copy = (CharPtr) MemNew((StrLen(str) + 1) * sizeof(Char));
+    if (!copy) return NULL;
+    StrCpy(copy, str);
+    return copy;
+}
+
+static BiostrucFeatureSetPtr Cn3D_MakeBSFSPFromARS(PARS pars)
+{
+    BiostrucFeatureSetPtr bsfsp;
+    BiostrucFeaturePtr bsfp;
+    UserObjectPtr pUO;
+    UserFieldPtr pUF, pUFprev;
+    int i;
+
+    bsfsp = BiostrucFeatureSetNew();
+    bsfp = BiostrucFeatureNew();
+    if (!bsfp || !bsfp) return NULL;
+
+    /* new BiostrucFeatureSet */
+    bsfsp->id = 0;
+    ValNodeAddPointer(&(bsfsp->descr), BiostrucFeatureSetDescr_name,
+        StringSave("Global Rendering Settings"));
+    bsfsp->next = NULL;
+    bsfsp->features = bsfp;
+
+    /* new BiostrucFeature */
+    bsfp->id = 0;
+    bsfp->name = NULL;
+    bsfp->Location_location = NULL;
+    bsfp->type = Feature_type_other;
+    bsfp->next = NULL;
+
+    /* new user property (ValNode with User-object)*/
+    bsfp->Property_property = ValNodeNew(NULL);
+    if (!bsfp->Property_property) return NULL;
+    bsfp->Property_property->choice = Property_property_user;
+    pUO = UserObjectNew();
+    if (!pUO) return NULL;
+    bsfp->Property_property->data.ptrvalue = (VoidPtr) pUO;
+    pUO->_class = NULL;
+    pUO->type = ObjectIdNew();
+    if (!pUO->type) return NULL;
+    pUO->type->id = 0;
+    pUO->type->str = StringSave("Cn3D AgorithmicRenderSet Data");
+
+    /* fill in User-object data with contents of ARS */
+    for (i = 0; ARSFieldData[i].description != NULL; i++) {
+        pUF = UserFieldNew();
+        if (!pUF) return NULL;
+        pUF->num = 0;
+        pUF->next = NULL;
+        if (i == 0)
+            pUO->data = pUF;
+        else
+            pUFprev->next = pUF;
+        pUFprev = pUF;
+
+        pUF->label = ObjectIdNew();
+        if (!pUF->label) return NULL;
+        pUF->label->id = 0;
+        pUF->label->str = StringSave(ARSFieldData[i].description);
+        pUF->choice = 1; /* str data */
+        pUF->data.ptrvalue = (VoidPtr)
+            Cn3D_GetARSFieldContentsAsString(pars, ARSFieldData[i].description);
+    }
+
+    return bsfsp;
+}
+
+static void Cn3D_AddGlobalRenderSettingsToBiostruc(PDNMS pdnms)
+{
+    BiostrucFeatureSetPtr bsfsp, bsfspNew;
+    PARS pars;
+    PMSD pmsd;
+
+    if (!pdnms ||
+        !(pmsd = (PMSD) pdnms->data.ptrvalue) ||
+        !(pars = pmsd->pGlobalPARS))
+        return;
+
+    /* make new feature set and add to end of MSD's feature list */
+    bsfspNew = Cn3D_MakeBSFSPFromARS(pars);
+    if (!bsfspNew) return;
+    bsfsp = pmsd->pbsBS->features;
+    if (bsfsp) {
+        while (bsfsp->next) bsfsp = bsfsp->next;
+        bsfsp->next = bsfspNew;
+    } else {
+        pmsd->pbsBS->features = bsfspNew;
+    }
+}
+
+static void Cn3D_RemoveGlobalRenderSettingsFromBiostruc(PDNMS pdnms)
+{
+    BiostrucPtr bsp;
+    BiostrucFeatureSetPtr bsfsp, bsfsp_prev = NULL, bsfsp_curr = NULL;
+    ValNodePtr descr = NULL;
+
+    if (!pdnms || !pdnms->data.ptrvalue ||
+        !(bsp = ((PMSD) pdnms->data.ptrvalue)->pbsBS))
+        return;
+
+    /* assuming this feature set always occur at the tail end of the feature list,
+       unhook from the biostruc and free */
+    bsfsp = bsp->features;
+    while (bsfsp) {
+        if (bsfsp->descr != NULL) {
+            descr = bsfsp->descr;
+            if (descr->choice == BiostrucFeatureSetDescr_name) {
+                if (StrCmp(descr->data.ptrvalue, "Global Rendering Settings") == 0) {
+                    if (bsfsp_prev)
+                        bsfsp_prev->next = NULL;
+                    bsfsp_curr = bsfsp;
+                    break;
+                }
+            }
+        }
+        bsfsp_prev = bsfsp;
+        bsfsp = bsfsp->next;
+    }
+    BiostrucFeatureSetFree(bsfsp_curr);
+}
+
+/* returns TRUE on success, FALSE on error */
+static Boolean Cn3D_SetARSFieldContentsFromString(PARS pars,
+                                                  CharPtr descr,
+                                                  CharPtr data)
+{
+    int type, i1, i2, i3;
+    VoidPtr address;
+
+    if (!pars || !descr || !data ||
+        (type = Cn3D_GetARSFieldType(descr)) < 0 ||
+        !(address = Cn3D_GetARSFieldAddress(pars, descr)))
+        return FALSE;
+
+    switch (type) {
+    case TYPE_BOOLEAN:
+        *((Boolean *) address) = (StrCmp(data, "True") == 0);
+        break;
+    case TYPE_INT2:
+        *((Int2 *) address) = atoi(data);
+        break;
+    case TYPE_UINT1PTR_3:
+        if (sscanf(data, "%i %i %i", &i1, &i2, &i3) != 3) return FALSE;
+        ((Uint1 *) address)[0] = (Uint1) i1;
+        ((Uint1 *) address)[1] = (Uint1) i2;
+        ((Uint1 *) address)[2] = (Uint1) i3;
+        break;
+    default:
+        Message(MSG_ERROR, "Invalid ARS type (%i) for %s", type, descr);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+NLM_EXTERN void Cn3D_GetRenderSettingsFromBiostruc(PDNMS pdnms)
+{
+    PMSD pmsd;
+    BiostrucFeatureSetPtr bsfsp;
+    UserObjectPtr pUO;
+    UserFieldPtr pUF;
+
+    if (!pdnms || !(pmsd = (PMSD) pdnms->data.ptrvalue)) return;
+
+    /* find feature set in biostruc */
+    bsfsp = pmsd->pbsBS->features;
+    while (bsfsp) {
+        if (bsfsp->descr && bsfsp->descr->data.ptrvalue &&
+            bsfsp->descr->choice == BiostrucFeatureSetDescr_name &&
+            StrCmp(bsfsp->descr->data.ptrvalue, "Global Rendering Settings") == 0)
+            break;
+        bsfsp = bsfsp->next;
+    }
+    if (!bsfsp) return;
+
+    /* find start of User-field list */
+    if (!bsfsp->features ||
+        !bsfsp->features->Property_property ||
+        bsfsp->features->Property_property->choice != Property_property_user || /* check property type */
+        !(pUO = (UserObjectPtr) bsfsp->features->Property_property->data.ptrvalue) ||
+        !pUO->type || !pUO->type->str || /* check object type */
+        StrCmp(pUO->type->str, "Cn3D AgorithmicRenderSet Data") != 0 ||
+        !(pUF = pUO->data))
+        return;
+
+    /* read ARS fields from User-fields */
+    for (; pUF; pUF = pUF->next) {
+        if (!pUF->label || !pUF->label->str ||
+            pUF->choice != 1 || !pUF->data.ptrvalue)
+            continue;
+        Cn3D_SetARSFieldContentsFromString(pmsd->pGlobalPARS,
+            pUF->label->str, (CharPtr) pUF->data.ptrvalue);
+    }
+
+    /* remove now; locally changed settings re-added upon save */
+    Cn3D_RemoveGlobalRenderSettingsFromBiostruc(pdnms);
 }

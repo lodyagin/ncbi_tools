@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.9 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.9  2000/04/03 22:09:26  kans
+* added ClearGenBankKeywords for RefSeq processing
+*
+* Revision 6.8  2000/03/29 22:00:23  kans
+* added NC_Cleanup function used internally for genome RefSeq processing
+*
+* Revision 6.7  2000/02/17 17:20:58  sicotte
+* Add Reading of Lowercase Characters as SeqLoc for inputting masking informatioin. Use FastaToSeqEntryForDb or FastaToSeqEntryInternalEx
+*
+* Revision 6.6  2000/02/04 16:38:29  kans
+* added FastaToSeqEntryForDb and FastaToSeqEntryInternalEx, giving control over generation of unique SeqID
+*
 * Revision 6.5  1999/09/20 18:37:55  shavirin
 * Added definition of the function Int4 GetOrderBySeqId().
 *
@@ -235,6 +247,23 @@ NLM_EXTERN SeqEntryPtr FastaToSeqBuffEx(CharPtr buffer, CharPtr PNTR last_char,
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryEx (FILE *fp, Boolean is_na, 
                                CharPtr PNTR errormsg,
                                Boolean parseSeqId); 
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryForDb ( FILE *fp, Boolean is_na,
+                               CharPtr PNTR errormsg,
+                               Boolean parseSeqId,
+                               CharPtr prefix, Int2Ptr ctrptr, 
+                               SeqLocPtr PNTR mask_ptr);
+
+/********* DEFINES for input type *********/
+
+#define FASTA_MEM_IO  1   /* type of reading from buffer in memory */
+#define FASTA_FILE_IO 2   /* type of reading from file */
+
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx ( VoidPtr input,
+                               Int4 type, CharPtr PNTR next_char,
+                               Boolean is_na, CharPtr PNTR errormsg,
+                               Boolean parseSeqId, CharPtr special_symbol,
+                               CharPtr prefix, Int2Ptr ctrptr,
+                               SeqLocPtr PNTR mask_ptr);
 
 /*****************************************************************************
 *
@@ -319,6 +348,14 @@ NLM_EXTERN Boolean FastaSeqLine PROTO((SeqPortPtr spp, CharPtr buf, Int2 linelen
 
 Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot);
 
+/*****************************************************************************
+*
+*   NC_Cleanup (entityID, ptr) and ClearGenBankKeywords (entityID, ptr)
+*     internal functions for genome RefSeq processing
+*
+*****************************************************************************/
+NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
 #ifdef __cplusplus
 }
 #endif

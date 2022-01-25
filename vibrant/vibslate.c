@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.37 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.37  2000/03/13 15:58:18  thiessen
+* warn user about buggy 8-bit OpenGL
+*
+* Revision 6.36  2000/03/09 17:55:18  thiessen
+* changes to palette handling for 8-bit OpenGL
+*
+* Revision 6.35  2000/03/06 18:35:23  thiessen
+* fixes for 8-bit color
+*
+* Revision 6.34  2000/02/07 20:17:36  lewisg
+* minor bug fixes, use gui font for win32
+*
+* Revision 6.33  2000/02/03 22:29:15  lewisg
+* make windows version of vibrant use standard color
+*
 * Revision 6.32  2000/01/12 15:13:01  thiessen
 * fixed minor OpenGL memory leak
 *
@@ -2597,6 +2612,9 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
      <Btn1Motion>:   slate(motion) ManagerGadgetButtonMotion() \n\
      <Key>:          DrawingAreaInput()";
 #endif
+#ifdef WIN_MSWIN
+    Nlm_FntPtr      fntptr;
+#endif
 
   Nlm_GetRect ((Nlm_GraphiC) s, &r);
   h = NULL;
@@ -2612,6 +2630,10 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
   if (h != NULL) {
     SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) s);
   }
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
+
 #endif
 
 #ifdef WIN_MOTIF
@@ -2720,18 +2742,19 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
         palette->palNumEntries = totalColors;
         for( i=0; i<totalColors; i++ ) {
           p = &(palette->palPalEntry[i]);
-          p->peFlags = (BYTE)((i != 0) ? 0 : PC_RESERVED);
+          /*p->peFlags = (BYTE)((i != 0) ? 0 : PC_RESERVED);*/
+          p->peFlags = PC_NOCOLLAPSE;
           p->peRed   = red[i];
           p->peGreen = green[i];
           p->peBlue  = blue[i];
         }
         wdata.cMap = CreatePalette(palette);
-        MemFree (palette);
         if ( wdata.cMap != NULL ) {
+          /*SetForegroundWindow(Nlm_ParentWindowPtr((Nlm_GraphiC) w));*/
           SelectPalette ( wglGetCurrentDC(),wdata.cMap,FALSE );
           RealizePalette ( wglGetCurrentDC() );
-
         }
+        MemFree (palette);
       }
     }
   }
@@ -3153,10 +3176,12 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
     BitsPixel = GetDeviceCaps(hDC, BITSPIXEL);  /* number of bits per pixel */
     /* there is no guarantee that the contents of the stack that become
        the pfd are zeroed, therefore _make sure_ to clear these bits. */
-    memset(&pfd, 0, sizeof(pfd));
-    pfd.nSize        = sizeof(pfd);
+    memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
+    pfd.nSize        = sizeof(PIXELFORMATDESCRIPTOR);
     pfd.nVersion     = 1;
     pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    pfd.cColorBits   = BitsPixel;
+    pfd.dwLayerMask  = PFD_MAIN_PLANE;
 
     /* use colorindex mode if less that 16 bits per pixel */
     if (BitsPixel < 16) {
@@ -3167,8 +3192,6 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
         pfd.iPixelType   = PFD_TYPE_RGBA;
         *IndexMode = FALSE;
     }
-
-    pfd.cColorBits   = BitsPixel;
 
     pf = ChoosePixelFormat(hDC, &pfd);
     if (pf == 0) {
@@ -3286,6 +3309,10 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
     if (*IndexMode) aglDisable(ctx, AGL_COLORMAP_TRACKING);
   }
 #endif /* WIN_MAC */
+
+  if (*IndexMode)
+    Message(MSG_ERROR, "8-Bit (256 color) mode may be buggy, due to many platform bugs and inconsitencies.\n"
+                       "Consider using a >= 16 bit display setting, which will provide higher quality graphics.");
 
   if (vScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
@@ -4377,7 +4404,7 @@ extern Nlm_Boolean Nlm_RegisterSlates (void)
   wc.hIcon = LoadIcon (NULL, IDI_APPLICATION);
 /*wc.hCursor = LoadCursor (NULL, IDC_ARROW);      M.I */
   wc.hCursor = NULL;                           /* M.I */
-  wc.hbrBackground = GetStockObject (HOLLOW_BRUSH);
+  wc.hbrBackground = CreateSolidBrush( GetSysColor(COLOR_WINDOW));
   wc.lpszMenuName = NULL;
   sprintf (slateclass, "Nlm_SlateClass%ld", (long) (int) Nlm_currentHInst);
   wc.lpszClassName = slateclass;

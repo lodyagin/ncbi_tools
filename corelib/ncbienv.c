@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.13  2000/03/15 20:59:53  kans
+* Mac version of Nlm_OpenConfigFile was opening file for reading even under writeMode - fixed
+*
 * Revision 6.12  1999/12/30 16:36:37  kans
 * additional cleanup (Churchill)
 *
@@ -734,7 +737,11 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
 
     if( err == noErr){      // the file is already there
         HSetVol( (StringPtr) 0, vRefNum, dirID);
-        fp = fopen (str, "r");
+        if (writeMode) {
+            fp = fopen (str, "w");
+        } else {
+            fp = fopen (str, "r");
+        }
         HSetVol( (StringPtr) 0, saveVRefNum, saveDirID);
     }
     else if( err == fnfErr && create){

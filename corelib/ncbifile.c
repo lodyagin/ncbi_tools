@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,10 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.16  2000/03/08 17:55:47  vakatov
+* Use Int8 for the file size.
+* Also, get rid of the WIN16 code, do other cleanup.
+*
 * Revision 6.15  1999/12/30 16:36:38  kans
 * additional cleanup (Churchill)
 *
@@ -374,10 +378,6 @@ NLM_EXTERN void LIBCALL  Nlm_FileClose (FILE *stream)
 /*****************************************************************************
 *   FileRead(buf, size, fp)
 *****************************************************************************/
-#ifdef WIN16
-#include <dos.h> /* dos.h defines the FP_SEG macro */
-#endif
-
 NLM_EXTERN size_t LIBCALL Nlm_FileRead
 (void *ptr, size_t size, size_t n, FILE *stream)
 {
@@ -566,9 +566,9 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_FilePathFind(const Nlm_Char* fullname)
 *   FileLength()
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLength(Nlm_CharPtr fileName)
+NLM_EXTERN Nlm_Int8 LIBCALL Nlm_FileLength(Nlm_CharPtr fileName)
 {
-  Nlm_Int4 file_len = Nlm_FileLengthEx(fileName);
+  Nlm_Int8 file_len = Nlm_FileLengthEx(fileName);
   return (file_len > 0) ? file_len : 0;
 }
 
@@ -578,7 +578,7 @@ NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLength(Nlm_CharPtr fileName)
 *   FileLengthEx()
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLengthEx(const Nlm_Char* fileName)
+NLM_EXTERN Nlm_Int8 LIBCALL Nlm_FileLengthEx(const Nlm_Char* fileName)
 {
   if (!fileName  ||  !*fileName)
     return -1;
@@ -869,22 +869,6 @@ NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
              fData.cFileName);
       } while ( FindNextFile(hFindFile, &fData) );
       FindClose(hFindFile);
-    }}
-#endif
-#if defined(WIN16)
-    {{
-      Nlm_Char x_path[PATH_MAX];
-      struct find_t fData;
-      Nlm_StringNCpy_0(x_path, pathname, sizeof(x_path) - 5);
-      Nlm_StringCat(x_path, "\\*.*");
-      if (_dos_findfirst(x_path, _A_SUBDIR|_A_RDONLY|_A_NORMAL|_A_ARCH, &fData)
-          != 0)
-        return 0;
-      do {
-        if (fData.name[0] != '.'  ||
-            (fData.name[1] != '.'  &&  fData.name[1] != '\0'))
-          ValNodeCopyStr(&vnp, (fData.attrib & _A_SUBDIR) ? 1 : 0, fData.name);
-      } while (_dos_findnext(&fData) == 0);
     }}
 #endif
 #ifdef OS_UNIX

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -47,6 +47,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistd.h,v $
+* Revision 6.6  2000/02/25 16:45:58  vakatov
+* Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+* the C++ toolkits, and even to use them in a "standalone" fashion
+*
 * Revision 6.5  1999/10/14 18:44:35  vakatov
 * For better consistency, include <ncbilcl.h> to <ncbistd.h>
 *
@@ -79,6 +83,7 @@
 
 #include <ncbilcl.h>
 #include <ncbiopt.h>
+#include <connect/ncbi_core.h>
 
 #ifndef LITTLE_ENDIAN
 #define LITTLE_ENDIAN	1234
@@ -223,14 +228,6 @@ typedef double		Nlm_FloatHi, PNTR Nlm_FloatHiPtr;
 #ifndef BigScalar
 #define BigScalar long
 #endif
-
-/* Timeout structure
- */
-typedef struct {
-  Nlm_Uint4 sec;   /* seconds(gets truncated to platform-dep. max. limit) */
-  Nlm_Uint4 usec;  /* microseconds(always get truncated to 10**6)         */
-} Nlm_STimeout;
-#define STimeout Nlm_STimeout
 
 
 /*----------------------------------------------------------------------*/

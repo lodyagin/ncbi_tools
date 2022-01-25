@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.12 2000/01/12 21:05:00 egorov Exp $
+/* $Id: fastacmd.c,v 6.13 2000/03/08 15:26:03 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.13  2000/03/08 15:26:03  madden
+* Add return statement to Main fct, purify nit
+*
 * Revision 6.12  2000/01/12 21:05:00  egorov
 * Use Fastacmd API
 *
@@ -130,4 +133,6 @@ Int2 Main (void)
     linelen = myargs[4].intvalue;
 
     Fastacmd_Search (searchstr, database, batchfile, dupl, linelen, (stdout));
+
+    return 0;
 }

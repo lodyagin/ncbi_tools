@@ -1,7 +1,7 @@
 #ifndef CONNUTIL__H
 #define CONNUTIL__H
 
-/*  $Id: connutil.h,v 6.11 1999/09/13 15:54:32 vakatov Exp $
+/*  $Id: connutil.h,v 6.12 2000/02/25 16:45:53 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,10 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connutil.h,v $
+* Revision 6.12  2000/02/25 16:45:53  vakatov
+* Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+* the C++ toolkits, and even to use them in a "standalone" fashion
+*
 * Revision 6.11  1999/09/13 15:54:32  vakatov
 * Added URL_DecodeEx() -- for "relaxed" URL decoding: let the user to
 * allow some of the symbols prohibited by the standard
@@ -113,7 +117,7 @@ typedef struct {
   Nlm_Uint2    port;             /* server:  service port */
   Nlm_Char*    path;             /* server:  path(e.g. path to a CGI script) */
   Nlm_Char*    args;             /* server:  args(e.g. args for CGI script)  */
-  Nlm_STimeout timeout;          /* i/o (connection and read/write) timeout  */
+  STimeout     timeout;          /* i/o (connection and read/write) timeout  */
   Nlm_Uint4    conn_try;         /* max.number of attempts to establish conn */
   Nlm_Char*    http_proxy_host;  /* host name of HTTP proxy (can be NULL) */
   Nlm_Uint2    http_proxy_port;  /* port #    of HTTP proxy server */

@@ -1,4 +1,4 @@
-/*   cn3dmodl.h
+/*  $Id: cn3dmodl.h,v 6.25 2000/04/08 00:37:31 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -22,6 +22,18 @@
 *  purpose.
 *
 * $Log: cn3dmodl.h,v $
+* Revision 6.25  2000/04/08 00:37:31  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 6.24  2000/02/26 00:01:40  thiessen
+* OpenGL improvements, progress on cleanup of Show/Hide
+*
+* Revision 6.23  2000/02/19 21:25:57  thiessen
+* split of cn3dmodl into cn3dmodl and cn3dstyl
+*
+* Revision 6.22  2000/02/11 15:52:29  thiessen
+* transparent solvent if partial occupancy; move alt conf behaviour checkbox to Show/Hide panel
+*
 * Revision 6.21  1999/11/02 23:06:07  lewisg
 * fix cn3d to launch correctly if there is no seqentry associated with bioseq
 *
@@ -97,59 +109,22 @@ typedef struct domain_info {
     Boolean bVisible, bVisibleParent, bAligned;
 } DomainInfo, PNTR DomainInfoPtr;
 
-typedef struct special_feature_info {
-    PARS parsSpecial;
-/* PRK  prkSpecial;      */
-    Boolean On;
-    CharPtr title, description;
-    Int4 iRes;
-} SpecialFeatureInfo, PNTR SpecialFeatureInfoPtr;
-
 extern Boolean Cn3D_fAlignOn, Cn3D_fUnalignOn;
 
-typedef ValNodePtr SpecialFeaturePtr;
-
-extern DomainInfo **domaindata;
-extern Boolean Cn3D_DisplayHighlight;
-extern Boolean Cn3D_NoSingleHL;
-
-extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));
-extern GrouP LIBCALL ModelControls PROTO((Nlm_GrouP prnt));
-extern void LIBCALL ResetDisplayCtrls(void);
-extern void LIBCALL ResetModelCtrls(void);
+extern Nlm_Boolean allowAltConfIdOverlay(void);
 extern void LIBCALL Cn3D_CountDomainProc(void);
-extern void LIBCALLBACK DoLinkSpecialFeatureWithMGD
-    PROTO((PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr));
-extern void LIBCALLBACK DoCleanSpecialFeatureWithMGD(PFB pfbThis,
-                                                     Int4 iModel,
-                                                     Int4 iIndex,
-                                                     Pointer ptr);
-extern void LIBCALLBACK DoCleanJustHLStatusWithMGD(PFB pfbThis,
-                                                   Int4 iModel,
-                                                   Int4 iIndex,
-                                                   Pointer ptr);
-extern void LIBCALLBACK DoTurnOnSpecialFeatureWithMGD(PFB pfbThis,
-                                                      Int4 iModel,
-                                                      Int4 iIndex,
-                                                      Pointer ptr);
-extern void LIBCALLBACK DoDeHighlightWithMGD(PFB pfbThis, Int4 iModel,
-                                             Int4 iIndex, Pointer ptr);
-extern SpecialFeaturePtr LIBCALL SpecialFeatureFree(SpecialFeaturePtr
-                                                    sfpThis);
-extern void LIBCALLBACK DoUnLinkSpecialFeatureWithMGD(PFB pfbThis,
-                                                      Int4 iModel,
-                                                      Int4 iIndex,
-                                                      Pointer ptr);
-extern void Cn3D_bDisplayHighlightStatusSet(Boolean Yes);
-extern void Cn3DCheckHighlighted(void);
-extern void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,
-                                                   Int4 iModel,
-                                                   Int4 iIndex,
-                                                   Pointer ptr);
-extern PDNMS Cn3DAddUserDefinedFeature(PDNMS pdnmsThis);
-extern void Cn3DIndexUserDefinedFeature(void);
-extern void ClearRest(void);
+extern void LIBCALL ResetDisplayCtrls(void);
+extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));
+
+/* sets values in the show/hide list for structures */
+NLM_EXTERN void Cn3D_SetStrucList(void);
+/* fill out domain list */
+NLM_EXTERN void Cn3D_ListDomainProc(void);
+NLM_EXTERN void fnAlignList(LisT l);
+NLM_EXTERN void Cn3D_DisplayProc(ButtoN b);
+
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif /* _CN3DMODEL_ */

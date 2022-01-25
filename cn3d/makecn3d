@@ -63,7 +63,7 @@ LIBPATH = $(NCBI_ALTLIB)
 # DEF = -DINTERNAL_NCBI_SEQUIN -DSALSA_DEBUG 
 SRC = algorend.o cn3dentr.o cn3dmain.o cn3dmatn.o cn3dmesh.o cn3dmodl.o \
 cn3dmsel.o cn3dmsg.o cn3dopen.o cn3dsave.o cn3dshim.o \
-cn3dwin.o cn3dxprt.o
+cn3dwin.o cn3dxprt.o seqcons.o rowmgr.o cn3dstyl.o
 EXE = Cn3D
 
 
@@ -126,7 +126,7 @@ all : $(EXE)
 ##
 
 $(EXE) : $(SRC)
-	$(CC) -o $(EXE) $(LDFLAGS) $(SRC)  $(LIB31) $(LIB20) $(LIB41) $(LIB22) \
+	$(CC) -o $(EXE) $(LDFLAGS) $(SRC)  $(LIB31) $(LIB20) $(LIB41) -lnetblast $(LIB22) \
 	$(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
 	$(NCBI_VIBLIBS) $(LIB36) $(NCBI_OTHERLIBS)
 

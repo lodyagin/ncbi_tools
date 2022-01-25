@@ -176,10 +176,10 @@ IMPALAGetReference(Boolean html)
           ;
 	} else
 		add_string_to_bufferEx("Reference: Alejandro A. Schaffer, Yuri I. Wolf, Chris P. Ponting, ", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("Eugene V. Koonin, L. Aravind, Stephen F. Altschul (2000), ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("Eugene V. Koonin, L. Aravind, Stephen F. Altschul (1999), ", &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("\"IMPALA: Matching a Protein Sequence Against a Collection of ", &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("\"PSI-BLAST-Constructed Position-Specific Score Matrices\",", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("Bioinformatics, to appear.", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("Bioinformatics 15:1000-1011.", &ret_buffer, &ret_buffer_length, TRUE);
 	return ret_buffer;
 }
 
@@ -399,3 +399,104 @@ void  LIBCALL impalaMakeFileNames(Char * matrixDbName,
   }
 }
 
+Nlm_FloatHi LIBCALL
+IMPALAfindUngappedLambda(Char *matrixName)
+{
+   if (0 == strcmp(matrixName, "BLOSUM62"))
+     return(0.3176);
+   if (0 == strcmp(matrixName, "BLOSUM90"))
+     return(0.3346);
+   if (0 == strcmp(matrixName, "BLOSUM80"))
+     return(0.3430);
+   if (0 == strcmp(matrixName, "BLOSUM50"))
+     return(0.232);
+   if (0 == strcmp(matrixName, "BLOSUM45"))
+     return(0.2291);
+   if (0 == strcmp(matrixName, "PAM30"))
+     return(0.340);
+   if (0 == strcmp(matrixName, "PAM70"))
+     return(0.3345);
+   if (0 == strcmp(matrixName, "PAM250"))
+     return(0.229);
+   return(0);
+}
+
+/*Given a sequence of 'length' amino acid residues, compute the
+  probability of each residue and put that in the array resProb*/
+void LIBCALL
+IMPALAfillResidueProbability(Uint1Ptr sequence, Int4 length, Nlm_FloatHi * resProb)
+{
+  Int4 frequency[PRO_ALPHABET_SIZE]; /*frequency of each letter*/
+  Int4 i; /*index*/
+  Int4 denominator; /*length not including X's*/
+
+  denominator = length;
+  for(i = 0; i < PRO_ALPHABET_SIZE; i++)
+    frequency[i] = 0;
+  for(i = 0; i < length; i++)
+    if (Xchar != sequence[i])
+      frequency[sequence[i]]++;
+    else
+      denominator--;
+  for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
+    if (frequency[i] == 0)
+      resProb[i] = 0.0;
+    else
+      resProb[i] = ((Nlm_FloatHi) (frequency[i])) /((Nlm_FloatHi) denominator);
+  }
+}
+
+/*matrix is a position-specific score matrix with matrixLength positions
+  queryProbArray is an array containing the probability of occurrence
+  of each residue in the query
+  scoreArray is an array of probabilities for each score that is
+    to be used as a field in return_sfp
+  return_sfp is a the structure to be filled in and returned
+  range is the size of scoreArray and is an upper bound on the
+   difference between maximum score and minimum score in the matrix
+  the routine fillSfp computes the probability of each score weighted
+   by the probability of each query residue and fills those probabilities
+   into scoreArray and puts scoreArray as a field in
+   that in the structure that is returned
+   for indexing convenience the field storing scoreArray points to the
+   entry for score 0, so that referring to the -k index corresponds to
+   score -k */
+BLAST_ScoreFreqPtr LIBCALL
+IMPALAfillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArray, Nlm_FloatHi *scoreArray,  BLAST_ScoreFreqPtr return_sfp, Int4 range)
+{
+  Int4 minScore, maxScore; /*observed minimum and maximum scores*/
+  Int4 i,j; /* indices */
+  Nlm_FloatHi onePosFrac; /*1/matrix length as a double*/
+
+  minScore = maxScore = 0;
+
+  for(i = 0; i < matrixLength; i++) {
+    for(j = 0 ; j < PRO_ALPHABET_SIZE; j++) {
+      if (Xchar == j)
+        continue;
+      if ((matrix[i][j] != BLAST_SCORE_MIN) && (matrix[i][j] < minScore))
+	minScore = matrix[i][j];
+      if (matrix[i][j] > maxScore)
+        maxScore = matrix[i][j];
+    }
+  }
+  return_sfp->obs_min = minScore;
+  return_sfp->obs_max = maxScore;
+  for (i = 0; i < range; i++)
+    scoreArray[i] = 0.0;
+  return_sfp->sprob = &(scoreArray[-minScore]); /*center around 0*/
+  onePosFrac = 1.0/ ((Nlm_FloatHi) matrixLength);
+  for(i = 0; i < matrixLength; i++) {
+    for (j = 0; j < PRO_ALPHABET_SIZE; j++) {
+      if (Xchar == j)
+        continue;
+      if(matrix[i][j] >= minScore) {
+        return_sfp->sprob[matrix[i][j]] += (onePosFrac * queryProbArray[j]);
+      }
+    }
+  }
+  return_sfp->score_avg = 0;
+  for(i = minScore; i <= maxScore; i++)
+    return_sfp->score_avg += i * return_sfp->sprob[i];
+  return(return_sfp);
+}

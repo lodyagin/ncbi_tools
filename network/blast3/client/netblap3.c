@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.57  2000/04/18 16:30:37  madden
+* Fix memory leaks
+*
 * Revision 1.56  2000/01/20 18:37:13  madden
 * Add vecscrn.h to includes
 *
@@ -2340,12 +2343,21 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                 options->maxNumPasses = parameters->max_num_passes;
                 options->pseudoCountConst = parameters->pseudo_count_const;
                 
-                options->gifile = StringSave(parameters->gifile);
+		if (parameters->gifile)
+		{
+                	options->gifile = StringSave(parameters->gifile);
+		}
                 options->gilist = parameters->gilist;
 		if (parameters->matrix)
+		{
+			options->matrix = MemFree(options->matrix);
                 	options->matrix = StringSave(parameters->matrix);
+		}
 		if (parameters->filter_string)
+		{
+               		options->filter_string = MemFree(options->filter_string);
                		options->filter_string = StringSave(parameters->filter_string);
+		}
                 if (parameters->entrez_query)
                     options->entrez_query = StringSave(parameters->entrez_query);
                 /* compensates for client not providing this.  Remove this at some point? */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.66 $
+* $Revision: 6.91 $
 *
 * File Description: 
 *
@@ -1730,7 +1730,7 @@ NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
                 if (sip != NULL) {
                   pbsp->id = sip;
                 } else {
-                  pbsp->id = MakeNewProteinSeqIdEx (sfp->location, NULL, &ctr);
+                  pbsp->id = MakeNewProteinSeqIdEx (sfp->location, NULL, NULL, &ctr);
                 }
                 CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
                 SeqMgrAddToBioseqIndex (pbsp);
@@ -2280,6 +2280,13 @@ static Boolean HandledGBQualOnCDS (SeqFeatPtr sfp, GBQualPtr gbq, ValNodePtr PNT
     if (crp != NULL) {
       frame = crp->frame;
       if (frame == 0) {
+        StringNCpy_0 (str, gbq->val, sizeof (str));
+        if (sscanf (str, "%d", &val) == 1) {
+          if (val > 0 || val < 4) {
+            crp->frame = (Uint1) val;
+            return TRUE;
+          }
+        }
         frame = 1;
       }
       sprintf (str, "%d", (int) frame);
@@ -2308,15 +2315,34 @@ static Boolean HandledGBQualOnCDS (SeqFeatPtr sfp, GBQualPtr gbq, ValNodePtr PNT
             transl_table = vnp->data.intvalue;
           }
         }
-      }
-      if (transl_table == 0) {
-        transl_table = 1;
-      }
-      sprintf (str, "%ld", (long) transl_table);
-      if (StringICmp (str, gbq->val) == 0) {
-        return TRUE;
+        if (transl_table == 0) {
+          transl_table = 1;
+        }
+        sprintf (str, "%ld", (long) transl_table);
+        if (StringICmp (str, gbq->val) == 0) {
+          return TRUE;
+        }
+      } else {
+        StringNCpy_0 (str, gbq->val, sizeof (str));
+        if (sscanf (str, "%d", &val) == 1) {
+          vnp = ValNodeNew (NULL);
+          if (vnp != NULL) {
+            vnp->choice = 2;
+            vnp->data.intvalue = (Int4) val;
+            gcp = GeneticCodeNew ();
+            if (gcp != NULL) {
+              gcp->data.ptrvalue = vnp;
+              crp->genetic_code = gcp;
+              return TRUE;
+            }
+          }
+        }
       }
     }
+  }
+
+  if (StringICmp (gbq->qual, "translation") == 0) {
+    return TRUE;
   }
 
   return FALSE;
@@ -2327,8 +2353,10 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
 {
   Uint1      aa;
   Int2       j;
+  size_t     len;
   CharPtr    name;
   RnaRefPtr  rrp;
+  CharPtr    str;
   tRNAPtr    trp;
 
   if (StringICmp (gbq->qual, "product") == 0 ||
@@ -2352,6 +2380,21 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
           trp->aa = aa;
           rrp->ext.choice = 2;
           rrp->ext.value.ptrvalue = (Pointer) trp;
+          if (aa == 'M') {
+            if (StringStr (name, "fMet") != NULL) {
+              if (sfp->comment == NULL) {
+                sfp->comment = StringSave ("fMet");
+              } else {
+                len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
+                str = MemNew (sizeof (Char) * len);
+                StringCpy (str, sfp->comment);
+                StringCat (str, "; ");
+                StringCat (str, "fMet");
+                sfp->comment = MemFree (sfp->comment);
+                sfp->comment = str;
+              }
+            }
+          }
         }
       }
     }
@@ -2372,7 +2415,28 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
       if (StringICmp ((CharPtr) rrp->ext.value.ptrvalue, gbq->val) == 0) {
         return TRUE;
       }
-      return FALSE;
+      str = StringStr (gbq->val, "rDNA");
+      if (str != NULL) {
+        str [1] = 'R';
+        if (StringICmp ((CharPtr) rrp->ext.value.ptrvalue, gbq->val) == 0) {
+          return TRUE;
+        }
+      }
+      /* subsequent /product now added to comment */
+      if (sfp->comment == NULL) {
+        sfp->comment = gbq->val;
+        gbq->val = NULL;
+      } else {
+        len = StringLen (sfp->comment) + StringLen (gbq->val) + 5;
+        str = MemNew (sizeof (Char) * len);
+        StringCpy (str, sfp->comment);
+        StringCat (str, "; ");
+        StringCat (str, gbq->val);
+        sfp->comment = MemFree (sfp->comment);
+        sfp->comment = str;
+      }
+      /* return FALSE; */
+      return TRUE;
     }
     if (rrp->ext.choice == 1 && rrp->ext.value.ptrvalue != NULL) {
       rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
@@ -2668,6 +2732,8 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp)
       xref->specialCleanupFlag = TRUE; /* flag to test for overlapping gene later */
       xref->next = sfp->xref;
       sfp->xref = xref;
+    } else if (sfp->data.choice != SEQFEAT_CDREGION && StringICmp (gbq->qual, "codon_start") == 0) {
+      /* not legal on anything but CDS, so remove it */
     } else {
       unlink = FALSE;
     }
@@ -3050,6 +3116,7 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
 static void OrpModToSubSource (ValNodePtr PNTR vnpp, SubSourcePtr PNTR sspp)
 
 {
+/*
   SubSourcePtr  ssp;
   ValNodePtr    vnp;
 
@@ -3069,6 +3136,7 @@ static void OrpModToSubSource (ValNodePtr PNTR vnpp, SubSourcePtr PNTR sspp)
   vnp = *vnpp;
   *vnpp = NULL;
   ValNodeFree (vnp);
+*/
 }
 
 static int LIBCALLBACK SortDbxref (VoidPtr ptr1, VoidPtr ptr2)
@@ -3455,9 +3523,11 @@ static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial)
   }
 }
 
-static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial)
+static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
+  Char             buf1 [121];
+  Char             buf2 [121];
   CitGenPtr        cgp;
   ValNodePtr       next;
   ValNodePtr PNTR  prev;
@@ -3468,6 +3538,8 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial)
   vnp = pdp->pub;
   if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_Gen) {
     cgp = (CitGenPtr) vnp->data.ptrvalue;
+    buf1 [0] = '\0';
+    PubLabelUnique (vnp, buf1, sizeof (buf1) - 1, OM_LABEL_CONTENT, TRUE);
     NormalizeAuthors (cgp->authors);
     if (stripSerial) {
       cgp->serial_number = -1;
@@ -3477,10 +3549,18 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial)
       cgp->date = DateFree (cgp->date); /* remove date if unpublished */
 #endif
     }
+    buf2 [0] = '\0';
+    PubLabelUnique (vnp, buf2, sizeof (buf2) - 1, OM_LABEL_CONTENT, TRUE);
+    if (StringCmp (buf1, buf2) != 0) {
+      ValNodeCopyStr (publist, 1, buf1);
+      ValNodeCopyStr (publist, 2, buf2);
+    }
     return; /* but does not remove if empty and only element of Pub */
   }
   while (vnp != NULL) {
     next = vnp->next;
+    buf1 [0] = '\0';
+    PubLabelUnique (vnp, buf1, sizeof (buf1) - 1, OM_LABEL_CONTENT, TRUE);
     NormalizeAPub (vnp, stripSerial);
     if (vnp->choice == PUB_Gen && empty_citgen ((CitGenPtr) vnp->data.ptrvalue)) {
       *prev = vnp->next;
@@ -3488,6 +3568,12 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial)
       PubFree (vnp);
     } else {
       prev = &(vnp->next);
+      buf2 [0] = '\0';
+      PubLabelUnique (vnp, buf2, sizeof (buf2) - 1, OM_LABEL_CONTENT, TRUE);
+      if (StringCmp (buf1, buf2) != 0) {
+        ValNodeCopyStr (publist, 1, buf1);
+        ValNodeCopyStr (publist, 2, buf2);
+      }
     }
     vnp = next;
   }
@@ -3525,7 +3611,7 @@ static void UniqueCodons (tRNAPtr trp)
 
 {
   Int2   i, j;
-  Uint2  last = 0, next;
+  Uint2  last = 255, next;
 
   if (trp == NULL) return;
 
@@ -3663,7 +3749,9 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
   if (aa != 'X') {
     if (aa == ParseTRnaString (sfp->comment, &justTrnaText)) {
       if (justTrnaText) {
-        sfp->comment = MemFree (sfp->comment);
+        if (StringCmp (sfp->comment, "fMet") != 0) {
+          sfp->comment = MemFree (sfp->comment);
+        }
       }
     }
     return;
@@ -3672,7 +3760,9 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
   if (aa == 0) return;
   trp->aa = aa;
   if (justTrnaText) {
-    sfp->comment = MemFree (sfp->comment);
+    if (StringCmp (sfp->comment, "fMet") != 0) {
+      sfp->comment = MemFree (sfp->comment);
+    }
   }
 }
 
@@ -3787,11 +3877,12 @@ static void HandleXrefOnCDS (SeqFeatPtr sfp)
   }
 }
 
-static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial)
+static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
   Uint1         aa;
   BioSourcePtr  biop;
+  Char          ch;
   GeneRefPtr    grp;
   ImpFeatPtr    ifp;
   Int2          j;
@@ -3804,6 +3895,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial)
   ProtRefPtr    prp;
   RnaRefPtr     rrp;
   CharPtr       str;
+  CharPtr       suff;
   tRNAPtr       trp;
 
   if (sfp == NULL) return;
@@ -3934,7 +4026,9 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial)
             rrp->ext.choice = 2;
             rrp->ext.value.ptrvalue = (Pointer) trp;
             if (justTrnaText) {
-              sfp->comment = MemFree (sfp->comment);
+              if (StringCmp (sfp->comment, "fMet") != 0) {
+                sfp->comment = MemFree (sfp->comment);
+              }
             }
           }
         }
@@ -3955,12 +4049,75 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial)
           sfp->comment = MemFree (sfp->comment);
         }
       }
+      if (rrp->type == 4) {
+        name = (CharPtr) rrp->ext.value.ptrvalue;
+        len = StringLen (name);
+        if (len > 5) {
+          suff = NULL;
+          str = StringStr (name, " ribosomal");
+          if (str != NULL) {
+            suff = str + 10;
+          }
+          if (str == NULL) {
+            str = StringStr (name, " rRNA");
+            if (str != NULL) {
+              suff = str + 5;
+            }
+          }
+          if (suff != NULL && StringNICmp (suff, " RNA", 4) == 0) {
+            suff += 4;
+          }
+          if (suff != NULL && StringNICmp (suff, " DNA", 4) == 0) {
+            suff += 4;
+          }
+          if (suff != NULL && StringNICmp (suff, " ribosomal", 10) == 0) {
+            suff += 10;
+          }
+          TrimSpacesAroundString (suff);
+          if (str != NULL) {
+            *str = '\0';
+            len = StringLen (name);
+            if (StringHasNoText (suff)) {
+              suff = NULL;
+            }
+            if (suff != NULL) {
+              len += StringLen (suff) + 2;
+            }
+            str = MemNew (len + 15);
+            if (str != NULL) {
+              StringCpy (str, name);
+              StringCat (str, " ribosomal RNA");
+              if (suff != NULL) {
+                ch = *suff;
+                if (ch != ',' && ch != ';') {
+                  StringCat (str, " ");
+                }
+                StringCat (str, suff);
+              }
+              rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+              rrp->ext.value.ptrvalue = (Pointer) str;
+            }
+          }
+        }
+        name = (CharPtr) rrp->ext.value.ptrvalue;
+        len = StringLen (name);
+        if (len > 5) {
+          ch = *name;
+          while (ch != '\0' && (ch == '.' || (IS_DIGIT (ch)))) {
+            name++;
+            ch = *name;
+          }
+          if (ch == 's' && StringCmp (name, "s ribosomal RNA") == 0) {
+            *name = 'S';
+          }
+        }
+      }
       break;
     case SEQFEAT_PUB :
       pdp = (PubdescPtr) sfp->data.value.ptrvalue;
       CleanVisString (&(pdp->comment));
       CleanDoubleQuote (pdp->comment);
-      NormalizePubdesc (pdp, stripSerial);
+      NormalizePubdesc (pdp, stripSerial, publist);
       break;
     case SEQFEAT_SEQ :
       break;
@@ -4029,7 +4186,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial)
   }
 }
 
-static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial)
+static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
   BioSourcePtr  biop;
@@ -4083,7 +4240,7 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial)
     case Seq_descr_pub :
       pdp = (PubdescPtr) sdp->data.ptrvalue;
       CleanVisString (&(pdp->comment));
-      NormalizePubdesc (pdp, stripSerial);
+      NormalizePubdesc (pdp, stripSerial, publist);
       break;
     case Seq_descr_region :
       break;
@@ -4137,12 +4294,103 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial)
   }
 }
 
+static Int2 CheckForQual (GBQualPtr gbqual, CharPtr string_q, CharPtr string_v)
+
+{
+  GBQualPtr curq;
+
+  for (curq = gbqual; curq; curq = curq->next) {
+    if (StringCmp (string_q, curq->qual) == 0) {
+      if (curq->val == NULL) {
+        curq->val = StringSave (string_v);
+        return 1;
+      } 
+      if (StringCmp (string_v, curq->val) == 0) return 1;
+    }
+  }
+  return 0;
+}
+static GBQualPtr AddGBQual (GBQualPtr gbqual, CharPtr qual, CharPtr val)
+
+{
+  GBQualPtr curq;
+
+  if (StringCmp (qual, "translation") == 0) {
+    if (val == NULL)  return gbqual;
+    if (*val == '\0') return gbqual;
+  }
+  if (gbqual) {
+    if (CheckForQual (gbqual, qual, val) == 1) return gbqual;
+    for (curq = gbqual; curq->next != NULL; curq = curq->next) continue;
+    curq->next = GBQualNew ();
+    curq = curq->next;
+    if (val)
+      curq->val = StringSave (val);
+    curq->qual = StringSave (qual);
+  } else {
+    gbqual = GBQualNew ();
+    gbqual->next = NULL;
+    if (val)
+      gbqual->val = StringSave (val);
+    gbqual->qual = StringSave (qual);
+  }
+  return gbqual;
+}
+
+static void AddReplaceQual (SeqFeatPtr sfp, CharPtr p)
+
+{
+  CharPtr s, val;
+
+  val = StringChr (p, '\"');
+  if (val == NULL) return;
+  val++;
+  s = p + StringLen (p) - 1;
+  if (*s != ')') return;
+  for (s--; s > val && *s != '\"'; s--) continue;
+  if (*s != '\"') return;
+  *s = '\0';
+  sfp->qual = (GBQualPtr) AddGBQual (sfp->qual, "replace", val);
+  *s = '\"';
+}
+
+NLM_EXTERN Boolean SerialNumberInString (CharPtr str)
+
+{
+  Char     ch;
+  Boolean  hasdigits;
+  CharPtr  ptr;
+  Boolean  suspicious = FALSE;
+
+  if (str == NULL || StringHasNoText (str)) return FALSE;
+  ptr = StringChr (str, '[');
+  while ((! suspicious) && ptr != NULL) {
+    hasdigits = FALSE;
+    ptr++;
+    ch = *ptr;
+    while (IS_DIGIT (ch)) {
+      hasdigits = TRUE;
+      ptr++;
+      ch = *ptr;
+    }
+    if (ch == ']' && hasdigits) {
+      suspicious = TRUE;
+    }
+    if (! suspicious) {
+      ptr = StringChr (ptr, '[');
+    }
+  }
+  return suspicious;
+}
+
+/* now only strips serials for local, general, refseq, and 2+6 genbank ids */
 static void CheckForSwissProtID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
-  BioseqPtr  bsp;
-  SeqIdPtr   sip;
-  BoolPtr    stripSerial;
+  BioseqPtr     bsp;
+  SeqIdPtr      sip;
+  BoolPtr       stripSerial;
+  TextSeqIdPtr  tsip;
 
   if (sep == NULL) return;
   if (IS_Bioseq (sep)) {
@@ -4151,19 +4399,47 @@ static void CheckForSwissProtID (SeqEntryPtr sep, Pointer mydata, Int4 index, In
     stripSerial = (BoolPtr) mydata;
     if (stripSerial == NULL) return;
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
-      if (sip->choice == SEQID_SWISSPROT) {
-        *stripSerial = FALSE;
+      switch (sip->choice) {
+        case SEQID_GIBBSQ :
+        case SEQID_GIBBMT :
+          *stripSerial = FALSE;
+          break;
+        case SEQID_EMBL :
+        case SEQID_PIR :
+        case SEQID_SWISSPROT :
+        case SEQID_PATENT :
+        case SEQID_DDBJ :
+        case SEQID_PRF :
+        case SEQID_PDB :
+          *stripSerial = FALSE;
+          break;
+        case SEQID_GENBANK :
+          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+          if (tsip != NULL) {
+            if (StringLen (tsip->accession) == 6) {
+              *stripSerial = FALSE;
+            }
+          }
+          break;
+        case SEQID_NOT_SET :
+        case SEQID_LOCAL :
+        case SEQID_OTHER :
+        case SEQID_GENERAL :
+          break;
+        default :
+          break;
       }
     }
   }
 }
 
-NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
+static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publist)
 
 {
   BioSourcePtr  biop;
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
+  CdRegionPtr   crp;
   Char          div [10];
   GBBlockPtr    gbp;
   ImpFeatPtr    ifp;
@@ -4173,12 +4449,16 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
   SeqAnnotPtr   sap = NULL;
   ValNodePtr    sdp = NULL;
   SeqFeatPtr    sfp;
+  CharPtr       str;
   Boolean       stripSerial = TRUE;
   SeqEntryPtr   tmp;
 
   if (sep == NULL) return;
   SeqEntryExplore (sep, (Pointer) &stripSerial, CheckForSwissProtID);
 #ifdef SUPPRESS_TRIVIAL_FLATFILE_DIFFERENCES
+  stripSerial = FALSE;
+#endif
+#ifdef SUPPRESS_STRIP_SERIAL_DIFFERENCES
   stripSerial = FALSE;
 #endif
   if (IS_Bioseq (sep)) {
@@ -4190,7 +4470,7 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-      BasicSeqEntryCleanup (tmp);
+      BasicSeqEntryCleanupInternal (tmp, publist);
     }
     sap = bssp->annot;
     sdp = bssp->descr;
@@ -4203,18 +4483,37 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
     if (sap->type == 1) {
       sfp = (SeqFeatPtr) sap->data;
       while (sfp != NULL) {
+        crp = NULL;
         if (sfp->data.choice == SEQFEAT_IMP) {
           ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+          if (ifp != NULL && ifp->loc != NULL) {
+            str = StringStr (ifp->loc, "replace");
+            if (str != NULL) {
+              AddReplaceQual (sfp, str);
+              ifp->loc = MemFree (ifp->loc);
+            }
+          }
           if (ifp != NULL && StringCmp (ifp->key, "CDS") == 0) {
             sfp->data.value.ptrvalue = ImpFeatFree (ifp);
             sfp->data.choice = SEQFEAT_CDREGION;
-            sfp->data.value.ptrvalue = CdRegionNew ();
+            crp = CdRegionNew ();
+            sfp->data.value.ptrvalue = crp;
+            sfp->idx.subtype = FEATDEF_CDS;
+          } else if (ifp != NULL &&
+                     (StringCmp (ifp->key, "allele") == 0 ||
+                     StringCmp (ifp->key, "mutation") == 0)) {
+            ifp->key = MemFree (ifp->key);
+            ifp->key = StringSave ("variation");
+            sfp->idx.subtype = FEATDEF_variation;
           }
         }
         CleanupFeatureGBQuals (sfp);
+        if (crp != NULL && crp->frame == 0) {
+          crp->frame = GetFrameFromLoc (sfp->location);
+        }
         sfp->qual = SortFeatureGBQuals (sfp->qual);
         sfp->qual = SortIllegalGBQuals (sfp->qual);
-        CleanupFeatureStrings (sfp, stripSerial);
+        CleanupFeatureStrings (sfp, stripSerial, publist);
         sfp->dbxref = ValNodeSort (sfp->dbxref, SortDbxref);
         CleanupDuplicateDbxrefs (&(sfp->dbxref));
         psp = sfp->cit;
@@ -4242,7 +4541,7 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
       default :
         break;
     }
-    CleanupDescriptorStrings (sdp, stripSerial);
+    CleanupDescriptorStrings (sdp, stripSerial, publist);
     sdp = sdp->next;
   }
 
@@ -4260,6 +4559,66 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
       onp = onp->next;
     }
   }
+}
+
+static void ReplaceCitOnFeat (CitGenPtr cgp, ValNodePtr publist)
+
+{
+  ValNodePtr  nxt;
+  ValNodePtr  vnp;
+
+  for (vnp = publist; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice != 1) continue;
+    if (StringCmp (cgp->cit, (CharPtr) vnp->data.ptrvalue) == 0) {
+      nxt = vnp->next;
+      if (nxt != NULL && nxt->choice == 2) {
+        cgp->cit = MemFree (cgp->cit);
+        cgp->cit = StringSaveNoNull ((CharPtr) nxt->data.ptrvalue);
+      }
+      return;
+    }
+  }
+}
+
+static void ChangeCitsOnFeats (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  CitGenPtr   cgp;
+  ValNodePtr  ppr;
+  ValNodePtr  psp;
+  ValNodePtr  vnp;
+
+  psp = sfp->cit;
+  if (psp != NULL && psp->data.ptrvalue) {
+    for (ppr = (ValNodePtr) psp->data.ptrvalue; ppr != NULL; ppr = ppr->next) {
+      vnp = NULL;
+      if (ppr->choice == PUB_Gen) {
+        vnp = ppr;
+      } else if (ppr->choice == PUB_Equiv) {
+        for (vnp = (ValNodePtr) ppr->data.ptrvalue;
+             vnp != NULL && vnp->choice != PUB_Gen;
+             vnp = vnp->next) continue;
+      }
+      if (vnp != NULL && vnp->choice == PUB_Gen) {
+        cgp = (CitGenPtr) vnp->data.ptrvalue;
+        if (cgp != NULL && (! StringHasNoText (cgp->cit))) {
+          ReplaceCitOnFeat (cgp, (ValNodePtr) userdata);
+        }
+      }
+    }
+  }
+}
+
+NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
+
+{
+  ValNodePtr  publist = NULL;
+
+  BasicSeqEntryCleanupInternal (sep, &publist);
+  if (publist != NULL) {
+    VisitFeaturesInSep (sep, (Pointer) publist, ChangeCitsOnFeats);
+  }
+  ValNodeFreeData (publist);
 }
 
 /* end BasicSeqEntryCleanup section */
@@ -5163,5 +5522,462 @@ NLM_EXTERN ValNodePtr CreateNewDescriptorOnBioseq (BioseqPtr bsp, Uint1 choice)
   sep = SeqMgrGetSeqEntryForData (bsp);
   if (sep == NULL) return NULL;
   return CreateNewDescriptor (sep, choice);
+}
+
+/* common functions to scan binary ASN.1 file of entire release as Bioseq-set */
+
+NLM_EXTERN void VisitDescriptorsOnBsp (BioseqPtr bsp, Pointer userdata, VisitDescriptorsFunc callback)
+
+{
+  SeqDescrPtr  sdp;
+
+  if (bsp == NULL || callback == NULL) return;
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    callback (sdp, userdata);
+  }
+}
+
+NLM_EXTERN void VisitDescriptorsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback)
+
+{
+  SeqDescrPtr  sdp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+    callback (sdp, userdata);
+  }
+}
+
+NLM_EXTERN void VisitDescriptorsInSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback)
+
+{
+  SeqDescrPtr  sdp;
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+    callback (sdp, userdata);
+  }
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitDescriptorsInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitDescriptorsOnSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitDescriptorsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitDescriptorsOnSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitDescriptorsInSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitDescriptorsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitDescriptorsInSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitFeaturesOnBsp (BioseqPtr bsp, Pointer userdata, VisitFeaturesFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqFeatPtr   sfp;
+
+  if (bsp == NULL || callback == NULL) return;
+  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 1) continue;
+    for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+      callback (sfp, userdata);
+    }
+  }
+}
+
+NLM_EXTERN void VisitFeaturesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqFeatPtr   sfp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 1) continue;
+    for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+      callback (sfp, userdata);
+    }
+  }
+}
+
+NLM_EXTERN void VisitFeaturesInSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqFeatPtr   sfp;
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 1) continue;
+    for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+      callback (sfp, userdata);
+    }
+  }
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitFeaturesInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitFeaturesOnSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitFeaturesOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitFeaturesOnSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitFeaturesInSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitFeaturesOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitFeaturesInSet (bssp, userdata, callback);
+  }
+}
+
+static void VisitAlignmentsOnDisc (Pointer segs, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  SeqAlignPtr  salp;
+
+  for (salp = (SeqAlignPtr) segs; salp != NULL; salp = salp->next) {
+    callback (salp, userdata);
+    if (salp->segtype == SAS_DISC) {
+      VisitAlignmentsOnDisc (salp->segs, userdata, callback);
+    }
+  }
+}
+
+NLM_EXTERN void VisitAlignmentsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  SeqAlignPtr  salp;
+  SeqAnnotPtr  sap;
+
+  if (bsp == NULL || callback == NULL) return;
+  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 2) continue;
+    for (salp = (SeqAlignPtr) sap->data; salp != NULL; salp = salp->next) {
+      callback (salp, userdata);
+      if (salp->segtype == SAS_DISC) {
+        VisitAlignmentsOnDisc (salp->segs, userdata, callback);
+      }
+    }
+  }
+}
+
+NLM_EXTERN void VisitAlignmentsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqAlignPtr  salp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 2) continue;
+    for (salp = (SeqAlignPtr) sap->data; salp != NULL; salp = salp->next) {
+      callback (salp, userdata);
+      if (salp->segtype == SAS_DISC) {
+        VisitAlignmentsOnDisc (salp->segs, userdata, callback);
+      }
+    }
+  }
+}
+
+NLM_EXTERN void VisitAlignmentsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqAlignPtr  salp;
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 2) continue;
+    for (salp = (SeqAlignPtr) sap->data; salp != NULL; salp = salp->next) {
+      callback (salp, userdata);
+      if (salp->segtype == SAS_DISC) {
+        VisitAlignmentsOnDisc (salp->segs, userdata, callback);
+      }
+    }
+  }
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitAlignmentsInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitAlignmentsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitAlignmentsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitAlignmentsOnSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitAlignmentsInSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitAlignmentsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitAlignmentsInSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitGraphsOnBsp (BioseqPtr bsp, Pointer userdata, VisitGraphsFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqGraphPtr   sgp;
+
+  if (bsp == NULL || callback == NULL) return;
+  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 3) continue;
+    for (sgp = (SeqGraphPtr) sap->data; sgp != NULL; sgp = sgp->next) {
+      callback (sgp, userdata);
+    }
+  }
+}
+
+NLM_EXTERN void VisitGraphsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqGraphPtr   sgp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 3) continue;
+    for (sgp = (SeqGraphPtr) sap->data; sgp != NULL; sgp = sgp->next) {
+      callback (sgp, userdata);
+    }
+  }
+}
+
+NLM_EXTERN void VisitGraphsInSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback)
+
+{
+  SeqAnnotPtr  sap;
+  SeqGraphPtr   sgp;
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type != 3) continue;
+    for (sgp = (SeqGraphPtr) sap->data; sgp != NULL; sgp = sgp->next) {
+      callback (sgp, userdata);
+    }
+  }
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitGraphsInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitGraphsOnSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitGraphsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitGraphsOnSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitGraphsInSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitGraphsOnBsp (bsp, userdata, callback);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitGraphsInSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitBioseqsInSet (BioseqSetPtr bssp, Pointer userdata, VisitBioseqsFunc callback)
+
+{
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitBioseqsInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitBioseqsInSep (SeqEntryPtr sep, Pointer userdata, VisitBioseqsFunc callback)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    callback (bsp, userdata);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitBioseqsInSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFunc callback)
+
+{
+  SeqEntryPtr  tmp;
+
+  if (bssp == NULL || callback == NULL) return;
+  callback (bssp, userdata);
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    VisitSetsInSep (tmp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitSetsInSep (SeqEntryPtr sep, Pointer userdata, VisitSetsFunc callback)
+
+{
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    VisitSetsInSet (bssp, userdata, callback);
+  }
+}
+
+NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback)
+
+{
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   tmp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || callback == NULL) return;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    if (bssp->_class == 7 || bssp->_class == 13 ||
+        bssp->_class == 14 || bssp->_class == 15) {
+      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+        VisitElementsInSep (tmp, userdata, callback);
+      }
+      return;
+    }
+  }
+  callback (sep, userdata);
+}
+
+NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Pointer userdata, ScanBioseqSetFunc callback)
+
+{
+  AsnIoPtr      aip;
+  AsnModulePtr  amp;
+  AsnTypePtr    atp, atp_bss, atp_se;
+  SeqEntryPtr   sep;
+
+  if (StringHasNoText (inputFile) || callback == NULL) return;
+
+  amp = AsnAllModPtr ();
+  if (amp == NULL) {
+    Message (MSG_ERROR, "Unable to load AsnAllModPtr");
+    return;
+  }
+
+  atp_bss = AsnFind ("Bioseq-set");
+  if (atp_bss == NULL) {
+    Message (MSG_ERROR, "Unable to find ASN.1 type Bioseq-set");
+    return;
+  }
+
+  atp_se = AsnFind ("Bioseq-set.seq-set.E");
+  if (atp_se == NULL) {
+    Message (MSG_ERROR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+    return;
+  }
+
+  aip = AsnIoOpen (inputFile, binary? "rb" : "r");
+  if (aip == NULL) {
+    Message (MSG_ERROR, "AsnIoOpen failed for input file '%s'", inputFile);
+    return;
+  }
+
+  atp = atp_bss;
+
+  while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
+    if (atp == atp_se) {
+      sep = SeqEntryAsnRead (aip, atp);
+      callback (sep, userdata);
+      SeqEntryFree (sep);
+    } else {
+      AsnReadVal (aip, atp, NULL);
+    }
+  }
+
+  AsnIoClose (aip);
 }
 

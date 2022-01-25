@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.8 at Aug 16, 1999 11:49 AM
+*    Generated using ASNCODE Revision: 6.8 at Apr 6, 2000  5:13 PM
 *
 **************************************************/
 
@@ -211,6 +211,26 @@ NLM_EXTERN Boolean LIBCALL Entrez2TermPosAsnWrite PROTO (( Entrez2TermPosPtr , A
 
 /**************************************************
 *
+*    Entrez2HierQuery
+*
+**************************************************/
+typedef struct struct_Entrez2_hier_query {
+   CharPtr   db;
+   CharPtr   field;
+   CharPtr   term;
+   Int4   txid;
+} Entrez2HierQuery, PNTR Entrez2HierQueryPtr;
+
+
+NLM_EXTERN Entrez2HierQueryPtr LIBCALL Entrez2HierQueryFree PROTO ((Entrez2HierQueryPtr ));
+NLM_EXTERN Entrez2HierQueryPtr LIBCALL Entrez2HierQueryNew PROTO (( void ));
+NLM_EXTERN Entrez2HierQueryPtr LIBCALL Entrez2HierQueryAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Entrez2HierQueryAsnWrite PROTO (( Entrez2HierQueryPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    Entrez2GetLinks
 *
 **************************************************/
@@ -382,22 +402,23 @@ NLM_EXTERN Boolean LIBCALL Entrez2TermListAsnWrite PROTO (( Entrez2TermListPtr ,
 
 /**************************************************
 *
-*    Entrez2TermNode
+*    Entrez2HierNode
 *
 **************************************************/
-typedef struct struct_Entrez2_term_node {
+typedef struct struct_Entrez2_hier_node {
    CharPtr   cannonical_form;
    Int4   lineage_count;
-   ValNodePtr   lineage;
+   struct struct_Entrez2_term PNTR   lineage;
    Int4   child_count;
    struct struct_Entrez2_term PNTR   children;
-} Entrez2TermNode, PNTR Entrez2TermNodePtr;
+   Uint1   is_ambiguous;
+} Entrez2HierNode, PNTR Entrez2HierNodePtr;
 
 
-NLM_EXTERN Entrez2TermNodePtr LIBCALL Entrez2TermNodeFree PROTO ((Entrez2TermNodePtr ));
-NLM_EXTERN Entrez2TermNodePtr LIBCALL Entrez2TermNodeNew PROTO (( void ));
-NLM_EXTERN Entrez2TermNodePtr LIBCALL Entrez2TermNodeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL Entrez2TermNodeAsnWrite PROTO (( Entrez2TermNodePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Entrez2HierNodePtr LIBCALL Entrez2HierNodeFree PROTO ((Entrez2HierNodePtr ));
+NLM_EXTERN Entrez2HierNodePtr LIBCALL Entrez2HierNodeNew PROTO (( void ));
+NLM_EXTERN Entrez2HierNodePtr LIBCALL Entrez2HierNodeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Entrez2HierNodeAsnWrite PROTO (( Entrez2HierNodePtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -536,6 +557,7 @@ typedef struct struct_Entrez2_docsum {
    Uint1   no_abstract;
    Uint1   translated_title;
    Uint1   no_authors;
+   Int4   taxid;
 } Entrez2Docsum, PNTR Entrez2DocsumPtr;
 
 
@@ -554,6 +576,7 @@ NLM_EXTERN Boolean LIBCALL Entrez2DocsumAsnWrite PROTO (( Entrez2DocsumPtr , Asn
 typedef struct struct_Entrez2_term {
    struct struct_Entrez2_term PNTR next;
    CharPtr   term;
+   Int4   txid;
    Int4   count;
    Uint1   is_leaf_node;
 } Entrez2Term, PNTR Entrez2TermPtr;

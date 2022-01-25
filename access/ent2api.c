@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.7 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -86,6 +86,32 @@ static CharPtr EntrezGetProgramName (
   return ptr;
 }
 
+/* for development testing, later to override ncbi named service */
+
+static CharPtr  e2_host_machine = NULL;
+static Uint2    e2_host_port = 0;
+static CharPtr  e2_host_path = NULL;
+
+NLM_EXTERN void EntrezSetServer (
+  CharPtr host_machine,
+  Uint2 host_port,
+  CharPtr host_path
+)
+
+{
+  if (! StringHasNoText (host_machine)) {
+    e2_host_machine = MemFree (e2_host_machine);
+    e2_host_machine = StringSaveNoNull (host_machine);
+  }
+  if (host_port != 0) {
+    e2_host_port = host_port;
+  }
+  if (! StringHasNoText (host_path)) {
+    e2_host_path = MemFree (e2_host_path);
+    e2_host_path = StringSaveNoNull (host_path);
+  }
+}
+
 /* connection functions */
 
 NLM_EXTERN CONN EntrezOpenConnection (
@@ -93,8 +119,21 @@ NLM_EXTERN CONN EntrezOpenConnection (
 )
 
 {
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,
-                             "/entrez/utils/entrez2server.fcgi",
+  CharPtr  host_machine = e2_host_machine;
+  Uint2    host_port = e2_host_port;
+  CharPtr  host_path = e2_host_path;
+
+  if (StringHasNoText (host_machine)) {
+    host_machine = "neptune.nlm.nih.gov";
+  }
+  if (host_port == 0) {
+    host_port = 5701;
+  }
+  if (StringHasNoText (host_path)) {
+    host_path = "/entrez/utils/entrez2server.cgi";
+  }
+
+  return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
                              NULL, EntrezGetProgramName (),
                              30, eMIME_AsnBinary, URLC_SURE_FLUSH);
 }
@@ -280,8 +319,6 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   Boolean return_parsed,
   CharPtr db,
   CharPtr query_string,
-  Boolean do_not_explode,
-  Boolean do_not_translate,
   Int4 begin_date,
   Int4 end_date,
   CharPtr type_date,
@@ -313,7 +350,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
 
   if (! StringHasNoText (query_string)) {
     EntrezAddToBooleanRequest (e2rq, query_string, 0, NULL, NULL, 0, 0,
-                               NULL, NULL, do_not_explode, do_not_translate);
+                               NULL, NULL, TRUE, TRUE);
   }
 
   return e2rq;
@@ -434,19 +471,21 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermListRequest (
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermHierarchyRequest (
   CharPtr db,
   CharPtr field,
-  CharPtr term
+  CharPtr term,
+  Int4 txid
 )
 
 {
-  Entrez2TermQueryPtr  e2tq;
+  Entrez2HierQueryPtr  e2hq;
 
-  e2tq = Entrez2TermQueryNew ();
-  if (e2tq == NULL) return NULL;
-  e2tq->db = StringSaveNoNull (db);
-  e2tq->field = StringSaveNoNull (field);
-  e2tq->term = StringSaveNoNull (term);
+  e2hq = Entrez2HierQueryNew ();
+  if (e2hq == NULL) return NULL;
+  e2hq->db = StringSaveNoNull (db);
+  e2hq->field = StringSaveNoNull (field);
+  e2hq->term = StringSaveNoNull (term);
+  e2hq->txid = txid;
 
-  return CreateRequest (E2Request_get_term_hierarchy, (Pointer) e2tq);
+  return CreateRequest (E2Request_get_term_hierarchy, (Pointer) e2hq);
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinksRequest (
@@ -600,12 +639,12 @@ NLM_EXTERN Entrez2TermListPtr EntrezExtractTermListReply (
   return (Entrez2TermListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_term_list, NULL);
 }
 
-NLM_EXTERN Entrez2TermNodePtr EntrezExtractTermNodeReply (
+NLM_EXTERN Entrez2HierNodePtr EntrezExtractHierNodeReply (
   Entrez2ReplyPtr e2ry
 )
 
 {
-  return (Entrez2TermNodePtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_term_hierarchy, NULL);
+  return (Entrez2HierNodePtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_term_hierarchy, NULL);
 }
 
 NLM_EXTERN Entrez2LinkSetPtr EntrezExtractLinksReply (

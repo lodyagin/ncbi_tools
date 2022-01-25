@@ -1,5 +1,5 @@
 #
-# $Id: sgi.ncbi.mk,v 1.9 2000/01/05 15:46:32 thiessen Exp $
+# $Id: sgi.ncbi.mk,v 1.11 2000/04/13 14:10:44 thiessen Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
@@ -44,7 +44,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3DOGL
+#OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

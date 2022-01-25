@@ -3,9 +3,15 @@
 *   -- all routines for checking genbank feature table
 *   -- all extern variables are in gbftglob.c
 *                                                                  10-11-93
-$Revision: 6.4 $
+$Revision: 6.6 $
 *
 * $Log: gbfeat.c,v $
+* Revision 6.6  2000/02/02 22:10:19  kans
+* use TextSave instead of TextSaveEx, which is not available
+*
+* Revision 6.5  2000/02/02 21:03:09  tatiana
+* CkNumberType() added
+*
 * Revision 6.4  1998/06/15 15:00:17  tatiana
 * UNIX compiler warnings fixed
 *
@@ -510,6 +516,13 @@ NLM_EXTERN int GBQualSemanticValid(GBQualPtr PNTR gbqp,
                 case Class_int:
                      ret = CkQualTokenType(gbqp, curq, preq, error_msgs, 
                            perform_corrections, ParFlat_Integer_type);
+                     if (ret > retval){
+                        retval = ret;
+                     }
+                     break;
+                case Class_number:
+                     ret = CkQualTokenType(gbqp, curq, preq, error_msgs, 
+                           perform_corrections, ParFlat_Number_type);
                      if (ret > retval){
                         retval = ret;
                      }
@@ -1235,8 +1248,8 @@ NLM_EXTERN int CkQualSite ( GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
 *  -- format   single token
 *  -- example  ParFlat_Stoken_type        /label=Albl_exonl  /mod_base=m5c
 *              ParFlat_BracketInt_type    /citation=[3] or /citation= ([1],[3])
-*              ParFlat_Integer_type       /number=4       /transl_table=4
-*
+*              ParFlat_Integer_type           /transl_table=4
+*				ParFlat_Number_type			/number=4b
 *  -- not implemented yet, treat as ParFlat_Stoken_type:
 *     -- feature_label or base_range              
 *                 /rpt_unit=Alu_rpt1   /rpt_unit=202..245
@@ -1297,6 +1310,9 @@ NLM_EXTERN int CkQualTokenType (GBQualPtr PNTR head_gbqp,  GBQualPtr gbqp,
               break;
          case ParFlat_Stoken_type:
          		str = CkLabelType(token);
+               break;
+         case ParFlat_Number_type:
+         		str = CkNumberType(token);
                break;
         default:
               str = NULL;
@@ -1438,6 +1454,23 @@ NLM_EXTERN CharPtr CkBracketType(CharPtr str)
 		return str;
 	}
 }
+
+/*------------------------ CkNumberType() --------------------*/
+/*****************************************************************************
+*   CkNumberType:
+*	checks /number=single_token  - numbers and letters
+*	/number=4 or /number=6b
+*                                                          -Tatiana 2/1/00
+******************************************************************************/
+NLM_EXTERN CharPtr CkNumberType(CharPtr str)
+{
+		for (;  *str != '\0' && !IS_ALPHANUM(*str); str++)
+			continue;
+		if (*str != '\0') {
+			return NULL;  
+		}
+		return str;
+} 
 
 /*------------------------ CkLabelType() --------------------*/
 /*****************************************************************************

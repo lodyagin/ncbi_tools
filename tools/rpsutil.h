@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.1 1999/12/29 19:39:47 shavirin Exp $
+/* $Id: rpsutil.h,v 6.4 2000/03/28 20:32:27 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.4  2000/03/28 20:32:27  shavirin
+* Added functions RPSInfoDetach and RPSInfoAttach.
+*
+* Revision 6.3  2000/02/25 17:01:14  madden
+* Added copyMatrix field
+*
+* Revision 6.2  2000/02/11 20:44:08  shavirin
+* Added possibility to search PSSM database against DNA sequence.
+*
 * Revision 6.1  1999/12/29 19:39:47  shavirin
 * Initial revision.
 *
@@ -50,6 +59,7 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <readdb.h>
+#include <profiles.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +96,7 @@ typedef struct _RPSequence {
     Int4 seqlen;                /* Length of the sequence */
     CharPtr description;        /* Actually this is defline */
     Int4Ptr PNTR posMatrix;     /* PSI Matrix of the sequence */
+    Int4Ptr PNTR copyMatrix;     /* copy of Matrix for rescaling. */
     ModLAEntry  *mod_lt;        /* Lookup table for the sequence */
     ModLookupPositionPtr mod_lookup_table_memory; /* Memory tail */
     Int4 num_pos_added;         /* Elements of lookup structure */
@@ -101,8 +112,9 @@ typedef struct _RPSInfo {
     Int4Ptr offsets;            /* Offsets of matrixes in the file */
     RPScoreRow PNTR bigMatrix;  /* PSI Matrixes for all sequences */
     RPSLookupPtr lookup;        /* Precalculated lookup tables */
+    Boolean query_is_prot;      /* Do we need translate query sequence ? */
 } RPSInfo, PNTR RPSInfoPtr;
-
+    
 /****************************************************************************/
 /* FINCTION DEFINITIONS */
 /****************************************************************************/
@@ -115,7 +127,8 @@ typedef struct _RPSInfo {
                 MatrixFile - name of file with all PSI matrixes
    Returns:     Poiner to created RPSInfoPtr
   ------------------------------------------------------------------*/
-RPSInfoPtr RPSInit(CharPtr database, CharPtr MatrixFile, CharPtr LookupFile);
+RPSInfoPtr RPSInit(CharPtr database, CharPtr MatrixFile, CharPtr LookupFile,
+                   Int4 query_is_prot);
 
 /* ----------------------  RPSClose --------------------------
    Purpose:     De-initialize main structures of the RPS Search
@@ -156,6 +169,11 @@ void RPSequenceFree(RPSequencePtr rpseqp);
   ------------------------------------------------------------------*/
 SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo);
+
+
+RPSInfoPtr RPSInfoAttach(RPSInfoPtr rpsinfo);
+void RPSInfoDetach(RPSInfoPtr rpsinfo);
+
 
 #ifdef __cplusplus
 }

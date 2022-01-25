@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# $Id: wrapper_lib.sh,v 6.10 1999/12/06 23:10:24 kimelman Exp $
+# $Id: wrapper_lib.sh,v 6.11 2000/02/10 19:14:19 zimmerma Exp $
 #
 # this is CGI handler wrapper library. It works as a membrane between httpd and actual
 # cgi program and allow to run new technological version of such program in
@@ -88,13 +88,14 @@ run_one() {
         cat >$input_file
         rf=$res_fname
         $texec $options 2>$res_fname.2 >$rf <$input_file
+	rcode=$?
         cat $rf
     else
         rf=/dev/null
         $texec $options 2>$res_fname.2
-        
+	rcode=$?        
     fi
-    rcode=$?             # end get it return code and
+
     if [ $rcode -ne 0 ] ; then 
       report_failure $texec $rcode $rf $res_fname.2
     fi
@@ -332,10 +333,10 @@ Input file:
 `cat $input_file`
 
 ====================================================================
-Log.2:
+stderr:
 `cat $rf_rn2`
 
-Log:
+diff:
 `cat $rf_rn`
 
 ====================================================================

@@ -1,4 +1,4 @@
-/*  $Id: debug_server.c,v 6.4 1999/10/19 19:18:15 vakatov Exp $
+/*  $Id: debug_server.c,v 6.6 2000/04/07 15:49:17 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,13 @@
 *
 * --------------------------------------------------------------------------
 * $Log: debug_server.c,v $
+* Revision 6.6  2000/04/07 15:49:17  vakatov
+* Fixed a typo in the USAGE info
+*
+* Revision 6.5  2000/02/25 16:45:57  vakatov
+* Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+* the C++ toolkits, and even to use them in a "standalone" fashion
+*
 * Revision 6.4  1999/10/19 19:18:15  vakatov
 * Switched to the new low-level "ncbi_socket.[ch]" API (independent of
 * the NCBI C toolkit).
@@ -58,7 +65,8 @@
 #  define __EXTENSIONS__
 #endif
 
-#include "ncbi_socket.h"
+#include <connect/ncbi_socket.h>
+#include <connect/ncbi_util.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -93,7 +101,7 @@ static void s_Usage(const char* message)
     fprintf(stderr, "\nERROR:  %s\n", message);
 
   fprintf(stderr, "\
-\nUSAGE:  %s <listening_port> <logname> <server_path> <arg1> <arg2> ...\
+\nUSAGE:  %s <logname> <listening_port> <server_path> <arg1> <arg2> ...\
 \n  logname:         [string]   log file base name(no if empty)\
 \n                              *.inp, *.out, *.err, *.inf\
 \n  listening_port:  [1..32767] port to listen at\
@@ -128,8 +136,8 @@ static void s_Usage(const char* message)
 /* Verify status returned by a SOCK function
  */
 #define SOCK_VERIFY(status)  do { \
-  if (status != eSOCK_Success) {\
-    perror( SOCK_StatusStr(status) ); \
+  if (status != eIO_Success) {\
+    perror( IO_StatusStr(status) ); \
     exit(99); } \
 } while(0)
 
@@ -324,12 +332,12 @@ static void s_PerformIO(void)
   /* FromClient */
   if ( s_IOpoll[eIOE_FromClient].revents ) {
     if (s_IOpoll[eIOE_FromClient].revents & POLLIN) {
-      ESOCK_Status status;
+      EIO_Status status;
       size_t n_read;
       assert( !s_CS.size );
       if ((status =
-           SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read, eSOCK_Read))
-          != eSOCK_Success)
+           SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read, eIO_Plain))
+          != eIO_Success)
         s_ClientHup = 1 /* true */;
 
       if ( log_inf_fp ) {
@@ -340,7 +348,7 @@ FROM_CLIENT [%lu:%lu]\n",
                   (unsigned long)(s_CS.n_total_store + n_read - 1));
         if ( s_ClientHup ) {
           fprintf(log_inf_fp, "\
-### FROM_CLIENT(READ): %s\n", SOCK_StatusStr(status));
+### FROM_CLIENT(READ): %s\n", IO_StatusStr(status));
         }
       }
       if (log_inp_fd != -1  &&
@@ -512,13 +520,13 @@ TO_STDIN    [%lu:%lu]\n",
   /* ToClient */
   if ( s_IOpoll[eIOE_ToClient].revents ) {
     if (s_IOpoll[eIOE_ToClient].revents & POLLOUT) {
-      ESOCK_Status status;
+      EIO_Status status;
       size_t n_written;
       size_t n_write = s_SC.size - s_SC.n_skip;
       assert( s_SC.size );
 
       if ((status = SOCK_Write(sock, s_SC.buf + s_SC.n_skip, n_write,
-                               &n_written)) != eSOCK_Success)
+                               &n_written)) != eIO_Success)
         s_ClientHup = 1 /* true */;
 
 
@@ -530,7 +538,7 @@ TO_STDIN    [%lu:%lu]\n",
                   (unsigned long)(s_SC.n_total_flush + n_written - 1));
         if ( s_ClientHup ) {
           fprintf(log_inf_fp, "\
-### TO_CLIENT(WRITE): %s\n", SOCK_StatusStr(status));
+### TO_CLIENT(WRITE): %s\n", IO_StatusStr(status));
         }
       }
 
@@ -701,7 +709,11 @@ extern int main(int argc, char* argv[], char* envp[])
 
   /* Errors and warnings go to STDERR
    */
-  SOCK_SetErrStream(stderr, 0);
+  {{
+    LOG lg = LOG_Create(0, 0, 0, 0);
+    LOG_ToFILE(lg, stderr, 0/*false*/);
+    SOCK_SetLOG(lg);
+  }}
 
 
   /* Store program name
@@ -825,17 +837,17 @@ SERVER:   '%s'\
    */
   fprintf(stderr, "----- Accept connection from a client... ");
   {{
-    LSOCK         lsock;
-    SSOCK_Timeout timeout;
+    LSOCK    lsock;
+    STimeout timeout;
     SOCK_VERIFY( LSOCK_Create(port, 1, &lsock) );
     SOCK_VERIFY( LSOCK_Accept(lsock, 0, &sock) );
     SOCK_VERIFY( LSOCK_Close(lsock) );
     timeout.sec  = 0;
     timeout.usec = 0;
 #if defined(NDEBUG)
-    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, &timeout) );
+    SOCK_VERIFY( SOCK_SetTimeout(sock, eIO_ReadWrite, &timeout) );
 #else
-    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, 0) );
+    SOCK_VERIFY( SOCK_SetTimeout(sock, eIO_ReadWrite, 0) );
 #endif
   }}
   fprintf(stderr, "done\n");

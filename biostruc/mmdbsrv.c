@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.22 1999/10/13 20:13:18 zimmerma Exp $
+/* $Id: mmdbsrv.c,v 6.23 2000/01/31 19:59:12 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.23  2000/01/31 19:59:12  lewisg
+* fix output of date in pdb header
+*
 * Revision 6.22  1999/10/13 20:13:18  zimmerma
 * DZ: Removed use of temporary files - html ouput redirected to stdout
 *
@@ -364,7 +367,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.22 1999/10/13 20:13:18 zimmerma Exp $";
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.23 2000/01/31 19:59:12 lewisg Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 
@@ -717,8 +720,8 @@ PrintStructureInfo(PDNMS ModelStruc,  FILE *File, CharPtr tax_save)
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
   	fprintf(File, "<TR>\n<TD VALIGN=TOP NOWRAP>");
-	fprintf(File, "<strong>PDB Deposition</strong>:</TD>\n<TD>%2d-%3s-%2d</TD>\n</TR>\n",
-		(int) depday, NCBI_months[pbssThis->database_entry_date->data[2] - 1], (int) depyear);
+	fprintf(File, "<strong>PDB Deposition</strong>:</TD>\n<TD>%2d-%3s-%02d</TD>\n</TR>\n",
+		(int) depday, NCBI_months[pbssThis->database_entry_date->data[2] - 1], (int) depyear%100);
   }
 
   if (pmsdThis->pcPdbClass) {

@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.h,v 1.8 1999/11/18 14:37:15 durand Exp $
+/*  $Id: ddvgraph.h,v 1.11 2000/02/15 15:31:47 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.8 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.h,v $
+* Revision 1.11  2000/02/15 15:31:47  lewisg
+* move DDVRulerDescr to pgppop
+*
+* Revision 1.10  2000/02/03 15:56:47  hurwitz
+* added constructor and destructor for DDVRulerDescrPtr
+*
+* Revision 1.9  2000/01/26 13:38:54  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.8  1999/11/18 14:37:15  durand
 * avoid flashing sequence during selection
 *
@@ -103,12 +112,6 @@ extern "C" {
 	structures
 
 ******************************************************************************/
-typedef struct ddvrulerdescr{
-	Int4    disp_start;/*start in display coordinate*/
-	Int4    disp_stop;/*stop in display coordinate*/
-	Int4    align_start;/*start in align coordinate*/
-	Boolean bUnAligned;
-} DDVRulerDescr, PNTR DDVRulerDescrPtr;
 
 /******************************************************************************
 
@@ -130,6 +133,8 @@ extern void DDV_InvalRegion(PaneL hWndDDV,UnDViewerGraphDataPtr GrData,
 extern void DDV_GetCurrentDispRange(PaneL hWndDDV,UnDViewerGraphDataPtr GrData,
 		Int4 LengthAli,Int4Ptr from_col,Int4Ptr to_col,Int4Ptr from_row,
 		Int4Ptr to_row);
+NLM_EXTERN ValNodePtr DDV_GetRulerForEditor(ValNodePtr descr_head,Int4 from_disp,
+		Int4 to_disp);
 extern ValNodePtr DDV_ComputeRuler(SeqAlignPtr sap,DDV_Disp_OptPtr ddop);
 extern void	DDV_AdjustDrawingRect(RecT * rcP,UDVFontDataPtr udv_font);
 extern void  DDV_DrawPanelContent_H (PaneL p,DdvMainPtr dmp,RecT PNTR MyUpdateRect,

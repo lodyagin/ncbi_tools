@@ -1,48 +1,47 @@
 /*   asn2ff2.c
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*            National Center for Biotechnology Information (NCBI)
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government do not place any restriction on its use or reproduction.
-*  We would, however, appreciate having the NCBI and the author cited in
-*  any work or product based on this material
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-* ===========================================================================
-*
-* File Name:  asn2ff2.c
-*
-* Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov
-*
-* Version Creation Date:   7/15/95
-*
-* $Revision: 6.18 $
-*
-* File Description: 
-*
-* Modifications:  
-* --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
-* ==========================================================================
-*/
-
-/*************************************
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *            National Center for Biotechnology Information (NCBI)
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government do not place any restriction on its use or reproduction.
+ *  We would, however, appreciate having the NCBI and the author cited in
+ *  any work or product based on this material
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ * ===========================================================================
+ *
+ * File Name:  asn2ff2.c
+ *
+ * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov
+ *
+ * Version Creation Date:   7/15/95
+ *
+ * $Revision: 6.20 $
+ *
+ * File Description: 
+ *
+ * Modifications:  
+ * --------------------------------------------------------------------------
+ * Date     Name        Description of modification
+ * -------  ----------  -----------------------------------------------------
+ *
+ * $Log: asn2ff2.c,v $
+ * Revision 6.20  2000/02/29 16:54:35  bazhin
+ * Removed memory leaks.
+ *
  * Revision 5.11  1997/06/19 18:36:58  vakatov
  * [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
  *
@@ -556,6 +555,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 	Int4 buflen = 0;
 	Int4 num_s = 0, num_g = 0;
 	Boolean is_other;
+	CharPtr p;
 
 	if (bsp && bsp->id) {
 		is_other = (bsp->id->choice == SEQID_OTHER) ? TRUE : FALSE; 
@@ -659,21 +659,31 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 						if (num_s > 0) {
 							sprintf(buffer, 
 							" It currently~* consists of %ld contigs. The true order of the pieces~* is not known and their order in this sequence record is~* arbitrary. Gaps between the contigs are represented as~* runs of N, but the exact sizes of the gaps are unknown.", (long) (num_s-num_g));
-							tmp = Cat2Strings(tmp, buffer, "", 0);
+							p = Cat2Strings(tmp, buffer, "", 0);
+							MemFree(tmp);
+							tmp = p;
 						}
 						tmp3 = StringSave("* This record will be updated with the finished sequence~* as soon as it is available and the accession number will~* be preserved.");
-						tmp = Cat2Strings(tmp, tmp3, "~", 0);
-						csp->string = Cat2Strings(tmp, buf, "~", 0);
+						p = Cat2Strings(tmp, tmp3, "~", 0);
+						MemFree(tmp);
+						MemFree(tmp3);
+						csp->string = Cat2Strings(p, buf, "~", 0);
+						MemFree(p);
 					} else if (mfp->tech == MI_TECH_htgs_2) {
 						tmp = StringSave(
 						"* NOTE: This is a \"working draft\" sequence."); 
 						if (num_s > 0) {
 							sprintf(buffer, " It currently~* consists of %ld contigs. Gaps between the contigs~* are represented as runs of N. The order of the pieces~* is believed to be correct as given, however the sizes~* of the gaps between them are based on estimates that have~* provided by the submittor.", (long) (num_s-num_g));
-							tmp = Cat2Strings(tmp, buffer, "", 0);
+							p = Cat2Strings(tmp, buffer, "", 0);
+							MemFree(tmp);
+							tmp = p;
 						}
 						tmp3 = StringSave("* This sequence will be replaced~* by the finished sequence as soon as it is available and~* the accession number will be preserved.");
-						tmp = Cat2Strings(tmp, tmp3, "~", 0);
-						csp->string = Cat2Strings(tmp, buf, "~", 0);
+						p = Cat2Strings(tmp, tmp3, "~", 0);
+						MemFree(tmp);
+						MemFree(tmp3);
+						csp->string = Cat2Strings(p, buf, "~", 0);
+						MemFree(p);
 					} else if ((str = StringForSeqTech(mfp->tech)) != NULL) {
 						ptr = MemNew(StringLen(str) + 10);
 						sprintf(ptr, "Method: %s.", str); 
@@ -1612,7 +1622,7 @@ NLM_EXTERN ValNodePtr GatherDescrByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint
   	MemSet ((Pointer) (&gsc), 0, sizeof (GatherScope));
 	MemSet ((Pointer) (gsc.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
 	gsc.ignore[OBJ_SEQDESC] = FALSE;
-	if (gbp) {
+	if (gbp && gbp->bsp != NULL) {
 		bsp = gbp->bsp;
 		bspID = ObjMgrGetEntityIDForPointer(bsp);
 		slp = ValNodeNew(NULL);
@@ -1666,7 +1676,7 @@ NLM_EXTERN ValNodePtr GatherDescrListByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, 
   	gsc.get_feats_location = TRUE;
 	MemSet ((Pointer) (gsc.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
 	gsc.ignore[OBJ_SEQDESC] = FALSE;
-	if (gbp) {
+	if (gbp && gbp->bsp != NULL) {
 		bsp = gbp->bsp; 
 		slp = ValNodeNew(NULL);
 		slp->choice = SEQLOC_WHOLE;

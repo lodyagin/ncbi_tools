@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dxprt.c,v $
+* Revision 6.8  2000/03/24 20:34:58  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
 * Revision 6.7  2000/01/07 16:28:37  thiessen
 * fixed broken header conflicts
 *
@@ -519,13 +522,13 @@ MenU LIBCALL Cn3D_ExportSub(MenU m)
     MenU s;
 
     s = SubMenu(m, "Export");
-    i = CommandItem(s, "PDB File", Cn3D_ExportPDB);
-    i = CommandItem(s, "Kinemage File", Cn3D_ExportKin);
+    i = CommandItem(s, "PDB File...", Cn3D_ExportPDB);
+    i = CommandItem(s, "Kinemage File...", Cn3D_ExportKin);
 #ifndef _OPENGL
-    i = CommandItem(s, "GIF/S", Cn3D_GifSaveProc);
+    i = CommandItem(s, "GIF.../S", Cn3D_GifSaveProc);
 #endif
 #if defined(_OPENGL) && defined(_PNG)
-    i = CommandItem(s, "PNG", Cn3D_PNGSaveProc);
+    i = CommandItem(s, "PNG...", Cn3D_PNGSaveProc);
 #endif
     return s;
 }

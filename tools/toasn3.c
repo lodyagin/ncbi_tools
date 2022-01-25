@@ -3646,9 +3646,12 @@ static void MergeDupBioSources (SeqEntryPtr sep, Pointer data, Int4 index, Int2 
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Boolean       fuseanddelete;
+  ValNodePtr    mod;
   ValNodePtr    nextvnp;
+  OrgModPtr     omp;
   Pointer PNTR  prevvnp;
   ValNodePtr    sdp;
+  SubSourcePtr  ssp;
   OrgNamePtr    onp1, onp2;
   OrgRefPtr     orp1, orp2;
   ValNodePtr    vnp;
@@ -3700,10 +3703,24 @@ static void MergeDupBioSources (SeqEntryPtr sep, Pointer data, Int4 index, Int2 
               if (biop1->subtype == NULL) {
                 biop1->subtype = biop2->subtype;
                 biop2->subtype = NULL;
+              } else {
+                ssp = biop1->subtype;
+                while (ssp->next != NULL) {
+                  ssp = ssp->next;
+                }
+                ssp->next = biop2->subtype;
+                biop2->subtype = NULL;
               }
               if (orp1 != NULL && orp2 != NULL) {
                 if (orp1->mod == NULL) {
                   orp1->mod = orp2->mod;
+                  orp2->mod = NULL;
+                } else {
+                  mod = orp1->mod;
+                  while (mod->next != NULL) {
+                    mod = mod->next;
+                  }
+                  mod->next = orp2->mod;
                   orp2->mod = NULL;
                 }
                 if (orp1->db == NULL) {
@@ -3719,6 +3736,13 @@ static void MergeDupBioSources (SeqEntryPtr sep, Pointer data, Int4 index, Int2 
                 if (onp1 != NULL && onp2 != NULL) {
                   if (onp1->mod == NULL) {
                     onp1->mod = onp2->mod;
+                    onp2->mod = NULL;
+                  } else {
+                    omp = onp1->mod;
+                    while (omp->next != NULL) {
+                      omp = omp->next;
+                    }
+                    omp->next = onp2->mod;
                     onp2->mod = NULL;
                   }
                   if (onp1->gcode == 0) {
@@ -4324,6 +4348,30 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			ifp = (ImpFeatPtr) f1->data.value.ptrvalue;
 			sfp = SeqFeatNew();
 			sfp->location = slp;
+
+			sfp->partial = f1->partial;
+			sfp->excpt = f1->excpt;
+			sfp->exp_ev = f1->exp_ev;
+			sfp->pseudo = f1->pseudo;
+
+			sfp->comment = f1->comment;
+			f1->comment = NULL;
+			sfp->qual = f1->qual;
+			f1->qual = NULL;
+			sfp->title = f1->title;
+			f1->title = NULL;
+			sfp->ext = f1->ext;
+			f1->ext = NULL;
+			sfp->cit = f1->cit;
+			f1->cit = NULL;
+
+			sfp->xref = f1->xref;
+			f1->xref = NULL;
+			sfp->dbxref = f1->dbxref;
+			f1->dbxref = NULL;
+			sfp->except_text = f1->except_text;
+			f1->except_text = NULL;
+
 			if (f1->qual != NULL) {
 				sfp->qual = f1->qual;
 				f1->qual = NULL;
@@ -4377,6 +4425,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			sfp->excpt = f1->excpt;
 			sfp->partial = f1->partial;
 			sfp->exp_ev = f1->exp_ev;
+			sfp->pseudo = f1->pseudo;
 			if(sfp->location)
 				SeqLocFree(sfp->location);
 			sfp->location = 

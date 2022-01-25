@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.26 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -43,6 +43,15 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
+* Revision 6.29  2000/03/13 15:51:25  thiessen
+* added storage for PARS to each residue for Cn3D; removed unused fields
+*
+* Revision 6.28  2000/03/09 17:52:57  thiessen
+* changes to MSD, MGD for feature implementation in Cn3D
+*
+* Revision 6.27  2000/03/01 16:16:45  thiessen
+* modified backbone definitions, added AM_PARTIALBACKBONE
+*
 * Revision 6.26  1999/10/05 23:18:17  lewisg
 * add ddv and udv to cn3d with memory management
 *
@@ -396,14 +405,14 @@
 
 /* Flags Block bWhat byte for MAD atom */
 /* all these are  set by traversers */
-#define  AM_BACKBONE    0x01  /* PROT & NA */
-#define  AM_CALPHA      0x02  /* PROT */
-#define  AM_PALPHA      0x04  /* RNA & DNA */
-#define  AM_OCARBNYL    0x08  /* PROT & NA - also labels H's off bbone */
-#define  AM_CBETA	0x10  /* PROT */
-#define  AM_NBETA	0x20  /* RNA & DNA */
-#define  AM_C1RIBOSE    0x40  /* RNA & DNA */
-#define  AM_C4RIBOSE    0x80  /* RNA & DNA */
+#define  AM_BACKBONE            0x01  /* PROT & NA */
+#define  AM_CALPHA              0x02  /* PROT */
+#define  AM_PALPHA              0x04  /* RNA & DNA */
+#define  AM_PARTIALBACKBONE     0x08  /* PROT & NA - all atoms off linear backbone */
+#define  AM_CBETA               0x10  /* PROT */
+#define  AM_NBETA               0x20  /* RNA & DNA */
+#define  AM_C1RIBOSE            0x40  /* RNA & DNA */
+#define  AM_C4RIBOSE            0x80  /* RNA & DNA */
 
 /* shorter names from the ASN.1 defines */
 #define Bond_order_partial_double 2
@@ -660,24 +669,23 @@ typedef struct Nlm_msd
      /*  When needed, Allocated with:  ppflBoundBox = FLMatrix(0,2,0,3); */
      FloatLoPtr PNTR ppflRotate; /* matrix 3x3 with rotations for structure */
      FloatLoPtr pflTranslate; /* 3 - vector with translations for structure */
-	/* temporarily added until features turned on */
-     void PNTR pExtra;
      PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
-     BiostrucAnnotSetPtr psaStrucAlignment; 
-     }MSD,  *PMSD;
+     BiostrucAnnotSetPtr psaStrucAlignment;
+     VoidPtr pGlobalPARS; /* will hold pointer to default "global" PARS for this structure */
+} MSD,  *PMSD;
  
 
 /***********************/
 /* Model Molecule Data */
 /***********************/
 typedef struct Nlm_mmd 
-    {
+{
 /* flag block */
   	PFB pfbParent; 
   	Byte bMe; 
   	Byte bWhat;  
   	Byte bUpdate;
-        Byte bReserved;   
+    Byte bReserved;   
   	Int4Ptr pI4vFeatID;  
   	PointerPtr ppvFeatData; 
   	Int2 iNumFeats;  
@@ -689,24 +697,25 @@ typedef struct Nlm_mmd
 #endif
 /* bookkeeping block */
   	Byte bVisible;  /* to control show/off on MM level -- Yanli  */
-     PDNMM pdnmmLink;
-     ValNodePtr pMolDescr; /* the ASN.1 molecule descr */
-     ValNodePtr pSeqId;
-     CharPtr pcMolName; /* from ASN.1 "chain" descr field */
-     Int4 iChainId;
-     Int4 iGi;
-     Int4 iResCount; /* number of graphs */
-     Int4 iIRBCount; /* number of inter-res bonds */
-     CharPtr pcSeqId;
-     CharPtr pcSequence;
-     PDNMG pdnmgStartSelect, pdnmgEndSelect;  /* used to select a range of residues in the molecule.  lyg */
+    PDNMM pdnmmLink;
+    ValNodePtr pMolDescr; /* the ASN.1 molecule descr */
+    ValNodePtr pSeqId;
+    CharPtr pcMolName; /* from ASN.1 "chain" descr field */
+    Int4 iChainId;
+    Int4 iGi;
+    Int4 iResCount; /* number of graphs */
+    Int4 iIRBCount; /* number of inter-res bonds */
+    CharPtr pcSeqId;
+    CharPtr pcSequence;
+    PDNMG pdnmgStartSelect, pdnmgEndSelect;  /* used to select a range of residues in the molecule.  lyg */
+    Int4 iTargetRow; /* corresponding row in the original ASN1 alignment */
      
 /* data block */
-     PDNMG pdnmgHead;  /* the list of model graphs (children)  */
-     PVNMB pvnmbIRBHead;  /* Inter-residue bonds in molecule (children) */
-     FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
-     ValNodePtr pvnContainedBy;
-     }MMD,  *PMMD;
+    PDNMG pdnmgHead;  /* the list of model graphs (children)  */
+    PVNMB pvnmbIRBHead;  /* Inter-residue bonds in molecule (children) */
+    FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
+    ValNodePtr pvnContainedBy;
+} MMD, *PMMD;
 
  
     
@@ -714,13 +723,13 @@ typedef struct Nlm_mmd
 /* Model Graph Data */
 /********************/
 typedef struct Nlm_mgd  
-    {
+{
 /* flag block */
   	PFB pfbParent; 
   	Byte bMe; 
   	Byte bWhat;  
   	Byte bUpdate;  
-        Byte bReserved;
+    Byte bReserved;
  	Int4Ptr pI4vFeatID;  
   	PointerPtr ppvFeatData; 
   	Int2 iNumFeats;  
@@ -733,33 +742,31 @@ typedef struct Nlm_mgd
 /* bookkeeping block */
     Byte bVisible;     /* control display at residue level */
     Byte bHighlighted;
-    Byte bJustHighlighted;
-    Byte bTurnedOff;
-                        /* Yanli */
-     Byte bNCBISecStru;
-     Byte bPDBSecStru;
-     PDNMG pdnmgLink;
-     Int2 FeatureOn;
-     Int2 FeatureOnOld;
-     Int2 iUserDefinedFeature;
-     Int2 iUserDefinedFeatureOld;
-     Int2 iDomain;   /* NCBI assigned domain number */
-     CharPtr pcGraphName;  /* PDB 3-letter code */
-     CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
-     Int4 iIDict;  /* index into dictionary */
-     CharPtr pcIUPAC; /* IUPAC name X = invalid graph code */ 
-     CharPtr pcNCBISS; /* pointer into the NCBI ss features string */
-     CharPtr pcPDBSS; /* pointer into the PDB ss features string */
-     CharPtr pcPDBComment; /* pointer into name of heterogen in dict */
-     Int4 iAtomCount;
-     Int4 iBondCount;
+
+    Byte bNCBISecStru;
+    Byte bPDBSecStru;
+    PDNMG pdnmgLink;
+    Int2 iDomain;   /* NCBI assigned domain number */
+    CharPtr pcGraphName;  /* PDB 3-letter code */
+    CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
+    Int4 iIDict;  /* index into dictionary */
+    CharPtr pcIUPAC; /* IUPAC name X = invalid graph code */ 
+    CharPtr pcNCBISS; /* pointer into the NCBI ss features string */
+    CharPtr pcPDBSS; /* pointer into the PDB ss features string */
+    CharPtr pcPDBComment; /* pointer into name of heterogen in dict */
+    Int4 iAtomCount;
+    Int4 iBondCount;
 /* data block */
-     PVNMA pvnmaAHead; /* the atom list (children) */
-     PVNMB pvnmbBHead; /* the bond list (children) */
-     FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
-     ValNodePtr pvnContainedBy;
-     BytePtr pbMasterReserved;
-    }MGD,  *PMGD;
+    PVNMA pvnmaAHead; /* the atom list (children) */
+    PVNMB pvnmbBHead; /* the bond list (children) */
+    FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
+    ValNodePtr pvnContainedBy;
+    BytePtr pbMasterReserved;
+
+    /* will contain list of pointers to PARS structures - "global" has choice = 0,
+     * "special style" has choice >= 1 */
+    ValNodePtr pvnPARSList;
+} MGD, *PMGD;
 
 
 

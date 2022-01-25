@@ -30,8 +30,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a global gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.5 $ 
+/* $Revision: 6.6 $ 
 * $Log: bandalgn.h,v $
+* Revision 6.6  2000/02/10 22:47:07  vakatov
+* DLL'zation for MSVC on PC, Win-NT
+*
 * Revision 6.5  1999/03/17 16:49:10  madden
 * Removed comment within comment
 *
@@ -64,15 +67,24 @@ Contents: prototypes to perform a global gapped alignment on two sequences.
 #ifndef _G_BAND_H_
 #define _G_BAND_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <ncbi.h>
 #include <gapxdrop.h>
 #include <blastkar.h>
 #include <seqport.h>
 #include <blast.h>
+
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define MININT -999999
 #define MAXINT 9999999
@@ -196,8 +208,8 @@ typedef struct psu_gapped_options {
 	Functions to create and delte the PSUGapOptions, as well as
 	set default values.
 */
-PSUGapOptionsPtr LIBCALL PSUGapOptionsDelete PROTO((PSUGapOptionsPtr options));
-PSUGapOptionsPtr LIBCALL PSUGapOptionsCreate PROTO((Uint1 search_type));
+NLM_EXTERN PSUGapOptionsPtr PSUGapOptionsDelete(PSUGapOptionsPtr options);
+NLM_EXTERN PSUGapOptionsPtr PSUGapOptionsCreate(Uint1 search_type);
 
 
 
@@ -260,24 +272,24 @@ typedef struct global_band_struct {
         Deletes the GlobalBandStruct, including the options.
         Does not delete the sequence matrix, or the ID's.
 */
-GlobalBandStructPtr LIBCALL GlobalBandStructDelete PROTO((GlobalBandStructPtr gbsp));
+NLM_EXTERN GlobalBandStructPtr GlobalBandStructDelete(GlobalBandStructPtr gbsp);
 
 /*
 	Creates the GlobalBandStructPtr, needed to run GlobalBandToEditScript,
 	with the default values.
 */
-GlobalBandStructPtr LIBCALL GlobalBandStructCreate PROTO((Uint1 search_type));
+NLM_EXTERN GlobalBandStructPtr GlobalBandStructCreate(Uint1 search_type);
 
 /*
 	Performs a global alignment, producing a SeqAlign.
 */
-SeqAlignPtr LIBCALL GlobalBandToSeqAlign PROTO((GlobalBandStructPtr gbsp));
+NLM_EXTERN SeqAlignPtr GlobalBandToSeqAlign(GlobalBandStructPtr gbsp);
 
 /*
 	Performs a global alignment, producing an EditBlock, which
 	can be made into a SeqAlign.
 */
-Boolean LIBCALL GlobalBandToEditBlock PROTO((GlobalBandStructPtr gbsp));
+NLM_EXTERN Boolean GlobalBandToEditBlock(GlobalBandStructPtr gbsp);
 
 
 /*************************************************************************
@@ -313,24 +325,24 @@ typedef struct local_band_struct {
         Deletes the LocalBandStruct, including the options.
         Does not delete the sequence matrix, or the ID's.
 */
-LocalBandStructPtr LIBCALL LocalBandStructDelete PROTO((LocalBandStructPtr gbsp));
+NLM_EXTERN LocalBandStructPtr LocalBandStructDelete(LocalBandStructPtr gbsp);
 
 /*
 	Creates the LocalBandStructPtr, needed to run LocalBandToEditScript,
 	with the default values.
 */
-LocalBandStructPtr LIBCALL LocalBandStructCreate PROTO((Uint1 search_type));
+NLM_EXTERN LocalBandStructPtr LocalBandStructCreate(Uint1 search_type);
 
 /*
 	Performs a global alignment, producing a SeqAlign.
 */
-SeqAlignPtr LIBCALL LocalBandToSeqAlign PROTO((LocalBandStructPtr lbsp));
+NLM_EXTERN SeqAlignPtr LocalBandToSeqAlign(LocalBandStructPtr lbsp);
 
 /*
 	Performs a global alignment, producing an EditBlock, which
 	can be made into a SeqAlign.
 */
-Boolean LIBCALL LocalBandToEditBlock PROTO((LocalBandStructPtr lbsp));
+NLM_EXTERN Boolean LocalBandToEditBlock(LocalBandStructPtr lbsp);
 
 
 /*********************************************************
@@ -352,74 +364,82 @@ Boolean LIBCALL LocalBandToEditBlock PROTO((LocalBandStructPtr lbsp));
 *
 ***********************************************************/
 
-Int4 LIBCALL gband_linear PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_linear(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				 Int4 M, Int4 N,
 				 Int4Ptr PNTR matrix,
 				 PSUGapOptionsPtr option,
-				 Int4Ptr S, Int4Ptr Slen));
+				 Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL gband_quadratic PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_quadratic(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				    Int4 M, Int4 N,
 				    Int4Ptr PNTR matrix,
 				    PSUGapOptionsPtr option,
-				    Int4Ptr S, Int4Ptr Slen));
+				    Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL gband_linear_gap PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_linear_gap(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				     Int4 M, Int4 N, 
 				     Int4Ptr PNTR matrix,
 				     PSUGapOptionsPtr option,
-				     Int4Ptr S, Int4Ptr Slen));
+				     Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL gband_linear_qgap PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_linear_qgap(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				      Int4 M, Int4 N,
 				      Int4Ptr PNTR matrix,
 				      PSUGapOptionsPtr option,
-				      Int4Ptr S, Int4Ptr Slen));
+				      Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL gband_l3gap PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_l3gap(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				Int4 M, Int4 N,
 				Int4Ptr PNTR matrix,
 				PSUGapOptionsPtr option,
-				Int4Ptr S, Int4Ptr Slen));
+				Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL gband_q3gap PROTO((Uint1Ptr Seq1, Uint1Ptr Seq2,
+extern Int4 LIBCALL gband_q3gap(Uint1Ptr Seq1, Uint1Ptr Seq2,
 				Int4 M, Int4 N,
 				Int4Ptr PNTR matrix,
 				PSUGapOptionsPtr option,
-				Int4Ptr S, Int4Ptr Slen));
+				Int4Ptr S, Int4Ptr Slen);
 
-Int4 LIBCALL BAND_LOCAL_ALIGN PROTO((Uint1Ptr A, Uint1Ptr B,
+extern Int4 BAND_LOCAL_ALIGN(Uint1Ptr A, Uint1Ptr B,
 				     Int4 M, Int4 N, 
 				     Int4Ptr PNTR matrix,
 				     PSUGapOptionsPtr options,
 				     Int4Ptr S,
 				     Int4Ptr psi, Int4Ptr psj,
 				     Int4Ptr pei, Int4Ptr pej,
-				     Int4 align_type));
+				     Int4 align_type);
+
 
 /**********************************************************************
-*		Gloabal Alignment utility functions
+*		Global Alignment utility functions
 **********************************************************************/
 
-void SetGlobaltOptions PROTO((GlobalBandStructPtr gbsp, Int4 lg1_ext, Int4 rg1_ext, Int4 lg2_ext, Int4 rg2_ext, Int4 lg1_open, Int4 lg2_open, Int4 rg1_open, Int4 rg2_open, Int2 gopen, Int2 gext));
+NLM_EXTERN void SetGlobaltOptions(GlobalBandStructPtr gbsp, Int4 lg1_ext, Int4 rg1_ext, Int4 lg2_ext, Int4 rg2_ext, Int4 lg1_open, Int4 lg2_open, Int4 rg1_open, Int4 rg2_open, Int2 gopen, Int2 gext);
 
-GlobalBandStructPtr CreatBandStruct PROTO((SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR W, Boolean is_prot, Int2 method));
+NLM_EXTERN GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR W, Boolean is_prot, Int2 method);
 		
-void SetLowUpFromBlast PROTO((PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 width, SeqLocPtr slp1, SeqLocPtr slp2));
+NLM_EXTERN void SetLowUpFromBlast(PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 width, SeqLocPtr slp1, SeqLocPtr slp2);
 
-SeqAlignPtr GlobalBandByLoc PROTO((GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr slp2,  Boolean is_prot, Int2 band_method));
+NLM_EXTERN SeqAlignPtr GlobalBandByLoc(GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr slp2,  Boolean is_prot, Int2 band_method);
 
-SeqAlignPtr ExtendSeqAlign PROTO((SeqAlignPtr seqalign, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2));
+NLM_EXTERN SeqAlignPtr ExtendSeqAlign(SeqAlignPtr seqalign, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2);
 
-SeqAlignPtr CC_ExtendSeqAlign PROTO((SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, Uint1 strand1, Uint1 strand2));
+NLM_EXTERN SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, Uint1 strand1, Uint1 strand2);
 
-void GetAlignExtremes PROTO((SeqAlignPtr seqalign, Int4Ptr xx1, Int4Ptr yy1, Int4Ptr xx2, Int4Ptr yy2));
+NLM_EXTERN void GetAlignExtremes(SeqAlignPtr seqalign, Int4Ptr xx1, Int4Ptr yy1, Int4Ptr xx2, Int4Ptr yy2);
 
-Int2 ChangeGlobalBandMatrix PROTO((GlobalBandStructPtr gbsp, Boolean is_prot, CharPtr matrix_name, Int4 penalty, Int4 reward));
+NLM_EXTERN Int2 ChangeGlobalBandMatrix(GlobalBandStructPtr gbsp, Boolean is_prot, CharPtr matrix_name, Int4 penalty, Int4 reward);
 
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif

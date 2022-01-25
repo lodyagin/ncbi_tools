@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.19 $
+* $Revision: 6.23 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.23  2000/04/07 15:01:24  durand
+* added UPDATE_TYPE_NEWSEQ define
+*
+* Revision 6.22  2000/03/02 21:11:05  lewisg
+* use bandalign for import sequence, make standalone ddv use viewmgr, make dialogs modal, send color update
+*
+* Revision 6.21  2000/02/10 17:05:52  kans
+* added UPDATE_TYPE_CN3D
+*
+* Revision 6.20  2000/02/10 16:53:55  kans
+* added UPDATE_TYPE_VIEWMGR define (presumably in the right place)
+*
 * Revision 6.19  1999/12/06 22:38:52  durand
 * add UPDATE_TYPE_CARETPOS to be used by DDV
 *
@@ -355,6 +367,9 @@ typedef Int2 (LIBCALLBACK *OMMessageFunc) PROTO((OMMsgStructPtr message));
 #define UPDATE_TYPE_COLOR        (2)
 #define UPDATE_TYPE_EDIT_DELBSP  (3)
 #define UPDATE_TYPE_CARETPOS     (4)
+#define UPDATE_TYPE_VIEWMGR      (5)
+#define UPDATE_TYPE_RECOLOR      (6)
+#define UPDATE_TYPE_NEWSEQ       (7)
 
 typedef struct ddvupdatemsg{
 	Uint1   type;

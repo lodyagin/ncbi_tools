@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.8 $
+* $Revision: 6.14 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,24 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.14  2000/04/03 21:05:53  lewisg
+* fix launch of cn3d from sequin
+*
+* Revision 6.13  2000/03/27 22:15:05  lewisg
+* add show/hide row dialog
+*
+* Revision 6.12  2000/03/24 20:34:57  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 6.11  2000/03/20 18:18:33  thiessen
+* fixed header problem causing network unavailability
+*
+* Revision 6.10  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.9  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
 * Revision 6.8  2000/01/21 15:59:05  lewisg
 * add check for binary/ascii files
 *
@@ -85,10 +103,10 @@
 extern "C" {
 #endif
 #include <objmime.h>
+#include <algorend.h>
 #define MAX_MDLNO 1000
 #define PRINT_FORM_MIME_NAME "Ncbi-mime-asn1"
 #define PRINT_FORM_BIOSTRUC "Biostruc"
-extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m));
 extern Boolean OpenMimeFileWithDeletion
     PROTO((CharPtr filename, Boolean removeIt));
 extern void LIBCALLBACK fnClearMarkedResidues
@@ -100,6 +118,54 @@ extern ValNodePtr fnMarkAlignedResidues
 NLM_EXTERN Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime);
 NLM_EXTERN void Cn3D_OpenEnd();
 NLM_EXTERN void Cn3D_OpenStart();
+NLM_EXTERN Boolean Cn3D_StartNet(Boolean UseNetwork);
+NLM_EXTERN void MMDB_OpenTraverse(PMSD pmsd);
+NLM_EXTERN void Cn3D_SetPars(PARS parsThis, PDNMS pdnms);
+
+extern Boolean Cn3D_UsingEntrez(void);
+extern Boolean Cn3D_EntrezOn(void);
+
+/*******************************************************************************
+
+Function : Cn3D_BlastDlg()
+  
+Purpose : Blast alignment dialog for multiple alignment
+  
+Parameters : i; menu
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_BlastDlg(IteM i);
+
+/*****************************************************************************
+
+Function: Cn3D_UseNetwork()
+
+Purpose:  Determines if Cn3D should use the network
+  
+Returns:  TRUE if yes
+
+*****************************************************************************/
+NLM_EXTERN Boolean Cn3D_CheckNetworkUse();
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportBioseq()
+  
+  Purpose : Import a single bioseq via the net
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_ImportBioseq(IteM i);
+NLM_EXTERN void Cn3D_OpenBiostruc(IteM i);
+NLM_EXTERN void Cn3D_NetOpenBiostruc(IteM i);
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportBioseqFile()
+  
+  Purpose : Import a single bioseq from a fasta file
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i);
 
 #ifdef __cplusplus
 }

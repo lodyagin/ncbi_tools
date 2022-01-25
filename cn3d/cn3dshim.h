@@ -33,6 +33,27 @@
 *
 * Modifications:
 * $Log: cn3dshim.h,v $
+* Revision 6.21  2000/04/04 22:18:42  lewisg
+* add defline to ddv, fix seq import bugs, set boundbox
+*
+* Revision 6.20  2000/03/20 18:18:34  thiessen
+* fixed header problem causing network unavailability
+*
+* Revision 6.19  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.18  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.17  2000/03/08 21:46:15  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.16  2000/02/19 01:23:59  lewisg
+* use ibm, add row tracking code, various bug fixes
+*
+* Revision 6.15  2000/02/05 01:32:21  lewisg
+* add viewmgr, move place freeing is done in ddv, modify visual c++ projects
+*
 * Revision 6.14  2000/01/06 00:04:43  lewisg
 * selection bug fixes, update message outbound, animation APIs moved to vibrant
 *
@@ -86,6 +107,7 @@ extern "C" {
 #endif
 
 #include <shim3d.h>
+#include <viewmgr.h>
 
 #ifndef _OPENGL
 #include <viewer3d.h>
@@ -105,29 +127,21 @@ typedef struct _Cn3D_ColorData {
     ValNode *pvnsep;        /* the current seqentry */
     Boolean StandAlone;     /* is Cn3D running standalone? */
     Uint2 sapprocid, sepprocid, userkey;
-#ifdef _OPENGL
-    TOGL_Data *OGL_Data;    /* pointer to OGL data */
-#endif
     WindoW Cn3D_w;
     Cn3D_AnimateDlg AnimateDlg;
     Boolean UseEntrez;  /* turn on entrez use */
-    Boolean EntrezOn;  /* is entrez on? */
+    Boolean EntrezOn;   /* is entrez on? */
+    Int4 rows;          /* number of rows in initial seqalign */
+    Boolean AlignMode;  /* is Cn3D showing alignments or sequences? */
+    Boolean IBM;        /* are we using intersect by master? */
+    IteM BlastMany;     /* blast many menu item */
+#ifdef _OPENGL
+    TOGL_Data *OGL_Data;    /* pointer to OGL data */
+#endif
 } TCn3D_ColorData;
 
 extern TCn3D_ColorData Cn3D_ColorData; /* where all dynamic color info is kept */
 
-
-/*****************************************************************************
-
-Function: Cn3D_UseNetwork()
-
-Purpose:  Determines if Cn3D should use the network
-  
-Returns:  TRUE if yes
-
-*****************************************************************************/
-
-NLM_EXTERN Boolean Cn3D_UseNetwork();
 
 
 /*****************************************************************************
@@ -174,27 +188,85 @@ Purpose: Deletes the Cn3D messagefunc from userdata on the SeqAnnots and
 *****************************************************************************/
 extern void ClearSequences(void);
 
-
 extern void Cn3D_ConstructColorData(TCn3D_ColorData * ColorData
 #ifdef _OPENGL
                                     , TOGL_Data * OGL_Data
 #endif
                                     , Boolean StandAlone);
+
 /* destructor for Color structure */
 extern void Cn3D_DestructColorData(TCn3D_ColorData * ColorData);
-
-#ifdef _OPENGL
-extern void LIBCALL Cn3D_Size(TOGL_BoundBox * BoundBox,
-                              PDNMS pdnmsThis);
-NLM_EXTERN void Cn3D_Animate(IteM i);
-extern Nlm_GrouP LIBCALL OGL_Quality(Nlm_GrouP prnt);
-#endif                          /* _OPENGL */
 
 extern void fnCHLresidue(PDNMG pdnmgThis,
 #ifndef _OPENGL
                          Viewer3D vvv,
 #endif
                          Boolean highlight);
+
+
+/*****************************************************************************
+
+Function: Cn3D_FindFeature
+
+Purpose: Finds a feature of a given type in the feature set
+  
+Parameters: bsfsp, the head of the BiostrucFeatureSets to search
+            type, the type of feature to look for
+            num, the nth occurrence of the feature type
+
+Returns: The feature if found,  NULL otherwise
+            
+*****************************************************************************/
+NLM_EXTERN BiostrucFeature *Cn3D_FindFeature(BiostrucFeatureSetPtr bsfsp,
+                                             Int4 type, Int4 num);
+
+/*****************************************************************************
+
+Function: Cn3D_AddFeatureSet
+
+Purpose: Adds a new BiostrucFeatureSet the feature set
+  
+Parameters: bsfspp, pointer to the head of the BiostrucFeatureSets
+
+Returns: the feature set
+            
+*****************************************************************************/
+NLM_EXTERN BiostrucFeatureSetPtr Cn3D_AddFeatureSet(
+                                       BiostrucFeatureSetPtr *bsfspp);
+
+
+#ifdef _OPENGL
+extern void LIBCALL Cn3D_Size(TOGL_BoundBox * BoundBox,
+                              PDNMS pdnmsThis);
+NLM_EXTERN void Cn3D_Animate(IteM i);
+extern Nlm_GrouP LIBCALL OGL_Quality(Nlm_GrouP prnt);
+
+
+/*****************************************************************************
+
+Function: Cn3D_Matrix2Asn
+
+Purpose: Converts an OpenGL matrix to an ASN.1 GLMatrix
+  
+Parameters: glmatrix, the destination ASN.1 GLMatrix
+            modelmatrixin, the source opengl matrix
+            
+*****************************************************************************/
+NLM_EXTERN void Cn3D_Matrix2Asn (GLMatrix *glmatrix, void *modelmatrix);
+
+/*****************************************************************************
+
+Function: Cn3D_Asn2Matrix
+
+Purpose: Converts an ASN.1 GLMatrix to an OpenGL matrix
+  
+Parameters: modelmatrixin, the destination opengl matrix
+            glmatrix, the source ASN.1 GLMatrix
+
+*****************************************************************************/
+NLM_EXTERN void Cn3D_Asn2Matrix (void *modelmatrix, GLMatrix *glmatrix);
+
+#endif                          /* _OPENGL */
 
 #ifdef __cplusplus
 }

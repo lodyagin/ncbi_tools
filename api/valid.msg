@@ -105,6 +105,10 @@ $^   IdOnMultipleBioseqs, 28
 There are multiple occurrences of the same Seq-id in this record. Sequence
 identifiers must be unique within a record.
 
+$^   DuplicateSegmentReferences, 29
+The segmented sequence refers multiple times to the same Seq-id. This may be due
+to a software error. Please consult with the database staff to fix this record.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -159,6 +163,11 @@ All members of a population study should be from the same organism.
 $^   MissingLineage, 12
 A BioSource should have a taxonomic lineage, which can be obtained from the
 taxonomy network server.
+
+$^   SerialInComment, 13
+Comments that refer to the conclusions of a specific reference should not be
+cited by a serial number inside brackets (e.g., [3]), but should instead be
+attached as a REMARK on the reference itself.
 
 $$ GENERIC, 3
 
@@ -367,6 +376,11 @@ This may be caused by errors in originally annotating these features on DNA coor
 where start or stop positions do not occur in between codon boundaries.  These then
 appear as errors when the features are converted to protein coordinates by mapping
 through the CDS.
+
+$^ SerialInComment, 38
+Comments that refer to the conclusions of a specific reference should not be
+cited by a serial number inside brackets (e.g., [3]), but should instead be
+attached as a REMARK on the reference itself.
 
 $$ SEQ_ALIGN, 6
 

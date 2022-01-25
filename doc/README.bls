@@ -1039,6 +1039,29 @@ References
 
 Release History
 ---------------
+
+Notes for 2.0.12 release:
+
+Enhancements:
+
+1.) Bl2seq can now perform nucleotide-protein (blastx style) comparisons.
+This necessitated changing the '-p' option from a Boolean to a
+string.  Valid arguments are "blastn", "blastp", or "blastx".
+
+Bug fixes:
+
+1.) A problem in the NCBI threads library that caused BLAST to sometimes
+stick was corrected.  Many thanks to Haruna Cofer and colleauges at SGI
+for providing a fix.
+
+2.) A problem that caused BLAST to core-dump (especially on long queries)
+has been fixed.  Many thanks to Gary Williams for providing examples.
+
+3.) A problem that prevented the search of multiple multivolume databases
+has been fixed.  
+
+
+
 Notes for 2.0.11 release:
 
 Enhancements:

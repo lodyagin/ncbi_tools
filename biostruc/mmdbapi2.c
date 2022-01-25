@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *
@@ -44,6 +44,12 @@
 * 95/08/30 C. Hogue    Moved globals into mmdbapi2.c.
 *
 * $Log: mmdbapi2.c,v $
+* Revision 6.7  2000/03/31 22:30:47  lewisg
+* fix output of CONECT, create intrabond traverser, misc bugs
+*
+* Revision 6.6  2000/03/01 16:16:45  thiessen
+* modified backbone definitions, added AM_PARTIALBACKBONE
+*
 * Revision 6.5  1999/03/30 23:15:03  kans
 * included sequtil.h
 *
@@ -682,6 +688,106 @@ Int2 LIBCALL TraverseBonds( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex,
   return FALSE;
 }
 
+/* like TraverseBonds, but minus the interresidue and intermolecular bonds */
+Int2 LIBCALL TraverseIntraBonds( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex,
+                                Pointer ptr, pNodeFunc pfnCallMe)
+/*	 Walks the structure children from the current pointer.  Performs
+(*pfnCallMe)((PFB) pxxxxThis,  Int4 iMode, Int4 iIndex, Pointer ptr) at each PMBD
+(as Flags Block). callbacks are void return types.
+*/
+{
+    PFB pfbThis;
+    PDNMS pdnmsThis = NULL;
+    PMSD pmsdThis = NULL;
+    PDNMM pdnmmThis = NULL;
+    PMMD pmmdThis = NULL;
+    PDNMG pdnmgThis = NULL;
+    PMGD pmgdThis = NULL;
+    PVNMB pvnmbThis = NULL;
+    PMBD pmbdThis = NULL;
+    if (pdnModel)
+        pfbThis = (PFB) pdnModel->data.ptrvalue;  /* get the data block */
+    else return FALSE;
+    switch ((int)pfbThis->bMe)  /* set the proper type */
+    {
+    case AM_MSD:
+        pdnmsThis = (PDNMS) pdnModel;
+        break;
+    case AM_MMD:
+        pdnmmThis = (PDNMM) pdnModel;
+        break;
+    case AM_MGD:
+        pdnmgThis = (PDNMM) pdnModel;
+        break;
+    default:
+        return FALSE;
+    }
+    
+    if (pdnmgThis)
+    {
+        while(pdnmgThis)
+        {   /*graph*/
+            pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+            pvnmbThis = pmgdThis->pvnmbBHead;
+            while (pvnmbThis)
+            {   /*bond*/
+                pmbdThis = (PMBD) pvnmbThis->data.ptrvalue;
+                (*pfnCallMe)((PFB) pmbdThis,  iModel, iIndex, ptr); /* do the callback */
+                pvnmbThis = pvnmbThis->next;
+            } /*bond*/   
+            pdnmgThis = pdnmgThis->next;
+        }/*graph*/
+        return TRUE;
+    } /* if pdnmgThis */
+    if (pdnmmThis)
+    {
+        while(pdnmmThis)
+        {   /*molecule*/
+            pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
+            pdnmgThis =  pmmdThis->pdnmgHead;
+            while(pdnmgThis)
+            {   /*graph*/
+                pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+                pvnmbThis = pmgdThis->pvnmbBHead;
+                while (pvnmbThis)
+                {   /*bond*/
+                    pmbdThis = (PMBD) pvnmbThis->data.ptrvalue;
+                    (*pfnCallMe)((PFB) pmbdThis, iModel, iIndex, ptr); /* do the callback */
+                    pvnmbThis = pvnmbThis->next;
+                } /*bond*/
+                pdnmgThis = pdnmgThis->next;
+            }/*graph*/
+            pdnmmThis = pdnmmThis->next;
+        }   /*molecule*/
+        return TRUE;
+    } /* if pdnmmThis */
+    if (pdnmsThis)
+    {
+        pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+        pdnmmThis = pmsdThis->pdnmmHead;
+        while(pdnmmThis)
+        {   /*molecule*/
+            pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
+            pdnmgThis =  pmmdThis->pdnmgHead;
+            while(pdnmgThis)
+            {   /*graph*/
+                pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+                pvnmbThis = pmgdThis->pvnmbBHead;
+                while (pvnmbThis)
+                {   /*bond*/
+                    pmbdThis = (PMBD) pvnmbThis->data.ptrvalue;
+                    (*pfnCallMe)((PFB) pmbdThis, iModel, iIndex, ptr); /* do the callback */
+                    pvnmbThis = pvnmbThis->next;
+                } /*bond*/
+                pdnmgThis = pdnmgThis->next;
+            }/*graph*/
+            pdnmmThis = pdnmmThis->next;
+        }   /*molecule*/
+        /* traverse inter-molecule bonds */
+        return TRUE;
+    }
+    return FALSE;
+}
 
 
 
@@ -1040,6 +1146,9 @@ Int2 LIBCALL TraverseModels(DValNodePtr pdnModel, Int2 iTraverse,
 	    case TRAVERSE_BOND:
 	       iTest = TraverseBonds( pdnModel, (Int4) pdnmlThis->choice, iIndex, ptr, pfnCallMe);
 	       break;
+        case TRAVERSE_INTRABOND:
+	       iTest = TraverseIntraBonds( pdnModel, (Int4) pdnmlThis->choice, iIndex, ptr, pfnCallMe);
+	       break;
 	    case TRAVERSE_IBOND:
 	       iTest = TraverseIBonds( pdnModel, (Int4) pdnmlThis->choice, iIndex, ptr, pfnCallMe);
 	       break;
@@ -1079,6 +1188,9 @@ Int2 LIBCALL TraverseOneModel(DValNodePtr pdnModel, Int2 iTraverse, Int2 iModel,
 	       break;
 	    case TRAVERSE_BOND:
 	       iTest = TraverseBonds( pdnModel, (Int4) iModel, iIndex, ptr, pfnCallMe);
+	       break;
+        case TRAVERSE_INTRABOND:
+	       iTest = TraverseIntraBonds( pdnModel, (Int4)  iModel, iIndex, ptr, pfnCallMe);
 	       break;
 	    case TRAVERSE_IBOND:
 	       iTest = TraverseIBonds( pdnModel, (Int4) iModel, iIndex, ptr, pfnCallMe);
@@ -1479,160 +1591,77 @@ void LIBCALLBACK SetBackBone(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr)
 {
    PMAD pmadThis = NULL;
    PMMD pmmdThis = NULL;
-   if (pfbThis->bMe == (Byte) AM_MAD)
-     {  /* iIndex isn't used */
-	pmadThis = (PMAD) pfbThis;
-	if (pmadThis->pcAName)
-	 {
-	  pmmdThis = GetParentMol((PFB)pmadThis);
-	  if ((pmmdThis->bWhat & (Byte) AM_DNA) || (pmmdThis->bWhat & (Byte) AM_RNA))
-	    {
-	      if (!StringICmp(pmadThis->pcAName, " P  "))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat |(Byte) AM_PALPHA | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " O2P"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat |(Byte) AM_OCARBNYL| (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " O1P"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat |(Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " C1*"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_C1RIBOSE );
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " C4*"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_C4RIBOSE | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " C5*"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " O5*"))
-	         {
-		    pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " C3*"))
-	         {
-		    pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	       if (!StringICmp(pmadThis->pcAName, " O3*"))
-	         {
-		    pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_BACKBONE);
-		    return;
-		 }
-	       if (!StringICmp(pmadThis->pcAName, " N9 "))
-	         {
-		    pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_NBETA);
-		    return;
-		 }
-  /*     code that must test parent graph for Pyr or Pur
-		if (!StringICmp(pmadThis->pcAName, " N1 "))
-	         {    if A or G don't set this
-		    pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_NBETA);
-		    return;
-		 }
-		*/
-	      return;
-	    }
-	  if (pmmdThis->bWhat & (Byte) AM_PROT)
-	     {
-	       if (!StringICmp(pmadThis->pcAName," CA "))
-		 {
-		     pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_CALPHA | (Byte) AM_BACKBONE);
-		     return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " C  "))
-	         {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte)AM_BACKBONE);
-		   return;
-		 }
-	       if (!StringICmp(pmadThis->pcAName, " N  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte)AM_BACKBONE);
-		   return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName, " H  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-              if (!StringICmp(pmadThis->pcAName, " D  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-               if (!StringICmp(pmadThis->pcAName, "1H  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-              if (!StringICmp(pmadThis->pcAName, "2H  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
- 	       if (!StringICmp(pmadThis->pcAName, "3H  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-	       if (!StringICmp(pmadThis->pcAName, "1D  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-              if (!StringICmp(pmadThis->pcAName, "2D  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
- 	       if (!StringICmp(pmadThis->pcAName, "3D  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
- 	      if (!StringICmp(pmadThis->pcAName, " O  "))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-   	      if (!StringICmp(pmadThis->pcAName, " OXT"))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-              if (!StringICmp(pmadThis->pcAName, " HXT"))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-              if (!StringICmp(pmadThis->pcAName, " DXT"))
-		 {
-	           pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_OCARBNYL | (Byte) AM_BACKBONE);
-		   return;
-		 }
-	      if (!StringICmp(pmadThis->pcAName," CB "))
-		 {
-		     pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_CBETA);
-		     return;
-		 }  /* dosen't do GLY */
-	       return;
-	     } /* if AM_PROT */
-	 } /* if pcAName */
-     }  /* if AM_MAD */
-   return;
+
+    if (pfbThis->bMe != (Byte) AM_MAD)
+        return;
+    pmadThis = (PMAD) pfbThis;
+    if (!pmadThis->pcAName) return;
+
+    pmmdThis = GetParentMol((PFB) pmadThis);
+    if (!pmmdThis) return;
+
+    if ((pmmdThis->bWhat & (Byte) AM_DNA) || (pmmdThis->bWhat & (Byte) AM_RNA)) {
+        if (!StringICmp(pmadThis->pcAName, " P  ")) 
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_PALPHA | (Byte) AM_PARTIALBACKBONE | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O2P")) 
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O1P"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C1*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_C1RIBOSE | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C2*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O2*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C3*"))
+            pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O3*"))
+            pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C4*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_C4RIBOSE | (Byte) AM_PARTIALBACKBONE| (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O4*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C5*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " O5*"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+/*     code that must test parent graph for Pyr or Pur
+        else if (!StringICmp(pmadThis->pcAName, " N9 "))
+        pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_NBETA);
+    else if (!StringICmp(pmadThis->pcAName, " N1 "))
+            {    if A or G don't set this
+        pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_NBETA);
+        return;
+        }
+    */
+    }
+
+    else if (pmmdThis->bWhat & (Byte) AM_PROT) {
+        if (!StringICmp(pmadThis->pcAName," CA "))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_CALPHA | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+        else if (!StringICmp(pmadThis->pcAName, " C  ") ||
+                 !StringICmp(pmadThis->pcAName, " N  "))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE | (Byte) AM_PARTIALBACKBONE);
+
+        else if (!StringICmp(pmadThis->pcAName, " H  ") ||
+                 !StringICmp(pmadThis->pcAName, " D  ") ||
+                 !StringICmp(pmadThis->pcAName, "1H  ") ||
+                 !StringICmp(pmadThis->pcAName, "2H  ") ||
+                 !StringICmp(pmadThis->pcAName, "3H  ") ||
+                 !StringICmp(pmadThis->pcAName, "1D  ") ||
+                 !StringICmp(pmadThis->pcAName, "2D  ") ||
+                 !StringICmp(pmadThis->pcAName, "3D  ") ||
+                 !StringICmp(pmadThis->pcAName, " O  ") ||
+                 !StringICmp(pmadThis->pcAName, " OXT") ||
+                 !StringICmp(pmadThis->pcAName, " HXT") ||
+                 !StringICmp(pmadThis->pcAName, " DXT"))
+            pmadThis->bWhat = (Byte)(pmadThis->bWhat | (Byte) AM_BACKBONE);
+
+        else if (!StringICmp(pmadThis->pcAName," CB "))
+            pmadThis->bWhat = (Byte) (pmadThis->bWhat | (Byte) AM_CBETA);
+    } /* if AM_PROT */
+
+    return;
 }
 
 

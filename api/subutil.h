@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.16 $
+* $Revision: 6.22 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,24 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.22  2000/03/10 18:35:46  kans
+* added CreateContigCloneUserObject for genome contig RefSeq records
+*
+* Revision 6.21  2000/02/26 23:55:34  kans
+* added AddPhrapGraphToSeqLit, using internal extended SeqLit to track, readjust graphs to current position of seqlit in delta seq - may need to move fields to public SeqLit if problems arise
+*
+* Revision 6.20  2000/02/24 23:15:00  kans
+* added AddSecondaryAccnToEntry
+*
+* Revision 6.19  2000/02/23 19:25:54  kans
+* AddFakeGapToDeltaSeq returns SeqLitPtr so program can set fuzz after SpreadGapsInDeltaSeq is no longer being called
+*
+* Revision 6.18  2000/02/23 18:28:39  kans
+* added AddFakeGapToDeltaSeq to set fuzz even if nonzero length is passed in
+*
+* Revision 6.17  2000/02/07 16:48:08  ostell
+* added AddDeltaSeqToNucProtEntry()
+*
 * Revision 6.16  1999/12/20 19:57:45  kans
 * added AddStatusToRefGeneTrackUserObject
 *
@@ -499,6 +517,19 @@ NLM_EXTERN SeqEntryPtr AddSegmentedSeqToNucProtEntry (
 	Int2 topology ,
 	Int2 strandedness );
 
+NLM_EXTERN SeqEntryPtr AddDeltaSeqToNucProtEntry (
+	NCBISubPtr submission,
+	SeqEntryPtr nuc_prot_entry ,
+	CharPtr local_name ,
+	CharPtr genbank_locus ,
+	CharPtr genbank_accession ,
+	Int4 gi_number ,
+	Int2 molecule_class,
+	Int2 molecule_type ,
+	Int4 length ,
+	Int2 topology ,
+	Int2 strandedness );
+
 				 /**** Entry contains one delta sequence ****/
 
 NLM_EXTERN SeqEntryPtr AddDeltaSeqOnlyToSubmission (
@@ -517,6 +548,11 @@ NLM_EXTERN Boolean AddGapToDeltaSeq (
 	NCBISubPtr submission,
 	SeqEntryPtr delta_seq_entry,
 	Int4 length_of_gap );    /** 0 if not known */
+
+NLM_EXTERN SeqLitPtr AddFakeGapToDeltaSeq (
+	NCBISubPtr submission,
+	SeqEntryPtr delta_seq_entry,
+	Int4 length_of_gap );    /** returns slp so program can set lim - unk fuzz after empty gaps are spread */
 
 NLM_EXTERN SeqLitPtr AddLiteralToDeltaSeq (
 	NCBISubPtr submission,
@@ -599,6 +635,11 @@ NLM_EXTERN Boolean AddTitleToEntry (
 	NCBISubPtr submission,
 	SeqEntryPtr entry ,
 	CharPtr title );
+
+NLM_EXTERN Boolean AddSecondaryAccnToEntry (
+NCBISubPtr submission,
+	SeqEntryPtr entry ,
+	CharPtr accn );
 
 /*****************************************************************
 *
@@ -1398,6 +1439,11 @@ NLM_EXTERN Boolean AddPhrapGraph (
 	CharPtr local_name ,
 	BytePtr phrap_values );
 
+NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
+	NCBISubPtr submission,
+	SeqLitPtr slp ,
+	BytePtr phrap_values );
+
 /* internal functions for reference gene project */
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
@@ -1416,6 +1462,10 @@ NLM_EXTERN UserObjectPtr CreateSubmissionUserObject (CharPtr univecComment,
                                                      Int4 validatorErrorCount,
                                                      Int4 validatorHashCode,
                                                      Boolean isCloningVector);
+
+/* clone name and ID for genomic contig RefSeq records */
+NLM_EXTERN UserObjectPtr CreateContigCloneUserObject (CharPtr name, Int4 ID);
+
 
 #ifdef __cplusplus
 }

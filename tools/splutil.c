@@ -27,13 +27,16 @@
 *
 * Author:  Sarah Wheelan
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * Contents:  splice site matrices and associated utilites 
 *
 * ==========================================================================
 *
 * $Log: splutil.c,v $
+* Revision 6.6  2000/04/22 15:56:04  wheelan
+* changed is_donor to take a FloatHiPtr instead of returning a FloatHi
+*
 * Revision 6.5  1998/09/24 12:46:17  wheelan
 * put in log and revision stuff
 *
@@ -51,7 +54,7 @@
 #include <blast.h>
 **********/
 
-extern FloatHi is_donor (CharPtr str, Int4 len)
+extern void is_donor (CharPtr str, Int4 len, FloatHiPtr score)
 {
   FloatHi one[4]={0.35, 0.35, 0.19, 0.11};
   FloatHi two[4]={0.59, 0.13, 0.14, 0.14};
@@ -62,13 +65,15 @@ extern FloatHi is_donor (CharPtr str, Int4 len)
   FloatHi seven[4]={0.71, 0.08, 0.12, 0.09};
   FloatHi eight[4]={0.06, 0.05, 0.84, 0.05};
   FloatHi nine[4]={0.15, 0.16, 0.17, 0.52};
-  FloatHi score;
-  Int1    i;
-  Int1    PNTR num=NULL;
+  FloatHi score1;
+  Int4    i;
+  Int4    PNTR num=NULL;
 
-  if ((num = MemNew(len*sizeof(Int4)))==NULL) {
+  if (score == NULL)
+     return;
+  if ((num = MemNew((len+2)*sizeof(Int4)))==NULL) {
     /* memory error */	
-    return(0);
+    return;
   }
 
   for (i = 0; i <= len; i++){
@@ -81,20 +86,21 @@ extern FloatHi is_donor (CharPtr str, Int4 len)
     if (str[i]=='T')
       num[i] = 3;
   }
-  score = one[num[0]];
-  score *= two[num[1]];
-  score *= three[num[2]];
-  score *= four[num[3]];
-  score *= five[num[4]];
-  score *= six[num[5]];
-  score *= seven[num[6]];
-  score *= eight[num[7]];
-  score *= nine[num[8]];
+  score1 = one[num[0]];
+  score1 *= two[num[1]];
+  score1 *= three[num[2]];
+  score1 *= four[num[3]];
+  score1 *= five[num[4]];
+  score1 *= six[num[5]];
+  score1 *= seven[num[6]];
+  score1 *= eight[num[7]];
+  score1 *= nine[num[8]];
 
   MemFree(num);
   num=NULL;
 
-  return score;
+  *score = score1;
+  return;
 }
 
 extern Int4 getSplicePos (CharPtr str, Int4 overlaplength)
@@ -114,7 +120,8 @@ extern Int4 getSplicePos (CharPtr str, Int4 overlaplength)
       {
         tmpstr[c] = str[xcursor+c];
       }
-      if ((score=is_donor(tmpstr, 8)) > topscore)
+      is_donor(tmpstr, 8, &score);
+      if (score > topscore)
       {
         topscore = score;
         offset = xcursor;

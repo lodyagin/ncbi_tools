@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.6  2000/03/31 19:20:03  thiessen
+* fix recursion bug
+*
+* Revision 6.5  2000/02/07 20:17:36  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.4  1998/07/02 18:24:35  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -2598,7 +2604,7 @@ static void Nlm_TextCallback(Widget w,
 {
   XmAnyCallbackStruct *cbs = (XmAnyCallbackStruct *)call_data;
 
-  if (cbs->event != NULL  ||  allowTextCallback)
+  if (cbs->event != NULL && allowTextCallback)
     Nlm_DoAction( (Nlm_GraphiC)client_data );
 }
 
@@ -2762,6 +2768,7 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
+  Nlm_FntPtr      fntptr;
 #endif
 #ifdef WIN_MOTIF
   XmFontList      fontlist;
@@ -2809,6 +2816,9 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
   }
   SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
   allowTextCallback = TRUE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
 #endif
 
 #ifdef WIN_MOTIF
@@ -2960,6 +2970,7 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
+  Nlm_FntPtr fntptr;
 #endif
 #ifdef WIN_MOTIF
   Cardinal        n;
@@ -3004,6 +3015,9 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
   SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
 #endif
 
 #ifdef WIN_MOTIF
@@ -3061,6 +3075,7 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
+  Nlm_FntPtr fntptr;
 #endif
 #ifdef WIN_MOTIF
   XmFontList      fontlist;
@@ -3111,6 +3126,9 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
   }
   SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
   allowTextCallback = TRUE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
 #endif
 
 #ifdef WIN_MOTIF

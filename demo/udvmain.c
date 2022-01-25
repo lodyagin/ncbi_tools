@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvmain.c,v $
+* Revision 6.15  2000/04/10 21:41:26  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 6.14  2000/03/06 14:01:27  durand
+* first release of the Summary viewer done
+*
+* Revision 6.13  2000/03/01 16:53:17  durand
+* add the Genome Viewer init functions
+*
 * Revision 6.12  2000/01/12 14:01:17  durand
 * fix a cast to avoid compiling error on NT
 *
@@ -71,6 +80,9 @@
 #include <udviewer.h>
 #include <accentr.h>
 #include <netcnfg.h>
+#ifdef UDV_GENOME
+#include <udvgv.h>
+#endif
 
 /*local text*/
 static Char szAppName[]="OneD-Viewer";
@@ -270,7 +282,11 @@ UDVLogoData		ldp;
 	}
 
 	/*OBjMgr Callback Function declaration*/
-	REGISTER_UDV_AUTONOMOUS;
+	vmp->UDVprocid=REGISTER_UDV_AUTONOMOUS;
+
+#ifdef UDV_GENOME
+	vmp->GVprocid=REGISTER_GV_MODULE;
+#endif
 	
 	/*main window*/
 	Margins=20*stdCharWidth;
@@ -293,7 +309,7 @@ UDVLogoData		ldp;
 	vmp->UseNetwork=UDV_UseNetwork();
 	UseNetwork=vmp->UseNetwork;
 	/*init menu*/
-	UDV_SetupMenus(w,UseNetwork);
+	UDV_SetupMenus(w,UseNetwork, NULL);
 	UDV_set_MainMenus(&vmp->MainMenu,FALSE);
 	/*create the windows*/
 	CreateMainControls(w,vmp,NULL);
@@ -307,7 +323,7 @@ UDVLogoData		ldp;
 	vmp->Show_logo=TRUE;
 	SetAppProperty("AutonomousUDVViewer",(Pointer)vmp);	
 	
-	/*ProcessUpdatesFirst(FALSE);*/
+	ProcessUpdatesFirst(FALSE);
 	
 	RealizeWindow(w);
 	UDV_WinMainResize(w);

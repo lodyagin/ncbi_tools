@@ -1,4 +1,4 @@
-/* $Id: fdfilter.c,v 6.9 1999/09/20 18:35:03 shavirin Exp $ */
+/* $Id: fdfilter.c,v 6.11 2000/03/14 16:59:32 shavirin Exp $ */
 /*****************************************************************************
 
   
@@ -31,11 +31,17 @@
    
    Version Creation Date: 05/21/99
 
-   $Revision: 6.9 $
+   $Revision: 6.11 $
 
    File Description:  Filter FASTA databases for identical sequences
 
    $Log: fdfilter.c,v $
+   Revision 6.11  2000/03/14 16:59:32  shavirin
+   For equivalent databases added sorting by gi.
+
+   Revision 6.10  2000/02/01 17:19:23  egorov
+   Couple functions changed prototypes, so the adjustment made.
+
    Revision 6.9  1999/09/20 18:35:03  shavirin
    Added dumping of deflines in order defined in tofasta.c file.
 
@@ -101,6 +107,7 @@ typedef struct gilist
 typedef struct _DefLine 
 {
     Int4 type;
+    Int4 gi;
     CharPtr line;
 } DefLine, PNTR DefLinePtr;
 
@@ -158,7 +165,7 @@ Args flt_args[NUMARG] = {
 #define IS_Protein   flt_args[6].intvalue
 #define ReverseQuery flt_args[7].intvalue
 
-void FDB_optionsFree(FDB_optionsPtr options)
+static void FDB_optionsFree(FDB_optionsPtr options)
 {
     if(options == NULL)
         return;
@@ -171,7 +178,7 @@ void FDB_optionsFree(FDB_optionsPtr options)
     return;
 }
 
-SeqIdPtr MySeqIdFree(SeqIdPtr sip)
+static SeqIdPtr MySeqIdFree(SeqIdPtr sip)
 {
     SeqIdPtr sip_tmp;
     do {
@@ -183,7 +190,7 @@ SeqIdPtr MySeqIdFree(SeqIdPtr sip)
     return NULL;
 }
 
-Boolean SRReadCharData(CharPtr buffer, CharPtr PNTR div_in)
+static Boolean SRReadCharData(CharPtr buffer, CharPtr PNTR div_in)
 {
     CharPtr tmp, ch, ch2;
     Int4 j;
@@ -212,7 +219,7 @@ Boolean SRReadCharData(CharPtr buffer, CharPtr PNTR div_in)
     return TRUE;
 }
 
-Boolean SRReadIntData(CharPtr buffer, Int4Ptr id)
+static Boolean SRReadIntData(CharPtr buffer, Int4Ptr id)
 {
     CharPtr tmp, ch, ch2;
     Int4 j;
@@ -237,7 +244,7 @@ Boolean SRReadIntData(CharPtr buffer, Int4Ptr id)
     return TRUE;
 }
 
-SR_InfoPtr SRReadSRInfo(CharPtr buffer)
+static SR_InfoPtr SRReadSRInfo(CharPtr buffer)
 {
     WWWInfoPtr info;
     WWWInfoDataPtr info_data;
@@ -272,7 +279,7 @@ SR_InfoPtr SRReadSRInfo(CharPtr buffer)
     return srip;
 }
 
-FDB_optionsPtr FDB_CreateCLOptions(void)
+static FDB_optionsPtr FDB_CreateCLOptions(void)
 {
     FDB_optionsPtr options;
     Char buffer[128];
@@ -308,7 +315,7 @@ FDB_optionsPtr FDB_CreateCLOptions(void)
 #define HASH_ALLOC_CHUNK 1024
 #define GI_ALLOC_CHUNK 1024
 
-HashTablePtr FDBHashTableNew(void)
+static HashTablePtr FDBHashTableNew(void)
 {
     HashTablePtr htp;
 
@@ -319,7 +326,7 @@ HashTablePtr FDBHashTableNew(void)
     return htp;
 }
 
-void FDBAddNewHash(HashTablePtr htp, Int4Ptr data, CharPtr div)
+static void FDBAddNewHash(HashTablePtr htp, Int4Ptr data, CharPtr div)
 {
     HashElmPtr hem;
 
@@ -366,10 +373,18 @@ static int DefListCompare(VoidPtr i, VoidPtr j)
         return (1);
     if (dp->type < dp1->type)
         return (-1);
+
+    /* If type the same we compare gis */
+    
+    if (dp->gi > dp1->gi)
+        return (1);
+    if (dp->gi < dp1->gi)
+        return (-1);
+    
     return (0);
 }
 
-void FDBDestroyHashIndex(HashTablePtr htp)
+static void FDBDestroyHashIndex(HashTablePtr htp)
 {
     if(htp == NULL)
         return;
@@ -380,7 +395,7 @@ void FDBDestroyHashIndex(HashTablePtr htp)
     return;
 }
 
-HashTablePtr FDBCreateHashIndex(CharPtr filename)
+static HashTablePtr FDBCreateHashIndex(CharPtr filename)
 {
     HashTablePtr htp;
     Int4 length;
@@ -426,9 +441,9 @@ static CharPtr ConcatDefline(CharPtr dline, CharPtr dline_tmp)
     
     return buf;
 }
-/* --------- Functions shuffeling deflines ----------- */
+/* --------- Functions shuffleing deflines ----------- */
 
-DefListPtr DefListNew(void)
+static DefListPtr DefListNew(void)
 {
     DefListPtr dlp;
     Int4 i;
@@ -443,7 +458,7 @@ DefListPtr DefListNew(void)
     
     return dlp;
 }
-Boolean DefListRealloc(DefListPtr dlp)
+static Boolean DefListRealloc(DefListPtr dlp)
 {
     Int4 i, old_allocated;
 
@@ -460,7 +475,7 @@ Boolean DefListRealloc(DefListPtr dlp)
     
     return TRUE;
 }
-void DefListFree(DefListPtr dlp)
+static void DefListFree(DefListPtr dlp)
 {
     Int4 i;
     DefLinePtr dp;
@@ -476,7 +491,7 @@ void DefListFree(DefListPtr dlp)
     return;
 }
 
-Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type)
+static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi)
 {
     DefLinePtr dp;
 
@@ -489,12 +504,13 @@ Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type)
     
     dp->line = StringSave(line);
     dp->type = type;
+    dp->gi = gi;
     
     dlp->count++;
     return TRUE;
 }
 
-CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
+static CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
 {
     Int4 i, j;
     DefLinePtr dp;
@@ -522,15 +538,20 @@ CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
 }
 
 
-Int4 GetMinimalType(CharPtr defline)
+static Int4 GetMinimalType(CharPtr defline, Int4Ptr gip)
 {
     SeqIdPtr sip, sip_tmp;
     Int4 order, order1 = INT2_MAX;
     Char buffer[512];
     CharPtr chptr;
 
-    StringNCpy(buffer, defline, sizeof(buffer) - 1);
+    if(defline == NULL || gip == NULL)
+        return -1;
+    
+    *gip = -1;                  /* Default if NOT found */
 
+    StringNCpy(buffer, defline, sizeof(buffer) - 1);
+    
     if((chptr = StringChr(buffer, ' ')) != NULL)
         *chptr = NULLB;
     else
@@ -539,9 +560,13 @@ Int4 GetMinimalType(CharPtr defline)
     sip = SeqIdParse(buffer);
 
     for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
-        if((order = GetOrderBySeqId(sip_tmp->choice)) < 0)
+        if((order = GetOrderBySeqId(sip_tmp->choice, TRUE)) < 0)
             return -1;
         order1 = MIN(order, order1);
+
+        /* Extracting gi */
+        if(sip_tmp->choice == SEQID_GI)
+            *gip = (Int4) sip->data.intvalue;
     }
 
     MySeqIdFree(sip);
@@ -550,15 +575,16 @@ Int4 GetMinimalType(CharPtr defline)
 
 /* --------------------------------------------------- */
 
-Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count, 
-                    ValNodePtr PNTR seqid, CharPtr PNTR defline, 
-                    BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num)
+static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count, 
+                           ValNodePtr PNTR seqid, CharPtr PNTR defline, 
+                           BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num)
 {
     Int4 i, hash_val, length, len_seq;
     Int4 first, next_count = 0, type;
     UcharPtr sequence, buffer;
     CharPtr dline;
     DefListPtr dlp;
+    Int4 gi;
 
     dlp = DefListNew();
     
@@ -586,12 +612,12 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
             
 
             readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
-            type = GetMinimalType(dline);
+            type = GetMinimalType(dline, &gi);
             
             if(dline == NULL)
                 return -1;
             
-            DefListAddLine(dlp, dline, type);
+            DefListAddLine(dlp, dline, type, gi);
             MemFree(dline);          
             
             first = FALSE;
@@ -606,8 +632,8 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
             if(dline == NULL)
                 return -1;
 
-            type = GetMinimalType(dline);
-            DefListAddLine(dlp, dline, type);
+            type = GetMinimalType(dline, &gi);
+            DefListAddLine(dlp, dline, type, gi);
             MemFree(dline);
                 
             htp->hep[i].seq_num = -1; /* Label do not pass second time */
@@ -633,7 +659,7 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
 }
 
 /* Functions used in filtering by gi number */
-GiListPtr GiListNew(void)
+static GiListPtr GiListNew(void)
 {
     GiListPtr glp;
 
@@ -644,7 +670,7 @@ GiListPtr GiListNew(void)
     
     return glp;
 }
-void GiListFree(GiListPtr glp)
+static void GiListFree(GiListPtr glp)
 {
     if(glp == NULL)
         return;
@@ -654,7 +680,7 @@ void GiListFree(GiListPtr glp)
     return;
 }
 
-Boolean ReadGiList(ReadDBFILEPtr rdfp, GiListPtr glp, CharPtr filename)
+static Boolean ReadGiList(ReadDBFILEPtr rdfp, GiListPtr glp, CharPtr filename)
 {
     FILE *fd;
     Int4 gi, retvalue, seqnum;
@@ -671,7 +697,7 @@ Boolean ReadGiList(ReadDBFILEPtr rdfp, GiListPtr glp, CharPtr filename)
                                    sizeof(Int4) * glp->allocated);
         }
 
-        seqnum = readdb_gi2seq(rdfp, gi);
+        seqnum = readdb_gi2seq(rdfp, gi, 0);
             
         if(seqnum < 0) {
             ErrPostEx(SEV_WARNING, 0,0, "Gi %d is not found", gi);
@@ -688,7 +714,7 @@ Boolean ReadGiList(ReadDBFILEPtr rdfp, GiListPtr glp, CharPtr filename)
 }
 /* Here we will check, that data[2] == tax_id, 
    data[3] == owner, div=div */
-Boolean CheckSRCondition(SR_InfoPtr srip, Int4Ptr data, CharPtr div)
+static Boolean CheckSRCondition(SR_InfoPtr srip, Int4Ptr data, CharPtr div)
 {
     Int4    i;
     CharPtr chptr;
@@ -740,7 +766,8 @@ Boolean CheckSRCondition(SR_InfoPtr srip, Int4Ptr data, CharPtr div)
 }
 /* Here we will check, that data[2] == tax_id, 
    data[3] == owner, div=div */
-Boolean CheckSRConditionReverse(SR_InfoPtr srip, Int4Ptr data, CharPtr div)
+static Boolean CheckSRConditionReverse(SR_InfoPtr srip, 
+                                       Int4Ptr data, CharPtr div)
 {
     Int4    i;
     CharPtr chptr;
@@ -791,9 +818,9 @@ Boolean CheckSRConditionReverse(SR_InfoPtr srip, Int4Ptr data, CharPtr div)
     return TRUE;
 }
 
-Boolean FDGetGiListByQuery(ReadDBFILEPtr rdfp, SR_InfoPtr srip, 
-                           GiListPtr glp, CharPtr filename, 
-                           Boolean reverse)
+static Boolean FDGetGiListByQuery(ReadDBFILEPtr rdfp, SR_InfoPtr srip, 
+                                  GiListPtr glp, CharPtr filename, 
+                                  Boolean reverse)
 { 
     FILE *fd;
     Int4 length, data[7];

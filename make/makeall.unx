@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.110 2000/01/20 13:20:45 madden Exp $
+#	$Id: makeall.unx,v 6.126 2000/03/21 19:26:51 durand Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -162,7 +162,8 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
-	ncbisock.c ncbi_socket.c matrix.c ncbibuf.c ncbi_buffer.c \
+	ncbisock.c ncbi_socket_.c ncbi_socket.c matrix.c ncbibuf.c ncbi_buffer.c \
+   ncbi_core.c ncbi_util.c \
    connectn.c connutil.c con_url.c con_sock.c \
 	urlquery.c lbapi.c con_stateless.c binary.c
 
@@ -173,13 +174,13 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c \
 	seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c subutil.c edutil.c asn2ff1.c \
+	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c subutil.c edutil.c asn2ff1.c \
 	asn2ff2.c asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
 	apparam.c codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
-	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c
+	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c 
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -213,7 +214,7 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	medview.c bspview.c gbfview.c gphview.c \
 	gphdraw.c gxydraw.c gtrdraw.c \
 	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c \
-	ddvclick.c ddvcreate.c ddvgraph.c ddvopen.c ddvpanel.c
+	ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
 
 SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c \
 	mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c mmdbapi4.c mmdbentr.c \
@@ -224,17 +225,19 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	pobutil.c stsutil.c suggadj.c suggest.c suggslp.c \
 	blast.c blastutl.c blastool.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
-	posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
+	actutils.c posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
-	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c vecscrn.c
+	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c vecscrn.c \
+	mblast.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
 
 SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
 	cn3dxprt.c cn3dwin.c cn3dentr.c \
-	cn3dmsg.c cn3dmatn.c cn3dmodl.c cn3dshim.c cn3dmesh.c
+	cn3dmsg.c cn3dmatn.c cn3dmodl.c cn3dshim.c cn3dmesh.c \
+	cn3dstyl.c seqcons.c
 
 SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c
 
@@ -255,8 +258,9 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
-	ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o \
+	ncbisock.o ncbi_socket_.o matrix.o ncbibuf.o ncbi_buffer.o \
    connectn.o connutil.o con_url.o con_sock.o \
+	ncbi_core.o ncbi_util.o \
 	urlquery.o lbapi.o con_stateless.o binary.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
@@ -265,13 +269,13 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o \
 	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
 	tofile.o tomedlin.o \
-	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o \
+	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
 	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
 	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
 	salpedit.o salpstat.o salpacc.o salsap.o salstruc.o salutil.o salprop.o \
-	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o
+	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -315,7 +319,7 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	medview.o bspview.o gbfview.o gphview.o \
 	gphdraw.o gxydraw.o gtrdraw.o \
 	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o \
-	ddvclick.o ddvcreate.o ddvgraph.o ddvopen.o ddvpanel.o
+	ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
 
 OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o \
 	mmdbapi.o mmdbapi1.o mmdbapi2.o mmdbapi3.o mmdbapi4.o mmdbentr.o \
@@ -326,21 +330,24 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	pobutil.o stsutil.o suggadj.o suggest.o suggslp.o \
 	blast.o blastutl.o blastool.o splutil.o gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
-	posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
+	actutils.o posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
-	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o vecscrn.o
+	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o vecscrn.o \
+	mblast.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
 
 OBJ30 = algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o \
 	cn3dxprt.o cn3dwin.o cn3dentr.o \
-	cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o cn3dmesh.o
+	cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o cn3dmesh.o \
+	cn3dstyl.o seqcons.o
 
 OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
 	cn3dxprt.glo cn3dwin.glo cn3dentr.glo \
-	cn3dmsg.glo cn3dmatn.glo cn3dmodl.glo cn3dshim.glo cn3dmesh.glo
+	cn3dmsg.glo cn3dmatn.glo cn3dmodl.glo cn3dshim.glo cn3dmesh.glo \
+	cn3dstyl.glo seqcons.glo
 
 OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o
 
@@ -353,8 +360,11 @@ OBJ39 = humchrow.o humchrom_dat.o humchrom.o humchrdrw.o hc_util.o
 
 ## All things to make
 ##
-all : copy .WAIT nocopy asntool .WAIT $(DLIB39)
+all : ln-if-absent copy .WAIT nocopy asntool .WAIT $(DLIB39)
 
+ln-if-absent:	../make/ln-if-absent
+	rm -f ln-if-absent
+	ln -s ../make/ln-if-absent .
 
 nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
 	$(LIB5) $(DLIB20) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
@@ -390,8 +400,8 @@ clean :
 ## Special case
 ##
 
-ncbi_socket.o : ncbi_socket.c
-	$(CC) $(CFLAGS) -DNCBI_C ncbi_socket.c
+ncbi_socket_.o : ncbi_socket.c ncbi_socket_.c
+	$(CC) $(CFLAGS) ncbi_socket_.c
 con_stateless.o : con_stateless.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) con_stateless.c
 lbapi.o : lbapi.c
@@ -527,7 +537,7 @@ shlib.alf :
 ##
 
 copy :
-	- chmod -R ug+rw,o+r .
+	-chmod -R ug+rw,o+r . ../include
 	$(SRCCOPY) ../corelib/tsprintf.h ../include
 	$(SRCCOPY) ../corelib/gifgen.h ../include
 	$(SRCCOPY) ../corelib/ncbi*.h ../include
@@ -543,6 +553,10 @@ copy :
 	$(SRCCOPY) ../asnlib/*.c .
 	$(SRCCOPY) ../connect/*.c .
 	$(SRCCOPY) ../connect/*.h ../include
+	-mkdir ../include/connect
+	-chmod ug+rw,o+r ../include/connect
+	-rm ../include/ncbi_*.h
+	cp -p ../connect/ncbi_*.h ../include/connect
 	$(SRCCOPY) ../connect/lbapi/*.c .
 	$(SRCCOPY) ../connect/lbapi/*.h ../include
 	$(SRCCOPY) ../object/*.c .
@@ -579,6 +593,8 @@ copy :
 	- $(SRCCOPY) ../internal/ccap/*.h ../include
 	$(SRCCOPY) ncbidraw.c ncbidrwg.c
 	$(SRCCOPY) ncbithr.c ncbithrs.c
+	$(SRCCOPY) ../network/nsclilib/*.h ../include
+	$(SRCCOPY) ../network/blast3/client/*.h ../include
 	$(SRCCOPY) ../network/id1arch/*.h ../include
 	- chmod -R ug+rw,o+r .
 

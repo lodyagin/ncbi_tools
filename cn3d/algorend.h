@@ -34,6 +34,54 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.h,v $
+* Revision 6.40  2000/04/25 00:22:35  thiessen
+* save quality settings in config
+*
+* Revision 6.39  2000/04/19 17:56:48  thiessen
+* added background color in OpenGL
+*
+* Revision 6.38  2000/04/17 15:54:26  thiessen
+* add cylinder arrows; misc graphics tweaks
+*
+* Revision 6.37  2000/04/05 23:11:27  lewisg
+* get rid of double redraw for hide row
+*
+* Revision 6.36  2000/03/23 14:53:04  thiessen
+* fix bug in viewer3d camera; added conservation color algorithm to ARS
+*
+* Revision 6.35  2000/03/22 23:17:49  thiessen
+* added ability to save ARS in ASN1
+*
+* Revision 6.34  2000/03/15 18:49:07  thiessen
+* fixed viewer3d color bug
+*
+* Revision 6.33  2000/03/13 16:04:26  thiessen
+* re-implementation of features
+*
+* Revision 6.32  2000/03/09 17:56:58  thiessen
+* changes to palette handling, feature implementation, PARS storage
+*
+* Revision 6.31  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.30  2000/03/02 21:18:28  thiessen
+* installed color-by-conservation on all alignment rows
+*
+* Revision 6.29  2000/03/01 16:17:54  thiessen
+* improved handling of colors; many small fixes
+*
+* Revision 6.28  2000/02/26 13:30:41  thiessen
+* capped cylinders and worms for visible ends
+*
+* Revision 6.27  2000/02/10 17:47:01  thiessen
+* added: color-by-sequence-conservation menu item, zoom-out to OpenGL, misc fixes
+*
+* Revision 6.26  2000/02/10 15:51:58  lewisg
+* cn3d responds and send correct update messages.  many coloring bug fixes
+*
+* Revision 6.25  2000/02/03 15:07:45  thiessen
+* more correct handling of worm bonds
+*
 * Revision 6.24  2000/01/14 21:40:41  lewisg
 * add translucent spheres, ion labels, new cpk, fix misc bugs
 *
@@ -163,15 +211,14 @@ extern "C" {
 #define R_BALLNSTICK 4
 #define R_THICKWIRE 5
 #define R_WORMWIRE 6
-
 #ifdef _OPENGL
 #define R_WORMTHIN 7
 #define R_WORMFAT 8
 #endif
-
 #define R_NAME 10
 #define R_NUMBER 11
 #define R_PDBNUMBER 12
+
 #define C_default  0
 #define C_hotpink  1
 #define C_magenta  2
@@ -195,22 +242,12 @@ extern "C" {
 #define C_gray    20
 #define C_brown   21
 #define C_top     22
-#define C_CPK 225
-#define C_BYCHAIN 226
-#define C_BYTEMP 227
-#define C_BYRES 228
-#define C_BYSSTRU 230
-#define C_BYHYDRO 231
-#define C_BYOBJECT 246
-#define C_BYDOMAIN 247
-#define C_BYALIGN 248           /* color by alignment */
-#define C_BYCONS 249            /* color by structure conservation */
-#define C_BYSEQCONS 250         /* color by sequence conservation */
-/* the number of colors available to color aligned structures */
-#define NUM_SLAVES 8
+
 /* these set bond draw styles */
 #define NO_BOND 0
 #define HALF_BOND 1
+#define HALF_WORM_BOND 2
+
 /* these set atom widths */
 #define ATOM_NONE   0
 #define ATOM_SPACE  1
@@ -221,169 +258,125 @@ extern "C" {
 #define SUPER_BOND_WIDTH (float)1.0
 #define CYL_THRESHOLD    (float)0.1
 #define EXPAND_ATOM      (float)1.8
+
+/* flags for rendering various parts of the structure */
 #define CONNECTON  0
 #define VIRTUALBB  1
-#define REALBB     2
-#define REALXTRABB 3
+#define PARTIALBB  2
+#define COMPLETEBB 3
 #define RESIDUES   4
 #define IONSON     5
 #define HETSON     6
 #define SOLVENTON  7
-#define PBBLABELSON  8
-#define NTBBLABELSON 9
-#define HETLABELSON 10
-#define PTERMLABON  11
-#define NTTERMLABON 12
-/* from the ASN.1 spec ...
-        default         (0),  -- Default view
-        wire            (1),  -- use wireframe
-        space           (2),  -- use spacefill
-        stick           (3),  -- use stick model (thin cylinders)
-        ballNStick      (4),  -- use ball & stick model
-        thickWire       (5),  -- thicker wireframe
-        bbOnly          (6),  -- show BB atoms only
-        bbVirtual       (7),  -- show BB as virtual c-alpha bonds
-        hide            (9),  -- don't show this
-        name            (10), -- display its name next to it
-        number          (11), -- display its number next to it
-        pdbNumber       (12), -- display its PDB number next to it
-        hBond           (13), -- show any hBonds this forms
-        objWireFrame    (150), -- display MMDB surface object as wireframe
-        objPolygons     (151), -- display MMDB surface object as polygons
-        bbWire          (200), -- backbone in wireframe
-        bbSpace         (201), -- backbone in spacefill
-        bbStick         (202), -- backbone in stick (thin cylinders)
-        bbCurve         (203), -- backbone interpreted as a curve
-        bbWorm          (204), -- backbone interpreted like a worm
-        bbRibbon        (205), -- backbone as a ribbon (general)
-        bbLineRibbon    (206), -- backbone as a vectorized ribbon
-        bbCylRibbon     (207), -- bacbbone ribbon cyl-x-section
-        bbRectRibbon    (208), -- backbone ribbon rect-x-section
-        bbOvalRibbon    (209), -- backbone ribbon oval-x-section
-        bbBallNStick    (210), -- backbone as ball and stick
-        bbThickWire     (211), -- backbone in thick wireframe
-        ssCylinder      (215), -- show helices as cylinders
-        ssRectArrow     (216), -- show sheets with rect-x-section arrows
-        ssSquareArrow   (217), -- show sheets with square-x-section arrows
-        ssOvalArrow     (218), -- show sheets with oval-x-section arrows
-        colorsetCPK     (225), -- color atoms like CPK models
-        colorsetbyChain (226), -- color each chain different
-        colorsetbyTemp  (227), -- color using isotropic Temp factors
-        colorsetbyRes   (228), -- color using residue properties
-        colorsetbyLen   (229), -- color changes along chain length
-        colorsetbySStru (230), -- color by secondary structure
-        colorsetbyHydro (231), -- color by hydrophobicity
-        colorsetTurn    (232), -- color Turn
-        colorsetLoop    (233), -- color Loop
-        colorsetHelix   (234), -- color Helix
-        colorsetSheet   (235), -- color Sheet
-        colorsetSite    (236), -- color Site
-        colorsetHet     (237), -- color Het
-        colorsetIon     (238), -- color metal Ion
-        colorsetDNA     (239), -- color DNA
-        colorsetRNA     (240), -- color RNA
-        colorsetProtein (241), -- color Protein
-        colorsetSugar   (242), -- color Sugar
-        colorsetBasic   (243), -- color Basic pH
-        colorsetAcidic  (244), -- color Acidic pH
-        colorsetNeutr   (245), -- color Neutral pH
-        other           (255)
+#define PBBLABELS  8
+#define NTBBLABELS 9
+/*#define HETLABELS 10*/
+#define PTERMLABELS  11
+#define NTTERMLABELS 12
+#define ANYBACKBONE  13
 
-*//* this AlgorRenderSet gets hung off of an MSD structure for the first go-round *//* will later feature-ize it */
+
+/* flags for labeling styles */
 #define   L_NAME      0x01
 #define   L_NUM       0x02
 #define   L_PDB       0x04
 #define   L_WHITE     0x20
 #define   L_3LETR     0x40
 #define   L_1LETR     0x80
-/* 3LETR is both bits set */
 #define LA_LEFT   0x01
 #define LA_RIGHT  0x02
 #define LA_UPPER  0x04
 #define LA_LOWER  0x08
 #define LA_CENTER 0x20
 #define LA_FRONT  0x40
- typedef struct AlgorRenderSet {
 
-/* this embeds a camera structure inside */
-#ifndef _OPENGL
-    Int4 dummy[CAMERA_SIZE_I4];
-#endif
+
+/* bit flags for 3d-object arrow styles */
+#define ARROW_BRICK 0x01
+#define ARROW_CYL   0x02
+
+
+#define VIEWSCALE 1000000.0
+
+
+/*
+   note that the fields in this structure are mirrored in the ARSFieldData
+   structure in cn3dsave.c in order to save as ASN1 - any changes to this
+   structure should be accompanied by update to ARSFieldData or 
+   save/read won't work!
+*/
+
+typedef struct AlgorRenderSet {
 
 /* global settings */
-
     Boolean HydrogensOn;
-    Boolean DisorderOn;
-    Boolean AnimateOn;
+    Uint1 BGColRGB[3];
+    Int2 ConsColAlg;
 
-/* an On Boolean signifies a separate pass through the structure data with a callback */
 /* Protein Renderings */
     Boolean PVirtualBBOn;
-    Boolean PRealBBOn;
-    Boolean PExtraBBOn;     /* carbonyl oxygens */
+    Boolean PPartialBBOn;
+    Boolean PCompleteBBOn;
     Boolean PResiduesOn;
-    Int2 PBBRender;         /* valid are {0,1-5} */
-    Int2 PBBColor;          /* valid are {0,225-231} */
-    Int2 PResRender;        /* valid are {0, 1-5} */
-    Int2 PResColor;         /* valid are {0,225-231} */
+    Int2 PBBRender;
+    Int2 PBBColor;
+    Int2 PResRender;
+    Int2 PResColor;
+    Uint1 PBBColRGB[3];
+    Uint1 PResColRGB[3];
 
-
-    Uint1 PBBLabelOn;       /* uses PResColor */
-    Uint1 PBBLabelJust;
-    Uint1 PBBLabelStyle;
+    Int2 PBBLabelInterval;
+    Int2 PBBLabelJust;
+    Int2 PBBLabelStyle;
     Int2 PBBLabelScale;
 
-    Boolean PTermLabelOn;   /* uses PBBColor */
-    Uint1 PTermLabelJust;
-    Uint1 PTermLabelStyle;
+    Boolean PTermLabelOn;
+    Int2 PTermLabelJust;
+    Int2 PTermLabelStyle;
     Int2 PTermLabelScale;
-
-    Boolean IonLabelOn;
 
 /* DNA/RNA  Renderings */
     Boolean NTVirtualBBOn;
-    Boolean NTRealBBOn;
-    Boolean NTExtraBBOn;    /* phosponyl oxygens */
+    Boolean NTPartialBBOn;
+    Boolean NTCompleteBBOn;
     Boolean NTResiduesOn;
-    Int2 NTBBRender;        /* valid are {0,1-5} */
-    Int2 NTBBColor;         /* valid are {0,225-231} */
-    Int2 NTResRender;       /* valid are {0,1-5} */
-    Int2 NTResColor;        /* valid are {0,225-231} */
-    Int2 DomainColor;
+    Int2 NTBBRender;
+    Int2 NTBBColor;
+    Int2 NTResRender;
+    Int2 NTResColor;
+    Uint1 NTBBColRGB[3];
+    Uint1 NTResColRGB[3];
 
-    Uint1 NTBBLabelOn;      /* uses NTResColor */
-    Uint1 NTBBLabelJust;
-    Uint1 NTBBLabelStyle;
+    Int2 NTBBLabelInterval;
+    Int2 NTBBLabelJust;
+    Int2 NTBBLabelStyle;
     Int2 NTBBLabelScale;
 
-    Boolean NTTermLabelOn;  /* Uses NTBBColor */
-    Uint1 NTTermLabelJust;
-    Uint1 NTTermLabelStyle;
+    Boolean NTTermLabelOn;
+    Int2 NTTermLabelJust;
+    Int2 NTTermLabelStyle;
     Int2 NTTermLabelScale;
 
     Boolean HeterogensOn;
-    Int2 HetRender;         /* valid are {0,1-5} */
-    Int2 HetColor;          /* valid are {0,225,226,227} */
+    Int2 HetRender;
+    Int2 HetColor;
 
     Boolean IonsOn;
-    Int2 IonRender;         /* valid are {0,2,4} */
-    Int2 IonColor;          /* valid are {0,225,226,227} */
+    Int2 IonRender;
+    Int2 IonColor;
+    Boolean IonLabelOn;
 
     Boolean ConnectOn;
-    Int2 ConnectRender;     /* valid are {0, 1,3,4,5} */
-    Int2 ConnectColor;      /* valid are {0} fixed yellow color */
+    Int2 ConnectRender;
+    Int2 ConnectColor;
 
     Boolean SolventOn;
-    Int2 SolventRender;     /* {} from hets, 0 inherits from HetRender */
-    Int2 SolventColor;      /* {} from hets,  0 inherits fro HetColor */
+    Int2 SolventRender;
+    Int2 SolventColor;
 
     Boolean ObjectOn;
-    Int2 ObjectRender;
-    Int2 ObjectColor;       /* valid are BYCHAIN, BYSSTRU */
-
-    Uint1 NumColors;
-/*  Uint1 IndexRGB[CN3D_COLOR_MAX];*/
-
+    Int2 ObjectColor;
+    Int2 ObjectArrows;
 
 } ARS, PNTR PARS;
 
@@ -405,14 +398,14 @@ typedef struct RenderKeep {
 
 /************function prototypes***********/
 
-extern void LIBCALL SetDefaultAlgorRender PROTO((PARS pars));
+extern void LIBCALL SetStructureAlgorRender PROTO((PARS pars));
 extern void LIBCALL SetAlignAlgorRender PROTO((PARS pars));
-extern PARS LIBCALL NewAlgorRenderSet PROTO((void));
+extern PARS LIBCALL NewStructureRenderSet PROTO((void));
 extern PARS LIBCALL NewAlignRenderSet PROTO((void));
-extern void LIBCALL SetStrucSeqsAlgorRender PROTO((PARS pars));
-extern PARS LIBCALL NewStrucSeqsRenderSet PROTO((void));
 extern void LIBCALL FreeAlgorRenderSet PROTO((PARS pars));
+/*
 extern PARS LIBCALL GetAlgorRenderSet PROTO((PDNMS pdnmsThis));
+*/
 extern void LIBCALL ResetRenderCtrls PROTO((void));
 extern GrouP LIBCALL RenderControls PROTO((Nlm_GrouP prnt));
 extern void LIBCALL ResetLabelCtrls PROTO((void));
@@ -421,26 +414,23 @@ extern PRK LIBCALL NewRenderKeep PROTO((void));
 extern PRK LIBCALL CopyRenderKeep PROTO((PRK prkThis));
 extern void LIBCALL FreeRenderKeep PROTO((PRK prkThis));
 extern void LIBCALL RenderObject PROTO((PVNMO pvnmoThis));
-extern void LIBCALL RenderBond PROTO((PALD paldFrom, PALD paldTo,
-                                      DDV_ColorCell * iColor,
-                                      FloatLo fCylRadius));
 extern void LIBCALL RenderAnAtom
     PROTO((PALD paldAtom, DDV_ColorCell * iColor, FloatLo fRadius,
     FloatHi lfAlpha));
 extern Int2 LIBCALL GetGraphNCBIstdaa PROTO((PMGD pmgdThis));
 extern Int2 LIBCALL GetGraphNCBI4na PROTO((PMGD pmgdThis));
-extern void LIBCALL MakePaletteModel
-    PROTO((PDNMS pdnmsThis, Int2 iModel));
-extern void LIBCALL MakeStrucPalette PROTO((Boolean fSpecial));
+extern void LIBCALL MakeStrucPalette PROTO((PDNMS pdnmsThis));
 #ifdef _OPENGL
 extern void LIBCALL AlgorithmicRendering PROTO((void));
+extern void Cn3D_SetQualityFromAppParams(void);
 #else
 extern Picture3D LIBCALL Do3DOrigin PROTO((Picture3D p3d));
 extern Picture3D LIBCALL AlgorithmicRendering PROTO((Picture3D p3d));
+extern void Cn3d_Lock3DPalette PROTO((Picture3D ppic));
 #endif
 extern void Cn3D_RedrawProc PROTO((ButtoN b));
-extern void LIBCALL fnMSPLoop
-    PROTO((PDNMS pdnmsThis, Boolean fSpecial));
+NLM_EXTERN void fnCn3D_RedrawWrapper(ButtoN b);
+extern void LIBCALL fnMSPLoop PROTO((PDNMS pdnmsThis));
 extern void LIBCALL fnARLoop PROTO((PDNMS pdnmsThis));
 
 extern void Cn3D_RenStruc PROTO((IteM i));
@@ -453,17 +443,31 @@ extern void Cn3D_RenDefault PROTO((IteM i));
 extern void Cn3D_RenAlign PROTO((IteM i));
 
 
+/* the number of color functions used by Cn3D*/
+#define CN3DFUNCNUM 10
+
+#define C_CPK 225
+#define C_BYCHAIN 226
+#define C_BYTEMP 227
+#define C_BYRES 228
+#define C_BYSECSTRUC 230
+#define C_BYHYDRO 231
+#define C_BYOBJECT 246
+#define C_BYDOMAIN 247
+#define C_BYSTRUCALIGN 249            /* color by structure alignment */
+#define C_BYSEQCONS 250         /* color by sequence conservation */
+#define C_BYCHOICE 251 /* user picks - not associated with a color function */
+
 extern void Cn3D_ColCPK PROTO((IteM i));
 extern void Cn3D_ColDomain PROTO((IteM i));
-extern void Cn3D_ColCy PROTO((IteM i));
-extern void Cn3D_ColStru PROTO((IteM i));
+extern void Cn3D_ColCyChain PROTO((IteM i));
+extern void Cn3D_ColSecStruc PROTO((IteM i));
 extern void Cn3D_ColRes PROTO((IteM i));
 extern void Cn3D_ColHydro PROTO((IteM i));
 extern void Cn3D_ColTemp PROTO((IteM i));
-extern void Cn3D_ColAlign PROTO((IteM i));
-extern void Cn3D_ColCons PROTO((IteM i));
+extern void Cn3D_ColObject PROTO((IteM i));
+extern void Cn3D_ColStrucAlign PROTO((IteM i));
 extern void Cn3D_ColSeqCons PROTO((IteM i));
-extern void Cn3D_DoColSeqCons PROTO((void));
 
 
 /* external color functions */
@@ -475,7 +479,7 @@ extern void Cn3D_Color_BYTEMP(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
 extern void Cn3D_Color_BYRES(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
-extern void Cn3D_Color_BYSSTRU(DDV_ColorGlobal * pColorGlobal, void *pData,
+extern void Cn3D_Color_BYSECSTRUC(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
 extern void Cn3D_Color_BYHYDRO(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
@@ -483,15 +487,16 @@ extern void Cn3D_Color_BYOBJECT(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
 extern void Cn3D_Color_BYDOMAIN(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
-extern void Cn3D_Color_BYALIGN(DDV_ColorGlobal * pColorGlobal, void *pData,
+extern void Cn3D_Color_BYSTRUCCONS(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
-extern void Cn3D_Color_BYCONS(DDV_ColorGlobal * pColorGlobal, void *pData,
+extern void Cn3D_Color_BYSEQCONS(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
 extern void Cn3D_ColorSpecial(DDV_ColorGlobal * pColorGlobal, void *pData,
                        DDV_Range * pRange);
-
 /* end external color functions */
+
 extern Char * Cn3D_ColorFuncFind(void);
+extern Char * Cn3D_ColorFuncName(Int4 which);
 
 #ifdef __cplusplus
 }

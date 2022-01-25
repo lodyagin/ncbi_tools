@@ -46,6 +46,10 @@
  *       GIF drawing functions
  *
  * $Log: gifgen.c,v $
+ * Revision 6.13  2000/04/06 17:12:54  chetvern
+ * gdImageFilledPolygon
+ * zero section width case fixed
+ *
  * Revision 6.12  1999/10/20 19:48:39  vakatov
  * + gdImageGetDimensions()
  *
@@ -1622,13 +1626,13 @@ NLM_EXTERN void
          }
       }
 
-      HeapSort((Nlm_VoidPtr)im->polyInts, ints, sizeof(int), &gdCompareInt);
-      {{
+      if (ints > 1) {
         size_t j;
+        HeapSort((Nlm_VoidPtr)im->polyInts, ints, sizeof(int), &gdCompareInt);
         for (j = 0;  j < (ints-1);  j += 2) {
-           gdImageLine(im, im->polyInts[j], y, im->polyInts[j+1], y, c);
+          gdImageLine(im, im->polyInts[j], y, im->polyInts[j+1], y, c);
         }
-      }}
+      }
    }
 }
    

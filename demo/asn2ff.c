@@ -31,7 +31,7 @@ Args myargs[] = {
 	"b", NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
 	{"Output mode?: r for release, d for dump, s for Sequin, c for Chromoscope, k for dir-sub-debug, l for dir-sub, e for revise, p for partial report","r", NULL ,NULL ,TRUE,'m',ARG_STRING,0.0,0,NULL},
 	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
-	{"Show gi numbers?","T", NULL ,NULL ,TRUE,'g',ARG_BOOLEAN,0.0,0,NULL},
+	{"Show gi numbers?","F", NULL ,NULL ,TRUE,'g',ARG_BOOLEAN,0.0,0,NULL},
 	{"Non-Strict gene_binding","T", NULL ,NULL ,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL},
 	{"Show error messages","T", NULL ,NULL ,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
 	{"Show verbose message text","F", NULL ,NULL ,TRUE,'t',ARG_BOOLEAN,0.0,0,NULL},
@@ -55,6 +55,7 @@ Args myargs[] = {
 	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
 	{"Use VERSION?","T",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
 	{"Show Bankit comments?","F",NULL,NULL,TRUE,'C',ARG_BOOLEAN,0.0,0,NULL},
+	{"For GenBank Release?","F",NULL,NULL,TRUE,'R',ARG_BOOLEAN,0.0,0,NULL},
 	};
 
 
@@ -132,10 +133,11 @@ Int2 Main(void)
 	SeqIntPtr sip;
 	BioseqPtr bsp;
 	Boolean useSeqMgrIndexes;
-	CharPtr PNTR tmpstr = NULL, tstr;
+	/*
 	ValNode v;
 	LinkStrPtr lsp;
-	CharPtr str;
+	*/
+
 	if ( ! GetArgs("asn2ff", sizeof(myargs)/sizeof(Args), myargs))
 		return 1;
 	ErrSetMessageLevel(SEV_NONE);
@@ -295,6 +297,9 @@ Int2 Main(void)
 	}
 	if (myargs[26].intvalue) {
 		ajp->bankit = TRUE;
+	}
+	if (myargs[27].intvalue) {
+		ajp->forgbrel = TRUE;
 	}
 	useSeqMgrIndexes = (Boolean)(myargs[24].intvalue);
 	/* get pointer to all loaded ASN.1 modules */

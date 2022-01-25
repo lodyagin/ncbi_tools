@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Traversers & Data Lookup
 *
@@ -46,6 +46,9 @@
 *
 *
 * $Log: mmdbapi2.h,v $
+* Revision 6.2  2000/03/31 22:30:47  lewisg
+* fix output of CONECT, create intrabond traverser, misc bugs
+*
 * Revision 6.1  1999/03/30 22:31:12  ywang
 * add GetMGFromMM & GetMMFromMSDBySeqId
 *
@@ -111,6 +114,8 @@
 #define TRAVERSE_BOND 4
 #define TRAVERSE_SOLID  5
 #define TRAVERSE_IBOND 6
+/* traverse all intraresidue bonds for a structure */
+#define TRAVERSE_INTRABOND 7
 
 #define VIRTUAL_BOND_CHOICE 7 
 
@@ -146,6 +151,8 @@ extern "C" {
 #endif
 
 Int2 LIBCALL TraverseSolids( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex, 
+			  Pointer ptr, pNodeFunc pfnCallMe);
+Int2 LIBCALL TraverseIntraBonds( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex,
 			  Pointer ptr, pNodeFunc pfnCallMe);
 Int2 LIBCALL TraverseBonds( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex, 
 			  Pointer ptr, pNodeFunc pfnCallMe);

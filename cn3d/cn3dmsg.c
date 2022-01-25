@@ -33,6 +33,51 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.98  2000/04/20 23:27:44  lewisg
+* misc bug fixes
+*
+* Revision 6.97  2000/04/12 19:53:37  lewisg
+* sequence saving uses genbank class
+*
+* Revision 6.96  2000/04/10 21:41:25  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 6.95  2000/04/08 00:37:31  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 6.94  2000/04/05 23:11:28  lewisg
+* get rid of double redraw for hide row
+*
+* Revision 6.93  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.92  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.91  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.90  2000/03/02 21:11:05  lewisg
+* use bandalign for import sequence, make standalone ddv use viewmgr, make dialogs modal, send color update
+*
+* Revision 6.89  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 6.88  2000/02/19 01:23:59  lewisg
+* use ibm, add row tracking code, various bug fixes
+*
+* Revision 6.87  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 6.86  2000/02/10 15:51:59  lewisg
+* cn3d responds and send correct update messages.  many coloring bug fixes
+*
+* Revision 6.85  2000/02/07 20:17:37  lewisg
+* minor bug fixes, use gui font for win32
+*
+* Revision 6.84  2000/02/05 01:32:21  lewisg
+* add viewmgr, move place freeing is done in ddv, modify visual c++ projects
+*
 * Revision 6.83  2000/01/18 22:49:16  lewisg
 * send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
 *
@@ -208,6 +253,8 @@
 #include <algorend.h>
 #include <cn3dshim.h>
 #include <alignmgr.h>
+#include <cn3dopen.h>
+#include <cn3dmodl.h>
 
 
 void Cn3D_RegisterColor(void)
@@ -249,6 +296,8 @@ static void Cn3D_SetRect(RecT *Rect)
     Rect->bottom = screenRect.bottom - 100;
     if(Rect->bottom - Rect->top < 200) Rect->top =
         Rect->bottom - 200;
+    if(Rect->bottom - Rect->top > 300) Rect->top =
+        Rect->bottom - 300;
     Rect->left = cn3drc.left;
     Rect->right = screenRect.right - 100;
     if(Rect->right - Rect->left < 400) Rect->left =
@@ -257,33 +306,24 @@ static void Cn3D_SetRect(RecT *Rect)
 
 void Cn3D_LaunchSeqEntry(ValNode * pvnsep)
 {
-    Uint2 entityID, itemID;
-    ValNode *pvnSips, *pvnSipsHold;
-    SeqId *sip;
-    SeqEntry *sep;
+    Uint2 entityID;
     SAM_ViewGlobal vg;
-
-    for(sep = pvnsep; sep != NULL; sep = sep->next) {
-        
-        pvnSips = SAM_ExtractSips(sep);
-        if (pvnSips == NULL) return;
-        pvnSipsHold = pvnSips;
-        
-        for (; pvnSips != NULL; pvnSips = pvnSips->next) {
-            sip = (SeqId *) pvnSips->data.ptrvalue;
-            if (sip == NULL) continue;
-            entityID = BioseqFindEntity(sip, &itemID);
-            Cn3D_SetRect((RecT *)&vg.Rect);
-            vg.MasterViewer = SAMVIEWCN3D;
-            vg.FetchProc = NULL;
-            SetAppProperty(SAM_ViewString, &vg);
-            GatherSpecificProcLaunch(0, "OneD-Viewer", OMPROC_VIEW,
-                FALSE, entityID, itemID, OBJ_BIOSEQ);
-            RemoveAppProperty(SAM_ViewString);
-        }
-        ValNodeFree(pvnSipsHold);
-    }
-
+    
+    MemSet(&vg, 0, sizeof(SAM_ViewGlobal));
+    Cn3D_SetRect((RecT *)&vg.Rect);
+    vg.MasterViewer = SAMVIEWCN3D;
+    vg.FetchProc = NULL;
+    vg.NetStartProc = Cn3D_StartNet;
+    vg.BlastFile = (void *)Cn3D_ImportBioseqFile;
+    vg.BlastNet = (void *)Cn3D_ImportBioseq;
+    vg.BlastMany = (void *)Cn3D_BlastDlg;
+    SetAppProperty(SAM_ViewString, &vg);
+    entityID = ObjMgrGetEntityIDForPointer(pvnsep);
+    
+    GatherSpecificProcLaunch(0, "OneD-Viewer SE", OMPROC_VIEW,
+        FALSE, entityID, 0, OBJ_BIOSEQSET);
+    RemoveAppProperty(SAM_ViewString);
+    
 }
 
 /*****************************************************************************
@@ -300,19 +340,26 @@ Parameters: pvnsep, a valnode list of SeqEntries
 void Cn3D_RegisterSeqEntry(ValNode * pvnsep)
 {
     Int2 entityID;
-    SeqEntry *sep;
+    SeqEntry *sep = NULL;
     BioseqSet *bssp;
     
-    
-    bssp = BioseqSetNew ();
-    if (bssp == NULL) return;
-    bssp->_class = BioseqseqSet_class_genbank;
-    bssp->seq_set = pvnsep;
-    
-    sep = SeqEntryNew ();
-    if (sep == NULL) return;
-    sep->choice = 2;  /* Bioseq-set */
-    sep->data.ptrvalue = (Pointer) bssp;
+    if(pvnsep == NULL) return;
+    if(pvnsep->choice == 2) 
+        if(((BioseqSet *)pvnsep->data.ptrvalue)->_class == 
+            BioseqseqSet_class_genbank) sep = pvnsep;
+
+    if(!sep) {
+        bssp = BioseqSetNew ();
+        if (bssp == NULL) return;
+        bssp->_class = BioseqseqSet_class_genbank;
+        bssp->seq_set = pvnsep;
+        
+        sep = SeqEntryNew ();
+        if (sep == NULL) return;
+        sep->choice = 2;  /* Bioseq-set */
+        sep->data.ptrvalue = (Pointer) bssp;
+        sep->next = NULL;
+    }
     
     SeqMgrLinkSeqEntry(sep, 0, NULL);
     
@@ -329,40 +376,6 @@ void Cn3D_RegisterSeqEntry(ValNode * pvnsep)
     Cn3D_RegisterColor();
 }
 
-
-
-SeqAnnot *Cn3D_MakeFakeAnnot(SeqEntry *sep)
-{
-    SeqAnnot *sap = NULL;
-    SeqAlign *salp = NULL;
-    DenseSeg *pDenseSeg = NULL;  /* the denseseg in the new seq align */
-    ValNode *pvnSips = NULL;
-    
-    pDenseSeg = SAM_NewDenseSeg(1, 1, FALSE);
-    if(pDenseSeg == NULL) ThrowError;
-    
-    pvnSips = SAM_ExtractSips(sep);
-    if(pvnSips == NULL) ThrowError;  
-   
-    pDenseSeg->ids = SeqIdDup((SeqId *)pvnSips->data.ptrvalue);
-    pDenseSeg->starts[0] = 0;
-    pDenseSeg->lens[0] = 128;
-
-    salp = SAM_NewSeqAlign((Uint1)SAT_GLOBAL, (Uint1)SAS_DENSEG,
-        pDenseSeg, 1);
-    
-    sap = SeqAnnotNew();
-    if(sap == NULL || salp == NULL) ThrowError;
-    sap->data = salp;
-    return sap;
-
-error:
-    if(salp == NULL) DenseSegFree(pDenseSeg);
-    ValNodeFree(pvnSips);
-    SeqAnnotFree(sap);
-    SeqAlignFree(salp);
-    return NULL;
-}
 
 /*****************************************************************************
 
@@ -381,6 +394,7 @@ void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
     SAM_ViewGlobal vg;
     RecT cn3drc;
 
+    MemSet(&vg, 0, sizeof(SAM_ViewGlobal));
 
     for (; sap != NULL; sap = sap->next) {
         if (sap->data == NULL)
@@ -395,12 +409,41 @@ void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
         Cn3D_SetRect((RecT *)&vg.Rect);
         vg.MasterViewer = SAMVIEWCN3D;
         vg.FetchProc = NULL;
+        vg.NetStartProc = Cn3D_StartNet;
+        vg.BlastFile = (void *)Cn3D_ImportBioseqFile;
+        vg.BlastNet = (void *)Cn3D_ImportBioseq;
+        vg.BlastMany = (void *)Cn3D_BlastDlg;
         SetAppProperty(SAM_ViewString, &vg);
         GatherSpecificProcLaunch(0, "DDV", OMPROC_VIEW,
             FALSE, entityID, itemID, OBJ_SEQALIGN);
 
         RemoveAppProperty(SAM_ViewString);
     }
+}
+
+/*****************************************************************************
+
+Function: Cn3D_CountRows()
+
+Purpose: figures out the number of rows in the SeqAlign
+  
+Parameters: salp, the SeqAlign corresponding to the vast alignment.
+
+*****************************************************************************/
+
+NLM_EXTERN Int4 Cn3D_CountRows(SeqAlign *salp)
+{
+    SeqAlign *salptmp;
+    Int4 retval;
+    
+    if(salp == NULL) return 0;
+    
+    salptmp = SeqAlignListDup(salp);
+    AlnMgrNeatlyIndex(salptmp);
+    AlnMgrMakeMultByIntersectOnMaster(salptmp, TRUE);
+    retval = AlnMgrGetNumRows(salptmp);
+    SeqAlignListFree(salptmp);
+    return retval;
 }
 
 
@@ -415,13 +458,13 @@ Parameters: sap, the SeqAnnot pointer
 
 *****************************************************************************/
 
-void Cn3D_RegisterSeqAnnot(SeqAnnot * sap)
+void Cn3D_RegisterSeqAnnot(SeqAnnot *sap, Boolean Neat, Boolean IBM)
 {
     Int2 entityID;
     SeqAlign *salp;
 
     Cn3D_ColorData.sap = sap;
-
+    
     /* index the seq aligns */
     for (; sap != NULL; sap = sap->next) {
         if (sap->data == NULL) continue;
@@ -436,12 +479,13 @@ void Cn3D_RegisterSeqAnnot(SeqAnnot * sap)
         }
         else DDV_GetColorGlobalEx((void *) salp);
 
-        if(!AlnMgrIndexSeqAlign(salp)) {
+/*        if(!AlnMgrIndexSeqAlign(salp)) {
             ErrPostEx(SEV_ERROR, 0, 0, "Alignment not in correct format");
             return;
-        }
+        } */
+        ViewMgr_RemoveSA(salp);  /* make sure it isn't there */
+        ViewMgr_Attach(salp, Neat, IBM, 0, 0);
     }
-    Cn3D_RegisterColor();
 }
 
 
@@ -459,11 +503,11 @@ NLM_EXTERN void Cn3D_SendUpdate()
     Uint2 entityID, itemID;
     SeqAlign *salp;
     SeqAnnot *sap;
-    ValNode *pvnSips, *pvnSipsHold;
+    ValNode *pvnSips, *pvnSipsHold, *pvnsep;
     SeqId *sip;
 
     dump.data = NULL;
-	dump.type = UPDATE_TYPE_EDIT_DELBSP;
+	dump.type = UPDATE_TYPE_COLOR;
     
     for (sap = Cn3D_ColorData.sap; sap != NULL; sap = sap->next) {        
         if (sap->data == NULL) continue;
@@ -476,7 +520,8 @@ NLM_EXTERN void Cn3D_SendUpdate()
             OBJ_SEQALIGN,0,0,(Pointer)&dump);
     }
     
-    if (Cn3D_ColorData.pvnsep) {
+    for(pvnsep = Cn3D_ColorData.pvnsep; pvnsep != NULL;
+            pvnsep = pvnsep->next) {
         pvnSips = SAM_ExtractSips(Cn3D_ColorData.pvnsep);
         if (pvnSips != NULL) {
             pvnSipsHold = pvnSips;
@@ -495,16 +540,76 @@ NLM_EXTERN void Cn3D_SendUpdate()
 }
 
 
+/* check to see if there is any visible row in the pdmnsThis */
+static Boolean Cn3D_IsVisibleRow(PDNMS pdnmsThis)
+{
+    PMSD pmsdThis;
+    PDNMM pdvn;
+    PMMD pmmdThis;
+    Boolean retval = FALSE;
+
+    if(!Cn3D_ColorData.sap || pdnmsThis == NULL) return FALSE;
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    for(pdvn = pmsdThis->pdnmmHead; pdvn != NULL; pdvn = pdvn->next){
+        pmmdThis = (PMMD)pdvn->data.ptrvalue;
+        if(pmmdThis) {
+            if(ViewMgr_TRow2VRow((SeqAlign *)Cn3D_ColorData.sap->data,
+                pmmdThis->iTargetRow) > 0) retval = TRUE;
+        }
+    }
+    pmsdThis->bVisible = retval;
+    return retval;
+}
+
+
 /*-----------------------------------------*/
 static Int2 LIBCALLBACK SeqStrucMediaMsgFunc(OMMsgStructPtr ommsp)
 {
     OMUserDataPtr omudp = NULL;
+    DDVUpdateMSGPtr dump = NULL;
     SelStructPtr sel = NULL;
-
+    PDNMS pdnmsThis;
+    PMSD pmsdThis;
     omudp = (OMUserDataPtr) (ommsp->omuserdata);
 
     switch (ommsp->message) {
     case OM_MSG_UPDATE:
+			
+        dump = (DDVUpdateMSGPtr)(ommsp->procmsgdata);
+			
+        /* ignore generic UPDATE msg*/
+        if (!dump) break;
+
+        switch(dump->type){
+        case UPDATE_TYPE_RECOLOR:
+            pdnmsThis = GetSelectedModelstruc();
+            if (pdnmsThis) {
+                Cn3D_IsVisibleRow(pdnmsThis);
+                MakeStrucPalette(pdnmsThis);
+                pmsdThis = (PMSD)pdnmsThis->data.ptrvalue;
+                for (pdnmsThis = pmsdThis->pdnmsSlaves; pdnmsThis != NULL;
+                        pdnmsThis = pdnmsThis->next) {
+                    Cn3D_IsVisibleRow(pdnmsThis);
+                    MakeStrucPalette(pdnmsThis);
+                }
+            }
+            Cn3D_SetStrucList();
+            Cn3D_ListDomainProc();
+            break;
+        case UPDATE_TYPE_VIEWMGR:
+#ifdef _OPENGL
+            if(OGL_IsPlaying(Cn3D_ColorData.OGL_Data))
+                OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+            OGL_AllLayerOnProc(Cn3D_ColorData.OGL_Data);
+#else /* _OPENGL */
+            if(IsPlaying3D()) StopPlaying3D();
+            Nlm_AllLayerSet3D(Cn3D_v3d, TRUE);
+#endif /* else _OPENGL */
+            Cn3D_DisplayProc(NULL);
+            break;
+        default:
+            break;
+        }
         break;
 
     case OM_MSG_SELECT:
@@ -540,6 +645,9 @@ static Int2 LIBCALLBACK SeqStrucMediaMsgFunc(OMMsgStructPtr ommsp)
         break;
 
     case OM_MSG_MOUSEUP:
+        if (ommsp->itemtype == OBJ_SEQFEAT)
+            return OM_MSG_RET_OK;
+
 #ifdef _OPENGL
         if(OGL_IsPlaying(Cn3D_ColorData.OGL_Data)) {
             OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
@@ -553,8 +661,6 @@ static Int2 LIBCALLBACK SeqStrucMediaMsgFunc(OMMsgStructPtr ommsp)
 #endif /* else _OPENGL */
         Cn3D_Redraw(FALSE);
         break;
-        
-
     }
 
     return OM_MSG_RET_OK;
@@ -568,8 +674,14 @@ extern Int2 LIBCALLBACK SeqStrucMediaFunc(Pointer data)
     OMUserDataPtr omudp = NULL;
 
     ompcp = (OMProcControlPtr) data;
-    if (ompcp == NULL || ompcp->proc == NULL) {
+
+    if (ompcp == NULL) {
         Message(MSG_ERROR, "Data NULL [1]");
+        return OM_MSG_RET_ERROR;
+    }
+        
+    if( ompcp->proc == NULL) {
+        Message(MSG_ERROR, "Data NULL [2]");
         return OM_MSG_RET_ERROR;
     }
 
@@ -582,7 +694,7 @@ extern Int2 LIBCALLBACK SeqStrucMediaFunc(Pointer data)
     }
 
     if (ompcp->input_data == NULL) {
-        Message(MSG_ERROR, "Data NULL [2]");
+        Message(MSG_ERROR, "Data NULL [3]");
         return OM_MSG_RET_ERROR;
     }
 
@@ -616,8 +728,13 @@ extern Int2 LIBCALLBACK Cn3D_AnnotEditFunc(Pointer data)
     OMUserDataPtr omudp = NULL;
 
     ompcp = (OMProcControlPtr) data;
-    if (ompcp == NULL || ompcp->proc == NULL) {
+    if (ompcp == NULL) {
         Message(MSG_ERROR, "Data NULL [1]");
+        return OM_MSG_RET_ERROR;
+    }
+        
+    if( ompcp->proc == NULL) {
+        Message(MSG_ERROR, "Data NULL [2]");
         return OM_MSG_RET_ERROR;
     }
 
@@ -632,7 +749,7 @@ extern Int2 LIBCALLBACK Cn3D_AnnotEditFunc(Pointer data)
     }
 
     if (ompcp->input_data == NULL) {
-        Message(MSG_ERROR, "Data NULL [2]");
+        Message(MSG_ERROR, "Data NULL [3]");
         return OM_MSG_RET_ERROR;
     }
     Cn3D_ColorData.sapprocid = ompcp->proc->procid;

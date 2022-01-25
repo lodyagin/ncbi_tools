@@ -32,8 +32,29 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.57 $ 
+/* $Revision: 6.64 $ 
 * $Log: blastpri.h,v $
+* Revision 6.64  2000/04/10 19:57:20  dondosha
+* Added prototype for BlastSeqLocFillDoubleIntRev
+*
+* Revision 6.63  2000/03/30 21:46:08  madden
+* prototypes for BLASTResultHitlistFreeEx and BlastDeleteHeap
+*
+* Revision 6.62  2000/03/29 22:16:08  dondosha
+* Added edit_script argument to BlastSaveCurrentHspGapped
+*
+* Revision 6.61  2000/03/08 20:51:21  madden
+* Add prototype for BlastGetAllowedGis
+*
+* Revision 6.60  2000/03/06 23:29:09  kans
+* added prototype for BlastConvertDNASeqLoc
+*
+* Revision 6.59  2000/02/17 19:00:45  shavirin
+* Removed theCacheSize parameter from everywhere.
+*
+* Revision 6.58  2000/02/01 18:08:59  dondosha
+* Added prototype for BlastSaveCurrentHspGapped
+*
 * Revision 6.57  2000/01/11 17:04:48  shavirin
 * Added parameter theCacheSize into BlastSearchBlkNew and BlastSearchBlkNewExtra
 *
@@ -571,10 +592,10 @@ Int2 LIBCALL BlastTimeFillStructure PROTO((BlastTimeKeeperPtr btkp));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDuplicate PROTO((BlastSearchBlkPtr search));
 
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, Int4 window_size, Int4 theCacheSize));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, Int4 window_size));
 
 /* Allocates a search Block, except it only attaches to the rdfp, does not allocate it. */
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp, Int4 window_size, Int4 theCacheSize));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp, Int4 window_size));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
 
@@ -621,6 +642,7 @@ Boolean LIBCALL FilterDNA PROTO((BioseqPtr bsp, Int4 filter));
 Boolean LIBCALL FilterWithSeg PROTO((Uint1Ptr sequence, Int4 length, Uint1 alphabet));
 
 BLASTResultHitlistPtr LIBCALL BLASTResultHitlistFree PROTO((BLASTResultHitlistPtr result));
+BLASTResultHitlistPtr LIBCALL BLASTResultHitlistFreeEx PROTO((BlastSearchBlkPtr search, BLASTResultHitlistPtr result));
 
 BLASTResultHitlistPtr LIBCALL BLASTResultHitlistNew PROTO((Int4 hspcnt));
 
@@ -637,6 +659,11 @@ Int4 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt, Bool
 
 
 void BlastSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context));
+
+void BlastSaveCurrentHspGapped PROTO((BlastSearchBlkPtr search, BLAST_Score
+				      score, Int4 q_offset, Int4 s_offset, Int4
+				      q_length, Int4 s_length, Int2 context,
+				      edit_script_t *esp));
 
 void BlastNtSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context, Int4 query_gap_start, Int4 subject_gap_start));
 
@@ -676,6 +703,8 @@ SeqLocPtr MyBioseqSeg PROTO((BioseqPtr bsp_unfilter));
 SeqLocPtr SeqLocSeg PROTO((SeqLocPtr slp));
 
 Boolean BlastConvertProteinSeqLoc PROTO((SeqLocPtr slp, Int2 frame, Int4 full_length));
+
+Boolean BlastConvertDNASeqLoc (SeqLocPtr slp, Int2 frame, Int4 full_length);
 
 BlastPruneSapStructPtr BlastPruneSapStructDestruct PROTO((BlastPruneSapStructPtr prune));
 
@@ -721,6 +750,7 @@ SeqLocPtr HitRangeToSeqLoc PROTO((BlastHitRangePtr bhrp, Int4 link_value, Boolea
 
 
 ValNodePtr BlastSeqLocFillDoubleInt PROTO((SeqLocPtr mask_slp, Int4 max_length, Boolean reverse));
+ValNodePtr BlastSeqLocFillDoubleIntRev PROTO((ValNodePtr location, SeqLocPtr mask_slp, Int4 max_length));
 
 
 Int2 BlastInsertList2Heap PROTO((BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist));
@@ -750,6 +780,9 @@ Boolean BlastParceInputString(CharPtr string, CharPtr letters, CharPtr PNTR *val
 
 Int4 BlastGetLetterIndex(CharPtr letters, Char ch);
 
+SeqIdPtr BlastGetAllowedGis PROTO((BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seqid));
+
+Int4 BlastDeleteHeap PROTO((BLASTHeapPtr which_heap, Int4 position));
 
 
 #ifdef __cplusplus

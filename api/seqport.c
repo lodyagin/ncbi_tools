@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.27  2000/03/08 17:18:32  kans
+* final fixes for delta seqs with gaps of nonzero length, including those starting with gaps
+*
 * Revision 6.26  2000/01/12 18:44:50  ostell
 * added a check for 0 length gap in delta seq and treated it as a NULL
 * location.
@@ -233,6 +236,9 @@ static char *this_file = __FILE__;
 #include <seqport.h>
 #include <edutil.h>    /* for SeqLoc creation functions */
 #include <gather.h>    /* for SeqLocOffset function */
+
+
+NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
 
 /*****************************************************************************
 *
@@ -563,12 +569,82 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_is_seg (SeqPortPtr spp, Boolean value)
 	return SeqPortSetValues(spp);
 }
 
-NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
+/**************************************************************
+*
+*  This function adjusts the length of seqport to remove virtual
+*   segments or add them back as needed
+*
+**************************************************************/
+NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp)
 {
+	SeqPortPtr tmp;
+	Int4 len = 0;
+
 	if (spp == NULL)
 		return FALSE;
+
+
+	if (spp->isa_virtual)
+	{
+		if (spp->do_virtual)
+			spp->totlen = spp->stop - spp->start + 1;
+		else
+			spp->totlen = 0;
+		if (spp->totlen == 0)
+			spp->isa_null = TRUE;
+		else
+			spp->isa_null = FALSE;
+	}
+	else if (spp->segs != NULL)
+	{
+		for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
+		{
+			SeqPortAdjustLength (tmp);
+			len += tmp->totlen;
+		}
+		spp->totlen = len;
+	}
+	else
+		spp->totlen = spp->stop - spp->start + 1;
+	spp->curpos = -1;  /* reset to unused */
+
+	return TRUE;
+
+}
+
+NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
+{
+	Boolean do_it = FALSE, has_virtual=FALSE;
+	SeqPortPtr tmp;
+
+	if (spp == NULL)
+		return FALSE;
+	
+	if (spp->isa_virtual == TRUE)
+		has_virtual = TRUE;
+	if (spp->do_virtual != value)
+		do_it = TRUE;
+	for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
+	{
+		if (tmp->isa_virtual == TRUE)
+			has_virtual = TRUE;
+		if (tmp->do_virtual != value)
+			do_it = TRUE;
+	}
+
+	if (! do_it)   /* no change needed */
+		return TRUE;
+
+	
 	spp->do_virtual = value;
-	return SeqPortSetValues(spp);
+	SeqPortSetValues(spp);
+	if (has_virtual)   /* have to check the SeqPort */
+	{
+		SeqPortAdjustLength(spp);
+		SeqPortSeek(spp, 0, SEEK_SET);
+	}
+
+	return TRUE;
 }
 
 
@@ -933,6 +1009,7 @@ SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), currseg);
 
     }
 
+    SeqPortAdjustLength (spp);
     SeqPortSeek(spp, 0, SEEK_SET);
     return spp;
 }
@@ -1045,6 +1122,7 @@ code);
             break;
 	}
 
+    SeqPortAdjustLength (spp);
     SeqPortSeek(spp, 0, SEEK_SET);
 
     return spp;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.12  2000/02/15 22:53:58  kans
+ * added dbSNP and RATMAP as legal dbxrefs, put /organelle under ajp->forgrel control
+ *
  * Revision 6.11  1999/04/02 20:35:51  kans
  * added prototype for GR_PrintPubs
  *
@@ -135,6 +138,9 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.12  2000/02/15 22:53:58  kans
+* added dbSNP and RATMAP as legal dbxrefs, put /organelle under ajp->forgrel control
+*
 * Revision 6.11  1999/04/02 20:35:51  kans
 * added prototype for GR_PrintPubs
 *
@@ -255,7 +261,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 24
+#define DBNUM 26
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.37  2000/03/31 16:14:13  thiessen
+* fix modal window lockout bug
+*
+* Revision 6.36  2000/02/03 22:29:16  lewisg
+* make windows version of vibrant use standard color
+*
 * Revision 6.35  2000/01/13 23:37:14  beloslyu
 * changes because of port to HP-UX 11.0
 *
@@ -2774,55 +2780,6 @@ static Nlm_WindoW Nlm_NextVisWindow (Nlm_WindoW w)
 }
 #endif
 
-static void Nlm_RemoveWindow (Nlm_GraphiC w, Nlm_Boolean savePort)
-
-{
-  Nlm_WindoW      nxt;
-  Nlm_WindoW      p;
-  Nlm_WindoW      q;
-  Nlm_WindowData  wdata;
-#ifdef WIN_MOTIF
-  Nlm_ShellTool   shl;
-#endif
-
-  if ((Nlm_WindoW) w != Nlm_desktopWindow && (Nlm_WindoW) w != Nlm_systemWindow) {
-    q = Nlm_desktopWindow;
-    p = (Nlm_WindoW) Nlm_GetNext ((Nlm_GraphiC) Nlm_desktopWindow);
-    while (p != NULL && p != (Nlm_WindoW) w) {
-      q = p;
-      p = (Nlm_WindoW) Nlm_GetNext ((Nlm_GraphiC) p);
-    }
-    if (p != NULL) {
-      Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
-      wdata.timer = NULL;
-      Nlm_SetWindowData ((Nlm_WindoW) w, &wdata);
-#ifdef WIN_MAC
-      HideWindow (Nlm_GetWindowPtr ((Nlm_WindoW) w));
-      Nlm_Update ();
-#endif
-#ifdef WIN_MSWIN
-      ShowWindow (Nlm_GetWindowPtr ((Nlm_WindoW) w), SW_HIDE);
-#endif
-#ifdef WIN_MOTIF
-      shl = Nlm_GetWindowShell ((Nlm_WindoW) w);
-      if (NLM_QUIET) {
-        if (Nlm_WindowHasBeenShown ((Nlm_WindoW) w)) {
-          XtUnmapWidget (shl);
-        }
-      } else {
-        XtUnmapWidget (shl);
-      }
-#endif
-      Nlm_SetWindowDying ((Nlm_WindoW) w, TRUE);
-      nxt = (Nlm_WindoW) Nlm_GetNext (w);
-      Nlm_SetNext ((Nlm_GraphiC) q, (Nlm_GraphiC) nxt);
-      Nlm_SetNext (w, (Nlm_GraphiC) dyingWindow);
-      dyingWindow = (Nlm_WindoW) w;
-    }
-  }
-  Nlm_Update ();
-}
-
 static void Nlm_HideWindow (Nlm_GraphiC w, Nlm_Boolean setFlag, Nlm_Boolean savePort)
 {
   Nlm_WindowTool  wptr;
@@ -2974,6 +2931,58 @@ static void Nlm_HideModal (Nlm_GraphiC w, Nlm_Boolean setFlag, Nlm_Boolean saveP
   }
 }
 
+
+static void Nlm_RemoveWindow (Nlm_GraphiC w, Nlm_Boolean savePort)
+
+{
+  Nlm_WindoW      nxt;
+  Nlm_WindoW      p;
+  Nlm_WindoW      q;
+  Nlm_WindowData  wdata;
+#ifdef WIN_MOTIF
+  Nlm_ShellTool   shl;
+#endif
+
+  if ((Nlm_WindoW) w != Nlm_desktopWindow && (Nlm_WindoW) w != Nlm_systemWindow) {
+    q = Nlm_desktopWindow;
+    p = (Nlm_WindoW) Nlm_GetNext ((Nlm_GraphiC) Nlm_desktopWindow);
+    while (p != NULL && p != (Nlm_WindoW) w) {
+      q = p;
+      p = (Nlm_WindoW) Nlm_GetNext ((Nlm_GraphiC) p);
+    }
+    if (p != NULL) {
+      Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
+      wdata.timer = NULL;
+      Nlm_SetWindowData ((Nlm_WindoW) w, &wdata);
+#ifdef WIN_MAC
+      HideWindow (Nlm_GetWindowPtr ((Nlm_WindoW) w));
+      Nlm_Update ();
+#endif
+#ifdef WIN_MSWIN
+      ShowWindow (Nlm_GetWindowPtr ((Nlm_WindoW) w), SW_HIDE);
+#endif
+#ifdef WIN_MOTIF
+      shl = Nlm_GetWindowShell ((Nlm_WindoW) w);
+      if (NLM_QUIET) {
+        if (Nlm_WindowHasBeenShown ((Nlm_WindoW) w)) {
+          XtUnmapWidget (shl);
+        }
+      } else {
+        XtUnmapWidget (shl);
+      }
+#endif
+      Nlm_SetWindowDying ((Nlm_WindoW) w, TRUE);
+      nxt = (Nlm_WindoW) Nlm_GetNext (w);
+      Nlm_SetNext ((Nlm_GraphiC) q, (Nlm_GraphiC) nxt);
+      Nlm_SetNext (w, (Nlm_GraphiC) dyingWindow);
+      dyingWindow = (Nlm_WindoW) w;
+      /* prevents parent lockout under Linux/LessTif, maybe others (thiessen) */
+      if (Nlm_IsWindowModal((Nlm_WindoW) w))
+        Nlm_HideModal(w, FALSE, FALSE);
+    }
+  }
+  Nlm_Update ();
+}
 
 /* esl: extraWidth parameter added */
 static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
@@ -5753,7 +5762,7 @@ extern Nlm_Boolean Nlm_RegisterWindows (void)
   wc.hInstance = Nlm_currentHInst;
   wc.hIcon = LoadIcon (NULL, IDI_APPLICATION);
   wc.hCursor = NULL;
-  wc.hbrBackground = CreateSolidBrush( GetSysColor(COLOR_WINDOW) );
+  wc.hbrBackground = CreateSolidBrush( GetSysColor(COLOR_ACTIVEBORDER) );
   wc.lpszMenuName = NULL;
   sprintf (windowclass, "Nlm_WindowClass%ld", (long) (int) Nlm_currentHInst);
   wc.lpszClassName = windowclass;

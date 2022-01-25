@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -3036,6 +3036,7 @@ typedef struct visstrpage {
 
 typedef struct visstrform {
   DESCRIPTOR_FORM_BLOCK
+  Uint2         subtype;
 } VisStrForm, PNTR VisStrFormPtr;
 
 static void CharPtrToVisStrPage (DialoG d, Pointer data)
@@ -3188,6 +3189,7 @@ extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
     vfp->form = (ForM) w;
     vfp->actproc = actproc;
     vfp->formmessage = VisStrFormMessage;
+    vfp->subtype = subtype;
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -3212,41 +3214,58 @@ extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
   return (ForM) w;
 }
 
+static CharPtr citInCommentMsg =
+"This comment looks like it has citation references in [#] form.\n\
+You should put comments about references in the REMARK section by\n\
+double clicking on the reference and launching its editor.\n\
+Continue saving this comment?";
+
 static void VisStrDescFormActnProc (ForM f)
 
 {
-  DescriptorFormPtr  dfp;
-  OMProcControl      ompc;
-  CharPtr            str;
+  OMProcControl  ompc;
+  CharPtr        str;
+  Boolean        suspicious;
+  VisStrFormPtr  vfp;
 
-  dfp = (DescriptorFormPtr) GetObjectExtra (f);
-  if (dfp != NULL) {
-    str = DialogToPointer (dfp->data);
+  vfp = (VisStrFormPtr) GetObjectExtra (f);
+  if (vfp != NULL) {
+    str = DialogToPointer (vfp->data);
     if (str == NULL || StringHasNoText (str)) {
       MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
       ompc.do_not_reload_from_cache = TRUE;
-      ompc.input_entityID = dfp->input_entityID;
-      ompc.input_itemID = dfp->input_itemID;
-      ompc.input_itemtype = dfp->input_itemtype;
+      ompc.input_entityID = vfp->input_entityID;
+      ompc.input_itemID = vfp->input_itemID;
+      ompc.input_itemtype = vfp->input_itemtype;
       if (! DetachDataForProc (&ompc, FALSE)) {
         Message (MSG_ERROR, "DetachDataForProc failed");
       }
-      GetRidOfEmptyFeatsDescStrings (dfp->input_entityID, NULL);
-      ObjMgrSetDirtyFlag (dfp->input_entityID, TRUE);
-      ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID,
-                     dfp->input_itemID, dfp->input_itemtype);
+      GetRidOfEmptyFeatsDescStrings (vfp->input_entityID, NULL);
+      ObjMgrSetDirtyFlag (vfp->input_entityID, TRUE);
+      ObjMgrSendMsg (OM_MSG_UPDATE, vfp->input_entityID,
+                     vfp->input_itemID, vfp->input_itemtype);
       MemFree (str);
       return;
     }
+    suspicious = FALSE;
+    if (vfp->subtype == Seq_descr_comment) {
+      suspicious = SerialNumberInString (str);
+    }
     MemFree (str);
-    if (DescFormReplaceWithoutUpdateProc (f)) {
-      GetRidOfEmptyFeatsDescStrings (dfp->input_entityID, NULL);
-      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-        ExtendGeneFeatIfOnMRNA (dfp->input_entityID, NULL);
+    if (suspicious) {
+      if (Message (MSG_OKC, "%s", citInCommentMsg) == ANS_CANCEL) {
+        Remove (f);
+        return;
       }
-      ObjMgrSetDirtyFlag (dfp->input_entityID, TRUE);
-      ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID,
-                     dfp->input_itemID, dfp->input_itemtype);
+    }
+    if (DescFormReplaceWithoutUpdateProc (f)) {
+      GetRidOfEmptyFeatsDescStrings (vfp->input_entityID, NULL);
+      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+        ExtendGeneFeatIfOnMRNA (vfp->input_entityID, NULL);
+      }
+      ObjMgrSetDirtyFlag (vfp->input_entityID, TRUE);
+      ObjMgrSendMsg (OM_MSG_UPDATE, vfp->input_entityID,
+                     vfp->input_itemID, vfp->input_itemtype);
     }
   }
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.18  2000/03/10 17:29:12  kans
+* changed divray to Uint8 - fix supplied by DDBJ for Cray computer
+*
 * Revision 6.17  1999/12/21 17:52:40  kans
 * removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
 *
@@ -163,7 +166,7 @@ static int	bufno = 0; /* current buffer marker in the circular list */
 static char	buf[NBUFS][(CHAR_BIT)*sizeof(long)/2];
 
 /* divray[] is a fixed array of power-of-10 divisors which must be initialized*/
-static unsigned long divray[CHAR_BIT*sizeof(unsigned long)/2];
+static Uint8 divray[CHAR_BIT*sizeof(Uint8)/2];
 /* divray_max is related to the maximum precision available in a long int */
 static int	divray_max;
 
@@ -187,7 +190,7 @@ static void
 divray_init (void)
 
 {
-	unsigned long	j = ULONG_MAX, k = 1;
+	Uint8	j = UINT8_MAX, k = 1;
 
 	for (divray_max=0; divray_max < DIM(divray) && j != 0; ++divray_max) {
 		divray[divray_max] = k;

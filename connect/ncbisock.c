@@ -1,4 +1,4 @@
-/* $Id: ncbisock.c,v 6.1 1999/10/18 15:39:05 vakatov Exp $
+/* $Id: ncbisock.c,v 6.2 2000/02/25 16:45:54 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,37 +39,32 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.c,v $
+ * Revision 6.2  2000/02/25 16:45:54  vakatov
+ * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+ * the C++ toolkits, and even to use them in a "standalone" fashion
+ *
+ * Revision 6.3  2000/02/18 23:50:41  vakatov
+ * REDESIGN
+ *
+ * Revision 6.2  2000/02/17 21:51:15  vakatov
+ * REDESIGN::
+ *
  * Revision 6.1  1999/10/18 15:39:05  vakatov
  * Initial revision
  * This is actually just an interface for the back compatibility with the
  * former "ncbisock.[ch]"; the real code is in "ncbi_socket.[ch]"
- *
  * ===========================================================================
  */
 
 #include <ncbithr.h>
 #include <ncbisock.h>
+#include <ncbierr.h>
 
-/* undefine all "Nlm_SOCK_*" to clear the access to <ncbi_socket.h> API */
+
+/* Undefine some "Nlm_SOCK_*" to clear the access to <ncbi_socket.h> API
+ */
 #undef LSOCK
 #undef SOCK
-
-#undef ESOCK_ErrCode
-#undef eSOCK_ESuccess
-#undef eSOCK_ETimeout
-#undef eSOCK_EClosed
-#undef eSOCK_EUnknown
-
-
-#undef ESOCK_Mode
-#undef eSOCK_OnRead
-#undef eSOCK_OnWrite
-#undef eSOCK_OnReadWrite
-
-#undef SOCK_ErrCodeStr
-
-#undef SOCK_Initialize
-#undef SOCK_Destroy
 
 #undef LSOCK_Create
 #undef LSOCK_Accept
@@ -78,7 +73,6 @@
 
 #undef SOCK_Create
 #undef SOCK_SetTimeout
-#undef SOCK_Select
 #undef SOCK_Read
 #undef SOCK_ReadPersist
 #undef SOCK_Peek
@@ -89,173 +83,268 @@
 #undef SOCK_Close
 #undef SOCK_GetOSHandle
 
-#undef GetHostName
-#undef Uint4toInaddr
 
-/* this is the only place where both <ncbibuf.h> and <ncbi_buffer.h> can
- * be #include'd in one source module! */
+/* This is the only place where both <ncbibuf.h> and <ncbi_buffer.h> are
+ * allowed to be #include'd in the same source module!
+ */
 #undef NCBISOCK__H
 
-#include <ncbi_socket.h>
+#include <connect/ncbi_socket.h>
 
 
-/* ESOCK_Status <--> ESOCK_ErrCode
+/* EIO_Status <--> ESOCK_ErrCode
  */
-#define S2E(status)   ((Nlm_ESOCK_ErrCode) status)
-#define E2S(err_code) ((ESOCK_Status)    err_code)
+static ESOCK_ErrCode s_ESOCK_ErrCode[eIO_Unknown + 1] = {
+  eSOCK_ESuccess,
+  eSOCK_ETimeout,
+  eSOCK_EClosed,
+  eSOCK_EUnknown,
+  eSOCK_EUnknown,
+  eSOCK_EUnknown
+};
+#define S2E(status)  s_ESOCK_ErrCode[(int) status]
 
-/* ESOCK_Mode -> ESOCK_Direction
+static EIO_Status s_EIO_Status[eSOCK_EUnknown + 1] = {
+  eIO_Success,
+  eIO_Timeout,
+  eIO_Closed,
+  eIO_Unknown
+};
+#define E2S(err_code)  s_EIO_Status[(int) err_code]
+
+
+/* ESOCK_Mode -> EIO_Event
  */
-#define M2D(mode) ((ESOCK_Direction) mode)
+static EIO_Event s_EIO_Event[3] = {
+  eIO_Read,
+  eIO_Write,
+  eIO_ReadWrite
+};
+#define M2E(mode) s_EIO_Event[(int) mode]
 
-/* STimeout <--> SSOCK_Timeout
+
+/***********************************************************************
+ *  INITIALIZATION  -- to provide MT-safety and error posting
  */
-static STimeout* s_ss2tt(const SSOCK_Timeout *ss, STimeout *tt)
-{
-  if ( !ss )
-    return 0;
 
-  tt->sec  = ss->sec;
-  tt->usec = ss->usec % 1000000;
-  return tt;
-}
-
-static SSOCK_Timeout* s_tt2ss(const STimeout *tt, SSOCK_Timeout *ss)
-{
-  if ( !tt )
-    return 0;
-
-  ss->sec  = tt->sec;
-  ss->usec = tt->usec % 1000000;
-  return ss;
-}
-
-
-/* MT-protection callback
- */
 #if defined(__cplusplus)
 extern "C" {
-  static void s_MT_CSection(void* data, ESOCK_MT_Locking what);
+  static int/*bool*/ s_MT_LOCK_Handler(void* user_data, EMT_Lock how);
+  static void        s_MT_LOCK_Cleanup(void* user_data);
+  static void s_LOG_Handler(void* user_data, SLOG_Handler* call_data);
 }
 #endif /* __cplusplus */
-static void s_MT_CSection(void* data, ESOCK_MT_Locking what)
-{
-  TNlmMutex* mtx = (TNlmMutex*) data;
 
-  switch ( what ) {
-  case eSOCK_MT_Lock:
-    NlmMutexLockEx(mtx);
+
+static int/*bool*/ s_MT_LOCK_Handler(void* user_data, EMT_Lock how)
+{
+  TNlmRWlock rw_lock = (TNlmRWlock) user_data;
+  Int4 ret_code;
+  switch ( how ) {
+  case eMT_Lock:
+    ret_code = NlmRWwrlock(rw_lock);
     break;
-  case eSOCK_MT_Unlock:
-    NlmMutexUnlock(*mtx);
+  case eMT_LockRead:
+    ret_code = NlmRWrdlock(rw_lock);
     break;
-  case eSOCK_MT_Cleanup:
-    NlmMutexDestroy(*mtx);
-    *mtx = (TNlmMutex) ~0;
+  case eMT_Unlock:
+    ret_code = NlmRWunlock(rw_lock);
     break;
+  default:
+    ASSERT(0);
+    ret_code = 1/*bad*/;
+  }
+
+  return (ret_code == 0);
+}
+
+static void s_MT_LOCK_Cleanup(void* user_data)
+{
+  NlmRWdestroy((TNlmRWlock) user_data);
+}
+
+
+static void s_LOG_Handler(void* user_data, SLOG_Handler* call_data)
+{
+  static ErrSev s_Lev2Sev[eLOG_Fatal + 1] = {
+    SEV_INFO,
+    SEV_INFO,
+    SEV_WARNING,
+    SEV_ERROR,
+    SEV_REJECT,
+    SEV_FATAL
+  };
+
+  if (Nlm_ErrSetContext(call_data->module, call_data->file, call_data->line,
+                        0, 0, 0, 0) == 0) {
+    ErrSev sev = s_Lev2Sev[(int) call_data->level];
+    Nlm_ErrPostStr(sev, SOCK_ERRCODE, 0, call_data->message);
   }
 }
 
 
-/* Setup MT-protection callback
- */
-static void s_MT_SetCriticalSection(void)
+static int/*bool*/ s_Initialized = 0/*false*/;
+static TNlmMutex   s_InitMutex;
+
+static int/*fake*/ s_Initialize(void)
 {
-  if ( !NlmThreadsAvailable() ) {
-    static TNlmMutex s_Mutex;
-    NlmMutexLockEx(&s_Mutex);
-    SOCK_MT_SetCriticalSection(s_MT_CSection, &s_Mutex);
-    NlmMutexUnlock(s_Mutex);
+  NlmMutexLockEx(&s_InitMutex);
+  if ( !s_Initialized ) {
+    /* MT safety */
+    if ( NlmThreadsAvailable() ) {
+      TNlmRWlock rw_lock = NlmRWinit();
+      if ( !rw_lock ) {
+        ASSERT(0);
+      } else {
+        MT_LOCK lk =
+          MT_LOCK_Create(rw_lock, s_MT_LOCK_Handler, s_MT_LOCK_Cleanup);
+        ASSERT(lk);
+        SOCK_SetLOCK(lk);
+      }
+    }
+
+    /* Error posting */
+    SOCK_SetLOG( LOG_Create(0, s_LOG_Handler, 0, 0) );
+
+    /* API initialization */
+    {{
+      if (SOCK_InitializeAPI() == eIO_Success)
+        s_Initialized = 1/*true*/;
+      else
+        ASSERT(0);
+    }}
   }
+  NlmMutexUnlock(s_InitMutex);
+  return 1;
+}
+
+#define INITIALIZE (void)(s_Initialized ? 1 : s_Initialize())
+
+
+
+/******************************************************************************
+ *  SHUTDOWN
+ */
+
+NLM_EXTERN ESOCK_ErrCode SOCK_Destroy
+(void)
+{
+  ESOCK_ErrCode err_code;
+  TNlmMutex x_InitMutex;
+
+  NlmMutexLockEx(&s_InitMutex);
+
+  if ( s_Initialized ) {
+    err_code = S2E( SOCK_ShutdownAPI() );
+    s_Initialized = 0/*false*/;
+  } else {
+    err_code = eSOCK_ESuccess;
+  }
+
+  x_InitMutex = s_InitMutex;
+  s_InitMutex = 0;
+  NlmMutexUnlock(x_InitMutex);
+  NlmMutexDestroy(x_InitMutex);
+
+  return err_code;
 }
 
 
 
 /***********************************************************************
- *  EXTERNAL
- ***********************************************************************/
+ *  MISC
+ */
 
-NLM_EXTERN const char* Nlm_SOCK_ErrCodeStr
-(Nlm_ESOCK_ErrCode err_code)
+NLM_EXTERN const char* SOCK_ErrCodeStr
+(ESOCK_ErrCode err_code)
 {
-  return SOCK_StatusStr( E2S(err_code) );
+  return IO_StatusStr( E2S(err_code) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Destroy(void)
-{
-  return S2E( SOCK_ShutdownAPI() );
-}
 
+/***********************************************************************
+ *  LSOCK
+ */
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_LSOCK_Create
+NLM_EXTERN ESOCK_ErrCode Nlm_LSOCK_Create
 (Nlm_Uint2  port,
  Nlm_Uint2  n_listen,
- LSOCK     *lsock)
+ LSOCK*     lsock)
 {
-  s_MT_SetCriticalSection();
+  INITIALIZE;
   return S2E( LSOCK_Create(port, n_listen, lsock) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_LSOCK_Accept
+NLM_EXTERN ESOCK_ErrCode Nlm_LSOCK_Accept
 (LSOCK           lsock,
- const STimeout *timeout,
- SOCK           *sock)
+ const STimeout* timeout,
+ SOCK*           sock)
 {
-  SSOCK_Timeout x_timeout;
-  return S2E( LSOCK_Accept(lsock, s_tt2ss(timeout, &x_timeout), sock) );
+  return S2E( LSOCK_Accept(lsock, timeout, sock) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_LSOCK_Close
+NLM_EXTERN ESOCK_ErrCode Nlm_LSOCK_Close
 (LSOCK lsock)
 {
   return S2E( LSOCK_Close(lsock) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Create
+NLM_EXTERN ESOCK_ErrCode Nlm_LSOCK_GetOSHandle
+(LSOCK     lsock,
+ void*     handle_buf,
+ Nlm_Uint4 handle_size)
+{
+  return S2E( LSOCK_GetOSHandle(lsock, handle_buf, (size_t) handle_size) );
+}
+
+
+
+/***********************************************************************
+ *  SOCK
+ */
+
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Create
 (const char*     host,
  Nlm_Uint2       port,
  const STimeout* timeout,
  SOCK*           sock)
 {
-  SSOCK_Timeout x_timeout;
-  s_MT_SetCriticalSection();
-  return S2E( SOCK_Create(host, port, s_tt2ss(timeout, &x_timeout), sock) );
+  INITIALIZE;
+  return S2E( SOCK_Create(host, port, timeout, sock) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Reconnect
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Reconnect
 (SOCK            sock,
  const char*     host,
  Nlm_Uint2       port,
  const STimeout* timeout)
 {
-  SSOCK_Timeout x_timeout;
-  return S2E( SOCK_Reconnect(sock, host, port, s_tt2ss(timeout, &x_timeout)) );
+  return S2E( SOCK_Reconnect(sock, host, port, timeout) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Close
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Close
 (SOCK sock)
 {
   return S2E( SOCK_Close(sock) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Select
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Select
 (SOCK            sock,
  Nlm_ESOCK_Mode  mode,
  const STimeout* timeout)
 {
-  SSOCK_Timeout x_timeout;
-  return S2E( SOCK_Wait(sock, M2D(mode), s_tt2ss(timeout, &x_timeout)) );
+  return S2E( SOCK_Wait(sock, M2E(mode), timeout) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_SetTimeout
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_SetTimeout
 (SOCK            sock,
  Nlm_ESOCK_Mode  mode,
  const STimeout* new_timeout,
@@ -265,70 +354,71 @@ NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_SetTimeout
   /* retrieve R and/or W timeouts, if requested */
   static const STimeout s_Infinite = { 99999999, 999999 };
   if ( r_timeout ) {
-    if ( !s_ss2tt(SOCK_GetReadTimeout(sock), r_timeout) )
-      *r_timeout = s_Infinite;
+    const STimeout* x_timeout = SOCK_GetTimeout(sock, eIO_Read);
+    *r_timeout = x_timeout ? *x_timeout : s_Infinite;
   }
   if ( w_timeout ) {
-    if ( !s_ss2tt(SOCK_GetWriteTimeout(sock), w_timeout) )
-      *w_timeout = s_Infinite;
+    const STimeout* x_timeout = SOCK_GetTimeout(sock, eIO_Write);
+    *w_timeout = x_timeout ? *x_timeout : s_Infinite;
   }
 
   /* special case -- do not change the timeout(s) */
   if (new_timeout == SOCK_GET_TIMEOUT)
     return Nlm_eSOCK_Success;
 
+  /* change C(close) timeout when W timeout is changed */
+  if (mode == eSOCK_OnWrite  ||  mode == eSOCK_OnReadWrite) {
+    VERIFY(SOCK_SetTimeout(sock, eIO_Close, new_timeout) == eIO_Success);
+  }
+
   /* change R and/or W timeouts */
-  {{
-    SSOCK_Timeout x_timeout;
-    return S2E( SOCK_SetTimeout(sock, M2D(mode),
-                                s_tt2ss(new_timeout, &x_timeout)) );
-  }}
+  return S2E( SOCK_SetTimeout(sock, M2E(mode), new_timeout) );
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Read
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Read
 (SOCK       sock,
  void*      buf,
  Nlm_Uint4  size,
  Nlm_Uint4* n_read)
 {
   size_t x_read;
-  Nlm_ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eSOCK_Read) );
+  ESOCK_ErrCode err_code =
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Plain) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_ReadPersist
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_ReadPersist
 (SOCK       sock,
  void*      buf,
  Nlm_Uint4  size,
  Nlm_Uint4* n_read)
 {
   size_t x_read;
-  Nlm_ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eSOCK_Persist) );
+  ESOCK_ErrCode err_code =
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Persist) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Peek
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Peek
 (SOCK       sock,
  void*      buf,
  Nlm_Uint4  size,
  Nlm_Uint4* n_read)
 {
   size_t x_read;
-  Nlm_ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eSOCK_Peek) );
+  ESOCK_ErrCode err_code =
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Peek) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_PushBack
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_PushBack
 (SOCK        sock,
  const void* buf,
  Nlm_Uint4   size)
@@ -343,14 +433,14 @@ NLM_EXTERN Nlm_Boolean Nlm_SOCK_Eof(SOCK sock)
 }
 
 
-NLM_EXTERN Nlm_ESOCK_ErrCode Nlm_SOCK_Write
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Write
 (SOCK        sock,
  const void* buf,
  Nlm_Uint4   size,
  Nlm_Uint4*  n_written)
 {
   size_t x_written;
-  Nlm_ESOCK_ErrCode err_code =
+  ESOCK_ErrCode err_code =
     S2E( SOCK_Write(sock, buf, (size_t) size, &x_written) );
   if ( n_written )
     *n_written = (Nlm_Uint4) x_written;
@@ -377,10 +467,25 @@ NLM_EXTERN void Nlm_SOCK_Address
 }
 
 
+NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_GetOSHandle
+(SOCK      sock,
+ void*     handle_buf,
+ Nlm_Uint4 handle_size)
+{
+  return S2E( SOCK_GetOSHandle(sock, handle_buf, (size_t) handle_size) );
+}
+
+
+
+/***********************************************************************
+ *  AUXILIARY
+ */
+
 NLM_EXTERN Nlm_Boolean Nlm_GetHostName
 (char*     name,
  Nlm_Uint4 namelen)
 {
+  INITIALIZE;
   return SOCK_gethostname(name, (size_t) namelen) ? FALSE : TRUE;
 }
 
@@ -390,10 +495,11 @@ NLM_EXTERN Nlm_Boolean Nlm_Uint4toInaddr
  char*     buf,
  Nlm_Uint4 buf_len)
 {
-  s_MT_SetCriticalSection();
+  INITIALIZE;
   return SOCK_host2inaddr((unsigned int) ui4_addr, buf, (size_t) buf_len) ?
-    TRUE : FALSE;
+    FALSE : TRUE;
 }
+
 
 NLM_EXTERN Nlm_Uint4 Nlm_htonl(Nlm_Uint4 value)
 {

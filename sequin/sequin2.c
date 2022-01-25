@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.85 $
+* $Revision: 6.86 $
 *
 * File Description: 
 *
@@ -5849,13 +5849,18 @@ static void LookForReplacedByCallback (SeqEntryPtr sep, Pointer mydata, Int4 ind
   }
 }
 
+#ifdef USE_SMARTNET
+extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+#endif
+
 static void DownloadProc (ButtoN b)
 
 {
+  CharPtr       accn = NULL;
   MsgAnswer     ans;
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
-  Pointer       dataptr;
+  Pointer       dataptr = NULL;
   Uint2         datatype;
   CharPtr       dbname;
   Uint2         entityID;
@@ -5917,6 +5922,7 @@ static void DownloadProc (ButtoN b)
     SeqIdFree (sip);
     */
     uid = AccessionToGi (str);
+    accn = str;
   } else {
     if (! StrToLong (str, &uid)) {
      uid = 0;
@@ -5958,6 +5964,14 @@ static void DownloadProc (ButtoN b)
       }
     }
     dataptr = (Pointer) sep->data.ptrvalue;
+  } else if (! StringHasNoText (accn)) {
+#ifdef USE_SMARTNET
+    if (accn != NULL) {
+      dataptr = ReadFromDirSub (accn, &datatype, NULL);
+    }
+#endif
+  }
+  if (dataptr != NULL) {
     entityID = ObjMgrRegister (datatype, dataptr);
     if (dataptr != NULL && entityID > 0) {
       if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
@@ -5998,7 +6012,7 @@ static void DownloadProc (ButtoN b)
           }
           */
         }
-        if (datatype != OBJ_SEQSUB) {
+        if (datatype != OBJ_SEQSUB && uid > 0) {
           ArrowCursor ();
           Update ();
           if (Message (MSG_YN, repackageMsg) == ANS_YES) {

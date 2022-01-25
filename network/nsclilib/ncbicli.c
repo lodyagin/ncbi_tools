@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbicli.c,v $  $Revision: 4.18 $  $Date: 1999/06/24 17:59:35 $
+/*  $RCSfile: ncbicli.c,v $  $Revision: 4.19 $  $Date: 2000/02/09 15:54:31 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.c,v $
+* Revision 4.19  2000/02/09 15:54:31  vakatov
+* NIC_GetService() -- Changed error message format
+*
 * Revision 4.18  1999/06/24 17:59:35  vakatov
 * Untie the HTTP and regular proxy servers: SRV_HTTP_PROXY_***, SRV_PROXY_HOST
 *
@@ -473,8 +476,8 @@ NLM_EXTERN NIC NIC_GetService
 
   /* error */
   ErrPostEx(SEV_ERROR, NIC_ERROR, 10,
-            "[NIC_GetService]  Failed to establish connection to dispatcher "
-            " %s:%d/%s, for service \"%s\"",
+            "[NIC_GetService]  Failed to establish connection to dispatcher"
+            " at \"%s:%d\", path \"%s\", for service \"%s\"",
             disp_host, (int)disp_port, disp_path, service_name);
   NIC_CloseService(nic);
   return 0;

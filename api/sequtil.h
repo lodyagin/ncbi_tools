@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.18  2000/02/04 16:13:17  kans
+* added prefix parameter to MakeNewProteinSeqIdEx
+*
 * Revision 6.17  1999/08/03 20:00:35  sicotte
 * Add SeqIdFindBestAccession
 *
@@ -604,12 +607,12 @@ NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
 *       the returned id is guaranteed to be unique among all Bioseqs currently
 *       loaded in memory. 
 *   	
-*   MakeNewProteinSeqIdEx(SeqLocPtr slp, SeqIdPtr sip, Int2 ctrptr)
+*   MakeNewProteinSeqIdEx(SeqLocPtr slp, SeqIdPtr sip, prefix, Int2 ctrptr)
 *   	Allows you to indicate a starting count for the X in base_X, and returns
 *       the next count for improved speed when allocating many protein bioseqs
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx PROTO((SeqLocPtr slp, SeqIdPtr sip, Int2Ptr ctrptr));
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx PROTO((SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr));
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId PROTO((SeqLocPtr slp, SeqIdPtr sip));
 
 

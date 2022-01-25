@@ -29,13 +29,64 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.30 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.47  2000/04/13 13:58:03  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.46  2000/04/11 13:19:26  durand
+* added UDV_LoadSpecificEditor for Sequin
+*
+* Revision 6.45  2000/04/10 21:41:26  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 6.44  2000/04/10 20:33:40  lewisg
+* fix show/hide for blast multiple, make blast multiple API generic
+*
+* Revision 6.43  2000/04/05 21:13:20  kans
+* more changes to allow udv panel to be added to Sequin viewer
+*
+* Revision 6.42  2000/04/05 20:52:36  hurwitz
+* added GUI control for shifting left and right alignment boundaries
+*
+* Revision 6.41  2000/04/03 22:26:32  hurwitz
+* can now shift a row with click and drag
+*
+* Revision 6.40  2000/03/31 13:51:21  durand
+* added UDV_InitForSequin()
+*
+* Revision 6.39  2000/03/30 19:54:09  kans
+* initial work to get UDV and DDV into Sequin viewer
+*
+* Revision 6.38  2000/03/28 21:03:14  hurwitz
+* added gui control to re-order rows
+*
+* Revision 6.37  2000/03/15 19:32:20  lewisg
+* launch only single udv window
+*
+* Revision 6.36  2000/03/06 14:00:47  durand
+* first release of the Summary viewer done
+*
+* Revision 6.35  2000/03/02 15:41:46  lewisg
+* move StartNetworkProc typedef to samutil.h
+*
+* Revision 6.34  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 6.33  2000/02/16 22:38:30  durand
+* fixed some wierd behaviours of features selections
+*
+* Revision 6.32  2000/02/16 16:00:33  durand
+* added UDVprocid and GVprocid to vmp data structure
+*
+* Revision 6.31  2000/02/15 22:40:58  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
 * Revision 6.30  2000/01/11 15:03:18  durand
 * remove network stuff
 *
@@ -144,6 +195,7 @@ extern "C" {
 #include <sequtil.h>
 #include <sqnutils.h>
 #include <vibrant.h>
+#include <bspview.h>
 
 #include <odlbox.h>
 #include <udvseq.h>
@@ -321,16 +373,17 @@ extern "C" {
 		UDV_Item_Select		Old_Item_select;/*old selected Item*/
 		Boolean				ClickFeatFromDlg;/*click from Feat List Dlg==TRUE*/
 		UDVTimerData		udt;
+        SAM_ViewGlobal     *vgp;  /*added for data exchange with Cn3D*/
+        BioseqViewPtr       bvp;  /*added for data exchange with Sequin*/
+		Boolean             bDisplayRevComp;/*TRUE : diasplay the reverse
+		    complement of a sequence. Nuc. only.*/
 		} ViewerDialogData, PNTR ViewerDialogDataPtr;
 
 	typedef struct udvmainmenu {/*handles of the main menu commands*/
 		MenU File;
 		MenU Options;
 		MenU Help;
-#ifdef _DDVEDIT
-        MenU Insert;
-        IteM InsertBlock;
-#endif /* _DDVEDIT */
+        MenU Align;
 		IteM FileOpen;		/*open file command*/
 		IteM EntrezOpen;	/*open from Entrez command*/
 		IteM FileClose;		/*close file command*/
@@ -339,9 +392,14 @@ extern "C" {
 		IteM ShowFeature;	/*show feature on/off command*/
 		IteM ShowFeatureList;	/*show feature on/off command*/
 		IteM SearchForFeature;/*search features by keyword*/
+		IteM ShowRevComp;	/*show reverse complement (nuc. seq. only)*/
 		MenU ScalePos;		/*scale position command*/
 		ChoicE ScalePosChoice; /*scale pos value (sub-menu)*/
 		IteM RefreshScreen;	/*redraw the entire screen*/
+        MenU AlignBlast;
+        IteM BlastFile;
+        IteM BlastNet;
+        IteM BlastMany;
 		IteM ConfigNet;/*Entrez Network configuration*/
 		IteM HelpAbout;	/*what's that ?*/
 	} UDVMainMenu, PNTR UDVMainMenuPtr;
@@ -356,6 +414,8 @@ extern "C" {
 		
 	typedef struct viewermain {
 		Boolean             UseNetwork;/*true if UDV is connected to Entrez*/
+		Uint2               UDVprocid;
+		Uint2               GVprocid;
 			/*main win menu*/
 		UDVMainMenu			MainMenu;		/*menu command list*/
 			/*Features List DlgBox*/
@@ -381,7 +441,10 @@ extern "C" {
 #define REGISTER_UDV_AUTONOMOUS ObjMgrProcLoad(OMPROC_VIEW, \
 		"OneD-Viewer", "SingleSeqViewer", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, \
 		NULL, UDV_ObjRegAutonomous, 0)	
-	
+#define REGISTER_UDV_SEQENTRY ObjMgrProcLoad(OMPROC_VIEW, \
+		"OneD-Viewer SE", "SingleSeqViewer SE", OBJ_BIOSEQSET, 0, OBJ_BIOSEQSET, 0, \
+		NULL, UDV_ObjRegAutonomous, 0)	
+
 	/*struture passed to the FEAT List dialog box*/
 	typedef  struct  flmdata {
 		WindoW 		hWndMain;	/*UnDviewer*/
@@ -412,7 +475,6 @@ extern "C" {
 	*/
 
 	typedef SeqEntryPtr (*UdvFetchSeqEntryProc) (Int4 uid, Int2 retcode);
-	typedef Boolean (*StartNetworkProc) (Boolean UseNetwork);
 
 	typedef  struct  udvglobals {
 		ViewerMainPtr         vmp;
@@ -420,6 +482,25 @@ extern "C" {
 		Nlm_ItmActnProc   NetCfgMenuProc;
 		StartNetworkProc  NetStartProc;
 		} UdvGlobals, PNTR UdvGlobalsPtr;
+
+    /*
+    /* structs used only by the Blast sequence dialog box
+    */
+
+    struct _UDV_BlastDlgData;
+    typedef void (*UDV_BlastProcCB)(struct _UDV_BlastDlgData *bddp);
+
+    typedef struct _UDV_BlastDlgData {
+        ValNode *pvnSips;		/* list of sips in structure */
+        LisT bsp_list;		/* listbox of bsps */
+        ButtoN bGap;   /* should the alignment be gapped? */
+        TexT tMax;
+        TexT tExpect;
+        UDV_BlastProcCB callback;  /* called at end of alignment */
+        Boolean IBM; /* should IBM be applied? */
+        SeqAlign *salp;  /* resulting seqalign */
+    } UDV_BlastDlgData;
+
 
 /*******************************************************************************
 
@@ -430,7 +511,8 @@ extern "C" {
 	/*drawing and UDV graphical management*/
 	NLM_EXTERN ValNodePtr UDV_GetSelectedRegions(SelStructPtr om_ssp, Uint2 bsp_eID,
 		Uint2 bsp_iID);
-	NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos);
+	NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos,
+		Int4 bspLength,Boolean bDisplayRevComp);
 	NLM_EXTERN SeqLocPtr UDV_GetClosetSeqLocGivenBspPos(SeqIdPtr sip, Uint2 eID, 
 		Uint2 iID, Int4 bsp_pos, Int4Ptr old_pos, Boolean bModify);
 	NLM_EXTERN void UDV_InvalRegion(PaneL UnDViewer,UnDViewerGraphDataPtr GrData,
@@ -453,9 +535,16 @@ extern "C" {
 	NLM_EXTERN Uint4Ptr UDV_BuildFeatColorTable(void);
 	NLM_EXTERN void UDV_Build_NA_LayoutPalette(UnDViewerGraphDataPtr GrData);
 	NLM_EXTERN void UDV_Build_AA_LayoutPalette(UnDViewerGraphDataPtr GrData);
+	NLM_EXTERN void UDV_deselect_feature(ViewerDialogDataPtr vdp);
+	NLM_EXTERN void UDV_SelectFeatInFeatDlg(ViewerMainPtr vmp, 
+			Uint2 entityID, Uint2 itemID);
 	NLM_EXTERN void UDV_select_feature(PaneL p,ViewerDialogDataPtr vdp,
 			Uint2 entityID,Uint2 itemID,Boolean bRepos);
 	NLM_EXTERN void UDV_draw_double_cursor(RecT rcClip,PoinT pos);
+  NLM_EXTERN void UDV_draw_horizontal_line(RecT rcClip, Int4 VPos);
+  NLM_EXTERN void UDV_draw_rectangle(RecT rcClip, Boolean DotIt);
+  NLM_EXTERN void UDV_draw_vertical_bar(RecT rcClip, Int4 HPos, Boolean DotIt);
+  NLM_EXTERN void UDV_draw_horizontal_bar(Int4 VPos, Int4 LeftHPos, Int4 RightHPos);
 	NLM_EXTERN void UDV_ClickProc(PaneL p, PoinT pt);
 	NLM_EXTERN void UDV_DragMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt);
 	NLM_EXTERN void UDV_DragProc(PaneL p, PoinT pt);
@@ -472,7 +561,8 @@ extern "C" {
 	NLM_EXTERN void UDV_Draw_sequence(UnDViewerGraphDataPtr GrData,
         DDV_ColorGlobal *svpp ,Boolean UseDefClr,Uint4 DefClr,
 		ParaGPtr pgp,RecT PNTR rc,Int4 start_decal,Int4 StartLetter,
-		CharPtr szSequence, SeqId *sip,ValNodePtr vnp_bsp,Boolean bSelect);
+		CharPtr szSequence, SeqId *sip,ValNodePtr vnp_bsp,Boolean bSelect,
+        Int4 Row,Int4 bspLength,Boolean bDisplayRevComp);
 	NLM_EXTERN void UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
 		Boolean ShowMajorTick,Boolean ShowMMinorTick,Uint1 ScalePosition,
 		Int4 StartLetter,Int4 StopLetter,RecT PNTR rc,Int2 LeftDecal,
@@ -493,7 +583,7 @@ extern "C" {
 	NLM_EXTERN void UDV_set_PullMenus(UDVMainMenuPtr mmp,Boolean enable);
 	NLM_EXTERN void UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable);
 	NLM_EXTERN void UDV_set_MainControls(ViewerMainPtr vmp,Boolean enable);
-	NLM_EXTERN void UDV_SetupMenus(WindoW w,Boolean isEntrezOk);
+	NLM_EXTERN void UDV_SetupMenus(WindoW w,Boolean isEntrezOk,SAM_ViewGlobal *vgp);
 	NLM_EXTERN void	UDV_resize_viewer(PaneL p,ViewerDialogDataPtr vdp);
 	NLM_EXTERN void UnDViewerVScrlUpdate(PaneL p,Boolean bInit,Int4 CurPos);
 	NLM_EXTERN void UDV_WinMainResize(WindoW w);
@@ -502,14 +592,18 @@ extern "C" {
 	NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,
 				ViewerDialogDataPtr PNTR vdp,FonT f);
 	NLM_EXTERN Boolean CreateMainControls(WindoW w,ViewerMainPtr vmp,SAM_ViewGlobal *vgp);
+	NLM_EXTERN void UnDViewerVScrlProc (BaR sb, SlatE s, Int4 newval,  Int4 oldval);
 
 	/*sequence buffer management*/
 	NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to, 
 		Boolean IsProt,Int2 len);
 	NLM_EXTERN void UDV_create_buffer(UnDViewerGraphDataPtr GrData,
-		ValNodePtr ParaG_list,BspInfoPtr bsp_i,ValNodePtr StartScan);
+		ValNodePtr ParaG_list,BspInfoPtr bsp_i,ValNodePtr StartScan,
+		Boolean bReverse);
 		
 	/*open a SeqEntry management*/
+    NLM_EXTERN Boolean LIBCALLBACK SearchBioseq (BioseqPtr bsp, 
+			SeqMgrBioseqContextPtr context);
 	NLM_EXTERN Boolean  UDV_analyze_SEP_for_open(FILE *fp,SeqEntryPtr the_set,
 		ViewerMainPtr vmp,WindoW w);
 	NLM_EXTERN void UDV_Init_vdp_struct(PaneL p,ViewerDialogDataPtr vdp, 
@@ -522,7 +616,13 @@ extern "C" {
 	/*clean quit*/
 	NLM_EXTERN void UDV_WinMainProgQuit(WindoW w);
 
+	/*Sequin stuffs*/
+	NLM_EXTERN Boolean UDV_InitForSequin(PaneL udvPanel, BioseqViewPtr bvp);
+	NLM_EXTERN void UDV_LoadSpecificEditor(BioseqViewPtr bvp, Uint2 entityID, 
+		Uint2 itemID, Uint2 itemtype);
 
+    /* blast dialog */
+    NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp);
 
 
 #ifdef __cplusplus

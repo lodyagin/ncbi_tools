@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.134 $
+* $Revision: 6.136 $
 *
 * File Description: 
 *
@@ -60,6 +60,7 @@
 #include <toasn3.h>
 #include <salstruc.h>
 #include <explore.h>
+#include <utilpub.h>
 
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
 /*#ifdef NEW_TAXON_SERVICE*/
@@ -3372,7 +3373,7 @@ static ENUM_ALIST(biosource_genome_alistX)
   {"Nucleomorph",         15},
   {"Apicoplast",          16},
   {"Leucoplast",          17},
-  {"Protoplast",          18},
+  {"Proplastid",          18},
 END_ENUM_ALIST
 
 static ENUM_ALIST(orgref_textfield_alist)
@@ -5701,6 +5702,25 @@ static void RemovePub (IteM i)
   ProcessPub (i, REMOVE_PUB);
 }
 
+static void StripSerials (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  EntryStripSerialNumber (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static void RemoveLocalIDsProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -7302,6 +7322,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove RNA Qual", RemoveRNA);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Remove Pub", RemovePub);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Strip Serial Numbers", StripSerials);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Remove Text Inside String", RemoveTextInsideString);

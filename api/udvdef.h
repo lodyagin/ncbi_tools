@@ -1,4 +1,4 @@
-/*  $Id: udvdef.h,v 6.8 2000/01/05 21:07:50 durand Exp $
+/*  $Id: udvdef.h,v 6.13 2000/04/13 13:57:33 durand Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   07/09/99
 *
-* $Revision: 6.8 $
+* $Revision: 6.13 $
 *
 * File Description: this file is the companion of udviewer.h
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvdef.h,v $
+* Revision 6.13  2000/04/13 13:57:33  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.12  2000/04/10 20:58:43  hurwitz
+* added GUI controls for DeleteBlock in DDE
+*
+* Revision 6.11  2000/04/05 20:52:35  hurwitz
+* added GUI control for shifting left and right alignment boundaries
+*
+* Revision 6.10  2000/04/03 22:26:31  hurwitz
+* can now shift a row with click and drag
+*
+* Revision 6.9  2000/03/28 21:03:14  hurwitz
+* added gui control to re-order rows
+*
 * Revision 6.8  2000/01/05 21:07:50  durand
 * update mouse click actions and DrawSequence function for a better use from ddv and cn3d
 *
@@ -146,10 +161,14 @@ typedef struct udvmapinfo {/*use to build the image map of the Entrez viewer*/
 	
 	/*Mouse actions*/
 #define MS_ACTION_FEAT_NOTHING	  1 /*no action*/
-#define MS_ACTION_FEAT_CURSOR	  2 /* double cursor for features*/
-#define MS_ACTION_RESIZE_WIN	  3 /*resize cxName region*/	
-#define MS_ACTION_SELECT_SEQ	  4 /*select letters on the sequence*/	
+#define MS_ACTION_FEAT_CURSOR	    2 /*double cursor for features*/
+#define MS_ACTION_RESIZE_WIN	    3 /*resize cxName region*/	
+#define MS_ACTION_SELECT_SEQ	    4 /*select letters on the sequence*/	
 #define MS_ACTION_SELECT_FULL_SEQ 5 /*select full sequence*/
+#define MS_ACTION_MOVE_ROW        6 /*change row order*/
+#define MS_ACTION_SHIFT_ROW       7 /*shift row left/right*/
+#define MS_ACTION_SHIFT_BOUNDARY  8 /*shift left/right boundary left/right*/
+#define MS_ACTION_CREATE_BLOCK    9 /*create aligned block*/
 
 	/*************************************************************************
 
@@ -191,6 +210,7 @@ typedef struct udvmapinfo {/*use to build the image map of the Entrez viewer*/
 #define DDV_DISP_HORZ ((Uint4)1)
 #define DDV_DISP_VERT ((Uint4)2)
 #define DDV_DISP_LABEL ((Uint4)4)
+#define DDV_DISP_REVERTCOORD ((Uint4)8)
 
 /*timer control*/
 #define UDV_SET_TIMER 1

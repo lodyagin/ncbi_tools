@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.5  2000/02/07 20:17:35  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.4  2000/01/07 00:22:46  thiessen
 * fixes for LessTif and OpenGL X visual selection
 *
@@ -1271,6 +1274,10 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
   Cardinal        n;
   Arg             wargs [15];
 #endif
+#ifdef WIN_MSWIN
+  Nlm_FntPtr      fntptr;
+#endif
+
 
   Nlm_GetRect ((Nlm_GraphiC) l, &r);
   wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) l);
@@ -1316,6 +1323,9 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
     Nlm_Message (MSG_ERROR, "ListProc subclass error");
   }
   SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewListProc);
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(c, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
 #endif
 #ifdef WIN_MOTIF
   sb = NULL;

@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.27 1999/11/30 20:48:53 shavirin Exp $ */
+/* $Id: pseed3.c,v 6.30 2000/04/25 19:13:17 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,18 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.27 $
+$Revision: 6.30 $
 
 $Log: pseed3.c,v $
+Revision 6.30  2000/04/25 19:13:17  dondosha
+Assign db_chunk_last to first_db_seq before start of search
+
+Revision 6.29  2000/04/25 14:29:05  shavirin
+Fixed problem with BlastGetDbChunk function in case of database subsets.
+
+Revision 6.28  2000/02/11 20:00:20  shavirin
+Fixes for seed search with list of gis.
+
 Revision 6.27  1999/11/30 20:48:53  shavirin
 Corrected the way that returnData->SeedSearch and
 returnData->patternSearch are filled in seedParallelFill.
@@ -646,9 +655,13 @@ parallel_seed_search(VoidPtr seedParallel)
     
     localSeedParallel = (seedParallelItems * ) seedParallel;
     id_list = NULL;
+
+    /* Reading databases with OIDLIST - subsets imply, that number
+       of returned ids may exceed db_chunk_size by Int4 bits (32) */
+       
     if (localSeedParallel->thr_info->blast_gi_list != NULL ||
         localSeedParallel->rdpt->oidlist != NULL) {
-        id_list = MemNew(localSeedParallel->thr_info->db_chunk_size*
+        id_list = MemNew((localSeedParallel->thr_info->db_chunk_size+33)*
                          sizeof(Int4));
     }
 
@@ -1541,7 +1554,7 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
         return;
 
     search->thr_info->last_db_seq = 0; /* This should be reset */
-    search->thr_info->db_chunk_last = 0;
+    search->thr_info->db_chunk_last = search->pbp->first_db_seq;
     
     search->thr_info->number_seqs_done = 
         search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
@@ -1553,6 +1566,10 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
         search->thr_info->final_db_seq = search->pbp->final_db_seq;
     else
         search->thr_info->final_db_seq = readdb_get_num_entries_total(search->rdfp);
+    
+    /* Directive to the function BlastGetDbChunk to use oidlist */
+    if(search->rdfp->oidlist != NULL)
+        search->thr_info->realdb_done = TRUE;
     
     BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
     

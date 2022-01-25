@@ -35,6 +35,21 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.60  2000/03/30 20:37:29  kans
+* added tilde to newline code in PrintImpFeatEx (thanks to Sergei B)
+*
+* Revision 6.59  2000/03/01 19:09:53  tatiana
+* for SYN records with multiple source features there is no subtraction
+*
+* Revision 6.58  2000/02/17 21:59:18  kans
+* /organelle not under ajp->forgbrel for this release now
+*
+* Revision 6.57  2000/02/15 22:53:56  kans
+* added dbSNP and RATMAP as legal dbxrefs, put /organelle under ajp->forgrel control
+*
+* Revision 6.56  2000/02/09 01:12:51  tatiana
+* remove space in organelle qualifier
+*
 * Revision 6.55  2000/01/21 20:48:45  kans
 * changes to merge several source qualifiers under new organelle qualifier
 *
@@ -466,7 +481,7 @@ NLM_EXTERN Int2 CheckForEqualSign PROTO ((CharPtr qual));
 NLM_EXTERN CharPtr GetProductFromCDS PROTO ((ValNodePtr product, ValNodePtr location, Int4 length));
 NLM_EXTERN void PrepareSourceFeatQuals PROTO ((SeqFeatPtr sfp_in, SeqFeatPtr sfp_out, GBEntryPtr gbp, Boolean add_modif));
 static Int2 CheckForExtraChars PROTO ((CharPtr note));
-NLM_EXTERN GBQualPtr AddBioSourceToGBQual PROTO((NoteStructPtr nsp, BioSourcePtr biosp, GBQualPtr gbqual, Boolean new_release));
+NLM_EXTERN GBQualPtr AddBioSourceToGBQual PROTO((Asn2ffJobPtr ajp, NoteStructPtr nsp, BioSourcePtr biosp, GBQualPtr gbqual, Boolean new_release));
 NLM_EXTERN Boolean delete_qual PROTO((GBQualPtr PNTR qlist, CharPtr qual));
 
 typedef struct {
@@ -511,7 +526,7 @@ ORGMOD orgmod_subtype[25] = {
 	{"note", 255}, { NULL, 0 }
 };
 
-CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene", "LocusID"};
+CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP", "RATMAP"};
 
 
 /*************************************************************************
@@ -918,7 +933,7 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	OrgRefPtr orp=NULL;
 	SeqFeatPtr sfp_in, sfp_out=NULL, sfp;
 	SeqIntPtr sip;
-	SeqLocPtr slp;
+	SeqLocPtr slp, keep_loc;
 	ValNodePtr vnp=NULL;
 	BioSourcePtr biosp = NULL;
 	OrgModPtr omp;
@@ -946,7 +961,7 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	ifp = sfp_out->data.value.ptrvalue;
 	ifp->key = StringSave("source");
 	if (ajp->slp) {
-		sfp_out->location = AsnIoMemCopy(ajp->slp,
+		slp = AsnIoMemCopy(ajp->slp,
 					(AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
 	} else {
 		slp = (SeqLocPtr) ValNodeNew(NULL);
@@ -956,22 +971,30 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		sip->to = (bsp->length)-1;
 		sip->id = SeqIdDup(SeqIdFindBest (bsp->id, 0));
 		slp->data.ptrvalue = sip;
-		sfp_out->location = slp;
 	}
+	sfp_out->location = slp;
 	if (ds != NULL) {
 		vnp = ds->vnp;
+		keep_loc = AsnIoMemCopy(slp,
+					(AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);					
 		if (vnp && vnp->choice == Seq_descr_source) {
 			biosp = vnp->data.ptrvalue;
 			if (biosp->is_focus == TRUE) {
 				sfp_out->qual = AddGBQual(sfp_out->qual, 
 										"focus", NULL);
-				for (pss=bs, i= 0; pss && i < bsize; i++, pss++) {
-					if (pss->sfp == NULL)
-						continue;
-					sfp_out->location = 
-						SeqLocSubtract(sfp_out->location, pss->sfp->location);
+				if (StringNCmp(gbp->div, "SYN", 3) != 0) {
+					for (pss=bs, i= 0; pss && i < bsize; i++, pss++) {
+						if (pss->sfp == NULL)
+							continue;
+						sfp_out->location = 
+							SeqLocSubtract(sfp_out->location,
+												 pss->sfp->location);
+					}
 				}
 			}
+		}
+		if (sfp_out->location == NULL) {
+			sfp_out->location = keep_loc;
 		}
 	}
 	flat2asn_install_feature_user_string("source", ifp->loc);
@@ -1078,7 +1101,7 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					CpNoteToCharPtrStack(nsp, NULL, omp->subname);
 				}
 			}
-			sfp_out->qual = AddBioSourceToGBQual(nsp, biosp, sfp_out->qual, TRUE);
+			sfp_out->qual = AddBioSourceToGBQual(ajp, nsp, biosp, sfp_out->qual, TRUE);
 			sfp_out->qual = AddOrgRefModToGBQual(orp, sfp_out->qual);
 		}
 		if ((vnp=BioseqGetSeqDescr(gbp->bsp, Seq_descr_molinfo, NULL)) != NULL){
@@ -1102,7 +1125,7 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			CpNoteToCharPtrStack(nsp, NULL, orp->common);
 /*try new first */
 		if (biosp) {
-			sfp_out->qual = AddBioSourceToGBQual(nsp, biosp, sfp_out->qual, TRUE);
+			sfp_out->qual = AddBioSourceToGBQual(ajp, nsp, biosp, sfp_out->qual, TRUE);
 			if (orp)
 				sfp_out->qual = AddOrgRefModToGBQual(orp, sfp_out->qual);
 		}
@@ -2327,7 +2350,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			sfp_out->qual = AddGBQual(sfp_out->qual, "organism",
 															 "unknown");
 		}
-		sfp_out->qual = AddBioSourceToGBQual(nsp, biosp, sfp_out->qual,
+		sfp_out->qual = AddBioSourceToGBQual(ajp, nsp, biosp, sfp_out->qual,
 		 	TRUE);
 		break;	
 	case SEQFEAT_CDREGION:
@@ -3901,9 +3924,9 @@ any qual. */
 static CharPtr organelleQual [] = {
   NULL,
   NULL,
-  "plastid: chloroplast",
-  "plastid: chromoplast",
-  "mitochondrion: kinetoplast",
+  "plastid:chloroplast",
+  "plastid:chromoplast",
+  "mitochondrion:kinetoplast",
   "mitochondrion",
   "plastid",
   NULL,
@@ -3911,16 +3934,16 @@ static CharPtr organelleQual [] = {
   NULL, 
   NULL,
   NULL,
-  "plastid: cyanelle",
+  "plastid:cyanelle",
   NULL,
   NULL,
   "nucleomorph",
-  "plastid: apicoplast",
-  "plastid: leucoplast",
-  "plastid: proplastid"
+  "plastid:apicoplast",
+  "plastid:leucoplast",
+  "plastid:proplastid"
 };
 
-NLM_EXTERN GBQualPtr AddBioSourceToGBQual (NoteStructPtr nsp, BioSourcePtr biosp, GBQualPtr gbqual, Boolean new_release)
+NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, BioSourcePtr biosp, GBQualPtr gbqual, Boolean new_release)
 {
 	CharPtr qual, val = NULL;
 	OrgModPtr omp;
@@ -4060,6 +4083,7 @@ NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp,
 	static CharPtr buf = NULL;
 	Uint2 retval;
 	ValNodePtr seqid;
+	CharPtr p, q;
 
 	if (sfp == NULL)
 		return -1;
@@ -4139,6 +4163,19 @@ NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp,
 				|| class_qual == Class_ecnum || class_qual == Class_note)
 				ff_AddString("\"");
 			if (class_qual == Class_note) {
+				/* start of process tildes */
+				if (StringCmp (gbqp->qual, "note") == 0) {
+					for (p = buf, q = buf; *p != '\0'; *q++ = *p++) {
+						if (*p != '~')
+							continue;
+						if (p [1] != '~')
+							*p = '\n';
+						else
+							p++;
+					}
+					*q = '\0';
+				}
+				/* end of process tildes */
 				www_note_gi(buf);
 			} else if (class_qual != Class_none) {
 				if (StringCmp(gbqp->qual, "transl_table") == 0) {

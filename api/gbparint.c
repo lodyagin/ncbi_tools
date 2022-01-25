@@ -28,6 +28,19 @@
 * Author:  Karl Sirotkin
 *
 * $Log: gbparint.c,v $
+* Revision 6.4  2000/03/20 23:38:39  aleksey
+* Finally submitted the changes which have been made by serge bazhin
+* and been kept in my local directory.
+*
+* These changes allow to establish user callback functions
+* in 'Asn2ffJobPtr' structure which are called within
+* 'SeqEntryToFlatAjp' function call.
+* The new members are:
+* user_data       - pointer to a user context for passing data
+* ajp_count_index - user defined function
+* ajp_print_data  - user defined function
+* ajp_print_index - user defined function
+*
 * Revision 6.3  1999/04/06 19:42:55  bazhin
 * Changes, related to flat2asn's ACCESSION.VERSION parsing.
 *
@@ -95,15 +108,37 @@ do_Nlm_gbparse_error (CharPtr msg, CharPtr details)
 
 	MemFree(errmsg);
 }
-
+#define MAKE_THREAD_SAFE
+#ifndef MAKE_THREAD_SAFE
 static Nlm_gbparse_errfunc Err_func = do_Nlm_gbparse_error;
 static Nlm_gbparse_rangefunc Range_func = NULL;
 static Pointer Nlm_gbparse_range_data = NULL;
+#define MACRO_THREAD_SAVE_STATIC
+
+#else
+
+#include <ncbithr.h>
+
+static TNlmTls Err_func_tls=NULL;
+static TNlmTls Range_func_tls=NULL;
+static TNlmTls Nlm_gbparse_range_data_tls=NULL;
+
+#define MACRO_THREAD_SAVE_STATIC \
+        Nlm_gbparse_errfunc Err_func = NULL; \
+        Nlm_gbparse_rangefunc Range_func = NULL; \
+        Pointer Nlm_gbparse_range_data = NULL; \
+        if(Err_func_tls) NlmTlsGetValue(Err_func_tls,(VoidPtr PNTR)&Err_func); \
+	if(!Err_func) Err_func = do_Nlm_gbparse_error; \
+        if(Range_func_tls) NlmTlsGetValue(Range_func_tls,(VoidPtr PNTR)&Range_func); \
+        if(Nlm_gbparse_range_data_tls) NlmTlsGetValue(Nlm_gbparse_range_data_tls,(VoidPtr PNTR)&Nlm_gbparse_range_data); 
+#endif
+
 /*------------------ Nlm_gbcheck_range()-------------*/
 static void
 Nlm_gbcheck_range(Int4 num, SeqIdPtr idp, Boolean PNTR keep_rawPt, int PNTR num_errsPt, ValNodePtr head, ValNodePtr current)
 {
 	Int4 len;
+	MACRO_THREAD_SAVE_STATIC;
 	if (Range_func != NULL){
 		len = (*Range_func)(Nlm_gbparse_range_data, idp);
 		if (len > 0)
@@ -120,9 +155,11 @@ Nlm_gbcheck_range(Int4 num, SeqIdPtr idp, Boolean PNTR keep_rawPt, int PNTR num_
 NLM_EXTERN void
 Nlm_install_gbparse_error_handler(Nlm_gbparse_errfunc new_func)
 {
-
+#ifdef MAKE_THREAD_SAFE
+	NlmTlsSetValue(&Err_func_tls, (VoidPtr PNTR) new_func, NULL);
+#else
 	Err_func = new_func;
-
+#endif
 }
 
 /*----------- Nlm_install_gbparse_range_func ()-------------*/
@@ -130,9 +167,13 @@ Nlm_install_gbparse_error_handler(Nlm_gbparse_errfunc new_func)
 NLM_EXTERN void
 Nlm_install_gbparse_range_func(Pointer data, Nlm_gbparse_rangefunc new_func)
 {
-
+#ifdef MAKE_THREAD_SAFE
+	NlmTlsSetValue(&Range_func_tls, (VoidPtr PNTR) new_func,NULL);
+	NlmTlsSetValue(&Nlm_gbparse_range_data_tls,data,NULL);
+#else
 	Range_func = new_func;
 	Nlm_gbparse_range_data = data;
+#endif
 
 }
 
@@ -142,6 +183,8 @@ NLM_EXTERN void
 Nlm_gbparse_error(CharPtr front, ValNodePtr head, ValNodePtr current)
 {
 	CharPtr details;
+
+	MACRO_THREAD_SAVE_STATIC;
 
 	details = Nlm_gbparse_point (head, current);
 	Err_func (front,details); 

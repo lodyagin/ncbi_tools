@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlex.c,v $
+* Revision 6.4  2000/03/10 18:02:05  kans
+* increased size of tbuf in AsnLexReadOctets to handle long lines in hand-edited (?) ASN.1 records being submitted
+*
 * Revision 6.3  1999/12/23 17:25:44  kans
 * AsnTxtReadVal checks for NULL atp - same as recent check in AsnBinReadVal
 *
@@ -690,7 +693,7 @@ NLM_EXTERN ByteStorePtr AsnLexReadOctets (AsnIoPtr aip, AsnTypePtr atp)
 {
 	Int2 token, len;
 	ByteStorePtr ssp = NULL;
-	Byte tbuf[101];
+	Byte tbuf[256]; /* was 101 - changed to handle occasional hand-edited ASN.1? */
 	Int4 bytes, left, added;
 
 	token = AsnLexWord(aip);      /* read the start */

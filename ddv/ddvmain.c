@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.c,v 1.12 2000/01/11 15:29:48 durand Exp $
+/*  $Id: ddvmain.c,v 1.20 2000/04/21 23:00:50 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.12 $
+* $Revision: 1.20 $
 *
 * File Description: starter module of DeuxD-Viewer (DDV). Onlu use to
 * start DDV as a standalone software.
@@ -37,6 +37,30 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.c,v $
+* Revision 1.20  2000/04/21 23:00:50  hurwitz
+* can launch DDE from DDV
+*
+* Revision 1.19  2000/04/17 13:30:43  durand
+* removed g_hParent and unused functions DDV_LaunchAlignViewer and DDV_LaunchAlignEditor
+*
+* Revision 1.18  2000/03/30 21:58:06  durand
+* made standalone DDV a viewer, not the editor
+*
+* Revision 1.17  2000/03/21 14:22:42  durand
+* fixed a problem with menus setup
+*
+* Revision 1.16  2000/03/16 18:38:38  durand
+* fixed the starter function for the GUI
+*
+* Revision 1.15  2000/02/04 16:05:41  durand
+* add click action to select a row
+*
+* Revision 1.14  2000/02/02 14:44:32  durand
+* added function to create data structure for block editor, fixed some bugs
+*
+* Revision 1.13  2000/01/26 13:38:55  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.12  2000/01/11 15:29:48  durand
 * add a cast to use EntrezSeqEntryGet instead of ID1SeqEntryGet
 *
@@ -270,16 +294,17 @@ Boolean bRet;
 	mWin_d->AutonomeViewer=TRUE;
 
 	/*use the Network ?*/
-	mWin_d->UseNetwork=DDV_UseNetwork();
+	mWin_d->UseNetwork=TRUE;/*DDV_UseNetwork();*/
 
-	/*init menu*/
-	DDV_SetupMenus(w,mWin_d->UseNetwork);
 
-	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL);
-
+#if defined(_COLD_LAUNCH_DDE)
+  /* launch the editor instead of the viewer */
+	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL,TRUE);  /*TRUE for editor  */
+#else
+	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL,FALSE); /*FALSE for viewer */
+#endif
 	if (!bRet) return(NULL);
 
-	/*DDV_set_MainMenus(&dmp->MainMenu,FALSE);*/
 	/*init logo_panel*/
 	LogoFontCreate(&ldp->f1,&ldp->f2,&ldp->f3);
 	StringCpy(ldp->szTitle,"DDV");
@@ -290,7 +315,6 @@ Boolean bRet;
 	mWin_d->fetchSepProc=(UdvFetchSeqEntryProc)EntrezSeqEntryGet;
 	mWin_d->NetCfgMenuProc=DDV_ConfigNetwork;
 	mWin_d->NetStartProc=DDV_StartEntrez;
-	g_hParent=w;
 		
 	return(w);
 }
@@ -364,8 +388,10 @@ ObjMgrPtr omp = NULL;
 	}
 
 	/*OBjMgr Callback Function declaration*/
-	REG_DDV_AUTO_EDIT;
+/*	REG_DDV_AUTO_EDIT; */
+	REG_DDV_AUTO_VIEW;
 	REGISTER_UDV_AUTONOMOUS;
+  REG_DDV_SLA_EDIT;
 	
     /* increment maximum # of objects held in memory */
     omp = ObjMgrWriteLock();

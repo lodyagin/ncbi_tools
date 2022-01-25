@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.22 1999/11/24 21:24:33 vakatov Exp $
+/* $Id: txalign.h,v 6.23 2000/03/07 21:58:41 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.23  2000/03/07 21:58:41  shavirin
+* Now will use PSSM Matrix to show positives in PSI Blast
+*
 * Revision 6.22  1999/11/24 21:24:33  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -214,6 +217,7 @@ typedef struct align_summary {
 	Int4 gaps;		/*number of the gaps*/
 	Int4 totlen;	        /*total length of the alignemtns*/
 	Int4Ptr PNTR matrix;	/*matrix for protein alignments*/
+	Int4Ptr PNTR posMatrix;	/*matrix for PSSM protein alignments*/
 	SeqIdPtr master_sip;	/*the Seq-id of the master sequence*/
 	SeqIdPtr target_sip;	/*the Seq-id for the target sequence*/
 	Boolean is_aa;		/*are the sequences nucleotide or protein?*/
@@ -335,6 +339,21 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot2 PROTO((
                     CharPtr db_name,
                     CharPtr blast_type
                     ));
+/**
+ * same as ShowTextAlignFromAnnot
+ * the posMatrix used to show alignments using PSSM
+ */
+NLM_EXTERN Boolean ShowTextAlignFromAnnot3 PROTO((
+                    SeqAnnotPtr hannot, Int4 line_len, 
+                    FILE *fp, Uint1Ptr featureOrder, 
+                    Uint1Ptr groupOrder, Uint4 option, 
+                    Int4Ptr PNTR matrix, ValNodePtr mask_loc,
+                    int (LIBCALLBACK *fmt_score_func)
+                    PROTO((AlignStatOptionPtr)),
+                    CharPtr db_name,
+                    CharPtr blast_type,
+                    Int4Ptr PNTR posMatrix
+                    ));
 
 
 /***********************************************************************
@@ -376,7 +395,8 @@ NLM_EXTERN Boolean ShowAlignNodeText2 PROTO((
                      int (LIBCALLBACK *fmt_score_func)
                      PROTO((AlignStatOptionPtr)),
                      CharPtr db_name,
-                     CharPtr blast_type
+                     CharPtr blast_type,
+                     Int4Ptr PNTR posMatrix
                      ));
 
 /***********************************************************************
@@ -402,6 +422,14 @@ NLM_EXTERN ValNodePtr ProcessTextAlignNode PROTO((
                     CharPtr m_buf, Int4 line_len, 
                     Int1 m_frame, 
                     Uint4 option, Int4Ptr PNTR matrix
+                    ));
+NLM_EXTERN ValNodePtr ProcessTextAlignNode2 PROTO((
+                    AlignNodePtr anp, Int4 m_left, 
+                    Int4 m_right, Int4Ptr p_stop, 
+                    CharPtr m_buf, Int4 line_len, 
+                    Int1 m_frame, 
+                    Uint4 option, Int4Ptr PNTR matrix,
+                    Int4Ptr PNTR posMatrix, Int4 q_start
                     ));
 
 

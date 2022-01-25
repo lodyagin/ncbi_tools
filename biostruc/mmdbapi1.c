@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -44,6 +44,21 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.37  2000/04/20 23:27:44  lewisg
+* misc bug fixes
+*
+* Revision 6.36  2000/03/13 15:51:25  thiessen
+* added storage for PARS to each residue for Cn3D; removed unused fields
+*
+* Revision 6.35  2000/03/09 17:52:56  thiessen
+* changes to MSD, MGD for feature implementation in Cn3D
+*
+* Revision 6.34  2000/03/08 21:46:12  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.33  2000/02/14 19:31:03  lewisg
+* fix occupancy bug when temperature factors present
+*
 * Revision 6.32  1999/11/02 23:06:08  lewisg
 * fix cn3d to launch correctly if there is no seqentry associated with bioseq
 *
@@ -343,18 +358,11 @@ PMGD LIBCALL NewMGD(void)
       pmgdNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
       pmgdNew->bReserved = 0;
       pmgdNew->bVisible = 1;   /* be displayed by default */
-      pmgdNew->bHighlighted = 0;   /* be displayed by default */
-      pmgdNew->bJustHighlighted = 0;   /* be displayed by default */
-      pmgdNew->bTurnedOff = 0;   /* be displayed by default */
-      pmgdNew->iUserDefinedFeature = 0;
-      pmgdNew->iUserDefinedFeatureOld = 0;
-      pmgdNew->FeatureOn = 0;
-      pmgdNew->FeatureOnOld = 0;
-                               /* Yanli */
+      pmgdNew->bHighlighted = 0;
       pmgdNew->pbMasterReserved = NULL;
-
+      pmgdNew->pvnPARSList = NULL;
      }
-      return pmgdNew;
+    return pmgdNew;
 }
 
 PMMD LIBCALL NewMMD(void)
@@ -366,6 +374,7 @@ PMMD LIBCALL NewMMD(void)
       pmmdNew->bMe = (Byte) AM_MMD;
       pmmdNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
       pmmdNew->bVisible = 1;
+      pmmdNew->iTargetRow = -1;
       }
       return pmmdNew;
 }
@@ -379,6 +388,7 @@ PMSD LIBCALL NewMSD(void)
       pmsdNew->bMe = (Byte) AM_MSD;
       pmsdNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
       pmsdNew->pfbParent = NULL;
+      pmsdNew->pGlobalPARS = NULL;
      }
     return pmsdNew;
 }
@@ -653,6 +663,7 @@ printf("in FreeMGD ");
      {
       if (pmgdThis->pvnContainedBy) ValNodeFree(pmgdThis->pvnContainedBy);
       if (pmgdThis->pcGraphName) MemFree(pmgdThis->pcGraphName);
+      if (pmgdThis->pcPDBComment) MemFree(pmgdThis->pcPDBComment);
       if (pmgdThis->pvnmaAHead) FreeListVNMA(pmgdThis->pvnmaAHead); 
       if (pmgdThis->pvnmbBHead) FreeListVNMB(pmgdThis->pvnmbBHead);
       if (pmgdThis->ppflBoundBox) FLMatrixFree(pmgdThis->ppflBoundBox,0,0);
@@ -712,8 +723,6 @@ printf("in FreeMSD ");
         if (pmsdThis->pdnsfsHead) FreeListDNSFS(pmsdThis->pdnsfsHead);
         if (pmsdThis->pflTranslate) FLVectorFree(pmsdThis->pflTranslate,0);
         if (pmsdThis->ppflBoundBox) FLMatrixFree(pmsdThis->ppflBoundBox,0,0);
-/* leak.  the slaves point to the master pExtra, but since pExtra is part of cn3d, I don't want
-        to put logic in here that is dependent on cn3d. if (pmsdThis->pExtra) MemFree(pmsdThis->pExtra); */
         if (pmsdThis->pdnmsSlaves) FreeListDNMS(pmsdThis->pdnmsSlaves);
  	MemFree(pmsdThis);
 
@@ -2173,6 +2182,7 @@ printf(" Occ = %f  ", paldThis->pflvData[3]);
 #endif
 		
 	           }
+        else if(iVectLen >=3 ) paldThis->pflvData[3]  = 1.0;
 	        if (bAltConf)
                    {
 		     pcThis = (CharPtr) pvnAlt->data.ptrvalue;
@@ -4032,8 +4042,8 @@ printf("in InstallStrucFeature \n");
         case Feature_type_camera:
         case Feature_type_script:
            /* detach & save the property data in ASN.1 format */
-	  psfsThis->psfdFeats->pData = (Pointer) pbsfThis->Property_property;
-	  pbsfThis->Property_property = NULL;
+/*	  psfsThis->psfdFeats->pData = (Pointer) pbsfThis->Property_property; */
+/*	  pbsfThis->Property_property = NULL;*/
           break;
 	  
 	case Feature_type_cn3dstate:
@@ -4701,7 +4711,7 @@ printf(":%s: PDB No ", pmgdThis->pcGraphNum);
 				pbmdrThis = ValNodeFindNext(prgDict->descr, NULL, BiomolDescr_pdb_comment);
 				if (pbmdrThis)
 				  {
-   				    pmgdThis->pcPDBComment = (CharPtr) pbmdrThis->data.ptrvalue;
+   				    pmgdThis->pcPDBComment = StringSave((CharPtr) pbmdrThis->data.ptrvalue);
 				  }
 				pvnStrings = prgDict->iupac_code;
 				if (pvnStrings)  /* only interpret the first one!!! */

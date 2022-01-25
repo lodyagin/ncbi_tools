@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.19  2000/04/13 13:57:33  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.18  2000/02/03 15:55:14  hurwitz
+* added constructor and destructor for MsaTxtDisp
+*
 * Revision 6.17  1999/12/02 13:47:32  durand
 * add new function for Entrez sequence viewer
 *
@@ -86,6 +92,7 @@
 #include <udvseq.h>
 #include <udvdef.h>
 #include <subutil.h>
+#include <jzmisc.h>
 
 /*******************************************************************************
 
@@ -733,9 +740,8 @@ SeqAnnotPtr sap;
 
 	if (!context2->sfp) return (TRUE);
 
-
-/* for test only : print out the Feature list
-{{
+/* for test only : print out the Feature list*/
+/*{{
  Char  str [256];
  int i;
 
@@ -751,8 +757,6 @@ SeqAnnotPtr sap;
                 }
         }
   }
-	
-
 }}
 */
 	pgfl = (ParaGFeaturesInLocPtr) context2->userdata;	
@@ -784,28 +788,27 @@ SeqAnnotPtr sap;
 		context->left=0;
 		context->right=context->bsp->length-1;
 	}
-	
 	while(TRUE){		
 		pgp=(ParaGPtr)vnp->data.ptrvalue;
-
-		/*are the ParaG from a MSA ?*/
-		if (pgp->ptxtList){
-			UDV_ComputeBspCoordRangeinPGP(pgp,&StartLetter, &StopLetter);
-		}
-		else{
-			StartLetter=pgp->StartLetter;
-			StopLetter=pgp->StopLetter;
-		}
 		
 		FeatInParaG=FALSE;
 		if (pgp){
+			/*are the ParaG from a MSA ?*/
+			if (pgp->ptxtList){
+				UDV_ComputeBspCoordRangeinPGP(pgp,&StartLetter, &StopLetter);
+			}
+			else{
+				StartLetter=pgp->StartLetter;
+				StopLetter=pgp->StopLetter;
+			}
+			
 			if (StartLetter>context->right){
 				pgfl->ParaG_last_head=vnp;/*uses to count last ParaG of the list
 											where there is no feature*/
 				break;
 			}
 			/*Feature in pgp ?*/
-			if(StopLetter>=context->left && StopLetter<=context->right){
+			/*if(StopLetter>=context->left && StopLetter<=context->right){
 					FeatInParaG=TRUE;
 			}
 			else if(StartLetter>=context->left && 
@@ -816,8 +819,10 @@ SeqAnnotPtr sap;
 				StopLetter>=context->right){
 					FeatInParaG=TRUE;
 
+			}*/
+			if(StopLetter>=context->left && StartLetter<=context->right){
+				FeatInParaG=TRUE;
 			}
-
 			if (FeatInParaG){
 				nLines=1;decal=0;
 				if (pgfl->DispType&DDV_DISP_VERT){/*UDV*/
@@ -992,7 +997,8 @@ Return value: the index value to use with others Sequence Manager functions.
 
 *******************************************************************************/
 
-NLM_EXTERN Uint2  UDV_CreateOneFeatureIndex(Uint2 entityID_seq, BioseqPtr bsp)
+NLM_EXTERN Uint2 UDV_CreateOneFeatureIndex(Uint2 entityID_seq, BioseqPtr bsp,
+	Boolean bReverse)
 {
 Uint2 EntityID;
 
@@ -1001,15 +1007,16 @@ Uint2 EntityID;
 	if (SeqMgrFeaturesAreIndexed (entityID_seq) == 0) {
 		/*create the index*/
 		if (bsp)
-			EntityID=SeqMgrIndexFeatures (0, bsp);
+			EntityID=SeqMgrIndexFeaturesEx (0, bsp, bReverse);
 		else
-			EntityID=SeqMgrIndexFeatures (entityID_seq, NULL);
+			EntityID=SeqMgrIndexFeaturesEx (entityID_seq, NULL, bReverse);
 	}
 	
 	if (EntityID == 0) {
-		Message (MSG_ERROR, "SeqMgrIndexFeatures failed.");
+		Message (MSG_ERROR, "SeqMgrIndexFeaturesEx failed.");
 		EntityID=INDEX_CREATION_ERROR;
 	}
+	
 	return(EntityID);
 }
 
@@ -1339,5 +1346,43 @@ NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to,
 {
 	return (UDV_Read_SequenceEx ( sip,  from,  to, 
 		 IsProt, len,Seq_strand_plus));
+}
+
+/*******************************************************************************
+
+  Function : UDV_RevertBioSeqCoord()
+  
+  Purpose : given a 5'->3' coord, get back the 3'->5' coord (nuc. seq only) 
+  
+  IMPORTANT NOTE : the return value is ONE-BASED
+  
+*******************************************************************************/
+NLM_EXTERN Int4 UDV_RevertBioSeqCoord(Int4 bsp_coord,Int4 bsp_length)
+{
+	return(bsp_length-bsp_coord);
+}
+
+NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispNew(MsaTxtDispPtr pTxtDisp) {
+/*----------------------------------------------------------------------------
+*  makes a copy of an MsaTxtDisp.
+*  returns pointer to a new MsaTxtDisp.
+*---------------------------------------------------------------------------*/
+  MsaTxtDispPtr  pTxtDispCopy;
+
+  pTxtDispCopy = MemNew(sizeof(MsaTxtDisp));
+  ASSERT(pTxtDispCopy != NULL);
+  MemCopy(pTxtDispCopy, pTxtDisp, sizeof(MsaTxtDisp));
+  return(pTxtDispCopy);
+}
+
+
+NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispFree(MsaTxtDispPtr pTxtDisp) {
+/*******************************************************************************
+*  frees memory used for MsaTxtDisp.
+*  returns NULL for successful completion.
+*******************************************************************************/
+  ASSERT(pTxtDisp != NULL);
+  ASSERT(MemFree(pTxtDisp) == NULL);
+  return(NULL);
 }
 

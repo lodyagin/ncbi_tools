@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.3 2000/01/07 22:34:05 shavirin Exp $
+/* $Id: rpsblast.c,v 6.15 2000/04/13 18:50:55 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,50 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.3 $
+* $Revision: 6.15 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.15  2000/04/13 18:50:55  shavirin
+* Fixed serious memory leaks.
+*
+* Revision 6.14  2000/04/12 14:15:41  shavirin
+* Added back ObjMgrFreeCache together wirg seqmgr changes, those removed
+* deadlock.
+*
+* Revision 6.13  2000/03/28 20:33:44  shavirin
+* Changed logic of processing MT - multiple FASTA files.
+*
+* Revision 6.12  2000/03/10 20:00:15  shavirin
+* Added multi-thread support for multi-FASTA files.X
+*
+* Revision 6.11  2000/03/02 21:06:09  shavirin
+* Added -U option, that allows to consider low characters in FASTA files
+* as filtered regions (for blastn, blastp and tblastn).
+*
+* Revision 6.10  2000/02/23 21:03:36  shavirin
+* Fixed -z and -Y options in rpsblast.
+*
+* Revision 6.9  2000/02/17 21:28:55  shavirin
+* Added option is_rps_blast = TRUE.
+*
+* Revision 6.8  2000/02/15 16:14:04  shavirin
+* Minor changes.
+*
+* Revision 6.7  2000/02/11 22:05:01  shavirin
+* Oprion do_sum_stats set to FALSE.
+*
+* Revision 6.6  2000/02/11 20:51:01  shavirin
+* Added possibility to search PSSM database against DNA sequences.
+*
+* Revision 6.5  2000/02/08 17:39:08  shavirin
+* Empty log message.
+*
+* Revision 6.4  2000/02/01 17:22:48  shavirin
+* Updated function RPSViewSeqAlign().
+*
 * Revision 6.3  2000/01/07 22:34:05  shavirin
 * Added printing of SeqAlignment if necessary.
 *
@@ -49,12 +87,17 @@
 #include <lookup.h>
 #include <tofasta.h>
 #include <txalign.h>
-
+#include <ncbithr.h>
 #include <rpsutil.h>
+
+#if PURIFY
+#include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
+#endif
 
 typedef struct _rps_blast_options {
     BLAST_OptionsBlkPtr options;
     CharPtr blast_database;
+    SeqEntryPtr sep;
     BioseqPtr query_bsp, fake_bsp;
     Int4 number_of_descriptions, number_of_alignments;
     FILE *outfp;
@@ -69,6 +112,11 @@ typedef struct _rps_blast_options {
     RPSInfoPtr rpsinfo;
 } RPSBlastOptions, PNTR RPSBlastOptionsPtr;
 
+typedef struct _rps_thr_data {
+    RPSBlastOptionsPtr rpsbop;
+    RPSInfoPtr rpsinfo;
+} RPSThrData, PNTR RPSThrDataPtr;
+
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs [] = {
@@ -76,8 +124,8 @@ static Args myargs [] = {
      "stdin", NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
     {"RPS BLAST Database",            /* 1 */
      NULL, NULL,NULL,FALSE,'d',ARG_FILE_IN, 0.0,0,NULL},
-    {"Logfile name ",     /* 2 */
-     "rpsblast.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
+    {"Query sequence is protein ",     /* 2 */
+     "T", NULL,NULL,TRUE, 'p', ARG_BOOLEAN, 0.0,0,NULL},
     { "Threshold for extending hits", /* 3 */
       "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",        /* 4 */
@@ -131,8 +179,14 @@ static Args myargs [] = {
     { "Produce HTML output",  /* 28 */
       "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Cost to decline alignment", /* 29 */
-      "10000", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}  
+      "10000", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},
+    {"Logfile name ",     /* 30 */
+     "rpsblast.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
+    {"Use lower case filtering of FASTA sequence",    /* 31 */
+     "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
 };
+
+static TNlmSemaphore MaxThreadsSem;
 
 void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
                         Uint4Ptr print_options_out)
@@ -179,12 +233,19 @@ void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out,
 void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
 {
 
+    FileClose(rpsbop->outfp);
     BLASTOptionDelete(rpsbop->options);
-    RPSClose(rpsbop->rpsinfo);
+    RPSInfoDetach(rpsbop->rpsinfo);
     
-    /*    BioseqFree(rpsbop->query_bsp);
-          BioseqFree(rpsbop->fake_bsp); */
+    SeqEntryFree(rpsbop->sep);
     
+    if(!rpsbop->believe_query) {
+        rpsbop->fake_bsp->descr = NULL;
+        rpsbop->fake_bsp->seq_data = NULL;
+        BioseqFree(rpsbop->fake_bsp);
+    }
+
+    MemFree(rpsbop->rps_lookup);
     MemFree(rpsbop->rps_database);
     MemFree(rpsbop->rps_matrix);
     
@@ -193,48 +254,45 @@ void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
     return;
 }
 
-RPSBlastOptionsPtr RPSReadBlastOptions(void)
+RPSBlastOptionsPtr RPSReadBlastOptions(RPSInfoPtr rpsinfo_main, 
+                                       SeqEntryPtr sep, SeqLocPtr slp)
 {
     RPSBlastOptionsPtr rpsbop;
-    FILE *infp;
     BLAST_OptionsBlkPtr options;
-    SeqEntryPtr sep;
     Char buffer[512];
+    BioseqPtr bsp;
+    static Int4 count;
+    
     rpsbop = MemNew(sizeof(RPSBlastOptions));
-
+    
     rpsbop->rps_database = StringSave(myargs [1].strvalue);
-
+    
     sprintf(buffer, "%s.rps", rpsbop->rps_database);
     rpsbop->rps_matrix = StringSave(buffer);
     
     sprintf(buffer, "%s.loo", rpsbop->rps_database);
     rpsbop->rps_lookup = StringSave(buffer);
     
-    /* Initializing RPS Blast database */
-
-    /* sprintf(buffer, "%s.mat", myargs[1].strvalue); */
-    if((rpsbop->rpsinfo = RPSInit(rpsbop->rps_database, 
-                                  rpsbop->rps_matrix,
-                                  rpsbop->rps_lookup)) == NULL) {
-        ErrPostEx(SEV_ERROR, 0,0, "Failure to initialize RPS Blast database");
-        return NULL;
-    }
+    rpsbop->rpsinfo = RPSInfoAttach(rpsinfo_main);
     
-    /* Reading query sequence */
-    if ((infp = FileOpen(myargs [0].strvalue, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open input file %s\n", 
-                  myargs [0].strvalue);
-        return NULL;
-    }
-
     if (myargs [6].strvalue != NULL) {
-        if ((rpsbop->outfp = FileOpen(myargs [6].strvalue, "w")) == NULL) {
+        if ((rpsbop->outfp = FileOpen(myargs [6].strvalue, "a")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
                       "file %s\n", myargs [6].strvalue);
             return NULL;
         }
     }
-
+    
+    rpsbop->sep = sep;
+    
+    SeqEntryExplore(sep, &rpsbop->query_bsp, 
+                    myargs[2].intvalue ? FindProt : FindNuc); 
+    
+    if (rpsbop->query_bsp == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+        return NULL;
+    }
+    
     if (myargs[19].intvalue != 0)
         rpsbop->believe_query = TRUE;
     
@@ -252,32 +310,30 @@ RPSBlastOptionsPtr RPSReadBlastOptions(void)
             return NULL;
         }
     }
-
-    if((sep = FastaToSeqEntryEx(infp, FALSE, NULL, 
-                                rpsbop->believe_query)) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
-        return NULL;
-    }
-
-    FileClose(infp);
-    SeqEntryExplore(sep, &rpsbop->query_bsp, FindProt);    
-    sep->data.ptrvalue = NULL;
-    SeqEntryFree(sep);
     
-    if (rpsbop->query_bsp == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
-        return NULL;
-    }
+    options = BLASTOptionNew(rpsbop->rpsinfo->query_is_prot ?
+                             "blastp" : "tblastn", 
+                             (Boolean)myargs[14].intvalue);
+    rpsbop->options = options;
 
+    rpsbop->options->query_lcase_mask = slp; /* External filtering */
+    
+   if (myargs[26].intvalue)
+        options->db_length = (Int8) myargs[26].intvalue;
+    
+    if (myargs[27].floatvalue)
+        options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
+    
+    /* Necessary options for RPS Blast */
+    options->do_sum_stats = FALSE;
+    options->is_rps_blast = TRUE; 
+    
     rpsbop->number_of_descriptions = myargs[23].intvalue;
     rpsbop->number_of_alignments = myargs[24].intvalue;
     
-    options = BLASTOptionNew("blastp", (Boolean)myargs[14].intvalue);
-    rpsbop->options = options;
-
     /* Update size of the database in accordance with RPS Database size */
-    RPSUpdateDbSize(rpsbop->options, rpsbop->rpsinfo);
-
+    RPSUpdateDbSize(rpsbop->options, rpsbop->rpsinfo, rpsbop->query_bsp->length);
+    
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, myargs[22].strvalue, 0, 0);
     
@@ -292,6 +348,7 @@ RPSBlastOptionsPtr RPSReadBlastOptions(void)
     }
 
     /* This is not used */
+    options->threshold_first = (Int4) myargs [3].intvalue;
     options->threshold_second = (Int4) myargs [3].intvalue;
     
     options->dropoff_2nd_pass  = myargs [7].floatvalue;
@@ -334,13 +391,9 @@ RPSBlastOptionsPtr RPSReadBlastOptions(void)
 
     if (myargs[25].intvalue)
         options->wordsize = myargs[25].intvalue;
-    if (myargs[26].intvalue)
-        options->db_length = (Int8) myargs[26].intvalue;
     
-    if (myargs[27].floatvalue)
-        options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
-    
-    options = BLASTOptionValidate(options, "blastp");
+    options = BLASTOptionValidate(options, rpsbop->rpsinfo->query_is_prot ? 
+                                  "blastp" : "tblastn");
     
     if (options == NULL)
         return NULL;
@@ -361,11 +414,16 @@ RPSBlastOptionsPtr RPSReadBlastOptions(void)
         rpsbop->fake_bsp->seq_data = rpsbop->query_bsp->seq_data;
         
         obidp = ObjectIdNew();
-        obidp->str = StringSave("QUERY");
+        sprintf(buffer, "QUERY_%d", count++);
+        obidp->str = StringSave(buffer);
         ValNodeAddPointer(&(rpsbop->fake_bsp->id), SEQID_LOCAL, obidp);
         
         /* FASTA defline not parsed, ignore the "lcl|tempseq" ID. */
         rpsbop->query_bsp->id = SeqIdSetFree(rpsbop->query_bsp->id);
+
+        BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, 
+                                 rpsbop->fake_bsp->id);
+        
     }
     
     return rpsbop;
@@ -376,22 +434,34 @@ void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop,
     SeqAnnotPtr seqannot;
     AsnIoPtr aip;
     BlastPruneSapStructPtr prune;
-    
-    ObjMgrSetHold();
+    Uint1 align_type;
+
+    free_buff();    
     init_buff_ex(128);
 
-    BlastPrintReference(FALSE, 90, stdout);
-    fprintf(stdout, "\n");
-    AcknowledgeBlastQuery(rpsbop->fake_bsp, 70, stdout, FALSE, FALSE);
+    BlastPrintReference(FALSE, 90, rpsbop->outfp);
+    fprintf(rpsbop->outfp, "\n");
+    AcknowledgeBlastQuery(rpsbop->fake_bsp, 70, rpsbop->outfp, FALSE, FALSE);
+
+    if(seqalign == NULL) {
+        fprintf(rpsbop->outfp, "\nNo hits found for the sequence...\n\n");
+        return;
+    }
     
     prune = BlastPruneHitsFromSeqAlign(seqalign, 
                                        rpsbop->number_of_descriptions, NULL);
     PrintDefLinesFromSeqAlign(prune->sap, 80, rpsbop->outfp, 
                               rpsbop->print_options, FIRST_PASS, NULL);
-    
+
     seqannot = SeqAnnotNew();
     seqannot->type = 2;
-    AddAlignInfoToSeqAnnot(seqannot, 2); /* blastp */
+    align_type = BlastGetProgramNumber(rpsbop->rpsinfo->query_is_prot ?
+                                       "blastp" : "blastx");
+    
+    AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
+    
+    if(!rpsbop->rpsinfo->query_is_prot)
+        rpsbop->align_options += TXALIGN_BLASTX_SPECIAL;
     
     prune = BlastPruneHitsFromSeqAlign(seqalign, rpsbop->number_of_alignments, 
                                        prune);
@@ -411,10 +481,8 @@ void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop,
                                NULL, NULL, rpsbop->align_options, NULL, 
                                mask, FormatScoreFunc);
     }
-    
+
     prune = BlastPruneSapStructDestruct(prune);
-    ObjMgrClearHold();
-    ObjMgrFreeCache(0);
 
     seqannot->data = NULL;
     seqannot = SeqAnnotFree(seqannot);
@@ -422,47 +490,291 @@ void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop,
     free_buff();
     return;
 }
-Int2 Main(void)
+static BioseqPtr createFakeProtein(void)
+{
+    BioseqPtr bsp;
+    CharPtr sequence = "THEFAKEPROTEIN"; 
+    
+    bsp = BioseqNew();
+    
+    bsp->mol = Seq_mol_aa;
+    bsp->seq_data_type = Seq_code_iupacaa;
+    bsp->repr = Seq_repr_raw;
+    bsp->length = StringLen(sequence);
+    
+    bsp->seq_data = BSNew(64);
+    BSWrite(bsp->seq_data, sequence, StringLen(sequence));
+    
+    bsp->id = MakeNewProteinSeqIdEx(NULL, NULL, "ssh_seq", NULL);
+
+    return bsp;
+}
+
+Boolean RPSFormatFooter(RPSBlastOptionsPtr rpsbop, BlastSearchBlkPtr search)
+{
+    ValNodePtr  mask_loc, mask_loc_start, vnp;
+    BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
+    TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
+    CharPtr params_buffer=NULL;
+    ValNodePtr other_returns;
+    BLAST_MatrixPtr blast_matrix;
+    
+    other_returns = BlastOtherReturnsPrepare(search);
+
+    mask_loc = NULL;
+    for (vnp=other_returns; vnp; vnp = vnp->next) {
+        switch (vnp->choice) {
+        case TXDBINFO:
+            dbinfo = vnp->data.ptrvalue;
+            break;
+        case TXKABLK_NOGAP:
+            ka_params = vnp->data.ptrvalue;
+            break;
+        case TXKABLK_GAP:
+            ka_params_gap = vnp->data.ptrvalue;
+            break;
+        case TXPARAMETERS:
+            params_buffer = vnp->data.ptrvalue;
+            break;
+        case TXMATRIX:
+            blast_matrix = vnp->data.ptrvalue;
+            BLAST_MatrixDestruct(blast_matrix);
+            break;
+        case SEQLOC_MASKING_NOTSET:
+        case SEQLOC_MASKING_PLUS1:
+        case SEQLOC_MASKING_PLUS2:
+        case SEQLOC_MASKING_PLUS3:
+        case SEQLOC_MASKING_MINUS1:
+        case SEQLOC_MASKING_MINUS2:
+        case SEQLOC_MASKING_MINUS3:
+            ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+            break;
+        default:
+            break;
+        }
+    }	
+    
+    free_buff();    
+    init_buff_ex(85);
+    dbinfo_head = dbinfo;
+    while (dbinfo) {
+        PrintDbReport(dbinfo, 70, rpsbop->outfp);
+        dbinfo = dbinfo->next;
+    }
+    dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
+    
+    if (ka_params) {
+        PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 
+                          70, rpsbop->outfp, FALSE);
+    }
+    
+    if (ka_params_gap) {
+        PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K,
+                          ka_params_gap->H, 70, rpsbop->outfp, TRUE);
+    }
+    
+    MemFree(ka_params);
+    MemFree(ka_params_gap);
+    
+    PrintTildeSepLines(params_buffer, 70, rpsbop->outfp);
+    MemFree(params_buffer);
+    free_buff();
+
+
+    mask_loc_start = mask_loc;
+    while (mask_loc) {
+        SeqLocSetFree(mask_loc->data.ptrvalue);
+        mask_loc = mask_loc->next;
+    }
+    ValNodeFree(mask_loc_start);
+    search->mask = NULL;
+    
+    other_returns = ValNodeFree(other_returns);
+
+    fflush(rpsbop->outfp);
+
+    /* ----- */    
+    return TRUE;
+}
+
+SeqEntryPtr RPSGetNextSeqEntry(SeqLocPtr PNTR slp)
+{
+    SeqEntryPtr sep;
+    static TNlmMutex read_mutex;
+    static FILE *infp;
+    static Boolean end_of_data = FALSE;
+
+    NlmMutexInit(&read_mutex);
+    NlmMutexLock(read_mutex);
+    
+    if(end_of_data) {
+        NlmMutexUnlock(read_mutex);
+        return NULL;
+    }
+
+    /* Opening file with input sequences */
+    if(infp == NULL) {
+        if ((infp = FileOpen(myargs [0].strvalue, "r")) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, 
+                      "rpsblast: Unable to open input file %s\n", 
+                      myargs [0].strvalue);
+            end_of_data = TRUE;
+            NlmMutexUnlock(read_mutex);
+        }
+    }
+    
+    if(myargs[31].intvalue) {
+        sep = FastaToSeqEntryForDb (infp, !myargs[2].intvalue, NULL, myargs[19].intvalue, NULL, NULL, slp);
+    } else {
+        sep = FastaToSeqEntryEx (infp, !myargs[2].intvalue, NULL, myargs[19].intvalue);
+    }
+    
+    if(sep == NULL) {            /* Probably last FASTA entry */
+        end_of_data = TRUE;
+        FileClose(infp);
+        NlmMutexUnlock(read_mutex);
+        return NULL;
+    }
+    
+    NlmMutexUnlock(read_mutex);
+    
+    return sep;
+}
+
+void RPSThreadOnExit(VoidPtr data)
+{
+    /* NlmSemaPost(MaxThreadsSem); */
+    return;
+}
+
+VoidPtr RPSEngineThread(VoidPtr data)
 {
     SeqAlignPtr seqalign;
     ValNodePtr other_returns, error_returns;
     BlastSearchBlkPtr search;
     RPSBlastOptionsPtr rpsbop;
+    BioseqPtr bsp;
+    SeqEntryPtr sep;
+    Char buffer[64];
+    static TNlmMutex print_mutex;
+    SeqLocPtr slp = NULL;
+    RPSInfoPtr rpsinfo_main;
+
+    if((rpsinfo_main = (RPSInfoPtr) data) == NULL) {
+        return NULL;
+    }
     
+    NlmThreadAddOnExit(RPSThreadOnExit, NULL);
+    
+    ReadDBBioseqFetchEnable("rpsblast",  myargs [1].strvalue, FALSE, TRUE);
+    
+    NlmMutexInit(&print_mutex);
+
+    while(TRUE) {               /* Main loop */
+
+        if((sep = RPSGetNextSeqEntry(&slp)) == NULL)
+            break;
+        
+        if((rpsbop = RPSReadBlastOptions(rpsinfo_main, 
+                                         sep, slp)) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize RPS Blast.");
+            break;
+        }
+        
+        if(rpsbop->rpsinfo->query_is_prot)
+            bsp = rpsbop->fake_bsp;
+        else
+            bsp = createFakeProtein();
+        
+        search = BLASTSetUpSearch (bsp, rpsbop->rpsinfo->query_is_prot ? 
+                                   "blastp" : "tblastn", 
+                                   bsp->length, 0, 
+                                   NULL, rpsbop->options, NULL);
+
+        seqalign = RPSBlastSearch(search, rpsbop->fake_bsp, rpsbop->rpsinfo);
+
+        NlmMutexLock(print_mutex);
+
+        RPSViewSeqAlign(seqalign, rpsbop, search->mask);    
+
+        RPSFormatFooter(rpsbop, search);
+
+        ObjMgrFreeCache(0);
+
+        /* Final cleanup */
+        
+        if(!rpsbop->rpsinfo->query_is_prot) 
+            BioseqFree(bsp);
+        
+        SeqAlignSetFree(seqalign);
+        search = BlastSearchBlkDestruct(search);
+
+        RPSBlastOptionsFree(rpsbop);
+
+        NlmMutexUnlock(print_mutex); 
+    }
+
+    return NULL;
+}
+
+Int2 Main(void)
+{
+    FILE *fd;
+    Char rps_matrix[128], rps_lookup[128];
+    RPSInfoPtr rpsinfo_main;
+    Int4 i;
+
     if (!GetArgs("rpsblast", NUMARG, myargs))
 	return 1;
     
-    if ( !ErrSetLog (myargs[2].strvalue) ) { /* Logfile */
+    if ( !ErrSetLog (myargs[30].strvalue) ) { /* Logfile */
         ErrShow();
         return 1;
     } else {
         ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
     }
-
+    
     UseLocalAsnloadDataAndErrMsg ();
     
     if (!SeqEntryLoad())
         return 1;
-    
-    if((rpsbop = RPSReadBlastOptions()) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize RPS Blast.");
+        
+    if((MaxThreadsSem = NlmSemaInit(myargs[17].intvalue)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0,0, "NlmSemaInit failed with errno %d", errno);
         return 1;
     }
+
+    /* Truncate output file */
+    if((fd = FileOpen(myargs [6].strvalue, "w")) != NULL)
+        FileClose(fd);
     
-    search = BLASTSetUpSearch (rpsbop->fake_bsp, 
-                               "blastp", rpsbop->fake_bsp->length, 0, 
-                               NULL/*all_words*/, rpsbop->options, NULL);
+    /* Initializing RPS Database */
+
+    sprintf(rps_matrix, "%s.rps", myargs [1].strvalue);
+    sprintf(rps_lookup, "%s.loo", myargs [1].strvalue);
     
-    seqalign = RPSBlastSearch(search, rpsbop->fake_bsp, rpsbop->rpsinfo);
+    /* Initializing RPS Blast database */
     
-    RPSViewSeqAlign(seqalign, rpsbop, search->mask);
+    /* sprintf(buffer, "%s.mat", myargs[1].strvalue); */
+    /*  myargs[2].intvalue == query is protein, default = 1 */
+    if((rpsinfo_main = RPSInit(myargs [1].strvalue, 
+                               rps_matrix, rps_lookup,
+                               myargs[2].intvalue)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0,0, 
+                  "Failure to initialize RPS Blast database");
+        return NULL;
+    }
+
+    if(myargs[17].intvalue > 1) {
+        for(i = 0; i < myargs[17].intvalue; i++) {
+            NlmThreadCreate(RPSEngineThread, (VoidPtr) rpsinfo_main);
+        }
+    } else {
+        RPSEngineThread((VoidPtr) rpsinfo_main);
+    }
     
-    /* Final cleanup */
-    
-    SeqAlignSetFree(seqalign);
-    search = BlastSearchBlkDestruct(search);
-    
-    RPSBlastOptionsFree(rpsbop);
+    NlmThreadJoinAll();
+    RPSClose(rpsinfo_main);
     
     return 0;
 }

@@ -481,6 +481,8 @@ Int2 Main(void)
      if (! SeqEntryLoad())
        return (1);
 
+     UseLocalAsnloadDataAndErrMsg();
+
      if ((Boolean) myargs[7].intvalue) {
        IMPALAPrintHelp(FALSE, 80, "makemat", stdout);
        return(1);

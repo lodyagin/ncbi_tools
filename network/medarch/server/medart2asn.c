@@ -29,12 +29,15 @@
 *   
 * Version Creation Date: 2/26/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  interface between getmedart.h and ncbi asn objects
 *
 * RCS Modification History:
 * $Log: medart2asn.c,v $
+* Revision 6.1  2000/02/03 21:17:23  beloslyu
+* fix the problem with unset hh:mm:ss in NCBI_Date
+*
 * Revision 6.0  1997/08/25 18:36:27  madden
 * Revision changed to 6.0
 *
@@ -455,11 +458,7 @@ void parsemeddate(str)
 	CharPtr strt, tmp, tmp2, tmp3;
 	int i;
 
-	journal_date.data[0] = 0; /* str date */
-	journal_date.data[1] = 0;
-	journal_date.data[2] = 0;  /* clear optional elements */
-	journal_date.data[3] = 0;
-	journal_date.str = NULL;
+	DateClean(&journal_date); /* fix the problem with unset hh:mm:ss */
 
 	strt = StringNCpy(datebuf, str, 80);
 
@@ -787,6 +786,7 @@ medlinePub2asn ( MedArt *article, int status )
 /*   MRI is discarded */
 	medline_obj -> uid = article -> ui;
 	medline_obj -> em = & entry_month;
+	DateClean(&entry_month); /* fix problems with unset hh:mm:ss */
 	entry_month.data[0] = 1;
 	entry_month.data[1] = article->entry_month / 100;
 	entry_month.data[2] = article->entry_month - 100 * entry_month.data[1] ;

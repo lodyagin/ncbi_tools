@@ -27,13 +27,16 @@
 *
 * Author:  Sarah Wheelan
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * Contents:  header file for splice utilities program
 *
 * Modifications:
 *
 * $Log: splutil.h,v $
+* Revision 6.3  2000/04/22 15:56:04  wheelan
+* changed is_donor to take a FloatHiPtr instead of returning a FloatHi
+*
 * Revision 6.2  1998/09/24 12:49:26  wheelan
 * added contents, revision and log stuff
 *
@@ -44,7 +47,7 @@
 #ifndef _SPLUTIL_
 #define _SPLUTIL_
 
-extern FloatHi is_donor (CharPtr str, Int4 len);
+extern void is_donor (CharPtr str, Int4 len, FloatHiPtr score);
 extern Int4 getSplicePos (CharPtr str, Int4 overlaplength);
 extern FloatHi is_acceptor (CharPtr str, Int4 len);
 

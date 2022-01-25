@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.5  2000/02/14 15:00:19  kans
+* added vsp->farIDsInAlignments for use by alignment validator
+*
 * Revision 6.4  1999/12/24 01:21:06  kans
 * added validateAlignments flag controlling call to ValidateSeqAlignWithinValidator
 *
@@ -141,6 +144,7 @@ typedef struct validstruct {
 	Boolean useSeqMgrIndexes;      /* new style indexing to speed up validation */
 	Boolean suppressContext;       /* suppress context part of message */
 	Boolean validateAlignments;    /* call alignval test suite */
+	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

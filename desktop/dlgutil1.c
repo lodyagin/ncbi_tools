@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -556,17 +556,20 @@ extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
 
 {
-  Char            ch;
   GeneGatherList  ggl;
   GeneRefPtr      grp;
   GatherScope     gs;
-  CharPtr         ptr;
   CharPtr         str;
   SeqFeatXrefPtr  xref;
+  /*
+  Char            ch;
+  CharPtr         ptr;
+  */
 
   if (ffp != NULL) {
     if (sfp != NULL) {
       str = StringSave (sfp->comment);
+      /*
       ptr = str;
       if (ptr != NULL) {
         ch = *ptr;
@@ -582,6 +585,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
           ch = *ptr;
         }
       }
+      */
       SetTitle (ffp->comment, str);
       SetTitle (ffp->title, sfp->title);
       SetValue (ffp->evidence, sfp->exp_ev + 1);

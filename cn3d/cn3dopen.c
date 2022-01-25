@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.70 $
+* $Revision: 6.104 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,105 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
+* Revision 6.104  2000/04/20 23:27:45  lewisg
+* misc bug fixes
+*
+* Revision 6.103  2000/04/11 20:05:39  lewisg
+* fix freeing bug on bioseq import, misc. tweaks
+*
+* Revision 6.102  2000/04/10 20:33:40  lewisg
+* fix show/hide for blast multiple, make blast multiple API generic
+*
+* Revision 6.101  2000/04/08 00:37:30  lewisg
+* multiple seqentries, NEWSEQ message, etc.
+*
+* Revision 6.100  2000/04/07 17:48:39  thiessen
+* make 'identity' color default for strucseqs
+*
+* Revision 6.99  2000/04/04 22:18:42  lewisg
+* add defline to ddv, fix seq import bugs, set boundbox
+*
+* Revision 6.98  2000/04/04 17:51:54  lewisg
+* fix various seq import bugs
+*
+* Revision 6.97  2000/04/03 21:05:53  lewisg
+* fix launch of cn3d from sequin
+*
+* Revision 6.96  2000/04/03 14:56:22  lewisg
+* fix sequence import hang
+*
+* Revision 6.95  2000/03/28 21:18:54  lewisg
+* more bug fixes for strucseqs
+*
+* Revision 6.94  2000/03/28 19:28:13  lewisg
+* prep new imported sa
+*
+* Revision 6.93  2000/03/28 16:23:04  thiessen
+* store row number in MMD after BLAST import
+*
+* Revision 6.92  2000/03/27 22:15:04  lewisg
+* add show/hide row dialog
+*
+* Revision 6.91  2000/03/27 17:15:42  thiessen
+* fix layer display bug
+*
+* Revision 6.90  2000/03/24 20:34:56  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 6.89  2000/03/23 21:01:07  thiessen
+* add row number (1) to structure of strucseqs mime type
+*
+* Revision 6.88  2000/03/22 23:17:49  thiessen
+* added ability to save ARS in ASN1
+*
+* Revision 6.87  2000/03/20 18:18:33  thiessen
+* fixed header problem causing network unavailability
+*
+* Revision 6.86  2000/03/18 22:39:50  lewisg
+* copy blast3 headers in makeall.unx, add blast3 to entrez link
+*
+* Revision 6.84  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.83  2000/03/15 04:43:55  thiessen
+* various minor fixes
+*
+* Revision 6.82  2000/03/14 18:03:13  thiessen
+* add target row to MMD; remove rowmgr
+*
+* Revision 6.81  2000/03/13 22:03:21  lewisg
+* add globalpars to network biostruc open
+*
+* Revision 6.80  2000/03/09 20:32:26  lewisg
+* fix saving strucseq
+*
+* Revision 6.79  2000/03/09 17:56:58  thiessen
+* changes to palette handling, feature implementation, PARS storage
+*
+* Revision 6.78  2000/03/08 21:46:14  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.77  2000/03/02 21:11:06  lewisg
+* use bandalign for import sequence, make standalone ddv use viewmgr, make dialogs modal, send color update
+*
+* Revision 6.76  2000/03/01 22:49:41  lewisg
+* import bioseq, neatlyindex, get rid of dead code
+*
+* Revision 6.75  2000/03/01 16:17:55  thiessen
+* improved handling of colors; many small fixes
+*
+* Revision 6.74  2000/02/19 21:25:57  thiessen
+* split of cn3dmodl into cn3dmodl and cn3dstyl
+*
+* Revision 6.73  2000/02/15 22:40:57  lewisg
+* add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
+*
+* Revision 6.72  2000/02/10 17:47:02  thiessen
+* added: color-by-sequence-conservation menu item, zoom-out to OpenGL, misc fixes
+*
+* Revision 6.71  2000/02/05 01:32:21  lewisg
+* add viewmgr, move place freeing is done in ddv, modify visual c++ projects
+*
 * Revision 6.70  2000/01/21 15:59:05  lewisg
 * add check for binary/ascii files
 *
@@ -283,9 +382,16 @@
 #include <algorend.h>
 #include <cn3dmsg.h>
 #include <salmedia.h>
-#include <cn3dmodl.h>
 #include <cn3dshim.h>
-
+#include <cn3dmodl.h>
+#include <cn3dstyl.h>
+#include <alignmgr.h>
+#include <sqnutils.h>
+#include <cn3dsave.h>
+#include <ddvopen.h>
+#include <seqcons.h>
+#include <udviewer.h>
+#include <tofasta.h>
 
 
 static Boolean Cn3D_Open_InUse = FALSE;
@@ -302,6 +408,43 @@ static ButtoN Cn3D_bOpenBrowse;
 Boolean Mime_ReadIn = FALSE;
 
 Int2 Cn3DMime = 0;
+
+
+/*****************************************************************************
+
+Function: Cn3D_UseNetwork()
+
+Purpose:  Sets Cn3D_ColorData.UseEntrez, if Cn3D should use the network
+  
+Returns:  TRUE if yes
+
+*****************************************************************************/
+
+NLM_EXTERN Boolean Cn3D_CheckNetworkUse()
+{
+    Char str[64];
+    Boolean useNetwork = FALSE;
+
+    if (GetAppParam
+        ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof(str))) {
+        if (StringICmp(str, "TRUE") == 0) useNetwork = TRUE;
+    }
+    Cn3D_ColorData.UseEntrez = useNetwork;
+    Cn3D_ColorData.EntrezOn = FALSE;
+    return useNetwork;
+}
+
+/*------------------------------------------------------*/
+Boolean Cn3D_UsingEntrez(void)
+{
+    return Cn3D_ColorData.UseEntrez;
+}
+
+/*------------------------------------------------------*/
+Boolean Cn3D_EntrezOn(void)
+{
+    return Cn3D_ColorData.EntrezOn;
+}
 
 /*------------------------------------------------------*/
 SeqEntryPtr Cn3DFetchSeqEntry(PMSD pmsdThis)
@@ -327,7 +470,7 @@ SeqEntryPtr Cn3DFetchSeqEntry(PMSD pmsdThis)
             si.choice = SEQID_GI;
             si.data.intvalue = pmmdThis->iGi;
             bsp = BioseqLockById(&si);
-            BioseqUnlockById(&si);
+            BioseqUnlock(bsp);
 
             if (bsp != NULL)
                 return SeqEntryFind(&si);
@@ -340,31 +483,23 @@ SeqEntryPtr Cn3DFetchSeqEntry(PMSD pmsdThis)
     return NULL;
 }
 
-/*------------------------------------------------------*/
-void fnMarkAlignedResiduesForStrucSeqs(PDNMS pdnmsThis)
+/*
+sets alignment bits in master structure given pairwise seqaligns
+*/
+static void Cn3D_MarkStrucSeqs(PDNMS pdnmsThis, SeqAnnot *sap)
 {
     PMSD pmsdThis = NULL;
     PMMD pmmdThis = NULL;
     PMGD pmgdThis = NULL;
-
     SeqIdPtr sip = NULL;
-    SeqAnnotPtr sap = NULL;
-    SeqAlignPtr salp = NULL, salp_curr = NULL;
+    SeqAlignPtr salp = NULL;
     DenseSegPtr dssp = NULL;
-    Int4Ptr starts = NULL;
-    Int4Ptr lens = NULL;
+    DenseDiagPtr ddp = NULL;
+    Int4 nres, numseg;
 
-    Int4 from = 0, to = 0, nres = 0;
-    Int4 numseg = 0;
-
-
+    if (sap == NULL || pdnmsThis == NULL) return;
     pmsdThis = pdnmsThis->data.ptrvalue;
-    if (pmsdThis == NULL)
-        return;
-
-    sap = Cn3D_ColorData.sap;
-    if (sap == NULL)
-        return;
+    if (pmsdThis == NULL) return;
 
     while (sap) {
         if (sap->type == 2) {
@@ -374,56 +509,55 @@ void fnMarkAlignedResiduesForStrucSeqs(PDNMS pdnmsThis)
         sap = sap->next;
     }
 
-    if (salp == NULL)
-        return;
-    salp_curr = salp;
-    if (salp_curr) {
-        dssp = salp->segs;
-        sip = dssp->ids;
+    if (salp) {
+        if(salp->segtype == SAS_DENDIAG) {
+            ddp = salp->segs;
+            sip = ddp->id;
+        }
+        else if(salp->segtype == SAS_DENSEG) {
+            dssp = salp->segs;
+            sip = dssp->ids;
+        }
+        else return;
         pmmdThis = GetMMFromMSDBySeqId(pmsdThis, sip);
         /* assume the first sip is for the sequence with known structure */
-    }
+    } else return;
 
-    if (pmmdThis == NULL)
-        return;
+    if (pmmdThis == NULL) return;
 
-    salp_curr = salp;
-    while (salp_curr) {
-        pmsdThis->bAligned++;
-        salp_curr = salp_curr->next;
-    }
-
-    salp_curr = salp;
     while (salp) {
-        dssp = salp->segs;
-        starts = dssp->starts;
-        lens = dssp->lens;
-
-        for (numseg = 0; numseg < dssp->numseg; numseg++, lens++) {
-            from = *starts;
-            to = from + *lens;
-            if (from == -1) {
-                starts++;
-                starts++;
-                continue;
-            }
-            starts++;
-            if (*starts != -1) {
-                for (nres = from; nres < to; nres++) {
+        pmsdThis->bAligned++;
+        if(salp->segtype == SAS_DENSEG) {
+            dssp = salp->segs;
+            if(dssp->dim != 2) continue;
+            
+            for (numseg = 0; numseg < dssp->numseg; numseg++) {
+                if (dssp->starts[numseg*2] == -1  
+                    || dssp->starts[numseg*2+1] == -1 ) continue;
+                for (nres = dssp->starts[numseg*2];
+                        nres < dssp->starts[numseg*2] + dssp->lens[numseg];
+                        nres++) {
                     pmgdThis = GetMGFromMM(pmmdThis, nres + 1);
-                    if (pmgdThis)
-                        pmgdThis->bReserved++;
+                    if (pmgdThis) pmgdThis->bReserved++;
                 }
             }
-            starts++;
         }
-
+        else /* densediag */ {
+            ddp = salp->segs;
+            if(ddp->dim != 2) continue;
+            if (ddp->starts[0] != -1 && ddp->starts[1] != -1) {
+                for (nres = ddp->starts[0]; nres < ddp->starts[0] + ddp->len;
+                nres++) {
+                    pmgdThis = GetMGFromMM(pmmdThis, nres + 1);
+                    if (pmgdThis) pmgdThis->bReserved++;
+                }
+            }
+        }
         salp = salp->next;
     }
-
 }
 
-/*----------------------------------------------------*/
+
 /**********
 fnMarkAlignedResidue()
 Given a master and model, mark all of the residues in the slave and master that are aligned.
@@ -436,7 +570,8 @@ ValNodePtr fnMarkAlignedResidues(PDNMS pdnmsMaster, PDNMS pdnmsSlave,
     ValNodePtr pvnAlignment;
     ValNodePtr pvnThis = NULL;
     ChemGraphPntrsPtr pcgpThis;
-    ValNodePtr pvnListMaster = NULL, pvnListSlave = NULL;
+    ValNodePtr pvnListMaster = NULL, pvnListSlave = NULL,
+        pvnListMasterHead, pvnListSlaveHead;
     PFB pfbMaster = NULL, pfbSlave = NULL;
     ChemGraphAlignmentPtr pcgaSlave;
 
@@ -453,9 +588,11 @@ ValNodePtr fnMarkAlignedResidues(PDNMS pdnmsMaster, PDNMS pdnmsSlave,
     pvnThis = pcgaSlave->alignment;
     if (pvnThis) {
         pcgpThis = (ChemGraphPntrsPtr) pvnThis;
-        pvnListMaster = MakeChemGraphNodeList(pdnmsMaster, pcgpThis);
+        pvnListMasterHead = pvnListMaster = 
+            MakeChemGraphNodeList(pdnmsMaster, pcgpThis);
         pcgpThis = (ChemGraphPntrsPtr) pvnThis->next;
-        pvnListSlave = MakeChemGraphNodeList(pdnmsSlave, pcgpThis);
+        pvnListSlaveHead = pvnListSlave = 
+            MakeChemGraphNodeList(pdnmsSlave, pcgpThis);
         if (!pvnListMaster || !pvnListSlave)
             return NULL;
         while (pvnListMaster && pvnListSlave) {
@@ -467,8 +604,8 @@ ValNodePtr fnMarkAlignedResidues(PDNMS pdnmsMaster, PDNMS pdnmsSlave,
             pvnListSlave = pvnListSlave->next;
             pvnListMaster = pvnListMaster->next;
         }                       /* while pvnListMaster */
-        ValNodeFree(pvnListMaster);
-        ValNodeFree(pvnListSlave);
+        ValNodeFree(pvnListMasterHead);
+        ValNodeFree(pvnListSlaveHead);
     }                           /* while pvnThis */
     return pvnAlignment;
 }
@@ -495,7 +632,7 @@ void LIBCALLBACK fnClearMarkedResidues(PFB pfbThis, Int4 iModel,
 *
 ******************************************************************************/
 
-static void MMDB_OpenTraverse(PMSD pmsd)
+NLM_EXTERN void MMDB_OpenTraverse(PMSD pmsd)
 {
     PDNML pdnmlThis = NULL;
     PMLD pmldThis = NULL;
@@ -540,14 +677,18 @@ NLM_EXTERN void Cn3D_OpenStart()
     ClearRest();
 }
 
-static void Cn3D_StartNet()
+NLM_EXTERN Boolean Cn3D_StartNet(Boolean UseNetwork)
 {
-    if (Cn3D_ColorData.EntrezOn) return;
+    if (Cn3D_ColorData.EntrezOn) return TRUE;
     if (Cn3D_ColorData.UseEntrez) {
-        if(EntrezBioseqFetchEnable("Cn3D", FALSE)) {
-            if(EntrezInit("Cn3D", TRUE, NULL)) Cn3D_ColorData.EntrezOn = TRUE;
+        if(EntrezInit("Cn3D", TRUE, NULL)) {
+            if(EntrezBioseqFetchEnable("Cn3D", FALSE)) {
+                Cn3D_ColorData.EntrezOn = TRUE;
+                return TRUE;
+            }
         }
     }
+    return FALSE;
 }
 
 /******************************************************************************
@@ -571,9 +712,8 @@ static void LIBCALLBACK fnRewireSips(PFB pfbThis, Int4 iModel,
     bsp = BioseqLockById(pmmdThis->pSeqId);
     if(bsp == NULL) return;
     sip = SeqIdDupList(bsp->id);
-    BioseqUnlockById(pmmdThis->pSeqId);
+    BioseqUnlock(bsp);
     if(sip == NULL) {
-        BioseqUnlockById(pmmdThis->pSeqId);
         return;
     }
     SeqIdFree(pmmdThis->pSeqId);
@@ -587,6 +727,10 @@ NLM_EXTERN void Cn3D_OpenEnd()
     PMSD pmsdMaster = NULL;
     PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
     SeqEntryPtr sep = NULL;
+#ifdef _OPENGL
+    BiostrucFeaturePtr bsfp;
+    Camera *camera;
+#endif
 
     Cn3DIndexUserDefinedFeature();
 
@@ -595,20 +739,19 @@ NLM_EXTERN void Cn3D_OpenEnd()
 #else
     ZoomAll3D(Cn3D_v3d);
 #endif
-
-
         
     pdnmsMaster = GetSelectedModelstruc();
     if(pdnmsMaster == NULL) return;
     pmsdMaster = pdnmsMaster->data.ptrvalue;
     if(pmsdMaster == NULL) return;
 
+    Cn3D_GetRenderSettingsFromBiostruc(pdnmsMaster);
+
     if (!Mime_ReadIn || pmsdMaster->iMimeType == NcbiMimeAsn1_entrez) {
-        Cn3D_StartNet();
+        Cn3D_StartNet(TRUE);
         if (Cn3D_ColorData.EntrezOn) {
             sep = Cn3DFetchSeqEntry(pmsdMaster);
             if (sep != NULL) {
-                SeqAnnot *sap;
                 pmsdMaster->iMimeType = NcbiMimeAsn1_strucseq;
                 Cn3D_RegisterSeqEntry(sep);
             }
@@ -619,7 +762,8 @@ NLM_EXTERN void Cn3D_OpenEnd()
 
     Cn3D_ColorData.IsUserData = TRUE;
     if(Cn3D_ColorData.pDDVColorGlobal == NULL) {
-        Cn3D_ColorData.pDDVColorGlobal = DDV_CreateColorGlobal(FALSE);
+        Cn3D_ColorData.pDDVColorGlobal = DDV_CreateColorGlobal(FALSE,
+            NULL);
         DDV_LoadSSColor(Cn3D_ColorData.pDDVColorGlobal, "CN3D");
         Cn3D_ColorData.IsUserData = FALSE;
         Cn3D_RegisterColor();
@@ -635,12 +779,78 @@ NLM_EXTERN void Cn3D_OpenEnd()
     }
 
     Cn3D_ResetActiveStrucProc();
-    if (pmsdMaster->iMimeType != NcbiMimeAsn1_entrez) {    
-        
-        LaunchSequenceWindow();
+    Cn3D_RedrawEx(TRUE);          /* always a new structure */
+
+#ifdef _OPENGL
+    bsfp = Cn3D_FindFeature(pmsdMaster->pbsBS->features,
+        Feature_type_camera, 1);
+
+    if(bsfp != NULL) {
+        camera = (Camera *)bsfp->Property_property->data.ptrvalue;
+        if(camera->scale != 0) {
+            Cn3D_Asn2Matrix(Cn3D_ColorData.OGL_Data->ModelMatrix, camera->modelview);
+            Cn3D_ColorData.OGL_Data->CameraDistance = ((FloatLo)camera->distance)
+                /camera->scale;
+            Cn3D_ColorData.OGL_Data->CameraAngle = ((FloatLo)camera->angle)
+                /camera->scale;
+            Cn3D_ColorData.OGL_Data->CameraDirection[0] = ((FloatLo)camera->x)
+                /camera->scale;
+            Cn3D_ColorData.OGL_Data->CameraDirection[1] = ((FloatLo)camera->y)
+                /camera->scale;
+            Cn3D_ColorData.OGL_Data->NeedCameraSetup = TRUE;
+        }
     }
+    OGL_AllLayerOnProc(Cn3D_ColorData.OGL_Data);
+#endif
+
+    Cn3D_RedrawNUpdate(FALSE);
+    if (pmsdMaster->iMimeType != NcbiMimeAsn1_entrez) LaunchSequenceWindow();
     
 }
+
+static void Cn3D_StoreAlignRowNumsInMMDs(SeqAnnot * sanp)
+{
+    PDNMS pdnmsMaster, pdnmsSlave;
+    PMMD pmmdThis;
+    Int4 row = 1;
+    SeqAlignPtr salp = NULL;
+    SeqIdPtr sip;
+        
+    for (; sanp != NULL; sanp = sanp->next) {
+        if (sanp->data == NULL) continue;
+        salp = sanp->data;
+        break;
+    }
+    if (!salp) return;
+
+    pdnmsMaster = GetSelectedModelstruc();
+    if (pdnmsMaster == NULL) return;
+
+    /* assume master is row #1 */
+    sip = AlnMgrGetNthSeqIdPtr(salp, row);
+    pmmdThis = GetMMFromMSDBySeqId((PMSD) pdnmsMaster->data.ptrvalue, sip);
+    if (!pmmdThis) {
+        Message(MSG_ERROR, "error matching master MMD to target row 0");
+        return;
+    }
+    pmmdThis->iTargetRow = row;
+    row++;
+
+    /* assume slaves are rows 2..N in order */
+    for(pdnmsSlave = ((PMSD) pdnmsMaster->data.ptrvalue)->pdnmsSlaves; 
+        pdnmsSlave;
+        pdnmsSlave = pdnmsSlave->next, row++) {
+
+        sip = AlnMgrGetNthSeqIdPtr(salp, row);
+        pmmdThis = GetMMFromMSDBySeqId((PMSD) pdnmsSlave->data.ptrvalue, sip);
+        if (!pmmdThis) {
+            Message(MSG_ERROR, "error matching slave MMD to target row %i", row);
+            return;
+        }
+        pmmdThis->iTargetRow = row;
+    }
+}
+
 
 /******************************************************************************
 *
@@ -689,13 +899,31 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
     return retval;
 }
 
+/*
+ * callback to initialize MG's PARS list with default PARS (passed as ptr)
+ */
+void LIBCALLBACK fnSetGlobalPARSinMG(PFB pfbThis, Int4 iModel,
+                                     Int4 iIndex, Pointer ptr)
+{
+    ValNodeAddPointer(&(((PMGD) pfbThis)->pvnPARSList), 0, (VoidPtr) ptr);
+}
+
+NLM_EXTERN void Cn3D_SetPars(PARS parsThis, PDNMS pdnms)
+{
+    PMSD pmsdThis;
+
+    if(parsThis == NULL || pdnms == NULL) return;
+    pmsdThis = pdnms->data.ptrvalue;
+    pmsdThis->pGlobalPARS = parsThis;
+    TraverseGraphs(pdnms, 0, 0, (Pointer) parsThis, (pNodeFunc) fnSetGlobalPARSinMG);
+}
+
 /******************************************************************************
 *
 * Meant to be an ncbiobj and mmdb dependent function to process mime input
 * into objects and MSD's.  Still has a few dependencies to be eliminated
 *
 ******************************************************************************/
-
 Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
 {
     Boolean retval = FALSE;
@@ -732,16 +960,13 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                 switch (egp->Data_data->choice) {
                 case Data_data_structure:
                     pdnms =
-                        MakeAModelstruc((BiostrucPtr) egp->Data_data->data.
-                                        ptrvalue);
-                    if (!pdnms)
-                        break;
+                        MakeAModelstruc((BiostrucPtr) egp->Data_data->data.ptrvalue);
+                    if (!pdnms) break;
 
                     pmsdThis = (PMSD) pdnms->data.ptrvalue;
-
                     pmsdThis->iMimeType = NcbiMimeAsn1_entrez;
-
                     MMDB_OpenTraverse(pmsdThis);
+                    Cn3D_SetPars(NewStructureRenderSet(), pdnms);
                     break;
 
                 case Data_data_nuc:
@@ -752,96 +977,79 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                     break;
                 }
                 break;
+
             case NcbiMimeAsn1_strucseq:
                 bssp = (BiostrucSeqPtr) mime->data.ptrvalue;
                 pdnms = MakeAModelstruc((BiostrucPtr) bssp->structure);
-                if (!pdnms)
-                    break;
+                if (!pdnms) break;
 
                 pmsdThis = (PMSD) pdnms->data.ptrvalue;
+                Cn3D_SetPars(NewStructureRenderSet(), pdnms);
+                pmsdThis->iMimeType = NcbiMimeAsn1_strucseq;
+
                 MMDB_OpenTraverse(pmsdThis);
-
                 Cn3D_RegisterSeqEntry(bssp->sequences);
-
                 break;
 
             case NcbiMimeAsn1_strucseqs:
                 bsssp = (BiostrucSeqsPtr) mime->data.ptrvalue;
                 pdnms = MakeAModelstruc((BiostrucPtr) bsssp->structure);
-                if (!pdnms)
-                    break;
+                if (!pdnms) break;
 
                 pmsdThis = (PMSD) pdnms->data.ptrvalue;
-
                 pmsdThis->iMimeType = NcbiMimeAsn1_strucseqs;
-
                 MMDB_OpenTraverse(pmsdThis);
-                fnMarkAlignedResiduesForStrucSeqs(pdnms);
+                Cn3D_MarkStrucSeqs(pdnms, bsssp->seqalign);
 
+                Cn3D_RegisterSeqAnnot(bsssp->seqalign, TRUE, TRUE);
                 Cn3D_RegisterSeqEntry(bsssp->sequences);
-                Cn3D_RegisterSeqAnnot(bsssp->seqalign);
-
-
-                parsThis = NewStrucSeqsRenderSet();
-                pmsdThis->pExtra = parsThis;
-
+                parsThis = NewStructureRenderSet();
+                parsThis->PBBColor = C_BYSEQCONS;
+                parsThis->ConsColAlg = CSC_SHOWIDENTITY;
+                Cn3D_SetPars(parsThis, pdnms);
+                /* after indexing/IBM, store "original" row numbers in corresponding MMD */
+                Cn3D_StoreAlignRowNumsInMMDs(bsssp->seqalign);
                 break;
 
             case NcbiMimeAsn1_alignseq:
                 pbsasThis = (BiostrucAlignSeqPtr) mime->data.ptrvalue;
                 sap = pbsasThis->seqalign;
-                Cn3D_RegisterSeqAnnot(pbsasThis->seqalign);
+                Cn3D_RegisterSeqAnnot(pbsasThis->seqalign, TRUE, TRUE);
                 Cn3D_RegisterSeqEntry(pbsasThis->sequences);
-
                 return retval;
+
             case NcbiMimeAsn1_alignstruc: /* this is the code that received alignments */
                 pbsaThis = (BiostrucAlignPtr) mime->data.ptrvalue;
-                if (!pbsaThis)
-                    break;      /* THROW */
+                if (!pbsaThis) break;      /* THROW */
                 retval = TRUE;
                 /* load in the master */
                 pdnmsMaster = MakeAModelstruc((BiostrucPtr) pbsaThis->master); /* grab the master struc */
-                if (!pdnmsMaster)
-                    break;
+                if (!pdnmsMaster) break;
 
                 pmsdMaster = (PMSD) pdnmsMaster->data.ptrvalue;
 
                 pmsdMaster->iMimeType = NcbiMimeAsn1_alignstruc;
 
                 parsThis = NewAlignRenderSet();
-                pmsdMaster->pExtra = parsThis;
+                Cn3D_SetPars(parsThis, pdnmsMaster);
+
                 pmsdMaster->bVisible = TRUE;
                 MMDB_OpenTraverse(pmsdMaster);
 
-#ifdef CN3DDEBUG
-                {
-                    AsnIoPtr aip;
-                    
-                    aip = AsnIoOpen("align.out", "w");
-                    SeqAnnotAsnWrite(pbsaThis->seqalign, aip, NULL);
-                    AsnIoClose(aip);
-                }
-#endif /* CN3DDEBUG */
-                
-
                 /* add the alignment seq annot ptr, etc. */
                 pmsdMaster->psaStrucAlignment = pbsaThis->alignments;
-                Cn3D_RegisterSeqAnnot(pbsaThis->seqalign);
+                Cn3D_RegisterSeqAnnot(pbsaThis->seqalign, TRUE, TRUE);
                 Cn3D_RegisterSeqEntry(pbsaThis->sequences);
-
 
                 SetNeighborOn(); /* turn on neighbor mode */
 
                 SetMasterModelstruc(pdnmsMaster);
 
                 /* do a slave */
-
                 pbsThis = (BiostrucPtr) pbsaThis->slaves;
-                pbsfThis =
-                    (BiostrucFeaturePtr) pbsaThis->alignments->features->
-                    features;
+                pbsfThis = (BiostrucFeaturePtr)
+                    pbsaThis->alignments->features->features;
                 pvnAlignment = NULL;
-/* pmsdMaster->pdnsfFeatures = DValNodeAddPointer(NULL, 0, pbsfThis); *//* tack the alignments onto the master model struct. */
                 TraverseGraphs(pdnmsMaster, 0, 0, NULL,
                                (pNodeFunc) fnClearMarkedResidues);
 
@@ -855,29 +1063,22 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                     pmsdSlave->bMaster = FALSE; /* this is not a master struct */
                     pmsdMaster->bAligned++;
                     pmsdSlave->pbAligned = &(pmsdMaster->bAligned);
+
                     MMDB_OpenTraverse(pmsdSlave);
-                    pmsdSlave->pExtra = parsThis;
+                    Cn3D_SetPars(parsThis, pdnmsSlave);
+
                     pmsdSlave->bVisible = TRUE; /* turn them all on by default */
 
                     pvnAlignment =
-                        fnMarkAlignedResidues(pdnmsMaster, pdnmsSlave,
-                                              pbsfThis);
-                    if (!pvnAlignment)
-                        break;
-
-                    /* use this to clear out the bReserved value. TraverseGraphs( DValNodePtr pdnModel, Int4 iModel, Int4 iIndex,
-                       Pointer ptr, pNodeFunc pfnCallMe)
-                       (*pfnCallMe)((PFB) pxxxxThis,  Int4 iMode, Int4 iIndex, Pointer ptr)
-                     */
+                        fnMarkAlignedResidues(pdnmsMaster, pdnmsSlave, pbsfThis);
+                    if (!pvnAlignment) break;
 
                     pdnTransform = NULL;
                     /* create the spatial transformation */
                     TransformToDNTRN(&pdnTransform,
                                      ((ChemGraphAlignmentPtr)
-                                      pvnAlignment->data.ptrvalue)->
-                                     transform);
-                    if (pdnTransform == NULL)
-                        break;
+                                      pvnAlignment->data.ptrvalue)->transform);
+                    if (pdnTransform == NULL) break;
                     /* loop over the slave's models with the transformation */
                     pdnmlThis = pmsdSlave->pdnmlModels;
 
@@ -892,10 +1093,12 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                     FreeDNTRN(pdnTransform);
                     pbsThis = pbsThis->next;
                     pbsfThis = pbsfThis->next;
-                    /* turn the transform into a dvalnode for the traverse */
                 }               /*while pbsThis */
 
+                /* after indexing/IBM, store "original" row numbers in corresponding MMD */
+                Cn3D_StoreAlignRowNumsInMMDs(pbsaThis->seqalign);
                 break;
+
             default:
                 break;
             }
@@ -1006,6 +1209,7 @@ static void Cn3D_NetOpenAcceptProc(ButtoN b)
         pmsdThis = (PMSD) pdnmsModelstruc->data.ptrvalue;
         MMDB_OpenTraverse(pmsdThis);
     }
+    Cn3D_SetPars(NewStructureRenderSet(), pdnmsModelstruc);
 
     Remove(Cn3D_wNetOpen);
     Cn3D_EnableFileOps();
@@ -1028,7 +1232,7 @@ static void Cn3D_NetOpenCancelProc(GraphiC g)
     return;
 }
 
-static void Cn3D_NetOpenBiostruc(IteM i)
+NLM_EXTERN void Cn3D_NetOpenBiostruc(IteM i)
 {
     GrouP g, hg;
     ButtoN b;
@@ -1038,11 +1242,11 @@ static void Cn3D_NetOpenBiostruc(IteM i)
     else
         Cn3D_Open_InUse = TRUE;
 
-    Cn3D_StartNet();
+    Cn3D_StartNet(TRUE);
     if (!Cn3D_ColorData.EntrezOn) return;
 
     Cn3D_wNetOpen =
-        FixedWindow(-30, -20, -10, -10, " Internet retrieve from MMDB ",
+        MovableModalWindow(-30, -20, -10, -10, " Internet retrieve from MMDB ",
                     NULL);
     hg = HiddenGroup(Cn3D_wNetOpen, 3, 0, NULL);
     SetGroupSpacing(hg, 30, 30);
@@ -1098,31 +1302,7 @@ static void Cn3D_NetOpenBiostruc(IteM i)
 /* below this are the file i/o open-er procs */
 /*********************************************/
 
-static void Cn3D_OpenBrowseProc(GraphiC g)
-{
-    Char path[PATH_MAX];
-
-    path[0] = '\0';
-
-    if (GetInputFileName(path, sizeof(path), NULL, NULL)) {
-        SetTitle(Cn3D_tOpen, path);
-        Cn3D_OpenEnableProc(NULL);
-    }
-
-    return;
-}
-
-
-static void Cn3D_OpenCancelProc(ButtoN b)
-{
-    Remove(Cn3D_wOpen);
-    Cn3D_EnableFileOps();
-    Cn3D_Open_InUse = FALSE;
-    return;
-}
-
-
-static void Cn3D_OpenAcceptProc(ButtoN b)
+NLM_EXTERN void Cn3D_OpenBiostruc(IteM i)
 {
     Char str[PATH_MAX];
     unsigned char szBegin[10];
@@ -1133,22 +1313,24 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
     FILE *hFile;
     Char buf[50];
 
-
-
+    StrCpy(str,"");
+    GetInputFileName(str, sizeof(str), NULL, NULL);
+    if(StrCmp(str,"") == 0) return;
     WatchCursor();
-    GetTitle(Cn3D_tOpen, str, sizeof(str));
     hFile = FileOpen(str, "rb");
+    if(hFile == NULL) return;
     FileGets((CharPtr) szBegin, 2, hFile);
-    if (hFile == NULL)
-        szBegin[0] = (Char) 0;
+    if (hFile == NULL) szBegin[0] = (Char) 0;
     FileClose(hFile);
+    if(szBegin[0] == 31 && szBegin[1] == 139) {
+        Message(MSG_ERROR, 
+            "This file may require a newer version of Cn3D.  Go to http://www.ncbi.nlm.nih.gov/Structure/CN3D for more information");     
+        return;
+    }
     /* to make cn3d to take strucseq for which szBegin[0] is 78 */
     /* for single biostruc szBegin[0] is 48 */
     if (szBegin[0] > 70) { /* mime */
         if (!OpenMimeFileWithDeletion(str, FALSE)) {
-            Remove(Cn3D_wOpen);
-            Cn3D_EnableFileOps();
-            Cn3D_Open_InUse = FALSE;
             return;
         }
     } else {                    /* not mime */
@@ -1175,80 +1357,256 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
             pdnmsModelstruc = MakeAModelstruc(pbsBiostruc);
             pmsdThis = (PMSD) pdnmsModelstruc->data.ptrvalue;
             MMDB_OpenTraverse(pmsdThis);
+            Cn3D_SetPars(NewStructureRenderSet(), pdnmsModelstruc);
 
             ArrowCursor();
-        } else {
-            /* return a not found error here */
-
-            Remove(Cn3D_wOpen);
-            Cn3D_EnableFileOps();
-            Cn3D_Open_InUse = FALSE;
-            return;
-        }
+        } else return;
 
         Cn3D_OpenEnd();
     }                           /* switch between mime and non-mime */
-    Remove(Cn3D_wOpen);
-    Cn3D_EnableFileOps();
-    Cn3D_Open_InUse = FALSE;
-
-    return;
 }
 
-static void Cn3D_OpenBiostruc(IteM i)
+/* generic set up for new alignment */
+static void Cn3D_ImportSAEnd(SeqAlign *salp, Boolean Neat)
 {
-    GrouP g;
-    ButtoN b;
+    SeqAnnot * annot;
+    PMSD pmsdThis;
+    PDNMS pdnmsThis;
+    Uint2 entityID;
+    PARS pars = NULL;
+        
+    if (salp == NULL) return;
+    pdnmsThis = GetSelectedModelstruc();
+    if (!pdnmsThis) return;
+    
+    /* close the sequence window */
+    entityID =
+        ObjMgrGetEntityIDForPointer((void *) Cn3D_ColorData.pvnsep);
+    ObjMgrSendMsg(OM_MSG_FLUSH, entityID, 0, 0);
 
-    if (Cn3D_Open_InUse)
-        return;
-    else
-        Cn3D_Open_InUse = TRUE;
-
-    Cn3D_wOpen =
-        FixedWindow(-30, -20, -10, -10, " Open a local Biostruc ", NULL);
-    g =
-        NormalGroup(Cn3D_wOpen, 2, 1, " Enter Biostruc file name:",
-                    systemFont, NULL);
-    SetGroupMargins(g, 10, 10);
-    SetGroupSpacing(g, 10, 20);
-    Cn3D_tOpen = DialogText(g, "", 25, (TxtActnProc) Cn3D_OpenEnableProc);
-    Cn3D_bOpenBrowse =
-        PushButton(g, " browse...", (BtnActnProc) Cn3D_OpenBrowseProc);
-
-    g = HiddenGroup(Cn3D_wOpen, 3, 1, NULL);
-    SetGroupMargins(g, 10, 10);
-    SetGroupSpacing(g, 30, 30);
-
-/*    Cn3D_gBinAscii = NormalGroup(g, 2, 1, "file mode", systemFont, NULL);
-    SetGroupMargins(Cn3D_gBinAscii, 10, 10);
-    RadioButton(Cn3D_gBinAscii, "Ascii");
-    RadioButton(Cn3D_gBinAscii, "Binary");
-    SetValue(Cn3D_gBinAscii, 2);*/
-
-    b = PushButton(g, "Cancel", (BtnActnProc) Cn3D_OpenCancelProc);
-    Cn3D_bOpenAccept =
-        DefaultButton(g, "OK", (BtnActnProc) Cn3D_OpenAcceptProc);
-
-    Disable(Cn3D_bOpenAccept);
-    Cn3D_DisableFileOps();
-    Select(Cn3D_tOpen);
-    Show(Cn3D_wOpen);
-    return;
-}
-
-
-MenU LIBCALL Cn3D_OpenSub(MenU m)
-{
-    IteM i;
-    MenU s;
-
-    s = SubMenu(m, "Open");
-    i = CommandItem(s, "Network/N", Cn3D_NetOpenBiostruc);
-    if (!Cn3D_ColorData.UseEntrez) {
-        Disable(i);
+    /* fetch the active structure */
+    pars = (PARS) ((PMSD) pdnmsThis->data.ptrvalue)->pGlobalPARS;
+    if (pars) {
+    pars->ConsColAlg = (Nlm_Int2) 0;
+    pars->PBBColor = C_BYSEQCONS;
+    pars->PResColor = C_BYSEQCONS;
+    pars->ObjectOn = FALSE;
     }
-    i = CommandItem(s, "Local File/B", Cn3D_OpenBiostruc);
 
-    return s;
+    annot = SeqAnnotNew();
+    if(annot == NULL) return;
+    annot->type = 2;
+    annot->data = salp;
+
+    /* change mime type for saving */
+    if(pdnmsThis) {
+        pmsdThis = pdnmsThis->data.ptrvalue;
+        if(pmsdThis) pmsdThis->iMimeType = NcbiMimeAsn1_strucseqs;
+        Cn3D_MarkStrucSeqs(pdnmsThis, annot);
+    }
+
+    Cn3D_ColorData.pDDVColorGlobal = NULL; /* force creation of new color object */
+    Cn3D_RegisterSeqAnnot(annot, Neat, Neat); /* register annot? */
+    Cn3D_StoreAlignRowNumsInMMDs(annot);
+    Cn3D_LaunchSeqAnnot(annot);
+    ViewMgr_Update(salp);
+    Disable(Cn3D_ColorData.BlastMany);
+}
+
+static void Cn3D_ImportSAEndCB(UDV_BlastDlgData *bddp)
+{
+    if(bddp) Cn3D_ImportSAEnd(bddp->salp, bddp->IBM);
+}
+
+
+/*******************************************************************************
+
+Function : Cn3D_BlastDlg()
+  
+Purpose : Blast alignment dialog for multiple alignment
+  
+Parameters : i; menu
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_BlastDlg(IteM i)
+{
+    UDV_BlastDlgData *bddp;
+    
+    if(Cn3D_ColorData.sap) return;
+    Cn3D_StartNet(TRUE);
+    if (!Cn3D_ColorData.EntrezOn) {
+        Message(MSG_ERROR, "Blast requires network access");
+        return;
+    }
+
+    bddp = (UDV_BlastDlgData *)MemNew(sizeof(UDV_BlastDlgData));
+    if (bddp == NULL) return;
+    bddp->pvnSips = SAM_ExtractSips(Cn3D_ColorData.pvnsep);
+    bddp->callback = Cn3D_ImportSAEndCB;
+    bddp->IBM = FALSE;
+
+    UDV_BlastDlg(bddp);
+}
+
+static void Cn3D_ImportSeqEntry(DDV_ImportDialog *idp)
+{
+    DDVUpdateMSG dum;
+    Uint2 entityID, entityIDsalp;
+    ValNode *pvn;
+    
+    entityID = ObjMgrGetEntityIDForPointer((void *) idp->bsp);
+
+    if(Cn3D_ColorData.sap && (idp->mode == DDVIMPNET2SA
+        || idp->mode == DDVIMPSE2SA)) {
+        MemSet(&dum, 0, sizeof(DDVUpdateMSG));
+        dum.data = &entityID;
+        dum.type = UPDATE_TYPE_NEWSEQ;
+        entityIDsalp = ObjMgrGetEntityIDForPointer((void *) Cn3D_ColorData.sap->data);
+        ObjMgrSendProcMsg(OM_MSG_UPDATE, entityIDsalp, 0, OBJ_SEQALIGN,
+            0, 0, (Pointer)&dum);
+    }
+    
+    if(idp->mode & DDVIMPNET)
+    {
+        idp->sep = GetBestTopParentForData(entityID, idp->bsp);
+        for(pvn = Cn3D_ColorData.pvnsep; pvn != NULL; pvn = pvn->next)
+            if(pvn == idp->sep) return;
+    } 
+    ValNodeLink(&Cn3D_ColorData.pvnsep, idp->sep);
+    idp->sep->next = NULL;
+    SAM_MakeViewerFree((void *) idp->sep);
+    if(IS_Bioseq(idp->sep)) GatherSpecificProcLaunch(0, "Seq-Struc Communication",
+        OMPROC_VIEW, FALSE, entityID, 0, OBJ_BIOSEQ);
+    else GatherSpecificProcLaunch(0, "Seq-Struc Communication", OMPROC_VIEW,
+        FALSE, entityID, 0, OBJ_BIOSEQSET);
+}
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportCBSE()
+  
+  Purpose : callback for importing single sequence into a seqalign
+
+*******************************************************************************/
+static void Cn3D_ImportCBSE(DDV_ImportDialog *idp, SeqAlign *salpdest,
+                            SeqAlign *salp)
+{
+    if (salpdest == NULL || salp == NULL) return;
+    SeqAlignSetFree(salp->next);
+    salp->next = NULL;
+    ViewMgr_Add(salpdest, salp);
+    Cn3D_ImportSeqEntry(idp);
+}
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportCB()
+  
+  Purpose : callback for importing single sequence and creating a new pairwise
+            seqalign
+
+*******************************************************************************/
+static void Cn3D_ImportCB(DDV_ImportDialog *idp, SeqAlign *salpdest,
+                          SeqAlign *salp)
+{
+    if (salp == NULL) return;
+    SeqAlignSetFree(salp->next);
+    salp->next = NULL;
+    Cn3D_ImportSAEnd(salp, TRUE);
+    Cn3D_ImportSeqEntry(idp);
+}
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportBioseq()
+  
+  Purpose : Import a single bioseq via the net
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_ImportBioseq(IteM i)
+{
+    DDV_ImportDialog *idp;
+
+    idp = MemNew(sizeof(DDV_ImportDialog));
+    if(idp == NULL) return;
+
+    Cn3D_StartNet(TRUE);
+    if (!Cn3D_ColorData.EntrezOn) {
+        Message(MSG_ERROR, "Blast requires network access");     
+        return;
+    }
+
+    if(Cn3D_ColorData.sap == NULL) {
+        idp->sap = NULL;
+        idp->callback = Cn3D_ImportCB;
+        idp->pvnSips = SAM_ExtractSips(Cn3D_ColorData.pvnsep);
+        idp->mode = DDVIMPNET2SE;
+    }
+    else {
+        idp->sap = (SeqAlign *)Cn3D_ColorData.sap->data;
+        idp->sip = AlnMgrFindMaster(idp->sap);
+        idp->callback = Cn3D_ImportCBSE;
+        idp->mode = DDVIMPNET2SA;
+    }
+
+    DDV_ImportBioseqDlg(idp);
+}
+
+/*******************************************************************************
+
+  Function : Cn3D_ImportBioseqFile()
+  
+  Purpose : Import a single bioseq from a fasta file
+
+*******************************************************************************/
+NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
+{
+    DDV_ImportDialog *idp;
+    SeqEntry *sep;  /* need to deallocate! */
+    Char str[PATH_MAX];
+    FILE *fp;
+    Bioseq *bsp;
+
+    StrCpy(str,"");
+    GetInputFileName(str, sizeof(str), NULL, NULL);
+    if(StrCmp(str,"") == 0) return;
+
+    fp = FileOpen(str,"r");
+
+    sep = FastaToSeqEntry(fp, FALSE);
+    FileClose(fp);
+    if (sep == NULL) {
+        Message(MSG_ERROR, "Sequence Import Error");     
+        return;
+    }
+       
+    if (IS_Bioseq(sep)) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (bsp != NULL) ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+    } else {
+        SeqEntryFree(sep);
+        Message(MSG_ERROR, "Sequence Import Error: must be a single sequence");     
+        return;
+    }
+
+    idp = MemNew(sizeof(DDV_ImportDialog));
+    if(idp == NULL) return;
+    idp->sep = sep;
+    idp->sipslave = SAM_ExtractSips(sep);
+
+    if(Cn3D_ColorData.sap == NULL) {
+        idp->sap = NULL;
+        idp->callback = Cn3D_ImportCB;
+        idp->pvnSips = SAM_ExtractSips(Cn3D_ColorData.pvnsep);
+        idp->mode = DDVIMPSE2SE;
+        DDV_ImportBioseqDlg(idp);
+    }
+    else {
+        idp->sap = (SeqAlign *)Cn3D_ColorData.sap->data;
+        idp->sip = AlnMgrFindMaster(idp->sap);
+        idp->callback = Cn3D_ImportCBSE;
+        idp->mode = DDVIMPSE2SA;
+        DDV_DoAlign(idp);
+    }
+
 }

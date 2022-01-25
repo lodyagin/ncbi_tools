@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.4  2000/02/07 20:17:35  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.3  1999/10/19 12:48:19  thiessen
 * minor hack to Nlm_RemoveDefaultButton to allow Cn3D to run under RH linux 6 with Lesstif library
 *
@@ -1024,6 +1027,7 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4        style;
+  Nlm_FntPtr fntptr;
 #endif
 #ifdef WIN_MOTIF
   String           call;
@@ -1100,6 +1104,9 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
     Nlm_Message (MSG_ERROR, "ButtonProc subclass error");
   }
   SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewButtonProc);
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
+  SetWindowFont(c, fntptr->handle, FALSE);
+  Nlm_HandUnlock(Nlm_systemFont);
 #endif
 
 #ifdef WIN_MOTIF

@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.c,v 1.19 2000/01/24 16:11:13 lewisg Exp $
+/*  $Id: ddvgraph.c,v 1.32 2000/04/26 21:54:27 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,52 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.19 $
+* $Revision: 1.32 $
 *
 * File Description: graphic engine of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.c,v $
+* Revision 1.32  2000/04/26 21:54:27  hurwitz
+* added save function to tell AlnMgr about edits made in DDE
+*
+* Revision 1.31  2000/04/05 20:52:35  hurwitz
+* added GUI control for shifting left and right alignment boundaries
+*
+* Revision 1.30  2000/03/29 23:57:04  hurwitz
+* temporary fix for DDE use before it's initialized
+*
+* Revision 1.29  2000/03/29 20:02:48  hurwitz
+* keep track of master during move row operations
+*
+* Revision 1.28  2000/03/24 20:34:59  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 1.27  2000/02/23 19:49:33  durand
+* use row number instead of SeqId for coloring
+*
+* Revision 1.26  2000/02/15 15:31:46  lewisg
+* move DDVRulerDescr to pgppop
+*
+* Revision 1.25  2000/02/08 17:18:40  hurwitz
+* don't use char* szEditSeq
+*
+* Revision 1.24  2000/02/07 14:03:35  durand
+* replace BioseqUnlockById by BioseqUnlock
+*
+* Revision 1.23  2000/02/04 16:05:40  durand
+* add click action to select a row
+*
+* Revision 1.22  2000/02/03 15:56:47  hurwitz
+* added constructor and destructor for DDVRulerDescrPtr
+*
+* Revision 1.21  2000/02/02 14:44:31  durand
+* added function to create data structure for block editor, fixed some bugs
+*
+* Revision 1.20  2000/01/26 13:38:54  durand
+* update the GUI for the editor. Add functions to create the data to be used by the editor
+*
 * Revision 1.19  2000/01/24 16:11:13  lewisg
 * speed up seqid comparison in color manager, make fast windows version of SetColor()
 *
@@ -147,10 +186,12 @@
 #include <ddvcolor.h>
 #include <ddvmain.h>
 #include <ddvgraph.h>
+#include <ddvclick.h>
 #include <pgppop.h>
 #include <alignmgr.h>
 #include <ddvcreate.h>
 
+static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp);
 
 /*******************************************************************************
 
@@ -238,7 +279,7 @@ WindoW     temport;
 		/*just above the row*/
 	from_y=(Int2)((disp_row-GrData->udv_vscrl.ScrollPos-1)*GrData->udv_font.LineHeight);
 		/*just below the row*/
-	to_y=(Int2)(from_y+GrData->udv_font.LineHeight);
+	to_y=(Int2)(from_y+2*GrData->udv_font.LineHeight);
 
 	/*adjust the values according to the PaneL RecT position*/
 		/*panel size*/
@@ -347,6 +388,89 @@ RecT rcP;
 
 /*******************************************************************************
 
+  Function : DDV_GetRulerForEditor()
+  
+  Purpose : create the ruler for the editor. This new descriptor is created
+      using the descriptor of the viewer.
+
+  Return value : an allocated data block ready for use by the editor. Null if
+  failure
+
+*******************************************************************************/
+NLM_EXTERN ValNodePtr DDV_GetRulerForEditor(ValNodePtr descr_head,Int4 from_disp,
+		Int4 to_disp)
+{
+DDVRulerDescrPtr drdp,prev_drdp,new_drdp;
+ValNodePtr  vnp2,vnp3,vnpDesc;
+Int4     cumulDecr,drdp_size,beginCopy,endCopy,drdp_start_ali;
+Boolean  bPop;
+
+	cumulDecr=0;
+	vnpDesc=NULL;
+	prev_drdp=NULL;
+	
+	for(vnp2=descr_head;vnp2!=NULL;vnp2=vnp2->next){
+		drdp=(DDVRulerDescrPtr)vnp2->data.ptrvalue;
+		drdp_size=drdp->disp_stop-drdp->disp_start+1;
+
+		/*not yet in the region of interest ?*/
+		if (drdp->disp_stop<from_disp) {
+			cumulDecr+=drdp_size;
+			continue;
+		}
+		
+		beginCopy=_max_(from_disp,drdp->disp_start);
+		endCopy=_min_(drdp->disp_stop,to_disp);
+
+		if (drdp->bUnAligned==FALSE)
+			drdp_start_ali=drdp->align_start+(beginCopy-drdp->disp_start);
+		else
+			drdp_start_ali=(Int4)-1;
+		/*in order to merge nodes of same type, i keep track of
+		the previous populated drdp node. Same style==yes, then
+		just extend to the right the previous node*/
+		if (prev_drdp){
+			if (prev_drdp->bUnAligned==drdp->bUnAligned){
+				prev_drdp->disp_stop=endCopy;
+				bPop=TRUE;
+			}
+			else{
+				bPop=FALSE;
+			}
+		}
+		else{
+			bPop=FALSE;
+		}
+		if (!bPop){
+			new_drdp=(DDVRulerDescrPtr)MemNew(sizeof(DDVRulerDescr));
+			if (!new_drdp) goto erreur;
+			
+			new_drdp->disp_start=beginCopy;
+			new_drdp->disp_stop=endCopy;
+			new_drdp->align_start=drdp_start_ali;
+			new_drdp->bUnAligned=drdp->bUnAligned;
+			if (!vnpDesc){
+				vnp3=ValNodeAddPointer(&vnpDesc,0,(Pointer)new_drdp);
+			}
+			else{
+				vnp3=ValNodeAddPointer(&vnp3,0,(Pointer)new_drdp);
+			}
+			prev_drdp=new_drdp;
+		}
+		if (drdp->disp_stop>=to_disp) break;
+		cumulDecr+=drdp_size;
+	}
+
+	return(vnpDesc);
+erreur:
+	if (vnpDesc)
+		ValNodeFreeData(vnpDesc);
+	return(NULL);
+}
+
+
+/*******************************************************************************
+
   Function : DDV_ComputeRuler()
   
   Purpose : compute the Ruler descriptor (usefull for discontinuous align)
@@ -427,16 +551,21 @@ Boolean          bUnAligned;
   Return value : none
 
 *******************************************************************************/
-static void  DDV_DrawSequenceName(UnDViewerGraphDataPtr GrData,
-					ParaGPtr pgp,Int2 top,Int2 left)
+static void  DDV_DrawSequenceName(UnDViewerGraphDataPtr GrData,ParaGPtr pgp,
+	Int2 top,Int2 left,Int4 cur_row,Int4 CurEditRow,Int4 CurMasterRow)
 {
-SeqIdPtr sip;
-RecT     rc;
-Int2     x,y,decal=1;/*text position*/
-Char     szAccess[21];
+SeqIdPtr  sip = NULL;
+RecT      rc;
+Int2      x,y,decal=1,size;/*text position/size*/
+Char      szAccess[21];
+BioseqPtr bsp;
 
 	/*get a name*/	
-	sip = SeqIdFindBest(pgp->sip, SEQID_GENBANK);
+    bsp = BioseqLockById(pgp->sip);
+    if(bsp) {
+        sip = SeqIdFindBestAccession(bsp->id);
+        BioseqUnlock(bsp);
+    }
 	if (!sip)
 		sip = SeqIdFindBest(pgp->sip, 0);
 	SeqIdWrite(sip, szAccess,PRINTID_TEXTID_ACCESSION, 20);   
@@ -445,11 +574,19 @@ Char     szAccess[21];
 	if (pgp->ScaleStyle==SCALE_POS_TOP) decal++;
 	
 	/*draw name*/
-	x=left-GrData->udv_scale.cxLeftScale-StringWidth(szAccess);
+	size=StringWidth(szAccess);
+	x=left-GrData->udv_scale.cxLeftScale-size;
 	y=top+decal*GrData->udv_font.LineHeight;
 	MoveTo(x,y);
+	if (cur_row==CurEditRow){
+		Magenta();
+	}
 	PaintString (szAccess);
-	
+	if (cur_row==CurMasterRow){
+		Blue();
+		MoveTo(x,y);
+		LineTo(x+size,y);
+	}
 	/*draw a little box (for selection a full sequence)*/
 	left+=GrData->udv_font.cxChar;
 	top+=GrData->udv_font.cxChar/2;
@@ -474,7 +611,7 @@ static void DDV_DrawSequence(UnDViewerGraphDataPtr GrData,ParaGPtr pgp,
 		DDV_ColorGlobal *pColorGlobal,SeqIdPtr sip,RectPtr rc_pgp,
 		CharPtr szSeq,Int4 from,Int4 to,Uint1 ScaleStyle,
 		Int2 leftDecal,Uint1 strand,Boolean bUseColors,ValNodePtr vnp_bsp,
-		Boolean bSelect)
+		Int4 row,Boolean bSelect)
 {
 DDV_ColorCell *dclrp,*highlighClr;
 Int4            dp;
@@ -515,7 +652,7 @@ RecT            rcSel;
 					if (dp==(Int4)-1)
 						dclrp=NULL;
 					else
-						dclrp=DDV_GetColor(pColorGlobal,sip, -1, dp);
+						dclrp=DDV_GetColor(pColorGlobal,NULL, row+1, dp);
 
 					if(bUseColors){
 						if (dclrp) 
@@ -600,7 +737,7 @@ Return value: -
 *****************************************************************************/
 static void DDV_DrawParaG(RectPtr rc_pgp,ParaGPtr pgp,Int4 from,Int4 to,
 			UnDViewerGraphDataPtr GrData,DDV_ColorGlobal *pColorGlobal,
-			DDV_Disp_OptPtr ddop,ValNodePtr vnp_bsp,Boolean bSelect)
+			DDV_Disp_OptPtr ddop,ValNodePtr vnp_bsp,Int4 row,Boolean bSelect)
 {
 CharPtr   szSeq;
 BioseqPtr bsp;
@@ -613,18 +750,19 @@ MsaTxtDispPtr    mtdp;
 ValNodePtr vnp;
 
 	/*get some bsp info*/	
-	sip=SeqIdFindBest(pgp->sip,0);
-	if (sip==NULL) sip=pgp->sip;
+	/*sip=SeqIdFindBest(pgp->sip,0);
+	if (sip==NULL)*/
+	sip=pgp->sip;
 	bsp=BioseqLockById(sip);
 	if (!bsp) return;
 	bspLength=BioseqGetLen(bsp);
 	IsAA=ISA_aa(bsp->mol);
-	BioseqUnlockById(sip);
+	BioseqUnlock(bsp);
 
 	szSeq=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+2)*sizeof(Char));
 	/*get a sequence to draw*/
 	DDV_GetSequenceFromParaG(pgp,&szSeq,bspLength,IsAA,&strand,&bsp_start,&bsp_stop);
-	/**/
+	
 	if (pgp->ScaleStyle==SCALE_POS_TOP){
 		vnp=pgp->ptxtList;
 		decal=0;
@@ -643,7 +781,7 @@ ValNodePtr vnp;
 					(Int2)(GrData->udv_font.ColWidth/2)+
 					(Int2)(decal*GrData->udv_font.ColWidth),
 					bspLength,
-					mtdp->from+1,
+					mtdp->from,
 					FALSE,
 					GrData->udv_font.ColWidth,(Uint4)DDV_DISP_HORZ);
 			}
@@ -669,8 +807,10 @@ ValNodePtr vnp;
 			strand,
 			ddop->bUseColors,
 			vnp_bsp,
+			row,
 			bSelect);
-		MemFree(szSeq);
+		if (pgp->szEditSeq==NULL)/*viewer deletes allocated char array*/
+			MemFree(szSeq);
 	}
 }
 
@@ -745,7 +885,9 @@ Int4         i,/*just for a loop*/
 	         nLinesDraw,/*number of lines drawn*/
 	         nColsDraw,/*number of col. drawn*/
 	         nTotRow,/*total number of row to draw*/
-	         start_i=0;/*first ParaG to draw*/
+	         start_i=0,/*first ParaG to draw*/
+           start_ruler,/*beginning of the display ruler*/
+           curMasterRow;
 RecT         rcP;/*size of the DDV panel*/
 RecT         rcD;/*size of the drawing panel*/
 RecT         rcI;/*size of the invalidated rect*/
@@ -756,7 +898,7 @@ Uint2        bsp_eID,/*...*/
 			 bsp_iID;/*... identifiers of a bioseq in the SeqAlign*/
 Boolean      bNotDrawCol;
 DdvMainWinPtr   mWin_d;
-	
+DDVRulerDescrPtr drdp;	
 	
 	if (dmp->hParent){
 		mWin_d=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
@@ -768,7 +910,7 @@ DdvMainWinPtr   mWin_d;
 
 	/*some checks before a core dump...*/
 	if (!dmp->MSA_d.pgp_l.TableHead) return;
-
+	
 	/*restrict panel drawing area: 'add' little margins*/
 	ObjectRect(p,&rcP);
 	InsetRect(&rcP,4,4);
@@ -809,19 +951,23 @@ DdvMainWinPtr   mWin_d;
 	if (to_col==0) to_col=dmp->MSA_d.pgp_l.LengthAli;
 	if (to_col>dmp->MSA_d.pgp_l.LengthAli) to_col=dmp->MSA_d.pgp_l.LengthAli;
 	rcD.top+=dmp->GrData.udv_panel.cyScale/2;
+
+	/*get the first node of the Ruler descriptor, then get the start value*/
+	drdp=(DDVRulerDescrPtr)dmp->MSA_d.pgp_l.RulerDescr->data.ptrvalue;
+	start_ruler=drdp->disp_start;
 	UDV_Draw_scale(
 		&dmp->GrData,
 		dmp->GrData.udv_scale.ShowMajorTick,
 		dmp->GrData.udv_scale.ShowMMinorTick,
 		(Uint1)dmp->GrData.udv_scale.ScalePosition,
-		from_col,
-		to_col,
+		from_col+start_ruler,
+		to_col+start_ruler,
 		&rcD,
 		(Int2)(dmp->GrData.udv_font.ColWidth/2)+
 		(Int2)((from_col-dmp->GrData.udv_hscrl.ScrollPos)*
 		dmp->GrData.udv_font.ColWidth),
-		dmp->MSA_d.pgp_l.LengthAli,
-		from_col,
+		dmp->MSA_d.pgp_l.LengthAli+start_ruler-1,
+		from_col+start_ruler,
 		FALSE,
 		dmp->GrData.udv_font.ColWidth,(Uint4)DDV_DISP_HORZ);
 
@@ -864,8 +1010,16 @@ DdvMainWinPtr   mWin_d;
 
 	ClipRect(&rcD);
 
+  /* get the row of the master */
+  if (dmp->dsp == NULL) {
+    curMasterRow = 0;
+  }
+  else {
+    curMasterRow = DDE_GetIndexOfMaster(dmp->dsp);
+  }
+
 	/*draw the names*/
-	nLinesDraw=0;
+  nLinesDraw=0;
 	for(i=start_i;i<dmp->MSA_d.pgp_l.nBsp;i++){
 		if (!(pgp=(ParaGPtr)(dmp->MSA_d.pgp_l.TableHead[i]->data.ptrvalue))) continue;
 		if ((pgp->StartLine<=to_row)&&(pgp->StartLine>=from_row)){
@@ -873,7 +1027,8 @@ DdvMainWinPtr   mWin_d;
 			DDV_DrawSequenceName(&dmp->GrData,pgp,
 				(Int2)(pgp->StartLine*dmp->GrData.udv_font.LineHeight-
 				top_offset+rcP.top),
-				(Int2)(dmp->GrData.udv_panel.cxName-3));
+				(Int2)(dmp->GrData.udv_panel.cxName-3),
+				i, dmp->deri.curEditRow, curMasterRow);
 		}
 		else nLinesDraw+=pgp->nLines;
 		if (nLinesDraw>to_row) break;
@@ -908,7 +1063,7 @@ DdvMainWinPtr   mWin_d;
 					if (bsp_eID!=0 && bsp_iID!=0){
 						vnp_bsp=DDV_GetSelectedRegions(ssp,bsp_eID,bsp_iID);
 					}
-					BioseqUnlockById(first_pgp->sip);
+					BioseqUnlock(bsp);
 				}
 			}
 		}
@@ -939,7 +1094,7 @@ DdvMainWinPtr   mWin_d;
 					dmp->GrData.GotoLetter=(Int4)-1;
 				}
 				DDV_DrawParaG(&rc_pgp,pgp,from_col,to_col,&dmp->GrData,
-					dmp->Globals.colorp,&(dmp->ddo),vnp_bsp,bSelect);
+					dmp->Globals.colorp,&(dmp->ddo),vnp_bsp,i,bSelect);
 			}
 			else{
 				nColsDraw+=(pgp->StopLetter-pgp->StartLetter);
@@ -968,10 +1123,50 @@ DdvMainWinPtr   mWin_d;
 		LineTo(x+3*dmp->GrData.udv_font.ColWidth/2,y+2);
 		Black();
 	}
-	
 	ResetClip();
+
+  if (dmp->bEditor) {
+    /* this is for allowing edits of the alignment boundaries */
+    DDV_DrawAlignmentBoundaries(p, dmp);
+  }
+
 	return;
 }
+
+static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp) {
+/*******************************************************************************
+  draw vertical bars at the top of the panel showing the alignment
+  boundaries, and horizontal lines connecting them.
+*******************************************************************************/
+  Int4  LeftHPos, RightHPos;
+  Int4  TopVPos, BotVPos;
+  Int4  i, NumBlocks;
+  RecT  rcP, rcBanner;
+
+  ObjectRect(p, &rcP);
+  DDV_GetVPixelPosOfEmptySpace(dmp, rcP, &TopVPos, &BotVPos);
+  rcBanner = rcP;
+  rcBanner.left += dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale;
+  rcBanner.top =    TopVPos;
+  rcBanner.bottom = BotVPos;
+  rcBanner.left -= 4;
+  ClipRect(&rcBanner);
+  EraseRect(&rcBanner);
+
+  /* for each aligned block, draw a semi-rectangle on top of it */
+  NumBlocks = DDE_GetNumBlocks(dmp->dsp->pEdit);
+  for (i=0; i<NumBlocks; i++) {
+    LeftHPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, DDE_GetAlignStart(dmp->dsp->pEdit, i));
+    LeftHPos -= dmp->GrData.udv_font.ColWidth;
+    RightHPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, DDE_GetAlignStop(dmp->dsp->pEdit, i));
+    UDV_draw_vertical_bar(rcBanner, LeftHPos, FALSE);
+    UDV_draw_vertical_bar(rcBanner, RightHPos, FALSE);
+    UDV_draw_horizontal_bar(TopVPos, LeftHPos, RightHPos);
+  }
+
+  ResetClip();
+}
+
 
 /*******************************************************************************
 

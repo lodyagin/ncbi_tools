@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.113 $
+* $Revision: 6.118 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -508,7 +508,7 @@ static CharPtr organellePrefix [] = {
   "Nucleomorph ",
   "Apicoplast ",
   "Leucoplast ",
-  "Protoplast "
+  "Proplastid "
 };
 
 static CharPtr FormatSourceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
@@ -2343,6 +2343,33 @@ static Int4 GetMuid (PubdescPtr pdp)
   return 0;
 }
 
+static Int4 GetPmid (PubdescPtr pdp)
+
+{
+  MedlineEntryPtr  mep;
+  ValNodePtr       vnp;
+
+  if (pdp == NULL) return 0;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    switch (vnp->choice) {
+      case PUB_Medline :
+        mep = (MedlineEntryPtr) vnp->data.ptrvalue;
+        if (mep != NULL) {
+          return mep->pmid;
+        }
+        break;
+      case PUB_PMid :
+        return vnp->data.intvalue;
+        break;
+      default :
+        break;
+    }
+  }
+
+  return 0;
+}
+
 static CharPtr remarksText [] = {
   "full automatic", "full staff_review", "full staff_entry",
   "simple staff_review", "simple staff_entry", "simple automatic",
@@ -2375,6 +2402,7 @@ static CharPtr FormatReferenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
   Boolean            notFound;
   ObjMgrDataPtr      omdp;
   PubdescPtr         pdp = NULL;
+  Int4               pmid;
   CharPtr            prefix;
   ReferenceBlockPtr  rbp;
   SubmitBlockPtr     sbp;
@@ -2607,6 +2635,17 @@ static CharPtr FormatReferenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
     }
 
     ff_EndPrint ();
+  }
+
+  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+    pmid = GetPmid (pdp);
+    if (pmid > 0) {
+      gb_StartPrint (afp->format, FALSE, 3, 12, "PUBMED", 13, 5, 5, "RX", FALSE);
+
+      www_muid (pmid);
+
+      ff_EndPrint ();
+    }
   }
 
   if (pdp == NULL) return gb_MergeString (FALSE);
@@ -3781,6 +3820,7 @@ static void OrgModToQualArray (OrgModPtr omp, QualValPtr qvp)
   }
 }
 
+/*
 static CharPtr organelleQual [] = {
   NULL,
   NULL,
@@ -3802,32 +3842,29 @@ static CharPtr organelleQual [] = {
   NULL,
   NULL
 };
+*/
 
-/* future version of organelleQual will have /organelle= "xxx" style */
-
-/*
 static CharPtr organelleQual [] = {
   NULL,
   NULL,
-  "/organelle=\"plastid: chloroplast",
-  "/organelle=\"plastid: chromoplast",
-  "/organelle=\"mitochondrion: kinetoplast",
-  "/organelle=\"mitochondrion",
-  "/organelle=\"plastid",
+  "/organelle=\"plastid:chloroplast\"",
+  "/organelle=\"plastid:chromoplast\"",
+  "/organelle=\"mitochondrion:kinetoplast\"",
+  "/organelle=\"mitochondrion\"",
+  "/organelle=\"plastid\"",
   "/macronuclear",
   "/extrachrom",
   "/plasmid", 
   "/transposon",
   "/insertion_seq",
-  "/organelle=\"plastid: cyanelle",
+  "/organelle=\"plastid:cyanelle\"",
   "/proviral",
   "/virion",
-  "/organelle=\"nucleomorph",
-  "/organelle=\"plastid: apicoplast",
-  "/organelle=\"plastid: leucoplast",
-  "/organelle=\"plastid: proplastid"
+  "/organelle=\"nucleomorph\"",
+  "/organelle=\"plastid:apicoplast\"",
+  "/organelle=\"plastid:leucoplast\"",
+  "/organelle=\"plastid:proplastid\""
 };
-*/
 
 static Boolean StringIsJustQuotes (CharPtr str)
 
@@ -5789,17 +5826,20 @@ static CharPtr FormatFeatureBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
             }
             for (sip = prod->id; sip != NULL; sip = sip->next) {
               if (sip->choice == SEQID_GI) {
+                /*
                 if (choice != 0) {
                   sprintf (seqid, "PID:g%ld", (long) sip->data.intvalue);
                   NewContLine ();
                   gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, FALSE);
                 }
+                */
                 sprintf (seqid, "GI:%ld", (long) sip->data.intvalue);
                 NewContLine ();
                 gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, FALSE);
               } else if (sip->choice == SEQID_GENERAL) {
                 dbt = (DbtagPtr) sip->data.ptrvalue;
                 if (dbt != NULL && StringCmp (dbt->db, "PID") == 0) {
+                  /*
                   oip = dbt->tag;
                   if (oip != NULL) {
                     if (! StringHasNoText (oip->str)) {
@@ -5808,6 +5848,7 @@ static CharPtr FormatFeatureBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
                       gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, FALSE);
                     }
                   }
+                  */
                 }
               }
             }
@@ -6046,7 +6087,7 @@ static CharPtr FormatBasecountBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
     spp = SeqPortNew (bsp, 0, -1, 0, code);
     len = bsp->length;
   }
-  if (bsp->repr == Seq_repr_delta) {
+  if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
     SeqPortSet_do_virtual (spp, TRUE);
   }
 
@@ -6196,7 +6237,7 @@ static CharPtr FormatSequenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
     } else {
       spp = SeqPortNew (bsp, 0, -1, 0, code);
     }
-    if (bsp->repr == Seq_repr_delta) {
+    if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
       SeqPortSet_do_virtual (spp, TRUE);
     }
 
@@ -7042,6 +7083,9 @@ static void AddVersionBlock (Asn2gbWorkPtr awp)
   bbp = Asn2gbAddBlock (awp, VERSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
+  /* no longer displaying NID */
+
+  /*
   if (gi > 0) {
     sprintf (version, "g%ld", (long) gi);
 
@@ -7053,6 +7097,7 @@ static void AddVersionBlock (Asn2gbWorkPtr awp)
 	ff_EndPrint();
 	needEndPrint = FALSE;
   }
+  */
 
   if (SHOWVERSION && accn != NULL) {
 
@@ -7092,6 +7137,9 @@ static void AddVersionBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (needEndPrint);
 }
 
+/* no longer displaying PID */
+
+/*
 static void AddPidBlock (Asn2gbWorkPtr awp)
 
 {
@@ -7104,6 +7152,7 @@ static void AddPidBlock (Asn2gbWorkPtr awp)
 
   bbp->string = StringSave ("PID\n");
 }
+*/
 
 static void AddDbsourceBlock (Asn2gbWorkPtr awp)
 
@@ -9592,7 +9641,7 @@ static void DoOneSection (BioseqPtr target, BioseqPtr parent, BioseqPtr bsp,
       }
 
       if (ISA_aa (bsp->mol)) {
-        AddPidBlock (awp);
+        /* AddPidBlock (awp); */
         AddDbsourceBlock (awp);
       }
 
@@ -9605,7 +9654,7 @@ static void DoOneSection (BioseqPtr target, BioseqPtr parent, BioseqPtr bsp,
       }
 
       if (ISA_aa (bsp->mol)) {
-        AddPidBlock (awp);
+        /* AddPidBlock (awp); */
         AddDbsourceBlock (awp);
       }
 
@@ -9766,7 +9815,10 @@ static void DoOneBioseq (BioseqPtr bsp, Asn2gbWorkPtr awp)
       DoOneSection (parent, parent, bsp, ajp->slp, 0, from, to, awp);
     }
 
-  } else if (bsp->repr == Seq_repr_raw || bsp->repr == Seq_repr_const || bsp->repr == Seq_repr_delta) {
+  } else if (bsp->repr == Seq_repr_raw ||
+             bsp->repr == Seq_repr_const ||
+             bsp->repr == Seq_repr_delta ||
+             bsp->repr == Seq_repr_virtual) {
 
     parent = SeqMgrGetParentOfPart (bsp, &context);
     if (parent != NULL) {
@@ -10707,7 +10759,7 @@ static Boolean SeqEntryHasGi (SeqEntryPtr sep, Int4 gi)
 static void CompareFlatFiles (CharPtr path1, CharPtr path2, CharPtr path3,
                               SeqEntryPtr sep, FILE* fp,
                               FmtType format, ModType mode, StlType style,
-                              Boolean batch, Boolean diff)
+                              Boolean batch, Boolean diff, Boolean gbdjoin)
 
 {
 #ifdef OS_UNIX
@@ -10734,27 +10786,35 @@ static void CompareFlatFiles (CharPtr path1, CharPtr path2, CharPtr path3,
 
   }
 
-  sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-  system (cmmd);
+  if (gbdjoin) {
+    sprintf (cmmd, "/netopt/genbank/subtool/bin/gbdjoin -o %s -n %s -d reports", path1, path2);
+    system (cmmd);
 
-  sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-  system (cmmd);
+    sprintf (cmmd, "rm %s; rm %s", path1, path2);
+    system (cmmd);
+  } else {
+    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
+    system (cmmd);
 
-  sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-  system (cmmd);
+    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
+    system (cmmd);
 
-  sprintf (cmmd, "cat %s", path3);
-  fpo = popen (cmmd, "r");
-  if (fpo != NULL) {
-    while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-      fwrite (buf, 1, ct, fp);
-      fflush (stdout);
+    sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
+    system (cmmd);
+
+    sprintf (cmmd, "cat %s", path3);
+    fpo = popen (cmmd, "r");
+    if (fpo != NULL) {
+      while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+        fwrite (buf, 1, ct, fp);
+        fflush (stdout);
+      }
+      pclose (fpo);
     }
-    pclose (fpo);
-  }
 
-  sprintf (cmmd, "rm %s.suc; rm %s.suc; rm %s", path1, path2, path3);
-  system (cmmd);
+    sprintf (cmmd, "rm %s.suc; rm %s.suc; rm %s", path1, path2, path3);
+    system (cmmd);
+  }
 
 #else
   SeqEntryToGnbk (sep, format, mode, style, fp);
@@ -10764,7 +10824,7 @@ static void CompareFlatFiles (CharPtr path1, CharPtr path2, CharPtr path3,
 static Int2 HandleMultipleRecords (CharPtr inputFile, CharPtr outputFile,
                                    CharPtr iomode, FmtType format,
                                    ModType mode, StlType style, Int4 gi,
-                                   Boolean batch, Boolean diff)
+                                   Boolean batch, Boolean diff, Boolean gbdjoin)
 
 {
   AsnIoPtr      aip;
@@ -10854,7 +10914,8 @@ static Int2 HandleMultipleRecords (CharPtr inputFile, CharPtr outputFile,
       }
       if (gi == 0 && SeqEntryHasNucs (sep)) {
         CompareFlatFiles (path1, path2, path3, sep, fp,
-                          format, mode, style, batch, diff);
+                          format, mode, style,
+                          batch, diff, gbdjoin);
       }
       SeqEntryFree (sep);
     } else {
@@ -10874,10 +10935,11 @@ static Int2 HandleMultipleRecords (CharPtr inputFile, CharPtr outputFile,
 #define m_argMode 3
 #define s_argStyle 4
 #define t_argBatch 5
-#define b_argBinary 6
-#define g_argGiToSave 7
-#define r_argRemote 8
-#define d_argDiffFF 9
+#define d_argDiffFF 6
+#define j_argGbdjoin 7
+#define b_argBinary 8
+#define g_argGiToSave 9
+#define r_argRemote 10
 
 Args myargs [] = {
   {"Input File Name", "stdin", NULL, NULL,
@@ -10890,16 +10952,18 @@ Args myargs [] = {
     TRUE, 'm', ARG_INT, 0.0, 0, NULL},
   {"Style (1 Normal, 2 Master, 3 Contig)", "1", NULL, NULL,
     TRUE, 's', ARG_INT, 0.0, 0, NULL},
-  {"Batch Process Bioseq-set", "F", NULL, NULL,
+  {"Batch Compare Asn2gnbk to Asn2ff", "F", NULL, NULL,
     TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Batch Diff SeriousSeqEntryCleanup with Asn2ff", "F", NULL, NULL,
+    FALSE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Batch Use Gbdjoin for Diffs", "F", NULL, NULL,
+    FALSE, 'j', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "T", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"GI to save", "0", NULL, NULL,
     TRUE, 'g', ARG_STRING, 0.0, 0, NULL},
   {"Remote fetching", "F", NULL, NULL,
     FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Batch Diff Asn2ff", "F", NULL, NULL,
-    FALSE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 #ifdef OS_UNIX
@@ -10913,6 +10977,7 @@ Int2 Main (void)
   Boolean  batch = FALSE;
   Boolean  diff = FALSE;
   FmtType  format;
+  Boolean  gbdjoin = FALSE;
   Int4     gi = 0;
   CharPtr  iomode = "r";
   ModType  mode;
@@ -10962,16 +11027,28 @@ Int2 Main (void)
     batch = FALSE;
   }
 
-  if (myargs [b_argBinary].intvalue) {
-    iomode = "rb";
-  } else {
-    iomode = "r";
-  }
-
   if (myargs [d_argDiffFF].intvalue) {
     diff = TRUE;
   } else {
     diff = FALSE;
+  }
+
+  if (myargs [j_argGbdjoin].intvalue) {
+    gbdjoin = TRUE;
+  } else {
+    gbdjoin = FALSE;
+  }
+
+  if (gbdjoin) {
+    if ((! batch) && (! diff)) {
+      diff = TRUE;
+    }
+  }
+
+  if (myargs [b_argBinary].intvalue) {
+    iomode = "rb";
+  } else {
+    iomode = "r";
   }
 
   if (! StringHasNoText (myargs [g_argGiToSave].strvalue)) {
@@ -11032,11 +11109,11 @@ Int2 Main (void)
   }
 #endif
 
-  if (batch || diff || gi != 0) {
+  if (batch || diff || gbdjoin || gi != 0) {
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
                                    iomode, format, mode, style, gi,
-                                   batch, diff);
+                                   batch, diff, gbdjoin);
   } else {
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,

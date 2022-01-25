@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.109 $
+* $Revision: 6.110 $
 *
 * File Description: 
 *
@@ -2416,8 +2416,9 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 #define REFGENE_ASSEMBLY   1
 #define REFGENE_RELATED    2
 #define REFGENE_SPLICEVAR  3
-#define REFGENE_REJECT     4
-#define REFGENE_UNKNOWN    5
+#define REFGENE_RELDREK    4
+#define REFGENE_REJECT     5
+#define REFGENE_UNKNOWN    6
 
 typedef struct refgeneuserdialog {
   DIALOG_MESSAGE_BLOCK
@@ -2439,11 +2440,12 @@ END_ENUM_ALIST
 
 static ENUM_ALIST(refgene_alist)
   {" ",          0},
-  {"Assembly",   REFGENE_ASSEMBLY},
-  {"Related",    REFGENE_RELATED},
-  {"SpliceVar",  REFGENE_SPLICEVAR},
-  {"Reject",     REFGENE_REJECT},
-  {"Unknown",    REFGENE_UNKNOWN},
+  {"Assembly",    REFGENE_ASSEMBLY},
+  {"Related",     REFGENE_RELATED},
+  {"SpliceVar",   REFGENE_SPLICEVAR},
+  {"RelatedDrek", REFGENE_RELDREK},
+  {"Reject",      REFGENE_REJECT},
+  {"Unknown",     REFGENE_UNKNOWN},
 END_ENUM_ALIST
 
 static Uint2 refgene_types [] = {
@@ -2459,7 +2461,7 @@ static EnumFieldAssocPtr refgene_popups [] = {
 };
 
 static CharPtr refgene_labels [] = {
-  "", "Assembly", "Related", "SpliceVar", "Reject", "Unknown", NULL
+  "", "Assembly", "Related", "SpliceVar", "RelatedDrek", "Reject", "Unknown", NULL
 };
 
 static CharPtr refgene_fields [] = {

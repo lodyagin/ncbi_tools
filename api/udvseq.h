@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.16 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.h,v $
+* Revision 6.19  2000/04/13 13:57:33  durand
+* allowed udv to display reverse complement sequence
+*
+* Revision 6.18  2000/02/17 15:54:36  durand
+* use ~ for an unaligned gap and - for an aligned gap
+*
+* Revision 6.17  2000/02/03 15:55:14  hurwitz
+* added constructor and destructor for MsaTxtDisp
+*
 * Revision 6.16  2000/01/24 19:37:18  durand
 * add field szEditSeq in ParaG
 *
@@ -134,9 +143,11 @@ extern "C" {
 #define MSA_TXT_STYLE_GAP		    2	/*gap type                      */
 #define MSA_TXT_STYLE_NONE		    3	/*nothing                       */
 #define MSA_TXT_STYLE_1             4   /*style 1 = 5 "space" char.     */
-#define MSA_TXT_STYLE_REG_ALIGN		5	/*aligned region                 */
-#define MSA_TXT_STYLE_REG_UNALIGN	6	/*unaligned region                 */
+#define MSA_TXT_STYLE_REG_ALIGN		5	/*aligned region                */
+#define MSA_TXT_STYLE_REG_UNALIGN	6	/*unaligned region              */
 #define MSA_TXT_STYLE_2             7   /*for a disc. ali, display unaligned seq.*/
+#define MSA_TXT_STYLE_UAGAP		    8	/*gap type, unaligned regions   */
+
 #define SPACER_TXT_BLANK            5  /*use with MSA_TXT_STYLE_1*/
 
 /*text justification for UnAligned region; used only by DDV */
@@ -241,6 +252,8 @@ typedef struct bspinfo {
 
 *******************************************************************************/
 
+NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispNew(MsaTxtDispPtr pTxtDisp);
+NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispFree(MsaTxtDispPtr pTxtDisp);
 /*BSP information*/
 NLM_EXTERN void  UDV_ReadBspDataForViewer(BspInfoPtr bsp_i);
 /*Feature management*/
@@ -257,7 +270,7 @@ NLM_EXTERN Boolean UDV_IsTranslationNeeded(SeqMgrFeatContextPtr context,
 NLM_EXTERN Boolean LIBCALLBACK UDV_ParaGFTableFeatures (SeqFeatPtr sfp, 
 		SeqMgrFeatContextPtr context);
 NLM_EXTERN Uint2 UDV_CreateOneFeatureIndex(Uint2 entityID_seq, 
-		BioseqPtr bsp);
+		BioseqPtr bsp,Boolean bReverse);
 NLM_EXTERN void UDV_FreeListParaG(ValNodePtr PNTR vnp_head);
 NLM_EXTERN ValNodePtr UDV_CreateParaGList(Int2 nCharByLine,
 		Int4 bsp_length,Int4 from,Int4 to,
@@ -280,6 +293,7 @@ NLM_EXTERN void UDV_GetStrandinPGP(ParaGPtr pgp,Uint1Ptr strand);
 NLM_EXTERN void UDV_GetStrandinPGPList(ValNodePtr pgp_list,Uint1Ptr strand);
 NLM_EXTERN void UDV_GetBspRangeinPGPList(ValNodePtr pgp_list,
 	Int4Ptr bsp_start,Int4Ptr bsp_stop);
+NLM_EXTERN Int4 UDV_RevertBioSeqCoord(Int4 bsp_coord,Int4 bsp_length);
 
 
 

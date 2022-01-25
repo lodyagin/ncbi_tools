@@ -6,6 +6,12 @@
 --    readability at the suggestion of Peter Rice, EMBL
 --  Later additions by Taxonomy Group staff at NCBI
 --
+--  Version 3.6
+--     Added code 22 TAG-Leu, TCA-stop
+--        found in mitochondrial DNA of Scenedesmus obliquus
+--        submitted by Gertraude Berger, Ph.D.
+--        Organelle Genome Megasequencing Program, Univ Montreal
+--
 --  Version 3.5
 --     Added code 21, Trematode Mitochondrial
 --       (as deduced from: Garey & Wolstenholme,1989; Ohama et al, 1990)
@@ -184,6 +190,15 @@ Genetic-code-table ::= {
   id 21 ,
   ncbieaa  "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
   sncbieaa "-----------------------------------M---------------M------------"
+  -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
+  -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
+  -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
+ } ,
+ {
+  name "TAG-Leu,TCA-stop" ,
+  id 22 ,
+  ncbieaa  "FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+  sncbieaa "-----------------------------------M----------------------------"
   -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
   -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG

@@ -1,5 +1,5 @@
 #
-# $Id: linux.ncbi.mk,v 1.11 2000/01/13 23:38:19 beloslyu Exp $
+# $Id: linux.ncbi.mk,v 1.12 2000/04/13 14:10:44 thiessen Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -28,7 +28,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3DOGL
+#OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE = -I/usr/local/apps/Mesa-3.0/include
 OPENGL_LIBS = -L/usr/local/apps/Mesa-3.0/lib -lMesaGL -lMesaGLU

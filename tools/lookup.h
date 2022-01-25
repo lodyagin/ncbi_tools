@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,18 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.15  2000/03/03 18:00:11  dondosha
+* Added prototype for MegaBlastLookupTableDup, plus cosmetic changes
+*
+* Revision 6.14  2000/02/17 19:00:45  shavirin
+* Removed theCacheSize parameter from everywhere.
+*
+* Revision 6.13  2000/02/11 20:52:25  dondosha
+* Added Webb Miller s lookup table and related prototypes
+*
+* Revision 6.12  2000/02/01 21:05:56  dondosha
+* Added prototype for mb_lookup_position_aux_destruct - modification for megablast
+*
 * Revision 6.11  2000/01/11 17:27:02  shavirin
 * Added elements theTable and theCacheSize into LookupTable
 * Added parameters theCacheSize into lookup_new and BLAST_WordFinderNew
@@ -140,7 +152,6 @@ extern "C" {
 #endif
 
 #include <ncbi.h>
-
 /* 
 	Structure that keeps a block of memory for the functions in lookup.c
 	Most often used instead of a MemNew call in AddPositionToLookupTable.
@@ -195,6 +206,24 @@ typedef struct mod_lt_entry {
 } ModLAEntry, PNTR ModLAEntryPtr;
 #endif
 
+#define MBSTACK_SIZE 5000
+
+typedef struct megablast_stack {
+    int diag, level, length;
+} MbStack, PNTR MbStackPtr;
+
+typedef struct megablast_lookup_table {
+   Int2 width;          /* Number of bytes in hash value   */
+   Int4 hashsize;      /* = 2^(8*width) - 1               */ 
+   Int2 lpm;            /* Minimal length of perfect match */
+   Int2 max_positions;  /* Maximal number of positions for one hash value */
+   Int4Ptr hashtable;   /* Array of positions              */
+   Int4Ptr next_pos;    /* Extra positions stored here     */
+   Uint4 mask; 
+   Int4 stack_index;    
+   MbStackPtr estack; /* Most recent hits stored here */
+} MbLookupTable, PNTR MbLookupTablePtr;
+
 typedef struct lookup_table {
     Int4 char_size,		/* number of bits per residue/bp */
         wordsize,		/* size of "word" */
@@ -213,9 +242,9 @@ typedef struct lookup_table {
     ModLAEntry *mod_lt;	        /* The new&improved lookup table */
 #endif
     Uint4Ptr theTable;          /* Lookup table with variable length */
-    Int4     theCacheSize;    /* Size of cache determines lookup length */
     ModLookupPositionPtr 	mod_lookup_table_memory; /* Memory for new and improved lookup table. */
     Int4 mod_lookup_table_size;/* Size for new and improved lookup table */
+   MbLookupTablePtr mb_lt; /* MegaBlast version of the lookup table */
 } LookupTable, PNTR LookupTablePtr;
 
 
@@ -230,7 +259,7 @@ typedef struct _blast_wordfinder {
         } BLAST_WordFinder, PNTR BLAST_WordFinderPtr;
 
 
-LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize, Int4 theCacheSize));
+LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize));
 
 LookupTablePtr LIBCALL lookup_destruct PROTO((LookupTablePtr lookup));
 
@@ -241,9 +270,14 @@ void LIBCALL lookup_add_index PROTO((LookupTablePtr lookup, Int4 lookup_index, I
 Uint1Ptr LIBCALL lookup_find_init PROTO((LookupTablePtr lookup, Int4 PNTR lookup_index, Uint1Ptr string));
 
 Boolean lookup_position_aux_destruct PROTO((LookupTablePtr lookup));
+Boolean mb_lookup_position_aux_destruct PROTO((LookupTablePtr lookup));
+
+LookupTablePtr MegaBlastLookupTableDup PROTO((LookupTablePtr lookup));
+LookupTablePtr MegaBlastLookupTableDestruct PROTO((LookupTablePtr lookup));
 
 BLAST_WordFinderPtr BLAST_WordFinderDestruct PROTO((BLAST_WordFinderPtr wfp));
-BLAST_WordFinderPtr BLAST_WordFinderNew PROTO((Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down, Int4 theCacheSize));
+BLAST_WordFinderPtr BLAST_WordFinderNew PROTO((Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down));
+
 
 
 #ifdef __cplusplus

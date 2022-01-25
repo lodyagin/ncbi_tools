@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.125 2000/01/18 22:49:16 lewisg Exp $
+/*  $Id: cn3dwin.c,v 6.155 2000/04/25 00:22:35 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,96 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
+* Revision 6.155  2000/04/25 00:22:35  thiessen
+* save quality settings in config
+*
+* Revision 6.154  2000/04/20 23:27:45  lewisg
+* misc bug fixes
+*
+* Revision 6.153  2000/04/19 17:56:48  thiessen
+* added background color in OpenGL
+*
+* Revision 6.152  2000/04/17 21:46:56  lewisg
+* do not do double index on viewmgr update, rename menus
+*
+* Revision 6.151  2000/04/10 21:41:26  lewisg
+* move alignment menus into ddv, udv from cn3d
+*
+* Revision 6.150  2000/04/04 22:18:43  lewisg
+* add defline to ddv, fix seq import bugs, set boundbox
+*
+* Revision 6.149  2000/03/27 22:15:05  lewisg
+* add show/hide row dialog
+*
+* Revision 6.148  2000/03/24 20:34:55  lewisg
+* add blast from file, bug fixes, get rid of redundant code, etc.
+*
+* Revision 6.147  2000/03/24 19:59:20  thiessen
+* draw new logo in OpenGL
+*
+* Revision 6.146  2000/03/23 14:53:04  thiessen
+* fix bug in viewer3d camera; added conservation color algorithm to ARS
+*
+* Revision 6.145  2000/03/18 00:06:00  lewisg
+* add blast, new help, new menus
+*
+* Revision 6.144  2000/03/17 22:49:00  thiessen
+* fix for multi-chain / multi-model features ; added feature-move ; misc bug fixes
+*
+* Revision 6.143  2000/03/15 18:49:07  thiessen
+* fixed viewer3d color bug
+*
+* Revision 6.142  2000/03/15 16:59:55  thiessen
+* fix highlighting, other minor bugs
+*
+* Revision 6.141  2000/03/15 04:43:56  thiessen
+* various minor fixes
+*
+* Revision 6.140  2000/03/10 18:46:59  lewisg
+* add show/hide
+*
+* Revision 6.139  2000/03/09 18:58:55  thiessen
+* fixed typo
+*
+* Revision 6.138  2000/03/09 17:56:58  thiessen
+* changes to palette handling, feature implementation, PARS storage
+*
+* Revision 6.137  2000/03/08 21:46:15  lewisg
+* cn3d saves viewport, misc bugs
+*
+* Revision 6.136  2000/03/06 15:33:53  lewisg
+* add new hydrophobic palette, update visual c++ project to move seqcons
+*
+* Revision 6.135  2000/03/03 20:05:17  thiessen
+* removal of palette-building pass if in 24-bit color
+*
+* Revision 6.134  2000/03/01 16:17:55  thiessen
+* improved handling of colors; many small fixes
+*
+* Revision 6.133  2000/02/26 00:01:41  thiessen
+* OpenGL improvements, progress on cleanup of Show/Hide
+*
+* Revision 6.132  2000/02/22 17:10:00  thiessen
+* fix typecast error
+*
+* Revision 6.131  2000/02/19 21:25:57  thiessen
+* split of cn3dmodl into cn3dmodl and cn3dstyl
+*
+* Revision 6.130  2000/02/19 01:23:59  lewisg
+* use ibm, add row tracking code, various bug fixes
+*
+* Revision 6.129  2000/02/17 15:41:11  thiessen
+* added CSC algorithm selection submenu
+*
+* Revision 6.128  2000/02/10 19:04:25  thiessen
+* added checkbox to change altConf behaviour
+*
+* Revision 6.127  2000/02/10 17:47:02  thiessen
+* added: color-by-sequence-conservation menu item, zoom-out to OpenGL, misc fixes
+*
+* Revision 6.126  2000/02/10 15:51:59  lewisg
+* cn3d responds and send correct update messages.  many coloring bug fixes
+*
 * Revision 6.125  2000/01/18 22:49:16  lewisg
 * send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
 *
@@ -548,16 +638,23 @@
 #include <salutil.h>
 #include <cn3dmsg.h>
 #include <salmedia.h>
-#include <cn3dmodl.h>
 #include <cn3dshim.h>
 #include <diagnost.h>
 #include <cn3dmesh.h>
 #include <udviewer.h>
 #include <vsm.h>
 #include <image.h>
+#include <seqcons.h>
+#include <cn3dmodl.h>
+#include <cn3dstyl.h>
+#include <bspview.h>
+#ifdef _OPENGL
+#include <shim3d.h>
+#endif
 
 static Uint2 Cn3D_Vy, Cn3D_Rx;
 static MenU Cn3D_sOpen;
+static IteM Cn3D_iOpen;
 static IteM Cn3D_iSelStruc;
 static IteM Cn3D_iClearStruc;
 static IteM Cn3D_iRendCtrl = NULL;
@@ -568,11 +665,11 @@ static IteM Cn3D_iDisplayCtrl = NULL; /* For display control, Yanli */
 static IteM Cn3D_iViewCtrl = NULL;
 #endif
 static IteM Cn3D_iModelCtrl = NULL;
+static IteM Cn3D_sSave = NULL;
 static MenU Cn3D_sExport;
 static WindoW Cn3D_w = NULL;
 static MenU Cn3D_ma_group_menu;
 static MenU Cn3D_ma_action_menu;
-static MenU Cn3D_sSave;
 /*static MenU     Cn3D_sNaybor;*/
 static MenU Cn3D_mRender;
 static MenU Cn3D_mColor;
@@ -586,6 +683,7 @@ static CharPtr errMsg;
 #ifndef _OPENGL
 Viewer3D Cn3D_v3d = NULL;
 static Picture3D Cn3D_pMain;
+static Camera3D Cn3D_Camera3D;
 #endif
 TCn3D_ColorData Cn3D_ColorData;
 
@@ -648,8 +746,26 @@ Uint1 Cn3d_PaletteRGB[CN3D_COLOR_MAX][3] =
   160,  82,  45, /* sienna 33 */
   240, 230, 140, /* khaki 34 */
   171, 130, 255, /* light purple 35 */
-  255, 200,   0  /* orange yellow 36 */  
+  255, 200,   0, /* orange yellow 36 */
+  117, 128, 160, /* 37 */
+    5,  53, 239, /* 38 */
+   27,  62, 255, /* 39 */
+   84, 110, 203, /* 40 */
+  216,  77,  84, /* 41 */
+  125, 128, 135, /* 42 */
+  237,  29,  61, /* 43 */
+  184, 118, 120, /* 44 */
+  155,   9,   0, /* 45 */
+  155, 119, 107, /* 46 */
+   80, 110, 196, /* 47 */
+  122, 127, 157, /* 48 */
+   50,  85, 241, /* 49 */
+  201,  93,  91, /* 50 */
+  254,   0,   5, /* 51 */
+  155, 137, 133, /* 52 */
+    3,  53, 246  /* 53 */
 };
+
 
 
 
@@ -676,8 +792,10 @@ void LIBCALL Cn3D_EnableFileOps(void)
         Cn3D_DisableFileOps();
         /* just leave the "opener enabled" */
         Enable(Cn3D_sOpen);
+        Enable(Cn3D_iOpen);
     } else {
         Enable(Cn3D_sOpen);
+        Enable(Cn3D_iOpen);
         Enable(Cn3D_sSave);
         Enable(Cn3D_sExport);
         Enable(Cn3D_iSelStruc);
@@ -689,6 +807,7 @@ void LIBCALL Cn3D_EnableFileOps(void)
 void LIBCALL Cn3D_DisableFileOps(void)
 {
     Disable(Cn3D_sOpen);
+    Disable(Cn3D_iOpen);
     Disable(Cn3D_sSave);
     Disable(Cn3D_sExport);
     Disable(Cn3D_iSelStruc);
@@ -718,17 +837,52 @@ void LIBCALL Cn3D_EnableMenus(void)
 static void Cn3D_AboutProc(IteM i)
 {
     MsgAlert(KEY_OK, SEV_INFO, "About Cn3D",
-             "Cn3D\n\nA 3-D Viewer for MMDB\nthe Molecular Modelling Database\nVersion 2.50\n\nThe National Center for Biotechnology Information\ninfo@ncbi.nlm.nih.gov");
+             "Cn3D\n\nA 3-D Viewer for\nNCBI Databases\nVersion 3.0\n\nThe National Center for Biotechnology Information\nhttp://www.ncbi.nlm.nih.gov\ninfo@ncbi.nlm.nih.gov");
 }
 
 
+static void Cn3D_HelpProcOK(ButtoN g)
+{
+    WindoW hOpenDlg;
+
+    hOpenDlg=(WindoW)ParentWindow(g);
+    if (!hOpenDlg) return;
+    Remove(hOpenDlg);
+
+    Nlm_LaunchWebPage("http://www.ncbi.nlm.nih.gov/Structure/CN3D/cn3dhelp.html");
+}
+
+static void Cn3D_HelpProcCancel(ButtoN g)
+{
+    WindoW hOpenDlg;
+
+    hOpenDlg=(WindoW)ParentWindow(g);
+    if (!hOpenDlg) return;
+    Remove(hOpenDlg);
+}
+
 static void Cn3D_HelpProc(IteM i)
 {
-    MsgAlert(KEY_OK, SEV_INFO, "Cn3D Online Manual",
-             "An WWW-Based Manual for Cn3D can be viewed at:\n\n\
-http://www.ncbi.nlm.nih.gov/Structure/cn3d.html\n\n\
- Send questions to:\n\
-info@ncbi.nlm.nih.gov");
+    WindoW d;
+    GrouP h, h1, h2;
+    
+    d = MovableModalWindow(-50, -33 ,-10, -10, "Help", NULL);
+    if (d != NULL){
+        h = HiddenGroup(d, 1, 2,  NULL);
+
+        h1 = HiddenGroup(h, 1, 5,  NULL);
+        StaticPrompt(h1,"An WWW Manual for Cn3D can be viewed at:",0,0,systemFont,'l');
+        StaticPrompt(h1,"http://www.ncbi.nlm.nih.gov/Structure/CN3D/cn3dhelp.html",0,0,systemFont,'l');
+        StaticPrompt(h1,"Send questions to:",0,0,systemFont,'l');
+        StaticPrompt(h1,"info@ncbi.nlm.nih.gov",0,0,systemFont,'l');
+        StaticPrompt(h1,"",0,0,systemFont,'l');
+
+        h2 = HiddenGroup(h, 2, 0,  NULL);
+        PushButton(h2, "Launch", Cn3D_HelpProcOK);
+        PushButton(h2, "Cancel", Cn3D_HelpProcCancel);
+        RealizeWindow(d);
+        Show(d);
+    }
 }
 
 
@@ -736,6 +890,8 @@ static void Cn3D_AllCB(IteM i)
 {
 #ifdef _OPENGL
     OGL_Reset(Cn3D_ColorData.OGL_Data);
+    if (!GetSelectedModelstruc())
+        OGL_DrawLogo(Cn3D_ColorData.OGL_Data);
     OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
 #else
     ZoomAll3D(Cn3D_v3d);
@@ -777,6 +933,7 @@ static void Cn3D_BgColor(IteM i)
 {
 
 #ifdef _OPENGL
+/* not currently used in OpenGL... done in Render panel instead */
     DDV_ColorCell *pColorCell;
 
     pColorCell =
@@ -812,7 +969,7 @@ static void Cn3D_Default_HLColor(IteM i)
 #ifndef _OPENGL
     SetHLColor3D(Cn3D_v3d, colorR, colorG, colorB);
 #endif /* ndef _OPENGL */
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 
 }
 
@@ -835,7 +992,7 @@ static void Cn3D_HLColor(IteM i)
     SetHLColor3D(Cn3D_v3d, pColorCell->rgb[0], pColorCell->rgb[1],
                  pColorCell->rgb[2]);
 #endif /* ndef _OPENGL */
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 static void Cn3D_Default_SSColor(IteM i)
@@ -848,7 +1005,7 @@ static void Cn3D_Default_SSColor(IteM i)
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Turn", "CN3D", 255, 69, 0);
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Coil", "CN3D", 0, 255, 255);
 #endif  /* else _OPENGL */
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 static void Cn3D_HelixColor(IteM i)
@@ -866,7 +1023,7 @@ static void Cn3D_HelixColor(IteM i)
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Helix", "CN3D",
         pColorCell->rgb[0], pColorCell->rgb[1], pColorCell->rgb[2]);
 
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 static void Cn3D_StrandColor(IteM i)
@@ -884,7 +1041,7 @@ static void Cn3D_StrandColor(IteM i)
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Strand", "CN3D",
         pColorCell->rgb[0], pColorCell->rgb[1], pColorCell->rgb[2]);
     
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 static void Cn3D_TurnColor(IteM i)
@@ -902,7 +1059,7 @@ static void Cn3D_TurnColor(IteM i)
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Turn", "CN3D",
         pColorCell->rgb[0], pColorCell->rgb[1], pColorCell->rgb[2]);
 
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 static void Cn3D_CoilColor(IteM i)
@@ -920,15 +1077,16 @@ static void Cn3D_CoilColor(IteM i)
     DDV_SetPaletteColor(Cn3D_ColorData.pDDVColorGlobal, "Coil", "CN3D",
         pColorCell->rgb[0], pColorCell->rgb[1], pColorCell->rgb[2]);
     
-    Cn3D_Redraw(FALSE);
+    Cn3D_RedrawNUpdate(FALSE);
 }
 
 
-/* Compose the starting(NCBI-Logo) 3D-Picture
- */
+/* Compose the starting(NCBI-Logo) 3D-Picture */
 static void LogoProc(Nlm_ButtoN b)
 {
-#ifndef _OPENGL
+#ifdef _OPENGL
+    OGL_DrawLogo(Cn3D_ColorData.OGL_Data);
+#else
     Nlm_Prim3D p[4];
     Int4 x1, x2;
     double ang1, ang2;
@@ -1033,147 +1191,53 @@ NLM_EXTERN void LIBCALL Cn3D_ResetActiveStrucProc(void)
 /*    ResetAlignCtrls(); */
     ResetDisplayCtrls();
     Cn3dObjMgrGetSelected();
-    Cn3D_Redraw(TRUE);          /* always a new structure */
 }
 
 void /*LIBCALL*/ Cn3D_SaveActiveCam(void)
 {
 #ifndef _OPENGL
+    PARS pars;
     PDNMS pdnmsThis = GetSelectedModelstruc();
-    PARS pars = GetAlgorRenderSet(pdnmsThis);
 
-    if (pars)
-        GetViewerInfo3D(Cn3D_v3d, NULL, (Nlm_Camera3DPtr) pars, NULL);
+    if (pdnmsThis && pdnmsThis->data.ptrvalue &&
+        (pars = (PARS) ((PMSD) pdnmsThis->data.ptrvalue)->pGlobalPARS))
+        GetViewerInfo3D(Cn3D_v3d, NULL, &Cn3D_Camera3D, NULL);
 #endif                          /* ndef _OPENGL */
 }
 
-#ifdef _OPENGL
-static void Cn3D_MakeOGLPalette(TCn3D_ColorData * ColorData,
-                                TOGL_Data * OGL_Data)
+
+
+
+NLM_EXTERN void Cn3D_RedrawNUpdate(Boolean New)
 {
-    ValNodePtr Palette, PaletteIndex, PaletteExpanded;
-    Int4 i, j, TotalColors = 0;
-    Int4 Slices;                /* the number of palette entries per color */
-
-    Palette = ColorData->pDDVColorGlobal->Palette;
-    if (!Palette)
-        return;
-
-    DDV_SetColorChoice(Palette); /* set up the indices */
-
-    /* count the colors */
-    for (Palette = ColorData->pDDVColorGlobal->Palette; Palette;
-         Palette = Palette->next) {
-        TotalColors++;
-        if (TotalColors > CN3D_MAX_PALETTE)
-            break;              /* limit the maximum number of colors for now */
-    }
-
-    Slices = CN3D_MAX_PALETTE / TotalColors;
-    Palette = ColorData->pDDVColorGlobal->Palette;
-    ValNodeFreeData(OGL_Data->PaletteIndex);
-    OGL_Data->PaletteIndex = NULL;
-    ValNodeFreeData(OGL_Data->PaletteExpanded);
-    OGL_Data->PaletteExpanded = NULL;
-    OGL_Data->NewPalette = TRUE;
-
-    for (i = 0; Palette && i < TotalColors; i++, Palette = Palette->next) {
-        /* create a color entry in the index */
-        PaletteIndex =
-            ValNodeAddPointer(&(OGL_Data->PaletteIndex), 0,
-                              MemNew(sizeof(TOGL_PaletteIndex)));
-        DDV_CopyColorCell(&
-                          (((TOGL_PaletteIndex
-                             *) (PaletteIndex->data.ptrvalue))->ColorCell),
-&(((DDV_ColorEntry *) (Palette->data.ptrvalue))->ColorCell));
-        ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->Begin = i * Slices; /* start ramp */
-        /* create a color ramp */
-        for (j = 0; j < Slices; j++) {
-            PaletteExpanded =
-                ValNodeAddPointer(&(OGL_Data->PaletteExpanded), 0,
-                                  MemNew(sizeof(DDV_ColorCell)));
-
-            ((DDV_ColorCell *) (PaletteExpanded->data.ptrvalue))->rgb[0] =
-                (Uint1) (((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                         ColorCell.rgb[0] * ((j + 1) / (float) Slices));
-            ((DDV_ColorCell *) (PaletteExpanded->data.ptrvalue))->rgb[1] =
-                (Uint1) (((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                         ColorCell.rgb[1] * ((j + 1) / (float) Slices));
-            ((DDV_ColorCell *) (PaletteExpanded->data.ptrvalue))->rgb[2] =
-                (Uint1) (((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                         ColorCell.rgb[2] * ((j + 1) / (float) Slices));
-        }
-        
-            ((TOGL_PaletteIndex *) (PaletteIndex->data.ptrvalue))->End =
-            i * Slices + j - 1; /* end ramp */
-    }
+    DDV_Clear2Default(Cn3D_ColorData.pDDVColorGlobal); 
+    Cn3D_Redraw(New);
+    Cn3D_SendUpdate();
 }
-
-#endif                          /* _OPENGL */
-
-#ifndef _OPENGL
-static void Cn3d_Lock3DPalette(Picture3D ppic)
-{
-    ValNodePtr Palette;
-    Int4 i = 0;
-
-    Palette = Cn3D_ColorData.pDDVColorGlobal->Palette;
-    if (!Palette) {
-        AllocPalette3D(ppic, 1);
-        SetColor3D(ppic, 0, 255, 255, 255);
-        return;
-    }
-
-    DDV_SetColorChoice(Palette);
-
-    while (Palette) {
-        i++;
-        if (i > CN3D_MAX_PALETTE)
-            break;              /* limit the maximum number of colors for now */
-        Palette = Palette->next;
-    }
-
-    AllocPalette3D(ppic, (Uint1) i);
-    if (readErrors())
-        return;
-
-    Palette = Cn3D_ColorData.pDDVColorGlobal->Palette;
-    i = 0;
-
-    while (Palette) {
-        SetColor3D(ppic, (Uint1) i,
-                   ((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                   ColorCell.rgb[0],
-                   ((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                   ColorCell.rgb[1],
-                   ((DDV_ColorEntry *) (Palette->data.ptrvalue))->
-                   ColorCell.rgb[2]);
-        if (readErrors())
-            return;
-        i++;
-        if (i > CN3D_MAX_PALETTE)
-            break;              /* limit the maximum number of colors for now */
-        Palette = Palette->next;
-    }
-}
-
-#endif                          /* ndef _OPENGL */
-
 
 NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New)
+{
+    Cn3D_RedrawEx(New);
+#ifdef _OPENGL
+    OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data); /* force a window redraw */
+#endif
+}
+
+NLM_EXTERN void LIBCALL Cn3D_RedrawEx(Boolean New)
 {
     /* fetch the active structure */
     PARS pars = NULL;
     DDV_ColorCell iColor;
     PDNMS pdnmsThis = GetSelectedModelstruc();
 
-    if (pdnmsThis == NULL || (pars = GetAlgorRenderSet(pdnmsThis)) == NULL) {
+    if (pdnmsThis == NULL || 
+        (pars = (PARS) ((PMSD) pdnmsThis->data.ptrvalue)->pGlobalPARS) == NULL) {
         LogoProc(NULL);
         return;
     }
 #ifndef _OPENGL
     if (!New)
-        GetViewerInfo3D(Cn3D_v3d, NULL, (Camera3DPtr) pars, NULL);
+        GetViewerInfo3D(Cn3D_v3d, NULL, &Cn3D_Camera3D, NULL);
 #endif                          /* ndef _OPENGL */
 
     WatchCursor();
@@ -1207,30 +1271,27 @@ NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New)
         /* to do: add slaves to traverse */
         OGL_Reset(Cn3D_ColorData.OGL_Data);
     }
+    /* set background color */
+    Cn3D_ColorData.OGL_Data->Background.rgb[0] = pars->BGColRGB[0];
+    Cn3D_ColorData.OGL_Data->Background.rgb[1] = pars->BGColRGB[1];
+    Cn3D_ColorData.OGL_Data->Background.rgb[2] = pars->BGColRGB[2];
 #endif                          /* _OPENGL */
 
 
+/*
     if (Cn3D_DisplayHighlight)
         Cn3DCheckHighlighted();
     if (Cn3D_NoSingleHL) {
         Cn3D_DisplayHighlight = FALSE;
         Cn3D_bDisplayHighlightStatusSet(FALSE);
     }
-
+*/
     /* execute all color functions */
-    DDV_ColorExecute(Cn3D_ColorData.pDDVColorGlobal, NULL, NULL, Cn3D_ColorFuncFind());
-
-
-#ifdef _OPENGL
-    Cn3D_MakeOGLPalette(&Cn3D_ColorData, Cn3D_ColorData.OGL_Data);
-#else
-    Cn3d_Lock3DPalette(Cn3D_pMain); /* Allocates the Picture3D palette  */
-#endif                          /* else _OPENGL */
+    /*DDV_ColorExecute(Cn3D_ColorData.pDDVColorGlobal, NULL, NULL, Cn3D_ColorFuncFind());*/
 
     ProgMon("Rendering Structure...");
 #ifdef _OPENGL
     AlgorithmicRendering();
-    OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data); /* force a window redraw */
 #else                           /* _OPENGL */
     Cn3D_pMain = AlgorithmicRendering(Cn3D_pMain);
 
@@ -1252,19 +1313,17 @@ NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New)
     }
 
     ProgMon("Redrawing 3D image ...");
-    AttachPicture3D(Cn3D_v3d, Cn3D_pMain, (Camera3DPtr) pars);
+    AttachPicture3D(Cn3D_v3d, Cn3D_pMain, &Cn3D_Camera3D);
 #endif                          /* else _OPENGL */
-    Cn3D_SendUpdate();
 
     readErrors();
     Cn3D_EnableFileOps();
     ArrowCursor();
-
-
 }
 
-/* Mouse Action Callbacks
- */
+
+
+/* Mouse Action Callbacks */
 
 static void LIBCALLBACK DoHighlightSeg(PFB pfbThis,
                                        Int4 iModel, Int4 iIndex,
@@ -1341,7 +1400,7 @@ static Boolean GetPointData(MAPtr ma, PoinT point,
 #endif                          /* ndef _OPENGL */
 
 
-/* 
+/*
  *  for highlighting an atom.  not presently used or ported to opengl
  */
 
@@ -1469,14 +1528,12 @@ void fnPreCHLresidue(PDNMG pdnmgThis, Boolean highlight)
         else
             pmgdThis->bHighlighted = 0;
 #ifndef _OPENGL
-        
+
         pmsdThis = ToMSDParent((PFB) pmgdThis);
-        
+
         if (pmsdThis && pmgdThis && pmsdThis->bVisible && pmgdThis->bVisible) {
             fnCHLresidue(pdnmgThis, Cn3D_v3d, highlight);
         }
-#else
-       /* Cn3D_Redraw(FALSE); */
 #endif
     }
 }
@@ -1504,13 +1561,11 @@ static void HLresidue_MA(MAPtr ma,
         OGL_Select(Cn3D_ColorData.OGL_Data, FALSE);
 
         pmgdThis = OGL_Hit(Cn3D_ColorData.OGL_Data);
-        if (pmgdThis == NULL)
+        if (pmgdThis == NULL || !IsGraphNode(pmgdThis)) /* can highlight anything */
             return;
-        if (!IsGraphNode(pmgdThis))
-            return;
+
         pdnmgThis = pmgdThis->pdnmgLink;
         MediaObjSelect(pdnmgThis, !pmgdThis->bHighlighted);
-        /*Cn3D_Redraw(FALSE);*/
     }
 
 #else /* _OPENGL */
@@ -1542,8 +1597,8 @@ static void HLresidue_MA(MAPtr ma,
 
 }
 
-/* 
- *   for highlighting an entire molecule.  not presently used or ported 
+/*
+ *   for highlighting an entire molecule.  not presently used or ported
  *   to opengl
  */
 
@@ -1603,7 +1658,7 @@ static void Cn3D_ShowCtrlProc(IteM i);
 
 
 static CharPtr cn3dControlFormTabs[] = {
-    "Render", "Label", "Show/Hide", "Feature",
+    "Style", "Label", "Show/Hide", "Annotations",
 #ifdef _OPENGL
     "Quality",
 #endif                          /* _OPENGL */
@@ -1875,16 +1930,12 @@ static void Cn3D_AlignEdit(IteM i)
         psaAlign = Cn3D_ColorData.sap;
 
     if (psaAlign == NULL) {
-        DDV_ColorExecute(Cn3D_ColorData.pDDVColorGlobal, NULL, NULL, Cn3D_ColorFuncFind());
         Cn3D_LaunchSeqEntry(Cn3D_ColorData.pvnsep);
         Cn3dObjMgrGetSelected();
     }
 
     if (psaAlign != NULL && psaAlign->data != NULL) {
-
-        DDV_ColorExecute(Cn3D_ColorData.pDDVColorGlobal, NULL, NULL, Cn3D_ColorFuncFind());
         Cn3dObjMgrGetSelected();
-
         Cn3D_LaunchSeqAnnot(psaAlign);
     }
 
@@ -1928,16 +1979,12 @@ static void Cn3D_AboutStruc(IteM i)
     fp = FileOpen(path, "w");
     if (fp != NULL) {
         WriteStructSummary(pdnmsThis, fp);
-        fprintf(fp, "\n\nPDB Remarks (non-REFERENCE)\n\n");
-        WritePDBRemarks(pdnmsThis, fp);
         fprintf(fp, "\n\n\n\n\n\n\n\n\n\n");
         /* loop through the slave structures */
         if (pmsdThis->pdnmsSlaves != NULL) {
             pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
             while (pdnmsThisSlave) {
                 WriteStructSummary(pdnmsThisSlave, fp);
-                fprintf(fp, "\n\nPDB Remarks (non-REFERENCE)\n\n");
-                WritePDBRemarks(pdnmsThisSlave, fp);
                 fprintf(fp, "\n\n\n\n\n\n\n\n\n\n");
 
                 pdnmsThisSlave = pdnmsThisSlave->next;
@@ -1952,34 +1999,52 @@ static void Cn3D_AboutStruc(IteM i)
     Show(Cn3D_wAbout);
 }
 
+#ifdef _OPENGL
+static void Cn3D_ZoomOutCB(IteM i)
+{
+    OGL_ZoomOut(Cn3D_ColorData.OGL_Data);
+}
+
+static void Cn3D_ZoomInCB(IteM i)
+{
+    OGL_ZoomIn(Cn3D_ColorData.OGL_Data);
+}
+#endif
 
 /* Create the generic CN3D menu system;
  * return handler to the "File" top menu
  */
 static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig)
 {
-    MenU file_menu, color_menu, color_submenu, menu;
+    MenU file_menu, color_menu, color_submenu, menu, align_menu;
+    int i;
 
     /* FILE top menu
      */
 
     file_menu = menu = PulldownMenu(w, "File/F");
 
-    Cn3D_sOpen = Cn3D_OpenSub(menu); /* Open submenu(see cn3dopen.c) */
+    if (!Cn3D_ColorData.UseEntrez) {
+        Cn3D_iOpen = CommandItem(menu, "Open.../O", Cn3D_OpenBiostruc);
+        Cn3D_sOpen = NULL;
+    } else {
+        Cn3D_sOpen = SubMenu(menu, "Open/0");
+        CommandItem(Cn3D_sOpen, "File.../B", Cn3D_OpenBiostruc);
+        CommandItem(Cn3D_sOpen, "by Network.../N", Cn3D_NetOpenBiostruc);
+        Cn3D_iOpen = NULL;
+    }
+
 
     /* Import menu item would go here */
-    Cn3D_sSave = Cn3D_SaveSub(menu);
-
+    /*Cn3D_sSave = Cn3D_SaveSub(menu);*/
+    Cn3D_sSave = CommandItem(menu, "Save.../S", Cn3D_SaveBiostruc);
     Cn3D_sExport = Cn3D_ExportSub(menu);
     /*CommandItem(menu, "Mesh /M", Cn3D_OpenMesh);*/
 
     SeparatorItem(menu);
     CommandItem(menu, "Properties.../P", Cn3D_AboutStruc);
 
-
-
-    /* EDIT top menu
-     */
+    /* EDIT top menu */
 
     menu = PulldownMenu(w, "View/V");
 #ifndef _OPENGL
@@ -1991,7 +2056,7 @@ static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig)
 
 
     Cn3D_iDisplayCtrl =
-        StatusItem(menu, "Cn3D Controls.../N", Cn3D_ShowCtrlProc);
+        StatusItem(menu, "Drawing Settings.../N", Cn3D_ShowCtrlProc);
 #ifndef _OPENGL
     Cn3D_iViewCtrl = StatusItem(menu,
                                 "Animation Controls/A",
@@ -1999,84 +2064,88 @@ static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig)
 #else
     CommandItem(menu, "Animation.../A", Cn3D_Animate);
 #endif                          /* ndef _OPENGL */
-
-    SeparatorItem(menu);
-
     CommandItem(menu, "Sequence Window.../S", Cn3D_AlignEdit);
-    SeparatorItem(menu);
 
+    SeparatorItem(menu);
+#ifdef _OPENGL
+    CommandItem(menu, "Zoom Out", Cn3D_ZoomOutCB);
+    CommandItem(menu, "Zoom In", Cn3D_ZoomInCB);
+#endif
     CommandItem(menu, "Reset", Cn3D_AllCB);
+
 #ifdef _DEBUG
+    SeparatorItem(menu);
     VSMAddToMenu(menu, VSM_DESKTOP);
 #endif  /* _DEBUG */
 
     /* RENDER top menu
      */
 
-    menu = PulldownMenu(w, "Structure/S");
+    menu = PulldownMenu(w, "Style/S");
 
     CommandItem(menu, "Sec. Structure/S", Cn3D_RenStruc);
+    CommandItem(menu, "Neighbor/N", Cn3D_RenAlign);
     CommandItem(menu, "WireFrame/W", Cn3D_RenWire);
     CommandItem(menu, "Tubular/T", Cn3D_RenTube);
     CommandItem(menu, "Hierarchy/H", Cn3D_RenHier);
     CommandItem(menu, "Spacefill/P", Cn3D_RenSpace);
     CommandItem(menu, "Ball and Stick/B", Cn3D_RenBS);
-    CommandItem(menu, "Neighbor/N", Cn3D_RenAlign);
 
-    /* COLOR top menu
-     */
-
+    /* COLOR top menu */
     menu = PulldownMenu(w, "Color/C");
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYSECSTRUC), Cn3D_ColSecStruc);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYSTRUCALIGN), Cn3D_ColStrucAlign);
+    color_submenu = SubMenu(menu, Cn3D_ColorFuncName(C_BYSEQCONS));
 
-    CommandItem(menu, "Sec. Structure/S", Cn3D_ColStru);
-    CommandItem(menu, "Domain/D", Cn3D_ColDomain);
-    CommandItem(menu, "Cycle Molecule/C", Cn3D_ColCy);
-    CommandItem(menu, "Residue/R", Cn3D_ColRes);
-    CommandItem(menu, "Hydrophobicity/H", Cn3D_ColHydro);
-    CommandItem(menu, "CPK/K", Cn3D_ColCPK);
-    CommandItem(menu, "Temperature/T", Cn3D_ColTemp);
-    CommandItem(menu, "Neighbor/O", Cn3D_ColCons);
-/*  CommandItem(menu, "SeqConservation/S",  Cn3D_ColSeqCons); */
-    CommandItem(menu, "Structure/U", Cn3D_ColAlign);
-
-    /* OPTIONS top menu 
-     */
-
-    menu = PulldownMenu(w, "Option/O");
-
-    if (netconfig != NULL) {
-        CommandItem(menu, "Net Configure...", netconfig);
+        /* sequence conservation submenu */
+    for (i = 0; i < CSC_NUMALGORITHMS; i++) {
+        SetObjectExtra(
+          CommandItem(color_submenu, (Nlm_CharPtr) CSC_GetAlgorithmName(i),  Cn3D_ColSeqCons), 
+          (Nlm_VoidPtr) i, NULL);
     }
 
-    color_menu = SubMenu(menu, "Color Settings");
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYOBJECT), Cn3D_ColObject);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYCHAIN), Cn3D_ColCyChain);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYDOMAIN), Cn3D_ColDomain);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYRES), Cn3D_ColRes);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYHYDRO), Cn3D_ColHydro);
+    CommandItem(menu, Cn3D_ColorFuncName(C_CPK), Cn3D_ColCPK);
+    CommandItem(menu, Cn3D_ColorFuncName(C_BYTEMP), Cn3D_ColTemp);
+
+    /* OPTIONS top menu */
+    menu = PulldownMenu(w, "Option/O");
+    if (netconfig != NULL) {
+        CommandItem(menu, "Net Configure.../N", netconfig);
+    }
+    color_menu = SubMenu(menu, "Palette Settings");
+
 #ifndef _OPENGL
     color_submenu = SubMenu(color_menu, "Background/B");
     CommandItem(color_submenu, "Default", Cn3D_Default_BgColor);
-    CommandItem(color_submenu, "User Defined", Cn3D_BgColor);
+    CommandItem(color_submenu, "User Defined...", Cn3D_BgColor);
     SeparatorItem(color_menu);
     color_submenu = SubMenu(color_menu, "Highlight");
     CommandItem(color_submenu, "Default", Cn3D_Default_HLColor);
-    CommandItem(color_submenu, "User Defined", Cn3D_HLColor);
+    CommandItem(color_submenu, "User Defined...", Cn3D_HLColor);
     SeparatorItem(color_menu);
 
     color_submenu = SubMenu(color_menu,  "Secondary Structure");
     CommandItem(color_submenu, "Default", Cn3D_Default_SSColor);
-    CommandItem(color_submenu, "Helix", Cn3D_HelixColor);
-    CommandItem(color_submenu, "Strand/Sheet", Cn3D_StrandColor);
-    CommandItem(color_submenu, "Turn", Cn3D_TurnColor);
-    CommandItem(color_submenu, "Coil", Cn3D_CoilColor);
+    CommandItem(color_submenu, "Helix...", Cn3D_HelixColor);
+    CommandItem(color_submenu, "Strand/Sheet...", Cn3D_StrandColor);
+    CommandItem(color_submenu, "Turn...", Cn3D_TurnColor);
+    CommandItem(color_submenu, "Coil...", Cn3D_CoilColor);
 #else /* ndef _OPENGL */
-    CommandItem(color_menu, "Default", Cn3D_Default_SSColor);
+    CommandItem(color_menu, "Helix...", Cn3D_HelixColor);
+    CommandItem(color_menu, "Strand/Sheet...", Cn3D_StrandColor);
+    CommandItem(color_menu, "Turn...", Cn3D_TurnColor);
+    CommandItem(color_menu, "Coil...", Cn3D_CoilColor);
+    CommandItem(color_menu, "Highlight...", Cn3D_HLColor);
     SeparatorItem(color_menu);
-    CommandItem(color_menu, "Helix", Cn3D_HelixColor);
-    CommandItem(color_menu, "Strand/Sheet", Cn3D_StrandColor);
-    CommandItem(color_menu, "Turn", Cn3D_TurnColor);
-    CommandItem(color_menu, "Coil", Cn3D_CoilColor);
-    CommandItem(color_menu, "Highlight", Cn3D_HLColor);
-/*    CommandItem(color_menu, "Background", Cn3D_BgColor); */
+    CommandItem(color_menu, "Default", Cn3D_Default_SSColor);
 #endif
 
-    Cn3D_ma_group_menu = SubMenu(menu, "Mouse Settings/M");
+    Cn3D_ma_group_menu = NULL /*SubMenu(menu, "Mouse Settings/M")*/;
     Cn3D_ma_action_menu = NULL /* SubMenu(menu, "Mouse3D Actions") */ ;
 
     /* CONTROLS top menu
@@ -2192,19 +2261,13 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
      */
     RestrictMotifColorsTo(32);
 
-
-
-
-
-    /* CN3d window and menus
-     */
-
+    /* CN3d window and menus */
     { {
             MenU menu;
 
             /* CN3d window and menubar
              */
-            Cn3D_w = DocumentWindow(-33, -10, -10, -10, "Cn3D 2.50",
+            Cn3D_w = DocumentWindow(-33, -10, -10, -10, "Cn3D 3.0",
                                     (on_close ? on_close : Cn3D_Quit),
                                     NULL);
 
@@ -2252,10 +2315,10 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
         , StandAlone); /* create default palette */
     Cn3D_ColorData.Cn3D_w = Cn3D_w;
 
-    /* 
+    /*
        todo: both Viewer3dViewer and Cn3D_ColorData need to be deallocated.  CloseMMDBAPI()
        probably should be called also.  This means we need some sort of callback from Entrez
-       and Sequin to do this right.  lyg 
+       and Sequin to do this right.  lyg
 
        also need to break out OGL_Data from Viewer 3D when it gets its own initialization routine.
 
@@ -2284,6 +2347,11 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
         FixedWindow(-10, -33, -10, -10, "Viewer Controls", Cn3D_HideCtrl);
     Cn3D_gWinGP = Viewer3DGroups(Cn3D_wCtrls);
     RealizeWindow(Cn3D_wCtrls);
+
+#ifdef _OPENGL
+    /* restore saved quality settings */
+    Cn3D_SetQualityFromAppParams();
+#endif
 
     return Cn3D_w;
 }

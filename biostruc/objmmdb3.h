@@ -1,13 +1,13 @@
 #ifndef _objmmdb3_ 
 #define _objmmdb3_ 
 
-
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
 #else
 #define NLM_EXTERN extern
 #endif
+
 
 #ifdef __cplusplus
 extern "C" { /* } */
@@ -16,8 +16,8 @@ extern "C" { /* } */
 
 /**************************************************
 *
-*    Generated objects for Module MMDB-features
-*    Generated using ASNCODE Revision: 4.2 at Aug 14, 1996  5:26 PM
+*    Generated objects for Module MMDB-Features
+*    Generated using ASNCODE Revision: 6.8 at Mar 6, 2000  9:42 AM
 *
 **************************************************/
 
@@ -39,10 +39,10 @@ typedef struct struct_Biostruc_feature_set {
 } BiostrucFeatureSet, PNTR BiostrucFeatureSetPtr;
 
 
-BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetFree PROTO ((BiostrucFeatureSetPtr ));
-NLM_EXTERN BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetNew PROTO ((void));
-BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BiostrucFeatureSetAsnWrite PROTO (( BiostrucFeatureSetPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetFree PROTO ((BiostrucFeatureSetPtr ));
+NLM_EXTERN BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetNew PROTO (( void ));
+NLM_EXTERN BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucFeatureSetAsnWrite PROTO (( BiostrucFeatureSetPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr ChemGraphPntrsPtr;
 typedef ValNode ChemGraphPntrs;
@@ -51,9 +51,9 @@ typedef ValNode ChemGraphPntrs;
 #define ChemGraphPntrs_molecules 3
 
 
-ChemGraphPntrsPtr LIBCALL ChemGraphPntrsFree PROTO ((ChemGraphPntrsPtr ));
-ChemGraphPntrsPtr LIBCALL ChemGraphPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ChemGraphPntrsAsnWrite PROTO (( ChemGraphPntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ChemGraphPntrsPtr LIBCALL ChemGraphPntrsFree PROTO ((ChemGraphPntrsPtr ));
+NLM_EXTERN ChemGraphPntrsPtr LIBCALL ChemGraphPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ChemGraphPntrsAsnWrite PROTO (( ChemGraphPntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -71,10 +71,10 @@ typedef struct struct_Atom_pntrs {
 } AtomPntrs, PNTR AtomPntrsPtr;
 
 
-AtomPntrsPtr LIBCALL AtomPntrsFree PROTO ((AtomPntrsPtr ));
-AtomPntrsPtr LIBCALL AtomPntrsNew PROTO (( void ));
-AtomPntrsPtr LIBCALL AtomPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL AtomPntrsAsnWrite PROTO (( AtomPntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN AtomPntrsPtr LIBCALL AtomPntrsFree PROTO ((AtomPntrsPtr ));
+NLM_EXTERN AtomPntrsPtr LIBCALL AtomPntrsNew PROTO (( void ));
+NLM_EXTERN AtomPntrsPtr LIBCALL AtomPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AtomPntrsAsnWrite PROTO (( AtomPntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -94,10 +94,10 @@ typedef struct struct_Chem_graph_alignment {
 } ChemGraphAlignment, PNTR ChemGraphAlignmentPtr;
 
 
-ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentFree PROTO ((ChemGraphAlignmentPtr ));
-ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentNew PROTO (( void ));
-ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ChemGraphAlignmentAsnWrite PROTO (( ChemGraphAlignmentPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentFree PROTO ((ChemGraphAlignmentPtr ));
+NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentNew PROTO (( void ));
+NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ChemGraphAlignmentAsnWrite PROTO (( ChemGraphAlignmentPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -113,10 +113,10 @@ typedef struct struct_Sphere {
 } Sphere, PNTR SpherePtr;
 
 
-SpherePtr LIBCALL SphereFree PROTO ((SpherePtr ));
-SpherePtr LIBCALL SphereNew PROTO (( void ));
-SpherePtr LIBCALL SphereAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL SphereAsnWrite PROTO (( SpherePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN SpherePtr LIBCALL SphereFree PROTO ((SpherePtr ));
+NLM_EXTERN SpherePtr LIBCALL SphereNew PROTO (( void ));
+NLM_EXTERN SpherePtr LIBCALL SphereAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SphereAsnWrite PROTO (( SpherePtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -133,10 +133,10 @@ typedef struct struct_Cone {
 } Cone, PNTR ConePtr;
 
 
-ConePtr LIBCALL ConeFree PROTO ((ConePtr ));
-ConePtr LIBCALL ConeNew PROTO (( void ));
-ConePtr LIBCALL ConeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ConeAsnWrite PROTO (( ConePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ConePtr LIBCALL ConeFree PROTO ((ConePtr ));
+NLM_EXTERN ConePtr LIBCALL ConeNew PROTO (( void ));
+NLM_EXTERN ConePtr LIBCALL ConeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ConeAsnWrite PROTO (( ConePtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -153,10 +153,10 @@ typedef struct struct_Cylinder {
 } Cylinder, PNTR CylinderPtr;
 
 
-CylinderPtr LIBCALL CylinderFree PROTO ((CylinderPtr ));
-CylinderPtr LIBCALL CylinderNew PROTO (( void ));
-CylinderPtr LIBCALL CylinderAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL CylinderAsnWrite PROTO (( CylinderPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN CylinderPtr LIBCALL CylinderFree PROTO ((CylinderPtr ));
+NLM_EXTERN CylinderPtr LIBCALL CylinderNew PROTO (( void ));
+NLM_EXTERN CylinderPtr LIBCALL CylinderAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CylinderAsnWrite PROTO (( CylinderPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -178,10 +178,10 @@ typedef struct struct_Brick {
 } Brick, PNTR BrickPtr;
 
 
-BrickPtr LIBCALL BrickFree PROTO ((BrickPtr ));
-BrickPtr LIBCALL BrickNew PROTO (( void ));
-BrickPtr LIBCALL BrickAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BrickAsnWrite PROTO (( BrickPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BrickPtr LIBCALL BrickFree PROTO ((BrickPtr ));
+NLM_EXTERN BrickPtr LIBCALL BrickNew PROTO (( void ));
+NLM_EXTERN BrickPtr LIBCALL BrickAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BrickAsnWrite PROTO (( BrickPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -198,10 +198,10 @@ typedef struct struct_Transform {
 } Transform, PNTR TransformPtr;
 
 
-TransformPtr LIBCALL TransformFree PROTO ((TransformPtr ));
-TransformPtr LIBCALL TransformNew PROTO (( void ));
-TransformPtr LIBCALL TransformAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL TransformAsnWrite PROTO (( TransformPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN TransformPtr LIBCALL TransformFree PROTO ((TransformPtr ));
+NLM_EXTERN TransformPtr LIBCALL TransformNew PROTO (( void ));
+NLM_EXTERN TransformPtr LIBCALL TransformAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TransformAsnWrite PROTO (( TransformPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr BiostrucFeatureSetDescrPtr;
 typedef ValNode BiostrucFeatureSetDescr;
@@ -211,9 +211,9 @@ typedef ValNode BiostrucFeatureSetDescr;
 #define BiostrucFeatureSetDescr_attribution 4
 
 
-BiostrucFeatureSetDescrPtr LIBCALL BiostrucFeatureSetDescrFree PROTO ((BiostrucFeatureSetDescrPtr ));
-BiostrucFeatureSetDescrPtr LIBCALL BiostrucFeatureSetDescrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BiostrucFeatureSetDescrAsnWrite PROTO (( BiostrucFeatureSetDescrPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BiostrucFeatureSetDescrPtr LIBCALL BiostrucFeatureSetDescrFree PROTO ((BiostrucFeatureSetDescrPtr ));
+NLM_EXTERN BiostrucFeatureSetDescrPtr LIBCALL BiostrucFeatureSetDescrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucFeatureSetDescrAsnWrite PROTO (( BiostrucFeatureSetDescrPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -225,9 +225,11 @@ Boolean LIBCALL BiostrucFeatureSetDescrAsnWrite PROTO (( BiostrucFeatureSetDescr
 typedef struct struct_Biostruc_feature {
    struct struct_Biostruc_feature PNTR next;
    Uint4 OBbits__;
+#define OB__Biostruc_feature_id 0
+
    Int4   id;
    CharPtr   name;
-#define OB__Biostruc_feature_type 0
+#define OB__Biostruc_feature_type 1
 
    Int4   type;
    ValNodePtr   Property_property;
@@ -235,10 +237,10 @@ typedef struct struct_Biostruc_feature {
 } BiostrucFeature, PNTR BiostrucFeaturePtr;
 
 
-BiostrucFeaturePtr LIBCALL BiostrucFeatureFree PROTO ((BiostrucFeaturePtr ));
+NLM_EXTERN BiostrucFeaturePtr LIBCALL BiostrucFeatureFree PROTO ((BiostrucFeaturePtr ));
 NLM_EXTERN BiostrucFeaturePtr LIBCALL BiostrucFeatureNew PROTO (( void ));
-BiostrucFeaturePtr LIBCALL BiostrucFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BiostrucFeatureAsnWrite PROTO (( BiostrucFeaturePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BiostrucFeaturePtr LIBCALL BiostrucFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucFeatureAsnWrite PROTO (( BiostrucFeaturePtr , AsnIoPtr, AsnTypePtr));
 
 
 #ifdef NLM_GENERATED_CODE_PROTO
@@ -307,10 +309,10 @@ typedef struct struct_Color_prop {
 } ColorProp, PNTR ColorPropPtr;
 
 
-ColorPropPtr LIBCALL ColorPropFree PROTO ((ColorPropPtr ));
-ColorPropPtr LIBCALL ColorPropNew PROTO (( void ));
-ColorPropPtr LIBCALL ColorPropAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ColorPropAsnWrite PROTO (( ColorPropPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ColorPropPtr LIBCALL ColorPropFree PROTO ((ColorPropPtr ));
+NLM_EXTERN ColorPropPtr LIBCALL ColorPropNew PROTO (( void ));
+NLM_EXTERN ColorPropPtr LIBCALL ColorPropAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ColorPropAsnWrite PROTO (( ColorPropPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -321,23 +323,19 @@ Boolean LIBCALL ColorPropAsnWrite PROTO (( ColorPropPtr , AsnIoPtr, AsnTypePtr))
 **************************************************/
 typedef struct struct_Camera {
    Uint4 OBbits__;
-   Int4   mode;
-   struct struct_Model_space_point PNTR   x;
-   struct struct_Model_space_point PNTR   y;
-   struct struct_Model_space_point PNTR   z;
-   struct struct_Model_space_point PNTR   up;
-   struct struct_Model_space_point PNTR   fore;
-   struct struct_Model_space_point PNTR   norm;
-   struct struct_Model_space_point PNTR   center;
-   struct struct_RealValue PNTR   tooclose;
-   struct struct_RealValue PNTR   toofar;
+   Int4   x;
+   Int4   y;
+   Int4   distance;
+   Int4   angle;
+   Int4   scale;
+   struct struct_GL_matrix PNTR   modelview;
 } Camera, PNTR CameraPtr;
 
 
-CameraPtr LIBCALL CameraFree PROTO ((CameraPtr ));
-CameraPtr LIBCALL CameraNew PROTO (( void ));
-CameraPtr LIBCALL CameraAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL CameraAsnWrite PROTO (( CameraPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN CameraPtr LIBCALL CameraFree PROTO ((CameraPtr ));
+NLM_EXTERN CameraPtr LIBCALL CameraNew PROTO (( void ));
+NLM_EXTERN CameraPtr LIBCALL CameraAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CameraAsnWrite PROTO (( CameraPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -352,10 +350,10 @@ typedef struct struct_BiostrucScriptStep PNTR BiostrucScriptPtr;
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-BiostrucScriptPtr LIBCALL BiostrucScriptFree PROTO ((BiostrucScriptPtr ));
-BiostrucScriptPtr LIBCALL BiostrucScriptNew PROTO (( void ));
-BiostrucScriptPtr LIBCALL BiostrucScriptAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BiostrucScriptAsnWrite PROTO (( BiostrucScriptPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BiostrucScriptPtr LIBCALL BiostrucScriptFree PROTO ((BiostrucScriptPtr ));
+NLM_EXTERN BiostrucScriptPtr LIBCALL BiostrucScriptNew PROTO (( void ));
+NLM_EXTERN BiostrucScriptPtr LIBCALL BiostrucScriptAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucScriptAsnWrite PROTO (( BiostrucScriptPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
@@ -374,10 +372,10 @@ typedef struct struct_Region_pntrs {
 } RegionPntrs, PNTR RegionPntrsPtr;
 
 
-RegionPntrsPtr LIBCALL RegionPntrsFree PROTO ((RegionPntrsPtr ));
-RegionPntrsPtr LIBCALL RegionPntrsNew PROTO (( void ));
-RegionPntrsPtr LIBCALL RegionPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RegionPntrsAsnWrite PROTO (( RegionPntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RegionPntrsPtr LIBCALL RegionPntrsFree PROTO ((RegionPntrsPtr ));
+NLM_EXTERN RegionPntrsPtr LIBCALL RegionPntrsNew PROTO (( void ));
+NLM_EXTERN RegionPntrsPtr LIBCALL RegionPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RegionPntrsAsnWrite PROTO (( RegionPntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 #ifdef NLM_GENERATED_CODE_PROTO
@@ -414,10 +412,10 @@ typedef struct struct_Region_similarity {
 } RegionSimilarity, PNTR RegionSimilarityPtr;
 
 
-RegionSimilarityPtr LIBCALL RegionSimilarityFree PROTO ((RegionSimilarityPtr ));
-RegionSimilarityPtr LIBCALL RegionSimilarityNew PROTO (( void ));
-RegionSimilarityPtr LIBCALL RegionSimilarityAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RegionSimilarityAsnWrite PROTO (( RegionSimilarityPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RegionSimilarityPtr LIBCALL RegionSimilarityFree PROTO ((RegionSimilarityPtr ));
+NLM_EXTERN RegionSimilarityPtr LIBCALL RegionSimilarityNew PROTO (( void ));
+NLM_EXTERN RegionSimilarityPtr LIBCALL RegionSimilarityAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RegionSimilarityAsnWrite PROTO (( RegionSimilarityPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -435,10 +433,10 @@ typedef struct struct_Other_feature {
 } OtherFeature, PNTR OtherFeaturePtr;
 
 
-OtherFeaturePtr LIBCALL OtherFeatureFree PROTO ((OtherFeaturePtr ));
-OtherFeaturePtr LIBCALL OtherFeatureNew PROTO (( void ));
-OtherFeaturePtr LIBCALL OtherFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL OtherFeatureAsnWrite PROTO (( OtherFeaturePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureFree PROTO ((OtherFeaturePtr ));
+NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureNew PROTO (( void ));
+NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL OtherFeatureAsnWrite PROTO (( OtherFeaturePtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr ResiduePntrsPtr;
 typedef ValNode ResiduePntrs;
@@ -446,9 +444,9 @@ typedef ValNode ResiduePntrs;
 #define ResiduePntrs_interval 2
 
 
-ResiduePntrsPtr LIBCALL ResiduePntrsFree PROTO ((ResiduePntrsPtr ));
-ResiduePntrsPtr LIBCALL ResiduePntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ResiduePntrsAsnWrite PROTO (( ResiduePntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ResiduePntrsPtr LIBCALL ResiduePntrsFree PROTO ((ResiduePntrsPtr ));
+NLM_EXTERN ResiduePntrsPtr LIBCALL ResiduePntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ResiduePntrsAsnWrite PROTO (( ResiduePntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -464,10 +462,10 @@ typedef struct struct_Molecule_pntrs {
 } MoleculePntrs, PNTR MoleculePntrsPtr;
 
 
-MoleculePntrsPtr LIBCALL MoleculePntrsFree PROTO ((MoleculePntrsPtr ));
-MoleculePntrsPtr LIBCALL MoleculePntrsNew PROTO (( void ));
-MoleculePntrsPtr LIBCALL MoleculePntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL MoleculePntrsAsnWrite PROTO (( MoleculePntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN MoleculePntrsPtr LIBCALL MoleculePntrsFree PROTO ((MoleculePntrsPtr ));
+NLM_EXTERN MoleculePntrsPtr LIBCALL MoleculePntrsNew PROTO (( void ));
+NLM_EXTERN MoleculePntrsPtr LIBCALL MoleculePntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MoleculePntrsAsnWrite PROTO (( MoleculePntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -484,10 +482,10 @@ typedef struct struct_Residue_explicit_pntrs {
 } ResidueExplicitPntrs, PNTR ResidueExplicitPntrsPtr;
 
 
-ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsFree PROTO ((ResidueExplicitPntrsPtr ));
-ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsNew PROTO (( void ));
-ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ResidueExplicitPntrsAsnWrite PROTO (( ResidueExplicitPntrsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsFree PROTO ((ResidueExplicitPntrsPtr ));
+NLM_EXTERN ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsNew PROTO (( void ));
+NLM_EXTERN ResidueExplicitPntrsPtr LIBCALL ResidueExplicitPntrsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ResidueExplicitPntrsAsnWrite PROTO (( ResidueExplicitPntrsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -505,10 +503,10 @@ typedef struct struct_Residue_interval_pntr {
 } ResidueIntervalPntr, PNTR ResidueIntervalPntrPtr;
 
 
-ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrFree PROTO ((ResidueIntervalPntrPtr ));
-ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrNew PROTO (( void ));
-ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ResidueIntervalPntrAsnWrite PROTO (( ResidueIntervalPntrPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrFree PROTO ((ResidueIntervalPntrPtr ));
+NLM_EXTERN ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrNew PROTO (( void ));
+NLM_EXTERN ResidueIntervalPntrPtr LIBCALL ResidueIntervalPntrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ResidueIntervalPntrAsnWrite PROTO (( ResidueIntervalPntrPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -528,10 +526,10 @@ typedef struct struct_Region_coordinates {
 } RegionCoordinates, PNTR RegionCoordinatesPtr;
 
 
-RegionCoordinatesPtr LIBCALL RegionCoordinatesFree PROTO ((RegionCoordinatesPtr ));
-RegionCoordinatesPtr LIBCALL RegionCoordinatesNew PROTO (( void ));
-RegionCoordinatesPtr LIBCALL RegionCoordinatesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RegionCoordinatesAsnWrite PROTO (( RegionCoordinatesPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RegionCoordinatesPtr LIBCALL RegionCoordinatesFree PROTO ((RegionCoordinatesPtr ));
+NLM_EXTERN RegionCoordinatesPtr LIBCALL RegionCoordinatesNew PROTO (( void ));
+NLM_EXTERN RegionCoordinatesPtr LIBCALL RegionCoordinatesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RegionCoordinatesAsnWrite PROTO (( RegionCoordinatesPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr RegionBoundaryPtr;
 typedef ValNode RegionBoundary;
@@ -541,9 +539,9 @@ typedef ValNode RegionBoundary;
 #define RegionBoundary_brick 4
 
 
-RegionBoundaryPtr LIBCALL RegionBoundaryFree PROTO ((RegionBoundaryPtr ));
-RegionBoundaryPtr LIBCALL RegionBoundaryAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RegionBoundaryAsnWrite PROTO (( RegionBoundaryPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RegionBoundaryPtr LIBCALL RegionBoundaryFree PROTO ((RegionBoundaryPtr ));
+NLM_EXTERN RegionBoundaryPtr LIBCALL RegionBoundaryAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RegionBoundaryAsnWrite PROTO (( RegionBoundaryPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -583,10 +581,10 @@ typedef struct struct_Align_stats {
 } AlignStats, PNTR AlignStatsPtr;
 
 
-AlignStatsPtr LIBCALL AlignStatsFree PROTO ((AlignStatsPtr ));
-AlignStatsPtr LIBCALL AlignStatsNew PROTO (( void ));
-AlignStatsPtr LIBCALL AlignStatsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL AlignStatsAsnWrite PROTO (( AlignStatsPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN AlignStatsPtr LIBCALL AlignStatsFree PROTO ((AlignStatsPtr ));
+NLM_EXTERN AlignStatsPtr LIBCALL AlignStatsNew PROTO (( void ));
+NLM_EXTERN AlignStatsPtr LIBCALL AlignStatsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AlignStatsAsnWrite PROTO (( AlignStatsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -604,10 +602,10 @@ typedef struct struct_Model_space_point {
 } ModelSpacePoint, PNTR ModelSpacePointPtr;
 
 
-ModelSpacePointPtr LIBCALL ModelSpacePointFree PROTO ((ModelSpacePointPtr ));
-ModelSpacePointPtr LIBCALL ModelSpacePointNew PROTO (( void ));
-ModelSpacePointPtr LIBCALL ModelSpacePointAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL ModelSpacePointAsnWrite PROTO (( ModelSpacePointPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ModelSpacePointPtr LIBCALL ModelSpacePointFree PROTO ((ModelSpacePointPtr ));
+NLM_EXTERN ModelSpacePointPtr LIBCALL ModelSpacePointNew PROTO (( void ));
+NLM_EXTERN ModelSpacePointPtr LIBCALL ModelSpacePointAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ModelSpacePointAsnWrite PROTO (( ModelSpacePointPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -623,10 +621,10 @@ typedef struct struct_RealValue {
 } RealValue, PNTR RealValuePtr;
 
 
-RealValuePtr LIBCALL RealValueFree PROTO ((RealValuePtr ));
-RealValuePtr LIBCALL RealValueNew PROTO (( void ));
-RealValuePtr LIBCALL RealValueAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RealValueAsnWrite PROTO (( RealValuePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RealValuePtr LIBCALL RealValueFree PROTO ((RealValuePtr ));
+NLM_EXTERN RealValuePtr LIBCALL RealValueNew PROTO (( void ));
+NLM_EXTERN RealValuePtr LIBCALL RealValueAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RealValueAsnWrite PROTO (( RealValuePtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr MovePtr;
 typedef ValNode Move;
@@ -634,9 +632,9 @@ typedef ValNode Move;
 #define Move_translate 2
 
 
-MovePtr LIBCALL MoveFree PROTO ((MovePtr ));
-MovePtr LIBCALL MoveAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL MoveAsnWrite PROTO (( MovePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN MovePtr LIBCALL MoveFree PROTO ((MovePtr ));
+NLM_EXTERN MovePtr LIBCALL MoveAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MoveAsnWrite PROTO (( MovePtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -660,10 +658,10 @@ typedef struct struct_Rot_matrix {
 } RotMatrix, PNTR RotMatrixPtr;
 
 
-RotMatrixPtr LIBCALL RotMatrixFree PROTO ((RotMatrixPtr ));
-RotMatrixPtr LIBCALL RotMatrixNew PROTO (( void ));
-RotMatrixPtr LIBCALL RotMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL RotMatrixAsnWrite PROTO (( RotMatrixPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN RotMatrixPtr LIBCALL RotMatrixFree PROTO ((RotMatrixPtr ));
+NLM_EXTERN RotMatrixPtr LIBCALL RotMatrixNew PROTO (( void ));
+NLM_EXTERN RotMatrixPtr LIBCALL RotMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RotMatrixAsnWrite PROTO (( RotMatrixPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -681,10 +679,44 @@ typedef struct struct_Trans_matrix {
 } TransMatrix, PNTR TransMatrixPtr;
 
 
-TransMatrixPtr LIBCALL TransMatrixFree PROTO ((TransMatrixPtr ));
-TransMatrixPtr LIBCALL TransMatrixNew PROTO (( void ));
-TransMatrixPtr LIBCALL TransMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL TransMatrixAsnWrite PROTO (( TransMatrixPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN TransMatrixPtr LIBCALL TransMatrixFree PROTO ((TransMatrixPtr ));
+NLM_EXTERN TransMatrixPtr LIBCALL TransMatrixNew PROTO (( void ));
+NLM_EXTERN TransMatrixPtr LIBCALL TransMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TransMatrixAsnWrite PROTO (( TransMatrixPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    GLMatrix
+*
+**************************************************/
+typedef struct struct_GL_matrix {
+   Uint4 OBbits__;
+   Int4   scale;
+   Int4   m11;
+   Int4   m12;
+   Int4   m13;
+   Int4   m14;
+   Int4   m21;
+   Int4   m22;
+   Int4   m23;
+   Int4   m24;
+   Int4   m31;
+   Int4   m32;
+   Int4   m33;
+   Int4   m34;
+   Int4   m41;
+   Int4   m42;
+   Int4   m43;
+   Int4   m44;
+} GLMatrix, PNTR GLMatrixPtr;
+
+
+NLM_EXTERN GLMatrixPtr LIBCALL GLMatrixFree PROTO ((GLMatrixPtr ));
+NLM_EXTERN GLMatrixPtr LIBCALL GLMatrixNew PROTO (( void ));
+NLM_EXTERN GLMatrixPtr LIBCALL GLMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GLMatrixAsnWrite PROTO (( GLMatrixPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -709,14 +741,16 @@ typedef struct struct_Biostruc_script_step {
 } BiostrucScriptStep, PNTR BiostrucScriptStepPtr;
 
 
-BiostrucScriptStepPtr LIBCALL BiostrucScriptStepFree PROTO ((BiostrucScriptStepPtr ));
-BiostrucScriptStepPtr LIBCALL BiostrucScriptStepNew PROTO (( void ));
-BiostrucScriptStepPtr LIBCALL BiostrucScriptStepAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-Boolean LIBCALL BiostrucScriptStepAsnWrite PROTO (( BiostrucScriptStepPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BiostrucScriptStepPtr LIBCALL BiostrucScriptStepFree PROTO ((BiostrucScriptStepPtr ));
+NLM_EXTERN BiostrucScriptStepPtr LIBCALL BiostrucScriptStepNew PROTO (( void ));
+NLM_EXTERN BiostrucScriptStepPtr LIBCALL BiostrucScriptStepAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucScriptStepAsnWrite PROTO (( BiostrucScriptStepPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }
 #endif
+
+#endif /* _objmmdb3_ */
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT
@@ -725,4 +759,3 @@ Boolean LIBCALL BiostrucScriptStepAsnWrite PROTO (( BiostrucScriptStepPtr , AsnI
 #define NLM_EXTERN
 #endif
 
-#endif /* _objmmdb3_ */

@@ -1,7 +1,7 @@
 #ifndef NCBISOCK__H
 #define NCBISOCK__H
 
-/* $Id: ncbisock.h,v 6.1 1999/10/18 15:39:05 vakatov Exp $
+/* $Id: ncbisock.h,v 6.2 2000/02/25 16:45:55 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,11 +42,20 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.h,v $
+ * Revision 6.2  2000/02/25 16:45:55  vakatov
+ * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
+ * the C++ toolkits, and even to use them in a "standalone" fashion
+ *
+ * Revision 6.3  2000/02/17 21:51:34  vakatov
+ * REDESIGN::
+ *
+ * Revision 6.2  2000/02/17 19:37:42  vakatov
+ * REDESIGN::
+ *
  * Revision 6.1  1999/10/18 15:39:05  vakatov
  * Initial revision
  * This is actually just an interface for the back compatibility with the
  * former "ncbisock.[ch]"; the real code is in "ncbi_socket.[ch]"
- *
  * ===========================================================================
  */
 
@@ -225,7 +234,7 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Reconnect
 
 
 /* [CLIENT-side]  Close the connection, destroy relevant internal data
- * NOTE: if write timeout is specified then it blocks until either all
+ * NOTE: if write timeout is specified then it is lingering until either all
  *       unsent data are sent or until the timeout expires
  * NOTE: whatever error code is returned, this function cannot be
  *       called more than once for the same socket
@@ -344,12 +353,6 @@ NLM_EXTERN void SOCK_Address
  );
 
 
-/* Destroy internal data used by this module
- * NOTE: no function from this API can be used after the call to SOCK_Destroy
- */
-NLM_EXTERN ESOCK_ErrCode SOCK_Destroy(void);
-
-
 /* Get an OS-dependent native socket handle to use by platform-specific API.
  * FYI:  on MS-Windows it will be "SOCKET", on other platforms -- "int".
  */
@@ -358,6 +361,17 @@ NLM_EXTERN ESOCK_ErrCode SOCK_GetOSHandle
  void*     handle_buf,  /* pointer to a memory area to put the OS handle at */
  Nlm_Uint4 handle_size  /* exact(!) size of the expected OS handle */
  );
+
+
+
+/******************************************************************************
+ *  SHUTDOWN
+ */
+
+/* Destroy internal data used by this module
+ * NOTE: no function from this API can be used after the call to SOCK_Destroy
+ */
+NLM_EXTERN ESOCK_ErrCode SOCK_Destroy(void);
 
 
 

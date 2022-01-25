@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.32  2000/02/07 16:48:34  kans
+* fixed setting of context->index in SeqMgrGetNextFeatureByID
+*
+* Revision 6.31  2000/02/01 22:25:44  kans
+* indexed speedup now returns features in itemID order, not position order, to allow simple diff of e2index
+*
 * Revision 6.30  2000/01/07 03:01:42  kans
 * indexed speedup only if raw bioseq not part of segmented bioseq
 *
@@ -1474,6 +1480,96 @@ static Boolean process_packed_pnt(SeqLocPtr slp, SeqLocPtr head, Int4 r_len, Int
 
 /* functions to speed up targeted feature gather by using seqmgr explore index */
 
+static ObjMgrDataPtr GatherGetOmdpForBioseq (BioseqPtr bsp)
+
+{
+  ObjMgrDataPtr  omdp;
+  ObjMgrPtr      omp;
+
+  if (bsp == NULL) return NULL;
+  omdp = (ObjMgrDataPtr) bsp->omdp;
+  if (omdp != NULL) return omdp;
+  omp = ObjMgrWriteLock ();
+  omdp = ObjMgrFindByData (omp, bsp);
+  ObjMgrUnlock ();
+  bsp->omdp = (Pointer) omdp;
+  return omdp;
+}
+
+static SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByID (BioseqPtr bsp, SeqFeatPtr curr,
+                                                    Uint1 seqFeatChoice, Uint1 featDefChoice,
+                                                    SeqMgrFeatContext PNTR context)
+
+{
+  BioseqExtraPtr      bspextra;
+  Uint2               entityID;
+  SMFeatItemPtr PNTR  featsByID;
+  Uint2               i;
+  SMFeatItemPtr       item;
+  ObjMgrDataPtr       omdp;
+  Uint1               seqfeattype;
+
+  if (context == NULL) return NULL;
+
+  if (curr == NULL) {
+    if (bsp == NULL) return NULL;
+    omdp = GatherGetOmdpForBioseq (bsp);
+    if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
+
+    context->omdp = (Pointer) omdp;
+    context->index = 0;
+  }
+
+  omdp = (ObjMgrDataPtr) context->omdp;
+  if (omdp == NULL) return NULL;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return NULL;
+  featsByID = bspextra->featsByID;
+  if (featsByID == NULL || bspextra->numfeats < 1) return NULL;
+
+  entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
+
+  i = context->index;
+
+  while (i < bspextra->numfeats) {
+    item = featsByID [i];
+    if (item != NULL) {
+      curr = item->sfp;
+      i++;
+      if (curr != NULL) {
+        seqfeattype = curr->data.choice;
+        if ((seqFeatChoice == 0 || seqfeattype == seqFeatChoice) &&
+            (featDefChoice == 0 || item->subtype == featDefChoice) &&
+            (! item->ignore)) {
+          context->entityID = entityID;
+          context->itemID = item->itemID;
+          context->sfp = curr;
+          context->sap = item->sap;
+          context->bsp = item->bsp;
+          context->label = item->label;
+          context->left = item->left;
+          context->right = item->right;
+          context->dnaStop = item->dnaStop;
+          context->partialL = item->partialL;
+          context->partialR = item->partialR;
+          context->farloc = item->farloc;
+          context->strand = item->strand;
+          context->seqfeattype = seqfeattype;
+          context->featdeftype = item->subtype;
+          context->numivals = item->numivals;
+          context->ivals = item->ivals;
+          context->userdata = NULL;
+          context->omdp = (Pointer) omdp;
+          context->index = i;
+          return curr;
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+
 static Boolean NEAR ExploreSeqFeat (
   InternalGCCPtr gccp,
   BioseqPtr bsp,
@@ -1505,7 +1601,7 @@ static Boolean NEAR ExploreSeqFeat (
   gcp->num_interval = 0;
 
   if (gsp->get_feats_location) {
-    sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+    sfp = SeqMgrGetNextFeatureByID (bsp, NULL, 0, 0, &fcontext);
     while (sfp != NULL) {
 
       gcp->previtem = NULL;
@@ -1530,7 +1626,7 @@ static Boolean NEAR ExploreSeqFeat (
           return FALSE;
       }
 
-      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+      sfp = SeqMgrGetNextFeatureByID (bsp, sfp, 0, 0, &fcontext);
     }
   }
 

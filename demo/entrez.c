@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.28 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.33  2000/04/21 23:13:56  kans
+* added qualPageData
+*
+* Revision 6.32  2000/03/02 17:49:24  kans
+* call ID1 fetch enable/disable in preference to old Entrez service for sequence fetch
+*
+* Revision 6.31  2000/03/01 23:52:25  kans
+* comment out ID1 fetch for now
+*
+* Revision 6.30  2000/03/01 22:20:11  kans
+* raised version number, calls ID1BioseqFetchEnable to fetch sequences
+*
+* Revision 6.29  2000/02/11 23:04:49  kans
+* remove loadUidItem and saveUidItem - use import and export
+*
 * Revision 6.28  1999/11/12 23:06:56  kans
 * DoLoadNamedUidList takes Int4 num argument
 *
@@ -173,6 +188,7 @@
 #include <medview.h>
 #include <bspview.h>
 #include <accentr.h>
+#include <accid1.h>
 #include <lsqfetch.h>
 #include <objsub.h>
 #include <gather.h>
@@ -187,7 +203,7 @@
 
 #include <entrez.h>
 
-#define ENTREZ_APP_VERSION "7.05"
+#define ENTREZ_APP_VERSION "7.50"
 
 static ForM  termListForm = NULL;
 static ForM  docSumForm = NULL;
@@ -201,8 +217,6 @@ static IteM  importItem = NULL;
 static IteM  saveItem = NULL;
 static IteM  saveAsItem = NULL;
 */
-static IteM  loadUidItem = NULL;
-static IteM  saveUidItem = NULL;
 static IteM  printItem = NULL;
 static IteM  cutItem = NULL;
 static IteM  copyItem = NULL;
@@ -398,8 +412,6 @@ static void TermSelectionActivateProc (WindoW w)
                    (HANDLE) pasteItem,
                    (HANDLE) deleteItem,
                    (HANDLE) preferencesItem,
-                   (HANDLE) loadUidItem,
-                   (HANDLE) saveUidItem,
                    (HANDLE) queryChoice,
                    (HANDLE) clearUnusedItem,
                    NULL);
@@ -424,8 +436,6 @@ static void DocumentSummaryActivateProc (WindoW w)
                    (HANDLE) docsumfontItem,
                    (HANDLE) preferencesItem,
                    (HANDLE) neighborChoice,
-                   (HANDLE) loadUidItem,
-                   (HANDLE) saveUidItem,
                    NULL);
 }
 
@@ -480,8 +490,6 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) clearUnusedItem,
                    (HANDLE) neighborChoice,
                    (HANDLE) legendItem,
-                   (HANDLE) loadUidItem,
-                   (HANDLE) saveUidItem,
                    NULL);
 }
 #endif
@@ -1171,6 +1179,7 @@ static void SetupAppProperties (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &emblPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gnptPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &fstaPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &qualPageData);
   if (showAsnPage) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
@@ -1471,6 +1480,7 @@ static void CleanupEntrez (void)
   FreePrintOptions ();
 
   LocalSeqFetchDisable ();
+  ID1BioseqFetchDisable ();
   EntrezBioseqFetchDisable ();
 }
 
@@ -1596,6 +1606,7 @@ Int2 Main (void)
     }
     return 0;
   }
+  ID1BioseqFetchEnable ("Entrez", TRUE);
   LocalSeqFetchInit (FALSE);
 
 #ifdef WIN_MAC

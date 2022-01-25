@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -1082,6 +1082,12 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                   StringCat (str, " (");
                   StringCat (str, text);
                   StringCat (str, ") gene,");
+                  if (/* count < 2 && */ /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
+                    StringNCpy_0 (text, dfp->allelename, sizeof (text));
+                    StringCat (str, " ");
+                    StringCat (str, text);
+                    StringCat (str, " allele,");
+                  }
                 }
               }
             }

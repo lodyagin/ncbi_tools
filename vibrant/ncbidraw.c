@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.27  2000/02/07 20:17:35  lewisg
+* minor bug fixes, use gui font for win32
+*
 * Revision 6.26  2000/01/24 16:11:13  lewisg
 * speed up seqid comparison in color manager, make fast windows version of SetColor()
 *
@@ -422,6 +425,7 @@ static HFONT       hDeviceDefaultFont;
 static HFONT       hOemFixedFont;
 static HFONT       hSystemFont;
 static HFONT       hSystemFixedFont;
+static HFONT       hDefaultGuiFont;
 
 static TEXTMETRIC  textMetrics;
 
@@ -6373,14 +6377,11 @@ extern void Nlm_SetUpDrawingTools (void)
   hOemFixedFont      = GetStockObject( OEM_FIXED_FONT      );
   hSystemFont        = GetStockObject( SYSTEM_FONT         );
   hSystemFixedFont   = GetStockObject( SYSTEM_FIXED_FONT   );
+  hDefaultGuiFont    = GetStockObject( DEFAULT_GUI_FONT    );
 
   Nlm_systemFont  = (Nlm_FonT) Nlm_HandNew( sizeof(Nlm_FontRec) );
-  Nlm_LoadFontData(Nlm_systemFont,  NULL, -1, NULL, hSystemFont,
-                   HFONT2Font( hSystemFont ));
-
-  Nlm_programFont = (Nlm_FonT) Nlm_HandNew( sizeof(Nlm_FontRec) );
-  Nlm_LoadFontData(Nlm_programFont, NULL, -1, NULL, hAnsiFixedFont,
-                   HFONT2Font( hAnsiFixedFont ));
+  Nlm_LoadFontData(Nlm_systemFont,  NULL, -1, NULL, hDefaultGuiFont,
+                   HFONT2Font( hDefaultGuiFont ));
 
   Nlm_fontList  = NULL;
   Nlm_fontInUse = Nlm_systemFont;
@@ -6391,6 +6392,10 @@ extern void Nlm_SetUpDrawingTools (void)
   Nlm_stdFontHeight = Nlm_FontHeight();
   Nlm_stdLineHeight = Nlm_LineHeight();
   Nlm_stdCharWidth  = Nlm_MaxCharWidth();
+
+  Nlm_programFont = (Nlm_FonT) Nlm_HandNew( sizeof(Nlm_FontRec) );
+  Nlm_LoadFontData(Nlm_programFont, NULL, -1, NULL, hAnsiFixedFont,
+                   HFONT2Font( hAnsiFixedFont ));
 
   blackColor   = RGB(  0,   0,   0);
   redColor     = RGB(255,   0,   0);

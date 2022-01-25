@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,12 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.4  2000/04/05 21:42:33  hurwitz
+* made SeqIdSetDup consistent with declaration
+*
+* Revision 6.3  2000/04/05 18:11:54  dondosha
+* Moved SeqIdSetDup from mblast.c
+*
 * Revision 6.2  1998/08/26 17:46:12  kans
 * fixed -v -fd warnings in label functions
 *
@@ -656,6 +662,33 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
      }
 	return newid;
 }
+
+/*****************************************************************************
+*
+*   SeqIdPtr SeqIdSetDup(oldid)
+*       duplicates a chain of SeqId's
+*
+*****************************************************************************/
+NLM_EXTERN SeqIdPtr LIBCALL 
+SeqIdSetDup(SeqIdPtr seqid)
+{
+   SeqIdPtr sid_head, sid, seqid_var;
+
+   if (seqid == NULL)
+      return seqid;
+   else {
+      seqid_var = seqid;
+      sid_head = sid = SeqIdDup(seqid);
+   }
+
+   while ((seqid_var = seqid_var->next) != NULL) {
+      sid->next = SeqIdDup(seqid_var);
+      sid = sid->next;
+   }
+
+   return sid_head;
+}
+
 
 /*****************************************************************************
 *

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object manager interface for module NCBI-Seqloc
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objloc.h,v $
+* Revision 6.1  2000/04/05 18:11:41  dondosha
+* Moved SeqIdSetDup from mblast.h
+*
 * Revision 6.0  1997/08/25 18:50:07  madden
 * Revision changed to 6.0
 *
@@ -156,6 +159,7 @@ NLM_EXTERN Boolean	 LIBCALL SeqIdAsnWrite PROTO((SeqIdPtr anp, AsnIoPtr aip, Asn
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdFree PROTO((SeqIdPtr anp));
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup PROTO((SeqIdPtr oldid));
+NLM_EXTERN SeqIdPtr LIBCALL SeqIdSetDup PROTO((SeqIdPtr seqid));
 NLM_EXTERN Int2 LIBCALL SeqIdLabel PROTO(( SeqIdPtr sip, CharPtr buffer, Int2 buflen, Uint1 content));
 
 /*****************************************************************************

@@ -5,8 +5,9 @@
 *****************************************************************************/
 #include <tofasta.h>
 #include <subutil.h>
+#include <sqnutils.h>
 
-#define NUMARG 12
+#define NUMARG 14
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'a',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -19,15 +20,31 @@ Args myargs[NUMARG] = {
 	{"Produce DNA File","T",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
 	{"Limit to GenBank","F",NULL,NULL,TRUE,'g',ARG_BOOLEAN,0.0,0,NULL},
 	{"Instantiate virtual sequences","F",NULL,NULL,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
-	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL}
+	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
+	{"Output Quality Scores Filename","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
+	{"Produce Quality Scores File","F",NULL,NULL,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
 };
+
+static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+
+{
+	BioseqPtr  bsp;
+	FILE       *fp;
+
+	if (IS_Bioseq (sep)) {
+		bsp = (BioseqPtr) sep->data.ptrvalue;
+		fp = (FILE*) data;
+		PrintQualityScores (bsp, fp);
+	}
+}
+
 
 Boolean CheckIsGenBank(SeqEntryPtr sep);
 
 Int2 Main(void)
 {
 	AsnIoPtr aip;
-	FILE * aa = NULL, * na = NULL;
+	FILE * aa = NULL, * na = NULL, * ql = NULL;
 	SeqEntryPtr sep;
 	SeqSubmitPtr ssp;
 	AsnTypePtr atp, atp2;
@@ -36,6 +53,7 @@ Int2 Main(void)
 	Boolean limit_to_genbank,
 		make_dna,
 		make_protein,
+		make_quality,
 		do_it;
 	
 
@@ -88,6 +106,7 @@ Int2 Main(void)
 
 	make_protein = (Boolean)(myargs[7].intvalue);
 	make_dna = (Boolean)(myargs[8].intvalue);
+	make_quality = (Boolean)(myargs[13].intvalue);
 
 					/* open the ASN.1 input file in the right mode */
 
@@ -112,6 +131,15 @@ Int2 Main(void)
 	if ((myargs[4].strvalue != NULL) && (make_dna))
 	{
 		if ( (na = FileOpen (myargs[4].strvalue, "w")) == NULL)
+		{
+			ErrShow();
+			return 1;
+		}
+	}
+
+	if ((myargs[12].strvalue != NULL) && (make_quality))
+	{
+		if ( (ql = FileOpen (myargs[12].strvalue, "w")) == NULL)
 		{
 			ErrShow();
 			return 1;
@@ -149,6 +177,8 @@ Int2 Main(void)
 				SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 			if (make_dna)
 				SeqEntrysToFasta(sep, na, TRUE, group_segs);
+			if (make_quality)
+				SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
 		}
 		SeqEntryFree(sep);
 	}
@@ -171,6 +201,8 @@ Int2 Main(void)
 							SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 						if (make_dna)
 							SeqEntrysToFasta(sep, na, TRUE, group_segs);
+						if (make_quality)
+							SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
 					}
 				}
 				SeqSubmitFree(ssp);
@@ -197,6 +229,8 @@ Int2 Main(void)
 						SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 					if (make_dna)
 						SeqEntrysToFasta(sep, na, TRUE, group_segs);
+					if (make_quality)
+						SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
 				}
 				SeqEntryFree(sep);
 			}
@@ -212,6 +246,8 @@ Int2 Main(void)
 		FileClose(aa);
 	if (make_dna)
 		FileClose(na);
+	if (make_quality)
+		FileClose (ql);
 
 	return(0);
 }

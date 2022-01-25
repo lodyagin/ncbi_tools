@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.20 $
+* $Revision: 6.29 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,33 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.29  2000/03/14 13:33:32  kans
+* NCBISubValidate sets indexing, adds AppProperty to shut off specific messages to be decided later
+*
+* Revision 6.28  2000/03/10 18:35:45  kans
+* added CreateContigCloneUserObject for genome contig RefSeq records
+*
+* Revision 6.27  2000/02/28 19:02:57  kans
+* AddSecondaryAccnToEntry does not need submission parameter set
+*
+* Revision 6.26  2000/02/28 18:46:12  kans
+* fixes for add phrap to seqlit
+*
+* Revision 6.25  2000/02/26 23:55:33  kans
+* added AddPhrapGraphToSeqLit, using internal extended SeqLit to track, readjust graphs to current position of seqlit in delta seq - may need to move fields to public SeqLit if problems arise
+*
+* Revision 6.24  2000/02/24 23:15:00  kans
+* added AddSecondaryAccnToEntry
+*
+* Revision 6.23  2000/02/23 19:25:53  kans
+* AddFakeGapToDeltaSeq returns SeqLitPtr so program can set fuzz after SpreadGapsInDeltaSeq is no longer being called
+*
+* Revision 6.22  2000/02/23 18:28:38  kans
+* added AddFakeGapToDeltaSeq to set fuzz even if nonzero length is passed in
+*
+* Revision 6.21  2000/02/07 16:48:07  ostell
+* added AddDeltaSeqToNucProtEntry()
+*
 * Revision 6.20  1999/12/23 17:26:29  kans
 * free old reftrack status string if replacing
 *
@@ -879,6 +906,58 @@ NLM_EXTERN SeqEntryPtr AddDeltaSeqOnlyToSubmission (
 	return sep;
 }
 
+/* extended SeqLit that adjusts attached SeqGraphs - internal for subutil only */
+
+typedef struct extseqlit {
+	SeqLit slp;
+	BioseqPtr parentbsp;
+	SeqGraphPtr graph;
+} ExtSeqLit, PNTR ExtSeqLitPtr;
+
+static void ReadjustSeqLitGraphs (BioseqPtr bsp)
+
+{
+  Int4          curroffset = 0;
+  DeltaSeqPtr   dsp;
+  SeqGraphPtr   sgp;
+  SeqIntPtr     sintp;
+  SeqLocPtr     slocp;
+  SeqLitPtr     slp;
+  ExtSeqLitPtr  xslp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return;
+  for (dsp = (DeltaSeqPtr) (bsp->seq_ext); dsp != NULL; dsp = dsp->next) {
+    switch (dsp->choice) {
+      case 1 :
+        slocp = (SeqLocPtr) dsp->data.ptrvalue;
+        if (slocp == NULL) break;
+        if (slocp->choice != SEQLOC_NULL) {
+          curroffset += SeqLocLen (slocp);
+        }
+        break;
+      case 2 :
+        slp = (SeqLitPtr) dsp->data.ptrvalue;
+        if (slp == NULL) break;
+        xslp = (ExtSeqLitPtr) slp;
+        sgp = xslp->graph;
+        if (sgp != NULL) {
+          slocp = sgp->loc;
+          if (slocp != NULL && slocp->choice == SEQLOC_INT) {
+            sintp = (SeqIntPtr) slocp->data.ptrvalue;
+            if (sintp != NULL) {
+              sintp->from = curroffset;
+              sintp->to = slp->length + curroffset - 1;
+            }
+          }
+        }
+        curroffset += slp->length;
+        break;
+      default :
+        break;
+    }
+  }
+}
+
 static SeqLitPtr AddSeqLitToBioseq(
 	NCBISubPtr submission,
 	SeqEntryPtr delta_seq_entry,
@@ -889,6 +968,7 @@ static SeqLitPtr AddSeqLitToBioseq(
 	ValNodePtr vnp;
 	SeqLitPtr slp;
 	IntFuzzPtr ifp;
+	ExtSeqLitPtr xslp;
 
 	if (delta_seq_entry == NULL) return FALSE;
 	if (IS_Bioseq_set(delta_seq_entry)) return FALSE;
@@ -903,7 +983,8 @@ static SeqLitPtr AddSeqLitToBioseq(
 
 	if ((length > 0) || ((length == 0) && (isa_gap)))
 	{
-		slp = SeqLitNew();
+		/* slp = SeqLitNew(); */
+		slp = (SeqLitPtr) MemNew (sizeof (ExtSeqLit));
 		slp->length = length;
 		vnp = ValNodeAddPointer((ValNodePtr PNTR)&(bsp->seq_ext),(Int2) 2, (Pointer)slp);
 		if ((length == 0) && (isa_gap)) /* gap of unknown length */
@@ -912,8 +993,12 @@ static SeqLitPtr AddSeqLitToBioseq(
 			ifp->choice = 4;    /* lim - unk*/
 			slp->fuzz = ifp;
 		}
+		xslp = (ExtSeqLitPtr) slp;
+		xslp->parentbsp = bsp;
 		
 		SpreadGapsInDeltaSeq(bsp);   /* distribute the unknown gap sizes */
+
+		ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
 
 		return slp;
 	}
@@ -930,6 +1015,14 @@ NLM_EXTERN Boolean AddGapToDeltaSeq (
 		return FALSE;
 	else
 		return TRUE;
+}
+
+NLM_EXTERN SeqLitPtr AddFakeGapToDeltaSeq (
+	NCBISubPtr submission,
+	SeqEntryPtr delta_seq_entry,
+	Int4 length_of_gap )
+{
+	return AddSeqLitToBioseq(submission, delta_seq_entry, length_of_gap, TRUE);
 }
 
 
@@ -1611,6 +1704,94 @@ NLM_EXTERN SeqEntryPtr AddSegmentedSeqToNucProtEntry (
 	return the_set;
 }
 
+NLM_EXTERN SeqEntryPtr AddDeltaSeqToNucProtEntry (   /** add delta nuc bioseq */
+	NCBISubPtr submission,
+	SeqEntryPtr nuc_prot_entry,
+	CharPtr local_name ,
+	CharPtr genbank_locus ,
+	CharPtr genbank_accession ,
+	Int4 gi_number ,
+	Int2 molecule_class,
+	Int2 molecule_type ,
+	Int4 length ,
+	Int2 topology ,
+	Int2 strandedness )
+{
+	BioseqSetPtr nucprot, tp;
+	BioseqPtr bsp, segseq= NULL;
+	SeqEntryPtr sep, tmp, prev, tmp2;
+	Boolean is_nuc;
+
+	if (nuc_prot_entry == NULL) return NULL;
+	if (IS_Bioseq(nuc_prot_entry)) return NULL;
+	if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
+
+	nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
+	if (nucprot->_class != 1) return NULL;
+
+	if (ISA_na(molecule_class))
+		is_nuc = TRUE;
+	else
+		is_nuc = FALSE;
+
+	prev = NULL;
+	for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
+	{
+		if (is_nuc)   /* check for multiple nucleotides */
+		{
+			if (IS_Bioseq(tmp))
+			{
+				bsp = (BioseqPtr)(tmp->data.ptrvalue);
+				if (ISA_na(bsp->mol))
+				{
+					Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+					return NULL;
+				}
+			}
+			else
+			{
+				tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+				if (tp->_class == 2)  /* seg-set */
+				{
+					for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
+					{
+						if (IS_Bioseq(tmp2))
+						{
+							bsp = (BioseqPtr)(tmp2->data.ptrvalue);
+							if (ISA_na(bsp->mol))
+							{
+								Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+								return NULL;
+							}
+						}
+					}
+				}
+			}
+		}
+		prev = tmp;
+	}
+
+	sep = SeqEntryNew();
+	if (prev == NULL)      /* first one */
+		nucprot->seq_set = sep;
+	else
+		prev->next = sep;
+
+	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+		genbank_accession, gi_number, molecule_class, molecule_type,
+		length, topology, strandedness);
+	sep->choice = 1;
+	sep->data.ptrvalue = (Pointer)bsp;
+	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)nucprot);
+
+	bsp->repr = Seq_repr_delta;
+	bsp->seq_ext_type = 4;    /* delta extension */
+
+	return sep;
+
+}
+
 /*************************************************************************
 *  GetDNAConv:
 *  -- DNA conversion table array
@@ -1925,6 +2106,107 @@ NLM_EXTERN ValNodePtr GetDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 	if (vnp != NULL)
 		vnp->choice = (Uint1)type;
 	return vnp;
+}
+
+static SeqIdPtr SubutilMakeAc2GBSeqId (CharPtr accession)
+{
+   TextSeqIdPtr tsip;
+   SeqIdPtr sip;
+
+   if (accession == NULL || *accession == '\0')
+      return NULL;
+
+   sip = ValNodeNew(NULL);
+   sip->choice = SEQID_GENBANK;
+   tsip = TextSeqIdNew();
+   sip->data.ptrvalue = tsip;
+   tsip->accession = StringSave(accession);
+
+   return sip;
+
+} /* MakeAc2GBSeqId */
+
+NLM_EXTERN Boolean AddSecondaryAccnToEntry (
+NCBISubPtr submission,
+	SeqEntryPtr entry ,
+	CharPtr accn )
+
+{
+	BioseqPtr bsp;
+	ValNodePtr vnp;
+	GBBlockPtr gbp;
+	CharPtr p;
+	Int4 i, j;
+	SeqHistPtr shp;
+	SeqIdPtr sip;
+
+	if ((entry == NULL) || (accn == NULL))
+		return FALSE;
+
+	if (! IS_Bioseq(entry))
+		return FALSE;
+
+	bsp = (BioseqPtr)(entry->data.ptrvalue);
+	if (bsp == NULL)
+		return FALSE;
+
+	vnp = GetDescrOnSeqEntry (entry, Seq_descr_genbank);
+	if (vnp == NULL) {
+		vnp = NewDescrOnSeqEntry (entry, Seq_descr_genbank);
+		if (vnp != NULL) {
+			vnp->data.ptrvalue = (Pointer) GBBlockNew ();
+		}
+	}
+	if (vnp == NULL) return FALSE;
+	gbp = (GBBlockPtr) vnp->data.ptrvalue;
+	if (gbp == NULL) return FALSE;
+
+	shp = bsp->hist; 
+
+	p = accn;
+	for (i = 0; isalnum(*p) && *p != '\0'; ++p, ++i) continue;
+
+               /* check one_letter+5digits or two_letter+6digits */
+       if (i == 6 || i == 8)
+       {
+          if (!isalpha(accn[0]) || (!(isdigit(accn[1]) && i == 6) &&
+              !(isalpha(accn[1]) && i == 8)))
+          {
+             ErrPostEx(SEV_ERROR,0,0,
+ "Invalid accession (one_letter+5digits or two_letter+6digits): %s",
+                                                           accn);
+             return FALSE;
+          }
+
+          for (j = 2; j < i; ++j)
+          {
+              if (!(isdigit(accn[j])))
+              {
+                 ErrPostEx(SEV_ERROR,0,0,
+ "Invalid accession (one_letter+5digits or two_letter+6digits): %s",
+                                                           accn);
+                 return FALSE;
+              }
+          }
+
+          ValNodeCopyStr (&gbp->extra_accessions, 0, accn);
+          sip = SubutilMakeAc2GBSeqId (accn);
+          if (shp == NULL)
+          {
+             shp = SeqHistNew();
+             bsp->hist = shp;
+          }
+          ValNodeLink (&shp->replace_ids, sip);
+       }
+       else
+       {
+          ErrPostEx(SEV_ERROR,0,0,
+ "Invalid accession (one_letter+5digits or two_letter+6digits): %s",
+                                                           accn);
+          return FALSE;
+       }
+
+	return TRUE;
 }
 
 NLM_EXTERN Boolean AddTitleToEntry (
@@ -3771,7 +4053,7 @@ static SeqAnnotPtr NewPhrapGraphSeqAnnot (CharPtr name, SeqGraphPtr sgp)
   return sap;
 }
 
-static Boolean AddPhrapGraphInternal (
+static SeqGraphPtr AddPhrapGraphInternal (
 	NCBISubPtr submission,
 	BioseqPtr bsp ,
 	BytePtr phrap_values ,
@@ -3789,9 +4071,9 @@ static Boolean AddPhrapGraphInternal (
 	SeqAnnotPtr sap;
 	SeqGraphPtr lastsgp;
 
-	if (bsp == NULL) return FALSE;
+	if (bsp == NULL) return NULL;
 	bs = BSNew (num_values);
-	if (bs == NULL) return FALSE;
+	if (bs == NULL) return NULL;
 	BSWrite (bs, (Pointer) phrap_values, num_values);
 
 	sgp = SeqGraphNew ();
@@ -3845,7 +4127,7 @@ static Boolean AddPhrapGraphInternal (
 		}
 	}
 
-	return TRUE;
+	return sgp;
 }
 
 NLM_EXTERN Boolean AddPhrapGraph (
@@ -3854,10 +4136,33 @@ NLM_EXTERN Boolean AddPhrapGraph (
 	CharPtr local_name ,
 	BytePtr phrap_values )
 {
-	BioseqPtr bsp;
+	BioseqPtr    bsp;
+	SeqGraphPtr  sgp;
 
 	bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddPhrapGraph");
-	return AddPhrapGraphInternal (submission, bsp, phrap_values, 0, bsp->length);
+	sgp =  AddPhrapGraphInternal (submission, bsp, phrap_values, 0, bsp->length);
+	return (Boolean) (sgp != NULL);
+}
+
+NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
+	NCBISubPtr submission,
+	SeqLitPtr slp ,
+	BytePtr phrap_values )
+{
+	BioseqPtr     bsp;
+	SeqGraphPtr   sgp;
+	ExtSeqLitPtr  xslp;
+
+	if (slp == NULL) return FALSE;
+	xslp = (ExtSeqLitPtr) slp;
+	bsp = xslp->parentbsp;
+	sgp = AddPhrapGraphInternal (submission, bsp, phrap_values, 0, slp->length);
+	if (sgp != NULL) {
+		xslp->graph = sgp;
+		ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
+		return TRUE;
+	}
+	return FALSE;
 }
 
 /*****************************************************************************
@@ -3873,6 +4178,8 @@ NLM_EXTERN Int2 NCBISubValidate (NCBISubPtr nsp, FILE * errfile)
 	SeqEntryPtr sep;
 
 	vsp = ValidStructNew();
+	vsp->useSeqMgrIndexes = TRUE;
+	SetAppProperty ("NcbiSubutilValidation", (void *) 1024);
 	
 	  /**** errfile is no longer supported ****
 	vsp->errfile = errfile;
@@ -4165,6 +4472,41 @@ NLM_EXTERN UserObjectPtr CreateSubmissionUserObject (CharPtr univecComment,
     last->next = ufp;
     last = ufp;
   }
+
+  return uop;
+}
+
+NLM_EXTERN UserObjectPtr CreateContigCloneUserObject (CharPtr name, Int4 ID)
+
+{
+  UserFieldPtr   last = NULL;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ContigClone");
+  uop->type = oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("CloneName");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (name);
+
+  uop->data = ufp;
+  last = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("CloneID");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = ID;
+
+  last->next = ufp;
 
   return uop;
 }
