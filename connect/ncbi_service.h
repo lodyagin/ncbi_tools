@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.33 2004/06/14 16:36:13 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.34 2004/08/19 15:26:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -88,6 +88,9 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenSimple
 /* Special values for preferred_host parameter */
 #define SERV_LOCALHOST  ((unsigned int)(~0UL))
 #define SERV_ANYHOST    0           /* default, may be used as just 0 in code*/
+
+/* Can be combined in types to get even dead services (not off ones!) */
+#define fSERV_Promiscuous 0x80000000
 
 
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
@@ -199,6 +202,9 @@ extern NCBI_XCONNECT_EXPORT void DISP_SetMessageHook(FDISP_MessageHook);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.34  2004/08/19 15:26:54  lavr
+ * +fSERV_Promiscuous
+ *
  * Revision 6.33  2004/06/14 16:36:13  lavr
  * Client minor version number incremented
  *

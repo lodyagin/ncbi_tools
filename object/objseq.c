@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -893,6 +893,91 @@ erret:
     goto ret;
 }
 
+/**********************************************************/
+static Boolean LIBCALL SeqDataAsnWriteXML(ByteStorePtr bsp, Uint1 seqtype,
+                                          AsnIoPtr aip, AsnTypePtr orig,
+                                          Int4 seqlen)
+{
+    AsnTypePtr atp;
+    AsnTypePtr tmp;
+    DataVal    av;
+    Boolean    tofree;
+    Boolean    retval;
+    Uint1      newseqtype;
+
+    if((!loaded && !SeqAsnLoad()) || aip == NULL)
+        return(FALSE);
+
+    atp = AsnLinkType(orig, SEQ_DATA);  /* link local tree */
+    if(atp == NULL)
+        return(FALSE);
+
+    if(bsp == NULL)
+    {
+        AsnNullValueMsg(aip, atp);
+        AsnUnlinkType(orig);            /* unlink local tree */
+        return(FALSE);
+    }
+
+    tofree = FALSE;
+    if(aip->type & ASNIO_XML)
+    {
+        if(seqtype == Seq_code_ncbi2na || seqtype == Seq_code_ncbi4na ||
+           seqtype == Seq_code_ncbi8na || seqtype == Seq_code_ncbipna)
+            newseqtype = Seq_code_iupacna;
+        else if(seqtype == Seq_code_ncbi8aa || seqtype == Seq_code_ncbieaa ||
+                seqtype == Seq_code_ncbipaa || seqtype == Seq_code_ncbistdaa)
+            newseqtype = Seq_code_iupacaa;
+        else
+            newseqtype = seqtype;
+
+        if(newseqtype != seqtype)
+        {
+            bsp = BSConvertSeq(BSDup(bsp), newseqtype, seqtype, seqlen);
+            seqtype = newseqtype;
+            tofree = TRUE;
+        }
+    }
+
+    av.ptrvalue = bsp;
+    if(!AsnWriteChoice(aip, atp, (Int2) seqtype, &av))  /* CHOICE */
+    {
+        AsnUnlinkType(orig);            /* unlink local tree */
+        return(FALSE);
+    }
+
+    if(seqtype == Seq_code_iupacna)
+        tmp = SEQ_DATA_iupacna;
+    else if(seqtype == Seq_code_iupacaa)
+        tmp = SEQ_DATA_iupacaa;
+    else if(seqtype == Seq_code_ncbi2na)
+        tmp = SEQ_DATA_ncbi2na;
+    else if(seqtype == Seq_code_ncbi4na)
+        tmp = SEQ_DATA_ncbi4na;
+    else if(seqtype == Seq_code_ncbi8na)
+        tmp = SEQ_DATA_ncbi8na;
+    else if(seqtype == Seq_code_ncbipna)
+        tmp = SEQ_DATA_ncbipna;
+    else if(seqtype == Seq_code_ncbi8aa)
+        tmp = SEQ_DATA_ncbi8aa;
+    else if(seqtype == Seq_code_ncbieaa)
+        tmp = SEQ_DATA_ncbieaa;
+    else if(seqtype == Seq_code_ncbipaa)
+        tmp = SEQ_DATA_ncbipaa;
+    else if(seqtype == Seq_code_ncbistdaa)
+        tmp = SEQ_DATA_ncbistdaa;
+    else
+        tmp = NULL;
+
+    retval = AsnWrite(aip, tmp, &av);
+
+    AsnUnlinkType(orig);            /* unlink local tree */
+    if(tofree != FALSE)
+        BSFree(bsp);
+
+    return(retval);
+}
+
 /*****************************************************************************
 *
 *   BioseqInstAsnWrite(bsp, aip, orig)
@@ -903,7 +988,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
 	DataVal av;
 	AsnTypePtr atp;
 	Boolean retval = FALSE;
-	Uint1 newcode;
+/*	Uint1 newcode;*/
 
 	if (! loaded)
 	{
@@ -948,18 +1033,23 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
     }
 
 	              /** for XML, make it text ****/
-    if (aip->type & ASNIO_XML)
+/*    if (aip->type & ASNIO_XML)
     {
 	if (ISA_aa(bsp->mol))
 		newcode = Seq_code_ncbieaa;
 	else
 		newcode = Seq_code_iupacna;
 	BioseqConvert(bsp, newcode);
-    }
+    }*/
 
     if (bsp->seq_data != NULL)
     {
-		if (! SeqDataAsnWrite(bsp->seq_data, bsp->seq_data_type, aip, SEQ_INST_seq_data))
+                if (aip->type & ASNIO_XML)
+		{
+			if (! SeqDataAsnWriteXML(bsp->seq_data, bsp->seq_data_type, aip, SEQ_INST_seq_data, bsp->length))
+				goto erret;
+		}
+		else if (! SeqDataAsnWrite(bsp->seq_data, bsp->seq_data_type, aip, SEQ_INST_seq_data))
 			goto erret;
     }
     if (bsp->seq_ext != NULL)
@@ -3025,7 +3115,7 @@ static Boolean SeqAnnotSetAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypeP
 {
 	AsnTypePtr atp;
 	SeqAnnotPtr oldsap = NULL, tsap = NULL;
-    Boolean retval = FALSE, had_sap = FALSE, had_extra = FALSE;
+    Boolean retval = FALSE, had_extra = FALSE;
 	AsnOptionPtr aopp;
 	ValNodePtr extras = NULL;
 	SeqAnnot sa;
@@ -3620,7 +3710,11 @@ NLM_EXTERN Boolean LIBCALL SeqLitAsnWrite (SeqLitPtr slp, AsnIoPtr aip, AsnTypeP
 
     if (slp->seq_data != NULL)
     {
-        if (! SeqDataAsnWrite(slp->seq_data, slp->seq_data_type, aip, SEQ_LITERAL_seq_data)) goto erret;
+        if (aip->type & ASNIO_XML)
+	{
+	        if (! SeqDataAsnWriteXML(slp->seq_data, slp->seq_data_type, aip, SEQ_LITERAL_seq_data, slp->length)) goto erret;
+	}
+        else if (! SeqDataAsnWrite(slp->seq_data, slp->seq_data_type, aip, SEQ_LITERAL_seq_data)) goto erret;
     }
 
     if (! AsnCloseStruct(aip, atp, (Pointer)slp)) goto erret;

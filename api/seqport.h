@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.44  2004/07/16 19:37:37  kans
+* SeqPortStream and FastaStream functions return Int4, negative count if any fetch failures
+*
 * Revision 6.43  2004/05/12 18:55:33  kans
 * StreamCache takes SeqLocPtr as well as BioseqPtr optional arguments, slp version is equivalent of SeqPortNewByLoc
 *
@@ -371,14 +374,14 @@ typedef unsigned long StreamFlgType;
 
 #define STREAM_EXPAND_GAPS  1
 
-NLM_EXTERN void SeqPortStream (
+NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
   StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc
 );
 
-NLM_EXTERN void SeqPortStreamInt (
+NLM_EXTERN Int4 SeqPortStreamInt (
   BioseqPtr bsp,
   Int4 start,
   Int4 stop,
@@ -388,7 +391,7 @@ NLM_EXTERN void SeqPortStreamInt (
   SeqPortStreamProc proc
 );
 
-NLM_EXTERN void SeqPortStreamLoc (
+NLM_EXTERN Int4 SeqPortStreamLoc (
   SeqLocPtr slp,
   StreamFlgType flags,
   Pointer userdata,

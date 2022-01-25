@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.438 2004/06/01 20:34:06 dondosha Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.447 2004/10/18 13:02:41 madden Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,53 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.438 $
+$Revision: 6.447 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.447  2004/10/18 13:02:41  madden
+* Changes from Mike Gertz:
+*         - In score_compare_hsps, query_offset_compare_hsp and
+*           query_end_compare_hsp, change the comparison tests so that
+*           nil HSPs are less than any non-nil HSP.  Previously, these
+*           comparison functions would return 0 if either HSP was nil,
+*           which would result in sort routines terminating before the
+*           non-nil HSPs in the list were fully sorted.
+*
+*         - In score_compare_hsps, copied the set of tie-breakers from
+*           the corresponding routine in algo/blast/core/blast_hits.c.
+*
+*         - In RealBlastGetGappedAlignmentTraceback, the HSP list must
+*           be sorted before BLASTCheckHSPInclusion is invoked.
+*
+* Revision 6.446  2004/09/28 16:05:32  papadopo
+* From Michael Gertz: In BlastGappedScoreInternal, changed a
+* reference to the sumscore field of an HSP to a reference to the
+* xsum field of an HSP.
+*
+* Revision 6.445  2004/08/23 17:05:42  papadopo
+* From Michael Gertz: make CopyResultHspToHSP public
+*
+* Revision 6.444  2004/08/16 19:37:26  dondosha
+* Enabled uneven gap HSP linking for blastx
+*
+* Revision 6.443  2004/08/05 21:52:28  camacho
+* Gracefully handle inability to calculate ungapped lambda for PSSM in psiblast2sequences
+*
+* Revision 6.442  2004/07/24 18:55:29  camacho
+* Fix to GetSequenceWithDenseSeg when sequence cannot be found
+*
+* Revision 6.441  2004/07/19 17:05:36  papadopo
+* specify (unused) 'output-to-scoremat' parameter
+*
+* Revision 6.440  2004/06/30 12:29:39  madden
+* Moved some functions to blfmtutl.c
+*
+* Revision 6.439  2004/06/22 14:16:55  camacho
+* Changed invocation of posFreqsToMatrix to conform with new signature
+*
 * Revision 6.438  2004/06/01 20:34:06  dondosha
 * Fix in previous change; memory leak fix
 *
@@ -1711,6 +1752,7 @@ $Revision: 6.438 $
 #include <vecscrn.h>
 #include <rpsutil.h>
 #include <simutil.h>
+#include <blfmtutl.h>
 
 
 typedef struct _pgp_blast_options {
@@ -2611,6 +2653,9 @@ static BLAST_ScorePtr *RPS2SeqImpalaStatCorrections
     scaledInitialUngappedLambda = initialUngappedLambda/scalingFactor;
     correctUngappedLambda = impalaKarlinLambdaNR(this_sfp, scaledInitialUngappedLambda);
     if(correctUngappedLambda == -1.0) {
+        ErrPostEx(SEV_ERROR, 0, 0, 
+                  "RPS2SeqImpalaStatCorrections: Could not calculate ungapped "
+                  "lambda for PSSM");
         MemFree(resProb);
         MemFree(scoreArray);
         MemFree(return_sfp);
@@ -2678,6 +2723,10 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
         if (search->positionBased && search->pbp->scalingFactor != 0.0) {
             scaledMatrix = RPS2SeqImpalaStatCorrections(search, subject_seq, 
                     subject_length);
+            if ( !scaledMatrix ) {
+                BioseqUnlock(subject_bsp);
+                return NULL;
+            }
             copyMatrix = search->sbp->posMatrix;
             search->sbp->posMatrix = scaledMatrix;
             
@@ -2982,7 +3031,7 @@ static BLAST_ScorePtr *B2SCalculateScaledPSSM(BlastSearchBlkPtr search,
         return NULL;
     }
 
-    posFreqsToMatrix(posSearch, compactSearch,  NULL, 1);
+    posFreqsToMatrix(posSearch, compactSearch);
     impalaScaling(posSearch, compactSearch, scalingFactor, TRUE);
     if (karlinK)
         *karlinK = compactSearch->kbp_gap_psi[0]->K;
@@ -4980,6 +5029,7 @@ BioseqBlastEngineByLocWithCallbackMult(SeqLocPtr slp, CharPtr progname, CharPtr 
 
           checkReturn = posReadCheckpoint(posSearch, compactSearch,
                                           options->CheckpointFileName,
+                                          NO_SCOREMAT_IO,
                                           &(search->error_return));
           search->sbp->posMatrix = posSearch->posMatrix;
           if (NULL == search->sbp->posFreqs)
@@ -7735,7 +7785,7 @@ CopyHSPToResultHsp(BLAST_KarlinBlkPtr kbp, BLAST_HSPPtr hsp, BLASTResultHspPtr r
 	return TRUE;
 }
 
-static Boolean 
+Boolean LIBCALL
 CopyResultHspToHSP(BLASTResultHspPtr result_hsp, BLAST_HSPPtr hsp)
 {
 	if (result_hsp == NULL || hsp == NULL)
@@ -7786,35 +7836,44 @@ int LIBCALLBACK
 score_compare_hsps(VoidPtr v1, VoidPtr v2)
 
 {
-	BLAST_HSPPtr h1, h2;
-	BLAST_HSPPtr PNTR hp1, PNTR hp2;
+    BLAST_HSPPtr h1, h2;
+    BLAST_HSPPtr PNTR hp1, PNTR hp2;
 
-	hp1 = (BLAST_HSPPtr PNTR) v1;
-	hp2 = (BLAST_HSPPtr PNTR) v2;
-	h1 = *hp1;
-	h2 = *hp2;
+    hp1 = (BLAST_HSPPtr PNTR) v1;
+    hp2 = (BLAST_HSPPtr PNTR) v2;
+    h1 = *hp1;
+    h2 = *hp2;
 
-	if (h1 == NULL || h2 == NULL)
-		return 0;
+    if (h1 == NULL) {
+        return (h2 == NULL) ? 0 : 1;
+    } else if (h2 == NULL) {
+      return -1;
+    }
+    /* Neither HSP is nil */
+    else if (h1->score > h2->score)
+      return -1;
+    else if (h1->score < h2->score)
+      return 1;
+    /* Tie-breakers: decreasing subject offsets; decreasing subject
+       ends, decreasing query offsets, decreasing query ends */
+    else if (h1->subject.offset > h2->subject.offset)
+      return -1;
+    else if (h1->subject.offset < h2->subject.offset)
+      return 1;
+    else if (h1->subject.end > h2->subject.end)
+      return -1;
+    else if (h1->subject.end < h2->subject.end)
+      return 1;
+    else if (h1->query.offset > h2->query.offset)
+      return -1;
+    else if (h1->query.offset < h2->query.offset)
+      return 1;
+    else if (h1->query.end > h2->query.end)
+      return -1;
+    else if (h1->query.end < h2->query.end)
+      return 1;
 
-	if (h1->score < h2->score) 
-		return 1;
-	if (h1->score > h2->score)
-		return -1;
-
-        if( h1->subject.offset < h2->subject.offset )
-          return 1;
-        if( h1->subject.offset > h2->subject.offset )
-          return -1;
-
-        if( h1->subject.end < h2->subject.end )
-          return 1;
-        if( h1->subject.end > h2->subject.end )
-          return -1;
-
-
-
-	return 0;
+    return 0;
 }
 
 /*
@@ -8052,8 +8111,11 @@ query_offset_compare_hsp(VoidPtr v1, VoidPtr v2)
 	h1 = *hp1;
 	h2 = *hp2;
 
-	if (h1 == NULL || h2 == NULL)
-		return 0;
+    if (h1 == NULL) {
+        return (h2 == NULL) ? 0 : 1;
+    } else if (h2 == NULL) {
+      return -1;
+    }
 
 	if (h1->query.offset < h2->query.offset)
 		return -1;
@@ -8075,8 +8137,11 @@ query_end_compare_hsp(VoidPtr v1, VoidPtr v2)
 	h1 = *hp1;
 	h2 = *hp2;
 
-	if (h1 == NULL || h2 == NULL)
-		return 0;
+    if (h1 == NULL) {
+        return (h2 == NULL) ? 0 : 1;
+    } else if (h2 == NULL) {
+      return -1;
+    }
 
 	if (h1->query.end < h2->query.end)
 		return -1;
@@ -8395,7 +8460,7 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
 			hsp_array[index]->linked_set = FALSE;
 			hsp_array[index]->start_of_chain = FALSE;
 			hsp_array[index]->num = 0;
-			hsp_array[index]->sumscore = 0;
+			hsp_array[index]->xsum = 0.0;
 
                         if(search->pbp->is_ooframe) {
                             gap_align->is_ooframe = TRUE;
@@ -9216,8 +9281,9 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 
     /* Now for OOF alignment we try to detect simular alignments */
 
+    HeapSort(hsp_array,hspcnt,sizeof(BLAST_HSPPtr), score_compare_hsps);
     BLASTCheckHSPInclusion(hsp_array, hspcnt, pbp->is_ooframe);
-    
+
     /* Make up fake hitlist, relink and rereap. */
 
     if (StringCmp(search->prog_name, "blastx") == 0 ||
@@ -9243,6 +9309,9 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
            search->subject_id = ordinal_id;
         }
  
+        if (!search->pbp->do_sum_stats || search->pbp->longest_intron > 0)
+           BlastGetNonSumStatsEvalue(search);
+
 	/* AM: Changed to support query concatenation. */
         if (search->pbp->do_sum_stats == TRUE)
 	{
@@ -9250,8 +9319,6 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 
             BlastLinkHsps(search);
         }
-        else
-            BlastGetNonSumStatsEvalue(search);
         
         if (search->prog_number == blast_type_tblastn &&
             search->pbp->longest_intron > 0)
@@ -10857,6 +10924,14 @@ GetSequenceWithDenseSeg(DenseSegPtr dsp, Boolean query, Int4Ptr start, Int4Ptr l
 	}
 
 	bsp = BioseqLockById(id);
+    if (bsp == NULL) {
+        Char buf[1024];
+        StringCpy(buf, "Failed to retrieve sequence ");
+        SeqIdWrite(id, &buf[StringLen(buf)], PRINTID_FASTA_LONG,
+                   sizeof(buf)-StringLen(buf)-1);
+        ErrPostEx(SEV_WARNING, 0, 0, buf);
+        return NULL;
+    }
 
 	spp = SeqPortNew(bsp, *start, (*start)+(*length)-1, Seq_strand_unknown, Seq_code_ncbistdaa);
 
@@ -10923,83 +10998,6 @@ BlastDeleteFakeBioseq(BioseqPtr fake_bsp)
          fake_bsp->seq_ext = NULL;
 
 	return BioseqFree(fake_bsp);
-}
-
-/*
-	Counts the number of SeqAligns present.
-*/
-
-static Int4 
-GetSeqAlignCount(SeqAlignPtr sap)
-
-{
-	Int4 count = 0;
-	SeqIdPtr last_id=NULL, id;
-
-	while (sap)
-	{
-		id = TxGetSubjectIdFromSeqAlign(sap);
-		if (last_id)
-		{
-			if(SeqIdComp(id, last_id) != SIC_YES)
-				count++;
-		}
-		else
-		{
-			count = 1;
-		}
-		last_id = id;
-		sap = sap->next;
-	}
-
-	return count;
-
-}
-
-/*
-	Duplicates a SeqAlignPtr, up to the number of unique
-	records specified.
-*/
-
-static SeqAlignPtr 
-GetPrivateSeqAlign(SeqAlignPtr sap, Int4 number, Int4Ptr number_returned)
-
-{
-	Int4 count=0;
-	SeqIdPtr last_id=NULL, id;
-	SeqAlignPtr new_head=NULL, var;
-
-	last_id = TxGetSubjectIdFromSeqAlign(sap);
-
-	while (count<number && sap)
-	{
-		count++;
-		while (sap)
-		{
-			id = TxGetSubjectIdFromSeqAlign(sap);
-			if(SeqIdComp(id, last_id) != SIC_YES)
-			{
-				last_id = id;
-				break;
-			}
-			if (new_head == NULL)
-			{
-				new_head = AsnIoMemCopy(sap, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);
-				var = new_head;
-			}
-			else
-			{
-				var->next = AsnIoMemCopy(sap, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);
-				var = var->next;
-			}
-			last_id = id;
-			sap = sap->next;
-		}
-	}
-
-	*number_returned = count;
-
-	return new_head;
 }
 
 /* Comparison function for sorting gi list */
@@ -11098,65 +11096,6 @@ BlastPruneSeqAlignByEvalueRange(SeqAlignPtr seqalign, FloatHi expect_low,
    if (last_sap)
       last_sap->next = NULL;
    return head;
-}
-
-/*
-	Duplicate a SeqAlignPtr, keeping on the number of unique db
-	hits specified.
-*/
-
-BlastPruneSapStructPtr
-BlastPruneHitsFromSeqAlign(SeqAlignPtr sap, Int4 number, BlastPruneSapStructPtr prune)
-
-{
-	if (prune == NULL)
-	{
-		prune = MemNew(sizeof(BlastPruneSapStruct));
-	}
-	else
-	{
-		if (prune->number == number)
-			return prune;
-		if (prune->allocated)
-			prune->sap = SeqAlignSetFree(prune->sap);
-		prune->sap = NULL;
-		prune->allocated = FALSE;
-		prune->original_number = 0;
-		prune->number = 0;
-	}
-
-	prune->original_number = GetSeqAlignCount(sap);
-
-	if (prune->original_number < number)
-	{
-		prune->number = prune->original_number;
-		prune->sap = sap;
-		prune->allocated = FALSE;
-	}
-	else
-	{
-		prune->sap = GetPrivateSeqAlign(sap, number, &(prune->number));
-		prune->allocated = TRUE;
-	}
-	
-	return prune;
-}
-
-
-BlastPruneSapStructPtr
-BlastPruneSapStructDestruct(BlastPruneSapStructPtr prune)
-
-{
-	if (prune == NULL)
-		return NULL;
-
-	if (prune->allocated)
-	{
-		prune->sap = SeqAlignSetFree(prune->sap);
-	}
-	prune = MemFree(prune);
-
-	return prune;
 }
 
 /*

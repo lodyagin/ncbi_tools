@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.h,v 1.4 2004/05/19 14:52:01 camacho Exp $
+/* $Id: phi_lookup.h,v 1.7 2004/09/13 12:39:50 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,8 +44,8 @@
 extern "C" {
 #endif
 
-/*The following 3 flags define 3 options for running the program*/
-#define SEED_FLAG 1
+/** The following 3 flags define 3 options for running the program */
+#define SEED_FLAG 1         
 #define PATTERN_FLAG 2
 #define PAT_SEED_FLAG 3
 #define PAT_MATCH_FLAG 4
@@ -59,27 +59,28 @@ extern "C" {
 /** Pseudo lookup table structure for PHI-BLAST. Contains starting and ending
  * offsets of pattern occurrences in the query sequence. 
  */
-typedef struct PHILookupTable {
+typedef struct BlastPHILookupTable {
    patternSearchItems* pattern_info;
    Boolean is_dna;
    Int4 num_matches;
    Int4 allocated_size;
    Int4* start_offsets;
    Int4* lengths;
-} PHILookupTable;
+} BlastPHILookupTable;
 
 /** Initialize the pseudo lookup table for PHI BLAST */
-Int2 PHILookupTableNew(const LookupTableOptions* opt, PHILookupTable* * lut,
+Int2 PHILookupTableNew(const LookupTableOptions* opt, 
+                       BlastPHILookupTable* * lut,
                        Boolean is_dna, BlastScoreBlk* sbp);
 
-/* Deallocate memory for the PHI BLAST lookup table */
-PHILookupTable* PHILookupTableDestruct(PHILookupTable* lut);
+/** Deallocate memory for the PHI BLAST lookup table */
+BlastPHILookupTable* PHILookupTableDestruct(BlastPHILookupTable* lut);
 
 /** Find all occurrencies of a pattern in query, and save starts/stops in the
  * PHILookupTable structure.
  */
-Int4 PHIBlastIndexQuery(PHILookupTable* lookup,
-        BLAST_SequenceBlk* query, ListNode* location, Boolean is_dna);
+Int4 PHIBlastIndexQuery(BlastPHILookupTable* lookup,
+        BLAST_SequenceBlk* query, BlastSeqLoc* location, Boolean is_dna);
 
 
 /**

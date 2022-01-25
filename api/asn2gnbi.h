@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.12 $
+* $Revision: 1.16 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -171,6 +171,9 @@ typedef struct asn2gbformat {
   FmtType          format;
   Asn2gbWriteFunc  ffwrite;
   Pointer          userdata;
+  Asn2gbLockFunc   remotelock;
+  Asn2gbFreeFunc   remotefree;
+  Pointer          remotedata;
   FILE             *fp;
   AsnIoPtr         aip;
   AsnTypePtr       atp;
@@ -359,6 +362,7 @@ typedef enum {
   Qual_class_label,
   Qual_class_number,
   Qual_class_paren,
+  Qual_class_usedin,
   Qual_class_region,
   Qual_class_replace,
   Qual_class_consplice,
@@ -500,6 +504,7 @@ typedef enum {
   FTQUAL_citation,
   FTQUAL_clone,
   FTQUAL_coded_by,
+  FTQUAL_compare,
   FTQUAL_codon,
   FTQUAL_codon_start,
   FTQUAL_cons_splice,
@@ -537,6 +542,7 @@ typedef enum {
   FTQUAL_modelev,
   FTQUAL_note,
   FTQUAL_number,
+  FTQUAL_old_locus_tag,
   FTQUAL_operon,
   FTQUAL_organism,
   FTQUAL_partial,
@@ -1021,6 +1027,12 @@ NLM_EXTERN void PrintFtableLocAndQuals (
 NLM_EXTERN CharPtr FormatFtableSourceFeatBlock (
   BaseBlockPtr bbp,
   BioseqPtr target
+);
+
+NLM_EXTERN void DoImmediateRemoteFeatureFormat (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp,
+  SeqFeatPtr sfp
 );
 
 NLM_EXTERN void DoImmediateFormat (

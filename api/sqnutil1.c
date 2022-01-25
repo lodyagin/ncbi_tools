@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.300 $
+* $Revision: 6.310 $
 *
 * File Description: 
 *
@@ -1657,7 +1657,8 @@ NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode)
   }
 }
 
-NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX, Boolean gen_prod_set)
+NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop,
+                                  Boolean remove_trailingX, Boolean gen_prod_set, Boolean force_local_id)
 
 {
   ByteStorePtr         bs;
@@ -1671,6 +1672,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   Int4                 i;
   Char                 id [64];
   SeqEntryPtr          last;
+  Char                 lcl [64];
   BioseqPtr            mbsp;
   MolInfoPtr           mip;
   SeqEntryPtr          msep;
@@ -1815,6 +1817,9 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
         if (! StringHasNoText (id)) {
           if (StringChr (id, '|') != NULL) {
             sip = SeqIdParse (id);
+          } else if (force_local_id) {
+            sprintf (lcl, "lcl|%s", id);
+            sip = SeqIdParse (lcl);
           } else {
             ptr = StringChr (id, '.');
             if (ptr != NULL) {
@@ -2011,6 +2016,9 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                   if (! StringHasNoText (id)) {
                     if (StringChr (id, '|') != NULL) {
                       sip = SeqIdParse (id);
+                    } else if (force_local_id) {
+                      sprintf (lcl, "lcl|%s", id);
+                      sip = SeqIdParse (lcl);
                     } else {
                       ptr = StringChr (id, '.');
                       if (ptr != NULL) {
@@ -2059,6 +2067,9 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 if (! StringHasNoText (id)) {
                   if (StringChr (id, '|') != NULL) {
                     sip = SeqIdParse (id);
+                  } else if (force_local_id) {
+                    sprintf (lcl, "lcl|%s", id);
+                    sip = SeqIdParse (lcl);
                   } else {
                     ptr = StringChr (id, '.');
                     if (ptr != NULL) {
@@ -2150,10 +2161,17 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   }
 }
 
+NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop,
+                                Boolean remove_trailingX, Boolean gen_prod_set)
+
+{
+  PromoteXrefsExEx (sfp, bsp, entityID, include_stop, remove_trailingX, gen_prod_set, FALSE);
+}
+
 NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
 
 {
-  PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE, FALSE);
+  PromoteXrefsExEx (sfp, bsp, entityID, TRUE, FALSE, FALSE, FALSE);
 }
 
 /* begin BasicSeqEntryCleanup section */
@@ -3207,6 +3225,7 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq, Boolean isEmbl
   Uint1      codon [6];
   Int4       from;
   Boolean    is_fMet = FALSE;
+  Boolean    is_std_name = FALSE;
   Int2       j;
   Boolean    justTrnaText;
   size_t     len;
@@ -3221,13 +3240,15 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq, Boolean isEmbl
   tRNAPtr    trp;
   long int   val;
 
+  is_std_name = (Boolean) (StringICmp (gbq->qual, "standard_name") == 0);
   if (StringICmp (gbq->qual, "product") == 0 ||
-      (StringICmp (gbq->qual, "standard_name") == 0 && (! isEmblOrDdbj) )) {
+      (is_std_name && (! isEmblOrDdbj) )) {
     rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
     if (rrp == NULL) return FALSE;
     if (rrp->type == 0) {
       rrp->type = 255;
     }
+    if (rrp->type == 255 && is_std_name) return FALSE;
     if (rrp->type == 3 && rrp->ext.choice == 1) {
       name = (CharPtr) rrp->ext.value.ptrvalue;
       aa = ParseTRnaString (name, &justTrnaText, codon, FALSE);
@@ -3599,12 +3620,32 @@ static void CleanupRptUnit (GBQualPtr gbq)
     if (ch == '\0' || ch == '(' || ch == ')' || ch == ',' || ch == '.' || IS_WHITESP (ch) || IS_DIGIT (ch)) {
     } else {
       MemFree (str);
+      /* lower case the contents */
+      ptr = gbq->val;
+      ch = *ptr;
+      while (ch != '\0') {
+        if (IS_UPPER (ch)) {
+          *ptr = TO_LOWER (ch);
+        }
+        ptr++;
+        ch = *ptr;
+      }
       return;
     }
   }
   *ptr = '\0';
   gbq->val = MemFree (gbq->val);
   gbq->val = str;
+  /* and lower case the contents */
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_UPPER (ch)) {
+      *ptr = TO_LOWER (ch);
+    }
+    ptr++;
+    ch = *ptr;
+  }
 }
 
 static Boolean StringIsJustQuotes (CharPtr str)
@@ -3651,12 +3692,15 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
 
 {
   ValNodePtr      afterMe = NULL;
+  Char            ch;
   DbtagPtr        db;
   GBQualPtr       gbq;
   GeneRefPtr      grp;
+  ImpFeatPtr      ifp;
   size_t          len;
   GBQualPtr       nextqual;
   ObjectIdPtr     oip;
+  GBQualPtr       old_locus_tag = NULL;
   GBQualPtr PNTR  prevqual;
   CharPtr         ptr;
   GBQualPtr       rpt_type = NULL;
@@ -3682,6 +3726,22 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
     }
     if (gbq->val == NULL) {
       gbq->val = StringSave ("");
+    }
+    if (StringICmp (gbq->qual, "replace") == 0) {
+      if (sfp->data.choice == SEQFEAT_IMP) {
+        ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+        if (ifp != NULL) {
+          if (StringICmp (ifp->key, "variation") == 0 && gbq->val != NULL) {
+            ptr = gbq->val;
+            ch = *ptr;
+            while (ch != '\0') {
+              *ptr = TO_LOWER (ch);
+              ptr++;
+              ch = *ptr;
+            }
+          }
+        }
+      }
     }
     nextqual = gbq->next;
     unlink = TRUE;
@@ -3781,6 +3841,13 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
         unlink = FALSE;
       } else {
         usedin->val = CombineSplitQual (usedin->val, gbq->val);
+      }
+    } else if (StringICmp (gbq->qual, "old_locus_tag") == 0) {
+      if (old_locus_tag == NULL) {
+        old_locus_tag = gbq;
+        unlink = FALSE;
+      } else {
+        old_locus_tag->val = CombineSplitQual (old_locus_tag->val, gbq->val);
       }
     } else if (StringICmp (gbq->qual, "pseudo") == 0) {
       sfp->pseudo = TRUE;
@@ -4615,6 +4682,13 @@ static void FixOldDbxrefs (ValNodePtr vnp)
         dbt->db = MemFree (dbt->db);
         dbt->db = StringSave ("SubtiList");
       }
+      if (StringICmp (dbt->db, "Swiss-Prot") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("UniProt/Swiss-Prot");
+      } else if (StringICmp (dbt->db, "TrEMBL") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("UniProt/TrEMBL");
+      }
     }
     vnp = vnp->next;
   }
@@ -4759,7 +4833,7 @@ static void CleanupDuplicateCits (ValNodePtr PNTR prevvnp)
 
 /* name processing code from Sequin editors */
 
-static void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsize)
+NLM_EXTERN void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsize)
 
 {
   Char  ch;
@@ -6902,6 +6976,114 @@ static void CleanupSeqLoc (SeqLocPtr slp)
   MemFree (loc);
 }
 
+typedef struct cbloc {
+  CodeBreakPtr  cbp;
+  Int4          pos;
+} CbLoc, PNTR CbLocPtr;
+
+static int LIBCALLBACK SortByCodeBreakLoc (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  CbLocPtr  clp1;
+  CbLocPtr  clp2;
+
+  clp1 = (CbLocPtr) ptr1;
+  clp2 = (CbLocPtr) ptr2;
+  if (clp1 == NULL || clp2 == NULL) return 0;
+  if (clp1->pos < clp2->pos) {
+    return -1;
+  } else if (clp1->pos > clp2->pos) {
+    return 1;
+  }
+  return 0;
+}
+
+static CodeBreakPtr SortCodeBreaks (SeqFeatPtr sfp, CodeBreakPtr list)
+
+{
+  BioseqPtr     bsp;
+  CodeBreakPtr  cbp;
+  CbLocPtr      head;
+  size_t        count, i;
+  Boolean       out_of_order = FALSE;
+  Int4          pos;
+  SeqLocPtr     slp;
+
+  if (sfp == NULL || list == NULL) return list;
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return list;
+
+  for (cbp = list, count = 0; cbp != NULL; cbp = cbp->next, count++) continue;
+  if (count < 2) return list;
+
+  head = (CbLocPtr) MemNew (sizeof (CbLoc) * (count + 1));
+  if (head == NULL) return list;
+
+  for (cbp = list, i = 0; cbp != NULL && i < count; i++) {
+    head [i].cbp = cbp;
+    slp = dnaLoc_to_aaLoc (sfp, cbp->loc, TRUE, NULL, TRUE);
+    head [i].pos = GetOffsetInBioseq (slp, bsp, SEQLOC_START) + 1;
+    SeqLocFree (slp);
+    cbp = cbp->next;
+  }
+
+  pos = head [0].pos;
+  for (i = 1; i < count; i++) {
+    if (head [i].pos < pos) {
+      out_of_order = TRUE;
+    }
+  }
+
+  if (out_of_order) {
+    HeapSort (head, count, sizeof (CbLoc), SortByCodeBreakLoc);
+
+    for (i = 0; i < count; i++) {
+      cbp = head [i].cbp;
+      cbp->next = head [i + 1].cbp;
+    }
+
+    list = head [0].cbp;
+  }
+
+  MemFree (head);
+
+  return list;
+}
+
+static void CleanupDuplicatedCodeBreaks (CodeBreakPtr PNTR prevcbp)
+
+{
+  CodeBreakPtr  cbp;
+  CodeBreakPtr  last = NULL;
+  CodeBreakPtr  next;
+  Boolean       unlink;
+
+  if (prevcbp == NULL) return;
+  cbp = *prevcbp;
+  while (cbp != NULL) {
+    next = cbp->next;
+    unlink = FALSE;
+    if (last != NULL) {
+      if (SeqLocCompare (cbp->loc, last->loc) == SLC_A_EQ_B &&
+          cbp->aa.choice == last->aa.choice &&
+          cbp->aa.value.intvalue == last->aa.value.intvalue) {
+        unlink = TRUE;
+      }
+    } else {
+      last = cbp;
+    }
+    if (unlink) {
+      *prevcbp = cbp->next;
+      cbp->next = NULL;
+      CodeBreakFree (cbp);
+    } else {
+      last = cbp;
+      prevcbp = (CodeBreakPtr PNTR) &(cbp->next);
+    }
+    cbp = next;
+  }
+}
+
 static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publist)
 
 {
@@ -7065,6 +7247,8 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
         if (sfp->data.choice == SEQFEAT_CDREGION) {
           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
           if (crp != NULL) {
+            crp->code_break = SortCodeBreaks (sfp, crp->code_break);
+            CleanupDuplicatedCodeBreaks (&(crp->code_break));
             for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
               CleanupSeqLoc (cbp->loc);
               if (strand == Seq_strand_minus && id != NULL) {

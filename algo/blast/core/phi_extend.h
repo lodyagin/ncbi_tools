@@ -1,4 +1,4 @@
-/* $Id: phi_extend.h,v 1.5 2004/05/19 14:52:01 camacho Exp $
+/* $Id: phi_extend.h,v 1.6 2004/07/06 15:29:20 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,7 @@
 extern "C" {
 #endif
 
+/** WordFinder type function for PHI BLAST. */
 Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
         BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
         Int4** matrix, const BlastInitialWordParameters* word_params,

@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.7 2004/05/19 14:52:03 camacho Exp $
+/* $Id: phi_extend.c,v 1.8 2004/07/12 16:26:38 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
  */
 
 static char const rcsid[] = 
-    "$Id: phi_extend.c,v 1.7 2004/05/19 14:52:03 camacho Exp $";
+    "$Id: phi_extend.c,v 1.8 2004/07/12 16:26:38 papadopo Exp $";
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/phi_lookup.h>
@@ -46,7 +46,7 @@ Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject,
         Int4 max_hits, BlastInitHitList* init_hitlist, 
         BlastUngappedStats* ungapped_stats)
 {
-   PHILookupTable* lookup = (PHILookupTable*) lookup_wrap->lut;
+   BlastPHILookupTable* lookup = (BlastPHILookupTable*) lookup_wrap->lut;
    Int4 hits=0;
    Int4 totalhits=0;
    Int4 first_offset = 0;

@@ -142,8 +142,6 @@ mv asn.h ../include
 ./ln-if-absent ../asnlib/*.c .
 ./ln-if-absent ../connect/*.c .
 ./ln-if-absent ../connect/*.h ../include
-./ln-if-absent ../connect/lbapi/*.c .
-./ln-if-absent ../connect/lbapi/*.h ../include
 ./ln-if-absent ../object/*.c .
 ./ln-if-absent ../object/*.h ../include
 ./ln-if-absent ../access/*.c .
@@ -248,11 +246,9 @@ cc -fast -c  -I../include -DWIN_MOTIF connutil.c
 cc -fast -c  -I../include -DWIN_MOTIF con_url.c
 cc -fast -c  -I../include -DWIN_MOTIF con_sock.c
 cc -fast -c  -I../include -DWIN_MOTIF urlquery.c
-cc -fast -c  -I../include -DWIN_MOTIF  lbapi.c
-cc -fast -c  -I../include -DWIN_MOTIF  con_stateless.c
 cc -fast -c  -I../include -DWIN_MOTIF binary.c
 rm -f libncbi.a
-ar cru libncbi.a ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o ncbimsg.o ncbistr.o ncbisgml.o ncbitime.o ncbilang.o asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o asnlext.o asnout.o asnprint.o asntypes.o asngenob.o gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o connectn.o connutil.o con_url.o con_sock.o urlquery.o lbapi.o con_stateless.o binary.o
+ar cru libncbi.a ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o ncbimsg.o ncbistr.o ncbisgml.o ncbitime.o ncbilang.o asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o asnlext.o asnout.o asnprint.o asntypes.o asngenob.o gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o connectn.o connutil.o urlquery.o binary.o
 cp -p libncbi.a ../lib
 ls -l ../lib/libncbi.a
 -rw-r--r--   1 coremake ncbi      827962 Jan 31 14:11 ../lib/libncbi.a
@@ -1003,5 +999,5 @@ Good luck!
 
 
 =======================================================================	
- $Id: readme.unx,v 6.17 2001/12/12 20:37:50 beloslyu Exp $
+ $Id: readme.unx,v 6.18 2004/09/28 15:11:48 lavr Exp $
 =======================================================================	

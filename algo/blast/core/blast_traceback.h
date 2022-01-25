@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.33 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: blast_traceback.h,v 1.37 2004/10/06 19:03:43 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,8 +60,9 @@ extern "C" {
  * @param hit_params Hit saving parameters [in]
  * @param gen_code_string specifies genetic code [in]
  */
+NCBI_XBLAST_EXPORT
 Int2
-Blast_TracebackFromHSPList(Uint1 program_number, BlastHSPList* hsp_list,
+Blast_TracebackFromHSPList(EBlastProgramType program_number, BlastHSPList* hsp_list,
    BLAST_SequenceBlk* query_blk, BLAST_SequenceBlk* subject_blk,
    BlastQueryInfo* query_info,
    BlastGapAlignStruct* gap_align, BlastScoreBlk* sbp,
@@ -89,7 +90,8 @@ Blast_TracebackFromHSPList(Uint1 program_number, BlastHSPList* hsp_list,
  * @param results All results from the BLAST search [out]
  * @return nonzero indicates failure, otherwise zero
  */
-Int2 BLAST_ComputeTraceback(Uint1 program_number, BlastHSPStream* hsp_stream, 
+NCBI_XBLAST_EXPORT
+Int2 BLAST_ComputeTraceback(EBlastProgramType program_number, BlastHSPStream* hsp_stream, 
         BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
         const BlastSeqSrc* bssp, BlastGapAlignStruct* gap_align,
         BlastScoringParameters* score_params,
@@ -132,7 +134,8 @@ Int2 BLAST_ComputeTraceback(Uint1 program_number, BlastHSPStream* hsp_stream,
  *                traceback information. [out]
  * @return nonzero indicates failure, otherwise zero
  */
-Int2 BLAST_RPSTraceback(Uint1 program_number,
+NCBI_XBLAST_EXPORT
+Int2 BLAST_RPSTraceback(EBlastProgramType program_number,
         BlastHSPStream* hsp_stream, 
         BLAST_SequenceBlk* concat_db,
         BlastQueryInfo* concat_db_info,
@@ -149,7 +152,8 @@ Int2 BLAST_RPSTraceback(Uint1 program_number,
 /** Get the subject sequence encoding type for the traceback,
  * given a program number.
  */
-Uint1 Blast_TracebackGetEncoding(Uint1 program_number);
+NCBI_XBLAST_EXPORT
+Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number);
 
 #ifdef __cplusplus
 }

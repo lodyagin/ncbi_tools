@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/*  $Id: ncbi_comm.h,v 6.8 2003/08/11 19:06:23 lavr Exp $
+/*  $Id: ncbi_comm.h,v 6.9 2004/08/02 16:52:42 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,7 @@ extern "C" {
 #define DISPATCHER_CFGPATH      "/var/etc/lbsmd/"
 #define DISPATCHER_CFGFILE      "servrc.cfg"
 #define DISP_PROTOCOL_VERSION   "1.0"
+#define DISPD_MESSAGE_FILE      ".dispd.msg"
 
 typedef unsigned int ticket_t;
 
@@ -59,6 +60,9 @@ typedef unsigned int ticket_t;
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_comm.h,v $
+ * Revision 6.9  2004/08/02 16:52:42  lavr
+ * +DISPD_MESSAGE_FILE
+ *
  * Revision 6.8  2003/08/11 19:06:23  lavr
  * +HTTP_DISP_MESSAGE
  *

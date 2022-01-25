@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.13 2004/06/08 17:47:24 dondosha Exp $
+/* $Id: twoseq_api.c,v 1.28 2004/10/04 14:04:26 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -42,7 +42,7 @@
 #include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/hspstream_collector.h>
-#include <algo/blast/api/multiseq_src.h>
+#include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/twoseq_api.h>
@@ -52,7 +52,7 @@
 
 Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
 {
-    BLAST_SummaryOptions *new_options = (BLAST_SummaryOptions *)malloc(
+    BLAST_SummaryOptions *new_options = (BLAST_SummaryOptions *)calloc(1,
                                                  sizeof(BLAST_SummaryOptions));
     if (new_options == NULL) {
         *options = NULL;
@@ -63,13 +63,11 @@ Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
     new_options->program = eChoose;
     new_options->strand = Seq_strand_both;
     new_options->cutoff_evalue = 10.0;
-    new_options->matrix = NULL;
-    new_options->filter_string = NULL;
-    new_options->word_size = 0;
     new_options->gapped_calculation = TRUE;
+    new_options->use_megablast = FALSE;
     new_options->nucleotide_match = 1;
     new_options->nucleotide_mismatch = -3;
-    new_options->word_threshold = 0;
+    new_options->longest_intron = 0;
     new_options->init_seed_method = eDefaultSeedType;
 
     *options = new_options;
@@ -79,12 +77,14 @@ Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
 BLAST_SummaryOptions*
 BLAST_SummaryOptionsFree(BLAST_SummaryOptions *options)
 {
-    free(options);
+    sfree(options->matrix);
+    sfree(options->filter_string);
+    sfree(options);
     return NULL;
 }
 
 static Int2 
-BLAST_FillOptions(Uint1 program_number,
+BLAST_FillOptions(EBlastProgramType program_number,
     const BLAST_SummaryOptions* basic_options,
     LookupTableOptions* lookup_options,
     QuerySetUpOptions* query_setup_options, 
@@ -102,42 +102,46 @@ BLAST_FillOptions(Uint1 program_number,
     Boolean do_ag_blast = FALSE;
     Boolean do_discontig = FALSE;
     Int4 greedy_align = 0;
-    Int4 word_size = basic_options->word_size;
+    Int2 word_size = basic_options->word_size;
     char *matrix;
 
-    if (program_number == blast_type_blastn) {
+    if (program_number == eBlastTypeBlastn) {
         if (basic_options->strand != Seq_strand_plus &&
             basic_options->strand != Seq_strand_minus &&
             basic_options->strand != Seq_strand_both) {
             return -2;
         }
+        
+        if (basic_options->use_megablast == TRUE)
+           do_megablast = TRUE;
 
-        /* If one of the sequences is large enough,
-           set up a megablast search */
+        /* If the query sequence is large enough, set up a megablast search */
 
-        if (basic_options->hint == eFast ||
-            query_length > MEGABLAST_CUTOFF || 
-            subject_length > MEGABLAST_CUTOFF) {
+        if (basic_options->hint != eNone && 
+            query_length > MEGABLAST_CUTOFF) {
             do_megablast = TRUE;
             if (basic_options->gapped_calculation)
                 greedy_align = 1;       /* one-pass, no ungapped */
         }
 
         /* For a megablast search or a blastn search with
-           a larger-than-default word size, turn on striding */
+           a non-default word size, turn on striding. Note that
+           striding is beneficial even if the wordsize is
+           smaller than the default */
 
-        if (word_size > 13 || do_megablast)
+        if (word_size != 0 || do_megablast)
             do_ag_blast = TRUE;
 
         /* If megablast was turned on but the input indicates
            a sensitive search is desired, switch to discontiguous
-           megablast (hardwired to the 11-of-21 optimal template) */
+           megablast. Because a sensitive search is the default, 
+           discontig. megablast will be used by default when the 
+           first input sequence is large */
 
         if (do_megablast && basic_options->hint == eSensitive) {
-           if (word_size == 0)
               word_size = 11;
-            do_discontig = TRUE;
-            do_ag_blast = FALSE;
+              do_discontig = TRUE;
+              do_ag_blast = FALSE;
         }
     }
     
@@ -151,7 +155,9 @@ BLAST_FillOptions(Uint1 program_number,
                                  0,              /* no variable wordsize */ 
                                  FALSE);         /* no PSSM */ 
  
-    /* Fill the rest of the lookup table options */
+    /* If discontiguous megablast is specified, choose
+       the 11-of-21 optimal template).*/
+
     if (do_discontig) {
         lookup_options->mb_template_length = 21; 
         lookup_options->mb_template_type = MB_WORD_OPTIMAL;
@@ -210,8 +216,9 @@ BLAST_FillOptions(Uint1 program_number,
                                0);    /* default number of alignments saved */
   
     hit_options->percent_identity = 0;   /* no percent identity cutoff */
+    hit_options->longest_intron = basic_options->longest_intron;   /* For uneven gap statistics. */
   
-    eff_len_options->db_length = basic_options->db_length;
+    eff_len_options->db_length = (Int8)basic_options->db_length;
 
     return 0;
 }
@@ -221,7 +228,7 @@ BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
                          BioseqPtr bsp1, BioseqPtr bsp2, 
                          SeqAlign **seqalign_out)
 {
-    Uint1 program_type = blast_type_undefined;
+    enum blast_type program_type = eChoose;
     SeqLocPtr query_slp = NULL;      /* sequence variables */
     SeqLocPtr subject_slp = NULL;
     Boolean seq1_is_aa, seq2_is_aa;
@@ -239,15 +246,15 @@ BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
     /* Find program type consistent with the sequences. */
     if (!seq1_is_aa && !seq2_is_aa) {
        if (basic_options->program == eTblastx)
-          program_type = blast_type_tblastx;
+          program_type = eTblastx;
        else
-          program_type = blast_type_blastn;
+          program_type = eBlastn;
     } else if (seq1_is_aa && seq2_is_aa) {
-       program_type = blast_type_blastp;
+       program_type = eBlastp;
     } else if (!seq1_is_aa && seq2_is_aa) {
-       program_type = blast_type_blastx;
+       program_type = eBlastx;
     } else if (seq1_is_aa && !seq2_is_aa) {
-       program_type = blast_type_tblastn;
+       program_type = eTblastn;
     }
 
     /* Check if program type in options is consistent with the one determined
@@ -269,7 +276,7 @@ BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
        return -1;
 
     status = BLAST_TwoSeqLocSets(basic_options, query_slp, subject_slp, 
-                                 seqalign_out, NULL, NULL);
+                                 NULL, seqalign_out, NULL, NULL, NULL);
     SeqLocFree(query_slp);
     SeqLocFree(subject_slp);
 
@@ -292,26 +299,29 @@ static Int4 SeqLocListLen(SeqLoc* seqloc)
 Int2 
 BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
                     SeqLoc* query_seqloc, SeqLoc* subject_seqloc, 
+                    SeqLoc* masking_locs,
                     SeqAlign **seqalign_out,
                     SeqLoc** filter_out,
-                    BLAST_SummaryReturn* *extra_returns)
+                    Boolean* mask_at_hash,
+                    Blast_SummaryReturn* *extra_returns)
 {
-    Uint1 program_type;
+    EBlastProgramType program_type;
     BlastSeqSrc *seq_src = NULL;
     BLAST_SequenceBlk *query = NULL;
     BlastQueryInfo* query_info = NULL;
 
-    ListNode* lookup_segments = NULL;      /* query filtering structures */
-    BlastMaskLoc* filter_loc = NULL;
+    BlastSeqLoc* lookup_segments = NULL;      /* query filtering structures */
 
     LookupTableOptions* lookup_options = NULL;  /* new engine options */
     BlastInitialWordOptions* word_options = NULL;
     BlastScoringOptions* score_options = NULL;
     BlastExtensionOptions* ext_options = NULL;
     BlastHitSavingOptions* hit_options = NULL;
+    BlastMaskInformation maskInfo;
     LookupTableWrap* lookup_wrap = NULL;
     QuerySetUpOptions* query_options = NULL;	
     BlastEffectiveLengthsOptions* eff_len_options = NULL;
+    BlastMaskLoc* blast_mask_loc=NULL;
     BlastScoreBlk* sbp = NULL;
     BlastHSPResults* results = NULL;
     BlastDiagnostics* diagnostics = NULL;
@@ -320,22 +330,22 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
     RPSInfo *rps_info = NULL;
     Int2 status = 0;
     BlastHSPStream* hsp_stream;
-
+    
     switch(basic_options->program) {
     case eBlastn:
-       program_type = blast_type_blastn;
+       program_type = eBlastTypeBlastn;
        break;
     case eBlastp:
-       program_type = blast_type_blastp;
+       program_type = eBlastTypeBlastp;
        break;
     case eBlastx:
-       program_type = blast_type_blastx;
+       program_type = eBlastTypeBlastx;
        break;
     case eTblastn:
-       program_type = blast_type_tblastn;
+       program_type = eBlastTypeTblastn;
        break;
     case eTblastx:
-       program_type = blast_type_tblastx;
+       program_type = eBlastTypeTblastx;
        break;
     default:
        return -1;
@@ -350,8 +360,8 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
     if (status != 0)
         goto bail_out;
 
-    if (program_type == blast_type_tblastn || 
-        program_type == blast_type_tblastx) {
+    if (program_type == eBlastTypeTblastn || 
+        program_type == eBlastTypeTblastx) {
        if ((status = BLAST_GeneticCodeFind(db_options->genetic_code,
                                            &db_options->gen_code_string)))
           return status;
@@ -382,15 +392,43 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
     /* perform final setup */
 
     status = BLAST_ValidateOptions(program_type, ext_options,
-                score_options, lookup_options, hit_options, NULL);
+                score_options, lookup_options, word_options,
+                hit_options, NULL);
     if (status != 0)
        goto bail_out;
 
+    blast_mask_loc = BlastMaskLocNew(1);
+    blast_mask_loc->seqloc_array[0] = BlastSeqLocFromSeqLoc(masking_locs);
+    if (program_type == eBlastTypeBlastx ||
+          program_type == eBlastTypeTblastx) {
+          BlastMaskLoc* blast_maskloc_tmp = BlastMaskLocNew(6);
+          BlastMaskLocDNAToProtein(blast_mask_loc->seqloc_array[0], blast_maskloc_tmp, 0, query_seqloc);
+          blast_mask_loc = BlastMaskLocFree(blast_mask_loc);
+          blast_mask_loc = blast_maskloc_tmp;
+    }
+
+    query->lcase_mask = blast_mask_loc;
+    query->lcase_mask_allocated = TRUE;
+
     status = BLAST_MainSetUp(program_type, query_options, score_options,
                     hit_options, query, query_info, 1.0, &lookup_segments,
-                    &filter_loc, &sbp, NULL);
+                    &maskInfo, &sbp, NULL);
     if (status != 0)
        goto bail_out;
+
+    if (mask_at_hash)
+       *mask_at_hash = maskInfo.mask_at_hash;
+
+    if (filter_out) {
+      if (program_type == eBlastTypeBlastx || 
+          program_type == eBlastTypeTblastx) {
+         /* Filter locations were returned in protein coordinates; convert them
+            back to nucleotide here */
+         BlastMaskLocProteinToDNA(&maskInfo.filter_slp, query_seqloc);
+      }
+      *filter_out = 
+         BlastMaskLocToSeqLoc(program_type, maskInfo.filter_slp, query_seqloc);
+    }
 
     if (extra_returns) {
        if ((diagnostics = Blast_DiagnosticsInit()) == NULL)
@@ -419,7 +457,7 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
     /* Convert results to the SeqAlign form */
 
     status = BLAST_ResultsToSeqAlign(program_type, results, query_seqloc, 
-                seq_src, score_options->gapped_calculation,
+                NULL, subject_seqloc, score_options->gapped_calculation,
                 score_options->is_ooframe, seqalign_out);
 
 bail_out:
@@ -428,20 +466,14 @@ bail_out:
     if (!status && extra_returns) {
        Blast_SummaryReturnFill(program_type, score_options, sbp, 
                                lookup_options, word_options, ext_options, 
-                               hit_options, eff_len_options, query_info, 
-                               seq_src, diagnostics, extra_returns);
+                               hit_options, eff_len_options, query_options, query_info, 
+                               NULL, subject_seqloc, &diagnostics, extra_returns);
     }
 
-    if (filter_out) {
-       *filter_out = 
-          BlastMaskLocToSeqLoc(program_type, filter_loc, query_seqloc);
-    }
-
-    Blast_DiagnosticsFree(diagnostics);
-    BlastMaskLocFree(filter_loc);
+    BlastMaskLocFree(maskInfo.filter_slp);
     BlastSeqSrcFree(seq_src);
     LookupTableWrapFree(lookup_wrap);
-    ListNodeFreeData(lookup_segments);
+    BlastSeqLocFree(lookup_segments);
     Blast_HSPResultsFree(results);
     BlastSequenceBlkFree(query);
     BlastQueryInfoFree(query_info);

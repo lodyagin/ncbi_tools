@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.49 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
@@ -1464,7 +1464,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           }
         }
       }
-      biop->subtype = DialogToPointer (gbp->subsource);
+      biop->subtype = DialogToPointer (gbp->subsource); 
       if (! TextHasNoText (gbp->subcomment)) {
         ssp = SubSourceNew ();
         if (biop->subtype == NULL) {
@@ -1481,6 +1481,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           ssp->name = SaveStringFromTextAndStripNewlines (gbp->subcomment);
         }
       }
+      RemoveTextFromTextFreeSubSourceModifiers (biop, NULL);     
       /* look for plasmid-name - if we find one, set the location to plasmid */
       tmpssp = biop->subtype;
       while (tmpssp != NULL)
@@ -1825,6 +1826,352 @@ static void SubSourcePtrToSubsourceDialog (DialoG d, Pointer data)
     tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
     CorrectBarMax (tlp->bar, tlp->max);
     CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  }
+}
+
+typedef struct fixmodifiertextform
+{
+  WindoW     w;
+  Boolean    done;
+  Boolean    move_to_text;
+  Boolean    remove;
+  Boolean    do_all;
+} FixModifierTextFormData, PNTR FixModifierTextFormPtr;
+
+static void FixModifierTextMove (ButtoN b)
+{
+  FixModifierTextFormPtr fp;
+  
+  fp = (FixModifierTextFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  
+  Remove (fp->w);
+  fp->remove = FALSE;
+  fp->move_to_text = TRUE;
+  fp->do_all = FALSE;
+  fp->done = TRUE;	
+}
+
+static void FixModifierTextMoveAll (ButtoN b)
+{
+  FixModifierTextFormPtr fp;
+  
+  fp = (FixModifierTextFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  
+  Remove (fp->w);
+  fp->remove = FALSE;
+  fp->move_to_text = TRUE;
+  fp->do_all = TRUE;
+  fp->done = TRUE;	
+}
+
+static void FixModifierTextRemove (ButtoN b)
+{
+  FixModifierTextFormPtr fp;
+  
+  fp = (FixModifierTextFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  
+  Remove (fp->w);
+  fp->remove = TRUE;
+  fp->move_to_text = FALSE;
+  fp->do_all = FALSE;
+  fp->done = TRUE;	
+}
+
+static void FixModifierTextRemoveAll (ButtoN b)
+{
+  FixModifierTextFormPtr fp;
+  
+  fp = (FixModifierTextFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  
+  Remove (fp->w);
+  fp->remove = TRUE;
+  fp->move_to_text = FALSE;
+  fp->do_all = TRUE;
+  fp->done = TRUE;	
+}
+
+extern ModTextFixPtr ModTextFixNew (void)
+{
+  ModTextFixPtr tfp;
+  
+  tfp = (ModTextFixPtr) MemNew (sizeof (ModTextFixData));
+  if (tfp == NULL) return NULL;
+  tfp->remove_this = FALSE;
+  tfp->move_this = FALSE;
+  tfp->remove_all_germline = FALSE;
+  tfp->remove_all_transgenic = FALSE;
+  tfp->remove_all_environmental = FALSE;
+  tfp->remove_all_rearranged = FALSE;
+  tfp->move_all_germline = FALSE;
+  tfp->move_all_transgenic = FALSE;
+  tfp->move_all_environmental = FALSE;
+  tfp->move_all_rearranged = FALSE;
+  return tfp;
+}
+
+static void 
+GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
+{
+  GrouP  g, c, t;
+  ButtoN b;
+  FixModifierTextFormData fd;
+  CharPtr prompt_fmt = "You have text (%s) in %s modifier field.";
+  CharPtr prompt_str = NULL;
+  CharPtr btn_str = NULL;
+  
+  if (tfp == NULL) return;
+  switch (subtype)
+  {
+  	case SUBSRC_rearranged:
+  	  if (tfp->remove_all_rearranged)
+  	  {
+  	  	tfp->remove_this = TRUE;
+  	  	tfp->move_this = FALSE;
+  	  	return;
+  	  }
+  	  else if (tfp->move_all_rearranged)
+  	  {
+  	  	tfp->move_this = TRUE;
+  	  	tfp->remove_this = FALSE;
+  	  	return;
+  	  }
+  	  break;
+  	case SUBSRC_transgenic:
+  	  if (tfp->remove_all_transgenic)
+  	  {
+  	  	tfp->remove_this = TRUE;
+  	  	tfp->move_this = FALSE;
+  	  	return;
+  	  }
+  	  else if (tfp->move_all_transgenic)
+  	  {
+  	  	tfp->move_this = TRUE;
+  	  	tfp->remove_this = FALSE;
+  	  	return;
+  	  }
+  	  break;
+  	case SUBSRC_germline:
+  	  if (tfp->remove_all_germline)
+  	  {
+  	  	tfp->remove_this = TRUE;
+  	  	tfp->move_this = FALSE;
+  	  	return;
+  	  }
+  	  else if (tfp->move_all_germline)
+  	  {
+  	  	tfp->move_this = TRUE;
+  	  	tfp->remove_this = FALSE;
+  	  	return;
+  	  }
+  	  break;
+  	case SUBSRC_environmental_sample:
+  	  if (tfp->remove_all_environmental)
+  	  {
+  	  	tfp->remove_this = TRUE;
+  	  	tfp->move_this = FALSE;
+  	  	return;
+  	  }
+  	  else if (tfp->move_all_environmental)
+  	  {
+  	  	tfp->move_this = TRUE;
+  	  	tfp->remove_this = FALSE;
+  	  	return;
+  	  }
+  	  break;
+  }
+
+  fd.w = ModalWindow(-20, -13, -10, -10, NULL);
+  g = HiddenGroup(fd.w, -1, 0, NULL);
+  
+  prompt_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (prompt_fmt) + StringLen (txt)
+                                  + StringLen ("an environmental sample")));
+  if (prompt_str == NULL) return;
+  switch (subtype)
+  {
+  	case SUBSRC_rearranged:
+  	  sprintf (prompt_str, prompt_fmt, txt, "a rearranged");
+  	  break;
+  	case SUBSRC_germline:
+  	  sprintf (prompt_str, prompt_fmt, txt, "a germline");
+  	  break;
+  	case SUBSRC_transgenic:
+  	  sprintf (prompt_str, prompt_fmt, txt, "a transgenic");
+  	  break;
+  	case SUBSRC_environmental_sample:
+  	  sprintf (prompt_str, prompt_fmt, txt, "an environmental sample");
+  	  break;
+  }
+  
+  t = HiddenGroup (g, 1, 0, NULL);
+  StaticPrompt (t, prompt_str, 0, dialogTextHeight, programFont, 'l');
+  StaticPrompt (t, "This text will never be displayed in your GenBank record.", 0, dialogTextHeight, programFont, 'l');
+  StaticPrompt (t, "Do you want to move this text to a note or remove it?", 0, dialogTextHeight, programFont, 'l');
+  
+  c = HiddenGroup (g, 4, 0, NULL);
+  b = PushButton (c, "Move to note", FixModifierTextMove);
+  SetObjectExtra (b, &fd, NULL);  
+  b = PushButton (c, "Move all to note", FixModifierTextMoveAll);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton (c, "Remove", FixModifierTextRemove);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton (c, "Remove all", FixModifierTextRemoveAll);
+  SetObjectExtra (b, &fd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) t, (HANDLE) c, NULL);
+  
+  Show(fd.w); 
+  Select (fd.w);
+  fd.done = FALSE;
+  while (!fd.done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+
+  if (fd.remove)
+  {
+  	tfp->remove_this = TRUE;
+  	if (fd.do_all)
+  	{
+  	  switch (subtype)
+  	  {
+  	  	case SUBSRC_rearranged:
+  	  	  tfp->remove_all_rearranged = TRUE;
+  	  	  tfp->move_all_rearranged = FALSE;
+  	  	  break;
+  	  	case SUBSRC_transgenic:
+  	  	  tfp->remove_all_transgenic = TRUE;
+  	  	  tfp->move_all_transgenic = FALSE;
+  	  	  break;
+  	  	case SUBSRC_germline:
+  	  	  tfp->remove_all_germline = TRUE;
+  	  	  tfp->move_all_germline = FALSE;
+  	  	  break;
+  	  	case SUBSRC_environmental_sample:
+  	  	  tfp->remove_all_environmental = TRUE;
+  	  	  tfp->move_all_environmental = FALSE;
+  	  	  break;
+  	  }
+  	}
+  }
+  else if (fd.move_to_text)
+  {
+  	tfp->move_this = TRUE;
+  	if (fd.do_all)
+  	{
+  	  switch (subtype)
+  	  {
+  	  	case SUBSRC_rearranged:
+  	  	  tfp->remove_all_rearranged = FALSE;
+  	  	  tfp->move_all_rearranged = TRUE;
+  	  	  break;
+  	  	case SUBSRC_transgenic:
+  	  	  tfp->remove_all_transgenic = FALSE;
+  	  	  tfp->move_all_transgenic = TRUE;
+  	  	  break;
+  	  	case SUBSRC_germline:
+  	  	  tfp->remove_all_germline = FALSE;
+  	  	  tfp->move_all_germline = TRUE;
+  	  	  break;
+  	  	case SUBSRC_environmental_sample:
+  	  	  tfp->remove_all_environmental = FALSE;
+  	  	  tfp->move_all_environmental = TRUE;
+  	  	  break;
+  	  }
+  	}
+  }
+}
+
+extern void RemoveTextFromTextFreeSubSourceModifiers (BioSourcePtr biop, Pointer userdata)
+{
+  SubSourcePtr ssp;
+  SubSourcePtr note_ssp = NULL;
+  Int4         len;
+  CharPtr      new_note;
+  ModTextFixPtr   tfp;
+  
+  if (biop == NULL || biop->subtype == NULL) return;
+  
+  if (userdata == NULL)
+  {
+    tfp = ModTextFixNew();
+    if (tfp == NULL) return;
+  }
+  else
+  {
+  	tfp = (ModTextFixPtr) userdata;
+  }
+  
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next)
+  {
+  	tfp->move_this = FALSE;
+  	tfp->remove_this = FALSE;
+  	if ((ssp->subtype == SUBSRC_germline
+  	    || ssp->subtype == SUBSRC_transgenic
+  	    || ssp->subtype == SUBSRC_rearranged
+  	    || ssp->subtype == SUBSRC_environmental_sample)
+  	    && ! StringHasNoText (ssp->name))
+  	{
+ 	  GetModifierTextFix (tfp, ssp->subtype, ssp->name);
+  	  if (tfp->move_this)
+  	  {
+  	    /* if a note modifier is found, add this text to it, otherwise create a new
+  	     * note modifier to hold this text.
+  	     */
+  	    if (note_ssp == NULL)
+  	    {
+  	      for (note_ssp = biop->subtype; note_ssp != NULL && note_ssp->subtype != 255; note_ssp = note_ssp->next)
+  	      {	
+  	      }
+  	    }
+  	    if (note_ssp == NULL)
+  	    {
+  	  	  note_ssp = SubSourceNew ();
+  	  	  if (note_ssp != NULL)
+  	  	  {
+  	  	    note_ssp->subtype = 255;
+  	  	    note_ssp->name = ssp->name;
+  	  	    ssp->name = StringSave ("");
+  	  	    note_ssp->next = ssp->next;
+  	  	    ssp->next = note_ssp;
+  	  	  }
+  	    }
+  	    else if (StringHasNoText (note_ssp->name))
+  	    {
+          note_ssp->name = MemFree (note_ssp->name);
+          note_ssp->name = ssp->name;
+          ssp->name = StringSave ("");  	  		
+  	    }
+  	    else
+  	    {
+  	  	  len = StringLen (note_ssp->name) + StringLen (ssp->name) + 3;
+  	  	  new_note = (CharPtr) MemNew (len * sizeof (Char));
+  	  	  if (new_note != NULL)
+  	  	  {
+  	  	    StringCpy (new_note, note_ssp->name);
+  	  	    StringCat (new_note, "; ");
+  	  	    StringCat (new_note, ssp->name);
+  	  	    note_ssp->name = MemFree (note_ssp->name);
+  	  	    note_ssp->name = new_note;
+  	  	    ssp->name = MemFree (ssp->name);
+  	  	    ssp->name = StringSave ("");
+  	  	  }
+  	    }
+  	  }
+  	  else if (tfp->remove_this)
+  	  {
+  	    ssp->name = MemFree (ssp->name);
+  	    ssp->name = StringSave ("");
+  	  }
+  	}
+  }
+  if (userdata == NULL)
+  {
+  	MemFree (tfp);
   }
 }
 

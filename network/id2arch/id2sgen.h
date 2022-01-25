@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Seq-split
-*    Generated using ASNCODE Revision: 6.0 at May 3, 2004  6:18 PM
+*    Generated using ASNCODE Revision: 6.0 at Oct 18, 2004  1:24 AM
 *
 **************************************************/
 
@@ -165,6 +165,7 @@ typedef ValNode ID2SChunkContent;
 #define ID2SChunkContent_seq_map 4
 #define ID2SChunkContent_seq_data 5
 #define ID2SChunkContent_seq_annot_place 6
+#define ID2SChunkContent_bioseq_place 7
 
 
 NLM_EXTERN ID2SChunkContentPtr LIBCALL ID2SChunkContentFree PROTO ((ID2SChunkContentPtr ));
@@ -181,7 +182,7 @@ NLM_EXTERN Boolean LIBCALL ID2SChunkContentAsnWrite PROTO (( ID2SChunkContentPtr
 typedef struct struct_ID2S_Seq_descr_Info {
    Int4   type_mask;
    struct struct_ID2_Id_Range PNTR   bioseqs;
-   struct struct_ID2_Id_Range PNTR   bioseq_sets;
+   ValNodePtr   bioseq_sets;
 } ID2SSeqDescrInfo, PNTR ID2SSeqDescrInfoPtr;
 
 
@@ -243,7 +244,7 @@ NLM_EXTERN Boolean LIBCALL ID2SSeqAssemblyInfoAsnWrite PROTO (( ID2SSeqAssemblyI
 typedef struct struct_ID2S_Seq_annot_place_Info {
    CharPtr   name;
    struct struct_ID2_Id_Range PNTR   bioseqs;
-   struct struct_ID2_Id_Range PNTR   bioseq_sets;
+   ValNodePtr   bioseq_sets;
 } ID2SSeqAnnotPlaceInfo, PNTR ID2SSeqAnnotPlaceInfoPtr;
 
 
@@ -251,6 +252,65 @@ NLM_EXTERN ID2SSeqAnnotPlaceInfoPtr LIBCALL ID2SSeqAnnotPlaceInfoFree PROTO ((ID
 NLM_EXTERN ID2SSeqAnnotPlaceInfoPtr LIBCALL ID2SSeqAnnotPlaceInfoNew PROTO (( void ));
 NLM_EXTERN ID2SSeqAnnotPlaceInfoPtr LIBCALL ID2SSeqAnnotPlaceInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ID2SSeqAnnotPlaceInfoAsnWrite PROTO (( ID2SSeqAnnotPlaceInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2SBioseqPlaceInfo
+*
+**************************************************/
+typedef struct struct_ID2S_Bioseq_place_Info {
+   struct struct_ID2S_Bioseq_place_Info PNTR next;
+   Int4   bioseq_set;
+   ValNodePtr   seq_ids;
+} ID2SBioseqPlaceInfo, PNTR ID2SBioseqPlaceInfoPtr;
+
+
+NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoFree PROTO ((ID2SBioseqPlaceInfoPtr ));
+NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoNew PROTO (( void ));
+NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SBioseqPlaceInfoAsnWrite PROTO (( ID2SBioseqPlaceInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2BioseqIds
+*
+**************************************************/
+typedef struct struct_ID2IdRange ID2BioseqIds;
+typedef struct struct_ID2IdRange PNTR ID2BioseqIdsPtr;
+#define ID2BioseqIdsNew() ID2IdRangeNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN ID2BioseqIdsPtr LIBCALL ID2BioseqIdsFree PROTO ((ID2BioseqIdsPtr ));
+NLM_EXTERN ID2BioseqIdsPtr LIBCALL ID2BioseqIdsNew PROTO (( void ));
+NLM_EXTERN ID2BioseqIdsPtr LIBCALL ID2BioseqIdsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2BioseqIdsAsnWrite PROTO (( ID2BioseqIdsPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    ID2BioseqSetIds
+*
+**************************************************/
+typedef ValNode ID2BioseqSetIds;
+typedef ValNodePtr ID2BioseqSetIdsPtr;
+#define ID2BioseqSetIdsNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN ID2BioseqSetIdsPtr LIBCALL ID2BioseqSetIdsFree PROTO ((ID2BioseqSetIdsPtr ));
+NLM_EXTERN ID2BioseqSetIdsPtr LIBCALL ID2BioseqSetIdsNew PROTO (( void ));
+NLM_EXTERN ID2BioseqSetIdsPtr LIBCALL ID2BioseqSetIdsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2BioseqSetIdsAsnWrite PROTO (( ID2BioseqSetIdsPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 
 
@@ -315,8 +375,9 @@ typedef struct struct_ID2S_Chunk_Data {
    ValNodePtr   descrs;
    struct struct_Seq_annot PNTR   annots;
    struct struct_Seq_align PNTR   assembly;
-   struct struct_Seq_literal PNTR   seq_map;
-   struct struct_Seq_literal PNTR   seq_data;
+   struct struct_ID2S_Sequence_Piece PNTR   seq_map;
+   struct struct_ID2S_Sequence_Piece PNTR   seq_data;
+   struct struct_Bioseq PNTR   bioseqs;
 } ID2SChunkData, PNTR ID2SChunkDataPtr;
 
 
@@ -335,6 +396,7 @@ typedef ValNode Id_id;
 
 #define Id_id_bioseq_set 1
 #define Id_id_gi 2
+#define Id_id_seq_id 3
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -343,6 +405,25 @@ static Id_idPtr LIBCALL Id_idAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 static Boolean LIBCALL Id_idAsnWrite PROTO (( Id_idPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    ID2SSequencePiece
+*
+**************************************************/
+typedef struct struct_ID2S_Sequence_Piece {
+   struct struct_ID2S_Sequence_Piece PNTR next;
+   Int4   start;
+   struct struct_Seq_literal PNTR   data;
+} ID2SSequencePiece, PNTR ID2SSequencePiecePtr;
+
+
+NLM_EXTERN ID2SSequencePiecePtr LIBCALL ID2SSequencePieceFree PROTO ((ID2SSequencePiecePtr ));
+NLM_EXTERN ID2SSequencePiecePtr LIBCALL ID2SSequencePieceNew PROTO (( void ));
+NLM_EXTERN ID2SSequencePiecePtr LIBCALL ID2SSequencePieceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SSequencePieceAsnWrite PROTO (( ID2SSequencePiecePtr , AsnIoPtr, AsnTypePtr));
 
 
 

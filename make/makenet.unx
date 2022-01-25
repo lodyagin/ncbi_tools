@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.175 2004/05/17 17:56:58 dondosha Exp $
+#	$Id: makenet.unx,v 6.181 2004/08/09 13:07:02 madden Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -520,7 +520,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf flint gbseqget insdseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all flint gbseqget insdseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -669,6 +669,8 @@ copy :
 	$(SRCCOPY) ../demo/asn2ff.c .
 	$(SRCCOPY) ../demo/asn2gb.c .
 	$(SRCCOPY) ../demo/asn2fsa.c .
+	$(SRCCOPY) ../demo/asn2all.c .
+	$(SRCCOPY) ../demo/tbl2asn.c .
 	$(SRCCOPY) ../demo/flint.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
 	$(SRCCOPY) ../demo/insdseqget.c .
@@ -1100,12 +1102,12 @@ netentcf : netentcf.c $(ULIB31)
 	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB20) $(LIB22) $(LIB4) $(LIB23) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 ddv    : $(OBJDDV)
-	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) $(LIB22) $(LIB45) \
+	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB61) $(LIB60) $(LIB41) $(LIB31) $(LIB20) $(LIB22) $(LIB45) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
 	$(VIBLIBS) $(OTHERLIBS)
 
 udv    : $(OBJUDV)
-	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) $(LIB22) $(LIB45) \
+	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB61) $(LIB60) $(LIB41) $(LIB31) $(LIB20) $(LIB22) $(LIB45) \
     $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) \
 	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
@@ -1200,6 +1202,14 @@ asn2fsa_psf :	asn2fsa.c
 	$(CC) -DINTERNAL_NCBI_ASN2FSA -g -o asn2fsa_psf $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
+# asn2all program (asn2all)
+asn2all :	asn2all.c
+	$(CC) -g -o asn2all $(LDFLAGS) asn2all.c $(THREAD_OBJ) $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# tbl2asn
+tbl2asn : tbl2asn.c 
+	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
+
 # flint program (flint)
 flint :	flint.c
 	$(CC) -g -o flint $(LDFLAGS) flint.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
@@ -1218,7 +1228,7 @@ testent2 :	testent2.c
 
 # network Entrez2 application (entrez2)
 entrez2 :	entrez2.c
-	$(CC) -g -o entrez2 $(LDFLAGS) entrez2.c $(LIB41) $(LIB6) $(LIB20) $(LIB22) $(LIB23) $(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -g -o entrez2 $(LDFLAGS) entrez2.c $(LIB61) $(LIB60) $(LIB41) $(LIB6) $(LIB20) $(LIB22) $(LIB23) $(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) entrez2
 
 # demo program (spidey)
@@ -1274,7 +1284,7 @@ blastcl3: blastall.c $(BNETCLILIB) $(BLIB36)
 # BLAST 2 sequences
 # Uses network libraries to access Entrez for retrieving sequences by gi/accession
 bl2seq : bl2seq.c
-	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB23) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB61) $(LIB60) $(LIB23) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)

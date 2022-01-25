@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.16 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.16  2004/10/04 15:50:22  kans
+* added vsp->justShowAccession for extremely terse output
+*
+* Revision 6.15  2004/09/10 17:52:05  kans
+* changed ValidateLimit enum to Int2 defines
+*
+* Revision 6.14  2004/09/10 15:31:43  kans
+* added farFetchMRNAproducts, locusTagGeneralMatch, validationLimit flags to vsp
+*
 * Revision 6.13  2004/05/06 19:42:22  kans
 * new function GetValidCountryList for access to country code list, which is now NULL terminated
 *
@@ -147,6 +156,15 @@ typedef int (* SpellCheckFunc) (char *String, SpellCallBackFunc);
 
 #define SET_DEPTH 20
 
+#define VALIDATE_ALL 0
+#define VALIDATE_INST 1
+#define VALIDATE_HIST 2
+#define VALIDATE_CONTEXT 3
+#define VALIDATE_GRAPH 4
+#define VALIDATE_SET 5
+#define VALIDATE_FEAT 6
+#define VALIDATE_DESC 7
+
 typedef struct validstruct {
 	Int2 cutoff;                   /* lowest errmsg to show 0=default */
 	Int2 errors[6];
@@ -177,8 +195,12 @@ typedef struct validstruct {
 	Boolean doSeqHistAssembly;     /* do alignment validation in Seq-hist.assembly */
 	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
 	Boolean farFetchCDSproducts;   /* lock CDS->products for CdTransCheck, if necessary */
+	Boolean farFetchMRNAproducts;  /* lock MRNA->products for MrnaTransCheck, if necessary */
+	Boolean locusTagGeneralMatch;  /* expect locus_tag to match Seq-id.general of CDS and mRNA product */
 	Boolean validateIDSet;         /* look for gain or loss of general IDs on sequence update */
 	Boolean seqSubmitParent;       /* flag from tbl2asn to suppress no pub message */
+	Boolean justShowAccession;     /* extremely terse output with accession and error type */
+	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 } ValidStruct, PNTR ValidStructPtr;
 
@@ -186,7 +208,6 @@ NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp))
 NLM_EXTERN void ValidStructClear (ValidStructPtr vsp);  /* 0 out a ValidStruct */
 NLM_EXTERN ValidStructPtr ValidStructNew (void);
 NLM_EXTERN ValidStructPtr ValidStructFree (ValidStructPtr vsp);
-NLM_EXTERN void ReportNonAscii PROTO((ValidStructPtr vsp, SeqEntryPtr sep));
 NLM_EXTERN void SpellCallBack (char * str);
 NLM_EXTERN Boolean IsNuclAcc (CharPtr name);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,9 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.15  2004/07/08 15:27:37  kans
+* commented out second unnecessary call to GetArgs
+*
 * Revision 6.14  2004/04/01 13:43:05  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -210,9 +213,11 @@ Int2 Main (void)
 
     AsnSetXMLmodulePrefix((CharPtr)(asnargs[P_argXMLmodulePrefix].strvalue));
 
+	/*
 	if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
 		return 1;
         ErrClear();
+    */
 
     if (! AsnIoSetBufsize(NULL, (Int2)asnargs[b_argBufferSize].intvalue))
         return 1;

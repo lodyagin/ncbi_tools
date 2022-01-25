@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.458 $
+* $Revision: 6.474 $
 *
 * File Description: 
 *
@@ -115,12 +115,6 @@ static char *time_of_compilation = "now";
 #include <medarch.h>
 #include <medutil.h>
 
-/*#ifdef USE_TAXON*/
-/*
-#include <taxondt.h>
-*/
-#include <taxutil.h>
-
 #ifdef USE_SPELL
 #include <spellapi.h>
 #endif
@@ -129,7 +123,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "5.25"
+#define SEQ_APP_VER "5.33"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -1478,6 +1472,7 @@ static void ProcessDoneButton (ForM f)
           }
           HideValidateDoc ();
           vsp->suppressContext = ShouldSetSuppressContext ();
+          vsp->justShowAccession = ShouldSetJustShowAccession ();
           oldErrHook = ErrSetHandler (ValidErrHook);
           oldErrSev = ErrSetMessageLevel (SEV_NONE);
           vsp->validateAlignments = TRUE;
@@ -1596,7 +1591,7 @@ static void Cn3DWinShowProc (IteM i)
 #endif
 */
 
-extern void ValSeqEntryFormEx (ForM f, Boolean doAligns)
+static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit)
 
 {
   Boolean         allRawOrSeg = TRUE;
@@ -1632,9 +1627,13 @@ extern void ValSeqEntryFormEx (ForM f, Boolean doAligns)
         }
         if (indexerVersion) {
           vsp->alwaysRequireIsoJTA = TRUE;
+          vsp->farFetchCDSproducts = TRUE;
+          vsp->farFetchMRNAproducts = TRUE;
         }
+        vsp->validationLimit = limit;
         HideValidateDoc ();
         vsp->suppressContext = ShouldSetSuppressContext ();
+        vsp->justShowAccession = ShouldSetJustShowAccession ();
         if (doAligns) {
           vsp->validateAlignments = TRUE;
           vsp->alignFindRemoteBsp = TRUE;
@@ -1679,7 +1678,7 @@ extern void ValSeqEntryFormEx (ForM f, Boolean doAligns)
 extern void ValSeqEntryForm (ForM f)
 
 {
-  ValSeqEntryFormEx (f, TRUE);
+  ValSeqEntryFormEx (f, TRUE, VALIDATE_ALL);
 }
 
 static void ValSeqEntryProc (IteM i)
@@ -1708,8 +1707,65 @@ static void ValSeqEntryProcNoAln (IteM i)
   bfp = (BaseFormPtr) GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    ValSeqEntryFormEx (bfp->form, FALSE);
+    ValSeqEntryFormEx (bfp->form, FALSE, VALIDATE_ALL);
   }
+}
+
+static void ValSeqEntryProcSpec (IteM i, Int2 limit)
+
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = (BaseFormPtr) GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    ValSeqEntryFormEx (bfp->form, FALSE, limit);
+  }
+}
+
+static void ValSeqEntryProcInst (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_INST);
+}
+
+static void ValSeqEntryProcHist (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_HIST);
+}
+
+static void ValSeqEntryProcContext (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_CONTEXT);
+}
+
+static void ValSeqEntryProcGraph (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_GRAPH);
+}
+
+static void ValSeqEntryProcSet (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_SET);
+}
+
+static void ValSeqEntryProcFeat (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_FEAT);
+}
+
+static void ValSeqEntryProcDesc (IteM i)
+
+{
+  ValSeqEntryProcSpec (i, VALIDATE_DESC);
 }
 
 #ifdef USE_SPELL
@@ -1762,6 +1818,7 @@ static void SpellCheckTheForm (ForM f)
         }
         HideValidateDoc ();
         vsp->suppressContext = ShouldSetSuppressContext ();
+        vsp->justShowAccession = ShouldSetJustShowAccession ();
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);
         for (j = 0; j < 6; j++) {
@@ -3191,7 +3248,7 @@ static void PrintAlignmentSummary (TAlignmentFilePtr afp, FILE *fp)
   }
 }
 
-static void 
+extern void 
 ProduceAlignmentNotes 
 (TAlignmentFilePtr afp,
  TErrorInfoPtr error_list)
@@ -4179,6 +4236,10 @@ static void DisplayHelpFormProc (IteM i)
 }
 
 /*#ifdef USE_MEDARCH*/
+
+static Boolean debug_fix_pub_equiv = FALSE;
+static Boolean debug_fix_pub_set = FALSE;
+
 static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep)
 
 {
@@ -4189,6 +4250,10 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep)
   Int4           pmid = 0;
   ValNodePtr     pub;
   ValNodePtr     vnp;
+#ifdef OS_UNIX
+  AsnIoPtr       aip;
+  CharPtr        str;
+#endif
 
   pub = NULL;
   if (oldpep != NULL) {
@@ -4208,6 +4273,26 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep)
       MonitorStrValue (mon, "Performing Lookup");
       Update ();
       pub = FixPubEquiv (pep, &fpo);
+#ifdef OS_UNIX
+      if (! debug_fix_pub_set) {
+        str = (CharPtr) getenv ("DEBUG_FIX_PUB_EQUIV");
+        if (StringDoesHaveText (str)) {
+          if (StringICmp (str, "TRUE") == 0) {
+            debug_fix_pub_equiv = TRUE;
+          }
+        }
+        debug_fix_pub_set = TRUE;
+      }
+      if (debug_fix_pub_equiv) {
+        if (pub != NULL) {
+          aip = AsnIoOpen ("fixpubequiv.txt", "w");
+          if (aip != NULL) {
+            PubEquivAsnWrite (pub, aip, NULL);
+            AsnIoClose (aip);
+          }
+        }
+      }
+#endif
       if (! fpo.fetches_succeeded) {
         ErrShow ();
         Update ();
@@ -6887,8 +6972,11 @@ static void BioseqViewFormMenus (WindoW w)
     SetFormMenuItem (bfp, mssgupd, (IteM) sub);
     i = CommandItem (sub, "Read FASTA File...", UpdateSeqWithFASTA);
     SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Read FASTA File, Use New BLAST...", NewUpdateSequenceNewBlast);
-    SetObjectExtra (i, bfp, NULL);
+    if (indexerVersion)
+    {
+      i = CommandItem (sub, "Read FASTA File, Use New BLAST...", NewUpdateSequenceNewBlast);
+      SetObjectExtra (i, bfp, NULL);      
+    }
     i = CommandItem (sub, "Read Sequence Record...", UpdateSeqWithRec);
     SetObjectExtra (i, bfp, NULL);
     if (useEntrez) {
@@ -6897,14 +6985,9 @@ static void BioseqViewFormMenus (WindoW w)
       mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
       FormCommandItem (sub, "Selected Alignment...", bfp, mssgupwthaln);
     }
-    if (indexerVersion) {
-      SeparatorItem (sub);
-      i = CommandItem (sub, "FASTA Set", UpdateFastaSet);
-      /*
-      i = CommandItem (sub, "FASTA Set", DoUpdatesSeq);
-      */
-      SetObjectExtra (i, bfp, NULL);
-    }
+    SeparatorItem (sub);
+    i = CommandItem (sub, "FASTA or ASN.1 Set", UpdateFastaSet);
+    SetObjectExtra (i, bfp, NULL);
     sub = SubMenu (m, "Extend Sequence");
     SetFormMenuItem (bfp, mssgext, (IteM) sub);
     i = CommandItem (sub, "Read FASTA File...", ExtendSeqWithFASTA);
@@ -6950,6 +7033,21 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (sub, "Validate Record/ R", ValSeqEntryProc);
       SetObjectExtra (i, bfp, NULL);
       i = CommandItem (sub, "Validate no Alignments/ A", ValSeqEntryProcNoAln);
+      SetObjectExtra (i, bfp, NULL);
+      SeparatorItem (sub);
+      i = CommandItem (sub, "Validate Inst", ValSeqEntryProcInst);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Hist", ValSeqEntryProcHist);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Context", ValSeqEntryProcContext);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Graph", ValSeqEntryProcGraph);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Set", ValSeqEntryProcSet);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Feat", ValSeqEntryProcFeat);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate Desc", ValSeqEntryProcDesc);
       SetObjectExtra (i, bfp, NULL);
     } else {
       i = CommandItem (m, "Validate/ V", ValSeqEntryProc);
@@ -7055,6 +7153,8 @@ static void BioseqViewFormMenus (WindoW w)
     SetupNewDescriptorsMenu (sub, bfp);
     SeparatorItem (m);
     i = CommandItem (m, "Generate Definition Line", testAutoDef);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (m, "Sort Unique Count By Group", SUCSubmitterProc);
     SetObjectExtra (i, bfp, NULL);
 
     if (indexerVersion) {
@@ -9653,10 +9753,8 @@ static void SetupMacMenus (void)
     mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
     updalignitem = FormCommandItem (updateSeqMenu, "Selected Alignment...", NULL, mssgupwthaln);
   }
-  if (indexerVersion) {
-    SeparatorItem (updateSeqMenu);
-    CommandItem (updateSeqMenu, "FASTA Set", DoUpdatesSeq);
-  }
+  SeparatorItem (updateSeqMenu);
+  CommandItem (updateSeqMenu, "FASTA or ASN.1 Set", UpdateFastaSet);
   extendSeqMenu = SubMenu (m, "Extend Sequence");
   SetFormMenuItem (NULL, mssgext, (IteM) extendSeqMenu);
   CommandItem (extendSeqMenu, "Read FASTA File...", ExtendSeqWithFASTA);
@@ -9690,6 +9788,14 @@ static void SetupMacMenus (void)
     validateMenu = SubMenu (m, "Validate");
     CommandItem (validateMenu, "Validate Record/ V", ValSeqEntryProc);
     CommandItem (validateMenu, "Validate no Alignments", ValSeqEntryProcNoAln);
+    SeparatorItem (validateMenu);
+    CommandItem (validateMenu, "Validate Inst", ValSeqEntryProcInst);
+    CommandItem (validateMenu, "Validate Hist", ValSeqEntryProcHist);
+    CommandItem (validateMenu, "Validate Context", ValSeqEntryProcContext);
+    CommandItem (validateMenu, "Validate Graph", ValSeqEntryProcGraph);
+    CommandItem (validateMenu, "Validate Set", ValSeqEntryProcSet);
+    CommandItem (validateMenu, "Validate Feat", ValSeqEntryProcFeat);
+    CommandItem (validateMenu, "Validate Desc", ValSeqEntryProcDesc);
   } else {
     validateItem = CommandItem (m, "Validate", ValSeqEntryProc);
   }
@@ -10664,8 +10770,15 @@ extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityI
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", dirsubfetchcmd, accn, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);
@@ -10714,8 +10827,15 @@ static Int2 LIBCALLBACK DirSubBioseqFetchFunc (Pointer data)
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", dirsubfetchcmd, tsip->accession, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);
@@ -10775,8 +10895,15 @@ extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", smartfetchcmd, accn, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", smartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);
@@ -10825,8 +10952,15 @@ static Int2 LIBCALLBACK SmartBioseqFetchFunc (Pointer data)
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", smartfetchcmd, tsip->accession, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", smartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);
@@ -10886,8 +11020,15 @@ extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entit
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, accn, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);
@@ -10936,8 +11077,15 @@ static Int2 LIBCALLBACK TPASmartBioseqFetchFunc (Pointer data)
 
   TmpNam (path);
 
+#ifdef OS_UNIX
   sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, tsip->accession, path);
   system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
   fp = FileOpen (path, "r");
   if (fp == NULL) {
     FileRemove (path);

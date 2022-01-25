@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.145 2004/05/05 11:31:16 ivanov Exp $
+/*  $Id: ncbi_socket.c,v 6.149 2004/09/08 15:12:43 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -247,6 +247,9 @@ typedef int TSOCK_Handle;
 #  ifdef NETDB_INTERNAL
 #    undef NETDB_INTERNAL
 #  endif /*NETDB_INTERNAL*/
+#  ifndef INADDR_LOOPBACK
+#    define	INADDR_LOOPBACK	0x7F000001
+#  endif /*INADDR_LOOPBACK*/
 
 #endif /*NCBI_OS_MSWIN, NCBI_OS_UNIX, NCBI_OS_MAC*/
 
@@ -1210,20 +1213,22 @@ extern EIO_Status LSOCK_Create(unsigned short port,
                                unsigned short backlog,
                                LSOCK*         lsock)
 {
-    return LSOCK_CreateEx(port, backlog, lsock, eDefault);
+    return LSOCK_CreateEx(port, backlog, lsock, fLSCE_LogDefault);
 }
 
 
 extern EIO_Status LSOCK_CreateEx(unsigned short port,
                                  unsigned short backlog,
                                  LSOCK*         lsock,
-                                 ESwitch        log)
+                                 TLSCE_Flags    flags)
 {
+    ESwitch            log = (ESwitch)(flags & 0xF);
     unsigned int       x_id = ++s_ID_Counter;
     TSOCK_Handle       x_lsock;
     struct sockaddr_in addr;
-
+    unsigned int       ip;
     *lsock = 0;
+
     /* initialize internals */
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
 
@@ -1254,9 +1259,10 @@ extern EIO_Status LSOCK_CreateEx(unsigned short port,
     }
 
     /* bind */
+    ip = flags & fLSCE_BindLocal ? INADDR_LOOPBACK : INADDR_ANY;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(ip);
     addr.sin_port        = htons(port);
 #ifdef HAVE_SIN_LEN
     addr.sin_len         = sizeof(addr);
@@ -1264,8 +1270,10 @@ extern EIO_Status LSOCK_CreateEx(unsigned short port,
     if (bind(x_lsock, (struct sockaddr*) &addr, sizeof(addr)) != 0) {
         int x_errno = SOCK_ERRNO;
         CORE_LOGF_ERRNO_EX(eLOG_Error, x_errno, SOCK_STRERROR(x_errno),
-                           ("LSOCK#%u[%u]: [LSOCK::Create]  Failed bind(:%hu)",
-                            x_id, (unsigned int) x_lsock, port));
+                           ("LSOCK#%u[%u]: [LSOCK::Create] "
+                            " Failed bind(%s:%hu)", x_id,
+                            (unsigned int) x_lsock,
+                            ip == INADDR_LOOPBACK ? "127.0.0.1" : "", port));
         SOCK_CLOSE(x_lsock);
         return x_errno == SOCK_EADDRINUSE ? eIO_Closed : eIO_Unknown;
     }
@@ -1300,8 +1308,9 @@ extern EIO_Status LSOCK_CreateEx(unsigned short port,
 
     /* statistics & logging */
     if (log == eOn  ||  (log == eDefault  &&  s_Log == eOn)) {
-        CORE_LOGF(eLOG_Trace, ("LSOCK#%u[%u]: Listening at port :%hu",
-                               x_id, (unsigned int) x_lsock, port));
+        CORE_LOGF(eLOG_Trace,("LSOCK#%u[%u]: Listening at  %s:%hu",
+                              x_id, (unsigned int) x_lsock,
+                              ip == INADDR_LOOPBACK ? "127.0.0.1" : "", port));
     }
 
     return eIO_Success;
@@ -3932,8 +3941,8 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
                 x_errno = SOCK_ERRNO;
 #  endif /*NETDB_INTERNAL*/
             CORE_LOGF_ERRNO_EX(eLOG_Warning, x_errno, SOCK_STRERROR(x_errno),
-                              ("[SOCK_gethostbyname]  Failed "
-                              "gethostbyname%s(\"%.64s\")", suffix, hostname));
+                               ("[SOCK_gethostbyname]  Failed "
+                                "gethostbyname%s(\"%.64s\")",suffix,hostname));
         }
 
 #endif /*HAVE_GETADDR_INFO*/
@@ -3957,7 +3966,7 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 
     if ( host ) {
         int x_errno;
-#if defined(HAVE_GETNAMEINFO)
+#if defined(HAVE_GETNAMEINFO) && defined(EAI_SYSTEM)
         struct sockaddr_in addr;
 
         memset(&addr, 0, sizeof(addr));
@@ -3979,8 +3988,8 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
                 if (SOCK_ntoa(host, addr, sizeof(addr)) != 0)
                     strcpy(addr, "<unknown>");
                 CORE_LOGF_ERRNO_EX(eLOG_Warning,x_errno,SOCK_STRERROR(x_errno),
-                                  ("[SOCK_gethostbyaddr]  Failed "
-                                   "getnameinfo(%s)", addr));
+                                   ("[SOCK_gethostbyaddr]  Failed "
+                                    "getnameinfo(%s)", addr));
             }
             name[0] = '\0';
             return 0;
@@ -4039,9 +4048,9 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 #  endif /*NETDB_INTERNAL*/
             if (SOCK_ntoa(host, addr, sizeof(addr)) != 0)
                 strcpy(addr, "<unknown>");
-            CORE_LOG_ERRNO_EX(eLOG_Warning, x_errno, SOCK_STRERROR(x_errno),
-                              ("[SOCK_gethostbyaddr]  Failed "
-                              "gethostbyaddr%s(%s)", suffix, addr));
+            CORE_LOGF_ERRNO_EX(eLOG_Warning, x_errno, SOCK_STRERROR(x_errno),
+                               ("[SOCK_gethostbyaddr]  Failed "
+                                "gethostbyaddr%s(%s)", suffix, addr));
         }
 
         return name;
@@ -4057,6 +4066,19 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 /*
  * ===========================================================================
  * $Log: ncbi_socket.c,v $
+ * Revision 6.149  2004/09/08 15:12:43  ucko
+ * SOCK_gethostbyaddr: use getnameinfo only if EAI_SYSTEM is defined.
+ * (OSF headers provide it conditionally.)
+ *
+ * Revision 6.148  2004/08/20 21:24:29  lavr
+ * Fix CORE_LOGF_ERRNO_EX() in conditional branches we never compiled :-)
+ *
+ * Revision 6.147  2004/07/23 20:26:44  lavr
+ * INADDR_LOOPBACK defined conditionally for Mac
+ *
+ * Revision 6.146  2004/07/23 19:05:52  lavr
+ * LSOCK_CreateEx() to accept flags and allow to bind to localhost
+ *
  * Revision 6.145  2004/05/05 11:31:16  ivanov
  * Fixed compile errors
  *

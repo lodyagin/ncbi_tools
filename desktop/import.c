@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -1962,6 +1962,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"FLI_cDNA",          17},
   {"HTC",               19},
   {"WGS",               20},
+  {"Barcode",           21},
   {"Other:",           255},
 END_ENUM_ALIST
 
@@ -1981,6 +1982,7 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"FLI_cDNA",          17},
   {"HTC",               19},
   {"WGS",               20},
+  {"Barcode",           21},
   {"Other:",           255},
 END_ENUM_ALIST
 
@@ -2041,7 +2043,7 @@ static Uint1 check_biomol (Uint1 biomol)
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > 20 && tech != 255) return 0;
+  if (tech > MI_TECH_barcode && tech != MI_TECH_other) return 0;
   return tech;
 }
 

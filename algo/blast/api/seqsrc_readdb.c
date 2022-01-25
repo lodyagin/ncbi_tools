@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.29 2004/06/07 17:14:58 dondosha Exp $
+/*  $Id: seqsrc_readdb.c,v 1.35 2004/10/06 14:59:28 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 *
 */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.29 2004/06/07 17:14:58 dondosha Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.35 2004/10/06 14:59:28 dondosha Exp $";
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_def.h>
@@ -57,7 +57,12 @@ static Int4 ReaddbGetMaxLength(void* readdb_handle, void* ignoreme)
  */
 static Int4 ReaddbGetNumSeqs(void* readdb_handle, void* ignoreme)
 {
-    return readdb_get_num_entries_total_real((ReadDBFILEPtr) readdb_handle);
+   ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
+   Int4 dbnseqs = 0;
+   Int8 dblength = 0;
+   
+   readdb_get_totals_ex(rdfp, &dblength, &dbnseqs, TRUE);
+   return dbnseqs;
 }
 
 /** Retrieves the total length of all sequences in the BlastSeqSrc.
@@ -90,36 +95,11 @@ static Int4 ReaddbGetAvgLength(void* readdb_handle, void* ignoreme)
  * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
  * @param ignoreme Unused by this implementation [in]
  */
-static char* ReaddbGetName(void* readdb_handle, void* ignoreme)
+static const char* ReaddbGetName(void* readdb_handle, void* ignoreme)
 {
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
 
-    return strdup(readdb_get_filename(rdfp));
-}
-
-/** Retrieves the definition of the BLAST database.
- * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
- * @param ignoreme Unused by this implementation [in]
- */
-static char* ReaddbGetDefinition(void* readdb_handle, void* ignoreme)
-{
-    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-    char* definition = NULL;
-    
-    if ((definition = readdb_get_title(rdfp)) == NULL)
-       definition = readdb_get_filename(rdfp);
-    return strdup(definition);
-}
-
-/** Retrieves the date of the BLAST database.
- * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
- * @param ignoreme Unused by this implementation [in]
- */
-static char* ReaddbGetDate(void* readdb_handle, void* ignoreme)
-{
-    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-
-    return strdup(readdb_get_date(rdfp));
+    return readdb_get_filename(rdfp);
 }
 
 /** Retrieves the date of the BLAST database.
@@ -161,7 +141,7 @@ static Int2 ReaddbGetSequence(void* readdb_handle, void* args)
         BlastSequenceBlkClean(readdb_args->seq);
 
     /* TODO: this should be cached somewhere */
-    if (oid >= readdb_get_num_entries_total_real(rdfp))
+    if (oid >= readdb_get_num_entries_total(rdfp))
         return BLAST_SEQSRC_EOF;
 
     if (!buffer_allocated) 
@@ -196,83 +176,7 @@ static Int2 ReaddbRetSequence(void* readdb_handle, void* args)
     GetSeqArg* readdb_args = (GetSeqArg*) args;
 
     ASSERT(readdb_args);
-
-    if (readdb_args->seq->sequence_start_allocated) {
-       sfree(readdb_args->seq->sequence_start);
-       readdb_args->seq->sequence_start_allocated = FALSE;
-    }
-    return 0;
-}
-
-/** Retrieves the sequence identifier meeting the criteria defined by its 
- * second argument. Currently it is an ordinal id (integer value).
- * @todo Need a way to request difference sequence identifiers in redundant
- * databases.
- * Client code is responsible for deallocating the return value. 
- * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
- * @param args Pointer to integer indicating ordinal id [in]
- */
-static char* ReaddbGetSeqIdStr(void* readdb_handle, void* args)
-{
-    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-    Int4* oid = (Int4*) args;
-    SeqIdPtr sip = NULL;
-    char* descr = NULL;
-    char *seqid_str = NULL;
-
-    if (!rdfp || !oid)
-        return NULL;
-
-    if (!readdb_get_descriptor(rdfp, *oid, &sip, &descr)) {
-        sfree(seqid_str);
-        return NULL;
-    }
-
-    if (sip->choice != SEQID_GENERAL ||
-        strcmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
-       if ( !(seqid_str = (char*) malloc(sizeof(char)*SEQIDLEN_MAX)))
-          return NULL;
-       SeqIdWrite(sip, seqid_str, PRINTID_FASTA_LONG, SEQIDLEN_MAX-1);
-       sfree(descr);
-    } else {
-       seqid_str = strtok(descr, " \t\n\r");
-    }
-    sip = SeqIdSetFree(sip);
-
-    return seqid_str;
-}
-
-/** Retrieves the sequence identifier meeting the criteria defined by its 
- * second argument. Currently it is an ordinal id (integer value).
- * Client code is responsible for deallocating the return value. 
- * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
- * @param args Pointer to integer indicating ordinal id [in]
- * @return Sequence id structure generated from ASN.1 spec, 
- *         cast to a void pointer.
- */
-static ListNode* ReaddbGetSeqId(void* readdb_handle, void* args)
-{
-    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-    Int4* oid = (Int4*) args;
-    SeqIdPtr sip = NULL;
-    ListNode* seqid_wrap;
-
-    if (!rdfp || !oid)
-        return NULL;
-
-    if (!readdb_get_descriptor(rdfp, *oid, &sip, NULL)) {
-        return NULL;
-    }
-    seqid_wrap = ListNodeAddPointer(NULL, BLAST_SEQSRC_C_SEQID, (void*) sip);
-
-    return seqid_wrap;
-}
-
-/* There is no need to return locations from readdb, since we always search
-   whole sequences in the database */
-static ListNode* ReaddbGetSeqLoc(void* readdb_handle, void* args)
-{
-   return NULL;
+    return BlastSequenceBlkClean(readdb_args->seq);
 }
 
 /** Retrieve length of a given database sequence.
@@ -293,107 +197,149 @@ static Int4 ReaddbGetSeqLen(void* readdb_handle, void* args)
 
 /* There are no error messages saved in the ReadDBFILE structure, so the 
  * following getter function is implemented as always returning NULL.
+ * @todo Should more meaningful error reporting be implemented?
  */
-static ListNode* ReaddbGetError(void* readdb_handle, void* args)
+static Blast_Message* ReaddbGetError(void* readdb_handle, void* args)
 {
    return NULL;
 }
 
-/** Retrieves the first OIDList attached to the rdfp_list. This is either a
- * virtual oid list (which spans all rdfp elements in rdfp_list from that point
- * until the end of the list) or individual oid lists attached to individual
- * rdfp elements from the rdfp_list.
- * @param rdfp_list Linked list of ReadDBFILEPtr structures 
- * @return First oid list found or NULL
+/** Mutex for retrieving ordinal id chunks from ReadDB in a multi-threaded
+ * search.
  */
-static OIDListPtr ReaddbFetchFirstOIDList(ReadDBFILEPtr rdfp_list)
-{
-    OIDListPtr virtual_oidlist = NULL;
-
-    for (; rdfp_list; rdfp_list = rdfp_list->next) {
-        if ((virtual_oidlist = rdfp_list->oidlist)) {
-            break;
-        }
-    }
-
-    return virtual_oidlist;
-}
-
-/* TODO: IMPLEMENT ME! */
-static Int4 ReaddbGetNumberOfSeqs(ReadDBFILEPtr rdfp)
-{
-    register Int4 retval = 0;
-
-    for (; rdfp; rdfp = rdfp->next) {
-        if (rdfp->oidlist) {
-            /* guess from its length whether it is a local oidlist or a virtual
-             * oidlist */
-            Boolean local_oidlist = FALSE;
-            if (local_oidlist) {
-                /* add up and continue iteration over rdfp*/
-                ;
-            } else {
-                /* add up and exit loop */
-                break;
-            }
-        } else if (rdfp->aliasnseq) {
-            retval += rdfp->aliasnseq;
-        } else {
-            retval += rdfp->num_seqs;
-        }
-    }
-
-    return retval;
-}
-
 static TNlmMutex ReaddbMutex;
+
+
+/** Retrieve next chunk of ordinal ids from a ReadDBFILE structure, in case
+ * it contains an oidlist.
+ * NB: this function is not MT-safe: ReaddbMutex must be locked/unlocked around
+ * any call to this function.
+ * @param rdfp List of ReadDBFILE structures [in]
+ * @param itr BLAST sequence source iterator [in]
+ * @return Status
+ */ 
+static Int2
+ReadDbGetNextOidListChunk(ReadDBFILEPtr rdfp, BlastSeqSrcIterator* itr,
+                          Uint4* last_oid_assigned)
+     
+{
+   Int2 status = BLAST_SEQSRC_SUCCESS;
+   OIDListPtr oidlist;
+   Uint4  gi_start, gi_end;
+   Uint4* id_list;
+   Uint4 oidindex  = 0;
+
+   if (!itr || !last_oid_assigned)
+      return BLAST_SEQSRC_ERROR;
+
+   for ( ; rdfp; rdfp = rdfp->next) {
+      oidlist = rdfp->oidlist;
+   
+      /* If there is no OID list, go to the next readdb structure. */
+      if (!oidlist)
+         continue;
+
+      gi_start = MAX(*last_oid_assigned, (Uint4)rdfp->start) - rdfp->start;
+      gi_end = (Uint4)oidlist->total + 1;
+      id_list = itr->oid_list;
+
+      if (gi_start < gi_end) {
+         Uint4 bit_start = gi_start % MASK_WORD_SIZE;
+         Uint4 gi;
+
+         for(gi = gi_start; (gi < gi_end) && (oidindex < itr->chunk_sz);) {
+            Int4 bit_end = ((gi_end - gi + bit_start) < MASK_WORD_SIZE) ?
+               (gi_end - gi + bit_start) : MASK_WORD_SIZE;
+            Int4 bit;
+            
+            Uint4 mask_index = gi / MASK_WORD_SIZE;
+            Uint4 mask_word  = Nlm_SwapUint4(oidlist->list[mask_index]);
+            
+            if ( mask_word ) {
+               for(bit = bit_start; bit<bit_end && oidindex<itr->chunk_sz; bit++) {
+                  Uint4 bitshift = (MASK_WORD_SIZE-1)-bit;
+                  
+                  if ((mask_word >> bitshift) & 1) {
+                     id_list[ oidindex++ ] = rdfp->start + (gi - bit_start) + bit;
+                  }
+               }
+               gi += bit - bit_start;
+            } else {
+               gi += bit_end - bit_start;
+            }
+            
+            bit_start = 0;
+         }
+
+         if (oidindex == itr->chunk_sz || !rdfp->next) {
+            itr->itr_type = eOidList;
+            itr->current_pos = 0;
+            *last_oid_assigned = rdfp->start + gi;
+            itr->chunk_sz = oidindex;
+            break;
+         }
+      } /* End if (gi_start < gi_end) */
+   } /* End loop over ReadDBFILE's */
+   
+   if (!rdfp) 
+      status = BLAST_SEQSRC_EOF;
+
+   return status;
+}
+
+
 
 static Int2 ReaddbGetNextChunk(void* readdb_handle, BlastSeqSrcIterator* itr)
 {
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-    OIDListPtr oidlist = ReaddbFetchFirstOIDList(rdfp);
+    ReadDBFILEPtr rdfp_head = rdfp;
     unsigned int nseqs;
+    Uint4 current_oid;
+    Int2 status = BLAST_SEQSRC_SUCCESS;
+    Uint4 real_readdb_entries;
 
     if (!rdfp || !itr)
         return BLAST_SEQSRC_ERROR;
 
+    real_readdb_entries = readdb_get_num_entries_total_real(rdfp);
+    
+    /* Lock the mutex before retrieving the next chunk */
+    NlmMutexLockEx(&ReaddbMutex);
+    ASSERT(rdfp->shared_info);
 
-    if (itr->next_oid < (unsigned int) rdfp->start)
-       itr->next_oid = (unsigned int) rdfp->start;
+    current_oid = rdfp->shared_info->last_oid_assigned;
 
-    while (rdfp) {
+    if (current_oid < (unsigned int) rdfp->start)
+       current_oid = (unsigned int) rdfp->start;
+    
+    for ( ; rdfp && !rdfp->oidlist; rdfp = rdfp->next) {
        if (rdfp->stop > 0) {
           nseqs = rdfp->stop + 1;
+       } else if (rdfp->aliasnseq) {
+          nseqs = rdfp->aliasnseq;
        } else {
-          /* call get_totals_ex2?: need a less expensive and accurate way of 
-             doing this */
-          nseqs = ReaddbGetNumberOfSeqs(rdfp);
+          nseqs = rdfp->num_seqs;
        }
-
-       if (itr->next_oid >= nseqs) {
-          rdfp = rdfp->next;
-       } else {
+       
+       if (current_oid < nseqs)
           break;
-       }
     }
-    if (!rdfp)
-       return BLAST_SEQSRC_EOF;
 
-    if (oidlist) {
-        itr->itr_type = eOidList;
-        /* Should initialize itr->oid_list here? */
-        fprintf(stderr, "OidList iterators are not implemented yet!\n");
-        abort();    /* FIXME */
+    if (!rdfp) {
+       status = BLAST_SEQSRC_EOF;
+    } else if (!rdfp->oidlist) {
+       itr->itr_type = eOidRange;
+       itr->current_pos = itr->oid_range[0] = current_oid;
+       itr->oid_range[1] = MIN(current_oid + itr->chunk_sz, nseqs);
+       rdfp_head->shared_info->last_oid_assigned = itr->oid_range[1];
     } else {
-        itr->itr_type = eOidRange;
-        NlmMutexLockEx(&ReaddbMutex);
-        itr->current_pos = itr->oid_range[0] = itr->next_oid;
-        itr->oid_range[1] = MIN(itr->next_oid + itr->chunk_sz, nseqs);
-        itr->next_oid = itr->oid_range[1];
-        NlmMutexUnlock(ReaddbMutex);
+       status = ReadDbGetNextOidListChunk(rdfp, itr, 
+                   &rdfp_head->shared_info->last_oid_assigned);
     }
 
-    return BLAST_SEQSRC_SUCCESS;
+    NlmMutexUnlock(ReaddbMutex);
+
+    return status;
 }
 
 static Int4 ReaddbIteratorNext(void* seqsrc, BlastSeqSrcIterator* itr)
@@ -401,6 +347,7 @@ static Int4 ReaddbIteratorNext(void* seqsrc, BlastSeqSrcIterator* itr)
     BlastSeqSrc* bssp = (BlastSeqSrc*) seqsrc;
     Int4 retval = BLAST_SEQSRC_EOF;
     Int4 status = BLAST_SEQSRC_SUCCESS;
+    Uint4 last_pos = 0;
 
     ASSERT(bssp);
     ASSERT(itr);
@@ -409,29 +356,26 @@ static Int4 ReaddbIteratorNext(void* seqsrc, BlastSeqSrcIterator* itr)
      * BlastSeqSrc */
     if (itr->current_pos == UINT4_MAX) {
         status = BLASTSeqSrcGetNextChunk(bssp, itr);
-        if (status == BLAST_SEQSRC_ERROR) {
+        if (status != BLAST_SEQSRC_SUCCESS) {
             return status;
         }
     }
 
     if (itr->itr_type == eOidRange) {
-
-        retval = itr->current_pos++;
-        if (itr->current_pos >= itr->oid_range[1]) {
-            itr->current_pos = UINT4_MAX;   /* invalidate iterator */
-        }
-        if (status == BLAST_SEQSRC_EOF) {
-            retval = status;
-        }
-
+        retval = itr->current_pos;
+        last_pos = itr->oid_range[1];
     } else if (itr->itr_type == eOidList) {
-        /* Unimplemented iterator type! */
-        fprintf(stderr, "eOidList iterator type is not implemented\n");
-        abort();
+        retval = itr->oid_list[itr->current_pos];
+        last_pos = itr->chunk_sz;
     } else {
         /* Unsupported/invalid iterator type! */
         fprintf(stderr, "Invalid iterator type: %d\n", itr->itr_type);
-        abort();
+        retval = BLAST_SEQSRC_ERROR;
+    }
+
+    ++itr->current_pos;
+    if (itr->current_pos >= last_pos) {
+        itr->current_pos = UINT4_MAX;  /* invalidate internal iteration */
     }
 
     return retval;
@@ -460,13 +404,8 @@ BlastSeqSrc* ReaddbSeqSrcNew(BlastSeqSrc* retval, void* args)
     SetGetTotLen(retval, &ReaddbGetTotLen);
     SetGetAvgSeqLen(retval, &ReaddbGetAvgLength);
     SetGetName(retval, &ReaddbGetName);
-    SetGetDefinition(retval, &ReaddbGetDefinition);
-    SetGetDate(retval, &ReaddbGetDate);
     SetGetIsProt(retval, &ReaddbGetIsProt);
     SetGetSequence(retval, &ReaddbGetSequence);
-    SetGetSeqIdStr(retval, &ReaddbGetSeqIdStr);
-    SetGetSeqId(retval, &ReaddbGetSeqId);
-    SetGetSeqLoc(retval, &ReaddbGetSeqLoc);
     SetGetSeqLen(retval, &ReaddbGetSeqLen);
     SetGetNextChunk(retval, &ReaddbGetNextChunk);
     SetIterNext(retval, &ReaddbIteratorNext);

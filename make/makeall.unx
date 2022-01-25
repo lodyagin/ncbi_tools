@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.240 2004/06/08 15:44:54 dondosha Exp $
+#	$Id: makeall.unx,v 6.247 2004/10/06 19:05:10 dondosha Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -179,7 +179,7 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
 	ncbi_host_info.c ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_dispd.c \
-	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
+	ncbi_socket_connector.c urlquery.c binary.c \
 	ncbi_sendmail.c asn_connection.c raw_scoremat.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
 
@@ -188,7 +188,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c \
-	objinsdseq.c objent2.c ent2api.c pmfapi.c \
+	objinsdseq.c objent2.c ent2api.c pmfapi.c objtax3.c tax3api.c \
 	qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
@@ -256,7 +256,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c mbalign.c \
 	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c objscoremat.c \
-	dotseq.c spidey.c motif.c
+	dotseq.c spidey.c motif.c blfmtutl.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -289,9 +289,9 @@ SRC60 = aa_ungapped.c blast_diagnostics.c blast_dust.c blast_engine.c \
     lookup_util.c blast_encoding.c blast_psi.c blast_psi_priv.c blast_kappa.c \
     matrix_freq_ratios.c blast_hspstream.c
 
-SRC61 = blast_format.c blast_input.c blast_returns.c blast_seq.c \
-        blast_seqalign.c blast_tabular.c hspstream_queue.c multiseq_src.c \
-        seqsrc_readdb.c twoseq_api.c
+SRC61 = blast_format.c blast_input.c blast_mtlock.c blast_prelim.c \
+        blast_returns.c blast_seq.c blast_seqalign.c blast_tabular.c \
+        blast_tback.c hspstream_queue.c seqsrc_multiseq.c seqsrc_readdb.c twoseq_api.c
 
 # objects needed for versions of asntool and entrez
 
@@ -311,7 +311,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
 	ncbi_host_info.o ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_dispd.o \
-	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
+	ncbi_socket_connector.o urlquery.o binary.o \
 	ncbi_sendmail.o asn_connection.o raw_scoremat.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
 
@@ -320,7 +320,7 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objres.o objseq.o objblock.o objcode.o objsset.o \
 	objsub.o objprt.o objfdef.o objalignloc.o \
 	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o \
-	objinsdseq.o objent2.o ent2api.o pmfapi.o \
+	objinsdseq.o objent2.o ent2api.o pmfapi.o objtax3.o tax3api.o \
 	qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
@@ -400,7 +400,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o mbalign.o \
 	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o objscoremat.o \
-	dotseq.o spidey.o motif.o
+	dotseq.o spidey.o motif.o blfmtutl.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -438,9 +438,9 @@ OBJ60 = aa_ungapped.o blast_diagnostics.o blast_dust.o blast_engine.o blast_exte
     lookup_util.o blast_encoding.o blast_psi.o blast_psi_priv.o blast_kappa.o \
     matrix_freq_ratios.o blast_hspstream.o
 
-OBJ61 = blast_input.o blast_format.o blast_returns.o blast_seq.o \
-        blast_seqalign.o blast_tabular.o hspstream_queue.o multiseq_src.o \
-        seqsrc_readdb.o twoseq_api.o
+OBJ61 = blast_input.o blast_format.o blast_mtlock.o blast_prelim.o \
+        blast_returns.o blast_seq.o blast_seqalign.o blast_tabular.o \
+        blast_tback.o hspstream_queue.o seqsrc_multiseq.o seqsrc_readdb.o twoseq_api.o
 
 
 # NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
@@ -492,8 +492,6 @@ clean :
 ## Special case
 ##
 
-lbapi.o : lbapi.c
-	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) lbapi.c
 ncbithrs.o: ncbithrs.c
 	$(CC) -DNCBI_NOTHREADS_AVAIL $(CFLAGS) ncbithrs.c
 ncbidrwg.o: ncbidrwg.c
@@ -691,8 +689,6 @@ copy :
 	-mkdir ../include/ctools
 	-chmod ug+rw,o+r ../include/ctools
 	cp -fp ../ctools/*.h ../include/ctools
-	$(SRCCOPY) ../connect/lbapi/*.c .
-	$(SRCCOPY) ../connect/lbapi/*.h ../include
 	$(SRCCOPY) ../object/*.c .
 	$(SRCCOPY) ../object/*.h ../include
 	$(SRCCOPY) ../access/*.c .

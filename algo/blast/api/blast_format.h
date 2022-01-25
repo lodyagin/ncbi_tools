@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.22 2004/06/07 18:40:48 dondosha Exp $
+/* $Id: blast_format.h,v 1.31 2004/10/04 14:00:18 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions needed for formatting of BLAST results
 
 ******************************************************************************
- * $Revision: 1.22 $
+ * $Revision: 1.31 $
  * */
 #ifndef __BLAST_FORMAT__
 #define __BLAST_FORMAT__
@@ -50,7 +50,6 @@ extern "C" {
 #include <bxmlobj.h>
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
-#include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_diagnostics.h>   
 #include <algo/blast/api/twoseq_api.h>
 
@@ -76,7 +75,7 @@ typedef struct BlastFormattingOptions {
  * @param align_view What kind of formatted output to show? [in]
  * @param format_options_ptr The initialized structure [out]
 */
-Int2 BlastFormattingOptionsNew(Uint1 program, char* file_out, 
+Int2 BlastFormattingOptionsNew(EBlastProgramType program, char* file_out, 
         Int4 num_descriptions, Int4 num_alignments, Int4 align_view,
         BlastFormattingOptions** format_options_ptr);
 
@@ -87,85 +86,55 @@ Int2 BlastFormattingOptionsNew(Uint1 program, char* file_out,
 BlastFormattingOptions* 
 BlastFormattingOptionsFree(BlastFormattingOptions* format_options);
 
-/** Used for pruning SeqALigns that are too big. */
-typedef struct BlastPruneSapStruct {
-   SeqAlignPtr sap;
-   Int4	original_number; /**< how may unique hits were there originally. */
-   Int4 number;		 /**< How many hits on SeqALignPtr above. */
-   Boolean allocated; /**< If FALSE, SeqAlignPtr above does NOT belong to this 
-                         struc.*/
-} BlastPruneSapStruct;
-
-typedef struct MBXml {
-   BlastOutputPtr boutp;
-   AsnIoPtr   aip;
-   AsnTypePtr atp;
-   AsnTypePtr BlastOutput;
-   AsnTypePtr BlastOutput_iterations;
-   AsnTypePtr BlastOutput_mbstat;
-} MBXml;
-
 /** Print formatted output.
- * @param head Results in the SeqAlign form (freed after use) [in]
+ * @param head Results in the SeqAlign form [in]
  * @param blast_database BLAST database name [in]
  * @param blast_program BLAST program name [in]
  * @param num_queries Number of query sequences [in]
  * @param query_slp Linked list of query SeqLocs [in]
- * @param mask_loc Masking locations for all queries (freed after use) [in]
+ * @param mask_loc Masking locations for all queries [in]
  * @param format_options Formatting options [in]
  * @param is_ooframe Are frame shifts allowed in alignments? [in]
  */
 Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
         char* blast_program, Int4 num_queries, 
         SeqLocPtr query_slp, BlastMaskLoc* mask_loc, 
-        const BlastFormattingOptions* format_options, Boolean is_ooframe);
+        const BlastFormattingOptions* format_options, Boolean is_ooframe, Int4** matrix,
+        Blast_SummaryReturn* sum_returns);
 
 /** Print the summary at the end of the BLAST report.
  * @param program_number Type of BLAST program [in]
  * @param format_options Formatting options [in]
- * @param score_options Scoring options [in]
- * @param sbp Statistical information [in]
- * @param lookup_options Lookup table options [in]
- * @param word_options Word finding options and parameters [in]
- * @param ext_options Extension options and parameters [in]
- * @param hit_options Hit saving options [in]
- * @param eff_len_options Effective lengths options, containing user-specified
- *                        values for database length or eff. search space [in]
- * @param query_info Query information [in]
- * @param seq_src Source of subject sequences [in]
- * @param diagnostics Data about this run [in]
+ * @param rdfp Pointer to the BLAST database [in]
+ * @param sum_returns infor from inside blast engine [in]
  */
-Int2 PrintOutputFooter(Uint1 program_number, 
-        const BlastFormattingOptions* format_options, 
-        const BlastScoringOptions* score_options, 
-        const BlastScoreBlk* sbp,
-        const LookupTableOptions* lookup_options,
-        const BlastInitialWordOptions* word_options,
-        const BlastExtensionOptions* ext_options,
-        const BlastHitSavingOptions* hit_options,
-        const BlastEffectiveLengthsOptions* eff_len_options,
-        const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src,
-        const BlastDiagnostics* diagnostics);
+Int2 Blast_PrintOutputFooter(EBlastProgramType program_number,
+        const BlastFormattingOptions* format_options,
+        ReadDBFILE* rdfp, const Blast_SummaryReturn* sum_returns);
 
 /** Prints the top part of the traditional BLAST output, including version, 
  * reference(s) and database information.
  * @param format_options Formatting options [in]
  * @param is_megablast Is this a megablast search (i.e. greedy gapped
  *                     extension used)? [in]
+ * @param program_name blastn, blastp, blastx, etc. [in]
  * @param dbname BLAST database name [in]
  * @param is_protein Is the database protein or nucleotide? [in]
  */
 Int2 BLAST_PrintOutputHeader(const BlastFormattingOptions* format_options,
-        Boolean is_megablast, char* dbname, Boolean is_protein);
+        Boolean is_megablast, const char* program_name, char* dbname, Boolean is_protein);
 
-void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
-        BlastQueryInfo* query_info, SeqLocPtr query_slp, 
-        BlastSeqSrc* seq_src, BlastScoreBlk* sbp, 
-        char* filename);
+/** Prints the "log info" at the bottom of the megablast output, looks something like:
+ * "Mega BLAST run finished, processed 2 queries"
+ *
+ * @param format_options Formatting options [in]
+ * @param count number of searches completed [in]
+ * @return 0 on success 
+ */
+Int2 BlastPrintLogReport(const BlastFormattingOptions* format_options, Int4 count);
+
 void 
-Blast_SeqIdGetDefLine(SeqIdPtr sip, char* descr, char** buffer_ptr, 
-                Boolean ncbi_gi, Boolean accession_only, 
-                Boolean seqid_only, Boolean believe_local_id);
+Blast_SeqIdGetDefLine(SeqIdPtr sip, char** buffer_ptr, Boolean ncbi_gi, Boolean accession_only);
 
 
 #ifdef __cplusplus

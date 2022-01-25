@@ -193,7 +193,7 @@ on SetProjectData()
 	
 	AddSimpleProjectExceptFiles("ncbiid1", {}, "network:id1arch", {"idfetch.c"})
 	
-	AddSimpleProject("ncbiid2", {}, "network:id2arch")
+	-- AddSimpleProject("ncbiid2", {}, "network:id2arch")
 	
 	AddSimpleProjectExceptFiles("ncbimla", {}, "network:medarch:client", {"sybmed.c"})
 	

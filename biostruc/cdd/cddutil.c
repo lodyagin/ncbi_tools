@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.91 2003/12/09 22:21:35 bauer Exp $
+/* $Id: cddutil.c,v 1.92 2004/06/22 14:20:19 camacho Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.91 $
+* $Revision: 1.92 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.92  2004/06/22 14:20:19  camacho
+* Changed invocation of posFreqsToMatrix to conform with new signature.
+*
 * Revision 1.91  2003/12/09 22:21:35  bauer
 * added CddCountResTypes
 *
@@ -4808,7 +4811,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
       posTakeCheckpoint(posSearch, compactSearch, ckptFileName, NULL);
   }
 
-  posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
+  posFreqsToMatrix(posSearch,compactSearch);
 /*---------------------------------------------------------------------------*/
 /* kludge to set the matrix column for matches to * (stop codons) to the     */
 /* most negative value used, so that matrix-file corresponds to what makemat */

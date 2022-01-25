@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha Exp $";
+static char const rcsid[] = "$Id: xmlblast.c,v 6.35 2004/06/30 12:32:20 madden Exp $";
 
-/* $Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.35 2004/06/30 12:32:20 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,12 +32,18 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.35  2004/06/30 12:32:20  madden
+* Added include for blfmtutl.h, removed unused variable
+*
+* Revision 6.34  2004/06/23 21:08:58  dondosha
+* Fixed masking of filtered locations for translated queries
+*
 * Revision 6.33  2004/04/29 19:55:35  dondosha
 * Mask filtered locations in query sequence lines
 *
@@ -145,6 +151,7 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha
 */
 
 #include <xmlblast.h>
+#include <blfmtutl.h>
 
 static Int4Ptr PNTR glb_matrix;
 
@@ -586,7 +593,8 @@ Boolean BXMLGetSeqLines(SeqAlignPtr align, HspPtr hsp, Int4 length,
 }
 
 static void 
-MaskFilteredLocInHsp(HspPtr hsp, ValNodePtr mask, Boolean is_prot)
+MaskFilteredLocInHsp(HspPtr hsp, ValNodePtr mask, Boolean is_prot,
+                     Boolean query_translated)
 {
    Char mask_char;
    SeqLocPtr mask_loc;
@@ -596,16 +604,36 @@ MaskFilteredLocInHsp(HspPtr hsp, ValNodePtr mask, Boolean is_prot)
    if (!mask)
       return;
 
-   mask_loc = (SeqLocPtr) mask->data.ptrvalue;
    mask_char = (is_prot ? 'X' : 'N');
 
-   while((seqloc = SeqLocFindNext(mask_loc, seqloc)) != NULL) {
-      start = MAX(0, SeqLocStart(seqloc) - hsp->query_from);
-      stop = MIN(SeqLocStop(seqloc), hsp->query_to) - hsp->query_from;
-      for (index = start; index <= stop; ++index) {
-         hsp->qseq[index] = mask_char;
-         if (hsp->hseq[index] != mask_char)
-            hsp->midline[index] = ' ';
+   for ( ; mask; mask = mask->next) {
+      if (mask->choice != FrameToDefine(hsp->query_frame))
+         continue;
+      mask_loc = (SeqLocPtr) mask->data.ptrvalue;
+
+      while((seqloc = SeqLocFindNext(mask_loc, seqloc)) != NULL) {
+         if (hsp->query_from < hsp->query_to) {
+            start = MAX(hsp->query_from, SeqLocStart(seqloc))
+               - hsp->query_from;
+            stop = MIN(SeqLocStop(seqloc), hsp->query_to) - 
+               hsp->query_from;
+         } else {
+            start = hsp->query_from - 
+               MIN(SeqLocStop(seqloc), hsp->query_from);
+            stop = hsp->query_from - 
+               MAX(hsp->query_to, SeqLocStart(seqloc));
+         }
+
+         if (query_translated) {
+            start /= CODON_LENGTH;
+            stop /= CODON_LENGTH;
+         }
+         
+         for (index = start; index <= stop; ++index) {
+            hsp->qseq[index] = mask_char;
+            if (hsp->hseq[index] != mask_char)
+               hsp->midline[index] = ' ';
+         }
       }
    }
 }
@@ -627,7 +655,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
 
     MemSet(&as, NULLB, sizeof(AlignSum));
     
-    as.master_sip = SeqIdDup(TxGetQueryIdFromSeqAlign(sap));
+    as.master_sip = TxGetQueryIdFromSeqAlign(sap);
     as.target_sip = TxGetSubjectIdFromSeqAlign(sap);
 
     /* Checkup for query Bioseq to be available in the index */
@@ -703,7 +731,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
        that is if either subject is protein, or it is a translated search, 
        in which case alignment segments have StdSeg form. */
     prot_alphabet = (is_aa || sap->segtype == SAS_STD);
-    MaskFilteredLocInHsp(hsp, mask_loc, prot_alphabet);
+    MaskFilteredLocInHsp(hsp, mask_loc, prot_alphabet, as.m_frame_set);
 
     /* For display it depends on strand */
     
@@ -727,8 +755,6 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
     if(matrix_allocated)
         free_default_matrix(as.matrix);
 
-    SeqIdFree(as.master_sip);
-    
     return hsp;
 }
 
@@ -793,6 +819,8 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
         hsp_count = 1;          /* Hsps starting with 1 */
         chain = 1;
 
+        BioseqUnlock(bsp);
+
         for(sap2 = sap; sap2 != NULL;) {
             
             /* Filling info about specific alignments */
@@ -854,7 +882,6 @@ IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign,
                                    BioseqPtr query, ValNodePtr mask_loc)
 {
     IterationPtr iterp;
-    TxDfDbInfoPtr dbinfo=NULL;
     BLAST_KarlinBlkPtr ka_params_gap=NULL;
     BLAST_KarlinBlkPtr ka_params_ungap=NULL;
     ValNodePtr vnp;

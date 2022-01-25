@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.10 2004/06/04 15:16:01 papadopo Exp $
+/* $Id: blast_lookup.h,v 1.15 2004/09/21 13:43:36 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -92,7 +92,7 @@ typedef struct LookupBackboneCell {
 /** The basic lookup table structure for blastn
  *  and blastp searches
  */
-typedef struct LookupTable {
+typedef struct BlastLookupTable {
     Int4 threshold;        /**< the score threshold for neighboring words */
     Int4 neighbor_matches; /**< the number of neighboring words found while 
                                 indexing the queries, used for informational/
@@ -126,15 +126,10 @@ typedef struct LookupTable {
     PV_ARRAY_TYPE *pv;     /**< Presence vector bitfield; bit positions that
                                 are set indicate that the corresponding thick
                                 backbone cell contains hits */
-    Uint1* neighbors;      /**< neighboring word array, used during lookup 
-                                table construction to hold the complete set 
-                                of subject words that can occur during the 
-                                search*/
-    Int4 neighbors_length; /**< length of neighboring word array */
     Boolean use_pssm;      /**< if TRUE, lookup table construction will assume
                                 that the underlying score matrix is position-
                                 specific */
-  } LookupTable;
+  } BlastLookupTable;
   
   /** Create a mapping from word w to the supplied query offset
  *
@@ -144,7 +139,7 @@ typedef struct LookupTable {
  * @return Zero.
  */
 
-Int4 BlastAaLookupAddWordHit(LookupTable* lookup,
+Int4 BlastAaLookupAddWordHit(BlastLookupTable* lookup,
                              Uint1* w,
                              Int4 query_offset);
 
@@ -154,7 +149,7 @@ Int4 BlastAaLookupAddWordHit(LookupTable* lookup,
  * @return Zero.
  */
 
-Int4 _BlastAaLookupFinalize(LookupTable* lookup);
+Int4 _BlastAaLookupFinalize(BlastLookupTable* lookup);
 /**
  * Scans the subject sequence from "offset" to the end of the sequence.
  * Copies at most array_size hits.
@@ -205,7 +200,7 @@ Int4 BlastRPSScanSubject(const LookupTableWrap* lookup_wrap,
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 BlastAaLookupNew(const LookupTableOptions* opt, LookupTable* * lut);
+Int4 BlastAaLookupNew(const LookupTableOptions* opt, BlastLookupTable* * lut);
 
 
 /** Create a new lookup table.
@@ -215,78 +210,81 @@ Int4 BlastAaLookupNew(const LookupTableOptions* opt, LookupTable* * lut);
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 LookupTableNew(const LookupTableOptions* opt, LookupTable* * lut, 
+Int4 LookupTableNew(const LookupTableOptions* opt, BlastLookupTable* * lut, 
 		    Boolean is_protein);
 
 /** Free the lookup table.
  *  @param lookup The lookup table structure to be frees
  *  @return NULL
  */
-LookupTable* LookupTableDestruct(LookupTable* lookup);
+BlastLookupTable* LookupTableDestruct(BlastLookupTable* lookup);
 
-/** Index an array of queries.
+/** Index a protein query.
  *
  * @param lookup the lookup table [in/modified]
  * @param matrix the substitution matrix [in]
  * @param query the array of queries to index
- * @param unmasked_regions an array of ListNode*s, each of which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
+ * @param unmasked_regions an array of BlastSeqLoc*s, each of which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
  * @param num_queries the number of queries [in]
  * @return Zero.
  */
-Int4 BlastAaLookupIndexQueries(LookupTable* lookup,
+Int4 BlastAaLookupIndexQuery(BlastLookupTable* lookup,
 			       Int4 ** matrix,
 			       BLAST_SequenceBlk* query,
-			       ListNode* unmasked_regions,
-			       Int4 num_queries);
+			       BlastSeqLoc* unmasked_regions);
 
 /** Index a single query.
  *
  * @param lookup the lookup table [in/modified]
  * @param matrix the substitution matrix [in]
  * @param query the array of queries to index
- * @param unmasked_regions a ListNode* which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
+ * @param unmasked_regions a BlastSeqLoc* which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
  * @param query_bias number added to each offset put into lookup table (only used for RPS blast database creation, otherwise 0) [in]
  * @return Zero.
  */
 
-Int4 _BlastAaLookupIndexQuery(LookupTable* lookup,
+Int4 _BlastAaLookupIndexQuery(BlastLookupTable* lookup,
 			      Int4 ** matrix,
 			      BLAST_SequenceBlk* query,
-			      ListNode* unmasked_regions,
+			      BlastSeqLoc* unmasked_regions,
                               Int4 query_bias);
 
-/** Create a sequence containing all possible words as subsequences.
- *
- * @param lookup the lookup table [in]
- * @return Zero.
- */
-
-Int4 MakeAllWordSequence(LookupTable* lookup);
-
 /**
- * Find the words in the neighborhood of w, that is, those whose
- * score is greater than t.
- *
- * For typical searches against a database, a sequence containing
- * all possible words (as created by MakeAllWordSequence() is used.
- *
- * For blast-two-sequences type applications, it is not necessary to
- * find all neighboring words; it is sufficient to use the words
- * occurring in the subject sequence.
+ * Index a query sequence; i.e. fill a lookup table with the offsets
+ * of query words score exceeds a threshold.
  *
  * @param lookup the lookup table [in/modified]
  * @param matrix the substitution matrix [in]
  * @param query the query sequence [in]
- * @param offset the offset of the word
- * @param query_bias number added to each offset put into lookup table (only used for RPS blast database creation, otherwise 0) [in]
+ * @param query_bias number added to each offset put into lookup table
+ *                      (ordinarily 0; a nonzero value allows a succession of
+ *                      query sequences to update the same lookup table)
+ * @param locations the list of ranges of query offsets to examine for indexing [in]
  * @return Zero.
  */
-
-Int4 AddNeighboringWords(LookupTable* lookup,
+Int4 AddNeighboringWords(BlastLookupTable* lookup,
 			 Int4 ** matrix,
 			 BLAST_SequenceBlk* query,
-			 Int4 offset,
-                         Int4 query_bias);
+                         Int4 query_bias,
+                         BlastSeqLoc* locations);
+
+/**
+ * A position-specific version of AddNeighboringWords. Note that
+ * only the score matrix matters for indexing purposes, so an
+ * actual query sequence is unneccessary
+ *
+ * @param lookup the lookup table [in/modified]
+ * @param matrix the substitution matrix [in]
+ * @param query_bias number added to each offset put into lookup table
+ *                      (ordinarily 0; a nonzero value allows a succession of
+ *                      query sequences to update the same lookup table)
+ * @param locations the list of ranges of query offsets to examine for indexing
+ * @return Zero.
+ */
+Int4 AddPSSMNeighboringWords(BlastLookupTable* lookup,
+			 Int4 ** matrix,
+                         Int4 query_bias,
+                         BlastSeqLoc* locations);
 
 /* RPS blast structures and functions */
 
@@ -312,7 +310,7 @@ typedef struct RPSBackboneCell {
 /** 
  * The basic lookup table structure for RPS blast searches
  */
-typedef struct RPSLookupTable {
+typedef struct BlastRPSLookupTable {
     Int4 wordsize;      /**< number of full bytes in a full word */
     Int4 longest_chain; /**< length of the longest chain on the backbone */
     Int4 mask;          /**< part of index to mask off, that is, 
@@ -324,6 +322,7 @@ typedef struct RPSLookupTable {
     RPSBackboneCell * rps_backbone; /**< the lookup table used for RPS blast */
     Int4 ** rps_pssm;   /**< Pointer to memory-mapped RPS Blast profile file */
     Int4 * rps_seq_offsets; /**< array of start offsets for each RPS DB seq. */
+    Int4 num_profiles; /**< Number of profiles in RPS database. */
     RPSAuxInfo* rps_aux_info; /**< RPS Blast auxiliary information */
     Int4 * overflow;    /**< the overflow array for the compacted 
                              lookup table */
@@ -331,7 +330,7 @@ typedef struct RPSLookupTable {
     PV_ARRAY_TYPE *pv;     /**< Presence vector bitfield; bit positions that
                                 are set indicate that the corresponding thick
                                 backbone cell contains hits */
-} RPSLookupTable;
+} BlastRPSLookupTable;
   
 /** Create a new RPS blast lookup table.
   * @param rps_info pointer to structure with RPS setup information [in]
@@ -339,7 +338,7 @@ typedef struct RPSLookupTable {
   * @return 0 if successful, nonzero on failure
   */
   
-Int4 RPSLookupTableNew(const RPSInfo *rps_info, RPSLookupTable* * lut);
+Int4 RPSLookupTableNew(const RPSInfo *rps_info, BlastRPSLookupTable* * lut);
 
 /** Free the lookup table. 
  *  @param lookup The lookup table structure to free; note that
@@ -347,7 +346,7 @@ Int4 RPSLookupTableNew(const RPSInfo *rps_info, RPSLookupTable* * lut);
  *          by this call, since they may refer to memory-mapped arrays
  *  @return NULL
  */
-RPSLookupTable* RPSLookupTableDestruct(RPSLookupTable* lookup);
+BlastRPSLookupTable* RPSLookupTableDestruct(BlastRPSLookupTable* lookup);
 
 /********************* Nucleotide functions *******************/
 
@@ -401,9 +400,9 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
  * @param location What locations on the query sequence to index? [in]
  * @return Always 0
  */
-Int4 BlastNaLookupIndexQuery(LookupTable* lookup, 
+Int4 BlastNaLookupIndexQuery(BlastLookupTable* lookup, 
                              BLAST_SequenceBlk* query,
-                             ListNode* location);
+                             BlastSeqLoc* location);
 
 #ifdef __cplusplus
 }

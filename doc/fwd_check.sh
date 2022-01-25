@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.19 2004/06/07 19:36:33 lavr Exp $
+# $Id: fwd_check.sh,v 1.21 2004/08/02 18:26:58 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -20,8 +20,8 @@ cat <<EOF
 ;130.14.22.2	5859	RETIRED
 ;130.14.22.8	5840	RETIRED
 ;130.14.22.30	5810	RETIRED
-130.14.22.31	5812	RETIRED
-130.14.22.32	5811	RETIRED
+;130.14.22.31	5812	RETIRED
+;130.14.22.32	5811	RETIRED
 ;130.14.22.12	5845	RETIRED
 130.14.25.13	5860	INTERNAL
 130.14.29.112	5861	OK
@@ -42,7 +42,7 @@ while read x_host x_port x_status ; do
         echo "${x_host}:${x_port}	$x_status"
         continue
     fi
-    ( echo x ; sleep $delay_sec ) | telnet $x_host $x_port >/tmp/$$ 2>&1 &
+    ( echo ; sleep $delay_sec ) | telnet $x_host $x_port >/tmp/$$ 2>&1 &
     pid=$!
     trap 'rm -f /tmp/$$; kill $pid >/dev/null 2>&1' 1 2 15
     ( sleep `expr $delay_sec + 2`  &&  kill $pid ) >/dev/null 2>&1 &

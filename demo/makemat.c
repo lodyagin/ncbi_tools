@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: makemat.c,v 6.14 2004/05/14 12:10:06 camacho Exp $";
+static char const rcsid[] = "$Id: makemat.c,v 6.15 2004/07/19 17:19:09 papadopo Exp $";
 
 /*
 * ===========================================================================
@@ -274,6 +274,9 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
         prefixLength = strlen(directoryPrefix);
     }     
     
+    posSearch->stdFreqRatios = 
+                      PSIMatrixFrequencyRatiosNew(underlyingMatrixName);
+
     for(i = 0; i < count; i++) {
         if ('\0' == directoryPrefix[0])
             fscanf(profilesFile,"%s", profileFileName); 
@@ -390,6 +393,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
         
         posSearch->posInformation = NULL;
         success = impalaReadCheckpoint(posSearch, compactSearch, profileFileName, &error_return, scalingFactor);
+
         if (!success) {
             ErrPostEx(SEV_FATAL, 1,0, "Unable to recover checkpoint from %s\n",profileFileName);
             return(1);
@@ -449,6 +453,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
     FileClose(matricesFile);
     FileClose(auxiliaryFile);
     compactSearchDestruct(compactSearch);
+    PSIMatrixFrequencyRatiosFree(posSearch->stdFreqRatios);
     MemFree(posSearch);
     BLAST_ScoreBlkDestruct(sbp);
     return(0);

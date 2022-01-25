@@ -47,6 +47,10 @@
 #define ERR_SEQ_INST_SeqLitGapLength0  1,43
 #define ERR_SEQ_INST_TpaAssmeblyProblem  1,44
 #define ERR_SEQ_INST_SeqLocLength  1,45
+#define ERR_SEQ_INST_MissingGaps  1,46
+#define ERR_SEQ_INST_CompleteTitleProblem  1,47
+#define ERR_SEQ_INST_CompleteCircleProblem  1,48
+#define ERR_SEQ_INST_BadHTGSeq  1,49
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -75,6 +79,7 @@
 #define ERR_SEQ_DESCR_RefGeneTrackingWithoutStatus  2,25
 #define ERR_SEQ_DESCR_UnwantedCompleteFlag  2,26
 #define ERR_SEQ_DESCR_CollidingPublications  2,27
+#define ERR_SEQ_DESCR_TransgenicProblem  2,28
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -82,6 +87,7 @@
 #define ERR_GENERIC_MissingPubInfo  3,4
 #define ERR_GENERIC_UnnecessaryPubEquiv  3,5
 #define ERR_GENERIC_BadPageNumbering  3,6
+#define ERR_GENERIC_MedlineEntryPub  3,7
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -172,6 +178,15 @@
 #define ERR_SEQ_FEAT_AltStartCodon  5,71
 #define ERR_SEQ_FEAT_PartialsInconsistent  5,72
 #define ERR_SEQ_FEAT_GenesInconsistent  5,73
+#define ERR_SEQ_FEAT_DuplicateTranslExcept  5,74
+#define ERR_SEQ_FEAT_TranslExceptAndRnaEditing  5,75
+#define ERR_SEQ_FEAT_NoNameForProtein  5,76
+#define ERR_SEQ_FEAT_TaxonDbxrefOnFeature  5,77
+#define ERR_SEQ_FEAT_UnindexedFeature  5,78
+#define ERR_SEQ_FEAT_CDSmRNAmismatch  5,79
+#define ERR_SEQ_FEAT_UnnecessaryException  5,80
+#define ERR_SEQ_FEAT_LocusTagProductMismatch  5,81
+#define ERR_SEQ_FEAT_MrnaTransFail  5,82
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

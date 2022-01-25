@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.h,v 1.2 2004/06/14 20:43:30 dondosha Exp $
+/* $Id: blast_tabular.h,v 1.5 2004/08/31 16:59:15 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions needed for formatting of BLAST results
 
 ******************************************************************************
- * $Revision: 1.2 $
+ * $Revision: 1.5 $
  * */
 #ifndef __BLAST_TABULAR__
 #define __BLAST_TABULAR__
@@ -54,11 +54,17 @@ extern "C" {
 #include <algo/blast/core/blast_gapalign.h>
 #include <objloc.h>
 
+/** Tabular formatting options. */
+typedef enum {
+   eBlastTabularDefault=1,
+   eBlastTabularAddSequences
+} EBlastTabularFormatOptions;
+
 /** Data structure containing all information necessary for production of the
  * tabular output.
  */
 typedef struct BlastTabularFormatData {
-   Uint1 program; /**< Type of BLAST program */
+   EBlastProgramType program; /**< Type of BLAST program */
    BlastHSPStream* hsp_stream; /**< Source of the BLAST results */
    BlastSeqSrc* seq_src; /**< Source of the subject sequences */
    BLAST_SequenceBlk* query; /**< Query sequence */
@@ -74,12 +80,19 @@ typedef struct BlastTabularFormatData {
    FILE* outfp; /**< Output stream */
    Boolean perform_traceback; /**< Must gapped extension with traceback be
                                  performed before formatting? */
+   Boolean show_gi; /**< Show gi's instead of full ids in output, if 
+                       possible. */
+   Boolean show_accession; /**< Show accessions instead of full ids in output,
+                              if possible. This option has lower priority than
+                              show_gi. */
+   EBlastTabularFormatOptions format_options; /**< Tabular formatting options. */
 } BlastTabularFormatData;
 
 /** Function initializing the BlastTabularFormatData data structure fields. */
 BlastTabularFormatData* 
-Blast_TabularFormatDataInit(Uint1 program, BlastHSPStream* hsp_stream,
-   BlastSeqSrc* seq_src, BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
+Blast_TabularFormatDataInit(EBlastProgramType program, 
+   BlastHSPStream* hsp_stream, BlastSeqSrc* seq_src, 
+   BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
    const BlastScoringOptions* scoring_options, BlastScoreBlk* sbp,
    const BlastEffectiveLengthsOptions* eff_len_options,
    const BlastExtensionOptions* ext_options,

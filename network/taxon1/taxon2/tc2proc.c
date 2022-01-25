@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.34 2004/02/25 19:21:21 soussov Exp $           */
+/* $Id: tc2proc.c,v 1.35 2004/10/06 20:34:26 soussov Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -904,9 +904,11 @@ static OrgModPtr bldOrgMod(TreeCursorPtr cursor)
         else if(rank == tax_getRankId("forma")) {
             orgMdf->subtype= 25; /* forma */
         }
+#if 0
         else if((parent != NULL) && (prank == SubspeciesRank)) {
             orgMdf->subtype= 2; /* strain */
         }
+#endif
         else {
             orgMdf->subtype= 0; /* other */
         }

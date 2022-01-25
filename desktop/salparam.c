@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.53 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -1447,7 +1447,7 @@ static void BoolButton (GrouP g)
 *******************************************************/
 #define FIND_MAXRANGE 10000
 
-static ValNodePtr JK_NTPattern (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint1 mol_type)
+extern ValNodePtr JK_NTPattern (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint1 mol_type)
 {
   ValNodePtr      patlist = NULL;
   ValNodePtr      vnp;
@@ -1550,7 +1550,7 @@ static Int2 CC_SeqEntryToGeneticCode (Uint2 entityID, SeqIdPtr sip)
   return genCode;
 }
 
-static ValNodePtr JK_NTPattern2 (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint2 entityID)
+extern ValNodePtr JK_NTPattern2 (CharPtr pattern, ValNodePtr sqloc_list, Boolean flagInvert, Uint2 entityID)
 {
   ByteStorePtr    bsp;
   ValNodePtr      patlist = NULL;
@@ -1993,7 +1993,7 @@ static SeqAlignPtr ExtendToAllSeq(SeqAlignPtr origsap)
       }
       SeqIdFree(sip);
    }
-   if (pad == 0)
+   if (pad <= 0)
    {
       SeqAlignFree(sap);
       return origsap;
@@ -2796,6 +2796,7 @@ NLM_EXTERN void PropagateFeatDialog (IteM i)
   Uint1            strand;
   ButtoN           b;
   PrompT           p;
+  GrouP            warn_grp;
 
   ValNodePtr  allseqfeat = NULL;
 
@@ -2809,7 +2810,11 @@ NLM_EXTERN void PropagateFeatDialog (IteM i)
   SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);
   dbdp->w = w;
 
-  g1 = HiddenGroup (wdialog, 0, -6, NULL);
+  g1 = HiddenGroup (wdialog, 0, -7, NULL);
+
+  warn_grp = HiddenGroup (g1, 0, 1, NULL);
+  MultiLinePrompt (warn_grp, "WARNING: THIS FEATURE IS OBSOLETE.  Please use the Edit->Feature Propagate... menu item"
+                " in the main Sequin menu.", 30 * stdCharWidth, systemFont);  
 
   g2 = HiddenGroup (g1, 2, 0, NULL);
 
@@ -2895,7 +2900,7 @@ NLM_EXTERN void PropagateFeatDialog (IteM i)
   PushButton (h, "Propagate", PropagateFeatureProc);
   PushButton (h, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g3, (HANDLE) c, (HANDLE) d, (HANDLE) e, (HANDLE) h, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) warn_grp, (HANDLE) g2, (HANDLE) g3, (HANDLE) c, (HANDLE) d, (HANDLE) e, (HANDLE) h, NULL);
 
   RealizeWindow (wdialog);
   Show (wdialog);

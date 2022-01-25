@@ -1,4 +1,4 @@
-/* $Id: actutils.h,v 6.12 2002/03/27 17:35:39 todorov Exp $
+/* $Id: actutils.h,v 6.13 2004/07/30 13:36:47 bollin Exp $
  *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.13  2004/07/30 13:36:47  bollin
+* created separate function for reversing features on a sequence, changed code
+* to swap plus to minus and minus to plus instead of moving all features to
+* minus strand
+*
 * Revision 6.12  2002/03/27 17:35:39  todorov
 * recreated ACT_MakeProfileFromSA
 *
@@ -193,6 +198,7 @@ NLM_EXTERN ACT_TopScorePtr ACT_FindPeakScores(FloatHiPtr scorearray, Int4 len);
 NLM_EXTERN ACT_PositionPtr ACT_PlaceByScore(ACT_PlaceBoundsPtr abp);
 NLM_EXTERN FloatHi ACT_CalcScore(ACT_PlaceBoundsPtr abp);
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
+NLM_EXTERN void ReverseBioseqFeatureStrands (BioseqPtr bsp);
 NLM_EXTERN void ACT_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
 NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side);
 NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);

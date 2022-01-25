@@ -29,13 +29,46 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.150 $
+* $Revision: 6.161 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.161  2004/10/13 16:46:52  kans
+* added DA, DB, DC as DDBJ_EST
+*
+* Revision 6.160  2004/09/21 22:34:36  dondosha
+* Get the number of linked HSPs for a DenDiag from the first segment, not from the largest linked set
+*
+* Revision 6.159  2004/09/15 13:02:02  kans
+* added CW to WHICH_db_accession as NCBI GSS
+*
+* Revision 6.158  2004/08/20 18:55:27  kans
+* SeqLocStrand skips NULL or EMPTY components of MIX to avoid giving incorrect unknown result
+*
+* Revision 6.157  2004/08/17 19:35:44  kans
+* BSPack uses BSRead instead of BSGetByte for significant speed increase
+*
+* Revision 6.156  2004/08/06 17:15:50  kans
+* added CV as NCBI EST
+*
+* Revision 6.155  2004/08/04 17:15:16  kans
+* added AccnInUniProt - still need AccnIsSWISSPROT for old style
+*
+* Revision 6.154  2004/07/21 18:05:00  rsmith
+* SeqLocStart and SeqLocStop were not handling SEQLOC_PACKED_PNTs properly
+*
+* Revision 6.153  2004/07/14 22:55:04  dondosha
+* Add version in GetAccessionVersionFromSeqId only if it is > 0
+*
+* Revision 6.152  2004/07/14 22:46:08  dondosha
+* Added GetAccessionVersionFromSeqId function to extract Accession.version from a Seq-id
+*
+* Revision 6.151  2004/07/14 19:09:19  kans
+* added CP for ACCN_NCBI_GENOME in WHICH_db_accession
+*
 * Revision 6.150  2004/06/04 17:31:34  kans
 * added CN and CO accession prefixes
 *
@@ -1324,6 +1357,9 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
   Uint1 newcode, byte;
   Char Code4na[256], CodeIna[256];
   Boolean remained;
+  Int2 actual, j;
+  Int4 cntr;
+  Uint1 tmp [401];
 
   Uint1 set4na[16] = {17, 18, 20, 24,  33,  34,  36,  40,
                       65, 66, 68, 72, 129, 130, 132, 136}; 
@@ -1334,7 +1370,9 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
   
   if (oldcode == Seq_code_ncbi2na)   /* already packed */
     return NULL;
-  
+
+  MemSet ((Pointer) tmp, 0, sizeof (tmp));
+
   BSSeek(from, 0L, SEEK_SET);
   newcode = Seq_code_ncbi2na;    /* go for broke */
 
@@ -1347,9 +1385,20 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
     MemSet(Code4na, 1, sizeof(Code4na));
     for(i=0; i< 16; i++)
       Code4na[set4na[i]] = 0;
-  
-    while(seqlen) {
-      byte = (Uint1) BSGetByte(from);    
+
+    cntr = (Int4) MIN ((Int4) seqlen, (Int4) (sizeof (tmp) - 1));
+    actual = (Int2) BSRead (from, tmp, (Int4) cntr);
+    j = 0;
+
+    while(seqlen && actual > 0) {
+      if (j == actual) {
+        cntr = (Int4) MIN ((Int4) seqlen, (Int4) (sizeof (tmp) - 1));
+        actual = (Int2) BSRead (from, tmp, (Int4) cntr);
+        j = 0;
+      }
+      /* byte = (Uint1) BSGetByte(from); */
+      byte = (Int2) (Uint1) tmp [j];
+      j++;
       if(Code4na[byte]) {
         newcode = Seq_code_ncbi4na;
         if (newcodeptr != NULL) {
@@ -1370,8 +1419,20 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
     for(i=0; i < 4; i++)
       CodeIna[setIna[i]] = 0;
     seqlen = length;
-    while(seqlen) {
-      byte = (Uint1) BSGetByte(from);    
+
+    cntr = (Int4) MIN ((Int4) seqlen, (Int4) (sizeof (tmp) - 1));
+    actual = (Int2) BSRead (from, tmp, (Int4) cntr);
+    j = 0;
+
+    while(seqlen && actual > 0) {
+      if (j == actual) {
+        cntr = (Int4) MIN ((Int4) seqlen, (Int4) (sizeof (tmp) - 1));
+        actual = (Int2) BSRead (from, tmp, (Int4) cntr);
+        j = 0;
+      }
+      /* byte = (Uint1) BSGetByte(from); */
+      byte = (Int2) (Uint1) tmp [j];
+      j++;
       if(CodeIna[byte]) {
         newcode = Seq_code_ncbi4na;
         break;
@@ -3577,6 +3638,15 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
 				     CharPtr PNTR id)
 {
+   return GetAccessionVersionFromSeqId(sip, gi, id, FALSE);
+}
+
+/* Maximal length of a version number in Accession.version identifiers */
+#define MAX_VERSION_LENGTH 10
+
+Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+                                     CharPtr PNTR id, Boolean get_version)
+{
    Boolean numeric_id_type = FALSE;
    Int2 id_len;
    GiimPtr gip;
@@ -3616,9 +3686,16 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
    case SEQID_OTHER: case SEQID_TPG: case SEQID_TPE: case SEQID_TPD:
       textsip = (TextSeqIdPtr)sip->data.ptrvalue;
       if (textsip->accession) {
-         id_len = StringLen(textsip->accession);
-         *id = (CharPtr) MemNew(id_len+1);
-         sprintf(*id, "%s", textsip->accession);
+         if (get_version && textsip->version > 0) {
+            /* Assume versions are no longer than MAX_VERSION_LENGTH digits */
+            id_len = StringLen(textsip->accession) + MAX_VERSION_LENGTH + 1;
+            *id = (CharPtr) MemNew(id_len+1);
+            sprintf(*id, "%s.%ld", textsip->accession, textsip->version);
+         } else {
+            id_len = StringLen(textsip->accession);
+            *id = (CharPtr) MemNew(id_len+1);
+            sprintf(*id, "%s", textsip->accession);
+         }
       } else if (textsip->name) {
          id_len = StringLen(textsip->name);
          *id = (CharPtr) MemNew(id_len+1);
@@ -4666,12 +4743,12 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
 			numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
 			while (numpnt)
 			{
+				numpnt--;
 				tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
 				if (pos < 0)
 					pos = tpos;
 				else if (tpos < pos)
 					pos = tpos;
-				numpnt--;
 			}
             break;
         default:
@@ -4752,12 +4829,12 @@ NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
 			numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
 			while (numpnt)
 			{
+				numpnt--;
 				tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
 				if (pos < 0)
 					pos = tpos;
 				else if (tpos > pos)
 					pos = tpos;
-				numpnt--;
 			}
             break;
         default:
@@ -4806,6 +4883,7 @@ NLM_EXTERN Uint1 SeqLocStrand (SeqLocPtr anp)   /* seqloc */
 						strand = SeqLocStrand(slp), slp = slp -> next;
 						slp != NULL ; slp = slp->next)
 				{
+				    if (slp->choice == SEQLOC_NULL || slp->choice == SEQLOC_EMPTY) continue;
 					tstrand = SeqLocStrand(slp);
 					if (strand == Seq_strand_unknown && tstrand == Seq_strand_plus) {
 						strand = Seq_strand_plus;
@@ -7800,15 +7878,28 @@ GetScoreAndEvalue(SeqAlignPtr seqalign, Int4 *score, Nlm_FloatHi *bit_score, Nlm
 		switch (seqalign->segtype)
 		{
 			case 1: /*Dense-diag*/
+                        {
+                                Boolean number_set = FALSE;
 				ddp = seqalign->segs;
 				while (ddp)
 				{
-					local_retval = GetBestScoreAndEvalueFromScorePtr(ddp->scores, score, bit_score, evalue, number);	
-					if (local_retval == TRUE)
-						retval = TRUE;
-					ddp = ddp->next;
+                                   Int4 number_tmp = 1;
+                                   local_retval =
+                                      GetBestScoreAndEvalueFromScorePtr(ddp->scores, score, 
+                                         bit_score, evalue, &number_tmp);	
+                                   /* Number of linked HSPs should be returned
+                                      for the segment with best e-value, which
+                                      must be first on the list. */
+                                   if (!number_set) {
+                                      *number = number_tmp;
+                                      number_set = TRUE;
+                                   }
+                                   if (local_retval == TRUE)
+                                      retval = TRUE;
+                                   ddp = ddp->next;
 				}
 				break;
+                        }
 			case 2:
 				dsp = seqalign->segs;
 				if (dsp)
@@ -8541,7 +8632,7 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s) {
     return retstatus;
 }
 
- NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s) {
+NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s) {
      Boolean retstatus = FALSE;
      if(s && *s && *(s+1) && *(s+2) && *(s+3) && *(s+4) && *(s+5) && *(s+6) ==NULLB) {
          if(*s == 'o' || *s == 'O' ||
@@ -8562,7 +8653,40 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s) {
      }
 
      return retstatus;
- }
+}
+ 
+NLM_EXTERN Boolean LIBCALL AccnIsUniProt (CharPtr s)
+ 
+{
+  Char  ch;
+
+  if (StringLen (s) != 6) return FALSE;
+
+  ch = *s;
+  if (! IS_ALPHA (ch)) return FALSE;
+
+  s++;
+  ch = *s;
+  if (! IS_DIGIT (ch)) return FALSE;
+
+  s++;
+  ch = *s;
+  if (! IS_ALPHA (ch)) return FALSE;
+
+  s++;
+  ch = *s;
+  if (! (IS_ALPHA (ch) || IS_DIGIT (ch))) return FALSE;
+
+  s++;
+  ch = *s;
+  if (! (IS_ALPHA (ch) || IS_DIGIT (ch))) return FALSE;
+
+  s++;
+  ch = *s;
+  if (! IS_DIGIT (ch)) return FALSE;
+
+   return TRUE;
+}
 
  /*
    function to tell if an accession is in the format
@@ -8658,6 +8782,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
   switch (len) {
 
   case 6:                       /* Old-style 6-character accession */
+    if (AccnIsUniProt (s)) {
+      return ACCN_SWISSPROT;
+    }
     while (*s) {
       if (retval == FALSE)
         break;
@@ -8675,7 +8802,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
             if (AccnIsSWISSPROT(s)) {
             	retcode = ACCN_SWISSPROT;
             }
-            /* retcode = AccnIsSWISSPROT(s); */
             break;
 
 /* GenBank : EST */
@@ -8804,7 +8930,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CF") == 0) || 
 	      (StringICmp(temp,"CK") == 0) || 
 	      (StringICmp(temp,"CN") == 0) || 
-	      (StringICmp(temp,"CO") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"CO") == 0) || 
+	      (StringICmp(temp,"CV") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8813,7 +8940,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AF") == 0) ||
                      (StringICmp(temp,"AY") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
-          } else if ((StringICmp(temp,"AE") == 0)) {      /* NCBI genome project data */
+          } else if ((StringICmp(temp,"AE") == 0) ||
+                     (StringICmp(temp,"CP") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
           } else if ((StringICmp(temp,"AH") == 0) ||
                      (StringICmp(temp,"CH") == 0) ||      /* NCBI segmented set header Bioseq */
@@ -8831,7 +8959,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CC") == 0) ||
                      (StringICmp(temp,"CE") == 0) ||
                      (StringICmp(temp,"CG") == 0) ||
-                     (StringICmp(temp,"CL") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"CL") == 0) ||
+                     (StringICmp(temp,"CW") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
@@ -8867,7 +8996,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"BW") == 0) ||
                      (StringICmp(temp,"BY") == 0) ||
                      (StringICmp(temp,"CI") == 0) ||
-                     (StringICmp(temp,"CJ") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"CJ") == 0) ||
+                     (StringICmp(temp,"DA") == 0) ||
+                     (StringICmp(temp,"DB") == 0) ||
+                     (StringICmp(temp,"DC") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;

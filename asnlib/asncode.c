@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.15  2004/07/08 15:24:05  kans
+* needed a couple additional TESTNIL wrappers
+*
 * Revision 6.14  2002/03/07 21:36:27  beloslyu
 * typo fixed
 *
@@ -138,7 +141,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.14 $";
+static char     RCS_Rev [] = "$Revision: 6.15 $";
 
 /*******************
  * Interator structure
@@ -2192,7 +2195,7 @@ userobj_CHECK_LIST (AsnIterPtr iter)
 	 } else {
 	    ErrPost (CTX_NCBIASN1, 101,
 		     "userobj CHECK LIST Unresolved imported type at %s.%s",
-		     iter->atp->name, this_type->name);
+		     TESTNIL (iter->atp->name), TESTNIL (this_type->name));
 	    use_type = (AsnTypePtr) NULL;
 	 }
       } else {

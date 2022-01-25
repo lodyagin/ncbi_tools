@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.147 $
+* $Revision: 6.153 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,27 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.153  2004/09/27 16:29:34  madden
+* Make title on SI_Record dynamically allocated
+*
+* Revision 6.152  2004/08/25 14:45:23  camacho
+* Refactorings to allow formatdb process multiple deflines
+*
+* Revision 6.151  2004/07/14 18:35:12  camacho
+* Added comments for readdb_get_header_ex
+*
+* Revision 6.150  2004/07/09 17:09:12  camacho
+* Updated documentation for last_oid_assigned
+*
+* Revision 6.149  2004/07/08 19:49:03  camacho
+* Contributions from ID1 Group:
+* 1) SI_Record structure.
+* 2) Refactoring of FDBAddSequence2 to allow addition of non-redundant sequences
+* when creating BLAST databases.
+*
+* Revision 6.148  2004/06/29 20:59:23  camacho
+* Added last_oid_assigned to ReadDBSharedInfo structure
+*
 * Revision 6.147  2004/04/16 18:14:50  camacho
 * Made division field in DI_Record larger
 *
@@ -903,6 +924,16 @@ OIDListPtr OIDListFree (OIDListPtr oidlist);
 typedef struct read_db_shared_info {
    Int2 nthreads;
    NlmMFILEPtr headerfp, sequencefp;
+
+   /* This is the ordinal id of the last chunk assigned to a thread when
+    * iterating over a database via the BlastSeqSrc interface with multiple
+    * threads. It should not be used in other contexts. It is analogous to 
+    * the db_chunk_last field of the BlastThrInfo structure.
+    * Please note that in case of a linked list of ReadDBFILE structures, only
+    * the first shared_info->last_oid_assigned field is significant when
+    * performing an iteration with multiple threads.
+    */
+   Uint4 last_oid_assigned;
 } ReadDBSharedInfo, *ReadDBSharedInfoPtr;
 
 /* ---------------------------------------------------------------------*/
@@ -939,6 +970,29 @@ typedef	struct _RDBTaxLookup {
 } RDBTaxLookup, *RDBTaxLookupPtr;
 
 typedef Boolean (*TaxCallbackFunc) (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
+
+
+/*
+ * sequence info record (SI_Record):
+ * > contains information about given gi 
+ * > most of it will be dumped to *[np]di files
+ * > form a linked list for identical gis
+ * > used for transferring data into AddSequence interface
+ *
+ * Contribution from Michael Kimelman/Olga Cherenkov from
+ * NCBI's ID1 group.
+ */
+
+typedef struct si_record {
+    struct  si_record PNTR next;
+    Int4    gi;
+    char    seqid[256]; /* seqid in FASTA format */
+    char*   title;      /* defline */
+    Int4    taxid;
+    Int4    owner;
+    char    div[4];
+    Int4    ent;  /* entity [sat_key in the ID] */
+} SI_Record, PNTR SI_RecordPtr;
 
 /*    ----
       Here are functions for run-time blast in relation to the
@@ -1240,6 +1294,10 @@ readdb_get_header PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Uint4Ptr head
 
 /* 
 Get the ID's, headers, taxid, memberships, and links for a sequence.
+Returns FALSE if the sequence_number is not applicable in the context of the
+database in rdfp (i.e.: masked databases), otherwise it will return TRUE until
+there are sequences associated with this sequence_number (then it returns
+FALSE).
 */
 Boolean LIBCALL 
 readdb_get_header_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, 
@@ -1561,34 +1619,46 @@ ValNodePtr FDBDestroyLinksTable(ValNodePtr list);
 ValNodePtr FDBLoadMembershipsTable(void);
 ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl);
 
+/* Constructs BlastDefLine structures from Bioseq */
+BlastDefLinePtr FDBGetDefAsnFromBioseq(BioseqPtr bsp);
+
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
 
+/* For database version FORMATDB_VER (or greater), only the first 5 parameters
+ * are used, the latter are kept for the FORMATDB_VER_TEXT version of the BLAST
+ * databases */
 Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp, 
                      Uint1 seq_data_type, ByteStorePtr *seq_data, 
                      Int4 SequenceLen, 
                      CharPtr seq_id, CharPtr title, 
                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date);
 
-Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
-                      Uint1 seq_data_type, ByteStorePtr *seq_data, 
-                      Int4 SequenceLen, 
-                      /* These 2 parameters are left for the backward
-                         compatibility. They are not used for ASN.1 structues
-                         deflines dump */
-                      
-                      CharPtr seq_id, CharPtr title,
-                      
-                      /* These parameters suppose, that this function adds
-                         sequence to the Blast database with single definition 
-                         line. Generally speaking, this is not the common case
-                         and if this function is used to add sequence item
-                         with many definition lines these parameters must not
-                         be used at all. */
-                      
-                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date,
+/**
+ * FDBAddSequence2: is an interface to add "non-redundant sequence", i.e
+ * common sequence data and multiple sequence information block (1 per gi)
+ * @param fdbp target blast db [in]
+ * @param srp linked list of sequence information for each gi [in]
+ * @param seq_data_type type of the parameter below [in]
+ * @param seq_data sequence data itself [in]
+ * @param SequenceLen length of the sequence in seq_data [in]
+ * @param AmbCharPtr pointer to ambiguity sequence data (nucl only) [in]
+ * @param pig_id stable protein group identifier [in]
+ * @param hash sequence hash - to allow  resuse of hahs calculated in ID [in]
+ * @return 1 on failure, 0 on success
+ */
+Int2 FDBAddSequence2 (FormatDBPtr  fdbp,
+                      SI_RecordPtr srp,
+                      Uint1 seq_data_type,
+                      ByteStorePtr *seq_data,
+                      Int4 SequenceLen,
                       Uint4Ptr  AmbCharPtr,
-                      Int4 pig_id); /* protein identifier group */
+                      Int4 pig_id, 
+                      Uint4 hash   
+                      );
 
+/* For database version FORMATDB_VER (or greater), the bdp parameter must 
+ * be provided. This could be populated from the bsp parameter by calling 
+ * FDBGetDefAsnFromBioseq */
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 

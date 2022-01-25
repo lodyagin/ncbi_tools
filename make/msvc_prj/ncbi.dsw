@@ -36,6 +36,15 @@ Package=<4>
     Project_Dep_Name demo_asn2xml
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name demo_asn2idx
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asn2all
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asn2fsa
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name demo_asndhuff
     End Project Dependency
     Begin Project Dependency
@@ -272,6 +281,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name demo_insdseqget
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_formatrpsdb
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -486,6 +498,66 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_asn2all"=.\demo\asn2all\demo_asn2all.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asn2idx"=.\demo\asn2idx\demo_asn2idx.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_asn2ff"=.\demo\asn2ff\demo_asn2ff.dsp - Package Owner=<4>
 
 Package=<5>
@@ -508,6 +580,42 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name connect
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asn2fsa"=.\demo\asn2fsa\demo_asn2fsa.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 
@@ -611,6 +719,12 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbitool
     End Project Dependency
@@ -1440,6 +1554,36 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_formatrpsdb"=.\demo\formatrpsdb\demo_formatrpsdb.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_gbseqget"=.\demo\gbseqget\demo_gbseqget.dsp - Package Owner=<4>
 
 Package=<5>
@@ -1736,6 +1880,12 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbitool
     End Project Dependency
@@ -2269,6 +2419,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi

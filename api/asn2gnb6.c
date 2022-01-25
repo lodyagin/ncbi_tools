@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.23 $
+* $Revision: 1.29 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -362,6 +362,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "dbEST",
   "dbSNP",
   "dbSTS",
+  "dictyBase",
   "ENSEMBL",
   "ESTLIB",
   "FANTOM_DB",
@@ -376,8 +377,8 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GOA",
   "H-InvDB",
   "IFO",
-  "IMGT/LIGM",
   "IMGT/HLA",
+  "IMGT/LIGM",
   "InterimID",
   "InterPro",
   "ISFinder",
@@ -399,10 +400,10 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "SGD",
   "SoyBase",
   "SubtiList",
-  "Swiss-Prot",
   "taxon",
-  "TrEMBL",
   "UniGene",
+  "UniProt/Swiss-Prot",
+  "UniProt/TrEMBL",
   "UniSTS",
   "WorfDB",
   "WormBase",
@@ -412,6 +413,8 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
 
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "REBASE",
+  "IMGT/GENE-DB",
+  "CloneID",
   NULL
 };
 
@@ -3544,7 +3547,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
           bsq.seq_ext_type = 1;
           bsq.length = SeqLocLen (slp);
           bsq.seq_ext = &sl;
-          if (slp->choice == SEQLOC_MIX) {
+          if (slp->choice == SEQLOC_MIX || slp->choice == SEQLOC_PACKED_INT) {
             loc = (SeqLocPtr) slp->data.ptrvalue;
             if (loc != NULL) {
               sl.choice = loc->choice;
@@ -3592,7 +3595,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     if (lin >= 60) {
 
       buf [count] = '\0';
-      PrintSeqLine (ffstring, afp->format, buf, start, start);
+      PrintSeqLine (ffstring, afp->format, buf, start, start + lin);
       count = 0;
       blk = 0;
       lin = 0;
@@ -3609,7 +3612,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
 
   buf [count] = '\0';
   if (count > 0) {
-    PrintSeqLine (ffstring, afp->format, buf, start, start);
+    PrintSeqLine (ffstring, afp->format, buf, start, start + lin);
   }
 
   str = FFToCharPtr(ffstring);

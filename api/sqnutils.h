@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.98 $
+* $Revision: 6.107 $
 *
 * File Description: 
 *
@@ -304,6 +304,7 @@ NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
 NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
 NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr codon, Boolean noSingleLetter);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
+NLM_EXTERN Char FindResidueByName (CharPtr res_name, SeqCodeTablePtr sctp);
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
 NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon);
 NLM_EXTERN Boolean SerialNumberInString (CharPtr str);
@@ -399,6 +400,8 @@ and protein bioseqs.  It processes ALL features in the list - you give it the FI
 NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID);
 NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop,
                                 Boolean remove_trailingX, Boolean gen_prod_set);
+NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop,
+                                  Boolean remove_trailingX, Boolean gen_prod_set, Boolean force_local_id);
 
 /* SetEmptyGeneticCodes imposes genetic code on all coding regions within a feature table */
 
@@ -435,6 +438,8 @@ NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, S
 /* Convert a segmented or delta Bioseq to a raw Bioseq */
 
 NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp);
+
+NLM_EXTERN void ConvertSegSetsToDeltaSequences (SeqEntryPtr sep);
 
 /* general purpose text finite state machine */
 /* based on Practical Algorithms for Programmers by Binstock and Rex */
@@ -575,6 +580,8 @@ typedef PubmedEntryPtr (LIBCALLBACK * PubMedFetchFunc) (Int4 uid);
 
 NLM_EXTERN void LIBCALL PubMedSetFetchFunc (PubMedFetchFunc func);
 
+NLM_EXTERN void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsize);
+
 extern CharPtr MyFGetLine (FILE *fp, ValNodePtr PNTR current_data);
 
 #if defined (WIN32)
@@ -593,9 +600,12 @@ typedef struct readbuffer {
 extern void FreeBufferedReadList (ValNodePtr vnp);
 
 extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 moltype);
+extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 moltype, Boolean check_ids);
 extern SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep);
+extern void ProcessPseudoMiscFeatsForEntityID (Uint2 entityID);
+extern void ConvertPseudoCDSToMiscFeatsForEntityID (Uint2 entityID);
 
-
+extern SeqAlignPtr FindAlignmentsForBioseq (BioseqPtr bsp);
 
 #ifdef __cplusplus
 }

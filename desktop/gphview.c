@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.62 $
+* $Revision: 6.64 $
 *
 * File Description:
 *
@@ -3875,7 +3875,9 @@ static void PopulateAsn2GphGraphic (
   CharPtr      appearanceName;
   CharPtr      filterName;
   CharPtr      layoutName;
+  /*
   CharPtr      alignScoreName;
+  */
   CharPtr      alignScoreCutoff;
   GraphicViewExtras gvExtras;
 

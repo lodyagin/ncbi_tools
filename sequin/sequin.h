@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.138 $
+* $Revision: 6.167 $
 *
 * File Description: 
 *
@@ -229,9 +229,16 @@ extern void ConsolidateLikeModifiersWithSemicolons (IteM i);
 extern void ConsolidateLikeModifiersWithoutSemicolons (IteM i);
 
 extern void CountryLookup (IteM i);
+extern void ExtractProteinFeaturesFromNote (IteM i);
+extern void ConvertPseudoCDSToMiscFeat (IteM i);
+extern void ProcessPseudoMiscFeat (IteM i);
+extern void ConvertGeneLocusTagToOldLocusTag (IteM i);
+extern void ParseInfluenzaAVirusNames (IteM i);
+extern void EditPubs (IteM i);
 
 extern void ExtendPartialFeatures (IteM i);
 extern void TrimOrganismName (IteM i);
+extern void SUCSubmitterProc (IteM i);
 
 extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether);
 
@@ -314,7 +321,6 @@ extern void SequinCheckSocketsProc (void);
 
 extern Int4 MySeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force);
 extern void ValSeqEntryForm (ForM f);
-extern void ValSeqEntryFormEx (ForM f, Boolean doAligns);
 
 extern void InitSequinExtras (void);
 extern void FiniSequinExtras (void);
@@ -344,7 +350,8 @@ extern void LaunchOrfViewer (BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Boolea
 
 extern Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
                                   ButtoN partialLft, ButtoN partialRgt,
-                                  TexT geneName, TexT protName, TexT rnaName,
+                                  TexT geneName, TexT protName, 
+                                  TexT protDesc, TexT rnaName,
                                   TexT featcomment, TexT defline);
 
 extern SeqFeatPtr FindBestCds (Uint2 entityID, SeqLocPtr loc, SeqLocPtr prod, SeqEntryPtr scope);
@@ -400,6 +407,9 @@ extern void FindGeneAndProtForCDS (Uint2 entityID, SeqFeatPtr cds,
 extern SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product);
 extern void ExportAlignmentInterleave (IteM i);
 extern void ExportAlignmentContiguous (IteM i);
+extern void FixFeatureIntervals (IteM i);
+extern void ConvertInnerCDSsToProteinFeatures (IteM i);
+
 extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype);
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
@@ -426,6 +436,7 @@ extern void LoadTPAAccessionNumbersFromFile (IteM i);
 extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
 extern void LoadHistoryAccessionNumbersFromFile (IteM i);
 extern void LoadOrganismModifierTable (IteM i);
+extern void ExportOrganismTable (IteM i);
 extern void LoadFeatureQualifierTable (IteM i);
 
 extern void RemoveRNA (IteM i);
@@ -435,7 +446,9 @@ extern void EditRNA (IteM i);
 
 extern void RemoveRedundantProproteinMiscFeats (IteM i);
 extern void AddTypeStrainCommentsToAll (IteM i);
+extern void AddTypeStrainCommentsWithConstraint (IteM i);
 extern void RemoveSequencesFromAlignment (IteM i);
+extern void RemoveSequencesFromRecord (IteM i);
 
 extern void ParseDefToSource (IteM i);
 extern void ParseLocalIDToSource (IteM i);
@@ -455,6 +468,7 @@ extern void RetranslateCdRegionsNoStop (IteM i);
 extern void RetranslateCdRegionsDoStop (IteM i);
 extern void RetranslateCdRegionsNoStopExceptEndCompleteCDS (IteM i);
 extern void AddGlobalCodeBreak (IteM i);
+extern void ParseCodonQualToCodeBreak (IteM i);
 extern void CorrectCDSGenCodes (IteM i);
 /* extern void CorrectCDSStartCodon (IteM i); */
 /* extern Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean include_stop); */
@@ -495,6 +509,7 @@ extern void RemoveDescriptor (IteM i);
 extern void SelectFeature (IteM i);
 extern void SelectDescriptor (IteM i);
 extern void SelectBioseq (IteM i);
+extern void SelectPubs (IteM i);
 
 extern void FuseFeature (IteM i);
 
@@ -505,6 +520,7 @@ extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByFeatureWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByDescriptorWindow (Pointer data);
+extern Int2 LIBCALLBACK CreateSegregateByMoleculeTypeWindow (Pointer data);
 extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data);
 extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
@@ -526,7 +542,7 @@ extern void FindGeneProc (IteM i);
 extern void FindProtProc (IteM i);
 extern void FindPosProc (IteM i);
 
-extern Boolean MeetsStringConstraint (SeqFeatPtr sfp, CharPtr str);
+extern Boolean MeetsStringConstraint (SeqFeatPtr sfp, CharPtr str, Boolean case_insensitive);
 
 extern Boolean SaveSeqSubmitProc (BaseFormPtr bfp, Boolean saveAs);
 
@@ -572,6 +588,7 @@ extern void RemoveProteins (IteM i);
 extern void RemoveProteinsAndRenormalize (IteM i);
 
 extern void GlobalAddTranslExcept (IteM i);
+extern void AddTranslExceptWithComment (IteM i);
 
 extern void ReadAlignment (IteM i);
 extern SeqEntryPtr SeqEntryFromAlignmentFile (FILE *fp, CharPtr missing, CharPtr match,
@@ -585,6 +602,8 @@ extern SeqAlignPtr Sequin_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, Int
 /* eventually this declaration should be moved to libncbitool */
 NLM_EXTERN SeqAlignPtr Sqn_LocalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, Boolean use_new_blast);
 extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp);
+
+extern void ProduceAlignmentNotes (TAlignmentFilePtr afp, TErrorInfoPtr error_list);
 
 extern Boolean CreateUpdateCitSubFromBestTemplate (SeqEntryPtr top_sep, SeqEntryPtr upd_sep);
 
@@ -636,6 +655,8 @@ typedef struct sequencesform {
   TexT            geneName;
   PrompT          protOrRnaPpt;
   TexT            protOrRnaName;
+  PrompT          protDescPpt;
+  TexT            protDesc;
   TexT            featcomment;
   TexT            defline;
   ButtoN          orgPrefix;
@@ -651,6 +672,8 @@ typedef struct sequencesform {
   SeqEntryPtr     currConfirmSeq;
   FormActnFunc    putItAllTogether;
   Int2            currConfirmCount;
+  
+  ButtoN          use_id_from_fasta_defline;
 } SequencesForm, PNTR SequencesFormPtr;
 
 typedef int (LIBCALLBACK *CompareFunc) (Nlm_VoidPtr, Nlm_VoidPtr);
@@ -677,6 +700,54 @@ extern ValNodePtr BuildFeatureValNodeList (
 );
 
 extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname);
+
+extern void MergeFeatureIntervalsToParts (SeqFeatPtr sfp);
+
+extern void InitValNodePopup (ValNodePtr list, PopuP p);
+extern Int2 GetValNodePopup (PopuP p, ValNodePtr list);
+extern void SetValNodePopupValue (ValNodePtr list, PopuP p, CharPtr val);
+extern ValNodePtr GetQualList (void);
+
+typedef struct listpair
+{
+  ValNodePtr selected_names_list;
+  ValNodePtr selected_values_list;
+} ListPairData, PNTR ListPairPtr;
+
+extern DialoG CreateModifierTagList (GrouP g, ListPairPtr lpp);
+extern ListPairPtr GetModifierList (DialoG d);
+extern Uint1 FindTypeForModNameText (CharPtr cp);
+
+typedef struct featureswithtextdata 
+{
+  Uint1             seqFeatChoice;
+  Uint1             featDefChoice;
+  CharPtr           search_text;
+  Boolean           case_insensitive;
+  Boolean           no_text;
+  Boolean           act_when_string_not_present;
+  VisitFeaturesFunc callback;
+  Pointer           userdata;
+} FeaturesWithTextData, PNTR FeaturesWithTextPtr;
+
+typedef struct descriptorswithtextdata 
+{
+  CharPtr           search_text;
+  Boolean           case_insensitive;
+  Boolean           no_text;
+  Boolean           act_when_string_not_present;
+  VisitDescriptorsFunc callback;
+  Pointer           userdata;
+} DescriptorsWithTextData, PNTR DescriptorsWithTextPtr;
+
+
+extern void OperateOnBioseqFeaturesWithText 
+(BioseqPtr         bsp,
+ Pointer           userdata);
+
+extern void OperateOnSeqEntryFeaturesWithText (SeqEntryPtr sep, FeaturesWithTextPtr fdp);
+extern void OperateOnSeqEntryDescriptorsWithText (SeqEntryPtr sep, DescriptorsWithTextPtr ddp);
+
 
 #ifdef __cplusplus
 }

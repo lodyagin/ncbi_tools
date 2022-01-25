@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.9 2004/05/14 17:25:07 dondosha Exp $
+/* $Id: wblast2.c,v 1.14 2004/10/12 20:49:55 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,27 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.9 $
+* $Revision: 1.14 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.14  2004/10/12 20:49:55  dondosha
+* Correction due to change in SummaryReturn structure name and contents
+*
+* Revision 1.13  2004/08/16 19:39:35  dondosha
+* Use CreateMaskByteStore function from txalign.h; fixed bug in masking filtered locations for translated queries
+*
+* Revision 1.12  2004/08/09 15:40:51  dondosha
+* Propagated change in progotype for BLAST_TwoSeqLocSets
+*
+* Revision 1.11  2004/06/28 16:11:17  dondosha
+* Fixed constant name
+*
+* Revision 1.10  2004/06/24 21:17:07  dondosha
+* Boolean argument in ScoreAndEvalueToBuffers changed to Uint1
+*
 * Revision 1.9  2004/05/14 17:25:07  dondosha
 * Allow use of new BLAST engine
 *
@@ -182,6 +197,8 @@
 #include <tofasta.h>
 #include <wwwblast.h>
 #include <id1arch.h>
+#include <txalign.h>
+
 /* For rlimit stuff. */
 #if defined(OS_UNIX)
 #include <sys/resource.h>
@@ -198,11 +215,7 @@
 #include <qblastnet.h>
 #endif
 
-#if 1
-#define USE_NEW_BLAST
-#endif
-
-#ifdef USE_NEW_BLAST
+#ifndef USE_OLD_BLAST
 #include <algo/blast/api/twoseq_api.h>
 #endif
 
@@ -578,7 +591,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("</tr></table>\n");
         } else {
            printf("<CENTER><TABLE CELLSPACING=2 CELLPADDING=2 WIDTH=100%%>\n");
-           printf("<TR ALIGN=CENTER BaGCOLOR=#8dc7cc BGCOLOR=#0000ff><TD><B><I>\n");
+           printf("<TR ALIGN=CENTER BGCOLOR=#8dc7cc BGCOLOR=#0000ff><TD><B><I>\n");
            printf("<A HREF=http://www.ncbi.nlm.nih.gov/><font color=#ffffff>NCBI</font></A></I></B></TD>\n");
            printf("<TD><B><I>\n");
            printf("<A HREF=http://www.ncbi.nlm.nih.gov/Entrez><font color=#ffffff>Entrez</font></A>\n");
@@ -1052,109 +1065,27 @@ static Boolean sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 	return TRUE;
 }
 
-/* static functions from txalign.c needed for SEG masking */
-static void MaskWithLowComplexity(ByteStorePtr bsp, SeqLocPtr maskloc, Uint1 mol)
+/** Frees the part of the byte store list that has not been used for replacement
+ * of Bioseq data.
+ */
+static void 
+ByteStoreListFreeUnused (ValNodePtr bs_list, Uint1 frame_to_skip)
 {
-	SeqLocPtr slp = NULL;
-	Int4 start, stop;
-	Uint1 res = 'N';
-	
+   ByteStorePtr bsp;
+   ValNodePtr bs_next = NULL;
+   Boolean skip_done = FALSE;
 
-	if(mol == Seq_mol_aa)
-		res = 'X';
-
-	while(maskloc)
-	{
-		slp = NULL;
- 		while((slp = SeqLocFindNext(maskloc, slp))!=NULL)
-		{
-			start = SeqLocStart(slp);
-			stop = SeqLocStop(slp);
-			BSSeek(bsp, start, SEEK_SET);
-			for(; start <=stop; ++start)
-                BSPutByte(bsp, (Int2)res);
-		}
-		maskloc = maskloc->next;
-	}
-}
-
-static ByteStorePtr create_byte_store_from_bsp (BioseqPtr bsp)
-{
-	SeqPortPtr spp;
-	Uint1 code;
-	ByteStorePtr b_store;
-	Uint1 residue;
-
-	if(bsp == NULL)
-		return NULL;
-	if(bsp->mol == Seq_mol_aa)
-		code = Seq_code_iupacaa;
-	else
-		code = Seq_code_iupacna;
-
-	spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_plus, code);
-	b_store = BSNew(bsp->length +1);
-	BSSeek(b_store, 0, SEEK_SET);
-	while((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
-		BSPutByte(b_store, (Int2)residue);
-	SeqPortFree(spp);
-	return b_store;
-}
-
-static ValNodePtr CreateMaskByteStore (ValNodePtr mask_list)
-{
-	BioseqPtr bsp;
-	SeqLocPtr slp;
-	SeqIdPtr sip;
-	ValNodePtr list, curr;
-	ByteStorePtr b_store, c_store;
-	Uint1 mol;
-
-	list = NULL;
-	b_store = NULL;
-	while(mask_list)
-	{
-		curr = ValNodeNew(list);
-		curr->choice = mask_list->choice;
-		if(list == NULL)
-			list = curr;
-		slp = mask_list->data.ptrvalue;
-		if(slp != NULL)
-		{
-			if(b_store == NULL)
-			{
-				sip = SeqLocId(slp);
-				if(sip != NULL)
-				{
-					bsp = BioseqLockById(sip);
-					if(bsp != NULL)
-					{
-						b_store = create_byte_store_from_bsp (bsp);
-						mol = bsp->mol;
-						BioseqUnlock(bsp);
-					}
-				}
-			}
-			if(b_store != NULL)
-			{
-				if(mask_list->next == NULL)
-				{
-					c_store = b_store;
-					b_store = NULL;
-				}
-				else
-					c_store = BSDup(b_store);
-				MaskWithLowComplexity(c_store, slp, mol);
-				curr->data.ptrvalue = c_store;
-			}
-		}
-
-		mask_list = mask_list->next;
-	}
-
-	if(b_store != NULL)
-		BSFree(b_store);
-	return list;
+   for( ; bs_list; bs_list = bs_next) {
+      bs_next = bs_list->next;
+      if (skip_done || bs_list->choice != frame_to_skip) {
+         bsp = (ByteStorePtr) bs_list->data.ptrvalue;
+         if(bsp != NULL)
+            BSFree(bsp);
+      } else {
+         skip_done = TRUE;
+      }
+      MemFree(bs_list);
+   }
 }
 
 /*******************************************************/
@@ -1167,12 +1098,14 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
 	Char eval_buff[10], bit_score_buff[10];
 	AlignSumPtr asp;
 	Int2 percent_identical, percent_positive;
-        ValNodePtr bs_list;
-        BioseqPtr q_bsp;
-        Int4 frame;
-        Uint1 code;
-        Uint1 repr;
-        ByteStorePtr seq_data;
+   ValNodePtr bs_list;
+   BioseqPtr q_bsp;
+   Int4 frame;
+   Uint1 code=0;
+   Uint1 repr=0;
+   ByteStorePtr seq_data=NULL;
+   Boolean local_matrix = FALSE;     
+   Boolean seq_data_replaced = FALSE;
 
 	printf("<pre>\n");
 	GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
@@ -1181,7 +1114,7 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
       before e. */
 	eval_buff_ptr = eval_buff;
    ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
-                           &eval_buff_ptr, TRUE);
+                           &eval_buff_ptr, TX_KNOCK_OFF_ALLOWED);
 
 	if (number == 1) {
 		printf("Score = %s bits (%ld), Expect = %s<BR>", 
@@ -1192,46 +1125,58 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
 	}
 	asp = MemNew(sizeof(AlignSum));
 	asp->matrix = NULL;
-        if (is_aa) {
-           if (matrix != NULL)
-              asp->matrix = matrix;
-           else
-              asp->matrix = load_default_matrix();
+   if (is_aa) {
+      if (matrix != NULL)
+         asp->matrix = matrix;
+      else {
+         asp->matrix = load_default_matrix();
+         local_matrix = TRUE;
+      }
 	}
 	asp->is_aa = is_aa;
 	asp->totlen = 0;
 	asp->positive = 0;
 	asp->identical = 0;
 	asp->gaps = 0;
-        asp->master_sip = SeqIdDup(TxGetQueryIdFromSeqAlign(sap));
-        asp->target_sip = TxGetSubjectIdFromSeqAlign(sap);
+   asp->master_sip = SeqIdDup(TxGetQueryIdFromSeqAlign(sap));
+   asp->target_sip = TxGetSubjectIdFromSeqAlign(sap);
 
-        if (mask_loc) { /* Mask the query sequence */
-           bs_list = CreateMaskByteStore (mask_loc);
-           q_bsp = BioseqLockById(asp->master_sip);
-           if (ISA_na(q_bsp->mol) && sap->segtype == SAS_STD) {
-              StdSegPtr ssp = (StdSegPtr) sap->segs;
-              frame = SeqLocStart(ssp->loc);
-              if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
-                 frame += SeqLocLen(ssp->loc);
-                 frame = -(1+(q_bsp->length - frame)%3);
-              } else {
-                 frame = (1+frame%3);
-              }
-           } else
-              frame = 0;
-           repr = q_bsp->repr;
-           seq_data = q_bsp->seq_data;
-           code = q_bsp->seq_data_type;
-           if (!replace_bytestore_data(q_bsp, bs_list, (Uint1)frame)) {
-              q_bsp->repr = repr;
-              q_bsp->seq_data = seq_data;
-              q_bsp->seq_data_type = code;
-           }
-           BioseqUnlock(q_bsp);
-        }
+   if (mask_loc) { /* Mask the query sequence */
+      bs_list = CreateMaskByteStore (mask_loc);
+      q_bsp = BioseqLockById(asp->master_sip);
+      if (ISA_na(q_bsp->mol) && sap->segtype == SAS_STD) {
+         StdSegPtr ssp = (StdSegPtr) sap->segs;
+         frame = SeqLocStart(ssp->loc);
+         if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
+            frame += SeqLocLen(ssp->loc);
+            frame = -(1+(q_bsp->length - frame)%3);
+         } else {
+            frame = (1+frame%3);
+         }
+      } else
+         frame = 0;
+      repr = q_bsp->repr;
+      seq_data = q_bsp->seq_data;
+      code = q_bsp->seq_data_type;
+      seq_data_replaced = replace_bytestore_data(q_bsp, bs_list, (Uint1)frame);
+      if (!seq_data_replaced) {
+         q_bsp->repr = repr;
+         q_bsp->seq_data = seq_data;
+         q_bsp->seq_data_type = code;
+      }
+      BioseqUnlock(q_bsp);
+      ByteStoreListFreeUnused(bs_list, (Uint1)frame);
+   }
+   
+   find_score_in_align(sap, 1, asp);
 
-        find_score_in_align(sap, 1, asp);
+   /* Restore the unmasked sequence data. */
+   if (seq_data_replaced) {
+      q_bsp = BioseqLockById(asp->master_sip);
+      q_bsp->repr = repr;
+      q_bsp->seq_data = seq_data;
+      q_bsp->seq_data_type = code;
+   }
 
 	if (asp && asp->totlen > 0) {
            Char sign1, sign2;           
@@ -1273,8 +1218,11 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
            printf("<BR><BR>");
 	}
 	printf("</pre>\n");		
-        SeqIdFree(asp->master_sip);
-        MemFree(asp);
+   
+   SeqIdFree(asp->master_sip);
+   if (local_matrix)
+      free_default_matrix(asp->matrix);
+   MemFree(asp);
 }
 
 static Int2 CreateRectAlign(SeqAlignPtr sap, PrymPtr PNTR rect, PrymPtr PNTR rectY, FloatHi scalex, FloatHi scaley, Int4 l1, Int4 l2, Int2 color, Int4 from, Int4 ffrom, Int4 to, Int4 tto)
@@ -1721,6 +1669,7 @@ static BioseqPtr FindSeqByAccession(CharPtr accver, Int2 id_num, Boolean is_na)
    if (gi > 0) {
       ValNodeAddInt(&sip, SEQID_GI, gi);
       bsp = BioseqLockById(sip);
+      SeqIdFree(sip);
    } 
 
    if (bsp == NULL)
@@ -1982,12 +1931,14 @@ static void* ConnectionThreadRun(void *p)
       if (run_status != WBLAST2_DONE) /* Sleep 4 seconds */
          poll(NULL, 0, 4000);
    }
-   
+
+   MemFree(fds);
+
    return NULL;
 }
 #endif
 
-#ifdef USE_NEW_BLAST
+#ifndef USE_OLD_BLAST
 static void BLASTOptions2SummaryOptions(BLAST_OptionsBlk* options,
                                         Char* progname,
                                         BLAST_SummaryOptions* s_options)
@@ -2031,9 +1982,8 @@ static void BLASTOptions2SummaryOptions(BLAST_OptionsBlk* options,
    s_options->gap_x_dropoff = options->gap_x_dropoff;
    s_options->db_length = options->db_length;
    s_options->word_threshold = options->threshold_second;
-   /* If window size is set to 0, enforce single hit method for initial 
-      words */
-   if (options->window_size == 0)
+
+   if (!options->multiple_hits_only)
       s_options->init_seed_method = eOneHit;
 }
 #endif
@@ -2076,7 +2026,6 @@ Int2 Main(void)
     static PrymPtr PNTR rectY;
     SeqLocPtr    slp1=NULL, slp2=NULL, slp, sl, qslp = NULL;
     Uint1        align_type;
-    
     ValNodePtr	   other_returns, mask, mask_head;
     CharPtr		   buffer = NULL;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_gap_params=NULL;
@@ -2100,9 +2049,11 @@ Int2 Main(void)
     int pid, time_start, results_size = 0;
 #endif
 
-#ifdef USE_NEW_BLAST 
+#ifndef USE_OLD_BLAST 
     BLAST_SummaryOptions* s_options = NULL;
-    BLAST_SummaryReturn* s_return = NULL;
+    Blast_SummaryReturn* s_return = NULL;
+    Boolean mask_at_hash;
+    EBlastProgramType program_number; 
 #endif
 
 #ifdef RLIMIT_CPU
@@ -2462,10 +2413,14 @@ Int2 Main(void)
 
         StringCpy(options->matrix, mbuf);
         
-        /* one-pass non-multiple hits search with low threshold */		
-        options->two_pass_method  = FALSE;                      			
-        options->multiple_hits_only  = FALSE;
-        options->threshold_second = 9;
+        /* Use one-pass initial word search with low threshold, except for 
+           tblastx. Also do not use multiple hits approach for finding initial 
+           seeds. */
+        options->two_pass_method  = FALSE;  
+        if (StrCmp(progname, "tblastx")) {
+           options->threshold_second = 9;
+           options->multiple_hits_only  = FALSE;
+        }
     } else {
         if (gopen == -1) 
             gopen = (is_megablast) ? 0 : 5;
@@ -2597,13 +2552,24 @@ Int2 Main(void)
     logmsg(0);
 #endif
 
-#ifndef USE_NEW_BLAST
+#ifndef USE_OLD_BLAST
+    BLAST_SummaryOptionsInit(&s_options);
+    BLASTOptions2SummaryOptions(options, progname, s_options);
+    BLAST_TwoSeqLocSets(s_options, slp1, slp2, NULL, &seqalign, &mask, &mask_at_hash,
+                        &s_return);
+    if (mask_at_hash) {
+       /* If masking was done for lookup table only, do not use mask locations
+          for formatting. */
+       while (mask) {
+          SeqLocSetFree(mask->data.ptrvalue);
+          mask = mask->next;
+       }
+    }
+        
+    BLAST_SummaryOptionsFree(s_options);
+#else
     seqalign =  BlastTwoSequencesByLocEx(slp1, slp2, progname, 
                                          options, &other_returns, NULL);
-#else
-       BLAST_SummaryOptionsInit(&s_options);
-       BLASTOptions2SummaryOptions(options, progname, s_options);
-       BLAST_TwoSeqLocSets(s_options, slp1, slp2, &seqalign, &mask, &s_return);
 #endif
     run_status = WBLAST2_FORMAT;    
     /*	seqalign =  BlastTwoSequencesEx(query_bsp, subject_bsp, progname, 
@@ -2633,7 +2599,7 @@ Int2 Main(void)
         return 0;
     }
 
-#ifndef USE_NEW_BLAST
+#ifdef USE_OLD_BLAST
     mask = NULL;
     for (vnp=other_returns; vnp; vnp = vnp->next) {
         switch (vnp->choice) {
@@ -3023,7 +2989,22 @@ Int2 Main(void)
     if (txmatrix)
         txmatrix = TxMatrixDestruct(txmatrix);
     dbinfo = TxDfDbInfoDestruct(dbinfo);
-#ifndef USE_NEW_BLAST
+#ifndef USE_OLD_BLAST
+    if (s_return->ka_params) {
+       PrintKAParameters(s_return->ka_params->Lambda, s_return->ka_params->K, 
+                         s_return->ka_params->H, 70, stdout, FALSE);
+    }
+    if (s_return->ka_params_gap) {
+       PrintKAParameters(s_return->ka_params_gap->Lambda, 
+                         s_return->ka_params_gap->K, 
+                         s_return->ka_params_gap->H, 70, stdout, TRUE);
+    }
+    BlastProgram2Number(progname, &program_number);
+    buffer = Blast_GetParametersBuffer(program_number, s_return);
+    PrintTildeSepLines(buffer, 70, stdout);
+    sfree(buffer);
+    Blast_SummaryReturnFree(s_return);
+#else
     if (ka_params) {
         PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 
                           70, stdout, FALSE);
@@ -3037,25 +3018,14 @@ Int2 Main(void)
     PrintTildeSepLines(buffer, 70, stdout);
     MemFree(buffer);
     free_buff();
+#endif
     mask_head = mask;
     while (mask) {
         SeqLocSetFree(mask->data.ptrvalue);
         mask = mask->next;
     }
     ValNodeFree(mask_head);
-#else
-    if (s_return->ka_params) {
-       PrintKAParameters(s_return->ka_params->Lambda, s_return->ka_params->K, 
-                         s_return->ka_params->H, 70, stdout, FALSE);
-    }
-    if (s_return->ka_params_gap) {
-       PrintKAParameters(s_return->ka_params_gap->Lambda, 
-                         s_return->ka_params_gap->K, 
-                         s_return->ka_params_gap->H, 70, stdout, TRUE);
-    }
-    PrintTildeSepLines(s_return->params_buffer, 70, stdout);
-    
-#endif
+
     CreateTailHTML();
     run_status = WBLAST2_DONE;
     options = BLASTOptionDelete(options);

@@ -47,4 +47,6 @@ NLM_EXTERN Boolean ValidateSeqAlignandACCInSeqEntry (SeqEntryPtr sep,
                    Boolean find_acc_bsp,
                    Boolean delete_bsp, Boolean delete_salp);
 
+NLM_EXTERN void    CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold);
+
 #endif

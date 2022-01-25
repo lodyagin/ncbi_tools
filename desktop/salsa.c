@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.160 $
+* $Revision: 6.163 $
 *
 * File Description: 
 *
@@ -66,6 +66,7 @@
 #include <salpedit.h>
 #include <salptool.h>
 #include <alignmgr.h>
+#include <seqpanel.h>
 
 /******/
 #include <pgppop.h>
@@ -5030,14 +5031,12 @@ static ForM CreateSeqAlignViewForm (Int2 left, Int2 top, CharPtr windowname, Seq
 ************************************************/
 extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
 {
-  WindoW              w = NULL;
   BioseqPtr           bsp = NULL;
-  SeqEditViewFormPtr  wdp = NULL;
   OMProcControlPtr    ompcp;
-  OMUserDataPtr       omudp;
+  ForM                f;
+  Int2                top;
   SeqIdPtr            sip;
   Char                str [64];
-  SelStruct ss;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) 
@@ -5054,9 +5053,79 @@ extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
   if (bsp == NULL) {
      return OM_MSG_RET_ERROR;
   }  
-  ss.entityID = ompcp->input_entityID;
-  ss.itemID = ompcp->input_itemID;
-  ss.itemtype = ompcp->input_itemtype;
+
+  sip = SeqIdFindWorst (bsp->id);
+  SeqIdWrite (sip, str, PRINTID_REPORT, 64);
+  
+#ifdef WIN_MAC
+  top = 53;
+#else
+  top = 33;
+#endif
+  f = CreateSeqEditorWindow (33, top, str, bsp);
+  if (f != NULL)
+  {
+     Show (f);
+     Update ();
+     Select (f);
+     return OM_MSG_RET_DONE;
+  }
+
+  return OM_MSG_RET_ERROR;
+}
+
+
+static Boolean DeltaLitOnly (BioseqPtr bsp)
+
+{
+  ValNodePtr  vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) return FALSE;
+  }
+  return TRUE;
+}
+
+
+/************************************************
+* This function launches the old sequence editor from a menu item
+************************************************/
+extern void OldSequenceEditor (IteM i)
+{
+  BaseFormPtr         bfp;
+  WindoW              w = NULL;
+  BioseqPtr           bsp = NULL;
+  SeqEditViewFormPtr  wdp = NULL;
+  OMUserDataPtr       omudp;
+  SeqIdPtr            sip;
+  Char                str [64];
+  SelStruct ss;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL) return;
+  
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, 
+                           bfp->input_itemID,
+                           bfp->input_itemtype);
+  if (bsp == NULL) return;
+  
+  if (DeltaLitOnly (bsp)) {
+    if (Message (MSG_YN, "Convert near delta Bioseq to raw Bioseq?") == ANS_NO) {
+      return;
+    }
+    SegOrDeltaBioseqToRaw (bsp);
+    Message (MSG_OK, "Converted to raw, now launch editor again");
+  }
+  
+  ss.entityID = bfp->input_entityID;
+  ss.itemID = bfp->input_itemID;
+  ss.itemtype = bfp->input_itemtype;
   ss.regiontype =0;
   ss.region = NULL;
 
@@ -5066,15 +5135,16 @@ extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
   if (w != NULL) {
      wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
      if (wdp != NULL) {
-        wdp->input_entityID = ompcp->input_entityID;
-        wdp->input_itemID = ompcp->input_itemID;
-        wdp->input_itemtype = ompcp->input_itemtype;
+        wdp->input_entityID = bfp->input_entityID;
+        wdp->input_itemID = bfp->input_itemID;
+        wdp->input_itemtype = bfp->input_itemtype;
         wdp->this_itemtype = OBJ_BIOSEQ;
         wdp->this_subtype = bsp->repr;
-        wdp->procid = ompcp->proc->procid;
-        wdp->proctype = ompcp->proc->proctype;
+        
+        wdp->procid = 0;
+        wdp->proctype = OMPROC_EDIT;
         wdp->userkey = OMGetNextUserKey ();
-        omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, OMPROC_EDIT, wdp->userkey);
+        omudp = ObjMgrAddUserData (wdp->input_entityID, wdp->procid, OMPROC_EDIT, wdp->userkey);
         if (omudp != NULL) {
           omudp->userdata.ptrvalue = (Pointer) wdp;
           omudp->messagefunc = BioseqEditMsgFunc;
@@ -5085,10 +5155,9 @@ extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
      Update ();
      CaptureSlateFocus ((SlatE) wdp->pnl);
      Select (w);
-     return OM_MSG_RET_DONE;
   }
-  return OM_MSG_RET_ERROR;
 }
+
 
 /************************************************
 ***

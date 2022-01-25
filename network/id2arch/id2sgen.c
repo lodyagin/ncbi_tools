@@ -32,7 +32,7 @@ id2sgenAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Seq-split
-*    Generated using ASNCODE Revision: 6.0 at May 3, 2004  6:18 PM
+*    Generated using ASNCODE Revision: 6.0 at Oct 18, 2004  1:24 AM
 *
 **************************************************/
 
@@ -1267,6 +1267,9 @@ ID2SChunkContentFree(ValNodePtr anp)
    case ID2SChunkContent_seq_annot_place:
       ID2SSeqAnnotPlaceInfoFree(anp -> data.ptrvalue);
       break;
+   case ID2SChunkContent_bioseq_place:
+      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) ID2SBioseqPlaceInfoFree);
+      break;
    }
    return MemFree(anp);
 }
@@ -1346,6 +1349,14 @@ ID2SChunkContentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == CHUNK_CONTENT_seq_annot_place) {
       choice = ID2SChunkContent_seq_annot_place;
       func = (AsnReadFunc) ID2SSeqAnnotPlaceInfoAsnRead;
+   }
+   else if (atp == ID2S_CHUNK_CONTENT_bioseq_place) {
+      choice = ID2SChunkContent_bioseq_place;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2SBioseqPlaceInfoAsnRead,             (AsnOptFreeFunc) ID2SBioseqPlaceInfoFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
    }
    anp->choice = choice;
    if (func != NULL)
@@ -1432,6 +1443,9 @@ ID2SChunkContentAsnWrite(ID2SChunkContentPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       writetype = CHUNK_CONTENT_seq_annot_place;
       func = (AsnWriteFunc) ID2SSeqAnnotPlaceInfoAsnWrite;
       break;
+   case ID2SChunkContent_bioseq_place:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) ID2SBioseqPlaceInfoAsnWrite, aip, ID2S_CHUNK_CONTENT_bioseq_place, CHUNK_CONTENT_bioseq_place_E);
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -1476,8 +1490,8 @@ ID2SSeqDescrInfoFree(ID2SSeqDescrInfoPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   AsnGenericUserSeqOfFree(ptr -> bioseqs, (AsnOptFreeFunc) ID2IdRangeFree);
-   AsnGenericUserSeqOfFree(ptr -> bioseq_sets, (AsnOptFreeFunc) ID2IdRangeFree);
+   ID2BioseqIdsFree(ptr -> bioseqs);
+   ID2BioseqSetIdsFree(ptr -> bioseq_sets);
    return MemFree(ptr);
 }
 
@@ -1537,15 +1551,15 @@ ID2SSeqDescrInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == ID2S_SEQ_DESCR_INFO_bioseqs) {
-      ptr -> bioseqs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
-      if (isError && ptr -> bioseqs == NULL) {
+      ptr -> bioseqs = ID2BioseqIdsAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == ID2S_SEQ_DESCR_INFO_bioseq_sets) {
-      ptr -> bioseq_sets = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
-      if (isError && ptr -> bioseq_sets == NULL) {
+      ptr -> bioseq_sets = ID2BioseqSetIdsAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -1603,8 +1617,16 @@ ID2SSeqDescrInfoAsnWrite(ID2SSeqDescrInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    av.intvalue = ptr -> type_mask;
    retval = AsnWrite(aip, ID2S_SEQ_DESCR_INFO_type_mask,  &av);
-   AsnGenericUserSeqOfAsnWrite(ptr -> bioseqs, (AsnWriteFunc) ID2IdRangeAsnWrite, aip, ID2S_SEQ_DESCR_INFO_bioseqs, ID2S_SEQ_DESCR_INFO_bioseqs_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> bioseq_sets, (AsnWriteFunc) ID2IdRangeAsnWrite, aip, ID2S_SEQ_DESCR_INFO_bioseq_sets, SEQ_DESCR_INFO_bioseq_sets_E);
+   if (ptr -> bioseqs != NULL) {
+      if ( ! ID2BioseqIdsAsnWrite(ptr -> bioseqs, aip, ID2S_SEQ_DESCR_INFO_bioseqs)) {
+         goto erret;
+      }
+   }
+   if (ptr -> bioseq_sets != NULL) {
+      if ( ! ID2BioseqSetIdsAsnWrite(ptr -> bioseq_sets, aip, ID2S_SEQ_DESCR_INFO_bioseq_sets)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1646,7 +1668,7 @@ ID2SSeqAssemblyInfoFree(ID2SSeqAssemblyInfoPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   AsnGenericUserSeqOfFree(ptr -> bioseqs, (AsnOptFreeFunc) ID2IdRangeFree);
+   ID2BioseqIdsFree(ptr -> bioseqs);
    return MemFree(ptr);
 }
 
@@ -1699,8 +1721,8 @@ ID2SSeqAssemblyInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    func = NULL;
 
    if (atp == ID2S_SEQ_ASSEMBLY_INFO_bioseqs) {
-      ptr -> bioseqs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
-      if (isError && ptr -> bioseqs == NULL) {
+      ptr -> bioseqs = ID2BioseqIdsAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -1756,7 +1778,11 @@ ID2SSeqAssemblyInfoAsnWrite(ID2SSeqAssemblyInfoPtr ptr, AsnIoPtr aip, AsnTypePtr
       goto erret;
    }
 
-   AsnGenericUserSeqOfAsnWrite(ptr -> bioseqs, (AsnWriteFunc) ID2IdRangeAsnWrite, aip, ID2S_SEQ_ASSEMBLY_INFO_bioseqs, SEQ_ASSEMBLY_INFO_bioseqs_E);
+   if (ptr -> bioseqs != NULL) {
+      if ( ! ID2BioseqIdsAsnWrite(ptr -> bioseqs, aip, ID2S_SEQ_ASSEMBLY_INFO_bioseqs)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1799,8 +1825,8 @@ ID2SSeqAnnotPlaceInfoFree(ID2SSeqAnnotPlaceInfoPtr ptr)
       return NULL;
    }
    MemFree(ptr -> name);
-   AsnGenericUserSeqOfFree(ptr -> bioseqs, (AsnOptFreeFunc) ID2IdRangeFree);
-   AsnGenericUserSeqOfFree(ptr -> bioseq_sets, (AsnOptFreeFunc) ID2IdRangeFree);
+   ID2BioseqIdsFree(ptr -> bioseqs);
+   ID2BioseqSetIdsFree(ptr -> bioseq_sets);
    return MemFree(ptr);
 }
 
@@ -1860,15 +1886,15 @@ ID2SSeqAnnotPlaceInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SEQ_ANNOT_PLACE_INFO_bioseqs) {
-      ptr -> bioseqs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
-      if (isError && ptr -> bioseqs == NULL) {
+      ptr -> bioseqs = ID2BioseqIdsAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == ANNOT_PLACE_INFO_bioseq_sets) {
-      ptr -> bioseq_sets = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
-      if (isError && ptr -> bioseq_sets == NULL) {
+      ptr -> bioseq_sets = ID2BioseqSetIdsAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -1928,11 +1954,408 @@ ID2SSeqAnnotPlaceInfoAsnWrite(ID2SSeqAnnotPlaceInfoPtr ptr, AsnIoPtr aip, AsnTyp
       av.ptrvalue = ptr -> name;
       retval = AsnWrite(aip, ID2S_SEQ_ANNOT_PLACE_INFO_name,  &av);
    }
-   AsnGenericUserSeqOfAsnWrite(ptr -> bioseqs, (AsnWriteFunc) ID2IdRangeAsnWrite, aip, SEQ_ANNOT_PLACE_INFO_bioseqs, SEQ_ANNOT_PLACE_INFO_bioseqs_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> bioseq_sets, (AsnWriteFunc) ID2IdRangeAsnWrite, aip, ANNOT_PLACE_INFO_bioseq_sets, ANNOT_PLACE_INFO_bioseq_sets_E);
+   if (ptr -> bioseqs != NULL) {
+      if ( ! ID2BioseqIdsAsnWrite(ptr -> bioseqs, aip, SEQ_ANNOT_PLACE_INFO_bioseqs)) {
+         goto erret;
+      }
+   }
+   if (ptr -> bioseq_sets != NULL) {
+      if ( ! ID2BioseqSetIdsAsnWrite(ptr -> bioseq_sets, aip, ANNOT_PLACE_INFO_bioseq_sets)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ID2SBioseqPlaceInfoNew()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SBioseqPlaceInfoPtr LIBCALL
+ID2SBioseqPlaceInfoNew(void)
+{
+   ID2SBioseqPlaceInfoPtr ptr = MemNew((size_t) sizeof(ID2SBioseqPlaceInfo));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ID2SBioseqPlaceInfoFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SBioseqPlaceInfoPtr LIBCALL
+ID2SBioseqPlaceInfoFree(ID2SBioseqPlaceInfoPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr -> seq_ids, (AsnOptFreeFunc) SeqIdFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ID2SBioseqPlaceInfoAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SBioseqPlaceInfoPtr LIBCALL
+ID2SBioseqPlaceInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID2SBioseqPlaceInfoPtr ptr;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID2SBioseqPlaceInfo ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID2S_BIOSEQ_PLACE_INFO);
+   } else {
+      atp = AsnLinkType(orig, ID2S_BIOSEQ_PLACE_INFO);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ID2SBioseqPlaceInfoNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BIOSEQ_PLACE_INFO_bioseq_set) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> bioseq_set = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID2S_BIOSEQ_PLACE_INFO_seq_ids) {
+      ptr -> seq_ids = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqIdAsnRead, (AsnOptFreeFunc) SeqIdFree);
+      if (isError && ptr -> seq_ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID2SBioseqPlaceInfoFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID2SBioseqPlaceInfoAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID2SBioseqPlaceInfoAsnWrite(ID2SBioseqPlaceInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID2S_BIOSEQ_PLACE_INFO);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> bioseq_set;
+   retval = AsnWrite(aip, BIOSEQ_PLACE_INFO_bioseq_set,  &av);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> seq_ids, (AsnWriteFunc) SeqIdAsnWrite, aip, ID2S_BIOSEQ_PLACE_INFO_seq_ids, BIOSEQ_PLACE_INFO_seq_ids_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ID2BioseqIdsFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID2BioseqIdsPtr LIBCALL
+ID2BioseqIdsFree(ID2BioseqIdsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) ID2IdRangeFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    ID2BioseqIdsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID2BioseqIdsPtr LIBCALL
+ID2BioseqIdsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID2BioseqIdsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID2BioseqIds ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID2_BIOSEQ_IDS);
+   } else {
+      atp = AsnLinkType(orig, ID2_BIOSEQ_IDS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2IdRangeAsnRead, (AsnOptFreeFunc) ID2IdRangeFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID2BioseqIdsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID2BioseqIdsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID2BioseqIdsAsnWrite(ID2BioseqIdsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID2_BIOSEQ_IDS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) ID2IdRangeAsnWrite, aip, atp, ID2_BIOSEQ_IDS_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ID2BioseqSetIdsFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID2BioseqSetIdsPtr LIBCALL
+ID2BioseqSetIdsFree(ID2BioseqSetIdsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr,ASNCODE_INTVAL_SLOT);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    ID2BioseqSetIdsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID2BioseqSetIdsPtr LIBCALL
+ID2BioseqSetIdsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID2BioseqSetIdsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID2BioseqSetIds ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID2_BIOSEQ_SET_IDS);
+   } else {
+      atp = AsnLinkType(orig, ID2_BIOSEQ_SET_IDS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID2BioseqSetIdsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID2BioseqSetIdsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID2BioseqSetIdsAsnWrite(ID2BioseqSetIdsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID2_BIOSEQ_SET_IDS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_INTVAL_SLOT, aip, atp, ID2_BIOSEQ_SET_IDS_E);
    retval = TRUE;
 
 erret:
@@ -2509,8 +2932,9 @@ ID2SChunkDataFree(ID2SChunkDataPtr ptr)
    AsnGenericChoiceSeqOfFree(ptr -> descrs, (AsnOptFreeFunc) SeqDescrFree);
    AsnGenericUserSeqOfFree(ptr -> annots, (AsnOptFreeFunc) SeqAnnotFree);
    AsnGenericUserSeqOfFree(ptr -> assembly, (AsnOptFreeFunc) SeqAlignFree);
-   AsnGenericUserSeqOfFree(ptr -> seq_map, (AsnOptFreeFunc) SeqLiteralFree);
-   AsnGenericUserSeqOfFree(ptr -> seq_data, (AsnOptFreeFunc) SeqLiteralFree);
+   AsnGenericUserSeqOfFree(ptr -> seq_map, (AsnOptFreeFunc) ID2SSequencePieceFree);
+   AsnGenericUserSeqOfFree(ptr -> seq_data, (AsnOptFreeFunc) ID2SSequencePieceFree);
+   AsnGenericUserSeqOfFree(ptr -> bioseqs, (AsnOptFreeFunc) BioseqFree);
    return MemFree(ptr);
 }
 
@@ -2534,6 +2958,9 @@ Id_idFree(ValNodePtr anp)
    switch (anp->choice)
    {
    default:
+      break;
+   case Id_id_seq_id:
+      SeqIdFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -2616,15 +3043,22 @@ ID2SChunkDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == ID2S_CHUNK_DATA_seq_map) {
-      ptr -> seq_map = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLiteralAsnRead, (AsnOptFreeFunc) SeqLiteralFree);
+      ptr -> seq_map = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2SSequencePieceAsnRead, (AsnOptFreeFunc) ID2SSequencePieceFree);
       if (isError && ptr -> seq_map == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == ID2S_CHUNK_DATA_seq_data) {
-      ptr -> seq_data = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLiteralAsnRead, (AsnOptFreeFunc) SeqLiteralFree);
+      ptr -> seq_data = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ID2SSequencePieceAsnRead, (AsnOptFreeFunc) ID2SSequencePieceFree);
       if (isError && ptr -> seq_data == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID2S_CHUNK_DATA_bioseqs) {
+      ptr -> bioseqs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) BioseqAsnRead, (AsnOptFreeFunc) BioseqFree);
+      if (isError && ptr -> bioseqs == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -2712,6 +3146,10 @@ Id_idAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == ID2S_CHUNK_DATA_id_seq_id) {
+      choice = Id_id_seq_id;
+      func = (AsnReadFunc) SeqIdAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -2775,8 +3213,9 @@ ID2SChunkDataAsnWrite(ID2SChunkDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    AsnGenericChoiceSeqOfAsnWrite(ptr -> descrs, (AsnWriteFunc) SeqDescrAsnWrite, aip, ID2S_CHUNK_DATA_descrs, ID2S_CHUNK_DATA_descrs_E);
    AsnGenericUserSeqOfAsnWrite(ptr -> annots, (AsnWriteFunc) SeqAnnotAsnWrite, aip, ID2S_CHUNK_DATA_annots, ID2S_CHUNK_DATA_annots_E);
    AsnGenericUserSeqOfAsnWrite(ptr -> assembly, (AsnWriteFunc) SeqAlignAsnWrite, aip, ID2S_CHUNK_DATA_assembly, ID2S_CHUNK_DATA_assembly_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> seq_map, (AsnWriteFunc) SeqLiteralAsnWrite, aip, ID2S_CHUNK_DATA_seq_map, ID2S_CHUNK_DATA_seq_map_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> seq_data, (AsnWriteFunc) SeqLiteralAsnWrite, aip, ID2S_CHUNK_DATA_seq_data, ID2S_CHUNK_DATA_seq_data_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> seq_map, (AsnWriteFunc) ID2SSequencePieceAsnWrite, aip, ID2S_CHUNK_DATA_seq_map, ID2S_CHUNK_DATA_seq_map_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> seq_data, (AsnWriteFunc) ID2SSequencePieceAsnWrite, aip, ID2S_CHUNK_DATA_seq_data, ID2S_CHUNK_DATA_seq_data_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> bioseqs, (AsnWriteFunc) BioseqAsnWrite, aip, ID2S_CHUNK_DATA_bioseqs, ID2S_CHUNK_DATA_bioseqs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -2836,6 +3275,10 @@ Id_idAsnWrite(Id_idPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, ID2S_CHUNK_DATA_id_gi, &av);
       break;
+   case Id_id_seq_id:
+      writetype = ID2S_CHUNK_DATA_id_seq_id;
+      func = (AsnWriteFunc) SeqIdAsnWrite;
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -2849,6 +3292,167 @@ erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
+
+/**************************************************
+*
+*    ID2SSequencePieceNew()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SSequencePiecePtr LIBCALL
+ID2SSequencePieceNew(void)
+{
+   ID2SSequencePiecePtr ptr = MemNew((size_t) sizeof(ID2SSequencePiece));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ID2SSequencePieceFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SSequencePiecePtr LIBCALL
+ID2SSequencePieceFree(ID2SSequencePiecePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr -> data, (AsnOptFreeFunc) SeqLiteralFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ID2SSequencePieceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID2SSequencePiecePtr LIBCALL
+ID2SSequencePieceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID2SSequencePiecePtr ptr;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID2SSequencePiece ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID2S_SEQUENCE_PIECE);
+   } else {
+      atp = AsnLinkType(orig, ID2S_SEQUENCE_PIECE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ID2SSequencePieceNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ID2S_SEQUENCE_PIECE_start) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> start = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID2S_SEQUENCE_PIECE_data) {
+      ptr -> data = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLiteralAsnRead, (AsnOptFreeFunc) SeqLiteralFree);
+      if (isError && ptr -> data == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID2SSequencePieceFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID2SSequencePieceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID2SSequencePieceAsnWrite(ID2SSequencePiecePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id2sgenAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID2S_SEQUENCE_PIECE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> start;
+   retval = AsnWrite(aip, ID2S_SEQUENCE_PIECE_start,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> data, (AsnWriteFunc) SeqLiteralAsnWrite, aip, ID2S_SEQUENCE_PIECE_data, ID2S_SEQUENCE_PIECE_data_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,12 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.37  2004/07/21 18:08:30  kans
+* FileCacheSetup calls _setmode (_fileno (fp), _O_BINARY) if OS_MSWIN
+*
+* Revision 6.36  2004/07/20 19:37:30  kans
+* FileCacheSeek always initializes fields, calls fseek to keep file pointer in sync
+*
 * Revision 6.35  2004/05/07 15:57:14  kans
 * added FileCache functions for buffered read, graceful handing of Unix, Mac, and DOS line endings
 *
@@ -1369,6 +1375,11 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
 
 /* attach file pointer (text read mode expected) to cache object (usually on stack) */
 
+#ifdef OS_MSWIN
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 NLM_EXTERN Nlm_Boolean Nlm_FileCacheSetup (
   Nlm_FileCache PNTR fcp,
   FILE *fp
@@ -1376,6 +1387,10 @@ NLM_EXTERN Nlm_Boolean Nlm_FileCacheSetup (
 
 {
   if (fp == NULL || fcp == NULL) return FALSE;
+
+#ifdef OS_MSWIN
+  _setmode (_fileno (fp), _O_BINARY);
+#endif
 
   MemSet ((Nlm_VoidPtr) fcp, 0, sizeof (Nlm_FileCache));
 
@@ -1427,7 +1442,7 @@ static Nlm_Char Nlm_FileCacheGetChar (
     Nlm_FileCacheReadBlock (fcp);
   }
 
-  /* get next Nlm_Character in buffer */
+  /* get next character in buffer */
 
   if (fcp->ctr < fcp->total) {
     ch = fcp->buf [(int) fcp->ctr];
@@ -1444,7 +1459,7 @@ static Nlm_Char Nlm_FileCacheGetChar (
 
       nxt = fcp->buf [(int) fcp->ctr];
 
-      /* advance past second Nlm_Character in cr/lf pair */
+      /* advance past second character in cr/lf pair */
 
       if (ch == '\n' && nxt == '\r') {
         (fcp->ctr)++;
@@ -1547,10 +1562,12 @@ NLM_EXTERN void Nlm_FileCacheSeek (
 {
   if (fcp == NULL || fcp->fp == NULL) return;
 
+  /*
   if (fcp->offset <= pos && fcp->offset + (Nlm_Int4) fcp->total >= pos) {
     fcp->ctr = (Nlm_Int2) (pos - fcp->offset);
     return;
   }
+  */
 
   fcp->ctr = 0;
   fcp->total = 0;

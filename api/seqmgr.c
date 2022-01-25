@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.215 $
+* $Revision: 6.222 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.222  2004/09/07 18:50:47  bollin
+* added new overlap type: RANGE_MATCH - left and right must match exactly
+*
+* Revision 6.221  2004/09/03 13:43:58  bollin
+* added SegMgrGetLocationSupersetmRNA function
+*
+* Revision 6.220  2004/08/20 19:05:49  kans
+* RecordFeaturesInBioseqs errors back to warning now that unindexed features are picked up by the validator
+*
+* Revision 6.219  2004/08/20 13:45:23  kans
+* allocate ctmp again for second errpost on bad feature indexing location - was dangling
+*
+* Revision 6.218  2004/08/19 18:53:26  kans
+* SeqMgr indexing messages raised from WARNING to ERROR
+*
+* Revision 6.217  2004/08/19 17:18:43  kans
+* RecordFeaturesInBioseqs posts error if left or right are -1
+*
+* Revision 6.216  2004/06/22 17:37:25  kans
+* added FreeSeqIdGiCache
+*
 * Revision 6.215  2004/05/13 19:38:08  kans
 * SeqLocMergeExEx takes ignore_mixed so gene by overlap can ignore trans splicing confusion
 *
@@ -1995,10 +2016,40 @@ static int LIBCALLBACK SortSeqIdGiCacheTime (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
+NLM_EXTERN void FreeSeqIdGiCache (void)
+
+{
+  Int4           ret;
+  SeqIdBlockPtr  sibp;
+  ValNodePtr     vnp;
+
+  ret = NlmRWwrlock(sgi_RWlock);
+  if (ret != 0) {
+    ErrPostEx(SEV_ERROR,0,0,"FreeSeqIdGiCache: RWwrlock error [%ld]", (long) ret);
+    return;
+  }
+
+  seqidcount = 0;
+  seqidgiarray = MemFree (seqidgiarray);
+
+  for (vnp = seqidgicache; vnp != NULL; vnp = vnp->next) {
+    sibp = (SeqIdBlockPtr) vnp->data.ptrvalue;
+    if (sibp == NULL) continue;
+    sibp->sip = SeqIdFree (sibp->sip);
+  }
+  seqidgicache = ValNodeFreeData (seqidgicache);
+
+  ret = NlmRWunlock(sgi_RWlock);
+  if (ret != 0) {
+    ErrPostEx(SEV_ERROR,0,0,"FreeSeqIdGiCache: RWwrlock error [%ld]", (long) ret);
+    return;
+  }
+}
+
 NLM_EXTERN Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp)
 
 {
-	ValNodePtr vnp;
+	ValNodePtr vnp, tmp;
 	SeqIdBlockPtr sibp = NULL;
 	Int2 i;
 	Int2 left, right, mid;
@@ -2030,6 +2081,11 @@ NLM_EXTERN Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp)
 			  for (vnp = seqidgicache; vnp != NULL && seqidcount > 24000;
 			       vnp = vnp->next, seqidcount--) continue;
 			  if (vnp != NULL) {
+			    for (tmp = vnp->next; tmp != NULL; tmp = tmp->next) {
+			      sibp = (SeqIdBlockPtr) tmp->data.ptrvalue;
+			      if (sibp == NULL) continue;
+			      sibp->sip = SeqIdFree (sibp->sip);
+			    }
 			    vnp->next = ValNodeFreeData (vnp->next);
 			  }
 			}
@@ -5812,7 +5868,35 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   /*
   SeqLocFree (slp);
   */
-  if (left == -1 || right == -1) return TRUE;
+  if (left == -1 || right == -1) {
+    GatherContext     gc;
+    GatherContextPtr  gcp;
+    Char              lastbspid [41];
+    SeqIdPtr          sip;
+    MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+    gcp = &gc;
+    gc.entityID = gop->entityID;
+    gc.itemID = gop->itemID;
+    gc.thistype = gop->itemtype;
+    lastbspid [0] = '\0';
+    if (exindx->lastbsp != NULL) {
+      sip = SeqIdFindBest (exindx->lastbsp->id, 0);
+      if (sip != NULL) {
+        SeqIdWrite (sip, lastbspid, PRINTID_FASTA_LONG, sizeof (lastbspid));
+      }
+    }
+    FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+    ctmp = SeqLocPrint (sfp->location);
+    loclbl = ctmp;
+    if (loclbl == NULL) {
+      loclbl = "?";
+    }
+    ErrPostItem (SEV_WARNING, 0, 0,
+                 "SeqMgr indexing feature mapping problem - Feature: %s - Location [%s] - Record [%s]",
+                 buf, loclbl, lastbspid);
+    MemFree (ctmp);
+    return TRUE;
+  }
 
   /* if indexing protein bioseq, store largest protein feature */
 
@@ -7856,6 +7940,14 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
       }
     }
   }
+  else if (overlapType == RANGE_MATCH)
+  {
+  	/* left and right ends must match exactly */
+  	if (feat->right == right && feat->left == left)
+  	{
+  	  return 0;
+  	}
+  }
 
   return -1;
 }
@@ -8188,6 +8280,12 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA (SeqLocPtr slp, SeqMgrFea
 
 {
   return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetLocationSupersetmRNA (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
+
+{
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, LOCATION_SUBSET, context, NULL, NULL, NULL);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS (SeqLocPtr slp, SeqMgrFeatContext PNTR context)

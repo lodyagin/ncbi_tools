@@ -1,4 +1,4 @@
-/*  $Id: ni_www.c,v 4.26 2000/09/28 17:53:24 vakatov Exp $
+/*  $Id: ni_www.c,v 4.27 2004/09/28 15:17:32 lavr Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_www.c,v $
+* Revision 4.27  2004/09/28 15:17:32  lavr
+* Retire LB_DIRECT unconditionally
+*
 * Revision 4.26  2000/09/28 17:53:24  vakatov
 * NI_WWW_SetNcbidPort() -- yet another fix
 *
@@ -109,6 +112,9 @@
 #include <ncbinet.h>
 #include <ncbicli.h>
 
+#ifdef LB_DIRECT
+#  undef LB_DIRECT
+#endif
 #ifdef LB_DIRECT
 #  include <lbapi.h>
 #  include <ncbithr.h>

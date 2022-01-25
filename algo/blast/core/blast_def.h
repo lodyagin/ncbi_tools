@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.42 2004/05/19 14:52:01 camacho Exp $
+/* $Id: blast_def.h,v 1.49 2004/09/28 16:24:57 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,32 +35,43 @@
 #define __BLAST_DEF__
 
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Belongs to a higher level header */
+/** Safe free a pointer: belongs to a higher level header. */
 #ifndef sfree
 #define sfree(x) __sfree((void**)&(x))
 #endif
+NCBI_XBLAST_EXPORT
 void __sfree(void** x); /* implemented in lib/util.c */
 
 /******************** Preprocessor definitions ******************************/
 
-/** Program type */
-#define blast_type_blastn 0
-#define blast_type_blastp 1
-#define blast_type_blastx 2
-#define blast_type_tblastn 3
-#define blast_type_tblastx 4
-#define blast_type_rpsblast 5
-#define blast_type_rpstblastn 6
-#define blast_type_undefined 255
+/** Program type: defines the engine's notion of the different
+ * applications of the BLAST algorithm */
+typedef enum {
+    eBlastTypeBlastn,
+    eBlastTypeBlastp,
+    eBlastTypeBlastx,
+    eBlastTypeTblastn,
+    eBlastTypeTblastx,
+    eBlastTypeRpsBlast,
+    eBlastTypeRpsTblastn,
+    eBlastTypeUndefined
+} EBlastProgramType;
 
 /** Codons are always of length 3 */
 #ifndef CODON_LENGTH
 #define CODON_LENGTH 3
+#endif
+
+/** for traslated gapped searches, this is the default value in nucleotides of
+ *  longest_intron */
+#ifndef DEFAULT_LONGEST_INTRON
+#define DEFAULT_LONGEST_INTRON 122
 #endif
 
 /** Compression ratio of nucleotide bases (4 bases in 1 byte) */
@@ -78,12 +89,35 @@ void __sfree(void** x); /* implemented in lib/util.c */
 
 /********************* Structure definitions ********************************/
 
+/** A structure containing two integers, used e.g. for locations for the 
+ * lookup table.
+ */
+typedef struct SSeqRange {
+   Int4 left;
+   Int4 right;
+} SSeqRange;
+
+/** Used to hold a set of positions, mostly used for filtering. 
+ * oid holds the index of the query sequence.
+*/
+typedef struct BlastSeqLoc {
+        struct BlastSeqLoc *next;  /**< next in linked list */
+        SSeqRange *ssr;            /**< location data on the sequence. */
+} BlastSeqLoc;
+
 /** Structure for keeping the query masking information */
 typedef struct BlastMaskLoc {
-   Int4 index; /**< Index of the query sequence this mask is applied to */
-   ListNode* loc_list; /**< List of mask locations */
-   struct BlastMaskLoc* next; /**< Pointer to the next query mask */
+   Int4 total_size; /**< total size of the BlastSeqLoc array below (FIXME: same as # of contexts, or of queries?) */
+   BlastSeqLoc** seqloc_array; /**< array of mask locations. */
 } BlastMaskLoc;
+
+
+/** Encapsulates masking/filtering information. */
+typedef struct BlastMaskInformation {
+   BlastMaskLoc* filter_slp; /**< masking locations. */
+   Boolean mask_at_hash; /**< if TRUE masking used only for building lookup table. */
+} BlastMaskInformation; 
+
 
 /** Structure to hold a sequence. */
 typedef struct BLAST_SequenceBlk {
@@ -91,8 +125,8 @@ typedef struct BLAST_SequenceBlk {
    Uint1* sequence_start; /**< Start of sequence, usually one byte before 
                                sequence as that byte is a NULL sentinel byte.*/
    Int4     length;         /**< Length of sequence. */
-   Int4	context; /**< Context of the query, needed for multi-query searches */
-   Int2	frame; /**< Frame of the query, needed for translated searches */
+   Int4 context; /**< Context of the query, needed for multi-query searches */
+   Int2 frame; /**< Frame of the query, needed for translated searches */
    Int4 oid; /**< The ordinal id of the current sequence */
    Boolean sequence_allocated; /**< TRUE if memory has been allocated for 
                                   sequence */
@@ -125,19 +159,6 @@ typedef struct BlastQueryInfo {
                         queries */
 } BlastQueryInfo;
 
-/** A structure containing two integers, used e.g. for locations for the 
- * lookup table.
- */
-typedef struct SSeqRange {
-   Int4 left;
-   Int4 right;
-} SSeqRange;
-
-/** BlastSeqLoc is a ListNode with choice equal to the sequence local id,
- * and data->ptrvalue pointing to a SSeqRange structure defining the 
- * location interval in the sequence.
- */
-#define BlastSeqLoc ListNode
 
 #ifdef __cplusplus
 }

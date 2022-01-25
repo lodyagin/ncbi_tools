@@ -1,4 +1,4 @@
-/*  $Id: blast_setup.h,v 1.40 2004/06/16 14:53:03 dondosha Exp $
+/*  $Id: blast_setup.h,v 1.44 2004/08/11 11:58:43 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,11 +56,12 @@ extern "C" {
  * @param scale_factor Multiplier for cutoff and dropoff scores [in]
  * @param lookup_segments Start/stop locations for non-masked query 
  *                        segments [out]
- * @param filter_slp_out Filtering/masking locations. [out]
+ * @param maskInfo masking location information, mask_at_hash value. [out]
  * @param sbpp Contains scoring information. [out]
  * @param blast_message error or warning [out] 
  */
-Int2 BLAST_MainSetUp(Uint1 program_number,
+NCBI_XBLAST_EXPORT
+Int2 BLAST_MainSetUp(EBlastProgramType program_number,
         const QuerySetUpOptions* qsup_options,
         const BlastScoringOptions* scoring_options,
         const BlastHitSavingOptions* hit_options,
@@ -68,7 +69,7 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
         BlastQueryInfo* query_info, 
         double scale_factor,
         BlastSeqLoc* *lookup_segments,
-        BlastMaskLoc* *filter_slp_out,
+        BlastMaskInformation* maskInfo,
         BlastScoreBlk* *sbpp, 
         Blast_Message* *blast_message);
 
@@ -80,10 +81,10 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
  * @param query_info Query information containing context information [in]
  *
 */
-Int2
-BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
-                        const BlastScoringOptions * scoring_options,
-                        Uint1 program, BlastQueryInfo * query_info);
+NCBI_XBLAST_EXPORT
+Int2 BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
+    const BlastScoringOptions * scoring_options,
+    EBlastProgramType program, BlastQueryInfo * query_info);
 
 /** Function to calculate effective query length and db length as well as
  * effective search space. 
@@ -94,7 +95,8 @@ BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
  * @param query_info The query information block, which stores the effective
  *                   search spaces for all queries [in] [out]
 */
-Int2 BLAST_CalcEffLengths (Uint1 program_number, 
+NCBI_XBLAST_EXPORT
+Int2 BLAST_CalcEffLengths (EBlastProgramType program_number, 
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsParameters* eff_len_params, 
    const BlastScoreBlk* sbp, BlastQueryInfo* query_info);
@@ -116,8 +118,8 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
  * @param eff_len_params Parameters for search space calculations [out]
  * @param gap_align Gapped alignment information and allocated memory [out]
  */
-Int2 
-BLAST_GapAlignSetUp(Uint1 program_number,
+NCBI_XBLAST_EXPORT
+Int2 BLAST_GapAlignSetUp(EBlastProgramType program_number,
    const BlastSeqSrc* seq_src,
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsOptions* eff_len_options,
@@ -147,7 +149,8 @@ BLAST_GapAlignSetUp(Uint1 program_number,
  * @param eff_len_params Parameters for effective lengths calculation. Reset
  *                       with the current sequence data [in] [out]
  */
-Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
+NCBI_XBLAST_EXPORT
+Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
     Uint4 subject_length,
     const BlastScoringOptions* scoring_options,
     BlastQueryInfo* query_info, 
@@ -164,18 +167,26 @@ Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
  * @param sbp Contains fields to be set, should not be NULL. [out]
  *
 */
-
-Int2
-BlastScoreBlkMatrixInit(Uint1 program_number, 
+NCBI_XBLAST_EXPORT
+Int2 BlastScoreBlkMatrixInit(EBlastProgramType program_number, 
     const BlastScoringOptions* scoring_options,
     BlastScoreBlk* sbp);
 
-
-Int2
-BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
+/** Initializes the score block structure.
+ * @param query_blk Query sequence(s) [in]
+ * @param query_info Additional query information [in]
+ * @param scoring_options Scoring options [in]
+ * @param program_number BLAST program type [in]
+ * @param phi_align Is this a PHI BLAST search? [in]
+ * @param sbpp Initialized score block [out]
+ * @param scale_factor Matrix scaling factor for this search [in]
+ * @param blast_message Error message [out]
+ */
+NCBI_XBLAST_EXPORT
+Int2 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
     BlastQueryInfo* query_info, 
     const BlastScoringOptions* scoring_options, 
-    Uint1 program_number, 
+    EBlastProgramType program_number, 
     Boolean phi_align, 
     BlastScoreBlk* *sbpp, 
     double scale_factor, 
@@ -189,6 +200,18 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
 /*
  *
 * $Log: blast_setup.h,v $
+* Revision 1.44  2004/08/11 11:58:43  ivanov
+* Added more export specifiers NCBI_XBLAST_EXPORT
+*
+* Revision 1.43  2004/08/10 14:52:00  ivanov
+* Added export specifier NCBI_XBLAST_EXPORT
+*
+* Revision 1.42  2004/07/06 15:35:12  dondosha
+* Use EBlastProgramType enumeration type instead of Uint1 for program argument in all functions
+*
+* Revision 1.41  2004/06/28 13:38:30  madden
+* Change BLAST_MainSetUp to use BlastMaskInformation rather than BlastMaskLoc
+*
 * Revision 1.40  2004/06/16 14:53:03  dondosha
 * Moved extern "C" after the #includes
 *

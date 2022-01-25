@@ -1,4 +1,4 @@
-/* $Id: blast_dust.h,v 1.11 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: blast_dust.h,v 1.13 2004/08/10 14:52:00 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,8 +41,18 @@
 extern "C" {
 #endif
 
+/** Perform DUST low complexity filtering for a sequence buffer.
+ * @param sequence Buffer for which to find low complexity locations [in]
+ * @param length Length of the buffer [in]
+ * @param offset At what offset in the buffer to start looking? [in]
+ * @param level Level to be used in DUST algorithm [in]
+ * @param window Window size for DUST [in]
+ * @param linker Distance at which to link segments  [in]
+ * @param dust_loc The locations found by dust [out]
+ */
+NCBI_XBLAST_EXPORT
 Int2 SeqBufferDust (Uint1* sequence, Int4 length, Int4 offset,
-                    Int2 level, Int2 window, Int2 minwin, Int2 linker,
+                    Int2 level, Int2 window, Int2 linker,
                     BlastSeqLoc** dust_loc);
 
 #ifdef __cplusplus

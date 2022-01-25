@@ -28,13 +28,16 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.56  2004/09/15 14:59:19  bollin
+* make sure we do not read outside the alignment index arrays
+*
 * Revision 6.55  2004/05/20 19:46:25  bollin
 * removed unused variables
 *
@@ -7616,6 +7619,9 @@ NLM_EXTERN Int4 AlnMgr2MapSeqAlignToBioseq(SeqAlignPtr sap, Int4 pos, Int4 row)
       saip = (SAIndex2Ptr)(amaip->sharedaln->saip);
       dsp = (DenseSegPtr)(amaip->sharedaln->segs);
    }
+   if (row > saip->numrows)
+   return -1;
+
    sect = binary_search_on_uint4_list(saip->aligncoords, pos, saip->numseg);
    offset = pos - saip->aligncoords[sect];
    if (saip->anchor > 0)

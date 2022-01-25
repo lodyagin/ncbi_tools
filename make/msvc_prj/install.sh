@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.36 2004/04/14 17:14:08 ivanov Exp $
+# $Id: install.sh,v 1.37 2004/07/20 18:07:06 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -94,6 +94,8 @@ makedir "$srcdir"/object
 makedir "$srcdir"/sequin
 makedir "$srcdir"/tools
 makedir "$srcdir"/vibrant
+makedir "$srcdir"/util/creaders          -p
+makedir "$srcdir"/util/tables            -p
 makedir "$bindir"   -p
 makedir "$datdir"   -p
 makedir "$errdir"   -p
@@ -160,6 +162,10 @@ cp -p "$builddir"/cn3d/*.c                      "$srcdir"/cn3d
 cp -p "$builddir"/cn3d/*.h                      "$incdir"
 cp -p "$builddir"/ddv/*.c                       "$srcdir"/ddv
 cp -p "$builddir"/ddv/*.h                       "$incdir"
+cp -p "$builddir"/util/creaders/*.c             "$srcdir"/util/creaders
+cp -p "$builddir"/util/creaders/*.h             "$incdir"
+cp -p "$builddir"/util/tables/*.c               "$srcdir"/util/tables
+cp -p "$builddir"/util/tables/*.h               "$incdir"
 
 
 # Copy network files

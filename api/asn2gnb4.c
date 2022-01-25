@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.18 $
+* $Revision: 1.31 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -70,6 +70,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_gene,
 
   FTQUAL_locus_tag,
+  FTQUAL_old_locus_tag,
   FTQUAL_gene_syn_refseq,
 
   FTQUAL_gene_allele,
@@ -105,6 +106,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_anticodon,
   FTQUAL_bound_moiety,
   FTQUAL_clone,
+  FTQUAL_compare,
   FTQUAL_cons_splice,
   FTQUAL_direction,
   FTQUAL_function,
@@ -208,6 +210,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "citation",       Qual_class_pubset        },
   { "clone",          Qual_class_quote         },
   { "coded_by",       Qual_class_seq_loc       },
+  { "compare",        Qual_class_quote         },
   { "codon",          Qual_class_codon         },
   { "codon_start",    Qual_class_int           },
   { "cons_splice",    Qual_class_consplice     },
@@ -245,6 +248,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "model_evidence", Qual_class_model_ev      },
   { "note",           Qual_class_note          },
   { "number",         Qual_class_number        },
+  { "old_locus_tag",  Qual_class_paren         },
   { "operon",         Qual_class_quote         },
   { "organism",       Qual_class_quote         },
   { "partial",        Qual_class_boolean       },
@@ -288,7 +292,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "transposon",     Qual_class_quote         },
   { "trna_aa",        Qual_class_ignore        },
   { "trna_codons",    Qual_class_trna_codons   },
-  { "usedin",         Qual_class_paren         },
+  { "usedin",         Qual_class_usedin        },
   { "xtra_products",  Qual_class_xtraprds      }
 };
 
@@ -298,13 +302,14 @@ typedef struct qualfeatur {
   FtQualType  featurclass;
 } QualFeatur, PNTR QualFeaturPtr;
 
-#define NUM_GB_QUALS 26
+#define NUM_GB_QUALS 28
 
 static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "allele",         FTQUAL_allele         },
   { "bound_moiety",   FTQUAL_bound_moiety   },
   { "clone",          FTQUAL_clone          },
   { "codon",          FTQUAL_codon          },
+  { "compare",        FTQUAL_compare        },
   { "cons_splice",    FTQUAL_cons_splice    },
   { "direction",      FTQUAL_direction      },
   { "EC_number",      FTQUAL_EC_number      },
@@ -315,6 +320,7 @@ static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "map",            FTQUAL_map            },
   { "mod_base",       FTQUAL_mod_base       },
   { "number",         FTQUAL_number         },
+  { "old_locus_tag",  FTQUAL_old_locus_tag  },
   { "operon",         FTQUAL_operon         },
   { "organism",       FTQUAL_organism       },
   { "PCR_conditions", FTQUAL_PCR_conditions },
@@ -762,6 +768,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_GENE , FTQUAL_function },
   { FEATDEF_GENE , FTQUAL_label },
   { FEATDEF_GENE , FTQUAL_map },
+  { FEATDEF_GENE , FTQUAL_old_locus_tag },
   { FEATDEF_GENE , FTQUAL_operon },
   { FEATDEF_GENE , FTQUAL_phenotype },
   { FEATDEF_GENE , FTQUAL_product },
@@ -773,6 +780,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_CDS , FTQUAL_label },
   { FEATDEF_CDS , FTQUAL_map },
   { FEATDEF_CDS , FTQUAL_number },
+  { FEATDEF_CDS , FTQUAL_old_locus_tag },
   { FEATDEF_CDS , FTQUAL_operon },
   { FEATDEF_CDS , FTQUAL_standard_name },
   { FEATDEF_CDS , FTQUAL_usedin },
@@ -783,6 +791,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_preRNA , FTQUAL_function },
   { FEATDEF_preRNA , FTQUAL_label },
   { FEATDEF_preRNA , FTQUAL_map },
+  { FEATDEF_preRNA , FTQUAL_old_locus_tag },
   { FEATDEF_preRNA , FTQUAL_operon },
   { FEATDEF_preRNA , FTQUAL_product },
   { FEATDEF_preRNA , FTQUAL_standard_name },
@@ -792,6 +801,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_mRNA , FTQUAL_function },
   { FEATDEF_mRNA , FTQUAL_label },
   { FEATDEF_mRNA , FTQUAL_map },
+  { FEATDEF_mRNA , FTQUAL_old_locus_tag },
   { FEATDEF_mRNA , FTQUAL_operon },
   { FEATDEF_mRNA , FTQUAL_product },
   { FEATDEF_mRNA , FTQUAL_standard_name },
@@ -801,6 +811,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_tRNA , FTQUAL_function },
   { FEATDEF_tRNA , FTQUAL_label },
   { FEATDEF_tRNA , FTQUAL_map },
+  { FEATDEF_tRNA , FTQUAL_old_locus_tag },
   { FEATDEF_tRNA , FTQUAL_product },
   { FEATDEF_tRNA , FTQUAL_standard_name },
   { FEATDEF_tRNA , FTQUAL_usedin },
@@ -809,6 +820,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_rRNA , FTQUAL_function },
   { FEATDEF_rRNA , FTQUAL_label },
   { FEATDEF_rRNA , FTQUAL_map },
+  { FEATDEF_rRNA , FTQUAL_old_locus_tag },
   { FEATDEF_rRNA , FTQUAL_product },
   { FEATDEF_rRNA , FTQUAL_standard_name },
   { FEATDEF_rRNA , FTQUAL_usedin },
@@ -817,6 +829,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_snRNA , FTQUAL_function },
   { FEATDEF_snRNA , FTQUAL_label },
   { FEATDEF_snRNA , FTQUAL_map },
+  { FEATDEF_snRNA , FTQUAL_old_locus_tag },
   { FEATDEF_snRNA , FTQUAL_product },
   { FEATDEF_snRNA , FTQUAL_standard_name },
   { FEATDEF_snRNA , FTQUAL_usedin },
@@ -825,6 +838,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_scRNA , FTQUAL_function },
   { FEATDEF_scRNA , FTQUAL_label },
   { FEATDEF_scRNA , FTQUAL_map },
+  { FEATDEF_scRNA , FTQUAL_old_locus_tag },
   { FEATDEF_scRNA , FTQUAL_product },
   { FEATDEF_scRNA , FTQUAL_standard_name },
   { FEATDEF_scRNA , FTQUAL_usedin },
@@ -833,6 +847,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_otherRNA , FTQUAL_function },
   { FEATDEF_otherRNA , FTQUAL_label },
   { FEATDEF_otherRNA , FTQUAL_map },
+  { FEATDEF_otherRNA , FTQUAL_old_locus_tag },
   { FEATDEF_otherRNA , FTQUAL_operon },
   { FEATDEF_otherRNA , FTQUAL_product },
   { FEATDEF_otherRNA , FTQUAL_standard_name },
@@ -841,6 +856,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_attenuator , FTQUAL_allele },
   { FEATDEF_attenuator , FTQUAL_label },
   { FEATDEF_attenuator , FTQUAL_map },
+  { FEATDEF_attenuator , FTQUAL_old_locus_tag },
   { FEATDEF_attenuator , FTQUAL_operon },
   { FEATDEF_attenuator , FTQUAL_phenotype },
   { FEATDEF_attenuator , FTQUAL_usedin },
@@ -848,6 +864,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_C_region , FTQUAL_allele },
   { FEATDEF_C_region , FTQUAL_label },
   { FEATDEF_C_region , FTQUAL_map },
+  { FEATDEF_C_region , FTQUAL_old_locus_tag },
   { FEATDEF_C_region , FTQUAL_product },
   { FEATDEF_C_region , FTQUAL_standard_name },
   { FEATDEF_C_region , FTQUAL_usedin },
@@ -855,6 +872,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_CAAT_signal , FTQUAL_allele },
   { FEATDEF_CAAT_signal , FTQUAL_label },
   { FEATDEF_CAAT_signal , FTQUAL_map },
+  { FEATDEF_CAAT_signal , FTQUAL_old_locus_tag },
   { FEATDEF_CAAT_signal , FTQUAL_usedin },
 
   { FEATDEF_Imp_CDS , FTQUAL_codon },
@@ -863,25 +881,30 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_Imp_CDS , FTQUAL_label },
   { FEATDEF_Imp_CDS , FTQUAL_map },
   { FEATDEF_Imp_CDS , FTQUAL_number },
+  { FEATDEF_Imp_CDS , FTQUAL_old_locus_tag },
   { FEATDEF_Imp_CDS , FTQUAL_operon },
   { FEATDEF_Imp_CDS , FTQUAL_product },
   { FEATDEF_Imp_CDS , FTQUAL_standard_name },
   { FEATDEF_Imp_CDS , FTQUAL_usedin },
 
   { FEATDEF_conflict , FTQUAL_allele },
+  { FEATDEF_conflict , FTQUAL_compare },
   { FEATDEF_conflict , FTQUAL_label },
   { FEATDEF_conflict , FTQUAL_map },
+  { FEATDEF_conflict , FTQUAL_old_locus_tag },
   { FEATDEF_conflict , FTQUAL_replace },
   { FEATDEF_conflict , FTQUAL_usedin },
 
   { FEATDEF_D_loop , FTQUAL_allele },
   { FEATDEF_D_loop , FTQUAL_label },
   { FEATDEF_D_loop , FTQUAL_map },
+  { FEATDEF_D_loop , FTQUAL_old_locus_tag },
   { FEATDEF_D_loop , FTQUAL_usedin },
 
   { FEATDEF_D_segment , FTQUAL_allele },
   { FEATDEF_D_segment , FTQUAL_label },
   { FEATDEF_D_segment , FTQUAL_map },
+  { FEATDEF_D_segment , FTQUAL_old_locus_tag },
   { FEATDEF_D_segment , FTQUAL_product },
   { FEATDEF_D_segment , FTQUAL_standard_name },
   { FEATDEF_D_segment , FTQUAL_usedin },
@@ -889,6 +912,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_enhancer , FTQUAL_allele },
   { FEATDEF_enhancer , FTQUAL_label },
   { FEATDEF_enhancer , FTQUAL_map },
+  { FEATDEF_enhancer , FTQUAL_old_locus_tag },
   { FEATDEF_enhancer , FTQUAL_standard_name },
   { FEATDEF_enhancer , FTQUAL_usedin },
 
@@ -898,6 +922,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_exon , FTQUAL_label },
   { FEATDEF_exon , FTQUAL_map },
   { FEATDEF_exon , FTQUAL_number },
+  { FEATDEF_exon , FTQUAL_old_locus_tag },
   { FEATDEF_exon , FTQUAL_product },
   { FEATDEF_exon , FTQUAL_standard_name },
   { FEATDEF_exon , FTQUAL_usedin },
@@ -905,6 +930,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_GC_signal , FTQUAL_allele },
   { FEATDEF_GC_signal , FTQUAL_label },
   { FEATDEF_GC_signal , FTQUAL_map },
+  { FEATDEF_GC_signal , FTQUAL_old_locus_tag },
   { FEATDEF_GC_signal , FTQUAL_usedin },
 
   { FEATDEF_iDNA , FTQUAL_allele },
@@ -912,6 +938,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_iDNA , FTQUAL_label },
   { FEATDEF_iDNA , FTQUAL_map },
   { FEATDEF_iDNA , FTQUAL_number },
+  { FEATDEF_iDNA , FTQUAL_old_locus_tag },
   { FEATDEF_iDNA , FTQUAL_standard_name },
   { FEATDEF_iDNA , FTQUAL_usedin },
 
@@ -921,12 +948,14 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_intron , FTQUAL_label },
   { FEATDEF_intron , FTQUAL_map },
   { FEATDEF_intron , FTQUAL_number },
+  { FEATDEF_intron , FTQUAL_old_locus_tag },
   { FEATDEF_intron , FTQUAL_standard_name },
   { FEATDEF_intron , FTQUAL_usedin },
 
   { FEATDEF_J_segment , FTQUAL_allele },
   { FEATDEF_J_segment , FTQUAL_label },
   { FEATDEF_J_segment , FTQUAL_map },
+  { FEATDEF_J_segment , FTQUAL_old_locus_tag },
   { FEATDEF_J_segment , FTQUAL_product },
   { FEATDEF_J_segment , FTQUAL_standard_name },
   { FEATDEF_J_segment , FTQUAL_usedin },
@@ -935,6 +964,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_LTR , FTQUAL_function },
   { FEATDEF_LTR , FTQUAL_label },
   { FEATDEF_LTR , FTQUAL_map },
+  { FEATDEF_LTR , FTQUAL_old_locus_tag },
   { FEATDEF_LTR , FTQUAL_standard_name },
   { FEATDEF_LTR , FTQUAL_usedin },
 
@@ -943,6 +973,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_mat_peptide , FTQUAL_function },
   { FEATDEF_mat_peptide , FTQUAL_label },
   { FEATDEF_mat_peptide , FTQUAL_map },
+  { FEATDEF_mat_peptide , FTQUAL_old_locus_tag },
   { FEATDEF_mat_peptide , FTQUAL_product },
   { FEATDEF_mat_peptide , FTQUAL_standard_name },
   { FEATDEF_mat_peptide , FTQUAL_usedin },
@@ -952,12 +983,15 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_binding , FTQUAL_function },
   { FEATDEF_misc_binding , FTQUAL_label },
   { FEATDEF_misc_binding , FTQUAL_map },
+  { FEATDEF_misc_binding , FTQUAL_old_locus_tag },
   { FEATDEF_misc_binding , FTQUAL_usedin },
 
   { FEATDEF_misc_difference , FTQUAL_allele },
   { FEATDEF_misc_difference , FTQUAL_clone },
+  { FEATDEF_misc_difference , FTQUAL_compare },
   { FEATDEF_misc_difference , FTQUAL_label },
   { FEATDEF_misc_difference , FTQUAL_map },
+  { FEATDEF_misc_difference , FTQUAL_old_locus_tag },
   { FEATDEF_misc_difference , FTQUAL_phenotype },
   { FEATDEF_misc_difference , FTQUAL_replace },
   { FEATDEF_misc_difference , FTQUAL_standard_name },
@@ -968,6 +1002,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_feature , FTQUAL_label },
   { FEATDEF_misc_feature , FTQUAL_map },
   { FEATDEF_misc_feature , FTQUAL_number },
+  { FEATDEF_misc_feature , FTQUAL_old_locus_tag },
   { FEATDEF_misc_feature , FTQUAL_phenotype },
   { FEATDEF_misc_feature , FTQUAL_product },
   { FEATDEF_misc_feature , FTQUAL_standard_name },
@@ -976,6 +1011,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_recomb , FTQUAL_allele },
   { FEATDEF_misc_recomb , FTQUAL_label },
   { FEATDEF_misc_recomb , FTQUAL_map },
+  { FEATDEF_misc_recomb , FTQUAL_old_locus_tag },
   { FEATDEF_misc_recomb , FTQUAL_organism },
   { FEATDEF_misc_recomb , FTQUAL_standard_name },
   { FEATDEF_misc_recomb , FTQUAL_usedin },
@@ -984,6 +1020,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_signal , FTQUAL_function },
   { FEATDEF_misc_signal , FTQUAL_label },
   { FEATDEF_misc_signal , FTQUAL_map },
+  { FEATDEF_misc_signal , FTQUAL_old_locus_tag },
   { FEATDEF_misc_signal , FTQUAL_operon },
   { FEATDEF_misc_signal , FTQUAL_phenotype },
   { FEATDEF_misc_signal , FTQUAL_standard_name },
@@ -993,6 +1030,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_structure , FTQUAL_function },
   { FEATDEF_misc_structure , FTQUAL_label },
   { FEATDEF_misc_structure , FTQUAL_map },
+  { FEATDEF_misc_structure , FTQUAL_old_locus_tag },
   { FEATDEF_misc_structure , FTQUAL_standard_name },
   { FEATDEF_misc_structure , FTQUAL_usedin },
 
@@ -1001,35 +1039,42 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_modified_base , FTQUAL_label },
   { FEATDEF_modified_base , FTQUAL_map },
   { FEATDEF_modified_base , FTQUAL_mod_base },
+  { FEATDEF_modified_base , FTQUAL_old_locus_tag },
   { FEATDEF_modified_base , FTQUAL_usedin },
 
   { FEATDEF_N_region , FTQUAL_allele },
   { FEATDEF_N_region , FTQUAL_label },
   { FEATDEF_N_region , FTQUAL_map },
+  { FEATDEF_N_region , FTQUAL_old_locus_tag },
   { FEATDEF_N_region , FTQUAL_product },
   { FEATDEF_N_region , FTQUAL_standard_name },
   { FEATDEF_N_region , FTQUAL_usedin },
 
   { FEATDEF_old_sequence , FTQUAL_allele },
+  { FEATDEF_old_sequence , FTQUAL_compare },
   { FEATDEF_old_sequence , FTQUAL_label },
   { FEATDEF_old_sequence , FTQUAL_map },
+  { FEATDEF_old_sequence , FTQUAL_old_locus_tag },
   { FEATDEF_old_sequence , FTQUAL_replace },
   { FEATDEF_old_sequence , FTQUAL_usedin },
 
   { FEATDEF_polyA_signal , FTQUAL_allele },
   { FEATDEF_polyA_signal , FTQUAL_label },
   { FEATDEF_polyA_signal , FTQUAL_map },
+  { FEATDEF_polyA_signal , FTQUAL_old_locus_tag },
   { FEATDEF_polyA_signal , FTQUAL_usedin },
 
   { FEATDEF_polyA_site , FTQUAL_allele },
   { FEATDEF_polyA_site , FTQUAL_label },
   { FEATDEF_polyA_site , FTQUAL_map },
+  { FEATDEF_polyA_site , FTQUAL_old_locus_tag },
   { FEATDEF_polyA_site , FTQUAL_usedin },
 
   { FEATDEF_prim_transcript , FTQUAL_allele },
   { FEATDEF_prim_transcript , FTQUAL_function },
   { FEATDEF_prim_transcript , FTQUAL_label },
   { FEATDEF_prim_transcript , FTQUAL_map },
+  { FEATDEF_prim_transcript , FTQUAL_old_locus_tag },
   { FEATDEF_prim_transcript , FTQUAL_operon },
   { FEATDEF_prim_transcript , FTQUAL_standard_name },
   { FEATDEF_prim_transcript , FTQUAL_usedin },
@@ -1037,6 +1082,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_primer_bind , FTQUAL_allele },
   { FEATDEF_primer_bind , FTQUAL_label },
   { FEATDEF_primer_bind , FTQUAL_map },
+  { FEATDEF_primer_bind , FTQUAL_old_locus_tag },
   { FEATDEF_primer_bind , FTQUAL_PCR_conditions },
   { FEATDEF_primer_bind , FTQUAL_standard_name },
   { FEATDEF_primer_bind , FTQUAL_usedin },
@@ -1045,6 +1091,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_promoter , FTQUAL_function },
   { FEATDEF_promoter , FTQUAL_label },
   { FEATDEF_promoter , FTQUAL_map },
+  { FEATDEF_promoter , FTQUAL_old_locus_tag },
   { FEATDEF_promoter , FTQUAL_operon },
   { FEATDEF_promoter , FTQUAL_phenotype },
   { FEATDEF_promoter , FTQUAL_standard_name },
@@ -1055,12 +1102,14 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_protein_bind , FTQUAL_function },
   { FEATDEF_protein_bind , FTQUAL_label },
   { FEATDEF_protein_bind , FTQUAL_map },
+  { FEATDEF_protein_bind , FTQUAL_old_locus_tag },
   { FEATDEF_protein_bind , FTQUAL_standard_name },
   { FEATDEF_protein_bind , FTQUAL_usedin },
 
   { FEATDEF_RBS , FTQUAL_allele },
   { FEATDEF_RBS , FTQUAL_label },
   { FEATDEF_RBS , FTQUAL_map },
+  { FEATDEF_RBS , FTQUAL_old_locus_tag },
   { FEATDEF_RBS , FTQUAL_standard_name },
   { FEATDEF_RBS , FTQUAL_usedin },
 
@@ -1069,6 +1118,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_repeat_region , FTQUAL_insertion_seq },
   { FEATDEF_repeat_region , FTQUAL_label },
   { FEATDEF_repeat_region , FTQUAL_map },
+  { FEATDEF_repeat_region , FTQUAL_old_locus_tag },
   { FEATDEF_repeat_region , FTQUAL_rpt_family },
   { FEATDEF_repeat_region , FTQUAL_rpt_type },
   { FEATDEF_repeat_region , FTQUAL_rpt_unit },
@@ -1080,6 +1130,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_repeat_unit , FTQUAL_function },
   { FEATDEF_repeat_unit , FTQUAL_label },
   { FEATDEF_repeat_unit , FTQUAL_map },
+  { FEATDEF_repeat_unit , FTQUAL_old_locus_tag },
   { FEATDEF_repeat_unit , FTQUAL_rpt_family },
   { FEATDEF_repeat_unit , FTQUAL_rpt_type },
   { FEATDEF_repeat_unit , FTQUAL_usedin },
@@ -1088,12 +1139,14 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_rep_origin , FTQUAL_direction },
   { FEATDEF_rep_origin , FTQUAL_label },
   { FEATDEF_rep_origin , FTQUAL_map },
+  { FEATDEF_rep_origin , FTQUAL_old_locus_tag },
   { FEATDEF_rep_origin , FTQUAL_standard_name },
   { FEATDEF_rep_origin , FTQUAL_usedin },
 
   { FEATDEF_S_region , FTQUAL_allele },
   { FEATDEF_S_region , FTQUAL_label },
   { FEATDEF_S_region , FTQUAL_map },
+  { FEATDEF_S_region , FTQUAL_old_locus_tag },
   { FEATDEF_S_region , FTQUAL_product },
   { FEATDEF_S_region , FTQUAL_standard_name },
   { FEATDEF_S_region , FTQUAL_usedin },
@@ -1101,6 +1154,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_satellite , FTQUAL_allele },
   { FEATDEF_satellite , FTQUAL_label },
   { FEATDEF_satellite , FTQUAL_map },
+  { FEATDEF_satellite , FTQUAL_old_locus_tag },
   { FEATDEF_satellite , FTQUAL_rpt_family },
   { FEATDEF_satellite , FTQUAL_rpt_type },
   { FEATDEF_satellite , FTQUAL_rpt_unit },
@@ -1111,6 +1165,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_sig_peptide , FTQUAL_function },
   { FEATDEF_sig_peptide , FTQUAL_label },
   { FEATDEF_sig_peptide , FTQUAL_map },
+  { FEATDEF_sig_peptide , FTQUAL_old_locus_tag },
   { FEATDEF_sig_peptide , FTQUAL_product },
   { FEATDEF_sig_peptide , FTQUAL_standard_name },
   { FEATDEF_sig_peptide , FTQUAL_usedin },
@@ -1119,6 +1174,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_stem_loop , FTQUAL_function },
   { FEATDEF_stem_loop , FTQUAL_label },
   { FEATDEF_stem_loop , FTQUAL_map },
+  { FEATDEF_stem_loop , FTQUAL_old_locus_tag },
   { FEATDEF_stem_loop , FTQUAL_operon },
   { FEATDEF_stem_loop , FTQUAL_standard_name },
   { FEATDEF_stem_loop , FTQUAL_usedin },
@@ -1126,17 +1182,20 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_STS , FTQUAL_allele },
   { FEATDEF_STS , FTQUAL_label },
   { FEATDEF_STS , FTQUAL_map },
+  { FEATDEF_STS , FTQUAL_old_locus_tag },
   { FEATDEF_STS , FTQUAL_standard_name },
   { FEATDEF_STS , FTQUAL_usedin },
 
   { FEATDEF_TATA_signal , FTQUAL_allele },
   { FEATDEF_TATA_signal , FTQUAL_label },
   { FEATDEF_TATA_signal , FTQUAL_map },
+  { FEATDEF_TATA_signal , FTQUAL_old_locus_tag },
   { FEATDEF_TATA_signal , FTQUAL_usedin },
 
   { FEATDEF_terminator , FTQUAL_allele },
   { FEATDEF_terminator , FTQUAL_label },
   { FEATDEF_terminator , FTQUAL_map },
+  { FEATDEF_terminator , FTQUAL_old_locus_tag },
   { FEATDEF_terminator , FTQUAL_operon },
   { FEATDEF_terminator , FTQUAL_standard_name },
   { FEATDEF_terminator , FTQUAL_usedin },
@@ -1145,6 +1204,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_transit_peptide , FTQUAL_function },
   { FEATDEF_transit_peptide , FTQUAL_label },
   { FEATDEF_transit_peptide , FTQUAL_map },
+  { FEATDEF_transit_peptide , FTQUAL_old_locus_tag },
   { FEATDEF_transit_peptide , FTQUAL_product },
   { FEATDEF_transit_peptide , FTQUAL_standard_name },
   { FEATDEF_transit_peptide , FTQUAL_usedin },
@@ -1152,12 +1212,14 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_unsure , FTQUAL_allele },
   { FEATDEF_unsure , FTQUAL_label },
   { FEATDEF_unsure , FTQUAL_map },
+  { FEATDEF_unsure , FTQUAL_old_locus_tag },
   { FEATDEF_unsure , FTQUAL_replace },
   { FEATDEF_unsure , FTQUAL_usedin },
 
   { FEATDEF_V_region , FTQUAL_allele },
   { FEATDEF_V_region , FTQUAL_label },
   { FEATDEF_V_region , FTQUAL_map },
+  { FEATDEF_V_region , FTQUAL_old_locus_tag },
   { FEATDEF_V_region , FTQUAL_product },
   { FEATDEF_V_region , FTQUAL_standard_name },
   { FEATDEF_V_region , FTQUAL_usedin },
@@ -1165,14 +1227,17 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_V_segment , FTQUAL_allele },
   { FEATDEF_V_segment , FTQUAL_label },
   { FEATDEF_V_segment , FTQUAL_map },
+  { FEATDEF_V_segment , FTQUAL_old_locus_tag },
   { FEATDEF_V_segment , FTQUAL_product },
   { FEATDEF_V_segment , FTQUAL_standard_name },
   { FEATDEF_V_segment , FTQUAL_usedin },
 
   { FEATDEF_variation , FTQUAL_allele },
+  { FEATDEF_variation , FTQUAL_compare },
   { FEATDEF_variation , FTQUAL_frequency },
   { FEATDEF_variation , FTQUAL_label },
   { FEATDEF_variation , FTQUAL_map },
+  { FEATDEF_variation , FTQUAL_old_locus_tag },
   { FEATDEF_variation , FTQUAL_phenotype },
   { FEATDEF_variation , FTQUAL_product },
   { FEATDEF_variation , FTQUAL_replace },
@@ -1183,6 +1248,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_3clip , FTQUAL_function },
   { FEATDEF_3clip , FTQUAL_label },
   { FEATDEF_3clip , FTQUAL_map },
+  { FEATDEF_3clip , FTQUAL_old_locus_tag },
   { FEATDEF_3clip , FTQUAL_standard_name },
   { FEATDEF_3clip , FTQUAL_usedin },
 
@@ -1190,6 +1256,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_3UTR , FTQUAL_function },
   { FEATDEF_3UTR , FTQUAL_label },
   { FEATDEF_3UTR , FTQUAL_map },
+  { FEATDEF_3UTR , FTQUAL_old_locus_tag },
   { FEATDEF_3UTR , FTQUAL_standard_name },
   { FEATDEF_3UTR , FTQUAL_usedin },
 
@@ -1197,6 +1264,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_5clip , FTQUAL_function },
   { FEATDEF_5clip , FTQUAL_label },
   { FEATDEF_5clip , FTQUAL_map },
+  { FEATDEF_5clip , FTQUAL_old_locus_tag },
   { FEATDEF_5clip , FTQUAL_standard_name },
   { FEATDEF_5clip , FTQUAL_usedin },
 
@@ -1204,12 +1272,14 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_5UTR , FTQUAL_function },
   { FEATDEF_5UTR , FTQUAL_label },
   { FEATDEF_5UTR , FTQUAL_map },
+  { FEATDEF_5UTR , FTQUAL_old_locus_tag },
   { FEATDEF_5UTR , FTQUAL_standard_name },
   { FEATDEF_5UTR , FTQUAL_usedin },
 
   { FEATDEF_10_signal , FTQUAL_allele },
   { FEATDEF_10_signal , FTQUAL_label },
   { FEATDEF_10_signal , FTQUAL_map },
+  { FEATDEF_10_signal , FTQUAL_old_locus_tag },
   { FEATDEF_10_signal , FTQUAL_operon },
   { FEATDEF_10_signal , FTQUAL_standard_name },
   { FEATDEF_10_signal , FTQUAL_usedin },
@@ -1217,6 +1287,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_35_signal , FTQUAL_allele },
   { FEATDEF_35_signal , FTQUAL_label },
   { FEATDEF_35_signal , FTQUAL_map },
+  { FEATDEF_35_signal , FTQUAL_old_locus_tag },
   { FEATDEF_35_signal , FTQUAL_operon },
   { FEATDEF_35_signal , FTQUAL_standard_name },
   { FEATDEF_35_signal , FTQUAL_usedin },
@@ -1225,6 +1296,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_REGION , FTQUAL_label },
   { FEATDEF_REGION , FTQUAL_map },
   { FEATDEF_REGION , FTQUAL_number },
+  { FEATDEF_REGION , FTQUAL_old_locus_tag },
   { FEATDEF_REGION , FTQUAL_phenotype },
   { FEATDEF_REGION , FTQUAL_product },
   { FEATDEF_REGION , FTQUAL_standard_name },
@@ -1233,6 +1305,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_mat_peptide_aa , FTQUAL_allele },
   { FEATDEF_mat_peptide_aa , FTQUAL_label },
   { FEATDEF_mat_peptide_aa , FTQUAL_map },
+  { FEATDEF_mat_peptide_aa , FTQUAL_old_locus_tag },
   { FEATDEF_mat_peptide_aa , FTQUAL_product },
   { FEATDEF_mat_peptide_aa , FTQUAL_standard_name },
   { FEATDEF_mat_peptide_aa , FTQUAL_usedin },
@@ -1240,6 +1313,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_sig_peptide_aa , FTQUAL_allele },
   { FEATDEF_sig_peptide_aa , FTQUAL_label },
   { FEATDEF_sig_peptide_aa , FTQUAL_map },
+  { FEATDEF_sig_peptide_aa , FTQUAL_old_locus_tag },
   { FEATDEF_sig_peptide_aa , FTQUAL_product },
   { FEATDEF_sig_peptide_aa , FTQUAL_standard_name },
   { FEATDEF_sig_peptide_aa , FTQUAL_usedin },
@@ -1247,6 +1321,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_transit_peptide_aa , FTQUAL_allele },
   { FEATDEF_transit_peptide_aa , FTQUAL_label },
   { FEATDEF_transit_peptide_aa , FTQUAL_map },
+  { FEATDEF_transit_peptide_aa , FTQUAL_old_locus_tag },
   { FEATDEF_transit_peptide_aa , FTQUAL_product },
   { FEATDEF_transit_peptide_aa , FTQUAL_standard_name },
   { FEATDEF_transit_peptide_aa , FTQUAL_usedin },
@@ -1255,6 +1330,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_snoRNA , FTQUAL_function },
   { FEATDEF_snoRNA , FTQUAL_label },
   { FEATDEF_snoRNA , FTQUAL_map },
+  { FEATDEF_snoRNA , FTQUAL_old_locus_tag },
   { FEATDEF_snoRNA , FTQUAL_product },
   { FEATDEF_snoRNA , FTQUAL_standard_name },
   { FEATDEF_snoRNA , FTQUAL_usedin },
@@ -1272,6 +1348,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_oriT , FTQUAL_direction },
   { FEATDEF_oriT , FTQUAL_label },
   { FEATDEF_oriT , FTQUAL_map },
+  { FEATDEF_oriT , FTQUAL_old_locus_tag },
   { FEATDEF_oriT , FTQUAL_rpt_type },
   { FEATDEF_oriT , FTQUAL_rpt_type },
   { FEATDEF_oriT , FTQUAL_rpt_unit },
@@ -1358,6 +1435,8 @@ static CharPtr validRefSeqExceptionString [] = {
   "alternative start codon",
   "unclassified transcription discrepancy",
   "unclassified translation discrepancy",
+  "mismatches in transcription",
+  "mismatches in translation",
   NULL
 };
 
@@ -1438,6 +1517,7 @@ NLM_EXTERN Int2 ValidateAccn (
           accession [1] == 'G' ||
           accession [1] == 'R' ||
           accession [1] == 'S' ||
+          accession [1] == 'W' ||
           accession [1] == 'Z') {
         return 0;
       }
@@ -2202,7 +2282,7 @@ static void FormatFeatureBlockQuals (
         }
         break;
 
-      case Qual_class_paren :
+      case Qual_class_usedin :
         gbq = qvp [idx].gbq;
         if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
         if (lasttype == NULL) {
@@ -2235,6 +2315,49 @@ static void FormatFeatureBlockQuals (
               FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=",
                   FALSE, TRUE, TILDE_IGNORE);
               FFAddOneString(ffstring, str, FALSE, TRUE, TILDE_TO_SPACES);
+              FFAddOneChar(ffstring, '\n', FALSE);
+            }
+            MemFree (tmp);
+          }
+          gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_paren :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            tmp = StringSave (gbq->val);
+            str = tmp;
+            len = StringLen (str);
+            if (len > 1 && *str == '(' && str [len - 1] == ')' &&
+                StringChr (str, ',') != NULL) {
+              str++;
+              while (! StringHasNoText (str)) {
+                ptr = StringChr (str, ',');
+                if (ptr == NULL) {
+                  ptr = StringChr (str, ')');
+                }
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                  ptr++;
+                }
+                FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=\"",
+                  FALSE, TRUE, TILDE_IGNORE);
+                FFAddOneString(ffstring, str, FALSE, TRUE, TILDE_TO_SPACES);
+                FFAddOneChar(ffstring, '\"', FALSE);
+                FFAddOneChar(ffstring, '\n', FALSE);
+                str = ptr;
+              }
+            } else {
+              FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=\"",
+                  FALSE, TRUE, TILDE_IGNORE);
+              FFAddOneString(ffstring, str, FALSE, TRUE, TILDE_TO_SPACES);
+              FFAddOneChar(ffstring, '\"', FALSE);
               FFAddOneChar(ffstring, '\n', FALSE);
             }
             MemFree (tmp);
@@ -2521,21 +2644,33 @@ static void FormatFeatureBlockQuals (
             A2GBSeqLocReplaceID (newloc, ajp->ajp.slp);
           }
         }
-        if (slp != NULL && slp->choice == SEQLOC_INT) {
-          sintp = (SeqIntPtr) slp->data.ptrvalue;
-          if (sintp != NULL) {
-            str = qvp [FTQUAL_trna_aa].str;
-            if (! StringHasNoText (str)) {
-              sprintf(numbuf, "%ld", (long) sintp->from + 1);
-              FFAddTextToString(ffstring, "/anticodon=(pos:", numbuf, "..",
-                                FALSE, FALSE, TILDE_IGNORE);
-              sprintf(numbuf, "%ld", (long) sintp->to + 1);
-              FFAddTextToString(ffstring, NULL, numbuf, ",",
-                                FALSE, FALSE, TILDE_IGNORE);
+        str = qvp [FTQUAL_trna_aa].str;
+        if (slp != NULL && StringDoesHaveText (str)) {
+          if (ajp->mode == RELEASE_MODE) { /* !!! quarantined pending collab approval !!! */
+            if (slp->choice == SEQLOC_INT) {
+              sintp = (SeqIntPtr) slp->data.ptrvalue;
+              if (sintp != NULL) {
+                sprintf(numbuf, "%ld", (long) sintp->from + 1);
+                FFAddTextToString (ffstring, "/anticodon=(pos:", numbuf, "..",
+                                   FALSE, FALSE, TILDE_IGNORE);
+                sprintf (numbuf, "%ld", (long) sintp->to + 1);
+                FFAddTextToString (ffstring, NULL, numbuf, ",",
+                                   FALSE, FALSE, TILDE_IGNORE);
+                FFAddTextToString (ffstring, "aa:", str, ")",
+                                  FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneChar (ffstring, '\n', FALSE);
+              }
+            }
+          } else {
+            tmp = FFFlatLoc (ajp, target, slp, ajp->masterStyle);
+            if (tmp != NULL) {
+              FFAddTextToString (ffstring, "/anticodon=(pos:", tmp, ",",
+                                 FALSE, FALSE, TILDE_IGNORE);
               FFAddTextToString(ffstring, "aa:", str, ")",
                                 FALSE, FALSE, TILDE_IGNORE);
               FFAddOneChar(ffstring, '\n', FALSE);
             }
+            MemFree (tmp);
           }
         }
         if (newloc != NULL) {
@@ -3755,15 +3890,20 @@ static CharPtr FormatFeatureBlockEx (
   SeqEntryPtr        sep;
   Uint1              seqcode;
   Uint1              shift;
+  SeqInt             sint;
+  SeqIntPtr          sintp;
   SeqIdPtr           sip;
   Int2               siteidx;
   SeqMapTablePtr     smtp;
   Boolean            split;
+  SeqPntPtr          spp;
+  SeqPnt             spt;
   CharPtr            str;
   Uint1              strand = Seq_strand_unknown;
   CharPtr            tmp;
   tRNAPtr            trna;
   BioseqPtr          unlockme = NULL;
+  ValNode            vn;
   ValNodePtr         vnp;
   StringItemPtr      ffstring;
 
@@ -4082,7 +4222,40 @@ static CharPtr FormatFeatureBlockEx (
     if (grp == NULL) {
       sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
       oldscope = SeqEntrySetScope (sep);
-      gene = SeqMgrGetOverlappingGene (locforgene, &gcontext);
+      if (fcontext->featdeftype == FEATDEF_variation && locforgene != NULL) {
+        /* special case variation feature - copy location but set strand both */
+        if (locforgene->choice == SEQLOC_INT && locforgene->data.ptrvalue != NULL) {
+          sintp = (SeqIntPtr) locforgene->data.ptrvalue;
+          MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          sint.from = sintp->from;
+          sint.to = sintp->to;
+          sint.id = sintp->id;
+          sint.if_from = sintp->if_from;
+          sint.if_to = sintp->if_to;
+          sint.strand = Seq_strand_both;
+          vn.choice = SEQLOC_INT;
+          vn.data.ptrvalue = (Pointer) &sint;
+          gene = SeqMgrGetOverlappingGene (&vn, &gcontext);
+
+        } else if (locforgene->choice == SEQLOC_PNT && locforgene->data.ptrvalue != NULL) {
+          spp = (SeqPntPtr) locforgene->data.ptrvalue;
+          MemSet ((Pointer) &spt, 0, sizeof (SeqPnt));
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          spt.point = spp->point;
+          spt.id = spp->id;
+          spt.fuzz = spp->fuzz;
+          spt.strand = Seq_strand_both;
+          vn.choice = SEQLOC_PNT;
+          vn.data.ptrvalue = (Pointer) &spt;
+          gene = SeqMgrGetOverlappingGene (&vn, &gcontext);
+
+        } else {
+          gene = SeqMgrGetOverlappingGene (locforgene, &gcontext);
+        }
+      } else {
+        gene = SeqMgrGetOverlappingGene (locforgene, &gcontext);
+      }
       SeqEntrySetScope (oldscope);
       if (gene != NULL) {
         qvp [FTQUAL_gene_note].str = gene->comment;
@@ -4314,6 +4487,10 @@ static CharPtr FormatFeatureBlockEx (
           }
         } else {
           qvp [FTQUAL_coded_by].slp = sfp->location;
+
+          /* show /evidence on coded_by CDS */
+
+          qvp [FTQUAL_evidence].num = sfp->exp_ev;
 
           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
           if (crp != NULL) {
@@ -5074,7 +5251,11 @@ NLM_EXTERN CharPtr FormatFeatHeaderBlock (
   IntAsn2gbJobPtr  ajp;
   Asn2gbSectPtr    asp;
   BioseqPtr        bsp;
+  Char             ch;
+  Boolean          has_space;
   Char             id [64];
+  ObjectIdPtr      oip;
+  CharPtr          ptr;
   SeqIdPtr         sip;
   SeqIdPtr         sip2;
   CharPtr          str = NULL;
@@ -5094,13 +5275,37 @@ NLM_EXTERN CharPtr FormatFeatHeaderBlock (
 
   if (ajp->format == FTABLE_FMT) {
     sip = SeqIdFindBest (target->id, 0);
-    if (sip != NULL && sip->choice == SEQID_GI) {
+    if (sip == NULL) return NULL;
+    id [0] = '\0';
+
+    if (sip->choice == SEQID_GI) {
       sip2 = GetSeqIdForGI (sip->data.intvalue);
       if (sip2 != NULL) {
         sip = sip2;
       }
     }
-    SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    if (sip->choice == SEQID_LOCAL) {
+      oip = (ObjectIdPtr) sip->data.ptrvalue;
+      if (oip != NULL && StringDoesHaveText (oip->str)) {
+        has_space = FALSE;
+        ptr = oip->str;
+        ch = *ptr;
+        while (ch != '\0') {
+          if (IS_WHITESP (ch)) {
+            has_space = TRUE;
+          }
+          ptr++;
+          ch = *ptr;
+        }
+        if (has_space) {
+          sprintf (id, "lcl|%c%s%c", (char) '"', oip->str, (char) '"');
+        }
+      }
+    }
+
+    if (id [0] == '\0') {
+      SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    }
     if (! StringHasNoText (id)) {
       sprintf (tmp, ">Feature %s\n", id);
       str = StringSave (tmp);
@@ -5148,6 +5353,83 @@ static void StripLeadingSpaces (
     ch = *ptr;
   }
   *dst = '\0';
+}
+
+NLM_EXTERN void DoImmediateRemoteFeatureFormat (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp,
+  SeqFeatPtr sfp
+)
+
+{
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
+  BlockType          blocktype;
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  fcontext;
+  size_t             max;
+  SeqEntryPtr        oldscope;
+  QualValPtr         qvp = NULL;
+  SeqEntryPtr        sep;
+  SeqLocPtr          slp;
+  CharPtr            str = NULL;
+  BioseqPtr          target;
+
+  if (afp == NULL || bbp == NULL || sfp == NULL) return;
+  asp = afp->asp;
+  if (asp == NULL) return;
+  target = asp->target;
+  bsp = asp->bsp;
+  if (target == NULL || bsp == NULL) return;
+  ajp = afp->ajp;
+  if (ajp == NULL) return;
+
+  blocktype = bbp->blocktype;
+  if (blocktype < LOCUS_BLOCK || blocktype > SLASH_BLOCK) return;
+
+  max = (size_t) (MAX (ASN2GNBK_TOTAL_SOURCE, ASN2GNBK_TOTAL_FEATUR));
+  qvp = MemNew (sizeof (QualVal) * (max + 5));
+  if (qvp == NULL) return;
+
+  MemSet ((Pointer) &fcontext, 0, sizeof (SeqMgrFeatContext));
+  fcontext.itemID = 0;
+  fcontext.featdeftype = sfp->idx.subtype;
+  fcontext.seqfeattype = sfp->data.choice;
+  slp = sfp->location;
+  fcontext.left = GetOffsetInBioseq (slp, bsp, SEQLOC_LEFT_END);
+  fcontext.right = GetOffsetInBioseq (slp, bsp, SEQLOC_RIGHT_END);
+  fcontext.strand = SeqLocStrand (slp);
+
+  sep = GetTopSeqEntryForEntityID (bbp->entityID);
+
+  oldscope = SeqEntrySetScope (sep);
+
+  if (ajp->format != FTABLE_FMT) {
+    str = FormatFeatureBlockEx (ajp, asp, bsp, target, sfp, &fcontext, qvp,
+                                ajp->format, (IntFeatBlockPtr) bbp, ISA_aa (bsp->mol), TRUE);
+  }
+
+  SeqEntrySetScope (oldscope);
+
+  if (str != NULL) {
+    if (afp->fp != NULL) {
+      fprintf (afp->fp, "%s", str);
+    }
+    if (afp->ffwrite != NULL) {
+      afp->ffwrite (str, afp->userdata, blocktype);
+    }
+  } else {
+    if (afp->fp != NULL) {
+      fprintf (afp->fp, "?\n");
+    }
+    if (afp->ffwrite != NULL) {
+      afp->ffwrite ("?\n", afp->userdata, blocktype);
+    }
+  }
+
+  MemFree (str);
+  MemFree (qvp
+  );
 }
 
 NLM_EXTERN CharPtr FormatFeatureQuals (

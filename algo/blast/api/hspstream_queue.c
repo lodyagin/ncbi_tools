@@ -1,4 +1,4 @@
-/*  $Id: hspstream_queue.c,v 1.2 2004/06/08 17:46:35 dondosha Exp $
+/*  $Id: hspstream_queue.c,v 1.3 2004/06/22 16:22:13 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
  */
 
 static char const rcsid[] = 
-    "$Id: hspstream_queue.c,v 1.2 2004/06/08 17:46:35 dondosha Exp $";
+    "$Id: hspstream_queue.c,v 1.3 2004/06/22 16:22:13 dondosha Exp $";
 
 
 #include <algo/blast/core/blast_hits.h>
@@ -42,6 +42,11 @@ static char const rcsid[] =
 
 /** Default hit saving stream methods */
 
+/** Deallocate memory for the BlastHSPStream with an HSP list queue data 
+ * structure. 
+ * @param hsp_stream HSP stream to free [in]
+ * @return NULL
+ */
 static BlastHSPStream* 
 BlastHSPListQueueFree(BlastHSPStream* hsp_stream) 
 {
@@ -61,9 +66,17 @@ BlastHSPListQueueFree(BlastHSPStream* hsp_stream)
    return NULL;
 }
 
+/** Read one HSP list from a queue of HSP lists. If the queue is empty, this 
+ * function waits for more results to be written, unless results queue is 
+ * already closed for writing.
+ * @param hsp_stream HSP list stream to read from [in]
+ * @param hsp_list_out The read HSP list. NULL, if there is nothing left 
+ *                     in the queue to read.
+ * @return Status: success, error or end of reading.
+ */
 static int 
 BlastHSPListQueueRead(BlastHSPStream* hsp_stream, 
-                           BlastHSPList** hsp_list_out) 
+                      BlastHSPList** hsp_list_out) 
 {
    BlastHSPListQueueData* stream_data = 
       (BlastHSPListQueueData*) GetData(hsp_stream);
@@ -106,6 +119,13 @@ BlastHSPListQueueRead(BlastHSPStream* hsp_stream,
    return status;
 }
 
+/** Write an HSP list to the results queue.
+ * @param hsp_stream BlastHSPStream to write to. [in]
+ * @param hsp_list Pointer to an HSP list to save in the queue. The HSP stream
+ *                 takes ownership of the HSP list and sets the dereferenced
+ *                 pointer to NULL [in]
+ * @return Status: success or error, if queue is already closed for writing.
+ */
 static int 
 BlastHSPListQueueWrite(BlastHSPStream* hsp_stream, 
                        BlastHSPList** hsp_list)
@@ -135,6 +155,10 @@ BlastHSPListQueueWrite(BlastHSPStream* hsp_stream,
    return kBlastHSPStream_Success;
 }
 
+/** Prohibit any future writing to the HSP list queue. Also increment the 
+ * read semaphore, to allow exit out of the wait state in the reading function.
+ * @param hsp_stream The BlastHSPStream pointer [in] [out]
+ */
 static void 
 BlastHSPListQueueClose(BlastHSPStream* hsp_stream)
 {
@@ -148,6 +172,11 @@ BlastHSPListQueueClose(BlastHSPStream* hsp_stream)
    NlmMutexUnlock(stream_data->m_resultsMutex);
 }
 
+/** Set functions pointers and data structure pointer in a new BlastHSPStream 
+ * with an HSP list queue data structure.
+ * @param hsp_stream The BlastHSPStream to initialize [in] [out]
+ * @param args Pointer to the HSP list queue data structure [in]
+ */
 static BlastHSPStream* 
 BlastHSPListQueueNew(BlastHSPStream* hsp_stream, void* args) 
 {
@@ -166,6 +195,7 @@ BlastHSPListQueueNew(BlastHSPStream* hsp_stream, void* args)
     return hsp_stream;
 }
 
+/** Create a new BlastHSPStream with an HSP list queue data structure. */
 BlastHSPStream* Blast_HSPListQueueInit()
 {
     BlastHSPListQueueData* stream_data = 

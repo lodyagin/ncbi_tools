@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -187,6 +187,7 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
                                             Boolean useBar, Boolean showPartials,
                                             Boolean allowGaps, FeatureFormPtr ffp,
                                             IntEdPartialProc proc);
+extern void SetSequenceAndStrandForIntervalPage (DialoG d);                                            
 extern void StdFeatIntEdPartialCallback (FeatureFormPtr ffp, Boolean partial5, Boolean partial3, Boolean order);
 
 extern DialoG CreateVisibleStringDialog (GrouP h, Uint2 rows,
@@ -220,6 +221,9 @@ typedef struct textviewprocs {
   Boolean          useScrollText;
 
   FonT             displayFont;
+
+  Char             screenMode;
+
 } TextViewProcs, PNTR TextViewProcsPtr;
 
 extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title);
@@ -241,6 +245,9 @@ typedef struct stdeditorprocs {
   FormMessageFunc  handleMessages;
 
   Boolean          duplicateExisting;
+
+  Char             screenMode;
+
 } StdEditorProcs, PNTR StdEditorProcsPtr;
 
 #ifndef WIN_MAC

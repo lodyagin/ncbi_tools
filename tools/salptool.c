@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.36 2004/06/10 18:59:36 bollin Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.37 2004/08/26 18:16:29 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -2335,7 +2335,6 @@ static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
    Int4        l;
    Int4        len;
    Int4        linesize;
-   Boolean     more;
    FILE        *ofp;
    CharPtr     seq;
    CharPtr     seq1;
@@ -2406,7 +2405,7 @@ static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
       seq1 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
       seq = seq1;
       first_from = -1;
-      while (more = AlnMgr2GetNextAlnBit(sap, amp))
+      while (AlnMgr2GetNextAlnBit(sap, amp))
       {
          if (amp->type == AM_GAP)
          {
@@ -2449,7 +2448,7 @@ static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
       seq2 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
       seq = seq2;
       first_from = -1;
-      while (more = AlnMgr2GetNextAlnBit(sap, amp))
+      while (AlnMgr2GetNextAlnBit(sap, amp))
       {
          if (amp->type == AM_GAP)
          {
@@ -2920,6 +2919,146 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   }
   return vnp;  
 }
+
+/* we need to iterate through the actual SeqEntries, because theoretically the
+ * same SeqID should appear in the SeqEntry with the new alignment and again
+ * in the SeqEntry of the original record.
+ */
+static BioseqPtr FindBioseqInSep (SeqEntryPtr sep, SeqIdPtr sip)
+{
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  this_sep;
+  
+  if (sep == NULL || sip == NULL) return NULL;
+  
+  if (IS_Bioseq (sep))
+  {
+  	bsp = (BioseqPtr) sep->data.ptrvalue;
+	if (! BioseqMatch(bsp, sip))
+	{
+	  bsp = NULL;
+	}
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+  	bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (this_sep = bssp->seq_set; this_sep != NULL && bsp == NULL; this_sep = this_sep->next)
+    {
+      bsp = FindBioseqInSep (this_sep, sip);
+    }
+  }
+  return bsp;
+}
+
+extern void CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold)
+{
+  SeqAlignPtr         salpnew;
+  DenseSegPtr         dsp;
+  SeqIdPtr            sip_temp, sip_next;
+  BioseqPtr           bsp1, bsp2;
+  BLAST_OptionsBlkPtr options;
+  SeqAlignPtr         seqalign = NULL;
+  SeqAlignPtr         bestsalp = NULL;
+  Int4                start1, start2, stop1, stop2;
+  CharPtr             errstr = NULL;
+  Uint1               strand;
+  Int4                offset, len, nonly;
+  BioseqPtr           copybsp1, copybsp2;
+  SeqIdPtr            tmp_id_1, tmp_id_2;
+  
+  if (sepnew == NULL || sepold == NULL)
+  {
+  	return;
+  }
+  /* this function needs to look at the bioseqs we have created while reading in the
+   * alignment, align them with the existing bioseqs, and adjust the alignment start
+   * positions if necessary.
+   */
+
+  salpnew = (SeqAlignPtr) FindSeqAlignInSeqEntry (sepnew, OBJ_SEQALIGN);
+  if (salpnew == NULL)
+  {
+  	return;
+  }
+  
+  if (salpnew->segtype != 2) return;
+  dsp = (DenseSegPtr) salpnew->segs;
+  if (dsp == NULL) return;
+
+  /* create IDs to use when copying Bioseqs.
+   * BioseqCopyEx makes a copy of these for the Bioseq it creates,
+   * so we can reuse them and then free them at the end of the for-next loop.
+   */
+  tmp_id_1 = MakeSeqID ("lcl|tmp_1_for_update");
+  tmp_id_2 = MakeSeqID ("lcl|tmp_2_for_update");
+  
+  for (sip_temp = dsp->ids; sip_temp != NULL; sip_temp = sip_next)
+  {
+  	sip_next = sip_temp->next;
+  	sip_temp->next = NULL;
+  	
+  	/* find bsp1 in sepnew, bsp2 in sepold */
+    bsp1 = FindBioseqInSep (sepnew, sip_temp);
+    bsp2 = FindBioseqInSep (sepold, sip_temp);
+    
+    if (bsp1 != NULL && bsp2 != NULL) 
+    {
+  	  /* create alignment between old and new bioseqs */
+  	  /* new bioseq will have same ID as old bioseq, so BLAST won't work
+  	   * because it's looking for IDs using indexing.
+  	   * Create a temporary copy of the two bioseqs with different IDS,
+  	   * add them to the BioseqIndex, BLAST them, then remove them 
+  	   * from the index and delete them.
+  	   */
+      copybsp1 = BioseqCopyEx (tmp_id_1, bsp1, 0, bsp1->length - 1, Seq_strand_plus, FALSE);
+      copybsp2 = BioseqCopyEx (tmp_id_2, bsp2, 0, bsp2->length - 1 , Seq_strand_plus, FALSE);
+      SeqMgrAddToBioseqIndex (copybsp1);
+      SeqMgrAddToBioseqIndex (copybsp2);
+ 	   
+      options = BLASTOptionNew("blastn", TRUE);
+      options->filter_string = StringSave("m L;R");
+      seqalign = BlastTwoSequences (copybsp1, copybsp2, "blastn", options);
+      if (errstr != NULL)
+        MemFree(errstr);
+      errstr = (CharPtr)MemNew(1000*sizeof(Char));
+      bestsalp = SeqAlignBestHit (seqalign, copybsp1, copybsp2, 100, &errstr, &nonly);
+  
+      /* we don't need the copies after this, and we don't want them in the BioseqIndex
+       * (or BLAST might get confused the next time through the loop).
+       */	
+  	  copybsp1->idx.deleteme = TRUE;
+  	  copybsp2->idx.deleteme = TRUE;
+  	  SeqMgrDeleteFromBioseqIndex (copybsp1);
+  	  SeqMgrDeleteFromBioseqIndex (copybsp2);
+  	
+  	  /* update start position in alignment */
+      offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
+      if ((SeqAlignStrand(bestsalp, 0)==Seq_strand_minus && SeqAlignStrand(bestsalp, 1) != Seq_strand_minus) || (SeqAlignStrand(bestsalp, 1)==Seq_strand_minus && SeqAlignStrand(bestsalp, 0) != Seq_strand_minus))
+      {
+        strand=Seq_strand_minus;
+        AlnMgr2IndexSingleChildSeqAlign(bestsalp);
+        AlnMgr2GetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
+        AlnMgr2GetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
+        len = stop2 + start1;
+      } 
+      else
+      {
+        strand=Seq_strand_plus;
+      }
+      SeqAlignStartUpdate (salpnew, sip_temp, abs(offset), len, strand);	    	
+    }  	
+  	sip_temp->next = sip_next;
+  }
+  SeqIdFree (tmp_id_1);
+  SeqIdFree (tmp_id_2);
+    
+  if (errstr != NULL)
+  {
+  	MemFree (errstr);
+  }
+}
+
 
 static Boolean check_dbid_seqalign (SeqAlignPtr salp)
 {

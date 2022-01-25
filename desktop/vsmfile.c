@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -410,38 +410,82 @@ Int2 LIBCALLBACK VSMFastaNucSave ( Pointer data )
 	return VSMGenericFastaSave((OMProcControlPtr)data, TRUE);
 }
 
+typedef struct selectedsave
+{
+	AsnIoPtr     aip;
+  SelStructPtr ssp;    
+	ObjMgrPtr    omp;
+} SelectedSaveData, PNTR SelectedSavePtr;
+
+NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
+static Boolean SaveOneSelectedItem (GatherObjectPtr gop)
+
+{
+  SelectedSavePtr ssp;
+  SelStructPtr    sel;
+	ObjMgrTypePtr   omtp;
+
+  if (gop == NULL || gop->dataptr == NULL) return TRUE;
+  ssp = (SelectedSavePtr) gop->userdata;
+  if (ssp == NULL || ssp->aip == NULL || ssp->ssp == NULL) return TRUE;
+
+  sel = ssp->ssp;
+  while (sel != NULL 
+         && (sel->entityID != gop->entityID 
+             || sel->itemtype != gop->itemtype 
+             || sel->itemID != gop->itemID))
+  {
+    sel = sel->next;
+  }
+
+  if (sel == NULL) return TRUE;
+   
+ 	omtp = ObjMgrTypeFind(ssp->omp, sel->itemtype, NULL, NULL);
+	if (omtp == NULL)
+	{
+		ErrPostEx(SEV_ERROR,0,0,"Can't locate type record for [%d]", (int)sel->itemtype);
+		return TRUE;
+	}	
+		
+  (*(omtp->asnwrite))(gop->dataptr, ssp->aip, NULL);
+  AsnPrintNewLine (ssp->aip);
+  AsnIoFlush (ssp->aip);
+ 
+  return TRUE;
+}
+
 
 static Int2 LIBCALLBACK VSMGenericAsnSave (OMProcControlPtr ompcp, CharPtr mode )
 {
 	Char filename[255];
-	AsnIoPtr aip;
-	ObjMgrPtr omp;
-	ObjMgrTypePtr omtp;
-	Uint2 the_type;
-	Pointer the_data;
+	SelStructPtr  ssp, sel;
 #ifdef WIN_MAC
 	FILE * fp;
 #endif
+  ValNodePtr entity_list = NULL, vnp;
+  SelectedSaveData ssd;
 
-	omp = ObjMgrGet();
-	if (ompcp->input_choicetype)
+  ssp = ObjMgrGetSelected();
+  if (ssp == NULL)
 	{
-		the_type = ompcp->input_choicetype;
-		the_data = (Pointer)(ompcp->input_choice);
-	}
-	else
-	{
-		the_type = ompcp->input_itemtype;
-		the_data = ompcp->input_data;
+		return OM_MSG_RET_ERROR;
 	}
 	
-	omtp = ObjMgrTypeFind(omp, the_type, NULL, NULL);
-	if (omtp == NULL)
+	for (sel = ssp; sel != NULL; sel = sel->next)
 	{
-		ErrPostEx(SEV_ERROR,0,0,"Can't locate type record for [%d]", (int)the_type);
-		return OM_MSG_RET_ERROR;
-	}	
-		
+	  for (vnp = entity_list;
+	       vnp != NULL && vnp->data.intvalue != sel->entityID;
+	       vnp = vnp->next)
+	  {}
+	  if (vnp == NULL)
+	  {
+	    ValNodeAddInt (&entity_list, 0, sel->entityID);
+	  }
+	}
+
+	ssd.omp = ObjMgrGet();
+
+  /* get file name to use */	
 	filename[0] = '\0';
 	if (GetOutputFileName(filename, (size_t)254, NULL))
 	{
@@ -454,14 +498,23 @@ static Int2 LIBCALLBACK VSMGenericAsnSave (OMProcControlPtr ompcp, CharPtr mode 
 			FileCreate (filename, "TEXT", "ttxt");
 		}
 #endif
-		aip = AsnIoOpen(filename, mode);
-		(*(omtp->asnwrite))(the_data, aip, NULL);
-		AsnIoClose(aip);
+
+		ssd.aip = AsnIoOpen(filename, mode);
+		ssd.ssp = ssp;
+	
+	  for (vnp = entity_list; vnp != NULL; vnp = vnp->next)
+	  {
+      GatherObjectsInEntity (vnp->data.intvalue, 0, NULL, SaveOneSelectedItem, (Pointer) &ssd, NULL);
+	  }
+
+    ValNodeFree (entity_list);
+		AsnIoClose(ssd.aip);
 		ArrowCursor();
 	}
 	
 	return OM_MSG_RET_DONE;
 }
+
 
 Int2 LIBCALLBACK VSMGenericTextAsnSave ( Pointer data )
 {

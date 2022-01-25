@@ -1,4 +1,4 @@
-/* $Id: blast_inline.h,v 1.2 2004/05/19 14:52:02 camacho Exp $
+/* $Id: blast_inline.h,v 1.4 2004/09/01 13:19:43 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,8 +29,9 @@
  * @todo FIXME needs file description
  */
 
-#include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/core/blast_lookup.h>
+#include <algo/blast/core/mb_lookup.h>
 
 /** Given a word packed into an integer, compute a discontiguous word lookup 
  *  index.
@@ -294,7 +295,7 @@ static NCBI_INLINE Int4 BlastNaLookupAdjustIndex(Uint1* s, Int4 index,
  * @param index The lookup index [out]
  */
 static NCBI_INLINE Int2
-Na_LookupComputeIndex(LookupTable* lookup, Uint1* word, Int4* index)
+Na_LookupComputeIndex(BlastLookupTable* lookup, Uint1* word, Int4* index)
 {
    Int4 i;
    Int4 wordsize = lookup->reduced_wordsize*COMPRESSION_RATIO; /* i.e. 8 or 4 */
@@ -376,4 +377,28 @@ BlastNaMiniExtendRight(Uint1* q, const Uint1* s, Uint1 max_right)
       }
    }
    return right;
+}
+
+/** Returns the index in the MaskLoc given a context number for the query.
+ * If the query is nucleotide
+ *
+ * @param is_na the query is nucleotide
+ * @param context offset in the QueryInfo array
+ * @return index in the maskloc
+ */
+static NCBI_INLINE Int2 BlastGetMaskLocIndexFromContext(Boolean is_na, Int2 context)
+{
+     return (is_na ? context / 2 : context);
+}
+
+/** Determines whether this is a nucleotide query and whether this a minus strand or not
+ *
+ * @param is_na the query is nucleotide
+ * @param context offset in the QueryInfo array
+ * @return TRUE if this is minus strand
+ */
+static NCBI_INLINE Boolean BlastIsReverseStrand(Boolean is_na, Int2 context)
+{
+     return (is_na && ((context & 1) != 0));
+
 }

@@ -113,7 +113,8 @@ Input:
 
  These three options are mutually exclusive.
 
- -l &lt;file&gt; a file with a list of IDs to restrict the clustering
+ -l &lt;file&gt; a file with a list of IDs to restrict the clustering,
+    applicable only when reclustering from a saved hit-list.
  
 Thresholds:
 
@@ -182,7 +183,7 @@ are true for most UNIX platforms.
 
 A.1. Header.
 
-        1-byte boolean  IDtype  1 if numeric IDs; 0 if string IDs
+        4-byte integer  IDtype  1 if numeric IDs; 0 if string IDs
         4-byte integer  ListSz  size of the ID list; if IDs are numeric this
                                 is the number of SeqID records, otherwise this
                                 is the length of the ID list (in bytes)

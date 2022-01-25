@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.5 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: lookup_wrap.h,v 1.7 2004/09/13 12:39:50 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,12 +60,13 @@ typedef struct LookupTableWrap {
  */
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
-        ListNode* lookup_segments, BlastScoreBlk* sbp, 
+        BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
         LookupTableWrap** lookup_wrap_ptr, RPSInfo *rps_info);
 
 /** Deallocate memory for the lookup table */
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);
 
+/** Default size of offset arrays filled in a single ScanSubject call. */
 #define OFFSET_ARRAY_SIZE 4096
 
 /** Determine the size of the offsets arrays to be filled by

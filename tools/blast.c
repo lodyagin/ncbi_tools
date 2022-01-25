@@ -1,6 +1,7 @@
-static char const rcsid[] = "$Id: blast.c,v 6.406 2004/05/21 13:53:37 dondosha Exp $";
 
-/* $Id: blast.c,v 6.406 2004/05/21 13:53:37 dondosha Exp $
+static char const rcsid[] = "$Id: blast.c,v 6.419 2004/10/18 13:01:54 madden Exp $";
+
+/* $Id: blast.c,v 6.419 2004/10/18 13:01:54 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -49,9 +50,89 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.406 $
+ * $Revision: 6.419 $
  *
  * $Log: blast.c,v $
+ * Revision 6.419  2004/10/18 13:01:54  madden
+ * Changes from Mike Gertz:
+ *         - In xsum_compare_hsps change the comparison tests so that nil
+ *           HSPs are less than any non-nil HSP.  Previously, this
+ *           function would return 0 if either HSP was nil, which would
+ *           result in sort routines terminating before the non-nil HSPs
+ *           in the list were fully sorted.
+ *
+ *         - In rev_compare_hsps_cfj, reversed the order of the
+ *           comparsion on query.frame to make the sort order consistent
+ *           with the sort used in algo/blast/core/link_hsps.c.
+ *
+ * Revision 6.418  2004/10/07 13:07:06  madden
+ * Cast int to FloatHi to prevent wrap-around
+ *
+ * Revision 6.417  2004/09/30 12:10:19  madden
+ * Add function BlastReapHitlistByScore, use on gapped tblastn and blastx HSPs that do not acheive a high enough score for continued processing
+ *
+ * Revision 6.416  2004/09/28 15:59:40  papadopo
+ * Items 1 and 2 of version 6.414 were mistakenly left out
+ *
+ * Revision 6.415  2004/09/28 15:52:16  papadopo
+ * From Michael Gertz:
+ * 1. Undo previous fix to ungapped PSSM wordfinder (not necessary)
+ * 2. Modify square-matrix ungapped wordfinder to avoid occaisional
+ * 	incorrect choice of start offset for right extensions
+ * 3. Call BlastLinkHsps if and only if search->pbp->do_sum_stats is
+ * 	true; previously used the program number to decide
+ * 4. For ungapped blastx and tblastn, if longest_intron is not set
+ *         (i.e. = 0) or (longest_intron - 2)/3 is nonpositive, call
+ *         link_hsps. Otherwise call new_link_hsps.
+ * 5. For gapped blastx, tblastn or psitblastn, if longest_intron is
+ *         not set (i.e. = 0), set it to 122.  Then call new_link_hsps if
+ *         (longest_intron - 2)/3 is positive.  Otherwise turn off sum statistics.
+ * 6. In BlastLinkHsps, enabled the use of new_link_hsps for psitblastn.
+ * 7. Caused all routines for calculating the significance of multiple
+ * 	distinct alignments (BlastSmallGapSumE, BlastLargeGapSumE and
+ * 	BlastUnevenGapSumE) to use
+ *
+ * 	sum_{i in linked_set} (\lambda_i s_i - \ln K_i)
+ *
+ * 	as the weighted sum score. This change affects e-values in
+ * 	blastx and tblastx.
+ * 8. When computing normalized sum scores, use the ungapped values of
+ * 	(lambda, K) for ungapped alignments.
+ * 9. In SumHSPEvalue, for blastx, the subject_length must be divided by 3.
+ * 10. Pass the effective database size into BlastSmallGapSumE,
+ * 	BlastLargeGapSumE and BlastUnevenGapSumE.  The routines use this
+ * 	value in a simplified formula to compute the e-value of singleton sets.
+ * 11. Sort HSPs in new_link_hsps by normalized score, rather than score;
+ * 	for blastx, this places HSPs in the correct order of significance.
+ * 12. In new_link_hsps, set xsum field of every HSP to the appropriate
+ * 	value for a singleton set before doing any linking.
+ * 13. In both link_hsps and new_link_hsps use normalized sum score,
+ * 	rather than raw sum score, everywhere when choosing linked sets
+ * 14. Delete code in new_link_hsps for finding splice junctions.
+ * 15. Delete some unused variables in link_hsps.
+ *
+ * Revision 6.412  2004/09/22 16:44:48  dondosha
+ * Assign frames in ungapped blastn before any attempt to link HSPs, not only before second linking
+ *
+ * Revision 6.411  2004/09/21 16:28:23  dondosha
+ * Make sure first change in previous revision is applied only to blastn
+ *
+ * Revision 6.410  2004/09/21 13:58:46  dondosha
+ * 1. Assign HSP contexts and subject frames before linking HSPs after
+ *    reevaluation with ambiguities for ungapped blastn - necessary to distinguish
+ *    HSPs from different strands;
+ * 2. Use ideal Karlin-Altschul parameters for RPS tblastn instead of those for a
+ *    fake protein.
+ *
+ * Revision 6.409  2004/09/15 18:33:23  papadopo
+ * From Michael Gertz: modify two-hit ungapped code to compute the correct end offset even if an extension to the right does not happen
+ *
+ * Revision 6.408  2004/08/27 16:11:18  dondosha
+ * Changes in new_link_hsps from Mike Gertz: adjust singleton sets e-values by gap decay divisor; use effective db length for sum e-value calculations
+ *
+ * Revision 6.407  2004/08/16 19:37:26  dondosha
+ * Enabled uneven gap HSP linking for blastx
+ *
  * Revision 6.406  2004/05/21 13:53:37  dondosha
  * Fix in BLASTMergeHitLists
  *
@@ -2446,6 +2527,8 @@ static BLAST_HSPPtr link_hsps PROTO((BlastSearchBlkPtr search, BLAST_HitListPtr 
 static Int4 BlastNtWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 static Int4 BlastNtWordFinder_mh PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
+static Int2 BlastReapHitlistByScore PROTO((BlastSearchBlkPtr search, Int4 count));
+
 /* DEBUGGING stuff */
 #ifdef BLAST_TIMER
 clock_t	last_clock = 0;
@@ -3003,11 +3086,11 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	current_hitlist->hspcnt_max = index1;	
 
 	/* Relink the HSP's, ReReap the Hits. */
-	if (search->pbp->do_sum_stats == TRUE && 
-            !search->pbp->mb_params) 
+	if (!search->pbp->mb_params && search->pbp->do_sum_stats == TRUE) {
            status = BlastLinkHsps(search);
-        else
+        } else {
            status = BlastGetNonSumStatsEvalue(search);
+        }
         status = BlastReapHitlistByEvalue(search);
 	
 	return status;
@@ -3184,14 +3267,13 @@ do_gapped_blast_search(VoidPtr ptr)
             for (index=0; index<id_list_length; index++)
             {
                 index1 = id_list[index];
-                if ((status = BLASTPerformSearchWithReadDb(search, index1)) != 0)
+                if ((status =
+                     BLASTPerformSearchWithReadDb(search, index1)) != 0)
                     break;
-                               
-                if (search->prog_number == blast_type_blastx 
-                    || search->prog_number == blast_type_tblastn 
-                    || search->prog_number == blast_type_psitblastn)
-                   status = BlastLinkHsps(search);
-                            
+
+                if (search->pbp->do_sum_stats) {
+                    status = BlastLinkHsps(search);
+                }
                 status = BlastReapHitlistByEvalue(search);
                 if (search->handle_results)
                     search->handle_results((VoidPtr) search);
@@ -3210,26 +3292,24 @@ do_gapped_blast_search(VoidPtr ptr)
                     break;
 
                 /* AM: Support for query concatenation. */
-		if( !search->mult_queries )
-		{
-                  if (search->prog_number == blast_type_blastx 
-                      || search->prog_number == blast_type_tblastn 
-                      || search->prog_number == blast_type_psitblastn)
-                     status = BlastLinkHsps(search);
-
-                  status = BlastReapHitlistByEvalue(search);
-                  if (search->handle_results)
-                      search->handle_results((VoidPtr) search);
-                  else
-                      BlastSaveCurrentHitlist(search);
-                }
+        if( !search->mult_queries )
+        {
+            if (search->pbp->do_sum_stats) {
+                status = BlastLinkHsps(search);
+            }
+            status = BlastReapHitlistByEvalue(search);
+            if (search->handle_results)
+                search->handle_results((VoidPtr) search);
+            else
+                BlastSaveCurrentHitlist(search);
+        }
 		else /* AM: Support for query concatenation. */
 		{
 		  InitHitLists( search );
 		  search->mult_queries->use_mq = TRUE;
 		  search->mult_queries->delete_current_hitlist = FALSE;
 
-                  for( i = 0; i < search->mult_queries->NumQueries; ++i )
+          for( i = 0; i < search->mult_queries->NumQueries; ++i )
 		  {
 		    search->mult_queries->current_query = i;
 
@@ -3240,11 +3320,11 @@ do_gapped_blast_search(VoidPtr ptr)
 
                     status = BlastReapHitlistByEvalue( search );
 
-                    if( search->handle_results )
-                      search->handle_results( (VoidPtr)search );
-                    else
-                      BlastSaveCurrentHitlist( search );
-                  }
+              if( search->handle_results )
+                  search->handle_results( (VoidPtr)search );
+              else
+                  BlastSaveCurrentHitlist( search );
+          }
 
 		  if( search->mult_queries->delete_current_hitlist )
 		  {
@@ -4055,6 +4135,8 @@ FloatHi LIBCALL BLASTCalculateSearchSpace(BLAST_OptionsBlkPtr options,
 
 #define DROPOFF_NUMBER_OF_BITS 10.0
 #define INDEX_THR_MIN_SIZE 20000
+#define DEFAULT_LONGEST_INTRON 122
+
 Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)(Int4 done, Int4 positives))
 
 {
@@ -4740,7 +4822,40 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	/* This is used right below. */
 	search->pbp->gapped_calculation = options->gapped_calculation;
 	search->pbp->do_not_reevaluate = options->do_not_reevaluate;
-	search->pbp->do_sum_stats = options->do_sum_stats;
+
+    /* Set up sum statistics */
+    search->pbp->do_sum_stats = options->do_sum_stats;
+    if(search->prog_number == blast_type_blastx  ||
+       search->prog_number == blast_type_tblastn ||
+       search->prog_number == blast_type_psitblastn)
+    {
+        /* The program may use new_link_hsps to evaluate sum
+           statistics. */
+        Int4 max_protein_gap; /* the largest gap permitted in the
+                               * translated sequence */
+
+        max_protein_gap = (options->longest_intron - 2)/3;
+        if(search->pbp->gapped_calculation) {
+            if(options->longest_intron == 0) {
+                /* a zero value of longest_intron
+                 * invokes the default behavior, which for gapped
+                 * calculation is to set longest_intron to a
+                 * predefined value. */
+                search->pbp->longest_intron = (DEFAULT_LONGEST_INTRON - 2) / 3;
+            } else if(max_protein_gap <= 0) {
+                /* A nonpositive value of max_protein_gap turns linking off */
+                search->pbp->do_sum_stats = FALSE;
+                search->pbp->longest_intron = 0;
+            } else { /* the value of max_protein_gap is positive */
+                search->pbp->longest_intron = max_protein_gap;
+            }
+        } else { /* This is an ungapped calculation. */
+            /* For ungapped calculations, we preserve the old behavior
+             * of the longest_intron parameter to maintain
+             * backward-compatibility with older versions of BLAST. */
+            search->pbp->longest_intron = MAX(max_protein_gap, 0);
+        }
+    }
 	search->pbp->first_db_seq = options->first_db_seq;
 	search->pbp->final_db_seq = options->final_db_seq;
 
@@ -4879,9 +4994,15 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	}
 
 	/* Adjust the Karlin parameters. */
-	if (StringCmp(prog_name, "blastx") == 0  || StringCmp(prog_name, "tblastx") == 0)
+	if (StringCmp(prog_name, "blastx") == 0  || 
+            StringCmp(prog_name, "tblastx") == 0 ||
+            (search->pbp->is_rps_blast && !StringCmp(prog_name, "tblastn")))
 	{
-                BlastKarlinBlkStandardCalc(search->sbp, search->first_context, search->last_context);
+            /* Make sure ideal values are used for RPS tblastn, because the previously
+               obtained values are for the fake protein. */
+            if (search->pbp->is_rps_blast && !StringCmp(prog_name, "tblastn"))
+               search->sbp->kbp[0]->Lambda = search->sbp->kbp_ideal->Lambda;
+            BlastKarlinBlkStandardCalc(search->sbp, search->first_context, search->last_context);
 	}
 
 	/* If retval was set non-zero above (by the routines calculating Karlin-Altschul params),
@@ -5261,9 +5382,6 @@ available) this needs to be set higher up. */
         if (options->is_megablast_search) 
            search->pbp->mb_params = MegaBlastParameterBlkNew(options);
 	search->pbp->explode_seqids = options->explode_seqids;
-        
-        if (search->prog_number == blast_type_tblastn)
-           search->pbp->longest_intron = options->longest_intron / 3;
 
 	if (search->pbp->multiple_hits_only)
 	{ 	
@@ -6628,6 +6746,8 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
                search->prog_number != blast_type_blastn) {
               status = BlastPreliminaryGappedScore(search, search->subject->sequence, search->subject->length, inner_frame);
               status = BlastGetGappedScore(search, search->subject->length, search->subject->sequence, inner_frame);
+              if (search->pbp->do_sum_stats)
+                  status = BlastReapHitlistByScore(search, search->pbp->cutoff_s1);
            }
 #if 1
            else if (!search->pbp->do_sum_stats && !search->pbp->mb_params) {
@@ -6819,7 +6939,6 @@ BlastWordFinder(BlastSearchBlkPtr search)
 	BLAST_WordFinderPtr	wfp;
 	LookupTablePtr		lookup;
 	BLAST_ParameterBlkPtr	pbp;
-
 
 	pbp = search->pbp;
 	if (search->prelim == TRUE)
@@ -8010,7 +8129,7 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
 		else if (sum <= 0)
 		{
 			sum = 0;
-			q_right = q;
+			q_right = q-1;
 		}
 		q--; s--;
 	}
@@ -8090,6 +8209,8 @@ q_off - q_left is greater than the window. */
 		q = q_right = q_best_right;
 		s = search->subject->sequence + (q - query) + diag;
 		sum = 0;
+                q_right++;  /* pre-increment in case while() loop doesn't run */
+
 /**************************************************************
 
 The extension to the right is performed in the same way as the extension
@@ -8236,6 +8357,7 @@ q_off - q_left is greater than the window. */
 		q--;
 		s = search->subject->sequence + (q - query) + diag;
 		sum = 0;
+
 /* "score" is actually the "maxscore", if sum drops by "score", then the
 total new score is zero and the extension can stop. */
 		if ((x = -score) < X)
@@ -10091,21 +10213,21 @@ blast_set_parameters(BlastSearchBlkPtr search,
     if (pbp->gapped_calculation)
     {
       if( !search->mult_queries )
-        BlastCutoffs(&s2, &e2, kbp_gap, MIN(avglen,meff) * avglen,
+        BlastCutoffs(&s2, &e2, kbp_gap, (FloatHi) MIN(avglen,meff) * (FloatHi) avglen,
                      TRUE, search->pbp->gap_decay_rate );
       else
         BlastCutoffs( &s2, &e2, kbp_gap, 
-                      MIN( avglen,search->mult_queries->MinLen ) * avglen,
+                      (FloatHi) MIN( avglen,search->mult_queries->MinLen ) * (FloatHi) avglen,
                       TRUE, search->pbp->gap_decay_rate ); 
     }
     else
     { /* AM: Changed to support query concatenation. */
       if( !search->mult_queries )
-        BlastCutoffs(&s2, &e2, kbp, MIN(avglen,meff) * avglen,
+        BlastCutoffs(&s2, &e2, kbp, (FloatHi) MIN(avglen,meff) * (FloatHi) avglen,
                      TRUE, search->pbp->gap_decay_rate );
       else
         BlastCutoffs( &s2, &e2, kbp, 
-                      MIN(avglen,2*(search->mult_queries->MinLen)) * avglen,
+                      (FloatHi) MIN(avglen,2*(search->mult_queries->MinLen)) * (FloatHi) avglen,
                       TRUE, search->pbp->gap_decay_rate ); 
     }
 		/* Adjust s2 to be in line with s, as necessary */
@@ -10227,11 +10349,29 @@ BlastLinkHsps (BlastSearchBlkPtr search)
 
 	if (hitlist && hitlist->hspcnt > 0)
 	{
+           /* For ungapped blastn, assign frames to all HSPs, 
+	      since this is necessary for linking, and frames have not yet been
+              assigned. Do it only if both strands are searched. Note that
+	      we don't assign context numbers here because the offsets have
+	      not yet been adjusted to be relative to individual contexts. */
+	   if (search->prog_number == blast_type_blastn &&
+	       search->last_context > search->first_context) {
+            
+	      for (index = 0; index < hitlist->hspcnt; ++index) {
+		 if (hitlist->hsp_array[index]->query.offset >= 
+		     search->query_context_offsets[search->last_context]) {
+		    hitlist->hsp_array[index]->query.frame = -1;
+		 }
+	      }
+	   }
+
+
            /* Link up the HSP's for this hitlist. */
-         if ((search->prog_number != blast_type_tblastn &&
-                 search->prog_number != blast_type_psitblastn) || 
-             search->pbp->longest_intron <= 0)
-	  {
+           if (search->pbp->longest_intron <= 0 || 
+               (search->prog_number != blast_type_tblastn && 
+                search->prog_number != blast_type_psitblastn &&
+                search->prog_number != blast_type_blastx))
+           {
               hsp = link_hsps(search, hitlist, hitlist->hsp_array);
               /* The HSP's may be in a different order than they were before, 
                  but hsp contains the first one. */
@@ -10345,6 +10485,18 @@ rev_compare_hsps(VoidPtr v1, VoidPtr v2)
 		return  1;
 	if (h1->query.offset > h2->query.offset) 
 		return -1;
+	if (h1->query.end < h2->query.end) 
+		return  1;
+	if (h1->query.end > h2->query.end) 
+		return -1;
+	if (h1->subject.offset < h2->subject.offset) 
+		return  1;
+	if (h1->subject.offset > h2->subject.offset) 
+		return -1;
+	if (h1->subject.end < h2->subject.end) 
+		return  1;
+	if (h1->subject.end > h2->subject.end) 
+		return -1;
 	return 0;
 }
 
@@ -10364,9 +10516,9 @@ rev_compare_hsps_cfj(VoidPtr v1, VoidPtr v2)
 	if (SIGN(h1->query.frame) != SIGN(h2->query.frame))
 	{
 		if (h1->query.frame > h2->query.frame)
-			return 1;
-		else
 			return -1;
+		else
+			return 1;
 	}
 
 	if (SIGN(h1->subject.frame) != SIGN(h2->subject.frame))
@@ -10380,6 +10532,18 @@ rev_compare_hsps_cfj(VoidPtr v1, VoidPtr v2)
 	if (h1->query.offset < h2->query.offset) 
 		return  1;
 	if (h1->query.offset > h2->query.offset) 
+		return -1;
+	if (h1->query.end < h2->query.end) 
+		return  1;
+	if (h1->query.end > h2->query.end) 
+		return -1;
+	if (h1->subject.offset < h2->subject.offset) 
+		return  1;
+	if (h1->subject.offset > h2->subject.offset) 
+		return -1;
+	if (h1->subject.end < h2->subject.end) 
+		return  1;
+	if (h1->subject.end > h2->subject.end) 
 		return -1;
 	return 0;
 }
@@ -10408,65 +10572,64 @@ static Int4 hsp_binary_search(BLAST_HSPPtr PNTR hsp_array, Int4 size,
    return end;
 }
 
+#define LINK_HSP_OVERLAP 9
 
-#define WINDOW_SIZE 20
 static FloatHi SumHSPEvalue(BlastSearchBlkPtr search, BLAST_HSPPtr head_hsp, 
-                            BLAST_HSPPtr hsp, BLAST_ScorePtr sumscore)
+                            BLAST_HSPPtr hsp, Nlm_FloatHi *xsum)
 {
-   FloatHi gap_prob, gap_decay_rate, sum_evalue, score_prime;
+   FloatHi gap_decay_rate, sum_evalue;
    Int4 gap_size, num, subject_length;
 
-   gap_prob = search->pbp->gap_prob;
    gap_size = search->pbp->gap_size;
    gap_decay_rate = search->pbp->gap_decay_rate;
    num = head_hsp->num + hsp->num;
    subject_length = 
       MAX((search->subject->length - search->length_adjustment), 1);
-   if (!StringCmp(search->prog_name, "tblastn")) 
-      subject_length /= 3;
-   subject_length = MAX(subject_length, 1);
-	
 
-   *sumscore = MAX(hsp->score, hsp->sumscore) + 
-      MAX(head_hsp->score, head_hsp->sumscore);
-   score_prime = *sumscore * search->sbp->kbp_gap[search->first_context]->Lambda;
+   if (search->prog_number == blast_type_tblastn ||
+       search->prog_number == blast_type_blastx ||
+       search->prog_number == blast_type_psitblastn) {
+     subject_length /= 3;
+   }
+   subject_length = MAX(subject_length, 1);
+
+   *xsum = head_hsp->xsum + hsp->xsum;
 
    sum_evalue =
-      BlastUnevenGapSumE(search->sbp->kbp_gap[search->first_context],
-                         2*WINDOW_SIZE,
-                         search->pbp->longest_intron + WINDOW_SIZE,
-                         num, score_prime,
+      BlastUnevenGapSumE(LINK_HSP_OVERLAP + search->pbp->gap_size + 1,
+                         search->pbp->longest_intron + LINK_HSP_OVERLAP + 1,
+                         num, *xsum,
                          search->context[search->first_context].
                          query->effective_length,
                          subject_length,
+                         search->dblen_eff,
                          BlastGapDecayDivisor(gap_decay_rate, num));
 
-   sum_evalue *= (FloatHi) search->dblen / subject_length;
    return sum_evalue;
 }
 
+
 static int LIBCALLBACK
-sumscore_compare_hsps(VoidPtr v1, VoidPtr v2)
+xsum_compare_hsps(VoidPtr v1, VoidPtr v2)
 
 {
 	BLAST_HSPPtr h1, h2;
 	BLAST_HSPPtr PNTR hp1, PNTR hp2;
-        BLAST_Score score1, score2;
 
 	hp1 = (BLAST_HSPPtr PNTR) v1;
 	hp2 = (BLAST_HSPPtr PNTR) v2;
 	h1 = *hp1;
 	h2 = *hp2;
 
-	if (h1 == NULL || h2 == NULL)
-		return 0;
+    if (h1 == NULL) {
+        return (h2 == NULL) ? 0 : 1;
+    } else if (h2 == NULL) {
+      return -1;
+    }
 
-        score1 = MAX(h1->sumscore, h1->score);
-        score2 = MAX(h2->sumscore, h2->score);
-
-	if (score1 < score2) 
+	if (h1->xsum < h2->xsum) 
 		return 1;
-	if (score1 > score2)
+	if (h1->xsum > h2->xsum)
 		return -1;
 
 	return 0;
@@ -10535,19 +10698,49 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
    BLAST_HSPPtr hsp, head_hsp, best_hsp, var_hsp;
    Int4 hspcnt, index, index1, i;
    FloatHi best_evalue, evalue;
-   BLAST_Score sumscore, best_sumscore;
+   Nlm_FloatHi xsum, best_xsum;
    Boolean reverse_link;
    Uint1Ptr subject_seq = NULL;
-   Int4 length, buf_len=0; 
+   Int4 gap_size = search->pbp->gap_size;
+   BLAST_KarlinBlkPtr * kbp_array;
+   const Int4 overlap_size = LINK_HSP_OVERLAP;
+   Nlm_FloatHi gap_decay_divisor =
+      BlastGapDecayDivisor(search->pbp->gap_decay_rate, 1);
+
+   if( search->pbp->gapped_calculation ) {
+       kbp_array = search->sbp->kbp_gap;
+   } else {
+       kbp_array = search->sbp->kbp;
+   }
 
    hspcnt = hitlist->hspcnt;
 
+   /* Find e-values for single HSPs */
+   BlastGetNonSumStatsEvalue(search);
+
    for (index=0; index<hspcnt; index++) {
-      hsp_array[index]->num = 1;
-      hsp_array[index]->linked_set = FALSE;
-      hsp_array[index]->ordering_method = 3;
+       hsp = hsp_array[index];
+
+       hsp->num              = 1;
+       hsp->linked_set       = FALSE;
+       hsp->ordering_method  = 3;
+       hsp->evalue          /= gap_decay_divisor;
+
+       hsp->xsum = kbp_array[hsp->context]->Lambda * hsp->score -
+           kbp_array[hsp->context]->logK;
    }
 
+   if (search->prog_number == blast_type_blastx) {
+      BLAST_Seg seg;
+      /* Switch query and subject in hsp_array.They will be switched back in the
+       * end.
+       */
+      for (index = 0; index < hspcnt; ++index) {
+         seg = hsp_array[index]->query;
+         hsp_array[index]->query = hsp_array[index]->subject;
+         hsp_array[index]->subject = seg;
+      }
+   }
    score_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
    offset_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
    end_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
@@ -10558,11 +10751,14 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
    HeapSort(offset_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), fwd_compare_hsps);
    HeapSort(end_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), end_compare_hsps);
 
-   HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), sumscore_compare_hsps);
+   HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), xsum_compare_hsps);
       
+   /* head_hsp is set to NULL whenever there is no current linked set that is
+      being worked on. */
    head_hsp = NULL;
    for (index = 0; index < hspcnt && score_hsp_array[index]; ) {
       if (!head_hsp) {
+         /* Find the highest scoring HSP that is not yet part of a linked set. */
          while (index<hspcnt && score_hsp_array[index] && 
                 score_hsp_array[index]->linked_set)
             index++;
@@ -10581,36 +10777,44 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
          var_hsp = head_hsp;
 
       index1 = hsp_binary_search(offset_hsp_array, hspcnt,
-                                 var_hsp->query.end - WINDOW_SIZE, TRUE);
-      while (index1 < hspcnt && offset_hsp_array[index1]->query.offset < 
-             var_hsp->query.end + WINDOW_SIZE) {
+                                 var_hsp->query.end - overlap_size, TRUE);
+      while (index1 < hspcnt && offset_hsp_array[index1]->query.offset <= 
+             var_hsp->query.end + gap_size) {
          hsp = offset_hsp_array[index1++];
          /* If this is already part of a linked set, disregard it */
          if (hsp == var_hsp || hsp == head_hsp || 
              (hsp->linked_set && !hsp->start_of_chain))
             continue;
-         /* Check if the subject coordinates are consistent with query */
-         if (hsp->subject.offset < var_hsp->subject.end - WINDOW_SIZE || 
+         /* Check if the subject coordinates are consistent with query. Also
+            make sure the HSPs to be linked are on the same strand. */
+         if (SIGN(hsp->subject.frame) != SIGN(var_hsp->subject.frame) ||
+             hsp->subject.offset < var_hsp->subject.end - overlap_size || 
              hsp->subject.offset > var_hsp->subject.end + search->pbp->longest_intron)
             continue;
-         /* Check if the e-value for the combined two HSPs is better than for
-            one of them */
-         if ((evalue = SumHSPEvalue(search, head_hsp, hsp, &sumscore)) < 
+         /* Check if the e-value for the new combined HSP set is better than for
+            the previously obtained set. */
+         if ((evalue = SumHSPEvalue(search, head_hsp, hsp, &xsum)) < 
              MIN(best_evalue, hsp->evalue)) {
             best_hsp = hsp;
             best_evalue = evalue;
-            best_sumscore = sumscore;
+            best_xsum = xsum;
          }
       }
+
+      /* Look for farthest HSP to the left that ends within a window from 
+       * where this HSP set starts.
+       */
       index1 = hsp_binary_search(end_hsp_array, hspcnt,
-                                 head_hsp->query.offset - WINDOW_SIZE, FALSE);
-      while (index1 < hspcnt && end_hsp_array[index1]->query.end < 
-             head_hsp->query.offset + WINDOW_SIZE) {
+                                 head_hsp->query.offset - gap_size, FALSE);
+      while (index1 < hspcnt && end_hsp_array[index1]->query.end <= 
+             head_hsp->query.offset + overlap_size) {
          hsp = end_hsp_array[index1++];
 
-         /* Check if the subject coordinates are consistent with query */
+         /* Check if the subject coordinates are consistent with query. Also
+            make sure the HSPs are on the same strand. */
          if (hsp == head_hsp || 
-             hsp->subject.end > head_hsp->subject.offset + WINDOW_SIZE || 
+             SIGN(hsp->subject.frame) != SIGN(head_hsp->subject.frame) ||
+             hsp->subject.end > head_hsp->subject.offset + overlap_size || 
              hsp->subject.end < head_hsp->subject.offset - search->pbp->longest_intron)
             continue;
          if (hsp->linked_set) {
@@ -10618,15 +10822,16 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
                  var_hsp = var_hsp->prev, i++);
             if (i<var_hsp->num || var_hsp == head_hsp)
                continue;
-         } else
+         } else {
             var_hsp = hsp;
-         /* Check if the e-value for the combined two HSPs is better than for
-            one of them */
-         if ((evalue = SumHSPEvalue(search, var_hsp, head_hsp, &sumscore)) < 
+         }
+         /* Check if the e-value for the new combined HSP set is better than for
+            the previously obtained set. */
+         if ((evalue = SumHSPEvalue(search, var_hsp, head_hsp, &xsum)) < 
              MIN(var_hsp->evalue, best_evalue)) {
             best_hsp = hsp;
             best_evalue = evalue;
-            best_sumscore = sumscore;
+            best_xsum = xsum;
             reverse_link = TRUE;
          }
       }
@@ -10635,7 +10840,7 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
       if (best_hsp != NULL) {
          if (!reverse_link) {
             head_hsp->start_of_chain = TRUE;
-            head_hsp->sumscore = best_sumscore;
+            head_hsp->xsum = best_xsum;
             head_hsp->evalue = best_evalue;
             best_hsp->start_of_chain = FALSE;
             if (head_hsp->linked_set) 
@@ -10656,7 +10861,7 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
             } else
                   var_hsp = best_hsp;
             var_hsp->start_of_chain = TRUE;
-            var_hsp->sumscore = best_sumscore;
+            var_hsp->xsum = best_xsum;
             var_hsp->evalue = best_evalue;
             var_hsp->num += head_hsp->num;
             head_hsp->start_of_chain = FALSE;
@@ -10670,34 +10875,20 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
          index++;
       }
    }
-   
-   HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), sumscore_compare_hsps);
-   /* Get the nucleotide subject sequence in Seq_code_ncbi4na */
-   if (search->rdfp)
-      length = readdb_get_sequence_ex(search->rdfp, search->subject_id,
-                                      &subject_seq, &buf_len, FALSE);
-   else /* Comes from two sequences BLAST */
-      subject_seq = search->subject->sequence;
+
+   HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr),
+            xsum_compare_hsps);
 
    hsp = head_hsp = score_hsp_array[0];
    for (index=0; index<hspcnt; hsp = hsp->next) {
       if (hsp->linked_set) {
          index1 = hsp->num;
          for (i=1; i < index1; i++, hsp = hsp->next) {
-            hsp->next->evalue = hsp->evalue; 
+            hsp->next->evalue = hsp->evalue;
             hsp->next->num = hsp->num;
-            hsp->next->sumscore = hsp->sumscore;
-            if (FindSpliceJunction(subject_seq, hsp, hsp->next)) {
-               /* Kludge: ordering_method here would indicate existence of
-                  splice junctions(s) */
-               hsp->ordering_method++;
-               hsp->next->ordering_method++;
-            } else {
-               hsp->ordering_method--;
-               hsp->next->ordering_method--;
-            }
+            hsp->next->xsum = hsp->xsum;
          }
-      } 
+      }
       while (++index < hspcnt)
          if (!score_hsp_array[index]->linked_set ||
              score_hsp_array[index]->start_of_chain)
@@ -10707,6 +10898,16 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
          break;
       }
       hsp->next = score_hsp_array[index];
+   }
+
+   if (search->prog_number == blast_type_blastx) {
+      BLAST_Seg seg;
+      /* Switch back query and subject segments. */ 
+      for (hsp = head_hsp; hsp; hsp = hsp->next) {
+         seg = hsp->query;
+         hsp->query = hsp->subject;
+         hsp->subject = seg;
+      }
    }
 
    MemFree(subject_seq);
@@ -10770,7 +10971,9 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	Nlm_FloatHi gap_decay_rate, gap_prob, prob[2];
 	Int4 index, index1, ordering_method, num_links, frame_index, number_of_query_frames;
 	Int4 hp_frame_number[3*2];
-	Int4 gap_size, subject_length, number_of_hsps, total_number_of_hsps;
+	Int4 start_range_size; /* Number of positions at which next HSP can
+                                  start around the end point of the previous HSP. */
+        Int4 subject_length, number_of_hsps, total_number_of_hsps;
 	VoidPtr link;
 	Int4 H2_index,H_index;
 	Int4 i;
@@ -10779,6 +10982,12 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
  	Int4 first_pass, use_current_max; 
 	LinkHelpStruct *lh_helper=0;
 	Uint4 query_num; /* AM: to support query concatenation. */
+        const Int4 overlap_size = LINK_HSP_OVERLAP; /* Maximal allowed overlap
+                                                       between to successive
+                                                       HSPs in a linked set. */
+        Int4 trim_size = (overlap_size+1)/2; /* Distance by which HSPs are
+                                                trimmed to remove the potential 
+                                                overlap. */
 
 	if (search == NULL || hitlist == NULL)
 		return NULL;
@@ -10821,7 +11030,7 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	}
 	subject_length = MAX(subject_length, 1);
 	number_of_hsps = total_number_of_hsps;
-	gap_size = search->pbp->gap_size;
+	start_range_size = search->pbp->gap_size + overlap_size + 1;
 	gap_prob = search->pbp->gap_prob;
 	gap_decay_rate = search->pbp->gap_decay_rate;
 /* Sort by (reverse) position. */
@@ -10881,12 +11090,16 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	    for (index=0;index<number_of_hsps;index++) 
 	    {
 		H=hsp_array[index];
-		H->query.offset_trim = H->query.offset + MIN(((H->query.length)/4), 5);
-		H->query.end_trim = H->query.end - MIN(((H->query.length)/4), 5);
-		H->subject.offset_trim = H->subject.offset + MIN(((H->subject.length)/4), 5);
-		H->subject.end_trim = H->subject.end - MIN(((H->subject.length)/4), 5);
+		H->query.offset_trim = H->query.offset +
+                   MIN(((H->query.length)/4), trim_size);
+		H->query.end_trim = H->query.end - 
+                   MIN(((H->query.length)/4), trim_size);
+		H->subject.offset_trim = H->subject.offset + 
+                   MIN(((H->subject.length)/4), trim_size);
+		H->subject.end_trim = H->subject.end - 
+                   MIN(((H->subject.length)/4), trim_size);
 	     }	    
-	    max_q_diff = 5;
+	    max_q_diff = trim_size;
 	}
 	else
 	{
@@ -11046,8 +11259,8 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 			  Int4 H_sign_sframe = SIGN(H->subject.frame);
 			  Int4 H_query_etrim = H->query.end_trim;
 			  Int4 H_sub_etrim = H->subject.end_trim;
-			  Int4 H_q_et_gap = H_query_etrim+gap_size;
-			  Int4 H_s_et_gap = H_sub_etrim+gap_size;
+			  Int4 H_q_et_gap = H_query_etrim+start_range_size;
+			  Int4 H_s_et_gap = H_sub_etrim+start_range_size;
 
 			  /* We only walk down hits with the same frame sign */
 			  /* for (H2=H->prev; H2!=NULL; H2=H2->prev,H2_index--) */
@@ -11093,9 +11306,11 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 			    } /* end for H2... */
 			}
 			{ 
-			  BLAST_Score score=H->score;
-			  Nlm_FloatHi new_xsum = H_hsp_xsum + (score*(kbp[H->context]->Lambda));
-			  Int4 new_sum = H_hsp_sum + (score - cutoff[index]);
+              BLAST_Score score=H->score;
+              Nlm_FloatHi new_xsum =
+                  H_hsp_xsum +
+                  (score*(kbp[H->context]->Lambda)) - kbp[H->context]->logK;
+              Int4 new_sum = H_hsp_sum + (score - cutoff[index]);
 
 			  H->hsp_link.sum[index] = new_sum;
 			  H->hsp_link.num[index] = H_hsp_num+1;
@@ -11140,12 +11355,8 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 			    H->hsp_link.changed=0;
 			  } else
 			if (H->score > cutoff[index]) {
-			  Int4 H_sign_sframe = SIGN(H->subject.frame);
 			  Int4 H_query_etrim = H->query.end_trim;
 			  Int4 H_sub_etrim = H->subject.end_trim;
-			  Int4 H_q_et_gap = H_query_etrim+gap_size;
-			  Int4 H_s_et_gap = H_sub_etrim+gap_size;
-
 
 			  /* Here we look at what was the best choice last time (if it's still around)
 			   * and set this to the initial choice.  By setting the best score to 
@@ -11214,8 +11425,10 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 			} /* end if(H->score>cuttof[]) */
 			{ 
 			  BLAST_Score score=H->score;
-			  Nlm_FloatHi new_xsum = H_hsp_xsum + (score*(kbp[H->context]->Lambda));
-			  Int4 new_sum = H_hsp_sum + (score - cutoff[index]);
+              Nlm_FloatHi new_xsum =
+                  H_hsp_xsum +
+                  (score*(kbp[H->context]->Lambda)) - kbp[H->context]->logK;
+              Int4 new_sum = H_hsp_sum + (score - cutoff[index]);
 
 			  H->hsp_link.sum[index] = new_sum;
 			  H->hsp_link.num[index] = H_hsp_num+1;
@@ -11265,25 +11478,26 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
             } else {
               if( !search->mult_queries )
                 prob[0] =
-                  BlastSmallGapSumE(kbp[search->first_context],
-                                    gap_size,
+                  BlastSmallGapSumE(start_range_size,
                                     best[0]->hsp_link.num[0],
                                     best[0]->hsp_link.xsum[0],
                                     search->context[search->first_context].
                                     query->effective_length,
                                     subject_length,
+                                    search->dblen_eff,
                                     BlastGapDecayDivisor(gap_decay_rate,
                                                          best[0]->
                                                          hsp_link.num[0]));
               else
                 prob[0] =
-                  BlastSmallGapSumE( kbp[search->first_context],
-                                     gap_size,
+                  BlastSmallGapSumE( start_range_size,
                                      best[0]->hsp_link.num[0],
                                      best[0]->hsp_link.xsum[0],
                                      search->mult_queries->
                                      EffLengths[query_num],
                                      subject_length,
+                                     search->mult_queries->
+                                     DbLenEff[query_num],
                                      BlastGapDecayDivisor(gap_decay_rate,
                                                           best[0]->
                                                           hsp_link.num[0]));
@@ -11301,23 +11515,24 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
             } else{
               if( !search->mult_queries )
                 prob[1] =
-                  BlastLargeGapSumE(kbp[search->first_context],
-                                    best[1]->hsp_link.num[1],
+                  BlastLargeGapSumE(best[1]->hsp_link.num[1],
                                     best[1]->hsp_link.xsum[1],
                                     search->context[search->first_context].
                                     query->effective_length,
                                     subject_length,
+                                    search->dblen_eff,
                                     BlastGapDecayDivisor(gap_decay_rate,
                                                          best[1]->
                                                          hsp_link.num[1]));
               else
                 prob[1] =
-                  BlastLargeGapSumE( kbp[search->first_context],
-                                     best[1]->hsp_link.num[1],
+                  BlastLargeGapSumE( best[1]->hsp_link.num[1],
                                      best[1]->hsp_link.xsum[1],
                                      search->mult_queries->
                                      EffLengths[query_num],
                                      subject_length,
+                                     search->mult_queries->
+                                     DbLenEff[query_num],
                                      BlastGapDecayDivisor(gap_decay_rate,
                                                           best[1]->
                                                           hsp_link.num[1]));
@@ -11338,22 +11553,23 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		    /* AM: Support for query concatenation. */
             if( !search->mult_queries )
               prob[1] =
-                BlastLargeGapSumE(kbp[search->first_context],
-                                  best[1]->hsp_link.num[1],
+                BlastLargeGapSumE(best[1]->hsp_link.num[1],
                                   best[1]->hsp_link.xsum[1],
                                   search->context[search->first_context].
                                   query->effective_length,
                                   subject_length,
+                                  search->dblen_eff,
                                   BlastGapDecayDivisor(gap_decay_rate,
                                                        best[1]->
                                                        hsp_link.num[1]));
             else
               prob[1] =
-                BlastLargeGapSumE( kbp[search->first_context],
-                                   best[1]->hsp_link.num[1],
+                BlastLargeGapSumE( best[1]->hsp_link.num[1],
                                    best[1]->hsp_link.xsum[1],
                                    search->mult_queries->EffLengths[query_num],
                                    subject_length,
+                                   search->mult_queries->
+                                   DbLenEff[query_num],
                                    BlastGapDecayDivisor(gap_decay_rate,
                                                         best[1]->
                                                         hsp_link.num[1]));
@@ -11369,22 +11585,23 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		    /* AM: Support for query concatenation. */
             if( !search->mult_queries )
               prob[1] =
-                BlastLargeGapSumE( kbp[search->first_context],
-                                   best[1]->hsp_link.num[1],
+                BlastLargeGapSumE( best[1]->hsp_link.num[1],
                                    best[1]->hsp_link.xsum[1],
                                    search->context[search->first_context].
                                    query->effective_length,
                                    subject_length,
+                                   search->dblen_eff,
                                    BlastGapDecayDivisor(gap_decay_rate,
                                                         best[1]->
                                                         hsp_link.num[1]));
             else
               prob[1] =
-                BlastLargeGapSumE( kbp[search->first_context],
-                                   best[1]->hsp_link.num[1],
+                BlastLargeGapSumE( best[1]->hsp_link.num[1],
                                    best[1]->hsp_link.xsum[1],
                                    search->mult_queries->EffLengths[query_num],
                                    subject_length,
+                                   search->mult_queries->
+                                   DbLenEff[query_num],
                                    BlastGapDecayDivisor(gap_decay_rate,
                                                         best[1]->
                                                         hsp_link.num[1]));
@@ -11392,21 +11609,8 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
             ordering_method = 1;
 		}
 
-		best[ordering_method]->start_of_chain = TRUE;
-		
-		/* AM: Support for query concatenation. */
-		if( !search->mult_queries )
-		  prob[ordering_method] *= 
-			((Nlm_FloatHi)search->searchsp_eff/((Nlm_FloatHi)subject_length*search->context[search->first_context].query->effective_length));
-                else
-		{
-		  prob[ordering_method] 
-		    *= ((Nlm_FloatHi)search->mult_queries->SearchSpEff[query_num]
-		       /((Nlm_FloatHi)subject_length
-		       *search->mult_queries->EffLengths[query_num]));
-		}
-
-		best[ordering_method]->evalue = prob[ordering_method];
+        best[ordering_method]->start_of_chain = TRUE;
+        best[ordering_method]->evalue = prob[ordering_method];
 
 /* remove the links that have been ordered already. */
 		if (best[ordering_method]->hsp_link.link[ordering_method])
@@ -11492,7 +11696,7 @@ chain down, connecting them with "next" and "prev". */
 			while (link)
 			{
 				H->num = num_links;
-				H->sumscore = H->hsp_link.sum[ordering_method];
+				H->xsum = H->hsp_link.xsum[ordering_method];
 				H->next = (BLAST_HSPPtr) link;
 				H->prev = last_hsp;
 				last_hsp = H;
@@ -11504,7 +11708,7 @@ chain down, connecting them with "next" and "prev". */
 			}
 			/* Set these for last link in chain. */
 			H->num = num_links;
-			H->sumscore = H->hsp_link.sum[ordering_method];
+			H->xsum = H->hsp_link.xsum[ordering_method];
 /* Grab the next HSP that is not part of a chain or the start of a chain */
 		     	index1=index;
 		     	H2 = index1<(total_number_of_hsps-1) ? hsp_array[index1+1] : NULL;
@@ -11522,6 +11726,79 @@ chain down, connecting them with "next" and "prev". */
 	
 	return first_hsp;
 }
+/*
+	Checks Hitlist's for an HSP (or set of HSP's) with the 
+	minimum e-value.  Discards those that do not meet the
+	standard.
+*/
+
+static Int2
+BlastReapHitlistByScore (BlastSearchBlkPtr search, Int4 cutoff_score)
+
+{
+	BLAST_HitListPtr hitlist;
+
+	if (search == NULL)
+		return 1;
+
+        /* AM: Support for query concatenation. */
+	if( !search->mult_queries 
+	    || search->prog_number != blast_type_tblastn 
+	    || !search->mult_queries->use_mq )
+	  hitlist = search->current_hitlist;
+        else
+	  hitlist = search->mult_queries->HitListArray[
+	    search->mult_queries->current_query];
+
+	if (hitlist && hitlist->hspcnt > 0)
+	{
+	        BLAST_HSPPtr hsp;
+	        BLAST_HSPPtr PNTR hsp_array;
+	        Boolean hsp_deleted=FALSE;
+	        Int4 hsp_cnt=0;
+	        Int4 index;
+
+		hitlist->hspcnt_max = hitlist->hspcnt;
+		hsp_array = hitlist->hsp_array;
+		for (index=0; index<hitlist->hspcnt; index++)
+		{
+			hsp = hsp_array[index];
+			if (hsp->score < cutoff_score)
+			{
+                            hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
+                            hsp_deleted = TRUE;
+			}
+			else
+			{
+				hsp_cnt++;
+			}
+		}
+
+                if (hsp_deleted == TRUE)
+		{
+			HspArrayPurge(hitlist->hsp_array, hitlist->hspcnt, FALSE);
+		}
+
+		hitlist->hspcnt = hsp_cnt;
+		hitlist->hspcnt_max = hitlist->hspcnt;
+		if (hitlist->hspcnt == 0)
+		{
+			BlastHitListPurge(hitlist);
+		}
+	}
+
+	/* AM: Support for query concatenation. */
+	if( !search->mult_queries 
+	    || search->prog_number != blast_type_tblastn 
+	    || !search->mult_queries->use_mq )
+	  search->current_hitlist = hitlist;
+        else
+	  search->mult_queries->HitListArray[
+	    search->mult_queries->current_query] = hitlist;
+
+	return 0;
+}
+
 /*
 	Checks Hitlist's for an HSP (or set of HSP's) with the 
 	minimum e-value.  Discards those that do not meet the

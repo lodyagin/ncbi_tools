@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -959,9 +959,6 @@ static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
 {
     WarnIfAlignmentPtr wiap;
 	SeqAlignPtr        salp;
-	SeqIdPtr           sip_list, sip;
-	BioseqPtr bsp;
-	SeqIdPtr  bsp_id;
 
 	if (sap == NULL || sap->type != 2 || userdata == NULL) {
 		return;
@@ -971,20 +968,6 @@ static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
     salp = (SeqAlignPtr) sap->data;
 	if (salp == NULL) return;
 	wiap->found = IsSeqEntryInAlignment (salp, wiap->lookingfor);
-
-#if 0
-	if (IS_Bioseq (sep)) {
-        bsp = (BioseqPtr)wiap->lookingfor->data.ptrvalue;
-        sip_list = SeqIdPtrFromSeqAlign(salp);
-	    for (sip = sip_list; sip != NULL && !wiap->found; sip = sip->next) {
-		    for (bsp_id = bsp->id; bsp_id != NULL && !wiap->found; bsp_id = bsp_id->next) {
-			    if (SeqIdComp (sip, bsp_id) == SIC_YES) {
-				    wiap->found = TRUE;
-				}
-			}
-		}
-#endif
-
 }
 
 static void WarnIfAlignment (Uint2 type, Pointer ptr, Uint2 input_entityID)

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.54  2004/06/22 17:37:25  kans
+* added FreeSeqIdGiCache
+*
 * Revision 6.53  2004/02/24 20:57:45  kans
 * added genesByLocusTag field, SeqMgrGetNextGeneByLocusTag function, now that locus_tag should be a unique identifier
 *
@@ -846,11 +849,13 @@ NLM_EXTERN Int4 LIBCALL GetUniGeneIDForSeqId PROTO((SeqIdPtr sip));
 *
 *   FetchFromSeqIdGiCache(gi, sipp)
 *   RecordInSeqIdGiCache(gi, sip)
+*   FreeSeqIdGiCache()
 *     Internal functions to cache gi - SeqId associations
 *
 *****************************************************************************/
 NLM_EXTERN Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp);
 NLM_EXTERN void RecordInSeqIdGiCache (Int4 gi, SeqIdPtr sip);
+NLM_EXTERN void FreeSeqIdGiCache (void);
 
 
 /*****************************************************************************

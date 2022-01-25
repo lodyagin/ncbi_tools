@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.178 $
+* $Revision: 6.186 $
 *
 * File Description: 
 *
@@ -1752,7 +1752,7 @@ static CharPtr molinfo_tech_list [] = {
   "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
   "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
   "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
-  "fli cDNA", "htgs 0", "htc", "wgs", NULL
+  "fli cDNA", "htgs 0", "htc", "wgs", "barcode", NULL
 };
 
 NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
@@ -3195,7 +3195,7 @@ static void FreeFeatureTable (ValNodePtr head)
   ValNodeFreeData (head);
 }
 
-NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, CharPtr seqid, CharPtr title)
+static SeqEntryPtr ReadContigListExEx (FileCachePtr fcp, Boolean coordinatesOnMaster, CharPtr seqid, CharPtr title)
 
 {
   BioseqPtr    bsp;
@@ -3211,16 +3211,16 @@ NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, 
   Char         tmp [128];
   ValNodePtr   vnp;
 
-  if (fp == NULL) return NULL;
+  if (fcp == NULL) return NULL;
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   if (str != NULL && StringNICmp (line, ">Contig", 7) == 0) {
     if (seqid == NULL && title == NULL) {
       title = GetSeqId (tmp, line, sizeof (tmp), TRUE, FALSE);
       seqid = tmp;
     }
-    str = ReadALine (line, sizeof (line), fp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
   while (str != NULL) {
     if (! HasNoText (line)) {
@@ -3229,7 +3229,7 @@ NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, 
           StringNCmp (line, "ID ", 3) == 0 ||
           StringNCmp (line, "//", 2) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         break;
       }
       vnp = ParseContigOrFeatureTableString (line, TRUE);
@@ -3237,8 +3237,8 @@ NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, 
         ValNodeAddPointer (&head, 0, (Pointer) vnp);
       }
     }
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (fcp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
   if (head == NULL) return NULL;
 
@@ -3306,17 +3306,53 @@ NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, 
   return sep;
 }
 
+NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, CharPtr seqid, CharPtr title)
+
+{
+  FileCache    fc;
+  Int4         pos;
+  SeqEntryPtr  sep;
+
+  if (fp == NULL) return NULL;
+
+  FileCacheSetup (&fc, fp);
+
+  sep = ReadContigListExEx (&fc, coordinatesOnMaster, seqid, title);
+
+  pos = FileCacheTell (&fc);
+  FileCacheSetup (&fc, fp);
+  FileCacheSeek (&fc, pos);
+  fseek (fp, pos, SEEK_SET);
+
+  return sep;
+}
+
 NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
 
 {
-  return ReadContigListEx (fp, coordinatesOnMaster, NULL, NULL);
+  FileCache    fc;
+  Int4         pos;
+  SeqEntryPtr  sep;
+
+  if (fp == NULL) return NULL;
+
+  FileCacheSetup (&fc, fp);
+
+  sep = ReadContigListExEx (&fc, coordinatesOnMaster, NULL, NULL);
+
+  pos = FileCacheTell (&fc);
+  FileCacheSetup (&fc, fp);
+  FileCacheSeek (&fc, pos);
+  fseek (fp, pos, SEEK_SET);
+
+  return sep;
 }
 
 /* PreCheckSeqForProteinType saves the current file position, then reads lines of
 sequence, checking each character for letters that appear only in proteins.  It then
 restores the file position, and returns true if it thinks it found a protein. */
 
-static Boolean PreCheckSeqForProteinType (FILE *fp)
+static Boolean PreCheckSeqForProteinType (FileCachePtr fcp)
 
 {
   Char     ch;
@@ -3326,10 +3362,10 @@ static Boolean PreCheckSeqForProteinType (FILE *fp)
   Int4     pos;
   CharPtr  str;
 
-  if (fp == NULL) return FALSE;
+  if (fcp == NULL) return FALSE;
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -3339,7 +3375,7 @@ static Boolean PreCheckSeqForProteinType (FILE *fp)
           StringNCmp (line, "ID ", 3) == 0 ||
           StringNCmp (line, "//", 2) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         return isProt;
       }
 
@@ -3360,11 +3396,74 @@ static Boolean PreCheckSeqForProteinType (FILE *fp)
 
     }
 
-    str = ReadALine (line, sizeof (line), fp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
 
-  fseek (fp, pos, SEEK_SET);
+  FileCacheSetup (fcp, fcp->fp);
+  FileCacheSeek (fcp, pos);
+  fseek (fcp->fp, pos, SEEK_SET);
   return isProt;
+}
+
+static void ReportFlatFileDNABadChars (Int4Ptr bad_chars)
+{
+  Int4    num_bad_chars = 0;
+  Int4    i;
+  CharPtr msg = NULL;
+  CharPtr msg_format = "%d different illegal characters were found:";
+  CharPtr msg_format_single = "One illegal character (%c) was found %d times.";
+  CharPtr msg_format_one = "%c (%d),";
+  CharPtr msg_ptr;
+  
+  for (i = 0; i < 255; i++)
+  {
+  	if (bad_chars [i] > 0)
+  	{
+  	  num_bad_chars ++;
+  	}
+  }
+  
+  if (num_bad_chars == 0) return;
+  
+  if (num_bad_chars == 1)
+  {
+  	msg = (CharPtr) MemNew ((StringLen (msg_format_single) + 15) * sizeof (Char));
+  	if (msg != NULL)
+  	{
+  	  for (i = 0; i < 255; i++)
+  	  {
+  	  	if (bad_chars [i] > 0)
+  	  	{
+  	      sprintf (msg, msg_format_single, i, bad_chars [i]);
+  	  	}
+  	  }
+  	}
+  }
+  else
+  {
+  	msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_format) + 15
+  	             + num_bad_chars * (StringLen (msg_format_one) + 18)));
+  	if (msg != NULL)
+  	{
+  	  sprintf (msg, msg_format, num_bad_chars);
+  	  msg_ptr = msg + StringLen (msg);
+  	  for (i = 0; i < 255; i ++)
+  	  {
+  	  	if (bad_chars [i] > 0)
+  	  	{
+  	  	  sprintf (msg_ptr, msg_format_one, i, bad_chars [i]);
+  	  	  msg_ptr += StringLen (msg_ptr);
+  	  	}
+  	  }
+  	  msg_ptr --;
+  	  *msg_ptr = 0;
+  	}
+  }
+  Message (MSG_ERROR, msg);
+  if (bad_chars ['?'] > 0)
+  {
+  	Message (MSG_ERROR, "Warning - question marks have been converted to 'N's.");
+  }
 }
 
 /* ReadFlatFileDNA reads lines of sequence into a byte store.  Unless it is forced to be
@@ -3372,7 +3471,7 @@ treated as a nucleotide or a protein, it first calls PreCheckSeqForProteinType t
 the sequence in advance, checking for protein-specific letters. If it encounters a non-
 printing character, it completes the read but returns NULL. */
 
-static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc,
+static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean forceNuc,
                                      Boolean forceProt, Boolean fastaAsSimpleSeq)
 
 {
@@ -3384,8 +3483,9 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
   CharPtr        q;
   Int4           pos;
   CharPtr        str;
+  Int4           bad_char [256];
 
-  if (fp == NULL) return NULL;
+  if (fcp == NULL) return NULL;
   bs = BSNew (1000);
   if (bs == NULL) return NULL;
 
@@ -3394,14 +3494,16 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
   } else if (forceProt) {
     isProt = TRUE;
   } else if (protPtr != NULL) {
-    isProt = PreCheckSeqForProteinType (fp);
+    isProt = PreCheckSeqForProteinType (fcp);
   }
   if (protPtr != NULL) {
     *protPtr = isProt;
   }
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  MemSet (bad_char, 0, sizeof (bad_char));
+
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -3410,9 +3512,11 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
+        ReportFlatFileDNABadChars (bad_char);
         return bs;
       } else if (StringNCmp (line, "//", 2) == 0) {
+        ReportFlatFileDNABadChars (bad_char);
         return bs;
       }
 
@@ -3420,6 +3524,7 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
       q = line;
       ch = *p;
       while (ch != '\0') {
+        ch = TO_UPPER (ch);
         if (IS_WHITESP (ch)) {
         } else if (! (IS_ALPHA (ch))) {
           if (isProt && (ch == '*' || ch == '-')) {
@@ -3427,6 +3532,20 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
             q++;
           } else if (! IS_PRINT (ch)) {
             bs = BSFree (bs);
+          }
+          else if (IS_DIGIT (ch))
+          {
+          	/* skip */
+          }
+          else if (ch == '?')
+          {
+          	bad_char [ch] ++;
+          	*q = 'N';
+          	q++;
+          }
+          else
+          {
+          	bad_char [ch] ++;
           }
         } else {
           if (! fastaAsSimpleSeq) {
@@ -3437,9 +3556,7 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
               ch = 'T';
             } else if (ch == 'u') {
               ch = 't';
-            }
-          } else {
-            if (ch == 'X') {
+            } else if (ch == 'X') {
               ch = 'N';
             } else if (ch == 'x') {
               ch = 'n';
@@ -3458,13 +3575,15 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
 
     }
 
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (fcp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
 
   if (bs != NULL && BSLen (bs) < 1) {
     bs = BSFree (bs);
   }
+  ReportFlatFileDNABadChars (bad_char);
+
   return bs;
 }
 
@@ -3720,6 +3839,35 @@ NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str)
   if (StringICmp ("Glutamate", tmp) == 0) return "Glutamic Acid";
   return NULL;
 }
+
+NLM_EXTERN Char FindResidueByName (CharPtr res_name, SeqCodeTablePtr sctp)
+{
+  Int2    i;
+  Uint1   last;
+  Int2    res = INVALID_RESIDUE;
+  Int4    len;
+  
+  if (res_name == NULL || sctp == NULL) return INVALID_RESIDUE;
+  last = LastResidueInCode (sctp);
+  len = StringLen (res_name);
+  if (len == 1)
+  {
+    res = GetResidueForSymbol (sctp, res_name[0]);
+  }
+  else
+  {
+    for (i = 0; aaList [3 * i] != NULL && res == INVALID_RESIDUE; i++)
+    {
+      if (StringICmp (res_name, aaList [3 * i + 1]) == 0
+          || StringICmp (res_name, aaList [3 * i + 2]) == 0)
+      {
+        res = GetResidueForSymbol (sctp, aaList [3 * i][0]);
+      }
+    }
+  }
+  return res;
+}
+
 
 NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr cdP, Boolean noSingleLetter)
 
@@ -4355,7 +4503,7 @@ static Boolean ParseQualIntoStsUserObject (SeqFeatPtr sfp, CharPtr qual, CharPtr
 }
 
 static CharPtr cloneQualList [] = {
-  "", "clone_id", "method", "sequence", "bac-ends", "STS", "weight", NULL
+  "", "clone_id", "method", "sequence", "bac_ends", "STS", "weight", NULL
 };
 
 static UserObjectPtr CreateCloneUserObject (void)
@@ -4732,7 +4880,11 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
     return;
   }
 
-  if (sfp->data.choice == SEQFEAT_GENE) {
+  if (qnum == GBQUAL_old_locus_tag) {
+
+    /* fall through to add as gbqual */
+
+  } else if (sfp->data.choice == SEQFEAT_GENE) {
     if (qnum == GBQUAL_gene) {
       grp = (GeneRefPtr) sfp->data.value.ptrvalue;
       if (grp != NULL) {
@@ -5080,7 +5232,7 @@ static void ParseWhitespaceIntoTabs (CharPtr line)
   MemFree (str);
 }
 
-static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
+static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr annotname)
 
 {
   Boolean        allowWhitesp  = TRUE;
@@ -5123,12 +5275,12 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   CharPtr        tmp;
   CharPtr        val;
 
-  if (fp == NULL || seqid == NULL) return NULL;
+  if (fcp == NULL || fcp->fp == NULL || seqid == NULL) return NULL;
   sip = SeqIdFindBest (MakeSeqID (seqid), 0);
   if (sip == NULL) return NULL;
 
-  pos = ftell (fp);
-  str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
+  pos = FileCacheTell (fcp);
+  str = FileCacheReadLine (fcp, line, sizeof (line), &nonewline);
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -5137,7 +5289,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         SeqIdFree (sip);
         return sap;
       } else if (StringNCmp (line, "//", 2) == 0) {
@@ -5388,11 +5540,11 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
     /* if humongously long line (e.g., /note), truncate by ignoring */
 
     while (nonewline && str != NULL) {
-      str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
+      str = FileCacheReadLine (fcp, line, sizeof (line), &nonewline);
     }
 
-    pos = ftell (fp);
-    str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
+    pos = FileCacheTell (fcp);
+    str = FileCacheReadLine (fcp, line, sizeof (line), &nonewline);
   }
 
   SeqIdFree (sip);
@@ -5401,7 +5553,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
 
 /* ReadVecScreenTable reads lines of vector screen output into a Seq-annot. */
 
-static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotname)
+static SeqAnnotPtr ReadVecScreenTable (FileCachePtr fcp, CharPtr seqid, CharPtr annotname)
 
 {
   Char            ch;
@@ -5426,7 +5578,7 @@ static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotnam
   CharPtr         str;
   SeqFeatXrefPtr  xref;
 
-  if (fp == NULL || seqid == NULL) return NULL;
+  if (fcp == NULL || seqid == NULL) return NULL;
   sip = SeqIdFindBest (MakeSeqID (seqid), 0);
   if (sip == NULL) return NULL;
   matchtype [0] = '\0';
@@ -5463,8 +5615,8 @@ static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotnam
     *ptr = '\0';
   }
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -5473,7 +5625,7 @@ static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotnam
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         SeqIdFree (sip);
         return sap;
       } else if (StringNCmp (line, "//", 2) == 0) {
@@ -5570,8 +5722,8 @@ static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotnam
 
     }
 
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (fcp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
 
   SeqIdFree (sip);
@@ -5607,7 +5759,7 @@ static SeqLocPtr AddPointToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 pt)
   return loc;
 }
 
-static SeqAnnotPtr ReadRestrictionSiteTable (FILE *fp, CharPtr seqid, CharPtr annotname)
+static SeqAnnotPtr ReadRestrictionSiteTable (FileCachePtr fcp, CharPtr seqid, CharPtr annotname)
 
 {
   DbtagPtr       dbt;
@@ -5625,13 +5777,13 @@ static SeqAnnotPtr ReadRestrictionSiteTable (FILE *fp, CharPtr seqid, CharPtr an
   CharPtr        str;
   long int       val;
 
-  if (fp == NULL || seqid == NULL) return NULL;
+  if (fcp == NULL || seqid == NULL) return NULL;
   sip = SeqIdFindBest (MakeSeqID (seqid), 0);
   if (sip == NULL) return NULL;
   name [0] = '\0';
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -5640,7 +5792,7 @@ static SeqAnnotPtr ReadRestrictionSiteTable (FILE *fp, CharPtr seqid, CharPtr an
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         SeqIdFree (sip);
         return sap;
       } else if (StringNCmp (line, "//", 2) == 0) {
@@ -5713,8 +5865,8 @@ static SeqAnnotPtr ReadRestrictionSiteTable (FILE *fp, CharPtr seqid, CharPtr an
 
     }
 
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (fcp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
 
   SeqIdFree (sip);
@@ -5723,7 +5875,7 @@ static SeqAnnotPtr ReadRestrictionSiteTable (FILE *fp, CharPtr seqid, CharPtr an
 
 /* ReadMessageStrings allows retired services to announce replacement URLs. */
 
-static void ReadMessageStrings (FILE *fp)
+static void ReadMessageStrings (FileCachePtr fcp)
 
 {
   Boolean     done = FALSE;
@@ -5736,10 +5888,10 @@ static void ReadMessageStrings (FILE *fp)
   CharPtr     tmp;
   ValNodePtr  vnp;
 
-  if (fp == NULL) return;
+  if (fcp == NULL) return;
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL && (! done)) {
 
     if (! HasNoText (line)) {
@@ -5748,7 +5900,7 @@ static void ReadMessageStrings (FILE *fp)
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         done = TRUE;
       } else if (StringNCmp (line, "//", 2) == 0) {
         done = TRUE;
@@ -5761,8 +5913,8 @@ static void ReadMessageStrings (FILE *fp)
     }
 
     if (! done) {
-      pos = ftell (fp);
-      str = ReadALine (line, sizeof (line), fp);
+      pos = FileCacheTell (fcp);
+      str = FileCacheGetString (fcp, line, sizeof (line));
     }
   }
 
@@ -5796,7 +5948,7 @@ static void ReadMessageStrings (FILE *fp)
 
 /* ReadUidList reads lines of uids (or accessions) into a byte store. */
 
-static ByteStorePtr ReadUidList (FILE *fp, Boolean nucdb, Boolean lastResortSeqIDs)
+static ByteStorePtr ReadUidList (FileCachePtr fcp, Boolean nucdb, Boolean lastResortSeqIDs)
 
 {
   Boolean       allDigits;
@@ -5812,12 +5964,12 @@ static ByteStorePtr ReadUidList (FILE *fp, Boolean nucdb, Boolean lastResortSeqI
   long int      val;
   ValNode       vn;
 
-  if (fp == NULL) return NULL;
+  if (fcp == NULL) return NULL;
   bs = BSNew (128);
   if (bs == NULL) return NULL;
 
-  pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  pos = FileCacheTell (fcp);
+  str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -5826,7 +5978,7 @@ static ByteStorePtr ReadUidList (FILE *fp, Boolean nucdb, Boolean lastResortSeqI
           StringNCmp (line, "LOCUS ", 6) == 0 ||
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
         if (abort) {
           bs = BSFree (bs);
         }
@@ -5868,8 +6020,8 @@ static ByteStorePtr ReadUidList (FILE *fp, Boolean nucdb, Boolean lastResortSeqI
 
     }
 
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (fcp);
+    str = FileCacheGetString (fcp, line, sizeof (line));
   }
 
   if (abort) {
@@ -5899,6 +6051,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   Boolean        coordinatesOnMaster;
   Uint2          datatype;
   Int2           db = -1;
+  FileCache      fc;
   Boolean        inLetters;
   Boolean        isProt = FALSE;
   Int4           j;
@@ -5951,9 +6104,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   }
 
   seqid [0] = '\0';
-  pos = ftell (fp);
+
+  FileCacheSetup (&fc, fp);
+
+  pos = FileCacheTell (&fc);
   begin = pos;
-  str = ReadALine (line, sizeof (line), fp);
+  str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
 
   if (str == NULL) return NULL; /* already at end of file */
 
@@ -5990,12 +6146,15 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         ObjMgrUnlock ();
 
         if (omtp != NULL) {
+          FileCacheFree (&fc, FALSE);
           fseek (fp, pos, SEEK_SET);
           aip = AsnIoNew (ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
           aip->scan_for_start = TRUE;
           ptr = (*(omtp->asnread)) (aip, NULL);
           pos = AsnIoTell (aip);
           AsnIoFree (aip, FALSE);
+          FileCacheSetup (&fc, fp);
+          FileCacheSeek (&fc, pos);
           fseek (fp, pos, SEEK_SET);
 
           if (ptr == NULL) {
@@ -6055,7 +6214,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           db = 4;
         }
         if (db != -1) {
-          bs = ReadUidList (fp, (Boolean) (db == 2), FALSE);
+          bs = ReadUidList (&fc, (Boolean) (db == 2), FALSE);
           if (bs != NULL) {
             proj = ProjectNew ();
             if (proj != NULL) {
@@ -6120,6 +6279,11 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
               *entityIDptr = ObjMgrRegister (OBJ_PROJECT, (Pointer) proj);
             }
 
+            pos = FileCacheTell (&fc);
+            FileCacheSetup (&fc, fp);
+            FileCacheSeek (&fc, pos);
+            fseek (fp, pos, SEEK_SET);
+
             return (Pointer) proj;
           }
 
@@ -6127,7 +6291,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
           annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
           if (! HasNoText (seqid)) {
-            sap = ReadFeatureTable (fp, seqid, annotname);
+            sap = ReadFeatureTable (&fc, seqid, annotname);
             if (sap != NULL && sap->type == 1) {
               sfp = (SeqFeatPtr) sap->data;
               prevsfp = (Pointer PNTR) &(sap->data);
@@ -6158,6 +6322,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
               if (entityIDptr != NULL) {
                 *entityIDptr = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
               }
+
+              pos = FileCacheTell (&fc);
+              FileCacheSetup (&fc, fp);
+              FileCacheSeek (&fc, pos);
+              fseek (fp, pos, SEEK_SET);
+
               return (Pointer) sap;
             }
           }
@@ -6166,7 +6336,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
           annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
           if (! HasNoText (seqid)) {
-            sap = ReadVecScreenTable (fp, seqid, annotname);
+            sap = ReadVecScreenTable (&fc, seqid, annotname);
             if (sap != NULL) {
               if (datatypeptr != NULL) {
                 *datatypeptr = OBJ_SEQANNOT;
@@ -6174,6 +6344,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
               if (entityIDptr != NULL) {
                 *entityIDptr = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
               }
+
+              pos = FileCacheTell (&fc);
+              FileCacheSetup (&fc, fp);
+              FileCacheSeek (&fc, pos);
+              fseek (fp, pos, SEEK_SET);
+
               return (Pointer) sap;
             }
           }
@@ -6182,7 +6358,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
           annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, TRUE);
           if (! HasNoText (seqid)) {
-            sap = ReadRestrictionSiteTable (fp, seqid, annotname);
+            sap = ReadRestrictionSiteTable (&fc, seqid, annotname);
             if (sap != NULL) {
               if (datatypeptr != NULL) {
                 *datatypeptr = OBJ_SEQANNOT;
@@ -6190,6 +6366,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
               if (entityIDptr != NULL) {
                 *entityIDptr = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
               }
+
+              pos = FileCacheTell (&fc);
+              FileCacheSetup (&fc, fp);
+              FileCacheSeek (&fc, pos);
+              fseek (fp, pos, SEEK_SET);
+
               return (Pointer) sap;
             }
           }
@@ -6201,7 +6383,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             coordinatesOnMaster = TRUE;
           }
           annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
-          sep = ReadContigListEx (fp, coordinatesOnMaster, seqid, annotname);
+          sep = ReadContigListExEx (&fc, coordinatesOnMaster, seqid, annotname);
           if (sep != NULL && IS_Bioseq (sep)) {
             bsp = (BioseqPtr) sep->data.ptrvalue;
             if (bsp != NULL) {
@@ -6234,6 +6416,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                 *entityIDptr = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
               }
             }
+
+            pos = FileCacheTell (&fc);
+            FileCacheSetup (&fc, fp);
+            FileCacheSeek (&fc, pos);
+            fseek (fp, pos, SEEK_SET);
+
             return (Pointer) bsp;
           }
 
@@ -6266,13 +6454,19 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                   }
                 }
               }
+
+              pos = FileCacheTell (&fc);
+              FileCacheSetup (&fc, fp);
+              FileCacheSeek (&fc, pos);
+              fseek (fp, pos, SEEK_SET);
+
               return (Pointer) bsp;
             }
           }
 
         } else if (StringNICmp (line, ">Message", 8) == 0) {
 
-          ReadMessageStrings (fp);
+          ReadMessageStrings (&fc);
 
         } else {
 
@@ -6314,10 +6508,10 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                   title = StringSaveNoNull (tmp);
                 }
               }
-              bs = ReadFlatFileDNA (fp, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+              bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
             }
           } else {
-            bs = ReadFlatFileDNA (fp, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+            bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
           }
           if (bs == NULL && title != NULL) {
             title = MemFree (title);
@@ -6342,7 +6536,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         mayBePlainFasta = FALSE;
         mayBeAccessionList = FALSE;
         if (! HasNoText (seqid)) {
-          bs = ReadFlatFileDNA (fp, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+          bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
         }
 
       } else {
@@ -6454,20 +6648,28 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             }
           }
         }
+
+        pos = FileCacheTell (&fc);
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+
         return (Pointer) bsp;
       }
 
     }
 
-    pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    pos = FileCacheTell (&fc);
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
   }
 
   if (mayBePlainFasta) {
 
+    FileCacheSetup (&fc, fp);
+    FileCacheSeek (&fc, begin);
     fseek (fp, begin, SEEK_SET);
     if (fastaAsSimpleSeq) {
-      bs = ReadFlatFileDNA (fp, FALSE, (Boolean) (! isProt), (Boolean) (isProt), fastaAsSimpleSeq);
+      bs = ReadFlatFileDNA (&fc, FALSE, (Boolean) (! isProt), (Boolean) (isProt), fastaAsSimpleSeq);
       if (bs != NULL) {
         ssp = ByteStoreToSimpleSeq (bs, NULL, NULL);
         if (ssp != NULL) {
@@ -6478,6 +6680,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             *entityIDptr = ObjMgrRegister (OBJ_FASTA, (Pointer) ssp);
           }
         }
+
+        pos = FileCacheTell (&fc);
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+
         return (Pointer) ssp;
       }
     }
@@ -6500,8 +6708,10 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
   if (mayBeAccessionList) {
 
+    FileCacheSetup (&fc, fp);
+    FileCacheSeek (&fc, begin);
     fseek (fp, begin, SEEK_SET);
-    bs = ReadUidList (fp, TRUE, TRUE);
+    bs = ReadUidList (&fc, TRUE, TRUE);
     if (bs != NULL) {
       numLinks = BSLen (bs) / sizeof (Int4);
       if (numLinks < 1) {
@@ -6530,6 +6740,11 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
       if (entityIDptr != NULL) {
         *entityIDptr = ObjMgrRegister (OBJ_PROJECT, (Pointer) proj);
       }
+
+      pos = FileCacheTell (&fc);
+      FileCacheSetup (&fc, fp);
+      FileCacheSeek (&fc, pos);
+      fseek (fp, pos, SEEK_SET);
 
       return (Pointer) proj;
     }

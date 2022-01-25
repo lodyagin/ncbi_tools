@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.13 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,39 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.13  2004/10/08 16:04:16  bollin
+* added ability to check when an action will remove a feature
+*
+* Revision 6.12  2004/09/29 18:49:57  bollin
+* fixed bugs in sequence editing, can now undo a nucleotide deletion that
+* removes an entire feature location (feature will be restored)
+*
+* Revision 6.11  2004/09/23 14:59:51  bollin
+* moved functions that depend on functions that depend on BLAST functions
+* into seqpanel.c, made function scalled by those functions extern
+*
+* Revision 6.10  2004/09/22 18:20:32  bollin
+* added functions for playing and unplaying a sequence editor action to translate
+* a CDS
+*
+* Revision 6.9  2004/07/30 18:46:55  bollin
+* added function for reordering intervals after they have been dragged by
+* the sequence editor
+*
+* Revision 6.8  2004/07/28 20:06:19  bollin
+* added journaling for undo/redo of dragged sequence location changes
+*
+* Revision 6.7  2004/07/28 15:22:15  bollin
+* moved functions for moving feature locations around to edutil.c from
+* seqpanel.c
+*
+* Revision 6.6  2004/07/22 15:34:41  bazhin
+* Added function prototype GapToSeqLocEx() to handle gaps of unknown
+* lengths within locations.
+*
+* Revision 6.5  2004/07/12 12:29:45  bollin
+* moved new sequence editor editing functions here
+*
 * Revision 6.4  2003/02/10 22:57:45  kans
 * added BioseqCopyEx, which takes a BioseqPtr instead of a SeqIdPtr for the source
 *
@@ -126,6 +159,7 @@
 extern "C" {
 #endif
 
+#include "explore.h"
 
 /*****************************************************************************
 *
@@ -496,6 +530,18 @@ NLM_EXTERN SeqLocPtr LIBCALL GapToSeqLoc(Int4 range);
 
 /**********************************************************
  *
+ *   NLM_EXTERN SeqLocPtr LIBCALL GapToSeqLocEx(range, unknown):
+ *
+ *      Gets the size of gap and constructs SeqLoc block with
+ *   $(seqlitdbtag) value in case of gap of known length or
+ *   $(unkseqlitdbtag) value if length is unknown as Dbtag.db
+ *   and Dbtag.tag.id = 0.
+ *
+ **********************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL GapToSeqLocEx(Int4 range, Boolean unknown);
+
+/**********************************************************
+ *
  *   NLM_EXTERN Boolean LIBCALL ISAGappedSeqLoc(slp):
  *
  *      Looks at a single SeqLoc item. If it has the SeqId
@@ -519,6 +565,146 @@ NLM_EXTERN Boolean LIBCALL ISAGappedSeqLoc(SeqLocPtr slp);
  *
  **********************************************************/
 NLM_EXTERN DeltaSeqPtr LIBCALL GappedSeqLocsToDeltaSeqs(SeqLocPtr slp);
+
+/* the following typedefs and functions are used by the new sequence editor 
+ * in desktop/seqpanel.c
+ */
+typedef enum { eSeqEdInsert, eSeqEdDelete, eSeqEdFeatMove, eSeqEdTranslate,
+               eSeqEdJournalStart, eSeqEdJournalEnd } ESeqEdJournalAction ;
+
+typedef struct seqedjournaldata
+{
+  ESeqEdJournalAction action;              /* indicates action taken */
+  Int4                offset;              /* position to the left of deletion or right of insertion */
+  Int4                num_chars;           /* number of characters inserted or deleted */
+  CharPtr             char_data;           /* characters inserted or removed */
+                                           /* when creating a journal entry for deletion, allocate
+                                            * space for char_data but do not populate it - it will
+                                            * be populated when the journal entry is played */
+  Boolean             spliteditmode;       /* if insertion occurs and spliteditmode is true and
+                                            * a feature overlaps the insertion position, the location
+                                            * of the feature will be discontinuous at the point of
+                                            * insertion. */
+  SeqFeatPtr          sfp;                 /* A feature that was moved - should be NULL
+                                            * unless action == eSeqEdFeatMove */
+  SeqLocPtr           slp;                 /* A location for sfp - if the journal has
+                                            * already been played, this is the previous
+                                            * location, if the journal has been undone,
+                                            * this is the location before the redo. */
+  ValNodePtr          affected_feats;      /* This is a list of features which were shortened by
+                                            * an eSeqEdDelete operation - their locations will
+                                            * need to be reconstructed if the operation is undone. */
+  BioseqPtr           bsp;                 /* The Bioseq for which the action is to be/was applied. */
+  Uint2               moltype;             /* Molecule type for bsp.  Stored for convenience. */
+  Uint2               entityID;            /* entityID for bsp.  Stored for convenience. */
+  Pointer             next;                /* Journal entries are a doubly-linked list so that */
+  Pointer             prev;                /* we can traverse the list in both directions for  */
+                                           /* undo and redo. */
+} SeqEdJournalData, PNTR SeqEdJournalPtr;
+
+NLM_EXTERN SeqLocPtr LIBCALL 
+SeqEdSeqLocInsert 
+(SeqLocPtr head,
+ BioseqPtr target, 
+ Int4 pos,
+ Int4 len,
+ Boolean split,
+ SeqIdPtr newid);
+
+NLM_EXTERN void 
+SeqEdInsertAdjustRNA 
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp,
+ Int4       insert_pos,
+ Int4       len,
+ Boolean    do_split);
+
+NLM_EXTERN void 
+SeqEdInsertAdjustCdRgn 
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp,
+ Int4       insert_pos,
+ Int4       len,
+ Boolean    do_split);
+ 
+NLM_EXTERN SeqLocPtr 
+SeqEdSeqLocDelete 
+(SeqLocPtr head,
+ BioseqPtr target,
+ Int4      from,
+ Int4      to,
+ Boolean   merge,
+ BoolPtr   changed,
+ BoolPtr   partial5,
+ BoolPtr   partial3);
+
+NLM_EXTERN void SeqEdJournalFree (SeqEdJournalPtr sejp);
+NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewSeqEdit 
+(ESeqEdJournalAction action,
+ Int4                offset,
+ Int4                num_chars,
+ CharPtr             char_data,
+ Boolean             spliteditmode,
+ BioseqPtr           bsp,
+ Uint2               moltype,
+ Uint2               entityID);
+ 
+NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewFeatEdit
+(ESeqEdJournalAction action,
+ SeqFeatPtr          sfp,
+ SeqLocPtr           slp,
+ BioseqPtr           bsp,
+ Uint2               moltype,
+ Uint2               entityID);
+ 
+NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewTranslate
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp,
+ Uint2      entityID);
+
+NLM_EXTERN Boolean PlayJournal 
+(SeqEdJournalPtr      list, 
+ SeqEdJournalPtr PNTR last, 
+ Int4                 num_steps,
+ BoolPtr              pfeats_deleted);
+NLM_EXTERN Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps);
+
+NLM_EXTERN SeqFeatPtr 
+SeqEdGetNextFeature 
+(BioseqPtr              bsp, 
+ SeqFeatPtr             curr,
+ Uint1                  seqFeatChoice,
+ Uint1                  featDefChoice,
+ SeqMgrFeatContext PNTR context,
+ Boolean                byLabel,
+ Boolean                byLocusTag,
+ Uint2                  entityID);
+
+/* this enum describes the kind of motion for feature adjusts */
+typedef enum { eLeftEnd=1, eRightEnd, eSlide } EMoveType;
+
+/* This function moves a feature location */
+NLM_EXTERN void SeqEdFeatureAdjust
+(SeqFeatPtr sfp,
+ SeqLocPtr  orig_loc,
+ Int4       change,
+ EMoveType  move_type,
+ Int4       interval_offset,
+ BioseqPtr  bsp);
+
+/* This function locates the endpoints of the Nth interval in a SeqLoc */
+NLM_EXTERN Boolean SeqEdGetNthIntervalEndPoints 
+(SeqLocPtr slp, Int4 n, Int4Ptr left, Int4Ptr right);
+
+/* this function is used to repair the interval order after a feature location
+ * interval has been dragged around.
+ */
+NLM_EXTERN void SeqEdRepairIntervalOrder (SeqFeatPtr sfp, BioseqPtr bsp);
+NLM_EXTERN Boolean SeqEdInsert (SeqEdJournalPtr sejp);
+NLM_EXTERN void SeqEdReindexAffectedFeatures (Int4 shift_start, Int4 shift_amt, 
+                                          Boolean split, BioseqPtr bsp);
+NLM_EXTERN void SeqEdReindexFeature (SeqFeatPtr sfp, BioseqPtr bsp);
+NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_deleted);
 
 
 #ifdef __cplusplus

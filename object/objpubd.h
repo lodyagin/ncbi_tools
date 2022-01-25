@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -45,6 +45,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objpubd.h,v $
+* Revision 6.6  2004/08/30 18:08:52  kans
+* added MI_TECH_barcode
+*
 * Revision 6.5  2002/02/20 20:47:18  kans
 * added MI_TECH_wgs
 *
@@ -233,6 +236,7 @@ typedef struct molinfo {
 #define MI_TECH_htgs_0 18    /* unordered single pass reads */
 #define MI_TECH_htc 19       /* High Throughput CDNA.. unfinished */
 #define MI_TECH_wgs 20       /* Whole Genome Shotgun */
+#define MI_TECH_barcode 21   /* Barcode of Life Project */
 #define MI_TECH_other 255           /* doesnt' fit anything */
 
 NLM_EXTERN MolInfoPtr LIBCALL MolInfoNew PROTO((void));

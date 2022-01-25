@@ -32,8 +32,11 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.67 $ 
+/* $Revision: 6.68 $ 
 * $Log: blast.h,v $
+* Revision 6.68  2004/06/30 12:28:20  madden
+* Removed some function prototypes and moved to blfmtutl.h
+*
 * Revision 6.67  2003/03/25 22:21:53  boemker
 * Clarified behavior of BLAST_Wizard.
 *
@@ -618,25 +621,6 @@ SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallbackMult PROTO((SeqLocPtr slp,
 void LIBCALL BlastErrorPrint PROTO((ValNodePtr error_return));
 void LIBCALL BlastErrorPrintExtra PROTO((ValNodePtr error_return,  Boolean errpostex, FILE* fp));
 
-/*
-	Prints some header information.
-*/
-
-CharPtr LIBCALL BlastGetVersionNumber PROTO((void));
-
-CharPtr LIBCALL BlastGetReference PROTO((Boolean html));
-
-Boolean LIBCALL BlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
-Boolean LIBCALL MegaBlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
-
-CharPtr LIBCALL BlastGetPhiReference PROTO((Boolean html));
-
-Boolean LIBCALL BlastPrintPhiReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
-
-Boolean BlastPrintVersionInfo PROTO((CharPtr program, Boolean html, FILE *outfp));
-Boolean BlastPrintVersionInfoEx PROTO((CharPtr program, Boolean html, CharPtr version, CharPtr date, FILE *outfp));
-
-CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
 
 Uint1 LIBCALL BlastGetProgramNumber PROTO((CharPtr blast_program));
 CharPtr LIBCALL BlastGetProgramName PROTO((Uint1 number));

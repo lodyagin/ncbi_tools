@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.44 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -51,6 +51,7 @@
 #include <gbftdef.h>
 #include <edutil.h>
 #include <explore.h>
+#include <sqnutils.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -1000,6 +1001,63 @@ static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName)
   }
 }
 
+static Boolean IsPseudo (SeqFeatPtr sfp)
+{
+  Boolean   pseudo = FALSE;
+  GBQualPtr qual;
+  
+  if (sfp != NULL)
+  {
+    if (sfp->pseudo)
+    {
+      pseudo = TRUE;
+    }
+    else
+    {
+      qual = sfp->qual;
+      while (qual != NULL)
+      {
+        if (StringICmp (qual->qual, "pseudo") == 0) 
+        {
+          pseudo = TRUE;
+        }
+        qual = qual->next;
+      }
+    }
+  }
+  return pseudo;
+}
+
+static void RemoveProtXrefs (SeqFeatPtr sfp)
+{
+  SeqFeatXrefPtr  xref_prev = NULL, xref_next, xref;
+
+  if (sfp == NULL || sfp->xref == NULL) return;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref_next)
+  {
+    xref_next = xref->next;
+    if (xref->data.choice == SEQFEAT_PROT)
+    {
+      if (xref_prev == NULL)
+      {
+        sfp->xref = xref->next;
+      }
+      else
+      {
+        xref_prev->next = xref->next;
+      }
+      xref->next = NULL;
+      xref->data.value.ptrvalue = ProtRefFree (xref->data.value.ptrvalue);
+      SeqFeatXrefFree (xref);
+    }
+    else
+    {
+      xref_prev = xref;
+    }
+  }  
+}
+
 extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
 
 {
@@ -1261,7 +1319,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
-        AddProtRefXref (sfp, ffp->protXrefName);
+        if (IsPseudo (sfp))
+        {
+          RemoveProtXrefs (sfp);
+        }
+        else
+        {
+          AddProtRefXref (sfp, ffp->protXrefName);
+        }
         if (! ReplaceDataForProc (&ompc, FALSE)) {
           Message (MSG_ERROR, "ReplaceDataForProc failed");
         }
@@ -1472,44 +1537,6 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
     vnp->data.ptrvalue = StringSave (str);
   }
   return head;
-}
-
-static void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsize)
-
-{
-  Char  ch;
-  Int2  i;
-
-  if (inits != NULL && maxsize > 0) {
-    inits [0] = '\0';
-    if (first != NULL) {
-      i = 0;
-      ch = *first;
-      while (ch != '\0' && i < maxsize) {
-        while (ch != '\0' && (ch <= ' ' || ch == '-')) {
-          first++;
-          ch = *first;
-        }
-        if (IS_ALPHA (ch)) {
-          inits [i] = ch;
-          i++;
-          first++;
-          ch = *first;
-        }
-        while (ch != '\0' && ch > ' ' && ch != '-') {
-          first++;
-          ch = *first;
-        }
-        if (ch == '-') {
-          inits [i] = ch;
-          i++;
-          first++;
-          ch = *first;
-        }
-      }
-      inits [i] = '\0';
-    }
-  }
 }
 
 static void StripPeriods (CharPtr str)
@@ -2833,6 +2860,20 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
   partial3 = FALSE;
   head = NULL;
 
+  if (location == NULL)
+  {
+  	if (ipp->count == 1)
+  	{
+       sprintf (str, "\t\t\t1\n");
+       vnp = ValNodeNew (head);
+       if (head == NULL) {
+         head = vnp;
+       }
+       if (vnp != NULL) {
+         vnp->data.ptrvalue = StringSave (str);
+       }	
+  	}
+  }
   if (location != NULL) {
     firstSlp = NULL;
     lastSlp = NULL;
@@ -3006,6 +3047,52 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
   tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
   CorrectBarMax (tlp->bar, tlp->max);
   CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+}
+
+extern void SetSequenceAndStrandForIntervalPage (DialoG d)
+{
+  IntervalPagePtr  ipp;
+  TagListPtr       tlp;
+  ValNodePtr       vnp;
+  CharPtr          cp;
+  CharPtr          tabptr;
+  ValNodePtr       saved_list;
+  
+  ipp = (IntervalPagePtr) GetObjectExtra (d);
+  if (ipp == NULL) return;
+  tlp = GetObjectExtra (ipp->ivals);
+  if (tlp == NULL) return;
+  saved_list = tlp->vnp;
+  tlp->vnp = NULL;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = saved_list;
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) 
+  {
+    cp = vnp->data.ptrvalue;
+    if (cp != NULL)
+    {
+      tabptr = StringChr (cp, '\t');
+      if (tabptr != NULL)
+      {
+      	tabptr = StringChr (tabptr + 1, '\t');
+      }
+      if (tabptr != NULL)
+      {
+      	cp[0] = '\t';
+      	cp++;
+      	while (*tabptr != 0)
+      	{
+      	  *cp = *tabptr;
+      	  cp++;
+      	  tabptr++;
+      	}
+      	*cp = 0;
+      }
+    }
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+	
 }
 
 static Pointer IntervalPageToSeqLocPtr (DialoG d)

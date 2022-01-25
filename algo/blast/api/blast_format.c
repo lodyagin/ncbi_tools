@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.51 2004/06/07 18:40:34 dondosha Exp $
+/* $Id: blast_format.c,v 1.77 2004/10/06 15:01:19 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,26 +34,25 @@ Contents: Formatting of BLAST results (SeqAlign)
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.51 $
+ * $Revision: 1.77 $
  * */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.51 2004/06/07 18:40:34 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.77 2004/10/06 15:01:19 dondosha Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/api/blast_returns.h>
-#include <sequtil.h>
+#include <algo/blast/api/blast_seq.h>
+#include <readdb.h>
 #include <txalign.h>
+#include <blfmtutl.h>
+#include <xmlblast.h>
 
 extern Uint1 LIBCALL 
 BlastGetTypes PROTO((char* blast_program, Boolean* query_is_na, 
                      Boolean* db_is_na));
-extern Boolean LIBCALL 
-AcknowledgeBlastQuery PROTO((BioseqPtr bsp, Int4 line_length, FILE *outfp, 
-                             Boolean believe_query, Boolean html));
 extern void PrintTabularOutputHeader PROTO((char* blast_database, 
                BioseqPtr query_bsp, SeqLocPtr query_slp, char* blast_program, 
                Int4 iteration, Boolean believe_query, FILE *outfp));
@@ -62,57 +61,14 @@ extern void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign,
                char* blast_program, Boolean is_ungapped, 
                Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, 
                Boolean print_query_info));
-extern IterationPtr 
-BXMLBuildOneQueryIteration (SeqAlignPtr seqalign, ValNodePtr other_returns, 
-   Boolean is_ooframe, Boolean ungapped, Int4 iter_num, char* message,
-   BioseqPtr query, ValNodePtr mask_loc);
-extern BlastPruneSapStruct* 
-BlastPruneHitsFromSeqAlign PROTO((SeqAlignPtr sap, Int4 number, 
-   BlastPruneSapStruct* prune));
-extern BlastPruneSapStruct* 
-BlastPruneSapStructDestruct PROTO((BlastPruneSapStruct* prune));
 extern Int4 SeqLocTotalLen (char* prog_name, SeqLocPtr slp);
-extern Boolean LIBCALL 
-PrintKAParameters PROTO((double Lambda, double K, double H, 
-   Int4 line_length, FILE *outfp, Boolean gapped));
-extern Boolean LIBCALL 
-PrintTildeSepLines PROTO((char* buffer, Int4 line_length, FILE *outfp));
-extern Boolean 
-BlastPrintVersionInfo PROTO((char* program, Boolean html, FILE *outfp));
-extern Boolean LIBCALL 
-BlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
-extern Boolean LIBCALL 
-MegaBlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
 
 extern void MBXmlClose(MBXml* mbxp, ValNodePtr other_returns, 
                        Boolean ungapped);
 
-extern CharPtr LIBCALL BlastGetReference (Boolean html);
-
-extern CharPtr LIBCALL BlastGetVersionNumber PROTO((void));
-extern CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
-
-/** This function is defined in distrib/tools/blastool.c; 1st argument is
- * a pointer to TxDfDbInfo, defined in blastpri.h, which is identical to 
- * BLAST_DbSummary, defined in algo/blast/api/blast_returns.h
- */
-extern Boolean LIBCALL 
-PrintDbReport PROTO((BLAST_DbSummary* dbinfo, Int4 line_length, FILE *outfp));
-
-/** The following 3 functions are from distrib/tools/readdb.h */
-extern Boolean LIBCALL 
-ReadDBBioseqFetchEnable PROTO((CharPtr program, CharPtr dbname, Boolean is_na,
-                               Boolean now));
-
-extern void LIBCALL ReadDBBioseqFetchDisable PROTO((void));
-
-extern Boolean LIBCALL 
-PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 line_length,
-                          FILE *outfp, Boolean html));
-
-Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out, 
-        Int4 num_descriptions, Int4 num_alignments, Int4 align_view, 
-        BlastFormattingOptions** format_options_ptr)
+Int2 BlastFormattingOptionsNew(EBlastProgramType program_number, 
+        char* file_out, Int4 num_descriptions, Int4 num_alignments, 
+        Int4 align_view, BlastFormattingOptions** format_options_ptr)
 {
    BlastFormattingOptions* format_options; 
 
@@ -121,8 +77,8 @@ Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out,
       be protein; thus the formatting must behave as
       if a blastx search was performed */
 
-   if (program_number == blast_type_rpstblastn)
-      program_number = blast_type_blastx;
+   if (program_number == eBlastTypeRpsTblastn)
+      program_number = eBlastTypeBlastx;
 
    if ((format_options = (BlastFormattingOptions*)
         calloc(1, sizeof(BlastFormattingOptions))) == NULL)
@@ -153,6 +109,15 @@ Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out,
       format_options->outfp = (void *) aip;
    }
 
+   if ((program_number == eBlastTypeBlastx || program_number == eBlastTypeTblastx)
+        && align_view > 0 && align_view < 7)
+   {
+          ErrPostEx(SEV_FATAL, 1, 0, "This option is not supported with blastx or tblastx");
+          format_options = BlastFormattingOptionsFree(format_options);
+          return -1;
+   }
+
+
    format_options->number_of_descriptions = num_descriptions;
    format_options->number_of_alignments = num_alignments;
    
@@ -163,9 +128,23 @@ Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out,
    format_options->align_options += TXALIGN_SHOW_GI;
    format_options->print_options += TXALIGN_SHOW_GI;
    
-   format_options->align_options += TXALIGN_MATRIX_VAL;
-   format_options->align_options += TXALIGN_SHOW_QS;
-   if (program_number == blast_type_blastx)
+   if (align_view == 0)
+   {
+      format_options->align_options += TXALIGN_MATRIX_VAL;
+      format_options->align_options += TXALIGN_SHOW_QS;
+   }
+   else
+   {
+       format_options->align_options += TXALIGN_MASTER;
+       if (align_view == 1 || align_view == 3)
+            format_options->align_options += TXALIGN_MISMATCH;
+       if (align_view == 3 || align_view == 4 || align_view == 6)
+            format_options->align_options += TXALIGN_FLAT_INS;
+        if (align_view == 5 || align_view == 6)
+            format_options->align_options += TXALIGN_BLUNT_END;
+   }
+
+   if (program_number == eBlastTypeBlastx)
       format_options->align_options += TXALIGN_BLASTX_SPECIAL;
    
    format_options->align_view = align_view;
@@ -177,20 +156,34 @@ Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out,
 BlastFormattingOptions* 
 BlastFormattingOptionsFree(BlastFormattingOptions* format_options)
 {
-   if (format_options->align_view != 7 && format_options->align_view < 10)
-      FileClose( (FILE *)format_options->outfp);
-   else
-      AsnIoClose( (AsnIoPtr)format_options->outfp);
+   /* In case of XML output, the i/o stream has already been closed. */
+   if (format_options->align_view != 7) {
+      if (format_options->align_view < 10)
+         FileClose( (FILE *)format_options->outfp);
+      else
+         AsnIoClose( (AsnIoPtr)format_options->outfp);
+   }
 
    sfree(format_options);
    return NULL;
 }
 
+Int2 
+BlastPrintLogReport(const BlastFormattingOptions* format_options, Int4 count)
+{
+     if (format_options == NULL || format_options->outfp == NULL)
+        return -1;
+
+     fprintf((FILE*) format_options->outfp, "Mega BLAST run finished, processed %ld queries\n", (long) count);
+
+     return 0;
+}
+
 #define BXML_INCLUDE_QUERY 0x1
 
 static BlastOutputPtr 
-CreateBlastOutputHead(CharPtr program, CharPtr database, 
-                      SeqLocPtr query_loc, Int4 flags)
+CreateBlastOutputHead(CharPtr program, CharPtr database, SeqLocPtr query_loc, 
+                     Int4 flags, Blast_SearchParams* search_param)
 {
     BlastOutputPtr boutp;
     Char buffer[1024];
@@ -226,7 +219,7 @@ CreateBlastOutputHead(CharPtr program, CharPtr database,
           boutp->query_seq = MemNew(boutp->query_len+1);
           is_aa = (strcmp(program, "blastp") || strcmp(program, "tblastn"));
           spp = SeqPortNewByLoc(query_loc, 
-                   (is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
+                   (Uint1)((is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna));
           
           for (i = 0; i < boutp->query_len; i++) {
              boutp->query_seq[i] = SeqPortGetResidue(spp);
@@ -251,12 +244,15 @@ CreateBlastOutputHead(CharPtr program, CharPtr database,
     boutp->reference = BlastGetReference(FALSE);
 
     /* Filling parameters */
-    
     boutp->param = ParametersNew();    
-    /* THE FOLLOWING IS NOT IMPLEMENTED. JUST FILL DEFAULT NUMBERS */
-    boutp->param->expect = 10;
-    boutp->param->gap_open = 0;
-    boutp->param->gap_extend = 0;
+    boutp->param->expect = search_param->expect;
+    boutp->param->gap_open = search_param->gap_open;
+    boutp->param->gap_extend = search_param->gap_extension;
+    boutp->param->matrix = StringSave(search_param->matrix);
+    boutp->param->sc_match = search_param->match;
+    boutp->param->sc_mismatch = search_param->mismatch;
+    boutp->param->include = search_param->ethresh;
+    boutp->param->filter = StringSave(search_param->filter_string);
     
     return boutp;
 }
@@ -269,7 +265,7 @@ CreateBlastOutputHead(CharPtr program, CharPtr database,
         }
 
 static MBXml* MBXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database, 
-                          SeqLocPtr query_loc, Int4 flags)
+                          SeqLocPtr query_loc, Int4 flags, Blast_SearchParams* search_params)
 {
     MBXml* mbxp;
     AsnModulePtr amp;
@@ -332,7 +328,7 @@ static MBXml* MBXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     /* Head of the final statistics for Mega BLAST */
     mbxp->BlastOutput_mbstat = BLASTOUTPUT_mbstat;
     
-    mbxp->boutp = CreateBlastOutputHead(program, database, query_loc, flags);
+    mbxp->boutp = CreateBlastOutputHead(program, database, query_loc, flags, search_params);
     
     atp = AsnLinkType(NULL, BLASTOUTPUT);   /* link local tree */
     
@@ -397,20 +393,88 @@ static MBXml* MBXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     return mbxp;
 }
 
+
+static StatisticsPtr
+XMLBuildStatistics(Blast_SummaryReturn* sum_returns, Boolean ungapped)
+{
+   StatisticsPtr stat;
+   Blast_DatabaseStats* db_stats = sum_returns->db_stats;
+
+   stat = StatisticsNew();
+
+   stat->eff_space = db_stats->eff_searchsp;
+   stat->hsp_len = db_stats->hsp_length;
+   stat->db_num= db_stats->dbnum;
+   stat->db_len = db_stats->dblength;
+
+   if(ungapped) {
+      if(sum_returns->ka_params != NULL) {
+         stat->lambda = sum_returns->ka_params->Lambda;
+         stat->kappa = sum_returns->ka_params->K;
+         stat->entropy = sum_returns->ka_params->H;
+      }
+   } else {
+      if(sum_returns->ka_params_gap != NULL) {
+         stat->lambda = sum_returns->ka_params_gap->Lambda;
+         stat->kappa = sum_returns->ka_params_gap->K;
+         stat->entropy = sum_returns->ka_params_gap->H;
+      }
+   }
+
+   return stat;
+}
+
+
+static IterationPtr 
+XMLBuildOneQueryIteration(SeqAlignPtr seqalign,
+                                   Blast_SummaryReturn* sum_returns,
+                                   Boolean is_ooframe, Boolean ungapped,
+                                   Int4 iter_num, CharPtr message,
+                                   BioseqPtr query, ValNodePtr mask_loc)
+{
+    IterationPtr iterp = IterationNew();
+    iterp->iter_num = iter_num;
+
+    if (query) {
+       char buffer[1024];
+       SeqIdWrite(query->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
+       iterp->query_ID = StringSave(buffer);
+
+       if((iterp->query_def = StringSave(BioseqGetTitle(query))) == NULL) {
+          iterp->query_def = StringSave("No definition line found");
+       }
+
+       iterp->query_len = query->length;
+    }
+
+    if(seqalign != NULL) {
+       iterp->hits =
+          BXMLSeqAlignToHits(seqalign, ungapped, is_ooframe, mask_loc);
+    }
+
+    iterp->stat = XMLBuildStatistics(sum_returns, ungapped);
+
+    iterp->message = StringSave(message);
+
+    return iterp;
+}
+
+
 Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
         char* blast_program, Int4 num_queries, 
         SeqLocPtr query_slp, BlastMaskLoc* blast_mask, 
-        const BlastFormattingOptions* format_options, Boolean is_ooframe)
+        const BlastFormattingOptions* format_options, Boolean is_ooframe, 
+        Int4** matrix, Blast_SummaryReturn* sum_returns)
 {  
    SeqAlignPtr seqalign = head, sap, next_seqalign;
    SeqLocPtr mask_loc, next_mask_loc = NULL, tmp_loc = NULL, mask_loc_head;
-   Uint1 program_number;
+   EBlastProgramType program_number;
    Uint1 align_type;
    Boolean query_is_na, db_is_na;
    Int4 query_index;
    SeqLocPtr slp, mask_slp;
    SeqIdPtr query_id;
-   BioseqPtr bsp;
+   BioseqPtr bsp = NULL;
    AsnIoPtr aip = NULL;
    BlastPruneSapStruct* prune;
    SeqAnnotPtr seqannot;
@@ -446,11 +510,20 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
       BlastMaskLocToSeqLoc(program_number, blast_mask, slp);
 
    if (!seqalign && format_options->align_view < 7) {
-      fprintf(outfp, "\n\n ***** No hits found ******\n\n");
+      /* Acknowledge all queries and report the "no hits found" message. */
+      for ( ; slp; slp = slp->next) {
+         bsp = BioseqLockById(SeqLocId(slp));
+         init_buff_ex(70);
+         AcknowledgeBlastQuery(bsp, 70, outfp, 
+            format_options->believe_query, format_options->html);
+         free_buff();
+         BioseqUnlock(bsp);
+         fprintf(outfp, " ***** No hits found ******\n\n\n");
+      }
    }
       
    if (format_options->align_view == 7) {
-      mbxp = MBXmlInit(aip, "megablast", blast_database, slp, 0);
+      mbxp = MBXmlInit(aip, blast_program, blast_database, slp, 0, sum_returns->search_params);
    }
 
    while (seqalign) {
@@ -458,8 +531,19 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
       query_id = TxGetQueryIdFromSeqAlign(seqalign);
       for ( ; slp && query_index < num_queries; 
             ++query_index, slp = slp->next) {
-         if (SeqIdComp(query_id, SeqLocId(slp)) == SIC_YES)
+         if (SeqIdComp(query_id, SeqLocId(slp)) == SIC_YES) {
             break;
+         } else if (format_options->align_view < 7) {
+            /* This query has no results; acknowledge the query and report a "no
+               results" message. */
+            bsp = BioseqLockById(SeqLocId(slp));
+            init_buff_ex(70);
+            AcknowledgeBlastQuery(bsp, 70, outfp, 
+               format_options->believe_query, format_options->html);
+            free_buff();
+            BioseqUnlock(bsp);
+            fprintf(outfp, " ***** No hits found ******\n\n\n");
+         }
       }
       /* The following should never happen! We mustn't have a SeqAlign left
          without a corresponding query */
@@ -468,7 +552,10 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
 
       slp = slp->next;
 
-      /* Find the masking location for this query */
+      /* Find the masking location for this query. Initialize next_mask_loc
+	 to the current start of the chain, in case nothing for this query 
+	 will be found. */
+      next_mask_loc = mask_loc;
       for ( ; mask_loc; mask_loc = mask_loc->next) {
          mask_slp = (SeqLocPtr) mask_loc->data.ptrvalue;
          if (SeqIdComp(query_id, SeqLocId(mask_slp)) == SIC_YES) {
@@ -521,20 +608,17 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
          BlastPrintTabulatedResults(seqalign, bsp, NULL, 
             format_options->number_of_alignments, blast_program, 
             format_options->ungapped, format_options->believe_query, 0, 0, 
-            outfp, (format_options->align_view == 9));
+            outfp, (Boolean)(format_options->align_view == 9));
          
-         SeqAlignSetFree(seqalign);
       } else if(format_options->align_view == 7) {
-         /* XML printout - NOT IMPLEMENTED YET */
          IterationPtr iterp;
          
-         iterp = BXMLBuildOneQueryIteration(seqalign, NULL, FALSE, 
+         iterp = XMLBuildOneQueryIteration(seqalign, sum_returns, FALSE, 
                     format_options->ungapped, query_index, NULL, bsp, 
                     mask_loc);
          IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
          AsnIoFlush(mbxp->aip);
          IterationFree(iterp);
-         SeqAlignSetFree(seqalign);
       } else {
          seqannot = SeqAnnotNew();
          seqannot->type = 2;
@@ -561,10 +645,10 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
                                      format_options->align_options, NULL);
             } else if (format_options->align_view != 0) {
                ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, 
-                  format_options->align_options, NULL, mask_loc, NULL);
+                  format_options->align_options, matrix, mask_loc, NULL);
             } else {
                ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, 
-                  format_options->align_options, NULL, mask_loc, 
+                  format_options->align_options, matrix, mask_loc, 
                   FormatScoreFunc);
             }
             seqannot->data = seqalign;
@@ -572,8 +656,12 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
             ObjMgrClearHold();
             ObjMgrFreeCache(0);
          }
+         /* Set data to NULL, because we do not free Seq-align here. */
+         seqannot->data = NULL;
          seqannot = SeqAnnotFree(seqannot);
       }
+      BioseqUnlock(bsp);
+      bsp = NULL;
       seqalign = next_seqalign;
       /* Relink the mask locations so chain can be freed in the end.
        The 'tmp_loc' variable points to the location that was unlinked. */
@@ -603,20 +691,12 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
    return 0;
 }
 
-Int2 PrintOutputFooter(Uint1 program_number, 
+Int2 Blast_PrintOutputFooter(EBlastProgramType program_number, 
         const BlastFormattingOptions* format_options, 
-        const BlastScoringOptions* score_options, const BlastScoreBlk* sbp,
-        const LookupTableOptions* lookup_options,
-        const BlastInitialWordOptions* word_options,
-        const BlastExtensionOptions* ext_options,
-        const BlastHitSavingOptions* hit_options,
-        const BlastEffectiveLengthsOptions* eff_len_options,
-        const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src,
-        const BlastDiagnostics* diagnostics) 
+        ReadDBFILE* rdfp, const Blast_SummaryReturn* sum_returns) 
 {
    FILE *outfp;
-   BLAST_DbSummary* dbinfo_head,* dbinfo;
-   char* params_buffer;
+   char* params_buffer=NULL;
 
    if (!format_options || !format_options->outfp)
       return -1;
@@ -630,234 +710,136 @@ Int2 PrintOutputFooter(Uint1 program_number,
       fprintf(outfp, "<PRE>\n");
    init_buff_ex(85);
 
-   dbinfo_head = Blast_GetDbSummary(seq_src);
+   if (rdfp) {
+      TxDfDbInfo* dbinfo_head,* dbinfo;
+      dbinfo_head = Blast_GetDbInfo(rdfp);
 
-   for (dbinfo = dbinfo_head; dbinfo; dbinfo = dbinfo->next) {
-      PrintDbReport(dbinfo, 70, outfp);
+      for (dbinfo = dbinfo_head; dbinfo; dbinfo = dbinfo->next) {
+         PrintDbReport((TxDfDbInfoPtr) dbinfo, 70, outfp);
+      }
+      dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
    }
-   dbinfo_head = Blast_DbSummaryFree(dbinfo_head);
-   
-   if (sbp && sbp->kbp) {
-      Blast_KarlinBlk* ka_params;
+
       
-      if (sbp->kbp[query_info->first_context]) {
-         ka_params = sbp->kbp[query_info->first_context];
-         PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, 
+   if (sum_returns->ka_params)
+   {
+      BLAST_KAParameters* ka_params=sum_returns->ka_params;
+      PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, 
                            outfp, FALSE);
-      }
-
-      if (score_options->gapped_calculation) {
-         ka_params = sbp->kbp_gap[query_info->first_context];
-         PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, 
-                           outfp, TRUE);
-      }
    }
-   
-   params_buffer = 
-      Blast_GetParametersBuffer(program_number, score_options, sbp, 
-                                lookup_options, word_options, ext_options, 
-                                hit_options, eff_len_options, query_info, 
-                                seq_src, diagnostics);
 
+ 
+   if (sum_returns->ka_params_gap && sum_returns->search_params->gapped_search)
+   {
+      BLAST_KAParameters* ka_params=sum_returns->ka_params_gap;
+      PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, 
+                           outfp, TRUE);
+   }
+ 
+   params_buffer = 
+      Blast_GetParametersBuffer(program_number, sum_returns);
    PrintTildeSepLines(params_buffer, 70, outfp);
    sfree(params_buffer);
    free_buff();
-   
+
    return 0;
 }
 
 Int2 BLAST_PrintOutputHeader(const BlastFormattingOptions* format_options,
-        Boolean is_megablast, char* dbname, Boolean is_protein)
+        Boolean is_megablast, const char* program_name, char* dbname, Boolean is_protein)
 {
+   Int2 status = 0;
+
    if (format_options->align_view < 7) {
       if (format_options->html) {
          fprintf(format_options->outfp, 
-                 "<HTML>\n<TITLE>MEGABLAST Search Results</TITLE>\n");
+                 "<HTML>\n<TITLE>BLAST Search Results</TITLE>\n");
          fprintf(format_options->outfp, 
                  "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
                  "VLINK=\"#660099\" ALINK=\"#660099\">\n");
          fprintf(format_options->outfp, "<PRE>\n");
       }
       init_buff_ex(90);
-      BlastPrintVersionInfo("BLAST", format_options->html, 
-                            format_options->outfp);
+      if (is_megablast)
+          BlastPrintVersionInfo("MEGABLAST", format_options->html, format_options->outfp);
+      else
+          BlastPrintVersionInfo(program_name, format_options->html, format_options->outfp);
       fprintf(format_options->outfp, "\n");
-      BlastPrintReference(format_options->html, 90, format_options->outfp);
+      if (is_megablast)
+         MegaBlastPrintReference(format_options->html, 90, format_options->outfp);
+      else
+         BlastPrintReference(format_options->html, 90, format_options->outfp);
       fprintf(format_options->outfp, "\n");
-      if (is_megablast) {
-         MegaBlastPrintReference(format_options->html, 90, 
-                                 format_options->outfp);
-         fprintf(format_options->outfp, "\n");
-      }
 
-      if(dbname && 
-         !PrintDbInformation(dbname, is_protein, 70, 
-             format_options->outfp, format_options->html))
-         return 1;
-              
+      if(dbname) { 
+         status = 
+            PrintDbInformation(dbname, is_protein, 70, 
+               format_options->outfp, format_options->html);
+      }
       free_buff();
 	
 #ifdef OS_UNIX
       fprintf(format_options->outfp, "%s", "Searching\n\n");
 #endif
-   } else if (dbname && format_options->align_view == 9) {
-      PrintTabularOutputHeader(dbname, NULL, NULL, "BLAST", 0, 
-                               format_options->believe_query,
-                               format_options->outfp);
    }
-   return 0;
+
+   return status;
 }
 
+#ifdef BUFFER_LENGTH
+#undef BUFFER_LENGTH
+#endif
 #define BUFFER_LENGTH 256
 
 void 
-Blast_SeqIdGetDefLine(SeqIdPtr sip, char* descr, char** buffer_ptr, 
-   Boolean ncbi_gi, Boolean accession_only, Boolean seqid_only,
-   Boolean believe_local_id)
+Blast_SeqIdGetDefLine(SeqIdPtr sip, char** buffer_ptr, Boolean ncbi_gi, Boolean accession_only)
 {
-   char* seqid_buffer = NULL, *title = NULL, *defline_buffer = NULL;
+   char* seqid_buffer = NULL;
    Int4 gi;
-   Boolean numeric_sip_type = FALSE;
+   Boolean numeric_id_type = FALSE;
 
-   if ((believe_local_id || sip->choice != SEQID_LOCAL) && 
-       (sip->choice != SEQID_GENERAL ||
-       StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID"))) {
-      if (!accession_only && sip->choice != SEQID_LOCAL) {
+   *buffer_ptr = NULL;
+
+   if (sip == NULL)
+	return;
+
+   /* Check for ad hoc ID's generated by formatdb if the user does not provide any. */
+   if (sip->choice != SEQID_GENERAL ||
+       StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID"))  
+   {
+      if ((!accession_only && !ncbi_gi) || sip->choice == SEQID_LOCAL) {
          seqid_buffer = (char*) malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(sip, seqid_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+      } else if (accession_only) {
+         seqid_buffer = (char*) malloc(BUFFER_LENGTH + 1);
+         SeqIdWrite(SeqIdFindBestAccession(sip), seqid_buffer, 
+                    PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
       } else if (ncbi_gi) {
-         numeric_sip_type = 
+         numeric_id_type = 
             GetAccessionFromSeqId(SeqIdFindBest(sip, SEQID_GI), 
                                   &gi, &seqid_buffer);
       } else {
-         numeric_sip_type = 
-            GetAccessionFromSeqId(SeqIdFindBestAccession(sip), 
+         numeric_id_type = 
+	    GetAccessionFromSeqId(SeqIdFindBestAccession(sip), 
                                   &gi, &seqid_buffer);
       }
-   } else {
-      if (!descr) {
-         /* Get the title */
-         BioseqPtr bsp = BioseqLockById(sip);
-         if (bsp) {
-            title = strdup(BioseqGetTitle(bsp));
-            BioseqUnlock(bsp);
-         }
-      } else {
-         title = descr;
-      }
-
-      if (seqid_only) 
-         seqid_buffer = StringTokMT(title, " \t\n\r", &title); 
    }
-   
-   if (numeric_sip_type && !seqid_buffer) {
+
+   if (numeric_id_type && gi > 0) {
       seqid_buffer = (char*) malloc(16);
-      sprintf(seqid_buffer, "%ld", (long)gi);
-   }
-
-   if (!title || seqid_only) {
-      defline_buffer = seqid_buffer;
-   } else if (!seqid_buffer) {
-      defline_buffer = title;
-   } else {
-      defline_buffer = (char *) malloc((StrLen(seqid_buffer) + StrLen(title) + 2));
-      sprintf(defline_buffer, "%s %s", seqid_buffer, title);
-      sfree(seqid_buffer);
-      sfree(title);
-   }
+      sprintf(seqid_buffer, "%ld", (long) gi);
+   }   
+   if (!seqid_buffer) {
+      /* If it's still NULL make a last ditch effort to get info. */
+      char* title=NULL;
+      BioseqPtr bsp = BioseqLockById(sip);
+      if (bsp)
+         title = strdup(BioseqGetTitle(bsp));
+      BioseqUnlock(bsp);
       
-   *buffer_ptr = defline_buffer;
-}
-
-/* This function might serve as a starting point for a callback function 
- * that prints results before the traceback stage, e.g. the on-the-fly 
- * tabular output, a la the -D3 option of the old megablast.
- */
-void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
-        BlastQueryInfo* query_info, SeqLocPtr query_slp, 
-        BlastSeqSrc* seq_src, BlastScoreBlk* sbp, 
-        char* filename)
-{
-   Int4 query_index, hit_index, hsp_index;
-   SeqIdPtr query_id, subject_id;
-   char* query_buffer,* subject_buffer;
-   BlastHitList* hit_list;
-   BlastHSPList* hsp_list;
-   Int4 query_length;
-   Int4 q_start, q_end, s_start, s_end;
-   FILE *outfp;
-   SeqLocPtr slp;
-   Blast_KarlinBlk* kbp;
-   char bit_score_buff[10], eval_buff[10];
-   char* eval_buff_ptr = NULL;
-   BlastHSP* hsp;
-   ListNode* seqid_wrap = NULL;
-
-   if (!results || !query_info || !query_slp || !seq_src || 
-       !sbp || !filename)
-      return;
-
-   outfp = FileOpen(filename, "w");
-
-   for (query_index = 0, slp = query_slp; 
-        query_index < results->num_queries && slp; 
-        ++query_index, slp = slp->next) {
-      hit_list = results->hitlist_array[query_index];
-      query_id = SeqLocId(slp);
-      Blast_SeqIdGetDefLine(query_id, NULL, &query_buffer, TRUE, FALSE, FALSE,
-                      FALSE);
-      fprintf(outfp, "#Query = %s\n\n", query_buffer);
-      sfree(query_buffer);
-
-      if (!hit_list || hit_list->hsplist_count == 0) {
-         fprintf(outfp, "# No hits found.\n\n");
-      } else {
-         query_length = SeqLocLen(query_slp);
-         
-         for (hit_index = 0; hit_index < hit_list->hsplist_count; 
-              ++hit_index) {
-            hsp_list = hit_list->hsplist_array[hit_index];
-            BLASTSeqSrcGetSeqId(seq_src, (void*) &hsp_list->oid);
-            if (seqid_wrap->choice == BLAST_SEQSRC_C_SEQID) {
-               subject_id = (SeqId*) seqid_wrap->ptr;
-               ListNodeFree(seqid_wrap);
-            } else {
-               /* Could not retrieve id for this subject sequence. This should
-                  never happen, but if it does, skip this HSP. */
-               continue;
-            }
-            Blast_SeqIdGetDefLine(subject_id, NULL, &subject_buffer, 
-                            TRUE, FALSE, FALSE, TRUE);
-            fprintf(outfp, ">%s\n\n", subject_buffer);
-            sfree(subject_buffer);
-
-            for (hsp_index = 0; hsp_index < hsp_list->hspcnt; ++hsp_index) {
-               hsp = hsp_list->hsp_array[hsp_index];
-               if (hsp->query.offset > query_length) {
-                  q_end = 2*query_length - hsp->query.offset + 1;
-                  q_start = 2*query_length - hsp->query.end + 2;
-                  s_start = hsp->subject.end;
-                  s_end = hsp->subject.offset + 1;
-               } else {
-                  q_start = hsp->query.offset + 1;
-                  q_end = hsp->query.end;
-                  s_start = hsp->subject.offset + 1;
-                  s_end = hsp->subject.end;
-               }
-
-               kbp = sbp->kbp[hsp->context];
-
-               eval_buff_ptr = eval_buff;
-
-               ScoreAndEvalueToBuffers(hsp->bit_score, hsp->evalue, 
-                  bit_score_buff, &eval_buff_ptr, TRUE);
-
-               fprintf(outfp, "[%ld %ld] [%ld %ld] %s %s\n", 
-                       (long)q_start, (long)q_end, (long)s_start, (long)s_end,
-                       bit_score_buff, eval_buff_ptr);
-            }
-         }
-      }
+      if (title) /* Use first token as id. */
+         seqid_buffer = StringTokMT(title, " \t\n\r", &title);  
    }
-   FileClose(outfp);
+   *buffer_ptr = seqid_buffer;
+
 }

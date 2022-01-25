@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.20 2004/06/07 17:11:34 dondosha Exp $
+/*  $Id: blast_seqsrc.h,v 1.28 2004/10/06 14:47:59 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
 #define BLAST_SEQSRC_H
 
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_message.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,7 +49,6 @@ extern "C" {
  *  - Retrieving the length of the longest sequence in set
  *  - Retrieving an individual sequence in a user-specified encoding by ordinal
  *    id (index into the set)
- *  - Retrieving a sequence identifier for a given ordinal id
  *  - Retrieving the length of a given sequence in set by ordinal id
  *  - Allow MT-safe iteration over sequences in set through the
  *    BlastSeqSrcIterator abstraction
@@ -87,35 +87,20 @@ typedef Int8 (*GetInt8FnPtr) (void*, void*);
 /** Function pointer typedef to return a null terminated string. 
  * First argument is the BlastSeqSrc structure used, second
  * argument is passed to user-defined implementation. */
-typedef char* (*GetStrFnPtr) (void*, void*);
-
+typedef const char* (*GetStrFnPtr) (void*, void*);
 
 /** Function pointer typedef to return a boolean value. 
  * First argument is the BlastSeqSrc structure used, second
  * argument is passed to user-defined implementation. */
 typedef Boolean (*GetBoolFnPtr) (void*, void*);
 
-/** Types of objects returned by generic data functions */
-typedef enum {
-   BLAST_SEQSRC_C_SEQID = 0,  /**< C ASN.1 generated SeqId structure */
-   BLAST_SEQSRC_CPP_SEQID,    /**< C++ ASN.1 generated CSeq_id class */ 
-   BLAST_SEQSRC_CPP_SEQID_REF,/**< Pointer to a CRef wrapper over CSeq_id
-                                  object */
-   BLAST_SEQSRC_C_SEQLOC,     /**< Pointer to a C ASN.1 generated SeqLoc 
-                                 structure */
-   BLAST_SEQSRC_CPP_SEQLOC,   /**< Pointer to a C++ ASN.1 generated CSeq_loc 
-                                 structure */
-   BLAST_SEQSRC_MESSAGE       /**< Pointer to a Blast_Message structure */
-} BlastSeqSrcDataType;
-
-/** Function pointer typedef to return pointer to some generic data. 
- * The data is wrapped in a ListNode structure, whose 'choice' field is set 
- * to one of the BlastSeqSrcDataType values defined above, and indicates what 
- * data is being returned.
+/** Function pointer typedef to return error messages. This may be needed
+ * when it is necessary to catch exceptions in a C++ implementation, pass them 
+ * through the C code and throw them again.
  * First argument is the BlastSeqSrc structure used, second argument is 
  * passed to user-defined implementation. 
  */
-typedef ListNode* (*GetGenDataFnPtr) (void*, void*);
+typedef Blast_Message* (*GetErrorFnPtr) (void*, void*);
 
 /** Function pointer typedef to retrieve sequences from data structure embedded
  * in the BlastSeqSrc structure.
@@ -164,12 +149,15 @@ typedef struct BlastSeqSrcIterator {
     /** Size of the chunks to advance over the BlastSeqSrc, also size of 
       * oid_list member */
     unsigned int  chunk_sz;
-    /* Starting oid for the next chunk/range */
-    unsigned int next_oid;
 } BlastSeqSrcIterator;
 
+/** How many database sequences to process in one database chunk. */
+extern const unsigned int kBlastSeqSrcDefaultChunkSize;
+
 /** Allocated and initialized an iterator over a BlastSeqSrc. 
- * @param chunk_sz sets the chunk size of the iterator. [in]
+ * @param chunk_sz sets the chunk size of the iterator, if zero 
+ *    use kBlastSeqSrcDefaultChunkSize (above). [in]
+ * @return pointer to initialized iterator for BlastSeqSrc
  */
 BlastSeqSrcIterator* BlastSeqSrcIteratorNew(unsigned int chunk_sz);
 
@@ -178,7 +166,7 @@ BlastSeqSrcIterator* BlastSeqSrcIteratorNew(unsigned int chunk_sz);
  * @return NULL
  */
 BlastSeqSrcIterator* BlastSeqSrcIteratorFree(BlastSeqSrcIterator* itr);
-Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* bssp, BlastSeqSrcIterator* itr);
+Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src, BlastSeqSrcIterator* itr);
 
 /** Function pointer typedef to obtain the next ordinal id to fetch from the
  * BlastSeqSrc structure. First argument is the BlastSeqSrc structure used,
@@ -224,49 +212,41 @@ BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info);
  * the user-defined constructor function when the structure is initialized
  * (indirectly, by BlastSeqSrcNew). If the destructor function pointer is not
  * set, a memory leak could occur.
- * @param bssp BlastSeqSrc to free [in]
+ * @param seq_src BlastSeqSrc to free [in]
  * @return NULL
  */
-BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* bssp);
+NCBI_XBLAST_EXPORT
+BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* seq_src);
 
 /** Copy function: needed to guarantee thread safety. 
  */
+NCBI_XBLAST_EXPORT
 BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src);
 
 /** Convenience macros call function pointers (TODO: needs to be more robust)
  * Currently, this defines the API */
-#define BLASTSeqSrcGetNumSeqs(bssp) \
-    (*GetGetNumSeqs(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetMaxSeqLen(bssp) \
-    (*GetGetMaxSeqLen(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetAvgSeqLen(bssp) \
-    (*GetGetAvgSeqLen(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetTotLen(bssp) \
-    (*GetGetTotLen(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetName(bssp) \
-    (*GetGetName(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetDefinition(bssp) \
-    (*GetGetDefinition(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetDate(bssp) \
-    (*GetGetDate(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetIsProt(bssp) \
-    (*GetGetIsProt(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcGetSequence(bssp, arg) \
-    (*GetGetSequence(bssp))(GetDataStructure(bssp), arg)
-#define BLASTSeqSrcGetSeqIdStr(bssp, arg) \
-    (*GetGetSeqIdStr(bssp))(GetDataStructure(bssp), arg)
-#define BLASTSeqSrcGetSeqId(bssp, arg) \
-    (*GetGetSeqId(bssp))(GetDataStructure(bssp), arg)
-#define BLASTSeqSrcGetSeqLoc(bssp, arg) \
-    (*GetGetSeqLoc(bssp))(GetDataStructure(bssp), arg)
-#define BLASTSeqSrcGetSeqLen(bssp, arg) \
-    (*GetGetSeqLen(bssp))(GetDataStructure(bssp), arg)
-#define BLASTSeqSrcGetNextChunk(bssp, iterator) \
-    (*GetGetNextChunk(bssp))(GetDataStructure(bssp), iterator)
-#define BLASTSeqSrcGetError(bssp) \
-    (*GetGetError(bssp))(GetDataStructure(bssp), NULL)
-#define BLASTSeqSrcRetSequence(bssp, arg) \
-    (*GetRetSequence(bssp))(GetDataStructure(bssp), arg)
+#define BLASTSeqSrcGetNumSeqs(seq_src) \
+    (*GetGetNumSeqs(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetMaxSeqLen(seq_src) \
+    (*GetGetMaxSeqLen(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetAvgSeqLen(seq_src) \
+    (*GetGetAvgSeqLen(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetTotLen(seq_src) \
+    (*GetGetTotLen(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetName(seq_src) \
+    (*GetGetName(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetIsProt(seq_src) \
+    (*GetGetIsProt(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcGetSequence(seq_src, arg) \
+    (*GetGetSequence(seq_src))(GetDataStructure(seq_src), arg)
+#define BLASTSeqSrcGetSeqLen(seq_src, arg) \
+    (*GetGetSeqLen(seq_src))(GetDataStructure(seq_src), arg)
+#define BLASTSeqSrcGetNextChunk(seq_src, iterator) \
+    (*GetGetNextChunk(seq_src))(GetDataStructure(seq_src), iterator)
+#define BLASTSeqSrcGetError(seq_src) \
+    (*GetGetError(seq_src))(GetDataStructure(seq_src), NULL)
+#define BLASTSeqSrcRetSequence(seq_src, arg) \
+    (*GetRetSequence(seq_src))(GetDataStructure(seq_src), arg)
 
 
 #define DECLARE_MEMBER_FUNCTIONS(member_type, member, data_structure_type) \
@@ -274,10 +254,11 @@ DECLARE_ACCESSOR(member_type, member, data_structure_type); \
 DECLARE_MUTATOR(member_type, member, data_structure_type)
 
 #define DECLARE_ACCESSOR(member_type, member, data_structure_type) \
-member_type Get##member(const data_structure_type var)
+NCBI_XBLAST_EXPORT member_type Get##member(const data_structure_type var)
 
 #define DECLARE_MUTATOR(member_type, member, data_structure_type) \
-void Set##member(data_structure_type var, member_type arg) \
+NCBI_XBLAST_EXPORT void Set##member(data_structure_type var, member_type arg) \
+
 
 DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcConstructor, NewFnPtr, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr, BlastSeqSrc*);
@@ -285,22 +266,67 @@ DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr, BlastSeqSrc*);
 
 DECLARE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetMaxSeqLen(seq_src)
+   \brief Get the length of the longest sequence in the sequence source.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetAvgSeqLen(seq_src)
+   \brief Get the average length of all sequences in the sequence source.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetAvgSeqLen, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetTotLen(seq_src)
+   \brief Get the total length of all sequences in the sequence source.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLen, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetName(seq_src)
+   \brief Get the database name.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetName, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetDefinition, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetDate, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetIsProt(seq_src)
+   \brief Find if the database is protein or nucleotide.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetSequence(seq_src,arg)
+   \brief Retrieve an individual sequence.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetSeqIdStr, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetSeqId, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetSeqLoc, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetSeqLen(seq_src,arg)
+   \brief Retrieve sequence length.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcGetNextChunk(seq_src,iterator)
+   \brief Get next chunk of sequence indices.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetNextChunkFnPtr, GetNextChunk, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(AdvanceIteratorFnPtr, IterNext, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetError, BlastSeqSrc*);
+
+/*!\fn BLASTSeqSrcRetSequence(seq_src,arg)
+   \brief Deallocate individual sequence buffer if necessary.
+*/
+
 DECLARE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, RetSequence, BlastSeqSrc*);
+
+
+/*!\fn BlasteqSrcGetError(seq_src)
+   \brief Retrieves error message, if defined.
+*/
+DECLARE_MEMBER_FUNCTIONS(GetErrorFnPtr, GetError, BlastSeqSrc*);
 
 #ifdef __cplusplus
 }

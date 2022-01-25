@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.217 $
+* $Revision: 1.226 $
 *
 * File Description: 
 *
@@ -2904,8 +2904,8 @@ static void LIBCALLBACK GetTransposonFeatureLabel (
 }
 
 static CharPtr noncoding_feature_keywords[] = {
-  "contains ",
-  "similar to "
+  "similar to ",
+  "contains "
 };
 
 static CharPtr find_noncoding_feature_keyword (
@@ -4179,7 +4179,7 @@ static CharPtr GetProductName
     {
       return StringSave (grp->desc);
     }
-    if (grp->locus_tag != NULL
+    if (grp->locus_tag != NULL && ! suppress_locus_tag
       && StringCmp (grp->locus_tag, gene_name) != 0)
     {
       return StringSave (grp->locus_tag);
@@ -5434,7 +5434,8 @@ static void RenameMiscFeats (ValNodePtr clause_list, Uint1 biomol)
                    = MemFree (fcp->feature_label_data.description);
       }
       name_len = StringCSpn (sfp->comment, ";");
-      fcp->feature_label_data.description = MemNew (name_len * sizeof (Char));
+	  /* make sure we have space for terminating NULL */
+      fcp->feature_label_data.description = MemNew ((name_len + 1) * sizeof (Char));
       if (fcp->feature_label_data.description == NULL) return;
       StringNCpy (fcp->feature_label_data.description, sfp->comment, name_len);
       fcp->feature_label_data.description [ name_len ] = 0;
@@ -8166,7 +8167,8 @@ static void BuildDefLineFeatClauseList (
   {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
-    if ( bssp->_class == 7 || IsPopPhyEtcSet (bssp->_class))
+    if ( bssp->_class == 7 || IsPopPhyEtcSet (bssp->_class)
+        || bssp->_class == BioseqseqSet_class_gen_prod_set)
     {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
       {
@@ -9244,7 +9246,7 @@ static void SetFormModsAcceptButton (Handle a)
     if ( GetValue (form_data->line_forms [ column_index].action_choice) == 2)
     {
       apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
-      if ( apply_choice > 0 && apply_choice < NumDefLineModifiers)
+      if ( apply_choice > 0 && apply_choice <= NumDefLineModifiers + 1)
       {
         have_apply = TRUE;
       }
@@ -9324,6 +9326,7 @@ static void BuildOrgModLineForm (
   {
     ListItem (omlfp->apply_choice, DefLineModifiers[index].name);
   }
+  ListItem (omlfp->apply_choice, "Tax Name");
 
   SetValue (omlfp->action_choice, 1);
 }
@@ -9422,6 +9425,21 @@ static void AddOneQualToOrg (
     }
   }
 }
+
+static void ApplyTaxNameToOrg (BioSourcePtr biop, CharPtr value_string)
+{
+  if (biop == NULL) return;
+  if (biop->org == NULL)
+  {
+  	biop->org = OrgRefNew ();
+  }
+  if (biop->org == NULL) return;
+  if (biop->org->taxname != NULL)
+  {
+  	biop->org->taxname = MemFree (biop->org->taxname);
+  }
+  biop->org->taxname = StringSave (value_string);
+}
   
 static void ApplyQualsToOrg (
   BioSourcePtr biop, 
@@ -9442,11 +9460,19 @@ static void ApplyQualsToOrg (
   {
     apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
     if (GetValue (form_data->line_forms[column_index].action_choice) == 2
-      && apply_choice > 0 && apply_choice < NumDefLineModifiers)
+      && apply_choice > 0)
     {
-      if (form_data->replace_with_blank || ! StringHasNoText (part->data.ptrvalue)) {
-        AddOneQualToOrg (biop, part->data.ptrvalue, 
-          GetValue (form_data->line_forms[column_index].apply_choice) - 1);
+      if (form_data->replace_with_blank || ! StringHasNoText (part->data.ptrvalue)) 
+      {
+        if (apply_choice < NumDefLineModifiers + 1)
+        {
+          AddOneQualToOrg (biop, part->data.ptrvalue,
+              GetValue (form_data->line_forms[column_index].apply_choice) - 1);
+        }
+        else if (apply_choice == NumDefLineModifiers + 1)
+        {  
+          ApplyTaxNameToOrg (biop, part->data.ptrvalue);   
+        }
       }
     }
     part = part->next;
@@ -9579,12 +9605,22 @@ static Boolean IDListHasValue (
           return TRUE;
         }
       } else {
-        match_len = StringCSpn (acc_str, ".");
-        match_len2 = StringCSpn (id, ".");
-        if (match_len == match_len2
-          && match_len > 0 && StringNCmp (id, acc_str, match_len) == 0)
+        if (only_local)
         {
-          return TRUE;
+          if (StringCmp (id, acc_str) == 0)
+          {
+          	return TRUE;
+          }
+        }
+        else 
+        {
+          match_len = StringCSpn (acc_str, ".");
+          match_len2 = StringCSpn (id, ".");
+          if (match_len == match_len2
+            && match_len > 0 && StringNCmp (id, acc_str, match_len) == 0)
+          {
+            return TRUE;
+          }
         }
       }
     }
@@ -9859,6 +9895,225 @@ extern void LoadOrganismModifierTable (IteM i)
   Show (w);
   Update ();
 }
+
+typedef struct exportorgtable
+{
+  ModifierItemLocalPtr modList;
+  BioseqPtr            bsp;
+  FILE *fp;  
+} ExportOrgTableData, PNTR ExportOrgTablePtr;
+
+static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
+{
+  ExportOrgTablePtr eotp;
+  Char              acc_str [256];
+  SeqIdPtr          sip;
+  SeqIdPtr          acc_sip = NULL, local_sip = NULL, gen_sip = NULL;
+  Int4              i;
+  OrgModPtr         mod;
+  SubSourcePtr      ssp;
+  
+  if (biop == NULL || userdata == NULL) return;
+  eotp = (ExportOrgTablePtr) userdata;
+  
+  if (eotp->bsp == NULL || eotp->modList == NULL || eotp->fp == NULL) return;
+  
+  for (sip = eotp->bsp->id;
+       sip != NULL && (acc_sip == NULL || local_sip == NULL);
+       sip = sip->next)
+  {
+    if (acc_sip == NULL && sip->choice == SEQID_GENBANK)
+    {
+      acc_sip = sip;
+    }
+    else if (local_sip == NULL && sip->choice == SEQID_LOCAL)
+    {
+      local_sip = sip;
+    }
+    else if (gen_sip == NULL && sip->choice == SEQID_GENERAL)
+    {
+      gen_sip = sip;
+    }
+  }
+
+  /* get accession number and print to column */
+  if (acc_sip == NULL)
+  {
+    fprintf (eotp->fp, " \t");
+  }
+  else
+  {
+    sip = acc_sip->next;
+    acc_sip->next = NULL;
+    SeqIdWrite (acc_sip, acc_str, PRINTID_TEXTID_ACC_VER, sizeof (acc_str));
+    acc_sip->next = sip;
+    fprintf (eotp->fp, "%s\t", acc_str);
+  }    
+  
+  /* get local ID and print to column */
+  if (local_sip == NULL)
+  {
+    fprintf (eotp->fp, " \t");
+  }
+  else
+  {
+    sip = local_sip->next;
+    local_sip->next = NULL;
+    SeqIdWrite (local_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
+    local_sip->next = sip;
+    fprintf (eotp->fp, "%s\t", acc_str);
+  }    
+  
+  /* get general ID and print to column */
+  if (gen_sip == NULL)
+  {
+    fprintf (eotp->fp, " \t");
+  }
+  else
+  {
+    sip = gen_sip->next;
+    gen_sip->next = NULL;
+    SeqIdWrite (gen_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
+    gen_sip->next = sip;
+    fprintf (eotp->fp, "%s\t", acc_str);
+  }    
+  
+  /* get tax name and print to column */
+  if (biop->org != NULL && ! StringHasNoText (biop->org->taxname))
+  {
+    fprintf (eotp->fp, "%s", biop->org->taxname);
+  }
+  else
+  {
+    fprintf (eotp->fp, " ");
+  }
+  
+  /* print modifiers for each available column */
+  for (i= 0; i < NumDefLineModifiers; i++)
+  {
+    if (eotp->modList[i].any_present)
+    {
+      mod = NULL;
+      ssp = NULL;
+      if (DefLineModifiers[i].isOrgMod)
+      {
+        if ( biop->org != NULL && biop->org->orgname != NULL) 
+        {
+          mod = biop->org->orgname->mod;
+          while (mod != NULL
+                 && mod->subtype != DefLineModifiers[i].subtype)
+          {
+            mod = mod->next;
+          }
+        }
+      }
+      else
+      {
+        ssp = biop->subtype;
+        while (ssp != NULL && ssp->subtype != DefLineModifiers[i].subtype)
+        {
+          ssp = ssp->next;
+        }
+      }
+      if (mod != NULL && !StringHasNoText (mod->subname))
+      {
+        fprintf (eotp->fp, "\t%s", mod->subname);
+      }
+      else if (ssp != NULL && !StringHasNoText (ssp->name))
+      {
+        fprintf (eotp->fp, "\t%s", ssp->name);
+      }
+      else
+      {
+        fprintf (eotp->fp, "\t ");
+      }
+    }
+  }
+  fprintf (eotp->fp, "\n");
+}
+
+static void ExportOrganisms (SeqEntryPtr sep, ExportOrgTablePtr eotp)
+{
+  BioseqSetPtr bssp;
+  SeqEntryPtr  nsep;
+  
+  if (sep == NULL || eotp == NULL || sep->data.ptrvalue == NULL) return;
+  
+  if (IS_Bioseq (sep))
+  {
+    eotp->bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitBioSourcesOnBsp (eotp->bsp, eotp, ExportOneOrganism);  
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp->_class == BioseqseqSet_class_nuc_prot)
+    {
+      nsep = FindNucSeqEntry (sep);
+      if (nsep != NULL)
+      {
+        eotp->bsp = (BioseqPtr) nsep->data.ptrvalue;
+        VisitBioSourcesOnSep (sep, eotp, ExportOneOrganism);
+      }
+    }
+    else
+    {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+      {
+        ExportOrganisms (sep, eotp);
+      }
+    }
+  }
+}
+
+extern void ExportOrganismTable (IteM i)
+{
+  BaseFormPtr        bfp;
+  SeqEntryPtr        sep;
+  ExportOrgTableData eotd;
+  Char               path [PATH_MAX];
+  Int4               idx;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  if (! GetOutputFileName (path, sizeof (path), NULL)) return;
+  eotd.fp = FileOpen (path, "w");
+  if (eotd.fp == NULL) return;
+
+  eotd.modList = MemNew (NumDefLineModifiers * sizeof (ModifierItemLocalData));
+  if (eotd.modList != NULL) 
+  {
+    CountModifiers (eotd.modList, sep);
+    /* print a header line */
+    fprintf (eotd.fp, "Accession Number\tLocal ID\tGeneral ID\tTax Name");
+    for (idx = 0; idx < NumDefLineModifiers; idx++)
+    {
+      if (eotd.modList[idx].any_present)
+      {
+        fprintf (eotd.fp, "\t%s", DefLineModifiers [idx].name);
+      }
+    }
+    fprintf (eotd.fp, "\n");
+        
+    ExportOrganisms  (sep, &eotd);
+  }
+  FileClose (eotd.fp);
+  for (idx=0; idx < NumDefLineModifiers; idx++)
+  {
+    ValNodeFree (eotd.modList[idx].values_seen);
+  }
+  MemFree (eotd.modList);
+
+}
+
 
 typedef struct qualifierselect {
   LisT gene_quals;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.16 $
+* $Revision: 1.23 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "1.0"
+#define ASN2FSA_APP_VER "1.2"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -265,6 +265,7 @@ typedef struct fastaflags {
   CharPtr  blastdbname;
   Int2     type;
   Int2     linelen;
+  Boolean  failed;
   FILE     *nt;
   FILE     *aa;
   FILE     *ql;
@@ -454,14 +455,17 @@ static Boolean SegHasParts (
   return FALSE;
 }
 
-static void CacheFarComponents (FILE *fr, ValNodePtr bsplist, Int2 linelen)
+static void CacheFarComponents (
+  FastaFlagPtr ffp,
+  ValNodePtr bsplist
+)
 
 {
   BioseqPtr   bsp;
   Uint2       entityID;
   ValNodePtr  vnp;
 
-  if (fr == NULL || bsplist == NULL) return;
+  if (ffp == NULL || ffp->fr == NULL || bsplist == NULL) return;
 
   for (vnp = bsplist; vnp != NULL; vnp = vnp->next) {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
@@ -472,18 +476,24 @@ static void CacheFarComponents (FILE *fr, ValNodePtr bsplist, Int2 linelen)
     switch (bsp->repr) {
         case Seq_repr_raw :
         case Seq_repr_const :
-          BioseqFastaStream (bsp, fr, 0, linelen, 0, 0, TRUE);
+          if (BioseqFastaStream (bsp, ffp->fr, 0, ffp->linelen, 0, 0, TRUE) < 0) {
+            ffp->failed = TRUE;
+          }
           break;
         case Seq_repr_seg :
           entityID = ObjMgrGetEntityIDForPointer (bsp);
           AssignIDsInEntity (entityID, 0, NULL);
           if (SegHasParts (bsp)) {
-            BioseqFastaStream (bsp, fr, 0, linelen, 0, 0, TRUE);
+            if (BioseqFastaStream (bsp, ffp->fr, 0, ffp->linelen, 0, 0, TRUE) < 0) {
+              ffp->failed = TRUE;
+            }
           }
           break;
         case Seq_repr_delta :
           if (DeltaLitOnly (bsp)) {
-            BioseqFastaStream (bsp, fr, 0, linelen, 0, 0, TRUE);
+            if (BioseqFastaStream (bsp, ffp->fr, 0, ffp->linelen, 0, 0, TRUE) < 0) {
+              ffp->failed = TRUE;
+            }
           }
           break;
         default :
@@ -646,15 +656,21 @@ static void ProcessSingleRecord (
       if (ffp->lock) {
         bsplist = DoLockFarComponents (sep, ffp);
         if (bsplist != NULL && ffp->fr != NULL) {
-          CacheFarComponents (ffp->fr, bsplist, ffp->linelen);
+          CacheFarComponents (ffp, bsplist);
         }
       }
 
       if (ffp->nt != NULL) {
-        SeqEntryFastaStream (sep, ffp->nt, flags, ffp->linelen, 0, 0, TRUE, FALSE, ffp->master_style);
+        if (SeqEntryFastaStream (sep, ffp->nt, flags, ffp->linelen, 0, 0,
+                                 TRUE, FALSE, ffp->master_style) < 0) {
+          ffp->failed = TRUE;
+        }
       }
       if (ffp->aa != NULL) {
-        SeqEntryFastaStream (sep, ffp->aa, flags, ffp->linelen, 0, 0, FALSE, TRUE, ffp->master_style);
+        if (SeqEntryFastaStream (sep, ffp->aa, flags, ffp->linelen, 0, 0,
+                                 FALSE, TRUE, ffp->master_style) < 0) {
+          ffp->failed = TRUE;
+        }
       }
       if (ffp->ql != NULL) {
         VisitBioseqsInSep (sep, (Pointer) ffp, PrintQualScores);
@@ -833,7 +849,7 @@ static void ProcessMultipleRecord (
       if (ffp->lock) {
         bsplist = DoLockFarComponents (sep, ffp);
         if (bsplist != NULL && ffp->fr != NULL) {
-          CacheFarComponents (ffp->fr, bsplist, ffp->linelen);
+          CacheFarComponents (ffp, bsplist);
         }
       }
 
@@ -905,6 +921,49 @@ static void ProcessOneRecord (
   }
 }
 
+static void ProcessOneSeqEntry (
+  SeqEntryPtr sep,
+  FastaFlagPtr ffp
+)
+
+
+{
+  ValNodePtr     bsplist;
+  StreamFlgType  flags = 0;
+
+  if (sep == NULL || ffp == NULL) return;
+
+  if (ffp->expand_gaps) {
+    flags = STREAM_EXPAND_GAPS;
+  }
+
+  bsplist = NULL;
+  if (ffp->lock) {
+    bsplist = DoLockFarComponents (sep, ffp);
+    if (bsplist != NULL && ffp->fr != NULL) {
+      CacheFarComponents (ffp, bsplist);
+    }
+  }
+
+  if (ffp->nt != NULL) {
+    if (SeqEntryFastaStream (sep, ffp->nt, flags, ffp->linelen, 0, 0,
+                             TRUE, FALSE, ffp->master_style) < 0) {
+      ffp->failed = TRUE;
+    }
+  }
+  if (ffp->aa != NULL) {
+    if (SeqEntryFastaStream (sep, ffp->aa, flags, ffp->linelen, 0, 0,
+                             FALSE, TRUE, ffp->master_style) < 0) {
+      ffp->failed = TRUE;
+    }
+  }
+  if (ffp->ql != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) ffp, PrintQualScores);
+  }
+
+  bsplist = UnlockFarComponents (bsplist);
+}
+
 static void FileRecurse (
   CharPtr directory,
   CharPtr subdir,
@@ -957,6 +1016,53 @@ static void FileRecurse (
   ValNodeFreeData (head);
 }
 
+static SeqEntryPtr SeqEntryFromAccnOrGi (
+  CharPtr accn
+)
+
+{
+  Boolean      alldigits;
+  Char         ch;
+  CharPtr      ptr;
+  SeqEntryPtr  sep = NULL;
+  SeqIdPtr     sip;
+  Int4         uid = 0;
+  long int     val;
+
+  if (StringHasNoText (accn)) return NULL;
+
+  TrimSpacesAroundString (accn);
+
+  alldigits = TRUE;
+  ptr = accn;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) {
+      alldigits = FALSE;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+
+  if (alldigits) {
+    if (sscanf (accn, "%ld", &val) == 1) {
+      uid = (Int4) val;
+    }
+  } else {
+    sip = SeqIdFromAccessionDotVersion (accn);
+    if (sip != NULL) {
+      uid = GetGIForSeqId (sip);
+      SeqIdFree (sip);
+    }
+  }
+
+  if (uid > 0) {
+    sep = PubSeqSynchronousQuery (uid, 0, -1);
+  }
+
+  return sep;
+}
+
 /* Args structure contains command-line arguments */
 
 #define p_argInputPath     0
@@ -971,23 +1077,23 @@ static void FileRecurse (
 #define s_argGenomicQual   9
 #define z_argZeroQualGap  10
 #define a_argType         11
-#define t_argBatch        12
-#define b_argBinary       13
-#define c_argCompressed   14
-#define r_argRemote       15
-#define f_argFastaIdx     16
-#define d_argBlastDB      17
-#define k_argLocalFetch   18
-#define l_argLockFar      19
-#define h_argFarOutFile   20
-#define e_argLineLength   21
-#define T_argThreads      22
-#define L_argLogFile      23
+#define b_argBinary       12
+#define c_argCompressed   13
+#define r_argRemote       14
+#define f_argFastaIdx     15
+#define d_argBlastDB      16
+#define k_argLocalFetch   17
+#define l_argLockFar      18
+#define h_argFarOutFile   19
+#define e_argLineLength   20
+#define T_argThreads      21
+#define L_argLogFile      22
+#define A_argAccession    23
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
     TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
-  {"Single Input File", NULL, NULL, NULL,
+  {"Single Input File", "stdin", NULL, NULL,
     TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Nucleotide Output File Name", NULL, NULL, NULL,
     TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -1007,10 +1113,8 @@ Args myargs [] = {
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Print Quality Score Gap as -1", "F", NULL, NULL,
     TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Batch Processing of Bioseq-set", "F", NULL, NULL,
-    TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Bioseq-set is Compressed", "F", NULL, NULL,
@@ -1033,13 +1137,15 @@ Args myargs [] = {
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Log File", NULL, NULL, NULL,
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Accession to Fetch", NULL, NULL, NULL,
+    TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
   Char           app [64], sfx [32];
-  CharPtr        base, blastdb, directory, fastaidx, ntout,
+  CharPtr        accn, base, blastdb, directory, fastaidx, ntout,
                  aaout, qlout, frout, logfile, ptr, str, suffix;
   Boolean        batch, binary, blast, compressed, dorecurse,
                  expandgaps, fargenomicqual, fasta, local, lock,
@@ -1047,6 +1153,7 @@ Int2 Main (void)
   FastaFlagData  ffd;
   Int2           linelen, type = 0;
   time_t         run_time, start_time, stop_time;
+  SeqEntryPtr    sep;
 
   /* standard setup */
 
@@ -1091,6 +1198,7 @@ Int2 Main (void)
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
   base = (CharPtr) myargs [i_argInputFile].strvalue;
+  accn = (CharPtr) myargs [A_argAccession].strvalue;
   dorecurse = (Boolean) myargs [u_argRecurse].intvalue;
   remote = (Boolean ) myargs [r_argRemote].intvalue;
   fastaidx = (CharPtr) myargs [f_argFastaIdx].strvalue;
@@ -1106,7 +1214,7 @@ Int2 Main (void)
   masterstyle = (Boolean) myargs [m_argMaster].intvalue;
   fargenomicqual = (Boolean) myargs [s_argGenomicQual].intvalue;
   qualgapzero = (Boolean) myargs [z_argZeroQualGap].intvalue;
-  batch = (Boolean) myargs [t_argBatch].intvalue;
+  batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
 
@@ -1121,6 +1229,9 @@ Int2 Main (void)
     type = 4;
   } else if (StringICmp (str, "m") == 0) {
     type = 5;
+  } else if (StringICmp (str, "t") == 0) {
+    type = 1;
+    batch = TRUE;
   } else {
     type = 1;
   }
@@ -1130,6 +1241,11 @@ Int2 Main (void)
       Message (MSG_FATAL, "-b or -c cannot be used without -t or -a");
       return 1;
     }
+  }
+
+  if (StringHasNoText (directory) && StringHasNoText (base)) {
+    Message (MSG_FATAL, "Input path or input file must be specified");
+    return 1;
   }
 
   ntout = (CharPtr) myargs [o_argNtOutFile].strvalue;
@@ -1162,6 +1278,7 @@ Int2 Main (void)
   ffd.useThreads = usethreads;
   ffd.type = type;
   ffd.linelen = linelen;
+  ffd.failed = FALSE;
   ffd.nt = NULL;
   ffd.aa = NULL;
   ffd.ql = NULL;
@@ -1256,17 +1373,28 @@ Int2 Main (void)
 
   /* recurse through all files within source directory or subdirectories */
 
-  if (! StringHasNoText (base)) {
+  if (StringDoesHaveText (accn)) {
+
+    if (remote) {
+      sep = SeqEntryFromAccnOrGi (accn);
+      if (sep != NULL) {
+        ProcessOneSeqEntry (sep, &ffd);
+        SeqEntryFree (sep);
+      }
+    }
+
+  } else if (StringDoesHaveText (directory)) {
+
+    FileRecurse (directory, NULL, suffix, dorecurse, &ffd);
+
+  } else if (StringDoesHaveText (base)) {
+
     ptr = StringRChr (base, '.');
     if (ptr != NULL) {
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';
     }
     ProcessOneRecord (directory, base, sfx, &ffd);
-
-  } else {
-
-    FileRecurse (directory, NULL, suffix, dorecurse, &ffd);
   }
 
   if (ffd.nt != NULL) {
@@ -1291,8 +1419,6 @@ Int2 Main (void)
     FileClose (ffd.logfp);
   }
 
-  Message (MSG_POST, "Ran in %ld seconds", (long) run_time);
-
   /* close fetch functions */
 
   if (local) {
@@ -1313,6 +1439,10 @@ Int2 Main (void)
 #else
     PubSeqFetchDisable ();
 #endif
+  }
+
+  if (ffd.failed) {
+    return 1;
   }
 
   return 0;

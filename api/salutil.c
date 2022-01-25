@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -674,7 +674,6 @@ NLM_EXTERN SeqEntryPtr StringToSeqEntry (CharPtr str, SeqIdPtr sip, Int4 length_
          str++;
   }
   if ( bsp->length == 0 ) {
-         BSFree (bs);
          BioseqFree (bsp);
          ValNodeFree (sep);
          return NULL;

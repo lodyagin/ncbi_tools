@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.83 2004/05/14 16:10:34 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.86 2004/09/08 20:59:53 kans Exp $";
 
 /*****************************************************************************
 *
@@ -1156,8 +1156,6 @@ static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
 *   SeqEntryToAsn3(sep)
 *   	Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
 *		Does the Taxonomy lookup if taxserver = TRUE and taxfun != NULL 
-*		ATTENTION: TaxArchInit() should be called before using this function
-*		or taxserver set to FALSE !!!
 *		Strips old stuff if strip_old=TRUE
 *		Moves /map from GeneRef, removes ProtRef xrefs and checks genetic
 *		code in CDSs
@@ -1240,8 +1238,6 @@ static Int2 GetUpdateDatePos (SeqEntryPtr sep)
 *   SeqEntryToAsn3Ex(sep)
 *   	Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
 *		Does the Taxonomy lookup if taxserver = TRUE and taxfun != NULL 
-*		ATTENTION: TaxArchInit() should be called before using this function
-*		or taxserver set to FALSE !!!
 *		Strips old stuff if strip_old=TRUE
 *		Moves /map from GeneRef, removes ProtRef xrefs and checks genetic
 *		code in CDSs
@@ -1252,8 +1248,8 @@ static Int2 GetUpdateDatePos (SeqEntryPtr sep)
 *		ERR_INPUT -   if input is NULL
 *
 *		New argument added SeqEntryFunc taxmerge
-*		txfun - GetTaxserverOrg
-*		taxmerge - TaxMergeBSinDescr
+*		txfun - Taxon3ReplaceOrgInSeqEntry
+*		taxmerge - Tax3MergeSourceDescr
 *****************************************************************************/
 Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
 {
@@ -1323,11 +1319,14 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 		SeqEntryExplore (sep, NULL, FuseMolInfos);
 		SeqEntryExplore(sep, NULL, StripProtXref);
 		SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
+		/*
 		if (qm.same == TRUE) {
 			SeqEntryExplore(sep, (Pointer)(&qm), StripMaps);
 		} else {
 			SeqEntryExplore(sep, NULL, MapsToGenref);
 		}
+		*/
+		SeqEntryExplore(sep, NULL, MapsToGenref);
 		CheckGeneticCode(sep);
 		NormalizeSegSeqMolInfo (sep);
 		toasn3_free(&ta);
@@ -1390,11 +1389,14 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	SeqEntryExplore (sep, NULL, FuseMolInfos);
 	SeqEntryExplore(sep, NULL, StripProtXref);
 	SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
+	/*
 	if (qm.same == TRUE) {
 		SeqEntryExplore(sep, (Pointer)(&qm), StripMaps);
 	} else {
 		SeqEntryExplore(sep, NULL, MapsToGenref);
 	}
+	*/
+	SeqEntryExplore(sep, NULL, MapsToGenref);
 	CheckGeneticCode(sep);
 	NormalizeSegSeqMolInfo (sep);
 	toasn3_free(&ta);
@@ -4875,6 +4877,21 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 	}
 }
 
+static Boolean PseudoGeneOverlap (SeqLocPtr slp)
+
+{
+  SeqFeatPtr  gene;
+  GeneRefPtr  grp;
+
+  gene = SeqMgrGetOverlappingGene (slp, NULL);
+  if (gene == NULL) return FALSE;
+  if (gene->pseudo) return TRUE;
+  grp = (GeneRefPtr) gene->data.value.ptrvalue;
+  if (grp == NULL) return FALSE;
+  if (grp->pseudo) return TRUE;
+  return FALSE;
+}
+
 static void GetCdRegionsWithPeptides (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
 	BioseqPtr 		bsp;
@@ -4900,7 +4917,7 @@ static void GetCdRegionsWithPeptides (SeqEntryPtr sep, Pointer data, Int4 index,
 		}
 		for (sfp = sap->data; sfp != NULL; sfp = sfp->next) {
 			if (sfp->data.choice == SEQFEAT_CDREGION) {
-			    if (! sfp->pseudo) {
+			    if ((! sfp->pseudo) && (! (PseudoGeneOverlap (sfp->location)))) {
 			    	tmp = ValNodeNew(NULL);
 				    tmp->data.ptrvalue = sfp;
 				    sfap->cds = tie_next(sfap->cds, tmp);

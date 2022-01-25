@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.171 $
+* $Revision: 6.181 $
 *
 * File Description:
 *
@@ -7298,29 +7298,38 @@ static void FeatConvertPeptideToImp (SeqFeatPtr  sfp,
 /*                                                                     */
 /* FeatConvertBioSrcToRepeatRegion ()                                  */
 /*                                                                     */
+/* 9/28/2004: Changed to convert all BioSource features with notes     */
+/* instead of ones with transposon or insertion_seq qualifiers.        */
 /*---------------------------------------------------------------------*/
 
 static void FeatConvertBioSrcToRepeatRegion (SeqFeatPtr sfp)
 {
   BioSourcePtr  biop;
-  Boolean       doConvert;
   GBQualPtr     gbqual;
   ImpFeatPtr    ifp;
-  OrgModPtr     omp;
-  SubSourcePtr  ssp;
+  OrgModPtr     omp = NULL;
+  SubSourcePtr  ssp = NULL;
+  CharPtr       text_to_use = NULL;
+  Int4          text_len = 0;
 
   /* Only convert transposon and insertion_seq features */
 
-  doConvert = FALSE;
   biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next)
-    if ((SUBSRC_transposon_name == ssp->subtype) ||
-	(SUBSRC_insertion_seq_name == ssp->subtype))
-      doConvert = TRUE;
+  for (ssp = biop->subtype; 
+       ssp != NULL && ssp->subtype != SUBSRC_other; 
+       ssp = ssp->next)
+  {
+  }
+  if (biop->org != NULL && biop->org->orgname != NULL)
+  {
+    for (omp = biop->org->orgname->mod; 
+         omp != NULL && omp->subtype != ORGMOD_other; 
+         omp = omp->next)
+    {
+    }
+  }
 
-  if (FALSE == doConvert)
-    return;
-
+  
   /* Create a new Import Feature */
 
   ifp = ImpFeatNew ();
@@ -7331,57 +7340,43 @@ static void FeatConvertBioSrcToRepeatRegion (SeqFeatPtr sfp)
   /* Copy relevant info from the BioSource */
   /* feature to the Import feature.        */
 
-  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
-
-    if (biop->org != NULL)
-      if (biop->org->orgname != NULL)
-	for (omp = biop->org->orgname->mod; omp != NULL; omp = omp->next)
-	  if (ORGMOD_other == omp->subtype)
-	    if (!StringHasNoText (omp->subname)) {
-	      gbqual = GBQualNew ();
-	      if (gbqual != NULL) {
-		gbqual->qual = StringSave ("note");
-		gbqual->val = StringSave (omp->subname);
-		gbqual->next = sfp->qual;
-		sfp->qual = gbqual;
-	      }
+  if (ssp != NULL)
+  {
+    text_len += StringLen (ssp->name) + 1;
+  }
+  if (omp != NULL)
+  {
+    text_len += StringLen (omp->subname) + 1;
+  }
+  if (text_len > 0)
+  {
+    text_to_use = (CharPtr) MemNew (text_len * sizeof (Char));
+    if (text_to_use != NULL)
+    {
+      text_to_use [0] = 0;
+      if (ssp != NULL)
+      {
+        StringCat (text_to_use, ssp->name);
+      }
+      if (omp != NULL)
+      {
+        if (!StringHasNoText (text_to_use))
+        {
+          StringCat (text_to_use, ";");
+        }
+        StringCat (text_to_use, omp->subname);
+      }
+	    gbqual = GBQualNew ();
+	    if (gbqual != NULL) 
+	    {
+		    gbqual->qual = StringSave ("note");
+		    gbqual->val = text_to_use;
+	      gbqual->next = sfp->qual;
+		    sfp->qual = gbqual;
 	    }
-
-    if (SUBSRC_transposon_name == ssp->subtype) {
-      if (! StringHasNoText (ssp->name)) {
-	gbqual = GBQualNew ();
-	if (gbqual != NULL) {
-	  gbqual->qual = StringSave ("transposon");
-	  gbqual->val = StringSave (ssp->name);
-	  gbqual->next = sfp->qual;
-	  sfp->qual = gbqual;
-	}
-      }
-    }
-    else if (SUBSRC_insertion_seq_name == ssp->subtype) {
-      if (! StringHasNoText (ssp->name)) {
-	gbqual = GBQualNew ();
-	if (gbqual != NULL) {
-	  gbqual->qual = StringSave ("insertion_seq");
-	  gbqual->val = StringSave (ssp->name);
-	  gbqual->next = sfp->qual;
-	  sfp->qual = gbqual;
-	}
-      }
-    }
-    else if (SUBSRC_other == ssp->subtype) {
-      if (! StringHasNoText (ssp->name)) {
-	gbqual = GBQualNew ();
-	if (gbqual != NULL) {
-	  gbqual->qual = StringSave ("note");
-	  gbqual->val = StringSave (ssp->name);
-	  gbqual->next = sfp->qual;
-	  sfp->qual = gbqual;
-	}
-      }
     }
   }
-  
+    
   /* Delete the old BioSource feature */
 
   sfp->data.value.ptrvalue = BioSourceFree (biop);
@@ -7933,41 +7928,57 @@ static void CommonQualifierCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
   if (aeop != NULL) {
     aeop->user_data = (Pointer) qfp;
   }
-  while (sap != NULL) {
+  while (sap != NULL) 
+  {
     nextsap = sap->next;
-    if (sap->type == 1) {
+    if (sap->type == 1) 
+    {
       sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
+      while (sfp != NULL) 
+      {
         nextsfp = sfp->next;
         subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
         lookfor = qfp->subtype;
 
-	if ((SEQFEAT_IMP == sfp->data.choice) &&
-	   ((subtype == FEATDEF_mat_peptide ||
-	     subtype == FEATDEF_sig_peptide ||
-	     subtype == FEATDEF_transit_peptide)))
-	  lookfor = subtype;
+	      if ((SEQFEAT_IMP == sfp->data.choice) &&
+	          ((subtype == FEATDEF_mat_peptide ||
+	            subtype == FEATDEF_sig_peptide ||
+	            subtype == FEATDEF_transit_peptide)))
+	      {
+	        lookfor = subtype;	        
+	      }
 
-        if (qfp->type != CONVERT_FEAT){
+        if (qfp->type != CONVERT_FEAT)
+        {
           if (qfp->subtype == 0)
             lookfor = subtype;
         }
 
-        if (subtype == lookfor) {
+        if (subtype == lookfor) 
+        {
           if (qfp->type == ADD_QUAL)
-	    QualAdd (qfp, sfp, val);
-	  else if (notext || QualifierHasSubstring (omtp, aip,
-						      (Pointer) sfp, qfp)) {
-            if (qfp->type == CONVERT_FEAT) {
-	      if (FeatConvert (qfp, sfp, newval) == FALSE)
-		return;
-	    }
-	    else
-	      QualConvertEditRemove (qfp, sfp, val, newval);
+          {
+	          QualAdd (qfp, sfp, val);            
+          }
+	        else if (notext || QualifierHasSubstring (omtp, aip,
+						      (Pointer) sfp, qfp)) 
+				  {
+            if (qfp->type == CONVERT_FEAT) 
+            {
+	            if (FeatConvert (qfp, sfp, newval) == FALSE)
+	            {
+		            return;
+	            }
+	          }
+	          else
+	          {
+	            QualConvertEditRemove (qfp, sfp, val, newval);
+	          }
           }
           if (qfp->type == REMOVE_QUAL
-		&& val < NumRemoveQualifiers
-		&& StringCmp (RemoveQualifierList[val - 1].name, "citation") == 0) {
+              && val < NumRemoveQualifiers
+              && StringCmp (RemoveQualifierList[val - 1].name, "citation") == 0) 
+          {
             sfp->cit = PubSetFree (sfp->cit);
           }
         }
@@ -8551,7 +8562,6 @@ typedef struct sourceformdata {
   TexT           onlyThisPart;
   GrouP          sourceGroup;
   GrouP          modGrp;
-  GrouP          applyChoiceGrp;
   GrouP          genGrp;
   GrouP          refGrp;
   GrouP          txtGrp;
@@ -8566,6 +8576,18 @@ typedef struct sourceformdata {
   PopuP          fromorigin;
   TexT           findthis;
   TexT           replacewith;
+  GrouP          applyChoiceGrp;  /* This is the group for the radio buttons for the
+                                   * constraint on which biosources to operate on.
+                                   */
+  PopuP          qual_to_have;    /* This is the control that indicates which qualifier
+                                   * should be present to operate on a biosource.
+                                   */
+  TexT           text_to_have;    /* This is the control that indicates the text that
+                                   * should be present in the biosource to be operated on.
+                                   */
+  Int4           applyChoiceVal;  /* This is the value of the applyChoiceGrp choice. */
+  CharPtr        text_to_have_str;/* This is the contents of the text_to_have box. */
+  Int4           qual_to_have_val;/* This is the subtype for the qual to have. */
 
   Int2           choice;
   Int2           fromval;
@@ -8579,6 +8601,227 @@ typedef struct sourceformdata {
   Boolean        use_semicolon;
   ButtoN         leaveDlgUp;
 } SourceFormData, PNTR SourceFormPtr;
+
+static ValNodePtr EnumToValNode (EnumFieldAssocPtr al) 
+{
+  EnumFieldAssocPtr efap;
+  ValNodePtr list = NULL, vnp;
+  
+  for (efap = al; efap->name != NULL; efap++)
+  {
+  	vnp = ValNodeNew (list);
+  	if (list == NULL) list = vnp;
+  	if (vnp != NULL)
+  	{
+  	  vnp->choice = efap->value;
+  	  vnp->data.ptrvalue = efap->name;
+  	}
+  }
+  return list;
+}
+
+extern ValNodePtr GetQualList (void)
+{
+  ValNodePtr list;
+  
+  list = EnumToValNode (subsource_and_orgmod_subtype_alistX);
+  return list;
+}
+
+Uint2 mod_widths [] = {
+  0, 25
+};
+
+Uint2 mod_types [] = {
+  TAGLIST_POPUP, TAGLIST_TEXT
+};
+
+extern Uint1 FindTypeForModNameText (CharPtr cp)
+{
+  EnumFieldAssocPtr  ap;
+  
+  for (ap = subsource_and_orgmod_subtype_alistX; ap->name != NULL; ap++) 
+  {
+    if (StringICmp (ap->name, cp) == 0)
+    {
+      return ap->value;
+    }
+  }
+  return 255;
+}
+
+static void ModListToModDialog (DialoG d, Pointer data)
+
+{
+  ValNodePtr  head;
+  Int2        j;
+  size_t      len;
+  ListPairPtr lpp;
+  CharPtr     str;
+  TagListPtr  tlp;
+  ValNodePtr  name_vnp;
+  ValNodePtr  value_vnp;
+  ValNodePtr  vnp;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  lpp = (ListPairPtr) data;
+  head = NULL;
+  if (tlp != NULL) {
+    name_vnp = lpp->selected_names_list;
+    value_vnp = lpp->selected_values_list;
+    while (name_vnp != NULL) {
+      if (!StringHasNoText (name_vnp->data.ptrvalue))
+      {
+        vnp = ValNodeNew (head);
+        if (head == NULL) {
+          head = vnp;
+        }
+        len = StringLen (name_vnp->data.ptrvalue) + 4;
+        if (value_vnp != NULL)
+        {
+          len += StringLen (value_vnp->data.ptrvalue);
+        }
+        str = MemNew (len);
+        if (str != NULL)
+        {
+          if (value_vnp != NULL && ! StringHasNoText (value_vnp->data.ptrvalue))
+          {
+        	sprintf (str, "%d\t%s\n", 
+        	         name_vnp->choice,
+        	         value_vnp->data.ptrvalue);
+          }
+          else
+          {
+          	sprintf (str, "%d\t\n", name_vnp->choice);
+          }
+        }
+        vnp->data.ptrvalue = str;
+      }
+      name_vnp = name_vnp->next;
+      if (value_vnp != NULL)
+      {
+      	value_vnp = value_vnp->next;
+      }
+    }
+    SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+    tlp->vnp = head;
+    SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+    for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
+    }
+    tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
+    CorrectBarMax (tlp->bar, tlp->max);
+    CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  }
+}
+
+static CharPtr GetValueNameFromEnum (Int4 val, EnumFieldAssocPtr list)
+{ 
+  EnumFieldAssocPtr ap;
+  
+  for (ap = list; ap != NULL && ap->name != NULL; ap++)
+  {
+  	if (ap->value == val)
+  	{
+  	  return ap->name;
+  	}
+  }
+  return NULL;
+}
+
+static Pointer ModDialogToModList (DialoG d)
+
+{
+  Char        ch;
+  OrgModPtr   head;
+  Int2        j;
+  Int2        len;
+  Boolean     okay;
+  CharPtr     str;
+  TagListPtr  tlp;
+  CharPtr     mod_name;
+  CharPtr     mod_value;
+  ValNodePtr  vnp, name_vnp, value_vnp;
+  ListPairPtr lpp;
+  CharPtr     tmp;
+  int         val;
+
+  head = NULL;
+  tlp = (TagListPtr) GetObjectExtra (d);
+
+  lpp = (ListPairPtr) MemNew (sizeof (ListPairData));
+  if (lpp == NULL) return NULL;
+  lpp->selected_names_list = NULL;
+  lpp->selected_values_list = NULL;
+
+  if (tlp != NULL && tlp->vnp != NULL) {
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      okay = FALSE;
+      len = StringLen (str);
+      for (j = 0; j < len; j++) {
+        ch = str [j];
+        if (ch != ' ' && ch != '\t' && ch != '\n') {
+          okay = TRUE;
+        }
+      }
+      if (okay) {
+        tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+        if (tmp != NULL && sscanf (tmp, "%d", &val) == 1 && val != 0) {
+          mod_name = GetValueNameFromEnum (val, subsource_and_orgmod_subtype_alistX);
+          if (mod_name != NULL && ! StringHasNoText (mod_name)) {
+            mod_value = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
+            name_vnp = ValNodeNew (lpp->selected_names_list);
+            value_vnp = ValNodeNew (lpp->selected_values_list);
+            if (lpp->selected_names_list == NULL)
+            {
+              lpp->selected_names_list = name_vnp;
+            }
+            if (lpp->selected_values_list == NULL)
+            {
+          	  lpp->selected_values_list = value_vnp;
+            }
+            if (name_vnp != NULL)
+            {
+              name_vnp->choice = val;
+              name_vnp->data.ptrvalue = mod_name;
+            }
+            if (value_vnp != NULL)
+            {
+          	  value_vnp->data.ptrvalue = mod_value;
+            }
+            
+          }
+        } 
+        MemFree (tmp);
+      }
+    }
+  }
+  return (Pointer) lpp;
+}
+
+static EnumFieldAssocPtr mod_lists[] = 
+  { subsource_and_orgmod_subtype_alistX, NULL };
+
+extern DialoG CreateModifierTagList (GrouP g, ListPairPtr lpp)
+{ 
+  DialoG d;
+  
+  if (lpp == NULL) return NULL;
+  d = CreateTagListDialog (g, 4, 2, STD_TAG_SPACING, mod_types,
+                           mod_widths, mod_lists,
+                           ModListToModDialog,
+                           ModDialogToModList);
+  PointerToDialog (d, lpp);
+  return d;
+}
+
+extern ListPairPtr GetModifierList (DialoG d)
+{
+  ListPairPtr lpp;
+  
+  lpp = DialogToPointer (d);
+  return lpp;
+}
 
 extern void AppendOrReplaceString (
   CharPtr PNTR string_loc,
@@ -8770,7 +9013,7 @@ static void ConvertSourceString (OrgRefPtr orp, Int2 fromval, Int2 toval)
 
   switch (fromval) {
     case 1 :
-      tmp = orp->taxname;
+      tmp = StringSave (orp->taxname);
       SetTaxNameAndRemoveTaxRef (orp, NULL);
       break;
     case 2 :
@@ -9146,6 +9389,16 @@ static Boolean DoesBioSourceQualContainString (BioSourcePtr biop, CharPtr str)
   return FALSE;
 }
 
+static Boolean DoesBioSourceOrgNameContainString (BioSourcePtr biop, CharPtr str)
+{
+  if (biop == NULL || str == NULL || biop->org == NULL) return FALSE;
+  if (StringStr (biop->org->taxname, str) != NULL || StringStr (biop->org->common, str) != NULL)
+  {
+  	return TRUE;
+  }
+  return FALSE;
+}
+
 static Boolean DoesBioSourceHaveQual (BioSourcePtr biop, Uint1 subtype, Boolean is_ssp)
 {
   SubSourcePtr  ssp = NULL;
@@ -9195,27 +9448,22 @@ static Boolean DoesBioSourceHaveQual (BioSourcePtr biop, Uint1 subtype, Boolean 
   return FALSE;
 }
 
-static Boolean OkToApplyQual (BioSourcePtr biop, SourceFormPtr sfp)
+static Boolean OkToOperateOnSource (BioSourcePtr biop, SourceFormPtr sfp)
 {
-  Int2           val;
   Uint1          subtype;
   Boolean        is_ssp;
   
   if (biop == NULL || sfp == NULL) {
     return FALSE;
   }
-  if (sfp->choice != 1 || sfp->type != ADD_SOURCE) 
-  {
-  	return TRUE;
-  }
-  val = GetValue (sfp->applyChoiceGrp);
-  switch (val) 
+
+  switch (sfp->applyChoiceVal) 
   {
   	case 1:
   	  return TRUE;
   	  break;
   	case 2:
-  	  subtype = sfp->toval;
+  	  subtype = sfp->qual_to_have_val;
   	  is_ssp = FALSE;
   	  if (subtype == 999) 
   	  {
@@ -9238,7 +9486,8 @@ static Boolean OkToApplyQual (BioSourcePtr biop, SourceFormPtr sfp)
   	  return DoesBioSourceHaveQual (biop, subtype, is_ssp);
   	  break;
   	case 4:
-      return DoesBioSourceQualContainString (biop, sfp->replaceStr);
+      return DoesBioSourceQualContainString (biop, sfp->text_to_have_str) 
+          || DoesBioSourceOrgNameContainString (biop, sfp->text_to_have_str);
       break; 	  
   }
   return FALSE;	
@@ -9259,20 +9508,19 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
   Int4          offset;
 
   if (biop == NULL || sfp == NULL) return;
-  if (! OkToApplyQual (biop, sfp)) return;
+  if (! OkToOperateOnSource (biop, sfp)) return;
   if (sfp->choice == 1) {
     if (sfp->fromval == 999) {
       ssp = FindSubSource (biop, 255, sfp, FALSE, FALSE, is_feat);
       if (ssp != NULL)
-	str1 = ssp->name;
+	      str1 = ssp->name;
 
       mod = FindOrgMod (biop, 255, sfp, FALSE, FALSE);
       if (mod != NULL)
-	str2 = mod->subname;
+	      str2 = mod->subname;
     }
     else if (sfp->fromval >= 100) {
-      ssp = FindSubSource (biop, sfp->fromval - 100, sfp,
-			   FALSE, FALSE, is_feat);
+      ssp = FindSubSource (biop, sfp->fromval - 100, sfp, FALSE, FALSE, is_feat);
       if (ssp == NULL) return;
       str = ssp->name;
     } else {
@@ -9301,14 +9549,14 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         if (ssp != NULL) {
           foundit = StringISearch (ssp->name, sfp->findStr);
 		  while (foundit != NULL) {
-		    offset = foundit - ssp->name + 1;
+		    offset = foundit - ssp->name + 1 + StringLen (sfp->replaceStr);
             EditSourceString (&(ssp->name), sfp, foundit);
 			foundit = StringISearch (ssp->name + offset, sfp->findStr);
           }
         } else if (mod != NULL) {
           foundit = StringISearch (mod->subname, sfp->findStr);
  		  while (foundit != NULL) {
-		    offset = foundit - mod->subname + 1;
+		    offset = foundit - mod->subname + 1 + StringLen (sfp->replaceStr);
             EditSourceString (&(mod->subname), sfp, foundit);
 			foundit = StringISearch (mod->subname + offset, sfp->findStr);
           }
@@ -9575,6 +9823,19 @@ static void DoProcessSource (ButtoN b)
   Hide (sfp->form);
   WatchCursor ();
   Update ();
+  
+  sfp->applyChoiceVal = GetValue (sfp->applyChoiceGrp);  
+  sfp->text_to_have_str = SaveStringFromText (sfp->text_to_have);
+  if (GetEnumPopup (sfp->qual_to_have, subsource_and_orgmod_subtype_alistX, &val))
+  {
+	  sfp->qual_to_have_val = (Int2) val;
+  }
+  else
+  {
+    sfp->qual_to_have_val = 0;
+  }
+
+  
   sfp->fromval = 0;
   sfp->toval = 0;
   sfp->choice = GetValue (sfp->sourceGroup);
@@ -9648,7 +9909,7 @@ static void DoProcessSource (ButtoN b)
         gs.ignore[OBJ_SEQANNOT] = FALSE;
         gs.ignore[OBJ_SEQFEAT] = FALSE;
         gs.ignore[OBJ_SEQDESC] = FALSE;
-        GatherEntity (sfp->input_entityID, (Pointer) sfp, ProcessSourceGatherFunc, &gs);
+        GatherEntity (sfp->input_entityID, (Pointer) sfp, ProcessSourceGatherFunc, &gs);          
       }
     }
   }
@@ -9740,6 +10001,7 @@ static void CleanupSourceForm (GraphiC g, VoidPtr data)
   if (sfp != NULL) {
     MemFree (sfp->findStr);
     MemFree (sfp->replaceStr);
+    MemFree (sfp->text_to_have_str);
   }
   StdCleanupFormProc (g, data);
 }
@@ -9776,6 +10038,33 @@ static void SourceApplyToPartsProc (ButtoN b)
   } else {
     SafeDisable (sfp->onlyThisPart);
   }
+}
+
+static void ClearProcessSourceDlgText (ButtoN b)
+{
+  SourceFormPtr  sfp;
+
+  sfp = (SourceFormPtr) GetObjectExtra (b);
+  if (sfp == NULL) return;
+
+  switch (sfp->type) {
+    case REMOVE_SOURCE :
+      SetTitle (sfp->findthis, "");
+      break;
+    case CONVERT_SOURCE :
+      SetTitle (sfp->findthis, "");
+      break;
+    case EDIT_SOURCE :
+      SetTitle (sfp->findthis, "");
+      SetTitle (sfp->replacewith, "");
+      break;
+    case ADD_SOURCE :
+      SetTitle (sfp->findthis, "");
+      break;
+    default :
+      break;
+  }
+  Select (sfp->findthis);
 }
 
 static void ClearProcessSourceDlg (ButtoN b)
@@ -9843,16 +10132,16 @@ static void ChangeApplyTarget (GrouP g)
   val = GetValue (g);
   switch (val) {
   	case 1:
-      Disable (sfp->tomod);
-      Disable (sfp->replacewith);
+      Disable (sfp->qual_to_have);
+      Disable (sfp->text_to_have);
       break;
   	case 2:
-  	  Enable (sfp->tomod);
-  	  Disable (sfp->replacewith);
+  	  Enable (sfp->qual_to_have);
+  	  Disable (sfp->text_to_have);
   	  break;
   	case 4:
-  	  Disable (sfp->tomod);
-  	  Enable (sfp->replacewith);
+  	  Disable (sfp->qual_to_have);
+  	  Enable (sfp->text_to_have);
   	  break;
   }
 }
@@ -9961,16 +10250,6 @@ static void ProcessSource (IteM i, Int2 type)
     case ADD_SOURCE :
       StaticPrompt (sfp->modGrp, "Type", 0, popupMenuHeight, programFont, 'l');
       sfp->frommod = PopupOrSingleList (sfp->modGrp, TRUE, NULL, subsource_and_orgmod_subtype_alistX, 0);
-      sfp->applyChoiceGrp = HiddenGroup (sfp->modGrp, 1, 3, ChangeApplyTarget);
-      SetObjectExtra (sfp->applyChoiceGrp, sfp, NULL);
-      RadioButton (sfp->applyChoiceGrp, "To every biosource");
-      RadioButton (sfp->applyChoiceGrp, "When qualifier present");
-      sfp->tomod = PopupOrSingleList (sfp->applyChoiceGrp, TRUE, NULL, subsource_and_orgmod_subtype_alistX, 0);      
-      RadioButton (sfp->applyChoiceGrp, "When any qualifier contains");
-      sfp->replacewith = DialogText (sfp->applyChoiceGrp, "", 14, NULL);
-      SetValue (sfp->applyChoiceGrp, 1);
-      Disable (sfp->tomod);
-      Disable (sfp->replacewith);
       break;
     default :
       break;
@@ -10051,8 +10330,8 @@ static void ProcessSource (IteM i, Int2 type)
   switch (type) {
     case REMOVE_SOURCE :
     case CONVERT_SOURCE :
-      sfp->txtGrp = HiddenGroup (h, 0, 2, NULL);
-      StaticPrompt (sfp->txtGrp, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
+      sfp->txtGrp = HiddenGroup (h, 0, 3, NULL);
+      StaticPrompt (sfp->txtGrp, "Optional string constraint for item to change", 0, dialogTextHeight, programFont, 'c');
       sfp->findthis = DialogText (sfp->txtGrp, "", 14, NULL);
       break;
     case ADD_SOURCE :
@@ -10097,16 +10376,30 @@ static void ProcessSource (IteM i, Int2 type)
       break;
   }
   SafeHide (sfp->originGrp);
+  
+  sfp->applyChoiceGrp = HiddenGroup (h, 1, 3, ChangeApplyTarget);
+  SetObjectExtra (sfp->applyChoiceGrp, sfp, NULL);
+  RadioButton (sfp->applyChoiceGrp, "To every biosource");
+  RadioButton (sfp->applyChoiceGrp, "When qualifier present");
+  sfp->qual_to_have = PopupOrSingleList (sfp->applyChoiceGrp, TRUE, NULL, subsource_and_orgmod_subtype_alistX, 0);      
+  RadioButton (sfp->applyChoiceGrp, "When any qualifier or the organism name contains");
+  sfp->text_to_have = DialogText (sfp->applyChoiceGrp, "", 14, NULL);
+  SetValue (sfp->applyChoiceGrp, 1);
+  Disable (sfp->qual_to_have);
+  Disable (sfp->text_to_have);
 
-  c = HiddenGroup (h, 4, 0, NULL);
+  c = HiddenGroup (h, 5, 0, NULL);
   b = DefaultButton (c, "Accept", DoProcessSource);
   SetObjectExtra (b, sfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   b = PushButton (c, "Clear", ClearProcessSourceDlg);
   SetObjectExtra (b, sfp, NULL);
+  b = PushButton (c, "Clear Text", ClearProcessSourceDlgText);
+  SetObjectExtra (b, sfp, NULL);
   sfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) c, (HANDLE) sfp->sourceGroup,
+  AlignObjects (ALIGN_CENTER, (HANDLE) sfp->applyChoiceGrp, (HANDLE) c, 
+                (HANDLE) sfp->sourceGroup,
                 (HANDLE) sfp->modGrp, (HANDLE) sfp->genGrp,
                 (HANDLE) sfp->refGrp, (HANDLE) sfp->txtGrp,
                 (HANDLE) sfp->originGrp, NULL);

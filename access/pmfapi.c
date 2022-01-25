@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.64 $
+* $Revision: 1.71 $
 *
 * File Description: 
 *
@@ -258,6 +258,9 @@ static void ChangeMedlineAuthorsToISO (
   ValNodeFreeData (oldnames);
 }
 
+static Boolean log_query_url = FALSE;
+static Boolean log_query_url_set = FALSE;
+
 NLM_EXTERN CONN PubMedFetchOpenConnection (
   Int4 uid
 )
@@ -278,6 +281,38 @@ NLM_EXTERN CONN PubMedFetchOpenConnection (
   return QUERY_OpenServiceQuery ("PubFetch", query, 30);
 }
 
+static void MakeDateTimeStamp (
+  CharPtr buf
+)
+
+{
+  DayTime  dt;
+
+  if (buf == NULL) return;
+  *buf = '\0';
+
+  if (GetDayTime (&dt)) {
+    sprintf (buf, "%2ld/%2ld/%4ld %2ld:%2ld:%2ld",
+             (long) (dt.tm_mon + 1), (long) dt.tm_mday, (long) (dt.tm_year + 1900),
+             (long) dt.tm_hour, (long) dt.tm_min, (long) dt.tm_sec);
+    if (buf [0] == ' ') {
+      buf [0] = '0';
+    }
+    if (buf [3] == ' ') {
+      buf [3] = '0';
+    }
+    if (buf [11] == ' ') {
+      buf [11] = '0';
+    }
+    if (buf [14] == ' ') {
+      buf [14] = '0';
+    }
+    if (buf [17] == ' ') {
+      buf [17] = '0';
+    }
+  }
+}
+
 NLM_EXTERN CONN PubSeqFetchOpenConnection (
   Int4 uid,
   Int2 retcode,
@@ -285,7 +320,12 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 )
 
 {
-  Char  query [64];
+  Char     buf [32];
+  CONN     conn;
+  Char     query [64];
+#ifdef OS_UNIX
+  CharPtr  str;
+#endif
 
   if (uid < 1) return NULL;
   if (retcode < 0 || retcode > 4) {
@@ -303,7 +343,41 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 #endif
 
   sprintf (query, "val=%ld&maxplex=%d&extrafeat=%ld", (long) uid, (int) retcode, (long) flags);
-  return QUERY_OpenServiceQuery ("SeqFetch", query, 30);
+  conn = QUERY_OpenServiceQuery ("SeqFetch", query, 30);
+
+#ifdef OS_UNIX
+  if (! log_query_url_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_LOG_URL");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_query_url = TRUE;
+      }
+    }
+    log_query_url_set = TRUE;
+  }
+#endif
+
+  if (conn == NULL) {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchOpenConnection failed for gi %ld, date/time %s", (long) uid, buf);
+    return conn;
+  }
+
+#ifdef OS_UNIX
+  if (log_query_url) {
+    str = CONN_Description (conn);
+    if (str == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for gi %ld", (long) uid);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for gi %ld is %s", (long) uid, str);
+    }
+  }
+#endif
+
+  return conn;
 }
 
 static CharPtr girevtxt = "cmd=seqid&txt=on&seqid=fasta&val=";
@@ -348,6 +422,53 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
   */
 
   conn = QUERY_OpenServiceQuery ("Gi2Accn", query, 30);
+
+  MemFree (query);
+  return conn;
+}
+
+static CharPtr giaccvertxt = "cmd=seqid&txt=on&seqid=15&val=";
+
+NLM_EXTERN CONN GiAccVerOpenConnection (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+)
+
+{
+  CONN     conn;
+  Int4     i;
+  CharPtr  query;
+  Char     tmp [16];
+
+  if (uid > 0 && uids == NULL) {
+    uids = &uid;
+    num = 1;
+  }
+  if (uids == NULL || num < 1) return NULL;
+
+  query = (CharPtr) MemNew (11 * num + StringLen (giaccvertxt) + 5);
+  if (query == NULL) return NULL;
+  /*
+  StringCpy (query, giaccvertxt);
+  */
+  StringCpy (query, "val=");
+
+  sprintf (tmp, "%ld", (long) uids [0]);
+  StringCat (query, tmp);
+
+  for (i = 1; i < num; i++) {
+    sprintf (tmp, ",%ld", (long) uids [i]);
+    StringCat (query, tmp);
+  }
+
+  /*
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_Plain, eENCOD_None, 0);
+  */
+
+  conn = QUERY_OpenServiceQuery ("Gi2AccVer", query, 30);
 
   MemFree (query);
   return conn;
@@ -560,11 +681,37 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
 
 {
   SeqEntryPtr  sep = NULL;
+  EIO_Status   status;
+#ifdef OS_UNIX
+  CharPtr      str;
+#endif
 
   if (conn == NULL) return NULL;
 
-  if (CommonWaitForReply (conn) == eIO_Success) {
+#ifdef OS_UNIX
+  if (! log_query_url_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_LOG_URL");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_query_url = TRUE;
+      }
+    }
+    log_query_url_set = TRUE;
+  }
+#endif
+
+  status = CommonWaitForReply (conn);
+  if (status == eIO_Success) {
     sep = PubSeqReadReply (conn, eIO_Success);
+#ifdef OS_UNIX
+    /*
+    if (sep == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "PubSeqWaitForReply unable to read valid result");
+    }
+    */
+  } else {
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqWaitForReply failed with status %d", (int) status);
+#endif
   }
   CONN_Close (conn);
 
@@ -607,6 +754,48 @@ NLM_EXTERN CharPtr GiRevHistWaitForReply (
 
   if (CommonWaitForReply (conn) == eIO_Success) {
     str = GiRevHistReadReply (conn, eIO_Success);
+  }
+  CONN_Close (conn);
+
+  return str;
+}
+
+NLM_EXTERN CharPtr GiAccVerReadReply (
+  CONN conn,
+  EIO_Status status
+)
+
+{
+  AsnIoConnPtr  aicp;
+  ByteStorePtr  bsp;
+  Char          buf [512];
+  size_t        n_read;
+  CharPtr       str = NULL;
+
+  if (conn != NULL && status == eIO_Success) {
+    bsp = BSNew (512);
+    aicp = QUERY_AsnIoConnOpen ("r", conn);
+    while ((status = CONN_Read (aicp->conn, (Pointer) buf, sizeof (buf), &n_read, eIO_ReadPlain)) == eIO_Success) {
+      BSWrite (bsp, buf, n_read);
+    }
+    str = BSMerge (bsp, NULL);
+    BSFree (bsp);
+    QUERY_AsnIoConnClose (aicp);
+  }
+  return str;
+}
+
+NLM_EXTERN CharPtr GiAccVerWaitForReply (
+  CONN conn
+)
+
+{
+  CharPtr  str = NULL;
+
+  if (conn == NULL) return NULL;
+
+  if (CommonWaitForReply (conn) == eIO_Success) {
+    str = GiAccVerReadReply (conn, eIO_Success);
   }
   CONN_Close (conn);
 
@@ -752,6 +941,9 @@ NLM_EXTERN CharPtr AccnListWaitForReply (
   return str;
 }
 
+static Boolean log_sync_query_times = FALSE;
+static Boolean log_sync_query_set = FALSE;
+
 NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   Int4 uid
 )
@@ -760,16 +952,24 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   CONN            conn;
   PubmedEntryPtr  pep;
 #ifdef OS_UNIX
-  Boolean         logtimes;
   clock_t         starttime;
   clock_t         stoptime;
+  CharPtr         str;
   struct tms      timebuf;
 #endif
 
   if (uid < 1) return NULL;
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = PubMedFetchOpenConnection (uid);
@@ -779,7 +979,7 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
@@ -787,7 +987,7 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   pep = PubMedWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("PubMedWaitForReply %ld\n", (long) (stoptime - starttime));
   }
@@ -829,11 +1029,12 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 )
 
 {
+  Char         buf [32];
   CONN         conn;
   PsConfirm    ps;
   SeqEntryPtr  sep;
+  CharPtr      str;
 #ifdef OS_UNIX
-  Boolean      logtimes;
   clock_t      starttime;
   clock_t      stoptime;
   struct tms   timebuf;
@@ -842,7 +1043,15 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   if (uid < 1) return NULL;
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = PubSeqFetchOpenConnection (uid, retcode, flags);
@@ -852,15 +1061,20 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
 
+  str = CONN_Description (conn);
+  if (StringHasNoText (str)) {
+    str = "?";
+  }
+
   sep = PubSeqWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("PubSeqWaitForReply %ld\n", (long) (stoptime - starttime));
   }
@@ -876,7 +1090,13 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
                  (long) uid, (long) ps.gi);
     }
   } else {
-    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqSynchronousQuery failed for gi %ld", (long) uid);
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0,
+               "PubSeqSynchronousQuery failed for gi %ld, date/time %s, URL is %s",
+               (long) uid, buf, str);
   }
 
   return sep;
@@ -892,14 +1112,21 @@ NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
   CONN        conn;
   CharPtr     str;
 #ifdef OS_UNIX
-  Boolean     logtimes;
   clock_t     starttime;
   clock_t     stoptime;
   struct tms  timebuf;
 #endif
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = GiRevHistOpenConnection (uid, num, uids);
@@ -909,7 +1136,7 @@ NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
@@ -917,9 +1144,60 @@ NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
   str = GiRevHistWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("GiRevHistWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
+
+  return str;
+}
+
+NLM_EXTERN CharPtr GiAccVerSynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+)
+
+{
+  CONN        conn;
+  CharPtr     str;
+#ifdef OS_UNIX
+  clock_t     starttime;
+  clock_t     stoptime;
+  struct tms  timebuf;
+#endif
+
+#ifdef OS_UNIX
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
+#endif
+
+  conn = GiAccVerOpenConnection (uid, num, uids);
+
+  if (conn == NULL) return NULL;
+
+  QUERY_SendQuery (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    starttime = times (&timebuf);
+  }
+#endif
+
+  str = GiAccVerWaitForReply (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    stoptime = times (&timebuf);
+    printf ("GiAccVerWaitForReply %ld\n", (long) (stoptime - starttime));
   }
 #endif
 
@@ -934,14 +1212,22 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
   CONN        conn;
   Int4        gi;
 #ifdef OS_UNIX
-  Boolean     logtimes;
   clock_t     starttime;
   clock_t     stoptime;
+  CharPtr     str;
   struct tms  timebuf;
 #endif
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = AccnRevHistOpenConnection (accn);
@@ -951,7 +1237,7 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
@@ -959,7 +1245,7 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
   gi = AccnRevHistWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("AccnRevHistWaitForReply %ld\n", (long) (stoptime - starttime));
   }
@@ -976,14 +1262,22 @@ NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
   CONN        conn;
   SeqIdPtr    sip;
 #ifdef OS_UNIX
-  Boolean     logtimes;
   clock_t     starttime;
   clock_t     stoptime;
+  CharPtr     str;
   struct tms  timebuf;
 #endif
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = GiSeqIdSetOpenConnection (gi);
@@ -993,7 +1287,7 @@ NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
@@ -1001,7 +1295,7 @@ NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
   sip = GiSeqIdSetWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("GiSeqIdSetWaitForReply %ld\n", (long) (stoptime - starttime));
   }
@@ -1018,14 +1312,21 @@ NLM_EXTERN CharPtr AccnListSynchronousQuery (
   CONN        conn;
   CharPtr     str;
 #ifdef OS_UNIX
-  Boolean     logtimes;
   clock_t     starttime;
   clock_t     stoptime;
   struct tms  timebuf;
 #endif
 
 #ifdef OS_UNIX
-  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
 #endif
 
   conn = AccnListOpenConnection (accns);
@@ -1035,7 +1336,7 @@ NLM_EXTERN CharPtr AccnListSynchronousQuery (
   QUERY_SendQuery (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     starttime = times (&timebuf);
   }
 #endif
@@ -1043,7 +1344,7 @@ NLM_EXTERN CharPtr AccnListSynchronousQuery (
   str = AccnListWaitForReply (conn);
 
 #ifdef OS_UNIX
-  if (logtimes) {
+  if (log_sync_query_times) {
     stoptime = times (&timebuf);
     printf ("AccnListWaitForReply %ld\n", (long) (stoptime - starttime));
   }
@@ -1136,6 +1437,37 @@ NLM_EXTERN Boolean GiRevHistAsynchronousQuery (
 }
 
 NLM_EXTERN Int4 GiRevHistCheckQueue (
+  QUEUE* queue
+)
+
+{
+  return QUERY_CheckQueue (queue);
+}
+
+NLM_EXTERN Boolean GiAccVerAsynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+)
+
+{
+  CONN  conn;
+
+  conn = GiAccVerOpenConnection (uid, num, uids);
+
+  if (conn == NULL) return FALSE;
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
+
+  return TRUE;
+}
+
+NLM_EXTERN Int4 GiAccVerCheckQueue (
   QUEUE* queue
 )
 
@@ -1239,6 +1571,9 @@ static CharPtr pubseqgitoseqid = "PubSeqGiForSeqId";
 static Boolean  fetch_fail_warn = FALSE;
 static Boolean  fetch_fail_warn_set = FALSE;
 
+static Boolean  fetch_succeed_log = FALSE;
+static Boolean  fetch_succeed_log_set = FALSE;
+
 static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
 {
@@ -1267,9 +1602,36 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   sip = (SeqIdPtr) ompcp->input_data;
   if (sip == NULL) return OM_MSG_RET_ERROR;
 
+#ifdef OS_UNIX
+  if (! fetch_fail_warn_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_FAIL_WARN");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        fetch_fail_warn = TRUE;
+      }
+    }
+    fetch_fail_warn_set = TRUE;
+  }
+
+  if (! fetch_succeed_log_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_SUCCEED_LOG");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        fetch_succeed_log = TRUE;
+      }
+    }
+    fetch_succeed_log_set = TRUE;
+  }
+#endif
+
   omdp = ObjMgrGetUserData (ompcp->input_entityID, ompp->procid, OMPROC_FETCH, 0);
   if (omdp != NULL) {
     uid = omdp->userdata.intvalue;
+#ifdef OS_UNIX
+    if (fetch_succeed_log) {
+      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch reloading gi %ld", uid);
+    }
+#endif
     if (uid == 0) return OM_MSG_RET_ERROR;
   } else if (sip->choice == SEQID_GI) {
     uid = sip->data.intvalue;
@@ -1284,22 +1646,24 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
   sep = PubSeqSynchronousQuery (uid, retcode, flags);
 
-  if (sep == NULL) return OM_MSG_RET_OK;
+  if (sep == NULL) {
+#ifdef OS_UNIX
+    if (fetch_fail_warn) {
+      ErrPostEx (SEV_ERROR, 0, 0, "PSSyncQuery failed for gi %ld", uid);
+    }
+#endif
+    return OM_MSG_RET_OK;
+  }
   bsp = BioseqFindInSeqEntry (sip, sep);
 
 #ifdef OS_UNIX
-  if (bsp == NULL) {
-
-    if (! fetch_fail_warn_set) {
-      str = (CharPtr) getenv ("PUBSEQ_FETCH_FAIL_WARN");
-      if (StringDoesHaveText (str)) {
-        if (StringICmp (str, "TRUE") == 0) {
-          fetch_fail_warn = TRUE;
-        }
-      }
-      fetch_fail_warn_set = TRUE;
+  if (bsp != NULL) {
+    if (fetch_succeed_log) {
+      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch succeeded for gi %ld", uid);
     }
+  }
 
+  if (bsp == NULL) {
     if (fetch_fail_warn) {
       firstsep = FindNthBioseq (sep, 1);
       if (firstsep != NULL && IS_Bioseq (firstsep)) {
@@ -1578,11 +1942,12 @@ static Int4 IntPreLoadSeqIdGiCache (
   CharPtr   str;
   CharPtr   tmp;
 
-  if (num < 1 || num > 100 || ids == NULL) return 0;
+  if (num < 1 || num > 500 || ids == NULL) return 0;
 
   /* perform multiple gi to SeqId query */
 
-  str = GiRevHistSynchronousQuery (0, num, ids);
+  /* str = GiRevHistSynchronousQuery (0, num, ids); */
+  str = GiAccVerSynchronousQuery (0, num, ids);
   if (str == NULL) return 0;
 
   /* parse output */
@@ -1607,7 +1972,12 @@ static Int4 IntPreLoadSeqIdGiCache (
       /* safety check before recording in cache */
 
       if (! FetchFromSeqIdGiCache (gi, NULL)) {
-        sip = SeqIdParse (tmp);
+        sip = NULL;
+        if (StringChr (tmp, '|') != NULL) {
+          sip = SeqIdParse (tmp);
+        } else {
+          sip = SeqIdFromAccessionDotVersion (tmp);
+        }
         if (sip != NULL) {
           RecordInSeqIdGiCache (gi, sip);
           SeqIdFree (sip);
@@ -1632,12 +2002,12 @@ static Int4 FilterKnownGis (
   BioseqPtr  bsp;
   Int4       gi;
   Int4       i;
-  Int4       ids [101];
+  Int4       ids [501];
   Int4       j;
   SeqIdPtr   sip;
   ValNode    vn;
 
-  if (num < 1 || num > 100 || uniq == NULL) return 0;
+  if (num < 1 || num > 500 || uniq == NULL) return 0;
 
   MemSet ((Pointer) &vn, 0, sizeof (ValNode));
   vn.choice = SEQID_GI;
@@ -1674,9 +2044,9 @@ static Int4 UniqPreLoadList (
   Int4  i;
   Int4  j;
   Int4  last;
-  Int4  uniq [101];
+  Int4  uniq [501];
 
-  if (num < 1 || num > 100 || srted == NULL) return 0;
+  if (num < 1 || num > 500 || srted == NULL) return 0;
 
   /* unique uid list */
 
@@ -1701,9 +2071,9 @@ static Int4 SortPreLoadList (
 
 {
   Int4  i;
-  Int4  uids [101];
+  Int4  uids [501];
 
-  if (num < 1 || num > 100 || raw == NULL) return 0;
+  if (num < 1 || num > 500 || raw == NULL) return 0;
 
   /* copy raw uid list */
 
@@ -1728,16 +2098,16 @@ NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   Int4  offset;
   Int4  rsult = 0;
 
-  /* split into queries of 100 or fewer uids at a time */
+  /* split into queries of 500 or fewer uids at a time */
 
   if (num < 1 || uids == NULL) return 0;
-  count = (Int4) MIN (num, 100L);
+  count = (Int4) MIN (num, 500L);
   offset = 0;
   while (count > 0 && num > 0) {
     rsult += SortPreLoadList (count, uids + offset);
     offset += count;
     num -= count;
-    count = (Int4) MIN (num, 100L);
+    count = (Int4) MIN (num, 500L);
   }
   return rsult;
 }

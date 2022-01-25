@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.56 2004/06/30 12:33:30 madden Exp $";
 
-/* $Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha Exp $
+/* $Id: rpsblast.c,v 6.56 2004/06/30 12:33:30 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.56  2004/06/30 12:33:30  madden
+* Add include for blfmtutl.h
+*
 * Revision 6.55  2004/04/30 15:33:05  dondosha
 * Added argument in call to BXMLPrintOutput
 *
@@ -213,6 +216,7 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha
 #include <ncbithr.h>
 #include <rpsutil.h>
 #include <xmlblast.h>
+#include <blfmtutl.h>
 #include <sqnutils.h>
 
 #if PURIFY

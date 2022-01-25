@@ -1,4 +1,4 @@
-/* $Id: blast_seg.h,v 1.12 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: blast_seg.h,v 1.14 2004/10/04 12:41:21 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,34 +41,40 @@
 extern "C" {
 #endif
 
-/*--------------------------------------------------------------(structs)---*/
 
-typedef struct Alpha
-  {
-   Int4 alphabet;
-   Int4 alphasize;
-   double lnalphasize;
-   Int4* alphaindex;
-   unsigned char* alphaflag;
-   char* alphachar;
-  } Alpha;
-
+/** Structure to hold parameters for seg search.
+ */
 typedef struct SegParameters
   {
-   Int4 window;
-   double locut;
+   Int4 window;         /**< initial window size to trigger further work. */
+   double locut;        
    double hicut;
    Int4 period;
    Int4 hilenmin;
    Boolean overlaps;	/* merge overlapping pieces if TRUE. */
    Int4 maxtrim;
    Int4 maxbogus;
-   Alpha* palpha;
   } SegParameters;
 
+/** Allocated SeqParameter struct for proteins and fills with default values.
+ * @return pointer to SegParameters
+ */
 SegParameters* SegParametersNewAa (void);
+
+/** Free SegParameters structure
+ * @param sparamsp object to be freed [in]
+ */
 void SegParametersFree(SegParameters* sparamsp);
 
+/** Runs seg on a protein sequence in ncbistdaa.
+ * @param sequence the protein residues in ncbistdaa [in]
+ * @param length number of redidues [in]
+ * @param offset amount to shift over resulting locations 
+ *    (if full sequence not passed in) [in]
+ * @param sparamsp the seg parameters created with SegParametersNewAa [in]
+ * @params seg_locs resulting locations for filtering [out]
+ * @return zero on success
+ */
 Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,
                    SegParameters* sparamsp, BlastSeqLoc** seg_locs);
 

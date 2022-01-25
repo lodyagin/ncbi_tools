@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: actutils.c,v 6.36 2004/02/11 20:51:48 bollin Exp $";
+static char const rcsid[] = "$Id: actutils.c,v 6.37 2004/07/30 13:36:47 bollin Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,18 @@ static char const rcsid[] = "$Id: actutils.c,v 6.36 2004/02/11 20:51:48 bollin E
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.37  2004/07/30 13:36:47  bollin
+* created separate function for reversing features on a sequence, changed code
+* to swap plus to minus and minus to plus instead of moving all features to
+* minus strand
+*
 * Revision 6.36  2004/02/11 20:51:48  bollin
 * use error log instead of popup message to indicate that  BLAST found no sequence similarity
 *
@@ -2523,6 +2528,74 @@ static void SPI_flip_sa_list (SeqAlignPtr sap)
    }
 }
 
+NLM_EXTERN void ReverseBioseqFeatureStrands (BioseqPtr bsp)
+{
+   Uint2                entityID;
+   SeqMgrFeatContext    context;
+   SeqFeatPtr           sfp;
+   SeqIdPtr             sip;
+   SeqLocPtr            slp;
+   CdRegionPtr          crp;
+   CodeBreakPtr         cbp;
+   RnaRefPtr            rrp;
+   tRNAPtr              trp;   
+   Uint1                strand;
+	
+   if (bsp == NULL) return;
+   
+   entityID = ObjMgrGetEntityIDForPointer (bsp);
+   if (! SeqMgrFeaturesAreIndexed (entityID)) {
+     SeqMgrIndexFeatures (entityID, NULL);
+   }
+   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+   while (sfp != NULL) {
+      sip = SeqLocId (sfp->location);
+      strand = SeqLocStrand (sfp->location);
+      if (strand == Seq_strand_minus)
+      {
+      	strand = Seq_strand_plus;
+      }
+      else
+      {
+      	strand = Seq_strand_minus;
+      }
+      slp = SeqLocCopyRegion (sip, sfp->location, bsp, 0, bsp->length - 1, strand, FALSE);
+      sfp->location = SeqLocFree (sfp->location);
+      sfp->location = slp;
+      switch (sfp->data.choice) {
+         case SEQFEAT_CDREGION :
+           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+           if (crp != NULL) {
+             for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+               sip = SeqLocId (cbp->loc);
+               slp = SeqLocCopyRegion (sip, cbp->loc, bsp, 0, bsp->length - 1, strand, FALSE);
+               cbp->loc = SeqLocFree (cbp->loc);
+               cbp->loc = slp;
+             }
+           }
+           break;
+         case SEQFEAT_RNA :
+           rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+           if (rrp != NULL && rrp->ext.choice == 2) {
+             trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+             if (trp != NULL && trp->anticodon != NULL) {
+               sip = SeqLocId (trp->anticodon);
+               slp = SeqLocCopyRegion (sip, trp->anticodon, bsp, 0, bsp->length - 1, strand, FALSE);
+               trp->anticodon = SeqLocFree (trp->anticodon);
+               trp->anticodon = slp;
+             }
+           }
+           break;
+         default :
+           break;
+      }
+      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+   }
+   SeqMgrClearFeatureIndexes (entityID, NULL);
+   SeqMgrIndexFeatures (entityID, NULL);
+}
+
+
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
    AMAlignIndex2Ptr     amaip;
@@ -2588,46 +2661,7 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
      AMAlignIndexFreeEitherIndex (sap);
      sap = SeqAlignFree (sap);
      BioseqRevComp (bsp2);
-     entityID = ObjMgrGetEntityIDForPointer (bsp2);
-     if (! SeqMgrFeaturesAreIndexed (entityID)) {
-       SeqMgrIndexFeatures (entityID, NULL);
-     }
-     sfp = SeqMgrGetNextFeature (bsp2, NULL, 0, 0, &context);
-     while (sfp != NULL) {
-       sip = SeqLocId (sfp->location);
-       slp = SeqLocCopyRegion (sip, sfp->location, bsp2, 0, bsp2->length - 1, Seq_strand_minus, FALSE);
-       sfp->location = SeqLocFree (sfp->location);
-       sfp->location = slp;
-       switch (sfp->data.choice) {
-         case SEQFEAT_CDREGION :
-           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-           if (crp != NULL) {
-             for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-               sip = SeqLocId (cbp->loc);
-               slp = SeqLocCopyRegion (sip, cbp->loc, bsp2, 0, bsp2->length - 1, Seq_strand_minus, FALSE);
-               cbp->loc = SeqLocFree (cbp->loc);
-               cbp->loc = slp;
-             }
-           }
-           break;
-         case SEQFEAT_RNA :
-           rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
-           if (rrp != NULL && rrp->ext.choice == 2) {
-             trp = (tRNAPtr) rrp->ext.value.ptrvalue;
-             if (trp != NULL && trp->anticodon != NULL) {
-               sip = SeqLocId (trp->anticodon);
-               slp = SeqLocCopyRegion (sip, trp->anticodon, bsp2, 0, bsp2->length - 1, Seq_strand_minus, FALSE);
-               trp->anticodon = SeqLocFree (trp->anticodon);
-               trp->anticodon = slp;
-             }
-           }
-           break;
-         default :
-           break;
-       }
-       sfp = SeqMgrGetNextFeature (bsp2, sfp, 0, 0, &context);
-     }
-     SeqMgrClearFeatureIndexes (entityID, NULL);
+     ReverseBioseqFeatureStrands (bsp2);
 
      options = BLASTOptionNew(program, TRUE);
      options->gapped_calculation = TRUE;

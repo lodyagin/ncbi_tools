@@ -66,9 +66,18 @@ a score model can be stored and later reused.
    -R  restarts from a file stored previously.
 When using -R, it is required that the query specified on the command line
 match exactly the query in the restart file.
-The checkpoint files are stored in a byte-encoded (not human readable)
-format, so as to prevent roundoff error between writing and reading
-the checkpoint.
+
+Two additional arguments specify the format of the input/output
+checkpoint file
+   -q  Format of the input checkpoint file:
+        0: the default: a byte-encoded (not human readable) format
+        1: a text ASN.1 scoremat object
+        2: a binary ASN.1 scoremat object
+   -u  Format of the output checkpoint file:
+        0: the default: a byte-encoded (not human readable) format
+        1: a text ASN.1 scoremat object
+        2: a binary ASN.1 scoremat object
+
 Users who also develop their own sequence analysis software may wish
 to develop their own scoring systems. For this purpose the code
 in posit.c that writes out the checkpoint can be easily adapated to

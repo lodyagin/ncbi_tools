@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.119 $
+* $Revision: 6.122 $
 *
 * File Description: 
 *
@@ -1746,6 +1746,7 @@ static void ChangeBioseqDocText (PopuP p)
 {
   BioseqViewFormPtr  bfp;
   BioseqPagePtr      bpp;
+  Int4               val;
 
   bfp = (BioseqViewFormPtr) GetObjectExtra (p);
   if (bfp != NULL && bfp->bvd.bsp != NULL) {
@@ -1756,7 +1757,17 @@ static void ChangeBioseqDocText (PopuP p)
       bpp->show (&(bfp->bvd), FALSE);
     }
     Update ();
-    bfp->bvd.useScrollText = (Boolean) (! bfp->bvd.useScrollText);
+    
+    val = GetValue (p);
+    if (val == 1)
+    {
+      bfp->bvd.useScrollText = FALSE;
+    }
+    else
+    {
+      bfp->bvd.useScrollText = TRUE;
+    }
+    
     PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
     SetBioseqImportExportItems (bfp);
     ArrowCursor ();
@@ -2811,11 +2822,13 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
           bpp = bfp->bioseqNucPageList;
           str = svpp->initNucLabel;
           if (bsp->length > 350000) {
+            /*
             if (is_nc) {
               str = "GenBank";
             } else {
               str = "Graphic";
             }
+            */
           }
         }
       }

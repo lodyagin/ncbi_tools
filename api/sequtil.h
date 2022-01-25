@@ -29,13 +29,19 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.45 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.45  2004/08/04 17:15:16  kans
+* added AccnInUniProt - still need AccnIsSWISSPROT for old style
+*
+* Revision 6.44  2004/07/14 22:46:08  dondosha
+* Added GetAccessionVersionFromSeqId function to extract Accession.version from a Seq-id
+*
 * Revision 6.43  2004/04/01 13:43:05  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -671,6 +677,8 @@ NLM_EXTERN CharPtr SeqIdPrint(SeqIdPtr sip, CharPtr buf, Uint1 format);
 NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Uint4 buflen);
 NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
 				     CharPtr PNTR id);
+NLM_EXTERN Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+                                     CharPtr PNTR id, Boolean get_version);
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
 
 /*****************************************************************************
@@ -1082,6 +1090,7 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 NLM_EXTERN Boolean LIBCALL ACCN_PIR_FORMAT( CharPtr s);
 NLM_EXTERN Boolean LIBCALL ACCN_1_5_FORMAT( CharPtr s);
 NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
+NLM_EXTERN Boolean LIBCALL AccnIsUniProt (CharPtr s);
 NLM_EXTERN Boolean LIBCALL NAccnIsGENBANK (CharPtr s);
 NLM_EXTERN Boolean LIBCALL NAccnIsEMBL (CharPtr s);
 NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);

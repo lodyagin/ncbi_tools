@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.c,v 1.33 2004/06/08 17:30:06 dondosha Exp $
+/* $Id: aa_ungapped.c,v 1.36 2004/08/05 20:41:01 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 static char const rcsid[] = 
-    "$Id: aa_ungapped.c,v 1.33 2004/06/08 17:30:06 dondosha Exp $";
+    "$Id: aa_ungapped.c,v 1.36 2004/08/05 20:41:01 dondosha Exp $";
 
 #include <algo/blast/core/aa_ungapped.h>
 
@@ -88,8 +88,8 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 			      BlastInitHitList* ungapped_hsps, 
                BlastUngappedStats* ungapped_stats)
 {
-   LookupTable* lookup=NULL;
-   RPSLookupTable* rps_lookup=NULL;
+   BlastLookupTable* lookup=NULL;
+   BlastRPSLookupTable* rps_lookup=NULL;
    Boolean use_pssm;
    Int4 wordsize;
    Int4 i;
@@ -106,20 +106,22 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
    Boolean right_extend;
    Int4 hits_extended = 0;
 
-   if (diag == NULL)
-      return -1;
+   ASSERT(diag != NULL);
 
    diag_offset = diag->offset;
-   diag_array = diag->diag_array;
+   diag_array = diag->hit_level_array;
+
+   ASSERT(diag_array);
+
    diag_mask = diag->diag_mask;
    window = diag->window;
 
    if (lookup_wrap->lut_type == RPS_LOOKUP_TABLE) {
-      rps_lookup = (RPSLookupTable *)lookup_wrap->lut;
+      rps_lookup = (BlastRPSLookupTable *)lookup_wrap->lut;
       wordsize = rps_lookup->wordsize;
    }
    else {
-      lookup = (LookupTable *)lookup_wrap->lut;
+      lookup = (BlastLookupTable *)lookup_wrap->lut;
       wordsize = lookup->wordsize;
    }
    last_offset  = subject->length - wordsize;
@@ -226,8 +228,8 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
                BlastInitHitList* ungapped_hsps, 
                BlastUngappedStats* ungapped_stats)
 {
-   LookupTable* lookup=NULL;
-   RPSLookupTable* rps_lookup=NULL;
+   BlastLookupTable* lookup=NULL;
+   BlastRPSLookupTable* rps_lookup=NULL;
    Boolean use_pssm;
    Int4 wordsize;
    Int4 hits=0;
@@ -242,19 +244,20 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
    DiagStruct* diag_array;
    Int4 hits_extended = 0;
 
-   if (!diag) 
-      return -1;
+   ASSERT(diag != NULL);
    
    diag_offset = diag->offset;
-   diag_array = diag->diag_array;
+   diag_array = diag->hit_level_array;
+   ASSERT(diag_array);
+
    diag_mask = diag->diag_mask;
    
    if (lookup_wrap->lut_type == RPS_LOOKUP_TABLE) {
-      rps_lookup = (RPSLookupTable *)lookup_wrap->lut;
+      rps_lookup = (BlastRPSLookupTable *)lookup_wrap->lut;
       wordsize = rps_lookup->wordsize;
    }
    else {
-      lookup = (LookupTable *)lookup_wrap->lut;
+      lookup = (BlastLookupTable *)lookup_wrap->lut;
       wordsize = lookup->wordsize;
    }
    last_offset  = subject->length - wordsize;
@@ -569,17 +572,19 @@ Int4 DiagUpdate(BLAST_DiagTable* diag, Int4 length)
 Int4 DiagClear(BLAST_DiagTable* diag)
 {
   Int4 i,n;
+  DiagStruct* diag_struct_array;
 
   if (diag==NULL)
     return 0;
 
   n=diag->diag_array_length;
 
-  for(i=0;i<n;i++)
-    {
-      diag->diag_array[i].diag_level = 0;
-      diag->diag_array[i].last_hit = - diag->window;
-    }
+  diag_struct_array = diag->hit_level_array;
+
+  for(i=0;i<n;i++) {
+     diag_struct_array[i].diag_level = 0;
+     diag_struct_array[i].last_hit = - diag->window;
+  }
   return 0;
 }
 

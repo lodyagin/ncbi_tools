@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1477,6 +1477,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
 
+              cbp->entityID = awp->entityID;
               cbp->first = first;
               first = FALSE;
 
@@ -1534,6 +1535,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
 
+              cbp->entityID = awp->entityID;
               cbp->first = first;
               first = FALSE;
 
@@ -1577,6 +1579,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
 
+              cbp->entityID = awp->entityID;
               cbp->first = first;
               first = FALSE;
 
@@ -1659,6 +1662,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
 
+              cbp->entityID = awp->entityID;
               cbp->first = first;
               first = FALSE;
 
@@ -1800,6 +1804,8 @@ NLM_EXTERN void AddCommentBlock (
       if (dbt != NULL && StringCmp (dbt->db, "GSDB") == 0 && dbt->tag != NULL) {
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
+
+          cbp->entityID = awp->entityID;
           cbp->first = first;
           first = FALSE;
 
@@ -1853,6 +1859,7 @@ NLM_EXTERN void AddCommentBlock (
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
 
+          cbp->entityID = awp->entityID;
           cbp->first = first;
           first = FALSE;
 
@@ -2040,6 +2047,7 @@ NLM_EXTERN void AddCommentBlock (
       cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
       if (cbp != NULL) {
 
+        cbp->entityID = awp->entityID;
         cbp->first = first;
         first = FALSE;
 
@@ -2085,6 +2093,8 @@ NLM_EXTERN void AddCommentBlock (
       if (okay) {
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
+
+          cbp->entityID = awp->entityID;
           cbp->first = first;
           first = FALSE;
 
@@ -2122,6 +2132,8 @@ NLM_EXTERN void AddCommentBlock (
       if (okay) {
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
+
+          cbp->entityID = awp->entityID;
           cbp->first = first;
           first = FALSE;
 
@@ -2189,6 +2201,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp->itemID = dcontext.itemID;
             cbp->itemtype = OBJ_SEQDESC;
             */
+            cbp->entityID = awp->entityID;
             cbp->first = first;
             first = FALSE;
 
@@ -2220,6 +2233,7 @@ NLM_EXTERN void AddCommentBlock (
       if (gbp != NULL && (! StringHasNoText (gbp->source))) {
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
+
           cbp->entityID = dcontext.entityID;
           cbp->itemID = dcontext.itemID;
           cbp->itemtype = OBJ_SEQDESC;
@@ -2252,6 +2266,7 @@ NLM_EXTERN void AddCommentBlock (
     if (sdp->data.ptrvalue != NULL) {
       cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
       if (cbp != NULL) {
+
         cbp->entityID = dcontext.entityID;
         cbp->itemID = dcontext.itemID;
         cbp->itemtype = OBJ_SEQDESC;
@@ -2270,6 +2285,7 @@ NLM_EXTERN void AddCommentBlock (
   while (sdp != NULL) {
     cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
     if (cbp != NULL) {
+
       cbp->entityID = dcontext.entityID;
       cbp->itemID = dcontext.itemID;
       cbp->itemtype = OBJ_SEQDESC;
@@ -2288,6 +2304,7 @@ NLM_EXTERN void AddCommentBlock (
     if (sdp->data.ptrvalue != NULL) {
       cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
       if (cbp != NULL) {
+
         cbp->entityID = dcontext.entityID;
         cbp->itemID = dcontext.itemID;
         cbp->itemtype = OBJ_SEQDESC;
@@ -2354,6 +2371,7 @@ NLM_EXTERN void AddCommentBlock (
           cbp->itemID = dcontext.itemID;
           cbp->itemtype = OBJ_SEQDESC;
           */
+          cbp->entityID = awp->entityID;
           cbp->first = first;
           first = FALSE;
 
@@ -2386,6 +2404,7 @@ NLM_EXTERN void AddCommentBlock (
             cbp->itemID = dcontext.itemID;
             cbp->itemtype = OBJ_SEQDESC;
             */
+            cbp->entityID = awp->entityID;
             cbp->first = first;
             first = FALSE;
 
@@ -2420,6 +2439,7 @@ NLM_EXTERN void AddCommentBlock (
     if (fcontext.left == awp->from && fcontext.right == awp->to) {
       cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
       if (cbp != NULL) {
+
         cbp->entityID = fcontext.entityID;
         cbp->itemID = fcontext.itemID;
         cbp->itemtype = OBJ_SEQFEAT;
@@ -2444,6 +2464,7 @@ NLM_EXTERN void AddCommentBlock (
     cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
     if (cbp != NULL) {
 
+      cbp->entityID = awp->entityID;
       cbp->first = first;
       first = FALSE;
 
@@ -2484,6 +2505,8 @@ NLM_EXTERN void AddFeatHeaderBlock (
 
   bbp = Asn2gbAddBlock (awp, FEATHEADER_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
+
+  bbp->entityID = awp->entityID;
 
   if (awp->format != FTABLE_FMT) {
     ffstring = FFGetString(ajp);
@@ -3687,7 +3710,6 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   Char               buf [41];
   SeqFeatPtr         cds;
   SeqMgrFeatContext  cdscontext;
-  SeqMgrDescContext  dcontext;
   FeatBlockPtr       fbp;
   SeqLocPtr          firstslp;
   GBQualPtr          gbq;
@@ -3711,10 +3733,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   Boolean            partial5;
   Boolean            partial3;
   ValNodePtr         ppr;
-  PubdescPtr         pdp;
   BioseqPtr          prod;
   Boolean            pseudo = FALSE;
-  SeqDescrPtr        sdp;
   SeqEntryPtr        sep;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
@@ -3722,6 +3742,11 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   Int4               stop;
   TextSeqIdPtr       tsip;
   ValNodePtr         vnp;
+  /*
+  SeqMgrDescContext  dcontext;
+  PubdescPtr         pdp;
+  SeqDescrPtr        sdp;
+  */
 
   if (sfp == NULL || fcontext == NULL) return FALSE;
   awp = (Asn2gbWorkPtr) fcontext->userdata;
@@ -4155,8 +4180,9 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->isCDS = TRUE;
   icp = (IntCdsBlockPtr) ifp;
 
-  /* first explore pubs to pick up figure and maploc */
+  /* first explore pubs to pick up figure and maploc - no longer shown */
 
+  /*
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pub, &dcontext);
   while (sdp != NULL) {
     pdp = (PubdescPtr) sdp->data.ptrvalue;
@@ -4170,6 +4196,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_pub, &dcontext);
   }
+  */
 
   /* product may be segmented part, and remaining features are indexed on parent */
 

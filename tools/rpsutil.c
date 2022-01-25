@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.70 2004/05/13 16:58:28 kans Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.71 2004/09/21 13:59:31 dondosha Exp $";
 
-/* $Id: rpsutil.c,v 6.70 2004/05/13 16:58:28 kans Exp $
+/* $Id: rpsutil.c,v 6.71 2004/09/21 13:59:31 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.70 2004/05/13 16:58:28 kans Exp 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.70 $
+* $Revision: 6.71 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.71  2004/09/21 13:59:31  dondosha
+* Use query length in protein scale for search space calculation for RPS tblastn; do not multiply search space by extra 6
+*
 * Revision 6.70  2004/05/13 16:58:28  kans
 * in AnnotateRegionsFromCDD, do not put cdd->ShortName into comment if same as cdd->Definition
 *
@@ -675,15 +678,23 @@ void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query
         dblen = options->db_length;
     options->dbseq_num = rpsinfo->matrixCount;
 
+    /* For nucleotide query, each translated frame's length is approximately
+       1/3 of the nucleotide length. */
+    if (!rpsinfo->query_is_prot)
+       query_length /= 3;
+
     searchsp = BLASTCalculateSearchSpace(options, options->dbseq_num, dblen,
             query_length);
 
     if(options->db_length == 0)
         options->db_length = dblen;
 
-    /* Save the search space, adjusting for tblastn if necessary */
-    if (options->searchsp_eff == 0)
-        options->searchsp_eff = rpsinfo->query_is_prot ? searchsp : searchsp*6;
+    /* Save the search space, adjusting for tblastn */
+    if (options->searchsp_eff == 0) {
+        options->searchsp_eff = searchsp;
+        if (!rpsinfo->query_is_prot)
+            options->searchsp_eff *= 3;
+    }
 
     return;
 }

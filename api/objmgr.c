@@ -29,13 +29,19 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.55 $
+* $Revision: 6.57 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.57  2004/10/15 19:08:36  bollin
+* when removing an object, make sure to also deselect it
+*
+* Revision 6.56  2004/09/07 14:08:27  kans
+* post errors on failure of ObjMgrNextAvailEntityID and ObjMgrRecycleEntityID
+*
 * Revision 6.55  2004/06/09 01:56:43  kans
 * initialize assigned id array from all functions that use it
 *
@@ -604,7 +610,10 @@ static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
   while (idx < 2048 && assignedIDsArray [idx] == 0xFFFFFFFF) {
     idx++;
   }
-  if (idx >= 2048) return 0;
+  if (idx >= 2048) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ObjMgrNextAvailEntityID failed with idx %d", (int) idx);
+    return 0;
+  }
 
   /* reset starting point, everything below should be in use */
 
@@ -617,7 +626,10 @@ static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
   while (jdx < 32 && (val & assignedIDsBitIdx [jdx]) != 0) {
     jdx++;
   }
-  if (jdx >= 32) return 0;
+  if (jdx >= 32) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ObjMgrNextAvailEntityID failed with jdx %d", (int) jdx);
+    return 0;
+  }
 
   /* set bit to mark new entityID as in use */
 
@@ -648,8 +660,14 @@ static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
   idx = (Int2) (entityID / 32);
   jdx = (Int2) (entityID % 32);
 
-  if (idx >= 2048 || idx < 0) return;
-  if (jdx >= 32 || jdx < 0) return;
+  if (idx >= 2048 || idx < 0) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ObjMgrRecycleEntityID failed with idx %d", (int) idx);
+    return;
+  }
+  if (jdx >= 32 || jdx < 0) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ObjMgrRecycleEntityID failed with jdx %d", (int) jdx);
+    return;
+  }
 
   /* clear bit to mark old entityID as available */
 
@@ -4521,8 +4539,10 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID
 
 	if (msg == OM_MSG_UPDATE) {
 		SeqMgrClearFeatureIndexes (entityID, NULL);
-	} else if (msg == OM_MSG_DEL)
+	} else if (msg == OM_MSG_DEL) {
 		SeqMgrClearFeatureIndexes (entityID, NULL);
+	  ObjMgrDeSelect (entityID, itemID, itemtype, 0, NULL);
+	}
 	omp = ObjMgrReadLock();
 	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
 	if (omdp != NULL)

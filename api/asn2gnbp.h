@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.31 $
+* $Revision: 6.33 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -220,6 +220,9 @@ typedef struct asn2gb_job {
 
 typedef void (*Asn2gbWriteFunc) (CharPtr str, Pointer userdata, BlockType blocktype);
 
+typedef SeqAnnotPtr (*Asn2gbLockFunc) (SeqIdPtr sip, Pointer remotedata);
+typedef void (*Asn2gbFreeFunc) (SeqAnnotPtr sap, Pointer remotedata);
+
 typedef struct XtraData {
   Asn2gbWriteFunc  ffwrite;
   CharPtr          ffhead;
@@ -229,6 +232,9 @@ typedef struct XtraData {
   AsnIoPtr         aip;
   AsnTypePtr       atp;
   Pointer          userdata;
+  Asn2gbLockFunc   remotelock;
+  Asn2gbFreeFunc   remotefree;
+  Pointer          remotedata;
 } XtraBlock;
 
 

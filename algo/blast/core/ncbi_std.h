@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.28 2004/05/19 14:52:01 camacho Exp $
+/* $Id: ncbi_std.h,v 1.30 2004/09/02 19:19:37 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,8 +55,8 @@ extern "C" {
 #endif
 
 /* For some reason, ICC claims a suitable __STDC_VERSION__ but then
-   barfs on restrict. */
-#ifdef __ICC
+   barfs on restrict. Added ECC per Haruna Cofer */
+#if defined(__ICC) || defined(__ECC)
 #define NCBI_RESTRICT __restrict
 #elif __STDC_VERSION__ >= 199901
 #define NCBI_RESTRICT restrict
@@ -150,19 +150,38 @@ extern void* BlastMemDup (const void *orig, size_t size);
 
 /** A generic linked list node structure */
 typedef struct ListNode {
-	Uint1 choice;   /* to pick a choice */
-	void *ptr;              /* attached data */
-	struct ListNode *next;  /* next in linked list */
+	Uint1 choice;   /**< to pick a choice */
+	void *ptr;              /**< attached data */
+	struct ListNode *next;  /**< next in linked list */
 } ListNode;
 
+/** Create a new list node */
 ListNode* ListNodeNew (ListNode* vnp);
+
+/** Add a node to the list.
+ * @param head Pointer to the start of the list. [in] [out]
+ * @return New node
+ */
 ListNode* ListNodeAdd (ListNode** head);
+/** Add a node to the list with a given choice and data pointer.
+ * @param head Pointer to the start of the list [in] [out]
+ * @param choice Choice value for the new node. [in]
+ * @param value Data pointer for the new node. [in]
+ * @return New node
+ */
 ListNode* ListNodeAddPointer (ListNode** head, Uint1 choice, void *value);
+/** Free all list's nodes */
 ListNode* ListNodeFree (ListNode* vnp);
+/** Free only the attached data for all list's nodes */
 ListNode* ListNodeFreeData (ListNode* vnp);
+/** Sort the list, using a provided comparison function. */
 ListNode* ListNodeSort (ListNode* list_to_sort, 
                int (*compar) (const void *, const void *));
+/** Add a node to the list with a provided choice, and attached data 
+ * pointing to a provided string.
+ */
 ListNode* ListNodeCopyStr (ListNode** head, Uint1 choice, char* str);
+/** Count number of nodes in a list */
 Int4 ListNodeLen (ListNode* vnp);
 
 #ifdef __cplusplus

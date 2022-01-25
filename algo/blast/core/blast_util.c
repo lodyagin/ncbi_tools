@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.71 2004/06/07 14:23:04 dondosha Exp $
+/* $Id: blast_util.c,v 1.75 2004/08/13 17:46:49 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.71 2004/06/07 14:23:04 dondosha Exp $";
+    "$Id: blast_util.c,v 1.75 2004/08/13 17:46:49 dondosha Exp $";
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_util.h>
@@ -139,12 +139,18 @@ Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
    if (!seq_blk)
        return 1;
 
-   if (seq_blk->sequence_allocated) 
+   if (seq_blk->sequence_allocated) {
        sfree(seq_blk->sequence);
-   if (seq_blk->sequence_start_allocated)
+       seq_blk->sequence_allocated = FALSE;
+   }
+   if (seq_blk->sequence_start_allocated) {
        sfree(seq_blk->sequence_start);
-   if (seq_blk->oof_sequence_allocated)
+       seq_blk->sequence_start_allocated = FALSE;
+   }
+   if (seq_blk->oof_sequence_allocated) {
        sfree(seq_blk->oof_sequence);
+       seq_blk->oof_sequence_allocated = FALSE;
+   }
 
    return 0;
 }
@@ -178,56 +184,56 @@ void BlastSequenceBlkCopy(BLAST_SequenceBlk** copy,
    (*copy)->lcase_mask_allocated = FALSE;
 }
 
-Int2 BlastProgram2Number(const char *program, Uint1 *number)
+Int2 BlastProgram2Number(const char *program, EBlastProgramType *number)
 {
-	*number = blast_type_undefined;
+	*number = eBlastTypeUndefined;
 	if (program == NULL)
 		return 1;
 
 	if (strcasecmp("blastn", program) == 0)
-		*number = blast_type_blastn;
+		*number = eBlastTypeBlastn;
 	else if (strcasecmp("blastp", program) == 0)
-		*number = blast_type_blastp;
+		*number = eBlastTypeBlastp;
 	else if (strcasecmp("blastx", program) == 0)
-		*number = blast_type_blastx;
+		*number = eBlastTypeBlastx;
 	else if (strcasecmp("tblastn", program) == 0)
-		*number = blast_type_tblastn;
+		*number = eBlastTypeTblastn;
 	else if (strcasecmp("tblastx", program) == 0)
-		*number = blast_type_tblastx;
+		*number = eBlastTypeTblastx;
 	else if (strcasecmp("rpsblast", program) == 0)
-		*number = blast_type_rpsblast;
+		*number = eBlastTypeRpsBlast;
 	else if (strcasecmp("rpstblastn", program) == 0)
-		*number = blast_type_rpstblastn;
+		*number = eBlastTypeRpsTblastn;
 
 	return 0;
 }
 
-Int2 BlastNumber2Program(Uint1 number, char* *program)
+Int2 BlastNumber2Program(EBlastProgramType number, char* *program)
 {
 
 	if (program == NULL)
 		return 1;
 
 	switch (number) {
-		case blast_type_blastn:
+		case eBlastTypeBlastn:
 			*program = strdup("blastn");
 			break;
-		case blast_type_blastp:
+		case eBlastTypeBlastp:
 			*program = strdup("blastp");
 			break;
-		case blast_type_blastx:
+		case eBlastTypeBlastx:
 			*program = strdup("blastx");
 			break;
-		case blast_type_tblastn:
+		case eBlastTypeTblastn:
 			*program = strdup("tblastn");
 			break;
-		case blast_type_tblastx:
+		case eBlastTypeTblastx:
 			*program = strdup("tblastx");
 			break;
-		case blast_type_rpsblast:
+		case eBlastTypeRpsBlast:
 			*program = strdup("rpsblast");
 			break;
-		case blast_type_rpstblastn:
+		case eBlastTypeRpsTblastn:
 			*program = strdup("rpstblastn");
 			break;
 		default:
@@ -647,24 +653,24 @@ Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length,
    return 0;
 }
 
-Int2 BLAST_ContextToFrame(Uint1 prog_number, Int4 context_number)
+Int2 BLAST_ContextToFrame(EBlastProgramType prog_number, Int4 context_number)
 {
    Int2 frame=255;
 
-   if (prog_number == blast_type_blastn) {
-      if (context_number % 2 == 0)
+   if (prog_number == eBlastTypeBlastn) {
+      if (context_number % NUM_STRANDS == 0)
          frame = 1;
       else
          frame = -1;
-   } else if (prog_number == blast_type_blastp ||
-              prog_number == blast_type_rpsblast ||
-              prog_number == blast_type_tblastn ||
-              prog_number == blast_type_rpstblastn) { 
+   } else if (prog_number == eBlastTypeBlastp ||
+              prog_number == eBlastTypeRpsBlast ||
+              prog_number == eBlastTypeTblastn ||
+              prog_number == eBlastTypeRpsTblastn) { 
       /* Query and subject are protein, no frame. */
       frame = 0;
-   } else if (prog_number == blast_type_blastx || 
-              prog_number == blast_type_tblastx) {
-      context_number = context_number % 6;
+   } else if (prog_number == eBlastTypeBlastx || 
+              prog_number == eBlastTypeTblastx) {
+      context_number = context_number % NUM_FRAMES;
       frame = (context_number < 3) ? context_number+1 : -context_number+2;
    }
    
@@ -672,16 +678,16 @@ Int2 BLAST_ContextToFrame(Uint1 prog_number, Int4 context_number)
 }
 
 Int4 
-Blast_GetQueryIndexFromContext(Int4 context, Uint1 program)
+Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program)
 {
    Int4 index = 0;
    switch (program) {
-   case blast_type_blastn:
+   case eBlastTypeBlastn:
       index = context/NUM_STRANDS; break;
-   case blast_type_blastp: case blast_type_tblastn: 
-   case blast_type_rpsblast: case blast_type_rpstblastn:
+   case eBlastTypeBlastp: case eBlastTypeTblastn: 
+   case eBlastTypeRpsBlast: case eBlastTypeRpsTblastn:
       index = context; break;
-   case blast_type_blastx: case blast_type_tblastx:
+   case eBlastTypeBlastx: case eBlastTypeTblastx:
       index = context/NUM_FRAMES; break;
    default:
       break;
@@ -697,10 +703,12 @@ Int4 BLAST_GetQueryLength(const BlastQueryInfo* query_info, Int4 context)
 
 BlastQueryInfo* BlastQueryInfoFree(BlastQueryInfo* query_info)
 {
-   sfree(query_info->context_offsets);
-   sfree(query_info->length_adjustments);
-   sfree(query_info->eff_searchsp_array);
-   sfree(query_info);
+   if (query_info) {
+      sfree(query_info->context_offsets);
+      sfree(query_info->length_adjustments);
+      sfree(query_info->eff_searchsp_array);
+      sfree(query_info);
+   }
    return NULL;
 }
 
@@ -906,7 +914,7 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
    frame_offsets[0] = 0;
    
    for (context = 0; context < NUM_FRAMES; ++context) {
-      frame = BLAST_ContextToFrame(blast_type_blastx, context);
+      frame = BLAST_ContextToFrame(eBlastTypeBlastx, context);
       if (encoding == NCBI2NA_ENCODING) {
          if (frame > 0) {
             length = 

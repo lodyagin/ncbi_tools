@@ -327,6 +327,10 @@ SOURCE=..\..\..\object\objsub.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objtax3.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objtseq.c
 # End Source File
 # Begin Source File
@@ -416,6 +420,10 @@ SOURCE=..\..\..\access\strucapi.c
 # Begin Source File
 
 SOURCE=..\..\..\api\subutil.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\tax3api.c
 # End Source File
 # Begin Source File
 
@@ -883,6 +891,10 @@ SOURCE=..\..\..\object\objsub.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objtax3.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objtseq.h
 # End Source File
 # Begin Source File
@@ -968,6 +980,10 @@ SOURCE=..\..\..\api\subutil.h
 # Begin Source File
 
 SOURCE=..\..\..\asnstat\sugmap.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\tax3api.h
 # End Source File
 # Begin Source File
 

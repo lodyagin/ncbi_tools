@@ -25,6 +25,15 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.35  2004/10/12 21:39:28  vysokolo
+ Added intervals of accessions like: "ABC_000123-ABC_000456"
+
+ Revision 1.34  2004/10/04 19:30:25  vysokolo
+ The "strcasecmp" replaced by "StringICmp"
+
+ Revision 1.33  2004/09/30 17:59:26  vysokolo
+ Added key -F to enable features by name.
+
  Revision 1.32  2004/05/25 18:41:35  kans
  removed obsolete STREAM_SEQ_PORT_FIRST flag
 
@@ -160,7 +169,6 @@
  * Modified by Eugene Yaschenko for ID1 Server
  *
  */
-
 #include <ncbi.h>
 #include <objsset.h>
 #include <accid1.h>
@@ -224,7 +232,8 @@ prf|acc|name pdb|entry|chain",
         {"Log file", NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'q',ARG_STRING,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL},
-        {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL}
+        {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL},
+        {"Add features delimited by ','. Allowed values are: 'CDD', 'SNP', 'SNP_graph', 'MGC'.", NULL,NULL,NULL,TRUE,'F',ARG_STRING,0.0,0,NULL}
 };
 int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
@@ -241,13 +250,16 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 static Nlm_Int2 Nlm_WhichArg PROTO(( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
 static void MyBioseqToFasta(BioseqPtr bsp, Pointer userdata);
 
+static Boolean CreateMaxPlexParam();
+static Int4 GetIntervalAccession( const Char* pAccession, Char* pResult);
+
 Int4 giBuffer[1000];
 int giBufferPos = 0;
 
 DataVal Val;
 Int2 fileoutarg, logarg, outtypearg,maxplexarg,seqidarg,
   giarg, fastaarg, infotypearg, entarg, dbarg, gifilearg,
-  entrezqueryarg, entrezqueryfilearg, onlylistarg;
+  entrezqueryarg, entrezqueryfilearg, onlylistarg, showfeatures, maxplex_param;
 
 FILE * fp = NULL;
 AsnIoPtr asnout=NULL;
@@ -262,6 +274,8 @@ Int2 Main()
   FILE * fp_in = NULL;
   SeqIdPtr sip;
   Char tbuf[1024];
+  static CharPtr accession = NULL;
+  int type_int;
 
   /* check command line arguments */
 
@@ -289,6 +303,13 @@ Int2 Main()
   MACRO_SETARG('q', entrezqueryarg)
   MACRO_SETARG('Q', entrezqueryfilearg)
   MACRO_SETARG('n', onlylistarg)
+  MACRO_SETARG('F', showfeatures)
+
+  if( !CreateMaxPlexParam())
+  {
+    has_trouble=TRUE;
+    goto FATAL;
+  }
 
   if(! SeqEntryLoad())
     ErrShow();
@@ -462,9 +483,8 @@ Int2 Main()
      "flaTtened SeqId, format:
      type(name,accession,release,version) or type=accession",
      */
-    static CharPtr name = NULL, accession = NULL, release = NULL, version = NULL, number = NULL;
+    static CharPtr name = NULL, release = NULL, version = NULL, number = NULL;
     CharPtr p;
-    int type_int;
     static CharPtr PNTR fields [] = {&name, &accession, &release, &number};
     Boolean found_equals = FALSE, found_left = FALSE,
       found_colon = FALSE, flat_seqid_err = FALSE,
@@ -472,7 +492,6 @@ Int2 Main()
     int dex;
     TextSeqIdPtr tsip;
 
-    sip = ValNodeNew(NULL);
     type_int = atoi(myargs[seqidarg].strvalue);
     for(p = myargs[seqidarg].strvalue; *p; p++ )
     {
@@ -561,6 +580,7 @@ Int2 Main()
               "id1test: could not find \'(\' or \'=\' or \':\' in flattened seqid=%s",myargs[seqidarg].strvalue);  /* ) match */
       exit(1);
     }
+    sip = ValNodeNew(NULL);
     sip->choice = type_int;
     switch(type_int)
     {
@@ -595,6 +615,7 @@ Int2 Main()
     case SEQID_GENERAL :
     case SEQID_PDB :
     case SEQID_LOCAL :
+    default:
       ErrPost(CTX_NCBIIDRETRIEVE,30,
               "Sorry, this test program does not support %d patent, general, pdb, or local, try id2asn ",
               type_int);
@@ -605,24 +626,63 @@ Int2 Main()
 
   if(! fp_in && ! gi && ! (myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue))
   {
-    gi = ID1ArchGIGet (sip);
-    if(gi <= 0)
+    Char tacc[64];
+    if( sip->data.ptrvalue && GetIntervalAccession( accession, tacc) > 0 )
     {
-	if(sip->choice==SEQID_GENERAL){
-		Dbtag *db = (Dbtag*)sip->data.ptrvalue;
-		gi=myargs[entarg].intvalue=db->tag->str?atoi(db->tag->str):db->tag->id;
-		myargs[dbarg].strvalue=StringSave(db->db);
-	} else {
-	      SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
-	      ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
-	      goto FATAL;	
+      do{ 
+      	Int4 tgi = TryGetGi( type_int, tacc, NULL, 0);
+	if(tgi <= 0)
+	{
+	  SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
+	  ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
+	  has_trouble=TRUE;
+	  break;
 	}
+	if( !IdFetch_func(tgi,myargs[dbarg].strvalue, myargs[entarg].intvalue,maxplex_param))
+	{
+	  has_trouble=TRUE;
+	  break;
+	}
+
+	if(fp) fflush(fp);
+      }
+      while( GetIntervalAccession( NULL, tacc) > 0);
+      if(fp) fflush(fp);
+      if( has_trouble ) goto FATAL;
+    }
+    else
+    {
+      gi = ID1ArchGIGet (sip);
+      if(gi <= 0)
+      {
+	  if(sip->choice==SEQID_GENERAL){
+		  Dbtag *db = (Dbtag*)sip->data.ptrvalue;
+		  gi=myargs[entarg].intvalue=db->tag->str?atoi(db->tag->str):db->tag->id;
+		  myargs[dbarg].strvalue=StringSave(db->db);
+	  } else {
+		SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
+		ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
+		goto FATAL;	
+	  }
+      }
     }
   }
   else if(fp_in)
   {
+    Char tacc[1024];
     while(fgets(tbuf,sizeof(tbuf)-1,fp_in)){
-      IdFetch_func1(tbuf, myargs[maxplexarg].intvalue);
+      if( GetIntervalAccession( tbuf, tacc) > 0 )
+      {
+	do{ 
+	  IdFetch_func1(tacc, maxplex_param); 
+	  if(fp) fflush(fp);
+	}
+	while( GetIntervalAccession( NULL, tacc) > 0);
+      }
+      else
+      {
+	IdFetch_func1(tbuf, maxplex_param);
+      }	      
       if(fp) fflush(fp);
     }
   }
@@ -652,7 +712,7 @@ Int2 Main()
     }
   }
 
-  if(gi>0 && !IdFetch_func(gi,myargs[dbarg].strvalue, myargs[entarg].intvalue,myargs[maxplexarg].intvalue))
+  if(gi>0 && !IdFetch_func(gi,myargs[dbarg].strvalue, myargs[entarg].intvalue,maxplex_param))
   {
     has_trouble=TRUE;
     goto FATAL;
@@ -699,7 +759,7 @@ void EntrezQuery(char *query)
       IdFetch_func(ids[i],
                    myargs[dbarg].strvalue,
                    myargs[entarg].intvalue,
-                   myargs[maxplexarg].intvalue);
+		   maxplex_param);
   }
 }
 
@@ -805,7 +865,7 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
       return IdFetch_func(gi,
                           myargs[dbarg].strvalue,
                           myargs[entarg].intvalue,
-                          myargs[maxplexarg].intvalue);
+                          maxplex_param);
 
     if(ver == INT2_MIN &&
        (
@@ -818,7 +878,7 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
       return IdFetch_func(gi,
                           myargs[dbarg].strvalue,
                           myargs[entarg].intvalue,
-                          myargs[maxplexarg].intvalue);
+                          maxplex_param);
     return 0;
   }
   else
@@ -1217,3 +1277,116 @@ MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
 		start=stop+1;
 	}
 }
+
+Boolean CreateMaxPlexParam()
+{
+  Char buf[1024];
+  Char *ptoken = NULL;
+  maxplex_param = 0xfffffff0 | myargs[maxplexarg].intvalue;
+
+  if(myargs[showfeatures].strvalue)
+  {
+    strncpy( buf, myargs[showfeatures].strvalue, 1024);
+    ptoken = strtok( buf, ",");
+    while( ptoken)
+    {
+      if( !StringICmp( ptoken, "CDD"))
+      {
+	maxplex_param &= 0xffffff7f;
+      }
+      else if( !StringICmp( ptoken, "SNP"))
+      {
+	maxplex_param &= 0xffffffef;
+      }
+      else if( !StringICmp( ptoken, "SNP_graph"))
+      {
+	maxplex_param &= 0xffffffbf;
+      }
+      else if( !StringICmp( ptoken, "MGC"))
+      {
+	maxplex_param &= 0xfffffeff;
+      }
+      else
+      {
+	/* Error: unknown feature */
+	ErrPostEx(SEV_ERROR,0,0,"Unknown feature type [%s]", ptoken);
+	return FALSE;
+      }
+      ptoken = strtok( NULL, ",");
+    }
+  }
+  return TRUE;
+}
+
+static Int4 GetPrefixIndexFromAcession( const Char* pSrc, Char* pDest, Int4* pDiditsLen)
+{
+  Int4 ret;
+  while( *pSrc )
+  {
+    if( isdigit( *pSrc)) break;
+    *pDest++ = *pSrc++;
+  }
+  *pDest = '\0';
+  if( !*pSrc ) return -1;
+  ret = atoi( pSrc);
+  *pDiditsLen = 0;
+  while( isdigit( *pSrc++)) ++(*pDiditsLen);
+  return ret;
+}
+
+/*************************************************
+* GetIntervalAccession parses string as 'ABC_0000123-ABC_0000456'
+* and *returns* in 'pResult' strings like 'ABC_0000123', 'ABC_0000124', 'ABC_0000125', ..., 'ABC_0000456'
+* iteratively using 'iterator'
+* First call 'pAccession' must be a string like 'ABC_0000123-ABC_0000456', and all other times NULL
+* returns: 0 if no more iterations
+*         -1 if wrong format of input string
+*         >0 if next iteration are present
+**************************************************/
+static Int4 GetIntervalAccession( const Char* pAccession, Char* pResult)
+{
+  static Int4 iterator=0, Start=0, End=0, DigitsStart=0;
+  static Char pStartPrefix[64]={'\0'};
+  static Char pFormat[64]={'\0'};
+  
+  if( pAccession )
+  {
+    Int4 DigitsEnd=0;
+    Char pBuff[64]={'\0'};
+    Char pEndPrefix[64];
+    Char *pEnd, *pStart;
+
+    iterator = 0;
+
+    strncpy( pBuff, pAccession, 64);
+    /*parse interval*/
+
+    /*find dash*/
+    pEnd = pStart = pBuff;
+    while( *pEnd++ )
+    {
+      if( *pEnd == '-' ) break;
+    }
+    if( !*pEnd ) return -1; /*no dash found*/
+
+    *pEnd++ = '\0';
+    
+    /*find index of start and end in the interval*/
+    Start = GetPrefixIndexFromAcession( pStart, pStartPrefix, &DigitsStart);
+    End = GetPrefixIndexFromAcession( pEnd, pEndPrefix, &DigitsEnd);
+
+    if( DigitsStart != DigitsEnd || strcmp( pStartPrefix, pEndPrefix) || Start >= End || DigitsStart < 1)
+    {
+      return -1; /* wrong interval format */
+    }
+    sprintf( pFormat, "%%s%%0%hdhd", DigitsStart);
+  }
+  
+  if( Start+iterator > End ) return 0; /*stop*/
+  
+  /* return next accession */
+  sprintf( pResult, pFormat, pStartPrefix, Start+iterator);
+
+  return ++iterator;
+}
+

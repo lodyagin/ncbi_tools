@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.64 $
+* $Revision: 6.66 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,14 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.66  2004/07/19 13:37:24  bollin
+* adjusted FixVisibilityIssues function to handle nesting of groups
+*
+* Revision 6.65  2004/07/16 18:47:29  bollin
+* added FixVisibilityIssues function to handle LessTif problems with not correctly hiding
+* widgets before the parent widget is managed.
+* Also replaced obsolete XmFontListCreate function to get rid of run-time warning.
+*
 * Revision 6.64  2004/06/02 15:53:17  bollin
 * fixed Nlm_ProcessKeyPress for MOTIF to handle arrow keys
 *
@@ -3557,12 +3565,38 @@ static void Nlm_GetWindowPosition (Nlm_GraphiC w, Nlm_RectPtr r)
   }
 }
 
+#if defined(LESSTIF_VERSION)
+
+static void FixVisibilityIssues (Nlm_GraphiC g)
+{
+  Nlm_GraphiC child;
+
+  for (child = Nlm_GetChild (g);  child != NULL; child = Nlm_GetNext (child))
+  {
+    if (!Nlm_GetVisible (child))
+    {
+      Nlm_Show (child);
+      FixVisibilityIssues (child);
+      Nlm_Hide (child);
+    }
+    else
+    {
+      FixVisibilityIssues (child);
+    }
+  }
+}
+#endif
+
 extern void Nlm_RealizeWindow (Nlm_WindoW w)
 
 {
   if (w != NULL) {
     Nlm_DoShow ((Nlm_GraphiC) w, FALSE, TRUE);
   }
+
+#if defined(LESSTIF_VERSION)
+  FixVisibilityIssues ((Nlm_GraphiC) w);
+#endif
 }
 
 extern void Nlm_IconifyWindow(Nlm_WindoW w)
@@ -6312,6 +6346,7 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_Int4   width;
   int        xx_argc = (int)Nlm_GetArgc();
   char     **xx_argv =      Nlm_GetArgv();
+  XmFontListEntry font_entry;
 
   Nlm_desktopWindow = NULL;
   Nlm_systemWindow = NULL;
@@ -6434,7 +6469,8 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   
   font = Nlm_XLoadStandardFont();
 
-  Nlm_XfontList = XmFontListCreate(font, "dummy");
+  font_entry = XmFontListEntryCreate  ("dummy", XmFONT_IS_FONT, font);
+  Nlm_XfontList = XmFontListAppendEntry(NULL, font_entry);
 
   Nlm_fileDialogShell = NULL;
 

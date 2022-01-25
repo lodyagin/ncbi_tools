@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.89 2004/06/15 14:51:51 dondosha Exp $
+/* $Id: blast_setup.c,v 1.97 2004/10/14 17:10:18 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.89 2004/06/15 14:51:51 dondosha Exp $";
+    "$Id: blast_setup.c,v 1.97 2004/10/14 17:10:18 madden Exp $";
 
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_util.h>
@@ -44,29 +44,29 @@ static char const rcsid[] =
 Int2
 BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
                         const BlastScoringOptions * scoring_options,
-                        Uint1 program, BlastQueryInfo * query_info)
+                        EBlastProgramType program, BlastQueryInfo * query_info)
 {
-    Int2 tmp_index;
+    Int2 index = 0;
 
     if (sbp == NULL || scoring_options == NULL)
         return 1;
 
     /* At this stage query sequences are nucleotide only for blastn */
 
-    if (program == blast_type_blastn) {
+    if (program == eBlastTypeBlastn) {
 
         /* for blastn, duplicate the ungapped Karlin 
            structures for use in gapped alignments */
 
-        for (tmp_index = query_info->first_context;
-             tmp_index <= query_info->last_context; tmp_index++) {
-            if (sbp->kbp_std[tmp_index] != NULL) {
-                Blast_KarlinBlk *kbp_gap;
-                Blast_KarlinBlk *kbp;
+        for (index = query_info->first_context;
+             index <= query_info->last_context; index++) {
+            if (sbp->kbp_std[index] != NULL) {
+                Blast_KarlinBlk *kbp_gap = NULL;
+                Blast_KarlinBlk *kbp = NULL;
  
-                sbp->kbp_gap_std[tmp_index] = Blast_KarlinBlkCreate();
-                kbp_gap = sbp->kbp_gap_std[tmp_index];
-                kbp     = sbp->kbp_std[tmp_index];
+                sbp->kbp_gap_std[index] = Blast_KarlinBlkCreate();
+                kbp_gap = sbp->kbp_gap_std[index];
+                kbp     = sbp->kbp_std[index];
 
                 kbp_gap->Lambda = kbp->Lambda;
                 kbp_gap->K      = kbp->K;
@@ -77,14 +77,31 @@ BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
         }
 
     } else {
-        for (tmp_index = query_info->first_context;
-             tmp_index <= query_info->last_context; tmp_index++) {
-            sbp->kbp_gap_std[tmp_index] = Blast_KarlinBlkCreate();
-            Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[tmp_index],
-                                      scoring_options->gap_open,
-                                      scoring_options->gap_extend,
-                                      scoring_options->decline_align,
-                                      sbp->name, NULL);
+        for (index = query_info->first_context;
+             index <= query_info->last_context; index++) {
+            Int2 retval = 0;
+            sbp->kbp_gap_std[index] = Blast_KarlinBlkCreate();
+            retval = Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
+                                               scoring_options->gap_open,
+                                               scoring_options->gap_extend,
+                                               scoring_options->decline_align,
+                                               sbp->name, NULL);
+            /* FIXME: retval is not expressive enough and the Blast_Message is
+             * being passed NULL, so it's not possible to pass a meaningful
+             * error code to the calling context! */
+            if (retval != 0) {
+                return retval;
+            }
+
+            /* For right now, copy the contents from kbp_gap_std to 
+             * kbp_gap_psi (as in old code - BLASTSetUpSearchInternalByLoc) */
+            sbp->kbp_gap_psi[index] = Blast_KarlinBlkCreate();
+            
+            sbp->kbp_gap_psi[index]->Lambda = sbp->kbp_gap_std[index]->Lambda;
+            sbp->kbp_gap_psi[index]->K      = sbp->kbp_gap_std[index]->K;
+            sbp->kbp_gap_psi[index]->logK   = sbp->kbp_gap_std[index]->logK;
+            sbp->kbp_gap_psi[index]->H      = sbp->kbp_gap_std[index]->H;
+            sbp->kbp_gap_psi[index]->paramC = sbp->kbp_gap_std[index]->paramC;
         }
     }
 
@@ -328,14 +345,14 @@ return status;
 }
 
 Int2
-BlastScoreBlkMatrixInit(Uint1 program_number, 
+BlastScoreBlkMatrixInit(EBlastProgramType program_number, 
                   const BlastScoringOptions* scoring_options,
                   BlastScoreBlk* sbp)
 {
    if (!sbp || !scoring_options)
       return 1;
 
-   if (program_number == blast_type_blastn) {
+   if (program_number == eBlastTypeBlastn) {
 
       BLAST_ScoreSetAmbigRes(sbp, 'N');
       sbp->penalty = scoring_options->penalty;
@@ -374,7 +391,7 @@ Int2
 BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
                          BlastQueryInfo* query_info, 
                          const BlastScoringOptions* scoring_options, 
-                         Uint1 program_number, 
+                         EBlastProgramType program_number, 
                          Boolean phi_align, 
                          BlastScoreBlk* *sbpp, 
                          double scale_factor, 
@@ -388,7 +405,7 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
     if (sbpp == NULL)
        return 1;
 
-    if (program_number == blast_type_blastn)
+    if (program_number == eBlastTypeBlastn)
        sbp = BlastScoreBlkNew(BLASTNA_SEQ_CODE, query_info->last_context + 1);
     else
        sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, query_info->last_context + 1);
@@ -445,17 +462,13 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
     }
 
     /* Get "ideal" values if the calculated Karlin-Altschul params bad. */
-    if (program_number == blast_type_blastx ||
-        program_number == blast_type_tblastx ||
-        program_number == blast_type_rpstblastn) {
+    if (program_number == eBlastTypeBlastx ||
+        program_number == eBlastTypeTblastx ||
+        program_number == eBlastTypeRpsTblastn) {
         /* Adjust the ungapped Karlin parameters */
         sbp->kbp = sbp->kbp_std;
         Blast_KarlinBlkStandardCalc(sbp, query_info->first_context,
                                     query_info->last_context);
-    }
-
-    if (program_number == blast_type_blastx ||
-        program_number == blast_type_tblastx) {
         /* Adjust the gapped Karlin parameters, if it is a gapped search */
         if (scoring_options->gapped_calculation) {
            sbp->kbp = sbp->kbp_gap_std;
@@ -472,7 +485,7 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk,
     return 0;
 }
 
-Int2 BLAST_MainSetUp(Uint1 program_number,
+Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     const QuerySetUpOptions *qsup_options,
     const BlastScoringOptions *scoring_options,
     const BlastHitSavingOptions *hit_options,
@@ -480,7 +493,7 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
     BlastQueryInfo *query_info,
     double scale_factor,
     BlastSeqLoc **lookup_segments, 
-    BlastMaskLoc **filter_out,
+    BlastMaskInformation* maskInfo,
     BlastScoreBlk **sbpp, 
     Blast_Message **blast_message)
 {
@@ -509,23 +522,27 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
         }
     }
 
-    /* If there was a lower case mask, its contents have now been moved to 
-     * filter_maskloc and are no longer needed in the query block.
-    */
-    query_blk->lcase_mask = NULL;
-
-    if (filter_out)
-       *filter_out = filter_maskloc;
-    else 
-        filter_maskloc = BlastMaskLocFree(filter_maskloc);
-
-    if (program_number == blast_type_blastx && scoring_options->is_ooframe) {
+    if (program_number == eBlastTypeBlastx && scoring_options->is_ooframe) {
         BLAST_InitDNAPSequence(query_blk, query_info);
     }
 
-    BLAST_ComplementMaskLocations(program_number, query_info, filter_maskloc, 
-                                  lookup_segments);
+    /* Find complement of the mask locations, for which lookup table will be
+     * created. This should only be done if we do want to create a lookup table,
+     * i.e. if it is a full search, not a traceback-only search. 
+     */
+    if (lookup_segments) {
+        BLAST_ComplementMaskLocations(program_number, query_info, 
+                                      filter_maskloc, lookup_segments);
+    }
 
+    if (maskInfo)
+    {
+       maskInfo->filter_slp = filter_maskloc;
+       maskInfo->mask_at_hash = mask_at_hash;
+       filter_maskloc = NULL;
+    }
+    else 
+        filter_maskloc = BlastMaskLocFree(filter_maskloc);
 
     status = BlastSetup_GetScoreBlock(query_blk, query_info, scoring_options, 
                                       program_number, hit_options->phi_align, 
@@ -538,7 +555,7 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
 }
 
 
-Int2 BLAST_CalcEffLengths (Uint1 program_number, 
+Int2 BLAST_CalcEffLengths (EBlastProgramType program_number, 
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsParameters* eff_len_params, 
    const BlastScoreBlk* sbp, BlastQueryInfo* query_info)
@@ -569,8 +586,8 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
    if (db_length == 0)
       return 0;
 
-   if (program_number == blast_type_tblastn || 
-       program_number == blast_type_tblastx)
+   if (program_number == eBlastTypeTblastn || 
+       program_number == eBlastTypeTblastx)
       db_length = db_length/3;	
 
    if (eff_len_options->dbseq_num > 0)
@@ -578,7 +595,7 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
    else
       db_num_seqs = eff_len_params->real_num_seqs;
    
-   if (program_number != blast_type_blastn) {
+   if (program_number != eBlastTypeBlastn) {
       if (scoring_options->gapped_calculation) {
          BLAST_GetAlphaBeta(sbp->name,&alpha,&beta,TRUE, 
             scoring_options->gap_open, scoring_options->gap_extend);
@@ -602,7 +619,7 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
              blocks are allocated for each sequence (one per strand), but we
              only need one of them.
           */
-          if (program_number != blast_type_blastn &&
+          if (program_number != eBlastTypeBlastn &&
               scoring_options->gapped_calculation) {
              BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK,
                                            alpha/kbp->Lambda, beta,
@@ -621,12 +638,6 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
              effective_search_space =
                 (query_length - length_adjustment) * 
                 (db_length - db_num_seqs*length_adjustment);
-
-             /* For translated RPS blast, the DB size is left unchanged
-                and the query size is divided by 3 (for conversion to 
-                a protein sequence) and multiplied by 6 (for 6 frames) */
-             if (program_number == blast_type_rpstblastn)
-                effective_search_space *= (Int8)(NUM_FRAMES / CODON_LENGTH);
           }
        }
        query_info->eff_searchsp_array[index] = effective_search_space;
@@ -637,7 +648,7 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
 }
 
 Int2 
-BLAST_GapAlignSetUp(Uint1 program_number,
+BLAST_GapAlignSetUp(EBlastProgramType program_number,
     const BlastSeqSrc* seq_src,
     const BlastScoringOptions* scoring_options,
     const BlastEffectiveLengthsOptions* eff_len_options,
@@ -663,6 +674,9 @@ BLAST_GapAlignSetUp(Uint1 program_number,
    } else {
       /* Not a database search; each subject sequence is considered
          individually */
+      Int4 oid=0;  /* Get length of first sequence. */
+      if ((total_length=BLASTSeqSrcGetSeqLen(seq_src, (void*) &oid)) < 0)
+          return -1;
       num_seqs = 1;
    }
 
@@ -680,7 +694,7 @@ BLAST_GapAlignSetUp(Uint1 program_number,
                                query_info, ext_params);
 
    BlastHitSavingParametersNew(program_number, hit_options, *ext_params, 
-                               sbp, query_info, hit_params);
+                               sbp, query_info, total_length/num_seqs, hit_params);
 
    /* To initialize the gapped alignment structure, we need to know the 
       maximal subject sequence length */
@@ -694,7 +708,7 @@ BLAST_GapAlignSetUp(Uint1 program_number,
    return status;
 }
 
-Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
+Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
                     Uint4 subject_length,
                     const BlastScoringOptions* scoring_options,
                     BlastQueryInfo* query_info, 
@@ -711,13 +725,16 @@ Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
       return status;
    /* Update cutoff scores in hit saving parameters */
    BlastHitSavingParametersUpdate(program_number, ext_params,
-                                  sbp, query_info, 
+                                  sbp, query_info, subject_length, 
                                   hit_params);
    
    if (word_params) {
       /* Update cutoff scores in initial word parameters */
       BlastInitialWordParametersUpdate(program_number, hit_params, ext_params,
          sbp, query_info, subject_length, word_params);
+      /* Update the parameters for linking HSPs, if necessary. */
+      BlastLinkHSPParametersUpdate(word_params, ext_params, 
+         hit_params, scoring_options->gapped_calculation);
    }
    return status;
 }

@@ -1,4 +1,4 @@
-/* $Id: link_hsps.h,v 1.11 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: link_hsps.h,v 1.14 2004/09/23 14:57:46 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,15 +44,15 @@ extern "C" {
  * @param program_number BLAST program [in]
  * @param hsp_list List of HSPs [in]
  * @param query_info Query information block [in]
- * @param subject Subject sequence block [in]
+ * @param subject_length Subject sequence length [in]
  * @param sbp Scoring and statistical data [in]
- * @param hit_params Hit saving parameters [in]
+ * @param link_hsp_params Parameters for linking of HSPs [in]
  * @param gapped_calculation Is this a gapped search? [in]
  */
 Int2 
-BLAST_LinkHsps(Uint1 program_number, BlastHSPList* hsp_list, 
-   BlastQueryInfo* query_info, BLAST_SequenceBlk* subject, 
-   BlastScoreBlk* sbp, const BlastHitSavingParameters* hit_params,
+BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list, 
+   BlastQueryInfo* query_info, Int4 subject_length, 
+   BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
    Boolean gapped_calculation);
 
 #ifdef __cplusplus

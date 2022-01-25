@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.18 $  $Date: 2004/02/23 17:00:39 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.19 $  $Date: 2004/07/12 16:34:05 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,10 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.19  2004/07/12 16:34:05  lavr
+ * Add "SRV_CONN_MODE" for alternate FIREWALL switching
+ * (Thanks to Svetlana Karamycheva for reporting this..)
+ *
  * Revision 6.18  2004/02/23 17:00:39  lavr
  * Fix n_written variable name typo
  *
@@ -105,6 +109,7 @@
 
 #define SRV_SECTION         "NET_SERV"
 
+#define ENV_CONN_MODE       "SRV_CONN_MODE"
 #define ENV_ENGINE_HOST     "SRV_ENGINE_HOST"
 #define ENV_ENGINE_PORT     "SRV_ENGINE_PORT"
 #define ENV_ENGINE_URL      "SRV_ENGINE_URL"
@@ -196,6 +201,12 @@ static NI_HandPtr s_GenericGetService
     /* Now override default parameters with legacy parameters
      * of older WWW service dispatcher -- should go obsolete soon... */
 
+    /* alternate firewall mode request */
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_CONN_MODE,
+                   str, sizeof(str), "");
+    if (*str  &&  StringICmp(str, "FIREWALL") == 0)
+        net_info->firewall = 1/*true*/;
+
     /* alternate dispatcher's host name & port */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_HOST,
                    net_info->host, sizeof(net_info->host), def_info->host);
@@ -248,6 +259,7 @@ static NI_HandPtr s_GenericGetService
     if ((val = atoi(str)) != 0)
         net_info->max_try = val;
 
+    /* alternate debug printout request */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_DEBUG_PRINTOUT,
                    str, sizeof(str), "");
     if (*str  &&  (StringICmp(str, "1"   ) == 0 ||

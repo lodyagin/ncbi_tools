@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.148 $
+* $Revision: 6.165 $
 *
 * File Description: 
 *
@@ -64,7 +64,6 @@ static char *time_of_compilation = "now";
 #include <findrepl.h>
 #include <toasn3.h>
 #include <toporg.h>
-#include <taxutil.h>
 #include <utilpub.h>
 #include <salsap.h>
 #include <salptool.h>
@@ -72,6 +71,8 @@ static char *time_of_compilation = "now";
 #include <explore.h>
 #include <seqpanel.h>
 #include <alignmgr2.h>
+#include <actutils.h>
+#include <tax3api.h>
 
 #define CONVERT_TO_JOIN  1
 #define CONVERT_TO_ORDER 2
@@ -4297,8 +4298,8 @@ static void AddProtFeatIfMissing (SeqEntryPtr sep, Pointer mydata, Int4 index, I
         if (sfp->data.choice == SEQFEAT_PROT) {
           return;
         }
+        sfp = sfp->next;
       }
-      sfp = sfp->next;
     }
     sap = sap->next;
   }
@@ -4306,6 +4307,38 @@ static void AddProtFeatIfMissing (SeqEntryPtr sep, Pointer mydata, Int4 index, I
   if (sfp == NULL) return;
   prp = ProtRefNew ();
   sfp->data.value.ptrvalue = (Pointer) prp;
+}
+
+static void AddGeneFeatIfMissing (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+{
+  BioseqPtr    bsp;
+  SeqAnnotPtr  sap;
+  SeqFeatPtr   sfp;
+  GeneRefPtr   grp;
+
+  if (sep == NULL) return;
+  if (! IS_Bioseq (sep)) return;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
+  
+  sap = bsp->annot;
+  while (sap != NULL) {
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_GENE) 
+        {
+          return;
+        }
+        sfp = sfp->next;
+      }
+    }
+    sap = sap->next;
+  }
+  sfp = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
+  if (sfp == NULL) return;
+  grp = GeneRefNew ();
+  sfp->data.value.ptrvalue = (Pointer) grp;  
 }
 
 CharPtr JustSaveStringFromText (TexT t)
@@ -4370,6 +4403,13 @@ static void DoProcessCDSet (ButtoN b)
       sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
       SeqEntryExplore (sep, NULL, AddProtFeatIfMissing);
     }
+  }
+  if (cfp->type == ADD_CDSET 
+      && cfp->toval >= GENE_LOCUS_FIELD 
+      && cfp->toval <= GENE_LOCUS_TAG_FIELD)
+  {
+    sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
+    SeqEntryExplore (sep, NULL, AddGeneFeatIfMissing);
   }
   cfp->replaceOldAsked = FALSE;
   cfp->doReplaceAll = FALSE;
@@ -4698,6 +4738,21 @@ static void ClearProcessCDSetDlg (ButtoN b)
   SetTitle ( cfp->findthis, "");
   SetTitle ( cfp->replacewith, "");
   SafeSetTitle (cfp->example, "");
+  SafeSetTitle (cfp->qual_text, "");
+}
+
+static void ClearProcessCDSetDlgText (ButtoN b)
+
+{
+  CdsetFormPtr  cfp;
+
+  cfp = (CdsetFormPtr) GetObjectExtra (b);
+  if (cfp == NULL) return;
+
+  SetTitle ( cfp->findthis, "");
+  SetTitle ( cfp->replacewith, "");
+  SafeSetTitle (cfp->example, "");
+  SafeSetTitle (cfp->qual_text, "");
 }
 
 static void ChangeTargetRestriction (GrouP g)
@@ -4912,11 +4967,13 @@ static void ProcessCDSet (IteM i, Int2 type)
 
   b1 = PushButton (h, "Legend", CDSetLegend);
 
-  c = HiddenGroup (w, 4, 0, NULL);
+  c = HiddenGroup (w, 5, 0, NULL);
   b = DefaultButton (c, "Accept", DoProcessCDSet);
   SetObjectExtra (b, cfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   b = PushButton (c, "Clear", ClearProcessCDSetDlg);
+  SetObjectExtra (b, cfp, NULL);
+  b = PushButton (c, "Clear Text", ClearProcessCDSetDlgText);
   SetObjectExtra (b, cfp, NULL);
   cfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
@@ -5073,6 +5130,54 @@ static Boolean IsTargetInTupleList
   return FALSE;
 }
 
+static Boolean HaveSourceForField
+(SeqFeatPtr cds, 
+ SeqFeatPtr gene,
+ GeneRefPtr grp,
+ SeqFeatPtr prot,
+ ProtRefPtr prp,
+ Int4       targetfield)
+{
+  Boolean rval = FALSE;
+  
+  switch (targetfield)
+  {
+    case CDS_COMMENT_FIELD :
+      if (cds != NULL) 
+        rval = TRUE;
+      break;
+    case GENE_LOCUS_FIELD :
+    case GENE_DESCRIPTION_FIELD :
+    case GENE_ALLELE_FIELD :
+    case GENE_MAPLOC_FIELD :
+    case GENE_SYNONYM_FIELD :
+    case GENE_LOCUS_TAG_FIELD :
+      if (grp != NULL)  
+        rval = TRUE;
+      break;
+    case GENE_COMMENT_FIELD :
+      if (gene != NULL) 
+        rval = TRUE;
+      break;
+    case PROT_NAME_FIELD :
+    case PROT_DESCRIPTION_FIELD :
+    case PROT_EC_NUMBER_FIELD :
+    case PROT_ACTIVITY_FIELD :
+      if (prp != NULL) 
+        rval = TRUE;
+      break;
+    case PROT_COMMENT_FIELD :
+      if (prot != NULL) 
+        rval = TRUE;
+      break;
+  }
+  return rval;
+}
+ 
+
+/* when swapping qualifiers, need to make sure that we have both the source and
+ * the destination before we make the trade.
+ */
 static Boolean LIBCALLBACK DoSwapQualifiers_FeatureCallback (SeqFeatPtr sfp,
 				SeqMgrFeatContextPtr fcontext)
 {
@@ -5108,6 +5213,12 @@ static Boolean LIBCALLBACK DoSwapQualifiers_FeatureCallback (SeqFeatPtr sfp,
     if (prot != NULL) {
       prp = (ProtRefPtr) prot->data.value.ptrvalue;
     }
+  }
+  
+  if (! HaveSourceForField (cds, gene, grp, prot, prp, cfp->fromval)
+      || ! HaveSourceForField (cds, gene, grp, prot, prp, cfp->toval))
+  {
+    return TRUE;
   }
 
   /* have we already swapped for this target? */
@@ -5581,9 +5692,9 @@ FindInFlatFile
 
   if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
     bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
-    ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, NORMAL_STYLE, 0, 0, 0, NULL);
+    ajp = asn2gnbk_setup (NULL, bssp, NULL, (FmtType) format, (ModType) mode, NORMAL_STYLE, (FlgType) 0, (LckType) 0, (CstType) 0, NULL);
   } else {
-    ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, NORMAL_STYLE, 0, 0, 0, NULL);
+    ajp = asn2gnbk_setup (bsp, NULL, NULL, (FmtType) format, (ModType) mode, NORMAL_STYLE, (FlgType) 0, (LckType) 0, (CstType) 0, NULL);
   }
   if (ajp != NULL) {
     retval = FindInFlatFileNext (ajp, sub, case_counts, whole_word, stop_after_one, start_index);
@@ -6816,7 +6927,8 @@ static Int4 DoSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
 /*#endif*/
   oldscope = SeqEntrySetScope (sep);
   if (dotaxon) {
-    rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, GetTaxserverOrg, TaxMergeBSinDescr);
+    rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, NULL, Tax3MergeSourceDescr);
+    DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
   } else {
     rsult = SeqEntryToAsn3Ex (sep, strip, correct, FALSE, NULL, NULL);
   }
@@ -7089,18 +7201,6 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   if (dotaxon) {
     WatchCursor ();
     mon = MonitorStrNewEx ("Taxonomy Lookup", 40, FALSE);
-    MonitorStrValue (mon, "Connecting to Taxon");
-    Update ();
-    if (! TaxArchInit ()) {
-      ArrowCursor ();
-      Update ();
-      Message (MSG_ERROR, "Couldn't connect to Taxon");
-      MonitorFree (mon);
-      Update ();
-      BasicSeqEntryCleanup (sep);
-      ErrSetMessageLevel (sev);
-      return 0;
-    }
     MonitorStrValue (mon, "Processing Organism Info");
     Update ();
   }
@@ -7114,12 +7214,12 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
 
   EntryMergeDupBioSources (sep); /* do before and after SE2A3 */
 
+  Taxon3ReplaceOrgInSeqEntry (sep, FALSE);
   rsult = DoSeqEntryToAsn3 (sep, strip, correct, force, dotaxon, mon);
 /*#ifdef USE_TAXON*/
   if (dotaxon) {
     MonitorStrValue (mon, "Closing Taxon");
     Update ();
-    TaxArchFini ();
     MonitorFree (mon);
     ArrowCursor ();
     Update ();
@@ -7164,10 +7264,20 @@ typedef struct partialformdata {
   Int2               orderjoinpolicy;
   ObjMgrPtr          omp;
   ObjMgrTypePtr      omtp;
+  ButtoN             extend5_btn;
+  ButtoN             extend3_btn;
+  Boolean            extend5;
+  Boolean            extend3;
+  ButtoN             leaveDlgUp;
+  Boolean            case_insensitive;
+  ButtoN             case_insensitive_btn;
+  Boolean            when_string_not_present;
+  ButtoN             when_string_not_present_btn;
 } PartialFormData, PNTR PartialFormPtr;
 
 static Boolean CDSMeetsStringConstraint (SeqFeatPtr sfp,
-				      CharPtr     findThisStr)
+				      CharPtr     findThisStr,
+				      Boolean     case_insensitive)
 {
   BioseqPtr		protbsp;
   SeqFeatPtr		protsfp;
@@ -7178,22 +7288,35 @@ static Boolean CDSMeetsStringConstraint (SeqFeatPtr sfp,
   protbsp = BioseqFindFromSeqLoc (sfp->product);
   if (protbsp == NULL) return FALSE;
   protsfp = SeqMgrGetBestProteinFeature (protbsp, &context);
-  if (StringISearch (context.label, findThisStr))
+  if ((case_insensitive && StringISearch (context.label, findThisStr) != NULL)
+    || (!case_insensitive && StringSearch (context.label, findThisStr) != NULL))
+  {
     return TRUE;
+  }
   if (protsfp == NULL) return FALSE;
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  prp = (ProtRefPtr) protsfp->data.value.ptrvalue;
   if (prp->name != NULL)
   {
-    if (StringISearch (prp->name->data.ptrvalue, findThisStr))
+    if ((case_insensitive && StringISearch (prp->name->data.ptrvalue, findThisStr) != NULL)
+      || (!case_insensitive && StringSearch (prp->name->data.ptrvalue, findThisStr) != NULL))
+    {
       return TRUE;
+    }
   }
-  if (StringISearch (prp->desc, findThisStr))
-    return TRUE;
+  if (prp->desc != NULL)
+  {
+  	if ((case_insensitive && StringISearch (prp->desc, findThisStr) != NULL)
+  	  || (!case_insensitive && StringSearch (prp->desc, findThisStr) != NULL))
+  	{
+  	  return TRUE;
+  	}
+  }
   return FALSE;
 }
 
 extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
-				      CharPtr     findThisStr)
+				                      CharPtr     findThisStr,
+				                      Boolean     case_insensitive)
 {
   GBQualPtr         gbqp;
   GeneRefPtr        grp;
@@ -7230,7 +7353,11 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
 
   if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context) != NULL)
   {
-  	if (StringISearch (context.label, findThisStr))
+    if (!case_insensitive && StringSearch (context.label, findThisStr) != NULL)
+    {
+    	return TRUE;
+    }
+    else if (case_insensitive && StringISearch (context.label, findThisStr) != NULL)
   	{
   	  return TRUE;
   	}
@@ -7240,17 +7367,26 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
   if (sfp->data.choice == SEQFEAT_GENE)
   {
     grp = sfp->data.value.ptrvalue;
-
-    if (StringISearch (grp->locus, findThisStr))
-      return TRUE;
-    if (StringISearch (grp->desc, findThisStr))
-      return TRUE;
-    if (StringISearch (grp->locus_tag, findThisStr))
-      return TRUE;
+    if (!case_insensitive && 
+        (StringSearch (grp->locus, findThisStr) != NULL
+        || StringSearch (grp->desc, findThisStr) != NULL
+        || StringSearch (grp->desc, findThisStr) != NULL
+        || StringSearch (grp->locus_tag, findThisStr) != NULL))
+    {
+      return TRUE;    	
+    }
+    else if (case_insensitive &&
+        (StringISearch (grp->locus, findThisStr) != NULL
+        || StringISearch (grp->desc, findThisStr) != NULL
+        || StringISearch (grp->desc, findThisStr) != NULL
+        || StringISearch (grp->locus_tag, findThisStr) != NULL))
+    {
+      return TRUE;    	
+    }
   }
   else if (sfp->data.choice == SEQFEAT_CDREGION)
   {
-    if (CDSMeetsStringConstraint (sfp, findThisStr))
+    if (CDSMeetsStringConstraint (sfp, findThisStr, case_insensitive))
       return TRUE;
   }
   else if (sfp->data.choice == SEQFEAT_RNA)
@@ -7258,14 +7394,19 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
     rrp = sfp->data.value.ptrvalue;
 
     if (rrp->ext.choice == 1) {
-      if (StringISearch ((CharPtr) rrp->ext.value.ptrvalue, findThisStr))
+      if ((!case_insensitive && StringSearch ((CharPtr) rrp->ext.value.ptrvalue, findThisStr) != NULL)
+        || (case_insensitive && StringISearch ((CharPtr) rrp->ext.value.ptrvalue, findThisStr) != NULL))
+      {
         return TRUE;
+      }
     }
     else if (rrp->type == 3 && rrp->ext.choice == 2 && have_context) 
     {
       /* look for the label as it appears to the user */
-      if (StringNCmp(findThisStr, "tRNA-", 5) == 0
-          && StringISearch (context.label, findThisStr + 5))
+      if ((!case_insensitive && StringNCmp(findThisStr, "tRNA-", 5) == 0
+          && StringSearch (context.label, findThisStr + 5))
+          || (case_insensitive && StringNICmp (findThisStr, "tRNA-", 5) == 0
+          && StringISearch (context.label, findThisStr + 5)))
       {
       	return TRUE;
       }
@@ -7276,6 +7417,64 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
 
   return FALSE;
 }
+
+
+static void SetBestFrame (SeqFeatPtr sfp)
+{
+  SeqAlignPtr  salp;
+  CdRegionPtr  crp;
+  BioseqPtr    old_prot, new_prot;
+  ByteStorePtr bs;
+  Int4         original_frame, test_frame;
+  Boolean      revcomp;
+  ErrSev       level;
+  
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_CDS) return;
+  
+  crp = sfp->data.value.ptrvalue;
+  if (crp == NULL) return;
+
+  old_prot = BioseqFindFromSeqLoc (sfp->product);
+  if (old_prot == NULL) return;
+  
+  new_prot = BioseqNew ();
+  new_prot->id = SeqIdParse ("lcl|CdRgnTransl");
+  new_prot->repr = Seq_repr_raw;
+  new_prot->mol = Seq_mol_aa;
+  new_prot->seq_data_type = Seq_code_ncbieaa;
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  new_prot->seq_data = bs;
+  new_prot->length = BSLen (bs);
+  
+  original_frame = crp->frame;
+
+  /* suppress BLAST error messages when no similarity is found */
+  level = ErrSetMessageLevel (SEV_MAX);
+  salp = Sqn_GlobalAlign2Seq (old_prot, new_prot, &revcomp);
+  if (salp == NULL) 
+  {
+    for (test_frame = 1; test_frame <= 3 && salp == NULL; test_frame ++)
+    {
+      if (test_frame == original_frame) continue;
+      new_prot->seq_data = BSFree (bs);
+      crp->frame = test_frame;
+      new_prot->seq_data = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+      salp = Sqn_GlobalAlign2Seq (old_prot, new_prot, &revcomp);
+    }  	
+  }
+  
+  if (salp == NULL)
+  {
+  	crp->frame = original_frame;
+  }
+  else
+  {
+  	SeqAlignFree (salp);
+  }
+  ErrSetMessageLevel (level);
+  BioseqFree (new_prot);
+}
+
 
 static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
@@ -7326,8 +7525,9 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
       while (sfp != NULL) {
         subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
         if ((pfp->subtype == 0 || subtype == pfp->subtype) &&
-	    MeetsStringConstraint (sfp, pfp->findThisStr))
-	{
+          ((pfp->when_string_not_present && ! MeetsStringConstraint (sfp, pfp->findThisStr, pfp->case_insensitive))
+           || (!pfp->when_string_not_present && MeetsStringConstraint (sfp, pfp->findThisStr, pfp->case_insensitive))))
+        {
           CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
           dash_at_end = FALSE;
           star_at_end = FALSE;
@@ -7438,6 +7638,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                 switch (pfp->leftpolicy) {
                   case 1 :
                     partial5 = TRUE;
+                    if (! atEnd && pfp->extend5)
+                    {
+                      ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+                    }
                     break;
                   case 2 :
                     if (atEnd) {
@@ -7450,6 +7654,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                       && (crp = sfp->data.value.ptrvalue) != NULL
                       && (crp->frame > 1 || first_char != 'M')) {
                       partial5 = TRUE;
+                      if (! atEnd && pfp->extend5)
+                      {
+                        ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+                      }
                     }
                     break;
                   case 4:
@@ -7459,6 +7667,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                       && crp->frame > 1)
                     {
                       partial5 = TRUE;
+                      if (! atEnd && pfp->extend5)
+                      {
+                        ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+                      }
                     }
                     break;
                   case 5 :
@@ -7510,6 +7722,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                 switch (pfp->rightpolicy) {
                   case 1 :
                     partial3 = TRUE;
+                    if (! atEnd && pfp->extend3)
+                    {
+                      ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+                    }
                     break;
                   case 2 :
                     if (atEnd) {
@@ -7519,6 +7735,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                   case 3 :
                     if ((! star_at_end) && subtype == FEATDEF_CDS) {
                       partial3 = TRUE;
+                      if (! atEnd && pfp->extend3)
+                      {
+                        ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+                      }
                     }
                     break;
                   case 4 :
@@ -7543,6 +7763,10 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
           SetSeqLocPartial (sfp->location, partial5, partial3);
           sfp->partial = (/* sfp->partial || */ partial5 || partial3 ||
                           LocationHasNullsBetween (sfp->location));
+          if (partial5)
+          {
+          	SetBestFrame (sfp);
+          }
         }
         sfp = sfp->next;
       }
@@ -7572,6 +7796,10 @@ static void DoEditPartials (ButtoN b)
   pfp->nucprotpolicy = GetValue (pfp->nucprotchoice);
   pfp->orderjoinpolicy = GetValue (pfp->orderJoinState);
   pfp->findThisStr = JustSaveStringFromText (pfp->findThis);
+  pfp->extend5 = GetStatus (pfp->extend5_btn);
+  pfp->extend3 = GetStatus (pfp->extend3_btn);
+  pfp->case_insensitive = GetStatus (pfp->case_insensitive_btn);
+  pfp->when_string_not_present = GetStatus (pfp->when_string_not_present_btn);
 
   pfp->omp = ObjMgrGet ();
   pfp->omtp = NULL;
@@ -7594,7 +7822,14 @@ static void DoEditPartials (ButtoN b)
   Update ();
   ObjMgrSetDirtyFlag (pfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, pfp->input_entityID, 0, 0);
-  Remove (pfp->form);
+  if (GetStatus (pfp->leaveDlgUp))
+  {
+  	Show (pfp->form);
+  }
+  else
+  {
+    Remove (pfp->form);  	
+  }
 }
 
 static void PartialMessageProc (ForM f, Int2 mssg)
@@ -7631,7 +7866,7 @@ extern void EditFeaturePartials (IteM i)
   GrouP              g;
   GrouP              h;
   ValNodePtr         head;
-  GrouP              k;
+  GrouP              k, l, m, n;
   Int2               listHeight;
   PartialFormPtr     pfp;
   SeqEntryPtr        sep;
@@ -7640,6 +7875,7 @@ extern void EditFeaturePartials (IteM i)
   WindoW             w;
   GrouP              x;
   GrouP              y;
+  GrouP              z;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -7709,9 +7945,12 @@ extern void EditFeaturePartials (IteM i)
   PopupItem (pfp->change5, "Clear if good start codon");
   PopupItem (pfp->change5, "Do not change");
   SetValue (pfp->change5, 8);
+  l = HiddenGroup (h, 1, 0, NULL);
+  pfp->extend5_btn = CheckBox (l, "Extend to 5' end of sequence if setting 5' partial", NULL);
 
-  StaticPrompt (k, "3' policy", 0, stdLineHeight, programFont, 'l');
-  pfp->change3 = PopupList (k, TRUE, NULL);
+  m = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (m, "3' policy", 0, stdLineHeight, programFont, 'l');
+  pfp->change3 = PopupList (m, TRUE, NULL);
   PopupItem (pfp->change3, "Set");
   PopupItem (pfp->change3, "Set only if at 3' end");
   PopupItem (pfp->change3, "Set if bad stop codon");
@@ -7720,6 +7959,8 @@ extern void EditFeaturePartials (IteM i)
   PopupItem (pfp->change3, "Clear if good stop codon");
   PopupItem (pfp->change3, "Do not change");
   SetValue (pfp->change3, 7);
+  n = HiddenGroup (h, 1, 0, NULL);
+  pfp->extend3_btn = CheckBox (n, "Extend to 3' end of sequence if setting 3' partial", NULL);
 
   x = HiddenGroup (h, 2, 0, NULL);
   pfp->nucprotchoice = HiddenGroup (x, 4, 0, NULL);
@@ -7732,14 +7973,19 @@ extern void EditFeaturePartials (IteM i)
   StaticPrompt (y, "Optional string constraint", 0,
 		dialogTextHeight, programFont, 'c');
   pfp->findThis = DialogText (y, "", 14, NULL);
+  z = HiddenGroup (h, 2, 0, NULL);
+  pfp->case_insensitive_btn = CheckBox (z, "Case Insensitive", NULL);
+  pfp->when_string_not_present_btn = CheckBox (z, "When String is Not Present", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoEditPartials);
   SetObjectExtra (b, pfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  pfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) x, (HANDLE) c,
-		(HANDLE) y, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) l, (HANDLE) m,
+                 (HANDLE) n, (HANDLE) x, (HANDLE) c,
+		(HANDLE) y, (HANDLE) z, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -8143,7 +8389,7 @@ static void MarkProteinCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, In
   }
 }
 
-extern void RemoveProteinsAndOptionallyRenormalize (IteM i, Boolean renormalize)
+static void RemoveProteinsAndOptionallyRenormalize (IteM i, Boolean renormalize)
 
 {
   BaseFormPtr    bfp;
@@ -9333,4 +9579,287 @@ extern void ExportAlignmentContiguous (IteM i)
   ExportAlignment (i, FALSE);
 }
 
+static Int4 FindFeaturePos (SeqIdPtr sip, SeqAlignPtr salp, Int4 pos)
+{
+  Int4        aln_row;
+  Int4        new_pos;
+  
+  if (sip == NULL || salp == NULL) return pos;
+  aln_row = AlnMgr2GetFirstNForSip(salp, sip);
+  if (aln_row > 0)
+  {
+  	new_pos = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
+  	if (new_pos < 0)
+  	{
+  	  return pos;
+  	}
+  	else
+  	{
+  	  return new_pos;
+  	}
+  }
+  return pos;
+}
 
+static void FixFeatureIntervalSeqLoc (SeqLocPtr slp, SeqAlignPtr salp)
+{
+  SeqIntPtr     sintp;
+  SeqBondPtr    sbp;
+  SeqPntPtr     spp;
+  SeqIdPtr      tmpsip;
+  SeqLocPtr     this_slp;
+ 
+  if (slp == NULL || slp->data.ptrvalue == NULL || salp == NULL) return;
+
+  tmpsip = SeqIdPtrFromSeqAlign (salp);
+
+  switch (slp->choice)
+  {
+    case SEQLOC_INT:
+      sintp = slp->data.ptrvalue;
+      sintp->from = FindFeaturePos (sintp->id, salp, sintp->from);
+      sintp->to = FindFeaturePos (sintp->id, salp, sintp->to);
+      break;
+  	case SEQLOC_PNT:
+  	  spp = slp->data.ptrvalue;
+  	  spp->point = FindFeaturePos (spp->id, salp, spp->point);
+  	  break;
+    case SEQLOC_BOND:   /* bond -- 2 seqs */
+      sbp = (SeqBondPtr)(slp->data.ptrvalue);
+      spp = sbp->a;
+  	  spp->point = FindFeaturePos (spp->id, salp, spp->point);
+      spp = sbp->b;
+  	  spp->point = FindFeaturePos (spp->id, salp, spp->point);
+      break;
+    case SEQLOC_MIX:    /* mix -- more than one seq */
+    case SEQLOC_EQUIV:    /* equiv -- ditto */
+    case SEQLOC_PACKED_INT:    /* packed int */
+      for (this_slp = slp->data.ptrvalue; this_slp != NULL; this_slp = this_slp->next)
+      {
+      	FixFeatureIntervalSeqLoc (this_slp, salp);
+      }
+      break;
+    default:
+      break;	
+  }
+}
+
+typedef struct featurefixdata 
+{
+  Uint2 entityID;
+  SeqAlignPtr salp;	
+} FeatureFixData, PNTR FeatureFixPtr;
+
+static void FixFeatureIntervalCallback (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BioseqPtr     bsp;
+  FeatureFixPtr ffp;
+ 
+  if (sfp == NULL || userdata == NULL) return;  
+  
+  ffp = (FeatureFixPtr) userdata;
+ 
+  FixFeatureIntervalSeqLoc (sfp->location, ffp->salp);
+  if (sfp->idx.subtype == FEATDEF_CDS)
+  {
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+  	SeqEdTranslateOneCDS (sfp, bsp, ffp->entityID);
+  }
+}
+
+extern void FixFeatureIntervals (IteM i)
+{
+  BaseFormPtr    bfp;
+  SeqEntryPtr    sep;
+  FeatureFixData ffd;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  ffd.entityID = bfp->input_entityID;
+  ffd.salp = SeqAlignListDup((SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN));
+  if (ffd.salp == NULL)
+  {
+    Message (MSG_ERROR, "No alignment present - cannot remap intervals");
+    return;
+  }
+      
+  if (ffd.salp->segtype == SAS_DENSEG  &&  ffd.salp->next == NULL) 
+  {
+    AlnMgr2IndexSingleChildSeqAlign(ffd.salp);
+  } else {
+    AlnMgr2IndexSeqAlign(ffd.salp);
+  }
+
+  VisitFeaturesInSep (sep, (Pointer) &ffd, FixFeatureIntervalCallback);
+  SeqAlignFree (ffd.salp);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static SeqLocPtr CreateProteinLoc (SeqLocPtr nuc_loc, Int4 offset, BioseqPtr prot_bsp)
+{
+  SeqLocPtr prot_loc = NULL;
+  SeqIntPtr sintp_nuc, sintp_prot;
+  Boolean   partial5, partial3;
+  
+  if (nuc_loc == NULL || prot_bsp == NULL)
+  {
+    return NULL;
+  }
+  if (nuc_loc->choice != SEQLOC_INT)
+  {
+    Message (MSG_ERROR, "Unable to translate locations that are not simple intervals");
+  }
+  else
+  {
+    sintp_nuc = (SeqIntPtr)(nuc_loc->data.ptrvalue);
+    if (sintp_nuc != NULL)
+    {
+      if (sintp_nuc->from < offset || (sintp_nuc->from - offset) % 3 != 0
+          || sintp_nuc->to < offset || (sintp_nuc->to + 1 - offset) % 3 != 0)
+      {
+        Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
+      }
+      else
+      {        
+        sintp_prot = SeqIntNew ();
+        if (sintp_prot != NULL)
+        {
+          CheckSeqLocForPartial (nuc_loc, &partial5, &partial3);
+          sintp_prot->id = SeqIdDup (SeqIdFindBest(prot_bsp->id, 0));
+          sintp_prot->from = (sintp_nuc->from - offset) / 3;
+          sintp_prot->to = (sintp_nuc->to - offset) / 3;
+          ValNodeAddPointer (&prot_loc, SEQLOC_INT, sintp_prot);
+          SetSeqLocPartial (prot_loc, partial5, partial3);
+        }
+      }
+    }
+  }
+  return prot_loc;
+}
+
+static void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqFeatPtr        sfp = NULL;
+  ValNodePtr        top_level_cds_list = NULL;
+  SeqMgrFeatContext context, gene_context;
+  ValNodePtr        vnp;
+  SeqFeatPtr        top_cds;
+  BioseqPtr         prot_bsp;
+  SeqLocPtr         prot_loc;
+  Int4              offset;
+  SeqFeatPtr        new_sfp;
+  ProtRefPtr        prp;
+  SeqFeatPtr        gene;
+  
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
+  
+  sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
+  while (sfp != NULL)
+  {
+    top_cds = NULL;
+    offset = 0;
+    for (vnp = top_level_cds_list; vnp != NULL && top_cds == NULL; vnp = vnp->next)
+    {
+      top_cds = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (top_cds != NULL)
+      {
+        if (SeqLocCompare (top_cds->location, sfp->location) == SLC_B_IN_A)
+        {
+          offset = vnp->choice;
+        }
+        else
+        {
+          top_cds = NULL;
+        }
+      }
+    }
+    /* Only handling the simplest cases of SeqInt locs inside other SeqInt locs */
+    if (top_cds == NULL)
+    {
+      if (sfp->location != NULL 
+          && sfp->location->choice == SEQLOC_INT
+          && sfp->location->data.ptrvalue != NULL)
+      {
+        /* add to list of top level CDSs */
+        ValNodeAddPointer (&top_level_cds_list, context.left, sfp);
+      }
+    }
+    else
+    {
+      prot_bsp = BioseqFindFromSeqLoc (top_cds->product);
+      if (prot_bsp != NULL)
+      {
+        /* convert location by subtracting top_cds start from sfp locations and
+         * divide all locations by 3
+         */
+        prot_loc = CreateProteinLoc (sfp->location, offset, prot_bsp);
+        if (prot_loc != NULL)
+        {
+          /* Create new feature on prot_bsp */
+          new_sfp = CreateNewFeatureOnBioseq (prot_bsp, SEQFEAT_PROT, prot_loc);
+          if (new_sfp != NULL)
+          {
+            prp = ProtRefNew ();
+            if (prp != NULL)
+            {
+              ValNodeCopyStr (&(prp->name), 0, context.label);
+              prp->processed = 2;
+            }
+            new_sfp->data.value.ptrvalue = prp;
+            
+            /* mark old product for deletion */
+            prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+            if (prot_bsp != NULL)
+            {
+              prot_bsp->idx.deleteme = 1;
+            }
+         
+            /* Mark old feature for deletion */
+            sfp->idx.deleteme = 1;
+            gene = SeqMgrGetOverlappingGene (sfp->location, &gene_context);
+            if (gene != NULL && SeqLocCompare (gene->location, sfp->location) == SLC_A_EQ_B)
+            {
+              gene->idx.deleteme = 1;
+            }
+          }
+        }
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
+  }
+  ValNodeFree (top_level_cds_list);
+}
+
+
+
+extern void ConvertInnerCDSsToProteinFeatures (IteM i)
+{
+  BaseFormPtr    bfp;
+  SeqEntryPtr    sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  
+  VisitBioseqsInSep (sep, NULL, ConvertInnerCDSsToMatPeptidesCallback);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();  
+}

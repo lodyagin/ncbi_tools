@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.3 2004/03/15 19:23:27 bollin Exp $
+/* $Id: seqpanel.h,v 6.7 2004/09/23 15:00:39 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,6 +28,8 @@
 * ==========================================================================
 */
 
+#ifndef seqpanel_h
+#define seqpanel_h
 extern PaneL CreateSeqViewPanel (GrouP g, Int2 w, Int2 h);
 extern void 
 AlignmentIntervalToString 
@@ -41,3 +43,8 @@ AlignmentIntervalToString
  Uint1Ptr    alnbuf,
  Int4 PNTR   alnbuffer_len);
 
+extern ForM CreateSeqEditorWindow (Int2 left, Int2 top, CharPtr windowname, BioseqPtr bsp);
+
+NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 entityID);
+
+#endif

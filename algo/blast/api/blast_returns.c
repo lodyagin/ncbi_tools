@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.1 2004/05/14 17:19:03 dondosha Exp $
+/* $Id: blast_returns.c,v 1.12 2004/10/06 15:01:01 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,149 +34,63 @@ Contents: Manipulating data returned from BLAST other than Seq-aligns
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.1 $
+ * $Revision: 1.12 $
  * */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.1 2004/05/14 17:19:03 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.12 2004/10/06 15:01:01 dondosha Exp $";
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_seqsrc.h>
 
-BLAST_DbSummary* LIBCALL
-Blast_DbSummaryFree (BLAST_DbSummary* dbinfo)
+TxDfDbInfo* Blast_GetDbInfo(ReadDBFILE* rdfp)
 {
-        BLAST_DbSummary* next;
-
-        if (dbinfo == NULL)
-                return NULL;
-
-        while (dbinfo)
-        {
-                sfree(dbinfo->name);
-                sfree(dbinfo->definition);
-                sfree(dbinfo->date);
-                next = dbinfo->next;
-                sfree(dbinfo);
-                dbinfo = next;
-        }
-
-        return dbinfo;
-}
-
-BLAST_DbSummary* Blast_GetDbSummary(const BlastSeqSrc* seq_src)
-{
-   BLAST_DbSummary* dbinfo = NULL;
+   TxDfDbInfo* dbinfo = NULL;
    char* chptr = NULL;
 
-   dbinfo = calloc(1, sizeof(BLAST_DbSummary));
-   dbinfo->name = BLASTSeqSrcGetName(seq_src);	
-      
-   if((chptr = BLASTSeqSrcGetDefinition(seq_src)) == NULL)
-      chptr = dbinfo->name;
+   if (!rdfp)
+      return NULL;
 
-   if (chptr)
+   dbinfo = calloc(1, sizeof(TxDfDbInfo));
+
+   dbinfo->name = strdup(readdb_get_filename(rdfp));
+      
+   if (((chptr = readdb_get_title(rdfp)) == NULL) && dbinfo->name)
+      dbinfo->definition = strdup(dbinfo->name);
+   else
       dbinfo->definition = strdup(chptr);	
       
-   dbinfo->date = BLASTSeqSrcGetDate(seq_src);
+   dbinfo->date = strdup(readdb_get_date(rdfp));
 
-   dbinfo->is_protein = BLASTSeqSrcGetIsProt(seq_src);
+   dbinfo->is_protein = readdb_is_prot(rdfp);
      
-   if ((dbinfo->total_length = BLASTSeqSrcGetTotLen(seq_src)) == 0)
-      dbinfo->total_length = BLASTSeqSrcGetMaxSeqLen(seq_src); 
-   dbinfo->number_seqs = BLASTSeqSrcGetNumSeqs(seq_src);
-
+   readdb_get_totals_ex(rdfp, &dbinfo->total_length, &dbinfo->number_seqs, TRUE);
+   
    return dbinfo;
 }
 
-/*
-        adds the new string to the buffer, separating by a tilde.
-        Checks the size of the buffer for Blast_GetParametersBuffer and
-        allocates longer replacement if needed.
-*/
-
-static Boolean
-add_string_to_buffer(char* buffer, char* *old, Int2* old_length)
-
-{
-        char* new,* ptr;
-        Int2 length = 0, new_length;
-
-        if (!buffer) 
-           return FALSE;
-
-        if (*old)
-           length = (strlen(*old));
-
-        if((Int2)(strlen(buffer)+length+3) > *old_length)
-        {
-                new_length = *old_length + 255;
-                new = calloc(new_length, sizeof(char));
-                if (*old_length > 0 && *old != NULL)
-                {
-                        memcpy(new, *old, *old_length);
-                        sfree(*old);
-                }
-                *old = new;
-                *old_length = new_length;
-        }
-
-        ptr = *old;
-        ptr += length;
-
-        /* Add a tilde */
-        *ptr = '~';
-        ptr++;
-
-        while (*buffer != NULLB)
-        {
-                *ptr = *buffer;
-                buffer++; ptr++;
-        }
-
-        return TRUE;
-}
-
 char*
-Blast_GetParametersBuffer(Uint1 program_number, 
-   const BlastScoringOptions* score_options,
-   const BlastScoreBlk* sbp, const LookupTableOptions* lookup_options,
-   const BlastInitialWordOptions* word_options,
-   const BlastExtensionOptions* ext_options,
-   const BlastHitSavingOptions* hit_options,
-   const BlastEffectiveLengthsOptions* eff_len_options,
-   const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src, 
-   const BlastDiagnostics* diagnostics)
+Blast_GetParametersBuffer(EBlastProgramType program_number, 
+        const Blast_SummaryReturn* sum_returns)
 {
-   Int4 cutoff = 0;
    char buffer[128];
-   char* ret_buffer;
-   Int2 ret_buffer_length;
-   Int4 num_entries = 0;
-   Int8 total_length = 0;
-   Int4 qlen = 0;
-   double evalue;
-   Int2 num_frames;
-   Boolean single_query;
-   Blast_KarlinBlk* kbp;
+   char* ret_buffer=NULL;
+   Int2 ret_buffer_length=0;
    BlastUngappedStats* ungapped_stats = NULL;
    BlastGappedStats* gapped_stats = NULL;
    BlastRawCutoffs* raw_cutoffs = NULL;
+   Blast_SearchParams* search_params=NULL;
+   Blast_DatabaseStats* db_stats = NULL;
+   BlastDiagnostics* diagnostics = NULL;
    
-   ret_buffer = NULL;
-   ret_buffer_length = 0;
-   
-   if (program_number == blast_type_blastx ||
-       program_number == blast_type_tblastx)
-      num_frames = NUM_FRAMES;
-   else if (program_number == blast_type_blastn)
-      num_frames = 2;
-   else
-      num_frames = 1;
 
-   single_query = (query_info->last_context < num_frames);
+   if (sum_returns == NULL)
+     return NULL;
+
+   search_params = sum_returns->search_params;
+   db_stats = sum_returns->db_stats;
+   diagnostics = sum_returns->diagnostics;
 
    if (diagnostics) {
       ungapped_stats = diagnostics->ungapped_stat;
@@ -184,36 +98,25 @@ Blast_GetParametersBuffer(Uint1 program_number,
       raw_cutoffs = diagnostics->cutoffs;
    }
 
-   if (score_options->matrix) {
-      sprintf(buffer, "Matrix: %s", score_options->matrix);
+   if (program_number == eBlastTypeBlastn)
+   {
+      sprintf(buffer, "Matrix: blastn matrix:%d %d", search_params->match, search_params->mismatch);
+      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+   } 
+   else if (search_params->matrix) 
+   {
+      sprintf(buffer, "Matrix: %s", search_params->matrix);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
 
-   if (score_options->gapped_calculation) {
+   if (search_params->gapped_search) {
       sprintf(buffer, "Gap Penalties: Existence: %ld, Extension: %ld",
-              (long) score_options->gap_open, 
-              (long) score_options->gap_extend);
+              (long) search_params->gap_open, 
+              (long) search_params->gap_extension);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    
-   if (eff_len_options->db_length)
-      total_length = eff_len_options->db_length;
-   else if (seq_src) {
-      if ((total_length = BLASTSeqSrcGetTotLen(seq_src)) == 0)
-         total_length = BLASTSeqSrcGetMaxSeqLen(seq_src);
-   }
-      
-   if (program_number == blast_type_tblastn || 
-       program_number == blast_type_rpstblastn ||
-       program_number == blast_type_tblastx)
-      total_length /= 3;
-
-   if (eff_len_options->dbseq_num)
-      num_entries = eff_len_options->dbseq_num;
-   else if (seq_src)
-      num_entries = BLASTSeqSrcGetNumSeqs(seq_src);
-
-   sprintf(buffer, "Number of Sequences: %ld", (long) num_entries);
+   sprintf(buffer, "Number of Sequences: %ld", (long) db_stats->dbnum);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    if (ungapped_stats) {
       sprintf(buffer, "Number of Hits to DB: %s", 
@@ -229,21 +132,21 @@ Blast_GetParametersBuffer(Uint1 program_number,
    }
 
    if (gapped_stats) {
-      if (hit_options->expect_value > 0.1) {
+      if (search_params->expect > 0.1) {
          sprintf(buffer, "Number of sequences better than %4.1f: %ld", 
-                 hit_options->expect_value, 
+                 search_params->expect, 
                  (long) gapped_stats->num_seqs_passed);
       } else {
          sprintf(buffer, "Number of sequences better than %3.1e: %ld", 
-                 hit_options->expect_value, 
+                 search_params->expect, 
                  (long) gapped_stats->num_seqs_passed);
       }
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    
-      if (score_options->gapped_calculation) {
+      if (search_params->gapped_search) {
          sprintf(buffer, 
                  "Number of HSP's better than %4.1f without gapping: %ld", 
-                 hit_options->expect_value, 
+                 search_params->expect, 
                  (long) gapped_stats->seqs_ungapped_passed);
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
          sprintf(buffer, 
@@ -256,93 +159,76 @@ Blast_GetParametersBuffer(Uint1 program_number,
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
          sprintf(buffer, 
                "Number of extra gapped extensions for HSPs above %4.1f: %ld", 
-                 hit_options->expect_value,
+                 search_params->expect,
                  (long) gapped_stats->extra_extensions);
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       }
    }
 
    /* Query length makes sense only for single query sequence. */
-   if (single_query) {
-      qlen = BLAST_GetQueryLength(query_info, query_info->first_context);
-      sprintf(buffer, "Length of query: %ld", (long)qlen);
+   if (db_stats->qlen > 0) {
+      sprintf(buffer, "Length of query: %ld", (long)db_stats->qlen);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
 
-   sprintf(buffer, "Length of database: %s", Nlm_Int8tostr (total_length, 1));
+   sprintf(buffer, "Length of database: %s", Nlm_Int8tostr (db_stats->dblength, 1));
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    
-   if (single_query) {
-      Int4 length_adjustment = 
-         query_info->length_adjustments[query_info->first_context];
-      Int4 eff_qlen;
-      Int8 eff_dblen;
-      sprintf(buffer, "Length adjustment: %ld", (long) length_adjustment);
+   if (db_stats->qlen > 0) {
+      sprintf(buffer, "Length adjustment: %ld", (long) db_stats->hsp_length);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 
       /** FIXME: Should this be different for RPS BLAST? */
-      eff_qlen = qlen - length_adjustment;
-      sprintf(buffer, "Effective length of query: %ld", (long)eff_qlen);
+      sprintf(buffer, "Effective length of query: %ld", (long)db_stats->eff_qlen);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       
-      eff_dblen = total_length - num_entries*length_adjustment;
       sprintf(buffer, "Effective length of database: %s", 
-              Nlm_Int8tostr (eff_dblen , 1));
+              Nlm_Int8tostr (db_stats->eff_dblength , 1));
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "Effective search space: %8.0f", 
-              ((double) eff_dblen)*((double) eff_qlen));
+      sprintf(buffer, "Effective search space: %8.0f", (double) db_stats->eff_searchsp);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "Effective search space used: %8.0f",
-         (double)query_info->eff_searchsp_array[query_info->first_context]);
+      sprintf(buffer, "Effective search space used: %8.0f", (double) db_stats->eff_searchsp_used);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    sprintf(buffer, "Neighboring words threshold: %ld", 
-           (long) lookup_options->threshold);
+           (long) search_params->threshold);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    sprintf(buffer, "Window for multiple hits: %ld", 
-           (long) word_options->window_size);
+           (long) search_params->window_size);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    
    if (raw_cutoffs) {
-      kbp = sbp->kbp[query_info->first_context];
+      BLAST_KAParameters* ka_params_gap = sum_returns->ka_params_gap;
+      BLAST_KAParameters* ka_params = sum_returns->ka_params;
+
       sprintf(buffer, "X1: %ld (%4.1f bits)", 
-              (long)raw_cutoffs->x_drop_ungapped, 
-              raw_cutoffs->x_drop_ungapped*kbp->Lambda/NCBIMATH_LN2);
+              (long)raw_cutoffs->x_drop_ungapped, (raw_cutoffs->x_drop_ungapped)*(ka_params->Lambda)/NCBIMATH_LN2);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      if (score_options->gapped_calculation) {
+
+      if (search_params->gapped_search) {
          sprintf(buffer, "X2: %ld (%4.1f bits)", 
-                 (long)raw_cutoffs->x_drop_gap, ext_options->gap_x_dropoff);
+                 (long)raw_cutoffs->x_drop_gap, raw_cutoffs->x_drop_gap*(ka_params_gap->Lambda)/NCBIMATH_LN2);
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
          sprintf(buffer, "X3: %ld (%4.1f bits)", 
-                 (long)raw_cutoffs->x_drop_gap_final,
-                 ext_options->gap_x_dropoff_final);
+                 (long)raw_cutoffs->x_drop_gap_final, raw_cutoffs->x_drop_gap_final*(ka_params_gap->Lambda)/NCBIMATH_LN2);
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       
          sprintf(buffer, "S1: %ld (%4.1f bits)", 
-                 (long)raw_cutoffs->gap_trigger, ext_options->gap_trigger);
+                 (long)raw_cutoffs->gap_trigger, 
+                 ((raw_cutoffs->gap_trigger*(ka_params->Lambda))-(log(ka_params->K)))/NCBIMATH_LN2);
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       }
-   }
-   cutoff = 0;
-   if (single_query) {
-      Int4 context = query_info->first_context;
-      double searchsp = (double) query_info->eff_searchsp_array[context];
 
-      /* For translated RPS blast the search space must be scaled down */
-      if (program_number == blast_type_rpstblastn)
-         searchsp = searchsp / NUM_FRAMES;
-
-      evalue = hit_options->expect_value;
-      if (!score_options->gapped_calculation)
-         kbp = sbp->kbp[query_info->first_context];
+      if (search_params->gapped_search)
+          sprintf(buffer, "S2: %ld (%4.1f bits)", (long) raw_cutoffs->cutoff_score, 
+            (((raw_cutoffs->cutoff_score)*(ka_params_gap->Lambda))-(log(ka_params_gap->K)))/NCBIMATH_LN2);
       else
-         kbp = sbp->kbp_gap[query_info->first_context];
-   
-      BLAST_Cutoffs(&cutoff, &evalue, kbp, searchsp, FALSE, 0);
-      sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, 
-              (((cutoff)*(kbp->Lambda))-(kbp->logK))/NCBIMATH_LN2);
+          sprintf(buffer, "S2: %ld (%4.1f bits)", (long) raw_cutoffs->cutoff_score, 
+            (((raw_cutoffs->cutoff_score)*(ka_params->Lambda))-(log(ka_params->K)))/NCBIMATH_LN2);
+      
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
+
    return ret_buffer;
 }
 
@@ -353,8 +239,8 @@ Blast_GetParametersBuffer(Uint1 program_number,
  * @param sum_returns Returns summary structure [out]
 */
 static void 
-Blast_SummaryFillKAParameters(const BlastScoreBlk* sbp, Int4 context, 
-                              BLAST_SummaryReturn* sum_returns)
+Blast_SummaryKAParametersFill(const BlastScoreBlk* sbp, Int4 context, 
+                              Blast_SummaryReturn* sum_returns)
 {
    Blast_KarlinBlk* kbp;
 
@@ -380,7 +266,202 @@ Blast_SummaryFillKAParameters(const BlastScoreBlk* sbp, Int4 context,
    }
 }
 
-void Blast_SummaryReturnFill(Uint1 program_number, 
+/** Frees Blast_DatabaseStats object
+ * @param db_stats object to be freed [in]
+ * @return NULL pointer 
+ */
+static Blast_DatabaseStats*
+Blast_SummaryDBStatsFree(Blast_DatabaseStats* db_stats)
+{
+    sfree(db_stats);
+    return NULL;
+}
+
+/** Allocated and fills in Blast_DatabaseStats
+ * Either rdfp or subject_slp should be non-NULL, not both!
+ *
+ * @param program_number blastn/blastp/etc. [in]
+ * @param eff_len_options pointer to effective length options [in]
+ * @param query_info information about query [in]
+ * @param rdfp pointer to BLAST DB reader [in]
+ * @param subject_slp Seq-loc for target sequence [in]
+ * @param db_stats object to be returned [out]
+ * @return zero on success
+ */
+static Int2 
+Blast_SummaryDBStatsFill(EBlastProgramType program_number, 
+   const BlastEffectiveLengthsOptions* eff_len_options,
+   const BlastQueryInfo* query_info, ReadDBFILE* rdfp, 
+   SeqLoc* subject_slp, Blast_DatabaseStats** db_stats)
+{
+   Int8 total_length=0;  /* total length of database. */
+   Int4 num_entries=0;   /* number of entries in database. */
+   Int4 num_frames;      /* number of frames allowed. */
+
+   ASSERT(db_stats);
+
+   *db_stats = (Blast_DatabaseStats*) calloc(1, sizeof(Blast_DatabaseStats));
+   if (*db_stats == NULL)
+     return -1;
+
+   if (eff_len_options->db_length) {
+      total_length = eff_len_options->db_length;
+   } else if (rdfp) {
+      readdb_get_totals_ex(rdfp, &total_length, &num_entries, TRUE);
+   } else {
+      SeqLoc* slp;
+      for (slp = subject_slp; slp; slp = slp->next) {
+         total_length += SeqLocLen(slp);
+      }
+   }
+      
+   if (program_number == eBlastTypeTblastn || 
+       program_number == eBlastTypeRpsTblastn ||
+       program_number == eBlastTypeTblastx)
+      total_length /= 3;
+
+   (*db_stats)->dblength = total_length;
+
+
+   if (eff_len_options->dbseq_num)
+      num_entries = eff_len_options->dbseq_num;
+   else if (!rdfp) 
+      num_entries = ValNodeLen(subject_slp);
+
+   (*db_stats)->dbnum = num_entries;
+
+   if (program_number == eBlastTypeBlastx ||
+       program_number == eBlastTypeTblastx)
+      num_frames = NUM_FRAMES;
+   else if (program_number == eBlastTypeBlastn)
+      num_frames = 2;
+   else
+      num_frames = 1;
+
+   
+   if (query_info->last_context < num_frames) {  /* Only one query here. */
+      Int4 qlen = BLAST_GetQueryLength(query_info, query_info->first_context);
+      (*db_stats)->hsp_length = query_info->length_adjustments[query_info->first_context];
+      /** FIXME: Should this be different for RPS BLAST? */
+      (*db_stats)->qlen = qlen;
+      (*db_stats)->eff_qlen = qlen - ((*db_stats)->hsp_length);
+      (*db_stats)->eff_dblength = total_length - num_entries*((*db_stats)->hsp_length);
+      (*db_stats)->eff_searchsp = query_info->eff_searchsp_array[query_info->first_context];
+      if (eff_len_options && eff_len_options->searchsp_eff)
+         (*db_stats)->eff_searchsp_used = eff_len_options->searchsp_eff;
+      else
+         (*db_stats)->eff_searchsp_used = (*db_stats)->eff_searchsp;
+   }
+
+   return 0;
+}
+
+/** Free Blast_SearchParams structure and underlying data
+ *
+ * @param search_params the object to be freed [in]
+ * @return NULL pointer 
+ */
+static Blast_SearchParams*
+Blast_SummarySearchParamsFree(Blast_SearchParams* search_params)
+{
+
+   if (search_params == NULL)
+      return NULL;
+
+   sfree(search_params->matrix);
+   sfree(search_params->entrez_query);
+   sfree(search_params->filter_string);
+   sfree(search_params);
+
+   return NULL;
+}
+
+/** Allocated and fills some search parameters.  
+ * 
+ * @param program_number identifies blastn/blastp/etc. [in]
+ * @param score_options pointer to scoring options [in]
+ * @param lookup_options pointer to options for lookup table creation [in]
+ * @param hit_options options for saving and evaluating hits [in]
+ * @param query_setup options for filtering etc. [in]
+ * @param word_options options for processing initial hits [in]
+ * @param entrez_query limit search by this query [in]
+ * @param search_params object to be allocated and filled [out]
+ * @return zero on success
+ */
+static Int2 
+Blast_SummarySearchParamsFill(EBlastProgramType program_number,
+   const BlastScoringOptions* score_options,
+   const LookupTableOptions* lookup_options,
+   const BlastHitSavingOptions* hit_options,
+   const QuerySetUpOptions* query_setup, 
+   const BlastInitialWordOptions* word_options,
+   const char* entrez_query,
+   Blast_SearchParams** search_params)
+{
+   Blast_SearchParams* search_params_lcl;
+
+   ASSERT(search_params);
+   ASSERT(score_options && lookup_options && hit_options && query_setup);
+
+   *search_params = search_params_lcl = (Blast_SearchParams*) calloc(1, sizeof(Blast_SearchParams));
+   if (search_params_lcl == NULL)
+     return -1;
+
+   if (program_number == eBlastTypeBlastn)
+   {
+      search_params_lcl->match = score_options->reward;
+      search_params_lcl->mismatch = score_options->penalty;
+   } 
+   else if (score_options->matrix) 
+   {
+      search_params_lcl->matrix = StringSave(score_options->matrix);
+   }
+
+   if (score_options->gapped_calculation) 
+   {
+      search_params_lcl->gapped_search = TRUE;
+      search_params_lcl->gap_open = score_options->gap_open;
+      search_params_lcl->gap_extension = score_options->gap_extend;
+   }
+   else
+      search_params_lcl->gapped_search = FALSE;
+
+   if (query_setup && query_setup->filter_string)
+      search_params_lcl->filter_string = StringSave(query_setup->filter_string);
+   else
+      search_params_lcl->filter_string = StringSave("F");
+
+   search_params_lcl->expect = hit_options->expect_value;
+
+   if (lookup_options->phi_pattern)
+      search_params_lcl->pattern = StringSave(lookup_options->phi_pattern); 
+
+   search_params_lcl->threshold = lookup_options->threshold;
+
+   search_params_lcl->window_size = word_options->window_size;
+
+   if (entrez_query)
+      search_params_lcl->entrez_query = StringSave(entrez_query);
+
+   return 0;
+}
+
+
+Blast_SummaryReturn* 
+Blast_SummaryReturnFree(Blast_SummaryReturn* sum_returns)
+{
+   if (sum_returns) {
+      sfree(sum_returns->ka_params);
+      sfree(sum_returns->ka_params_gap);
+      sum_returns->db_stats = Blast_SummaryDBStatsFree(sum_returns->db_stats);
+      sum_returns->search_params = Blast_SummarySearchParamsFree(sum_returns->search_params);
+      sum_returns->diagnostics = Blast_DiagnosticsFree(sum_returns->diagnostics);
+      sfree(sum_returns);
+   }
+   return NULL;
+}
+
+Int2 Blast_SummaryReturnFill(EBlastProgramType program_number, 
         const BlastScoringOptions* score_options, 
         const BlastScoreBlk* sbp,
         const LookupTableOptions* lookup_options,
@@ -388,18 +469,39 @@ void Blast_SummaryReturnFill(Uint1 program_number,
         const BlastExtensionOptions* ext_options,
         const BlastHitSavingOptions* hit_options,
         const BlastEffectiveLengthsOptions* eff_len_options,
+        const QuerySetUpOptions* query_setup,
         const BlastQueryInfo* query_info,
-        const BlastSeqSrc* seq_src,
-        const BlastDiagnostics* diagnostics, 
-        BLAST_SummaryReturn** sum_returns_out)
+        ReadDBFILE* rdfp, SeqLoc* subject_slp,
+        BlastDiagnostics** diagnostics,
+        Blast_SummaryReturn** sum_returns_out)
 {
-   BLAST_SummaryReturn* sum_returns = 
-      (BLAST_SummaryReturn*) calloc(1, sizeof(BLAST_SummaryReturn));
-   Blast_SummaryFillKAParameters(sbp, query_info->first_context, sum_returns);
-   sum_returns->params_buffer = 
-      Blast_GetParametersBuffer(program_number, score_options, sbp, 
-                                lookup_options, word_options, ext_options,
-                                hit_options, eff_len_options, query_info, 
-                                seq_src, diagnostics);
+   Blast_SummaryReturn* sum_returns = 
+      (Blast_SummaryReturn*) calloc(1, sizeof(Blast_SummaryReturn));
+
+   if (sum_returns_out == NULL)
+      return -1;
+
+   if (score_options == NULL || sbp == NULL || lookup_options == NULL || 
+      word_options == NULL || ext_options == NULL || hit_options == NULL ||
+      eff_len_options == NULL || query_info == NULL)
+     return -1;
+
+   if (rdfp == NULL && subject_slp == NULL)
+     return -1;
+
+   Blast_SummaryKAParametersFill(sbp, query_info->first_context, sum_returns);
+   Blast_SummaryDBStatsFill(program_number, eff_len_options, query_info, rdfp, 
+            subject_slp, &(sum_returns->db_stats));
+   
+   Blast_SummarySearchParamsFill(program_number, score_options,
+            lookup_options, hit_options, query_setup, word_options,
+            NULL, &(sum_returns->search_params));
+   if (diagnostics)
+   {
+      sum_returns->diagnostics = *diagnostics;
+      *diagnostics = NULL;
+   }
    *sum_returns_out = sum_returns;
+
+   return 0;
 }

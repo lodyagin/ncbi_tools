@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.h,v 1.15 2004/06/16 14:53:03 dondosha Exp $
+/* $Id: mb_lookup.h,v 1.17 2004/09/13 12:39:50 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -291,7 +291,7 @@ extern "C" {
 
 
 /** The lookup table structure used for Mega BLAST, generally with width 12 */
-typedef struct MBLookupTable {
+typedef struct BlastMBLookupTable {
    Int4 hashsize;       /**< = 2^(8*width) */ 
    Int4 mask;           /**< hashsize - 1 */
    Int2 compressed_wordsize;/**< Number of bytes in intersection between 
@@ -317,7 +317,7 @@ typedef struct MBLookupTable {
                           the backbone */
    Int4 longest_chain; /**< Largest number of query positions for a given 
                           word */
-} MBLookupTable;
+} BlastMBLookupTable;
 
 /**
  * Create the lookup table for Mega BLAST 
@@ -328,14 +328,14 @@ typedef struct MBLookupTable {
  * @param mb_lt_ptr Pointer to the lookup table to be created [out]
  * @param lookup_options Options for lookup table creation [in]
  */
-Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
-                       MBLookupTable** mb_lt_ptr,
+Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, BlastSeqLoc* location,
+                       BlastMBLookupTable** mb_lt_ptr,
                        const LookupTableOptions* lookup_options);
 
 /** 
  * Deallocate memory used by the Mega BLAST lookup table
  */
-MBLookupTable* MBLookupTableDestruct(MBLookupTable* mb_lt);
+BlastMBLookupTable* MBLookupTableDestruct(BlastMBLookupTable* mb_lt);
 
 /** General types of discontiguous word templates */   
 typedef enum {

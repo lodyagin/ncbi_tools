@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.50 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -67,7 +67,8 @@ typedef struct seqPanelLines {
   Int2    lineType;     /* what to draw on this line (see ELineType) */
   Int4    idx;          /* feature index                             */
   Int4    row;          /* index in alignment                        */
-  Boolean protProduct;
+  Boolean protProduct;  /* indicates whether product sequence should be drawn */
+  Boolean on_the_fly;   /* indicates whether translation of feature location should be drawn */
 } SeqPanLine, PNTR SeqPanLinePtr;
 
 
@@ -107,7 +108,22 @@ typedef struct bioseqviewdata {
   Boolean         DrawGrid, seqAlignMode;
   SeqPanLinePtr   PNTR SeqPanLines;
   ValNodePtr      Selection;
-
+  Boolean         frames[6]; /* indicates which frames should be displayed */
+  Boolean         ShowComplement;
+  ValNodePtr      chapter_list; /* list of chapters for SeqEd */
+  ValNodePtr PNTR feature_lists; /* storage for feature lists for SeqEd */
+  Int4            frame_for_codon_draw;   /* This indicates which frame (1-6) to draw
+                                           * codons for. */
+  Boolean         show_translation_errors; /* This indicates whether
+                                            * protein amino acids that
+                                            * do not match the sequence
+                                            * translation should be shown
+                                            * in red.
+                                            */
+  Boolean         on_the_fly;              /* This indicates whether an on-the-fly
+                                            * translation of coding regions should
+                                            * be shown.
+                                            */
 
   GrouP           udvParentGrp;
   /*
@@ -276,6 +292,8 @@ typedef struct seqviewprocs {
 
   FonT             displayFont;
   CharPtr          filepath;
+
+  Char             screenMode;
 
   BioseqPagePtr    pageSpecs;
 

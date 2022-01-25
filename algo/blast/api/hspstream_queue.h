@@ -1,4 +1,4 @@
-/*  $Id: hspstream_queue.h,v 1.2 2004/06/08 17:46:35 dondosha Exp $
+/*  $Id: hspstream_queue.h,v 1.3 2004/06/22 16:22:13 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,11 +47,13 @@ extern "C" {
 
 /** Data structure for the queue implementation of BlastHSPStream */
 typedef struct BlastHSPListQueueData {
-   ListNode* m_queueStart;
-   ListNode* m_queueEnd;
-   Boolean   m_writingDone;
-   TNlmMutex m_resultsMutex;
-   TNlmSemaphore m_resultsSema;
+   ListNode* m_queueStart;  /**< First element of the linked list of HSP 
+                               lists */
+   ListNode* m_queueEnd;    /**< Last element in the linked list of HSP 
+                               lists */
+   Boolean   m_writingDone; /**< Has writing to this stream been finished? */
+   TNlmMutex m_resultsMutex;/**< Mutex for writing to this queue. */
+   TNlmSemaphore m_resultsSema; /**< Semaphore for reading from this queue. */
 } BlastHSPListQueueData;
 
 /** Function to initialize the queue implementation of BlastHSPStream */

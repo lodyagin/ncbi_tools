@@ -29,7 +29,7 @@
 #
 # Version Creation Date:   4/3/2003
 #
-# $Revision: 1.1 $
+# $Revision: 1.2 $
 #
 # File Description:
 #
@@ -44,6 +44,9 @@
 # Modifications log:
 #
 #   $Log: setrsrc.sh,v $
+#   Revision 1.2  2004/09/29 18:35:39  kans
+#   removed setting of header/source/resource files to ttxt TEXT - not needed by current CodeWarrior projects
+#
 #   Revision 1.1  2003/04/03 20:45:30  rsmith
 #   Script to set macintosh file & creation types. Duplicates setrsrc.c functionality.
 #
@@ -54,12 +57,6 @@ export PATH
 
 output=
 #output=-t
-
-# set the types of the source files.
-find ~/ncbi \( -name '*.h' -or -name '*.hpp' -or -name '*.c' -or -name '*.cpp' -o -name '*.r' \) | \
-    xargs $output SetFile -c 'ttxt' -t 'TEXT' 
-find ~/ncbi_cxx \( -name '*.h' -or -name '*.hpp' -or -name '*.c' -or -name '*.cpp' -o -name '*.r' \) | \
-    xargs $output SetFile -c 'ttxt' -t 'TEXT' 
 
 # Metrowerks project files.
 find ~/ncbi  -path '*/link/macmet/*.mcp'  | \

@@ -62,11 +62,23 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_mtlock.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_prelim.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_returns.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_tback.c
 # End Source File
 # Begin Source File
 
@@ -82,7 +94,7 @@ SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\api\multiseq_src.c
+SOURCE=..\..\..\..\..\algo\blast\api\seqsrc_multiseq.c
 # End Source File
 # Begin Source File
 
@@ -106,11 +118,23 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_mtlock.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_prelim.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_returns.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_tback.h
 # End Source File
 # Begin Source File
 
@@ -126,7 +150,7 @@ SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\api\multiseq_src.h
+SOURCE=..\..\..\..\..\algo\blast\api\seqsrc_multiseq.h
 # End Source File
 # Begin Source File
 

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.101 2004/06/07 20:03:23 coulouri Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.102 2004/09/28 16:04:19 papadopo Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,22 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.101 $
+ * $Revision: 6.102 $
  * $Log: blastkar.c,v $
+ * Revision 6.102  2004/09/28 16:04:19  papadopo
+ * From Michael Gertz:
+ * 1. Pass the effective database size into BlastSmallGapSumE,
+ *     BlastLargeGapSumE and BlastUnevenGapSumE.  The routines use this
+ *     value in a simplified formula to compute the e-value of singleton sets.
+ * 2. Caused all routines for calculating the significance of multiple
+ *     distinct alignments (BlastSmallGapSumE, BlastLargeGapSumE and
+ *     BlastUnevenGapSumE) to use
+ *
+ *        sum_{i in linked_set} (\lambda_i s_i - \ln K_i)
+ *
+ *     as the weighted sum score, where (\lambda_i, K_i) are taken from
+ *     the appropriate query context.
+ *
  * Revision 6.101  2004/06/07 20:03:23  coulouri
  * use floating point constants for comparisons with floating point variables
  *
@@ -4180,34 +4194,43 @@ f(Nlm_FloatHi	x, Nlm_VoidPtr	vp)
 
 Nlm_FloatHi LIBCALL
 BlastSmallGapSumE(
-    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
-    Int4 gap,                   /* maximum size of gaps between alignments */
+    Int4 starting_points,       /* the number of starting points
+                                 * permitted between adjacent
+                                 * alignments;
+                                 * max_overlap + max_gap + 1 */
     Int2 num,                   /* the number of distinct alignments in this
                                  * collection */
-    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+    Nlm_FloatHi xsum,           /* the sum of the scores of these alignments
                                  * each weighted by an appropriate value of
-                                 * Lambda */
+                                 * Lambda and logK */
     Int4 query_length,          /* the effective len of the query seq */
     Int4 subject_length,        /* the effective len of the database seq */
+    Int8 dblen_eff,             /* the effective len of the database */
     Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
                                  * when multiple collections of alignments
                                  * are being considered by the calling
                                  * routine */
 {
     Nlm_FloatHi search_space;   /* The effective size of the search space */
-    Nlm_FloatHi sum_p;          /* The p-value of this set of alignments */
     Nlm_FloatHi sum_e;          /* The e-value of this set of alignments */
 
-    search_space = (Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length;
+    if(num == 1) {
+        search_space = (Nlm_FloatHi) query_length * (Nlm_FloatHi)dblen_eff;
 
-    score_prime -= kbp->logK +
-        log(search_space) + (num-1)*(kbp->logK + 2*log((Nlm_FloatHi)gap));
-    score_prime -= LnFactorial((Nlm_FloatHi) num);
+        sum_e = search_space * exp(-xsum);
+    } else {
+        Nlm_FloatHi sum_p;      /* The p-value of this set of alignments */
 
-    sum_p = BlastSumP(num, score_prime);
+        search_space = (Nlm_FloatHi)subject_length * (Nlm_FloatHi)query_length;
 
-    sum_e = BlastKarlinPtoE(sum_p);
+        xsum -=
+          log(search_space) + 2 * (num-1)*log((Nlm_FloatHi)starting_points);
+        xsum -= LnFactorial((Nlm_FloatHi) num);
 
+        sum_p = BlastSumP(num, xsum);
+        sum_e = BlastKarlinPtoE(sum_p) *
+            ((Nlm_FloatHi) dblen_eff / (Nlm_FloatHi) subject_length);
+    }
     if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
         sum_e = INT4_MAX;
     }
@@ -4228,38 +4251,48 @@ BlastSmallGapSumE(
 
 Nlm_FloatHi LIBCALL
 BlastUnevenGapSumE(
-    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
-    Int4 p_gap,                 /* maximum size of gaps between alignments,
-                                 * in one sequence */
-    Int4 n_gap,                 /* maximum size of gaps between alignments,
-                                 * in the other sequence */
+    Int4 query_start_points,    /* the number of starting points in
+                                 * the query sequence permitted
+                                 * between adjacent alignments;
+                                 * max_overlap + max_gap + 1 */
+    Int4 subject_start_points,  /* the number of starting points in
+                                 * the subject sequence permitted
+                                 * between adjacent alignments */
     Int2 num,                   /* the number of distinct alignments in this
                                  * collection */
-    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+    Nlm_FloatHi xsum,           /* the sum of the scores of these alignments
                                  * each weighted by an appropriate value of
-                                 * Lambda */
+                                 * Lambda and logK */
     Int4 query_length,          /* the effective len of the query seq */
     Int4 subject_length,        /* the effective len of the database seq */
+    Int8 dblen_eff,             /* the effective len of the database */
     Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
                                  * when multiple collections of alignments
                                  * are being considered by the calling
                                  * routine */
 {
     Nlm_FloatHi search_space;   /* The effective size of the search space */
-    Nlm_FloatHi sum_p;          /* The p-value of this set of alignments */
     Nlm_FloatHi sum_e;          /* The e-value of this set of alignments */
 
-    search_space = (Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length;
+    if( num == 1 ) {
+        search_space = (Nlm_FloatHi)query_length * (Nlm_FloatHi)dblen_eff;
 
-    score_prime -=
-        kbp->logK + log(search_space) +
-        (num-1)*(kbp->logK + log((Nlm_FloatHi)p_gap) + log((Nlm_FloatHi)n_gap));
-    score_prime -= LnFactorial((Nlm_FloatHi) num);
+        sum_e = search_space * exp(-xsum);
+    } else {
+        Nlm_FloatHi sum_p;        /* The p-value of this set of alignments */
 
-    sum_p = BlastSumP(num, score_prime);
+        search_space = (Nlm_FloatHi)subject_length * (Nlm_FloatHi)query_length;
 
-    sum_e = BlastKarlinPtoE(sum_p);
+        xsum -= log(search_space) +
+            (num-1)*(log((Nlm_FloatHi) query_start_points) +
+                     log((Nlm_FloatHi) subject_start_points));
+        xsum -= LnFactorial((Nlm_FloatHi) num);
 
+        sum_p = BlastSumP(num, xsum);
+
+        sum_e = BlastKarlinPtoE(sum_p) *
+            ((Nlm_FloatHi) dblen_eff / (Nlm_FloatHi) subject_length);
+    }
     if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
         sum_e = INT4_MAX;
     }
@@ -4274,14 +4307,14 @@ BlastUnevenGapSumE(
 
 Nlm_FloatHi LIBCALL
 BlastLargeGapSumE(
-    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
     Int2 num,                   /* the number of distinct alignments in this
                                  * collection */
-    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+    Nlm_FloatHi xsum,           /* the sum of the scores of these alignments
                                  * each weighted by an appropriate value of
-                                 * Lambda */
+                                 * Lambda and logK */
     Int4 query_length,          /* the effective len of the query seq */
     Int4 subject_length,        /* the effective len of the database seq */
+    Int8 dblen_eff,             /* the effective len of the database */
     Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
                                  * when multiple collections of alignments
                                  * are being considered by the calling
@@ -4297,13 +4330,17 @@ BlastLargeGapSumE(
     lcl_query_length = (Nlm_FloatHi) query_length;
     lcl_subject_length = (Nlm_FloatHi) subject_length;
 
-    score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length))
-        - LnFactorial((Nlm_FloatHi) num);
+    if( num == 1 ) {
+        sum_e = lcl_query_length * (Nlm_FloatHi) dblen_eff * exp(-xsum);
+    } else {
+        xsum -= num*log(lcl_subject_length*lcl_query_length)
+            - LnFactorial((Nlm_FloatHi) num);
 
-    sum_p = BlastSumP(num, score_prime);
+        sum_p = BlastSumP(num, xsum);
 
-    sum_e = BlastKarlinPtoE(sum_p);
-
+        sum_e = BlastKarlinPtoE(sum_p) *
+            ((Nlm_FloatHi) dblen_eff / (Nlm_FloatHi) subject_length);
+    }
     if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
         sum_e = INT4_MAX;
     }

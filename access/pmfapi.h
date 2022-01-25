@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.22 $
+* $Revision: 1.23 $
 *
 * File Description: 
 *
@@ -80,6 +80,12 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
   Int4Ptr uids
 );
 
+NLM_EXTERN CONN GiAccVerOpenConnection (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+);
+
 NLM_EXTERN CONN AccnRevHistOpenConnection (
   CharPtr accn
 );
@@ -101,6 +107,10 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
 );
 
 NLM_EXTERN CharPtr GiRevHistWaitForReply (
+  CONN conn
+);
+
+NLM_EXTERN CharPtr GiAccVerWaitForReply (
   CONN conn
 );
 
@@ -132,6 +142,12 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 );
 
 NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+);
+
+NLM_EXTERN CharPtr GiAccVerSynchronousQuery (
   Int4 uid,
   Int4 num,
   Int4Ptr uids
@@ -213,6 +229,24 @@ NLM_EXTERN Int4 GiRevHistCheckQueue (
 );
 
 NLM_EXTERN CharPtr GiRevHistReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
+NLM_EXTERN Boolean GiAccVerAsynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids,
+  QUEUE* q,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 GiAccVerCheckQueue (
+  QUEUE* q
+);
+
+NLM_EXTERN CharPtr GiAccVerReadReply (
   CONN conn,
   EIO_Status status
 );

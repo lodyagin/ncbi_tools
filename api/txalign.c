@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.83 2004/05/14 16:31:03 kans Exp $
+/* $Id: txalign.c,v 6.89 2004/09/09 19:39:49 jianye Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,31 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.83 $
+* $Revision: 6.89 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.89  2004/09/09 19:39:49  jianye
+* Added gene linkout
+*
+* Revision 6.88  2004/08/16 19:36:52  dondosha
+* Made CreateMaskByteStore function public: needed by web BLAST 2 sequences
+*
+* Revision 6.87  2004/08/11 18:14:55  jianye
+* not turn on gene linkout yet
+*
+* Revision 6.86  2004/08/10 20:02:03  jianye
+* Added gene linkout
+*
+* Revision 6.85  2004/07/06 19:12:13  dondosha
+* Correction for bit score formatting in one-line descriptions
+*
+* Revision 6.84  2004/06/24 21:15:44  dondosha
+* Changed last Boolean argument in ScoreAndEvalueToBuffers to Uint1, to allow different options for formatting
+*
 * Revision 6.83  2004/05/14 16:31:03  kans
 * ScoreAndEvalueToBuffers had a typo in OS_MAC specific code
 *
@@ -678,17 +696,17 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 
 	/*add space in front of linkout*/
 	fprintf(fp, " ");
-	bdlpTemp=bdlp;
-	
-	while(bdlpTemp){
-	  if(checkLinkoutType(bdlpTemp, linkout_locuslink)){
-	    hasLinkout=TRUE;
-	    gi=GetGIForSeqId(bdlpTemp->seqid);
-	    fprintf(fp, URL_LocusLink, gi, molType);
-	    break;
-	  }
-	  bdlpTemp=bdlpTemp->next;
-	}
+       
+        bdlpTemp=bdlp;
+	while(bdlpTemp){ 
+            if(checkLinkoutType(bdlpTemp, linkout_gene)){
+                hasLinkout=TRUE;
+                gi=GetGIForSeqId(bdlpTemp->seqid);
+                fprintf(fp, URL_Gene, gi, ISA_aa(bsp->mol) ? "PUID" : "NUID");
+                break;
+            }
+            bdlpTemp=bdlpTemp->next;
+        }
 	bdlpTemp=bdlp;
 	while(bdlpTemp){ 	
 	  if(checkLinkoutType(bdlpTemp, linkout_unigene)){         
@@ -752,12 +770,11 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, 
 
 	/*add space in front of linkout*/
 	fprintf(fp, " ");
-	
-	if(checkLinkoutType(actualBdlp, linkout_locuslink)){
-	  hasLinkout=TRUE;
-	  fprintf(fp, URL_LocusLink, gi, molType);
-	}
-	 
+	       
+        if(checkLinkoutType(actualBdlp, linkout_gene)){
+            hasLinkout=TRUE;
+            fprintf(fp, URL_Gene, gi, ISA_aa(bsp->mol) ? "PUID" : "NUID");
+        }
 	
 	if(checkLinkoutType(actualBdlp, linkout_unigene)){	
 	  hasLinkout=TRUE;	
@@ -939,7 +956,7 @@ static ByteStorePtr create_byte_store_from_bsp (BioseqPtr bsp)
 	return b_store;
 }
 
-static ValNodePtr CreateMaskByteStore (ValNodePtr mask_list)
+ValNodePtr CreateMaskByteStore (ValNodePtr mask_list)
 {
 	BioseqPtr bsp;
 	SeqLocPtr slp;
@@ -1350,7 +1367,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
     if(master) {
         frame = get_alignment_frame(anp_node, m_bsp);
         if(frame != -1 && bs_list != NULL) {
-            load_master_translate_frame(anp_node, m_bsp->length, m_bsp);
+           load_master_translate_frame(anp_node, m_bsp->length, m_bsp);
             
             if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame)) {
                 m_bsp->repr = repr;
@@ -4593,17 +4610,18 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 	return TRUE;
 }
 
+#define KNOCK_OFF_ALLOWED
 NLM_EXTERN void LIBCALL 
 ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue, 
                         CharPtr bit_score_buf, CharPtr PNTR evalue_buf,
-                        Boolean knock_off_allowed)
+                        Uint1 format_options)
 {
 #ifdef OS_MAC
    if (evalue < 1.0e-180) {
       sprintf(*evalue_buf, "0.0");
    } else if (evalue < 1.0e-99) {
       sprintf(*evalue_buf, "%2.0Le", evalue);
-      if (knock_off_allowed)
+      if (format_options & TX_KNOCK_OFF_ALLOWED)
          (*evalue_buf)++; /* Knock off digit. */
    } else if (evalue < 0.0009) {
       sprintf(*evalue_buf, "%3.0Le", evalue);
@@ -4627,7 +4645,7 @@ ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue,
       sprintf(*evalue_buf, "0.0");
    } else if (evalue < 1.0e-99) {
       sprintf(*evalue_buf, "%2.0le", evalue);
-      if (knock_off_allowed)
+      if (format_options & TX_KNOCK_OFF_ALLOWED)
          (*evalue_buf)++; /* Knock off digit. */
    } else if (evalue < 0.0009) {
       sprintf(*evalue_buf, "%3.0le", evalue);
@@ -4644,6 +4662,8 @@ ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue,
       sprintf(bit_score_buf, "%4.3le", bit_score);
    else if (bit_score > 99.9)
       sprintf(bit_score_buf, "%4.0ld", (long)bit_score);
+   else if (format_options & TX_INTEGER_BIT_SCORE)
+      sprintf(bit_score_buf, "%4.0lf", bit_score);
    else
       sprintf(bit_score_buf, "%4.1lf", bit_score);
 #endif
@@ -5100,7 +5120,8 @@ PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *
 
             eval_buff_ptr = eval_buff;
             ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
-                                    &eval_buff_ptr, TRUE);
+               &eval_buff_ptr, 
+               (TX_KNOCK_OFF_ALLOWED | TX_INTEGER_BIT_SCORE));
 
             if (options & TXALIGN_HTML) {
                 if (gi != 0)
@@ -5804,7 +5825,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     eval_buff_ptr = eval_buff;
 
     ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
-                            &eval_buff_ptr, TRUE);
+                            &eval_buff_ptr, TX_KNOCK_OFF_ALLOWED);
     
     if(asop->html_hot_link == TRUE && *id_buffer != NULLB) {
 

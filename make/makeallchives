@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.74 2004/06/16 19:17:52 beloslyu Exp $
+# $Id: makeallchives,v 1.77 2004/08/11 21:15:49 beloslyu Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -43,7 +43,7 @@ test -d archive && rm -rf archive
 #make sure we have timestamp file
 test -f ncbi/VERSION || date > ncbi/VERSION
 
-for i in sequin entrez fa2htgs blast netblast asn2xml
+for i in sequin entrez fa2htgs netblast asn2xml
 do
 	f=""
 	mkdir -p archive/$i/data
@@ -89,10 +89,6 @@ EOF
 		;;
 	fa2htgs)
 		f="fa2htgs"
-		;;
-	blast)
-		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat impala megablast blastclust rpsblast bl2seq ../doc/blast/bl2seq.html ../doc/blast/blast.html ../doc/blast/blastall.html ../doc/blast/blastclust.html ../doc/blast/blastdb.html ../doc/blast/blastftp.html ../doc/blast/blastpgp.html ../doc/blast/fastacmd.html ../doc/blast/filter.html ../doc/blast/formatdb.html ../doc/blast/impala.html ../doc/blast/index.html ../doc/blast/megablast.html ../doc/blast/netblast.html ../doc/blast/rpsblast.html"
-		rm -f archive/blast/data/sequin.hlp
 		;;
 	netblast)
 		f="blastcl3 ../doc/firewall.html ../doc/blast/netblast.html"
@@ -245,13 +241,12 @@ EOF
 	cd ..
 done
 
-#for A in sequin entrez fa2htgs cn3d blast netblast asn2xml
-for A in sequin entrez fa2htgs blast netblast asn2xml
+for A in sequin entrez fa2htgs netblast asn2xml
 do
 	cd $A || continue
 	tar cf ../$A.$platform.tar .
 	rm -f ../$A.$platform.tar.Z
-	compress < ../$A.$platform.tar > ../$A.$platform.tar.Z
+	#compress < ../$A.$platform.tar > ../$A.$platform.tar.Z
 	gzip < ../$A.$platform.tar > ../$A.$platform.tar.gz 2>/dev/null
 	if [ $? != 0 ] ; then
 		/usr/ncbi/bin/gzip < ../$A.$platform.tar > ../$A.$platform.tar.gz 2>/dev/null
@@ -263,9 +258,40 @@ do
 	rm -fr $A
 done
 
-# build wwwblast archive
+echo Building blast archive...
 
-# cd archive && cvs export -d blast -r HEAD distrib/network/wwwblast && cd ..
+BLASTDIR=blast-`cat ../ncbi/demo/.BLAST_VERSION`
+
+mkdir $BLASTDIR
+mkdir $BLASTDIR/bin
+mkdir $BLASTDIR/data
+mkdir $BLASTDIR/doc
+
+for file in blastall blastpgp seedtop formatdb formatrpsdb fastacmd copymat makemat impala megablast blastclust rpsblast bl2seq 
+do
+cp ../ncbi/build/$file $BLASTDIR/bin
+done
+
+for file in $datafiles
+do
+cp ../ncbi/data/$file $BLASTDIR/data
+done
+
+for file in bl2seq.html blast.html blastall.html blastclust.html blastdb.html blastftp.html blastpgp.html fastacmd.html filter.html formatdb.html formatrpsdb.html history.html impala.html index.html megablast.html netblast.html rpsblast.html
+do
+cp ../ncbi/doc/blast/$file $BLASTDIR/doc
+done
+
+cp ../ncbi/VERSION $BLASTDIR
+
+tar -cpf blast.$platform.tar $BLASTDIR
+gzip blast.$platform.tar
+rm -rf $BLASTDIR
+
+# end build blast archive
+
+
+echo Building wwwblast archive...
 
 mkdir blast
 

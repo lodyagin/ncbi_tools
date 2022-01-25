@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.172 $
+* $Revision: 6.201 $
 *
 * File Description: 
 *
@@ -119,6 +119,9 @@ typedef struct fastapage {
   Boolean      is_mrna;
   Boolean      parseSeqId;
   Boolean      single;
+  ButtoN       import_btn;
+  ButtoN       create_btn;
+  ButtoN       clear_btn;
 } FastaPage, PNTR FastaPagePtr;
 
 static ParData faParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
@@ -493,7 +496,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
     }
   }
 }
-
+   
 static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
 
 {
@@ -642,6 +645,9 @@ static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
       fpp->errmsgs = head;
       SafeHide (fpp->instructions);
       Update ();
+      Disable (fpp->import_btn);
+      Disable (fpp->create_btn);
+      Enable (fpp->clear_btn);
       FormatFastaDoc (fpp);
       SafeShow (fpp->doc);
       ArrowCursor ();
@@ -666,17 +672,19 @@ static void CleanupFastaDialog (GraphiC g, VoidPtr data)
 
 static CharPtr  fastaNucMsg = "\
 \nPlease enter information about the nucleotide \
-sequence in the spaces above.  Then click on \
-'Import Nucleotide FASTA' to read a FASTA file that \
-contains the sequence (which can be in segments).  The \
-FASTA definition lines may be of the following form:\n\n\
+sequence in the spaces above.  Then click on either \
+'Create My FASTA File' to create a new FASTA file or \
+'Import Nucleotide FASTA' to read a previously generated \
+FASTA file that contains the sequence (which can be in segments).\
+  The FASTA definition lines may be of the following form:\n\n\
 >ID [organism=scientific name] [strain=name] [clone=name] title\n\n\
 where the [ and ] brackets are actually in the text.";
 
 static CharPtr  fastaGenMsg = "\
 \nPlease enter information about the genomic \
-sequence in the spaces above.  Then click on \
-'Import Genomic FASTA' to read a FASTA file that \
+sequence in the spaces above.  Then click on either \
+'Create My FASTA file' to create a new FASTA file or \
+'Import Genomic FASTA' to read a previously generated FASTA file that \
 contains the sequence (which can be in segments).  The \
 FASTA definition lines may be of the following form:\n\n\
 >ID [organism=scientific name] [strain=name] [clone=name] title\n\n\
@@ -1424,7 +1432,9 @@ typedef struct fixnucorm {
   GrouP              pptGrp;
   DialoG             modifiers;
   Int2               oldModVal;
-
+  PrompT             modifier_intro;
+  PrompT             modifier_list;
+  
   SequencesFormPtr   sqfp;
 } FixNucForm, PNTR FixNucFormPtr;
 
@@ -1538,6 +1548,193 @@ static void ModifierDialogToSeqEntryPtr (DialoG d, PopuP t, Pointer data, FixNuc
   }
 }
 
+typedef struct modifierinfo 
+{
+  CharPtr name;
+  Uint1   subtype;
+  CharPtr value;
+  Boolean is_org;
+} ModifierInfoData, PNTR ModifierInfoPtr;
+
+static ModifierInfoPtr ModifierInfoNew (void)
+{
+  ModifierInfoPtr mip;
+  mip = (ModifierInfoPtr) MemNew (sizeof (ModifierInfoData));
+  if (mip == NULL) return NULL;
+  mip->name = NULL;
+  mip->value = NULL;
+  mip->is_org = FALSE;
+  return mip;
+}
+
+static ModifierInfoPtr ModifierInfoFree (ModifierInfoPtr mip)
+{
+  if (mip == NULL) return NULL;
+  mip->name = MemFree (mip->name);
+  mip->value = MemFree (mip->value);
+  mip = MemFree (mip);
+  return mip;
+}
+
+static ValNodePtr ModifierInfoListFree (ValNodePtr list)
+{
+  if (list == NULL) return NULL;
+  ModifierInfoListFree (list->next);
+  list->next = NULL;
+  list->data.ptrvalue = ModifierInfoFree (list->data.ptrvalue);
+  ValNodeFree (list);
+  return NULL;
+}
+
+static ModifierInfoPtr ParseOneBracketedModifier (CharPtr str)
+{
+  CharPtr         start, stop, eq_loc;
+  ModifierInfoPtr mip;
+  Int4            value_len, name_len;
+  
+  start = StringChr (str, '[');
+  stop = StringChr (str, ']');
+  eq_loc = StringChr (start + 1, '=');
+  
+  if (start == NULL || stop == NULL || eq_loc == NULL) return NULL;
+  
+  mip = ModifierInfoNew();
+  if (mip == NULL) return NULL;
+  name_len = eq_loc - start + 1;
+  value_len = stop - eq_loc + 1;
+  mip->value = (CharPtr) MemNew (value_len * sizeof (Char));
+  mip->name = (CharPtr) MemNew (name_len * sizeof (Char));
+  if (mip->value == NULL || mip->name == NULL)
+  {
+  	ModifierInfoFree (mip);
+  	return NULL;
+  }
+  StringNCpy (mip->value, eq_loc + 1, value_len - 2);
+  mip->value [value_len - 1] = 0;
+  StringNCpy (mip->name, start + 1, name_len - 2);
+  mip->name [name_len - 1] = 0;
+  
+  if (StringICmp (mip->name, "organism") == 0)
+  {
+	mip->is_org = TRUE;
+  }
+  else
+  {
+  	mip->subtype = FindTypeForModNameText (mip->name);
+  }
+  return mip;
+}
+
+static ValNodePtr ParseAllBracketedModifiers (CharPtr str)
+{
+  CharPtr         stop, cp;
+  ValNodePtr      list = NULL;
+  ValNodePtr      vnp;
+  ModifierInfoPtr mip;
+  
+  cp = str;
+  stop = StringChr (cp, ']');
+  while (stop != NULL)
+  {
+  	mip = ParseOneBracketedModifier (cp);
+  	if (mip == NULL)
+  	{
+  	  stop = NULL;
+  	}
+  	else
+  	{
+  	  vnp = ValNodeAdd (&list);
+  	  if (vnp != NULL)
+  	  {
+  	  	vnp->data.ptrvalue = mip;
+  	  }
+  	  cp = stop + 1;
+  	  stop = StringChr (cp, ']');
+  	}
+  }
+  return list;
+}
+
+static ValNodePtr BuildModifierTypeList (ValNodePtr type_list, CharPtr new_title)
+{
+  ValNodePtr      modifier_info_list;
+  ValNodePtr      info_vnp, type_vnp;
+  ModifierInfoPtr mip;
+  
+  modifier_info_list = ParseAllBracketedModifiers (new_title);
+  for (info_vnp = modifier_info_list; info_vnp != NULL; info_vnp = info_vnp->next)
+  {
+    mip = (ModifierInfoPtr)info_vnp->data.ptrvalue;
+    if (mip == NULL) continue;
+    if (mip->is_org) continue;
+  	for (type_vnp = type_list; type_vnp != NULL && type_vnp->choice != mip->subtype; type_vnp = type_vnp->next)
+  	{
+  	}
+  	if (type_vnp == NULL)
+  	{
+  	  type_vnp = ValNodeNew (type_list);
+  	  if (type_list == NULL) type_list = type_vnp;
+  	  if (type_vnp != NULL)
+  	  {
+  	  	type_vnp->choice = mip->subtype;
+  	  	type_vnp->data.ptrvalue = StringSave (mip->name);
+  	  }
+  	}
+  }
+  ModifierInfoListFree (modifier_info_list);
+  return type_list;
+}
+
+static void SetModifierListPrompt (FixNucFormPtr fnfp, ValNodePtr mod_list)
+{
+  ValNodePtr vnp;
+  Int4       num_modifiers = 0;
+  Int4       text_len = 0;
+  CharPtr    text;
+  CharPtr    text_fmt = "Already have values for:";
+    
+  if (mod_list == NULL)
+  {
+  	SetTitle (fnfp->modifier_intro, "No modifiers are present.");
+  	SetTitle (fnfp->modifier_list, "");
+  }
+  else
+  {
+    for (vnp = mod_list; vnp != NULL; vnp = vnp->next)
+    {
+      num_modifiers ++;
+      text_len += StringLen (vnp->data.ptrvalue);
+    }
+    text_len += num_modifiers * 6;
+    text = (CharPtr) MemNew (text_len * sizeof (Char));
+    if (text != NULL)
+    {
+      text[0] = 0;
+      for (vnp = mod_list; vnp != NULL; vnp = vnp->next)
+      {
+        if (vnp->next == NULL && num_modifiers > 1)
+        {
+          StringCat (text, "and ");
+        }
+      	StringCat (text, vnp->data.ptrvalue);
+      	if (vnp->next != NULL)
+      	{
+      	  if (num_modifiers > 2)
+      	  {
+      	  	StringCat (text, ", ");
+      	  }
+      	  else
+      	  {
+      	  	StringCat (text, " ");
+      	  }
+      	}
+      }
+      SetTitle (fnfp->modifier_intro, text_fmt);
+      SetTitle (fnfp->modifier_list, text);
+    }
+  }	
+}
+
 static void SeqEntryPtrToModifierDialog (DialoG d, PopuP p, Pointer data, FixNucFormPtr fnfp)
 
 {
@@ -1559,9 +1756,12 @@ static void SeqEntryPtrToModifierDialog (DialoG d, PopuP p, Pointer data, FixNuc
   Char               tmp [128];
   UIEnum             val;
   ValNodePtr         vnp;
+  ValNodePtr         found_modifiers = NULL;
+
 
   tlp = (TagListPtr) GetObjectExtra (d);
   list = (SeqEntryPtr) data;
+
   if (tlp != NULL) {
     if (! GetEnumPopup (p, combined_subtype_alist, &val)) return;
     fnfp->oldModVal = (Int2) val;
@@ -1592,6 +1792,8 @@ static void SeqEntryPtrToModifierDialog (DialoG d, PopuP p, Pointer data, FixNuc
           ttl = NULL;
           SeqEntryExplore (list, (Pointer) (&ttl), FindFirstTitle);
           title = StringSaveNoNull (ttl);
+          found_modifiers = BuildModifierTypeList (found_modifiers, title);
+
           sip = SeqIdFindWorst (bsp->id);
           SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
           ptr = StringChr (tmp, '|');
@@ -1617,6 +1819,9 @@ static void SeqEntryPtrToModifierDialog (DialoG d, PopuP p, Pointer data, FixNuc
       }
       list = list->next;
     }
+    SetModifierListPrompt (fnfp, found_modifiers);
+    found_modifiers = ValNodeFreeData (found_modifiers);
+  
     SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
     tlp->vnp = head;
     SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
@@ -1819,6 +2024,9 @@ static CharPtr  sourceModMsg = "\
 strain, isolate, and other source modifiers.\n\n\
 The resulting spreadsheet lets you enter or edit source \
 information for all sequence components.\n\n\
+You may enter data for multiple modifiers. \
+The data for each modifier is saved when you use the menu \
+to change to a different modifier.\n\n\
 Scientific names should not be abbreviated (use 'Drosophila \
 melanogaster' instead of 'D. melanogaster').";
 
@@ -1835,6 +2043,7 @@ static void LetUserFixNucleotideInfo (SequencesFormPtr sqfp)
   StdEditorProcsPtr  sepp;
   GrouP              t;
   WindoW             w;
+  GrouP              x;
 
   if (sqfp == NULL) return;
 
@@ -1888,12 +2097,16 @@ static void LetUserFixNucleotideInfo (SequencesFormPtr sqfp)
 
     fnfp->pptGrp = HiddenGroup (k, 1, 0, NULL);
     MultiLinePrompt (fnfp->pptGrp, sourceModMsg, 25 * stdCharWidth, programFont);
+    
+    x = HiddenGroup (h, 0, 2, NULL);
+    fnfp->modifier_intro = StaticPrompt (x, "", 30 * stdCharWidth, popupMenuHeight, programFont, 'l');
+    fnfp->modifier_list = StaticPrompt (x, "", 30 * stdCharWidth, popupMenuHeight, programFont, 'l');
 
     c = HiddenGroup (h, 2, 0, NULL);
     b = DefaultButton (c, "OK", AcceptNucleotideFixup);
     SetObjectExtra (b, fnfp, NULL);
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) fnfp->modGrp,
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) x, (HANDLE) fnfp->modGrp,
                   (HANDLE) fnfp->pptGrp, (HANDLE) c, NULL);
 
     RealizeWindow (w);
@@ -3051,17 +3264,30 @@ static void ResolveCollidingIDs (IdListPtr PNTR head, SeqEntryPtr list)
   }
 }
 
+
 static void PutMolInfoOnSeqEntry (SequencesFormPtr sqfp, SeqEntryPtr sep, Uint1 biomol)
 
 {
-  BioseqPtr   bsp;
-  MolInfoPtr  mip;
-  Boolean     partial5;
-  Boolean     partial3;
-  UIEnum      val;
-  ValNodePtr  vnp;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  MolInfoPtr   mip;
+  Boolean      partial5;
+  Boolean      partial3;
+  UIEnum       val;
+  ValNodePtr   vnp;
+
 
   if (sqfp != NULL && sep != NULL) {
+    if (IS_Bioseq_set (sep))
+    {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) 
+      {
+      	PutMolInfoOnSeqEntry (sqfp, sep, biomol);
+      }
+      return;
+    }
+
     mip = MolInfoNew ();
     if (mip != NULL) {
       mip->biomol = biomol;
@@ -3093,7 +3319,8 @@ static void PutMolInfoOnSeqEntry (SequencesFormPtr sqfp, SeqEntryPtr sep, Uint1 
           sqfp->dnamolfrommolinfo = Seq_mol_other;
         }
       }
-      if (sqfp->seqPackage > SEQ_PKG_GENOMICCDNA && IS_Bioseq (sep)) {
+      if (sqfp->seqPackage > SEQ_PKG_GENOMICCDNA && IS_Bioseq (sep))
+      {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp != NULL) {
           if (bsp->mol != Seq_mol_dna && bsp->mol != Seq_mol_rna) {
@@ -3102,7 +3329,7 @@ static void PutMolInfoOnSeqEntry (SequencesFormPtr sqfp, SeqEntryPtr sep, Uint1 
           if (GetEnumPopup (sqfp->topologyPopup, topology_nuc_alist, &val)) {
             bsp->topology = (Uint1) val;
           }
-        }
+        }		
       }
     }
   }
@@ -3837,7 +4064,7 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
         sqfp->seqPackage <= SEQ_PKG_GENBANK) {
       if (! TextHasNoText (sqfp->defline)) {
         ApplyAnnotationToAll (ADD_TITLE, sep, sqfp->partialLft, sqfp->partialRgt,
-                              NULL, NULL, NULL, NULL, sqfp->defline);
+                              NULL, NULL, NULL, NULL, NULL, sqfp->defline);
       }
       if (GetStatus (sqfp->orgPrefix)) {
         PrefixOrgToDefline (sep);
@@ -4029,17 +4256,17 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
         switch (annotType) {
           case 1 :
             ApplyAnnotationToAll (ADD_IMP, sep, sqfp->partialLft, sqfp->partialRgt,
-                                  sqfp->geneName, NULL, NULL,
+                                  sqfp->geneName, NULL, NULL, NULL,
                                   sqfp->featcomment, NULL);
             break;
           case 2 :
             ApplyAnnotationToAll (ADD_RRNA, sep, sqfp->partialLft, sqfp->partialRgt,
-                                  sqfp->geneName, NULL, sqfp->protOrRnaName,
+                                  sqfp->geneName, NULL, NULL, sqfp->protOrRnaName,
                                   sqfp->featcomment, NULL);
             break;
           case 3 :
             ambig = ApplyAnnotationToAll (ADD_CDS, sep, sqfp->partialLft, sqfp->partialRgt,
-                                          sqfp->geneName, sqfp->protOrRnaName, NULL,
+                                          sqfp->geneName, sqfp->protOrRnaName, sqfp->protDesc, NULL,
                                           sqfp->featcomment, NULL);
             if (ambig > 0) {
               if (ambig > 1) {
@@ -4360,7 +4587,7 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
         sqfp->seqPackage <= SEQ_PKG_GENBANK) {
       if (! TextHasNoText (sqfp->defline)) {
         ApplyAnnotationToAll (ADD_TITLE, sep, sqfp->partialLft, sqfp->partialRgt,
-                              NULL, NULL, NULL, NULL, sqfp->defline);
+                              NULL, NULL, NULL, NULL, NULL, sqfp->defline);
       }
       if (GetStatus (sqfp->orgPrefix)) {
         PrefixOrgToDefline (sep);
@@ -4371,17 +4598,17 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       switch (annotType) {
         case 1 :
           ApplyAnnotationToAll (ADD_IMP, sep, sqfp->partialLft, sqfp->partialRgt,
-                                sqfp->geneName, NULL, NULL,
+                                sqfp->geneName, NULL, NULL, NULL,
                                 sqfp->featcomment, NULL);
           break;
         case 2 :
           ApplyAnnotationToAll (ADD_RRNA, sep, sqfp->partialLft, sqfp->partialRgt,
-                                sqfp->geneName, NULL, sqfp->protOrRnaName,
+                                sqfp->geneName, NULL, NULL, sqfp->protOrRnaName,
                                 sqfp->featcomment, NULL);
           break;
         case 3 :
           ambig = ApplyAnnotationToAll (ADD_CDS, sep, sqfp->partialLft, sqfp->partialRgt,
-                                        sqfp->geneName, sqfp->protOrRnaName, NULL,
+                                        sqfp->geneName, sqfp->protOrRnaName, sqfp->protDesc, NULL,
                                         sqfp->featcomment, NULL);
           if (ambig > 0) {
             if (ambig > 1) {
@@ -4678,6 +4905,9 @@ static void SequencesFormDeleteProc (Pointer formDataPtr)
             SafeShow (fpp->instructions);
             Update ();
           }
+          Enable (fpp->import_btn);
+          Enable (fpp->create_btn);
+          Disable (fpp->clear_btn);
         } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
           ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
           if (ppp != NULL) {
@@ -4921,6 +5151,8 @@ static void ChangeAnnotType (GrouP g)
     case 1 :
       SafeHide (sqfp->protOrRnaPpt);
       SafeHide (sqfp->protOrRnaName);
+      SafeHide (sqfp->protDescPpt);
+      SafeHide (sqfp->protDesc);
       SafeShow (sqfp->annotGrp);
       Select (sqfp->geneName);
       break;
@@ -4928,6 +5160,8 @@ static void ChangeAnnotType (GrouP g)
       SafeSetTitle (sqfp->protOrRnaPpt, "rRNA Name");
       SafeShow (sqfp->protOrRnaPpt);
       SafeShow (sqfp->protOrRnaName);
+      SafeHide (sqfp->protDescPpt);
+      SafeHide (sqfp->protDesc);
       SafeShow (sqfp->annotGrp);
       Select (sqfp->protOrRnaName);
       break;
@@ -4935,6 +5169,8 @@ static void ChangeAnnotType (GrouP g)
       SafeSetTitle (sqfp->protOrRnaPpt, "Protein Name");
       SafeShow (sqfp->protOrRnaPpt);
       SafeShow (sqfp->protOrRnaName);
+      SafeShow (sqfp->protDescPpt);
+      SafeShow (sqfp->protDesc);
       SafeShow (sqfp->annotGrp);
       Select (sqfp->protOrRnaName);
       break;
@@ -4978,6 +5214,3168 @@ static void PopulateGeneticCodePopup (PopuP gc)
   }
 }
 
+typedef struct createfastadata 
+{
+  FORM_MESSAGE_BLOCK
+  
+  ValNodePtr   sequence_list;
+  FastaPagePtr fpp;
+  ButtoN       use_id_from_fasta_defline;
+  ButtoN       import_btn;
+  ButtoN       create_btn;
+  ButtoN       clear_btn;
+  PopuP        sequence_selector;
+  ValNodePtr   selected_qual_list;
+  PopuP        qual_list;
+  CharPtr      default_tax_name;
+  ButtoN       prev_btn;
+  ButtoN       next_btn;
+  Boolean      auto_id;
+  Boolean      is_segmented;
+  Boolean      is_popset;
+} CreateFastaData, PNTR CreateFastaPtr;
+
+typedef struct createfastaseqdata
+{
+  TexT           local_id_txt;
+  TexT           sequence_txt;
+  CharPtr        local_id;
+  CharPtr        sequence;
+  CharPtr        title;
+  GrouP          grp;
+  
+  /* organism information*/
+  DoC            orglist;
+  TexT           taxName;
+  Int2           orgrow;
+  CharPtr        tax_name;
+  
+  DialoG         mods;
+  ListPairData   mod_values;
+  CreateFastaPtr master_set; /* This points to the master set */
+} CreateFastaSeqData, PNTR CreateFastaSeqPtr;
+
+static void AddFastaSequence (CreateFastaPtr cfp);
+static void RemoveFastaSequence (CreateFastaPtr cfp);
+static WindoW CreateFastaWindow (CreateFastaPtr cfp);
+static void CollectAllSequenceInformation (ValNodePtr list);
+
+static CharPtr valid_iupac_characters = "atgcbdhkmnrsuvwy";
+
+static void FreeSequenceGroup (ValNodePtr list)
+{
+  CreateFastaSeqPtr cfsp;
+  
+  if (list == NULL) return;
+  FreeSequenceGroup (list->next);
+  list->next = NULL;
+  cfsp = (CreateFastaSeqPtr) list->data.ptrvalue;
+  if (cfsp != NULL)
+  {
+    cfsp->local_id = MemFree (cfsp->local_id);
+  	cfsp->sequence = MemFree (cfsp->sequence);
+  	cfsp->tax_name = MemFree (cfsp->tax_name);
+  	cfsp->mod_values.selected_names_list = ValNodeFree (cfsp->mod_values.selected_names_list);
+  	cfsp->mod_values.selected_values_list = ValNodeFreeData (cfsp->mod_values.selected_values_list);
+  	MemFree (cfsp);
+  }
+  ValNodeFree (list);
+}
+
+static void FreeCreateFasta (CreateFastaPtr cfp)
+{
+  if (cfp == NULL) return;
+  
+  cfp->selected_qual_list = ValNodeFree (cfp->selected_qual_list);
+  FreeSequenceGroup (cfp->sequence_list);
+  cfp->sequence_list = NULL;
+  cfp->default_tax_name = MemFree (cfp->default_tax_name);
+  MemFree (cfp);
+}
+
+static CharPtr CreateNewLocalID (ValNodePtr list, CharPtr auto_id_fmt, Int4 to_remove)
+{
+  CharPtr           new_id;
+  Int4              id_len = 15;
+  long int          val;
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  Int4              new_seq_id = 1;
+  Int4              seq_num;
+  
+  if (auto_id_fmt != NULL)
+  {
+    id_len += StringLen (auto_id_fmt);
+  }
+  
+  new_id = (CharPtr) MemNew (id_len * sizeof (Char));
+  if (new_id == NULL) return NULL;
+  
+  if (list == NULL)
+  {
+    sprintf (new_id, auto_id_fmt, 1);	
+  }
+  else
+  {
+    for (seq_num = 1, vnp = list; vnp != NULL; vnp = vnp->next, seq_num++)
+    {
+      if (seq_num == to_remove) continue;
+      cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+      if (cfsp != NULL && !StringHasNoText (cfsp->local_id))
+      {
+        if (sscanf (cfsp->local_id, auto_id_fmt, &val) == 1) 
+        {
+          if (new_seq_id <= val)
+          {
+          	new_seq_id = val + 1;
+          }
+        }
+      }
+    }
+    sprintf (new_id, auto_id_fmt, new_seq_id);
+  }
+  return new_id;
+}
+
+static ValNodePtr AddSequenceGroup 
+(ValNodePtr     list, 
+ ValNodePtr     qual_list,
+ CharPtr        def_taxname, 
+ Boolean        auto_id, 
+ Int4           to_remove,
+ CreateFastaPtr cfp)
+{
+  CreateFastaSeqPtr cfsp;
+  ValNodePtr        vnp, name_vnp, val_vnp;
+  CharPtr           auto_id_fmt = "seq_%d";
+  
+  cfsp = (CreateFastaSeqPtr) MemNew (sizeof (CreateFastaSeqData));
+  if (cfsp == NULL) return NULL;
+  
+  cfsp->local_id_txt = NULL;
+  cfsp->local_id = NULL;
+  cfsp->sequence_txt = NULL;
+  cfsp->sequence = NULL;
+  cfsp->master_set = cfp;
+  
+  /* use default tax name if we have one */
+  cfsp->orgrow = -1;
+  if (def_taxname != NULL)
+  {
+  	cfsp->tax_name = MemNew (sizeof (Char) * (StringLen (def_taxname) + 1));
+  	StringCpy (cfsp->tax_name, def_taxname);
+  }
+  
+  /* add source modifiers to match existing lists */  
+  cfsp->mod_values.selected_names_list = NULL;
+  cfsp->mod_values.selected_values_list = NULL;
+  for (vnp = qual_list; vnp != NULL; vnp = vnp->next)
+  {
+    name_vnp = ValNodeNew (cfsp->mod_values.selected_names_list);
+    if (cfsp->mod_values.selected_names_list == NULL)
+    {
+      cfsp->mod_values.selected_names_list = name_vnp;
+    }
+    if (name_vnp != NULL)
+    {
+      name_vnp->choice = vnp->choice;
+      name_vnp->data.ptrvalue = vnp->data.ptrvalue;
+    }
+    val_vnp = ValNodeNew (cfsp->mod_values.selected_values_list); 
+    if (cfsp->mod_values.selected_values_list == NULL)	
+    {
+      cfsp->mod_values.selected_values_list = val_vnp;
+    }
+    if (val_vnp != NULL)
+    {
+      val_vnp->data.ptrvalue = NULL;
+    }
+  }
+  
+  if (auto_id)
+  {
+    cfsp->local_id = CreateNewLocalID (list, auto_id_fmt, to_remove);
+  }
+  vnp = ValNodeNew (list);
+  if (vnp == NULL) return NULL;
+  vnp->data.ptrvalue = cfsp;
+  if (list == NULL) list = vnp;
+  return list;
+}
+
+static void ShowSequenceGroup (PopuP p)
+{
+  CreateFastaPtr cfp;
+  Int4           val;
+  Int4           seq_num = 1;
+  ValNodePtr     vnp;
+  CreateFastaSeqPtr cfsp;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (p);
+  if (cfp == NULL) return;
+  
+  val = GetValue (p);
+  for (vnp = cfp->sequence_list; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    if (cfsp == NULL) continue;
+    if (seq_num == val)
+    {
+      Show (cfsp->grp);
+      if (val > 1)
+      {
+      	Enable (cfp->prev_btn);
+      }
+      else
+      {
+      	Disable (cfp->prev_btn);
+      }
+      if (vnp->next == NULL)
+      {
+      	Disable (cfp->next_btn);
+      }
+      else
+      {
+      	Enable (cfp->next_btn);
+      }
+    }
+    else
+    {
+      Hide (cfsp->grp);
+    }
+  }
+  
+}
+
+static void GetMasterQualList (CreateFastaPtr cfp)
+{
+  ValNodePtr        vnp, name_vnp, master_vnp;
+  CreateFastaSeqPtr cfsp;
+  if (cfp == NULL) return;
+  
+  cfp->selected_qual_list = ValNodeFree (cfp->selected_qual_list);
+  /* add modifiers listed in any sequence to selected list */
+  for (vnp = cfp->sequence_list; vnp != NULL; vnp = vnp->next)
+  {
+  	cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  	if (cfsp != NULL)
+  	{
+  	  for (name_vnp = cfsp->mod_values.selected_names_list; name_vnp != NULL; name_vnp = name_vnp->next)
+  	  {
+        master_vnp = FindExactStringInStrings (cfp->selected_qual_list, name_vnp->data.ptrvalue);
+  	  	if (master_vnp == NULL)
+  	  	{
+  	  	  master_vnp = ValNodeNew (cfp->selected_qual_list);
+  	  	  if (cfp->selected_qual_list == NULL)
+  	  	  {
+  	  	  	cfp->selected_qual_list = master_vnp;
+  	  	  }
+  	  	  master_vnp->choice = name_vnp->choice;
+  	  	  master_vnp->data.ptrvalue = name_vnp->data.ptrvalue;
+  	  	}
+  	  }
+  	}
+  }
+}
+
+static void 
+ReportMissingQualsOrValues 
+(ValNodePtr missing_list,
+ CharPtr    sequence_str_fmt,
+ CharPtr    local_id,
+ CharPtr    sequence_num_fmt,
+ Int4       seq_num)
+{
+  ValNodePtr vnp;
+  Int4       msg_len = 0;
+  CharPtr    msg;
+  
+  if (missing_list == NULL || sequence_str_fmt == NULL || sequence_num_fmt == NULL)
+  {
+  	return;
+  }
+  
+  if (StringHasNoText (local_id))
+  {
+  	msg_len = StringLen (sequence_str_fmt) + 15;
+  }
+  else
+  {
+  	msg_len = StringLen (sequence_num_fmt) + StringLen (local_id);
+  }
+  
+  for (vnp = missing_list; vnp != NULL; vnp = vnp->next)
+  {
+  	msg_len += StringLen (vnp->data.ptrvalue) + 3;
+  }
+
+  msg = (CharPtr) MemNew (sizeof (Char) * msg_len);
+  if (msg != NULL)
+  {
+    if (StringHasNoText (local_id))
+    {
+      sprintf (msg, sequence_num_fmt, seq_num);
+    }
+    else
+    {
+      sprintf (msg, sequence_str_fmt, local_id);
+    }
+    for (vnp = missing_list; vnp != NULL; vnp = vnp->next)
+    {
+      StringCat (msg, vnp->data.ptrvalue);
+      if (vnp->next != NULL)
+      {
+        StringCat (msg, ", ");
+        
+      }
+    }
+    Message (MSG_ERROR, msg);
+    MemFree (msg);
+  }
+}
+
+static Boolean 
+CheckSeqQualListForConsistency 
+(CreateFastaSeqPtr cfsp,
+ ValNodePtr        master_list,
+ Int4              seq_num)
+{
+  ValNodePtr name_vnp, value_vnp, master_vnp, missing_vnp;
+  ValNodePtr missing_list = NULL;
+  Int4       num_missing = 0;
+  CharPtr    sequence_str_fmt = "Sequence %s is missing the following quals: ";
+  CharPtr    sequence_num_fmt = "Sequence %d is missing the following quals: ";
+  Boolean    rval = TRUE;
+  
+  if (cfsp == NULL) return FALSE;
+  
+  for (master_vnp = master_list;
+       master_vnp != NULL;
+       master_vnp = master_vnp->next)
+  {
+   	if (FindExactStringInStrings (cfsp->mod_values.selected_names_list,
+   	                              master_vnp->data.ptrvalue) == NULL)
+   	{
+   	  missing_vnp = ValNodeNew (missing_list);
+   	  if (missing_list == NULL)
+   	  {
+   	  	missing_list = missing_vnp;
+   	  }
+   	  if (missing_vnp != NULL)
+   	  {
+   	  	missing_vnp->data.ptrvalue = master_vnp->data.ptrvalue;
+   	  	missing_vnp->choice = master_vnp->choice;
+   	  }
+   	  num_missing ++;
+   	}
+  }
+  
+  for (name_vnp = cfsp->mod_values.selected_names_list,
+       value_vnp = cfsp->mod_values.selected_values_list;
+       name_vnp != NULL && value_vnp != NULL;
+       name_vnp = name_vnp->next, value_vnp = value_vnp->next)
+  {
+  	if (StringHasNoText (value_vnp->data.ptrvalue))
+  	{
+  	  num_missing ++;
+  	  missing_vnp = ValNodeNew (missing_list);
+  	  if (missing_list == NULL)
+  	  {
+  	  	missing_list = missing_vnp;
+  	  }
+  	  if (missing_vnp != NULL)
+  	  {
+  	  	missing_vnp->data.ptrvalue = name_vnp->data.ptrvalue;
+  	  	missing_vnp->choice = name_vnp->choice;
+  	  }
+  	}
+  }
+  
+  if (num_missing > 0)
+  {
+    rval = FALSE;
+    ReportMissingQualsOrValues (missing_list, sequence_str_fmt, cfsp->local_id,
+                                sequence_num_fmt, seq_num);
+    ValNodeFree (missing_list);
+  }
+  return rval;
+}
+
+static Boolean CheckQualListForConsistency (CreateFastaPtr cfp)
+{
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  Boolean           rval = TRUE;
+  Int4              seq_num = 1;
+  
+  if (cfp == NULL) return FALSE;
+
+  GetMasterQualList (cfp);
+
+  for (vnp = cfp->sequence_list; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+  	cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  	if (cfsp != NULL)
+  	{
+  	  rval &= CheckSeqQualListForConsistency (cfsp, cfp->selected_qual_list, seq_num); 	  
+    }
+  }
+  return rval;
+}
+  
+/* code for scientific name selection controls */
+static ValNodePtr orglist = NULL;
+
+static void LoadOrganismList (void)
+{
+  Char     str [PATH_MAX];
+  ReadBufferData    rbd;
+  CharPtr  line;
+  ValNodePtr vnp;
+  CharPtr           ptr;
+  FILE              *f;
+
+  if (orglist != NULL) return;
+  ProgramPath (str, sizeof (str));
+  ptr = StringRChr (str, DIRDELIMCHR);
+  if (ptr != NULL) {
+    *ptr = '\0';
+    FileBuildPath (str, NULL, "taxlist.txt");
+    f = FileOpen (str, "r");
+    if (f == NULL) {
+      if (GetAppParam ("NCBI", "NCBI", "DATA", "", str, sizeof (str))) {
+        FileBuildPath (str, NULL, "taxlist.txt");
+        f = FileOpen (str, "r");
+      }
+    }
+    if (f != NULL) {
+      rbd.fp = f;
+      rbd.current_data = NULL;
+      line = AbstractReadFunction (&rbd);
+      line = AbstractReadFunction (&rbd);
+      while (line != NULL)
+      {
+        ptr = StringChr (line, '\t');
+        if (ptr != NULL)
+        {
+          *ptr = 0;
+        }
+      	vnp = ValNodeNew (orglist);
+      	if (vnp != NULL)
+      	{
+      	  vnp->data.ptrvalue = line;
+      	}
+      	if (orglist == NULL)
+      	{
+      	  orglist = vnp;
+      	}
+      	line = AbstractReadFunction (&rbd);
+      }
+      FileClose (f);
+    }
+  }
+}
+
+static CharPtr GetTextForOrgPos (Int4 pos)
+{
+  ValNodePtr vnp;
+  Int4       val;
+  
+  for (vnp = orglist, val = 1; vnp != NULL && val < pos; vnp = vnp->next, val++)
+  {
+  }
+  if (vnp != NULL)
+  {
+  	return (CharPtr)vnp->data.ptrvalue;
+  }
+  else
+  {
+  	return NULL;
+  }
+}
+
+static void GetOrgPosForText (CharPtr cp, Int4Ptr pos, Boolean PNTR match)
+{
+  ValNodePtr vnp;
+  Int4       val = 1;
+  CharPtr    dat;
+  Int4       res;
+  
+  if (cp == NULL || pos == NULL || match == NULL) return;
+  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
+  {
+  	dat = (CharPtr) vnp->data.ptrvalue;
+  	res = StringCmp (cp, dat);
+  	if (res < 0)
+  	{
+  	  *pos = val;
+  	  *match = FALSE;
+  	  return;
+  	}
+  	else if (res == 0)
+  	{
+  	  *pos = val;
+  	  *match = TRUE;
+  	  return;
+  	}
+  	val++;
+  }
+  *pos = val - 1;
+  *match = FALSE;
+}
+
+static void SetAllOrganismNames (CreateFastaSeqPtr cfsp)
+{
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp_set;
+  if (cfsp == NULL || cfsp->master_set == NULL) return;
+  
+  for (vnp = cfsp->master_set->sequence_list;
+       vnp != NULL;
+       vnp = vnp->next)
+  {
+    cfsp_set = vnp->data.ptrvalue;
+    if (cfsp_set == NULL || cfsp_set == cfsp)
+    {
+      continue; /* don't need to set the values in this one */
+    }
+    SetTitle (cfsp_set->taxName, cfsp->tax_name);
+    cfsp_set->orgrow = cfsp->orgrow;
+  }
+}
+
+static void SetOrganismDoc (DoC d, PoinT pt)
+{
+  Int2 item, row, prevrow;
+
+  CreateFastaSeqPtr cfsp;
+  
+  cfsp = (CreateFastaSeqPtr) GetObjectExtra (d);
+  if (cfsp == NULL) return;
+  
+  MapDocPoint (d, pt, &item, &row, NULL, NULL);
+  if (item > 0 && row > 0) {
+    prevrow = cfsp->orgrow;
+    cfsp->orgrow = item;
+    if (item != prevrow)
+    {
+      if (prevrow != -1)
+      {
+        InvalDocRows (d, prevrow, 1, 1);
+      }
+      InvalDocRows (d, item, 1, 1);
+      SetTitle (cfsp->taxName, GetTextForOrgPos (item));
+      if (cfsp->master_set != NULL && cfsp->master_set->is_popset)
+      {
+        cfsp->tax_name = MemFree (cfsp->tax_name);
+        cfsp->tax_name = SaveStringFromText (cfsp->taxName);
+        SetAllOrganismNames (cfsp);
+      }
+    }  	
+  }
+}
+
+static void SetOrganismText (TexT t)
+{
+  CreateFastaSeqPtr cfsp;
+  Int4              pos, prevpos;
+  Boolean           match;
+  
+  cfsp = (CreateFastaSeqPtr) GetObjectExtra (t);
+  if (cfsp == NULL) return;
+  if (cfsp->tax_name != NULL)
+  {
+  	MemFree (cfsp->tax_name);
+  }
+  cfsp->tax_name = SaveStringFromText (cfsp->taxName);
+  if (cfsp->tax_name != NULL)
+  {
+  	cfsp->tax_name [0] = TO_UPPER (cfsp->tax_name[0]);
+  }
+  GetOrgPosForText (cfsp->tax_name, &pos, &match);
+  SetOffset (cfsp->orglist, 0, pos - 1);
+  if (pos != cfsp->orgrow)
+  {
+    prevpos = cfsp->orgrow;
+    if (match)
+    { 
+      cfsp->orgrow = pos;
+      SetTitle (cfsp->taxName, cfsp->tax_name);
+    }
+    else
+    {
+      cfsp->orgrow = -1;
+    }
+  	if (prevpos != -1)
+    {
+  	  InvalDocRows (cfsp->orglist, prevpos, 1, 1);
+    }
+    if (match)
+    {
+      InvalDocRows (cfsp->orglist, cfsp->orgrow, 1, 1);
+    }
+  }
+  else if (!match)
+  {
+  	cfsp->orgrow = -1;
+    InvalDocRows (cfsp->orglist, pos, 1, 1);	
+  }
+  if (cfsp->master_set != NULL && cfsp->master_set->is_popset)
+  {
+    cfsp->tax_name = MemFree (cfsp->tax_name);
+    cfsp->tax_name = SaveStringFromText (cfsp->taxName);
+    SetAllOrganismNames (cfsp);
+  }
+}
+
+static Boolean OrgNameHighlight (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  CreateFastaSeqPtr cfsp;
+  
+  cfsp = (CreateFastaSeqPtr) GetObjectExtra (doc);
+  if (cfsp == NULL) return FALSE;
+  
+  if (item == cfsp->orgrow) return TRUE;
+  return FALSE;
+}
+
+static ParData orgListPar = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
+static ColData orgListCol [] = {
+  {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
+  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE}};
+
+static void DrawOrganismSelection (GrouP g, CreateFastaSeqPtr cfsp, CreateFastaPtr cfp)
+{
+  GrouP           f, h;
+  Int2            height;
+  ValNodePtr      vnp;
+
+  LoadOrganismList ();	
+  h = NormalGroup (g, 2, 0, "Organism Information", programFont, NULL);
+  f = NormalGroup (h, 0, 3, "Scientific Name", programFont, NULL);
+  cfsp->taxName = DialogText (f, "", 20, SetOrganismText);
+  SetObjectExtra (cfsp->taxName, cfsp, NULL);
+  if (cfsp->tax_name != NULL)
+  {
+  	SetTitle (cfsp->taxName, cfsp->tax_name);
+  	SetOrganismText (cfsp->taxName);
+  }
+  if (cfp->is_popset)
+  {
+    StaticPrompt (f, "All organism names must be identical for a population study",
+                   0, dialogTextHeight, programFont, 'l');
+  }
+/*  f = HiddenGroup (h, 1, 0, NULL); */
+  SelectFont (programFont);
+  height = LineHeight ();
+  SelectFont (systemFont);
+  cfsp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 6);
+  SetObjectExtra (cfsp->orglist, cfsp, NULL);
+/*  SetDocAutoAdjust (cfsp->orglist, FALSE); */
+  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
+  {
+  	AppendText (cfsp->orglist, vnp->data.ptrvalue, &orgListPar, orgListCol, programFont);
+  }
+  SetDocAutoAdjust (cfsp->orglist, FALSE);
+  SetDocProcs (cfsp->orglist, SetOrganismDoc, NULL, NULL, NULL);
+  SetDocShade (cfsp->orglist, NULL, NULL, OrgNameHighlight, NULL);
+  
+  f = NormalGroup (h, 1, 0, "Organism Qualifiers", programFont, NULL);
+  cfsp->mods = CreateModifierTagList (f, &(cfsp->mod_values));
+}
+
+static void CreateFastaPrev (ButtoN b)
+{
+  CreateFastaPtr cfp;
+  Int4           val;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  if (cfp == NULL) return;
+  val = GetValue (cfp->sequence_selector);
+  if (val <= 1) return;
+  SetValue (cfp->sequence_selector, val - 1);
+  ShowSequenceGroup (cfp->sequence_selector);
+}
+
+static void CreateFastaNext (ButtoN b)
+{
+  CreateFastaPtr cfp;
+  Int4           val;
+  Int4           num_sequences;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  if (cfp == NULL) return;
+  num_sequences = ValNodeLen (cfp->sequence_list);
+  val = GetValue (cfp->sequence_selector);
+  if (val >= num_sequences) return;
+  SetValue (cfp->sequence_selector, val + 1);
+  ShowSequenceGroup (cfp->sequence_selector);
+}
+
+static void DrawSequenceSelector (CreateFastaPtr cfp, GrouP g)
+{
+  GrouP k;
+  Char              str [200];
+  ValNodePtr        vnp; 
+  Int4              seq_num;
+  CreateFastaSeqPtr cfsp;
+  Int4              num_sequences;
+
+  if (cfp == NULL) return;
+  
+  num_sequences = ValNodeLen (cfp->sequence_list);
+  
+  k = NormalGroup (g, 4, 0, "Select Sequence", programFont, NULL);
+
+  cfp->prev_btn = PushButton (k, "<<", CreateFastaPrev);
+  SetObjectExtra (cfp->prev_btn, cfp, NULL);
+  Disable (cfp->prev_btn);
+  cfp->sequence_selector = PopupList (k, TRUE, ShowSequenceGroup);
+  SetObjectExtra (cfp->sequence_selector, cfp, NULL);
+  for (vnp = cfp->sequence_list, seq_num = 1; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    if (cfsp != NULL)
+    {
+      if (!StringHasNoText (cfsp->local_id)) 
+      {
+        PopupItem (cfp->sequence_selector, cfsp->local_id);
+      }
+      else
+      {
+        sprintf (str, "Unlabeled sequence %d", seq_num);
+        PopupItem (cfp->sequence_selector, str);
+      }
+    }
+  }
+  cfp->next_btn = PushButton (k, ">>", CreateFastaNext);
+  SetObjectExtra (cfp->next_btn, cfp, NULL);
+  if (num_sequences < 2)
+  {
+  	Disable (cfp->next_btn);
+  }
+}
+ 
+static void DrawSequenceGroups (CreateFastaPtr cfp, GrouP g)
+{
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  GrouP             k, n;
+  Char              str [200];
+  Int4              seq_num = 1;
+  Int4              num_sequences;
+  
+  if (cfp == NULL || cfp->sequence_list == NULL || g == NULL) return;
+  cfp->sequence_selector = NULL;
+  n = HiddenGroup (g, 0, 0, NULL);
+  num_sequences = ValNodeLen (cfp->sequence_list);
+  for (vnp = cfp->sequence_list; vnp != NULL; vnp = vnp->next)
+  {
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    if (cfsp != NULL)
+    {
+      cfsp->grp = HiddenGroup (n, 0, 3, NULL);
+      k = HiddenGroup (cfsp->grp, 4, 0, NULL);
+      StaticPrompt (k, "Sequence ID", 0, dialogTextHeight, programFont, 'l');
+      if (cfsp->local_id == NULL)
+      {
+      	cfsp->local_id_txt = DialogText (k, "", 20, NULL);
+      }
+      else
+      {
+      	cfsp->local_id_txt = DialogText (k, cfsp->local_id, 20, NULL);
+      }
+      sprintf (str, "%d of %d", seq_num, num_sequences);
+      StaticPrompt (k, str, 0, dialogTextHeight, programFont, 'l');
+      if (!StringHasNoText (cfsp->title))
+      {
+      	StaticPrompt (k, cfsp->title, 0, dialogTextHeight, programFont, 'l');
+      }
+      
+      DrawOrganismSelection (cfsp->grp, cfsp, cfp);
+      
+      k = NormalGroup (cfsp->grp, 1, 0, "Sequence Characters", programFont, NULL);
+      sprintf (str, "Please enter the nucleotides for your sequence.  "
+                    "You may only use the valid IUPAC characters (%s).", 
+                    valid_iupac_characters);
+      MultiLinePrompt (k, str, 60 * stdCharWidth, programFont);
+      cfsp->sequence_txt = ScrollText (k, 60, 10, programFont, FALSE, NULL);
+      if (cfsp->sequence != NULL)
+      {
+        SetTitle (cfsp->sequence_txt, cfsp->sequence);
+      }
+      seq_num++;      
+    }
+  }
+}
+
+static Boolean SeqCharsOk( CharPtr seq_chars, Int4 seq_num)
+{
+  CharPtr cp;
+  Char    ch;
+  Boolean at_least_one = FALSE;
+  Int4    len;
+  CharPtr badchars;
+  
+  if (seq_chars == NULL)
+  {
+  	Message (MSG_ERROR, "There are no sequence characters for sequence %d.  Please enter some.", seq_num);
+  	return FALSE;
+  }
+  len = StringLen (seq_chars);
+  if (len == 0)
+  {
+  	Message (MSG_ERROR, "There are no sequence characters for sequence %d.  Please enter some.", seq_num);
+  	return FALSE;
+  }
+  badchars = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+  if (badchars == NULL) return FALSE;
+  badchars[0] = 0;
+  len = 0;
+  for (cp = seq_chars; *cp != 0; cp++)
+  {
+    ch = TO_LOWER (*cp);
+  	if (isspace (ch))
+  	{
+  	  /* space allowed */
+  	}
+  	else if (StringChr (valid_iupac_characters, ch) == NULL)
+  	{
+  	  if (StringChr (badchars, *cp) == NULL)
+  	  {
+  	  	badchars [len] = ch;
+  	  	len++; 
+  	  	badchars [len] = 0;
+  	  }
+  	}
+  	else 
+  	{
+  	  at_least_one = TRUE;
+  	}
+  }
+  if (len > 0)
+  {
+  	Message (MSG_ERROR, 
+  	         "There were %d illegal characters were found in sequence %d: %s."
+  	         "  Repeated characters are listed only once. "
+  	         "  You may only have IUPAC characters in your sequence "
+  	         "(%s).\n", len, seq_num, badchars, valid_iupac_characters);
+  	return FALSE;
+  }
+  if (!at_least_one)
+  {
+  	Message (MSG_ERROR, "There are no sequence characters in sequence %d.  Please enter some.", seq_num);
+  	return FALSE;
+  }
+  return TRUE;
+}
+
+static CharPtr ReformatSequenceText (CharPtr seq_text)
+{
+  CharPtr src, dst;
+  CharPtr new_text;
+  Int4    num_lines;
+  Int4    len;
+  Int4    line_len = 80;
+  Int4    counter;
+
+  if (StringHasNoText (seq_text))
+  {
+  	MemFree (seq_text);
+  	return NULL;
+  }
+  len = StringLen (seq_text);
+  num_lines = len / line_len;
+  len += num_lines + 2;
+  new_text = (CharPtr) MemNew (len * sizeof (Char));
+  if (new_text == NULL)
+  {
+  	return seq_text;
+  }
+  dst = new_text;
+  counter = 0;
+  for (src = seq_text; *src != 0; src++)
+  {
+  	if (!isspace (*src))
+  	{
+  	  *dst = *src;
+  	  dst++;
+  	  counter++;
+  	  if (counter == line_len)
+  	  {
+  	  	*dst = '\n';
+  	  	dst++;
+  	  	counter = 0;
+  	  }
+  	}
+  }
+  *dst = 0;
+  MemFree (seq_text);
+  return new_text;
+}
+
+static CharPtr ReformatLocalId (CharPtr local_id)
+{
+  CharPtr cp, new_local_id;
+  
+  cp = local_id;
+  while (*cp == '>')
+  {
+    cp ++;
+  }
+  while (isspace (*cp))
+  {
+  	cp++;
+  }
+  new_local_id = StringSave (cp);
+  cp = new_local_id;
+  while (*cp != 0)
+  {
+    if (isspace (*cp))
+    {
+      *cp = '_';
+    }
+    cp++;
+  }
+  MemFree (local_id);
+  return new_local_id;
+}
+
+static void CollectOneSequenceInformation (CreateFastaSeqPtr cfsp)
+{
+  ListPairPtr     lpp;
+  
+  if (cfsp == NULL) return;
+
+  /* get sequence ID */
+  if (cfsp->local_id != NULL)
+  {
+  	MemFree (cfsp->local_id);
+  }
+  cfsp->local_id = SaveStringFromText (cfsp->local_id_txt);
+  cfsp->local_id = ReformatLocalId (cfsp->local_id);
+
+  /* get sequence text */
+  if (cfsp->sequence != NULL)
+  {
+  	MemFree (cfsp->sequence);
+  }
+  cfsp->sequence = SaveStringFromText (cfsp->sequence_txt);
+  cfsp->sequence = ReformatSequenceText (cfsp->sequence);
+
+  /* get organism name */
+  cfsp->tax_name = SaveStringFromText (cfsp->taxName);
+  
+  
+  /* copy in qual information */
+  cfsp->mod_values.selected_names_list = ValNodeFree (cfsp->mod_values.selected_names_list);
+  cfsp->mod_values.selected_values_list = ValNodeFreeData (cfsp->mod_values.selected_values_list);
+  lpp = GetModifierList (cfsp->mods);
+  if (lpp != NULL)
+  {
+  	cfsp->mod_values.selected_names_list = lpp->selected_names_list;
+  	cfsp->mod_values.selected_values_list = lpp->selected_values_list;
+  	MemFree (lpp);
+  }
+
+}
+
+static void CollectAllSequenceInformation (ValNodePtr list)
+{
+  ValNodePtr vnp;
+  
+  for (vnp = list; vnp != NULL; vnp = vnp->next)
+  {
+  	CollectOneSequenceInformation (vnp->data.ptrvalue);
+  }
+}
+
+static Boolean ValidateOneSequenceInformation (CreateFastaSeqPtr cfsp, Int4 seq_num)
+{
+  Boolean         rval = TRUE;
+  CharPtr        localid_msg = "You must include a sequence ID for sequence %d."
+        "  A sequence ID is a temporary ID which will be replaced with a unique"
+        " GenBank accession number by the GenBank curators.  The sequence ID should"
+        " be unique for each sequence in a record.  It could represent a clone,"
+        " isolate, a laboratory designation for your specimen, or some other useful"
+        " information, but this is not required."
+        "  A sequence ID may not begin with a '>' character or contain spaces.";
+  
+  if (cfsp == NULL) return FALSE;
+  
+  CollectOneSequenceInformation (cfsp);
+  
+  /* complain if sequence ID is empty */
+  if (StringHasNoText (cfsp->local_id)) {
+    Message (MSG_ERROR, localid_msg, seq_num);
+    rval = FALSE;
+  }
+   
+  /* get sequence text, complain if empty or bad chars */
+  if (!SeqCharsOk (cfsp->sequence, seq_num))
+  {
+    rval = FALSE;
+  }
+  /* complain if no organism name */
+  if (StringHasNoText (cfsp->tax_name))
+  {
+  	Message (MSG_ERROR, "Sequence %d has no organism name.  Please supply one.", seq_num);
+  }
+    
+  return rval;	
+}
+
+static Boolean CheckLocalIDs (ValNodePtr list, Int4 skip)
+{
+  ValNodePtr        vnp, check_vnp, ignore_list, ignore_vnp;
+  Int4              seq_num, check_seq_num;
+  CreateFastaSeqPtr cfsp;
+  CharPtr           local_id; 
+  Boolean           rval = TRUE;
+  Int4              num_appearances;
+  ValNodePtr        appearance_positions, pos_vnp;
+
+  ignore_list = NULL;  
+  for (vnp = list, seq_num = 1; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+    if (seq_num == skip) continue;
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    local_id = cfsp->local_id;
+    if (StringHasNoText (local_id)) continue;
+    for (ignore_vnp = ignore_list; 
+         ignore_vnp != NULL && StringCmp (local_id, ignore_vnp->data.ptrvalue) != 0;
+         ignore_vnp = ignore_vnp->next)
+    {
+    }
+    if (ignore_vnp != NULL) continue;
+    num_appearances = 1;
+    appearance_positions = NULL;
+    for (check_vnp = vnp->next, check_seq_num = seq_num + 1;
+         check_vnp != NULL;
+         check_vnp = check_vnp->next)
+    {
+      cfsp = (CreateFastaSeqPtr) check_vnp->data.ptrvalue;
+      if (StringCmp (local_id, cfsp->local_id) == 0)
+      {
+        rval = FALSE;
+        /* add to list of positions for report */
+      	pos_vnp = ValNodeNew (appearance_positions);
+      	if (appearance_positions == NULL)
+      	{
+      	  appearance_positions = pos_vnp;
+          /* add to list of strings to ignore in further checking */
+      	  ignore_vnp = ValNodeNew (ignore_list);
+      	  if (ignore_list == NULL)
+      	  {
+      	    ignore_list = ignore_vnp;
+      	  }
+      	  if (ignore_vnp != NULL)
+      	  {
+      	    ignore_vnp->data.ptrvalue = local_id;
+      	  }
+      	}
+      	if (pos_vnp != NULL)
+      	{
+      	  pos_vnp->data.intvalue = check_seq_num;
+      	}
+      }
+    }
+    if (appearance_positions != NULL)
+    {
+      Message (MSG_ERROR, "Sequence ID %s is not unique.  "
+               "Please change your sequence IDs to be unique within this record.",
+               local_id);
+      ValNodeFree (appearance_positions);
+    }
+  	
+  }
+  
+  ValNodeFree (ignore_list);
+  return rval;
+}
+
+static CharPtr GetNthSeqId (ValNodePtr sequence_list, Int4 n)
+{
+  Int4              id_pos;
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  CharPtr           txt;
+  CharPtr           fmt = "Unlabeled sequence %d";
+  
+  if (sequence_list == NULL) return NULL;
+  for (id_pos = 0, vnp = sequence_list; id_pos < n - 1 && vnp != NULL; id_pos++, vnp = vnp->next)
+  {	
+  }
+  if (vnp == NULL) return NULL;
+  cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  if (cfsp == NULL) return NULL;
+  if (cfsp->local_id == NULL)
+  {
+  	txt = (CharPtr) MemNew (StringLen (fmt) + 25);
+  	if (txt != NULL)
+  	{
+  	  sprintf (txt, fmt, n);
+  	}
+  }
+  else
+  {
+   txt = StringSave (cfsp->local_id);
+  }
+  return txt;
+}
+
+static CharPtr ReportMultipleAppearances (ValNodePtr app_pos, ValNodePtr sequence_list)
+{
+  Int4       num_pos, pos_ctr;
+  ValNodePtr vnp, seq_id_vnp;
+  CharPtr    fmt = "Identical sequences appear for ";
+  CharPtr    msg_txt;
+  ValNodePtr seq_id_list = NULL;
+  Int4       txt_len = StringLen (fmt) + 1;
+  
+  if (app_pos == NULL || sequence_list == NULL) return NULL;
+  num_pos = ValNodeLen (app_pos);
+  if (num_pos == 1) return NULL;
+  for (vnp = app_pos; vnp != NULL; vnp = vnp->next)
+  {
+    msg_txt = GetNthSeqId (sequence_list, vnp->data.intvalue);
+    if (msg_txt == NULL) continue;
+  	seq_id_vnp = ValNodeNew (seq_id_list);
+  	if (seq_id_list == NULL) seq_id_list = seq_id_vnp;
+  	if (seq_id_vnp != NULL)
+  	{
+  	  seq_id_vnp->data.ptrvalue = msg_txt;
+  	  txt_len += StringLen (msg_txt) + 5;
+  	}
+  }
+  num_pos = ValNodeLen (seq_id_list);
+  msg_txt = (CharPtr) MemNew (txt_len * sizeof (Char));
+  if (msg_txt != NULL)
+  {
+    sprintf (msg_txt, fmt);
+  	for (seq_id_vnp = seq_id_list, pos_ctr = 0;
+  	     seq_id_vnp != NULL;
+  	     seq_id_vnp = seq_id_vnp->next, pos_ctr ++)
+  	{
+  	  if (seq_id_vnp->next == NULL)
+  	  {
+  	  	StringCat (msg_txt, "and ");
+  	  }
+  	  StringCat (msg_txt, seq_id_vnp->data.ptrvalue);
+  	  if (seq_id_vnp->next != NULL)
+  	  {
+  	    if (num_pos > 2)
+  	    {
+	      StringCat (msg_txt, ", ");
+  	    }
+  	    else
+  	    {
+  	  	  StringCat (msg_txt, " ");
+  	    }
+  	  }
+  	}
+  }
+  ValNodeFreeData (seq_id_list);
+  return msg_txt;
+}
+
+
+static Boolean CheckSequenceUniqueness (ValNodePtr list, Int4 skip)
+{
+  ValNodePtr        vnp, check_vnp, ignore_list, ignore_vnp;
+  Int4              seq_num, check_seq_num;
+  CreateFastaSeqPtr cfsp;
+  Boolean           rval = TRUE;
+  Int4              num_appearances;
+  ValNodePtr        appearance_positions, pos_vnp;
+  CharPtr           sequence;
+
+  ignore_list = NULL;  
+  for (vnp = list, seq_num = 1; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+    if (seq_num == skip) continue;
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    sequence = cfsp->sequence;
+    if (StringHasNoText (sequence)) continue;
+    for (ignore_vnp = ignore_list; 
+         ignore_vnp != NULL && StringCmp (sequence, ignore_vnp->data.ptrvalue) != 0;
+         ignore_vnp = ignore_vnp->next)
+    {
+    }
+    if (ignore_vnp != NULL) continue;
+    num_appearances = 1;
+    appearance_positions = NULL;
+    for (check_vnp = vnp->next, check_seq_num = seq_num + 1;
+         check_vnp != NULL;
+         check_vnp = check_vnp->next, check_seq_num++)
+    {
+      cfsp = (CreateFastaSeqPtr) check_vnp->data.ptrvalue;
+      if (StringCmp (sequence, cfsp->sequence) == 0)
+      {
+        rval = FALSE;
+        /* add to list of positions for report */
+      	pos_vnp = ValNodeNew (appearance_positions);
+      	if (appearance_positions == NULL)
+      	{
+      	  appearance_positions = pos_vnp;
+      	  /* add in first location */
+      	  pos_vnp->data.intvalue = seq_num;
+      	  pos_vnp = ValNodeNew (appearance_positions);
+          /* add to list of strings to ignore in further checking */
+      	  ignore_vnp = ValNodeNew (ignore_list);
+      	  if (ignore_list == NULL)
+      	  {
+      	    ignore_list = ignore_vnp;
+      	  }
+      	  if (ignore_vnp != NULL)
+      	  {
+      	    ignore_vnp->data.ptrvalue = sequence;
+      	  }
+      	}
+      	if (pos_vnp != NULL)
+      	{
+      	  pos_vnp->data.intvalue = check_seq_num;
+      	}
+      }
+    }
+    if (appearance_positions != NULL)
+    {
+      Message (MSG_ERROR, ReportMultipleAppearances (appearance_positions, list));
+      ValNodeFree (appearance_positions);
+    }
+  	
+  }
+  
+  ValNodeFree (ignore_list);
+  return rval;
+}
+
+static Boolean IsValuePairInListPair (CharPtr qname, CharPtr qvalue, ListPairPtr lpp)
+{
+  ValNodePtr name_vnp, val_vnp;
+  if (qname == NULL || qvalue == NULL || lpp == NULL) return FALSE;
+  
+  for (name_vnp = lpp->selected_names_list, val_vnp = lpp->selected_values_list;
+       name_vnp != NULL && val_vnp != NULL;
+       name_vnp = name_vnp->next, val_vnp = val_vnp->next)
+  {
+  	if (StringCmp (name_vnp->data.ptrvalue, qname) == 0)
+  	{
+  	  if (StringCmp (val_vnp->data.ptrvalue, qvalue) == 0)
+  	  {
+  	  	return TRUE;
+  	  }
+  	  else
+  	  {
+  	  	return FALSE;
+  	  }
+  	}
+  }
+  return FALSE;
+}
+
+static Boolean AreOrgsIdentical (CreateFastaSeqPtr seq1, CreateFastaSeqPtr seq2)
+{
+  ValNodePtr name_vnp, val_vnp;
+
+  if (seq1 == NULL && seq2 == NULL) return TRUE;
+  if (seq1 == NULL || seq2 == NULL) return FALSE;
+  
+  if (StringHasNoText (seq1->tax_name) && StringHasNoText (seq2->tax_name))
+  {
+  	return TRUE;
+  }
+  if (StringHasNoText (seq1->tax_name) || StringHasNoText (seq2->tax_name))
+  {
+  	return FALSE;
+  }
+  if (StringCmp (seq1->tax_name, seq2->tax_name) != 0)
+  {
+  	return FALSE;
+  }
+  /* check modifiers */
+  for (name_vnp = seq1->mod_values.selected_names_list, val_vnp = seq1->mod_values.selected_values_list;
+       name_vnp != NULL && val_vnp != NULL;
+       name_vnp = name_vnp->next, val_vnp = val_vnp->next)
+  {
+    if (! StringHasNoText (name_vnp->data.ptrvalue)
+        && !StringHasNoText (val_vnp->data.ptrvalue)
+        && ! IsValuePairInListPair (name_vnp->data.ptrvalue, val_vnp->data.ptrvalue, &(seq2->mod_values)))
+    {
+      return FALSE;
+    }
+  }
+  
+  for (name_vnp = seq2->mod_values.selected_names_list, val_vnp = seq2->mod_values.selected_values_list;
+       name_vnp != NULL && val_vnp != NULL;
+       name_vnp = name_vnp->next, val_vnp = val_vnp->next)
+  {
+    if (! StringHasNoText (name_vnp->data.ptrvalue)
+        && !StringHasNoText (val_vnp->data.ptrvalue)
+        && ! IsValuePairInListPair (name_vnp->data.ptrvalue, val_vnp->data.ptrvalue, &(seq1->mod_values)))
+    {
+      return FALSE;
+    }
+  }
+  
+  return TRUE;
+}
+
+static Boolean ValidateOrganismList (ValNodePtr list, Int4 skip, Boolean is_popset)
+{
+  ValNodePtr        vnp, check_vnp, ignore_list, ignore_vnp;
+  Int4              seq_num, check_seq_num;
+  CreateFastaSeqPtr cfsp, check_cfsp;
+  CharPtr           local_id; 
+  Boolean           rval = TRUE;
+  Int4              num_appearances;
+  ValNodePtr        appearance_positions, pos_vnp;
+  Char              str [255];
+  Char              tmp [20];
+  Boolean           tax_names_need_identical = FALSE;
+
+  ignore_list = NULL;  
+  for (vnp = list, seq_num = 1; vnp != NULL; vnp = vnp->next, seq_num++)
+  {
+    if (seq_num == skip) continue;
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    local_id = cfsp->local_id;
+    for (ignore_vnp = ignore_list; 
+         ignore_vnp != NULL && ! AreOrgsIdentical (cfsp, ignore_vnp->data.ptrvalue);
+         ignore_vnp = ignore_vnp->next)
+    {
+    }
+    if (ignore_vnp != NULL) continue;
+    num_appearances = 1;
+    appearance_positions = NULL;
+    for (check_vnp = vnp->next, check_seq_num = seq_num + 1;
+         check_vnp != NULL;
+         check_vnp = check_vnp->next, check_seq_num++)
+    {
+      check_cfsp = (CreateFastaSeqPtr) check_vnp->data.ptrvalue;
+      if (is_popset)
+      {
+        if (StringCmp (cfsp->tax_name, check_cfsp->tax_name) != 0)
+        {
+          tax_names_need_identical = TRUE;
+        }
+      }
+      if (AreOrgsIdentical (cfsp, check_cfsp))
+      {
+        rval = FALSE;
+        num_appearances ++;
+        /* add to list of positions for report */
+      	pos_vnp = ValNodeNew (appearance_positions);
+      	if (appearance_positions == NULL)
+      	{
+      	  appearance_positions = pos_vnp;
+      	  if (pos_vnp != NULL)
+      	  {
+      	  	pos_vnp->data.intvalue = seq_num;
+      	  }
+      	  pos_vnp = ValNodeNew (appearance_positions);
+      	  
+          /* add to list of strings to ignore in further checking */
+      	  ignore_vnp = ValNodeNew (ignore_list);
+      	  if (ignore_list == NULL)
+      	  {
+      	    ignore_list = ignore_vnp;
+      	  }
+      	  if (ignore_vnp != NULL)
+      	  {
+      	    ignore_vnp->data.ptrvalue = cfsp;
+      	  }
+      	}
+      	if (pos_vnp != NULL)
+      	{
+      	  pos_vnp->data.intvalue = check_seq_num;
+      	}
+      }
+    }
+    if (appearance_positions != NULL)
+    {
+      if (num_appearances == 2)
+      {
+      	sprintf (str, "sequences %d and %d", seq_num, appearance_positions->data.intvalue);
+      }
+      else if (num_appearances < 25)
+      {
+        str[0] = 0;
+        for (pos_vnp = appearance_positions; pos_vnp->next != NULL; pos_vnp = pos_vnp->next)
+        {
+      	  sprintf (tmp, "%d, ", pos_vnp->data.intvalue);
+          StringCat (str, tmp);
+        }
+        sprintf (tmp, " and %d", pos_vnp->data.intvalue);
+        StringCat (str, tmp);
+      }
+      else 
+      {
+      	sprintf (str, "%d sequences", num_appearances);
+      }
+      
+      if (is_popset)
+      {
+        Message (MSG_ERROR, "The qualifiers in %s are identical.  "
+                 "Please change or add qualifiers to make your organisms unique within this record.",
+                 str);
+      }
+      else
+      {
+        Message (MSG_ERROR, "The organisms in %s are identical.  "
+                 "Please change your organisms or add qualifiers to make your organisms unique within this record.",
+                 str);
+       
+      }
+      ValNodeFree (appearance_positions);
+    }
+  }
+  if (tax_names_need_identical && is_popset)
+  {
+    Message (MSG_ERROR, "This is a population study.  All of the organism names should be identical, but they are not.");
+  }
+
+  
+  ValNodeFree (ignore_list);
+  return rval;
+}
+
+static Boolean ValidateSequenceInformation (ValNodePtr list, Int4 skip)
+{
+  Boolean           rval = TRUE;
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  Int4              seq_num = 1;
+  
+  if (list == NULL) 
+  {
+    Message (MSG_ERROR, "You have no sequences.  Please add some.");
+  	return FALSE;
+  }
+  for (vnp = list; vnp != NULL; vnp = vnp->next)
+  {
+  	cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  	if (seq_num != skip)
+  	{
+      rval &= ValidateOneSequenceInformation (cfsp, seq_num);
+  	}
+    seq_num ++;
+  }
+  rval &= CheckLocalIDs (list, skip);
+  return rval;
+}
+
+static void WriteSequenceInformationToFile (ValNodePtr list, FILE *fp)
+{
+  ValNodePtr        vnp, name_vnp, val_vnp;
+  CreateFastaSeqPtr cfsp;
+  CharPtr           cp;
+  Int4              counter;
+  
+  for (vnp = list; vnp != NULL; vnp = vnp->next)
+  {
+  	cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  	if (cfsp != NULL)
+  	{
+  	  if (cfsp->local_id == NULL)
+  	  {
+  	  	fprintf (fp, ">");
+  	  }
+  	  else
+  	  {
+        fprintf (fp, ">%s", cfsp->local_id);
+  	  }
+      if (!StringHasNoText (cfsp->tax_name))
+      {
+      	fprintf (fp, " [organism=%s]", cfsp->tax_name);
+      }
+      
+      for (name_vnp = cfsp->mod_values.selected_names_list,
+            val_vnp = cfsp->mod_values.selected_values_list;
+           name_vnp != NULL && val_vnp != NULL;
+           name_vnp = name_vnp->next, val_vnp = val_vnp->next)
+      {
+      	if (!StringHasNoText(name_vnp->data.ptrvalue)
+      	    && ! StringHasNoText (val_vnp->data.ptrvalue))
+      	{
+      	  fprintf (fp, "[%s=%s]", name_vnp->data.ptrvalue, val_vnp->data.ptrvalue);
+      	}
+      }
+      if (cfsp->title != NULL)
+      {
+      	fprintf (fp, " %s", cfsp->title);
+      }
+      fprintf (fp, "\n");
+      counter = 0;
+      if (cfsp->sequence != NULL)
+      {
+        for (cp = cfsp->sequence; *cp != 0; cp++)
+        {
+       	  if (isalpha (*cp))
+      	  {
+      	    fprintf (fp, "%c", *cp);
+      	    counter++;
+      	    if (counter == 80)
+      	    {
+      	  	  fprintf (fp, "\n");
+      	  	  counter = 0;
+      	    }
+      	  }
+        }    	
+      }
+      if (counter != 0)
+      {
+      	fprintf (fp, "\n");
+      }
+  	}    
+  }
+}
+
+/* This function checks the values of the inputs for the seq_num sequence to determine
+ * whether the user has made any changes from the defaults - i.e., did he enter
+ * any qualifier values?  any sequence data?  a different organism name from the
+ * default?  a sequence ID?
+ * If so, the sequence is not "empty".
+ */
+static Boolean IsThisSequenceEmpty (CreateFastaPtr cfp, Int4 seq_num)
+{
+  Int4              val;
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  
+  if (cfp == NULL) return TRUE;
+  
+  for (val = 1, vnp = cfp->sequence_list; vnp != NULL && val < seq_num; vnp = vnp->next, val++)
+  {
+  }
+  if (val != seq_num || vnp == NULL)
+  {
+  	return TRUE;
+  }
+  cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  if (cfsp == NULL) return TRUE;
+  CollectOneSequenceInformation (cfsp);
+
+  if (StringHasNoText (cfp->default_tax_name))
+  {
+  	if (!StringHasNoText (cfsp->tax_name))
+  	{
+  	  return FALSE;
+  	}
+  }
+  else if (StringCmp (cfp->default_tax_name, cfsp->tax_name) != 0 && !StringHasNoText (cfsp->tax_name))
+  {
+  	return FALSE;
+  }
+  
+  if (!StringHasNoText (cfsp->sequence))
+  {
+  	return FALSE;
+  }
+  
+  if (! cfp->auto_id && ! StringHasNoText (cfsp->local_id))
+  {
+  	return FALSE;
+  }
+
+  for (vnp = cfsp->mod_values.selected_values_list; vnp != NULL; vnp = vnp->next)
+  {
+  	if (!StringHasNoText (vnp->data.ptrvalue))
+  	{
+  	  return FALSE;
+  	}
+  }
+  	
+  return TRUE;
+}
+
+
+static void DoCreateFASTAFile (CreateFastaPtr cfp)
+{
+  Char           path [PATH_MAX];
+  FILE           *fp;
+  Int4           to_remove = -1;
+  Boolean        remove_current = FALSE;
+  Int4           num_seq;
+  ValNodePtr     vnp, prev;
+  Int4           val;
+
+  if (cfp == NULL) return;
+  
+  /* if we are creating a multiple sequence set, the user may have hit
+   * Add Sequence to "finish" his last sequence when he didn't need to.
+   * If the sequence dialog is "empty" and we have enough sequences for
+   * a set, we can remove the empty sequence.
+   */
+  if (!cfp->fpp->single)
+  {
+    to_remove = GetValue (cfp->sequence_selector);
+    num_seq = ValNodeLen (cfp->sequence_list);
+    if (num_seq > 2)
+    {
+      remove_current = IsThisSequenceEmpty (cfp, to_remove);	
+    }
+    if (! remove_current)
+    {
+      to_remove = -1;
+    }
+  }
+  
+  if (! ValidateSequenceInformation (cfp->sequence_list, to_remove)) 
+  {
+    return; 
+  }
+  
+  if (cfp->sequence_list->next == NULL && ! cfp->fpp->single)
+  {
+  	Message (MSG_ERROR, "You must have at least two sequences for a set.");
+  	return;
+  }
+  if (!ValidateOrganismList (cfp->sequence_list, to_remove, cfp->is_popset))
+  {
+    if (Message (MSG_YN, "Do you wish to edit your organisms?") == ANS_YES) return;
+  }
+  if (!CheckQualListForConsistency (cfp)) 
+  {
+    if (Message (MSG_YN, "Do you wish to edit your modifiers?") == ANS_YES) return;
+  }
+  if (! CheckSequenceUniqueness (cfp->sequence_list, to_remove))
+  {
+  	if (Message (MSG_YN, "Do you wish to edit your sequences?") == ANS_YES) return;
+  }
+  
+  if (cfp->fpp->single)
+  {
+    if (Message (MSG_YN, "This will complete the creation of your FASTA file.  "
+                 "The new file will automatically be imported into Sequin.  "
+                 "You will not be able to change the sequence in this file if you continue."
+                 "Are you sure that you are done editing this sequence?  "
+                 "(Click Yes to continue and save your file)") == ANS_NO) return;
+  }
+  else
+  {
+    if (Message (MSG_YN, "This will complete the creation of your FASTA file.  "
+                 "The new file will automatically be imported into Sequin.  "
+                 "You have %d sequences.  "
+                 "You will not be able to add more sequences to this file if you continue.  "
+                 "Are you sure that you are done adding sequences?  "
+                 "(Click Yes to continue and save your file)",
+                 ValNodeLen (cfp->sequence_list)) == ANS_NO) return;
+  }
+
+  if (! GetOutputFileName (path, sizeof (path), NULL)) 
+  {
+    return;
+  }
+  fp = FileOpen (path, "w");
+  if (fp == NULL) 
+  {
+    Message (MSG_ERROR, "Unable to write to %s", path);
+    return;
+  }
+  
+  /* remove current sequence if empty */
+  if (remove_current)
+  {
+    prev = NULL;
+    for (val = 1, vnp = cfp->sequence_list; vnp != NULL && val < to_remove; vnp = vnp->next, val++)
+    {
+  	  prev = vnp;
+    }
+    if (vnp == NULL) return;
+    if (prev == NULL)
+    {
+  	  cfp->sequence_list = vnp->next;
+    }
+    else 
+    {
+  	  prev->next = vnp->next;
+    }
+    vnp->next = NULL;
+    FreeSequenceGroup (vnp);  	
+  }  
+  
+  WriteSequenceInformationToFile (cfp->sequence_list, fp);
+  FileClose (fp);
+  SetObjectExtra (cfp->form, cfp->fpp, NULL);
+  ImportFastaDialog ((DialoG) cfp->form, path);
+  SetObjectExtra (cfp->form, cfp, NULL);
+  SetStatus (cfp->use_id_from_fasta_defline, TRUE);
+  cfp->fpp->parseSeqId = TRUE;
+  Remove (cfp->form);
+}
+
+static void DoCreateFASTAFileButton (ButtoN b)
+{
+  CreateFastaPtr cfp;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  DoCreateFASTAFile (cfp);
+}
+
+static void DoCreateFASTAFileItem (IteM i)
+{
+  CreateFastaPtr cfp;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (i);
+  DoCreateFASTAFile (cfp);
+}
+
+static void PreviewFastaFile (CreateFastaPtr cfp)
+{
+  Char         path [PATH_MAX];
+  FILE         *fp;
+  
+  if (cfp == NULL) return;
+
+  TmpNam (path);
+  fp = FileOpen (path, "wb");
+  if (fp == NULL) 
+  {
+    Message (MSG_ERROR, "Unable to open temporary file");
+    return;
+  }
+
+  ValidateSequenceInformation (cfp->sequence_list, -1);
+  WriteSequenceInformationToFile (cfp->sequence_list, fp);
+
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "FASTA File");
+  FileRemove (path);
+}
+
+static void PreviewFastaFileButton (ButtoN b)
+{
+  CreateFastaPtr cfp;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  PreviewFastaFile (cfp);  
+}
+
+static void PreviewFastaFileItem (IteM i)
+{
+  CreateFastaPtr cfp;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (i);
+  PreviewFastaFile (cfp);  
+}
+
+static void CleanupCreateFastaForm (
+  GraphiC g,
+  VoidPtr data
+)
+
+{
+  CreateFastaPtr  cfp;
+
+  cfp = (CreateFastaPtr) data;
+  FreeCreateFasta (cfp);
+}
+
+static void CreateFastaCancel (CreateFastaPtr cfp)
+{
+  if (cfp == NULL) return;
+  
+  if (cfp->fpp->single)
+  {
+    if (Message (MSG_YN, "Your sequence will not be saved if you cancel.  Do you wish to cancel?") == ANS_NO)
+    {
+      return;
+    }
+  }
+  else
+  {
+    if (Message (MSG_YN, "None of your sequences will be saved if you cancel.  Do you wish to cancel?") == ANS_NO)
+    {
+      return;
+    }
+  }
+  Remove (cfp->form);
+}
+
+static void CreateFastaCancelButton (ButtoN b)
+{
+  CreateFastaPtr  cfp;
+  cfp = GetObjectExtra (b);
+  CreateFastaCancel (cfp);
+}
+
+static void CreateFastaCancelItem (IteM i)
+{
+  CreateFastaPtr  cfp;
+  cfp = GetObjectExtra (i);
+  CreateFastaCancel (cfp);
+}
+
+static void AddFastaSequenceButton (ButtoN b)
+{
+  CreateFastaPtr   cfp;
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  AddFastaSequence (cfp);
+}
+
+static void AddFastaSequenceItem (IteM i)
+{
+  CreateFastaPtr   cfp;
+  cfp = (CreateFastaPtr) GetObjectExtra (i);
+  AddFastaSequence (cfp);
+}
+
+static void RemoveFastaSequenceButton (ButtoN b)
+{
+  CreateFastaPtr   cfp;
+  cfp = (CreateFastaPtr) GetObjectExtra (b);
+  RemoveFastaSequence (cfp);
+}
+
+static void RemoveFastaSequenceItem (IteM i)
+{
+  CreateFastaPtr   cfp;
+  cfp = (CreateFastaPtr) GetObjectExtra (i);
+  RemoveFastaSequence (cfp);
+}
+
+static void SequenceIdHelp (IteM i)
+{
+  Message (MSG_OK,
+        "  A sequence ID is a temporary ID which will be replaced with a unique"
+        " GenBank accession number by the GenBank curators.  The sequence ID should"
+        " be unique for each sequence in a record.  It could represent a clone,"
+        " isolate, a laboratory designation for your specimen, or some other useful"
+        " information, but this is not required."
+        "  A sequence ID may not begin with a '>' character or contain spaces.");
+}
+
+static void OrganismNameHelp (IteM i)
+{
+  Message (MSG_OK, "You must enter a scientific name for your organism. "
+           "The name does not need to be present in the list in the dialog.");
+}
+
+static void OrganismQualifiersHelp (IteM i)
+{
+  Message (MSG_OK, "If you have multiple organisms with the same scientific name, "
+           "please use modifiers to distinguish the organisms from one another.  "
+           "Strain, clone, isolate, and specimen voucher are modifiers frequently "
+           "used for this purpose, but you may select any applicable modifiers.");
+}
+
+static void SequenceCharactersHelp (IteM i)
+{
+  Message (MSG_OK, "Please enter the nucleotides for your sequence into the  "
+                   "sequence characters area.  You may only use the valid "
+                   "IUPAC characters (%s).  You may not use *, -, ., or any other "
+                   "alignment characters or punctuation in your sequence.  If you "
+                   "are trying to import an alignment, you should use the Cancel "
+                   "button to exit this dialog, then hit the Prev Page button and then "
+                   "the Prev Form button to get to the Sequence Format dialog, and "
+                   "select 'Alignment' instead of FASTA for the sequence data format.  "
+                   "You will need to have a file prepared for import.", 
+                    valid_iupac_characters);
+}
+
+const CharPtr bracket_mismatch_msg = "You have mismatched brackets at line %d.";
+const CharPtr missing_equals_msg = "Your bracketed pairs must be in the form [qualifier=value].  "
+  	                    "You are missing an equals sign in line %d.";
+  	                    
+/* later, add handling for equals signs without brackets? */
+static CharPtr SuggestCorrectBracketing (CharPtr str)
+{
+  CharPtr    start, stop, next_start, next_stop, eq_loc;
+  ValNodePtr pieces = NULL;
+  CharPtr    cp = str;
+  Boolean    done = FALSE;
+  ValNodePtr vnp;
+  Int4       len;
+  CharPtr    txt;
+
+  if (str == NULL) return NULL;
+  
+  while (!done && *cp != 0)
+  {  	
+    start = StringChr (cp, '[');
+    stop = StringChr (cp, ']');
+    eq_loc = StringChr (cp, '=');
+    if (start == NULL)
+    {
+      next_start = NULL;
+    }
+    else
+    {
+      next_start = StringChr (start + 1, '[');    	
+    }
+
+    if (start == NULL && stop == NULL) 
+    {
+      len = StringLen (cp) + 1;
+      if (len > 1)
+      {
+        txt = (CharPtr) MemNew (len * sizeof (Char));
+        if (txt != NULL)
+        {
+      	  StringNCpy (txt, cp, len - 1);
+      	  txt [len - 1] = 0;
+          vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+            vnp->data.ptrvalue = txt;
+  		  }
+        }
+      }
+      done = TRUE;
+    }
+    else if (start != NULL && stop != NULL && eq_loc != NULL
+             && start < eq_loc && eq_loc < stop 
+             && (next_start == NULL || next_start > stop))
+    {
+      len = stop - cp + 2;
+      txt = (CharPtr) MemNew (len * sizeof (Char));
+      if (txt != NULL)
+      {
+      	StringNCpy (txt, cp, len - 1);
+      	txt [len - 1] = 0;
+        vnp = ValNodeAdd (&pieces);
+  		if (vnp != NULL)
+  		{
+          vnp->data.ptrvalue = txt;
+  		}
+      }
+      cp = stop + 1;
+    }
+    else if (start == NULL || (stop != NULL && start > stop))
+    {
+  	  eq_loc = StringChr (cp, '=');
+  	  if (eq_loc == NULL || eq_loc == cp || eq_loc > stop)
+  	  {
+  	    /* if there is no equals sign, remove the offending bracket */
+  		len = stop - cp + 1;
+  		txt = (CharPtr) MemNew (len * sizeof (Char));
+  		if (txt != NULL)
+  		{
+  		  StringNCpy (txt, cp, len - 1);
+  		  txt [len - 1] = 0;
+  		  vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+  		  	vnp->data.ptrvalue = txt;
+  		  }
+  		}
+  		cp = stop + 1;
+  	  }
+  	  else 
+  	  {
+  	  	/* find the first non-alphabet character before the equals sign and put in a bracket */
+  	  	start = eq_loc - 1;
+  	  	/* skip over whitespace before equals sign */
+  	  	while (cp != start && isspace (*start))
+  	  	{
+  	  	  start --;
+  	  	}
+  	  	/* back up past qualifier name */
+  	  	while (cp != start && isalpha (*start))
+  	  	{
+  	  	  start --;
+  	  	}
+  	  	/* now insert left bracket */
+  	  	len = stop - cp + 1;
+  	  	txt = (CharPtr) MemNew (len * sizeof (Char));
+  		if (txt != NULL)
+  		{
+  		  if (start > cp)
+  		  {
+  		    StringNCpy (txt, cp, start - cp - 1);
+  		  }
+  		  StringCat (txt, "[");
+  		  StringNCat (txt, start, stop - start);
+  		  txt [len - 1] = 0;
+  		  vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+  		  	vnp->data.ptrvalue = txt;
+  		  }
+  		}
+  		cp = stop + 1;
+  	  }
+    }
+    else if (stop != NULL && eq_loc != NULL && eq_loc > stop)
+    {
+      next_stop = StringChr (stop + 1, ']');
+      if (next_stop != NULL && next_stop < next_start && eq_loc < next_stop)
+      {
+      	/* remove the intermediate stop */
+      	len = next_stop - cp;
+      	txt = (CharPtr) MemNew (len * sizeof (Char));
+  		if (txt != NULL)
+  		{
+  		  StringNCpy (txt, cp, stop - cp);
+  		  StringNCat (txt, stop + 1, next_stop - stop);
+  		  vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+  		  	vnp->data.ptrvalue = txt;
+  		  }
+  		}
+  		cp = next_stop + 1;
+      }
+      else
+      {
+      	/* remove both the start and stop */
+      	len = stop - cp - 1;
+      	txt = (CharPtr) MemNew (len * sizeof (Char));
+  		if (txt != NULL)
+  		{
+          if (start > cp)
+          {
+          	StringNCpy (txt, cp, start - cp);
+          }
+          StringNCat (txt, start + 1, stop - start - 1);
+  		  vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+  		  	vnp->data.ptrvalue = txt;
+  		  }
+  		}
+  		cp = stop + 1;
+      }
+    }
+    else
+    {
+      /* we have a start without a stop */
+      eq_loc = StringChr (start, '=');
+      next_start = StringChr (start + 1, '[');
+      if (eq_loc == NULL || (next_start != NULL && eq_loc > next_start))
+      {
+      	/* if we have no equals sign, remove the offending bracket */
+      	if (next_start == NULL)
+      	{
+      	  /* if there are no more starts, copy the rest of the string and finish */
+      	  len = StringLen (cp);
+      	  done = TRUE;
+      	}
+      	else
+      	{
+      	  /* copy up to the next start */
+      	  len = next_start - cp;      		
+      	}
+      	if (len > 1)
+      	{
+      	  txt = (CharPtr) MemNew (len * sizeof (Char));
+  		  if (txt != NULL)
+  		  {
+  		    if (cp < start)
+  		    {
+ 		      StringNCpy (txt, cp, start - cp);
+ 		      if (next_start - start > 1)
+ 		      {
+ 		      	StringNCat (txt, start + 1, next_start - start - 1);
+ 		      }
+  		    }
+  		    else
+  		    {
+  		      StringNCpy (txt, start + 1, len);  		    	
+  		    }
+  		    vnp = ValNodeAdd (&pieces);
+  		    if (vnp != NULL)
+  		    {
+  		      vnp->data.ptrvalue = txt;
+  		    }
+      	  }
+      	}
+      	cp += len;
+      }
+      else
+      {
+      	/* put everything before the next start inside the bracket */
+      	if (next_start == NULL)
+      	{
+      	  len = StringLen (cp) + 2;
+      	  done = TRUE;
+      	}
+      	else
+      	{
+      	  len = next_start - cp + 2;
+      	}
+      	txt = (CharPtr) MemNew (len * sizeof (Char));
+  		if (txt != NULL)
+  		{
+  		  StringNCpy (txt, cp, len - 2);
+  		  StringCat (txt, "]");
+  		  vnp = ValNodeAdd (&pieces);
+  		  if (vnp != NULL)
+  		  {
+  		    vnp->data.ptrvalue = txt;
+  		  }
+      	}
+      	cp += len - 2;
+      }
+    }
+  }
+  
+  txt = MergeValNodeStrings (pieces, FALSE);
+  ValNodeFreeData (pieces);
+  return txt;
+}
+
+static CharPtr DetectBadBracketing (CharPtr str)
+{
+  CharPtr start, stop, next_start, next_stop, eq_loc;
+  
+  
+  if (str == NULL) return NULL;
+  
+  start = StringChr (str, '[');
+  stop = StringChr (str, ']');
+  if (start == NULL && stop == NULL) return NULL;
+  if ((start != NULL && stop == NULL)
+   || (start == NULL && stop != NULL)
+   || (start > stop))
+  {
+  	return bracket_mismatch_msg;
+  }
+  eq_loc = StringChr (start + 1, '=');
+  if (eq_loc == NULL || eq_loc > stop)
+  {
+    return missing_equals_msg;
+  }
+  while (start != NULL && stop != NULL)
+  {
+    next_start = StringChr (start + 1, '[');
+    next_stop = StringChr (stop + 1, ']');
+    if (next_start == NULL && next_stop == NULL) return FALSE;
+
+    if ((next_start != NULL && next_stop == NULL)
+     || (next_start == NULL && next_stop != NULL)
+     || (next_start > next_stop)
+     || (next_start < stop))
+    {
+  	  return bracket_mismatch_msg;
+    }
+    eq_loc = StringChr (next_start + 1, '=');
+    if (eq_loc == NULL || eq_loc > next_stop)
+    {
+      return missing_equals_msg;
+    }
+    
+    start = next_start;
+    stop = next_stop;    
+  }
+  return NULL;
+}
+
+typedef struct fixbadlineform 
+{
+  WindoW  w;
+  PrompT  prompt;
+  TexT    new_line;	
+  CharPtr new_text;
+  Int4    line_num;
+  Boolean done;
+  Boolean cancelled;
+  CharPtr orig_txt;
+} FixBadLineFormData, PNTR FixBadLineFormPtr;
+
+static void SetBadLineFormPrompt (FixBadLineFormPtr fp, CharPtr msg)
+{
+  CharPtr str;
+  if (fp == NULL || msg == NULL) return;
+  
+  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg) + 15));
+  if (str != NULL)
+  {
+    sprintf (str, msg, fp->line_num);
+  }
+  SetTitle (fp->prompt, str);
+}
+
+static void FixBadLineOk (ButtoN b)
+{
+  FixBadLineFormPtr fp;
+  CharPtr           msg;
+  
+  fp = (FixBadLineFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  fp->new_text = MemFree (fp->new_text);
+  fp->new_text = SaveStringFromText (fp->new_line);
+  msg = DetectBadBracketing (fp->new_text);
+  if (msg != NULL)
+  {
+  	SetBadLineFormPrompt (fp, msg);
+  	return;
+  }
+  Remove (fp->w);
+  fp->cancelled = FALSE;
+  fp->done = TRUE;
+}
+
+static void FixBadLineCancel (ButtoN b)
+{
+  FixBadLineFormPtr fp;
+  
+  fp = (FixBadLineFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  fp->new_text = MemFree (fp->new_text);
+  fp->cancelled = TRUE;
+  
+  Remove (fp->w);
+  fp->done = TRUE;
+}
+
+static void SuggestBracketFix (ButtoN b)
+{
+  FixBadLineFormPtr fp;
+  
+  fp = (FixBadLineFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  fp->new_text = MemFree (fp->new_text);
+  fp->new_text = SaveStringFromText (fp->new_line);
+  SetTitle (fp->new_line, SuggestCorrectBracketing(fp->new_text));
+  return;
+}
+
+static void ResetBracketFixText (ButtoN b)
+{
+  FixBadLineFormPtr fp;
+  
+  fp = (FixBadLineFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  SetTitle (fp->new_line, fp->orig_txt);
+  return;
+}
+
+
+static CharPtr FixBadBracketing (CharPtr bad_line, CharPtr msg, Int4 line_num, BoolPtr cancelled)
+{
+  GrouP  g, c;
+  ButtoN b;
+  FixBadLineFormData fd;
+  Int4               len;
+  
+  fd.w = ModalWindow(-20, -13, -10, -10, NULL);
+  g = HiddenGroup(fd.w, 0, 4, NULL);
+  len = StringLen (bad_line) + 5;
+  fd.orig_txt = bad_line;
+  fd.line_num = line_num;
+  fd.new_text = NULL;
+  fd.prompt = StaticPrompt (g, "", 0, popupMenuHeight, programFont, 'l');
+  SetBadLineFormPrompt (&fd, msg);
+  fd.new_line = DialogText (g, bad_line, len, NULL);
+  c = HiddenGroup (g, 4, 0, NULL);
+  b = PushButton(c, "OK", FixBadLineOk);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton(c, "Cancel", FixBadLineCancel);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton (c, "Suggest Correction", SuggestBracketFix);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton (c, "Reset to original text", ResetBracketFixText);
+  SetObjectExtra (b, &fd, NULL);
+  
+  Show(fd.w); 
+  Select (fd.w);
+  fd.done = FALSE;
+  while (!fd.done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (fd.cancelled)
+  {
+  	if (cancelled != NULL)
+  	{
+      *cancelled = TRUE;
+  	}
+  	return NULL;
+  }
+  return fd.new_text;
+}
+
+static CharPtr GetUnbracketedText (CharPtr str)
+{
+  CharPtr unbr_text, src, dst;
+  
+  if (StringHasNoText (str))
+  {
+  	return NULL;
+  }
+  unbr_text = StringSave (str);
+  dst = StringChr (unbr_text, '[');
+  src = StringChr (unbr_text, ']');
+  while (dst != NULL && src != NULL && *src != 0)
+  {
+    src++;
+    while (*src != '[' && *src != 0)
+    {
+      *dst = *src;
+      dst++;
+      src++;
+    }
+  	src = StringChr (src, ']');
+  }
+  if (dst != NULL)
+  {
+    *dst = 0;    
+  }
+  return unbr_text;
+}
+
+typedef struct stringpair
+{
+  CharPtr findstr;
+  CharPtr replstr;
+  Int4    replint;
+  Boolean is_org;
+} StringPairData, PNTR StringPairPtr;
+
+static ValNodePtr FreeStringPairList (ValNodePtr list)
+{
+  StringPairPtr spp;
+  
+  if (list == NULL) return NULL;
+  list->next = FreeStringPairList (list->next);
+  spp = (StringPairPtr) list->data.ptrvalue;
+  if (spp != NULL)
+  {
+  	MemFree (spp->findstr);
+  	MemFree (spp->replstr);
+  	MemFree (spp);
+  	list->data.ptrvalue = NULL;
+  }
+  list = ValNodeFree (list);
+  return list;
+}
+
+typedef struct fixmodifierform
+{
+  WindoW     w;
+  PopuP      qualtype_selector;
+  ValNodePtr qual_list;
+  ButtoN     add_to_fixes;
+  Boolean    done;
+  Boolean    cancelled;
+} FixModifierFormData, PNTR FixModifierFormPtr;
+
+static void FixQualTypeOk (ButtoN b)
+{
+  FixModifierFormPtr fp;
+  Int4               val;
+  
+  fp = (FixModifierFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  val = GetValue (fp->qualtype_selector);
+  if (val == 0) return;
+  
+  Remove (fp->w);
+  fp->cancelled = FALSE;
+  fp->done = TRUE;	
+}
+
+static void FixQualTypeCancel (ButtoN b)
+{
+  FixModifierFormPtr fp;
+  
+  fp = (FixModifierFormPtr) GetObjectExtra (b);
+  if (fp == NULL) return;
+  
+  Remove (fp->w);
+  fp->cancelled = TRUE;
+  fp->done = TRUE;	
+}
+
+static StringPairPtr 
+GetModifierFix (ModifierInfoPtr mip, Int4 line_num, BoolPtr cancelled, BoolPtr add_to_fixes)
+{
+  GrouP  g, c;
+  ButtoN b;
+  FixModifierFormData fd;
+  CharPtr            str = NULL;
+  CharPtr            prompt_fmt = "In line %d, %s is not a valid qualifier type.  "
+                                  "Please choose a valid qualifier type:";
+  ValNodePtr         vnp_new, vnp;
+  StringPairPtr      spp = NULL;
+  Int4               val;
+  Int4               pos;
+  CharPtr            old_name;
+  
+  fd.w = ModalWindow(-20, -13, -10, -10, NULL);
+  g = HiddenGroup(fd.w, 0, 4, NULL);
+  str = MemNew ((StringLen (mip->name) + StringLen (prompt_fmt) + 15) * sizeof (Char));
+  sprintf (str, prompt_fmt, line_num, mip->name);
+  MultiLinePrompt (g, str, 27 * stdCharWidth, programFont);
+  fd.qual_list = GetQualList ();
+  vnp_new = ValNodeNew (NULL);
+  if (vnp_new != NULL)
+  {
+  	vnp_new->data.ptrvalue = "organism";
+  	vnp_new->choice = 0;
+  	vnp_new->next = fd.qual_list;
+  	fd.qual_list = vnp_new;
+  }
+  fd.qualtype_selector = PopupList (g, TRUE, NULL); 
+  InitValNodePopup (fd.qual_list, fd.qualtype_selector);
+  fd.add_to_fixes = CheckBox (g, "Replace all instances", NULL);
+  c = HiddenGroup (g, 4, 0, NULL);
+  b = PushButton(c, "OK", FixQualTypeOk);
+  SetObjectExtra (b, &fd, NULL);
+  b = PushButton(c, "Cancel", FixQualTypeCancel);
+  SetObjectExtra (b, &fd, NULL);
+  
+  Show(fd.w); 
+  Select (fd.w);
+  fd.done = FALSE;
+  while (!fd.done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  
+  if (fd.cancelled)
+  {
+  	if (cancelled != NULL)
+  	{
+  	  *cancelled = TRUE;
+  	}
+  }
+  else
+  {
+  	val = GetValue (fd.qualtype_selector);
+  	for (vnp = fd.qual_list, pos = 1; vnp != NULL && pos < val; vnp = vnp->next, pos++)
+  	{
+  	}
+  	if (vnp != NULL)
+  	{
+  	  old_name = mip->name;
+  	  mip->name = StringSave (vnp->data.ptrvalue);
+  	  if (StringCmp (vnp->data.ptrvalue, "organism") == 0)
+  	  {
+  	  	mip->is_org = TRUE;
+  	  }
+      else
+      {
+      	mip->subtype = vnp->choice;
+      }  	  
+      if (add_to_fixes != NULL)
+      {
+        *add_to_fixes = GetStatus (fd.add_to_fixes);
+      }
+      if (GetStatus (fd.add_to_fixes))
+      {
+        spp = (StringPairPtr) MemNew (sizeof(StringPairData));
+  	    if (spp != NULL)
+  	    {
+    	  spp->findstr = old_name;
+    	  spp->replstr = StringSave (vnp->data.ptrvalue);
+    	  if (mip->is_org)
+    	  {
+    	  	spp->is_org = TRUE;
+    	  }
+    	  else
+    	  {
+    	  	spp->replint = mip->subtype;
+    	  }
+  	    }
+  	    else 
+  	    {
+  	      MemFree (old_name);
+  	    }
+      }
+      else
+      {
+      	MemFree (old_name);
+      }
+  	}
+  }
+  ValNodeFree (fd.qual_list);
+  return spp;
+}
+
+static ValNodePtr FixUnrecognizedModifier 
+(ModifierInfoPtr mip, ValNodePtr fixes, Int4 line_num, BoolPtr cancelled)
+{
+  ValNodePtr    vnp;
+  StringPairPtr spp;
+  Boolean       found = FALSE;
+  Boolean       add_to_fixes = FALSE;
+  
+  if (mip == NULL) return fixes;
+  
+  /* try to find mip->name in list of automatic fixes */
+  for (vnp = fixes; vnp != NULL && !found; vnp = vnp->next)
+  {
+  	spp = (StringPairPtr) vnp->data.ptrvalue;
+  	if (spp != NULL && StringCmp (spp->findstr, mip->name) == 0)
+  	{
+  	  found = TRUE;
+  	  mip->name = MemFree (mip->name);
+  	  mip->name = StringSave (spp->replstr);
+  	  if (spp->is_org)
+  	  {
+  	  	mip->is_org = TRUE;
+  	  }
+  	  else
+  	  {
+  	  	mip->subtype = spp->replint;
+  	  }
+  	}
+  }
+  if (!found)
+  {
+  	/* get new fix and add to list*/
+    spp = GetModifierFix (mip, line_num, cancelled, &add_to_fixes);
+    if (add_to_fixes && spp != NULL)
+    {
+      vnp = ValNodeNew (fixes);
+      if (fixes == NULL)
+      {
+      	fixes = vnp;
+      }
+      if (vnp != NULL)
+      {
+      	vnp->data.ptrvalue = spp;
+      }
+    }
+  }
+  return fixes;
+}
+
+/* remove bracketed pairs, return remaining title characters */
+static CharPtr ParseImportFastaOrgAndQuals 
+(CreateFastaSeqPtr cfsp, CharPtr str, Int4 line_num, BoolPtr cancelled, ValNodePtr PNTR fixes)
+{
+  CharPtr    cp;
+  CharPtr    msg;
+  ValNodePtr mod_list;
+  CharPtr    title;
+  ValNodePtr vnp, name_vnp, val_vnp;
+  ModifierInfoPtr mip;
+  
+  if (cfsp == NULL || str == NULL) return NULL;
+ 
+  cp = StringSave (str);
+  msg = DetectBadBracketing (cp);
+  if (msg != NULL)
+  {
+  	str = FixBadBracketing (cp, msg, line_num, cancelled);
+  	MemFree (cp);
+  	if (*cancelled)
+  	{
+  	  return NULL;
+  	}
+  	cp = str;
+  }
+
+  mod_list = ParseAllBracketedModifiers (cp);
+  title = GetUnbracketedText (cp);
+  
+  for (vnp = mod_list; vnp != NULL && !*cancelled; vnp = vnp->next)
+  {
+    mip = (ModifierInfoPtr)vnp->data.ptrvalue;
+    if (mip == NULL) continue;
+    if (!mip->is_org && mip->subtype == 255)
+    {
+      /* fix qualifier name */
+      *fixes =  FixUnrecognizedModifier (mip, *fixes, line_num, cancelled);
+    }
+    if (! *cancelled)
+    {
+      if (mip->is_org)
+      {
+        cfsp->tax_name = MemFree (cfsp->tax_name);
+        cfsp->tax_name = StringSave (mip->value);
+      }
+      else
+      {
+        name_vnp = ValNodeNew (cfsp->mod_values.selected_names_list);
+        if (cfsp->mod_values.selected_names_list == NULL)
+        {
+          cfsp->mod_values.selected_names_list = name_vnp;
+        }
+        if (name_vnp != NULL)
+        {
+          name_vnp->choice = mip->subtype;
+          name_vnp->data.ptrvalue = StringSave (mip->name);
+        }
+        val_vnp = ValNodeNew (cfsp->mod_values.selected_values_list); 
+        if (cfsp->mod_values.selected_values_list == NULL)	
+        {
+          cfsp->mod_values.selected_values_list = val_vnp;
+        }
+        if (val_vnp != NULL)
+        {
+          val_vnp->data.ptrvalue = StringSave (mip->value);
+        }      	
+      }	
+    }
+  }  
+
+  mod_list = ModifierInfoListFree (mod_list);
+  MemFree (cp);
+  
+  return title;
+}
+
+static CreateFastaSeqPtr ParseImportFastaDefLine 
+(CharPtr         line,
+ Int4            line_num,
+ CreateFastaPtr  cfp,
+ BoolPtr         cancelled, 
+ ValNodePtr PNTR qualfixes,
+ Int4            to_remove)
+{
+  ValNodePtr        vnp;
+  CreateFastaSeqPtr cfsp;
+  CharPtr           cp, cpend, cp_return;
+  
+  if (line == NULL) return NULL;
+  
+  cfp->sequence_list = AddSequenceGroup (cfp->sequence_list, 
+                                         cfp->selected_qual_list,
+                                         cfp->default_tax_name,
+                                         cfp->auto_id,
+                                         to_remove,
+                                         cfp);
+  vnp = cfp->sequence_list;
+  while (vnp != NULL && vnp->next != NULL)
+  {
+    vnp = vnp->next;
+  }
+  if (vnp != NULL)
+  {
+    cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+  }
+  if (cfsp == NULL) return NULL;
+
+  cp = line;
+  if (*cp == '>')
+  {
+  	cp++;
+  }
+  while (isspace (*cp))
+  {
+  	cp++;
+  }
+  
+  /* find bracketed pairs and parse to quals or organism name, remove from line */
+  cp_return = ParseImportFastaOrgAndQuals (cfsp, cp, line_num, cancelled, qualfixes);
+  if (*cancelled)
+  {
+  	return NULL;
+  }
+  
+  
+  /* take remaining characters and use as sequence ID or title */
+  if (cfp->auto_id)
+  {
+  	cfsp->title = StringSave (cp_return);
+  }
+  else
+  {
+  	cpend = cp_return + 1;
+  	while (*cpend != 0 && !isspace (*cpend))
+  	{
+  	  cpend ++;
+  	}
+  	if (*cpend == 0)
+  	{
+  	  cfsp->local_id = StringSave (cp_return);
+  	}
+  	else
+  	{
+  	  *cpend = 0;
+  	  cfsp->local_id = StringSave (cp_return);
+  	  cfsp->title = StringSave (cpend + 1);
+  	}
+  }
+  if (cp_return != cp)
+  {
+  	MemFree (cp_return);
+  }
+  return cfsp;	
+}
+
+static CreateFastaSeqPtr ParseImportFastaSeqLine 
+(CreateFastaSeqPtr cfsp,
+ CharPtr           line,     
+ Int4              line_num,
+ CreateFastaPtr    cfp,
+ BoolPtr           cancelled,
+ ValNodePtr PNTR   qualfixes,
+ Int4              to_remove)
+{
+  CharPtr    cp;
+  Char       ch;
+  MsgAnswer  ans;
+  ValNodePtr vnp;
+  Int4       new_len = 0;
+  CharPtr    new_seq;
+  
+  if (line == NULL) return NULL;	
+  
+  /* check for non-IUPAC characters */
+  for (cp = line; *cp != 0; cp++)
+  {
+    ch = TO_LOWER (*cp);
+  	if (isspace (ch))
+  	{
+  	  /* space allowed */
+  	}
+  	else if (StringChr (valid_iupac_characters, ch) == NULL)
+  	{
+  	  ans = Message (MSG_YN, "Line %d (%s) contains invalid IUPAC characters "
+  	                 "(should contain only %s).  Is this a definition line?  "
+  	                 "If not, you will need to remove or replace the invalid "
+  	                 "characters in the sequence later.",
+  	                 line_num, line, valid_iupac_characters);
+  	  if (ans == ANS_YES)
+  	  {
+  	  	return ParseImportFastaDefLine (line, line_num, cfp, cancelled, qualfixes, to_remove);
+  	  }
+  	  else
+  	  {
+  	  	break;
+  	  }
+  	}
+  }
+
+  if (cfsp == NULL)
+  {	
+    cfp->sequence_list = AddSequenceGroup (cfp->sequence_list, 
+                                           cfp->selected_qual_list,
+                                           cfp->default_tax_name,
+                                           TRUE,
+                                           to_remove,
+                                           cfp);
+    vnp = cfp->sequence_list;
+    while (vnp != NULL && vnp->next != NULL)
+    {
+      vnp = vnp->next;
+    }
+    if (vnp != NULL)
+    {
+      cfsp = (CreateFastaSeqPtr) vnp->data.ptrvalue;
+    }
+  }
+  if (cfsp == NULL) return NULL;
+  
+  new_len = StringLen (line) + StringLen (cfsp->sequence) + 1;
+  new_seq = (CharPtr) MemNew (new_len * sizeof (Char));
+  if (new_seq != NULL)
+  {
+  	StringCpy (new_seq, cfsp->sequence);
+  	StringCat (new_seq, line);
+  	MemFree (cfsp->sequence);
+  	cfsp->sequence = new_seq;
+  	cfsp->sequence = ReformatSequenceText (cfsp->sequence);
+  }
+  return cfsp;
+}
+
+static void ImportFastaCreationFile (CreateFastaPtr cfp, BoolPtr cancelled, BoolPtr segmented)
+{
+  CharPtr           extension;
+  Char              path [PATH_MAX];
+  ReadBufferData    rbd;
+  CreateFastaSeqPtr cfsp = NULL;
+  Int4              line_num = 1;
+  Int4              last;
+  CharPtr           line;
+  WindoW            w;
+  Int4              current_selection = 1;
+  Int4              to_remove = -1;
+  Boolean           remove_current = FALSE;
+  ValNodePtr        vnp, prev;
+  Int4              val;
+  ValNodePtr        qualfixes = NULL;
+
+  if (cfp == NULL) return;
+  
+  if (cfp->fpp->single)
+  {
+    to_remove = 1;
+  	remove_current = TRUE;
+  }
+  else if (cfp->sequence_list != NULL)
+  {
+    current_selection = GetValue (cfp->sequence_selector);
+    to_remove = current_selection;
+    remove_current = IsThisSequenceEmpty (cfp, to_remove);	
+  }
+  if (!remove_current)
+  {
+  	to_remove = -1;
+  }
+
+  if (cfp->sequence_list != NULL && ! ValidateSequenceInformation (cfp->sequence_list, to_remove)) 
+  {
+    return; 
+  }
+  GetMasterQualList (cfp);
+  last = ValNodeLen (cfp->sequence_list);
+
+  extension = GetAppProperty ("FastaNucExtension");
+  if (! GetInputFileName (path, sizeof (path), extension, "TEXT")) return;
+  rbd.fp = FileOpen (path, "r");
+  if (rbd.fp == NULL) return;
+  
+  rbd.current_data = NULL;
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL && ! *cancelled)
+  {
+    if (line [0] == '[')
+    {
+      *cancelled = TRUE;
+      *segmented = TRUE;
+      if (cfp->form != NULL)
+      {
+      	Message (MSG_ERROR, "Cannot import segmented sequences");
+      }
+    }
+    else if (line [0] == '#')
+    {
+      cfsp = NULL;
+    }
+    else if (StringHasNoText (line))
+    {
+      /* finish current sequence */
+      cfsp = NULL;
+    }
+    else if (line [0] == '>')
+    {
+      cfsp = ParseImportFastaDefLine (line, line_num, cfp, cancelled, &qualfixes, to_remove);
+    }
+    else
+    {
+      /* parse as sequence line */
+      cfsp = ParseImportFastaSeqLine (cfsp, line, line_num, cfp, cancelled, &qualfixes, to_remove);
+    }
+    line = MemFree (line);
+    line_num ++;
+    line = AbstractReadFunction (&rbd);
+  }
+  /* if sequence in progress, finish sequence */
+  FileClose (rbd.fp);
+  qualfixes = FreeStringPairList (qualfixes);  
+  
+  if (*cancelled)
+  {
+  	/* free newly created sequences */
+    prev = NULL;
+    for (val = 1, vnp = cfp->sequence_list; vnp != NULL && val <= last; vnp = vnp->next, val++)
+    {
+  	  prev = vnp;
+    }
+    if (vnp != NULL) 
+    {    	
+      if (prev == NULL || last == 0)
+      {
+  	    cfp->sequence_list = NULL;
+      }
+      else 
+      {
+  	    prev->next = NULL;
+      }
+      FreeSequenceGroup (vnp);  	
+    }  	
+    last = current_selection;
+  }
+  else
+  { 	
+    /* remove current sequence if empty */
+    if (remove_current)
+    {
+      prev = NULL;
+      for (val = 1, vnp = cfp->sequence_list; vnp != NULL && val < to_remove; vnp = vnp->next, val++)
+      {
+  	    prev = vnp;
+      }
+      if (vnp == NULL) return;
+      if (prev == NULL)
+      {
+  	    cfp->sequence_list = vnp->next;
+      }
+      else 
+      {
+  	    prev->next = vnp->next;
+      }
+      vnp->next = NULL;
+      FreeSequenceGroup (vnp);  	
+    }
+
+    if (remove_current && to_remove < last)
+    {
+      last --;
+    }
+    else if (!remove_current)
+    {
+  	  last++;
+    }
+  
+    if (cfp->fpp->single && cfp->sequence_list->next != NULL)
+    {
+  	  Message (MSG_ERROR, "Only one sequence can be imported!");
+  	  vnp = cfp->sequence_list->next;
+  	  cfp->sequence_list->next = NULL;
+  	  FreeSequenceGroup (vnp);
+    }
+  }
+
+  if (cfp->form == NULL) return;
+  
+  SetObjectExtra (cfp->form, NULL, NULL);
+  Remove (cfp->form);
+  w = CreateFastaWindow (cfp);
+  cfp->form = (ForM) w;
+  SetValue (cfp->sequence_selector, last);
+  ShowSequenceGroup (cfp->sequence_selector);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+}
+
+static void ImportFastaCreationFileItem (IteM i)
+{
+  CreateFastaPtr cfp;
+  Boolean        cancelled = FALSE;
+  Boolean        segmented = FALSE;
+  
+  cfp = (CreateFastaPtr) GetObjectExtra (i);
+  ImportFastaCreationFile (cfp, &cancelled, &segmented);
+}
+
+static WindoW CreateFastaWindow (CreateFastaPtr cfp)
+{
+  WindoW w;
+  GrouP  h, g, c1, c2, c3;
+  ButtoN a;
+  MenU   m;
+  IteM   i;
+  
+  if (cfp == NULL) return NULL;
+  
+  GetMasterQualList (cfp);
+  
+  w = FixedWindow (-50, -33, -10, -10, "FASTA File", NULL);
+  SetObjectExtra (w, cfp, CleanupCreateFastaForm);
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 20);
+  
+  g = HiddenGroup (h, 1, 0, NULL);
+  DrawSequenceGroups (cfp, g);
+  if (!cfp->fpp->single)
+  {
+    c1 = HiddenGroup (h, 2, 0, NULL);
+    a = PushButton (c1, "Add Sequence", AddFastaSequenceButton);
+    SetObjectExtra (a, cfp, NULL);
+    a = PushButton (c1, "Remove Sequence", RemoveFastaSequenceButton);
+    SetObjectExtra (a, cfp, NULL);
+  
+    c2 = HiddenGroup (h, 4, 0, NULL);
+    DrawSequenceSelector (cfp, c2);
+    if (cfp->sequence_selector != NULL)
+    {
+      SetValue (cfp->sequence_selector, 1);
+  	  ShowSequenceGroup (cfp->sequence_selector);
+    }
+  }
+  c3 = HiddenGroup (h, 7, 0, NULL);
+  SetGroupSpacing (c3, 10, 3);
+  a = DefaultButton (c3, "Finish FASTA File", DoCreateFASTAFileButton);
+  SetObjectExtra (a, cfp, NULL);
+  if (! cfp->fpp->single && ValNodeLen (cfp->sequence_list) < 2)
+  {
+  	Disable (a);
+  }
+  a = PushButton (c3, "Cancel", CreateFastaCancelButton); 
+  SetObjectExtra (a, cfp, NULL);
+  a = PushButton (c3, "Preview File", PreviewFastaFileButton);
+  SetObjectExtra (a, cfp, NULL);
+
+  if (cfp->fpp->single)
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c3, NULL);
+  }
+  else
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c1, (HANDLE) c2, (HANDLE) c3, NULL);
+  }
+
+
+  /* add menus */  
+  m = PulldownMenu (w, "File");
+  i = CommandItem (m, "Import sequence data from file", ImportFastaCreationFileItem);
+  SetObjectExtra (i, cfp, NULL);
+  i = CommandItem (m, "Finish FASTA File", DoCreateFASTAFileItem);
+  SetObjectExtra (i, cfp, NULL);
+  i = CommandItem (m, "Cancel", CreateFastaCancelItem);
+  SetObjectExtra (i, cfp, NULL);
+  i = CommandItem (m, "Preview File", PreviewFastaFileItem);
+  SetObjectExtra (i, cfp, NULL);
+  if (!cfp->fpp->single)
+  {
+    m = PulldownMenu (w, "Edit");
+    i = CommandItem (m, "Add Sequence", AddFastaSequenceItem);
+    SetObjectExtra (i, cfp, NULL);
+    i = CommandItem (m, "Remove Sequence", RemoveFastaSequenceItem);
+    SetObjectExtra (i, cfp, NULL);
+  }
+  m = PulldownMenu (w, "Help");
+  i = CommandItem (m, "Sequence ID", SequenceIdHelp);
+  i = CommandItem (m, "Organism Name", OrganismNameHelp);
+  i = CommandItem (m, "Organism Qualifiers", OrganismQualifiersHelp);
+  i = CommandItem (m, "Sequence Characters", SequenceCharactersHelp);
+  return w;
+}
+
+static void AddFastaSequence (CreateFastaPtr   cfp)
+{
+  WindoW           w;
+  Int4             last;
+  
+  if (cfp == NULL) return;
+  
+  if (cfp->sequence_list != NULL && ! ValidateSequenceInformation (cfp->sequence_list, -1))
+  {
+  	return;
+  }
+  GetMasterQualList (cfp);
+
+  SetObjectExtra (cfp->form, NULL, NULL);
+  Remove (cfp->form);
+  cfp->sequence_list = AddSequenceGroup (cfp->sequence_list, 
+                                         cfp->selected_qual_list,
+                                         cfp->default_tax_name,
+                                         cfp->auto_id,
+                                         -1,
+                                         cfp);
+
+  w = CreateFastaWindow (cfp);
+  cfp->form = (ForM) w;
+  last = ValNodeLen (cfp->sequence_list);
+  SetValue (cfp->sequence_selector, last);
+  ShowSequenceGroup (cfp->sequence_selector);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+}
+
+static void RemoveFastaSequence (CreateFastaPtr   cfp)
+{
+  WindoW           w;
+  Int4             to_remove, val;
+  ValNodePtr       prev, vnp;
+  
+  if (cfp == NULL) return;
+
+  to_remove = GetValue (cfp->sequence_selector);
+  
+  ValidateSequenceInformation (cfp->sequence_list, to_remove);
+  SetObjectExtra (cfp->form, NULL, NULL);
+  
+  prev = NULL;
+  for (val = 1, vnp = cfp->sequence_list; vnp != NULL && val < to_remove; vnp = vnp->next, val++)
+  {
+  	prev = vnp;
+  }
+  if (vnp == NULL) return;
+  if (prev == NULL)
+  {
+  	cfp->sequence_list = vnp->next;
+  }
+  else 
+  {
+  	prev->next = vnp->next;
+  }
+  vnp->next = NULL;
+  FreeSequenceGroup (vnp);
+  
+  Remove (cfp->form);
+
+  w = CreateFastaWindow (cfp);
+  cfp->form = (ForM) w;
+  
+  if (to_remove != 1)
+  {
+  	to_remove--;
+  }
+  SetValue (cfp->sequence_selector, to_remove);
+  ShowSequenceGroup (cfp->sequence_selector);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+}
+
+static void CreateFASTAFile (ButtoN b)
+{
+  CreateFastaPtr   cfp;
+  WindoW           w;
+  SequencesFormPtr sqfp;
+  FastaPagePtr     fpp;
+  BioSourcePtr     biop;
+  
+  sqfp = (SequencesFormPtr) GetObjectExtra (b);
+  if (sqfp == NULL || sqfp->dnaseq == NULL) return;
+  fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
+  if (fpp == NULL) return;
+  
+  cfp = (CreateFastaPtr) MemNew (sizeof (CreateFastaData));
+  if (cfp == NULL) return;
+  cfp->fpp = fpp;
+  cfp->use_id_from_fasta_defline = sqfp->use_id_from_fasta_defline;
+  cfp->auto_id = TRUE;
+  
+  if (sqfp->seqPackage == SEQ_PKG_SEGMENTED)
+  {
+    cfp->is_segmented = TRUE;
+    cfp->is_popset = FALSE;
+  }
+  else if (sqfp->seqPackage == SEQ_PKG_POPULATION)
+  {
+    cfp->is_popset = TRUE;
+    cfp->is_segmented = FALSE;
+  }
+  else
+  {
+    cfp->is_popset = FALSE;
+    cfp->is_segmented = FALSE;
+  }
+  
+  biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
+  if (biop != NULL && biop->org != NULL && !StringHasNoText (biop->org->taxname))
+  {
+  	cfp->default_tax_name = MemNew (sizeof (Char) * (StringLen (biop->org->taxname) + 1));
+  	StringCpy (cfp->default_tax_name, biop->org->taxname);
+  }
+  
+  cfp->sequence_list = AddSequenceGroup (NULL, cfp->selected_qual_list, 
+                                         cfp->default_tax_name, cfp->auto_id,
+                                         -1, cfp);  
+  
+  w = CreateFastaWindow (cfp);
+  cfp->form = (ForM) w;
+
+  SendHelpScrollMessage (helpForm, "Organism and Sequences Form", "FASTA Format for Nucleotide Sequences");
+  
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+}
+
+static void ClearSequencesButton (ButtoN b)
+{
+  SequencesFormPtr   sqfp;
+  
+  sqfp = (SequencesFormPtr) GetObjectExtra (b);
+  if (sqfp == NULL) return;
+  SequencesFormDeleteProc (sqfp);
+}
+
 extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
                                       FormatBlockPtr format,
                                       BtnActnProc goToNext,
@@ -4985,7 +8383,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
                                       WndActnProc activateForm)
 
 {
-  ButtoN             b;
+  ButtoN             b, b2 = NULL;
   GrouP              c;
   GrouP              f1, f2, f3;
   GrouP              g;
@@ -5009,6 +8407,8 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
   GrouP              x;
   GrouP              y;
   GrouP              z;
+  GrouP              import_btn_grp;
+  FastaPagePtr       fpp;
 
   w = NULL;
   sqfp = MemNew (sizeof (SequencesForm));
@@ -5139,6 +8539,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
     prs = NULL;
     if (sqfp->seqFormat == SEQ_FMT_FASTA) {
       prs = CheckBox (g, "Fasta definition line starts with sequence ID", ChangeDnaParse);
+      sqfp->use_id_from_fasta_defline = prs;
       SetObjectExtra (prs, sqfp, NULL);
       parseSeqId = FALSE;
       if (GetAppParam ("SEQUIN", "PREFERENCES", "PARSENUCSEQID", NULL, str, sizeof (str))) {
@@ -5169,31 +8570,44 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       */
     }
 
-    k = HiddenGroup (g, 0, 2, NULL);
     b = NULL;
+    k = HiddenGroup (g, 0, 2, NULL);
     if (sqfp->seqFormat == SEQ_FMT_FASTA) {
       single = (Boolean) (sqfp->seqPackage == SEQ_PKG_SINGLE);
       if (sqfp->seqPackage == SEQ_PKG_GENOMICCDNA) {
         sqfp->dnaseq = CreateFastaDialog (k, "", TRUE, FALSE, fastaGenMsg, parseSeqId, single);
-        b = PushButton (g, "Import Genomic FASTA", ImportBtnProc);
+        fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
+        import_btn_grp = HiddenGroup (g, 4, 0, NULL);
+        fpp->import_btn = PushButton (import_btn_grp, "Import Genomic FASTA", ImportBtnProc);
       } else {
         sqfp->dnaseq = CreateFastaDialog (k, "", TRUE, FALSE, fastaNucMsg, parseSeqId, single);
-        b = PushButton (g, "Import Nucleotide FASTA", ImportBtnProc);
+        fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
+        import_btn_grp = HiddenGroup (g, 4, 0, NULL);
+        fpp->import_btn = PushButton (import_btn_grp, "Import Nucleotide FASTA", ImportBtnProc);
       }
-      SetObjectExtra (b, sqfp, NULL);
+      SetObjectExtra (fpp->import_btn, sqfp, NULL);
+#ifdef USE_CREATE_MY_FASTA
+      fpp->create_btn = PushButton (import_btn_grp, "Create My FASTA File", CreateFASTAFile);
+      SetObjectExtra (fpp->create_btn, sqfp, NULL);
+#endif
+      fpp->clear_btn = PushButton (import_btn_grp, "Clear sequences", ClearSequencesButton);
+      SetObjectExtra (fpp->clear_btn, sqfp, NULL);
+      Disable (fpp->clear_btn);
     } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
       sqfp->dnaseq = CreatePhylipDialog (k, "", phylipNucMsg, sqfp->seqFormat, "",
                                          sqfp->seqPackage, sqfp->genbio);
-      b = PushButton (g, "Import Nucleotide Alignment", ImportBtnProc);
+      import_btn_grp = HiddenGroup (g, 4, 0, NULL);
+      import_btn_grp = HiddenGroup (g, 4, 0, NULL);
+      b = PushButton (import_btn_grp, "Import Nucleotide Alignment", ImportBtnProc);
       SetObjectExtra (b, sqfp, NULL);
     }
     if (sqfp->makeAlign != NULL) {
       h1 = (Handle) sqfp->makeAlign;
-      h2 = (Handle) b;
+      h2 = (Handle) import_btn_grp;
       h3 = (Handle) prs;
       h4 = (Handle) sqfp->singleIdGrp;
     } else {
-      h1 = (Handle) b;
+      h1 = import_btn_grp;
       h2 = (Handle) prs;
       h3 = (Handle) sqfp->singleIdGrp;
       h4 = NULL;
@@ -5299,6 +8713,8 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       y = HiddenGroup (sqfp->annotGrp, 2, 0, NULL);
       sqfp->protOrRnaPpt = StaticPrompt (y, "Protein Name", 0, dialogTextHeight, programFont, 'l');
       sqfp->protOrRnaName = DialogText (y, "", 20, NULL);
+      sqfp->protDescPpt = StaticPrompt (y, "Protein Description", 0, dialogTextHeight, programFont, 'l');
+      sqfp->protDesc = DialogText (y, "", 20, NULL);
       StaticPrompt (y, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
       sqfp->geneName = DialogText (y, "", 20, NULL);
       StaticPrompt (y, "Comment", 0, 3 * Nlm_stdLineHeight, programFont, 'l');
@@ -5314,6 +8730,8 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
                     (HANDLE) sqfp->orgPrefix, NULL);
       Hide (sqfp->protOrRnaPpt);
       Hide (sqfp->protOrRnaName);
+      Hide (sqfp->protDescPpt);
+      Hide (sqfp->protDesc);
       /* Hide (sqfp->annotGrp); */
       sqfp->pages [page] = q;
       Hide (sqfp->pages [page]);
@@ -7762,15 +11180,233 @@ extern void RemoveRedundantProproteinMiscFeats (IteM i)
   Update ();
 }
 
+typedef struct typestraindata
+{
+  FORM_MESSAGE_BLOCK
+  
+  TexT   find_this_txt;
+  ButtoN when_string_not_found_btn;
+  ButtoN case_insensitive_btn;
+  GrouP  string_loc_grp;
+  PopuP  field_choice_popup;
+  ButtoN remove_found_text_btn;
+  
+  Boolean when_string_not_found;
+  Boolean case_insensitive;
+  Int4    string_loc;
+  Int4    field_choice;
+  CharPtr find_this;
+  Boolean remove_found_text;
+} TypeStrainData, PNTR TypeStrainPtr;
+
+static Boolean MeetsTypeStrainConstraint (BioSourcePtr biop, TypeStrainPtr tsp)
+{
+  CharPtr      string_found = NULL;
+  CharPtr      search_text = NULL;
+  OrgModPtr    mod = NULL, prev_mod = NULL;
+  SubSourcePtr ssp = NULL, prev_ssp = NULL;
+  Boolean      rval;
+  CharPtr      cp, destp;
+  
+  if (biop == NULL) return FALSE;
+  if (tsp == NULL) return TRUE;
+  if (StringHasNoText (tsp->find_this)) return TRUE;
+  if (biop->org == NULL)
+  {
+  	if (tsp->when_string_not_found)
+  	{
+  	  return TRUE;
+  	}
+  	else
+  	{
+  	  return FALSE;
+  	}
+  }
+  
+  if (tsp->field_choice == 1)
+  {
+  	/* look for strain field */
+  	if (biop->org->orgname == NULL)
+  	{
+  	  if (tsp->when_string_not_found)
+  	  {
+  	  	return TRUE;
+  	  }
+  	  else
+  	  {
+  	  	return FALSE;
+  	  }
+  	}
+  	for (mod = biop->org->orgname->mod;
+  	     mod != NULL && mod->subtype != ORGMOD_strain;
+  	     mod = mod->next)
+  	{
+  	  prev_mod = mod;
+  	}
+  	if (mod != NULL)
+  	{
+  	  search_text = mod->subname;
+  	}
+  }
+  else if (tsp->field_choice == 2)
+  {
+    /* look for biosource comment */
+  	for (mod = biop->org->orgname->mod;
+  	     mod != NULL && mod->subtype != 255;
+  	     mod = mod->next)
+  	{
+  	  prev_mod = mod;
+  	}
+  	if (mod != NULL)
+  	{
+  	  search_text = mod->subname;
+  	}
+  	else
+  	{
+  	  for (ssp = biop->subtype; ssp != NULL && ssp->subtype != 255; ssp = ssp->next)
+  	  {
+  	  	prev_ssp = ssp;
+  	  }
+  	  if (ssp != NULL)
+  	  {
+  	  	search_text = ssp->name;
+  	  }
+  	}
+  }
+  else
+  {
+  	return FALSE;
+  }
+  if (search_text != NULL)
+  {
+  	if (tsp->case_insensitive)
+  	{
+  	  string_found = StringISearch (search_text, tsp->find_this);
+  	}
+  	else
+  	{
+  	  string_found = StringSearch (search_text, tsp->find_this);
+  	}
+  	if (string_found != NULL)
+  	{
+  	  if (tsp->string_loc == 2 && string_found != search_text)
+  	  {
+  	  	string_found = NULL;
+  	  }
+  	  else if (tsp->string_loc == 3)
+  	  {
+  	  	while (string_found != NULL && string_found[StringLen (tsp->find_this)] != 0)
+  	  	{
+  	      if (tsp->case_insensitive)
+  	      {
+  	        string_found = StringISearch (string_found + 1, tsp->find_this);
+          }
+          else
+          {
+            string_found = StringSearch (string_found + 1, tsp->find_this);
+          }
+  	  	}
+  	  }
+  	}
+  }
+  
+  if (string_found == NULL) 
+  {
+    if (tsp->when_string_not_found)
+  	{
+  	  rval = TRUE;
+  	}
+  	else
+  	{
+  	  rval = FALSE;
+  	}
+  }
+  else
+  {
+    if (tsp->when_string_not_found)
+  	{
+  	  rval = FALSE;
+  	}
+  	else
+  	{
+  	  rval = TRUE;
+  	  if (tsp->remove_found_text)
+  	  {
+  	  	if (string_found == search_text)
+  	  	{
+  	  	  if (StringLen (string_found) == StringLen (tsp->find_this))
+  	  	  {
+  	  	  	/* remove entire mod or ssp */
+  	  	  	if (mod != NULL)
+  	  	  	{
+  	  	  	  if (prev_mod == NULL)
+  	  	  	  {
+  	  	  	  	biop->org->orgname->mod = mod->next;
+  	  	  	  }
+  	  	  	  else
+  	  	  	  {
+  	  	  	  	prev_mod->next = mod->next;
+  	  	  	  }
+  	  	  	  mod->next = NULL;
+  	  	  	  OrgModFree (mod);
+  	  	  	}
+  	  	  	else if (ssp != NULL)
+  	  	  	{
+  	  	  	  if (prev_ssp == NULL)
+  	  	  	  {
+  	  	  	  	biop->subtype = ssp->next;
+  	  	  	  }
+  	  	  	  else
+  	  	  	  {
+  	  	  	  	prev_ssp->next = ssp->next;
+  	  	  	  	ssp->next = NULL;
+  	  	  	  	SubSourceFree (ssp);
+  	  	  	  }
+  	  	  	  ssp->next = NULL;
+  	  	  	  SubSourceFree (ssp);
+  	  	  	}
+  	  	  }
+  	  	  else
+  	  	  {
+  	  	  	/* remove first part of string and shift remainder */
+  	  	  	destp = search_text;
+  	  	  	for (cp = search_text + StringLen (tsp->find_this); *cp != 0; cp++)
+  	  	  	{
+  	  	  	  *destp++ = *cp;
+  	  	  	}
+  	  	  	*destp = 0;
+  	  	  }
+  	  	}
+  	  	else
+  	  	{
+  	  	  /* keep first part of string, skip match, keep remainder */
+  	  	  destp = string_found;
+  	  	  for (cp = string_found + StringLen (tsp->find_this); *cp != 0; cp++)
+  	  	  {
+  	  	  	*destp++ = *cp;
+  	  	  }
+  	  	  *destp = 0;
+  	  	}
+  	  }
+  	}
+  }
+  return rval;
+}
+
 static void AddTypeStrainCommentsProc (BioSourcePtr biop, Pointer userdata)
 {
   SubSourcePtr       ssp, last_ssp;
+  TypeStrainPtr      tsp;
   CharPtr            tmp;
   CharPtr            short_format = "type strain of %s";
   CharPtr            long_format = "%s; type strain of %s";
 
   if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL) return;
 
+  tsp = (TypeStrainPtr) userdata;
+  
+  if (! MeetsTypeStrainConstraint (biop, tsp)) return;
+  
   ssp = biop->subtype;
   last_ssp = NULL;
   while (ssp != NULL && ssp->subtype != 255) {
@@ -7803,6 +11439,107 @@ static void AddTypeStrainCommentsProc (BioSourcePtr biop, Pointer userdata)
       }
     }
   }
+}
+
+static void CleanupTypeStrainForm (GraphiC g, VoidPtr data)
+
+{
+  TypeStrainPtr tsp;
+
+  tsp = (TypeStrainPtr) data;
+  if (tsp != NULL)
+  {
+  	tsp->find_this = MemFree (tsp->find_this);
+  }
+  MemFree (tsp);
+  StdCleanupFormProc (g, data);
+}
+
+static void AddTypeStrainCommentsWithConstraintProc (ButtoN b)
+{
+  TypeStrainPtr tsp;
+  SeqEntryPtr   sep;
+  
+  tsp = (TypeStrainPtr) GetObjectExtra (b);
+  if (tsp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (tsp->input_entityID);
+  if (sep == NULL) return;
+
+  tsp->find_this = SaveStringFromText (tsp->find_this_txt);  
+  tsp->when_string_not_found = GetStatus (tsp->when_string_not_found_btn);
+  tsp->case_insensitive = GetStatus (tsp->case_insensitive_btn);
+  tsp->string_loc = GetValue (tsp->string_loc_grp);
+  tsp->field_choice = GetValue (tsp->field_choice_popup);
+  tsp->remove_found_text = GetStatus (tsp->remove_found_text_btn);
+  
+  /* Visit each bioseq to remove redundant proprotein misc feats */
+  VisitBioSourcesInSep (sep, tsp, AddTypeStrainCommentsProc);
+
+  ObjMgrSetDirtyFlag (tsp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, tsp->input_entityID, 0, 0);
+  Remove (tsp->form);
+  ArrowCursor ();
+  Update ();
+}
+
+extern void AddTypeStrainCommentsWithConstraint (IteM i)
+{
+  BaseFormPtr    bfp;
+  TypeStrainPtr  tsp;
+  WindoW         w;
+  GrouP          h, k, l, m, c;
+  ButtoN         b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+	
+  tsp = (TypeStrainPtr) MemNew (sizeof (TypeStrainData));
+  if (tsp == NULL) return;
+  tsp->input_entityID = bfp->input_entityID;
+
+  w = FixedWindow (-50, -33, -10, -10, "Remove Sequences From Alignment", StdCloseWindowProc);
+  if (w == NULL) {
+	MemFree (tsp);
+	return;
+  }
+  tsp->form = (ForM) w;
+  SetObjectExtra (w, tsp, CleanupTypeStrainForm);
+  
+  h = HiddenGroup (w, 1, 0, NULL);
+  k = HiddenGroup (h, 2, 0, NULL);
+
+  StaticPrompt (k, "When this text is present", 0, dialogTextHeight, systemFont, 'c');
+  tsp->find_this_txt = DialogText (k, "", 15, NULL);
+  l = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (l, "In ", 0, dialogTextHeight, systemFont, 'c');
+  tsp->field_choice_popup = PopupList (l, TRUE, NULL);
+  PopupItem (tsp->field_choice_popup, "Strain");
+  PopupItem (tsp->field_choice_popup, "Comment");
+  SetValue (tsp->field_choice_popup, 1);
+  tsp->string_loc_grp = HiddenGroup (h, 3, 0, NULL);
+  RadioButton (tsp->string_loc_grp, "Anywhere in field");
+  RadioButton (tsp->string_loc_grp, "At beginning of field");
+  RadioButton (tsp->string_loc_grp, "At end of field");
+  SetValue (tsp->string_loc_grp, 3);
+  m = HiddenGroup (h, 2, 0, NULL);
+  tsp->case_insensitive_btn = CheckBox (m, "Case Insensitive", NULL);
+  tsp->when_string_not_found_btn = CheckBox (m, "When string is not found", NULL);  
+  tsp->remove_found_text_btn = CheckBox (m, "Remove found text", NULL);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", AddTypeStrainCommentsWithConstraintProc);
+  SetObjectExtra (b, tsp, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc); 
+  SetObjectExtra (b, tsp, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) l, (HANDLE) tsp->string_loc_grp, 
+                (HANDLE) m, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
 }
 
 extern void AddTypeStrainCommentsToAll (IteM i)
@@ -7842,7 +11579,7 @@ extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp)
   bsp2->mol = bsp1->mol;
   BLAST_SummaryOptionsInit(&options);
 
-  options->filter_string = "F";
+  options->filter_string = StringSave ("F");
   BLAST_TwoSequencesSearch(options, bsp1, bsp2, salp);
   bsp2->mol = mol_was;
   BLAST_SummaryOptionsFree(options);
@@ -7861,6 +11598,10 @@ typedef struct removeseqfromaligndata {
   LisT        sequence_list_ctrl;
   ValNodePtr  sequence_list;
   SeqEntryPtr sep;
+  Boolean     remove_all_from_alignments;
+  Boolean     no_remove_all_from_alignments;
+  Boolean     remove_all_products;
+  Boolean     no_remove_all_products;
 } RemoveSeqFromAlignData, PNTR RemoveSeqFromAlignPtr;
 
 /* This function will remove DenDiag and pairwise alignments if they contain
@@ -7873,7 +11614,7 @@ static SeqAlignPtr RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr sal
   SeqIdPtr    tmpsip;
   SeqAlignPtr salp, salp_next, prev_salp, remove_salp, last_remove;
   
-  if (!FindSeqIdinSeqAlign (salphead, sip)) return;
+  if (!FindSeqIdinSeqAlign (salphead, sip)) return NULL;
   
   salp = salphead;
   prev_salp = NULL;
@@ -8206,3 +11947,478 @@ extern void RemoveSequencesFromAlignment (IteM i)
 
 /* End of Remove Sequences From Alignments function code. */
 
+/* This section of code is used for removing sequences from the record. */
+
+static void ListSequencesInSeqEntry (SeqEntryPtr sep, ValNodePtr PNTR list)
+{
+  BioseqPtr                bsp;
+  BioseqSetPtr             bssp;
+  ValNodePtr               vnp;
+  AlignmentSequenceListPtr aslp;
+  Int4                     offset;
+  SeqIdPtr                 bsp_sip;
+  
+  if (sep == NULL) return;
+  
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    aslp = (AlignmentSequenceListPtr) MemNew (sizeof (AlignmentSequenceListData));
+    if (aslp == NULL) return;
+    aslp->sip = bsp->id;
+    aslp->descr[0] = 0;
+	aslp->descr[253] = 0;
+    offset = 0;
+    for (bsp_sip = bsp->id; bsp_sip != NULL && offset < 250; bsp_sip = bsp_sip->next) {
+	  if (aslp->descr[0] != 0) {
+	    aslp->descr[offset] = '\t';
+	    offset ++;
+	  }
+      SeqIdWrite (bsp_sip, aslp->descr + offset, PRINTID_TEXTID_ACCESSION, 254 - offset);
+      offset = StringLen (aslp->descr);
+	}
+    vnp = ValNodeNew (*list);
+    if (vnp != NULL)
+    {
+      vnp->data.ptrvalue = aslp;
+    }
+    if (*list == NULL)
+    {
+      *list = vnp;
+    }
+  }
+  else
+  {
+  	bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) 
+    {
+      ListSequencesInSeqEntry (sep, list);
+    }
+  }
+}
+
+typedef struct bioseqinalignmentdata {
+	Boolean   found;
+	BioseqPtr lookingfor;
+} BioseqInAlignmentData, PNTR BioseqInAlignmentPtr;
+
+static Boolean IsBioseqInThisAlignment (SeqAlignPtr salp, BioseqPtr bsp)
+{
+  SeqIdPtr sip;
+  Boolean found = FALSE;
+
+  for (sip = bsp->id; sip != NULL && ! found; sip = sip->next) 
+  {
+    found = SeqAlignFindSeqId (salp, sip);
+  }
+  return found;
+}
+
+static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  BioseqInAlignmentPtr biap;
+  SeqAlignPtr          salp;
+
+  if (sap == NULL || sap->type != 2 || userdata == NULL) 
+  {
+    return;
+  }
+  biap = (BioseqInAlignmentPtr) userdata;
+  if (biap->found) return;
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  biap->found = IsBioseqInThisAlignment (salp, biap->lookingfor);
+
+}
+
+static Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID)
+{
+  SeqEntryPtr           topsep;
+  BioseqInAlignmentData biad;
+
+  topsep = GetTopSeqEntryForEntityID (input_entityID);
+  biad.found = FALSE;
+  biad.lookingfor = bsp;
+
+  VisitAnnotsInSep (topsep, &biad, FindAlignmentCallback);
+  return biad.found;
+}
+
+static void DoesBioseqHaveFeaturesWithProductsCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  ValNodePtr PNTR list;
+  ValNodePtr vnp;
+  
+  if (sfp == NULL || userdata == NULL) return;
+  list = (ValNodePtr PNTR) userdata;
+  
+  if (sfp->product != NULL)
+  {
+  	vnp = ValNodeNew (*list);
+  	if (vnp != NULL)
+  	{
+  	  vnp->data.ptrvalue = sfp;
+  	}
+  	if (*list == NULL)
+  	{
+  	  *list = vnp;
+  	}
+  }
+}
+
+static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp);
+
+static void RemoveBioseqProducts (ValNodePtr product_feature_list, RemoveSeqFromAlignPtr rp)
+{
+  ValNodePtr vnp;
+  SeqFeatPtr sfp;
+  BioseqPtr  bsp;
+  
+  for (vnp = product_feature_list; vnp != NULL; vnp = vnp->next)
+  {
+    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+    if (sfp != NULL)
+    {
+  	  bsp = BioseqFindFromSeqLoc (sfp->product);
+  	  sfp->product = SeqLocFree (sfp->product);
+  	  RemoveBioseq (bsp, rp);
+    }
+  }
+}
+
+static void RemoveEmptyNucProtSet (SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp;
+
+  if (sep == NULL || !IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp->_class != BioseqseqSet_class_nuc_prot) return;
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+  {
+  	if (!IS_Bioseq (sep)) return;
+  	bsp = sep->data.ptrvalue;
+  	if (bsp != NULL && !bsp->idx.deleteme) return;
+  }
+  bssp->idx.deleteme = TRUE;
+}
+
+typedef struct removealnorproductans 
+{
+  WindoW  w;
+  Boolean ans;
+  Boolean do_all;
+  Boolean done;
+} RemoveAlnOrProductAnsData, PNTR RemoveAlnOrProductAnsPtr;
+
+static void RemoveAlnOrProductYes (ButtoN b)
+{
+  RemoveAlnOrProductAnsPtr rp;
+  
+  rp = (RemoveAlnOrProductAnsPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  rp->ans = TRUE;
+  rp->do_all = FALSE;
+  Remove (rp->w);
+  rp->done = TRUE;
+}
+
+static void RemoveAlnOrProductYesAll (ButtoN b)
+{
+  RemoveAlnOrProductAnsPtr rp;
+  
+  rp = (RemoveAlnOrProductAnsPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  rp->ans = TRUE;
+  rp->do_all = TRUE;
+  Remove (rp->w);
+  rp->done = TRUE;
+}
+
+static void RemoveAlnOrProductNo (ButtoN b)
+{
+  RemoveAlnOrProductAnsPtr rp;
+  
+  rp = (RemoveAlnOrProductAnsPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  rp->ans = FALSE;
+  rp->do_all = FALSE;
+  Remove (rp->w);
+  rp->done = TRUE;
+}
+
+static void RemoveAlnOrProductNoAll (ButtoN b)
+{
+  RemoveAlnOrProductAnsPtr rp;
+  
+  rp = (RemoveAlnOrProductAnsPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  rp->ans = FALSE;
+  rp->do_all = TRUE;
+  Remove (rp->w);
+  rp->done = TRUE;
+}
+
+static Boolean GetRemoveAlignments (RemoveSeqFromAlignPtr rp, CharPtr idstr)
+{
+  RemoveAlnOrProductAnsData rd;
+
+  GrouP                    g, h, c;
+  ButtoN                   b;
+  CharPtr                  prompt_fmt = "%s is part of an alignment - would you like to remove it from the alignment before deleting it?";
+  CharPtr                  prompt_str = NULL;
+  
+  if (rp == NULL || idstr == NULL) return FALSE;
+  if (rp->remove_all_from_alignments) return TRUE;
+  if (rp->no_remove_all_from_alignments) return FALSE;
+
+  prompt_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (prompt_fmt) + StringLen (idstr)));
+  if (prompt_str == NULL) return FALSE;
+  sprintf (prompt_str, prompt_fmt, idstr);
+  rd.w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup(rd.w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  rd.done = FALSE;
+  g = HiddenGroup (h, 1, 0, NULL);
+  StaticPrompt (g, prompt_str, 0, popupMenuHeight, programFont, 'l');
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton(c, "Yes", RemoveAlnOrProductYes);
+  SetObjectExtra (b, &rd, NULL);
+  b = PushButton(c, "Remove All", RemoveAlnOrProductYesAll);
+  SetObjectExtra (b, &rd, NULL);
+  b = DefaultButton(c, "No", RemoveAlnOrProductNo);
+  SetObjectExtra (b, &rd, NULL);
+  b = DefaultButton(c, "Remove None", RemoveAlnOrProductNoAll);
+  SetObjectExtra (b, &rd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  prompt_str = MemFree (prompt_str);
+  
+  Show(rd.w); 
+  Select (rd.w);
+  rd.done = FALSE;
+  while (!rd.done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (rd.do_all)
+  {
+    if (rd.ans)
+    {
+  	  rp->remove_all_from_alignments = TRUE;
+  	  rp->no_remove_all_from_alignments = FALSE;
+    }
+    else
+    {
+  	  rp->remove_all_from_alignments = FALSE;
+  	  rp->no_remove_all_from_alignments = TRUE;
+    }
+  }
+  return rd.ans;
+}
+
+
+static Boolean GetRemoveProducts (RemoveSeqFromAlignPtr rp, CharPtr idstr)
+{
+  RemoveAlnOrProductAnsData rd;
+
+  GrouP                    g, h, c;
+  ButtoN                   b;
+  CharPtr                  prompt_fmt = "%s contains features that have products (proteins, etc.).  Would you like to remove the product sequences?";
+  CharPtr                  prompt_str = NULL;
+  
+  if (rp == NULL || idstr == NULL) return FALSE;
+  if (rp->remove_all_products) return TRUE;
+  if (rp->no_remove_all_products) return FALSE;
+
+  prompt_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (prompt_fmt) + StringLen (idstr)));
+  if (prompt_str == NULL) return FALSE;
+  sprintf (prompt_str, prompt_fmt, idstr);
+  rd.w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup(rd.w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  rd.done = FALSE;
+  g = HiddenGroup (h, 1, 0, NULL);
+  StaticPrompt (g, prompt_str, 0, popupMenuHeight, programFont, 'l');
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton(c, "Yes", RemoveAlnOrProductYes);
+  SetObjectExtra (b, &rd, NULL);
+  b = PushButton(c, "Remove All", RemoveAlnOrProductYesAll);
+  SetObjectExtra (b, &rd, NULL);
+  b = DefaultButton(c, "No", RemoveAlnOrProductNo);
+  SetObjectExtra (b, &rd, NULL);
+  b = DefaultButton(c, "Remove None", RemoveAlnOrProductNoAll);
+  SetObjectExtra (b, &rd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  prompt_str = MemFree (prompt_str);
+  
+  Show(rd.w); 
+  Select (rd.w);
+  rd.done = FALSE;
+  while (!rd.done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (rd.do_all)
+  {
+    if (rd.ans)
+    {
+  	  rp->remove_all_products = TRUE;
+  	  rp->no_remove_all_products = FALSE;
+    }
+    else
+    {
+  	  rp->remove_all_products = FALSE;
+  	  rp->no_remove_all_products = TRUE;
+    }
+  }
+  return rd.ans;
+}
+
+
+static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp)
+{
+  ValNodePtr   product_feature_list = NULL;
+  Char         str [128];
+  SeqEntryPtr  sep;
+  
+  if (bsp == NULL || rp == NULL) return;	
+  
+  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+
+  if (IsBioseqInAnyAlignment (bsp, rp->input_entityID))
+  {
+    if (GetRemoveAlignments (rp, str))
+    {
+ 	  VisitAnnotsInSep (rp->sep, (Pointer) bsp->id, RemoveSequenceFromAlignmentsCallback);
+    }
+  }
+  VisitFeaturesOnBsp (bsp, &product_feature_list, DoesBioseqHaveFeaturesWithProductsCallback);
+  if (product_feature_list != NULL)
+  {
+    if (GetRemoveProducts (rp, str))
+    {
+      RemoveBioseqProducts (product_feature_list, rp);
+    }
+  }
+        
+  bsp->idx.deleteme = TRUE;
+  /* remove nuc-prot set if we are deleting the nucleotide and its proteins */
+  sep = GetBestTopParentForData (rp->input_entityID, bsp);
+  RemoveEmptyNucProtSet (sep);
+
+  ValNodeFree (product_feature_list);
+  
+}
+
+
+static void DoRemoveSequencesFromRecord (ButtoN b)
+{
+  RemoveSeqFromAlignPtr    rp;
+  WindoW                   w;
+  ValNodePtr               vnp;
+  Int2                     val;
+  AlignmentSequenceListPtr aslp;
+  BioseqPtr                bsp;
+  
+  if (b == NULL) return;
+  rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  
+  w = (WindoW) rp->form;
+  Hide (w);
+
+  val = 1;
+  for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
+    aslp = vnp->data.ptrvalue;
+	if (aslp == NULL) continue;
+	if (GetItemStatus (rp->sequence_list_ctrl, val)) {
+	  bsp = BioseqFind (aslp->sip);
+	  if (bsp != NULL)
+	  {
+	    RemoveBioseq (bsp, rp);
+	  }
+	}
+	val++;
+  }
+ 
+  ValNodeFree (rp->sequence_list);
+  rp->sequence_list = NULL; 
+  DeleteMarkedObjects (rp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (rp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, rp->input_entityID, 0, 0);
+  Remove (rp->form);  
+}
+
+extern void RemoveSequencesFromRecord (IteM i)
+{
+  BaseFormPtr              bfp;
+  WindoW                   w;
+  RemoveSeqFromAlignPtr    rp;
+  GrouP                    h, k, c;
+  ButtoN                   b;
+  ValNodePtr               vnp;
+  AlignmentSequenceListPtr aslp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL) return;
+
+  rp = (RemoveSeqFromAlignPtr) MemNew (sizeof (RemoveSeqFromAlignData));
+  if (rp == NULL) return;
+  rp->input_entityID = bfp->input_entityID;
+  rp->sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (rp->sep == NULL) {
+	MemFree (rp);
+	return;
+  }
+  ListSequencesInSeqEntry (rp->sep, &rp->sequence_list);
+  if (rp->sequence_list == NULL) {
+    Message (MSG_ERROR, "There are no sequences in alignments");
+	MemFree (rp);
+	return;
+  }
+  
+  rp->remove_all_from_alignments = FALSE;
+  rp->remove_all_products = FALSE;
+  rp->no_remove_all_from_alignments = FALSE;
+  rp->no_remove_all_products = FALSE;
+  
+  w = FixedWindow (-50, -33, -10, -10, "Remove Sequences From Record", StdCloseWindowProc);
+  if (w == NULL) {
+	MemFree (rp);
+	return;
+  }
+  rp->form = (ForM) w;
+  SetObjectExtra (w, rp, CleanupRemoveSequencesFromAlignmentForm);
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  k = HiddenGroup (h, 2, 0, NULL);
+
+  rp->sequence_list_ctrl = MultiList (k, 16, 16, NULL);
+  for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
+    aslp = vnp->data.ptrvalue;
+	if (aslp != NULL) {
+      ListItem (rp->sequence_list_ctrl, aslp->descr);
+	}
+  }
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", DoRemoveSequencesFromRecord);
+  SetObjectExtra (b, rp, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc); 
+  SetObjectExtra (b, rp, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();  
+}

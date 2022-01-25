@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.204 2004/05/27 17:35:56 dondosha Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.205 2004/09/13 18:33:01 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,12 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.204 $
+ * $Revision: 6.205 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.205  2004/09/13 18:33:01  dondosha
+ * Advance mask pointer in the list when one of the queries in a set is discarded due to being too short, and also has a lower case mask
+ *
  * Revision 6.204  2004/05/27 17:35:56  dondosha
  * Do not flag HSPs for deletion in sorting before doing inclusion tests
  *
@@ -1293,6 +1296,10 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
          ErrPostEx(SEV_WARNING, 0, 0, 
                    "Query sequence %s removed: length %ld is less than wordsize %d", 
                    buffer, query_length, options->wordsize);
+         if (next_mask_slp &&
+            SeqIdComp(SeqLocId(next_mask_slp), SeqLocId(tmp_slp)) == SIC_YES) {
+            next_mask_slp = next_mask_slp->next;
+         }
          slp = slp->next;
          context += 2;
 	 continue;

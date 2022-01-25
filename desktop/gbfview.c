@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.75 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -1060,8 +1060,10 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
         sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
       }
       if (feats_with_product_count > 500) {
-        /* too many to lookup with current caching implementation */
+        /* too many to lookup with older caching implementation - now sufficiently fast */
+        /*
         lookupFar = FALSE;
+        */
       }
     }
     if (lookupFar) {

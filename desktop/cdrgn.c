@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.60 $
+* $Revision: 6.67 $
 *
 * File Description: 
 *
@@ -513,10 +513,36 @@ static void CdRegionPtrToCdRgnPage (DialoG d, Pointer data)
 
 static SeqIdPtr  globalid;
 
+static CodeBreakPtr RemoveNullLocationCodeBreaks (CodeBreakPtr cbp)
+{
+  CodeBreakPtr this_cbp, prev_cbp, next_cbp;
+  
+  prev_cbp = NULL;
+  for (this_cbp = cbp; this_cbp != NULL; this_cbp = next_cbp)
+  {
+  	next_cbp = this_cbp->next;
+  	if (this_cbp->loc == NULL)
+  	{
+  	  Message (MSG_ERROR, "A code break was removed because the location is now invalid");
+  	  if (prev_cbp == NULL)
+  	  {
+  	  	cbp = this_cbp->next;
+  	  }
+  	  else
+  	  {
+  	  	prev_cbp->next = this_cbp->next;
+  	  }
+  	  this_cbp->next = NULL;
+  	  CodeBreakFree (this_cbp);
+  	}
+  }
+  return cbp;
+}
+
 static Pointer CdRgnPageToCdRegionPtr (DialoG d)
 
 {
-  BioseqPtr     bsp;
+  BioseqPtr     bsp = NULL;
   CodeBreakPtr  cbp;
   CdRgnFormPtr  cfp;
   ValNodePtr    code;
@@ -581,6 +607,8 @@ static Pointer CdRgnPageToCdRegionPtr (DialoG d)
         if (globalid != NULL) {
           cbp = DialogToPointer (cpp->cdBrk);
           ConvertToNTCodeBreak (cpp->cfp, crp, cbp);
+          /* remove any code breaks that have fallen off the end of the protein */
+          cbp = RemoveNullLocationCodeBreaks (cbp);
           crp->code_break = cbp;
         }
       }
@@ -2618,6 +2646,17 @@ Database policy is to convert this into a misc_feature,\n\
 and to remove any protein product attached to the CDS.\n\
 Are you sure you want to trigger this conversion now?";
 
+static void SetComment (CharPtr new_comment, WindoW w)
+{
+  FeatureFormPtr ffp;
+  
+  if (new_comment == NULL || w == NULL) return;
+  ffp = (FeatureFormPtr) GetObjectExtra (w);
+  if (ffp == NULL) return;
+
+  SafeSetTitle (ffp->comment, new_comment);
+}
+
 static void CdRgnFormAcceptButtonProc (ButtoN b)
 
 {
@@ -2634,6 +2673,8 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
   SeqLocPtr      slp;
   Char           str [128];
   WindoW         w;
+  SeqLocPtr      prod_slp;
+  Boolean        delete_old_product = FALSE;
 
   if (b != NULL) {
     w = ParentWindow (b);
@@ -2699,26 +2740,63 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
       if (cfp->autoRetranslate) {
         DoTranslateProtein (cfp);
       }
+      
       pseudo = FALSE;
-      qual = (GBQualPtr) DialogToPointer (cfp->gbquals);
-      gbq = qual;
-      while (gbq != NULL) {
-        if (StringICmp (gbq->qual, "pseudo") == 0) {
-          pseudo = TRUE;
-        }
-        gbq = gbq->next;
+      if (GetStatus (cfp->pseudo))
+      {
+        pseudo = TRUE;
       }
-      GBQualFree (qual);
-      bsp = (BioseqPtr) DialogToPointer (cfp->protseq);
-      if (bsp == NULL) {
-        if (! pseudo) {
+      else
+      {
+        qual = (GBQualPtr) DialogToPointer (cfp->gbquals);
+        gbq = qual;
+        while (gbq != NULL) {
+          if (StringICmp (gbq->qual, "pseudo") == 0) {
+            pseudo = TRUE;
+          }
+          gbq = gbq->next;
+        }
+        GBQualFree (qual);
+      }
+      
+      if (pseudo)
+      {
+        /* remove old product, if there is one */
+        prod_slp = DialogToPointer (cfp->product);
+        if (prod_slp != NULL)
+        {
+          bsp = BioseqFind (SeqLocId (prod_slp));
+          if (bsp != NULL) {
+            bsp->idx.deleteme = TRUE;
+            delete_old_product = TRUE;
+          }
+          prod_slp = SeqLocFree (prod_slp);
+        }
+        /* do not create new product */
+        PointerToDialog (cfp->product, NULL);
+        PointerToDialog (cfp->protseq, NULL);
+        
+        /* if the protein name is set, move it to a note */
+        GetTitle (cfp->protNameText, str, sizeof (str) - 1);
+        if (! StringHasNoText (str))
+        {
+          SetComment (str, w);
+          SetTitle (cfp->protNameText, "");
+        }
+      }
+      else
+      {
+        bsp = (BioseqPtr) DialogToPointer (cfp->protseq);
+        if (bsp == NULL) 
+        {
           ans = Message (MSG_OKC, "The coding region has no peptide sequence.  Are you sure?");
+          if (ans != ANS_OK)
+          {
+            SeqLocFree (slp);
+            return;
+          }
         }
-      } else if (pseudo) {
-        /* ask about deleting the product bioseq? */
-      }
-      BioseqFree (bsp);
-      if (ans == ANS_OK) {
+        bsp = BioseqFree (bsp);
         Hide (w);
         Update ();
         if (Visible (cfp->protSeqIdGrp)) {
@@ -2739,13 +2817,22 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
             cfp->protXrefName = cfp->protNameText;
           }
         }
-        (cfp->actproc) (cfp->form);
-        SeqLocFree (slp);
-      } else {
-        SeqLocFree (slp);
-        return;
       }
+      (cfp->actproc) (cfp->form);
     }
+    SeqLocFree (slp);
+    if (delete_old_product)
+    {
+      DeleteMarkedObjects (cfp->input_entityID, 0, NULL);
+      sep = GetBestTopParentForItemID (cfp->input_entityID,
+                                       cfp->input_itemID,
+                                       cfp->input_itemtype);
+      RenormalizeNucProtSets (sep, TRUE);
+      ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID,
+                       cfp->input_itemID, cfp->input_itemtype);
+      ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    }
+    
     Update ();
     Remove (w);
   }
@@ -4909,7 +4996,19 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
               PointerToDialog (rpp->codons, head);
               ValNodeFreeData (head);
             }
-            PointerToDialog (rpp->anticodon, trna->anticodon);
+            if (trna->anticodon == NULL)
+            {
+              /* attempt to provide default location */
+              SeqLocPtr tmp_loc = NULL;
+              tmp_loc = DialogToPointer (rpp->rfp->location);
+              PointerToDialog (rpp->anticodon, tmp_loc);
+              SetSequenceAndStrandForIntervalPage (rpp->anticodon);
+              SeqLocFree (tmp_loc);              
+            }
+            else
+            {
+              PointerToDialog (rpp->anticodon, trna->anticodon);            	
+            }
           }
         }
         SafeShow (rpp->trnaGrp);
@@ -5644,6 +5743,7 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
     oldsep = SeqEntrySetScope (sep);
     sfp = (SeqFeatPtr) data;
     if (sfp != NULL) {
+      PointerToDialog (rfp->location, sfp->location);
       switch (sfp->data.choice) {
         case SEQFEAT_BOND :
         case SEQFEAT_SITE :
@@ -5658,7 +5758,6 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
           break;
       }
       SeqFeatPtrToCommon ((FeatureFormPtr) rfp, sfp);
-      PointerToDialog (rfp->location, sfp->location);
       PointerToDialog (rfp->product, sfp->product);
       if (sfp->product != NULL) {
         sip = SeqLocId (sfp->product);
@@ -5886,9 +5985,20 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
     } else {
       rpp = (RnaPagePtr) GetObjectExtra (rfp->data);
       if (rpp != NULL) {
+        SetNewFeatureDefaultInterval ((FeatureFormPtr) rfp);
         if (subtype >= FEATDEF_preRNA && subtype <= FEATDEF_scRNA) {
           SetEnumPopup (rpp->type, rna_type_alist,
                         (UIEnum) check_rna_type (subtype - FEATDEF_preRNA + 1));
+          if (subtype == FEATDEF_tRNA)
+          {
+            /* attempt to provide default location for anticodons */
+            SeqLocPtr tmp_loc = NULL;
+            
+            tmp_loc = DialogToPointer (rpp->rfp->location);
+            PointerToDialog (rpp->anticodon, tmp_loc);
+            SetSequenceAndStrandForIntervalPage (rpp->anticodon);
+            SeqLocFree (tmp_loc);              
+          }
         } else if (subtype == FEATDEF_snoRNA) {
           SetEnumPopup (rpp->type, rna_type_alist,
                         (UIEnum) check_rna_type (7));
@@ -5899,7 +6009,6 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
           SetEnumPopup (rpp->type, rna_type_alist, (UIEnum) 0);
         }
       }
-      SetNewFeatureDefaultInterval ((FeatureFormPtr) rfp);
     }
   }
   Show (w);

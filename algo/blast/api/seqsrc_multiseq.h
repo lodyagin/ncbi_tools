@@ -1,4 +1,4 @@
-/*  $Id: multiseq_src.h,v 1.1 2004/03/13 00:25:29 dondosha Exp $
+/*  $Id: seqsrc_multiseq.h,v 1.4 2004/10/06 14:59:16 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -42,19 +42,17 @@
 /** Encapsulates the arguments needed to initialize multi-sequence source. */
 typedef struct MultiSeqSrcNewArgs {
     SeqLoc* seqloc_list;
-    Uint1 program;
+    EBlastProgramType program;
 } MultiSeqSrcNewArgs;
 
 /** Contains information about all sequences in a set */
 typedef struct MultiSeqInfo {
-   SeqLoc** seqloc_array; /**< Array of sequence locations. Individual 
-			   SeqLoc's are not owned by this structure! */
    Boolean is_prot; /**< Are these sequences protein or nucleotide? */
    BLAST_SequenceBlk** seqblk_array; /**< Array of sequence blocks */
    Uint4 max_length;
    Uint4 avg_length;
    Uint4 num_seqs;
-   Blast_Message* error_msg;
+   Boolean contents_allocated;
 } MultiSeqInfo;
 
 /** Multi-sequence source constructor 
@@ -69,7 +67,7 @@ BlastSeqSrc* MultiSeqSrcNew(BlastSeqSrc* seq_src, void* args);
  * @param program Type of BLAST to be performed [in]
  */
 BlastSeqSrc* 
-MultiSeqSrcInit(SeqLoc* seqloc_list, Uint1 program);
+MultiSeqSrcInit(SeqLoc* seqloc_list, EBlastProgramType program);
 
 /** Multi sequence source destructor: frees its internal data structure and the
  * BlastSeqSrc structure itself.
@@ -77,5 +75,11 @@ MultiSeqSrcInit(SeqLoc* seqloc_list, Uint1 program);
  * @return NULL
  */
 BlastSeqSrc* MultiSeqSrcFree(BlastSeqSrc* seq_src);
+
+/** Multi sequence source copier; copies the MultiSeqInfo structure
+ * @param bssp BlastSeqSrc structure to copy [in]
+ * @return New BlastSeqSrc structure
+ */
+BlastSeqSrc* MultiSeqSrcCopy(BlastSeqSrc* seq_src);
 
 #endif /* MULTISEQ_SRC_H */

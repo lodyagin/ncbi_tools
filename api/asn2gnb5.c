@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.16 $
+* $Revision: 1.22 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -117,7 +117,7 @@ static Char link_fly_fbgn [MAX_WWWBUF];
 #define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 
 static Char link_cog [MAX_WWWBUF];
-#define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/cgi-bin/COG/palox?"
+#define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="
 
 static Char link_sgd [MAX_WWWBUF];
 #define DEF_LINK_SGD "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="
@@ -179,6 +179,9 @@ static Char link_nextdb [MAX_WWWBUF];
 static Char link_imgt [MAX_WWWBUF];
 #define DEF_LINK_IMGT "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"
 
+static Char link_imgt_gene [MAX_WWWBUF];
+#define DEF_LINK_IMGT_GENE "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"
+
 static Char link_ifo [MAX_WWWBUF];
 #define DEF_LINK_IFO "http://www.ifo.or.jp/index_e.html"
 
@@ -232,6 +235,9 @@ static Char link_hinvdbhix [MAX_WWWBUF];
 
 static Char link_asap [MAX_WWWBUF];
 #define DEF_LINK_ASAP "https://asap.ahabs.wisc.edu/annotation/php/feature_info.php?FeatureID="
+
+static Char link_dicty [MAX_WWWBUF];
+#define DEF_LINK_DICTY "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="
 
 
 /* www utility functions */
@@ -296,6 +302,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_WORFDB", DEF_LINK_WORFDB, link_worfdb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_NEXTDB", DEF_LINK_NEXTDB, link_nextdb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT", DEF_LINK_IMGT, link_imgt, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE", DEF_LINK_IMGT_GENE, link_imgt_gene, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_IFO", DEF_LINK_IFO, link_ifo, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_JCM", DEF_LINK_JCM, link_jcm, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISFINDER", DEF_LINK_ISFINDER, link_isfinder, MAX_WWWBUF);
@@ -314,6 +321,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIT", DEF_LINK_HINVDBHIT, link_hinvdbhit, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIX", DEF_LINK_HINVDBHIX, link_hinvdbhix, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ASAP", DEF_LINK_ASAP, link_asap, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DICTY", DEF_LINK_DICTY, link_dicty, MAX_WWWBUF);
 }
 
 
@@ -562,6 +570,8 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_sgd);
   } else if ( StringCmp(db , "IMGT/LIGM") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_imgt);
+  } else if ( StringCmp(db , "IMGT/GENE-DB") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_imgt_gene);
   } else if ( StringCmp(db , "CK") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_ck);
   } else if ( StringCmp(db , "RiceGenes") == 0) {
@@ -632,6 +642,8 @@ static void Do_www_db_xref(
     FF_www_db_xref_hinvdb(ffstring, db, identifier);
   } else if ( StringCmp(db , "ASAP") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_asap);
+  } else if ( StringCmp(db , "dictyBase") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_dicty);
 
   } else {  
     /* default: no link just the text */
@@ -1666,7 +1678,14 @@ static CharPtr FormatCitJour (
     ttl = ttl->next;
   }
 
+  imp = cjp->imp;
+  if (imp == NULL) return NULL;
+
   /* release mode requires iso_jta title */
+
+  if (imp->pubstatus == 3 || imp->pubstatus == 10) {
+    electronic_journal = TRUE;
+  }
 
   if (ttl == NULL) {
     ttl = cjp->title;
@@ -1678,9 +1697,6 @@ static CharPtr FormatCitJour (
     }
     if (citArtIsoJta && (! electronic_journal)) return NULL;
   }
-
-  imp = cjp->imp;
-  if (imp == NULL) return NULL;
 
   dp = imp->date;
   year [0] = '\0';
@@ -1703,6 +1719,10 @@ static CharPtr FormatCitJour (
 
   title = (CharPtr) ttl->data.ptrvalue;
   if (StringLen (title) < 3) return StringSave (".");
+
+  if (imp->pubstatus == 3 || imp->pubstatus == 10) {
+    ValNodeCopyStr (&head, 0, "(er) ");
+  }
 
   ValNodeCopyStr (&head, 0, title);
 
@@ -1743,6 +1763,8 @@ static CharPtr FormatCitJour (
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     if (imp->prepub == 2) {
+      ValNodeCopyStr (&head, 0, " In press");
+    } else if (imp->pubstatus == 10 && StringHasNoText (pages)) {
       ValNodeCopyStr (&head, 0, " In press");
     }
   }
@@ -3357,12 +3379,12 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   FFRecycleString(ajp, temp);
   temp = FFGetString(ajp);
   if (! StringHasNoText (consortium)) {
-    FFStartPrint (temp, afp->format, 2, 12, "CONSRTM", 12, 5, 5, "CM", FALSE);
+    FFStartPrint (temp, afp->format, 2, 12, "CONSRTM", 12, 5, 5, "RG", FALSE);
     FFAddTextToString (temp, NULL, consortium, suffix, FALSE, FALSE, TILDE_TO_SPACES);
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "CM");
+      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RG");
     }
   }
   MemFree (consortium);

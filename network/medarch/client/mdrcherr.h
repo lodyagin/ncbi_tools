@@ -3,6 +3,9 @@
 *
 * RCS Modification History:
 * $Log: mdrcherr.h,v $
+* Revision 6.2  2004/08/17 15:21:31  bazhin
+* Added a few error messages to report PubMed id problems.
+*
 * Revision 6.1  2003/10/01 13:07:50  bazhin
 * Added a couple of new warning messages ERR_REFERENCE_NoConsortAuthors
 * and ERR_REFERENCE_DiffConsortAuthors. The severity of message
@@ -36,6 +39,10 @@
 #define ERR_REFERENCE_MuidMissmatch  1,8
 #define ERR_REFERENCE_NoConsortAuthors 1,9
 #define ERR_REFERENCE_DiffConsortAuthors 1,10
+#define ERR_REFERENCE_PmidMissmatch 1,11
+#define ERR_REFERENCE_Multiple_pmid 1,12
+#define ERR_REFERENCE_FailedToGetPub 1,13
+
 #define ERR_PRINT  2,0
 #define ERR_PRINT_Failed  2,1
 

@@ -1,4 +1,4 @@
-/*  $Id: hspstream_collector.h,v 1.2 2004/06/16 14:53:03 dondosha Exp $
+/*  $Id: hspstream_collector.h,v 1.5 2004/09/24 14:19:26 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,6 +38,7 @@
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_hspstream.h>
+#include <connect/ncbi_core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +46,7 @@ extern "C" {
 
 /** Default implementation of BlastHSPStream */
 typedef struct BlastHSPListCollectorData {
-   Uint1 program;           /**< BLAST program type */
+   EBlastProgramType program;           /**< BLAST program type */
    BlastHitSavingOptions* hit_options; /**< Hit saving options */
    BlastHSPResults* results;/**< Structure for saving HSP lists */
    Boolean results_sorted;  /**< Have the results already been sorted? 
@@ -54,11 +55,27 @@ typedef struct BlastHSPListCollectorData {
                                read call? */
    Int4 first_query_index;  /**< Index of the first query to try getting 
                                results from. */
-   /* TNlmMutex results_mutex; */ /**< Mutex for writing and reading results.
-                                  @todo FIXME: not implemented yet. */
+   MT_LOCK x_lock;   /**< Mutex for writing and reading results. */
+                                  
 } BlastHSPListCollectorData;
 
-/** Initialize the internal data structure. 
+/** Initialize the collector HSP stream for a multi-threaded search. The 
+ * locking facility must be instantiated before this function is called. 
+ * @param program Type of BlAST program [in]
+ * @param hit_options Hit saving options containing limits on numbers of 
+ *                    results to save[in]
+ * @param num_queries Number of query sequences in this BLAST search [in]
+ * @param sort_on_read Should results be sorted on the first read call? [in]
+ * @param lock        Pointer to locking structure for writing by multiple
+ *                    threads. Locking will not be performed if NULL. [in]
+ */
+BlastHSPStream* 
+Blast_HSPListCollectorInitMT(EBlastProgramType program, 
+   BlastHitSavingOptions* hit_options, Int4 num_queries, 
+   Boolean sort_on_read, MT_LOCK lock);
+
+/** Initialize the collector HSP stream for a single-threaded search, i.e. 
+ * no locking is done when reading/writing from/to the stream.
  * @param program Type of BlAST program [in]
  * @param hit_options Hit saving options containing limits on numbers of 
  *                    results to save[in]
@@ -66,7 +83,7 @@ typedef struct BlastHSPListCollectorData {
  * @param sort_on_read Should results be sorted on the first read call? [in]
  */
 BlastHSPStream* 
-Blast_HSPListCollectorInit(Uint1 program, BlastHitSavingOptions* hit_options, 
+Blast_HSPListCollectorInit(EBlastProgramType program, BlastHitSavingOptions* hit_options, 
                            Int4 num_queries, Boolean sort_on_read);
 
 #ifdef __cplusplus

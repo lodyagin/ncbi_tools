@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.96 $
+* $Revision: 6.97 $
 *
 * File Description: 
 *
@@ -2421,6 +2421,36 @@ extern void CCFetchFromNet (EditAlignDataPtr adp, WindoW editor_window)
 }
 
 
+static SeqIdPtr FindSeqIdForFastaExport (BioseqPtr bsp)
+{
+	static Uint1 fasta_order[NUM_SEQID] = {
+ 	84, /* 0 = not set */
+	80, /* 1 = local Object-id */
+	70,  /* 2 = gibbsq */
+	70,  /* 3 = gibbmt */
+	70, /* 4 = giim Giimport-id */
+	60, /* 5 = genbank */
+	60, /* 6 = embl */
+	60, /* 7 = pir */
+	60, /* 8 = swissprot */
+	67,  /* 9 = patent */
+	65, /* 10 = other TextSeqId */
+	80, /* 11 = general Dbtag */
+	83,  /* 12 = gi */
+	60, /* 13 = ddbj */
+	60, /* 14 = prf */
+	60, /* 15 = pdb */
+	60,  /* 16 = tpg */
+	60,  /* 17 = tpe */
+	60   /* 18 = tpd */
+	};
+
+  if (bsp == NULL || bsp->id == NULL) return NULL;
+ 
+ 	return SeqIdSelect (bsp->id, fasta_order, NUM_SEQID);
+    
+}
+
 /************************************************************
 ***  EditBioseqToFasta called by salparam.c
 SHOULD BE SEQ-ENTRY /Bioseq, Bioseqet
@@ -2450,12 +2480,18 @@ extern void EditBioseqToFasta (BioseqPtr bsp, FILE *fout, Int4 from, Int4 to)
   Int4             txt_out;
   Int4             Width_Page = 60;
   Int4             j;
+  SeqIdPtr         sip, sip_next;
 
   if (bsp == NULL) 
      return;
   if (fout == NULL)
      return; 
-  SeqIdWrite (SeqIdFindBest(bsp->id, 0), str, PRINTID_FASTA_LONG, 120);
+  sip = FindSeqIdForFastaExport (bsp);
+  if (sip == NULL) return;
+  sip_next = sip->next;
+  sip->next = NULL;
+  SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 120);
+  sip->next = sip_next;
   if (from < 0) 
      from = 0;
   if (to < 0) 

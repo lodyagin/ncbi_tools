@@ -1,4 +1,4 @@
-/* $Id: blast_returns.h,v 1.1 2004/05/14 17:19:03 dondosha Exp $
+/* $Id: blast_returns.h,v 1.7 2004/10/04 14:02:02 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Manipulation of data returned from BLAST other than Seq-aligns
 
 ******************************************************************************
- * $Revision: 1.1 $
+ * $Revision: 1.7 $
  * */
 #ifndef __BLAST_RETURNS__
 #define __BLAST_RETURNS__
@@ -47,45 +47,101 @@ extern "C" {
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
-#include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_diagnostics.h>   
-#include <algo/blast/api/twoseq_api.h>
+#include <blfmtutl.h>
 
-typedef struct BLAST_DbSummary {
-   struct BLAST_DbSummary* next;
-   Boolean   is_protein;
-   char*   name;
-   char*   definition;
-   char*   date;
-   Int8   total_length;
-   Int4   number_seqs;
-   Boolean subset;      /* Print the subset message. */
-} BLAST_DbSummary;
+/** Small structure containing the just those Karlin-Altschul parameters needed
+ * for the BLAST formatting */
+typedef struct BLAST_KAParameters {
+   double Lambda;     /**< Karlin-Altschul scaling parameter. */
+   double K;          /**< Karlin-Altschul K parameter. */
+   double H;          /**< Karlin-Altschul entropy */
+} BLAST_KAParameters;
 
-BLAST_DbSummary* LIBCALL
-Blast_DbSummaryFree (BLAST_DbSummary* dbinfo);
+/** Small structure containing some numbers about database length, adjustment, 
+ * etc.
+ */
+typedef struct BLAST_DatabaseStats {
+   Int4 dbnum;              /**< number of sequences in database search */
+   Int8 dblength;           /**< Length of databases. */
+   Int8 eff_dblength;       /**< Length of databases with edge corrections. */
+   Int4 qlen;               /**< Length of query with edge corrections. */
+   Int4 eff_qlen;           /**< Length of query with edge corrections. */
+   Int4 hsp_length;         /**< Expect length of an HSP. */
+   Int8 eff_searchsp;       /**< effective search-space */
+   Int8 eff_searchsp_used;  /**< effective search-space actually used. */
+} Blast_DatabaseStats;
+
+/** Small structure containing relevant search parameters. 
+ *  Mostly for use in building XML or footer in BLAST report.
+ */
+typedef struct Blast_SearchParams {
+   Boolean gapped_search;   /**< true if a gapped search. */
+   Int4 gap_open;           /**< Cost of gap existence. */
+   Int4 gap_extension;      /**< Cost to extend gap by one letter. */
+   char* filter_string;     /**< filtering command. */
+   char* matrix;            /**< name of matrix (e.g., BLOSUM62) */
+   double expect;           /**< expect value cutoff. */
+   Int4 match;              /**< reward for a match (blastn only) */
+   Int4 mismatch;           /**< penalty for a mismatch (blastn only) */
+   char* pattern;           /**< phi-blast pattern used. */
+   char* entrez_query;      /**< query to entrez */
+   double ethresh;          /**< PSI-BLAST threshold to keep HSPs in profile. */
+   Int4 threshold;          /**< threshold to start extension of hits. */
+   Int4 window_size;        /**< max allowed distance between hits to init extension in 2-hit mode. */
+} Blast_SearchParams;
+
+/** Structure holding all calculated data returned from a BLAST search other
+ * than the alignment.
+ */
+typedef struct Blast_SummaryReturn {
+   BLAST_KAParameters* ka_params; /**< Ungapped Karlin-Altschul parameters */
+   BLAST_KAParameters* ka_params_gap;/**< Gapped Karlin-Altschul parameters */
+   Blast_DatabaseStats* db_stats; /**< database numbers and adjustments */
+   Blast_SearchParams* search_params; /**< parameters used in search. */
+   BlastDiagnostics* diagnostics;     /**< diagnositics from engine. */
+} Blast_SummaryReturn;
 
 /** Retrieves necessary information from a sequence source and fills the 
- * BLAST_DbSummary structure.
+ * TxDfDbInfo structure.
+ * @param rdfp pointer to BLAST db reader [in]
+ * @return pointer to info about database.
  */
-BLAST_DbSummary* Blast_GetDbSummary(const BlastSeqSrc* seq_src);
+TxDfDbInfo* Blast_GetDbInfo(ReadDBFILE* rdfp);
 
 /** Formats the BLAST parameters for the BLAST report.
- *	One char* is returned, newlines are indicated by tildes ('~').
+ *
+ * @param program_number indicates blastn, blastp, etc. [in]
+ * @param sum_return object constructed by Blast_SummaryReturnFill, used 
+ *    to fill buffer [in]
+ * @return char* with information, newlines indicated by tildes ('~').
  */	
 char*
-Blast_GetParametersBuffer(Uint1 program_number, 
-   const BlastScoringOptions* score_options,
-   const BlastScoreBlk* sbp, const LookupTableOptions* lookup_options,
-   const BlastInitialWordOptions* word_options,
-   const BlastExtensionOptions* ext_options,
-   const BlastHitSavingOptions* hit_options,
-   const BlastEffectiveLengthsOptions* eff_len_options,
-   const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src, 
-   const BlastDiagnostics* diagnostics);
+Blast_GetParametersBuffer(EBlastProgramType program_number,
+        const Blast_SummaryReturn* sum_return);
 
-/** Fills the summary returns */
-void Blast_SummaryReturnFill(Uint1 program_number, 
+/** Fills the summary returns from the provided information.
+ * NOTE: either one of rdfp or subject_loc (below) can be NULL,
+ * but not both.
+ *
+ * @param score_options pointer for scoring options [in]
+ * @parm sbp Karlin-Altschul/statistics information [in]
+ * @param lookup_options pointer for lookup table options [in]
+ * @param word_options pointer for word finding options [in]
+ * @param ext_options pointer for extension options [in]
+ * @param hit_options pointer for hit saving options [in]
+ * @param eff_len_options pointer for effective length options [in]
+ * @param query_setup pointer for query setup options [in]
+ * @param query_info information about query [in]
+ * @param rdfp used to fetch information from BLAST db, leave NULL if 
+ *    "blast2seqs" case [in]
+ * @param subject_loc location of target sequence, leave NULL if db search [in]
+ * @param diagnostics pointer to diagnostic information, SET to NULL
+ *    on return [in|out]
+ * @param sum_returns_out object to be filled in [out]
+ * @return zero returned on success
+ */
+Int2 Blast_SummaryReturnFill(EBlastProgramType program_number, 
         const BlastScoringOptions* score_options, 
         const BlastScoreBlk* sbp,
         const LookupTableOptions* lookup_options,
@@ -93,10 +149,17 @@ void Blast_SummaryReturnFill(Uint1 program_number,
         const BlastExtensionOptions* ext_options,
         const BlastHitSavingOptions* hit_options,
         const BlastEffectiveLengthsOptions* eff_len_options,
+        const QuerySetUpOptions* query_setup,
         const BlastQueryInfo* query_info,
-        const BlastSeqSrc* seq_src,
-        const BlastDiagnostics* diagnostics, 
-        BLAST_SummaryReturn** sum_returns_out);
+        ReadDBFILE* rdfp, SeqLoc* subject_slp,
+        BlastDiagnostics** diagnostics,
+        Blast_SummaryReturn** sum_returns_out);
+
+/** Deallocates memory for the summary returns structure 
+ * @param sum_return object to be freed [in]
+ * @return NULL pointer
+ */
+Blast_SummaryReturn* Blast_SummaryReturnFree(Blast_SummaryReturn* sum_return);
 
 #ifdef __cplusplus
 }

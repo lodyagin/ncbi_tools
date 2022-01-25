@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.10 2003/12/03 17:30:25 dondosha Exp $
+/* $Id: blast_input.h,v 1.13 2004/07/14 13:17:38 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@ Author: Ilya Dondoshansky
 
 Contents: Reading FASTA sequences for BLAST
 
-$Revision: 1.10 $
+$Revision: 1.13 $
 
 ******************************************************************************/
 
@@ -54,19 +54,22 @@ extern "C" {
  * @param query_is_na Are sequences nucleotide (or protein)? [in]
  * @param strand Which strands should SeqLocs contain (0 for protein, 
  *               1 for plus, 2 for minus, 3 for both)? [in]
+ * @param max_total_length length of query sequences to be returned [in]
  * @param from Starting offset in query location [in]
  * @param to Ending offset in query location (-1 for end of sequence) [in]
  * @param lcase_mask The lower case masking locations (no lower case masking 
  *                   if NULL [out]
  * @param query_slp List of query SeqLocs [out]
- * @param ctr_start Number from which to start counting local ids [in]
+ * @param ctr Number from which to start counting local ids, will be 
+ *   incremented by number of queries read in  [in|out]
  * @param num_queries Number of sequences read [out]
- * @return Have all sequences been read?
+ * @param believe_query parse FASTA seqid if TRUE [in]
+ * @return number of letters read, negative number on error.
  */
-Boolean
-BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
-   Int4 from, Int4 to, BlastMaskLoc** lcase_mask, SeqLocPtr* query_slp, Int4 ctr_start,
-   Int4* num_queries);
+Int4
+BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, Int4 max_total_length,
+   Int4 from, Int4 to, BlastMaskLoc** lcase_mask, SeqLocPtr* query_slp, Int2Ptr ctr,
+   Int4* num_queries, Boolean believe_query);
 
 /** Given a file containing sequence(s) in fasta format,
  * read a sequence and fill out a BLAST_SequenceBlk structure.

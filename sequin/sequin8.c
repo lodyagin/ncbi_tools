@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.256 $
+* $Revision: 6.271 $
 *
 * File Description: 
 *
@@ -72,11 +72,11 @@ typedef struct evidenceformdata {
   Uint2          subtype;
   PopuP          evdence;
   Uint2          exp_ev;
-  ObjMgrPtr      omp;
-  ObjMgrTypePtr  omtp;
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
+  ButtoN         case_insensitive;
+  ButtoN         when_string_not_present;
 } EvidenceFormData, PNTR 
 
 EvidenceFormPtr;
@@ -89,31 +89,6 @@ typedef struct codebreakformdata {
   ButtoN acceptButton;
 } CodeBreakFormData, PNTR CodeBreakFormPtr;
 
-static void LIBCALLBACK AsnWriteEvidenceCallBack (AsnExpOptStructPtr pAEOS)
-
-{
-  EvidenceFormPtr  efp;
-  CharPtr          pchFind;
-  CharPtr          pchSource;
-
-  efp = (EvidenceFormPtr) pAEOS->data;
-  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
-	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
-	pchFind = efp->findStr;
-	if (StringSearch (pchSource, pchFind) != NULL) {
-	  efp->stringfound = TRUE;
-	}
-  }
-}
-
-static Boolean EvidenceHasSubstring (ObjMgrTypePtr omtp, AsnIoPtr aip, Pointer ptr, EvidenceFormPtr efp)
-
-{
-  efp->stringfound = FALSE;
-  (omtp->asnwrite) (ptr, aip, NULL);
-  return efp->stringfound;
-}
-
 static Boolean IsRealImpFeat (Uint2 subtype)
 
 {
@@ -122,80 +97,30 @@ static Boolean IsRealImpFeat (Uint2 subtype)
   return FALSE;
 }
 
-static void EvidenceCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
+static void DoEvidenceFeatureProc (SeqFeatPtr sfp, Pointer userdata)
 {
-  AsnExpOptPtr     aeop;
-  AsnIoPtr         aip;
-  BioseqPtr        bsp;
-  BioseqSetPtr     bssp;
-  EvidenceFormPtr  efp;
-  Boolean          notext;
-  ObjMgrTypePtr    omtp;
-  SeqAnnotPtr      sap;
-  SeqFeatPtr       sfp;
-  Uint2            subtype;
-  SeqMgrFeatContext context;
-  SeqFeatPtr       new_sfp;
+  EvidenceFormPtr efp;
+  
+  if (sfp == NULL || userdata == NULL) return;
+  efp = (EvidenceFormPtr) userdata;
 
-  if (mydata == NULL) return;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  efp = (EvidenceFormPtr) mydata;
-  if (efp == NULL) return;
-  omtp = efp->omtp;
-  if (omtp == NULL || omtp->subtypefunc == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  GetTitle (efp->findthis, efp->findStr, sizeof (efp->findStr) - 1);
-  notext = StringHasNoText (efp->findStr);
-  aip = AsnIoNullOpen ();
-  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteEvidenceCallBack);
-  if (aeop != NULL) {
-    aeop->user_data = (Pointer) efp;
-  }
- 
-  while (sap != NULL) {
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
-        if (efp->subtype == 0 || subtype == efp->subtype ||
+  if (efp->subtype == 0 || sfp->idx.subtype == efp->subtype ||
            (efp->subtype == FEATDEF_IMP &&
-            IsRealImpFeat (subtype)))
-        {
-          if (notext || EvidenceHasSubstring (omtp, aip, (Pointer) sfp, efp)) {
-            sfp->exp_ev = (Uint1) efp->exp_ev;
-          }
-          else
-          {
-            new_sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context);
-            if (new_sfp == sfp && StringStr (context.label, efp->findStr) != NULL)
-            {
-              sfp->exp_ev = (Uint1) efp->exp_ev;
-            }
-          }
-        }
-        sfp = sfp->next;
-      }
-    }
-    sap = sap->next;
+            IsRealImpFeat (sfp->idx.subtype)))
+  {
+    sfp->exp_ev = (Uint1) efp->exp_ev;
   }
-  AsnIoClose (aip);
 }
 
 static void DoEvidence (ButtoN b)
 
 {
-  EvidenceFormPtr  efp;
-  SeqEntryPtr      sep;
-  Uint2            subtype;
-  Int2             val;
-  ValNodePtr       vnp;
+  EvidenceFormPtr      efp;
+  SeqEntryPtr          sep;
+  Uint2                subtype;
+  Int2                 val;
+  ValNodePtr           vnp;
+  FeaturesWithTextData fd;
 
   efp = GetObjectExtra (b);
   if (efp == NULL) return;
@@ -218,16 +143,21 @@ static void DoEvidence (ButtoN b)
   if (vnp != NULL) {
     subtype = vnp->choice;
   }
-  efp->omp = ObjMgrGet ();
-  efp->omtp = NULL;
-  if (efp->omp != NULL) {
-    efp->omtp = ObjMgrTypeFind (efp->omp, efp->itemtype, NULL, NULL);
-  }
   efp->subtype = subtype;
   efp->exp_ev = GetValue (efp->evdence) - 1;
-  if (efp->itemtype != 0 && efp->omtp != NULL) {
-    SeqEntryExplore (sep, (Pointer) efp, EvidenceCallback);
-  }
+  
+  GetTitle (efp->findthis, efp->findStr, sizeof (efp->findStr) - 1);
+  fd.search_text = efp->findStr;
+  fd.no_text = StringHasNoText (efp->findStr);
+  fd.seqFeatChoice = 0;
+  fd.featDefChoice = 0;
+  fd.case_insensitive = GetStatus (efp->case_insensitive);
+  fd.act_when_string_not_present = GetStatus (efp->when_string_not_present);
+  fd.callback = DoEvidenceFeatureProc;
+  fd.userdata = efp;
+
+  OperateOnSeqEntryFeaturesWithText (sep, &fd);
+
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (efp->input_entityID, TRUE);
@@ -330,9 +260,11 @@ extern void EditEvidenceFlag (IteM i)
   PopupItem (efp->evdence, "Non-Experimental");
   SetValue (efp->evdence, 1);
 
-  k = HiddenGroup (h, 0, 2, NULL);
+  k = HiddenGroup (h, 0, 4, NULL);
   StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
   efp->findthis = DialogText (k, "", 14, NULL);
+  efp->case_insensitive = CheckBox (k, "Case insensitive", NULL);
+  efp->when_string_not_present = CheckBox (k, "When String is Not Present", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoEvidence);
@@ -359,122 +291,71 @@ typedef struct exceptionformdata {
   Boolean        excpt;
   CharPtr        except_text;
   Boolean        rescue;
-  ObjMgrPtr      omp;
-  ObjMgrTypePtr  omtp;
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
   GrouP          prodgrp;
   Int2           prodval;
+  ButtoN         case_insensitive;
+  ButtoN         when_string_not_present;
 } ExceptionFormData, PNTR ExceptionFormPtr;
 
-static void LIBCALLBACK AsnWriteExceptionCallBack (AsnExpOptStructPtr pAEOS)
-
+static void DoExceptionFeatureProc (SeqFeatPtr sfp, Pointer userdata)
 {
-  ExceptionFormPtr  efp;
-  CharPtr          pchFind;
-  CharPtr          pchSource;
+  ExceptionFormPtr efp;
+  CharPtr          str;
+  
+  if (sfp == NULL || userdata == NULL) return;
+  efp = (ExceptionFormPtr) userdata;
 
-  efp = (ExceptionFormPtr) pAEOS->data;
-  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
-	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
-	pchFind = efp->findStr;
-	if (StringSearch (pchSource, pchFind) != NULL) {
-	  efp->stringfound = TRUE;
-	}
-  }
-}
-
-static Boolean ExceptionHasSubstring (ObjMgrTypePtr omtp, AsnIoPtr aip, Pointer ptr, ExceptionFormPtr efp)
-
-{
-  efp->stringfound = FALSE;
-  (omtp->asnwrite) (ptr, aip, NULL);
-  return efp->stringfound;
-}
-
-static void ExceptionCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  AsnExpOptPtr      aeop;
-  AsnIoPtr          aip;
-  BioseqPtr         bsp;
-  BioseqSetPtr      bssp;
-  ExceptionFormPtr  efp;
-  Boolean           notext;
-  ObjMgrTypePtr     omtp;
-  SeqAnnotPtr       sap;
-  SeqFeatPtr        sfp;
-  CharPtr           str;
-  Uint2             subtype;
-
-  if (mydata == NULL) return;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  efp = (ExceptionFormPtr) mydata;
-  if (efp == NULL) return;
-  omtp = efp->omtp;
-  if (omtp == NULL || omtp->subtypefunc == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  GetTitle (efp->findthis, efp->findStr, sizeof (efp->findStr) - 1);
-  notext = StringHasNoText (efp->findStr);
-  aip = AsnIoNullOpen ();
-  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteExceptionCallBack);
-  if (aeop != NULL) {
-    aeop->user_data = (Pointer) efp;
-  }
-  while (sap != NULL) {
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
-        if (efp->subtype == 0 || subtype == efp->subtype ||
+  if (efp->subtype == 0 || sfp->idx.subtype == efp->subtype ||
            (efp->subtype == FEATDEF_IMP &&
-            IsRealImpFeat (subtype))) {
-          if ((efp->prodval == 1 && sfp->product != NULL) ||
+            IsRealImpFeat (sfp->idx.subtype)))
+  {
+    if ((efp->prodval == 1 && sfp->product != NULL) ||
               (efp->prodval == 2 && sfp->product == NULL) ||
-              efp->prodval == 3) {
-            if (notext || ExceptionHasSubstring (omtp, aip, (Pointer) sfp, efp)) {
-              sfp->excpt = efp->excpt;
-              if (sfp->excpt) {
-                if (! StringHasNoText (efp->except_text)) {
-                  sfp->except_text = MemFree (sfp->except_text);
-                  sfp->except_text = StringSave (efp->except_text);
-                }
-              } else {
-                if (efp->rescue) {
-                  if (sfp->comment == NULL) {
-                    sfp->comment = sfp->except_text;
-                  } else {
-                    str = MemNew (StringLen (sfp->comment) + StringLen (sfp->except_text) + 5);
-                    if (str != NULL) {
-                      StringCpy (str, sfp->comment);
-                      StringCat (str, "; ");
-                      StringCat (str, sfp->except_text);
-                      sfp->comment = MemFree (sfp->comment);
-                      sfp->comment = str;
-                    }
-                  }
-                  sfp->except_text = NULL;
-                } else {
-                  sfp->except_text = MemFree (sfp->except_text);
-                }
-              }
+              efp->prodval == 3)
+    {
+      sfp->excpt = efp->excpt;
+      if (sfp->excpt)
+      {
+        if (! StringHasNoText (efp->except_text)) 
+        {
+          sfp->except_text = MemFree (sfp->except_text);
+          sfp->except_text = StringSave (efp->except_text);
+        }
+      } 
+      else
+      {
+        if (efp->rescue) 
+        {
+          if (sfp->comment == NULL) 
+          {
+            sfp->comment = sfp->except_text;
+          } 
+          else 
+          {
+            str = MemNew (StringLen (sfp->comment) + StringLen (sfp->except_text) + 5);
+            if (str != NULL) 
+            {
+              StringCpy (str, sfp->comment);
+              StringCat (str, "; ");
+              StringCat (str, sfp->except_text);
+              sfp->comment = MemFree (sfp->comment);
+              sfp->comment = str;
             }
           }
+          sfp->except_text = NULL;
         }
-        sfp = sfp->next;
+        else 
+        {
+          sfp->except_text = MemFree (sfp->except_text);
+        }
       }
     }
-    sap = sap->next;
   }
-  AsnIoClose (aip);
 }
+
 
 static CharPtr ExceptionExplanations [] = {
   "RNA Editing",
@@ -490,13 +371,14 @@ static CharPtr ExceptionExplanations [] = {
 static void DoException (ButtoN b)
 
 {
-  ExceptionFormPtr  efp;
-  SeqEntryPtr      sep;
-  Uint2            subtype;
-  Int2             val;
-  ValNodePtr       vnp;
-  Int4             explanation_choice;
-  Int4             num_explanations;
+  ExceptionFormPtr     efp;
+  SeqEntryPtr          sep;
+  Uint2                subtype;
+  Int2                 val;
+  ValNodePtr           vnp;
+  Int4                 explanation_choice;
+  Int4                 num_explanations;
+  FeaturesWithTextData fd;
 
   efp = GetObjectExtra (b);
   if (efp == NULL) return;
@@ -519,11 +401,6 @@ static void DoException (ButtoN b)
   if (vnp != NULL) {
     subtype = vnp->choice;
   }
-  efp->omp = ObjMgrGet ();
-  efp->omtp = NULL;
-  if (efp->omp != NULL) {
-    efp->omtp = ObjMgrTypeFind (efp->omp, efp->itemtype, NULL, NULL);
-  }
   efp->subtype = subtype;
   efp->excpt = (Boolean) (GetValue (efp->xception) == 2);
   if (efp->excpt) {
@@ -542,9 +419,19 @@ static void DoException (ButtoN b)
   }
   efp->rescue = GetStatus (efp->rescueExpl);
   efp->prodval = GetValue (efp->prodgrp);
-  if (efp->itemtype != 0 && efp->omtp != NULL) {
-    SeqEntryExplore (sep, (Pointer) efp, ExceptionCallback);
-  }
+  GetTitle (efp->findthis, efp->findStr, sizeof (efp->findStr) - 1);
+  
+  fd.search_text = efp->findStr;
+  fd.no_text = StringHasNoText (efp->findStr);
+  fd.seqFeatChoice = 0;
+  fd.featDefChoice = 0;
+  fd.case_insensitive = GetStatus (efp->case_insensitive);
+  fd.act_when_string_not_present = GetStatus (efp->when_string_not_present);
+  fd.callback = DoExceptionFeatureProc;
+  fd.userdata = efp;
+
+  OperateOnSeqEntryFeaturesWithText (sep, &fd);
+
   MemFree (efp->except_text);
   ArrowCursor ();
   Update ();
@@ -710,9 +597,11 @@ extern void EditExceptionFlag (IteM i)
   BuildExceptionExplanationGroup (efp, r);
   efp->rescueExpl = CheckBox (h, "Move explanation to comment", NULL);
 
-  k = HiddenGroup (h, 0, 2, NULL);
+  k = HiddenGroup (h, 0, 4, NULL);
   StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
   efp->findthis = DialogText (k, "", 14, NULL);
+  efp->case_insensitive = CheckBox (k, "Case Insensitive", NULL);
+  efp->when_string_not_present = CheckBox (k, "When String is Not Present", NULL);
 
   j = HiddenGroup (h, -2, 0, NULL);
   StaticPrompt (j, "Feature Product", 0, dialogTextHeight, programFont, 'c');
@@ -995,6 +884,7 @@ extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
       slp_to_change = slp;
       break;
     case SEQLOC_MIX:
+  	case SEQLOC_PACKED_INT:
       sip = SeqLocId (slp);
       if (sip == NULL) return; /* can only process if all on one bioseq */
       slp_to_change = NULL;
@@ -1178,8 +1068,9 @@ static void RecomputeSuggestedIntervalsForCDS (
   nucbsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
   if (nucbsp != NULL && rdp->batchbsp != NULL && nucbsp != rdp->batchbsp) {
     ClearBatchSuggestNucleotide ();
-    rdp->batchbsp = NULL;
-    Message (MSG_POSTERR, "Recompute Suggest is reverting to slower processing");
+    rdp->batchbsp = nucbsp;
+    SetBatchSuggestNucleotide (rdp->batchbsp, code);
+/*    Message (MSG_POSTERR, "Recompute Suggest is reverting to slower processing"); */
   }
   sip = SeqLocId (sfp->product);
   if (sip != NULL) {
@@ -1345,7 +1236,6 @@ static Boolean RetranslateOneCDS (
   CharPtr       ptr;
   SeqEntryPtr   sep;
   SeqIdPtr      sip;
-  SeqLocPtr     slp;
   ValNodePtr    vnp;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
@@ -1365,9 +1255,8 @@ static Boolean RetranslateOneCDS (
     }
   }
 
-  slp = SeqLocFindNext (sfp->location, NULL);
-  if (slp == NULL) return TRUE;
-  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  if (sfp->location == NULL) return TRUE;
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   /* if (CdsTranslatesProperly (sfp, gcp)) return TRUE; */
 
   if (sfp->product == NULL) {
@@ -1770,56 +1659,41 @@ extern void ReprocessmRNAProducts (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
-/*---------------------------------------------------------------------*/
-/*                                                                     */
-/* ApplyCodeBreak_FeatureCallback () -- Called for each CDS feature in */
-/*                                      a Bioseq.  Checks for any      */
-/*                                      nucleotide triplets that match */
-/*                                      the one in the given code      */
-/*                                      break and sets a code break    */
-/*                                      for each one that is found.    */
-/*                                                                     */
-/*---------------------------------------------------------------------*/
-
-static Boolean LIBCALLBACK ApplyCodeBreak_FeatureCallback (SeqFeatPtr sfp,
-					SeqMgrFeatContextPtr fcontext)
+/*
+ * ApplyCodeBreakToCDS
+ */
+ 
+static Boolean ApplyCodeBreakToCDS (SeqFeatPtr sfp, CharPtr codonStr, Int2 aaNum)
 {
   Uint1            aaChar;
   SeqLocPtr        aaSlp;
-  Int2             aaNum;
   Int4             aaPosition;
   SeqPntPtr        aaSpp;
   CharPtr          basePtr;
   CharPtr          bases;
-  CodeBreakFormPtr cbfp;
   CodeBreakPtr     cbp;
-  Char             codonStr [4];
   CdRegionPtr      crp;
   Int4             dnaLen;
   SeqLocPtr        dnaSlp;
-  Int2             i;
   CodeBreakPtr     lastCbp;
   SeqCodeTablePtr  sctp;
   Int4             total;
-
-  cbfp = (CodeBreakFormPtr) fcontext->userdata;
+  Boolean          added_code_breaks = FALSE;
+  
+  if (sfp == NULL || codonStr == NULL)
+  {
+    return FALSE;
+  }
 
   /* Get the nucleotide sequence */
 
   dnaLen = SeqLocLen (sfp->location);
   if (dnaLen < 1)
-    return TRUE;
+    return FALSE;
 
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+
   bases = ReadCodingRegionBases (sfp->location, dnaLen, crp->frame, &total);
-
-  /* Get the selected Amino Acid and codon triplet */
-
-  GetTitle (cbfp->codonText, codonStr, sizeof (codonStr));
-  for (i = 0; i < 3; i++)
-    codonStr [i] = TO_UPPER (codonStr [i]);
-
-  aaNum = GetValue (cbfp->aminoAcidPopup);
 
   /* Search for the selected codon in the */
   /* nucleotide sequence.  If found, add  */
@@ -1853,7 +1727,7 @@ static Boolean LIBCALLBACK ApplyCodeBreak_FeatureCallback (SeqFeatPtr sfp,
       cbp = CodeBreakNew ();
       cbp->loc = dnaSlp;
       sctp = SeqCodeTableFind (Seq_code_ncbieaa);
-      aaChar = (Uint1) GetSymbolForResidue (sctp, aaNum + 65);
+      aaChar = (Uint1) GetSymbolForResidue (sctp, aaNum);
       cbp->aa.value.intvalue = aaChar;
       cbp->aa.choice = 1; /* ncbieaa */
 
@@ -1862,23 +1736,76 @@ static Boolean LIBCALLBACK ApplyCodeBreak_FeatureCallback (SeqFeatPtr sfp,
 
       lastCbp = crp->code_break;
       if (lastCbp == NULL)
-	crp->code_break = cbp;
-      else {
-	while (lastCbp->next != NULL)
-	  lastCbp = lastCbp->next;
-	lastCbp->next = cbp;
-	cbp->next = NULL;
+      {
+	      crp->code_break = cbp;        
+      }
+      else 
+      {
+        while (lastCbp->next != NULL)
+        {
+          lastCbp = lastCbp->next;          
+        }
+	      lastCbp->next = cbp;
+	      cbp->next = NULL;
       }
 
-      /* Retranslate the CDS */
-
-      RetranslateOneCDS (sfp, fcontext->entityID, TRUE, FALSE);
-
+      added_code_breaks = TRUE;
     }
     basePtr += 3;
     aaPosition++;
   }
 
+  return added_code_breaks;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ApplyCodeBreak_FeatureCallback () -- Called for each CDS feature in */
+/*                                      a Bioseq.  Checks for any      */
+/*                                      nucleotide triplets that match */
+/*                                      the one in the given code      */
+/*                                      break and sets a code break    */
+/*                                      for each one that is found.    */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ApplyCodeBreak_FeatureCallback (SeqFeatPtr sfp,
+					SeqMgrFeatContextPtr fcontext)
+{
+  Int2             aaNum;
+  CodeBreakFormPtr cbfp;
+  Char             codonStr [4];
+  Int2             i;
+
+  cbfp = (CodeBreakFormPtr) fcontext->userdata;
+
+
+  /* Get the selected Amino Acid and codon triplet */
+
+  GetTitle (cbfp->codonText, codonStr, sizeof (codonStr));
+  for (i = 0; i < 3; i++)
+    codonStr [i] = TO_UPPER (codonStr [i]);
+
+  aaNum = GetValue (cbfp->aminoAcidPopup);
+  aaNum += 63;
+
+  if (aaNum >= 74)
+  {
+  	aaNum++;
+  }
+  if (aaNum >= 79)
+  {
+  	aaNum++;
+  }
+
+  if (ApplyCodeBreakToCDS (sfp, codonStr, aaNum))
+  {
+    /* Retranslate the CDS */
+
+    RetranslateOneCDS (sfp, fcontext->entityID, TRUE, FALSE);
+    
+  }
+  
   /* Return TRUE to continue on to the next CDS feature */
 
   return TRUE;
@@ -2207,6 +2134,103 @@ extern void AddGlobalCodeBreak (IteM i)
   Show (breakWin);
   Update ();
 
+}
+
+static void ParseCodonQualToCodeBreakCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  SeqCodeTablePtr sctp;
+  GBQualPtr       gqual, prev_qual = NULL, next_qual;
+  CharPtr         cp;
+  Char            codon_text[4];
+  Char            symbol_text [4];
+  Int2            aaNum;
+  Int4            i;
+  Boolean         converted_qual;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION || userdata == NULL)
+  {
+    return;
+  }
+  
+  sctp = (SeqCodeTablePtr) userdata;
+  
+  for (gqual = sfp->qual; gqual != NULL; gqual = next_qual)
+  {
+    next_qual = gqual->next;
+    converted_qual = FALSE;
+    if (StringCmp (gqual->qual, "codon") == 0)
+    {
+      cp = StringSearch (gqual->val, "seq:\"");
+      if (cp != NULL)
+      {
+        cp += 5;
+        StringNCpy (codon_text, cp, 3);
+        codon_text [3] = 0;
+        for (i = 0; i < 3; i++)
+          codon_text [i] = TO_UPPER (codon_text [i]);
+
+        cp = StrChr (cp, ':');
+        if (cp != NULL)
+        {
+          cp++;
+          StringNCpy (symbol_text, cp, 3);
+          symbol_text [3] = 0;
+          aaNum = FindResidueByName (symbol_text, sctp);         
+          if (ApplyCodeBreakToCDS (sfp, codon_text, aaNum))
+          {
+            /* Retranslate the CDS */
+
+            RetranslateOneCDS (sfp, sfp->idx.entityID, TRUE, FALSE);
+            
+            /* remove the codon qual */
+            if (prev_qual == NULL)
+            {
+              sfp->qual = gqual->next;
+            }
+            else
+            {
+              prev_qual->next = gqual->next;
+            }
+            gqual->next = NULL;
+            GBQualFree (gqual);
+            converted_qual = TRUE;
+          }
+        }
+      }
+    }
+    if (!converted_qual)
+    {
+      prev_qual = gqual;
+    }
+  }
+}
+
+extern void ParseCodonQualToCodeBreak (IteM i)
+{
+  BaseFormPtr      bfp;
+  SeqEntryPtr      sep;
+  SeqCodeTablePtr  sctp;
+  
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  
+  WatchCursor ();
+  Update ();
+  
+  sctp = SeqCodeTableFind (Seq_code_ncbieaa);
+  
+  VisitFeaturesInSep (sep, sctp, ParseCodonQualToCodeBreakCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
 }
 
 static Boolean CorrectGenCodeCallback (GatherContextPtr gcp)
@@ -2810,41 +2834,17 @@ typedef struct removeformdata {
   TexT           toTxt;
   Uint2          itemtype;
   Uint2          subtype;
-  ObjMgrPtr      omp;
-  ObjMgrTypePtr  omtp;
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
+  Boolean        take_action_when_string_present;
+  GrouP          string_constraint_type;
+  ButtoN         case_insensitive;
   Int4           from;
   Int4           to;
   ValNodePtr     bsplist;
   ValNodePtr     bssplist;
 } RemoveFormData, PNTR RemoveFormPtr;
-
-static void LIBCALLBACK AsnWriteRemoveForDCallBack (AsnExpOptStructPtr pAEOS)
-
-{
-  CharPtr        pchFind;
-  CharPtr        pchSource;
-  RemoveFormPtr  rfp;
-
-  rfp = (RemoveFormPtr) pAEOS->data;
-  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
-	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
-	pchFind = rfp->findStr;
-	if (StringSearch (pchSource, pchFind) != NULL) {
-	  rfp->stringfound = TRUE;
-	}
-  }
-}
-
-static Boolean ObjectHasSubstring (ObjMgrTypePtr omtp, AsnIoPtr aip, Pointer ptr, RemoveFormPtr rfp)
-
-{
-  rfp->stringfound = FALSE;
-  (omtp->asnwrite) (ptr, aip, NULL);
-  return rfp->stringfound;
-}
 
 static Boolean ObjectInRange (SeqFeatPtr sfp, Int4 from, Int4 to)
 
@@ -2859,48 +2859,79 @@ static Boolean ObjectInRange (SeqFeatPtr sfp, Int4 from, Int4 to)
   return TRUE;
 }
 
-static void RemoveFeatureCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
+static void RemoveFeatureCallback (SeqFeatPtr sfp, Pointer userdata)
 {
-  AsnExpOptPtr   aeop;
-  AsnIoPtr       aip;
-  BioseqPtr      bsp;
-  BioseqSetPtr   bssp;
-  SeqAnnotPtr    nextsap;
-  SeqFeatPtr     nextsfp;
-  Boolean        notext;
-  ObjMgrTypePtr  omtp;
-  Pointer PNTR   prevsap;
-  Pointer PNTR   prevsfp;
-  BioseqPtr      productbsp;
-  BioseqPtr      productcdna;
-  BioseqSetPtr   productnps;
-  RemoveFormPtr  rfp;
-  SeqAnnotPtr    sap;
-  SeqFeatPtr     sfp;
-  SeqIdPtr       sip;
+  RemoveFormPtr rfp;
+  SeqIdPtr      sip;
+  BioseqPtr     productbsp, productcdna;
+  BioseqSetPtr  productnps;
+  
+  if (sfp == NULL || userdata == NULL) return;
+
+  rfp = (RemoveFormPtr) userdata;
+  if (rfp == NULL) return;
+  if (sfp->idx.subtype == rfp->subtype ||
+      (rfp->subtype == FEATDEF_IMP && IsRealImpFeat (sfp->idx.subtype)) ||
+      rfp->subtype == ALL_FEATURES) 
+  {
+    if ((rfp->from == -1 && rfp->to == -1) || ObjectInRange (sfp, rfp->from, rfp->to)) 
+    {
+      if (sfp->data.choice == SEQFEAT_CDREGION) 
+      {
+        if (sfp->product != NULL) 
+        {
+          sip = SeqLocId (sfp->product);
+          if (sip != NULL) 
+          {
+            productbsp = BioseqFind (sip);
+            if (productbsp != NULL) 
+            {
+              ValNodeAddPointer (&(rfp->bsplist), 0, (Pointer) productbsp);
+            }
+          }
+        }
+      } 
+      else if (sfp->data.choice == SEQFEAT_RNA) 
+      {
+        if (sfp->product != NULL) 
+        {
+          sip = SeqLocId (sfp->product);
+          if (sip != NULL) 
+          {
+            productcdna = BioseqFind (sip);
+            if (productcdna != NULL && productcdna->idx.parenttype == OBJ_BIOSEQSET) 
+            {
+              productnps = (BioseqSetPtr) productcdna->idx.parentptr;
+              if (productnps != NULL && productnps->_class == BioseqseqSet_class_nuc_prot) 
+              {
+                ValNodeAddPointer (&(rfp->bssplist), 0, (Pointer) productnps);
+              }
+            }
+          }
+        }
+      }
+      sfp->idx.deleteme = TRUE;  
+    }
+  }
+}
+
+static void RemoveFeatures (SeqEntryPtr sep, RemoveFormPtr rfp)
+{
+  FeaturesWithTextData fd;
   Char           str [32];
-  Uint2          subtype;
   Int4           swap;
   long int       val;
-
-  if (mydata == NULL) return;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  rfp = (RemoveFormPtr) mydata;
-  if (rfp == NULL) return;
-  omtp = rfp->omtp;
-  if (omtp == NULL || omtp->subtypefunc == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-    prevsap = (Pointer PNTR) &(bsp->annot);
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-    prevsap = (Pointer PNTR) &(bssp->annot);
-  } else return;
+  
   GetTitle (rfp->findthis, rfp->findStr, sizeof (rfp->findStr) - 1);
-  notext = StringHasNoText (rfp->findStr);
+  fd.search_text = rfp->findStr;
+  fd.no_text = StringHasNoText (rfp->findStr);
+  fd.seqFeatChoice = 0;
+  fd.featDefChoice = 0;
+  fd.case_insensitive = GetStatus (rfp->case_insensitive);
+  fd.act_when_string_not_present = ! rfp->take_action_when_string_present;
+  fd.userdata = rfp;
+  fd.callback = RemoveFeatureCallback;
   GetTitle (rfp->fromTxt, str, sizeof (str) - 1);
   if ((! StringHasNoText (str)) && sscanf (str, "%ld", &val) == 1 && val >= 0) {
     rfp->from = (Int4) val;
@@ -2918,132 +2949,60 @@ static void RemoveFeatureCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, 
     rfp->from = rfp->to;
     rfp->to = swap;
   }
-  aip = AsnIoNullOpen ();
-  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteRemoveForDCallBack);
-  if (aeop != NULL) {
-    aeop->user_data = (Pointer) rfp;
-  }
-  while (sap != NULL) {
-    nextsap = sap->next;
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      prevsfp = (Pointer PNTR) &(sap->data);
-      while (sfp != NULL) {
-        nextsfp = sfp->next;
-        subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
-        if (subtype == rfp->subtype ||
-           (rfp->subtype == FEATDEF_IMP &&
-            IsRealImpFeat (subtype)) ||
-           rfp->subtype == ALL_FEATURES) {
-          if (notext || ObjectHasSubstring (omtp, aip, (Pointer) sfp, rfp)) {
-            if ((rfp->from == -1 && rfp->to == -1) || ObjectInRange (sfp, rfp->from, rfp->to)) {
-              if (sfp->data.choice == SEQFEAT_CDREGION) {
-                if (sfp->product != NULL) {
-                  sip = SeqLocId (sfp->product);
-                  if (sip != NULL) {
-                    productbsp = BioseqFind (sip);
-                    if (productbsp != NULL) {
-                      ValNodeAddPointer (&(rfp->bsplist), 0,
-				         (Pointer) productbsp);
-                    }
-                  }
-                }
-              } else if (sfp->data.choice == SEQFEAT_RNA) {
-                if (sfp->product != NULL) {
-                  sip = SeqLocId (sfp->product);
-                  if (sip != NULL) {
-                    productcdna = BioseqFind (sip);
-                    if (productcdna != NULL && productcdna->idx.parenttype == OBJ_BIOSEQSET) {
-                      productnps = (BioseqSetPtr) productcdna->idx.parentptr;
-                      if (productnps != NULL && productnps->_class == BioseqseqSet_class_nuc_prot) {
-                        ValNodeAddPointer (&(rfp->bssplist), 0,
-					   (Pointer) productnps);
-                      }
-                    }
-                  }
-                }
-              }
-              *(prevsfp) = sfp->next;
-              sfp->next = NULL;
-              SeqFeatFree (sfp);
-            } else {
-              prevsfp = (Pointer PNTR) &(sfp->next);
-            }
-          } else {
-            prevsfp = (Pointer PNTR) &(sfp->next);
-          }
-        } else {
-          prevsfp = (Pointer PNTR) &(sfp->next);
-        }
-        sfp = nextsfp;
-      }
-    }
-    if (sap->data == NULL) {
-      *(prevsap) = sap->next;
-      sap->next = NULL;
-      SeqAnnotFree (sap);
-    } else {
-      prevsap = (Pointer PNTR) &(sap->next);
-    }
-    sap = nextsap;
-  }
-  AsnIoClose (aip);
+  OperateOnSeqEntryFeaturesWithText (sep, &fd);
+  DeleteMarkedObjects (rfp->input_entityID, OBJ_SEQENTRY, (Pointer) sep);
 }
 
-static void RemoveDescriptorCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
+static void RemoveDescriptorCallback (SeqDescrPtr sdp, Pointer userdata)
 {
-  AsnExpOptPtr   aeop;
-  AsnIoPtr       aip;
-  BioseqPtr      bsp;
-  BioseqSetPtr   bssp;
-  ValNodePtr     nextsdp;
-  Boolean        notext;
-  ObjMgrTypePtr  omtp;
-  Pointer PNTR   prevsdp;
-  RemoveFormPtr  rfp;
-  ValNodePtr     sdp;
-  Uint2          subtype;
-
-  if (mydata == NULL) return;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  rfp = (RemoveFormPtr) mydata;
+  ObjValNodePtr ovp;
+  RemoveFormPtr rfp;
+  
+  if (sdp == NULL || userdata == NULL || sdp->extended == 0) return;
+  rfp = (RemoveFormPtr) userdata;
   if (rfp == NULL) return;
-  omtp = rfp->omtp;
-  if (omtp == NULL || omtp->subtypefunc == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sdp = bsp->descr;
-    prevsdp = (Pointer PNTR) &(bsp->descr);
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sdp = bssp->descr;
-    prevsdp = (Pointer PNTR) &(bssp->descr);
-  } else return;
+  
+  ovp = (ObjValNodePtr) sdp;
+    
+  if (sdp->choice == rfp->subtype) 
+  {
+    ovp->idx.deleteme = TRUE;	
+  }
+}
+
+static void RemoveDescriptors (SeqEntryPtr sep, RemoveFormPtr rfp)
+{
+  DescriptorsWithTextData dd;
+  Char                    str [32];
+  Int4                    swap;
+  long int                val;
+  
   GetTitle (rfp->findthis, rfp->findStr, sizeof (rfp->findStr) - 1);
-  notext = StringHasNoText (rfp->findStr);
-  aip = AsnIoNullOpen ();
-  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteRemoveForDCallBack);
-  if (aeop != NULL) {
-    aeop->user_data = (Pointer) rfp;
+  dd.search_text = rfp->findStr;
+  dd.no_text = StringHasNoText (rfp->findStr);
+  dd.case_insensitive = GetStatus (rfp->case_insensitive);
+  dd.act_when_string_not_present = ! rfp->take_action_when_string_present;
+  dd.userdata = rfp;
+  dd.callback = RemoveDescriptorCallback;
+  GetTitle (rfp->fromTxt, str, sizeof (str) - 1);
+  if ((! StringHasNoText (str)) && sscanf (str, "%ld", &val) == 1 && val >= 0) {
+    rfp->from = (Int4) val;
+  } else {
+    rfp->from = -1;
   }
-  while (sdp != NULL) {
-    nextsdp = sdp->next;
-    subtype = (*(omtp->subtypefunc)) ((Pointer) sdp);
-    if (subtype == rfp->subtype) {
-      if (notext || ObjectHasSubstring (omtp, aip, (Pointer) sdp, rfp)) {
-        *(prevsdp) = sdp->next;
-        sdp->next = NULL;
-        SeqDescFree (sdp);
-      } else {
-        prevsdp = (Pointer PNTR) &(sdp->next);
-      }
-    } else {
-      prevsdp = (Pointer PNTR) &(sdp->next);
-    }
-    sdp = nextsdp;
+  GetTitle (rfp->toTxt, str, sizeof (str) - 1);
+  if ((! StringHasNoText (str)) && sscanf (str, "%ld", &val) == 1 && val >= 0) {
+    rfp->to = (Int4) val;
+  } else {
+    rfp->to = -1;
   }
-  AsnIoClose (aip);
+  if (rfp->from > rfp->to) {
+    swap = rfp->from;
+    rfp->from = rfp->to;
+    rfp->to = swap;
+  }
+  OperateOnSeqEntryDescriptorsWithText (sep, &dd);
+  DeleteMarkedObjects (rfp->input_entityID, OBJ_SEQENTRY, (Pointer) sep);
 }
 
 static void DoRemoveAsnObject (ButtoN b)
@@ -3074,15 +3033,18 @@ static void DoRemoveAsnObject (ButtoN b)
     rfp->itemtype = OBJ_SEQDESC;
   }
 
-  rfp->omp = ObjMgrGet ();
-  rfp->omtp = NULL;
-  if (rfp->omp != NULL) {
-    rfp->omtp = ObjMgrTypeFind (rfp->omp, rfp->itemtype, NULL, NULL);
-  }
-
- if (rfp->itemtype == 0 || rfp->omtp == NULL) return;
+  if (rfp->itemtype == 0) return;
 
   removed_some_features = FALSE;
+  
+  if (GetValue (rfp->string_constraint_type) == 1)
+  {
+  	rfp->take_action_when_string_present = TRUE;
+  }
+  else
+  {
+    rfp->take_action_when_string_present = FALSE;
+  }
 
   val = 1;
   for (vnp = rfp->head; vnp != NULL; vnp = vnp->next)
@@ -3092,10 +3054,10 @@ static void DoRemoveAsnObject (ButtoN b)
       rfp->subtype = vnp->choice;
       if (rfp->subtype != 0) {
         if (rfp->is_feature) {
-          SeqEntryExplore (sep, (Pointer) rfp, RemoveFeatureCallback);
+          RemoveFeatures (sep, rfp);
           removed_some_features = TRUE;
         } else {
-          SeqEntryExplore (sep, (Pointer) rfp, RemoveDescriptorCallback);
+          RemoveDescriptors (sep, rfp);
         }
       }
     }
@@ -3373,7 +3335,6 @@ static void RemoveAsnObject (IteM i, Boolean feature)
   GrouP              g;
   GrouP              h;
   ValNodePtr         head;
-  Int2               j;
   GrouP              k;
   Int2               listHeight;
   GrouP              m;
@@ -3446,9 +3407,13 @@ static void RemoveAsnObject (IteM i, Boolean feature)
   rfp->bsplist = NULL;
   rfp->bssplist = NULL;
 
-  k = HiddenGroup (h, 0, 2, NULL);
-  StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
+  k = NormalGroup (h, 0, 3, "Optional string constraint", NULL, NULL);
+  rfp->string_constraint_type = HiddenGroup (k, 0, 2, NULL);
+  RadioButton (rfp->string_constraint_type, "Remove when text is present");
+  RadioButton (rfp->string_constraint_type, "Remove when text is not present");
+  SetValue (rfp->string_constraint_type, 1);
   rfp->findthis = DialogText (k, "", 14, NULL);
+  rfp->case_insensitive = CheckBox (k, "Case Insensitive", NULL);
 
   m = NULL;
   if (feature) {
@@ -3485,6 +3450,7 @@ extern void RemoveDescriptor (IteM i)
 #define SLCT_FEAT    1
 #define SLCT_DESC    2
 #define SLCT_BIOSEQ  3
+#define SLCT_PUB     4
 
 typedef struct selectformdata {
   FEATURE_FORM_BLOCK
@@ -3499,228 +3465,146 @@ typedef struct selectformdata {
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
+  ButtoN         when_string_not_present;
+  ButtoN         case_insensitive;
 } SelectFormData, PNTR SelectFormPtr;
 
-static Boolean StringListMatchesString (ValNodePtr string_list, CharPtr findStr)
+static void FeatureSelectCallback (SeqFeatPtr sfp, Pointer userdata)
 {
-  ValNodePtr vnp;
-
-  if (StringHasNoText (findStr)) return TRUE;
-  for (vnp = string_list; vnp != NULL; vnp = vnp->next)
-  {
-    if (StringStr (vnp->data.ptrvalue, findStr) != NULL) return TRUE;
-  }
-  return FALSE;
-}
-
-static Boolean PubJournalMatchesString (CitJourPtr cjp, CharPtr findStr)
-{
-  if (cjp == NULL || cjp->title == NULL) return FALSE;
-  if (StringListMatchesString (cjp->title, findStr)) return TRUE;
-  return FALSE;
-}
-
-static Boolean PubBookMatchesString (CitBookPtr cbp, CharPtr findStr)
-{
-  if (cbp == NULL || cbp->title == NULL) return FALSE;
-  if (StringListMatchesString (cbp->title, findStr)) return TRUE;
-  return FALSE;
-}
-
-static Boolean PubArticleMatchesString (CitArtPtr cap, CharPtr findStr)
-{
-  if (cap == NULL || cap->fromptr == NULL) return FALSE;
-  switch (cap->from)
-  {
-    case 1:
-      if (PubJournalMatchesString (cap->fromptr, findStr)) return TRUE;
-    case 2:
-    case 3:
-      if (PubBookMatchesString (cap->fromptr, findStr)) return TRUE;
-  }
-  return FALSE;
-}
-
-static Boolean PubdescMatchesString ( ValNodePtr vnp, CharPtr findStr)
-{
-  CitGenPtr       cgp;
-  CitPatPtr       cpp;
-  MedlineEntryPtr mep;
-  ValNodePtr      pub;
-
- 
-  if (vnp == NULL) return FALSE;
-  switch (vnp->choice)
-  {
-    case PUB_Gen :
-      cgp = (CitGenPtr) vnp->data.ptrvalue;
-      if (cgp == NULL) return FALSE;
-      if (StringStr (cgp->title, findStr) != NULL) return TRUE;
-      if (StringListMatchesString (cgp->journal, findStr)) return TRUE;
-      break;
-    case PUB_Medline :
-      mep = (MedlineEntryPtr) vnp->data.ptrvalue;
-      if (mep == NULL) return FALSE;
-      if ( PubArticleMatchesString (mep->cit, findStr)) return TRUE;
-      break;
-    case PUB_Article :
-      if ( PubArticleMatchesString (vnp->data.ptrvalue, findStr)) return TRUE;
-      break;
-    case PUB_Journal :
-      if (PubJournalMatchesString (vnp->data.ptrvalue, findStr)) return TRUE;
-      break;
-    case PUB_Patent :
-      cpp = (CitPatPtr) vnp->data.ptrvalue;
-      if (cpp == NULL || cpp->title == NULL) return FALSE;
-      if (StringStr (cpp->title, findStr) != NULL) return TRUE;
-      break;
-    case PUB_Book :
-    case PUB_Man :
-      if (PubBookMatchesString (vnp->data.ptrvalue, findStr)) return TRUE;
-      break;
-    case PUB_Equiv :
-      for (pub = vnp->data.ptrvalue; pub != NULL; pub = pub->next)
-      {
-        if (PubdescMatchesString (pub, findStr)) return TRUE;
-      }
-      break;
-  }
-  return FALSE;
-}
-    
-static Boolean FeatureMatchesString (SeqFeatPtr sfp, CharPtr findStr)
-{
-  SeqMgrFeatContext context;
-  SeqFeatPtr        new_sfp;
-  PubdescPtr        pdp;
-  ValNodePtr        vnp;
-
-  if (sfp == NULL) return FALSE;
-  if (StringHasNoText (findStr)) return TRUE;
-  if (sfp->data.choice == SEQFEAT_PUB)
-  {
-    if( (pdp = (PubdescPtr) sfp->data.value.ptrvalue) == NULL) return FALSE;
-    for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next)
-    {
-      if (PubdescMatchesString (sfp->data.value.ptrvalue, findStr))
-      {
-        return TRUE;
-      }
-    }
-    return FALSE;
-  }
-
-  new_sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp,
-                                     &context);
-  if (new_sfp != sfp || StringStr (context.label, findStr) == NULL)
-    return FALSE;
-
-  return TRUE;
-}
+  Uint1Ptr subtype;
+  if (sfp == NULL) return;
   
-static Boolean DescriptorMatchesString ( SeqDescPtr sdp, CharPtr findStr)
-{
-  CharPtr      cp;
-  OrgRefPtr    orp;
-  BioSourcePtr biop;
-  PubdescPtr   pdp;
-  ValNodePtr   vnp;
-
-  if (sdp == NULL) return FALSE;
-  if (StringHasNoText (findStr)) return TRUE;
-
-  switch (sdp->choice)
+  if (userdata != NULL)
   {
-    case Seq_descr_name:
-    case Seq_descr_title:
-    case Seq_descr_comment:
-    case Seq_descr_region:
-      cp = sdp->data.ptrvalue;
-      if (StringStr (cp, findStr) == NULL) return FALSE;
-      break;
-    case Seq_descr_org:
-      orp = sdp->data.ptrvalue;
-      if (orp == NULL || orp->taxname == NULL) return FALSE;
-      if (StringStr (orp->taxname, findStr) == NULL) return FALSE;
-      break;
-    case Seq_descr_source:
-      biop = sdp->data.ptrvalue;
-      if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL) return FALSE;
-      if (StringStr (biop->org->taxname, findStr) == NULL) return FALSE;
-      break;
-    case Seq_descr_pub:
-      if( (pdp = (PubdescPtr) sdp->data.ptrvalue) == NULL) return FALSE;
-      for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next)
-      {
-        if (PubdescMatchesString (vnp, findStr))
-        {
-          return TRUE;
-        }
-      }
-      return FALSE;
-      break;
-    default:
-      return FALSE;
-      break;
+  	subtype = (Uint1Ptr) userdata;
+  	if (*subtype != sfp->idx.subtype) return;
+  }
+  ObjMgrAlsoSelect (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, 0, NULL);
+}
+
+static void DescriptorSelectCallback (SeqDescrPtr sdp, Pointer userdata)
+{
+  ObjValNodePtr ovp;
+  Uint1Ptr subtype;
+  
+  if (sdp == NULL || sdp->extended == 0) return;
+  
+  ovp = (ObjValNodePtr) sdp;
+  if (userdata != NULL)
+  {
+  	subtype = (Uint1Ptr) userdata;
+  	if (*subtype != ovp->idx.subtype) return;
   }
     
-  return TRUE;
+  ObjMgrAlsoSelect (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, 0, NULL);
 }
 
-static Boolean SelectObjCallback (GatherContextPtr gcp)
-
+static void BioseqSelectCallback (BioseqPtr bsp, Pointer userdata)
 {
-  ObjMgrTypePtr  omtp;
-  SelectFormPtr  selfp;
-  Uint2          subtype;
-
-  if (gcp == NULL) return TRUE;
-  selfp = (SelectFormPtr) gcp->userdata;
-  if (selfp == NULL) return TRUE;
-  if (gcp->thistype != selfp->itemtype) return TRUE;
-  omtp = selfp->omtp;
-  if (omtp == NULL) return TRUE;
-  subtype = (*(omtp->subtypefunc)) ((Pointer) gcp->thisitem);
-  if (subtype != selfp->subtype) return TRUE;
-
-  if (gcp->thistype == OBJ_SEQFEAT
-    && ! FeatureMatchesString (gcp->thisitem, selfp->findStr))
+  Uint1Ptr subtype;
+  
+  if (bsp == NULL) return;
+  
+  if (userdata != NULL)
   {
-    return TRUE;
+  	subtype = (Uint1Ptr) userdata;
+  	if (*subtype != bsp->idx.subtype) return;
   }
-  if (gcp->thistype == OBJ_SEQDESC
-    && ! DescriptorMatchesString (gcp->thisitem, selfp->findStr))
-  {
-    return TRUE;
-  }
-  ObjMgrAlsoSelect (gcp->entityID, gcp->itemID, gcp->thistype, 0, NULL);
-  return TRUE;
+    
+  ObjMgrAlsoSelect (bsp->idx.entityID, bsp->idx.itemID, bsp->idx.itemtype, 0, NULL);
 }
+
 
 static void DoSelectAsnObject (ButtoN b)
 
 {
-  GatherScope    gs;
-  SelectFormPtr  selfp;
-  SeqEntryPtr    sep;
-  Int2           val;
-  ValNodePtr     vnp;
+  SelectFormPtr           selfp;
+  SeqEntryPtr             sep;
+  Int2                    val;
+  ValNodePtr              vnp;
+  FeaturesWithTextData    fd;
+  DescriptorsWithTextData dd;
+  Uint1                   bioseq_choice = Seq_repr_raw;
+  Uint1                   pub_choice = FEATDEF_PUB;
 
   selfp = GetObjectExtra (b);
   if (selfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (selfp->input_entityID);
   if (sep == NULL) return;
   Hide (selfp->form);
+  
+  vnp = NULL;
+  if (selfp->type == SLCT_FEAT || selfp->type == SLCT_DESC)
+  {
+    val = GetValue (selfp->objlist);
+    if (val > 0) {
+      vnp = selfp->head;
+      while (vnp != NULL && val > 1) {
+        val--;
+        vnp = vnp->next;
+      }
+    }
+  }
+
   switch (selfp->type) {
     case SLCT_FEAT :
-      selfp->itemtype = OBJ_SEQFEAT;
+      GetTitle (selfp->findthis, selfp->findStr, sizeof (selfp->findStr) - 1);
+      fd.search_text = selfp->findStr;
+      fd.no_text = StringHasNoText (selfp->findStr);
+      fd.seqFeatChoice = 0;
+      fd.featDefChoice = 0;
+      fd.case_insensitive = GetStatus (selfp->case_insensitive);
+      fd.act_when_string_not_present = GetStatus (selfp->when_string_not_present);
+      fd.callback = FeatureSelectCallback;
+      if (vnp == NULL)
+      {
+      	fd.userdata = NULL;
+      }
+      else
+      {
+        fd.userdata = (Pointer) &(vnp->choice);
+      }
+      OperateOnSeqEntryFeaturesWithText (sep, &fd); 	
       break;
     case SLCT_DESC :
-      selfp->itemtype = OBJ_SEQDESC;
+      GetTitle (selfp->findthis, selfp->findStr, sizeof (selfp->findStr) - 1);
+      dd.search_text = selfp->findStr;
+      dd.no_text = StringHasNoText (selfp->findStr);
+      dd.case_insensitive = GetStatus (selfp->case_insensitive);
+      dd.act_when_string_not_present = GetStatus (selfp->when_string_not_present);
+      dd.callback = DescriptorSelectCallback;
+      if (vnp == NULL)
+      {
+      	fd.userdata = NULL;
+      }
+      else
+      {
+        fd.userdata = (Pointer) &(vnp->choice);
+      }
+      OperateOnSeqEntryDescriptorsWithText (sep, &dd); 	
       break;
     case SLCT_BIOSEQ :
-      selfp->itemtype = OBJ_BIOSEQ;
+ 	  VisitBioseqsInSep (sep, (Pointer) &bioseq_choice, BioseqSelectCallback);	
       break;
+  	case SLCT_PUB:
+      GetTitle (selfp->findthis, selfp->findStr, sizeof (selfp->findStr) - 1);
+      fd.search_text = selfp->findStr;
+      fd.no_text = StringHasNoText (selfp->findStr);
+      fd.seqFeatChoice = 0;
+      fd.featDefChoice = 0;
+      fd.case_insensitive = GetStatus (selfp->case_insensitive);
+      fd.act_when_string_not_present = GetStatus (selfp->when_string_not_present);
+      fd.callback = FeatureSelectCallback;
+      fd.userdata = (Pointer) &pub_choice;
+      OperateOnSeqEntryFeaturesWithText (sep, &fd); 
+      dd.search_text = fd.search_text;
+      dd.no_text = fd.no_text;
+      dd.case_insensitive = fd.case_insensitive;
+      dd.act_when_string_not_present = fd.act_when_string_not_present;
+      dd.callback = DescriptorSelectCallback;
+      dd.userdata = fd.userdata;	
+      OperateOnSeqEntryDescriptorsWithText (sep, &dd); 	
+      break;  	
     default :
       Remove (selfp->form);
       Update ();
@@ -3728,42 +3612,7 @@ static void DoSelectAsnObject (ButtoN b)
   }
   WatchCursor ();
   Update ();
-  vnp = NULL;
-  val = GetValue (selfp->objlist);
-  if (val > 0) {
-    vnp = selfp->head;
-    while (vnp != NULL && val > 1) {
-      val--;
-      vnp = vnp->next;
-    }
-  }
-  if (selfp->type == SLCT_FEAT || selfp->type == SLCT_DESC)
-  {
-    GetTitle (selfp->findthis, selfp->findStr, sizeof (selfp->findStr) - 1);
-  }
-  if (selfp->type == SLCT_BIOSEQ || vnp != NULL) {
-    selfp->omp = ObjMgrGet ();
-    selfp->omtp = NULL;
-    if (selfp->omp != NULL) {
-      selfp->omtp = ObjMgrTypeFind (selfp->omp, selfp->itemtype, NULL, NULL);
-    }
-    if (selfp->type == SLCT_BIOSEQ) {
-      selfp->subtype = Seq_repr_raw;
-    } else {
-      selfp->subtype = vnp->choice;
-    }
-    if (selfp->itemtype != 0 && selfp->subtype != 0 && selfp->omtp != NULL) {
-      MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-      gs.seglevels = 1;
-      MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-      gs.ignore[OBJ_BIOSEQ] = FALSE;
-      gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-      gs.ignore[OBJ_SEQANNOT] = FALSE;
-      gs.ignore[OBJ_SEQFEAT] = FALSE;
-      gs.ignore[OBJ_SEQDESC] = FALSE;
-      GatherEntity (selfp->input_entityID, (Pointer) selfp, SelectObjCallback, &gs);
-    }
-  }
+
   ArrowCursor ();
   Update ();
   /* ObjMgrSendMsg (OM_MSG_UPDATE, selfp->input_entityID, 0, 0); */
@@ -3803,7 +3652,7 @@ static void SelectAsnObject (IteM i, Int2 type)
   GrouP              c;
   GrouP              g;
   GrouP              h;
-  GrouP              k;
+  GrouP              k, m;
   ValNodePtr         head;
   Int2               j;
   Int2               listHeight;
@@ -3834,6 +3683,9 @@ static void SelectAsnObject (IteM i, Int2 type)
     case SLCT_BIOSEQ :
       title = "Sequence Selection";
       break;
+  	case SLCT_PUB:
+  	  title = "Publication Selection";
+  	  break;
     default :
       title = "? Selection";
       break;
@@ -3868,6 +3720,9 @@ static void SelectAsnObject (IteM i, Int2 type)
     case SLCT_BIOSEQ :
       StaticPrompt (g, "Sequence", 0, 0, programFont, 'c');
       break;
+  	case SLCT_PUB:
+  	  StaticPrompt (g, "Publication", 0, 0, programFont, 'c');
+  	  break;
     default :
       break;
   }
@@ -3876,7 +3731,11 @@ static void SelectAsnObject (IteM i, Int2 type)
   } else {
     listHeight = 8;
   }
-  selfp->objlist = SingleList (g, 16, listHeight, NULL);
+  
+  if (type != SLCT_PUB)
+  {
+    selfp->objlist = SingleList (g, 16, listHeight, NULL);
+  }
   head = NULL;
   if (type == SLCT_FEAT) {
     head = BuildFeatureValNodeList (TRUE, NULL, ALL_FEATURES, TRUE, FALSE);
@@ -3903,11 +3762,14 @@ static void SelectAsnObject (IteM i, Int2 type)
   }
   selfp->head = head;
 
-  if (selfp->type == SLCT_FEAT || selfp->type == SLCT_DESC)
+  if (selfp->type == SLCT_FEAT || selfp->type == SLCT_DESC || selfp->type == SLCT_PUB)
   {
-    k = HiddenGroup (h, 0, 2, NULL);
+    k = HiddenGroup (h, 0, 3, NULL);
     StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
     selfp->findthis = DialogText (k, "", 14, NULL);
+    m = HiddenGroup (k, 2, 0, NULL);
+    selfp->case_insensitive = CheckBox (m, "Case Insensitive", NULL);
+    selfp->when_string_not_present = CheckBox (m, "When String Not Present", NULL);
   }
 
   c = HiddenGroup (h, 4, 0, NULL);
@@ -3949,6 +3811,12 @@ extern void SelectBioseq (IteM i)
 
 {
   SelectAsnObject (i, SLCT_BIOSEQ);
+}
+
+extern void SelectPubs (IteM i)
+
+{
+  SelectAsnObject (i, SLCT_PUB);
 }
 
 typedef struct fuseformdata {
@@ -9854,7 +9722,7 @@ static CharPtr molinfo_tech_list [] = {
   "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
   "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
   "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
-  "fli cDNA", "htgs 0", "htc", "wgs", NULL
+  "fli cDNA", "htgs 0", "htc", "wgs", "barcode", NULL
 };
 
 static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)

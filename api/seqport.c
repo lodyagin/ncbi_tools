@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.124 $
+* $Revision: 6.131 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,31 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.131  2004/09/20 18:29:48  bollin
+* use partial flag in TransTableTranslateCommon only when feature is 3' partial.
+*
+* Revision 6.130  2004/07/16 19:37:37  kans
+* SeqPortStream and FastaStream functions return Int4, negative count if any fetch failures
+*
+* Revision 6.129  2004/07/12 17:22:42  kans
+* added overflow protection to ReadCodingRegionBases - replaces StringMove
+*
+* Revision 6.128  2004/06/24 16:08:30  kans
+* FormatSequenceBlock and StreamCacheGetResidue handle SEQLOC_PACKED_INT like SEQLOC_MIX
+*
+* Revision 6.127  2004/06/21 20:55:54  bollin
+* adapted ConvertNsToGaps function to handle known and unknown length gaps
+* and be able to leave Ns in sequence.
+*
+* Revision 6.126  2004/06/18 20:08:43  bollin
+* changed handling of userdata for ConvertNsToGaps to allow negative values to
+* indicate >= absolute value of integer passed
+*
+* Revision 6.125  2004/06/18 16:32:51  bollin
+* when changing sets of N where the length is not 100 to gaps of unknown length,
+* size 100, must change locations and lengths of affected features and total
+* length of affected Bioseq.
+*
 * Revision 6.124  2004/06/09 14:03:48  bollin
 * unknown length gaps should always be length 100 after converting
 *
@@ -532,7 +557,7 @@ static char *this_file = __FILE__;
 #include <explore.h>   /* for BioseqFindFromSeqLoc function */
 #include <subutil.h>
 #include <tofasta.h>   /* for FastaSeqLineEx function */
-
+#include <salutil.h> 
 
 
 NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
@@ -2424,6 +2449,7 @@ typedef struct streamdata {
   SeqPortStreamProc  proc;
   Uint1              letterToComp [256];
   CharPtr            tmp;
+  Boolean            failed;
 } StreamData, PNTR StreamDataPtr;
 
 /* prototype for main internal recursive processing function */
@@ -2841,6 +2867,7 @@ static Int4 SeqPortStreamSeqLoc (
     } else {
       ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream failed to load Bioseq %s", buf);
     }
+    sdp->failed = TRUE;
     return 0;
   }
 
@@ -3288,6 +3315,7 @@ static Int4 SeqPortStreamSetup (
   sd.userdata = userdata;
   sd.proc = proc;
   sd.tmp = NULL;
+  sd.failed = FALSE;
 
   /* if NULL callback, copy into allocated userdata string */
 
@@ -3338,12 +3366,16 @@ static Int4 SeqPortStreamSetup (
 
   /* return number of bases or residues streamed to callback */
 
+  if (sd.failed) {
+    return -count;
+  }
+
   return count;
 }
 
 /* public functions all call SeqPortStreamSetup */
 
-NLM_EXTERN void SeqPortStream (
+NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
   StreamFlgType flags,
   Pointer userdata,
@@ -3351,10 +3383,10 @@ NLM_EXTERN void SeqPortStream (
 )
 
 {
-  SeqPortStreamSetup (bsp, 0, -1, Seq_strand_unknown, NULL, flags, userdata, proc);
+  return SeqPortStreamSetup (bsp, 0, -1, Seq_strand_unknown, NULL, flags, userdata, proc);
 }
 
-NLM_EXTERN void SeqPortStreamInt (
+NLM_EXTERN Int4 SeqPortStreamInt (
   BioseqPtr bsp,
   Int4 start,
   Int4 stop,
@@ -3365,10 +3397,10 @@ NLM_EXTERN void SeqPortStreamInt (
 )
 
 {
-  SeqPortStreamSetup (bsp, start, stop, strand, NULL, flags, userdata, proc);
+  return SeqPortStreamSetup (bsp, start, stop, strand, NULL, flags, userdata, proc);
 }
 
-NLM_EXTERN void SeqPortStreamLoc (
+NLM_EXTERN Int4 SeqPortStreamLoc (
   SeqLocPtr slp,
   StreamFlgType flags,
   Pointer userdata,
@@ -3376,7 +3408,7 @@ NLM_EXTERN void SeqPortStreamLoc (
 )
 
 {
-  SeqPortStreamSetup (NULL, 0, 0, 0, slp, flags, userdata, proc);
+  return SeqPortStreamSetup (NULL, 0, 0, 0, slp, flags, userdata, proc);
 }
 
 /*******************************************************************************
@@ -3451,7 +3483,7 @@ NLM_EXTERN Uint1 StreamCacheGetResidue (
       bsq.seq_ext_type = 1;
       bsq.length = SeqLocLen (slp);
       bsq.seq_ext = &sl;
-      if (slp->choice == SEQLOC_MIX) {
+      if (slp->choice == SEQLOC_MIX || slp->choice == SEQLOC_PACKED_INT) {
         loc = (SeqLocPtr) slp->data.ptrvalue;
         if (loc != NULL) {
           sl.choice = loc->choice;
@@ -5957,7 +5989,9 @@ NLM_EXTERN void TransTableProcessBioseq (
 
 typedef struct readcdsdata {
   CharPtr  tmp;
-  size_t    frame;
+  size_t   frame;
+  Int4     max;
+  Boolean  overflow;
 } ReadCdsData, PNTR ReadCdsPtr;
 
 /* callback allows skipping one or two bases at beginning */
@@ -5969,7 +6003,9 @@ static void LIBCALLBACK SaveCdsBases (
 
 {
   Char        ch;
+  CharPtr     from, to;
   int         len;
+  Int4        max;
   ReadCdsPtr  rcp;
 
   rcp = (ReadCdsPtr) userdata;
@@ -5991,7 +6027,27 @@ static void LIBCALLBACK SaveCdsBases (
     }
   }
 
-  rcp->tmp = StringMove (rcp->tmp, sequence + rcp->frame);
+  /* rcp->tmp = StringMove (rcp->tmp, sequence + rcp->frame); */
+
+  from = sequence + rcp->frame;
+  to = rcp->tmp;
+  max = rcp->max;
+
+  ch = *from;
+  while (ch != '\0' && max > 0) {
+    *to = ch;
+    to++;
+    from++;
+    ch = *from;
+    max--;
+  }
+  *to = '\0';
+  if (ch != '\0') {
+    rcp->overflow = TRUE;
+  }
+
+  rcp->tmp = to;
+  rcp->max = max;
 
   rcp->frame = 0;
 }
@@ -6015,6 +6071,8 @@ NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 fr
   if (bases == NULL) return NULL;
 
   rcd.tmp = bases;
+  rcd.max = len;
+  rcd.overflow = FALSE;
 
   /* adjust start position */
 
@@ -6029,6 +6087,10 @@ NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 fr
   SeqPortStreamLoc (location, STREAM_EXPAND_GAPS, (Pointer) &rcd, SaveCdsBases);
 
   txt = rcd.tmp;
+
+  if (rcd.overflow) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ReadCodingRegionBases overflow caught");
+  }
 
 #if 0
   spp = SeqPortNewByLoc (location, Seq_code_iupacna);
@@ -6438,6 +6500,7 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
   CdRegionPtr  crp;
   Int2         genCode = 0;
   ValNodePtr   vnp;
+  Boolean      partial5, partial3;
 
   if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION) return NULL;
   crp = (CdRegionPtr) cds->data.value.ptrvalue;
@@ -6454,8 +6517,9 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
       vnp = vnp->next;
     }
   }
+  CheckSeqLocForPartial (cds->location, &partial5, &partial3);
 
-  return TransTableTranslateCommon (tblptr, cds->location, cds->product, cds->partial,
+  return TransTableTranslateCommon (tblptr, cds->location, cds->product, partial3,
                                     genCode, crp->frame, crp->code_break,
                                     include_stop, remove_trailingX,
                                     no_stop_at_end_of_complete_cds, altStartP);
@@ -7593,6 +7657,30 @@ NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (CharPtr accession)
 }
 
 
+static void FixGapLength (SeqIdPtr sip, Uint2 moltype, Int4 offset, Int4 diff)
+{
+  CharPtr    extra_ns;
+  SeqLocPtr  slp;
+  
+  if (sip == NULL || diff == 0) return;
+  if (diff > 0)
+  {
+    extra_ns = (CharPtr)MemNew ((diff + 1) * sizeof (Char));
+    if (extra_ns != NULL)
+    {
+      MemSet (extra_ns, 'N', diff);
+      extra_ns [diff] = 0;
+      insertchar (extra_ns, offset, sip, moltype, FALSE);
+    }
+  }
+  else
+  {
+  	slp = SeqLocIntNew (offset, offset - diff - 1, Seq_strand_plus, sip);
+    SeqDeleteByLoc (slp, TRUE, FALSE);
+    SeqLocFree (slp);
+  }
+}
+
 /*****************************************************************************
 *
 *   ConvertNsToGaps
@@ -7612,14 +7700,36 @@ NLM_EXTERN void ConvertNsToGaps (
   ValNodePtr  seq_ext;
   SeqLitPtr   slp;
   Boolean     use_unknown = FALSE;
-  Int4        unknown_gap_size;
+  Boolean     unknown_greater_than_or_equal = FALSE;
+  Boolean     use_known = FALSE;
+  Boolean     known_greater_than_or_equal = FALSE;
+  Int4Ptr     gap_sizes;
+  Int4        unknown_gap_size = 0;
+  Int4        known_gap_size = 0;
   IntFuzzPtr  ifp;
+  Int4        gap_len;
+  Boolean     make_unknown_size;
 
   if (bsp == NULL || bsp->repr != Seq_repr_raw || ISA_aa (bsp->mol)) return;
-  if (userdata != NULL)
+  if (userdata == NULL)
   {
-    use_unknown = TRUE;
-    unknown_gap_size = *((Int4Ptr) userdata);
+    known_greater_than_or_equal = TRUE;
+  }
+  else
+  {
+    gap_sizes = (Int4Ptr) userdata;
+    unknown_gap_size = gap_sizes[0];
+    known_gap_size = gap_sizes[1];
+    if (unknown_gap_size < 0)
+    {
+      unknown_greater_than_or_equal = TRUE;
+      unknown_gap_size = 0 - unknown_gap_size;
+    }
+    if (known_gap_size < 0)
+    {
+      known_greater_than_or_equal = TRUE;
+      known_gap_size = 0 - known_gap_size;
+    }
   }
 
   bases = GetSequenceByBsp (bsp);
@@ -7642,10 +7752,31 @@ NLM_EXTERN void ConvertNsToGaps (
   while (ch != '\0') {
 
     str = txt;
+    gap_len = 0;
     while (ch != 'N' && ch != '\0') {
       txt++;
       ch = *txt;
+      if (ch == 'N')
+      {
+        gap_len = StringSpn (txt, "N");
+        if (gap_len == unknown_gap_size
+          || (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+          || gap_len == known_gap_size
+          || (gap_len > known_gap_size && known_greater_than_or_equal))
+        {
+          /* leave ch pointing to N so that we will break out and
+           * create a gap */
+        }
+        else
+        {
+          /* this is an N that should be left in the sequence */
+          txt += gap_len;
+          ch = *txt;
+          gap_len = 0;
+        }
+      }
     }
+    
     *txt = '\0';
     if (StringLen (str) > 0) {
       slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
@@ -7666,27 +7797,58 @@ NLM_EXTERN void ConvertNsToGaps (
       ch = *txt;
     }
     *txt = '\0';
-    if (StringLen (str) > 0) {
+    gap_len = StringLen (str);
+    make_unknown_size = FALSE;
+    if (gap_len == 0)
+    {
+      make_unknown_size = FALSE;
+    }
+    else if (gap_len == unknown_gap_size)
+    {
+      make_unknown_size = TRUE;
+    }
+    else if (gap_len == known_gap_size)
+    {
+      make_unknown_size = FALSE;
+    }
+    else if (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+    {
+      if (!known_greater_than_or_equal)
+      {
+      	make_unknown_size = TRUE;
+      }
+      else if (unknown_gap_size > known_gap_size)
+      {
+      	make_unknown_size = TRUE;
+      }
+      else if (gap_len < known_gap_size)
+      {
+      	make_unknown_size = TRUE;
+      }
+    }
+    
+    if (gap_len > 0) {
       slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
       if (slp != NULL) {
-        slp->length = StringLen (str);
+        slp->length = gap_len;
         ValNodeAddPointer ((ValNodePtr PNTR) &(seq_ext), (Int2) 2, (Pointer) slp);
-        len += slp->length;
-        if (use_unknown && (unknown_gap_size == -1 || slp->length == unknown_gap_size))
+        if (make_unknown_size)
         {
           ifp = IntFuzzNew ();
           ifp->choice = 4;
           slp->fuzz = ifp;
-          if (unknown_gap_size == -1)
+          if (slp->length != 100)
           {
+            FixGapLength (bsp->id, bsp->mol, len, 100 - slp->length);
           	slp->length = 100;
           }
         }
+        len += slp->length;
       }
     }
     *txt = ch;
   }
-
+  
   MemFree (bases);
 
   bsp->seq_data = BSFree (bsp->seq_data);

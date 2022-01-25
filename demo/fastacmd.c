@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri Exp $";
+static char const rcsid[] = "$Id: fastacmd.c,v 6.31 2004/06/30 19:52:00 camacho Exp $";
 
-/* $Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri Exp $
+/* $Id: fastacmd.c,v 6.31 2004/06/30 19:52:00 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.31  2004/06/30 19:52:00  camacho
+* Added #include <blfmtutl.h>
+*
 * Revision 6.30  2004/05/13 20:54:45  coulouri
 * spell 'loci' correctly
 *
@@ -151,6 +154,7 @@ static char const rcsid[] = "$Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri
 #include <tofasta.h>
 #include <readdb.h>
 #include <blast.h>
+#include <blfmtutl.h>
 
 static Args myargs [] = {
     { "Database",                                               /* 0 */

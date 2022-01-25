@@ -107,6 +107,10 @@ SOURCE=..\..\..\tools\blastutl.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\blfmtutl.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\bxmlobj.c
 # End Source File
 # Begin Source File
@@ -364,6 +368,10 @@ SOURCE=..\..\..\tools\blastkar.h
 # Begin Source File
 
 SOURCE=..\..\..\tools\blastpri.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\blfmtutl.h
 # End Source File
 # Begin Source File
 

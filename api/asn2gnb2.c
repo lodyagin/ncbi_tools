@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.11 $
+* $Revision: 1.18 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1221,6 +1221,7 @@ NLM_EXTERN void AddAccessionBlock (
   GBBlockPtr         gbp;
   SeqIdPtr           gi = NULL;
   GBSeqPtr           gbseq;
+  SeqIdPtr           gnl = NULL;
   IndxPtr            index;
   SeqIdPtr           lcl = NULL;
   size_t             len = 0;
@@ -1289,9 +1290,7 @@ NLM_EXTERN void AddAccessionBlock (
         break;
       case SEQID_GENERAL :
         /* should not override better accession */
-        if (accn == NULL) {
-          accn = sip;
-        }
+        gnl = sip;
         break;
       case SEQID_LOCAL :
         lcl = sip;
@@ -1304,6 +1303,8 @@ NLM_EXTERN void AddAccessionBlock (
   sip = NULL;
   if (accn != NULL) {
     sip = accn;
+  } else if (gnl != NULL) {
+    sip = gnl;
   } else if (lcl != NULL) {
     sip = lcl;
   } else if (gi != NULL) {
@@ -1316,6 +1317,17 @@ NLM_EXTERN void AddAccessionBlock (
 
   bbp = Asn2gbAddBlock (awp, ACCESSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
+
+  bbp->entityID = awp->entityID;
+
+  if (accn == NULL) {
+
+    /* if no accession, do not show local or general in ACCESSION */
+
+    if (ajp->mode == ENTREZ_MODE || ajp->mode == SEQUIN_MODE) {
+      buf [0] = '\0';
+    }
+  }
 
   FFStartPrint (ffstring, awp->format, 0, 12, "ACCESSION", 12, 5, 5, "AC", TRUE);
 
@@ -1525,6 +1537,8 @@ NLM_EXTERN void AddVersionBlock (
   bbp = Asn2gbAddBlock (awp, VERSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
+  bbp->entityID = awp->entityID;
+
   /* no longer displaying NID */
 
   /*
@@ -1554,6 +1568,11 @@ NLM_EXTERN void AddVersionBlock (
 
     bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "SV");
     FFRecycleString(ajp, ffstring);
+
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, bbp);
+    }
+
     return;
   }
 
@@ -2470,6 +2489,8 @@ NLM_EXTERN void AddDbsourceBlock (
   bbp = Asn2gbAddBlock (awp, DBSOURCE_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
+  bbp->entityID = awp->entityID;
+
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
 
@@ -2894,6 +2915,12 @@ NLM_EXTERN void AddKeywordsBlock (
             ValNodeCopyStr (&head, 0, "; ");
           }
           ValNodeCopyStr (&head, 0, "WGS");
+          break;
+        case MI_TECH_barcode :
+          if (head != NULL) {
+            ValNodeCopyStr (&head, 0, "; ");
+          }
+          ValNodeCopyStr (&head, 0, "BARCODE");
           break;
         default :
           break;
@@ -3584,6 +3611,9 @@ static int LIBCALLBACK SortReferences (
     temp = rbp1;
     rbp1 = rbp2;
     rbp2 = temp;
+
+    irp1 = (IntRefBlockPtr) rbp1;
+    irp2 = (IntRefBlockPtr) rbp2;
   }
 
   /* if same uid, one with just uids goes last to be excised but remembered */
@@ -3598,9 +3628,9 @@ static int LIBCALLBACK SortReferences (
 
   /* put sites after pubs that refer to all or a range of bases */
 
-  if (rbp1->sites > 0) {
+  if (rbp1->sites > rbp2->sites) {
     return 1;
-  } else if (rbp2->sites > 0) {
+  } else if (rbp2->sites > rbp1->sites) {
     return -1;
   }
 
@@ -4148,6 +4178,9 @@ NLM_EXTERN Boolean AddReferenceBlock (
           if (alp != NULL) {
             irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
           }
+          if (csp->date != NULL) {
+            irp->date = DateDup (csp->date);
+          }
         }
       }
 
@@ -4226,6 +4259,10 @@ NLM_EXTERN Boolean AddReferenceBlock (
         /* EMBL patent records do not need author or title - A29528.1 */
       } else if (StringHasNoText (irp->authstr)) {
         /* do not allow no author reference to appear by itself - U07000.1 */
+        excise = TRUE;
+        combine = FALSE;
+      } else if (isRefSeq && is_aa && rbp->category == REF_CAT_SUB) {
+        /* GenPept RefSeq suppresses cit-subs */
         excise = TRUE;
         combine = FALSE;
       }
@@ -4602,6 +4639,8 @@ NLM_EXTERN void AddOriginBlock (
   bbp = Asn2gbAddBlock (awp, ORIGIN_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
+  bbp->entityID = awp->entityID;
+
   if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
 
     buf [0] = '\0';
@@ -4730,6 +4769,8 @@ NLM_EXTERN void AddSlashBlock (
 
   bbp = Asn2gbAddBlock (awp, SLASH_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
+
+  bbp->entityID = awp->entityID;
 
   str = MemNew(sizeof(Char) * 4);
   StringNCpy(str, "//\n", 4);
