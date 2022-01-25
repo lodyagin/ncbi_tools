@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 6.30 2002/04/19 17:47:24 dondosha Exp $
+/* $Id: wwwbutl.c,v 6.33 2002/08/06 20:10:10 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.30 $
+* $Revision: 6.33 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 6.33  2002/08/06 20:10:10  dondosha
+* Added handling of the discontiguous word options
+*
+* Revision 6.32  2002/05/09 15:38:08  dondosha
+* Call BLASTOptionNewEx instead of BLASTOptionNew, so megablast defaults are set in a central place
+*
+* Revision 6.31  2002/05/02 22:45:47  dondosha
+* Do not break out of loop if SeqPortRead returns negative value, just skip the non-residue and continue
+*
 * Revision 6.30  2002/04/19 17:47:24  dondosha
 * Removed restriction on the allowed number of databases in the config file
 *
@@ -907,7 +916,9 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
            number = 0;
            while (number < query_bsp->length) {
               retval = SeqPortRead(spp, buf, buf_length);
-              if (retval <= 0)
+              if (retval < 0)
+                 continue;
+              if (retval == 0)
                  break;
               BSWrite(query_bsp->seq_data, buf, retval);
               number += retval;
@@ -1045,23 +1056,17 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if(WWWGetValueByName(theInfo->info, "UNGAPPED_ALIGNMENT") != NULL)
 	gapped_set = FALSE;
 
-    if((options = BLASTOptionNew(theInfo->program, gapped_set)) == NULL) {
+    if((options = BLASTOptionNewEx(theInfo->program, gapped_set, is_megablast)) == NULL) {
         WWWBlastErrMessage(BLASTErrOptions, NULL);
 	return FALSE; 
     }
     
     if (is_megablast) {
-       options->is_megablast_search = TRUE;
        options->query_lcase_mask = query_lcase_mask;
-       /* WORD SIZE */
-       options->wordsize = 28;
        if((chptr = WWWGetValueByName(theInfo->info, "WORD_SIZE")) != NULL &&
           StringStr(chptr, "default") == NULL) {
           options->wordsize = atoi(chptr);
        }
-       options->gap_open = 0;
-       options->gap_extend = 0;
-       options->block_width = 0;
        /* Mega BLAST with no traceback (endpoints only)? */
        if (WWWGetValueByName(theInfo->info, "ENDPOINTS") != NULL)
           options->no_traceback = TRUE;
@@ -1115,28 +1120,53 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     }
 
     if (!StringICmp(theInfo->program, "blastn")) {
-       if (options->perc_identity > 98.0 || options->perc_identity <= 0) {
+       if (options->perc_identity >= 95.0) {
           options->reward = 1;
           options->penalty = -3;
-       } else if (options->perc_identity > 95.0) {
-          options->reward = 2;
-          options->penalty = -5;
-       } else if (options->perc_identity > 90.0) {
+       } else if (options->perc_identity >= 85.0 ||
+                  options->perc_identity == 0.0) {
           options->reward = 1;
           options->penalty = -2;
-       } else if (options->perc_identity > 85.0) {
+       } else if (options->perc_identity >= 80.0) {
           options->reward = 2;
           options->penalty = -3;
-       } else if (options->perc_identity > 80.0) {
-          options->reward = 3;
-          options->penalty = -4;
-       } else if (options->perc_identity > 75.0) {
-          options->reward = 5;
-          options->penalty = -6;
-       } else {
-          options->reward = 1;
-          options->penalty = -1;
-       } 
+       } else if (options->perc_identity >= 75.0) {
+          options->reward = 4;
+          options->penalty = -5;
+       } else if (options->perc_identity >= 60.0) {
+          options->reward = 2;
+          options->penalty = -2;
+       }
+    }
+
+    /* The discontiguous word options */
+    if ((chptr = WWWGetValueByName(theInfo->info, "TEMPLATE_LENGTH")) != NULL)
+       options->mb_template_length = atoi(chptr);
+
+    if (WWWGetValueByName(theInfo->info, "TWO_HITS") != NULL)
+       options->window_size = 40;
+    if ((chptr = WWWGetValueByName(theInfo->info, "TEMPLATE_TYPE")) != NULL)
+       options->mb_disc_type = (MBDiscWordType) atoi(chptr);
+
+    /* Set the gap penalties depending on the percent identity cutoff, if
+       the discontiguous word approach is used. Also make sure non-greedy
+       dynamic programming algorithm is used for gapped extension */
+    if (options->mb_template_length > 0 && options->wordsize <= 12 && 
+        options->wordsize >= 11 && options->perc_identity < 90.0) {
+       options->mb_use_dyn_prog = TRUE;
+       if (options->perc_identity >= 85.0) {
+          options->gap_open = 4;
+          options->gap_extend = 1;
+       } else if (options->perc_identity >= 80.0) {
+          options->gap_open = 5;
+          options->gap_extend = 2;
+       } else if (options->perc_identity >= 75) {
+          options->gap_open = 7;
+          options->gap_extend = 2;
+       } else if (options->perc_identity >= 60) {
+          options->gap_open = 3;
+          options->gap_extend = 1;
+       }
     }
 
     if((chptr = WWWGetValueByName(theInfo->info, "GAP_SIZE")) != NULL &&

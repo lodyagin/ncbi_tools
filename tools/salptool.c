@@ -1959,7 +1959,7 @@ static SeqIdPtr SeqIdReplaceID (SeqIdPtr head, SeqIdPtr pre, SeqIdPtr sip, SeqId
   return head;
 }
 
-static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, BioseqPtr bsp2, Int4 threshold, CharPtr PNTR message, BoolPtr nonly)
+static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, BioseqPtr bsp2, Int4 threshold, CharPtr PNTR message, Int4Ptr nonly)
 {
    AMFreqPtr         afp;
    Int4              alln;
@@ -2083,7 +2083,7 @@ static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, Bi
       nctr = 0;
       while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
       {
-         if (res != 1 && res != 2 && res != 4 && res != 8)
+         if (res == 15)
          {
             if (beg == ctr)
                beg++;
@@ -2111,14 +2111,32 @@ static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, Bi
    }
    if ((*message[0] != '\0') && len == bsp1->length && gaps == 0 && mismatches == 0)
    {
-      *nonly = TRUE;
+      if (nctr > 0)
+         *nonly = nctr+beg+end;
+      else
+         *nonly = -(beg+end);
+      sprintf(newstr, "\nThere are no other differences between the local and database sequences.");
+      StringCat(*message, newstr);
       return sap;
    } else
-      *nonly = FALSE;
+      *nonly = 0;
    if (len < bsp1->length)
    {
       sprintf(newstr, "%sThe alignment to the database sequence does not cover all of the local sequence. ", *message[0]=='\0'?"":"\n");
       StringCat(*message, newstr);
+      spp = SeqPortNew(bsp1, len, bsp1->length-1, Seq_strand_plus, Seq_code_ncbi4na);
+      alln = TRUE;
+      while (alln && (res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+      {
+         if (res != 15)
+            alln = FALSE;
+      }
+      if (alln)
+         sprintf(newstr, "\nThe unaligned sequence consists only of Ns. ");
+      else
+         sprintf(newstr, "\nThere are non-N residues in the unaligned sequence. ");
+      StringCat(*message, newstr);
+      SeqPortFree(spp);
    }
    if (gaps > 0 || mismatches > 0 || n > 0)
    {
@@ -2244,7 +2262,7 @@ typedef struct besthit {
    SeqIdPtr     sip1;
    SeqIdPtr     sip2;
    CharPtr      errstr;
-   Boolean      nonly;
+   Int4         nonly;
    Int4         errtype;
    struct besthit PNTR next;
 } BestHit, PNTR BestHitPtr;
@@ -2272,9 +2290,10 @@ static SeqIdPtr SWSeqIdReplaceID(SeqIdPtr sip_head, SeqIdPtr sip1, SeqIdPtr sip2
 
    sip = sip_head;
    sip_prev = NULL;
+   found = FALSE;
    while (sip != NULL && !found)
    {
-      if (SeqIdComp(sip, sip1))
+      if (SeqIdComp(sip, sip1) == SIC_YES)
          found = TRUE;
       else
       {
@@ -2298,6 +2317,203 @@ static SeqIdPtr SWSeqIdReplaceID(SeqIdPtr sip_head, SeqIdPtr sip1, SeqIdPtr sip2
    }
 }
 
+static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
+{
+   AlnMsg2Ptr  amp;
+   BioseqPtr   bsp;
+   BioseqPtr   bsp2;
+   Uint1Ptr    buf;
+   Int4        ctr;
+   CharPtr     dig;
+   Int4        first_from;
+   Int4        i;
+   Int4        l;
+   Int4        len;
+   Int4        linesize;
+   Boolean     more;
+   FILE        *ofp;
+   CharPtr     seq;
+   CharPtr     seq1;
+   CharPtr     seq2;
+   SeqIdPtr    sip;
+   SeqIdPtr    sip2;
+   SeqPortPtr  spp;
+   Int4        start;
+   Int4        stop;
+   Uint1       strand;
+   Char        textid1[16];
+   Char        textid2[16];
+   CharPtr     tmp;
+
+   linesize=70;
+   buf = (Uint1Ptr)MemNew(70*sizeof(Uint1));
+   if (sap == NULL || filename == NULL)
+      return;
+   if (sap->saip == NULL)
+      AlnMgr2IndexSingleChildSeqAlign(sap);
+   ofp = FileOpen(filename, "a");
+   if (ofp == NULL)
+      return;
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
+   for (i=0; i<16; i++)
+   {
+      textid1[i] = textid2[i] = ' ';
+   }
+   sip = AlnMgr2GetNthSeqIdPtr(sap, 1);
+   SeqIdWrite(sip, textid1, PRINTID_TEXTID_ACC_VER, 15);
+   sip2 = AlnMgr2GetNthSeqIdPtr(sap, 2);
+   SeqIdWrite(sip2, textid2, PRINTID_TEXTID_ACC_VER, 15);
+   for (i=0; i<15; i++)
+   {
+      if (textid1[i] == '\0')
+         textid1[i] = ' ';
+      if (textid2[i] == '\0')
+         textid2[i] = ' ';
+   }
+   textid1[15] = '\0';
+   textid2[15] = '\0';
+   bsp = BioseqLockById(sip);
+   bsp2 = BioseqLockById(sip2);
+   strand = AlnMgr2GetNthStrand(sap, 1);
+   dig = (CharPtr)MemNew(6*sizeof(Char));
+   for (l=0; l<start; l+=linesize)
+   {
+      spp = SeqPortNew(bsp, l, MIN(l+linesize-1, start-1), strand, Seq_code_iupacna);
+      ctr = SeqPortRead(spp, buf, MIN(l+linesize-1, start-1)-l+1);
+      buf[ctr] = '\0';
+      sprintf(dig, "%d", l+1);
+      for (i=StrLen(dig); i<5; i++)
+      {
+         dig[i] = ' ';
+      }
+      dig[i] = '\0';
+      fprintf(ofp, "%s%c%s %s\n", textid1, strand == Seq_strand_plus?'>':'<', dig, buf);
+      SeqPortFree(spp);
+   }
+   len = AlnMgr2GetAlnLength(sap, FALSE);
+   amp = AlnMsgNew2();
+   for (l=0; l<len; l+=linesize)
+   {
+      AlnMsgReNew2(amp);
+      amp->from_aln = l;
+      amp->to_aln = MIN(l+linesize-1, len-1);
+      amp->row_num = 1;
+      seq1 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
+      seq = seq1;
+      first_from = -1;
+      while (more = AlnMgr2GetNextAlnBit(sap, amp))
+      {
+         if (amp->type == AM_GAP)
+         {
+            for (i=0; i<amp->to_row - amp->from_row+1; i++)
+            {
+               *seq = '-';
+               seq++;
+            }
+         } else if (amp->type == AM_SEQ)
+         {
+            if (first_from == -1)
+            {
+               if (amp->strand == Seq_strand_minus)
+                  first_from = amp->to_row+1;
+               else
+                  first_from = amp->from_row+1;
+            }
+            spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
+            ctr = SeqPortRead(spp, buf, amp->to_row-amp->from_row+1);
+            buf[ctr] = '\0';
+            SeqPortFree(spp);
+            for (i=0; i<ctr; i++)
+            {
+               *seq = buf[i];
+               seq++;
+            }
+         }
+      }
+      sprintf(dig, "%d", first_from);
+      for (i=StrLen(dig); i<5; i++)
+      {
+         dig[i] = ' ';
+      }
+      dig[i] = '\0';
+      fprintf(ofp, "%s%c%s %s\n", textid1, amp->strand==Seq_strand_plus?'>':'<', dig, seq1);
+      AlnMsgReNew2(amp);
+      amp->from_aln = l;
+      amp->to_aln = MIN(l+linesize-1, len-1);
+      amp->row_num = 2;
+      seq2 = (CharPtr)MemNew((linesize+1)*sizeof(Char));
+      seq = seq2;
+      first_from = -1;
+      while (more = AlnMgr2GetNextAlnBit(sap, amp))
+      {
+         if (amp->type == AM_GAP)
+         {
+            for (i=0; i<amp->to_row - amp->from_row+1; i++)
+            {
+               *seq = '-';
+               seq++;
+            }
+         } else if (amp->type == AM_SEQ)
+         {
+            if (first_from == -1)
+            {
+               if (amp->strand == Seq_strand_minus)
+                  first_from = amp->to_row+1;
+               else
+                  first_from = amp->from_row+1;
+            }
+            spp = SeqPortNew(bsp2, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
+            ctr = SeqPortRead(spp, buf, amp->to_row-amp->from_row+1);
+            buf[ctr] = '\0';
+            SeqPortFree(spp);
+            for (i=0; i<ctr; i++)
+            {
+               *seq = buf[i];
+               seq++;
+            }
+         }
+      }
+      sprintf(dig, "%d", first_from);
+      for (i=StrLen(dig); i<5; i++)
+      {
+         dig[i] = ' ';
+      }
+      dig[i] = '\0';
+      fprintf(ofp, "%s%c%s ", textid2, amp->strand==Seq_strand_plus?'>':'<', dig);
+      tmp = seq1;
+      seq = seq2;
+      while (*tmp != '\0')
+      {
+         if (*tmp == *seq)
+            fprintf(ofp, ".");
+         else
+            fprintf(ofp, "%c", *seq);
+         tmp++;
+         seq++;
+      }
+      fprintf(ofp, "\n\n");
+   }
+   AlnMsgFree2(amp);
+   for (l=stop+1; l<bsp->length; l+=linesize)
+   {
+      spp = SeqPortNew(bsp, l, MIN(l+linesize-1, bsp->length-1), strand, Seq_code_iupacna);
+      ctr = SeqPortRead(spp, buf, MIN(l+linesize-1, bsp->length-1)-l+1);
+      buf[ctr] = '\0';
+      sprintf(dig, "%d", l+1);
+      for (i=StrLen(dig); i<5; i++)
+      {
+         dig[i] = ' ';
+      }
+      dig[i] = '\0';
+      fprintf(ofp, "%s%c%s %s\n", textid1, strand == Seq_strand_plus?'>':'<', dig, buf);
+      SeqPortFree(spp);
+   }
+   BioseqUnlock(bsp);
+   SeqIdFree(sip);
+   MemFree(buf);
+   FileClose(ofp);
+}
+
 static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 {
   BLAST_OptionsBlkPtr options;
@@ -2315,7 +2531,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Int4                gi = 0,
                       offset,
                       totlenlcl = 0, totlendb = 0;
-  Int4                i, j, k, len;
+  Int4                i, j, k, len, n;
   Int2                index;
   Uint1               strand;
   Boolean             ok, 
@@ -2325,14 +2541,15 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   BioseqPtr           bsp1, bsp2;
   Int4                start1, start2, stop1, stop2;
   CharPtr             errstr;
-  Boolean             nonly;
+  Int4                nonly;
   BestHitPtr          hip, hip_prev, hip_head;
   BestHitPtr          PNTR hiparray;
   Char                messagestr[1500];
   Int4                numhips;
+  FILE                *ofp;
 
   hip_prev = hip_head = NULL;
-  errstr = NULL;
+  errstr = (CharPtr)MemNew(500*sizeof(Char));
   if (salp!=NULL) {
      if (salp->segtype == 2) {
         dsp = (DenseSegPtr) salp->segs;
@@ -2400,10 +2617,12 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip->sip2 = dbsip;
                  hip->errstr = StringSave(errstr);
                  hip->nonly = nonly;
-                 if (*hip->errstr == '\0' || nonly)
+                 if (*hip->errstr == '\0')
                     hip->errtype = 0;
-                 else
+                 else if (nonly < 0)
                     hip->errtype = 1;
+                 else
+                    hip->errtype = 2;
                  if (hip_head != NULL)
                  {
                     hip_prev->next = hip;
@@ -2417,7 +2636,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                    sip->next = next;
                  } else if (totlenlcl == 0) {
                    SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                   sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                   sprintf(errstr, "This alignment contains \"%s\" that can not be found.\nPlease check the accession number.\n", strLog);
                    sip->next = next;
                  }
                  hip = (BestHitPtr)MemNew(sizeof(BestHit));
@@ -2425,8 +2644,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip->sip1 = lclsip;
                  hip->sip2 = dbsip;
                  hip->errstr = StringSave(errstr);
-                 hip->nonly = FALSE;
-                 hip->errtype = 2;
+                 hip->nonly = 0;
+                 hip->errtype = 3;
                  if (hip_head != NULL)
                  {
                     hip_prev->next = hip;
@@ -2434,8 +2653,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  } else
                     hip_head = hip_prev = hip;
               }
-              }
-              else {
+              } else {
                  SeqIdWrite (sip, strLog, PRINTID_TEXTID_ACCESSION, 50);
                  sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
                  sip->next = next;
@@ -2444,7 +2662,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip->sip1 = lclsip;
                  hip->sip2 = dbsip;
                  hip->errstr = StringSave(errstr);
-                 hip->nonly = FALSE;
+                 hip->nonly = 0;
                  hip->errtype = 3;
                  if (hip_head != NULL)
                  {
@@ -2477,7 +2695,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
         }
         HeapSort(hiparray, numhips, sizeof(BestHitPtr), OrderBestHits);
         i = 0;
-        while (i<numhips && (*hiparray[i]->errstr == '\0' || hiparray[i]->nonly == TRUE))
+        while (i<numhips && *hiparray[i]->errstr == '\0')
         {
            i++;
         }
@@ -2505,13 +2723,13 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                      len = stop2 + start1;
                  } else
                       strand=Seq_strand_plus;
-                 SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                 SeqAlignStartUpdate (salp, hiparray[j]->sip1, abs(offset), len, strand);
                  dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
                  if (presip)
                     sip = presip->next;
                  else
                     sip = dsp->ids;
-                 SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                 /*SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);*/
                  vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
                  found = TRUE;
                  SeqAlignFree(hiparray[j]->sap);
@@ -2548,9 +2766,83 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
               }
            }
         }
-        for (j=i; j<numhips; j++)
+        n = i;
+        i = 0;
+      /*  while (n<numhips && hiparray[n]->nonly < 0)
         {
-           if (hiparray[j]->errtype == 1)
+           i++;
+           n++;
+        }
+        if (i > 0)
+        {
+           messagestr[0] = '\0';
+           for (j=0; j<i; j++)
+           {
+              SeqIdWrite(hiparray[j+n]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+              StringCat(messagestr, strLog);
+              StringCat(messagestr, ", ");
+           }
+           ans = Message(MSG_OKC, "This alignment contains %s that %s already in GenBank. \n However, the local sequence%s %s terminal Ns.\nDo you wish to replace %s?", messagestr, i>1?"are":"is", i>1?"s":"", i>1?"have":"has", i>1?"them": "it");
+           if (ans != ANS_CANCEL)
+           {
+              for (j=0; j<i; j++)
+              {
+                 offset = SeqAlignStart(hiparray[j+n]->sap, 1)-SeqAlignStart(hiparray[j+n]->sap, 0);
+                 if ((SeqAlignStrand(hiparray[j+n]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j+n]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 0) != Seq_strand_minus))
+                 {
+                     strand=Seq_strand_minus;
+                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j+n]->sap);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 1, &start1, &stop1);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 2, &start2, &stop2);
+                     len = stop2 + start1;
+                 } else
+                      strand=Seq_strand_plus;
+                 SeqAlignStartUpdate (salp, hiparray[j+n]->sip1, abs(offset), len, strand);
+                 dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j+n]->sip1, hiparray[j+n]->sip2);
+                 if (presip)
+                    sip = presip->next;
+                 else
+                    sip = dsp->ids;
+                 SeqAlignReplaceId (hiparray[j+n]->sip1, hiparray[j+n]->sip2, salp);
+                 vnp = nrSeqIdAdd (vnp, hiparray[j+n]->sip1);
+                 found = TRUE;
+                 SeqAlignFree(hiparray[j+n]->sap);
+              }
+           } else
+           {
+              for (j=0; j<i; j++)
+              {
+                 SeqIdWrite(hiparray[j+n]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                 ans = Message(MSG_OKC, "This alignment contains %s that is already in GenBank. \n %s\nDo you wish to replace it?", strLog, hiparray[j+n]->errstr);
+                 if (ans != ANS_CANCEL)
+                 {
+                    offset = SeqAlignStart(hiparray[j+n]->sap, 1)-SeqAlignStart(hiparray[j+n]->sap, 0);
+                    if ((SeqAlignStrand(hiparray[j+n]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j+n]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j+n]->sap, 0) != Seq_strand_minus))
+                    {
+                        strand=Seq_strand_minus;
+                        AlnMgr2IndexSingleChildSeqAlign(hiparray[j+n]->sap);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 1, &start1, &stop1);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j+n]->sap, 2, &start2, &stop2);
+                        len = stop2 + start1;
+                    } else
+                         strand=Seq_strand_plus;
+                    SeqAlignStartUpdate (salp, hiparray[j+n]->sip1, offset, len, strand);
+                    dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j+n]->sip1, hiparray[j+n]->sip2);
+                    if (presip)
+                       sip = presip->next;
+                    else
+                       sip = dsp->ids;
+                    SeqAlignReplaceId (hiparray[j+n]->sip1, hiparray[j+n]->sip2, salp);
+                    vnp = nrSeqIdAdd (vnp, hiparray[j+n]->sip1);
+                    found = TRUE;
+                    SeqAlignFree(hiparray[j+n]->sap);
+                 }
+              }
+           }
+        } */
+        for (j=n+i; j<numhips; j++)
+        {
+           if (hiparray[j]->errtype <3)
            {
                SeqIdWrite (hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
                ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the most recent database version.\n %s \nDo you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, hiparray[j]->errstr, strLog);
@@ -2572,12 +2864,13 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                   found = TRUE;
                }
                else {
-                  showtextalign_fromalign (hiparray[j]->sap, "error.log", NULL);
+                  ofp = FileOpen("error.log", "a");
+                  fprintf(ofp, "This alignment contains %s that is already in GenBank; \nhowever, the local version is not identical to the most recent database version.\n %s\n", strLog, hiparray[j]->errstr);
+                  FileClose(ofp);
+                  SWPrintFarpointerAln(hiparray[j]->sap, "error.log");
                }
             } else
                Message(MSG_OK, "%s", hiparray[j]->errstr);
-            if (seqalign)
-               seqalign = SeqAlignFree (seqalign);
          }
      }
   }

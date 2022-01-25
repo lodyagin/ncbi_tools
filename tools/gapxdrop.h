@@ -31,8 +31,17 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.15 $
+/* $Revision: 6.18 $
 * $Log: gapxdrop.h,v $
+* Revision 6.18  2002/05/09 17:01:23  dondosha
+* Renamed typedefs dp_ptr and dp_node to GapXDPPtr and GapXDP
+*
+* Revision 6.17  2002/05/09 16:13:51  dondosha
+* Changed name of the dp_node structure
+*
+* Revision 6.16  2002/05/08 22:48:27  dondosha
+* Allocate memory for dynamic programming upfront in Mega BLAST case
+*
 * Revision 6.15  2001/07/19 22:13:32  dondosha
 * Made GapXEditScriptDelete public for use in mblast.c
 *
@@ -193,6 +202,11 @@ typedef struct _state_array_struct {
 
 /********************************************************************/
 
+/* Dynamic Programming structure. */
+typedef struct _gapxdrop_DP_ {
+  Int4 CC, DD, FF;	/* Values for gap opening and extensions (?). */
+} PNTR GapXDPPtr, GapXDP;
+
 /*
 	Structure used to pass arguments for gapped alignment functions.
 */
@@ -248,6 +262,7 @@ typedef struct _gapalign_blk {
     Boolean posConverged;
     Boolean is_ooframe;
     Boolean discontinuous;
+    GapXDPPtr dyn_prog;
 } GapAlignBlk, PNTR GapAlignBlkPtr;
 
 GapXDropStateArrayStructPtr GapXDropStateDestroy PROTO((GapXDropStateArrayStructPtr state_struct));

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objfeat.h,v $
+* Revision 6.11  2002/06/03 17:43:48  kans
+* added locus_tag to GeneRef
+*
 * Revision 6.10  2001/10/02 21:47:54  kans
 * added hooks for writing extra descriptors or features (JO)
 *
@@ -465,6 +468,7 @@ typedef struct generef {
     Boolean pseudo;
     ValNodePtr db;          /* ids in other databases */
     ValNodePtr syn;         /* synonyms for locus */
+    CharPtr locus_tag;      /* systematic gene name */
 } GeneRef, PNTR GeneRefPtr;
 
 NLM_EXTERN GeneRefPtr LIBCALL GeneRefNew PROTO((void));

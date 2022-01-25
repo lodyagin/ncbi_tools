@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.13  2002/07/19 20:16:33  johnson
+* bug fix in make_lib -- wasn't properly handling sequences >=1000 residues
+*
 * Revision 6.12  2002/01/22 19:50:32  kans
 * IndexedFastaLibBioseqFetchFunc looks for prefix with upper case followed by lower case
 *
@@ -74,6 +77,9 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.13  2002/07/19 20:16:33  johnson
+* bug fix in make_lib -- wasn't properly handling sequences >=1000 residues
+*
 * Revision 6.12  2002/01/22 19:50:32  kans
 * IndexedFastaLibBioseqFetchFunc looks for prefix with upper case followed by lower case
 *
@@ -289,8 +295,10 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
 				if(temp[0] == '>')
 					is_end = TRUE;
 				else
-					seq_len += (StringLen(temp) -1);
+					seq_len += StringLen(temp);
 			}
+                        if (seq_len > 0) /* don't count \n */
+                            --seq_len;
 		}
 	}
 
@@ -315,7 +323,7 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
 		*is_DNA = CheckDnaResidue(temp, StringLen(temp), NULL);
 		check_DNA = TRUE;
 	    }
-	    for(p=temp; p!=NULL && *p != '\n'; ++p)
+	    for(p=temp; *p!='\0' && *p != '\n'; ++p)
 		if(IS_ALPHA(*p) || *p == '-' || *p == '*')
 		{
 			++seq_len;

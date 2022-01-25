@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.22 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.22  2002/07/11 22:14:31  vakatov
+* [LINUX, MMAP_AVAIL]  #define __USE_BSD to get MADV_*** constants
+*
+* Revision 6.21  2002/07/11 19:13:41  ivanov
+* Nlm_MemMapAdvise() -- fix arguments for madvise() on Sun Solaris
+*
+* Revision 6.20  2002/07/10 20:24:44  ivanov
+* Added functions Nlm_MemMapAdvise(), Nlm_MemMapAdvisePtr()
+*
+* Revision 6.19  2002/06/17 15:01:30  ivanov
+* Disable USE_SETHEAPLIMIT on BeOS platform
+*
 * Revision 6.18  2002/02/07 14:41:19  ivanov
 * Added MemSearch()
 *
@@ -136,7 +148,9 @@
 #include <ncbi.h>
 
 #ifdef OS_UNIX
+#ifndef OS_UNIX_BEOS
 #define USE_SETHEAPLIMIT
+#endif
 #endif
 
 #ifdef USE_SETHEAPLIMIT
@@ -147,15 +161,19 @@
 
 /* Used for UNIX memory-mapping. */
 #ifdef MMAP_AVAIL
-#include <sys/mman.h>
-#ifdef OS_UNIX_AIX
-#include <fcntl.h>
-#else
-#include <sys/fcntl.h>
-#endif
-#ifndef MAP_FAILED
-#define MAP_FAILED ((void *) -1)
-#endif
+#  ifdef OS_UNIX_LINUX
+/*   MADV_*** constants are not defined on Linux otherwise */
+#    define __USE_BSD
+#  endif
+#  include <sys/mman.h>
+#  ifdef OS_UNIX_AIX
+#    include <fcntl.h>
+#  else
+#    include <sys/fcntl.h>
+#  endif
+#  ifndef MAP_FAILED
+#    define MAP_FAILED ((void *) -1)
+#  endif
 #endif
 
 #ifdef USE_SETHEAPLIMIT
@@ -899,4 +917,41 @@ NLM_EXTERN void Nlm_MemMapFini(Nlm_MemMapPtr mem_mapp)
 #endif
 
   Nlm_MemFree( mem_mapp );
+}
+
+
+NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvise(void* addr, size_t len, EMemMapAdvise advise)
+{
+#if defined(HAVE_MADVISE)
+  int adv;
+  if (!addr || !len) {
+    return FALSE;
+  }
+  switch (advise) {
+	case eMMA_Random:
+	  adv = MADV_RANDOM;     break;
+	case eMMA_Sequential:
+      adv = MADV_SEQUENTIAL; break;
+	case eMMA_WillNeed:
+	  adv = MADV_WILLNEED;   break;
+	case eMMA_DontNeed:
+	  adv = MADV_DONTNEED;   break;
+	default:
+	  adv = MADV_NORMAL;
+  }
+  // Conversion type of "addr" to char* -- Sun Solaris fix
+  return madvise((char*)addr, len, adv) == 0;
+#else
+  return TRUE;
+#endif
+}
+
+
+NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvisePtr(Nlm_MemMapPtr ptr, EMemMapAdvise advise)
+{
+#if defined(HAVE_MADVISE)
+  return ptr ? Nlm_MemMapAdvise(ptr->mmp_begin, ptr->file_size, advise) : FALSE;
+#else
+  return TRUE;
+#endif
 }

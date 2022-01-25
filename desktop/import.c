@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -3093,12 +3093,12 @@ extern Int2 LIBCALLBACK GenBankGenFunc (Pointer data)
     gfp->proctype = ompcp->proc->proctype;
     gfp->userkey = OMGetNextUserKey ();
 
-    /* DOn't allow history update for proteins */
+    /* Don't allow history update for proteins */
 
     bsp = GetBioseqGivenIDs (gfp->input_entityID,
 			     gfp->input_itemID,
 			     gfp->input_itemtype);
-    if (ISA_aa (bsp->mol)) {
+    if (bsp != NULL && ISA_aa (bsp->mol)) {
       SetStatus (gfp->xaccnstohistory, FALSE);
       SafeDisable (gfp->xaccnstohistory);
     }
@@ -3453,6 +3453,10 @@ extern Int2 LIBCALLBACK VisStrGenFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+#ifdef OS_UNIX_DARWIN
+/* avoid a namespace conflict with Carbon's DateTimeUtils.h */
+# define DateForm nlm_DateForm
+#endif
 
 typedef struct dateform {
   DESCRIPTOR_FORM_BLOCK

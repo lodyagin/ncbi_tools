@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -43,6 +43,9 @@
 *
 *
 * $Log: vibincld.h,v $
+* Revision 6.5  2002/06/13 16:15:13  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
+*
 * Revision 6.4  2000/07/08 20:44:14  vakatov
 * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
@@ -562,7 +565,9 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
   /** includes needed by vibutils.c ***/
 
 #ifdef WIN_MAC
+#ifndef OS_UNIX_DARWIN
 #include <Printing.h>
+#endif
 #include <Processes.h>
 #include <Gestalt.h>
 #include <Scrap.h>

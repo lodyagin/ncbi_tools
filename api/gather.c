@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.38  2002/05/08 18:58:09  kans
+* itemID is Uint4
+*
 * Revision 6.37  2002/04/13 20:23:53  kans
 * fixed get next descriptor unindexed
 *
@@ -6105,7 +6108,7 @@ NLM_EXTERN Boolean LIBCALL GatherOverWrite (Pointer oldptr, Pointer newptr, Uint
 
 typedef struct internalacc {
   Uint2             entityID;
-  Int2              itemIDs [OBJ_MAX];
+  Uint4             itemIDs [OBJ_MAX];
   Boolean           assignIDs;
   GatherObjectProc  callback;
   Pointer           userdata;

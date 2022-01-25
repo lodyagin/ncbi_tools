@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.65 $
+* $Revision: 6.71 $
 *
 * File Description: 
 *
@@ -45,6 +45,24 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.71  2002/08/08 14:00:37  kans
+ * added FANTOM_DB hyperlink
+ *
+ * Revision 6.70  2002/07/24 21:08:47  kans
+ * reverted ncbi URL
+ *
+ * Revision 6.69  2002/07/23 16:44:35  kans
+ * changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+ *
+ * Revision 6.68  2002/06/21 15:38:34  kans
+ * added GABI db_xref
+ *
+ * Revision 6.67  2002/06/18 21:00:00  kans
+ * added ISFinder as legal db_xref with hotlink
+ *
+ * Revision 6.66  2002/05/06 22:20:49  kans
+ * added IFO and JCM db_xref hotlinks
+ *
  * Revision 6.65  2002/04/18 22:24:16  kans
  * added dbEST and dbSTS links
  *
@@ -412,6 +430,11 @@ static Char link_niaest[MAX_WWWBUF];
 static Char link_worm_sequence[MAX_WWWBUF];
 static Char link_worm_locus[MAX_WWWBUF];
 static Char link_imgt[MAX_WWWBUF];
+static Char link_ifo[MAX_WWWBUF];
+static Char link_jcm[MAX_WWWBUF];
+static Char link_isfinder[MAX_WWWBUF];
+static Char link_gabi[MAX_WWWBUF];
+static Char link_fantom[MAX_WWWBUF];
 
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 
@@ -463,6 +486,11 @@ static Char link_imgt[MAX_WWWBUF];
 #define DEF_LINK_WORM_SEQUENCE "http://www.wormbase.org/db/seq/sequence?name="
 #define DEF_LINK_WORM_LOCUS "http://www.wormbase.org/db/gene/locus?name="
 #define DEF_LINK_IMGT "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"
+#define DEF_LINK_IFO "http://www.ifo.or.jp/index_e.html"
+#define DEF_LINK_JCM "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="
+#define DEF_LINK_ISFINDER "http://www-is.biotoul.fr/scripts/is/is_spec.idc?name="
+#define DEF_LINK_GABI "https://gabi.rzpd.de/cgi-bin-protected/GreenCards.pl.cgi?Mode=ShowBioObject&BioObjectName="
+#define DEF_LINK_FANTOM "http://fantom.gsc.riken.go.jp/db/view/main.cgi?masterid="
 
 /* now other data bases are linked to Entrez. may be changed later 
 static char *link_epd = 
@@ -568,6 +596,16 @@ NLM_EXTERN void LIBCALL init_www(void)
 		link_worm_locus, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_IMGT", DEF_LINK_IMGT, 
 		link_imgt, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_IFO", DEF_LINK_IFO, 
+		link_ifo, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_JCM", DEF_LINK_JCM, 
+		link_jcm, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_ISFINDER", DEF_LINK_ISFINDER,
+		link_isfinder, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_GABI", DEF_LINK_GABI,
+		link_gabi, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_FANTOM", DEF_LINK_FANTOM,
+		link_fantom, MAX_WWWBUF);
 
 }
 
@@ -1467,6 +1505,101 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			ff_AddString(p);
 			AddLink("</a>");
 		} 
+		if (( p = StringStr(str, "IFO:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("IFO:");
+			l = StringLen(link_ifo) + StringLen(p);
+			prefix = "<a href=%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_ifo);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "JCM:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("JCM:");
+			l = StringLen(link_jcm) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_jcm, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		}
+		if (( p = StringStr(str, "ISFinder:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("ISFinder:");
+			l = StringLen(link_isfinder) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_isfinder, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		}
+		if (( p = StringStr(str, "GABI:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("GABI:");
+			l = StringLen(link_gabi) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_gabi, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		}
+		if (( p = StringStr(str, "FANTOM_DB:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("FANTOM_DB:");
+			l = StringLen(link_fantom) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_fantom, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		}
 		if (nothing) {
 			ff_AddString(str);
 		}

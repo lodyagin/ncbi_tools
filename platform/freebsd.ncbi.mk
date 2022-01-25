@@ -1,7 +1,7 @@
 #
-# $Id: freebsd.ncbi.mk,v 1.5 2001/06/12 21:11:56 vakatov Exp $
+# $Id: freebsd.ncbi.mk,v 1.7 2002/08/04 20:21:31 vakatov Exp $
 #
-# This platform is not supported. Tested on FreeBSD 4.1-RELEASE
+# This platform is not supported. Tested on FreeBSD 4.5-RELEASE
 #
 NCBI_DEFAULT_LCL = fbd
 NCBI_MAKE_SHELL = /bin/sh
@@ -21,7 +21,8 @@ NCBI_DISTVIBLIBS = -L/usr/X11R6/lib /usr/X11R6/lib/libXm.a /usr/X11R6/lib/libXp.
 NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh
-NCBI_MT_OTHERLIBS = 
+NCBI_MT_OTHERLIBS = -pthread
+NCBI_OTHERLIBS_MT = $(NCBI_MT_OTHERLIBS) -lm
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 

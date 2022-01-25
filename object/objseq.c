@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -90,6 +90,8 @@ static char *this_file = __FILE__;
 #include <asnseq.h>        /* the AsnTool header */
 #include <objmgr.h>
 #include <sequtil.h>
+#include <objgbseq.h>
+#include <objtseq.h>
 
 static Boolean SeqDescrAsnWriteExtra (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig,
 					Boolean anp_not_null);
@@ -556,6 +558,16 @@ NLM_EXTERN Boolean LIBCALL SeqAsnLoad (void)
 		return FALSE;
 	}
 	if (! SeqBlockAsnLoad())
+	{
+		loaded = FALSE;
+		return FALSE;
+	}
+	if (! objgbseqAsnLoad())
+	{
+		loaded = FALSE;
+		return FALSE;
+	}
+	if (! objtseqAsnLoad())
 	{
 		loaded = FALSE;
 		return FALSE;

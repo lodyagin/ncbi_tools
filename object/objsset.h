@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.6  2002/06/27 16:26:10  kans
+* document eco-set, gen-prod-set in comment
+*
 * Revision 6.5  2001/05/14 19:54:20  kans
 * redefine BioseqseqSet_class_gen_prod_set to 17, now in ASN.1 spec
 *
@@ -155,6 +158,8 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
         mut-set (13) ,              -- set of mutations
         pop-set (14) ,              -- population study
         phy-set (15) ,              -- phylogenetic study
+        eco-set (16) ,              -- ecological sample study
+        gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein
         other (255) } DEFAULT not-set ,
 
 *

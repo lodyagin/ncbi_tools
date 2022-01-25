@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.6  2002/08/19 20:05:54  kans
+* fixes for SeqEntryAsnGet when asking for nuc-prot retcode but Bioseq is not inside a nuc-prot set
+*
 * Revision 6.5  2002/03/11 22:22:58  kans
 * removed retcode >= 3 test from SeqEntryAsnGet
 *
@@ -707,7 +710,7 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 					{
 						if (oop->working_on_set == 2)  /* found set in lower level */
 							got_it = TRUE;
-						else if ((oop->retcode == 2) && (! oop->in_right_set))
+						else if ((oop->retcode == 2 || oop->retcode == 3) && (! oop->in_right_set))
 						{
 							if (osp->found_it)   /* found the component Bioseq */
 							{
@@ -1084,6 +1087,12 @@ NLM_EXTERN SeqEntryPtr LIBCALL SeqEntryAsnGet (AsnIoPtr aip, AsnTypePtr orig, Se
 	{							/* got Bioseq, but not part of seg-set */
 		bssp = (BioseqSetPtr)sep->data.ptrvalue;
 		if (bssp->_class != 2)   /* not a seg-set */
+			pack_it = TRUE;
+	}
+	else if ((retcode == 3) && (IS_Bioseq_set(sep)))
+	{							/* got Bioseq, but not part of nuc-prot set */
+		bssp = (BioseqSetPtr)sep->data.ptrvalue;
+		if (bssp->_class != 1)   /* not a nuc-prot set */
 			pack_it = TRUE;
 	}
 

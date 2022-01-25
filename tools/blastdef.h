@@ -30,8 +30,23 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.132 $ 
+/* $Revision: 6.137 $ 
 * $Log: blastdef.h,v $
+* Revision 6.137  2002/08/26 15:49:51  madden
+* Change release date and version
+*
+* Revision 6.136  2002/08/09 19:39:20  camacho
+* Added constants for some blast search parameters
+*
+* Revision 6.135  2002/06/21 21:43:01  camacho
+* Removed obsolete BlastSeqIdList structure and functions
+*
+* Revision 6.134  2002/05/17 21:40:13  dondosha
+* Added 2 optimal Mega BLAST word templates for length 21
+*
+* Revision 6.133  2002/05/14 22:20:20  dondosha
+* Renamed maximal discontiguous template type into optimal
+*
 * Revision 6.132  2002/04/23 20:59:53  madden
 * Change version and date for release
 *
@@ -802,8 +817,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.3"
-#define BLAST_RELEASE_DATE "May-13-2002"
+#define BLAST_ENGINE_VERSION "2.2.4"
+#define BLAST_RELEASE_DATE "Aug-26-2002"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -828,6 +843,51 @@ extern "C" {
 
 /* Specifies minimum search space size for an awak thread. */
 #define AWAKE_THR_MIN_SIZE 2000000000000.0
+
+/* Some default values (used when creating blast options block and for
+ * command-line program defaults. When changing these defaults, please
+ * remember to update the defaults in the command-line programs */
+#define WINDOW_SIZE_PROT 40
+#define WINDOW_SIZE_NUCL 0
+#define WINDOW_SIZE_MEGABLAST 0
+
+#define WORDSIZE_PROT 3
+#define WORDSIZE_NUCL 11
+#define WORDSIZE_MEGABLAST 28
+
+/* Protein gap costs are the defaults for the BLOSUM62 scoring matrix.
+ * More gap costs are listed in BLASTOptionSetGapParams */
+#define GAP_OPEN_PROT 11
+#define GAP_OPEN_NUCL 5
+#define GAP_OPEN_MEGABLAST 0
+
+#define GAP_EXTN_PROT 1
+#define GAP_EXTN_NUCL 2
+#define GAP_EXTN_MEGABLAST 0
+
+#define WORD_THRESHOLD_BLASTP 11
+#define WORD_THRESHOLD_BLASTN 0
+#define WORD_THRESHOLD_BLASTX 12
+#define WORD_THRESHOLD_TBLASTN 13
+#define WORD_THRESHOLD_TBLASTX 13
+#define WORD_THRESHOLD_MEGABLAST 0
+
+#define UNGAPPED_X_DROPOFF_PROT 7
+#define UNGAPPED_X_DROPOFF_NUCL 20
+#define UNGAPPED_X_DROPOFF_MEGABLAST 10
+
+#define GAP_X_DROPOFF_PROT 15
+#define GAP_X_DROPOFF_NUCL 30 
+#define GAP_X_DROPOFF_MEGABLAST 20 
+#define GAP_X_DROPOFF_TBLASTX 0
+
+#define GAP_X_DROPOFF_FINAL_PROT 25
+#define GAP_X_DROPOFF_FINAL_NUCL 50 
+#define GAP_X_DROPOFF_FINAL_TBLASTX 0
+
+/* reward and penalty only apply to blastn/megablast */
+#define PENALTY -3
+#define REWARD 1
 
 /********************************************************************
 *
@@ -906,7 +966,7 @@ typedef struct _blast_prune_hits_from_sap {
 
 typedef enum {
    MB_WORD_CODING = 0,
-   MB_WORD_MAX_INFO = 1,
+   MB_WORD_OPTIMAL = 1,
    MB_TWO_TEMPLATES = 2
 } MBDiscWordType;
 
@@ -1033,10 +1093,12 @@ typedef enum {
    TEMPL_12_18 = 3,
    TEMPL_11_21 = 4,
    TEMPL_12_21 = 5,
-   TEMPL_11_16_MAX = 6,
-   TEMPL_12_16_MAX = 7,
-   TEMPL_11_18_MAX = 8,
-   TEMPL_12_18_MAX = 9
+   TEMPL_11_16_OPT = 6,
+   TEMPL_12_16_OPT = 7,
+   TEMPL_11_18_OPT = 8,
+   TEMPL_12_18_OPT = 9,
+   TEMPL_11_21_OPT = 10,
+   TEMPL_12_21_OPT = 11
 } MBTemplateType;
 
 typedef struct _mb_parameter_blk_ {
@@ -1404,12 +1466,13 @@ typedef struct _blast_all_words {
 			specific;	/* specific (limited) words are to be indexed. */
 	} BlastAllWord, *BlastAllWordPtr;
 		
+#if 0 /* deprecated */
 typedef struct _blast_seqid_list {
     SeqIdPtr 	seqid_list;	/* A list of SeqId's (may or may not be in the database) that should serve as subject sequences for BLAST'ing. */
     Uint1 		mode;	/* Either BLAST_OWN, or BLAST_NOT_OWN.  Specifies whether they should be deleted. */
     SeqIdPtr seqid_ptr;
 } BlastSeqIdList, *BlastSeqIdListPtr;
-		
+#endif	
 
 /*
 	Contains gi and ordinal number for use by random access BLAST.
@@ -1503,11 +1566,14 @@ typedef struct _BlastThrInfo {
     TNlmMutex callback_mutex; /*lock for issuing update ticks on the screen*/
     /* Mutex for recalculation of ambiguities, in BlastReevaluateWithAmbiguities */
     TNlmMutex ambiguities_mutex;
+
+#if 0 /* deprecated */
     /*
       SeqId lists if only a certain number of the database sequences will be
       used for the search.
       */
     BlastSeqIdListPtr blast_seqid_list;
+#endif
 
 
     /*

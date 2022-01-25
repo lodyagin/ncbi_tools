@@ -29,13 +29,49 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.110 $
+* $Revision: 6.122 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.122  2002/08/28 13:28:54  kans
+* added BX prefix
+*
+* Revision 6.121  2002/08/26 20:38:26  kans
+* added BW as ddbj est prefix
+*
+* Revision 6.120  2002/08/19 15:57:28  kans
+* BV is NCBI STS prefix
+*
+* Revision 6.119  2002/08/19 15:54:47  kans
+* added BU as NCBI EST prefix
+*
+* Revision 6.118  2002/07/12 18:47:46  kans
+* WHICH_db_accession was using the result of AccnIsSWISSPROT incorrectly
+*
+* Revision 6.117  2002/07/08 20:25:45  kans
+* added BT as FLI_cDNA type
+*
+* Revision 6.116  2002/06/28 14:48:03  kans
+* added BS as ddbj genome project prefix
+*
+* Revision 6.115  2002/06/20 18:38:43  kans
+* added FAA and GAA, ACCN_NCBI_WGS_PROT, ACCN_EMBL_WGS_PROT, ACCN_DDBJ_WGS_PROT, and ACCN_IS_WGS
+*
+* Revision 6.114  2002/06/19 17:13:48  kans
+* added ACCN_PDB, support for PDB in SeqIdFromAccessionDotVersion
+*
+* Revision 6.113  2002/06/10 18:06:16  kans
+* SeqLocLen use of smp->seq_len_lookup_func first checks sip for NULL
+*
+* Revision 6.112  2002/06/10 14:07:12  kans
+* SeqLocLen on whole tries new smp->seq_len_lookup_func registered function
+*
+* Revision 6.111  2002/05/29 19:19:53  bazhin
+* Added support for new EAA-EZZ protein's WGS accessions.
+*
 * Revision 6.110  2002/04/24 17:11:03  kans
 * added BR as DDBJ TPA accession prefix
 *
@@ -4741,6 +4777,10 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
 	Boolean locked = FALSE;
 	Boolean average = FALSE;
     Int2 num;
+    SeqIdPtr sip;
+    Int4 gi;
+    SeqMgrPtr smp;
+    SeqLenLookupFunc func;
 
 
     if (anp == NULL)
@@ -4756,16 +4796,29 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
 			len = 0;
 			break;
         case SEQLOC_WHOLE:    /* whole */
-            bsp = BioseqFindCore((SeqIdPtr)anp->data.ptrvalue);
-				if (bsp == NULL)
-				{
-					bsp = BioseqLockById((SeqIdPtr)anp->data.ptrvalue);
-					if (bsp != NULL)
-						locked = TRUE;
+			sip = (SeqIdPtr) anp->data.ptrvalue;
+			bsp = BioseqFindCore(sip);
+			if (bsp == NULL) {
+				if (sip != NULL && sip->choice == SEQID_GI) {
+					gi = (Int4) sip->data.intvalue;
+					/* try registered service for rapid length lookup */
+					smp = SeqMgrWriteLock ();
+					if (smp != NULL) {
+						func = smp->seq_len_lookup_func;
+						SeqMgrUnlock ();
+						if (func != NULL) {
+							len = (*func) (gi);
+							if (len > 0) break;
+						}
+					}
 				}
-            len = BioseqGetLen(bsp);
-				if (locked)
-					BioseqUnlock(bsp);
+				bsp = BioseqLockById(sip);
+				if (bsp != NULL)
+					locked = TRUE;
+			}
+			len = BioseqGetLen(bsp);
+			if (locked)
+				BioseqUnlock(bsp);
 			break;
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         	average = TRUE;
@@ -7948,6 +8001,16 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
         Boolean formally_assigned;
         formally_assigned = !(ACCN_IS_UNASSIGNED(status));
         if(formally_assigned || Permissive) {
+        	/* new support for PDB */
+        	if (status == ACCN_PDB) {
+        		Char pdbstr [41];
+        		if (StringLen (accession) < 8) {
+        			sprintf (pdbstr, "pdb|%s", accession);
+        			sip = SeqIdParse (pdbstr);
+        			return sip;
+        		}
+        		return NULL;
+        	}
             sip = ValNodeNew(NULL);
             tsp = TextSeqIdNew();
             tsp->accession = StringSave(accession);
@@ -8408,12 +8471,22 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
   Uint4 retcode = 0;
   Boolean retval = TRUE;
   Boolean first = TRUE;
+  size_t len;
   Char temp [16];
  
   if (s == NULL || ! *s)
     return FALSE;
 
-  switch (StringLen(s)) {
+  len = StringLen (s);
+
+  if (IS_DIGIT (*s)) {
+    if (len == 4 || (len > 4 && s [4] == '|')) {
+      return ACCN_PDB;
+    }
+    return ACCN_UNKNOWN;
+  }
+
+  switch (len) {
 
   case 6:                       /* Old-style 6-character accession */
     while (*s) {
@@ -8430,7 +8503,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 
 /* Protein SWISS-PROT accessions */
         case 'O': case 'P': case 'Q':  
-            retcode = AccnIsSWISSPROT(s);
+            if (AccnIsSWISSPROT(s)) {
+            	retcode = ACCN_SWISSPROT;
+            }
+            /* retcode = AccnIsSWISSPROT(s); */
             break;
 
 /* GenBank : EST */
@@ -8521,15 +8597,18 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           
           if ((StringICmp(temp,"AAA") >= 0) && (StringICmp(temp,"AZZ") <= 0)) { 
               retcode = ACCN_NCBI_PROT;
-          } else if ((StringICmp(temp,"DAA") >= 0) && (StringICmp(temp,"DZZ") <= 0)) { 
-              retcode = ACCN_NCBI_PROT;
-              if ((StringICmp(temp,"DAA") == 0)) {
-                retcode = ACCN_NCBI_TPA_PROT;
-              }
-          } else if ((StringICmp(temp,"CAA") >= 0) && (StringICmp(temp,"CZZ") <= 0)) { 
-              retcode = ACCN_EMBL_PROT;
           } else  if ((StringICmp(temp,"BAA") >= 0) && (StringICmp(temp,"BZZ") <= 0)) { 
               retcode = ACCN_DDBJ_PROT;
+          } else if ((StringICmp(temp,"CAA") >= 0) && (StringICmp(temp,"CZZ") <= 0)) { 
+              retcode = ACCN_EMBL_PROT;
+          } else if ((StringICmp(temp,"DAA") >= 0) && (StringICmp(temp,"DZZ") <= 0)) { 
+              retcode = ACCN_NCBI_TPA_PROT;
+          } else if ((StringICmp(temp,"EAA") >= 0) && (StringICmp(temp,"EZZ") <= 0)) { 
+              retcode = ACCN_NCBI_WGS_PROT;
+          } else  if ((StringICmp(temp,"FAA") >= 0) && (StringICmp(temp,"FZZ") <= 0)) { 
+              retcode = ACCN_DDBJ_TPA_PROT;
+          } else  if ((StringICmp(temp,"GAA") >= 0) && (StringICmp(temp,"GZZ") <= 0)) { 
+              retcode = ACCN_DDBJ_WGS_PROT;
           } else {
               retcode = ACCN_IS_PROTEIN;
               retval = TRUE;
@@ -8548,8 +8627,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"BF") == 0) || 
 	      (StringICmp(temp,"BI") == 0) || 
 	      (StringICmp(temp,"BM") == 0) || 
-	      (StringICmp(temp,"BQ") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"BQ") == 0) || 
+	      (StringICmp(temp,"BU") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
+          } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
+              retcode = ACCN_NCBI_STS;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
           } else if ((StringICmp(temp,"AF") == 0) ||
@@ -8572,6 +8654,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
+          } else if((StringICmp(temp,"BT")==0)) {         /* NCBI FLI_cDNA */
+              retcode = ACCN_NCBI_cDNA;
           } else if((StringICmp(temp,"BK")==0) ||         /* NCBI third-party annotation */
                     (StringICmp(temp,"BL") == 0)) {
               retcode = ACCN_NCBI_TPA;
@@ -8582,7 +8666,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
-          } else if ((StringICmp(temp,"AL") == 0)) {      /* EMBL genome project data */
+          } else if ((StringICmp(temp,"AL") == 0) ||
+                     (StringICmp(temp,"BX") == 0)) {      /* EMBL genome project data */
               retcode = ACCN_EMBL_GENOME;
           } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL CON division */
               retcode = ACCN_EMBL_CON;
@@ -8593,12 +8678,14 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"AV") == 0) ||
                      (StringICmp(temp,"BB") == 0) ||
                      (StringICmp(temp,"BJ") == 0) ||
-                     (StringICmp(temp,"BP") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"BP") == 0) ||
+                     (StringICmp(temp,"BW") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
           } else if ((StringICmp(temp,"AG") == 0) || 
-                     (StringICmp(temp,"AP") == 0)) {      /* DDBJ genome project data */
+                     (StringICmp(temp,"AP") == 0) || 
+                     (StringICmp(temp,"BS") == 0)) {      /* DDBJ genome project data */
               retcode = ACCN_DDBJ_GENOME;
           } else if ((StringICmp(temp,"AK") == 0))  {     /* DDBJ HTGS */
               retcode = ACCN_DDBJ_HTGS;

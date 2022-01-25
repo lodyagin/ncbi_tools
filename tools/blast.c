@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.346 2002/04/23 16:01:27 madden Exp $
+/* $Id: blast.c,v 6.366 2002/08/22 13:39:45 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,73 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.346 $
+ * $Revision: 6.366 $
  *
  * $Log: blast.c,v $
+ * Revision 6.366  2002/08/22 13:39:45  camacho
+ * Close the header and sequence files only if allocated
+ *
+ * Revision 6.365  2002/08/07 21:37:47  camacho
+ * Do not remove the search block prematurely in do_gapped_blast_search
+ *
+ * Revision 6.364  2002/08/06 17:33:50  madden
+ * Fix return value problem
+ *
+ * Revision 6.363  2002/07/19 17:55:47  dondosha
+ * 1.Return 0 status from BLASTPerformFinalSearch when database sequence has 0 length;
+ * 2. Do not destroy search block too early.
+ *
+ * Revision 6.362  2002/07/15 18:53:27  camacho
+ * Small fix to previous commit
+ *
+ * Revision 6.361  2002/07/14 17:18:13  camacho
+ * Fixed small memory leak in do_blast_search/do_gapped_blast_search
+ *
+ * Revision 6.360  2002/07/12 18:02:55  dondosha
+ * Do not call AdjustOffsetsInMaskLoc if no lower case mask
+ *
+ * Revision 6.359  2002/07/12 16:06:26  dondosha
+ * Adjust offsets and remove unneeded lower case mask locations when query is a subsequence
+ *
+ * Revision 6.358  2002/06/27 13:01:26  kans
+ * BlastGetVirtualOIDList is LIBCALL
+ *
+ * Revision 6.357  2002/06/26 00:56:28  camacho
+ *
+ * 1. Fixed bug when searching a mixture of real and mask databases.
+ * 2. Clean up of code that calculates the number of sequences and database
+ *    length.
+ *
+ * Revision 6.356  2002/06/25 16:43:45  dondosha
+ * Get out from all search loops if bad status returned, meaning process ran out of memory
+ *
+ * Revision 6.355  2002/06/25 13:11:22  madden
+ * Fix UMR for status in do_gapped_blast_search
+ *
+ * Revision 6.354  2002/06/21 21:49:10  camacho
+ * Removed references to thr_info->blast_seqid_list in BlastGetDbChunk
+ *
+ * Revision 6.353  2002/06/12 15:43:09  dondosha
+ * Potential uninitialized variable bug fixed
+ *
+ * Revision 6.352  2002/06/12 15:33:25  dondosha
+ * Corrected integer types of the variable holding return status in 2 functions
+ *
+ * Revision 6.351  2002/06/11 20:40:04  dondosha
+ * Correction to previous change
+ *
+ * Revision 6.350  2002/06/11 14:44:45  dondosha
+ * Return status from some functions instead of search block pointer
+ *
+ * Revision 6.349  2002/06/05 15:30:34  coulouri
+ * Move signal handling to blastsrv.c
+ *
+ * Revision 6.348  2002/05/20 22:49:10  dondosha
+ * Fix for the Mega BLAST case when database sequence is split, and an HSP is accidentally extended across the boundary to a completely masked query
+ *
+ * Revision 6.347  2002/05/15 19:51:01  dondosha
+ * Do a sanity check for the final db sequence parameter
+ *
  * Revision 6.346  2002/04/23 16:01:27  madden
  * Fix for ungapped search of arbitrary matrix
  *
@@ -2145,12 +2209,6 @@ Detailed Contents:
 #include <gapxdrop.h>
 #include <dust.h>
 
-/* For rlimit stuff. */
-#if defined(OS_UNIX)
-#include <sys/resource.h>
-#include <signal.h>
-#endif
-
 #include <mbalign.h>
 #include <mblast.h>
 
@@ -2164,7 +2222,7 @@ should be emitted.
 /*
 	Set to TRUE if the process has timed out.
 */
-Boolean time_out_boolean=FALSE;
+volatile Boolean time_out_boolean;
 
 /*
 	SeqId lists if only a certain number of the database sequences will be
@@ -2806,6 +2864,23 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	return status;
 }
 
+/* Auxiliary function to retrieve the virtual oidlist attached to the
+ * rdfp_chain. Returns a pointer to the OIDList, called should *NOT* modify
+ * this copy. Assumes that this function is called after BlastProcessGiLists
+ * has been called (while setting up the search) */
+OIDListPtr LIBCALL BlastGetVirtualOIDList(ReadDBFILEPtr rdfp_chain)
+{
+    OIDListPtr virtual_oidlist = NULL;
+
+    while (rdfp_chain) {
+        if (virtual_oidlist = rdfp_chain->oidlist) {
+            break;
+        }
+        rdfp_chain = rdfp_chain->next;
+    }
+    return virtual_oidlist;
+}
+
 /*
 	Function to assign chunks of the database to a thread.  
 	The "start" and "stop" points are returned by the arguments.
@@ -2826,170 +2901,112 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
     Boolean done=FALSE;
     Int4 ordinal_id;
     SeqIdPtr sip;
+    OIDListPtr virtual_oidlist = NULL;
 
     *id_list_number = 0;
     
     NlmMutexLockEx(&thr_info->db_mutex);
     if (thr_info->realdb_done) {
-	if (rdfp->oidlist) {
-	    /* Virtual database.   Create id_list using mask file */
-	    OIDListPtr oidlist = rdfp->oidlist;
-	    Uint4	mask;
-	    Int4	maskindex, base, i;
-	    Boolean	cont;
-	    Int4	oidindex;
-	    Int4	total_mask = oidlist->total/MASK_WORD_SIZE + 1;
+        if (virtual_oidlist = BlastGetVirtualOIDList(rdfp)) {
+            /* Virtual database.   Create id_list using mask file */
+            Uint4	mask;
+            Int4	maskindex, base, i;
+            Boolean	cont;
+            Int4	oidindex;
+            Int4	total_mask = virtual_oidlist->total/MASK_WORD_SIZE + 1;
 
+            if (thr_info->gi_current < total_mask) {
 
-	    if (thr_info->gi_current < total_mask) {
+                oidindex = 0;
+                maskindex = thr_info->gi_current;
+                base = thr_info->gi_current * MASK_WORD_SIZE;
+                cont = TRUE;
 
-		oidindex = 0;
-		maskindex = thr_info->gi_current;
-		base = thr_info->gi_current * MASK_WORD_SIZE;
-		cont = TRUE;
+                while (cont) {
+                    /* for each long-word mask */
+                    mask = Nlm_SwapUint4(virtual_oidlist->list[maskindex]);
 
-		while (cont) {
-		    /* for each long-word mask */
-		    mask = Nlm_SwapUint4(oidlist->list[maskindex]);
-
-		    i = 0;
-		    while (mask) {
-			if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-			    id_list[oidindex++] = base + i;
-			}
-			mask <<= 1;
-			i++;
-		    }
-		    maskindex++;
-		    base += MASK_WORD_SIZE;
-		    if (maskindex >= total_mask ||
-			    oidindex > thr_info->db_chunk_size) {
-			cont = FALSE;
-		    }
-		}
-		thr_info->gi_current = maskindex;
-		*id_list_number = oidindex;
+                    i = 0;
+                    while (mask) {
+                        if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+                            id_list[oidindex++] = base + i;
+                        }
+                        mask <<= 1;
+                        i++;
+                    }
+                    maskindex++;
+                    base += MASK_WORD_SIZE;
+                    if (maskindex >= total_mask || 
+                        oidindex > thr_info->db_chunk_size) {
+                        cont = FALSE;
+                    }
+                }
+                thr_info->gi_current = maskindex;
+                *id_list_number = oidindex;
                 BlastTickProc(thr_info->gi_current, thr_info);
-	    } else {
-		done = TRUE;
-	    }
-
-	} else {
-	    done = TRUE;
-	}
-    } else if (thr_info->blast_seqid_list) {
-	/* global_seqid_list indicates there is a list of selected ID's, 
-	   global_seqid_ptr is the position in the list. */
-	sip = thr_info->blast_seqid_list->seqid_ptr;
-	if (sip == NULL) {
-	    NlmMutexUnlock(thr_info->db_mutex);
-	    return TRUE;
-	}
-
-	ordinal_id = SeqId2OrdinalId(rdfp, sip);
-	while (ordinal_id < 0 && sip) {
-	    thr_info->blast_seqid_list->seqid_ptr = 
-		thr_info->blast_seqid_list->seqid_ptr->next;
-	    sip = thr_info->blast_seqid_list->seqid_ptr;
-	    ordinal_id = SeqId2OrdinalId(rdfp, sip);
-	}
-
-	if (thr_info->blast_seqid_list->seqid_ptr) {
-	    *start = ordinal_id;
-	    *stop = ordinal_id+1;
-	    done = FALSE;
-	    thr_info->blast_seqid_list->seqid_ptr = 
-		thr_info->blast_seqid_list->seqid_ptr->next;
-	} else {
-	    done = TRUE;
-	}
-
-    } else {
-	/* we have real database with start/stop specified */
-	if (thr_info->db_mutex) {
-
-	    /* Emit a tick if needed. */
-	    BlastTickProc(thr_info->db_chunk_last, thr_info);
-	    *start = thr_info->db_chunk_last;
-	    if (thr_info->db_chunk_last < thr_info->final_db_seq) {
-		*stop = MIN((thr_info->db_chunk_last + 
-			    thr_info->db_chunk_size), 
-			thr_info->final_db_seq);
-	    } else {/* Already finished. */
-		*stop = thr_info->db_chunk_last;
-		thr_info->realdb_done = TRUE;
-	    }
-	    thr_info->db_chunk_last = *stop;
-	} else {
-	    if (*stop != thr_info->final_db_seq) {
-		done = FALSE;
-		*start = thr_info->last_db_seq;
-		*stop = thr_info->final_db_seq;
-	    } else {
-		thr_info->realdb_done = TRUE;
+            } else {
                 done = TRUE;
-	    }
-	}
+            }
+
+        } else {
+            done = TRUE;
+        }
+#if 0 /* deprecated */
+    } else if (thr_info->blast_seqid_list) {
+        /* global_seqid_list indicates there is a list of selected ID's, 
+           global_seqid_ptr is the position in the list. */
+        sip = thr_info->blast_seqid_list->seqid_ptr;
+        if (sip == NULL) {
+            NlmMutexUnlock(thr_info->db_mutex);
+            return TRUE;
+        }
+
+        ordinal_id = SeqId2OrdinalId(rdfp, sip);
+        while (ordinal_id < 0 && sip) {
+            thr_info->blast_seqid_list->seqid_ptr = 
+            thr_info->blast_seqid_list->seqid_ptr->next;
+            sip = thr_info->blast_seqid_list->seqid_ptr;
+            ordinal_id = SeqId2OrdinalId(rdfp, sip);
+        }
+
+        if (thr_info->blast_seqid_list->seqid_ptr) {
+            *start = ordinal_id;
+            *stop = ordinal_id+1;
+            done = FALSE;
+            thr_info->blast_seqid_list->seqid_ptr = 
+            thr_info->blast_seqid_list->seqid_ptr->next;
+        } else {
+            done = TRUE;
+        }
+#endif
+    } else {
+        /* we have real database with start/stop specified */
+        if (thr_info->db_mutex) {
+
+            /* Emit a tick if needed. */
+            BlastTickProc(thr_info->db_chunk_last, thr_info);
+            *start = thr_info->db_chunk_last;
+            if (thr_info->db_chunk_last < thr_info->final_db_seq) {
+                *stop = MIN((thr_info->db_chunk_last + 
+                    thr_info->db_chunk_size), thr_info->final_db_seq);
+            } else {/* Already finished. */
+                *stop = thr_info->db_chunk_last;
+                thr_info->realdb_done = TRUE;
+            }
+            thr_info->db_chunk_last = *stop;
+        } else {
+            if (*stop != thr_info->final_db_seq) {
+                done = FALSE;
+                *start = thr_info->last_db_seq;
+                *stop = thr_info->final_db_seq;
+            } else {
+                thr_info->realdb_done = TRUE;
+                done = TRUE;
+            }
+        }
     }
     NlmMutexUnlock(thr_info->db_mutex);
-    
     return done;
-}
-
-/* Signal handler for SIGXCPU, exceeded cpu time soft limit. */
-
-static void 
-timeout_shutdown(int flag)
-
-{
-#ifdef OS_UNIX
-  time_out_boolean = TRUE;
-
-  /* this probably isn't the best way to do this.
-   * probably ought to be rewritten with posix sigaction() instead.
-   * -coulouri 20020104
-   */
-
-#ifdef SIG_IGN
-  signal(SIGXCPU, SIG_IGN);
-#else
-  sigignore(SIGXCPU);
-#endif
-
-#endif
-}
-
-
-/* 
- * call setrlimit() on unix systems to cap cpu time.
- * changed to ignore number of cpus, since this limit is per process,
- * not per thread. also added a hard limit at 2x the soft limit.
- * -coulouri 20020104
- */
-
-static Boolean
-BlastSetLimits(Int4 cpu_limit, Int2 num_cpu)
-{
-#ifdef OS_UNIX
-  struct rlimit   rl;
-
-  if (cpu_limit <= 0)
-    return FALSE;
-
-  if (num_cpu < 1)
-    return FALSE;
-
-  rl.rlim_cur = cpu_limit;
-  rl.rlim_max = 2 * cpu_limit;
-
-  if (setrlimit(RLIMIT_CPU, &rl) == -1) return FALSE;
-  
-  if (signal(SIGXCPU, timeout_shutdown) == SIG_ERR) return FALSE;
-
-#endif
-
-  time_out_boolean = FALSE;
-  return TRUE;
 }
 
 static void do_on_exit_func(VoidPtr ptr)
@@ -3008,77 +3025,83 @@ static VoidPtr
 do_gapped_blast_search(VoidPtr ptr)
 
 {
-	BlastSearchBlkPtr search;
-	Int2 status;
-	Int4 index, index1, start=0, stop=0, id_list_length;
-	Int4Ptr id_list=NULL;
+    BlastSearchBlkPtr search;
+    Int2 status=0;
+    Int4 index, index1, start=0, stop=0, id_list_length;
+    Int4Ptr id_list=NULL;
 
 	search = (BlastSearchBlkPtr) ptr;
-	if (search->thr_info->blast_gi_list || search->rdfp->oidlist) {
-            id_list = MemNew((search->thr_info->db_chunk_size+33)
-                             *sizeof(Int4));
-        }
+	if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
+    {
+        id_list = MemNew((search->thr_info->db_chunk_size+33)*sizeof(Int4));
+    }
 
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
         NlmThreadAddOnExit(do_on_exit_func, ptr);
 
 
-	while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, &id_list_length, search->thr_info) != TRUE)
-	{
-	    if (id_list)
-	    {
-		for (index=0; index<id_list_length; index++)
-		{
-			index1 = id_list[index];
-			search = BLASTPerformSearchWithReadDb(search, index1);
-           if (search->prog_number == blast_type_blastx 
-	       || search->prog_number == blast_type_tblastn 
-	       || search->prog_number == blast_type_psitblastn)
+    while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, 
+                           &id_list_length, search->thr_info) != TRUE)
+    {
+        if (id_list)
+        {
+            for (index=0; index<id_list_length; index++)
+            {
+                index1 = id_list[index];
+                if ((status = BLASTPerformSearchWithReadDb(search, index1)) != 0)
+                    break;
+                               
+                if (search->prog_number == blast_type_blastx 
+                    || search->prog_number == blast_type_tblastn 
+                    || search->prog_number == blast_type_psitblastn)
+                   status = BlastLinkHsps(search);
+                            
+                status = BlastReapHitlistByEvalue(search);
+                if (search->handle_results)
+                    search->handle_results((VoidPtr) search);
+                else
+                    BlastSaveCurrentHitlist(search);
+                /* Emit a tick if needed and we're not MT. */
+                if (search->thr_info->db_mutex == NULL)
+                    BlastTickProc(index1, search->thr_info);
+                if (time_out_boolean == TRUE)
+                    break;	
+            }
+        } else {
+            for (index=start; index<stop; index++)
+            {
+                if ((status = BLASTPerformSearchWithReadDb(search, index)) != 0)
+                    break;
 
-				status = BlastLinkHsps(search);
+                if (search->prog_number == blast_type_blastx 
+                    || search->prog_number == blast_type_tblastn 
+                    || search->prog_number == blast_type_psitblastn)
+                   status = BlastLinkHsps(search);
 
-			status = BlastReapHitlistByEvalue(search);
-			if (search->handle_results)
-				search->handle_results((VoidPtr) search);
-			else
-				BlastSaveCurrentHitlist(search);
-			/* Emit a tick if needed and we're not MT. */
-			if (search->thr_info->db_mutex == NULL)
-                            BlastTickProc(index1, search->thr_info);
-			if (time_out_boolean == TRUE)
-                            break;	
-		}
-             } else {
-		for (index=start; index<stop; index++)
-		{
-			search = BLASTPerformSearchWithReadDb(search, index);
+                status = BlastReapHitlistByEvalue(search);
+                if (search->handle_results)
+                    search->handle_results((VoidPtr) search);
+                else
+                    BlastSaveCurrentHitlist(search);
+                /* Emit a tick if needed and we're not MT. */
+                if (search->thr_info->db_mutex == NULL)
+                    BlastTickProc(index, search->thr_info);
+                if (time_out_boolean == TRUE)
+                    break;	
+            }
+        }
+        /* Get out if "stop" was the last seq. */
+        if (time_out_boolean || status)
+            break;
+    }
 
-                       if (search->prog_number == blast_type_blastx 
-			   || search->prog_number == blast_type_tblastn 
-			   ||  search->prog_number == blast_type_psitblastn)
+    if (id_list)
+        id_list = MemFree(id_list);
 
-				status = BlastLinkHsps(search);
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
+        NlmThreadRemoveOnExit(do_on_exit_func, ptr);
 
-			status = BlastReapHitlistByEvalue(search);
-			if (search->handle_results)
-				search->handle_results((VoidPtr) search);
-			else
-				BlastSaveCurrentHitlist(search);
-			/* Emit a tick if needed and we're not MT. */
-			if (search->thr_info->db_mutex == NULL)
-				BlastTickProc(index, search->thr_info);
-			if (time_out_boolean == TRUE)
-				break;	
-		}
-	     }
-		/* Get out if "stop" was the last seq. */
-		if (time_out_boolean)
-			break;
-	}
-
-	if (id_list)
-		id_list = MemFree(id_list);
-
-	return (VoidPtr) search;
+    return (VoidPtr) search;
 } 
 
 static VoidPtr
@@ -3086,24 +3109,28 @@ do_blast_search(VoidPtr ptr)
 
 {
     BlastSearchBlkPtr search;
-    Int2 status;
+    Int2 status = 0;
     Int4 index, index1, start=0, stop=0, id_list_length;
     Int4Ptr id_list=NULL;
 
     search = (BlastSearchBlkPtr) ptr;
-    if (search->thr_info->blast_gi_list || search->rdfp->oidlist) {
+	if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
+    {
         id_list = MemNew((search->thr_info->db_chunk_size+33)
                          *sizeof(Int4));
     }
 
-    NlmThreadAddOnExit(do_on_exit_func, ptr);
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
+        NlmThreadAddOnExit(do_on_exit_func, ptr);
     
     while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list,
 			   &id_list_length, search->thr_info) != TRUE) {
         if (search->thr_info->realdb_done && id_list) {
             for (index=0; index<id_list_length; index++) {
                 index1 = id_list[index];
-                search = BLASTPerformSearchWithReadDb(search, index1);
+                if ((status = BLASTPerformSearchWithReadDb(search, index1))
+                    != 0)
+                   break;
                 if (!search->pbp->mb_params) {
                    if (search->pbp->do_sum_stats == TRUE)
                       status = BlastLinkHsps(search);
@@ -3134,7 +3161,9 @@ do_blast_search(VoidPtr ptr)
             }
         } else if (!search->thr_info->realdb_done) {
             for (index=start; index<stop; index++) {
-                search = BLASTPerformSearchWithReadDb(search, index);
+                if ((status = BLASTPerformSearchWithReadDb(search, index))
+                    != 0)
+                   break;
                 if (!search->pbp->mb_params) {
                    if (search->pbp->do_sum_stats == TRUE)
                       status = BlastLinkHsps(search);
@@ -3146,7 +3175,6 @@ do_blast_search(VoidPtr ptr)
                 } else {
                    MegaBlastReevaluateWithAmbiguities(search, index);
                 }
-                
                 if (search->handle_results)
                    search->handle_results((VoidPtr) search);
 		else if (!search->pbp->mb_params)
@@ -3167,12 +3195,15 @@ do_blast_search(VoidPtr ptr)
         }
 
         /* Get out if "stop" was the last seq. */
-        if (time_out_boolean)
+        if (time_out_boolean || status)
             break;
     }
     
     if (id_list)
         id_list = MemFree(id_list);
+
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
+        NlmThreadRemoveOnExit(do_on_exit_func, ptr);
     
     return (VoidPtr) search;
 } 
@@ -3201,27 +3232,28 @@ do_the_blast_run(BlastSearchBlkPtr search)
 #endif
     search->thr_info->db_incr = num_seq / BLAST_NTICKS;
     search->thr_info->last_db_seq = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
-    if (search->pbp->final_db_seq == 0)
-        search->thr_info->final_db_seq = readdb_get_num_entries_total_real(search->rdfp);
-    else
-        search->thr_info->final_db_seq = search->pbp->final_db_seq;
+    search->thr_info->final_db_seq = readdb_get_num_entries_total_real(search->rdfp);
+    /* If last sequence number provided in options, assign it, 
+       but do a sanity check */
+    if (search->pbp->final_db_seq > 0 && 
+        search->pbp->final_db_seq < search->thr_info->final_db_seq)
+       search->thr_info->final_db_seq = search->pbp->final_db_seq;
     
     search->thr_info->db_chunk_last = search->pbp->first_db_seq;
     
-    if (search->thr_info->blast_gi_list || search->rdfp->oidlist)
+    if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
         search->thr_info->gi_current = 0;
 
     /* guess if we need to search any real database */
     if (search->thr_info->final_db_seq == 0) {
-	/* that means that we have only mask and no real database should be searched */
-	search->thr_info->realdb_done = TRUE;
+        /* that means that we have only mask and no real database should be searched */
+        search->thr_info->realdb_done = TRUE;
     } else {
-	/* otherwise, we need to start searching all real databases */
-	search->thr_info->realdb_done = FALSE;
+        /* otherwise, we need to start searching all real databases */
+        search->thr_info->realdb_done = FALSE;
     }
     
-    BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
-    if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
+   if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
         rdfp = search->rdfp;
         number_of_entries = INT4_MAX;
         /* Look for smallest database. */
@@ -3244,15 +3276,14 @@ do_the_blast_run(BlastSearchBlkPtr search)
             array[index] = BlastSearchBlkDuplicate(search);
             if (array[index] == NULL) {
                search->pbp->process_num = index;
-	       ErrPostEx(SEV_WARNING, 0, 0, "Number of threads reduced to %d", index);
+               ErrPostEx(SEV_WARNING, 0, 0, "Number of threads reduced to %d", index);
                break;
             }
         }
         
         thread_array = (TNlmThread PNTR) MemNew((search->pbp->process_num)*sizeof(TNlmThread));
         for (index=0; index<search->pbp->process_num; index++) {
-            if (search->pbp->gapped_calculation &&
-                StringCmp(search->prog_name, "blastn") != 0)
+            if (search->pbp->gapped_calculation && StringCmp(search->prog_name, "blastn") != 0)
                 thread_array[index] = NlmThreadCreateEx(do_gapped_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
             else
                 thread_array[index] = NlmThreadCreateEx(do_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
@@ -3315,35 +3346,19 @@ do_the_blast_run(BlastSearchBlkPtr search)
         NlmMutexDestroy(search->thr_info->ambiguities_mutex);
         search->thr_info->ambiguities_mutex = NULL;
     } else {
-        if (search->pbp->gapped_calculation &&
-            StringCmp(search->prog_name, "blastn") != 0)
+        if (search->pbp->gapped_calculation && StringCmp(search->prog_name, "blastn") != 0)
             do_gapped_blast_search((VoidPtr) search);
         else
-	   do_blast_search((VoidPtr) search);
+            do_blast_search((VoidPtr) search);
     }
-    search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp); 
+    if (search->rdfp->parameters & READDB_CONTENTS_ALLOCATED)
+        search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp); 
     if (time_out_boolean) {
         sprintf(buffer, "CPU limit exceeded");
         BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
-	search->timed_out = TRUE;
+        search->timed_out = TRUE;
     } 
-    else
-      /*
-       * We've finished the search without timing out,
-       * so we can ignore the soft limit now. -coulouri 20020104
-       */
-      {
-        #ifdef OS_UNIX
 
-	#ifdef SIG_IGN
-        signal(SIGXCPU, SIG_IGN);
-	#else
-	sigignore(SIGXCPU);
-	#endif
-
-        #endif
-      }
-    
     return;
 }
 
@@ -3542,6 +3557,64 @@ void BLASTUpdateSeqIdInSeqInt(SeqLocPtr mask, SeqIdPtr sip)
     }
     return;
 }
+
+/* Adjust offsets in the mask locations list; discard locations outside of
+   the range */
+static SeqLocPtr 
+AdjustOffsetsInMaskLoc(SeqLocPtr mask_loc, Int4 start, Int4 length)
+{
+   SeqLocPtr slp, last_slp = NULL, next_slp, head = NULL;
+   SeqIntPtr loc;
+
+   if (!mask_loc)
+      return NULL;
+
+   if (mask_loc->choice == SEQLOC_PACKED_INT)
+      slp = (SeqLocPtr) mask_loc->data.ptrvalue;
+   else if (mask_loc->choice == SEQLOC_INT)
+      slp = mask_loc;
+   else /* Should be impossible */ 
+      return NULL;
+
+   while (slp) {
+      if (slp->choice == SEQLOC_INT) {
+         loc = (SeqIntPtr) slp->data.ptrvalue;
+         loc->from -= start;
+         loc->to -= start;
+         if (loc->from >= length || loc->to < 0) {
+            next_slp = slp->next;
+            SeqLocFree(slp);
+            slp = next_slp;
+         } else {
+            if (loc->to > length)
+               loc->to = length;
+            if (loc->from < 0)
+               loc->from = 0;
+            if (last_slp) {
+               last_slp->next = slp;
+            } else {
+               head = slp;
+            }
+            last_slp = slp;
+            slp = slp->next;
+         }
+      } else {
+         next_slp = slp->next;
+         SeqLocFree(slp);
+         slp = next_slp;
+      }
+   }
+   if (last_slp)
+      last_slp->next = NULL;
+   
+   if (mask_loc->choice == SEQLOC_PACKED_INT) {
+      mask_loc->data.ptrvalue = head;
+      return mask_loc;
+   } else {
+      return head;
+   }
+} 
+
 /* This function use PACKED INT as slp2 */
 SeqLocPtr blastMergeFilterLocs(SeqLocPtr slp1, SeqLocPtr slp2, Boolean translate,
                                Int2 frame, Int4 length)
@@ -3819,6 +3892,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	Uint1Ptr sequence;
 	Uint1Ptr query_seq, query_seq_start, query_seq_rev, query_seq_start_rev;
 	ValNodePtr vnp;
+        Int4 query_loc_start;
 
 	if (options == NULL)
 	{
@@ -3846,14 +3920,22 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 
 	if (query_slp)
 	{
+           query_loc_start = SeqLocStart(query_slp);
+           if (query_slp->choice != SEQLOC_WHOLE && 
+               search->pbp->query_lcase_mask) {
+              search->pbp->query_lcase_mask = 
+                 AdjustOffsetsInMaskLoc(search->pbp->query_lcase_mask, 
+                                        query_loc_start, SeqLocLen(query_slp));
+           }
+
 		strand = SeqLocStrand(query_slp);
 		if (strand == Seq_strand_unknown || strand == Seq_strand_plus || strand == Seq_strand_both)
 		{
-			private_slp = SeqLocIntNew(SeqLocStart(query_slp), SeqLocStop(query_slp), Seq_strand_plus, SeqLocId(query_slp));
+			private_slp = SeqLocIntNew(query_loc_start, SeqLocStop(query_slp), Seq_strand_plus, SeqLocId(query_slp));
 		}
 		if (strand == Seq_strand_minus || strand == Seq_strand_both)
 		{
-			private_slp_rev = SeqLocIntNew(SeqLocStart(query_slp), SeqLocStop(query_slp), Seq_strand_minus, SeqLocId(query_slp));
+			private_slp_rev = SeqLocIntNew(query_loc_start, SeqLocStop(query_slp), Seq_strand_minus, SeqLocId(query_slp));
 		}
 		private_slp_delete = TRUE;
 	   	if (search->prog_number==blast_type_blastn)
@@ -4957,28 +5039,20 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
     if (search) {
        readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
 
-       if (seqid_list && !options->use_real_db_size)
-          BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num),
-                               seqid_list, NULL, NULL, NULL, 0);
-   
        /* Create virtual database if any of the databases have gi lists or 
           ordinal id masks, or if gi list is provided from options */
-       BlastProcessGiLists(search, options, gi_list, &gi_list_total);
-       /* Intended for use when a list of gi's is sent in, but the real size is needed. */
-        /* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
-           if this were not required. */
-       if (gi_list_total > 0 && !options->use_real_db_size)
+       BlastProcessGiLists(search, options, gi_list, gi_list_total);
+
+       /* search->thr_info->blast_gi_list will be non-NULL if gi_list or 
+        * options->gilist or options->gifile was non-NULL and therefore
+        * intersected with any oidlists in the search->rdfp(s). If this is the
+        * case, we need to recalculate the database length and number of
+        * sequences */
+       if (search->thr_info->blast_gi_list && !options->use_real_db_size)
           BlastAdjustDbNumbers(search->rdfp, &(dblen), 
                                &(search->dbseq_num), NULL, NULL, 
-                               search->rdfp->oidlist, NULL, 0);
+                               BlastGetVirtualOIDList(search->rdfp), NULL, 0);
 
-#if 0
-        /* use length and num of seqs of the database from alias file */
-        if (search->rdfp->aliaslen && !gi_list)
-            dblen = search->rdfp->aliaslen;
-        if (search->rdfp->aliasnseq && !gi_list) 
-            search->dbseq_num = search->rdfp->aliasnseq;
-#endif
         /* command-line/options trump alias file. */
         if (options->db_length > 0)
            dblen = options->db_length;
@@ -5008,7 +5082,8 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
         else 
             search->abmp = NULL;
         
-        search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
+        if (search->rdfp->parameters & READDB_CONTENTS_ALLOCATED)
+            search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
     }
     
     if (options_alloc)
@@ -5650,12 +5725,17 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
          searchsp_eff = (FloatHi) search->dblen_eff *
             (FloatHi) search->context[context].query->effective_length;
          
-         hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[context], 
-                                              searchsp_eff);
-         if (hsp->evalue > 10*search->pbp->cutoff_e) {
-            hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
-            hsp = MemFree(hsp);
-            search->current_hitlist->hsp_array[index] = NULL;
+         if (kbp[context]) {
+            /* kbp[context] == NULL means that this alignment has been 
+               extended across the boundary between different query sequences.
+               Leave it like this for now */
+            hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[context], 
+                                                 searchsp_eff);
+            if (hsp->evalue > 10*search->pbp->cutoff_e) {
+               hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
+               hsp = MemFree(hsp);
+               search->current_hitlist->hsp_array[index] = NULL;
+            }
          }
       }
    }
@@ -5667,7 +5747,7 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
 /*
 	Performs a BLAST search using a sequence from obtained from readdb.
 */
-BlastSearchBlkPtr LIBCALL
+Int2 LIBCALL
 BLASTPerformSearchWithReadDb (BlastSearchBlkPtr search, Int4 sequence_number)
 
 {
@@ -5682,9 +5762,7 @@ BLASTPerformSearchWithReadDb (BlastSearchBlkPtr search, Int4 sequence_number)
 	search->dblen_eff_real += MAX(subject_length-search->length_adjustment, 1);
         search->subject_id = sequence_number;
 
-        search = BLASTPerformSearch(search, subject_length, subject_seq); 
-
-	return search;
+        return BLASTPerformSearch(search, subject_length, subject_seq); 
 }
 
 /*
@@ -5693,7 +5771,7 @@ BLASTPerformSearchWithReadDb (BlastSearchBlkPtr search, Int4 sequence_number)
 	BLASTPerformSearchWithReadDb) and when only two seqs are being
 	compared.
 */
-BlastSearchBlkPtr LIBCALL
+Int2 LIBCALL
 BLASTPerformSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subject_seq)
 
 {
@@ -5708,7 +5786,7 @@ BLASTPerformSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subj
 		status = BLASTPerformFinalSearch(search, subject_length, subject_seq);
 	}
 	
-	return search;
+	return status;
 }
 
 /*
@@ -5844,13 +5922,14 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
 
 {
     BLAST_HitListPtr current_hitlist, hitlist = NULL;
-    Int2 inner_frame, inner_frame_max, status, inner_frame_min;
+    Int2 inner_frame, inner_frame_max, inner_frame_min, status;
     Int4 real_length, length, start = 0, num_chunks, index;
     Uint1Ptr prot_seq;
     
     BlastHitListPurge(search->current_hitlist);
     if (subject_length == 0)
-	return 1;
+       /* Normal return */
+	return 0;
 
     BlastSequenceAddSequence(search->subject, NULL, subject_seq-1, subject_length, subject_length, 0);
     search->current_hitlist_purge = TRUE; /* The default. */
@@ -5951,8 +6030,10 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
            length = MIN(real_length-start, MAX_DBSEQ_LEN);
            search->subject->length = length;
            /* THE BLAST SEARCH _IS_ HERE! */
-           status = BlastExtendWordSearch(search, search->pbp->multiple_hits_only);
-           
+           if (BlastExtendWordSearch(search, search->pbp->multiple_hits_only) < 0) {
+              /* Error occurred in BlastExtendWordSearch */
+              return 1;
+           }
            /* HSP's were not saved in any special order, sort. */
            current_hitlist = search->current_hitlist;
            if (current_hitlist && current_hitlist->do_not_reallocate == FALSE)
@@ -5965,7 +6046,11 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
 #if 1
            else if (!search->pbp->do_sum_stats && !search->pbp->mb_params) {
               status = BlastNTPreliminaryGappedScore(search, search->subject->sequence, search->subject->length);
+              if (status < 0)
+                 return status;
               status = BlastNTGetGappedScore(search, search->subject->length, search->subject->sequence);
+              if (status < 0)
+                 return status;
            }  
 #endif
            if (num_chunks > 1) {
@@ -5993,6 +6078,7 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
     if (hitlist) {
        MemFree(search->current_hitlist->hsp_array);
        MemCpy(search->current_hitlist, hitlist, sizeof(BLAST_HitList));
+       MemFree(hitlist);
        if (!search->pbp->mb_params)
           search->subject->sequence = search->subject->sequence_start + 1;
     }
@@ -6125,7 +6211,7 @@ BlastSequenceAddSequence (BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, U
 static Int4
 BlastExtendWordSearch(BlastSearchBlkPtr search, Boolean multiple_hits)
 {
-	Int2 status=0;
+	Int4 status=0;
 
 
 	/* multiple hits structure needed to perform mh extensions. */
@@ -10549,10 +10635,14 @@ BlastGetNonSumStatsEvalue (BlastSearchBlkPtr search)
                            hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[hsp->context], search->searchsp_eff);
                         else {
                            FloatHi searchsp_eff;
-                           hsp->context = BinarySearchInt4(hsp->query.offset, search->query_context_offsets, (Int4) (search->last_context+1));
-                           searchsp_eff = (FloatHi) search->dblen_eff *
+                           hsp->context = BinarySearchInt4(hsp->query.offset,
+                                                           search->query_context_offsets, (Int4) (search->last_context+1));
+                           if (kbp[hsp->context]) {
+                              searchsp_eff = (FloatHi) search->dblen_eff *
                               (FloatHi) search->context[hsp->context].query->effective_length;
-                           hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[hsp->context], searchsp_eff);
+                              hsp->evalue = BlastKarlinStoE_simple(hsp->score,
+                                   kbp[hsp->context], searchsp_eff);
+                           }
                         }
 		}
 	}

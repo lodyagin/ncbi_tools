@@ -1,7 +1,7 @@
 #ifndef NCBI_SOCKET__H
 #define NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.16 2002/04/22 20:52:34 lavr Exp $
+/*  $Id: ncbi_socket.h,v 6.21 2002/08/27 03:15:01 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,6 +58,7 @@
  *  SOCK_Shutdown
  *  SOCK_Close
  *  SOCK_Wait
+ *  SOCK_Poll
  *  SOCK_SetTimeout
  *  SOCK_GetReadTimeout
  *  SOCK_GetWriteTimeout
@@ -65,10 +66,12 @@
  *  SOCK_PushBack
  *  SOCK_Status
  *  SOCK_Write
- *  SOCK_GetAddress
+ *  SOCK_GetPeerAddress
  *
  *  SOCK_SetReadOnWriteAPI
  *  SOCK_SetReadOnWrite
+ *  SOCK_SetInterruptOnSignalAPI
+ *  SOCK_SetInterruptOnSignal
  *
  *  SOCK_IsServerSide
  *
@@ -81,66 +84,11 @@
  *
  *  SOCK_gethostname
  *  SOCK_ntoa
- *  SOCK_htonl
+ *  SOCK_HostToNetShort
+ *  SOCK_HostToNetLong
+ *  SOCK_NetToHostShort
+ *  SOCK_NetToHostLong
  *
- * ---------------------------------------------------------------------------
- * $Log: ncbi_socket.h,v $
- * Revision 6.16  2002/04/22 20:52:34  lavr
- * +SOCK_htons(), macros SOCK_ntohl() and SOCK_ntohs()
- *
- * Revision 6.15  2001/12/03 21:33:48  vakatov
- * + SOCK_IsServerSide()
- *
- * Revision 6.14  2001/09/10 16:10:41  vakatov
- * SOCK_gethostbyname() -- special cases "0.0.0.0" and "255.255.255.255"
- *
- * Revision 6.13  2001/05/21 15:11:46  ivanov
- * Added (with Denis Vakatov) automatic read on write data from the socket
- * (stall protection).
- * Added functions SOCK_SetReadOnWriteAPI(), SOCK_SetReadOnWrite()
- * and internal function s_SelectStallsafe().
- *
- * Revision 6.12  2001/04/23 22:22:06  vakatov
- * SOCK_Read() -- special treatment for "buf" == NULL
- *
- * Revision 6.11  2001/03/22 17:44:14  vakatov
- * + SOCK_AllowSigPipeAPI()
- *
- * Revision 6.10  2001/03/06 23:54:10  lavr
- * Renamed: SOCK_gethostaddr -> SOCK_gethostbyname
- * Added:   SOCK_gethostbyaddr
- *
- * Revision 6.9  2001/03/02 20:05:15  lavr
- * Typos fixed
- *
- * Revision 6.8  2000/12/26 21:40:01  lavr
- * SOCK_Read modified to handle properly the case of 0 byte reading
- *
- * Revision 6.7  2000/12/05 23:27:44  lavr
- * Added SOCK_gethostaddr
- *
- * Revision 6.6  2000/11/15 18:51:05  vakatov
- * Add SOCK_Shutdown() and SOCK_Status().  Remove SOCK_Eof().
- *
- * Revision 6.5  2000/06/23 19:34:41  vakatov
- * Added means to log binary data
- *
- * Revision 6.4  2000/05/30 23:31:37  vakatov
- * SOCK_host2inaddr() renamed to SOCK_ntoa(), the home-made out-of-scratch
- * implementation to work properly with GCC on IRIX64 platforms
- *
- * Revision 6.3  2000/03/24 23:12:04  vakatov
- * Starting the development quasi-branch to implement CONN API.
- * All development is performed in the NCBI C++ tree only, while
- * the NCBI C tree still contains "frozen" (see the last revision) code.
- *
- * Revision 6.2  2000/02/23 22:33:38  vakatov
- * Can work both "standalone" and as a part of NCBI C++ or C toolkits
- *
- * Revision 6.1  1999/10/18 15:36:39  vakatov
- * Initial revision (derived from the former "ncbisock.[ch]")
- *
- * ===========================================================================
  */
 
 #include <connect/ncbi_core.h>
@@ -162,8 +110,16 @@ extern "C" {
 
 
 /******************************************************************************
- *  TYPEDEF & MACRO
+ *  TYPEDEFS & MACROS
  */
+
+
+/* Network and host byte order enumeration type
+ */
+typedef enum {
+    eNH_HostByteOrder,
+    eNH_NetworkByteOrder
+} ENH_ByteOrder;
 
 
 /* Forward declarations of the hidden socket internal structure, and
@@ -220,6 +176,22 @@ extern void SOCK_SetDataLogging(SOCK sock, ESwitch log_data);
 
 
 /******************************************************************************
+ *   I/O restart on signals
+ */
+
+
+/* By default ("on_off" == eDefault,eOff), I/O is restartable if interrupted.
+ */
+extern void SOCK_SetInterruptOnSignalAPI(ESwitch on_off);
+
+
+/* Control sockets individually. eDefault causes the use of global API flag.
+ */
+extern void SOCK_SetInterruptOnSignal(SOCK sock, ESwitch on_off);
+
+
+
+/******************************************************************************
  *  API Initialization and Shutdown/Cleanup
  */
 
@@ -260,7 +232,7 @@ extern EIO_Status SOCK_ShutdownAPI(void);
 
 /* [SERVER-side]  Create and initialize the server-side(listening) socket
  * (socket() + bind() + listen())
- * NOTE:  on some systems, "backlog" can be silently limited down to 128(or 5).
+ * NOTE: on some systems, "backlog" can be silently limited down to 128 (or 5).
  */
 extern EIO_Status LSOCK_Create
 (unsigned short port,    /* [in]  the port to listen at                  */
@@ -270,8 +242,8 @@ extern EIO_Status LSOCK_Create
 
 
 /* [SERVER-side]  Accept connection from a client.
- * NOTE: the "*timeout" is for this accept() only.  To set i/o timeout,
- *       use SOCK_SetTimeout();  the timeout is infinite by default.
+ * NOTE: the "*timeout" is for this accept() only.  To set I/O timeout,
+ *       use SOCK_SetTimeout();  all I/O timeouts are infinite by default.
  */
 extern EIO_Status LSOCK_Accept
 (LSOCK           lsock,    /* [in]  handle of a listening socket */
@@ -305,10 +277,10 @@ extern EIO_Status LSOCK_GetOSHandle
  * (socket() + connect() [+ select()])
  */
 extern EIO_Status SOCK_Create
-(const char*     host,    /* [in]  host to connect to           */
- unsigned short  port,    /* [in]  port to connect to           */
- const STimeout* timeout, /* [in]  the connect timeout          */
- SOCK*           sock     /* [out] handle of the created socket */
+(const char*     host,    /* [in]  host to connect to                     */
+ unsigned short  port,    /* [in]  port to connect to                     */
+ const STimeout* timeout, /* [in]  the connect timeout (infinite if NULL) */
+ SOCK*           sock     /* [out] handle of the created socket           */
  );
 
 
@@ -321,10 +293,10 @@ extern EIO_Status SOCK_Create
  * NOTE: "new" socket inherits the old i/o timeouts,
  */
 extern EIO_Status SOCK_Reconnect
-(SOCK            sock,    /* [in] handle of the socket to reconnect */
- const char*     host,    /* [in] host to connect to                */
- unsigned short  port,    /* [in] port to connect to                */
- const STimeout* timeout  /* [in] the connect timeout               */
+(SOCK            sock,    /* [in] handle of the socket to reconnect      */
+ const char*     host,    /* [in] host to connect to  (can be NULL)      */
+ unsigned short  port,    /* [in] port to connect to  (can be 0)         */
+ const STimeout* timeout  /* [in] the connect timeout (infinite if NULL) */
  );
 
 
@@ -357,6 +329,35 @@ extern EIO_Status SOCK_Wait
  );
 
 
+/* Block until at least one of the sockets enlisted in "polls" array
+ * (of size "n") becomes available for requested operation (event),
+ * or until timeout expires (wait indefinitely if timeout is passed NULL).
+ * Return eIO_Success if at least one socket was found ready; eIO_Timeout
+ * if timeout expired; eIO_Unknown if underlying system call(s) failed.
+ * NOTE1: for a socket found not ready for an operation, eIO_Open is returned
+ *        in its "revent"; for a failing socket, eIO_Close is returned;
+ * NOTE2: this call can return eIO_InvalidArg if a non-NULL socket polled with
+ *        a bad "event" (like eIO_Open or eIO_Close);
+ * NOTE3: if either both "n" and "polls" are NULL, or all sockets in "polls"
+ *        are NULL, then the returned result is either
+ *        eIO_Timeout (after the specified amount of time was spent idle), or
+ *        eIO_Interrupted (if signal came while the waiting was in progress).
+ */
+
+typedef struct {
+    SOCK      sock;   /* [in]           SOCK to poll (NULL if not to poll)   */
+    EIO_Event event;  /* [in]  one of:  eIO_Read, eIO_Write, eIO_ReadWrite   */
+    EIO_Event revent; /* [out] one of:  eIO_Open/Read/Write/ReadWrite/Close  */
+} SSOCK_Poll;
+
+extern EIO_Status SOCK_Poll
+(size_t          n,         /* [in]      # of SSOCK_Poll elems in "polls"    */
+ SSOCK_Poll      polls[],   /* [in|out]  array of query/result structures    */
+ const STimeout* timeout,   /* [in]      max time to wait (infinite if NULL) */
+ size_t*         n_ready    /* [out]     # of ready sockets  (can be NULL)   */
+ );
+
+
 /* Specify timeout for the connection i/o (see SOCK_[Read|Write|Close] funcs).
  * If "timeout" is NULL then set the timeout to be infinite;
  * NOTE: the default timeout is infinite (wait "ad infinitum" on i/o).
@@ -381,7 +382,7 @@ extern const STimeout* SOCK_GetTimeout
 
 /* Read up to "size" bytes from "sock" to the mem.buffer pointed by "buf".
  * In "*n_read", return the number of successfully read bytes.
- * If there is no data available to read (also, if eIO_Persist and cannot
+ * If there is no data available to read (also, if eIO_ReadPersist and cannot
  * read exactly "size" bytes) and the timeout(see SOCK_SetTimeout) is expired
  * then return eIO_Timeout.
  * If "buf" is passed NULL, then:
@@ -390,14 +391,14 @@ extern const STimeout* SOCK_GetTimeout
  * NOTE1: Theoretically, eIO_Closed may indicate an empty message
  *        rather than a real closure of the connection...
  * NOTE2: If on input "size" == 0, then "*n_read" is set to 0, and
- *        return value can be either of eIO_Success, eIO_Closed and
+ *        return value can be either of eIO_Success, eIO_Closed or
  *        eIO_Unknown depending on connection status of the socket.
  */
 extern EIO_Status SOCK_Read
 (SOCK           sock,
  void*          buf,    /* [out] data buffer to read to          */
  size_t         size,   /* [in]  max # of bytes to read to "buf" */
- size_t*        n_read, /* [out] # of bytes read                 */
+ size_t*        n_read, /* [out] # of bytes read  (can be NULL)  */
  EIO_ReadMethod how     /* [in]  how to read the data            */
  );
 
@@ -432,16 +433,25 @@ extern EIO_Status SOCK_Status
  );
 
 
-/* Write "size" bytes from the mem.buffer "buf" to "sock".
- * In "*n_written", return the number of successfully written bytes.
- * If cannot write all data and the timeout(see SOCK_SetTimeout()) is expired
- * then return eIO_Timeout.
+/* Write "size" bytes from buffer "buf" to "sock".
+ * In "*n_written", return the number of bytes actually written.
+ * eIO_WritePlain   --  write as many bytes as possible at once and return
+ *                      immediately; if no bytes can be written then wait
+ *                      at most WRITE timeout, try again and return.
+ * eIO_WritePersist --  write all data (doing an internal retry loop
+ *                      if necessary); if any single write attempt times out
+ *                      or fails then stop writing and return (error code).
+ * Return status: eIO_Success -- some bytes were written successfully  [Plain]
+ *                            -- all bytes were written successfully [Persist]
+ *                other code denotes an error, but some bytes might have
+ *                been sent (check *n_written to know).
  */
 extern EIO_Status SOCK_Write
-(SOCK        sock,
- const void* buf,       /* [in]  data to write to the socket                */
- size_t      size,      /* [in]  # of bytes (starting at "buf") to write    */
- size_t*     n_written  /* [out] # of successf. written bytes (can be NULL) */
+(SOCK            sock,
+ const void*     buf,       /* [in]  data to write to the socket             */
+ size_t          size,      /* [in]  # of bytes (starting at "buf") to write */
+ size_t*         n_written, /* [out] # of written bytes (can be NULL)        */
+ EIO_WriteMethod how        /* [in]  eIO_WritePlain | eIO_WritePersist       */
  );
 
 
@@ -449,11 +459,11 @@ extern EIO_Status SOCK_Write
  * If "network_byte_order" is true(non-zero) then return the host/port in the
  * network byte order; otherwise return them in the local host byte order.
  */
-extern void SOCK_GetAddress
+extern void SOCK_GetPeerAddress
 (SOCK            sock,
  unsigned int*   host,               /* [out] the peer's host (can be NULL) */
  unsigned short* port,               /* [out] the peer's port (can be NULL) */
- int             network_byte_order  /* [in]  host/port byte order          */
+ ENH_ByteOrder   byte_order          /* [in]  host/port byte order          */
  );
 
 
@@ -511,15 +521,21 @@ extern int SOCK_ntoa
  );
 
 
-/* See man for the BSD htonl() and htons().
+/* See man for the BSDisms, htonl() and htons().
  */
-extern unsigned int SOCK_htonl(unsigned int value);
+extern unsigned int SOCK_HostToNetLong(unsigned int value);
 
-#define SOCK_ntohl SOCK_htonl
+#define SOCK_NetToHostLong SOCK_HostToNetLong
 
-extern unsigned short SOCK_htons(unsigned short value);
+extern unsigned short SOCK_HostToNetShort(unsigned short value);
 
-#define SOCK_ntohs SOCK_htons
+#define SOCK_NetToHostShort SOCK_HostToNetShort
+
+/* Deprecated */
+#define SOCK_htonl SOCK_HostToNetLong
+#define SOCK_ntohl SOCK_NetToHostLong
+#define SOCK_htons SOCK_HostToNetShort
+#define SOCK_ntohs SOCK_NetToHostShort
 
 
 /* Return INET host address (in network byte order) of the
@@ -548,5 +564,85 @@ extern char* SOCK_gethostbyaddr
 } /* extern "C" */
 #endif
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * $Log: ncbi_socket.h,v $
+ * Revision 6.21  2002/08/27 03:15:01  lavr
+ * Deprecate SOCK_{nh}to{hn}{ls}, define more elaborate call names
+ * SOCK_{Net|Host}To{Host|Net}{Long|Short} instead
+ *
+ * Revision 6.20  2002/08/15 18:44:18  lavr
+ * SOCK_Poll() documented in more details
+ *
+ * Revision 6.19  2002/08/12 14:59:12  lavr
+ * Additional (last) argument for SOCK_Write: write_mode
+ *
+ * Revision 6.18  2002/08/07 16:31:00  lavr
+ * Added enum ENH_ByteOrder; renamed SOCK_GetAddress() ->
+ * SOCK_GetPeerAddress() and now accepts ENH_ByteOrder as last arg;
+ * added SOCK_SetInterruptOnSignal[API]; write-status (w_status) made current;
+ * log moved to end
+ *
+ * Revision 6.17  2002/04/26 16:40:43  lavr
+ * New method: SOCK_Poll()
+ *
+ * Revision 6.16  2002/04/22 20:52:34  lavr
+ * +SOCK_htons(), macros SOCK_ntohl() and SOCK_ntohs()
+ *
+ * Revision 6.15  2001/12/03 21:33:48  vakatov
+ * + SOCK_IsServerSide()
+ *
+ * Revision 6.14  2001/09/10 16:10:41  vakatov
+ * SOCK_gethostbyname() -- special cases "0.0.0.0" and "255.255.255.255"
+ *
+ * Revision 6.13  2001/05/21 15:11:46  ivanov
+ * Added (with Denis Vakatov) automatic read on write data from the socket
+ * (stall protection).
+ * Added functions SOCK_SetReadOnWriteAPI(), SOCK_SetReadOnWrite()
+ * and internal function s_SelectStallsafe().
+ *
+ * Revision 6.12  2001/04/23 22:22:06  vakatov
+ * SOCK_Read() -- special treatment for "buf" == NULL
+ *
+ * Revision 6.11  2001/03/22 17:44:14  vakatov
+ * + SOCK_AllowSigPipeAPI()
+ *
+ * Revision 6.10  2001/03/06 23:54:10  lavr
+ * Renamed: SOCK_gethostaddr -> SOCK_gethostbyname
+ * Added:   SOCK_gethostbyaddr
+ *
+ * Revision 6.9  2001/03/02 20:05:15  lavr
+ * Typos fixed
+ *
+ * Revision 6.8  2000/12/26 21:40:01  lavr
+ * SOCK_Read modified to handle properly the case of 0 byte reading
+ *
+ * Revision 6.7  2000/12/05 23:27:44  lavr
+ * Added SOCK_gethostaddr
+ *
+ * Revision 6.6  2000/11/15 18:51:05  vakatov
+ * Add SOCK_Shutdown() and SOCK_Status().  Remove SOCK_Eof().
+ *
+ * Revision 6.5  2000/06/23 19:34:41  vakatov
+ * Added means to log binary data
+ *
+ * Revision 6.4  2000/05/30 23:31:37  vakatov
+ * SOCK_host2inaddr() renamed to SOCK_ntoa(), the home-made out-of-scratch
+ * implementation to work properly with GCC on IRIX64 platforms
+ *
+ * Revision 6.3  2000/03/24 23:12:04  vakatov
+ * Starting the development quasi-branch to implement CONN API.
+ * All development is performed in the NCBI C++ tree only, while
+ * the NCBI C tree still contains "frozen" (see the last revision) code.
+ *
+ * Revision 6.2  2000/02/23 22:33:38  vakatov
+ * Can work both "standalone" and as a part of NCBI C++ or C toolkits
+ *
+ * Revision 6.1  1999/10/18 15:36:39  vakatov
+ * Initial revision (derived from the former "ncbisock.[ch]")
+ *
+ * ===========================================================================
+ */
 
 #endif /* NCBI_SOCKET__H */

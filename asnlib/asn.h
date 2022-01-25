@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,10 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.9  2002/05/20 23:13:39  ivanov
+* Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
+* buffers reserved room
+*
 * Revision 6.8  2001/10/11 14:39:08  ostell
 * added support for XMLModulePrefix
 *
@@ -166,11 +170,11 @@ typedef struct asnopt {
 
 typedef struct asnvaluenode {
 	Int2 valueisa;
-	CharPtr name;		/* use for strings and named int */
-	Int4 intvalue;		    /* use for int and boolean */
+	CharPtr name;	               /* use for strings and named int */
+	Int4 intvalue;		           /* use for int and boolean */
 	FloatHi realvalue;
 	struct asnvaluenode PNTR next;
-	AsnOptionPtr aop;           /* for comments */
+	AsnOptionPtr aop;              /* for comments */
 }	AsnValxNode, PNTR AsnValxNodePtr;
 
    /******** AsnType is a node in the AsnTool parse tree *******/
@@ -186,47 +190,49 @@ typedef struct asntype {
 	unsigned exported   : 1;
 	unsigned imported   : 1;
 	unsigned resolved   : 1;
-	AsnValxNodePtr defaultvalue;		 /* used for default value, range, subtypes */
+	AsnValxNodePtr defaultvalue;   /* used for default value, range, subtypes */
 	struct asntype PNTR type;
-	Pointer branch;				 /* used for named ints, enum, set, sequence */
-	Int2 tmp;     /* for temporary ->type link to local tree */
+	Pointer branch;				   /* used for named ints, enum, set, sequence */
+	Int2 tmp;                      /* for temporary ->type link to local tree */
 	struct asntype PNTR next;
-	AsnOptionPtr hints;         /* used to customize the type by application */
-	CharPtr XMLname;            /* for reading/writing XML */
-	Boolean been_here;          /* needed for printing DTD */
+	AsnOptionPtr hints;            /* used to customize the type by application */
+	CharPtr XMLname;               /* for reading/writing XML */
+	Boolean been_here;             /* needed for printing DTD */
 }	AsnType, PNTR AsnTypePtr;
 
 typedef struct asnmodule {
 	CharPtr modulename;
-	CharPtr filename;           /* if module to be loaded from disk */
+	CharPtr filename;              /* if module to be loaded from disk */
 	AsnTypePtr types;
 	AsnTypePtr values;
 	struct asnmodule PNTR next;    /* for chain of modules */
-	Int2 lasttype;          /* for isa defined types */
-	Int2 lastvalue; 		/* for isa defined values */
+	Int2 lasttype;                 /* for isa defined types */
+	Int2 lastvalue; 		       /* for isa defined values */
 }	AsnModule, PNTR AsnModulePtr;
 
-#define ASNIO_BUFSIZE	1024    /* default size of AsnIo.buf */
-                                /* AsnIo.type  bit[0] = text? bit[1]=binary?*/
-                                /* bit[2]=input? bit[3]=output?           */
-#define ASNIO_TEXT  1
-#define ASNIO_BIN   2
-#define ASNIO_IN    4
-#define ASNIO_OUT   8
-#define ASNIO_FILE  16
-#define ASNIO_CARRIER   32     /* is a pure iterator */
-#define ASNIO_XML 64
+#define ASNIO_BUFSIZE	      1024 /* default size of AsnIo.buf */
+#define ASNIO_BUFSIZE_RESERVE  200 /* default size of reserved room in AsnIo.buf */
 
-#define ASNIO_TEXT_IN	21     /* AsnIo.type */
+                                   /* AsnIo.type  bit[0] = text? bit[1]=binary?*/
+                                   /* bit[2]=input? bit[3]=output?           */
+#define ASNIO_TEXT       1
+#define ASNIO_BIN        2
+#define ASNIO_IN         4
+#define ASNIO_OUT        8
+#define ASNIO_FILE      16
+#define ASNIO_CARRIER   32         /* is a pure iterator */
+#define ASNIO_XML       64
+
+#define ASNIO_TEXT_IN	21         /* AsnIo.type */
 #define ASNIO_TEXT_OUT	25
 #define ASNIO_BIN_IN	22
 #define ASNIO_BIN_OUT	26
 
 typedef struct pstack {
-    AsnTypePtr type;           /* type at this level of stack */
-    Int4 len;                  /* length of item for binary decode */
-    Boolean resolved;          /* resolution of type for binary decode */
-	Boolean tag_indef;                /* indefinate tag length on input? */
+    AsnTypePtr type;               /* type at this level of stack */
+    Int4 len;                      /* length of item for binary decode */
+    Boolean resolved;              /* resolution of type for binary decode */
+	Boolean tag_indef;             /* indefinate tag length on input? */
 } Pstack, PNTR PstackPtr;
 
 typedef struct asnexpoptstruct {
@@ -243,23 +249,23 @@ typedef void (LIBCALLBACK * AsnExpOptFunc) PROTO ((AsnExpOptStructPtr));
 
 typedef struct expopt {
 	Int2 numtypes;
-	AsnTypePtr PNTR types;             /* the type to check */
-	Pointer user_data;           /* user supplied data */
-	AsnExpOptFunc user_callback; /* user supplied callback function */
+	AsnTypePtr PNTR types;         /* the type to check */
+	Pointer user_data;             /* user supplied data */
+	AsnExpOptFunc user_callback;   /* user supplied callback function */
 	struct expopt PNTR next;
 } AsnExpOpt, PNTR AsnExpOptPtr;
 
 typedef void (LIBCALLBACK * AsnErrorFunc) PROTO((Int2, CharPtr));
-#define ErrorRetType AsnErrorFunc	/* for backward compatibility */
+#define ErrorRetType AsnErrorFunc  /* for backward compatibility */
 typedef Int2 (LIBCALLBACK * AsnIoFunc) PROTO((Pointer, CharPtr, Uint2));
-#define IoFuncType AsnIoFunc		/* for backward compatibility */
+#define IoFuncType AsnIoFunc	   /* for backward compatibility */
 
 
 typedef struct asnio {
 	CharPtr linebuf;
 	Int1 type;            /* type- text-in, text-out, bin-in, bin-out */
 	Int2 linepos;         /* current offset in linebuf */
-	FILE * fp;             /* file to write or read to */
+	FILE * fp;            /* file to write or read to */
 	BytePtr buf;          /* buffer for I/O */
     Int2 bufsize;         /* sizeof this buffer */
 	Int2 bytes,           /* bytes of data available in buf */
@@ -267,36 +273,36 @@ typedef struct asnio {
 	Uint1 tagclass;       /* last BER tag-id-len read */
 	Int2 tagnumber;
 	Boolean constructed;
-	Int4 length;          /* length of BER encoded data */
-	Boolean tagsaved;     /* TRUE if tag info already here - stops read */
-	Int4 used;            /* if tagsaved, bytes used recorded here */
-	Int1 tabsize,         /* spaces per tab */
-		indent_level,     /* current indent level for print output */
-		linelength,      /* max line length on output */
-		max_indent,       /* current maximum indent levels for first */
-		state;            /* parsing state */
-    BoolPtr first;        /* for first element on indented line for printing */
-	Int4 linenumber;      /* for reporting errors */
+	Int4 length;            /* length of BER encoded data */
+	Boolean tagsaved;       /* TRUE if tag info already here - stops read */
+	Int4 used;              /* if tagsaved, bytes used recorded here */
+	Int1 tabsize,           /* spaces per tab */
+		indent_level,       /* current indent level for print output */
+		linelength,         /* max line length on output */
+		max_indent,         /* current maximum indent levels for first */
+		state;              /* parsing state */
+    BoolPtr first;          /* for first element on indented line for printing */
+	Int4 linenumber;        /* for reporting errors */
 	CharPtr word;           /* current word in linebuf */
-	Int2 wordlen,         /* length of word in linebuf */
-	     token;           /* current parsing token for word */
-    PstackPtr typestack;  /* the parsing stack for input and output */
-	Int1 type_indent,     /* used like indent_level and max_indent, but for */
-		max_type;         /* typestack */
-	ErrorRetType error_ret;     /* user error return */
-    Pointer iostruct;    /* non-FILE io structure */
-    IoFuncType readfunc,      /* read/write functions for sockets */
-          writefunc;     /*  open and close MUST be done outside AsnIo */
-	Boolean read_id;     /* for checking AsnReadId AsnReadVal alternation */
-	CharPtr fname;       /* name of file in use */
-	AsnOptionPtr aop;    /* head of options chain */
-	AsnExpOptPtr aeop;   /* exploration options chain */
+	Int2 wordlen,           /* length of word in linebuf */
+	     token;             /* current parsing token for word */
+    PstackPtr typestack;    /* the parsing stack for input and output */
+	Int1 type_indent,       /* used like indent_level and max_indent, but for */
+		max_type;           /* typestack */
+	ErrorRetType error_ret; /* user error return */
+    Pointer iostruct;       /* non-FILE io structure */
+    IoFuncType readfunc,    /* read/write functions for sockets */
+          writefunc;        /*  open and close MUST be done outside AsnIo */
+	Boolean read_id;        /* for checking AsnReadId AsnReadVal alternation */
+	CharPtr fname;          /* name of file in use */
+	AsnOptionPtr aop;       /* head of options chain */
+	AsnExpOptPtr aeop;      /* exploration options chain */
 	AsnExpOptStructPtr aeosp;
-	Boolean io_failure;  /* set on failed write, or read  */
-	Uint1 fix_non_print; /* fix non-printing chars in VisibleStrings (see below)*/
-	Boolean scan_for_start;  /* if TRUE, scan over garbage in print form */
-	Int2 spec_version;    /* used for filtering between asn.1 spec versions */
-	Boolean no_newline;   /* to suppress internal newlines in long XML strings */
+	Boolean io_failure;     /* set on failed write, or read  */
+	Uint1 fix_non_print;    /* fix non-printing chars in VisibleStrings (see below)*/
+	Boolean scan_for_start; /* if TRUE, scan over garbage in print form */
+	Int2 spec_version;      /* used for filtering between asn.1 spec versions */
+	Boolean no_newline;     /* to suppress internal newlines in long XML strings */
 	Boolean XMLModuleWritten; /* to put header on first XML DTD only */
 } AsnIo, PNTR AsnIoPtr;
 

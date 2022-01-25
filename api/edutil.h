@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.3  2002/07/02 13:23:43  kans
+* added SeqLocDeleteEx
+*
 * Revision 6.2  1997/11/10 19:50:23  kans
 * Fixed incorrect comment for ISAGappedSeqLoc() function (SB).
 *
@@ -354,6 +357,8 @@ NLM_EXTERN SeqLocPtr LIBCALL SegLocToParts (BioseqPtr seg, SeqLocPtr slp);
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocDelete (SeqLocPtr head, SeqIdPtr target, Int4 from, Int4 to, Boolean merge, BoolPtr changed);
+
+NLM_EXTERN SeqLocPtr LIBCALL SeqLocDeleteEx (SeqLocPtr head, SeqIdPtr target, Int4 from, Int4 to, Boolean merge, BoolPtr changed, BoolPtr partial5, BoolPtr partial3);
 
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocSubtract (SeqLocPtr head, SeqLocPtr piece);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.96 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -99,7 +99,7 @@ typedef struct bioseqviewform {
   EnumFieldAssoc  PNTR targetAlist;
   Boolean         usePopupForTarget;
   Int4            numTargets;
-  Int2            targetScratchSpace;
+  Int4            targetScratchSpace;
   GrouP           controls;
   GrpActnProc     updateControls;
   GrouP           retrieveAlignments;
@@ -107,8 +107,8 @@ typedef struct bioseqviewform {
   Boolean         hasaligns;
 
   EnumFieldAssoc  PNTR workingAlist;
-  Int2            workingCount;
-  Int2            workingTargets;
+  Int4            workingCount;
+  Int4            workingTargets;
 
   BioseqViewData  bvd;
 
@@ -1148,6 +1148,7 @@ static void PopTargetAlistProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
 
   bfp = (BioseqViewFormPtr) mydata;
   if (bfp != NULL && sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
+    if (bfp->workingCount > 32000) return; /* alists use Int2 indexing, so protect here */
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sip = SeqIdFindWorst (bsp->id);
     SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
@@ -1169,7 +1170,7 @@ static EnumFieldAssocPtr MakeTargetAlist (BioseqViewFormPtr bfp, SeqEntryPtr sep
 
 {
   EnumFieldAssocPtr  alist;
-  Int2               num;
+  Int4               num;
 
   if (bfp == NULL || sep == NULL) return NULL;
   bfp->workingAlist = NULL;
@@ -1186,14 +1187,14 @@ static EnumFieldAssocPtr MakeTargetAlist (BioseqViewFormPtr bfp, SeqEntryPtr sep
   return alist;
 }
 
-static Int2 PopulateTarget (BioseqViewFormPtr bfp)
+static Int4 PopulateTarget (BioseqViewFormPtr bfp)
 
 {
   EnumFieldAssocPtr  ap;
-  Int2               count;
+  Int4               count;
   Uint2              entityID;
   SeqEntryPtr        sep;
-  Int2               val;
+  Int4               val;
 
   val = 0;
   if (bfp != NULL && bfp->bvd.bsp != NULL) {
@@ -1210,7 +1211,9 @@ static Int2 PopulateTarget (BioseqViewFormPtr bfp)
             PopupItem (bfp->targetControl, ap->name);
           }
         } else {
-          ListItem (bfp->targetControl, ap->name);
+          if (count < 32000) {
+            ListItem (bfp->targetControl, ap->name);
+          }
         }
       }
       bfp->numTargets = bfp->workingTargets;
@@ -2560,7 +2563,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqEntryPtr          sep;
   CharPtr              str;
   CharPtr              styleName;
-  Int2                 val;
+  Int4                 val;
   WindoW               w;
   PopuP                x;
   GrouP                y;
@@ -2707,7 +2710,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         }
         SetObjectExtra (bfp->targetControl, (Pointer) bfp, NULL);
         val = PopulateTarget (bfp);
-        SetValue (bfp->targetControl, val + 1);
+        SetValue (bfp->targetControl, (Int2) val + 1);
         bfp->pubseq = PushButton (k, "PubMed", LaunchPubSeqArticle);
         SetObjectExtra (bfp->pubseq, (Pointer) bfp, NULL);
         Hide (bfp->pubseq);
@@ -3203,6 +3206,7 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
       (*(omtp->labelfunc)) (gcp->thisitem, buf, sizeof (buf) - 1, OM_LABEL_BOTH);
     } else if (gcp->thistype == OBJ_BIOSEQ_SEG) {
       SeqLocLabel (gcp->thisitem, buf, sizeof (buf) - 1, OM_LABEL_BOTH);
+      label = "BioseqSeg";
     }
   }
   if (! StringHasNoText (buf)) {
@@ -3641,7 +3645,7 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
   SeqViewProcsPtr    svpp;
   CharPtr            timestamptitle;
   ValNodePtr         ttl;
-  Int2               val;
+  Int4               val;
   WindoW             w;
 
   ompcp = (OMProcControlPtr) data;
@@ -3734,7 +3738,7 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
     Update ();
     Reset (bfp->targetControl);
     val = PopulateTarget (bfp);
-    SetValue (bfp->targetControl, val + 1);
+    SetValue (bfp->targetControl, (Int2) val + 1);
     SafeShow (bfp->targetControl);
     bfp->input_entityID = ompcp->input_entityID;
     bfp->input_itemID = ompcp->input_itemID;

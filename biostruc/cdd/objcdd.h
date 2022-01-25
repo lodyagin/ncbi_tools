@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.13 at Mar 7, 2002  1:32 PM
+*    Generated using ASNCODE Revision: 6.14 at May 17, 2002 10:52 AM
 *
 **************************************************/
 
@@ -76,7 +76,7 @@ typedef struct struct_Cdd {
    struct struct_Matrix PNTR   posfreq;
    struct struct_Matrix PNTR   scoremat;
    struct struct_Triangle PNTR   distance;
-   ValNodePtr   parents;
+   ValNodePtr   parent;
    ValNodePtr   children;
    ValNodePtr   siblings;
    ValNodePtr   neighbors;
@@ -126,7 +126,7 @@ typedef struct struct_Cdd_tree {
    CharPtr   name;
    ValNodePtr   id;
    ValNodePtr   description;
-   ValNodePtr   parents;
+   ValNodePtr   parent;
    ValNodePtr   children;
    ValNodePtr   siblings;
    ValNodePtr   neighbors;

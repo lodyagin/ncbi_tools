@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.59 2001/08/07 16:55:04 beloslyu Exp $
+#	$Id: makedemo.unx,v 6.62 2002/06/17 14:27:20 ivanov Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -11,6 +11,7 @@
 #	Apple AUX [ make SHELL=\usr\bin ]
 #	NeXt [ make CFLAGS1="-c -ansi"  ]
 #   DEC Alpha under OSF/1  [ make CC=cc ]
+#   BeOS [  make OTHERLIBS="" ]
 #	
 #	Subsequent makes should make ... nocopy instead of make ... all
 #	to avoid recopying the include files
@@ -71,6 +72,7 @@ LIB20 = -lncbidesk
 LIB20 =
 LIB22 = -lncbimmdb
 LIB23 = -lncbitool
+LIB50 = -lregexp
 NCBI_INCDIR = ../include
 NCBI_LIBDIR = ../lib
 NCBI_LINKINGLIBDIR = $(NCBI_LIBDIR)
@@ -95,7 +97,8 @@ EXE1 = testcore makeset \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
 	testval seedtop fmerge makemat copymat impala bl2seq \
 	megablast vecscreen gil2bin tbl2asn blastclust rpsblast \
-	asn2xml
+	asn2xml \
+	test_regexp demo_regexp demo_regexp_grep
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
@@ -104,7 +107,8 @@ SRC1 = testcore.c makeset.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
     testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c bl2seq.c \
 	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c \
-	asn2xml.c
+	asn2xml.c \
+	pcretest.c pcredemo.c pcregrep.c
 
 INTERNAL = testgen
 
@@ -143,6 +147,8 @@ clean :
 
 copy :
 	$(SRCCOPY) ../demo/*.* .
+	$(SRCCOPY) ../regexp/test/*.* .
+	$(SRCCOPY) ../regexp/demo/*.* .
 	-$(SRCCOPY) ../internal/*.* .
 	chmod -R ug+rw,o+r .
 
@@ -354,3 +360,11 @@ rpsblast : rpsblast.c $(THREAD_OBJ)
 asn2xml : asn2xml.c $(THREAD_OBJ)
 	$(CC) -o asn2xml $(LDFLAGS) asn2xml.c $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# regexp demos
+
+test_regexp : pcretest.c
+	$(CC) -o test_regexp $(LDFLAGS) pcretest.c $(LIB50)
+demo_regexp : pcretest.c
+	$(CC) -o demo_regexp $(LDFLAGS) pcredemo.c $(LIB50)
+demo_regexp_grep : pcretest.c
+	$(CC) -o demo_regexp_grep $(LDFLAGS) pcregrep.c $(LIB50)

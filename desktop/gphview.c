@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.54 $
+* $Revision: 6.55 $
 *
 * File Description:
 *
@@ -3532,7 +3532,7 @@ static Boolean Asn2GphDrawSelectionPrim (SegmenT seg, PrimitivE prim, Uint2 segI
 
 {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   SelStructPtr  sel;
   SelectPtr     sp;
@@ -3609,7 +3609,7 @@ static Boolean SelectAsn2GphPrim (
 
 {
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   SelectPtr  sp;
 
@@ -3637,7 +3637,7 @@ static Boolean DeselectAsn2GphPrim (
 
 {
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   SelectPtr  sp;
 
@@ -3693,7 +3693,7 @@ static Boolean InitSelectAsn2GphPrim (
 
 {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   SelStructPtr  sel;
   SelectPtr     sp;
@@ -3755,7 +3755,7 @@ static void ReleaseAsn2GphGraphic (
 {
   BioseqViewPtr  bvp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   SeqEntryPtr    sep;
   PrimitivE      thatPrim;

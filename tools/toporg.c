@@ -718,7 +718,7 @@ static void MovePopPhyMutPubsProc (SeqEntryPtr sep, Pointer data, Int4 index, In
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
   if (bssp->_class < BioseqseqSet_class_mut_set ||
-      bssp->_class > BioseqseqSet_class_phy_set) return;
+      bssp->_class > BioseqseqSet_class_eco_set) return;
   pub = CheckSegsForPopPhyMut (bssp->seq_set);
   if (pub == NULL) return;
 /* check if pub is already on the set descr */
@@ -2871,10 +2871,14 @@ extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 inde
           if (EmptyOrNullString (grp->maploc)) {
             grp->maploc = MemFree (grp->maploc);
           }
+          if (EmptyOrNullString (grp->locus_tag)) {
+            grp->locus_tag = MemFree (grp->locus_tag);
+          }
           if (EmptyOrNullString (grp->locus) &&
 			  EmptyOrNullString (grp->allele) &&
 			  EmptyOrNullString (grp->desc) &&
 			  EmptyOrNullString (grp->maploc) &&
+			  EmptyOrNullString (grp->locus_tag) &&
 			  grp->db == NULL && grp->syn == NULL) {
             empty = TRUE;
           }
@@ -3257,13 +3261,36 @@ static Boolean ConvertSourceFeatDescProc (GatherObjectPtr gop)
   return TRUE;
 }
 
+static void LookForTransgenic (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BioSourcePtr  biop;
+  BoolPtr       is_trans;
+  SubSourcePtr  ssp;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source) return;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (ssp->subtype == SUBSRC_transgenic) {
+      is_trans = (BoolPtr) userdata;
+      *is_trans = TRUE;
+      return;
+    }
+  }
+}
+
 extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep)
 
 {
+  Boolean      is_transgenic = FALSE;
   Boolean      objMgrFilter [OBJ_MAX];
   SeqEntryPtr  oldscope;
 
   if (sep == NULL) return;
+  VisitDescriptorsInSep (sep, (Pointer) &is_transgenic, LookForTransgenic);
+  if (is_transgenic) return;
+
   oldscope = SeqEntrySetScope (sep);
 
   MemSet ((Pointer) objMgrFilter, FALSE, sizeof (objMgrFilter));

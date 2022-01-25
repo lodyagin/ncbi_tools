@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ni_types.h,v $
+* Revision 6.5  2002/08/08 01:52:28  lavr
+* Default dispatcher set to SERVICE
+*
 * Revision 6.4  2001/02/21 22:09:27  lavr
 * SERVICE connector included
 *
@@ -234,9 +237,9 @@ typedef enum {
    * so that eNII_Default be equal to the number of avail. interfaces */
   eNII_Default      /* let program try environment and config files */
 
-/* NII_DEFAULT will be used if user did not explicitely specify the interface
+/* NII_DEFAULT will be used if user did not explicitly specify the interface
  * and if application failed to find it in environment and config files */
-#define NII_DEFAULT eNII_WWW
+#define NII_DEFAULT eNII_Service
 } ENIInterface;
 
 

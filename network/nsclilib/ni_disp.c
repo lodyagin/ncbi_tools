@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.10 $
+* $Revision: 4.11 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.11  2002/06/17 15:14:32  ivanov
+* Added fix for BeOS platform to sokselectw()
+*
 * Revision 4.10  2001/09/17 20:09:38  lavr
 * Added conditional compilation for config parameter HAVE_SOCKLEN_T
 *
@@ -3411,6 +3414,7 @@ int sokselectw(int fd, int seconds)
     if (FD_ISSET(fd, &wfds))
     {
 #ifdef OS_UNIX
+#ifndef OS_UNIX_BEOS
         int err;
 #  ifdef HAVE_SOCKLEN_T
         socklen_t optlen;
@@ -3422,6 +3426,7 @@ int sokselectw(int fd, int seconds)
         if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *) &err, &optlen) >= 0 &&
             err != 0) /* check for an error */
             return -1; /* got some error */
+#endif
 #endif /* OS_UNIX */
         return 0;
     }

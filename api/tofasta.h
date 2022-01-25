@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.20 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.20  2002/07/18 19:28:35  kans
+*  working implementation of BioseqRawToFastaExtraEx, always zero out all of MyFsa struct, no need for fake seqloc
+*
+* Revision 6.18  2002/07/14 21:04:32  camacho
+* Added option to print a subsequence of a raw bioseq to fasta format
+*
 * Revision 6.17  2002/01/16 17:02:04  camacho
 * Changed buflen and seqlen in MyFsa struct. to use Uint4, as well as some function prototypes
 *
@@ -186,6 +192,7 @@ typedef struct myfsa {   /* struct used for fasta searches */
     Uint1	code;	/* coding of sequence */
     Boolean	formatdb; /* TRUE, if is used in formatdb */
     Boolean printid_general; /* show gi and gnl for SeqId */
+    SeqLocPtr seqloc;  /* sub-sequence of interest */
 } MyFsa, PNTR MyFsaPtr;
 
 typedef struct tofasta {
@@ -199,6 +206,7 @@ typedef struct tofasta {
     
 
 NLM_EXTERN Boolean BioseqRawToFastaExtra PROTO((BioseqPtr bsp, FILE *fp, Int2 line_length));
+NLM_EXTERN Boolean BioseqRawToFastaExtraEx PROTO((BioseqPtr bsp, FILE *fp, Int2 line_length, SeqLocPtr slp));
 NLM_EXTERN Boolean BioseqRawToFasta PROTO((BioseqPtr bsp, FILE * fp, Boolean is_na));
 NLM_EXTERN Boolean SeqEntryToFasta PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na));
 NLM_EXTERN Boolean SeqEntryToFastaEx PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na, Boolean printid_general));
@@ -380,6 +388,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 *****************************************************************************/
 NLM_EXTERN SeqPortPtr FastaSeqPort PROTO((BioseqPtr bsp, Boolean is_na,
                                           Boolean do_virtual, Uint1 code));
+NLM_EXTERN SeqPortPtr FastaSeqPortEx PROTO((BioseqPtr bsp, Boolean is_na, 
+        Boolean do_virtual, Uint1 code, SeqLocPtr slp));
 
 /*****************************************************************************
 *

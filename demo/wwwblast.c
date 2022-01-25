@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 6.30 2002/01/08 22:36:25 dondosha Exp $
+/* $Id: wwwblast.c,v 6.32 2002/06/19 22:50:17 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 6.32  2002/06/19 22:50:17  dondosha
+* Added all queries information for tabular output with multiple queries
+*
+* Revision 6.31  2002/06/18 21:14:28  dondosha
+* Added return statement in the end of AppendMegaBlastHit
+*
 * Revision 6.30  2002/01/08 22:36:25  dondosha
 * Added tabular output functionality
 *
@@ -347,7 +353,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
                                   theInfo->number_of_alignments,
                                   program, 
                                   !theInfo->options->gapped_calculation,
-                                  FALSE, SeqLocStart(slp), 0, stdout);
+                                  FALSE, SeqLocStart(slp), 0, stdout,
+                                  (theInfo->align_view == HitTableWithHeader));
        SeqAlignSetFree(seqalign);
     } else {
     while (seqalign) {
@@ -712,6 +719,7 @@ AppendMegaBlastHit(VoidPtr ptr)
          last_hit = last_hit->next;
       }
    }
+   return 0;
 }
 
 Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
@@ -894,7 +902,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                         theInfo->program, 
                         !theInfo->options->gapped_calculation, FALSE, 
                         (query_slp ? SeqLocStart(query_slp) : 0), 0, 
-                        stdout);
+                        stdout, (theInfo->align_view == HitTableWithHeader));
                 } else {
                     seqannot = SeqAnnotNew();
                     seqannot->type = 2;

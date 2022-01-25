@@ -1,7 +1,7 @@
-#ifndef NCBI_CONFIG__H
-#define NCBI_CONFIG__H
+#ifndef CONNECT___NCBI_CONFIG__H
+#define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.1 2002/02/11 20:38:30 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.4 2002/06/17 18:21:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,13 +34,21 @@
  * ===========================================================================
  */
 
-
 /* Real configuration
  */
 #include <ncbilcl.h>
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
+#  ifdef OS_UNIX_IRIX
+#      define NCBI_OS_IRIX
+#  endif
+#  ifdef OS_UNIX_SOL
+#      define NCBI_OS_SOLARIS
+#  endif
+#  ifdef OS_UNIX_BEOS
+#      define NCBI_OS_BEOS
+#  endif
 #  if !defined(HAVE_GETHOSTBYNAME_R)
 #    if   defined(OS_UNIX_SOL)
 #      define HAVE_GETHOSTBYNAME_R 5
@@ -56,4 +64,4 @@
 #  define NCBI_OS_MAC 1
 #endif
 
-#endif /* NCBI_CONFIG__H */
+#endif /* CONNECT___NCBI_CONFIG__H */

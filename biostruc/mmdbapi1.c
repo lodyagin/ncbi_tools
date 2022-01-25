@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -44,8 +44,8 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
-* Revision 6.42  2001/11/19 16:31:14  kans
-* force load cdd object loader
+* Revision 6.43  2002/05/10 16:33:18  chenj
+* fix bugs in fnPBSFtoPSA
 *
 * Revision 6.41  2001/01/26 15:06:39  lewisg
 * use entrez2 to retrieve structures
@@ -286,7 +286,6 @@ NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compa
   /* this should be #include <utilpub.h> but this conflicts with mmdbdata.h. fix this. lyg */
 #include <mmdbapi.h>
 #include <mmdbapi1.h>
-#include <objcdd.h>
 #include <matrix.h>
 #include "prunebsc.h"  
 
@@ -1232,7 +1231,7 @@ BiostrucPtr LIBCALL FetchBS(CharPtr pcFetch,  Int2 iType, Int4 mdlLvl,
 printf("MaxModels=%d ModelLevel=%d\n",(int) maxModels,(int) mdlLvl);
 #endif
 	/* load the parse trees */
-	if (! (objmmdb1AsnLoad() && objmmdb2AsnLoad() && objmmdb3AsnLoad() && objcddAsnLoad() ))
+	if (! (objmmdb1AsnLoad() && objmmdb2AsnLoad() && objmmdb3AsnLoad() ))
 	  {
 	    	ErrPostEx(SEV_FATAL,0,0, "Internal - objmmdbNAsnLoad() Failure");
 		return NULL;
@@ -3196,7 +3195,6 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
   iDomain = 0;
   cChain = '-';
   
-  
   pcPDB[0] = pbsfSelected->name[7];
   pcPDB[1] = pbsfSelected->name[8];
   pcPDB[2] = pbsfSelected->name[9];
@@ -3225,7 +3223,6 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
     nextmasterstart = masterseg->to + 1;
     nextslavestart = slaveseg->to + 1;
   } 
-  
   
   salp = SeqAlignNew ();
   if (sap == NULL) {
@@ -3280,7 +3277,8 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
   dsp->dim = 2;
   dsp->numseg = count;
   dsp->ids = SeqIdDup (mastersip);
-  dsp->ids->next = slavesip;
+ /* dsp->ids->next = slavesip;  could be a bug, J. Chen */
+  dsp->ids->next = SeqIdDup(slavesip);
   dsp->starts = (Int4Ptr) MemNew (count * sizeof (Int4) * 2);
   dsp->lens = (Int4Ptr) MemNew (count * sizeof (Int4));
   
@@ -3309,14 +3307,19 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
  }
  else {
  DenseDiagPtr ddp, ddp_tmp;
+
   salp->segs = NULL;
   salp->type = 3;
-  salp->segtype = 1 /* densediag */ ;
+  salp->segtype = 1  /* densediag */ ;
+
   for(count = 0, masterseg = master, slaveseg = slave; masterseg != NULL && slaveseg != NULL; masterseg = masterseg->next, slaveseg = slaveseg->next) {
      ddp = DenseDiagNew();
      ddp->dim = 2;
-     ddp->id = SeqIdDup (mastersip);
-     ddp->id->next = slavesip;
+
+     ddp->id = SeqIdDup (mastersip); 
+/*     ddp->id->next = slavesip;    bug! fixed by J.Chen */
+     ddp->id->next = SeqIdDup(slavesip);
+
      ddp->starts = (Int4Ptr) MemNew ((size_t) 4 * sizeof (Int4));
      ddp->starts[0] = masterseg->from-1;
      ddp->starts[1] = slaveseg->from -1 ;
@@ -3329,6 +3332,7 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
         ddp_tmp->next = ddp;
      }
   }
+
  }
 
   

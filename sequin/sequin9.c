@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.141 $
+* $Revision: 6.146 $
 *
 * File Description: 
 *
@@ -373,7 +373,17 @@ static Boolean LIBCALLBACK VecScreenCallback (
   return TRUE;
 }
 
-static void SimpleUniVecScreenProc (IteM i)
+static void DoVecScreens (BioseqPtr bsp, Pointer userdata)
+
+{
+  CharPtr  service;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+  service = (CharPtr) userdata;
+  VecScreenAsynchronousRequest (service, bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
+}
+
+static void SimpleVecScreenCommon (IteM i, CharPtr service)
 
 {
   BaseFormPtr   bfp;
@@ -395,42 +405,25 @@ static void SimpleUniVecScreenProc (IteM i)
   bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp != NULL) {
     sep = SeqMgrGetSeqEntryForData (bsp);
+    if (sep == NULL) return;
+    VecScreenAsynchronousRequest (service, bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
   } else {
     sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+    if (sep == NULL) return;
+    VisitBioseqsInSep (sep, (Pointer) service, DoVecScreens);
   }
-  if (sep == NULL) return;
+}
 
-  VecScreenAsynchronousRequest ("UniVec", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
+static void SimpleUniVecScreenProc (IteM i)
+
+{
+  SimpleVecScreenCommon (i, "UniVec");
 }
 
 static void SimpleUniVecCoreScreenProc (IteM i)
 
 {
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  NewObjectPtr  nop;
-  SeqEntryPtr   sep = NULL;
-  Int2          which;
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (which != 1) return;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-  } else {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  }
-  if (sep == NULL) return;
-
-  VecScreenAsynchronousRequest ("UniVec_Core", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
+  SimpleVecScreenCommon (i, "UniVec_Core");
 }
 
 static QBQUEUE  qbquerylist = NULL;
@@ -3101,7 +3094,7 @@ static Boolean Merge3Prime (UpsDataPtr udp)
   return ReplaceSequence (udp);
 }
 
-/*==================================================================*/
+/*------------------------------------------------------------------*/
 /*                                                                  */
 /*  Merge5PrimeNoOverlap () -- Merge a new sequence onto the 5' end */
 /*                             of an existing sequence.             */
@@ -3111,7 +3104,7 @@ static Boolean Merge3Prime (UpsDataPtr udp)
 /*                             there is no alignment between the    */
 /*                             two sequences.                       */
 /*                                                                  */
-/*==================================================================*/
+/*------------------------------------------------------------------*/
 
 static Boolean Merge5PrimeNoOverlap (UpsDataPtr udp)
 
@@ -3152,7 +3145,7 @@ static Boolean Merge5PrimeNoOverlap (UpsDataPtr udp)
   return ReplaceSequence (udp);
 }
 
-/*==================================================================*/
+/*------------------------------------------------------------------*/
 /*                                                                  */
 /*  Merge3PrimeNoOverlap () -- Merge a new sequence onto the 3' end */
 /*                             of an existing sequence.             */
@@ -3162,7 +3155,7 @@ static Boolean Merge5PrimeNoOverlap (UpsDataPtr udp)
 /*                             there is no alignment between the    */
 /*                             two sequences.                       */
 /*                                                                  */
-/*==================================================================*/
+/*------------------------------------------------------------------*/
 
 static Boolean Merge3PrimeNoOverlap (UpsDataPtr udp)
 
@@ -3398,6 +3391,7 @@ static void FuseFeatures (
       CombineTexts (&(grp->allele), &(oldgrp->allele));
       CombineTexts (&(grp->desc), &(oldgrp->desc));
       CombineTexts (&(grp->maploc), &(oldgrp->maploc));
+      CombineTexts (&(grp->locus_tag), &(oldgrp->locus_tag));
       grp->pseudo |= oldgrp->pseudo;
       ValNodeLink (&(grp->db), oldgrp->db);
       oldgrp->db = NULL;
@@ -4842,6 +4836,7 @@ static ForM UpdateSequenceForm (
         SetValue (udp->sfb, 2);
         Disable (udp->sfb);
         udp->diffOrgs = TRUE;
+        Message (MSG_OK, "Organisms are different, so features will be propagated, but sequence will not be changed");
       } else {
         /* no features, cannot do anything */
         SetValue (udp->sfb, 0);
@@ -5389,120 +5384,67 @@ static void TruncateCDS (
   }
 }
 
-static void DoFeatProp (
-  BioseqPtr bsp,
-  SeqAlignPtr salp,
-  Int4 begin,
-  Int4 fin,
-  SeqFeatPtr sfp,
-  Boolean gapSplit,
-  Boolean stopCDS,
-  Boolean transPast,
-  Boolean cds3end,
-  Uint1 strand
-)
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* PropagateCDS () - Called from DoFeaetProp() for CDS-specific     */
+/*                   feature propagation.                           */
+/*                                                                  */
+/*------------------------------------------------------------------*/
 
+static void PropagateCDS (SeqFeatPtr dup,
+			  SeqFeatPtr sfp,
+			  BioseqPtr  newbsp,
+			  Boolean    stopCDS,
+			  Boolean    transPast,
+			  Boolean    cds3end,
+			  Uint1      strand)
 {
-  CodeBreakPtr    cbp, prevcbp, nextcbp;
-  CdRegionPtr     crp;
-  SeqFeatPtr      dup, prot;
   Uint2           entityID;
   MolInfoPtr      mip;
-  BioseqPtr       newbsp, pbsp;
-  SeqLocPtr       newloc;
-  Boolean         partial5;
   Boolean         partial3;
+  Boolean         partial5;
+  BioseqPtr       pbsp;
+  SeqFeatPtr      prot;
   ProtRefPtr      prp;
-  RnaRefPtr       rrp;
   SeqDescrPtr     sdp;
-  SeqEntryPtr     sep;
   SeqIdPtr        sip;
-  tRNAPtr         trp;
   SeqFeatXrefPtr  xref;
   Boolean         xtend;
 
-  if (bsp == NULL || salp == NULL || sfp == NULL) return;
+  /* Check parameters */
 
-  sip = AlnMgr2GetNthSeqIdPtr (salp, fin);
-  if (sip == NULL) return;
+  if (dup->data.choice != SEQFEAT_CDREGION)
+    return;
 
-  newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, sfp->location);
-  if (newloc == NULL) return;
+  /* Extend the location to the end if that was checked */
 
-  dup = AsnIoMemCopy ((Pointer) sfp,
-                      (AsnReadFunc) SeqFeatAsnRead,
-                      (AsnWriteFunc) SeqFeatAsnWrite);
-  SeqLocFree (dup->location);
-  dup->location = newloc;
-
-  switch (dup->data.choice) {
-    case SEQFEAT_CDREGION :
-      crp = (CdRegionPtr) dup->data.value.ptrvalue;
-      if (crp != NULL) {
-        prevcbp = NULL;
-        for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp) {
-          nextcbp = cbp->next;
-          newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, cbp->loc);
-          SeqLocFree (cbp->loc);
-          cbp->loc = newloc;
-          if (cbp->loc == NULL) {
-            if (prevcbp != NULL) {
-              prevcbp->next = nextcbp;
-            } else {
-              crp->code_break = nextcbp;
-            }
-            cbp->next = NULL;
-            CodeBreakFree (cbp);
-          } else {
-            prevcbp = cbp;
-          }
-        }
-      }
-      break;
-    case SEQFEAT_RNA :
-      rrp = (RnaRefPtr) dup->data.value.ptrvalue;
-      if (rrp != NULL && rrp->ext.choice == 2) {
-        trp = (tRNAPtr) rrp->ext.value.ptrvalue;
-        if (trp != NULL && trp->anticodon != NULL) {
-          newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, trp->anticodon);
-          SeqLocFree (trp->anticodon);
-          trp->anticodon = newloc;
-        }
-      }
-      break;
-    default :
-      break;
-  }
-
-  newbsp = BioseqFindCore (sip);
-  if (newbsp == NULL) return;
-  sep = SeqMgrGetSeqEntryForData (newbsp);
-  if (sep == NULL) return;
-  CreateNewFeature (sep, NULL, dup->data.choice, dup);
-
-  if (dup->product != NULL) {
-    dup->product = SeqLocFree (dup->product);
-  }
-
-  if (dup->data.choice != SEQFEAT_CDREGION) return;
-
-  if (transPast && cds3end) {
+  if (transPast && cds3end) 
     ExtendLocToEnd (dup->location, newbsp, strand);
-  }
+
+  /**/
 
   sip = SeqLocId (sfp->product);
-  if (sip == NULL) return;
+  if (sip == NULL)
+    return;
+
   pbsp = BioseqFindCore (sip);
-  if (pbsp == NULL) return;
+  if (pbsp == NULL)
+    return;
+
   prot = SeqMgrGetBestProteinFeature (pbsp, NULL);
-  if (prot == NULL || prot->data.choice != SEQFEAT_PROT) return;
+  if (prot == NULL || prot->data.choice != SEQFEAT_PROT)
+    return;
+
   prp = (ProtRefPtr) prot->data.value.ptrvalue;
-  if (prp == NULL) return;
+  if (prp == NULL)
+    return;
   prp = AsnIoMemCopy ((Pointer) prp,
                        (AsnReadFunc) ProtRefAsnRead,
                        (AsnWriteFunc) ProtRefAsnWrite);
+
   xref = SeqFeatXrefNew ();
-  if (xref == NULL) return;
+  if (xref == NULL)
+    return;
   xref->data.choice = SEQFEAT_PROT;
   xref->data.value.ptrvalue = (Pointer) prp;
   xref->next = dup->xref;
@@ -5511,13 +5453,19 @@ static void DoFeatProp (
   entityID = ObjMgrGetEntityIDForPointer (newbsp);
   PromoteXrefsEx (dup, newbsp, entityID, (Boolean) (! stopCDS), FALSE);
 
-  /* now truncate new cds based on new protein length */
+  /* Truncate new CDS based on new protein length */
 
   sip = SeqLocId (dup->product);
-  if (sip == NULL) return;
+  if (sip == NULL)
+    return;
+
   pbsp = BioseqFindCore (sip);
-  if (pbsp == NULL) return;
+  if (pbsp == NULL)
+    return;
+
   TruncateCDS (dup, pbsp);
+
+  /**/
 
   CheckSeqLocForPartial (dup->location, &partial5, &partial3);
   if (cds3end) {
@@ -5548,7 +5496,152 @@ static void DoFeatProp (
       }
     }
   }
+
+  /* Set partial flag */
+
   dup->partial = (Boolean) (partial5 || partial3);
+}
+
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* CalculateReadingFrame () -- Calculates a sequence's reading      */
+/*                             frame by seeing which frame          */
+/*                             generates the most amino acids       */
+/*                             when converted to a protein.         */
+/*                                                                  */
+/*------------------------------------------------------------------*/
+
+static Int2 CalculateReadingFrame (SeqFeatPtr sfp)
+{
+  ByteStorePtr  bs;
+  CdRegionPtr   crp;
+  Int4          len;
+  Int4          max;
+  Uint1         frame;
+  Int2          i;
+
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+
+  max = 0;
+  frame = 0;
+
+  for (i = 1; i <= 3; i++) {
+    crp->frame = (Uint1) i;
+    bs = ProteinFromCdRegionEx (sfp, FALSE, FALSE);
+    len = BSLen (bs);
+    BSFree (bs);
+    if (len > max) {
+      max = len;
+      frame = (Uint1) i;
+    }
+  }
+
+  return frame;
+}
+
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* DoFeatProp () -                                                  */
+/*                                                                  */
+/*------------------------------------------------------------------*/
+
+static void DoFeatProp (BioseqPtr   bsp,
+			SeqAlignPtr salp,
+			Int4        begin,
+			Int4        fin,
+			SeqFeatPtr  sfp,
+			Boolean     gapSplit,
+			Boolean     stopCDS,
+			Boolean     transPast,
+			Boolean     cds3end,
+			Uint1       strand)
+
+{
+  CodeBreakPtr    cbp, prevcbp, nextcbp;
+  CdRegionPtr     crp;
+  SeqFeatPtr      dup;
+  BioseqPtr       newbsp;
+  SeqLocPtr       newloc;
+  RnaRefPtr       rrp;
+  SeqEntryPtr     sep;
+  SeqIdPtr        sip;
+  tRNAPtr         trp;
+
+  if (bsp == NULL || salp == NULL || sfp == NULL)
+    return;
+
+  sip = AlnMgr2GetNthSeqIdPtr (salp, fin);
+  if (sip == NULL)
+    return;
+
+  newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, sfp->location);
+  if (newloc == NULL)
+    return;
+
+  dup = AsnIoMemCopy ((Pointer) sfp,
+                      (AsnReadFunc) SeqFeatAsnRead,
+                      (AsnWriteFunc) SeqFeatAsnWrite);
+  SeqLocFree (dup->location);
+  dup->location = newloc;
+
+  switch (dup->data.choice) {
+    case SEQFEAT_CDREGION :
+      crp = (CdRegionPtr) dup->data.value.ptrvalue;
+      if (crp != NULL) {
+	crp->frame = CalculateReadingFrame (dup);
+        prevcbp = NULL;
+        for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp) {
+          nextcbp = cbp->next;
+          newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, cbp->loc);
+          SeqLocFree (cbp->loc);
+          cbp->loc = newloc;
+          if (cbp->loc == NULL) {
+            if (prevcbp != NULL) {
+              prevcbp->next = nextcbp;
+            } else {
+              crp->code_break = nextcbp;
+            }
+            cbp->next = NULL;
+            CodeBreakFree (cbp);
+          } else {
+            prevcbp = cbp;
+          }
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) dup->data.value.ptrvalue;
+      if (rrp != NULL && rrp->ext.choice == 2) {
+        trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+        if (trp != NULL && trp->anticodon != NULL) {
+          newloc = MapLocForProp (salp, begin, fin, sip,
+				  gapSplit, trp->anticodon);
+          SeqLocFree (trp->anticodon);
+          trp->anticodon = newloc;
+        }
+      }
+      break;
+    default :
+      break;
+  }
+
+  newbsp = BioseqFindCore (sip);
+  if (newbsp == NULL)
+    return;
+
+  sep = SeqMgrGetSeqEntryForData (newbsp);
+  if (sep == NULL)
+    return;
+  CreateNewFeature (sep, NULL, dup->data.choice, dup);
+
+  if (dup->product != NULL)
+    dup->product = SeqLocFree (dup->product);
+
+  /* If we're doing a CDS propagation, then */
+  /* do the extra stuff related to that.    */
+
+  if (SEQFEAT_CDREGION == dup->data.choice)
+    PropagateCDS (dup, sfp, newbsp, stopCDS, transPast, cds3end, strand);
 }
 
 static Boolean CDSgoesToEnd (
@@ -5839,6 +5932,115 @@ extern void NewFeaturePropagate (
   Show (f);
   Select (f);
   SendHelpScrollMessage (helpForm, "Edit Menu", "Feature Propagate");
+}
+
+static void DoFixCDS (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BaseFormPtr        bfp;
+  ByteStorePtr       bs;
+  BioseqPtr          bsp;
+  Boolean            change_partials = FALSE;
+  SeqMgrFeatContext  context;
+  CdRegionPtr        crp;
+  size_t             len;
+  Boolean            partial5;
+  Boolean            partial3;
+  SeqIntPtr          sintp;
+  SeqLocPtr          slp;
+  CharPtr            str;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  bfp = (BaseFormPtr) userdata;
+  if (SeqMgrGetDesiredFeature (bfp->input_entityID, NULL,
+                               0, 0, sfp, &context) != sfp) return;
+  bsp = context.bsp;
+  if (bsp == NULL) return;
+
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (crp->frame > 1) {
+    if (context.strand == Seq_strand_minus) {
+      if (context.right == bsp->length - 1) {
+        partial5 = TRUE;
+        change_partials = TRUE;
+      }
+    } else {
+      if (context.left == 0) {
+        partial5 = TRUE;
+        change_partials = TRUE;
+      }
+    }
+  }
+    bs = ProteinFromCdRegion (sfp, TRUE);
+    if (bs != NULL) {
+      str = BSMerge (bs, NULL);
+      BSFree (bs);
+      if (str != NULL) {
+        if (*str == '-') {
+          if (! partial5) {
+            partial5 = TRUE;
+            change_partials = TRUE;
+          }
+        }
+        len = StringLen (str);
+        if (len > 0 && str [len - 1] != '*') {
+          if (context.strand == Seq_strand_minus) {
+          } else {
+            if (bsp->length - context.right < 3) {
+              slp = SeqLocFindNext (sfp->location, NULL);
+              while (slp != NULL) {
+                if (slp->choice == SEQLOC_INT) {
+                  sintp = (SeqIntPtr) slp->data.ptrvalue;
+                  if (sintp != NULL) {
+                    if (sintp->to == context.right) {
+                      sintp->to = bsp->length - 1;
+                    }
+                  }
+                }
+                slp = SeqLocFindNext (sfp->location, slp);
+              }
+            }
+            partial3 = TRUE;
+            change_partials = TRUE;
+          }
+        }
+        MemFree (str);
+      }
+    }
+  if (change_partials) {
+    SetSeqLocPartial (sfp->location, partial5, partial3);
+    ResynchCDSPartials (sfp, NULL);
+  }
+}
+
+extern void FixCdsAfterPropagate (
+  IteM i
+);
+extern void FixCdsAfterPropagate (
+  IteM i
+)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitFeaturesInSep (sep, (Pointer) bfp, DoFixCDS);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
 /* taken from ripen.c */

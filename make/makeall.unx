@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.197 2002/03/20 19:01:20 beloslyu Exp $
+#	$Id: makeall.unx,v 6.203 2002/06/28 16:31:24 kans Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -15,6 +15,7 @@
 #	NeXt [ make LCL=nxt CFLAGS1="-c -ansi" RAN=ranlib ]
 #	DEC Alpha under OSF/1 version 4.x [ make LCL=alf CC=cc RAN=ranlib ]
 #	DEC Alpha under OSF/1 version 3.x [ make LCL=alf CC="cc -DNCBI_NOTHREADS_AVAIL" RAN=ranlib OTHERLIBS="-lc_r -lm"]
+#   BeOS [  make OTHERLIBS="" ]
 #
 #	see README for other supported systems
 #	
@@ -118,6 +119,8 @@ LIB38 =
 ULIB39 = libideochr.a
 LIB39= $(ULIB39)
 LIB39 =
+LIB50 = libregexp.a
+
 #
 # Pseudo-dummy targets when Vibrant is not used
 #
@@ -169,21 +172,23 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
 	ncbisock.c ncbi_socket.c ncbi_socket.c matrix.c ncbibuf.c \
-	ncbi_buffer.c ncbi_core.c ncbi_util.c ncbi_priv.c \
+	ncbi_buffer.c ncbi_core.c ncbi_core_c.c ncbi_util.c ncbi_priv.c \
 	ncbi_ansi_ext.c ncbi_connection.c ncbi_connector.c ncbi_connutil.c \
 	ncbi_file_connector.c ncbi_heapmgr.c ncbi_http_connector.c \
 	ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
 	ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_service_dispd.c \
 	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
-	ncbi_sendmail.c ncbi_sendmail.c asn_connection.c
+	ncbi_sendmail.c ncbi_sendmail.c asn_connection.c \
+	drwnflpt.c drwnfspc.c drwnmfls.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objalignloc.c \
-	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
-	strucapi.c qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c \
+	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c \
+	objent2.c ent2api.c pmfapi.c \
+	qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
 	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
@@ -233,7 +238,7 @@ SRC45 = ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
 SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c objcn3d.c \
 	mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c mmdbapi4.c mmdbentr.c \
 	vastsubs.c prunebsc.c objcdd.c cddutil.c cddposutil.c objmime.c \
-	thrdalgs.c thrdatd.c  thrdbwfi.c thrdcpal.c \
+	strucapi.c thrdalgs.c thrdatd.c  thrdbwfi.c thrdcpal.c \
 	thrdcpll.c thrdcprl.c thrdcxei.c thrddgri.c thrdrsmp.c \
 	thrdsal0.c thrdsalr.c thrdsalu.c thrdsgoi.c thrdslo0.c \
 	thrdslor.c thrdslou.c thrdspci.c thrdspea.c thrdspel.c \
@@ -271,6 +276,7 @@ SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
 	bands_abc.c
 
+SRC50 = chartables.c get.c maketables.c pcre.c pcreposix.c study.c
 
 # objects needed for versions of asntool and entrez
 
@@ -284,21 +290,23 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
 	ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o \
-	ncbi_core.o ncbi_util.o ncbi_priv.o \
+	ncbi_core.o ncbi_core_c.o ncbi_util.o ncbi_priv.o \
 	ncbi_ansi_ext.o ncbi_connection.o ncbi_connector.o ncbi_connutil.o \
 	ncbi_file_connector.o ncbi_heapmgr.o ncbi_http_connector.o \
 	ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
 	ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_service_dispd.o \
 	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
-	ncbi_sendmail.o asn_connection.o
+	ncbi_sendmail.o asn_connection.o \
+	drwnflpt.o drwnfspc.o drwnmfls.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
 	objres.o objseq.o objblock.o objcode.o objsset.o \
 	objsub.o objprt.o objfdef.o objalignloc.o \
-	objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
-	strucapi.o qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o \
+	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o \
+	objent2.o ent2api.o pmfapi.o \
+	qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
 	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
@@ -358,7 +366,7 @@ OBJ45 = ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
 OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o objcn3d.o \
 	mmdbapi.o mmdbapi1.o mmdbapi2.o mmdbapi3.o mmdbapi4.o mmdbentr.o \
 	vastsubs.o prunebsc.o objcdd.o cddutil.o cddposutil.o objmime.o \
-	thrdalgs.o thrdatd.o  thrdbwfi.o thrdcpal.o \
+	strucapi.o thrdalgs.o thrdatd.o  thrdbwfi.o thrdcpal.o \
 	thrdcpll.o thrdcprl.o thrdcxei.o thrddgri.o thrdrsmp.o \
 	thrdsal0.o thrdsalr.o thrdsalu.o thrdsgoi.o thrdslo0.o \
 	thrdslor.o thrdslou.o thrdspci.o thrdspea.o thrdspel.o \
@@ -402,6 +410,8 @@ OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 OBJ39 = ideochrow.o humchrom_dat.o mschrom_dat.o ideochrom.o ideoorgs.o \
 	bands_abc.o
 
+OBJ50 = chartables.o get.o maketables.o pcre.o pcreposix.o study.o
+
 # NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
 # enter the make actions below (e.g. ddvclick.o).  This is because the
 # implicit make rule for opengl objects (.glo) somehow causes the default make rule for .o
@@ -419,9 +429,10 @@ ln-if-absent:	../make/ln-if-absent
 
 nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
 	$(LIB5) $(DLIB20) $(DLIB45) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
-	$(DLIB34) $(DLIB37) $(DLIB38) $(NCBI_SHLIBS)
+	$(DLIB34) $(DLIB37) $(DLIB38) $(LIB50) $(NCBI_SHLIBS)
 
-sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) $(SRC23) $(SRC28) $(SRC30) 
+sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) \
+    $(SRC23) $(SRC28) $(SRC30) $(SRC50)
 
 ## To clean out the directory without removing make
 ##
@@ -609,6 +620,9 @@ copy :
 	$(SRCCOPY) ../corelib/regex.h ../include
 	$(SRCCOPY) ../corelib/matrix.h ../include
 	$(SRCCOPY) ../corelib/binary.h ../include
+	$(SRCCOPY) ../corelib/morefile/*.h ../include
+	$(SRCCOPY) ../corelib/morefile/*.c .
+	$(SRCCOPY) ../link/macmet/MoreCarbonAccessors.h ../include
 	$(SRCCOPY) ../corelib/ncbilcl.$(SUFFIXLCL) ../include/ncbilcl.h
 	$(SRCCOPY) ../corelib/*.c .
 	$(SRCCOPY) ../corelib/core*.h .
@@ -663,6 +677,8 @@ copy :
 	$(SRCCOPY) ../gif/*.h ../include
 	$(SRCCOPY) ../ddv/*.h ../include
 	$(SRCCOPY) ../ddv/*.c .
+	$(SRCCOPY) ../regexp/*.c .
+	$(SRCCOPY) ../regexp/*.h ../include
 	- $(SRCCOPY) ../internal/compr/*.c .
 	- $(SRCCOPY) ../internal/compr/*.h ../include
 	- $(SRCCOPY) ../internal/libindx/*.c .
@@ -838,6 +854,13 @@ $(LIB23) : $(OBJ23)
 	$(AR) cru $(LIB23) $(OBJ23)
 	$(LIBCOPY) $(LIB23) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB23)
+
+$(LIB50) : $(OBJ50)
+	- $(RM_LIB) $(LIB50)
+	$(AR) cru $(LIB50) $(OBJ50)
+	$(LIBCOPY) $(LIB50) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB50)
+
 
 ## make asntool application
 ##  This is ALWAYS the command line version

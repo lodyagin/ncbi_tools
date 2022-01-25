@@ -5470,6 +5470,7 @@ static void CleanFeatStrings (SeqFeatPtr sfp)
       CleanVisString (&(grp->allele));
       CleanVisString (&(grp->desc));
       CleanVisString (&(grp->maploc));
+      CleanVisString (&(grp->locus_tag));
       CleanVisStringList (&(grp->syn));
       break;
     case SEQFEAT_ORG :

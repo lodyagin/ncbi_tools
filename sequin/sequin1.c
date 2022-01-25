@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.350 $
+* $Revision: 6.361 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "4.00"
+#define SEQ_APP_VER "4.10"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -286,6 +286,7 @@ static Int4 SMWriteBioseqObj(VoidPtr bio_data, SMUserDataPtr sm_usr_data,
 static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, 
                             Int4 length, Int4 fd);
 #define SMART_KEY 1313
+#define DUMB_KEY 1314
 #endif
 
 static void Sequin_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n);
@@ -314,6 +315,27 @@ static Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, Char
   return rsult;
 }
 
+extern Boolean WriteSequinAppParam (CharPtr section, CharPtr type, CharPtr value)
+
+{
+  MsgAnswer  ans;
+
+  if (indexerVersion) {
+    if (section == NULL) {
+      section = "";
+    }
+    if (type == NULL) {
+      type = "";
+    }
+    if (value == NULL) {
+      value = "";
+    }
+    ans = Message (MSG_OKC, "Writing to local .sequinrc configuration file - [%s] %s = %s", section, type, value);
+    if (ans == ANS_CANCEL) return FALSE;
+  }
+  return SetAppParam ("SEQUIN", section, type, value);
+}
+
 static Boolean SetSequinAppParam (CharPtr section, CharPtr type, CharPtr value)
 
 {
@@ -322,7 +344,7 @@ static Boolean SetSequinAppParam (CharPtr section, CharPtr type, CharPtr value)
   if (GetAppParam ("SEQUINCUSTOM", section, type, NULL, tmp, sizeof (tmp) - 1)) {
     return SetAppParam ("SEQUINCUSTOM", section, type, value);
   }
-  return SetAppParam ("SEQUIN", section, type, value);
+  return WriteSequinAppParam (section, type, value);
 }
 
 static void SetSequinAppParamTF (CharPtr section, CharPtr type, Boolean value)
@@ -1095,6 +1117,50 @@ static Boolean LIBCALLBACK AllGenBankOrRefSeq (BioseqPtr bsp, SeqMgrBioseqContex
   return TRUE;
 }
 
+static void DoSmartReport (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr        bsp;
+  BioseqSetPtr     bssp;
+  Char             id [42];
+  ValNodePtr PNTR  vnpp;
+
+  vnpp = (ValNodePtr PNTR) mydata;
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    SeqIdWrite (bsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    ValNodeCopyStr (vnpp, 0, id);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    ValNodeAddInt (vnpp, bssp->_class, 0);
+  }
+}
+
+static VoidPtr SmartStructureReport (SeqEntryPtr sep)
+
+{
+  ValNodePtr  vnp = NULL;
+
+  SeqEntryExplore (sep, (Pointer) &vnp, DoSmartReport);
+  return vnp;
+}
+
+static Boolean ValNodeListsDiffer (ValNodePtr vnp1, ValNodePtr vnp2)
+
+{
+  while (vnp1 != NULL && vnp2 != NULL) {
+    if (vnp1->choice != vnp2->choice) return TRUE;
+    if (vnp1->choice == 0) {
+      if (StringCmp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) != 0) return TRUE;
+    }
+    vnp1 = vnp1->next;
+    vnp2 = vnp2->next;
+  }
+  if (vnp1 != NULL || vnp2 != NULL) return TRUE;
+  return FALSE;
+}
+
 static void SmartnetDoneFunc (BaseFormPtr bfp)
 
 {
@@ -1111,6 +1177,7 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
     Uint2         entityID;
 
     Boolean       resetUpdateDate = TRUE;
+    ValNodePtr    vnp;
 
     if(bfp != NULL) {
         f = bfp->form;
@@ -1187,6 +1254,16 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
             }
             /*   SeqEntryPubsAsn3 (sep);   */
             CdCheck (sep, NULL);
+
+            omudp = ObjMgrGetUserData(bfp->input_entityID, 0, 0, DUMB_KEY);
+            if (omudp != NULL) {
+              vnp = SmartStructureReport (sep);
+              if (ValNodeListsDiffer (vnp, omudp->userdata.ptrvalue)) {
+                sm_usr_data->header->dirty |= 0x04; /* set rearranged signal */
+              }
+              ValNodeFreeData (vnp);
+            }
+
         }
 
         if(sm_usr_data->header->format == OBJ_SEQENTRY) {
@@ -1938,6 +2015,30 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
                                           PopuP gencode, SeqEntryPtr nsep, SeqEntryPtr top,
                                           BioSourcePtr masterbiop);
 
+static void LookForTaxonID (BioSourcePtr biop, Pointer userdata)
+
+{
+  DbtagPtr     dbt;
+  BoolPtr      notaxid;
+  ObjectIdPtr  oip;
+  OrgRefPtr    orp;
+  ValNodePtr   vnp;
+
+  notaxid = (BoolPtr) userdata;
+  if (biop == NULL) return;
+  orp = biop->org;
+  if (orp == NULL) return;
+  for (vnp = orp->db; vnp != NULL; vnp = vnp->next) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt == NULL) continue;
+    if (StringICmp (dbt->db, "taxon") != 0) continue;
+    oip = dbt->tag;
+    if (oip == NULL) continue;
+    if (oip->id != 0) return;
+  }
+  *notaxid = TRUE;
+}
+
 static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean askForSubmit,
                                     CharPtr path, Pointer dataptr, Uint2 datatype, Uint2 entityID,
                                     Uint2Ptr updateEntityIDPtr)
@@ -1946,6 +2047,7 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Int2          handled;
+  Boolean       notaxid;
   SeqEntryPtr   nsep;
   Boolean       processonenuc;
   SeqEntryPtr   sep;
@@ -2010,7 +2112,11 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
           ProcessOneNucleotideTitle (SEQ_PKG_SINGLE, hiddengenbio, NULL, NULL, nsep, sep, NULL);
         }
         if (! leaveAsOldAsn) {
-          MySeqEntryToAsn3 (sep, TRUE, FALSE, FALSE);
+          notaxid = FALSE;
+          VisitBioSourcesInSep (sep, (Pointer) &notaxid, LookForTaxonID);
+          if (notaxid) {
+            MySeqEntryToAsn3 (sep, TRUE, FALSE, FALSE);
+          }
         }
       }
       if (sep != NULL) {
@@ -3791,6 +3897,7 @@ static void CloseProc (BaseFormPtr bfp)
               entityID = bfp->input_entityID;
               RemoveSeqEntryViewer (bfp->form);
               ObjMgrFreeUserData(entityID, 0, 0, SMART_KEY); 
+              ObjMgrFreeUserData (entityID, 0, 0, DUMB_KEY);
               if (freeEditors) {
                 ObjMgrSendMsg (OM_MSG_DEL, entityID, 0, 0);
               }
@@ -4180,8 +4287,9 @@ static void ConfigFormMessage (ForM f, Int2 mssg)
 static void ConfigAccepted (void)
 
 {
-  SetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", "TRUE");
-  Message (MSG_OK, "Setting will take affect when you restart Sequin");
+  if (WriteSequinAppParam ("SETTINGS", "PUBLICNETWORKSEQUIN", "TRUE")) {
+    Message (MSG_OK, "Setting will take affect when you restart Sequin");
+  }
 }
 
 static void ConfigCancelled (void)
@@ -4193,8 +4301,9 @@ static void ConfigCancelled (void)
 static void ConfigTurnedOff (void)
 
 {
-  SetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", "FALSE");
-  Message (MSG_OK, "Setting will take affect when you restart Sequin");
+  if (WriteSequinAppParam ("SETTINGS", "PUBLICNETWORKSEQUIN", "FALSE")) {
+    Message (MSG_OK, "Setting will take affect when you restart Sequin");
+  }
 }
 
 typedef struct prefsform {
@@ -7579,7 +7688,7 @@ void EntrezQueryProc (IteM i)
   Update ();
 }
 
-#ifdef WIN_MAC
+#ifdef OS_MAC
 extern Boolean Nlm_LaunchAppEx (CharPtr fileName, VoidPtr serialNumPtr, CharPtr sig);
 #endif
 
@@ -7589,13 +7698,13 @@ void Entrez2QueryProc (IteM i)
   WatchCursor ();
   Update ();
 
-#ifdef WIN_MAC
+#ifdef OS_MAC
   Nlm_LaunchAppEx (NULL, NULL, "ENTZ");
 #endif
-#ifdef WIN_MSWIN
+#ifdef OS_MSWIN
   Nlm_MSWin_OpenApplication ("entrez2.exe", NULL);
 #endif
-#ifdef WIN_MOTIF
+#if defined (OS_UNIX) || defined(WIN_MOTIF)
   system ("entrez2 &");
 #endif
 
@@ -9049,6 +9158,13 @@ ERROR - You may not enter multiple segments for a single sequence submission.\n\
 You should either clear the nucleotide and import a single FASTA record, or \n\
 return to the Sequence Format form and choose the proper submission type.";
 
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* PutItTogether () --                                                 */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
 static void PutItTogether (ButtoN b)
 
 {
@@ -9074,6 +9190,16 @@ static void PutItTogether (ButtoN b)
       ans = Message (MSG_OKC, "You have not entered proteins.  Is this correct?");
       if (ans == ANS_CANCEL) return;
     }
+
+    if (TRUE == HasZeroLengthSequence (bfp->form)) {
+      Message (MSG_POSTERR, "One or more of the submitted sequences are "
+	       "zero length.  Zero-length sequences are not allowed. Your "
+	       "FASTA sequence may be missing a carriage return after the "
+	       "definition line, or may have other formatting problems. "
+	       "Please check your FASTA file.");
+      return;
+    }
+
     Hide (bfp->form);
     ConfirmSequencesFormParsing (bfp->form, FinishPuttingTogether);
   }
@@ -9858,6 +9984,13 @@ static VoidPtr LIBCALLBACK SmartUserDataFree (VoidPtr Pointer)
 
     return NULL;
 }
+
+static VoidPtr LIBCALLBACK DumbUserDataFree (VoidPtr Pointer)
+
+{
+  return ValNodeFreeData ((ValNodePtr) Pointer);
+}
+
 static void SMCancelAllEdit(void)
 {
     ObjMgrPtr      omp;
@@ -9883,6 +10016,10 @@ static void SMCancelAllEdit(void)
                 /* Deleting all */
                 ObjMgrSendMsg (OM_MSG_DEL, j, 0, 0);
             }
+        }
+        if ((omudp = ObjMgrGetUserData(j, 0,0, DUMB_KEY)) != NULL) {
+          DumbUserDataFree (omudp->userdata.ptrvalue);                
+          omudp->userdata.ptrvalue = NULL;
         }
     }
     
@@ -10059,6 +10196,18 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
             omudp->freefunc = SmartUserDataFree;
         }
  
+        if((omudp = ObjMgrGetUserData (entityID, 0, 0, DUMB_KEY)) != NULL) {
+            DumbUserDataFree (omudp->userdata.ptrvalue);
+        } else {
+            omudp = ObjMgrAddUserData (entityID, 0, 0, DUMB_KEY);
+        }
+
+        if (omudp != NULL) {
+            omudp->userdata.ptrvalue = (VoidPtr) SmartStructureReport (sep);
+            omudp->messagefunc = NULL;
+            omudp->freefunc = DumbUserDataFree;
+        }
+ 
         seqviewprocs.forceSeparateViewer = FALSE;
         SeqEntrySetScope (NULL);
         handled = GatherProcLaunch (OMPROC_VIEW, FALSE, entityID, 1,
@@ -10157,6 +10306,7 @@ Int2 Main (void)
   BtnActnProc    fetchProc;
   FILE           *fp;
   Int2           handled;
+  Boolean        notaxid;
   SeqEntryPtr    oldsep;
   /*
   ObjMgrPtr      omp;
@@ -10172,7 +10322,7 @@ Int2 Main (void)
   Char           str [80];
   Int2           val;
   WindoW         w;
-#ifdef WIN_MOTIF
+#if defined(OS_UNIX) || defined(WIN_MOTIF)
   Int2           i;
   RecT           r;
 #endif
@@ -10233,7 +10383,7 @@ Int2 Main (void)
   subtoolEntityID = 0;
   leaveAsOldAsn = FALSE;
 
-#ifdef WIN_MOTIF
+#if defined(OS_UNIX) || defined(WIN_MOTIF)
   {{
     Nlm_Int4         argc = GetArgc();
     Nlm_CharPtr PNTR argv = GetArgv();
@@ -10268,6 +10418,8 @@ Int2 Main (void)
           newAlignReader = FALSE;
         } else if (StringCmp (argv[i], "-oldasn") == 0) {
           leaveAsOldAsn = TRUE;
+        } else if (StringCmp (argv[i], "-newsource") == 0) {
+          SetAppProperty ("NewFlatfileSource", (void *) 1024);
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -10604,7 +10756,11 @@ Int2 Main (void)
               /* now instantiating protein titles */
               InstantiateProteinTitles (subtoolEntityID, NULL);
             } else {
-              MySeqEntryToAsn3 (sep, TRUE, FALSE, FALSE);
+              notaxid = FALSE;
+              VisitBioSourcesInSep (sep, (Pointer) &notaxid, LookForTaxonID);
+              if (notaxid) {
+                MySeqEntryToAsn3 (sep, TRUE, FALSE, FALSE);
+              }
             }
           }
           if (subtoolMode) {

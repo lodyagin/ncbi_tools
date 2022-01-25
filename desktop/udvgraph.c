@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvgraph.c,v $
+* Revision 6.49  2002/08/23 18:47:52  kans
+* protect against dereferencing NULL prot
+*
 * Revision 6.48  2000/06/27 20:46:38  hurwitz
 * fixed bugs with select rectangle, added select row option
 *
@@ -2344,7 +2347,7 @@ BioseqPtr prot;
 	if (context->sfp->product){
 		prot=BioseqFind(SeqLocId(context->sfp->product));
 		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
-		if (sip){
+		if (sip && prot){
 			CharPtr str2;
 			gi = GetGINumFromSip(sip);
 			if (gi>0) bGiForProductOk=TRUE;
@@ -2470,7 +2473,7 @@ BioseqPtr prot;
 	if (context->sfp->product){
 		prot=BioseqFind(SeqLocId(context->sfp->product));
 		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
-		if (sip){
+		if (sip && prot){
 			CharPtr str2;
 			gi = GetGINumFromSip(sip);
 			if (gi>0) bGiForProductOk=TRUE;

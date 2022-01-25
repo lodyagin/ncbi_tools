@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.21 $
+* $Revision: 6.25 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -609,7 +609,7 @@ erret:
 }
 
 static FeatDefPtr featdefp = NULL;
-static FeatDefPtr PNTR featdeflookup;  /* kludge which assumes featdef_key in order */
+static FeatDefPtr PNTR featdeflookup = NULL;  /* kludge which assumes featdef_key in order */
 static Int2 numfdef, numfdispg;
 static FeatDispGroupPtr featdgp;
 
@@ -643,7 +643,7 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"RNA\" , menulabel \"Other Types of RNA\" , featdef-key 11 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"Cit\" , menulabel \"Bibliographic Citations\" , featdef-key 12 , seqfeat-key 6 , entrygroup 4 , displaygroup 4 , molgroup both } ,\n" \
 "{ typelabel \"Xref\" , menulabel \"Reference to Another Sequence\" , featdef-key 13 , seqfeat-key 7 , entrygroup 4 , displaygroup 4 , molgroup both } ,\n" \
-"{ typelabel \"Imp\" , menulabel \"Unclassified ImpFeat\" , featdef-key 14 , seqfeat-key 8 , entrygroup 0 , displaygroup 0 , molgroup na } ,\n" \
+"{ typelabel \"Import\" , menulabel \"Unclassified ImpFeat\" , featdef-key 14 , seqfeat-key 8 , entrygroup 0 , displaygroup 0 , molgroup na } ,\n" \
 "{ typelabel \"allele\" , menulabel \"Allelic Varient\" , featdef-key 15 , seqfeat-key 8 , entrygroup 0 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"attenuator\" , menulabel \"Attenuator\" , featdef-key 16 , seqfeat-key 8 , entrygroup 0 , displaygroup 5 , molgroup na } ,\n" \
 "{ typelabel \"C_region\" , menulabel \"Immunoglobin/T-cell receptor constant region\" , featdef-key 17 , seqfeat-key 8 , entrygroup 0 , displaygroup 1 , molgroup na } ,\n" \
@@ -733,7 +733,7 @@ static FeatDefPtr LIBCALL FeatDefGroupSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 {
 	FeatDefPtr fdp;
 	FeatDispGroupPtr fdgp;
-	Int2 i;
+	Int2 i, num;
 	DataVal av;
 	AsnTypePtr atp, oldtype;
 
@@ -774,9 +774,13 @@ static FeatDefPtr LIBCALL FeatDefGroupSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	for (numfdef = 0, fdp = featdefp; fdp != NULL; fdp = fdp->next)
 		numfdef++;
 
-	featdeflookup = MemNew((size_t)(sizeof(FeatDefPtr) * numfdef));
+	num = numfdef;
+	if (num < FEATDEF_MAX) {
+		num = FEATDEF_MAX;
+	}
+	featdeflookup = MemNew((size_t)(sizeof(FeatDefPtr) * num));
 
-	for (i = 0, fdp = featdefp; i < numfdef; fdp = fdp->next, i++)
+	for (i = 0, fdp = featdefp; fdp != NULL && i < numfdef; fdp = fdp->next, i++)
 		featdeflookup[i] = fdp;
 
 	for (numfdispg = 0, fdgp = featdgp; fdgp != NULL; fdgp = fdgp->next)
@@ -1044,6 +1048,8 @@ generef:	if (grp->locus != NULL)
 				label = (grp->locus);
 			else if (grp->desc != NULL)
 				label = (grp->desc);
+			else if (grp->locus_tag != NULL)
+				label = (grp->locus_tag);
 			else if (grp->syn != NULL)
 				label = (CharPtr)(grp->syn->data.ptrvalue);
 			else if (grp->db != NULL)
@@ -1102,7 +1108,7 @@ orgref:		if (orp->taxname != NULL)
 			if (grp != NULL &&
 				((grp->locus != NULL && grp->locus [0] != '\0') ||
 					grp->allele != NULL || grp->desc != NULL ||
-					grp->maploc != NULL || grp->pseudo ||
+					grp->maploc != NULL || grp->locus_tag != NULL || grp->pseudo ||
 					grp->db != NULL || grp->syn != NULL)) goto generef;
 			break;
 		case SEQFEAT_PROT:

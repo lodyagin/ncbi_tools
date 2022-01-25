@@ -35,7 +35,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.13 at Mar 7, 2002  1:32 PM
+*    Generated using ASNCODE Revision: 6.14 at May 17, 2002 10:52 AM
 *
 **************************************************/
 
@@ -368,7 +368,7 @@ CddFree(CddPtr ptr)
    MatrixFree(ptr -> posfreq);
    MatrixFree(ptr -> scoremat);
    TriangleFree(ptr -> distance);
-   CddIdSetFree(ptr -> parents);
+   CddIdFree(ptr -> parent);
    CddIdSetFree(ptr -> children);
    CddIdSetFree(ptr -> siblings);
    CddIdSetFree(ptr -> neighbors);
@@ -506,8 +506,8 @@ CddAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CDD_parents) {
-      ptr -> parents = CddIdSetAsnRead(aip, atp);
+   if (atp == CDD_parent) {
+      ptr -> parent = CddIdAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -677,8 +677,8 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> parents != NULL) {
-      if ( ! CddIdSetAsnWrite(ptr -> parents, aip, CDD_parents)) {
+   if (ptr -> parent != NULL) {
+      if ( ! CddIdAsnWrite(ptr -> parent, aip, CDD_parent)) {
          goto erret;
       }
    }
@@ -873,7 +873,7 @@ CddTreeFree(CddTreePtr ptr)
    MemFree(ptr -> name);
    CddIdSetFree(ptr -> id);
    CddDescrSetFree(ptr -> description);
-   CddIdSetFree(ptr -> parents);
+   CddIdFree(ptr -> parent);
    CddIdSetFree(ptr -> children);
    CddIdSetFree(ptr -> siblings);
    CddIdSetFree(ptr -> neighbors);
@@ -949,8 +949,8 @@ CddTreeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == CDD_TREE_parents) {
-      ptr -> parents = CddIdSetAsnRead(aip, atp);
+   if (atp == CDD_TREE_parent) {
+      ptr -> parent = CddIdAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -1042,8 +1042,8 @@ CddTreeAsnWrite(CddTreePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> parents != NULL) {
-      if ( ! CddIdSetAsnWrite(ptr -> parents, aip, CDD_TREE_parents)) {
+   if (ptr -> parent != NULL) {
+      if ( ! CddIdAsnWrite(ptr -> parent, aip, CDD_TREE_parent)) {
          goto erret;
       }
    }

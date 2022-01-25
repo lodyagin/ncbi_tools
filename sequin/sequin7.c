@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.92 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -156,7 +156,7 @@ static void ChangeDestination (GrouP g)
       if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
         if (! StringHasNoText (str)) {
           if (StringICmp (str, "GenBank") != 0) {
-            SetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", "GenBank");
+            WriteSequinAppParam ("PREFERENCES", "DATABASE", "GenBank");
           }
         }
       }
@@ -164,12 +164,12 @@ static void ChangeDestination (GrouP g)
     case 2 :
       SetAppProperty ("SequinUseEMBLStyle", (void *) 1024);
       RemoveAppProperty ("SequinUseDDBJStyle");
-      SetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", "EMBL");
+      WriteSequinAppParam ("PREFERENCES", "DATABASE", "EMBL");
       break;
     case 3 :
       RemoveAppProperty ("SequinUseEMBLStyle");
       SetAppProperty ("SequinUseDDBJStyle", (void *) 1024);
-      SetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", "DDBJ");
+      WriteSequinAppParam ("PREFERENCES", "DATABASE", "DDBJ");
       break;
     default :
       break;
@@ -3470,11 +3470,12 @@ static ENUM_ALIST(cds_gene_prot_field_alist)
   {"Gene maploc",          5},
   {"Gene synonym",         6},
   {"Gene comment",         7},
-  {"Protein name",         8},
-  {"Protein description",  9},
-  {"Protein E.C. number", 10},
-  {"Protein activity",    11},
-  {"Protein comment",     12},
+  {"Gene locus tag",       8},
+  {"Protein name",         9},
+  {"Protein description", 10},
+  {"Protein E.C. number", 11},
+  {"Protein activity",    12},
+  {"Protein comment",     13},
 END_ENUM_ALIST
 
 static ENUM_ALIST(prot_subtype_alist)
@@ -3783,6 +3784,11 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
           }
           break;
         case 8 :
+          if (grp != NULL) {
+            str = StringSave (grp->locus_tag);
+          }
+          break;
+        case 9 :
           if (prp != NULL) {
             vnp = prp->name;
             if (vnp != NULL) {
@@ -3790,12 +3796,12 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 9 :
+        case 10 :
           if (prp != NULL) {
             str = StringSave (prp->desc);
           }
           break;
-        case 10 :
+        case 11 :
           if (prp != NULL) {
             vnp = prp->ec;
             if (vnp != NULL) {
@@ -3803,7 +3809,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 11 :
+        case 12 :
           if (prp != NULL) {
             vnp = prp->activity;
             if (vnp != NULL) {
@@ -3811,7 +3817,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 12 :
+        case 13 :
           if (prot != NULL) {
             str = StringSave (prot->comment);
           }
@@ -3893,6 +3899,12 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
           }
           break;
         case 8 :
+          if (grp != NULL) {
+            grp->locus_tag = SaveOrReplaceString (cfp, str, grp->locus_tag);
+            str = NULL;
+          }
+          break;
+        case 9 :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->name != NULL && ShouldReplaceString (cfp)) {
@@ -3912,13 +3924,13 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 9 :
+        case 10 :
           if (prp != NULL) {
             prp->desc = SaveOrReplaceString (cfp, str, prp->desc);
             str = NULL;
           }
           break;
-        case 10 :
+        case 11 :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->ec != NULL && ShouldReplaceString (cfp)) {
@@ -3938,7 +3950,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 11 :
+        case 12 :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->activity != NULL && ShouldReplaceString (cfp)) {
@@ -3958,7 +3970,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 12 :
+        case 13 :
           if (prot != NULL) {
             prot->comment = SaveOrReplaceString (cfp, str, prot->comment);
             str = NULL;
@@ -4055,26 +4067,31 @@ static Boolean CleanupEachCDSFunc (GatherContextPtr gcp)
           }
           break;
         case 8 :
-          if (prp != NULL) {
-            prp->name = ValNodeFreeData (prp->name);
+          if (gene != NULL) {
+            grp->locus_tag = MemFree (grp->locus_tag);
           }
           break;
         case 9 :
           if (prp != NULL) {
-            prp->desc = MemFree (prp->desc);
+            prp->name = ValNodeFreeData (prp->name);
           }
           break;
         case 10 :
           if (prp != NULL) {
-            prp->ec = ValNodeFreeData (prp->ec);
+            prp->desc = MemFree (prp->desc);
           }
           break;
         case 11 :
           if (prp != NULL) {
-            prp->activity = ValNodeFreeData (prp->activity);
+            prp->ec = ValNodeFreeData (prp->ec);
           }
           break;
         case 12 :
+          if (prp != NULL) {
+            prp->activity = ValNodeFreeData (prp->activity);
+          }
+          break;
+        case 13 :
           if (prot != NULL) {
             prot->comment = MemFree (prot->comment);
           }
@@ -4174,12 +4191,12 @@ static void DoProcessCDSet (ButtoN b)
   if (cfp->type == ADD_CDSET || cfp->type == EDIT_CDSET) {
     cfp->toval = cfp->fromval;
   }
-  cfp->onlyGene = (Boolean) ((cfp->toval >= 2 && cfp->toval <= 7) &&
-                             (cfp->fromval >= 2 && cfp->fromval <= 7));
-  cfp->onlyProt = (Boolean) ((cfp->toval >= 8 && cfp->toval <= 12) &&
-                             (cfp->fromval >= 8 && cfp->fromval <= 12));
+  cfp->onlyGene = (Boolean) ((cfp->toval >= 2 && cfp->toval <= 8) &&
+                             (cfp->fromval >= 2 && cfp->fromval <= 8));
+  cfp->onlyProt = (Boolean) ((cfp->toval >= 9 && cfp->toval <= 13) &&
+                             (cfp->fromval >= 9 && cfp->fromval <= 13));
   if (cfp->type == ADD_CDSET || cfp->type == CONVERT_CDSET) {
-    if (cfp->toval >= 8 && cfp->toval <= 12) {
+    if (cfp->toval >= 9 && cfp->toval <= 13) {
       sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
       SeqEntryExplore (sep, NULL, AddProtFeatIfMissing);
     }
@@ -4223,13 +4240,14 @@ static void DoProcessCDSet (ButtoN b)
         case 5 :
         case 6 :
         case 7 :
+        case 8 :
           Message (MSG_OK, "When only one record present, edit the gene feature directly");
           break;
-        case 8 :
         case 9 :
         case 10 :
         case 11 :
         case 12 :
+        case 13 :
           Message (MSG_OK, "When only one record present, edit the protein feature directly");
           break;
         default :
@@ -4320,6 +4338,11 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
       }
       break;
     case 8 :
+      if (grp != NULL) {
+        str = grp->locus_tag;
+      }
+      break;
+    case 9 :
       if (prp != NULL) {
         vnp = prp->name;
         if (vnp != NULL) {
@@ -4327,12 +4350,12 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 9 :
+    case 10 :
       if (prp != NULL) {
         str = prp->desc;
       }
       break;
-    case 10 :
+    case 11 :
       if (prp != NULL) {
         vnp = prp->ec;
         if (vnp != NULL) {
@@ -4340,7 +4363,7 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 11 :
+    case 12 :
       if (prp != NULL) {
         vnp = prp->activity;
         if (vnp != NULL) {
@@ -4348,7 +4371,7 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 12 :
+    case 13 :
       if (prot != NULL) {
         str = prot->comment;
       }
@@ -4401,7 +4424,7 @@ static void ChangeCDSetExample (PopuP p)
     gs.ignore[OBJ_SEQFEAT] = FALSE;
     gs.ignore[OBJ_SEQANNOT] = FALSE;
     GatherEntity (cfp->input_entityID, (Pointer) cfp, SetCDSExample, &gs);
-    if (cfp->fromval >= 8 && cfp->fromval <= 12) {
+    if (cfp->fromval >= 9 && cfp->fromval <= 13) {
       SafeShow (cfp->protSubGrp);
     } else {
       SafeHide (cfp->protSubGrp);
@@ -6033,6 +6056,10 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     EntryMergeDupBioSources (sep);
     GetRidOfEmptyFeatsDescStrings (0, sep);
     GetRidOfLocusInSeqIds (0, sep);
+    /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
+    entityID = ObjMgrGetEntityIDForChoice (sep);
+    SeqMgrIndexFeatures (entityID, NULL);
+    CdCheck (sep, NULL);
     BasicSeqEntryCleanup (sep);
     ErrSetMessageLevel (sev);
     return rsult;
@@ -6092,6 +6119,10 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   EntryMergeDupBioSources (sep);
   GetRidOfEmptyFeatsDescStrings (0, sep);
   GetRidOfLocusInSeqIds (0, sep);
+  /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  SeqMgrIndexFeatures (entityID, NULL);
+  CdCheck (sep, NULL);
   BasicSeqEntryCleanup (sep);
   ErrSetMessageLevel (sev);
   ErrClear ();
@@ -6624,9 +6655,11 @@ static void AddOrgToDefElement (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, In
     }
     */
     TrimSpacesAroundString (str);
-    if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
+    if ((StringICmp (str, "Human immunodeficiency virus type 1") == 0) ||
+	(StringICmp (str, "Human immunodeficiency virus 1") == 0)) {
       StringCpy (str, "HIV-1");
-    } else if (StringICmp (str, "Human immunodeficiency virus type 2") == 0) {
+    } else if ((StringICmp (str,"Human immunodeficiency virus type 2")==0) ||
+	       (StringICmp (str,"Human immunodeficiency virus 2") == 0)) {
       StringCpy (str, "HIV-2");
     }
     str [0] = TO_UPPER (str [0]);

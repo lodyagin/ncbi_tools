@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.150 2002/02/20 21:18:22 lavr Exp $
+# $Id: makeall.dos,v 6.154 2002/07/17 13:22:00 kans Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -22,9 +22,9 @@ OBJ1  = \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
 	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +ncbi_socket.obj +matrix.obj \
-	+ncbibuf.obj +ncbi_buffer.obj +ncbi_core.obj +ncbi_util.obj +ncbi_priv.obj \
-	+ncbi_ansi_ext.obj +ncbi_connection.obj +ncbi_connector.obj +ncbi_connutil.obj \
-	+ncbi_file_connector.obj +ncbi_http_connector.obj \
+	+ncbibuf.obj +ncbi_buffer.obj +ncbi_core.obj +ncbi_core_c.obj +ncbi_util.obj \
+	+ncbi_priv.obj +ncbi_ansi_ext.obj +ncbi_connection.obj +ncbi_connector.obj \
+	+ncbi_connutil.obj +ncbi_file_connector.obj +ncbi_http_connector.obj \
 	+ncbi_memory_connector.obj +ncbi_server_info.obj +ncbi_service.obj \
 	+ncbi_service_connector.obj +ncbi_service_dispd.obj \
 	+ncbi_service_lbsmd_stub.obj +ncbi_socket_connector.obj \
@@ -34,13 +34,14 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objpubme.obj \
-	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj +pmfapi.obj \
-	+strucapi.obj +qblastapi.obj +vecscnapi.obj +objmim.obj +mimapi.obj +seqport.obj \
+	+objmdrs.obj +objproj.obj +objtseq.obj \
+	+objent2.obj +ent2api.obj +pmfapi.obj \
+	+qblastapi.obj +vecscnapi.obj +objmim.obj +mimapi.obj +seqport.obj \
 	+sequtil.obj +prtutil.obj \
 	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
 	+alignmgr.obj +aliparse.obj +aliread.obj +alignval.obj +subutil.obj +edutil.obj \
 	+asn2ff1.obj +asn2ff2.obj +asn2ff3.obj +alignmgr2.obj \
-	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +asn2gnbk.obj +ftusrstr.obj +gbfeat.obj \
+	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +asn2gnbk.obj +objgbseq.obj +ftusrstr.obj +gbfeat.obj \
 	+gbftglob.obj +gbparint.obj +utilpars.obj +utilpub.obj +ffprint.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
@@ -83,9 +84,9 @@ OBJ20 = +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+mapgene.obj +prtgene.obj +salogif.obj
 
 OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
-	+objmime.obj +objcn3d.obj +mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj +\
-	mmdbapi4.obj +mmdbentr.obj +vastsubs.obj +prunebsc.obj +objcdd.obj +cddutil.obj \
-	+cddposutil.obj \
+	+objmime.obj +objcn3d.obj +mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj \
+	+mmdbapi4.obj +mmdbentr.obj +vastsubs.obj +prunebsc.obj +objcdd.obj +cddutil.obj \
+	+cddposutil.obj +strucapi.obj \
 	+thrdalgs.obj +thrdatd.obj  +thrdbwfi.obj +thrdcpal.obj \
 	+thrdcpll.obj +thrdcprl.obj +thrdcxei.obj +thrddgri.obj +thrdrsmp.obj \
 	+thrdsal0.obj +thrdsalr.obj +thrdsalu.obj +thrdsgoi.obj +thrdslo0.obj \

@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.6 2002/03/07 19:12:15 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.9 2002/06/25 21:23:28 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.6 $
+* $Revision: 1.9 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.9  2002/06/25 21:23:28  bauer
+* revised Sequence retrieval interface
+*
+* Revision 1.8  2002/06/12 15:20:54  bauer
+* 6/11/02 update
+*
+* Revision 1.7  2002/05/23 20:19:16  bauer
+* intermediate version of wrpsb
+*
 * Revision 1.6  2002/03/07 19:12:15  bauer
 * major revisions to cgi-bins and the CD-dumper
 *
@@ -56,7 +65,7 @@
 */
 
 
-#define BUFFER_LENGTH 255
+#define BUFFER_LENGTH 128
 #define DDVCOL_DEFAULT 0
 #define DDVCOL_HOTPINK 1
 #define DDVCOL_MAGENTA 2
@@ -95,7 +104,7 @@ static     Int4                   borkPutbuf(gdIOCtx*, const void *, Int4);
 static     void                   borkPutchar(gdIOCtx*, Int4 );
 static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                OverlapInterval(Int4 from1, Int4 to1, Int4 from2, Int4 to2);
-           void                   WRPSBSearchHead(CharPtr title);
+           void                   WRPSBSearchHead(CharPtr title, CharPtr banner);
            void                   WRPSBSearchFoot();
            void                   WRPSBHtmlError(CharPtr cErrTxt); 
            Int4                   max(Int4 i1, Int4 i2);
@@ -103,7 +112,7 @@ static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                print_score_eonly(FloatHi evalue, CharPtr buf);
            Boolean                print_score_sonly(FloatHi bit_score, CharPtr buf);
            Boolean                print_score_evalue (FloatHi evalue, FloatHi bit_score, CharPtr buf);
-           void                   WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table, Boolean bAnyPdb, BioseqPtr query_bsp, CharPtr urlcgi);
+           void                   WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table, Boolean bAnyPdb, BioseqPtr query_bsp, CharPtr urlcgi, Int4 querygi);
            Boolean                WRPSBAcknowledgeBlastQuery(BioseqPtr bsp, Int4 line_length, FILE *outfp, Boolean believe_query, Boolean html);
 static     Int4                   WRPSBGetSeqAlignCount(SeqAlignPtr sap);
 static     SeqAlignPtr            WRPSBGetPrivateSeqAlign(SeqAlignPtr sap, Int4 number, Int4Ptr number_returned);

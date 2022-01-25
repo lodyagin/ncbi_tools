@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.8  2002/08/07 18:13:42  kans
+* G/SetPrimitiveIDs, itemID is Uint4
+*
 * Revision 6.7  1999/10/20 22:09:44  kans
 * AlistDialogData public, has userdata field, convenience functions set userdata, initial value
 *
@@ -302,7 +305,7 @@ typedef Nlm_Boolean (*Nlm_FormInOutFunc) (Nlm_ForM, Nlm_CharPtr filename);
   Nlm_Int2             menulistsize;    \
   Nlm_FormMessageFunc  appmessage;      \
   Nlm_Uint2            input_entityID;  \
-  Nlm_Uint2            input_itemID;    \
+  Nlm_Uint4            input_itemID;    \
   Nlm_Uint2            input_itemtype;  \
   Nlm_Uint2            this_itemtype;   \
   Nlm_Uint2            this_subtype;    \

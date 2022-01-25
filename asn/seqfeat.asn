@@ -1,4 +1,4 @@
---$Revision: 6.7 $
+--$Revision: 6.9 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -278,7 +278,8 @@ Gene-ref ::= SEQUENCE {
     maploc VisibleString OPTIONAL ,       -- descriptive map location
     pseudo BOOLEAN DEFAULT FALSE ,        -- pseudogene
     db SET OF Dbtag OPTIONAL ,            -- ids in other dbases
-    syn SET OF VisibleString OPTIONAL }   -- synonyms for locus
+    syn SET OF VisibleString OPTIONAL ,   -- synonyms for locus
+    locus-tag VisibleString OPTIONAL }    -- systematic gene name (e.g., MI0001, ORF0069)
 
 END
 
@@ -361,6 +362,9 @@ OrgMod ::= SEQUENCE {
         anamorph (29) ,
         teleomorph (30) ,
         breed (31) ,
+        gb-acronym (32) ,       -- used by taxonomy database
+        gb-anamorph (33) ,      -- used by taxonomy database
+        gb-synonym (34) ,       -- used by taxonomy database
         old-lineage (253) ,
         old-name (254) ,
         other (255) } ,         -- ASN5: old-name (254) will be added to next spec

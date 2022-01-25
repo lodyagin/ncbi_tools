@@ -30,11 +30,18 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.67 $
+   $Revision: 6.69 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.69  2002/08/09 19:41:25  camacho
+   1) Added blast version number to command-line options
+   2) Added explanations for some default parameters
+
+   Revision 6.68  2002/07/24 20:52:55  coulouri
+   Change database volume size parameter to megabases
+
    Revision 6.67  2002/04/19 13:10:43  madden
    Make new database format the default
 
@@ -330,7 +337,7 @@ Args dump_args[] = {
      "F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
     { "Base name for BLAST files", /* 8 */
       NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
-    { "Number of sequence bases to be created in the volume", /* 9 */
+    { "Database volume size in millions of letters", /* 9 */
       "0", "0", "2147483647", TRUE, 'v', ARG_INT, 0.0, 0, NULL},
     { "Create indexes limited only to accessions - sparse", /* 10 */
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -361,10 +368,13 @@ Args dump_args[] = {
 static FDB_optionsPtr FDB_CreateCLOptions(void)
 {
     FDB_optionsPtr options;
+    Char buf[256] = { '\0' };
     
     options = MemNew(sizeof(FDB_options));
     
-    if ( !GetArgs ("formatdb", NUMARG, dump_args) )
+    StringCpy(buf, "formatdb ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
+    if ( !GetArgs (buf, NUMARG, dump_args) )
         return NULL;
     
     if ( !ErrSetLog (dump_args[2].strvalue) ) { /* Logfile */
@@ -392,7 +402,7 @@ static FDB_optionsPtr FDB_CreateCLOptions(void)
     options->dump_info = FALSE;
     options->sparse_idx = dump_args[10].intvalue;
     options->test_non_unique = dump_args[11].intvalue;
-    options->bases_in_volume = dump_args[9].intvalue;
+    options->bases_in_volume = 1000000 * dump_args[9].intvalue;
     options->alias_file = StringSave(dump_args[13].strvalue);
     options->gi_file = StringSave(dump_args[14].strvalue);
     options->gi_file_bin = StringSave(dump_args[15].strvalue);

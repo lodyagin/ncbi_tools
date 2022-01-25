@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.45 2002/03/26 16:48:54 madden Exp $
+/* $Id: rpsutil.c,v 6.48 2002/08/26 16:55:52 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.45 $
+* $Revision: 6.48 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.48  2002/08/26 16:55:52  madden
+* Fix for scaling with translated searches
+*
+* Revision 6.47  2002/06/11 15:13:35  dondosha
+* Syntax error fixed in previous commit
+*
+* Revision 6.46  2002/06/11 14:44:48  dondosha
+* Return status from some functions instead of search block pointer
+*
 * Revision 6.45  2002/03/26 16:48:54  madden
 * Correctly calculate effective lengths, use correct Karlin-Altschul parameters
 *
@@ -1248,8 +1257,6 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 		search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
 		/* scalingFactor should only be different than one (or zero) if
 			the aux file was read and rpsinfo->karlinK was filled in. */
-		if (search->pbp->scalingFactor != 0) 
-			search->sbp->kbp_gap[0]->Lambda /= search->pbp->scalingFactor;
 	    }
 
             if (rpseq->copyMatrix) {
@@ -1257,6 +1264,9 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
                 search->sbp->posMatrix = rpseq->copyMatrix;
             }
 	}
+
+	if (search->pbp->scalingFactor != 0) 
+		search->sbp->kbp_gap[0]->Lambda /= search->pbp->scalingFactor;
 
         if(rpsinfo->query_is_prot) {
 
@@ -1466,7 +1476,13 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     }
 
     /* Performing real search here */    
-    search = BLASTPerformSearch(search, subject_length, subject_seq);
+    status = BLASTPerformSearch(search, subject_length, subject_seq);
+
+    if (status) {
+       /* This is a fatal error, must exit now */
+       search = BlastSearchBlkDestruct(search);
+       return NULL;
+    }
 
     if(!rpsinfo->query_is_prot) {
         /* status = BlastLinkHsps(search); */

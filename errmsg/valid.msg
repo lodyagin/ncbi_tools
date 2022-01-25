@@ -134,6 +134,12 @@ The MolInfo biomol field is inconsistent with the Bioseq molecule type field.
 $^   HistoryGiCollision, 36
 The Bioseq history gi refers to this Bioseq, not to its predecessor or successor.
 
+$^   GiWithoutAccession, 37
+The Bioseq has a gi identifier but no GenBank/EMBL/DDBJ accession identifier.
+
+$^   MultipleAccessions, 38
+The Bioseq has a gi identifier and more than one GenBank/EMBL/DDBJ accession identifier.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -220,6 +226,16 @@ $^   Inconsistent, 20
 There are two descriptors of the same type which are inconsistent with each
 other. Please make them consistent.
 
+$^   ObsoleteSourceLocation, 21
+There is a source location that is no longer legal for use in GenBank records.
+
+$^   ObsoleteSourceQual, 22
+There is a source qualifier that is no longer legal for use in GenBank records.
+
+$^   StructuredSourceNote, 23
+The name of a structured source field is present as text in a note.  The data
+should probably be put into the appropriate field instead.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -239,6 +255,9 @@ authors.
 $^   UnnecessaryPubEquiv, 5
 A nested Pub-equiv is not normally expected in a publication.  This may prevent
 proper display of all publication information.
+
+$^   BadPageNumbering, 6
+The publication page numbering is suspect.
 
 $$ SEQ_PKG, 4
 
@@ -279,6 +298,9 @@ $^   GenomicProductPackagingProblem, 11
 The product of an mRNA feature in a genomic product set should point to a cDNA
 Bioseq packaged in the set, perhaps within a nuc-prot set.  RefSeq records may
 however be referenced remotely.
+
+$^   InconsistentMolInfoBiomols, 12
+Mol-info.biomol is inconsistent within a segset or parts set.
 
 $$ SEQ_FEAT, 5
 

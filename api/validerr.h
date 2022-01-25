@@ -38,6 +38,8 @@
 #define ERR_SEQ_INST_ZeroGiNumber  1,34
 #define ERR_SEQ_INST_RnaDnaConflict  1,35
 #define ERR_SEQ_INST_HistoryGiCollision  1,36
+#define ERR_SEQ_INST_GiWithoutAccession  1,37
+#define ERR_SEQ_INST_MultipleAccessions  1,38
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -59,12 +61,16 @@
 #define ERR_SEQ_DESCR_BadOrgMod  2,18
 #define ERR_SEQ_DESCR_InconsistentProteinTitle  2,19
 #define ERR_SEQ_DESCR_Inconsistent  2,20
+#define ERR_SEQ_DESCR_ObsoleteSourceLocation  2,21
+#define ERR_SEQ_DESCR_ObsoleteSourceQual  2,22
+#define ERR_SEQ_DESCR_StructuredSourceNote  2,23
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
 #define ERR_GENERIC_AuthorListHasEtAl  3,3
 #define ERR_GENERIC_MissingPubInfo  3,4
 #define ERR_GENERIC_UnnecessaryPubEquiv  3,5
+#define ERR_GENERIC_BadPageNumbering  3,6
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -77,6 +83,7 @@
 #define ERR_SEQ_PKG_PartsSetHasSets  4,9
 #define ERR_SEQ_PKG_FeaturePackagingProblem  4,10
 #define ERR_SEQ_PKG_GenomicProductPackagingProblem  4,11
+#define ERR_SEQ_PKG_InconsistentMolInfoBiomols  4,12
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2

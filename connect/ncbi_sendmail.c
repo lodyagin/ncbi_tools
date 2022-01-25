@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail.c,v 6.11 2002/02/11 20:36:44 lavr Exp $
+/*  $Id: ncbi_sendmail.c,v 6.14 2002/08/14 18:55:39 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,42 +28,6 @@
  * File Description:
  *    Send mail
  *
- * ---------------------------------------------------------------------------
- * $Log: ncbi_sendmail.c,v $
- * Revision 6.11  2002/02/11 20:36:44  lavr
- * Use "ncbi_config.h"
- *
- * Revision 6.10  2001/07/13 20:15:12  lavr
- * Write lock then unlock when using not MT-safe s_ComposeFrom()
- *
- * Revision 6.9  2001/05/18 20:41:43  lavr
- * Beautifying: change log corrected
- *
- * Revision 6.8  2001/05/18 19:52:24  lavr
- * Tricks in macros to keep Sun C compiler silent from warnings (details below)
- *
- * Revision 6.7  2001/03/26 18:39:24  lavr
- * Casting to (unsigned char) instead of (int) for ctype char.class macros
- *
- * Revision 6.6  2001/03/06 04:32:00  lavr
- * Better custom header processing
- *
- * Revision 6.5  2001/03/02 20:09:06  lavr
- * Typo fixed
- *
- * Revision 6.4  2001/03/01 00:30:23  lavr
- * Toolkit configuration moved to ncbi_sendmail_.c
- *
- * Revision 6.3  2001/02/28 21:11:47  lavr
- * Bugfix: buffer overrun
- *
- * Revision 6.2  2001/02/28 17:48:53  lavr
- * Some fixes; larger intermediate buffer for message body
- *
- * Revision 6.1  2001/02/28 00:52:26  lavr
- * Initial revision
- *
- * ===========================================================================
  */
 
 #include "ncbi_config.h"
@@ -121,7 +85,7 @@ static int s_SockRead(SOCK sock, char* reply, size_t reply_len)
         size_t m = 0;
         char buf[4];
 
-        if (SOCK_Read(sock, buf, 4, &m, eIO_Persist) != eIO_Success)
+        if (SOCK_Read(sock, buf, 4, &m, eIO_ReadPersist) != eIO_Success)
             return SMTP_READERR;
         if (m != 4)
             return SMTP_REPLYERR;
@@ -138,7 +102,7 @@ static int s_SockRead(SOCK sock, char* reply, size_t reply_len)
 
         do {
             m = 0;
-            if (SOCK_Read(sock, buf, 1, &m, eIO_Plain) != eIO_Success || !m)
+            if (SOCK_Read(sock,buf,1,&m,eIO_ReadPlain) != eIO_Success  ||  !m)
                 return SMTP_READERR;
 
             if (buf[0] != '\r' && n < reply_len)
@@ -202,7 +166,8 @@ static int/*bool*/ s_SockWrite(SOCK sock, const char* buf)
     size_t len = strlen(buf);
     size_t n;
 
-    if (SOCK_Write(sock, buf, len, &n) != eIO_Success || n != len)
+    if (SOCK_Write(sock, buf, len, &n, eIO_WritePersist) != eIO_Success ||
+        n != len)
         return 0/*failed*/;
     return 1/*success*/;
 }
@@ -280,6 +245,8 @@ extern const char* CORE_SendMail(const char* to,
 
 #define SENDMAIL_RETURN(reason)                                            \
     do {                                                                   \
+        if (sock)                                                          \
+            SOCK_Close(sock);                                              \
         CORE_LOGF(eLOG_Error, ("[SendMail]  %s", reason));                 \
         if (reason/*always true, though, to trick "smart" compiler*/)      \
             return reason;                                                 \
@@ -287,6 +254,8 @@ extern const char* CORE_SendMail(const char* to,
 
 #define SENDMAIL_RETURN2(reason, explanation)                              \
     do {                                                                   \
+       if (sock)                                                           \
+           SOCK_Close(sock);                                               \
        CORE_LOGF(eLOG_Error, ("[SendMail]  %s: %s", reason, explanation)); \
        if (reason/*always true, though, to trick "smart" compiler*/)       \
            return reason;                                                  \
@@ -304,7 +273,7 @@ const char* CORE_SendMailEx(const char*          to,
     const SSendMailInfo* info;
     SSendMailInfo ainfo;
     char buffer[1024];
-    SOCK sock;
+    SOCK sock = 0;
 
     info = uinfo ? uinfo : SendMailInfo_Init(&ainfo);
     if (info->magic_number != MX_MAGIC_NUMBER)
@@ -314,17 +283,17 @@ const char* CORE_SendMailEx(const char*          to,
         (!info->cc || !*info->cc) &&
         (!info->bcc || !*info->bcc))
         SENDMAIL_RETURN("At least one message recipient must be specified");
-    
+
     /* Open connection to sendmail */
     if (SOCK_Create(info->mx_host, info->mx_port, &info->mx_timeout, &sock)
         != eIO_Success)
         SENDMAIL_RETURN("Cannot connect to sendmail");
     SOCK_SetTimeout(sock, eIO_ReadWrite, &info->mx_timeout);
-    
+
     /* Follow the protocol conversation, RFC821 */
     if (!SENDMAIL_READ_RESPONSE(220, 0, buffer))
         SENDMAIL_RETURN2("Protocol error in connection init", buffer);
-    
+
     if (SOCK_gethostname(buffer, sizeof(buffer)) != 0)
         SENDMAIL_RETURN("Unable to get local host name");
     if (!s_SockWrite(sock, "HELO ") ||
@@ -333,7 +302,7 @@ const char* CORE_SendMailEx(const char*          to,
         SENDMAIL_RETURN("Write error in HELO command");
     if (!SENDMAIL_READ_RESPONSE(250, 0, buffer))
         SENDMAIL_RETURN2("Protocol error in HELO command", buffer);
-    
+
     if (!s_SockWrite(sock, "MAIL FROM: <") ||
         !s_SockWrite(sock, info->from) ||
         !s_SockWrite(sock, ">" MX_CRLF))
@@ -367,12 +336,12 @@ const char* CORE_SendMailEx(const char*          to,
         if (!SENDMAIL_READ_RESPONSE(250, 251, buffer))
             SENDMAIL_RETURN2("Protocol error in RCPT (Bcc) command", buffer);
     }
-    
+
     if (!s_SockWrite(sock, "DATA" MX_CRLF))
         SENDMAIL_RETURN("Write error in DATA command");
     if (!SENDMAIL_READ_RESPONSE(354, 0, buffer))
         SENDMAIL_RETURN2("Protocol error in DATA command", buffer);
-    
+
     /* Follow RFC822 to compose message headers. Note that
      * 'Date:'and 'From:' are both added by sendmail automatically.
      */ 
@@ -426,7 +395,7 @@ const char* CORE_SendMailEx(const char*          to,
         if (!newline && !s_SockWrite(sock, MX_CRLF))
             SENDMAIL_RETURN("Write error in finalizing custom header");
     }
-    
+
     if (body && *body) {
         int/*bool*/ newline = 0/*false*/;
         size_t n = 0, m = strlen(body);
@@ -463,12 +432,12 @@ const char* CORE_SendMailEx(const char*          to,
         SENDMAIL_RETURN("Write error in finishing message");
     if (!SENDMAIL_READ_RESPONSE(250, 0, buffer))
         SENDMAIL_RETURN2("Protocol error in sending message body", buffer);
-    
+
     if (!s_SockWrite(sock, "QUIT" MX_CRLF))
         SENDMAIL_RETURN("Write error in QUIT command");
     if (!SENDMAIL_READ_RESPONSE(221, 0, buffer))
         SENDMAIL_RETURN2("Protocol error in QUIT command", buffer);
-    
+
     SOCK_Close(sock);
     return 0;
 }
@@ -476,3 +445,52 @@ const char* CORE_SendMailEx(const char*          to,
 #undef SENDMAIL_READ_RESPONSE
 #undef SENDMAIL_RETURN2
 #undef SENDMAIL_RETURN
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * $Log: ncbi_sendmail.c,v $
+ * Revision 6.14  2002/08/14 18:55:39  lavr
+ * Close socket on error return (was forgotten)
+ *
+ * Revision 6.13  2002/08/12 15:12:31  lavr
+ * Use persistent SOCK_Write()
+ *
+ * Revision 6.12  2002/08/07 16:33:15  lavr
+ * Changed EIO_ReadMethod enums accordingly; log moved to end
+ *
+ * Revision 6.11  2002/02/11 20:36:44  lavr
+ * Use "ncbi_config.h"
+ *
+ * Revision 6.10  2001/07/13 20:15:12  lavr
+ * Write lock then unlock when using not MT-safe s_ComposeFrom()
+ *
+ * Revision 6.9  2001/05/18 20:41:43  lavr
+ * Beautifying: change log corrected
+ *
+ * Revision 6.8  2001/05/18 19:52:24  lavr
+ * Tricks in macros to keep Sun C compiler silent from warnings (details below)
+ *
+ * Revision 6.7  2001/03/26 18:39:24  lavr
+ * Casting to (unsigned char) instead of (int) for ctype char.class macros
+ *
+ * Revision 6.6  2001/03/06 04:32:00  lavr
+ * Better custom header processing
+ *
+ * Revision 6.5  2001/03/02 20:09:06  lavr
+ * Typo fixed
+ *
+ * Revision 6.4  2001/03/01 00:30:23  lavr
+ * Toolkit configuration moved to ncbi_sendmail_.c
+ *
+ * Revision 6.3  2001/02/28 21:11:47  lavr
+ * Bugfix: buffer overrun
+ *
+ * Revision 6.2  2001/02/28 17:48:53  lavr
+ * Some fixes; larger intermediate buffer for message body
+ *
+ * Revision 6.1  2001/02/28 00:52:26  lavr
+ * Initial revision
+ *
+ * ===========================================================================
+ */

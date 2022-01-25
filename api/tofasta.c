@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.100 $
+* $Revision: 6.110 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,30 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.110  2002/08/22 17:33:39  madden
+* Print range on FASTA output if only partial sequence written
+*
+* Revision 6.109  2002/07/18 19:28:35  kans
+*  working implementation of BioseqRawToFastaExtraEx, always zero out all of MyFsa struct, no need for fake seqloc
+*
+* Revision 6.107  2002/07/15 21:18:49  camacho
+* Fixed problem with revision 6.105
+*
+* Revision 6.105  2002/07/14 21:04:32  camacho
+* Added option to print a subsequence of a raw bioseq to fasta format
+*
+* Revision 6.104  2002/07/02 20:57:38  kimelman
+* GatherDescrOnBioseq: added parameter if only the first one required
+*
+* Revision 6.103  2002/06/19 13:56:25  kans
+* htgs_cancelled keyword suppresses sequencing in progress phrase in defline
+*
+* Revision 6.102  2002/05/28 19:02:53  dondosha
+* Correction to change in MakeTrustedID in revision 6.96
+*
+* Revision 6.101  2002/05/13 17:32:40  kans
+* restored complete sequence on phase 3
+*
 * Revision 6.100  2002/04/26 13:58:25  kans
 * phase 3 should not say complete sequence
 *
@@ -661,150 +685,148 @@ Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot)
 void SeqEntryFasta (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 {
-    FastaPtr tfa;
-    BioseqPtr bsp;
-	BioseqSetPtr bssp;
-    MyFsaPtr mfp;
-    Boolean is_na;
-	SeqIdPtr sip;
-	TextSeqIdPtr tsip;
-	ValNodePtr vnp;
-	OrgRefPtr orp;
-	BioSourcePtr bsrcp;
-	MolInfoPtr mip;
+  FastaPtr tfa;
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  MyFsaPtr mfp;
+  Boolean is_na;
+  SeqIdPtr sip;
+  TextSeqIdPtr tsip;
+  ValNodePtr vnp;
+  OrgRefPtr orp;
+  MolInfoPtr mip;
 
-    tfa = (FastaPtr) data;
-    mfp = tfa->mfp;
-	if (tfa->group_segs == 2)       /* put out only segments */
-	{
-		if (tfa->parts != -1)      /* in parts set */
-		{
-			if (indent <= tfa->parts)   /* out of parts set */
-			{
-				tfa->parts = -1;
-				tfa->seg = -1;
-			}
-		}
-	}
+  tfa = (FastaPtr) data;
+  mfp = tfa->mfp;
+  if (tfa->group_segs == 2)       /* put out only segments */
+    {
+      if (tfa->parts != -1)      /* in parts set */
+        {
+          if (indent <= tfa->parts)   /* out of parts set */
+            {
+              tfa->parts = -1;
+              tfa->seg = -1;
+            }
+        }
+    }
 
-	if (IS_Bioseq(sep))
-	{
-		bsp = (BioseqPtr)(sep->data.ptrvalue);
-		vnp = bsp->descr;
-	}
-	else
-	{
-		bssp = (BioseqSetPtr)(sep->data.ptrvalue);
-		vnp = bssp->descr;
-	}
+  if (IS_Bioseq(sep))
+    {
+      bsp = (BioseqPtr)(sep->data.ptrvalue);
+      vnp = bsp->descr;
+    }
+  else
+    {
+      bssp = (BioseqSetPtr)(sep->data.ptrvalue);
+      vnp = bssp->descr;
+    }
 
-	orp = NULL;
-	mip = NULL;
-	while (vnp != NULL)   /* check for organism info */
-	{
-		switch (vnp->choice)
-		{
-			case Seq_descr_source:
-				bsrcp = (BioSourcePtr)(vnp->data.ptrvalue);
-				orp = bsrcp->org;
-				break;
-			case Seq_descr_org:
-				orp = (OrgRefPtr)(vnp->data.ptrvalue);
-				break;
-			case Seq_descr_molinfo:
-				mip = (MolInfoPtr)(vnp->data.ptrvalue);
-				break;
-			default:
-				break;
-		}
-		vnp = vnp->next;
-	}
+  orp = NULL;
+  mip = NULL;
+  while (vnp != NULL)   /* check for organism info */
+    {
+      switch (vnp->choice)
+        {
+        case Seq_descr_source:
+          orp = ((BioSourcePtr)(vnp->data.ptrvalue))->org;
+          break;
+        case Seq_descr_org:
+          orp = (OrgRefPtr)(vnp->data.ptrvalue);
+          break;
+        case Seq_descr_molinfo:
+          mip = (MolInfoPtr)(vnp->data.ptrvalue);
+          break;
+        default:
+          break;
+        }
+      vnp = vnp->next;
+    }
 
-	if (orp != NULL)
-	{
-		if (orp->taxname != NULL)
-			mfp->organism = orp->taxname;
-		else if (orp->common != NULL)
-			mfp->organism = orp->common;
-	}
+  if (orp != NULL)
+    {
+      if (orp->taxname != NULL)
+        mfp->organism = orp->taxname;
+      else if (orp->common != NULL)
+        mfp->organism = orp->common;
+    }
 
-	if (mip != NULL)
-            mfp->tech = mip->tech;
-        else
-            mfp->tech = 0 ;
+  if (mip != NULL)
+    mfp->tech = mip->tech;
+  else
+    mfp->tech = 0 ;
 
-   if (! IS_Bioseq(sep))	/* check for taking only parts of seg seqs */
-	{
-		if (tfa->group_segs == 2)    /* put out only segments */
-		{
-			if (bssp->_class == 2)   /* segset */
-				tfa->seg = indent;
-			else if (bssp->_class == 4)   /* parts */
-			{
-				if ((tfa->seg >= 0) && (tfa->seg < indent))
-				{
-					tfa->parts = indent;   /* in parts set */
-				}
-			}
-		}
-		return;
-	}
+  if (! IS_Bioseq(sep))	/* check for taking only parts of seg seqs */
+    {
+      if (tfa->group_segs == 2)    /* put out only segments */
+        {
+          if (bssp->_class == 2)   /* segset */
+            tfa->seg = indent;
+          else if (bssp->_class == 4)   /* parts */
+            {
+              if ((tfa->seg >= 0) && (tfa->seg < indent))
+                {
+                  tfa->parts = indent;   /* in parts set */
+                }
+            }
+        }
+      return;
+    }
 
-   is_na = tfa->is_na;
+  is_na = tfa->is_na;
 
-	if ((! is_na) && (! ISA_aa(bsp->mol))) /* check for translations */
-	{
-		for (sip = bsp->id; sip != NULL; sip = sip->next)
-		{
-		 	switch (sip->choice)
-			{
-				case SEQID_GENBANK:
-				case SEQID_EMBL:
-				case SEQID_DDBJ:
-				case SEQID_OTHER:
-				case SEQID_TPG:
-				case SEQID_TPE:
-				case SEQID_TPD:
-					tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
-					if (tsip->accession != NULL)
-						mfp->accession = tsip->accession;
-					break;
-				default:
-					break;
-			}
-		}
-	}
+  if ((! is_na) && (! ISA_aa(bsp->mol))) /* check for translations */
+    {
+      for (sip = bsp->id; sip != NULL; sip = sip->next)
+        {
+          switch (sip->choice)
+            {
+            case SEQID_GENBANK:
+            case SEQID_EMBL:
+            case SEQID_DDBJ:
+            case SEQID_OTHER:
+            case SEQID_TPG:
+            case SEQID_TPE:
+            case SEQID_TPD:
+              tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+              if (tsip->accession != NULL)
+                mfp->accession = tsip->accession;
+              break;
+            default:
+              break;
+            }
+        }
+    }
 
-	if (tfa->last_indent != -1)   /* putting out segments together */
-	{
-		if (indent > tfa->last_indent)
-			return;
-		tfa->last_indent = -1;
-	}
-									 /* do raw bioseqs only */
-	if (! tfa->group_segs)
-	{
-		if (BioseqRawToFastaX(bsp, mfp, is_na))
-			tfa->got_one = TRUE;
-	}
-	else if (tfa->group_segs == 1)    /* do segmented sets */
-	{
-		if (BioseqToFastaX(bsp, mfp, is_na))
-		{
-			tfa->got_one = TRUE;
-			if (bsp->repr == Seq_repr_seg)
-				tfa->last_indent = indent;
-		}
-	}
-	else if (tfa->group_segs == 2)    /* take only the parts */
-	{
-		if (tfa->parts >= 0)    /* in segmented parts set */
-		{
-			if (BioseqRawToFastaX(bsp, mfp, is_na))
-				tfa->got_one = TRUE;
-		}
-	}
-    return;
+  if (tfa->last_indent != -1)   /* putting out segments together */
+    {
+      if (indent > tfa->last_indent)
+        return;
+      tfa->last_indent = -1;
+    }
+  /* do raw bioseqs only */
+  if (! tfa->group_segs)
+    {
+      if (BioseqRawToFastaX(bsp, mfp, is_na))
+        tfa->got_one = TRUE;
+    }
+  else if (tfa->group_segs == 1)    /* do segmented sets */
+    {
+      if (BioseqToFastaX(bsp, mfp, is_na))
+        {
+          tfa->got_one = TRUE;
+          if (bsp->repr == Seq_repr_seg)
+            tfa->last_indent = indent;
+        }
+    }
+  else if (tfa->group_segs == 2)    /* take only the parts */
+    {
+      if (tfa->parts >= 0)    /* in segmented parts set */
+        {
+          if (BioseqRawToFastaX(bsp, mfp, is_na))
+            tfa->got_one = TRUE;
+        }
+    }
+  return;
 }
 
 /*****************************************************************************
@@ -932,6 +954,7 @@ static Boolean SeqEntrysToFastaXX (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uin
     if ((sep == NULL) || (fp == NULL))
         return FALSE;
     
+    MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
     mfa.buf = buf;
     mfa.buflen = FASTA_BUFFER_LEN;
     mfa.seqlen = 70;
@@ -946,6 +969,7 @@ static Boolean SeqEntrysToFastaXX (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uin
     mfa.no_sequence = FALSE;
     mfa.formatdb	= FALSE;
     mfa.printid_general = printid_general;
+    mfa.seqloc = NULL;
     
     tfa.mfp = &mfa;
     tfa.is_na = is_na;
@@ -1021,6 +1045,7 @@ NLM_EXTERN Boolean SeqEntrysToDefline(SeqEntryPtr sep,
   if ((sep == NULL) || (fp == NULL))
     return FALSE;
   
+  MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
   mfa.buf = (CharPtr) MemNew(DEFLINE_MAX_LEN);
   mfa.buflen = DEFLINE_MAX_LEN-1;
   mfa.seqlen = DEFLINE_MAX_LEN;
@@ -1035,6 +1060,7 @@ NLM_EXTERN Boolean SeqEntrysToDefline(SeqEntryPtr sep,
   mfa.formatdb = FALSE;
   mfa.tech = 0;
   mfa.printid_general = FALSE;
+  mfa.seqloc = NULL;
 
   tfa.mfp = &mfa;
   tfa.is_na = is_na;
@@ -1067,12 +1093,19 @@ NLM_EXTERN Boolean BioseqRawToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 NLM_EXTERN Boolean BioseqRawToFastaExtra (BioseqPtr bsp, FILE *fp, Int2 line_length)
 
 {
+ 	return BioseqRawToFastaExtraEx (bsp, fp, line_length, NULL);
+}
+
+NLM_EXTERN Boolean BioseqRawToFastaExtraEx(BioseqPtr bsp, FILE *fp, Int2 line_length, SeqLocPtr slp)
+
+{
     MyFsa mfa;
     Char buf[FASTA_BUFFER_LEN+1];
 
     if ((bsp == NULL) || (fp == NULL))
         return FALSE;
 
+	MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
 	mfa.buf = buf;
 	mfa.buflen = FASTA_BUFFER_LEN;
 	mfa.seqlen = line_length;
@@ -1087,6 +1120,7 @@ NLM_EXTERN Boolean BioseqRawToFastaExtra (BioseqPtr bsp, FILE *fp, Int2 line_len
 	mfa.no_sequence = FALSE;
 	mfa.formatdb = FALSE;
 	mfa.printid_general = FALSE;
+	mfa.seqloc = slp;
 
  	return BioseqRawToFastaX(bsp, &mfa, ISA_na(bsp->mol));
 }
@@ -1125,6 +1159,7 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
     if ((bsp == NULL) || (fp == NULL))
         return FALSE;
 
+	MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
 	mfa.buf = buf;
 	mfa.buflen = FASTA_BUFFER_LEN;
 	mfa.seqlen = 80;
@@ -1139,6 +1174,7 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 	mfa.no_sequence = FALSE;
 	mfa.formatdb = FALSE;
 	mfa.printid_general = FALSE;
+	mfa.seqloc = NULL;
 
 	return BioseqToFastaX(bsp, &mfa, is_na);
 }
@@ -1157,6 +1193,7 @@ NLM_EXTERN Boolean BioseqToFastaDump (BioseqPtr bsp, FILE *fp, Boolean is_na)
     if ((bsp == NULL) || (fp == NULL))
         return FALSE;
 
+	MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
 	mfa.buf = buf;
 	mfa.buflen = FASTA_BUFFER_LEN;
 	mfa.seqlen = 80;
@@ -1171,6 +1208,7 @@ NLM_EXTERN Boolean BioseqToFastaDump (BioseqPtr bsp, FILE *fp, Boolean is_na)
 	mfa.no_sequence = FALSE;
 	mfa.formatdb = FALSE;
 	mfa.printid_general = FALSE;
+	mfa.seqloc = NULL;
 
 	return BioseqToFastaX(bsp, &mfa, is_na);
 }
@@ -1180,7 +1218,7 @@ NLM_EXTERN Boolean BioseqToFastaDump (BioseqPtr bsp, FILE *fp, Boolean is_na)
 *   Boolean BioseqToFastaX(bsp, mfp, is_na)
 *
 *****************************************************************************/
-static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general);
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general, SeqLocPtr seqloc);
 
 NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 
@@ -1264,7 +1302,7 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 			break;
 	}
 
-	if (! FastaIdX(bsp, mfp->buf, mfp->buflen, mfp->printid_general))
+	if (! FastaIdX(bsp, mfp->buf, mfp->buflen, mfp->printid_general, mfp->seqloc))
 		return FALSE;
 
 	(*(mfp->myfunc))(bsp, FASTA_ID, mfp->buf, StringLen(mfp->buf), mfp->mydata);
@@ -1287,7 +1325,7 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 		code = mfp->code;
 	    }
 
-            spp = FastaSeqPort(bsp, is_na, mfp->do_virtual, code);
+            spp = FastaSeqPortEx (bsp, is_na, mfp->do_virtual, code, mfp->seqloc);
             if (spp == NULL) return FALSE;
             
             while (FastaSeqLineEx(spp, mfp->buf, mfp->seqlen, is_na, mfp->do_virtual))
@@ -1910,7 +1948,10 @@ static SeqIdPtr MakeTrustedID (CharPtr prefix, Int2Ptr ctrptr)
 		start = 1;
 	}
 
-	sprintf (buf, "%d_%.32s", (int) start, prefix);
+        if (prefix)
+           sprintf (buf, "%d_%.32s", (int) start, prefix);
+        else
+           sprintf(buf, "%d", (int) start);
 
 	newid = ValNodeNew (NULL);
 	oid = ObjectIdNew ();
@@ -2226,14 +2267,25 @@ NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Uint4 buflen)
 	return TRUE;
 }
 
-static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general)
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general, SeqLocPtr seqloc)
 {
+	Int4 length;
+
 	if ((bsp == NULL) || (buf == NULL)) return FALSE;
 
-	if (printid_general) { 
-		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_GENERAL, buflen);
-	} else {
-		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
+	if (seqloc == NULL || SeqLocLen(seqloc) == bsp->length)
+	{ /* Full sequence is being dumped. */
+		if (printid_general) { 
+			SeqIdWrite(bsp->id, buf, PRINTID_FASTA_GENERAL, buflen);
+		} else {
+			SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
+		}
+	}
+	else
+	{
+		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_SHORT, buflen);
+		length = StringLen(buf);
+		sprintf(buf+length, ":%ld-%ld", (SeqLocStart(seqloc)+1), (SeqLocStop(seqloc)+1));
 	}
 	return TRUE;
 }
@@ -2542,7 +2594,7 @@ static ValNodePtr IndexedGatherDescrOnBioseq (ItemInfoPtr iip, BioseqPtr bsp, Ui
 	return sdp;
 }
 
-static ValNodePtr GatherDescrOnBioseq(ItemInfoPtr iip, BioseqPtr bsp, Uint1 choice)
+static ValNodePtr GatherDescrOnBioseq(ItemInfoPtr iip, BioseqPtr bsp, Uint1 choice, Boolean get_first)
 {
 	ValNodePtr   vnp;
 
@@ -2556,6 +2608,18 @@ static ValNodePtr GatherDescrOnBioseq(ItemInfoPtr iip, BioseqPtr bsp, Uint1 choi
 	if (SeqMgrFeaturesAreIndexed (entityID)) {
 		return IndexedGatherDescrOnBioseq (iip, bsp, choice);
 	}
+    /*
+	if (iip==NULL && (get_first || (ISA_aa(bsp->mol) && !is_pdb(bsp))) ) {
+		for(vnp=bsp->descr;vnp && vnp->choice != choice; vnp=vnp->next){}
+		return vnp;
+	}
+    */
+	if (iip==NULL && get_first)
+          {
+            for(vnp=bsp->descr;vnp; vnp=vnp->next)
+              if(vnp->choice == choice)
+                return vnp;
+          }
 	dsp = (DescrInfoPtr) MemNew(sizeof(DescrInfo));
 	dsp->choice = choice;
 	dsp->bsp = bsp;
@@ -2924,15 +2988,15 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 	if (bsp == NULL) {
 		return NULL;
 	}
-	if ((vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_source)) == NULL) {
+	if ((vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_source,FALSE)) == NULL) {
 		return NULL;
 	}
 	biop = (BioSourcePtr) vnp->data.ptrvalue;
-    orp = biop->org;
-    if (orp && orp->taxname) {
-	    name = StringSave(orp->taxname);
-	    deflen += StringLen(orp->taxname);
-    }
+        orp = biop->org;
+        if (orp && orp->taxname) {
+          name = StringSave(orp->taxname);
+          deflen += StringLen(orp->taxname);
+        }
 	for (ssp = biop->subtype; ssp; ssp=ssp->next) {
 		if (ssp->subtype == 1) { /* chromosome */
 			if (ssp->name != NULL) {
@@ -3085,17 +3149,17 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 	if (bsp == NULL) {
 		return NULL;
 	}
-	if ((vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_source)) == NULL) {
+	if ((vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_source,TRUE)) == NULL) {
 		return NULL;
 	}
 	biop = (BioSourcePtr) vnp->data.ptrvalue;
 	if (biop == NULL) {
 		return NULL;
 	}
-    orp = biop->org;
-    if (orp == NULL || orp->taxname == NULL) {
-		return NULL;
-    }
+        orp = biop->org;
+        if (orp == NULL || orp->taxname == NULL) {
+          return NULL;
+        }
 	name = orp->taxname;
 	deflen += StringLen(orp->taxname);
 	genome = biop->genome;
@@ -3269,7 +3333,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		"LOW-PASS SEQUENCE SAMPLING",
 		"WORKING DRAFT SEQUENCE",
 		"*** SEQUENCING IN PROGRESS ***" };
-	Boolean htg_tech = FALSE, htgs_draft = FALSE, is_nc = FALSE, is_tpa = FALSE;
+	Boolean htg_tech = FALSE, htgs_draft = FALSE, htgs_cancelled = FALSE, is_nc = FALSE, is_tpa = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
 	Boolean wgsmaster = FALSE;
@@ -3337,19 +3401,20 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 	}
 	diff = 0;
 	if (htg_tech) {
-		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank);
+		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank,TRUE);
 		if (vnp != NULL) {
 			gbp = (GBBlockPtr) vnp->data.ptrvalue;
 		}
 	}
-	if (! ignoreTitle) {
-		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
-	}
-	if (vnp != NULL) {
-		title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
-	}
+	if (! ignoreTitle)
+          {
+            vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title,TRUE);
+            if (vnp != NULL) 
+              title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
+          }
 	if (tech == MI_TECH_htgs_0 || tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
-		title = MemFree(title);  /* manufacture all HTG titles */
+                MemFree(title);  /* manufacture all HTG titles */
+                title = NULL;
 		if (title == NULL || *title == '\0') {
 			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
@@ -3377,7 +3442,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		}
 	} else if (is_nc && title == NULL) {
 		/* manufacture complete chromosome titles if not already present */
-		vnp = GatherDescrOnBioseq (&ii, bsp, Seq_descr_molinfo);
+		vnp = GatherDescrOnBioseq (&ii, bsp, Seq_descr_molinfo,TRUE);
 		if (vnp != NULL) {
 			mip = (MolInfoPtr) vnp->data.ptrvalue;
 			if (mip != NULL &&
@@ -3407,7 +3472,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 			tmp--;
 			diff--;
 		}
-	} else if ((vnp = GatherDescrOnBioseq(iip, bsp, Seq_descr_pdb)) != NULL) {
+	} else if ((vnp = GatherDescrOnBioseq(iip, bsp, Seq_descr_pdb,TRUE)) != NULL) {
 		pbp = (PdbBlockPtr)(vnp->data.ptrvalue);
 		for (vnp = bsp->id; vnp != NULL; vnp = vnp->next) {
 			if (vnp->choice == SEQID_PDB) {
@@ -3534,7 +3599,6 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		}
 		if (phase == 3)
 		{
-			/*
 			if (title) {
 				if (title && StringStr(title, "complete sequence") == NULL) {
 					diff = LabelCopy(buf, ", complete sequence", buflen);
@@ -3542,7 +3606,6 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					buf += diff;
 				}
 			}
-			*/
 		} else {
 			doit = FALSE;
 			if (phase == 0) {
@@ -3555,6 +3618,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
 						if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
 							htgs_draft = TRUE;
+						} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
+							htgs_cancelled = TRUE;
 						}
 					}
 				}
@@ -3563,7 +3628,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 						doit = TRUE;
 						i = 1;
 					}
-				} else {
+				} else if (! htgs_cancelled) {
 					if (StringStr(title, "SEQUENCING IN") == NULL) {
 						doit = TRUE;
 						i = 2;
@@ -3699,6 +3764,29 @@ NLM_EXTERN SeqPortPtr FastaSeqPort(BioseqPtr bsp, Boolean is_na, Boolean do_virt
     SeqPortSeek(spp, 0, SEEK_SET);
 	return spp;
 }
+
+/*****************************************************************************
+*
+*   FastaSeqPortEx(bsp, is_na, do_virtual, slp)
+*   	opens a SeqPort for a fasta output of bsp constrained to slp
+*
+*****************************************************************************/
+NLM_EXTERN SeqPortPtr FastaSeqPortEx(BioseqPtr bsp, Boolean is_na, Boolean do_virtual,
+                                     Uint1 code, SeqLocPtr slp)
+{
+	SeqPortPtr spp = NULL;
+
+	if (bsp == NULL) return spp;
+	if (slp == NULL) return FastaSeqPort (bsp, is_na, do_virtual, code);
+
+    spp = SeqPortNew(bsp, SeqLocStart(slp), SeqLocStop(slp),
+            SeqLocStrand(slp), code);
+	if (do_virtual)
+		SeqPortSet_do_virtual(spp, TRUE);
+    SeqPortSeek(spp, 0, SEEK_SET);
+	return spp;
+}
+
 
 /*****************************************************************************
 *

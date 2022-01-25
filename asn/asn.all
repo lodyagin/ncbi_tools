@@ -8,7 +8,7 @@
 --
 --**********************************************************************
 
---$Revision: 6.3 $
+--$Revision: 6.4 $
 --**********************************************************************
 --
 --  NCBI General Data elements
@@ -97,7 +97,8 @@ Person-id ::= CHOICE {
     name Name-std ,             -- structured name
     ml VisibleString ,          -- MEDLINE name (semi-structured)
                                 --    eg. "Jones RM"
-    str VisibleString }         -- unstructured name
+    str VisibleString,          -- unstructured name
+    consortium VisibleString }  -- consortium name
 
 Name-std ::= SEQUENCE { -- Structured names
     last VisibleString ,
@@ -737,7 +738,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.5 $
+--$Revision: 6.6 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -866,13 +867,21 @@ MolInfo ::= SEQUENCE {
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
+    --
+    -- Completeness is not indicated in most records.  For genomes, assume
+    -- the sequences are incomplete unless specifically marked as complete.
+    -- For mRNAs, assume the ends are not known exactly unless marked as
+    -- having the left or right end.
+    --
     completeness INTEGER {
       unknown (0) ,
       complete (1) ,                   -- complete biological entity
       partial (2) ,                    -- partial but no details given
-      no-left (3),                     -- missing 5' or NH3 end
+      no-left (3) ,                    -- missing 5' or NH3 end
       no-right (4) ,                   -- missing 3' or COOH end
       no-ends (5) ,                    -- missing both ends
+      has-left (6) ,                   -- 5' or NH3 end present
+      has-right (7) ,                  -- 3' or COOH end present
       other (255) } DEFAULT unknown }
 
 
@@ -1501,7 +1510,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.7 $
+--$Revision: 6.9 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1781,7 +1790,8 @@ Gene-ref ::= SEQUENCE {
     maploc VisibleString OPTIONAL ,       -- descriptive map location
     pseudo BOOLEAN DEFAULT FALSE ,        -- pseudogene
     db SET OF Dbtag OPTIONAL ,            -- ids in other dbases
-    syn SET OF VisibleString OPTIONAL }   -- synonyms for locus
+    syn SET OF VisibleString OPTIONAL ,   -- synonyms for locus
+    locus-tag VisibleString OPTIONAL }    -- systematic gene name (e.g., MI0001, ORF0069)
 
 END
 
@@ -1864,6 +1874,9 @@ OrgMod ::= SEQUENCE {
         anamorph (29) ,
         teleomorph (30) ,
         breed (31) ,
+        gb-acronym (32) ,       -- used by taxonomy database
+        gb-anamorph (33) ,      -- used by taxonomy database
+        gb-synonym (34) ,       -- used by taxonomy database
         old-lineage (253) ,
         old-name (254) ,
         other (255) } ,         -- ASN5: old-name (254) will be added to next spec

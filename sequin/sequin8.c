@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.160 $
+* $Revision: 6.185 $
 *
 * File Description: 
 *
@@ -73,6 +73,14 @@ typedef struct evidenceformdata {
   Boolean        stringfound;
   Char           findStr [128];
 } EvidenceFormData, PNTR EvidenceFormPtr;
+
+typedef struct codebreakformdata {
+  FEATURE_FORM_BLOCK
+  PopuP  aminoAcidPopup;
+  Char   currentCodonStr [4];
+  TexT   codonText;
+  ButtoN acceptButton;
+} CodeBreakFormData, PNTR CodeBreakFormPtr;
 
 static void LIBCALLBACK AsnWriteEvidenceCallBack (AsnExpOptStructPtr pAEOS)
 
@@ -1221,6 +1229,445 @@ extern void RetranslateCdRegionsNoStop (IteM i)
 
 {
   RetranslateCdRegions (i, FALSE);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ApplyCodeBreak_FeatureCallback () -- Called for each CDS feature in */
+/*                                      a Bioseq.  Checks for any      */
+/*                                      nucleotide triplets that match */
+/*                                      the one in the given code      */
+/*                                      break and sets a code break    */
+/*                                      for each one that is found.    */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ApplyCodeBreak_FeatureCallback (SeqFeatPtr sfp,
+					SeqMgrFeatContextPtr fcontext)
+{
+  Uint1            aaChar;
+  SeqLocPtr        aaSlp;
+  Int2             aaNum;
+  Int4             aaPosition;
+  SeqPntPtr        aaSpp;
+  CharPtr          basePtr;
+  CharPtr          bases;
+  CodeBreakFormPtr cbfp;
+  CodeBreakPtr     cbp;
+  Char             codonStr [4];
+  CdRegionPtr      crp;
+  Int4             dnaLen;
+  SeqLocPtr        dnaSlp;
+  Int2             i;
+  CodeBreakPtr     lastCbp;
+  SeqCodeTablePtr  sctp;
+  Int4             total;
+
+  cbfp = (CodeBreakFormPtr) fcontext->userdata;
+
+  /* Get the nucleotide sequence */
+
+  dnaLen = SeqLocLen (sfp->location);
+  if (dnaLen < 1)
+    return TRUE;
+
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  bases = ReadCodingRegionBases (sfp->location, dnaLen, crp->frame, &total);
+
+  /* Get the selected Amino Acid and codon triplet */
+
+  GetTitle (cbfp->codonText, codonStr, sizeof (codonStr));
+  for (i = 0; i < 3; i++)
+    codonStr [i] = TO_UPPER (codonStr [i]);
+
+  aaNum = GetValue (cbfp->aminoAcidPopup);
+
+  /* Search for the selected codon in the */
+  /* nucleotide sequence.  If found, add  */
+  /* it as a codebreak.                   */
+
+  basePtr = bases;
+  aaPosition = 0;
+  while (basePtr[0] != '\0') {
+    if (StringNCmp (basePtr, codonStr, 3) == 0) {
+
+      /* Create a new seq point object with the aa location */
+
+      aaSpp = SeqPntNew ();
+      aaSpp->point  = aaPosition;
+      aaSpp->strand = Seq_strand_plus;
+      aaSpp->id = SeqLocId (sfp->product);
+      aaSpp->fuzz   = NULL;
+
+      /* Make a SeqLoc using the seq point */
+
+      aaSlp = (SeqLocPtr) ValNodeNew (NULL);
+      aaSlp->choice = SEQLOC_PNT;
+      aaSlp->data.ptrvalue = (Pointer) aaSpp;
+
+      /* Convert the seqloc to a DNA location */
+
+      dnaSlp = aaLoc_to_dnaLoc (sfp, aaSlp);
+
+      /* Create the code break using the DNA location */
+
+      cbp = CodeBreakNew ();
+      cbp->loc = dnaSlp;
+      sctp = SeqCodeTableFind (Seq_code_ncbieaa);
+      aaChar = (Uint1) GetSymbolForResidue (sctp, aaNum + 65);
+      cbp->aa.value.intvalue = aaChar;
+      cbp->aa.choice = 1; /* ncbieaa */
+
+      /* Insert the code break into the CDS's */
+      /* existing list of code breaks.        */
+
+      lastCbp = crp->code_break;
+      if (lastCbp == NULL)
+	crp->code_break = cbp;
+      else {
+	while (lastCbp->next != NULL)
+	  lastCbp = lastCbp->next;
+	lastCbp->next = cbp;
+	cbp->next = NULL;
+      }
+
+      /* Retranslate the CDS */
+
+      RetranslateOneCDS (sfp, fcontext->entityID, TRUE);
+
+    }
+    basePtr += 3;
+    aaPosition++;
+  }
+
+  /* Return TRUE to continue on to the next CDS feature */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ApplyCodeBreak_BioseqCallback () -- Called by SeqMgrExploreBioseqs  */
+/*                                     for each Bioseq.  Searches the  */
+/*                                     Bioseq for CDS features and adds*/
+/*                                     the given code break to any     */
+/*                                     found.                          */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ApplyCodeBreak_BioseqCallback (BioseqPtr bsp,
+					 SeqMgrBioseqContextPtr bcontext)
+{
+  Boolean featureFilterArray [SEQFEAT_MAX];
+
+  /* Set up to explore only CDS features */
+
+  MemSet ((Pointer) (featureFilterArray),
+	  (int) FALSE,
+	  SEQFEAT_MAX);
+
+  featureFilterArray[SEQFEAT_CDREGION] = TRUE;
+
+  /* Explore the Bioseq's CDS features, marking the */
+  /* ones with internal stop codons as pseudo.      */
+
+  SeqMgrExploreFeatures (bsp, bcontext->userdata,
+			 ApplyCodeBreak_FeatureCallback, NULL,
+			 featureFilterArray, NULL);
+
+  /* Return TRUE to continue on to the next Bioseq */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* DoAddCodeBreak_Callback () -- Called when the 'Apply' button is     */
+/*                               pressed in the "Add Code Break"       */
+/*                               window.  Adds the entered code break  */
+/*                               to all CDS features.                  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void DoAddCodeBreak_Callback (ButtoN b)
+{
+  CodeBreakFormPtr  cbfp;
+
+  cbfp = (CodeBreakFormPtr) GetObjectExtra (b);
+
+  /* Change to the "working" cursor */
+
+  Hide (cbfp->form);
+  WatchCursor ();
+  Update ();
+
+  /* Visit all the Bioseqs, where we will */
+  /* then explore their CDS features.     */
+
+  SeqMgrExploreBioseqs (cbfp->input_entityID, NULL, (Pointer) cbfp,
+			ApplyCodeBreak_BioseqCallback, TRUE, FALSE, TRUE);
+
+  /* Restore the cursor and force an update */
+
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (cbfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, cbfp->input_entityID, 0, 0);
+  Remove (cbfp->form);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* PopulateAAPopup () -- Creates a popup list of amino acids.          */
+/*                                                                     */
+/*     NOTE : This function is identical to (and identically named as) */
+/*            a function in cdrgn.c                                    */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void PopulateAAPopup (PopuP AAitem)
+
+{
+  Char             ch;
+  Uint1            first;
+  Uint1            i;
+  Char             item [77];
+  Uint1            last;
+  SeqCodeTablePtr  sctp;
+  CharPtr          str;
+
+  sctp = SeqCodeTableFind (Seq_code_ncbieaa);
+  first = FirstResidueInCode (sctp);
+  last = LastResidueInCode (sctp);
+  PopupItem (AAitem, " ");
+  for (i = 65; i <= last; i++) {
+    if (i == 74 || i == 79) {
+      continue;
+    }
+    ch = GetSymbolForResidue (sctp, i);
+    str = (CharPtr) GetNameForResidue (sctp, i);
+    sprintf (item, "%c    %s", ch, str);
+    PopupItem (AAitem, item);
+  } 
+  SetValue (AAitem, 1); 
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* IsLegalCodon () - Determines if a three base string is a legal      */
+/*                   codon.                                            */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean IsLegalCodon (CharPtr codonStr)
+{
+  Int2 i;
+  Char baseChar;
+
+  /* Only allow three characters */
+
+  if (StringLen (codonStr) > 3)
+    return FALSE;
+
+  /* Allow only the character A,C,G,T,U and */
+  /* convert the U to a T.                  */
+
+  i = 0;
+  while (i < 3) {
+
+    if (codonStr [i] == '\0')
+      break;
+
+    baseChar = codonStr [i];
+    
+    if (StringChr ("acgtuACGTU", baseChar) == NULL)
+      return FALSE;
+    if ('U' == baseChar)
+      codonStr [i] = 'T';
+    else if ('u' == baseChar)
+      codonStr [i] = 't';
+    
+    i++;
+  }
+
+  /* If we made it this far, it's a valid codon */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* CodonText_Callback () -- Called whenever a keystoke is entered in   */
+/*                          Codon text field.  Validates to see if the */
+/*                          keystroke should be allowed.               */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void CodonText_Callback (TexT codonText)
+
+{
+  CodeBreakFormPtr  cbfp;
+  Int2              aaNum;
+  Char              newCodonStr [5];
+
+  /* Get the currect code break data */
+
+  cbfp = (CodeBreakFormPtr) GetObjectExtra (codonText);
+  if (cbfp == NULL)
+    return;
+
+  /* If the new codon string is not legal */
+  /* then reset to the previous text.     */
+
+  GetTitle (codonText, newCodonStr, sizeof (newCodonStr));
+
+  if (!IsLegalCodon (newCodonStr))
+    StringCpy (newCodonStr, cbfp->currentCodonStr);
+  else
+    StringCpy (cbfp->currentCodonStr, newCodonStr);
+
+  SafeSetTitle (cbfp->codonText, newCodonStr);
+
+  /* Only enable the accept button if */
+  /* we have a full codon.            */
+
+  if (StringLen (newCodonStr) != 3) {
+    SafeDisable (cbfp->acceptButton);
+    return;
+  }
+
+  /* See if an amino acid has been selected yet */
+
+  aaNum = GetValue (cbfp->aminoAcidPopup);
+  if (aaNum <= 1) {
+    SafeDisable (cbfp->acceptButton);
+    return;
+  }
+
+  /* If we made it this far then we have both a codon and */
+  /* an amino acid, so enable the accept button.          */
+ 
+  SafeEnable (cbfp->acceptButton);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* SelectAminoAcid_Callback () -- Called whenever a new amino acid is  */
+/*                                selected in the Amino Acid Popup.    */
+/*                                Toggles 'Accept' button base on      */
+/*                                current state.                       */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void SelectAminoAcid_Callback (PopuP p)
+{
+  CodeBreakFormPtr  cbfp;
+  Char              codonStr [4];
+  Int2              aaNum;
+
+  /* Get the currect code break data */
+
+  cbfp = (CodeBreakFormPtr) GetObjectExtra (p);
+  if (cbfp == NULL)
+    return;
+
+  /* Only enable the accept button if */
+  /* we have a full codon.            */
+
+  GetTitle (cbfp->codonText, codonStr, sizeof (codonStr));
+  if (StringLen (codonStr) != 3) {
+    SafeDisable (cbfp->acceptButton);
+    return;
+  }
+
+  /* Get the newly selected amino acid */
+
+  aaNum = GetValue (cbfp->aminoAcidPopup);
+
+  /* If an amino acid is selected then */
+  /* enable the accept button.         */
+
+  if (aaNum > 1)
+    SafeEnable (cbfp->acceptButton);
+  else
+    SafeDisable (cbfp->acceptButton);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AddGlobalCodeBreak () -- Gets a nucleotide triplet and an amino     */
+/*                          acid from the user and adds them as        */
+/*                          codebreaks for all CDS features.           */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+extern void AddGlobalCodeBreak (IteM i);
+extern void AddGlobalCodeBreak (IteM i)
+
+{
+  BaseFormPtr      bfp;
+  WindoW           breakWin;
+  GrouP            mainGroup;
+  GrouP            buttGroup;
+  CodeBreakFormPtr cbfp;
+
+  /* Get the current state of things */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+
+  cbfp = (CodeBreakFormPtr) MemNew (sizeof (EvidenceFormData));
+
+  /* Create a window to get the codon and */
+  /* the Amino acid from the user.        */
+
+  breakWin = FixedWindow (-50, -33, -10, -10,
+			  "Add Code Break", StdCloseWindowProc);
+  SetObjectExtra (breakWin, cbfp, StdCleanupFormProc);
+  cbfp->form = (ForM) breakWin;
+  cbfp->formmessage = NULL;
+  cbfp->input_entityID = bfp->input_entityID;
+
+  mainGroup = HiddenGroup (breakWin, -2, 0, NULL);
+
+  /* Create a text entry box for the nucl. codon */
+
+  StaticPrompt (mainGroup, "Triplet Codon", 0, popupMenuHeight,
+		programFont, 'l');
+  cbfp->codonText = DialogText (mainGroup, "", 3, CodonText_Callback);
+  SetObjectExtra (cbfp->codonText, cbfp, NULL);
+  cbfp->currentCodonStr [0] = '\0';
+
+  /* Add a Popup list of Amino Acids */
+
+  StaticPrompt (mainGroup, "Amino Acid", 0, popupMenuHeight,
+		programFont, 'l');
+  cbfp->aminoAcidPopup = PopupList (mainGroup, TRUE,
+				    SelectAminoAcid_Callback);
+  PopulateAAPopup (cbfp->aminoAcidPopup);
+  SetObjectExtra (cbfp->aminoAcidPopup, cbfp, NULL);
+
+  /* Add Accept and Cancel buttons */
+
+  buttGroup = HiddenGroup (breakWin, 2, 0, NULL);
+  cbfp->acceptButton = PushButton (buttGroup, "Accept",
+				   DoAddCodeBreak_Callback);
+  SetObjectExtra (cbfp->acceptButton, cbfp, NULL);
+  SafeDisable (cbfp->acceptButton);
+  PushButton (buttGroup, "Cancel", StdCancelButtonProc);
+
+  /* Line things up and display the window */
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) mainGroup, (HANDLE) buttGroup, NULL);
+  RealizeWindow (breakWin);
+  Show (breakWin);
+  Update ();
+
 }
 
 extern void RetranslateCdRegionsDoStop (IteM i)
@@ -3440,6 +3887,81 @@ typedef struct cka_acc {
 
 static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head);
 
+static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id)
+{
+   Boolean numeric_id_type = FALSE;
+   Int2 id_len;
+   GiimPtr gip;
+   ObjectIdPtr oip;
+   TextSeqIdPtr textsip;
+   DbtagPtr dbtag;
+   PatentSeqIdPtr psip;
+   PDBSeqIdPtr pdbsip;
+
+   *id = NULL;
+   *gi = 0;
+
+   switch (sip->choice) {
+   case SEQID_GI: case SEQID_GIBBSQ: case SEQID_GIBBMT:
+      *gi = sip->data.intvalue;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_GIIM:
+      gip = (GiimPtr) sip->data.ptrvalue;
+      *gi = gip->id;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_LOCAL:
+      oip = (ObjectIdPtr) sip->data.ptrvalue;
+
+      if (oip->str) {
+         id_len = StringLen(oip->str);
+         *id = (CharPtr) MemNew(id_len+1);
+         sprintf(*id, "%s", oip->str);
+      } else {
+         *id = (CharPtr) MemNew(6);
+         sprintf(*id, "%d", oip->id);
+      }
+      break;
+   case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: case SEQID_TPG: case SEQID_TPE: case SEQID_TPD:
+   case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF:
+   case SEQID_OTHER:
+      textsip = (TextSeqIdPtr)sip->data.ptrvalue;
+      id_len = StringLen(textsip->accession);
+      *id = (CharPtr) MemNew(id_len+1);
+      if (textsip->version > 0)
+         sprintf(*id, "%s.%d", textsip->accession, textsip->version);
+      else
+         sprintf(*id, "%s", textsip->accession);
+      break;
+   case SEQID_GENERAL:
+      dbtag = (DbtagPtr) sip->data.ptrvalue;
+      if (dbtag->tag->str == NULL) {
+         numeric_id_type = TRUE;
+         *gi = dbtag->tag->id;
+      } else {
+         id_len = StringLen(dbtag->tag->str);
+         *id = (CharPtr) MemNew(id_len+1);
+         sprintf(*id, "%s", dbtag->tag->str);
+      }
+      break;
+   case SEQID_PATENT:
+      psip = (PatentSeqIdPtr) sip->data.ptrvalue;
+      *gi = (Int4) psip->seqid;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_PDB:
+      pdbsip = (PDBSeqIdPtr) sip->data.ptrvalue;
+      id_len = StringLen(pdbsip->mol);
+      *id = (CharPtr) MemNew(id_len+4);
+      sprintf(*id, "%s%d", pdbsip->mol, pdbsip->chain);
+      break;
+   default: break;
+   }
+
+   return numeric_id_type;
+}
+
 static void CKA_FindAllTpaDescr(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
    CKA_AccPtr         acc;
@@ -3473,21 +3995,28 @@ static void CKA_FindAllTpaDescr(SeqEntryPtr sep, Pointer data, Int4 index, Int2 
                for (curr = uop->data; curr != NULL; curr = curr->next)
                {
                   if (curr->choice != 11) continue;
-                  for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next)
-                  {
-                     if (ufp->choice != 1) continue;
-                     oip = ufp->label;
-                     if (oip == NULL || StringICmp (oip->str, "accession") != 0) continue;
-                     acc = (CKA_AccPtr)MemNew(sizeof(CKA_Acc));
-                     acc->accession = StringSave((CharPtr)ufp->data.ptrvalue);
-                     acc->sip_whole = SeqIdDup(bsp->id);
-                     if (acc_prev == NULL)
-                        *acc_head = acc_prev = acc;
-                     else
-                     {
-                        acc_prev->next = acc;
-                        acc_prev = acc;
-                     }
+                  
+                  acc = (CKA_AccPtr)MemNew(sizeof(CKA_Acc));
+                  acc->sip_whole = SeqIdSetDup(bsp->id);
+                  /* will use these to mark the span for blast2seq */
+                  acc->start_acc = acc->stop_acc = -1;
+                  if (acc_prev == NULL)
+                    *acc_head = acc_prev = acc;
+                  else {
+                    acc_prev->next = acc;
+                    acc_prev = acc;
+                  }
+                  
+                  for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+                    oip = ufp->label;
+                    if (oip == NULL) continue;
+                    if (StringICmp (oip->str, "accession") == 0 && ufp->choice == 1) {
+                      acc->accession = StringSave((CharPtr)ufp->data.ptrvalue);
+                    } else if (StringICmp (oip->str, "from") == 0 && ufp->choice == 2) {
+                      acc->start_acc = (Int4) ufp->data.intvalue;
+                    } else if (StringICmp (oip->str, "to") == 0 && ufp->choice == 2) {
+                      acc->stop_acc = (Int4) ufp->data.intvalue;
+                    }
                   }
                }
             }
@@ -3503,9 +4032,13 @@ static int LIBCALLBACK CKA_SortAccs(VoidPtr ptr1, VoidPtr ptr2)
 
    acc1 = *((CKA_AccPtr PNTR)ptr1);
    acc2 = *((CKA_AccPtr PNTR)ptr2);
-   if (acc1->num < acc2->num)
+   if (acc1->start_seq < acc2->start_seq)
       return -1;
-   else if (acc1->num > acc2->num)
+   else if (acc1->start_seq > acc2->start_seq)
+      return 1;
+   else if (acc1->stop_seq < acc2->stop_seq)
+      return -1;
+   else if (acc1->stop_seq > acc2->stop_seq)
       return 1;
    else
       return 0; /* no alignment */
@@ -3516,16 +4049,23 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    CKA_AccPtr        acc;
    CKA_AccPtr        PNTR accarray;
    AMAlignIndex2Ptr  amaip;
-   Int4              first;
+   DenseSegPtr       dsp;
+   Int4              first, first_align;
    Boolean           found;
+   Int4              gi;
    Int4              i;
    Int4              j;
+   Int4              k;
    Int4              last;
+   Int4              longest;
+   Int4              max;
+   Int4              n;
    FILE              PNTR ofp;
    Int4              prev;
    Boolean           retval;
    Char              string[300];
-   Char              textid[42];
+   CharPtr           textid;
+   Char              textid2[42];
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return FALSE;
@@ -3538,14 +4078,11 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       {
          if (amaip->saps[i] == acc->sap)
             found = TRUE;
-         else
+         if (!found)
             acc = acc->next;
       }
       if (!found) /* big error */
-      {
-         Message(MSG_ERROR, "Serious error. Please contact sequindev.");
          return FALSE;
-      }
       acc->num = i+1;
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &acc->start_seq, &acc->stop_seq);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &acc->start_acc, &acc->stop_acc);
@@ -3559,6 +4096,16 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    i = 0;
    while (acc != NULL)
    {
+      if (acc->start_seq == 0 && acc->stop_seq == 0)
+      {
+         AlnMgr2GetNthSeqRangeInSA(acc->sap, 1, &acc->start_seq, &acc->stop_seq);
+         AlnMgr2GetNthSeqRangeInSA(acc->sap, 2, &acc->start_acc, &acc->stop_acc);
+         acc->strand = AlnMgr2GetNthStrand(acc->sap, 2);
+         acc->start_seq++;
+         acc->stop_seq++;
+         acc->start_acc++;
+         acc->stop_acc++;
+      }
       if (acc->num == 0)
          acc->num = amaip->numsaps; /* sort these guys all to the end */
       i++;
@@ -3574,34 +4121,56 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       acc = acc->next;
    }
    HeapSort(accarray, i, sizeof(CKA_AccPtr), CKA_SortAccs);
-   SeqIdWrite(accarray[0]->sip_whole, textid, PRINTID_TEXTID_ACC_VER, 41);
+   n=0;
+   while (accarray[n]->sap == NULL && n < i)
+   {
+      n++;
+   }
+   if (n < i)
+   {
+      dsp = (DenseSegPtr)(accarray[n]->sap->segs);
+      SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(dsp->ids), &gi, &textid);
+   } else
+      SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(accarray[0]->sip_whole), &gi, &textid);
+   if (textid == NULL)
+   {
+      sprintf(textid2, "%d", gi);
+      textid = textid2;
+   }
    first = last = -1;
    prev = -1;
    retval = TRUE;
-   for (j=0; j<i && first <=0 ; j++)
+   for (j=0; j<i /*&& first <=0*/ ; j++)
    {
       acc = accarray[j];
       if (acc->sap != NULL)
       {
-         if (first == -1)
-            first = acc->start_seq;
-         last = MAX(last, acc->stop_seq);
-      } else
-         Message (MSG_OK, "Accession %s does not align to the bioseq %s.", acc->accession, textid);
+        if (first == -1) {
+          first = acc->start_seq;
+          first_align = j;
+        }
+        last = MAX(last, acc->stop_seq);
+      } else {
+        continue;
+      }
       if (prev != -1)
       {
          if (acc->start_seq > prev + CKA_GAPLEN)
          {
-            sprintf(string, "The annotated accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but next aln is %s to %d-%d", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
-            ofp = FileOpen("cka_validate.txt", "w");
+            sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but next aln is %s to %d-%d", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
+            ofp = FileOpen("cka_validate.txt", "a");
             fprintf(ofp, "%s", string);
             FileClose(ofp);
             Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
-            MemFree(accarray);
             retval = FALSE;
          } else if (acc->start_seq > prev)
          {
-            Message(MSG_OK, "The annotated accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but the next aln is %s to %d-%d;\n the gap is less than %d and is acceptable.", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq, CKA_GAPLEN);
+            sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but the next aln is %s to %d-%d;\n the gap is less than %d and is acceptable.", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq, CKA_GAPLEN);
+            ofp = FileOpen("cka_validate.txt", "a");
+            fprintf(ofp, "%s", string);
+            FileClose(ofp);
+            Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+            retval = FALSE;
          }
       }
       prev = acc->stop_seq+1;
@@ -3610,30 +4179,36 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    {
       if (first > CKA_GAPLEN)
       {
-         sprintf(string, "The annotated accessions do not completely cover the bioseq %s:\n %s (the first aln) starts at position %d", textid, accarray[0]->accession, accarray[0]->start_seq);
-         ofp = FileOpen("cka_validate.txt", "w");
+         sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s (the first aln) starts at position %d", textid, accarray[first_align]->accession, accarray[first_align]->start_seq);
+         ofp = FileOpen("cka_validate.txt", "a");
          fprintf(ofp, "%s\n", string);
          FileClose(ofp);
          Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
          retval = FALSE;
       } else if (first != 1)
       {
-         Message(MSG_OK, "The annotated accessions do not completely cover the bioseq %s:\n %s (the first alignment) starts at position %d, but the gap is less than %d and is acceptable.", textid, accarray[0]->accession, accarray[0]->start_seq, CKA_GAPLEN);
+         Message(MSG_OK, "Primary accessions do not completely cover the bioseq %s:\n %s (the first alignment) starts at position %d, but the gap is less than %d and is acceptable.", textid, accarray[first_align]->accession, accarray[first_align]->start_seq, CKA_GAPLEN);
       }
-      if (accarray[i-1]->stop_seq < bioseqlen-CKA_GAPLEN)
+      max = 0;
+      for (k=0; k<i; k++)
       {
-         sprintf (string, "The annotated accessions do not completely cover the bioseq %s:\n %s (the last aln) goes to %d, bioseq length is %d", textid, accarray[i-1]->accession, accarray[i-1]->stop_seq, bioseqlen);
-         if (first != 0)
-            ofp = FileOpen("cka_validate.txt", "a");
-         else
-            ofp = FileOpen("cka_validate.txt", "w");
+         if (accarray[k]->stop_seq > max)
+         {
+            max = accarray[k]->stop_seq;
+            longest = k;
+         }
+      }
+      if (accarray[longest]->stop_seq < bioseqlen-CKA_GAPLEN)
+      {
+         sprintf (string, "Primary accessions do not completely cover the bioseq %s:\n %s (the last aln) goes to %d, bioseq length is %d", textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen);
+         ofp = FileOpen("cka_validate.txt", "a");
          fprintf(ofp, "%s", string);
          FileClose(ofp);
          Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
          retval = FALSE;
-      } else if (accarray[i-1]->stop_seq < bioseqlen)
+      } else if (accarray[longest]->stop_seq < bioseqlen)
       {
-         Message(MSG_OK, "The annotated accesseions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable", textid, accarray[i-1]->accession, accarray[i-1]->stop_seq, bioseqlen, CKA_GAPLEN);
+         Message(MSG_OK, "Primary accessions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable", textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen, CKA_GAPLEN);
       }
       MemFree(accarray);
    }
@@ -3641,18 +4216,117 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    return retval;
 }
 
+static void FrameVwr (
+  VieweR vwr,
+  SegmenT pict
+)
+
+{
+  RecT  r;
+
+  ResetClip ();
+  ObjectRect (vwr, &r);
+  FrameRect (&r);
+}
+
+static void CKA_ShowAln(SeqAlignPtr sap, CKA_AccPtr acc_head)
+{
+   CKA_AccPtr   acc;
+   BioseqPtr    bsp;
+   DenseSegPtr  dsp;
+   Boolean      found;
+   GrouP        g;
+   Int4         gi;
+   Int4         i;
+   Int4         len;
+   Int4         numsaps;
+   SegmenT      picture;
+   SeqAlignPtr  salp;
+   SeqIdPtr     sip;
+   Int4         start;
+   Int4         start_r;
+   Int4         stop;
+   Int4         stop_r;
+   Char         tmp[42];
+   CharPtr      textid;
+   Char         textid2[42];
+   VieweR       v;
+   WindoW       w;
+
+   w = FixedWindow(-1, -1, -1, -1, "TPA display", StdCloseWindowProc);
+   g = HiddenGroup(w, 1, 0, NULL);
+   v = CreateViewer(g, 750, 300, TRUE, TRUE);
+   picture = CreatePicture();
+   salp = (SeqAlignPtr)(sap->segs);
+   numsaps = 0;
+   while (salp != NULL)
+   {
+      numsaps++;
+      salp = salp->next;
+   }
+   salp = (SeqAlignPtr)(sap->segs);
+   numsaps++;
+   dsp = (DenseSegPtr)(salp->segs);
+   sip = dsp->ids;
+   SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(sip), &gi, &textid);
+   if (textid == NULL)
+   {
+      sprintf(textid2, "%d", gi);
+      textid = textid2;
+   }
+   bsp = BioseqLockById(sip);
+   len = bsp->length;
+   AddRectangle(picture, 0, numsaps*10, (bsp->length*680)/len, numsaps*10-7, 0, TRUE, 0);
+   sprintf(tmp, "1");
+   AddLabel(picture, 0-10, numsaps*10-3, tmp, 0, 0, MIDDLE_LEFT, 0);
+   sprintf(tmp, "%d  %s", bsp->length, textid);
+   AddLabel(picture, ((bsp->length+10)*680)/len, numsaps*10-3, tmp, 0, 0, MIDDLE_RIGHT, 0);
+   BioseqUnlock(bsp);
+   i = numsaps-1;
+   while (salp != NULL)
+   {
+      acc = acc_head;
+      found = FALSE;
+      while (acc != NULL && !found)
+      {
+         if (acc->sap == salp)
+            found = TRUE;
+         else
+            acc = acc->next;
+      }
+      AlnMgr2GetNthSeqRangeInSA(salp, 1, &start, &stop);
+      start_r = (start*680)/len;
+      stop_r = (stop*680)/len;
+      AddRectangle(picture, start_r, i*10, stop_r, i*10-7, 0, TRUE, 0);
+      dsp = (DenseSegPtr)(salp->segs);
+      sprintf(tmp, "%d", start+1);
+      AddLabel(picture, start_r-10, i*10-3, tmp, 0, 0, MIDDLE_LEFT, 0);
+      sprintf(tmp, "%d  %s", stop+1, acc->accession);
+      AddLabel(picture, stop_r+10, i*10-3, tmp, 0, 0, MIDDLE_RIGHT, 0);
+      salp = salp->next;
+      i--;
+   }
+   AttachPicture(v, picture, 0, 0, UPPER_LEFT, 1, 1, FrameVwr);
+   Show(w);
+}
+
 static void CKA_RunChecker(SeqEntryPtr sep)
 {
+   CKA_AccPtr   acc;
    CKA_AccPtr   acc_head;
    CKA_AccPtr   acc_head_next;
    CKA_AccPtr   acc_head_prev;
+   CKA_AccPtr   acc_head_real;
    CKA_AccPtr   acc_head_tmp;
    BioseqPtr    bsp;
+   DenseSegPtr  dsp;
    Boolean      found;
+   Int4         gi;
    SeqIdPtr     lastid;
    SeqAlignPtr  sap;
    SeqHistPtr   shp;
-   Char         textid[42];
+   CharPtr      textid;
+   Char         textid2[42];
 
    if (sep == NULL)
    {
@@ -3667,8 +4341,7 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       Message(MSG_ERROR, "No Tpa features found in SeqEntry.");
       return;
    }
-   acc_head_tmp = acc_head;
-   acc_head_prev = NULL;
+   acc_head_real = acc_head;
    while (acc_head != NULL)
    {
       lastid = acc_head->sip_whole;
@@ -3691,37 +4364,79 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       if (ISA_na(bsp->mol))
       {
          sap = CKA_MakeAlign(bsp, acc_head);
-         SeqIdWrite(bsp->id, textid, PRINTID_TEXTID_ACC_VER, 41);
-         if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length))
-            Message(MSG_OK, "Alignments were successfully created and are being added to %s.", textid);
-         else
-            Message(MSG_OK, "Alignments were created but are not valid. They are being added to %s for review.", textid);
-         /* make seq-hist and add it to record */
-         if (bsp->hist != NULL)
+         acc = acc_head;
+         while (acc != NULL && acc->sap == NULL)
          {
-            shp = bsp->hist;
-            if (shp->assembly != NULL)
-               SeqAlignSetFree(shp->assembly);
-            shp->assembly = sap;
-         } else
-         {
-            shp = SeqHistNew();
-            shp->assembly = sap;
-            bsp->hist = shp;
+            acc = acc->next;
          }
-      } else
-         Message(MSG_ERROR, "%s is annotated on a non-nucleotide bioseq.", acc_head->accession);
-      while (acc_head != NULL)
-      {
-         acc_head_tmp = acc_head->next;
-         acc_head->next = NULL;
-         MemFree(acc_head->accession);
-         SeqIdFree(acc_head->sip_whole);
-         MemFree(acc_head);
-         acc_head = acc_head_tmp;
-      }
-      acc_head = acc_head_next;
-   }
+         if (acc != NULL)
+         {
+            dsp = (DenseSegPtr)(acc->sap->segs);
+            SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(dsp->ids), &gi, &textid);
+         } else
+            SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(acc_head->sip_whole), &gi, &textid);
+         if (textid == NULL)
+         {
+            sprintf(textid2, "%d", gi);
+            textid = textid2;
+         }
+
+         /* report each accession that does not align to the bioseq */
+         acc = acc_head;
+         while (acc != NULL) {
+           if (acc->sap == NULL) {
+             Message (MSG_OK, "Accession %s does not align to the bioseq %s.", acc->accession, textid);
+           }
+           acc = acc->next;
+         }
+
+	 if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length))
+	    Message(MSG_OK, "Alignments were successfully created and are being added to %s.", textid);
+	 else if (sap != NULL)
+	    Message(MSG_OK, "Alignments were created but are not valid. They are being added to %s for review.", textid);
+         else if (sap == NULL) {
+            Message(MSG_ERROR, "No alignments could be created for %s.", textid);
+            return;
+         }
+         AlnMgr2IndexLite(sap);
+         AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+	 /* make seq-hist and add it to record */
+	 if (bsp->hist != NULL)
+	 {
+	    shp = bsp->hist;
+	    if (shp->assembly != NULL)
+	       SeqAlignSetFree(shp->assembly);
+	    shp->assembly = (SeqAlignPtr)(sap->segs);
+	 } else
+	 {
+	    shp = SeqHistNew();
+	    shp->assembly = (SeqAlignPtr)(sap->segs);
+	    bsp->hist = shp;
+	 }
+         sap->segs = NULL;
+         SeqAlignFree(sap);
+	     } else
+	 Message(MSG_ERROR, "%s is annotated on a non-nucleotide bioseq.", acc_head->accession);
+    /* while (acc_head != NULL)
+     {
+        acc_head_tmp = acc_head->next;
+        acc_head->next = NULL;
+        MemFree(acc_head->accession);
+        SeqIdFree(acc_head->sip_whole);
+        MemFree(acc_head);
+        acc_head = acc_head_tmp;
+     }*/
+     acc_head = acc_head_next;
+  }
+  /*CKA_ShowAln(sap, acc_head_real);*/
+  while (acc_head_real != NULL)
+  {
+     acc_head_tmp = acc_head_real->next;
+     MemFree(acc_head_real->accession);
+     SeqIdFree(acc_head_real->sip_whole);
+     MemFree(acc_head_real);
+     acc_head_real = acc_head_tmp;
+  }
 }
 
 static void CKA_FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
@@ -3760,17 +4475,261 @@ static int LIBCALLBACK CKA_CompareAlns(VoidPtr ptr1, VoidPtr ptr2)
    return 0;
 }
 
+static void amconssetfree(AMConsSetPtr acp)
+{
+   AMConsSetPtr  acp_next;
+
+   while (acp != NULL)
+   {
+      acp_next = acp->next;
+      MemFree(acp->starts);
+      MemFree(acp->stops);
+      MemFree(acp->strands);
+      MemFree(acp);
+      acp = acp_next;
+   }
+}
+
+static int LIBCALLBACK CKA_SortForConsistent(VoidPtr ptr1, VoidPtr ptr2)
+{
+   AMConsSetPtr  acp1;
+   AMConsSetPtr  acp2;
+   FloatHi       bitscore;
+   FloatHi       evalue;
+   Int4          number;
+   SAIndex2Ptr   saip1;
+   SAIndex2Ptr   saip2;
+
+   acp1 = *((AMConsSetPtr PNTR)ptr1);
+   acp2 = *((AMConsSetPtr PNTR)ptr2);
+   saip1 = (SAIndex2Ptr)(acp1->sap->saip);
+   saip2 = (SAIndex2Ptr)(acp2->sap->saip);
+   if (saip1->score == 0)
+      GetScoreAndEvalue(acp1->sap, &saip1->score, &bitscore, &evalue, &number);
+   if (saip2->score == 0)
+      GetScoreAndEvalue(acp2->sap, &saip2->score, &bitscore, &evalue, &number);
+   if (saip1->score > saip2->score)
+      return -1;
+   else if (saip1->score < saip2->score)
+      return 1;
+   else
+      return 0;
+}
+
+static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
+{
+   AMConsSetPtr  acp;
+   AMConsSetPtr  acp_head;
+   AMConsSetPtr  acp_prev;
+   AMConsSetPtr  PNTR acparray;
+   DenseSegPtr   dsp;
+   Int4          i;
+   Int4          j;
+   Int4          k;
+   Int4          lfuzz;
+   SeqAlignPtr   newsap;
+   Int4          numrows;
+   Int4          numsaps;
+   Int4          orientation;
+   Int4          row;
+   SAIndex2Ptr   saip;
+   SeqAlignPtr   salp_head;
+   SeqAlignPtr   salp_prev;
+   SeqAlignPtr   sap;
+   SeqAlignPtr   sapnext;
+   Int4          score;
+   SeqIdPtr      sip;
+   SeqIdPtr      sip_head;
+   Uint1         strand;
+
+   lfuzz = fuzz;
+   if (fuzz < 0)
+      fuzz = 1;
+   sap = (SeqAlignPtr)(sap_head->segs);
+   if (sap->next == NULL)
+      return;
+   dsp = (DenseSegPtr)(sap->segs);
+   sip_head = dsp->ids;
+   numrows = AlnMgr2GetNumRows(sap);
+   acp_head = NULL;
+   strand = AlnMgr2GetNthStrand(sap, 1);
+   numsaps = 0;
+   while (sap != NULL)
+   {
+      if (AlnMgr2GetNumRows(sap) != numrows)
+      {
+         amconssetfree(acp_head);
+         return;
+      }
+      numsaps++;
+      acp = (AMConsSetPtr)MemNew(sizeof(AMConsSet));
+      acp->starts = (Int4Ptr)MemNew(numrows*sizeof(Int4));
+      acp->stops = (Int4Ptr)MemNew(numrows*sizeof(Int4));
+      acp->strands = (Uint1Ptr)MemNew(numrows*sizeof(Uint1));
+      acp->which = (Int4Ptr)MemNew(numrows*sizeof(Int4));
+      acp->sap = sap;
+      if (acp_head != NULL)
+      {
+         acp_prev->next = acp;
+         acp_prev = acp;
+      } else
+         acp_head = acp_prev = acp;
+      sip = sip_head;
+      row = AlnMgr2GetFirstNForSip(sap, sip);
+      if (row <= 0)
+      {
+         amconssetfree(acp_head);
+         return;
+      }
+      if (acp->strands[row] != strand)
+      {
+         sapnext = acp->sap->next;
+         acp->sap->next = NULL;
+         score = ((SAIndex2Ptr)(acp->sap->saip))->score;
+         SeqAlignListReverseStrand(acp->sap);
+         AMAlignIndexFreeEitherIndex(acp->sap);
+         AlnMgr2IndexSingleChildSeqAlign(acp->sap);
+         saip = (SAIndex2Ptr)(acp->sap->saip);
+         saip->score = score;
+         acp->strands[row] = strand;
+         acp->sap->next = sapnext;
+      }
+      for (i=0; i<numrows; i++)
+      {
+         acp->which[i] = row;
+         AlnMgr2GetNthSeqRangeInSA(sap, i+1, &acp->starts[i], &acp->stops[i]);
+         acp->strands[i] = AlnMgr2GetNthStrand(sap, i+1);
+      }
+      sap = sap->next;
+   }
+   acparray = (AMConsSetPtr PNTR)MemNew(numsaps*sizeof(AMConsSetPtr));
+   acp = acp_head;
+   i = 0;
+   while (acp != NULL)
+   {
+      acparray[i] = acp;
+      acp = acp->next;
+      i++;
+   }
+   HeapSort(acparray, numsaps, sizeof(AMConsSetPtr), CKA_SortForConsistent);
+   /* orientation -1 means that ith is before jth in ALL rows, 1 means ith is after jth in ALL rows */
+   for (i=0; i<numsaps; i++)
+   {
+      if (acparray[i]->used != -1)
+      {
+         for (j=i+1; j<numsaps; j++)
+         {
+            orientation = 0;
+            for (k=0; acparray[j]->used != -1 && k<numrows; k++)
+            {
+               if (acparray[i]->starts[k] - fuzz < acparray[j]->starts[k])
+               {
+                  if (acparray[i]->stops[k] - fuzz < acparray[j]->starts[k])
+                  {
+                     if (orientation == 0)
+                     {
+                        if (acparray[i]->strands[k] == Seq_strand_minus)
+                           orientation = 1;
+                        else
+                           orientation = -1;
+                     }
+                  } else
+                  {
+                     if (lfuzz >= 0) /* just mark it for deletion */
+                        acparray[j]->used = -1;
+                     else /* truncate it */
+                     {
+                        if (acparray[j]->stops[k] > acparray[i]->stops[k])
+                        {
+                           newsap = AlnMgr2GetSubAlign(acparray[j]->sap, acparray[i]->stops[k]+1,
+ acparray[j]->stops[k], k+1, TRUE);
+                           SeqAlignFree(acparray[j]->sap);
+                           acparray[j]->sap = newsap;
+                           acparray[j]->starts[k] = acparray[i]->stops[k]+1;
+                        } else
+                           acparray[j]->used = -1;
+                     }
+                  }
+               } else if (acparray[i]->starts[k] - fuzz > acparray[j]->starts[k])
+               {
+                 if (acparray[i]->starts[k] + fuzz > acparray[j]->stops[k])
+                  {
+                     if (orientation == 0)
+                     {
+                        if (acparray[i]->strands[k] == Seq_strand_minus)
+                           orientation = -1;
+                        else
+                           orientation = 1;
+                     }
+                  } else
+                  {
+                     if (lfuzz >= 0) /* mark for deletion */
+                        acparray[j]->used = -1;
+                     else /* truncate */
+                     {
+                        if (acparray[j]->starts[k] < acparray[i]->starts[k])
+                        {
+                           newsap = AlnMgr2GetSubAlign(acparray[j]->sap, acparray[j]->starts[k], acparray[i]->starts[k]-1, k+1, TRUE);
+                           SeqAlignFree(acparray[j]->sap);
+                           acparray[j]->sap = newsap;
+                           AlnMgr2IndexSingleChildSeqAlign(newsap);
+                           acparray[j]->starts[k] = acparray[i]->stops[k]+1;
+                        } else
+                           acparray[j]->used = -1;
+                     }
+                  }
+               } else
+                  acparray[j]->used = -1;
+            }
+         }
+      }
+   }
+   /* now free all the unused ones, stick the rest back together, reindex, and return */
+   salp_head = salp_prev = NULL;
+   for (i=0; i<numsaps; i++)
+   {
+      if (acparray[i]->used == -1)
+      {
+         SeqAlignFree(acparray[i]->sap);
+         acparray[i]->sap = NULL;
+      } else
+      {
+         if (salp_head != NULL)
+         {
+            salp_prev->next = acparray[i]->sap;
+            salp_prev = acparray[i]->sap;
+            salp_prev->next = NULL;
+         } else
+         {
+            salp_head = salp_prev = acparray[i]->sap;
+            salp_prev->next = NULL;
+         }
+      }
+   }
+   amconssetfree(acp_head);
+   MemFree(acparray);
+   sap_head->segs = (Pointer)(salp_head);
+   AMAlignIndex2Free2(sap_head->saip);
+   AlnMgr2IndexLite(sap_head);
+}
+
+
 static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
 {
    CKA_AccPtr           acc;
+   CKA_AccPtr           acc_new;
+   CKA_AccPtr           acc_new_head_head;
+   CKA_AccPtr           acc_new_head;
+   CKA_AccPtr           acc_new_prev;
    SeqAlignPtr          allsap;
    SeqAlignPtr          allsap_prev;
    AMAlignIndex2Ptr     amaip;
    BioseqPtr            bsp_tmp;
    Int4                 i;
    BLAST_OptionsBlkPtr  options;
-   SeqAlignPtr          salp;
    SeqAlignPtr          sap_new;
+   SeqAlignPtr          sap_tmp;
+   SeqAlignPtr          sap_tmp_next;
    SeqIdPtr             sip;
    Uint1                strand;
 
@@ -3779,41 +4738,90 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    acc = acc_head;
    allsap = NULL;
    allsap_prev = NULL;
+   acc_new_head_head = acc_new_prev = NULL;
    while (acc != NULL)
    {
       options = BLASTOptionNew("blastn", TRUE);
       if (bsp->length > 10000)
       {
-   /* faster with no filtering */
+/*    faster with no filtering */
          options->is_megablast_search = TRUE;
          options->gap_open = options->gap_extend = 0;
-         options->wordsize = 32;
-      } else
-         options->filter_string = StringSave("m L;R");
+         options->wordsize = 100;
+      }/* else
+         options->filter_string = StringSave("m L;R");*/
+      options->expect_value = 0.000001;
       sip = SeqIdFromAccessionDotVersion(acc->accession);
       bsp_tmp = BioseqLockById(sip);
+      if (bsp_tmp->id->next) {
+        /* find the best accession */
+        SeqIdPtr sip = SeqIdDup(SeqIdFindBestAccession(bsp_tmp->id));
+        bsp_tmp->id = SeqIdSetFree(bsp_tmp->id);
+        bsp_tmp->id = sip;
+      }
       if (!ISA_na(bsp_tmp->mol))
       {
          BioseqUnlock(bsp_tmp);
          Message(MSG_ERROR, "%s is not a nucleotide bioseq.", acc->accession);
          break;
       }
-      acc->sap = BlastTwoSequences(bsp_tmp, bsp, "blastn", options);
+      WatchCursor();
+      if (acc->start_acc >=0 && acc->stop_acc >=0 &&
+          acc->start_acc < bsp_tmp->length &&
+          acc->start_acc < bsp_tmp->length) {
+        SeqLocPtr slp1, slp2;
+        if (acc->start_acc <= acc->stop_acc) {
+          slp1 = SeqLocIntNew
+            (acc->start_acc, acc->stop_acc, Seq_strand_plus, bsp_tmp->id);
+        } else {
+          slp1 = SeqLocIntNew
+            (acc->stop_acc, acc->start_acc, Seq_strand_minus, bsp_tmp->id);
+        }
+        slp2 = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
+        acc->sap = BlastTwoSequencesByLoc(slp1, slp2, "blastn", options);
+        SeqLocFree(slp1);
+        SeqLocFree(slp2);
+      } else {
+        acc->sap = BlastTwoSequences(bsp_tmp, bsp, "blastn", options);
+      }
+      BLASTOptionDelete(options);
+      ArrowCursor();
+      acc->start_acc = acc->stop_acc = 0; /* reset, for later usage */
       if (acc->sap != NULL)
          SPI_flip_sa_list(acc->sap);
+      acc_new_head = NULL;
       if (acc->sap != NULL && acc->sap->next != NULL)
       {
          AlnMgr2IndexLite(acc->sap);
-         amaip = (AMAlignIndex2Ptr)(acc->sap->saip);
-         HeapSort(amaip->saps, amaip->numsaps, sizeof(SeqAlignPtr), CKA_CompareAlns);
-         salp = (amaip->saps[0]);
-         sap_new = SeqAlignDup(salp);
-         SeqAlignSetFree(acc->sap);
-         acc->sap = sap_new;
-      }
+         CKA_RemoveInconsistentAlnsFromSet(acc->sap, 10);
+         sap_tmp = acc->sap;
+         acc->sap = (SeqAlignPtr)(acc->sap->segs);
+         sap_tmp->segs = NULL;
+         SeqAlignFree(sap_tmp);
+         sap_tmp = acc->sap->next;
+         acc->sap->next = NULL;
+         while (sap_tmp != NULL)
+         {
+            AlnMgr2IndexSingleChildSeqAlign(sap_tmp);
+            sap_tmp_next = sap_tmp->next;
+            sap_tmp->next = NULL;
+            acc_new = (CKA_AccPtr)MemNew(sizeof(CKA_Acc));
+            acc_new->accession = StringSave(acc->accession);
+            acc_new->sip_whole = SeqIdDup(acc->sip_whole);
+            acc_new->sap = sap_tmp;
+            sap_tmp = sap_tmp_next;
+            if (!acc_new_head) {
+              acc_new_head = acc_new;
+            }
+            if (acc_new_prev) {
+              acc_new_prev->next = acc_new;
+            }
+            acc_new_prev = acc_new;
+         }
+      } else if (acc->sap != NULL)
+         AlnMgr2IndexSingleChildSeqAlign(acc->sap);
       if (acc->sap != NULL)
       {
-         AlnMgr2IndexSingleChildSeqAlign(acc->sap);
          strand = AlnMgr2GetNthStrand(acc->sap, 1);
          if (strand == Seq_strand_minus)
          {
@@ -3821,17 +4829,50 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
             SAIndex2Free2(acc->sap->saip);
             acc->sap->saip = NULL;
          }
-         if (allsap != NULL && acc->sap != NULL)
-         {
-            allsap_prev->next = acc->sap;
-            allsap_prev = allsap_prev->next;;
-         } else if (acc->sap != NULL)
-            allsap_prev = allsap = (acc->sap);
       }
+      if (allsap != NULL && acc->sap != NULL)
+      {
+         allsap_prev->next = acc->sap;
+         allsap_prev = allsap_prev->next;;
+      } else if (acc->sap != NULL)
+         allsap_prev = allsap = (acc->sap);
+      acc_new = acc_new_head;
+      while (acc_new != NULL)
+      {
+         strand = AlnMgr2GetNthStrand(acc_new->sap, 1);
+         if (strand == Seq_strand_minus)
+         {
+            SeqAlignListReverseStrand(acc_new->sap);
+            SAIndex2Free2(acc_new->sap->saip);
+            acc_new->sap->saip = NULL;
+         }
+         if (allsap != NULL)
+         {
+            allsap_prev->next = acc_new->sap;
+            allsap_prev = allsap_prev->next;;
+         } else
+            allsap_prev = allsap = acc_new->sap;
+         acc_new = acc_new->next;
+      }
+      if (allsap_prev != NULL)
+      {
+         while (allsap_prev->next != NULL)
+         {
+            allsap_prev = allsap_prev->next;
+         }
+      }  
       BioseqUnlock(bsp_tmp);
       acc = acc->next;
-      BLASTOptionDelete(options);
+      if (!acc_new_head_head) {
+        acc_new_head_head = acc_new_head;
+      }
    }
+   acc = acc_head;
+   while (acc->next != NULL)
+   {
+      acc = acc->next;
+   }
+   acc->next = acc_new_head_head;
    if (allsap == NULL)
       return NULL;
    sap_new = SeqAlignNew();
@@ -3888,10 +4929,14 @@ static void UserObjectPtrToAssemblyDialog (DialoG d, Pointer data)
 
 {
   AssemblyUserDialogPtr  adp;
+  Char                   buf [16];
   UserFieldPtr           curr;
+  Int4                   from;
   ValNodePtr             head = NULL;
   ObjectIdPtr            oip;
   CharPtr                str;
+  CharPtr                tmp;
+  Int4                   to;
   UserFieldPtr           ufp;
   UserObjectPtr          uop;
 
@@ -3906,18 +4951,73 @@ static void UserObjectPtrToAssemblyDialog (DialoG d, Pointer data)
 
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     if (curr->choice != 11) continue;
+    str = NULL;
+    from = 0;
+    to = 0;
     for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
-      if (ufp->choice != 1) continue;
       oip = ufp->label;
-      if (oip == NULL || StringICmp (oip->str, "accession") != 0) continue;
-      str = (CharPtr) ufp->data.ptrvalue;
-      if (StringHasNoText (str)) continue;
-      ValNodeCopyStr (&head, 0, (Pointer) str);
+      if (oip == NULL) continue;
+      if (StringICmp (oip->str, "accession") == 0 && ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+      } else if (StringICmp (oip->str, "from") == 0 && ufp->choice == 2) {
+        from = (Int4) ufp->data.intvalue;
+      } else if (StringICmp (oip->str, "to") == 0 && ufp->choice == 2) {
+        to = (Int4) ufp->data.intvalue;
+      }
     }
+    if (StringHasNoText (str)) continue;
+    tmp = MemNew (StringLen (str) + 32);
+    StringCpy (tmp, str);
+    StringCat (tmp, "\t");
+    if (from > 0 || to > 0) {
+      sprintf (buf, "%ld", (long) (from + 1));
+      StringCat (tmp, buf);
+      StringCat (tmp, "\t");
+      sprintf (buf, "%ld", (long) (to + 1));
+      StringCat (tmp, buf);
+      StringCat (tmp, "\t");
+    } else {
+      StringCat (tmp, "\t\t");
+    }
+    ValNodeAddStr (&head, 0, (Pointer) tmp);
   }
 
   PointerToDialog (adp->accns, (Pointer) head);
   ValNodeFreeData (head);
+}
+
+static void DoAddAccessionToTpa (UserObjectPtr uop, CharPtr last)
+
+{
+  Int4      from = 0;
+  CharPtr   ptr1, ptr2, ptr3;
+  Int4      to = 0;
+  long int  val;
+
+  ptr1 = StringChr (last, '\t');
+  if (ptr1 != NULL) {
+    *ptr1 = '\0';
+    ptr1++;
+    ptr2 = StringChr (ptr1, '\t');
+    if (ptr2 != NULL) {
+      *ptr2 = '\0';
+      ptr2++;
+      ptr3 = StringChr (ptr2, '\t');
+      if (ptr3 != NULL) {
+        *ptr3 = '\0';
+      }
+    }
+    if (sscanf (ptr1, "%ld", &val) == 1 && val > 0) {
+      from = val - 1;
+      if (sscanf (ptr2, "%ld", &val) == 1 && val > 0) {
+        to = val - 1;
+      } else {
+        from = 0;
+        to = 0;
+      }
+    }
+  }
+  AddAccessionToTpaAssemblyUserObject (uop, last, from, to);
 }
 
 static Pointer AssemblyDialogToUserObjectPtr (DialoG d)
@@ -3950,10 +5050,10 @@ static Pointer AssemblyDialogToUserObjectPtr (DialoG d)
     ptr = last;
     ch = *ptr;
     while (ch != '\0') {
-      if (ch == ',') {
+      if (ch == ',' || ch == ' ') {
         *ptr = '\0';
         TrimSpacesAroundString (last);
-        AddAccessionToTpaAssemblyUserObject (uop, last);
+        DoAddAccessionToTpa (uop, last);
         ptr++;
         last = ptr;
         ch = *ptr;
@@ -3964,9 +5064,8 @@ static Pointer AssemblyDialogToUserObjectPtr (DialoG d)
     }
     if (! StringHasNoText (last)) {
       TrimSpacesAroundString (last);
-      AddAccessionToTpaAssemblyUserObject (uop, last);
+      DoAddAccessionToTpa (uop, last);
     }
-    /* AddAccessionToTpaAssemblyUserObject (uop, str); */
     MemFree (tmp);
   }
 
@@ -3975,12 +5074,103 @@ static Pointer AssemblyDialogToUserObjectPtr (DialoG d)
   return uop;
 }
 
+static void ValNodePtrToAssemblyDialog (DialoG d, Pointer data)
+
+{
+  ValNodePtr   head;
+  Int2         j;
+  ValNodePtr   list;
+  CharPtr      str;
+  TagListPtr   tlp;
+  ValNodePtr   vnp;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  list = (ValNodePtr) data;
+  if (tlp != NULL) {
+    head = NULL;
+    while (list != NULL) {
+      vnp = ValNodeNew (head);
+      if (head == NULL) {
+        head = vnp;
+      }
+      if (vnp != NULL) {
+        str = MemNew (StringLen ((CharPtr) list->data.ptrvalue) + 3);
+        if (str != NULL) {
+          StringCpy (str, (CharPtr) list->data.ptrvalue);
+          StringCat (str, "\n");
+        }
+        vnp->data.ptrvalue = str;
+      }
+      list = list->next;
+    }
+    SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+    tlp->vnp = head;
+    SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+    for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
+    }
+    tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
+    CorrectBarMax (tlp->bar, tlp->max);
+    CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  }
+}
+
+static Pointer AssemblyDialogToValNodePtr (DialoG d)
+
+{
+  Char         ch;
+  ValNodePtr   head;
+  Int2         j;
+  Int2         len;
+  ValNodePtr   list;
+  Boolean      okay;
+  CharPtr      str;
+  TagListPtr   tlp;
+  ValNodePtr   vnp;
+
+  head = NULL;
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp != NULL && tlp->vnp != NULL) {
+    list = NULL;
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      okay = FALSE;
+      len = StringLen (str);
+      for (j = 0; j < len; j++) {
+        ch = str [j];
+        if (ch != ' ' && ch != '\t' && ch != '\n') {
+          okay = TRUE;
+        }
+      }
+      if (okay) {
+        list = ValNodeNew (list);
+        if (head == NULL) {
+          head = list;
+        }
+        if (list != NULL) {
+          list->choice = 0;
+          list->data.ptrvalue = StringSave ((CharPtr) vnp->data.ptrvalue);
+        }
+      }
+    }
+  }
+  return (Pointer) head;
+}
+
+Uint2 assmbly_types [] = {
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT
+};
+
+Uint2 assmbly_widths [] = {
+  16, 8, 8, 0
+};
+
 static DialoG CreateAssemblyDialog (GrouP g)
 
 {
   AssemblyUserDialogPtr  adp;
   GrouP                  p;
   GrouP                  x;
+  GrouP                  y;
 
   p = HiddenGroup (g, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -3994,8 +5184,14 @@ static DialoG CreateAssemblyDialog (GrouP g)
   adp->fromdialog = AssemblyDialogToUserObjectPtr;
 
   x = HiddenGroup (p, 0, 2, NULL);
-  StaticPrompt (x, "Accessions", 0, 0, programFont, 'c');
-  adp->accns = CreateVisibleStringDialog (x, 3, -1, 15);
+  y = HiddenGroup (x, 3, 0, NULL);
+  StaticPrompt (y, "Accessions", 16 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "From", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "To", 8 * stdCharWidth, 0, programFont, 'c');
+  adp->accns = CreateTagListDialog (x, 3, 3, -1,
+                                    assmbly_types, assmbly_widths, NULL,
+                                    ValNodePtrToAssemblyDialog,
+                                    AssemblyDialogToValNodePtr);
 
   return (DialoG) p;
 }
@@ -4586,6 +5782,7 @@ typedef struct deffeats {
   Uint2       entityID;
   Uint2       itemID;
   Uint2       subtype;
+  Boolean     isAlleleGroup;
   Boolean     lastInString;
   Boolean     lastInGroup;
   Boolean     lastInType;
@@ -4913,7 +6110,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
 
     ssp = biop->subtype;
     while (ssp != NULL) {
-      if (ssp->subtype < 29 && subsource_rank [ssp->subtype] > 0) {
+      if (ssp->subtype < 29 && subsource_rank [ssp->subtype] > 0 && ssp->subtype != SUBSRC_transgenic) {
         text [0] = '\0';
         str [0] = '\0';
         StringNCpy_0 (text, ssp->name, sizeof (text));
@@ -5012,19 +6209,292 @@ static CharPtr organelleByPopup [] = {
   NULL
 };
 
-static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
-                               ValNodePtr head, BioseqPtr target,
-                               SeqEntryPtr nsep, MolInfoPtr mip,
-                               ValNodePtr strings, BioSourcePtr biop,
-                               Int2 mitochloroflag)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddProtein () -- Add a protein feature to a defline.        */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddProtein (DefFeatsPtr dfp,
+				MolInfoPtr  mip,
+				CharPtr     str,
+				Int2        featNum)
+{
+  Char    text [64];
+  CharPtr ptr;
+
+  /* If we're suppressing the prefix then */
+  /* skip all the rest.                   */
+
+  if (dfp->suppressprefix) {
+    str [0] = '\0';
+    if (dfp->sfp->partial) {
+      StringCat (str, "partial cds");
+    }
+    else {
+      StringCat (str, "complete cds");
+    }
+
+    if (dfp->altSplices > 1) {
+      StringCat (str, ", alternatively spliced");
+    }
+
+    return;
+  }
+
+  /* If we have no protein name, we're done */
+
+  if (dfp->protname == NULL)
+    return;
+
+  /* Add the protein name and, if there */
+  /* is one, the gene name.             */
+
+  if (StringICmp (dfp->protname, "unknown") == 0 &&
+      !(StringHasNoText (dfp->genename))) {
+    StringNCpy_0 (text, dfp->genename, sizeof (text));
+    StringCat (str, text);
+  }
+  else {
+    StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+    if (dfp->genename != NULL) {
+      StringNCpy_0 (text, dfp->genename, sizeof (text));
+      if (! StringHasNoText (text)) {
+	StringCat (str, " (");
+	StringCat (str, text);
+	StringCat (str, ")");
+      }
+    }
+  }
+
+  if (dfp->lastInGroup || dfp->lastInType) {
+
+    if (mip != NULL) {
+      ptr = StringISearch (str, "precursor");
+      if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
+	StringCat (str, ",");
+      }
+      if (mip->biomol == MOLECULE_TYPE_MRNA) {
+	StringCat (str, " mRNA");
+      } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+	StringCat (str, " precursor RNA");
+      } else {
+	StringCat (str, " gene");
+      }
+    }
+
+    if (featNum > 1)
+      StringCat (str, "s");
+    else if (! StringHasNoText (dfp->allelename)) {
+      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringCat (str, ", ");
+      StringCat (str, text);
+      StringCat (str, " allele");
+    }
+
+    if (dfp->altSplices > 1)
+      StringCat (str, ", alternatively spliced");
+
+  }
+
+  if ((dfp->lastInGroup && !dfp->isAlleleGroup) || dfp->lastInType)
+    if (dfp->sfp->partial)
+      StringCat (str, ", partial cds");
+    else 
+      StringCat (str, ", complete cds");
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddPseudoGene () -- Add a pseudogene feature to a defline.  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddPseudoGene (DefFeatsPtr dfp,
+				   CharPtr     str,
+				   Int2        featNum,
+				   CharPtr     text)
+{
+  if (dfp->genename != NULL)
+    StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+
+  if (dfp->lastInGroup || dfp->lastInType) {
+    StringCat (str, " pseudogene");
+    if (featNum > 1) {
+      StringCat (str, "s");
+    }
+    if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
+      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringCat (str, ", ");
+      StringCat (str, text);
+      StringCat (str, " allele");
+    }
+    if (dfp->sfp->partial) {
+      StringCat (str, ", partial sequence");
+    } else {
+      StringCat (str, ", complete sequence");
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddExon () -- Add an exon feature to a defline.             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddExon (DefFeatsPtr dfp,
+			     CharPtr     str,
+			     CharPtr     text,
+			     ValNodePtr  vnp,
+			     SeqFeatPtr  sfp)
+{
+  CharPtr       exonnumber;
+
+  /* If there is a protein name then use it*/
+
+  if (dfp->protname != NULL) {
+    str [0] = '\0';
+
+    /* Add the protein name and, if there */
+    /* is one, the gene name.             */
+
+    if (! dfp->suppressprefix) {
+      StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+      if (dfp->genename != NULL) {
+	StringNCpy_0 (text, dfp->genename, sizeof (text));
+	if (! StringHasNoText (text)) {
+	  StringCat (str, " (");
+	  StringCat (str, text);
+	  StringCat (str, ") gene,");
+	  if (! StringHasNoText (dfp->allelename)) {
+	    StringNCpy_0 (text, dfp->allelename, sizeof (text));
+	    StringCat (str, " ");
+	    StringCat (str, text);
+	    StringCat (str, " allele,");
+	  }
+	}
+      }
+    }
+
+    /* Add the exon number */
+
+    if ((! StringHasNoText (str)) || dfp->suppressprefix) {
+      exonnumber = GetExonNumber (sfp->qual);
+      if (! dfp->suppressprefix) {
+	if (exonnumber == NULL) {
+	  if (StringStr (sfp->comment, "exon") != NULL &&
+	      (! NextIsExon (vnp))) {
+	  } else {
+	    StringCat (str, " exon");
+	    if (NextIsExon (vnp)) {
+	      StringCat (str, "s");
+	    }
+	  }
+	} else {
+	  StringCat (str, " exon");
+	  if (NextIsExon (vnp)) {
+	    StringCat (str, "s");
+	  }
+	}
+      }
+      if (exonnumber != NULL) {
+	if (! dfp->suppressprefix) {
+	  StringCat (str, " ");
+	}
+	StringCat (str, exonnumber);
+      } else {
+	if (! StringHasNoText (sfp->comment)) {
+	  if (! dfp->suppressprefix) {
+	    StringCat (str, " ");
+	  }
+	  StringCat (str, sfp->comment);
+	}
+      }
+    }
+  }
+
+  /* Else use the gene name if there is one */
+
+  else if (dfp->genename != NULL) {
+    str [0] = '\0';
+
+    /* Add the gene name */
+
+    if (! dfp->suppressprefix) {
+      StringNCpy_0 (str, dfp->genename, sizeof (str));
+      StringCat (str, " gene,");
+    }
+
+    /* Add the exon number */
+
+    if ((! StringHasNoText (str)) || dfp->suppressprefix) {
+      exonnumber = GetExonNumber (sfp->qual);
+      if (! dfp->suppressprefix) {
+	if (exonnumber == NULL) {
+	  if (StringStr (sfp->comment, "exon") != NULL &&
+	      (! NextIsExon (vnp))) {
+	  } else {
+	    StringCat (str, " exon");
+	    if (NextIsExon (vnp)) {
+	      StringCat (str, "s");
+	    }
+	  }
+	} else {
+	  StringCat (str, " exon");
+	  if (NextIsExon (vnp)) {
+	    StringCat (str, "s");
+	  }
+	}
+      }
+      if (exonnumber != NULL) {
+	if (! dfp->suppressprefix) {
+	  StringCat (str, " ");
+	}
+	StringCat (str, exonnumber);
+      } else {
+	if (! StringHasNoText (sfp->comment)) {
+	  if (! dfp->suppressprefix) {
+	    StringCat (str, " ");
+	  }
+	  StringCat (str, sfp->comment);
+	}
+      }
+    }
+  }
+
+  /* Otherwise, label it as uncharacterized */
+
+  else {
+    StringCpy (str, "uncharacterized exon");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* FinishAutoDefProc () -- Finish the automatic generation of a        */
+/*                         definition line that was started in         */
+/*                         AutoDefProc ().                             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void FinishAutoDefProc (Uint2        entityID,
+			       SeqEntryPtr  sep,
+                               ValNodePtr   head,
+			       BioseqPtr    target,
+                               SeqEntryPtr  nsep,
+			       MolInfoPtr   mip,
+                               ValNodePtr   strings,
+			       BioSourcePtr biop,
+                               Int2         mitochloroflag)
 
 {
   Int2          count;
   Boolean       ddbjstyle = FALSE;
   DefFeatsPtr   dfp;
-  CharPtr       exonnumber;
   Int2          mitocount;
   DefFeatsPtr   nextdfp;
+  Char          orgnelle [80];
   CharPtr       ptr;
   RnaRefPtr     rrp;
   SeqFeatPtr    sfp;
@@ -5032,14 +6502,18 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
   tRNAPtr       trna;
   ValNodePtr    ttl;
   Char          text [64];
-  Char          orgnelle [80];
   ValNodePtr    vnp;
 
-  if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
+  /* Check configuration parameters to */
+  /* see if we are using DDBJ style.   */  
+
+  if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL,
+		   str, sizeof (str))) {
     if (StringICmp (str, "DDBJ") == 0) {
       ddbjstyle = TRUE;
     }
   }
+
   vnp = head;
   count = 0;
   mitocount = 0;
@@ -5051,91 +6525,11 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
       if (sfp != NULL || dfp->numUnknown > 0) {
         count++;
         mitocount++;
-        /* FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot)); */
-        /* StringCpy (str, "unknown"); */
         text [0] = '\0';
         if (dfp->subtype == FEATDEF_CDS && dfp->prot != NULL) {
-          if (dfp->suppressprefix) {
-            str [0] = '\0';
-            if (dfp->sfp->partial) {
-              StringCat (str, "partial cds");
-            } else {
-              StringCat (str, "complete cds");
-            }
-            if (dfp->altSplices > 1) {
-              StringCat (str, ", alternatively spliced");
-            }
-          } else if (dfp->protname != NULL) {
-            if (StringICmp (dfp->protname, "unknown") == 0 && (! StringHasNoText (dfp->genename))) {
-              StringNCpy_0 (text, dfp->genename, sizeof (text));
-              /* StringCat (str, "("); */
-              StringCat (str, text);
-              /* StringCat (str, ")"); */
-            } else {
-              StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
-              if (dfp->genename != NULL) {
-                StringNCpy_0 (text, dfp->genename, sizeof (text));
-                if (! StringHasNoText (text)) {
-                  StringCat (str, " (");
-                  StringCat (str, text);
-                  StringCat (str, ")");
-                }
-              }
-            }
-            if (dfp->lastInGroup || dfp->lastInType) {
-              if (mip != NULL) {
-                ptr = StringISearch (str, "precursor");
-                if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
-                  StringCat (str, ",");
-                }
-                if (mip->biomol == MOLECULE_TYPE_MRNA) {
-                  StringCat (str, " mRNA");
-                } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
-                  StringCat (str, " precursor RNA");
-                } else {
-                  StringCat (str, " gene");
-                }
-              }
-              if (count > 1) {
-                StringCat (str, "s");
-              }
-              if (count < 2 && /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
-                StringNCpy_0 (text, dfp->allelename, sizeof (text));
-                StringCat (str, ", ");
-                StringCat (str, text);
-                StringCat (str, " allele");
-              }
-              if (dfp->sfp->partial) {
-                StringCat (str, ", partial cds");
-              } else {
-                StringCat (str, ", complete cds");
-              }
-              if (dfp->altSplices > 1) {
-                StringCat (str, ", alternatively spliced");
-              }
-            }
-          }
+	  AutoDef_AddProtein (dfp, mip, str, count);
         } else if (dfp->subtype == FEATDEF_CDS && dfp->pseudo) {
-          if (dfp->genename != NULL) {
-            StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
-          }
-          if (dfp->lastInGroup || dfp->lastInType) {
-            StringCat (str, " pseudogene");
-            if (count > 1) {
-              StringCat (str, "s");
-            }
-            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
-              StringNCpy_0 (text, dfp->allelename, sizeof (text));
-              StringCat (str, ", ");
-              StringCat (str, text);
-              StringCat (str, " allele");
-            }
-            if (dfp->sfp->partial) {
-              StringCat (str, ", partial sequence");
-            } else {
-              StringCat (str, ", complete sequence");
-            }
-          }
+	  AutoDef_AddPseudoGene (dfp, str, count, text);
         } else if (dfp->subtype == FEATDEF_CDS && dfp->prot == NULL && dfp->genename != NULL) {
           StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
           if (dfp->lastInGroup || dfp->lastInType) {
@@ -5278,10 +6672,6 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             if (rrp->ext.choice == 1) {
               StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
               if (! StringHasNoText (str)) {
-                if (StringStr (str, "snoRNA") == NULL ||
-                    StringStr (str, "small nucleolar RNA") == NULL) {
-                  StringCat (str, " snoRNA");
-                }
                 if (dfp->genename != NULL) {
                   StringNCpy_0 (text, dfp->genename, sizeof (text));
                   if (! StringHasNoText (text)) {
@@ -5291,10 +6681,12 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                   }
                 }
                 if (dfp->lastInGroup || dfp->lastInType) {
-                  StringCat (str, " gene");
-                  if (count > 1) {
-                    StringCat (str, "s");
-                  }
+                  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNORNA) {
+		    StringCat (str, " gene");
+		    if (count > 1) {
+		      StringCat (str, "s");
+		    }
+		  }
                   if (dfp->sfp->partial) {
                     StringCat (str, ", partial sequence");
                   } else {
@@ -5310,10 +6702,6 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             if (rrp->ext.choice == 1) {
               StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
               if (! StringHasNoText (str)) {
-                if (StringStr (str, "snRNA") == NULL &&
-                    StringStr (str, "small nuclear RNA") == NULL) {
-                  StringCat (str, " snRNA");
-                }
                 if (dfp->genename != NULL) {
                   StringNCpy_0 (text, dfp->genename, sizeof (text));
                   if (! StringHasNoText (text)) {
@@ -5364,107 +6752,7 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             }
           }
         } else if (dfp->subtype == FEATDEF_exon && target != NULL) {
-          if (dfp->protname != NULL) {
-            str [0] = '\0';
-            if (! dfp->suppressprefix) {
-              StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
-              if (dfp->genename != NULL) {
-                StringNCpy_0 (text, dfp->genename, sizeof (text));
-                if (! StringHasNoText (text)) {
-                  StringCat (str, " (");
-                  StringCat (str, text);
-                  StringCat (str, ") gene,");
-                  if (/* count < 2 && */ /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
-                    StringNCpy_0 (text, dfp->allelename, sizeof (text));
-                    StringCat (str, " ");
-                    StringCat (str, text);
-                    StringCat (str, " allele,");
-                  }
-                }
-              }
-            }
-            if ((! StringHasNoText (str)) || dfp->suppressprefix) {
-              exonnumber = GetExonNumber (sfp->qual);
-              if (! dfp->suppressprefix) {
-                if (exonnumber == NULL) {
-                  if (StringStr (sfp->comment, "exon") != NULL && (! NextIsExon (vnp))) {
-                  } else {
-                    StringCat (str, " exon");
-                    if (NextIsExon (vnp)) {
-                      StringCat (str, "s");
-                    }
-                  }
-                } else {
-                  StringCat (str, " exon");
-                  if (NextIsExon (vnp)) {
-                    StringCat (str, "s");
-                  }
-                }
-              }
-              if (exonnumber != NULL) {
-                if (! dfp->suppressprefix) {
-                  StringCat (str, " ");
-                }
-                StringCat (str, exonnumber);
-              } else {
-                if (! StringHasNoText (sfp->comment)) {
-                  if (! dfp->suppressprefix) {
-                    StringCat (str, " ");
-                  }
-                  StringCat (str, sfp->comment);
-                }
-              }
-            }
-          } else if (dfp->genename != NULL) {
-            str [0] = '\0';
-            if (! dfp->suppressprefix) {
-              StringNCpy_0 (str, dfp->genename, sizeof (str));
-              StringCat (str, " gene,");
-            }
-            if ((! StringHasNoText (str)) || dfp->suppressprefix) {
-              exonnumber = GetExonNumber (sfp->qual);
-              if (! dfp->suppressprefix) {
-                if (exonnumber == NULL) {
-                  if (StringStr (sfp->comment, "exon") != NULL && (! NextIsExon (vnp))) {
-                  } else {
-                    StringCat (str, " exon");
-                    if (NextIsExon (vnp)) {
-                      StringCat (str, "s");
-                    }
-                  }
-                } else {
-                  StringCat (str, " exon");
-                  if (NextIsExon (vnp)) {
-                    StringCat (str, "s");
-                  }
-                }
-              }
-              if (exonnumber != NULL) {
-                if (! dfp->suppressprefix) {
-                  StringCat (str, " ");
-                }
-                StringCat (str, exonnumber);
-              } else {
-                if (! StringHasNoText (sfp->comment)) {
-                  if (! dfp->suppressprefix) {
-                    StringCat (str, " ");
-                  }
-                  StringCat (str, sfp->comment);
-                }
-              }
-            }
-          } else {
-            StringCpy (str, "uncharacterized exon");
-          }
-          /*
-          if (dfp->lastInGroup || dfp->lastInType) {
-            if (dfp->sfp->partial) {
-              StringCat (str, ", partial sequence");
-            } else {
-              StringCat (str, ", complete sequence");
-            }
-          }
-          */
+	  AutoDef_AddExon (dfp, str, text, vnp, sfp);
         } else if (dfp->numUnknown > 0) {
           if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
             StringCat (str, "unknown mRNA");
@@ -5518,54 +6806,6 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               }
               break;
           }
-          /*
-          if (biop->genome == GENOME_mitochondrion) {
-            if (mitocount > 1) {
-              StringCat (str, "; mitochondrial genes for mitochondrial products");
-            } else {
-              StringCat (str, "; mitochondrial gene for mitochondrial product");
-            }
-          } else if (biop->genome == GENOME_chloroplast) {
-            if (mitocount > 1) {
-              StringCat (str, "; chloroplast genes for chloroplast products");
-            } else {
-              StringCat (str, "; chloroplast gene for chloroplast product");
-            }
-          } else if (mitochloroflag > 0) {
-            switch (mitochloroflag) {
-              case 1 :
-                if (mitocount > 1) {
-                  StringCat (str, "; nuclear genes for mitochondrial products");
-                } else {
-                  StringCat (str, "; nuclear gene for mitochondrial product");
-                }
-                break;
-              case 2 :
-                if (mitocount > 1) {
-                   StringCat (str, "; nuclear genes for chloroplast products");
-                 } else {
-                   StringCat (str, "; nuclear gene for chloroplast product");
-                 }
-                break;
-              case 3 :
-                if (mitocount > 1) {
-                  StringCat (str, "; mitochondrial genes for mitochondrial products");
-                } else {
-                  StringCat (str, "; mitochondrial gene for mitochondrial product");
-                }
-                break;
-              case 4 :
-                if (mitocount > 1) {
-                   StringCat (str, "; chloroplast genes for chloroplast products");
-                 } else {
-                   StringCat (str, "; chloroplast gene for chloroplast product");
-                 }
-                break;
-              default :
-                break;
-            }
-          }
-          */
         }
         StringCat (str, ".");
       } else if (vnp->next == NULL) {
@@ -5782,57 +7022,282 @@ static void MergeAltSpliceCDSs (ValNodePtr head)
   }
 }
 
-static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
-                         Boolean labelMods, Int2 maxMods, Boolean leaveInParen,
-                         BioseqPtr target, BioseqPtr seg, ValNodePtr nonUniqueOrgs,
-                         Int2 mitochloroflag, Boolean suppressAltSplice, BioseqPtr parent)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_SetGroupingFlags () -- Loop through all the features and    */
+/*                                set flags if they are the last in    */
+/*                                a group, string, or type.            */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_SetGroupingFlags (ValNodePtr vnp)
+{
+  Boolean            change;
+  DefFeatsPtr        dfp;
+  Int2               group;
+  DefFeatsPtr        nextdfp;
+  DefFeatsPtr        penult;
+
+  group = 0;
+  penult = NULL;
+
+  /* Loop through all the features, comparing */
+  /* the current feature to the next one.     */
+
+  while (vnp != NULL) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    vnp->choice = (Uint1) group;
+    vnp = vnp->next;
+
+    /* If there is a next feat, compare */
+    /* it with the current one.         */
+
+    if (vnp != NULL) {
+      change = FALSE;
+      nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+
+      if ((dfp->subtype     == FEATDEF_rRNA &&
+	   nextdfp->subtype == FEATDEF_otherRNA) ||
+          (dfp->subtype     == FEATDEF_otherRNA &&
+	   nextdfp->subtype == FEATDEF_rRNA)) {
+        dfp->lastInString = TRUE;
+        if (dfp->sfp->partial != nextdfp->sfp->partial) {
+          dfp->lastInGroup = TRUE;
+        }
+        change = TRUE;
+      }
+
+      else if (dfp->subtype != nextdfp->subtype) {
+        if (dfp->subtype     == FEATDEF_exon &&
+	    nextdfp->subtype == FEATDEF_CDS &&
+	    nextdfp->suppressprefix) {
+          /* no separator between exons and appropriate cds */
+        } else {
+          dfp->lastInType = TRUE;
+          change = TRUE;
+        }
+      }
+
+      else if (dfp->sfp->partial != nextdfp->sfp->partial) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      }
+
+      else if (dfp->pseudo != nextdfp->pseudo) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      }
+      
+      else if ((dfp->allelename != NULL) || (nextdfp->allelename != NULL)) {
+        dfp->lastInGroup = TRUE;
+	dfp->isAlleleGroup = TRUE;
+        if (dfp->sfp->partial != nextdfp->sfp->partial) {
+          dfp->lastInString = TRUE;
+        }
+        change = TRUE;
+      }
+
+      else if (dfp->altSplices > 1 || nextdfp->altSplices > 1) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      }
+
+      if (change) {
+        group++;
+        penult = dfp;
+      }
+    }
+
+    /* Since the next feature is NULL, we're on the */
+    /* last feature so all the last flags are TRUE. */
+
+    else {
+      dfp->lastInString = TRUE;
+      dfp->lastInGroup = TRUE;
+      dfp->lastInType = TRUE;
+      group++;
+    }
+  }
+
+  if (penult != NULL) {
+    penult->lastInPenultimate = TRUE;
+  }
+
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* GetExonProtNameFromCDS () -- Gets a protein name for an Exon by     */
+/*                              checking for overlap with a CDS feat.  */
+/*                                                                     */
+/*    Returns : The protein name in the dfp->protname field.  NULL if  */
+/*              not found.                                             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void GetExonProtNameFromCDS (DefFeatsPtr dfp)
+{
+  SeqFeatPtr         cdsSfp;
+  DefFeatsData       df;
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         mrnaSfp;
+
+  /* Use the mRNA feature to check for overlap because the */
+  /* CDS  doesn't completely overlap all the exons.        */
+
+  mrnaSfp = SeqMgrGetOverlappingmRNA (dfp->sfp->location, &fcontext);
+  if (NULL == mrnaSfp)
+    return;
+
+  /* If it overlaps the CDS also, then use that */
+
+  cdsSfp = SeqMgrGetOverlappingFeature (dfp->sfp->location,
+					FEATDEF_CDS,
+					NULL,
+					0,
+					NULL,
+					SIMPLE_OVERLAP,
+					&fcontext);
+  if (cdsSfp != NULL) {
+    if (dfp->protname == NULL) {
+      dfp->protname = fcontext.label; /* points to stable str */
+    } else {
+      df.protname = fcontext.label;
+      CombineProteinNames (dfp, &df);
+    }
+  }
+
+  return;
+
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* GetProtNameForExons () -- Get a protein for a given exon feature    */
+/*                           to use in the defline.                    */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void GetProtNameForExons (ValNodePtr head,
+				 Uint2      entityID,
+				 BioseqPtr  parent)
+{
+  SeqFeatPtr         cdsSfp;
+  DefFeatsData       df;
+  DefFeatsPtr        dfp;
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         gene;
+  Int4               left;
+  Int4               right;
+  ValNodePtr         vnp;
+      
+  /* Loop through all the features that we've gathered data for */
+  /* and add a protein name to any that are exon features.      */
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+
+    /* If not an exon then skip */
+
+    if ((dfp == NULL) || (dfp->subtype != FEATDEF_exon))
+      continue;
+
+    /* If the exon has a gene, then use */
+    /* that to get the protein name.    */
+
+    if (dfp->gene != NULL) {
+      gene = SeqMgrGetDesiredFeature (entityID, NULL, 0, 0,
+				      dfp->gene, &fcontext);
+      if (gene == dfp->gene && (! gene->pseudo)) {
+	left = fcontext.left;
+	right = fcontext.right;
+	cdsSfp = SeqMgrGetNextFeature (parent, NULL, SEQFEAT_CDREGION,
+				       0, &fcontext);
+	while (cdsSfp != NULL) {
+	  if (fcontext.left >= left && 
+	      fcontext.right <= right &&
+	      (! cdsSfp->pseudo)) {
+	    if (dfp->protname == NULL) {
+	      dfp->protname = fcontext.label; /* points to stable str */
+	    } else {
+	      df.protname = fcontext.label;
+	      CombineProteinNames (dfp, &df);
+	    }
+	  }
+	  cdsSfp = SeqMgrGetNextFeature (parent, cdsSfp, SEQFEAT_CDREGION,
+					 0, &fcontext);
+	}
+      }
+    }
+
+    /* Otherwise, try to get a protein name */
+    /* from an overlapping CDS.             */
+
+    else {
+      GetExonProtNameFromCDS (dfp);
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDefProc () -- Create a defline from scratch.                    */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDefProc (Uint2       entityID,
+			 SeqEntryPtr sep,
+			 Boolean     addMods,
+                         Boolean     labelMods,
+			 Int2        maxMods,
+			 Boolean     leaveInParen,
+                         BioseqPtr   target,
+			 BioseqPtr   seg,
+			 ValNodePtr  nonUniqueOrgs,
+                         Int2        mitochloroflag,
+			 Boolean     suppressAltSplice,
+			 BioseqPtr   parent)
 
 {
-  Char            allele [256];
-  BioseqContextPtr  bcp;
-  BioSourcePtr    biop;
-  BioseqPtr       bsp;
-  BioseqSetPtr    bssp;
-  SeqFeatPtr      cds;
-  Boolean         change;
-  CdRegionPtr     crp;
-  DefFeatsData    df;
-  DefFeatsPtr     dfp;
-  DefFeatsPtr     dfpx;
-  SeqMgrFeatContext  fcontext;
-  GBQualPtr       gbq;
-  SeqFeatPtr      gene;
-  Int2            group;
-  GeneRefPtr      grp;
-  GatherScope     gs;
-  ValNodePtr      head;
-  SeqLocPtr       lastslp;
-  Int4            left;
-  size_t          lenallele;
-  size_t          lenlocus;
-  MolInfoPtr      mip;
-  DefFeatsPtr     nextdfp;
-  SeqLocPtr       nextslp;
-  ValNodePtr      nextvnp;
-  SeqEntryPtr     nsep;
-  Int2            numUnknown;
-  BioseqPtr       part;
-  DefFeatsPtr     penult;
-  ValNodePtr      PNTR prevvnp;
-  ProtRefPtr      prp;
-  CharPtr         ptr;
-  Int4            right;
-  ValNodePtr      sdp;
-  SeqFeatPtr      sfp;
-  SeqIdPtr        sip;
-  SeqLocPtr       slp;
-  Char            str [128];
-  ValNodePtr      ttl;
-  ValNodePtr      strings;
-  ValNode         vn;
-  ValNodePtr      vnp;
-  ValNodePtr      vnpx;
-  SeqFeatXrefPtr  xref;
+  Char               allele [256];
+  BioseqContextPtr   bcp;
+  BioSourcePtr       biop;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  CdRegionPtr        crp;
+  DefFeatsPtr        dfp;
+  DefFeatsPtr        dfpx;
+  GBQualPtr          gbq;
+  GeneRefPtr         grp;
+  GatherScope        gs;
+  ValNodePtr         head;
+  Boolean            is_transgenic;
+  SeqLocPtr          lastslp;
+  size_t             lenallele;
+  size_t             lenlocus;
+  MolInfoPtr         mip;
+  DefFeatsPtr        nextdfp;
+  SeqLocPtr          nextslp;
+  ValNodePtr         nextvnp;
+  SeqEntryPtr        nsep;
+  Int2               numUnknown;
+  BioseqPtr          part;
+  ValNodePtr    PNTR prevvnp;
+  ProtRefPtr         prp;
+  CharPtr            ptr;
+  ValNodePtr         sdp;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+  SeqLocPtr          slp;
+  SubSourcePtr       ssp;
+  Char               str [196];
+  ValNodePtr         ttl;
+  ValNodePtr         strings;
+  ValNode            vn;
+  ValNodePtr         vnp;
+  ValNodePtr         vnpx;
+  SeqFeatXrefPtr     xref;
 
   if (sep == NULL) return;
   if (target == NULL && seg == NULL) {
@@ -5889,12 +7354,25 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     }
   }
   TrimSpacesAroundString (str);
-  if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
+  if ((StringICmp (str, "Human immunodeficiency virus type 1") == 0) ||
+      (StringICmp (str, "Human immunodeficiency virus 1") == 0)) {
     StringCpy (str, "HIV-1");
-  } else if (StringICmp (str, "Human immunodeficiency virus type 2") == 0) {
+  } else if ((StringICmp (str, "Human immunodeficiency virus type 2") == 0) ||
+	     (StringICmp (str, "Human immunodeficiency virus 2") == 0)) {
     StringCpy (str, "HIV-2");
   }
   str [0] = TO_UPPER (str [0]);
+
+  is_transgenic = FALSE;
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (ssp->subtype == SUBSRC_transgenic) {
+      is_transgenic = TRUE;
+    }
+  }
+  if (is_transgenic) {
+    StringCat (str, " transgenic");
+  }
+
   ValNodeCopyStr (&strings, 0, str);
 
   mip = NULL;
@@ -5922,19 +7400,6 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
       }
     }
   }
-
-  /*
-  nsep = FindNucSeqEntry (sep);
-  if (nsep != NULL) {
-    sdp = SeqEntryGetSeqDescr (nsep, Seq_descr_molinfo, NULL);
-    if (sdp == NULL) {
-      sdp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
-    }
-    if (sdp != NULL) {
-      mip = (MolInfoPtr) sdp->data.ptrvalue;
-    }
-  }
-  */
 
   if (nonUniqueOrgs != NULL) {
     for (vnp = nonUniqueOrgs; vnp != NULL; vnp = vnp->next) {
@@ -6147,28 +7612,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
   }
 
   if (target != NULL) {
-    for (vnp = head; vnp != NULL; vnp = vnp->next) {
-      dfp = (DefFeatsPtr) vnp->data.ptrvalue;
-      if (dfp != NULL && dfp->subtype == FEATDEF_exon && dfp->gene != NULL) {
-        gene = SeqMgrGetDesiredFeature (entityID, NULL, 0, 0, dfp->gene, &fcontext);
-        if (gene == dfp->gene && (! gene->pseudo)) {
-          left = fcontext.left;
-          right = fcontext.right;
-          cds = SeqMgrGetNextFeature (parent, NULL, SEQFEAT_CDREGION, 0, &fcontext);
-          while (cds != NULL) {
-            if (fcontext.left >= left && fcontext.right <= right && (! cds->pseudo)) {
-              if (dfp->protname == NULL) {
-                dfp->protname = fcontext.label; /* points to stable string */
-              } else {
-                df.protname = fcontext.label;
-                CombineProteinNames (dfp, &df);
-              }
-            }
-            cds = SeqMgrGetNextFeature (parent, cds, SEQFEAT_CDREGION, 0, &fcontext);
-          }
-        }
-      }
-    }
+    GetProtNameForExons (head, entityID, parent);
     vnp = head;
     while (vnp != NULL) {
       dfp = (DefFeatsPtr) vnp->data.ptrvalue;
@@ -6186,56 +7630,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
   }
 
   vnp = head;
-  group = 0;
-  penult = NULL;
-  while (vnp != NULL) {
-    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
-    vnp->choice = (Uint1) group;
-    vnp = vnp->next;
-    if (vnp != NULL) {
-      change = FALSE;
-      nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
-      if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA) ||
-          (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA)) {
-        dfp->lastInString = TRUE;
-        if (dfp->sfp->partial != nextdfp->sfp->partial) {
-          dfp->lastInGroup = TRUE;
-        }
-        change = TRUE;
-      } else if (dfp->subtype != nextdfp->subtype) {
-        if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_CDS && nextdfp->suppressprefix) {
-          /* no separator between exons and appropriate cds */
-        } else {
-          dfp->lastInType = TRUE;
-          change = TRUE;
-        }
-      } else if (dfp->sfp->partial != nextdfp->sfp->partial) {
-        dfp->lastInGroup = TRUE;
-        change = TRUE;
-      } else if (dfp->pseudo != nextdfp->pseudo) {
-        dfp->lastInGroup = TRUE;
-        change = TRUE;
-      } else if (dfp->allelename != NULL || nextdfp->allelename != NULL) {
-        dfp->lastInGroup = TRUE;
-        change = TRUE;
-      } else if (dfp->altSplices > 1 || nextdfp->altSplices > 1) {
-        dfp->lastInGroup = TRUE;
-        change = TRUE;
-      }
-      if (change) {
-        group++;
-        penult = dfp;
-      }
-    } else {
-      dfp->lastInString = TRUE;
-      dfp->lastInGroup = TRUE;
-      dfp->lastInType = TRUE;
-      group++;
-    }
-  }
-  if (penult != NULL) {
-    penult->lastInPenultimate = TRUE;
-  }
+  AutoDef_SetGroupingFlags (vnp);
 
   FinishAutoDefProc (entityID, sep, head, target, nsep, mip, strings, biop, mitochloroflag);
 }
@@ -6336,9 +7731,11 @@ static Boolean GatherOrgnamesFunc (GatherContextPtr gcp)
     str = StringSave (orp->taxname);
     if (str == NULL) return TRUE;
     TrimSpacesAroundString (str);
-    if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
+    if ((StringICmp (str, "Human immunodeficiency virus type 1") == 0) ||
+	(StringICmp (str, "Human immunodeficiency virus 1") == 0)) {
       StringCpy (str, "HIV-1");
-    } else if (StringICmp (str, "Human immunodeficiency virus type 2") == 0) {
+    } else if ((StringICmp (str, "Human immunodeficiency virus type 2") == 0) ||
+	       (StringICmp (str, "Human immunodeficiency virus 2") == 0)) {
       StringCpy (str, "HIV-2");
     }
     str [0] = TO_UPPER (str [0]);

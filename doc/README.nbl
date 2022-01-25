@@ -1,135 +1,747 @@
-
-
 		README for netblast (network-client BLAST)
-			last updated 6/14/99
-
+			Last updated 8/23/02
 
 	This README describes the BLAST client (blastcl3), which accesses the
-newest NCBI BLAST search engine (version 2.0).  The software behind BLAST version 
-2.0 was written from scratch to allow BLAST to handle the new challenges posed 
-by the sequence databases in the coming years.  Updates to this software will
-continue in the coming years.
+NCBI BLAST search engine (version 2.2).  The software behind BLAST version 2.2 
+allows BLAST to handle new challenges posed by the sequence databases.  Updates
+to this software will continue in the coming years.
 
 	Blastcl3 can search all the sequences in a FASTA file, produce one-to-many
-(master-slave) alignments as well as HTML, and it can perform searches against multiple
-databases.  Organism-specific searches are planned for the near future.  A full list of 
-command-line options is given below.
+(master-slave) alignments in text or HTML format. It can also perform searches 
+against multiple databases.  Version 2.2.4 now supports organism-specific 
+searches via the newly introduced -u option, which functions like the "Limit by 
+Entrez Query Term" in the NCBI BLAST web pages. The old -l option is removed.  
+A full list of command-line options is given in Appendix B.
 
-	Blastcl3 should be used instead of previous clients such as blastcl2, 
-blastcli, and PowerBlast.  (Blastcl2 and blastcli do not produce gapped alignments 
-at all; PowerBlast performs the gapped computation on the user machine, instead of 
-the NCBI server).  The service that these older clients use will not be supported 
-indefinitely.
+	The setup for NCBI network clients has been greatly simplified.  If you
+are not behind a firewall no further action is required.  If you are behind a 
+firewall, and already use Sequin or Entrez, or if your system administrator has 
+already performed the setup, then you should be able to start performing searches 
+immediately.  Otherwise, please refer to 'firewall.txt' that is included with 
+this archive.  Follow the instructions for "Configuring newer clients".  
 
-	The setup for NCBI network clients has been greatly simplified.  If you are
-not behind a firewall no further action is required.  If you are behind a firewall,
-and already use Sequin or Entrez, or if your system administrator has already performed
-the setup, then you should be able to start performing searches immediately.  Otherwise,
-please refer to 'firewall.txt' that is included with this archive.  Follow the instructions
-for "Configuring newer clients".  
+	As an alternative to blastcl3, NCBI BLAST web server also supports
+URL API.  For details on the standard commands, please refer to the online
+document at:
+	http://www.ncbi.nlm.nih.gov/BLAST/Doc/urlapi.pdf
 
 	Please send questions and comments to 'blast-help@ncbi.nlm.nih.gov'.
 
 Blastcl3
 --------
 
-Blastcl3 may be used to perform all five flavors of blast comparison. One
-may obtain the blastcl3 options by executing 'blastcl3 -' (note the dash). A
-typical use of blastcl3 would be to perform a blastn search (nucl. vs. nucl.) 
-of a file called QUERY:
+Blastcl3 may be used to perform all five flavors of blast comparison.  For large
+blastn searches one can choose to use MEGABLAST algorithm. Please refer to
+Appendix B for the complete list of program options. Or one can obtain the options 
+by executing 'blastcl3 -' (note the dash). A typical use of blastcl3 would be to 
+perform a blastn search (nucleotide vs. nucleotide) of a file called QUERY (which
+needs to be saved in plain text format):
 
 blastcl3 -p blastn -d nr -i QUERY -o out.QUERY
 
 The output is placed into the output file out.QUERY and the search is performed
 against the 'nr' database.  If a protein vs. protein search is desired,
-then 'blastn' should be replaced with 'blastp' etc.
+then 'blastn' should be replaced with 'blastp' etc.  The following commandline
+will search a query file named MY_QUERY against protein nr database and place the
+result in a file called MY_QUEYR.out:
 
-Some of the most commonly used blastcl3 options are:
+blastcl3 -p blastp -d nr -i MY_QUEYR -o MY_QUERY.out
 
-blastcl3   arguments:
+
+Commonly used options
+---------------------
+
+Some of the most commonly used blastcl3 options and their explanations are:
 
   -p  Program Name [String]
-
-        Input should be one of "blastp", "blastn", "blastx", "tblastn", or "tblastx".
+        Input should be one of "blastp", "blastn", "blastx", "tblastn", 
+	or "tblastx".
 
   -d  Database [String]
-    default = nr
+	default = nr
 
         Multiple database names (bracketed by quotations) will be accepted.
         An example would be
 
-                -d "nr est"
+        -d "nr est" 
 
-        which will search both the nr and est databases, presenting the results as if one
-        'virtual' database consisting of all the entries from both were searched.   The
-        statistics are based on the 'virtual' database of nr and est.  
+        which will search both the nr and est databases, presenting the results
+	as if one 'virtual' database consisting of all the entries from both
+	were searched.   The statistics are based on the combined 'virtual'
+	database of nr and est.  For supported database list please refer to
+	Appendix C.
 
   -i  Query File [File In]
-    default = stdin
+	default = stdin
 
-        The query should be in FASTA format.  If multiple FASTA entries are in the input
-        file, all queries will be searched.
+        The query sequences should be in FASTA format and the file should be saved
+	in plain text format.  If multiple FASTA entries are in the input file, all
+	queries will be searched.  For query file format,
+	please see Appendix A.
 
   -e  Expectation value (E) [Real]
-    default = 10.0
+	default = 10.0
+	
+	Accepted formats are integer, decimal, fraction (1/6240), and 
+	exponent (2e-64)
 
   -o  BLAST report Output File [File Out]  Optional
-    default = stdout
+	default = stdout 
 
   -F  Filter query sequence (DUST with blastn, SEG with others) [T/F]
-    default = T
+	default = T
 
-         BLAST 2.0 uses the dust low-complexity filter for blastn and seg for the
-         other programs. Both 'dust' and 'seg' are integral parts of the NCBI toolkit
-         and are accessed automatically.
+	BLAST 2.0 uses the dust low-complexity filter for blastn and seg for 
+	the other programs. Both 'dust' and 'seg' are integral parts of the
+	NCBI toolkit and are accessed automatically.
 
-         If one uses "-F T" then normal filtering by seg or dust (for blastn)
-         occurs (likewise "-F F" means no filtering whatsoever).  The seg options
-         can be changed by using:
+	If one uses "-F T" then normal filtering by seg or dust (for blastn) 
+	occurs (likewise "-F F" means no filtering whatsoever).  The seg
+	options can be changed by using:
 
-         -F "S 10 1.0 1.5"
+	-F "S 10 1.0 1.5"
 
-         which specifies a window of 10, locut of 1.0 and hicut of 1.5.  A coiled-coiled filter,
-         based on the work of Lupas et al. (Science, vol 252, pp. 1162-4 (1991)) and written by
-         John Kuzio (Wilson et al., J Gen Virol, vol. 76, pp. 2923-32 (1995)), may be invoked
-         by specifying:
+	which specifies a window of 10, locut of 1.0 and hicut of 1.5.  A 
+	coiled-coiled filter, based on the work of Lupas et al. 
+	(Science, vol 252, pp. 1162-4 (1991)) and written by John Kuzio 
+	(Wilson et al., J Gen Virol, vol. 76, pp. 2923-32 (1995)), may be 
+	invoked by specifying:
 
-         -F "C"
+	-F "C"
 
-         There are three parameters for this: window, cutoff (prob of a coil-coil), and
-         linker (distance between two coiled-coiled regions that should be linked
-         together).  These are now set to
+	There are three parameters for this: window, cutoff (prob of a 
+	coil-coil), and linker (distance between two coiled-coiled regions
+	that should be linked together).  These are now set to
 
-         window: 22
-         cutoff: 40.0
-         linker: 32
+	window: 22
+	cutoff: 40.0
+	linker: 32
 
-         One may also change the coiled-coiled parameters in a manner analogous to
-         that of seg:
+	One may also change the coiled-coiled parameters in a manner analogous 
+	to that of seg:
 
-         -F "C 28 40.0 32" will change the window to 28.
+	-F "C 28 40.0 32" will change the window to 28.
 
-         One may also run both seg and coiled-coiled together by using a ";":
+	One may also run both seg and coiled-coiled together by using a ";":
 
-         -F "C;S"
+	-F "C;S"
 
-         Filtering by dust may also be specified by:
+	Filtering by dust may also be specified by:
 
-         -F "D"
+	-F "D"
 
-         It is possible to specify that the masking should only be done during
-         the process of building the initial words by starting the filtering
-         command with 'm':
+	It is possible to specify that the masking should only be done during
+	the process of building the initial words by starting the filtering
+	command with 'm':
 
-         -F "m S"
+	-F "m S"
 
-         which specifies that seg (with default arguments) should be used for masking, 
-         but that the masking should only be done when the words are being built.  
-         This masking option is available with all filters.
+	which specifies that seg (with default arguments) should be used for 
+	masking, but that the masking should only be done when the words are 
+	being built.  This masking option is available with all filters.
 
-  -S  Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom [Integer]
-    default = 3
+	-F "R"
+	
+	This would invoke the human repeat filter to mask the human repeat
+	element present in the query sequences.
+
+	-F "V"
+	
+	This would invoke the vector filter to mask the vector sequences present
+	in the query sequences.
+
+  -S  Query strands to search against database (for blast[nx], and tblastx).
+	[Integer] 
+	 
+	3 is both, 1 is top [input strand], 2 is bottom [reverse complement] 
+	default = 3
 
   -T  Produce HTML output [T/F]
-    default = F
+	default = F
 
+  -u  Entrez query terms [Optional]
+  
+  	Some examples for how to use -u option:
+	
+  	-u mouse[organism]	
+		This limits the search to sequences from mouse.
+	
+	-u biomol_mrna[properties]	
+		This limits the search to mRNA sequences.
+	
+	-u "nucleotide_all[filter] NOT human[organism]"	
+		This limits the search to all non-human entries.
+	
+	For details on the terms, please refer to this web document:
+	http://www.ncbi.nlm.nih.gov:80/entrez/query/static/help/helpdoc.html
+
+	
+Appendix A. FASTA Query file format
+-----------------------------------
+
+Query files with multiple query sequences should be put in this format
+with defline in a separate line and the sequences put in 70-80 characters
+per line.  NOTE the file should be in text format.  If WORD or othe word
+processing program is used, make sure the file is saved as text.
+
+>query_sequence_1
+MNTIRNSICLTIITMVLCGFLFPLAITLIGQIFFYQQANGSLITYDNRIVGSKLIGQHWTETRYFHGRPS
+AVDYNMNPEKLYKNGVSSGGSNESNGNTELIARMKHHVKFGNSNVTIDAATSSGSGLDPHITVENALKQA
+PRIADARHISTSRVADLIQHRKQRGVLTNDYVNVLELNIALDKMKD
+>query_sequence_2
+MAQPGPAPQPDVSLQQRVAELEKINAEFLRAQQQLEQEFNQKRAKFKELYLAKEEDLKRQNAVLQAAQDD
+LGHLRTQLWEAQAEMENIKAIATVSENTKQEAIDEVKRQWREEVASLQAIMKETVRDYEHQFHLRLEQER
+AQWAQYRESAEREIADLRRRLSEGQEEENLENEMKKAQEDAEKLRSVVMPMEKEIAALKDKLTEAEDKIK
+ELEASKVKELNHYLEAEKSCRTDLEMYVAVLNTQKSVLQEDAEKLRKELHEVCHLLEQERQQHNQLKHTW
+
+Appendix. B.  Complete list of blastcl3 arguments
+-------------------------------------------------
+blastcl3 2.2.3   arguments:
+
+  -p  Program Name [String]
+  -d  Database [String]
+    default = nr
+  -i  Query File [File In]
+    default = stdin
+  -e  Expectation value (E) [Real]
+    default = 10.0
+  -m  alignment view options:
+0 = pairwise,
+1 = query-anchored showing identities,
+2 = query-anchored no identities,
+3 = flat query-anchored, show identities,
+4 = flat query-anchored, no identities,
+5 = query-anchored no identities and blunt ends,
+6 = flat query-anchored, no identities and blunt ends,
+7 = XML Blast output,
+8 = tabular, 
+9 = tabular with comment lines [Integer]
+    default = 0
+  -o  BLAST report Output File [File Out]  Optional
+    default = stdout
+  -F  Filter query sequence (DUST with blastn, SEG with others) [String]
+    default = T
+  -G  Cost to open a gap (zero invokes default behavior) [Integer]
+    default = 0
+  -E  Cost to extend a gap (zero invokes default behavior) [Integer]
+    default = 0
+  -X  X dropoff value for gapped alignment (in bits) (zero invokes default behavior)
+      blastn 30, megablast 20, tblastx 0, all others 15 [Integer]
+    default = 0
+  -I  Show GI's in deflines [T/F]
+    default = F
+  -q  Penalty for a nucleotide mismatch (blastn only) [Integer]
+    default = -3
+  -r  Reward for a nucleotide match (blastn only) [Integer]
+    default = 1
+  -v  Number of database sequences to show one-line descriptions for (V) [Integer]
+    default = 500
+  -b  Number of database sequence to show alignments for (B) [Integer]
+    default = 250
+  -f  Threshold for extending hits, default if zero
+      blastp 11, blastn 0, blastx 12, tblastn 13
+      tblastx 13, megablast 0 [Integer]
+    default = 0
+  -g  Perfom gapped alignment (not available with tblastx) [T/F]
+    default = T
+  -Q  Query Genetic code to use [Integer]
+    default = 1
+  -D  DB Genetic code (for tblast[nx] only) [Integer]
+    default = 1
+  -a  Number of processors to use [Integer]
+    default = 1
+  -O  SeqAlign file [File Out]  Optional
+  -J  Believe the query defline [T/F]
+    default = F
+  -M  Matrix [String]
+    default = BLOSUM62
+  -W  Word size, default if zero (blastn 11, megablast 28, all others 3) [Integer]
+    default = 0
+  -z  Effective length of the database (use zero for the real size) [Real]
+    default = 0
+  -K  Number of best hits from a region to keep (off by default, if used a
+      value of 100 is recommended) [Integer]
+    default = 0
+  -Y  Effective length of the search space (use zero for the real size) [Real]
+    default = 0
+  -S  Query strands to search against database (for blast[nx], and tblastx)
+       3 is both, 1 is top, 2 is bottom [Integer]
+    default = 3
+  -T  Produce HTML output [T/F]
+    default = F
+  -u  Restrict search of database to results of Entrez2 lookup [String]  Optional
+  -U  Use lower case filtering of FASTA sequence [T/F]  Optional
+    default = F
+  -y  X dropoff value for ungapped extensions in bits (0.0 invokes default behavior)
+      blastn 20, megablast 10, all others 7 [Real]
+    default = 0.0
+  -Z  X dropoff value for final gapped alignment in bits (0.0 invokes default behavior)
+      blastn/megablast 50, tblastx 0, all others 25 [Integer]
+    default = 0
+  -R  RPS Blast search [T/F]
+    default = F
+  -n  MegaBlast search [T/F]
+    default = F
+  -L  Location on query sequence [String]  Optional
+  -A  Multiple Hits window size, default if zero (blastn/megablast 0,
+      all others 40 [Integer]
+    default = 0
+  -w  Frame shift penalty (OOF algorithm for blastx) [Integer]
+    default = 0
+  -t  Length of the largest intron allowed in tblastn for linking HSPs
+      (0 disables linking) [Integer]
+    default = 0
+
+
+Appendix B. Currently supported databases
+-----------------------------------------
+
+NOTE: all the database should be called with -d NAME, where the
+	NAME should be exactly as it appears in the lists given below!
+
+**General Databases**
+
+--Nucleotide Sequence Databases--
+
+NAME		CONTENT
+----		-------
+nr		All GenBank+EMBL+DDBJ+PDB sequences (but no EST, STS, GSS, or 
+			phase 0, 1 or 2 HTGS sequences). No longer "non-redundant".  
+est		Database of GenBank+EMBL+DDBJ sequences from EST Divisions 
+est_human	Human subset of GenBank+EMBL+DDBJ sequences from EST Divisions 
+est_mouse 	Mouse subset of GenBank+EMBL+DDBJ sequences from EST Divisions 
+est_others 	Non-Mouse, non-Human sequences of GenBank+EMBL+DDBJ sequences
+			from EST Divisions 
+gss		Genome Survey Sequence, includes single-pass genomic data, 
+			exon-trapped sequences, and Alu PCR sequences. 
+htg  		Unfinished High Throughput Genomic Sequences: phases 0, 1 and 2
+			(finished, phase 3 HTG sequences are in nr) 
+pat		Nucleotides from the Patent division of GenBank. 
+yeast 		Yeast (Saccharomyces cerevisiae) genomic nucleotide sequences 
+mito  		Database of mitochondrial sequences 
+vector		Vector subset of GenBank(R)
+ecoli		Escherichia coli genomic nucleotide sequences 
+pdb		Sequences derived from the 3-dimensional structure from
+			Brookhaven Protein Data Bank 
+drosoph		Drosophila genome provided by Celera and Berkeley Drosophila
+			Genome Project (BDGP). 
+month		All new or revised GenBank+EMBL+DDBJ+PDB sequences released in
+			the last 30 days. 
+alu		Select Alu repeats from REPBASE, suitable for masking Alu repeats
+			from query sequences. 
+sts		Database of GenBank+EMBL+DDBJ sequences from STS Divisions . 
+chromosome	Searches Complete Genomes, Complete Chromosome, or contigs form 
+			the NCBI Reference Sequence project.
+UniVec		The UniVec non-redundant vector fragment sequences.
+
+One can blast search a specific completed bacterial or archeal genome by searching
+the chromosome database and limit the search to that microbe using -u option.
+For example, to search a query file QUERY against Aquifex aeolicus genome,
+one can use this commandline combination:
+  blastcl3 -p blastn -i QUERY -d chromosome -u "Aquifex aeolicus[orgn]" -o OUT
+
+For list of completed bacterial and archeal genomes, please visit:
+  http://www.ncbi.nlm.nih.gov/PMGifs/Genomes/eub.html
+  http://www.ncbi.nlm.nih.gov/PMGifs/Genomes/a_g.html
+  
+--Peptide Sequence Databases-- 
+
+NAME		CONTENT
+----		-------
+nr		All non-redundant GenBank CDS translations+PDB+SwissProt+PIR+PRF
+swissprot	Last major release of the SWISS-PROT protein sequence database 
+			(no updates) 
+pat		Proteins from the Patent division of GenPept. 
+yeast		yeast (Saccharomyces cerevisiae) genomic CDS translations 
+ecoli		Escherichia coli genomic CDS translations 
+pdb		Sequences derived from the 3-dimensional structure from 
+			Brookhaven Protein Data Bank 
+drosoph		Drosophila genome proteins provided by Celera and Berkeley 
+			Drosophila Genome Project (BDGP). 
+month		All new or revised GenBank CDS translation+PDB+SwissProt+PIR+PRF 
+			released in the last 30 days. 	
+
+**Specialized databases**
+
+--human genome related databases--
+
+NAME			CONTENT
+----			-------
+hs_genome/contig	human genomic contigs wiht NT_ accessions 
+hs_genome/mrna		human RefSeq mrna with NM_ or XM_ accessions 
+hs_genome/protein	human RefSeq proteins with NP_ or XP_ accessions 
+hs_genome/GS_mRNA	GenomeScan program predicted mRNA sequences 
+hs_genome/GS_prot	CDS translations from gscan mrna set
+hs_genome/hs_bes	End sequences for Human BAC clones
+hs_genome/hs_htg	human HTG records
+hs_genome/hs_est	human est entries
+Trace/Homo_Sapiens_EST	EST Traces
+Trace/Homo_Sapiens_EST	Other Traces
+
+NAME			CONTENT
+----			-------
+snp/snpch1.fas		human snps mapped to Chromosome 1
+snp/snpch2.fas		human snps mapped to Chromosome 2
+snp/snpch3.fas		human snps mapped to Chromosome 3
+snp/snpch4.fas		human snps mapped to Chromosome 4
+snp/snpch5.fas		human snps mapped to Chromosome 5
+snp/snpch6.fas		human snps mapped to Chromosome 6
+snp/snpch7.fas		human snps mapped to Chromosome 7
+snp/snpch8.fas		human snps mapped to Chromosome 8
+snp/snpch9.fas		human snps mapped to Chromosome 9
+snp/snpch10.fas		human snps mapped to Chromosome 10
+snp/snpch11.fas		human snps mapped to Chromosome 11
+snp/snpch12.fas		human snps mapped to Chromosome 12
+snp/snpch13.fas		human snps mapped to Chromosome 13
+snp/snpch14.fas		human snps mapped to Chromosome 14
+snp/snpch15.fas		human snps mapped to Chromosome 15
+snp/snpch16.fas		human snps mapped to Chromosome 16
+snp/snpch17.fas		human snps mapped to Chromosome 17
+snp/snpch18.fas		human snps mapped to Chromosome 18
+snp/snpch19.fas		human snps mapped to Chromosome 19
+snp/snpch20.fas		human snps mapped to Chromosome 20
+snp/snpch21.fas		human snps mapped to Chromosome 21
+snp/snpch22.fas		human snps mapped to Chromosome 22
+snp/snpchX.fas.		human snps mapped to Chromosome X
+snp/snpchY.fas.nsq	human snps mapped to Chromosome Y
+snp/snpchMulti.fas	human snps mapped to multiple chromosomes
+snp/snpchNotOn.fas	human snps not yet mapped to any chromosome
+snp/snpchMasked.fas	repeat masked human snps
+snp/snp			All the above
+
+--Mouse genome related databases--
+
+NAME			CONTENT
+----			-------
+mouse_contig/contig	Assemblies of Finished Mouse BAC clones 
+			     with SNPs and STSs annotation
+mouse_contig/mm_htg	Mouse phase 0, 1, 2, or 3 original BAC sequences
+			     submitted by sequencing centers
+mouse_contig/mgscv3	These are the supercontigs (scaffolds) generated by
+			     using the end pairing information from the 
+			     reads used to generate the WGS contigs. Long 
+			     record with Ns inserted between WGS contigs.
+mouse_contig/arachne	WGS contigs from the mouse WGS reads based on the Feb
+			     01 freeze of the WGS data performed by David Jaffe, Jon
+                             Butler, Sante Gnerre and Evan Maucelli at the 
+			     Whitehead Institute. This assembly should be 
+			     considered experimental. This will be the final WGS
+			     assembly.
+mouse_contig/sanger	WGS contigs from the mouse WGS reads based on the Feb
+                             01 freeze of the WGS data perforrmed by Jim 
+			     Mullikin and Zemin Ning at the Welcome Trust Sanger
+			     Institute. This assembly should be considered 
+			     experimental. This will be the final WGS assembly.
+mouse_contig/mm_bes	The end sequences of BACs from RPCI-23 and RPCI-24.
+                             Sequenced at TIGR.
+mouse_contig/mm_rna	Collection of reference mRNAs generated by the NCBI 
+			     RefSeq project (mouse NM_ and XM_ records).
+mouse_contig/mm_protein	Collection of reference proteins generated by the NCBI 
+                             RefSeq project (mouse NP_ and XP_ records).
+mouse_contig/mm_est	Single pass sequence reads from numerous mouse cDNA
+                             libraries
+mouse_contig/GS_mRNA	mRNAs predicted by GenomeScan program.
+mouse_contig/GS_prot	Proteins translated from GS_mRNAs
+Trace/Mus_Musculus_WGS		All of the raw mouse WGS traces
+Trace/Mus_Musculus_EST		Raw mouse EST traces
+Trace/Mus_Musculus_OTHER	All of other raw mouse traces
+	
+--Rat genome related databases--
+
+NAME				CONTENT
+----				-------
+rn_genome/rn_htg		Rat HTGS, phase 0, 1, 2, or 3 BAC sequences.
+rn_genome/rn_bes		Rat BAC ends sequences.
+rn_genome/rn_refm		Rat Reference mRNAs, NM_ records from RefSeq.
+rn_genome/rn_refp		Rat Reference proteins, NP_ records from Refseq.
+rn_genome/rn_est		Subset of Rat ESTs from the EST database.
+Trace/Rattus_Norvegicus_WGS	Rat whole genome shotgun Traces.
+Trace/Rattus_Norvegicus_OTHER	Other Rat Traces.
+
+--Zebra Fish genome related databases--
+
+NAME			CONTENT
+----			-------
+dr_genome/dr_mrna	Zebra fish mRNA
+dr_htg			HTGS phase 0, 1, 2, or 3 sequences.
+dr_est			subset of Zebra fish EST from the EST database
+dr_refm			Reference mRNAs from RefSeq project
+dr_refp			Reference Proteins from RefSeq project
+Trace/Danio_Rerio_WGS	Zebra fish whole genome shotgun Traces
+Trace/Danio_Rerio_EST	Zebra fish EST Traces
+
+--Japanese puffer fish genome database--
+
+NAME			CONTENT
+----			-------
+genomes/fugu		Fugu genome
+
+--Anopheles gambiae genome database--
+
+NAME			CONTENT
+----			-------
+genomes/agambiae	Anopheles gambiae genome scaffold
+        
+--RICE genome database--
+
+NAME			CONTENT
+----			-------
+genomes/riceChWGS	riceChWGS_genome
+
+--Arabidopsis thaliana related genome databases--
+
+NAME			CONTENT
+----			-------
+genomes/ara_clone	clone	
+genomes/ara		mRNA	
+genomes/ara		protein	
+
+--Microbial genome databases--
+
+NAME			CONTENT
+----			-------
+Microbial/56636		Aeropyrum pernix
+Microbial/2287		Sulfolobus solfataricus
+Microbial/111955	Sulfolobus tokodaii
+Microbial/13773		Pyrobaculum aerophilum
+Microbial/2234		Archaeoglobus fulgidus
+Microbial/64091		Halobacterium sp. NRC-1
+Microbial/145262	Methanothermobacter thermautotrophicus
+Microbial/2190		Methanocaldococcus jannaschii
+Microbial/190192	Methanopyrus kandleri AV19
+Microbial/188937	Methanosarcina acetivorans str. C2A
+Microbial/2208		Methanosarcina barkeri
+Microbial/192952	Methanosarcina mazei Goe1
+Microbial/29292		Pyrococcus abyssi
+Microbial/186497	Pyrococcus furiosus DSM 3638
+Microbial/53953		Pyrococcus horikoshii
+Microbial/97393		Ferroplasma acidarmanus
+Microbial/2303		Thermoplasma acidophilum
+Microbial/50339		Thermoplasma volcanium
+Microbial/63363		Aquifex aeolicus
+Microbial/817		Bacteroides fragilis
+Microbial/1097		Chlorobium tepidum
+Microbial/837		Porphyromonas gingivalis
+Microbial/28131		Prevotella intermedia
+Microbial/28112		Tannerella forsythensis
+Microbial/83560		Chlamydia muridarum
+Microbial/813		Chlamydia trachomatis
+Microbial/83557		Chlamydophila caviae
+Microbial/115711	Chlamydophila pneumoniae AR39
+Microbial/115713	Chlamydophila pneumoniae CWL029
+Microbial/138677	Chlamydophila pneumoniae J138
+Microbial/63737		Nostoc punctiforme
+Microbial/103690	Nostoc sp. PCC 7120
+Microbial/74547		Prochlorococcus marinus str. MIT 9313
+Microbial/59919		Prochlorococcus marinus subsp. pastoris str. CCMP1378
+Microbial/32049		Synechococcus sp. PCC 7002
+Microbial/84588		Synechococcus sp. WH 8102
+Microbial/1148		Synechocystis sp. PCC 6803
+Microbial/985		Cytophaga hutchinsonii
+Microbial/1717		Corynebacterium diphtheriae
+Microbial/1718		Corynebacterium glutamicum
+Microbial/1764		Mycobacterium avium
+Microbial/1770		Mycobacterium avium subsp. paratuberculosis
+Microbial/1765		Mycobacterium bovis
+Microbial/1769		Mycobacterium leprae
+Microbial/1772		Mycobacterium smegmatis
+Microbial/164513	Mycobacterium tuberculosis 210
+Microbial/83331		Mycobacterium tuberculosis CDC1551
+Microbial/83332		Mycobacterium tuberculosis H37Rv
+Microbial/100226	Streptomyces coelicolor A3(2)
+Microbial/2021		Thermobifida fusca
+Microbial/1392		Bacillus anthracis
+Microbial/1396		Bacillus cereus
+Microbial/86665		Bacillus halodurans
+Microbial/1423		Bacillus subtilis
+Microbial/1488		Clostridium acetobutylicum
+Microbial/36826		Clostridium botulinum A
+Microbial/1496		Clostridium difficile
+Microbial/1502		Clostridium perfringens
+Microbial/195103	Clostridium perfringens ATCC 13124
+Microbial/1351		Enterococcus faecalis
+Microbial/1352		Enterococcus faecium
+Microbial/2097		Mycoplasma genitalium
+Microbial/2104		Mycoplasma pneumoniae
+Microbial/2107		Mycoplasma pulmonis
+Microbial/2130		Ureaplasma urealyticum
+Microbial/129958	Carboxydothermus hydrogenoformans
+Microbial/49338		Desulfitobacterium hafniense
+Microbial/1422		Geobacillus stearothermophilus
+Microbial/1360		Lactococcus lactis subsp. lactis
+Microbial/1642		Listeria innocua
+Microbial/1639		Listeria monocytogenes
+Microbial/169963	Listeria monocytogenes EGD-e
+Microbial/1264		Ruminococcus albus
+Microbial/119072	Thermoanaerobacter tengcongensis
+Microbial/159288	Staphylococcus aureus subsp. aureus 252
+Microbial/159289	Staphylococcus aureus subsp. aureus 476
+Microbial/93062		Staphylococcus aureus subsp. aureus COL
+Microbial/158878	Staphylococcus aureus subsp. aureus Mu50
+Microbial/158879	Staphylococcus aureus subsp. aureus N315
+Microbial/93061		Staphylococcus aureus subsp. aureus NCTC 8325
+Microbial/1282		Staphylococcus epidermidis
+Microbial/1336		Streptococcus equi
+Microbial/1302		Streptococcus gordonii
+Microbial/28037		Streptococcus mitis
+Microbial/1309		Streptococcus mutans
+Microbial/189423	Streptococcus pneumoniae 670
+Microbial/171101	Streptococcus pneumoniae R6
+Microbial/170187	Streptococcus pneumoniae TIGR4
+Microbial/160490	Streptococcus pyogenes M1 GAS
+Microbial/186103	Streptococcus pyogenes MGAS8232
+Microbial/160491	Streptococcus pyogenes Manfredo
+Microbial/1108		Chloroflexus aurantiacus
+Microbial/61435		Dehalococcoides ethenogenes
+Microbial/833		Fibrobacter succinogenes
+Microbial/190304	Fusobacterium nucleatum subsp. nucleatum ATCC 25586
+Microbial/156889	Magnetococcus sp. MC-1
+Microbial/190650	Caulobacter crescentus CB15
+Microbial/181661	Agrobacterium tumefaciens str. C58 (Cereon)
+Microbial/180835	Agrobacterium tumefaciens str. C58 (U. Washington)
+Microbial/29459		Brucella melitensis
+Microbial/29461		Brucella melitensis biovar Suis
+Microbial/381		Mesorhizobium loti
+Microbial/1076		Rhodopseudomonas palustris
+Microbial/382		Sinorhizobium meliloti
+Microbial/1063		Rhodobacter sphaeroides
+Microbial/178391	Silicibacter pomeroyi
+Microbial/188		Magnetospirillum magnetotacticum
+Microbial/781		Rickettsia conorii
+Microbial/782		Rickettsia prowazekii
+Microbial/163164	Wolbachia endosymbiont of Drosophila melanogaster
+Microbial/48935		Novosphingobium aromaticivorans
+Microbial/518		Bordetella bronchiseptica
+Microbial/519		Bordetella parapertussis
+Microbial/520		Bordetella pertussis
+Microbial/134537	Burkholderia fungorum
+Microbial/13373		Burkholderia mallei
+Microbial/28450		Burkholderia pseudomallei
+Microbial/119219	Ralstonia metallidurans
+Microbial/305		Ralstonia solanacearum
+Microbial/485		Neisseria gonorrhoeae
+Microbial/122586	Neisseria meningitidis MC58
+Microbial/122587	Neisseria meningitidis Z2491
+Microbial/135720	Neisseria meningitidis serogroup C
+Microbial/915		Nitrosomonas europaea
+Microbial/881		Desulfovibrio vulgaris
+Microbial/35554		Geobacter sulfurreducens
+Microbial/197		Campylobacter jejuni
+Microbial/195099	Campylobacter jejuni RM1221
+Microbial/85962		Helicobacter pylori 26695
+Microbial/85963		Helicobacter pylori J99
+Microbial/83333		Escherichia coli K12
+Microbial/83334		Escherichia coli O157:H7
+Microbial/155864	Escherichia coli O157:H7 EDL933
+Microbial/573		Klebsiella pneumoniae
+Microbial/556		Pectobacterium chrysanthemi
+Microbial/34054		Yersinia enterocolitica (type 0:8)
+Microbial/632		Yersinia pestis
+Microbial/920		Acidithiobacillus ferrooxidans
+Microbial/107806	Buchnera sp. APS
+Microbial/167879	Colwellia sp. 34H
+Microbial/777		Coxiella burnetii
+Microbial/870		Dichelobacter nodosus
+Microbial/446		Legionella pneumophila
+Microbial/414		Methylococcus capsulatus
+Microbial/24		Shewanella putrefaciens
+Microbial/666		Vibrio cholerae
+Microbial/190486	Xanthomonas axonopodis pv. citri str. 306
+Microbial/190485	Xanthomonas campestris pv. campestris str. ATCC 33913
+Microbial/160492	Xylella fastidiosa 9a5c
+Microbial/155920	Xylella fastidiosa Ann-1
+Microbial/155919	Xylella fastidiosa Dixon
+Microbial/714		Actinobacillus actinomycetemcomitans
+Microbial/730		Haemophilus ducreyi
+Microbial/71421		Haemophilus influenzae Rd
+Microbial/747		Pasteurella multocida
+Microbial/287		Pseudomonas aeruginosa
+Microbial/294		Pseudomonas fluorescens
+Microbial/160488	Pseudomonas putida KT2440
+Microbial/160489	Pseudomonas putida PRS1
+Microbial/317		Pseudomonas syringae
+Microbial/98360		Salmonella enterica subsp. enterica serovar Dublin
+Microbial/90370		Salmonella enterica subsp. enterica serovar Typhi
+Microbial/592		Salmonella enteritidis
+Microbial/54388		Salmonella paratyphi
+Microbial/99287		Salmonella typhimurium LT2
+Microbial/178328	Salmonella typhimurium TR7095
+Microbial/139		Borrelia burgdorferi
+Microbial/158		Treponema denticola
+Microbial/160		Treponema pallidum
+Microbial/2336		Thermotoga maritima
+Microbial/1299		Deinococcus radiodurans
+
+--Other eukaryotes genome databases--
+
+NAME		CONTENT
+----		-------
+Microbial/5865	Babesia bovis	
+Microbial/5807	Cryptosporidium parvum	
+Microbial/5802	Eimeria tenella	
+Microbial/5825	Plasmodium chabaudi	
+Microbial/5833	Plasmodium falciparum	
+Microbial/36329	Plasmodium falciparum 3D7	
+Microbial/5855	Plasmodium vivax	
+Microbial/5861	Plasmodium yoelii	
+Microbial/5874	Theileria annulata	
+Microbial/5875	Theileria parva	
+Microbial/5811	Toxoplasma gondii	
+Microbial/44689	Dictyostelium discoideum	
+Microbial/5741	Giardia intestinalis	
+Microbial/5759	Entamoeba histolytica	
+Microbial/5085	Aspergillus fumigatus	
+Microbial/5072	Aspergillus nidulans	
+Microbial/5067	Aspergillus parasiticus
+Microbial/5476	Candida albicans
+Microbial/5207	Filobasidiella neoformans
+Microbial/5514	Fusarium sporotrichioides
+Microbial/5141	Neurospora crassa
+Microbial/5306	Phanerochaete chrysosporium
+Microbial/38081	Pneumocystis carinii f. sp. carinii
+Microbial/42068	Pneumocystis carinii f. sp. hominis
+Microbial/4932	Saccharomyces cerevisiae
+Microbial/4896	Schizosaccharomyces pombe
+Microbial/7159	Aedes aegypti
+Microbial/7160	Aedes albopictus
+Microbial/6943	Amblyomma americanum
+Microbial/7165	Anopheles gambiae
+Microbial/7227	Drosophila melanogaster
+Microbial/7393	Glossina
+Microbial/7162	Ochlerotatus triseriatus
+Microbial/6279	Brugia malayi
+Microbial/6238	Caenorhabditis briggsae
+Microbial/6239	Caenorhabditis elegans
+Microbial/6182	Schistosoma japonicum
+Microbial/6183	Schistosoma mansoni
+Microbial/5664	Leishmania major
+Microbial/5691	Trypanosoma brucei
+Microbial/5693	Trypanosoma cruzi
+Microbial/6035	Encephalitozoon cuniculi
+
+--Trace Databases--
+
+NAME						CONTENT
+----						-------
+Trace/Anopheles_Gambiae_WGS			Anopheles gambiae - WGS
+Trace/Bacillus_Anthracis_Strain_A2012_WGS	Bacillus Anthracis Strain A2012 - WGS
+Trace/Brassica_Oleracea_WGS			Brassica oleracea - WGS
+Trace/Brassica_WGS				Brassica - WGS
+Trace/Caenorhabditis_Briggsae_WGS		Caenorhabditis briggsae - WGS
+Trace/Ciona_Savignyi_WGS			Ciona savignyi - WGS
+Trace/Danio_Rerio_WGS				Danio rerio - WGS
+Trace/Danio_Rerio_EST				Danio rerio - EST
+Trace/Danio_Rerio_OTHER				Danio rerio - other
+Trace/Fugu_Rubripes_WGS				Fugu rubripes - WGS
+Trace/Glycine_Max_EST				Glycine max - EST
+Trace/Homo_Sapiens_EST				Homo sapiens - EST
+Trace/Homo_Sapiens_OTHER			Homo sapiens - other
+Trace/Mus_Musculus_WGS				Mus musculus - WGS
+Trace/Mus_Musculus_EST				Mus musculus - EST
+Trace/Mus_Musculus_OTHER			Mus musculus - other
+Trace/Rattus_Norvegicus_WGS			Rattus norvegicus - WGS
+Trace/Rattus_Norvegicus_OTHER			Rattus norvegicus - other
+Trace/Tetraodon_Nigroviridis_WGS		Tetraodon nigroviridis - WGS
+Trace/Tetraodon_Nigroviridis_OTHER		Tetraodon nigroviridis - other
+Trace/Xenopus_Laevis_EST			Xenopus laevis - EST
+Trace/Zea_Mays_EST				Zea mays - EST

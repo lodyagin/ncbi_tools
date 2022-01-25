@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.15 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -514,6 +514,11 @@ static void RetrieveDocs_Callback (ButtoN buttonPressed)
   /*-------------------------------------*/
 
   e2BooleanPtr = Query_FetchUIDs (s_mainForm [s_currFormNum]);
+  if (e2BooleanPtr == NULL) {
+    ArrowCursor ();
+    return;
+  }
+
   e2UidList = e2BooleanPtr->uids;
   uidList = (Int4Ptr) BSMerge (e2UidList->uids, NULL);
 
@@ -537,8 +542,6 @@ static void RetrieveDocs_Callback (ButtoN buttonPressed)
   Entrez2BooleanReplyFree (e2BooleanPtr);
   ArrowCursor ();
   Update ();
-
-  return;
 }
 
 /*==================================================================*/

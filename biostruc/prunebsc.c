@@ -8,6 +8,9 @@
 /************************************************************/ 
 /*
 * $Log: prunebsc.c,v $
+* Revision 6.3  2002/05/31 20:16:37  chenj
+* PruneModel: Initialize molidx=NULL & if (molidx) Memfree(molidx)
+*
 * Revision 6.2  1999/11/06 15:56:15  addess
 * got rid of two useless lines of code
 *
@@ -275,7 +278,7 @@ static BiostrucModelPtr PruneModel(BiostrucModelPtr bsmp, ValNodePtr pvnIds, Int
   AtomPntrsPtr atmp;
   ModelSpacePointsPtr stmp;
   Int4 numatoms, index, new_numatoms = 0;
-  Boolean *molidx, found;
+  Boolean *molidx = NULL, found;
  
   bsmp2 = BiostrucModelNew();
   bsmp2->id = bsmp->id;
@@ -509,7 +512,8 @@ static BiostrucModelPtr PruneModel(BiostrucModelPtr bsmp, ValNodePtr pvnIds, Int
       }
     }
   }
-  MemFree(molidx);
+
+  if (molidx) MemFree(molidx);
   return bsmp2;
 }
 

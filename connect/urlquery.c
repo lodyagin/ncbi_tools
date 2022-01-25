@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.20  2002/08/07 18:45:17  lavr
+* Change from deprecated to current EIO_ReadMethod enums
+*
+* Revision 6.19  2002/07/02 17:17:58  kans
+* fixed error message
+*
 * Revision 6.18  2001/09/25 13:20:56  lavr
 * SERVICE_CreateConnectorEx() - number of args adjusted
 *
@@ -195,7 +201,7 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
   status = CONN_Create (connector, &conn);
   if (status != eIO_Success) {
-    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");
   }
 
   /* cleanup & return */
@@ -257,7 +263,7 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
   buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
       while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read,
-                                  eIO_Plain)) == eIO_Success) {
+                                  eIO_ReadPlain)) == eIO_Success) {
           FileWrite (buffer, 1, n_read, fp);
       }
   }
@@ -284,7 +290,7 @@ static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count
 
 	aicp = (AsnIoConnPtr) ptr;
 	if (aicp == NULL || aicp->conn == NULL) return 0;
-	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_Plain);
+	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_ReadPlain);
 	return (Nlm_Int2) bytes;
 }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.81 $
+* $Revision: 6.82 $
 *
 * File Description: 
 *
@@ -192,6 +192,11 @@ NLM_EXTERN void ResynchCodingRegionPartials (SeqEntryPtr sep);
 /* resynchronizes mRNAs with product cDNA bioseq */
 
 NLM_EXTERN void ResynchMessengerRNAPartials (SeqEntryPtr sep);
+
+/* individual feature callbacks for above functions */
+
+NLM_EXTERN void ResynchMRNAPartials (SeqFeatPtr sfp, Pointer userdata);
+NLM_EXTERN void ResynchCDSPartials (SeqFeatPtr sfp, Pointer userdata);
 
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */

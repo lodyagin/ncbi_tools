@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.75 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -203,6 +203,7 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
                                     Boolean buildContig,
                                     WndActnProc activateForm);
 
+extern Boolean HasZeroLengthSequence (ForM newForm);
 extern Boolean SequencesFormHasProteins (ForM f);
 extern Boolean SequencesFormHasTooManyNucleotides (ForM f);
 
@@ -325,6 +326,8 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
 
 /* Many miscellaneous extern functions within sequin source files */
 
+extern Boolean WriteSequinAppParam (CharPtr section, CharPtr type, CharPtr value);
+
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
 
 extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap);
@@ -406,6 +409,7 @@ extern void AutoParseFeatureTableProc (IteM i);
 extern void RecomputeSuggest (IteM i);
 extern void RetranslateCdRegionsNoStop (IteM i);
 extern void RetranslateCdRegionsDoStop (IteM i);
+extern void AddGlobalCodeBreak (IteM i);
 extern void CorrectCDSGenCodes (IteM i);
 /* extern void CorrectCDSStartCodon (IteM i); */
 /* extern Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean include_stop); */
@@ -434,9 +438,10 @@ extern void SelectBioseq (IteM i);
 
 extern void FuseFeature (IteM i);
 
+extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
 extern void RemoveTextInsideString (IteM i);
-extern void GeneralTextConversion (IteM i);
+extern void RemoveTextOutsideString (IteM i);
 
 extern void BioseqViewFormToolBar (GrouP h);
 

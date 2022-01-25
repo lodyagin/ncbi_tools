@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.111 $
+* $Revision: 6.116 $
 *
 * File Description: 
 *
@@ -1403,6 +1403,47 @@ typedef struct sequencesform {
   FormActnFunc    putItAllTogether;
   Int2            currConfirmCount;
 } SequencesForm, PNTR SequencesFormPtr;
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* HasZeroLengthSequence () -- Checks to see if any of a submission's  */
+/*                             sequences are missing (ie -- zero       */
+/*                             length).                                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+extern Boolean HasZeroLengthSequence (ForM newForm)
+{
+  SequencesFormPtr  sqfp;
+  FastaPagePtr      fpp;
+  SeqEntryPtr       sep;
+  BioseqPtr         bsp;
+
+  /* Get the list of Bioseqs to check */
+
+  sqfp = (SequencesFormPtr) GetObjectExtra (newForm);
+  if (NULL == sqfp)
+    return TRUE;
+
+  fpp = GetObjectExtra (sqfp->dnaseq);
+  sep = fpp->list;
+
+  /* Check the list */
+
+  while (NULL != sep) {
+    if (sep->choice == 1) { 
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (bsp->length <= 0)
+	return TRUE;
+    }
+    sep = sep->next;
+  }
+
+  /* If we made it to here, then */
+  /* there were none found.      */
+
+  return FALSE;
+}
 
 extern Boolean SequencesFormHasProteins (ForM f)
 
@@ -3210,9 +3251,11 @@ static void PrefixOrgToDefline (SeqEntryPtr sep)
     *ptr = '\0';
   }
   TrimSpacesAroundString (taxname);
-  if (StringICmp (taxname, "Human immunodeficiency virus type 1") == 0) {
+  if ((StringICmp (taxname, "Human immunodeficiency virus type 1") == 0) ||
+      (StringICmp (taxname, "Human immunodeficiency virus 1") == 0)) {
     StringCpy (taxname, "HIV-1");
-  } else if (StringICmp (taxname, "Human immunodeficiency virus type 2") == 0) {
+  } else if ((StringICmp (taxname,"Human immunodeficiency virus type 2")==0) ||
+	     (StringICmp (taxname,"Human immunodeficiency virus 2")==0)) {
     StringCpy (taxname, "HIV-2");
   }
 
@@ -4893,10 +4936,10 @@ static void ChangeDnaParse (ButtoN b)
     if (fpp != NULL) {
       fpp->parseSeqId = GetStatus (b);
       if (fpp->parseSeqId) {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSENUCSEQID", "TRUE");
+        WriteSequinAppParam ("PREFERENCES", "PARSENUCSEQID", "TRUE");
         SafeHide (sqfp->singleIdGrp);
       } else {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSENUCSEQID", "FALSE");
+        WriteSequinAppParam ("PREFERENCES", "PARSENUCSEQID", "FALSE");
         SafeShow (sqfp->singleIdGrp);
       }
     }
@@ -4915,9 +4958,9 @@ static void ChangeMrnaParse (ButtoN b)
     if (fpp != NULL) {
       fpp->parseSeqId = GetStatus (b);
       if (fpp->parseSeqId) {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSEMRNASEQID", "TRUE");
+        WriteSequinAppParam ("PREFERENCES", "PARSEMRNASEQID", "TRUE");
       } else {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSEMRNASEQID", "FALSE");
+        WriteSequinAppParam ("PREFERENCES", "PARSEMRNASEQID", "FALSE");
       }
     }
   }
@@ -4935,9 +4978,9 @@ static void ChangeProtParse (ButtoN b)
     if (fpp != NULL) {
       fpp->parseSeqId = GetStatus (b);
       if (fpp->parseSeqId) {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSEPROTSEQID", "TRUE");
+        WriteSequinAppParam ("PREFERENCES", "PARSEPROTSEQID", "TRUE");
       } else {
-        SetAppParam ("SEQUIN", "PREFERENCES", "PARSEPROTSEQID", "FALSE");
+        WriteSequinAppParam ("PREFERENCES", "PARSEPROTSEQID", "FALSE");
       }
     }
   }
@@ -4952,9 +4995,9 @@ static void ChangeMrnaFlag (ButtoN b)
   if (sqfp != NULL) {
     sqfp->makeMRNA = GetStatus (b);
     if (sqfp->makeMRNA) {
-      SetAppParam ("SEQUIN", "PREFERENCES", "CREATEMRNA", "TRUE");
+      WriteSequinAppParam ("PREFERENCES", "CREATEMRNA", "TRUE");
     } else {
-      SetAppParam ("SEQUIN", "PREFERENCES", "CREATEMRNA", "FALSE");
+      WriteSequinAppParam ("PREFERENCES", "CREATEMRNA", "FALSE");
     }
   }
 }

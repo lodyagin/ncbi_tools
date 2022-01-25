@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.25  2002/06/13 16:14:07  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
+*
 * Revision 6.24  2002/04/05 19:02:47  ivanov
 * Changed L_tmpnam to PATH_MAX in Nlm_TmpNam()
 *
@@ -164,8 +167,13 @@ Removed disabled CD routines.
 #define THIS_MODULE g_corelib
 #define THIS_FILE  _this_file
 
+#include <ncbilcl.h>
+
 #include "corepriv.h"
 #ifdef OS_MAC
+#ifdef OS_UNIX_DARWIN
+#include <Carbon.h>
+#endif
 #include <Navigation.h>
 #include <Script.h>
 #endif

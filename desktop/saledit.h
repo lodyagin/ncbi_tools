@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -85,7 +85,7 @@ typedef struct seqeditview {
                    viewmodeitem;
   IteM             prefitem;
   IteM             undoitem;
-  IteM             cutitem, delitem, copyitem, pasteitem;
+  IteM             cutitem, delitem, copyitem, pasteitem, insitem;
   IteM             rfitem[10];
   IteM             conscolor;
   IteM             importseq,

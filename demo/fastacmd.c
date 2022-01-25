@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.18 2001/12/18 13:01:52 camacho Exp $
+/* $Id: fastacmd.c,v 6.26 2002/08/12 12:40:55 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,38 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.18 $
+* $Revision: 6.26 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.26  2002/08/12 12:40:55  camacho
+* Fix for unresolved symbol in Win32 build
+*
+* Revision 6.25  2002/08/09 19:41:25  camacho
+* 1) Added blast version number to command-line options
+* 2) Added explanations for some default parameters
+*
+* Revision 6.24  2002/07/30 21:02:17  camacho
+* Added explanation for -T option
+*
+* Revision 6.23  2002/07/30 15:30:47  camacho
+* 1. Added explanation for -L option
+* 2. Moved function to parse SeqLocs to readdb.c
+*
+* Revision 6.22  2002/07/18 22:17:49  madden
+* Revert last change
+*
+* Revision 6.21  2002/07/18 18:49:43  madden
+* Set SeqLoc to NULL always
+*
+* Revision 6.20  2002/07/14 21:02:08  camacho
+* Added extra features to fastacmd
+*
+* Revision 6.19  2002/05/02 21:59:31  camacho
+* Clarified database parameter default
+*
 * Revision 6.18  2001/12/18 13:01:52  camacho
 * Added new flag -D to dump blast database in FASTA format
 *
@@ -110,39 +136,62 @@
 #include <seqport.h>
 #include <tofasta.h>
 #include <readdb.h>
+#include <blast.h>
 
 #define NUMARG sizeof(myargs)/sizeof(myargs[0])
 
 static Args myargs [] = {
-    { "Database", 
-      NULL, NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
+    { "Database",                                               /* 0 */
+      "nr", NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
+    { "Type of file\n"                                          /* 1 */
+      "         G - guess mode (look for protein, then nucleotide)\n"
+      "         T - protein   \n"
+      "         F - nucleotide", 
+      "G", NULL,NULL,TRUE,'p',ARG_STRING,0.0,0,NULL},
     { "Search string: GIs, accessions and locuses may be used delimited\n"
-      "      by comma.",
+      "      by comma.",                                        /* 2 */
       NULL, NULL, NULL, TRUE, 's', ARG_STRING, 0.0, 0, NULL},
-    { "Input file wilth GIs/accessions/locuses for batch retrieval",
+    { "Input file wilth GIs/accessions/locuses for batch\n"
+      "      retrieval",/* 3 */
       NULL, NULL, NULL, TRUE, 'i', ARG_STRING, 0.0, 0, NULL},
-    { "Retrieve duplicate accessions",
+    { "Retrieve duplicate accessions",                          /* 4 */
       "F", NULL, NULL, TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Line length for sequence", 
+    { "Line length for sequence",                               /* 5 */
       "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL},
-    { "Definition line should contain target gi only",
+    { "Definition line should contain target gi only",          /* 6 */
       "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Output file", 
+    { "Output file",                                            /* 7 */ 
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
-    { "Use Ctrl-A's as non-redundant defline separator", 
+    { "Use Ctrl-A's as non-redundant defline separator",        /* 8 */
       "F", NULL, NULL, TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Dump the entire database in fasta format", 
-      "F", NULL, NULL, TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL}
+    { "Dump the entire database in fasta format",               /* 9 */
+      "F", NULL, NULL, TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Range of sequence to extract (Format: start,stop)\n"
+      "      0 in 'start' refers to the beginning of the sequence\n"
+      "      0 in 'stop' refers to the end of the sequence",
+      "0,0", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL}, /* 10 */
+    { "Strand on subsequence (nucleotide only): 1 is top, 2 is bottom",
+      "1", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},    /* 11 */
+    { "Print taxonomic information for requested sequence(s)",
+      "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},/* 12 */
+    { "Print database information only (overrides all other options)",
+      "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},/* 13 */
 };
 
 Int2 Main (void)
 {
     CharPtr	database, searchstr, batchfile;
     Int4	linelen;
-    Boolean	dupl, target, use_ctrlAs, dump_all;
-    FILE *outfp;
+    Boolean	dupl, target, use_ctrlAs, dump_all, taxonomy_info, dbinfo_only;
+    Uint1 is_prot;
+    FILE *outfp = NULL;
+    CharPtr seqlocstr;
+    Uint1 strand;
+    Char buf[256] = { '\0' };
 
-    if (! GetArgs ("fastacmd", NUMARG, myargs)) {
+    StringCpy(buf, "fastacmd ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
+    if (! GetArgs (buf, NUMARG, myargs)) {
 	     return (1);
     }
 
@@ -151,17 +200,33 @@ Int2 Main (void)
     }
 
     database = myargs[0].strvalue;
-    searchstr = myargs[1].strvalue;
-    batchfile = myargs[2].strvalue;
-    dupl = myargs[3].intvalue;
-    linelen = myargs[4].intvalue;
-    target = myargs[5].intvalue;
-    use_ctrlAs = myargs[7].intvalue;
-    dump_all = myargs[8].intvalue;
+    if (!StringICmp(myargs[1].strvalue, "T"))
+        is_prot = READDB_DB_IS_PROT;
+    else if (!StringICmp(myargs[1].strvalue, "F"))
+        is_prot = READDB_DB_IS_NUC;
+    else
+        is_prot = READDB_DB_UNKNOWN;
 
-    outfp = FileOpen(myargs[6].strvalue, "w");
+    searchstr     = myargs[2].strvalue;
+    batchfile     = myargs[3].strvalue;
+    dupl          = myargs[4].intvalue;
+    linelen       = myargs[5].intvalue;
+    target        = myargs[6].intvalue;
+    use_ctrlAs    = myargs[8].intvalue;
+    dump_all      = myargs[9].intvalue;
+    seqlocstr     = myargs[10].strvalue;
+    strand        = myargs[11].intvalue;
+    taxonomy_info = myargs[12].intvalue;
+    dbinfo_only   = myargs[13].intvalue;
 
-    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, outfp, target, use_ctrlAs, dump_all);
+    if ((outfp = FileOpen(myargs[7].strvalue, "w")) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0,"Could not open %s", myargs[7].strvalue);
+        return 1;
+    }
+
+    Fastacmd_Search_ex (searchstr, database, is_prot, batchfile, dupl,
+            linelen, outfp, target, use_ctrlAs, dump_all, seqlocstr, strand,
+            taxonomy_info, dbinfo_only);
 
     FileClose(outfp);
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -70,7 +70,7 @@ extern "C" {
 
 typedef struct seqmgrbioseqcontext {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   BioseqPtr     bsp;
   SeqEntryPtr   sep;
   BioseqSetPtr  bssp;
@@ -78,12 +78,12 @@ typedef struct seqmgrbioseqcontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Uint2         index;
+  Uint4         index;
 } SeqMgrBioseqContext, PNTR SeqMgrBioseqContextPtr;
 
 typedef struct seqmgrsegmentcontext {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   SeqLocPtr     slp;
   BioseqPtr     parent;
   Int4          cumOffset;
@@ -93,12 +93,12 @@ typedef struct seqmgrsegmentcontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Uint2         index;
+  Uint4         index;
 } SeqMgrSegmentContext, PNTR SeqMgrSegmentContextPtr;
 
 typedef struct seqmgrdesccontext {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   ValNodePtr    sdp;
   SeqEntryPtr   sep;
   Uint2         level;
@@ -106,12 +106,12 @@ typedef struct seqmgrdesccontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Uint2         index;
+  Uint4         index;
 } SeqMgrDescContext, PNTR SeqMgrDescContextPtr;
 
 typedef struct seqmgrfeatcontext {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   SeqFeatPtr    sfp;
   SeqAnnotPtr   sap;
   BioseqPtr     bsp;
@@ -130,7 +130,7 @@ typedef struct seqmgrfeatcontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Uint2         index;
+  Uint4         index;
 } SeqMgrFeatContext, PNTR SeqMgrFeatContextPtr;
 
 /*****************************************************************************
@@ -315,7 +315,7 @@ typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) (
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs (
+NLM_EXTERN Int4 LIBCALL SeqMgrExploreBioseqs (
   Uint2 entityID,
   Pointer ptr,
   Pointer userdata,
@@ -325,20 +325,20 @@ NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs (
   Boolean parts
 );
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments (
+NLM_EXTERN Int4 LIBCALL SeqMgrExploreSegments (
   BioseqPtr bsp,
   Pointer userdata,
   SeqMgrSegmentExploreProc userfunc
 );
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreDescriptors (
+NLM_EXTERN Int4 LIBCALL SeqMgrExploreDescriptors (
   BioseqPtr bsp,
   Pointer userdata,
   SeqMgrDescExploreProc userfunc,
   BoolPtr seqDescFilter
 );
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures (
+NLM_EXTERN Int4 LIBCALL SeqMgrExploreFeatures (
   BioseqPtr bsp,
   Pointer userdata,
   SeqMgrFeatExploreProc userfunc,
@@ -387,8 +387,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByLabel (
 NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor (
   Uint2 entityID,
   BioseqPtr bsp,
-  Uint2 itemID,
-  Uint2 index,
+  Uint4 itemID,
+  Uint4 index,
   ValNodePtr sdp,
   SeqMgrDescContext PNTR context
 );
@@ -396,8 +396,8 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor (
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (
   Uint2 entityID,
   BioseqPtr bsp,
-  Uint2 itemID,
-  Uint2 index,
+  Uint4 itemID,
+  Uint4 index,
   SeqFeatPtr sfp,
   SeqMgrFeatContext PNTR context
 );
@@ -502,7 +502,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (
   BioseqPtr bsp,
   VoidPtr featarray,
   Int4 numfeats,
-  Uint2 index,
+  Uint4 index,
   SeqMgrFeatContext PNTR context
 );
 
@@ -562,7 +562,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeaturesRev (
+NLM_EXTERN Int4 LIBCALL SeqMgrExploreFeaturesRev (
   BioseqPtr bsp,
   Pointer userdata,
   SeqMgrFeatExploreProc userfunc,

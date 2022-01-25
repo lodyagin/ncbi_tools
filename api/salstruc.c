@@ -1,6 +1,6 @@
 /* ===========================================================================
 *
-o                            PUBLIC DOMAIN NOTICE
+*                            PUBLIC DOMAIN NOTICE
 *            National Center for Biotechnology Information (NCBI)
 *
 *  This software/database is a "United States Government Work" under the
@@ -29,6 +29,9 @@ o                            PUBLIC DOMAIN NOTICE
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.11  2002/07/31 17:01:07  kans
+* do not call get_tot_line if not showing features (VL)
+*
 * Revision 6.10  2001/11/30 16:57:11  wheelan
 * removed line numbers from FASTA+GAP dumping
 *
@@ -1656,7 +1659,7 @@ static Int4 get_tot_line (EditAlignDataPtr adp, Int4 line_len, Int4 left, Int4 r
   line += (Int4) CountFeatNum (adp->seqfeat, line_len, left, right);
   return line;
 }
- 
+
 NLM_EXTERN void data_collect_arrange (EditAlignDataPtr adp, Boolean recollect)
 {
   ValNodePtr         list = NULL, 
@@ -1669,9 +1672,14 @@ NLM_EXTERN void data_collect_arrange (EditAlignDataPtr adp, Boolean recollect)
   if (adp->draw_scale) x++;
   if (adp->draw_bars) x++;
   maxscroll = adp->length * x / adp->visibleWidth;
-  adp->nlines = get_tot_line (adp, adp->visibleWidth, 0, adp->length-1);
-  adp->nlines = adp->nlines - adp->pnlLine +3;
-  adp->nlines = MAX ((Int4)0, adp->nlines);
+  
+  if (adp->int4value2 != -1) /* Feature line count is disabled when scrolling */
+  {
+  	adp->nlines = get_tot_line (adp, adp->visibleWidth, 0, adp->length-1);
+  	adp->nlines = adp->nlines - adp->pnlLine +3;
+  	adp->nlines = MAX ((Int4)0, adp->nlines);
+  }
+
   if (recollect) 
   {
      adp->bufferstart = get_bufferstart (adp);

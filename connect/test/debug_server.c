@@ -1,4 +1,4 @@
-/*  $Id: debug_server.c,v 6.7 2001/01/02 21:17:47 vakatov Exp $
+/*  $Id: debug_server.c,v 6.8 2002/08/07 18:45:19 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: debug_server.c,v $
+* Revision 6.8  2002/08/07 18:45:19  lavr
+* Change from deprecated to current EIO_ReadMethod enums
+*
 * Revision 6.7  2001/01/02 21:17:47  vakatov
 * Keep in-sync with the CONNECT API:  SOCK_SetLOG --> CORE_SetLOG
 *
@@ -339,7 +342,7 @@ static void s_PerformIO(void)
       size_t n_read;
       assert( !s_CS.size );
       if ((status =
-           SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read, eIO_Plain))
+           SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read, eIO_ReadPlain))
           != eIO_Success)
         s_ClientHup = 1 /* true */;
 

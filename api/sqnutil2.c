@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.129 $
+* $Revision: 6.134 $
 *
 * File Description: 
 *
@@ -405,6 +405,7 @@ typedef struct seqlocrange {
   Int4		left;
   Int4		right;
   Uint1		strand;
+  Uint1     choice;
   struct seqlocrange PNTR next;
  } SeqLocRange, PNTR SeqLocRangePtr;
  
@@ -456,6 +457,7 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
           slrp->left = left;
           slrp->right = right;
           slrp->strand = strand;
+          slrp->choice = curr->choice;
           if (head == NULL) {
             head = slrp;
           } else if (last != NULL) {
@@ -651,7 +653,7 @@ static SeqLocPtr SeqLocFromRange (SeqLocRangePtr head, BioseqPtr target,
         from = to;
         to = tmp;
       }
-      if (add_null  && notFirst) {
+      if (add_null && notFirst) {
         slp = ValNodeNew (NULL);
         if (slp != NULL) {
           slp->choice = SEQLOC_NULL;
@@ -677,8 +679,12 @@ static SeqLocPtr SeqLocFromRange (SeqLocRangePtr head, BioseqPtr target,
           }
         }
       }
-      AddIntToSeqFeat (sfp, from, to, target,
-                       fuzz_from, fuzz_to, strand);
+      if (head->choice == SEQLOC_PNT) {
+        AddPntToSeqFeat (sfp, from, target, fuzz_from, strand);
+      } else {
+        AddIntToSeqFeat (sfp, from, to, target,
+                         fuzz_from, fuzz_to, strand);
+      }
       notFirst = TRUE;
       head = head->next;
     }
@@ -3953,6 +3959,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   GeneRefPtr      grp;
   ImpFeatPtr      ifp = NULL;
   Boolean         isGeneSyn = FALSE;
+  Boolean         isLocusTag = FALSE;
   Int2            j;
   Boolean         justTrnaText;
   GBQualPtr       last;
@@ -3981,6 +3988,9 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     if (StringNCmp (qual, "gene_syn", 8) == 0) {
       qnum = GBQUAL_gene;
       isGeneSyn = TRUE;
+    } else if (StringNCmp (qual, "locus_tag", 9) == 0) {
+      qnum = GBQUAL_gene;
+      isLocusTag = TRUE;
     }
   }
   if (qnum <= -1) {
@@ -4096,6 +4106,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       if (grp == NULL) return;
       if (isGeneSyn) {
         ValNodeCopyStr (&(grp->syn), 0, val);
+      } else if (isLocusTag) {
+        grp->locus_tag = StringSave (val);
       } else if (grp->locus == NULL) {
         grp->locus = StringSave (val);
       } else {
@@ -4157,6 +4169,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       if (grp != NULL) {
         if (isGeneSyn) {
           ValNodeCopyStr (&(grp->syn), 0, val);
+        } else if (isLocusTag) {
+          grp->locus_tag = StringSave (val);
         } else if (grp->locus == NULL) {
           grp->locus = StringSave (val);
         } else {
@@ -4412,7 +4426,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   Boolean        partial3;
   PubdescPtr     pdp;
   Int4           pos;
-  SeqFeatPtr     prev;
+  SeqFeatPtr     prev = NULL;
   CharPtr        qual;
   Uint1          rnatype;
   RnaRefPtr      rrp;
@@ -4469,13 +4483,17 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
           sfp = SeqFeatNew ();
           if (sfp != NULL && sap != NULL) {
             if (sap->data != NULL) {
-              prev = sap->data;
-              while (prev->next != NULL) {
-                prev = prev->next;
+              if (prev == NULL) {
+                prev = sap->data;
+                while (prev->next != NULL) {
+                  prev = prev->next;
+                }
               }
               prev->next = sfp;
+              prev = sfp;
             } else {
               sap->data = (Pointer) sfp;
+              prev = sfp;
             }
 
             if (StringCmp (feat, "gene") == 0) {
@@ -5574,7 +5592,14 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         mayBeAccessionList = FALSE;
         GetSeqId (seqid, line, sizeof (seqid), TRUE, TRUE);
 
-      } else if (StringNCmp (line, "ORIGIN ", 7) == 0 || StringNCmp (line, "SQ ", 3) == 0) {
+      } else if (StringNCmp (line, "ACCESSION ", 10) == 0) {
+
+        mayBePlainFasta = FALSE;
+        mayBeAccessionList = FALSE;
+        /* locus may not be unique, but accession should be, so it overrides locus */
+        GetSeqId (seqid, line, sizeof (seqid), TRUE, TRUE);
+
+      } else if (StringNCmp (line, "ORIGIN", 6) == 0 || StringNCmp (line, "SQ ", 3) == 0) {
 
         mayBePlainFasta = FALSE;
         mayBeAccessionList = FALSE;

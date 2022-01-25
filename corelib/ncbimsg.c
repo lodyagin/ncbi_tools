@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,9 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.10  2002/06/17 15:07:01  ivanov
+* Added fix for BeOS platform in GetOneChar
+*
 * Revision 6.9  2000/08/28 18:46:24  vakatov
 * Made internal hooks "static" and "C" -- to pass C++ compilation
 *
@@ -489,6 +492,7 @@ static int GetOneChar (void)
   do
     {
 #ifdef OS_UNIX
+#ifndef OS_UNIX_BEOS
       if (value == 0)
         {
           fd_set rfds;
@@ -501,6 +505,7 @@ static int GetOneChar (void)
               sleep(1);
             }
         }
+#endif
 #endif /* OS_UNIX */
       if((tvalue = getchar()) == EOF) {
         return 0;

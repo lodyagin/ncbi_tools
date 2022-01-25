@@ -32,8 +32,86 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.182 $
+* $Revision: 6.206 $
 * $Log: blastool.c,v $
+* Revision 6.206  2002/08/22 12:36:36  madden
+* Removed unused variables
+*
+* Revision 6.205  2002/08/19 18:24:20  camacho
+* Removed unused variables
+*
+* Revision 6.204  2002/08/09 19:39:20  camacho
+* Added constants for some blast search parameters
+*
+* Revision 6.203  2002/08/07 02:06:07  camacho
+* Fixed problem when merging lists of gis
+*
+* Revision 6.202  2002/08/06 15:43:20  dondosha
+* Set window size to 0 for megablast in BLASTOptionNewEx
+*
+* Revision 6.201  2002/08/06 15:41:49  camacho
+* Changed return type of MergeDbGiFilesWithOIDLists to void
+*
+* Revision 6.200  2002/08/01 20:45:34  dondosha
+* Changed prototype of the BLASTPostSearchLogic function to make it
+* more convenient
+*
+* Revision 6.199  2002/07/24 21:11:38  kans
+* reverted ncbi URL
+*
+* Revision 6.198  2002/07/24 15:38:07  dondosha
+* Corrections in BlastPostSearchLogic for processing multiple-query intermediate results from megablast
+*
+* Revision 6.197  2002/07/23 16:50:04  kans
+* changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+*
+* Revision 6.196  2002/07/15 17:34:18  camacho
+* Fixed little/big endian problem in IntersectDoubleInt4ListWithOIDLists
+*
+* Revision 6.195  2002/07/09 16:09:43  camacho
+* Changed interface to BlastCreateVirtualOIDList
+*
+* Revision 6.194  2002/07/02 17:08:01  dondosha
+* Reverse previous change - not needed
+*
+* Revision 6.193  2002/07/02 01:36:40  dondosha
+* For megablast use larger window in CheckStartForGappedAlignment
+*
+* Revision 6.192  2002/06/26 00:56:30  camacho
+*
+* 1. Fixed bug when searching a mixture of real and mask databases.
+* 2. Clean up of code that calculates the number of sequences and database
+*    length.
+*
+* Revision 6.191  2002/06/25 19:39:38  camacho
+* Made BlastCreateVirtualOIDList public for use by neighboring software
+*
+* Revision 6.190  2002/06/23 06:57:45  camacho
+* Minor fix to previous commit
+*
+* Revision 6.189  2002/06/21 21:48:19  camacho
+* Reorganized BlastProcessGiLists
+*
+* Revision 6.188  2002/06/19 22:50:33  dondosha
+* Added all queries information for tabular output with multiple queries
+*
+* Revision 6.187  2002/06/13 20:48:45  dondosha
+* Do not assign cutoff_s for megablast in BLASTOptionNewEx - it is not needed anyway
+*
+* Revision 6.186  2002/06/06 22:03:06  camacho
+*
+* 1. Fixed bug in BlastDbGiListToOidList
+* 2. Removed statement in BlastProcessGiLists that sets num_seqs to 0
+*
+* Revision 6.185  2002/05/28 21:41:03  dondosha
+* Correction for megablast -D3 output with non-affine extension when database has a gi list
+*
+* Revision 6.184  2002/05/10 22:38:49  dondosha
+* Always do preliminary and then traceback gapped extension if dynamic programming extension is used
+*
+* Revision 6.183  2002/05/09 15:35:51  dondosha
+* Added BLASTOptionNewEx function with an extra argument for megablast
+*
 * Revision 6.182  2002/04/18 19:05:08  camacho
 * Modified BlastProcessGiLists to deal with multi-volume databases with empty oidlists
 *
@@ -1426,6 +1504,13 @@ BLAST_OptionsBlkPtr LIBCALL
 BLASTOptionNew(CharPtr progname, Boolean gapped)
 
 {
+   return BLASTOptionNewEx(progname, gapped, FALSE);
+}
+
+BLAST_OptionsBlkPtr LIBCALL 
+BLASTOptionNewEx(CharPtr progname, Boolean gapped, Boolean is_megablast)
+
+{
 	BLAST_OptionsBlkPtr options;
 
 	options = (BLAST_OptionsBlkPtr) MemNew(sizeof(BLAST_OptionsBlk));
@@ -1435,17 +1520,15 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 	options->program_name = StringSave(progname);
 	options->required_start = 0;
 	options->required_end = -1;	/* -1 indicates the end of the query. */
-	options->cutoff_s = 0;
-	options->cutoff_s2 = 0;
 	options->db_length = 0;		/* zero means that real size will be used. */
 	options->searchsp_eff = 0;	/* zero means that real size will be used. */
 
-	options->block_width = 20;
 	options->hsp_range_max = 100;
 	options->entrez_query = NULL;
 	options->gifile = NULL;
 	options->gilist = NULL;
 	options->sort_gi_list = TRUE;
+    options->gilist_already_calculated = FALSE;
 
 	if (gapped)
 	{
@@ -1465,27 +1548,41 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->gap_decay_rate = 0.5;
 		options->gap_prob = 0.5;
 		options->gap_size = 50;
-		options->window_size = 30;
-		options->threshold_second = 0;
+		options->threshold_second = WORD_THRESHOLD_BLASTN;
 		options->expect_value  = 10;
 		options->hitlist_size = 500;
 		options->two_pass_method  = FALSE;
 		options->multiple_hits_only  = FALSE;
 		options->number_of_bits  = 0.0;
 		/* 1st pass not done for blastn. */
-		options->dropoff_2nd_pass  = 20;
+		options->dropoff_2nd_pass  = UNGAPPED_X_DROPOFF_NUCL;
 		options->matrix  = NULL;
 		options->old_stats  = FALSE;
-		options->wordsize  = 11;
-		options->penalty  = -3;
-		options->reward  = 1;
+		options->penalty  = PENALTY;
+		options->reward  = REWARD;
 		options->e2 = 0.05;
 		/* Used in the post-process gapping of the blastn result. */
-		options->gap_open  = 5;
-		options->gap_extend  = 2;
-                options->decline_align = INT2_MAX;
-		options->gap_x_dropoff  = 30;
-		options->gap_x_dropoff_final  = 50;
+        if (!is_megablast) {
+            options->wordsize  = WORDSIZE_NUCL;
+            options->gap_open  = GAP_OPEN_NUCL;
+            options->gap_extend  = GAP_EXTN_NUCL;
+            options->block_width = 20;
+            options->window_size = WINDOW_SIZE_NUCL;
+            options->cutoff_s = 0;
+            options->cutoff_s2 = 0;
+            options->gap_x_dropoff  = GAP_X_DROPOFF_NUCL;
+        } else {
+            options->is_megablast_search = TRUE;
+            options->wordsize = WORDSIZE_MEGABLAST;
+            options->gap_open  = GAP_OPEN_MEGABLAST;
+            options->gap_extend  = GAP_EXTN_MEGABLAST;
+            options->cutoff_s2 = options->cutoff_s = 28;
+            options->window_size = WINDOW_SIZE_MEGABLAST;
+            options->gap_x_dropoff  = GAP_X_DROPOFF_MEGABLAST;
+            options->dropoff_2nd_pass = UNGAPPED_X_DROPOFF_MEGABLAST;
+        }
+        options->decline_align = INT2_MAX;
+		options->gap_x_dropoff_final  = GAP_X_DROPOFF_FINAL_NUCL;
 		options->gap_trigger  = 25.0;
 		options->strand_option  = BLAST_BOTH_STRAND;
 		options->no_check_score  = FALSE;
@@ -1497,17 +1594,17 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 	else
 	{
 		options->gap_size = 50;
-		options->window_size = 40;
+		options->window_size = WINDOW_SIZE_PROT;
 		options->expect_value  = 10;
 		options->hitlist_size = 500;
 		options->two_pass_method  = FALSE;
 		options->multiple_hits_only  = TRUE;
 		options->number_of_bits  = 0.0;
 		options->dropoff_1st_pass  = 7;
-		options->dropoff_2nd_pass  = 10;
+		options->dropoff_2nd_pass  = UNGAPPED_X_DROPOFF_PROT;
 		options->matrix  = StringSave("BLOSUM62");
 		options->old_stats  = FALSE;
-		options->wordsize  = 3;
+		options->wordsize  = WORDSIZE_PROT;
 		options->penalty  = 0;
 		options->reward  = 0;
 		options->gap_decay_rate = 0.5;
@@ -1522,33 +1619,33 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->gap_prob = 1.0;
 		}
 
-		options->gap_open  = 11;
-		options->gap_extend  = 1;
-                options->decline_align = INT2_MAX;
-		options->gap_x_dropoff  = 15;
-		options->gap_x_dropoff_final  = 25;
+		options->gap_open  = GAP_OPEN_PROT;
+		options->gap_extend  = GAP_EXTN_PROT;
+        options->decline_align = INT2_MAX;
+		options->gap_x_dropoff  = GAP_X_DROPOFF_PROT;
+		options->gap_x_dropoff_final  = GAP_X_DROPOFF_FINAL_PROT;
 		options->gap_trigger  = 22.0;
 
 		if (StringICmp(progname, "blastp") == 0)
 		{
 			options->e2 = BLAST_SMALLEST_EVALUE;
-			options->threshold_second = 11;
+			options->threshold_second = WORD_THRESHOLD_BLASTP;
 		}
 		else if (StringICmp(progname, "blastx") == 0)
 		{
 			options->e2 = 1.0;
 			options->genetic_code = 1;
-			options->threshold_second = 12;
+			options->threshold_second = WORD_THRESHOLD_BLASTX;
 			options->do_sum_stats = TRUE;
 			options->strand_option  = BLAST_BOTH_STRAND;
 		}
 
-               else if ( StringICmp(progname, "tblastn") == 0
+        else if ( StringICmp(progname, "tblastn") == 0
 			 || StringICmp(progname, "psitblastn") == 0 )
 		{
 			options->e2 = 1.0;
 			options->db_genetic_code = 1;
-			options->threshold_second = 13;
+			options->threshold_second = WORD_THRESHOLD_TBLASTN;
 			options->do_sum_stats = TRUE;
 		}
 		else if (StringICmp(progname, "tblastx") == 0)
@@ -1556,7 +1653,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->e2 = BLAST_SMALLEST_EVALUE;
 			options->genetic_code = 1;
 			options->db_genetic_code = 1;
-			options->threshold_second = 13;
+			options->threshold_second = WORD_THRESHOLD_TBLASTX;
 			options->gap_open  = 0;
 			options->gap_extend  = 0;
 			options->gap_x_dropoff  = 0;
@@ -1873,12 +1970,13 @@ has been specified. */
         if (!options->is_megablast_search) {
            options->gap_open  = 5;
            options->gap_extend  = 2;
-	   if (found_matrix == FALSE) /* probably not a protein-protein matrix. */
-	   {
-        	options->matrix = StringSave(matrix_name);
-	   }
+           if (found_matrix == FALSE) {
+               /* probably not a protein-protein matrix. */
+               options->matrix = StringSave(matrix_name);
+	       }
         } else {
-           options->gap_open = options->gap_extend = 0;
+           options->gap_open   = GAP_OPEN_MEGABLAST;
+           options->gap_extend = GAP_EXTN_MEGABLAST;
         }
 	return 0;
     }
@@ -1949,64 +2047,21 @@ BlastGetSequenceFromBioseq (BioseqPtr bsp, Int4Ptr length)
 	return sequence;
 }
 
-
 /*
 	Adjusts the length and number of sequences in a database according
 	to the gi_list or seqIdPtr list given.
+
+    06/24/2002: This function returns the number of sequences and number of
+    bases/residues based on the information on the rdfp parameter (all others
+    are ignored). This function should be called after BlastProcessGiLists and
+    before calculating the effective search space.
 */
 
 Boolean
 BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total)
 
 {
-	Int4 count, ordinal_id;
-        Int8	db_length_private;
-	SeqIdPtr sip;
-
-		
-	count = 0;
-	db_length_private = 0;
-
-	if (seqid_list)
-	{
-		sip = seqid_list;
-		while (sip)
-		{
-			ordinal_id = SeqId2OrdinalId(rdfp, sip);
-			if (ordinal_id > 0)
-				count++;
-			sip = sip->next;
-		}
-	}
-	else if (oidlist) {
-
-	    Uint4	mask, base=0, maskindex, i;
-	    Uint4	total_mask = oidlist->total/MASK_WORD_SIZE + 1;
-
-	    maskindex = 0;
-
-	    while (maskindex < total_mask) {
-		/* for each long-word mask */
-		mask = Nlm_SwapUint4(oidlist->list[maskindex]);
-		i = 0;
-		while (mask) {
-		    if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-			count++;
-			db_length_private +=
-			    readdb_get_sequence_length(rdfp, base + i);
-		    }
-		    mask <<= 1;
-		    i++;
-		}
-		maskindex++;
-		base += MASK_WORD_SIZE;
-	    }
-	}
-
-	*db_length = db_length_private;
-	*db_number = count;
-
-	return TRUE;
+    return readdb_get_totals_ex2(rdfp, db_length, db_number, FALSE, TRUE);
 }
 
 /*
@@ -2015,7 +2070,6 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 */
 BlastGiListPtr 
 BlastGiListDestruct(BlastGiListPtr blast_gi_list, Boolean contents)
-
 {
 	if (blast_gi_list == NULL)
 		return NULL;
@@ -2035,28 +2089,42 @@ BlastGiListDestruct(BlastGiListPtr blast_gi_list, Boolean contents)
 	the gi_list and must delete it.
 */
 
-BlastGiListPtr 
-BlastGiListNew(BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 total)
-
+BlastGiListPtr BlastGiListNew(BlastDoubleInt4Ptr gi_list, Int4 tot)
 {
-	BlastGiListPtr blast_gi_list;
+	BlastGiListPtr blast_gi_list = NULL;
+    register Int4 i;
 
-	if (gi_list == NULL || total == 0)
+	if (gi_list == NULL || tot == 0)
 		return NULL;
 
-	blast_gi_list = MemNew(sizeof(BlastGiList));
-	blast_gi_list->gi_list = gi_list;
-	blast_gi_list->gi_list_pointer = gi_list_pointers;
-	blast_gi_list->total = total;
+	if ((blast_gi_list = MemNew(sizeof(BlastGiList))) == NULL)  {
+        ErrPostEx(SEV_ERROR,0,0,"BlastGiListNew: Out of memory\n");
+        return NULL;
+    }
+
+    blast_gi_list->gi_list = MemNew(sizeof(BlastDoubleInt4)*tot);
+    blast_gi_list->gi_list_pointer = MemNew(sizeof(BlastDoubleInt4Ptr)*tot);
+    if ((blast_gi_list->gi_list == NULL) || 
+        (blast_gi_list->gi_list_pointer == NULL)) {
+        ErrPostEx(SEV_ERROR,0,0,"BlastGiListNew: Out of memory\n");
+        return NULL;
+    }
+
+    for (i = 0; i < tot; i++) {
+        MemCpy(&(blast_gi_list->gi_list[i]),&gi_list[i],
+                sizeof(BlastDoubleInt4));
+        blast_gi_list->gi_list_pointer[i] = &(blast_gi_list->gi_list[i]);
+    }
+	blast_gi_list->total = tot;
 	blast_gi_list->current = 0;
+    blast_gi_list->gilist_not_owned = FALSE; /* yes, we own this */
 	
 	return blast_gi_list;
 }
 
 /* This is a simple callback comparison function for sorting */
 static int LIBCALLBACK
-blast_double_int_compare(VoidPtr v1, VoidPtr v2)
-
+blast_double_int_oid_compare(VoidPtr v1, VoidPtr v2)
 {
 	BlastDoubleInt4Ptr h1, h2;
 	BlastDoubleInt4Ptr *hp1, *hp2;
@@ -2075,7 +2143,6 @@ blast_double_int_compare(VoidPtr v1, VoidPtr v2)
 }
 static int LIBCALLBACK
 blast_double_int_gi_compare(VoidPtr v1, VoidPtr v2)
-
 {
 	BlastDoubleInt4Ptr h1, h2;
 	BlastDoubleInt4Ptr *hp1, *hp2;
@@ -2092,450 +2159,610 @@ blast_double_int_gi_compare(VoidPtr v1, VoidPtr v2)
 
 	return 0;
 }
-
-/* The function below returns an intersection of the two gi lists, if the first
-   list is non-empty. However it returns the second gi list, if the first list
-   is empty. 
-*/
-static
-BlastGiListPtr MergeBlastGiLists(BlastGiListPtr gi_list, BlastGiListPtr
-                                 gi_list_1)
+static int LIBCALLBACK
+blast_double_int_start_compare(VoidPtr v1, VoidPtr v2)
 {
-    Int4 index, index1, gi, new_total = 0;
-    BlastDoubleInt4Ptr new_gi_list;
-    BlastDoubleInt4Ptr *gi_list_pointers, *gi_list_1_pointers;
+	BlastDoubleInt4Ptr h1, h2;
+	BlastDoubleInt4Ptr *hp1, *hp2;
 
-    gi_list_1_pointers = gi_list_1->gi_list_pointer;
+	hp1 = (BlastDoubleInt4Ptr PNTR) v1;
+	hp2 = (BlastDoubleInt4Ptr PNTR) v2;
+	h1 = *hp1;
+	h2 = *hp2;
 
-    /* If first list is empty, sort second list by ordinal ids 
-       and return it */
-    if (gi_list == NULL) {
-       HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
-       return gi_list_1;
+	if (h1->start < h2->start)
+		return -1;
+	if (h1->start > h2->start)
+		return 1;
+    if (h1->start == h2->start) { /* break the tie with oids */
+        if (h1->ordinal_id < h2->ordinal_id)
+            return -1;
+        if (h1->ordinal_id > h2->ordinal_id)
+            return 1;
     }
 
-    /* Sort both lists by gis */
-    HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
-   
-    gi_list_pointers = gi_list->gi_list_pointer;
-    HeapSort(gi_list_pointers, gi_list->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
-
-    for (index=0, index1=0; index<gi_list_1->total; index++) {
-        gi = gi_list_1_pointers[index]->gi;
-        for ( ; index1<gi_list->total && 
-                  gi_list_pointers[index1]->gi < gi; 
-              index1++);
-        if (index1<gi_list->total && gi_list_pointers[index1]->gi == gi)
-            gi_list_1_pointers[new_total++] = gi_list_1_pointers[index];
-        else
-            gi_list_1_pointers[index] = NULL;
-    }
-
-
-    new_gi_list = (BlastDoubleInt4Ptr)
-        MemNew(new_total*sizeof(BlastDoubleInt4));
-
-    for (index=0; index<new_total; index++) {
-        MemCpy(&(new_gi_list[index]), gi_list_1_pointers[index], 
-               sizeof(BlastDoubleInt4));
-        gi_list_1_pointers[index] = &(new_gi_list[index]);
-    }
-
-    MemFree(gi_list_1->gi_list);
-    gi_list_1->gi_list = new_gi_list;
-    gi_list_1->total = new_total;
-
-    /* Now re-sort by ordinal ids */
-    HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
-    /* Don't need the first list any more */
-    BlastGiListDestruct(gi_list, TRUE);
-
-    return gi_list_1;
-} 
-
-static
-BlastDoubleInt4Ptr CombineDoubleInt4Lists(BlastDoubleInt4Ptr list1, Int4Ptr new_total,
-                                          BlastDoubleInt4Ptr list2, Int4 total2)
-{
-   BlastDoubleInt4Ptr new_list;
-   Int4 total1;
-
-   if (list1 == NULL) {
-      *new_total = total2;
-      return list2;
-   }
-
-   total1 = *new_total;
-
-   new_list = (BlastDoubleInt4Ptr) 
-      Realloc(list1, (total1+total2)*sizeof(BlastDoubleInt4));
-   if (!new_list) {
-      ErrPostEx(SEV_WARNING, 0, 0, "Failed to reallocate a gi list");
-      MemFree(list2);
-      return list1;
-   }
-   
-   MemCpy(&(new_list[total1]), list2, total2*sizeof(BlastDoubleInt4));
-   MemFree(list2);
-   *new_total = total1 + total2;
-   
-   return new_list;
+	return 0;
 }
 
-/* The following function creates ordinal id lists from gi lists
-   for each of the databases in the readdb chain separately;
-   Function returns the union of all gi lists, which needs to be
-   saved for formatting */
-static
-BlastGiListPtr BlastDbGiListToOidList(ReadDBFILEPtr rdfp_chain) 
+/* Returns the intersection of list1 and list2. Caller is reponsible to
+ * deallocate the return value */
+static BlastGiListPtr IntersectBlastGiLists(
+                        BlastDoubleInt4Ptr list1, Int4 total1,
+                        BlastDoubleInt4Ptr list2, Int4 total2)
 {
-   Int4	gi_list_total=0, total, i, start, maxoid, num_gis, index;
-   BlastDoubleInt4Ptr	gi_list=NULL, full_gi_list = NULL;
-   BlastDoubleInt4Ptr *gi_list_pointers;
-   OIDListPtr	oidlist;
-   ReadDBFILEPtr  rdfp;
-   Int4		virtual_mask_index, virtual_oid;
-   Uint4	virtual_oid_bit;
-   BlastGiListPtr blast_gi_list = NULL;
-         
+    BlastGiListPtr retval = NULL;
+    BlastDoubleInt4Ptr new_list = NULL;
+    BlastDoubleInt4Ptr *list_ptrs1 = NULL, *list_ptrs2 = NULL;
+    Int4 idx1, idx2, new_idx = 0, short_list_sz = 0, gi;
+
+    if ((!list1 && !list2) || (total1 <= 0 && total2 <= 0)) {
+        ErrPostEx(SEV_WARNING, 0, 0, "IntersectBlastGiLists: No lists to "
+                "combine?");
+        return NULL;
+    }
+    if (!list1) total1 = 0;
+    if (!list2) total2 = 0;
+
+    if (total1 > total2)
+        short_list_sz = total2;
+    else
+        short_list_sz = total1;
+
+    new_list = (BlastDoubleInt4Ptr)
+        MemNew(short_list_sz*sizeof(BlastDoubleInt4));
+    if (!new_list) {
+        ErrPostEx(SEV_WARNING, 0, 0, "IntersectBlastGiLists: Failed to "
+                "allocate memory for gi list");
+        return NULL;
+    }
+
+    /* sort the two lists by gi to facilitate intersection */
+    list_ptrs1 = (BlastDoubleInt4Ptr *)
+                 MemNew(sizeof(BlastDoubleInt4Ptr)*total1);
+    list_ptrs2 = (BlastDoubleInt4Ptr *)
+                 MemNew(sizeof(BlastDoubleInt4Ptr)*total2);
+
+    for (idx1 = 0; idx1 < total1; idx1++)
+        list_ptrs1[idx1] = &(list1[idx1]);
+    for (idx2 = 0; idx2 < total2; idx2++)
+        list_ptrs2[idx2] = &(list2[idx2]);
+    HeapSort(list_ptrs1, total1, sizeof(BlastDoubleInt4Ptr *),
+             blast_double_int_gi_compare);
+    HeapSort(list_ptrs2, total2, sizeof(BlastDoubleInt4Ptr *),
+             blast_double_int_gi_compare);
+
+    /* Intersect! */
+    for (idx1 = 0, idx2 = 0; idx1 < total1; idx1++) {
+        gi = list_ptrs1[idx1]->gi;
+
+        for (; idx2 < total2 && list_ptrs2[idx2]->gi < gi; idx2++);
+
+        if (idx2 < total2 && list_ptrs2[idx2]->gi == gi) {
+            MemCpy((VoidPtr)&new_list[new_idx], list_ptrs1[idx1],
+                   sizeof(BlastDoubleInt4));
+            new_idx++;
+        }
+    }
+
+    /* Save the intersection and return it */
+    if (new_idx > 0)
+        retval = BlastGiListNew(new_list, new_idx);
+
+    if (list_ptrs1)
+        MemFree(list_ptrs1);
+    if (list_ptrs2)
+        MemFree(list_ptrs2);
+    MemFree(new_list);
+
+    return retval;
+}
+
+/* Return the union of list1 and list2. Size of the return value will be
+ * total1 + total2. This function does not eliminate repeated entries.
+ * Caller is responsible for deallocating the return value.*/
+static
+BlastGiListPtr CombineDoubleInt4Lists(
+                   BlastDoubleInt4Ptr list1, Int4 total1, 
+                   BlastDoubleInt4Ptr list2, Int4 total2)
+{
+    BlastGiListPtr retval = NULL;
+    BlastDoubleInt4Ptr new_list;
+ 
+    if ((!list1 && !list2) || (total1 <= 0 && total2 <= 0))
+        return NULL;
+ 
+    if (!list1) total1 = 0;
+    if (!list2) total2 = 0;
+ 
+    new_list = (BlastDoubleInt4Ptr) 
+               MemNew((total1+total2)*sizeof(BlastDoubleInt4));
+    if (!new_list) {
+        ErrPostEx(SEV_WARNING, 0, 0, "CombineDoubleInt4Lists: Failed to "
+                "allocate memory for gi list");
+        return NULL;
+    }
+    MemCpy(new_list, list1, total1*sizeof(BlastDoubleInt4));
+    MemCpy(&(new_list[total1]), list2, total2*sizeof(BlastDoubleInt4));
+
+    retval = BlastGiListNew(new_list, total1+total2);
+    MemFree(new_list);
+
+    return retval;
+}
+
+/* Intersects (or creates) oidlists and attaches them to individual rdfp's in
+ * the rdfp_chain. If any rdfp->oidlist is populated before calling this
+ * function, it will be freed and replaced by the intersection of the gilist
+ * parameter and itself. */
+static 
+Boolean IntersectDoubleInt4ListWithOIDLists(
+           BlastDoubleInt4Ptr gilist, Int4 total, 
+           ReadDBFILEPtr rdfp_chain)
+{
+    OIDListPtr new_oidlist = NULL, lcl_oidlist = NULL;
+    ReadDBFILEPtr rdfp = NULL;
+    BlastDoubleInt4Ptr *gilist_ptrs = NULL;
+    Int4 gilist_idx = 0; /* index into gilist_ptrs */
+    Int4 i, new_oidlistsz = 0, new_oidlist_count = 0;
+    Int4 maxoid, lcl_mask_index, lcl_oid; 
+    Uint4 lcl_oid_bit = 0, lcl_mask = 0;
+
+    gilist_ptrs = (BlastDoubleInt4Ptr *) 
+                    MemNew(total*sizeof(BlastDoubleInt4Ptr));
+    for (i=0; i < total; i++)
+        gilist_ptrs[i] = &(gilist[i]);
+
+    /* Sort by start field */
+    HeapSort(gilist_ptrs, total, 
+              sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_start_compare);
+
+   /* merge gis from gilist and oids as you walk through rdfp_chain */
    for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
-      if (!rdfp->gifile)
-         continue;
 
-      gi_list = GetGisFromFile(rdfp->gifile, &num_gis);
-      
-      if (gi_list) {
-         maxoid = 0;
-         for (index=0, i=0; i < num_gis; i++) {
-            gi_list[index].ordinal_id = readdb_gi2seq(rdfp, gi_list[i].gi, &start);
-            if (gi_list[index].ordinal_id >= 0) {
-               gi_list[index].gi = gi_list[i].gi;
-               gi_list[index].start = start;
-               maxoid = MAX(maxoid, gi_list[index].ordinal_id);
-               index++;
-            }
-         }
-         num_gis = index;
+       lcl_oidlist = rdfp->oidlist;
 
+       while (gilist_idx < total &&
+              gilist_ptrs[gilist_idx]->start == rdfp->start) {
 
-         /* allocate space for mask for virtual database */
-         oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-         oidlist->total = maxoid + 1;
-         total = maxoid/MASK_WORD_SIZE + 2;
-         oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
-         oidlist->memory = oidlist->list;
+           if (!new_oidlist) {
+               /* determine the maxoid for this rdfp */
+               for (i = gilist_idx; 
+                    i < total && gilist_ptrs[i]->start == rdfp->start; 
+                    i++);
 
-         for (i=0; i < num_gis; i++) {
-            /* populate the mask */
-            virtual_oid = gi_list[i].ordinal_id - gi_list[i].start;
-            
-            if (virtual_oid >= 0) {
-               virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-               virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-               oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-            }
-         }
-         for (i=0; i<total; i++) {
-            oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
-         }
+               if (i == total && rdfp->start != gilist_ptrs[i-1]->start)
+                   break;
+               maxoid = gilist_ptrs[i-1]->ordinal_id - rdfp->start;
+               
+               new_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+               new_oidlist->total = maxoid + 1;
+               new_oidlistsz = maxoid/MASK_WORD_SIZE + 2;
+               new_oidlist->list = (Uint4Ptr) MemNew(
+                                   (new_oidlistsz)*sizeof(Uint4));
+               new_oidlist->memory = new_oidlist->list;
+           }
 
-         rdfp->oidlist = oidlist;
-         full_gi_list = CombineDoubleInt4Lists(full_gi_list, &gi_list_total, 
-                                               gi_list, num_gis);
-      }
-   }
-   
-   if (gi_list && gi_list_total > 0) {
-      gi_list_pointers = (BlastDoubleInt4Ptr *) 
-         MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
-      for (i=0; i<gi_list_total; i++)
-         gi_list_pointers[i] = &(full_gi_list[i]);
-      HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
-      blast_gi_list = BlastGiListNew(full_gi_list, gi_list_pointers, gi_list_total);
-      blast_gi_list->gilist_not_owned = FALSE;
-   }
-   return blast_gi_list;
+           lcl_oid = gilist_ptrs[gilist_idx]->ordinal_id - rdfp->start;
 
-}
+           if (lcl_oid >= 0) {
 
-static Int4 BlastGiListToOid(BlastGiListPtr blast_gi_list, Int4 gi, 
-                             Int4Ptr start, Int4Ptr first_index)
-{
-   BlastDoubleInt4Ptr *gi_list_pointers = blast_gi_list->gi_list_pointer;
-   Int4 total = blast_gi_list->total;
-   Int4 index;
-   Boolean found = FALSE;
+               lcl_mask_index = lcl_oid/MASK_WORD_SIZE;
+               lcl_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - 
+                                       lcl_oid % MASK_WORD_SIZE);
 
-   for (index = *first_index; index < total &&
-           gi > gi_list_pointers[index]->gi; index++);
-      
-   if (index < total && gi == gi_list_pointers[index]->gi) {
-      found = TRUE;
-      *start = gi_list_pointers[index]->start;
-   }
-   *first_index = index;
-   if (found)
-      return gi_list_pointers[index]->ordinal_id;
-   else 
-      return -1;
-}
-
-void
-BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
-                    BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size)
-{
-   Int4		i, maxoid, virtual_oid, total, start;
-   Int4         gi_list_total = *gi_list_size;
-   OIDListPtr	oidlist, alias_oidlist;
-   Boolean	use_private_gilist = FALSE, done;
-   Int4		mask_index, virtual_mask_index;
-   Uint4	oid_bit, virtual_oid_bit;
-   ValNodePtr	vnp;
-   ReadDBFILEPtr rdfp;
-   BlastGiListPtr db_gi_list;
-   BlastDoubleInt4Ptr PNTR gi_list_pointers;
-   
-   /* Create individual ordinal id masks for those databases 
-      which have gi lists */
-   db_gi_list = BlastDbGiListToOidList(search->rdfp);
-   
-   /* non-NULL gi_list means that standalone program called the function */
-   /* non-NULL options->gilist means that server got this gilist from client */
-   if(options->gilist) {
-      /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
-      
-      gi_list = MemNew(ValNodeLen(options->gilist) * sizeof(BlastDoubleInt4));
-      
-      for (vnp=options->gilist, i=0; vnp; vnp = vnp->next, ++i) {
-         gi_list[i].gi = vnp->data.intvalue;
-      }
-      gi_list_total = i;
-   }
-   
-   /* Using "options->gifile" file and gi_list,
-      construct new gi_list with all needed gis */
-   
-   if (options->gifile && StringCmp(options->gifile, "")) {
-      Int4	gi_list_total_2;
-      BlastDoubleInt4Ptr	gi_list_2, tmptr;
-      Int4	size = sizeof(BlastDoubleInt4);
-      
-      gi_list_2 = GetGisFromFile(options->gifile, &gi_list_total_2);
-      
-      /* replace or append this list to main one */
-      if (gi_list && gi_list_2) {
-         /* append */
-         tmptr = MemNew((gi_list_total+gi_list_total_2)*size);
-         MemCpy(tmptr, gi_list, gi_list_total * size);
-         MemCpy(tmptr+gi_list_total, gi_list_2, gi_list_total_2 * size);
-         
-         MemFree(gi_list);
-         MemFree(gi_list_2);
-         
-         gi_list = tmptr;
-         gi_list_total += gi_list_total_2;
-      } else if (gi_list_2) {
-         /* replace */
-         gi_list = gi_list_2;
-         gi_list_total = gi_list_total_2;
-      }
-   }
-   
-   if (gi_list) {
-      /* transform the list into OID mask */
-      use_private_gilist = TRUE;
-      
-      gi_list_pointers = 
-         Nlm_Malloc(gi_list_total*sizeof(BlastDoubleInt4Ptr));
-      for (i=0; i < gi_list_total; i++)
-         gi_list_pointers[i] = &(gi_list[i]);
-      if (db_gi_list)
-         HeapSort(gi_list_pointers, gi_list_total,
-                  sizeof(BlastDoubleInt4Ptr PNTR),
-                  blast_double_int_gi_compare);
-      
-      maxoid = 0;
-      if (options->gilist_already_calculated == TRUE)
-         { /* gi to ordinalID already done, probably for neighboring software. */
-            for (i=0; i < gi_list_total; i++) {
-               /* get virtual OID and start position for the database this gi is in */
-               maxoid = MAX(maxoid, gi_list[i].ordinal_id);
-               gi_list_pointers[i] = &(gi_list[i]);
-            }
-         }
-      else
-         {
-            Int4 first_index = 0;
-            for (i=0; i < gi_list_total; i++) {
-               /* get virtual OID and start position for the database 
-                  this gi is in */
-               gi_list[i].ordinal_id = -1;
-               if (db_gi_list)
-                  gi_list[i].ordinal_id = 
-                     BlastGiListToOid(db_gi_list, gi_list[i].gi, 
-                                      &start, &first_index);
-               if (gi_list[i].ordinal_id == -1)
-                  gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
-               gi_list[i].start = start;
-               maxoid = MAX(maxoid, gi_list[i].ordinal_id);
-            }
-         }
-      
-      /* allocate space for mask for virtual database */
-      oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-      oidlist->total = maxoid + 1;
-      total = maxoid/MASK_WORD_SIZE + 2;
-      oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
-      oidlist->memory = oidlist->list;
-      
-      /* Merge this list with virtual database (OID list) */
-      
-      for (i=0; i < gi_list_total; i++) {
-         /* get start possition in that database */
-         start = gi_list[i].start;
-         
-         /* find out if this is an mask database */
-         
-         done = FALSE;
-         rdfp = search->rdfp;
-         
-         alias_oidlist = NULL;
-         while (rdfp && !done) {
-            if (rdfp->start == start) {
-               alias_oidlist = rdfp->oidlist;
-               done = TRUE;
-            } else if (rdfp->start > start) {
-               done = TRUE;
-            } else {
-               rdfp = rdfp->next;
-            }
-         }
-         
-         /* populate the mask */
-         virtual_oid = gi_list[i].ordinal_id;
-         
-         if (virtual_oid >= 0) {
-            virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-            if (alias_oidlist) {
-               mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
-               oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
                /* In a database with volumes and oidlists we might have empty 
                 * masks (ie: month est subset in a multi-volume est real 
                 * database), so reset the mask index to avoid accessing 
-                * outside the bounds of the alias_oidlist->list */
-               if (alias_oidlist->total == 0)
-                   mask_index = 0;
-            }
-            
-            virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-            
-            if ((!alias_oidlist) ||
-		        (alias_oidlist && virtual_oid < oidlist->total &&
-                 alias_oidlist->list && 
-                 (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
-               oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-            }
-         }
-      }
-      
-      for (i=0; i<total; i++) {
-         oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
-      }
-      /* The individual database oid masks are not needed any more */
-      for (rdfp = search->rdfp; rdfp; rdfp = rdfp->next) {
-         rdfp->oidlist = OIDListFree(rdfp->oidlist);
-      }
-      search->rdfp->oidlist = oidlist;
-      
-      /* in this case, the case when we have .gil file, the only database mask
-         should be used in Blast Search, so set number of sequences for the first
-         database in rdfp list to 0 avoiding search this real database: */
-      search->rdfp->num_seqs = 0;
-      
-      /* keep list of gi's (needed for formating) */
-      if (options->sort_gi_list && !db_gi_list)
-         HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
-      search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
-      search->thr_info->blast_gi_list->gilist_not_owned =
-         options->gilist_already_calculated;
-      *gi_list_size = gi_list_total;
-   } else {
-      /* Ok, we do not have a gi-list specified, but maybe
-         we have an a mask database in the list of databases,
-         we need to create one mask for all such databases */
-      OIDListPtr		virtual_oidlist = NULL;
-      Int4		final_virtual_db_seq=0, final_db_seq=0;
-      Int4		mask, oid, virtual_oid, maskindex,
-         virtual_mask_index, total_virtual_mask,
-         base;
-      Uint4		virtual_oid_bit;
-      ReadDBFILEPtr       mask_rdfp = NULL;
-      
-      rdfp = search->rdfp;
-      while (rdfp) {
-         
-         final_virtual_db_seq = rdfp->stop;
-         if (!rdfp->oidlist)
-            final_db_seq = rdfp->stop;
-         rdfp = rdfp->next;
-      }
-      
-      rdfp = search->rdfp;
-      while (rdfp) {
-         if (rdfp->oidlist) {
-            if (mask_rdfp == NULL)
-               mask_rdfp = rdfp;
-            if (!virtual_oidlist) {
-				/* create new oidlist for virtual database */
-               virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-               virtual_oidlist->total = final_virtual_db_seq + 1;
-               total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
-               virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
-                                /* use the 'memory' field to OIDListFee this memory after use */
-               virtual_oidlist->memory = virtual_oidlist->list;
-            }
-            /* Now populate the virtual_oidlist */
-            maskindex = 0;
-            base = 0;
-            
-            while (maskindex < (rdfp->oidlist->total/MASK_WORD_SIZE +1)) {
-				/* for each long-word mask */
-               mask = Nlm_SwapUint4(rdfp->oidlist->list[maskindex]);
-               
-               i = 0;
-               while (mask) {
-                  if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-                     oid = base + i;
-                     virtual_oid = oid + rdfp->start;
-                     
-                     virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-                     virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-                     virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-                  }
-                  mask <<= 1;
-                  i++;
+                * outside the bounds of the lcl_oidlist->list */
+               if (lcl_oidlist) {
+                   if (lcl_oidlist->total == 0)
+                       lcl_mask_index = 0;
+                   /* also remember the mask */
+                   lcl_mask = SwapUint4(lcl_oidlist->list[lcl_mask_index]);
                }
-               maskindex++;
-               base += MASK_WORD_SIZE;
-            }
-            
-            /* free old mask */
-            rdfp->oidlist = OIDListFree(rdfp->oidlist);
-         }
-         rdfp = rdfp->next;
-      }
-      if (virtual_oidlist) {
-         for (i=0; i<total_virtual_mask; i++) {
-            virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
-         }
-         mask_rdfp->oidlist = virtual_oidlist;
-      }
+
+               /* if there is an oidlist already, make sure this gi is in both
+                * the gilist and the oidlist */
+               if (!lcl_oidlist || 
+                   (lcl_oidlist && lcl_oidlist->list &&
+                   (lcl_oid < new_oidlist->total) && (lcl_mask & lcl_oid_bit))) 
+               {
+                   new_oidlist->list[lcl_mask_index] |= lcl_oid_bit;
+                   new_oidlist_count++;
+               }
+           }
+           gilist_idx++;
+       }
+       /* Save the newly created (or combined) oidlist */
+       if (new_oidlist_count != 0) {
+           for (i = 0; i < new_oidlistsz; i++)
+               new_oidlist->list[i] = SwapUint4(new_oidlist->list[i]);
+           rdfp->oidlist = OIDListFree(rdfp->oidlist);
+           rdfp->oidlist = new_oidlist;
+           new_oidlist = NULL;
+           new_oidlist_count = 0;
+       } else {
+           new_oidlist = OIDListFree(new_oidlist);
+       }
    }
-   /* Save the gi lists from databases; if blast_gi_list exists,
-      then take intersection */
-   if (db_gi_list) 
-      search->thr_info->blast_gi_list = 
-         MergeBlastGiLists(search->thr_info->blast_gi_list, db_gi_list);
+
+   MemFree(gilist_ptrs);
+    
+   return TRUE;
+}
+
+/* The purpose of this function is to merge (or convert) any rdfp->gifile(s)
+   in the rdfp_chain to rdfp->oidlist(s). These oidlists would be local to
+   each rdfp (ie: if one gi list is given for a multivolume database, 
+   multiple oidlists could be created corresponding to each of the rdfp in 
+   the rdfp_chain).
+   If there are any ordinal id lists present in the rdfp_chain, these will be
+   intersected with the oidlists created from the gifiles.
+*/
+static
+void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain) 
+{
+    ReadDBFILEPtr  rdfp = NULL;
+    BlastDoubleInt4Ptr	list=NULL, global_list = NULL;
+    BlastGiListPtr tmp_list = NULL;
+    Int4	i, index, ngis = 0, total_num_gis = 0, start;
+ 
+    /** 
+     * Gather all gis from all rdfp->gifile(s).
+     */
+    for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+        if (!rdfp->gifile)
+           continue;
+  
+        if ((list = GetGisFromFile(rdfp->gifile, &ngis)) != NULL) {
+           
+            for (index=0, i=0; i < ngis; i++) {
+                list[index].ordinal_id = readdb_gi2seq(rdfp_chain, 
+                        list[i].gi, &start);
+                if (list[index].ordinal_id >= 0) {
+                    list[index].gi = list[i].gi;
+                    list[index].start = start;
+                    index++;
+                }
+            }
+            ngis = index;
+   
+            tmp_list = CombineDoubleInt4Lists(global_list, total_num_gis, 
+                                              list, ngis);
+            if (tmp_list) {
+                global_list = MemFree(global_list);
+                global_list = tmp_list->gi_list;
+                tmp_list->gilist_not_owned = TRUE;
+                BlastGiListDestruct(tmp_list, TRUE);
+                total_num_gis += ngis;
+            }
+            list = MemFree(list);
+        }
+    }
+    
+    /**
+     * If there are any lists, create (or intersect) oidlists for the 
+     * appropriate rdfp's
+     */
+    if (global_list && total_num_gis > 0) {
+ 
+        if (IntersectDoubleInt4ListWithOIDLists(global_list, total_num_gis,
+                    rdfp_chain) == FALSE) {
+            ErrPostEx(SEV_WARNING, 0, 0, "MergeDbGiFilesWithOIDLists: Could "
+                    "not intersect gi lists with oidlists");
+            MemFree(global_list);
+            return;
+        }
+  
+        MemFree(global_list);
+    }
+    return;
+}
+
+/* Purpose: Create the virtual oidlist to limit this blast search.
+   Parameters:
+   bglp contains the list of gis to limit the search with. It is freed by this
+   function.
+   rdfp_chain must be the head of the linked list of rdfps attached to the 
+   BlastSearchBlk structure. 
+   oidlist_forall_rdfp determines whether the gis in bglp mask only
+   certain rdfps or mask the entire rdfp_chain. 
+   Finally, in the options parameter, the the gilist_already_calculated 
+   field is a flag to determine whether the ordinal ids for the bglp should 
+   be calculated. This is not the case for the neighboring software 
+   (ie: nabrd.cpp), so we do not calculate them again. This assumes that *
+   only* real databases are used and that the virtual oidlist is freed for 
+   every subsequent invocation of the BLASTSetUpSearch function.
+   The options->sort_gi_list flag is also used by the neighboring software
+   where no sorting of the gi list (bglp parameter) is needed.
+
+   The bglp parameter is used to construct the virtual oidlist. If there are
+   any local oidlists in the rdfp_chain, these are intersected with the bglp.
+   If the bglp is NULL, any oidlists in the rdfp will be consolidated into
+   the virtual oidlist but these will not be part of the return value. If 
+   there are no oidlists and bglp is NULL, the search is not limited at all.
+*/
+BlastGiListPtr 
+BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
+                Boolean oidlist_forall_rdfp, BLAST_OptionsBlkPtr options)
+{
+    BlastDoubleInt4Ptr gilist, real_gilist = NULL, *real_gilist_ptrs = NULL;
+    ReadDBFILEPtr rdfp, mask_rdfp = NULL; 
+    OIDListPtr virtual_oidlist = NULL, lcl_oidlist = NULL;
+    Int4 start, maxoid = 0, virtual_oidlistsz, real_ngis = 0, real_idx = 0;
+    Int4 virtual_oid, virtual_mask_index, virtual_oid_bit;
+    Int4 lcl_mask_index, lcl_bit, lcl_oid;
+    Uint4 lcl_mask = 0;
+    register Int4 i;
+
+    /* initialize the start and oid fields of gilist, as well as maxoid */
+    if (bglp) {
+        gilist = bglp->gi_list;
+        for (i = 0; i < bglp->total; i++) {
+            if (!options->gilist_already_calculated) { 
+                /* nabrd software does this */
+                gilist[i].ordinal_id = readdb_gi2seq(rdfp_chain, gilist[i].gi, 
+                                                 &start);
+                gilist[i].start = start;
+            }
+            maxoid = MAX(maxoid, gilist[i].ordinal_id);
+            if (gilist[i].ordinal_id != -1)
+                real_ngis++; /* keep track of how many gis are actually found */
+        }
+    } else {
+        for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+            if (rdfp->oidlist)
+                maxoid = MAX(maxoid, rdfp->oidlist->total+rdfp->start-1);
+        }
+    }
+
+    if (maxoid == 0) /* no bglp or oidlists ? don't restrict the search */ {
+        bglp = BlastGiListDestruct(bglp, TRUE);
+        return NULL;
+    }
+
+    /* Allocate the virtual oidlist */
+    if (!(virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList)))) {
+        ErrPostEx(SEV_WARNING, 0, 0,"BlastCreateVirtualOIDList: Could not "
+                "allocate memory for global oidlist");
+        return NULL;
+    }
+    virtual_oidlist->total = maxoid + 1;
+    virtual_oidlistsz = maxoid/MASK_WORD_SIZE+2;
+    virtual_oidlist->list = (Uint4Ptr) MemNew(virtual_oidlistsz*sizeof(Uint4));
+    virtual_oidlist->memory = virtual_oidlist->list;
+    if (!virtual_oidlist->list) {
+        ErrPostEx(SEV_WARNING, 0, 0,"BlastCreateVirtualOIDList: Could not "
+                "allocate memory for global oidlist");
+        return NULL;
+    }
+
+    /* real_gilist will store the gilist that corresponds to the intersection
+     * of the bglp and the oidlists in the rdfp_chain */
+    if (real_ngis > 0) {
+        real_gilist = (BlastDoubleInt4Ptr)
+            MemNew(sizeof(BlastDoubleInt4)*real_ngis);
+        real_gilist_ptrs = (BlastDoubleInt4Ptr *)
+            MemNew(sizeof(BlastDoubleInt4 *)*real_ngis);
+        if (!real_gilist || !real_gilist_ptrs) {
+            ErrPostEx(SEV_WARNING, 0, 0, "BlastCreateVirtualOIDList: Out of "
+                    "memory");
+            MemFree(virtual_oidlist);
+            return NULL;
+        }
+    }
+
+    if (bglp) {
+        /* Iterate through the gilist, initializing the virtual oidlist */
+        for (i = 0; i < bglp->total; i++) {
+            if ((virtual_oid = gilist[i].ordinal_id) < 0) 
+                continue;
+
+            for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+                if (rdfp->start == gilist[i].start)
+                    break;
+            }
+            if (!rdfp) continue;
+
+            virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+            virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 -
+                                      virtual_oid % MASK_WORD_SIZE);
+            if (lcl_oidlist = rdfp->oidlist) {
+                lcl_oid = gilist[i].ordinal_id - gilist[i].start;
+                lcl_mask_index = lcl_oid/MASK_WORD_SIZE;
+                lcl_bit = 0x1 << (MASK_WORD_SIZE - 1 -
+                                      lcl_oid % MASK_WORD_SIZE);
+                if (lcl_oidlist->total == 0)
+                    lcl_mask_index = 0;
+            }
+
+            if (!lcl_oidlist ||
+                (lcl_oidlist && lcl_oidlist->list &&
+                 lcl_oid < lcl_oidlist->total &&
+                 (SwapUint4(lcl_oidlist->list[lcl_mask_index])&lcl_bit))) 
+            {
+                virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+                MemCpy((VoidPtr) &real_gilist[real_idx], (VoidPtr) &gilist[i],
+                        sizeof(BlastDoubleInt4));
+                real_idx++;
+            }
+        }
+    } else {
+        /* Create virtual oidlist by combining existing oidlists */
+
+        for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+
+            if (!(lcl_oidlist = rdfp->oidlist) || oidlist_forall_rdfp)
+                continue;
+
+            for (i = 0; i < lcl_oidlist->total; i++) {
+                lcl_mask_index = i/MASK_WORD_SIZE;
+                lcl_bit = 0x1 << (MASK_WORD_SIZE - 1 - i % MASK_WORD_SIZE);
+                virtual_oid = i + rdfp->start;
+                virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+                virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 -
+                        virtual_oid % MASK_WORD_SIZE);
+
+                lcl_mask = SwapUint4(lcl_oidlist->list[lcl_mask_index]);
+                if (lcl_mask & lcl_bit) {
+                    virtual_oidlist->list[virtual_mask_index] |=
+                        virtual_oid_bit;
+                }
+            }
+        }
+    }
+    for (i = 0; i < virtual_oidlistsz; i++)
+        virtual_oidlist->list[i] = SwapUint4(virtual_oidlist->list[i]);
+    
+    /* Determine the first rdfp with an oidlist, and free the local oidlists */
+    for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+        if (rdfp->oidlist && !mask_rdfp)
+            mask_rdfp = rdfp;
+        rdfp->oidlist = OIDListFree(rdfp->oidlist);
+    }
+
+    /* attach mask to appropriate place */
+    if (oidlist_forall_rdfp && real_ngis > 0) {
+        rdfp_chain->oidlist = virtual_oidlist;
+    } else {
+        if (mask_rdfp)
+            mask_rdfp->oidlist = virtual_oidlist;
+        else {
+            /* Should never happen */
+            ErrPostEx(SEV_ERROR, 0, 0, "BlastCreateVirtualOIDList: Missing "
+                    "oidlists to attach virtual_oidlist");
+            OIDListFree(virtual_oidlist);
+            return NULL;
+        }
+    }
+
+    /* Discard bglp and use real_gilist to store the gilist that corresponds
+     * to the virtual oidlist */
+    if (bglp) {
+        bglp = BlastGiListDestruct(bglp, TRUE);
+        for (i = 0; i < real_idx; i++)
+            real_gilist_ptrs[i] = &(real_gilist[i]);
+        if (options->sort_gi_list == TRUE) {
+            /* sort by oid to allow quick searches in BlastGetAllowedGis */
+            HeapSort(real_gilist_ptrs, real_idx,
+                 sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_oid_compare);
+        }
+        gilist = (BlastDoubleInt4Ptr)MemNew(real_idx*sizeof(BlastDoubleInt4));
+        for (i = 0; i < real_idx; i++)
+            MemCpy((VoidPtr)&gilist[i], real_gilist_ptrs[i],
+                    sizeof(BlastDoubleInt4));
+        bglp = BlastGiListNew(gilist, real_idx);
+        MemFree(real_gilist);
+        MemFree(real_gilist_ptrs);
+        MemFree(gilist);
+    }
+
+    return bglp;
+}
+
+/* These are the criteria that can restrict a blast search:
+   a) OIDListPtr rdfp->oidlist;
+   b) CharPtr rdfp->gifile;
+   c) ValNodePtr options->gilist;
+   d) CharPtr options->gifile;
+   e) BlastDoubleInt4Ptr gi_list;
+   
+   The policy to restrict blast searches follows:
+   All rdfp->gifile(s) are read and from the file(s) in (a) and merged (union).
+   The resulting gilist is then intersected with any rdfp->oidlist(s) in (b)
+   (see MergeDbGiFilesWithOIDLists).
+   If non-NULL, (c), (d), and (e) are intersected and this result is 
+   intersected with the gilist obtained previously.
+
+   A single 'virtual' oidlist is created and attached to the first rdfp in the
+   search->rdfp chain that has been restricted (see BlastCreateVirtualOIDList).
+    
+   The resulting gi list from (b), (c), (d), and (e) is attached to the 
+   BlastGiListPtr search->thr_info->blast_gi_list field. The definite source
+   for the actual search resides in the virtual oidlist (if any).
+*/
+void
+BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
+                    BlastDoubleInt4Ptr gi_list, Int4 gi_list_size)
+{
+    BlastGiListPtr bglp = NULL, bglp_tmp = NULL;
+    BlastDoubleInt4Ptr tmp_list = NULL;
+    ValNodePtr vnp;
+    Int4 ngis = 0;
+    /* determine if final oidlist should cover all rdfps or it should start
+     * with the first rdfp that had a rdfp->oidlist or a rdfp->gifile */
+    Boolean oidlist_forall_rdfp = FALSE; 
+
+    /* if any of the following parameters is non-NULL, we need to create an 
+     * oidlist that covers all rdfp(s) in search->rdfp. */
+    if (gi_list || options->gifile || options->gilist)
+        oidlist_forall_rdfp = TRUE;
+
+    /* Create individual oidlists for those databases which have gi lists */
+    MergeDbGiFilesWithOIDLists(search->rdfp);
+
+    if (gi_list)
+        bglp = CombineDoubleInt4Lists(gi_list, gi_list_size, NULL, 0);
+
+    if (options->gifile) {
+
+        if (tmp_list = GetGisFromFile(options->gifile, &ngis)) {
+            if (bglp) {
+                bglp_tmp = IntersectBlastGiLists(tmp_list, ngis,
+                            bglp->gi_list, bglp->total);
+            } else {
+                bglp_tmp = CombineDoubleInt4Lists(tmp_list, ngis, NULL, 0);
+            }
+
+            BlastGiListDestruct(bglp, TRUE);
+            bglp = bglp_tmp;
+            bglp_tmp = NULL;
+            tmp_list = (BlastDoubleInt4Ptr) MemFree(tmp_list);
+            ngis = 0;
+        }
+    }
+
+    /* this is very inefficient, needs to be changed in ASN.1 spec? */
+    if (options->gilist) {
+        Int4 alloc_chunk = 1024, alloc = 1024; 
+
+        tmp_list = (BlastDoubleInt4Ptr) MemNew(sizeof(BlastDoubleInt4)*alloc);
+        if (!tmp_list) {
+            ErrPostEx(SEV_WARNING, 0, 0, "BlastProcessGiLists: Out of memory");
+            BlastGiListDestruct(bglp, TRUE);
+            return ;
+        }
+
+        for (vnp = options->gilist; vnp; vnp = vnp->next) {
+            if (ngis >= alloc) {
+                alloc += alloc_chunk;
+                tmp_list = (BlastDoubleInt4Ptr) 
+                    Realloc(tmp_list, sizeof(BlastDoubleInt4)*alloc);
+                MemSet(&tmp_list[ngis], 0, alloc_chunk*sizeof(BlastDoubleInt4));
+            }
+            tmp_list[ngis++].gi = vnp->data.intvalue;
+        }
+
+        if (bglp) {
+            bglp_tmp = IntersectBlastGiLists(tmp_list, ngis,
+                       bglp->gi_list, bglp->total);
+        } else {
+            /* (options->gifile intersection gi_list) resulted in an empty
+             * set, then we don't recreate bglp. */
+            if (!options->gifile && !gi_list) 
+                bglp_tmp = CombineDoubleInt4Lists(tmp_list, ngis, NULL, 0);
+        }
+
+        BlastGiListDestruct(bglp, TRUE);
+        bglp = bglp_tmp;
+        bglp_tmp = NULL;
+        tmp_list = (BlastDoubleInt4Ptr) MemFree(tmp_list);
+    }
+
+    /* Save the final gi list for formatting purposes */
+    search->thr_info->blast_gi_list = 
+        BlastCreateVirtualOIDList(bglp, search->rdfp, oidlist_forall_rdfp,
+                options);
 }
 
 
@@ -2560,7 +2787,6 @@ BlastComputeProbs(BlastMatrixRescalePtr matrix_rescale, Boolean position_depende
    Int4 dim1, dim2;
    BLAST_Score score_min, score_max;
    BLAST_ScoreFreqPtr sfp;
-   Int4 numberOfScores; /* number of distinct scores*/
    Int4 score;  /*one score in the matrix*/
    Nlm_FloatHi increment;  /*Increment in probability due to one score*/
    Int4 effectiveLength;
@@ -2608,7 +2834,6 @@ BlastComputeProbs(BlastMatrixRescalePtr matrix_rescale, Boolean position_depende
 
    sfp->obs_min = sfp->score_min;
    sfp->obs_max = sfp->score_max;
-   numberOfScores = (sfp->score_max) - (sfp->score_min) + 1;
    for (p = 0; p < dim1; p++)
      if (Xchar != matrix_rescale->query[p])
        for (c = 0; c < dim2; c++) {
@@ -2676,25 +2901,25 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
    {
    	for(c = 0; c < dim1; c++)
    	{
-       	    for(a = 0; a < dim2; a++)
-	    {
-		if (private_matrix[c][a] == BLAST_SCORE_MIN)
-		{
-			matrix[c][a] = BLAST_SCORE_MIN;
-		}
-		else
-		{
-			matrix[c][a] = Nlm_Nint(((FloatHi)(factor*private_matrix[c][a]))/POSIT_SCALE_FACTOR);
-		}
-	    }
+        for(a = 0; a < dim2; a++)
+        {
+            if (private_matrix[c][a] == BLAST_SCORE_MIN)
+            {
+                matrix[c][a] = BLAST_SCORE_MIN;
+            }
+            else
+            {
+                matrix[c][a] = Nlm_Nint(((FloatHi)(factor*private_matrix[c][a]))/POSIT_SCALE_FACTOR);
+            }
         }
+    }
 
-        updateLambdaK(matrix_rescale, position_dependent);
+    updateLambdaK(matrix_rescale, position_dependent);
 
-        if(matrix_rescale->kbp_psi[0] != NULL)
-            new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
-        else
-            return 0.0;
+    if(matrix_rescale->kbp_psi[0] != NULL)
+        new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
+    else
+        return 0.0;
 
 	if (new_lambda > lambda)
 	{
@@ -2741,7 +2966,7 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 /* binary search for ten times. */
    for (index=0; index<POSIT_NUM_ITERATIONS; index++)
    {
-        factor = 0.5*(factor_high+factor_low);
+    factor = 0.5*(factor_high+factor_low);
    	for(c = 0; c < dim1; c++)
    	{
        	    for(a = 0; a < dim2; a++)
@@ -3330,7 +3555,7 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
 { 
     BLASTResultHspPtr PNTR heap, hsp;
     BLASTResultHspPtr hsp_array;
-    Int4 index, hsp_range_max;
+    Int4 index;
     Int4 begin, end, i, hspcnt, query_length;
     Int2 context;
     BLASTHeapPtr hp;
@@ -3339,7 +3564,6 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
         search->pbp->mb_params)  /* Culling is turned off. */
         return;
 
-    hsp_range_max = search->pbp->hsp_range_max;
     hspcnt = result_hitlist->hspcnt;
     hsp_array = result_hitlist->hsp_array;
 
@@ -4378,11 +4602,12 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                 SeqLocPtr query_slp, Int4 num_alignments, 
                                 CharPtr blast_program, Boolean is_ungapped, 
                                 Boolean believe_query, Int4 q_shift, 
-                                Int4 s_shift, FILE *fp)
+                                Int4 s_shift, FILE *fp,
+                                Boolean print_query_info)
 {
    BlastPrintTabulatedResultsEx(seqalign, query_bsp, query_slp, num_alignments,
                                 blast_program, is_ungapped, believe_query,
-                                q_shift, s_shift, fp, NULL);
+                                q_shift, s_shift, fp, NULL, print_query_info);
 }
 
 void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
@@ -4390,7 +4615,7 @@ void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                 CharPtr blast_program, Boolean is_ungapped, 
                                 Boolean believe_query, Int4 q_shift, 
                                 Int4 s_shift, FILE *fp, 
-                                int *num_formatted)
+                                int *num_formatted, Boolean print_query_info)
 {
    SeqAlignPtr sap, sap_tmp = NULL;
    FloatHi perc_ident, bit_score, evalue;
@@ -4440,6 +4665,10 @@ void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
             slp = slp->next;
          if (slp != NULL) {
             query_id = old_query_id = SeqLocId(slp);
+            /* Print new query information */
+            if (print_query_info)
+               PrintTabularOutputHeader(NULL, NULL, slp, NULL, 0, 
+                                        believe_query, fp);
          } else if (query_bsp)
             old_query_id = query_bsp->id;
          defline = (CharPtr) Malloc(BUFFER_LENGTH+1);
@@ -4668,8 +4897,8 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    Int4 q_start, q_end, s_start, s_end, q_shift=0, s_shift=0;
    CharPtr subject_descr = NULL;
    Int4 cutoff_s;
-   Boolean numeric_sip_type = FALSE, is_na, is_translated, db_is_na;
-   Int4 hspcnt, new_hspcnt, number, numseg;
+   Boolean is_na, is_translated, db_is_na;
+   Int4 hspcnt, number, numseg;
    SeqAlignPtr seqalign = NULL, sap;
    FILE *fp = (FILE *)search->output;
    BioseqPtr bsp = NULL, query_bsp;
@@ -4867,10 +5096,10 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    sip = SeqIdSetFree(sip);
    if (search->prog_number != blast_type_tblastx && 
        search->pbp->gapped_calculation)
-      new_hspcnt = RealBlastGetGappedAlignmentTraceback(search, subject_seq, subject_length, rev_subject, rev_subject_length, subject_id, hsp_array, hspcnt, &seqalign, NULL, cutoff_s, FALSE, search->subject_id, TRUE);
+      RealBlastGetGappedAlignmentTraceback(search, subject_seq, subject_length, rev_subject, rev_subject_length, subject_id, hsp_array, hspcnt, &seqalign, NULL, cutoff_s, FALSE, search->subject_id, TRUE);
    else {
       SeqIdPtr new_sip, gi_list=NULL;
-      StdSegPtr ssp, ssp_head = NULL;
+      StdSegPtr ssp;
 
       gi_list = BlastGetAllowedGis(search, search->subject_id, &new_sip);
       sip = SeqIdDup(query_id);
@@ -5056,7 +5285,6 @@ int LIBCALLBACK
 MegaBlastPrintAlignInfo(VoidPtr ptr)
 {
    BlastSearchBlkPtr search = (BlastSearchBlkPtr) ptr;
-   ReadDBFILEPtr rdfp = search->rdfp;
    BLAST_HSPPtr hsp; 
    Int4 i, subject_gi;
    Int2 context;
@@ -5069,8 +5297,8 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    FloatHi perc_ident, bit_score;
    Char eval_buff[10], bit_score_buff[10];
    GapXEditScriptPtr esp;
-   Int4 q_start, q_end, s_start, s_end, query_length, subj_length, numseg;
-   Int4 q_off, q_shift = 0, s_shift = 0;
+   Int4 q_start, q_end, s_start, s_end, query_length, numseg;
+   Int4 q_off, q_shift = 0, s_off, s_shift = 0;
    Int4Ptr length, start;
    Uint1Ptr strands;
    CharPtr subject_descr=NULL, subject_buffer, buffer;
@@ -5091,6 +5319,17 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       sip = SeqIdSetDup(search->subject_info->sip);
 
    subject_id = SeqIdFindBestAccession(sip);
+   
+   if (subject_id->choice == SEQID_GI) {
+      SeqIdPtr new_subject_seqid = NULL;
+      ValNodePtr gi_list = 
+         BlastGetAllowedGis(search, search->subject_id, &new_subject_seqid);
+      
+      if (gi_list) {
+         /* change subject's gi with this 'use_this_gi' gi */
+         subject_id->data.intvalue = gi_list->data.intvalue;
+      }
+   }
 
    if (subject_id->choice != SEQID_GENERAL ||
        StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
@@ -5130,36 +5369,71 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
 	 continue; 
       hsp->context = context & 1;
 
-      kbp = search->sbp->kbp[context];
-      bit_score = (hsp->score*kbp->Lambda - kbp->logK) / NCBIMATH_LN2;
-
       query_length = search->query_context_offsets[context+1] -
          search->query_context_offsets[context] - 1;
 
-      q_off = hsp->query.offset;
-      if (hsp->context) {
-	 hsp->query.end = query_length - hsp->query.offset;
-	 hsp->query.offset = 
-	    hsp->query.end - hsp->query.length;
-         s_end = hsp->subject.offset + 1;
-         s_start = hsp->subject.end;
-      } else {
-	 hsp->query.end = hsp->query.offset + hsp->query.length;
-         s_start = hsp->subject.offset + 1;
-         s_end = hsp->subject.offset + hsp->subject.length;
-      }
+      query_seq = search->context[context].query->sequence;
+      kbp = search->sbp->kbp[context];
 
-      q_start = hsp->query.offset + 1;
-      q_end = hsp->query.end;
+      /* If traceback hasn't been done yet, do it now */
+      if (!hsp->gap_info) {
+         /* This must have already been allocated */
+         GapAlignBlkPtr gap_align = search->gap_align; 
+         FloatHi searchsp_eff;
+         Int4 max_offset, max_start = MAX_DBSEQ_LEN / 2, start_shift;
+
+         gap_align->query = query_seq;
+         gap_align->query_length = query_length;
+         gap_align->subject = subject_seq;
+         gap_align->subject_length = search->subject->length;
+         if ((hsp->query.gapped_start == 0 && hsp->subject.gapped_start == 0) ||
+             CheckStartForGappedAlignment(search, hsp, gap_align->query, gap_align->subject, search->sbp->matrix) == FALSE) {
+            max_offset = GetStartForGappedAlignment(search, hsp, gap_align->query, gap_align->subject, search->sbp->matrix);
+            gap_align->q_start = max_offset;
+            gap_align->s_start = (hsp->subject.offset - hsp->query.offset) + max_offset;
+            hsp->query.gapped_start = gap_align->q_start;
+            hsp->subject.gapped_start = gap_align->s_start;
+         } else {
+            gap_align->q_start = hsp->query.gapped_start;
+            gap_align->s_start = hsp->subject.gapped_start;
+         }
+            
+         if (gap_align->s_start > max_start) {
+            start_shift = (gap_align->s_start / max_start) * max_start;
+            gap_align->subject = gap_align->subject + start_shift;
+            
+            gap_align->s_start %= max_start;
+         } else
+            start_shift = 0;
          
-      /* Adjust offsets if query is a subsequence, only for first query */
-      if (context < 2) {
-          q_start += q_shift;
-          q_end += q_shift;
+         gap_align->subject_length =
+            MIN(gap_align->subject_length - start_shift, 
+                gap_align->s_start + hsp->subject.length + max_start);
+         PerformGappedAlignmentWithTraceback(gap_align);
+         hsp->query.offset = gap_align->query_start;
+         hsp->subject.offset = gap_align->subject_start + start_shift;
+         /* The end is one further for BLAST than for the gapped align. */
+         hsp->query.end = gap_align->query_stop + 1;
+         hsp->subject.end = gap_align->subject_stop + 1 + start_shift;
+         if (gap_align->edit_block && start_shift > 0) {
+            gap_align->edit_block->start2 += start_shift;
+            gap_align->edit_block->length2 += start_shift;
+         }
+         hsp->query.length = hsp->query.end - hsp->query.offset;
+         hsp->subject.length = hsp->subject.end - hsp->subject.offset;
+         hsp->score = gap_align->score;
+         hsp->gap_info = gap_align->edit_block;
+         searchsp_eff = (FloatHi) search->dblen_eff *
+            (FloatHi) search->context[hsp->context].query->effective_length;
+         
+         hsp->evalue = 
+            BlastKarlinStoE_simple(hsp->score, kbp, searchsp_eff);
+         if (hsp->evalue > search->pbp->cutoff_e) {
+            hsp->gap_info = 
+               GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
+            continue;
+         }
       }
-
-      s_start += s_shift;
-      s_end += s_shift;
 
       if (query_id->choice == SEQID_LOCAL && 
        search->pbp->mb_params->full_seqids) {
@@ -5188,15 +5462,18 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
                        BUFFER_LENGTH);
       }
 
-      query_seq = search->context[context].query->sequence;
+      bit_score = (hsp->score*kbp->Lambda - kbp->logK) / NCBIMATH_LN2;
 
       esp = hsp->gap_info->esp;
         
       for (numseg=0; esp; esp = esp->next, numseg++);
 
+      q_off = hsp->query.offset;
+      s_off = hsp->subject.offset;
+
       GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
 				&start, &length, &strands, 
-				&q_off, &hsp->subject.offset);
+				&q_off, &s_off);
       hsp->gap_info = 
          GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 
@@ -5237,6 +5514,31 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
          MemFree(query_buffer);
          continue;
       }
+
+      if (hsp->context) {
+	 hsp->query.end = query_length - hsp->query.offset;
+	 hsp->query.offset = 
+	    hsp->query.end - hsp->query.length;
+         s_end = hsp->subject.offset + 1;
+         s_start = hsp->subject.end;
+      } else {
+	 hsp->query.end = hsp->query.offset + hsp->query.length;
+         s_start = hsp->subject.offset + 1;
+         s_end = hsp->subject.offset + hsp->subject.length;
+      }
+
+      q_start = hsp->query.offset + 1;
+      q_end = hsp->query.end;
+         
+      /* Adjust offsets if query is a subsequence, only for first query */
+      if (context < 2) {
+          q_start += q_shift;
+          q_end += q_shift;
+      }
+
+      s_start += s_shift;
+      s_end += s_shift;
+
       if (hsp->evalue < 1.0e-180)
          sprintf(eval_buff, "0.0");
       else if (hsp->evalue < 1.0e-99)
@@ -5307,10 +5609,9 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
       NewContLine();
    }
 
-   ff_AddString("# Database: ");
-   ff_AddString(blast_database);
-   NewContLine();
-   
+   if (blast_database) {
+   }
+
    if (iteration > 0) {
       ff_AddString("# Iteration: ");
       ff_AddString(Ltostr((long) iteration, 1));
@@ -5335,16 +5636,20 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
       }
 
       if ((title = BioseqGetTitle(query_bsp)) != NULL)
-        sprintf(buffer, "%.*s", BUFFER_LENGTH-str_len, 
-                BioseqGetTitle(query_bsp)); 
+        sprintf(buffer, "%.*s", BUFFER_LENGTH-str_len, title);
       
       ff_AddString(buffer);
       if (no_bioseq)
          BioseqUnlock(query_bsp);
-      
       NewContLine();
    }
-   ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+   if (blast_database) {
+      ff_AddString("# Database: ");
+      ff_AddString(blast_database);
+      NewContLine();
+      ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+   }
+
    ff_EndPrint();
 }
 
@@ -5451,7 +5756,6 @@ SeqAlignPtr BlastClusterHitsFromSeqAlign(SeqAlignPtr seqalign,
    SeqIdPtr sip, next_sip;
    Int4 index, hspcnt, index1, q_overlap;
    ValNodePtr mask;
-   Int4Ptr subj_len;
    BLASTHSPSegmentPtr PNTR hit_array;
    BLASTHSPSegmentPtr hsp, hsp1;
    BioseqPtr PNTR bspp;
@@ -5637,230 +5941,269 @@ SeqAlignPtr BlastClusterHitsFromSeqAlign(SeqAlignPtr seqalign,
    return head;
 }
 
-SeqAlignPtr BLASTPostSearchLogic(BlastSearchBlkPtr search,BLAST_OptionsBlkPtr options)
-{
-  StdSegPtr ssp;
-  BLASTResultHspPtr hsp;
-  GapXEditBlockPtr edit_block;
-  SeqIdPtr gi_list=NULL,subject_id;
-  SeqAlignPtr head,seqalign,seqalign_var,sap;
-  BLASTResultsStructPtr result_struct;
-  BLASTResultHitlistPtr   result_hitlist;
-  Uint1Ptr sequence;
-  Int4 length,hitlist_count,sequence_length,index,index1,total_num_hsp=0,hspcnt;
-  Char buffer[512];
-  
-  
-  head = NULL;
-  
-  if (search->prog_number==blast_type_blastn) {
-    /* Unconcatenate the strands by adjusting the query offsets in
-       all hsps */
-    search->context[search->first_context].query->length = 
-      search->query_context_offsets[search->first_context+1] - 1;
-  }
-
-	if (StringCmp(search->prog_name, "blastn") == 0 && 
-		search->pbp->gapped_calculation)
-        {
-		search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
-
-		search->pbp->gap_open = options->gap_open;
-		search->pbp->gap_extend = options->gap_extend;
-/*
-		search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
-		search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+/* This function does everything necessary to produce a SeqAlign from the
+   intermediate BLAST results structures;
+   In case of multiple queries, the SeqAlign array must be allocated outside.
 */
+void
+BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
+                     SeqAlignPtr PNTR seqalignp, Boolean single_chain)
+{
+   StdSegPtr ssp;
+   BLASTResultHspPtr hsp;
+   GapXEditBlockPtr edit_block;
+   SeqIdPtr gi_list=NULL,subject_id;
+   SeqAlignPtr head,seqalign,tail,sap;
+   BLASTResultsStructPtr result_struct;
+   BLASTResultHitlistPtr   result_hitlist;
+   Uint1Ptr sequence;
+   Int4 length,hitlist_count,sequence_length,index,index1,total_num_hsp=0,hspcnt;
+   Char buffer[512];
+   Int2 num_queries, query_index;
+   
+   head = NULL;
+   tail = NULL;
+   if (single_chain)
+      *seqalignp = NULL;
+   
+   if (search->prog_number==blast_type_blastn) {
+      /* Unconcatenate the strands by adjusting the query offsets in
+         all hsps */
+      search->context[search->first_context].query->length = 
+         search->query_context_offsets[search->first_context+1] - 1;
+   }
+   
+   if (StringCmp(search->prog_name, "blastn") == 0 && 
+       search->pbp->gapped_calculation)
+   {
+      num_queries = search->last_context / 2 + 1;
 
+      for (query_index=0; query_index<num_queries; query_index++) {
+         if (options) {
+            search->pbp->gap_open = options->gap_open;
+            search->pbp->gap_extend = options->gap_extend;
+         }
+         /*
+           search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+           search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+         */
+         
+         if (!search->pbp->mb_params) {
+            search->sbp->kbp_gap[search->first_context] = 
+               search->sbp->kbp[search->first_context];
+            result_struct = search->result_struct;
+         } else {
+            search->sbp->kbp_gap[search->first_context] = 
+               search->sbp->kbp[2*query_index];
+            result_struct = search->mb_result_struct[query_index];
+         }
+         
+         if (!result_struct)
+            continue;
+         hitlist_count = result_struct->hitlist_count;
+         
+         sequence=NULL;
+         sequence_length=0;
+         
+         for (index=0; index<hitlist_count; index++)
+         {
+            if (search->pbp->mb_params && !search->pbp->mb_params->no_traceback
+                && !search->pbp->mb_params->use_dyn_prog) {
+               /* Traceback has already been computed */
+               seqalign = 
+                  MegaBlastGapInfoToSeqAlign(search, index, query_index);
+            } else {
+               length = readdb_get_sequence_ex(search->rdfp, 
+                           result_struct->results[index]->subject_id,
+                           &sequence, &sequence_length, TRUE);
+               
+               if (!search->pbp->mb_params) {
+                  /* Traditional Blastn */
+                  seqalign = SumBlastGetGappedAlignmentTraceback(
+                                search, index, FALSE, FALSE, 
+                                sequence+1, length);
+               } else if (!search->pbp->mb_params->no_traceback) {
+                  /* Mega BLAST with non-greedy extension */
+                  SumBlastGetGappedAlignmentEx(search, index, FALSE, FALSE, 
+                                               sequence+1, length, TRUE,
+                                               &seqalign, NULL, query_index);
+               }
+            }
+            result_struct->results[index]->seqalign = seqalign;
+            total_num_hsp += result_struct->results[index]->hspcnt;
+            BLASTResultFreeHsp(result_struct->results[index]);
+            if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
+            {
+               sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
+               BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
+               break;
+            }	
+         }
+         sequence = MemFree(sequence);
+         sequence_length = 0;
+         search->sbp->kbp_gap[search->first_context] = NULL;
+         
+         HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
 
-		result_struct = search->result_struct;
-       		hitlist_count = result_struct->hitlist_count;
+         /* 
+            The next loop organizes the SeqAligns (and the alignments
+            in the BLAST report) in the same order as the deflines.
+         */
+         if (!single_chain) {
+            head = tail = NULL;
+         }
+         for (index=0; index<hitlist_count; index++) {
+            seqalign = result_struct->results[index]->seqalign;
+            if (seqalign) {
+               if (head == NULL) {
+                  head = seqalign;
+               } else {
+                  for (; tail->next; tail = tail->next);
+                  tail->next = seqalign;
+               }
+               tail = seqalign;
+            }
+         }
+         
+         if (!single_chain)
+            seqalignp[query_index] = head;
+      }
+      if (!single_chain)
+         head = NULL;
+   }
+   else if (search->pbp->gapped_calculation)
+      /* Non-blastn programs */
+   {
+      result_struct = search->result_struct;
+      hitlist_count = result_struct->hitlist_count;
+      
+      if (!options || !(options->smith_waterman)) {
+         
+         for (index=0; index<hitlist_count; index++) {
+            seqalign = BlastGetGapAlgnTbckWithReaddb(search, index, FALSE);
+            result_struct->results[index]->seqalign = seqalign;
+            /*BLASTResultFreeHsp(result_struct->results[index]);*/
+            total_num_hsp += result_struct->results[index]->hspcnt;
+            if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
+            {
+               sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
+               BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
+               break;
+            }	
+         }
+         
+         HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
+      }
+      
+      /* 
+         The next loop organizes the SeqAligns (and the alignments in the
+         BLAST report) in the same order as the deflines.
+      */
 
-		sequence=NULL;
-		sequence_length=0;
-		
-		for (index=0; index<hitlist_count; index++)
-		{
-			length = readdb_get_sequence_ex(search->rdfp, result_struct->results[index]->subject_id, &sequence, &sequence_length, TRUE);
-			seqalign = SumBlastGetGappedAlignmentTraceback(search, index, FALSE, FALSE, sequence+1, length);
-			result_struct->results[index]->seqalign = seqalign;
-			total_num_hsp += result_struct->results[index]->hspcnt;
-			BLASTResultFreeHsp(result_struct->results[index]);
-			if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
-			{
-				sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
-				BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
-				break;
-			}	
-		}
-		sequence = MemFree(sequence);
-		search->sbp->kbp_gap[search->first_context] = NULL;
+      if (options && options->tweak_parameters) {
+         /*restore settings of number of matches and E-value threshold
+           to what user requested*/
+         options->hitlist_size = options->hitlist_size/2;
+         options->expect_value = search->pbp->cutoff_e = options->original_expect_value;
+      }
+      
+      if (options && 
+          ((options->tweak_parameters) || (options->smith_waterman))) {
+         head = RedoAlignmentCore(search, options, hitlist_count, 
+                   options->tweak_parameters, options->smith_waterman);
+      }
 
-		HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
+      for (index=0; index<hitlist_count; index++)
+      {
+         BLASTResultFreeHsp(result_struct->results[index]);
+      }
+      
+      if (!options || 
+          (!(options->tweak_parameters) && !(options->smith_waterman))) {
+         for (index=0; index<hitlist_count; index++) {
+            seqalign = result_struct->results[index]->seqalign;
+            if (seqalign) {
+               if (head == NULL) {
+                  head = seqalign;
+               } else {
+                  for ( ; tail->next; tail = tail->next);
+                  tail->next = seqalign;
+               }
+               tail = seqalign;
+            }
+         }
+      } else {
+         /* We eventually have to free unused seqalign */
+         for (index=0; index<hitlist_count; index++) {
+            seqalign = result_struct->results[index]->seqalign;
+            SeqAlignSetFree(seqalign);
+         }
+      }
+   } else {
+      /* Ungapped psi-blast. */
+      if (StringCmp("blastp", search->prog_name) == 0 && search->positionBased == TRUE)
+      {
+         result_struct = search->result_struct;
+         hitlist_count = result_struct->hitlist_count;
+         for (index=0; index<hitlist_count; index++)
+         {
+            result_hitlist = result_struct->results[index];
+            gi_list = BlastGetAllowedGis(search, result_hitlist->subject_id, NULL);
+            hspcnt = result_hitlist->hspcnt;
+            subject_id = BlastGetSubjectId(search, index, TRUE, NULL);
+            for (index1=0; index1<hspcnt; index1++)
+            {
+               hsp = &(result_hitlist->hsp_array[index1]);
+               edit_block = SimpleIntervalToGapXEditBlock(hsp->query_offset, hsp->subject_offset, hsp->query_length);
+               seqalign = GapXEditBlockToSeqAlign(edit_block, SeqIdDup(subject_id), SeqIdDup(search->query_id));
+               seqalign->score = GetScoreSetFromBlastResultHsp(hsp, gi_list);
+               
+               if (seqalign->segtype == 3) {
+                  ssp = seqalign->segs;
+                  while (ssp) {
+                     ssp->scores = GetScoreSetFromBlastResultHsp(hsp, gi_list);
+                     ssp = ssp->next;
+                  }
+               } else if (seqalign->segtype == 5) { /* Discontinuous */
+                  sap = (SeqAlignPtr) seqalign->segs;
+                  for(;sap != NULL; sap = sap->next) {
+                     sap->score = GetScoreSetFromBlastResultHsp(hsp, gi_list);
+                  }
+               }
+               
+               if (head == NULL) {
+                  head = seqalign;
+               } else {
+                  for ( ; tail->next; tail = tail->next);
+                  tail->next = seqalign;
+               }
+               tail = seqalign;
+               total_num_hsp += result_struct->results[index]->hspcnt;
+               if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
+               {
+                  sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
+                  BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
+                  break;
+               }	
+            }
+         }
+      } /* end blastp */
+      else
+      {
+         Boolean discontinuous = ((options != NULL) && options->discontinuous);
+         if (StringCmp("blastn", search->prog_name) == 0 || StringCmp("blastp", search->prog_name) == 0)
+            head = GetSeqAlignForResultHitList(search, TRUE, FALSE, discontinuous, FALSE, FALSE);
+         else
+            head = GetSeqAlignForResultHitList(search, FALSE, FALSE, discontinuous, FALSE, FALSE);
+      }
+   }
+   
+   gi_list = SeqIdSetFree(gi_list);
 
-		  /* 
-		     The next loop organizes the SeqAligns (and the alignments in the
-		     BLAST report) in the same order as the deflines.
-		  */
-		  head = NULL;
-		  for (index=0; index<hitlist_count; index++)
-		    {
-		      seqalign = result_struct->results[index]->seqalign;
-		      if (seqalign)
-			{
-			  if (head == NULL)
-			    {
-			      head = seqalign;
-			    }
-			  else
-			    {
-			      for (seqalign_var=head; seqalign_var->next;)
-				seqalign_var = seqalign_var->next;
-			      seqalign_var->next = seqalign;
-			    }
-			}
-		    }
-	}
-	else if (search->pbp->gapped_calculation)
-	{
-		result_struct = search->result_struct;
-                hitlist_count = result_struct->hitlist_count;
-
-		if (!(options->smith_waterman)) {
-                    
-                    for (index=0; index<hitlist_count; index++) {
-                        seqalign = BlastGetGapAlgnTbckWithReaddb(search, index, FALSE);
-                        result_struct->results[index]->seqalign = seqalign;
-                        /*BLASTResultFreeHsp(result_struct->results[index]);*/
-			total_num_hsp += result_struct->results[index]->hspcnt;
-			if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
-			{
-				sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
-				BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
-				break;
-			}	
-                    }
-                    
-                    HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
-                }
-
-		/* 
-		The next loop organizes the SeqAligns (and the alignments in the
-		BLAST report) in the same order as the deflines.
-		*/
-
-		if (options->tweak_parameters) {
-                  /*restore settings of number of matches and E-value threshold
-                    to what user requested*/
-		  options->hitlist_size = options->hitlist_size/2;
-		  options->expect_value = search->pbp->cutoff_e = options->original_expect_value;
-		}
-
-		if ((options->tweak_parameters) || (options->smith_waterman))
-                  head = RedoAlignmentCore(search, options, hitlist_count, 
-		       options->tweak_parameters, options->smith_waterman);
-
-                for (index=0; index<hitlist_count; index++)
-                {
-		     BLASTResultFreeHsp(result_struct->results[index]);
-                }
-
-		if ((!(options->tweak_parameters)) && 
-		    (!(options->smith_waterman))) {
-
-
-		  head = NULL;
-		  for (index=0; index<hitlist_count; index++)
-		    {
-		      seqalign = result_struct->results[index]->seqalign;
-		      if (seqalign)
-			{
-			  if (head == NULL)
-			    {
-			      head = seqalign;
-			    }
-			  else
-			    {
-			      for (seqalign_var=head; seqalign_var->next;)
-				seqalign_var = seqalign_var->next;
-			      seqalign_var->next = seqalign;
-			    }
-			}
-		    }
-		} else {
-                    /* We eventually have to free unused seqalign */
-                    for (index=0; index<hitlist_count; index++) {
-                        seqalign = result_struct->results[index]->seqalign;
-                        SeqAlignSetFree(seqalign);
-                    }
-                }
-	}
-	else
-	{
-		/* Ungapped psi-blast. */
-		if (StringCmp("blastp", search->prog_name) == 0 && search->positionBased == TRUE)
-		{
-		      result_struct = search->result_struct;
-                      hitlist_count = result_struct->hitlist_count;
-		      for (index=0; index<hitlist_count; index++)
-		      {
-			  result_hitlist = result_struct->results[index];
-		      	  gi_list = BlastGetAllowedGis(search, result_hitlist->subject_id, NULL);
-			  hspcnt = result_hitlist->hspcnt;
-			  subject_id = BlastGetSubjectId(search, index, TRUE, NULL);
-			  for (index1=0; index1<hspcnt; index1++)
-			    {
-			      hsp = &(result_hitlist->hsp_array[index1]);
-			      edit_block = SimpleIntervalToGapXEditBlock(hsp->query_offset, hsp->subject_offset, hsp->query_length);
-			      seqalign = GapXEditBlockToSeqAlign(edit_block, SeqIdDup(subject_id), SeqIdDup(search->query_id));
-                              seqalign->score = GetScoreSetFromBlastResultHsp(hsp, gi_list);
-			      
-                              if (seqalign->segtype == 3) {
-                                  ssp = seqalign->segs;
-                                  while (ssp) {
-                                      ssp->scores = GetScoreSetFromBlastResultHsp(hsp, gi_list);
-                                      ssp = ssp->next;
-                                  }
-                              } else if (seqalign->segtype == 5) { /* Discontinuous */
-                                  sap = (SeqAlignPtr) seqalign->segs;
-                                  for(;sap != NULL; sap = sap->next) {
-                                      sap->score = GetScoreSetFromBlastResultHsp(hsp, gi_list);
-                                  }
-                              }
-
-			      if (head == NULL)
-				{
-				  head = seqalign;
-				}
-			      else
-				{
-				  for (seqalign_var=head; seqalign_var->next;)
-				    seqalign_var = seqalign_var->next;
-				  seqalign_var->next = seqalign;
-				}
-				total_num_hsp += result_struct->results[index]->hspcnt;
-				if (search->pbp->total_hsp_limit > 0 && total_num_hsp > search->pbp->total_hsp_limit)
-				{
-					sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
-					BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
-					break;
-				}	
-			    }
-			}
-		} /* end blastp */
-		else
-		{
-		    if (StringCmp("blastn", search->prog_name) == 0 || StringCmp("blastp", search->prog_name) == 0)
-			head = GetSeqAlignForResultHitList(search, TRUE, FALSE, options->discontinuous, FALSE, FALSE);
-		    else
-			head = GetSeqAlignForResultHitList(search, FALSE, FALSE, options->discontinuous, FALSE, FALSE);
-		}
-	}
-
-	gi_list = SeqIdSetFree(gi_list);
-	return head;
-
+   if (head)
+      *seqalignp = head;
 }
+
 /*return query fasta style title(id+title). New memory was allocated for this title*/
 CharPtr getFastaStyleTitle(BioseqPtr bsp){
   

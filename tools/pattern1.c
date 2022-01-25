@@ -1,4 +1,4 @@
-/* $Id: pattern1.c,v 6.11 1999/09/22 17:51:02 shavirin Exp $
+/* $Id: pattern1.c,v 6.13 2002/08/28 13:37:29 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,15 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.11 $ 
+$Revision: 6.13 $ 
 
 $Log: pattern1.c,v $
+Revision 6.13  2002/08/28 13:37:29  madden
+Fix memory leaks
+
+Revision 6.12  2002/08/09 17:32:30  madden
+Add warning if MAX_HIT is reached
+
 Revision 6.11  1999/09/22 17:51:02  shavirin
 Now functions will collect messages in ValNodePtr before printing out.
 
@@ -405,6 +411,11 @@ static Int4 find_hitsS(Int4 *hitArray, Uint1Ptr seq, Int4 len1,
           ends; second part is where match starts*/
 	hitArray[numMatches++] = i;
 	hitArray[numMatches++] = i - lenof(prefixMatchedBitPattern, mask)+1;
+	if (numMatches == MAX_HIT)
+	{
+    		ErrPostEx(SEV_WARNING, 0, 0, "%ld matches saved, discarding others", numMatches);
+		break;
+	}
       }
     }
     return numMatches;
@@ -1298,6 +1309,8 @@ static void get_patL(Uint1 *seq, Int4 len, Int4 *start, Int4 *end,
       wordIndex--;
       j --;
     }
+    prefixMatchedBitPattern = MemFree(prefixMatchedBitPattern);
+    mask = MemFree(mask);
     *start = rightMaskOnly+1; 
     *end = wordIndex*BITS_PACKED_PER_WORD+j;
 }

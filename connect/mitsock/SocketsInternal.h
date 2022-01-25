@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/SocketsInternal.h,v 1.3 2001/11/07 22:49:57 juran Exp $ */
+/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/SocketsInternal.h,v 1.4 2002/06/25 18:37:00 kans Exp $ */
 
 /* 
  *
@@ -52,8 +52,8 @@
 
 /* External Types, Function Prototypes and Definitions */
 #include "s_socket.h"
+#include "IdleInternal.h" /* must be before sock_ext.h to avoid write becoming MIT_write */
 #include "sock_ext.h"
-#include "IdleInternal.h"
 
 
 /* The constant that sets the maximum number of sockets that can be 

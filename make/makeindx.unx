@@ -1,6 +1,6 @@
 #	makefile for flat2asn
 #
-#	$Id: makeindx.unx,v 6.4 1999/04/23 19:10:58 beloslyu Exp $
+#	$Id: makeindx.unx,v 6.5 2002/06/17 14:27:20 ivanov Exp $
 #
 #	Sun with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
 #	Sun with Gnu C [ make LCL=gcc RAN=ranlib CC=gcc ]
@@ -11,6 +11,7 @@
 #	Apple AUX [ make LCL=aux SHELL=\usr\bin ]
 #	NeXt [ make LCL=nxt CFLAGS1="-c -ansi" RAN=ranlib ]
 #	DEC Alpha under OSF/1  [ make LCL=alf CC=cc RAN=ranlib ]
+#   BeOS [  make OTHERLIBS="" ]
 #
 #   see README for other supported systems
 #	

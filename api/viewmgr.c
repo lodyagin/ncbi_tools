@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.35 2001/01/18 22:28:06 hurwitz Exp $
+/*   $Id: viewmgr.c,v 1.36 2002/05/09 15:34:51 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.35 2001/01/18 22:28:06 hurwitz Exp $
+* File Name:  $Id: viewmgr.c,v 1.36 2002/05/09 15:34:51 kans Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.35 $
+* $Revision: 1.36 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.36  2002/05/09 15:34:51  kans
+* commented out unneeded headers in tools library
+*
 * Revision 1.35  2001/01/18 22:28:06  hurwitz
 * added fast option for ViewMgr_Update
 *
@@ -155,8 +158,10 @@
 #include <objmgr.h>
 #include <alignmgr.h>
 #include <sqnutils.h>
+/*
 #include <ddvcolor.h>
 #include <actutils.h>
+*/
 
 
 /*****************************************************************************

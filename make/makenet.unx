@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.143 2002/04/16 21:48:56 lavr Exp $
+#	$Id: makenet.unx,v 6.148 2002/08/07 23:16:29 beloslyu Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -12,6 +12,7 @@
 #   Apple AUX [ make SHELL=\usr\bin ]
 #   NeXt [ make CFLtxcprocAGS1="-c -ansi" RAN=ranlib ]
 #   DEC Alpha under OSF/1  [ make CC=cc RAN=ranlib ]
+#   BeOS [  make OTHERLIBS="" ]
 #   
 #   Subsequent makes should make ... nocopy instead of make ... all
 #   to avoid recopying the include files
@@ -314,7 +315,7 @@ SRC31 = netcnfg.c trmlst.c docsum.c
 
 SRC33 = smartnet.c
 
-SRC35 = dlistptr.c ssputil.c
+SRC35 = ssputil.c
 
 SRC36 = objblst3.c netblap3.c 
 
@@ -381,7 +382,7 @@ OBJ31 = netcnfg.o trmlst.o docsum.o
 
 OBJ33 = smartnet.o
 
-OBJ35 = dlistptr.o ssputil.o
+OBJ35 = ssputil.o
 
 OBJ36 = objblst3.o netblap3.o
 
@@ -504,7 +505,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff asn2gb testent2 entrez2 spidey dotmatrix ingenue condense
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf testent2 entrez2 spidey dotmatrix ingenue condense
 
 .WAIT:
 	echo Waiting...go
@@ -819,8 +820,6 @@ docsum.o : docsum.c
 	$(CC) $(CFLAGS) docsum.c
 smartnet.o : smartnet.c
 	$(CC) $(CFLAGS) smartnet.c
-dlistptr.o : dlistptr.c
-	$(CC) $(CFLAGS) dlistptr.c
 ssputil.o : ssputil.c
 	$(CC) $(CFLAGS) ssputil.c
 objblst3.o : objblst3.c
@@ -1141,9 +1140,14 @@ rtestval :	rtestval.c
 rasn2ff :	asn2ff.c
 	$(CC) -o rasn2ff -DENABLE_ENTREZ -DENABLE_ID1 $(LDFLAGS) asn2ff.c $(LIB8) $(LIB3) $(LIB7) $(LIB6) $(LIB41) $(LIB2) $(LIB1) $(OTHERLIBS)
 
-# remote asn2gb program (asn2gb)
+# asn2gb program (asn2gb)
 asn2gb :	asn2gb.c
 	$(CC) -g -o asn2gb $(LDFLAGS) asn2gb.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# asn2gb_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqfetchEnable
+# should be used only internally within NCBI.
+asn2gb_psf :	asn2gb.c
+	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c $(LIB42) -lnlmzip $(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c
@@ -1187,7 +1191,7 @@ fetchent : fetchent.c
 
 # demo program (condense)
 condense :	condense.c
-	$(CC) $(IN_HOUSE_CFLAGS) -o condense $(LDFLAGS) condense.c $(LIB42) $(LIB2) $(LIB1) -lnlmzip $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+	$(CC) $(IN_HOUSE_CFLAGS) -o condense $(LDFLAGS) condense.c $(LIB42) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT) -lnlmzip $(OTHERLIBS)
 
 # test client for the id0 network service
 

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_dispd.c,v 6.36 2002/04/13 06:40:05 lavr Exp $
+/*  $Id: ncbi_service_dispd.c,v 6.40 2002/08/12 15:13:50 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,132 +29,18 @@
  *   Low-level API to resolve NCBI service name to the server meta-address
  *   with the use of NCBI network dispatcher (DISPD).
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_service_dispd.c,v $
- * Revision 6.36  2002/04/13 06:40:05  lavr
- * Few tweaks to reduce the number of syscalls made
- *
- * Revision 6.35  2002/03/11 22:01:47  lavr
- * Threshold for choosing a local server explained better
- *
- * Revision 6.34  2001/12/04 15:57:05  lavr
- * Change log correction
- *
- * Revision 6.33  2001/10/01 19:53:39  lavr
- * -s_FreeData(), -s_ResetData() - do everything in s_Close()/s_Reset() instead
- *
- * Revision 6.32  2001/09/29 19:33:04  lavr
- * BUGFIX: SERV_Update() requires VT bound (was not the case in constructor)
- *
- * Revision 6.31  2001/09/29 18:41:03  lavr
- * "Server-Keyed-Info:" removed from protocol
- *
- * Revision 6.30  2001/09/28 20:52:16  lavr
- * Update VT method revised as now called on a per-line basis
- *
- * Revision 6.29  2001/09/24 20:30:01  lavr
- * Reset() VT method added and utilized
- *
- * Revision 6.28  2001/09/10 21:23:53  lavr
- * "Relay-Mode:" tag eliminated from the dispatcher protocol
- *
- * Revision 6.27  2001/07/24 18:02:02  lavr
- * Seed random generator at Open()
- *
- * Revision 6.26  2001/07/18 17:41:25  lavr
- * BUGFIX: In code for selecting services by preferred host
- *
- * Revision 6.25  2001/07/03 20:49:44  lavr
- * RAND_MAX included in the interval search
- *
- * Revision 6.24  2001/06/25 15:36:38  lavr
- * s_GetNextInfo now takes one additional argument for host environment
- *
- * Revision 6.23  2001/06/20 17:27:49  kans
- * include <time.h> for Mac compiler
- *
- * Revision 6.22  2001/06/19 19:12:01  lavr
- * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
- *
- * Revision 6.21  2001/05/17 15:02:51  lavr
- * Typos corrected
- *
- * Revision 6.20  2001/05/11 15:30:31  lavr
- * Protocol change: REQUEST_FAILED -> DISP_FAILURES
- *
- * Revision 6.19  2001/05/03 16:58:16  lavr
- * FIX: Percent is taken of local bonus coef instead of the value itself
- *
- * Revision 6.18  2001/05/03 16:35:53  lavr
- * Local bonus coefficient modified: meaning of negative value changed
- *
- * Revision 6.17  2001/04/26 20:20:01  lavr
- * Better way of choosing local server with a tiny (e.g. penalized) status
- *
- * Revision 6.16  2001/04/24 21:35:46  lavr
- * Treatment of new bonus coefficient for local servers
- *
- * Revision 6.15  2001/03/21 21:24:11  lavr
- * Type match (int) for %n in scanf
- *
- * Revision 6.14  2001/03/06 23:57:27  lavr
- * SERV_DISPD_LOCAL_SVC_BONUS used for services running locally
- *
- * Revision 6.13  2001/03/05 23:10:46  lavr
- * SERV_ReadInfo takes only one argument now
- *
- * Revision 6.12  2001/03/01 00:33:12  lavr
- * FIXES: Empty update does not generate parse error
- *        Dispathing error is only logged in debug mode; milder severity
- *
- * Revision 6.11  2001/02/09 17:36:48  lavr
- * Modified: fSERV_StatelessOnly overrides info->stateless
- *
- * Revision 6.10  2001/01/25 17:06:36  lavr
- * s_FreeData now calls ConnNetInfo_Destroy() unconditionally
- *
- * Revision 6.9  2001/01/12 23:51:40  lavr
- * Message logging modified for use LOG facility only
- *
- * Revision 6.8  2001/01/08 23:48:14  lavr
- * (unsigned char) conversion in isspace
- *
- * Revision 6.7  2001/01/08 22:40:23  lavr
- * Further development of service-mapping protocol: stateless/stateful
- * is now separated from firewall/direct mode (see also in few more files)
- *
- * Revision 6.6  2000/12/29 18:05:46  lavr
- * First working revision.
- *
- * Revision 6.5  2000/10/20 17:36:05  lavr
- * Partially working dispd dispatcher client (service mapping works)
- * Checkin for backup purposes; working code '#if 0'-ed out
- *
- * Revision 6.4  2000/10/05 22:43:30  lavr
- * Another dummy revision: still in development
- *
- * Revision 6.3  2000/10/05 22:34:23  lavr
- * Temporary (dummy) revision for compilation to go
- *
- * Revision 6.2  2000/05/22 16:53:12  lavr
- * Rename service_info -> server_info everywhere (including
- * file names) as the latter name is more relevant
- *
- * Revision 6.1  2000/05/12 18:43:59  lavr
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include "ncbi_comm.h"
 #if defined(_DEBUG) && !defined(NDEBUG)
-#include "ncbi_priv.h"
+#  include "ncbi_priv.h"
 #endif
 #include "ncbi_servicep_dispd.h"
 #include <connect/ncbi_ansi_ext.h>
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -263,7 +149,7 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     char *s;
 
     /* Form service name argument (as CGI argument) */
-    if (strlen(iter->service) + sizeof(service) > sizeof(net_info->args))
+    if (sizeof(service) + strlen(iter->service) > sizeof(net_info->args))
         return 0/*failed*/;
     strcpy(net_info->args, service);
     strcat(net_info->args, iter->service);
@@ -307,7 +193,7 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     if (CONN_Create(c, &conn) != eIO_Success)
         return 0/*failed*/;
     /* This dummy read will send all the HTTP data, we'll get a callback */
-    CONN_Read(conn, 0, 0, &buflen, eIO_Plain);
+    CONN_Read(conn, 0, 0, &buflen, eIO_ReadPlain);
     CONN_Close(conn);
     return ((SDISPD_Data*) iter->data)->n_node != 0;
 }
@@ -327,6 +213,10 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
         if (sscanf(p, "%u: %n", &d1, &d2) < 1)
             return 0/*not updated*/;
         if ((info = SERV_ReadInfo(p + d2)) != 0) {
+#if 1/*TEMPORARY PATCH*/
+            if (!info->rate)
+                info->rate = 0.01;
+#endif
             info->time += now; /* expiration time now */
             if (s_AddServerInfo(data, info))
                 return 1/*updated*/;
@@ -464,7 +354,7 @@ static void s_Close(SERV_ITER iter)
 
 const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
                                     const SConnNetInfo* net_info,
-                                    SSERV_Info** info, char** env)
+                                    SSERV_Info** info, char** env/*unused*/)
 {
     SDISPD_Data* data;
 
@@ -474,7 +364,7 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
         s_RandomSeed = (int)time(0) + (int)SOCK_gethostbyname(0);
         srand(s_RandomSeed);
     }
-    data->net_info = ConnNetInfo_Clone(net_info);
+    data->net_info = ConnNetInfo_Clone(net_info); /*called with non-NULL*/
     if (iter->type & fSERV_StatelessOnly)
         data->net_info->stateless = 1/*true*/;
     if (iter->type & fSERV_Firewall)
@@ -494,7 +384,136 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
     /* call GetNextInfo if info is needed */
     if (info)
         *info = 0;
-    if (env)
-        *env = 0;
     return &s_op;
 }
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_service_dispd.c,v $
+ * Revision 6.40  2002/08/12 15:13:50  lavr
+ * Temporary fix for precision loss in transmission of SERV_Info as text
+ *
+ * Revision 6.39  2002/08/07 16:33:43  lavr
+ * Changed EIO_ReadMethod enums accordingly; log moved to end
+ *
+ * Revision 6.38  2002/05/07 15:31:50  lavr
+ * +#include <stdio.h>: noticed by J.Kans
+ *
+ * Revision 6.37  2002/05/06 19:18:12  lavr
+ * Few changes to comply with the rest of API
+ *
+ * Revision 6.36  2002/04/13 06:40:05  lavr
+ * Few tweaks to reduce the number of syscalls made
+ *
+ * Revision 6.35  2002/03/11 22:01:47  lavr
+ * Threshold for choosing a local server explained better
+ *
+ * Revision 6.34  2001/12/04 15:57:05  lavr
+ * Change log correction
+ *
+ * Revision 6.33  2001/10/01 19:53:39  lavr
+ * -s_FreeData(), -s_ResetData() - do everything in s_Close()/s_Reset() instead
+ *
+ * Revision 6.32  2001/09/29 19:33:04  lavr
+ * BUGFIX: SERV_Update() requires VT bound (was not the case in constructor)
+ *
+ * Revision 6.31  2001/09/29 18:41:03  lavr
+ * "Server-Keyed-Info:" removed from protocol
+ *
+ * Revision 6.30  2001/09/28 20:52:16  lavr
+ * Update VT method revised as now called on a per-line basis
+ *
+ * Revision 6.29  2001/09/24 20:30:01  lavr
+ * Reset() VT method added and utilized
+ *
+ * Revision 6.28  2001/09/10 21:23:53  lavr
+ * "Relay-Mode:" tag eliminated from the dispatcher protocol
+ *
+ * Revision 6.27  2001/07/24 18:02:02  lavr
+ * Seed random generator at Open()
+ *
+ * Revision 6.26  2001/07/18 17:41:25  lavr
+ * BUGFIX: In code for selecting services by preferred host
+ *
+ * Revision 6.25  2001/07/03 20:49:44  lavr
+ * RAND_MAX included in the interval search
+ *
+ * Revision 6.24  2001/06/25 15:36:38  lavr
+ * s_GetNextInfo now takes one additional argument for host environment
+ *
+ * Revision 6.23  2001/06/20 17:27:49  kans
+ * include <time.h> for Mac compiler
+ *
+ * Revision 6.22  2001/06/19 19:12:01  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.21  2001/05/17 15:02:51  lavr
+ * Typos corrected
+ *
+ * Revision 6.20  2001/05/11 15:30:31  lavr
+ * Protocol change: REQUEST_FAILED -> DISP_FAILURES
+ *
+ * Revision 6.19  2001/05/03 16:58:16  lavr
+ * FIX: Percent is taken of local bonus coef instead of the value itself
+ *
+ * Revision 6.18  2001/05/03 16:35:53  lavr
+ * Local bonus coefficient modified: meaning of negative value changed
+ *
+ * Revision 6.17  2001/04/26 20:20:01  lavr
+ * Better way of choosing local server with a tiny (e.g. penalized) status
+ *
+ * Revision 6.16  2001/04/24 21:35:46  lavr
+ * Treatment of new bonus coefficient for local servers
+ *
+ * Revision 6.15  2001/03/21 21:24:11  lavr
+ * Type match (int) for %n in scanf
+ *
+ * Revision 6.14  2001/03/06 23:57:27  lavr
+ * SERV_DISPD_LOCAL_SVC_BONUS used for services running locally
+ *
+ * Revision 6.13  2001/03/05 23:10:46  lavr
+ * SERV_ReadInfo takes only one argument now
+ *
+ * Revision 6.12  2001/03/01 00:33:12  lavr
+ * FIXES: Empty update does not generate parse error
+ *        Dispathing error is only logged in debug mode; milder severity
+ *
+ * Revision 6.11  2001/02/09 17:36:48  lavr
+ * Modified: fSERV_StatelessOnly overrides info->stateless
+ *
+ * Revision 6.10  2001/01/25 17:06:36  lavr
+ * s_FreeData now calls ConnNetInfo_Destroy() unconditionally
+ *
+ * Revision 6.9  2001/01/12 23:51:40  lavr
+ * Message logging modified for use LOG facility only
+ *
+ * Revision 6.8  2001/01/08 23:48:14  lavr
+ * (unsigned char) conversion in isspace
+ *
+ * Revision 6.7  2001/01/08 22:40:23  lavr
+ * Further development of service-mapping protocol: stateless/stateful
+ * is now separated from firewall/direct mode (see also in few more files)
+ *
+ * Revision 6.6  2000/12/29 18:05:46  lavr
+ * First working revision.
+ *
+ * Revision 6.5  2000/10/20 17:36:05  lavr
+ * Partially working dispd dispatcher client (service mapping works)
+ * Checkin for backup purposes; working code '#if 0'-ed out
+ *
+ * Revision 6.4  2000/10/05 22:43:30  lavr
+ * Another dummy revision: still in development
+ *
+ * Revision 6.3  2000/10/05 22:34:23  lavr
+ * Temporary (dummy) revision for compilation to go
+ *
+ * Revision 6.2  2000/05/22 16:53:12  lavr
+ * Rename service_info -> server_info everywhere (including
+ * file names) as the latter name is more relevant
+ *
+ * Revision 6.1  2000/05/12 18:43:59  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */

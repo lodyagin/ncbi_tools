@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.58 2002/04/25 14:30:19 bauer Exp $
+/* $Id: cddutil.c,v 1.75 2002/08/17 11:55:07 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,64 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.58 $
+* $Revision: 1.75 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.75  2002/08/17 11:55:07  bauer
+* backed out changes
+*
+* Revision 1.74  2002/08/16 19:51:45  bauer
+* added Ben's CddSrvGetStyle2
+*
+* Revision 1.73  2002/08/06 12:54:26  bauer
+* fixes to accomodate COGs
+*
+* Revision 1.72  2002/07/31 17:15:29  kans
+* added prototype for BlastDefLineSetFree for Mac compiler
+*
+* Revision 1.71  2002/07/31 14:58:58  bauer
+* BLAST DB Sequence Retrieval
+*
+* Revision 1.70  2002/07/17 18:54:10  bauer
+* CddFeaturesAreConsistent now returns explicit error messages
+*
+* Revision 1.69  2002/07/11 14:43:43  bauer
+* column 21(X) is now always -1 in PSSMs
+*
+* Revision 1.68  2002/07/10 22:51:10  bauer
+* changed score for 26th pssm column to match whats done by makemat
+*
+* Revision 1.67  2002/07/10 22:06:07  bauer
+* replaced posScaling by impalaScaling
+*
+* Revision 1.66  2002/07/10 15:34:31  bauer
+* made SipIsConsensus public
+*
+* Revision 1.65  2002/07/09 21:12:39  bauer
+* added CddDenDiagCposComp2KBP to return Karlin-Altschul parameters together with PSSM
+*
+* Revision 1.64  2002/07/05 21:09:25  bauer
+* added GetAlignmentSize
+*
+* Revision 1.63  2002/06/12 15:22:51  bauer
+* 6/11/02 update
+*
+* Revision 1.62  2002/05/31 17:54:31  thiessen
+* fix for read-only string literal (e.g. on Mac)
+*
+* Revision 1.61  2002/05/24 17:49:01  bauer
+* Unlock Bioseqs again in SeqAlignInform
+*
+* Revision 1.60  2002/05/16 22:37:49  bauer
+* free seqalign in CddExpAlignToSeqAlign if empty
+*
+* Revision 1.59  2002/05/06 16:59:50  bauer
+* remove blanks in inferred CD short names
+*
 * Revision 1.58  2002/04/25 14:30:19  bauer
 * fixed CddFindMMDBIdInBioseq
 *
@@ -228,6 +279,8 @@
 #include <strimprt.h>
 #include <cdd.h>
 /* #include <bjcdd.h> */
+#include <readdb.h>
+#include <fdlobj.h>
 #include <cddutil.h>
 #include <edutil.h>
 #include <posit.h>
@@ -611,6 +664,33 @@ Int4 LIBCALL CddGetAlignmentLength(CddPtr pcdd)
   return iLength + 1;
 }
 
+/*---------------------------------------------------------------------------*/
+/* return number of rows and average number of blocks per row                */
+/*---------------------------------------------------------------------------*/
+Int4Ptr LIBCALL GetAlignmentSize(SeqAlignPtr salp)
+{
+  Int4Ptr       pRet;
+  Int4          iLength = 0;
+  Int4          iBlocks = 0;
+  DenseDiagPtr  ddp;
+  SeqAlignPtr   salpThis;
+
+  salpThis = salp;
+  while (salpThis) {
+    iLength++;
+    ddp = salpThis->segs;
+    while (ddp) {
+      iBlocks++;
+      ddp = ddp->next;
+    }
+    salpThis = salpThis->next;
+  }
+  pRet = MemNew(2*sizeof(Int4));
+  pRet[0] = iLength + 1;
+  pRet[1] = iBlocks / iLength;
+  return pRet;
+}
+
 ValNodePtr LIBCALL CddGetAnnotNames(CddPtr pcdd)
 {
   AlignAnnotPtr   aap;
@@ -748,7 +828,7 @@ Boolean LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp)
 /*---------------------------------------------------------------------------*/
 /* Check if Cdd has a consensus Sequence                                     */
 /*---------------------------------------------------------------------------*/
-Boolean static SipIsConsensus(SeqIdPtr sip)
+Boolean LIBCALL SipIsConsensus(SeqIdPtr sip)
 {
   ObjectIdPtr   oidp;
   
@@ -761,13 +841,20 @@ Boolean static SipIsConsensus(SeqIdPtr sip)
 
 Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
 {
-  SeqIntPtr   sintp;
-  SeqIdPtr    sip;
-  ObjectIdPtr oidp;
+  SeqIntPtr     sintp;
+  SeqIdPtr      sip;
+  ObjectIdPtr   oidp;
+  SeqAlignPtr   salp;
+  DenseDiagPtr  ddp;
   
   if (!pcdd) return (FALSE);
   sintp = (SeqIntPtr) pcdd->profile_range;
-  if (!sintp) return (FALSE);
+  if (!sintp) {
+    salp = pcdd->seqannot->data;
+    ddp = salp->segs;
+    sip = ddp->id;
+    return (SipIsConsensus(sip));
+  }
   sip = (SeqIdPtr) sintp->id;
   return(SipIsConsensus(sip));
 }
@@ -1525,6 +1612,7 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   SeqIdPtr           sip;
   SeqPortPtr         spp;
   Uint1Ptr           buffer;
+  Char               matrix[32];
   
   if (!salp) return(NULL);
   if (!bsp_master) return(NULL);
@@ -1535,7 +1623,8 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   sbp->protein_alphabet = TRUE;
   sbp->posMatrix = NULL;
   sbp->number_of_contexts = 1;
-  iStatus = BlastScoreBlkMatFill(sbp,"BLOSUM62");
+  StrCpy(matrix,"BLOSUM62");
+  iStatus = BlastScoreBlkMatFill(sbp,matrix);
   stdrfp = BlastResFreqNew(sbp);
   BlastResFreqStdComp(sbp,stdrfp); 
   standardProb = MemNew(alphabetSize * sizeof(Nlm_FloatHi));
@@ -1568,11 +1657,12 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   while (salp) {
     ddp = salp->segs;
     sip = ddp->id->next;
-    bsp = CddRetrieveBioseqById(sip,NULL);
+    bsp = BioseqLockById(sip);
     buffer = MemNew((bsp->length)*sizeof(Uint1));
     spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown, Seq_code_ncbistdaa);
     for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
     spp = SeqPortFree(spp);
+    BioseqUnlock(bsp);
     while (ddp) {
       for (c=ddp->starts[1];c<ddp->starts[1]+ddp->len;c++) {
         i = ddp->starts[0]+c-ddp->starts[1];
@@ -2680,6 +2770,7 @@ SeqAlignPtr CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter)
       ddplast = ddp;
     }
   }
+  if (!salp->segs) salp = SeqAlignFree(salp);
   return(salp);
 }
 
@@ -2803,7 +2894,7 @@ Int4Ptr CddMostDiverse(TrianglePtr pTri, Int4 length, Int4 maxdiv)
     }
   }
   
-  index = 0; for (index = 1; index < length; index++) {
+  for (index = 1; index < length; index++) {
     mincomp = 100.0, winner = -1;
     for (i=1;i<pTri->nelements;i++) {
       sumcomp = 0.0; ncomp = 0;
@@ -3671,12 +3762,14 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
     }
     salpThis = CddExpAlignToSeqAlign(pCDea,NULL);
     pCDea = CddExpAlignFree(pCDea);
-    if (!salpNew) {
-      salpNew = salpThis;
-    } else {
-      salpTail->next = salpThis;
+    if (salpThis) {
+      if (!salpNew) {
+        salpNew = salpThis;
+      } else {
+        salpTail->next = salpThis;
+      }
+      salpTail = salpThis;
     }
-    salpTail = salpThis;
   }
 
 /*---------------------------------------------------------------------------*/
@@ -4165,6 +4258,39 @@ static Boolean CddtakeMatrixCheckpoint(compactSearchItems *compactSearch,
   return(TRUE);
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void BlastKarlinBlkCopy(BLAST_KarlinBlkPtr kbp_in,BLAST_KarlinBlkPtr kbp_out)
+{ 
+  kbp_out->Lambda = kbp_in->Lambda;
+  kbp_out->K = kbp_in->K;
+  kbp_out->logK = kbp_in->logK;
+  kbp_out->H = kbp_in->H;
+  kbp_out->Lambda_real = kbp_in->Lambda_real;
+  kbp_out->K_real = kbp_in->K_real;
+  kbp_out->logK_real = kbp_in->logK_real;
+  kbp_out->H_real = kbp_in->H_real;
+  kbp_out->q_frame = kbp_in->q_frame;
+  kbp_out->s_frame = kbp_in->s_frame;
+  kbp_out->paramC = kbp_in->paramC;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* version of the PSSM calculation routine which does not return Karlin-     */
+/* Altschul parameters                                                       */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
+                                      SeqAlignPtr salp, CddPtr pcdd,
+				      BioseqPtr bspOut, double Weight,
+				      double ScaleFactor, CharPtr matrix_name)
+{
+  return CddDenDiagCposComp2KBP(bspFake, iPseudo, salp, pcdd, bspOut,
+                                Weight, ScaleFactor, matrix_name, NULL);
+}
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -4172,10 +4298,11 @@ static Boolean CddtakeMatrixCheckpoint(compactSearchItems *compactSearch,
 /* as of 12/27/2000                                                          */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
-                                      SeqAlignPtr salp, CddPtr pcdd,
-				      BioseqPtr bspOut, double Weight,
-				      double ScaleFactor, CharPtr matrix_name)
+Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
+                                         SeqAlignPtr salp, CddPtr pcdd,
+				         BioseqPtr bspOut, double Weight,
+				         double ScaleFactor, CharPtr matrix_name,
+				         BLAST_KarlinBlkPtr kbp)
 {
   PGPBlastOptionsPtr      bop;
   BlastSearchBlkPtr       search;
@@ -4232,13 +4359,10 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     search = BLASTSetUpSearch(bop->fake_bsp, "blastp",
                               bop->query_bsp->length,
 			      0, NULL, bop->options, NULL);
-  
   }
-
   posSearch = NULL;
   compactSearch = NULL;
   posSearch = (posSearchItems *)MemNew(sizeof(posSearchItems));
-
   compactSearch = compactSearchNew(compactSearch);
   copySearchItems(compactSearch, search, bop->options->matrix);
   posInitializeInformation(posSearch,search);
@@ -4282,11 +4406,13 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /* produces.                                                                 */
 /*---------------------------------------------------------------------------*/
   ASSERT(compactSearch->alphabetSize == 26);                 /* sanity check */
+/*
   for (c=0;c<compactSearch->qlength;c++) {
     posSearch->posPrivateMatrix[c][compactSearch->alphabetSize-1] = BLAST_SCORE_MIN;
   }
-
-  posScaling(posSearch, compactSearch);
+*/
+/*  posScaling(posSearch, compactSearch); */
+  impalaScaling(posSearch, compactSearch, 1.0, TRUE);
 
   if (pcdd) {
 /*---------------------------------------------------------------------------*/
@@ -4298,6 +4424,12 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     CddtakeMatrixCheckpoint(compactSearch,posSearch,search->sbp,mtrxFileName,
                             NULL,FALSE,1.0);
 */
+/*---------------------------------------------------------------------------*/
+/* in compliance with makemat, set the score for the X-column                */
+/*---------------------------------------------------------------------------*/
+    for (index = 0; index<compactSearch->qlength;index++) {
+      posSearch->posMatrix[index][21] = Xscore;
+    }
     sctp = SeqCodeTableFind(Seq_code_ncbistdaa);
     LetterHead = NULL;
     for (a=0;a<compactSearch->alphabetSize;a++) {
@@ -4387,6 +4519,9 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   posSearch->QuerySize = alignLength;
   CddposFreeMemory(posSearch);
   MemFree(posSearch);
+  if (kbp) {
+    BlastKarlinBlkCopy(*(compactSearch->kbp_gap_psi),kbp);
+  }
   CddposFreeMemory2(compactSearch);
   MemFree(compactSearch);
   search = BlastSearchBlkDestruct(search);
@@ -4572,8 +4707,12 @@ Int4Ptr LIBCALL CddGetFeatLocList(SeqLocPtr location, Int4 *nres)
 }
 
 /*---------------------------------------------------------------------------*/
+/* check for violations of an interval defined on the aligned master with    */
+/* respect to aligned residues. Returns -1 if everything is OK, returns      */
+/* the first location on the master (counting from 0) if a violation is      */
+/* detected, returns INT4_MAX if negative interval numbers are encountered   */
 /*---------------------------------------------------------------------------*/
-static Boolean CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
+static Int4 CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
 {
   SeqIntPtr     sintp;
   SeqPntPtr     spp;
@@ -4581,7 +4720,7 @@ static Boolean CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
   SeqLocPtr     slp;
   Int4          i;
 
-  if (!location) return;
+  if (!location) return(-1);
   switch (location->choice) {
     case SEQLOC_NULL:
     case SEQLOC_FEAT:
@@ -4591,19 +4730,22 @@ static Boolean CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
       break;
     case SEQLOC_INT:
       sintp = (SeqIntPtr) location->data.ptrvalue;
+      if (sintp->from < 0 || sintp->to < 0) return(INT4_MAX);
       for (i=sintp->from;i<=sintp->to;i++) {
-        if (eap->adata[i] < 0) return FALSE;
+        if (eap->adata[i] < 0) return(i);
       }
       break;
     case SEQLOC_PNT:
       spp = location->data.ptrvalue;
-      if (eap->adata[spp->point] < 0) return FALSE;
+      if (spp->point < 0) return(INT4_MAX);
+      if (eap->adata[spp->point] < 0) return(spp->point);
       break;
     case SEQLOC_PACKED_PNT:
       pspp = location->data.ptrvalue;
       while (pspp) {
 	for (i=0;i<pspp->used;i++) {
-          if (eap->adata[pspp->pnts[i]] < 0) return FALSE;
+          if (pspp->pnts[i] < 0) return (INT4_MAX);
+          if (eap->adata[pspp->pnts[i]] < 0) return(pspp->pnts[i]);
 	}
         pspp = pspp->next;
       }
@@ -4613,14 +4755,14 @@ static Boolean CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
     case SEQLOC_EQUIV:
       slp = (SeqLocPtr)location->data.ptrvalue;
       while (slp) {
-        if (!CddSeqLocInExpAlign(slp,eap)) return FALSE;
+        i = CddSeqLocInExpAlign(slp,eap);
+        if (i >= 0) return(i);
         slp = slp->next;
       }      
     default:
       break;
   }
-  return(TRUE);
-
+  return(-1);
 }
 
 
@@ -4750,6 +4892,7 @@ void LIBCALL CddTransferAlignAnnot(AlignAnnotPtr oldannot,
   if (bNewIsTop) {                             /* need to revert alignment  */
     pCDeaON = InvertCddExpAlign(pCDeaON,bssp->seq_set);
   }
+  if (!pCDeaON) CddSevError("Error in CDDTransferAlignAnnot, can not locate alignment data!");
   aap = oldannot; while (aap) {
     slp = aap->location;
     while (slp) {
@@ -4816,35 +4959,44 @@ SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
 /********************************************************************/
 void LIBCALL CddShrinkBioseq(BioseqPtr bsp)
 {
-    SeqDescrPtr next,sdp,sdp2=NULL;
-    SeqAnnotPtr sap,sap_next,sap2=NULL;
+  SeqDescrPtr next, sdp, sdp2              = NULL;
+  SeqAnnotPtr sap, sap_next, thissap, sap2 = NULL;
+  ValNodePtr  vnp;
+  SeqFeatPtr  sfp;
 
-    sdp=bsp->descr;
-    while (sdp != NULL) {
-	next = sdp->next;
-	sdp->next = NULL;
-	if(sdp->choice == Seq_descr_title ||
-	   sdp->choice == Seq_descr_org ||
-	   sdp->choice == Seq_descr_source) {
-	    ValNodeLink(&sdp2, sdp);
-	} else SeqDescFree(sdp);
-	sdp = next;
-    }
-    bsp->descr = sdp2;
+  sdp=bsp->descr;
+  while (sdp != NULL) {
+    next = sdp->next;
+    sdp->next = NULL;
+    if(sdp->choice == Seq_descr_title ||
+      sdp->choice == Seq_descr_org ||
+      sdp->choice == Seq_descr_pdb ||
+      sdp->choice == Seq_descr_source) {
+        ValNodeLink(&sdp2, sdp);
+      } else SeqDescFree(sdp);
+    sdp = next;
+  }
+  bsp->descr = sdp2;
 
-    sap = bsp->annot;
-    while (sap != NULL) {
-        sap_next = sap->next;
-	if(sap->type == 4 && ((SeqIdPtr)sap->data)->choice == SEQID_GENERAL
-	   && strcmp(((DbtagPtr)((SeqIdPtr)sap->data)->
-		      data.ptrvalue)->db,"mmdb") == 0 && sap2 == NULL) {
-	    sap2 = sap;
-        } else SeqAnnotFree(sap);
-        sap = sap_next;
-    }
-    bsp->annot = sap2;
-    
+  sap = bsp->annot;
+  while (sap != NULL) {
+    sap_next = sap->next;
+    if ((sap->type == 4 && ((SeqIdPtr)sap->data)->choice == SEQID_GENERAL
+         && Nlm_StrCmp(((DbtagPtr)((SeqIdPtr)sap->data)->data.ptrvalue)->db,"mmdb") == 0)
+	|| (sap->type == 1 && ((SeqFeatPtr)sap->data)->data.choice == SEQFEAT_PROT)) {
+      if (!sap2) {
+        sap2 = sap;
+      } else {
+        thissap = sap2; while (thissap->next) thissap = thissap->next;
+        thissap->next = sap;
+      }
+      sap->next = NULL;
+    } else SeqAnnotFree(sap);
+    sap = sap_next;
+  }
+  bsp->annot = sap2;
 }
+
 /********************************************************************/
 /* Make a list of m-s seq-aligns proper, aligning only columns	    */
 /* found in all pairs.						    */
@@ -5395,6 +5547,15 @@ void LIBCALL CddTruncStringAtFirstPunct(CharPtr pChar)
   }
 }
 
+void LIBCALL CddFillBlanksInString(CharPtr pChar) 
+{
+  Int4   i;
+  
+  for (i=0;i<Nlm_StrLen(pChar);i++) {
+    if (pChar[i] == ' ') pChar[i] = '_';
+  }
+}
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Remove a Consensus from a CD                                              */
@@ -5444,13 +5605,14 @@ Boolean LIBCALL CddRemoveConsensus(CddPtr pcdd)
 /* Check if a CD has annotation that is inconsistent with the alignment      */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-Boolean LIBCALL CddFeaturesAreConsistent(CddPtr pcdd)
+Boolean LIBCALL CddFeaturesAreConsistent(CddPtr pcdd, CharPtr errmsg)
 {
   SeqAlignPtr    salp;
   CddExpAlignPtr eap;
   BioseqSetPtr   bssp;
   AlignAnnotPtr  aap;
   SeqLocPtr      slp;
+  Int4           iWhere;
   
   if (!pcdd->alignannot) return TRUE;
   bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
@@ -5460,7 +5622,15 @@ Boolean LIBCALL CddFeaturesAreConsistent(CddPtr pcdd)
   aap = pcdd->alignannot;
   while (aap) {
     slp = aap->location;
-    if (!CddSeqLocInExpAlign(slp,eap)) return FALSE;
+    iWhere = CddSeqLocInExpAlign(slp,eap);
+    if (iWhere >= 0) {
+      if (iWhere == INT4_MAX) {
+        sprintf(errmsg,"Feature: %s, illegal feature address",aap->description);
+      } else {
+        sprintf(errmsg,"Feature: %s, Location: %d",aap->description,iWhere+1);
+      }    
+      return FALSE;
+    }
     aap = aap->next;
   }
   CddExpAlignFree(eap);
@@ -5584,3 +5754,249 @@ Boolean LIBCALL CddHas3DSuperpos(CddPtr pcdd)
   }
   MemFree(pMMDBid); return TRUE;
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* CD has unfinished alignment business                                      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd)
+{
+  if (pcdd->pending) return TRUE;
+  return FALSE;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Fetch bioseq using BLAST dB, removing ids redundant to query.             */
+/* index is the NR index in the dB -- if you don't have it, use -1.          */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+NLM_EXTERN BlastDefLineSetPtr LIBCALL BlastDefLineSetFree PROTO ((BlastDefLineSetPtr ));
+
+BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,
+				     ReadDBFILEPtr rdfp)
+{
+    BioseqPtr		bsp;
+    BlastDefLinePtr	bdp,tbdp;
+    RDBTaxNamesPtr	tnames;
+    Char		buf[64];
+
+    if(query == NULL) return NULL;
+    if(index < 0 && (index = SeqId2OrdinalId(rdfp, query)) < 0)
+	return NULL;
+    if(!(bsp = readdb_get_bioseq(rdfp, index))) return NULL;
+    if(!(tbdp = FDGetDeflineAsnFromBioseq(bsp))) return NULL;
+
+    for(bdp=tbdp; bdp; bdp=bdp->next) {
+	if(SeqIdComp(bdp->seqid,query) == SIC_YES ||
+	   SeqIdComp(bdp->seqid->next,query) == SIC_YES) {
+	    tnames = RDBGetTaxNames(rdfp->taxinfo, bdp->taxid);
+	    break;
+	}
+    }
+    if(bdp == NULL) {
+	SeqIdPrint(query,buf,PRINTID_FASTA_SHORT);
+	ErrPostEx(SEV_WARNING,0,0,"Bad seqid %s",buf);
+	return NULL;
+    }
+    bsp->id = SeqIdSetFree(bsp->id);
+    bsp->id = SeqIdDup(bdp->seqid->next);
+    bsp->id->next = SeqIdDup(bdp->seqid);
+
+    /* Remove concatenated deflines. */
+    SeqDescrFree(ValNodeExtractList(&bsp->descr, Seq_descr_title));
+    /* Replace with single defline. */
+    ValNodeCopyStr(&bsp->descr, Seq_descr_title, bdp->title);
+
+    tbdp = BlastDefLineSetFree(tbdp);
+
+    /* Remove all user data (tax info, asn1 defline). */
+    SeqDescrFree(ValNodeExtractList(&bsp->descr, Seq_descr_user));
+
+    if(tnames) {		/* Add taxid, taxnames. */
+	BioSourcePtr	bsrp;
+	DbtagPtr	dtp;
+
+	bsrp = BioSourceNew();
+	bsrp->subtype = NULL;
+	bsrp->org = OrgRefNew();
+	if(tnames->sci_name)
+	    bsrp->org->taxname = StringSave(tnames->sci_name);
+	if(tnames->common_name)
+	    bsrp->org->common = StringSave(tnames->common_name);
+	dtp = DbtagNew();
+	dtp->db = StringSave("taxon");
+	dtp->tag = ObjectIdNew();
+	dtp->tag->id = tnames->tax_id;
+	bsrp->org->db = NULL;
+	ValNodeAddPointer(&bsrp->org->db, 0, dtp);
+	ValNodeAddPointer(&bsp->descr, Seq_descr_source, bsrp);
+    }
+    RDBTaxNamesFree(tnames);
+
+    return bsp;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* return a common style dictionary for Cn3D 4.0                             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*
+Cn3dStyleDictionaryPtr LIBCALL CddSrvGetStyle2(Int4 *styles[], Int4 nstyles)
+{
+    Cn3dStyleDictionaryPtr    csdp;
+    Cn3dStyleTableItemPtr     cstip,cstipTail,cstipHead=NULL;
+    Int4			    i;
+
+    if(nstyles < 1) return(NULL);
+    csdp = Cn3dStyleDictionaryNew();
+    csdp->global_style = CddSrvGetStyle2_Ex(styles[0]);
+    for(i=1; i<nstyles; i++) {
+	cstip = Cn3dStyleTableItemNew();
+	cstip->id = i;
+	cstip->style = CddSrvGetStyle2_Ex(styles[i]);
+	cstip->next = NULL;
+	if(!cstipHead) cstipHead = cstipTail = cstip;
+	else {
+	    cstipTail->next = cstip;
+	    cstipTail = cstip;
+	}
+    }
+    csdp->style_table = cstipHead;
+
+    return(csdp);
+}
+static Cn3dStyleSettingsPtr CddSrvGetStyle2_Ex(Int4 style[])
+{
+  Cn3dStyleSettingsPtr      cssp;
+  Cn3dBackboneStylePtr      cbsp;
+  Cn3dGeneralStylePtr       cgsp;
+  Cn3dBackboneLabelStylePtr cblsp;
+
+    cssp = Cn3dStyleSettingsNew();
+      cssp->next = NULL;
+      cssp->name = NULL;
+      cbsp = Cn3dBackboneStyleNew();
+        cbsp->type = style[0];
+        cbsp->style = style[1];
+        cbsp->color_scheme = style[2];
+        cbsp->user_color =
+            MyCn3dColorInit(style[3],style[4],style[5],
+                            style[6],style[7]);
+      cssp->protein_backbone = cbsp;
+      cbsp = Cn3dBackboneStyleNew();
+        cbsp->type = style[8];
+        cbsp->style = style[9];
+        cbsp->color_scheme = style[10];
+        cbsp->user_color =
+            MyCn3dColorInit(style[11],style[12],style[13],
+                            style[14],style[15]);
+      cssp->nucleotide_backbone = cbsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[16];
+        cgsp->style = style[17];
+        cgsp->color_scheme = style[18];
+        cgsp->user_color =
+            MyCn3dColorInit(style[19],style[20],style[21],
+                            style[22],style[23]);
+      cssp->protein_sidechains = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[24];
+        cgsp->style = style[25];
+        cgsp->color_scheme = style[26];
+        cgsp->user_color =
+            MyCn3dColorInit(style[27],style[28],style[29],
+                            style[30],style[31]);
+      cssp->nucleotide_sidechains = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[32];
+        cgsp->style = style[33];
+        cgsp->color_scheme = style[34];
+        cgsp->user_color =
+            MyCn3dColorInit(style[35],style[36],style[37],
+                            style[38],style[39]);
+       cssp->heterogens = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[40];
+        cgsp->style = style[41];
+        cgsp->color_scheme = style[42];
+        cgsp->user_color =
+            MyCn3dColorInit(style[43],style[44],style[45],
+                            style[46],style[47]);
+      cssp->solvents = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[48];
+        cgsp->style = style[49];
+        cgsp->color_scheme = style[50];
+        cgsp->user_color =
+            MyCn3dColorInit(style[51],style[52],style[53],
+                            style[54],style[55]);
+       cssp->connections = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[56];
+        cgsp->style = style[57];
+        cgsp->color_scheme = style[58];
+        cgsp->user_color =
+            MyCn3dColorInit(style[59],style[60],style[61],
+                            style[62],style[63]);
+      cssp->helix_objects = cgsp;
+        cgsp = Cn3dGeneralStyleNew();
+        cgsp->is_on = style[64];
+        cgsp->style = style[65];
+        cgsp->color_scheme = style[66];
+        cgsp->user_color =
+            MyCn3dColorInit(style[67],style[68],style[69],
+                            style[70],style[71]);
+      cssp->strand_objects = cgsp;
+      cssp->virtual_disulfides_on = style[72];
+      cssp->virtual_disulfide_color =
+          MyCn3dColorInit(style[73],style[74],style[75],
+                          style[76],style[77]);
+      cssp->hydrogens_on = style[78];
+      cssp->background_color =
+          MyCn3dColorInit(style[79],style[80],style[81],
+                          style[82],style[83]);
+      cssp->scale_factor = style[84];
+      cssp->space_fill_proportion = style[85];
+      cssp->ball_radius = style[86];
+      cssp->stick_radius = style[87];
+      cssp->tube_radius = style[88];
+      cssp->tube_worm_radius = style[89];
+      cssp->helix_radius = style[90];
+      cssp->strand_width = style[91];
+      cssp->strand_thickness = style[92];
+        cblsp = Cn3dBackboneLabelStyleNew();
+        cblsp->spacing = style[93];
+        cblsp->type = style[94];
+        cblsp->number = style[95];
+        cblsp->termini = style[96];
+        cblsp->white = style[97];
+      cssp->protein_labels = cblsp;
+        cblsp = Cn3dBackboneLabelStyleNew();
+        cblsp->spacing = style[98];
+        cblsp->type = style[99];
+        cblsp->number = style[100];
+        cblsp->termini = style[101];
+        cblsp->white = style[102];
+      cssp->nucleotide_labels =cblsp;
+      cssp->ion_labels = style[103];
+
+  return(cssp);
+}
+static Cn3dColorPtr MyCn3dColorInit(Int4 scale_factor, Int4 red, Int4 green, Int4 blue,
+			     Int4 alpha)
+{
+    Cn3dColorPtr	ccp;
+
+    ccp = Cn3dColorNew();
+    ccp->scale_factor = scale_factor;
+    ccp->red = red;
+    ccp->green = green;
+    ccp->blue = blue;
+    ccp->alpha = alpha;
+
+    return ccp;
+}
+*/

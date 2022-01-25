@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.6 $  $Date: 2002/04/23 17:57:54 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.11 $  $Date: 2002/08/16 20:36:19 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,21 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.11  2002/08/16 20:36:19  lavr
+ * Do not override net params which are not defined by old env.interface
+ *
+ * Revision 6.10  2002/08/08 02:45:28  lavr
+ * Minor change
+ *
+ * Revision 6.9  2002/08/07 18:45:21  lavr
+ * Change from deprecated to current EIO_ReadMethod enums
+ *
+ * Revision 6.8  2002/08/06 20:36:22  lavr
+ * Uppercase environment variable name to look for an alternate service name
+ *
+ * Revision 6.7  2002/05/06 19:24:38  lavr
+ * Translate service name AFTER creation of SConnNetInfo
+ *
  * Revision 6.6  2002/04/23 17:57:54  lavr
  * Recognize "INFINITE" as a timeout from registry/environment
  *
@@ -69,34 +84,15 @@
 #define SRV_SECTION         "NET_SERV"
 
 #define ENV_ENGINE_HOST     "SRV_ENGINE_HOST"
-#define DEF_ENGINE_HOST     DEF_CONN_HOST
-
 #define ENV_ENGINE_PORT     "SRV_ENGINE_PORT"
-#define DEF_ENGINE_PORT     DEF_CONN_PORT
-
 #define ENV_ENGINE_URL      "SRV_ENGINE_URL"
-#define DEF_ENGINE_URL      DEF_CONN_PATH
-
 #define ENV_TIMEOUT         "SRV_CONN_TIMEOUT"
-#define DEF_TIMEOUT         DEF_CONN_TIMEOUT
-
 #define ENV_CONN_TRY        "SRV_CONN_TRY"
-#define DEF_CONN_TRY        DEF_CONN_MAX_TRY
-
 #define ENV_HTTP_PROXY_HOST "SRV_HTTP_PROXY_HOST"
-#define DEF_HTTP_PROXY_HOST DEF_CONN_HTTP_PROXY_HOST
-
 #define ENV_HTTP_PROXY_PORT "SRV_HTTP_PROXY_PORT"
-#define DEF_HTTP_PROXY_PORT DEF_CONN_HTTP_PROXY_PORT
-
 #define ENV_PROXY_HOST      "SRV_PROXY_HOST"
-#define DEF_PROXY_HOST      DEF_CONN_PROXY_HOST
-
 #define ENV_DEBUG_PRINTOUT  "SRV_DEBUG_PRINTOUT"
-#define DEF_DEBUG_PRINTOUT  DEF_CONN_DEBUG_PRINTOUT
-
 #define ENV_NO_LB_DIRECT    "SRV_NO_LB_DIRECT"
-#define DEF_NO_LB_DIRECT    DEF_CONN_LB_DISABLE
 
 
 /* Static functions
@@ -105,7 +101,7 @@
 static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buff, Uint2 len)
 {
     size_t n_read = 0;
-    CONN_Read((CONN) p, buff, len, &n_read, eIO_Plain);
+    CONN_Read((CONN) p, buff, len, &n_read, eIO_ReadPlain);
     return (Int2) n_read;
 }
 
@@ -156,7 +152,7 @@ static NI_HandPtr s_GenericGetService
 (NI_DispatcherPtr disp, CharPtr configFile, CharPtr configSection,
  CharPtr defService, Boolean hasResource)
 {
-    SConnNetInfo* net_info;
+    SConnNetInfo *net_info, *def_info;
     Char          str[64];
     NI_HandPtr    result;
     double        valf;
@@ -164,76 +160,74 @@ static NI_HandPtr s_GenericGetService
     int           val;
     CONNECTOR     c;
 
-    {{ /* alternate service name */
-        static const Char ENV_PREFIX[] = "NI_SERVICE_NAME_";
-        CharPtr envName = (CharPtr)MemNew(sizeof(ENV_PREFIX) +
-                                          StringLen(configSection));
-        StringCpy(envName, ENV_PREFIX);
-        StringCat(envName, configSection);
-        NI_GetEnvParamEx(configFile, configSection, envName, "SERVICE_NAME",
-                         str, sizeof(str), defService);
-        MemFree(envName);
-    }}
-    if (!(net_info = ConnNetInfo_Create(str))) {
+    if (!(net_info = ConnNetInfo_Create(defService))) {
         ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
-                  " Cannot set parameters for service \"%s\"", str);
+                  " Cannot set parameters for service \"%s\"", defService);
         return 0;
     }
-
-    /* Now override default parameters with proprietary parameters
+    if (!(def_info = ConnNetInfo_Clone(net_info))) {
+        ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
+                  " Cannot create reserve copy of network info");
+        ConnNetInfo_Destroy(net_info);
+        return 0;
+    }
+    /* Now override default parameters with legacy parameters
      * of older WWW service dispatcher -- should go obsolete soon... */
 
     /* alternate dispatcher's host name & port */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_HOST,
-                   net_info->host, sizeof(net_info->host), DEF_ENGINE_HOST);
+                   net_info->host, sizeof(net_info->host), def_info->host);
 
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_PORT,
                    str, sizeof(str), "");
-    val = atoi(str);
-    net_info->port = val > 0 ? val : DEF_ENGINE_PORT;
+    if ((val = atoi(str)) != 0)
+        net_info->port = val;
 
     /* alternate the dispatcher's CGI path */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_URL,
-                   net_info->path, sizeof(net_info->path), DEF_ENGINE_URL);
+                   net_info->path, sizeof(net_info->path), def_info->path);
 
     /* alternate HTTP proxy host & port */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_HTTP_PROXY_HOST,
                    net_info->http_proxy_host,
-                   sizeof(net_info->http_proxy_host), DEF_HTTP_PROXY_HOST);
+                   sizeof(net_info->http_proxy_host),
+                   def_info->http_proxy_host);
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_HTTP_PROXY_PORT,
                    str, sizeof(str), "");
-    val = atoi(str);
-    net_info->http_proxy_port = val > 0 ? val : DEF_HTTP_PROXY_PORT;
+    if ((val = atoi(str)) != 0)
+        net_info->http_proxy_port = val;
 
     /* alternate non-transparent CERN-like firewall proxy server */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_HOST,
                    net_info->proxy_host, sizeof(net_info->proxy_host),
-                   DEF_PROXY_HOST);
+                   def_info->proxy_host);
 
     /* alternate connection timeout */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_TIMEOUT,
                    str, sizeof(str), "");
-    if (strlen(str) < 3  ||  StringNICmp(str, "infinite", strlen(str)) != 0) {
-        valf = atof(str);
-        if (valf <= 0)
-            valf = DEF_TIMEOUT;
-        if (!net_info->timeout)
-            net_info->timeout   = &net_info->tmo;
-        net_info->timeout->sec  =
-            (unsigned int) valf;
-        net_info->timeout->usec =
-            (unsigned int) ((valf - net_info->timeout->sec) * 1000000);
-    } else
-        net_info->timeout = 0;
+    if (*str) {
+        if (strlen(str) > 2 && StringNICmp(str, "infinite", strlen(str)) == 0){
+            net_info->timeout = 0;
+        } else {
+            if (!net_info->timeout)
+                net_info->timeout = &net_info->tmo;
+            valf = atof(str);
+            if (valf <= 0.0)
+                valf = DEF_CONN_TIMEOUT;
+            net_info->timeout->sec  = (unsigned int) valf;
+            net_info->timeout->usec = (unsigned int)
+                ((valf - net_info->timeout->sec) * 1000000);
+        }
+    }
 
-    /* alternate max. number of attemts to establish connection */
+    /* alternate max. number of attempts to establish connection */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_CONN_TRY,
                    str, sizeof(str), "");
-    val = atoi(str);
-    net_info->max_try = val > 0 ? val : DEF_CONN_TRY;
+    if ((val = atoi(str)) != 0)
+        net_info->max_try = val;
 
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_DEBUG_PRINTOUT,
-                   str, sizeof(str), DEF_DEBUG_PRINTOUT);
+                   str, sizeof(str), "");
     if (*str  &&  (StringICmp(str, "1"   ) == 0 ||
                    StringICmp(str, "true") == 0 ||
                    StringICmp(str, "yes" ) == 0))
@@ -241,23 +235,36 @@ static NI_HandPtr s_GenericGetService
 
     /* whether to prohibit the use of local LBSMD */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,
-                   str, sizeof(str), DEF_NO_LB_DIRECT);
+                   str, sizeof(str), "");
     if (*str  &&  (StringICmp(str, "0"   )  != 0 &&
                    StringICmp(str, "false") != 0 &&
                    StringICmp(str, "no" )   != 0))
         net_info->lb_disable = 1/*true*/;
 
+    {{ /* alternate service name */
+        static const Char ENV_PREFIX[] = "NI_SERVICE_NAME_";
+        CharPtr envName = (CharPtr)MemNew(sizeof(ENV_PREFIX) +
+                                          StringLen(configSection));
+        StringCpy(envName, ENV_PREFIX);
+        StringCat(envName, configSection);
+        StringUpper(envName);
+        NI_GetEnvParamEx(configFile, configSection, envName, "SERVICE_NAME",
+                         str, sizeof(str), defService);
+        MemFree(envName);
+    }}
+
+    ConnNetInfo_Destroy(def_info);
     /* establish connection to the server */
-    if (!(c = SERVICE_CreateConnectorEx(defService, fSERV_Any, net_info, 0)) ||
+    if (!(c = SERVICE_CreateConnectorEx(str, fSERV_Any, net_info, 0)) ||
         CONN_Create(c, &conn) != eIO_Success) {
         ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
-                  " Service \"%s\" unusable", net_info->service);
+                  " Service \"%s\" unusable", str);
         ConnNetInfo_Destroy(net_info);
         return 0;
     }
-    CONN_SetTimeout(conn, eIO_Open,      net_info ? net_info->timeout : 0);
-    CONN_SetTimeout(conn, eIO_ReadWrite, net_info ? net_info->timeout : 0);
-    CONN_SetTimeout(conn, eIO_Close,     net_info ? net_info->timeout : 0);
+    CONN_SetTimeout(conn, eIO_Open,      net_info->timeout);
+    CONN_SetTimeout(conn, eIO_ReadWrite, net_info->timeout);
+    CONN_SetTimeout(conn, eIO_Close,     net_info->timeout);
 
     /* open ASN i/o, etc. */
     result = (NI_HandPtr) MemNew(sizeof(NI_Handle));
@@ -268,7 +275,7 @@ static NI_HandPtr s_GenericGetService
                             (void*) conn, (IoFuncType) 0, s_AsnWrite);
     AsnIoSetErrorMsg(result->raip, s_AsnErrorFunc);
     AsnIoSetErrorMsg(result->waip, s_AsnErrorFunc);
-    result->hostname = StringSave(net_info ? net_info->client_host : "");
+    result->hostname = StringSave(net_info->client_host);
     result->disp = disp;
     disp->referenceCount++;
     ConnNetInfo_Destroy(net_info);

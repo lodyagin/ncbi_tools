@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.31 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -57,7 +57,11 @@
 extern "C" {
 #endif
 
-typedef enum layoutAlgorithm {
+#define APPEARANCEITEM_MAX (FEATDEF_MAX + 3)
+#define APPEARANCEITEM_Alignment (FEATDEF_MAX + 1)
+#define APPEARANCEITEM_Segment (FEATDEF_MAX + 2)
+
+typedef enum {
   Layout_Inherit = 0,           /* inherit layout from higher-level entity */
   Layout_Diagonal,
   /* Layout_DiagonalSawtooth, */
@@ -69,7 +73,7 @@ typedef enum layoutAlgorithm {
   Layout_GroupCorrespondingFeatsRepeat
 } LayoutAlgorithm;
 
-typedef enum renderChoice {
+typedef enum {
   Do_Not_Render = 0,
   Render_Line,
   Render_CappedLine,            /* |---------| */
@@ -77,9 +81,11 @@ typedef enum renderChoice {
   Render_OutlineBox
 } RenderAlgorithm;
 
-typedef enum labelLocEnum {
+typedef enum {
   LabelUnset = 0,
   LabelNone,
+  LabelAboveClip, /* above, but not wider than the feature*/
+  LabelAboveCull, /* above, but only displayed iff wider than the feature */
   LabelInside,
   LabelAbove,
   LabelBelow,
@@ -87,17 +93,7 @@ typedef enum labelLocEnum {
   LabelRight
 } LabelLocEnum;
 
-typedef enum vibSymbols {
-  SymRectangle = 1,
-  SymDiamond,
-  SymOval,
-  SymLeftTriangle,
-  SymRightTriangle,
-  SymUpTriangle,
-  SymDownTriangle
-} VibSymbols;
-
-typedef enum gapEnum {
+typedef enum {
   NoGap = 0,
   LineGap,
   AngleGap
@@ -141,7 +137,7 @@ typedef struct bioseqAppearanceItem {
 typedef struct appearance {
   ValNodePtr               AppearanceItemList;   /* data.ptrvalue == AppearanceItemPtr */
   CharPtr                  name;
-  AppearanceItemPtr        FeaturesAppearanceItem [FEATDEF_MAX];
+  AppearanceItemPtr        FeaturesAppearanceItem [APPEARANCEITEM_MAX];
   BioseqAppearanceItemPtr  bioseqAIP;
   Boolean                  ShadeSmears; /* if FALSE, multi-feature smears (which can't be selected/edited like normal features) will be hollow instead of filled */
   Uint2                    MaxScaleForArrow;
@@ -177,7 +173,7 @@ typedef enum {
 #define BOOL_FROM_SET_TRISTATE(aTri) ((aTri == TristateTrue) ? (TRUE) : (FALSE))
 
 
-/* IncludeFeature[featdef_xxx] is either 0 (not included) or a number which indictes its order in this filter (1 = first, ..., FEATDEF_MAX = last) */
+/* IncludeFeature[featdef_xxx] is either 0 (not included) or a number which indictes its order in this filter (1 = first, ..., APPEARANCEITEM_MAX = last) */
 typedef struct filterItem {
   FilterType         Type;
   CharPtr            GroupLabel;
@@ -187,7 +183,7 @@ typedef struct filterItem {
   Boolean            GroupLabelFontSet;
   Uint1              GroupBoxColor [3];
   Boolean            GroupBoxColorSet;
-  Uint1              IncludeFeature [FEATDEF_MAX];
+  Uint1              IncludeFeature [APPEARANCEITEM_MAX];
   Uint2              IntraRowPaddingPixels;       /* number of blank (pixel) rows after _each_ row in this group*/
   Uint2              GroupPadding;               /* number of blank (pixel) rows after this group */
   LayoutAlgorithm    LayoutChoice;
@@ -214,7 +210,7 @@ typedef enum endPointType {
 } EndPointType;  
 
 typedef struct relevantFeatureItem {
-  Uint4           Left, Right;
+  Int4            Left, Right;
   Boolean         plusstrand;
   EndPointType    LeftEnd;
   EndPointType    RightEnd;
@@ -222,7 +218,9 @@ typedef struct relevantFeatureItem {
   Uint1           featdeftype;
   Int4Ptr         ivals;
   Int2            numivals;
-  Uint2           entityID, itemID, itemType;
+  Uint2           entityID, itemType;
+  Uint4           itemID;
+  Uint2           SAPindex; /* was this feature found in a SeqAnnot table?  0 if not, else the SeqAnnot table number (1-based) */
 } RelevantFeatureItem, PNTR RelevantFeatureItemPtr;
 
 typedef struct relevantFeatures {
@@ -238,6 +236,7 @@ typedef struct viewerConfigs {
   Uint1              AppearanceCount;
   AppearancePtr PNTR AppearanceArray;
   CharPtr PNTR       AppearanceNameArray;
+
   Uint1              FilterCount;
   FilterPtr PNTR     FilterArray;
   CharPtr PNTR       FilterNameArray;

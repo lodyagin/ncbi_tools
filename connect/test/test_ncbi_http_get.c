@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_http_get.c,v 6.4 2002/03/22 19:47:23 lavr Exp $
+/*  $Id: test_ncbi_http_get.c,v 6.6 2002/08/14 14:42:46 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,21 +28,6 @@
  * File Description:
  *   Retrieve a Web document via HTTP
  *
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_http_get.c,v $
- * Revision 6.4  2002/03/22 19:47:23  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.3  2002/02/05 21:45:55  lavr
- * Included header files rearranged
- *
- * Revision 6.2  2002/01/16 21:23:15  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.1  2001/12/30 19:42:06  lavr
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include "../ncbi_priv.h"
@@ -98,12 +83,12 @@ int main(int argc, char* argv[])
     for (;;) {
         size_t n;
         char blob[512];
-        EIO_Status status = CONN_Read(conn, blob, sizeof(blob), &n, eIO_Plain);
+        EIO_Status status = CONN_Read(conn,blob,sizeof(blob),&n,eIO_ReadPlain);
 
         if (status != eIO_Success && status != eIO_Closed)
             CORE_LOGF(eLOG_Fatal, ("Read error: %s", IO_StatusStr(status)));
         if (n) {
-            printf("%.*s", (int) n, blob);
+            fwrite(blob, 1, n, stdout);
             fflush(stdout);
         } else if (status == eIO_Closed) {
             break;
@@ -117,3 +102,28 @@ int main(int argc, char* argv[])
     CORE_LOG(eLOG_Note, "Completed");
     return 0;
 }
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: test_ncbi_http_get.c,v $
+ * Revision 6.6  2002/08/14 14:42:46  lavr
+ * Use fwrite() instead of printf() when printing out the data fetched
+ *
+ * Revision 6.5  2002/08/07 16:38:08  lavr
+ * EIO_ReadMethod enums changed accordingly; log moved to end
+ *
+ * Revision 6.4  2002/03/22 19:47:23  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.3  2002/02/05 21:45:55  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.2  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
+ * Revision 6.1  2001/12/30 19:42:06  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */

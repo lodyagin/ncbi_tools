@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.16 2000/08/01 17:21:13 shavirin Exp $
+/* $Id: seed.h,v 6.18 2002/08/28 13:37:09 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,15 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.16 $
+$Revision: 6.18 $
 
 $Log: seed.h,v $
+Revision 6.18  2002/08/28 13:37:09  madden
+Lower MAX_HIT to 20000 again (for LINUX)
+
+Revision 6.17  2002/08/09 17:32:09  madden
+Raise MAX_HIT to 20000
+
 Revision 6.16  2000/08/01 17:21:13  shavirin
 Added protection for using C++ compiler.
 
@@ -60,7 +66,7 @@ extern "C" {
 
 #define ALPHABET_SIZE 25
 #define DNA_ALPHABET_SIZE 4
-#define MAX_HIT 2000
+#define MAX_HIT 20000
 #define PATTERN_SPACE_SIZE 1000
 #define BUF_SIZE 100
 #define PATTERN_BUF_SIZE 2000

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.23 $
+* $Revision: 6.25 $
 *
 * File Description:
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.25  2002/08/01 19:47:10  kans
+* AddConsortiumToAuthList in CitSub
+*
+* Revision 6.24  2002/07/23 21:31:19  kans
+* support for consortium
+*
 * Revision 6.23  2001/11/12 19:54:53  kans
 * do not allocate year, protect against buffer overflow by -1 value
 *
@@ -396,6 +402,7 @@ typedef struct pubdescpage {
   TexT          title_box;
   DialoG        author_list;
   DialoG        author_affil;
+  TexT          consortium;
   AuthListPtr   originalAuthList;
 
   TexT          journal;
@@ -565,6 +572,51 @@ static ValNodePtr NewSerialFromText (TexT serialtext)
   return pubgennode;
 }
 
+static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+
+  if (TextHasNoText (consortium)) return alp;
+  if (alp == NULL) {
+    alp = AuthListNew ();
+    alp->choice = 1;
+  }
+  pid = PersonIdNew ();
+  if (pid == NULL) return NULL;
+  pid->choice = 5;
+  pid->data = SaveStringFromText (consortium);
+  ap = AuthorNew ();
+  if (ap == NULL) return NULL;
+  ap->name = pid;
+  names = ValNodeAdd (&(alp->names));
+  names->choice = 1;
+  names->data.ptrvalue = ap;
+  return alp;
+}
+
+static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+  CharPtr      str;
+
+  if (alp == NULL || consortium == NULL) return;
+  if (alp->choice != 1) return;
+  for (names = alp->names; names != NULL; names = names->next) {
+    ap = names->data.ptrvalue;
+    if (ap == NULL) continue;
+    pid = ap->name;
+    if (pid == NULL || pid->choice != 5) continue;
+    str = (CharPtr) pid->data;
+    SafeSetTitle (consortium, str);
+  }
+}
+
 static CitPatPtr PutATPat (PubdescPagePtr ppp)
 {
   CitPatPtr     cpp;
@@ -578,6 +630,7 @@ static CitPatPtr PutATPat (PubdescPagePtr ppp)
     {
       cpp->title = SaveStringFromTextAndStripNewlines (ppp->title_box);
       alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+      alp = AddConsortiumToAuthList (alp, ppp->consortium);
       if (alp != NULL)
       {
         alp->affil = DialogToPointer (ppp->author_affil);
@@ -792,6 +845,7 @@ static CitArtPtr PutATArt (ValNodePtr vnp, PubdescPagePtr ppp)
         ttl->data.ptrvalue = SaveStringFromTextAndStripNewlines (ppp->title_box);
       }
       alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+      alp = AddConsortiumToAuthList (alp, ppp->consortium);
       if (alp != NULL)
       {
         alp->affil = DialogToPointer (ppp->author_affil);
@@ -845,6 +899,7 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
           vnp->data.ptrvalue = cgp;
           cgp->cit = StringSave ("unpublished");
           alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+          alp = AddConsortiumToAuthList (alp, ppp->consortium);
           if (alp != NULL)
           {
             alp->affil = DialogToPointer (ppp->author_affil);
@@ -1002,6 +1057,7 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
           vnp->choice = PUB_Sub;
           vnp->data.ptrvalue = csp;
           alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+          alp = AddConsortiumToAuthList (alp, ppp->consortium);
           if (alp != NULL)
           {
             alp->affil = DialogToPointer (ppp->author_affil);
@@ -1070,6 +1126,7 @@ static void GetATSub (CitSubPtr csp, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
+      AuthListToConsortium (alp, ppp->consortium);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1100,6 +1157,7 @@ static void GetATPat (CitPatPtr cpp, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
+      AuthListToConsortium (alp, ppp->consortium);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1145,6 +1203,7 @@ static void GetATBook (CitBookPtr cbp, PubdescPagePtr ppp)
       else
       {
         PointerToDialog (ppp->author_list, (Pointer) alp);
+        AuthListToConsortium (alp, ppp->consortium);
         ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
         ppp->originalAuthList = AsnIoMemCopy (alp,
                                               (AsnReadFunc) AuthListAsnRead,
@@ -1250,6 +1309,7 @@ static void GetATArt (CitArtPtr cap, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
+      AuthListToConsortium (alp, ppp->consortium);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1333,6 +1393,7 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                 if (alp != NULL)
                 {
                   PointerToDialog (ppp->author_list, (Pointer) alp);
+                  AuthListToConsortium (alp, ppp->consortium);
                   ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
                   ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -2087,7 +2148,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   ButtoN                lkp;
   GrouP                 m, m1, m2, m3, m4, m5, m6, m7, m8, m9;
   GrouP                 n1, n2, n3, n4;
-  GrouP                 p;
+  GrouP                 p, q;
   PrompT                p2, p3, p4, p5;
   PopuP                 pp;
   PubdescPagePtr        ppp;
@@ -2215,11 +2276,16 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     }
     g2 = HiddenGroup (g1, 0, 0, NULL);
     m2 = HiddenGroup (g2, -1, 0, NULL);
+    SetGroupSpacing (m2, 10, 10);
     if (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC)
     {
       ppp->AuthGroup[0] = m2;
       ppp->author_list = CreateAuthorDialog (m2, 3, -1);
       pfp->Author_Page = thispage;
+      q = HiddenGroup (m2, 2, 0, NULL);
+      StaticPrompt (q, "Consortium", 0, stdLineHeight, programFont, 'l');
+      ppp->consortium = DialogText (q, "", 16, NULL);
+      AlignObjects (ALIGN_CENTER, (HANDLE) ppp->author_list, (HANDLE) q, NULL);
     }
     else
     {
@@ -3837,6 +3903,7 @@ static void ReplaceAuthors (ButtoN b)
   ppp = (PubdescPagePtr) GetObjectExtra (pfp->data);
   if (ppp == NULL) return;
   alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+  alp = AddConsortiumToAuthList (alp, ppp->consortium);
   if (alp == NULL) return;
   if (ppp->originalAuthList == NULL) return;
   Hide (pfp->form);

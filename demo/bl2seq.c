@@ -25,6 +25,22 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.49  2002/08/09 19:41:25  camacho
+* 1) Added blast version number to command-line options
+* 2) Added explanations for some default parameters
+*
+* Revision 6.48  2002/06/26 21:44:57  dondosha
+* Set default gap penalties before checking command line options
+*
+* Revision 6.47  2002/06/24 18:24:05  dondosha
+* Multiple memory freeing bug fixed
+*
+* Revision 6.46  2002/05/09 15:37:52  dondosha
+* Call BLASTOptionNewEx instead of BLASTOptionNew, so megablast defaults are set in a central place
+*
+* Revision 6.45  2002/05/02 22:18:25  dondosha
+* Copy bioseq if getting it from ID1, removing non-residue characters from sequence
+*
 * Revision 6.44  2002/05/01 16:43:53  dondosha
 * Call BLASTOptionSetGapParams instead of setting options->matrix
 *
@@ -168,6 +184,7 @@
 /* Used by the callback function. */
 FILE *global_fp=NULL;
 
+#define LOCAL_BUFLEN 255
 static BioseqPtr
 BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
 {
@@ -176,12 +193,13 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
    SeqIdPtr sip = NULL;
    TextSeqIdPtr tsip;
    PDBSeqIdPtr  psip;
-   BioseqPtr bsp = NULL;
+   BioseqPtr bsp = NULL, bsp_tmp = NULL;
    ObjectIdPtr  oid;
    SeqPortPtr spp;
    Int2 retval, buf_length=512;
    Uint1 buf[512];
-   Char tmp[255];
+   Char tmp[LOCAL_BUFLEN];
+   Int2 index;
 
 #ifdef NCBI_ENTREZ_CLIENT
    if (!ID1BioseqFetchEnable ("bl2seq", TRUE))
@@ -255,14 +273,14 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
 
    if (gi > 0) {
       ValNodeAddInt(&sip, SEQID_GI, gi);
-      if ((bsp = BioseqLockById(sip)) == NULL) {
+      if ((bsp_tmp = BioseqLockById(sip)) == NULL) {
          ErrPostEx(SEV_WARNING, 0, 0, "Gi %ld not found", gi);
          return NULL;
       }
    } 
    
-   if (ISA_na(bsp->mol) != is_na) {
-      BioseqUnlock(bsp);
+   if (ISA_na(bsp_tmp->mol) != is_na) {
+      BioseqUnlock(bsp_tmp);
       if (is_na)
          ErrPostEx(SEV_FATAL, 0, 0, 
                    "%s is a protein sequence, program requires nucleotide", 
@@ -273,13 +291,19 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
                    accver);
       return NULL;
    }
-
+   
+   bsp = BioseqNew();
+   bsp->length = bsp_tmp->length;
+   bsp->mol = bsp_tmp->mol;
+   bsp->repr = Seq_repr_raw;
+   bsp->seq_data = BSNew(bsp->length);
+                   
    if (ISA_na(bsp->mol)) {
-      spp = SeqPortNew(bsp, 0, -1, Seq_strand_plus, 
+      spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_plus, 
                        Seq_code_iupacna);
       bsp->seq_data_type = Seq_code_iupacna;
    } else {
-      spp = SeqPortNew(bsp, 0, -1, Seq_strand_unknown, 
+      spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_unknown, 
                        Seq_code_ncbieaa);
       bsp->seq_data_type = Seq_code_ncbieaa;
    }
@@ -292,13 +316,34 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
    
    while (number < bsp->length) {
       retval = SeqPortRead(spp, buf, buf_length);
-      if (retval <= 0)
+      if (retval < 0)
+         continue;
+      if (retval == 0)
          break;
       BSWrite(bsp->seq_data, buf, retval);
       number += retval;
    }
    
    SeqPortFree(spp);
+   title_length = StringLen(BioseqGetTitle(bsp_tmp));
+   SeqIdWrite(bsp_tmp->id, tmp, PRINTID_FASTA_LONG, LOCAL_BUFLEN);
+   id_length = StringLen(tmp);
+   title_length += id_length;
+   title_length +=3;
+   new_defline = (CharPtr) MemNew(title_length*sizeof(Char));
+   StringCpy(new_defline, tmp);
+   *(new_defline+id_length) = ' ';
+   StringCpy(new_defline+id_length+1, BioseqGetTitle(bsp_tmp)); 
+   *(new_defline+title_length-1) = NULLB;
+   bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, new_defline);
+   bsp->id = ValNodeNew(NULL);
+   oid = ObjectIdNew();
+   oid->str = (char*) Malloc(64);
+   sprintf(oid->str, "%d", id_num);
+   bsp->id->choice = SEQID_LOCAL;
+   bsp->id->data.ptrvalue = (Pointer) oid;
+   SeqMgrDeleteFromBioseqIndex(bsp_tmp);
+   BioseqUnlock(bsp_tmp);
    BioseqPack(bsp);
    ID1BioseqFetchDisable();
 #endif   
@@ -326,9 +371,11 @@ static Args myargs [] = {
         "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},/* 7 */
   { "Cost to extend a gap (zero invokes default behavior)",
         "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},/* 8 */
-  { "X dropoff value for gapped alignment (in bits) (zero invokes default behavior)",
+  { "X dropoff value for gapped alignment (in bits) (zero invokes default "
+    "behavior)\n      blastn 30, megablast 20, tblastx 0, all others 15",
         "0", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},/* 9 */
-  { "Wordsize (zero invokes default behavior)",
+  { "Word size, default if zero (blastn 11, megablast 28, "
+        "all others 3)",
         "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},/* 10 */
   { "Matrix",
         "BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},/* 11 */
@@ -356,7 +403,7 @@ static Args myargs [] = {
         NULL, NULL, NULL, TRUE, 'I', ARG_STRING, 0.0, 0, NULL},/* 22 */
   { "Location on second sequence",
         NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},/* 23 */
-  { "Output format: 0 - traditional, 1 - tabulated", 
+  { "Output format: 0 - traditional, 1 - tabular", 
         "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}, /* 24 */
   { "Use lower case filtering for the query sequence",
         "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL}/* 25 */
@@ -389,11 +436,13 @@ Int2 Main (void)
         Boolean entrez_lookup = FALSE;
         CharPtr query_accver = NULL, subject_accver = NULL;
         const char *dummystr;
+        Char buf[256] = { '\0' };
 
-        if (! GetArgs ("bl2seq", NUMARG, myargs))
-        {
-                return (1);
-        }
+    StringCpy(buf, "bl2seq ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+    if (! GetArgs (buf, NUMARG, myargs)) {
+        return (1);
+    }
 
 	UseLocalAsnloadDataAndErrMsg ();
 
@@ -449,8 +498,7 @@ Int2 Main (void)
 	}
 
         global_fp = outfp;
-	options = BLASTOptionNew(program_name, (Boolean) myargs[3].intvalue);
-        options->is_megablast_search = (Boolean) myargs[18].intvalue;
+	options = BLASTOptionNewEx(program_name, (Boolean) myargs[3].intvalue, (Boolean) myargs[18].intvalue);
 
         if (entrez_lookup) {
            query_bsp = BioseqFromAccession(query_accver, 1, seq1_is_na);
@@ -523,12 +571,6 @@ Int2 Main (void)
               fake_subject_bsp = BlastMakeFakeBioseq(subject_bsp, tmp);
            }
         }
-        if (options->is_megablast_search) {
-           options->gap_open = options->gap_extend = 0;
-           options->wordsize = 28;
-           options->block_width = 0;
-	}
-
     	if (myargs[19].floatvalue)
         	options->searchsp_eff = (Nlm_FloatHi) myargs[19].floatvalue;
 
@@ -546,10 +588,6 @@ Int2 Main (void)
 
 	options->discontinuous = FALSE;
 
-        if (myargs[7].intvalue != 0)
-              options->gap_open = myargs[7].intvalue;
-        if (myargs[8].intvalue != 0)
-               options->gap_extend = myargs[8].intvalue;
         if (myargs[9].intvalue != 0)
 	{
                options->gap_x_dropoff = myargs[9].intvalue;
@@ -561,8 +599,13 @@ Int2 Main (void)
 	   options->cutoff_s2 = options->wordsize*options->reward;
 	   options->cutoff_s = (options->wordsize + 4)*options->reward;
         }
-	MemFree(options->matrix);
+	options->matrix = MemFree(options->matrix);
         BLASTOptionSetGapParams(options, myargs[11].strvalue, 0, 0); 
+
+        if (myargs[7].intvalue != 0)
+              options->gap_open = myargs[7].intvalue;
+        if (myargs[8].intvalue != 0)
+               options->gap_extend = myargs[8].intvalue;
 
 	options->strand_option = myargs[16].intvalue;
 
@@ -788,8 +831,8 @@ Int2 Main (void)
 	FileClose(outfp);
 
         if (entrez_lookup) {
-           BioseqUnlock(query_bsp);
-           BioseqUnlock(subject_bsp);
+           BioseqFree(query_bsp);
+           BioseqFree(subject_bsp);
         } else {
            SeqEntryFree(sep);
            SeqEntryFree(sep1);

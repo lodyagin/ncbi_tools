@@ -1,4 +1,4 @@
-/* $Id: ncbithr.h,v 6.10 2000/11/06 17:09:21 vakatov Exp $ */
+/* $Id: ncbithr.h,v 6.11 2002/07/09 15:33:46 kans Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.h
@@ -35,6 +35,9 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.h,v $
+* Revision 6.11  2002/07/09 15:33:46  kans
+* use Nlm_ prefixes now that it is indirectly included by vibwndws.c
+*
 * Revision 6.10  2000/11/06 17:09:21  vakatov
 * RW_HISTORY, RW_TRACE -- To gather and printout info on the RW-lock history
 *
@@ -99,11 +102,11 @@ extern "C" {
 /* TYPEDEFS */
 /****************************************************************************/
 
-typedef VoidPtr TNlmThread;         /* handle(id) of the thread */
+typedef Nlm_VoidPtr TNlmThread;         /* handle(id) of the thread */
   
 #define NULL_thread ((TNlmThread)0) /* for error handling */
 
-typedef VoidPtr TNlmSemaphore;      /* handle (id) of the semaphore */
+typedef Nlm_VoidPtr TNlmSemaphore;      /* handle (id) of the semaphore */
 
 struct TNlmRWlockTag;                         /* internal RW-lock storage  */
 typedef struct TNlmRWlockTag PNTR TNlmRWlock; /* handle(id) of the RW-lock */
@@ -118,10 +121,10 @@ typedef struct TNlmTlsTag PNTR TNlmTls; /* handle(id) of the mutex       */
 typedef TNlmTls PNTR TNlmTlsPtr;        /* pointer to mutex handle       */
 
 /* pointer to the thread function */
-typedef VoidPtr (*TNlmThreadStart)(VoidPtr arg);
+typedef Nlm_VoidPtr (*TNlmThreadStart)(Nlm_VoidPtr arg);
 
 /* pointer to the thread finishing function */
-typedef void (*TNlmThreadOnExit)(VoidPtr user_arg);
+typedef void (*TNlmThreadOnExit)(Nlm_VoidPtr user_arg);
 
 
 /****************************************************************************/
@@ -132,7 +135,7 @@ typedef void (*TNlmThreadOnExit)(VoidPtr user_arg);
  *  Auxiliary function to be used in the NlmThreadAddOnExit()
  *  function call to provide memory deallocation on the thread exit
  */
-NLM_EXTERN void NlmThreadMemFree(VoidPtr ptr);
+NLM_EXTERN void NlmThreadMemFree(Nlm_VoidPtr ptr);
 
 
 /* --------------------  NlmThreadAddOnExit  ----------------------
@@ -143,7 +146,7 @@ NLM_EXTERN void NlmThreadMemFree(VoidPtr ptr);
    Returns:     TRUE on success...
    NOTE:        Must be called from inside the thread
   ------------------------------------------------------------------*/
-NLM_EXTERN Boolean NlmThreadAddOnExit(TNlmThreadOnExit func, VoidPtr arg);
+NLM_EXTERN Nlm_Boolean NlmThreadAddOnExit(TNlmThreadOnExit func, Nlm_VoidPtr arg);
 
 
 /* --------------------  NlmThreadRemoveOnExit  -------------------
@@ -153,7 +156,7 @@ NLM_EXTERN Boolean NlmThreadAddOnExit(TNlmThreadOnExit func, VoidPtr arg);
                 matches both "func" and "arg"
    NOTE:        Must be called from inside the thread
   ------------------------------------------------------------------*/
-NLM_EXTERN void NlmThreadRemoveOnExit(TNlmThreadOnExit func, VoidPtr arg);
+NLM_EXTERN void NlmThreadRemoveOnExit(TNlmThreadOnExit func, Nlm_VoidPtr arg);
 
 
 /* --------------------  NlmThreadCreate  ---------------------------
@@ -165,7 +168,7 @@ NLM_EXTERN void NlmThreadRemoveOnExit(TNlmThreadOnExit func, VoidPtr arg);
                 inside current process, that share most resources of the
                 parent thread.
   ------------------------------------------------------------------*/
-NLM_EXTERN TNlmThread NlmThreadCreate(TNlmThreadStart theStartFunction, VoidPtr arg);
+NLM_EXTERN TNlmThread NlmThreadCreate(TNlmThreadStart theStartFunction, Nlm_VoidPtr arg);
 
 
 /* --------------------  NlmThreadCreateEx  -------------------------
@@ -200,7 +203,7 @@ typedef enum { /* NOTE:  priority doesn't apply to "bound" threads on UNIX */
   eTP_Default
 } EThreadPriority;
     
-NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart theStartFunction, VoidPtr arg, Int4 flags, EThreadPriority priority, TNlmThreadOnExit exit_func, VoidPtr exit_arg);
+NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart theStartFunction, Nlm_VoidPtr arg, Nlm_Int4 flags, EThreadPriority priority, TNlmThreadOnExit exit_func, Nlm_VoidPtr exit_arg);
 
 
 /* ----------------------  NlmThreadSelf  --------------------------
@@ -218,7 +221,7 @@ NLM_EXTERN TNlmThread NlmThreadSelf(void);
    Description: In OSF1 thread ID is structure and must be compared 
                 in different way
   -----------------------------------------------------------------*/
-NLM_EXTERN Boolean NlmThreadCompare(TNlmThread thread1, TNlmThread thread2);
+NLM_EXTERN Nlm_Boolean NlmThreadCompare(TNlmThread thread1, TNlmThread thread2);
 
 
 /* ----------------------  NlmThreadJoin  --------------------------
@@ -235,7 +238,7 @@ NLM_EXTERN Boolean NlmThreadCompare(TNlmThread thread1, TNlmThread thread2);
                 On WIN32, if a thread is not joined using this function
                 it lead to a minor resource leak
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmThreadJoin(TNlmThread wait_for, VoidPtr *status);
+NLM_EXTERN Nlm_Int4 NlmThreadJoin(TNlmThread wait_for, Nlm_VoidPtr *status);
 
 
 /* ----------------------  NlmThreadJoinAll  -----------------------
@@ -247,7 +250,7 @@ NLM_EXTERN Int4 NlmThreadJoin(TNlmThread wait_for, VoidPtr *status);
                 normal return from the main thread function;
                 deadlocks if called *not* from the main thread!
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmThreadJoinAll(void);
+NLM_EXTERN Nlm_Int4 NlmThreadJoinAll(void);
 
 
 /* -------------------  NlmThreadExit  ------------------------------
@@ -258,7 +261,7 @@ NLM_EXTERN Int4 NlmThreadJoinAll(void);
                  returns from main() then the process exits with a status
                  equal to the return value
    -----------------------------------------------------------------*/
-NLM_EXTERN void NlmThreadExit(VoidPtr status);
+NLM_EXTERN void NlmThreadExit(Nlm_VoidPtr status);
 
 
 /********************************************************************/
@@ -276,7 +279,7 @@ NLM_EXTERN void NlmThreadExit(VoidPtr status);
    NOTE:        This semaphore can be used to synchronize threads in this
                 process only
    -----------------------------------------------------------------*/
-NLM_EXTERN TNlmSemaphore NlmSemaInit(Uint4 count);
+NLM_EXTERN TNlmSemaphore NlmSemaInit(Nlm_Uint4 count);
 
 
 /* ---------------------  NlmSemaDestroy  ---------------------------
@@ -286,7 +289,7 @@ NLM_EXTERN TNlmSemaphore NlmSemaInit(Uint4 count);
    Description: destroys any state associated with the semaphore pointed
                 to by theSemaphore
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmSemaDestroy(TNlmSemaphore theSemaphore);
+NLM_EXTERN Nlm_Int4 NlmSemaDestroy(TNlmSemaphore theSemaphore);
 
 
 /* ---------------------  NlmSemaWait  ------------------------------
@@ -297,7 +300,7 @@ NLM_EXTERN Int4 NlmSemaDestroy(TNlmSemaphore theSemaphore);
                  semaphore pointed by theSemaphore becomes greater than zero
                  and then atomically decrements it
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmSemaWait(TNlmSemaphore theSemaphore);
+NLM_EXTERN Nlm_Int4 NlmSemaWait(TNlmSemaphore theSemaphore);
 
 
 /* ---------------------  NlmSemaTryWait  ---------------------------
@@ -308,7 +311,7 @@ NLM_EXTERN Int4 NlmSemaWait(TNlmSemaphore theSemaphore);
                  pointed to by theSemaphore if the count is greater
                  than zero. Otherwise it returns an error.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmSemaTryWait(TNlmSemaphore theSemaphore);
+NLM_EXTERN Nlm_Int4 NlmSemaTryWait(TNlmSemaphore theSemaphore);
 
 
 /* ---------------------  NlmSemaPost  ------------------------------
@@ -318,7 +321,7 @@ NLM_EXTERN Int4 NlmSemaTryWait(TNlmSemaphore theSemaphore);
    Description:  atomically increments the count semaphore pointed to by
                  theSemaphore, one is unblocked.
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore);
+NLM_EXTERN Nlm_Int4 NlmSemaPost(TNlmSemaphore theSemaphore);
 
 
 /********************************************************************/
@@ -364,7 +367,7 @@ NLM_EXTERN TNlmRWlock NlmRWinit(void);
    Description:  Destroys any state associated with the RW lock
                  pointed to by RW.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW);
+NLM_EXTERN Nlm_Int4 NlmRWdestroy(TNlmRWlock RW);
 
 
 /* ---------------------  NlmRWrdlock  ------------------------------
@@ -378,7 +381,7 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW);
    NOTE:         More than one thread may hold a read lock on a RW lock
                  at any one time.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWrdlockEx(TNlmRWlock RW,
+NLM_EXTERN Nlm_Int4 NlmRWrdlockEx(TNlmRWlock RW,
                               const char* file, int line);
 #define NlmRWrdlock(RW)  NlmRWrdlockEx(RW, RW_FILE, RW_LINE)
 
@@ -394,7 +397,7 @@ NLM_EXTERN Int4 NlmRWrdlockEx(TNlmRWlock RW,
    NOTE:         Only one thread may hold a write lock on a RW lock
                  at any one time.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWwrlockEx(TNlmRWlock RW,
+NLM_EXTERN Nlm_Int4 NlmRWwrlockEx(TNlmRWlock RW,
                               const char* file, int line);
 #define NlmRWwrlock(RW)  NlmRWwrlockEx(RW, RW_FILE, RW_LINE)
 
@@ -411,7 +414,7 @@ NLM_EXTERN Int4 NlmRWwrlockEx(TNlmRWlock RW,
                  reading or writing no error status is returned and the
                  behavior of the program is undefined.
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWunlockEx(TNlmRWlock RW,
+NLM_EXTERN Nlm_Int4 NlmRWunlockEx(TNlmRWlock RW,
                               const char* file, int line);
 #define NlmRWunlock(RW)  NlmRWunlockEx(RW, RW_FILE, RW_LINE)
 
@@ -425,7 +428,7 @@ NLM_EXTERN Int4 NlmRWunlockEx(TNlmRWlock RW,
                  locked for writing, it returns an error. Otherwise
                  the read lock is acquired
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWtryrdlockEx(TNlmRWlock RW,
+NLM_EXTERN Nlm_Int4 NlmRWtryrdlockEx(TNlmRWlock RW,
                                  const char* file, int line);
 #define NlmRWtryrdlock(RW)  NlmRWtryrdlockEx(RW, RW_FILE, RW_LINE)
 
@@ -439,7 +442,7 @@ NLM_EXTERN Int4 NlmRWtryrdlockEx(TNlmRWlock RW,
                   locked for reading or writing, it returnes an error.
                   Otherwise the write lock is acquired
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWtrywrlockEx(TNlmRWlock RW,
+NLM_EXTERN Nlm_Int4 NlmRWtrywrlockEx(TNlmRWlock RW,
                                  const char* file, int line);
 #define NlmRWtrywrlock(RW)  NlmRWtrywrlockEx(RW, RW_FILE, RW_LINE)
 
@@ -487,7 +490,7 @@ NLM_EXTERN TNlmMutex NlmMutexInit(TNlmMutexPtr theMutexPtr);
    Returns:      Zero on success;  non-zero value on error
    Description:  Blocks code access
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexLock (TNlmMutex theMutex);
+NLM_EXTERN Nlm_Int4 NlmMutexLock (TNlmMutex theMutex);
 
 
 /* ---------------------  NlmMutexTryLock  ------------------------------
@@ -497,7 +500,7 @@ NLM_EXTERN Int4 NlmMutexLock (TNlmMutex theMutex);
                  by another thread
    Description:  Poll condition of mutex -- do not block if mutex busy
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexTryLock(TNlmMutex theMutex);
+NLM_EXTERN Nlm_Int4 NlmMutexTryLock(TNlmMutex theMutex);
 
 
 /* ---------------------  NlmMutexLockEx  ----------------------------
@@ -506,7 +509,7 @@ NLM_EXTERN Int4 NlmMutexTryLock(TNlmMutex theMutex);
    Returns:      Zero on success;  non-zero value on error
    Description:  Blocks code access
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexLockEx(TNlmMutexPtr theMutexPtr);
+NLM_EXTERN Nlm_Int4 NlmMutexLockEx(TNlmMutexPtr theMutexPtr);
 
 
 /* ---------------------  NlmMutexTryLockEx  ----------------------------
@@ -516,7 +519,7 @@ NLM_EXTERN Int4 NlmMutexLockEx(TNlmMutexPtr theMutexPtr);
                  by another thread
    Description:  Poll condition of mutex -- do not block if mutex busy
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexTryLockEx(TNlmMutexPtr theMutexPtr);
+NLM_EXTERN Nlm_Int4 NlmMutexTryLockEx(TNlmMutexPtr theMutexPtr);
 
 
 /* ---------------------  NlmMutexUnlock  ------------------------------
@@ -525,7 +528,7 @@ NLM_EXTERN Int4 NlmMutexTryLockEx(TNlmMutexPtr theMutexPtr);
    Returns:      Zero on success;  non-zero value on error
    Description:  Unblocks code access
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex);
+NLM_EXTERN Nlm_Int4 NlmMutexUnlock(TNlmMutex theMutex);
 
 
 /* ---------------------  NlmMutexDestroy ------------------------------
@@ -534,7 +537,7 @@ NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex);
    Returns:      Zero on success;  non-zero value on error
    Description:  Remove the mutex from execution
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmMutexDestroy(TNlmMutex theMutex);
+NLM_EXTERN Nlm_Int4 NlmMutexDestroy(TNlmMutex theMutex);
 
 
 /********************************************************************
@@ -557,8 +560,8 @@ NLM_EXTERN Int4 NlmMutexDestroy(TNlmMutex theMutex);
    NOTE 2:      inside the "cleanup" function: the new value is set
                 already, and NlmTls[SG]etValue(...) are safe to call
    -----------------------------------------------------------------*/
-typedef void (*TNlmTlsCleanup)(TNlmTls TLS, VoidPtr old_value);
-NLM_EXTERN Boolean NlmTlsSetValue(TNlmTls *pTLS, VoidPtr value, TNlmTlsCleanup cleanup);
+typedef void (*TNlmTlsCleanup)(TNlmTls TLS, Nlm_VoidPtr old_value);
+NLM_EXTERN Nlm_Boolean NlmTlsSetValue(TNlmTls *pTLS, Nlm_VoidPtr value, TNlmTlsCleanup cleanup);
 
 
 /* ---------------------  NlmTlsSetValue  --------------------------
@@ -571,7 +574,7 @@ NLM_EXTERN Boolean NlmTlsSetValue(TNlmTls *pTLS, VoidPtr value, TNlmTlsCleanup c
                 yet been set(by NlmTlsSetValue) in this thread, or
                 if the TLS has not been initialized yet(NULL TLS handle)
    -----------------------------------------------------------------*/
-NLM_EXTERN Boolean NlmTlsGetValue(TNlmTls TLS, VoidPtr *value_ptr);
+NLM_EXTERN Nlm_Boolean NlmTlsGetValue(TNlmTls TLS, Nlm_VoidPtr *value_ptr);
 
 
 /********************************************************************
@@ -583,14 +586,14 @@ NLM_EXTERN Boolean NlmTlsGetValue(TNlmTls TLS, VoidPtr *value_ptr);
    Returns:      TRUE if threads are available, FALSE otherwise
    Description:  Check to see if threads are available on this platform
    -----------------------------------------------------------------*/
-NLM_EXTERN Boolean NlmThreadsAvailable(void);
+NLM_EXTERN Nlm_Boolean NlmThreadsAvailable(void);
 
 
 /* ---------------------  NlmCPUNumber ------------------------------
    Purpose:      To get number of CPU on machine
    Returns:      Number of CPU
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmCPUNumber(void);
+NLM_EXTERN Nlm_Int4 NlmCPUNumber(void);
 
 
 /********************************************************************

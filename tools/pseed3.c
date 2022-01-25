@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.36 2001/05/04 14:14:52 madden Exp $ */
+/* $Id: pseed3.c,v 6.37 2002/08/28 13:38:06 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.36 $
+$Revision: 6.37 $
 
 $Log: pseed3.c,v $
+Revision 6.37  2002/08/28 13:38:06  madden
+Do not double close patfp, fix memory leaks
+
 Revision 6.36  2001/05/04 14:14:52  madden
 Fixes for multiple patterns in phi-blast
 
@@ -314,7 +317,9 @@ Char * LIBCALL get_a_pat(
 	  }
 	}
       }
+/*
       FileClose(fp);
+*/
       if (unfilterHitArray)
         MemFree(unfilterHitArray);
       return NULL;
@@ -953,16 +958,18 @@ hit_ptr LIBCALL get_hits(qseq_ptr qp, Int4 len_of_pat,
                                 pattern matches*/
     Int4 llen, rlen; /*lengths of lseq, rseq*/
     hit_ptr hit_list = NULL;
-    Int4 hitL[MAX_HIT]; /*array of hit pairs between seq_db and pattern
+    Int4 *hitL; /*array of hit pairs between seq_db and pattern
                          two entries are used per hit*/
     
+    hitL = (Int4Ptr) MemNew(MAX_HIT*sizeof(Int4));
+
     (*newOccurrences) = 0;
     lseq = qp->lseq; 
     llen = qp->llen;
     rseq = qp->rseq; 
     rlen = qp->rlen;
     sseq = qp->sseq;
-    leftPartseq_dbReversed = (Uint1Ptr) ckalloc(len_seq_db+1);
+    leftPartseq_dbReversed = (Uint1Ptr) MemNew((len_seq_db+1)*sizeof(Uint1));
     twiceNumMatches = find_hits(hitL, seq_db, len_seq_db, is_dna, patternSearch);
     if (twiceNumMatches > 0 && is_dna) {
       if (len_seq_db > MAXDNA) {
@@ -997,7 +1004,8 @@ MAXDNA);
 		   llen+len_of_pat+endPosrseq, lenLeft+(matchEnd-matchStart)+1+endPosrseq_db, &hit_list, mul);
       }
     }
-    free(leftPartseq_dbReversed);
+    MemFree(hitL);
+    MemFree(leftPartseq_dbReversed);
     if (buffer)
       MemFree(buffer);
     return hit_list;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.17 $
+* $Revision: 1.20 $
 *
 * File Description: 
 *
@@ -37,6 +37,15 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.20  2002/08/07 18:45:15  lavr
+* Change from deprecated to current EIO_ReadMethod enums
+*
+* Revision 1.19  2002/07/24 21:09:56  kans
+* reverted ncbi URL
+*
+* Revision 1.18  2002/07/23 16:45:21  kans
+* changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+*
 * Revision 1.17  2002/04/12 14:27:35  madden
 * Check RID for internal jobs, send to appropriate place
 *
@@ -886,8 +895,7 @@ NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 
     buff_len = 0;
     while ((status = CONN_Read(conn, in_buff + buff_len, 
-                               1024, &bytes, eIO_Plain)) == eIO_Success) {
-        
+                               1024, &bytes, eIO_ReadPlain)) == eIO_Success) {
         if(bytes == 0) 
             break;
 

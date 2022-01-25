@@ -79,8 +79,10 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
 {
   Int4    position;
   Int4    nuclCount;
+  Int4    miscCount;
   FloatLo percentNucl;
   Char    commonNucls[20];
+  Char    miscChars[5];
 
   /* Is it definitely a protein sequence? */
   /* The following chars are only in      */
@@ -110,18 +112,28 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
   /* most common nucleotide chars.           */
 
   nuclCount = 0;
+  miscCount = 0;
+  sprintf (commonNucls, "ATCGNXatcgnx");
+
   if (configPtr->unalignedChar != NULL)
-    sprintf (commonNucls, "ATCGNXatcgnx-%s%s%s ", configPtr->gapChar,
+    sprintf (miscChars, "-%s%s%s ", configPtr->gapChar,
 	     configPtr->missingChar, configPtr->unalignedChar);
   else
-    sprintf (commonNucls, "ATCGNXatcgnx-%s%s ", configPtr->gapChar,
+    sprintf (miscChars, "-%s%s ", configPtr->gapChar,
 	     configPtr->missingChar);
 
-  for (position = 0; seqLine[position] != '\0'; position++)
+  for (position = 0; seqLine[position] != '\0'; position++) {
     if (StringChr (commonNucls, seqLine[position]) != NULL)
       nuclCount++;
+    else if (StringChr (miscChars, seqLine[position]) != NULL)
+      miscCount++;
+  }
 
-  percentNucl = (FloatLo) nuclCount / (FloatLo) StringLen (seqLine);
+  if (miscCount == StringLen (seqLine))
+    return ALI_AMBIGUOUS;
+
+  percentNucl = ((FloatLo) nuclCount + (FloatLo) miscCount) / 
+                (FloatLo) StringLen (seqLine);
 
   if ((percentNucl * 100) > configPtr->nuclLineMaxThreshold)
     return ALI_NUCLEOTIDE;

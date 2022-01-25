@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.116 2002/04/29 19:55:26 madden Exp $
+/* $Id: blastall.c,v 6.122 2002/08/23 16:45:36 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,25 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.122  2002/08/23 16:45:36  madden
+ * Issue WARNING for out-of-frame alignments
+ *
+ * Revision 6.121  2002/08/14 15:09:59  camacho
+ * Only change default window size if its command-line value is non-zero
+ *
+ * Revision 6.120  2002/08/09 19:41:25  camacho
+ * 1) Added blast version number to command-line options
+ * 2) Added explanations for some default parameters
+ *
+ * Revision 6.119  2002/06/19 22:50:17  dondosha
+ * Added all queries information for tabular output with multiple queries
+ *
+ * Revision 6.118  2002/05/09 15:37:52  dondosha
+ * Call BLASTOptionNewEx instead of BLASTOptionNew, so megablast defaults are set in a central place
+ *
+ * Revision 6.117  2002/05/04 13:04:43  madden
+ * Unsuppress options
+ *
  * Revision 6.116  2002/04/29 19:55:26  madden
  * Use ARG_FLOAT for db length
  *
@@ -568,13 +587,11 @@ BlastGetMaskingLoc(FILE *infp, FILE *outfp, CharPtr instructions)
 	return 0;
 }
 
-/*
 #define DO_NOT_SUPPRESS_BLAST_OP
-*/
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
-static Args myargs [] = {
+static Args myargs[] = {
     { "Program Name",           /* 0 */
       NULL, NULL, NULL, FALSE, 'p', ARG_STRING, 0.0, 0, NULL},
     { "Database",               /* 1 */
@@ -593,7 +610,8 @@ static Args myargs [] = {
       "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
     { "Cost to extend a gap (zero invokes default behavior)", /* 8 */
       "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},
-    { "X dropoff value for gapped alignment (in bits) (zero invokes default behavior)", /* 9 */
+    { "X dropoff value for gapped alignment (in bits) (zero invokes default "
+      "behavior)\n      blastn 30, megablast 20, tblastx 0, all others 15", /* 9 */
       "0", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},
     { "Show GI's in deflines",  /* 10 */
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -605,7 +623,9 @@ static Args myargs [] = {
       "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
     { "Number of database sequence to show alignments for (B)", /* 14 */
       "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},
-    { "Threshold for extending hits, default if zero", /* 15 */
+    { "Threshold for extending hits, default if zero\n" /* 15 */
+      "      blastp 11, blastn 0, blastx 12, tblastn 13\n"
+      "      tblastx 13, megablast 0",
       "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Perfom gapped alignment (not available with tblastx)", /* 16 */
         "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -621,50 +641,54 @@ static Args myargs [] = {
       "F", NULL, NULL, FALSE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Matrix",                 /* 22 */
       "BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},
-    { "Word size, default if zero", /* 23 */
+    { "Word size, default if zero (blastn 11, megablast 28, "
+        "all others 3)", /* 23 */
       "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the database (use zero for the real size)", /* 24 */
       "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
     { "Number of best hits from a region to keep (off by default, if used a value of 100 is recommended)", /* 25 */
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
-    { "0 for multiple hits 1-pass, 1 for single hit 1-pass, 2 for 2-pass", /* 26 */
-      "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},
-    { "Effective length of the search space (use zero for the real size)", /* 27 */
+    { "Effective length of the search space (use zero for the real size)", /* 26 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
-    { "Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom", /* 28 */
+    { "Query strands to search against database (for blast[nx], and tblastx)\n"
+      "       3 is both, 1 is top, 2 is bottom", /* 27 */
       "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
-    { "Produce HTML output",    /* 29 */
+    { "Produce HTML output",    /* 28 */
       "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
 #ifdef BLAST_CS_API
-    { "Restrict search of database to results of Entrez2 lookup", /* 30 */
+    { "Restrict search of database to results of Entrez2 lookup", /* 29 */
       NULL, NULL, NULL, TRUE, 'u', ARG_STRING, 0.0, 0, NULL},
 #else
-    { "Restrict search of database to list of GI's",              /* 30 */
+    { "Restrict search of database to list of GI's",              /* 29 */
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
 #endif
-    {"Use lower case filtering of FASTA sequence", /* 31 */
+    {"Use lower case filtering of FASTA sequence", /* 30 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    { "Dropoff (X) for blast extensions in bits (0.0 invokes default behavior)", /* 32 */
+    { "X dropoff value for ungapped extensions in bits (0.0 invokes default "
+      "behavior)\n      blastn 20, megablast 10, all others 7", /* 31 */
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
-    { "X dropoff value for final gapped alignment (in bits)", /* 33 */
+    { "X dropoff value for final gapped alignment in bits " /* 32 */
+      "(0.0 invokes default behavior)\n"
+      "      blastn/megablast 50, tblastx 0, all others 25",
       "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
 #ifdef BLAST_CS_API
-    { "RPS Blast search",            /* 34 */
+    { "RPS Blast search",            /* 33 */
       "F", NULL, NULL, FALSE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
 #else
-    { "PSI-TBLASTN checkpoint file", /* 34 */
+    { "PSI-TBLASTN checkpoint file", /* 33 */
       NULL, NULL, NULL, TRUE, 'R', ARG_FILE_IN, 0.0, 0, NULL},
 #endif
-    { "MegaBlast search",       /* 35 */
+    { "MegaBlast search",       /* 34 */
       "F", NULL, NULL, FALSE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Location on query sequence",/* 36 */
+    { "Location on query sequence",/* 35 */
       NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
-    { "Multiple Hits window size (zero for single hit algorithm)", /* 37 */
-      "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
+    { "Multiple Hits window size, default if zero (blastn/megablast 0, "
+        "all others 40", /* 36 */
+      "0", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
-    { "Frame shift penalty (OOF algorithm for blastx)", /* 38 */
+    { "Frame shift penalty (OOF algorithm for blastx)", /* 37 */
       "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL},
-    { "Length of the largest intron allowed in tblastn for linking HSPs (0 disables linking)", /* 39 */
+    { "Length of the largest intron allowed in tblastn for linking HSPs (0 disables linking)", /* 38 */
       "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL} 
 #endif
 };
@@ -740,6 +764,7 @@ Int2 Main (void)
     ValNodePtr other_returns, error_returns;
     CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
     FILE *infp, *outfp;
+    Char buf[256] = { '\0' } ;
     /* Mega BLAST related variables */
     SeqAlignPtr sap, next_seqalign, PNTR seqalignp;
     Int4 num_bsps, index;
@@ -757,11 +782,15 @@ Int2 Main (void)
 #endif
     
 #ifdef BLAST_CS_API
-    if (! GetArgs ("blastcl3", NUMARG, myargs)) {
+    StringCpy(buf, "blastcl3 ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+    if (! GetArgs (buf, NUMARG, myargs)) {
         return (1);
     }
 #else    
-    if (! GetArgs ("blastall", NUMARG, myargs)) {
+    StringCpy(buf, "blastall ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
+    if (! GetArgs (buf, NUMARG, myargs)) {
         return (1);
     }
 #endif
@@ -773,22 +802,22 @@ Int2 Main (void)
     
     ErrSetMessageLevel(SEV_WARNING);
     
-    blast_program = myargs [0].strvalue;
+    blast_program = myargs[0].strvalue;
 
 #ifdef BLAST_CS_API
     /* For RPS Blast - anything not "blastp" - is "tblastn" */    
-    if(myargs[34].intvalue) {
+    if(myargs[33].intvalue) {
         if(StringICmp(blast_program, "blastp")) {
             StringCpy(blast_program, "blastx");
         }
     }
 #endif
 
-    blast_database = myargs [1].strvalue;
-    blast_inputfile = myargs [2].strvalue;
-    blast_outputfile = myargs [5].strvalue;
+    blast_database = myargs[1].strvalue;
+    blast_inputfile = myargs[2].strvalue;
+    blast_outputfile = myargs[5].strvalue;
 
-    if (myargs[29].intvalue)
+    if (myargs[28].intvalue)
         html = TRUE;
     
     if ((infp = FileOpen(blast_inputfile, "r")) == NULL) {
@@ -836,20 +865,14 @@ Int2 Main (void)
         ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
     }
     
-    options = BLASTOptionNew(blast_program, (Boolean) myargs [16].intvalue);
+    options = BLASTOptionNewEx(blast_program, (Boolean) myargs[16].intvalue, (Boolean) myargs[34].intvalue);
     if (options == NULL)
         return 3;
 
 #ifdef BLAST_CS_API
-    if(myargs[34].intvalue) 
+    if(myargs[33].intvalue) 
         options->is_rps_blast = TRUE;
 #endif
-    options->is_megablast_search = (Boolean) myargs[35].intvalue;
-    
-    if (options->is_megablast_search) {
-       options->wordsize = 28;
-       options->block_width = 0;
-    }
     
     if (align_view == 8 && options->is_megablast_search) {
        options->output = (VoidPtr) outfp;
@@ -858,7 +881,7 @@ Int2 Main (void)
        handle_results = NULL;
 
     BLASTOptionSetGapParams(options, myargs[22].strvalue, 0, 0); 
-    options->expect_value  = (Nlm_FloatHi) myargs [3].floatvalue;
+    options->expect_value  = (Nlm_FloatHi) myargs[3].floatvalue;
     number_of_descriptions = myargs[13].intvalue;	
     number_of_alignments = myargs[14].intvalue;	
     options->hitlist_size = MAX(number_of_descriptions, number_of_alignments);
@@ -869,32 +892,19 @@ Int2 Main (void)
     if (myargs[9].intvalue != 0)
         options->gap_x_dropoff = myargs[9].intvalue;
 
-	/* Multiple hits does not apply to blastn. */
+	/* Multiple hits does not apply to blastn. The two-pass method is defunct */
     if (StringICmp("blastn", blast_program)) {
-    	if (myargs[26].intvalue == 0) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = TRUE;
-    	} else if (myargs[26].intvalue == 1) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = FALSE;
-    	} else {
-            options->two_pass_method  = TRUE;
-            options->multiple_hits_only  = FALSE;
-    	}
+        options->two_pass_method  = FALSE;
+        options->multiple_hits_only  = TRUE;
     }
     else
     { /* Reverse these for blastn for now. */
-        if (myargs[26].intvalue == 1) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = TRUE;
-        } else if (myargs[26].intvalue == 0) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = FALSE;
-        }
+        options->two_pass_method  = FALSE;
+        options->multiple_hits_only  = FALSE;
     }
 
-    if(myargs[33].intvalue != 0) 
-        options->gap_x_dropoff_final = myargs[33].intvalue;
+    if(myargs[32].intvalue != 0) 
+        options->gap_x_dropoff_final = myargs[32].intvalue;
 
     if (StringICmp(myargs[6].strvalue, "T") == 0) {
         if (StringICmp("blastn", blast_program) == 0)
@@ -932,18 +942,19 @@ Int2 Main (void)
     options->hsp_range_max  = myargs[25].intvalue;
     if (options->hsp_range_max != 0)
         options->perform_culling = TRUE;
-    if (myargs[27].floatvalue)
-        options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
+    if (myargs[26].floatvalue)
+        options->searchsp_eff = (Nlm_FloatHi) myargs[26].floatvalue;
     
-    options->strand_option = myargs[28].intvalue;
+    options->strand_option = myargs[27].intvalue;
 
-    if(myargs [32].floatvalue != 0.0) {
-        options->dropoff_2nd_pass  = myargs [32].floatvalue;
+    if(myargs[32].floatvalue != 0.0) {
+        options->dropoff_2nd_pass  = myargs[32].floatvalue;
         if(options->dropoff_1st_pass > options->dropoff_2nd_pass)
             options->dropoff_1st_pass = options->dropoff_2nd_pass;
     }
 
-    options->window_size = myargs [37].intvalue;
+    if (myargs[36].intvalue != 0)
+        options->window_size = myargs[36].intvalue;
 
     print_options = 0;
     align_options = 0;
@@ -978,11 +989,11 @@ Int2 Main (void)
     }
 
 #ifdef BLAST_CS_API
-    if(myargs[30].strvalue)
-        options->entrez_query = StringSave(myargs[30].strvalue);
+    if(myargs[29].strvalue)
+        options->entrez_query = StringSave(myargs[29].strvalue);
 #else    
-    if (myargs[30].strvalue) {
-        options->gifile = StringSave(myargs[30].strvalue);
+    if (myargs[29].strvalue) {
+        options->gifile = StringSave(myargs[29].strvalue);
     }
 #endif
     
@@ -992,13 +1003,13 @@ Int2 Main (void)
     */
 
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
-    if(myargs[38].intvalue > 0) {
+    if(myargs[37].intvalue > 0) {
         if (!StringICmp("blastx", blast_program) || 
             !StringICmp("tblastn", blast_program)||
 	    !StringICmp("psitblastn", blast_program)) {
            if (!StringICmp("blastx", blast_program)) {
               options->is_ooframe = TRUE;
-              options->shift_pen = myargs[38].intvalue;
+              options->shift_pen = myargs[37].intvalue;
            }
         }
     }
@@ -1007,8 +1018,8 @@ Int2 Main (void)
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
     /* Input longest intron length is in nucleotide scale; in the lower level
        code it will be used in protein scale */
-    if (myargs[39].intvalue > 0) 
-       options->longest_intron = MAX(myargs[39].intvalue, MAX_INTRON_LENGTH);
+    if (myargs[38].intvalue > 0) 
+       options->longest_intron = MAX(myargs[38].intvalue, MAX_INTRON_LENGTH);
 #endif
 
     aip = NULL;
@@ -1032,11 +1043,11 @@ Int2 Main (void)
 
                   /* Futamura: Setting up the psitblastn options */
 #ifndef BLAST_CS_API
-    if (NULL != myargs[34].strvalue) {
+    if (NULL != myargs[33].strvalue) {
           options->recoverCheckpoint = TRUE;
           options->freqCheckpoint = TRUE;
     }
-    options->CheckpointFileName=myargs[34].strvalue;
+    options->CheckpointFileName=myargs[33].strvalue;
 #endif
 
 #ifdef BLAST_CS_API
@@ -1050,10 +1061,10 @@ Int2 Main (void)
     
     /* --- Main loop over all FASTA entries in the input file ---- */
 
-    if (myargs[36].strvalue) {       
+    if (myargs[35].strvalue) {       
         CharPtr delimiters = " ,;";
         CharPtr location;
-        location = myargs[36].strvalue;
+        location = myargs[35].strvalue;
         from = atoi(StringTokMT(location, delimiters, &location)) - 1;
         to = atoi(location) - 1;
         from = MAX(from, 0);
@@ -1120,7 +1131,7 @@ Int2 Main (void)
           if (num_bsps == 0) 
              break;
        } else {
-          if(myargs[31].intvalue) {
+          if(myargs[32].intvalue) {
              sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
              
           } else {
@@ -1198,6 +1209,8 @@ Int2 Main (void)
             }}
 #endif    /* BLAST_CS_API */        
             free_buff();
+		if (options->is_ooframe)
+        		ErrPostEx(SEV_WARNING, 0, 0, "Out-of-frame option selected, Expect values are only approximate and calculated not assuming out-of-frame alignments");
         }
 #ifdef OS_UNIX
         if(align_view < 7) {
@@ -1237,7 +1250,7 @@ Int2 Main (void)
            }
            seqalignp = MemFree(seqalignp);
 #endif
-        } else if (!myargs[36].strvalue) {       
+        } else if (!myargs[35].strvalue) {       
 #ifdef BLAST_CS_API
            seqalign = BlastBioseqNetCore(bl3hp, fake_bsp, blast_program, 
                                       blast_database, options,
@@ -1360,7 +1373,8 @@ Int2 Main (void)
                                          number_of_alignments,
                                          blast_program, 
                                          !options->gapped_calculation,
-                                         believe_query, from, 0, global_fp);
+                                         believe_query, from, 0, global_fp,
+                                         (align_view == 9));
               SeqAlignSetFree(seqalign);
            } else {
            while (seqalign) {

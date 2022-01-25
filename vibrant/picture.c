@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: picture.c,v $
+* Revision 6.6  2002/08/07 18:13:42  kans
+* G/SetPrimitiveIDs, itemID is Uint4
+*
 * Revision 6.5  2002/03/07 15:53:45  kans
 * added SetSegmentVisibleFlag to set/clear the visible flag before attaching to a viewer
 *
@@ -680,7 +683,7 @@ PrimitivE Nlm_GetPrimitive (SegmenT segment, Uint2 primCt)
   return (PrimitivE) item;
 }
 
-void Nlm_SetPrimitiveIDs (PrimitivE prim, Uint2 entityID, Uint2 itemID,
+void Nlm_SetPrimitiveIDs (PrimitivE prim, Uint2 entityID, Uint4 itemID,
                           Uint2 itemtype, Uint2 primID)
 
 {
@@ -697,7 +700,7 @@ void Nlm_SetPrimitiveIDs (PrimitivE prim, Uint2 entityID, Uint2 itemID,
   }
 }
 
-void Nlm_GetPrimitiveIDs (PrimitivE prim, Uint2Ptr entityIDPtr, Uint2Ptr itemIDPtr,
+void Nlm_GetPrimitiveIDs (PrimitivE prim, Uint2Ptr entityIDPtr, Uint4Ptr itemIDPtr,
                           Uint2Ptr itemtypePtr, Uint2Ptr primIDPtr)
 
 {

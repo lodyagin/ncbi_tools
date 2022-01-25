@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.71 $
+* $Revision: 6.76 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.76  2002/07/08 15:08:59  kans
+* made ReadCodingRegionBases extern
+*
+* Revision 6.75  2002/05/14 17:32:56  kans
+* after convert ns to gaps, BioseqPack
+*
+* Revision 6.74  2002/05/14 17:17:57  kans
+* convert ns to gaps needed to clear bsp->seq_data_type
+*
+* Revision 6.73  2002/05/13 21:51:28  kans
+* simplification of ConvertNsToGaps
+*
+* Revision 6.72  2002/05/13 21:41:32  kans
+* added ConvertNsToGaps
+*
 * Revision 6.71  2001/10/12 21:55:20  kans
 * convert nucleotide X to N
 *
@@ -4472,7 +4487,7 @@ NLM_EXTERN void TransTableProcessBioseq (
 
 /* trans table translation function can be passed cds feature or individual parameters */
 
-static CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 frame, Int4Ptr totalP)
+NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 frame, Int4Ptr totalP)
 
 {
   Int2        actual, cnt;
@@ -5980,6 +5995,94 @@ NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (CharPtr accession)
 
 {
   return GetSequenceByIdOrAccnDotVer (NULL, accession, TRUE);
+}
+
+
+/*****************************************************************************
+*
+*   ConvertNsToGaps
+*       Assumes string of Ns means a gap of known length
+*
+*****************************************************************************/
+
+NLM_EXTERN void ConvertNsToGaps (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  CharPtr     bases, str, txt;
+  Char        ch;
+  Int4        len;
+  ValNodePtr  seq_ext;
+  SeqLitPtr   slp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_raw || ISA_aa (bsp->mol)) return;
+
+  bases = GetSequenceByBsp (bsp);
+  if (bases == NULL) return;
+
+  for (txt = bases, ch = *txt; ch != '\0'; txt++, ch = *txt) {
+    if (ch == 'N') break;
+  }
+  if (ch != 'N') {
+    MemFree (bases);
+    return;
+  }
+
+  seq_ext = NULL;
+  len = 0;
+
+  txt = bases;
+  ch = *txt;
+
+  while (ch != '\0') {
+
+    str = txt;
+    while (ch != 'N' && ch != '\0') {
+      txt++;
+      ch = *txt;
+    }
+    *txt = '\0';
+    if (StringLen (str) > 0) {
+      slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+      if (slp != NULL) {
+        slp->length = StringLen (str);
+        ValNodeAddPointer (&(seq_ext), (Int2) 2, (Pointer) slp);
+        slp->seq_data = BSNew (slp->length);
+        slp->seq_data_type = Seq_code_iupacna;
+        AddBasesToByteStore (slp->seq_data, str);
+        len += slp->length;
+      }
+    }
+    *txt = ch;
+
+    str = txt;
+    while (ch == 'N') {
+      txt++;
+      ch = *txt;
+    }
+    *txt = '\0';
+    if (StringLen (str) > 0) {
+      slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+      if (slp != NULL) {
+        slp->length = StringLen (str);
+        ValNodeAddPointer ((ValNodePtr PNTR) &(seq_ext), (Int2) 2, (Pointer) slp);
+        len += slp->length;
+      }
+    }
+    *txt = ch;
+  }
+
+  MemFree (bases);
+
+  bsp->seq_data = BSFree (bsp->seq_data);
+  bsp->seq_data_type = 0;
+  bsp->repr = Seq_repr_delta;
+  bsp->seq_ext_type = 4;
+  bsp->seq_ext = seq_ext;
+
+  BioseqPack (bsp);
 }
 
 

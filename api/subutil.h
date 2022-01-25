@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,15 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.43  2002/07/09 16:17:35  kans
+* AddAccessionToTpaAssemblyUserObject takes from and to parameters
+*
+* Revision 6.42  2002/06/24 14:47:22  kans
+* added ORGMOD defines for gb_acronym, gb_anamorph, gb_synonym
+*
+* Revision 6.41  2002/06/04 14:40:30  kans
+* added AddPntToSeqFeat
+*
 * Revision 6.40  2002/03/27 19:26:31  kans
 * AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
 *
@@ -933,6 +942,9 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_anamorph 29
 #define ORGMOD_teleomorph 30
 #define ORGMOD_breed 31
+#define ORGMOD_gb_acronym 32
+#define ORGMOD_gb_anamorph 33
+#define ORGMOD_gb_synonym 34
 #define ORGMOD_old_lineage 253
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
@@ -1342,6 +1354,13 @@ NLM_EXTERN Boolean AddPointToFeature (
 	Boolean is_after_location ,
 	Boolean is_before_location );
 
+NLM_EXTERN Boolean AddPntToSeqFeat (
+	SeqFeatPtr sfp,
+	Int4 point,
+	BioseqPtr bsp,
+	Int2 fuzz,
+	Int2 strand);
+
 /*************************************************************************
 *
 *   Having made a generalized feature, now add type specific info to it.
@@ -1593,7 +1612,9 @@ NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (
 );
 NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
   UserObjectPtr uop,
-  CharPtr accn
+  CharPtr accn,
+  Int4 from,
+  Int4 to
 );
 
 

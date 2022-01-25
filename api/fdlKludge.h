@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   10/15/01
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: fdlKludge.h,v $
+* Revision 6.5  2002/08/22 20:32:35  jianye
+* add parentheses to bit shift
+*
+* Revision 6.4  2002/08/21 21:15:32  camacho
+* Added #define value for structure link bits
+*
 * Revision 6.3  2001/10/19 14:40:41  jianye
 * *** empty log message ***
 *
@@ -48,7 +54,8 @@
 
 #include <objloc.h>
 
-#define total_linkout 2
-#define linkout_locuslink 1
-#define linkout_unigene 2
+#define total_linkout 3
+#define linkout_locuslink (1<<0)
+#define linkout_unigene   (1<<1)
+#define linkout_structure (1<<2)
 #endif

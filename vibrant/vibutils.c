@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.44 $
+* $Revision: 6.47 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.47  2002/06/25 18:51:42  kans
+* ConvertFilename puts null byte at str [fullPathLen]
+*
+* Revision 6.46  2002/06/17 16:12:05  kans
+* fix for full path on Darwin (EN)
+*
+* Revision 6.45  2002/06/13 16:15:13  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
+*
 * Revision 6.44  2002/02/01 18:59:33  kans
 * ConvertFilename calls GetFullPath instead of FSMakePath
 *
@@ -357,6 +366,7 @@ either.
 * ==========================================================================
 */
 
+#include <ncbilcl.h>
 #include <vibtypes.h>
 #include <vibprocs.h>
 #include <vibincld.h>
@@ -1497,7 +1507,7 @@ static int LIBCALLBACK Nlm_VibMonitorHook(Nlm_MonitorPtr mon, MonCode code)
 static void LIBCALLBACK Nlm_VibBeepHook (void)
 
 {
-#ifdef OS_MAC
+#ifdef WIN_MAC
   SysBeep (60);
 #endif
 #ifdef WIN_MSWIN
@@ -4576,6 +4586,9 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
   short        fullPathLen;
   Handle       fullPath = NULL;
   Nlm_CharPtr  str;
+#ifdef OS_UNIX_DARWIN
+  Nlm_CharPtr  ptr;
+#endif
 
   if (fss == NULL || filename == NULL) return;
   *filename = '\0';
@@ -4584,13 +4597,36 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
   */
   err = GetFullPath (fss->vRefNum, fss->parID, (ConstStr255Param) fss->name, &fullPathLen, &fullPath);
   if (fullPath == NULL || fullPathLen < 1) return;
+  HLock ((Ptr *) fullPath);
+  str = (Nlm_CharPtr) *((Ptr *) fullPath);
+  /*
   str = Nlm_HandLock (fullPath);
+  */
   if (str != NULL) {
-    str [fullPathLen] = '\0';
+    if (fullPathLen > 0 && fullPathLen < 255) {
+      str [(int) fullPathLen] = '\0';
+    }
+#ifdef OS_UNIX_DARWIN
+	ptr = StringChr (str, ':'); /* skip the volume name */
+	if (ptr == NULL) {
+	  ptr = str;
+	}
+	StringCpy (filename, ptr);
+    for (ptr = filename; *ptr != '\0'; ptr++) {
+      if (*ptr == ':') {
+        *ptr = '/';
+      }
+    }
+#else
     Nlm_StringCpy (filename, str);
+#endif
   }
+  HUnlock ((Ptr *) fullPath);
+  DisposeHandle ((Ptr *) fullPath);
+  /*
   Nlm_HandUnlock (fullPath);
   Nlm_HandFree (fullPath);
+  */
 }
 
 #else
@@ -4633,8 +4669,8 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 #endif
 #endif
 
-#ifdef OS_MAC
-#ifdef PROC_PPC
+#ifdef WIN_MAC
+#if defined(PROC_PPC) || defined(OS_UNIX_DARWIN)
 static pascal void MyNavEventProc (NavEventCallbackMessage callBackSelector,
                                    NavCBRecPtr callBackParms,
                                    NavCallBackUserData callBackUD)
@@ -4669,8 +4705,8 @@ static pascal Boolean MyNavFilterProc (AEDesc* theItem, void* info,
 #endif
 #endif
 
-#ifdef OS_MAC
-#ifdef PROC_PPC
+#ifdef WIN_MAC
+#if defined(PROC_PPC) || defined(OS_UNIX_DARWIN)
 static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                                 Nlm_CharPtr extType, Nlm_CharPtr macType)
 
@@ -5017,8 +5053,8 @@ static void Nlm_CopyDefaultName (Nlm_CharPtr dst, Nlm_CharPtr src)
 }
 #endif
 
-#ifdef OS_MAC
-#ifdef PROC_PPC
+#ifdef WIN_MAC
+#if defined(PROC_PPC) || defined(OS_UNIX_DARWIN)
 static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                                  Nlm_CharPtr dfault)
 

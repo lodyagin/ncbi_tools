@@ -26,6 +26,9 @@ CFG=ncbiobj - Win32 DebugMT
 # PROP Scc_LocalPath ""
 CPP=cl.exe
 RSC=rc.exe
+
+!IF  "$(CFG)" == "ncbiobj - Win32 DebugMT"
+
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
 # PROP BASE Output_Dir "DebugMT"
@@ -36,9 +39,9 @@ RSC=rc.exe
 # PROP Output_Dir "DebugMT"
 # PROP Intermediate_Dir "DebugMT"
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
+# ADD BASE CPP /nologo /MTd /W3 /Gm /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # SUBTRACT BASE CPP /Fr
-# ADD CPP /nologo /MTd /W3 /GR /Zi /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\ddv" /I "..\..\..\access" /I "..\..\..\connect" /I "..\..\..\tools" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
+# ADD CPP /nologo /MTd /W3 /Gm /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\ddv" /I "..\..\..\access" /I "..\..\..\connect" /I "..\..\..\tools" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -47,6 +50,9 @@ BSC32=bscmake.exe
 LIB32=link.exe -lib
 # ADD BASE LIB32 /nologo
 # ADD LIB32 /nologo
+
+!ENDIF 
+
 # Begin Target
 
 # Name "ncbiobj - Win32 DebugMT"
@@ -239,6 +245,10 @@ SOURCE=..\..\..\object\objfeat.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objgbseq.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objgen.c
 # End Source File
 # Begin Source File
@@ -292,6 +302,10 @@ SOURCE=..\..\..\object\objsset.c
 # Begin Source File
 
 SOURCE=..\..\..\object\objsub.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objtseq.c
 # End Source File
 # Begin Source File
 
@@ -767,6 +781,10 @@ SOURCE=..\..\..\object\objfeat.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objgbseq.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objgen.h
 # End Source File
 # Begin Source File
@@ -824,6 +842,10 @@ SOURCE=..\..\..\object\objsset.h
 # Begin Source File
 
 SOURCE=..\..\..\object\objsub.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objtseq.h
 # End Source File
 # Begin Source File
 

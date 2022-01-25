@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: picture.h,v $
+* Revision 6.13  2002/08/07 18:13:42  kans
+* G/SetPrimitiveIDs, itemID is Uint4
+*
 * Revision 6.12  2002/03/07 15:53:45  kans
 * added SetSegmentVisibleFlag to set/clear the visible flag before attaching to a viewer
 *
@@ -416,8 +419,8 @@ extern void          Nlm_SetSegmentVisibleFlag (Nlm_SegmenT segment, Nlm_Boolean
 /*Working with primitive */
 
 extern Nlm_PrimitivE Nlm_GetPrimitive PROTO((Nlm_SegmenT segment, Nlm_Uint2 primCt));
-extern void Nlm_SetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2 entityID, Nlm_Uint2 itemID, Nlm_Uint2 itemtype, Nlm_Uint2 primID));
-extern void Nlm_GetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2Ptr entityIDPtr, Nlm_Uint2Ptr itemIDPtr, Nlm_Uint2Ptr itemtypePtr, Nlm_Uint2Ptr primIDPtr));
+extern void Nlm_SetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2 entityID, Nlm_Uint4 itemID, Nlm_Uint2 itemtype, Nlm_Uint2 primID));
+extern void Nlm_GetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2Ptr entityIDPtr, Nlm_Uint4Ptr itemIDPtr, Nlm_Uint2Ptr itemtypePtr, Nlm_Uint2Ptr primIDPtr));
 extern void Nlm_GetPrimDrawAttribute PROTO((Nlm_PrimitivE prim, 
 Nlm_Uint1Ptr color, Nlm_Int1Ptr plinestyle, Nlm_Int1Ptr pshading, 
 Nlm_Int1Ptr ppenwidth, Nlm_Int1Ptr pmode, Nlm_Int1Ptr phighlight));

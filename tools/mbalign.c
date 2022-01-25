@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.36 2002/03/20 19:56:34 dondosha Exp $
+/* $Id: mbalign.c,v 6.37 2002/08/01 21:02:12 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.37  2002/08/01 21:02:12  dondosha
+* Added a sanity check in GreedyAlignMemFree
+*
 * Revision 6.36  2002/03/20 19:56:34  dondosha
 * Check entire list of readdb structures for maximal length when allocating memory for greedy algorithm
 *
@@ -580,8 +583,10 @@ GreedyAlignMemPtr GreedyAlignMemFree(GreedyAlignMemPtr abmp)
       MemFree(abmp->flast_d[0]);
       MemFree(abmp->flast_d);
    } else {
-      MemFree(abmp->flast_d_affine[0]);
-      MemFree(abmp->flast_d_affine);
+      if (abmp->flast_d_affine) {
+         MemFree(abmp->flast_d_affine[0]);
+         MemFree(abmp->flast_d_affine);
+      }
       MemFree(abmp->uplow_free);
    }
    MemFree(abmp->max_row_free);

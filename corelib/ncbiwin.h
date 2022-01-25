@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.6  2002/06/13 16:14:07  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
+*
 * Revision 6.5  2002/02/15 20:19:50  beloslyu
 * bug fixed
 *
@@ -118,9 +121,14 @@
 #if UNIVERSAL_INTERFACES_VERSION > 0x0320
 #include <ControlDefinitions.h>  /* pjc added 11/20/99 */
 #endif
+#ifndef OS_UNIX_DARWIN
+#include <DiskInit.h>
+#include <Packages.h>
+#include <SegLoad.h>
+#include <StandardFile.h>  /* dgg added 12dec93 */
+#endif
 #include <Devices.h>
 #include <Dialogs.h>
-#include <DiskInit.h>
 #include <Events.h>
 #include <Files.h>
 #include <Fonts.h>
@@ -128,10 +136,7 @@
 #include <Memory.h>
 #include <Menus.h>
 #include <OSUtils.h>
-#include <Packages.h>
 #include <Quickdraw.h>
-#include <SegLoad.h>
-#include <StandardFile.h>  /* dgg added 12dec93 */
 #include <TextEdit.h>
 #include <ToolUtils.h>
 #include <Types.h>

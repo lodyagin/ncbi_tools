@@ -1,4 +1,4 @@
-/* $Id: thrdatd.c,v 1.21 2001/09/18 16:12:21 thiessen Exp $
+/* $Id: thrdatd.c,v 1.22 2002/06/06 18:57:40 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.21 $
+* $Revision: 1.22 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.c,v $
+* Revision 1.22  2002/06/06 18:57:40  thiessen
+* fix integer->double constant
+*
 * Revision 1.21  2001/09/18 16:12:21  thiessen
 * plug memory leaks
 *
@@ -1889,7 +1892,7 @@ void OrderThdTbl(Thd_Tbl* pResults) {
 
   /* look through the list n times */
   for (i=0; i<pResults->n; i++) {
-    HighestScore = -9999999999;
+    HighestScore = -9999999999.0;
     SaveIndex = -1;
     /* each time, find the highest remaining score */
     for (j=0; j<pResults->n; j++) {

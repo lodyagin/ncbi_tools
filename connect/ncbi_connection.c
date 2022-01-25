@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connection.c,v 6.23 2002/04/24 21:18:04 lavr Exp $
+/*  $Id: ncbi_connection.c,v 6.25 2002/08/07 16:32:32 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,96 +29,6 @@
  *   Generic API to open and handle connection to an abstract service.
  *   For more detail, see in "ncbi_connection.h".
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_connection.c,v $
- * Revision 6.23  2002/04/24 21:18:04  lavr
- * Beautifying: pup open check before buffer check in CONN_Wait()
- *
- * Revision 6.22  2002/04/22 19:30:01  lavr
- * Do not put trace message on polling wait (tmo={0,0})
- * More effective CONN_Read w/o repeatitive checkings for eIO_ReadPersist
- *
- * Revision 6.21  2002/03/22 22:17:01  lavr
- * Better check when formally timed out but technically polled in CONN_Wait()
- *
- * Revision 6.20  2002/02/05 22:04:12  lavr
- * Included header files rearranged
- *
- * Revision 6.19  2002/01/30 20:10:56  lavr
- * Remove *n_read = 0 assignment in s_CONN_Read; replace it with assert()
- *
- * Revision 6.18  2001/08/20 20:13:15  vakatov
- * CONN_ReInit() -- Check connection handle for NULL (it was missed in R6.17)
- *
- * Revision 6.17  2001/08/20 20:00:43  vakatov
- * CONN_SetTimeout() to return "EIO_Status".
- * CONN_***() -- Check connection handle for NULL.
- *
- * Revision 6.16  2001/07/10 15:08:35  lavr
- * Edit for style
- *
- * Revision 6.15  2001/06/29 21:06:46  lavr
- * BUGFIX: CONN_LOG now checks for non-NULL get_type virtual function
- *
- * Revision 6.14  2001/06/28 22:00:48  lavr
- * Added function: CONN_SetCallback
- * Added callback: eCONN_OnClose
- *
- * Revision 6.13  2001/06/07 17:54:36  lavr
- * Modified exit branch in s_CONN_Read()
- *
- * Revision 6.12  2001/05/30 19:42:44  vakatov
- * s_CONN_Read() -- do not issue warning if requested zero bytes
- * (by A.Lavrentiev)
- *
- * Revision 6.11  2001/04/24 21:29:04  lavr
- * CONN_DEFAULT_TIMEOUT is used everywhere when timeout is not set explicitly
- *
- * Revision 6.10  2001/02/26 22:52:44  kans
- * Initialize x_read in s_CONN_Read
- *
- * Revision 6.9  2001/02/26 16:32:01  kans
- * Including string.h instead of cstring
- *
- * Revision 6.8  2001/02/25 21:41:50  kans
- * Include <cstring> on Mac to get memset
- *
- * Revision 6.7  2001/02/09 17:34:18  lavr
- * CONN_GetType added; severities of some messages changed
- *
- * Revision 6.6  2001/01/25 16:55:48  lavr
- * CONN_ReInit bugs fixed
- *
- * Revision 6.5  2001/01/23 23:10:53  lavr
- * Typo corrected in description of connection structure
- *
- * Revision 6.4  2001/01/12 23:51:38  lavr
- * Message logging modified for use LOG facility only
- *
- * Revision 6.3  2001/01/03 22:29:59  lavr
- * CONN_Status implemented
- *
- * Revision 6.2  2000/12/29 17:52:59  lavr
- * Adapted to use new connector structure; modified to have
- * Internal tri-state {Unusable | Open | Closed }.
- *
- * Revision 6.1  2000/03/24 22:53:34  vakatov
- * Initial revision
- *
- * Revision 6.4  1999/11/01 16:14:23  vakatov
- * s_CONN_Read() -- milder error levels when hitting EOF
- *
- * Revision 6.3  1999/04/05 15:32:53  vakatov
- * CONN_Wait():  be more mild and discrete about the posted error severity
- *
- * Revision 6.1  1999/04/01 21:48:09  vakatov
- * Fixed for the change in spec:  "n_written/n_read" args in
- * CONN_Write/Read to be non-NULL and "*n_written / *n_read" := 0
- *
- * Revision 6.0  1999/03/25 23:04:57  vakatov
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include "ncbi_priv.h"
@@ -136,17 +46,15 @@
 
 /* Standard logging message
  */
-#define CONN_LOG(level, descr)                               \
-  CORE_LOGF(level,                                           \
-            ("%s (connector \"%s\", error \"%s\")",          \
-            descr,                                           \
-            conn->meta.get_type                              \
-             ? (*conn->meta.get_type)(conn->meta.c_get_type) \
-             : "Unknown",                                    \
-            IO_StatusStr(status)))
+#define CONN_LOG(level, descr)                             \
+  CORE_LOGF(level,                                         \
+            ("%s (connector \"%s\", error \"%s\")", descr, \
+             conn->meta.get_type                           \
+             ? conn->meta.get_type(conn->meta.c_get_type)  \
+             : "Unknown", IO_StatusStr(status)))
 
 
-/* Standard macro to verify that the passed connection handle is not NULL
+/* Standard macros to verify that the passed connection handle is not NULL
  */
 #define CONN_NOT_NULL_EX(func_name, status)                     \
   if ( !conn ) {                                                \
@@ -156,7 +64,7 @@
       return status;                                            \
   }
 
-#define CONN_NOT_NULL(func_name) \
+#define CONN_NOT_NULL(func_name)              \
   CONN_NOT_NULL_EX(func_name, eIO_InvalidArg)
 
 
@@ -259,8 +167,11 @@ extern EIO_Status CONN_ReInit
         /* call current connector's "CLOSE" method */
         if (conn->state == eCONN_Open) {
             if ( conn->meta.close ) {
-                status = (*conn->meta.close)(conn->meta.c_close,
-                                             conn->l_timeout);
+                status = conn->meta.close(conn->meta.c_close,
+                                          conn->l_timeout ==
+                                          CONN_DEFAULT_TIMEOUT
+                                          ? conn->meta.default_timeout
+                                          : conn->l_timeout);
                 if (status != eIO_Success) {
                     CONN_LOG(connector ? eLOG_Error : eLOG_Warning,
                              "[CONN_ReInit]  Cannot close current connection");
@@ -315,9 +226,11 @@ static EIO_Status s_Open
     }
 
     /* call current connector's "OPEN" method */
-    status = conn->meta.open ?
-        (*conn->meta.open)(conn->meta.c_open, conn->c_timeout) :
-        eIO_NotSupported;
+    status = conn->meta.open
+        ? conn->meta.open(conn->meta.c_open,
+                          conn->c_timeout == CONN_DEFAULT_TIMEOUT ?
+                          conn->meta.default_timeout : conn->c_timeout)
+        : eIO_NotSupported;
 
     if (status != eIO_Success) {
         CONN_LOG(eLOG_Error, "[CONN_Open]  Cannot open connection");
@@ -413,28 +326,28 @@ extern EIO_Status CONN_Wait
 
     CONN_NOT_NULL("Wait");
 
-    if (conn->state == eCONN_Unusable ||
-        (event != eIO_Read && event != eIO_Write))
+    if (conn->state == eCONN_Unusable               ||
+        (event != eIO_Read  &&  event != eIO_Write) ||
+        timeout == CONN_DEFAULT_TIMEOUT)
         return eIO_InvalidArg;
 
     /* perform open, if not opened yet */
-    if (conn->state != eCONN_Open && (status = s_Open(conn)) != eIO_Success)
+    if (conn->state != eCONN_Open  &&  (status = s_Open(conn)) != eIO_Success)
         return status;
 
     /* check if there is a PEEK'ed data in the input */
     if (event == eIO_Read && BUF_Size(conn->buf))
         return eIO_Success;
-
+    
     /* call current connector's "WAIT" method */
-    status = conn->meta.wait ?
-        (*conn->meta.wait)(conn->meta.c_wait, event, timeout) :
-        eIO_NotSupported;
+    status = conn->meta.wait
+        ? conn->meta.wait(conn->meta.c_wait, event, timeout)
+        : eIO_NotSupported;
 
     if (status != eIO_Success) {
         if (status != eIO_Timeout)
             CONN_LOG(eLOG_Error, "[CONN_Wait]  Error waiting on I/O");
-        else if (timeout == CONN_DEFAULT_TIMEOUT ||
-                 (timeout  &&  timeout->sec + timeout->usec != 0))
+        else if (timeout  &&  timeout->sec + timeout->usec != 0)
             CONN_LOG(eLOG_Warning, "[CONN_Wait]  I/O timed out");
     }
 
@@ -452,19 +365,21 @@ extern EIO_Status CONN_Write
 
     CONN_NOT_NULL("Write");
 
-    if (conn->state == eCONN_Unusable || !n_written)
+    if (conn->state == eCONN_Unusable  ||  !n_written)
         return eIO_InvalidArg;
 
     *n_written = 0;
 
     /* open connection, if not yet opened */
-    if (conn->state != eCONN_Open && (status = s_Open(conn)) != eIO_Success)
+    if (conn->state != eCONN_Open  &&  (status = s_Open(conn)) != eIO_Success)
         return status;
 
     /* call current connector's "WRITE" method */
-    status = conn->meta.write ?
-        (*conn->meta.write)(conn->meta.c_write, buf, size, n_written,
-                            conn->w_timeout) : eIO_NotSupported;
+    status = conn->meta.write
+        ? conn->meta.write(conn->meta.c_write, buf, size, n_written,
+                           conn->w_timeout == CONN_DEFAULT_TIMEOUT ?
+                           conn->meta.default_timeout : conn->w_timeout)
+        : eIO_NotSupported;
 
     if (status != eIO_Success)
         CONN_LOG(eLOG_Error, "[CONN_Write]  Write error");
@@ -488,9 +403,11 @@ extern EIO_Status CONN_Flush
         return eIO_Success;
 
     /* call current connector's "FLUSH" method */
-    status = conn->meta.flush ?
-        (*conn->meta.flush)(conn->meta.c_flush, conn->w_timeout) :
-        eIO_NotSupported;
+    status = conn->meta.flush
+        ? conn->meta.flush(conn->meta.c_flush,
+                           conn->w_timeout == CONN_DEFAULT_TIMEOUT ?
+                           conn->meta.default_timeout : conn->w_timeout)
+        : eIO_NotSupported;
 
     if (status != eIO_Success)
         CONN_LOG(eLOG_Warning, "[CONN_Flush]  Cannot flush data");
@@ -522,8 +439,8 @@ static EIO_Status s_CONN_Read
 
     /* read data from the internal "peek-buffer", if any */
     if ( size ) {
-        *n_read = peek ?
-            BUF_Peek(conn->buf, buf, size) : BUF_Read(conn->buf, buf, size);
+        *n_read = peek
+            ? BUF_Peek(conn->buf, buf, size) : BUF_Read(conn->buf, buf, size);
         if (*n_read == size)
             return eIO_Success;
         buf = (char*) buf + *n_read;
@@ -534,8 +451,9 @@ static EIO_Status s_CONN_Read
     {{
         size_t x_read = 0;
         /* call current connector's "READ" method */
-        status = (*conn->meta.read)(conn->meta.c_read,
-                                    buf, size, &x_read, conn->r_timeout);
+        status = conn->meta.read(conn->meta.c_read, buf, size, &x_read,
+                                 conn->r_timeout == CONN_DEFAULT_TIMEOUT ?
+                                 conn->meta.default_timeout : conn->r_timeout);
         *n_read += x_read;
         if (peek  &&  x_read)  /* save the read data in the "peek-buffer" */
             verify(BUF_Write(&conn->buf, buf, x_read));
@@ -606,11 +524,11 @@ extern EIO_Status CONN_Read
 
     *n_read = 0;
     switch (how) {
-    case eIO_Plain:
+    case eIO_ReadPlain:
         return s_CONN_Read(conn, buf, size, n_read, 0/*no peek*/);
-    case eIO_Peek:
+    case eIO_ReadPeek:
         return s_CONN_Read(conn, buf, size, n_read, 1/*peek*/);
-    case eIO_Persist:
+    case eIO_ReadPersist:
         return s_CONN_ReadPersist(conn, buf, size, n_read);
     }
     return eIO_Unknown;
@@ -633,7 +551,7 @@ extern EIO_Status CONN_Status(CONN conn, EIO_Event dir)
     if ( !conn->meta.status )
         return eIO_NotSupported;
 
-    return (*conn->meta.status)(conn->meta.c_status, dir);
+    return conn->meta.status(conn->meta.c_status, dir);
 }
 
 
@@ -643,9 +561,8 @@ extern EIO_Status CONN_Close(CONN conn)
 
     /* callback established? call it first, if yes! */
     if (conn->callback[eCONN_OnClose].func)
-        (*conn->callback[eCONN_OnClose].func)
-            (conn, eCONN_OnClose, conn->callback[eCONN_OnClose].data);
-
+        conn->callback[eCONN_OnClose].func(conn, eCONN_OnClose,
+                                           conn->callback[eCONN_OnClose].data);
     /* now close the connection */
     if ( conn->meta.list )
         CONN_ReInit(conn, 0);
@@ -659,8 +576,7 @@ extern const char* CONN_GetType(CONN conn)
 {
     CONN_NOT_NULL_EX("GetType", 0);
 
-    return conn->meta.get_type ?
-        (*conn->meta.get_type)(conn->meta.c_get_type) : 0;
+    return conn->meta.get_type? conn->meta.get_type(conn->meta.c_get_type) : 0;
 }
 
 
@@ -693,7 +609,7 @@ static void s_ConnectorAsyncHandler
  EIO_Status              status)
 {
     /* handle the async. event */
-    (*data->handler)(data->conn, event, status, data->data);
+    data->handler(data->conn, event, status, data->data);
 
     /* reset */
     verify(CONN_WaitAsync(data->conn, eIO_ReadWrite, 0, 0, 0) == eIO_Success);
@@ -727,7 +643,7 @@ extern EIO_Status CONN_WaitAsync
         return status;
     }
     if ( x_data->cleanup )
-        (*x_data->cleanup)(x_data->data);
+        x_data->cleanup(x_data->data);
     memset(x_data, '\0', sizeof(*x_data));
 
     /* set new handler, if specified */
@@ -749,3 +665,103 @@ extern EIO_Status CONN_WaitAsync
     return status;
 }
 #endif /* IMPLEMENTED__CONN_WaitAsync */
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_connection.c,v $
+ * Revision 6.25  2002/08/07 16:32:32  lavr
+ * Changed EIO_ReadMethod enums accordingly; log moved to end
+ *
+ * Revision 6.24  2002/04/26 16:30:26  lavr
+ * Checks for CONN_DEFAULT_TIMEOUT and use of default_timeout of meta-connector
+ *
+ * Revision 6.23  2002/04/24 21:18:04  lavr
+ * Beautifying: pup open check before buffer check in CONN_Wait()
+ *
+ * Revision 6.22  2002/04/22 19:30:01  lavr
+ * Do not put trace message on polling wait (tmo={0,0})
+ * More effective CONN_Read w/o repeatitive checkings for eIO_ReadPersist
+ *
+ * Revision 6.21  2002/03/22 22:17:01  lavr
+ * Better check when formally timed out but technically polled in CONN_Wait()
+ *
+ * Revision 6.20  2002/02/05 22:04:12  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.19  2002/01/30 20:10:56  lavr
+ * Remove *n_read = 0 assignment in s_CONN_Read; replace it with assert()
+ *
+ * Revision 6.18  2001/08/20 20:13:15  vakatov
+ * CONN_ReInit() -- Check connection handle for NULL (it was missed in R6.17)
+ *
+ * Revision 6.17  2001/08/20 20:00:43  vakatov
+ * CONN_SetTimeout() to return "EIO_Status".
+ * CONN_***() -- Check connection handle for NULL.
+ *
+ * Revision 6.16  2001/07/10 15:08:35  lavr
+ * Edit for style
+ *
+ * Revision 6.15  2001/06/29 21:06:46  lavr
+ * BUGFIX: CONN_LOG now checks for non-NULL get_type virtual function
+ *
+ * Revision 6.14  2001/06/28 22:00:48  lavr
+ * Added function: CONN_SetCallback
+ * Added callback: eCONN_OnClose
+ *
+ * Revision 6.13  2001/06/07 17:54:36  lavr
+ * Modified exit branch in s_CONN_Read()
+ *
+ * Revision 6.12  2001/05/30 19:42:44  vakatov
+ * s_CONN_Read() -- do not issue warning if requested zero bytes
+ * (by A.Lavrentiev)
+ *
+ * Revision 6.11  2001/04/24 21:29:04  lavr
+ * CONN_DEFAULT_TIMEOUT is used everywhere when timeout is not set explicitly
+ *
+ * Revision 6.10  2001/02/26 22:52:44  kans
+ * Initialize x_read in s_CONN_Read
+ *
+ * Revision 6.9  2001/02/26 16:32:01  kans
+ * Including string.h instead of cstring
+ *
+ * Revision 6.8  2001/02/25 21:41:50  kans
+ * Include <cstring> on Mac to get memset
+ *
+ * Revision 6.7  2001/02/09 17:34:18  lavr
+ * CONN_GetType added; severities of some messages changed
+ *
+ * Revision 6.6  2001/01/25 16:55:48  lavr
+ * CONN_ReInit bugs fixed
+ *
+ * Revision 6.5  2001/01/23 23:10:53  lavr
+ * Typo corrected in description of connection structure
+ *
+ * Revision 6.4  2001/01/12 23:51:38  lavr
+ * Message logging modified for use LOG facility only
+ *
+ * Revision 6.3  2001/01/03 22:29:59  lavr
+ * CONN_Status implemented
+ *
+ * Revision 6.2  2000/12/29 17:52:59  lavr
+ * Adapted to use new connector structure; modified to have
+ * Internal tri-state {Unusable | Open | Closed }.
+ *
+ * Revision 6.1  2000/03/24 22:53:34  vakatov
+ * Initial revision
+ *
+ * Revision 6.4  1999/11/01 16:14:23  vakatov
+ * s_CONN_Read() -- milder error levels when hitting EOF
+ *
+ * Revision 6.3  1999/04/05 15:32:53  vakatov
+ * CONN_Wait():  be more mild and discrete about the posted error severity
+ *
+ * Revision 6.1  1999/04/01 21:48:09  vakatov
+ * Fixed for the change in spec:  "n_written/n_read" args in
+ * CONN_Write/Read to be non-NULL and "*n_written / *n_read" := 0
+ *
+ * Revision 6.0  1999/03/25 23:04:57  vakatov
+ * Initial revision
+ *
+ * ==========================================================================
+ */

@@ -32,8 +32,29 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.50 $ 
+/* $Revision: 6.57 $ 
 * $Log: blast.h,v $
+* Revision 6.57  2002/08/09 19:39:20  camacho
+* Added constants for some blast search parameters
+*
+* Revision 6.56  2002/08/01 20:47:24  dondosha
+* Prototypes changed for megablast functions related to traceback
+*
+* Revision 6.55  2002/07/02 17:08:00  dondosha
+* Reverse previous change - not needed
+*
+* Revision 6.54  2002/07/01 22:52:06  dondosha
+* Added CheckStartForGappedAlignmentEx with an extra window size parameter
+*
+* Revision 6.53  2002/05/28 22:00:12  camacho
+* *** empty log message ***
+*
+* Revision 6.52  2002/05/13 13:51:33  dondosha
+* Made two functions public
+*
+* Revision 6.51  2002/05/09 15:35:51  dondosha
+* Added BLASTOptionNewEx function with an extra argument for megablast
+*
 * Revision 6.50  2002/03/14 16:11:40  camacho
 * Extended BlastTwoSequences to allow comparison between sequence and PSSM
 *
@@ -384,9 +405,10 @@ extern "C" {
 /*
 	Call this function to allocate the "options" structure.  The
 	fields will be filled in with the default values, which depend
-	on the program.
+	on the program. Defaults are #defined constants in blastdef.h
 */
 BLAST_OptionsBlkPtr LIBCALL BLASTOptionNew PROTO((CharPtr progname, Boolean gapped));
+BLAST_OptionsBlkPtr LIBCALL BLASTOptionNewEx PROTO((CharPtr progname, Boolean gapped, Boolean is_megablast));
 
 BLAST_OptionsBlkPtr LIBCALL BLASTOptionDelete PROTO((BLAST_OptionsBlkPtr));
 
@@ -446,6 +468,8 @@ SeqAlignPtr LIBCALL BlastTwoSequencesByLoc PROTO((SeqLocPtr slp1, SeqLocPtr slp2
 
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocEx PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
+/* number of rows in matrix must correspond to full length of master sequence
+ * slp1 */
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocWithCallback PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)), BLAST_MatrixPtr matrix));
 
 SeqAlignPtr LIBCALL BlastTwoSequencesEx PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
@@ -465,7 +489,7 @@ BlastSequencesOnTheFlyEx PROTO((BlastSearchBlkPtr search, BioseqPtr subject_bsp)
    
 SeqAlignPtr LIBCALL SumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length));
 
-SeqAlignPtr LIBCALL MegaSumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length, Int2 query_number));
+Boolean LIBCALL SumBlastGetGappedAlignmentEx PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length, Boolean do_traceback, SeqAlignPtr PNTR seqalignP, BlastHitRangePtr bhrp, Int2 query_number));
 
 /*
 	Performs a complete BLAST search and returns a SeqAnlign.
@@ -562,9 +586,14 @@ void PrintTabularOutputHeader PROTO((CharPtr blast_database, BioseqPtr query_bsp
 
 /* ------ Functions related to Smith-Waterman algorithm ------ */
 
-Nlm_FloatHi BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *matchSeqEnd, Int4 *queryEnd, Int4 *score, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi effSearchSpace, Boolean positionSpecific);
+Nlm_FloatHi BLbasicSmithWatermanScoreOnly PROTO((Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *matchSeqEnd, Int4 *queryEnd, Int4 *score, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi effSearchSpace, Boolean positionSpecific));
 
-Int4 BLSmithWatermanFindStart(Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score, Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific);
+Int4 BLSmithWatermanFindStart PROTO((Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score, Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific));
+
+Boolean
+CheckStartForGappedAlignment PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix));
+
+Int4 GetStartForGappedAlignment PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix));
 
 /* ----------------------------------------------------------- */
 

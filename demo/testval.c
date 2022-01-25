@@ -118,6 +118,10 @@ Int2 Main(void)
 		while (! found)
 		{
 			tmp = AsnIoGets(aip);
+			if (tmp == NULL) {
+			  printf("Unable to read file\n");
+			  return 0;
+			}
 			*(aip->buf + aip->offset -1) = '\0';
 			if (strstr(tmp, "Seq-submit") != NULL)
 			{

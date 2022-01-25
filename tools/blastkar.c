@@ -47,8 +47,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.80 $
+ * $Revision: 6.83 $
  * $Log: blastkar.c,v $
+ * Revision 6.83  2002/07/22 20:10:12  dondosha
+ * Correction: previous change did not work for proteins
+ *
+ * Revision 6.82  2002/07/19 18:34:58  dondosha
+ * Ignore bits higher than 4 when computing frequencies - needed for megablast
+ *
+ * Revision 6.81  2002/05/17 20:30:37  madden
+ * Add comments on adding new matrix values
+ *
  * Revision 6.80  2002/04/09 18:44:19  madden
  * Do not return if status of BlastScoreBlkMatCreate is non-zero
  *
@@ -586,12 +595,75 @@ typedef struct _matrix_info {
 
 /**************************************************************************************
 
-		NOTE!!!!!!!!!!!!!!!!!!!!!!!!!!!
+How the statistical parameters for the matrices are stored:
+-----------------------------------------------------------
+They parameters are stored in a two-dimensional array FloatHi (i.e., 
+doubles, which has as it's first dimensions the number of different 
+gap existence and extension combinations and as it's second dimension 8.
+The eight different columns specify:
 
-	The arrays below list all the matrices allowed for gapped BLAST.
-	If new ones are added, remember to edit the function BlastLoadMatrixValues!!!
+1.) gap existence penalty (INT2_MAX denotes infinite).
+2.) gap extension penalty (INT2_MAX denotes infinite).
+3.) decline to align penalty (INT2_MAX denotes infinite).
+4.) Lambda
+5.) K
+6.) H
+7.) alpha
+8.) beta
+
+(Items 4-8 are explained in:
+Altschul SF, Bundschuh R, Olsen R, Hwa T.
+The estimation of statistical parameters for local alignment score distributions.
+Nucleic Acids Res. 2001 Jan 15;29(2):351-61.).
+
+Take BLOSUM45 (below) as an example.  Currently (5/17/02) there are
+14 different allowed combinations (specified by "#define BLOSUM45_VALUES_MAX 14").
+The first row in the array "blosum45_values" has INT2_MAX (i.e., 32767) for gap 
+existence, extension, and decline-to-align penalties.  For all practical purposes
+this value is large enough to be infinite, so the alignments will be ungapped.
+BLAST may also use this value (INT2_MAX) as a signal to skip gapping, so a
+different value should not be used if the intent is to have gapless extensions.
+The next row is for the gap existence penalty 13 and the extension penalty 3.
+The decline-to-align penalty is only supported in a few cases, so it is normally
+set to INT2_MAX.
+
+
+How to add a new matrix to blastkar.c:
+--------------------------------------
+To add a new matrix to blastkar.c it is necessary to complete 
+four steps.  As an example consider adding the matrix
+called TESTMATRIX
+
+1.) add a define specifying how many different existence and extensions
+penalties are allowed, so it would be necessary to add the line:
+
+#define TESTMATRIX_VALUES_MAX 14
+
+if 14 values were to be allowed.
+
+2.) add a two-dimensional array to contain the statistical parameters:
+
+static Nlm_FloatHi testmatrix_values[TESTMATRIX_VALUES_MAX][8] ={ ...
+
+3.) add a "prefs" array that should hint about the "optimal" 
+gap existence and extension penalties:
+
+static Int4 testmatrix_prefs[TESTMATRIX_VALUES_MAX] = {
+BLAST_MATRIX_NOMINAL,
+...
+};
+
+4.) Go to the function BlastLoadMatrixValues (in this file) and
+add two lines before the return at the end of the function: 
+
+        matrix_info = MatrixInfoNew("TESTMATRIX", testmatrix_values, testmatrix_prefs, TESTMATRIX_VALUES_MAX);
+        ValNodeAddPointer(&retval, 0, matrix_info);
+
+
 
 ***************************************************************************************/
+
+
 	
 	
 
@@ -1953,12 +2025,16 @@ BlastResCompStr(BLAST_ScoreBlkPtr sbp, BLAST_ResCompPtr rcp, CharPtr str, Int4 l
 {
 	CharPtr	lp, lpmax;
 	Int2 index;
+        Uint1 mask;
 
 	if (sbp == NULL || rcp == NULL || str == NULL)
 		return 1;
 
 	if (rcp->alphabet_code != sbp->alphabet_code)
 		return 1;
+
+        /* For megablast, check only the first 4 bits of the sequence values */
+        mask = (sbp->protein_alphabet ? 0xff : 0x0f);
 
 /* comp0 starts at zero and extends for "num", comp is the same array, but 
 "start_at" offset. */
@@ -1967,7 +2043,7 @@ BlastResCompStr(BLAST_ScoreBlkPtr sbp, BLAST_ResCompPtr rcp, CharPtr str, Int4 l
 
 	for (lp = str, lpmax = lp+length; lp < lpmax; lp++)
 	{
-		++rcp->comp[(int)(*lp)];
+		++rcp->comp[(int)(*lp & mask)];
 	}
 
 	/* Don't count ambig. residues. */

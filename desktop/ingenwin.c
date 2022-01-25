@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -1846,7 +1846,7 @@ static void Ing_DotMatrixProc(IteM i)
 static Boolean Ing_SelectPrim (SegmenT seg, PrimitivE prim, Uint2 segID, Uint2 primID, Uint2 primCt, VoidPtr userdata)
 {
   Uint2      entityID=0;
-  Uint2      itemID=0;
+  Uint4      itemID=0;
   Uint2      itemtype=0;
   IngSelectPtr selp=NULL;
 
@@ -1876,7 +1876,7 @@ static Boolean Ing_DeSelectPrim (SegmenT seg, PrimitivE prim, Uint2 segID, Uint2
 
 {
   Uint2      entityID=0;
-  Uint2      itemID=0;
+  Uint4      itemID=0;
   Uint2      itemtype=0;
   IngSelectPtr  selp=NULL;
   
@@ -2812,7 +2812,8 @@ Purpose: click and scroll main window functions
 static void Ing_FeatViewerClickProc(VieweR v, SegmenT s, PoinT pt)
 {
   PrimitivE  prim=NULL;
-  Uint2      entityID=0,itemID=0,itemtype=0;
+  Uint2      entityID=0,itemtype=0;
+  Uint4      itemID=0;
   Uint2      primID=0;
   Uint2      segID=0;
   Int1       highlight=0; 
@@ -2922,7 +2923,7 @@ static void Ing_SequenceClickProc(VieweR v, SegmenT s, PoinT pt)
 {
   IngGenomeViewerPtr igvp=NULL;
   Uint2              entityID=0;
-  Uint2              itemID=0;
+  Uint4              itemID=0;
   Uint2              itemtype=0;
   Uint2              primID=0;
   PrimitivE          prim;
@@ -5108,7 +5109,7 @@ static void Ing_PropagateClickProc(VieweR v, SegmenT s, PoinT pt)
   SelStructPtr       ssp=NULL;
   PrimitivE          prim;
   Uint2              entityID=0;
-  Uint2              itemID=0;
+  Uint4              itemID=0;
   Uint2              itemtype=0;
   Uint2              primID=0;
 

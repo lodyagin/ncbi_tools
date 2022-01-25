@@ -34,6 +34,15 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.30  2002/05/23 22:57:03  dondosha
+* Made GetResponsePtr external
+*
+* Revision 1.29  2002/05/15 16:32:51  madden
+* Make QueryIsProteinFromType extern
+*
+* Revision 1.28  2002/05/10 12:56:27  madden
+* Allow network version of matrix as input
+*
 * Revision 1.27  2001/05/02 19:42:48  egorov
 * Make the NetBlastGetMatrix() external
 *
@@ -155,6 +164,7 @@ typedef struct _blastnet3_block {
 	BlastNet3Hptr bl3hptr;	/* BlastNet 3 handler returned from BlastInit. */
 	NetProgressCallback callback;
 	BLAST_MatrixPtr blast_matrix;	/* Matrix to be sent to server. */
+	BlastMatrixPtr net_matrix;	/* Network version of Matrix to be sent to server. */
         BioseqSetPtr bsp_set;   /* All queries if more than one */
 } BlastNet3Block, PNTR BlastNet3BlockPtr;
 
@@ -246,6 +256,11 @@ NLM_EXTERN Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr b
 
 
 NLM_EXTERN BlastMatrixPtr LIBCALL NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr);
+
+BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choice);
+
+/* Return TRUE if the query for this program is protein (e.g., blastp). */
+NLM_EXTERN Boolean LIBCALL QueryIsProteinFromType(Uint2 type);
 
 #ifdef __cplusplus
 }

@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.154 $
+* $Revision: 6.157 $
 *
 * File Description: 
 *
@@ -80,6 +80,10 @@ static SelEdStructPtr seq_info=NULL;
 static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignPtr salp, Int4 start, SeqIdPtr mastersip, Uint1 showfeature);
 static void CleanupAlignDataPanel (GraphiC g, VoidPtr data);
 static void CloseWindowProc (PaneL pnl);
+static void InsertSequenceDlg (ButtoN b);
+static void CancelButton (ButtoN b);
+static void InsertSequenceButton (ButtoN b);
+static void InsertSeqProc (IteM i);
 
 
 static Boolean AmIConfiguredForTheNetwork (void)
@@ -207,6 +211,7 @@ static void editor2viewer (SeqEditViewFormPtr wdp)
   Disable (wdp->copyitem);
   Disable (wdp->viewmodeitem);
   Enable  (wdp->editmodeitem);
+  Disable (wdp->insitem);
 }
 
 static void viewer2editor (SeqEditViewFormPtr wdp)
@@ -216,6 +221,8 @@ static void viewer2editor (SeqEditViewFormPtr wdp)
   Enable (wdp->undoitem);
   Enable (wdp->pasteitem);
   Enable (wdp->viewmodeitem);
+  Enable (wdp->insitem);    
+ 
   Disable(wdp->editmodeitem);
 
   k = checkOMss_for_itemtype (OBJ_BIOSEQ);
@@ -1649,8 +1656,8 @@ static void CloseWindowProc (PaneL pnl)
   SeqEntryPtr        currentsep;
 
   w = (WindoW)ParentWindow (pnl);
-  if ( ( adp = GetAlignEditData (w) ) == NULL ) return;
-  if (adp->dirty) {
+  adp = GetAlignEditData (w);
+  if (adp != NULL && adp->dirty) {
      if (adp->input_format == OBJ_BIOSEQ) 
      {
         Hide (w);
@@ -2519,6 +2526,8 @@ static void EditorEditMenu (MenU m, SeqEditViewFormPtr wdp)
   Disable (wdp->copyitem);
   CommandItem (m, "Refresh", RefreshAlignDataItem);
   SeparatorItem (m);
+  wdp->insitem   = CommandItem (m, "Insert Sequence", InsertSeqProc);
+  SeparatorItem (m);  
   wdp->delitem   = CommandItem (m, "Delete Seq", DeleteProc);
   Disable (wdp->delitem);
 /****
@@ -3857,6 +3866,7 @@ static SeqEditViewFormPtr SeqEditViewFormNew (void)
   wdp->closebt = NULL;
   wdp->svclosebt = NULL;
   wdp->cutitem = NULL;
+  wdp->insitem = NULL; 
   wdp->delitem = NULL; 
   wdp->copyitem = NULL; 
   wdp->pasteitem = NULL;
@@ -3934,6 +3944,9 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
       wdp->extended_dist_menu = svpp->extended_dist_menu;
       wdp->extended_tree_menu = svpp->extended_tree_menu;
       showfeat = svpp->showfeat;
+      if (bsp->length > 100000) {
+        showfeat = FALSE; /* to avoid inefficient feature gather for genome records - JK */
+      }
       if (svpp->minPixelWidth > 0) {
          window_width = svpp->minPixelWidth;
          if (window_width > 800) window_width = 800;
@@ -4000,6 +4013,7 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
      wdp->lookatbt = PushButton (g, "Look at:", LookAtButton);
      wdp->lookattxt = DialogText (g, str, (Int2)6, NULL);
   }  
+    
   g = HiddenGroup (w, 1, 0, NULL);                  
   wdp->pos = StaticPrompt (g, "", window_width, dialogTextHeight, programFont, 'l');
   
@@ -4058,6 +4072,7 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
   }
   return (ForM) w;
 }
+
 
 /********************************************
 ***
@@ -4206,7 +4221,7 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
      wdp->lookatbt = PushButton (g, "Look at:", LookAtButton);
      wdp->lookattxt = DialogText (g, str, (Int2)6, NULL);
   }  
-
+	
   g = HiddenGroup (w, 1, 0, NULL);
   wdp->pos = StaticPrompt (g, "", window_width, dialogTextHeight, programFont, 'l');
 
@@ -4512,7 +4527,7 @@ static Boolean get_bestpos_formerge (SeqAlignPtr salp, Int4Ptr from, Int4Ptr to)
      }
   }
   *to+=1; /* create a bug to fix a bug -- SW */
-  return; /* above fix put in 1/29/01 since coordinates were not correct -- SW */
+  return FALSE; /* above fix put in 1/29/01 since coordinates were not correct -- SW */
   j=what_seqalign(salp);
   if (j==1 || j==3) 
   { /* when j==3, there is also a bit afterwards that could be merged.*/
@@ -5614,10 +5629,65 @@ extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data)
 
 
 
+static void InsertSeqProc (IteM i)
+{
+  WindoW w;
+  GrouP  g1, g2;
+  PrompT insprt;
+  TexT   instxt;
+  ButtoN insbt, cnclbt;
+  SeqEditViewFormPtr wdp;
+  
+  wdp = (SeqEditViewFormPtr) GetObjectExtra ((WindoW)ParentWindow (i));
+  w = MovableModalWindow (-50, -33, -10, -10, "Insert Sequence", NULL);
+  
+  SetObjectExtra (w, (Pointer) wdp, NULL);
+  
+  g1 = HiddenGroup (w, 2, 0, NULL);
+  insprt = StaticPrompt (g1, "Sequence:", 0, dialogTextHeight, programFont, 'l');
+  instxt = DialogText (g1, "", (Int2)19, NULL);
+  
+  g2 = HiddenGroup (w, 2, 0, NULL);
+  SetGroupSpacing (g2, 10, 5);
+  insbt = PushButton (g2, "Insert", InsertSequenceButton);
+  SetObjectExtra (insbt, (Pointer) instxt, NULL);
+  cnclbt = PushButton (g2, "Cancel", CancelButton);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) g2, NULL);
+  
+  Show (w);
+  Select (w);
+}
 
 
+static void CancelButton (ButtoN b)
+{
+	Remove ( (WindoW)ParentWindow (b) );
+}
 
-
+static void InsertSequenceButton (ButtoN b)
+{
+   SeqEditViewFormPtr wdp;
+   EditAlignDataPtr   adp;
+   CharPtr            str, strtmp;
+     
+   wdp = (SeqEditViewFormPtr) GetObjectExtra ((WindoW)ParentWindow (b));
+   if (wdp==NULL) return;
+   if ( ( adp = GetAlignDataPanel (wdp->pnl) ) == NULL ) return;
+   
+   str = SaveStringFromText ( (TexT)GetObjectExtra(b) ); 
+   strtmp = char_to_insert (str, StringLen (str), adp->mol_type);
+   if (insertchar_atcaret (strtmp, adp)) 
+   {
+        adp->dirty = TRUE;
+        ObjMgrSetDirtyFlag (adp->caret.entityID, TRUE);
+        ObjMgrSendMsg (OM_MSG_UPDATE, adp->caret.entityID, adp->caret.itemID, adp->caret.itemtype);
+   }
+   MemFree (strtmp);
+   MemFree (str);
+   
+   Remove ( (WindoW)ParentWindow (b) );
+   return;
+}
 
 
 

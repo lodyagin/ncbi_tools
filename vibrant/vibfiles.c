@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Vibrant file functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibfiles.c,v $
+* Revision 6.2  2002/06/13 16:15:13  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
+*
 * Revision 6.1  1999/03/11 20:26:27  vakatov
 * Get in-sync the printf's format and args in some functions
 *
@@ -74,7 +77,8 @@ static Nlm_Char Nlm_ReadCharFromTerm (void)
 
 {
   Nlm_Char     ch;
-#ifdef OS_MAC
+/*#ifdef OS_MAC*/
+#ifdef WIN_MAC 
   EventRecord  event;
 #endif
 #ifdef WIN_MSWIN
@@ -83,7 +87,8 @@ static Nlm_Char Nlm_ReadCharFromTerm (void)
 #endif
 
   ch = '\0';
-#ifdef OS_MAC
+/*#ifdef OS_MAC*/
+#ifdef WIN_MAC
   while (ch == '\0') {
     if (GetNextEvent (keyDownMask + autoKeyMask, &event)) {
       ch = (Nlm_Char) (event.message % 256);

@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.60 2002/04/26 16:26:30 madden Exp $
+/* $Id: txalign.c,v 6.65 2002/07/24 21:08:47 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,28 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.60 $
+* $Revision: 6.65 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.65  2002/07/24 21:08:47  kans
+* reverted ncbi URL
+*
+* Revision 6.64  2002/07/23 16:44:35  kans
+* changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+*
+* Revision 6.63  2002/07/09 16:38:05  dondosha
+* Use gather for all translated searches when parsing seqaligns - fixes a bug for ungapped blastx
+*
+* Revision 6.62  2002/05/21 20:34:33  jianye
+* Added download large sequence gif
+*
+* Revision 6.61  2002/05/02 18:06:02  dondosha
+* Print 2 sequences tblastx link and/or list of extra hits in a cluster only for the first HSP in a hit
+*
 * Revision 6.60  2002/04/26 16:26:30  madden
 * Add length check to for loop over fasta seqid
 *
@@ -458,10 +473,11 @@
 #define MIN_INS_SPACE 50
 #define MAX_GI_NUM    10
 #define MAX_DB_NUM    10
+#define LENGTH_TO_SHOW_DOWNLOAD 10000
 
 #define TXALIGN_HREF "http://www.ncbi.nlm.nih.gov"
 
-#define NEW_ENTREZ_HREF "http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi"
+#define NEW_ENTREZ_HREF "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi"
 
 #define WBLAST2_HREF "http://www.ncbi.nlm.nih.gov/blast/bl2seq/wblast2.cgi"
 
@@ -619,10 +635,7 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	 
 	  RDBTaxNamesFree(rnp);
 	}
-	/*add one space*/
-	if(hasLinkout){
-	  fprintf(fp, " ");
-	  }
+	
       }
       BlastDefLineSetFree(bdlp);
     }
@@ -3515,8 +3528,8 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                     /*the first time it sees the Bioseq*/
                     bsp = BioseqLockById(anp->sip);
                     align = NULL;
-		    /* Use gather for tblastx and ungapped blast. */
-		    if(!has_tblastx && last_align && *last_align && (*last_align)->segtype != 1 && (*last_align)->next)
+		    /* Use gather for translated searches and ungapped blast. */
+		    if(!has_tblastx && last_align && *last_align && (*last_align)->segtype == 2 && (*last_align)->next)
 		    {
 			align = (*last_align)->next;
 		    }
@@ -3604,7 +3617,7 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                             fmt_score_func(&aso);
     /* Print seqids of other sequences in a cluster if clustering of hits 
        has been done  */                         
-    {
+    if (!aso.follower) {
        BioseqPtr bsp;
        SeqIdPtr sip, sip_head;
        Char buffer[BUFFER_LENGTH+1]/*, line[BUFFER_LENGTH+1]*/;
@@ -3648,7 +3661,6 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
           }
           fprintf(fp, "\n\n");
        }
-    }
     if (option & TXALIGN_BL2SEQ_LINK) {
        Boolean numeric_id;
        Int4 gi, index;
@@ -3671,6 +3683,7 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                WBLAST2_HREF, RID_glb, id1, id2);
     }
 
+    }
 
                             aso.segs = (CharPtr) MemFree(aso.segs);
                         }
@@ -4066,6 +4079,7 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 			mode, marks, number_of_descriptions, (CharPtr)NULL, (CharPtr)NULL);
 }
 
+
 static
 CharPtr
 StringAppend(CharPtr *dst, size_t *size, CharPtr src, size_t *used)
@@ -4126,7 +4140,7 @@ SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size, size_t 
 	* links to incomplete genomes
 **/
 static void
-make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer)
+make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer, Boolean isLinkOut)
 {
     BioseqPtr bsp;
     Boolean nodb_path = FALSE;
@@ -4167,8 +4181,12 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
         GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, 
                     sizeof(tool_url));
     }
-
-    if(*passwd == NULLB || *tool_url == NULLB)
+    /*only for linkout*/
+    if(isLinkOut){
+      StringCpy(tool_url, "/blast/dumpgnl.cgi");
+    }
+    /*no check for linkout*/
+    if(!isLinkOut&&(*passwd == NULLB || *tool_url == NULLB))
         return;
 
     /* If we are using 'dumpgnl.cgi' (the default) do not strip off the path. */
@@ -4729,10 +4747,10 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                               fprintf(outfp, "<a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?val=%ld&cmd=retrieve&dopt=fasta\">", (long) oip->id);
                            }
                         } else {
-                            make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, txsp->is_na, outfp, txsp->buffer_id);
+                            make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, txsp->is_na, outfp, txsp->buffer_id, FALSE);
                         }
                     } else
-                        make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, txsp->is_na, outfp, txsp->buffer_id);
+                        make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, txsp->is_na, outfp, txsp->buffer_id, FALSE);
                     make_link = TRUE;
                 }
         }
@@ -5263,10 +5281,10 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
                        }
                     } else {
                         /** * links to incomplete genomes */
-                        make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer);
+                        make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, FALSE);
                     }
                 } else {
-                    make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer);
+                    make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, FALSE);
                 }
                 make_link = TRUE;
             }
@@ -5320,7 +5338,20 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
     if(asop->txalign_options&TXALIGN_SHOW_LINKOUT){
       bsp=BioseqLockById(sip);
       if(bsp){
+	SeqIdPtr sipGi;
+	Char fastaLongIdBuf[BUFFER_LENGTH];
 	addLinkoutForBioseq(bsp, sip, asop->fp);
+
+	sipGi=SeqIdFindBest(bsp->id, SEQID_GI);
+	if(sipGi&&bsp->length> LENGTH_TO_SHOW_DOWNLOAD&&ISA_na(asop->bsp->mol)){
+	  SeqIdWrite(bsp->id, fastaLongIdBuf, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+	  make_dumpgnl_links(sipGi, asop->blast_type, asop->segs, asop->db_name, ISA_na(asop->bsp->mol), asop->fp, fastaLongIdBuf, TRUE);
+	  fprintf(asop->fp, "<img border=0 height=16 width=16 src=\"/blast/images/D.gif\" alt=\"Download subject sequence spanning the HSP\"></a>");
+	}
+	/*add one space before defline*/
+
+	fprintf(asop->fp, " ");
+      
 	BioseqUnlock(bsp);
       }
     }
@@ -5402,11 +5433,12 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     Int4 number, score, gi, len, i;
     Int4 index; /* index for while loop over seqid. */
     ObjectIdPtr obid;
-    SeqIdPtr gilist, sip, new_sip, sip_tmp;
+    SeqIdPtr gilist, sip, new_sip, sip_tmp, sipGi;
     ScorePtr	scrp, sp;
     Boolean splice_junction = FALSE;
     BlastDefLinePtr bdsp = NULL;
     CharPtr warning_msg = NULL;
+    Char fastaLongIdBuf[BUFFER_LENGTH+1];
 
     sp = asop->sp;
     bsp = asop->bsp;
@@ -5702,9 +5734,12 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
             else
                 sprintf(buffer, " Strand = Plus / Plus");
             ff_AddString(buffer);
+	    
+	   
             NewContLine();
         }
         /* for testing. */
+
     }
     ff_EndPrint();
     

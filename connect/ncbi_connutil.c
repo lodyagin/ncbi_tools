@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.32 2002/04/13 06:36:36 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.36 2002/08/12 15:12:01 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,113 +29,6 @@
  *   Auxiliary API, mostly CONN-, URL-, and MIME-related
  *   (see in "ncbi_connutil.h" for more details).
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_connutil.c,v $
- * Revision 6.32  2002/04/13 06:36:36  lavr
- * Fix for empty path parsing in HTTP URL
- *
- * Revision 6.31  2002/03/19 22:13:09  lavr
- * Minor tweak in recognizing "infinite" (and part) as a special timeout
- *
- * Revision 6.30  2002/03/11 21:53:18  lavr
- * Recognize ALL in CONN_DEBUG_PRINTOUT; bugfix for '//' in proxy adjustement
- *
- * Revision 6.29  2002/02/20 19:12:17  lavr
- * Swapped eENCOD_Url and eENCOD_None; eENCOD_Unknown introduced
- *
- * Revision 6.28  2002/02/08 22:22:17  lavr
- * BUGFIX: sizeof(info) -> sizeof(*info) in ConnNetInfo_Create()
- *
- * Revision 6.27  2002/01/30 20:14:48  lavr
- * URL_Connect(): Print error code in some failure messages
- *
- * Revision 6.26  2002/01/28 20:21:46  lavr
- * Do not store "" as a user_header
- *
- * Revision 6.25  2001/12/30 19:40:32  lavr
- * +ConnNetInfo_ParseURL()
- * Added recordkeeping of service name for which the info was created
- *
- * Revision 6.24  2001/12/04 15:56:28  lavr
- * Use strdup() instead of explicit strcpy(malloc(...), ...)
- *
- * Revision 6.23  2001/09/24 20:27:00  lavr
- * Message corrected: "Adjusted path too long"
- *
- * Revision 6.22  2001/09/10 21:14:58  lavr
- * Added functions: StringToHostPort()
- *                  HostPortToString()
- *
- * Revision 6.21  2001/05/31 21:30:57  vakatov
- * MIME_ParseContentTypeEx() -- a more accurate parsing
- *
- * Revision 6.20  2001/05/29 21:15:43  vakatov
- * + eMIME_Plain
- *
- * Revision 6.19  2001/04/24 21:29:43  lavr
- * Special text value "infinite" accepted as infinite timeout from environment
- *
- * Revision 6.18  2001/03/26 18:37:09  lavr
- * #include <ctype.h> not used, removed
- *
- * Revision 6.17  2001/03/02 20:08:05  lavr
- * Typo fixed
- *
- * Revision 6.16  2001/01/25 16:58:33  lavr
- * ConnNetInfo_SetUserHeader now used throughout to set/reset http_user_header
- *
- * Revision 6.15  2001/01/23 23:06:18  lavr
- * SConnNetInfo.debug_printout converted from boolean to enum
- * BUF_StripToPattern() introduced
- *
- * Revision 6.14  2001/01/12 00:01:27  lavr
- * CONN_PROXY_HOST was forgotten to init in ConnNetInfo_Create
- *
- * Revision 6.13  2001/01/11 23:07:08  lavr
- * ConnNetInfo_Print() prints user-header 'as is'; pretty-printing undone
- *
- * Revision 6.12  2001/01/08 23:46:27  lavr
- * REQUEST_METHOD -> REQ_METHOD to be consistent with SConnNetInfo
- *
- * Revision 6.11  2001/01/08 22:35:56  lavr
- * Client-Mode removed; replaced by 2 separate boolean fields:
- * stateless and firewall
- *
- * Revision 6.10  2000/12/29 17:54:11  lavr
- * NCBID stuff removed; ConnNetInfo_SetUserHeader added;
- * modifications to ConnNetInfo_Print output.
- *
- * Revision 6.9  2000/11/07 23:23:18  vakatov
- * In-sync with the C Toolkit "connutil.c:R6.15", "connutil.h:R6.13"
- * (with "eMIME_Dispatch" added).
- *
- * Revision 6.8  2000/10/20 17:08:40  lavr
- * All keys capitalized for registry access
- * Search for some keywords made case insensitive
- *
- * Revision 6.7  2000/10/11 22:29:44  lavr
- * Forgotten blank added after {GET|POST} request in URL_Connect
- *
- * Revision 6.6  2000/10/05 22:35:24  lavr
- * SConnNetInfo modified to contain 'client_mode' instead of just
- * 'firewall' boolean
- *
- * Revision 6.5  2000/09/27 19:37:40  lavr
- * ncbi_ansi_ext.h included
- *
- * Revision 6.4  2000/09/26 22:01:33  lavr
- * Registry entries changed, HTTP request method added
- *
- * Revision 6.3  2000/04/21 19:42:35  vakatov
- * Several minor typo/bugs fixed
- *
- * Revision 6.2  2000/03/29 16:36:09  vakatov
- * MIME_ParseContentType() -- a fix
- *
- * Revision 6.1  2000/03/24 22:53:34  vakatov
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include "ncbi_priv.h"
@@ -159,58 +52,57 @@ static const char* s_GetValue(const char* service, const char* param,
                               char* value, size_t value_size,
                               const char* def_value)
 {
-  char        key[250];
-  char*       sec;
-  const char* val;
+    char        key[250];
+    char*       sec;
+    const char* val;
 
-  if (!value  ||  !param  ||  value_size <= 0)
-      return 0;
-  *value = '\0';
+    if (!param  ||  !value  ||  value_size <= 0)
+        return 0;
+    *value = '\0';
 
-  if (service  &&  *service) {
-      /* Service-specific inquiry */
-      if (strlen(service) + 1 + sizeof(DEF_CONN_REG_SECTION) +
-          strlen(param) + 1 > sizeof(key))
-          return 0;
-      /* First, environment search for 'service_CONN_param' */
-      sprintf(key, "%s_" DEF_CONN_REG_SECTION "_%s", service, param);
-      strupr(key);
-      if ((val = getenv(key)) != 0) {
-          strncpy(value, val, value_size);
-          value[value_size - 1] = '\0';
-          return value;
-      }
-      /* Next, search for 'CONN_param' in '[service]' registry section */
-      sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
-      sec = key + strlen(key) + 1;
-      strupr(key);
-      strcpy(sec, service);
-      strupr(sec);
-      CORE_REG_GET(sec, key, value, value_size, 0);
-      if ( *value ) {
-          return value;
-      }
-  } else {
-      /* Common case. Form 'CONN_param' */
-      if (sizeof(DEF_CONN_REG_SECTION) + strlen(param) + 1 > sizeof(key))
-          return 0;
-      sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
-      strupr(key);
-  }
+    if (service  &&  *service) {
+        /* Service-specific inquiry */
+        if (strlen(service) + 1 + sizeof(DEF_CONN_REG_SECTION) +
+            strlen(param) + 1 > sizeof(key))
+            return 0;
+        /* First, environment search for 'service_CONN_param' */
+        sprintf(key, "%s_" DEF_CONN_REG_SECTION "_%s", service, param);
+        strupr(key);
+        if ((val = getenv(key)) != 0) {
+            strncpy(value, val, value_size);
+            value[value_size - 1] = '\0';
+            return value;
+        }
+        /* Next, search for 'CONN_param' in '[service]' registry section */
+        sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
+        sec = key + strlen(key) + 1;
+        strupr(key);
+        strcpy(sec, service);
+        strupr(sec);
+        CORE_REG_GET(sec, key, value, value_size, 0);
+        if (*value)
+            return value;
+    } else {
+        /* Common case. Form 'CONN_param' */
+        if (sizeof(DEF_CONN_REG_SECTION) + strlen(param) + 1 > sizeof(key))
+            return 0;
+        sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
+        strupr(key);
+    }
 
-  /* Environment search for 'CONN_param' */
-  if ((val = getenv(key)) != 0) {
-      strncpy(value, val, value_size);
-      value[value_size - 1] = '\0';
-      return value;
-  }
+    /* Environment search for 'CONN_param' */
+    if ((val = getenv(key)) != 0) {
+        strncpy(value, val, value_size);
+        value[value_size - 1] = '\0';
+        return value;
+    }
 
-  /* Last resort: Search for 'param' in default registry section */
-  strcpy(key, param);
-  strupr(key);
-  CORE_REG_GET(DEF_CONN_REG_SECTION, key, value, value_size, def_value);
+    /* Last resort: Search for 'param' in default registry section */
+    strcpy(key, param);
+    strupr(key);
+    CORE_REG_GET(DEF_CONN_REG_SECTION, key, value, value_size, def_value);
 
-  return value;
+    return value;
 }
 
 
@@ -224,7 +116,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 #define REG_VALUE(name, value, def_value) \
     s_GetValue(service, name, value, sizeof(value), def_value)
 
-    SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo) +
+    SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(*info) +
                                                 (service  &&  *service
                                                  ? strlen(service) + 1 : 0));
     /* aux. storage for the string-to-int conversions, etc. */
@@ -232,6 +124,9 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     int    val;
     double dbl;
     char*  s;
+
+    if (!info)
+        return 0/*failure*/;
 
     /* client host */
     SOCK_gethostname(info->client_host, sizeof(info->client_host));
@@ -287,9 +182,8 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         val = atoi(str);
         info->http_proxy_port = (unsigned short)
             (val > 0 ? val : DEF_CONN_HTTP_PROXY_PORT);
-    } else {
+    } else
         info->http_proxy_port = DEF_CONN_HTTP_PROXY_PORT;
-    }
 
     /* non-transparent CERN-like firewall proxy server? */
     REG_VALUE(REG_CONN_PROXY_HOST, info->proxy_host, DEF_CONN_PROXY_HOST);
@@ -334,7 +228,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     info->http_user_header = 0;
     /* not adjusted yet... */
     info->http_proxy_adjusted = 0/*false*/;
-    /* remember the service name for which this structure has been created */
+    /* store service name for which this structure has been created */
     if (service  &&  *service) {
         s = (char*) info + sizeof(*info);
         strcpy(s, service);
@@ -350,9 +244,8 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
 extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 {
-    if (info->http_proxy_adjusted  ||  !*info->http_proxy_host) {
+    if (info->http_proxy_adjusted  ||  !*info->http_proxy_host)
         return 0/*false*/;
-    }
 
     if (strlen(info->host) + strlen(info->path) + 16 > sizeof(info->path)) {
         CORE_LOG(eLOG_Error,
@@ -467,7 +360,7 @@ extern void ConnNetInfo_SetUserHeader(SConnNetInfo* info,
 extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 {
     SConnNetInfo* x_info;
-    if ( !info )
+    if (!info)
         return 0;
 
     x_info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo) +
@@ -489,64 +382,80 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 }
 
 
-static void s_PrintString(FILE* fp, const char* name, const char* str) {
-    fprintf(fp, "%-16.16s: \"%s\"\n", name, str ? str : "<NULL>");
+static void s_SaveString(char* s, const char* name, const char* str) {
+    sprintf(s + strlen(s), "%-16.16s: %s%s%s\n", name,
+            str ? "\"" : "", str ? str : "NULL", str ? "\"" : "");
 }
-static void s_PrintULong(FILE* fp, const char* name, unsigned long lll) {
-    fprintf(fp, "%-16.16s: %lu\n", name, lll);
+static void s_SaveULong(char* s, const char* name, unsigned long lll) {
+    sprintf(s + strlen(s), "%-16.16s: %lu\n", name, lll);
 }
-static void s_PrintBool(FILE* fp, const char* name, int/*bool*/ bbb) {
-    fprintf(fp, "%-16.16s: %s\n", name, bbb ? "TRUE" : "FALSE");
+static void s_SaveBool(char* s, const char* name, int/*bool*/ bbb) {
+    sprintf(s + strlen(s), "%-16.16s: %s\n", name, bbb ? "TRUE" : "FALSE");
 }
 
-extern void ConnNetInfo_Print(const SConnNetInfo* info, FILE* fp)
+extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
 {
-    if ( !fp )
+    char* s;
+
+    if (!lg)
         return;
 
-    fprintf(fp, "\n----- [BEGIN] ConnNetInfo_Print -----\n");
-
-    if ( info ) {
-        s_PrintString(fp, "service",        (info->service ?
-                                             info->service : "<none>"));
-        s_PrintString(fp, "client_host",     info->client_host);
-        s_PrintString(fp, "host",            info->host);
-        s_PrintULong (fp, "port",            info->port);
-        s_PrintString(fp, "path",            info->path);
-        s_PrintString(fp, "args",            info->args);
-        s_PrintString(fp, "req_method",
-                      info->req_method == eReqMethod_Any
-                      ? DEF_CONN_REQ_METHOD :
-                      (info->req_method == eReqMethod_Get
-                       ? "GET" :
-                       (info->req_method == eReqMethod_Post
-                        ? "POST" : "Unknown")));
-        if (info->timeout) {
-            s_PrintULong (fp, "timeout(sec)", info->timeout->sec);
-            s_PrintULong (fp, "timeout(usec)",info->timeout->usec);
-        } else
-            s_PrintString(fp, "timeout",     "infinite");
-        s_PrintULong (fp, "max_try",         info->max_try);
-        s_PrintString(fp, "http_proxy_host", info->http_proxy_host);
-        s_PrintULong (fp, "http_proxy_port", info->http_proxy_port);
-        s_PrintString(fp, "proxy_host",      info->proxy_host);
-        s_PrintString(fp, "debug_printout", 
-                      info->debug_printout == eDebugPrintout_None
-                      ? "NONE" :
-                      (info->debug_printout == eDebugPrintout_Some
-                       ? "SOME" :
-                       (info->debug_printout == eDebugPrintout_Data
-                        ? "DATA" : "Unknown")));
-        s_PrintBool  (fp, "stateless",       info->stateless);   
-        s_PrintBool  (fp, "firewall",        info->firewall);
-        s_PrintBool  (fp, "lb_disable",      info->lb_disable);
-        s_PrintString(fp, "user_header",     info->http_user_header);
-        s_PrintBool  (fp, "proxy_adjusted",  info->http_proxy_adjusted);
-    } else {
-        fprintf(fp, "<NULL>\n");
+    if (!info) {
+        LOG_Write(lg, eLOG_Trace, 0, 0, 0, "ConnNetInfo_Log: NULL info");
+        return;
     }
 
-    fprintf(fp, "----- [END] ConnNetInfo_Print -----\n\n");
+    if (!(s = (char*) malloc(sizeof(*info) + 4096 +
+                             (info->service ? strlen(info->service) : 0) +
+                             (info->http_user_header
+                              ? strlen(info->http_user_header) : 0)))) {
+        LOG_WRITE(lg, eLOG_Error, "ConnNetInfo_Log: Cannot alloc temp buffer");
+        return;
+    }
+
+    strcpy(s, "ConnNetInfo_Log\n"
+           "#################### [BEGIN] SConnNetInfo:\n");
+    s_SaveString    (s, "service",         info->service);
+    s_SaveString    (s, "client_host",     info->client_host);
+    s_SaveString    (s, "host",            info->host);
+    s_SaveULong     (s, "port",            info->port);
+    s_SaveString    (s, "path",            info->path);
+    s_SaveString    (s, "args",            info->args);
+    s_SaveString    (s, "req_method",     (info->req_method == eReqMethod_Any
+                                           ? DEF_CONN_REQ_METHOD
+                                           : (info->req_method
+                                              == eReqMethod_Get
+                                              ? "GET"
+                                              : (info->req_method
+                                                 == eReqMethod_Post
+                                                 ? "POST" : "Unknown"))));
+    if (info->timeout) {
+        s_SaveULong (s, "timeout(sec)",    info->timeout->sec);
+        s_SaveULong (s, "timeout(usec)",   info->timeout->usec);
+    } else
+        s_SaveString(s, "timeout",         "infinite");
+    s_SaveULong     (s, "max_try",         info->max_try);
+    s_SaveString    (s, "http_proxy_host", info->http_proxy_host);
+    s_SaveULong     (s, "http_proxy_port", info->http_proxy_port);
+    s_SaveString    (s, "proxy_host",      info->proxy_host);
+    s_SaveString    (s, "debug_printout", (info->debug_printout
+                                           == eDebugPrintout_None
+                                           ? "NONE"
+                                           : (info->debug_printout
+                                              == eDebugPrintout_Some
+                                              ? "SOME"
+                                              : (info->debug_printout
+                                                 == eDebugPrintout_Data
+                                                 ? "DATA" : "Unknown"))));
+    s_SaveBool      (s, "stateless",       info->stateless);
+    s_SaveBool      (s, "firewall",        info->firewall);
+    s_SaveBool      (s, "lb_disable",      info->lb_disable);
+    s_SaveString    (s, "user_header",     info->http_user_header);
+    s_SaveBool      (s, "proxy_adjusted",  info->http_proxy_adjusted);
+    strcat(s, "#################### [END] SConnNetInfo\n");
+
+    LOG_Write(lg, eLOG_Trace, 0, 0, 0, s);
+    free(s);
 }
 
 
@@ -598,16 +507,16 @@ extern SOCK URL_Connect
         break;
     case eReqMethod_Get:
         X_REQ_R = "GET ";
-        if (content_length) {
-            CORE_LOG(eLOG_Warning,
-                     "[URL_Connect]  Content length ignored with GET");
-            content_length = 0;
-        }
         break;
     default:
         CORE_LOG(eLOG_Error, "[URL_Connect]  Unrecognized request method");
         assert(0);
         return 0/*error*/;
+    }
+    if (strcasecmp(X_REQ_R, "GET ") == 0  &&  content_length) {
+        CORE_LOG(eLOG_Warning,
+                 "[URL_Connect]  Content length ignored with GET");
+        content_length = 0;
     }
 
     /* connect to HTTPD */
@@ -617,7 +526,6 @@ extern SOCK URL_Connect
                    port, st==eIO_Success? strerror(errno) : IO_StatusStr(st)));
         return 0/*error*/;
     }
-    
     SOCK_SetDataLogging(sock, data_logging);
 
     /* setup i/o timeout for the connection */
@@ -626,7 +534,7 @@ extern SOCK URL_Connect
         SOCK_Close(sock);
         return 0;
     }
-    
+
     /* URL-encode "args", if any specified */
     if (args  &&  *args) {
         size_t src_size = strlen(args);
@@ -647,32 +555,40 @@ extern SOCK URL_Connect
     /* compose and send HTTP header */
     if (
         /* {POST|GET} <path>?<args> HTTP/1.0\r\n */
-        (st = SOCK_Write(sock, (const void*) X_REQ_R, strlen(X_REQ_R), 0))
+        (st = SOCK_Write(sock, (const void*) X_REQ_R, strlen(X_REQ_R),
+                         0, eIO_WritePersist))
         != eIO_Success  ||
-        (st = SOCK_Write(sock, (const void*) path, strlen(path), 0))
+        (st = SOCK_Write(sock, (const void*) path, strlen(path),
+                         0, eIO_WritePersist))
         != eIO_Success  ||
         (x_args  &&
-         ((st = SOCK_Write(sock, (const void*) X_REQ_Q, strlen(X_REQ_Q), 0))
+         ((st = SOCK_Write(sock, (const void*) X_REQ_Q, strlen(X_REQ_Q),
+                           0, eIO_WritePersist))
           != eIO_Success  ||
-          (st = SOCK_Write(sock, (const void*) x_args, strlen(x_args), 0))
+          (st = SOCK_Write(sock, (const void*) x_args, strlen(x_args),
+                           0, eIO_WritePersist))
           != eIO_Success
           )
          )  ||
-        (st = SOCK_Write(sock, (const void*) X_REQ_E, strlen(X_REQ_E), 0))
+        (st = SOCK_Write(sock, (const void*) X_REQ_E, strlen(X_REQ_E),
+                         0, eIO_WritePersist))
         != eIO_Success  ||
 
         /* <user_header> */
         (user_hdr  &&
-         (st = SOCK_Write(sock, (const void*) user_hdr, strlen(user_hdr), 0))
+         (st = SOCK_Write(sock, (const void*) user_hdr, strlen(user_hdr),
+                          0, eIO_WritePersist))
          != eIO_Success)  ||
 
         /* Content-Length: <content_length>\r\n\r\n */
         (req_method != eReqMethod_Get  &&
          (sprintf(buffer, "Content-Length: %lu\r\n",
                   (unsigned long) content_length) <= 0  ||
-          (st = SOCK_Write(sock, (const void*) buffer, strlen(buffer), 0))
+          (st = SOCK_Write(sock, (const void*) buffer, strlen(buffer),
+                           0, eIO_WritePersist))
           != eIO_Success))  ||
-        (st = SOCK_Write(sock, (const void*) "\r\n", 2, 0))
+        (st = SOCK_Write(sock, (const void*) "\r\n", 2,
+                         0, eIO_WritePersist))
         != eIO_Success)
         {
             CORE_LOGF(eLOG_Error,
@@ -718,22 +634,32 @@ static EIO_Status s_StripToPattern
     /* check args */
     if ( n_discarded )
         *n_discarded = 0;
-    if (!source  ||  !pattern  ||  !pattern_size)
+    if (!source  ||  (!!pattern ^ !!pattern_size))
         return eIO_InvalidArg;
 
     /* allocate a temporary read buffer */
     buffer_size = 2 * pattern_size;
     if (buffer_size < 4096)
         buffer_size = 4096;
-    buffer = (char*) malloc(buffer_size);
+    if (!(buffer = (char*) malloc(buffer_size)))
+        return eIO_Unknown;
 
-    /* peek/read;  search for the pattern;  maybe, store the discarded data */
-    for (;;) {
+    if ( !pattern ) {
+        /* read/discard until EOF */
+        do {
+            status= read_func(source,buffer,buffer_size,&n_read,eIO_ReadPlain);
+            if ( buf )
+                BUF_Write(buf, buffer, n_read);
+            if ( n_discarded )
+                *n_discarded += n_read;
+        } while (status == eIO_Success);
+    } else for (;;) {
+        /* peek/read; search for the pattern; store the discarded data */
         /* peek */
         size_t n_peeked, n_stored, x_discarded;
         assert(n_read < pattern_size);
         status = read_func(source, buffer + n_read, buffer_size - n_read,
-                           &n_peeked, eIO_Peek);
+                           &n_peeked, eIO_ReadPeek);
         if ( !n_peeked ) {
             assert(status != eIO_Success);
             break; /*error*/
@@ -756,7 +682,7 @@ static EIO_Status s_StripToPattern
                 size_t x_read = b - buffer + pattern_size;
                 assert( memcmp(b, pattern, pattern_size) == 0 );
                 status = read_func(source, buffer + n_read, x_read - n_read,
-                                   &x_discarded, eIO_Plain);
+                                   &x_discarded, eIO_ReadPlain);
                 assert(status == eIO_Success);
                 assert(x_discarded == x_read - n_read);
                 if ( buf )
@@ -769,7 +695,7 @@ static EIO_Status s_StripToPattern
 
         /* pattern not found yet */
         status = read_func(source, buffer + n_read, n_peeked,
-                           &x_discarded, eIO_Plain);
+                           &x_discarded, eIO_ReadPlain);
         assert(status == eIO_Success);
         assert(x_discarded == n_peeked);
         if ( buf )
@@ -789,6 +715,7 @@ static EIO_Status s_StripToPattern
     free(buffer);
     return status;
 }
+
 
 static EIO_Status s_CONN_Read
 (void*          source,
@@ -841,7 +768,7 @@ static EIO_Status s_BUF_Read
  size_t*        n_read,
  EIO_ReadMethod how)
 {
-    size_t read = (how == eIO_Peek
+    size_t read = (how == eIO_ReadPeek
                    ? BUF_Peek((BUF)source, dest, size)
                    : BUF_Read((BUF)source, dest, size));
     if (n_read)
@@ -1251,3 +1178,127 @@ extern size_t HostPortToString(unsigned int   host,
     buf[n] = 0;
     return n;
 }
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_connutil.c,v $
+ * Revision 6.36  2002/08/12 15:12:01  lavr
+ * Use persistent SOCK_Write()
+ *
+ * Revision 6.35  2002/08/07 16:32:47  lavr
+ * Changed EIO_ReadMethod enums accordingly; log moved to end
+ *
+ * Revision 6.34  2002/05/06 19:12:57  lavr
+ * -ConnNetInfo_Print(); +ConnNetInfo_Log()
+ * Addition: *_StripToPattern() now can strip until EOF (or error)
+ *
+ * Revision 6.33  2002/04/26 16:31:41  lavr
+ * Add more space between functions to separate them better
+ *
+ * Revision 6.32  2002/04/13 06:36:36  lavr
+ * Fix for empty path parsing in HTTP URL
+ *
+ * Revision 6.31  2002/03/19 22:13:09  lavr
+ * Minor tweak in recognizing "infinite" (and part) as a special timeout
+ *
+ * Revision 6.30  2002/03/11 21:53:18  lavr
+ * Recognize ALL in CONN_DEBUG_PRINTOUT; bugfix for '//' in proxy adjustement
+ *
+ * Revision 6.29  2002/02/20 19:12:17  lavr
+ * Swapped eENCOD_Url and eENCOD_None; eENCOD_Unknown introduced
+ *
+ * Revision 6.28  2002/02/08 22:22:17  lavr
+ * BUGFIX: sizeof(info) -> sizeof(*info) in ConnNetInfo_Create()
+ *
+ * Revision 6.27  2002/01/30 20:14:48  lavr
+ * URL_Connect(): Print error code in some failure messages
+ *
+ * Revision 6.26  2002/01/28 20:21:46  lavr
+ * Do not store "" as a user_header
+ *
+ * Revision 6.25  2001/12/30 19:40:32  lavr
+ * +ConnNetInfo_ParseURL()
+ * Added recordkeeping of service name for which the info was created
+ *
+ * Revision 6.24  2001/12/04 15:56:28  lavr
+ * Use strdup() instead of explicit strcpy(malloc(...), ...)
+ *
+ * Revision 6.23  2001/09/24 20:27:00  lavr
+ * Message corrected: "Adjusted path too long"
+ *
+ * Revision 6.22  2001/09/10 21:14:58  lavr
+ * Added functions: StringToHostPort()
+ *                  HostPortToString()
+ *
+ * Revision 6.21  2001/05/31 21:30:57  vakatov
+ * MIME_ParseContentTypeEx() -- a more accurate parsing
+ *
+ * Revision 6.20  2001/05/29 21:15:43  vakatov
+ * + eMIME_Plain
+ *
+ * Revision 6.19  2001/04/24 21:29:43  lavr
+ * Special text value "infinite" accepted as infinite timeout from environment
+ *
+ * Revision 6.18  2001/03/26 18:37:09  lavr
+ * #include <ctype.h> not used, removed
+ *
+ * Revision 6.17  2001/03/02 20:08:05  lavr
+ * Typo fixed
+ *
+ * Revision 6.16  2001/01/25 16:58:33  lavr
+ * ConnNetInfo_SetUserHeader now used throughout to set/reset http_user_header
+ *
+ * Revision 6.15  2001/01/23 23:06:18  lavr
+ * SConnNetInfo.debug_printout converted from boolean to enum
+ * BUF_StripToPattern() introduced
+ *
+ * Revision 6.14  2001/01/12 00:01:27  lavr
+ * CONN_PROXY_HOST was forgotten to init in ConnNetInfo_Create
+ *
+ * Revision 6.13  2001/01/11 23:07:08  lavr
+ * ConnNetInfo_Print() prints user-header 'as is'; pretty-printing undone
+ *
+ * Revision 6.12  2001/01/08 23:46:27  lavr
+ * REQUEST_METHOD -> REQ_METHOD to be consistent with SConnNetInfo
+ *
+ * Revision 6.11  2001/01/08 22:35:56  lavr
+ * Client-Mode removed; replaced by 2 separate boolean fields:
+ * stateless and firewall
+ *
+ * Revision 6.10  2000/12/29 17:54:11  lavr
+ * NCBID stuff removed; ConnNetInfo_SetUserHeader added;
+ * modifications to ConnNetInfo_Print output.
+ *
+ * Revision 6.9  2000/11/07 23:23:18  vakatov
+ * In-sync with the C Toolkit "connutil.c:R6.15", "connutil.h:R6.13"
+ * (with "eMIME_Dispatch" added).
+ *
+ * Revision 6.8  2000/10/20 17:08:40  lavr
+ * All keys capitalized for registry access
+ * Search for some keywords made case insensitive
+ *
+ * Revision 6.7  2000/10/11 22:29:44  lavr
+ * Forgotten blank added after {GET|POST} request in URL_Connect
+ *
+ * Revision 6.6  2000/10/05 22:35:24  lavr
+ * SConnNetInfo modified to contain 'client_mode' instead of just
+ * 'firewall' boolean
+ *
+ * Revision 6.5  2000/09/27 19:37:40  lavr
+ * ncbi_ansi_ext.h included
+ *
+ * Revision 6.4  2000/09/26 22:01:33  lavr
+ * Registry entries changed, HTTP request method added
+ *
+ * Revision 6.3  2000/04/21 19:42:35  vakatov
+ * Several minor typo/bugs fixed
+ *
+ * Revision 6.2  2000/03/29 16:36:09  vakatov
+ * MIME_ParseContentType() -- a fix
+ *
+ * Revision 6.1  2000/03/24 22:53:34  vakatov
+ * Initial revision
+ *
+ * ==========================================================================
+ */

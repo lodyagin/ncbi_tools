@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  14 Jan 1997  
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: Used to provide Biostrucs data using
 * Conventional Entrez subsystems (Network or CDRom) 
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: mmdbentr.c,v $
+* Revision 6.3  2002/06/11 19:13:46  kans
+* StrucSynchronousQuery returns BiostrucSeqPtr instead of BiostrucPtr
+*
 * Revision 6.2  2001/01/26 15:06:39  lewisg
 * use entrez2 to retrieve structures
 *
@@ -87,13 +90,16 @@ void LIBCALL MMDBFini (void)
 
 BiostrucPtr LIBCALL MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
 {
+   BiostrucSeqPtr  bsqp;
 
 /* MMDB - Caching would check here for matching file first */
 
    /*
    return EntrezBiostrucGet(uid,  mdlLvl, maxModels);
    */
-   return StrucSynchronousQuery (uid,  mdlLvl, maxModels);
+   bsqp = StrucSynchronousQuery (uid);
+   if (bsqp == NULL) return NULL;
+   return bsqp->structure;
 
 /* Caching would also save file here */
 
@@ -157,7 +163,7 @@ DocUid LIBCALL MMDBEvalPDB(CharPtr str)
 CharPtr  LIBCALL MMDB_configuration(void)
 {
   return
-    "Version:\t$Id: mmdbentr.c,v 6.2 2001/01/26 15:06:39 lewisg Exp $\nConfiguration:"
+    "Version:\t$Id: mmdbentr.c,v 6.3 2002/06/11 19:13:46 kans Exp $\nConfiguration:"
     " Entrez"
     "\n";
 }

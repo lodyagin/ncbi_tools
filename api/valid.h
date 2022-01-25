@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.7  2002/07/16 17:13:09  kans
+* added sourceQualTags to vsp, ERR_SEQ_DESCR_StructuredSourceNote by finite state machine text search
+*
 * Revision 6.6  2002/03/12 22:27:00  kans
 * added alwaysRequireIsoJTA
 *
@@ -105,6 +108,10 @@
 #include <gather.h>
 #endif
 
+#ifndef _SQNUTILS_
+#include <sqnutils.h>
+#endif
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -149,6 +156,7 @@ typedef struct validstruct {
 	Boolean validateAlignments;    /* call alignval test suite */
 	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
 	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
+	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

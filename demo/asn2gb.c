@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.26 $
+* $Revision: 6.40 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -43,36 +43,12 @@
 #include <objsset.h>
 #include <objsub.h>
 #include <objfdef.h>
-#include <seqport.h>
+#include <objgbseq.h>
+#include <objtseq.h>
 #include <sequtil.h>
 #include <sqnutils.h>
-#include <subutil.h>
-#include <tofasta.h>
 #include <explore.h>
-#include <ffprint.h>
-#include <utilpub.h>
-#include <jzmisc.h>
-#include <gbfeat.h>
-#include <gbftdef.h>
-#include <edutil.h>
-#include <asn2gnbk.h>
-
-NLM_EXTERN Boolean SeqEntryToFlat (
-  SeqEntryPtr sep,
-  FILE *fp,
-  Uint1 format,
-  Uint1 mode
-);
-
-extern void SeriousSeqEntryCleanup (
-  SeqEntryPtr sep,
-  SeqEntryFunc taxfun,
-  SeqEntryFunc taxmerge
-);
-
-extern void SeriousSeqEntryCleanupBulk (
-  SeqEntryPtr sep
-);
+#include <asn2gnbp.h>
 
 static void SaveSeqEntry (
   SeqEntryPtr sep,
@@ -111,72 +87,6 @@ static void SaveAsn2gnbk (
   FileClose (fp);
 }
 
-typedef struct oldffdata {
-  FILE   *fp;
-  Uint1  format;
-  Uint1  mode;
-} OldFFData, PNTR OldFFPtr;
-
-static void DoOneFlatFile (
-  SeqEntryPtr sep,
-  Pointer userdata
-)
-
-{
-  OldFFPtr  ofp;
-
-  ofp = (OldFFPtr) userdata;
-  SeqEntryToFlat (sep, ofp->fp, ofp->format, ofp->mode);
-}
-
-static void SaveAsn2ff (
-  SeqEntryPtr sep,
-  CharPtr filename,
-  FmtType format,
-  ModType mode
-)
-
-{
-  OldFFData  ofd;
-
-  if (sep == NULL) return;
-  MemSet ((Pointer) &ofd, 0, sizeof (OldFFData));
-  ofd.fp = FileOpen (filename, "w");
-  if (ofd.fp != NULL) {
-    switch (format) {
-      case GENBANK_FMT :
-        ofd.format = 0;
-        break;
-      case EMBL_FMT :
-        if (mode == RELEASE_MODE || mode == ENTREZ_MODE) {
-          ofd.format = 1;
-        } else {
-          ofd.format = 3;
-        }
-        break;
-      case GENPEPT_FMT :
-        ofd.format = 2;
-        break;
-      default :
-        ofd.format = 0;
-        break;
-    }
-    switch (mode) {
-      case RELEASE_MODE :
-        ofd.mode = 6;
-        break;
-      case SEQUIN_MODE :
-        ofd.mode = 8;
-        break;
-      default :
-        ofd.mode = 7;
-        break;
-    }
-    VisitElementsInSep (sep, (Pointer) &ofd, DoOneFlatFile);
-  }
-  FileClose (ofd.fp);
-}
-
 static void GetFirstGoodBioseq (
   BioseqPtr bsp,
   Pointer userdata
@@ -190,6 +100,30 @@ static void GetFirstGoodBioseq (
   *bspp = bsp;
 }
 
+NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
+
+static void SaveTinySeqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  AsnIoPtr  aip;
+  TSeqPtr   tsp;
+
+  if (bsp == NULL) return;
+  aip = (AsnIoPtr) userdata;
+
+  tsp = BioseqToTSeq (bsp);
+  if (tsp == NULL) return;
+
+  TSeqAsnWrite (tsp, aip, NULL);
+  AsnPrintNewLine (aip);
+  AsnIoFlush (aip);
+
+  TSeqFree (tsp);
+}
+
 static Int2 HandleSingleRecord (
   CharPtr inputFile,
   CharPtr outputFile,
@@ -198,39 +132,85 @@ static Int2 HandleSingleRecord (
   StlType style,
   FlgType flags,
   LckType locks,
+  XtraPtr extra,
+  Int2 type,
   Int4 from,
   Int4 to,
   Uint1 strand,
-  Boolean both,
-  Boolean nocleanup,
-  Boolean justSSEC
+  Int4 itemID,
+  Boolean do_tiny_seq
 )
 
 {
   AsnIoPtr      aip;
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
-  Pointer       dataptr;
-  Uint2         datatype;
+  Pointer       dataptr = NULL;
+  Uint2         datatype = 0;
   Uint2         entityID;
   FILE          *fp;
-  OldFFData     ofd;
+  FILE          *ofp = NULL;
   SeqEntryPtr   sep;
+  SeqFeatPtr    sfp;
   SeqInt        sint;
   SeqLocPtr     slp = NULL;
   ValNode       vn;
 
-  fp = FileOpen (inputFile, "r");
-  if (fp == NULL) {
-    Message (MSG_FATAL, "FileOpen failed for input file '%s'", inputFile);
+  if (type == 1) {
+    fp = FileOpen (inputFile, "r");
+    if (fp == NULL) {
+      Message (MSG_POSTERR, "FileOpen failed for input file '%s'", inputFile);
+      return 1;
+    }
+
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+
+    FileClose (fp);
+
+    entityID = ObjMgrRegister (datatype, dataptr);
+
+  } else if (type >= 2 && type <= 5) {
+    aip = AsnIoOpen (inputFile, "r");
+    if (aip == NULL) {
+      Message (MSG_POSTERR, "AsnIoOpen failed for input file '%s'", inputFile);
+      return 1;
+    }
+
+    switch (type) {
+      case 2 :
+        dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
+        datatype = OBJ_SEQENTRY;
+        break;
+      case 3 :
+        dataptr = (Pointer) BioseqAsnRead (aip, NULL);
+        datatype = OBJ_BIOSEQ;
+        break;
+      case 4 :
+        dataptr = (Pointer) BioseqSetAsnRead (aip, NULL);
+        datatype = OBJ_BIOSEQSET;
+        break;
+      case 5 :
+        dataptr = (Pointer) SeqSubmitAsnRead (aip, NULL);
+        datatype = OBJ_SEQSUB;
+        break;
+      default :
+        break;
+    }
+
+    AsnIoClose (aip);
+
+    entityID = ObjMgrRegister (datatype, dataptr);
+
+  } else {
+    Message (MSG_POSTERR, "Input format type '%d' unrecognized", (int) type);
     return 1;
   }
 
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+  if (dataptr == NULL) {
+    Message (MSG_POSTERR, "Data read failed for input file '%s'", inputFile);
+    return 1;
+  }
 
-  FileClose (fp);
-
-  entityID = ObjMgrRegister (datatype, dataptr);
   if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
         datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
 
@@ -275,90 +255,56 @@ static Int2 HandleSingleRecord (
     }
 
     if (sep != NULL) {
-      FileRemove (outputFile);
+      if (extra == NULL) {
+        FileRemove (outputFile);
 #ifdef WIN_MAC
-      FileCreate (outputFile, "TEXT", "ttxt");
+        FileCreate (outputFile, "TEXT", "ttxt");
 #endif
-      if (justSSEC) {
-        aip = AsnIoOpen (outputFile, "w");
-        if (aip != NULL) {
-          SeriousSeqEntryCleanupBulk (sep);
-          SeqEntryAsnWrite (sep, aip, NULL);
-          AsnIoClose (aip);
+        ofp = FileOpen (outputFile, "w");
+      }
+
+      if ((from > 0 && to > 0) || strand == Seq_strand_minus) {
+        bsp = NULL;
+        if (format == GENPEPT_FMT) {
+          VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_PROTS, GetFirstGoodBioseq);
+        } else {
+          VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_NUCS, GetFirstGoodBioseq);
         }
+        if (bsp != NULL) {
+          if (strand == Seq_strand_minus && from == 0 && to == 0) {
+            from = 1;
+            to = bsp->length;
+          }
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+          sint.from = from - 1;
+          sint.to = to - 1;
+          sint.strand = strand;
+          sint.id = bsp->id;
+          vn.choice = SEQLOC_INT;
+          vn.data.ptrvalue = (Pointer) &sint;
+          slp = &vn;
+        }
+      } else if (itemID > 0) {
+        sfp = SeqMgrGetDesiredFeature (entityID, 0, itemID, 0, NULL, NULL);
+        if (sfp != NULL) {
+          slp = sfp->location;
+        }
+      }
+
+      if (do_tiny_seq) {
+        aip = AsnIoNew (ASNIO_TEXT_OUT | ASNIO_XML, ofp, NULL, NULL, NULL);
+        VisitBioseqsInSep (sep, (Pointer) aip, SaveTinySeqs);
+        AsnIoFree (aip, FALSE);
       } else {
-
-        fp = FileOpen (outputFile, "w");
-        if (both) {
-          if (! nocleanup) {
-            SeriousSeqEntryCleanup (sep, NULL, NULL);
-          }
-          fprintf (fp, "asn2ff:\n");
-          MemSet ((Pointer) &ofd, 0, sizeof (OldFFData));
-          ofd.fp = fp;
-          switch (format) {
-            case GENBANK_FMT :
-              ofd.format = 0;
-              break;
-            case EMBL_FMT :
-              if (mode == RELEASE_MODE || mode == ENTREZ_MODE) {
-                ofd.format = 1;
-              } else {
-                ofd.format = 3;
-              }
-              break;
-            case GENPEPT_FMT :
-              ofd.format = 2;
-              break;
-            default :
-              ofd.format = 0;
-              break;
-          }
-          switch (mode) {
-            case RELEASE_MODE :
-              ofd.mode = 6;
-              break;
-            case SEQUIN_MODE :
-              ofd.mode = 8;
-              break;
-            default :
-              ofd.mode = 7;
-              break;
-          }
-          VisitElementsInSep (sep, (Pointer) &ofd, DoOneFlatFile);
-          fprintf (fp, "asn2gnbk:\n");
-        }
-
-        if ((from > 0 && to > 0) || strand == Seq_strand_minus) {
-          bsp = NULL;
-          if (format == GENPEPT_FMT) {
-            VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_PROTS, GetFirstGoodBioseq);
-          } else {
-            VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_NUCS, GetFirstGoodBioseq);
-          }
-          if (bsp != NULL) {
-            if (strand == Seq_strand_minus && from == 0 && to == 0) {
-              from = 1;
-              to = bsp->length;
-            }
-            MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-            MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
-            sint.from = from - 1;
-            sint.to = to - 1;
-            sint.strand = strand;
-            sint.id = bsp->id;
-            vn.choice = SEQLOC_INT;
-            vn.data.ptrvalue = (Pointer) &sint;
-            slp = &vn;
-          }
-        }
-
-        SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, NULL, fp);
-        FileClose (fp);
+        SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, extra, ofp);
+      }
+      if (ofp != NULL) {
+        FileClose (ofp);
       }
     }
   } else {
-    Message (MSG_FATAL, "Datatype %d not recognized", (int) datatype);
+    Message (MSG_POSTERR, "Datatype %d not recognized", (int) datatype);
   }
   ObjMgrFree (datatype, dataptr);
 
@@ -442,51 +388,6 @@ static Boolean SeqEntryHasGi (
   return hgd.found;
 }
 
-/* list of gi numbers that take astronomical time for asn2ff, exclude */
-
-static Int4  badGiList [] = {
-  6538453, 12659450, 12959181, 12959863, 12960545, 12961227, 13448054, 13735857, 0
-};
-
-static void LookForBadGis (
-  BioseqPtr bsp,
-  Pointer userdata
-)
-
-{
-  BoolPtr   badFound;
-  Int4      gi;
-  Int2      idx;
-  SeqIdPtr  sip;
-
-  badFound = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_GI) {
-      gi = sip->data.intvalue;
-      if (gi != 0) {
-        for (idx = 0; badGiList [idx] != 0; idx++) {
-          if (gi == badGiList [idx]) {
-            *badFound = TRUE;
-          }
-        }
-      }
-    }
-  }
-}
-
-static Boolean SeqEntryNotInExcluded (
-  SeqEntryPtr sep
-)
-
-{
-  Boolean  badFound = FALSE;
-
-  if (sep == NULL) return TRUE;
-  VisitBioseqsInSep (sep, (Pointer) &badFound, LookForBadGis);
-  if (badFound) return FALSE;
-  return TRUE;
-}
-
 static void FreeUnpubAffil (
   PubdescPtr pdp,
   Pointer userdata
@@ -547,8 +448,8 @@ static void CompareFlatFiles (
   StlType style,
   FlgType flags,
   LckType locks,
+  XtraPtr extra,
   Int2 batch,
-  Boolean nocleanup,
   CharPtr gbdjoin,
   Boolean useGbdjoin
 )
@@ -564,61 +465,19 @@ static void CompareFlatFiles (
 
   if (batch == 1) {
 
-    if (! nocleanup) {
-      SeriousSeqEntryCleanup (sep, NULL, NULL);
-    }
-    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, NULL, fp);
+    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, extra, fp);
     return; /* just make report, nothing to diff */
 
   } else if (batch == 2) {
-
-    if (! nocleanup) {
-      SeriousSeqEntryCleanup (sep, NULL, NULL);
-    }
-    SaveAsn2gnbk (sep, path2, format, mode, style, flags, locks);
-    SaveAsn2ff (sep, path1, format, mode);
-
-  } else if (batch == 3) {
 
 #ifdef ASN2GNBK_SUPPRESS_UNPUB_AFFIL
     VisitPubdescsInSep (sep, NULL, FreeUnpubAffil);
 #endif
 
-    if (! nocleanup) {
-      SeriousSeqEntryCleanup (sep, NULL, NULL);
-    }
     SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks);
     SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks);
 
-    /*
-    SaveAsn2ff (sep, path1, format, SEQUIN_MODE);
-    SaveAsn2ff (sep, path2, format, RELEASE_MODE);
-    */
-
-  } else if (batch == 4) {
-
-    SaveAsn2ff (sep, path1, format, SEQUIN_MODE);
-    SeriousSeqEntryCleanupBulk (sep);
-    SeqMgrIndexFeatures (0, sep->data.ptrvalue);
-    SaveAsn2ff (sep, path2, format, SEQUIN_MODE);
-
   }
-
-/* this is one-time code to QA the toolkit with third party annotation SeqIDs
-{
-    AsnIoPtr  aip;
-    aip = AsnIoOpen (path3, "w");
-    if (aip == NULL) return;
-    SeqEntryAsnWrite (sep, aip, NULL);
-    AsnIoClose (aip);
-    sprintf (cmmd, "oldasn2ff -a %s -o %s -m s -e -d", path3, path1);
-    system (cmmd);
-    sprintf (cmmd, "newasn2ff -a %s -o %s -m s -e -d", path3, path2);
-    system (cmmd);
-    sprintf (cmmd, "rm %s", path3);
-    system (cmmd);
-}
-*/
 
   if (useGbdjoin) {
     sprintf (cmmd, "%s -o %s -n %s -d reports", gbdjoin, path1, path2);
@@ -651,11 +510,8 @@ static void CompareFlatFiles (
   }
 
 #else
-  if (! nocleanup) {
-    SeriousSeqEntryCleanup (sep, NULL, NULL);
-  }
 
-  SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, NULL, fp);
+  SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, extra, fp);
 #endif
 }
 
@@ -717,11 +573,11 @@ static Int2 HandleMultipleRecords (
   StlType style,
   FlgType flags,
   LckType locks,
+  XtraPtr extra,
   Int2 batch,
   Boolean binary,
   Boolean compressed,
   Boolean propOK,
-  Boolean nocleanup,
   CharPtr gbdjoin,
   CharPtr accn,
   FILE *logfp
@@ -742,6 +598,7 @@ static Int2 HandleMultipleRecords (
   Char          longest [41];
   Int4          numrecords = 0;
   FILE          *ofp = NULL;
+  ObjMgrPtr     omp;
   Boolean       outOfOrder;
   Char          path1 [PATH_MAX];
   Char          path2 [PATH_MAX];
@@ -760,32 +617,32 @@ static Int2 HandleMultipleRecords (
 
 #ifndef OS_UNIX
   if (compressed) {
-    Message (MSG_ERROR, "Can only decompress on-the-fly on UNIX machines");
+    Message (MSG_POSTERR, "Can only decompress on-the-fly on UNIX machines");
     return 1;
   }
 #endif
 
   amp = AsnAllModPtr ();
   if (amp == NULL) {
-    Message (MSG_FATAL, "Unable to load AsnAllModPtr");
+    Message (MSG_POSTERR, "Unable to load AsnAllModPtr");
     return 1;
   }
 
   atp_bss = AsnFind ("Bioseq-set");
   if (atp_bss == NULL) {
-    Message (MSG_FATAL, "Unable to find ASN.1 type Bioseq-set");
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set");
     return 1;
   }
 
   atp_desc = AsnFind ("Bioseq-set.descr");
   if (atp_desc == NULL) {
-    Message (MSG_FATAL, "Unable to find ASN.1 type Bioseq-set.descr");
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.descr");
     return 1;
   }
 
   atp_se = AsnFind ("Bioseq-set.seq-set.E");
   if (atp_se == NULL) {
-    Message (MSG_FATAL, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
     return 1;
   }
 
@@ -799,10 +656,10 @@ static Int2 HandleMultipleRecords (
       if (ret == 0) {
         sprintf (cmmd, "gzcat %s", inputFile);
       } else if (ret == -1) {
-        Message (MSG_FATAL, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
+        Message (MSG_POSTERR, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
         return 1;
       } else {
-        Message (MSG_FATAL, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
+        Message (MSG_POSTERR, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
         return 1;
       }
     }
@@ -815,7 +672,7 @@ static Int2 HandleMultipleRecords (
   fp = FileOpen (inputFile, binary? "rb" : "r");
 #endif
   if (fp == NULL) {
-    Message (MSG_ERROR, "FileOpen failed for input file '%s'", inputFile);
+    Message (MSG_POSTERR, "FileOpen failed for input file '%s'", inputFile);
     return 1;
   }
 
@@ -825,11 +682,11 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if (batch == 1 || format != GENBANK_FMT) {
+  if ((batch == 1 || format != GENBANK_FMT) && extra == NULL) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
       AsnIoClose (aip);
-      Message (MSG_FATAL, "FileOpen failed for output file '%s'", outputFile);
+      Message (MSG_POSTERR, "FileOpen failed for output file '%s'", outputFile);
       return 1;
     }
   }
@@ -891,14 +748,7 @@ static Int2 HandleMultipleRecords (
         sprintf (buf, "%s.before", accn);
         SaveSeqEntry (sep, buf);
         sprintf (buf, "%s.gbff.before", accn);
-        SaveAsn2ff (sep, buf, format, SEQUIN_MODE);
-        if (! nocleanup) {
-          SeriousSeqEntryCleanup (sep, NULL, NULL);
-        }
-        sprintf (buf, "%s.after", accn);
-        SaveSeqEntry (sep, buf);
-        sprintf (buf, "%s.gbff.after", accn);
-        SaveAsn2ff (sep, buf, format, SEQUIN_MODE);
+        SaveAsn2gnbk (sep, buf, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0);
         if (ofp != NULL) {
           FileClose (ofp);
         }
@@ -915,34 +765,35 @@ static Int2 HandleMultipleRecords (
       if ((! outOfOrder) && StringHasNoText (accn)) {
         if ((format != GENPEPT_FMT && SeqEntryHasNucs (sep)) ||
            (format == GENPEPT_FMT && SeqEntryHasProts (sep))) {
-          if (batch == 1 || SeqEntryNotInExcluded (sep)) {
 
-            hasRefSeq = FALSE;
-            VisitBioseqsInSep (sep, (Pointer) &hasRefSeq, LookForRefSeq);
-            if (hasRefSeq) {
-              if (batch != 1 && format == GENBANK_FMT && ofp == NULL) {
-                ofp = FileOpen (outputFile, "w");
-                if (ofp == NULL) {
-                  ofp = stdout;
-                }
+          hasRefSeq = FALSE;
+          VisitBioseqsInSep (sep, (Pointer) &hasRefSeq, LookForRefSeq);
+          if (hasRefSeq) {
+            if (batch != 1 && format == GENBANK_FMT && ofp == NULL && extra == NULL) {
+              ofp = FileOpen (outputFile, "w");
+              if (ofp == NULL) {
+                ofp = stdout;
               }
             }
-
-            starttime = GetSecs ();
-            useGbdjoin = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
-            CompareFlatFiles (path1, path2, path3, sep, ofp,
-                              format, mode, style, flags, locks,
-                              batch, nocleanup, gbdjoin, useGbdjoin);
-            stoptime = GetSecs ();
-            if (stoptime - starttime > worsttime) {
-              worsttime = stoptime - starttime;
-              StringCpy (longest, buf);
-            }
-            numrecords++;
           }
+
+          starttime = GetSecs ();
+          useGbdjoin = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
+          CompareFlatFiles (path1, path2, path3, sep, ofp,
+                            format, mode, style, flags, locks,
+                            extra, batch, gbdjoin, useGbdjoin);
+          stoptime = GetSecs ();
+          if (stoptime - starttime > worsttime) {
+            worsttime = stoptime - starttime;
+            StringCpy (longest, buf);
+          }
+          numrecords++;
         }
       }
       SeqEntryFree (sep);
+      omp = ObjMgrGet ();
+      ObjMgrReapOne (omp);
+      ObjMgrFreeCache (0);
     } else if (atp == atp_desc) {
       descr = SeqDescrAsnRead (aip, atp);
     } else {
@@ -987,20 +838,22 @@ static Int2 HandleMultipleRecords (
 #define s_argStyle       4
 #define g_argFlags       5
 #define h_argLock        6
-#define t_argBatch       7
-#define b_argBinary      8
-#define c_argCompressed  9
-#define p_argPropagate  10
-#define l_argLogFile    11
-#define r_argRemote     12
-#define a_argDoBoth     13
-#define n_argNoCleanup  14
+#define a_argType        7
+#define t_argBatch       8
+#define b_argBinary      9
+#define c_argCompressed 10
+#define p_argPropagate  11
+#define l_argLogFile    12
+#define r_argRemote     13
 #ifdef OS_UNIX
-#define q_argGbdJoin    15
-#define j_argFrom       16
-#define k_argTo         17
-#define d_argStrand     18
+#define q_argGbdJoin    14
+#define j_argFrom       15
+#define k_argTo         16
+#define d_argStrand     17
+#define y_argItemID     18
+#ifdef ENABLE_ARG_X
 #define x_argAccnToSave 19
+#endif
 #endif
 
 Args myargs [] = {
@@ -1008,17 +861,19 @@ Args myargs [] = {
     FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Output File Name", "stdout", NULL, NULL,
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
-  {"Format (b GenBank, e EMBL, p GenPept, t Feature Table)", "b", NULL, NULL,
+  {"Format (b GenBank, e EMBL, p GenPept, t Feature Table, x GBSet)", "b", NULL, NULL,
     FALSE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"Mode (r Release, e Entrez, s Sequin, d Dump)", "s", NULL, NULL,
     FALSE, 'm', ARG_STRING, 0.0, 0, NULL},
   {"Style (n Normal, s Segment, m Master, c Contig)", "n", NULL, NULL,
     FALSE, 's', ARG_STRING, 0.0, 0, NULL},
-  {"Bit Flags (1 HTML, 2 ContigFeats, 4 ContigSrcs, 8 FarTransl)", "0", NULL, NULL,
+  {"Bit Flags (1 HTML, 2 XML, 4 ContigFeats, 8 ContigSrcs, 16 FarTransl)", "0", NULL, NULL,
     FALSE, 'g', ARG_INT, 0.0, 0, NULL},
   {"Lock/Lookup Flags (8 LockProd, 16 LookupComp, 64 LookupProd)", "0", NULL, NULL,
     FALSE, 'h', ARG_INT, 0.0, 0, NULL},
-  {"Batch (1 Report, 2 Asn2ff/Asn2gnbk, 3 Sequin/Release, 4 SSEC)", "0", NULL, NULL,
+  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit)", "a", NULL, NULL,
+    TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
+  {"Batch (1 Report, 2 Sequin/Release)", "0", NULL, NULL,
     FALSE, 't', ARG_INT, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1030,10 +885,6 @@ Args myargs [] = {
     TRUE, 'l', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Remote Fetching", "F", NULL, NULL,
     TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Both asn2ff+asn2gnbk", "F", NULL, NULL,
-    TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"No SeriousSeqEntryCleanup", "T", NULL, NULL,
-    TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
 #ifdef OS_UNIX
 #ifdef PROC_I80X86
   {"Gbdjoin Executable", "gbdjoin", NULL, NULL,
@@ -1048,45 +899,60 @@ Args myargs [] = {
     TRUE, 'k', ARG_INT, 0.0, 0, NULL},
   {"SeqLoc Minus Strand", "F", NULL, NULL,
     TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Feature itemID", "0", NULL, NULL,
+    TRUE, 'y', ARG_INT, 0.0, 0, NULL},
   {"Accession to extract", NULL, NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
 #endif
 };
 
 
-/* #include <accid1.h> */
-#include <pmfapi.h>
 #include <lsqfetch.h>
+#ifdef INTERNAL_NCBI_ASN2GB
+#include <accpubseq.h>
+#else
+#include <pmfapi.h>
+#endif
+
+#define HTML_XML_ASN_MASK (CREATE_HTML_FLATFILE | CREATE_XML_GBSEQ_FILE | CREATE_ASN_GBSEQ_FILE)
 
 Int2 Main (
   void
 )
 
 {
-  CharPtr  accn = NULL;
-  Int2     batch = 0;
-  Boolean  binary = FALSE;
-  Boolean  both = FALSE;
-  Boolean  compressed = FALSE;
-  FlgType  flags;
-  FmtType  format;
-  Int4     from = 0;
-  CharPtr  gbdjoin = NULL;
-  Boolean  justSSEC = FALSE;
-  LckType  locks;
-  CharPtr  logfile = NULL;
-  FILE     *logfp = NULL;
-  ModType  mode;
-  Boolean  nocleanup = FALSE;
-  Char     path [PATH_MAX];
-  CharPtr  progname;
-  Boolean  propOK = FALSE;
-  Int2     rsult = 0;
-  time_t   starttime, stoptime;
-  CharPtr  str;
-  Uint1    strand = Seq_strand_plus;
-  StlType  style;
-  Int4     to = 0;
+  CharPtr     accn = NULL;
+  AsnIoPtr    aip = NULL;
+  AsnTypePtr  atp = NULL;
+  Int2        batch = 0;
+  Boolean     binary = FALSE;
+  Boolean     compressed = FALSE;
+  Boolean     do_gbseq = FALSE;
+  Boolean     do_tiny_seq = FALSE;
+  XtraPtr     extra = NULL;
+  FlgType     flags;
+  FmtType     format = GENBANK_FMT;
+  Int4        from = 0;
+  CharPtr     gbdjoin = NULL;
+  GBSeq       gbsq;
+  GBSet       gbst;
+  Int4        itemID = 0;
+  LckType     locks;
+  CharPtr     logfile = NULL;
+  FILE        *logfp = NULL;
+  ModType     mode = SEQUIN_MODE;
+  Char        path [PATH_MAX];
+  CharPtr     progname;
+  Boolean     propOK = FALSE;
+  Int2        rsult = 0;
+  time_t      starttime, stoptime;
+  CharPtr     str;
+  Uint1       strand = Seq_strand_plus;
+  StlType     style = NORMAL_STYLE;
+  Int4        to = 0;
+  Int2        type = 0;
+  Char        xmlbuf [128];
+  XtraBlock   xtra;
 
   /* standard setup */
 
@@ -1096,23 +962,23 @@ Int2 Main (
   ErrPathReset ();
 
   if (! AllObjLoad ()) {
-    Message (MSG_FATAL, "AllObjLoad failed");
+    Message (MSG_POSTERR, "AllObjLoad failed");
     return 1;
   }
   if (! SubmitAsnLoad ()) {
-    Message (MSG_FATAL, "SubmitAsnLoad failed");
+    Message (MSG_POSTERR, "SubmitAsnLoad failed");
     return 1;
   }
   if (! FeatDefSetLoad ()) {
-    Message (MSG_FATAL, "FeatDefSetLoad failed");
+    Message (MSG_POSTERR, "FeatDefSetLoad failed");
     return 1;
   }
   if (! SeqCodeSetLoad ()) {
-    Message (MSG_FATAL, "SeqCodeSetLoad failed");
+    Message (MSG_POSTERR, "SeqCodeSetLoad failed");
     return 1;
   }
   if (! GeneticCodeTableLoad ()) {
-    Message (MSG_FATAL, "GeneticCodeTableLoad failed");
+    Message (MSG_POSTERR, "GeneticCodeTableLoad failed");
     return 1;
   }
 
@@ -1150,18 +1016,6 @@ Int2 Main (
     propOK = FALSE;
   }
 
-  if (myargs [a_argDoBoth].intvalue) {
-    both = TRUE;
-  } else {
-    both = FALSE;
-  }
-
-  if (myargs [n_argNoCleanup].intvalue) {
-    nocleanup = TRUE;
-  } else {
-    nocleanup = FALSE;
-  }
-
   str = myargs [f_argFormat].strvalue;
   if (StringICmp (str, "b") == 0) {
     format = GENBANK_FMT;
@@ -1171,8 +1025,11 @@ Int2 Main (
     format = GENPEPT_FMT;
   } else if (StringICmp (str, "t") == 0) {
     format = FTABLE_FMT;
-  } else if (StringICmp (str, "c") == 0) {
-    justSSEC = TRUE;
+  } else if (StringICmp (str, "x") == 0) {
+    do_gbseq = TRUE;
+    format = GENBANK_FMT;
+  } else if (StringICmp (str, "y") == 0) {
+    do_tiny_seq = TRUE;
     format = GENBANK_FMT;
   } else {
     format = GENBANK_FMT;
@@ -1188,7 +1045,7 @@ Int2 Main (
   } else if (StringICmp (str, "d") == 0) {
     mode = DUMP_MODE;
   } else {
-    mode = RELEASE_MODE;
+    mode = SEQUIN_MODE;
   }
 
   str = myargs [s_argStyle].strvalue;
@@ -1208,9 +1065,30 @@ Int2 Main (
 
   locks = (LckType) myargs [h_argLock].intvalue;
 
+  str = myargs [a_argType].strvalue;
+  if (StringICmp (str, "a") == 0) {
+    type = 1;
+  } else if (StringICmp (str, "e") == 0) {
+    type = 2;
+  } else if (StringICmp (str, "b") == 0) {
+    type = 3;
+  } else if (StringICmp (str, "s") == 0) {
+    type = 4;
+  } else if (StringICmp (str, "m") == 0) {
+    type = 5;
+  } else {
+    type = 1;
+  }
+
   if (myargs [r_argRemote].intvalue) {
+#ifdef INTERNAL_NCBI_ASN2GB
+    if (! PUBSEQBioseqFetchEnable ("asn2gb", FALSE)) {
+      Message (MSG_POSTERR, "PUBSEQBioseqFetchEnable failed");
+      return 1;
+    }
+#else
     PubSeqFetchEnable ();
-    /* ID1BioseqFetchEnable ("asn2gnbk", FALSE); */
+#endif
     LocalSeqFetchInit (FALSE);
   }
 
@@ -1229,11 +1107,47 @@ Int2 Main (
   } else {
     strand = Seq_strand_plus;
   }
+  itemID = myargs [y_argItemID].intvalue;
 
+#ifdef ENABLE_ARG_X
   if (! StringHasNoText (myargs [x_argAccnToSave].strvalue)) {
     accn = myargs [x_argAccnToSave].strvalue;
   }
 #endif
+#endif
+
+  if (GetAppParam ("NCBI", "SETTINGS", "XMLPREFIX", NULL, xmlbuf, sizeof (xmlbuf))) {
+    AsnSetXMLmodulePrefix (StringSave (xmlbuf));
+  }
+
+  if (do_gbseq) {
+    if (! objgbseqAsnLoad ()) {
+      Message (MSG_POSTERR, "objgbseqAsnLoad failed");
+      return 1;
+    }
+    MemSet ((Pointer) &xtra, 0, sizeof (XtraBlock));
+    MemSet ((Pointer) &gbsq, 0, sizeof (GBSeq));
+    xtra.gbseq = &gbsq;
+    if ((flags & HTML_XML_ASN_MASK) == CREATE_ASN_GBSEQ_FILE) {
+      aip = AsnIoOpen (myargs [o_argOutputFile].strvalue, "w");
+    } else {
+      aip = AsnIoOpen (myargs [o_argOutputFile].strvalue, "wx");
+    }
+    if (aip == NULL) {
+      Message (MSG_POSTERR, "AsnIoOpen failed");
+      return 1;
+    }
+    xtra.aip = aip;
+    atp = AsnLinkType (NULL, AsnFind ("GBSet"));
+    xtra.atp = AsnLinkType (NULL, AsnFind ("GBSet.E"));
+    if (atp == NULL || xtra.atp == NULL) {
+      Message (MSG_POSTERR, "AsnLinkType or AsnFind failed");
+      return 1;
+    }
+    extra = &xtra;
+    MemSet ((Pointer) &gbst, 0, sizeof (GBSet));
+    AsnOpenStruct (aip, atp, (Pointer) &gbst);
+  }
 
   starttime = GetSecs ();
 
@@ -1241,14 +1155,20 @@ Int2 Main (
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
                                    format, mode, style, flags, locks,
-                                   batch, binary, compressed, propOK,
-                                   nocleanup, gbdjoin, accn, logfp);
+                                   extra, batch, binary, compressed,
+                                   propOK, gbdjoin, accn, logfp);
   } else {
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,
                                 format, mode, style, flags, locks,
-                                from, to, strand, both,
-                                nocleanup, justSSEC);
+                                extra, type, from, to, strand,
+                                itemID, do_tiny_seq);
+  }
+
+  if (aip != NULL) {
+    AsnCloseStruct (aip, atp, NULL);
+    AsnPrintNewLine (aip);
+    AsnIoClose (aip);
   }
 
   stoptime = GetSecs ();
@@ -1260,8 +1180,11 @@ Int2 Main (
 
   if (myargs [r_argRemote].intvalue) {
     LocalSeqFetchDisable ();
-    /* ID1BioseqFetchDisable (); */
+#ifdef INTERNAL_NCBI_ASN2GB
+    PUBSEQBioseqFetchDisable ();
+#else
     PubSeqFetchDisable ();
+#endif
   }
 
   return rsult;

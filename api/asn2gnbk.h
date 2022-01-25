@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.38 $
+* $Revision: 6.40 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -84,25 +84,26 @@ typedef enum {
 typedef unsigned long FlgType;
 
 #define CREATE_HTML_FLATFILE      1
+#define CREATE_XML_GBSEQ_FILE     2
+#define CREATE_ASN_GBSEQ_FILE     3
 
-#define SHOW_CONTIG_FEATURES      2
-#define SHOW_CONTIG_SOURCES       4
+#define SHOW_CONTIG_FEATURES      4
+#define SHOW_CONTIG_SOURCES       8
 
-#define SHOW_FAR_TRANSLATION      8
-#define TRANSLATE_IF_NO_PRODUCT  16
-#define ALWAYS_TRANSLATE_CDS     32
+#define SHOW_FAR_TRANSLATION     16
+#define TRANSLATE_IF_NO_PRODUCT  32
+#define ALWAYS_TRANSLATE_CDS     64
 
-#define ONLY_NEAR_FEATURES       64
-#define FAR_FEATURES_SUPPRESS   128
+#define ONLY_NEAR_FEATURES      128
+#define FAR_FEATURES_SUPPRESS   256
 
-#define COPY_GPS_CDS_UP         256
-#define COPY_GPS_GENE_DOWN      512
-#define HIDE_IMP_FEATS         1024
-#define HIDE_SNP_FEATS         2048
+#define COPY_GPS_CDS_UP         512
+#define COPY_GPS_GENE_DOWN     1024
+#define HIDE_IMP_FEATS         2048
+#define HIDE_SNP_FEATS         4096
 
-#define DDJB_VARIANT_FORMAT    4096
-#define USE_NEW_SOURCE_ORG     8192
-#define USE_OLD_LOCUS_LINE    16384
+#define DDJB_VARIANT_FORMAT    8192
+#define USE_NEW_SOURCE_ORG    16384
 
 /* locking behavior for system performance */
 

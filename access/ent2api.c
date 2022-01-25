@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.40 $
+* $Revision: 1.43 $
 *
 * File Description: 
 *
@@ -1205,6 +1205,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
         if (len1 < len2) {
           if (StringNICmp (last, str, len1) == 0) {
             if (StringICmp (last, "Gene Map") == 0 && StringICmp (str, "Gene Map Disorder") == 0) {
+            } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference SNP ID") == 0) {
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title/Abstract") == 0) {
             } else {
               sprintf (buf, "Menu names %s and %s may be unintended variants", last, str);

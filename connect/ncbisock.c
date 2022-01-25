@@ -1,4 +1,4 @@
-/* $Id: ncbisock.c,v 6.5 2001/04/03 22:17:05 juran Exp $
+/* $Id: ncbisock.c,v 6.10 2002/08/27 20:26:23 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,21 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.c,v $
+ * Revision 6.10  2002/08/27 20:26:23  lavr
+ * Fixed reference: SOCK_htonl() -> SOCK_HostToNetLong()
+ *
+ * Revision 6.9  2002/08/12 20:01:30  lavr
+ * Fix SOCK_Write() call (misplaced argument)
+ *
+ * Revision 6.8  2002/08/12 19:55:46  lavr
+ * Use write_mode in SOCK_Write()
+ *
+ * Revision 6.7  2002/08/07 18:45:17  lavr
+ * Change from deprecated to current EIO_ReadMethod enums
+ *
+ * Revision 6.6  2002/08/07 18:34:21  lavr
+ * SOCK_GetAddress() -> SOCK_GetPeerAddress()
+ *
  * Revision 6.5  2001/04/03 22:17:05  juran
  * Backout previous change.
  *
@@ -391,7 +406,7 @@ NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Read
 {
   size_t x_read;
   ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Plain) );
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_ReadPlain) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
@@ -405,7 +420,7 @@ NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_ReadPersist
 {
   size_t x_read;
   ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Persist) );
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_ReadPersist) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
@@ -419,7 +434,7 @@ NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Peek
 {
   size_t x_read;
   ESOCK_ErrCode err_code =
-    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_Peek) );
+    S2E( SOCK_Read(sock, buf, (size_t) size, &x_read, eIO_ReadPeek) );
   *n_read = (Nlm_Uint4) x_read;
   return err_code;
 }
@@ -448,7 +463,7 @@ NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_Write
 {
   size_t x_written;
   ESOCK_ErrCode err_code =
-    S2E( SOCK_Write(sock, buf, (size_t) size, &x_written) );
+    S2E( SOCK_Write(sock, buf, (size_t) size, &x_written, eIO_WritePersist) );
   if ( n_written )
     *n_written = (Nlm_Uint4) x_written;
   return err_code;
@@ -463,12 +478,14 @@ NLM_EXTERN void Nlm_SOCK_Address
 {
   if ( host ) {
     unsigned int x_host;
-    SOCK_GetAddress(sock, &x_host, 0, network_byte_order ? 1 : 0);
+    SOCK_GetPeerAddress(sock, &x_host, 0, network_byte_order
+                        ? eNH_NetworkByteOrder : eNH_HostByteOrder);
     *host = x_host;
   }
   if ( port ) {
     unsigned short x_port;
-    SOCK_GetAddress(sock, 0, &x_port, network_byte_order ? 1 : 0);
+    SOCK_GetPeerAddress(sock, 0, &x_port, network_byte_order
+                        ? eNH_NetworkByteOrder : eNH_HostByteOrder);
     *port = x_port;
   }
 }
@@ -510,5 +527,5 @@ NLM_EXTERN Nlm_Boolean Nlm_Uint4toInaddr
 
 NLM_EXTERN Nlm_Uint4 Nlm_htonl(Nlm_Uint4 value)
 {
-  return (Nlm_Uint4) SOCK_htonl((Nlm_Uint4) value);
+  return (Nlm_Uint4) SOCK_HostToNetLong((Nlm_Uint4) value);
 }

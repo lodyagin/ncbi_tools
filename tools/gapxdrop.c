@@ -32,8 +32,26 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.62 $
+/* $Revision: 6.68 $
 * $Log: gapxdrop.c,v $
+* Revision 6.68  2002/08/22 12:26:42  madden
+* Removed unused variables
+*
+* Revision 6.67  2002/07/24 19:14:42  dondosha
+* Previous fix was incomplete; correcting
+*
+* Revision 6.66  2002/07/02 17:08:48  dondosha
+* If alignment longer than traceback, set traceback remainder to 0
+*
+* Revision 6.65  2002/06/11 14:44:48  dondosha
+* Return status from some functions instead of search block pointer
+*
+* Revision 6.64  2002/05/09 17:01:23  dondosha
+* Renamed typedefs dp_ptr and dp_node to GapXDPPtr and GapXDP
+*
+* Revision 6.63  2002/05/08 22:48:26  dondosha
+* Allocate memory for dynamic programming upfront in Mega BLAST case
+*
 * Revision 6.62  2002/03/05 17:53:41  dondosha
 * Added one sanity check in GapXEditBlockToSeqAlign
 *
@@ -372,13 +390,8 @@ data.last = (data.last > 0) ? (data.sapp[-1] += (k)) : (*data.sapp++ = (k));
 { *data.sapp++ = MININT; data.last = 0; }
 
 
-/* Dynamic Programming structure. */
-typedef struct DP {
-  Int4 CC, DD, FF;	/* Values for gap opening and extensions (?). */
-} PNTR dp_ptr, dp_node;
-
 typedef struct {
-  dp_ptr CD;
+  GapXDPPtr CD;
   Int4Ptr PNTR v;	
   Int4Ptr sapp;			/* Current script append ptr */
   Int4  last;
@@ -492,13 +505,13 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
 		Int4Ptr pej, Int4Ptr pei, GapAlignBlkPtr gap_align,
 		Int4 query_offset, Boolean reverse_sequence)
 { 
-  dp_ptr dyn_prog;
+  GapXDPPtr dyn_prog;
   Int4 i, j, cb, j_r, g, decline_penalty;
   register Int4 c, d, e, m, tt, h, X, f;
   Int4 best_score = 0;
   Int4Ptr *matrix;
   register Int4Ptr wa;
-  register dp_ptr dp;
+  register GapXDPPtr dp;
   Uint1Ptr Bptr;
   Uint1 base_pair;
   Int4 B_increment=1;
@@ -515,9 +528,16 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
 
   if(N <= 0 || M <= 0) return 0;
 
-  j = (N + 2) * sizeof(dp_node);
-  dyn_prog = (dp_ptr)Nlm_Malloc(j);
-
+  j = (N + 2) * sizeof(GapXDP);
+  if (gap_align->dyn_prog)
+     dyn_prog = gap_align->dyn_prog;
+  else
+     dyn_prog = (GapXDPPtr)Nlm_Malloc(j);
+  if (!dyn_prog) {
+     ErrPostEx(SEV_ERROR, 0, 0, 
+               "Cannot allocate %ld bytes for dynamic programming", j);
+     return -1;
+  }
   dyn_prog[0].CC = 0; c = dyn_prog[0].DD = -m;
   dyn_prog[0].FF = -m;
   for(i = 1; i <= N; i++) {
@@ -620,8 +640,8 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
       }
   }
   
-
-  MemFree(dyn_prog);
+  if (!gap_align->dyn_prog)
+     MemFree(dyn_prog);
 
   return best_score;
 }
@@ -645,7 +665,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
   register Int4 c, d, e, m,t, tt, f, tt_start;
   Int4 best_score = 0;
   register Int4Ptr wa;
-  register dp_ptr dp, dyn_prog;
+  register GapXDPPtr dp, dyn_prog;
   Uint1Ptr PNTR state, stp, tmp;
   Uint1Ptr state_array;
   Int4Ptr *matrix;
@@ -654,6 +674,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
   Int4 next_c;
   Uint1Ptr Bptr;
   Int4 B_increment=1;
+  Int4 align_len;
   
   matrix = gap_align->matrix;
   *pei = *pej = 0;
@@ -676,8 +697,11 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
 
   GapXDropPurgeState(gap_align->state_struct);
 
-  j = (N + 2) * sizeof(dp_node);
-  dyn_prog = (dp_ptr)Nlm_Malloc(j);
+  j = (N + 2) * sizeof(GapXDP);
+  if (gap_align->dyn_prog)
+     dyn_prog = gap_align->dyn_prog;
+  else
+     dyn_prog = (GapXDPPtr)Nlm_Malloc(j);
 
   state = Nlm_Malloc(sizeof(Uint1Ptr)*(M+1));
   dyn_prog[0].CC = 0;
@@ -819,6 +843,8 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
       else {j--; i--;}
       tmp[c] = s = k;
   }
+
+  align_len = c;
   c--;
   while (c >= 0) {
       if (tmp[c] == 0) REP_
@@ -832,7 +858,11 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
 
   MemFree(state);
 
-  MemFree(dyn_prog);
+  if (!gap_align->dyn_prog)
+     MemFree(dyn_prog);
+
+  if ((align_len -= data.sapp - S) > 0)
+     MemSet(data.sapp, 0, align_len);
   *sapp = data.sapp;
 
   return best_score;
@@ -858,13 +888,13 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		Int4 query_offset, Boolean reversed, Boolean reverse_sequence)
 		
 { 
-  dp_ptr dyn_prog;
+  GapXDPPtr dyn_prog;
   Int4 i, j, cb, j_r, g, decline_penalty;
   register Int4 c, d, e, m, tt, h, X, f;
-  Int4 best_score = 0, h_original=0;
+  Int4 best_score = 0;
   Int4Ptr *matrix;
   register Int4Ptr wa;
-  register dp_ptr dp;
+  register GapXDPPtr dp;
   Uint1Ptr Bptr;
   Int4 B_increment=1;
   
@@ -875,7 +905,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   matrix = gap_align->matrix;
   *pei = *pej = 0;
   m = (g=gap_align->gap_open) + gap_align->gap_extend;
-  h_original = h = gap_align->gap_extend;
+  h = gap_align->gap_extend;
   decline_penalty = gap_align->decline_align;
 
   X = gap_align->x_parameter;
@@ -885,8 +915,8 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 
   if(N <= 0 || M <= 0) return 0;
 
-  j = (N + 2) * sizeof(dp_node);
-  dyn_prog = (dp_ptr)Nlm_Malloc(j);
+  j = (N + 2) * sizeof(GapXDP);
+  dyn_prog = (GapXDPPtr)Nlm_Malloc(j);
 
   dyn_prog[0].CC = 0; c = dyn_prog[0].DD = -m;
   dyn_prog[0].FF = -m;
@@ -1020,15 +1050,14 @@ static Int4 OOF_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	
 { 
   data_t data;
-  Int4 i, j, cb,  j_r, s, k, sc, s1, s2, s3, st1, st2, e1, e2, e3, shift;
-  register Int4 c, d, e, m,t, tt, tt_start, f1, f2;
+  Int4 i, j, cb,  j_r, s, k, sc, s1, s2, s3, st1, e1, e2, e3, shift;
+  register Int4 c, d, m,t, tt, tt_start, f1, f2;
   Int4 best_score = 0;
   register Int4Ptr wa;
   Int4 count = 0;
-  register dp_ptr dp;
+  register GapXDPPtr dp;
   Uint1Ptr PNTR state, stp, tmp;
   Uint1Ptr state_array;
-  Uint1 st;
   Int4Ptr *matrix;
   register Int4 X;
   GapXDropStateArrayStructPtr state_struct;
@@ -1054,8 +1083,8 @@ static Int4 OOF_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   N+=2;
   GapXDropPurgeState(gap_align->state_struct);
 
-  j = (N + 2) * sizeof(dp_node);
-  data.CD = (dp_ptr)MemNew(j);
+  j = (N + 2) * sizeof(GapXDP);
+  data.CD = (GapXDPPtr)MemNew(j);
 
   state = MemNew(sizeof(Uint1Ptr)*(M+1));
   data.CD[0].CC = 0;
@@ -1095,7 +1124,7 @@ static Int4 OOF_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
       else
         wa = gap_align->posMatrix[j_r + query_offset];
     }
-    e = c = MININT; sc =f1=f2=e1 =e2=e3=s1=s2=s3=MININT;
+    c = MININT; sc =f1=f2=e1 =e2=e3=s1=s2=s3=MININT;
     for(cb = i = tt, dp = &data.CD[i-1]; 1;) {
 	if (i >= j) break;
 	sc = MAX(MAX(f1, f2)-shift, s3);
@@ -1266,14 +1295,14 @@ static Int4 OOF_SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
                              GapAlignBlkPtr gap_align,
                              Int4 query_offset, Boolean reversed)
 { 
-  dp_ptr CD;
+  GapXDPPtr CD;
   Int4 i, j, cb, j_r;
   Int4 e1, e2, e3, s1, s2, s3, shift;
-  register Int4 c, d, sc, e, m, tt, h, X, f1, f2;
+  register Int4 c, d, sc, m, tt, h, X, f1, f2;
   Int4 best_score = 0, count = 0;
   Int4Ptr *matrix;
   register Int4Ptr wa;
-  register dp_ptr dp;
+  register GapXDPPtr dp;
   
   if(!score_only)
       return OOF_ALIGN(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed);
@@ -1294,8 +1323,8 @@ static Int4 OOF_SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   if(N <= 0 || M <= 0) return 0;
   N+=2;
 
-  j = (N + 5) * sizeof(dp_node);
-  CD = (dp_ptr)MemNew(j);
+  j = (N + 5) * sizeof(GapXDP);
+  CD = (GapXDPPtr)MemNew(j);
   CD[0].CC = 0; c = CD[0].DD = -m;
   for(i = 3; i <= N; i+=3) {
     CD[i].CC = c;
@@ -1600,7 +1629,7 @@ GapXEditBlockPtr LIBCALL
 OOFTracebackToGapXEditBlock(Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2)
 {
     register Int4 current_val, last_val, number, index1, index2;
-    GapXEditScriptPtr e_script, last_e_script=NULL;
+    GapXEditScriptPtr e_script;
     GapXEditBlockPtr edit_block;
     
     if (S == NULL)
@@ -1626,7 +1655,6 @@ OOFTracebackToGapXEditBlock(Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2)
            region  0,3,6 will be collected in a single segment */
         if (current_val != last_val || (current_val%3 != 0 && 
                                         edit_block->esp != e_script)) {
-            last_e_script = e_script;
             e_script->num = number;
             e_script = GapXEditScriptNew(e_script);
             
@@ -1689,6 +1717,7 @@ GapAlignBlkDelete(GapAlignBlkPtr gap_align)
     gap_align->state_struct = GapXDropStateDestroy(gap_align->state_struct);
     /* GapXEditBlockDelete(gap_align->edit_block); */
     
+    gap_align->dyn_prog = MemFree(gap_align->dyn_prog);
     gap_align = MemFree(gap_align);
     
     return gap_align;
@@ -1741,6 +1770,8 @@ PerformNtGappedAlignment(GapAlignBlkPtr gap_align)
 		q_length = (gap_align->q_start+1);
 		s_length = (gap_align->s_start+1);
 		score_left = ALIGN_packed_nucl(query, subject, q_length, s_length, &private_q_start, &private_s_start, gap_align, gap_align->q_start, TRUE);
+                if (score_left < 0) 
+                   return FALSE;
 		gap_align->query_start = q_length - private_q_start;
 		gap_align->subject_start = s_length - private_s_start;
 	}
@@ -1769,6 +1800,8 @@ PerformNtGappedAlignment(GapAlignBlkPtr gap_align)
 	{
 		found_end = TRUE;
 		score_right = ALIGN_packed_nucl(query+gap_align->q_start+include_query, subject+(gap_align->s_start+include_query)/4, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, &(gap_align->query_stop), &(gap_align->subject_stop), gap_align, gap_align->q_start+include_query, FALSE);
+                if (score_right < 0) 
+                   return FALSE;
 		gap_align->query_stop += gap_align->q_start+include_query;
 		gap_align->subject_stop += gap_align->s_start+include_query;
 	}
@@ -1898,7 +1931,6 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
 */
 Boolean LIBCALL
 PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
-
 {
     Boolean found_start, found_end;
     Int4 q_length=0, s_length=0, score_right, middle_score, score_left, private_q_length, private_s_length, tmp;
@@ -1915,11 +1947,12 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
     
     query = gap_align->query;
     subject = gap_align->subject;
-    
-/*
-    tback = tback1 = MemNew((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
-*/
-    tback = tback1 = Nlm_Malloc((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
+
+    /*
+       tback = tback1 = MemNew((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
+    */
+    tback = tback1 = 
+       Nlm_Malloc((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
     include_query = gap_align->include_query;
 
     gap_align->tback = tback;
@@ -2394,7 +2427,7 @@ Boolean GXECollectDataForSeqalign(GapXEditBlockPtr edit_block,
 
 static void GXECorrectUASequence(GapXEditBlockPtr edit_block)
 {
-    GapXEditScriptPtr curr, curr_last, curr_next, curr_last2;
+    GapXEditScriptPtr curr, curr_last, curr_last2;
     Boolean last_indel;
 
     last_indel = FALSE;
@@ -2550,13 +2583,11 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
 */
 SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdPtr query_id, Int4 query_length)
 {
-    Boolean reverse, translate1, translate2;
+    Boolean reverse;
     GapXEditScriptPtr curr, esp;
-    Int2 frame1, frame2, numseg;
-    Int4 begin1, begin2, index, start1, start2, length1, length2;
+    Int2 frame1, frame2;
+    Int4 start1, start2;
     Int4 original_length1, original_length2;
-    Int4Ptr length, start;
-    DenseSegPtr dsp;
     SeqAlignPtr sap;
     SeqIntPtr seq_int1, seq_int2;
     SeqIntPtr seq_int1_last = NULL, seq_int2_last = NULL;
@@ -2564,12 +2595,10 @@ SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqI
     SeqLocPtr slp, slp1, slp2;
     StdSegPtr sseg, sseg_head, sseg_old;
     Uint1 strand1, strand2;
-    Uint1Ptr strands;
     Boolean first_shift;
 
     reverse = edit_block->reverse;	
     
-    numseg=0;
 
     start1 = edit_block->start1;
     start2 = edit_block->start2;

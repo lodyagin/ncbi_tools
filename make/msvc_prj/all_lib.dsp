@@ -25,6 +25,9 @@ CFG=all_lib - Win32 DebugMT
 # PROP Scc_ProjName ""
 # PROP Scc_LocalPath ""
 MTL=midl.exe
+
+!IF  "$(CFG)" == "all_lib - Win32 DebugMT"
+
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
 # PROP BASE Output_Dir "DebugMT"
@@ -35,6 +38,9 @@ MTL=midl.exe
 # PROP Output_Dir "DebugMT"
 # PROP Intermediate_Dir "DebugMT"
 # PROP Target_Dir ""
+
+!ENDIF 
+
 # Begin Target
 
 # Name "all_lib - Win32 DebugMT"

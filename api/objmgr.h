@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.32 $
+* $Revision: 6.36 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.36  2002/07/30 14:41:45  kans
+* removed omdp->rearranged
+*
+* Revision 6.35  2002/07/29 21:30:17  kans
+* added rearranged flag to omdp
+*
+* Revision 6.34  2002/07/01 14:29:03  kans
+* changed totobj, currobj to Uint4
+*
+* Revision 6.33  2002/05/31 21:53:27  yaschenk
+* changing lookup by EntityID to array[][]
+*
 * Revision 6.32  2001/12/26 20:54:14  kans
 * added defines for OM_OPT_RECORD_SUPPRESSED and OM_OPT_RECORD_DEAD
 *
@@ -628,9 +640,9 @@ typedef struct objmng {        /* functions for data management */
 
 	OMDataPtr ncbidata;    /* data needed by NCBI functions */
 	ObjMgrDataPtr PNTR datalist; /* sorted by pointer */
-	Uint2 totobj,                 /* number of elements in ncbidata */
-		 currobj,                /* number of elements in ncbidata occupied */
-		HighestEntityID;
+	Uint4 totobj,                 /* number of elements in ncbidata */
+		 currobj;                /* number of elements in ncbidata occupied */
+	Uint2 HighestEntityID;
 	ObjMgrDataPtr clipboard;
 	SelStructPtr sel;               /* for currently selected data item(s) */
 
@@ -644,6 +656,8 @@ typedef struct objmng {        /* functions for data management */
 
 	Boolean autoclean;           /* if TRUE, reap and free cache if currobj > maxobj */
 	Uint2 maxobj;                /* number of objects that tiggers autocleaning */
+
+	ObjMgrDataPtr PNTR PNTR	entityID_index; /**** two-level array index on Entity ID *****/
 
 } ObjMgr, PNTR ObjMgrPtr;
 
@@ -1311,6 +1325,9 @@ NLM_EXTERN void LIBCALL ObjMgrResetAll PROTO((void));
 NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename);
 
 
+NLM_EXTERN void LIBCALL ObjMgrAddIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID,ObjMgrDataPtr omdp));
+NLM_EXTERN void LIBCALL ObjMgrDeleteIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID));
+NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrLookupIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID));
 
 #ifdef __cplusplus
 }

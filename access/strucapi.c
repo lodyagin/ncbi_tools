@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.8 $
+* $Revision: 1.12 $
 *
 * File Description: 
 *
@@ -49,9 +49,7 @@
 /* low-level connection functions */
 
 NLM_EXTERN CONN StrucOpenConnection (
-  Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels
+  Int4 uid
 )
 
 {
@@ -69,15 +67,11 @@ NLM_EXTERN CONN StrucOpenConnection (
   */
 
   conn = QUERY_OpenServiceQuery ("StrucFetch", NULL, 30);
+
   if (conn == NULL) return NULL;
 
-  sprintf (query, "uid=%ld&save=asntext&form=6&db=t&Dopt=i&mdlLvl=%ld&MaxModels=%ld",
-           (long) uid, (long) modelLevel, (long) maxModels);
-
-  /*
-  sprintf (query, "uid=%ld&mdlLvl=%ld&MaxModels=%ld",
-           (long) uid, (long) modelLevel, (long) maxModels);
-  */
+  sprintf (query, "uid=%ld%s", (long) uid,
+           "&save=asntext&form=6&db=t&Dopt=j&Complexity=Cn3D%20Subset");
 
   status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
   if (status != eIO_Success) return NULL;
@@ -85,17 +79,16 @@ NLM_EXTERN CONN StrucOpenConnection (
   return conn;
 }
 
-NLM_EXTERN BiostrucPtr StrucWaitForReply (
+NLM_EXTERN BiostrucSeqPtr StrucWaitForReply (
   CONN conn
 )
 
 {
-  AsnIoConnPtr  aicp;
-  BiostrucPtr   bsp = NULL;
-  time_t        currtime, starttime;
-  Int2          max = 0;
-  EIO_Status    status;
-  STimeout      timeout;
+  BiostrucSeqPtr  bsp = NULL;
+  time_t          currtime, starttime;
+  Int2            max = 0;
+  EIO_Status      status;
+  STimeout        timeout;
 
   if (conn == NULL) return NULL;
 
@@ -123,9 +116,7 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
       FileClose (fp);
     }
     */
-    aicp = QUERY_AsnIoConnOpen ("r", conn);
-    bsp = BiostrucAsnRead (aicp->aip, NULL);
-    QUERY_AsnIoConnClose (aicp);
+    bsp = StrucReadReply (conn, status);
   }
   CONN_Close (conn);
 
@@ -134,17 +125,15 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
 
 /* high-level connection functions */
 
-NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
-  Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels
+NLM_EXTERN BiostrucSeqPtr StrucSynchronousQuery (
+  Int4 uid
 )
 
 {
-  BiostrucPtr  bsp;
-  CONN         conn;
+  BiostrucSeqPtr  bsp;
+  CONN            conn;
 
-  conn = StrucOpenConnection (uid, modelLevel, maxModels);
+  conn = StrucOpenConnection (uid);
 
   if (conn == NULL) return NULL;
 
@@ -157,8 +146,6 @@ NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
 
 NLM_EXTERN Boolean StrucAsynchronousQuery (
   Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -167,7 +154,7 @@ NLM_EXTERN Boolean StrucAsynchronousQuery (
 {
   CONN  conn;
 
-  conn = StrucOpenConnection (uid, modelLevel, maxModels);
+  conn = StrucOpenConnection (uid);
 
   if (conn == NULL) return FALSE;
 
@@ -186,19 +173,23 @@ NLM_EXTERN Int4 StrucCheckQueue (
   return QUERY_CheckQueue (queue);
 }
 
-NLM_EXTERN BiostrucPtr StrucReadReply (
+NLM_EXTERN BiostrucSeqPtr StrucReadReply (
   CONN conn,
   EIO_Status status
 )
 
 {
-  AsnIoConnPtr  aicp;
-  BiostrucPtr   bsp = NULL;
+  AsnIoConnPtr     aicp;
+  BiostrucSeqPtr   bsp = NULL;
+  NcbiMimeAsn1Ptr  nmap = NULL;
 
   if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
-    bsp = BiostrucAsnRead (aicp->aip, NULL);
+    nmap = NcbiMimeAsn1AsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
+    if (nmap != NULL && nmap->choice == NcbiMimeAsn1_strucseq) {
+      bsp = (BiostrucSeqPtr) nmap->data.ptrvalue;
+    }
   }
   return bsp;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.14  2002/08/07 18:14:23  kans
+* itemID is Uint4, minor cleanup
+*
 * Revision 6.13  2001/10/15 18:18:37  wheelan
 * adapted to new alignment manager
 *
@@ -2809,7 +2812,8 @@ static void DOT_SVClickProc(VieweR v, SegmenT seg, PoinT pt)
 {
   DOTVibDataPtr  vdp2;
   PrimitivE     prim=NULL;
-  Uint2         primID = 0, entityID=0, itemID=0, itemtype=0;
+  Uint2         primID = 0, entityID=0, itemtype=0;
+  Uint4         itemID=0;
   Int1          highlight=0;
   Int2          handled=0;
   DOTAlnPtr     salp=NULL;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -311,7 +311,7 @@ typedef struct {
   Int2                chosenNumLines;
   RecT                trackRect;
   PoinT               trackPt;
-  StateDataPtr             termList;
+  StateDataPtr        termList;
 } FormInfo, PNTR FormInfoPtr;
 
 /*----------------------------*/
@@ -6611,7 +6611,7 @@ NLM_EXTERN Entrez2BooleanReplyPtr Query_FetchUIDs (ForM f)
   /* Get the name of the current DB */
   /*--------------------------------*/
 
-  dbName = DBGetNameFromID (pFormInfo->termList->db);
+  dbName = DBGetNameFromID (pFormInfo->currDb);
   if (StringHasNoText (dbName)) return 0;
 
   /*---------------------------------*/

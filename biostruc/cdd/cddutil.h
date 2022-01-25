@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.35 2002/04/22 16:37:31 bauer Exp $
+/* $Id: cddutil.h,v 1.43 2002/08/17 11:55:08 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,37 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.35 $
+* $Revision: 1.43 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.43  2002/08/17 11:55:08  bauer
+* backed out changes
+*
+* Revision 1.42  2002/08/16 19:51:46  bauer
+* added Ben's CddSrvGetStyle2
+*
+* Revision 1.41  2002/07/31 14:58:58  bauer
+* BLAST DB Sequence Retrieval
+*
+* Revision 1.40  2002/07/17 18:54:11  bauer
+* CddFeaturesAreConsistent now returns explicit error messages
+*
+* Revision 1.39  2002/07/10 15:34:31  bauer
+* made SipIsConsensus public
+*
+* Revision 1.38  2002/07/09 21:12:40  bauer
+* added CddDenDiagCposComp2KBP to return Karlin-Altschul parameters together with PSSM
+*
+* Revision 1.37  2002/07/05 21:09:26  bauer
+* added GetAlignmentSize
+*
+* Revision 1.36  2002/05/06 16:59:51  bauer
+* remove blanks in inferred CD short names
+*
 * Revision 1.35  2002/04/22 16:37:31  bauer
 * added check for missing structure alignments
 *
@@ -150,6 +174,7 @@ extern "C" {
 #endif
 
 #include <objcdd.h>
+/*#include <objcn3d.h> */
 #include <blastdef.h>
 #include <thrdatd.h>
 #include <posit.h>
@@ -225,6 +250,139 @@ typedef struct _pgp_blast_options {
     Uint4 align_options, print_options;
 } PGPBlastOptions, PNTR PGPBlastOptionsPtr;
 
+
+/*---------------------------------------------------------------------------*/
+/* drawing style conventions for Cn3D v4.x                                   */
+/*---------------------------------------------------------------------------*/
+/*
+Int4 cdd_def_style[] =
+{
+    Cn3d_backbone_type_trace,
+    Cn3d_drawing_style_tubes,
+     Cn3d_color_scheme_weighted_variety,
+    10000,5000,5000,5000,10000,
+    Cn3d_backbone_type_trace,
+    Cn3d_drawing_style_tubes,
+    Cn3d_color_scheme_molecule,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    Cn3d_drawing_style_wire,
+    Cn3d_color_scheme_weighted_variety,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    Cn3d_drawing_style_wire,
+    Cn3d_color_scheme_molecule,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    Cn3d_drawing_style_ball_and_stick,
+    Cn3d_color_scheme_element,
+    10000,5000,5000,5000,10000,
+    FALSE,
+    Cn3d_drawing_style_ball_and_stick,
+    Cn3d_color_scheme_element,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    Cn3d_drawing_style_tubes,
+    Cn3d_color_scheme_user_select,
+    10000,9000,9000,10000,10000,
+    FALSE,
+    Cn3d_drawing_style_with_arrows,
+    Cn3d_color_scheme_object,
+    10000,5000,5000,5000,10000,
+    FALSE,
+    Cn3d_drawing_style_with_arrows,
+    Cn3d_color_scheme_object,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    10000,9300,5500,500,10000,
+    FALSE,
+    10000,0,0,0,10000,
+    10000,
+    10000,
+    4000,
+    2000,
+    3000,
+    3000,
+    18000,
+    20000,
+    5000,
+    0,
+    Cn3d_backbone_label_style_type_three_letter,
+    Cn3d_backbone_label_style_number_sequential,
+    FALSE,
+    TRUE,
+    0,
+    Cn3d_backbone_label_style_type_three_letter,
+    Cn3d_backbone_label_style_number_sequential,
+    FALSE,
+    TRUE,
+    TRUE
+};
+Int4 cdd_evidence_style[] =
+{
+    Cn3d_backbone_type_trace,
+    Cn3d_drawing_style_tubes,
+    Cn3d_color_scheme_user_select,
+    10000,0,10000,0,10000,
+    Cn3d_backbone_type_complete,
+    Cn3d_drawing_style_ball_and_stick,
+    Cn3d_color_scheme_user_select,
+    10000,0,5019,10000,10000,
+    TRUE,
+    Cn3d_drawing_style_tubes,
+    Cn3d_color_scheme_user_select,
+    10000,0,10000,0,10000,
+    TRUE,
+    Cn3d_drawing_style_ball_and_stick,
+    Cn3d_color_scheme_user_select,
+    10000,10000,5019,0,10000,
+    TRUE,
+    Cn3d_drawing_style_space_fill,
+    Cn3d_color_scheme_user_select,
+    10000,10000,5019,0,10000,
+    TRUE,
+    Cn3d_drawing_style_ball_and_stick,
+    Cn3d_color_scheme_user_select,
+    10000,10000,5019,0,10000,
+    TRUE,
+    Cn3d_drawing_style_tubes,
+    Cn3d_color_scheme_user_select,
+    10000,9000,9000,10000,10000,
+    FALSE,
+    Cn3d_drawing_style_with_arrows,
+    Cn3d_color_scheme_object,
+    10000,5000,5000,5000,10000,
+    FALSE,
+    Cn3d_drawing_style_with_arrows,
+    Cn3d_color_scheme_object,
+    10000,5000,5000,5000,10000,
+    TRUE,
+    10000,9300,5500,500,10000,
+    FALSE,
+    10000,0,0,0,10000,
+    10000,
+    10000,
+    4000,
+    2000,
+    3000,
+    3000,
+    18000,
+    20000,
+    5000,
+    0,
+    Cn3d_backbone_label_style_type_three_letter,
+    Cn3d_backbone_label_style_number_sequential,
+    FALSE,
+    TRUE,
+    0,
+    Cn3d_backbone_label_style_type_three_letter,
+    Cn3d_backbone_label_style_number_sequential,
+    FALSE,
+    TRUE,
+    TRUE
+};
+*/
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Function prototypes                                                       */
@@ -257,19 +415,23 @@ CharPtr    LIBCALL CddGetSource(CddPtr pcdd);
 CharPtr    LIBCALL CddGetSourceId(CddPtr pcdd);
 Int4       LIBCALL CddGetStatus(CddPtr pcdd);
 Int4       LIBCALL CddGetAlignmentLength(CddPtr pcdd);
+Int4Ptr    LIBCALL GetAlignmentSize(SeqAlignPtr salp);
 ValNodePtr LIBCALL CddGetAnnotNames(CddPtr pcdd);
 Boolean    LIBCALL CddHasDescription(CddPtr pcdd, CharPtr pc);
 Boolean    LIBCALL CddHasAnnotation(CddPtr pcdd);
 Boolean    LIBCALL CddMasterIs3D(CddPtr pcdd);
 Int4       LIBCALL CddCount3DAlignments(CddPtr pcdd); 
 Boolean    LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp);
+Boolean    LIBCALL SipIsConsensus(SeqIdPtr sip);
 Boolean    LIBCALL CddHasConsensus(CddPtr pcdd);
 void       LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn, CharPtr cEx);
 Boolean    LIBCALL CddCheckForRepeats(CddPtr pcdd, Int4 width, Int4 GapI, Int4 GapE,
                                       Nlm_FloatHi rthresh, Boolean bOutput);
 void       LIBCALL CddTruncStringAtFirstPunct(CharPtr pChar);
-Boolean    LIBCALL CddFeaturesAreConsistent(CddPtr pcdd);
+void       LIBCALL CddFillBlanksInString(CharPtr pChar);
+Boolean    LIBCALL CddFeaturesAreConsistent(CddPtr pcdd, CharPtr errmsg);
 Boolean    LIBCALL CddHas3DSuperpos(CddPtr pcdd);
+Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
@@ -311,6 +473,7 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
 /*---------------------------------------------------------------------------*/
 /* Calculate PSSMs for DenseDiag (or DenseSeg) Master_Slave alignment sets   */
 /*---------------------------------------------------------------------------*/
+static void BlastKarlinBlkCopy(BLAST_KarlinBlkPtr kbp_in,BLAST_KarlinBlkPtr kbp_out);
 void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
                                        BioseqPtr bspF, CddPtr pcdd, Int4 pseudoCnt);
 void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd);
@@ -326,10 +489,22 @@ static Boolean CddtakeMatrixCheckpoint(compactSearchItems *compactSearch,
                                        Char *fileName,ValNodePtr *error_return,
 				       Boolean scaleScores,
 				       Nlm_FloatHi scalingFactor);
+/*---------------------------------------------------------------------------*/
+/* calculate a PSSM                                                          */
+/*---------------------------------------------------------------------------*/
 Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
                                       SeqAlignPtr salp, CddPtr pcdd,
 				      BioseqPtr bspOut, double Weight,
 				      double ScaleFactor, CharPtr matrix_name);
+/*---------------------------------------------------------------------------*/
+/* calculate a PSSM and also fill the kbp data structure. Must be initialized*/
+/* with BlastKarlinBlkCreate();                                              */
+/*---------------------------------------------------------------------------*/
+Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
+                                         SeqAlignPtr salp, CddPtr pcdd,
+				         BioseqPtr bspOut, double Weight,
+				         double ScaleFactor, CharPtr matrix_name,
+				         BLAST_KarlinBlkPtr kbp);
 
 /*---------------------------------------------------------------------------*/
 /* this function combines CddCposComputation and CddDenDiagCposComputation   */
@@ -378,7 +553,7 @@ void LIBCALL CddReindexMSLDenDiagMaster(SeqAlignPtr salp, Int4 offset);
 static  SeqIdPtr        CddFindSeqIdInSeqLoc(SeqLocPtr location);
         Int4Ptr LIBCALL CddGetFeatLocList(SeqLocPtr location, Int4 *nres);
 static  void            CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali);
-static  Boolean         CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap);
+static  Int4            CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap);
 static  SeqIdPtr        CddFindSeqIdInAlignAnnot(AlignAnnotPtr oldannot);
         void    LIBCALL CddTransferAlignAnnot(AlignAnnotPtr oldannot,
                                               SeqIdPtr newMaster,
@@ -445,6 +620,20 @@ CddIdxDataPtr LIBCALL CddIdxDataLink(CddIdxDataPtr PNTR head, CddIdxDataPtr cidp
 CddIdxDataPtr LIBCALL CddReadIdx(CharPtr CDDidx);
 void LIBCALL CddAccFromPssmId(Int4 iPssmId, CharPtr cAcc, CharPtr CDDidx);
 void LIBCALL CddPssmIdFromAcc(Int4 *iPssmId, CharPtr cAcc, CharPtr CDDidx);
+
+/*---------------------------------------------------------------------------*/
+/* Bioseq retrieval from BLAST db - contributed by Ben                       */
+/*---------------------------------------------------------------------------*/
+BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,ReadDBFILEPtr rdfp);
+
+/*---------------------------------------------------------------------------*/
+/* setting styles for Cn3D v4.x                                              */
+/*---------------------------------------------------------------------------*/
+/*
+Cn3dStyleDictionaryPtr LIBCALL CddSrvGetStyle2(Int4 *styles[], Int4 nstyles);
+static Cn3dStyleSettingsPtr CddSrvGetStyle2_Ex(Int4 style[]);
+static Cn3dColorPtr MyCn3dColorInit(Int4 scale_factor, Int4 red, Int4 green, Int4 blue,Int4 alpha);
+*/
 
 #ifdef __cplusplus
 }

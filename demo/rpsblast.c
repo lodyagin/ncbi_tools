@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.39 2002/04/29 19:55:25 madden Exp $
+/* $Id: rpsblast.c,v 6.42 2002/08/20 15:17:42 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,22 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.42  2002/08/20 15:17:42  camacho
+* Fixed small memory leak
+*
+* Revision 6.41  2002/08/09 19:41:25  camacho
+* 1) Added blast version number to command-line options
+* 2) Added explanations for some default parameters
+*
+* Revision 6.40  2002/06/19 22:50:17  dondosha
+* Added all queries information for tabular output with multiple queries
+*
 * Revision 6.39  2002/04/29 19:55:25  madden
 * Use ARG_FLOAT for db length
 *
@@ -169,7 +179,7 @@ AsnIoPtr aip_glb=NULL;
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
-static Args myargs [] = {
+static Args myargs[] = {
     {"Input query sequence (this parameter must be set)",  /* 0 */
      "stdin", NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
     {"RPS BLAST Database",            /* 1 */
@@ -184,47 +194,45 @@ static Args myargs [] = {
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
     { "Dropoff (X) for blast extensions in bits (default if zero)", /* 6 */
       "7.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
-    { "0 for multiple hits 1-pass, 1 for single hit 1-pass, 2 for 2-pass", /* 7 */
-      "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},
-    { "Filter query sequence with SEG", /* 8 */
+    { "Filter query sequence with SEG", /* 7 */
       "F", NULL, NULL, FALSE, 'F', ARG_STRING, 0.0, 0, NULL},
-    { "Cost to open a gap",     /* 9 */
+    { "Cost to open a gap",     /* 8 */
       "11", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
-    { "Cost to extend a gap",   /* 10 */
+    { "Cost to extend a gap",   /* 9 */
       "1", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},
-    { "X dropoff value for gapped alignment (in bits)", /* 11 */
+    { "X dropoff value for gapped alignment (in bits)", /* 10 */
       "15", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},
-    { "Number of bits to trigger gapping", /* 12 */
+    { "Number of bits to trigger gapping", /* 11 */
       "22.0", NULL, NULL, FALSE, 'N', ARG_FLOAT, 0.0, 0, NULL},
-    { "Gapped",                 /* 13 */
+    { "Gapped",                 /* 12 */
       "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Start of required region in query", /* 14 */
+    { "Start of required region in query", /* 13 */
       "1", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
-    { "End of required region in query (-1 indicates end of query)", /* 15 */
+    { "End of required region in query (-1 indicates end of query)", /* 14 */
       "-1", NULL, NULL, FALSE, 'H', ARG_INT, 0.0, 0, NULL},
-    { "Number of processors to use", /* 16 */
+    { "Number of processors to use", /* 15 */
       "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},
-    { "Show GI's in deflines",  /* 17 */
+    { "Show GI's in deflines",  /* 16 */
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Believe the query defline", /* 18 */
+    { "Believe the query defline", /* 17 */
       "F", NULL, NULL, FALSE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "X dropoff value for final gapped alignment (in bits)", /* 19 */
+    { "X dropoff value for final gapped alignment (in bits)", /* 18 */
       "25", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
-    { "SeqAlign file ('Believe the query defline' must be TRUE)", /* 20 */
+    { "SeqAlign file ('Believe the query defline' must be TRUE)", /* 19 */
       NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},
-    { "Number of database sequences to show one-line descriptions for (V)", /* 21 */
+    { "Number of database sequences to show one-line descriptions for (V)", /* 20 */
       "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-    { "Number of database sequence to show alignments for (B)", /* 22 */
+    { "Number of database sequence to show alignments for (B)", /* 21 */
       "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},
-    { "Effective length of the database (use zero for the real size)", /* 23 */
+    { "Effective length of the database (use zero for the real size)", /* 22 */
       "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
-    { "Effective length of the search space (use zero for the real size)", /* 24 */
+    { "Effective length of the search space (use zero for the real size)", /* 23 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
-    { "Produce HTML output",  /* 25 */
+    { "Produce HTML output",  /* 24 */
       "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
-    {"Logfile name ",  /* 26 */
+    {"Logfile name ",  /* 25 */
      "rpsblast.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
-    {"Use lower case filtering of FASTA sequence",    /* 27 */
+    {"Use lower case filtering of FASTA sequence",    /* 26 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
 };
 
@@ -241,12 +249,12 @@ void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out,
     align_options += TXALIGN_COMPRESS;
     align_options += TXALIGN_END_NUM;
 
-    if (myargs[17].intvalue) {
+    if (myargs[16].intvalue) {
         align_options += TXALIGN_SHOW_GI;
         print_options += TXALIGN_SHOW_GI;
     } 
     
-    if (myargs[25].intvalue) {
+    if (myargs[24].intvalue) {
         align_options += TXALIGN_HTML;
         print_options += TXALIGN_HTML;
     }
@@ -281,6 +289,7 @@ void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
     readdb_destruct(rpsbop->rdfp);
 
     MemFree(rpsbop->rps_database);    
+    MemFree(rpsbop->out_filename);
     MemFree(rpsbop);
     
     return;
@@ -294,46 +303,46 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     
     rpsbop = MemNew(sizeof(RPSBlastOptions));
 
-    if (myargs [5].strvalue != NULL) {
-	rpsbop->out_filename = StringSave(myargs [5].strvalue);
-        if ((rpsbop->outfp = FileOpen(myargs [5].strvalue, "a")) == NULL) {
+    if (myargs[5].strvalue != NULL) {
+	rpsbop->out_filename = StringSave(myargs[5].strvalue);
+        if ((rpsbop->outfp = FileOpen(myargs[5].strvalue, "a")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
-                      "file %s\n", myargs [5].strvalue);
+                      "file %s\n", myargs[5].strvalue);
             return NULL;
         }
     }
 
     /* Note: these 2 parameters are necessary to intialize RPS Blast */
-    rpsbop->rps_database = StringSave(myargs [1].strvalue);    
+    rpsbop->rps_database = StringSave(myargs[1].strvalue);    
     rpsbop->query_is_protein = myargs[2].intvalue;
-    rpsbop->num_threads = myargs[16].intvalue;
+    rpsbop->num_threads = myargs[15].intvalue;
 
-    if((rpsbop->rdfp = readdb_new(myargs [1].strvalue, TRUE)) == NULL)
+    if((rpsbop->rdfp = readdb_new(myargs[1].strvalue, TRUE)) == NULL)
         return NULL;
     
     /* rpsbop->rpsinfo = RPSInfoAttach(rpsinfo_main); */
 
-    if (myargs[18].intvalue != 0)
+    if (myargs[17].intvalue != 0)
         rpsbop->believe_query = TRUE;
     
     options = BLASTOptionNew(rpsbop->query_is_protein ? "blastp" : "tblastn", 
-                             (Boolean)myargs[13].intvalue);
+                             (Boolean)myargs[12].intvalue);
     rpsbop->options = options;
     
     /* rpsbop->options->query_lcase_mask = slp; External filtering */
     
-    if (myargs[23].floatvalue)
-        options->db_length = (Int8) myargs[23].floatvalue;
+    if (myargs[22].floatvalue)
+        options->db_length = (Int8) myargs[22].floatvalue;
     
-    if (myargs[24].floatvalue)
-        options->searchsp_eff = (Nlm_FloatHi) myargs[24].floatvalue;
+    if (myargs[23].floatvalue)
+        options->searchsp_eff = (Nlm_FloatHi) myargs[23].floatvalue;
     
     /* Necessary options for RPS Blast */
     options->do_sum_stats = FALSE;
     options->is_rps_blast = TRUE; 
     
-    rpsbop->number_of_descriptions = myargs[21].intvalue;
-    rpsbop->number_of_alignments = myargs[22].intvalue;
+    rpsbop->number_of_descriptions = myargs[20].intvalue;
+    rpsbop->number_of_alignments = myargs[21].intvalue;
     
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, "BLOSUM62", 0, 0);
@@ -352,47 +361,39 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
                           &rpsbop->align_options, &rpsbop->print_options);
     
     /* decrement by one to agree with program values. */
-    options->required_start = myargs[14].intvalue - 1;
-    options->required_end = myargs[15].intvalue;
+    options->required_start = myargs[13].intvalue - 1;
+    options->required_end = myargs[14].intvalue;
     
     if (options->required_end != -1) {
         options->required_end--;
     }
 
-    options->dropoff_2nd_pass  = (Int4) myargs [6].floatvalue;
-    options->expect_value  = (Nlm_FloatHi) myargs [3].floatvalue;
+    options->dropoff_2nd_pass  = (Int4) myargs[6].floatvalue;
+    options->expect_value  = (Nlm_FloatHi) myargs[3].floatvalue;
     options->hitlist_size = MAX(rpsbop->number_of_descriptions, 
                                 rpsbop->number_of_alignments);
     
-    if (myargs[13].intvalue != 0) {
-        if (myargs[7].intvalue == 0) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = TRUE;
-        } else if (myargs[7].intvalue == 1) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = FALSE;
-        } else {
-            options->two_pass_method  = TRUE;
-            options->multiple_hits_only  = FALSE;
-        }
-        options->gap_open = myargs[9].intvalue;
-        options->gap_extend = myargs[10].intvalue;
+    if (myargs[12].intvalue != 0) {
+        options->two_pass_method  = FALSE;
+        options->multiple_hits_only  = TRUE;
+        options->gap_open = myargs[8].intvalue;
+        options->gap_extend = myargs[9].intvalue;
 
         /*  options->decline_align = myargs[??].intvalue; */
 
-        options->gap_x_dropoff = myargs[11].intvalue;
-        options->gap_x_dropoff_final = myargs[19].intvalue;
-        options->gap_trigger = myargs[12].floatvalue;
+        options->gap_x_dropoff = myargs[10].intvalue;
+        options->gap_x_dropoff_final = myargs[18].intvalue;
+        options->gap_trigger = myargs[11].floatvalue;
     }
     
-    if (StringICmp(myargs[8].strvalue, "T") == 0) {
+    if (StringICmp(myargs[7].strvalue, "T") == 0) {
         options->filter_string = StringSave("S");
     } else {
-        options->filter_string = StringSave(myargs[8].strvalue);
+        options->filter_string = StringSave(myargs[7].strvalue);
     }
 
     /* Only one CPU may be used at this time inside the core engine*/    
-    options->number_of_cpus = (Int2) myargs[16].intvalue;
+    options->number_of_cpus = (Int2) myargs[15].intvalue;
     
     options->isPatternSearch = FALSE;
 
@@ -581,19 +582,19 @@ static SeqEntryPtr LIBCALLBACK RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr da
 
     /* Opening file with input sequences */
     if(infp == NULL) {
-        if ((infp = FileOpen(myargs [0].strvalue, "r")) == NULL) {
+        if ((infp = FileOpen(myargs[0].strvalue, "r")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, 
                       "rpsblast: Unable to open input file %s\n", 
-                      myargs [0].strvalue);
+                      myargs[0].strvalue);
             end_of_data = TRUE;
             NlmMutexUnlock(read_mutex);
         }
     }
     
-    if(myargs[27].intvalue) {
-        sep = FastaToSeqEntryForDb (infp, !myargs[2].intvalue, NULL, myargs[18].intvalue, NULL, NULL, slp);
+    if(myargs[26].intvalue) {
+        sep = FastaToSeqEntryForDb (infp, !myargs[2].intvalue, NULL, myargs[17].intvalue, NULL, NULL, slp);
     } else {
-        sep = FastaToSeqEntryEx (infp, !myargs[2].intvalue, NULL, myargs[18].intvalue);
+        sep = FastaToSeqEntryEx (infp, !myargs[2].intvalue, NULL, myargs[17].intvalue);
     }
     
     if(sep == NULL) {            /* Probably last FASTA entry */
@@ -630,7 +631,8 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
                                   rpsbop->number_of_alignments,
                                   rpsbop->query_is_protein ? 
                                   "blastp" : "tblastn", FALSE,
-                                  rpsbop->believe_query, 0, 0, rpsbop->outfp);
+                                  rpsbop->believe_query, 0, 0, rpsbop->outfp,
+                                  FALSE);
     } else {
         RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
         RPSFormatFooter(rpsbop, other_returns);
@@ -644,11 +646,14 @@ Int2 Main(void)
     FILE *fd;
     Int4 i;
     RPSBlastOptionsPtr rpsbop;
+    Char buf[256] = { '\0' };
 
-    if (!GetArgs("rpsblast", NUMARG, myargs))
-	return 1;
+    StringCpy(buf, "rpsblast ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+    if (!GetArgs(buf, NUMARG, myargs))
+        return 1;
     
-    if ( !ErrSetLog (myargs[26].strvalue) ) { /* Logfile */
+    if ( !ErrSetLog (myargs[25].strvalue) ) { /* Logfile */
         ErrShow();
         return 1;
     } else {
@@ -661,18 +666,18 @@ Int2 Main(void)
         return 1;
         
     /* Truncate output file */
-    if((fd = FileOpen(myargs [5].strvalue, "w")) != NULL)
+    if((fd = FileOpen(myargs[5].strvalue, "w")) != NULL)
         FileClose(fd);
     
-    if (myargs[20].strvalue != NULL) {
-        if (myargs[18].intvalue == 0) {
+    if (myargs[19].strvalue != NULL) {
+        if (myargs[17].intvalue == 0) {
             ErrPostEx(SEV_FATAL, 0, 0, 
                       "-J option must be TRUE to use this option");
             return 1;
         } else  {
-            if ((aip_glb = AsnIoOpen (myargs[20].strvalue,"w")) == NULL) {
+            if ((aip_glb = AsnIoOpen (myargs[19].strvalue,"w")) == NULL) {
                 ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
-                          "file %s\n", myargs[20].strvalue);
+                          "file %s\n", myargs[19].strvalue);
                 return 1;
             }
     	}

@@ -48,7 +48,14 @@ on HomeDir()
 	tell application "Finder"
 		
 		if my IsOSX() then
-			return the home as string
+			-- return the home as string
+			set hm to home as string
+			set wd to words of hm
+			set rs to rest of wd
+			set text item delimiters of AppleScript to ":"
+			set nw to (rs as string) & ":"
+			set text item delimiters of AppleScript to ""
+			return nw
 		else
 			return gStartupDisk
 		end if
@@ -62,7 +69,7 @@ on CToolkitRoot()
 		set modRoot to ResolveAlias(gMWroot & "ncbi")
 	on error
 		try
-			set modRoot to ResolveAlias(gHomeDir & "ncbi")
+			set modRoot to ResolveAlias(gStartupDisk & gHomeDir & "ncbi")
 		end try
 	end try
 	
@@ -80,8 +87,8 @@ on MWRootDir()
 	
 	set mwRoot to ""
 	set mwLocations to {gStartupDisk, gStartupDisk & "Applications:", gStartupDisk & "Applications (Mac OS 9):", ¬
-		gHomeDir, gHomeDir & "Applications:", gHomeDir & "Applications (Mac OS 9):"}
-	repeat with mwVersion from 6 to 7
+		gStartupDisk & gHomeDir, gStartupDisk & gHomeDir & "Applications:", gStartupDisk & gHomeDir & "Applications (Mac OS 9):"}
+	repeat with mwVersion from 8 to 9
 		set dirName to "Metrowerks CodeWarrior " & mwVersion & ".0"
 		repeat with mwLoc in mwLocations
 			try
@@ -94,21 +101,6 @@ on MWRootDir()
 	error "Can't find the Metrowerks CodeWarrior folder."
 	
 end MWRootDir
-
-on FindOpenGL()
-	tell application "Finder"
-		
-		set results to every folder of folder gMWroot whose name starts with "OpenGL SDK"
-		if (count results) > 0 then
-			set dir to item 1 of results as string
-		else
-			set dir to ""
-		end if
-		
-		return dir
-		
-	end tell
-end FindOpenGL
 
 on SetGlobals()
 	tell application "Finder"
@@ -129,7 +121,7 @@ on SetGlobals()
 end SetGlobals
 
 on BuildLibraries(proj)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		open (gProjectsDir & proj & pProjectFileExtension)
 		repeat with i from 2 to (count targets of project document 1)
 			set the current target of project document 1 to target i of project document 1
@@ -152,7 +144,7 @@ end BuildLibraries
 
 on BuildAllLibraries()
 	set myLibs to {"mitsock", "ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", ¬
-		"ncbidesk", "ddvlib", "ncbitool", "ncbimmdb", "ncbicn3d", "ncbiNacc", ¬
+		"ncbidesk", "ddvlib", "ncbitool", "ncbimmdb", "ncbiNacc", ¬
 		"netentr", "netcli", "ncbibls3", "ncbiid1", "ncbimla", "ncbitxc2", "vibnet"}
 	
 	repeat with proj in myLibs
@@ -166,7 +158,7 @@ with timeout of 60000 seconds
 
 	SetGlobals()
 	
-	tell application "CodeWarrior IDE 4.2.6" to activate
+	tell application "CodeWarrior IDE" to activate
 	
 	BuildAllLibraries()
 	

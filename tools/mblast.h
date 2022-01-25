@@ -32,8 +32,17 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.41 $ 
+/* $Revision: 6.44 $ 
 * $Log: mblast.h,v $
+* Revision 6.44  2002/08/01 20:47:24  dondosha
+* Prototypes changed for megablast functions related to traceback
+*
+* Revision 6.43  2002/07/17 22:12:58  dondosha
+* Allow return without computing seqalign for partial search
+*
+* Revision 6.42  2002/06/11 14:44:47  dondosha
+* Return status from some functions instead of search block pointer
+*
 * Revision 6.41  2002/04/09 18:21:00  dondosha
 * Changed #ifdefs to conditionals, allowing different discontiguous templates in a single binary
 *
@@ -217,6 +226,9 @@ BioseqMegaBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr datab
 SeqAlignPtr PNTR
 BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options));
 
+SeqAlignPtr PNTR
+BioseqMegaBlastEngineCoreEx PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Boolean partial));
+
 BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, Int4 wordsize));
 
 Boolean MegaBlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp,
@@ -294,9 +306,9 @@ GapXEditScriptPtr
 MBToGapXEditScript PROTO((edit_script_t PNTR ed_script));
 
 SeqAlignPtr
-MegaBlastSeqAlignFromResultHitlist PROTO((BlastSearchBlkPtr search,
-				   BLASTResultHitlistPtr result_hitlist,
-				   SeqIdPtr subject_id));
+MegaBlastGapInfoToSeqAlign PROTO((BlastSearchBlkPtr search, Int4 subject_index,
+                                  Int2 query_index));
+
 Boolean 
 BlastNeedHumanRepeatFiltering PROTO((BlastDoubleInt4Ptr gi_list, 
 				     Int4 gi_list_size, Uint4 query_gi));
@@ -309,7 +321,7 @@ MegaBlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject,
 Int2
 MegaBlastReevaluateWithAmbiguities PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
-Int4 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
+Int2 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
 
 Int4 BinarySearchInt4 PROTO((Int4 n, Int4Ptr A, Int4 size));
 

@@ -1,4 +1,4 @@
-/* $Id: elecpcr.c,v 6.8 1999/07/27 18:43:04 shavirin Exp $
+/* $Id: elecpcr.c,v 6.9 2002/07/25 14:15:09 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/19/1996
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         Main program for WWW and Command-Line Electronic PCR
 *
 * $Log: elecpcr.c,v $
+* Revision 6.9  2002/07/25 14:15:09  beloslyu
+* change www3 to www
+*
 * Revision 6.8  1999/07/27 18:43:04  shavirin
 * Fixed problems found on PC NT computer.
 *
@@ -424,7 +427,7 @@ static StsResultPtr PrintSTSHeader(StsResultPtr result, CharPtr label,
       printf(" ");
         
     if(html) {
-      sprintf(TmpBuff, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
+      sprintf(TmpBuff, "<a href=\"http://www.ncbi.nlm.nih.gov/"
               "htbin-post/Entrez/query?form=6&dopt=g&db=n&"
               "uid=%s\">%s</a>",
               result->acc, result->acc);
@@ -483,7 +486,7 @@ static Boolean PrintSTSDetailes(StsResultPtr result, Boolean html)
       printf("dbSTS id: <a href=\"http://www2.ncbi.nlm.nih.gov/cgi-bin/"
              "birx_by_acc?dbsts+%d\">%d</a>, "
              "GenBank Accession: "
-             "<a href=\"http://www3.ncbi.nlm.nih.gov/"
+             "<a href=\"http://www.ncbi.nlm.nih.gov/"
              "htbin-post/Entrez/query?form=6&dopt=g&db=n&"
              "uid=%s\">%s</a><BR>Organism: %s\n"
              "Primer1: <FONT color=\"%s\">%s</FONT>\n"

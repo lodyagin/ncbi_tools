@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -721,7 +721,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       GatherEntity (ffp->input_entityID, (Pointer) &ggl, GeneMatchFunc, &gs);
       if (grp != NULL && StringHasNoText (grp->locus) && StringHasNoText (grp->allele) &&
             StringHasNoText (grp->desc) && StringHasNoText (grp->maploc) &&
-            grp->db == NULL && grp->syn == NULL) {
+            grp->db == NULL && grp->syn == NULL && grp->locus_tag == NULL) {
         SetValue (ffp->gene, 1);
         SetValue (ffp->useGeneXref, 3);
         SetTitle (ffp->geneSymbol, grp->locus);

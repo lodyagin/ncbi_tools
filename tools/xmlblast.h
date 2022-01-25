@@ -1,4 +1,4 @@
-/* $Id: xmlblast.h,v 6.9 2000/11/28 20:51:58 shavirin Exp $ */
+/* $Id: xmlblast.h,v 6.10 2002/07/17 22:28:13 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.h,v $
+* Revision 6.10  2002/07/17 22:28:13  dondosha
+* Added support for megablast XML output
+*
 * Revision 6.9  2000/11/28 20:51:58  shavirin
 * Adopted for usage with mani-iterational XML definition.
 *
@@ -88,7 +91,8 @@ typedef struct PSIXml {
     AsnTypePtr atp;
     AsnTypePtr BlastOutput;
     AsnTypePtr BlastOutput_iterations;
-} PSIXml, PNTR PSIXmlPtr;
+   AsnTypePtr BlastOutput_mbstat;
+} PSIXml, MBXml, PNTR PSIXmlPtr, PNTR MBXmlPtr;
 
 #define BXML_INCLUDE_QUERY 0x1
 
@@ -105,6 +109,7 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
                         ValNodePtr other_returns, Int4 option, 
                         CharPtr message);
 
+StatisticsPtr BXMLBuildStatistics(ValNodePtr other_returns, Boolean ungapped);
 BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database, 
                                          BLAST_OptionsBlkPtr options, 
                                          BioseqPtr query, Int4 flags);
@@ -113,6 +118,12 @@ IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign,
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
                                    Int4 iter_num, CharPtr message);
+
+IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign, 
+                                   ValNodePtr other_returns,
+                                   Boolean is_ooframe, Boolean ungapped,
+                                   Int4 iter_num, CharPtr message, 
+                                   BioseqPtr query);
 
 HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
                               Boolean is_ooframe);
@@ -125,7 +136,7 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
                      BioseqPtr query, Int4 flags);
     
 void PSIXmlClose(PSIXmlPtr psixp);
-
+void MBXmlClose(PSIXmlPtr mbxp, ValNodePtr other_returns, Boolean ungapped);
 
 #ifdef __cplusplus
 /* { */ }

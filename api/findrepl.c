@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.7  2002/06/11 14:41:20  kans
+* added support for locus_tag
+*
 * Revision 6.6  2002/03/05 21:11:04  kans
 * do not replace ifp->key
 *
@@ -1328,6 +1331,7 @@ static void FindReplFeats (
       FindReplString (&(grp->allele), fsp);
       FindReplString (&(grp->desc), fsp);
       FindReplString (&(grp->maploc), fsp);
+      FindReplString (&(grp->locus_tag), fsp);
       FindReplStringList (grp->syn, fsp);
       FindReplDbxrefs (grp->db, fsp);
       break;

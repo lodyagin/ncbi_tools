@@ -1,4 +1,4 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.30 $  $Date: 2002/03/14 21:07:11 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.31 $  $Date: 2002/05/30 16:20:16 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,10 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.31  2002/05/30 16:20:16  dondosha
+* 1. Correction in evaluation of hits for DNA case,
+* 2. Added word size parameter to make DNA clustering more flexible
+*
 * Revision 6.30  2002/03/14 21:07:11  dondosha
 * Slight improvement in finding the used id list from a gi list when reclustering
 *
@@ -552,7 +556,7 @@ PrintNeighbors(VoidPtr ptr)
     if (search->prog_number == blast_type_blastp)
         subject_length = readdb_get_sequence(search->rdfp, search->subject_id, &subject);
     else { /* Mega BLAST saves ncbi4na-encoded sequence */
-        subject = search->subject->sequence_start;
+        subject = search->subject->sequence_start + 1;
         subject_length = search->subject->length;
     }
     hspcnt = current_hitlist->hspcnt;
@@ -773,7 +777,10 @@ static Args myargs [] = {
    { "Enable id parsing in database formatting?",                /* 13 */
       "TRUE", NULL, NULL, FALSE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
    { "Configuration file with advanced options",                 /* 14 */
-      NULL, NULL, NULL, TRUE, 'c', ARG_FILE_IN, 0.0, 0, NULL} 
+     NULL, NULL, NULL, TRUE, 'c', ARG_FILE_IN, 0.0, 0, NULL},
+   { "Word size to use (0 for default: proteins 3, nucleotides 32)",/* 15 */
+     "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL}       
+ 
 };
 
 #define MAX_DB_SIZE 100000
@@ -945,11 +952,14 @@ Int2 Main (void)
     options->number_of_cpus = myargs[1].intvalue;
     if (!is_prot) {
        options->is_megablast_search = TRUE;
-       options->wordsize = 32;
        options->gap_open = options->gap_extend = 0;
+       options->wordsize = 32;
        options->block_width = 0;
        options->window_size = 0;
     }    
+
+    if (myargs[15].intvalue != 0)
+       options->wordsize = myargs[15].intvalue;
 
     if (myargs[14].strvalue) {
        CharPtr string_options = NULL;

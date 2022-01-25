@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.17  2002/06/10 15:19:16  kans
+* AsnPrintString checks for NULL input string, reports error and returns FALSE
+*
 * Revision 6.16  2002/03/08 20:13:10  ivanov
 * Fixed AsnPrintNewLine(), AsnPrintString() -- accurate print XML
 *
@@ -1517,6 +1520,11 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 	Boolean          indent_state;
 	int              bad_char = 0, bad_char_ctr = 0;
     int              linepos_start = aip->linepos;
+
+	if (the_string == NULL) {
+		AsnIoErrorMsg(aip, 106, bad_char, "");
+		return FALSE;
+	}
 
     if (aip->type & ASNIO_XML)
 		isXML = TRUE;

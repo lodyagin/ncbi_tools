@@ -310,7 +310,7 @@ static Boolean print_citation (SeqFeatPtr sfp, FILE *fp, CharPtr buf, Int4 buf_s
 				if(is_html)
 				{
 					sprintf(temp, "%ld", (long) muid);
-					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
+					sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
 					print_store_for_html(temp, HTML_buffer, &index, prt_col.width, fp);
 					print_store_for_html(" ", NULL, &index, prt_col.width, fp);
 				}
@@ -342,7 +342,7 @@ static Boolean print_citation (SeqFeatPtr sfp, FILE *fp, CharPtr buf, Int4 buf_s
 						if(is_html)
 						{
 							sprintf(temp, "%ld", (long) muid);
-							sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
+							sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
 							print_store_for_html(temp, HTML_buffer, &index, prt_col.width, fp);
 							print_store_for_html(" ", NULL, &index, prt_col.width, fp);
 						}
@@ -481,7 +481,7 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 			}
 			else if(StringICmp(dbtag->db, "MIM") == 0 && oip->id > 0)
 			{
-				sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/htbin-post/Omim/dispmim?"
+				sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/htbin-post/Omim/dispmim?"
 				"%ld\">",(long) oip->id);
 				html_buf = HTML_buffer;
 			}
@@ -491,7 +491,7 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 				gi = GetGIForSeqId (t_sip);
 				if(gi > 0)
 				{
-					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
+					sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
                 				"htbin-post/Entrez/query?form=6&dopt=g&db=n&"
                  				"uid=%08ld\">",(long) gi);
 					html_buf = HTML_buffer;
@@ -860,7 +860,7 @@ static Boolean print_store_seqid(SeqIdPtr sip, CharPtr buf, Int4 buf_size, Int4P
 		MuskSeqIdWrite(sip, temp, 100, PRINTID_TEXTID_ACCESSION, TRUE, TRUE);
 		if(is_html)
 		{
-			sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
+			sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
                 "htbin-post/Entrez/query?form=6&dopt=g&db=n&"
                  "uid=%08ld\">", (long) sip->data.intvalue);
 			html_buf = HTML_buffer;

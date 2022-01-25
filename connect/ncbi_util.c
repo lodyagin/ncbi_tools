@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.19 2002/02/11 20:36:44 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.21 2002/06/18 17:07:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.21  2002/06/18 17:07:44  lavr
+ * Employ _strdate() & _strtime() if compiled by MSVC
+ *
+ * Revision 6.20  2002/05/07 18:22:10  lavr
+ * Use fLOG_None in LOG_ComposeMessage()
+ *
  * Revision 6.19  2002/02/11 20:36:44  lavr
  * Use "ncbi_config.h"
  *
@@ -215,7 +221,7 @@ extern char* LOG_ComposeMessage
     size_t total_len;
 
     /* Adjust formatting flags */
-    if (call_data->level == eLOG_Trace) {
+    if (call_data->level == eLOG_Trace  &&  format_flags != fLOG_None) {
         format_flags |= fLOG_Full;
     } else if (format_flags == fLOG_Default) {
 #ifdef NDEBUG
@@ -227,6 +233,15 @@ extern char* LOG_ComposeMessage
 
     /* Pre-calculate total message length */
     if ((format_flags & fLOG_DateTime) != 0) {
+#ifdef NCBI_OS_MSWIN/*Should be compiler-dependent, but C-Toolkit lacks it*/
+        _strdate(&datetime[datetime_len]);
+        datetime_len += strlen(&datetime[datetime_len]);
+        datetime[datetime_len++] = ' ';
+        _strtime(&datetime[datetime_len]);
+        datetime_len += strlen(&datetime[datetime_len]);
+        datetime[datetime_len++] = ' ';
+        datetime[datetime_len]   = '\0';
+#else /*NCBI_OS_MSWIN*/
         static const char timefmt[] = "%D %T ";
         struct tm* tm;
 #ifdef NCBI_CXX_TOOLKIT
@@ -244,6 +259,7 @@ extern char* LOG_ComposeMessage
         tm = &temp;
 #endif/*NCBI_CXX_TOOLKIT*/
         datetime_len = strftime(datetime, sizeof(datetime), timefmt, tm);
+#endif/*NCBI_OS_MSWIN*/
     }
     if ((format_flags & fLOG_Level) != 0  &&
         (call_data->level != eLOG_Note ||

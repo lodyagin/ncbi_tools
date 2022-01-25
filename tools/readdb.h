@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.98 $
+* $Revision: 6.116 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,66 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.116  2002/07/30 15:28:50  camacho
+* Added fastacmd function to parse SeqLocs
+*
+* Revision 6.115  2002/07/29 15:45:19  camacho
+* Made readdb_get_taxnames a LIBCALL function
+*
+* Revision 6.114  2002/07/24 19:31:48  raytseli
+* much simpler and more efficient approach to using madvise()
+* .
+*
+* Revision 6.113  2002/07/22 13:06:42  raytseli
+* explicitly allow setting of the advice type for madvise()
+* .
+*
+* Revision 6.112  2002/07/18 17:39:54  raytseli
+* changed ifdef OS_UNIX_SUN to ifdef OS_UNIX_SOL for madvise()
+* .
+*
+* Revision 6.111  2002/07/18 15:54:26  raytseli
+* added function to explicitly set madvise() block size, and madvise() sync mode.
+*
+* Revision 6.110  2002/07/18 15:01:54  raytseli
+* correct problem with pointer format "%p" ErrPostEx() handling on linux.
+* Add extern func to allow explicit madvise() functionality activation.
+*
+* Revision 6.109  2002/07/17 17:15:06  raytseli
+* only allow madvise()-related stuff on SUN or Linux.
+* .
+*
+* Revision 6.108  2002/07/17 16:54:54  raytseli
+* additional #ifdefs to allow compilation.
+*
+* Revision 6.106  2002/07/17 14:36:54  raytseli
+* incorporated madvise into readdb
+* .
+*
+* Revision 6.105  2002/07/14 21:02:08  camacho
+* Added extra features to fastacmd
+*
+* Revision 6.104  2002/07/09 16:41:52  camacho
+* Made taxonomy databases multi-thread safe
+*
+* Revision 6.103  2002/06/26 00:45:37  camacho
+*
+* Added readdb_get_totals_ex2 to allow recalculation of database length as
+* well as total number of sequences after the virtual oidlist has been
+* created.
+*
+* Revision 6.102  2002/06/04 21:45:39  dondosha
+* Corrected the readdb_get_sequence_number function in case of multiple-volume databases
+*
+* Revision 6.101  2002/06/04 20:22:56  camacho
+* Fixed taxonomy databases to work w/o mmap
+*
+* Revision 6.100  2002/05/15 20:23:47  camacho
+* Added wgs_{mouse,anthrax} criteria functions
+*
+* Revision 6.99  2002/05/02 21:52:06  camacho
+* Support for genmask's new month/subset mask combinations
+*
 * Revision 6.98  2002/04/18 19:35:07  camacho
 * 1. Added fdfilter/genmask callbacks for wgs subsets
 * 2. Modified fdfilter/genmask refseq_protein callback function
@@ -607,6 +667,7 @@ typedef struct nlm_mfile {
 	Boolean   mfile_true;	/* If TRUE then mmap succeeded. */
 	Boolean   contents_allocated; /* If TRUE, the contents have been allocated
 					and are not merely a copy. */
+	Uint1Ptr mmp_madvise_end; /* madvise() file offset */
 } NlmMFILE, PNTR NlmMFILEPtr;
 
 /*
@@ -706,7 +767,9 @@ typedef	struct _RDBTaxInfo {
     Int4        reserved[4];     /* reserved */
     NlmMFILEPtr taxfp;           /* Memory mapped index file */
     RDBTaxIdPtr taxdata;         /* Index tax_id/file offset */
-    FILE        *name_fd;        /* Pointer to the file with taxonomy names */
+    Boolean     taxdata_alloc;   /* true if taxdata was allocated */
+    NlmMFILEPtr name_fd;         /* Pointer to the file with taxonomy names */
+    Boolean     taxinfo_alloc;   /* Flag to determine structure ptr ownership */
 } RDBTaxInfo, *RDBTaxInfoPtr;
 
 typedef	struct _RDBTaxLookup {
@@ -787,8 +850,7 @@ if there is no mem-mapping or it failed. */
 	Int2	            filebit;   /* bit corresponding to the DB file */
 	Int2		    aliasfilebit;/* bit corresponding to the DB alias file */
 	OIDListPtr	    oidlist;   /* structure containing a list of ordinal ID's. */
-    Int4            membership_bit; /* membership bit read from .[pn]al file for
-                                       structured asn deflines */
+    Int4            membership_bit; /* membership bit read from .[pn]al file for structured asn deflines */
 	Int4		    sparse_idx;/* Sparse indexes indicator */
         Char                full_filename[PATH_MAX]; /* Full path for the file */
         ReadDBSharedInfoPtr shared_info;
@@ -797,6 +859,7 @@ if there is no mem-mapping or it failed. */
         CharPtr             gifile;    /* Path to a file with the gi list */
         Int4		    preferred_gi; /* this gi should be listed first */
                                           /* in the bioseq if non-zero */
+	Int4    last_preloaded; /* starting ordinal id of the last preloaded file block */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
     
 /* Function prototypes */
@@ -816,7 +879,8 @@ Int2	bit_engine_numofbits(Int4 word);
 Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path);
 CharPtr	FindBlastDBFile (CharPtr filename);
 CharPtr	FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot);
-RDBTaxNamesPtr readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id);
+RDBTaxNamesPtr LIBCALL readdb_get_taxnames PROTO((
+            ReadDBFILEPtr rdfp, Int4 tax_id));
 
 /* mmap's */
  
@@ -888,6 +952,14 @@ Boolean LIBCALL readdb_get_totals PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr total_
 Boolean LIBCALL
 readdb_get_totals_ex PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num, Boolean use_alias));
 
+/* retrieves the total number of sequences and database length in the
+ * rdfp_list. use_alias and use_virtual_oidlist are mutually exclusive
+ * options (both of them cannot be true at the same time). If 
+ * use_virtual_oidlist is TRUE, this function assumes that this rdfp_list has 
+ * been processed by BlastProcessGiLists */
+Boolean LIBCALL
+readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr dblen, 
+        Int4Ptr nseq, Boolean use_alias, Boolean use_virtual_oidlist));
 
 
 /* 
@@ -1219,7 +1291,16 @@ typedef	struct di_record {
 	Int4	gi_threshold;   /* for 'month' subset */
 } DI_Record, *DI_RecordPtr;
 
-Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
+typedef Boolean (*GMCriteriaFunc) (DI_Record direc);
+
+typedef struct {
+    Int4           count, allocated;
+    CharPtr        *subset_name;
+    GMCriteriaFunc *criteria;
+    Int4           *membership_bit;
+} GMSubsetData, * GMSubsetDataPtr;
+
+Boolean	ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
 	Boolean(*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
 	FILE *out, Int4 gi_threshold);
 
@@ -1238,6 +1319,8 @@ Boolean is_REFSEQ_PROTEIN(DI_Record direc);
 Boolean is_CONTIG(DI_Record direc);
 Boolean is_WGS_ANOPHELES(DI_Record direc);
 Boolean is_WGS_RICE(DI_Record direc);
+Boolean is_WGS_MOUSE(DI_Record direc);
+Boolean is_WGS_ANTHRAX(DI_Record direc);
 
 typedef	struct updateindex_struct {
     FILE	*cifile;/* CommonIndex file */
@@ -1252,9 +1335,11 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 /* Fastacmd API */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
-Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
+Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
-	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db);
+	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
+    CharPtr seqlocstr, Uint1 strand, Boolean taxonomy_info_only, 
+    Boolean dbinfo_only);
 Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
 		    Boolean use_ctrlAs);
 
@@ -1277,8 +1362,39 @@ Boolean FD_CreateAliasFile PROTO((CharPtr title, CharPtr basename,
 /* simple function to make alias file give FDB_optionsPtr, alias file is only made if appropriate. */
 Boolean FD_MakeAliasFile PROTO((FDB_optionsPtr options));
 Int4 LIBCALL 
-readdb_get_sequence_number PROTO((ReadDBFILEPtr rdfp, Int4 first_seq, Int4 offset));
+readdb_get_sequence_number PROTO((ReadDBFILEPtr rdfp, Int4 first_seq, Int8 offset));
 
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef HAVE_MADVISE
+
+/* enable/disable madvise functionality, -- disabled by default */
+void LIBCALL
+readdb_madvise_enable PROTO((Boolean enable));
+
+/* set madvise type, -- default eMMA_Normal */
+void LIBCALL
+readdb_madvise_type PROTO((EMemMapAdvise advice));
+
+/* explicitly set madvise sync mode:
+ * default is sync on Solaris, async on Linux 
+ */
+void LIBCALL
+readdb_madvise_sync_mode PROTO((Boolean mode));
+
+/* explicitly set madvise block size, which is the
+ * number of sequences preloaded in a single madvise
+ * operation, default is 65536
+ */
+void LIBCALL
+readdb_madvise_block PROTO((Int4 nSeqs));
+
+/* call preload directly -- run madvise on a chunk of memory mapped file */
+void LIBCALL
+readdb_preload PROTO((ReadDBFILEPtr rdfp, Int4 first_db_seq,
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync));
+
+#endif /* HAVE_MADVISE */
+#endif /* SOL || LINUX */
 #ifdef __cplusplus
 }
 #endif

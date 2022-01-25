@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.34  2002/06/13 16:15:12  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
+*
 * Revision 6.33  2002/03/28 13:35:48  kans
 * only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
 *
@@ -325,9 +328,7 @@ typedef struct gdImageStruct { void* dummy; } gdImage;
 Nlm_Boolean  Nlm_nowPrinting = FALSE;
 
 #ifdef WIN_MAC
-# if !defined(OS_UNIX_DARWIN)
 #include "MoreCarbonAccessors.h"
-#endif
 #endif
 
 #ifdef WIN_MAC

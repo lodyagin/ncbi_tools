@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.22  2002/07/23 19:31:43  butanaev
+ Filtered out gi -1
+
  Revision 1.21  2001/11/02 14:24:44  kans
  made Fasta style SeqId args multi-line for Mac window
 
@@ -627,6 +630,9 @@ void EntrezQuery(char *query)
                              0 == strcmp(myargs[dbarg].strvalue, "n"), FALSE);
   for(i = 0; i < count; ++i)
   {
+    if(ids[i] == -1)
+      continue;
+
     if(myargs[onlylistarg].intvalue)
       printf("%d\n", ids[i]);
     else

@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.70 $
+* $Revision: 6.80 $
 *
 * File Description:
 *
@@ -137,7 +137,7 @@ typedef struct internalRow {
   ValNodePtr      feats;        /* data.ptrvalue == RelevantFeatureItemPtr */
   struct internalRow PNTR next;
 } InternalRow, PNTR InternalRowPtr;
-  ValNodePtr      cleanupList;  /* */
+
 /* returns the total number of _rows_ */
 typedef Uint2   (PNTR LayoutFunction) (InternalRowPtr firstRow, FilterProcessStatePtr FPSP);
 
@@ -149,9 +149,9 @@ static CharPtr LayoutStrings [] = {
   "ByType", /* like "compact", except that no row will contain _different_ types of features (this may use more rows) */
   "Smear", /* one row contains all features of a given type (overlapping features will render as an anonymous smear */
   /*  "Single Row", -- not working currently*/ /* _all_ features are rendered in a single row (equivalent to "smear" if given only one type of features)*/
-  "Compact", /* Overlapping features are drawn in different rows, but this trys to minimize the number of rows, */
-  "GeneProducts", /* not yet implemented. . . */
-  "GeneProductsX", /* not yet implemented. . . */
+  "Compact", /* Overlapping features are drawn in different rows, but this tries to minimize the number of rows, */
+  "GeneProducts", /* Group associated mRNA and CDS regions . . . */
+  "GeneProductsX", /* Like GeneProducts, but may display the same mRNA multiple times if it maps to multiple CDS regions. . . */
   NULL
 };
 
@@ -169,6 +169,8 @@ static LayoutAlgorithm LayoutValues [] = {
 
 static CharPtr  LlocStrings [] = {
   "none",
+  "clip",
+  "cull",
   "inside",
   "above",
   "below",
@@ -179,6 +181,8 @@ static CharPtr  LlocStrings [] = {
 
 static LabelLocEnum LlocValues [] = {
   LabelNone,
+  LabelAboveClip, /* above, but not wider than the feature*/
+  LabelAboveCull, /* above, but only displayed iff wider than the feature */
   LabelInside,
   LabelAbove,
   LabelBelow,
@@ -334,6 +338,11 @@ static Int1 StringIndexInStringList (CharPtr testString, CharPtr PNTR stringList
   Int1  i;
 
   if (testString == NULL || stringList == NULL) return -1;
+  /*
+  for (i = 0; stringList [i] != NULL; i++) {
+    if (StringICmp (testString, stringList [i]) == 0) return i;
+  }
+  */
   i = 0;
   while (stringList [i] != NULL) {
     if (StringICmp (testString, stringList [i]) == 0) return i;
@@ -364,6 +373,15 @@ static FonT LocalParseFont (
   }
 }
 
+static CharPtr ColorModifiers [] = {
+"light",
+"lt",
+"dark",
+"drk",
+"dk",
+NULL
+};
+
 /* COLOR must point to an array of Uint1 [3]; */
 static Boolean ParseColor (
   CharPtr string,
@@ -371,47 +389,49 @@ static Boolean ParseColor (
 )
 
 {
-  unsigned  sscanfOffset, localColor [3] = { 0 }; /* "unsigned", to match %u and %n*/
-  Uint1  offset;
-  Uint1  i;
-  Boolean isLight = FALSE, isDark = FALSE;
-  Char modifierBuffer [8];
+  unsigned  sscanfOffset, localColor [3] = { 0, 0, 0 }; /* "unsigned", to match %u and %n*/
+  Uint1     offset = 0;
+  Uint1     i;
+  Boolean   isLight = FALSE, isDark = FALSE;
+  Char      ch, modifierBuffer [8];
+  CharPtr   tmp;
 
 
   if (string == NULL || color == NULL) return FALSE;
+
   /* first try to parse a human-readable color (ie, light blue)*/
   StringNCpy_0 (modifierBuffer, string, sizeof (modifierBuffer));
-  modifierBuffer [5] = '\0'; /* truncate "light xyz" -> "light" */
-  if (StringICmp (modifierBuffer, "light") == 0) {
-    isLight = TRUE;
-    offset = 5;
-  } else {
-    modifierBuffer [4] = '\0';
-    if (StringICmp (modifierBuffer, "dark") == 0) {
-      isDark = TRUE;
-      offset = 4;
-    } else {
-      modifierBuffer [3] = '\0';
-      if (StringICmp (modifierBuffer, "drk") == 0) {
+  /* truncate at space */
+  tmp = modifierBuffer;
+  ch = *tmp;
+  while (ch != '\0' && ch != ' ') {
+    tmp++;
+    ch = *tmp;
+  }
+  *tmp = '\0';
+
+  i = StringIndexInStringList (modifierBuffer, ColorModifiers);
+  if (i > 0 && i < DIM (ColorModifiers)) {
+    switch (i) {
+      case 1 :
+      case 2 :
+        isLight = TRUE;
+        offset = StringLen (modifierBuffer);
+        break;
+      case 3 :
+      case 4 :
+      case 5 :
         isDark = TRUE;
-        offset = 3;
-      } else {
-        modifierBuffer [2] = '\0';
-        if (StringICmp (modifierBuffer, "lt") == 0) {
-          isLight = TRUE;
-          offset = 2;
-        } else if (StringICmp (modifierBuffer, "dk") == 0) {
-          isDark = TRUE;
-          offset = 2;
-        } else {
-          offset = 0;
-        }
-      }
+        offset = StringLen (modifierBuffer);
+        break;
+      default :
+        break;
     }
   }
-  while (string[offset] != '\0' && !IS_ALPHA (string[offset])) {
+  while (string[offset] != '\0' && (! IS_ALPHA (string[offset]))) {
     offset ++;
   }
+
   i = StringIndexInStringList (string + offset, ColorStrings);
   if (i > 0 && i < DIM (ColorValues)) {
     color [0] = ColorValues [i] [0];
@@ -429,7 +449,7 @@ static Boolean ParseColor (
   } else {
     offset = 0;
     for (i = 0; i < 3; i++) {
-      for (; string[offset] != '\0' && !IS_DIGIT (string [offset]); offset++) continue;
+      for (; string[offset] != '\0' && (! IS_DIGIT (string [offset])); offset++) continue;
       if (string [offset] == '\0') return FALSE;
       if (sscanf (string + offset, "%u%n", localColor + i, &sscanfOffset) == 0)  return FALSE;
       offset += sscanfOffset;
@@ -450,7 +470,7 @@ NLM_EXTERN FilterPtr FindFilterByName (
 {
   Uint1  i;
 
-  if (VCP == NULL || StringHasNoText (name) || !VCP->ArraysPopulated) return NULL;
+  if (VCP == NULL || StringHasNoText (name) || (! VCP->ArraysPopulated)) return NULL;
   i = StringIndexInStringList (name, VCP->FilterNameArray);
   if (i < VCP->FilterCount && i >= 0) return (VCP->FilterArray[i]);
   return NULL;
@@ -464,7 +484,7 @@ NLM_EXTERN AppearancePtr FindAppearanceByName (
 {
   Uint1  i;
 
-  if (VCP == NULL || StringHasNoText (name) || !VCP->ArraysPopulated) return NULL;
+  if (VCP == NULL || StringHasNoText (name) || (! VCP->ArraysPopulated)) return NULL;
   i = StringIndexInStringList (name, VCP->AppearanceNameArray);
   if (i < VCP->AppearanceCount && i>= 0) return (VCP->AppearanceArray[i]);
   return NULL;
@@ -479,7 +499,7 @@ NLM_EXTERN LayoutAlgorithm FindLayoutByName (
 
   if (StringHasNoText (name)) return 0;
   i = StringIndexInStringList (name, LayoutStrings);
-  if (i >= 0 && i < DIM(LayoutValues)) {
+  if (i >= 0 && i < DIM (LayoutValues)) {
     return LayoutValues [i];
   }
   return Layout_Inherit;
@@ -545,12 +565,12 @@ NLM_EXTERN AppearancePtr CreateAppearance (
 }
 
 static BioseqAppearanceItemPtr ParseBioseqAppearanceItem (
-  CharPtr sectionName,
+  CharPtr sect,
   ViewerConfigsPtr VCP
 )
 
 {
-  Char                     inputBuffer [128];
+  Char                     buf [128];
   BioseqAppearanceItemPtr  bioseqAIP;
   Int2                     i;
   unsigned                 val; /* "unsigned" to match sscanf("%ud")*/
@@ -559,38 +579,38 @@ static BioseqAppearanceItemPtr ParseBioseqAppearanceItem (
   if (bioseqAIP == NULL) return NULL;
 
   bioseqAIP->labelLoc = GroupLabelLocationValues [0];
-  if (GetAppParam (config_filename, sectionName, "label", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, GroupLabelLocations);
+  if (GetAppParam (config_filename, sect, "label", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, GroupLabelLocations);
     if (i >= 0 && i < DIM (GroupLabelLocationValues)) {
       bioseqAIP->labelLoc = GroupLabelLocationValues  [i];
     }
   }
 
   bioseqAIP->drawScale = TRUE;
-  if (GetAppParam (config_filename, sectionName, "scale", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (GetAppParam (config_filename, sect, "scale", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       bioseqAIP->drawScale = BoolValues [i];
     }
   }
 
-  if (GetAppParam (config_filename, sectionName, "labelfont", NULL, inputBuffer, sizeof (inputBuffer))) {
-    bioseqAIP->labelFont = LocalParseFont (inputBuffer);
+  if (GetAppParam (config_filename, sect, "labelfont", NULL, buf, sizeof (buf))) {
+    bioseqAIP->labelFont = LocalParseFont (buf);
   }
   if (bioseqAIP->labelFont == NULL) {
     bioseqAIP->labelFont = systemFont;
   }
 
-  if (GetAppParam (config_filename, sectionName, "scalefont", NULL, inputBuffer, sizeof (inputBuffer))) {
-    bioseqAIP->scaleFont = LocalParseFont (inputBuffer);
+  if (GetAppParam (config_filename, sect, "scalefont", NULL, buf, sizeof (buf))) {
+    bioseqAIP->scaleFont = LocalParseFont (buf);
   }
   if (bioseqAIP->scaleFont == NULL) {
     bioseqAIP->scaleFont = SetSmallFont ();
   }
 
-  if (GetAppParam (config_filename, sectionName, "height", NULL, inputBuffer, sizeof (inputBuffer))) {
-    if (inputBuffer != NULL) {
-      sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "height", NULL, buf, sizeof (buf))) {
+    if (buf != NULL) {
+      sscanf (buf, "%ud", &val);
       bioseqAIP->height = MIN (val, 16);
     }
   }
@@ -598,9 +618,9 @@ static BioseqAppearanceItemPtr ParseBioseqAppearanceItem (
     bioseqAIP->height = 10;
   }
 
-  if (GetAppParam (config_filename, sectionName, "scaleheight", NULL, inputBuffer, sizeof (inputBuffer))) {
-    if (inputBuffer != NULL) {
-      sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "scaleheight", NULL, buf, sizeof (buf))) {
+    if (buf != NULL) {
+      sscanf (buf, "%ud", &val);
       bioseqAIP->scaleHeight = MIN (val, 16);
     }
   }
@@ -608,19 +628,19 @@ static BioseqAppearanceItemPtr ParseBioseqAppearanceItem (
     bioseqAIP->scaleHeight = 10;
   }
 
-  if (GetAppParam (config_filename, sectionName, "color", NULL, inputBuffer, sizeof (inputBuffer))) {
-    ParseColor (inputBuffer, bioseqAIP->bioseqColor);
+  if (GetAppParam (config_filename, sect, "color", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, bioseqAIP->bioseqColor);
   }
-  if (GetAppParam (config_filename, sectionName, "labelcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
-    ParseColor (inputBuffer, bioseqAIP->labelColor);
+  if (GetAppParam (config_filename, sect, "labelcolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, bioseqAIP->labelColor);
   }
-  if (GetAppParam (config_filename, sectionName, "scalecolor", NULL, inputBuffer, sizeof (inputBuffer))) {
-    ParseColor (inputBuffer, bioseqAIP->scaleColor);
+  if (GetAppParam (config_filename, sect, "scalecolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, bioseqAIP->scaleColor);
   }
 
   bioseqAIP->format = BioseqFormatValues [0];
-  if (GetAppParam (config_filename, sectionName, "format", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BioseqFormat);
+  if (GetAppParam (config_filename, sect, "format", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BioseqFormat);
     if (i >= 0 && i < DIM (BioseqFormatValues)) {
       bioseqAIP->format = BioseqFormatValues  [i];
     }
@@ -630,14 +650,14 @@ static BioseqAppearanceItemPtr ParseBioseqAppearanceItem (
 }
 
 static AppearanceItemPtr ParseFeatureAppearanceItem (
-  CharPtr sectionName,
+  CharPtr sect,
   AppearanceItemPtr inheritFromMe,
   Boolean recursing,
   ViewerConfigsPtr VCP
 )
 
 {
-  Char               inputBuffer [128];
+  Char               buf [128];
   AppearanceItemPtr  newAIP;
   Int2               i;
   Boolean            changed = FALSE;
@@ -645,8 +665,8 @@ static AppearanceItemPtr ParseFeatureAppearanceItem (
   AppearanceItemPtr  namedAIP;
 
   if (! recursing) {
-    if (GetAppParam (config_filename, sectionName, "usenamedstyle", NULL, inputBuffer, sizeof (inputBuffer))) {
-      namedAIP = ParseFeatureAppearanceItem (inputBuffer, inheritFromMe, TRUE, VCP);
+    if (GetAppParam (config_filename, sect, "usenamedstyle", NULL, buf, sizeof (buf))) {
+      namedAIP = ParseFeatureAppearanceItem (buf, inheritFromMe, TRUE, VCP);
       if (namedAIP != NULL) {
         inheritFromMe = namedAIP;
         changed = TRUE; /* !!! this will use more memory than necessary */
@@ -656,62 +676,62 @@ static AppearanceItemPtr ParseFeatureAppearanceItem (
   newAIP = MemNew (sizeof (AppearanceItem));
   if (newAIP == NULL) return NULL;
   MemCopy (newAIP, inheritFromMe, sizeof (AppearanceItem));
-  if (GetAppParam (config_filename, sectionName, "color", NULL, inputBuffer, sizeof (inputBuffer))) {
-    changed = ParseColor (inputBuffer, newAIP->Color);
+  if (GetAppParam (config_filename, sect, "color", NULL, buf, sizeof (buf))) {
+    changed = ParseColor (buf, newAIP->Color);
   }
-  if (GetAppParam (config_filename, sectionName, "labelcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
-    changed = ParseColor (inputBuffer, newAIP->LabelColor);
+  if (GetAppParam (config_filename, sect, "labelcolor", NULL, buf, sizeof (buf))) {
+    changed = ParseColor (buf, newAIP->LabelColor);
   }
 
   newAIP->LabelLoc = LabelAbove;
-  if (GetAppParam (config_filename, sectionName, "label", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, LlocStrings);
+  if (GetAppParam (config_filename, sect, "label", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, LlocStrings);
     if (i >= 0 && i < DIM (LlocValues)) {
       newAIP->LabelLoc = LlocValues [i];
     }
   }
-  if (GetAppParam (config_filename, sectionName, "displaywith", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, RenderStrings);
+  if (GetAppParam (config_filename, sect, "displaywith", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, RenderStrings);
     if (i >= 0 && i < DIM (RenderValues)) {
       newAIP->RenderChoice = RenderValues [i];
       changed = TRUE;
     }
   }
-  if (GetAppParam (config_filename, sectionName, "showarrow", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (GetAppParam (config_filename, sect, "showarrow", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       newAIP->ShowArrow = BoolValues [i];
       changed = TRUE;
     }
   }
-  if (GetAppParam (config_filename, sectionName, "gap", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, GapStrings);
+  if (GetAppParam (config_filename, sect, "gap", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, GapStrings);
     if (i >= 0 && i < DIM (RenderValues)) {
       newAIP->GapChoice = GapValues [i];
       changed = TRUE;
     }
   }
-  if (GetAppParam (config_filename, sectionName, "showtype", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (GetAppParam (config_filename, sect, "showtype", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       newAIP->AddTypeToLabel = BoolValues [i];
     }
   }
-  if (GetAppParam (config_filename, sectionName, "showcontent", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (GetAppParam (config_filename, sect, "showcontent", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       newAIP->AddDescToLabel = BoolValues [i];
     }
   }
-  if (GetAppParam (config_filename, sectionName, "height", NULL, inputBuffer, sizeof (inputBuffer))) {
-    if (inputBuffer != NULL) {
-      sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "height", NULL, buf, sizeof (buf))) {
+    if (buf != NULL) {
+      sscanf (buf, "%ud", &val);
       newAIP->Height = MIN (val, 16);
       changed = TRUE;
     }
   }
-  if (GetAppParam (config_filename, sectionName, "labelfont", NULL, inputBuffer, sizeof (inputBuffer))) {
-    newAIP->LabelFont = LocalParseFont (inputBuffer);
+  if (GetAppParam (config_filename, sect, "labelfont", NULL, buf, sizeof (buf))) {
+    newAIP->LabelFont = LocalParseFont (buf);
   }
   if (newAIP->LabelFont == NULL) {
     newAIP->LabelFont = programFont;
@@ -734,8 +754,8 @@ static AppearancePtr ParseAppearance (
 {
   AppearancePtr      AP;
   AppearanceItemPtr  AIP, impAIP, newAIP;
-  Char               inputBuffer [128];
-  Char               sectionName [128];
+  Char               buf [128];
+  Char               sect [128];
   Char               outputBuffer [128];
   AppearanceItem     DefaultAppearanceItem = {
     {0, 0, 0}, {64, 64, 64}, Render_Box, 0, 5, 0, FALSE, LineGap, TRUE, TRUE, NULL, LabelAbove
@@ -745,53 +765,57 @@ static AppearancePtr ParseAppearance (
 
   if (appearanceNameInFile == NULL) return NULL;
   DefaultAppearanceItem.LabelFont = programFont;
-  sprintf (sectionName, "%s.master", appearanceNameInFile);
+  sprintf (sect, "%s.master", appearanceNameInFile);
   /* require all styles to have a name, since high-level interface uses the name to identify Filters */
-  if (! GetAppParam (config_filename, sectionName, "name", NULL, inputBuffer, sizeof (inputBuffer))) return NULL;
-  if (StringHasNoText (inputBuffer)) return NULL;
-  AP = CreateAppearance (inputBuffer, VCP);
+  if (! GetAppParam (config_filename, sect, "name", NULL, buf, sizeof (buf))) return NULL;
+  if (StringHasNoText (buf)) return NULL;
+  AP = CreateAppearance (buf, VCP);
   if (AP == NULL) return NULL;
-  AIP = ParseFeatureAppearanceItem (sectionName, &DefaultAppearanceItem, FALSE, VCP); /*parse xyz.master */
+  AIP = ParseFeatureAppearanceItem (sect, &DefaultAppearanceItem, FALSE, VCP); /*parse xyz.master */
   if (AIP == NULL) {            /* require a "master" style */
     DestroyAppearance (AP, VCP);
     return NULL;
   }
   val = VCP->DefaultMaxScaleForArrow;
-  if (GetAppParam (config_filename, sectionName, "maxarrowscale", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "maxarrowscale", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
   }
   AP->MaxScaleForArrow = val;
   val = VCP->DefaultMinPixelsForArrow;
-  if (GetAppParam (config_filename, sectionName, "minarrowpixels", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "minarrowpixels", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
   }
   AP->MinPixelsForArrow = val;
   AP->ShadeSmears = VCP->DefaultShadeSmears;
-  if (GetAppParam (config_filename, sectionName, "shadesmears", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
-    if (i >= 0 && i < DIM(BoolValues) && i >= 0) {
+  if (GetAppParam (config_filename, sect, "shadesmears", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
+    if (i >= 0 && i < DIM (BoolValues)) {
       AP->ShadeSmears = BoolValues [i];
     }
   }
 
-  if (GetAppParam (config_filename, sectionName, "groupboxcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
-    ParseColor (inputBuffer, AP->GroupBoxColor);
+  if (GetAppParam (config_filename, sect, "groupboxcolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, AP->GroupBoxColor);
   }
 
-  if (GetAppParam (config_filename, sectionName, "grouplabelfont", NULL, inputBuffer, sizeof (inputBuffer))) {
-    AP->GroupLabelFont = LocalParseFont (inputBuffer);
+  if (GetAppParam (config_filename, sect, "grouplabelfont", NULL, buf, sizeof (buf))) {
+    AP->GroupLabelFont = LocalParseFont (buf);
     if (AP->GroupLabelFont == NULL) {
       AP->GroupLabelFont = programFont;
     }
   }
-  if (GetAppParam (config_filename, sectionName, "grouplabelcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
-    ParseColor (inputBuffer, AP->GroupLabelColor);
+  if (GetAppParam (config_filename, sect, "grouplabelcolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, AP->GroupLabelColor);
   }
 
   sprintf (outputBuffer, "%s.bioseq", appearanceNameInFile);
   AP->bioseqAIP = ParseBioseqAppearanceItem (outputBuffer, VCP);
   sprintf (outputBuffer, "%s.imp", appearanceNameInFile);
   impAIP = ParseFeatureAppearanceItem (outputBuffer, AIP, FALSE, VCP);
+  if (impAIP == NULL) {
+    sprintf (outputBuffer, "%s.import", appearanceNameInFile);
+    impAIP = ParseFeatureAppearanceItem (outputBuffer, AIP, FALSE, VCP);
+  }
   if (impAIP == NULL) {
     impAIP = AIP;
   } else {
@@ -939,6 +963,20 @@ NLM_EXTERN FilterItemPtr CreateNewFilterItemInFilter (
   return FIP;
 }
 
+static CharPtr SpecialFeatures [] = {
+"everything",
+"all",
+"every",
+"any",
+"imp",
+"rna",
+"prot",
+"bioseq",
+"graph",
+"align",
+NULL
+};
+
 static FilterItemPtr ParseFilterItem (
   CharPtr filterItemName,
   Uint2 defaultRowPadding,
@@ -948,57 +986,57 @@ static FilterItemPtr ParseFilterItem (
 )
 
 {
-  Char           sectionName [128];
+  Char           sect [128];
   Char           featureNum [128];
-  Char           inputBuffer [128];
+  Char           buf [128];
   Uint4          featdeftype;
   Uint4          featureCount = 0;
   FilterItemPtr  FIP;
-  Int2           i;
+  Int2           i, j;
   unsigned       val;
 
   FIP = MemNew (sizeof (FilterItem));
   if (FIP == NULL) return FIP;
   FIP->DrawScale = TristateUnset;
-  FIP->Type = FeatureFilter; /* this will get changed if a graph or alignment is disconvered instead */
-  sprintf (sectionName, "filters.%s", filterItemName);
-  GetAppParam (config_filename, sectionName, "layout", "inherit", inputBuffer, sizeof (inputBuffer));
-  i = StringIndexInStringList (inputBuffer, LayoutStrings);
-  if (i >=0 && i < DIM (LayoutStrings) && i >= 0) {
+  FIP->Type = FeatureFilter; /* this will get changed if a graph or alignment is discovered instead */
+  sprintf (sect, "filters.%s", filterItemName);
+  GetAppParam (config_filename, sect, "layout", "inherit", buf, sizeof (buf));
+  i = StringIndexInStringList (buf, LayoutStrings);
+  if (i >= 0 && i < DIM (LayoutStrings)) {
     FIP->LayoutChoice = LayoutValues [i];
   } else {
     FIP->LayoutChoice = defaultLayout;
   }
 
   FIP->GroupPadding = defaultGroupPadding;
-  if (GetAppParam (config_filename, sectionName, "grouppadding", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "grouppadding", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
     val = MIN (val, 100);
     FIP->GroupPadding = val;
   }
 
   FIP->IntraRowPaddingPixels = defaultRowPadding;
-  if (GetAppParam (config_filename, sectionName, "rowpadding", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "rowpadding", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
     val = MIN (val, 100);
     FIP->IntraRowPaddingPixels = val;
   }
   FIP->DrawItemRect = FALSE;
   FIP->FillItemRect = FALSE;
-  if (GetAppParam (config_filename, sectionName, "groupbox", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
-    if (i >= 0 && i < DIM (BoolValues) && i >=0) {
+  if (GetAppParam (config_filename, sect, "groupbox", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
+    if (i >= 0 && i < DIM (BoolValues) && i >= 0) {
       FIP->DrawItemRect = BoolValues [i];
     }
   }
   if (FIP->DrawItemRect) {
-    if (GetAppParam (config_filename, sectionName, "groupboxcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
+    if (GetAppParam (config_filename, sect, "groupboxcolor", NULL, buf, sizeof (buf))) {
       FIP->GroupBoxColorSet = TRUE;
-      ParseColor (inputBuffer, FIP->GroupBoxColor);
+      ParseColor (buf, FIP->GroupBoxColor);
     }
-    if (GetAppParam (config_filename, sectionName, "fillbox", NULL, inputBuffer, sizeof (inputBuffer))) {
-      i = StringIndexInStringList (inputBuffer, BoolStrings);
-      if (i >= 0 && i < DIM (BoolValues) && i >= 0) {
+    if (GetAppParam (config_filename, sect, "fillbox", NULL, buf, sizeof (buf))) {
+      i = StringIndexInStringList (buf, BoolStrings);
+      if (i >= 0 && i < DIM (BoolValues)) {
         FIP->FillItemRect = BoolValues[i];
       }
     }
@@ -1006,78 +1044,113 @@ static FilterItemPtr ParseFilterItem (
 
   FIP->GroupLabel = NoLabel;
   FIP->GroupLabelFont = programFont;
-  if (GetAppParam (config_filename, sectionName, "name", NULL, inputBuffer, sizeof (inputBuffer))) {
-    FIP->GroupLabel = StringSaveNoNull (inputBuffer);
+  if (GetAppParam (config_filename, sect, "name", NULL, buf, sizeof (buf))) {
+    FIP->GroupLabel = StringSaveNoNull (buf);
     FIP->GroupLabelLoc = LabelOnTop;
-    if (GetAppParam (config_filename, sectionName, "grouplabel", NULL, inputBuffer, sizeof (inputBuffer))) {
-      i = StringIndexInStringList (inputBuffer, GroupLabelLocations);
-      if (i >= 0 && i < DIM (GroupLabelLocationValues) && i >= 0) {
+    if (GetAppParam (config_filename, sect, "grouplabel", NULL, buf, sizeof (buf))) {
+      i = StringIndexInStringList (buf, GroupLabelLocations);
+      if (i >= 0 && i < DIM (GroupLabelLocationValues)) {
         FIP->GroupLabelLoc = GroupLabelLocationValues[i];
       }
     }
-    if (GetAppParam (config_filename, sectionName, "grouplabelfont", NULL, inputBuffer, sizeof (inputBuffer))) {
+    if (GetAppParam (config_filename, sect, "grouplabelfont", NULL, buf, sizeof (buf))) {
       FIP->GroupLabelFontSet = TRUE;
-      FIP->GroupLabelFont = LocalParseFont (inputBuffer);
+      FIP->GroupLabelFont = LocalParseFont (buf);
       if (FIP->GroupLabelFont == NULL) {
         FIP->GroupLabelFont = programFont;
       }
     }
-    if (GetAppParam (config_filename, sectionName, "grouplabelcolor", NULL, inputBuffer, sizeof (inputBuffer))) {
+    if (GetAppParam (config_filename, sect, "grouplabelcolor", NULL, buf, sizeof (buf))) {
       FIP->GroupLabelColorSet = TRUE;
-      ParseColor (inputBuffer, FIP->GroupLabelColor);
+      ParseColor (buf, FIP->GroupLabelColor);
     }
   }
 
   FIP->LabelLoc = LabelUnset;
-  if (GetAppParam (config_filename, sectionName, "label", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, LlocStrings);
+  if (GetAppParam (config_filename, sect, "label", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, LlocStrings);
     if (i >= 0 && i < DIM (LlocValues)) {
       FIP->LabelLoc = LlocValues [i];
     }
   }
 
   FIP->AddTypeToLabel = TristateUnset;
-  if (FIP->LabelLoc != LabelNone && GetAppParam (config_filename, sectionName, "showtype", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (FIP->LabelLoc != LabelNone && GetAppParam (config_filename, sect, "showtype", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       FIP->AddTypeToLabel = BOOL_TO_TRISTATE (BoolValues [i]);
     }
   }
   FIP->AddDescToLabel = TristateUnset;
-  if (FIP->LabelLoc != LabelNone && GetAppParam (config_filename, sectionName, "showcontent", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
+  if (FIP->LabelLoc != LabelNone && GetAppParam (config_filename, sect, "showcontent", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       FIP->AddDescToLabel = BOOL_TO_TRISTATE (BoolValues [i]);
     }
   }
 
   FIP->MatchStrand = StrandValues [0];
-  if (GetAppParam (config_filename, sectionName, "strand", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, StrandStrings);
+  if (GetAppParam (config_filename, sect, "strand", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, StrandStrings);
     if (i >= 0 && i < DIM (StrandValues)) {
       FIP->MatchStrand = StrandValues [i];
     }
   }
   for (i = 1; i < FEATDEF_MAX; i++) {
     sprintf (featureNum, "feature%d", (unsigned) i);
-    if (GetAppParam (config_filename, sectionName, featureNum, NULL, inputBuffer, sizeof (inputBuffer))) {
-      featdeftype = FindFeatDefTypeFromKey (inputBuffer);
+    if (GetAppParam (config_filename, sect, featureNum, NULL, buf, sizeof (buf))) {
+      featdeftype = FindFeatDefTypeFromKey (buf);
       if (featdeftype == FEATDEF_BAD) {
+        /* special-case checks for types of features not found by FindFeatDefTypeFromKey () */
+        j = StringIndexInStringList (buf, SpecialFeatures);
+        /*
+        if (j >= 0 && j < DIM (SpecialFeatures)) {
+          switch (j) {
+            case 1 :
+            case 2 :
+            case 3 :
+            case 4 :
+              featdeftype = FEATDEF_ANY;
+              break;
+            case 5 :
+              featdeftype = FEATDEF_IMP;
+              break;
+            case 6 :
+              featdeftype = FEATDEF_ANY_RNA;
+              break;
+            case 7 :
+              featdeftype = FEATDEF_ANY_PROT;
+              break;
+            case 8 :
+              FIP->Type = BioseqFilter;
+              break;
+            case 9 :
+              FIP->Type = GraphFilter;
+              break;
+            case 10 :
+              FIP->Type = AlignmentFilter;
+              break;
+            default :
+              break;
+          }
+        } else continue; */
         /* insert special-case checks for types of features not found by FindFeatDefTypeFromKey () here */
-        if (StringICmp (inputBuffer, "everything") == 0 ||
-            StringICmp (inputBuffer, "all") == 0 ||
-            StringICmp (inputBuffer, "every") == 0 ||
-            StringICmp (inputBuffer, "any") == 0) {
+        if (StringICmp (buf, "everything") == 0 ||
+            StringICmp (buf, "all") == 0 ||
+            StringICmp (buf, "every") == 0 ||
+            StringICmp (buf, "any") == 0) {
           featdeftype = FEATDEF_ANY;
-        } else if (StringICmp (inputBuffer, "rna") == 0) {
+        } else if (StringICmp (buf, "imp") == 0) {
+          featdeftype = FEATDEF_IMP; /* FindFeatDefTypeFromKey matches 'import', but not 'imp' */
+        } else if (StringICmp (buf, "rna") == 0) {
           featdeftype = FEATDEF_ANY_RNA;
-        } else if (StringICmp (inputBuffer, "prot") == 0) {
+        } else if (StringICmp (buf, "prot") == 0) {
           featdeftype = FEATDEF_ANY_PROT;
-        } else if (StringICmp (inputBuffer, "bioseq") == 0) {
+        } else if (StringICmp (buf, "bioseq") == 0) {
           FIP->Type = BioseqFilter;
-        } else if (StringICmp (inputBuffer, "graph") == 0) {
+        } else if (StringICmp (buf, "graph") == 0) {
           FIP->Type = GraphFilter;
-        } else if (StringICmp (inputBuffer, "align") == 0) {
+        } else if (StringICmp (buf, "align") == 0) {
           FIP->Type = AlignmentFilter;
         } else continue; /* failed to find a match */
       }
@@ -1087,8 +1160,8 @@ static FilterItemPtr ParseFilterItem (
   }
   if (FIP->Type == BioseqFilter) {
     FIP->DrawScale = TristateUnset;
-    if (GetAppParam (config_filename, sectionName, "scale", NULL, inputBuffer, sizeof (inputBuffer))) {
-      i = StringIndexInStringList (inputBuffer, BoolStrings);
+    if (GetAppParam (config_filename, sect, "scale", NULL, buf, sizeof (buf))) {
+      i = StringIndexInStringList (buf, BoolStrings);
       if (i >= 0 && i < DIM (BoolValues)) {
         FIP->DrawScale = BOOL_TO_TRISTATE (BoolValues [i]);
       }
@@ -1112,9 +1185,9 @@ static FilterPtr ParseFilter (
   FilterItemPtr   FIP;
   Int2            i;
   Uint1           filterItemCount = 0;
-  Char            inputBuffer [128];     /* for input *from* GetAppParam */
+  Char            buf [128];     /* for input *from* GetAppParam */
   Char            outputBuffer [128];    /* paramater *to* GetAppParam */
-  Char            sectionName [128];
+  Char            sect [128];
   Boolean         foundBioseqFilter = FALSE;
   Boolean         foundGraphFilter = FALSE;
   Boolean         foundAlignmentFilter = FALSE;
@@ -1127,62 +1200,63 @@ static FilterPtr ParseFilter (
   LayoutAlgorithm defaultLayout;
 
   if (filterNameInFile == NULL) return NULL;
-  sprintf (sectionName, "%s", filterNameInFile);
+  sprintf (sect, "%s", filterNameInFile);
   /* require all styles to have a name, since high-level interface uses the name to identify Filters */
-  if (! GetAppParam (config_filename, sectionName, "name", NULL, inputBuffer, sizeof (inputBuffer))) return NULL;
-  FP = CreateFilter (inputBuffer, VCP); /* Createfilter will check for duplucate names */
+  if (! GetAppParam (config_filename, sect, "name", NULL, buf, sizeof (buf))) return NULL;
+  FP = CreateFilter (buf, VCP); /* Createfilter will check for duplucate names */
   if (FP == NULL) return FP;
   val = VCP->DefaultMaxScaleWithLabels;
-  if (GetAppParam (config_filename, sectionName, "maxlabelscale", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "maxlabelscale", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
   }
   FP->MaxScaleWithLabels = val;
 
-  GetAppParam (config_filename, sectionName, "layout", NULL, inputBuffer, sizeof (inputBuffer));
-  i = StringIndexInStringList (inputBuffer, LayoutStrings);
-  if (i >= 0 && i < DIM (LayoutValues) && i >= 0) {
+  GetAppParam (config_filename, sect, "layout", NULL, buf, sizeof (buf));
+  i = StringIndexInStringList (buf, LayoutStrings);
+  if (i >= 0 && i < DIM (LayoutValues)) {
     defaultLayout = LayoutValues [i];
   } else {
     defaultLayout = Layout_Inherit;
   }
 
   val = VCP->DefaultGroupPadding;
-  if (GetAppParam (config_filename, sectionName, "grouppadding", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "grouppadding", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
     val = MIN (val, 100);
   }
   defaultGroupPadding = val;
 
   val = VCP->DefaultRowPadding;
-  if (GetAppParam (config_filename, sectionName, "rowpadding", NULL, inputBuffer, sizeof (inputBuffer))) {
-    sscanf (inputBuffer, "%ud", &val);
+  if (GetAppParam (config_filename, sect, "rowpadding", NULL, buf, sizeof (buf))) {
+    sscanf (buf, "%ud", &val);
   }
   defaultRowPadding = val;
 
-  if (GetAppParam (config_filename, sectionName, "suppressbioseq", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
-    if (i >= 0 && i < DIM (BoolStrings) && i >= 0) {
+  if (GetAppParam (config_filename, sect, "suppressbioseq", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
+    if (i >= 0 && i < DIM (BoolStrings)) {
       createImplicitBioseq = ! (BoolValues [i]);
     }
   }
-  if (GetAppParam (config_filename, sectionName, "suppressgraphs", NULL, inputBuffer, sizeof (inputBuffer))) {
-    i = StringIndexInStringList (inputBuffer, BoolStrings);
-    if (i >= 0 && i < DIM (BoolStrings) && i >= 0) {
+  if (GetAppParam (config_filename, sect, "suppressgraphs", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
+    if (i >= 0 && i < DIM (BoolStrings)) {
       createImplicitGraphs = ! (BoolValues [i]);
     }
   }
 
   for (i = 1; i < FEATDEF_MAX; i++) {
     sprintf (outputBuffer, "%s%d", "group", (unsigned) i);
-    if (GetAppParam (config_filename, sectionName, outputBuffer, NULL, inputBuffer, sizeof (inputBuffer))) {
-      FIP = ParseFilterItem (inputBuffer, defaultRowPadding, defaultGroupPadding, defaultLayout, VCP);
-      if (FIP != NULL && FIP->Type == BioseqFilter) {
+    if (GetAppParam (config_filename, sect, outputBuffer, NULL, buf, sizeof (buf))) {
+      FIP = ParseFilterItem (buf, defaultRowPadding, defaultGroupPadding, defaultLayout, VCP);
+      if (FIP == NULL) continue;
+      if (FIP->Type == BioseqFilter) {
         foundBioseqFilter = TRUE;
       }
-      if (FIP != NULL && FIP->Type == GraphFilter) {
+      if (FIP->Type == GraphFilter) {
         foundGraphFilter = TRUE;
       }
-      if (FIP != NULL && FIP->Type == AlignmentFilter) {
+      if (FIP->Type == AlignmentFilter) {
         foundAlignmentFilter = TRUE;
       }
       AddFilterItemToFilter (FIP, FP, VCP);
@@ -1239,6 +1313,7 @@ static FilterPtr ParseFilter (
 
 /* if this will be used by multiple threads in a multi-threaded application, there should be a lock around writing this */
 static ViewerConfigsPtr newGraphicViewer_ConfigFileParse_Global = NULL;
+
 static void InitializeDefaultStyle (
   CharPtr configFileName
 );
@@ -1256,8 +1331,9 @@ NLM_EXTERN ViewerConfigsPtr GetGraphicConfigParseResults (
   ValNodePtr        nameVNP;
   ValNodePtr        VNP;
 
-  if (newGraphicViewer_ConfigFileParse_Global != NULL)
+  if (newGraphicViewer_ConfigFileParse_Global != NULL) {
     return newGraphicViewer_ConfigFileParse_Global;
+  }
 
   InitializeDefaultStyle (config_filename);
 
@@ -1270,8 +1346,8 @@ NLM_EXTERN ViewerConfigsPtr GetGraphicConfigParseResults (
 
   AppearanceCount = VCP->AppearanceCount;
   FilterCount = VCP->FilterCount;
-  i = (AppearanceCount + FilterCount) * 2 + 2; /* total number of pointers needed (the extra 2 are NULL's to terminate the name lists)*/
-  ptr2 = MemNew (i * sizeof (void PNTR));
+  i = (AppearanceCount + FilterCount) * 2 + 2; /* total number of pointers needed (the extra 2 are NULL's to terminate the name lists) */
+  ptr2 = MemNew (i * sizeof (VoidPtr));
   if (ptr2 == NULL) {
     MemFree (VCP);
     return NULL;
@@ -1305,52 +1381,52 @@ NLM_EXTERN ViewerConfigsPtr GetGraphicConfigParseResults (
   return VCP;
 }
 
-/* returns count of objects successfully parsed -- so 0 on failure*/
+/* returns count of objects successfully parsed -- so 0 on failure */
 NLM_EXTERN Uint2 ParseConfigFile (
   ViewerConfigsPtr VCP
 )
 
 {
-  Char     tagBuffer [32];
-  Char     nameBuffer [128];
+  Char     tag [32];
+  Char     name [128];
   Int2     i;
   Uint2    fCount = 0, aCount = 0;
   VoidPtr  tempPtr;
   unsigned val; /* to match scanf("%ud"...) */
 
-  GetAppParam (config_filename, "filters", "maxlabelscale", NULL, tagBuffer, sizeof (tagBuffer));
-  if (sscanf (tagBuffer, "%ud", &val) != 1) {
+  GetAppParam (config_filename, "filters", "maxlabelscale", NULL, tag, sizeof (tag));
+  if (sscanf (tag, "%ud", &val) != 1) {
     val = 200;
   }
   VCP->DefaultMaxScaleWithLabels = val;
 
-  GetAppParam (config_filename, "filters", "grouppadding", NULL, tagBuffer, sizeof (tagBuffer));
-  if (sscanf (tagBuffer, "%ud", &val) != 1) {
+  GetAppParam (config_filename, "filters", "grouppadding", NULL, tag, sizeof (tag));
+  if (sscanf (tag, "%ud", &val) != 1) {
     val = 3;
   }
   VCP->DefaultGroupPadding = val;
 
-  GetAppParam (config_filename, "filters", "rowpadding", NULL, tagBuffer, sizeof (tagBuffer));
-  if (sscanf (tagBuffer, "%ud", &val) != 1) {
+  GetAppParam (config_filename, "filters", "rowpadding", NULL, tag, sizeof (tag));
+  if (sscanf (tag, "%ud", &val) != 1) {
     val = 5;
   }
   VCP->DefaultRowPadding = val;
 
-  GetAppParam (config_filename, "styles", "maxarrowscale", NULL, tagBuffer, sizeof (tagBuffer));
-  if (sscanf (tagBuffer, "%ud", &val) != 1) {
+  GetAppParam (config_filename, "styles", "maxarrowscale", NULL, tag, sizeof (tag));
+  if (sscanf (tag, "%ud", &val) != 1) {
     val = 5;
   }
   VCP->DefaultMaxScaleForArrow = val;
 
-  GetAppParam (config_filename, "styles", "minarrowpixels", NULL, tagBuffer, sizeof (tagBuffer));
-  if (sscanf (tagBuffer, "%ud", &val) != 1) {
+  GetAppParam (config_filename, "styles", "minarrowpixels", NULL, tag, sizeof (tag));
+  if (sscanf (tag, "%ud", &val) != 1) {
     val = 5;
   }
   VCP->DefaultMinPixelsForArrow = val;
 
   VCP->DefaultShadeSmears = FALSE;
-  if (GetAppParam (config_filename, "styles", "shadesmears", NULL, tagBuffer, sizeof (tagBuffer))) {
-    i = StringIndexInStringList (tagBuffer, BoolStrings);
+  if (GetAppParam (config_filename, "styles", "shadesmears", NULL, tag, sizeof (tag))) {
+    i = StringIndexInStringList (tag, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues)) {
       VCP->DefaultShadeSmears = BoolValues [i];
     }
@@ -1358,24 +1434,24 @@ NLM_EXTERN Uint2 ParseConfigFile (
 
   for (i = 0; i < 110; i++) {   /* do filters first */
     if (i < 10) {
-      sprintf (tagBuffer, "filter0%d", (unsigned) i);
+      sprintf (tag, "filter0%d", (unsigned) i);
     } else {
-      sprintf (tagBuffer, "filter%d", (unsigned) i - 9);
+      sprintf (tag, "filter%d", (unsigned) i - 9);
     }
-    if (GetAppParam (config_filename, "filters", tagBuffer, NULL, nameBuffer, sizeof (nameBuffer))) {
-      tempPtr = ParseFilter (nameBuffer, VCP);
+    if (GetAppParam (config_filename, "filters", tag, NULL, name, sizeof (name))) {
+      tempPtr = ParseFilter (name, VCP);
       if (tempPtr == NULL) continue;
       fCount++;
     }
   }
   for (i = 0; i < 110; i++) {
     if (i < 10) {
-      sprintf (tagBuffer, "style0%d", (unsigned) i);
+      sprintf (tag, "style0%d", (unsigned) i);
     } else {
-      sprintf (tagBuffer, "style%d", (unsigned) i - 9);
+      sprintf (tag, "style%d", (unsigned) i - 9);
     }
-    if (GetAppParam (config_filename, "styles", tagBuffer, NULL, nameBuffer, sizeof (nameBuffer))) {
-      tempPtr = ParseAppearance (nameBuffer, VCP);
+    if (GetAppParam (config_filename, "styles", tag, NULL, name, sizeof (name))) {
+      tempPtr = ParseAppearance (name, VCP);
       if (tempPtr == NULL) continue;
       aCount++;
     }
@@ -1396,7 +1472,7 @@ NLM_EXTERN FilterPtr DestroyFilter (
   if (FP == NULL || VCP == NULL) {
     return NULL;
   }
-  for (VNP = FP->FilterItemList; VNP; VNP = VNP->next) {        /* free all filterItems, and their labels */
+  for (VNP = FP->FilterItemList; VNP; VNP = VNP->next) { /* free all filterItems, and their labels */
     FIP = (FilterItemPtr) VNP->data.ptrvalue;
     if (FIP == NULL) {
       continue;
@@ -1501,6 +1577,7 @@ static void getDim_do_not_render (
 
 {
   RelevantFeatureItemPtr RFIP;
+
   RFIP = RIP->RFIP;
 
   *Start = *Stop = RFIP->Left;
@@ -1526,9 +1603,9 @@ static void getDim_render_with_line (
 
 {
   RelevantFeatureItemPtr RFIP;
+
   RFIP = RIP->RFIP;
 
-  *height = 1;
   if (vContext->allFeatures) {
     *Start = RFIP->Left;
     *Stop = RFIP->Right;
@@ -1536,6 +1613,7 @@ static void getDim_render_with_line (
     *Start = MAX (RFIP->Left, vContext->from);
     *Stop = MAX (RFIP->Right, vContext->to);
   }
+  *height = 1;
 }
 
 static void render_with_line (
@@ -1582,7 +1660,6 @@ static void getDim_render_with_capped_line (
   AIP = RIP->AIP;
 
 
-  *height = AIP->Height;;
   if (vContext->allFeatures) {
     *Start = RFIP->Left;
     *Stop = RFIP->Right;
@@ -1590,6 +1667,7 @@ static void getDim_render_with_capped_line (
     *Start = MAX (RFIP->Left, vContext->from);
     *Stop = MAX (RFIP->Right, vContext->to);
   }
+  *height = AIP->Height;
 }
 
 static void render_with_capped_line (
@@ -1676,7 +1754,7 @@ static Boolean TestForSmear (
 )
 
 {
-  Uint4                  minSeperation;
+  Uint4  minSeperation;
 
   minSeperation = 5 * vContext->viewScale;  /* do not smear a feature more than 5 pixels wide */
 
@@ -1826,7 +1904,7 @@ static const RenderClass RenderAlgorithmTable [] = {
   {render_with_capped_line, getDim_render_with_capped_line}, /* Render_CappedLine */
   {render_with_box, getDim_render_with_box},   /* Render_Box */
   {render_with_outline_box, getDim_render_with_box},   /* Render_OutlineBox */
-  /* these do not exist right now */
+  /* !!! these do not exist right now - can they be removed? !!! */
   {render_with_line, getDim_render_with_line},
   {render_with_box, getDim_render_with_box},
   {render_with_line, getDim_render_with_line},
@@ -1853,7 +1931,7 @@ static void DrawFeatureAndLabel (
   Uint4                   textWidthBP;
   Int4                    textStartX;
   Int4                    textStartY;
-  Uint1                   labelAlign;
+  Uint1                   labelAlign, fitChars;
   PrimitivE               thisPrim;
   Boolean                 addType;
   Boolean                 addDesc;
@@ -1908,16 +1986,30 @@ static void DrawFeatureAndLabel (
   SelectFont (AIP->LabelFont);
   textWidthBP = StringWidth (shortLabel) * vContext->viewScale;
   switch (FIP->LabelLoc) {
-    case LabelInside:
+    case LabelAboveClip:
       if (textWidthBP + 2 * vContext->viewScale >= (RFIP->Right - RFIP->Left)) {
-          /*!!! add string-chopper here, for now just don't render it */
-        return;
+        fitChars = Nlm_FitStringWidth (shortLabel, (RFIP->Right - RFIP->Left) / vContext->viewScale);
+        if (fitChars <= 2 && StringLen (shortLabel) != fitChars) return;
+        shortLabel [fitChars] = '>';
+        shortLabel [fitChars + 1] = '\0';
       }
       textStartX = (RFIP->Left + RFIP->Right) / 2;
       /*      textStartY = RIP->yStart - RIP->rowHeight / 2; -- change "labelInside" to mean "above, but not wider than"*/
       textStartY = RIP->yStart;
       labelAlign = UPPER_CENTER;
       break;
+    case LabelInside:
+      if (textWidthBP + 2 * vContext->viewScale >= (RFIP->Right - RFIP->Left)) {
+        fitChars = Nlm_FitStringWidth (shortLabel, (RFIP->Right - RFIP->Left) / vContext->viewScale);
+        shortLabel [fitChars + 1] = '\0';
+      }
+      textStartX = (RFIP->Left + RFIP->Right) / 2;
+      textStartY = RIP->yStart - RIP->rowHeight / 2;
+      labelAlign = MIDDLE_CENTER;
+      break;
+    case LabelAboveCull:
+      if (textWidthBP + 2 * vContext->viewScale >= (RFIP->Right - RFIP->Left)) return;
+      /* else fall through and display the label above */
     case LabelAbove:
       textStartX = (RFIP->Left + RFIP->Right) / 2;
       textStartY = RIP->yStart;
@@ -2127,7 +2219,7 @@ static void GetFeatureAndDecorationDimensions (
     lineHeight = LineHeight ();
     switch (FIP->LabelLoc) {
       case LabelInside:
-        Height += lineHeight + 3;
+        Height = MAX (Height + lineHeight, Height);
         featureOffset = lineHeight + 1;
         break;
       case LabelAbove:
@@ -2137,6 +2229,14 @@ static void GetFeatureAndDecorationDimensions (
         featureOffset = lineHeight + 1;
         Height += lineHeight + 3;
         break;
+      case LabelAboveClip:
+        Height += lineHeight + 3;
+        featureOffset = lineHeight + 1;
+      case LabelAboveCull:
+        if (textWidthBP + 2 * vContext->viewScale >= (Stop - Start)) {
+          Height += lineHeight + 3;
+          featureOffset = lineHeight + 1;
+        }
       case LabelBelow:
         textStartX = (Start + Stop) / 2;
         Start = MIN (Start, (signed)(textStartX - textWidthBP / 2));
@@ -2203,7 +2303,6 @@ static Boolean BuildRenderInputFromRFIP (
   return TRUE;
 }
 
-/* todo: perhaps switch to using Explore functions */
 static Boolean GetAndCountFeatures (
   ViewerContextPtr vContext
 )
@@ -2241,7 +2340,12 @@ static Boolean GetAndCountFeatures (
     rFeats [i].itemType = OBJ_SEQFEAT;
     rFeats [i].numivals = fContext.numivals;
     rFeats [i].ivals = fContext.ivals;
-    rFeats [i].plusstrand = (fContext.strand != Seq_strand_minus);
+    rFeats [i].plusstrand = (Boolean) (fContext.strand != Seq_strand_minus);
+    if (rFeats [i].Left < 0 && fContext.bsp != NULL) {
+      /* !!! for features that span origin JK !!! */
+      rFeats [i].Left = 0;
+      rFeats [i].Right = fContext.bsp->length;
+    }
     if (rFeats [i].Right < rFeats [i].Left) {
       /* protection against (feature indexing vs. trans-spliced features) */
       swap = rFeats [i].Right;
@@ -2378,11 +2482,16 @@ static RelevantFeatureItemPtr GetNextRFIPinAlignmentFilter (
   alignRow = AlnMgr2GetFirstNForSip (SAlnP, SID);
   if (alignRow == -1) return NULL;
   AlnMgr2GetNthSeqRangeInSA (SAlnP, alignRow, &start, &stop);
+/* !!! put in alignment manager code - AlnMgr2GetNthSeqRangeInSAStdSeg !!! */
   if (start < 0 || stop < 0) return NULL;
   RFIP->Left = MIN (start, stop);
   RFIP->Right = MAX (start, stop);
   RFIP->plusstrand = (start < stop);
   RFIP->numivals = 1;
+  RFIP->featdeftype = 1;
+  RFIP->entityID = SAlnP->idx.entityID;
+  RFIP->itemID = SAlnP->idx.itemID;
+  RFIP->itemType = SAlnP->idx.itemtype;
   return RFIP;
 }
 
@@ -3406,10 +3515,10 @@ static Int4 DrawBioseqSegments (
 )
 
 {
-  ValNodePtr   listHead = NULL, vnpSegment = NULL, vnpRow = NULL;
+  ValNodePtr   listHead = NULL, vnpSegment = NULL;
   ValNodePtr   firstRow = NULL;
-  Int4         segmentCount, rowCount;
-  Uint2         rowHeight, row;
+  Int4         segmentCount;
+  Uint2         rowHeight, row = 0; /* row is either 0 or 1 */
   AppearanceItem segmentAI;
   AppearanceItemPtr oldAIPzero;
   AppearancePtr AP;
@@ -3443,7 +3552,7 @@ static Int4 DrawBioseqSegments (
   segmentAI.AddTypeToLabel = FALSE;
   segmentAI.LabelFont = BioAIP->labelFont;
   segmentAI.LabelLoc = FIP->LabelLoc;
-  FIP->LabelLoc = LabelAbove;
+  FIP->LabelLoc = LabelAboveClip;
 
   segmentAI.ShowArrow = FALSE;
   segmentAI.VibLinestyle = SOLID_LINE;
@@ -3461,7 +3570,7 @@ static Int4 DrawBioseqSegments (
 
   SelectFont (segmentAI.LabelFont);
   rowHeight = LineHeight () + segmentAI.Height + 3 + FIP->IntraRowPaddingPixels;
-  rowCount = 0;
+  row = 0;
 
   for (vnpSegment = listHead; vnpSegment != NULL; vnpSegment = vnpSegment->next) {
 
@@ -3470,17 +3579,7 @@ static Int4 DrawBioseqSegments (
     if (!BuildRenderInputFromRFIP (&FPS.renderParm, RFIP, &FPS)) {
       continue;
     }
-    row = 0;
-    for (vnpRow = firstRow; vnpRow != NULL; vnpRow = vnpRow->next) {
-      if (vnpRow->data.intvalue < FPS.renderParm.decorationLeft) break;
-      row++;
-    }
-
-    if (row >= rowCount) {
-      rowCount++; 
-      vnpRow = ValNodeAddInt (&firstRow, 0, 0);
-    }
-    vnpRow->data.intvalue = FPS.renderParm.decorationRight;
+    row = 1 - row; /* alternate between 0 and 1 */
     FPS.renderParm.rowHeight += 2;
     FPS.renderParm.yStart = initialYOffset - (row * rowHeight);
     DrawFeatureAndLabel (&FPS.renderParm, vContext);
@@ -3492,7 +3591,7 @@ static Int4 DrawBioseqSegments (
   vContext->BSPsegmentVNP = NULL;
   vContext->AppPtr->FeaturesAppearanceItem[0] = oldAIPzero;
   vContext->FltPtr->MaxScaleWithLabels = oldMaxScale;
-  return (rowCount) * rowHeight + 7 + FIP->IntraRowPaddingPixels + FIP->GroupPadding;;
+  return 2 * rowHeight + 7 + FIP->IntraRowPaddingPixels + FIP->GroupPadding;
 }
 
 static Int4 DrawBioseq (
@@ -3947,7 +4046,7 @@ static GphSentPtr AddGphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
 
   if (sgp->title != NULL)  /* StringHasNoText -- vibforms */
   {
-    if (StrLen (sgp->title) > 0)
+    if (StringLen (sgp->title) > 0)
     {
       AddLabel (seg, (gsp->box.left + gsp->box.right) / 2, top,
                 sgp->title, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
@@ -4045,6 +4144,82 @@ static void ResetFilterState (
   }
 }
 
+static void DrawAlignments (
+  FilterProcessStatePtr FPSP,
+  ViewerContextPtr vContext  
+)
+
+{
+  SeqAlignPtr              SAP;
+  BioseqPtr                BSP;
+  SeqIdPtr                 SID;
+
+  AlignmentFilterStatePtr  alignSP;
+  Int4                     alignRow, start, stop, weight, swap, maxDensity, i, length;
+  Uint1                    color[3], col;
+  Uint2Ptr                 densities;
+
+  SegmenT                  seg;
+
+  if (FPSP == NULL || vContext == NULL) return;
+  alignSP = &FPSP->state.align;
+
+  BSP = vContext->BSP;
+  SID = BSP->id;
+  densities = MemNew (sizeof (Uint2) * vContext->seqLength / vContext->viewScale);
+  if (densities == NULL) return;
+
+  for (SAP = alignSP->SAPhead; SAP != NULL; SAP = SAP->next) {
+    if (!AlnMgr2IndexSingleChildSeqAlign (SAP)) continue;
+    alignRow = AlnMgr2GetFirstNForSip (SAP, SID);
+    if (alignRow > -1) {
+      AlnMgr2GetNthSeqRangeInSA (SAP, alignRow, &start, &stop);
+    } else {
+      alignRow = AlignMgr2GetFirstNForStdSeg (SAP, SID);
+      if (alignRow == -1) continue;
+      AlnMgr2GetNthSeqRangeInSAStdSeg (SAP, alignRow, &start, &stop);
+    }
+    if (start < 0 || stop < 0) continue;
+    if (stop < start) {
+      swap = stop;
+      stop = start;
+      start = swap;
+    }
+    start /= vContext->viewScale;
+    stop /= vContext->viewScale;
+    weight = 1; /* do this correctly based on the alignment score !!!!! */
+    for (i = start; i <= stop; i++) {
+      densities[i] += weight;
+    }
+  }
+  maxDensity = 0;
+  for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
+    maxDensity = MAX (maxDensity, densities[i]);
+  }
+
+  seg = CreateSegment (vContext->topLevelSeg, 0, 0);
+  FPSP->ceiling -= 5;
+
+  for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
+    for (length = 0; i + length < vContext->seqLength; length++) {
+      if (densities [i] != densities [i + length]) break;
+    }
+    if (densities [i] == 0) {
+      col = 255;
+    } else {
+      col = (Uint1) (224 - ((densities [i] * 192) / 256));
+    }
+    color [2] = color [1] = color [0] = col;
+    if (col < 255) {
+      AddAttribute (seg, COLOR_ATT, color, 0, 0, 1, 0);
+      AddRectangle (seg, i * vContext->viewScale, FPSP->ceiling, (i + length) * vContext->viewScale, FPSP->ceiling - 10, NO_ARROW, TRUE, 0);
+    }
+    i += length;
+  }
+  MemFree (densities);
+  FPSP->ceiling -= 15;
+}
+
 static Boolean FilterAndLayout (
   ViewerContextPtr vContext
 )
@@ -4057,7 +4232,7 @@ static Boolean FilterAndLayout (
   FilterItem          tempFI;
   Int1                featdeftype;
   LayoutAlgorithm     layoutC;
-  Int2                height;
+  Int4                height;
   SegmenT             filterSeg, invisibleSeg;
   Uint1               featdefOrder;
   Boolean             emptyFilterGroup;
@@ -4072,7 +4247,7 @@ static Boolean FilterAndLayout (
   if (vContext->ceiling != NULL) {
     FPS.ceiling = *vContext->ceiling;
   } else {
-    FPS.ceiling = -20;
+    FPS.ceiling = 0;
   }
   FPS.featuresProcessed = MemNew (vContext->featureCount * sizeof (Boolean));
   if (FPS.featuresProcessed == NULL && vContext->featureCount != 0) return FALSE;
@@ -4080,8 +4255,10 @@ static Boolean FilterAndLayout (
 
   FP = vContext->FltPtr;
   for (FPS.currentFilterVNP = FP->FilterItemList;
-       FPS.currentFilterVNP != NULL && FPS.currentFilterVNP->data.ptrvalue != NULL;
+       FPS.currentFilterVNP != NULL;
        FPS.currentFilterVNP = FPS.currentFilterVNP->next) {
+
+    if (FPS.currentFilterVNP->data.ptrvalue == NULL) continue; /* this should not happen if config file parsing worked */
 
     filterSeg = CreateSegment (vContext->topLevelSeg, 0, 0);
     MemSet (FPS.labelSegs, 0, sizeof (FPS.labelSegs));
@@ -4135,9 +4312,11 @@ static Boolean FilterAndLayout (
           ResetFilterState (&FPS);
           FPS.state.align.SAPhead = FPS.state.align.SAPcurrent = SAlnP;
           /*
-          fixme: something in here is thrashing the heap
-          height = ProcessRows (Layout_Diagonal, &FPS, vContext);
+          height = ProcessRows (Layout_FeatTypePerLine, &FPS, vContext);
           */
+
+          DrawAlignments (&FPS, vContext);
+
           height += 10;
           FPS.ceiling -= height;
         }
@@ -4154,70 +4333,70 @@ static Boolean FilterAndLayout (
           FeatTypePerLine is similar (but using AllInOneLine)
         */
         switch (layoutC) {
-        case Layout_FeatTypePerLine:
-        case Layout_FeatTypePerLineGroup:
-          FPS.currentFIP = &tempFI;
-          MemCopy (&tempFI, FIP, sizeof (FilterItem)); /* copy the filter . . .*/
-          MemSet (&tempFI.IncludeFeature, 0, sizeof (tempFI.IncludeFeature));  /* but don't include any features*/
-          tempFI.AddTypeToLabel = FALSE;
-          for (featdefOrder = 1; featdefOrder < FEATDEF_MAX; featdefOrder++) {
-            for (featdeftype = 1; featdeftype < FEATDEF_MAX; featdeftype++) {
-              if (FIP->IncludeFeature [featdeftype] == featdefOrder) {
-                ResetFilterState (&FPS);
-                tempFI.IncludeFeature[featdeftype] = TRUE;
-                height = ProcessRows (layoutC, &FPS, vContext);
-                if (FPS.featuresProcessedCount != 0) {
-                  emptyFilterGroup = FALSE;
+          case Layout_FeatTypePerLine:
+          case Layout_FeatTypePerLineGroup:
+            FPS.currentFIP = &tempFI;
+            MemCopy (&tempFI, FIP, sizeof (FilterItem)); /* copy the filter . . . */
+            MemSet (&tempFI.IncludeFeature, 0, sizeof (tempFI.IncludeFeature));  /* but don't include any features */
+            tempFI.AddTypeToLabel = FALSE;
+            for (featdefOrder = 1; featdefOrder < FEATDEF_MAX; featdefOrder++) {
+              for (featdeftype = 1; featdeftype < FEATDEF_MAX; featdeftype++) {
+                if (FIP->IncludeFeature [featdeftype] == featdefOrder) {
+                  ResetFilterState (&FPS);
+                  tempFI.IncludeFeature[featdeftype] = TRUE;
+                  height = ProcessRows (layoutC, &FPS, vContext);
+                  if (FPS.featuresProcessedCount != 0) {
+                    emptyFilterGroup = FALSE;
+                  }
+                  FPS.ceiling -= height;
+                  tempFI.IncludeFeature[featdeftype] = FALSE;
                 }
-                FPS.ceiling -= height;
-                tempFI.IncludeFeature[featdeftype] = FALSE;
               }
             }
-          }
-          height = 0; /* prevent FPS.ceiling from being bumped again */
-          break;
-        case Layout_GroupCorrespondingFeats:
-        case Layout_GroupCorrespondingFeatsRepeat:
-          /*
-            This uses 3 FilterItems:
-              - All gene features (compact)
-              - CDS & mRNA (grouped by products)
-              - anything else included in the filter as specified by the user (compact)
-          */
-          FPS.currentFIP = &tempFI;
-          MemCopy (&tempFI, FIP, sizeof (FilterItem)); /* copy the filter . . .*/
-          MemSet (&tempFI.IncludeFeature, 0, sizeof (tempFI.IncludeFeature));  /* but don't include any features*/
-          tempFI.GroupPadding = 0;
-          tempFI.IncludeFeature [FEATDEF_GENE] = FIP->IncludeFeature [FEATDEF_GENE];
-          ResetFilterState (&FPS);
-          height = ProcessRows (Layout_PackUpward, &FPS, vContext);
-          FPS.ceiling -= height;
+            height = 0; /* prevent FPS.ceiling from being bumped again */
+            break;
+          case Layout_GroupCorrespondingFeats:
+          case Layout_GroupCorrespondingFeatsRepeat:
+            /*
+              This uses 3 FilterItems:
+                - All gene features (compact)
+                - CDS & mRNA (grouped by products)
+                - anything else included in the filter as specified by the user (compact)
+            */
+            FPS.currentFIP = &tempFI;
+            MemCopy (&tempFI, FIP, sizeof (FilterItem)); /* copy the filter . . .*/
+            MemSet (&tempFI.IncludeFeature, 0, sizeof (tempFI.IncludeFeature));  /* but don't include any features*/
+            tempFI.GroupPadding = 0;
+            tempFI.IncludeFeature [FEATDEF_GENE] = FIP->IncludeFeature [FEATDEF_GENE];
+            ResetFilterState (&FPS);
+            height = ProcessRows (Layout_PackUpward, &FPS, vContext);
+            FPS.ceiling -= height;
 
-          ResetFilterState (&FPS);
-          tempFI.IncludeFeature [FEATDEF_CDS] = FIP->IncludeFeature [FEATDEF_CDS];
-          tempFI.IncludeFeature [FEATDEF_mRNA] = FIP->IncludeFeature [FEATDEF_mRNA];
-          height = ProcessRows (layoutC, &FPS, vContext);
-          FPS.ceiling -= height;
+            ResetFilterState (&FPS);
+            tempFI.IncludeFeature [FEATDEF_CDS] = FIP->IncludeFeature [FEATDEF_CDS];
+            tempFI.IncludeFeature [FEATDEF_mRNA] = FIP->IncludeFeature [FEATDEF_mRNA];
+            height = ProcessRows (layoutC, &FPS, vContext);
+            FPS.ceiling -= height;
 
-          ResetFilterState (&FPS);
-          MemCopy (&tempFI.IncludeFeature, &FIP->IncludeFeature, sizeof (tempFI.IncludeFeature));
-          tempFI.GroupPadding = FIP->GroupPadding;
-          height = ProcessRows (Layout_PackUpward, &FPS, vContext);
-          FPS.ceiling -= height;
-          height = 0;
-          if (FPS.featuresProcessedCount != 0) {
-            emptyFilterGroup = FALSE;
-          }
+            ResetFilterState (&FPS);
+            MemCopy (&tempFI.IncludeFeature, &FIP->IncludeFeature, sizeof (tempFI.IncludeFeature));
+            tempFI.GroupPadding = FIP->GroupPadding;
+            height = ProcessRows (Layout_PackUpward, &FPS, vContext);
+            FPS.ceiling -= height;
+            height = 0;
+            if (FPS.featuresProcessedCount != 0) {
+              emptyFilterGroup = FALSE;
+            }
 
-          break;
-        default:
-          FPS.currentFIP = FIP;
-          ResetFilterState (&FPS);
-          height = ProcessRows (layoutC, &FPS, vContext);
-          if (FPS.featuresProcessedCount != 0) {
-            emptyFilterGroup = FALSE;
-          }
-          break;
+            break;
+          default:
+            FPS.currentFIP = FIP;
+            ResetFilterState (&FPS);
+            height = ProcessRows (layoutC, &FPS, vContext);
+            if (FPS.featuresProcessedCount != 0) {
+              emptyFilterGroup = FALSE;
+            }
+            break;
         } /* switch (layoutC) */
         break;
     } /* switch (FIP->type) */
@@ -4226,8 +4405,6 @@ static Boolean FilterAndLayout (
       continue;
     } else {
       if (FIP->DrawItemRect) {
-        /* AddAttribute (filterSeg, COLOR_ATT, FIP->GroupBoxColor, 0, 0, 0, 0);*/
-        /* !!!! use a better invisibility control here !!!! */
         invisibleSeg = CreateSegment (filterSeg, 0, 0);
         SetSegmentVisibleFlag (invisibleSeg, FALSE);
         AddLine (invisibleSeg, vContext->from - 1, undoCeiling - 2, vContext->to + 1, undoCeiling - 2, FALSE, 0);
@@ -4311,12 +4488,8 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
     to allow display of BSP w/0 features on it.
    */
 
-  if (FP == NULL) {
-    return NULL;
-  }
-  if (AP == NULL) {
-    return NULL;
-  }
+  if (AP == NULL || FP == NULL) return NULL;
+  MemSet ((Pointer) &VC, 0, sizeof (ViewerContext));
   VC.from = MIN (from, to);
   VC.to =   MAX (from, to);
   VC.allFeatures = allFeatures;
@@ -4416,10 +4589,10 @@ NLM_EXTERN SegmenT CreateGraphicView (
   if (bsp == NULL && location == NULL) return NULL;
   myVCP = GetGraphicConfigParseResults ();
 
-  FP = FindFilterByName (filterName, myVCP);
   AP = FindAppearanceByName (styleName, myVCP);
+  FP = FindFilterByName (filterName, myVCP);
   i = StringIndexInStringList (overrideLayoutName, LayoutStrings);
-  if (i >= 0 && i < DIM(LayoutValues)) {
+  if (i >= 0 && i < DIM (LayoutValues)) {
     overrideLayout = LayoutValues[i];
   } else {
     overrideLayout = Layout_Inherit;
@@ -4697,7 +4870,7 @@ static ConfigFileLine defaultStyleLines18 [] = {
 
 /* [filters.defaultFilt-impfeats] */
 static ConfigFileLine defaultStyleLines19 [] = {
-  {"feature1", "imp"},
+  {"feature1", "Import"},
   {"name", "Import Features"},
   {"grouplabel", "none"},
   {"label", "above"},

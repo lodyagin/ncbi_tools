@@ -34,6 +34,18 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.99  2002/08/08 20:50:39  madden
+* Remove SPLIT_BLAST macros
+*
+* Revision 1.98  2002/05/23 22:57:03  dondosha
+* Made GetResponsePtr external
+*
+* Revision 1.97  2002/05/15 16:32:51  madden
+* Make QueryIsProteinFromType extern
+*
+* Revision 1.96  2002/05/10 12:56:27  madden
+* Allow network version of matrix as input
+*
 * Revision 1.95  2002/04/24 17:59:03  dondosha
 * Added handling of parameters for database splitting and megablast with discontiguous words
 *
@@ -698,7 +710,6 @@ BlastFini (BlastNet3Hptr bl3hptr)
     return retval;
 }
 
-#ifndef SPLIT_BLAST
 NLM_EXTERN BlastParametersPtr LIBCALL
 BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 
@@ -784,7 +795,6 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 
 	return parameters;
 }
-#endif
 
 /*
 	Translates the BlastDbinfoPtr into TxDfDbInfoPtr.
@@ -874,7 +884,7 @@ BlastNet3BlockNew(CharPtr program, CharPtr dbname)
 	return retval;
 }
 
-static Boolean
+NLM_EXTERN Boolean LIBCALL
 QueryIsProteinFromType(Uint2 type)
 {
 	switch (type)
@@ -894,8 +904,7 @@ QueryIsProteinFromType(Uint2 type)
 	}
 }
 
-#ifndef SPLIT_BLAST
-static BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choice)
+BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choice)
 
 {
 	while (response)
@@ -909,7 +918,6 @@ static BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choi
 
 	return response;
 }
-#endif
 
 NLM_EXTERN BlastDbinfoPtr LIBCALL
 BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
@@ -1043,7 +1051,6 @@ BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 	Converts 'standard' BLAST matrix to network matrix. 
 */
 
-#ifndef SPLIT_BLAST
 NLM_EXTERN BlastMatrixPtr LIBCALL
 BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
 
@@ -1158,7 +1165,6 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
 
     return blast_matrix;
 }
-#endif
 
 NLM_EXTERN ValNodePtr LIBCALL
 BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
@@ -1262,8 +1268,15 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
 	search->database = blnet3blkptr->dbname;
 	search->parameters = blnet3blkptr->parameters;
 	search->mask = blnet3blkptr->mask;
-	search->matrix =
-	   BlastMatrixToBlastNetMatrix(blnet3blkptr->blast_matrix);
+	if (blnet3blkptr->blast_matrix)
+	{
+		search->matrix =
+		   BlastMatrixToBlastNetMatrix(blnet3blkptr->blast_matrix);
+	}
+	else
+	{
+		search->matrix = blnet3blkptr->net_matrix;
+	}
 	search->query_set = blnet3blkptr->bsp_set;
         
         ValNodeAddPointer(&request, BlastRequest_search, search);
@@ -1292,12 +1305,13 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
 	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
 	}
 
-	/* These five are not allocated here. */
+	/* These six are not allocated here. */
 	search->query = NULL;
 	search->database = NULL;
 	search->parameters = NULL;
 	search->mask = NULL;
 	search->query_set = NULL;
+	search->matrix = NULL;
         BlastRequestFree(request);
 #if 0        
 	BlastDeleteUserErrorString(err_id);

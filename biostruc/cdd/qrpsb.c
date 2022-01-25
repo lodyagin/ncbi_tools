@@ -1,4 +1,4 @@
-/* $Id: qrpsb.c,v 1.7 2002/01/04 20:03:54 bauer Exp $
+/* $Id: qrpsb.c,v 1.10 2002/05/24 17:50:57 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 11/27/2000
 *
-* $Revision: 1.7 $
+* $Revision: 1.10 $
 *
 * File Description:
 *         WWW-RPS BLAST using the BLAST queue
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: qrpsb.c,v $
+* Revision 1.10  2002/05/24 17:50:57  bauer
+* assume default DATALIB
+*
+* Revision 1.9  2002/05/23 20:17:44  bauer
+* fixed database version display
+*
+* Revision 1.8  2002/05/22 15:24:05  bauer
+* fixes to catch missing query bioseqs
+*
 * Revision 1.7  2002/01/04 20:03:54  bauer
 * minor changes in DefLine parsing
 *
@@ -289,9 +298,9 @@ static Boolean CddGetParams()
 }                                                       /* end GetVastParams */
 
 /*---------------------------------------------------------------------------*/
-/* Montior hook to print to stderr for UNIX clients.                         */
+/* Monitor hook to print to stderr for UNIX clients.                         */
 /*---------------------------------------------------------------------------*/
-static int LIBCALLBACK UNIXMontiorHook(Nlm_MonitorPtr mon, MonCode code)
+static int LIBCALLBACK UNIXMonitorHook(Nlm_MonitorPtr mon, MonCode code)
 {
   switch (code)  {
 #ifdef OS_UNIX
@@ -601,15 +610,6 @@ static Boolean WRPSBDrawPage()
          " <OPTION SELECTED VALUE=\"fasta\"> Sequence in FASTA format \n"
          " <OPTION VALUE=\"access\"> Accession or GI \n"
          "</SELECT>\n");
-/*
-  printf("<BR>Enter query as \n<SELECT NAME=\"IS_PROT\"> \n"
-         " <OPTION SELECTED VALUE=1>Protein \n <OPTION VALUE=0>DNA/RNA "
-         "</SELECT>\n"
-         "<SELECT NAME=\"INPUT_TYPE\"> \n" 
-         " <OPTION SELECTED VALUE=\"fasta\"> Sequence in FASTA format \n"
-         " <OPTION VALUE=\"access\"> Accession or GI \n"
-         "</SELECT>\n");
-*/
   printf("<INPUT TYPE=\"submit\">\n");
   printf("<INPUT TYPE=\"reset\">\n");
   printf("<BR><TEXTAREA NAME=\"SEQUENCE\" rows=6 cols=60></TEXTAREA>\n");
@@ -1544,7 +1544,8 @@ static void QRPSBViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                  ValNodePtr mask, Int4 iGraphMode, Int4 iPairMode,
                                  BLAST_OptionsBlkPtr options, Boolean believe_query,
                                  Uint4 print_options, CharPtr version, CharPtr date,
-                                 CharPtr database, CharPtr dbversion, Int4 iBGram)
+                                 CharPtr database, CharPtr dbversion, Int4 iBGram,
+				 CharPtr dbname)
 {
   BlastDbinfoPtr         dbinfo = NULL;
   AsnIoPtr               aip;
@@ -1612,8 +1613,11 @@ static void QRPSBViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       if (cPtr) {
         cPtr++; StrCpy(dbversion,cPtr);
       } else StrCpy(dbversion, CDDefault);
-    } else StrCpy(dbversion, CDDefault);
-    
+    } else if (dbversion[0] != '\0' && dbname[0] != '\0') {
+        fprintf(table,"<strong>Database:</strong> %s.%s\n",dbname,dbversion);
+    } else {
+      StrCpy(dbversion, CDDefault);
+    }
     free_buff();
     fprintf(table,"</PRE>\n");
   }
@@ -1723,6 +1727,7 @@ Int2 Main (void)
   Int4Ptr             giptr           = NULL;
   SeqAnnotPtr         sap             = NULL;
   SeqAlignPtr         salp            = NULL;
+  DenseSegPtr         dsp;
   SeqIdPtr            sip;
   SeqLocPtr           slp;
   SeqEntryPtr         sep             = NULL;
@@ -1764,13 +1769,18 @@ Int2 Main (void)
   rl.rlim_max = rl.rlim_cur = CPUTIME_MAX;
   setrlimit(RLIMIT_CPU, &rl);
 
+  dbversion[0] = '\0';
+  dbname[0] = '\0';
+
 /*---------------------------------------------------------------------------*/
 /* Get Default Arguments (but DON'T read from command line)                  */
 /*---------------------------------------------------------------------------*/
   if (!WRPSBGetArgs ("blastcl3", NUMARGS, myargs)) {
     WRPSBHtmlError("Can't read Arguments!");
   }
-
+  if (putenv("BLASTDB=/blast/db/blast")) {
+    WRPSBHtmlError("Error setting environment");
+  }
 /*---------------------------------------------------------------------------*/
 /* retrieve names for directories etc.                                       */
 /*---------------------------------------------------------------------------*/
@@ -1812,6 +1822,14 @@ Int2 Main (void)
 /* anything beyond this point assumes that a search is launched, or that     */
 /* results are being formatted                                               */
 /*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "RID")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info,indx);
+    rid = StringSave(www_arg);
+    if (rid && Nlm_StrLen(rid)) {
+      Qmode = FORMATJOB;
+    }
+  } 
+  
   blast_inputfile  = myargs [2].strvalue;
   blast_outputfile = myargs [5].strvalue;
   if (myargs[26].intvalue) html = TRUE;
@@ -1839,12 +1857,6 @@ Int2 Main (void)
 /*---------------------------------------------------------------------------*/
 /* get the WWW arguments here                                                */
 /*---------------------------------------------------------------------------*/
-  if ((indx = WWWFindName(www_info, "RID")) >= 0) {
-    www_arg = WWWGetValueByIndex(www_info,indx);
-    rid = StringSave(www_arg);
-    if (rid && strlen(rid)) Qmode = FORMATJOB;
-  } 
-  
   if ((indx = WWWFindName(www_info, "BGRAM")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info,indx);
     iBGram = (Int4) atoi(www_arg);
@@ -1903,7 +1915,7 @@ Int2 Main (void)
     strcpy(dbversion,CDDefault);
   }
   if (Qmode == SUBMITJOB && (indx = WWWFindName(www_info,"DATALIB")) < 0) {
-    WRPSBHtmlError("DATALIB missing from input!");
+/*    WRPSBHtmlError("DATALIB missing from input!"); */
   } else if (indx >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
     myargs[1].strvalue = StringSave(www_arg);
@@ -1918,7 +1930,6 @@ Int2 Main (void)
 /* .. before it's determined whether output should be formatted or not!      */
 /*---------------------------------------------------------------------------*/
   if (Qmode != SUBMITJOB) {
-    ReadDBBioseqFetchEnable ("qrpsb", blast_database, db_is_na, TRUE);
     Qstatus = (Int2) QBlastGetResults(rid,&sap,&query,&program,&database,&other_returns, &error_returns);
     if (Qstatus < 0) {
       WRPSBHtmlError("Error retrieving CD-Search request from BLAST Queue!");
@@ -1928,8 +1939,16 @@ Int2 Main (void)
       QRPSBWait(rid,iGraphMode,iPairMode,iHowLong,options->expect_value, options->hitlist_size);
       exit(0);
     }
+    ReadDBBioseqFetchEnable ("wrpsb", blast_database, db_is_na, TRUE);
     if (!sap) sap = (SeqAnnotPtr) BLASTGetSeqAnnotByRID(rid);
     if (!sap)  WRPSBHtmlError("BLAST queue did not return alignment");
+    if (!query) {
+      salp = sap->data;
+      dsp = salp->segs;
+      sip = dsp->ids;
+      query = BioseqLockById(sip);
+    
+    }
     if (!query)  WRPSBHtmlError("BLAST queue did not return query sequence");
     
     salp = sap->data;
@@ -1940,6 +1959,17 @@ Int2 Main (void)
         WRPSBHtmlError("No sequence alignment retrieved!");
       }
     } 
+    
+    cSapDBTitle = BLASTGetDatabaseTitleFromSeqAnnot(sap);
+    if (cSapDBTitle) {
+      cPtr = strstr(cSapDBTitle,".v");
+      if (cPtr) {
+        cPtr++; StrCpy(dbversion,cPtr);
+      } else StrCpy(dbversion, CDDefault);
+      cPtr = strstr(cSapDBTitle,".v");
+      *cPtr = '\0';
+      strcpy(dbname,cSapDBTitle);
+    }
     mask_loc = NULL;
 /*    if (StringICmp(myargs[6].strvalue, "F")) { */
       for (vnp=other_returns; vnp; vnp = vnp->next) {
@@ -1960,7 +1990,7 @@ Int2 Main (void)
 /*    } */
     QRPSBViewSeqAlign(salp, query, mask_loc, iGraphMode, iPairMode, options,
                       believe_query, print_options, version, date,
-                      blast_database, dbversion,iBGram);
+                      blast_database, dbversion,iBGram, dbname);
     exit(0);
   }
 

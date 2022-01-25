@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -614,10 +614,14 @@ static void MarkEmptyFeatsForCleanup (SeqFeatPtr sfp, Pointer userdata)
     if (EmptyOrNullString (grp->maploc)) {
       grp->maploc = MemFree (grp->maploc);
     }
+    if (EmptyOrNullString (grp->locus_tag)) {
+      grp->locus_tag = MemFree (grp->locus_tag);
+    }
     if (EmptyOrNullString (grp->locus) &&
         EmptyOrNullString (grp->allele) &&
         EmptyOrNullString (grp->desc) &&
         EmptyOrNullString (grp->maploc) &&
+        EmptyOrNullString (grp->locus_tag) &&
         grp->db == NULL && grp->syn == NULL) {
       sfp->idx.deleteme = TRUE;
     }
@@ -977,7 +981,7 @@ static FeatdefNameData featdefWithName [] = {
   { FEATDEF_GENE ,               "Gene"               },
   { FEATDEF_HET ,                "Het"                },
   { FEATDEF_iDNA ,               "iDNA"               },
-  { FEATDEF_IMP ,                "Imp"                },
+  { FEATDEF_IMP ,                "Import"             },
   { FEATDEF_Imp_CDS ,            "Imp_CDS"            },
   { FEATDEF_intron ,             "intron"             },
   { FEATDEF_J_segment ,          "J_segment"          },
@@ -1083,7 +1087,7 @@ static CharPtr featurekeys [] = {
   "misc_RNA" ,
   "Cit" ,
   "Xref" ,
-  "Imp" ,
+  "Import" ,
   "allele" ,
   "attenuator" ,
   "C_region" ,

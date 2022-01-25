@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: ffprint.h,v $
+ * Revision 6.10  2002/08/26 22:06:57  kans
+ * ff_RecalculateLinks (MS) to fix hotlink artifact
+ *
  * Revision 6.9  1999/08/31 14:36:39  tatiana
  * ff_print_string_mem() added
  *
@@ -172,7 +175,7 @@ printing */
 				until printing. */
 	CharPtr line_return;
 /*  next three variables are used for HTML URLs   */
-	Int2  PNTR	pos_links;
+	Int4  PNTR	pos_links;
 	CharPtr	PNTR links;
 	Int2	n_links;
 	Int2	buf_n_links;
@@ -244,6 +247,7 @@ NLM_EXTERN void LIBCALL GetHelpMsg PROTO((SeqEntryPtr sep));
 NLM_EXTERN void LIBCALL www_PrintComment  PROTO((CharPtr string, Boolean identifier, Uint1 format));
 NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, Int4 gi, Int2 entityID, Int2 itemID));
 NLM_EXTERN void LIBCALL www_accession PROTO((CharPtr string));
+NLM_EXTERN void LIBCALL ff_RecalculateLinks(Int4 indent);
 
 #ifdef __cplusplus
 }

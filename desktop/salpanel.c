@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.54 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -590,12 +590,12 @@ extern BaR SeqEdGetSlateScrollBar (PaneL pnl)
 
 extern Int4 SeqEdGetValueScrollBar (PaneL pnl)
 {
-  return GetValue(SeqEdGetSlateScrollBar(pnl));
+  return GetBarValue(SeqEdGetSlateScrollBar(pnl));
 }
 
 extern void SeqEdSetValueScrollBar (PaneL pnl, Int4 value)
 {
-  SetValue(SeqEdGetSlateScrollBar(pnl), value);
+  SetBarValue(SeqEdGetSlateScrollBar(pnl), value);
 }
 
 extern void SeqEdCorrectBarPage (PaneL pnl, Int4 page1, Int4 page2)
@@ -643,7 +643,7 @@ extern void SeqEdSetCorrectBarMax (PaneL pnl, EditAlignDataPtr adp, float hratio
      cbm = MAX ((Int4) 0, (Int4) (adp->nlines -1));
   sb = SeqEdGetSlateScrollBar (pnl);
   CorrectBarMax (sb, cbm);
-  SetValue (sb, (Int4)(adp->voffset));
+  SetBarValue (sb, (Int4)(adp->voffset));
 }
 
 static void count_feature_buf_line (ValNodePtr fnp_list, Int4 g_left, Int4 g_right, ValNodePtr PNTR feature_line)
@@ -911,7 +911,7 @@ extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
      r.top = r.top + 1;
      ScrollRect (&r, 0, pixels);
   } 
-  adp->voffset = GetValue (sb);
+  adp->voffset = GetBarValue (sb);
   if (abs(newval - oldval) == 1)
   {
      oldhoffset = adp->hoffset;
@@ -940,10 +940,23 @@ extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
      }
   } 
   else {
+  	 Int4 tmp;
      x = adp->seqnumber;
      if (adp->draw_scale) x++;
      if (adp->draw_bars) x++;
-     adp->hoffset = count_nline (adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, (Int4)((FloatLo)adp->voffset));
+     
+     if (adp->showfeat)
+     {
+	     adp->hoffset = count_nline (adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, (Int4)((FloatLo)adp->voffset));
+     }
+     else 
+     {
+     	adp->hoffset = adp->visibleWidth * (Int4)((FloatLo)adp->voffset);
+     }
+     
+     /* Use adp->int4value2 to disable line number counting when scrolling */
+     tmp = adp->int4value2;
+     adp->int4value2 = -1;
      if (adp->hoffset > adp->bufferstart 
      && adp->hoffset+adp->visibleLength+ adp->visibleWidth < adp->bufferstart +adp->bufferlength) 
      {
@@ -951,6 +964,8 @@ extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
      } else {
          data_collect_arrange (adp, TRUE);
      }
+     adp->int4value2 = tmp;
+     
      if (x == 0) {
         adp->firstssp=go_to_next_to_draw(adp, TRUE, (Int4)0);
      } else {
@@ -986,7 +1001,7 @@ extern void HscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
   } else {
      InvalRect (&r);
   }
-  adp->hoffset = GetValue (sb);
+  adp->hoffset = GetBarValue (sb);
   RestorePort(tempPort);
   Update ();
 }
@@ -1054,7 +1069,7 @@ extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int4 width, Int4 h
      for (j=0; j<adp->minbufferlength +adp->editbuffer; j++) adp->colonne[j] = -1;
      rearrange = TRUE;
   }
-  adp->vPage = adp->pnlLine - 1;  
+  adp->vPage = /* adp->pnlLine - 1; */ 1;
   adp->hPage = adp->visibleWidth - 1;
   data_collect_arrange (adp, rearrange);
   SeqEdSetCorrectBarMax (pnl, adp, hratio);

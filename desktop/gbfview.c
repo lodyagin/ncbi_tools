@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.51 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -894,6 +894,10 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     }
   }
 
+  if (GetAppProperty ("NewFlatfileSource") != NULL) {
+    flags |= USE_NEW_SOURCE_ORG;
+  }
+
   svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
   if (svpp != NULL && svpp->lockFarComponents) {
     entityID = ObjMgrGetEntityIDForPointer (bsp);
@@ -995,7 +999,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 static void PopulateGenBank (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT, 0);
+  PopulateFlatFile (bvp, GENBANK_FMT, SHOW_CONTIG_FEATURES | SHOW_CONTIG_SOURCES);
 }
 
 static void PopulateEMBL (BioseqViewPtr bvp)

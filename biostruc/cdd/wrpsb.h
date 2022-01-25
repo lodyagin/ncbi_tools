@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.6 2002/03/07 19:12:14 bauer Exp $
+/* $Id: wrpsb.h,v 1.11 2002/08/16 19:50:36 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.6 $
+* $Revision: 1.11 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.11  2002/08/16 19:50:36  bauer
+* increased timeout span
+*
+* Revision 1.10  2002/08/06 02:39:09  bauer
+* changes to accomodate COGs
+*
+* Revision 1.9  2002/06/12 15:03:49  bauer
+* 6/11/02 update
+*
+* Revision 1.8  2002/05/23 20:19:16  bauer
+* intermediate version of wrpsb
+*
+* Revision 1.7  2002/05/06 17:18:04  bauer
+* switched to graphics on the fly
+*
 * Revision 1.6  2002/03/07 19:12:14  bauer
 * major revisions to cgi-bins and the CD-dumper
 *
@@ -56,14 +71,13 @@
 * ==========================================================================
 */
 
-
 #include "objcdd.h"
 #include "wrpsbutil.h"
 
-#define CPUTIME_MAX        600
+#define CPUTIME_MAX        900
 #define RPSBNAME           "wrpsb.cgi"
 #define QRPSBNAME          "wrpsb.cgi"
-#define DEFAULT_DATALIB    "cdd"
+#define DEFAULT_DATALIB    "oasis_sap"
 #define DEFAULT_EVALUE     "0.01"
 #define DEFAULT_NHITS      "50"
 #define NUMARGS            (sizeof(myargs)/sizeof(myargs[0]))
@@ -77,6 +91,15 @@
 #define MUTUAL_OVERLAP     .5
 #define USE_PNG
 #undef RESULTS_FILE
+
+#define DRAWSEARCHPAGE     0
+#define SENDREQUEST        1
+#define SENDQUEUEDREQUEST  2
+#define RETRIEVEQUEUE      3
+#define RETRIEVEPRECALC    4
+#define DRAWQUEUED         5
+#define DRAWONLY           6
+
 
 typedef struct _txdfline_struct {
   struct _txdfline_struct *next;
@@ -184,21 +207,27 @@ static Char    CDDPrefix[PATH_MAX];
 static Char    CDDPost_O[PATH_MAX];
 static Char    CDDPost_C[PATH_MAX];
 static Char    CDDefault[PATH_MAX];
+static Char    QUDefault[PATH_MAX];
 static Char    CDDSearch1[PATH_MAX];
 static Char    CDDSearch2[PATH_MAX];
 static Char    CDDSearch3[PATH_MAX];
 static Char    CDDSearch4[PATH_MAX];
 static Char    CDDSearch5[PATH_MAX];
 static Char    CDDSearch6[PATH_MAX];
+static Char    CDDSearch7[PATH_MAX];
 static Char    CDDSname1[PATH_MAX];
 static Char    CDDSname2[PATH_MAX];
 static Char    CDDSname3[PATH_MAX];
 static Char    CDDSname4[PATH_MAX];
 static Char    CDDSname5[PATH_MAX];
 static Char    CDDSname6[PATH_MAX];
+static Char    CDDSname7[PATH_MAX];
 static Char    CDDlocat[PATH_MAX];
 static Char    CDDhuman[PATH_MAX];
 static Char    CDDhumsq[PATH_MAX];
+static Char    ODBCINI[PATH_MAX];
+static Char    DARTUSER[PATH_MAX];
+static Char    DARTPASS[PATH_MAX];
 
 /*---------------------------------------------------------------------------*/
 /* DART color scheme                                                         */

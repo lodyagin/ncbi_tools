@@ -248,6 +248,15 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name demo_entrez2
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_regexp
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_regexp_grep
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_regexp
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -355,6 +364,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name vibgif
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name regexp
     End Project Dependency
 }}}
 
@@ -1560,6 +1572,36 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_regexp"=.\regexp\demo\demo_regexp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name regexp
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_regexp_grep"=.\regexp\demo\demo_regexp_grep.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name regexp
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_rpsblast"=.\demo\rpsblast\demo_rpsblast.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2586,6 +2628,18 @@ Package=<4>
 
 ###############################################################################
 
+Project: "regexp"=.\regexp\regexp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
 Project: "socket_io_bouncer"=.\connect\test\socket_io_bouncer\socket_io_bouncer.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2821,6 +2875,21 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_regexp"=.\regexp\test\test_regexp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name regexp
     End Project Dependency
 }}}
 

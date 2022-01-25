@@ -100,7 +100,7 @@ static AsnType atx[129] = {
   {418, "Score-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[114]} ,
   {0, "div-ranks" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[71],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "parents" ,128,11,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[73]} ,
+  {0, "parent" ,128,11,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[73]} ,
   {0, "children" ,128,12,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[74]} ,
   {0, "siblings" ,128,13,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[75]} ,
   {0, "neighbors" ,128,14,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[76]} ,
@@ -151,7 +151,7 @@ static AsnType atx[129] = {
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[121]} ,
   {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[122]} ,
   {0, "description" ,128,2,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[123]} ,
-  {0, "parents" ,128,3,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[124]} ,
+  {0, "parent" ,128,3,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[124]} ,
   {0, "children" ,128,4,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[125]} ,
   {0, "siblings" ,128,5,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[126]} ,
   {0, "neighbors" ,128,6,0,1,0,0,0,0,NULL,&atx[12],NULL,0,NULL} ,
@@ -193,7 +193,7 @@ static AsnModulePtr amp = ampx;
 #define CDD_posfreq &at[55]
 #define CDD_scoremat &at[64]
 #define CDD_distance &at[65]
-#define CDD_parents &at[72]
+#define CDD_parent &at[72]
 #define CDD_children &at[73]
 #define CDD_siblings &at[74]
 #define CDD_neighbors &at[75]
@@ -214,7 +214,7 @@ static AsnModulePtr amp = ampx;
 #define CDD_TREE_name &at[120]
 #define CDD_TREE_id &at[121]
 #define CDD_TREE_description &at[122]
-#define CDD_TREE_parents &at[123]
+#define CDD_TREE_parent &at[123]
 #define CDD_TREE_children &at[124]
 #define CDD_TREE_siblings &at[125]
 #define CDD_TREE_neighbors &at[126]

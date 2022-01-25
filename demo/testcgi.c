@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -522,6 +522,7 @@ static void RunEcho (CharPtr tempfile)
   size_t  ct;
   Char    buf [256];
   FILE*   fp;
+  Bool    headerSent = FALSE;
 
 /* reconstruct and print the query string */
 
@@ -547,10 +548,25 @@ static void RunEcho (CharPtr tempfile)
   if (fp == NULL) return;
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
+
+    if (! headerSent) {
+
+/* send required first header information to stdout */
+
+      printf ("Content-type: text/html\r\n\r\n");
+      fflush (stdout);
+      headerSent = TRUE;
+    }
+
     EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
   fclose (fp);
+
+  if (! headerSent) {
+    printf ("Content-type: text/html\r\n\r\n");
+    fflush (stdout);
+  }
 }
 
 
@@ -561,6 +577,7 @@ static void RunSeg (CharPtr tempfile)
   Char     cmmd [256];
   size_t   ct;
   FILE*    fp;
+  Bool     headerSent = FALSE;
   float    hi;
   CharPtr  hicut;
   CharPtr  lowcut;
@@ -595,10 +612,25 @@ static void RunSeg (CharPtr tempfile)
 /* send processed FASTA data from seg directly to stdout and calling program */
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
+
+    if (! headerSent) {
+
+/* send required first header information to stdout */
+
+      printf ("Content-type: text/html\r\n\r\n");
+      fflush (stdout);
+      headerSent = TRUE;
+    }
+
     EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
   pclose (fp);
+
+  if (! headerSent) {
+    printf ("Content-type: text/html\r\n\r\n");
+    fflush (stdout);
+  }
 }
 
 
@@ -614,6 +646,7 @@ static void RunTrnaScan (CharPtr tempfile)
   CharPtr   end;
   CharPtr   field [MAX_FIELDS];
   FILE*     fp;
+  Bool      headerSent = FALSE;
   CharPtr   id;
   Int2      idNotSent = TRUE;
   Int2      inBody = FALSE;
@@ -643,6 +676,15 @@ static void RunTrnaScan (CharPtr tempfile)
 /* line by line processing of tRNAscan-SE output table */
 
   while (fgets (buf, sizeof (buf), fp) != NULL) {
+
+    if (! headerSent) {
+
+/* send required first header information to stdout */
+
+      printf ("Content-type: text/html\r\n\r\n");
+      fflush (stdout);
+      headerSent = TRUE;
+    }
 
     if (inBody) {
       memset (field, 0, sizeof (field));
@@ -731,6 +773,11 @@ static void RunTrnaScan (CharPtr tempfile)
   }
   pclose (fp);
 
+  if (! headerSent) {
+    printf ("Content-type: text/html\r\n\r\n");
+    fflush (stdout);
+  }
+
   if (idNotSent) {
     sprintf (str, ">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
     EncodeAndWrite (str, strlen (str), stdout);
@@ -758,7 +805,7 @@ main (int argc, char *argv[])
   CharPtr  ptr;
   CharPtr  request;
   Int2     service;
-  Char     tempfile [PATH_MAX];
+  Char     tempfile [1024];
 
 /* at startup, first verify environment */
 
@@ -820,15 +867,11 @@ main (int argc, char *argv[])
   fflush (fp);
   fclose (fp);
 
-/* now send required first header information to stdout */
-
-  printf ("Content-type: text/html\r\n\r\n");
-  fflush (stdout);
-
 /* expect request=custom, request=echo, request=seg, or request=trnascan */
 
   request = FindByName ("request");
   if (request == NULL) {
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - No service request\n");
     fflush (stdout);
     return 1;
@@ -838,6 +881,7 @@ main (int argc, char *argv[])
 
   service = ListHasString (services, request);
   if (service < 1) {
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - Unable to match request '%s'\n", request);
     fflush (stdout);
     return 1;
@@ -867,6 +911,11 @@ main (int argc, char *argv[])
       RunTrnaScan (tempfile);
       break;
     default :
+
+/* each function must send required first header information to stdout */
+
+      printf ("Content-type: text/html\r\n\r\n");
+      fflush (stdout);
       break;
   }
 

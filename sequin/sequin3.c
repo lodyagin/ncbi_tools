@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.193 $
+* $Revision: 6.211 $
 *
 * File Description: 
 *
@@ -420,8 +420,8 @@ extern void DoFixupSegSet (SeqEntryPtr sep)
   } else {
     digits = 1;
   }
-  if (digits + 1 + len > 10) {
-    prefix += digits + 1 + len - 10;
+  if (digits + 1 + len > 16) {
+    prefix += digits + 1 + len - 16;
   }
   for (sep = pbssp->seq_set, segment = 1; sep != NULL; sep = sep->next, segment++) {
     DoFixPartLocus (sep, prefix, segment, digits);
@@ -1436,6 +1436,25 @@ static void SegSeqToRawSeq (IteM i)
   Message (MSG_OK, "Some manual desktop manipulations remain");
 }
 
+static void RawSeqToDeltaSeq (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioseqsInSep (sep, (Pointer) bfp, ConvertNsToGaps);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 typedef struct xrefgenedata {
   GeneRefPtr  grp;
   SeqLocPtr   slp;
@@ -1626,122 +1645,34 @@ static void GeneToXref (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
-static void ProtToImpFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+static void CdsToGeneCallback (SeqFeatPtr sfp, Pointer userdata)
 
 {
-  SeqFeatPtr    cds;
-  BioseqPtr     bsp = NULL;
-  BioseqSetPtr  bssp = NULL;
-  Uint1         entityID;
-  GBQualPtr     gbqual;
-  ImpFeatPtr    ifp;
-  CharPtr       name;
-  ProtRefPtr    prp;
-  SeqAnnotPtr   sap;
-  SeqEntryPtr   scope;
-  SeqFeatPtr    sfp;
-  SeqLocPtr     slp;
-  ValNodePtr    vnp;
+  SeqMgrFeatContext  context;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
 
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  scope = (SeqEntryPtr) mydata;
-  if (scope == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  entityID = ObjMgrGetEntityIDForChoice (sep);
-
-  while (sap != NULL) {
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_PROT) {
-          prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-          if (prp != NULL) {
-            if (prp->processed >= 2 && prp->processed <= 4) {
-              cds = FindBestCds (entityID, NULL, sfp->location, scope);
-              if (cds != NULL) {
-                slp = aaLoc_to_dnaLoc (cds, sfp->location);
-                if (slp != NULL) {
-                  sfp->location = SeqLocFree (sfp->location);
-                  sfp->location = slp;
-                  ifp = ImpFeatNew ();
-                  if (ifp != NULL) {
-                    switch (prp->processed) {
-                      case 2 :
-                        ifp->key = StringSave ("mat_peptide");
-                        break;
-                      case 3 :
-                        ifp->key = StringSave ("sig_peptide");
-                        break;
-                      case 4 :
-                        ifp->key = StringSave ("transit_peptide");
-                        break;
-                      default :
-                        ifp->key = StringSave ("?");
-                        break;
-                    }
-                    name = NULL;
-                    vnp = prp->name;
-                    if (vnp != NULL) {
-                      name = vnp->data.ptrvalue;
-                    }
-                    if (name == NULL) {
-                      name = prp->desc;
-                    }
-                    if (name != NULL) {
-                      gbqual = GBQualNew ();
-                      if (gbqual != NULL) {
-                        gbqual->qual = StringSave ("product");
-                        gbqual->val = StringSave (name);
-                        gbqual->next = sfp->qual;
-                        sfp->qual = gbqual;
-                      }
-                    }
-                    sfp->data.choice = SEQFEAT_IMP;
-                    sfp->data.value.ptrvalue = (Pointer) ifp;
-                    ProtRefFree (prp);
-                  }
-                }
-              }
-            }
-          }
-        }
-        sfp = sfp->next;
-      }
-    }
-    sap = sap->next;
-  }
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  if (SeqMgrGetGeneXref (sfp) != NULL) return;
+  if (SeqMgrGetOverlappingGene (sfp->location, NULL) != NULL) return;
+  if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL,
+                               0, 0, sfp, &context) == NULL) return;
+  if (StringHasNoText (context.label)) return;
+  grp = CreateNewGeneRef (context.label, NULL, NULL, FALSE);
+  if (grp == NULL) return;
+  gene = SeqFeatNew ();
+  if (gene == NULL) return;
+  gene->data.choice = SEQFEAT_GENE;
+  gene->data.value.ptrvalue = (Pointer) grp;
+  gene->location = SeqLocMerge (context.bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+  if (gene->location == NULL) return;
+  gene->next = sfp->next;
+  sfp->next = gene;
 }
 
-static void ProtToImpFeatProc (SeqEntryPtr sep)
+static void CdsToGene (IteM i)
 
 {
-  BioseqSetPtr  bssp = NULL;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp == NULL) return;
-    if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16)) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        ProtToImpFeatProc (sep);
-      }
-      return;
-    }
-  }
-  SeqEntryExplore (sep, (Pointer) sep, ProtToImpFeatCallback);
-}
-
-static void ProtToImpFeat (IteM i)
-
-{
-  MsgAnswer    ans;
   BaseFormPtr  bfp;
   SeqEntryPtr  sep;
 
@@ -1750,16 +1681,13 @@ static void ProtToImpFeat (IteM i)
 #else
   bfp = GetObjectExtra (i);
 #endif
-  if (bfp == NULL) return;
+  if (bfp == NULL) {
+    Message (MSG_ERROR, "GeneToXref error");
+    return;
+  }
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
-  ans = Message (MSG_OKC, "Are you sure you want to (temporarily) make ImpFeats?");
-  if (ans == ANS_CANCEL) return;
-  WatchCursor ();
-  Update ();
-  ProtToImpFeatProc (sep);
-  ArrowCursor ();
-  Update ();
+  VisitFeaturesInSep (sep, (Pointer) bfp, CdsToGeneCallback);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
@@ -2679,380 +2607,6 @@ static CharPtr siteString [NUM_SITES] = {
   "signal peptide", "transit peptide", "transmembrane region"
 };
 
-static void FeatConvertImpToSpecialRNA (SeqFeatPtr sfp,
-					Int2       toFeatSubType)
-{
-  RnaRefPtr          rrp;
-
-  rrp = RnaRefNew ();
-  if (rrp != NULL) {
-    sfp->data.value.ptrvalue = ImpFeatFree ((ImpFeatPtr) sfp->data.value.ptrvalue);
-    sfp->data.choice = SEQFEAT_RNA;
-    sfp->data.value.ptrvalue = (Pointer) rrp;
-    if (toFeatSubType == FEATDEF_precursor_RNA) {
-      rrp->type = 1;
-    } else {
-      rrp->type = 255;
-    }
-  }
-}
-
-static void FeatConvertImpToProt (SeqFeatPtr sfp,
-				  Int2       toFeatSubType)
-{
-  ImpFeatPtr ifp;
-
-  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-  if (ifp != NULL) {
-    switch (toFeatSubType) {
-    case FEATDEF_mat_peptide_aa :
-      ifp->key = MemFree (ifp->key);
-      ifp->key = StringSave ("mat_peptide");
-      break;
-    case FEATDEF_sig_peptide_aa :
-      ifp->key = MemFree (ifp->key);
-      ifp->key = StringSave ("sig_peptide");
-      break;
-    case FEATDEF_transit_peptide_aa :
-      ifp->key = MemFree (ifp->key);
-      ifp->key = StringSave ("transit_peptide");
-      break;
-    }
-  }
-
-}
-
-static void FeatConvertGeneToRNA (SeqFeatPtr  sfp,
-				  Int2        toFeatSubType,
-				  Int2        fromFeat,
-				  QualFormPtr qfp)
-{
-  Int2               j;
-  Char               label [256];
-  BioseqPtr          productbsp;
-  RnaRefPtr          rrp;
-  SeqIdPtr           sip;
-  tRNAPtr            trp;
-
-  rrp = RnaRefNew ();
-  if (NULL == rrp)
-    return;
-
-  FeatDefLabel (sfp, label, sizeof (label), OM_LABEL_CONTENT);
-  if (fromFeat == SEQFEAT_GENE) {
-    sfp->data.value.ptrvalue =
-      GeneRefFree ((GeneRefPtr) sfp->data.value.ptrvalue);
-  } else if (fromFeat == SEQFEAT_CDREGION) {
-    if (sfp->product != NULL) {
-      sip = SeqLocId (sfp->product);
-      if (sip != NULL) {
-	productbsp = BioseqFind (sip);
-	if (productbsp != NULL) {
-	  ValNodeAddPointer (&(qfp->bsplist), 0, (Pointer) productbsp);
-	}
-      }
-    }
-    sfp->data.value.ptrvalue =
-      CdRegionFree ((CdRegionPtr) sfp->data.value.ptrvalue);
-  }
-
-  sfp->data.choice = SEQFEAT_RNA;
-  sfp->data.value.ptrvalue = (Pointer) rrp;
-  switch (toFeatSubType) {
-  case FEATDEF_preRNA :
-    rrp->type = 1;
-    break;
-  case FEATDEF_mRNA :
-    rrp->type = 2;
-    break;
-  case FEATDEF_tRNA :
-    rrp->type = 3;
-    break;
-  case FEATDEF_rRNA :
-    rrp->type = 4;
-    break;
-  case FEATDEF_snRNA :
-    rrp->type = 5;
-    break;
-  case FEATDEF_scRNA :
-    rrp->type = 6;
-    break;
-  case FEATDEF_snoRNA :
-    rrp->type = 7;
-    break;
-  case FEATDEF_otherRNA :
-    rrp->type = 255;
-    break;
-  default :
-    break;
-  }
-
-  if (toFeatSubType == FEATDEF_tRNA) {
-    trp = (tRNAPtr) MemNew (sizeof (tRNA));
-    rrp->ext.choice = 2;
-    rrp->ext.value.ptrvalue = (Pointer) trp;
-    if (trp != NULL) {
-      trp->aa = ParseTRnaString (label, NULL, NULL, FALSE);
-      trp->aatype = 2;
-      for (j = 0; j < 6; j++) {
-	trp->codon [j] = 255;
-      }
-    }
-  } else if (! StringHasNoText (label)) {
-    rrp->ext.choice = 1;
-    rrp->ext.value.ptrvalue = StringSave (label);
-  }
-}
-
-static void FeatConvertRegionToImp (SeqFeatPtr sfp,
-				    Int2       toFeatSubType,
-				    EnumFieldAssoc PNTR alist)
-{
-  EnumFieldAssocPtr  ap;
-  GBQualPtr          gbqual;
-  Int2               i;
-  ImpFeatPtr         ifp;
-  CharPtr            str;
-
-  ifp = ImpFeatNew ();
-  if (NULL == ifp)
-    return;
-
-  str = (CharPtr) sfp->data.value.ptrvalue;
-  sfp->data.choice = SEQFEAT_IMP;
-  sfp->data.value.ptrvalue = (Pointer) ifp;
-  for (i = 1, ap = alist; ap->name != NULL; i++, ap++) {
-    if (ap->value == toFeatSubType) {
-      ifp->key = MemFree (ifp->key);
-      ifp->key = StringSave (ap->name);
-    }
-  }
-
-  if (ifp->key == NULL) {
-    ifp->key = StringSave ("misc_feature");
-  }
-
-  if (! StringHasNoText (str)) {
-    gbqual = GBQualNew ();
-    if (gbqual != NULL) {
-      gbqual->qual = StringSave ("note");
-      gbqual->val = str;
-      gbqual->next = sfp->qual;
-      sfp->qual = gbqual;
-    }
-  }
-  
-}
-
-static void FeatConvertRegionToRNA (SeqFeatPtr sfp,
-				    Int2       toFeatSubType)
-{
-  RnaRefPtr  rrp;
-  CharPtr    str;
-
-  rrp = RnaRefNew ();
-  if (NULL == rrp)
-    return;
-
-  str = (CharPtr) sfp->data.value.ptrvalue;
-  sfp->data.choice = SEQFEAT_RNA;
-  sfp->data.value.ptrvalue = (Pointer) rrp;
-
-  if (toFeatSubType == FEATDEF_precursor_RNA) {
-    rrp->type = 1;
-  } else {
-    rrp->type = 255;
-  }
-
-  if (! StringHasNoText (str)) {
-    rrp->ext.choice = 1;
-    rrp->ext.value.ptrvalue = str;
-  }
-
-}
-
-static void FeatConvertImpToRNA (SeqFeatPtr sfp,
-				 Int2       toFeatSubType)
-{
-  RnaRefPtr  rrp;
-
-  rrp = RnaRefNew ();
-  if (NULL == rrp)
-    return;
-
-  sfp->data.value.ptrvalue =
-    ImpFeatFree ((ImpFeatPtr) sfp->data.value.ptrvalue);
-  sfp->data.choice = SEQFEAT_RNA;
-  sfp->data.value.ptrvalue = (Pointer) rrp;
-
-  switch (toFeatSubType) {
-  case FEATDEF_preRNA :
-    rrp->type = 1;
-    break;
-  case FEATDEF_mRNA :
-    rrp->type = 2;
-    break;
-  case FEATDEF_tRNA :
-    rrp->type = 3;
-    break;
-  case FEATDEF_rRNA :
-    rrp->type = 4;
-    break;
-  case FEATDEF_snRNA :
-    rrp->type = 5;
-    break;
-  case FEATDEF_scRNA :
-    rrp->type = 6;
-    break;
-  case FEATDEF_snoRNA :
-    rrp->type = 7;
-    break;
-  case FEATDEF_otherRNA :
-    rrp->type = 255;
-    break;
-  default :
-    break;
-  }
-
-}
-
-static void FeatConvertCommentToMiscFeature (SeqFeatPtr sfp)
-{
-  ImpFeatPtr ifp;
-
-  if (sfp->data.value.ptrvalue == NULL) {
-    ifp = ImpFeatNew ();
-    if (ifp != NULL) {
-      ifp->key = StringSave ("misc_feature");
-      sfp->data.choice = SEQFEAT_IMP;
-      sfp->data.value.ptrvalue = (Pointer) ifp;
-    }
-  }
-}
-
-static void FeatConvertGeneToMiscFeature (SeqFeatPtr sfp)
-{
-  ImpFeatPtr  ifp;
-  GBQualPtr   gbqual;
-  CharPtr     genelocus;
-  GeneRefPtr  grp;
-
-  ifp = ImpFeatNew ();
-  if (NULL == ifp)
-    return;
-
-  genelocus = NULL;
-  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-  if (grp != NULL) {
-    genelocus = grp->locus;
-    grp->locus = NULL;
-  }
-
-  sfp->data.value.ptrvalue =
-    GeneRefFree ((GeneRefPtr) sfp->data.value.ptrvalue);
-  sfp->data.choice = SEQFEAT_IMP;
-  sfp->data.value.ptrvalue = (Pointer) ifp;
-  ifp->key = StringSave ("misc_feature");
-
-  if (! StringHasNoText (genelocus)) {
-    gbqual = GBQualNew ();
-    if (gbqual != NULL) {
-      gbqual->qual = StringSave ("gene");
-      gbqual->val = genelocus;
-      gbqual->next = sfp->qual;
-      sfp->qual = gbqual;
-    }
-  }
-
-}
-
-static void FeatConvertRNAToMiscFeature (SeqFeatPtr sfp)
-{
-  GBQualPtr  gbqual;
-  ImpFeatPtr ifp;
-  CharPtr    rnaname;
-  RnaRefPtr  rrp;
-
-  ifp = ImpFeatNew ();
-  if (NULL == ifp)
-    return;
-
-  rnaname = NULL;
-  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
-  if (rrp != NULL) {
-    if (rrp->ext.choice == 1) {
-      rnaname = (CharPtr) rrp->ext.value.ptrvalue;
-      rrp->ext.value.ptrvalue = NULL;
-    }
-  }
-
-  sfp->data.value.ptrvalue =
-    RnaRefFree ((RnaRefPtr) sfp->data.value.ptrvalue);
-  sfp->data.choice = SEQFEAT_IMP;
-  sfp->data.value.ptrvalue = (Pointer) ifp;
-  ifp->key = StringSave ("misc_feature");
-
-  if (! StringHasNoText (rnaname)) {
-    gbqual = GBQualNew ();
-    if (gbqual != NULL) {
-      gbqual->qual = StringSave ("product");
-      gbqual->val = rnaname;
-      gbqual->next = sfp->qual;
-      sfp->qual = gbqual;
-    }
-  }
-
-}
-
-static void FeatConvertSiteToMiscFeature (SeqFeatPtr sfp)
-{
-  GBQualPtr  gbqual;
-  ImpFeatPtr ifp;
-  Int2       sitetype;
-
-  ifp = ImpFeatNew ();
-  if (NULL == ifp)
-    return;
-
-  sitetype = (Int2) sfp->data.value.intvalue;
-  sfp->data.choice = SEQFEAT_IMP;
-  sfp->data.value.ptrvalue = (Pointer) ifp;
-  ifp->key = StringSave ("misc_feature");
-  if (sitetype > 0 && sitetype < NUM_SITES) {
-    gbqual = GBQualNew ();
-    if (gbqual != NULL) {
-      gbqual->qual = StringSave ("note");
-      gbqual->val = StringSave (siteString [sitetype]);
-      gbqual->next = sfp->qual;
-      sfp->qual = gbqual;
-    }
-  }
-
-}
-
-static void FeatConvertPeptideToRegion (SeqFeatPtr sfp)
-{
-  ProtRefPtr prp;
-  ValNodePtr vnp;
-  CharPtr    str;
-
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-  if (NULL == prp)
-    return;
-
-  vnp = prp->name;
-  if (vnp != NULL && vnp->next == NULL) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if (! StringHasNoText (str)) {
-      vnp->data.ptrvalue = NULL;
-      sfp->data.value.ptrvalue = ProtRefFree (prp);
-      sfp->data.choice = SEQFEAT_REGION;
-      sfp->data.value.ptrvalue = (Pointer) str;
-    }
-  }
-
-}
-
 /*=========================================================================*/
 /*                                                                         */
 /* SeqLocAdjustByOffset ()                                                 */
@@ -3443,9 +2997,6 @@ static Boolean MergeProteinBioseqs (BioseqSetPtr bssp)
 
   ConvertProtsToMatPeptides (firstProtBsp);
 
-  /* Adjust the length of the protein's */
-  /* non peptide features.              */
-
   /* Return successfully */
 
   return TRUE;
@@ -3453,65 +3004,7 @@ static Boolean MergeProteinBioseqs (BioseqSetPtr bssp)
 
 /*=========================================================================*/
 /*                                                                         */
-/* MergeCDSFeatures ()                                                     */
-/*                                                                         */
-/*=========================================================================*/
-
-static Boolean MergeCDSFeatures (BioseqSetPtr bssp)
-{
-  SeqEntryPtr sep;
-  BioseqPtr   bsp;
-  SeqAnnotPtr sap;
-  SeqFeatPtr  sfp;
-
-  
-
-  /* Loop through all the features */
-
-  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-
-    /* Make sure that we're working */
-    /* on a protein Bioseq.         */
-    
-    if (!IS_Bioseq (sep))
-      continue;
-    
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (! ISA_na (bsp->mol))
-      continue;
-    
-    /* Loop through the features, */
-    /* merging any CDS ones.      */
-    
-    sap = bsp->annot;
-    while (NULL != sap) {
-      if (1 == sap->type) {
-	sfp = (SeqFeatPtr) sap->data;
-	while (NULL != sfp) {
-	  if (sfp->data.choice == SEQFEAT_CDREGION) {
-	    /* !!!! function not found !!!
-	    tdf_DisplaySeqLoc (sfp->location);
-	    */
-	    /*
-	    SeqLocAdjustByOffset (sfp->location, *offsetPtr);
-	    */
-	  }
-	  sfp = sfp->next;
-	}
-      }
-      sap = sap->next;
-    }
-    
-      
-
-  }
-
-  return TRUE;
-}
-
-/*=========================================================================*/
-/*                                                                         */
-/* MergeCDS_Callback ()                                                    */
+/* MergeCDSForOneSet ()                                                    */
 /*                                                                         */
 /*=========================================================================*/
 
@@ -3539,23 +3032,10 @@ static Boolean LIBCALLBACK MergeCDSForOneSet (BioseqSetPtr bssp)
       return FALSE;
     }
 
-  /* If we made it to here, then */
-  /* it's a nuc/prot set.        */
-
-  /* Check to see if conversion makes sense on this Bioseq */
-
-
   /* Combine all of a nucleotide Bioseq's product */
   /* protein Bioseqs into one Bioseq.             */
 
   MergeProteinBioseqs (bssp);
-
-  /* Merge the nuc Bioseq's corresponding */
-  /* CDS features into one CDS.           */
-
-  /*
-  MergeCDSFeatures (bssp);
-  */
 
   /* Return successfully */
 
@@ -3611,6 +3091,356 @@ static void MergeCDS (IteM i)
 
   return;
 }
+
+static void FeatConvertImpToSpecialRNA (SeqFeatPtr sfp,
+					Int2       toFeatSubType)
+{
+  RnaRefPtr          rrp;
+
+  rrp = RnaRefNew ();
+  if (rrp != NULL) {
+    sfp->data.value.ptrvalue = ImpFeatFree ((ImpFeatPtr) sfp->data.value.ptrvalue);
+    sfp->data.choice = SEQFEAT_RNA;
+    sfp->data.value.ptrvalue = (Pointer) rrp;
+    if (toFeatSubType == FEATDEF_precursor_RNA) {
+      rrp->type = 1;
+    } else {
+      rrp->type = 255;
+    }
+  }
+}
+
+static void FeatConvertGeneToRNA (SeqFeatPtr  sfp,
+				  Int2        toFeatSubType,
+				  Int2        fromFeat,
+				  QualFormPtr qfp)
+{
+  Int2               j;
+  Char               label [256];
+  BioseqPtr          productbsp;
+  RnaRefPtr          rrp;
+  SeqIdPtr           sip;
+  tRNAPtr            trp;
+
+  rrp = RnaRefNew ();
+  if (NULL == rrp)
+    return;
+
+  FeatDefLabel (sfp, label, sizeof (label), OM_LABEL_CONTENT);
+  if (fromFeat == SEQFEAT_GENE) {
+    sfp->data.value.ptrvalue =
+      GeneRefFree ((GeneRefPtr) sfp->data.value.ptrvalue);
+  } else if (fromFeat == SEQFEAT_CDREGION) {
+    if (sfp->product != NULL) {
+      sip = SeqLocId (sfp->product);
+      if (sip != NULL) {
+	productbsp = BioseqFind (sip);
+	if (productbsp != NULL) {
+	  ValNodeAddPointer (&(qfp->bsplist), 0, (Pointer) productbsp);
+	}
+      }
+    }
+    sfp->data.value.ptrvalue =
+      CdRegionFree ((CdRegionPtr) sfp->data.value.ptrvalue);
+  }
+
+  sfp->data.choice = SEQFEAT_RNA;
+  sfp->data.value.ptrvalue = (Pointer) rrp;
+  switch (toFeatSubType) {
+  case FEATDEF_preRNA :
+    rrp->type = 1;
+    break;
+  case FEATDEF_mRNA :
+    rrp->type = 2;
+    break;
+  case FEATDEF_tRNA :
+    rrp->type = 3;
+    break;
+  case FEATDEF_rRNA :
+    rrp->type = 4;
+    break;
+  case FEATDEF_snRNA :
+    rrp->type = 5;
+    break;
+  case FEATDEF_scRNA :
+    rrp->type = 6;
+    break;
+  case FEATDEF_snoRNA :
+    rrp->type = 7;
+    break;
+  case FEATDEF_otherRNA :
+    rrp->type = 255;
+    break;
+  default :
+    break;
+  }
+
+  if (toFeatSubType == FEATDEF_tRNA) {
+    trp = (tRNAPtr) MemNew (sizeof (tRNA));
+    rrp->ext.choice = 2;
+    rrp->ext.value.ptrvalue = (Pointer) trp;
+    if (trp != NULL) {
+      trp->aa = ParseTRnaString (label, NULL, NULL, FALSE);
+      trp->aatype = 2;
+      for (j = 0; j < 6; j++) {
+	trp->codon [j] = 255;
+      }
+    }
+  } else if (! StringHasNoText (label)) {
+    rrp->ext.choice = 1;
+    rrp->ext.value.ptrvalue = StringSave (label);
+  }
+}
+
+static void FeatConvertRegionToImp (SeqFeatPtr sfp,
+				    Int2       toFeatSubType,
+				    EnumFieldAssoc PNTR alist)
+{
+  EnumFieldAssocPtr  ap;
+  GBQualPtr          gbqual;
+  Int2               i;
+  ImpFeatPtr         ifp;
+  CharPtr            str;
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+
+  str = (CharPtr) sfp->data.value.ptrvalue;
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  for (i = 1, ap = alist; ap->name != NULL; i++, ap++) {
+    if (ap->value == toFeatSubType) {
+      ifp->key = MemFree (ifp->key);
+      ifp->key = StringSave (ap->name);
+    }
+  }
+
+  if (ifp->key == NULL) {
+    ifp->key = StringSave ("misc_feature");
+  }
+
+  if (! StringHasNoText (str)) {
+    gbqual = GBQualNew ();
+    if (gbqual != NULL) {
+      gbqual->qual = StringSave ("note");
+      gbqual->val = str;
+      gbqual->next = sfp->qual;
+      sfp->qual = gbqual;
+    }
+  }
+  
+}
+
+static void FeatConvertRegionToRNA (SeqFeatPtr sfp,
+				    Int2       toFeatSubType)
+{
+  RnaRefPtr  rrp;
+  CharPtr    str;
+
+  rrp = RnaRefNew ();
+  if (NULL == rrp)
+    return;
+
+  str = (CharPtr) sfp->data.value.ptrvalue;
+  sfp->data.choice = SEQFEAT_RNA;
+  sfp->data.value.ptrvalue = (Pointer) rrp;
+
+  if (toFeatSubType == FEATDEF_precursor_RNA) {
+    rrp->type = 1;
+  } else {
+    rrp->type = 255;
+  }
+
+  if (! StringHasNoText (str)) {
+    rrp->ext.choice = 1;
+    rrp->ext.value.ptrvalue = str;
+  }
+
+}
+
+static void FeatConvertImpToRNA (SeqFeatPtr sfp,
+				 Int2       toFeatSubType)
+{
+  RnaRefPtr  rrp;
+
+  rrp = RnaRefNew ();
+  if (NULL == rrp)
+    return;
+
+  sfp->data.value.ptrvalue =
+    ImpFeatFree ((ImpFeatPtr) sfp->data.value.ptrvalue);
+  sfp->data.choice = SEQFEAT_RNA;
+  sfp->data.value.ptrvalue = (Pointer) rrp;
+
+  switch (toFeatSubType) {
+  case FEATDEF_preRNA :
+    rrp->type = 1;
+    break;
+  case FEATDEF_mRNA :
+    rrp->type = 2;
+    break;
+  case FEATDEF_tRNA :
+    rrp->type = 3;
+    break;
+  case FEATDEF_rRNA :
+    rrp->type = 4;
+    break;
+  case FEATDEF_snRNA :
+    rrp->type = 5;
+    break;
+  case FEATDEF_scRNA :
+    rrp->type = 6;
+    break;
+  case FEATDEF_snoRNA :
+    rrp->type = 7;
+    break;
+  case FEATDEF_otherRNA :
+    rrp->type = 255;
+    break;
+  default :
+    break;
+  }
+
+}
+
+static void FeatConvertCommentToMiscFeature (SeqFeatPtr sfp)
+{
+  ImpFeatPtr ifp;
+
+  if (sfp->data.value.ptrvalue == NULL) {
+    ifp = ImpFeatNew ();
+    if (ifp != NULL) {
+      ifp->key = StringSave ("misc_feature");
+      sfp->data.choice = SEQFEAT_IMP;
+      sfp->data.value.ptrvalue = (Pointer) ifp;
+    }
+  }
+}
+
+static void FeatConvertGeneToMiscFeature (SeqFeatPtr sfp)
+{
+  ImpFeatPtr  ifp;
+  GBQualPtr   gbqual;
+  CharPtr     genelocus;
+  GeneRefPtr  grp;
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+
+  genelocus = NULL;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp != NULL) {
+    genelocus = grp->locus;
+    grp->locus = NULL;
+  }
+
+  sfp->data.value.ptrvalue =
+    GeneRefFree ((GeneRefPtr) sfp->data.value.ptrvalue);
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  ifp->key = StringSave ("misc_feature");
+
+  if (! StringHasNoText (genelocus)) {
+    gbqual = GBQualNew ();
+    if (gbqual != NULL) {
+      gbqual->qual = StringSave ("gene");
+      gbqual->val = genelocus;
+      gbqual->next = sfp->qual;
+      sfp->qual = gbqual;
+    }
+  }
+
+}
+
+static void FeatConvertRNAToMiscFeature (SeqFeatPtr sfp)
+{
+  GBQualPtr  gbqual;
+  ImpFeatPtr ifp;
+  CharPtr    rnaname;
+  RnaRefPtr  rrp;
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+
+  rnaname = NULL;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp != NULL) {
+    if (rrp->ext.choice == 1) {
+      rnaname = (CharPtr) rrp->ext.value.ptrvalue;
+      rrp->ext.value.ptrvalue = NULL;
+    }
+  }
+
+  sfp->data.value.ptrvalue =
+    RnaRefFree ((RnaRefPtr) sfp->data.value.ptrvalue);
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  ifp->key = StringSave ("misc_feature");
+
+  if (! StringHasNoText (rnaname)) {
+    gbqual = GBQualNew ();
+    if (gbqual != NULL) {
+      gbqual->qual = StringSave ("product");
+      gbqual->val = rnaname;
+      gbqual->next = sfp->qual;
+      sfp->qual = gbqual;
+    }
+  }
+
+}
+
+static void FeatConvertSiteToMiscFeature (SeqFeatPtr sfp)
+{
+  GBQualPtr  gbqual;
+  ImpFeatPtr ifp;
+  Int2       sitetype;
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+
+  sitetype = (Int2) sfp->data.value.intvalue;
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  ifp->key = StringSave ("misc_feature");
+  if (sitetype > 0 && sitetype < NUM_SITES) {
+    gbqual = GBQualNew ();
+    if (gbqual != NULL) {
+      gbqual->qual = StringSave ("note");
+      gbqual->val = StringSave (siteString [sitetype]);
+      gbqual->next = sfp->qual;
+      sfp->qual = gbqual;
+    }
+  }
+
+}
+
+static void FeatConvertPeptideToRegion (SeqFeatPtr sfp)
+{
+  ProtRefPtr prp;
+  ValNodePtr vnp;
+  CharPtr    str;
+
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (NULL == prp)
+    return;
+
+  vnp = prp->name;
+  if (vnp != NULL && vnp->next == NULL) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (! StringHasNoText (str)) {
+      vnp->data.ptrvalue = NULL;
+      sfp->data.value.ptrvalue = ProtRefFree (prp);
+      sfp->data.choice = SEQFEAT_REGION;
+      sfp->data.value.ptrvalue = (Pointer) str;
+    }
+  }
+
+}
+
 
 static void FeatConvertImpToImp (SeqFeatPtr sfp,
 				 Int2       toFeatSubType,
@@ -3704,6 +3534,290 @@ static void FeatConvertProtToProt (SeqFeatPtr sfp,
 
 }
 
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* FeatConvertImpToPeptide () - Convert a given import feature to a    */
+/*                           protein feature.                          */
+/*                                                                     */
+/*    Note : Any of the Import feature's gbquals that can be converted */
+/*           to protein fields are caught in the automatic cleanup     */
+/*           called during reindexing, so they don't need to be        */
+/*           converted here.                                           */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void FeatConvertImpToPeptide (SeqFeatPtr  sfp,
+				     Int2        toFeatSubType,
+				     QualFormPtr qfp)
+{
+  ImpFeatPtr ifp;
+  SeqFeatPtr cds;
+  SeqLocPtr  slp;
+  SeqFeatPtr newSfp;
+  Int4       frame;
+  ProtRefPtr prp;
+  SeqIdPtr   sip;
+  BioseqPtr  bsp;
+
+  /* Get the Import Feature */
+
+  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+  if (NULL == ifp)
+    return;
+
+  /* Convert the location to a protein location */
+
+  cds = FindBestCds (qfp->input_entityID, sfp->location, NULL, NULL);
+  if (cds == NULL)
+    return;
+
+  slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, &frame, FALSE);
+  if (slp == NULL)
+    return;
+
+  /* Create a new generic feature */
+
+  sip = SeqLocId (cds->product);
+  if (sip == NULL)
+    return;
+
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL)
+    return;
+
+  newSfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_PROT, slp);
+  BioseqUnlock (bsp);
+  if (newSfp == NULL)
+    return;
+
+  /* Make it into a protein feature */
+
+  prp = ProtRefNew ();
+  newSfp->data.value.ptrvalue = (Pointer) prp;
+  if (NULL == prp)
+    return;
+
+  switch (toFeatSubType) {
+    case FEATDEF_mat_peptide_aa :
+      prp->processed = 2;
+      break;
+    case FEATDEF_sig_peptide_aa :
+      prp->processed = 3;
+      break;
+    case FEATDEF_transit_peptide_aa :
+      prp->processed = 4;
+      break;
+  }
+
+  sfp->idx.subtype = toFeatSubType;
+
+  /* Transfer unchanged fields from old feature */
+
+  newSfp->partial     = sfp->partial;
+  newSfp->excpt       = sfp->excpt;
+  newSfp->exp_ev      = sfp->exp_ev;
+  newSfp->pseudo      = sfp->pseudo;
+  newSfp->comment     = sfp->comment;
+  newSfp->qual        = sfp->qual;
+  newSfp->title       = sfp->title;
+  newSfp->ext         = sfp->ext;
+  newSfp->cit         = sfp->cit;
+  newSfp->xref        = sfp->xref;
+  newSfp->dbxref      = sfp->dbxref;
+  newSfp->except_text = sfp->except_text;
+
+  /* Null out pointers to transferred fields from old feature  */
+  /* so that they don't get deleted when the feature does,     */
+
+  sfp->comment     = NULL;
+  sfp->qual        = NULL;
+  sfp->title       = NULL;
+  sfp->ext         = NULL;
+  sfp->cit         = NULL;
+  sfp->xref        = NULL;
+  sfp->dbxref      = NULL;
+  sfp->except_text = NULL;
+
+  /* Mark the old feature for deletion */
+
+  sfp->idx.deleteme = TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* FeatConvertPeptideToImp () -                                        */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void FeatConvertPeptideToImp (SeqFeatPtr  sfp,
+				     QualFormPtr qfp)
+{
+  ProtRefPtr    prp;
+  SeqFeatPtr    cds;
+  SeqLocPtr     slp;
+  ImpFeatPtr    ifp;
+  CharPtr       name;
+  CharPtr       ec;
+  CharPtr       activity;
+  ValNodePtr    vnp;
+  GBQualPtr     gbqual;
+  GBQualPtr     prevGbq;
+  GBQualPtr     topOfGbqList;
+  DbtagPtr      dbt;
+  Char          idStr[64];
+  ObjectIdPtr   oip;
+
+  /* Make sure that we have a matching peptide feature */
+
+  if (sfp->data.choice != SEQFEAT_PROT)
+    return;
+
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (NULL == prp)
+    return;
+
+  switch (qfp->subtype) {
+    case FEATDEF_mat_peptide_aa :
+      if (2 != prp->processed)
+	return;
+      break;
+    case FEATDEF_sig_peptide_aa :
+      if (3 != prp->processed)
+	return;
+      break;
+    case FEATDEF_transit_peptide_aa :
+      if (4 != prp->processed)
+	return;
+      break;
+  }
+
+  /* Convert the location from the protein */
+  /* to the nucleotide Bioseq.             */
+
+  cds = FindBestCds (qfp->input_entityID, NULL, sfp->location, NULL);
+  if (NULL == cds)
+    return;
+
+  slp = aaLoc_to_dnaLoc (cds, sfp->location);
+  if (NULL == slp)
+    return;
+  sfp->location = SeqLocFree (sfp->location);
+  sfp->location = slp;
+
+  /* Create a new import feature and */
+  /* attach it to the feature.       */
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+
+  switch (qfp->subtype) {
+    case FEATDEF_mat_peptide_aa :
+      ifp->key = StringSave ("mat_peptide");
+      break;
+    case FEATDEF_sig_peptide_aa :
+      ifp->key = StringSave ("sig_peptide");
+      break;
+    case FEATDEF_transit_peptide_aa :
+      ifp->key = StringSave ("transit_peptide");
+      break;
+  }
+
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+
+  /* Store the protein fields as  */
+  /* gbqual qualifier/value pairs */
+
+  name = NULL;
+  vnp = prp->name;
+  if (vnp != NULL)
+    name = vnp->data.ptrvalue;
+  if (name == NULL) 
+    name = prp->desc;
+
+  if (name != NULL) {
+    gbqual = GBQualNew ();
+    if (NULL == gbqual)
+      return;
+    topOfGbqList = gbqual;
+    gbqual->qual = StringSave ("product");
+    gbqual->val = StringSave (name);
+  }
+
+  prevGbq = gbqual;
+
+  ec = NULL;
+  vnp = prp->ec;
+  if (vnp != NULL)
+    ec = (CharPtr) vnp->data.ptrvalue;
+  
+  if (ec != NULL) {
+    gbqual = GBQualNew ();
+    if (NULL == gbqual)
+      return;
+    prevGbq->next = gbqual;
+    gbqual->qual = StringSave ("EC_number");
+    gbqual->val = StringSave (ec);
+  }
+
+  prevGbq = gbqual;
+
+  activity = NULL;
+  vnp = prp->activity;
+  if (vnp != NULL)
+    activity = (CharPtr) vnp->data.ptrvalue;
+  
+  if (NULL != activity) {
+    gbqual = GBQualNew ();
+    if (NULL == gbqual)
+      return;
+    prevGbq->next = gbqual;
+    gbqual->qual = StringSave ("function");
+    gbqual->val = StringSave (activity);
+  }
+
+  prevGbq = gbqual;
+
+  for (vnp = prp->db; vnp != NULL; vnp = vnp->next) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (NULL == dbt ) 
+      return;
+    if (! StringHasNoText (dbt->db)) {
+      gbqual = GBQualNew ();
+      if (NULL == gbqual)
+	return;
+      prevGbq->next = gbqual;
+      oip = dbt->tag;
+      if (oip->str != NULL && (! StringHasNoText (oip->str))) {
+	sprintf (idStr, "%s:%s", dbt->tag, oip->str);
+	gbqual->qual = StringSave ("db_xref");
+	gbqual->val = StringSave (idStr);
+      } else {
+	sprintf (idStr, "%s:%ld", dbt->tag, (long) oip->id);
+	gbqual->qual = StringSave ("db_xref");
+	gbqual->val = StringSave (idStr);
+      }
+      prevGbq = gbqual;
+    }
+  }
+
+  /* Insert the new qualifiers in front of any existing ones */
+
+  gbqual->next = sfp->qual;
+  sfp->qual = topOfGbqList;
+
+  /* Free the obsolete Protein reference */
+
+  ProtRefFree (prp);
+}
+
+/*-------------------------------------------------------------------------*/
+/*                                                                         */
+/* FeatConvert () -- Convert a given feature from one type to another.     */
+/*                                                                         */
+/*-------------------------------------------------------------------------*/
+
 static Boolean FeatConvert (QualFormPtr qfp, 
 			    SeqFeatPtr  sfp,
 			    Int2        toFeatSubType)
@@ -3716,7 +3830,19 @@ static Boolean FeatConvert (QualFormPtr qfp,
 
   if (fromFeat == SEQFEAT_IMP &&
       toFeat   == SEQFEAT_PROT)
-    FeatConvertImpToProt (sfp, toFeatSubType);
+    FeatConvertImpToPeptide (sfp, toFeatSubType, qfp);
+  else if (fromFeat == SEQFEAT_PROT &&
+	   toFeat   == SEQFEAT_IMP &&
+	   qfp->subtype == FEATDEF_mat_peptide_aa)
+    FeatConvertPeptideToImp (sfp, qfp);
+  else if (fromFeat == SEQFEAT_PROT &&
+	   toFeat   == SEQFEAT_IMP &&
+	   qfp->subtype == FEATDEF_sig_peptide_aa)
+    FeatConvertPeptideToImp (sfp, qfp);
+  else if (fromFeat == SEQFEAT_PROT &&
+	   toFeat   == SEQFEAT_IMP &&
+	   qfp->subtype == FEATDEF_transit_peptide_aa)
+    FeatConvertPeptideToImp (sfp, qfp);
   else if (fromFeat == SEQFEAT_IMP &&
 	   (toFeatSubType == FEATDEF_misc_RNA ||
 	    toFeatSubType == FEATDEF_precursor_RNA))
@@ -3776,9 +3902,6 @@ static void QualAdd (QualFormPtr qfp,
 		     Int2        fromFeatSubType)
 {
   GBQualPtr  gbqual;
-
-  if (sfp->data.choice == SEQFEAT_IMP)
-    return;
 
   if (fromFeatSubType - 1 == GBQUAL_partial)
     sfp->partial = FALSE;
@@ -3935,10 +4058,18 @@ static void CommonQualifierCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
         nextsfp = sfp->next;
         subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
         lookfor = qfp->subtype;
-        if (qfp->type != CONVERT_FEAT) {
+
+	if ((SEQFEAT_IMP == sfp->data.choice) &&
+	   ((subtype == FEATDEF_mat_peptide ||
+	     subtype == FEATDEF_sig_peptide ||
+	     subtype == FEATDEF_transit_peptide)))
+	  lookfor = subtype;
+
+        if (qfp->type != CONVERT_FEAT){
           if (qfp->subtype == 0)
             lookfor = subtype;
         }
+
         if (subtype == lookfor) {
           if (qfp->type == ADD_QUAL)
 	    QualAdd (qfp, sfp, val);
@@ -3961,77 +4092,6 @@ static void CommonQualifierCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
     sap = nextsap;
   }
   AsnIoClose (aip);
-}
-
-static Boolean IsSupportedConversion (Int2 fromType,
-				      Int2 toType,
-				      Int2 fromSubType,
-				      Int2 toSubType)
-{
-
-  if (fromType != toType) 
-    return TRUE;
-
-  /* Convert to mat_peptide, sig_peptide,  */
-  /* or transit_peptide imp feat (briefly) */
-  
-  if (fromType == SEQFEAT_IMP && toType == SEQFEAT_PROT)
-    return TRUE;
-  
-  /* convert to misc_RNA or pre_RNA imp feat (briefly) */
-
-  if (fromType == SEQFEAT_IMP &&
-      (toSubType == FEATDEF_misc_RNA || toSubType == FEATDEF_precursor_RNA))
-    return TRUE;
-
-  if (fromType == SEQFEAT_REGION &&
-      (toSubType == FEATDEF_misc_RNA || toSubType == FEATDEF_precursor_RNA))
-    return TRUE;
-
-  if (fromType == SEQFEAT_REGION && toType == SEQFEAT_IMP)
-    return TRUE;
-
-  if (fromType == SEQFEAT_IMP && toType == SEQFEAT_RNA) 
-    return TRUE;
-
-  /* convert to misc_feature imp feat (briefly) */
-
-  if (fromType == SEQFEAT_COMMENT && toSubType == FEATDEF_misc_feature)
-    return TRUE;
-  
-  /* convert to misc_feature imp feat (briefly) */
-
-  if (fromType == SEQFEAT_GENE && toSubType == FEATDEF_misc_feature)
-    return TRUE;
-  
-  /* convert to misc_feature imp feat (briefly) */
-
-  if (fromType == SEQFEAT_RNA && toSubType == FEATDEF_misc_feature)
-    return TRUE;
-
-  /* convert to misc_feature imp feat (briefly) */
-
-  if (fromType == SEQFEAT_SITE && toSubType == FEATDEF_misc_feature)
-    return TRUE;
-
-  if ((fromType == SEQFEAT_GENE || fromType == SEQFEAT_CDREGION) &&
-      toType == SEQFEAT_RNA)
-    return TRUE;
-
-  /* Convert from mat_peptide, sig_peptide, */
-  /* or transit_peptide to region.          */
-
-  if (fromType == SEQFEAT_PROT &&
-      toType == SEQFEAT_REGION &&
-      (fromSubType == FEATDEF_mat_peptide_aa ||
-       fromSubType == FEATDEF_sig_peptide_aa ||
-       fromSubType == FEATDEF_transit_peptide_aa))
-    return TRUE;
-
-  /* If not one of the above conversions */
-  /* then do not allow.                  */
-
-  return FALSE;
 }
 
 static void DoProcessQualifier (ButtoN b)
@@ -4092,17 +4152,6 @@ static void DoProcessQualifier (ButtoN b)
         choice = FindFeatFromFeatDefType (qfp->subtype);
         newchoice = FindFeatFromFeatDefType (val);
 
-	/*
-	if (!IsSupportedConversion (choice, newchoice, qfp->subtype, val)) {
-          ArrowCursor ();
-          Update ();
-          Message (MSG_OK, "This conversion not supported - contact"
-		   " sequindev for instructions.");
-          Remove (qfp->form);
-          return;
-        }
-	*/
-
         if (choice == SEQFEAT_IMP && newchoice == SEQFEAT_CDREGION) {
           ArrowCursor ();
           Update ();
@@ -4145,6 +4194,7 @@ static void DoProcessQualifier (ButtoN b)
 
   /* Force an update */
 
+  DeleteMarkedObjects (qfp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (qfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, qfp->input_entityID, 0, 0);
   Remove (qfp->form);
@@ -4508,7 +4558,8 @@ typedef struct sourceformdata {
   Boolean        doReplaceAll;
 } SourceFormData, PNTR SourceFormPtr;
 
-static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp, Boolean forceRemove, Boolean convertNote)
+static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp,
+                                   Boolean forceRemove, Boolean convertNote, Boolean is_feat)
 
 {
   MsgAnswer     ans;
@@ -4549,6 +4600,7 @@ static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormP
   }
   if (sfp->type == REMOVE_SOURCE || forceRemove) return NULL;
   if (sfp->type != ADD_SOURCE && (! convertNote)) return NULL;
+  if (subtype == SUBSRC_transgenic && is_feat) return NULL;
   ssp = SubSourceNew ();
   if (biop->subtype == NULL) {
     biop->subtype = ssp;
@@ -4758,7 +4810,7 @@ static Uint1 AssignSubtype (Uint1 subtype)
   return subtype;
 }
 
-static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp)
+static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean is_feat)
 
 {
   CharPtr       foundit;
@@ -4771,7 +4823,7 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp)
   if (biop == NULL || sfp == NULL) return;
   if (sfp->choice == 1) {
     if (sfp->fromval >= 100) {
-      ssp = FindSubSource (biop, sfp->fromval - 100, sfp, FALSE, FALSE);
+      ssp = FindSubSource (biop, sfp->fromval - 100, sfp, FALSE, FALSE, is_feat);
       if (ssp == NULL) return;
       str = ssp->name;
     } else {
@@ -4793,9 +4845,9 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp)
             mod = FindOrgMod (biop, sfp->toval, sfp, FALSE, TRUE);
             if (mod == NULL) return;
             mod->subname = StringSave (str);
-            ssp = FindSubSource (biop, sfp->fromval - 100, sfp, TRUE, FALSE);
+            ssp = FindSubSource (biop, sfp->fromval - 100, sfp, TRUE, FALSE, is_feat);
           } else if (sfp->toval >= 100 && mod != NULL) {
-            ssp = FindSubSource (biop, sfp->toval - 100, sfp, FALSE, TRUE);
+            ssp = FindSubSource (biop, sfp->toval - 100, sfp, FALSE, TRUE, is_feat);
             if (ssp == NULL) return;
             ssp->name = StringSave (str);
             mod = FindOrgMod (biop, sfp->fromval, sfp, TRUE, FALSE);
@@ -4822,8 +4874,9 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp)
           if (ssp->name == NULL &&
               (ssp->subtype == SUBSRC_germline ||
                ssp->subtype == SUBSRC_rearranged ||
-               ssp->subtype == SUBSRC_transgenic ||
                ssp->subtype == SUBSRC_environmental_sample)) {
+            ssp->name = StringSave ("");
+          } else if (ssp->subtype == SUBSRC_transgenic && (! is_feat)) {
             ssp->name = StringSave ("");
           }
         } else if (mod != NULL) {
@@ -4941,6 +4994,7 @@ static Boolean ProcessSourceGatherFunc (GatherContextPtr gcp)
 {
   BioSourcePtr   biop;
   SeqFeatPtr     feat;
+  Boolean        is_feat = FALSE;
   SourceFormPtr  sfp;
   ValNodePtr     vnp;
 
@@ -4953,6 +5007,7 @@ static Boolean ProcessSourceGatherFunc (GatherContextPtr gcp)
     feat = (SeqFeatPtr) gcp->thisitem;
     if (feat->data.choice == SEQFEAT_BIOSRC) {
       biop = (BioSourcePtr) feat->data.value.ptrvalue;
+      is_feat = TRUE;
     }
   } else if (gcp->thistype == OBJ_SEQDESC) {
     vnp = (ValNodePtr) gcp->thisitem;
@@ -4961,7 +5016,7 @@ static Boolean ProcessSourceGatherFunc (GatherContextPtr gcp)
     }
   }
   if (biop == NULL) return TRUE;
-  ProcessBioSourceFunc (biop, sfp);
+  ProcessBioSourceFunc (biop, sfp, is_feat);
   return TRUE;
 }
 
@@ -5003,7 +5058,7 @@ static void PutBioSourceOnPartAndProcess (SeqEntryPtr sep, Int2 onlythis, Source
     sdp = SeqEntryGetSeqDescr (nsep, Seq_descr_source, NULL);
     if (sdp != NULL) {
       biop = (BioSourcePtr) sdp->data.ptrvalue;
-      ProcessBioSourceFunc (biop, sfp);
+      ProcessBioSourceFunc (biop, sfp, FALSE);
       return;
     }
     sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
@@ -5017,7 +5072,7 @@ static void PutBioSourceOnPartAndProcess (SeqEntryPtr sep, Int2 onlythis, Source
         sdp = CreateNewDescriptor (nsep, Seq_descr_source);
         if (sdp != NULL) {
           sdp->data.ptrvalue = (Pointer) biop;
-          ProcessBioSourceFunc (biop, sfp);
+          ProcessBioSourceFunc (biop, sfp, FALSE);
         }
       }
     }
@@ -5447,6 +5502,494 @@ static void AddSource (IteM i)
   ProcessSource (i, ADD_SOURCE);
 }
 
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* HasInternalStops () -- Checks to see if a given protein has         */
+/*                        any internal stop codons.                    */
+/*                                                                     */
+/*   Returns : TRUE -- If internal stop codons are found.              */
+/*             FALSE -- If internal stop codons are NOT found.         */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean HasInternalStops (SeqFeatPtr sfp)
+{
+  ByteStorePtr  bs;
+  CharPtr       protStr;
+  CharPtr       stopStr;
+
+  /* Get the protein sequence in ASCII chars */
+
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  if (NULL == bs)
+    return TRUE;
+  protStr = BSMerge (bs, NULL);
+  bs = BSFree (bs);
+
+  /* If the is a "*" in the str in any position  */
+  /* except at the end, then we have an internal */
+  /* stop codon.                                 */
+  
+  stopStr = StringStr (protStr, "*");
+  if ((NULL != stopStr) && (StringLen (stopStr) > 1)) {
+    MemFree (protStr);
+    return TRUE;
+  }
+  else {
+    MemFree (protStr);
+    return FALSE;
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDS_FeatureCallback () -- Called once for each CDS feature   */
+/*                                  on a Bioseq.  This function does   */
+/*                                  the actual CDS deleting.           */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDS_FeatureCallback (SeqFeatPtr sfp,
+					SeqMgrFeatContextPtr fcontext)
+{
+  CdRegionPtr          cdrp;
+  GBQualPtr            gbqual;
+  ImpFeatPtr           ifp;
+  CharPtr              noteStr;
+  BioseqPtr            protBsp;
+  SeqMgrFeatContext    protContext;
+  CharPtr              protName;
+  SeqFeatPtr           protSfp;
+  ProtRefPtr           prp;
+  ValNodePtr           vnp;
+
+  /* If no internal stop codons, then done */
+
+  if (FALSE == HasInternalStops(sfp))
+    return TRUE;
+
+  /* Get the CD region part of the feature, and */
+  /* the associated protein bioseq.             */
+
+  cdrp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  protBsp = BioseqFindFromSeqLoc (sfp->product);
+
+  /* Convert the CDS feature to a misc_feat */
+
+  CdRegionFree (cdrp);
+  sfp->data.value.ptrvalue = NULL;
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return FALSE;
+  ifp->key = StringSave ("misc_feature");
+
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  sfp->product = SeqLocFree (sfp->product);
+
+  /* Add a name key to the misc_feature */
+
+  protSfp = SeqMgrGetBestProteinFeature (protBsp, &protContext);
+  prp = (ProtRefPtr) protSfp->data.value.ptrvalue;
+
+  if (prp != NULL) {
+    vnp = prp->name;
+    if (NULL != vnp)
+      {
+	protName = (CharPtr) vnp->data.ptrvalue;
+	if (NULL != protName) {
+	  noteStr = (CharPtr) MemNew (StringLen (protName) + 12);
+	  sprintf (noteStr, "similar to %s", protName);
+	}
+      }
+  }
+
+  gbqual = GBQualNew ();
+  if (gbqual == NULL)
+    return FALSE;
+
+  gbqual->qual = StringSave ("note");
+  gbqual->val = noteStr;
+  gbqual->next = sfp->qual;
+  sfp->qual = gbqual;
+
+  /* Delete the protein Bioseq that */
+  /* the CDS points to.             */
+
+  protBsp->idx.deleteme = TRUE;
+
+  /* Return TRUE to continue on to the next CDS feature */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDS_BioseqCallback () -- Called once for each Bioseq by the  */
+/*                                 ConvertCDSWithStopCodons() function.*/
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDS_BioseqCallback (BioseqPtr bsp,
+					 SeqMgrBioseqContextPtr bcontext)
+{
+  Boolean featureFilterArray [SEQFEAT_MAX];
+
+  /* Set up to explore only CDS features */
+
+  MemSet ((Pointer) (featureFilterArray), (int) FALSE, SEQFEAT_MAX);
+  featureFilterArray[SEQFEAT_CDREGION] = TRUE;
+
+  /* Explore the Bioseq's CDS features, deleting */
+  /* the ones with internal stop codons.         */
+
+  SeqMgrExploreFeatures (bsp, NULL, ConvertCDS_FeatureCallback, NULL,
+			 featureFilterArray, NULL);
+
+  /* Return TRUE to continue on to the next Bioseq */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSWithStopCodons () -- Converts all CDS features that have  */
+/*                                internal stop codons into misc       */
+/*                                features.                            */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void ConvertCDSWithStopCodons (IteM i)
+{
+  BaseFormPtr bfp;
+
+  /* Get the current data */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL)
+    return;
+
+  /* Explore all the Bioseqs looking for CDS features */
+
+  SeqMgrExploreBioseqs (bfp->input_entityID, NULL, NULL,
+			ConvertCDS_BioseqCallback, TRUE, FALSE, TRUE);
+
+  /* Force an update and redraw */
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+
+  /* Return successfully */
+
+  return;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSAndKeep_FeatureCallback () -- Called once for each CDS    */
+/*                                         feature. If the CDS has an  */
+/*                                         internal stop codon, marks  */
+/*                                         it as pseudo, along with    */
+/*                                         any overlapping gene.       */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDSAndKeep_FeatureCallback (SeqFeatPtr sfp,
+					SeqMgrFeatContextPtr fcontext)
+{
+  CdRegionPtr          cdrp;
+  SeqMgrFeatContext    geneContext;
+  SeqFeatPtr           geneSfp;
+  GeneRefPtr           grp;
+  BioseqPtr            protBsp;
+  SeqMgrFeatContext    protContext;
+  CharPtr              protName = NULL;
+  SeqFeatPtr           protSfp;
+  ProtRefPtr           prp;
+  ValNodePtr           vnp;
+
+  /* If no internal stop codons, then done */
+
+  if (FALSE == HasInternalStops(sfp))
+    return TRUE;
+
+  /* Get the CD region part of the feature, and */
+  /* the associated protein bioseq.             */
+
+  cdrp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  protBsp = BioseqFindFromSeqLoc (sfp->product);
+  protSfp = SeqMgrGetBestProteinFeature (protBsp, &protContext);
+
+  /* Get the protein name */
+
+  prp = (ProtRefPtr) protSfp->data.value.ptrvalue;
+  if (prp != NULL) {
+    vnp = prp->name;
+    if (NULL != vnp)
+      protName = (CharPtr) vnp->data.ptrvalue;
+  }
+
+  /* Mark the CDS as Pseudo */
+
+  protSfp->pseudo = TRUE;
+  sfp->pseudo = TRUE;
+
+  /* Get the overlapping gene. If there isn't */
+  /* an overlapping gene, create one.         */
+
+  geneSfp = SeqMgrGetOverlappingGene (sfp->location, &geneContext);
+
+  if (NULL == geneSfp) {
+    grp = CreateNewGeneRef (protName, NULL, NULL, FALSE);
+    if (NULL == grp)
+      return FALSE;
+    geneSfp = CreateNewFeature (fcontext->bsp->seqentry, NULL,
+				SEQFEAT_GENE, NULL);
+    if (NULL == geneSfp)
+      return FALSE;
+
+    geneSfp->data.value.ptrvalue = (Pointer) grp;
+    geneSfp->location = AsnIoMemCopy ((Pointer) sfp->location,
+				  (AsnReadFunc) SeqLocAsnRead,
+				  (AsnWriteFunc) SeqLocAsnWrite);
+  }
+
+  /* Mark the overlapping gene as pseudo */
+
+  geneSfp->pseudo = TRUE;
+
+  /* Return TRUE to continue on to the next CDS feature */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSAndKeep_BioseqCallback () -- Called once for each Bioseq  */
+/*                                        to convert any CDS on it into*/
+/*                                        pseudogenes while keeping    */
+/*                                        the CDS.                     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDSAndKeep_BioseqCallback (BioseqPtr bsp,
+					 SeqMgrBioseqContextPtr bcontext)
+{
+  Boolean featureFilterArray [SEQFEAT_MAX];
+
+  /* Set up to explore only CDS features */
+
+  MemSet ((Pointer) (featureFilterArray),
+	  (int) FALSE,
+	  SEQFEAT_MAX);
+
+  featureFilterArray[SEQFEAT_CDREGION] = TRUE;
+
+  /* Explore the Bioseq's CDS features, marking the */
+  /* ones with internal stop codons as pseudo.      */
+
+  SeqMgrExploreFeatures (bsp, NULL, ConvertCDSAndKeep_FeatureCallback, NULL,
+			 featureFilterArray, NULL);
+
+  /* Return TRUE to continue on to the next Bioseq */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSToPseudoGeneAndKeep () --                                 */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void ConvertCDSToPseudoGeneAndKeep (IteM i)
+{
+  BaseFormPtr bfp;
+
+  /* Get the current data */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL)
+    return;
+
+  /* Explore all the Bioseqs looking for CDS features */
+
+  SeqMgrExploreBioseqs (bfp->input_entityID, NULL, NULL,
+			ConvertCDSAndKeep_BioseqCallback, TRUE, FALSE, TRUE);
+
+  /* Force an update and redraw */
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+
+  /* Return successfully */
+
+  return;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSAndRemove_FeatureCallback () -- Called once for each CDS  */
+/*                                           feature on a Bioseq. This */
+/*                                           converts a CDS feature    */
+/*                                           that contains internal    */
+/*                                           stop codons into a pseudo */
+/*                                           gene and removes the      */
+/*                                           original CDS.             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDSAndRemove_FeatureCallback
+                               (SeqFeatPtr sfp,
+				SeqMgrFeatContextPtr fcontext)
+{
+  SeqFeatPtr           geneSfp;
+  GeneRefPtr           grp;
+  BioseqPtr            protBsp;
+  SeqMgrFeatContext    protContext;
+  CharPtr              protName;
+  SeqFeatPtr           protSfp;
+  ProtRefPtr           prp;
+  ValNodePtr           vnp;
+
+  /* If no internal stop codons, then done */
+
+  if (FALSE == HasInternalStops(sfp))
+    return TRUE;
+
+  /* Get the associated protein bioseq. */
+
+  protBsp = BioseqFindFromSeqLoc (sfp->product);
+  protSfp = SeqMgrGetBestProteinFeature (protBsp, &protContext);
+  prp = (ProtRefPtr) protSfp->data.value.ptrvalue;
+
+  /* Create a GeneRef and move the protein */
+  /* name to the gene description field.   */
+
+  grp = GeneRefNew ();
+  vnp = prp->name;
+  if (NULL != vnp)
+    {
+      protName = (CharPtr) vnp->data.ptrvalue;
+      if (NULL != protName)
+	grp->desc = StringSave (protName);
+    }
+
+  /* If there is no overlapping gene, convert the CDS */
+  /* into one.  Either way, mark the gene as pseudo.  */
+
+  geneSfp = SeqMgrGetOverlappingGene (sfp->location, fcontext);
+  if (NULL == geneSfp) {
+    geneSfp = sfp;
+    geneSfp->data.choice = SEQFEAT_GENE;
+    geneSfp->product = SeqLocFree (geneSfp->product);
+  }
+  else
+    sfp->idx.deleteme = TRUE;
+
+  geneSfp->data.value.ptrvalue = grp;
+  geneSfp->pseudo = TRUE;
+
+  /* Delete the protein Bioseq and */
+  /* the CDS that points to it.    */
+
+  protBsp->idx.deleteme = TRUE;
+
+  /* Return TRUE to continue on to the next CDS feature */
+
+  return TRUE;
+}
+
+/*------------------------------------------------------------------------*/
+/*                                                                        */
+/* ConvertCDSAndRemove_BioseqCallback () -- Called once for each Bioseq   */
+/*                                          to convert any CDS on it into */
+/*                                          pseudogenes.                  */
+/*                                                                        */
+/*------------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK ConvertCDSAndRemove_BioseqCallback (BioseqPtr bsp,
+					 SeqMgrBioseqContextPtr bcontext)
+{
+  Boolean featureFilterArray [SEQFEAT_MAX];
+
+  /* Set up to explore only CDS features */
+
+  MemSet ((Pointer) (featureFilterArray),
+	  (int) FALSE,
+	  sizeof (featureFilterArray));
+
+  featureFilterArray[SEQFEAT_CDREGION] = TRUE;
+
+  /* Explore the Bioseq's CDS features, marking the */
+  /* ones with internal stop codons as pseudo.      */
+
+  SeqMgrExploreFeatures (bsp, bcontext->userdata,
+			 ConvertCDSAndRemove_FeatureCallback,
+			 NULL, featureFilterArray, NULL);
+
+  /* Return TRUE to continue on to the next Bioseq */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ConvertCDSToPseudoGeneAndRemove () --                               */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void ConvertCDSToPseudoGeneAndRemove (IteM i)
+{
+  BaseFormPtr bfp;
+
+  /* Get the current data */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL)
+    return;
+
+  /* Explore all the Bioseqs looking for CDS features */
+
+  SeqMgrExploreBioseqs (bfp->input_entityID, NULL, bfp,
+			ConvertCDSAndRemove_BioseqCallback,
+			TRUE, FALSE, TRUE);
+
+  /* Force an update and redraw */
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+
+  /* Return successfully */
+
+  return;
+}
+
 static Boolean RemoveTaxonProc (GatherObjectPtr gop)
 
 {
@@ -5522,12 +6065,12 @@ static void RemoveTaxonXrefs (IteM i)
                          RemoveTaxonProc, NULL, objMgrFilter);
 }
 
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 /*                                                                         */
 /* SuppressGeneXref_Callback () -- Suppresses any gene xref on the feature */
 /*                                 that is passed to it.                   */
 /*                                                                         */
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 
 static Boolean LIBCALLBACK SuppressGeneXref_Callback (SeqFeatPtr sfp,
 					       SeqMgrFeatContextPtr context)
@@ -5564,6 +6107,11 @@ static Boolean LIBCALLBACK SuppressGeneXref_Callback (SeqFeatPtr sfp,
 	      MemFree (grp->maploc);
 	      grp->maploc = NULL;
 	    }
+	  if (NULL != grp->locus_tag)
+	    {
+	      MemFree (grp->locus_tag);
+	      grp->locus_tag = NULL;
+	    }
 	  grp->db  = ValNodeFreeData (grp->db);
 	  grp->syn = ValNodeFreeData (grp->syn);
 	}    
@@ -5589,12 +6137,12 @@ static Boolean LIBCALLBACK SuppressGeneXref_Callback (SeqFeatPtr sfp,
   return TRUE;
 }
 
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 /*                                                                         */
 /* SuppressGeneXrefsForFeatureType () -- Suppresses gene xrefs for all     */
 /*                                       features of the given type.       */
 /*                                                                         */
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 
 static void SuppressGeneXrefsForFeatureType (BioseqPtr bsp,
 					     Int2      seqfeat,
@@ -5713,6 +6261,9 @@ static GeneRefPtr CopyGeneRef (GeneRefPtr srcGrp)
 
   if (srcGrp->maploc != NULL)
     destGrp->maploc = StringSave (srcGrp->maploc);
+
+  if (srcGrp->locus_tag != NULL)
+    destGrp->locus_tag = StringSave (srcGrp->locus_tag);
 
   /* Copy the DB references */
 
@@ -7622,6 +8173,161 @@ static void ReconnectCDSProduct (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void DoAddDeltaGap (BioseqPtr bsp, Pointer userdata)
+
+{
+  DeltaSeqPtr        del, dsp, next;
+  SeqMgrDescContext  dcontext;
+  SeqLitPtr          litp;
+  MolInfoPtr         mip;
+  SeqDescrPtr        sdp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4) return;
+
+  /* if has molinfo, but tech is not htgs1 or htgs2, bail */
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      if (mip->tech != MI_TECH_htgs_1 && mip->tech != MI_TECH_htgs_2) return;
+    }
+  }
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL && dsp->next != NULL; dsp = next) {
+    next = dsp->next;
+    if (dsp->choice != 2) continue;
+    litp = (SeqLitPtr) dsp->data.ptrvalue;
+    if (litp == NULL) continue;
+    if (litp->seq_data == NULL || litp->length == 0) continue;
+
+    if (next->choice == 2) {
+      litp = (SeqLitPtr) next->data.ptrvalue;
+      if (litp != NULL) {
+        if (litp->seq_data == NULL && litp->length > 0) continue;
+      }
+    }
+
+    del = ValNodeNew (NULL);
+    if (del == NULL) continue;
+    litp = SeqLitNew ();
+    if (litp == NULL) continue;
+    litp->length = 100;
+    del->choice = 2;
+    del->data.ptrvalue = litp;
+
+    del->next = next;
+    dsp->next = del;
+
+    bsp->length += 100;
+  }
+}
+
+static void AddDeltaGaps (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioseqsInSep (sep, NULL, DoAddDeltaGap);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void DoDeleteDeltaEndGap (BioseqPtr bsp, Pointer userdata)
+
+{
+  DeltaSeqPtr  dsp, last, prev;
+  SeqLitPtr    litp, pitp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4) return;
+
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  if (dsp == NULL) return;
+  if (dsp->choice == 2) {
+    litp = (SeqLitPtr) dsp->data.ptrvalue;
+    if (litp != NULL) {
+      if (litp->seq_data == NULL) {
+        bsp->length -= litp->length;
+        bsp->seq_ext = dsp->next;
+        SeqLitFree (litp);
+        MemFree (dsp);
+      }
+    }
+  }
+
+  prev = (DeltaSeqPtr) bsp->seq_ext;
+  if (prev == NULL) return;
+  last = prev->next;
+  if (last == NULL) return;
+  while (last->next != NULL) {
+    prev = last;
+    last = last->next;
+  }
+
+  if (last->choice == 2) {
+    litp = (SeqLitPtr) last->data.ptrvalue;
+    if (litp != NULL) {
+      if (litp->seq_data == NULL) {
+        bsp->length -= litp->length;
+        prev->next = NULL;
+        SeqLitFree (litp);
+        MemFree (last);
+      }
+    }
+  }
+
+  prev = (DeltaSeqPtr) bsp->seq_ext;
+  if (prev == NULL) return;
+  last = prev->next;
+  if (last == NULL) return;
+  while (last->next != NULL) {
+    if (prev->choice == 2 && last->choice == 2) {
+      pitp = (SeqLitPtr) prev->data.ptrvalue;
+      litp = (SeqLitPtr) last->data.ptrvalue;
+      if (pitp != NULL && litp != NULL) {
+        if (pitp->seq_data == NULL && litp->seq_data == NULL) {
+          pitp->length += litp->length;
+          prev->next = last->next;
+          last->next = NULL;
+          SeqLitFree (litp);
+          MemFree (last);
+          last = prev;
+        }
+      }
+    }
+    prev = last;
+    last = last->next;
+  }
+}
+
+static void DeleteDeltaEndGaps (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioseqsInSep (sep, NULL, DoDeleteDeltaEndGap);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static void AttcBioSourceStrainToXref (BioSourcePtr biop)
 
 {
@@ -8923,6 +9629,49 @@ static void ToolBtn16 (ButtoN b)
   AddCitSubForUpdateProc (bfp);
 }
 
+static void RemoveProtTitlesProc (BaseFormPtr bfp)
+
+{
+  SeqEntryPtr  sep;
+
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  ClearProteinTitlesInNucProts (bfp->input_entityID, NULL);
+
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void DoRemoveProtTitles (IteM i)
+
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  RemoveProtTitlesProc (bfp);
+}
+
+static void ToolBtn17 (ButtoN b)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  RemoveProtTitlesProc (bfp);
+}
+
 static ButtoN SqnPushButton (GrouP prnt, CharPtr title, BtnActnProc actn, BaseFormPtr bfp)
 
 {
@@ -8961,6 +9710,7 @@ extern void BioseqViewFormToolBar (GrouP h)
   SqnPushButton (g, "sub_add", ToolBtn12, bfp);
   SqnPushButton (g, "cit-sub-upd", ToolBtn16, bfp);
   SqnPushButton (g, "del_GBbck", ToolBtn13, bfp);
+  SqnPushButton (g, "rem_prot_titles", ToolBtn17, bfp);
   SqnPushButton (g, "Validate", ToolBtn14, bfp);
   SqnPushButton (g, "Desktop", ToolBtn15, bfp);
 }
@@ -9022,29 +9772,6 @@ static void DoSSECleanup (IteM i)
   if (sep == NULL) return;
 
   SeriousSeqEntryCleanup (sep, NULL, NULL);
-
-  Update ();
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-}
-
-static void DoRemoveProtTitles (IteM i)
-
-{
-  BaseFormPtr  bfp;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-
-  ClearProteinTitlesInNucProts (bfp->input_entityID, NULL);
 
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -9413,6 +10140,8 @@ extern void ClearMrnaProducts (IteM i);
 extern void MakeRedundantGPS (IteM i);
 extern void FuseSlpJoins (IteM i);
 extern void CreateSeqHistTPA (IteM i);
+extern void AddGlobalCodeBreak (IteM i);
+extern void FixCdsAfterPropagate (IteM i);
 
 extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
@@ -9531,6 +10260,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   i = CommandItem (s, "Remove Text Inside String", RemoveTextInsideString);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Text Outside String", RemoveTextOutsideString);
+  SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Remove Duplicate Genes", RemoveDuplicateGenes);
   SetObjectExtra (i, bfp, NULL);
@@ -9590,6 +10321,16 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Convert RNA Qual", ConvertRNA);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "CDS with internal Stop Codon to Misc Feat",
+		   ConvertCDSWithStopCodons);
+  SetObjectExtra (i, bfp, NULL);
+
+  x = SubMenu (s, "CDS with internal Stop Codon to Pseudo Gene");
+  i = CommandItem (x, "Keep CDS", ConvertCDSToPseudoGeneAndKeep);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Remove CDS", ConvertCDSToPseudoGeneAndRemove);
+  SetObjectExtra (i, bfp, NULL);
+
   SeparatorItem (s);
   i = CommandItem (s, "Parse Text from Flatfile", ParseAsnOrFlatfileToAnywhere);
   SetObjectExtra (i, bfp, NULL);
@@ -9643,10 +10384,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   i = CommandItem (s, "Correct CDS Genetic Codes", CorrectCDSGenCodes);
   SetObjectExtra (i, bfp, NULL);
-  /*
-  i = CommandItem (s, "Adjust CDS Start Codon", CorrectCDSStartCodon);
+  i = CommandItem (s, "Correct CDS Propagate Crud", FixCdsAfterPropagate);
   SetObjectExtra (i, bfp, NULL);
-  */
   SeparatorItem (s);
   i = CommandItem (s, "Trim Ns from Bioseqs", TrimNsFromNucs);
   SetObjectExtra (i, bfp, NULL);
@@ -9733,6 +10472,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Ignore Stop Codon", RetranslateCdRegionsDoStop);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add Global Code Break", AddGlobalCodeBreak);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Resynchronize CDS Partials", ResynchronizeCDSPartials);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Resynchronize mRNA Partials", ResynchronizeMRNAPartials);
@@ -9747,6 +10488,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Segmented Sequence to Raw Sequence", SegSeqToRawSeq);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Raw Sequence with Ns to Delta Sequence", RawSeqToDeltaSeq);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Generate GenProdSet Redundancy", MakeRedundantGPS);
@@ -9778,7 +10521,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Gene Xrefs from Features", GeneToXref);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  i = CommandItem (s, "Protein Subtypes to ImpFeats", ProtToImpFeat);
+  i = CommandItem (s, "Gene Features from CDS", CdsToGene);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Split Into Groups of 100 Bioseqs", MakeGroupsOf200);
@@ -9790,6 +10533,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Alignment Summary...", ViewAlignmentSummary);
   SetObjectExtra (i, bfp, NULL);
   if (indexerVersion) {
+    SeparatorItem (s);
+    i = CommandItem (s, "Add Gaps of 100 to HTGS Deltas", AddDeltaGaps);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Remove Gaps at ends of HTGS Deltas", DeleteDeltaEndGaps);
+    SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
     i = CommandItem (s, "Connect CDS to Closest Protein", ReconnectCDSProduct);
     SetObjectExtra (i, bfp, NULL);

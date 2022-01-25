@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.30 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -279,6 +279,48 @@ static Uint1  domainicon [] = {
   0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
 };
 
+static Uint1  stsicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
+static Uint1  cddicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
+static Uint1  snpicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
 static Uint1  genericon [] = {
   0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
   0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
@@ -310,7 +352,10 @@ static CharPtr  omimRadios [] = { "Summary", "Fields", "MIM ID", NULL };
 static CharPtr  taxonomyRadios [] = { "Summary", "Fields", "Taxon ID", NULL };
 static CharPtr  bookRadios [] = { "Summary", "Fields", "Book ID", NULL };
 static CharPtr  probeRadios [] = { "Summary", "Fields", "ProbeSet ID", NULL };
-static CharPtr  domainRadios [] = { "Summary", "Fields", "Domain ID", NULL };
+static CharPtr  domainRadios [] = { "Summary", "Fields", "3D Domain ID", NULL };
+static CharPtr  stsRadios [] = { "Summary", "Fields", "UniSTS ID", NULL };
+static CharPtr  cddRadios [] = { "Summary", "Fields", "Conserved Domain ID", NULL };
+static CharPtr  snpRadios [] = { "Summary", "Fields", "SNP ID", NULL };
 static CharPtr  localBioseqRadios [] = { "FASTA", NULL };
 
 static CharPtr  medLaunch [] = { "Local", "Web Entrez", "ASN.1", NULL };
@@ -324,6 +369,9 @@ static CharPtr  taxonomyLaunch [] = { "Web Entrez", NULL };
 static CharPtr  bookLaunch [] = { "Web Entrez", NULL };
 static CharPtr  probeLaunch [] = { "Web Entrez", NULL };
 static CharPtr  domainLaunch [] = { "Web Entrez", NULL };
+static CharPtr  stsLaunch [] = { "Web Entrez", NULL };
+static CharPtr  cddLaunch [] = { "Web Entrez", NULL };
+static CharPtr  snpLaunch [] = { "Web Entrez", NULL };
 
 /*-----------------------------------*/
 /* Data structures used to keep info */
@@ -611,6 +659,12 @@ static void DrawIcon (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst)
     icon = probeicon;
   else if (StringICmp (dbName, "domains") == 0)
     icon = domainicon;
+  else if (StringICmp (dbName, "unists") == 0)
+    icon = stsicon;
+  else if (StringICmp (dbName, "cdd") == 0)
+    icon = cddicon;
+  else if (StringICmp (dbName, "snp") == 0)
+    icon = snpicon;
   else
     icon = genericon;
 
@@ -695,14 +749,17 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   Int2                  commas;
   CharPtr               comname;
   CharPtr               cpt;
+  CharPtr               dcsum;
   CharPtr               etal;
   CharPtr               extra;
   size_t                len;
+  CharPtr               marker;
   CharPtr               mrnasrc1;
   CharPtr               mrnasrc2;
   CharPtr               oid;
   CharPtr               rank;
   CharPtr               sciname;
+  CharPtr               snpid;
   CharPtr               str;
   CharPtr               taxid;
   CharPtr               title;
@@ -728,6 +785,9 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   rank = NULL;
   sciname = NULL;
   taxid = NULL;
+  marker = NULL;
+  snpid = NULL;
+  dcsum = NULL;
   title = NULL;
   title1 = NULL;
   for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
@@ -763,6 +823,12 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       mrnasrc2 = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "Book") == 0) {
       book = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "Marker_Title") == 0) {
+      marker = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "SNP_ID") == 0) {
+      snpid = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "DOCSUM") == 0) {
+      dcsum = e2DocsumDataPtr->field_value;
     }
   }
 
@@ -787,6 +853,9 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
     cpt = book;
   }
   if (StringHasNoText (cpt)) {
+    cpt = snpid;
+  }
+  if (StringHasNoText (cpt)) {
     cpt = "?";
   }
 
@@ -802,15 +871,26 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
     ttl = title1;
   }
   if (StringHasNoText (ttl)) {
+    ttl = marker;
+  }
+  if (StringHasNoText (ttl)) {
+    ttl = dcsum;
+  }
+  if (StringHasNoText (ttl)) {
     ttl = "?";
   }
 
   len = StringLen (cpt) + StringLen (ttl) + StringLen (extra) +
         StringLen (mrnasrc2) + StringLen (comname) +
-        StringLen (", et al.") + StringLen ("vs. ") + StringLen (" []");
+        StringLen (", et al.") + StringLen ("vs. ") +
+        StringLen (" []") + StringLen ("rs");
   str = MemNew (len + 10);
   if (str != NULL) {
-    StringCpy (str, cpt);
+    str [0] = '\0';
+    if (cpt == snpid) {
+      StringCat (str, "rs");
+    }
+    StringCat (str, cpt);
     if (cpt == authors) {
       if (StringLen (str) > 64) {
         commas = 0;
@@ -1434,16 +1514,15 @@ static CharPtr FetchFastaCDS (DoC d, Int2 item, Pointer ptr)
 static CharPtr FetchPDB (DoC d, Int2 item, Pointer ptr)
 
 {
-  BiostrucPtr  bsp = NULL;
-  Int4         complexity;
-  CharPtr      failed;
-  FILE         *fp;
-  Int4         maxModels;
-  Char         path [PATH_MAX];
-  PDNMS        pdnms;
-  SummFormPtr  sfp;
-  CharPtr      str;
-  Int4         uid;
+  BiostrucPtr     bsp = NULL;
+  BiostrucSeqPtr  bsqp = NULL;
+  CharPtr         failed;
+  FILE            *fp;
+  Char            path [PATH_MAX];
+  PDNMS           pdnms;
+  SummFormPtr     sfp;
+  CharPtr         str;
+  Int4            uid;
 
   str = NULL;
   sfp = (SummFormPtr) GetObjectExtra (d);
@@ -1451,10 +1530,10 @@ static CharPtr FetchPDB (DoC d, Int2 item, Pointer ptr)
   if (sfp == NULL || sfp->uids == NULL || sfp->state == NULL) return failed;
   if (item < 1) return failed;
   uid = sfp->uids [item - 1];
-  complexity = VECMODEL;
-  maxModels = 1;
-  bsp = StrucSynchronousQuery (uid, complexity, maxModels);
-  if (bsp == NULL)  return failed;
+  bsqp = StrucSynchronousQuery (uid);
+  if (bsqp == NULL)  return failed;
+  bsp = bsqp->structure;
+  if (bsp == NULL) return failed;
 
   ClearStructures ();
   pdnms = MakeAModelstruc (bsp);
@@ -1576,6 +1655,12 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
       labels = probeRadios;
     else if (StringICmp (dbName, "domains") == 0)
       labels = domainRadios;
+    else if (StringICmp (dbName, "unists") == 0)
+      labels = stsRadios;
+    else if (StringICmp (dbName, "cdd") == 0)
+      labels = cddRadios;
+    else if (StringICmp (dbName, "snp") == 0)
+      labels = snpRadios;
 
     val = GetValue (sfp->formatPopups [sfp->currDb]);
     if (val > 0) {
@@ -1852,6 +1937,9 @@ static DocPrntProc taxonomyDocProcs [] = { Query_FetchDocSum, Query_FetchFields,
 static DocPrntProc bookDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc probeDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc domainDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc stsDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc cddDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc snpDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 
 static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
 
@@ -1959,6 +2047,12 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
         retrieveProc = probeDocProcs [val - 1];
       else if (StringICmp (dbName, "domains") == 0)
         retrieveProc = domainDocProcs [val - 1];
+      else if (StringICmp (dbName, "unists") == 0)
+        retrieveProc = stsDocProcs [val - 1];
+      else if (StringICmp (dbName, "cdd") == 0)
+        retrieveProc = domainDocProcs [val - 1];
+      else if (StringICmp (dbName, "snp") == 0)
+        retrieveProc = snpDocProcs [val - 1];
 
     }
   }
@@ -2585,13 +2679,9 @@ static void LaunchStructureViewer (Int4 uid)
   Message (MSG_OK, "Structure views not supported on this platform.");
 #else
   AsnIoPtr        aip;
-  BiostrucPtr     biostrucPtr;
-  Int4            complexity;
-  EntrezGeneral   eg;
-  Int2            maxModels;
+  BiostrucSeqPtr  bsqp = NULL;
   NcbiMimeAsn1    mime;
   Char            path [PATH_MAX];
-  ValNode         vn;
 
 #ifdef WIN_MOTIF
   Char            cmmd [PATH_MAX];
@@ -2602,10 +2692,8 @@ static void LaunchStructureViewer (Int4 uid)
 
   WatchCursor ();
   Update ();
-  complexity = GetBiostrucComplexity ();
-  maxModels = GetBiostrucMaxModels ();
-  biostrucPtr = StrucSynchronousQuery (uid, complexity, maxModels);
-  if (biostrucPtr == NULL) {
+  bsqp = StrucSynchronousQuery (uid);
+  if (bsqp == NULL) {
     ArrowCursor ();
     Update ();
     Message (MSG_OK, "Unable to find this record in the database.");
@@ -2615,26 +2703,17 @@ static void LaunchStructureViewer (Int4 uid)
   TmpNam (path);
   aip = AsnIoOpen (path, "w");
 
-  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-  vn.choice = Data_data_structure;
-  vn.data.ptrvalue = (Pointer) biostrucPtr;
-  vn.next = NULL;
-
-  MemSet ((Pointer) &eg, 0, sizeof (EntrezGeneral));
-  eg.style = Entrez_style_asn1;
-  eg.Data_data = &vn;
-
   MemSet ((Pointer) &mime, 0, sizeof (NcbiMimeAsn1));
-  mime.choice = NcbiMimeAsn1_entrez;
-  mime.data.ptrvalue = &eg;
+  mime.choice = NcbiMimeAsn1_strucseq;
+  mime.data.ptrvalue = bsqp;
   mime.next = NULL;
 
   NcbiMimeAsn1AsnWrite (&mime, aip, NULL);
   AsnIoClose (aip);
 
-  BiostrucFree (biostrucPtr);
+  BiostrucSeqFree (bsqp);
 
-  /* Cn3D expects Ncbi-mime-asn1, not Biostruc */
+  /* Cn3D expects Ncbi-mime-asn1, not Biostruc or BiostrucSeq */
 
 #ifdef WIN_MAC
   Nlm_SendOpenDocAppleEvent (path, "Cn3D");
@@ -2727,18 +2806,14 @@ static void LaunchSequenceASN (Int4 uid)
 static void LaunchStructureASN (Int4 uid)
 
 {
-  AsnIoPtr     aip;
-  BiostrucPtr  biostrucPtr;
-  Int4         complexity;
-  Int2         maxModels;
-  Char         path [PATH_MAX];
+  AsnIoPtr        aip;
+  BiostrucSeqPtr  bsqp = NULL;
+  Char            path [PATH_MAX];
 
   WatchCursor ();
   Update ();
-  complexity = GetBiostrucComplexity ();
-  maxModels = GetBiostrucMaxModels ();
-  biostrucPtr = StrucSynchronousQuery (uid, complexity, maxModels);
-  if (biostrucPtr == NULL) {
+  bsqp = StrucSynchronousQuery (uid);
+  if (bsqp == NULL) {
     ArrowCursor ();
     Update ();
     Message (MSG_OK, "Unable to find this record in the database.");
@@ -2747,12 +2822,12 @@ static void LaunchStructureASN (Int4 uid)
   TmpNam (path);
   aip = AsnIoOpen (path, "w");
   if (aip != NULL) {
-    BiostrucAsnWrite (biostrucPtr, aip, NULL);
+    BiostrucSeqAsnWrite (bsqp, aip, NULL);
     AsnIoClose (aip);
     LaunchGeneralTextViewer (path, "Structure ASN.1");
   }
   FileRemove (path);
-  BiostrucFree (biostrucPtr);
+  BiostrucSeqFree (bsqp);
   ArrowCursor ();
 }
 
@@ -2883,6 +2958,18 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
     } else if (StringICmp (dbName, "domains") == 0) {
       if (launchType == 1) {
         LaunchEntrezURL ("domains", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "unists") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("unists", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "cdd") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("cdd", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "snp") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("snp", uid, "DocSum");
       }
     }
   }
@@ -3443,6 +3530,12 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
       labels = probeRadios;
     else if (StringICmp (dbName, "domains") == 0)
       labels = domainRadios;
+    else if (StringICmp (dbName, "unists") == 0)
+      labels = stsRadios;
+    else if (StringICmp (dbName, "cdd") == 0)
+      labels = cddRadios;
+    else if (StringICmp (dbName, "snp") == 0)
+      labels = snpRadios;
 
     val = GetValue (sfp->formatPopups [sfp->currDb]);
     if (val > 0)
@@ -3489,6 +3582,15 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
         break;
       case 10:
         fprintf (fp, ">Domains\n");
+        break;
+      case 11:
+        fprintf (fp, ">UniSTS\n");
+        break;
+      case 12:
+        fprintf (fp, ">CDD\n");
+        break;
+      case 13:
+        fprintf (fp, ">SNP\n");
         break;
       default:
         fprintf (fp, ">?\n");
@@ -4057,6 +4159,7 @@ static void LoadDocsumOptionsMenu (MenU m)
   ChoiceItem (egp->seqComplex, "SegSet");
   ChoiceItem (egp->seqComplex, "BioSeq");
   SetValue (egp->seqComplex, 1);
+  /*
   SeparatorItem (m);
   sub = SubMenu (m, "Structure Complexity");
   egp->strucComplex = ChoiceGroup (sub, NULL);
@@ -4076,6 +4179,7 @@ static void LoadDocsumOptionsMenu (MenU m)
   ChoiceItem (egp->strucModels, "20");
   ChoiceItem (egp->strucModels, "maximum");
   SetValue (egp->strucModels, 7);
+  */
 }
 
 /*==================================================================*/
@@ -4617,6 +4721,12 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = probeRadios;
     else if (StringICmp (e2db->db_name, "domains") == 0)
       labels = domainRadios;
+    else if (StringICmp (e2db->db_name, "unists") == 0)
+      labels = stsRadios;
+    else if (StringICmp (e2db->db_name, "cdd") == 0)
+      labels = cddRadios;
+    else if (StringICmp (e2db->db_name, "snp") == 0)
+      labels = snpRadios;
 
     dbKey = DBGetIDFromName (e2db->db_name);
 
@@ -4655,6 +4765,12 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = probeLaunch;
     else if (StringICmp (e2db->db_name, "domains") == 0)
       labels = domainLaunch;
+    else if (StringICmp (e2db->db_name, "unists") == 0)
+      labels = stsLaunch;
+    else if (StringICmp (e2db->db_name, "cdd") == 0)
+      labels = cddLaunch;
+    else if (StringICmp (e2db->db_name, "snp") == 0)
+      labels = snpLaunch;
 
     dbKey = DBGetIDFromName (e2db->db_name);
 

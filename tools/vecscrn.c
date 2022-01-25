@@ -31,9 +31,15 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.132 $
+ * $Revision: 6.134 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.134  2002/07/24 21:11:39  kans
+ * reverted ncbi URL
+ *
+ * Revision 6.133  2002/07/23 16:50:04  kans
+ * changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+ *
  * Revision 6.132  2001/01/09 17:30:03  madden
  * Fix memory leaks
  *

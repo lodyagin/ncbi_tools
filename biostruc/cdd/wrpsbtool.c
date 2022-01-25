@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.12 2002/03/07 19:12:15 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.16 2002/08/06 02:39:10 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.12 $
+* $Revision: 1.16 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.16  2002/08/06 02:39:10  bauer
+* changes to accomodate COGs
+*
+* Revision 1.15  2002/06/25 21:23:28  bauer
+* revised Sequence retrieval interface
+*
+* Revision 1.14  2002/06/12 15:04:53  bauer
+* 6/11/02 update
+*
+* Revision 1.13  2002/05/06 17:18:05  bauer
+* switched to graphics on the fly
+*
 * Revision 1.12  2002/03/07 19:12:15  bauer
 * major revisions to cgi-bins and the CD-dumper
 *
@@ -139,14 +151,20 @@ Boolean OverlapMutual(Int4 from1, Int4 to1, Int4 from2, Int4 to2)
 /* Header and Footer for the Pages                                           */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-void WRPSBSearchHead(CharPtr title)
+void WRPSBSearchHead(CharPtr title, CharPtr banner)
 {
   CharPtr cTitle;
+  CharPtr cBanner;
 
   cTitle = MemNew(128 * sizeof (Char));
   if (!title) {
     StringCpy(cTitle,"NCBI CD-Search");
   } else (StringCpy(cTitle, title));
+  
+  cBanner = MemNew(128 * sizeof (Char));
+  if (!banner) {
+    StringCpy(cBanner,"NCBI Conserved Domain Search");
+  } else (StringCpy(cBanner, banner));
   
   printf("Content-type: text/html\n\n");
   printf("<html>\n");
@@ -166,11 +184,11 @@ void WRPSBSearchHead(CharPtr title)
   printf("            <tr>\n");
   printf("              <td align=\"left\">\n");
   printf("                <A HREF=\"http://www.ncbi.nlm.nih.gov\">\n");
-  printf("                  <img src=\"http://www.ncbi.nlm.nih.gov/corehtml/left.GIF\" width=\"130\" height=\"45\" border=\"0\">\n");
+  printf("                  <img src=\"/Structure/invleft.GIF\" width=\"130\" height=\"45\" border=\"0\">\n");
   printf("                </a>\n");
   printf("              </td>\n");
   printf("              <td align=\"left\">\n");
-  printf("                <span class=\"H2\">NCBI Conserved Domain Search</span>\n");
+  printf("                <span class=\"H2\">%s</span>\n",cBanner);
   printf("              </td>\n");
   printf("            </tr>\n");
   printf("          </table>\n");
@@ -186,7 +204,7 @@ void WRPSBSearchHead(CharPtr title)
   printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Nucleotide\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Nucleotide</FONT></a></td>\n");
   printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Protein\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Protein</FONT></a></td>\n");
   printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Structure\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Structure</FONT></a></td>\n");
-  printf("              <td width=\"12.5%%\"><a href=\"cdd.shtml\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>CDD</b></FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=cdd\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>CDD</b></FONT></a></td>\n");
   printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Taxonomy\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Taxonomy</FONT></a></td>\n");
   printf("              <td width=\"12.5%%\"><a href=\"cdd_help.shtml\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>Help?</b></FONT></a></td>\n");
   printf("            </tr>\n");
@@ -200,7 +218,7 @@ void WRPSBSearchHead(CharPtr title)
   printf("<!-- right content column  --> \n");
   printf("         <td width=\"100%%\" bgcolor=\"#FFFFFF\">       \n");
   printf("<!-- -------- view --------- -->\n");
-
+  MemFree(cBanner);
   MemFree(cTitle);
 }
 
@@ -237,7 +255,7 @@ void WRPSBSearchFoot()
 /*---------------------------------------------------------------------------*/
 void WRPSBHtmlError(CharPtr cErrTxt) 
 {
-  WRPSBSearchHead("CD-Search Error");
+  WRPSBSearchHead("CD-Search Error","CD-Search Error Message");
   printf("<BR><h3>%s</h3>\n",cErrTxt);
   WRPSBSearchFoot();
   exit(1);
@@ -324,7 +342,7 @@ Boolean print_score_evalue (FloatHi evalue, FloatHi bit_score, CharPtr buf)
 /*---------------------------------------------------------------------------*/
 void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
                                     Boolean bAnyPdb, BioseqPtr query_bsp,
-				    CharPtr urlcgi)
+				    CharPtr urlcgi, Int4 querygi)
 {
   Char                 dupstr[PATH_MAX];
   Char                 cTmp[16];
@@ -340,9 +358,11 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
   Char                 cTmp2[16];
   
 
-  buf = MemNew((query_bsp->length+1)*sizeof(Char));
-  spp = FastaSeqPort((BioseqPtr)query_bsp,FALSE,FALSE,Seq_code_ncbieaa);
-  FastaSeqLine(spp,buf,query_bsp->length,FALSE);
+  if (!querygi) {
+    buf = MemNew((query_bsp->length+1)*sizeof(Char));
+    spp = FastaSeqPort((BioseqPtr)query_bsp,FALSE,FALSE,Seq_code_ncbieaa);
+    FastaSeqLine(spp,buf,query_bsp->length,FALSE);
+  }
 
   fprintf(table,"<TABLE CELLPADDING=1 CELLSPACING=1 BORDER=0 width=600>\n");
   fprintf(table,"<TR>\n");
@@ -376,9 +396,10 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
           }
         }
         aln[strlen(aln)]='\0';
-	fprintf(table, "&query=%s",buf);
+	if (querygi) fprintf(table, "&querygi=%d",querygi); 
+	else fprintf(table, "&query=%s",buf);
 	fprintf(table, "&aln=%s",aln);
-	fprintf(table, "&ascbin=0&maxaln=10&seltype=3");
+	fprintf(table, "&ascbin=6&maxaln=10&seltype=3");
 	fprintf(table,"\"><IMG SRC=\"%spinkb.gif\" BORDER=0></A></TD>\n",urlcgi);
       } else {
         fprintf(table,"<TD>&nbsp;</TD>\n");
@@ -391,7 +412,7 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
     if (strlen(part2) == 65) {
       part2[64]='.'; part2[63]='.'; part2[62]='.';
     }
-    fprintf(table,"<TD NOWRAP ALIGN=LEFT><a href=\"%s\" TARGET=\"_new\">%s</a></TD>\n",
+    fprintf(table,"<TD NOWRAP ALIGN=LEFT><a href=\"%s\">%s</a></TD>\n",
             aapThis->cHtmlLink,part1);
     fprintf(table,"<TD NOWRAP ALIGN=LEFT>%s</TD>\n",part2);
     print_score_sonly(aapThis->defline->bit_score,cTmp);
@@ -1076,7 +1097,7 @@ Boolean WRPSBDisplayBlastPairList(AlignmentAbstractPtr aap,
 /*---------------------------------------------------------------------------*/
 /* print form for displaying a multiple alignment                            */
 /*---------------------------------------------------------------------------*/
-   if (!aap->bIsProfile) {
+/*   if (!aap->bIsProfile) {
       dsp = sap4->segs;
       nsegments = 0;
       for (i=0;i<dsp->numseg;i++) {
@@ -1108,6 +1129,7 @@ Boolean WRPSBDisplayBlastPairList(AlignmentAbstractPtr aap,
       fprintf(fp,"</SELECT> aligned sequences\n");
       fprintf(fp,"</FORM>\n");
     }
+    */
     if (option&DISP_FULL_HTML) fprintf(fp,"<pre>\n");
     bsp = BioseqLockById(new_id);
     subject_length = bsp->length;
@@ -1334,6 +1356,8 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
           fprintf(fp,", %s, %s, %s\n",aap->cCDDid,aap->cGraphId,description->data.ptrvalue);
 	} else if (Nlm_StrCmp(aap->cDatabase,"Cdd") == 0) {
           fprintf(fp,", %s, %s\n",aap->cGraphId,description->data.ptrvalue);
+	} else if (Nlm_StrCmp(aap->cDatabase,"Cog") == 0) {
+          fprintf(fp,", %s, %s\n",aap->cGraphId,description->data.ptrvalue);
 	} else {
           fprintf(fp,", %s\n", description->data.ptrvalue);
         }
@@ -1366,6 +1390,7 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
     aln[strlen(aln)]='\0';
     strcpy(dupstr,aap->cHtmlLink);
     part1 = strtok(dupstr,"?");
+/*
     if (!aap->bIsProfile) {
       fprintf(fp,"<FORM ACTION=\"%s\" METHOD=\"POST\" TARGET=\"_new\">\n",part1);
       fprintf(fp,"<INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n",aap->cCDDid);
@@ -1390,6 +1415,7 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
 
       fprintf(fp,"</FORM>\n");
     }
+*/    
     if (option&DISP_FULL_HTML) fprintf(fp,"<pre>\n");
 /*---------------------------------------------------------------------------*/
 /* need to explicitly get the subject sequence from a FASTA file (versions..)*/

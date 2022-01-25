@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.12  2002/05/08 18:58:09  kans
+* itemID is Uint4
+*
 * Revision 6.11  2001/11/15 18:34:52  kans
 * added GetNextDescriptorUnindexed, requires AssignIDsInEntity be called first
 *
@@ -583,10 +586,10 @@ NLM_EXTERN Boolean LIBCALL GatherOverWrite PROTO((Pointer oldptr, Pointer newptr
 
 typedef struct gatherobject {
   Uint2             entityID;
-  Uint2             itemID;
   Uint2             itemtype;
   Uint1             subtype;
   Uint2             parenttype;
+  Uint4             itemID;
   Pointer           dataptr;
   Pointer           parentptr;
   Pointer PNTR      prevlink;

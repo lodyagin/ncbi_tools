@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: ni_net.h,v $
+* Revision 6.3  2002/06/17 15:11:33  ivanov
+* #include <arpa/inet.h> is absent on BeOS platform
+*
 * Revision 6.2  2001/04/05 02:36:22  juran
 * Removed obsolete includes.
 *
@@ -186,7 +189,9 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
+#ifndef OS_UNIX_BEOS
 #include <arpa/inet.h>
+#endif
 #include <sys/time.h>
 #define _NI_NET_
 #endif /* _NI_NET_ */

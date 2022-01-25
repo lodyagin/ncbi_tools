@@ -173,12 +173,29 @@ static void NewTextE2 (Boolean showuids, Boolean showinfo)
   Entrez2ReplyPtr    e2ry;
   CharPtr            key1 = NULL;
   Int4               pos = -1;
+  CharPtr            str;
 
   e2rq = EntrezCreateGetInfoRequest ();
   SaveEntrezRequest (e2rq);
   e2ry = EntrezSynchronousQuery (e2rq);
   e2rq = Entrez2RequestFree (e2rq);
   DoInfoValidation (e2ry, showinfo);
+
+  str = "\"1900/01/01\"[MDAT] : \"1993/12/31\"[MDAT]";
+  e2rq = EntrezCreateBooleanRequest (TRUE, TRUE, "nucleotide", str, 0, 0, NULL, 0, 0);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
 
   e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "PubMed", NULL, 0, 0, NULL, 0, 0);
   EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, NULL, 0, 11, jkuidlist, NULL, FALSE, FALSE);

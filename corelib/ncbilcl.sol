@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.9  2002/07/11 19:26:31  ivanov
+* Added macro HAVE_MADVISE
+*
 * Revision 6.8  2000/08/07 16:50:06  vakatov
 * From now on, use the "standard" Int4 (as defined in <ncbistd.h>)
 * for 32-bit, too.
@@ -169,6 +172,7 @@
 
 #define IS_BIG_ENDIAN
 #define TEMPNAM_AVAIL
+#define HAVE_MADVISE
 
 /*----------------------------------------------------------------------*/
 /*      For importing MS_DOS code                                       */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *   	portable main() for console applications
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbimain.c,v $
+* Revision 6.2  2002/07/09 15:20:17  lavr
+* Call CONNECT_Init(0) in initialization sequence
+*
 * Revision 6.1  1998/02/13 15:18:15  vakatov
 * Added cleanup for the application context and thread library internals
 *
@@ -53,6 +56,8 @@
 #include <ncbi.h>
 #include <ncbithr.h>
 #include <ncbiwin.h>
+
+#include <connect/ncbi_core_c.h>
 
 #ifdef COMP_THINKC
 #include <console.h>
@@ -87,6 +92,9 @@ main(int argc, char *argv[])
     }
 #endif
 
+  /* Initialize connection library's logger, registry and lock */
+  CONNECT_Init(0);
+
   retval = Nlm_Main();
 
   NlmThreadJoinAll();
@@ -107,4 +115,3 @@ main(int argc, char *argv[])
   exit( retval );
 #endif
 }
-

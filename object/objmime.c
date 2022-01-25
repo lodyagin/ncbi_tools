@@ -31,6 +31,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
+* Revision 6.14  2002/08/23 20:35:34  thiessen
+* fix wrong user_annotations symbols
+*
 * Revision 6.13  2002/02/27 15:53:37  thiessen
 * fix typo
 *
@@ -1066,7 +1069,7 @@ BiostrucAlignSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+   if (atp == ALIGN_SEQ_user_annotations) {
       ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
@@ -1135,7 +1138,7 @@ BiostrucAlignSeqAsnWrite(BiostrucAlignSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    if (ptr -> user_annotations != NULL) {
-      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, ALIGN_SEQ_user_annotations)) {
          goto erret;
       }
    }
@@ -1258,7 +1261,7 @@ BiostrucSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+   if (atp == BIOSTRUC_SEQ_user_annotations) {
       ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
@@ -1329,7 +1332,7 @@ BiostrucSeqAsnWrite(BiostrucSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    if (ptr -> user_annotations != NULL) {
-      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_SEQ_user_annotations)) {
          goto erret;
       }
    }
@@ -1461,7 +1464,7 @@ BiostrucSeqsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+   if (atp == BIOSTRUC_SEQS_user_annotations) {
       ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
@@ -1535,7 +1538,7 @@ BiostrucSeqsAsnWrite(BiostrucSeqsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    if (ptr -> user_annotations != NULL) {
-      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_SEQS_user_annotations)) {
          goto erret;
       }
    }

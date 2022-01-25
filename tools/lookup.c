@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.50 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.53  2002/06/07 18:50:43  dondosha
+* Bug fix for Mega BLAST with two simultaneoue discontiguous word templates of length 21
+*
+* Revision 6.52  2002/05/17 21:40:13  dondosha
+* Added 2 optimal Mega BLAST word templates for length 21
+*
+* Revision 6.51  2002/05/14 22:20:20  dondosha
+* Renamed maximal discontiguous template type into optimal
+*
 * Revision 6.50  2002/04/09 18:19:47  dondosha
 * Changed #ifdefs to conditionals, allowing different discontiguous templates in a single binary
 *
@@ -883,7 +892,7 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    Int4 pv_shift, pv_array_bts, pv_size;
    Boolean discontiguous_word = FALSE;
    Int2 word_length, extra_length, word_weight;
-   Int4 weight11 = 0, /*template18 = 0, */last_offset;
+   Int4 last_offset;
    Int4 length, size, hash_shift, hash_mask, crc;
    Uint1Ptr hash_buf;
    Int4 bit0, no_bit0;
@@ -944,7 +953,7 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       return FALSE;
    }
    if (use_two_templates) {
-      if (!weight11) {
+      if (word_weight >= 12) {
          if ((mb_lt->hashtable2 = (Int4Ptr) 
               MemNew(mb_lt->hashsize*sizeof(Int4))) == NULL) {
             MegaBlastLookupTableDestruct(lookup);
@@ -990,11 +999,14 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                   case TEMPL_11_18: case TEMPL_12_18:
                      amb_cond = !GET_AMBIG_CONDITION_18(seq);
                      break;
-                  case TEMPL_11_18_MAX: case TEMPL_12_18_MAX:
-                     amb_cond = !GET_AMBIG_CONDITION_18_MAX(seq);
+                  case TEMPL_11_18_OPT: case TEMPL_12_18_OPT:
+                     amb_cond = !GET_AMBIG_CONDITION_18_OPT(seq);
                      break;
                   case TEMPL_11_21: case TEMPL_12_21:
                      amb_cond = !GET_AMBIG_CONDITION_21(seq);
+                     break;
+                  case TEMPL_11_21_OPT: case TEMPL_12_21_OPT:
+                     amb_cond = !GET_AMBIG_CONDITION_21_OPT(seq);
                      break;
                   default:
                      amb_cond = FALSE;
@@ -1011,13 +1023,13 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                         ecode1 = (GET_WORD_INDEX_12_18(ecode) |
                                   GET_EXTRA_CODE_18(seq)) & no_bit0;
                         break;
-                     case TEMPL_11_18_MAX:
-                        ecode1 = (GET_WORD_INDEX_11_18_MAX(ecode) |
-                                  GET_EXTRA_CODE_18_MAX(seq)) & no_bit0;
+                     case TEMPL_11_18_OPT:
+                        ecode1 = (GET_WORD_INDEX_11_18_OPT(ecode) |
+                                  GET_EXTRA_CODE_18_OPT(seq)) & no_bit0;
                         break;
-                     case TEMPL_12_18_MAX:
-                        ecode1 = (GET_WORD_INDEX_12_18_MAX(ecode) |
-                                  GET_EXTRA_CODE_18_MAX(seq)) & no_bit0;
+                     case TEMPL_12_18_OPT:
+                        ecode1 = (GET_WORD_INDEX_12_18_OPT(ecode) |
+                                  GET_EXTRA_CODE_18_OPT(seq)) & no_bit0;
                         break;
                      case TEMPL_11_21:
                         ecode1 = (GET_WORD_INDEX_11_21(ecode) |
@@ -1026,6 +1038,14 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                      case TEMPL_12_21:
                         ecode1 = (GET_WORD_INDEX_12_21(ecode) |
                                   GET_EXTRA_CODE_21(seq)) & no_bit0;
+                        break;
+                     case TEMPL_11_21_OPT:
+                        ecode1 = (GET_WORD_INDEX_11_21_OPT(ecode) |
+                                  GET_EXTRA_CODE_21_OPT(seq)) & no_bit0;
+                        break;
+                     case TEMPL_12_21_OPT:
+                        ecode1 = (GET_WORD_INDEX_12_21_OPT(ecode) |
+                                  GET_EXTRA_CODE_21_OPT(seq)) & no_bit0;
                         break;
                      default: 
                         ecode1 = 0;
@@ -1041,12 +1061,20 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                      if (use_two_templates) {
                         switch (template_type) {
                         case TEMPL_11_18:
-                           ecode2 = GET_WORD_INDEX_11_18_MAX(ecode) |
-                              GET_EXTRA_CODE_18_MAX(seq) | bit0;
+                           ecode2 = GET_WORD_INDEX_11_18_OPT(ecode) |
+                              GET_EXTRA_CODE_18_OPT(seq) | bit0;
                            break;
                         case TEMPL_12_18:
-                           ecode2 = GET_WORD_INDEX_12_18_MAX(ecode) |
-                              GET_EXTRA_CODE_18_MAX(seq) | bit0;
+                           ecode2 = GET_WORD_INDEX_12_18_OPT(ecode) |
+                              GET_EXTRA_CODE_18_OPT(seq) | bit0;
+                           break;
+                        case TEMPL_11_21:
+                           ecode2 = GET_WORD_INDEX_11_21_OPT(ecode) |
+                              GET_EXTRA_CODE_21_OPT(seq) | bit0;
+                           break;
+                        case TEMPL_12_21:
+                           ecode2 = GET_WORD_INDEX_12_21_OPT(ecode) |
+                              GET_EXTRA_CODE_21_OPT(seq) | bit0;
                            break;
                         default:
                            ecode2 = 0; break;
@@ -1096,11 +1124,11 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                   case TEMPL_12_16:
                      ecode1 = GET_WORD_INDEX_12_16(ecode) & no_bit0;
                      break;
-                  case TEMPL_11_16_MAX:
-                     ecode1 = GET_WORD_INDEX_11_16_MAX(ecode) & no_bit0;
+                  case TEMPL_11_16_OPT:
+                     ecode1 = GET_WORD_INDEX_11_16_OPT(ecode) & no_bit0;
                      break;
-                  case TEMPL_12_16_MAX:
-                     ecode1 = GET_WORD_INDEX_12_16_MAX(ecode) & no_bit0;
+                  case TEMPL_12_16_OPT:
+                     ecode1 = GET_WORD_INDEX_12_16_OPT(ecode) & no_bit0;
                      break;
                   default:
                      ecode1 = 0;
@@ -1115,10 +1143,10 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                   if (use_two_templates) {
                      switch (template_type) {
                      case TEMPL_11_16:
-                        ecode2 = GET_WORD_INDEX_11_16_MAX(ecode) | bit0;
+                        ecode2 = GET_WORD_INDEX_11_16_OPT(ecode) | bit0;
                         break;
                      case TEMPL_12_16:
-                        ecode2 = GET_WORD_INDEX_12_16_MAX(ecode) | bit0;
+                        ecode2 = GET_WORD_INDEX_12_16_OPT(ecode) | bit0;
                         break;
                      default:
                         ecode2 = 0; break;

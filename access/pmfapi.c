@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.32 $
+* $Revision: 1.42 $
 *
 * File Description: 
 *
@@ -298,8 +298,15 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
     retcode = 0;
   }
 
+#ifdef PUB_SEQ_FETCH_DEBUG
+  sprintf (query, "val=%ld&save=idf&view=1&maxplex=%d", (long) uid, (int) retcode);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
+#endif
+
   /*
-  sprintf (query, "val=%ld&save=idf&view=0&maxplex=%d&s=PUBSEQ_OS", (long) uid, (int) retcode);
+  sprintf (query, "val=%ld&save=idf&view=0&maxplex=%d", (long) uid, (int) retcode);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnBinary, eENCOD_None, 0);
@@ -380,7 +387,7 @@ NLM_EXTERN CONN AccnRevHistOpenConnection (
   if (StringHasNoText (accn)) return NULL;
   
   /*
-  sprintf (query, "val=%s&save=idf&view=gi&maxplex=0&s=PUBSEQ_OS", accn);
+  sprintf (query, "val=%s&save=idf&view=gi&maxplex=0", accn);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
@@ -470,6 +477,8 @@ NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
   return pep;
 }
 
+#define PUB_SEQ_DEBUG_TEMP_FILE "pubseqfetchtempfile"
+
 NLM_EXTERN SeqEntryPtr PubSeqReadReply (
   CONN conn,
   EIO_Status status
@@ -477,12 +486,31 @@ NLM_EXTERN SeqEntryPtr PubSeqReadReply (
 
 {
   AsnIoConnPtr  aicp;
+  ErrSev        oldsev;
   SeqEntryPtr   sep = NULL;
+#ifdef PUB_SEQ_FETCH_DEBUG
+  AsnIoPtr      aip;
+  FILE          *fp;
+#endif
 
   if (conn != NULL && status == eIO_Success) {
+#ifdef PUB_SEQ_FETCH_DEBUG
+    fp = FileOpen (PUB_SEQ_DEBUG_TEMP_FILE, "w");
+    QUERY_CopyResultsToFile (conn, fp);
+    FileClose (fp);
+    aip = AsnIoOpen (PUB_SEQ_DEBUG_TEMP_FILE, "r");
+    sep = SeqEntryAsnRead (aip, NULL);
+    AsnIoClose (aip);
+    if (sep != NULL) {
+      FileRemove (PUB_SEQ_DEBUG_TEMP_FILE);
+    }
+#else
+    oldsev = ErrSetMessageLevel (SEV_MAX);
     aicp = QUERY_AsnIoConnOpen ("rb", conn);
     sep = SeqEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
+    ErrSetMessageLevel (oldsev);
+#endif
   }
   return sep;
 }
@@ -519,7 +547,7 @@ NLM_EXTERN CharPtr GiRevHistReadReply (
   if (conn != NULL && status == eIO_Success) {
     bsp = BSNew (512);
     aicp = QUERY_AsnIoConnOpen ("r", conn);
-    while ((status = CONN_Read (aicp->conn, (Pointer) buf, sizeof (buf), &n_read, eIO_Plain)) == eIO_Success) {
+    while ((status = CONN_Read (aicp->conn, (Pointer) buf, sizeof (buf), &n_read, eIO_ReadPlain)) == eIO_Success) {
       BSWrite (bsp, buf, n_read);
     }
     str = BSMerge (bsp, NULL);
@@ -562,7 +590,7 @@ NLM_EXTERN Int4 AccnRevHistReadReply (
 
   if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
-    status = CONN_Read (aicp->conn, (Pointer) buf, sizeof (buf), &n_read, eIO_Plain);
+    status = CONN_Read (aicp->conn, (Pointer) buf, sizeof (buf), &n_read, eIO_ReadPlain);
     if (status == eIO_Success) {
       ptr = buf;
       ch = *ptr;
@@ -641,6 +669,32 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   return pep;
 }
 
+typedef struct psconfirm {
+  Int4  uid;
+  Int4  gi;
+} PsConfirm, PNTR PsConfirmPtr;
+
+static void ConfirmGiInSep (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Int4          gi;
+  PsConfirmPtr  psp;
+  SeqIdPtr      sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+  psp = (PsConfirmPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice != SEQID_GI) continue;
+    gi = (Int4) sip->data.intvalue;
+    if (psp->gi == 0 || gi == psp->uid) {
+      psp->gi = gi;
+    }
+  }
+}
+
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   Int4 uid,
   Int2 retcode,
@@ -649,6 +703,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 
 {
   CONN         conn;
+  PsConfirm    ps;
   SeqEntryPtr  sep;
 #ifdef OS_UNIX
   Boolean      logtimes;
@@ -683,6 +738,19 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
     printf ("PubSeqWaitForReply %ld\n", (long) (stoptime - starttime));
   }
 #endif
+
+  if (sep != NULL) {
+    ps.uid = uid;
+    ps.gi = 0;
+    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
+    if (ps.gi != uid) {
+      ErrPostEx (SEV_ERROR, 0, 0,
+                 "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
+                 (long) uid, (long) ps.gi);
+    }
+  } else {
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqSynchronousQuery failed for gi %ld", (long) uid);
+  }
 
   return sep;
 }
@@ -938,7 +1006,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
   sep = PubSeqSynchronousQuery (uid, retcode, flags);
 
-  if (sep == NULL) return OM_MSG_RET_ERROR;
+  if (sep == NULL) return OM_MSG_RET_OK;
   bsp = BioseqFindInSeqEntry (sip, sep);
   ompcp->output_data = (Pointer) bsp;
   ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);

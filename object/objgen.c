@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,12 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.10  2002/07/23 21:47:18  kans
+* label function for pid choice 5 consortium
+*
+* Revision 6.9  2002/07/22 19:56:49  kans
+* added support for PERSON_ID_Consortium
+*
 * Revision 6.8  2000/01/20 17:04:27  beloslyu
 * new function DateClean to properly clean the date was added
 *
@@ -1316,8 +1322,10 @@ NLM_EXTERN PersonIdPtr LIBCALL PersonIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 		pid->data = av.ptrvalue;
 		if (atp == PERSON_ID_ml)
 			pid->choice = 3;
-		else
+		else if (atp == PERSON_ID_str)
 			pid->choice = 4;       /* str */
+		else if (atp == PERSON_ID_consortium)
+			pid->choice = 5;       /* consortium */
 	}
     if (pid->data == NULL)
         goto erret;
@@ -1373,6 +1381,9 @@ NLM_EXTERN Boolean LIBCALL PersonIdAsnWrite (PersonIdPtr pid, AsnIoPtr aip, AsnT
 			break;
 		case 4:
 			if (! AsnWrite(aip, PERSON_ID_str, &av)) goto erret;
+			break;
+		case 5:
+			if (! AsnWrite(aip, PERSON_ID_consortium, &av)) goto erret;
 			break;
 	}
     retval = TRUE;
@@ -1443,7 +1454,7 @@ NLM_EXTERN Int2 LIBCALL PersonIdLabel (PersonIdPtr pid, CharPtr buf, Int2 buflen
 			buflen -= diff; buf += diff;
 		}
 	}
-	else if ((pid->choice == 3) || (pid->choice == 4))
+	else if ((pid->choice == 3) || (pid->choice == 4) || (pid->choice == 5))
 	{
 		diff = LabelCopy(buf, (CharPtr)(pid->data), buflen);
 		if (format == PIDLABEL_EMBL)

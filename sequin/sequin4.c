@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.161 $
+* $Revision: 6.165 $
 *
 * File Description: 
 *
@@ -91,6 +91,8 @@
 #define REGISTER_REMOVE_MESSEDUP ObjMgrProcLoadEx (OMPROC_FILTER,"Repair Messed Up Sets","RepairMessedUpSets",0,0,0,0,NULL,RepairMessedUpRecord,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_UPDATE_SEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER, "Update SeqAlign","UpdateSeqAlign",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,NewUpdateSeqAlign,PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_DELETE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Delete By Text","DeleteByText",0,0,0,0,NULL,CreateDeleteByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_CONVERTSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Convert SeqAlign","ConvertSeqAlign",0,0,0,0,NULL,ConvertToTrueMultipleAlignment,PROC_PRIORITY_DEFAULT, "Alignment")
 
@@ -1339,7 +1341,7 @@ static void SQNGetBioseqs(SeqEntryPtr sep, Pointer userdata, Int4 index, Int2 in
    {
       if (sbp->bsp == NULL)
          sbp->bsp = (BioseqPtr)(sep->data.ptrvalue);
-      else
+      else if (ISA_na(sbp->bsp->mol))
       {
          while (sbp->next != NULL)
          {
@@ -1384,6 +1386,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   BioseqSetPtr      bssp;
   Int4              chlen;
   SeqAnnotPtr       curr;
+  DenseSegPtr       dsp;
   Int4              endsfixed;
   ObjectIdPtr       oip;
   OMProcControlPtr  ompcp;
@@ -1397,6 +1400,8 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   SQNBspPtr         sbp;
   SQNBspPtr         sbp_prev;
   SeqEntryPtr       sep;
+  SeqIdPtr          sip1;
+  SeqIdPtr          sip2;
   UserFieldPtr      ufp;
   UserObjectPtr     uop;
 
@@ -1425,15 +1430,24 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   endsfixed = 0;
   while (sbp != NULL)
   {
-    salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
-    if (chlen > endsfixed)
-       endsfixed = chlen;
-    if (salp != NULL && salp_head != NULL)
+    if (ISA_na(sbp->bsp->mol))
     {
-       salp_prev->next = salp;
-       salp_prev = salp;
-    } else if (salp != NULL)
-       salp_head = salp_prev = salp;
+       sip1 = SeqIdDup(bsp->id);
+       sip2 = SeqIdDup(sbp->bsp->id);
+       salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
+       dsp = (DenseSegPtr)(salp->segs);
+       SeqIdSetFree(dsp->ids);
+       dsp->ids = sip1;
+       dsp->ids->next = sip2;
+       if (chlen > endsfixed)
+          endsfixed = chlen;
+       if (salp != NULL && salp_head != NULL)
+       {
+          salp_prev->next = salp;
+          salp_prev = salp;
+       } else if (salp != NULL)
+          salp_head = salp_prev = salp;
+    }
     sbp_prev = sbp;
     sbp = sbp->next;
     MemFree(sbp_prev);
@@ -1441,7 +1455,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   if (endsfixed > 0)
   {
     Message(MSG_OK, "The first sequence does not extend to both ends, so as much as %d nt%s on the ends %s not been algorithmically aligned.\nIf the ends do not look correctly aligned, and a good alignment is needed in those areas,\nchoose a sequence that extends to the desired end and put that first, then realign.", endsfixed, endsfixed > 1?"s":"", endsfixed > 1?"have":"has");
-  }
+ }
   if (salp_head != NULL)
   {
     salp_tmp = salp_head;
@@ -5142,10 +5156,8 @@ static Int2 LIBCALLBACK FindNonACGT (Pointer data)
     case OBJ_BIOSEQ :
       bsp = (BioseqPtr) ompcp->input_data;
       break;
-    case 0 :
-      return OM_MSG_RET_ERROR;
     default :
-      return OM_MSG_RET_ERROR;
+      break;
   }
   if (bsp == NULL) {
     Message (MSG_ERROR, "Please select a Bioseq");
@@ -5710,6 +5722,7 @@ extern void SetupSequinFilters (void)
   }
 
   if (indexerVersion) {
+    /*REGISTER_DELETE_BY_TEXT;*/
     REGISTER_FIND_NON_ACGT;
     REGISTER_BSP_INDEX;
     REGISTER_POPSET_WITHIN_GENBANK;

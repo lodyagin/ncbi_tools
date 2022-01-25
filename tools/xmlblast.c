@@ -1,4 +1,4 @@
-/* $Id: xmlblast.c,v 6.21 2002/04/23 20:48:24 madden Exp $ */
+/* $Id: xmlblast.c,v 6.22 2002/07/17 22:28:13 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.22  2002/07/17 22:28:13  dondosha
+* Added support for megablast XML output
+*
 * Revision 6.21  2002/04/23 20:48:24  madden
 * Fix hsp_count for ungapped case
 *
@@ -763,68 +766,107 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
 
     return hitp_head;
 }
+
 IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign, 
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
                                    Int4 iter_num, CharPtr message)
+{
+   return BXMLBuildOneQueryIteration(seqalign, other_returns, is_ooframe,
+                                     ungapped, iter_num, message, NULL);
+}
+
+IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign, 
+                                   ValNodePtr other_returns,
+                                   Boolean is_ooframe, Boolean ungapped,
+                                   Int4 iter_num, CharPtr message,
+                                   BioseqPtr query)
 {
     IterationPtr iterp;
     TxDfDbInfoPtr dbinfo=NULL;
     BLAST_KarlinBlkPtr ka_params_gap=NULL;
     BLAST_KarlinBlkPtr ka_params_ungap=NULL;
     ValNodePtr vnp;
+    Char buffer[1024];
     
     iterp = IterationNew();
     iterp->iter_num = iter_num;
-    iterp->stat = StatisticsNew();
-    
+
+    if (query) {
+       SeqIdWrite(query->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
+       iterp->query_ID = StringSave(buffer);
+
+       if((iterp->query_def = StringSave(BioseqGetTitle(query))) == NULL) {
+          iterp->query_def = StringSave("No definition line found");
+       }
+
+       iterp->query_len = query->length;
+    }
+
     if(seqalign != NULL) {
         iterp->hits = BXMLSeqAlignToHits(seqalign, ungapped, is_ooframe);
     }
 
-    if(other_returns != NULL) {    
-        for (dbinfo = NULL, vnp=other_returns; vnp; vnp = vnp->next) {
-            switch (vnp->choice) {
-            case TXDBINFO:
-                dbinfo = vnp->data.ptrvalue;
-                break;
-            case TXKABLK_GAP:
-                ka_params_gap = vnp->data.ptrvalue;
-                break;
-            case TXKABLK_NOGAP:
-                ka_params_ungap = vnp->data.ptrvalue;
-                break;
-            case EFF_SEARCH_SPACE:
-                iterp->stat->eff_space = vnp->data.realvalue;
-                break;
-            default:
-                break;
-            }
-        }
-        
-        if(dbinfo != NULL) {
-            iterp->stat->db_num= dbinfo->number_seqs;
-            iterp->stat->db_len = dbinfo->total_length;
-        }
-        
-        if(ungapped) {
-            if(ka_params_ungap != NULL) {
-                iterp->stat->lambda = ka_params_ungap->Lambda;
-                iterp->stat->kappa = ka_params_ungap->K;
-                iterp->stat->entropy = ka_params_ungap->H;
-            }
-        } else {
-            if(ka_params_gap != NULL) {
-                iterp->stat->lambda = ka_params_gap->Lambda;
-                iterp->stat->kappa = ka_params_gap->K;
-                iterp->stat->entropy = ka_params_gap->H;
-            }
-         }
-    }
+    iterp->stat = BXMLBuildStatistics(other_returns, ungapped);
     
     iterp->message = StringSave(message);
     
     return iterp;
+}
+
+StatisticsPtr
+BXMLBuildStatistics(ValNodePtr other_returns, Boolean ungapped)
+{
+   TxDfDbInfoPtr dbinfo=NULL;
+   BLAST_KarlinBlkPtr ka_params_gap=NULL;
+   BLAST_KarlinBlkPtr ka_params_ungap=NULL;
+   ValNodePtr vnp;
+   StatisticsPtr stat;
+
+   if (!other_returns) 
+      return NULL;
+
+   stat = StatisticsNew();
+
+   for (dbinfo = NULL, vnp=other_returns; vnp; vnp = vnp->next) {
+      switch (vnp->choice) {
+      case TXDBINFO:
+         dbinfo = vnp->data.ptrvalue;
+         break;
+      case TXKABLK_GAP:
+         ka_params_gap = vnp->data.ptrvalue;
+         break;
+      case TXKABLK_NOGAP:
+         ka_params_ungap = vnp->data.ptrvalue;
+         break;
+      case EFF_SEARCH_SPACE:
+         stat->eff_space = vnp->data.realvalue;
+         break;
+      default:
+         break;
+      }
+   }
+   
+   if(dbinfo != NULL) {
+      stat->db_num= dbinfo->number_seqs;
+      stat->db_len = dbinfo->total_length;
+   }
+   
+   if(ungapped) {
+      if(ka_params_ungap != NULL) {
+         stat->lambda = ka_params_ungap->Lambda;
+         stat->kappa = ka_params_ungap->K;
+         stat->entropy = ka_params_ungap->H;
+      }
+   } else {
+      if(ka_params_gap != NULL) {
+         stat->lambda = ka_params_gap->Lambda;
+         stat->kappa = ka_params_gap->K;
+         stat->entropy = ka_params_gap->H;
+      }
+   }
+
+   return stat;
 }
 
 BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database, 
@@ -844,29 +886,30 @@ BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database,
     if(glb_matrix == NULL)
         glb_matrix = load_default_matrix ();
     
-    SeqIdWrite(query->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
-    boutp->query_ID = StringSave(buffer);
+    if (query) {
+       SeqIdWrite(query->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
+       boutp->query_ID = StringSave(buffer);
 
-    if((boutp->query_def = StringSave(BioseqGetTitle(query))) == NULL) {
-        boutp->query_def = StringSave("No definition line found");
+       if((boutp->query_def = StringSave(BioseqGetTitle(query))) == NULL) {
+          boutp->query_def = StringSave("No definition line found");
+       }
+
+       boutp->query_len = query->length;
+
+       if(flags & BXML_INCLUDE_QUERY) {
+          boutp->query_seq = MemNew(query->length+1);
+          is_aa = (query->mol == Seq_mol_aa);
+          spp = SeqPortNew(query, 0, -1, Seq_strand_plus, 
+                           (is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
+          
+          for (i = 0; i < query->length; i++) {
+             boutp->query_seq[i] = SeqPortGetResidue(spp);
+          }
+          spp = SeqPortFree(spp);
+       } else {
+          boutp->query_seq = NULL;    /* Do we need sequence here??? */
+       }
     }
-
-    boutp->query_len = query->length;
-    
-    if(flags & BXML_INCLUDE_QUERY) {
-        boutp->query_seq = MemNew(query->length+1);
-        is_aa = (query->mol == Seq_mol_aa);
-        spp = SeqPortNew(query, 0, -1, Seq_strand_plus, 
-                         (is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-        
-        for (i = 0; i < query->length; i++) {
-            boutp->query_seq[i] = SeqPortGetResidue(spp);
-        }
-        spp = SeqPortFree(spp);
-    } else {
-        boutp->query_seq = NULL;    /* Do we need sequence here??? */
-    }
-
     /* Program name */
     boutp->program = StringSave(program);
 
@@ -958,6 +1001,7 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     AsnTypePtr       BLASTOUTPUT_param;
     AsnTypePtr       BLASTOUTPUT_iterations;
     AsnTypePtr       BLASTOUTPUT_iterations_E;
+    AsnTypePtr       BLASTOUTPUT_mbstat;
 
     psixp = (PSIXmlPtr) MemNew(sizeof(PSIXml));
     
@@ -981,15 +1025,19 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     MACRO_atp_find(BLASTOUTPUT_param,BlastOutput.param);
     MACRO_atp_find(BLASTOUTPUT_iterations,BlastOutput.iterations);
     MACRO_atp_find(BLASTOUTPUT_iterations_E,BlastOutput.iterations.E);
+    MACRO_atp_find(BLASTOUTPUT_mbstat,BlastOutput.mbstat);
 
     /* Start of iterations structure */
     psixp->atp = BLASTOUTPUT_iterations_E;
-    
+
     /* Head of all BlastOutput structure */
     psixp->BlastOutput = BLASTOUTPUT;
     
     /* Head of iterations strucure */
     psixp->BlastOutput_iterations = BLASTOUTPUT_iterations;
+
+    /* Head of the final statistics for Mega BLAST */
+    psixp->BlastOutput_mbstat = BLASTOUTPUT_mbstat;
     
     psixp->boutp = BXMLCreateBlastOutputHead(program, database, options, 
                                              query, flags);
@@ -1066,6 +1114,35 @@ void PSIXmlClose(PSIXmlPtr psixp)
     
     BlastOutputFree(psixp->boutp);
     MemFree(psixp);
+    
+    return;
+}
+
+void MBXmlClose(PSIXmlPtr mbxp, ValNodePtr other_returns, Boolean ungapped)
+{
+   StatisticsPtr stat;
+   AsnTypePtr atp;
+
+    AsnCloseStruct(mbxp->aip, mbxp->BlastOutput_iterations, NULL);
+
+    if (other_returns) {
+       atp = AsnLinkType(NULL, mbxp->BlastOutput_mbstat);
+
+       /*AsnOpenStruct(mbxp->aip, mbxp->BlastOutput_mbstat, NULL);*/
+       stat = BXMLBuildStatistics(other_returns, ungapped);
+
+       StatisticsAsnWrite(stat, mbxp->aip, atp);
+       AsnIoFlush(mbxp->aip);
+       StatisticsFree(stat);                 
+       /*AsnCloseStruct(mbxp->aip, mbxp->BlastOutput_mbstat, NULL);*/
+    }
+
+    AsnCloseStruct(mbxp->aip, mbxp->BlastOutput, NULL);
+    
+    AsnIoClose(mbxp->aip);
+    
+    BlastOutputFree(mbxp->boutp);
+    MemFree(mbxp);
     
     return;
 }

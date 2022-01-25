@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.17 2001/02/08 22:27:04 vakatov Exp $
+* $Id: ncbierr.c,v 6.19 2002/08/13 20:44:19 lavr Exp $
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,14 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.19  2002/08/13 20:44:19  lavr
+* Force logging to stderr/stdout if DEBUG_PRINTOUT env.var. is set as follows:
+* STDOUT (case-insensitively) - log to stdout; anything else - log to stderr.
+* By Denis Vakatov and Anton Lavrentiev.
+*
+* Revision 6.18  2002/07/11 20:26:03  lavr
+* Prevent possible buffer overruns in storing text parts of a message
+*
 * Revision 6.17  2001/02/08 22:27:04  vakatov
 * + Nlm_CallErrHandlerOnly() -- to allow processing of posted
 * err.messages by the hook only.
@@ -432,7 +440,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrPostStr (ErrSev sev, int lev1, int lev2, const cha
     {
       info->desc.errtext[0] = '\0';
       if (str != NULL)
-        strncat(info->desc.errtext,str,ERRTEXT_MAX);
+        strncat(info->desc.errtext,str,ERRTEXT_MAX - 1);
     }
   info->err_formatted = 0;
 
@@ -579,19 +587,36 @@ NLM_EXTERN void LIBCALL Nlm_ErrLogPrintStr (const char *str)
   bytes = strlen( str );
 
 #ifdef WIN_DUMB
-  if (TEST_BITS(info,EO_LOGTO_STDOUT))
-    {
-      fflush(stderr);
-      fwrite(str,1,bytes,stdout);
-      fflush(stdout);
-    }
+  {{
+      static unsigned long s_ForceBits = EO_ALL_FLAGS;
+      if (s_ForceBits == EO_ALL_FLAGS) {
+          char buf[64];
+          static const char s_SecretDefault[] = "_NoOneCanGuessThisValue_Duh_";
+          Nlm_GetEnvParam(0, 0, "DEBUG_PRINTOUT",
+                          buf, sizeof(buf), s_SecretDefault);
+          if (Nlm_StrCmp(buf, s_SecretDefault) == 0) {
+              s_ForceBits = 0;
+          } else if (Nlm_StrICmp(buf, "stdout") == 0) {
+              s_ForceBits = EO_LOGTO_STDOUT;
+          } else {
+              s_ForceBits = EO_LOGTO_STDERR;
+          }
+      }
 
-  if (TEST_BITS(info,EO_LOGTO_STDERR))
-    {
-      fflush(stdout);
-      fwrite(str,1,bytes,stderr);
-      fflush(stderr);
-    }
+      if ((s_ForceBits & EO_LOGTO_STDOUT)  ||  TEST_BITS(info,EO_LOGTO_STDOUT))
+          {
+              fflush(stderr);
+              fwrite(str,1,bytes,stdout);
+              fflush(stdout);
+          }
+
+      if ((s_ForceBits & EO_LOGTO_STDERR)  ||  TEST_BITS(info,EO_LOGTO_STDERR))
+          {
+              fflush(stdout);
+              fwrite(str,1,bytes,stderr);
+              fflush(stderr);
+          }
+  }}
 #endif
 
   info->busy &= ~AEI_BUSY_3;
@@ -633,7 +658,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrSetContext (const char *ctx, const char *fname, in
 
 	info->desc.module[0] = '\0';
 	if (ctx != NULL)
-		strncat(info->desc.module,ctx,MODSTR_MAX);
+		strncat(info->desc.module,ctx,MODSTR_MAX - 1);
 	info->desc.srcfile[0] = '\0';
 	if (fname != NULL)
 	{
@@ -642,7 +667,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrSetContext (const char *ctx, const char *fname, in
 			++p;
 		else
 			p = fname;
-		strncat(info->desc.srcfile,p,SRCFILE_MAX);
+		strncat(info->desc.srcfile,p,SRCFILE_MAX - 1);
 	}
 	info->desc.srcline = line;
 	info->desc.entityID = entityID;
@@ -1319,7 +1344,7 @@ NLM_EXTERN int LIBCALL  Nlm_ErrSetLogfile (const char *filename, unsigned long f
             }
           FileClose(fp);
         }
-      strncpy(info->logfile,filename,PATH_MAX);
+      strncpy(info->logfile,filename,PATH_MAX - 1);
       info->logfile[PATH_MAX - 1] = '\0';
     }
   return TRUE;

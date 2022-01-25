@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -45,6 +45,18 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.28  2002/07/12 17:34:35  kans
+ * WormBase is now legal dbxref for all records, not just RefSeq
+ *
+ * Revision 6.27  2002/06/21 15:31:11  kans
+ * added GABI db_xref
+ *
+ * Revision 6.26  2002/06/18 20:59:59  kans
+ * added ISFinder as legal db_xref with hotlink
+ *
+ * Revision 6.25  2002/05/06 22:15:12  kans
+ * added IFO and JCM db_xrefs
+ *
  * Revision 6.24  2002/02/20 21:59:33  tatiana
  * DBNUM increased for IMGT/LIGM
  *
@@ -174,6 +186,18 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.28  2002/07/12 17:34:35  kans
+* WormBase is now legal dbxref for all records, not just RefSeq
+*
+* Revision 6.27  2002/06/21 15:31:11  kans
+* added GABI db_xref
+*
+* Revision 6.26  2002/06/18 20:59:59  kans
+* added ISFinder as legal db_xref with hotlink
+*
+* Revision 6.25  2002/05/06 22:15:12  kans
+* added IFO and JCM db_xrefs
+*
 * Revision 6.24  2002/02/20 21:59:33  tatiana
 * DBNUM increased for IMGT/LIGM
 *
@@ -333,7 +357,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 45
+#define DBNUM 51
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

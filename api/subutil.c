@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.46 $
+* $Revision: 6.50 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.50  2002/07/10 14:36:29  kans
+* fixed TpaAssembly user object - from and to were being placed at wrong level
+*
+* Revision 6.49  2002/07/09 16:25:45  kans
+* if from and to are 0, do not add those fields to TPA user object
+*
+* Revision 6.48  2002/07/09 16:17:35  kans
+* AddAccessionToTpaAssemblyUserObject takes from and to parameters
+*
+* Revision 6.47  2002/06/04 14:40:29  kans
+* added AddPntToSeqFeat
+*
 * Revision 6.46  2002/03/27 19:26:31  kans
 * AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
 *
@@ -3263,8 +3275,7 @@ NLM_EXTERN Boolean AddIntervalToFeature (
 }
 
 NLM_EXTERN Boolean AddIntToSeqFeat (SeqFeatPtr sfp, Int4 from, Int4 to, BioseqPtr bsp,
-							Int2 fuzz_from, Int2 
-fuzz_to, Int2 strand)
+							Int2 fuzz_from, Int2 fuzz_to, Int2 strand)
 {
 	SeqLocPtr slp, tmp, tmp2;
 	SeqIntPtr sintp;
@@ -3293,6 +3304,54 @@ fuzz_to, Int2 strand)
 	slp = ValNodeNew(NULL);
 	slp->choice = SEQLOC_INT;
 	slp->data.ptrvalue = (Pointer)sintp;
+
+	if (sfp->location == NULL)
+	{
+		sfp->location = slp;
+		return TRUE;
+	}
+
+	tmp = sfp->location;
+	if (tmp->choice == SEQLOC_MIX)   /* second one already */
+	{
+		tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
+		while (tmp2->next != NULL)
+			tmp2 = tmp2->next;
+		tmp2->next = slp;
+	}
+	else                             /* create a chain */
+	{
+		tmp2 = ValNodeNew(NULL);
+		tmp2->choice = SEQLOC_MIX;
+		tmp2->data.ptrvalue = (Pointer)tmp;
+		tmp->next = slp;
+		sfp->location = tmp2;
+	}
+
+	return TRUE;
+}
+
+NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
+{
+	SeqLocPtr slp, tmp, tmp2;
+	SeqPntPtr spp;
+	IntFuzzPtr ifp;
+
+	spp = SeqPntNew();
+	spp->point = point;
+	spp->id = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+	spp->strand = (Uint1)strand;
+	if (fuzz >= 0)
+	{
+		ifp = IntFuzzNew();
+		ifp->choice = 4;   /* lim */
+		ifp->a = (Int4) fuzz;
+		spp->fuzz = ifp;
+	}
+
+	slp = ValNodeNew(NULL);
+	slp->choice = SEQLOC_PNT;
+	slp->data.ptrvalue = (Pointer)spp;
 
 	if (sfp->location == NULL)
 	{
@@ -5035,7 +5094,7 @@ NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (void)
   return uop;
 }
 
-NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr accn)
+NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr accn, Int4 from, Int4 to)
 
 {
   UserFieldPtr  curr;
@@ -5075,5 +5134,27 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr 
   ufp->data.ptrvalue = (Pointer) StringSave (accn);
 
   curr->data.ptrvalue = (Pointer) ufp;
+  prev = ufp;
+
+  if (from == 0 && to == 0) return;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("from");
+  ufp->label = oip;
+  ufp->choice = 2; /* int */
+  ufp->data.intvalue = from;
+
+  prev->next = ufp;
+  prev = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("to");
+  ufp->label = oip;
+  ufp->choice = 2; /* int */
+  ufp->data.intvalue = to;
+
+  prev->next = ufp;
 }
 

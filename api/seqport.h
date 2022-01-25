@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.32  2002/07/08 15:08:59  kans
+* made ReadCodingRegionBases extern
+*
+* Revision 6.31  2002/05/13 21:41:32  kans
+* added ConvertNsToGaps
+*
 * Revision 6.30  2001/02/18 20:58:52  kans
 * added GetSequenceByBsp
 *
@@ -653,6 +659,15 @@ NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
   Boolean remove_trailingX
 );
 
+/* returns string of bases to translate */
+
+NLM_EXTERN CharPtr ReadCodingRegionBases (
+  SeqLocPtr location,
+  Int4 len,
+  Uint1 frame,
+  Int4Ptr totalP
+);
+
 /* allow reuse of translation tables by saving as AppProperty, avoids unnecessary initializations */
 
 NLM_EXTERN TransTablePtr PersistentTransTableByGenCode (
@@ -755,6 +770,13 @@ NLM_EXTERN BytePtr GetScoresbyAccessionDotVersion (
 NLM_EXTERN BytePtr GetScoresbySeqId (
   SeqIdPtr sip,
   Int4Ptr bsplength
+);
+
+/* ConvertNsToGaps assumes string of Ns means a gap of known length */
+
+NLM_EXTERN void ConvertNsToGaps (
+  BioseqPtr bsp,
+  Pointer userdata
 );
 
 /**************************************************************

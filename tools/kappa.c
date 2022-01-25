@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.20 2001/12/28 18:02:33 dondosha Exp $ 
+/* $Id: kappa.c,v 6.22 2002/08/20 15:43:08 camacho Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,15 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.20 $
+ $Revision: 6.22 $
 
  $Log: kappa.c,v $
+ Revision 6.22  2002/08/20 15:43:08  camacho
+ Fixed memory leak in getStartFreqRatios
+
+ Revision 6.21  2002/05/23 20:14:21  madden
+ Correction for last checkin to cover SmithWaterman type alignment
+
  Revision 6.20  2001/12/28 18:02:33  dondosha
  Keep score and scoreThisAlign for each local alignment, so as to allow tie-breaking by score
 
@@ -1076,6 +1082,7 @@ static Nlm_FloatHi **getStartFreqRatios(BlastSearchBlkPtr search,
 	     && (startNumerator[i][j] > posEpsilon))
 	   returnRatios[i][j] = startNumerator[i][j]/standardProb[j];
      stdrfp = BlastResFreqDestruct(stdrfp);
+     standardProb = MemFree(standardProb);
    }
 
    else {
@@ -1832,6 +1839,9 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	       MemFree(reverseAlignScript);
 
 	   } while ((XdropAlignScore < score) && (doublingCount < 3));
+	   newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
+	   if (!foundFirstAlignment)
+	     bestScore = newScore;
 	 }
 	 newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
 	 newSW->seq = matchingSequence;

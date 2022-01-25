@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 5/27/97
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbilang.c,v $
+* Revision 6.3  2002/06/13 16:14:07  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
+*
 * Revision 6.2  1999/12/21 17:52:40  kans
 * removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
 *
@@ -69,7 +72,7 @@ static Nlm_LangEnum CheckLanguage(void)
 {
 	Nlm_LangEnum ret = LangUninit;
 
-#ifdef OS_MAC
+#if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
 	long script = GetScriptManagerVariable(smSysScript);
 	long lang = GetScriptVariable((short)script, smScriptLang);
 	switch (lang) {
@@ -81,7 +84,7 @@ static Nlm_LangEnum CheckLanguage(void)
 /*		default:				ret = LangUnknown;	break;	*/
 		default:				ret = LangEnglish;	break;
 	}
-#endif /*OS_MAC*/
+#endif /*OS_MAC && !OS_UNIX_DARWIN*/
 
 #ifdef WIN16
 	Nlm_Char lang [64];

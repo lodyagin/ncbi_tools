@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.46 $
+* $Revision: 6.50 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,20 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.50  2002/07/09 15:20:19  lavr
+* Call CONNECT_Init(0) in initialization sequence
+*
+* Revision 6.49  2002/06/13 16:15:13  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
+*
+* Revision 6.48  2002/05/07 16:50:14  bazhin
+* Changes in Nlm_SetWindowConfigureCallback().
+*
+* Revision 6.47  2002/04/30 18:25:12  bazhin
+* Added function "Nlm_SetWindowConfigureCallback(WindoW w)", which
+* allows to catch events, when window just moved without resizing.
+* Fixed some "gcc -Wall -ansi" warnings.
+*
 * Revision 6.46  2002/03/28 13:30:28  kans
 * check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
 *
@@ -587,6 +601,8 @@
 #include <vibtypes.h>
 #include <vibprocs.h>
 #include <vibincld.h>
+
+#include <connect/ncbi_core_c.h>
 
 #ifdef WIN_MAC
 #include <Appearance.h>
@@ -1522,7 +1538,6 @@ extern void Nlm_SetColorMap (Nlm_WindoW w, Nlm_Uint2 totalColors,
         unsigned long  plane_m[1];
         unsigned long  pixels[256];
         int defaultdepth;
-        Boolean testvisual;
 
         defaultdepth = DefaultDepth(Nlm_currentXDisplay,
                   DefaultScreen(Nlm_currentXDisplay));
@@ -4177,8 +4192,9 @@ static Nlm_Boolean Nlm_FloatingClick (Nlm_GraphiC w, Nlm_PoinT pt)
   return TRUE;
 }
 
-// 2001-03-22:  Joshua Juran
-// SystemClick() is not supported in Carbon.  It's unnecessary.
+/* 2001-03-22:  Joshua Juran
+ * SystemClick() is not supported in Carbon.  It's unnecessary.
+ */
 #if TARGET_API_MAC_CARBON
 # define SystemClick(event, window)
 #endif
@@ -5387,13 +5403,15 @@ static void Nlm_HandleEvent (void)
           // Resume
 #if !TARGET_API_MAC_CARBON
           if (Nlm_currentEvent.message & convertClipboardFlag) {
-            // 2001-05-14:  JDJ
-            // We always convert the clipboard.
-            // If it turns out that pasting is noticeably slow, I'll change it.
+            /* 2001-05-14:  JDJ
+             * We always convert the clipboard.
+             * If it turns out that pasting is noticeably slow, I'll change it.
+             */
           }
 #endif
         } else {
-          // Suspend
+          /* Suspend
+           */
         }
       } else if (mess == mouseMovedMessage) {
         if (mouseMovedAction != NULL) {
@@ -5411,8 +5429,9 @@ static void Nlm_HandleEvent (void)
         Nlm_DoDeactivate ((Nlm_GraphiC) Nlm_theWindow, FALSE);
       }
       break;
-// 2001-03-22:  Joshua Juran
-// Carbon doesn't support DIBadMount() and will not send diskEvt in the first place.
+/* 2001-03-22:  Joshua Juran
+ * Carbon doesn't support DIBadMount() and will not send diskEvt in the first place.
+ */
 #if !TARGET_API_MAC_CARBON
     case diskEvt:
       if (HiWord (Nlm_currentEvent.message) != 0) {
@@ -6289,7 +6308,8 @@ static void Nlm_GetReady (void)
 {
 /* p_churchill removed conditional compilation for Think C and MPW 12/99
  */
-#ifdef OS_MAC
+/* #ifdef OS_MAC */
+#ifdef WIN_MAC
   KeyMap  keys;
 
   GetKeys (keys);
@@ -6363,10 +6383,19 @@ static void Nlm_CleanUpWindows (void)
 }
 
 #ifdef WIN_MAC
+#ifdef OS_UNIX_DARWIN
+int main (int argc, char *argv[]) 
+{
+  long gval;
+  OSErr  err;
+
+  Nlm_SetupArguments (argc, argv);
+# else /* ! OS_UNIX_DARWIN */
 void main ()
 {
   long gval;
   OSErr  err;
+# endif
 
 #if __profile__
   ProfilerInit (collectDetailed, bestTimeBase, 1000, 50);
@@ -6381,7 +6410,8 @@ void main ()
   // Universal Interfaces 3.3.2 declares MoreMasters(void) under Carbon.
   MoreMasterPointers(1280);
   FlushEvents (everyEvent, 0);
-  // the rest of the toolbox is done for us can't init them...
+  /* the rest of the toolbox is done for us can't init them...
+   */
 #else
   MaxApplZone ();
   if (1) {
@@ -6449,11 +6479,17 @@ void main ()
   Nlm_RegisterWindows ();
   Nlm_RegisterTexts ();
   Nlm_RegisterSlates ();
+#ifndef OS_UNIX_DARWIN
   Nlm_SetupArguments(0, NULL);
+#endif
   Nlm_GetReady ();
 
-  // There is no need to initialize the TE private scrap because
-  // we never assume it's current.
+  /* Initialize connection library's logger, registry and lock */
+  CONNECT_Init(0);
+
+  /* There is no need to initialize the TE private scrap because
+   * we never assume it's current.
+   */
 
   Nlm_Main ();
 
@@ -6537,6 +6573,9 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   ParseSetupArguments(Nlm_currentHInst, StringSave(lpszCmdLine));
   Nlm_GetReady ();
+
+  /* Initialize connection library's logger, registry and lock */
+  CONNECT_Init(0);
 
   Nlm_Main ();
 
@@ -6632,6 +6671,10 @@ main (int argc, char *argv[])
   Nlm_RegisterSlates ();
 
   Nlm_GetReady ();
+
+  /* Initialize connection library's logger, registry and lock */
+  CONNECT_Init(0);
+
   retval = Nlm_Main ();
 
   Nlm_CleanUpWindows ();
@@ -7191,7 +7234,7 @@ extern Nlm_Boolean Nlm_QuittingProgram (void)
 extern void Nlm_UnloadSegment (Nlm_VoidProc routineAddr)
 
 {
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && !defined(OS_UNIX_DARWIN)
   if (routineAddr != NULL) {
     UnloadSeg ((void *) routineAddr);
   }
@@ -8044,3 +8087,85 @@ extern void Nlm_InitWindows (void)
   systemProcs->linkIn = Nlm_LinkIn;
 }
 
+#ifdef WIN_MOTIF
+/**********************************************************/
+static void WindowStructFocusCallbackEx(Widget wd, XtPointer client_data,
+                                        XEvent *event, Boolean *contin)
+{
+    Nlm_WindowData wdata;
+    Nlm_RectTool   rtool;
+    Nlm_WindoW     w;
+    Nlm_RecT       r;
+    Window         xw;
+    Window         root;
+    Window         parent;
+    Window         child;
+    Window         *children = NULL;
+    unsigned int   nchildren;
+    int            x;
+    int            y;
+
+    if(event->type != ConfigureNotify)
+    {
+        WindowStructFocusCallback(wd, client_data, event, contin);
+        return;
+    }
+
+    XSetErrorHandler(ignoreXerror_handler);
+    for(xw = XtWindow(wd); xw; xw = parent)
+    {
+        if(!XQueryTree(Nlm_currentXDisplay, xw, &root, &parent, &children,
+                       &nchildren) || root == parent)
+            break;
+        XFree((char *) children);
+        children = NULL;
+    }
+    XSetErrorHandler(defaultXerror_handler);
+    if(children != NULL)
+        XFree((char *) children);
+
+    if(root != parent)
+        return;
+
+    w = (Nlm_WindoW) client_data;
+
+    XTranslateCoordinates(Nlm_currentXDisplay, xw, root, (Position) 0,
+                          (Position) 0, &x, &y, &child);
+
+    rtool.x = x;
+    rtool.y = y;
+    rtool.width = event->xconfigure.width;
+    rtool.height = event->xconfigure.height;
+    if(Nlm_GetWindowMenuBar(w) != NULL)
+        rtool.height -= Nlm_internalMenuBarHeight;
+
+    Nlm_RectToolToRecT(&rtool, &r);
+    Nlm_SetRect((Nlm_GraphiC) w, &r);
+    Nlm_GetWindowData(w, &wdata);
+
+    if(wdata.resize != NULL && Nlm_WindowHasBeenShown(w) &&
+       Nlm_GetVisible((Nlm_GraphiC) w))
+    {
+        wdata.resize(w);
+    }
+}
+
+#endif
+
+/**********************************************************/
+extern void Nlm_SetWindowConfigureCallback(Nlm_WindoW w)
+{
+#ifdef WIN_MOTIF
+    Widget wd;
+
+    if(w == NULL)
+        return;
+
+    wd = (Widget) Nlm_GetWindowShell(w);
+    XtRemoveEventHandler(wd, (StructureNotifyMask | FocusChangeMask), FALSE,
+                         WindowStructFocusCallback, (XtPointer) w);
+    XtAddEventHandler(wd, (StructureNotifyMask | FocusChangeMask), FALSE,
+                      WindowStructFocusCallbackEx, (XtPointer) w);
+#endif
+    return;
+}

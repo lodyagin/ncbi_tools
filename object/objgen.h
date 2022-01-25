@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objgen.h,v $
+* Revision 6.11  2002/07/22 20:02:16  kans
+* document person-id.consortium choice
+*
+* Revision 6.10  2002/05/08 18:57:24  kans
+* itemID is Uint4
+*
 * Revision 6.9  2000/01/20 17:04:27  beloslyu
 * new function DateClean to properly clean the date was added
 *
@@ -107,11 +113,11 @@ extern "C" {
 
 #define EXTRA_OBJMGR_FIELDS \
   Uint2             entityID;   \
-  Uint2             itemID;     \
   Uint2             itemtype;   \
   Uint1             subtype;    \
   Uint1             deleteme;   \
   Uint2             parenttype; \
+  Uint4             itemID;     \
   Pointer           parentptr;  \
   Pointer PNTR      prevlink;
 
@@ -264,6 +270,7 @@ NLM_EXTERN Boolean    LIBCALL NameStdAsnWrite PROTO((NameStdPtr nsp, AsnIoPtr ai
 *              2 = name
 *              3 = ml
 *              4 = str
+*              5 = consortium
 *
 *****************************************************************************/
 typedef struct personid {

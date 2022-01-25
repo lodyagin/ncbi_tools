@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
@@ -1614,6 +1614,7 @@ static void DoTranslateProtein (CdRgnFormPtr cfp)
           }
           bsp = BioseqNew ();
           if (bsp != NULL) {
+            bsp->id = SeqIdParse ("lcl|CdRgnTransl");
             bsp->repr = Seq_repr_raw;
             bsp->mol = Seq_mol_aa;
             bsp->seq_data_type = Seq_code_ncbieaa;
@@ -3193,6 +3194,7 @@ typedef struct genepage {
   TexT          allele;
   TexT          desc;
   TexT          maploc;
+  TexT          locus_tag;
   ButtoN        pseudo;
   DialoG        db;
   DialoG        syn;
@@ -3221,6 +3223,7 @@ static void GeneRefPtrToGenePage (DialoG d, Pointer data)
       SafeSetTitle (gpp->allele, grp->allele);
       SafeSetTitle (gpp->desc, grp->desc);
       SafeSetTitle (gpp->maploc, grp->maploc);
+      SafeSetTitle (gpp->locus_tag, grp->locus_tag);
       SafeSetStatus (gpp->pseudo, grp->pseudo);
       PointerToDialog (gpp->db, grp->db);
       PointerToDialog (gpp->syn, grp->syn);
@@ -3229,6 +3232,7 @@ static void GeneRefPtrToGenePage (DialoG d, Pointer data)
       SafeSetTitle (gpp->allele, "");
       SafeSetTitle (gpp->desc, "");
       SafeSetTitle (gpp->maploc, "");
+      SafeSetTitle (gpp->locus_tag, "");
       SafeSetStatus (gpp->pseudo, FALSE);
       PointerToDialog (gpp->db, NULL);
       PointerToDialog (gpp->syn, NULL);
@@ -3251,6 +3255,7 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
       grp->allele = SaveStringFromText (gpp->allele);
       grp->desc = SaveStringFromText (gpp->desc);
       grp->maploc = SaveStringFromText (gpp->maploc);
+      grp->locus_tag = SaveStringFromText (gpp->locus_tag);
       grp->pseudo = GetStatus (gpp->pseudo);
       grp->db = DialogToPointer (gpp->db);
       grp->syn = DialogToPointer (gpp->syn);
@@ -3346,6 +3351,8 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp)
     gpp->desc = DialogText (f, "", 15, NULL);
     StaticPrompt (f, "Map Location", 0, dialogTextHeight, programFont, 'l');
     gpp->maploc = DialogText (f, "", 15, NULL);
+    StaticPrompt (f, "Locus Tag", 0, dialogTextHeight, programFont, 'l');
+    gpp->locus_tag = DialogText (f, "", 15, NULL);
 
     gpp->pseudo = CheckBox (gpp->geneGrp [0], "PseudoGene", NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) f, (HANDLE) gpp->pseudo, NULL);

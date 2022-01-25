@@ -35,7 +35,7 @@ on SimpleProjectData(projName, features)
 		set projName to characters 1 through 18 of projName as string
 	end if
 	
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		if features does not contain "C" and features does not contain "C++" then
 			--error "Project " & projName & "'s default language (a feature) must be C or C++."
@@ -58,14 +58,14 @@ on AddSimpleProject(projName, features)
 end AddSimpleProject
 
 on SetProjectData()
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		-- Entrez
 		set myName to "Entrez"
 		set myFeatures to {"sockets", "BNDL"}
 		set mySettings to {Prefix File:"net.pfx", ppcProject:{File Creator:"ENTZ"}}
 		set myRsrcs to {"entrez.r"}
-		set myLibs to {"mitsock", "ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", ¬
+		set myLibs to {"mitsock", "ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", ¬
 			"ncbitool", "netcli", "netentr", "ncbibls3", "ncbiid1", "vibnet"}
 		set myFiles to ¬
 			{{projPath:"cdromlib:", fileList:{"accentr", "accutils"}}, ¬
@@ -94,7 +94,7 @@ on SetProjectData()
 				{File Creator:"SEQN", Preferred Size:32000, Minimum Size:6000}}
 		set myRsrcs to {"sequin.r"}
 		set myLibs to {"mitsock", "ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", ¬
-			"ncbimmdb", "ncbicn3d", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbimla", ¬
+			"ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbimla", ¬
 			"ncbitxc2", "ncbiid1", "vibnet"}
 		set myFiles to ¬
 			{{projPath:"cdromlib:", fileList:{"accentr", "accutils"}}, ¬
@@ -107,11 +107,11 @@ on SetProjectData()
 		-- BlastCL3
 		set myName to "blastcl3"
 		set myFeatures to {"sockets", "BNDL"}
-		set mySettings to {Prefix File:"", ppcProject:{}}
+		set mySettings to {Prefix File:"blastcl3.pfx", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r"}
 		set myLibs to {"mitsock", "ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3"}
 		set myFiles to ¬
-			{{projPath:"network:blast3:client:", fileList:{"blastcl3"}}}
+			{{projPath:"demo:", fileList:{"blastall"}}}
 		set blastcl3Data to ¬
 			{name:myName, features:myFeatures, settings:mySettings, rsrcs:myRsrcs, projLibs:¬
 				myLibs, fileData:myFiles}
@@ -156,6 +156,7 @@ global gPPCLibs
 global gMSLPPCLibs
 
 global gDistribRoot
+global gAccessRoot
 
 global gProjectsDir
 global gSourceDir
@@ -163,6 +164,10 @@ global gIncludeDir
 global gLibsDir
 global gRsrcsDir
 global gOutputDir
+global gSourcePath
+global gIncludePath
+global gLibsPath
+global gRsrcsPath
 
 global gProjectData
 
@@ -199,7 +204,14 @@ on HomeDir()
 	tell application "Finder"
 		
 		if my IsOSX() then
-			return the home as string
+			-- return the home as string
+			set hm to home as string
+			set wd to words of hm
+			set rs to rest of wd
+			set text item delimiters of AppleScript to ":"
+			set nw to (rs as string) & ":"
+			set text item delimiters of AppleScript to ""
+			return nw
 		else
 			return gStartupDisk
 		end if
@@ -213,7 +225,7 @@ on CToolkitRoot()
 		set modRoot to ResolveAlias(gMWroot & "ncbi")
 	on error
 		try
-			set modRoot to ResolveAlias(gHomeDir & "ncbi")
+			set modRoot to ResolveAlias(gStartupDisk & gHomeDir & "ncbi")
 		end try
 	end try
 	
@@ -227,7 +239,7 @@ on CPlusPlusToolkitRoot()
 		set modRoot to ResolveAlias(gMWroot & "cxx")
 	on error
 		try
-			set modRoot to ResolveAlias(gHomeDir & "cxx")
+			set modRoot to ResolveAlias(gStartupDisk & gHomeDir & "cxx")
 		end try
 	end try
 	
@@ -245,12 +257,25 @@ on ModuleRoot()
 	
 end ModuleRoot
 
+on AccessRoot()
+	if my IsOSX() then
+		set wd to words of gDistribRoot
+		set rs to rest of wd
+		set text item delimiters of AppleScript to ":"
+		set nw to (rs as string) & ":"
+		set text item delimiters of AppleScript to ""
+		return nw
+	else
+		return gDistribRoot
+	end if
+end AccessRoot
+
 on MWRootDir()
 	
 	set mwRoot to ""
 	set mwLocations to {gStartupDisk, gStartupDisk & "Applications:", gStartupDisk & "Applications (Mac OS 9):", ¬
-		gHomeDir, gHomeDir & "Applications:", gHomeDir & "Applications (Mac OS 9):"}
-	repeat with mwVersion from 6 to 7
+		gStartupDisk & gHomeDir, gStartupDisk & gHomeDir & "Applications:", gStartupDisk & gHomeDir & "Applications (Mac OS 9):"}
+	repeat with mwVersion from 8 to 9
 		set dirName to "Metrowerks CodeWarrior " & mwVersion & ".0"
 		repeat with mwLoc in mwLocations
 			try
@@ -279,8 +304,10 @@ on SetGlobals()
 		set gMSLPPCLibs to gMWCWfolder & "MSL:MSL_C:MSL_MacOS:Lib:PPC:"
 		
 		set gDistribRoot to my ModuleRoot()
+		set gAccessRoot to my AccessRoot()
 		
 		set gIncludeDir to gDistribRoot & "include:"
+		set gIncludePath to gAccessRoot & "include:"
 		if pUsingCPlusPlus then
 			set gSourceDir to gDistribRoot & "src:"
 			set gLibsDir to gDistribRoot & "compilers:mac_prj:lib:"
@@ -291,6 +318,10 @@ on SetGlobals()
 			set gLibsDir to gDistribRoot & "lib:"
 			set gOutputDir to gDistribRoot & "build:"
 			set gRsrcsDir to gDistribRoot & "link:macmet:"
+			set gSourcePath to gAccessRoot
+			set gLibsPath to gAccessRoot & "lib:"
+			set gOutputPath to gAccessRoot & "build:"
+			set gRsrcsPath to gAccessRoot & "link:macmet:"
 		end if
 		
 		if pLinkExecutables then
@@ -303,7 +334,7 @@ on SetGlobals()
 end SetGlobals
 
 on SetDebugSettings(shouldDebug, shouldProfile)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		if shouldDebug then
 			(* ===== Panel PPC Global Optimizer =====  *)
@@ -346,7 +377,7 @@ on SetDebugSettings(shouldDebug, shouldProfile)
 end SetDebugSettings
 
 on SetPreferences()
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		(* ===== Section "Target" ===== *)
 		
@@ -411,7 +442,7 @@ on SetPreferences()
 		-- Panel "PPC Linker"
 		Set Preferences of panel "PPC Linker" to ¬
 			{Generate SYM File:true ¬
-				, Full Path In Sym Files:true ¬
+				, Full Path In SYM Files:true ¬
 				, Generate Link Map:false ¬
 				, Link Mode:fast ¬
 				, Initialization Name:¬
@@ -441,7 +472,7 @@ on SetPreferences()
 end SetPreferences
 
 on SetPaths1()
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -455,22 +486,22 @@ on SetPaths1()
 end SetPaths1
 
 on SetPaths2()
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		-- Add recursive include dir AFTER source dirs to avoid major performance hit
 		set pathsToAdd to {}
 		-- gDistribRoot & "link:macmet:", 
-		repeat with i in {gDistribRoot, gLibsDir, gIncludeDir}
+		repeat with i in {gAccessRoot, gLibsPath, gIncludePath}
 			copy {name:i, recursive:false, origin:absolute} to end of pathsToAdd
 		end repeat
 		if not pUsingCPlusPlus then
-			copy {name:gDistribRoot & "link:macmet:", recursive:true, origin:absolute} to end of pathsToAdd
+			copy {name:gAccessRoot & "link:macmet:", recursive:true, origin:absolute} to end of pathsToAdd
 		end if
 		Set Preferences of panel "Access Paths" to {User Paths:pathsToAdd}
 		
-		set pathsToAdd to {{name:gIncludeDir, recursive:true, origin:absolute}}
+		set pathsToAdd to {{name:gIncludePath, recursive:true, origin:absolute}}
 		if not pUsingCPlusPlus then
-			copy {name:gDistribRoot, recursive:true, origin:absolute} to end of pathsToAdd
+			copy {name:gAccessRoot, recursive:true, origin:absolute} to end of pathsToAdd
 		end if
 		
 		-- After we have added all paths, reinsert compiler default at end of list
@@ -488,7 +519,7 @@ on SetPaths2()
 end SetPaths2
 
 on SetWeakLink(libName)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		set the weak link of ¬
 			every target file of target (count targets of project document 1) of project document 1 ¬
@@ -499,7 +530,7 @@ on SetWeakLink(libName)
 end SetWeakLink
 
 on AddBlueLibs(shouldProfile)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		set libsToAdd to {¬
 			gMSLPPCLibs & "MSL C.PPC.Lib", ¬
@@ -533,7 +564,7 @@ on AddBlueLibs(shouldProfile)
 end AddBlueLibs
 
 on AddCarbonLibs(shouldProfile)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		set libsToAdd to {¬
 			gMSLPPCLibs & "MSL C.Carbon.Lib", ¬
@@ -557,7 +588,7 @@ on AddCarbonLibs(shouldProfile)
 end AddCarbonLibs
 
 on AddFeatures(features, flags)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		if features contains "BNDL" then
 			Set Preferences of panel "Output Flags" to {Has Bundle:true}
@@ -580,7 +611,7 @@ on AddFeatures(features, flags)
 end AddFeatures
 
 on SetupTarget(proj, flags)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		-- initialize variables
 		set projRsrcs to {}
@@ -676,7 +707,7 @@ on SetupTarget(proj, flags)
 		repeat with group in projFileData
 			set projPath to projPath of group
 			Set Preferences of panel "Access Paths" to ¬
-				{User Paths:{{name:gSourceDir & projPath, origin:absolute}}}
+				{User Paths:{{name:gSourcePath & projPath, origin:absolute}}}
 			set fileList to group's fileList
 			set filesToAdd to {}
 			repeat with i in fileList
@@ -758,7 +789,7 @@ on CreateFolders()
 end CreateFolders
 
 on CreateProject(proj)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		
 		-- This statement doesn't work, because AppleScript is broken.
 		if proj is {} then return
@@ -821,7 +852,7 @@ on CreateAllProjects()
 end CreateAllProjects
 
 on BuildProject(projName)
-	tell application "CodeWarrior IDE 4.2.6"
+	tell application "CodeWarrior IDE"
 		open (gProjectsDir & projName & pProjectFileExtension)
 		repeat with i from 2 to (count targets of project document 1)
 			set the current target of project document 1 to target i of project document 1
@@ -874,7 +905,7 @@ with timeout of 60000 seconds
 	
 	CreateFolders()
 	
-	tell application "CodeWarrior IDE 4.2.6" to activate
+	tell application "CodeWarrior IDE" to activate
 	
 	CreateAllProjects()
 	

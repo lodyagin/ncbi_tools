@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -2651,6 +2651,7 @@ NLM_EXTERN GeneRefPtr LIBCALL GeneRefFree (GeneRefPtr grp)
         MemFree(anp);
         anp = next;
     }
+    MemFree (grp->locus_tag);
     return (GeneRefPtr)MemFree(grp);
 }
 
@@ -2699,6 +2700,8 @@ NLM_EXTERN GeneRefPtr LIBCALL GeneRefDup (GeneRefPtr grp)
         vnp->data.ptrvalue = (Pointer)StringSave((CharPtr)anp->data.ptrvalue);
         anp = anp->next;
     }
+	if (grp->locus_tag != NULL)
+		ngp->locus_tag = StringSave(grp->locus_tag);
     return ngp;
 }
 
@@ -2785,6 +2788,11 @@ NLM_EXTERN Boolean LIBCALL GeneRefAsnWrite (GeneRefPtr grp, AsnIoPtr aip, AsnTyp
         }
         if (! AsnCloseStruct(aip, GENE_REF_syn, (Pointer)grp->syn))
             goto erret;
+    }
+    if (grp->locus_tag != NULL)
+    {
+        av.ptrvalue = grp->locus_tag;
+        if (! AsnWrite(aip, GENE_REF_locus_tag, &av)) goto erret;
     }
     if (! AsnCloseStruct(aip, atp, (Pointer)grp))
         goto erret;
@@ -2880,6 +2888,8 @@ NLM_EXTERN GeneRefPtr LIBCALL GeneRefAsnRead (AsnIoPtr aip, AsnTypePtr orig)
                 goto erret;
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;  /* end SET OF */
         }
+        else if (atp == GENE_REF_locus_tag)
+            grp->locus_tag = (CharPtr)av.ptrvalue;
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 ret:

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,10 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.11  2002/05/20 23:13:39  ivanov
+* Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
+* buffers reserved room
+*
 * Revision 6.10  2001/10/11 14:39:08  ostell
 * added support for XMLModulePrefix
 *
@@ -299,7 +303,8 @@ NLM_EXTERN AsnIoPtr LIBCALL AsnIoFree (AsnIoPtr aip, Boolean close_file)
     MemFree(aip->first);
 	MemFree(aip->typestack);
     MemFree(aip->buf);
-	MemFree(aip->fname);
+	if (aip->fname != NULL)
+       MemFree(aip->fname);
 	AsnIoOptionFree(aip, 0, 0);
 	AsnExpOptFree(aip, NULL);
 	MemFree(aip);
@@ -545,11 +550,11 @@ NLM_EXTERN void AsnIoPuts (AsnIoPtr aip)
 
 	aip->linepos = 0;
 
-    if ((aip->bytes - aip->offset) > (aip->linelength + 20))  /* room left */
+    if ((aip->bytes - aip->offset) > (aip->linelength + ASNIO_BUFSIZE_RESERVE)) /* room left */
         aip->linebuf = (CharPtr)aip->buf + aip->offset;
     else
     {
-        AsnIoWriteBlock(aip);    /* write it out */
+        AsnIoWriteBlock(aip);               /* write it out       */
         aip->linebuf = (CharPtr)aip->buf;   /* reset line pointer */
     }
 

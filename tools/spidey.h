@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.16  2002/06/27 11:53:33  wheelan
+* additions to structures to support off-by-one bug fixes and printing of the cds length
+*
+* Revision 6.15  2002/05/07 18:42:53  wheelan
+* changes to support user-defined splice matrices
+*
 * Revision 6.14  2002/04/16 17:54:03  wheelan
 * increased XLINTRON sizes
 *
@@ -104,6 +110,12 @@ extern "C" {
 #define SPI_GAPOPEN  10
 #define SPI_GAPEXTEND  3
 #define SPI_PENALTY   -5
+
+#define SPI_MINBADEXON  6
+#define SPI_MAXBADEXON  11
+#define SPI_BADEXONTHRESH  40
+
+#define SPI_MAXSEQPORT  20000
 
 #define SPI_SPLICETHRESH  0.0001
 
@@ -267,6 +279,7 @@ typedef struct spi_reginfo {
    Int4         gstop;
    Int4         mstart;
    Int4         mstop;
+   Int4         mlen;
    Uint1        strand;
    SPI_mRNAPtr  smp;
    Int4         coverage;
@@ -379,6 +392,14 @@ typedef struct spi_progress {
 
 typedef Boolean (LIBCALLBACK *SPI_ProgressCallback)(SPI_ProgressPtr progress);
 
+typedef struct spi_spliceinfo {
+   FloatHi  a;
+   FloatHi  c;
+   FloatHi  g;
+   FloatHi  t;
+   struct spi_spliceinfo PNTR next;
+} SPI_SpliceInfo, PNTR SPI_SpliceInfoPtr;
+
 typedef struct spi_options {
    FloatHi               firstpasseval;
    FloatHi               secpasseval;
@@ -403,6 +424,10 @@ typedef struct spi_options {
    Boolean               bigintron;
    Uint1                 strand; /* to restrict the search to one genomic strand */
    Boolean               revcomp;
+   Int4                  dsplicejunc;
+   SPI_SpliceInfoPtr     dssp_head;
+   Int4                  asplicejunc;
+   SPI_SpliceInfoPtr     assp_head;
 } SPI_Options, PNTR SPI_OptionsPtr;
 
 typedef struct spi_n {

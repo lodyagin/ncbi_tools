@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.16 2002/03/07 19:12:14 bauer Exp $
+/* $Id: cddumper.c,v 1.22 2002/08/06 12:54:25 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.16 $
+* $Revision: 1.22 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,24 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.22  2002/08/06 12:54:25  bauer
+* fixes to accomodate COGs
+*
+* Revision 1.21  2002/07/31 14:58:27  bauer
+* BLAST DB Sequence Retrieval
+*
+* Revision 1.20  2002/07/31 03:21:35  bauer
+* PUBSEQ instead of ID1 access
+*
+* Revision 1.19  2002/06/25 21:25:31  bauer
+* fixed binary ASN.1 reading problem
+*
+* Revision 1.18  2002/05/06 17:16:16  bauer
+* fixed bug in defline processing (conditional prepend of short name)
+*
+* Revision 1.17  2002/05/06 16:58:47  bauer
+* changed default behaviour in tax branch merge
+*
 * Revision 1.16  2002/03/07 19:12:14  bauer
 * major revisions to cgi-bins and the CD-dumper
 *
@@ -97,11 +115,12 @@
 #include <objmime.h>
 #include <taxutil.h>
 #include <txcommon.h>
-#include "objcdd.h"
+#include <objcdd.h>
 #include "cddsrv.h"
-#include "cddutil.h"
+#include <cddutil.h>
+#include <readdb.h>
 
-#define NUMARGS 25
+#define NUMARGS 26
 static Args myargs[NUMARGS] = {
   {"Cd-Accession",                                           /*0*/
    "RHO",      NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
@@ -152,8 +171,12 @@ static Args myargs[NUMARGS] = {
   { "Write out Checkpoint File, Sequence, and Tree File",   /*23*/
     "T",       NULL,NULL,TRUE, 'K',ARG_BOOLEAN,0.0,0,NULL},
   { "Verbose",                                              /*24*/
-    "F",       NULL,NULL,TRUE, 'V',ARG_BOOLEAN,0.0,0,NULL}
+    "F",       NULL,NULL,TRUE, 'V',ARG_BOOLEAN,0.0,0,NULL},
+  { "BLAST Sequence DB retrieval",                          /*25*/
+    "T",       NULL,NULL,TRUE, 'B',ARG_BOOLEAN,0.0,0,NULL}
 };
+
+ReadDBFILEPtr rdfp;
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -328,6 +351,32 @@ static CddSumPtr CddSumLink(CddSumPtr PNTR head, CddSumPtr newnode)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* retrieve a SeqEntry from the BLAST database - or use PUBSEQ if not found  */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static SeqEntryPtr CddumperSeqEntryGet(Int4 uid, Int2 retcode)
+{
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+  SeqEntryPtr sep;
+
+  if (myargs[25].intvalue) {
+    sip = ValNodeAddInt(NULL, SEQID_GI, uid);
+    bsp = CddReadDBGetBioseq(sip, -1, rdfp);
+    if (bsp) {
+      if (bsp->seq_data_type != Seq_code_ncbieaa)
+        BioseqRawConvert(bsp, Seq_code_ncbieaa);
+      sep = SeqEntryNew();
+      sep->choice = 1;
+      sep->data.ptrvalue = bsp;
+      return(sep);
+    }
+  }
+  return PUBSEQSeqEntryGet(uid,retcode);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* Process Sequence Alignment                                                */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -357,7 +406,8 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
     ddp = (DenseDiagPtr) salpHead->segs;
     sip = ddp->id;
     while (sip) {
-      uid = ID1FindSeqId(sip);
+      if (sip->choice == SEQID_GI) uid = sip->data.intvalue;
+      else uid = PUBSEQFindSeqId(sip);
       if (uid) {
         pcdsThis = CddSumNew();
         pcdsThis->uid = uid;
@@ -382,8 +432,8 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
           if (pcdsThis->bIsPdb) nPdb++;
           iCddSize++;
           if (UniqueUid(uid,pcdsThis->bIsPdb,pcds)) {
-            sep = (SeqEntryPtr) ID1SeqEntryGet(uid,retcode);
-            if (sep == NULL) CddSevError("Unable to get MasterSeqEntry from Entrez");
+            sep = (SeqEntryPtr) CddumperSeqEntryGet(uid,retcode);
+            if (sep == NULL) CddSevError("Unable to get MasterSeqEntry from PUBSEQ");
             bspNew = (BioseqPtr) CddExtractBioseq(sep,sip);
 	    if (bTrimBioseq) CddShrinkBioseq(bspNew);
 /*---------------------------------------------------------------------------*/
@@ -425,10 +475,10 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
           iPcount++;
           CddSumFree(pcdsThis);
         } else {
-          sep = (SeqEntryPtr) ID1SeqEntryGet(uid,retcode);
+          sep = (SeqEntryPtr) CddumperSeqEntryGet(uid,retcode);
           if (sep == NULL) {
             if (bVerbose) 
-	      printf("Unable to get SeqEntry %d from ID1, skipping ..\n",uid);
+	      printf("Unable to get SeqEntry %d from PUBSEQ, skipping ..\n",uid);
           } else {
             if (pcdsThis->bIsPdb) nPdb++;
             iCddSize++;
@@ -484,7 +534,7 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
       }
       else {
         if (bVerbose)
-          printf("Warning: %s - could not find uid #%d[%d] in ID1, removed from Cdd\n",
+          printf("Warning: %s - could not find uid #%d[%d] in PUBSEQ, removed from Cdd\n",
 	         cCDDid,iCddSize,sip->data.intvalue);
         sip=sip->next;
         iPcount++;
@@ -700,6 +750,37 @@ static int LIBCALLBACK CompareBlocks(VoidPtr vp1, VoidPtr vp2)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* heapsort wrapper, stolen from utilpub.c, to deal with larger lists        */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CDDVnpHeapSort (ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))	
+
+{
+  Int4 index, total;
+  ValNodePtr vnp1;
+  ValNodePtr PNTR temp;
+
+  if (vnp == NULL  ||  *vnp == NULL)  return;  /* do nothing */
+  total=0;
+  for (vnp1 = *vnp; vnp1; vnp1=vnp1->next) total++;
+  temp = (ValNodePtr PNTR) MemNew(total*sizeof(ValNodePtr));
+  index=0;
+  for (vnp1 = *vnp; vnp1; vnp1=vnp1->next) {
+    temp[index] = vnp1;
+    index++;
+  }
+  HeapSort ((VoidPtr) temp, (size_t) index, sizeof(ValNodePtr), compar);
+  *vnp = temp[0];
+  for (vnp1 = *vnp, index=0; index<(total-1); vnp1=vnp1->next, index++) {
+    vnp1->next = temp[index+1];
+  }
+  vnp1 = temp[total-1];
+  vnp1->next = NULL;
+  temp = MemFree(temp);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* read in an alignment formatted in the "real.ind" style, i.e. in a white-  */
 /* space delimited 6 column format: ID of master, ID of slave, start/stop    */
 /* pairs in master and slave. IDs are gi's, and contain PDB-Ids if structure */
@@ -794,12 +875,12 @@ SeqAlignPtr CddReadRealInd(CharPtr name)
       priThis->aid = 0;
       lastid = 0;
     } else {
+      if (priThis->mgi != priHead->mgi)
+	CddSevError("Inconsistent master-id's in real.ind file!");
       conflict = MemNew((lastid+1)*sizeof(Int4));
       for (i=0;i<=lastid;i++) conflict[i] = 0;  
       priThat = priHead;
       while (priThat != priThis) {
-        if (priThat->mgi != priThis->mgi) 
-	  CddSevError("Inconsistent master-id's in real.ind file!");
         if (priThat->sgi != priThis->sgi) {
           conflict[priThat->aid] = 1;
         } else {
@@ -833,7 +914,7 @@ SeqAlignPtr CddReadRealInd(CharPtr name)
     ValNodeAddPointer(&vnp,0,priThis);
     priThis = priThis->next;
   }
-  VnpHeapSort(&vnp,CompareBlocks);
+  CDDVnpHeapSort(&vnp,CompareBlocks);
   priHead = NULL;
   priTail = NULL;
   while (vnp) {
@@ -1542,6 +1623,12 @@ static Int4 Cdd_tax1_join(Int4 taxid1, Int4 taxid2)
   if (taxid1 <= 1 || taxid2 <=1) return(1);
   txtnpp1 = (TXC_TreeNodePtr *)txc_getLineage(taxid1,&inLineage1);
   txtnpp2 = (TXC_TreeNodePtr *)txc_getLineage(taxid2,&inLineage2);
+/*---------------------------------------------------------------------------*/
+/* kludge to deal with taxonomies extinct in the NCBI tax tree               */  
+/*---------------------------------------------------------------------------*/
+  if (!txtnpp1 && txtnpp2) return (taxid2);
+  if (!txtnpp2 && txtnpp1) return (taxid1);
+
   if (txtnpp1 && txtnpp2 && inLineage1 > 0 && inLineage2 > 0) {
     for (i=0;i<inLineage1;i++) {
       for (j=0;j<inLineage2;j++) {
@@ -1711,11 +1798,18 @@ Int2 Main()
   Boolean                  is_network, bHaveSource = FALSE;
   Char                     CDDref[PATH_MAX];
   Char                     cLink[23]               = "linked to 3D-structure";
-  Char                     pcBuf[100];
+  Char                     pcBuf[100], cTmp[PATH_MAX], checkstring[PATH_MAX];
   Char                     cOutFile[PATH_MAX];
   FILE                    *fp;
   Boolean                  bIsFinished             = FALSE;
   CharPtr                  pch;
+
+/*---------------------------------------------------------------------------*/
+/* Yanli's fix for making binary reading work                                */
+/*---------------------------------------------------------------------------*/
+  objmmdb1AsnLoad();
+  objmmdb2AsnLoad();
+  objmmdb3AsnLoad();
 
 /*---------------------------------------------------------------------------*/
 /* retrieve command-line parameters                                          */
@@ -1726,15 +1820,6 @@ Int2 Main()
 /* retrieve names for directories etc.                                       */
 /*---------------------------------------------------------------------------*/
   if (!CddGetParams()) CddSevError("Couldn't read from config file...");
-
-/*---------------------------------------------------------------------------*/
-/* initialize ID1/Entrez interface - this is needed to retrieve sequences    */
-/*---------------------------------------------------------------------------*/
-  if (!ID1BioseqFetchEnable("cddump",TRUE))
-    CddSevError("Unable to initialize ID1");
-  if (!MMDBInit()) CddSevError("MMDB Initialization failed");
-  if ( !EntrezInit("Cddump", FALSE, &is_network))
-    CddSevError("Unable to start Entrez");
 
 /*---------------------------------------------------------------------------*/
 /* assign CD-Id                                                              */
@@ -1769,8 +1854,17 @@ Int2 Main()
 /* Initialize the data structures needed to collect alignments and sequences */
 /*---------------------------------------------------------------------------*/
   if (iSeqStrMode != CDDUPDATE) {
-    pbsaSeq    = BiostrucAlignSeqNew();
-
+/*---------------------------------------------------------------------------*/
+/* initialize PUBSEQ interface - this is needed to retrieve sequences        */
+/*---------------------------------------------------------------------------*/
+    if (!PUBSEQBioseqFetchEnable("cddump",TRUE))
+      CddSevError("Unable to initialize PUBSEQ");
+    if (myargs[25].intvalue) {
+      if(!(rdfp = readdb_new_ex("nr", READDB_DB_IS_PROT, FALSE)))
+      CddSevError("Readdb init failed");
+    }
+    if (!MMDBInit()) CddSevError("MMDB Initialization failed");
+    pbsaSeq = BiostrucAlignSeqNew();
 /*---------------------------------------------------------------------------*/
 /* read in the ASN.1-formatted sequence alignment corresponding to this CD   */
 /*---------------------------------------------------------------------------*/
@@ -1779,7 +1873,6 @@ Int2 Main()
     } else {
       salpHead = (SeqAlignPtr) CddReadRealInd(myargs[11].strvalue);
     }
-  
 /*---------------------------------------------------------------------------*/
 /* process the Seqalign                                                      */
 /*---------------------------------------------------------------------------*/
@@ -1794,7 +1887,6 @@ Int2 Main()
     } else {
       iSeqStrMode = CDDSEQUONLY;
     }
-
 /*---------------------------------------------------------------------------*/
 /* additional pointers to list of sequences                                  */
 /*---------------------------------------------------------------------------*/
@@ -1805,43 +1897,34 @@ Int2 Main()
       pbsaStruct = BiostrucAlignNew();
       pbsaStruct->sequences = pbsaSeq->sequences;
     }
-
 /*---------------------------------------------------------------------------*/
 /* if more than one structure present, VAST results have to be retrieved     */
 /*---------------------------------------------------------------------------*/
     if (nPdb > 1) {
-      objmmdb1AsnLoad();
-      objmmdb2AsnLoad();
-      objmmdb3AsnLoad();
-      OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
+     OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
 /*---------------------------------------------------------------------------*/
 /* read the information contained in the VAST info file. This is used to     */
 /* figure out which biostruc annot sets have to be retrieved from the VAST   */
 /* data base                                                                 */
 /*---------------------------------------------------------------------------*/
       CddReadVASTInfo(pcds);
-    
 /*---------------------------------------------------------------------------*/
 /* Now identify the feature set id's that go with each structurally aligned  */
 /* slave - these need not be the same                                        */
 /*---------------------------------------------------------------------------*/
       CddIdentifyFsids(pcds);
-
 /*---------------------------------------------------------------------------*/
 /* load the biostruc annot sets (and trim them) for each aligned slave struc.*/
 /*---------------------------------------------------------------------------*/
       CddLoadBSAnnotSets(pcds, &nPdb, &iSeqStrMode, salpHead, pbsaStruct);    
-
       CloseMMDBAPI();
       VASTFini();
     }
 
 /*---------------------------------------------------------------------------*/
-/* Disable ID1 BioseqAccess                                                  */
+/* Disable BioseqAccess                                                      */
 /*---------------------------------------------------------------------------*/
-    ID1BioseqFetchDisable();  
-    EntrezFini();
-
+     if (iSeqStrMode != CDDUPDATE) PUBSEQFini();  
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* allocate the CDD data structure                                           */
@@ -1959,7 +2042,8 @@ Int2 Main()
       }
       if (myargs[22].intvalue) {
         if (Nlm_StrNCmp(pcdd->name,"pfam0",5) == 0 ||
-            Nlm_StrNCmp(pcdd->name,"smart0",6) == 0 || 
+            Nlm_StrNCmp(pcdd->name,"smart0",6) == 0 ||
+	    Nlm_StrNCmp(pcdd->name,"COG",3) == 0 || 
 	    Nlm_StrNCmp(pcdd->name,"LOAD_",5) == 0) {
           vnp = pcdd->description;
           while (vnp) {
@@ -2138,7 +2222,8 @@ Int2 Main()
       vnp = bspTrunc->descr;
       while (vnp) {
         if (vnp->choice == Seq_descr_title) {
-          if (Nlm_StrNCmp(vnp->data.ptrvalue,pcdd->name,Nlm_StrLen(pcdd->name))) {
+	  sprintf(cTmp,"%s,",pcdd->name);
+          if (Nlm_StrNCmp(vnp->data.ptrvalue,cTmp,Nlm_StrLen(cTmp))) {
 	    vnp->data.ptrvalue = CddTitlePrepend(vnp->data.ptrvalue, pcdd->name);
 	  }
           break;      
@@ -2177,8 +2262,10 @@ Int2 Main()
         salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
         pCDeaR = CddExpAlignFree(pCDeaR);
         pCDea = CddExpAlignFree(pCDea);
-        salpTail->next = salpThis;
-        salpTail = salpThis;
+        if (salpThis) {
+          salpTail->next = salpThis;
+          salpTail = salpThis;
+        }
         salpHead = salpHead->next;
       }
       psaCAlignHead->data = salpNew;
@@ -2209,7 +2296,8 @@ Int2 Main()
     vnp = pcdd->trunc_master->descr;
     while (vnp) {
       if (vnp->choice == Seq_descr_title) {
-        if (Nlm_StrNCmp(vnp->data.ptrvalue,pcdd->name,Nlm_StrLen(pcdd->name))) {
+        sprintf(checkstring,"%s, \0",pcdd->name);
+        if (Nlm_StrNCmp(vnp->data.ptrvalue,checkstring,Nlm_StrLen(checkstring))) {
 	  vnp->data.ptrvalue = CddTitlePrepend(vnp->data.ptrvalue, pcdd->name);
 	}
 	pvnId = pcdd->id; while (pvnId) {
@@ -2406,6 +2494,7 @@ Int2 Main()
 /*  pcdd        = (CddPtr) CddFreeCarefully(pcdd); */
   pcddeschead = CddDescFree(pcddeschead);
   pcds        = CddSumFree(pcds);
-  MMDBFini();
+  if (iSeqStrMode != CDDUPDATE) MMDBFini();
+  if (myargs[25].intvalue) rdfp = readdb_destruct(rdfp);
   return 0;
 }

@@ -162,7 +162,7 @@ FeatDefGroupSet ::= {
     molgroup both
   } ,
   {                   -- unclassified impfeat
-    typelabel "Imp" ,
+    typelabel "Import" ,
     menulabel "Unclassified ImpFeat" ,
     featdef-key 14 ,
     seqfeat-key 8 ,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.15 $
+* $Revision: 6.24 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -42,6 +42,7 @@
 #define _ASN2NGNBP_
 
 #include <asn2gnbk.h>
+#include <objgbseq.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -70,6 +71,7 @@ typedef enum {
   SOURCE_BLOCK,
   ORGANISM_BLOCK,
   REFERENCE_BLOCK,
+  PRIMARY_BLOCK,
   COMMENT_BLOCK,
   FEATHEADER_BLOCK,
   SOURCEFEAT_BLOCK,
@@ -79,14 +81,15 @@ typedef enum {
   SEQUENCE_BLOCK,
   CONTIG_BLOCK,
   WGS_BLOCK,
+  GENOME_BLOCK,
   SLASH_BLOCK,
   TAIL_BLOCK
 } BlockType;
 
 #define ASN2GB_BASE_BLOCK \
   Uint2      entityID;  \
-  Uint2      itemID;    \
   Uint2      itemtype;  \
+  Uint4      itemID;    \
   Int4       section;   \
   Int4       paragraph; \
   BlockType  blocktype; \
@@ -135,6 +138,19 @@ typedef struct seq_block {
   Int4  stop;
 } SeqBlock, PNTR SeqBlockPtr;
 
+typedef struct IndxData {
+  CharPtr     locus;
+  CharPtr     accession;
+  CharPtr     version;
+  CharPtr     gi;
+  CharPtr     div;
+  CharPtr     base_cnt;
+  ValNodePtr  authors;
+  ValNodePtr  genes;
+  ValNodePtr  journals;
+  ValNodePtr  keywords;
+  ValNodePtr  secondaries;
+} IndxBlock, PNTR IndxPtr;
 
 /* structure for single segment or pop/phy/mut set component */
 
@@ -155,10 +171,18 @@ typedef struct asn2gb_sect {
   BaseBlockPtr  PNTR blockArray;
   Int4          numBlocks;
 
-  /* referenceks for feature citation matching, serial number assignment */
+  /* references for feature citation matching, serial number assignment */
 
   RefBlockPtr   PNTR referenceArray;
   Int2          numReferences;
+
+  /* index is needed per section -- EY --- */
+
+  IndxBlock     index;
+
+  /* gbseq block is needed per section for GenBank-style XML */
+
+  GBSeq         gbseq;
 
 } Asn2gbSect, PNTR Asn2gbSectPtr;
 
@@ -194,24 +218,14 @@ typedef struct asn2gb_job {
 
 typedef void (*Asn2gbWriteFunc) (CharPtr str, Pointer userdata, BlockType blocktype);
 
-typedef struct IndxData {
-  CharPtr     locus;
-  CharPtr     accession;
-  CharPtr     version;
-  CharPtr     gi;
-  CharPtr     div;
-  ValNodePtr  authors;
-  ValNodePtr  genes;
-  ValNodePtr  journals;
-  ValNodePtr  keywords;
-  ValNodePtr  secondaries;
-} IndxBlock, PNTR IndxPtr;
-
 typedef struct XtraData {
   Asn2gbWriteFunc  ffwrite;
   CharPtr          ffhead;
   CharPtr          fftail;
   IndxPtr          index;
+  GBSeqPtr         gbseq;
+  AsnIoPtr         aip;
+  AsnTypePtr       atp;
   Pointer          userdata;
 } XtraBlock;
 
@@ -240,7 +254,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   StlType style,
   FlgType flags,
   LckType locks,
-  IndxPtr index
+  XtraPtr extra
 );
 
 NLM_EXTERN CharPtr asn2gnbk_format (

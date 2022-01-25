@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -1898,9 +1898,9 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
      }
      if (err_count==0 && svp->msg_success) {
         if (salp_count>1)
-           ans = Message (MSG_OK, "Validation test of %d alignments succeded", salp_count);
+           ans = Message (MSG_OK, "Validation test of %d alignments succeeded", salp_count);
         else
-           ans = Message (MSG_OK, "Validation test of the alignment succeded");
+           ans = Message (MSG_OK, "Validation test of the alignment succeeded");
      }
      if (dirty)
         *dirty = svp->dirty;

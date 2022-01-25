@@ -29,17 +29,31 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.43 $
+* $Revision: 6.49 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date	   Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: objmgr.c,v $
+* Revision 6.49  2002/07/30 14:41:45  kans
+* removed omdp->rearranged
+*
+* Revision 6.48  2002/07/29 21:30:17  kans
+* added rearranged flag to omdp
+*
+* Revision 6.47  2002/07/01 14:29:02  kans
+* changed totobj, currobj to Uint4
+*
+* Revision 6.46  2002/06/07 21:24:57  kans
+* update entityID/omdp index in BioseqReloadFunc, ObjMgrConnectFunc, ObjMgrDetachFunc
+*
+* Revision 6.45  2002/06/01 05:52:00  vakatov
+* Fix to R6.44 -- add LIBCALL and NLM_EXTERN modifiers to match the func proto
+*
+* Revision 6.44  2002/05/31 21:53:26  yaschenk
+* changing lookup by EntityID to array[][]
+*
 * Revision 6.43  2001/12/13 13:59:14  kans
 * ObjMgrSendMsg clears feature indexes if OM_MSG_UPDATE
 *
@@ -293,6 +307,8 @@ static char *this_file = __FILE__;
 #define DEBUG_OBJMGR
 ***/
 
+#define OBJMGR_MAX UINT4_MAX
+
 
 /*****************************************************************************
 *
@@ -453,6 +469,7 @@ extern void ObjMgrRecordOmdpByEntityID (Uint2 entityID, ObjMgrDataPtr omdp)
 		topOMDPs [topIDStackPt] = omdp;
 		topIDStackPt++;
 	}
+	ObjMgrAddIndexOnEntityID(NULL,entityID,omdp);
 }
 
 static ObjMgrDataPtr NEAR ObjMgrFindByEntityID (ObjMgrPtr omp, Uint2 entityID, ObjMgrDataPtr PNTR prev)
@@ -462,6 +479,7 @@ static ObjMgrDataPtr NEAR ObjMgrFindByEntityID (ObjMgrPtr omp, Uint2 entityID, O
 	Int4 i, imax;
 
 	/* check cache first to avoid linear search through all objects */
+	if((omdp=ObjMgrLookupIndexOnEntityID(omp,entityID)) != NULL) return omdp;
 
 	for (i = 0; i < topIDStackPt; i++) {
 		if (entityID == topEntityIDs [i]) {
@@ -1037,10 +1055,10 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrSetHold (void)
 
 	omp = ObjMgrWriteLock();
 
-	if (omp->hold < UINT2_MAX)
+	if (omp->hold < OBJMGR_MAX)
 		omp->hold++;
 	else
-		ErrPostEx(SEV_ERROR,0,0, "ObjMgrSetHold: hold > UINT2_MAX");
+		ErrPostEx(SEV_ERROR,0,0, "ObjMgrSetHold: hold > OBJMGR_MAX");
 	ObjMgrUnlock();
 	return omp->hold;
 }
@@ -1135,10 +1153,10 @@ static Boolean NEAR ObjMgrExtend (ObjMgrPtr omp)
 	for (i = 0; i < NUM_OMD; i++, j++)
 		tmp[j] = &(omdp->data[i]);
 
-	if (omp->totobj < UINT2_MAX - NUM_OMD)
+	if (omp->totobj < OBJMGR_MAX - NUM_OMD)
 		omp->totobj += NUM_OMD;
 	else
-		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrExtend: incrementing totobj above UINT2_MAX");
+		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrExtend: incrementing totobj above OBJMGR_MAX");
 	omp->datalist = tmp;
 
 	result = TRUE;
@@ -1245,10 +1263,10 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 	}
 
 	omdpp[i] = omdp;    /* put in the pointer in order */
-	if (omp->currobj < UINT2_MAX)
+	if (omp->currobj < OBJMGR_MAX)
 		omp->currobj++;     /* got one more */
 	else
-		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrAddFunc: incrementing currobj above UINT2_MAX");
+		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrAddFunc: incrementing currobj above OBJMGR_MAX");
 
 	omdp->dataptr = data;  /* fill in the values */
 	omdp->datatype = type;
@@ -1676,6 +1694,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	if (omdp->EntityID != 0)
 		ObjMgrRecycleEntityID (omdp->EntityID, omp);
 
+	ObjMgrDeleteIndexOnEntityID(omp,omdp->EntityID);
+
 	if (omdp->extradata != NULL && omdp->freeextra != NULL) {
 		omdp->freeextra ((Pointer) omdp);
 	}
@@ -1952,6 +1972,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrConnectFunc (ObjMgrPtr omp, Uint2 type, Pointer
 			(omp->HighestEntityID)--;
 		} */
 		ObjMgrRecycleEntityID (omdp->EntityID, omp);
+		ObjMgrDeleteIndexOnEntityID (omp, omdp->EntityID);
 		omdp->EntityID = 0;   /* reset.. now has a parent */
 	}
 	omdp->parenttype = parenttype;
@@ -2023,6 +2044,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDetachFunc (ObjMgrPtr omp, Uint2 type, Pointer 
 
 	omdp->parenttype = 0;
 	omdp->parentptr = NULL;
+	ObjMgrDeleteIndexOnEntityID (omp, omdp->EntityID);
 	omdp->EntityID = 0;   /* reset.. now has a parent */
 
 	retval = TRUE;
@@ -4790,3 +4812,53 @@ NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename)
   FileClose (fp);
 }
 
+
+NLM_EXTERN void LIBCALL
+ObjMgrAddIndexOnEntityID(ObjMgrPtr omp,Uint2 entityID,ObjMgrDataPtr omdp)
+{
+	Uint1   h,l;
+
+	h=entityID >> 8;
+	l=entityID & 0xff;
+	if(omp==NULL) omp=ObjMgrGet();
+	if(omp){
+		if(!omp->entityID_index){
+			omp->entityID_index=MemNew(256*sizeof(*omp->entityID_index));
+		}
+		if(!omp->entityID_index[h]){
+			omp->entityID_index[h]=MemNew(256*sizeof(**omp->entityID_index));
+		}
+		omp->entityID_index[h][l]=omdp;
+	}
+}
+
+
+NLM_EXTERN void LIBCALL
+ObjMgrDeleteIndexOnEntityID(ObjMgrPtr omp,Uint2 entityID)
+{
+	Uint1   h,l;
+
+        h=entityID >> 8;
+        l=entityID & 0xff;
+	if(omp==NULL) omp=ObjMgrGet();
+	if(omp && omp->entityID_index && omp->entityID_index[h]){
+		omp->entityID_index[h][l]=NULL;
+	}
+
+}
+
+
+NLM_EXTERN ObjMgrDataPtr LIBCALL
+ObjMgrLookupIndexOnEntityID(ObjMgrPtr omp,Uint2 entityID)
+{
+	Uint1   h,l;
+
+        h=entityID >> 8;
+        l=entityID & 0xff;
+	if(omp==NULL) omp=ObjMgrGet();
+	if(omp && omp->entityID_index && omp->entityID_index[h]){
+		return omp->entityID_index[h][l];
+	} else {
+		return NULL;
+	}
+}

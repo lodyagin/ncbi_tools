@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.8  2002/06/27 19:45:39  kans
+* reverted U Selenocysteine addition to iupac
+*
 * Revision 6.6  1999/04/23 12:47:43  madden
 * Use PATH_MAX in SeqCodeSetLoad
 *

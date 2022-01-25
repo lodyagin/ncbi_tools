@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,11 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.21  2002/04/30 18:25:12  bazhin
+* Added function "Nlm_SetWindowConfigureCallback(WindoW w)", which
+* allows to catch events, when window just moved without resizing.
+* Fixed some "gcc -Wall -ansi" warnings.
+*
 * Revision 6.20  2002/01/09 15:23:54  kans
 * added HasAquaMenuLayout
 *
@@ -327,6 +332,8 @@ void        Nlm_SetColorCell PROTO((Nlm_GraphiC w, Nlm_Uint1 pixel,
 
 void        Nlm_SetWindowExtra PROTO((Nlm_WindoW w, Nlm_VoidPtr data, Nlm_WndFreeProc cleanup));
 Nlm_VoidPtr Nlm_GetWindowExtra PROTO((Nlm_WindoW w));
+
+void        Nlm_SetWindowConfigureCallback PROTO((Nlm_WindoW w));
 
 /***  GROUPING OBJECT  ***/
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.22  2002/06/13 16:14:07  kans
+* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
+*
 * Revision 6.21  2001/04/05 03:03:28  juran
 * Defined our own C2PStr() and P2Cstr() for use with Carbon (which omits them).
 *
@@ -1116,7 +1119,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL NodeListDelete (ValNodePtr head, Nlm_Int2 item)
 *
 *****************************************************************************/
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
 
 // 2001-03-22:  Joshua Juran
 // C2PStr() and P2CStr() do not exist in Carbon, so we roll our own.

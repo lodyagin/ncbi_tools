@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.10 at May 3, 2001  1:46 PM
+*    Generated using ASNCODE Revision: 6.14 at Jul 12, 2002  2:02 PM
 *
 **************************************************/
 
@@ -31,6 +31,7 @@ bxmlobjAsnLoad PROTO((void));
 *
 **************************************************/
 typedef struct struct_BlastOutput {
+   Uint4 OBbits__;
    CharPtr   program;
    CharPtr   version;
    CharPtr   reference;
@@ -41,6 +42,7 @@ typedef struct struct_BlastOutput {
    CharPtr   query_seq;
    struct struct_Parameters PNTR   param;
    struct struct_Iteration PNTR   iterations;
+   struct struct_Statistics PNTR   mbstat;
 } BlastOutput, PNTR BlastOutputPtr;
 
 
@@ -57,10 +59,17 @@ NLM_EXTERN Boolean LIBCALL BlastOutputAsnWrite PROTO (( BlastOutputPtr , AsnIoPt
 *
 **************************************************/
 typedef struct struct_Parameters {
+   Uint4 OBbits__;
    CharPtr   matrix;
    FloatHi   expect;
+#define OB__Parameters_include 0
+
    FloatHi   include;
+#define OB__Parameters_sc_match 1
+
    Int4   sc_match;
+#define OB__Parameters_sc_mismatch 2
+
    Int4   sc_mismatch;
    Int4   gap_open;
    Int4   gap_extend;
@@ -84,7 +93,13 @@ NLM_EXTERN Boolean LIBCALL ParametersAsnWrite PROTO (( ParametersPtr , AsnIoPtr,
 **************************************************/
 typedef struct struct_Iteration {
    struct struct_Iteration PNTR next;
+   Uint4 OBbits__;
    Int4   iter_num;
+   CharPtr   query_ID;
+   CharPtr   query_def;
+#define OB__Iteration_query_len 0
+
+   Int4   query_len;
    struct struct_Hit PNTR   hits;
    struct struct_Statistics PNTR   stat;
    CharPtr   message;
@@ -100,33 +115,11 @@ NLM_EXTERN Boolean LIBCALL IterationAsnWrite PROTO (( IterationPtr , AsnIoPtr, A
 
 /**************************************************
 *
-*    Hit
-*
-**************************************************/
-typedef struct struct_Hit {
-   struct struct_Hit PNTR next;
-   Int4   num;
-   CharPtr   id;
-   CharPtr   def;
-   CharPtr   accession;
-   Int4   len;
-   struct struct_Hsp PNTR   hsps;
-} Hit, PNTR HitPtr;
-
-
-NLM_EXTERN HitPtr LIBCALL HitFree PROTO ((HitPtr ));
-NLM_EXTERN HitPtr LIBCALL HitNew PROTO (( void ));
-NLM_EXTERN HitPtr LIBCALL HitAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL HitAsnWrite PROTO (( HitPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
 *    Statistics
 *
 **************************************************/
 typedef struct struct_Statistics {
+   Uint4 OBbits__;
    Int4   db_num;
    Int4   db_len;
    Int4   hsp_len;
@@ -146,11 +139,36 @@ NLM_EXTERN Boolean LIBCALL StatisticsAsnWrite PROTO (( StatisticsPtr , AsnIoPtr,
 
 /**************************************************
 *
+*    Hit
+*
+**************************************************/
+typedef struct struct_Hit {
+   struct struct_Hit PNTR next;
+   Uint4 OBbits__;
+   Int4   num;
+   CharPtr   id;
+   CharPtr   def;
+   CharPtr   accession;
+   Int4   len;
+   struct struct_Hsp PNTR   hsps;
+} Hit, PNTR HitPtr;
+
+
+NLM_EXTERN HitPtr LIBCALL HitFree PROTO ((HitPtr ));
+NLM_EXTERN HitPtr LIBCALL HitNew PROTO (( void ));
+NLM_EXTERN HitPtr LIBCALL HitAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL HitAsnWrite PROTO (( HitPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    Hsp
 *
 **************************************************/
 typedef struct struct_Hsp {
    struct struct_Hsp PNTR next;
+   Uint4 OBbits__;
    Int4   num;
    FloatHi   bit_score;
    FloatHi   score;
@@ -159,14 +177,32 @@ typedef struct struct_Hsp {
    Int4   query_to;
    Int4   hit_from;
    Int4   hit_to;
+#define OB__Hsp_pattern_from 0
+
    Int4   pattern_from;
+#define OB__Hsp_pattern_to 1
+
    Int4   pattern_to;
+#define OB__Hsp_query_frame 2
+
    Int4   query_frame;
+#define OB__Hsp_hit_frame 3
+
    Int4   hit_frame;
+#define OB__Hsp_identity 4
+
    Int4   identity;
+#define OB__Hsp_positive 5
+
    Int4   positive;
+#define OB__Hsp_gaps 6
+
    Int4   gaps;
+#define OB__Hsp_align_len 7
+
    Int4   align_len;
+#define OB__Hsp_density 8
+
    Int4   density;
    CharPtr   qseq;
    CharPtr   hseq;

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.46 $
+* $Revision: 6.48 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.48  2002/06/10 13:50:43  kans
+* added SeqMgrSetLenFunc, SeqMgrSetAccnVerFunc
+*
+* Revision 6.47  2002/05/08 18:58:10  kans
+* itemID is Uint4
+*
 * Revision 6.46  2002/04/12 20:42:39  kans
 * LookupFarSeqIDs has separate parameter for alignments and history
 *
@@ -278,6 +284,8 @@ typedef BioseqPtr (LIBCALLBACK * BSFetchTop)
 typedef BioseqPtr (LIBCALLBACK * BSFetch) PROTO((SeqIdPtr sip, Pointer data));
 
 typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history);
+typedef Int4 (LIBCALLBACK * SeqLenLookupFunc) (Int4 gi);
+typedef CharPtr (LIBCALLBACK * AccnVerLookupFunc) (Int4 gi);
 
 typedef struct seqidindexelement {
 	CharPtr str;               /* PRINTID_FASTA_SHORT string */
@@ -311,6 +319,8 @@ typedef struct seqmng {        /* functions for sequence data management */
 	Boolean is_write_locked;
 	Int4 hold_indexing;      /* set by SeqMgrHoldIndexing */
 	SIDPreCacheFunc seq_id_precache_func;
+	SeqLenLookupFunc seq_len_lookup_func;
+	AccnVerLookupFunc accn_ver_lookup_func;
 } SeqMgr, PNTR SeqMgrPtr;
 
 /**** All replaced in Object Manager ************/
@@ -831,9 +841,9 @@ typedef struct smfeatitem {
   Boolean      farloc;   /* location has an accession not packaged in entity */
   Uint1        strand;   /* strand (mapped to segmented bioseq if segmented) */
   Uint1        subtype;  /* featdef subtype */
-  Uint2        itemID;   /* storing itemID so no need to gather again */
+  Uint4        itemID;   /* storing itemID so no need to gather again */
   Boolean      ignore;   /* ignore this second copy of a feature spanning the origin */
-  Uint2        index;    /* position index needed for SeqMgrGetDesiredFeature */
+  Uint4        index;    /* position index needed for SeqMgrGetDesiredFeature */
   Int4         overlap;  /* for xxxByPos, index of leftmost candidate that overlaps this */
 } SMFeatItem, PNTR SMFeatItemPtr;
 
@@ -852,14 +862,14 @@ typedef struct segpartsmap {
   Int4                     from;
   Int4                     to;
   Uint1                    strand;
-  Uint2                    itemID;         /* OBJ_BIOSEQ_SEG itemID */
+  Uint4                    itemID;         /* OBJ_BIOSEQ_SEG itemID */
 } SMSeqIdx, PNTR SMSeqIdxPtr;
 
 typedef struct smdescitem {
   SeqDescrPtr  sdp;         /* freed when TL_CACHED, later will implement reassignment when reloaded */
   SeqEntryPtr  sep;         /* SeqEntry containing SeqDescr, same reap/reload criteria as above */
-  Uint2        itemID;      /* storing itemID so no need to gather again */
-  Uint2        index;       /* position index needed for SeqMgrGetDesiredDescriptor */
+  Uint4        itemID;      /* storing itemID so no need to gather again */
+  Uint4        index;       /* position index needed for SeqMgrGetDesiredDescriptor */
   Uint2        level;       /* packaging level - 0 is on Bioseq itself */
   Uint1        seqdesctype; /* seqdesc subtype */
 } SMDescItem, PNTR SMDescItemPtr;
@@ -912,8 +922,8 @@ typedef struct bioseqextra {
   Int4                numsegs;        /* number of segments in partslist array */
 
   Int4                min;            /* used for finding best protein feature */
-  Uint2               bspItemID;      /* for bioseq explore functions */
-  Uint2               bspIndex;       /* for bioseq explore functions */
+  Uint4               bspItemID;      /* for bioseq explore functions */
+  Uint4               bspIndex;       /* for bioseq explore functions */
   Int2                blocksize;      /* size of SMFeatBlock.data array to avoid wasting space */
                                       /* additional fields to map between genome record and parts,
                                          genomic DNA and mRNA, and mRNA and protein */
@@ -946,7 +956,7 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrFreeBioseqExtraFunc PROTO((Pointer data));
 *****************************************************************************/
 
 NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemPtr PROTO((SeqFeatPtr sfp));
-NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID, BioseqPtr bsp, Uint2 itemID));
+NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID, BioseqPtr bsp, Uint4 itemID));
 NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetSfpProductList (BioseqPtr bsp);
 
 /*****************************************************************************
@@ -1031,6 +1041,17 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
   Boolean alignments,
   Boolean history
 );
+
+/*****************************************************************************
+*
+*   SeqMgrSetLenFunc registers the GiToSeqLen lookup function
+*   SeqMgrSetAccnVerFunc registers the GiToAccnVer lookup function
+*
+*****************************************************************************/
+
+NLM_EXTERN void LIBCALL SeqMgrSetLenFunc (SeqLenLookupFunc func);
+
+NLM_EXTERN void LIBCALL SeqMgrSetAccnVerFunc (AccnVerLookupFunc func);
 
 /*****************************************************************************
 *

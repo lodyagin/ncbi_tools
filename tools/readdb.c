@@ -1,4 +1,4 @@
-/* $Id: readdb.c,v 6.307 2002/04/26 16:31:36 camacho Exp $ */
+/* $Id: readdb.c,v 6.349 2002/08/21 17:51:47 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -36,8 +36,8 @@ Detailed Contents:
 
         - memory maps files. 
 
-	- database sequences are identified (by these routines) by their
-	order in the files.  this is based on a zero-offset.
+    - database sequences are identified (by these routines) by their
+    order in the files.  this is based on a zero-offset.
 
 
 ******************************************************************************/
@@ -48,7 +48,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.307 $
+* $Revision: 6.349 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -63,6 +63,141 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.349  2002/08/21 17:51:47  camacho
+* Added taxonomy id to Fastacmd_PrintTaxonomyInfo
+*
+* Revision 6.348  2002/07/30 15:28:49  camacho
+* Added fastacmd function to parse SeqLocs
+*
+* Revision 6.347  2002/07/29 15:45:18  camacho
+* Made readdb_get_taxnames a LIBCALL function
+*
+* Revision 6.346  2002/07/26 15:33:42  raytseli
+* for async searches use the highes priority for all databases other than "est", use default priority for "est".
+*
+* Revision 6.345  2002/07/25 13:45:07  raytseli
+* added a couple sanity checks.
+* .
+*
+* Revision 6.344  2002/07/24 21:11:39  kans
+* reverted ncbi URL
+*
+* Revision 6.343  2002/07/24 19:57:46  raytseli
+* removed special provisions for preloading the est database, since all preloads are acces driven only.
+* .
+*
+* Revision 6.342  2002/07/24 19:31:47  raytseli
+* much simpler and more efficient approach to using madvise()
+* .
+*
+* Revision 6.341  2002/07/23 16:50:04  kans
+* changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
+*
+* Revision 6.340  2002/07/22 18:34:34  raytseli
+* run madvise() thread at the highest priority.
+* .
+*
+* Revision 6.339  2002/07/22 13:06:42  raytseli
+* explicitly allow setting of the advice type for madvise()
+* .
+*
+* Revision 6.338  2002/07/19 19:59:48  raytseli
+* madvise()-related refinements.
+*
+* Revision 6.337  2002/07/19 17:15:59  madden
+* MemSet for MyFsa, use BioseqRawToFastaExtraEx again
+*
+* Revision 6.336  2002/07/19 13:35:58  raytseli
+* decided that preloading index is not advantageous in some cases, -- removed for now.
+*
+* Revision 6.335  2002/07/18 18:49:14  madden
+* Use BioseqRawToFastaExtra as BioseqRawToFastaExtraEx still has problems
+*
+* Revision 6.334  2002/07/18 15:54:26  raytseli
+* added function to explicitly set madvise() block size, and madvise() sync mode.
+*
+* Revision 6.333  2002/07/18 15:01:52  raytseli
+* correct problem with pointer format "%p" ErrPostEx() handling on linux.
+* Add extern func to allow explicit madvise() functionality activation.
+*
+* Revision 6.332  2002/07/17 19:41:29  raytseli
+* solaris exotics and other refinements.
+* .
+*
+* Revision 6.331  2002/07/17 17:52:40  raytseli
+* dealt with linux idiosyncrazies
+* .
+*
+* Revision 6.328  2002/07/17 16:46:27  raytseli
+* Exclude Windows from madvise()-related stuff, -- Provisional version
+* to allow Win build.
+*
+* Revision 6.327  2002/07/17 15:46:03  raytseli
+* itemporarily disable madvise on linux
+* .
+*
+* Revision 6.326  2002/07/17 15:20:50  raytseli
+* use async madvise on linux, sync on solaris; other minor changes.
+* .
+*
+* Revision 6.325  2002/07/17 14:36:54  raytseli
+* incorporated madvise into readdb
+* .
+*
+* Revision 6.324  2002/07/15 17:01:33  camacho
+* Replaced call to snprintf with StringNCpy
+*
+* Revision 6.323  2002/07/14 21:02:08  camacho
+* Added extra features to fastacmd
+*
+* Revision 6.322  2002/07/12 15:19:18  camacho
+* Updated comment explaining order to search blast databases
+*
+* Revision 6.321  2002/07/11 18:37:40  camacho
+* BLASTDB env. variable has higher precedence over .ncbirc file config value
+*
+* Revision 6.320  2002/07/09 16:41:52  camacho
+* Made taxonomy databases multi-thread safe
+*
+* Revision 6.319  2002/07/07 20:43:45  camacho
+* Pointer initialization in RDBGetTaxNames
+*
+* Revision 6.318  2002/06/26 00:45:37  camacho
+*
+* Added readdb_get_totals_ex2 to allow recalculation of database length as
+* well as total number of sequences after the virtual oidlist has been
+* created.
+*
+* Revision 6.317  2002/06/21 21:39:56  camacho
+* Eliminated check for obsolete flag
+*
+* Revision 6.316  2002/06/18 18:06:27  dondosha
+* Added comment to the readdb_get_sequence_number function
+*
+* Revision 6.315  2002/06/04 21:45:39  dondosha
+* Corrected the readdb_get_sequence_number function in case of multiple-volume databases
+*
+* Revision 6.314  2002/06/04 20:22:56  camacho
+* Fixed taxonomy databases to work w/o mmap
+*
+* Revision 6.313  2002/05/29 22:52:31  dondosha
+* Removed debug printouts accidentally added in last change
+*
+* Revision 6.312  2002/05/29 22:50:58  dondosha
+* Correction in readdb_get_sequence_number
+*
+* Revision 6.311  2002/05/15 20:23:46  camacho
+* Added wgs_{mouse,anthrax} criteria functions
+*
+* Revision 6.310  2002/05/07 18:10:42  camacho
+* Fixed memory leak in FDBAddSequence
+*
+* Revision 6.309  2002/05/02 21:58:42  camacho
+* Removed fastacmd dependency on the common index
+*
+* Revision 6.308  2002/05/02 21:52:06  camacho
+* Support for genmask's new month/subset mask combinations
+*
 * Revision 6.307  2002/04/26 16:31:36  camacho
 * Byte order fix to BlastDBToFasta
 *
@@ -1301,27 +1436,67 @@ Detailed Contents:
 #include <errno.h>
 #include <txalign.h>
 
+#ifdef __linux
+#define __USE_BSD
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#endif
+
 /* Used by fetch functions. */
 #define READDB_BUF_SIZE 255
 #define READDBBF_INIT 0
 #define READDBBF_READY 1
 #define READDBBF_DISABLE 2
 
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef  HAVE_MADVISE
 
+/* default size of preload (in sequences) in a single madvise operation */
+#define MADVISE_SEQ_PRELOAD 1024
+
+/* by default use async madvise for linux, sync for solaris, etc */
+#ifdef OS_UNIX_LINUX
+#define MADVISE_SYNC_MODE FALSE
+#else
+#define MADVISE_SYNC_MODE TRUE
+#endif
+
+/* flag enabling madvise functionality */
+static Boolean useMadvise = FALSE;
+
+/* advice to use */
+static EMemMapAdvise mmapAdvice = eMMA_Normal;
+
+
+/* flag that determines whether madvise is sync or async */
+static Boolean madviseSyncMode = MADVISE_SYNC_MODE;
+
+/* size of the block preloaded (in sequences) in a single madvise operation */
+static Int4 madvisePreloadBlock = MADVISE_SEQ_PRELOAD;
+
+#endif /* HAVE_MADVISE */
+#endif /* OS_UNIX_SOL || OS_UNIX_LINUX */
+
+#if defined(OS_UNIX_SOL)
+#include <sys/int_types.h>
+#elif defined(OS_UNIX_LINUX)
+#include <stdint.h>
+#endif
 typedef struct readdbbioseqfetch {
     struct readdbbioseqfetch PNTR next;
     Uint1 ReadDBFetchState;
-    CharPtr dbname;	/* Name of the database. */
+    CharPtr dbname;    /* Name of the database. */
     Uint2 ctr;
     Boolean is_prot; /* Is it a protein or not. */
     ReadDBFILEPtr rdfp;
     Int4 db_genetic_code;
-    TNlmThread	thread_id;
+    TNlmThread    thread_id;
 } ReadDBFetchStruct, PNTR ReadDBFetchStructPtr;
 
 typedef struct readdbfetchuserdata {
-    Int4 ordinal_number;	/* ordinal number of db sequence. */
-    Int2 db_id;		/* database ID, for multiple databases. */
+    Int4 ordinal_number;    /* ordinal number of db sequence. */
+    Int2 db_id;        /* database ID, for multiple databases. */
 } ReadDBFetchUserData, PNTR ReadDBFetchUserDataPtr;
 
 static Int2 LIBCALLBACK ReadDBBioseqFetchFunc PROTO((Pointer data));
@@ -1331,70 +1506,83 @@ static Int8 FormatDbUint8Read(NlmMFILEPtr mfp);
 static ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr, Int4);
 static ValNodePtr IntValNodeCopy(ValNodePtr vnp);
 
-static TNlmMutex isamsearch_mutex;	/* Mutex to regulate using ISAM;
-					 rdfp->isam is common for all threads */
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef  HAVE_MADVISE
+static void readdb_preload_index (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync);
+static void readdb_preload_data (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync);
+static readdb_preload_file ( NlmMFILEPtr mFilePtr, Int4 nPages, 
+				EMemMapAdvise advice, Boolean sync, EThreadPriority pri);
+static void readdb_madvise (void * mp, size_t len, 
+                EMemMapAdvise advice, Boolean sync, EThreadPriority pri);
+#endif /* HAVE_MADVISE */
+#endif /* SOL || LINUX */
+
+static TNlmMutex isamsearch_mutex;    /* Mutex to regulate using ISAM;
+                     rdfp->isam is common for all threads */
 static TNlmMutex hdrseq_mutex;
 
 /* Common index global variables */
-Boolean	isCommonIndex = TRUE;
+Boolean    isCommonIndex = TRUE;
 
 /**************************************************************************
 *
-*	Functions to perform memory mapping.
+*    Functions to perform memory mapping.
 *
-*	If memory mapping is not available, then these functions should
-*	default to normal FILE pointers.
+*    If memory mapping is not available, then these functions should
+*    default to normal FILE pointers.
 *
-*	This is allowed with "read-only files right now.
+*    This is allowed with "read-only files right now.
 *
 **************************************************************************/
 
 /*
-	Initialize the memory-mapping.
+    Initialize the memory-mapping.
 */
 NlmMFILEPtr LIBCALL 
 NlmOpenMFILE (CharPtr name)
 
 {
-	NlmMFILEPtr mfp;
+    NlmMFILEPtr mfp;
 
-	if ((mfp=(NlmMFILEPtr) MemNew(sizeof(NlmMFILE))) == NULL)
-		return NULL;
+    if ((mfp=(NlmMFILEPtr) MemNew(sizeof(NlmMFILE))) == NULL)
+        return NULL;
 
-        /* Default is FALSE. */
-        mfp->mfile_true = FALSE;
+    /* Default is FALSE. */
+    mfp->mfile_true = FALSE;
 
-	mfp->mmp_begin = NULL;
+    mfp->mmp_begin = NULL;
 
-	if (Nlm_MemMapAvailable() == TRUE)
-	{	 /* IF mem-map fails, open as a regular file. */
+    if (Nlm_MemMapAvailable() == TRUE)
+    {     /* IF mem-map fails, open as a regular file. */
                 if((mfp->mem_mapp = Nlm_MemMapInit(name)) != NULL)
-		{ /* copy this pointer to where it's convenient. */
-			mfp->mmp_begin = mfp->mmp = (Uint1Ptr) mfp->mem_mapp->mmp_begin;
-			if (mfp->mmp_begin != NULL) 
-			{
-				mfp->mfile_true = TRUE;
-				mfp->mmp_end = mfp->mmp_begin + mfp->mem_mapp->file_size;
-			}
-		}
-	}
+        { /* copy this pointer to where it's convenient. */
+            mfp->mmp_madvise_end = mfp->mmp_begin = mfp->mmp = (Uint1Ptr) mfp->mem_mapp->mmp_begin;
+            if (mfp->mmp_begin != NULL) 
+            {
+                mfp->mfile_true = TRUE;
+                mfp->mmp_end = mfp->mmp_begin + mfp->mem_mapp->file_size;
+            }
+        }
+    }
 
-	if (mfp->mmp_begin == NULL)
-	{
-		mfp->fp = FileOpen(name, "rb");
-		if (mfp->fp == NULL)
-		{
-			mfp = (NlmMFILEPtr) MemFree(mfp);
-			return NULL;
-		}
-	}
+    if (mfp->mmp_begin == NULL)
+    {
+        mfp->fp = FileOpen(name, "rb");
+        if (mfp->fp == NULL)
+        {
+            mfp = (NlmMFILEPtr) MemFree(mfp);
+            return NULL;
+        }
+    }
 
-	/* contents have been allocated. */
-	mfp->contents_allocated = TRUE;
+    /* contents have been allocated. */
+    mfp->contents_allocated = TRUE;
 
-	return mfp;
+    return mfp;
 
-}	/* NlmOpenMFILE */
+}    /* NlmOpenMFILE */
 
 /*
   Open the shared sequence and header files for memory mapping, if this hasn't
@@ -1410,18 +1598,18 @@ static Boolean ReadDBOpenMHdrAndSeqFiles(ReadDBFILEPtr rdfp)
       
    if (rdfp->shared_info == NULL) {
       if(!((Boolean)(rdfp->parameters & READDB_NO_SEQ_FILE))) {
-	 sprintf(buffer, "%s.%csq", rdfp->full_filename, is_prot? 'p':'n');
-	 if ((rdfp->sequencefp = NlmOpenMFILE(buffer)) == NULL) {
-	    ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
-	    rdfp = readdb_destruct(rdfp);
-	    return FALSE;
-	 } 
+     sprintf(buffer, "%s.%csq", rdfp->full_filename, is_prot? 'p':'n');
+     if ((rdfp->sequencefp = NlmOpenMFILE(buffer)) == NULL) {
+        ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
+        rdfp = readdb_destruct(rdfp);
+        return FALSE;
+     } 
       }
       sprintf(buffer, "%s.%chr", rdfp->full_filename, is_prot? 'p':'n');
       if((rdfp->headerfp = NlmOpenMFILE(buffer)) == NULL) {
-	 ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
-	 rdfp = readdb_destruct(rdfp);
-	 return FALSE;
+     ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
+     rdfp = readdb_destruct(rdfp);
+     return FALSE;
       } 
       return TRUE;
    }
@@ -1436,26 +1624,26 @@ static Boolean ReadDBOpenMHdrAndSeqFiles(ReadDBFILEPtr rdfp)
        rdfp->shared_info->sequencefp == NULL) {
       sprintf(buffer, "%s.%csq", rdfp->full_filename, is_prot? 'p':'n');
       if((rdfp->shared_info->sequencefp = NlmOpenMFILE(buffer)) == NULL) {
-	 ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
-	 rdfp = readdb_destruct(rdfp);
-	 return FALSE;
+     ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
+     rdfp = readdb_destruct(rdfp);
+     return FALSE;
       } 
    }
    rdfp->sequencefp = 
       (NlmMFILEPtr) MemDup(rdfp->shared_info->sequencefp, 
-			   sizeof(NlmMFILE));
+               sizeof(NlmMFILE));
    rdfp->sequencefp->contents_allocated = FALSE;
 
    if (rdfp->shared_info->headerfp == NULL) {
       sprintf(buffer, "%s.%chr", rdfp->full_filename, is_prot? 'p':'n');
       if((rdfp->shared_info->headerfp = NlmOpenMFILE(buffer)) == NULL) {
-	 ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
-	 rdfp = readdb_destruct(rdfp);
-	 return FALSE;
+     ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", buffer);
+     rdfp = readdb_destruct(rdfp);
+     return FALSE;
       } 
    }
    rdfp->headerfp = (NlmMFILEPtr) MemDup(rdfp->shared_info->headerfp, 
-					 sizeof(NlmMFILE));
+                     sizeof(NlmMFILE));
    rdfp->headerfp->contents_allocated = FALSE;
    
    return TRUE;
@@ -1467,11 +1655,11 @@ ReadDBFILEPtr ReadDBCloseMHdrAndSeqFiles(ReadDBFILEPtr rdfp)
 
    while (rdfp != NULL) {
       if (rdfp->shared_info) {
-	 rdfp->shared_info->sequencefp = 
-	    NlmCloseMFILE(rdfp->shared_info->sequencefp);
-	 rdfp->shared_info->headerfp = 
-	    NlmCloseMFILE(rdfp->shared_info->headerfp);
-	 rdfp->shared_info->nthreads = 0;
+     rdfp->shared_info->sequencefp = 
+        NlmCloseMFILE(rdfp->shared_info->sequencefp);
+     rdfp->shared_info->headerfp = 
+        NlmCloseMFILE(rdfp->shared_info->headerfp);
+     rdfp->shared_info->nthreads = 0;
       }
       /* These two pointers were just duplicates, free them */
       rdfp->sequencefp = MemFree(rdfp->sequencefp); 
@@ -1488,8 +1676,8 @@ static ReadDBFILEPtr ReadDBFreeSharedInfo(ReadDBFILEPtr rdfp)
 
    while (rdfp != NULL) {
       if ((rdfp->parameters & READDB_CONTENTS_ALLOCATED) && rdfp->shared_info) 
-	 rdfp->shared_info = 
-	    (ReadDBSharedInfoPtr) MemFree(rdfp->shared_info);
+     rdfp->shared_info = 
+        (ReadDBSharedInfoPtr) MemFree(rdfp->shared_info);
       rdfp = rdfp->next;
    }
    return start;
@@ -1497,126 +1685,126 @@ static ReadDBFILEPtr ReadDBFreeSharedInfo(ReadDBFILEPtr rdfp)
 
 /****************************************************************************
 *
-*	Undo the memory-mapping.
+*    Undo the memory-mapping.
 *
 *****************************************************************************/
 NlmMFILEPtr LIBCALL 
 NlmCloseMFILE (NlmMFILEPtr mfp)
 
 {
-	if (mfp == NULL)
-		return NULL;
+    if (mfp == NULL)
+        return NULL;
 
-	/* Have the contents been allocated, or is this just an attachemnt? */
-	if (mfp->contents_allocated)
-	{
+    /* Have the contents been allocated, or is this just an attachemnt? */
+    if (mfp->contents_allocated)
+    {
 
-	        if (mfp->mfile_true == TRUE)
-       	 	{
-			Nlm_MemMapFini(mfp->mem_mapp);
-		}
+        if (mfp->mfile_true == TRUE)
+            {
+            Nlm_MemMapFini(mfp->mem_mapp);
+        }
 
-		if (mfp->fp)
-		{
-			FileClose(mfp->fp);
-			mfp->fp = NULL;
-		}
-	}
+        if (mfp->fp)
+        {
+            FileClose(mfp->fp);
+            mfp->fp = NULL;
+        }
+    }
 
-	mfp = (NlmMFILEPtr) MemFree(mfp);
-	return mfp;
+    mfp = (NlmMFILEPtr) MemFree(mfp);
+    return mfp;
 
-}	/* NlmCloseMFILE */
+}    /* NlmCloseMFILE */
 
 /***********************************************************************
 *
-*	Analogous to ANSI-C fread.
+*    Analogous to ANSI-C fread.
 *
 ************************************************************************/
 Int4 LIBCALL 
 NlmReadMFILE (Uint1Ptr buffer, size_t size, Int4 nitems, NlmMFILEPtr mfp)
 
 {
-	register size_t	diff, len;
+    register size_t    diff, len;
 
-	if (mfp == NULL)
-		return 0;
+    if (mfp == NULL)
+        return 0;
 
-	if (mfp->mfile_true == TRUE)
-	{
-		len = size * nitems;
-		diff = mfp->mmp_end - mfp->mmp;
-		if (len > diff) 
-		{
-			nitems = diff / size;
-			len = nitems * size;
-		}
-		MemCpy((VoidPtr) buffer, (VoidPtr) mfp->mmp, len);
-		mfp->mmp += len;
-		return nitems;
-	}
-	
-	return FileRead(buffer, size, nitems, mfp->fp);
+    if (mfp->mfile_true == TRUE)
+    {
+        len = size * nitems;
+        diff = mfp->mmp_end - mfp->mmp;
+        if (len > diff) 
+        {
+            nitems = diff / size;
+            len = nitems * size;
+        }
+        MemCpy((VoidPtr) buffer, (VoidPtr) mfp->mmp, len);
+        mfp->mmp += len;
+        return nitems;
+    }
+    
+    return FileRead(buffer, size, nitems, mfp->fp);
 
-}	/* NlmReadMFILE */
+}    /* NlmReadMFILE */
 
 /*
-	Seeks to a point in the file, analogous to fseek.
+    Seeks to a point in the file, analogous to fseek.
 */
 Int4 LIBCALL 
 NlmSeekInMFILE (NlmMFILEPtr mfp, long offset, Int4 ptrname)
 
 {
-	Uint1Ptr cp;
+    Uint1Ptr cp;
 
-	if (mfp->mfile_true == TRUE)
-	{
-		switch (ptrname) {
-			case SEEK_SET: /* relative to beginning */
-				cp = mfp->mmp_begin + offset;
-				if (offset < 0 || cp >= mfp->mmp_end)
-					return -1;
-				mfp->mmp = cp;
-				break;
-			case SEEK_CUR: /* relative to current position */
-				cp = mfp->mmp + offset;
-				if (cp >= mfp->mmp_end || cp < mfp->mmp_begin)
-					return -1;
-				mfp->mmp = cp;
-				break;
-			case SEEK_END: /* relative to end of file */
-				if (offset > 0 || mfp->mem_mapp->file_size < -offset)
-					return -1;
-				mfp->mmp = mfp->mmp_begin + (mfp->mem_mapp->file_size + offset);
-				break;
-			default:
-				return -1;
-		}
-		return 0;
-	}
+    if (mfp->mfile_true == TRUE)
+    {
+        switch (ptrname) {
+            case SEEK_SET: /* relative to beginning */
+                cp = mfp->mmp_begin + offset;
+                if (offset < 0 || cp >= mfp->mmp_end)
+                    return -1;
+                mfp->mmp = cp;
+                break;
+            case SEEK_CUR: /* relative to current position */
+                cp = mfp->mmp + offset;
+                if (cp >= mfp->mmp_end || cp < mfp->mmp_begin)
+                    return -1;
+                mfp->mmp = cp;
+                break;
+            case SEEK_END: /* relative to end of file */
+                if (offset > 0 || mfp->mem_mapp->file_size < -offset)
+                    return -1;
+                mfp->mmp = mfp->mmp_begin + (mfp->mem_mapp->file_size + offset);
+                break;
+            default:
+                return -1;
+        }
+        return 0;
+    }
 
-	return (Int4) fseek(mfp->fp, offset, ptrname);
+    return (Int4) fseek(mfp->fp, offset, ptrname);
 
-}	/* NlmSeekInMFILE */
+}    /* NlmSeekInMFILE */
 
 /*
-	What is the offset (in bytes) to the beginning of the file.
-	Analog to ftell.
+    What is the offset (in bytes) to the beginning of the file.
+    Analog to ftell.
 */
 Int4 LIBCALL 
 NlmTellMFILE (NlmMFILEPtr mfp)
 
 {
-	if (mfp->mfile_true == TRUE)
-	{
-		return (mfp->mmp - mfp->mmp_begin);
-	}
-	else
-	{
-		return (Int4) ftell(mfp->fp);
-	}
+    if (mfp->mfile_true == TRUE)
+    {
+        return (mfp->mmp - mfp->mmp_begin);
+    }
+    else
+    {
+        return (Int4) ftell(mfp->fp);
+    }
 
-}	/* NlmTellMFILE */
+}    /* NlmTellMFILE */
 
 static ReadDBFILEPtr ReadDBFILENew(void)
 {
@@ -1627,69 +1815,69 @@ static ReadDBFILEPtr ReadDBFILENew(void)
 }
 
 /*
-	Parses the databases names (if more than one) from
-	'filenames' into buffer.  buffer should already be
-	long enough and allocated.  The funciton should be
-	repeatedly called until TRUE is returned.
+    Parses the databases names (if more than one) from
+    'filenames' into buffer.  buffer should already be
+    long enough and allocated.  The funciton should be
+    repeatedly called until TRUE is returned.
 */
 Boolean LIBCALL
 readdb_parse_db_names (CharPtr PNTR filenames, CharPtr buffer)
 
 {
-	Boolean done = FALSE;
+    Boolean done = FALSE;
 
-	while (**filenames == ' ')
-	{
-		(*filenames)++;
-	}
+    while (**filenames == ' ')
+    {
+        (*filenames)++;
+    }
 
-	while (**filenames != NULLB)
-	{
-		if (**filenames == ' ')
-		{
-			*buffer = NULLB;
-			break;
-		}
-		*buffer = **filenames;
-		buffer++;
-		(*filenames)++;
-	}
+    while (**filenames != NULLB)
+    {
+        if (**filenames == ' ')
+        {
+            *buffer = NULLB;
+            break;
+        }
+        *buffer = **filenames;
+        buffer++;
+        (*filenames)++;
+    }
 
-	while (**filenames == ' ')
-	{
-		(*filenames)++;
-	}
+    while (**filenames == ' ')
+    {
+        (*filenames)++;
+    }
 
-	if (**filenames == NULLB)
-	{
-		*buffer = NULLB;
-		done = TRUE;
-	}
+    if (**filenames == NULLB)
+    {
+        *buffer = NULLB;
+        done = TRUE;
+    }
 
-	return done;
+    return done;
 }
 
 
 typedef struct _readdb_alias_file {
-	CharPtr title,		/* title of the database. */
-		dblist,		/* list of databases. */
-		gilist,		/* a gilist to be used with the database. */
-		oidlist;	/* an ordinal id list to be used with this database. */
-	Int8	len;		/* length of the database */
-	Uint4	nseq;		/* number of seqs of the database */
+    CharPtr title,        /* title of the database. */
+        dblist,        /* list of databases. */
+        gilist,        /* a gilist to be used with the database. */
+        oidlist;    /* an ordinal id list to be used with this database. */
+    Int8    len;        /* length of the database */
+    Uint4    nseq;        /* number of seqs of the database */
         Int4    first_oid;      /* ordinal id range */
         Int4    last_oid;
         Int4    membership;
 } ReadDBAlias, PNTR ReadDBAliasPtr;
 /*
-	This function frees the 'alias' file for the BLAST databases.
+    This function frees the 'alias' file for the BLAST databases.
 */
 
 static ReadDBAliasPtr ReadDBAliasFree(ReadDBAliasPtr rdbap)
 {
 
     if (rdbap == NULL)
-	return NULL;
+    return NULL;
 
     MemFree(rdbap->title);
     MemFree(rdbap->dblist);
@@ -1700,7 +1888,7 @@ static ReadDBAliasPtr ReadDBAliasFree(ReadDBAliasPtr rdbap)
 }
 
 /*
-	This function reads the 'alias' file for the BLAST databases.
+    This function reads the 'alias' file for the BLAST databases.
 */
 static ReadDBAliasPtr
 readdb_read_alias_file(CharPtr filename)
@@ -1776,7 +1964,7 @@ readdb_read_alias_file(CharPtr filename)
                             rdbap->dblist = Realloc(rdbap->dblist, 
                                             2*total_length);
                             total_length *= 2;
-                        }		
+                        }        
                         if (!first)
                         {
                             StringCpy(rdbap->dblist+length, " ");
@@ -1811,7 +1999,7 @@ readdb_read_alias_file(CharPtr filename)
             } else {
                 rdbap->gilist = StringSave(ptr);
             }
-	    }
+        }
             
             continue;
         }
@@ -1870,7 +2058,7 @@ readdb_read_alias_file(CharPtr filename)
               ptr++;
            *Nlm_StrChr(ptr, '\n') = NULLB;
            sscanf(ptr, "%ld", &tmplong);
-	   rdbap->first_oid = tmplong;
+       rdbap->first_oid = tmplong;
            continue;
         }
         if (StringNCmp(buffer, "LAST_OID", 8) == 0) {
@@ -1879,7 +2067,7 @@ readdb_read_alias_file(CharPtr filename)
               ptr++;
            *Nlm_StrChr(ptr, '\n') = NULLB;
            sscanf(ptr, "%ld", &tmplong);
-	   rdbap->last_oid = tmplong;
+       rdbap->last_oid = tmplong;
            continue;
         }
 
@@ -1891,7 +2079,7 @@ readdb_read_alias_file(CharPtr filename)
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
             if (*ptr != NULLB)
-		sscanf(ptr, "%lld", &(rdbap->len));
+        sscanf(ptr, "%lld", &(rdbap->len));
             
             continue;
         }
@@ -1927,40 +2115,40 @@ readdb_read_alias_file(CharPtr filename)
 }
 
 /* 
-	Check if an alias file contains a database by the same name.  This
-	situation will lead to an infinite recursion and we do not allow it.
-	TRUE is returned if recursive situation found, otherwise FALSE.
+    Check if an alias file contains a database by the same name.  This
+    situation will lead to an infinite recursion and we do not allow it.
+    TRUE is returned if recursive situation found, otherwise FALSE.
 */
 
 static Boolean CheckForRecursion(CharPtr alias_filename, CharPtr db_list)
 
 {
-	Boolean done=FALSE;
-	Char buffer[PATH_MAX];
+    Boolean done=FALSE;
+    Char buffer[PATH_MAX];
 
-    	while (!done) {
-        	done = readdb_parse_db_names(&db_list, buffer);
-        	if (*buffer == NULLB)
-			break;
+        while (!done) {
+            done = readdb_parse_db_names(&db_list, buffer);
+            if (*buffer == NULLB)
+            break;
 
-		if (StringCmp(buffer, alias_filename) == 0)
-		{
-			ErrPostEx(SEV_WARNING, 0, 0,
+        if (StringCmp(buffer, alias_filename) == 0)
+        {
+            ErrPostEx(SEV_WARNING, 0, 0,
                                         "Recursive situation detected with %s, ignoring alias file", buffer);
-			return TRUE;
-		}
-	}
+            return TRUE;
+        }
+    }
 
-	return FALSE;
+    return FALSE;
 
 }
 /* Check if .?in file exists for specified database
    and assign proper is_prot to rdfp->is_prot */
 
-static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boolean PNTR is_prot, Uint1 init_state) 
+static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boolean PNTR is_prot, Uint1 init_state) 
 {
-    Char	buffer[PATH_MAX];
-    Int4	length = 0, i;
+    Char    buffer[PATH_MAX];
+    Int4    length = 0, i;
     ReadDBAliasPtr rdbap;
     ReadDBFILEPtr rdfp=NULL;
     
@@ -1968,13 +2156,13 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
     if (*is_prot == READDB_DB_UNKNOWN || *is_prot == READDB_DB_IS_PROT) {
         
         sprintf(buffer, "%s.pal", full_filename);
-	rdbap = readdb_read_alias_file(buffer);
-	if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
-	{
+    rdbap = readdb_read_alias_file(buffer);
+    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
+    {
             rdfp = readdb_new_ex2(rdbap->dblist, TRUE, init_state, rdbap->oidlist);
-	    rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
-	    if (rdfp->cih)
-	    	rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, TRUE);
+        rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
+        if (rdfp->cih)
+            rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, TRUE);
             if (rdbap->gilist)
                rdfp->gifile = StringSave(rdbap->gilist);
 
@@ -2009,13 +2197,13 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
                 }
                 rdfp->title = rdbap->title;
                 rdbap->title = NULL;
-		/* Length of the database is already calculated in alias file */
-		if (rdbap->len) {
-		    rdfp->aliaslen = rdbap->len;
-		}
-		if (rdbap->nseq) {
-		    rdfp->aliasnseq = rdbap->nseq;
-		}
+        /* Length of the database is already calculated in alias file */
+        if (rdbap->len) {
+            rdfp->aliaslen = rdbap->len;
+        }
+        if (rdbap->nseq) {
+            rdfp->aliasnseq = rdbap->nseq;
+        }
         rdfp->membership_bit = rdbap->membership;
 
                 rdfp = rdfp->next;
@@ -2027,18 +2215,18 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
 
             rdbap = ReadDBAliasFree(rdbap);
             return 1;
-	}
+    }
         rdbap = ReadDBAliasFree(rdbap);
     } 
     if ((*is_prot == READDB_DB_IS_NUC) || (rdfp == NULL && *is_prot == READDB_DB_UNKNOWN)) {
         sprintf(buffer, "%s.nal", full_filename);
         rdbap = readdb_read_alias_file(buffer);
-	if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
-	{
+    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
+    {
             rdfp = readdb_new_ex2(rdbap->dblist, FALSE, init_state, rdbap->oidlist);
-	    rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
-	    if (rdfp->cih && rdfp->aliasfilebit == 0)
-	    	rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, FALSE);
+        rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
+        if (rdfp->cih && rdfp->aliasfilebit == 0)
+            rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, FALSE);
             if (rdbap->gilist)
                rdfp->gifile = StringSave(rdbap->gilist);
 
@@ -2072,13 +2260,13 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
                 }
                 rdfp->title = rdbap->title;
                 rdbap->title = NULL;
-		/* Length of the database is already calculated in alias file */
-		if (rdbap->len) {
-		    rdfp->aliaslen = rdbap->len;
-		}
-		if (rdbap->nseq) {
-		    rdfp->aliasnseq = rdbap->nseq;
-		}
+        /* Length of the database is already calculated in alias file */
+        if (rdbap->len) {
+            rdfp->aliaslen = rdbap->len;
+        }
+        if (rdbap->nseq) {
+            rdfp->aliasnseq = rdbap->nseq;
+        }
         rdfp->membership_bit = rdbap->membership; 
         
                 rdfp = rdfp->next;
@@ -2090,7 +2278,7 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
 
             rdbap = ReadDBAliasFree(rdbap);
             return 1;
-	}
+    }
         rdbap = ReadDBAliasFree(rdbap);
     }
     
@@ -2119,11 +2307,11 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
         return -1;
 }
 
-CharPtr	FindBlastDBFile (CharPtr filename)
+CharPtr    FindBlastDBFile (CharPtr filename)
 {
 
-    CharPtr	buffer, buffer1;
-    Int4	len;
+    CharPtr    buffer, buffer1, envp = NULL;
+    Int4    len;
     
     /* first check current directory */
 
@@ -2135,11 +2323,13 @@ CharPtr	FindBlastDBFile (CharPtr filename)
     buffer1 = MemNew(PATH_MAX);
 
 #ifdef OS_UNIX
-    if (getenv("BLASTDB"))
-	Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), buffer, PATH_MAX);
+    if ((envp = getenv("BLASTDB")) == NULL)
+        Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
     else
+        StringCpy(buffer, envp);
+#else
+    Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
 #endif
-	Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
 
     sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
 
@@ -2148,33 +2338,33 @@ CharPtr	FindBlastDBFile (CharPtr filename)
     len = FileLength(buffer1);
 
     if (len) {
-	MemFree(buffer);
-	return buffer1;
+    MemFree(buffer);
+    return buffer1;
     } else {
     
-	/* the only location where we now can find database file is a 
-	   standard place #define'd as BLASTDB_DIR */
+    /* the only location where we now can find database file is a 
+       standard place #define'd as BLASTDB_DIR */
 
-	sprintf(buffer, "%s%s%s", BLASTDB_DIR, DIRDELIMSTR, filename);
-	len = FileLength(buffer);
-	if (len) {
-	    MemFree(buffer1);
-	    return buffer;
-	} else {
-	    /* we cannot find directory :( */
- 	    ErrPostEx(SEV_WARNING, 0, 0, "Could not find %s", filename);
-	    return NULL;
-	}
+    sprintf(buffer, "%s%s%s", BLASTDB_DIR, DIRDELIMSTR, filename);
+    len = FileLength(buffer);
+    if (len) {
+        MemFree(buffer1);
+        return buffer;
+    } else {
+        /* we cannot find directory :( */
+         ErrPostEx(SEV_WARNING, 0, 0, "Could not find %s", filename);
+        return NULL;
+    }
     }
 }
 
 /* 
-	filename: name of the file to be openend.
-	is_prot: three choices: protein, nucleotide, or either one.
-	init_state: how much should be initialized.
-		READDB_NEW_DO_ALL : initialize everything possible
-		READDB_NEW_DO_REPORT : init enough for a report on db size etc.
-	cih: common index
+    filename: name of the file to be openend.
+    is_prot: three choices: protein, nucleotide, or either one.
+    init_state: how much should be initialized.
+        READDB_NEW_DO_ALL : initialize everything possible
+        READDB_NEW_DO_REPORT : init enough for a report on db size etc.
+    cih: common index
 */
 
 static ReadDBFILEPtr
@@ -2183,13 +2373,13 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     ReadDBFILEPtr rdfp=NULL;
     Char buffer[PATH_MAX], buffer1[PATH_MAX];
     Char commonindex_full_filename[PATH_MAX];
-    Char	database_dir[PATH_MAX] = "";
+    Char    database_dir[PATH_MAX] = "";
     Uint4 seq_type, formatdb_ver, date_length, title_length, value;
     Int2 status;
     Int4 length, num_seqs;
-    CharPtr	charptr;
+    CharPtr    charptr, envp = NULL;
     ISAMErrorCode error;
-    Boolean	localdb = FALSE;
+    Boolean    localdb = FALSE;
     
     if (filename == NULL)
         return NULL;
@@ -2198,8 +2388,12 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     /* We need to find out what directory to use and which index system will
        be used for searching OID by give GI.  The algorithm is:
        Define blast database directory by present database searching
-       in the following order:  current directory, .ncbirc, getenv("BLASTDB"),
-       standard place;
+       in the following order  (and stopping when it is found): 
+       1) If absolute path was given, only this file is attempted.
+       2) Current working directory
+       3) getenv("BLASTDB") (UNIX only)
+       4) .ncbirc file: a) current working directory, b) home directory, c)
+           NCBI directory (obtained from the environment)
        Then defind which index system to use.  If "CommonIndex" then
        we need all CommonIndex and ISAM files to be present in database directory,
        if ISAM, them the only ISAM index files should be present in the
@@ -2212,7 +2406,7 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     if ((status=IndexFileExists(filename, &rdfp, &is_prot, 
                                 init_state)) >= 0) {
         
-	if (status > 0)
+    if (status > 0)
             return rdfp;
         
         /* use current directory */
@@ -2222,24 +2416,26 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
         localdb = TRUE;
         rdfp = readdb_destruct(rdfp);
     } else  {
-        /* Try to read this from .ncbirc file and if it is not specified 
-           in the file, then in BLASTDB environment variable (UNIX only) */
+        /* Try to read this from environment (UNIX only). If not found, try
+         * the .ncbirc file */
         
 #ifdef OS_UNIX
-        if (getenv("BLASTDB"))
-            Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", 
-                             getenv("BLASTDB"), buffer, PATH_MAX);
-        else
-#endif
+        if ((envp = getenv("BLASTDB")) == NULL)
             Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, 
-                             buffer, PATH_MAX);
+                        buffer, PATH_MAX);
+        else
+            StringCpy(buffer, envp);
+#else
+        Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, 
+                         buffer, PATH_MAX);
+#endif
         
         sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
         
         if ((status=IndexFileExists(buffer1, &rdfp, &is_prot, 
                                     init_state)) >= 0) {
             if (status > 0)
-		return rdfp;
+        return rdfp;
             /* database file is in directory 'buffer' */
             StringCpy(database_dir, buffer);
             rdfp = readdb_destruct(rdfp);
@@ -2266,7 +2462,7 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     rdfp = ReadDBFILENew();
 
     if (rdfp == NULL)
-	return NULL;
+    return NULL;
     
     rdfp->filename = StringSave(filename);
     
@@ -2360,7 +2556,7 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
         rdfp->title = (CharPtr)Nlm_Malloc((title_length+1)*sizeof(Char));
         NlmReadMFILE((Uint1Ptr) rdfp->title, title_length, 1, rdfp->indexfp);
         rdfp->title[title_length] = NULLB;
-    } else {	/* Use the filename, if there is no title. */
+    } else {    /* Use the filename, if there is no title. */
         rdfp->title = StringSave(rdfp->filename);;
     }
     
@@ -2376,12 +2572,12 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
 
     if (formatdb_ver == FORMATDB_VER_TEXT)
     {
-    	NlmReadMFILE((Uint1Ptr) &(value), 4, 1, rdfp->indexfp);
-    	rdfp->totlen = Nlm_SwapUint4(value);
+        NlmReadMFILE((Uint1Ptr) &(value), 4, 1, rdfp->indexfp);
+        rdfp->totlen = Nlm_SwapUint4(value);
     }
     else
     {
-    	rdfp->totlen = FormatDbUint8Read(rdfp->indexfp);
+        rdfp->totlen = FormatDbUint8Read(rdfp->indexfp);
     }
 
 #if 0
@@ -2568,11 +2764,11 @@ OIDListPtr OIDListFree (OIDListPtr oidlist)
 }
 
 
-Boolean	ReadOIDList (OIDListPtr oidlist)
+Boolean    ReadOIDList (OIDListPtr oidlist)
 {
     NlmMFILEPtr       mmfile;
     Int4 length;
-	
+    
 
 
     /* format of the file:
@@ -2593,18 +2789,18 @@ Boolean	ReadOIDList (OIDListPtr oidlist)
 
     if (mmfile->mfile_true == FALSE)
     {
-	length = FileLength(oidlist->filename);
-	oidlist->memory = MemNew(length);
-	if (oidlist->memory == NULL)
-		return FALSE;
-	FileRead(oidlist->memory, length, 1, mmfile->fp);
-	oidlist->list = oidlist->memory + 1;
-	NlmCloseMFILE(mmfile);
+    length = FileLength(oidlist->filename);
+    oidlist->memory = MemNew(length);
+    if (oidlist->memory == NULL)
+        return FALSE;
+    FileRead(oidlist->memory, length, 1, mmfile->fp);
+    oidlist->list = oidlist->memory + 1;
+    NlmCloseMFILE(mmfile);
     }
     else
     {
-    	oidlist->list = (Uint4Ptr) mmfile->mmp_begin + 1;
-	oidlist->mfp = mmfile;
+        oidlist->list = (Uint4Ptr) mmfile->mmp_begin + 1;
+    oidlist->mfp = mmfile;
     }
     oidlist->total = Nlm_SwapUint4(*((Int4Ptr) mmfile->mmp_begin));
 
@@ -2616,7 +2812,7 @@ ReadDBFILEPtr LIBCALL
 readdb_new_ex (CharPtr filename, Uint1 is_prot, Boolean init_indices)
 
 {
-	return readdb_new_ex2(filename, is_prot, READDB_NEW_INDEX, NULL);
+    return readdb_new_ex2(filename, is_prot, READDB_NEW_INDEX, NULL);
 }
 
 ReadDBFILEPtr LIBCALL 
@@ -2627,7 +2823,7 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
     Char buffer[PATH_MAX], buffer_oidlist[PATH_MAX];
     Int4 start=0, old_start = 0;
     ReadDBFILEPtr new, tmp, var, var1, rdfp_w_oidlist, var2;
-    CommonIndexHeadPtr	cih = NULL;
+    CommonIndexHeadPtr    cih = NULL;
     Int4 num_whole_db = 0, i;
     
     new = NULL;
@@ -2682,7 +2878,7 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
                  tmp->parameters |= READDB_NOT_FIRST_TIME;
                  if (buffer_oidlist[0] != NULLB) {
                     
-				/* read this OID list */
+                /* read this OID list */
                     tmp->oidlist = (OIDListPtr) MemNew (sizeof(OIDList));
                     tmp->oidlist->filename = StringSave(buffer_oidlist);
                     if (!ReadOIDList(tmp->oidlist)) {
@@ -2748,7 +2944,7 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
     tmp = new;
     start = 0;
     while (tmp) {
-	/* this may have been adjusted on a previous call to this function, 
+    /* this may have been adjusted on a previous call to this function, 
            readjust for indices. */
         old_start = tmp->start; 
         tmp->start = start;
@@ -2773,190 +2969,260 @@ readdb_new (CharPtr filename, Uint1 is_prot)
 
 {
 
-	return readdb_new_ex(filename, is_prot, TRUE);
+    return readdb_new_ex(filename, is_prot, TRUE);
 }
 
 
 /*
-	Get total length and number of sequences in multiple databases.
-	if 'use_alias' is TRUE, values from the alias file will be used
-	if non-zero.
+    Get total length and number of sequences in multiple databases.
+    if 'use_alias' is TRUE, values from the alias file will be used
+    if non-zero.
 */
 
 Boolean LIBCALL
 readdb_get_totals_ex(ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num, Boolean use_alias)
 
 {
-	*total_len = 0;
-	*total_num = 0;
+    return readdb_get_totals_ex2(rdfp_list, total_len, total_num, use_alias,
+            FALSE);
+}
 
-	if (rdfp_list == NULL || total_len == NULL || total_num == NULL)
-		return FALSE;
-	
-	while (rdfp_list) {
-	    if (use_alias && rdfp_list->aliasfilename) {
-		if (rdfp_list->aliaslen)
-			*total_len += rdfp_list->aliaslen;
-		else
-			*total_len += readdb_get_dblen(rdfp_list);
+/* retrieves the total number of sequences and database length in the
+ * rdfp_list. use_alias and use_virtual_oidlist are mutually exclusive
+ * options: use_virtual_oidlist assumes this rdfp_list has been processed by
+ * BlastProcessGiLists. */
+Boolean LIBCALL
+readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, 
+        Int4Ptr total_num, Boolean use_alias, Boolean use_virtual_oidlist))
+{
+    ReadDBFILEPtr rdfp;
+    OIDListPtr virtual_oidlist = NULL;
+    Uint4 maskindex, i, base = 0, total_mask;
+    Uint4 mask;
+    *total_len = 0;
+    *total_num = 0;
 
-		if (rdfp_list->aliasnseq)
-			*total_num += rdfp_list->aliasnseq;
-		else
-			*total_num += readdb_get_num_entries(rdfp_list);
-	    } else {
-		*total_len += readdb_get_dblen(rdfp_list);
-		*total_num += readdb_get_num_entries(rdfp_list);
-	    }
-	    rdfp_list = rdfp_list->next;
-	}
+    if (rdfp_list == NULL || total_len == NULL || total_num == NULL)
+        return FALSE;
 
-	return TRUE;
+    if (use_alias && use_virtual_oidlist)
+        return FALSE;
+    
+    if (use_virtual_oidlist) {
+
+        for (rdfp = rdfp_list; rdfp; rdfp = rdfp->next) {
+
+            if (virtual_oidlist = rdfp->oidlist) {
+                total_mask = virtual_oidlist->total/MASK_WORD_SIZE + 1;
+                maskindex = 0;
+
+                while (maskindex < total_mask){
+                    mask = SwapUint4(virtual_oidlist->list[maskindex]);
+                    i = 0;
+                    while (mask) {
+                        if (mask & (((Uint4)0x1) << MASK_WORD_SIZE-1)) {
+                            (*total_num)++;
+                            *total_len += readdb_get_sequence_length(rdfp_list,
+                                    base+i);
+                        }
+                        mask <<= 1;
+                        i++;
+                    }
+                    maskindex++;
+                    base += MASK_WORD_SIZE;
+                }
+                break; /* virtual oidlist is always the last oidlist */
+            }
+            *total_len += readdb_get_dblen(rdfp);
+            *total_num += readdb_get_num_entries(rdfp);
+        }
+    } else {
+
+        while (rdfp_list) {
+
+            if (use_alias && rdfp_list->aliasfilename) {
+                if (rdfp_list->aliaslen)
+                    *total_len += rdfp_list->aliaslen;
+                else
+                    *total_len += readdb_get_dblen(rdfp_list);
+
+                if (rdfp_list->aliasnseq)
+                    *total_num += rdfp_list->aliasnseq;
+                else
+                    *total_num += readdb_get_num_entries(rdfp_list);
+            } else {
+                *total_len += readdb_get_dblen(rdfp_list);
+                *total_num += readdb_get_num_entries(rdfp_list);
+            }
+            rdfp_list = rdfp_list->next;
+        }
+    }
+
+    return TRUE;
 }
 
 /*
-	Get total length and number of sequences in multiple databases.
+    Get total length and number of sequences in multiple databases.
 */
 
 Boolean LIBCALL
 readdb_get_totals(ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num)
 
 {
-	return readdb_get_totals_ex(rdfp_list, total_len, total_num, FALSE);
+    return readdb_get_totals_ex(rdfp_list, total_len, total_num, FALSE);
 }
 
 /*
-	Checks whether a ReadDBFILEPtr is the original, or just attaced.
-	It does this by checking the rdfp->contents_allocated flag.
+    Checks whether a ReadDBFILEPtr is the original, or just attaced.
+    It does this by checking the rdfp->contents_allocated flag.
 */
 Boolean LIBCALL 
 readdb_copy (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return FALSE;
+    if (rdfp == NULL)
+        return FALSE;
 
-	/* if allocated, this is not a copy. */
-	/*if (rdfp->contents_allocated)*/
-	if (rdfp->parameters & READDB_CONTENTS_ALLOCATED)
-		return FALSE;
+    /* if allocated, this is not a copy. */
+    /*if (rdfp->contents_allocated)*/
+    if (rdfp->parameters & READDB_CONTENTS_ALLOCATED)
+        return FALSE;
 
-	return TRUE;
+    return TRUE;
 }
 
 /*
-	Check whether two different ReadDBFILEPtr refer to the
-	same database.
+    Check whether two different ReadDBFILEPtr refer to the
+    same database.
 
-	If they are, then TRUE is returned.
+    If they are, then TRUE is returned.
 */
 Boolean LIBCALL
 readdb_compare(ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2)
 
 {
-	if (rdfp1 == NULL || rdfp2 == NULL)
-		return FALSE;
+    if (rdfp1 == NULL || rdfp2 == NULL)
+        return FALSE;
 
-	if (rdfp1 == rdfp2)
-		return TRUE;
+    if (rdfp1 == rdfp2)
+        return TRUE;
 
-	/*if (rdfp1->is_prot != rdfp2->is_prot)*/
-	if ((rdfp1->parameters & READDB_IS_PROT) != 
-	    (rdfp2->parameters & READDB_IS_PROT))
-		return FALSE;
+    /*if (rdfp1->is_prot != rdfp2->is_prot)*/
+    if ((rdfp1->parameters & READDB_IS_PROT) != 
+        (rdfp2->parameters & READDB_IS_PROT))
+        return FALSE;
 
-	if (rdfp1->totlen != rdfp2->totlen)
-		return FALSE;
+    if (rdfp1->totlen != rdfp2->totlen)
+        return FALSE;
 
-	if (rdfp1->maxlen != rdfp2->maxlen)
-		return FALSE;
+    if (rdfp1->maxlen != rdfp2->maxlen)
+        return FALSE;
 
-	if (StringCmp(rdfp1->filename, rdfp2->filename) != 0)
-		return FALSE;
+    if (StringCmp(rdfp1->filename, rdfp2->filename) != 0)
+        return FALSE;
 
-	if (StringCmp(rdfp1->title, rdfp2->title) != 0)
-		return FALSE;
+    if (StringCmp(rdfp1->title, rdfp2->title) != 0)
+        return FALSE;
 
-	if (StringCmp(rdfp1->date, rdfp2->date) != 0)
-		return FALSE;
+    if (StringCmp(rdfp1->date, rdfp2->date) != 0)
+        return FALSE;
 
-	return TRUE;
+    return TRUE;
 }
 
 /*
-	Attach to an already open ReadDBFILEPtr.  Duplicate the 
-	indexfp, sequencefp, and headerfp structures as the pointers
-	there (i.e., mmp) will need to be manipulated.  Do not 
-	change the FILE PNTR fp.
+    Attach to an already open ReadDBFILEPtr.  Duplicate the 
+    indexfp, sequencefp, and headerfp structures as the pointers
+    there (i.e., mmp) will need to be manipulated.  Do not 
+    change the FILE PNTR fp.
 */
 
 ReadDBFILEPtr LIBCALL 
 readdb_attach (ReadDBFILEPtr rdfp)
 
 {
-        ReadDBFILEPtr head, last, new_t;
+    ReadDBFILEPtr head, last, new_t;
 
-	if (rdfp == NULL)
-		return NULL;
+    if (rdfp == NULL)
+        return NULL;
 
-	head = NULL;
-	last = NULL;
-	while (rdfp)
-	{
-		new_t = (ReadDBFILEPtr) MemDup(rdfp, sizeof(ReadDBFILE));
+    head = NULL;
+    last = NULL;
+    while (rdfp)
+    {
+        new_t = (ReadDBFILEPtr) MemDup(rdfp, sizeof(ReadDBFILE));
 
-		/* 
-		The contents_allocated flag DOES NOT apply to the actual
-		structures indexfp, headerfp, or sequencefp.  These must always 
-		be duplicated, as their pointers need to be independently 
-		manipulated by threads.  They have their own allocation flags.
-		*/
-       		/*new_t->contents_allocated = FALSE;*/
-		new_t->parameters &= ~READDB_CONTENTS_ALLOCATED;
-       		new_t->indexfp = (NlmMFILEPtr) MemDup(rdfp->indexfp, 
+        /* 
+        The contents_allocated flag DOES NOT apply to the actual
+        structures indexfp, headerfp, or sequencefp.  These must always 
+        be duplicated, as their pointers need to be independently 
+        manipulated by threads.  They have their own allocation flags.
+        */
+               /*new_t->contents_allocated = FALSE;*/
+        new_t->parameters &= ~READDB_CONTENTS_ALLOCATED;
+           new_t->indexfp = (NlmMFILEPtr) MemDup(rdfp->indexfp, 
                                               sizeof(NlmMFILE));
-		new_t->indexfp->contents_allocated = FALSE;
-		if (rdfp->headerfp != NULL) {
-		   new_t->headerfp = (NlmMFILEPtr) MemDup(rdfp->headerfp, 
-							  sizeof(NlmMFILE));
-		   new_t->headerfp->contents_allocated = FALSE;
-		}
-		if (rdfp->sequencefp != NULL) {
-		   new_t->sequencefp = (NlmMFILEPtr) MemDup(rdfp->sequencefp, 
-							    sizeof(NlmMFILE));
-		   new_t->sequencefp->contents_allocated = FALSE;
-		}
+        new_t->indexfp->contents_allocated = FALSE;
+        if (rdfp->headerfp != NULL) {
+           new_t->headerfp = (NlmMFILEPtr) MemDup(rdfp->headerfp, 
+                              sizeof(NlmMFILE));
+           new_t->headerfp->contents_allocated = FALSE;
+        }
+        if (rdfp->sequencefp != NULL) {
+           new_t->sequencefp = (NlmMFILEPtr) MemDup(rdfp->sequencefp, 
+                                sizeof(NlmMFILE));
+           new_t->sequencefp->contents_allocated = FALSE;
+        }
+
+        if (new_t->taxinfo != NULL) {
+            new_t->taxinfo = (RDBTaxInfoPtr)
+                MemDup(rdfp->taxinfo, sizeof(RDBTaxInfo));
+
+            if (new_t->taxinfo->taxfp != NULL) {
+                new_t->taxinfo->taxfp = (NlmMFILEPtr) 
+                    MemDup(rdfp->taxinfo->taxfp, sizeof(NlmMFILE));
+                new_t->taxinfo->taxfp->contents_allocated = FALSE;
+            }
+
+            new_t->taxinfo->name_fd = (NlmMFILEPtr) 
+                MemDup(rdfp->taxinfo->name_fd, sizeof(NlmMFILE));
+            new_t->taxinfo->name_fd->contents_allocated = FALSE;
+
+            new_t->taxinfo->taxinfo_alloc = FALSE;
+            new_t->taxinfo->taxdata_alloc = FALSE;
+        }
+
                 /*new_t->handle_common_index = FALSE;*/
-		new_t->parameters &= ~READDB_HANDLE_COMMON_INDEX;
+        new_t->parameters &= ~READDB_HANDLE_COMMON_INDEX;
 
                 new_t->oidlist = rdfp->oidlist;
 
-		/* Copy address of shared information */
-		new_t->shared_info = rdfp->shared_info;
-                if(new_t->shared_info != NULL) 
-                    rdfp->shared_info->nthreads++;
+        /* Copy address of shared information */
+        new_t->shared_info = rdfp->shared_info;
+        if(new_t->shared_info != NULL) 
+             rdfp->shared_info->nthreads++;
 
-		/* Contents_allocated also does not apply to buffer, this is
-		determined by allocated_length. */
-		if (new_t->allocated_length > 0)
-        	{
-               		 new_t->buffer = (UcharPtr) MemNew((new_t->allocated_length)*sizeof(Uint1));
-        	}
+        /* Contents_allocated also does not apply to buffer, this is
+        determined by allocated_length. */
+        if (new_t->allocated_length > 0)
+            {
+                        new_t->buffer = (UcharPtr) MemNew((new_t->allocated_length)*sizeof(Uint1));
+            }
 
-		if (head == NULL)
-		{
-			head = new_t;
-		}
-		else
-		{
-			last->next = new_t;
-		}
+        if (head == NULL)
+        {
+            head = new_t;
+        }
+        else
+        {
+            last->next = new_t;
+        }
                 
-		last = new_t;
-		rdfp = rdfp->next;
-	}
+        last = new_t;
+        rdfp = rdfp->next;
+    }
 
-	return head;
+    return head;
 }
 
 ReadDBFILEPtr LIBCALL 
@@ -2981,7 +3247,7 @@ readdb_destruct (ReadDBFILEPtr rdfp)
 }
 
 /*
-	Destroys a single element.
+    Destroys a single element.
 */
 ReadDBFILEPtr LIBCALL 
 readdb_destruct_element (ReadDBFILEPtr rdfp)
@@ -3008,26 +3274,27 @@ readdb_destruct_element (ReadDBFILEPtr rdfp)
         /* is it completely safe to have one rdfp->nisam_opt for all threads. */
         ISAMObjectFree(rdfp->nisam_opt); /* Terminating NISAM */
         ISAMObjectFree(rdfp->sisam_opt); /* Terminating NISAM */
-        RDBTaxInfoClose(rdfp->taxinfo);  /* Closing taxonomy names database */
         OIDListFree(rdfp->oidlist);
-    	rdfp->gifile = MemFree(rdfp->gifile);
+        rdfp->gifile = MemFree(rdfp->gifile);
 
     }
     rdfp->indexfp = NlmCloseMFILE(rdfp->indexfp);
-    if (rdfp->shared_info) {  
+    if (rdfp->shared_info) {
        if (--(rdfp->shared_info->nthreads) == 0) {
-	  rdfp->shared_info->sequencefp = 
-	     NlmCloseMFILE(rdfp->shared_info->sequencefp); 
-	  rdfp->shared_info->headerfp = 
-	     NlmCloseMFILE(rdfp->shared_info->headerfp);  
+          rdfp->shared_info->sequencefp = 
+             NlmCloseMFILE(rdfp->shared_info->sequencefp); 
+          rdfp->shared_info->headerfp = 
+             NlmCloseMFILE(rdfp->shared_info->headerfp);  
        } else if (rdfp->shared_info->nthreads == -1) {
-	  rdfp->shared_info->nthreads = 0;
-	  rdfp->shared_info = NULL;
+          rdfp->shared_info->nthreads = 0;
+          rdfp->shared_info = NULL;
        }
     } 
     rdfp->shared_info = NULL;
     rdfp->sequencefp = NlmCloseMFILE(rdfp->sequencefp);
     rdfp->headerfp = NlmCloseMFILE(rdfp->headerfp);
+
+    RDBTaxInfoClose(rdfp->taxinfo);  /* Closing taxonomy names database */
     
     if (rdfp->allocated_length > 0) {
         rdfp->buffer = (UcharPtr)MemFree(rdfp->buffer);
@@ -3048,44 +3315,45 @@ readdb_destruct_element (ReadDBFILEPtr rdfp)
 }
 
 /*
-	Goes through a chain of ReadDBfILEPtr's, looking for the one
-	that contains the specified ordinal ID.
+    Goes through a chain of ReadDBfILEPtr's, looking for the one
+    that contains the specified ordinal ID.
 */
 
 static ReadDBFILEPtr
 readdb_get_link(ReadDBFILEPtr rdfp, Int4 ordinal_id)
 
 {
-   ReadDBFILEPtr last, rdfp_var;
+   ReadDBFILEPtr last, last_used, rdfp_var;
+   Boolean loaded_new = FALSE;
 
-   last = rdfp;
+   last_used = last = rdfp;
 
    while (rdfp) {
       if (rdfp->start <=ordinal_id && rdfp->stop >= ordinal_id)
-	 break;
+     break;
       rdfp = rdfp->next;
    }
    if (!(last->parameters & READDB_KEEP_HDR_AND_SEQ)) {
       while (rdfp != last) {
-	 if (last->sequencefp != NULL || last->headerfp != NULL) {
-	    if (last->shared_info) {
-	       NlmMutexLockEx(&hdrseq_mutex);
-	       if (--(last->shared_info->nthreads) == 0) {
-		  last->shared_info->sequencefp = 
-		     NlmCloseMFILE(last->shared_info->sequencefp);
-		  last->shared_info->headerfp = 
-		     NlmCloseMFILE(last->shared_info->headerfp);
-	       } else if (last->shared_info->nthreads < 0) {
+     if (last->sequencefp != NULL || last->headerfp != NULL) {
+        if (last->shared_info) {
+           NlmMutexLockEx(&hdrseq_mutex);
+           if (--(last->shared_info->nthreads) == 0) {
+          last->shared_info->sequencefp = 
+             NlmCloseMFILE(last->shared_info->sequencefp);
+          last->shared_info->headerfp = 
+             NlmCloseMFILE(last->shared_info->headerfp);
+           } else if (last->shared_info->nthreads < 0) {
                   last->sequencefp = NULL;
                   last->headerfp = NULL;
-		  last->shared_info->nthreads = 0;
+          last->shared_info->nthreads = 0;
                }
-	       NlmMutexUnlock(hdrseq_mutex);
-	    } 
-	    last->sequencefp = NlmCloseMFILE(last->sequencefp);
-	    last->headerfp = NlmCloseMFILE(last->headerfp);
-	 }
-	 last = last->next;
+           NlmMutexUnlock(hdrseq_mutex);
+        } 
+        last->sequencefp = NlmCloseMFILE(last->sequencefp);
+        last->headerfp = NlmCloseMFILE(last->headerfp);
+     }
+     last = last->next;
       }
 
       rdfp_var = rdfp->next;
@@ -3127,9 +3395,69 @@ readdb_get_link(ReadDBFILEPtr rdfp, Int4 ordinal_id)
                       "ReadDBOpenMHdrAndSeqFiles: failed to map files\n");
             rdfp = NULL;
          }
+		 else {
+			loaded_new = TRUE;
+		 }
       }
       NlmMutexUnlock(hdrseq_mutex);
    }
+
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef  HAVE_MADVISE
+	if( useMadvise && rdfp != NULL ) {
+		EThreadPriority pri = eTP_Highest;
+
+		/* est database requires special treatment */
+		if( rdfp->filename && !strncmp(rdfp->filename, "est", 3) ) {
+			pri = eTP_Default;
+		}
+
+		readdb_preload_file(rdfp->indexfp, madvisePreloadBlock, 
+								mmapAdvice, madviseSyncMode, pri);
+
+		readdb_preload_file(rdfp->sequencefp, madvisePreloadBlock, 
+								mmapAdvice, madviseSyncMode, pri);
+
+		readdb_preload_file(rdfp->headerfp, madvisePreloadBlock, 
+								mmapAdvice, madviseSyncMode, pri);
+	}
+#endif /* HAVE_MADVISE */
+#endif /* SOL || LINUX */
+
+#if 0 /* this approach is inefficient and [probably] wrong! */
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef  HAVE_MADVISE
+	if( useMadvise ) {
+	   if( loaded_new || 
+		  (ordinal_id != last_used->last_preloaded 
+			&& (ordinal_id % madvisePreloadBlock) == 0) ) {
+
+			/* preload files */
+			rdfp->last_preloaded = ordinal_id;
+
+			/* do not preload index, it is not needed and leads to
+			 * [at this point] obscure errors.
+			 *
+			 * readdb_preload_index(rdfp, ordinal_id, 
+			 *  ordinal_id + madvisePreloadBlock - 1, mmapAdvice, madviseSyncMode);
+			 */
+
+			readdb_preload_data(rdfp, ordinal_id, 
+				ordinal_id + madvisePreloadBlock - 1, mmapAdvice, madviseSyncMode);
+
+#ifdef READDB_DEBUG
+			fprintf(stderr, "Preloading ordinal id %d through %d\n",
+				ordinal_id, ordinal_id + madvisePreloadBlock - 1);
+#else
+			ErrPostEx(SEV_INFO, 0, 0, "Preloading ordinal id %d through %d",
+				ordinal_id, ordinal_id + madvisePreloadBlock - 1);
+#endif
+	   }
+	}
+#endif /* HAVE_MADVISE */
+#endif /* SOL || LINUX */
+#endif /* if 0 */
+
    return rdfp;
 }
 
@@ -3180,46 +3508,46 @@ Int4 LIBCALL
 readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
 {
 
-    Boolean	thereis_unknown_database = FALSE;
-    ReadDBFILEPtr	rdfp_start = rdfp;
+    Boolean    thereis_unknown_database = FALSE;
+    ReadDBFILEPtr    rdfp_start = rdfp;
     Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
 
     if (start)
-	*start = 0;
+    *start = 0;
 
     while(rdfp) {
-	if (!rdfp->filebit) {
-	    thereis_unknown_database = TRUE;
-	    break;
-	}
-	rdfp = rdfp->next;
+    if (!rdfp->filebit) {
+        thereis_unknown_database = TRUE;
+        break;
     }
-	    
+    rdfp = rdfp->next;
+    }
+        
     rdfp = rdfp_start;
 
     if (thereis_unknown_database || (!isCommonIndex)) {
-	ISAMErrorCode error;
-	Uint4 Value;
+    ISAMErrorCode error;
+    Uint4 Value;
 
-	while (rdfp)
-	{
-	    if(rdfp->nisam_opt == NULL)
-		return -1;
+    while (rdfp)
+    {
+        if(rdfp->nisam_opt == NULL)
+        return -1;
 
-	    if((error = NISAMSearch(rdfp->nisam_opt, gi, 
-		    &Value, NULL)) < 0) {
-		ErrPostEx(SEV_WARNING, 0, 0, "Failed to initialize search. "
-			"ISAM Error code is %d\n", error);
-		return error;
-	    }
+        if((error = NISAMSearch(rdfp->nisam_opt, gi, 
+            &Value, NULL)) < 0) {
+        ErrPostEx(SEV_WARNING, 0, 0, "Failed to initialize search. "
+            "ISAM Error code is %d\n", error);
+        return error;
+        }
 
-	    if(error != ISAMNotFound) {
-#if 0		
-	       printf("\n%d\t-> %d\t in %s (%d)", gi, Value+rdfp->start,
-		      rdfp->filename, is_prot);
-#endif		
-		if (start)
-		    *start = rdfp->start;
+        if(error != ISAMNotFound) {
+#if 0        
+           printf("\n%d\t-> %d\t in %s (%d)", gi, Value+rdfp->start,
+              rdfp->filename, is_prot);
+#endif        
+        if (start)
+            *start = rdfp->start;
 
         /* Before returning, make sure that this gi belongs to
          * the subset (mask) database, if we are dealing with one */
@@ -3229,41 +3557,41 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
         }
                 
         
-		return (Int4) (Value+rdfp->start);
-	    }
+        return (Int4) (Value+rdfp->start);
+        }
 
-	    rdfp = rdfp->next;
-	}
-	return -1;  
-    } else {	    
-	Int4		retval = 0;
-	Int4		mask = 0, alias_mask = 0;
-	CommonIndexHeadPtr	cih = rdfp->cih;
-	Int2		dbid=0, alias_dbid=0;
+        rdfp = rdfp->next;
+    }
+    return -1;  
+    } else {        
+    Int4        retval = 0;
+    Int4        mask = 0, alias_mask = 0;
+    CommonIndexHeadPtr    cih = rdfp->cih;
+    Int2        dbid=0, alias_dbid=0;
 
-	/* create common mask for all databases */
-	while (rdfp) {
-	    if (rdfp->aliasfilebit) {
-		alias_mask |= (0x1 << rdfp->aliasfilebit);
-	    };
-	    mask |= (0x1 << rdfp->filebit);
-	    rdfp = rdfp->next;
-	}
+    /* create common mask for all databases */
+    while (rdfp) {
+        if (rdfp->aliasfilebit) {
+        alias_mask |= (0x1 << rdfp->aliasfilebit);
+        };
+        mask |= (0x1 << rdfp->filebit);
+        rdfp = rdfp->next;
+    }
 
-	/* get OID and database id (dbid) of this OID */
-	if (cih)
-	    retval = GI2OID(cih, gi, mask, alias_mask, &dbid, &alias_dbid, rdfp_start);
+    /* get OID and database id (dbid) of this OID */
+    if (cih)
+        retval = GI2OID(cih, gi, mask, alias_mask, &dbid, &alias_dbid, rdfp_start);
 
-	if (retval >= 0) {
-	    /* find correct rdfp in the list */
-	    rdfp = rdfp_start;
-	    while (rdfp) {
-		/* if the oid found in mask database */
-		if (alias_mask && rdfp->aliasfilebit == alias_dbid)
-		    break;
-		/* if the oid found in real database */
-		if (!alias_mask && (rdfp->filebit == dbid))
-		    break;
+    if (retval >= 0) {
+        /* find correct rdfp in the list */
+        rdfp = rdfp_start;
+        while (rdfp) {
+        /* if the oid found in mask database */
+        if (alias_mask && rdfp->aliasfilebit == alias_dbid)
+            break;
+        /* if the oid found in real database */
+        if (!alias_mask && (rdfp->filebit == dbid))
+            break;
                 /* if version is greater than FORMATDB_VER and we have a 
                  * CommonIndex, rely on the membership information on 
                  * the BlastDefLine structure */
@@ -3272,21 +3600,21 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
                         break;
                 }
 
-		rdfp = rdfp->next;
-	    }
+        rdfp = rdfp->next;
+        }
 
-	    if (!rdfp) {
-		/* we did not find the gi where we were trying */
-		return -1;
-	    }
+        if (!rdfp) {
+        /* we did not find the gi where we were trying */
+        return -1;
+        }
 
-	    if (start)
-		*start = rdfp->start;
+        if (start)
+        *start = rdfp->start;
 
-	    return retval+rdfp->start;
-	}
-	else
-	    return -1;  
+        return retval+rdfp->start;
+    }
+    else
+        return -1;  
     }
 }
 
@@ -3331,9 +3659,9 @@ static Boolean readdb_find_best_id(SeqIdPtr sip, Int4Ptr gi, CharPtr tmpbuf)
         case SEQID_EMBL:      /* embl */
         case SEQID_DDBJ:      /* ddbj */
         case SEQID_GENBANK:   /* genbank */
-	case SEQID_TPG:	      /* Third Party Annot/Seq Genbank */
-	case SEQID_TPE:	      /* Third Party Annot/Seq EMBL */
-	case SEQID_TPD:	      /* Third Party Annot/Seq DDBJ */
+    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
         case SEQID_OTHER:     /* other */
         case SEQID_PIR:       /* pir   */
         case SEQID_SWISSPROT: /* swissprot */
@@ -3391,7 +3719,7 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
     bestid = SeqIdFindBest(sip, SEQID_GI);
     if (bestid && bestid->choice == SEQID_GI)
     {
-	return readdb_gi2seq(rdfp, bestid->data.intvalue, NULL);
+    return readdb_gi2seq(rdfp, bestid->data.intvalue, NULL);
     }
 
     while (rdfp)
@@ -3400,35 +3728,35 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
            rdfp = rdfp->next;
            continue;
         }
-    	if((error = ISAMGetIdxOption(rdfp->sisam_opt, &rdfp->sparse_idx)) < 0) {
+        if((error = ISAMGetIdxOption(rdfp->sisam_opt, &rdfp->sparse_idx)) < 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "Failed to access string index "
                       "ISAM Error code is %d\n", error);
-       	     return -1;
-    	}
+                return -1;
+        }
 
-    	if(rdfp->sparse_idx) {
-        	readdb_find_best_id(sip, &gi, tmpbuff);
-        	if(gi != 0) {
-            		return readdb_gi2seq(rdfp, gi, NULL);
-        	}
-    	} else {
+        if(rdfp->sparse_idx) {
+            readdb_find_best_id(sip, &gi, tmpbuff);
+            if(gi != 0) {
+                    return readdb_gi2seq(rdfp, gi, NULL);
+            }
+        } else {
 
-       		switch (sip->choice) {
-	        case SEQID_EMBL:      /* embl */
-	        case SEQID_DDBJ:      /* ddbj */
-	        case SEQID_GENBANK:   /* genbank */
-		case SEQID_TPG:	      /* Third Party Annot/Seq Genbank */
-		case SEQID_TPE:	      /* Third Party Annot/Seq EMBL */
-		case SEQID_TPD:	      /* Third Party Annot/Seq DDBJ */
-	        case SEQID_OTHER:     /* other */
-	        case SEQID_PIR:       /* pir   */
-	        case SEQID_SWISSPROT: /* swissprot */
-	        case SEQID_PRF:       /* prf   */
-	            tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
-	            break;
-	        default:
-	            break;
-	        }
+               switch (sip->choice) {
+            case SEQID_EMBL:      /* embl */
+            case SEQID_DDBJ:      /* ddbj */
+            case SEQID_GENBANK:   /* genbank */
+        case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+        case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+        case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+            case SEQID_OTHER:     /* other */
+            case SEQID_PIR:       /* pir   */
+            case SEQID_SWISSPROT: /* swissprot */
+            case SEQID_PRF:       /* prf   */
+                tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+                break;
+            default:
+                break;
+            }
 
         /* We have to clear name if both accession and name exists */
         if(tsip != NULL && tsip->accession != NULL && tsip->name != NULL) {
@@ -3447,14 +3775,14 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
         }
     }
 
-	NlmMutexLockEx(&isamsearch_mutex);
+    NlmMutexLockEx(&isamsearch_mutex);
         if((error = SISAMSearch(rdfp->sisam_opt, tmpbuff, 0, &key_out,
                                 &data, &index)) < 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
                       "ISAM Error code is %d\n", error);
             return error;
         }
-	NlmMutexUnlock(isamsearch_mutex);
+    NlmMutexUnlock(isamsearch_mutex);
         
         MemFree(key_out); /* We need no this for now */
         
@@ -3507,18 +3835,18 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
     }
                                   
     while (rdfp) {
-    	error =  SISAMFindAllData(rdfp->sisam_opt, string, ids, count);
+        error =  SISAMFindAllData(rdfp->sisam_opt, string, ids, count);
         
-    	if(error != ISAMNotFound) {
-	    Int4 index=0;
-	    while (index < *count)
-	    {
-		*ids[index] += rdfp->start;
-		index++;
-	    }
+        if(error != ISAMNotFound) {
+        Int4 index=0;
+        while (index < *count)
+        {
+        *ids[index] += rdfp->start;
+        index++;
+        }
             return 1;
-    	} 
-	rdfp = rdfp->next;
+        } 
+    rdfp = rdfp->next;
     }
     return -1;
 }
@@ -3556,98 +3884,98 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
 
     while (rdfp)
     {
-    	if((error = ISAMGetIdxOption(rdfp->sisam_opt, &rdfp->sparse_idx)) < 0) {
+        if((error = ISAMGetIdxOption(rdfp->sisam_opt, &rdfp->sparse_idx)) < 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "Failed to access string index "
                       "ISAM Error code is %d\n", error);
             return -1;
-    	}
+        }
     
-    	if(rdfp->sparse_idx) {
+        if(rdfp->sparse_idx) {
         
-       		Int4 seq_num, count;
-       	 	Int4Ptr ids;
+               Int4 seq_num, count;
+                Int4Ptr ids;
         
-       		readdb_acc2fastaEx(rdfp, string, &ids, &count);
-        	if(count > 0) {
-            		seq_num = *ids;
-            		MemFree(ids);
-            		return seq_num;
-        	}
-	}
-	else
-	{
-    		/* Trying accession first */
+               readdb_acc2fastaEx(rdfp, string, &ids, &count);
+            if(count > 0) {
+                    seq_num = *ids;
+                    MemFree(ids);
+                    return seq_num;
+            }
+    }
+    else
+    {
+            /* Trying accession first */
         
-	        sprintf(tmp_str, "gb|%s|", string);
+            sprintf(tmp_str, "gb|%s|", string);
         
-	        if((error = SISAMSearch(rdfp->sisam_opt, tmp_str, 0, &key_out, &data, &index)) < 0) {
-            		ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index " "ISAM Error code is %d\n", error);
-            		return error;
-    		}
+            if((error = SISAMSearch(rdfp->sisam_opt, tmp_str, 0, &key_out, &data, &index)) < 0) {
+                    ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index " "ISAM Error code is %d\n", error);
+                    return error;
+            }
         
-        	MemFree(key_out); /* We need no this for now */
+            MemFree(key_out); /* We need no this for now */
         
-	        if(error != ISAMNotFound) {
-	            Value = atol(data);
-	            MemFree(data);
+            if(error != ISAMNotFound) {
+                Value = atol(data);
+                MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
                     if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
-	            return Value + rdfp->start;
-	    	}
+                return Value + rdfp->start;
+            }
         
-	        /* Now trying LOCUS */
+            /* Now trying LOCUS */
         
-	    	sprintf(tmp_str, "gb||%s", string);
+            sprintf(tmp_str, "gb||%s", string);
         
-	    	if((error = SISAMSearch(rdfp->sisam_opt, tmp_str, 0, &key_out,
+            if((error = SISAMSearch(rdfp->sisam_opt, tmp_str, 0, &key_out,
                                 &data, &index)) < 0) {
-	            ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
+                ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
                       "ISAM Error code is %d\n", error);
-	            return error;
-	    	}
+                return error;
+            }
         
-	    	MemFree(key_out); /* We need no this for now */
+            MemFree(key_out); /* We need no this for now */
         
-	        if(error != ISAMNotFound) {
-	            Value = atol(data);
-	            MemFree(data);
+            if(error != ISAMNotFound) {
+                Value = atol(data);
+                MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
                     if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
-	            return Value + rdfp->start;
-	    	}
+                return Value + rdfp->start;
+            }
         
-	        /* Now trying string */
+            /* Now trying string */
         
         
-	    	if((error = SISAMSearch(rdfp->sisam_opt, string, 0, &key_out,
+            if((error = SISAMSearch(rdfp->sisam_opt, string, 0, &key_out,
                                 &data, &index)) < 0) {
-	            ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
+                ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
                       "ISAM Error code is %d\n", error);
-	            return error;
-	    	}
+                return error;
+            }
         
-	    	MemFree(key_out); /* We need no this for now */
+            MemFree(key_out); /* We need no this for now */
         
-	    	if(error != ISAMNotFound) {
-	            Value = atol(data);
-	            MemFree(data);
+            if(error != ISAMNotFound) {
+                Value = atol(data);
+                MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
                     if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
-	            return Value + rdfp->start;
-	    	} else {
-       		     MemFree(data);
-    		}
-	}
-	rdfp = rdfp->next;
+                return Value + rdfp->start;
+            } else {
+                    MemFree(data);
+            }
+    }
+    rdfp = rdfp->next;
     }
     
     return -1;
@@ -3875,10 +4203,10 @@ ValNodePtr readdb_get_taxonomy_names(ReadDBFILEPtr rdfp, Int4 sequence_number)
 }
 
 /*
-	Obtains a BioseqPtr from readdb:
+    Obtains a BioseqPtr from readdb:
 
-	ReadDBFILEPtr rdfp: the main ReadDB reference,
-	Int4 sequence_number: which number is this sequence,
+    ReadDBFILEPtr rdfp: the main ReadDB reference,
+    Int4 sequence_number: which number is this sequence,
 */
 BioseqPtr LIBCALL
 readdb_get_bioseq(ReadDBFILEPtr rdfp, Int4 sequence_number)
@@ -3908,45 +4236,45 @@ readdb_get_bioseq_ex(ReadDBFILEPtr rdfp, Int4 sequence_number,
 
     readdb_get_descriptor(rdfp, sequence_number, &sip, &defline);
     
-	if (insert_ctrlA == FALSE)
-	{
-    		count = 0;
-    		new_defline = NULL;
-    		if (defline != NULL) {
-       		 defline_ptr = defline;
+    if (insert_ctrlA == FALSE)
+    {
+            count = 0;
+            new_defline = NULL;
+            if (defline != NULL) {
+                defline_ptr = defline;
         
-       		 while (*defline_ptr != NULLB) {
-       		     count++;
-       		     if (*defline_ptr == READDB_DEF_SEPARATOR) {
-       	         /* Two spaces for every ctrl-A as it will be replaced by 2. */
-       		         count++;
-       		     }
-       		     defline_ptr++;
-       		 }
+                while (*defline_ptr != NULLB) {
+                    count++;
+                    if (*defline_ptr == READDB_DEF_SEPARATOR) {
+                    /* Two spaces for every ctrl-A as it will be replaced by 2. */
+                        count++;
+                    }
+                    defline_ptr++;
+                }
         
-       	    	if (count != 0) {
-       	     		new_defline = (CharPtr)Nlm_Malloc((count+1)*sizeof(Char));
-       	     		new_defline_ptr = new_defline;
-       	     		defline_ptr = defline;
-       	     		while (*defline_ptr != NULLB) {
-                		if (*defline_ptr == READDB_DEF_SEPARATOR) { 	
-                    			*new_defline_ptr = ' ';
-                    			new_defline_ptr++;
-                    			*new_defline_ptr = '>';
-                    			new_defline_ptr++;
-               			} else {
-                    			*new_defline_ptr = *defline_ptr;
-                    			new_defline_ptr++;
-                		}
-                	defline_ptr++;
-       	     		}
-       	     		*new_defline_ptr = NULLB;
-       	     		defline = (CharPtr)MemFree(defline);
-       	     	}
-    	    }
-    	}
-    	else
-		new_defline = defline;
+                   if (count != 0) {
+                        new_defline = (CharPtr)Nlm_Malloc((count+1)*sizeof(Char));
+                        new_defline_ptr = new_defline;
+                        defline_ptr = defline;
+                        while (*defline_ptr != NULLB) {
+                        if (*defline_ptr == READDB_DEF_SEPARATOR) {     
+                                *new_defline_ptr = ' ';
+                                new_defline_ptr++;
+                                *new_defline_ptr = '>';
+                                new_defline_ptr++;
+                           } else {
+                                *new_defline_ptr = *defline_ptr;
+                                new_defline_ptr++;
+                        }
+                    defline_ptr++;
+                        }
+                        *new_defline_ptr = NULLB;
+                        defline = (CharPtr)MemFree(defline);
+                    }
+            }
+        }
+        else
+        new_defline = defline;
     
     if((length = readdb_get_sequence(rdfp, sequence_number, &buffer)) < 1)
         return NULL;
@@ -3973,34 +4301,34 @@ readdb_get_bioseq_ex(ReadDBFILEPtr rdfp, Int4 sequence_number,
                       "Failure to read ambiguity information");
             return NULL;
         }
-	/* Convert sequence if ambiguities. */
+    /* Convert sequence if ambiguities. */
         if(ambchar != NULL) {/* are there any ambiguity ? */
-		compressed_length = (length+3)/4; /* enough bytes for all bases. */
-	    	buffer_4na = Nlm_Malloc((2*compressed_length)*sizeof(Uint1));
-	    	MapNa2ByteToNa4String(buffer, (Uint2Ptr) buffer_4na, length/4);
-		if (length%4 != 0)
-		{
-			Uint1 bytes[2];
-            		bytes[0] = *(buffer+length/4);
-            		bytes[0] &= 252; 
-	    		MapNa2ByteToNa4String(bytes, (Uint2Ptr) (buffer_4na+2*(compressed_length-1)), 1);
-		}
-		RebuildDNA_4na(buffer_4na, compressed_length*2, ambchar);
-            	BSWrite(byte_store, (VoidPtr) buffer_4na, compressed_length*2);
-		MemFree(buffer_4na);
-            	MemFree(ambchar);
-            	bsp->seq_data_type = Seq_code_ncbi4na;
+        compressed_length = (length+3)/4; /* enough bytes for all bases. */
+            buffer_4na = Nlm_Malloc((2*compressed_length)*sizeof(Uint1));
+            MapNa2ByteToNa4String(buffer, (Uint2Ptr) buffer_4na, length/4);
+        if (length%4 != 0)
+        {
+            Uint1 bytes[2];
+                    bytes[0] = *(buffer+length/4);
+                    bytes[0] &= 252; 
+                MapNa2ByteToNa4String(bytes, (Uint2Ptr) (buffer_4na+2*(compressed_length-1)), 1);
         }
-	else
-	{
-        	BSWrite(byte_store, (VoidPtr) buffer, length/4);
-        	if (length%4 != 0) {
-            		byte_value = *(buffer+length/4);
-            		byte_value &= 252; 
-            		BSPutByte(byte_store, byte_value);
-        	}
-            	bsp->seq_data_type = Seq_code_ncbi2na;
-	}
+        RebuildDNA_4na(buffer_4na, compressed_length*2, ambchar);
+                BSWrite(byte_store, (VoidPtr) buffer_4na, compressed_length*2);
+        MemFree(buffer_4na);
+                MemFree(ambchar);
+                bsp->seq_data_type = Seq_code_ncbi4na;
+        }
+    else
+    {
+            BSWrite(byte_store, (VoidPtr) buffer, length/4);
+            if (length%4 != 0) {
+                    byte_value = *(buffer+length/4);
+                    byte_value &= 252; 
+                    BSPutByte(byte_store, byte_value);
+            }
+                bsp->seq_data_type = Seq_code_ncbi2na;
+    }
         
         bsp->mol = Seq_mol_na;
     }
@@ -4044,9 +4372,9 @@ readdb_get_bioseq_ex(ReadDBFILEPtr rdfp, Int4 sequence_number,
 }
 
 /*
-	returns the 'filebits' associated with a certain ordinal number.
-	This is done by going to the rdfp for that ordinal id and
-	gathering the filebits.
+    returns the 'filebits' associated with a certain ordinal number.
+    This is done by going to the rdfp for that ordinal id and
+    gathering the filebits.
 */
 Boolean LIBCALL 
 readdb_get_filebits (ReadDBFILEPtr rdfp, Int4 ordinal_id, Uint2Ptr filebit, Uint2Ptr aliasfilebit)
@@ -4054,261 +4382,289 @@ readdb_get_filebits (ReadDBFILEPtr rdfp, Int4 ordinal_id, Uint2Ptr filebit, Uint
 {
         rdfp = readdb_get_link(rdfp, ordinal_id);
 
-	if (rdfp == NULL)
-		return FALSE;
+    if (rdfp == NULL)
+        return FALSE;
 
-	if (filebit)
-		*filebit = rdfp->filebit;
+    if (filebit)
+        *filebit = rdfp->filebit;
 
-	if (aliasfilebit)
-		*aliasfilebit = rdfp->aliasfilebit;
+    if (aliasfilebit)
+        *aliasfilebit = rdfp->aliasfilebit;
 
-	return TRUE;
+    return TRUE;
 }
 
+/* The following function performs a binary search to return an ordinal id of 
+   the last sequence in the BLAST database, whose offset in the sequence index
+   is less than the offset argument. The offset is in bases, nucleotide or 
+   protein. For the former, the actual offset in the sequence index is 
+   computed inside the function (i.e. the offset argument is divided by 4).
+   The first_seq argument tells the function not to look at ordinal ids smaller
+   than the argument value.
+*/
 Int4 LIBCALL 
-readdb_get_sequence_number(ReadDBFILEPtr rdfp, Int4 first_seq, Int4 offset) 
+readdb_get_sequence_number(ReadDBFILEPtr rdfp, Int4 first_seq, Int8 offset) 
 {
-   Int4 m, b, e, n;
+   Int4 m, b, e, n, val;
+   Int2 compression_ratio;
+   Int8 dblen;
 
-   b = first_seq; 
-   e = rdfp->num_seqs;
+   if (rdfp->parameters & READDB_IS_PROT)
+      compression_ratio = 1;
+   else 
+      compression_ratio = READDB_COMPRESSION_RATIO;
+
+   while (!rdfp->oidlist && rdfp->totlen <= offset) {
+      offset -= rdfp->totlen;
+      rdfp = rdfp->next;
+   }
+
+   if (rdfp->oidlist)
+      return -1;
+
+   e = rdfp->stop;
+   b = MAX(first_seq, rdfp->start); 
+   offset /= compression_ratio;
+
    while (b < e - 1) {
       m = (b + e) / 2;
-      if (Nlm_SwapUint4(rdfp->sequence_index[m]) > offset)
+      if ((val = Nlm_SwapUint4(rdfp->sequence_index[m])) > offset)
          e = m;
-      else 
+      else if (val == offset)
+         return m;
+      else
          b = m;
    }
-   return e;
+
+   return b;
 }
 
 /* 
-	Gets the sequence number "sequence_number".  If memory-mapped
-	files are enabled, then *buffer points to the appropriate place
-	in the memory-mapped file.  If memory-mapped files are not enabled,
-	then sufficient space in *buffer is allocated (if this is not already
-	the case) and this length is stored in *buffer_length. 
+    Gets the sequence number "sequence_number".  If memory-mapped
+    files are enabled, then *buffer points to the appropriate place
+    in the memory-mapped file.  If memory-mapped files are not enabled,
+    then sufficient space in *buffer is allocated (if this is not already
+    the case) and this length is stored in *buffer_length. 
 
-	The length of the sequence requested is the return value; for memory-
-	mapped files this is different than *buffer_length, which is always
-	zero.
+    The length of the sequence requested is the return value; for memory-
+    mapped files this is different than *buffer_length, which is always
+    zero.
 */
 
 Int4 LIBCALL 
 readdb_get_sequence (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer)
 
 {
-	Uint4 diff, length, nitems=0;
-	Uint1 remainder;
-	Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
+    Uint4 diff, length, nitems=0;
+    Uint1 remainder;
+    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
 
     rdfp = readdb_get_link(rdfp, sequence_number);
 
-	if (rdfp == NULL || rdfp->sequencefp == NULL)
-		return 0;
+    if (rdfp == NULL || rdfp->sequencefp == NULL)
+        return 0;
 
-	if (is_prot == FALSE)
-	{
-		nitems = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) - 
-		    Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
-	}
-	else
-	{
-		nitems = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) - 
-		    Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
-	}
+    if (is_prot == FALSE)
+    {
+        nitems = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) - 
+            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
+    }
+    else
+    {
+        nitems = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) - 
+            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
+    }
 
-	NlmSeekInMFILE(rdfp->sequencefp,
-		Nlm_SwapUint4(rdfp->sequence_index[sequence_number]),
-		SEEK_SET);
+    NlmSeekInMFILE(rdfp->sequencefp,
+        Nlm_SwapUint4(rdfp->sequence_index[sequence_number]),
+        SEEK_SET);
 
         length = sizeof(Uint1) * nitems;
-	/* Use memory-mapped file, don't allocate buffer. */
-	if (rdfp->sequencefp->mfile_true == TRUE)
-	{
-        	diff = rdfp->sequencefp->mmp_end - rdfp->sequencefp->mmp;
+    /* Use memory-mapped file, don't allocate buffer. */
+    if (rdfp->sequencefp->mfile_true == TRUE)
+    {
+            diff = rdfp->sequencefp->mmp_end - rdfp->sequencefp->mmp;
 
-        	if (length > diff)
-        	{
-               		 nitems = diff / sizeof(Uint1);
-               		 length = nitems * sizeof(Uint1);
-        	}
-        	*buffer = rdfp->sequencefp->mmp;
-	}
-	else
-	{
-	/* No mem-mapping, allocate a buffer for the subject sequence. */
-		if (length+2 > rdfp->allocated_length)
-		{
-			if (rdfp->buffer != NULL)
-				rdfp->buffer = (UcharPtr)MemFree(rdfp->buffer);
-			rdfp->allocated_length = length+2;
-			rdfp->buffer = (UcharPtr)MemNew((rdfp->allocated_length)*sizeof(Uint1));
-		}
+            if (length > diff)
+            {
+                        nitems = diff / sizeof(Uint1);
+                        length = nitems * sizeof(Uint1);
+            }
+            *buffer = rdfp->sequencefp->mmp;
+    }
+    else
+    {
+    /* No mem-mapping, allocate a buffer for the subject sequence. */
+        if (length+2 > rdfp->allocated_length)
+        {
+            if (rdfp->buffer != NULL)
+                rdfp->buffer = (UcharPtr)MemFree(rdfp->buffer);
+            rdfp->allocated_length = length+2;
+            rdfp->buffer = (UcharPtr)MemNew((rdfp->allocated_length)*sizeof(Uint1));
+        }
 /* For protein db's the first and last byte is the NULLB, which is a sentinel byte 
 used by the extension functions. For nucl. db's there are no sentinel bytes. */
-		if (is_prot)
-		{
-			rdfp->buffer[0] = NULLB;
-			*buffer = rdfp->buffer+1;
-			FileRead(*buffer, sizeof(Uint1), nitems+1, rdfp->sequencefp->fp);
-		}
-		else
-		{
-			*buffer = rdfp->buffer;
-			FileRead(*buffer, sizeof(Uint1), nitems, rdfp->sequencefp->fp);
-		}
-	}
+        if (is_prot)
+        {
+            rdfp->buffer[0] = NULLB;
+            *buffer = rdfp->buffer+1;
+            FileRead(*buffer, sizeof(Uint1), nitems+1, rdfp->sequencefp->fp);
+        }
+        else
+        {
+            *buffer = rdfp->buffer;
+            FileRead(*buffer, sizeof(Uint1), nitems, rdfp->sequencefp->fp);
+        }
+    }
 
-	/* For nucl. return "unpacked" length and get the remainder out
-	of the last byte. */
-	if (is_prot == FALSE)
-	{
+    /* For nucl. return "unpacked" length and get the remainder out
+    of the last byte. */
+    if (is_prot == FALSE)
+    {
 /* The first six bits in the byte holds the "remainder" (not a multiple of 4) 
 and the last two bits of the byte holds the size of the remainder (0-3). */
-		remainder = *(*buffer+length-1);
-		remainder &= 0x3;
-		length--;
+        remainder = *(*buffer+length-1);
+        remainder &= 0x3;
+        length--;
 /* 4 bases per byte. */
-		length *= 4;
-		length += remainder;
-	}
+        length *= 4;
+        length += remainder;
+    }
 
-	return length;
+    return length;
 }
-	
+    
 /* 
-	Gets the sequence number "sequence_number".  The sequence returned includes
-	all ambiguity information.  THis funciton should only be used for nucleic
-	acid sequences, for proteins use readdb_get_sequence.
+    Gets the sequence number "sequence_number".  The sequence returned includes
+    all ambiguity information.  THis funciton should only be used for nucleic
+    acid sequences, for proteins use readdb_get_sequence.
 
-	buffer contains the sequence and is reallocated if *buffer_length is not long enough.
+    buffer contains the sequence and is reallocated if *buffer_length is not long enough.
 
-	The length of the sequence requested is the return value.
-	protein sequences are always returned as Seq_code_ncbistdaa,
-	nucleotide sequences as Seq_code_ncbi4na.
+    The length of the sequence requested is the return value.
+    protein sequences are always returned as Seq_code_ncbistdaa,
+    nucleotide sequences as Seq_code_ncbi4na.
 */
 
 Int4 LIBCALL 
 readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length, Boolean ready)
 
 {
-    	ByteStorePtr byte_store;
-    	Uint1 byte_value;
-	Int4 index, index2, length, copy_length;
-	Uint1Ptr private_buffer, buffer_4na;
-    	Uint4Ptr ambchar = NULL;
-	Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
+        ByteStorePtr byte_store;
+        Uint1 byte_value;
+    Int4 index, index2, length, copy_length;
+    Uint1Ptr private_buffer, buffer_4na;
+        Uint4Ptr ambchar = NULL;
+    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
 
-	length = readdb_get_sequence(rdfp, sequence_number, &private_buffer);
+    length = readdb_get_sequence(rdfp, sequence_number, &private_buffer);
 
-	/* Check the length, make it one longer for ALIGN. */
-	if ((length+2) > *buffer_length || *buffer == NULL)
-	{
-		if (*buffer)
-			MemFree(*buffer);
+    /* Check the length, make it one longer for ALIGN. */
+    if ((length+2) > *buffer_length || *buffer == NULL)
+    {
+        if (*buffer)
+            MemFree(*buffer);
 
-		*buffer = Nlm_Malloc((length+2)*sizeof(Uint1));
-		*buffer_length = length+2;
-	}
+        *buffer = Nlm_Malloc((length+2)*sizeof(Uint1));
+        *buffer_length = length+2;
+    }
 
-	/* Copy sequence into allocated buffer. */
-	if (!is_prot)
-	{
-		copy_length = length/4;
-	}
-	else
-	{
-		copy_length = length;
-		MemCpy((VoidPtr) *buffer, private_buffer, copy_length);
-	}
+    /* Copy sequence into allocated buffer. */
+    if (!is_prot)
+    {
+        copy_length = length/4;
+    }
+    else
+    {
+        copy_length = length;
+        MemCpy((VoidPtr) *buffer, private_buffer, copy_length);
+    }
 
-    	if (!is_prot) 
-	{
-    		byte_store = BSNew(0);
-       	 	/* Nucleotide sequence require more attention */
-		/* Add one in case it's not divisible by four. */
-	    	buffer_4na = Nlm_Malloc((2*(copy_length+1))*sizeof(Uint1));
-	    	MapNa2ByteToNa4String(private_buffer, (Uint2Ptr) buffer_4na, copy_length);
-		if (length%4 != 0)
-		{
-            		byte_value = *(private_buffer+length/4);
-            		byte_value &= 252; 
-	    		MapNa2ByteToNa4String(&byte_value, (Uint2Ptr) (buffer_4na+(2*copy_length)), 1);
-			copy_length++;
-		}
-            	BSWrite(byte_store, (VoidPtr) buffer_4na, copy_length*2);
+        if (!is_prot) 
+    {
+            byte_store = BSNew(0);
+                /* Nucleotide sequence require more attention */
+        /* Add one in case it's not divisible by four. */
+            buffer_4na = Nlm_Malloc((2*(copy_length+1))*sizeof(Uint1));
+            MapNa2ByteToNa4String(private_buffer, (Uint2Ptr) buffer_4na, copy_length);
+        if (length%4 != 0)
+        {
+                    byte_value = *(private_buffer+length/4);
+                    byte_value &= 252; 
+                MapNa2ByteToNa4String(&byte_value, (Uint2Ptr) (buffer_4na+(2*copy_length)), 1);
+            copy_length++;
+        }
+                BSWrite(byte_store, (VoidPtr) buffer_4na, copy_length*2);
         
-        	if(!readdb_get_ambchar(rdfp, sequence_number, &ambchar)) {
-            		ErrPostEx(SEV_WARNING, 0, 0, 
-               	       "Failure to read ambiguity information");
-	                BSFree(byte_store);
+            if(!readdb_get_ambchar(rdfp, sequence_number, &ambchar)) {
+                    ErrPostEx(SEV_WARNING, 0, 0, 
+                          "Failure to read ambiguity information");
+                    BSFree(byte_store);
                         MemFree(buffer_4na);
-            		return -1;
-        	}
-		/* Convert sequence if ambiguities. */
-       		if(ambchar != NULL) {/* are there any ambiguity ? */
-       		     byte_store = BSRebuildDNA_4na(byte_store, ambchar);
-       		     MemFree(ambchar);
-    		}
-		MemFree(buffer_4na);
+                    return -1;
+            }
+        /* Convert sequence if ambiguities. */
+               if(ambchar != NULL) {/* are there any ambiguity ? */
+                    byte_store = BSRebuildDNA_4na(byte_store, ambchar);
+                    MemFree(ambchar);
+            }
+        MemFree(buffer_4na);
 
-		/* Sequence is copied back to *buffer. */
-		BSSeek(byte_store, 0, SEEK_SET);
-		if (ready)
-			BSMerge(byte_store, (*buffer)+1);
-		else
-			BSMerge(byte_store, *buffer);
-		BSFree(byte_store);
+        /* Sequence is copied back to *buffer. */
+        BSSeek(byte_store, 0, SEEK_SET);
+        if (ready)
+            BSMerge(byte_store, (*buffer)+1);
+        else
+            BSMerge(byte_store, *buffer);
+        BSFree(byte_store);
 
-		if (ready)
-		{
-			private_buffer = (*buffer)+1;
-			index = length/2 - 1;
-			index2 = length-1;
-			private_buffer[length] = ncbi4na_to_blastna[0];
-			if (length%2 != 0)
-			{
-				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index+1] >> 4)];
-				index2--;
-			}
-			while (index2 > 0)
-			{
-				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] & 15)];
-				index2--; 
-				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] >> 4)];
-				index2--; index--;
-			}
-			(*buffer)[0] = ncbi4na_to_blastna[0];
-		}
-		else
-		{
-			private_buffer = *buffer;
-			index = length/2 - 1;
-			index2 = length-1;
-			if (length%2 != 0)
-			{
-				private_buffer[index2] = (private_buffer[index+1] >> 4);
-				index2--;
-			}
-			while (index2 > 0)
-			{
-				private_buffer[index2] = (private_buffer[index] & 15);
-				index2--; 
-				private_buffer[index2] = (private_buffer[index] >> 4);
-				index2--; index--;
-			}
-		}
+        if (ready)
+        {
+            private_buffer = (*buffer)+1;
+            index = length/2 - 1;
+            index2 = length-1;
+            private_buffer[length] = ncbi4na_to_blastna[0];
+            if (length%2 != 0)
+            {
+                private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index+1] >> 4)];
+                index2--;
+            }
+            while (index2 > 0)
+            {
+                private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] & 15)];
+                index2--; 
+                private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] >> 4)];
+                index2--; index--;
+            }
+            (*buffer)[0] = ncbi4na_to_blastna[0];
+        }
+        else
+        {
+            private_buffer = *buffer;
+            index = length/2 - 1;
+            index2 = length-1;
+            if (length%2 != 0)
+            {
+                private_buffer[index2] = (private_buffer[index+1] >> 4);
+                index2--;
+            }
+            while (index2 > 0)
+            {
+                private_buffer[index2] = (private_buffer[index] & 15);
+                index2--; 
+                private_buffer[index2] = (private_buffer[index] >> 4);
+                index2--; index--;
+            }
+        }
 
-		
-	}
+        
+    }
 
-	return length;
+    return length;
 }
 
 /* 
-	Gets the length of sequence number "sequence_number". 
+    Gets the length of sequence number "sequence_number". 
 */
 
 Int4 LIBCALL 
@@ -4316,52 +4672,52 @@ readdb_get_sequence_length (ReadDBFILEPtr rdfp, Int4 sequence_number)
 
 {
 
-	Uint4 length;
-	Uint1 remainder;
-	Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
+    Uint4 length;
+    Uint1 remainder;
+    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
 
         rdfp = readdb_get_link(rdfp, sequence_number);
 
-	if (rdfp == NULL)
-		return 0;
+    if (rdfp == NULL)
+        return 0;
 
-	if (is_prot == FALSE)
-	{
-		length = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) -
-		    Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
-	}
-	else
-	{
-		length = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
-		    Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
-	}
+    if (is_prot == FALSE)
+    {
+        length = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) -
+            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
+    }
+    else
+    {
+        length = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
+            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
+    }
 
-	/* For nucl. return "unpacked" length and get the remainder out
-	of the last byte. */
-	if (is_prot == FALSE)
-	{
-		if (rdfp->sequencefp->mfile_true == TRUE)
-		{
-			NlmSeekInMFILE(rdfp->sequencefp, 
-				Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])-1, SEEK_SET);
-			remainder = *(rdfp->sequencefp->mmp);
-		}
-		else
-		{
-			NlmSeekInMFILE(rdfp->sequencefp, 
-				Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])-1, SEEK_SET);
-			NlmReadMFILE((Uint1Ptr) &remainder, 1, 1, rdfp->sequencefp);
-		}
+    /* For nucl. return "unpacked" length and get the remainder out
+    of the last byte. */
+    if (is_prot == FALSE)
+    {
+        if (rdfp->sequencefp->mfile_true == TRUE)
+        {
+            NlmSeekInMFILE(rdfp->sequencefp, 
+                Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])-1, SEEK_SET);
+            remainder = *(rdfp->sequencefp->mmp);
+        }
+        else
+        {
+            NlmSeekInMFILE(rdfp->sequencefp, 
+                Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])-1, SEEK_SET);
+            NlmReadMFILE((Uint1Ptr) &remainder, 1, 1, rdfp->sequencefp);
+        }
 /* The first six bits in the byte holds the "remainder" (not a multiple of 4) 
 and the last two bits of the byte holds the size of the remainder (0-3). */
-		remainder &= 3;
-		length--;
+        remainder &= 3;
+        length--;
 /* 4 bases per byte. */
-		length *= 4;
-		length += remainder;
-	}
+        length *= 4;
+        length += remainder;
+    }
 
-	return length;
+    return length;
 }
 #ifdef FASTA_ASN
 /*
@@ -4387,7 +4743,7 @@ FdbFastaPtr LIBCALL readdb_get_fastaid PROTO((ReadDBFILEPtr rdfp,
   if (rdfp->headerfp->mfile_true == TRUE) {
     NlmSeekInMFILE(rdfp->headerfp,
                    Nlm_SwapUint4(rdfp->header_index[sequence_number]),
-		   SEEK_SET);
+           SEEK_SET);
     aimp = AsnIoMemOpen("rb", rdfp->headerfp->mmp, size);    
     fasta = FdbFastaAsnRead(aimp->aip, NULL);
     AsnIoMemClose(aimp);
@@ -4395,7 +4751,7 @@ FdbFastaPtr LIBCALL readdb_get_fastaid PROTO((ReadDBFILEPtr rdfp,
     aip = AsnIoNew(ASNIO_BIN_IN, rdfp->headerfp->fp, NULL, NULL, NULL);  
     NlmSeekInMFILE(rdfp->headerfp,
                    Nlm_SwapUint4(rdfp->header_index[sequence_number]),
-		   SEEK_SET);
+           SEEK_SET);
     fasta = FdbFastaAsnRead(aip, NULL);   
     AsnIoFree(aip, FALSE);
   }
@@ -4412,7 +4768,7 @@ readdb_get_ambchar (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint4Ptr PNTR ambc
   rdfp = readdb_get_link(rdfp, sequence_number);
 
   if((length = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
-	      Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])) == 0) {
+          Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])) == 0) {
     *ambchar_return = NULL;
     return TRUE;    /* no ambiguous characters available */
   }
@@ -4438,52 +4794,52 @@ readdb_get_ambchar (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint4Ptr PNTR ambc
 }
 
 /*
-	Check if ambiguity characters are present in the sequence. 
+    Check if ambiguity characters are present in the sequence. 
 */
 
 Boolean LIBCALL
 readdb_ambchar_present (ReadDBFILEPtr rdfp, Int4 sequence_number)
 
 {
-  	rdfp = readdb_get_link(rdfp, sequence_number);
-	if (rdfp == NULL)
-		return FALSE;
+      rdfp = readdb_get_link(rdfp, sequence_number);
+    if (rdfp == NULL)
+        return FALSE;
 
-	if (rdfp->ambchar_index == NULL)
-		return FALSE;
+    if (rdfp->ambchar_index == NULL)
+        return FALSE;
 
-	if((Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
-		    Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])) == 0)
-	{
-		return FALSE;
-	}
+    if((Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
+            Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])) == 0)
+    {
+        return FALSE;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 static Boolean
 readdb_adjust_local_id(ReadDBFILEPtr rdfp, SeqIdPtr sip)
 
 {
-	DbtagPtr dbtag;
-	ObjectIdPtr oid;
+    DbtagPtr dbtag;
+    ObjectIdPtr oid;
 
-	if (sip == NULL || sip->choice != SEQID_GENERAL)
-		return FALSE;
+    if (sip == NULL || sip->choice != SEQID_GENERAL)
+        return FALSE;
 
-	if (rdfp->start == 0)
-		return TRUE;
+    if (rdfp->start == 0)
+        return TRUE;
 
-	dbtag = sip->data.ptrvalue;
-	if (dbtag && StringCmp(dbtag->db, "BL_ORD_ID") == 0)
-	{
-		oid = dbtag->tag;
-		oid->id += rdfp->start;
-	}
+    dbtag = sip->data.ptrvalue;
+    if (dbtag && StringCmp(dbtag->db, "BL_ORD_ID") == 0)
+    {
+        oid = dbtag->tag;
+        oid->id += rdfp->start;
+    }
 
-	return TRUE;
+    return TRUE;
 
-	
+    
 
 }
 
@@ -4671,7 +5027,7 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
     SeqLocAsnLoad();
     
     new_size = Nlm_SwapUint4(rdfp->header_index[sequence_number+1]) -
-	Nlm_SwapUint4(rdfp->header_index[sequence_number]);
+    Nlm_SwapUint4(rdfp->header_index[sequence_number]);
     
     if (new_size > READDB_BUF_SIZE){
         buf_ptr = (CharPtr)Nlm_Malloc(new_size*sizeof(Char) + 1);
@@ -4685,7 +5041,7 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
                      rdfp->headerfp) != new_size)
     {
         if (buf_ptr != &buffer[0])
-          	buf_ptr = (CharPtr)MemFree(buf_ptr);
+              buf_ptr = (CharPtr)MemFree(buf_ptr);
         return FALSE;
     }
 
@@ -4699,7 +5055,7 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
             if (seqidp)        *seqidp = NULL;
             if (description)   *description = NULL;
             if (buf_ptr != &buffer[0])
-            	buf_ptr = (CharPtr)MemFree(buf_ptr);
+                buf_ptr = (CharPtr)MemFree(buf_ptr);
             return FALSE;
         }
         
@@ -4719,26 +5075,26 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
     }
     
     
-    buf_ptr[new_size] = NULLB;	/* defline saved w/o NULLB. */
+    buf_ptr[new_size] = NULLB;    /* defline saved w/o NULLB. */
     
     if(seqidp != NULL) {        /* SeqId requested separate from descriptor */
         
-	for (index=0; index<READDB_BUF_SIZE; index++) {
+    for (index=0; index<READDB_BUF_SIZE; index++) {
             if (buf_ptr[index] == ' ' || buf_ptr[index] == NULLB) {
                 id_buf[index] = NULLB;
                 index++;
                 break;
             }
             id_buf[index] = buf_ptr[index];
-	}
+    }
         
-	*seqidp = SeqIdParse(id_buf);
-	readdb_adjust_local_id(rdfp, *seqidp);
+    *seqidp = SeqIdParse(id_buf);
+    readdb_adjust_local_id(rdfp, *seqidp);
 
-	if (description != NULL)
+    if (description != NULL)
             *description = StringSave(&buf_ptr[index]);
     } else {
-	if (description != NULL)
+    if (description != NULL)
             *description = StringSave(buf_ptr);
     }
 
@@ -4770,15 +5126,15 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
         return FALSE;
 
     if (rdfp->oidlist) {
-	readdb_get_filebits(rdfp, sequence_number, NULL, &aliasfilebit);
+    readdb_get_filebits(rdfp, sequence_number, NULL, &aliasfilebit);
     }
     
     if (aliasfilebit != 0) {
-	alias_mask |= (0x1 << aliasfilebit);
+    alias_mask |= (0x1 << aliasfilebit);
         
-	*id = NULL;
-	not_done = TRUE;
-	header_index = 0;
+    *id = NULL;
+    not_done = TRUE;
+    header_index = 0;
 
         bdfp = NULL;
         if (rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
@@ -4831,10 +5187,10 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
                 new_defline = MemFree(new_defline);
         }
     } else if (rdfp->gi_target != 0) {
-	*id = NULL;
-	not_done = TRUE;
-	header_index = 0;
-	new_defline = NULL;
+    *id = NULL;
+    not_done = TRUE;
+    header_index = 0;
+    new_defline = NULL;
 
         bdfp = NULL;
         if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
@@ -4849,7 +5205,7 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
             bdfp_head = bdfp;
         }
 
-	while (not_done) {
+    while (not_done) {
 
             if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
                 seqid = SeqIdSetDup(bdfp->seqid);
@@ -4873,7 +5229,7 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
                 seqid = SeqIdSetFree(seqid);
                 defline = MemFree(defline);
             }
-	}
+    }
 
     if (seqid != NULL)
         seqid = SeqIdSetFree(seqid);
@@ -4882,9 +5238,9 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
 
     BlastDefLineSetFree(bdfp_head);
 
-	if (description != NULL)
+    if (description != NULL)
             *description = new_defline;
-	else
+    else
             new_defline = MemFree(new_defline);
     } else {
         return readdb_get_defline_ex(rdfp, sequence_number, description, id);
@@ -4907,12 +5263,12 @@ readdb_get_defline (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR descr
 
 
 /*
-	A single sequence may be attched to several entries (as they all
-	have the same sequence).  This function gets the ID and deflines for 
-	each entry attched to one sequence.  On the first call the Uint4
-	(*header_index) should be zero; it will be filled in by readdb_get_header.  
-	Subsequent calls will use this information to know which ID and
-	defline to retrieve next.  When all are retrieved, FALSE will be returned.
+    A single sequence may be attched to several entries (as they all
+    have the same sequence).  This function gets the ID and deflines for 
+    each entry attched to one sequence.  On the first call the Uint4
+    (*header_index) should be zero; it will be filled in by readdb_get_header.  
+    Subsequent calls will use this information to know which ID and
+    defline to retrieve next.  When all are retrieved, FALSE will be returned.
     Caller is responsible for deallocating the out-parameters.
 */
 Boolean LIBCALL
@@ -5051,7 +5407,7 @@ readdb_get_header_ex (ReadDBFILEPtr rdfp, Int4 sequence_number,
         while (index < size) {
             if (buf_ptr[index] == READDB_DEF_SEPARATOR) {
                 break;
-            }	
+            }    
             index++;
         }
         buf_ptr[index] = NULLB;
@@ -5069,7 +5425,7 @@ readdb_get_header_ex (ReadDBFILEPtr rdfp, Int4 sequence_number,
 }
 
 /*
-	Obtains the total database length from the ReadDBFILE structure. 
+    Obtains the total database length from the ReadDBFILE structure. 
 */
 Int8 LIBCALL
 readdb_get_dblen (ReadDBFILEPtr rdfp)
@@ -5106,21 +5462,16 @@ Int4 LIBCALL
 readdb_get_num_entries_total_real (ReadDBFILEPtr rdfp)
 
 {
-	Int4 total=0;
-	if (rdfp == NULL)
-		return 0;
+    Int4 total=0;
+    if (rdfp == NULL)
+        return 0;
 
-	/* if first database contains no sequences, that means, that
-	   the only mask should be used, so size of real databases is zero */
-	if (rdfp->num_seqs == 0)
-	    return 0;
-
-	while (rdfp && !rdfp->oidlist)
-	{
-		total += rdfp->num_seqs;
-		rdfp = rdfp->next;
-	}
-	return total;
+    while (rdfp && !rdfp->oidlist)
+    {
+        total += rdfp->num_seqs;
+        rdfp = rdfp->next;
+    }
+    return total;
 }
 
 /*
@@ -5130,10 +5481,10 @@ Int4 LIBCALL
 readdb_get_num_entries (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return 0;
+    if (rdfp == NULL)
+        return 0;
 
-	return rdfp->num_seqs;
+    return rdfp->num_seqs;
 }
 
 /*
@@ -5143,10 +5494,10 @@ Int4 LIBCALL
 readdb_get_maxlen (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return 0;
+    if (rdfp == NULL)
+        return 0;
 
-	return rdfp->maxlen;
+    return rdfp->maxlen;
 }
 
 /*
@@ -5195,10 +5546,10 @@ CharPtr LIBCALL
 readdb_get_date (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return NULL;
+    if (rdfp == NULL)
+        return NULL;
 
-	return rdfp->date;
+    return rdfp->date;
 }
 
 /*
@@ -5208,10 +5559,10 @@ Boolean LIBCALL
 readdb_is_prot (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return FALSE;
+    if (rdfp == NULL)
+        return FALSE;
 
-	return /*rdfp->is_prot*/(Boolean) (rdfp->parameters & READDB_IS_PROT);
+    return /*rdfp->is_prot*/(Boolean) (rdfp->parameters & READDB_IS_PROT);
 }
 
 /*
@@ -5221,53 +5572,53 @@ Int4 LIBCALL
 readdb_get_formatdb_version (ReadDBFILEPtr rdfp)
 
 {
-	if (rdfp == NULL)
-		return 0;
+    if (rdfp == NULL)
+        return 0;
 
-	return rdfp->formatdb_ver;
+    return rdfp->formatdb_ver;
 }
 
 /* 
-	Translates a SeqIdPtr to an ordinal ID, used by the BLAST database.
-	If the SeqIdPtr cannot be translated, a negative number is returned. 
-	All valid ordinal numbers are >= 0.
+    Translates a SeqIdPtr to an ordinal ID, used by the BLAST database.
+    If the SeqIdPtr cannot be translated, a negative number is returned. 
+    All valid ordinal numbers are >= 0.
 */
 
 Int4 SeqId2OrdinalId(ReadDBFILEPtr rdfp, SeqIdPtr sip)
 
 {
-	DbtagPtr	dbtagptr;
-	Int4 ordinal_id;
+    DbtagPtr    dbtagptr;
+    Int4 ordinal_id;
 
-	if (rdfp == NULL || sip == NULL)
-		return -2;
+    if (rdfp == NULL || sip == NULL)
+        return -2;
 
-	switch (sip->choice)
-	{
-		case SEQID_GI:
-			ordinal_id = readdb_gi2seq(rdfp, sip->data.intvalue, NULL);
-			break;
+    switch (sip->choice)
+    {
+        case SEQID_GI:
+            ordinal_id = readdb_gi2seq(rdfp, sip->data.intvalue, NULL);
+            break;
 
-		case SEQID_GENERAL:
-			dbtagptr = (DbtagPtr) sip->data.ptrvalue;
-			if (dbtagptr == NULL)
-				return OM_MSG_RET_OK;
-			if (StringCmp(dbtagptr->db, "BL_ORD_ID") == 0)
-			{
-				ordinal_id = dbtagptr->tag->id;
-				break;
-			}
-			/* Fall through to default if not "BL_ORD_ID" */
-		default:
-			ordinal_id = readdb_seqid2fasta(rdfp, sip);
-			break;
-	}
+        case SEQID_GENERAL:
+            dbtagptr = (DbtagPtr) sip->data.ptrvalue;
+            if (dbtagptr == NULL)
+                return OM_MSG_RET_OK;
+            if (StringCmp(dbtagptr->db, "BL_ORD_ID") == 0)
+            {
+                ordinal_id = dbtagptr->tag->id;
+                break;
+            }
+            /* Fall through to default if not "BL_ORD_ID" */
+        default:
+            ordinal_id = readdb_seqid2fasta(rdfp, sip);
+            break;
+    }
 
-	return ordinal_id;
+    return ordinal_id;
 }
 /*************************************************************************
 
-	Inits the ReadDBFILEPtr for the BioseqFetch functions.
+    Inits the ReadDBFILEPtr for the BioseqFetch functions.
 
 **************************************************************************/
 
@@ -5275,174 +5626,174 @@ static Boolean
 ReadDBInit(ReadDBFetchStructPtr rdfsp)
 {
 
-	rdfsp->rdfp = readdb_new_ex(rdfsp->dbname, rdfsp->is_prot, TRUE);
+    rdfsp->rdfp = readdb_new_ex(rdfsp->dbname, rdfsp->is_prot, TRUE);
 
-	if (rdfsp->rdfp != NULL)
-		return TRUE;
-	else
-		return FALSE;
+    if (rdfsp->rdfp != NULL)
+        return TRUE;
+    else
+        return FALSE;
 }
 
 /*
-	Checks the chain of ReadDBFetchStructPtr's for one
-	which belongs to the calling thread. If none is found,
-	NULL isreturned; otherwise the ReadDBFetchStructPtr is
-	returned.
+    Checks the chain of ReadDBFetchStructPtr's for one
+    which belongs to the calling thread. If none is found,
+    NULL isreturned; otherwise the ReadDBFetchStructPtr is
+    returned.
 */
 static ReadDBFetchStructPtr
 ReadDBFindFetchStruct(ReadDBFetchStructPtr rdfp)
 
 {
 
-	if (rdfp == NULL)
-		return NULL;
+    if (rdfp == NULL)
+        return NULL;
 
-	while (rdfp)
-	{
-		if (NlmThreadCompare(rdfp->thread_id, NlmThreadSelf()) == TRUE)
-			break;
-		rdfp = rdfp->next;
-	}
-	return rdfp;
+    while (rdfp)
+    {
+        if (NlmThreadCompare(rdfp->thread_id, NlmThreadSelf()) == TRUE)
+            break;
+        rdfp = rdfp->next;
+    }
+    return rdfp;
 }
 
 /*
-	Initializes the ReadDBFetchStructPtr and adds onto end of
-	chain of ReadDBFetchStructPtr (head).  The new ReadDBFetchStructPtr
-	is returned.
+    Initializes the ReadDBFetchStructPtr and adds onto end of
+    chain of ReadDBFetchStructPtr (head).  The new ReadDBFetchStructPtr
+    is returned.
 */
 static ReadDBFetchStructPtr
 ReadDBFetchStructNew(ReadDBFetchStructPtr head, CharPtr dbname, Boolean is_na)
 
 {
-	ReadDBFetchStructPtr rdfsp, rdfsp_var;
+    ReadDBFetchStructPtr rdfsp, rdfsp_var;
 
-	
-	rdfsp = (ReadDBFetchStructPtr) MemNew(sizeof(ReadDBFetchStruct));
-	rdfsp->dbname = StringSave(dbname);
-	rdfsp->is_prot = (is_na == TRUE) ? FALSE : TRUE;
-	rdfsp->thread_id = NlmThreadSelf();
+    
+    rdfsp = (ReadDBFetchStructPtr) MemNew(sizeof(ReadDBFetchStruct));
+    rdfsp->dbname = StringSave(dbname);
+    rdfsp->is_prot = (is_na == TRUE) ? FALSE : TRUE;
+    rdfsp->thread_id = NlmThreadSelf();
 
-	if (head != NULL)
-	{
-		rdfsp_var = head;
-		while (rdfsp_var->next)
-			rdfsp_var = rdfsp_var->next;
-		rdfsp_var->next = rdfsp;
-	}
-	
-	return rdfsp;
+    if (head != NULL)
+    {
+        rdfsp_var = head;
+        while (rdfsp_var->next)
+            rdfsp_var = rdfsp_var->next;
+        rdfsp_var->next = rdfsp;
+    }
+    
+    return rdfsp;
 }
 
 /****************************************************************
 *
-*	ReadDBFetchFreeFunc
-*	Frees ReadDBFetchUserData.
+*    ReadDBFetchFreeFunc
+*    Frees ReadDBFetchUserData.
 *
 ****************************************************************/
-	
+    
 static Pointer LIBCALLBACK ReadDBFetchFreeFunc (Pointer ptr)
 {
-	ReadDBFetchUserDataPtr userdata;
+    ReadDBFetchUserDataPtr userdata;
 
-	userdata = (ReadDBFetchUserDataPtr) ptr;
-	return MemFree(userdata);
+    userdata = (ReadDBFetchUserDataPtr) ptr;
+    return MemFree(userdata);
 }
 
 
 
 /**********************************************************************
 
-	Fetches the Bioseq, based on the ordinal number of the
-	sequence in the database.
+    Fetches the Bioseq, based on the ordinal number of the
+    sequence in the database.
 
 ************************************************************************/
 
 static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
 {
-	BioseqPtr bsp, core_bsp;
-	Boolean status;
-	Int4 ordinal_id;
-	OMProcControlPtr ompcp;
+    BioseqPtr bsp, core_bsp;
+    Boolean status;
+    Int4 ordinal_id;
+    OMProcControlPtr ompcp;
         ObjMgrProcPtr ompp;
-	OMUserDataPtr omdp;
-	ReadDBFetchStructPtr rdfsp;
-	ReadDBFILEPtr rdfp=NULL;
-	ReadDBFetchUserDataPtr userdata;
-	SeqIdPtr sip, best_id;
-	SeqEntryPtr sep;
+    OMUserDataPtr omdp;
+    ReadDBFetchStructPtr rdfsp;
+    ReadDBFILEPtr rdfp=NULL;
+    ReadDBFetchUserDataPtr userdata;
+    SeqIdPtr sip, best_id;
+    SeqEntryPtr sep;
 
-	ordinal_id = -1;
-	
-	ompcp = (OMProcControlPtr)data;
+    ordinal_id = -1;
+    
+    ompcp = (OMProcControlPtr)data;
         ompp = ompcp->proc;
 
-	rdfsp = ReadDBFindFetchStruct((ReadDBFetchStructPtr)(ompp->procdata));
+    rdfsp = ReadDBFindFetchStruct((ReadDBFetchStructPtr)(ompp->procdata));
 
-	if (rdfsp->ReadDBFetchState == READDBBF_DISABLE)
-	{
-		return OM_MSG_RET_OK;
-	}
+    if (rdfsp->ReadDBFetchState == READDBBF_DISABLE)
+    {
+        return OM_MSG_RET_OK;
+    }
 
-	if (rdfsp->ReadDBFetchState == READDBBF_INIT)
-	{
-		status = ReadDBInit(rdfsp);
-		if (status == FALSE)
-			return OM_MSG_RET_OK;
-		rdfsp->ReadDBFetchState = READDBBF_READY;
-	}
+    if (rdfsp->ReadDBFetchState == READDBBF_INIT)
+    {
+        status = ReadDBInit(rdfsp);
+        if (status == FALSE)
+            return OM_MSG_RET_OK;
+        rdfsp->ReadDBFetchState = READDBBF_READY;
+    }
 
 #if 0
         if (ompcp->input_entityID)
         {
                 omdp = ObjMgrGetUserData(ompcp->input_entityID, ompp->procid, OMPROC_FETCH, 0);
                 if (omdp != NULL)
-		{
-			userdata = (ReadDBFetchUserDataPtr) (omdp->userdata.ptrvalue);	
-			if (userdata != NULL)
-			{
-				ordinal_id = userdata->ordinal_number;
-				rdfp = ReadDBGetDb(rdfsp->rdfp, userdata->db_id);
-			}
-		}
-	}
+        {
+            userdata = (ReadDBFetchUserDataPtr) (omdp->userdata.ptrvalue);    
+            if (userdata != NULL)
+            {
+                ordinal_id = userdata->ordinal_number;
+                rdfp = ReadDBGetDb(rdfsp->rdfp, userdata->db_id);
+            }
+        }
+    }
 #endif
 
-	if (ordinal_id < 0 || rdfp == NULL)
-	{
-		sip = (SeqIdPtr) (ompcp->input_data);
+    if (ordinal_id < 0 || rdfp == NULL)
+    {
+        sip = (SeqIdPtr) (ompcp->input_data);
 
-		best_id = SeqIdFindBest(sip, SEQID_GI);
+        best_id = SeqIdFindBest(sip, SEQID_GI);
 
-		if (best_id == NULL)
-		{
-			core_bsp = BioseqFindCore(sip);
-			if (core_bsp)
-				best_id = SeqIdFindBest(core_bsp->id, SEQID_GI);
-		}
+        if (best_id == NULL)
+        {
+            core_bsp = BioseqFindCore(sip);
+            if (core_bsp)
+                best_id = SeqIdFindBest(core_bsp->id, SEQID_GI);
+        }
 
-		if (best_id == NULL)
-			return OM_MSG_RET_OK;
+        if (best_id == NULL)
+            return OM_MSG_RET_OK;
 
-		rdfp = rdfsp->rdfp;
-		while (rdfp)
-		{	/* look in all databases for the proper ID. */
-			ordinal_id = SeqId2OrdinalId(rdfp, best_id);
-			if (ordinal_id >= 0) {
+        rdfp = rdfsp->rdfp;
+        while (rdfp)
+        {    /* look in all databases for the proper ID. */
+            ordinal_id = SeqId2OrdinalId(rdfp, best_id);
+            if (ordinal_id >= 0) {
                                 rdfp->preferred_gi = best_id->data.intvalue;
-				break;
+                break;
                         }
-			rdfp = rdfp->next;
-		}
+            rdfp = rdfp->next;
+        }
 
-	}
+    }
 
-	/* ordinal_id's start at zero. */
-	if (ordinal_id < 0)
-		return OM_MSG_RET_OK;
+    /* ordinal_id's start at zero. */
+    if (ordinal_id < 0)
+        return OM_MSG_RET_OK;
 
-	/* A BioseqPtr is returned by this function. */
-	bsp = readdb_get_bioseq(rdfp, ordinal_id);
+    /* A BioseqPtr is returned by this function. */
+    bsp = readdb_get_bioseq(rdfp, ordinal_id);
        
         /* Reset the preferred_gi */
         rdfp->preferred_gi = 0;
@@ -5459,20 +5810,20 @@ static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
             ValNodeAddPointer(&(bsp->descr), Seq_descr_source, source);
         }
 
-	sep = SeqEntryNew();
-	sep->choice = 1;
-	sep->data.ptrvalue = bsp;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	ompcp->output_data = (Pointer)bsp;
-	ompcp->output_entityID = ObjMgrGetEntityIDForChoice(sep);
-	omdp = ObjMgrAddUserData(ompcp->output_entityID, ompp->procid, OMPROC_FETCH, 0);
-	userdata = (ReadDBFetchUserDataPtr) MemNew(sizeof(ReadDBFetchUserData));
-	omdp->userdata.ptrvalue = userdata;
-	userdata->ordinal_number = ordinal_id;
-	userdata->db_id = ReadDBGetDbId(rdfsp->rdfp, rdfp);
-	omdp->freefunc = ReadDBFetchFreeFunc;
+    sep = SeqEntryNew();
+    sep->choice = 1;
+    sep->data.ptrvalue = bsp;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    ompcp->output_data = (Pointer)bsp;
+    ompcp->output_entityID = ObjMgrGetEntityIDForChoice(sep);
+    omdp = ObjMgrAddUserData(ompcp->output_entityID, ompp->procid, OMPROC_FETCH, 0);
+    userdata = (ReadDBFetchUserDataPtr) MemNew(sizeof(ReadDBFetchUserData));
+    omdp->userdata.ptrvalue = userdata;
+    userdata->ordinal_number = ordinal_id;
+    userdata->db_id = ReadDBGetDbId(rdfsp->rdfp, rdfp);
+    omdp->freefunc = ReadDBFetchFreeFunc;
 
-	return OM_MSG_RET_DONE;
+    return OM_MSG_RET_DONE;
 }
 
 Boolean LIBCALL ReadDBBioseqSetDbGeneticCode(Int4 db_genetic_code)
@@ -5493,8 +5844,8 @@ Boolean LIBCALL ReadDBBioseqSetDbGeneticCode(Int4 db_genetic_code)
 
 /*********************************************************************
 
-	Enables the fetching.  Initializes needed structures and calls
-	ReadDBInit.
+    Enables the fetching.  Initializes needed structures and calls
+    ReadDBInit.
 
 **********************************************************************/
 Boolean LIBCALL 
@@ -5555,9 +5906,9 @@ ReadDBBioseqFetchEnable(CharPtr program, CharPtr dbname, Boolean is_na, Boolean 
 
 /*****************************************************************************
 *
-*		ReadDBBioseqFetchDisable()
+*        ReadDBBioseqFetchDisable()
 *
-*	Calls readdb_destruct if necessary to deallocate resources.
+*    Calls readdb_destruct if necessary to deallocate resources.
 *
 *****************************************************************************/
 void LIBCALL ReadDBBioseqFetchDisable(void)
@@ -5571,69 +5922,69 @@ void LIBCALL ReadDBBioseqFetchDisable(void)
         if (ompp == NULL)   /* not initialized */
                 return;
 
-	rdfsp = ReadDBFindFetchStruct((ReadDBFetchStructPtr)(ompp->procdata));
-	if (! rdfsp->ctr)   /* no enables active */
-		return;
+    rdfsp = ReadDBFindFetchStruct((ReadDBFetchStructPtr)(ompp->procdata));
+    if (! rdfsp->ctr)   /* no enables active */
+        return;
 
-	rdfsp->ctr--;
-	if (rdfsp->ctr)   /* connection still pending */
-			  return;
+    rdfsp->ctr--;
+    if (rdfsp->ctr)   /* connection still pending */
+              return;
 
         if (rdfsp->ReadDBFetchState == READDBBF_READY)
-	{
-		rdfsp->ReadDBFetchState = READDBBF_DISABLE;  /* not active */
-		rdfsp->rdfp = readdb_destruct(rdfsp->rdfp);
-	}
+    {
+        rdfsp->ReadDBFetchState = READDBBF_DISABLE;  /* not active */
+        rdfsp->rdfp = readdb_destruct(rdfsp->rdfp);
+    }
 
         return;
 }
 
 /*
-	Returns the ReadDBFILEPtr by the database ID.
-	NULL is returned on error.
+    Returns the ReadDBFILEPtr by the database ID.
+    NULL is returned on error.
 */
 
 ReadDBFILEPtr 
 ReadDBGetDb (ReadDBFILEPtr rdfp_list, Int2 db_id)
 
 {
-	Int2 index=0;
+    Int2 index=0;
 
-	while (rdfp_list)
-	{
-		if (index == db_id)
-		{
-			return rdfp_list;
-		}
-		rdfp_list = rdfp_list->next;
-		index++;
-	}
-	return NULL;
+    while (rdfp_list)
+    {
+        if (index == db_id)
+        {
+            return rdfp_list;
+        }
+        rdfp_list = rdfp_list->next;
+        index++;
+    }
+    return NULL;
 }
 
 /*
-	Returns the Database ID.
-	-1 is returned on error.
+    Returns the Database ID.
+    -1 is returned on error.
 */
 
 Int2 
 ReadDBGetDbId (ReadDBFILEPtr list, ReadDBFILEPtr target)
 
 {
-	Int2 index=0;
+    Int2 index=0;
 
-	while (list)
-	{
-		if (readdb_compare(list, target) == TRUE)
-			return index;
-		list = list->next;
-		index++;
-	}
-	return -1;
+    while (list)
+    {
+        if (readdb_compare(list, target) == TRUE)
+            return index;
+        list = list->next;
+        index++;
+    }
+    return -1;
 }
 
 /*
-	Formatting functions for databases formatted by formatdb.
+    Formatting functions for databases formatted by formatdb.
 */
 static Boolean LIBCALL
 PrintDbInformationBasicEx (CharPtr database, Boolean is_aa, Int4 line_length,
@@ -5641,11 +5992,11 @@ PrintDbInformationBasicEx (CharPtr database, Boolean is_aa, Int4 line_length,
                            Int8 total_length, FILE *outfp, Boolean html, 
                            Boolean with_links)
 {
-	if (html && with_links) {
+    if (html && with_links) {
            fprintf(outfp, "<b>Database:</b> %s", definition);
            asn2ff_set_output(outfp, NULL);
            ff_StartPrint(0, 0, line_length, NULL);
-	} else {
+    } else {
            asn2ff_set_output(outfp, NULL);
            
            ff_StartPrint(0, 0, line_length, NULL);
@@ -5655,16 +6006,16 @@ PrintDbInformationBasicEx (CharPtr database, Boolean is_aa, Int4 line_length,
               ff_AddString("Database: ");
            ff_AddString(definition);
         }
-	NewContLine();
-	TabToColumn(12);
-	ff_AddString(Ltostr((long) number_seqs, 1));
-	ff_AddString(" sequences; ");
-	ff_AddString(Nlm_Int8tostr(total_length, 1));
-	ff_AddString(" total letters");
-	NewContLine();
-	ff_EndPrint();
+    NewContLine();
+    TabToColumn(12);
+    ff_AddString(Ltostr((long) number_seqs, 1));
+    ff_AddString(" sequences; ");
+    ff_AddString(Nlm_Int8tostr(total_length, 1));
+    ff_AddString(" total letters");
+    NewContLine();
+    ff_EndPrint();
 
-	return TRUE;
+    return TRUE;
 }
 
 Boolean LIBCALL
@@ -5678,49 +6029,49 @@ PrintDbInformationBasic (CharPtr database, Boolean is_aa, Int4 line_length,
 }
 
 /*
-	Print a summary of the database(s) used.
+    Print a summary of the database(s) used.
 */
 
 Boolean LIBCALL
 PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
                           FILE *outfp, Boolean html, CharPtr rid)
 {
-    CharPtr		definition, ptr, chptr;
-    Int8		total_length;
-    Int4		number_seqs, length, real_length, avail_length, shift;
-    ReadDBFILEPtr	rdfp, rdfp_var, rdfp_tmp;
+    CharPtr        definition, ptr, chptr;
+    Int8        total_length;
+    Int4        number_seqs, length, real_length, avail_length, shift;
+    ReadDBFILEPtr    rdfp, rdfp_var, rdfp_tmp;
     Boolean         first_title;
     Char            next_title[1024];
     Boolean         with_links = FALSE;
     Int2 tmp_len;
 
-	if (database == NULL || outfp == NULL)
-		return FALSE;
+    if (database == NULL || outfp == NULL)
+        return FALSE;
 
-	if (is_aa == TRUE)
-		rdfp = readdb_new_ex(database, READDB_DB_IS_PROT, FALSE);
-	else
-		rdfp = readdb_new_ex(database, READDB_DB_IS_NUC, FALSE);
+    if (is_aa == TRUE)
+        rdfp = readdb_new_ex(database, READDB_DB_IS_PROT, FALSE);
+    else
+        rdfp = readdb_new_ex(database, READDB_DB_IS_NUC, FALSE);
 
-	if (rdfp == FALSE)
-		return FALSE;
+    if (rdfp == FALSE)
+        return FALSE;
 
-	rdfp_var = rdfp;
-	length = 0;
-	while (rdfp_var)
-	{
-		length += StringLen(readdb_get_title(rdfp_var));
-		length += 3;
-		rdfp_var = rdfp_var->next;
-	}
-	definition = MemNew(length*sizeof(Char));
-	ptr = definition;
-	rdfp_var = rdfp;
+    rdfp_var = rdfp;
+    length = 0;
+    while (rdfp_var)
+    {
+        length += StringLen(readdb_get_title(rdfp_var));
+        length += 3;
+        rdfp_var = rdfp_var->next;
+    }
+    definition = MemNew(length*sizeof(Char));
+    ptr = definition;
+    rdfp_var = rdfp;
         
     real_length = 0;
     avail_length = length;
     first_title = TRUE;
-	while (rdfp_var) {
+    while (rdfp_var) {
         chptr = readdb_get_title(rdfp_var);
             
         if(chptr == NULL) {
@@ -5798,20 +6149,20 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
         ptr += length;
 
         rdfp_var = rdfp_var->next;
-	}
+    }
 
-	*ptr = NULLB;
-	readdb_get_totals_ex(rdfp, &(total_length), &(number_seqs), TRUE);
+    *ptr = NULLB;
+    readdb_get_totals_ex(rdfp, &(total_length), &(number_seqs), TRUE);
 
-	rdfp = readdb_destruct(rdfp);
+    rdfp = readdb_destruct(rdfp);
 
-	PrintDbInformationBasicEx (database, is_aa, line_length, definition,
+    PrintDbInformationBasicEx (database, is_aa, line_length, definition,
                                  number_seqs, total_length, outfp, 
                                  html, with_links);
 
-	definition = MemFree(definition);
+    definition = MemFree(definition);
 
-	return TRUE;
+    return TRUE;
 }
 
 Boolean LIBCALL
@@ -5825,7 +6176,7 @@ PrintDbInformation(CharPtr database, Boolean is_aa, Int4 line_length, FILE *outf
 
 /* Parse DB configuration file */
 
-#define	MAX_LINE_LENGTH	1024
+#define    MAX_LINE_LENGTH    1024
 
 typedef enum {
     lexIGNORE,
@@ -5835,19 +6186,19 @@ typedef enum {
     lexEOF
 } LexTokens;
 
-static CharPtr	getline (FILE *fp, CharPtr buf)
+static CharPtr    getline (FILE *fp, CharPtr buf)
 {
     buf[0] = '\0';
     while (!buf || (buf[0] == '#') || (buf[0] == '\0') || (buf[0] == '\n')) {
-	FileGets(buf, MAX_LINE_LENGTH, fp);
+    FileGets(buf, MAX_LINE_LENGTH, fp);
     }
     return buf;
 }
-    	    
-static Int4	parseInt(CharPtr buf)
+            
+static Int4    parseInt(CharPtr buf)
 {
-    Int4	retval;
-    long	my_long;
+    Int4    retval;
+    long    my_long;
 
     sscanf(buf, "%ld", &my_long);
     retval = my_long;
@@ -5855,49 +6206,49 @@ static Int4	parseInt(CharPtr buf)
     return retval;
 }
 
-static CharPtr	parseString(CharPtr buf)
+static CharPtr    parseString(CharPtr buf)
 {
-    CharPtr	retval = MemNew(sizeof(Char) * MAX_LINE_LENGTH);
+    CharPtr    retval = MemNew(sizeof(Char) * MAX_LINE_LENGTH);
 
     sscanf(buf, "%s", retval);
     return retval;
 }
 
-static Boolean	parseBool(CharPtr buf)
+static Boolean    parseBool(CharPtr buf)
 {
-    Boolean	retval;
-    CharPtr	str = parseString(buf);
+    Boolean    retval;
+    CharPtr    str = parseString(buf);
 
     if ((!StrCmp(str, "true")) || (!StrCmp(str, "True")) || (!StrCmp(str, "TRUE")) ||
-	    (!StrCmp(str, "t")) || (!StrCmp(str, "T")) ||
-	    (!StrCmp(str, "1")) ||
-	    (!StrCmp(str, "y")) || (!StrCmp(str, "Y")))
-	retval = TRUE;
+        (!StrCmp(str, "t")) || (!StrCmp(str, "T")) ||
+        (!StrCmp(str, "1")) ||
+        (!StrCmp(str, "y")) || (!StrCmp(str, "Y")))
+    retval = TRUE;
     else
-	retval = FALSE;
+    retval = FALSE;
 
     str = MemFree(str);
     return retval;
 }
 
-Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
+Int2    ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
 {
-    Int2		number_of_DBs = 0, i;
-    FILE		*fp;
-    DataBaseIDPtr	retval;
-    Char		buf[MAX_LINE_LENGTH], name[MAX_LINE_LENGTH];
-    Char		dbid[MAX_LINE_LENGTH], isprot[MAX_LINE_LENGTH];
-    Char		full_filename[PATH_MAX];
+    Int2        number_of_DBs = 0, i;
+    FILE        *fp;
+    DataBaseIDPtr    retval;
+    Char        buf[MAX_LINE_LENGTH], name[MAX_LINE_LENGTH];
+    Char        dbid[MAX_LINE_LENGTH], isprot[MAX_LINE_LENGTH];
+    Char        full_filename[PATH_MAX];
 
     /* open config file */
     if (path && StrCmp(path, "")) {
-	sprintf(full_filename, "%s%s%s", path, DIRDELIMSTR, DB_CONFIG_FN);
+    sprintf(full_filename, "%s%s%s", path, DIRDELIMSTR, DB_CONFIG_FN);
     } else {
-	sprintf(full_filename, "%s", DB_CONFIG_FN);
+    sprintf(full_filename, "%s", DB_CONFIG_FN);
     }
     
     if (!(fp = FileOpen(full_filename, "r")))
-	return 0;
+    return 0;
     
     getline(fp, buf);
 
@@ -5909,11 +6260,11 @@ Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
     
     /* each next line is contains name, id and type of a DB */
     for (i=0; i < number_of_DBs; i++) {
-	getline(fp, buf);
-	sscanf(buf, "%s%s%s", name, dbid, isprot);
-	(retval+i)->name   = parseString(name);
-	(retval+i)->id     = parseInt(dbid);
-	(retval+i)->isprot = parseBool(isprot);
+    getline(fp, buf);
+    sscanf(buf, "%s%s%s", name, dbid, isprot);
+    (retval+i)->name   = parseString(name);
+    (retval+i)->id     = parseInt(dbid);
+    (retval+i)->isprot = parseBool(isprot);
     }
 
     FileClose(fp);
@@ -5955,9 +6306,9 @@ FormatDbUint4Write(Uint4 number, FILE *fp)
   Uint4 value;
 
   /* If FORMATDB_SIZE changes, this must be changed. */
-  value = Nlm_SwapUint4(number);	
+  value = Nlm_SwapUint4(number);    
   if (FileWrite(&(value), FORMATDB_SIZE, 1, fp) != (Uint4) 1)
-	return FALSE;
+    return FALSE;
 
   return TRUE;
 }
@@ -6021,19 +6372,19 @@ static void FASTALookupFree(FASTALookupPtr lookup)
  * Initializing FormatDB structure (see formatdb.h),
  ******************************************************************************* 
  * Parameters:
- *	dbname		- name of the input file
- *	isProtein	- true, if file with protein seqs
+ *    dbname        - name of the input file
+ *    isProtein    - true, if file with protein seqs
  *
  * Returns pointer to allocated FormatDB structure (FormatDBPtr)
- *	
+ *    
  ******************************************************************************/
 
 FormatDBPtr FormatDBInit(FDB_optionsPtr options)
 {
     
-    FormatDBPtr		fdbp;
-    Char		filenamebuf[FILENAME_MAX];
-    Uint4		i = 0;
+    FormatDBPtr        fdbp;
+    Char        filenamebuf[FILENAME_MAX];
+    Uint4        i = 0;
     
     if(options == NULL)
         return NULL;
@@ -6056,7 +6407,7 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
     
     /* If basename is NULL, use dbname. */
     if (options->base_name == NULL)
-	options->base_name = StringSave(options->db_file);
+    options->base_name = StringSave(options->db_file);
 
     fdbp->fd = NULL;
     fdbp->aip = NULL;
@@ -6081,7 +6432,7 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
     fdbp->fd_seq = FileOpen(filenamebuf, "wb");        
     
     if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1) /* Sequence file started from NULLB */
-	return NULL;
+    return NULL;
     
     /* Index file */
     
@@ -6120,10 +6471,10 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
 
     if(!options->is_protein) {
         fdbp->AmbOffsetTable = (Int4Ptr)MemNew(fdbp->OffsetAllocated*sizeof(Uint4));
-	if (!fdbp->AmbOffsetTable) {
-	    ErrLogPrintf("Not enough memory to initialize main formatdb structure. Formatting failed.\n");
-	    return NULL;
-	}
+    if (!fdbp->AmbOffsetTable) {
+        ErrLogPrintf("Not enough memory to initialize main formatdb structure. Formatting failed.\n");
+        return NULL;
+    }
     } else {
         fdbp->AmbOffsetTable = NULL;
     }
@@ -6143,7 +6494,7 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
 /*****************************************************************************
 *
 *   SeqIdE2Index(anp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *       if atp == NULL, then assumes it stands alone (SeqId ::=)
 *
 *****************************************************************************/
@@ -6169,8 +6520,8 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     switch (anp->choice) {
 
     case SEQID_LOCAL:     /* local */
-	oid = (ObjectIdPtr)(anp->data.ptrvalue);
-	ptr = oid->str;
+    oid = (ObjectIdPtr)(anp->data.ptrvalue);
+    ptr = oid->str;
         break;
     case SEQID_GIBBSQ:    /* gibbseq */
         sprintf(buf, "%ld", (long)(anp->data.intvalue));
@@ -6184,14 +6535,14 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_DDBJ:      /* ddbj */
         do_gb = TRUE;     /* also index embl, ddbj as genbank */
     case SEQID_GENBANK:   /* genbank */
-    case SEQID_TPG:	      /* Third Party Annot/Seq Genbank */
-    case SEQID_TPE:	      /* Third Party Annot/Seq EMBL */
-    case SEQID_TPD:	      /* Third Party Annot/Seq DDBJ */
+    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
     case SEQID_OTHER:     /* other */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
-	if ((tsip->version > 0) && (tsip->release == NULL))
-		version = tsip->version;
-	break;
+    if ((tsip->version > 0) && (tsip->release == NULL))
+        version = tsip->version;
+    break;
     case SEQID_PIR:       /* pir   */
     case SEQID_SWISSPROT: /* swissprot */
     case SEQID_PRF:       /* prf   */
@@ -6206,8 +6557,8 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_GI:        /* gi */
         break;
     case SEQID_PDB:       /* pdb   */
-	psip = (PDBSeqIdPtr)(anp->data.ptrvalue);
-	ptr = psip->mol;
+    psip = (PDBSeqIdPtr)(anp->data.ptrvalue);
+    ptr = psip->mol;
         chain = psip->chain;
         break;
     }
@@ -6219,7 +6570,7 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     }
 
     if (ptr != NULL) {   /* write a single string */
-	StringMove(buf, ptr);
+    StringMove(buf, ptr);
         StringLower(buf);
         fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
 
@@ -6255,16 +6606,16 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
                 tsip->accession = tmp;
             }
 
-	    if (version) { /* Index accession without verison. */
-		tsip->version = 0;
-            	tmp = tsip->name;
-            	tsip->name = NULL;
-            	SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
+        if (version) { /* Index accession without verison. */
+        tsip->version = 0;
+                tmp = tsip->name;
+                tsip->name = NULL;
+                SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
                 StringLower(buf);
-            	fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-            	tsip->name = tmp;
-		tsip->version = version;
-	    }
+                fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
+                tsip->name = tmp;
+        tsip->version = version;
+        }
         }
 
                /* now index as separate strings */
@@ -6272,18 +6623,18 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
             StringMove(buf, tsip->accession);
             StringLower(buf);
             fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-	    if (version && !sparse) {
-            	fprintf(fd, "%s%.d%c%d\n", buf, version, 
+        if (version && !sparse) {
+                fprintf(fd, "%s%.d%c%d\n", buf, version, 
                         ISAM_DATA_CHAR, seq_num);
             }
-	}
+    }
 
         if(tsip->name != NULL && 
            StringICmp(tsip->accession, tsip->name) && !sparse) {
             StringMove(buf, tsip->name);
             StringLower(buf);
             fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-	}
+    }
     }
     
     if (do_gb && !sparse) {   /* index embl and ddbj as genbank */
@@ -6300,7 +6651,7 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
 /*****************************************************************************
 *
 *   SeqIdE2Index(anp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *       if atp == NULL, then assumes it stands alone (SeqId ::=)
 *
 *****************************************************************************/
@@ -6326,8 +6677,8 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     switch (anp->choice) {
 
     case SEQID_LOCAL:     /* local */
-	oid = (ObjectIdPtr)(anp->data.ptrvalue);
-	ptr = oid->str;
+    oid = (ObjectIdPtr)(anp->data.ptrvalue);
+    ptr = oid->str;
         break;
     case SEQID_GIBBSQ:    /* gibbseq */
         sprintf(buf, "%ld", (long)(anp->data.intvalue));
@@ -6341,14 +6692,14 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_DDBJ:      /* ddbj */
         do_gb = TRUE;     /* also index embl, ddbj as genbank */
     case SEQID_GENBANK:   /* genbank */
-    case SEQID_TPG:	      /* Third Party Annot/Seq Genbank */
-    case SEQID_TPE:	      /* Third Party Annot/Seq EMBL */
-    case SEQID_TPD:	      /* Third Party Annot/Seq DDBJ */
+    case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+    case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+    case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
     case SEQID_OTHER:     /* other */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
-	if ((tsip->version > 0) && (tsip->release == NULL))
-		version = tsip->version;
-	break;
+    if ((tsip->version > 0) && (tsip->release == NULL))
+        version = tsip->version;
+    break;
     case SEQID_PIR:       /* pir   */
     case SEQID_SWISSPROT: /* swissprot */
     case SEQID_PRF:       /* prf   */
@@ -6363,8 +6714,8 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     case SEQID_GI:        /* gi */
         break;
     case SEQID_PDB:       /* pdb   */
-	psip = (PDBSeqIdPtr)(anp->data.ptrvalue);
-	ptr = psip->mol;
+    psip = (PDBSeqIdPtr)(anp->data.ptrvalue);
+    ptr = psip->mol;
         chain = psip->chain;
         break;
     }
@@ -6385,14 +6736,14 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
             
             length = StringLen(buf);
             for(i = 0; i < length; i++)
-       		buf[i] = TO_LOWER(buf[i]);
+               buf[i] = TO_LOWER(buf[i]);
             fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
             tsip->version = version;
         }
     } /* if(!sparse) */
 
     if (ptr != NULL) {   /* write a single string */
-	StringMove(buf, ptr);
+    StringMove(buf, ptr);
         length = StringLen(buf);
         for(i = 0; i < length; i++)
             buf[i] = TO_LOWER(buf[i]);
@@ -6426,38 +6777,38 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
                 buf[i] = TO_LOWER(buf[i]);
             fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
             tsip->name = tmp;
-	    if (version)
-	    { /* Index accession without verison. */
-		tsip->version = 0;
-            	tmp = tsip->name;
-            	tsip->name = NULL;
-            	SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-            	length = StringLen(buf);
-            	for(i = 0; i < length; i++)
-               		 buf[i] = TO_LOWER(buf[i]);
-            	fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
-            	tsip->name = tmp;
-		tsip->version = version;
-	    }
+        if (version)
+        { /* Index accession without verison. */
+        tsip->version = 0;
+                tmp = tsip->name;
+                tsip->name = NULL;
+                SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
+                length = StringLen(buf);
+                for(i = 0; i < length; i++)
+                        buf[i] = TO_LOWER(buf[i]);
+                fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
+                tsip->name = tmp;
+        tsip->version = version;
+        }
         }
 
                /* now index as separate strings */
-	if (tsip->name != NULL && !sparse) {
+    if (tsip->name != NULL && !sparse) {
             StringMove(buf, tsip->name);
             length = StringLen(buf);
             for(i = 0; i < length; i++)
                 buf[i] = TO_LOWER(buf[i]);
             fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
-	}
+    }
         if (tsip->accession != NULL) {
             StringMove(buf, tsip->accession);
             length = StringLen(buf);
             for(i = 0; i < length; i++)
                 buf[i] = TO_LOWER(buf[i]);
             fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
-	    if (version && !sparse)
-            	fprintf(fd, "%s.%d%c%ld\n", buf, version, ISAM_DATA_CHAR, (long) seq_num);
-	}
+        if (version && !sparse)
+                fprintf(fd, "%s.%d%c%ld\n", buf, version, ISAM_DATA_CHAR, (long) seq_num);
+    }
         
     }
     
@@ -6501,48 +6852,48 @@ erret:
 }
 static SeqIdPtr SeqIdSetFree_NO_OBJ_MGR(SeqIdPtr sip)
 {
-	SeqIdPtr	next;
-	
-	while(sip != NULL){
-		next=sip->next;
-		switch(sip->choice) {
-		 case SEQID_LOCAL:      /* local */
-			ObjectIdFree(sip->data.ptrvalue);
-			break;
-		 case SEQID_GIBBSQ:      /* gibbseq */
-		 case SEQID_GIBBMT:      /* gibbmt */
-			break;
-		 case SEQID_GIIM:      /* giimid */
-			GiimFree(sip->data.ptrvalue);
-			break;
-		 case SEQID_GENBANK:      /* genbank */
-		 case SEQID_EMBL:      /* embl */
-		 case SEQID_PIR:      /* pir   */
-		 case SEQID_SWISSPROT:      /* swissprot */
-		 case SEQID_OTHER:     /* other */
-		 case SEQID_DDBJ:
-    	         case SEQID_TPG:	      /* Third Party Annot/Seq Genbank */
-    		 case SEQID_TPE:	      /* Third Party Annot/Seq EMBL */
-    		 case SEQID_TPD:	      /* Third Party Annot/Seq DDBJ */
-		 case SEQID_PRF:
-			TextSeqIdFree(sip->data.ptrvalue);
-			break;
-		 case SEQID_PATENT:      /* patent seq id */
-			PatentSeqIdFree(sip->data.ptrvalue);
-			break;
-		 case SEQID_GENERAL:     /* general */
-			DbtagFree(sip->data.ptrvalue);
-			break;
-		 case SEQID_GI:     /* gi */
-			break;
-		 case SEQID_PDB:
+    SeqIdPtr    next;
+    
+    while(sip != NULL){
+        next=sip->next;
+        switch(sip->choice) {
+         case SEQID_LOCAL:      /* local */
+            ObjectIdFree(sip->data.ptrvalue);
+            break;
+         case SEQID_GIBBSQ:      /* gibbseq */
+         case SEQID_GIBBMT:      /* gibbmt */
+            break;
+         case SEQID_GIIM:      /* giimid */
+            GiimFree(sip->data.ptrvalue);
+            break;
+         case SEQID_GENBANK:      /* genbank */
+         case SEQID_EMBL:      /* embl */
+         case SEQID_PIR:      /* pir   */
+         case SEQID_SWISSPROT:      /* swissprot */
+         case SEQID_OTHER:     /* other */
+         case SEQID_DDBJ:
+                 case SEQID_TPG:          /* Third Party Annot/Seq Genbank */
+             case SEQID_TPE:          /* Third Party Annot/Seq EMBL */
+             case SEQID_TPD:          /* Third Party Annot/Seq DDBJ */
+         case SEQID_PRF:
+            TextSeqIdFree(sip->data.ptrvalue);
+            break;
+         case SEQID_PATENT:      /* patent seq id */
+            PatentSeqIdFree(sip->data.ptrvalue);
+            break;
+         case SEQID_GENERAL:     /* general */
+            DbtagFree(sip->data.ptrvalue);
+            break;
+         case SEQID_GI:     /* gi */
+            break;
+         case SEQID_PDB:
                         PDBSeqIdFree(sip->data.ptrvalue);
                         break;
-		}
-		MemFree(sip);
-		sip=next;
-	}
-	return NULL;
+        }
+        MemFree(sip);
+        sip=next;
+    }
+    return NULL;
 }
 
 static Int4 UpdateLookupInfo(CharPtr defline, 
@@ -6604,7 +6955,7 @@ static Int4 UpdateLookupInfo(CharPtr defline,
             return FALSE;
         }
         
-	sip = SeqIdSetFree_NO_OBJ_MGR(sip);
+    sip = SeqIdSetFree_NO_OBJ_MGR(sip);
         
         if((p = StringChr(d, READDB_DEF_SEPARATOR)) == NULL)
             break;
@@ -6648,7 +6999,7 @@ static Boolean FormatdbCreateStringIndex(const CharPtr FileName,
     if (SORTFiles(&files, 1, fd_out, sop) != SORTNoError)
     {
         ErrPostEx(SEV_ERROR, 0, 0, "SORTFiles failed, change TMPDIR to a partition with more free space or use -s option");
-	return FALSE;
+    return FALSE;
     }
     SORTObjectFree(sop);
 
@@ -6748,7 +7099,7 @@ BlastDefLinePtr FDLCreateAsnDF(FormatDBPtr fdbp, CharPtr seq_id,
             bdp_last = bdp;
         }
 
-	sip = SeqIdSetFree_NO_OBJ_MGR(sip);
+    sip = SeqIdSetFree_NO_OBJ_MGR(sip);
 
         /* Looking for the next defline in the set */
         
@@ -6820,19 +7171,19 @@ static Boolean FDBDumpDefline(FormatDBPtr fdbp, CharPtr title, CharPtr seq_id)
         else
             defline_len = 0;
         
-        defline_len += 255;	/* Sufficient for an ID. */
+        defline_len += 255;    /* Sufficient for an ID. */
         
-	if ( sizeof(tmpbuff) > defline_len)
-	    defline = tmpbuff;
-	else
-	    defline = MemNew((defline_len+1)*sizeof(Char));
+    if ( sizeof(tmpbuff) > defline_len)
+        defline = tmpbuff;
+    else
+        defline = MemNew((defline_len+1)*sizeof(Char));
         
-	/* IF the gi is zero and there is another ID, then do not print it. */
-	if (StringNCmp(seq_id, "gi|0|", 5) == 0) {
-            StringCpy(defline, seq_id+5);	
+    /* IF the gi is zero and there is another ID, then do not print it. */
+    if (StringNCmp(seq_id, "gi|0|", 5) == 0) {
+            StringCpy(defline, seq_id+5);    
             ErrPostEx(SEV_WARNING, 0, 0, "%s: zero gi stripped", seq_id);
-	} else {
-            StringCpy(defline, seq_id);	
+    } else {
+            StringCpy(defline, seq_id);    
         }
         
         id_length = StringLen(defline);
@@ -6841,10 +7192,10 @@ static Boolean FDBDumpDefline(FormatDBPtr fdbp, CharPtr title, CharPtr seq_id)
     }
     if (FileWrite(defline, StringLen(defline), 1, fdbp->fd_def) != (Uint4) 1) {
 
-	if (defline != title && defline != tmpbuff) 
+    if (defline != title && defline != tmpbuff) 
             MemFree(defline);
         
-	return 1;
+    return 1;
     }
     
     /* -------- Now adding new entried into lookup hash table */
@@ -6853,7 +7204,7 @@ static Boolean FDBDumpDefline(FormatDBPtr fdbp, CharPtr title, CharPtr seq_id)
                          fdbp->fd_stmp, fdbp->options->parse_mode, 
                          fdbp->options->sparse_idx)) != LOOKUP_NO_ERROR) {
         
-	if ( defline != title && defline != tmpbuff) 
+    if ( defline != title && defline != tmpbuff) 
             MemFree(defline);
         
         return FALSE;
@@ -6885,16 +7236,16 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date)
 {
     
-    Char		tmpbuff[1025];
-    Uint4Ptr		AmbCharPtr = NULL;
-    Uint1		ch, remainder, new_code;
-    Uint4		len, i, total, index, hash;
+    Char        tmpbuff[1025];
+    Uint4Ptr        AmbCharPtr = NULL;
+    Uint1        ch, remainder, new_code;
+    Uint4        len, i, total, index, hash;
     ByteStorePtr        new_data;
     FDB_optionsPtr      options;
     CharPtr             ptr;
     Boolean             bdp_was_allocated = FALSE;
     FormatDBPtr         tmp_fdbp;
-    Char		oldnamebuf[FILENAME_MAX], newnamebuf[FILENAME_MAX];
+    Char        oldnamebuf[FILENAME_MAX], newnamebuf[FILENAME_MAX];
 
     /* Version should be consistent with input parameters */
     if(fdbp->options->version > FORMATDB_VER_TEXT && bdp == NULL) {
@@ -6991,18 +7342,18 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                                                 fdbp->OffsetAllocated*sizeof(Uint4));
         fdbp->SeqOffsetTable = (Int4Ptr)Realloc(fdbp->SeqOffsetTable, 
                                                 fdbp->OffsetAllocated*sizeof(Uint4));
-	if (!fdbp->DefOffsetTable || !fdbp->SeqOffsetTable) {
-	    ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
-	    return 1;
-	}
+    if (!fdbp->DefOffsetTable || !fdbp->SeqOffsetTable) {
+        ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
+        return 1;
+    }
 
         if(!fdbp->options->is_protein) {
             fdbp->AmbOffsetTable = (Int4Ptr)Realloc(fdbp->AmbOffsetTable, 
                                                     fdbp->OffsetAllocated*sizeof(Uint4));
-	    if (!fdbp->AmbOffsetTable) {
-		ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
-		return 1;
-	    }
+        if (!fdbp->AmbOffsetTable) {
+        ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
+        return 1;
+        }
         }
     }
     
@@ -7029,24 +7380,24 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
             
             /* ncbi4na require compression into ncbi2na */
             
-	    if (fdbp->options->version > FORMATDB_VER_TEXT)
-	    {
-            	if((new_data = BSCompressDNANew(*seq_data, SequenceLen,
+        if (fdbp->options->version > FORMATDB_VER_TEXT)
+        {
+                if((new_data = BSCompressDNANew(*seq_data, SequenceLen,
                                               &AmbCharPtr)) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return 3;
-            	}
-	     }
-	     else
-	     {
-            	if((new_data = BSCompressDNA(*seq_data, SequenceLen,
+                    return 3;
+                }
+         }
+         else
+         {
+                if((new_data = BSCompressDNA(*seq_data, SequenceLen,
                                               &AmbCharPtr)) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return 3;
-            	}
-	     }
+                    return 3;
+                }
+         }
             *seq_data = new_data;
             
             seq_data_type = Seq_code_ncbi2na; /* just for information */
@@ -7092,7 +7443,7 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
         /* if AmbCharPtr is not NULL, then there was ambiguity. */
         if(AmbCharPtr != NULL) { /* The first Uint4 holds the total number of ambig. bp. */
             total = (*AmbCharPtr)+1;
-	    total &= 0x7FFFFFFF;
+        total &= 0x7FFFFFFF;
             for (index=0; index<total; index++) {
                 if (!FormatDbUint4Write(AmbCharPtr[index], fdbp->fd_seq))
                     return 1;
@@ -7136,10 +7487,6 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                     (char*) accession ? accession : "unknown");
             accession = MemFree(accession);
 
-            if(bdp_was_allocated) {
-                BlastDefLineSetFree(bdp);
-            }
-
         } else {
             fprintf(fdbp->fd_sdi, "%ld %ld %ld %ld %s %ld %ld %ld\n", 
                     (long) fdbp->num_of_seqs, (long) gi, (long) tax_id, 
@@ -7148,6 +7495,9 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
         }
     }
     
+    if(bdp_was_allocated) {
+        BlastDefLineSetFree(bdp);
+    }
     /* ---------------------------------------------- */
 
     fdbp->num_of_seqs++;  /* Finshed ... */
@@ -7160,7 +7510,7 @@ Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp)
     SeqIdWrite(bsp->id, tmpbuf, PRINTID_FASTA_LONG, sizeof(tmpbuf));
 
     if (BioseqGetLen(bsp) <= 0)
-    	ErrPostEx(SEV_WARNING, 0, 0, "%s has zero-length sequence\n", tmpbuf);
+        ErrPostEx(SEV_WARNING, 0, 0, "%s has zero-length sequence\n", tmpbuf);
 
     return FDBAddSequence (fdbp, bdp, bsp->seq_data_type, 
                            &bsp->seq_data, bsp->length, tmpbuf, 
@@ -7172,23 +7522,23 @@ Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp)
  * into "def", "index", ...., files
  ******************************************************************************* 
  * Parameters:
- *	fdbp	- pointer to memory to be freed
+ *    fdbp    - pointer to memory to be freed
  *
  * Returns NULL
  ******************************************************************************/
 Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
 {
     
-    Int4		SequenceLen;
-    BioseqPtr		bsp = NULL;
-    CharPtr		defline;
-    Char		tmpbuff[1024];
-    Int4		buffer_size=0, defline_len=0;
-    CharPtr		buffer=NULL;
-    Int4		len, id_length;
-    Uint4Ptr		AmbCharPtr = NULL;
-    Uint1		ch, remainder;
-    Uint4		i, total, index;
+    Int4        SequenceLen;
+    BioseqPtr        bsp = NULL;
+    CharPtr        defline;
+    Char        tmpbuff[1024];
+    Int4        buffer_size=0, defline_len=0;
+    CharPtr        buffer=NULL;
+    Int4        len, id_length;
+    Uint4Ptr        AmbCharPtr = NULL;
+    Uint1        ch, remainder;
+    Uint4        i, total, index;
 
     if (IS_Bioseq(sep))
         bsp = (BioseqPtr) sep->data.ptrvalue;
@@ -7215,18 +7565,18 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
         fdbp->SeqOffsetTable = (Int4Ptr)Realloc(fdbp->SeqOffsetTable, 
                                                 fdbp->OffsetAllocated*sizeof(Uint4));
 
-	if (!fdbp->DefOffsetTable || !fdbp->SeqOffsetTable) {
-	    ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
-	    return 0;
-	}
+    if (!fdbp->DefOffsetTable || !fdbp->SeqOffsetTable) {
+        ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
+        return 0;
+    }
 
         if(!fdbp->options->is_protein) {
             fdbp->AmbOffsetTable = (Int4Ptr)Realloc(fdbp->AmbOffsetTable, 
                                                     fdbp->OffsetAllocated*sizeof(Uint4));
-	    if (!fdbp->AmbOffsetTable) {
-		ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
-		return 0;
-	    }
+        if (!fdbp->AmbOffsetTable) {
+        ErrLogPrintf("Not enough memory to allocate main formatdb structure. Formatting failed.\n");
+        return 0;
+        }
         }
     }
 
@@ -7249,7 +7599,7 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
             defline_len = StringLen(BioseqGetTitle(bsp));
         else
             defline_len = 0;
-        defline_len += 255;	/* Sufficient for an ID. */
+        defline_len += 255;    /* Sufficient for an ID. */
         if (buffer_size < defline_len) {
             if (buffer)
                 buffer = MemFree(buffer);
@@ -7264,7 +7614,7 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
         defline = buffer;
     }
     if (FileWrite(defline, StringLen(defline), 1, fdbp->fd_def) != (Uint4) 1)
-	return 1;
+    return 1;
     
         /* -------- Now adding new entried into lookup hash table */
     
@@ -7276,7 +7626,7 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
     
     defline = NULL;
     if (buffer)
-	MemFree(buffer);
+    MemFree(buffer);
     
     if(!fdbp->options->is_protein)  {
         AmbCharPtr = NULL;
@@ -7284,23 +7634,23 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
             
             /* ncbi4na require compression into ncbi2na */
             
-	    if (fdbp->options->version > FORMATDB_VER_TEXT)
-	    {
-            	if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
+        if (fdbp->options->version > FORMATDB_VER_TEXT)
+        {
+                if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
                                               &(AmbCharPtr))) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return -1;
-            	}
-	     }
-	     else
-	     {
-            	if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
+                    return -1;
+                }
+         }
+         else
+         {
+                if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
                                               &(AmbCharPtr))) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return -1;
-            	}
+                    return -1;
+                }
              }
             
             bsp->seq_data_type = Seq_code_ncbi2na; /* just for information */
@@ -7370,27 +7720,27 @@ static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j)
  * FormatDBClose()
  ******************************************************************************* 
  * Parameters:
- *	
+ *    
  *
  * Returns  void
  ******************************************************************************/
 #define DATETIME_LENGTH 64
 
-static	Int2	FDBFinish (FormatDBPtr fdbp) 
+static    Int2    FDBFinish (FormatDBPtr fdbp) 
 {
-    Char	DBName[FILENAME_MAX];
-    Int4	title_len;
-    Char	dateTime[DATETIME_LENGTH];
+    Char    DBName[FILENAME_MAX];
+    Int4    title_len;
+    Char    dateTime[DATETIME_LENGTH];
     ISAMObjectPtr object;
     ISAMErrorCode error;
-    Uint4	i;
-    Char	filenamebuf[FILENAME_MAX];
-    Int2	tmp, extra_bytes = 0;
+    Uint4    i;
+    Char    filenamebuf[FILENAME_MAX];
+    Int2    tmp, extra_bytes = 0;
 
     if(fdbp->num_of_seqs==0){
-	ErrLogPrintf("FDBFinish: Empty %s database...\n",
+    ErrLogPrintf("FDBFinish: Empty %s database...\n",
                      fdbp->options->is_protein?"protein":"nucleotide");
-	return 0;
+    return 0;
     }
     
     if(fdbp->aip_def != NULL)   /* Structured deflines */
@@ -7417,9 +7767,9 @@ static	Int2	FDBFinish (FormatDBPtr fdbp)
         fdbp->options->version = FORMATDB_VER_TEXT;
     
     if (!FormatDbUint4Write(fdbp->options->version, fdbp->fd_ind))
-	return 1;
+    return 1;
     if (!FormatDbUint4Write(fdbp->options->is_protein, fdbp->fd_ind))
-	return 1;
+    return 1;
     
     if(fdbp->options->db_title != NULL) {
         title_len = StringLen(fdbp->options->db_title);
@@ -7428,11 +7778,11 @@ static	Int2	FDBFinish (FormatDBPtr fdbp)
         title_len = 0;
     
     if (!FormatDbUint4Write(title_len, fdbp->fd_ind))
-	return 1;
+    return 1;
     
     if (title_len != 0)
         if (FileWrite(fdbp->options->db_title, title_len, 1, fdbp->fd_ind) != (Uint4) 1)
-		return 1;
+        return 1;
     
     MemSet(dateTime, 0, DATETIME_LENGTH);
     Nlm_DayTimeStr(dateTime, TRUE, TRUE);
@@ -7440,52 +7790,52 @@ static	Int2	FDBFinish (FormatDBPtr fdbp)
     /* write db_title and date-time stamp eigth bytes aligned */
     tmp = title_len + StringLen(dateTime);
     if (tmp%8) {
-	extra_bytes = 8 - tmp%8;
+    extra_bytes = 8 - tmp%8;
     }
     if (!FormatDbUint4Write(StringLen(dateTime) + extra_bytes, fdbp->fd_ind))
-	return 1;
+    return 1;
     if (FileWrite(dateTime, StringLen(dateTime) + extra_bytes, 1, fdbp->fd_ind) != 1)
-	return 1;
+    return 1;
     
     if (!FormatDbUint4Write(fdbp->num_of_seqs, fdbp->fd_ind))
-	return 1;
+    return 1;
 
     if (fdbp->options->version == FORMATDB_VER_TEXT)
     {
-    	if (!FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind))
-		return 1;
+        if (!FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind))
+        return 1;
     }
     else
     {
-    	if (!FormatDbUint8Write(fdbp->TotalLen, fdbp->fd_ind))
-		return 1;
+        if (!FormatDbUint8Write(fdbp->TotalLen, fdbp->fd_ind))
+        return 1;
     }
 
     if (!FormatDbUint4Write(fdbp->MaxSeqLen, fdbp->fd_ind))
-	return 1;
+    return 1;
     
         /* Offset tables */
     
     for(i=0; i <= fdbp->num_of_seqs; i++) {
         if (!FormatDbUint4Write(fdbp->DefOffsetTable[i], fdbp->fd_ind))
-		return 1;
+        return 1;
     }
     
     for(i=0; i <= fdbp->num_of_seqs; i++) {
         if (!FormatDbUint4Write(fdbp->SeqOffsetTable[i], fdbp->fd_ind))
-		return 1;
+        return 1;
     }
     if(!fdbp->options->is_protein) {
         for(i=0; i <= fdbp->num_of_seqs; i++) {
             if (!FormatDbUint4Write(fdbp->AmbOffsetTable[i], fdbp->fd_ind))
-		return 1;
+        return 1;
         }
     }
     
         /* Numeric lookup table sort & dump */
     
     if(fdbp->options->parse_mode && fdbp->lookup->used > 0) {
-        FILE	*fd_lookup;
+        FILE    *fd_lookup;
         
         sprintf(DBName, "%s.%cnd", fdbp->options->base_name, 
                 fdbp->options->is_protein ? 'p' : 'n'); 
@@ -7497,7 +7847,7 @@ static	Int2	FDBFinish (FormatDBPtr fdbp)
         
         for(i=0; i < fdbp->lookup->used; i++) {
             if (!FormatDbUint4Write(fdbp->lookup->table[i], fd_lookup))
-		return 1;
+        return 1;
         }
         
         FileClose(fd_lookup);
@@ -7604,7 +7954,7 @@ void FDB_FreeCLOptions(FDB_optionsPtr options)
  * Free memory allocated for given variable of FormatDB
  ******************************************************************************* 
  * Parameters:
- *	fdbp	- pointer to memory to be freed
+ *    fdbp    - pointer to memory to be freed
  *
  * Returns NULL
  ******************************************************************************/
@@ -7659,19 +8009,20 @@ NLM_EXTERN Boolean SeqEntrysToBLAST (SeqEntryPtr sep, FormatDBPtr fdbp,
     if ((sep == NULL) || (fdbp == NULL))
         return FALSE;
     
-    mfa.buf	= buf;
-    mfa.buflen	= 254;
-    mfa.seqlen	= 70;
-    mfa.mydata	= (Pointer)fdbp;
-    mfa.myfunc	= BLASTFileFunc;
-    mfa.bad_asn1	= FALSE;
-    mfa.order		= 0;
-    mfa.accession	= NULL;
-    mfa.organism	= NULL;
-    mfa.do_virtual	= FALSE;
-    mfa.tech		= 0;
-    mfa.no_sequence	= FALSE;
-    mfa.formatdb	= TRUE;
+    MemSet ((Pointer) (&mfa), 0, sizeof (MyFsa));
+    mfa.buf    = buf;
+    mfa.buflen    = 254;
+    mfa.seqlen    = 70;
+    mfa.mydata    = (Pointer)fdbp;
+    mfa.myfunc    = BLASTFileFunc;
+    mfa.bad_asn1    = FALSE;
+    mfa.order        = 0;
+    mfa.accession    = NULL;
+    mfa.organism    = NULL;
+    mfa.do_virtual    = FALSE;
+    mfa.tech        = 0;
+    mfa.no_sequence    = FALSE;
+    mfa.formatdb    = TRUE;
 
     if (is_na)
             /* in case of "formatdb" we wont use this parameter */
@@ -7705,9 +8056,9 @@ NLM_EXTERN Boolean SeqEntrysToBLAST (SeqEntryPtr sep, FormatDBPtr fdbp,
 Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
                        Pointer data)
 {
-    FormatDBPtr	fdbp = (FormatDBPtr) data;
-    Int4		SequenceLen;
-    Uint4		i, total, index;
+    FormatDBPtr    fdbp = (FormatDBPtr) data;
+    Int4        SequenceLen;
+    Uint4        i, total, index;
     
     switch (key) {
     case FASTA_ID:
@@ -7794,24 +8145,24 @@ Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
                 
             /* ncbi4na require compression into ncbi2na */
             
-	    if (fdbp->options->version > FORMATDB_VER_TEXT)
-	    {
-            	if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
+        if (fdbp->options->version > FORMATDB_VER_TEXT)
+        {
+                if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
                                               &(fdbp->AmbCharPtr))) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return FALSE;
-            	}
-	     }
-	     else
-	     {
-            	if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
+                    return FALSE;
+                }
+         }
+         else
+         {
+                if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
                                               &(fdbp->AmbCharPtr))) == NULL) {
-                	ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
+                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
-                	return FALSE;
-            	}
-	     }
+                    return FALSE;
+                }
+         }
             bsp->seq_data_type = Seq_code_ncbi2na; /* just for information */
         } else {
             /* if sequence already in ncbi2na format we have to update last byte */
@@ -8073,7 +8424,7 @@ RDBTaxInfoPtr  RDBTaxInfoInit(CharPtr base_filename, Boolean is_prot)
     }
     
     sprintf(buffer, "%s.%ctd", base_filename, is_prot? 'p':'n');
-    if((tip->name_fd = FileOpen(buffer, "rb")) == NULL) {
+    if((tip->name_fd = NlmOpenMFILE(buffer)) == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0, "RDBTaxInfoInit: Unable to open %s", 
                   buffer);        
         NlmCloseMFILE(tip->taxfp);
@@ -8087,7 +8438,7 @@ RDBTaxInfoPtr  RDBTaxInfoInit(CharPtr base_filename, Boolean is_prot)
         ErrPostEx(SEV_ERROR, 0, 0, "RDBTaxInfoInit: Invalid database", 
                   buffer);        
         NlmCloseMFILE(tip->taxfp);
-        FileClose(tip->name_fd);
+        NlmCloseMFILE(tip->name_fd);
         MemFree(tip);
         return NULL;
     }
@@ -8100,8 +8451,37 @@ RDBTaxInfoPtr  RDBTaxInfoInit(CharPtr base_filename, Boolean is_prot)
         tip->reserved[i] = Nlm_SwapUint4(value);
     }
 
-    tip->taxdata = (RDBTaxIdPtr) tip->taxfp->mmp;
-    
+    /* Load the taxid/file offsets from the remaining of the index file */
+    if (tip->taxfp->mfile_true) {
+        tip->taxdata = (RDBTaxIdPtr) tip->taxfp->mmp;
+        tip->taxdata_alloc = FALSE;
+    } else {
+
+        tip->taxdata = (RDBTaxIdPtr) MemNew(sizeof(RDBTaxId) *
+                tip->all_taxid_count);
+        if ((tip->taxdata) == NULL) {
+            ErrPostEx(SEV_ERROR, 0, 0, "RDBTaxInfoInit: Not enough memory to "
+                    "load index table");
+            NlmCloseMFILE(tip->taxfp);
+            NlmCloseMFILE(tip->name_fd);
+            MemFree(tip);
+            return NULL;
+        }
+
+        for (i = 0; i < tip->all_taxid_count; i++) {
+            NlmReadMFILE((Uint1Ptr) &value, 4, 1, tip->taxfp);
+            tip->taxdata[i].taxid = Nlm_SwapUint4(value);
+            NlmReadMFILE((Uint1Ptr) &value, 4, 1, tip->taxfp);
+            tip->taxdata[i].offset = Nlm_SwapUint4(value);
+        }
+
+        tip->taxfp = NlmCloseMFILE(tip->taxfp);
+        tip->taxdata_alloc = TRUE;
+    }
+
+    /* Only this thread will clean up this structure */
+    tip->taxinfo_alloc = TRUE;
+
     return tip;
 }
 
@@ -8111,9 +8491,20 @@ void RDBTaxInfoClose(RDBTaxInfoPtr tip)
     if(tip == NULL)
         return;
 
-    NlmCloseMFILE(tip->taxfp);
-    FileClose(tip->name_fd);
-    MemFree(tip);
+    if (tip->taxinfo_alloc) {
+        if (tip->taxdata_alloc)
+            MemFree(tip->taxdata);
+        else
+            NlmCloseMFILE(tip->taxfp);
+
+        NlmCloseMFILE(tip->name_fd);
+        MemFree(tip);
+    } else {
+        tip->taxfp = NlmCloseMFILE(tip->taxfp);
+        tip->name_fd = NlmCloseMFILE(tip->name_fd);
+        tip = MemFree(tip);
+    }
+
     return;
 }
 
@@ -8167,17 +8558,17 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
     
     if(tax_id == Nlm_SwapUint4(taxdata[new_index].taxid)) {
         Char buffer[1024];
-        CharPtr chptr, start_ptr;
+        CharPtr chptr = NULL, start_ptr = NULL;
 
         tnames = MemNew(sizeof(RDBTaxNames));
         tnames->tax_id = tax_id;
         
-        fseek(tip->name_fd, Nlm_SwapUint4(taxdata[new_index].offset), 
+        NlmSeekInMFILE(tip->name_fd, Nlm_SwapUint4(taxdata[new_index].offset), 
               SEEK_SET);
 
-        FileRead(buffer, Nlm_SwapUint4(taxdata[new_index+1].offset) - 
-                         Nlm_SwapUint4(taxdata[new_index].offset)+1, 
-                         1, tip->name_fd);
+        NlmReadMFILE((Uint1Ptr)buffer, 
+                Nlm_SwapUint4(taxdata[new_index+1].offset) - 
+                Nlm_SwapUint4(taxdata[new_index].offset)+1, 1, tip->name_fd);
 
         start_ptr = buffer;
 
@@ -8233,7 +8624,7 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
     return NULL;
 }
 
-RDBTaxNamesPtr readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id)
+RDBTaxNamesPtr LIBCALL readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id)
 {
     RDBTaxInfoPtr tip;
     RDBTaxNamesPtr tnames = NULL;
@@ -8246,17 +8637,17 @@ RDBTaxNamesPtr readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id)
 }
 
 /************************************************************************/
-/*	The CommonIndex stuff						*/
+/*    The CommonIndex stuff                        */
 /************************************************************************/
 
 /* The function initializes CommonIndexPtr with give filename */
 
-CommonIndexHeadPtr	CommonIndexInit(CharPtr indexfilename)
+CommonIndexHeadPtr    CommonIndexInit(CharPtr indexfilename)
 {
 
-    Nlm_MemMapPtr	mmpindx;
-    CommonIndexHeadPtr	cihp = (CommonIndexHeadPtr) MemNew(sizeof(CommonIndexHead));
-    CharPtr		charptr = NULL;
+    Nlm_MemMapPtr    mmpindx;
+    CommonIndexHeadPtr    cihp = (CommonIndexHeadPtr) MemNew(sizeof(CommonIndexHead));
+    CharPtr        charptr = NULL;
 
     if (!(mmpindx = Nlm_MemMapInit(indexfilename))) {
         ErrPostEx(SEV_ERROR, 0, 0, "Could not open Common Index file.  Probably wrong path specified\n");
@@ -8289,37 +8680,37 @@ CommonIndexHeadPtr	CommonIndexInit(CharPtr indexfilename)
         return cihp;
 }
   
-void	CommonIndexDestruct(CommonIndexHeadPtr cihp) {
+void    CommonIndexDestruct(CommonIndexHeadPtr cihp) {
 
-    Int2	i;
+    Int2    i;
 
     if (cihp &&  cihp->memmap)
-	Nlm_MemMapFini(cihp->memmap);
+    Nlm_MemMapFini(cihp->memmap);
 
     for (i=0; i < cihp->num_of_DBs; i++) {
-	if (cihp && cihp->dbids && ((cihp->dbids + i)->name))
-	    MemFree((cihp->dbids + i)->name);
+    if (cihp && cihp->dbids && ((cihp->dbids + i)->name))
+        MemFree((cihp->dbids + i)->name);
     }
     if (cihp && cihp->dbids)
-	MemFree(cihp->dbids);
+    MemFree(cihp->dbids);
     
     MemFree(cihp);
 }
 /* returns shift of bit for specified DB name */
 
-Int2	DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_prot)
+Int2    DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_prot)
 {
-    Int2	i;
+    Int2    i;
 
     if (!dbname) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Specified database name is NULL\n");
-	return 0;
+    ErrPostEx(SEV_ERROR, 0, 0, "Specified database name is NULL\n");
+    return 0;
     }
 
     for(i=0; i < num_of_DBs; i++) {
-	if(!StrCmp(dbname, (dbids+i)->name) && ((dbids+i)->isprot == is_prot)) {
-	    return (dbids+i)->id;
-	}
+    if(!StrCmp(dbname, (dbids+i)->name) && ((dbids+i)->isprot == is_prot)) {
+        return (dbids+i)->id;
+    }
     }
 
 #if 0    
@@ -8330,19 +8721,19 @@ Int2	DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_pr
 
 /* returns name of the database by given bit shift */
 
-CharPtr	DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift)
+CharPtr    DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift)
 {
     Int2      i;
 
     if (!shift) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift is zero\n");
-	return NULL;
+    ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift is zero\n");
+    return NULL;
     }
 
     for(i=0; i < num_of_DBs; i++) {
-	if((dbids+i)->id == shift) {
-	    return (dbids+i)->name;
-	}
+    if((dbids+i)->id == shift) {
+        return (dbids+i)->name;
+    }
     }
     ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift %d is not known\n", shift);
     return NULL;
@@ -8350,28 +8741,28 @@ CharPtr	DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift)
  
 /* say if the database contains proteins */
 
-Boolean	DBisProt(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift)
+Boolean    DBisProt(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift)
 {
     Int2      i;
 
     if (!shift) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift is zero\n");
-	return FALSE;
+    ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift is zero\n");
+    return FALSE;
     }
 
     for(i=0; i < num_of_DBs; i++) {
-	if((dbids+i)->id == shift) {
-	    return (dbids+i)->isprot;
-	}
+    if((dbids+i)->id == shift) {
+        return (dbids+i)->isprot;
+    }
     }
     ErrPostEx(SEV_ERROR, 0, 0, "Specified bit shift %d is not known\n", shift);
     return FALSE;
 }
 
-void	CommonIndexResultDestruct(CommonIndexResultPtr cir)
+void    CommonIndexResultDestruct(CommonIndexResultPtr cir)
 {
     if (!cir)
-	return;
+    return;
     if (cir->next)
         CommonIndexResultDestruct(cir->next);
     if (cir)
@@ -8380,11 +8771,11 @@ void	CommonIndexResultDestruct(CommonIndexResultPtr cir)
 
 /* returns OID by given GI */
 Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int4 alias_dbmask,
-	Int2Ptr dbid, Int2Ptr alias_dbid, ReadDBFILEPtr rdfp)
+    Int2Ptr dbid, Int2Ptr alias_dbid, ReadDBFILEPtr rdfp)
 {
-    CommonIndexResultPtr	cir, cir_start;
-    Int4		retval=-1;
-    Uint4		dbmask_tmp;
+    CommonIndexResultPtr    cir, cir_start;
+    Int4        retval=-1;
+    Uint4        dbmask_tmp;
  
     /* gi is not in the database (or even in the common index).
        The most probable reason for this is that the gi was released
@@ -8400,18 +8791,18 @@ Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int4 alias_dbmask,
     /* Get oid in a real database */
     cir = cir_start;
     while (cir && (retval==-1)) {
-	if (dbmask & (0x1<<cir->dbid)) {
-	    *dbid = cir->dbid;
-	    retval = cir->oid;
-	}
-	cir = cir->next;
+    if (dbmask & (0x1<<cir->dbid)) {
+        *dbid = cir->dbid;
+        retval = cir->oid;
+    }
+    cir = cir->next;
     }
 
 
     /* now set dbid to correct alias database, if alias database mask specified */
     dbmask_tmp = SwapUint4(cih->ci[gi].dbmask);
     if (dbmask_tmp - dbmask > 0 && alias_dbid)
-    	*alias_dbid = bit_engine_firstbit(dbmask_tmp & alias_dbmask);
+        *alias_dbid = bit_engine_firstbit(dbmask_tmp & alias_dbmask);
 
     CommonIndexResultDestruct(cir_start);
 
@@ -8426,133 +8817,133 @@ Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int4 alias_dbmask,
    noids - number of found oid on return
  */
 
-CommonIndexResultPtr	GIs2OIDs(CommonIndexHeadPtr cih, Int4Ptr gis,
-	Int4 number_of_gis, Int4 dbmask, ReadDBFILEPtr startrdfp)
+CommonIndexResultPtr    GIs2OIDs(CommonIndexHeadPtr cih, Int4Ptr gis,
+    Int4 number_of_gis, Int4 dbmask, ReadDBFILEPtr startrdfp)
 {
-    Int4		i, gi, numDB, mask;
-    Int2		firstpos, curfirstpos;
-    CommonIndexPtr	cigi;
+    Int4        i, gi, numDB, mask;
+    Int2        firstpos, curfirstpos;
+    CommonIndexPtr    cigi;
     CommonIndexResultPtr cir = NULL, cirfirst = NULL;
-    Boolean		first = TRUE;
-    ISAMObjectPtr	nisam_opt = NULL;
-    ISAMErrorCode	error;
-    Uint4		value;
-    ReadDBFILEPtr	rdfp;
+    Boolean        first = TRUE;
+    ISAMObjectPtr    nisam_opt = NULL;
+    ISAMErrorCode    error;
+    Uint4        value;
+    ReadDBFILEPtr    rdfp;
 
     /* for each given GI we need to check if this gi is in list */
 
     for(i=0; i < number_of_gis; i++) {
-	gi = gis[i];
-	if (gi < 0)
-		continue;
+    gi = gis[i];
+    if (gi < 0)
+        continue;
 
-	cigi = cih->ci + gi;
+    cigi = cih->ci + gi;
 
-	/* mask says what DBs the GI belongs to */
+    /* mask says what DBs the GI belongs to */
         mask = SwapUint4(cigi->dbmask);
 
-	if (dbmask && !(dbmask & mask)) {
-	    /* skip the gi if it is not in dbmask databases */
-	    continue;
-	}
+    if (dbmask && !(dbmask & mask)) {
+        /* skip the gi if it is not in dbmask databases */
+        continue;
+    }
 
-	numDB = bit_engine_numofbits(mask);
+    numDB = bit_engine_numofbits(mask);
 
-	if (numDB) {
-	    /* Okay, there is at least one database which contains such GI */
+    if (numDB) {
+        /* Okay, there is at least one database which contains such GI */
 
-	    /* Check if this is the "often" database for the GI */
-	    firstpos = bit_engine_firstbit(mask);
+        /* Check if this is the "often" database for the GI */
+        firstpos = bit_engine_firstbit(mask);
 
-	    /* dbmask == 0 means that we search for ALL DBs */
-	    if (!dbmask || (dbmask & (0x1 << firstpos))) {
-		if (first) {
-		    /* create first if needed */
-		    cirfirst = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
-		    first = FALSE;
-		    cir = cirfirst;
-		} else {
-		    cir->next = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
-		    cir = cir->next;
-		}
-		cir->gi = gi;
+        /* dbmask == 0 means that we search for ALL DBs */
+        if (!dbmask || (dbmask & (0x1 << firstpos))) {
+        if (first) {
+            /* create first if needed */
+            cirfirst = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
+            first = FALSE;
+            cir = cirfirst;
+        } else {
+            cir->next = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
+            cir = cir->next;
+        }
+        cir->gi = gi;
 
-		/* we know that for the first database the often field is used */
-		cir->oid = SwapUint4(cigi->oftenOID);
+        /* we know that for the first database the often field is used */
+        cir->oid = SwapUint4(cigi->oftenOID);
 
-		cir->dbid = firstpos;
-		cir->next = NULL;
-	    }
+        cir->dbid = firstpos;
+        cir->next = NULL;
+        }
             curfirstpos = firstpos;
             
-	    /* do for the rest of databases */
+        /* do for the rest of databases */
             while (--numDB) {
-		/* shift mask to get next database bit shift */
+        /* shift mask to get next database bit shift */
                 mask >>= (curfirstpos + 1);
                 curfirstpos = bit_engine_firstbit(mask);
-		/* update absolute bit shift */
+        /* update absolute bit shift */
                 firstpos += curfirstpos + 1;
 
-		if (!dbmask || (dbmask & (0x1 << firstpos))) {
+        if (!dbmask || (dbmask & (0x1 << firstpos))) {
 
-		    /* find OID using ISAM old index */
+            /* find OID using ISAM old index */
 
-		    rdfp = startrdfp;
-		    while (rdfp) {
-			if (rdfp->filebit == firstpos) {
-			    nisam_opt = rdfp->nisam_opt;
-			    break;
-			}
-			rdfp = rdfp->next;
-		    }
-
-		    if (!nisam_opt) {
-			/* that means that the database specified by 'firstpos' is mask */
-			/* skip the database */
-			continue;
-		    }
-		    if (first) {
-			cirfirst = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
-			first = FALSE;
-			cir = cirfirst;
-		    } else {
-			cir->next = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
-			cir = cir->next;
-		    }
-
-		    cir->gi = gi;
-
-		    /* Initialize and perform the ISAM search */
-		    if((error = NISAMSearch(nisam_opt, gi, &value, NULL)) < 0) {
-			ErrPostEx(SEV_ERROR, 0, 0, "Failed to initialize ISAM search");
-			return NULL;
-		    }
-
-		    if(error == ISAMNotFound) {
-			ErrPostEx(SEV_ERROR, 0, 0, "Internal error inside GIs2OIDs(), we expected to find this GI into the database\n");
-		    }
-
-		    cir->oid = (Int4) value;
-
-		    cir->dbid = firstpos;
-		    cir->next = NULL;
-		}
+            rdfp = startrdfp;
+            while (rdfp) {
+            if (rdfp->filebit == firstpos) {
+                nisam_opt = rdfp->nisam_opt;
+                break;
             }
-	}
+            rdfp = rdfp->next;
+            }
+
+            if (!nisam_opt) {
+            /* that means that the database specified by 'firstpos' is mask */
+            /* skip the database */
+            continue;
+            }
+            if (first) {
+            cirfirst = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
+            first = FALSE;
+            cir = cirfirst;
+            } else {
+            cir->next = (CommonIndexResultPtr) MemNew(sizeof(CommonIndexResult));
+            cir = cir->next;
+            }
+
+            cir->gi = gi;
+
+            /* Initialize and perform the ISAM search */
+            if((error = NISAMSearch(nisam_opt, gi, &value, NULL)) < 0) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Failed to initialize ISAM search");
+            return NULL;
+            }
+
+            if(error == ISAMNotFound) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Internal error inside GIs2OIDs(), we expected to find this GI into the database\n");
+            }
+
+            cir->oid = (Int4) value;
+
+            cir->dbid = firstpos;
+            cir->next = NULL;
+        }
+            }
+    }
     }
     /* return first item of the list */
     return cirfirst;
 }
 
 
-CharPtr	FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot)
+CharPtr    FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot)
 {
-    Int4		numDB, mask;
-    Int2		firstpos;
-    CommonIndexPtr	cigi;
+    Int4        numDB, mask;
+    Int2        firstpos;
+    CommonIndexPtr    cigi;
 
    if (gi > cih->maxgi)
-	return NULL;
+    return NULL;
 
     cigi = cih->ci + gi;
     mask = SwapUint4(cigi->dbmask);
@@ -8560,44 +8951,44 @@ CharPtr	FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot)
     numDB = bit_engine_numofbits(mask);
 
     if (numDB) {
-	firstpos = bit_engine_firstbit(mask);
-	*is_prot = DBisProt(cih->num_of_DBs, cih->dbids, firstpos);
-	return DBName(cih->num_of_DBs, cih->dbids, firstpos);
+    firstpos = bit_engine_firstbit(mask);
+    *is_prot = DBisProt(cih->num_of_DBs, cih->dbids, firstpos);
+    return DBName(cih->num_of_DBs, cih->dbids, firstpos);
     } else {
-	return NULL;
+    return NULL;
     }
 
 }
 
 /* returns senior (first) bit in the word */
-Int2	bit_engine_firstbit (Int4 word)
+Int2    bit_engine_firstbit (Int4 word)
 {
-    Int2	i;
-    Int4	senior_bit = 0x1;
+    Int2    i;
+    Int4    senior_bit = 0x1;
 
     for (i=0; i < 8*sizeof(Int4); i++) {
-	if (word & senior_bit)
-	    return i;
-	senior_bit <<= 1;
+    if (word & senior_bit)
+        return i;
+    senior_bit <<= 1;
     }
     return -1;
 }
 
 /* return number of bits which are ON in the give "word" */
-Int2	bit_engine_numofbits(Int4 word)
+Int2    bit_engine_numofbits(Int4 word)
 {
-    Int2	i;
-    Int4	tmpbit = 0x1;
-    Int2	count = 0;
+    Int2    i;
+    Int4    tmpbit = 0x1;
+    Int2    count = 0;
 
     if (!word) {
-	return 0;
+    return 0;
     }
 
     for (i=0; i < 8*sizeof(Int4); i++, tmpbit <<= 1) {
-	if (word & tmpbit) {
-	    count++;
-	}
+    if (word & tmpbit) {
+        count++;
+    }
     }
     return count;
 }
@@ -8606,25 +8997,25 @@ Int2	bit_engine_numofbits(Int4 word)
    2. number of dbs
  */
 
-Int2Ptr	bit_engine_arr(Int4 word)
+Int2Ptr    bit_engine_arr(Int4 word)
 {
-    Int2	i;
-    Int4	tmpbit = 0x1;
-    Int2Ptr	retval;
-    Int2	count = 0;
+    Int2    i;
+    Int4    tmpbit = 0x1;
+    Int2Ptr    retval;
+    Int2    count = 0;
 
     retval = (Int2Ptr) MemNew(sizeof(Int2)*8*sizeof(Int4));
 
     if (!word) {
-	retval[0] = 0;
-	return retval;
+    retval[0] = 0;
+    return retval;
     }
 
     for (i=0; i < 8*sizeof(Int4); i++, tmpbit <<= 1) {
-	if (word & tmpbit) {
-	    retval[count+1] = i;
-	    count++;
-	}
+    if (word & tmpbit) {
+        retval[count+1] = i;
+        count++;
+    }
     }
     retval[0] = count;
 
@@ -8632,14 +9023,14 @@ Int2Ptr	bit_engine_arr(Int4 word)
 }
 
 /* This callback is used in UpdateCommonIndexFile() when DI file is given */
-Boolean	DI_updateindex_callback(DI_RecordPtr direc, VoidPtr data)
+Boolean    DI_updateindex_callback(DI_RecordPtr direc, VoidPtr data)
 {
-    UpdateIndexStructPtr	uisp = (UpdateIndexStructPtr) data;
-    CommonIndex			cigi;
-    Int4			dbmask, tmpint;
-    Int2Ptr			bitarray;	/* contains positions of DB bits */
-    Int2			numDB;
-    Int4			retstat;
+    UpdateIndexStructPtr    uisp = (UpdateIndexStructPtr) data;
+    CommonIndex            cigi;
+    Int4            dbmask, tmpint;
+    Int2Ptr            bitarray;    /* contains positions of DB bits */
+    Int2            numDB;
+    Int4            retstat;
 
     cigi.dbmask = 0;
     cigi.oftenOID = 0;
@@ -8653,16 +9044,16 @@ Boolean	DI_updateindex_callback(DI_RecordPtr direc, VoidPtr data)
     numDB = bitarray[0];
 
     if (!numDB) {
-	/* the GI does not belong to a database */
-	cigi.oftenOID = SwapUint4(direc->oid);
+    /* the GI does not belong to a database */
+    cigi.oftenOID = SwapUint4(direc->oid);
     } else {
 
-	/* already exist one database with this GI */
-	/* try to figure out what DB is more often */
+    /* already exist one database with this GI */
+    /* try to figure out what DB is more often */
 
-	if (uisp->shift <= bitarray[1]) {
-	    cigi.oftenOID = SwapUint4(direc->oid);
-	}
+    if (uisp->shift <= bitarray[1]) {
+        cigi.oftenOID = SwapUint4(direc->oid);
+    }
     }
 
     /* add mask of given database */
@@ -8678,208 +9069,221 @@ Boolean	DI_updateindex_callback(DI_RecordPtr direc, VoidPtr data)
     return TRUE;
 }
 
-Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
-	FILE *fout, CharPtr difile, Int4 gi_threshold)
+#if 0
+Int4    UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
+    FILE *fout, CharPtr difile, Int4 gi_threshold)
 {
-    Char		full_filename[PATH_MAX];
-    Int4		num_of_gis=0;
-    CommonIndexPtr	cigi = MemNew(sizeof(CommonIndex));
-    FILE		*fildes;
-    Nlm_MemMapPtr	mmpisam;
-    NISAMKeyDataPtr	kdi;
-    Uint4		gi, oid;
-    Char		buf[1024], p_or_n;
-    Int2		shift;
-    Int2Ptr		bitarray;	/* contains positions of DB bits */
-    Int2		numDB;
-    Int4		dbmask, tmpint;
-    Int2		num_of_DBs;
-    DataBaseIDPtr	dbidsp = MemNew(sizeof(DataBaseID));
+    Char        full_filename[PATH_MAX];
+    Int4        num_of_gis=0;
+    CommonIndexPtr    cigi = MemNew(sizeof(CommonIndex));
+    FILE        *fildes;
+    Nlm_MemMapPtr    mmpisam;
+    NISAMKeyDataPtr    kdi;
+    Uint4        gi, oid;
+    Char        buf[1024], p_or_n;
+    Int2        shift;
+    Int2Ptr        bitarray;    /* contains positions of DB bits */
+    Int2        numDB;
+    Int4        dbmask, tmpint;
+    Int2        num_of_DBs;
+    DataBaseIDPtr    dbidsp = MemNew(sizeof(DataBaseID));
 
 
     /* read and parse DB config file */
     if (!(num_of_DBs = ParseDBConfigFile(&dbidsp, getenv("BLASTDB")))) {
-	ErrPostEx(SEV_ERROR, 0, 0, "DB configuration file is not present or corrupted");
-	return -1;
+    ErrPostEx(SEV_ERROR, 0, 0, "DB configuration file is not present or corrupted");
+    return -1;
     }
     
     /* find shift of the database */
     shift = DBShift(num_of_DBs, dbidsp, dbfilename, proteins);
     if (!shift) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Could not find db ID for %s", dbfilename);
+    ErrPostEx(SEV_ERROR, 0, 0, "Could not find db ID for %s", dbfilename);
     }
 
     fprintf(fout, "The database ID is %d\n", shift);
 
     /* create full name of the common index file commindex.mm */
     if (getenv("BLASTDB")) {
-	sprintf(full_filename, "%s%s%s", getenv("BLASTDB"), DIRDELIMSTR, COMMONINDEX_FN);
+    sprintf(full_filename, "%s%s%s", getenv("BLASTDB"), DIRDELIMSTR, COMMONINDEX_FN);
     } else {
-	sprintf(full_filename, "%s", COMMONINDEX_FN);
+    sprintf(full_filename, "%s", COMMONINDEX_FN);
     }
 
 
     /* open common index file */
     if (!(fildes = FileOpen(full_filename, "rb+"))) {
-	ErrPostEx (SEV_ERROR, 0, 0,
-		"Cannot open/create file %s\n", full_filename);
-	return -1;
+    ErrPostEx (SEV_ERROR, 0, 0,
+        "Cannot open/create file %s\n", full_filename);
+    return -1;
     };
 
     /* To update Common index we use old ISAM files produced by formatdb */
     /* Read ISAM index file */
     if (proteins)
-	p_or_n = 'p';
+    p_or_n = 'p';
     else
-	p_or_n = 'n';
+    p_or_n = 'n';
 
     if (getenv("BLASTDB")) {
-	sprintf(buf, "%s/%s.%cnd", getenv("BLASTDB"), dbfilename, p_or_n);
+    sprintf(buf, "%s/%s.%cnd", getenv("BLASTDB"), dbfilename, p_or_n);
     } else {
-	sprintf(buf, "%s.%cnd", dbfilename, p_or_n);
+    sprintf(buf, "%s.%cnd", dbfilename, p_or_n);
     }
 
     if (difile) {
-	char	subset[4096];
-	UpdateIndexStruct	uis;
-	uis.shift = shift;
-	uis.cifile = fildes;
-	uis.fout = fout;
+    char    subset[4096];
+    UpdateIndexStruct    uis;
+    uis.shift = shift;
+    uis.cifile = fildes;
+    uis.fout = fout;
 
-	if (!StringCmp(dbfilename, "month.nt") ||
-		!StringCmp(dbfilename, "month.est") ||
-		!StringCmp(dbfilename, "month.gss") ||
-		!StringCmp(dbfilename, "month.sts") ||
-		!StringCmp(dbfilename, "month.pataa") ||
-		!StringCmp(dbfilename, "month.patnt") ||
-		!StringCmp(dbfilename, "month.htgs")) {
-	    sprintf(subset, "month");
-	} else {
-	    sprintf(subset, "%s", dbfilename);
-	}
-
-	ScanDIFile(difile, subset, DI_updateindex_callback, (VoidPtr) &uis, 
-			fout, gi_threshold);
-	/* Update CommonIndex using .?di file */
+    if (!StringCmp(dbfilename, "month.nt") ||
+        !StringCmp(dbfilename, "month.est") ||
+        !StringCmp(dbfilename, "month.gss") ||
+        !StringCmp(dbfilename, "month.sts") ||
+        !StringCmp(dbfilename, "month.pataa") ||
+        !StringCmp(dbfilename, "month.patnt") ||
+        !StringCmp(dbfilename, "month.htgs")) {
+        sprintf(subset, "month");
     } else {
-	/* Update CommonIndex using ISAM files */
+        sprintf(subset, "%s", dbfilename);
+    }
 
-	/* create memory map for ISAM index file */
-	if ((mmpisam = Nlm_MemMapInit(buf)) == NULL) {
-	    ErrPostEx(SEV_ERROR, 0, 0,
-		    "\nCould not init mmap for file %s\n", buf);
-	    return -1;
-	}
+    ScanDIFile(difile, subset, DI_updateindex_callback, (VoidPtr) &uis, 
+            fout, gi_threshold);
+    /* Update CommonIndex using .?di file */
+    } else {
+    /* Update CommonIndex using ISAM files */
 
-	if (!(kdi = (NISAMKeyDataPtr)mmpisam->mmp_begin)) {
-	    ErrPostEx(SEV_ERROR, 0, 0, "Could not initialize ISAM index files");
-	    return -1;
-	}
+    /* create memory map for ISAM index file */
+    if ((mmpisam = Nlm_MemMapInit(buf)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0,
+            "\nCould not init mmap for file %s\n", buf);
+        return -1;
+    }
 
-	/* update common index */
+    if (!(kdi = (NISAMKeyDataPtr)mmpisam->mmp_begin)) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Could not initialize ISAM index files");
+        return -1;
+    }
 
-	for (num_of_gis = 0;
-		num_of_gis*8 < mmpisam->file_size && kdi->key;
-		kdi++, num_of_gis++) {
-	    /* get next record in KeyData */
-	    gi = SwapUint4(kdi->key);
-	    oid = SwapUint4(kdi->data);
+    /* update common index */
 
-	    fseek(fildes, gi * sizeof(CommonIndex), SEEK_SET);
-	    FileRead(cigi, sizeof(CommonIndex), 1, fildes);
+    for (num_of_gis = 0;
+        num_of_gis*8 < mmpisam->file_size && kdi->key;
+        kdi++, num_of_gis++) {
+        /* get next record in KeyData */
+        gi = SwapUint4(kdi->key);
+        oid = SwapUint4(kdi->data);
 
-	    /* get db information for this GI */
-	    dbmask = SwapUint4(cigi->dbmask); 
-	    bitarray = bit_engine_arr(dbmask); 
-	    numDB = bitarray[0];
+        fseek(fildes, gi * sizeof(CommonIndex), SEEK_SET);
+        FileRead(cigi, sizeof(CommonIndex), 1, fildes);
 
-	    if (!numDB) {
-		/* the GI does not belong to a database */
-		cigi->oftenOID = SwapUint4(oid);
-	    } else {
+        /* get db information for this GI */
+        dbmask = SwapUint4(cigi->dbmask); 
+        bitarray = bit_engine_arr(dbmask); 
+        numDB = bitarray[0];
 
-		/* already exist one database with this GI */
-		/* try to figure out what DB is more often */
+        if (!numDB) {
+        /* the GI does not belong to a database */
+        cigi->oftenOID = SwapUint4(oid);
+        } else {
 
-		if (shift <= bitarray[1]) {
-		    cigi->oftenOID = SwapUint4(oid);
-		}
-	    }
+        /* already exist one database with this GI */
+        /* try to figure out what DB is more often */
 
-	    /* add mask of given database */
-	    tmpint = SwapUint4(cigi->dbmask);
-	    cigi->dbmask = SwapUint4(tmpint | ((0x1 << shift)));
+        if (shift <= bitarray[1]) {
+            cigi->oftenOID = SwapUint4(oid);
+        }
+        }
 
-	    fprintf(fout, "\n%ld \t%ld", (long) gi, (long) oid);
+        /* add mask of given database */
+        tmpint = SwapUint4(cigi->dbmask);
+        cigi->dbmask = SwapUint4(tmpint | ((0x1 << shift)));
 
-	    fseek(fildes, gi * sizeof(CommonIndex), SEEK_SET);
-	    FileWrite(cigi, sizeof(CommonIndex), 1, fildes);
+        fprintf(fout, "\n%ld \t%ld", (long) gi, (long) oid);
 
-	}
+        fseek(fildes, gi * sizeof(CommonIndex), SEEK_SET);
+        FileWrite(cigi, sizeof(CommonIndex), 1, fildes);
 
-	Nlm_MemMapFini(mmpisam);
+    }
+
+    Nlm_MemMapFini(mmpisam);
     }
 
     FileClose(fildes);
     return num_of_gis;
 }
+#endif
 
 
 
 /************************************************************************/
-/* END	The CommonIndex stuff						*/
+/* END    The CommonIndex stuff                        */
 /************************************************************************/
 
 /************************************************************************/
-/*	The functions used with ID1 dump stuff				*/
+/*    The functions used with ID1 dump stuff                */
 /************************************************************************/
 
-Boolean	DB_Subset (Boolean (*f)(DI_Record direc), DI_Record direc)
+/* This function iterates through the array of function poiters, invoking each
+ * one and returning the logical AND of each of these function's return
+ * values. */
+Boolean    DB_Subset (GMSubsetDataPtr gmsdp, DI_Record direc)
 {
-    return (*f)(direc);
+    Boolean retval;
+    Int4 i;
+
+    retval = (*gmsdp->criteria[0])(direc);
+    for (i = 1; i < gmsdp->count; i++) {
+        retval = (retval && (*gmsdp->criteria[i])(direc));
+    }
+
+    return retval;
 }
 
-Boolean	is_EST_HUMAN (DI_Record direc)
+Boolean    is_EST_HUMAN (DI_Record direc)
 {
     return (direc.taxid == 9606);
 }
-Boolean	is_EST_MOUSE (DI_Record direc)
+Boolean    is_EST_MOUSE (DI_Record direc)
 {
     return (direc.taxid == 10090 ||
-	    direc.taxid == 10091 ||
-	    direc.taxid == 10092 ||
-	    direc.taxid == 35531 ||
-	    direc.taxid == 80274 ||
-	    direc.taxid == 57486
-	    );
+        direc.taxid == 10091 ||
+        direc.taxid == 10092 ||
+        direc.taxid == 35531 ||
+        direc.taxid == 80274 ||
+        direc.taxid == 57486
+        );
 }
-Boolean	is_EST_OTHERS (DI_Record direc)
+Boolean    is_EST_OTHERS (DI_Record direc)
 {
     return (!is_EST_HUMAN(direc) && !is_EST_MOUSE(direc));
 }
 
-Boolean	is_SWISSPROT (DI_Record direc)
+Boolean    is_SWISSPROT (DI_Record direc)
 {
 #if 0
-    SeqIdPtr	sip;
+    SeqIdPtr    sip;
 
     sip = ID1SeqIdForGI(direc.gi);
 
     if (sip) {
-	return (sip->choice == SEQID_SWISSPROT);
+    return (sip->choice == SEQID_SWISSPROT);
     } else {
-	printf("\nWARNING: could not get SeqID for GI: %ld\n", direc.gi);
+    printf("\nWARNING: could not get SeqID for GI: %ld\n", direc.gi);
     }
 #endif
     return (direc.owner == 6);
 }
 
-Boolean	is_MONTH (DI_Record direc)
+Boolean    is_MONTH (DI_Record direc)
 {
     return (direc.gi_threshold != -1 && direc.gi > direc.gi_threshold);
 }
 
-Boolean	is_PDB (DI_Record direc)
+Boolean    is_PDB (DI_Record direc)
 {
     return (direc.owner == 10);
 }
@@ -8933,6 +9337,16 @@ Boolean is_WGS_RICE(DI_Record direc)
     return (direc.taxid == 39946);
 }
 
+Boolean is_WGS_MOUSE(DI_Record direc)
+{
+    return (direc.taxid == 10090);
+}
+
+Boolean is_WGS_ANTHRAX(DI_Record direc)
+{
+    return (direc.taxid == 191218);
+}
+
 CharPtr FDFGetAccessionFromSeqIdChain(SeqIdPtr seqid_list)
 {
     SeqIdPtr     sip;
@@ -8962,17 +9376,17 @@ CharPtr FDFGetAccessionFromSeqIdChain(SeqIdPtr seqid_list)
 
 /* Function scans .pdi or .ndi file and do callback() for this gi and oid */
 
-Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
-	Boolean (*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
-	FILE *out, Int4 gi_threshold)
+Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
+    Boolean (*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
+    FILE *out, Int4 gi_threshold)
 {
 
-    FILE		*fdi;
-    DI_Record	direc;
-    Char		skipstr1[128], skipstr2[128];
-    int			readstat, total=0, progress_count=0;
-    Boolean		(*criteria)(DI_Record);
-    Int4		progress_chunk = 100;
+    FILE        *fdi;
+    DI_Record    direc;
+    Char        skipstr1[128], skipstr2[128];
+    int            readstat, total=0, progress_count=0;
+    Int4        progress_chunk = 100;
+
     
     /* open index file */
     fdi = FileOpen(difilename, "r");
@@ -8980,31 +9394,6 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
     if (!fdi) {
         fprintf(out, "\nERROR: cannot open '%s'", difilename);
         return FALSE;
-    }
-    
-    /* check what subset was wanted */
-    if (!StringICmp(subset, "est_human")) {
-        criteria = &is_EST_HUMAN;
-    }	else if (!StringICmp(subset, "est_mouse")) {
-        criteria = &is_EST_MOUSE;
-    }	else if (!StringICmp(subset, "est_others")) {
-        criteria = &is_EST_OTHERS;
-    }	else if (!StringICmp(subset, "swissprot")) {
-        criteria = &is_SWISSPROT;
-    }	else if (!StringICmp(subset, "pdb")) {
-        criteria = &is_PDB;
-    }	else if (!StringICmp(subset, "month")) {
-        criteria = &is_MONTH;
-    }   else if (!StringICmp(subset, "refseq_genomic")) {
-        criteria = &is_REFSEQ_GENOMIC;
-    }   else if (!StringICmp(subset, "refseq_rna")) {
-        criteria = &is_REFSEQ_RNA;
-    }   else if (!StringICmp(subset, "refseq_protein")) {
-        criteria = &is_REFSEQ_PROTEIN;
-    }   else if (!StringICmp(subset, "wgs_anopheles")) {
-        criteria = &is_WGS_ANOPHELES;
-    }   else if (!StringICmp(subset, "wgs_rice")) {
-        criteria = &is_WGS_RICE;
     }
     
     /* set gi threshold for month subset */
@@ -9018,7 +9407,7 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
         
         direc.acc = StringSave(skipstr2);
         /*direc.oid += *curr_oid;*/
-        if (DB_Subset(criteria, direc)) {
+        if (DB_Subset(gmsubsetdp, direc)) {
             callback(&direc, data);
             progress_count++;
         }
@@ -9051,11 +9440,11 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
     return TRUE;
 }
 /************************************************************************/
-/* END	The functions used with ID1 dump stuff				*/
+/* END    The functions used with ID1 dump stuff                */
 /************************************************************************/
 
 /************************************************************************/
-/*    	Fastacmd API                           				*/
+/*        Fastacmd API                                           */
 /************************************************************************/
 
 typedef struct FCMDAccList {
@@ -9182,71 +9571,225 @@ static void FCMDAccListFree(FCMDAccListPtr falp)
     }
 }
 
-Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
-	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out)
+static Boolean Fastacmd_PrintTaxonomyInfo(ReadDBFILEPtr rdfp, Int4 oid, 
+        FILE *fp, Int4 linelen)
 {
-	return Fastacmd_Search_ex(searchstr, database, batchfile, dupl, linelen, out, FALSE, FALSE, FALSE);
+    RDBTaxNamesPtr  tnames = NULL;
+    BlastDefLinePtr bdp = NULL, bdp_tmp;
+    Char buf[128];
+
+    if (rdfp == NULL || fp == NULL)
+        return FALSE;
+
+    if ((bdp = FDReadDeflineAsn(rdfp, oid)) == NULL)
+        return FALSE;
+
+    if ((tnames = RDBGetTaxNames(rdfp->taxinfo, bdp->taxid)) == NULL) {
+        BlastDefLineSetFree(bdp);
+        return FALSE;
+    }
+
+    asn2ff_set_output(fp, NULL);
+    ff_StartPrint(0, 0, linelen, NULL);
+
+    /* Print the taxonomy report for each sequence associated with this oid */
+    for (bdp_tmp = bdp; bdp_tmp; bdp_tmp = bdp_tmp->next) {
+
+        if (rdfp->gi_target != 0) {
+            SeqIdPtr sip = SeqIdFindBest(bdp_tmp->seqid, SEQID_GI);
+            if (sip->data.intvalue != rdfp->gi_target) 
+                continue;
+        }
+
+        MemSet(buf, 0, sizeof(buf));
+        SeqIdWrite(bdp_tmp->seqid, buf, PRINTID_FASTA_LONG, sizeof(buf)-1);
+        ff_AddString("NCBI sequence id: "); 
+        ff_AddString(buf); NewContLine();
+
+        ff_AddString("NCBI taxonomy id: ");
+        ff_AddInteger("%ld", bdp_tmp->taxid);
+        NewContLine();
+
+        ff_AddString("Common name: "); 
+        ff_AddString(tnames->common_name); NewContLine();
+        ff_AddString("Scientific name: ");
+        ff_AddString(tnames->sci_name); NewContLine();
+#if 0
+        ff_AddString("Blast name: ");
+        ff_AddString(tnames->blast_name); NewContLine();
+        ff_AddString("Super kingdom: ");
+        ff_AddString(tnames->s_king); NewContLine();
+#endif
+        if (bdp_tmp->next)
+            NewContLine();
+    }
+
+    ff_EndPrint();
+    BlastDefLineSetFree(bdp);
+    RDBTaxNamesFree(tnames);
+
+    return TRUE;
 }
 
-Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
-	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
-        Boolean use_target, Boolean use_ctrlAs, Boolean dump_db)
+/* Prints the output for the -I option in fastacmd */
+static Boolean
+Fastacmd_PrintDbFullInformation(ReadDBFILEPtr rdfp, CharPtr databases,
+                                Int4 linelen, FILE *out)
 {
-    BioseqPtr		bsp;
-    ReadDBFILEPtr	rdfp;
-    Int4		i, fid, TotalItems=0, count;
-    FCMDAccListPtr	falp=NULL, falp_tmp;
-    CharPtr		buffer = NULL;
-    FILE		*fd;
-    Int4Ptr		ids = NULL;
-    Int4		guess_gi = -1;
-    Uint1		is_prot = READDB_DB_UNKNOWN;
-    Boolean 		translateBlastDB2FASTA = dump_db;
+    Boolean is_prot;
+    CharPtr base_filename;
+    Char buf[256];
+    Int4 path_len;
+
+    is_prot = (rdfp->parameters & READDB_IS_PROT) ? TRUE : FALSE;
+    PrintDbInformationWithRID(databases, is_prot, linelen, out, FALSE, NULL);
+
+    asn2ff_set_output(out, NULL);
+    ff_StartPrint(0, 0, linelen, NULL);
+
+    ff_AddString("File name");
+    if (rdfp->next)
+        ff_AddString("s:");
+    else
+        ff_AddString(":");
+    NewContLine();
+
+    for (; rdfp; rdfp = rdfp->next) {
+
+        /** Print file name **/
+        if (rdfp->aliasfilename && rdfp->oidlist) { /* subset database */
+            base_filename = StringRChr(rdfp->full_filename,'/');
+            MemSet(buf, 0, sizeof(buf));
+            path_len = StringLen(rdfp->full_filename) -
+                        StringLen(base_filename);
+            if (path_len > 0 && path_len < sizeof(buf) 
+                    && base_filename != NULL) {
+                StringNCpy(buf, rdfp->full_filename, path_len+1);
+                StringNCat(buf, rdfp->aliasfilename, sizeof(buf)-1-path_len-1);
+            } else {
+                StringNCpy(buf, rdfp->aliasfilename, sizeof(buf)-1);
+            }
+
+            ff_AddString(buf);
+            base_filename = NULL;
+        } else /* real database */
+            ff_AddString(rdfp->full_filename);
+        NewContLine(); 
+
+        /** Print date **/
+        TabToColumn(4); 
+        ff_AddString("Date: "); ff_AddString(rdfp->date); 
+
+        /** Print database version **/
+        ff_AddString("    Version: ");
+        ff_AddString(Ltostr((long)rdfp->formatdb_ver, 1)); 
+        NewContLine();
+        TabToColumn(0);
+    }
+
+    ff_EndPrint();
+    return TRUE;
+}
+
+static SeqLocPtr Fastacmd_ParseSeqLoc(CharPtr str, Uint1 strand, BioseqPtr bsp) 
+{
+    SeqLocPtr slp = NULL;
+    CharPtr delimiters = " ,;";
+    Int4 from = 0, to = -1; /* zero offset */
+    CharPtr seqlocstr = NULL, strp = NULL;
+
+    if (str == NULL)
+        return slp;
+
+    seqlocstr = strp = StringSave(str);
+
+    from = atol(StringTokMT(seqlocstr, delimiters, &seqlocstr)) - 1;
+    if (seqlocstr)
+        to = atol(seqlocstr) - 1;
+
+    from = MAX(from, 0);
+    if (to <= 0) 
+        to = bsp->length - 1;
+    to = MIN(bsp->length - 1, to);
+    if (from >= bsp->length) {
+        ErrPostEx(SEV_ERROR, 0, 0, "From location cannot be greater "
+                "than %ld. Ignoring sequence location.\n",
+                bsp->length);
+        from = 0; to = bsp->length - 1;
+    }
+
+    if (ISA_aa(bsp->mol))  /* for proteins, the strand is irrelevant */
+        strand = Seq_strand_unknown;
+    slp = SeqLocIntNew(from, to, strand, SeqIdFindBest(bsp->id, SEQID_GI)); 
+
+    MemFree(strp);
+
+    return slp;
+}
+
+#define FASTACMD_DEFAULT_DB "nr"
+
+Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
+    CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out)
+{
+    return Fastacmd_Search_ex(searchstr, database, READDB_DB_UNKNOWN, 
+            batchfile, dupl, linelen, out, FALSE, FALSE, FALSE, NULL, 
+            Seq_strand_unknown, FALSE, FALSE);
+}
+
+Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
+    CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
+    Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
+    CharPtr seqlocstr, Uint1 strand, 
+    Boolean taxonomy_info_only, Boolean dbinfo_only)
+{
+    BioseqPtr        bsp;
+    ReadDBFILEPtr    rdfp = NULL, rdfp_tmp;
+    Int4             i, fid, TotalItems=0, count;
+    FCMDAccListPtr   falp=NULL, falp_tmp;
+    CharPtr          buffer = NULL, dbname = database;
+    FILE             *fd;
+    Int4Ptr          ids = NULL;
+    Int4             guess_gi = -1;
+    Boolean          translateBlastDB2FASTA = dump_db;
+    SeqLocPtr        slp = NULL;
 
     if (searchstr)
-    	guess_gi = atol(searchstr);
+        guess_gi = atol(searchstr);
 
-    /* if database name is not specified then use CommonIndex */
-    if (!database && guess_gi > 0) {
-	CommonIndexHeadPtr	cih = NULL;
-	CharPtr			commonindex_file;
-	CharPtr			dbname;
+    if (dbname == NULL)
+        dbname = FASTACMD_DEFAULT_DB;
 
-	commonindex_file = FindBlastDBFile(COMMONINDEX_FN);
-
-	cih = CommonIndexInit(commonindex_file);
-	commonindex_file = MemFree(commonindex_file);
-
-	if (cih) {
-	    dbname = FindDBbyGI(cih, guess_gi, &is_prot);
-
-	    if (!dbname) {
-                ErrPostEx(SEV_ERROR, 0, 0, "The gi \"%ld\" not found\n", 
-			guess_gi);
-                return (1);
-	    }
-	    database = MemNew(1024);
-	    StrCpy(database, dbname);
-	    CommonIndexDestruct(cih);
-	}
+    if ((rdfp = readdb_new_ex(dbname, is_prot, TRUE)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for "
+             "%s database\n", dbname);
+        return(1);
     }
 
-    if (!database) {
-      database = MemNew(1024);
-      StrCpy(database, "nr");
+    if (dbinfo_only) {
+        Fastacmd_PrintDbFullInformation(rdfp, dbname, linelen, out);
+        readdb_destruct(rdfp);
+        return 0;
     }
 
-    if((rdfp = readdb_new_ex(database, is_prot, TRUE)) == NULL) {
-	ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for "
- 			"%s database\n", database);
-	return(1);
+    /* Taxonomy information is encoded only in the new database format */
+    if (taxonomy_info_only) {
+        for (rdfp_tmp = rdfp; rdfp_tmp; rdfp_tmp = rdfp_tmp->next) {
+            if (rdfp_tmp->formatdb_ver < FORMATDB_VER || !rdfp_tmp->taxinfo) {
+                ErrPostEx(SEV_WARNING, 0, 0,"Taxonomy information is not "
+                        "available for %s.\n"
+                        "If it is available, please update it from\n"
+                        "ftp://ftp.ncbi.nih.gov/blast/db/FormattedDatabases",
+                        rdfp_tmp->filename);
+            }
+        }
     }
 
     if (!translateBlastDB2FASTA) {
         if(searchstr != NULL) {
             if((falp =  GetAccList(searchstr, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
-				"found. Exiting...\n");
+                "found. Exiting...\n");
                 return(1);
             }
         } else if(batchfile != NULL){
@@ -9257,7 +9800,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
     
             if((falp =  GetAccList(buffer, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
-				"found. Exiting...\n");
+                "found. Exiting...\n");
                 return(1);
             }
         }
@@ -9276,24 +9819,38 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
             }
         }
 
-        if(fid < 0 && fid != -1) { 
+        if (fid < 0 && fid != -1) { 
             ErrPostEx(SEV_ERROR, 0, 0, "Accesion search failed for \"%s\" "
                 "with error code %d\n", falp_tmp->acc, fid);
             return 1;
         } else if (fid == -1) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Entry \"%s\" not found\n", 				falp_tmp->acc);
+            ErrPostEx(SEV_ERROR, 0, 0, "Entry \"%s\" not found\n", 
+                        falp_tmp->acc);
         } else if (ids == NULL) { /* gi or SeqId */
             if (use_target)
                 rdfp->gi_target = falp_tmp->gi;
-            bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
-            BioseqRawToFastaExtra(bsp, out, linelen);
-            BioseqFree(bsp);  
-        } else {
-            for(i = 0; i < count; i++) {
-                bsp = readdb_get_bioseq_ex(rdfp, ids[i], TRUE, use_ctrlAs);
-                BioseqRawToFastaExtra(bsp, out, linelen);
-                BioseqFree(bsp);
+            if (taxonomy_info_only) {
+                Fastacmd_PrintTaxonomyInfo(rdfp, fid, out, linelen);
+            } else {
+                bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
+                slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
+                BioseqRawToFastaExtraEx(bsp, out, linelen, slp);
+                bsp = BioseqFree(bsp);  
+                slp = SeqLocFree(slp);
             }
+        } else {
+                for(i = 0; i < count; i++) {
+                    if (taxonomy_info_only) {
+                        Fastacmd_PrintTaxonomyInfo(rdfp, ids[i], out, linelen);
+                    } else {
+                        bsp = readdb_get_bioseq_ex(rdfp, ids[i], TRUE, 
+                                use_ctrlAs);
+                        slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
+                        BioseqRawToFastaExtraEx(bsp, out, linelen, slp);
+                        bsp = BioseqFree(bsp);
+                        slp = SeqLocFree(slp);
+                    }
+                }
         }   
     }
 
@@ -9304,7 +9861,6 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
     readdb_destruct(rdfp);
     MemFree(buffer);
     FCMDAccListFree(falp);
-    database = MemFree(database);
     return 0;
 } 
 
@@ -9348,7 +9904,6 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
 #ifdef SHOW_PROGRESS
             if (!(i%progress_chunk)) {
                 fprintf(stderr,"\b\b\b\b%3d%%",(int)((100*i)/total));
-                fflush(stderr);
              }
 #endif
             if ((bsp = readdb_get_bioseq_ex(rdfp,i, TRUE, ctrlA)) != NULL) {
@@ -9368,7 +9923,6 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
 #ifdef SHOW_PROGRESS
             if (!(i%progress_chunk)) {
                 fprintf(stderr,"\b\b\b\b%3d%%",(int)((100*i)/total));
-                fflush(stderr);
             }
 #endif
             /* Retrieve the correct oidlist, as each rdfp has its own */
@@ -9427,12 +9981,12 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
 }
 
 /************************************************************************/
-/* END	Fastacmd API                           				*/
+/* END    Fastacmd API                                           */
 /************************************************************************/
 
 
 /*************************************************************************
-	This function reads in a list of gi's from a text file
+    This function reads in a list of gi's from a text file
 and make a binary gilist file.
 
 The binary gilist format has the following construction:
@@ -9458,68 +10012,68 @@ compare_gis(VoidPtr v1, VoidPtr v2)
 }
 
 
-#define	GIFILE_LINE_LEN	1024
+#define    GIFILE_LINE_LEN    1024
 Int4 LIBCALL
 readdb_MakeGiFileBinary (CharPtr input_file, CharPtr output_file)
 {
-	FILE		*infp=NULL, *outfp=NULL;
-  	Int4		index = 0, value, chunk_size = 24, gilist_size;
-        Int2		status;
-        Char		line[GIFILE_LINE_LEN];
-	long		tmplong;
-  	Uint4Ptr	gi_list;
+    FILE        *infp=NULL, *outfp=NULL;
+      Int4        index = 0, value, chunk_size = 24, gilist_size;
+        Int2        status;
+        Char        line[GIFILE_LINE_LEN];
+    long        tmplong;
+      Uint4Ptr    gi_list;
 
-	if (!(infp = FileOpen(input_file, "r"))) {
+    if (!(infp = FileOpen(input_file, "r"))) {
             ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", input_file);
             return -1;
         }
         
-	if (!(outfp = FileOpen(output_file, "wb"))) {
+    if (!(outfp = FileOpen(output_file, "wb"))) {
             ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", output_file);
             return -1;
         }
 
-	gi_list = MemNew(chunk_size * sizeof(Uint4));
+    gi_list = MemNew(chunk_size * sizeof(Uint4));
 
-	while (FileGets(line, GIFILE_LINE_LEN, infp)) 
-	{
-	    /* do correct casting */
-	    status = sscanf(line, "%ld", &tmplong);
-	    value = tmplong;
+    while (FileGets(line, GIFILE_LINE_LEN, infp)) 
+    {
+        /* do correct casting */
+        status = sscanf(line, "%ld", &tmplong);
+        value = tmplong;
 
-	    /* skip non-valid lines */
-	    if (status > 0 && value > 0) {
-		/* do we have enough space in gi_list ? */
-		if (chunk_size < index + 1) {
-		    chunk_size *= 2;
-		    gi_list = Realloc(gi_list, chunk_size * sizeof(Uint4));
-		}
+        /* skip non-valid lines */
+        if (status > 0 && value > 0) {
+        /* do we have enough space in gi_list ? */
+        if (chunk_size < index + 1) {
+            chunk_size *= 2;
+            gi_list = Realloc(gi_list, chunk_size * sizeof(Uint4));
+        }
 
-		gi_list[index++] = value;
-	    }
-	}
+        gi_list[index++] = value;
+        }
+    }
 
-	FormatDbUint4Write(READDB_MAGIC_NUMBER, outfp);
-	FormatDbUint4Write(index, outfp);
-	
-	gilist_size = index;
-	HeapSort(gi_list, gilist_size, sizeof(Uint4), compare_gis);
+    FormatDbUint4Write(READDB_MAGIC_NUMBER, outfp);
+    FormatDbUint4Write(index, outfp);
+    
+    gilist_size = index;
+    HeapSort(gi_list, gilist_size, sizeof(Uint4), compare_gis);
 
-	for (index=0; index<gilist_size; index++)
-	{
-		FormatDbUint4Write(gi_list[index], outfp);
-	}
+    for (index=0; index<gilist_size; index++)
+    {
+        FormatDbUint4Write(gi_list[index], outfp);
+    }
 
-	gi_list = MemFree(gi_list);
+    gi_list = MemFree(gi_list);
 
-	FileClose(infp);
-	FileClose(outfp);
+    FileClose(infp);
+    FileClose(outfp);
 
-	return gilist_size;
+    return gilist_size;
 }
 
 Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename, 
-		    Int4 Bases_In_Volume)
+            Int4 Bases_In_Volume)
 {
    FILE *fd;
    FormatDBPtr fdbp;
@@ -9535,33 +10089,33 @@ Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename,
    
    /* Get sequences */
    while ((sep = FastaToSeqEntryEx(fd, (Boolean)!options->is_protein, 
-				   NULL, options->parse_mode)) != NULL) {
+                   NULL, options->parse_mode)) != NULL) {
       
       if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
-	 ErrLogPrintf("Error in readind Bioseq Formating failed.\n");
-	 return 4;
+     ErrLogPrintf("Error in readind Bioseq Formating failed.\n");
+     return 4;
       }
       
       SeqEntrySetScope(sep);
       bsp = (BioseqPtr) sep->data.ptrvalue;
       
       if(Bases_In_Volume >= 1) {
-	 if(count > Bases_In_Volume) {
-	    /* starting new volume ? */
-	    count = 0;
-	    if(FormatDBClose(fdbp))
-	       return 9;
-	    
-	    if(Bases_In_Volume > 1) {
-	       sprintf(filenamebuf, "%s.%02ld", basename, (long) volume);
-	       options->base_name = StringSave(filenamebuf);
-	       volume++;
-	    }
-	    
-	    if ((fdbp = FormatDBInit(options)) == NULL)
-	       return 2;
-	 }
-	 count += bsp->length;
+     if(count > Bases_In_Volume) {
+        /* starting new volume ? */
+        count = 0;
+        if(FormatDBClose(fdbp))
+           return 9;
+        
+        if(Bases_In_Volume > 1) {
+           sprintf(filenamebuf, "%s.%02ld", basename, (long) volume);
+           options->base_name = StringSave(filenamebuf);
+           volume++;
+        }
+        
+        if ((fdbp = FormatDBInit(options)) == NULL)
+           return 2;
+     }
+     count += bsp->length;
       }
    
       FDBAddBioseq(fdbp, bsp, 0);
@@ -9573,7 +10127,7 @@ Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename,
    if(FormatDBClose(fdbp))
       return 9;
 
-	return 0;
+    return 0;
 }
 
 Boolean FD_CreateAliasFileEx(CharPtr title, CharPtr basename, 
@@ -9581,7 +10135,7 @@ Boolean FD_CreateAliasFileEx(CharPtr title, CharPtr basename,
                              CharPtr parent,
                              Int4 first_oid, Int4 last_oid,
                              Int8 total_length, Int4 number_seqs,
-			     CharPtr oidlist, CharPtr gilist)
+                 CharPtr oidlist, CharPtr gilist)
 {
     Char filenamebuf[128];
     time_t tnow;
@@ -9616,14 +10170,14 @@ Boolean FD_CreateAliasFileEx(CharPtr title, CharPtr basename,
     fprintf(fd, "\n#\n");
     
     if (gilist)
-    	fprintf(fd, "GILIST %s\n#\n", gilist);
+        fprintf(fd, "GILIST %s\n#\n", gilist);
     else
-    	fprintf(fd, "#GILIST\n#\n");
+        fprintf(fd, "#GILIST\n#\n");
 
     if (oidlist)
-    	fprintf(fd, "OIDLIST %s\n#\n", oidlist);
+        fprintf(fd, "OIDLIST %s\n#\n", oidlist);
     else
-    	fprintf(fd, "#OIDLIST\n#\n");
+        fprintf(fd, "#OIDLIST\n#\n");
     
     if (first_oid > 0) {
        fprintf(fd, "FIRST_OID %ld\n#\n", (long) first_oid);
@@ -9653,11 +10207,374 @@ Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename,
 Boolean FD_MakeAliasFile(FDB_optionsPtr options)
 {
    if (options == NULL)
-	return FALSE;
+    return FALSE;
    
    if (options->bases_in_volume > 1 && options->volume > 0)
-   	return FD_CreateAliasFileEx(options->db_title, options->alias_file_name, options->volume+1, 
-		options->is_protein, NULL, 0, 0, 0, 0, NULL, NULL);
+       return FD_CreateAliasFileEx(options->db_title, options->alias_file_name, options->volume+1, 
+        options->is_protein, NULL, 0, 0, 0, 0, NULL, NULL);
    else
-	return FALSE;
+    return FALSE;
 }
+
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#ifdef  HAVE_MADVISE
+
+/* IMPORTANT INFO:
+ *
+ * If we need to preload file(s) using madvise(), we do it now. 
+ * There are several file chunks that could be preloaded, 
+ * and several considerations to be taken into account. 
+ *
+ * The file chunks are: 
+ * 1) the portion of the index file containing pointers to needed sections of
+ *    the header file.		
+ * 2) the portion of the index file containing pointers to needed sections of
+ *    the sequence file.		
+ * 3) the portion of the index file containing pointers to needed sections of
+ *    the ambchar.		
+ * 4) the needed portion of the header file.
+ * 5) the needed portion of the sequence file.
+ *
+ * The preloading consideration are 
+ * 1) whether the file chunk has been memory mapped.
+ * 2) the size of the individual chunks, and
+ * 3) the combined size of all chunks.
+ *
+ * If the size of an individual chunk is smaller than MADVISE_MIN_SIZE pages,
+ * there is no obvious benefit to applying madvise, and it could be avoided.
+ *
+ * Also, if the total size of all the chunks to be preloaded exceeds 
+ * certain share of RAM cache size, some chunk portions may not be preloaded, 
+ * -- and even then some preloaded chunks won't stay in memory, -- but this is 
+ * the best we can do. We should, however, minimize probability that preloaded
+ * pages will be pushed out by some other process, so we'll assume that
+ * given that the same database is likely to be processed again and again on
+ * the same server, the available portion of RAM is some value greater than 50%,
+ * and is defined by MADVISE_RAM_SHARE.
+ *
+ *
+ */
+#define MADVISE_MIN_SIZE  16
+#define MADVISE_RAM_SHARE 90
+
+/** exclusively for async madvise() */
+typedef struct {
+	void * mp;
+	size_t len;
+	EMemMapAdvise advice;
+
+}
+MadviseParam_t;
+
+/** */
+static void*
+readdb_do_madvise(void *param)
+{
+#ifdef READDB_DEBUG 
+	fprintf(stderr, "madvise(%p, %u, %d)\n", ((MadviseParam_t *)param)->mp, 
+		((MadviseParam_t *)param)->len, ((MadviseParam_t *)param)->advice);
+#else 
+	ErrPostEx(SEV_INFO, 0, 0, "madvise(0x%x, %u, %d)", ((MadviseParam_t *)param)->mp,
+		((MadviseParam_t *)param)->len, ((MadviseParam_t *)param)->advice);
+
+#endif
+
+	if( !Nlm_MemMapAdvise(((MadviseParam_t *)param)->mp, 
+			((MadviseParam_t *)param)->len, ((MadviseParam_t *)param)->advice) ) {
+
+#ifdef READDB_DEBUG 
+		fprintf(stderr, "Nlm_MemMapAdvise(%p, %u, %d) failed: %s\n", 
+			((MadviseParam_t *)param)->mp, ((MadviseParam_t *)param)->len, 
+			((MadviseParam_t *)param)->advice, strerror(errno));
+#else
+		ErrPostEx(SEV_WARNING, 0, 0, "Nlm_MemMapAdvise(0x%x, %u, %d) failed: %s", 
+			((MadviseParam_t *)param)->mp, ((MadviseParam_t *)param)->len,
+			((MadviseParam_t *)param)->advice, strerror(errno));
+#endif 
+	}
+
+#ifdef READDB_DEBUG
+	fprintf(stderr, "\t\t\t\tdone madvise(%p, %u, %d)\n", 
+		((MadviseParam_t *)param)->mp, ((MadviseParam_t *)param)->len, 
+		((MadviseParam_t *)param)->advice);
+#endif
+
+	Nlm_MemFree(param);
+	return NULL;
+}
+
+/** */
+static void
+readdb_madvise (void * mp, size_t len, 
+                EMemMapAdvise advice, Boolean sync, EThreadPriority pri)
+{
+	MadviseParam_t *param = (MadviseParam_t *)Nlm_MemNew(sizeof(MadviseParam_t));
+	if( param ) {
+		param->mp = mp;
+		param->len = len;
+		param->advice = advice;
+		if( sync ) {
+			readdb_do_madvise(param);
+		}
+		else {
+			NlmThreadCreateEx(readdb_do_madvise, (void *)param,
+				THREAD_RUN | THREAD_DETACHED, pri, NULL, NULL);
+		}
+	}
+}
+
+/** */
+static void 
+readdb_preload_index (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync)
+{
+	Uint4 idxHdrOffset = 0;
+	Uint4 idxSeqOffset = 0;
+	Uint4 idxAmbOffset = 0;
+
+	Uint4 idxLength = 0;
+	Uint4 firstPage = 0;
+
+	uintptr_t baseOffset = (uintptr_t)rdfp->indexfp->mmp_begin;
+
+	/* get page size */
+	long pagesz = sysconf(_SC_PAGESIZE);
+
+	/* sanity check */
+	if( !rdfp || pagesz < 0 ) {
+		return;
+	}
+
+	/* insure that we are within the ordinal id range */
+	if( first_db_seq < rdfp->start ) {
+		first_db_seq = rdfp->start;
+	}
+	if( final_db_seq >= rdfp->stop ) {
+		final_db_seq = rdfp->stop - 1;
+	}
+
+	/* verify that the index file is memory mapped */
+	if( rdfp->indexfp && rdfp->indexfp->mfile_true ) {
+		
+		/* portion of the index file containing pointers to header file. */
+		firstPage = (first_db_seq * 4) / pagesz;
+		idxHdrOffset = firstPage * pagesz;
+		idxLength = (final_db_seq - first_db_seq) * 4;
+		idxLength += (pagesz - idxLength % pagesz);
+
+		/* madvise segments if they are big enough */
+		if( idxLength / pagesz > MADVISE_MIN_SIZE ) {
+		
+			/* portion of the index file containing pointers to sequence file. */
+			firstPage = ((rdfp->num_seqs + 1 + first_db_seq) * 4) / pagesz;
+			idxSeqOffset = firstPage * pagesz;
+			
+			/* portion of the index file containing pointers to ambchars in seq file. */
+			firstPage = ((2 * rdfp->num_seqs + 2 + first_db_seq) * 4) / pagesz;
+			idxAmbOffset = firstPage * pagesz;
+		}
+	}
+
+	/* ensure that madvise() is called on page boundary */
+	if( baseOffset % pagesz ) {
+		uintptr_t adjustVal = pagesz - (baseOffset % pagesz);
+		baseOffset += adjustVal;
+		idxHdrOffset -= ((adjustVal && idxHdrOffset > pagesz) ? pagesz : 0);
+		idxSeqOffset -= ((adjustVal && idxSeqOffset > pagesz) ? pagesz : 0);
+		idxAmbOffset -= ((adjustVal && idxAmbOffset > pagesz) ? pagesz : 0);
+	}
+
+#ifdef READDB_DEBUG
+	fprintf(stderr, "MMP        Offset:    %p\n", rdfp->indexfp->mmp_begin);
+	fprintf(stderr, "MMP Adjust Offset:    %p\n", baseOffset);
+	fprintf(stderr, "Index Head Offset:    %ld\n", idxHdrOffset);
+	fprintf(stderr, "Index File Length:    %ld\n", idxLength);
+#endif
+
+	/* finally, preload chunks that are big enough to make it
+	 * worth while */
+	if( rdfp->indexfp && idxLength / pagesz > MADVISE_MIN_SIZE ) {
+		readdb_madvise((char *)(baseOffset + idxHdrOffset), idxLength, 
+						advice, sync, eTP_Default);
+		readdb_madvise((char *)(baseOffset + idxSeqOffset), idxLength, 
+						advice, sync, eTP_Default);
+		readdb_madvise((char *)(baseOffset + idxAmbOffset), idxLength, 
+						advice, sync, eTP_Default);
+	}
+}
+
+/** */
+static void 
+readdb_preload_data (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync)
+{
+	Uint4 hdrOffset = 0; 
+	Uint4 hdrLength = 0;
+	Uint4 seqOffset = 0; 
+	Uint4 seqLength = 0;
+
+	Uint4 firstPage = 0;
+
+	long allowPages = 0;
+	long needPages = 0;
+
+	/* get page size */
+	long pagesz = sysconf(_SC_PAGESIZE);
+	long totalPages = sysconf(_SC_PHYS_PAGES);
+
+	/* sanity check */
+	if( !rdfp || pagesz < 0 || totalPages < 0 ) {
+		return;
+	}
+
+	/* insure that we are within the ordinal id range */
+	if( first_db_seq < rdfp->start ) {
+		first_db_seq = rdfp->start;
+	}
+	if( final_db_seq >= rdfp->stop ) {
+		final_db_seq = rdfp->stop - 1;
+	}
+
+	/** verify that the header file is memory mapped */
+	if( rdfp->headerfp && rdfp->headerfp->mfile_true ) {
+		long firstOff = Nlm_SwapUint4(rdfp->header_index[first_db_seq]);
+		long lastOff = Nlm_SwapUint4(rdfp->header_index[final_db_seq]);
+
+		firstPage = firstOff / pagesz;
+		hdrOffset = firstPage * pagesz;
+		hdrLength = lastOff - firstOff;
+		hdrLength += (pagesz - hdrLength % pagesz);
+	}
+
+#ifdef READDB_DEBUG
+	if( !rdfp->sequencefp ) {
+		fprintf(stderr, "rdfp->sequencefp == NULL\n");
+	}
+#endif
+
+	/** verify that the sequence file is memory mapped */
+	if( rdfp->sequencefp && rdfp->sequencefp->mfile_true ) {
+		long firstOff = Nlm_SwapUint4(rdfp->sequence_index[first_db_seq]);
+		long lastOff = Nlm_SwapUint4(rdfp->sequence_index[final_db_seq]);
+
+		firstPage = firstOff / pagesz;
+		seqOffset = firstPage * pagesz;
+		seqLength = lastOff - firstOff;
+		seqLength += (pagesz - seqLength % pagesz);
+	}
+
+	/** before preloading pages, trim sizes so that the total 
+	 *  is under MADVISE_RAM_SHARE */
+	allowPages = totalPages / 100 * MADVISE_RAM_SHARE;
+	needPages = (hdrLength + seqLength) / pagesz;
+
+	if( needPages > allowPages ) {
+		int pctTrim = (needPages - allowPages) * 100 / needPages;
+
+		/* trim proportionately all chunks */
+		hdrLength -= hdrLength * pctTrim / 100;
+		hdrLength += (pagesz - hdrLength % pagesz);
+
+		seqLength -= seqLength * pctTrim / 100;
+		seqLength += (pagesz - seqLength % pagesz);
+	}
+
+#ifdef READDB_DEBUG
+	fprintf(stderr, "Header File:   %ld\n", hdrLength);
+	fprintf(stderr, "Sequence File: %ld\n", seqLength);
+#endif
+
+	/* finally, preload chunks that are big enough to make it
+	 * worth while */
+	if( rdfp->headerfp && hdrLength / pagesz > MADVISE_MIN_SIZE ) {
+		uintptr_t baseOffset = (uintptr_t)rdfp->headerfp->mmp_begin;
+		if( baseOffset % pagesz ) {
+			uintptr_t adjustVal = pagesz - (baseOffset % pagesz);
+			baseOffset += adjustVal;
+			hdrOffset -= ((adjustVal && hdrOffset > pagesz) ? pagesz : 0);
+		}
+		readdb_madvise((char *)(baseOffset + hdrOffset), hdrLength, 
+						advice, sync, eTP_Default);
+	}
+
+	if( rdfp->sequencefp && seqLength / pagesz > MADVISE_MIN_SIZE ) {
+		uintptr_t baseOffset = (uintptr_t)rdfp->sequencefp->mmp_begin;
+		if( baseOffset % pagesz ) {
+			uintptr_t adjustVal = pagesz - (baseOffset % pagesz);
+			baseOffset += adjustVal;
+			seqOffset -= ((adjustVal && hdrOffset > pagesz) ? pagesz : 0);
+		}
+		readdb_madvise((char *)(baseOffset + seqOffset), seqLength, 
+		               advice, sync, eTP_Default);
+	}
+}
+
+/** simpler and more efficient approach than the above */
+static
+readdb_preload_file (NlmMFILEPtr mFilePtr, Int4 nPages, 
+					EMemMapAdvise advice, Boolean sync, EThreadPriority pri)
+{
+	long pagesz;
+	size_t len;
+
+	/* general sanity check */
+	if( !mFilePtr || !mFilePtr->mfile_true || !mFilePtr->mmp
+		|| !mFilePtr->mmp_madvise_end || !mFilePtr->mmp_end ) {
+		return;
+	}
+
+	/* check whether this portion was loaded before */
+	if( mFilePtr->mmp < mFilePtr->mmp_madvise_end ||
+		mFilePtr->mmp_end <= mFilePtr->mmp_madvise_end ) {
+		return;
+	}
+
+	pagesz = sysconf(_SC_PAGESIZE);
+	len = madvisePreloadBlock * pagesz;
+	if( len > mFilePtr->mmp_end - mFilePtr->mmp_madvise_end ) {
+		len = mFilePtr->mmp_end - mFilePtr->mmp_madvise_end;
+	}
+	readdb_madvise(mFilePtr->mmp_madvise_end, len, advice, sync, pri);
+	mFilePtr->mmp_madvise_end += len;
+}
+
+/** */
+void LIBCALL 
+readdb_preload (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
+				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync)
+{
+	/* do not preload index */
+	/* readdb_preload_index(rdfp, first_db_seq, final_db_seq, advice, sync); */
+	readdb_preload_data(rdfp, first_db_seq, final_db_seq, advice, sync);
+}
+
+/** */
+void LIBCALL 
+readdb_madvise_enable (Boolean enable)
+{
+	useMadvise = enable;
+}
+
+/** */
+void LIBCALL 
+readdb_madvise_type (EMemMapAdvise advice)
+{
+	mmapAdvice = advice;
+}
+
+/** */
+void LIBCALL 
+readdb_madvise_sync_mode (Boolean mode)
+{
+	madviseSyncMode = mode;
+}
+
+/** */
+void LIBCALL 
+readdb_madvise_block (Int4 nSeqs)
+{
+	madvisePreloadBlock = nSeqs;
+}
+
+#endif /* HAVE_MADVISE */
+#endif /* SOL || LINUX */

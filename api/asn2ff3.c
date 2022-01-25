@@ -35,6 +35,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.113  2002/07/12 17:34:35  kans
+* WormBase is now legal dbxref for all records, not just RefSeq
+*
+* Revision 6.112  2002/06/21 15:31:11  kans
+* added GABI db_xref
+*
+* Revision 6.111  2002/06/18 20:59:59  kans
+* added ISFinder as legal db_xref with hotlink
+*
+* Revision 6.110  2002/05/06 22:15:12  kans
+* added IFO and JCM db_xrefs
+*
 * Revision 6.109  2002/02/27 13:47:11  kans
 * fixed model evidence printing
 *
@@ -702,11 +714,17 @@ CharPtr dbtag[DBNUM] = {
   "ESTLIB",
   "FANTOM_DB",
   "FLYBASE",
+  "GABI",
   "GDB",
   "GeneID",
   "GI",
   "GO",
+  "IFO",
+  "IMGT/LIGM",
+  "IMGT/HLA",
   "InterimID",
+  "ISFinder",
+  "JCM",
   "LocusID",
   "MaizeDB",
   "MGD",
@@ -727,7 +745,7 @@ CharPtr dbtag[DBNUM] = {
   "taxon",
   "UniGene",
   "UniSTS",
-  "IMGT/LIGM",
+  "WormBase",
   };
 
 

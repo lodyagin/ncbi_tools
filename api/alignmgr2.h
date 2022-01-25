@@ -28,13 +28,25 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.14 $
+* $Revision: 6.18 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.h,v $
+* Revision 6.18  2002/08/07 21:57:33  kans
+* added AlignMgr2GetFirstNForStdSeg
+*
+* Revision 6.17  2002/07/11 14:35:51  kans
+* fixed Mac complaints about prototypes
+*
+* Revision 6.16  2002/07/11 12:55:33  wheelan
+* added support for std-seg alignments
+*
+* Revision 6.15  2002/05/21 12:26:25  wheelan
+* added n5 field to AMSmallPtr
+*
 * Revision 6.14  2002/04/09 18:21:55  wheelan
 * changed params for AlnMgr2IndexAsRows
 *
@@ -88,6 +100,7 @@
 #include <salutil.h>
 #include <salpedit.h>
 #include <samutil.h>
+#include <sequtil.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -259,6 +272,7 @@ typedef struct am_small {
    Int4  n2;
    Int4  n3;
    Int4  n4;
+   Int4  n5;
    struct am_small PNTR next;
 } AM_Small2, PNTR AM_Small2Ptr;
 
@@ -863,6 +877,22 @@ NLM_EXTERN void AlnMgr2RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 
 ***************************************************************************/
 NLM_EXTERN SeqAlignPtr AlnMgr2FuseSet(SeqAlignPtr sap_head, Boolean returnall);
 
+/* SECTION 11 -- functions for std-segs */
+NLM_EXTERN Int4 AlignMgr2GetFirstNForStdSeg(SeqAlignPtr sap, SeqIdPtr sip);
+NLM_EXTERN SeqIdPtr AlnMgr2GetNthSeqIdPtrStdSeg(SeqAlignPtr sap, Int4 n);
+NLM_EXTERN void AlnMgr2GetNthSeqRangeInSAStdSeg(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
+/***************************************************************************
+*
+*  The two mapping functions act a little differently for std-segs. The
+*  alignment coordinates are 1:1 linearly correlated with the longest
+*  seqloc in the set; the others may be significantly shorter.
+*  The mapping functions deal with % lengths, and map those instead of
+*  coordinates (which may not be linear);
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgr2MapBioseqToSeqAlignStdSeg(SeqAlignPtr sap, Int4 n, Int4 pos);
+NLM_EXTERN Int4 AlnMgr2MapSeqAlignToBioseqStdSeg(SeqAlignPtr sap, Int4 n, Int4 pos);
+NLM_EXTERN Int4 AlnMgr2GetAlnLengthStdSeg(SeqAlignPtr sap);
 
 /***************************************************************************/
 

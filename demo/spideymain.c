@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.6  2002/05/07 18:43:46  wheelan
+* changes to support user-defined splice matrices
+*
 * Revision 6.5  2001/11/05 16:13:55  wheelan
 * bug fix in multiple alignment code; changed call to SPI_PrintMult..
 *
@@ -85,8 +88,11 @@
 #define MYARGTO        20
 #define MYARGMULT      21
 #define MYARGXL        22
+#define MYARGSTRAND    23
+#define MYARGDSPLICE   24
+#define MYARGASPLICE   25
 
-#define NUMARGS        23
+#define NUMARGS        26
 
 Args myargs[NUMARGS] = {
    {"Input file -- genomic sequence(s)", NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
@@ -97,7 +103,7 @@ Args myargs[NUMARGS] = {
    {"Input file is a GI list", "F", NULL, NULL, TRUE, 'G', ARG_BOOLEAN, 0.0, 0, NULL},
    {"Number of gene models", "1", NULL, NULL, TRUE, 'n', ARG_INT, 0.0, 0, NULL},
    {"Organism (genomic sequence) v=vertebrate,\nd = drosophila, p = plant, c = C. elegans", "v", NULL, NULL, TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
-   {"First-pass e-value", "0.0000001", NULL, NULL, TRUE, 'e', ARG_FLOAT, 0.0, 0, NULL},
+   {"First-pass e-value", "0.0000000001", NULL, NULL, TRUE, 'e', ARG_FLOAT, 0.0, 0, NULL},
    {"Second-pass e-value", "0.001", NULL, NULL, TRUE, 'f', ARG_FLOAT, 0.0, 0, NULL},
    {"Third-pass e-value", "10", NULL, NULL, TRUE, 'g', ARG_FLOAT, 0.0, 0, NULL},
    {"% identity cutoff", "0", NULL, NULL, TRUE, 'c', ARG_INT, 0.0, 0, NULL},
@@ -114,11 +120,15 @@ Args myargs[NUMARGS] = {
    {"Stop of genomic interval desired (to)", "0", NULL, NULL, TRUE, 'T', ARG_INT, 0.0, 0, NULL},
    {"Make a multiple alignment of all input mRNAs", "F", NULL, NULL, TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
    {"Use extra-large intron sizes", "F", NULL, NULL, TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
+   {"Restrict to plus (p) or minus (p) strand of genomic seq?", NULL, NULL, NULL, TRUE, 'S', ARG_STRING, 0.0, 0, NULL},
+   {"File with donor splice matrix", NULL, NULL, NULL, TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
+   {"File with acceptor splice matrix", NULL, NULL, NULL, TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
 };
 
 static void SPI_FindAllNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp);
 static BioseqPtr SPI_GetBspFromGIOrAcc(CharPtr str);
+static void SPI_GetSpliceInfo(SPI_OptionsPtr spot, FILE *sfp, Boolean donor);
 static void SPI_ReadFeatureTable(FILE *ifp, SPI_bsinfoPtr spim_head);
 
 Int2 Main()
@@ -141,6 +151,7 @@ Int2 Main()
    SeqAlignPtr        sap;
    SeqAnnotPtr        sanp;
    SeqEntryPtr        sep;
+   FILE               *sfp;
    SeqIdPtr           sip;
    SeqLocPtr          slp;
    SPI_bsinfoPtr      spig;
@@ -414,9 +425,32 @@ Int2 Main()
    sap = NULL;
    if (spot->printasn)
       spot->sap_head = &sap;
+   txt = myargs[MYARGSTRAND].strvalue;
+   if (txt != NULL)
+   {
+      if (StrChr(txt, 'p') || StrChr(txt, 'P'))
+         spot->strand = Seq_strand_plus;
+      else
+         spot->strand = Seq_strand_minus;
+   } else
+      spot->strand = Seq_strand_both;
    /*txt = myargs[MYARGDRAFTFILE].strvalue;
    if (txt != NULL)
       spot->draftfile = StringSave(txt);*/
+   txt = myargs[MYARGDSPLICE].strvalue;
+   if (txt != NULL)
+   {
+      sfp = FileOpen(txt, "r");
+      SPI_GetSpliceInfo(spot, sfp, TRUE);
+      FileClose(sfp);
+   }
+   txt = myargs[MYARGASPLICE].strvalue;
+   if (txt != NULL)
+   {
+      sfp = FileOpen(txt, "r");
+      SPI_GetSpliceInfo(spot, sfp, FALSE);
+      FileClose(sfp);
+   }
    h_head = h_prev = NULL;
    srip_head = srip_prev = NULL;
    while (spim != NULL)
@@ -633,5 +667,107 @@ static void SPI_ReadFeatureTable(FILE *ifp, SPI_bsinfoPtr spim_head)
          }
       }
       str = ReadALine(line, sizeof(line), ifp);
+   }
+}
+
+static void SPI_GetSpliceInfo(SPI_OptionsPtr spot, FILE *sfp, Boolean donor)
+{
+   Char               line[1000];
+   CharPtr            ptr;
+   SPI_SpliceInfoPtr  ssp;
+   SPI_SpliceInfoPtr  ssp_head;
+   SPI_SpliceInfoPtr  ssp_prev;
+   CharPtr            str;
+
+   if (sfp == NULL)
+   {
+      printf("Matrix file not found\n");
+      return;
+   }
+   str = ReadALine(line, sizeof(line), sfp);
+   /* should just be a single number */
+   if (donor)
+      spot->dsplicejunc = atoi(str);
+   else
+      spot->asplicejunc = atoi(str);
+   /* A */
+   str = ReadALine(line, sizeof(line), sfp);
+   ptr = strtok(str, "\t");
+   ssp_prev = NULL;
+   while (ptr != NULL)
+   {
+      ssp = (SPI_SpliceInfoPtr)MemNew(sizeof(SPI_SpliceInfo));
+      ssp->a = atof(ptr);
+      if (ssp_prev != NULL)
+      {
+         ssp_prev->next = ssp;
+         ssp_prev = ssp;
+      } else
+         ssp_head = ssp_prev = ssp;
+      ptr = strtok(NULL, "\t");
+   }
+   if (donor)
+      spot->dssp_head = ssp_head;
+   else
+      spot->assp_head = ssp_head;
+   /* C */
+   str = ReadALine(line, sizeof(line), sfp);
+   ptr = strtok(str, "\t");
+   ssp = ssp_head;
+   while (ptr != NULL)
+   {
+      if (ssp == NULL)  /* error */
+      {
+         printf("error reading splice matrix -- not all lines are same length");
+         return;
+      }
+      ssp->c = atof(ptr);
+      ptr = strtok(NULL, "\t");
+      ssp = ssp->next;
+   }
+   if (ssp != NULL)  /* error */
+   {
+      printf("error reading splice matrix -- not all lines are same length");
+      return;
+   }
+   /* G */
+   str = ReadALine(line, sizeof(line), sfp);
+   ptr = strtok(str, "\t");
+   ssp = ssp_head;
+   while (ptr != NULL)
+   {
+      if (ssp == NULL)  /* error */
+      {
+         printf("error reading splice matrix -- not all lines are same length");
+         return;
+      }
+      ssp->g = atof(ptr);
+      ptr = strtok(NULL, "\t");
+      ssp = ssp->next;
+   }
+   if (ssp != NULL)  /* error */
+   {
+      printf("error reading splice matrix -- not all lines are same length");
+      return;
+   }
+   /* T */
+   str = ReadALine(line, sizeof(line), sfp);
+   ptr = strtok(str, "\t");
+   ssp = ssp_head;
+   while (ptr != NULL)
+   {
+      if (ssp == NULL)  /* error */
+      {
+         printf("error reading splice matrix -- not all lines are same length");
+         return;
+      }
+      ssp->t = atof(ptr);
+      ptr = strtok(NULL, "\t");
+      ssp = ssp->next;
+   }
+   if (ssp != NULL)  /* error */
+   {
+      printf("error reading splice matrix -- not all lines are same length");
+      return;
    }
 }

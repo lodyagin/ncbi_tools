@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.13 2002/01/11 16:31:13 camacho Exp $
+/* $Id: taxblast.c,v 6.15 2002/07/02 16:38:04 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.15  2002/07/02 16:38:04  camacho
+* Moved increment of number of taxids in db to end of FDBTaxCallback
+*
+* Revision 6.14  2002/05/23 22:22:15  camacho
+* Do not keep entries with taxid 0 in blast taxonomy database
+*
 * Revision 6.13  2002/01/11 16:31:13  camacho
 * Verify if taxonomy service is properly initialized in RDTaxLookupInit
 *
@@ -1696,21 +1702,9 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
     if(tax_lookup->tax_array[tax_id] != NULL)
         return TRUE;
 
-    if(tax_id == 0) {
-        /* For unresolved tax_id we will eventually create some
-           entry */
-        tnames = MemNew(sizeof(RDBTaxNames));
-        tnames->sci_name = StringSave("Unknown");
-        tnames->common_name = StringSave("Unknown");
-        tnames->blast_name = StringSave("Unknown");
-        StringCpy(tnames->s_king, "-");
-        tax_lookup->tax_array[0] = tnames;
-        tax_lookup->taxids_in_db++;
-
+    if(tax_id == 0)
         return TRUE;
-    }
     
-    tax_lookup->taxids_in_db++;
     tdp = (TAXDataPtr) tax_lookup->tax_data;
     
     tax_tree= tdp->tax_tree;
@@ -1772,6 +1766,7 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
             tnames->blast_name,tnames->s_king[0],tnames->s_king[1],
             tnames->s_king[2]);
 #endif
+    tax_lookup->taxids_in_db++;
 
     return TRUE;
 }

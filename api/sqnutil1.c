@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.239 $
+* $Revision: 6.248 $
 *
 * File Description: 
 *
@@ -2132,6 +2132,8 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
     choice = 2;
   } else if (StringICmp (gbq->qual, "allele") == 0) {
     choice = 3;
+  } else if (StringICmp (gbq->qual, "locus_tag") == 0) {
+    choice = 4;
   }
   if (choice > 0) {
     grp = (GeneRefPtr) sfp->data.value.ptrvalue;
@@ -2149,6 +2151,11 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
         if (grp->allele != NULL) return FALSE;
         if (StringHasNoText (gbq->val)) return FALSE;
         grp->allele = StringSave (gbq->val);
+        break;
+      case 4 :
+        if (grp->locus_tag != NULL) return FALSE;
+        if (StringHasNoText (gbq->val)) return FALSE;
+        grp->locus_tag = StringSave (gbq->val);
         break;
       default :
         break;
@@ -4728,7 +4735,8 @@ static void NormalizeAuthors (AuthListPtr alp, Boolean fixInitials)
     ap = names->data.ptrvalue;
     if (ap != NULL) {
       pid = ap->name;
-      if (pid != NULL && pid->choice == 2) {
+      if (pid == NULL) continue;
+      if (pid->choice == 2) {
         nsp = pid->data;
         if (nsp != NULL /* && nsp->names [4] != NULL */) {
           upcaseinits = FALSE;
@@ -4824,6 +4832,8 @@ static void NormalizeAuthors (AuthListPtr alp, Boolean fixInitials)
             nsp->names [0] = StringSave ("et al.");
           }
         }
+      } else if (pid->choice == 3 || pid->choice == 4 || pid->choice == 5) {
+        TrimSpacesAroundString ((CharPtr) pid->data);
       }
     }
   }
@@ -5092,7 +5102,8 @@ static Boolean CopyGeneXrefToGeneFeat (GeneRefPtr grp, GeneRefPtr grx)
   }
   if (grx->locus == NULL && grx->allele == NULL &&
       grx->desc == NULL && grx->maploc == NULL &&
-      grx->db == NULL && grx->syn == NULL) return TRUE;
+      grx->locus_tag == NULL && grx->db == NULL &&
+      grx->syn == NULL) return TRUE;
   return FALSE;
 }
 
@@ -5247,6 +5258,61 @@ static void HandleXrefOnCDS (SeqFeatPtr sfp)
   }
 }
 
+static void CleanUserStrings (
+  UserFieldPtr ufp,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+
+  oip = ufp->label;
+  if (oip != NULL && oip->str != NULL) {
+    if (! StringHasNoText (oip->str)) {
+      CleanVisString (&(oip->str));
+    }
+  }
+  if (ufp->choice == 1) {
+    if (! StringHasNoText ((CharPtr) ufp->data.ptrvalue)) {
+      CleanVisString ((CharPtr PNTR) &(ufp->data.ptrvalue));
+    }
+  }
+}
+
+static void CleanUserFields (
+  UserFieldPtr ufp,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+
+  oip = ufp->label;
+  if (oip != NULL && oip->str != NULL) {
+    if (! StringHasNoText (oip->str)) {
+      CleanVisString (&(oip->str));
+    }
+  }
+  VisitUserFieldsInUfp (ufp, userdata, CleanUserStrings);
+}
+
+static void CleanUserObject (
+  UserObjectPtr uop,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+
+  oip = uop->type;
+  if (oip != NULL && oip->str != NULL) {
+    if (! StringHasNoText (oip->str)) {
+      CleanVisString (&(oip->str));
+    }
+  }
+  VisitUserFieldsInUop (uop, userdata, CleanUserFields);
+}
+
 static CharPtr siteList [] = {
   "", "active", "binding", "cleavage", "inhibit", "modifi",
   "glycosylation", "myristoylation", "mutagenized", "metal-binding",
@@ -5383,11 +5449,13 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
       CleanVisString (&(grp->allele));
       CleanVisString (&(grp->desc));
       CleanVisString (&(grp->maploc));
+      CleanVisString (&(grp->locus_tag));
       CleanVisStringList (&(grp->syn));
       CleanDoubleQuote (grp->locus);
       CleanDoubleQuote (grp->allele);
       CleanDoubleQuote (grp->desc);
       CleanDoubleQuote (grp->maploc);
+      CleanDoubleQuote (grp->locus_tag);
       CleanDoubleQuoteList (grp->syn);
       grp->db = ValNodeSort (grp->db, SortDbxref);
       CleanupDuplicateDbxrefs (&(grp->db));
@@ -5773,6 +5841,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
     case SEQFEAT_RSITE :
       break;
     case SEQFEAT_USER :
+      VisitUserObjectsInUop ((UserObjectPtr) sfp->data.value.ptrvalue, NULL, CleanUserObject);
       break;
     case SEQFEAT_TXINIT :
       break;
@@ -5884,6 +5953,7 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
       break;
     case Seq_descr_user :
+      VisitUserObjectsInUop ((UserObjectPtr) sdp->data.ptrvalue, NULL, CleanUserObject);
       break;
     case Seq_descr_sp :
       break;
@@ -6132,6 +6202,16 @@ static void CleanupSeqLoc (SeqLocPtr slp)
       }
     }
     loc = SeqLocFindNext (slp, loc);
+  }
+
+  if (slp->choice == SEQLOC_PACKED_INT) {
+    loc = (SeqLocPtr) slp->data.ptrvalue;
+    if (loc == NULL || loc->next != NULL) return;
+    /* here seqloc_packed_int points to a single location element, so no need for seqloc_packed_int parent */
+    slp->choice = loc->choice;
+    slp->data.ptrvalue = (Pointer) loc->data.ptrvalue;
+    MemFree (loc);
+    return;
   }
 
   if (slp->choice != SEQLOC_MIX) return;
@@ -6750,7 +6830,7 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
 
 /* end BasicSeqEntryCleanup section */
 
-static void ResynchCDSPartials (SeqFeatPtr sfp, Pointer userdata)
+NLM_EXTERN void ResynchCDSPartials (SeqFeatPtr sfp, Pointer userdata)
 
 {
   SeqFeatPtr   bestprot;
@@ -6823,7 +6903,7 @@ NLM_EXTERN void ResynchCodingRegionPartials (SeqEntryPtr sep)
   VisitFeaturesInSep (sep, NULL, ResynchCDSPartials);
 }
 
-static void ResynchMRNAPartials (SeqFeatPtr sfp, Pointer userdata)
+NLM_EXTERN void ResynchMRNAPartials (SeqFeatPtr sfp, Pointer userdata)
 
 {
   BioseqPtr    bsp;

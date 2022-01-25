@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.68 2002/04/18 16:30:44 ivanov Exp $
+# $Id: makedis.csh,v 1.75 2002/07/15 16:40:29 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -27,6 +27,9 @@
 #
 # Script to untar and make the NCBI toolkit on Solaris.
 #
+
+# NOTE:  use "/bin/tcsh" above if "/bin/csh" is absent (e.g. on QNX OS)
+
 
 set MFLG=""
 
@@ -64,6 +67,8 @@ set os=`uname -s`
 
 #by default any Unix has Motif installed. In case of Linux do a check later.
 set HAVE_MOTIF=1
+#darwin will use native Mac GUI
+set HAVE_MAC=0
 #we will try to build OpenGL version of vibrant
 set HAVE_OGL=1
 
@@ -180,6 +185,7 @@ case FreeBSD:
 case Darwin:
 	set platform=darwin
 	set HAVE_MOTIF=0
+	set HAVE_MAC=1
 	breaksw
 case NetBSD:
 	set platform=netbsd
@@ -222,6 +228,10 @@ case HP-UX:
 		set platform=hpux
 		breaksw
 	endsw
+	breaksw
+case QNX:
+    #uname -a: QNX qnxrulez 6.1.0 2001/06/25-15:31:48edt x86pc x86
+	set platform=qnx
 	breaksw
 default:
 	echo Platform not found : `uname -a`
@@ -304,7 +314,27 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez udv ddv blastcl3 blast.REAL \
-		idfetch asn2xml $OGL_TARGETS\") 
+		idfetch asn2xml asn2gb $OGL_TARGETS\") 
+else if ( "$HAVE_MAC" == 1 ) then
+	set ALL_VIB=(LIB30=libncbicn3d.a \
+		LIB28=libvibgif.a \
+		LIB4=libvibrant.a \
+		LIB20=libncbidesk.a \
+		LIB45=libddvlib.a \
+		$OGL_NCBI_LIBS \
+		VIBFLAG=\"$NCBI_VIBFLAG\" \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS\")
+	#By default we don't need to build demo programs with vibrant lib
+	#set DEMO_VIB=(LIB4=-lvibrant \
+	#	VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
+	#	VIBFLAG=\"$NCBI_VIBFLAG\")
+	set DEMO_VIB=()
+
+	set NET_VIB=(BLIB31=libvibnet.a \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
+		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
+		VIBFLAG=\"$NCBI_VIBFLAG\" \
+		VIB=\"Psequin\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -313,7 +343,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 idfetch asn2xml \") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch asn2xml asn2gb \") 
 endif
 
 set CMD='make $MFLG \
@@ -404,6 +434,21 @@ else
    echo "The version number of each individual application" >> ../VERSION
    echo "may be found in the appropriate documentation files in ./ncbi/doc/" >> ../VERSION
    echo "uname -a ouput is: `uname -a`" >> ../VERSION
+   foreach i ( Nentrez Psequin asn2ff asn2xml asn2gb asndhuff asntool bl2seq \
+	blast.REAL blastall blastcl3 blastclust blastpgp cdscan checksub \
+	copymat ddv demo_regexp demo_regexp_grep dosimple entrcmd entrez \
+	errhdr fa2htgs fastacmd findspl fmerge formatdb getfeat getmesh \
+	getpub getseq gil2bin idfetch impala indexpub makemat makeset \
+	megablast ncbisort netentcf rpsblast seedtop seqtest sequin \
+	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D )
+	if ( -x ./$i ) then
+		rm -f ../bin/$i
+		if ( $os == "Darwin" ) then
+			/Developer/Tools/Rez Carbon.r -o $i
+		endif
+		ln ./$i ../bin/
+	endif
+   end
    echo '*********************************************************'
    echo '*The new binaries are located in ./ncbi/build/ directory*'
    echo '*********************************************************'

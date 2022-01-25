@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -220,6 +220,9 @@ typedef struct genbiopage {
   GrouP           orgGrp [5];
   GrouP           modGrp [5];
   GrouP           miscGrp [5];
+  TexT            gbacr;
+  TexT            gbana;
+  TexT            gbsyn;
   CharPtr         origTaxName;
   Boolean         stripOldName;
   EnumFieldAssoc  PNTR genomeAlist;
@@ -1013,6 +1016,9 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     SafeSetValue (gbp->mgcode, 1);
     SafeSetValue (gbp->simplecode, 1);
     SafeSetTitle (gbp->orgcomment, "");
+    SafeSetTitle (gbp->gbacr, "");
+    SafeSetTitle (gbp->gbana, "");
+    SafeSetTitle (gbp->gbsyn, "");
     SafeSetTitle (gbp->subcomment, "");
     SafeSetTitle (gbp->lineage, "");
     PointerToDialog (gbp->db, NULL);
@@ -1040,11 +1046,24 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
           mod = onp->mod;
           head = NULL;
           while (mod != NULL) {
-            if (mod->subtype == 255) {
-              ValNodeAddStr (&head, 0, mod->subname);
-              /*
-              SetTitle (gbp->orgcomment, mod->subname);
-              */
+            switch (mod->subtype) {
+              case 32 :
+                SetTitle (gbp->gbacr, mod->subname);
+                break;
+              case 33 :
+                SetTitle (gbp->gbana, mod->subname);
+                break;
+              case 34 :
+                SetTitle (gbp->gbsyn, mod->subname);
+                break;
+              case 255 :
+                ValNodeAddStr (&head, 0, mod->subname);
+                /*
+                SetTitle (gbp->orgcomment, mod->subname);
+                */
+                break;
+              default :
+                break;
             }
             mod = mod->next;
           }
@@ -1236,6 +1255,54 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             onp->lineage = SaveStringFromTextAndStripNewlines (gbp->lineage);
           }
           onp->mod = DialogToPointer (gbp->orgmod);
+          if (! TextHasNoText (gbp->gbacr)) {
+            mod = OrgModNew ();
+            if (onp->mod == NULL) {
+              onp->mod = mod;
+            } else {
+              tmpmod = onp->mod;
+              while (tmpmod->next != NULL) {
+                tmpmod = tmpmod->next;
+              }
+              tmpmod->next = mod;
+            }
+            if (mod != NULL) {
+              mod->subtype = 32;
+              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbacr);
+            }
+          }
+          if (! TextHasNoText (gbp->gbana)) {
+            mod = OrgModNew ();
+            if (onp->mod == NULL) {
+              onp->mod = mod;
+            } else {
+              tmpmod = onp->mod;
+              while (tmpmod->next != NULL) {
+                tmpmod = tmpmod->next;
+              }
+              tmpmod->next = mod;
+            }
+            if (mod != NULL) {
+              mod->subtype = 33;
+              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbana);
+            }
+          }
+          if (! TextHasNoText (gbp->gbsyn)) {
+            mod = OrgModNew ();
+            if (onp->mod == NULL) {
+              onp->mod = mod;
+            } else {
+              tmpmod = onp->mod;
+              while (tmpmod->next != NULL) {
+                tmpmod = tmpmod->next;
+              }
+              tmpmod->next = mod;
+            }
+            if (mod != NULL) {
+              mod->subtype = 34;
+              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbsyn);
+            }
+          }
           if (! TextHasNoText (gbp->orgcomment)) {
             mod = OrgModNew ();
             if (onp->mod == NULL) {
@@ -1485,7 +1552,8 @@ static void OrgModPtrToOrgmodDialog (DialoG d, Pointer data)
   if (tlp != NULL) {
     head = NULL;
     while (list != NULL) {
-      if (list->subname != NULL && list->subtype != 255) {
+      if (list->subname != NULL && list->subtype != 255 &&
+          list->subtype != 32 && list->subtype != 33 && list->subtype != 34) {
         vnp = ValNodeNew (head);
         if (head == NULL) {
           head = vnp;
@@ -1731,11 +1799,11 @@ static CharPtr orgTabs [] = {
 };
 
 static CharPtr modTabs [] = {
-  "Source", "Organism", NULL
+  "Source", "Organism", "GenBank", NULL
 };
 
 static CharPtr modTabsUns [] = {
-  "Source", "Organism", "Unstructured", NULL
+  "Source", "Organism", "GenBank", "Unstructured", NULL
 };
 
 static CharPtr miscTabs [] = {
@@ -1766,10 +1834,10 @@ static void ChangeModSubPage (VoidPtr data, Int2 newval, Int2 oldval)
 
   gbp = (GenBioPagePtr) data;
   if (gbp != NULL) {
-    if (oldval >= 0 && oldval <= 2) {
+    if (oldval >= 0 && oldval <= 3) {
       SafeHide (gbp->modGrp [oldval]);
     }
-    if (newval >= 0 && newval <= 2) {
+    if (newval >= 0 && newval <= 3) {
       SafeShow (gbp->modGrp [newval]);
     }
     Update ();
@@ -2047,18 +2115,43 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     gbp->modGrp [2] = HiddenGroup (k, -1, 0, NULL);
     SetGroupSpacing (gbp->modGrp [2], 10, 10);
 
-    if (showUnstructMods) {
-      f3 = HiddenGroup (gbp->modGrp [2], 0, 2, NULL);
-      StaticPrompt (f3, "Unstructured Modifiers", 0, 0, programFont, 'c');
-      gbp->mod = CreateVisibleStringDialog (f3, 3, -1, 15);
+    g = HiddenGroup (gbp->modGrp [2], 2, 0, NULL);
+    SetGroupSpacing (g, 3, 10);
+
+    if (GetAppProperty ("ReadOnlyDbTags") == NULL) {
+      StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
+      gbp->gbacr = DialogText (g, "", 15, NULL);
+      StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
+      gbp->gbana = DialogText (g, "", 15, NULL);
+      StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
+      gbp->gbsyn = DialogText (g, "", 15, NULL);
+    } else {
+      StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
+      gbp->gbacr = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
+      StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
+      gbp->gbana = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
+      StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
+      gbp->gbsyn = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
     }
 
     Hide (gbp->modGrp [2]);
 
+    gbp->modGrp [3] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->modGrp [3], 10, 10);
+
+    if (showUnstructMods) {
+      f3 = HiddenGroup (gbp->modGrp [3], 0, 2, NULL);
+      StaticPrompt (f3, "Unstructured Modifiers", 0, 0, programFont, 'c');
+      gbp->mod = CreateVisibleStringDialog (f3, 3, -1, 15);
+    }
+
+    Hide (gbp->modGrp [3]);
+
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs,
                   (HANDLE) gbp->modGrp [0],
                   (HANDLE) gbp->modGrp [1],
-                  (HANDLE) gbp->modGrp [2], NULL);
+                  (HANDLE) gbp->modGrp [2],
+                  (HANDLE) gbp->modGrp [3], NULL);
 
     Hide (pages [1]);
 

@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.30  2002/06/11 15:25:12  johnson
+* two minor bug fixes to CpG functions
+*
 * Revision 6.29  2002/04/02 21:45:32  wheelan
 * added CpG finding functions written by Philip Johnson
 *
@@ -188,7 +191,7 @@ static void CalcWindowStats(CharPtr seq, Int4 seqLength, Int4 start,
     cgIsle->to = MIN(start + CG_WINDOWSIZE, seqLength) - 1;
     cgIsle->length = cgIsle->to - cgIsle->from + 1;
 
-    for (i = cgIsle->from; i < cgIsle->to; i++)
+    for (i = cgIsle->from; i <= cgIsle->to; i++)
         AddPosition(seq, i, cgIsle);
 }
 
@@ -241,6 +244,8 @@ static Boolean SlideToHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr cgIsle)
         if (IsIsland(cgIsle))
             found = TRUE;
     }
+
+    return found;
 }
 
 /*-----------------------------------------------------------------------------

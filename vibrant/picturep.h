@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 * 022495   Alex
 *
 * $Log: picturep.h,v $
+* Revision 6.3  2002/08/07 18:13:42  kans
+* G/SetPrimitiveIDs, itemID is Uint4
+*
 * Revision 6.2  1999/10/13 17:45:47  kans
 * added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
 *
@@ -140,7 +143,7 @@ typedef struct Nlm_genprec {
   Nlm_AttPData   att;
   Nlm_Uint2      primID;
   Nlm_Uint2      entityID;
-  Nlm_Uint2      itemID;
+  Nlm_Uint4      itemID;
   Nlm_Uint2      itemtype;
   Nlm_PrimDefPtr pdp;
   double         data;

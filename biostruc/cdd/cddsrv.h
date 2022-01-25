@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.10 2002/04/25 14:31:22 bauer Exp $
+/* $Id: cddsrv.h,v 1.13 2002/08/06 12:54:25 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.10 $
+* $Revision: 1.13 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.13  2002/08/06 12:54:25  bauer
+* fixes to accomodate COGs
+*
+* Revision 1.12  2002/07/05 21:10:54  bauer
+* added CDtrack access functionality
+*
+* Revision 1.11  2002/06/12 15:22:09  bauer
+* 6/11/02 update
+*
 * Revision 1.10  2002/04/25 14:31:22  bauer
 * layout changes to the CDD server
 *
@@ -154,10 +163,12 @@ typedef struct realind {
 /*---------------------------------------------------------------------------*/
 static Char    URLBase[PATH_MAX];
 static Char    URLcgi[PATH_MAX];
+static Char    CTBcgi[PATH_MAX];
 static Char    PFAMcgiUS[PATH_MAX];
 static Char    PFAMcgiUK[PATH_MAX];
 static Char    SMARTcgi[PATH_MAX];
 static Char    SMACCcgi[PATH_MAX];
+static Char    COGcgi[PATH_MAX];
 static Char    TAXcgi[PATH_MAX];
 static Char    DATApath[PATH_MAX];
 static Char    REFpath[PATH_MAX];
@@ -192,6 +203,7 @@ static Char    CDDdbtype[PATH_MAX];
 static Char    ODBCINI[PATH_MAX];
 static Char    DARTUSER[PATH_MAX];
 static Char    DARTPASS[PATH_MAX];
+static Char    CDTRKDBS[PATH_MAX];
 
 /*---------------------------------------------------------------------------*/
 /* static/local Function prototypes                                          */

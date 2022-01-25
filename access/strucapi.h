@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <mmdbapi.h>
+#include <objmime.h>
 #include <urlquery.h>
 
 #undef NLM_EXTERN
@@ -69,12 +70,10 @@ extern "C" {
 /* low-level connection functions */
 
 NLM_EXTERN CONN StrucOpenConnection (
-  Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels
+  Int4 uid
 );
 
-NLM_EXTERN BiostrucPtr StrucWaitForReply (
+NLM_EXTERN BiostrucSeqPtr StrucWaitForReply (
   CONN conn
 );
 
@@ -83,10 +82,8 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
  uid request, and waits for a reply
 */
 
-NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
-  Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels
+NLM_EXTERN BiostrucSeqPtr StrucSynchronousQuery (
+  Int4 uid
 );
 
 /*
@@ -100,13 +97,11 @@ NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
  cleaning up connection afterwards.
 
  StrucReadReply take conns and status parameters from completion
- routine and reads BiostrucPtr.
+ routine and reads BiostrucSeqPtr.
 */
 
 NLM_EXTERN Boolean StrucAsynchronousQuery (
   Int4 uid,
-  Int4 modelLevel,
-  Int4 maxModels,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -116,7 +111,7 @@ NLM_EXTERN Int4 StrucCheckQueue (
   QUEUE* queue
 );
 
-NLM_EXTERN BiostrucPtr StrucReadReply (
+NLM_EXTERN BiostrucSeqPtr StrucReadReply (
   CONN conn,
   EIO_Status status
 );

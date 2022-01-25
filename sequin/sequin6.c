@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.61 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -49,6 +49,17 @@
 #include <bspview.h>
 #include <import.h>
 #include <objsub.h>
+#include <explore.h>
+
+#define GENE_TYPE             1
+#define CDS_TYPE              2
+#define PROT_TYPE             3
+#define RNA_TYPE              4
+#define BIOSOURCE_TYPE        5
+#define ORGMOD_SUBSOURCE_TYPE 6
+#define IMPORT_FEAT_TYPE      7
+
+#define NUMBER_OF_TYPES       7
 
 static ENUM_ALIST(target_field_alist)
   {" ",                    0},
@@ -57,9 +68,8 @@ static ENUM_ALIST(target_field_alist)
   {"Prot",                 3},
   {"RNA",                  4},
   {"BioSource",            5},
-  {"OrgMod",               6},
-  {"SubSource",            7},
-  {"Import Feature",       8},
+  {"OrgMod and SubSource", 6},
+  {"Import Feature",       7},
 END_ENUM_ALIST
 
 static ENUM_ALIST(ext_target_field_alist)
@@ -69,126 +79,163 @@ static ENUM_ALIST(ext_target_field_alist)
   {"Prot",                 3},
   {"RNA",                  4},
   {"BioSource",            5},
-  {"OrgMod",               6},
-  {"SubSource",            7},
-  {"Feature Note",         8},
+  {"OrgMod and SubSource", 6},
+  {"Feature Note",         7},
 END_ENUM_ALIST
+
+#define GENE_LOCUS_FIELD        1
+#define GENE_DESCRIPTION_FIELD  2
+#define GENE_ALLELE_FIELD       3
+#define GENE_MAPLOC_FIELD       4
+#define GENE_LOCUS_TAG_FIELD    5
+#define GENE_SYNONYM_FIELD      6
+#define GENE_COMMENT_FIELD      7
 
 static ENUM_ALIST(gene_field_alist)
   {" ",                    0},
-  {"Gene locus",           1},
-  {"Gene description",     2},
-  {"Gene allele",          3},
-  {"Gene maploc",          4},
-  {"Gene synonym",         5},
-  {"Gene comment",         6},
+  {"Gene locus",           GENE_LOCUS_FIELD},
+  {"Gene description",     GENE_DESCRIPTION_FIELD},
+  {"Gene allele",          GENE_ALLELE_FIELD},
+  {"Gene maploc",          GENE_MAPLOC_FIELD},
+  {"Locus_tag",            GENE_LOCUS_TAG_FIELD},
+  {"Gene synonym",         GENE_SYNONYM_FIELD},
+  {"Gene comment",         GENE_COMMENT_FIELD},
 END_ENUM_ALIST
+
+#define CDS_COMMENT   1
+#define CDS_GENE_XREF 2
+#define CDS_DB_XREF   3
 
 static ENUM_ALIST(cds_field_alist)
   {" ",                    0},
-  {"CDS comment",          1},
-  {"gene xref",            2},
-  {"db_xref",              3},
+  {"CDS comment",          CDS_COMMENT},
+  {"gene xref",            CDS_GENE_XREF},
+  {"db_xref",              CDS_DB_XREF},
 END_ENUM_ALIST
+
+static ENUM_ALIST(cds_short_field_alist)
+  {" ",                    0},
+  {"CDS comment",          CDS_COMMENT},
+END_ENUM_ALIST
+
+#define PROT_NAME_FIELD        1
+#define PROT_DESCRIPTION_FIELD 2
+#define PROT_ECNUM_FIELD       3
+#define PROT_ACTIVITY_FIELD    4
+#define PROT_COMMENT_FIELD     5
 
 static ENUM_ALIST(prot_field_alist)
   {" ",                    0},
-  {"Protein name",         1},
-  {"Protein description",  2},
-  {"Protein E.C. number",  3},
-  {"Protein activity",     4},
-  {"Protein comment",      5},
+  {"Protein name",         PROT_NAME_FIELD},
+  {"Protein description",  PROT_DESCRIPTION_FIELD},
+  {"Protein E.C. number",  PROT_ECNUM_FIELD},
+  {"Protein activity",     PROT_ACTIVITY_FIELD},
+  {"Protein comment",      PROT_COMMENT_FIELD},
 END_ENUM_ALIST
+
+#define RNA_NAME_FIELD       1
+#define RNA_COMMENT_FIELD    2
+#define RNA_GENE_XREF_FIELD  3
 
 static ENUM_ALIST(rnax_field_alist)
   {" ",                    0},
-  {"RNA Name",             1},
-  {"RNA Comment",          2},
-  {"gene xref",            3},
+  {"RNA Name",             RNA_NAME_FIELD},
+  {"RNA Comment",          RNA_COMMENT_FIELD},
+  {"gene xref",            RNA_GENE_XREF_FIELD},
 END_ENUM_ALIST
+
+static ENUM_ALIST(rnax_short_field_alist)
+  {" ",                    0},
+  {"RNA Name",             RNA_NAME_FIELD},
+  {"RNA Comment",          RNA_COMMENT_FIELD},
+  {"gene xref",            RNA_GENE_XREF_FIELD},
+END_ENUM_ALIST
+
+#define ORGREF_SCI_NAME_FIELD    1
+#define ORGREF_COMMON_NAME_FIELD 2
+#define ORGREF_LINEAGE_FIELD     3
+#define ORGREF_DIVISION_FIELD    4
 
 static ENUM_ALIST(orgref_field_alist)
   {" ",                    0},
-  {"Scientific Name",      1},
-  {"Common Name",          2},
-  {"Lineage",              3},
-  {"Division",             4},
+  {"Scientific Name",      ORGREF_SCI_NAME_FIELD},
+  {"Common Name",          ORGREF_COMMON_NAME_FIELD},
+  {"Lineage",              ORGREF_LINEAGE_FIELD},
+  {"Division",             ORGREF_DIVISION_FIELD},
 END_ENUM_ALIST
 
-static ENUM_ALIST(orgmod_note_subtype_alist)
-  {" ",                 0},
-  {"Strain",            2},
-  {"Substrain",         3},
-  {"Type",              4},
-  {"Subtype",           5},
-  {"Variety",           6},
-  {"Serotype",          7},
-  {"Serogroup",         8},
-  {"Serovar",           9},
-  {"Cultivar",         10},
-  {"Pathovar",         11},
-  {"Chemovar",         12},
-  {"Biovar",           13},
-  {"Biotype",          14},
-  {"Group",            15},
-  {"Subgroup",         16},
-  {"Isolate",          17},
-  {"Common",           18},
-  {"Acronym",          19},
-  {"Dosage",           20},
-  {"Natural-host",     21},
-  {"Sub-species",      22},
-  {"Specimen-voucher", 23},
-  {"Authority",        24},
-  {"Forma",            25},
-  {"Forma-specialis",  26},
-  {"Ecotype",          27},
-  {"Synonym",          28},
-  {"Anamorph",         29},
-  {"Teleomorph",       30},
-  {"Breed",            31},
-  {"Old Lineage",     253},
-  {"Old Name",        254},
-  {"Note",            255},
+static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
+  {" ",                         0},
+  {"Acronym",                  19},
+  {"Anamorph",                 29},
+  {"Authority",                24},
+  {"Biotype",                  14},
+  {"Biovar",                   13},
+  {"Breed",                    31},
+  {"Cell-line",              1008},
+  {"Cell-type",              1009},
+  {"Chemovar",                 12},
+  {"Chromosome",             1001},
+  {"Clone",                  1003},
+  {"Clone-lib",              1011},
+  {"Common",                   18},
+  {"Country",                1023},
+  {"Cultivar",                 10},
+  {"Dev-stage",              1012},
+  {"Dosage",                   20},
+  {"Ecotype",                  27},
+  {"Endogenous-virus-name",  1025},
+  {"Environmental-sample",   1027},
+  {"Forma",                    25},
+  {"Forma-specialis",          26},
+  {"Frequency",              1013},
+  {"Genotype",               1006},
+  {"Germline",               1014},
+  {"Group",                    15},
+  {"Haplotype",              1005},
+  {"Ins-seq-name",           1021},
+  {"Isolate",                  17},
+  {"Isolation-source",       1028},
+  {"Lab-host",               1016},
+  {"Map",                    1002},
+  {"Natural-host",             21},
+  {"Note",                    255},
+  {"Old Lineage",             253},
+  {"Old Name",                254},
+  {"Pathovar",                 11},
+  {"Plasmid-name",           1019},
+  {"Plastid-name",           1022},
+  {"Pop-variant",            1017},
+  {"Rearranged",             1015},
+  {"Segment",                1024},
+  {"Serogroup",                 8},
+  {"Serotype",                  7},
+  {"Serovar",                   9},
+  {"Sex",                    1007},
+  {"Specimen-voucher",         23},
+  {"Strain",                    2},
+  {"Subclone",               1004},
+  {"Subgroup",                 16},
+  {"Sub-species",              22},
+  {"Substrain",                 3},
+  {"Subtype",                   5},
+  {"Synonym",                  28},
+  {"Teleomorph",               30},
+  {"Tissue-lib",             1018},
+  {"Tissue-type",            1010},
+  {"Transgenic",             1026},
+  {"Transposon-name",        1020},
+  {"Type",                      4},
+  {"Variety",                   6},
 END_ENUM_ALIST
 
-static ENUM_ALIST(subsource_note_subtype_alist)
-  {" ",                      0},
-  {"Chromosome",             1},
-  {"Map",                    2},
-  {"Clone",                  3},
-  {"Subclone",               4},
-  {"Haplotype",              5},
-  {"Genotype",               6},
-  {"Sex",                    7},
-  {"Cell-line",              8},
-  {"Cell-type",              9},
-  {"Tissue-type",           10},
-  {"Clone-lib",             11},
-  {"Dev-stage",             12},
-  {"Frequency",             13},
-  {"Germline",              14},
-  {"Rearranged",            15},
-  {"Lab-host",              16},
-  {"Pop-variant",           17},
-  {"Tissue-lib",            18},
-  {"Plasmid-name",          19},
-  {"Transposon-name",       20},
-  {"Ins-seq-name",          21},
-  {"Plastid-name",          22},
-  {"Country",               23},
-  {"Segment",               24},
-  {"Endogenous-virus-name", 25},
-  {"Transgenic",            26},
-  {"Environmental-sample",  27},
-  {"Isolation-source",      28},
-  {"Note",                 255},
-END_ENUM_ALIST
+#define IMPORT_GBQUAL_FIELD  1
+#define IMPORT_COMMENT_FIELD 2
 
 static ENUM_ALIST(impfeat_field_alist)
   {" ",        0},
-  {"GBQual",   1},
-  {"Comment",  2},
+  {"GBQual",   IMPORT_GBQUAL_FIELD},
+  {"Comment",  IMPORT_COMMENT_FIELD},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
@@ -202,6 +249,10 @@ typedef struct convertformdata {
   GrouP              asnOrFlat;
   TexT               atleft;
   TexT               atright;
+  TexT               deleteText;
+  CharPtr            deleteStr;
+  GrouP              deleteLevel;
+  Int2               deleteLevelInt;
   PopuP              target;
   PopuP              subtarget [NUM_SUBTARGET_POPUPS];
   EnumFieldAssocPtr  alists [NUM_SUBTARGET_POPUPS];
@@ -218,8 +269,989 @@ typedef struct convertformdata {
   Boolean            includeright;
   Boolean            replaceOldAsked;
   Boolean            doReplaceAll;
+  Boolean            isDirty;
+  ButtoN             removeBefore;
+  ButtoN             removeAfter;
+  GrouP              includeBeforeGroup;
+  GrouP              includeAfterGroup;
+  GrouP              ifNotFoundGroup;
+  Int2               ifNotFound;
   Int2               index;
 } ConvertFormData, PNTR ConvertFormPtr;
+
+/* Values for ifNotFound field */
+
+#define DO_NOTHING       2
+#define REMOVE_ALL_TEXT  3
+
+
+
+/*-------------------------------------------------------------------------*/
+/*                                                                         */
+/* TrimOffEndQuotes () -- Trim double-quotes off the ends of a string.     */
+/*                                                                         */
+/*-------------------------------------------------------------------------*/
+
+static void TrimOffEndQuotes (CharPtr trimString)
+{
+  Int4 strLen;
+  Int4 i;
+
+  strLen = StringLen(trimString);
+
+  /* If there is a quote at the end, remove it */
+
+  if (trimString[strLen-1] == '"') {
+    strLen--;
+    trimString [strLen] = '\0';
+  }
+
+  /* If there is a quote at the beginning, remove it */
+
+  if (trimString[0] == '"')
+    for (i = 0; trimString[i] != '\0'; i++)
+      trimString[i] = trimString [i+1];
+}
+
+/*-------------------------------------------------------------------------*/
+/*                                                                         */
+/* SaveStringFromTextNoStripSpaces () -                                    */
+/*                                                                         */
+/*-------------------------------------------------------------------------*/
+
+static CharPtr SaveStringFromTextNoStripSpaces (TexT t)
+
+{
+  size_t   len;
+  CharPtr  str;
+
+  len = TextLength (t);
+  if (len > 0) {
+    str = (CharPtr) MemNew(len + 1);
+    if (str != NULL) {
+      GetTitle (t, str, len + 1);
+      return str;
+    } else {
+      return NULL;
+    }
+  } else {
+    return NULL;
+  }
+}
+
+/*-------------------------------------------------------------------------*/
+/*                                                                         */
+/* SetConvertAcceptButton () -- Enable/Disable the Accept button depending */
+/*                              on the condition of other window objects.  */
+/*                                                                         */
+/*-------------------------------------------------------------------------*/
+
+static void SetConvertAcceptButton (Handle a)
+
+{
+  ConvertFormPtr  cfp;
+  UIEnum          val;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (a);
+  if (cfp == NULL) return;
+  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+    cfp->type = (Int2) val;
+    if (GetEnumPopup (cfp->subtarget [cfp->type],
+		      cfp->alists [cfp->type], &val) && val > 0) {
+      if (GetValue (cfp->asnOrFlat) > 0) {
+        if ((! TextHasNoText (cfp->atleft)) ||
+	    (! TextHasNoText (cfp->atright))) {
+          SafeEnable (cfp->accept);
+          return;
+        }
+      }
+      if (cfp->asnOrFlat == NULL) {
+        if ((! TextHasNoText (cfp->atleft)) ||
+	    (! TextHasNoText (cfp->atright))) {
+          SafeEnable (cfp->accept);
+          return;
+        }
+      }
+    }
+  }
+  SafeDisable (cfp->accept);
+}
+
+/*-------------------------------------------------------------------------*/
+/*                                                                         */
+/* SetDeleteAcceptButton () -- Enable/Disable the Accept button depending  */
+/*                             on the condition of other window objects.   */
+/*                                                                         */
+/*-------------------------------------------------------------------------*/
+
+static void SetDeleteAcceptButton (Handle a)
+
+{
+  ConvertFormPtr  cfp;
+  UIEnum          val;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (a);
+  if (cfp == NULL)
+    return;
+
+  /* Disable if a target has not been selected */
+
+  if (!GetEnumPopup (cfp->target, ext_target_field_alist, &val)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  if (val <= 0) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* Disable if a subtarget has not been selected */
+
+  cfp->type = (Int2) val;
+  
+  if (!GetEnumPopup (cfp->subtarget [cfp->type],
+		      cfp->alists [cfp->type], &val)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  if (val <= 0) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* Disable if there is no delete string */
+
+  if (TextHasNoText (cfp->deleteText)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* If we made it to here, then we passed all */
+  /* test and can enable the accept button.    */
+
+  SafeEnable (cfp->accept);
+}
+
+static void ChangeSubtarget (PopuP p)
+
+{
+  ConvertFormPtr  cfp;
+  Int2            i;
+  UIEnum          val;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (p);
+  if (cfp == NULL) return;
+  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+    for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
+      if (i != (Int2) val) {
+        SafeHide (cfp->subtarget [i]);
+      }
+    }
+    SafeShow (cfp->subtarget [(Int2) val]);
+  }
+  SetConvertAcceptButton ((Handle) p);
+}
+
+static void ChangeDeleteSubtarget (PopuP p)
+
+{
+  ConvertFormPtr  cfp;
+  Int2            i;
+  UIEnum          val;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (p);
+  if (cfp == NULL) return;
+  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+    for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
+      if (i != (Int2) val) {
+        SafeHide (cfp->subtarget [i]);
+      }
+    }
+    SafeShow (cfp->subtarget [(Int2) val]);
+  }
+  SetDeleteAcceptButton ((Handle) p);
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* CheckForString () -- Searches for a given string with another string.   */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean CheckForString (CharPtr searchStr,
+			       CharPtr sourceStr)
+{
+  if (NULL == SearchForString (sourceStr, searchStr, FALSE, FALSE))
+    return FALSE;
+  else
+    return TRUE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* GeneRefPtr () -- Search a GeneRef feature for a given string.           */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean SearchGeneRef (GeneRefPtr     grp,
+			      SeqFeatPtr     sfp,
+			      ConvertFormPtr cfp)
+{
+  ValNodePtr vnp;
+
+  /* Check parameters */
+
+  if ((NULL == grp) || (NULL == sfp))
+    return FALSE;
+
+  /* Check each text field for the given string */
+
+  switch (cfp->subtype) {
+  case 1 :
+    return CheckForString (cfp->deleteStr, grp->locus);
+    break;
+  case 2 :
+    return CheckForString (cfp->deleteStr, grp->desc);
+    break;
+  case 3 :
+    return CheckForString (cfp->deleteStr, grp->allele);
+    break;
+  case 4 :
+    return CheckForString (cfp->deleteStr, grp->maploc);
+    break;
+  case 5 :
+    return CheckForString (cfp->deleteStr, grp->locus_tag);
+    break;
+  case 6 :
+    for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+      if (TRUE == CheckForString (cfp->deleteStr,
+				  vnp->data.ptrvalue))
+	return TRUE;
+    }
+    return FALSE;
+    break;
+  case 7 :
+    return CheckForString (cfp->deleteStr, sfp->comment);
+    break;
+  default :
+    break;
+  }
+
+  return FALSE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* SearchCDSFeat () -- Search a CDS feature for a given string.            */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean SearchCDSFeat (SeqFeatPtr     sfp,
+			      ConvertFormPtr cfp)
+{
+
+  /* Check parameters */
+
+  if (NULL == sfp)
+    return FALSE;
+
+  /* Check each text field for the given string */
+
+  switch (cfp->subtype) {
+  case 1 :
+    return CheckForString (cfp->deleteStr, sfp->comment);
+    break;
+  case 2 :
+  default :
+    break;
+  }
+
+  /* If no match found, return FALSE */
+
+  return FALSE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* SearchRnaRef () -- Search an RnaRef feature for a given string.         */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean SearchRnaRef (RnaRefPtr      rrp,
+			     SeqFeatPtr     sfp,
+			     ConvertFormPtr cfp)
+{
+  /* Check parameters */
+
+  if ((NULL == rrp) || (NULL == sfp))
+    return FALSE;
+
+  /* Check each text field for the given string */
+
+  switch (cfp->subtype) {
+  case 1 :
+    if ((0 == rrp->ext.choice) || (1 == rrp->ext.choice)) {
+      return CheckForString (cfp->deleteStr, rrp->ext.value.ptrvalue);
+    }
+    break;
+  case 2 :
+    return CheckForString (cfp->deleteStr, sfp->comment);
+    break;
+  case 3 :
+  default :
+    break;
+  }
+
+  /* If no match found, return FALSE */
+
+  return FALSE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* SearchProtRef () -- Search a ProtRef feature for a given string.        */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean SearchProtRef (ProtRefPtr     prp,
+			      SeqFeatPtr     sfp,
+			      ConvertFormPtr cfp)
+{
+  ValNodePtr vnp;
+
+  /* Check parameters */
+
+  if (NULL == prp)
+    return FALSE;
+
+  /* Check each text field for the given string */
+
+  switch (cfp->subtype) {
+
+    /* Search the name field */  
+
+  case 1 :
+    for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+      if (TRUE == CheckForString (cfp->deleteStr,
+				  (CharPtr) vnp->data.ptrvalue))
+	return TRUE;
+    }
+    break;
+
+    /* Search the desc field */
+
+  case 2 :
+    return CheckForString (cfp->deleteStr, prp->desc);
+    break;
+
+    /* Search the ec field */
+
+  case 3 :
+    for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+      if (TRUE == CheckForString (cfp->deleteStr, vnp->data.ptrvalue))
+	return TRUE;
+    }
+    break;
+
+    /* Search the activity field */
+
+  case 4 :
+    for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+      if (TRUE == CheckForString (cfp->deleteStr, vnp->data.ptrvalue))
+	return TRUE;
+    }
+    break;
+
+    /* Search the comment field */
+
+  case 5 :
+    return CheckForString (cfp->deleteStr, sfp->comment);
+    break;
+
+    /* Default check */
+
+  default :
+    break;
+  }
+
+  /* If we made it this far no match was found */
+
+  return FALSE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* SearchImpFeat () -- Search an ImpFeat feature for a given string.       */
+/*                                                                         */
+/*=========================================================================*/
+
+static Boolean SearchImpFeat (SeqFeatPtr     sfp,
+			      ConvertFormPtr cfp)
+{
+  GBQualPtr       gbqp;
+
+  /* Check parameters */
+
+  if (NULL == sfp)
+    return FALSE;
+
+  switch (cfp->subtype) {
+
+    /* Search the GB Quals */
+
+  case IMPORT_GBQUAL_FIELD :
+    gbqp = sfp->qual;
+    while (NULL != gbqp) {
+      if (NULL != gbqp->val)
+	if (TRUE == CheckForString (cfp->deleteStr, gbqp->val))
+	  return TRUE;
+      gbqp = gbqp->next;
+    }
+    return FALSE;
+    break;
+
+    /* Search the comment field */
+
+  case IMPORT_COMMENT_FIELD :
+    return CheckForString (cfp->deleteStr, sfp->comment);
+    break;
+  default :
+    break;
+  }
+
+  return FALSE;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* MarkObjectsByText_Callback () - Called for each object in a SeqEntry    */
+/*                                 this will mark the item for deletion    */
+/*                                 if it matches the given criteria.       */
+/*                                                                         */
+/*=========================================================================*/
+
+static void DeleteFeaturesByText_Callback (SeqEntryPtr sep,
+					   Pointer     mydata,
+					   Int4        index,
+					   Int2        indent)
+{
+  ConvertFormPtr cfp;
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  SeqAnnotPtr    sap;
+  SeqFeatPtr     sfp;
+  GeneRefPtr     grp;
+  ProtRefPtr     prp;
+  RnaRefPtr      rrp;
+  Boolean        found;
+
+  /* Check parameters */
+
+  if ((NULL == sep) || (NULL == sep->data.ptrvalue))
+    return;
+
+  cfp = (ConvertFormPtr) mydata;
+  if (NULL == cfp)
+    return;
+
+  /* Get the list of annotations */
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sap = bsp->annot;
+  }
+  else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sap = bssp->annot;
+  }
+  else
+    return;
+
+  /* Search the requested item for the given string */
+
+  while (sap != NULL) {
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_GENE && cfp->type == GENE_TYPE) {
+          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+	  found = SearchGeneRef (grp, sfp, cfp);
+        }
+	else if (sfp->data.choice == SEQFEAT_CDREGION &&
+		 cfp->type == CDS_TYPE) {
+	  found = SearchCDSFeat (sfp, cfp);
+        }
+	else if (sfp->data.choice == SEQFEAT_PROT &&
+		 cfp->type == PROT_TYPE) {
+          prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+	  found = SearchProtRef (prp, sfp, cfp);
+        }
+	else if (sfp->data.choice == SEQFEAT_RNA && cfp->type == RNA_TYPE) {
+          rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+	  found = SearchRnaRef (rrp, sfp, cfp);
+        }
+	else if (sfp->data.choice == SEQFEAT_IMP &&
+		 cfp->type == IMPORT_FEAT_TYPE) {
+	  found = SearchImpFeat (sfp, cfp);
+        }
+	if (TRUE == found)
+	  break;
+	else
+	  sfp = sfp->next;
+      }
+    }
+    if (TRUE == found)
+      break;
+    else
+      sap = sap->next;
+  }
+
+  /* If we found the string, do the deletion */
+
+  if (TRUE == found) {
+    cfp->isDirty = TRUE;
+    switch (cfp->deleteLevelInt) {
+    case 1 :
+      sfp->idx.deleteme = TRUE;
+      break;
+    case 2 :
+      if (IS_Bioseq (sep))
+	bsp->idx.deleteme = TRUE;
+      break;
+    case 3 :
+      if (IS_Bioseq_set (sep))
+	bssp->idx.deleteme = TRUE;
+      else {
+	if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+	  bssp = (BioseqSetPtr) bsp->idx.parentptr;
+	  bssp->idx.deleteme = TRUE;
+	}
+      }
+      break;
+    default:
+      break;
+    }
+  }
+
+  /* Return successfully */
+
+  return;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* DeleteSourceByText () - Given a text string, delete all items of a      */
+/*                         given type that contain that string.            */
+/*                                                                         */
+/*=========================================================================*/
+
+static void DeleteSourceByText (SeqEntryPtr    sep,
+				BioseqPtr      bsp,
+				BioSourcePtr   biop,
+				ConvertFormPtr cfp)
+
+{
+  OrgModPtr     mod;
+  OrgNamePtr    onp;
+  OrgRefPtr     orp;
+  SubSourcePtr  ssp;
+  Boolean       found;
+  BioseqSetPtr  bssp;
+
+  /* Check parameters */
+
+  if (biop == NULL || cfp == NULL)
+    return;
+
+
+  switch (cfp->type) {
+    case BIOSOURCE_TYPE :
+      orp = biop->org;
+      if (orp == NULL) return;
+      switch (cfp->subtype) {
+        case ORGREF_SCI_NAME_FIELD :
+	  found = CheckForString (cfp->deleteStr, orp->taxname);
+          break;
+        case ORGREF_COMMON_NAME_FIELD :
+	  found = CheckForString (cfp->deleteStr, orp->common);
+          break;
+        case ORGREF_LINEAGE_FIELD :
+          onp = orp->orgname;
+          if (onp == NULL) {
+            onp = OrgNameNew ();
+            orp->orgname = onp;
+          }
+          if (onp != NULL)
+	    found = CheckForString (cfp->deleteStr, onp->lineage);
+	  else
+	    found = FALSE;
+          break;
+        case ORGREF_DIVISION_FIELD :
+          onp = orp->orgname;
+          if (onp == NULL) {
+            onp = OrgNameNew ();
+            orp->orgname = onp;
+          }
+          if (onp != NULL)
+	    found = CheckForString (cfp->deleteStr, onp->div);
+	  else
+	    found = FALSE;
+          break;
+        default :
+          break;
+      }
+      break;
+    case ORGMOD_SUBSOURCE_TYPE :
+      if (cfp->subtype < 1000) {
+	orp = biop->org;
+	if (orp == NULL) {
+	  orp = OrgRefNew ();
+	  biop->org = orp;
+	}
+	if (orp != NULL) {
+	  onp = orp->orgname;
+	  if (onp == NULL) {
+	    onp = OrgNameNew ();
+	    orp->orgname = onp;
+	  }
+	  if (onp != NULL) {
+	    mod = onp->mod;
+	    while (mod != NULL && mod->subtype != cfp->subtype) {
+	      mod = mod->next;
+	    }
+	    if (mod != NULL)
+	      found = CheckForString (cfp->deleteStr, mod->subname);
+	    else
+	      found = FALSE;
+	  }
+	  else
+	    found = FALSE;
+	}
+      }
+      else {
+	ssp = biop->subtype;
+	while (ssp != NULL && ssp->subtype != (cfp->subtype - 1000)) {
+	  ssp = ssp->next;
+	}
+	while (ssp != NULL) {
+	  if (ssp->subtype == (cfp->subtype - 1000)) {
+	    found = CheckForString (cfp->deleteStr, ssp->name);
+	    if (found)
+	      break;
+	  }
+	  ssp = ssp->next;
+	}
+	if (NULL == ssp)
+	  found = FALSE;
+      }
+      break;
+    default:
+      break;
+  }
+
+  /* If we found anything to delete then */
+  /* delete it and set the dirty flag.   */
+
+  if (TRUE == found) {
+    cfp->isDirty = TRUE;
+    switch (cfp->deleteLevelInt) {
+    case 1 :
+      break;
+    case 2 :
+      if (IS_Bioseq (sep))
+	bsp->idx.deleteme = TRUE;
+      break;
+    case 3 :
+      if (IS_Bioseq_set (sep)) {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+	bssp->idx.deleteme = TRUE;
+      } else {
+	if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+	  bssp = (BioseqSetPtr) bsp->idx.parentptr;
+	  bssp->idx.deleteme = TRUE;
+	}
+      }
+      break;
+    default:
+      break;
+    }
+  }
+
+  /* Return successfully */
+
+  return;
+
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* DeleteItemsByText () - Given a text string, delete all items of a given */
+/*                        type that contain that string.                   */
+/*                                                                         */
+/*=========================================================================*/
+
+static void DeleteItemsByText (SeqEntryPtr    sep,
+			       ConvertFormPtr cfp)
+{
+  BioseqSetPtr    bssp;
+  BioseqPtr       bsp;
+  BioSourcePtr    biop;
+
+  /* If we have a Bioseq Set, then recurse until */
+  /* we get down to an actual Bioseq.            */
+
+  if (IS_Bioseq_set (sep)) {
+
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (NULL == bssp)
+      return;
+
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+      DeleteItemsByText (sep, cfp);
+
+    return;
+  }
+
+  /* If we made it this far, then we have a Bioseq */
+
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+
+  switch (cfp->type) {
+    case GENE_TYPE :
+    case CDS_TYPE :
+    case PROT_TYPE :
+    case RNA_TYPE :
+    case IMPORT_FEAT_TYPE :
+      SeqEntryExplore (sep, (Pointer) cfp, DeleteFeaturesByText_Callback);
+      break;
+    case BIOSOURCE_TYPE :
+    case ORGMOD_SUBSOURCE_TYPE :
+      SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
+      DeleteSourceByText (sep, bsp, biop, cfp);
+      break;
+    default:
+      break;
+  }
+
+  /* Return succesfully */
+
+  return;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* DeleteByText_Callback () - Finds and deletes all items of a selected    */
+/*                            type that contain a given text phrase.       */
+/*                                                                         */
+/*=========================================================================*/
+
+static void DeleteByText_Callback (ButtoN b)
+{
+  ConvertFormPtr  cfp;
+  SeqEntryPtr     sep;
+  UIEnum          val;
+
+  /* Check the initial conditions and get the sequence */
+
+  cfp = (ConvertFormPtr) GetObjectExtra (b);
+  if (cfp == NULL || cfp->input_entityID == 0) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+
+  /* Get the string to search for */
+
+  cfp->deleteStr = SaveStringFromTextNoStripSpaces (cfp->deleteText);
+  if (StringHasNoText (cfp->deleteStr))
+    return;
+
+  /* Get the type of items to search */
+
+  GetEnumPopup (cfp->target, ext_target_field_alist, &val);
+  if (0 == val)
+    return;
+  else
+    cfp->type = (Int2) val;
+
+  GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
+  if (0 == val)
+    return;
+  else
+    cfp->subtype = (Int2) val;
+
+  /* Get the delete level */
+
+  cfp->deleteLevelInt = GetValue (cfp->deleteLevel);
+
+  /* Display the 'working' cursor */
+
+  WatchCursor ();
+  Update ();
+
+  /* Do the search and mark and found objects for deletion */
+
+  cfp->isDirty = FALSE;
+  DeleteItemsByText (sep, cfp);
+
+  /* Remove the window and update things */
+
+  if (cfp->isDirty) {
+    DeleteMarkedObjects (cfp->input_entityID, 0, NULL);
+    ObjMgrSetDirtyFlag (cfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID, 0, 0);
+  }
+
+  ArrowCursor ();
+  Update ();
+  Remove (cfp->form);
+
+  /* Return successfully */
+
+  return;
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* CreateDeleteByTextWindow () - Creates and then display the window for   */
+/*                               getting delete by text info from the user.*/
+/*                                                                         */
+/*=========================================================================*/
+
+extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data)
+{
+  EnumFieldAssocPtr  ap;
+  GrouP              c;
+  ConvertFormPtr     cfp;
+  GrouP              g;
+  GrouP              h;
+  GrouP              k;
+  Int2               j;
+  OMProcControlPtr   ompcp;
+  GrouP              p;
+  StdEditorProcsPtr  sepp;
+  WindoW             w;
+  GrouP              x;
+
+  /* Check parameters and get a pointer to the current data */
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL)
+    return OM_MSG_RET_ERROR;
+
+  /* Create a new window, and a struct */
+  /* to pass around the data in.       */
+
+  cfp = (ConvertFormPtr) MemNew (sizeof (ConvertFormData));
+  if (cfp == NULL)
+    return OM_MSG_RET_ERROR;
+
+  w = FixedWindow (-50, -33, -10, -10, "Delete By Text String",
+		   StdCloseWindowProc);
+  SetObjectExtra (w, cfp, StdCleanupFormProc);
+  cfp->form = (ForM) w;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    cfp->appmessage = sepp->handleMessages;
+  }
+
+  cfp->input_entityID = ompcp->input_entityID;
+  cfp->input_itemID = ompcp->input_itemID;
+  cfp->input_itemtype = ompcp->input_itemtype;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    cfp->appmessage = sepp->handleMessages;
+  }
+
+  /* Add the popup lists */
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  k = HiddenGroup (h, 3, 0, NULL);
+
+  StaticPrompt (k, "Delete at the level of", 0, dialogTextHeight,
+		programFont, 'l');
+  cfp->deleteLevel = HiddenGroup (k, 2, 0, NULL);
+  RadioButton (cfp->deleteLevel, "Feature");
+  RadioButton (cfp->deleteLevel, "Bioseq");
+  RadioButton (cfp->deleteLevel, "Bioseq Set");
+  SetValue (cfp->deleteLevel, 1);
+
+  g = HiddenGroup (h, 3, 0, NULL);
+
+  StaticPrompt (g, "Delete objects with the string", 0, dialogTextHeight,
+		programFont, 'l');
+  cfp->deleteText = DialogText (g, "", 10, (TxtActnProc) SetDeleteAcceptButton);
+  SetObjectExtra (cfp->deleteText, cfp, NULL);
+
+  p = HiddenGroup (h, 6, 0, NULL);
+  StaticPrompt (p, "Find string in", 0, popupMenuHeight, programFont, 'l');
+  cfp->target = PopupList (p, TRUE, ChangeDeleteSubtarget);
+  SetObjectExtra (cfp->target, cfp, NULL);
+  InitEnumPopup (cfp->target, target_field_alist, NULL);
+  SetEnumPopup (cfp->target, target_field_alist, 0);
+
+  cfp->alists [GENE_TYPE]             = gene_field_alist;
+  cfp->alists [CDS_TYPE]              = cds_field_alist;
+  cfp->alists [PROT_TYPE]             = prot_field_alist;
+  cfp->alists [RNA_TYPE]              = rnax_field_alist;
+  cfp->alists [BIOSOURCE_TYPE]        = orgref_field_alist;
+  cfp->alists [ORGMOD_SUBSOURCE_TYPE] = subsource_and_orgmod_note_subtype_alist;
+  cfp->alists [IMPORT_FEAT_TYPE]      = impfeat_field_alist;
+
+  x = HiddenGroup (p, 0, 0, NULL);
+
+  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
+    if (j == ORGMOD_SUBSOURCE_TYPE) {
+      cfp->subtarget [j] =
+	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      for (ap = cfp->alists [j]; ap->name != NULL; ap++)
+	ListItem ((LisT) cfp->subtarget [j], ap->name);
+      Hide (cfp->subtarget [j]);
+    }
+    else {
+      cfp->subtarget [j] = PopupList (x, TRUE,
+				      (PupActnProc) SetDeleteAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
+      SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
+      Hide (cfp->subtarget [j]);
+    }
+  }
+
+  /* Add Accept and Cancel buttons */
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  cfp->accept = PushButton (c, "Accept", DeleteByText_Callback);
+  SetObjectExtra (cfp->accept, cfp, NULL);
+  Disable (cfp->accept);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  /* Line things up nicely */
+
+  AlignObjects (ALIGN_LEFT, (HANDLE) p, (HANDLE) c, (HANDLE) h,
+		(HANDLE) k, NULL);
+
+  /* Display the window now */
+
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Select (cfp->accept);
+  Update ();
+  return OM_MSG_RET_OK;
+}
 
 static Boolean ShouldReplaceParsedString (ConvertFormPtr cfp)
 
@@ -295,7 +1327,7 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
     if (sap->type == 1) {
       sfp = (SeqFeatPtr) sap->data;
       while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_GENE && cfp->type == 1) {
+        if (sfp->data.choice == SEQFEAT_GENE && cfp->type == GENE_TYPE) {
           grp = (GeneRefPtr) sfp->data.value.ptrvalue;
           if (grp != NULL) {
             switch (cfp->subtype) {
@@ -312,6 +1344,9 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
                 grp->maploc = SaveOrReplaceStringCopy (cfp, cfp->foundstr, grp->maploc);
                 break;
               case 5 :
+                grp->locus_tag = SaveOrReplaceStringCopy (cfp, cfp->foundstr, grp->locus_tag);
+                break;
+              case 6 :
                 if (! StringHasNoText (cfp->foundstr)) {
                   if (grp->syn != NULL && ShouldReplaceParsedString (cfp)) {
                     vnp = grp->syn;
@@ -327,14 +1362,15 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
                   }
                 }
                 break;
-              case 6 :
+              case 7 :
                 sfp->comment = SaveOrReplaceStringCopy (cfp, cfp->foundstr, sfp->comment);
                 break;
               default :
                 break;
             }
           }
-        } else if (sfp->data.choice == SEQFEAT_CDREGION && cfp->type == 2) {
+        } else if (sfp->data.choice == SEQFEAT_CDREGION &&
+		   cfp->type == CDS_TYPE) {
           switch (cfp->subtype) {
             case 1 :
               sfp->comment = SaveOrReplaceStringCopy (cfp, cfp->foundstr, sfp->comment);
@@ -366,7 +1402,8 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
             default :
               break;
           }
-        } else if (sfp->data.choice == SEQFEAT_PROT && cfp->type == 3) {
+        } else if (sfp->data.choice == SEQFEAT_PROT &&
+		   cfp->type == PROT_TYPE) {
           prp = (ProtRefPtr) sfp->data.value.ptrvalue;
           if (prp != NULL) {
             switch (cfp->subtype) {
@@ -428,7 +1465,8 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
                 break;
             }
           }
-        } else if (sfp->data.choice == SEQFEAT_RNA && cfp->type == 4) {
+        } else if (sfp->data.choice == SEQFEAT_RNA &&
+		   cfp->type == RNA_TYPE) {
           rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
           if (rrp != NULL) {
             switch (cfp->subtype) {
@@ -458,9 +1496,10 @@ static void ConvertAFeatureField (SeqEntryPtr sep, Pointer mydata, Int4 index, I
                 break;
             }
           }
-        } else if (cfp->type == 8) {
+        } else if (cfp->type == IMPORT_FEAT_TYPE) {
           if (cfp->subtype == sfp->idx.subtype) {
-            sfp->comment = SaveOrReplaceStringCopy (cfp, cfp->foundstr, sfp->comment);
+            sfp->comment = SaveOrReplaceStringCopy (cfp, cfp->foundstr,
+						    sfp->comment);
           }
         }
         sfp = sfp->next;
@@ -482,17 +1521,17 @@ static void ConvertASourceField (BioSourcePtr biop, ConvertFormPtr cfp)
 
   if (biop == NULL || cfp == NULL) return;
   switch (cfp->type) {
-    case 5 :
+    case BIOSOURCE_TYPE :
       orp = biop->org;
       if (orp == NULL) return;
       switch (cfp->subtype) {
-        case 1 :
+        case ORGREF_SCI_NAME_FIELD :
           orp->taxname = SaveOrReplaceStringCopy (cfp, cfp->foundstr, orp->taxname);
           break;
-        case 2 :
+        case ORGREF_COMMON_NAME_FIELD :
           orp->common = SaveOrReplaceStringCopy (cfp, cfp->foundstr, orp->common);
           break;
-        case 3 :
+        case ORGREF_LINEAGE_FIELD :
           onp = orp->orgname;
           if (onp == NULL) {
             onp = OrgNameNew ();
@@ -502,7 +1541,7 @@ static void ConvertASourceField (BioSourcePtr biop, ConvertFormPtr cfp)
             onp->lineage = SaveOrReplaceStringCopy (cfp, cfp->foundstr, onp->lineage);
           }
           break;
-        case 4 :
+        case ORGREF_DIVISION_FIELD :
           onp = orp->orgname;
           if (onp == NULL) {
             onp = OrgNameNew ();
@@ -516,66 +1555,70 @@ static void ConvertASourceField (BioSourcePtr biop, ConvertFormPtr cfp)
           break;
       }
       break;
-    case 6 :
-      orp = biop->org;
-      if (orp == NULL) {
-        orp = OrgRefNew ();
-        biop->org = orp;
+    case ORGMOD_SUBSOURCE_TYPE :
+      if (cfp->subtype < 1000) {  /* Orgmod Notes */
+	orp = biop->org;
+	if (orp == NULL) {
+	  orp = OrgRefNew ();
+	  biop->org = orp;
+	}
+	if (orp != NULL) {
+	  onp = orp->orgname;
+	  if (onp == NULL) {
+	    onp = OrgNameNew ();
+	    orp->orgname = onp;
+	  }
+	  if (onp != NULL) {
+	    mod = onp->mod;
+	    while (mod != NULL && mod->subtype != cfp->subtype) {
+	      mod = mod->next;
+	    }
+	    if (mod == NULL) {
+	      mod = OrgModNew ();
+	      if (onp->mod == NULL) {
+		onp->mod = mod;
+	      } else {
+		tmpmod = onp->mod;
+		while (tmpmod->next != NULL) {
+		  tmpmod = tmpmod->next;
+		}
+		tmpmod->next = mod;
+	      }
+	    }
+	    if (mod != NULL) {
+	      mod->subtype = cfp->subtype;
+	      mod->subname = SaveOrReplaceStringCopy (cfp,
+						      cfp->foundstr,
+						      mod->subname);
+	    }
+	  }
+	}
       }
-      if (orp != NULL) {
-        onp = orp->orgname;
-        if (onp == NULL) {
-          onp = OrgNameNew ();
-          orp->orgname = onp;
-        }
-        if (onp != NULL) {
-          mod = onp->mod;
-          while (mod != NULL && mod->subtype != cfp->subtype) {
-            mod = mod->next;
-          }
-          if (mod == NULL) {
-            mod = OrgModNew ();
-            if (onp->mod == NULL) {
-              onp->mod = mod;
-            } else {
-              tmpmod = onp->mod;
-              while (tmpmod->next != NULL) {
-                tmpmod = tmpmod->next;
-              }
-              tmpmod->next = mod;
-            }
-          }
-          if (mod != NULL) {
-            mod->subtype = cfp->subtype;
-            mod->subname = SaveOrReplaceStringCopy (cfp, cfp->foundstr, mod->subname);
-          }
-        }
+      else {  /* SubSource Notes */
+	ssp = biop->subtype;
+	while (ssp != NULL && ssp->subtype != (cfp->subtype - 1000)) {
+	  ssp = ssp->next;
+	}
+	if (ssp == NULL) {
+	  ssp = SubSourceNew ();
+	  if (biop->subtype == NULL) {
+	    biop->subtype = ssp;
+	  } else {
+	    tmpssp = biop->subtype;
+	    while (tmpssp->next != NULL) {
+	      tmpssp = tmpssp->next;
+	    }
+	    tmpssp->next = ssp;
+	  }
+	}
+	if (ssp != NULL) {
+	  ssp->subtype = (cfp->subtype - 1000);
+	  ssp->name = SaveOrReplaceStringCopy (cfp, cfp->foundstr, ssp->name);
+	}
       }
       break;
-    case 7 :
-      ssp = biop->subtype;
-      while (ssp != NULL && ssp->subtype != cfp->subtype) {
-        ssp = ssp->next;
-      }
-      if (ssp == NULL) {
-        ssp = SubSourceNew ();
-        if (biop->subtype == NULL) {
-          biop->subtype = ssp;
-        } else {
-          tmpssp = biop->subtype;
-          while (tmpssp->next != NULL) {
-            tmpssp = tmpssp->next;
-          }
-          tmpssp->next = ssp;
-        }
-      }
-      if (ssp != NULL) {
-        ssp->subtype = cfp->subtype;
-        ssp->name = SaveOrReplaceStringCopy (cfp, cfp->foundstr, ssp->name);
-      }
-      break;
-    default :
-      break;
+  default:
+    break;
   }
 }
 
@@ -588,13 +1631,13 @@ static void FoundStringForConversion (Uint2 entityID, SeqEntryPtr sep, ConvertFo
 
   cfp->foundstr = str;
   switch (cfp->type) {
-    case 1 :
-    case 2 :
-    case 3 :
-    case 4 :
+    case GENE_TYPE :
+    case CDS_TYPE  :
+    case PROT_TYPE :
+    case RNA_TYPE  :
       SeqEntryExplore (sep, (Pointer) cfp, ConvertAFeatureField);
       break;
-    case 5 :
+    case BIOSOURCE_TYPE :
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
       if (biop == NULL && cfp->subtype == 1) {
         biop = BioSourceNew ();
@@ -608,15 +1651,14 @@ static void FoundStringForConversion (Uint2 entityID, SeqEntryPtr sep, ConvertFo
       }
       ConvertASourceField (biop, cfp);
       break;
-    case 6 :
-    case 7 :
+    case ORGMOD_SUBSOURCE_TYPE :
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
       ConvertASourceField (biop, cfp);
       break;
-    case 8 :
+    case IMPORT_FEAT_TYPE :
       SeqEntryExplore (sep, (Pointer) cfp, ConvertAFeatureField);
       break;
-    default :
+    default:
       break;
   }
 }
@@ -807,7 +1849,7 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
     if (sap->type == 1) {
       sfp = (SeqFeatPtr) sap->data;
       while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_GENE && cfp->type == 1) {
+        if (sfp->data.choice == SEQFEAT_GENE && cfp->type == GENE_TYPE) {
           grp = (GeneRefPtr) sfp->data.value.ptrvalue;
           if (grp != NULL) {
             switch (cfp->subtype) {
@@ -824,29 +1866,34 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
                 SearchAndExciseText (&grp->maploc, cfp);
                 break;
               case 5 :
+                SearchAndExciseText (&grp->locus_tag, cfp);
+                break;
+              case 6 :
                 for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
                   strp = (CharPtr PNTR) &vnp->data.ptrvalue;
                   SearchAndExciseText (strp, cfp);
                 }
                 break;
-              case 6 :
+              case 7 :
                 SearchAndExciseText (&sfp->comment, cfp);
                 break;
               default :
                 break;
             }
           }
-        } else if (sfp->data.choice == SEQFEAT_CDREGION && cfp->type == 2) {
+        } else if (sfp->data.choice == SEQFEAT_CDREGION &&
+		   cfp->type == CDS_TYPE) {
           switch (cfp->subtype) {
-            case 1 :
+            case CDS_COMMENT :
               SearchAndExciseText (&sfp->comment, cfp);
               break;
-            case 2 :
+            case CDS_GENE_XREF :
               break;
             default :
               break;
           }
-        } else if (sfp->data.choice == SEQFEAT_PROT && cfp->type == 3) {
+        } else if (sfp->data.choice == SEQFEAT_PROT &&
+		   cfp->type == PROT_TYPE) {
           prp = (ProtRefPtr) sfp->data.value.ptrvalue;
           if (prp != NULL) {
             switch (cfp->subtype) {
@@ -878,7 +1925,8 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
                 break;
             }
           }
-        } else if (sfp->data.choice == SEQFEAT_RNA && cfp->type == 4) {
+        } else if (sfp->data.choice == SEQFEAT_RNA &&
+		   cfp->type == RNA_TYPE) {
           rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
           if (rrp != NULL) {
             switch (cfp->subtype) {
@@ -897,9 +1945,10 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
                 break;
             }
           }
-        } else if (sfp->data.choice == SEQFEAT_IMP && cfp->type == 8) {
+        } else if (sfp->data.choice == SEQFEAT_IMP &&
+		   cfp->type == IMPORT_FEAT_TYPE) {
           switch (cfp->subtype) {
-            case 1 :
+            case IMPORT_GBQUAL_FIELD :
 	      gbqp = sfp->qual;
 	      while (NULL != gbqp)
 		{
@@ -908,7 +1957,7 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
 		  gbqp = gbqp->next;
 		}
               break;
-            case 2 :
+            case IMPORT_COMMENT_FIELD :
               SearchAndExciseText (&sfp->comment, cfp);
               break;
             default :
@@ -932,17 +1981,17 @@ static void RemoveASourceText (BioSourcePtr biop, ConvertFormPtr cfp)
 
   if (biop == NULL || cfp == NULL) return;
   switch (cfp->type) {
-    case 5 :
+    case BIOSOURCE_TYPE :
       orp = biop->org;
       if (orp == NULL) return;
       switch (cfp->subtype) {
-        case 1 :
+        case ORGREF_SCI_NAME_FIELD :
           SearchAndExciseText (&orp->taxname, cfp);
           break;
-        case 2 :
+        case ORGREF_COMMON_NAME_FIELD :
           SearchAndExciseText (&orp->common, cfp);
           break;
-        case 3 :
+        case ORGREF_LINEAGE_FIELD :
           onp = orp->orgname;
           if (onp == NULL) {
             onp = OrgNameNew ();
@@ -952,7 +2001,7 @@ static void RemoveASourceText (BioSourcePtr biop, ConvertFormPtr cfp)
             SearchAndExciseText (&onp->lineage, cfp);
           }
           break;
-        case 4 :
+        case ORGREF_DIVISION_FIELD :
           onp = orp->orgname;
           if (onp == NULL) {
             onp = OrgNameNew ();
@@ -962,43 +2011,45 @@ static void RemoveASourceText (BioSourcePtr biop, ConvertFormPtr cfp)
             SearchAndExciseText (&onp->div, cfp);
           }
           break;
-        default :
+        default:
           break;
       }
       break;
-    case 6 :
-      orp = biop->org;
-      if (orp == NULL) {
-        orp = OrgRefNew ();
-        biop->org = orp;
+    case ORGMOD_SUBSOURCE_TYPE :
+      if (cfp->subtype < 1000) {  /* Orgmod Note */
+	orp = biop->org;
+	if (orp == NULL) {
+	  orp = OrgRefNew ();
+	  biop->org = orp;
+	}
+	if (orp != NULL) {
+	  onp = orp->orgname;
+	  if (onp == NULL) {
+	    onp = OrgNameNew ();
+	    orp->orgname = onp;
+	  }
+	  if (onp != NULL) {
+	    mod = onp->mod;
+	    while (mod != NULL && mod->subtype != cfp->subtype) {
+	      mod = mod->next;
+	    }
+	    if (mod != NULL) {
+	      SearchAndExciseText (&mod->subname, cfp);
+	    }
+	  }
+	}
       }
-      if (orp != NULL) {
-        onp = orp->orgname;
-        if (onp == NULL) {
-          onp = OrgNameNew ();
-          orp->orgname = onp;
-        }
-        if (onp != NULL) {
-          mod = onp->mod;
-          while (mod != NULL && mod->subtype != cfp->subtype) {
-            mod = mod->next;
-          }
-          if (mod != NULL) {
-            SearchAndExciseText (&mod->subname, cfp);
-          }
-        }
+      else {  /* subsource note */
+	ssp = biop->subtype;
+	while (ssp != NULL && ssp->subtype != (cfp->subtype - 1000)) {
+	  ssp = ssp->next;
+	}
+	if (ssp != NULL) {
+	  SearchAndExciseText (&ssp->name, cfp);
+	}
       }
       break;
-    case 7 :
-      ssp = biop->subtype;
-      while (ssp != NULL && ssp->subtype != cfp->subtype) {
-        ssp = ssp->next;
-      }
-      if (ssp != NULL) {
-        SearchAndExciseText (&ssp->name, cfp);
-      }
-      break;
-    default :
+    default:
       break;
   }
 }
@@ -1027,46 +2078,25 @@ static void DoOneRemoveText (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp
     MonitorStrValue (mon, str);
   }
   switch (cfp->type) {
-    case 1 :
-    case 2 :
-    case 3 :
-    case 4 :
+    case GENE_TYPE :
+    case CDS_TYPE :
+    case PROT_TYPE :
+    case RNA_TYPE :
       SeqEntryExplore (sep, (Pointer) cfp, RemoveAFeatureText);
       break;
-    case 5 :
+    case BIOSOURCE_TYPE :
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
       RemoveASourceText (biop, cfp);
       break;
-    case 6 :
-    case 7 :
+    case ORGMOD_SUBSOURCE_TYPE :
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
       RemoveASourceText (biop, cfp);
       break;
-    case 8 :
+    case IMPORT_FEAT_TYPE :
       SeqEntryExplore (sep, (Pointer) cfp, RemoveAFeatureText);
       break;
-    default :
+    default:
       break;
-  }
-}
-
-static CharPtr SaveStringFromTextNoStripSpaces (TexT t)
-
-{
-  size_t   len;
-  CharPtr  str;
-
-  len = TextLength (t);
-  if (len > 0) {
-    str = (CharPtr) MemNew(len + 1);
-    if (str != NULL) {
-      GetTitle (t, str, len + 1);
-      return str;
-    } else {
-      return NULL;
-    }
-  } else {
-    return NULL;
   }
 }
 
@@ -1093,6 +2123,8 @@ static void DoConvertProc (ButtoN b)
       if (cfp->report > 0) {
         cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
         cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+	TrimOffEndQuotes (cfp->leftstr);
+	TrimOffEndQuotes (cfp->rightstr);
         cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
         cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
         mon = MonitorStrNewEx ("Parsing Text From FlatFile", 20, FALSE);
@@ -1133,6 +2165,8 @@ static void DoRemoveTextProc (ButtoN b)
       cfp->subtype = (Int2) val;
       cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
       cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+      TrimOffEndQuotes (cfp->leftstr);
+      TrimOffEndQuotes (cfp->rightstr);
       cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
       cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
       mon = MonitorStrNewEx ("Removing Text From String", 20, FALSE);
@@ -1148,54 +2182,6 @@ static void DoRemoveTextProc (ButtoN b)
   ObjMgrSetDirtyFlag (cfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID, 0, 0);
   Remove (cfp->form);
-}
-
-static void SetConvertAcceptButton (Handle a)
-
-{
-  ConvertFormPtr  cfp;
-  UIEnum          val;
-
-  cfp = (ConvertFormPtr) GetObjectExtra (a);
-  if (cfp == NULL) return;
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
-    cfp->type = (Int2) val;
-    if (GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val) && val > 0) {
-      if (GetValue (cfp->asnOrFlat) > 0) {
-        if ((! TextHasNoText (cfp->atleft)) || (! TextHasNoText (cfp->atright))) {
-          SafeEnable (cfp->accept);
-          return;
-        }
-      }
-      if (cfp->asnOrFlat == NULL) {
-        if ((! TextHasNoText (cfp->atleft)) || (! TextHasNoText (cfp->atright))) {
-          SafeEnable (cfp->accept);
-          return;
-        }
-      }
-    }
-  }
-  SafeDisable (cfp->accept);
-}
-
-static void ChangeSubtarget (PopuP p)
-
-{
-  ConvertFormPtr  cfp;
-  Int2            i;
-  UIEnum          val;
-
-  cfp = (ConvertFormPtr) GetObjectExtra (p);
-  if (cfp == NULL) return;
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
-    for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
-      if (i != (Int2) val) {
-        SafeHide (cfp->subtarget [i]);
-      }
-    }
-    SafeShow (cfp->subtarget [(Int2) val]);
-  }
-  SetConvertAcceptButton ((Handle) p);
 }
 
 static void ConvertMessageProc (ForM f, Int2 mssg)
@@ -1301,34 +2287,38 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   InitEnumPopup (cfp->target, ext_target_field_alist, NULL);
   SetEnumPopup (cfp->target, ext_target_field_alist, 0);
 
-  cfp->alists [1] = gene_field_alist;
-  cfp->alists [2] = cds_field_alist;
-  cfp->alists [3] = prot_field_alist;
-  cfp->alists [4] = rnax_field_alist;
-  cfp->alists [5] = orgref_field_alist;
-  cfp->alists [6] = orgmod_note_subtype_alist;
-  cfp->alists [7] = subsource_note_subtype_alist;
-  cfp->alists [8] = impfeat_field_alist;
-  cfp->alists [9] = import_featdef_alist (TRUE, FALSE, FALSE);
+  cfp->alists [GENE_TYPE]             = gene_field_alist;
+  cfp->alists [CDS_TYPE]              = cds_field_alist;
+  cfp->alists [PROT_TYPE]             = prot_field_alist;
+  cfp->alists [RNA_TYPE]              = rnax_field_alist;
+  cfp->alists [BIOSOURCE_TYPE]        = orgref_field_alist;
+  cfp->alists [ORGMOD_SUBSOURCE_TYPE] = subsource_and_orgmod_note_subtype_alist;
+  cfp->alists [IMPORT_FEAT_TYPE]      = import_featdef_alist (TRUE, FALSE,
+							      FALSE);
 
   cfp->replaceOldAsked = FALSE;
   cfp->doReplaceAll = FALSE;
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= 8; j++) {
-    cfp->subtarget [j] = PopupList (x, TRUE, (PupActnProc) SetConvertAcceptButton);
-    SetObjectExtra (cfp->subtarget [j], cfp, NULL);
-    InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
-    SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
-    Hide (cfp->subtarget [j]);
+  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
+    if ((j == IMPORT_FEAT_TYPE) || (j == ORGMOD_SUBSOURCE_TYPE)) {
+      cfp->subtarget [j] =
+	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      for (ap = cfp->alists [j]; ap->name != NULL; ap++)
+	ListItem ((LisT) cfp->subtarget [j], ap->name);
+      Hide (cfp->subtarget [j]);
+    }
+    else {
+      cfp->subtarget [j] = PopupList (x, TRUE,
+				      (PupActnProc) SetConvertAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
+      SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
+      Hide (cfp->subtarget [j]);
+    }
   }
-  cfp->subtarget [9] = (PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
-  SetObjectExtra (cfp->subtarget [9], cfp, NULL);
-  for (ap = cfp->alists [9]; ap->name != NULL; ap++) {
-    ListItem ((LisT) cfp->subtarget [9], ap->name);
-  }
-  Hide (cfp->subtarget [9]);
 
   c = HiddenGroup (h, 4, 0, NULL);
   cfp->accept = PushButton (c, "Accept", DoConvertProc);
@@ -1344,9 +2334,1116 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   Update ();
 }
 
-extern void RemoveTextInsideString (IteM i)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_SetAcceptButtonStatus () -- Enable/Disable the Accept     */
+/*                                       button depending on the       */
+/*                                       condition of other window     */
+/*                                       objects.                      */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_SetAcceptButtonStatus (ConvertFormPtr cfp)
+{
+  Boolean beforeChecked;
+  Boolean afterChecked;
+  UIEnum  val;
+
+  beforeChecked = GetStatus (cfp->removeBefore);
+  afterChecked  = GetStatus (cfp->removeAfter);
+
+  /* If both before and after text are disabled */
+  /* then disable the accept button.            */
+
+  if ((FALSE == beforeChecked) && (FALSE == afterChecked)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* If the before field is enabled but empty */
+  /* then disable the accept button.          */
+
+  if ((TRUE == beforeChecked) && (TextHasNoText (cfp->atleft))) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* If the before field is enabled but empty */
+  /* then disable the accept button.          */
+
+  if ((TRUE == afterChecked) && (TextHasNoText (cfp->atright))) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* Disable if a target has not been selected */
+
+  if (!GetEnumPopup (cfp->target, ext_target_field_alist, &val)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  if (val <= 0) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* Disable if a subtarget has not been selected */
+
+  cfp->type = (Int2) val;
+  
+  if (!GetEnumPopup (cfp->subtarget [cfp->type],
+		      cfp->alists [cfp->type], &val)) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  if (val <= 0) {
+    SafeDisable (cfp->accept);
+    return;
+  }
+
+  /* If we made it to here then we've met */
+  /* all conditions for accepting.        */
+
+  SafeEnable (cfp->accept);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutText_BeforeCheckBoxCallback () -- Called when the CheckBox    */
+/*                                         for the 'Before' text field */
+/*                                         is clicked on.              */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_BeforeCheckBoxCallback (ButtoN b)
+{
+  ConvertFormPtr   cfp;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (b);
+  if (NULL == cfp)
+    return;
+
+  if (GetStatus (b)) {
+    SafeEnable (cfp->atleft);
+    SafeEnable (cfp->includeBeforeGroup);
+  } else {
+    SafeDisable (cfp->atleft);
+    SafeDisable (cfp->includeBeforeGroup);
+  }
+
+  RemOutTxt_SetAcceptButtonStatus (cfp);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_AfterCheckBoxCallback () -- Called when the CheckBox for  */
+/*                                       the 'After' text field is     */
+/*                                       clicked on.                   */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_AfterCheckBoxCallback (ButtoN b)
+{
+  ConvertFormPtr   cfp;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (b);
+  if (NULL == cfp)
+    return;
+
+  if (GetStatus (b)) {
+    SafeEnable (cfp->atright);
+    SafeEnable (cfp->includeAfterGroup);
+  } else {
+    SafeDisable (cfp->atright);
+    SafeDisable (cfp->includeAfterGroup);
+  }
+
+  RemOutTxt_SetAcceptButtonStatus (cfp);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_SearchAndExcise () -- Removes all text from a string that */
+/*                                 does not match a specified substring*/
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_SearchAndExcise (CharPtr        sourceStr,
+				       ConvertFormPtr cfp)
+{
+  CharPtr  leftEnd = NULL;
+  CharPtr  rightEnd = NULL;
+  CharPtr  newStr = NULL;
+  Int4     strLen;
+  Int4     i;
+
+  /* Check parameters */
+
+  if (cfp == NULL)
+    return;
+
+  if ((NULL == cfp->leftstr) && (NULL == cfp->rightstr))
+    return;
+
+  if (sourceStr == NULL)
+    return;
+
+  /* Find the left end of the string */
+
+  if (cfp->leftstr != NULL && cfp->leftstr [0] != '\0') {
+    leftEnd = SearchForString (sourceStr, cfp->leftstr, FALSE, FALSE);
+    if (NULL == leftEnd)  /* String not found */
+      if (DO_NOTHING == cfp->ifNotFound)
+	return;
+      else {
+	sourceStr [0] = '\0';
+	return;
+      }
+    if (cfp->includeleft)
+      leftEnd += StringLen (cfp->leftstr);
+  }
+  else
+    leftEnd = sourceStr;
+
+  /* Find the right end of the string */
+
+  if (cfp->rightstr != NULL && cfp->rightstr [0] != '\0') {
+    rightEnd = SearchForString (leftEnd, cfp->rightstr, FALSE, FALSE);
+    if (NULL == rightEnd) /* String not found */
+      if (DO_NOTHING == cfp->ifNotFound)
+	return;
+      else {
+	sourceStr [0] = '\0';
+	return;
+      }
+    if (!cfp->includeright)
+      rightEnd += StringLen (cfp->rightstr);
+  }
+  else
+    rightEnd = sourceStr + StringLen(sourceStr);
+
+  /* End the original string at rightEnd and  */
+  /* then move everything starting at leftEnd */
+  /* to the beginning of the original.        */
+
+  rightEnd[0] = '\0';
+  if (leftEnd == sourceStr)
+    return;
+
+  strLen = StringLen (leftEnd);
+
+  for (i = 0; i <= strLen; i++)
+    sourceStr[i] = leftEnd[i];
+
+  sourceStr[i] = '\0';
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoProt () -- Does the requested search and delete         */
+/*                        on one protein feature.                      */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoProt (SeqFeatPtr sfp,
+				 SeqMgrFeatContextPtr context)
+{
+  ConvertFormPtr cfp;
+  ProtRefPtr     prp;
+  ValNodePtr     vnp;
+  CharPtr        str;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+
+  if (NULL == prp)
+    return TRUE;
+
+  /* Do the removal on the requested field */
+
+  switch (cfp->subtype) {
+  case PROT_NAME_FIELD :
+    for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      RemOutTxt_SearchAndExcise (str, cfp);
+    }
+    break;
+  case PROT_DESCRIPTION_FIELD :
+    RemOutTxt_SearchAndExcise (prp->desc, cfp);
+    break;
+  case PROT_ECNUM_FIELD :
+    for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      RemOutTxt_SearchAndExcise (str, cfp);
+    }
+    break;
+  case PROT_ACTIVITY_FIELD :
+    for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      RemOutTxt_SearchAndExcise (str, cfp);
+    }
+    break;
+  case PROT_COMMENT_FIELD :
+    RemOutTxt_SearchAndExcise (sfp->comment, cfp);
+    break;
+  default :
+    break;
+  }
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoCDS () -- Does the requested search and delete on one   */
+/*                       CDS feature.                                  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoCDS (SeqFeatPtr sfp,
+				SeqMgrFeatContextPtr context)
+{
+  ConvertFormPtr cfp;
+
+  cfp = (ConvertFormPtr) context->userdata;
+
+  switch (cfp->subtype) {
+  case CDS_COMMENT :
+    RemOutTxt_SearchAndExcise (sfp->comment, cfp);
+    break;
+  default:
+    break;
+  }
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoRNA () -- Does the requested search and delete on one   */
+/*                       RNA feature.                                  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoRNA (SeqFeatPtr sfp,
+				SeqMgrFeatContextPtr context)
+{
+  ConvertFormPtr  cfp;
+  RnaRefPtr       rrp;
+  CharPtr         str;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+
+  if (NULL == rrp)
+    return TRUE;
+
+  /* Do the removal on the requested field */
+
+  switch (cfp->subtype) {
+  case RNA_NAME_FIELD :
+    if (rrp->ext.choice == 0 || rrp->ext.choice == 1) {
+      rrp->ext.choice = 1;
+      str = (CharPtr) rrp->ext.value.ptrvalue;
+      RemOutTxt_SearchAndExcise (str, cfp);
+    }
+    break;
+  case RNA_COMMENT_FIELD :
+    RemOutTxt_SearchAndExcise (sfp->comment, cfp);
+    break;
+  default :
+    break;
+  }
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoOrgRef () -- Does the requested search and delete on    */
+/*                          one OrgRef.                                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_DoOrgRef (OrgRefPtr      orp,
+				ConvertFormPtr cfp)
+{
+  OrgNamePtr      onp;
+
+  switch (cfp->subtype) {
+    case ORGREF_SCI_NAME_FIELD :
+      RemOutTxt_SearchAndExcise (orp->taxname, cfp);
+      break;
+    case ORGREF_COMMON_NAME_FIELD :
+      RemOutTxt_SearchAndExcise (orp->common, cfp);
+      break;
+    case ORGREF_LINEAGE_FIELD :
+      onp = orp->orgname;
+      if (onp != NULL)
+	RemOutTxt_SearchAndExcise (onp->lineage, cfp);
+      break;
+    case ORGREF_DIVISION_FIELD :
+      onp = orp->orgname;
+      if (onp != NULL)
+	RemOutTxt_SearchAndExcise (onp->div, cfp);
+      break;
+    default:
+      break;
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoBioSourceFeat () -- Does the requested search and       */
+/*                                 delete on one orgref feature.       */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoBioSourceFeat (SeqFeatPtr sfp,
+					  SeqMgrFeatContextPtr context)
+				      
+{
+  BioSourcePtr    biop;
+  ConvertFormPtr  cfp;
+  OrgRefPtr       orp;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  if (NULL == sfp)
+    return FALSE;
+
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  if (NULL == biop)
+    return FALSE;
+ 
+  orp = biop->org;
+  if (NULL == orp)
+    return TRUE;
+
+  /* Do the removal on the requested field */
+  /* in the BioSource OrgRef.              */
+
+  RemOutTxt_DoOrgRef (orp, cfp);
+
+  /* Return TRUE to continue to next descriptor */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoBioSourceDescr () -- Does the requested search and      */
+/*                                  delete on one BioSource descriptor.*/
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoBioSourceDescr (SeqDescrPtr sdp,
+					   SeqMgrDescContextPtr context)
+				      
+{
+  BioSourcePtr    biop;
+  ConvertFormPtr  cfp;
+  OrgRefPtr       orp;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  if (NULL == sdp)
+    return FALSE;
+
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (NULL == biop)
+    return FALSE;
+ 
+  orp = biop->org;
+  if (NULL == orp)
+    return TRUE;
+
+  /* Do the removal on the requested field */
+  /* in the BioSource OrgRef.              */
+
+  RemOutTxt_DoOrgRef (orp, cfp);
+
+  /* Return TRUE to continue to next descriptor */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoOMSS () -- Does the requested search and delete on      */
+/*                        one orgmod or subsource.                     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean RemOutTxt_DoOMSS (BioSourcePtr biop,
+				 ConvertFormPtr cfp)
+				      
+{
+  OrgRefPtr       orp;
+  OrgNamePtr      onp;
+  OrgModPtr       omp;
+  SubSourcePtr    ssp;
+
+  /* Either do the removal on the requested */
+  /* orgmod subtype ...                     */
+
+  if (cfp->subtype < 1000) {
+    orp = biop->org;
+    if (NULL == orp)
+      return TRUE;
+    onp = orp->orgname;
+    if (NULL == onp)
+      return TRUE;
+    omp = onp->mod;
+    while (omp != NULL && omp->subtype != cfp->subtype)
+      omp = omp->next;
+    if (omp != NULL)
+	RemOutTxt_SearchAndExcise (omp->subname, cfp);
+  }
+
+  /* ... or do it on the requested subsource subtype */
+
+  else {
+    ssp = biop->subtype;
+    while (ssp != NULL) {
+      if (ssp->subtype == (cfp->subtype - 1000))
+	RemOutTxt_SearchAndExcise (ssp->name, cfp);
+      ssp = ssp->next;
+    }
+  }
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoOMSSFeat () -- Does the requested search and delete on  */
+/*                            one orgmod or subsource feature.         */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoOMSSFeat (SeqFeatPtr sfp,
+				     SeqMgrFeatContextPtr context)
+				      
+{
+  BioSourcePtr    biop;
+  ConvertFormPtr  cfp;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  if (NULL == sfp)
+    return FALSE;
+
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  if (NULL == biop)
+    return FALSE;
+
+  /* Check the orgmod or subsource fields of the BioSource */
+
+  RemOutTxt_DoOMSS (biop, cfp);
+  
+  /* Return TRUE to continue to next descriptor */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoOMSSDescr () -- Does the requested search and           */
+/*                             delete on one Orgmod or SubSource       */
+/*                             descriptor.                             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoOMSSDescr (SeqDescrPtr sdp,
+				      SeqMgrDescContextPtr context)
+				      
+{
+  BioSourcePtr    biop;
+  ConvertFormPtr  cfp;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  if (NULL == sdp)
+    return FALSE;
+
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (NULL == biop)
+    return FALSE;
+ 
+  /* Check the orgmod or subsource fields of the BioSource */
+
+  RemOutTxt_DoOMSS (biop, cfp);
+  
+  /* Return TRUE to continue to next descriptor */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoGene () -- Does the requested search and delete on one  */
+/*                        gene feature.                                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoGene (SeqFeatPtr sfp,
+				 SeqMgrFeatContextPtr context)
+{
+  ConvertFormPtr  cfp;
+  GeneRefPtr      grp;
+  ValNodePtr      vnp;
+  CharPtr         str;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (NULL == grp)
+    return TRUE;
+
+  /* Do the removal on the requested field */
+
+  switch (cfp->subtype) {
+    case GENE_LOCUS_FIELD :
+      RemOutTxt_SearchAndExcise (grp->locus, cfp);
+      break;
+    case GENE_DESCRIPTION_FIELD :
+      RemOutTxt_SearchAndExcise (grp->desc, cfp);
+      break;
+    case GENE_ALLELE_FIELD :
+      RemOutTxt_SearchAndExcise (grp->allele, cfp);
+      break;
+    case GENE_MAPLOC_FIELD :
+      RemOutTxt_SearchAndExcise (grp->maploc, cfp);
+      break;
+    case GENE_LOCUS_TAG_FIELD :
+      RemOutTxt_SearchAndExcise (grp->locus_tag, cfp);
+      break;
+    case GENE_SYNONYM_FIELD :
+      for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+	str = (CharPtr) vnp->data.ptrvalue;
+	RemOutTxt_SearchAndExcise (str, cfp);
+      }
+      break;
+    case GENE_COMMENT_FIELD :
+      RemOutTxt_SearchAndExcise (sfp->comment, cfp);
+      break;
+    default :
+      break;
+  }
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoImpFeat () -- Does the requested search and delete on   */
+/*                           one import feature.                       */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoImpFeat (SeqFeatPtr sfp,
+				    SeqMgrFeatContextPtr context)
+{
+  GBQualPtr       gbqp;
+  ConvertFormPtr  cfp;
+
+  /* Check parameters */
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  /* Do the removal on the requested field */
+
+  switch (cfp->subtype) {
+  case IMPORT_GBQUAL_FIELD :
+    gbqp = sfp->qual;
+    while (NULL != gbqp)
+      {
+	if (NULL != gbqp->val)
+	  RemOutTxt_SearchAndExcise (gbqp->val, cfp);
+	gbqp = gbqp->next;
+      }
+    break;
+  case IMPORT_COMMENT_FIELD :
+    RemOutTxt_SearchAndExcise (sfp->comment, cfp);
+    break;
+  default :
+    break;
+  }
+
+  /* Return TRUE to tell explore function to */
+  /* go on to the next feature.              */
+
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_DoBioseq () -- Does the requested search and delete on    */
+/*                          one Bioseq.                                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static Boolean LIBCALLBACK RemOutTxt_DoBioseq (BioseqPtr bsp,
+				   SeqMgrBioseqContextPtr context)
+{
+  Boolean        featureFilterArray [SEQFEAT_MAX];
+  Boolean        descFilterArray [SEQDESCR_MAX];
+  ConvertFormPtr cfp;
+
+  /* Check parameters */
+
+  if (NULL == context)
+    return FALSE;
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  /* Initialize the filter arrays */
+
+  MemSet ((Pointer) (featureFilterArray), (int) FALSE, SEQFEAT_MAX);
+  MemSet ((Pointer) (descFilterArray), (int) FALSE, SEQDESCR_MAX);
+
+  /* Explore the requested feature or descriptor type */
+
+  switch (cfp->type) {
+    case GENE_TYPE :
+      featureFilterArray[SEQFEAT_GENE] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoGene,
+			     NULL, featureFilterArray, NULL);
+      break;
+    case CDS_TYPE :
+      featureFilterArray[SEQFEAT_CDREGION] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoCDS,
+			     NULL, featureFilterArray, NULL);
+      break;
+    case PROT_TYPE :
+      featureFilterArray[SEQFEAT_PROT] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoProt,
+			     NULL, featureFilterArray, NULL);
+      break;
+    case RNA_TYPE :
+      featureFilterArray[SEQFEAT_RNA] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoRNA,
+			     NULL, featureFilterArray, NULL);
+      break;
+    case BIOSOURCE_TYPE :
+
+      /* A BioSource may be either a descriptor or a */
+      /* feature so we need to explore both.         */
+
+      featureFilterArray[SEQFEAT_ORG] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoBioSourceFeat,
+			     NULL, featureFilterArray, NULL);
+
+      descFilterArray[Seq_descr_source] = TRUE;
+      SeqMgrExploreDescriptors (bsp, cfp, RemOutTxt_DoBioSourceDescr,
+ 				descFilterArray);
+
+      break;
+    case ORGMOD_SUBSOURCE_TYPE :
+
+      /* OrgMods and SubSources may be either a descriptor */
+      /* or a feature so we need to explore both.          */
+
+      featureFilterArray[SEQFEAT_ORG] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoOMSSFeat,
+			     NULL, featureFilterArray, NULL);
+
+      descFilterArray[Seq_descr_source] = TRUE;
+      SeqMgrExploreDescriptors (bsp, cfp, RemOutTxt_DoOMSSDescr,
+ 				descFilterArray);
+
+      break;
+    case IMPORT_FEAT_TYPE :
+      featureFilterArray[SEQFEAT_IMP] = TRUE;
+      SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoImpFeat,
+			     NULL, featureFilterArray, NULL);
+      break;
+    default:
+      break;
+  }
+  
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_AcceptCallback ()                                         */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
+{
+  ConvertFormPtr  cfp;
+  SeqEntryPtr     sep;
+  UIEnum          val;
+
+  /* Get the current sequence and associated data */
+
+  cfp = (ConvertFormPtr) GetObjectExtra (acceptButton);
+  if (cfp == NULL || cfp->input_entityID == 0)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
+  if (sep == NULL)
+    return;
+
+  /* Hide the window and set the 'working' cursor */
+
+  Hide (cfp->form);
+  WatchCursor ();
+  Update ();
+
+  /* Get the states of the radio buttons */
+
+  if (GetValue (cfp->includeBeforeGroup) == 1)
+    cfp->includeleft = TRUE;
+  else
+    cfp->includeleft = FALSE;
+
+  if (GetValue (cfp->includeAfterGroup) == 1)
+    cfp->includeright = TRUE;
+  else
+    cfp->includeright = FALSE;
+
+  if (GetValue (cfp->ifNotFoundGroup) == 1)
+    cfp->ifNotFound = DO_NOTHING;
+  else
+    cfp->ifNotFound = REMOVE_ALL_TEXT;
+
+  /* Get the feature and subfeature types */
+
+  GetEnumPopup (cfp->target, ext_target_field_alist, &val);
+  if (0 == val)
+    return;
+  else
+    cfp->type = (Int2) val;
+
+  GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
+  if (0 == val)
+    return;
+  else
+    cfp->subtype = (Int2) val;
+
+  /* Get the before (left) and after (right) strings */
+
+  cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
+  cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+
+  TrimOffEndQuotes (cfp->leftstr);
+  TrimOffEndQuotes (cfp->rightstr);
+
+  /* Do actual work of removing text */
+
+  SeqMgrExploreBioseqs (cfp->input_entityID, NULL, cfp,
+			RemOutTxt_DoBioseq, TRUE, TRUE, TRUE);
+
+  /* Clean up and exit */
+
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (cfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID, 0, 0);
+  Remove (cfp->form);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_TextCallback () -- Called when text is entered into       */
+/*                              either the before or after text fields */
+/*                              in the "Remove Text Outside String"    */
+/*                              window.                                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_TextCallback (Handle a)
 
 {
+  ConvertFormPtr  cfp;
+
+  cfp = (ConvertFormPtr) GetObjectExtra (a);
+  if (cfp == NULL)
+    return;
+
+  RemOutTxt_SetAcceptButtonStatus (cfp);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_SubFeatureCallback () -- Called when a subfeature is      */
+/*                                    selected from the popup list     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_SubFeatureCallback (Handle a)
+{
+  ConvertFormPtr  cfp;
+  cfp = (ConvertFormPtr) GetObjectExtra (a);
+  if (cfp == NULL)
+    return;
+
+  RemOutTxt_SetAcceptButtonStatus (cfp);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemOutTxt_FeatureCallback () -- Called when a feature is selected   */
+/*                                 from the popup list.                */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RemOutTxt_FeatureCallback (PopuP p)
+{
+  ConvertFormPtr  cfp;
+  Int2            i;
+  UIEnum          val;
+
+  /* Get the current data */
+
+  cfp = (ConvertFormPtr) GetObjectExtra (p);
+  if (cfp == NULL) 
+    return;
+
+  /* Hide the old sub-feature popup */
+  /* and display the new one.       */
+
+  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+    for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
+      if (i != (Int2) val) {
+        SafeHide (cfp->subtarget [i]);
+      }
+    }
+    SafeShow (cfp->subtarget [(Int2) val]);
+  }
+
+  /* Adjust the 'Accept' button status */
+
+  RemOutTxt_SetAcceptButtonStatus (cfp);
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RemoveTextOutsideString ()                                          */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+extern void RemoveTextOutsideString (IteM i)
+{
+  EnumFieldAssocPtr  ap;
+  BaseFormPtr        bfp;
+  GrouP              buttonGroup;
+  ConvertFormPtr     cfp;
+  GrouP              featureGroup;
+  GrouP              headerGroup;
+  Int2               j;
+  GrouP              mainGroup;
+  SeqEntryPtr        sep;
+  StdEditorProcsPtr  sepp;
+  GrouP              subFeatureGroup;
+  GrouP              textGroup;
+  WindoW             w;
+
+  /* Get current sequence */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL)
+    return;
+
+  /* Create a form for passing user data on to callbacks */
+
+  cfp = (ConvertFormPtr) MemNew (sizeof (ConvertFormData));
+  if (cfp == NULL)
+    return;
+
+  /* Create a window for getting user input */
+
+  w = FixedWindow (-50, -33, -10, -10, "Remove Text Outside String",
+		   StdCloseWindowProc);
+  SetObjectExtra (w, cfp, StdCleanupFormProc);
+  cfp->form = (ForM) w;
+  cfp->formmessage = ConvertMessageProc;
+
+  /* Attach some basic data and callbacks to the data form */
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    cfp->appmessage = sepp->handleMessages;
+  }
+
+  cfp->input_entityID = bfp->input_entityID;
+  cfp->input_itemID   = bfp->input_itemID;
+  cfp->input_itemtype = bfp->input_itemtype;
+
+  /* Main object group for holding all the others */
+
+  mainGroup = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (mainGroup, 10, 10);
+
+  /* Set up Text group and headers */
+
+  headerGroup = HiddenGroup (mainGroup, 1, 0, NULL);
+  textGroup   = HiddenGroup (mainGroup, 4, 0, NULL);
+
+  StaticPrompt (headerGroup, "Remove Text :                       "
+		"Also Remove Entered Text?", 0, 0,
+		programFont, 'l');
+
+  /* 'Before' text */
+
+  cfp->removeBefore = CheckBox (textGroup, "",
+				RemOutTxt_BeforeCheckBoxCallback);
+  SetObjectExtra (cfp->removeBefore, cfp, NULL);
+  StaticPrompt (textGroup, "Before", 0, dialogTextHeight,
+		programFont, 'l');
+
+  cfp->atleft = DialogText (textGroup, "", 10,
+			    (TxtActnProc) RemOutTxt_TextCallback);
+  SetObjectExtra (cfp->atleft, cfp, NULL);
+  SafeDisable (cfp->atleft);
+
+  cfp->includeBeforeGroup = HiddenGroup (textGroup, 2, 0, NULL);
+  RadioButton (cfp->includeBeforeGroup, "Yes");
+  RadioButton (cfp->includeBeforeGroup, "No");
+  SetValue (cfp->includeBeforeGroup, 2);
+  SafeDisable (cfp->includeBeforeGroup);
+
+  /* 'After' text */
+
+  cfp->removeAfter = CheckBox (textGroup, "",
+			       RemOutTxt_AfterCheckBoxCallback);
+  SetObjectExtra (cfp->removeAfter, cfp, NULL);
+  StaticPrompt (textGroup, "After", 0, dialogTextHeight,
+		programFont, 'l');
+
+  cfp->atright = DialogText (textGroup, "", 10,
+			     (TxtActnProc) RemOutTxt_TextCallback);
+  SetObjectExtra (cfp->atright, cfp, NULL);
+  SafeDisable (cfp->atright);
+
+  cfp->includeAfterGroup = HiddenGroup (textGroup, 2, 0, NULL);
+  RadioButton (cfp->includeAfterGroup, "Yes");
+  RadioButton (cfp->includeAfterGroup, "No");
+  SetValue (cfp->includeAfterGroup, 2);
+  SafeDisable (cfp->includeAfterGroup);
+
+  /* The "If not found" group */
+
+  cfp->ifNotFoundGroup = HiddenGroup (mainGroup, 0, 3, NULL);
+  StaticPrompt (cfp->ifNotFoundGroup, "If field doesn't contain searched" 
+		" for text:", 0, 0, programFont, 'l');
+
+  RadioButton (cfp->ifNotFoundGroup, "     Do nothing to field");
+  RadioButton (cfp->ifNotFoundGroup, "     Remove entire field text");
+  SetValue (cfp->ifNotFoundGroup, DO_NOTHING);
+
+  /* Add the popup list for the feature type */
+
+  featureGroup = HiddenGroup (mainGroup, 2, 0, NULL);
+  SetGroupSpacing (featureGroup, 10, 10);
+
+  cfp->target = PopupList (featureGroup, TRUE, RemOutTxt_FeatureCallback);
+  SetObjectExtra (cfp->target, cfp, NULL);
+  InitEnumPopup (cfp->target, target_field_alist, NULL);
+  SetEnumPopup (cfp->target, target_field_alist, 0);
+
+  /* Create and fill in the submenus for */
+  /* each of the Feature types.          */
+
+  cfp->alists [GENE_TYPE]             = gene_field_alist;
+  cfp->alists [CDS_TYPE]              = cds_short_field_alist;
+  cfp->alists [PROT_TYPE]             = prot_field_alist;
+  cfp->alists [RNA_TYPE]              = rnax_short_field_alist;
+  cfp->alists [BIOSOURCE_TYPE]        = orgref_field_alist;
+  cfp->alists [ORGMOD_SUBSOURCE_TYPE] = subsource_and_orgmod_note_subtype_alist;
+  cfp->alists [IMPORT_FEAT_TYPE]      = impfeat_field_alist;
+
+  subFeatureGroup = HiddenGroup (featureGroup, 0, 0, NULL);
+
+  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
+    if (j == ORGMOD_SUBSOURCE_TYPE) {
+      cfp->subtarget [j] =
+	(PopuP) SingleList (subFeatureGroup, 10, 8,
+		    (LstActnProc) RemOutTxt_SubFeatureCallback);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      for (ap = cfp->alists [j]; ap->name != NULL; ap++)
+	ListItem ((LisT) cfp->subtarget [j], ap->name);
+      Hide (cfp->subtarget [j]);
+    }
+    else {
+      cfp->subtarget [j] = PopupList (subFeatureGroup, TRUE,
+		         (PupActnProc) RemOutTxt_SubFeatureCallback);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
+      SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
+      Hide (cfp->subtarget [j]);
+    }
+  }
+
+  /* Accept and Cancel buttons */
+
+  buttonGroup = HiddenGroup (mainGroup, 4, 0, NULL);
+  cfp->accept = PushButton (buttonGroup, "Accept",
+			    RemOutTxt_AcceptCallback);
+  SetObjectExtra (cfp->accept, cfp, NULL);
+  Disable (cfp->accept);
+  PushButton (buttonGroup, "Cancel", StdCancelButtonProc);
+
+  /* Line things up and display the window */
+
+  AlignObjects (ALIGN_CENTER,
+		(HANDLE) headerGroup,
+		(HANDLE) textGroup,
+		(HANDLE) buttonGroup,
+		(HANDLE) featureGroup,
+		NULL);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Update ();
+}
+
+extern void RemoveTextInsideString (IteM i)
+{
+  EnumFieldAssocPtr  ap;
   BaseFormPtr        bfp;
   GrouP              c;
   ConvertFormPtr     cfp;
@@ -1410,26 +3507,35 @@ extern void RemoveTextInsideString (IteM i)
   InitEnumPopup (cfp->target, target_field_alist, NULL);
   SetEnumPopup (cfp->target, target_field_alist, 0);
 
-  cfp->alists [1] = gene_field_alist;
-  cfp->alists [2] = cds_field_alist;
-  cfp->alists [3] = prot_field_alist;
-  cfp->alists [4] = rnax_field_alist;
-  cfp->alists [5] = orgref_field_alist;
-  cfp->alists [6] = orgmod_note_subtype_alist;
-  cfp->alists [7] = subsource_note_subtype_alist;
-  cfp->alists [8] = impfeat_field_alist;
+  cfp->alists [GENE_TYPE]             = gene_field_alist;
+  cfp->alists [CDS_TYPE]              = cds_field_alist;
+  cfp->alists [PROT_TYPE]             = prot_field_alist;
+  cfp->alists [RNA_TYPE]              = rnax_field_alist;
+  cfp->alists [BIOSOURCE_TYPE]        = orgref_field_alist;
+  cfp->alists [ORGMOD_SUBSOURCE_TYPE] = subsource_and_orgmod_note_subtype_alist;
+  cfp->alists [IMPORT_FEAT_TYPE]      = impfeat_field_alist;
 
   cfp->replaceOldAsked = FALSE;
   cfp->doReplaceAll = FALSE;
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= 8; j++) {
-    cfp->subtarget [j] = PopupList (x, TRUE, (PupActnProc) SetConvertAcceptButton);
-    SetObjectExtra (cfp->subtarget [j], cfp, NULL);
-    InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
-    SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
-    Hide (cfp->subtarget [j]);
+  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
+    if (j == ORGMOD_SUBSOURCE_TYPE) {
+      cfp->subtarget [j] =
+	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      for (ap = cfp->alists [j]; ap->name != NULL; ap++)
+	ListItem ((LisT) cfp->subtarget [j], ap->name);
+      Hide (cfp->subtarget [j]);
+    }
+    else {
+      cfp->subtarget [j] = PopupList (x, TRUE, (PupActnProc) SetConvertAcceptButton);
+      SetObjectExtra (cfp->subtarget [j], cfp, NULL);
+      InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
+      SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
+      Hide (cfp->subtarget [j]);
+    }
   }
 
   c = HiddenGroup (h, 4, 0, NULL);
@@ -1763,14 +3869,20 @@ static Boolean AlreadyHasFeatOrDesc (SeqEntryPtr sep, Uint1 featchoice, Uint1 de
   return ah.rsult;
 }
 
-static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr nsep,
-                                   ApplyFormPtr afp, Boolean suppressDups)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* Apply_AddCDS () --                                                  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
 
+static void Apply_AddCDS (Uint2        entityID,
+			  SeqEntryPtr  sep,
+			  SeqEntryPtr  nsep,
+			  ApplyFormPtr afp,
+			  Boolean      suppressDups)
 {
-  EnumFieldAssocPtr  ap;
   ByteStorePtr       bs;
   BioseqPtr          bsp;
-  BioseqSetPtr       bssp;
   Char               ch;
   CdRegionPtr        crp;
   ValNodePtr         descr;
@@ -1778,7 +3890,6 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
   Int2               genCode;
   GeneRefPtr         grp;
   Int2               i;
-  ImpFeatPtr         ifp;
   Int4               len;
   Int4               lens [4];
   Int4               max;
@@ -1788,17 +3899,212 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
   ProtRefPtr         prp;
   SeqEntryPtr        psep;
   CharPtr            ptr;
+  SeqFeatPtr         sfp;
+  Char               str [128];
+  ValNodePtr         vnp;
+
+  /* If necessary then check for duplication before adding */
+
+  if (suppressDups &&
+      entityID > 0 &&
+      AlreadyHasFeatOrDesc (sep, SEQFEAT_CDREGION, 0, 0))
+    return;
+
+  /*Create a new CDS feature */
+
+  genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+  crp = CreateNewCdRgn (1, FALSE, genCode);
+  if (NULL == crp)
+    return;
+
+  sfp = CreateNewFeature (nsep, NULL, SEQFEAT_CDREGION, NULL);
+  if (NULL == sfp)
+    return;
+
+  sfp->data.value.ptrvalue = (Pointer) crp;
+
+  /* Fill in the fields of the new CDS feature */
+
+  SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+  sfp->partial = (afp->noLeft || afp->noRight);
+  if (! TextHasNoText (afp->featcomment)) {
+    sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
+  }
+  max = 0;
+  frame = 0;
+  for (i = 1; i <= 3; i++) {
+    crp->frame = (Uint1) i;
+    bs = ProteinFromCdRegionEx (sfp, FALSE, FALSE);
+    len = BSLen (bs);
+    BSFree (bs);
+    lens [i] = len;
+    if (len > max) {
+      max = len;
+      frame = (Uint1) i;
+    }
+  }
+  for (i = 1; i <= 3; i++) {
+    if (lens [i] == max && i != frame) {
+      (afp->errcount)++;
+    }
+  }
+  crp->frame = frame;
+
+  /* Create corresponding protein sequence data for the CDS */
+
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  if (NULL == bs)
+    return;
+
+  prot = BSMerge (bs, NULL);
+  bs = BSFree (bs);
+  if (NULL == prot)
+    return;
+
+  ptr = prot;
+  ch = *ptr;
+  while (ch != '\0') {
+    *ptr = TO_UPPER (ch);
+    ptr++;
+    ch = *ptr;
+  }
+  i = (Int2) StringLen (prot);
+  if (i > 0 && prot [i - 1] == '*') {
+    prot [i - 1] = '\0';
+  }
+  bs = BSNew (1000);
+  if (bs != NULL) {
+    ptr = prot;
+    BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
+  }
+
+  /* Create the product protein Bioseq */
+  
+  bsp = BioseqNew ();
+  if (NULL == bsp)
+    return;
+  
+  bsp->repr = Seq_repr_raw;
+  bsp->mol = Seq_mol_aa;
+  bsp->seq_data_type = Seq_code_ncbieaa;
+  bsp->seq_data = bs;
+  bsp->length = BSLen (bs);
+  bs = NULL;
+  old = SeqEntrySetScope (sep);
+  bsp->id = MakeNewProteinSeqId (sfp->location, NULL);
+  SeqMgrAddToBioseqIndex (bsp);
+  SeqEntrySetScope (old);
+  
+  /* Create a new SeqEntry for the Prot Bioseq */
+  
+  psep = SeqEntryNew ();
+  if (NULL == psep)
+    return;
+  
+  psep->choice = 1;
+  psep->data.ptrvalue = (Pointer) bsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, psep);
+  
+  /* Add a descriptor to the protein Bioseq */
+  
+  mip = MolInfoNew ();
+  if (NULL == mip)
+    return;
+  
+  mip->biomol = 8;
+  mip->tech = 8;
+  if (afp->noLeft && afp->noRight) {
+    mip->completeness = 5;
+  } else if (afp->noLeft) {
+    mip->completeness = 3;
+  } else if (afp->noRight) {
+    mip->completeness = 4;
+  }
+  vnp = CreateNewDescriptor (psep, Seq_descr_molinfo);
+  if (NULL == vnp)
+    return;
+  
+  vnp->data.ptrvalue = (Pointer) mip;
+  
+  /**/
+  
+  descr = ExtractBioSourceAndPubs (sep);
+  AddSeqEntryToSeqEntry (sep, psep, TRUE);
+  nsep = FindNucSeqEntry (sep);
+  ReplaceBioSourceAndPubs (sep, descr);
+  SetSeqFeatProduct (sfp, bsp);
+  GetTitle (afp->protName, str, sizeof (str));
+  if (! StringHasNoText (str)) {
+    prp = CreateNewProtRef (str, NULL, NULL, NULL);
+    if (prp != NULL) {
+      sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
+      if (sfp != NULL) {
+	sfp->data.value.ptrvalue = (Pointer) prp;
+	SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+	sfp->partial = (afp->noLeft || afp->noRight);
+      }
+    }
+  }
+
+  /*  Create a Gene ref feature on the nuc seq */
+
+  GetTitle (afp->geneName, str, sizeof (str));
+  if (! StringHasNoText (str)) {
+    if (entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0))
+      return;
+
+    grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
+    if (NULL == grp)
+      return;
+
+    sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
+    if (NULL == sfp)
+      return;
+
+    sfp->data.value.ptrvalue = (Pointer) grp;
+    SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+
+    sfp->partial = (afp->noLeft || afp->noRight);
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* RealApplyBioFeatToAll () --                                         */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void RealApplyBioFeatToAll (Uint2        entityID,
+				   SeqEntryPtr  sep,
+				   SeqEntryPtr  nsep,
+                                   ApplyFormPtr afp,
+				   Boolean      suppressDups)
+
+{
+  EnumFieldAssocPtr  ap;
+  BioseqSetPtr       bssp;
+  GeneRefPtr         grp;
+  Int2               i;
+  ImpFeatPtr         ifp;
   RnaRefPtr          rrp;
   ValNodePtr         sdp;
   SeqFeatPtr         sfp;
   Char               str [128];
   Int2               val;
-  ValNodePtr         vnp;
 
-  if (sep == NULL || nsep == NULL || afp == NULL) return;
+  /* Check parameters */
+
+  if (sep == NULL || nsep == NULL || afp == NULL)
+    return;
+
+  /* Add a title feature */
+
   if (afp->type == ADD_TITLE) {
-    if (suppressDups && entityID > 0 && AlreadyHasFeatOrDesc (sep, 0, Seq_descr_title, 0)) return;
-    if (entityID == 0 && SeqEntryGetTitle (sep) != NULL) return;
+    if (suppressDups && entityID > 0 &&
+	AlreadyHasFeatOrDesc (sep, 0, Seq_descr_title, 0))
+      return;
+    if (entityID == 0 && SeqEntryGetTitle (sep) != NULL)
+      return;
     if (! TextHasNoText (afp->defline)) {
       if (IS_Bioseq_set (sep)) {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
@@ -1808,142 +4114,23 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
       }
       sdp = CreateNewDescriptor (sep, Seq_descr_title);
       if (sdp != NULL) {
-        sdp->data.ptrvalue = (Pointer) SaveStringFromTextAndStripNewlines (afp->defline);
+        sdp->data.ptrvalue =
+	  (Pointer) SaveStringFromTextAndStripNewlines (afp->defline);
       }
     }
     return;
-  } else if (afp->type == ADD_CDS) {
-    if (suppressDups && entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_CDREGION, 0, 0)) return;
-    genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
-    crp = CreateNewCdRgn (1, FALSE, genCode);
-    if (crp != NULL) {
-      sfp = CreateNewFeature (nsep, NULL, SEQFEAT_CDREGION, NULL);
-      if (sfp != NULL) {
-        sfp->data.value.ptrvalue = (Pointer) crp;
-        SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-        sfp->partial = (afp->noLeft || afp->noRight);
-        if (! TextHasNoText (afp->featcomment)) {
-          sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
-        }
-        max = 0;
-        frame = 0;
-        for (i = 1; i <= 3; i++) {
-          crp->frame = (Uint1) i;
-          bs = ProteinFromCdRegionEx (sfp, FALSE, FALSE);
-          len = BSLen (bs);
-          BSFree (bs);
-          lens [i] = len;
-          if (len > max) {
-            max = len;
-            frame = (Uint1) i;
-          }
-        }
-        for (i = 1; i <= 3; i++) {
-          if (lens [i] == max && i != frame) {
-            (afp->errcount)++;
-          }
-        }
-        crp->frame = frame;
-        bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
-        if (bs != NULL) {
-          prot = BSMerge (bs, NULL);
-          bs = BSFree (bs);
-          if (prot != NULL) {
-            ptr = prot;
-            ch = *ptr;
-            while (ch != '\0') {
-              *ptr = TO_UPPER (ch);
-              ptr++;
-              ch = *ptr;
-            }
-            i = (Int2) StringLen (prot);
-            if (i > 0 && prot [i - 1] == '*') {
-              prot [i - 1] = '\0';
-            }
-            bs = BSNew (1000);
-            if (bs != NULL) {
-              ptr = prot;
-              /*
-              if (prot [0] == '-') {
-                ptr++;
-              }
-              */
-              BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
-            }
-          }
-          bsp = BioseqNew ();
-          if (bsp != NULL) {
-            bsp->repr = Seq_repr_raw;
-            bsp->mol = Seq_mol_aa;
-            bsp->seq_data_type = Seq_code_ncbieaa;
-            bsp->seq_data = bs;
-            bsp->length = BSLen (bs);
-            bs = NULL;
-            old = SeqEntrySetScope (sep);
-            bsp->id = MakeNewProteinSeqId (sfp->location, NULL);
-            SeqMgrAddToBioseqIndex (bsp);
-            SeqEntrySetScope (old);
-            psep = SeqEntryNew ();
-            if (psep != NULL) {
-              psep->choice = 1;
-              psep->data.ptrvalue = (Pointer) bsp;
-              SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, psep);
-              mip = MolInfoNew ();
-              if (mip != NULL) {
-                mip->biomol = 8;
-                mip->tech = 8;
-                if (afp->noLeft && afp->noRight) {
-                  mip->completeness = 5;
-                } else if (afp->noLeft) {
-                  mip->completeness = 3;
-                } else if (afp->noRight) {
-                  mip->completeness = 4;
-                }
-                vnp = CreateNewDescriptor (psep, Seq_descr_molinfo);
-                if (vnp != NULL) {
-                  vnp->data.ptrvalue = (Pointer) mip;
-                }
-              }
-              descr = ExtractBioSourceAndPubs (sep);
-              /*
-              AddSeqEntryToSeqEntry (sep, psep, FALSE);
-              */
-              AddSeqEntryToSeqEntry (sep, psep, TRUE);
-              nsep = FindNucSeqEntry (sep);
-              ReplaceBioSourceAndPubs (sep, descr);
-              SetSeqFeatProduct (sfp, bsp);
-              GetTitle (afp->protName, str, sizeof (str));
-              if (! StringHasNoText (str)) {
-                prp = CreateNewProtRef (str, NULL, NULL, NULL);
-                if (prp != NULL) {
-                  sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-                  if (sfp != NULL) {
-                    sfp->data.value.ptrvalue = (Pointer) prp;
-                    SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-                    sfp->partial = (afp->noLeft || afp->noRight);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    GetTitle (afp->geneName, str, sizeof (str));
-    if (! StringHasNoText (str)) {
-      if (entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0)) return;
-      grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
-      if (grp != NULL) {
-        sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
-        if (sfp != NULL) {
-          sfp->data.value.ptrvalue = (Pointer) grp;
-          SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-          sfp->partial = (afp->noLeft || afp->noRight);
-        }
-      }
-    }
-  } else if (afp->type == ADD_RRNA) {
-    if (suppressDups && entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_RNA, 0, afp->rnatype)) return;
+  }
+
+  /* Add a CDS feature */
+
+  else if (afp->type == ADD_CDS)
+    Apply_AddCDS (entityID, sep, nsep, afp, suppressDups);
+
+  /* Add an rRNA feature */
+
+  else if (afp->type == ADD_RRNA) {
+    if (suppressDups && entityID > 0 &&
+	AlreadyHasFeatOrDesc (sep, SEQFEAT_RNA, 0, afp->rnatype)) return;
     rrp = RnaRefNew ();
     if (rrp != NULL) {
       rrp->type = afp->rnatype;
@@ -1957,13 +4144,15 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
         SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
         sfp->partial = (afp->noLeft || afp->noRight);
         if (! TextHasNoText (afp->featcomment)) {
-          sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
+          sfp->comment =
+	    SaveStringFromTextAndStripNewlines (afp->featcomment);
         }
       }
     }
     GetTitle (afp->geneName, str, sizeof (str));
     if (! StringHasNoText (str)) {
-      if (entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0)) return;
+      if (entityID > 0 &&
+	  AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0)) return;
       grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
       if (grp != NULL) {
         sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
@@ -1974,7 +4163,11 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
         }
       }
     }
-  } else if (afp->type == ADD_IMP) {
+  }
+
+  /* Add an Import feature */
+
+  else if (afp->type == ADD_IMP) {
     val = GetValue (afp->key);
     if (val > 0) {
       ifp = ImpFeatNew ();
@@ -1994,7 +4187,8 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
           SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
           sfp->partial = (afp->noLeft || afp->noRight);
           if (! TextHasNoText (afp->featcomment)) {
-            sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
+            sfp->comment =
+	      SaveStringFromTextAndStripNewlines (afp->featcomment);
           }
           sfp->qual = DialogToPointer (afp->gbquals);
         }
@@ -2002,7 +4196,8 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
     }
     GetTitle (afp->geneName, str, sizeof (str));
     if (! StringHasNoText (str)) {
-      if (entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0)) return;
+      if (entityID > 0 &&
+	  AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0)) return;
       grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
       if (grp != NULL) {
         sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
@@ -2011,7 +4206,8 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
           SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
           sfp->partial = (afp->noLeft || afp->noRight);
           if (val == 0 && (! TextHasNoText (afp->featcomment))) {
-            sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
+            sfp->comment = 
+	      SaveStringFromTextAndStripNewlines (afp->featcomment);
           }
         }
       }
@@ -2019,46 +4215,77 @@ static void RealApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr 
   }
 }
 
-static void ApplyBioFeatToRaw (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr tmp, ApplyFormPtr afp, Int2 onlythis)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ApplyBioFeatToRaw () --                                             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void ApplyBioFeatToRaw (Uint2        entityID,
+			       SeqEntryPtr  parentSep,
+			       SeqEntryPtr  sep,
+			       ApplyFormPtr afp,
+			       Int2         onlythis)
 
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Int2          count;
-  SeqEntryPtr   nsep;
+  SeqEntryPtr   nucSep;
 
-  if (tmp == NULL || afp == NULL) return;
-  if (IS_Bioseq_set (tmp)) {
-    bssp = (BioseqSetPtr) tmp->data.ptrvalue;
+  /* Check parameters */
+
+  if (sep == NULL || afp == NULL)
+    return;
+
+  /* If it is a set then recurse until we get to the raw Bioseq */
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL) {
       if (onlythis != 0 && bssp->_class == BioseqseqSet_class_parts) {
-        for (tmp = bssp->seq_set, count = 1;
-             tmp != NULL && count != onlythis;
-             tmp = tmp->next, count++) continue;
-        if (tmp != NULL) {
-          ApplyBioFeatToRaw (entityID, sep, tmp, afp, onlythis);
+        for (sep = bssp->seq_set, count = 1;
+             sep != NULL && count != onlythis;
+             sep = sep->next, count++)
+	  continue;
+        if (sep != NULL) {
+          ApplyBioFeatToRaw (entityID, parentSep, sep, afp, onlythis);
         }
       } else {
-        for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-          ApplyBioFeatToRaw (entityID, sep, tmp, afp, onlythis);
+        for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+          ApplyBioFeatToRaw (entityID, parentSep, sep, afp, onlythis);
         }
       }
       return;
     }
   }
-  nsep = FindNucSeqEntry (tmp);
-  if (nsep == NULL) return;
-  bsp = (BioseqPtr) nsep->data.ptrvalue;
-  if (bsp == NULL) return;
+
+  /* Get the nucleotide Bioseq */
+
+  nucSep = FindNucSeqEntry (sep);
+  if (nucSep == NULL)
+    return;
+
+  bsp = (BioseqPtr) nucSep->data.ptrvalue;
+  if (bsp == NULL)
+    return;
+
+  /* If we've got a raw Bioseq then do the apply */
+
   if (bsp->repr == Seq_repr_raw) {
-    RealApplyBioFeatToAll (entityID, nsep, nsep, afp, FALSE);
-    /*
-    RealApplyBioFeatToAll (entityID, sep, nsep, afp, FALSE);
-    */
+    RealApplyBioFeatToAll (entityID, parentSep, nucSep, afp, FALSE);
   }
 }
 
-static void ApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, ApplyFormPtr afp)
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* ApplyBioFeatToAll () --                                             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void ApplyBioFeatToAll (Uint2        entityID,
+			       SeqEntryPtr  sep,
+			       ApplyFormPtr afp)
 
 {
   BioseqSetPtr  bssp;
@@ -2066,7 +4293,13 @@ static void ApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, ApplyFormPtr afp
   Int2          onlythis;
   Char          str [32];
 
-  if (sep == NULL || afp == NULL) return;
+  /* Check parameters */
+
+  if (sep == NULL || afp == NULL)
+    return;
+
+  /* If it is a set then recurse until we get to a Bioseq */
+
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
@@ -2077,8 +4310,15 @@ static void ApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, ApplyFormPtr afp
       return;
     }
   }
+
+  /* Get the nucleotide Bioseq */
+
   nsep = FindNucSeqEntry (sep);
-  if (nsep == NULL) return;
+  if (nsep == NULL)
+    return;
+
+  /* Apply the feature */
+
   if (afp->applyToParts != NULL && GetStatus (afp->applyToParts)) {
     GetTitle (afp->onlyThisPart, str, sizeof (str));
     if (! StrToInt (str, &onlythis)) {

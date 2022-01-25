@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
  * $Log: ffprint.c,v $
+ * Revision 6.7  2002/08/26 22:06:57  kans
+ * ff_RecalculateLinks (MS) to fix hotlink artifact
+ *
  * Revision 6.6  1999/10/07 19:22:21  bazhin
  * Changed Int2 to Int4 for one variable. To prevent coredump.
  *
@@ -562,7 +565,7 @@ NLM_EXTERN void LIBCALL AddLink (CharPtr str)
 	Int2 		increment_string=0;
 	Int4		l;
 	CharPtr PNTR buf_links;
-	Int2 PNTR	buf_pos;
+	Int4 PNTR	buf_pos;
 	BuffStructPtr bfp;
 
 	bfp = GetBuffStruct();
@@ -585,7 +588,7 @@ NLM_EXTERN void LIBCALL AddLink (CharPtr str)
 		bfp->links = buf_links;
 		bfp->buf_n_links += LINKS;
 	}
-	bfp->pos_links[bfp->n_links] = (Int2)(buffer - bfp->buffer + l);
+	bfp->pos_links[bfp->n_links] = (buffer - bfp->buffer + l);
 	bfp->links[bfp->n_links] = StringSave(str);
 	bfp->n_links++;
 	return;
@@ -597,7 +600,7 @@ NLM_EXTERN void LIBCALL AddLinkLater (CharPtr str, Int2 prevlen)
 	Int2 		increment_string=0;
 	Int4		l;
 	CharPtr PNTR buf_links;
-	Int2 PNTR	buf_pos;
+	Int4 PNTR	buf_pos;
 	BuffStructPtr bfp;
 
 	bfp = GetBuffStruct();
@@ -733,6 +736,20 @@ NLM_EXTERN void LIBCALL ChangeStringWithTildes (CharPtr string)
 
 }	/* ChangeStringWithTildes */
 	
+NLM_EXTERN void LIBCALL ff_RecalculateLinks(Int4 indent) {
+    BuffStructPtr bfp = GetBuffStruct();
+    Int4 len = (bfp->byte_sp == NULL) ? 0 : BSLen(bfp->byte_sp);
+    Int2 i;
+
+    for ( i = bfp->n_links - 1; i >= 0; --i ) {
+        if ( bfp->pos_links[i] + 1 >= len ) { 
+            bfp->pos_links[i] += indent;
+        } else {
+            break;
+        }
+    }
+}
+
 NLM_EXTERN CharPtr LIBCALL CheckBufferState(Int2Ptr increment_string, Char next_char)
 
 {
@@ -744,6 +761,7 @@ NLM_EXTERN CharPtr LIBCALL CheckBufferState(Int2Ptr increment_string, Char next_
 	Int2 length, cont_indent, indent_space; 
 	Int2 line_max, line_index;
 	BuffStructPtr bfp;
+    Int2 IndentSize = 0;
 
 	bfp = GetBuffStruct();
 	cont_indent = bfp->cont_indent;
@@ -839,7 +857,8 @@ up on the next line and really looks stupid.			*/
 				}
 				buf_ptr_start[0] = '\0';
 			}
-
+            
+            
 			FlushBuffer();
 			if (line_prefix != NULL) {
 				*buffer = *line_prefix;
@@ -852,12 +871,14 @@ up on the next line and really looks stupid.			*/
 			if (indent_space > 0)
 				MemSet((VoidPtr) buffer, ' ', indent_space);
 			buffer += indent_space;
+            IndentSize = buffer - bfp->buffer + 1;
 			temp_ptr = temp_ptr_start;
 			while((*buffer = *temp_ptr) != '\0') {
 				temp_ptr++;
 				buffer++;
 			}
-		
+		    
+            ff_RecalculateLinks(IndentSize);
 			return buffer;
 		} else if (next_char == ' ') {
 			FlushBuffer();
@@ -871,13 +892,16 @@ up on the next line and really looks stupid.			*/
 			}
 			if (indent_space-1 > 0) {
 				MemSet((VoidPtr) buffer, ' ', indent_space-1);
+                ff_RecalculateLinks(buffer+indent_space-1 - bfp->buffer);
 				return buffer+indent_space-1;
 			} else if (indent_space-1 == 0) {
 			/* if there is one space indentation! */
+                ff_RecalculateLinks(buffer - bfp->buffer);
 				return buffer;
 			} else if (indent_space-1 < 0) {
 			/* if there is zero space indentation! */
 				*increment_string = 1;
+                ff_RecalculateLinks(buffer - bfp->buffer);
 				return buffer;
 			}
 		} else { 
@@ -893,6 +917,7 @@ up on the next line and really looks stupid.			*/
 			if (indent_space > 0) {
 				MemSet((VoidPtr) buffer, ' ', indent_space);
 			}
+            ff_RecalculateLinks(buffer +indent_space - bfp->buffer);
 			return buffer+indent_space;
 		}
 	}

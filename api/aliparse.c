@@ -2968,6 +2968,8 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
          buf[ctr] = '\0';
       }
       sip = MakeSeqID(iip->id);
+      SeqIdSetFree(sip->next);
+      sip->next = NULL;
       deflines[i] = StringSave(iip->defline);
       if (sip_prev != NULL)
       {

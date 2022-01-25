@@ -5,7 +5,7 @@
 *       check for stop codons
 *       Check for and fix non 3.0 asn spec things
 *
-* $Id: rtestval.c,v 1.5 2002/04/17 20:22:19 kans Exp $
+* $Id: rtestval.c,v 1.6 2002/06/26 18:49:38 kans Exp $
 *
 *****************************************************************************/
 #include <accid1.h>
@@ -122,6 +122,10 @@ Int2 Main(void)
 		while (! found)
 		{
 			tmp = AsnIoGets(aip);
+			if (tmp == NULL) {
+			  printf("Unable to read file\n");
+			  return 0;
+			}
 			*(aip->buf + aip->offset -1) = '\0';
 			if (strstr(tmp, "Seq-submit") != NULL)
 			{

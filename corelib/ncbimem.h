@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   	prototypes for ncbi memory functions
@@ -40,6 +40,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.h,v $
+* Revision 6.10  2002/07/11 15:06:43  ivanov
+* Fixed C++ comments
+*
+* Revision 6.9  2002/07/10 20:24:44  ivanov
+* Added functions Nlm_MemMapAdvise(), Nlm_MemMapAdvisePtr()
+*
+* Revision 6.8  2002/06/03 16:31:04  coulouri
+* FreeBSD has mmap()
+*
 * Revision 6.7  2002/02/07 14:41:19  ivanov
 * Added MemSearch()
 *
@@ -229,7 +238,7 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 #define HandLock    Nlm_HandLock
 #define HandUnlock  Nlm_HandUnlock
 
-#if (defined(OS_UNIX_SYSV) || defined(OS_UNIX_SUN) || defined(OS_UNIX_OSF1) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_AIX) || defined(OS_UNIX_DARWIN)) && !defined(OS_UNIX_ULTRIX)
+#if (defined(OS_UNIX_SYSV) || defined(OS_UNIX_SUN) || defined(OS_UNIX_OSF1) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_AIX) || defined(OS_UNIX_DARWIN)) && !defined(OS_UNIX_ULTRIX) || defined(OS_UNIX_FREEBSD)
 #define MMAP_AVAIL
 #endif
 
@@ -279,7 +288,6 @@ typedef struct _nlm_mem_map
   Nlm_CharPtr mmp_begin;
 } Nlm_MemMap, PNTR Nlm_MemMapPtr;
 
-
 /* Determine if memory-mapping is supported by the NCBI toolkit
  */
 NLM_EXTERN Nlm_Boolean Nlm_MemMapAvailable(void);
@@ -295,6 +303,22 @@ NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name);
 /* Close the memory mapping
  */
 NLM_EXTERN void Nlm_MemMapFini(Nlm_MemMapPtr mem_mapp);
+
+
+/* Advises the VM system that the a certain region of user mapped memory 
+   will be accessed following a type of pattern. The VM system uses this 
+   information to optimize work wih mapped memory.
+ */
+typedef enum {
+  eMMA_Normal,		/* No further special threatment     */
+  eMMA_Random,		/* Expect random page references     */
+  eMMA_Sequential,	/* Expect sequential page references */
+  eMMA_WillNeed,	/* Will need these pages             */
+  eMMA_DontNeed		/* Don't need these pages            */
+} EMemMapAdvise;
+
+Nlm_Boolean Nlm_MemMapAdvise(void* addr, size_t len, EMemMapAdvise advise);
+Nlm_Boolean Nlm_MemMapAdvisePtr(Nlm_MemMapPtr ptr, EMemMapAdvise advise);
 
 
 #ifdef __cplusplus

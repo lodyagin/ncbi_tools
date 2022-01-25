@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -1420,6 +1420,7 @@ extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
 
 {
   CharPtr     expanded;
+  ErrSev      msg_level;
   CharPtr     name1;
   CharPtr     name2;
   ErrMsgNode  *node1;
@@ -1430,6 +1431,7 @@ extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
   if (err != NULL) {
     /* FileOpen report matches ERR_SEQ_DESCR_FileOpenCollision instead of ERR_SEQ_DESCR_Inconsistent */
     if (err->errcode == E_File && err->subcode == E_FOpen) return 1;
+    msg_level = ErrGetMessageLevel ();
     name1 = NULL;
     name2 = NULL;
     if (err->module [0] != '\0') {
@@ -1451,6 +1453,8 @@ extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
     if (sev < SEV_NONE || sev > SEV_MAX) {
       sev = SEV_MAX;
     }
+    /* suppress if severity is less than message level */
+    if (sev < msg_level) return 1;
     expanded = (CharPtr) ErrGetExplanation (err->root, err->node);
     AppendValidMessage (severityLabel [sev], name1, name2,
                         (ErrSev) err->severity, err->errcode, err->subcode,

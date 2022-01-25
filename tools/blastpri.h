@@ -32,8 +32,36 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.95 $ 
+/* $Revision: 6.103 $ 
 * $Log: blastpri.h,v $
+* Revision 6.103  2002/08/01 20:45:35  dondosha
+* Changed prototype of the BLASTPostSearchLogic function to make it
+* more convenient
+*
+* Revision 6.102  2002/07/09 16:09:42  camacho
+* Changed interface to BlastCreateVirtualOIDList
+*
+* Revision 6.101  2002/06/26 00:56:29  camacho
+*
+* 1. Fixed bug when searching a mixture of real and mask databases.
+* 2. Clean up of code that calculates the number of sequences and database
+*    length.
+*
+* Revision 6.100  2002/06/25 19:46:07  camacho
+* Added PROTO around function declaration
+*
+* Revision 6.99  2002/06/25 19:39:38  camacho
+* Made BlastCreateVirtualOIDList public for use by neighboring software
+*
+* Revision 6.98  2002/06/21 21:43:01  camacho
+* Removed obsolete BlastSeqIdList structure and functions
+*
+* Revision 6.97  2002/06/19 22:50:33  dondosha
+* Added all queries information for tabular output with multiple queries
+*
+* Revision 6.96  2002/06/11 14:44:48  dondosha
+* Return status from some functions instead of search block pointer
+*
 * Revision 6.95  2002/04/18 16:18:20  dondosha
 * Added BlastPrintTabulatedResultsEx with extra argument to keep track of progress
 *
@@ -677,9 +705,9 @@ Int2 LIBCALL BlastReapHitlistByEvalue PROTO ((BlastSearchBlkPtr search));
 
 Int4 LIBCALL BlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
 
-BlastSearchBlkPtr LIBCALL BLASTPerformSearchWithReadDb PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
+Int2 LIBCALL BLASTPerformSearchWithReadDb PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
-BlastSearchBlkPtr LIBCALL BLASTPerformSearch PROTO((BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subject_seq));
+Int2 LIBCALL BLASTPerformSearch PROTO((BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subject_seq));
 
 BLASTResultsStructPtr LIBCALL BLASTResultsStructDelete PROTO((BLASTResultsStructPtr result_struct));
 
@@ -833,13 +861,18 @@ BlastAllWordPtr BlastPopulateAllWordArrays PROTO((Int4 wordsize, Int4 alphabet_s
 
 Uint1Ptr BlastGetSequenceFromBioseq PROTO((BioseqPtr bsp, Int4Ptr length));
 
+#if 0 /* deprecated */
 BlastSeqIdListPtr BlastSeqIdListNew PROTO((void));
 BlastSeqIdListPtr BlastSeqIdListDestruct PROTO((BlastSeqIdListPtr seqid_list));
+#endif
+
+/* Retrieve the virtual oidlist from rdfp_chain */
+OIDListPtr LIBCALL BlastGetVirtualOIDList PROTO((ReadDBFILEPtr rdfp_chain));
 
 Boolean BlastAdjustDbNumbers PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total));
 
 BlastGiListPtr BlastGiListDestruct PROTO((BlastGiListPtr blast_gi_list, Boolean contents));
-BlastGiListPtr BlastGiListNew PROTO((BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 total));
+BlastGiListPtr BlastGiListNew PROTO((BlastDoubleInt4Ptr gi_list, Int4 total));
 
 
 ScorePtr LIBCALL GetScoreSetFromBlastResultHsp PROTO((BLASTResultHspPtr hsp, SeqIdPtr gi_list));
@@ -941,16 +974,34 @@ StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length,
 
 int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
-void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp));
-void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr
-                                         query_bsp, SeqLocPtr query_slp, Int4
-                                         num_alignments, CharPtr blast_program,
-                                         Boolean is_ungapped, Boolean
-                                         believe_query, Int4 q_shift, Int4
-                                         s_shift, FILE *fp, int *num_formatted));
+void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, Boolean print_query_info));
+void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, Boolean print_query_info));
 void
-BlastProcessGiLists PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
-                           BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size));
+BlastProcessGiLists PROTO((BlastSearchBlkPtr search, 
+            BLAST_OptionsBlkPtr options, BlastDoubleInt4Ptr gi_list, 
+            Int4 gi_list_size));
+
+/* Purpose: Create the virtual oidlist that ultimately will limit the 
+ * blast search being set up. This will be an intersection of the bglp
+ * parameter as well as any oidlists attached to the rdfp_chain.
+ *
+ * Parameters: 
+ * bglp: The gi list to limit the search (this will be freed this by this
+ * function)
+ * rdfp_chain: The head of the rdfp list that will be searched.
+ * oidlist_for_all_rdfp: if true, the virtual oidlist will be attached to the
+ * beginning of the rdfp_chain, else it will be attached to the first rdfp in
+ * rdfp_chain that had an oidlist (and therefore covering all remaining
+ * rdfps).
+ * options: the blast options structure (see comments in blastool.c).
+ * 
+ * Return value:
+ * The intersection of the bglp parameter and any oidlists attached to the
+ * rdfp_chain. */
+BlastGiListPtr BlastCreateVirtualOIDList PROTO((BlastGiListPtr bglp, 
+                                         ReadDBFILEPtr rdfp_chain,
+                                         Boolean oidlist_forall_rdfp, 
+                                         BLAST_OptionsBlkPtr options));
 Boolean FastaCheckDna PROTO((CharPtr seq));
 BLASTHSPSegmentPtr BLASTHSPSegmentFromSeqAlign PROTO((SeqAlignPtr sap));
 SeqAlignPtr BlastClusterHitsFromSeqAlign PROTO((SeqAlignPtr seqalign, CharPtr prog_name, CharPtr database, BLAST_OptionsBlkPtr options, FloatHi length_thresh, FloatHi score_thresh, FloatHi overlap_thresh, Boolean two_sided));
@@ -958,7 +1009,9 @@ SeqAlignPtr RedoAlignmentCore PROTO((BlastSearchBlkPtr search,
   BLAST_OptionsBlkPtr options, Int4 hitlist_count, Boolean adjustParameters,
   Boolean SmithWaterman));
 void BLASTResultFreeHsp PROTO((BLASTResultHitlistPtr result));
-SeqAlignPtr BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search,BLAST_OptionsBlkPtr options));
+void BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr
+                                 options, SeqAlignPtr PNTR seqalignp,
+                                 Boolean single_chain));
 Boolean
 BlastNtWordUngappedExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, 
                                  Int4 s_off, Int4 cutoff));
@@ -977,6 +1030,10 @@ Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
 
 /*return query fasta style title(id+title). New memory was allocated for this title*/
 CharPtr getFastaStyleTitle(BioseqPtr bsp);
+
+#ifdef SPLIT_BLAST
+CharPtr load_options_to_buffer(CharPtr instructions, CharPtr buffer);
+#endif
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
-#ifndef NCBI_SENDMAIL__H
-#define NCBI_SENDMAIL__H
+#ifndef CONNECT___NCBI_SENDMAIL__H
+#define CONNECT___NCBI_SENDMAIL__H
 
-/*  $Id: ncbi_sendmail.h,v 6.4 2001/07/10 15:07:51 lavr Exp $
+/*  $Id: ncbi_sendmail.h,v 6.8 2002/08/14 18:51:33 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,23 +29,8 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *    Send mail (with accordance to RFC821 [protocol] and RFC822 [headers])
+ *    Send mail (in accordance with RFC821 [protocol] and RFC822 [headers])
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_sendmail.h,v $
- * Revision 6.4  2001/07/10 15:07:51  lavr
- * More comments added
- *
- * Revision 6.3  2001/03/01 01:03:46  lavr
- * SendMailInfo_Init got extern
- *
- * Revision 6.2  2001/02/28 18:13:02  lavr
- * Heavily documented
- *
- * Revision 6.1  2001/02/28 00:52:37  lavr
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include <connect/ncbi_core.h>
@@ -57,7 +42,7 @@ extern "C" {
 
 
 /* Default values for the structure below */
-#define MX_HOST         "ncbi"
+#define MX_HOST         "mailgw.ncbi.nlm.nih.gov"
 #define MX_PORT         25
 #define MX_TIMEOUT      120
 
@@ -77,23 +62,23 @@ typedef struct {
 
 
 /* NOTE about recipient lists:
- * They are not parsed; valid recipient (according to a standard)
+ * They are not parsed; valid recipient (according to the standard)
  * can be specified in the form "Name" <address>; recipients should
  * be separated by commas. In case of address-only recipients (no "Name"
- * part as above), angle brackets around address may be omitted.
+ * part above), angle brackets around the address may be omitted.
  */
 
 
 /* Initialize SSendMailInfo structure, setting:
- *   'magic_number' to proper value (verified by CORE_SendMailEx()!);
+ *   'magic_number' to a proper value (verified by CORE_SendMailEx()!);
  *   'cc', 'bcc', 'header' to NULL (means no recipients/additional headers);
- *   'from' is filled out using current user name (if discovered, 'anonymous'
+ *   'from' filled out using the current user name (if discovered, 'anonymous'
  *          otherwise) and host in the form: username@hostname; may be later
- *          reset by application to "" for sending no-return messages
+ *          reset by the application to "" for sending no-return messages
  *          (aka MAILER-DAEMON messages);
- *   'mx_*' filled out with accordance to corresponding macros defined above;
+ *   'mx_*' filled out in accordance with corresponding macros defined above;
  *          application may choose different values afterwards.
- * Return value equals passed argument.
+ * Return value equals the argument passed in.
  * Note: This call is the only valid way to init SSendMailInfo.
  */
 extern SSendMailInfo* SendMailInfo_Init(SSendMailInfo* info);
@@ -126,4 +111,35 @@ extern const char* CORE_SendMailEx(const char* to,
 }  /* extern "C" */
 #endif
 
-#endif /* NCBI_SENDMAIL__H */
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_sendmail.h,v $
+ * Revision 6.8  2002/08/14 18:51:33  lavr
+ * Change MX from "nes" to more generic mail hub "mailgw.ncbi.nlm.nih.gov"
+ *
+ * Revision 6.7  2002/08/14 16:38:55  lavr
+ * Change default MX from "ncbi" to "nes"
+ *
+ * Revision 6.6  2002/06/12 20:07:32  lavr
+ * Tiny correction of file description
+ *
+ * Revision 6.5  2002/06/12 19:20:12  lavr
+ * Few patches in comments; guard macro name standardized; log moved down
+ *
+ * Revision 6.4  2001/07/10 15:07:51  lavr
+ * More comments added
+ *
+ * Revision 6.3  2001/03/01 01:03:46  lavr
+ * SendMailInfo_Init got extern
+ *
+ * Revision 6.2  2001/02/28 18:13:02  lavr
+ * Heavily documented
+ *
+ * Revision 6.1  2001/02/28 00:52:37  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */
+
+#endif /* CONNECT___NCBI_SENDMAIL__H */
