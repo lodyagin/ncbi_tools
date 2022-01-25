@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.565 $
+* $Revision: 6.576 $
 *
 * File Description: 
 *
@@ -427,7 +427,6 @@ extern void FindGeneAndProtForCDS (Uint2 entityID, SeqFeatPtr cds,
 extern void ExportAlignmentInterleave (IteM i);
 extern void ExportAlignmentContiguous (IteM i);
 extern void FixFeatureIntervals (IteM i);
-extern void ConvertInnerCDSsToProteinFeatures (IteM i);
 extern void CombineMultipleCDS (IteM i);
 
 extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype);
@@ -728,9 +727,6 @@ extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname);
 extern void MergeToPartsJoin (IteM i);
 extern void MergeToPartsOrdered (IteM i);
 
-extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userdata);
-extern void MergeCDS (IteM i);
-
 extern void InitValNodePopup (ValNodePtr list, PopuP p);
 extern Int2 GetValNodePopup (PopuP p, ValNodePtr list);
 extern void SetValNodePopupValue (ValNodePtr list, PopuP p, CharPtr val);
@@ -789,22 +785,11 @@ extern void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID,
 
 extern Boolean AlistMessage (EnumFieldAssocPtr al, UIEnumPtr val, UIEnum dflt, CharPtr mssg);
 
-typedef struct loginfo 
-{
-  FILE *fp;
-  Boolean data_in_log;
-  CharPtr display_title;
-  Char path[PATH_MAX];  
-} LogInfoData, PNTR LogInfoPtr;
-
-extern LogInfoPtr OpenLog (CharPtr display_title);
-extern void CloseLog (LogInfoPtr lip);
-extern LogInfoPtr FreeLog (LogInfoPtr lip);
-
 extern void LogCDSAmbiguousFrame (LogInfoPtr lip, SeqFeatPtr sfp);
 
 extern void LoadGenomeProjectIDsFromFile (IteM i);
 extern void RemoveEmptyGenomeProjectIDs (IteM i);
+extern void RemoveGenomeProjectIDs (IteM i);
 
 extern CharPtr SourceQualValNodeName (ValNodePtr vnp);
 extern ValNodePtr SourceQualValNodeDataCopy (ValNodePtr vnp);
@@ -1370,7 +1355,6 @@ extern void ApplyGDSKeyword (IteM i);
 extern void ApplyTPAInferentialKeyword (IteM i);
 extern void ApplyTPAExperimentalKeyword (IteM i);
 extern void ApplyTPAReassemblyKeyword (IteM i);
-extern void ApplyKeywordWithStringConstraint (IteM i);
 extern void RemoveKeywordWithStringConstraint (IteM i);
 
 #if defined(OS_UNIX) || defined(OS_MSWIN)
@@ -1827,6 +1811,22 @@ extern void BioseqRevCompByIDMenuItem (IteM i);
 extern void RemoveSetsInSetMenuItem (IteM i);
 
 extern void LoadTaxTableReader (IteM i);
+extern void RemoveContigFromScaffoldMenuItem (IteM i);
+
+NLM_EXTERN void LIBCALLBACK SequesterSequenceList (Uint2 entityID, ValNodePtr bsp_list);
+NLM_EXTERN Boolean OkToSequester (void);
+
+extern void ConvertRptUnitRangeToLocation (IteM i);
+extern void RetranscribemRNA (IteM i);
+extern void 
+ReplaceComplexLocation 
+(SeqLocPtr   slp,
+ SeqAlignPtr salp,
+ Int4        new_len,
+ Int4        begin,
+ Int4        fin);
+
+NLM_EXTERN void CleanupCDD (IteM i);
 
 #ifdef OS_MSWIN
 NLM_EXTERN Int4 RunSilent(const char *cmdline);

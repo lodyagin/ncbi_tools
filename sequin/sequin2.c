@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.663 $
+* $Revision: 6.667 $
 *
 * File Description: 
 *
@@ -324,7 +324,6 @@ static IDAndTitleEditPtr SeqEntryListToIDAndTitleEditEx (SeqEntryPtr list, Boole
   IDAndTitleEditPtr iatep;
   Int4              num_sequences, i;
   BioseqPtr         bsp;
-  Char              id_str [128];  
   SeqDescrPtr       sdp;
   SeqIdPtr          sip;
   
@@ -352,11 +351,10 @@ static IDAndTitleEditPtr SeqEntryListToIDAndTitleEditEx (SeqEntryPtr list, Boole
       if (sip != NULL)
       {
         if (sip->choice == SEQID_LOCAL) {
-          SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str) - 1);  
+          iatep->id_list [i] = SeqIdWholeLabel (sip, PRINTID_REPORT);
         } else {
-          SeqIdWrite (sip, id_str, PRINTID_FASTA_SHORT, sizeof (id_str) - 1);
+          iatep->id_list [i] = SeqIdWholeLabel (sip, PRINTID_FASTA_SHORT);
         }
-        iatep->id_list [i] = StringSave (id_str);  
       }
       sdp = bsp->descr;
       while (sdp != NULL && sdp->choice != Seq_descr_title)
@@ -4030,7 +4028,7 @@ static Boolean HasNoSeqID (SeqEntryPtr sep)
 static void PutDeflineIDBackInTitle (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
-  Char        id_txt [128];
+  CharPtr     id_txt;
   CharPtr     title_txt;
   
   if (bsp == NULL || bsp->id == NULL)
@@ -4051,13 +4049,13 @@ static void PutDeflineIDBackInTitle (BioseqPtr bsp)
   {
     return;
   }
-    
-  SeqIdWrite (bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+  
+  id_txt = SeqIdWholeLabel (bsp->id, PRINTID_REPORT);
   
   if (StringHasNoText (sdp->data.ptrvalue))
   {
     sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-    sdp->data.ptrvalue = StringSave (id_txt);
+    sdp->data.ptrvalue = id_txt;
   }
   else
   {
@@ -4067,6 +4065,7 @@ static void PutDeflineIDBackInTitle (BioseqPtr bsp)
     StringCat (title_txt, sdp->data.ptrvalue);
     sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
     sdp->data.ptrvalue = title_txt;
+    id_txt = MemFree (id_txt);
   }
   
   bsp->id = SeqIdFree (bsp->id);  
@@ -5092,7 +5091,7 @@ static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
 
 static void ExportSeqIdAndTitle (SeqIdPtr sip, CharPtr title, FILE *fp)
 {
-  Char id_str[128];
+  CharPtr id_str = NULL;
 
   if (fp == NULL)
   {
@@ -5100,9 +5099,13 @@ static void ExportSeqIdAndTitle (SeqIdPtr sip, CharPtr title, FILE *fp)
   }
   
   id_str [0] = 0;
-  if (sip != NULL)
+  if (sip == NULL)
   {
-    SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
+    id_str = StringSave ("unknown_id");
+  }
+  else
+  {
+    id_str = SeqIdWholeLabel (sip, PRINTID_REPORT);
   }
   
   if (StringCSpn (id_str, " \t") == StringLen (id_str))
@@ -5113,6 +5116,7 @@ static void ExportSeqIdAndTitle (SeqIdPtr sip, CharPtr title, FILE *fp)
   {
     fprintf (fp, ">'%s' %s\n", id_str, title == NULL ? "" : title);
   }
+  id_str = MemFree (id_str);
 }
 
 static void ExportSeqPort (Int4 from, Int4 to, SeqPortPtr spp, FILE *fp)
@@ -7536,7 +7540,7 @@ static void BuildTree (IdListPtr PNTR head, BioseqPtr bsp, CharPtr x)
   Int2       comp;
   IdListPtr  idlist;
   SeqIdPtr   sip;
-  Char       str [64];
+  CharPtr    str;
 
   if (*head != NULL) {
     idlist = *head;
@@ -7551,9 +7555,9 @@ static void BuildTree (IdListPtr PNTR head, BioseqPtr bsp, CharPtr x)
         bsp->id = SeqIdFree (bsp->id);
         bsp->id = sip;
         SeqMgrReplaceInBioseqIndex (bsp);
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+        str = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
         BuildTree (head, bsp, str);
+        str = MemFree (str);
       }
     }
   } else {
@@ -7561,9 +7565,7 @@ static void BuildTree (IdListPtr PNTR head, BioseqPtr bsp, CharPtr x)
     if (idlist != NULL) {
       *head = idlist;
       idlist->bsp = bsp;
-      sip = SeqIdFindWorst (bsp->id);
-      SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
-      idlist->key = StringSave (str);
+      idlist->key = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
       idlist->left = NULL;
       idlist->right = NULL;
     }
@@ -7588,17 +7590,16 @@ static void ResolveCollidingIDs (IdListPtr PNTR head, SeqEntryPtr list)
 
 {
   BioseqPtr  bsp;
-  SeqIdPtr   sip;
-  Char       str [64];
+  CharPtr    str;
 
   if (head == NULL) return;
   while (list != NULL) {
     if (IS_Bioseq (list)) {
       bsp = (BioseqPtr) list->data.ptrvalue;
       if (bsp != NULL) {
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+        str = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
         BuildTree (head, bsp, str);
+        str = MemFree (str);
       }
     }
     list = list->next;
@@ -8466,7 +8467,7 @@ static SeqEntryPtr FindSeqEntryWithTranscriptID (SeqEntryPtr sep, CharPtr transc
   SeqEntryPtr  found_sep = NULL;
   BioseqPtr    nbsp;
   SeqIdPtr     sip, sip_next;
-  Char         tmp [128];
+  CharPtr      tmp;
   BioseqSetPtr bssp;
   
   if (IS_Bioseq (sep))
@@ -8476,12 +8477,13 @@ static SeqEntryPtr FindSeqEntryWithTranscriptID (SeqEntryPtr sep, CharPtr transc
     {
       sip_next = sip->next;
       sip->next = NULL;
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+      tmp = SeqIdWholeLabel (sip, PRINTID_REPORT);
       sip->next = sip_next;
       if (StringCmp (tmp, transcript_id) == 0)
       {
         found_sep = sep;
       }
+      tmp = MemFree (tmp);
     }
   }
   else
@@ -8694,6 +8696,27 @@ static Boolean FindFeaturesInIdenticalRegions (NucProtAssocPtr assoc_list)
   return found_any;
 }
 
+
+static Int2 GetGeneticCodeFromBioseq (BioseqPtr bsp)
+{
+  Int2 code = 1;
+  SeqDescrPtr sdp;
+  SeqMgrDescContext context;
+  CharPtr location;
+
+  if (bsp != NULL) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &context);
+    if (sdp != NULL) {
+      location = FindValueFromPairInDeflineBeforeCharPtr ("location", sdp->data.ptrvalue, NULL);
+      if (!StringHasNoText (location)) {      
+        code = UseGeneticCodeForLocation (location);
+      }
+    }
+  }
+  return code;
+}
+
+
 /* This function takes a ValNode list where each ValNode represents
  * a protein in prot_list (in order).  The choice for each ValNode
  * represents the position of the chosen nucleotide in the nuc_list
@@ -8707,8 +8730,7 @@ static Boolean
 PickCodingRegionLocationsForProteinNucleotidePairs 
 (NucProtAssocPtr  assoc_list,
  SeqEntryPtr nuc_list,
- SeqEntryPtr prot_list,
- Int2        code)
+ SeqEntryPtr prot_list)
 {
   NucProtAssocPtr vnp_assoc;
   Int4       data_row;
@@ -8719,6 +8741,7 @@ PickCodingRegionLocationsForProteinNucleotidePairs
   Boolean    errors_found = FALSE;
   Char       n_idstr[128];
   Char       p_idstr[128];
+  Int2       code;
   
   if (assoc_list == NULL || nuc_list == NULL || prot_list == NULL)
   {
@@ -8751,6 +8774,7 @@ PickCodingRegionLocationsForProteinNucleotidePairs
         errors_found = TRUE;
         slp = NULL;
       } else {
+        code = GetGeneticCodeFromBioseq (nbsp);
         slp = DefaultPairInterval (nbsp, pbsp, code);
       }
     }
@@ -9585,8 +9609,7 @@ CollectNucleotideProteinAssociations
       {
         if (!PickCodingRegionLocationsForProteinNucleotidePairs (nped.assoc_list,
                                                                  nuc_list,
-                                                                 prot_list,
-                                                                 1)) 
+                                                                 prot_list)) 
         {
           if (ANS_NO == Message (MSG_YN, "Some nucleotides are too short to encode the selected proteins.  These proteins will be discarded.  Do you wish to continue?")) 
           {
@@ -9816,8 +9839,7 @@ AssignProteinsForSequenceSet
   if (!always_review && all_provided) {
     if (!PickCodingRegionLocationsForProteinNucleotidePairs (assoc_list,
                                                              nuc_list,
-                                                             prot_list,
-                                                             1)) {
+                                                             prot_list)) {
       always_review = TRUE;
     } else if (FindFeaturesInIdenticalRegions (assoc_list)) {
       always_review = TRUE;
@@ -14547,7 +14569,7 @@ static GrouP MakeGeneticCodeInstructionGroup (GrouP parent)
   instr_grp = HiddenGroup (parent, 1, 0, NULL);
   StaticPrompt (instr_grp, "Please choose the translation table for your sequence.",
                 0, 0, programFont, 'l');
-  StaticPrompt (instr_grp, "Examples: Standard, Bacterial and Plant Plastid, Vertebrate Mitochondrial",
+  StaticPrompt (instr_grp, "Examples: Standard, Bacterial, Archaeal and Plant Plastid, Vertebrate Mitochondrial",
                 0, 0, programFont, 'l');
   
   return instr_grp;
@@ -16286,7 +16308,6 @@ ContinueWithAutopopulatedGeneticCodes
   ValNodePtr  autopop_list = NULL, already_have = NULL;
   SeqEntryPtr sep, nuc_sep;
   BioseqPtr   bsp;
-  Char        id_txt [128];
   Int4        j;
   CharPtr     list_msg = NULL;
   Int4        num_sequences = 0;
@@ -16340,9 +16361,7 @@ ContinueWithAutopopulatedGeneticCodes
       {
         if (bsp != NULL)
         {
-          SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT,
-                      sizeof (id_txt));
-          ValNodeAddPointer (&autopop_list, 0, StringSave (id_txt));
+          ValNodeAddPointer (&autopop_list, 0, SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT));
         }
       }
       else
@@ -16350,9 +16369,7 @@ ContinueWithAutopopulatedGeneticCodes
         gcode_name = GetModValueFromSeqEntry (sep, "genetic_code");
         if (!StringHasNoText (gcode_name))
         {
-          SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT,
-                      sizeof (id_txt));
-          ValNodeAddPointer (&already_have, 0, StringSave (id_txt));
+          ValNodeAddPointer (&already_have, 0, SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT));
         }
         gcode_name = MemFree (gcode_name);
       }
@@ -17779,9 +17796,8 @@ static ValNodePtr PrepareSequenceAssistantTableData (SequenceAssistantPtr sap)
   Int4               max_column_width = 20;
   SeqEntryPtr        sep, nsep;
   BioseqPtr          bsp;
-  SeqIdPtr           sip;
   Char               tmp[128];
-  CharPtr            ttl = NULL;
+  CharPtr            ttl = NULL, id;
   CharPtr            valstr;
   
   if (sap == NULL)
@@ -17825,12 +17841,11 @@ static ValNodePtr PrepareSequenceAssistantTableData (SequenceAssistantPtr sap)
     
     /* add Sequence ID */
     header_vnp = header_list;
-    sip = SeqIdFindWorst (bsp->id);
-    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp) - 1);    
-    column_width = MAX (StringLen (tmp), header_vnp->choice);
+    id = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
+    column_width = MAX (StringLen (id), header_vnp->choice);
     column_width = MIN (column_width, max_column_width);
     header_vnp->choice = column_width;
-    ValNodeAddPointer (&column_list, 0, StringSave (tmp));
+    ValNodeAddPointer (&column_list, 0, id);
       
     /* add length */
     header_vnp = header_vnp->next;
@@ -19803,6 +19818,7 @@ static Boolean ListIDCorrections
    
     len = StringLen (doc_txt_fmt) 
                      + StringLen (suggested->id_list [seq_num]) 
+                     + StringLen (iatep->id_list[seq_num])
                      + StringLen (str)
                      + 15
                      + StringLen (iatep->title_list [seq_num]);
@@ -23041,7 +23057,6 @@ static void EditOneSequenceTitle (SequenceAssistantPtr sap, Int4 seq_num)
   CharPtr               title = NULL;
   BioseqPtr             bsp = NULL;
   CharPtr               title_fmt = "Title for %s";
-  Char                  id_txt [128];
   GrouP                 h, g, c, err_grp;
   ButtoN                b;
   ModalAcceptCancelData acd;
@@ -23096,8 +23111,7 @@ static void EditOneSequenceTitle (SequenceAssistantPtr sap, Int4 seq_num)
   ted.iatep->num_sequences = 1;
   ted.iatep->id_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
   ted.iatep->title_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  ted.iatep->id_list [0] = StringSave (id_txt);
+  ted.iatep->id_list [0] = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
   if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
   {
     ted.iatep->title_list [0] = StringSave (sdp->data.ptrvalue);
@@ -23108,8 +23122,8 @@ static void EditOneSequenceTitle (SequenceAssistantPtr sap, Int4 seq_num)
   }  
   
   title = (CharPtr) MemNew ((StringLen (title_fmt) 
-                               + StringLen (id_txt)) * sizeof (Char));
-  sprintf (title, title_fmt, id_txt);
+                               + StringLen (ted.iatep->id_list [0])) * sizeof (Char));
+  sprintf (title, title_fmt, ted.iatep->id_list [0]);
   w = MovableModalWindow (-20, -13, -10, -10, title, NULL);
   title = MemFree (title);
   
@@ -24046,8 +24060,7 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
   ted.iatep->num_sequences = 1;
   ted.iatep->id_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
   ted.iatep->title_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  ted.iatep->id_list [0] = StringSave (id_txt);
+  ted.iatep->id_list[0] = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
   
   ttl = NULL;
   SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
@@ -24673,8 +24686,7 @@ SequenceAssistantValidateOneBioseqContentAndLength
   CharPtr     seqbuf;
   Boolean     rval = TRUE;
   Int2        seq_num = 0;
-  Char        id_str [128];
-  SeqIdPtr    sip;
+  CharPtr     id_str;
   SeqEntryPtr sep;
   
   if (bsp == NULL || too_short_list == NULL || all_N_list == NULL || all_one_char_list == NULL)
@@ -24686,23 +24698,26 @@ SequenceAssistantValidateOneBioseqContentAndLength
   
   seqbuf = GetSequenceString (sep);
   
-  sip = SeqIdFindWorst (bsp->id);
-  SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
+  id_str = SeqIdWholeLabel (SeqIdFindWorst (bsp->id), PRINTID_REPORT);
 
   if (CountSeqChars (seqbuf) < 50)
   {
-    ValNodeAddPointer (too_short_list, seq_num, StringSave (id_str));
+    ValNodeAddPointer (too_short_list, seq_num, id_str);
     rval = FALSE;
   }
   if (IsSequenceAllNs (seqbuf))
   {
-    ValNodeAddPointer (all_N_list, seq_num, StringSave (id_str));
+    ValNodeAddPointer (all_N_list, seq_num, id_str);
     rval = FALSE;
   }
   else if (IsSequenceAllOneCharacter(seqbuf))
   {
-    ValNodeAddPointer (all_one_char_list, seq_num, StringSave (id_str));
+    ValNodeAddPointer (all_one_char_list, seq_num, id_str);
     rval = FALSE;
+  }
+  else 
+  {
+    id_str = MemFree (id_str);
   }
   seqbuf = MemFree (seqbuf);
   return rval;
@@ -27039,7 +27054,7 @@ static BioseqPtr FindBioseqByIDString (
 {
   BioseqSetPtr      bssp;
   BioseqPtr         bsp;
-  Char              str [128];
+  CharPtr           str;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
   if (IS_Bioseq_set (sep)) {
@@ -27060,9 +27075,12 @@ static BioseqPtr FindBioseqByIDString (
 
   bsp = (BioseqPtr) sep->data.ptrvalue;
   if (bsp == NULL) return NULL;
-  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
-  if (StringCmp (str, seqid) == 0) return bsp;
-  else return NULL;
+  str = SeqIdWholeLabel (bsp->id, PRINTID_REPORT);
+  if (StringCmp (str, seqid) != 0) {
+    bsp = NULL;
+  }
+  str = MemFree (str);
+  return bsp;
 }
 
 
@@ -27492,9 +27510,10 @@ static void AddHistory (
 
 static Boolean DoIDsMatch (CharPtr seqid, BioseqPtr bsp, Boolean AllowLocal)
 {
-  Char         str [128];
+  CharPtr      str;
   Int4         seqid_len;
   SeqIdPtr     sip;
+  Boolean      rval = FALSE;
 
   if (bsp == NULL) return FALSE;
 
@@ -27502,16 +27521,17 @@ static Boolean DoIDsMatch (CharPtr seqid, BioseqPtr bsp, Boolean AllowLocal)
   {
     if (sip->choice != SEQID_LOCAL || AllowLocal)
     {
-      SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+      str = SeqIdWholeLabel (sip, PRINTID_REPORT);
       seqid_len = StringCSpn (str, ".");
       if (seqid_len > 0)
       {
         str [ seqid_len ] = 0;
       }
-      if (StringCmp (str, seqid) == 0) return TRUE;
+      if (StringCmp (str, seqid) == 0) rval = TRUE;
+      str = MemFree (str);
     }
   }
-  return FALSE;
+  return rval;
 }
 
 static Boolean AddAccessionToGenbankBlock (
@@ -27771,6 +27791,50 @@ extern void RemoveEmptyGenomeProjectIDs (IteM i)
   if (sep == NULL) return;
   
   VisitDescriptorsInSep (sep, NULL, RemoveEmptyGenomeProjectIDCallback);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+  return;
+}
+
+
+static void RemoveAllGenomeProjectIDCallback (SeqDescrPtr sdp, Pointer userdata)
+{
+  ObjValNodePtr ovn;
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  
+  if (sdp == NULL || sdp->extended == 0 || sdp->choice != Seq_descr_user) return;
+    
+  if (sdp->data.ptrvalue != NULL) {       
+    uop = (UserObjectPtr) sdp->data.ptrvalue;    
+    oip = uop->type;
+    if (oip != NULL && StringCmp (oip->str, "GenomeProjectsDB") == 0) {
+      ovn = (ObjValNodePtr) sdp;
+      ovn->idx.deleteme = TRUE;
+    }
+  }      
+}
+
+
+extern void RemoveGenomeProjectIDs  (IteM i)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  
+  VisitDescriptorsInSep (sep, NULL, RemoveAllGenomeProjectIDCallback);
 
   DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -29013,13 +29077,11 @@ static Boolean GetRemoveProducts (RemoveSeqFromAlignPtr rp, CharPtr idstr)
 static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp)
 {
   ValNodePtr   product_feature_list = NULL;
-  Char         str [128];
+  CharPtr      str = NULL;
   SeqEntryPtr  sep;
   
   if (bsp == NULL || rp == NULL) return;	
   
-  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
-
   if (IsBioseqInAnyAlignment (bsp, rp->input_entityID))
   {
     if (!rp->remove_all_from_alignments && !rp->no_remove_all_from_alignments) 
@@ -29042,10 +29104,12 @@ static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp)
   VisitFeaturesOnBsp (bsp, &product_feature_list, DoesBioseqHaveFeaturesWithProductsCallback);
   if (product_feature_list != NULL)
   {
+    str = SeqIdWholeLabel (bsp->id, PRINTID_REPORT);
     if (GetRemoveProducts (rp, str))
     {
       RemoveBioseqProducts (product_feature_list, rp);
     }
+    str = MemFree (str);
   }
         
   bsp->idx.deleteme = TRUE;

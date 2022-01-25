@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.10  2009/07/07 20:21:43  ucko
+* Don't bother with #cpu() or #machine() checks, which are redundant and
+* moreover yield noisy deprecation warnings with GCC 4.4.
+*
 * Revision 6.9  2004/01/21 22:31:20  ucko
 * Define PROC_X86_64 on x86-64 systems.
 *
@@ -81,29 +85,29 @@
 #define COMP_SYSV
 #define OS_UNIX
 #define OS_UNIX_LINUX
-#if defined(__alpha__) || #cpu(alpha) || #machine(alpha)
+#if defined(__alpha__)
 #define PROC_ALPHA
-#elif defined(__arm__) || #cpu(arm) || #machine(arm)
+#elif defined(__arm__)
 #define PROC_ARM /* ? (only occurrence) */
-#elif defined(__hppa__) || #cpu(hppa) || #machine(hppa)
+#elif defined(__hppa__)
 #define PROC_HPPA
-#elif defined(__i386__) || #cpu(i386) || #machine(i386)
+#elif defined(__i386__)
 #define PROC_I80X86
-#elif defined(__ia64__) || #cpu(ia64) || #machine(ia64)
+#elif defined(__ia64__)
 #define PROC_IA64 /* ? */
-#elif defined(m68k) || defined(mc68000) || #cpu(m68k) || #machine(m68k)
+#elif defined(m68k) || defined(mc68000)
 #define PROC_MC680X0
-#elif defined(__mips__) || defined(_mips) || #cpu(mips) || #machine(mips)
+#elif defined(__mips__) || defined(_mips)
 #define PROC_MIPS
-#elif defined(__powerpc__) || defined(__PPC__) || #cpu(powerpc) || #machine(powerpc)
+#elif defined(__powerpc__) || defined(__PPC__)
 #define PROC_PPC
-#elif defined(__s390__) || #cpu(s390) || #machine(s390)
+#elif defined(__s390__)
 #define PROC_S390 /* ? */
-#elif defined(__sh__) || #cpu(sh) || #machine(sh)
+#elif defined(__sh__)
 #define PROC_SH /* ? */
-#elif defined(__sparc__) || #cpu(sparc) || #cpu(sparc64) || #machine(sparc) || #machine(sparc64)
+#elif defined(__sparc__)
 #define PROC_SPARC
-#elif defined(__x86_64__) || #cpu(x86_64)
+#elif defined(__x86_64__)
 #define PROC_X86_64
 #else
 #warning Unknown processor type.  Please define something appropriate.

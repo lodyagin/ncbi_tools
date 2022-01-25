@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.296 $
+* $Revision: 6.302 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -3060,13 +3060,17 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
     Int4 i, total, k, old_BioseqIndexCnt;
     SeqIdPtr sip;
     Char buf[80];
+    /*
     CharPtr tmp;
+    */
     Uint1 oldchoice;
     Boolean indexed;
     TextSeqIdPtr tsip;
     SeqMgrPtr smp;
     Int2 version;
     Boolean sort_now = TRUE;
+    TextSeqId tsi;
+    SeqId si;
 
     smp = SeqMgrReadLock();
     if ((! smp->NonIndexedBioseqCnt) ||           /* nothing to index */
@@ -3114,7 +3118,9 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
                     case SEQID_EMBL:
                     case SEQID_DDBJ:
                         oldchoice = sip->choice;
+                        /*
                         sip->choice = SEQID_GENBANK;
+                        */
                     case SEQID_GENBANK:
                     case SEQID_OTHER:
                     case SEQID_TPG:
@@ -3131,6 +3137,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
                     case SEQID_SWISSPROT:
                     case SEQID_PRF:
                         tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+                        /*
                         if (tsip->name != NULL)
                         {
                             tmp = tsip->accession;
@@ -3139,19 +3146,53 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
                             SeqMgrAddIndexElement(smp, bsp, buf,sort_now);
                             tsip->accession = tmp;
                         }
+                        */
+                        /*
                         tmp = tsip->name;
                         tsip->name = NULL;
-                         SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
+                        SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
+                        SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
+                        */
+
+                        MemSet ((Pointer) &tsi, 0, sizeof (TextSeqId));
+                        tsi.name = tsip->name;
+                        tsi.accession = tsip->accession;
+                        tsi.release = tsip->release;
+                        tsi.version = tsip->version;
+                        MemSet ((Pointer) &si, 0, sizeof (SeqId));
+                        si.choice = sip->choice;
+                        if (oldchoice != 0) {
+                          si.choice = SEQID_GENBANK;
+                        }
+                        si.data.ptrvalue = (Pointer) &tsi;
+
+                        if (tsi.name != NULL) {
+                          tsi.accession = NULL;
+                          SeqIdWrite(&si, buf, PRINTID_FASTA_SHORT, 79);
+                          SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
+                          tsi.accession = tsip->accession;
+                        }
+                        tsi.name = NULL;
+                        SeqIdWrite(&si, buf, PRINTID_FASTA_SHORT, 79);
                         SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
                         if (version) {
+                          tsi.version = 0;
+                          SeqIdWrite(&si, buf, PRINTID_FASTA_SHORT, 79);
+                          SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
+                          /*
                           tsip->version = 0;
                           SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
                           SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
                           tsip->version = version;
+                          */
                         }
+                        /*
                         tsip->name = tmp;
+                        */
+                        /*
                         if (oldchoice)
                             sip->choice = oldchoice;
+                        */
                         break;
                     default:
                           SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
@@ -3314,7 +3355,7 @@ NLM_EXTERN Boolean LIBCALL SeqMgrDeleteFromBioseqIndex (BioseqPtr bsp)
 
     /* bail if in bulk deletion of large record */
     if (bsp != NULL) {
-        omdp = bsp->omdp;
+        omdp = SeqMgrGetOmdpForBioseq (bsp);
         if (omdp != NULL && omdp->bulkIndexFree) {
             SeqMgrUnlock();
             return FALSE;
@@ -3393,7 +3434,7 @@ static void MarkSeqForBulkDeletion (
   ObjMgrDataPtr  omdp;
 
   if (bsp == NULL) return;
-  omdp = bsp->omdp;
+  omdp = SeqMgrGetOmdpForBioseq (bsp);
   if (omdp == NULL || omdp->being_freed) return;
   omdp->bulkIndexFree = TRUE;
 }
@@ -3444,7 +3485,7 @@ NLM_EXTERN Boolean LIBCALL SeqMgrDeleteIndexesInRecord (SeqEntryPtr sep)
     for (i = 0; i < num; i++) {
       bsp = bspp [i];
       if (bsp != NULL) {
-        omdp = bsp->omdp;
+        omdp = SeqMgrGetOmdpForBioseq (bsp);
         if (omdp != NULL && omdp->bulkIndexFree) {
           num--;
           for (j = i; j < num; j++) {
@@ -3666,20 +3707,34 @@ static ObjMgrDataPtr SeqMgrGetOmdpForPointer (Pointer ptr)
   return omdp;
 }
 
-extern ObjMgrDataPtr SeqMgrGetOmdpForBioseq (BioseqPtr bsp)
+NLM_EXTERN ObjMgrDataPtr SeqMgrGetOmdpForBioseq (BioseqPtr bsp)
 
 {
-  ObjMgrDataPtr  omdp;
+  ObjMgrDataPtr  omdp = NULL;
   ObjMgrPtr      omp;
 
   if (bsp == NULL) return NULL;
-  omdp = (ObjMgrDataPtr) bsp->omdp;
-  if (omdp != NULL) return omdp;
   omp = ObjMgrWriteLock ();
-  omdp = ObjMgrFindByData (omp, bsp);
+  omdp = (ObjMgrDataPtr) bsp->omdp;
+  if (omdp == NULL) {
+    omdp = ObjMgrFindByData (omp, bsp);
+    bsp->omdp = (Pointer) omdp;
+  }
   ObjMgrUnlock ();
-  bsp->omdp = (Pointer) omdp;
   return omdp;
+}
+
+NLM_EXTERN Pointer SeqMgrGetExtraDataForOmdp (ObjMgrDataPtr omdp)
+
+{
+  Pointer    extradata;
+  ObjMgrPtr  omp;
+
+  if (omdp == NULL) return NULL;
+  omp = ObjMgrWriteLock ();
+  extradata = (Pointer) omdp->extradata;
+  ObjMgrUnlock ();
+  return extradata;
 }
 
 static SeqEntryPtr SeqMgrGetTopSeqEntryForEntity (Uint2 entityID)
@@ -5499,7 +5554,7 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         if (SimpleIvalsCalculation (sfp->location, bsp, exindx->flip, item)) {
           /* don't need to do complex merging to calculate intervals */
         } else {
-          loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE);
+          loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE);
 
           if (exindx->flip) {
             sip = SeqIdFindBest (bsp->id, 0);
@@ -7139,7 +7194,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
             /* map to segmented bioseq coordinates if necessary */
 
-            segloc = SeqLocMergeExEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE, TRUE);
+            segloc = SeqLocMergeExEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE, TRUE, TRUE);
 
             SeqLocFree (dnaloc);
             if (segloc != NULL) {
@@ -7748,7 +7803,7 @@ static void IndexFeatIDsOnEntity (
 *
 *****************************************************************************/
 
-NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
+static Uint2 LIBCALL s_DoSeqMgrIndexFeatures (
   Uint2 entityID,
   Pointer ptr,
   Boolean flip,
@@ -8014,6 +8069,33 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
   ValNodeFreeData (exind.adphead);
 
   return entityID;
+}
+
+static TNlmMutex  smp_feat_index_mutex = NULL;
+
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
+  Uint2 entityID,
+  Pointer ptr,
+  Boolean flip,
+  Boolean dorevfeats,
+  ValNodePtr extra
+)
+
+{
+  Uint2  eID;
+  Int4   ret;
+
+  ret = NlmMutexLockEx (&smp_feat_index_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "SeqMgrIndexFeatures mutex failed [%ld]", (long) ret);
+    return 0;
+  }
+
+  eID = s_DoSeqMgrIndexFeatures (entityID, ptr, flip, dorevfeats, extra);
+
+  NlmMutexUnlock (smp_feat_index_mutex);
+
+  return eID;
 }
 
 NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (
@@ -8625,7 +8707,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
     hier = feat->overlap;
   }
 
-  loc = SeqLocMergeExEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE, TRUE);
+  loc = SeqLocMergeExEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE, TRUE, TRUE);
   strand = SeqLocStrand (loc);
   if (overlapType == CHECK_INTERVALS) {
     tmp = NULL;
@@ -10610,14 +10692,17 @@ static ValNodePtr LookupAndExtractBspListMT (
 }
 
 static ValNodePtr LookupAndExtractBspListST (
-  ValNodePtr PNTR uidlistP
+  ValNodePtr PNTR uidlistP,
+  Boolean reindexIfBig
 )
 
 {
-  BioseqPtr   bsp;
-  SeqId       si;
-  ValNodePtr  sublist = NULL, vnp, vnx;
-  Int4        uid;
+  BioseqPtr    bsp;
+  Uint2        entityID;
+  SeqEntryPtr  sep;
+  SeqId        si;
+  ValNodePtr   sublist = NULL, vnp, vnx;
+  Int4         uid;
 
   if (uidlistP == NULL || *uidlistP == NULL) return NULL;
 
@@ -10631,9 +10716,20 @@ static ValNodePtr LookupAndExtractBspListST (
     si.choice = SEQID_GI;
     si.data.intvalue = uid;
 
-    if (BioseqFindFunc (&si, FALSE, FALSE, TRUE) != NULL) continue;
+    if (BioseqFindFunc (&si, FALSE, TRUE, TRUE) != NULL) continue;
     bsp = BioseqLockByIdEx (&si, FALSE);
     if (bsp == NULL) continue;
+
+    if (reindexIfBig) {
+      entityID = ObjMgrGetEntityIDForPointer (bsp);
+      sep = GetTopSeqEntryForEntityID (entityID);
+      if (sep != NULL && VisitBioseqsInSep (sep, NULL, NULL) > 2) {
+        SeqMgrHoldIndexing (FALSE);
+        ObjMgrClearHold ();
+        ObjMgrSetHold ();
+        SeqMgrHoldIndexing (TRUE);
+      }
+   }
 
     vnx = ValNodeAddPointer (NULL, 0, (Pointer) bsp);
     if (vnx == NULL) continue;
@@ -10650,7 +10746,8 @@ static ValNodePtr LookupAndExtractBspListST (
 
 static ValNodePtr LookupAndExtractBspList (
   ValNodePtr PNTR uidlistP,
-  Boolean usethreads
+  Boolean usethreads,
+  Boolean reindexIfBig
 )
 
 {
@@ -10682,7 +10779,7 @@ static ValNodePtr LookupAndExtractBspList (
   if (usethreads) {
     sublist = LookupAndExtractBspListMT (uidlistP);
   } else {
-    sublist = LookupAndExtractBspListST (uidlistP);
+    sublist = LookupAndExtractBspListST (uidlistP, reindexIfBig);
   }
 
   return sublist;
@@ -10913,7 +11010,8 @@ static void CollectAllSublocs (SeqLocPtr loc, Pointer userdata)
 static void FetchFromUidList (
   ValNodePtr PNTR uidlistP,
   ValNodePtr PNTR bsplistP,
-  Boolean usethreads
+  Boolean usethreads,
+  Boolean reindexIfBig
 )
 
 {
@@ -10923,7 +11021,7 @@ static void FetchFromUidList (
   if (uidlistP == NULL || bsplistP == NULL) return;
 
   SortUniqueCleanseUidList (uidlistP, bsplistP);
-  sublist = LookupAndExtractBspList (uidlistP, usethreads);
+  sublist = LookupAndExtractBspList (uidlistP, usethreads, reindexIfBig);
 
   while (sublist != NULL) {
 
@@ -10944,7 +11042,7 @@ static void FetchFromUidList (
     sublist = NULL;
 
     SortUniqueCleanseUidList (&uidlist, bsplistP);
-    sublist = LookupAndExtractBspList (&uidlist, usethreads);
+    sublist = LookupAndExtractBspList (&uidlist, usethreads, reindexIfBig);
   }
 }
 
@@ -11141,7 +11239,7 @@ NLM_EXTERN ValNodePtr AdvcLockFarComponents (
     SeqMgrHoldIndexing (TRUE);
     ils.uidlist = NULL;
     VisitBioseqsInSep (sep, (Pointer) &ils, CollectAllBioseqs);
-    FetchFromUidList (&ils.uidlist, &bsplist, usethreads);
+    FetchFromUidList (&ils.uidlist, &bsplist, usethreads, FALSE);
     SeqMgrHoldIndexing (FALSE);
     ObjMgrClearHold ();
   }
@@ -11151,7 +11249,7 @@ NLM_EXTERN ValNodePtr AdvcLockFarComponents (
     SeqMgrHoldIndexing (TRUE);
     ils.uidlist = NULL;
     VisitFeaturesInSep (sep, (Pointer) &ils, CollectAllLocations);
-    FetchFromUidList (&ils.uidlist, &bsplist, usethreads);
+    FetchFromUidList (&ils.uidlist, &bsplist, usethreads, TRUE);
     SeqMgrHoldIndexing (FALSE);
     ObjMgrClearHold ();
   }
@@ -11161,7 +11259,7 @@ NLM_EXTERN ValNodePtr AdvcLockFarComponents (
     SeqMgrHoldIndexing (TRUE);
     ils.uidlist = NULL;
     VisitFeaturesInSep (sep, (Pointer) &ils, CollectAllProducts);
-    FetchFromUidList (&ils.uidlist, &bsplist, usethreads);
+    FetchFromUidList (&ils.uidlist, &bsplist, usethreads, TRUE);
     SeqMgrHoldIndexing (FALSE);
     ObjMgrClearHold ();
   }
@@ -11171,7 +11269,7 @@ NLM_EXTERN ValNodePtr AdvcLockFarComponents (
     SeqMgrHoldIndexing (TRUE);
     ils.uidlist = NULL;
     CollectAllSublocs (loc, (Pointer) &ils);
-    FetchFromUidList (&ils.uidlist, &bsplist, usethreads);
+    FetchFromUidList (&ils.uidlist, &bsplist, usethreads, TRUE);
     SeqMgrHoldIndexing (FALSE);
     ObjMgrClearHold ();
   }

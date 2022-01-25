@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.58 $
+* $Revision: 1.63 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "4.4"
+#define ASN2ALL_APP_VER "5.1"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -96,6 +96,7 @@ typedef enum {
 
 typedef struct appflags {
   AppFormat     format;
+  Boolean       automatic;
   Boolean       batch;
   Boolean       binary;
   Boolean       compressed;
@@ -432,6 +433,7 @@ static void ProcessSingleRecord (
       return;
     }
 
+    SeqMgrHoldIndexing (TRUE);
     switch (afp->type) {
       case 2 :
         dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -452,6 +454,7 @@ static void ProcessSingleRecord (
       default :
         break;
     }
+    SeqMgrHoldIndexing (FALSE);
 
     AsnIoClose (aip);
 
@@ -658,7 +661,9 @@ static void ProcessMultipleRecord (
       }
       if (atp == afp->atp_se) {
 
+        SeqMgrHoldIndexing (TRUE);
         sep = SeqEntryAsnRead (aip, atp);
+        SeqMgrHoldIndexing (FALSE);
 
         if (sep != NULL) {
           bsplist = NULL;
@@ -713,6 +718,29 @@ static void ProcessMultipleRecord (
 #endif
 }
 
+static void FormatWrapper (
+  SeqEntryPtr sep,
+  Pointer userdata
+)
+
+{
+  AppFlagPtr  afp;
+  ValNodePtr  bsplist;
+
+  if (sep == NULL) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  bsplist = NULL;
+  if (afp->lock) {
+    bsplist = DoLockFarComponents (sep, afp->useThreads);
+  }
+
+  FormatRecord (sep, afp, bsplist);
+
+  bsplist = UnlockFarComponents (bsplist);
+}
+
 static void ProcessOneRecord (
   CharPtr filename,
   Pointer userdata
@@ -725,8 +753,9 @@ static void ProcessOneRecord (
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
-
-  if (afp->batch) {
+  if (afp->automatic) {
+    ReadSequenceAsnFile (filename, afp->binary, afp->compressed, (Pointer) afp, FormatWrapper);
+  } else if (afp->batch) {
     ProcessMultipleRecord (filename, afp);
   } else {
     ProcessSingleRecord (filename, afp);
@@ -894,7 +923,8 @@ Args myargs [] = {
    "      c Cache Components\n", NULL, NULL, NULL,
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"ASN.1 Type\n"
-   "      a Any\n"
+   "      a Automatic\n"
+   "      z Any\n"
    "      e Seq-entry\n"
    "      b Bioseq\n"
    "      s Bioseq-set\n"
@@ -1019,6 +1049,7 @@ Int2 Main (void)
 
   /* populate parameter structure */
 
+  afd.automatic = FALSE;
   afd.batch = FALSE;
   afd.binary = (Boolean) myargs [b_argBinary].intvalue;
   afd.compressed = (Boolean) myargs [c_argCompressed].intvalue;
@@ -1085,6 +1116,9 @@ Int2 Main (void)
   type = TO_LOWER (type);
   switch (type) {
     case 'a' :
+      afd.type = 1;
+      afd.automatic = TRUE;
+    case 'z' :
       afd.type = 1;
       break;
     case 'e' :

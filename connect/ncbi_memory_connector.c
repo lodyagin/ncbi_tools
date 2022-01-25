@@ -1,4 +1,4 @@
-/*  $Id: ncbi_memory_connector.c,v 6.11 2008/05/25 01:25:38 kazimird Exp $
+/* $Id: ncbi_memory_connector.c,v 6.12 2009/06/23 16:04:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -161,7 +161,9 @@ static EIO_Status s_VT_Wait
  EIO_Event       event,
  const STimeout* timeout)
 {
-    return eIO_Success;
+    SMemoryConnector* xxx = (SMemoryConnector*) connector->handle;
+    return event == eIO_Read  &&  !BUF_Size(xxx->buf)
+        ? eIO_Closed : eIO_Success;
 }
 
 
@@ -170,7 +172,6 @@ static EIO_Status s_VT_Status
  EIO_Event dir)
 {
     SMemoryConnector* xxx = (SMemoryConnector*) connector->handle;
-
     switch (dir) {
     case eIO_Read:
         return xxx->r_status;

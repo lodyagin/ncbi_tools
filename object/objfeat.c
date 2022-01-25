@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.44 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -792,6 +792,9 @@ NLM_EXTERN void LIBCALL SeqFeatDataFree(ChoicePtr cp)
         case SEQFEAT_BIOSRC:
             BioSourceFree((BioSourcePtr)pnt);
             break;
+        case SEQFEAT_CLONEREF:
+            CloneRefFree((CloneRefPtr)pnt);
+            break;
     }
     return;
 }
@@ -908,6 +911,10 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnWrite (ChoicePtr cp, AsnIoPtr aip, AsnT
             break;
         case SEQFEAT_BIOSRC:
             if (! BioSourceAsnWrite((BioSourcePtr)pnt, aip, SEQFEATDATA_biosrc))
+                goto erret;
+            break;
+        case SEQFEAT_CLONEREF:
+            if (! CloneRefAsnWrite((CloneRefPtr)pnt, aip, SEQFEATDATA_clone))
                 goto erret;
             break;
     }
@@ -1080,6 +1087,13 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, Ch
     {
         cp->choice = SEQFEAT_BIOSRC ;
         cp->value.ptrvalue = (Pointer)BioSourceAsnRead(aip, atp);
+        if (cp->value.ptrvalue == NULL)
+            goto erret;
+    }
+    else if (atp == SEQFEATDATA_clone)
+    {
+        cp->choice = SEQFEAT_CLONEREF ;
+        cp->value.ptrvalue = (Pointer)CloneRefAsnRead(aip, atp);
         if (cp->value.ptrvalue == NULL)
             goto erret;
     }
@@ -1924,7 +1938,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "{ name \"Euplotid Nuclear\" , name \"SGC9\" , id 10 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Bacterial and Plant Plastid\" , id 11 ,\n" \
+"{ name \"Bacterial, Archaeal and Plant Plastid\" , id 11 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"---M---------------M------------MMMM---------------M------------\" } ,\n" \
 "{ name \"Alternative Yeast Nuclear\" , id 12 ,\n" \
@@ -7248,6 +7262,528 @@ PCRReactionSetAsnWrite(PCRReactionSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) PCRReactionAsnWrite, aip, atp, PCRREACTIONSET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    CloneRefNew()
+*
+**************************************************/
+NLM_EXTERN 
+CloneRefPtr LIBCALL
+CloneRefNew(void)
+{
+   CloneRefPtr ptr = MemNew((size_t) sizeof(CloneRef));
+
+   ptr -> concordant = 0;
+   ptr -> unique = 0;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CloneRefFree()
+*
+**************************************************/
+NLM_EXTERN 
+CloneRefPtr LIBCALL
+CloneRefFree(CloneRefPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   MemFree(ptr -> library);
+   CloneSeqSetFree(ptr -> clone_seq);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CloneRefAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CloneRefPtr LIBCALL
+CloneRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   CloneRefPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CloneRef ::= (self contained) */
+      atp = AsnReadId(aip, amp, CLONE_REF);
+   } else {
+      atp = AsnLinkType(orig, CLONE_REF);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CloneRefNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CLONE_REF_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_REF_library) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> library = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_REF_concordant) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> concordant = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_REF_unique) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> unique = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_REF_placement_method) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> placement_method = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_REF_clone_seq) {
+      ptr -> clone_seq = CloneSeqSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CloneRefFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CloneRefAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CloneRefAsnWrite(CloneRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CLONE_REF);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, CLONE_REF_name,  &av);
+   }
+   if (ptr -> library != NULL) {
+      av.ptrvalue = ptr -> library;
+      retval = AsnWrite(aip, CLONE_REF_library,  &av);
+   }
+   av.boolvalue = ptr -> concordant;
+   retval = AsnWrite(aip, CLONE_REF_concordant,  &av);
+   av.boolvalue = ptr -> unique;
+   retval = AsnWrite(aip, CLONE_REF_unique,  &av);
+   if (ptr -> placement_method || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> placement_method;
+      retval = AsnWrite(aip, CLONE_REF_placement_method,  &av);
+   }
+   if (ptr -> clone_seq != NULL) {
+      if ( ! CloneSeqSetAsnWrite(ptr -> clone_seq, aip, CLONE_REF_clone_seq)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CloneSeqSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+CloneSeqSetPtr LIBCALL
+CloneSeqSetFree(CloneSeqSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) CloneSeqFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    CloneSeqSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CloneSeqSetPtr LIBCALL
+CloneSeqSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CloneSeqSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CloneSeqSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, CLONE_SEQ_SET);
+   } else {
+      atp = AsnLinkType(orig, CLONE_SEQ_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CloneSeqAsnRead, (AsnOptFreeFunc) CloneSeqFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CloneSeqSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CloneSeqSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CloneSeqSetAsnWrite(CloneSeqSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CLONE_SEQ_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) CloneSeqAsnWrite, aip, atp, CLONE_SEQ_SET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CloneSeqNew()
+*
+**************************************************/
+NLM_EXTERN 
+CloneSeqPtr LIBCALL
+CloneSeqNew(void)
+{
+   CloneSeqPtr ptr = MemNew((size_t) sizeof(CloneSeq));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CloneSeqFree()
+*
+**************************************************/
+NLM_EXTERN 
+CloneSeqPtr LIBCALL
+CloneSeqFree(CloneSeqPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqLocFree(ptr -> location);
+   SeqLocFree(ptr -> seq);
+   DbtagFree(ptr -> align_id);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CloneSeqAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CloneSeqPtr LIBCALL
+CloneSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   CloneSeqPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CloneSeq ::= (self contained) */
+      atp = AsnReadId(aip, amp, CLONE_SEQ);
+   } else {
+      atp = AsnLinkType(orig, CLONE_SEQ);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CloneSeqNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CLONE_SEQ_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_SEQ_confidence) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> confidence = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_SEQ_location) {
+      ptr -> location = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_SEQ_seq) {
+      ptr -> seq = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CLONE_SEQ_align_id) {
+      ptr -> align_id = DbtagAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CloneSeqFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CloneSeqAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CloneSeqAsnWrite(CloneSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CLONE_SEQ);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, CLONE_SEQ_type,  &av);
+   if (ptr -> confidence || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> confidence;
+      retval = AsnWrite(aip, CLONE_SEQ_confidence,  &av);
+   }
+   if (ptr -> location != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> location, aip, CLONE_SEQ_location)) {
+         goto erret;
+      }
+   }
+   if (ptr -> seq != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> seq, aip, CLONE_SEQ_seq)) {
+         goto erret;
+      }
+   }
+   if (ptr -> align_id != NULL) {
+      if ( ! DbtagAsnWrite(ptr -> align_id, aip, CLONE_SEQ_align_id)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
    retval = TRUE;
 
 erret:

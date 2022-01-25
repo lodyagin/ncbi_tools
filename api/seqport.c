@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.173 $
+* $Revision: 6.174 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -4295,148 +4295,162 @@ product_stop)
 
 
 
-   if(sfp->data.choice ==3)  /* cdregion must take into account 3 base/aa */
-   {
-	is_cdregion = TRUE;
+  if(sfp->data.choice ==3)  /* cdregion must take into account 3 base/aa */
+  {
+    is_cdregion = TRUE;
 
-	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-	if(!crp)
-		return NULL;
-	if(crp->frame>0)
-		frame_offset = crp->frame-1;
-	else
-		frame_offset = 0;
-	start_offset = frame_offset;
-   }
-   else
-   {
-	start_offset = 0;
-	frame_offset = 0;
-   }
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+    if(!crp)
+    {
+      return NULL;
+    }
 
-   cur_pos= product_start;
-   product_len = 0;
-   is_end = FALSE;
-   p_start = 0;
-   first_partial = 0;
-   end_partial = 0;
-   slp = NULL;
-   location_loc= NULL;
-   while(!is_end && ((slp = SeqLocFindNext(sfp->location, slp))!=NULL))
-   {
-	product_len += SeqLocLen(slp);
-	if (is_cdregion)
-	{
-		end_partial = ((product_len - start_offset)%3);
-		p_stop = (product_len - start_offset)/3 -1;
-		if(end_partial != 0)
-			++p_stop;
+    if(crp->frame>0)
+    {
+      frame_offset = crp->frame-1;
+    }
+    else
+    {
+      frame_offset = 0;
+    }
+    start_offset = frame_offset;
+  }
+  else
+  {
+    start_offset = 0;
+    frame_offset = 0;
+  }
+
+  cur_pos= product_start;
+  product_len = 0;
+  is_end = FALSE;
+  p_start = 0;
+  first_partial = 0;
+  end_partial = 0;
+  slp = NULL;
+  location_loc= NULL;
+  while(!is_end && ((slp = SeqLocFindNext(sfp->location, slp))!=NULL))
+  {
+	  product_len += SeqLocLen(slp);
+	  if (is_cdregion)
+	  {
+		  end_partial = ((product_len - start_offset)%3);
+		  p_stop = (product_len - start_offset)/3 -1;
+		  if(end_partial != 0)
+			  ++p_stop;
+	  }
+	  else
+	  {
+		  p_stop = product_len - start_offset - 1;
+	  }
+
+	  p_end_pos = p_stop;
+
+	  if(p_stop > product_stop || (p_stop == product_stop && end_partial == 0))
+	  {
+	    p_stop = product_stop;		/**check if the end is reached**/
+	    is_end = TRUE;
+	  }
+
+	  if(p_stop >= cur_pos)	/*get the exon*/
+	  {
+		  is_new = (p_start == cur_pos);	/*start a new exon?*/
+      if(is_new)	/**special case of the first partial**/
+      {
+		    offset = 0;
+      }
+		  else if (is_cdregion)
+		  {
+		    if(frame_offset && p_start >0)
+			  ++p_start;
+		    offset = 3*(cur_pos - p_start) + frame_offset;
+		  }
+		  else
+      {
+		    offset = cur_pos - p_start;
+      }
+
+		  strand = SeqLocStrand(slp);
+		  if(strand == Seq_strand_minus)
+		    d_start = SeqLocStop(slp) - offset;
+		  else
+		    d_start = SeqLocStart(slp) + offset;
+
+		  d_stop = d_start;
+		  /*first codon*/
+		  if(is_cdregion && is_new && product_len == SeqLocLen(slp))
+		  {
+			  if(strand == Seq_strand_minus)
+				  d_stop -= frame_offset;
+			  else
+				  d_stop += frame_offset;
+		  }
+		  aa_len = MIN(p_stop, product_stop) - cur_pos +1;
+		  if(end_partial != 0 && (p_end_pos >= product_start && p_end_pos <= product_stop))
+      {
+			  --aa_len;
+      }
+		  if(first_partial > 0)
+      {
+			  --aa_len;
+      }
+		  if(strand == Seq_strand_minus)
+		  {
+			  if(aa_len >= 0)
+			  {
+				  if (is_cdregion)
+					  d_stop -= (3*aa_len - 1);
+				  else
+					  d_stop -= (aa_len - 1);
+			  }
+			  else
+        {
+				  ++d_stop;
+        }
+
+			  if(first_partial >0)
+				  d_stop -= first_partial;
+  				
+			  first_partial = 0;
+			  if (end_partial > 0 && (p_end_pos >= product_start && p_end_pos <= product_stop)) 
+        {
+				  d_stop -= end_partial;
+				  first_partial = 3 - end_partial;
+			  }
+  			
+			  d_stop = MAX(d_stop, SeqLocStart(slp));
+			  loc = SeqLocIntNew(d_stop, d_start, strand, SeqLocId(slp));
+		  }
+		  else
+		  {
+			  if(aa_len >= 0)
+			  {
+				  if (is_cdregion)
+					  d_stop += (3*aa_len - 1);
+				  else
+					  d_stop += (aa_len - 1);
+			  }
+			  else
+				  --d_stop;
+  				
+			  if(first_partial > 0)
+				  d_stop += first_partial;
+			  first_partial = 0;
+			  if (end_partial> 0 && (p_end_pos >= product_start && p_end_pos <= product_stop)) 
+        {
+				  d_stop += end_partial;
+				  first_partial = 3 - end_partial;
+			  }
+			  d_stop = MIN(d_stop, SeqLocStop(slp));
+			  loc = SeqLocIntNew(d_start, d_stop, strand, SeqLocId(slp));
+		  }
+		  SeqLocAdd(&location_loc, loc, TRUE, FALSE);
+
+		  if(end_partial != 0)
+			  cur_pos = p_stop;
+		  else
+			  cur_pos = p_stop+1;
 	}
-	else
-	{
-		p_stop = product_len - start_offset - 1;
-	}
-
-	p_end_pos = p_stop;
-
-	if(p_stop > product_stop || (p_stop == product_stop && end_partial == 0))
-	{
-	   p_stop = product_stop;		/**check if the end is reached**/
-	   is_end = TRUE;
-	}
-
-	if(p_stop >= cur_pos)	/*get the exon*/
-	{
-		is_new = (p_start == cur_pos);	/*start a new exon?*/
-		if(is_new)	/**special case of the first partial**/
-		   offset = 0;
-		else if (is_cdregion)
-		{
-		   if(frame_offset && p_start >0)
-			++p_start;
-		   offset = 3*(cur_pos - p_start) + frame_offset;
-		}
-		else
-		   offset = cur_pos - p_start;
-
-		strand = SeqLocStrand(slp);
-		if(strand == Seq_strand_minus)
-		   d_start = SeqLocStop(slp) - offset;
-		else
-		   d_start = SeqLocStart(slp) + offset;
-
-		d_stop = d_start;
-		/*first codon*/
-		if(is_cdregion && is_new && product_len == SeqLocLen(slp))
-		{
-			if(strand == Seq_strand_minus)
-				d_stop -= frame_offset;
-			else
-				d_stop += frame_offset;
-		}
-		aa_len = MIN(p_stop, product_stop) - cur_pos +1;
-		if(end_partial != 0 && (p_end_pos >= product_start && p_end_pos <= 
-product_stop))
-			--aa_len;
-		if(first_partial > 0)
-			--aa_len;
-		if(strand == Seq_strand_minus)
-		{
-			if(aa_len >= 0)
-			{
-				if (is_cdregion)
-					d_stop -= (3*aa_len - 1);
-				else
-					d_stop -= (aa_len - 1);
-			}
-			else
-				++d_stop;
-			if(first_partial >0)
-				d_stop -= first_partial;
-				
-			first_partial = 0;
-			if (end_partial > 0 && (p_end_pos >= product_start && 
-p_end_pos <= product_stop)) {
-				d_stop -= end_partial;
-				first_partial = 3 - end_partial;
-			}
-			
-			d_stop = MAX(d_stop, SeqLocStart(slp));
-			loc = SeqLocIntNew(d_stop, d_start, strand, 
-SeqLocId(slp));
-		}
-		else
-		{
-			if(aa_len >= 0)
-			{
-				if (is_cdregion)
-					d_stop += (3*aa_len - 1);
-				else
-					d_stop += (aa_len - 1);
-			}
-			else
-				--d_stop;
-				
-			if(first_partial > 0)
-				d_stop += first_partial;
-			first_partial = 0;
-			if (end_partial> 0 && (p_end_pos >= product_start && 
-p_end_pos <= product_stop)) {
-				d_stop += end_partial;
-				first_partial = 3 - end_partial;
-			}
-			d_stop = MIN(d_stop, SeqLocStop(slp));
-			loc = SeqLocIntNew(d_start, d_stop, strand, 
-SeqLocId(slp));
-		}
-		SeqLocAdd(&location_loc, loc, TRUE, FALSE);
-
-		if(end_partial != 0)
-			cur_pos = p_stop;
-		else
-			cur_pos = p_stop+1;
-	}
-
 
 
 	if(end_partial != 0)
@@ -4481,10 +4495,13 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 	Int4 product_len, end_pos, frame_offset;
 	GatherRange gr;
 	Int4 a_left = 0, a_right, last_aa = -20, aa_from, aa_to;
+  Int4 cds_left, cds_right;
 	SeqLocPtr slp;
 	Int2 cmpval;
 	SeqIdPtr aa_sip;
 	BioseqPtr bsp;
+  Boolean partial5, partial3;
+  Uint1 strand;
 
 	if ((sfp == NULL) || (location_loc == NULL)) return aa_loc;
 	if (sfp->data.choice != 3) return aa_loc;
@@ -4493,7 +4510,7 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
 	if(crp == NULL) return aa_loc;
 
-	           /* location_loc must be equal or contained in feature */
+	/* location_loc must be equal or contained in feature */
 	cmpval = SeqLocCompare(location_loc, sfp->location);
 	if (! ((cmpval == SLC_A_IN_B) || (cmpval == SLC_A_EQ_B)))
 		return aa_loc;
@@ -4510,49 +4527,75 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 	else
 		frame_offset = (Int4)crp->frame-1;
 
+  cds_left = SeqLocStart (sfp->location);
+  cds_right = SeqLocStop (sfp->location);
+
+
 	slp = NULL;
 	product_len = 0;
 	loc = NULL;
 	while ((slp = SeqLocFindNext(sfp->location, slp))!=NULL)
 	{
-	   if (SeqLocOffset(location_loc, slp, &gr, 0))
-	   {
+    if (SeqLocOffset(location_loc, slp, &gr, 0))
+	  {
 			SeqLocOffset(slp, location_loc, &gr, 0);
-		
-			a_left = gr.left + product_len - frame_offset;
-			a_right = gr.right + product_len - frame_offset;
+
+			a_left = gr.left + product_len;
+			a_right = gr.right + product_len;
+      if (frame_offset > 0) {
+        a_left -= frame_offset;
+        a_right -= frame_offset;
+      }
+
+			if (a_left < 0)
+      {
+        CheckSeqLocForPartial (slp, &partial5, &partial3);
+        strand = SeqLocStrand (slp);
+        if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
+				  a_left = gr.left;
+        } else {
+          a_left += 3;
+        }
+      }
+      if (a_right > (bsp->length) * 3 - 1) {
+        CheckSeqLocForPartial (slp, &partial5, &partial3);
+        strand = SeqLocStrand (slp);
+        if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
+				  a_right = bsp->length - 1;
+        } else {
+          a_right -= 3;
+        }
+      }
 
 			aa_from = a_left / 3;
 			aa_to = a_right / 3;
 
-			if (aa_from < 0)
-				aa_from = 0;
 			if (aa_to > end_pos)
 				aa_to = end_pos;
 
 			if (merge)
 			{
-				if (aa_from <= last_aa)  /* overlap due to 
-codons */
-					aa_from = last_aa+1;  /* set up to merge 
-*/
+				if (aa_from <= last_aa)  /* overlap due to codons */
+					aa_from = last_aa+1;  /* set up to merge */
 			}
 
-			if (aa_from <= aa_to || (allowTerminator && aa_from == aa_to + 1))
+      /* NOTE - if a_left is not <= a_right, then a correction for frame may have
+       * caused the location to not actually be mappable to the protein sequence.
+       */
+			if ((aa_from <= aa_to || (allowTerminator && aa_from == aa_to + 1)) && a_left <= a_right)
 			{
 				if(loc != NULL)
 				{
 					if(aa_loc == NULL)
-						load_fuzz_to_DNA(loc, location_loc, 
-TRUE);
+						load_fuzz_to_DNA(loc, location_loc, TRUE);
 					SeqLocAdd(&aa_loc, loc, merge, FALSE);
 				}
 				loc = SeqLocIntNew(aa_from, aa_to, 0, aa_sip);
 				last_aa = aa_to;
 			}
-	     }
+    }
 
-	     product_len += SeqLocLen(slp);		
+    product_len += SeqLocLen(slp);		
 	}
 
 	if(loc != NULL)

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.273 $
+* $Revision: 6.284 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -3062,6 +3062,405 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     }
     return tmp;
 }
+
+
+NLM_EXTERN Int4 SeqIdLabelLen (SeqIdPtr isip, Uint1 format)
+
+{
+    Int4 label_len = 0;
+    SeqIdPtr sip;
+    char localbuf[32];    /* for MS Windows */
+    char *ldelim;
+    char d [2];
+    static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    12, /* 10 = other TextSeqId */
+    13, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
+    10,  /* 16 = tpg */
+    10,  /* 17 = tpe */
+    10,  /* 18 = tpd */
+    15,  /* 19 = gpp */
+    15   /* 20 = nat */
+    };
+    static Uint1 tmsmart_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    12, /* 10 = other TextSeqId */
+    29, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
+    10,  /* 16 = tpg */
+    10,  /* 17 = tpe */
+    10,  /* 18 = tpd */
+    15,  /* 19 = gpp */
+    15   /* 20 = nat */
+    };
+    static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    13, /* 10 = other TextSeqId */
+    12, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
+    10,  /* 16 = tpg */
+    10,  /* 17 = tpe */
+    10,  /* 18 = tpd */
+    15,  /* 19 = gpp */
+    15   /* 20 = nat */
+    };
+    Boolean useGeneral = FALSE;
+    TextSeqIdPtr tsip;
+    PDBSeqIdPtr psip;
+    ObjectIdPtr oip;
+    PatentSeqIdPtr patsip;
+    IdPatPtr ipp;
+    Boolean got_gi = FALSE;
+    Boolean got_tmsmart = FALSE;
+    Boolean is_us_pre_grant = FALSE;
+    DbtagPtr dbt;
+    Char chainbuf[3];
+    Char versionbuf[10];
+    Int2 version = 0;
+    CharPtr release = NULL;
+
+    if (isip == NULL)
+        return 0;
+
+    d [0] = *delim;
+    d [1] = '\0';
+    ldelim = &(d [0]);
+    if ((format >= ' ') && (format <= 127))  /* change delimiter */
+    {
+        if (format == 127)
+            d [0] = '\t';
+        else
+            d [0] = (char) format;
+        format = PRINTID_FASTA_SHORT;
+    }
+
+    if (format == PRINTID_FASTA_GENERAL) {
+        useGeneral = TRUE;
+        format = PRINTID_FASTA_LONG;
+    }
+
+    if (format == PRINTID_FASTA_ALL) {
+        for (sip = isip; sip != NULL; sip = sip->next) {
+            label_len += SeqIdLabelLen (sip, PRINTID_FASTA_SHORT) + 1;
+        }
+        label_len += 2;
+        return label_len;
+    }
+                                /* error on input, return ??? */
+    if ( (! (isip -> choice)) || (format < PRINTID_FASTA_SHORT)
+        || (format > PRINTID_REPORT))
+    {
+        return StringLen (txtid[0]) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+    }
+
+    if (format == PRINTID_FASTA_LONG)   /* find the ids in the chain */
+    {
+        for (sip = isip; sip != NULL; sip = sip->next)  /* GI present? */
+        {
+            if (sip->choice == SEQID_GI)
+            {
+                sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
+                    (long)(sip->data.intvalue));
+                label_len += StringLen (localbuf) + 1; /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                got_gi = TRUE;
+            } else if (sip->choice == SEQID_GENERAL) {
+                dbt = (DbtagPtr) sip->data.ptrvalue;
+                if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0) {
+                    got_tmsmart = TRUE;
+                }
+            } else if (sip->choice == SEQID_PATENT) {
+                patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+                if (patsip != NULL) {
+                    ipp = patsip->cit;
+                    if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+                        is_us_pre_grant = TRUE;
+                    }
+                }
+            }
+        }
+        if (useGeneral) {
+            sip = SeqIdSelect(isip, general_order, NUM_SEQID);
+        } else if (got_tmsmart) {
+            sip = SeqIdSelect(isip, tmsmart_order, NUM_SEQID);
+        } else {
+            sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
+        }
+        if (sip == NULL)   /* only GI */
+            return label_len;
+        else if (got_gi)
+        {
+            if (sip->choice == SEQID_GIIM)   /* don't show GIIM with GI */
+                return label_len;
+
+            label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+        }
+        format = PRINTID_FASTA_SHORT; /* put on second (or only) SeqId in this format */
+    }
+    else {
+        sip = isip;          /* only one id processed */
+        if (sip != NULL && sip->choice == SEQID_PATENT) {
+            patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+            if (patsip != NULL) {
+                ipp = patsip->cit;
+                if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+                    is_us_pre_grant = TRUE;
+                }
+            }
+        }
+    }
+
+                             /* deal with LOCUS and ACCESSION */
+    if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS) ||
+        (format == PRINTID_TEXTID_ACC_VER) || (format == PRINTID_TEXTID_ACC_ONLY))
+    {
+        if (format == PRINTID_TEXTID_ACCESSION) {
+            format = PRINTID_TEXTID_ACC_ONLY;     /* current default */
+        }
+        switch (sip->choice)   /* get the real TextSeqId types */
+        {
+            case SEQID_GENBANK:
+            case SEQID_EMBL:
+            case SEQID_DDBJ:
+            case SEQID_PIR:
+            case SEQID_SWISSPROT:
+            case SEQID_PRF:
+            case SEQID_OTHER:
+            case SEQID_TPG:
+            case SEQID_TPE:
+            case SEQID_TPD:
+            case SEQID_GPIPE:
+            case SEQID_NAMED_ANNOT_TRACK:
+                tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+                release = tsip->release;
+                if (sip->choice == SEQID_SWISSPROT) {
+                  release = NULL;
+                }
+                if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
+                    label_len += StringLen (tsip->name) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                    return label_len;
+                } else if ((format == PRINTID_TEXTID_ACC_ONLY || format == PRINTID_TEXTID_LOCUS) 
+                    && (tsip->accession != NULL)) {
+                    label_len += StringLen (tsip->accession) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                    return label_len;
+                } else if ((format == PRINTID_TEXTID_ACC_VER) 
+                    && (tsip->accession != NULL)) {
+                    label_len += StringLen (tsip->accession) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                    if (tsip->version > 0 && release == NULL) {
+                        sprintf(localbuf, ".%d", (int)(tsip->version));
+                        label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                    }
+                    return label_len;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (format == PRINTID_FASTA_SHORT)
+    {
+        if (sip->choice == SEQID_PATENT && is_us_pre_grant) {
+            label_len += 4;
+        } else if (sip->choice == SEQID_SWISSPROT) {
+            tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+            if (tsip->release && StringCmp(tsip->release, "unreviewed") == 0)
+                label_len += 3;
+            else
+                label_len += StringLen (txtid[sip->choice]) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+        } else {
+            label_len += StringLen (txtid[sip->choice]) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+        }
+        label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+    }
+
+    switch (sip->choice) 
+    {
+        case SEQID_LOCAL:           /* object id */
+            if ((((ObjectIdPtr)sip->data.ptrvalue)->str) == NULL)
+            {
+                sprintf(localbuf, "%ld", 
+                            (long)((ObjectIdPtr)sip->data.ptrvalue)->id);
+                label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            }
+            else
+            {
+                label_len += StringLen (((ObjectIdPtr)sip->data.ptrvalue)->str) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            }
+            break;
+        case SEQID_GIBBSQ:         
+        case SEQID_GIBBMT:
+        case SEQID_GI:
+            sprintf(localbuf, "%ld", (long)sip->data.intvalue);
+            label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+        case SEQID_GIIM:
+            sprintf(localbuf, "%ld", (long)((GiimPtr)sip->data.ptrvalue)->id);
+            label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+        case SEQID_GENBANK:
+        case SEQID_EMBL:
+        case SEQID_DDBJ:
+        case SEQID_OTHER:
+        case SEQID_TPG:
+        case SEQID_TPE:
+        case SEQID_TPD:
+        case SEQID_GPIPE:
+        case SEQID_NAMED_ANNOT_TRACK:
+        case SEQID_SWISSPROT:
+           tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+            release = tsip->release;
+            if (sip->choice == SEQID_SWISSPROT) {
+              release = NULL;
+            }
+           if ((tsip->version > 0) && (release == NULL) && SHOWVERSION)
+             version = tsip->version;  /* show versions */
+           sprintf(versionbuf, ".%d", (int)version);
+        case SEQID_PIR:
+        case SEQID_PRF:
+            tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+            if (tsip->accession != NULL)
+            {
+               label_len += StringLen (tsip->accession) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+               if (version) 
+               {
+                   label_len += StringLen (versionbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+               }
+               if (format != PRINTID_FASTA_SHORT)
+                 break;
+            }
+            if (format == PRINTID_FASTA_SHORT)
+                label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            if (tsip->name != NULL)
+                label_len += StringLen (tsip->name) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            /*
+            if (sip->choice == SEQID_OTHER) {
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+                if (tsip->release != NULL)
+                    Nlm_LabelCopyNext(&tmp, tsip->release, &buflen);
+            }
+            */
+            break;
+        case SEQID_PATENT:
+            patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
+            label_len += StringLen (patsip->cit->country);
+            if (format == PRINTID_FASTA_SHORT)
+                label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            if (is_us_pre_grant) {
+                label_len += StringLen (patsip->cit->app_number) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            } else {
+                label_len += StringLen (patsip->cit->number) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            }
+            if (format == PRINTID_FASTA_SHORT)
+                label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            else
+                label_len += 1;
+            sprintf(localbuf, "%d", (int)patsip->seqid);
+            label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+        case SEQID_GENERAL:
+            oip = ((DbtagPtr)sip->data.ptrvalue)->tag;
+            if((format == PRINTID_FASTA_SHORT) || (format == PRINTID_REPORT))
+                label_len += StringLen (((DbtagPtr)sip->data.ptrvalue)->db) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            if (format == PRINTID_FASTA_SHORT)
+                label_len += StringLen (ldelim) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            else if (format == PRINTID_REPORT)
+                label_len += 2;
+
+            if (oip->str == NULL)
+            {
+                sprintf(localbuf, "%ld", (long) oip->id);
+                label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            }
+            else
+                label_len += StringLen (oip->str) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+        case SEQID_PDB:
+            psip = (PDBSeqIdPtr) sip->data.ptrvalue;
+            chainbuf[0] = TO_UPPER (psip->chain);
+            chainbuf[1] = '\0';
+            chainbuf[2] = '\0';
+            if (IS_LOWER (psip->chain)) {
+              chainbuf[1] = chainbuf [0];
+            }
+            label_len += StringLen (psip->mol) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            if (format == PRINTID_FASTA_SHORT)
+            {
+                label_len += StringLen (ldelim);
+                if (chainbuf[0] == '|') /* special */
+                    label_len += 3;
+                else if (chainbuf[0] != '\0')
+                    label_len += StringLen (chainbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+                else
+                    label_len += 2;
+            }
+            else if (psip->chain > ' ')
+            {
+                label_len += 2;
+                label_len += StringLen (chainbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            }
+            break;
+        default:
+            label_len += StringLen (txtid[0]) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+
+    }
+    return label_len;
+}
+
+
+NLM_EXTERN CharPtr SeqIdWholeLabel (SeqIdPtr isip, Uint1 format)
+{
+    CharPtr label = NULL;
+    Int4 id_len;
+
+    if (isip == NULL) 
+    {
+        return NULL;
+    }
+
+    id_len = SeqIdLabelLen (isip, format) + 1;
+    label = (CharPtr) MemNew (sizeof (Char) * id_len);
+    SeqIdWrite (isip, label, format, id_len);
+    return label;
+}
+
 
 /* The following function finds either an integer or a string id from
    SeqIdPtr */
@@ -8658,6 +9057,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
   Boolean retval = TRUE;
   Boolean first = TRUE;
   size_t len;
+  Int2 i;
   Char temp [16];
  
   if (s == NULL || ! *s)
@@ -8815,6 +9215,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"AW") == 0) || 
           (StringICmp(temp,"BE") == 0) || 
           (StringICmp(temp,"BF") == 0) || 
+          (StringICmp(temp,"BG") == 0) || 
           (StringICmp(temp,"BI") == 0) || 
           (StringICmp(temp,"BM") == 0) || 
           (StringICmp(temp,"BQ") == 0) || 
@@ -8855,7 +9256,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"GD") == 0) || 
           (StringICmp(temp,"GE") == 0) || 
           (StringICmp(temp,"GH") == 0) || 
-          (StringICmp(temp,"GO") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"GO") == 0) || 
+          (StringICmp(temp,"GR") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -8868,7 +9270,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DQ") == 0) ||
                      (StringICmp(temp,"EF") == 0) ||
                      (StringICmp(temp,"EU") == 0) ||
-                     (StringICmp(temp,"FJ") == 0)) {      /* NCBI direct submission */
+                     (StringICmp(temp,"FJ") == 0) ||
+                     (StringICmp(temp,"GQ") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0) ||
                      (StringICmp(temp,"CP") == 0) ||
@@ -8891,8 +9294,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GO") == 0) ||
                      (StringICmp(temp,"GP") == 0) ||
                      (StringICmp(temp,"GQ") == 0) ||
-                     (StringICmp(temp,"GR") == 0) ||
-                     (StringICmp(temp,"GS") == 0) ||
                      (StringICmp(temp,"GT") == 0) ||
                      (StringICmp(temp,"GU") == 0) ||
                      (StringICmp(temp,"GV") == 0) ||
@@ -8922,7 +9323,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"ER") == 0) ||
                      (StringICmp(temp,"ET") == 0) ||
                      (StringICmp(temp,"FH") == 0) ||
-                     (StringICmp(temp,"FI") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"FI") == 0) ||
+                     (StringICmp(temp,"GS") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -8962,7 +9364,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CS") == 0) ||
                      (StringICmp(temp,"FB") == 0) ||
                      (StringICmp(temp,"GM") == 0) ||
-                     (StringICmp(temp,"GN") == 0)) {      /* EMBL patent division */
+                     (StringICmp(temp,"GN") == 0) ||
+                     (StringICmp(temp,"HA") == 0) ||
+                     (StringICmp(temp,"HB") == 0) ||
+                     (StringICmp(temp,"HC") == 0) ||
+                     (StringICmp(temp,"HD") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
@@ -8997,14 +9403,14 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DI") == 0) || 
                      (StringICmp(temp,"DJ") == 0) || 
                      (StringICmp(temp,"DL") == 0) || 
-                     (StringICmp(temp,"DM") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"DM") == 0) || 
+                     (StringICmp(temp,"FU") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
-                     (StringICmp(temp,"DH") == 0)) {      /* DDBJ GSS */
+                     (StringICmp(temp,"DH") == 0) || 
+                     (StringICmp(temp,"FT") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
-          } else if ((StringICmp(temp,"FT") == 0) || 
-                     (StringICmp(temp,"FU") == 0) || 
-                     (StringICmp(temp,"FV") == 0) || 
+          } else if ((StringICmp(temp,"FV") == 0) || 
                      (StringICmp(temp,"FW") == 0) || 
                      (StringICmp(temp,"FX") == 0) || 
                      (StringICmp(temp,"FY") == 0) || 
@@ -9130,10 +9536,42 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_REFSEQ_mRNA;
         } else if ((StringICmp(temp,"NW") == 0)) { 
           retcode = ACCN_REFSEQ_CONTIG;
+        } else if ((StringICmp(temp,"XM") == 0)) { 
+          retcode = ACCN_REFSEQ_mRNA_PREDICTED;
+        } else if ((StringICmp(temp,"XP") == 0)) { 
+          retcode = ACCN_REFSEQ_PROT_PREDICTED;
         } else if (IS_ALPHA(*temp) && IS_ALPHA(*(temp+1))) {
           retcode =ACCN_REFSEQ | ACCN_AMBIGOUS_MOL;
         } else
           retval = FALSE;
+        while (*s) {
+          if (! IS_DIGIT(*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+        }
+      }
+      break;
+    case 15:
+    case 16:
+      if (IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && (*(s+2)=='_')) {
+        /* New 15-16-character accession, two letters +"_"+ four letters + 8-9 digits */
+        temp[0] = *s; s++;
+        temp[1] = *s; s++;
+        temp[2] = NULLB; s++;
+      
+        if ((StringICmp(temp,"NZ") == 0)) { 
+          retcode = ACCN_REFSEQ_WGS;
+        } else
+          retval = FALSE;
+        for (i = 0; i < 4; i++) {
+          if (! IS_ALPHA (*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+        }
         while (*s) {
           if (! IS_DIGIT(*s)) {
               retval = FALSE;

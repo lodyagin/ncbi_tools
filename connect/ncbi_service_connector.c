@@ -1,4 +1,4 @@
-/* $Id: ncbi_service_connector.c,v 6.84 2009/02/04 19:29:34 kazimird Exp $
+/* $Id: ncbi_service_connector.c,v 6.87 2009/06/23 16:04:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,9 @@ typedef struct SServiceConnectorTag {
     SERV_ITER       iter;               /* Dispatcher information            */
     SMetaConnector  meta;               /* Low level comm.conn and its VT    */
     EIO_Status      status;             /* Status of last op                 */
-    unsigned int    host;               /* Parsed connection info...         */
-    unsigned short  port;
-    ticket_t        ticket;
+    unsigned int    host;               /* Parsed connection info... (n.b.o) */
+    unsigned short  port;               /*                       ... (h.b.o) */
+    ticket_t        ticket;             /* Network byte order (none if zero) */
     SSERVICE_Extra  params;
     char            service[1];         /* Untranslated service name         */
 } SServiceConnector;
@@ -139,7 +139,7 @@ static int/*bool*/ s_ParseHeader(const char* header,
                         sizeof(HTTP_CONNECTION_INFO) - 1) == 0) {
             unsigned int  i1, i2, i3, i4, ticket;
             unsigned char o1, o2, o3, o4;
-            char ipaddr[32];
+            char ipaddr[40];
 
             if (uuu->host)
                 break/*failed - duplicate connection info*/;
@@ -629,14 +629,15 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
                                       net_info->port,
                                       1/*max.try*/,
                                       &uuu->ticket,
-                                      sizeof(uuu->ticket),
+                                      uuu->ticket ? sizeof(uuu->ticket) : 0,
                                       net_info->debug_printout ==
                                       eDebugPrintout_Data ?
                                       fSOCK_LogOn : fSOCK_LogDefault);
     }
     return HTTP_CreateConnectorEx(net_info,
-                                  (uuu->params.flags & fHCC_Flushable)
-                                  | fHCC_AutoReconnect/*flags*/,
+                                  (uuu->params.flags
+                                   & (fHCC_Flushable | fHCC_NoAutoRetry))
+                                  | fHCC_AutoReconnect,
                                   s_ParseHeader, s_AdjustNetInfo,
                                   uuu/*adj.data*/, 0/*cleanup.data*/);
 }
@@ -704,7 +705,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
     for (;;) {
         int stateless;
 
-        if (uuu->net_info->firewall)
+        if (uuu->net_info->firewall  &&  strcasecmp(uuu->iter->name, "local"))
             info = 0;
         else if (!(info = s_GetNextInfo(uuu)))
             break;
@@ -713,6 +714,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
         if (!(net_info = ConnNetInfo_Clone(uuu->net_info)))
             break;
 
+        net_info->scheme = eURL_Unspec;
         conn = s_Open(uuu, timeout, info, net_info, 0/*!second_try*/);
         stateless = net_info->stateless;
 

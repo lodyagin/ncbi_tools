@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -229,19 +229,14 @@ extern void ClearSeqRec (SeqRecPtr srp);
 extern void SetBatchSuggestFrames (Char *dna_seq, Char *rev_seq, Int4 len);
 extern void ClearBatchSuggestFrames (void);
 
-Int4
-Get_Genetic_Code (Int4 code, SuggestRecPtr sugrp);
+extern Int4 Get_Genetic_Code (Int4 code, SuggestRecPtr sugrp);
 
-void
-OutProteinID(SuggestOutputPtr pSuggestOut, Int2 num);
+void OutProteinID (SuggestOutputPtr pSuggestOut, Int2 num);
 
-void
-OutLocation(SuggestOutputPtr pSuggestOut, Int4 num_nuc);
+void OutLocation (SuggestOutputPtr pSuggestOut, Int4 num_nuc);
 
-Boolean
-InitSuggest(void);
+Boolean InitSuggest (void);
  
-Boolean
-ProcessData(SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec);
+Int2 ProcessData (SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec);
 
 #endif

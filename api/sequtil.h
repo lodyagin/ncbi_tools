@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.56 $
+* $Revision: 6.58 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -450,6 +450,8 @@ NLM_EXTERN SeqIdPtr SeqIdFindBest(SeqIdPtr sip, Uint1 target);
 NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip);
 NLM_EXTERN CharPtr SeqIdPrint(SeqIdPtr sip, CharPtr buf, Uint1 format);
 NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Uint4 buflen);
+NLM_EXTERN Int4 SeqIdLabelLen (SeqIdPtr isip, Uint1 format);
+NLM_EXTERN CharPtr SeqIdWholeLabel (SeqIdPtr isip, Uint1 format);
 NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
 				     CharPtr PNTR id);
 NLM_EXTERN Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
@@ -979,6 +981,7 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 #define ACCN_DDBJ_TSA_PROT 67
 
 #define ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY 68
+#define ACCN_REFSEQ_WGS 69
 
 
 /* Some accessions prefix can be either protein or nucleotide 
@@ -1014,11 +1017,11 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 /* XM_,NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
    REFSEQ project
 */
-#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || ((c)== ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY) || (((c)&65535)== ACCN_REFSEQ) )
+#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || ((c)== ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY) || ((c)== ACCN_REFSEQ_WGS) || (((c)&65535)== ACCN_REFSEQ) )
 
 #define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT))
 
-#define ACCN_IS_WGS(c) (((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS) || ((c)== ACCN_DDBJ_WGS_PROT))
+#define ACCN_IS_WGS(c) (((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS) || ((c)== ACCN_DDBJ_WGS_PROT) || ((c)== ACCN_REFSEQ_WGS))
 
 #define ACCN_IS_TSA(c) (((c)== ACCN_NCBI_TSA) || ((c)== ACCN_NCBI_TSA_PROT) || ((c)== ACCN_EMBL_TSA) || ((c)== ACCN_EMBL_TSA_PROT) || ((c)== ACCN_DDBJ_TSA) || ((c)== ACCN_DDBJ_TSA_PROT))
 

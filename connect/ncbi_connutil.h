@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/* $Id: ncbi_connutil.h,v 6.67 2009/02/04 19:29:34 kazimird Exp $
+/* $Id: ncbi_connutil.h,v 6.68 2009/06/23 16:04:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -634,6 +634,7 @@ typedef enum {
     eMIME_Plain,         /* "plain"                                    */
     eMIME_Xml,           /* "xml"                                      */
     eMIME_XmlSoap,       /* "xml+soap"                                 */
+    eMIME_OctetStream,   /* "octet-stream"                             */
     /* eMIME_???,           "<subtype>" here go other NCBI subtypes    */
     eMIME_Unknown        /* "x-unknown"     (an arbitrary binary data) */
 } EMIME_SubType;

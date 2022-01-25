@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.110 2008/10/31 17:11:26 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.118 2009/06/03 20:13:16 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -1458,7 +1458,7 @@ void StripProtXref (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     head = (SeqFeatPtr)(ap->data);
     for (sfp = head; sfp; sfp = sfp->next) {
       if (sfp->data.choice != SEQFEAT_CDREGION) {
-        return;
+        continue;
       }
       if ((vnp = sfp->product) != NULL) {
         if (vnp->choice == SEQLOC_WHOLE) {
@@ -2818,6 +2818,43 @@ extern void CleanupGenbankCallback (SeqEntryPtr sep, Pointer mydata, Int4 index,
   }
 }
 
+static void BarCodeTechToKeyword (BioseqPtr bsp, Pointer userdata)
+
+{
+  GBBlockPtr   gbp;
+  MolInfoPtr   mip;
+  SeqDescrPtr  sdp;
+  ValNodePtr   vnp;
+
+  if (bsp == NULL) return;
+
+  sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_molinfo, NULL);
+  if (sdp == NULL || sdp->choice != Seq_descr_molinfo) return;
+
+  mip = (MolInfoPtr) sdp->data.ptrvalue;
+  if (mip == NULL || mip->tech != MI_TECH_barcode) return;
+
+  sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_genbank, NULL);
+  if (sdp == NULL) {
+    gbp = GBBlockNew ();
+    if (gbp != NULL) {
+      sdp = SeqDescrAddPointer (&(bsp->descr), Seq_descr_genbank, (Pointer) gbp);
+    }
+  }
+  if (sdp == NULL || sdp->choice != Seq_descr_genbank) return;
+
+  gbp = (GBBlockPtr) sdp->data.ptrvalue;
+  for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+    if (StringICmp ((CharPtr) vnp->data.ptrvalue, "BARCODE") == 0) return;
+  }
+
+  vnp = ValNodeCopyStr (NULL, 0, "BARCODE");
+  if (vnp == NULL) return;
+
+  vnp->next = gbp->keywords;
+  gbp->keywords = vnp;
+}
+
 static Boolean EmptyOrNullString (CharPtr str)
 
 {
@@ -3329,7 +3366,7 @@ extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep)
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
 }
 
-static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
+static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode)
 
 {
   BioseqSetPtr  bssp;
@@ -3344,14 +3381,14 @@ static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
                          (bssp->_class >= 13 && bssp->_class <= 16) ||
                          bssp->_class == BioseqseqSet_class_wgs_set)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        rsult += LoopSeqEntryToAsn3 (sep, strip, correct, taxfun, taxmerge);
+        rsult += LoopSeqEntryToAsn3 (sep, strip, correct, taxfun, taxmerge, gpipeMode);
       }
       return rsult;
     }
   }
   oldscope = SeqEntrySetScope (sep);
   taxserver = (Boolean) (taxfun != NULL || taxmerge != NULL);
-  rsult = SeqEntryToAsn3Ex (sep, strip, correct, taxserver, taxfun, taxmerge);
+  rsult = SeqEntryToAsn3Ex (sep, strip, correct, taxserver, taxfun, taxmerge, gpipeMode);
   SeqEntrySetScope (oldscope);
   return rsult;
 }
@@ -4458,6 +4495,78 @@ static void FindSingleBioSource (BioSourcePtr biop, Pointer userdata)
   *biopp = biop;
 }
 
+static void CleanupOldName (BioSourcePtr biop, Pointer userdata)
+
+{
+  OrgModPtr       next, omp;
+  OrgNamePtr      onp;
+  OrgRefPtr       orp;
+  OrgModPtr PNTR  prev;
+
+  if (biop == NULL) return;
+  orp = biop->org;
+  if (orp == NULL || StringHasNoText (orp->taxname)) return;
+  onp = orp->orgname;
+  if (onp == NULL || onp->mod == NULL) return;
+  prev = &(onp->mod);
+  omp = *prev;
+  while (omp != NULL) {
+    next = omp->next;
+    if (omp->subtype == ORGMOD_old_name && StringCmp (orp->taxname, omp->subname) == 0) {
+      *prev = omp->next;
+      omp->next = NULL;
+      OrgModFree (omp);
+    } else {
+      prev = &(omp->next);
+    }
+    omp = next;
+  }
+}
+
+static void CleanupOrgModNote (BioSourcePtr biop, Pointer userdata)
+
+{
+  CharPtr         gbacr = NULL, gbana = NULL, gbsyn = NULL, taxname = NULL;
+  OrgModPtr       next, omp;
+  OrgNamePtr      onp;
+  OrgRefPtr       orp;
+  OrgModPtr PNTR  prev;
+
+  if (biop == NULL) return;
+  orp = biop->org;
+  if (orp == NULL) return;
+  taxname = orp->taxname;
+  onp = orp->orgname;
+  if (onp == NULL || onp->mod == NULL) return;
+  for (omp = onp->mod; omp != NULL; omp = omp->next) {
+    if (omp->subtype == ORGMOD_gb_acronym) {
+      gbacr = omp->subname;
+    } else if (omp->subtype == ORGMOD_gb_anamorph) {
+      gbana = omp->subname;
+    } else if (omp->subtype == ORGMOD_gb_synonym) {
+      gbsyn = omp->subname;
+    }
+  }
+  prev = &(onp->mod);
+  omp = *prev;
+  while (omp != NULL) {
+    next = omp->next;
+    if (omp->subtype == ORGMOD_other &&
+        StringDoesHaveText (omp->subname) &&
+        (StringCmp (taxname, omp->subname) == 0 ||
+         StringCmp (gbacr, omp->subname) == 0 ||
+         StringCmp (gbana, omp->subname) == 0 ||
+         StringCmp (gbsyn, omp->subname) == 0)) {
+      *prev = omp->next;
+      omp->next = NULL;
+      OrgModFree (omp);
+    } else {
+      prev = &(omp->next);
+    }
+    omp = next;
+  }
+}
+
 static SeqFeatPtr GetUnambigOverlappingGene (BioseqPtr bsp, SeqLocPtr slp)
 
 {
@@ -4662,7 +4771,36 @@ static void MarkBadProtTitlesInNucProts (SeqEntryPtr sep)
   VisitBioseqsInSep (sep, NULL, StripBadTitleFromProteinProducts);
 }
 
-static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean doPseudo)
+static void MakeNcbiCleanupObject (SeqEntryPtr sep, Boolean gpipeMode)
+
+{
+  DatePtr        dp;
+  ValNodePtr     sdp;
+  UserObjectPtr  uop;
+
+  dp = DateCurr ();
+  if (dp == NULL) return;
+
+  uop = CreateNcbiCleanupUserObject ();
+  if (uop == NULL) return;
+
+  if (gpipeMode) {
+    AddStringToNcbiCleanupUserObject (uop, "method", "GpipeSeqEntryCleanup");
+  } else {
+    AddStringToNcbiCleanupUserObject (uop, "method", "SeriousSeqEntryCleanup");
+  }
+  AddIntegerToNcbiCleanupUserObject (uop, "version", NCBI_CLEANUP_VERSION);
+
+  AddIntegerToNcbiCleanupUserObject (uop, "month", dp->data [2]);
+  AddIntegerToNcbiCleanupUserObject (uop, "day", dp->data [3]);
+  AddIntegerToNcbiCleanupUserObject (uop, "year", dp->data [1] + 1900);
+
+  sdp = NewDescrOnSeqEntry (sep, Seq_descr_user);
+  if (sdp == NULL) return;
+  sdp->data.ptrvalue = uop;
+}
+
+static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean doPseudo, Boolean gpipeMode)
 
 {
   BioSourcePtr    biop;
@@ -4723,7 +4861,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   SeqEntryExplore (sep, NULL, MergeEquivCitSubs);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
   EntryMergeDupBioSources (sep); /* do before and after SE2A3 */
-  LoopSeqEntryToAsn3 (sep, TRUE, FALSE, taxfun, taxmerge);
+  LoopSeqEntryToAsn3 (sep, TRUE, FALSE, taxfun, taxmerge, gpipeMode);
   /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
   MovePopPhyMutPubs (sep);
   EntryChangeGBSource (sep);   /* at least remove redundant information in GBBlocks */
@@ -4747,6 +4885,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   ConvertFullLenPubFeatToDesc (sep);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
+  /* VisitBioseqsInSep (sep, NULL, BarCodeTechToKeyword); */
   /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
   SeqMgrIndexFeatures (entityID, NULL);
   biop = NULL;
@@ -4768,6 +4907,8 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
       }
     }
   }
+  VisitBioSourcesInSep (sep, NULL, CleanupOldName);
+  VisitBioSourcesInSep (sep, NULL, CleanupOrgModNote);
   CdCheck (sep, NULL);
   SeqMgrIndexFeatures (entityID, NULL);
   if (hasMarkedGenes) {
@@ -4775,13 +4916,18 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
     objMgrFilter [OBJ_SEQFEAT] = TRUE;
     GatherObjectsInEntity (entityID, 0, NULL, DeleteBadMarkedGeneXrefs, NULL, objMgrFilter);
   }
-  if (! isEmblOrDdbj) {   /* for now leave gene xrefs on EMBL and DDBJ */
-    VisitBioseqsInSep (sep, (Pointer) &isEmblOrDdbj, RemoveUnnecessaryGeneXrefs);
+  if (! gpipeMode) {
+    if (! isEmblOrDdbj) {   /* for now leave gene xrefs on EMBL and DDBJ */
+      VisitBioseqsInSep (sep, (Pointer) &isEmblOrDdbj, RemoveUnnecessaryGeneXrefs);
+    }
   }
   InstantiateProteinTitles (entityID, NULL);
   SeqMgrClearFeatureIndexes (entityID, NULL);
+  MakeNcbiCleanupObject (sep, gpipeMode);
   BasicSeqEntryCleanup (sep);
-  NormalizeDescriptorOrder (sep);
+  if (! gpipeMode) {
+    NormalizeDescriptorOrder (sep);
+  }
   TransTableFreeAll ();
   ErrSetMessageLevel (msev);
   ErrSetLogLevel (lsev);
@@ -4791,12 +4937,18 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
 
 {
-  SeriousSeqEntryCleanupEx (sep, taxfun, taxmerge, TRUE);
+  SeriousSeqEntryCleanupEx (sep, taxfun, taxmerge, TRUE, FALSE);
 }
 
 extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep)
 
 {
-  SeriousSeqEntryCleanupEx (sep, NULL, NULL, FALSE);
+  SeriousSeqEntryCleanupEx (sep, NULL, NULL, FALSE, FALSE);
+}
+
+extern void GpipeSeqEntryCleanup (SeqEntryPtr sep)
+
+{
+  SeriousSeqEntryCleanupEx (sep, NULL, NULL, TRUE, TRUE);
 }
 

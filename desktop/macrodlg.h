@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *
@@ -63,9 +63,12 @@ NLM_EXTERN DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_
 NLM_EXTERN DialoG ComplexConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG MolInfoBlockDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN void SingleAECRMacroAction (Uint2 entityID, Boolean indexer_version, Uint1 AECR_action_type, Uint1 AECR_qual_type);
+NLM_EXTERN void MacroApplyKeyword (Uint2 entityID, Boolean indexer_version);
 
 NLM_EXTERN Uint2 TwoStepExistingText (Int4 num_found, Boolean non_text, Boolean allow_multi);
 
 NLM_EXTERN ForM SingleParseAction (Uint2 entityID);
+
+NLM_EXTERN DialoG MolinfoFieldChoiceDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 
 #endif

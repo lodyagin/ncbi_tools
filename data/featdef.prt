@@ -899,6 +899,15 @@ FeatDefGroupSet ::= {
     displaygroup 3 ,
     molgroup na
   } ,
+  {                   -- clone ref
+    typelabel "CloneRef" ,
+    menulabel "Clone Reference" ,
+    featdef-key 96 ,
+    seqfeat-key 21 ,
+    entrygroup 0 ,
+    displaygroup 0 ,
+    molgroup na
+  } ,
 
 }
 }

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.205 2009/05/28 18:37:11 kans Exp $";
 
-/* $Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden Exp $
+/* $Id: blastall.c,v 6.205 2009/05/28 18:37:11 kans Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,12 @@ static char const rcsid[] = "$Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.205  2009/05/28 18:37:11  kans
+ * remove includd hspstream_queue.h
+ *
+ * Revision 6.204  2009/05/28 14:55:09  camacho
+ * Fix compilation issues following merge with BLAST sources from the C++ toolkit JIRA SB-166
+ *
  * Revision 6.203  2009/01/26 14:00:56  madden
  * env variable sets BLAST_MAXQUERY_SIZE
  *
@@ -731,9 +737,7 @@ static char const rcsid[] = "$Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden 
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_engine.h>
-#include <algo/blast/core/hspstream_collector.h>
 #include <algo/blast/core/blast_stat.h>
-#include <algo/blast/api/hspstream_queue.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/blast_input.h>
 #include <algo/blast/api/blast_format.h>

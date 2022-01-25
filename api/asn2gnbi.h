@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.108 $
+* $Revision: 1.111 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -157,6 +157,7 @@ typedef struct int_asn2gb_job {
   Boolean         www;
   Boolean         specialGapFormat;
   Boolean         hideGoTerms;
+  Boolean         reindex;
   Int4            seqGapCurrLen;
   ValNodePtr      gihead;
   ValNodePtr      gitail;
@@ -422,6 +423,7 @@ typedef enum {
   Qual_class_boolean,
   Qual_class_int,
   Qual_class_evidence,
+  Qual_class_exception,
   Qual_class_valnode,
   Qual_class_EC_valnode,
   Qual_class_xtraprds,
@@ -1138,7 +1140,7 @@ NLM_EXTERN void AddAccessionBlock (
 NLM_EXTERN void AddVersionBlock (
   Asn2gbWorkPtr awp
 );
-NLM_EXTERN void AddProjectBlock (
+NLM_EXTERN void AddDblinkBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddDbsourceBlock (

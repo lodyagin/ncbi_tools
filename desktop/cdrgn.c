@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.117 $
+* $Revision: 6.120 $
 *
 * File Description: 
 *
@@ -1767,6 +1767,9 @@ static void DoPredictCdRegion (CdRgnFormPtr cfp)
           protbsp != NULL && protbsp->length > 0) {
         nucbsp = (BioseqPtr) sep->data.ptrvalue;
         slp = PredictCodingRegion (nucbsp, protbsp, code);
+        if (slp != NULL && SeqLocStop (slp) > nucbsp->length - 1) {
+          Message (MSG_ERROR, "Warning!  Nucleotide is not long enough for protein sequence!");
+        }
         PointerToDialog (cfp->location, slp);
         if (slp != NULL) {
           cfp->locvisited = TRUE;
@@ -2681,9 +2684,11 @@ static void AdjustForStopCodon (ButtoN b)
   if (desired_cds_len < loc_len) {
     /* truncate to correct length */
     orig_slp = TruncateLocation (orig_slp, desired_cds_len);
-    PointerToDialog (cfp->location, orig_slp);
-    DoTranslateProtein (cfp);
   }
+  SetSeqLocPartial (orig_slp, partial5, FALSE);
+
+  PointerToDialog (cfp->location, orig_slp);
+  DoTranslateProtein (cfp);
   prot = MemFree (prot);
   orig_slp = SeqLocFree (orig_slp);
 }
@@ -6646,6 +6651,9 @@ static void AddRnaSpecificQualsForType (SeqFeatPtr sfp, RnaPagePtr rpp, UIEnum v
         gbq->val = str;
       }
     }
+  } else {
+    /* product should now be in extension, this is an old qualifier no longer needed */
+    RemoveQualByName (sfp, "product");
   }
 }
 

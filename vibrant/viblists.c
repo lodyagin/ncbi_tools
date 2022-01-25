@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.11  2009/05/15 13:52:38  bollin
+* make single list in Motif resize if possible, to allow longer strings to be displayed.
+*
 * Revision 6.10  2008/04/29 13:43:50  kans
 * fixes for warnings caught by mingw cross-compiler
 *
@@ -1386,7 +1389,7 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
       break;
     }
 
-  XtSetArg (wargs [n], XmNlistSizePolicy, XmCONSTANT); n++;
+  XtSetArg (wargs [n], XmNlistSizePolicy, XmRESIZE_IF_POSSIBLE); n++;
   XtSetArg (wargs [n], XmNscrollBarDisplayPolicy, XmSTATIC); n++;
 
   c = XmCreateScrolledList (wptr, (String) "", wargs, n);

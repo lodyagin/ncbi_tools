@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.25 $
+* $Revision: 1.26 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <tax3api.h>
 #endif
 
-#define ASNDISC_APP_VER "1.1"
+#define ASNDISC_APP_VER "1.2"
 
 CharPtr ASNDISC_APPLICATION = ASNDISC_APP_VER;
 
@@ -613,6 +613,7 @@ static void ProcessSingleRecord (
       return;
     }
 
+    SeqMgrHoldIndexing (TRUE);
     switch (drfp->type) {
       case 2 :
         dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -633,6 +634,7 @@ static void ProcessSingleRecord (
       default :
         break;
     }
+    SeqMgrHoldIndexing (FALSE);
 
     AsnIoClose (aip);
 
@@ -829,7 +831,11 @@ static void ProcessMultipleRecord (
 
   while ((atp = AsnReadId (aip, amp, atp)) != NULL && maxcount < drfp->maxcount) {
     if (atp == atp_se) {
+
+      SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
+      SeqMgrHoldIndexing (FALSE);
+
       ValNodeAddPointer (&(drfp->sep_list), 0, sep);
 
       if (drfp->lock) {

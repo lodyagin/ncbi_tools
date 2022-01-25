@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.149 $
+* $Revision: 1.154 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -66,7 +66,7 @@
 /* URLs */
 
 
-static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids=";
+static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/pubmed/";
 
 static CharPtr link_uspto = "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber=";
 
@@ -137,10 +137,10 @@ static UrlData Nlm_url_base [] = {
   {"CDD",                   "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
   {"CK",                    "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="},
   {"COG",                   "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
-  {"dbClone",               "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clone&cmd=Retrieve&list_uids="},
-  {"dbCloneLib",            "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clonelib&cmd=Retrieve&list_uids="},
+  {"dbClone",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clone&cmd=Retrieve&list_uids="},
+  {"dbCloneLib",            "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clonelib&cmd=Retrieve&list_uids="},
   {"dbEST",                 "http://www.ncbi.nlm.nih.gov/nucest/"},
-  {"dbProbe",               "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=probe&cmd=Retrieve&list_uids="},
+  {"dbProbe",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=probe&cmd=Retrieve&list_uids="},
   {"dbSNP",                 "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="},
   {"dbSTS",                 "http://www.ncbi.nlm.nih.gov/nuccore/"},
   {"dictyBase",             "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="},
@@ -151,11 +151,13 @@ static UrlData Nlm_url_base [] = {
   {"FLYBASE",               "http://flybase.bio.indiana.edu/.bin/fbidq.html?"},
   {"GABI",                  "http://www.gabipd.org/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="},
   {"GeneDB",                "http://www.genedb.org/genedb/Dispatcher?formType=navBar&submit=Search+for&organism=All%3Apombe%3Acerevisiae%3Adicty%3Aasp%3Atryp%3Aleish%3Amalaria%3Astyphi%3Aglossina&desc=yes&ohmr=%2F&name="},
-  {"GeneID",                "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
+  {"GeneID",                "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
   {"GO",                    "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:"},
+  {"GOA",                   "http://www.ebi.ac.uk/ego/GProtein?ac="},
   {"GRIN",                  "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"},
   {"H-InvDB",               "http://www.h-invitational.jp"},
   {"HGNC",                  "http://www.genenames.org/data/hgnc_data.php?hgnc_id="},
+  {"HOMD",                  "http://www.homd.org/"},
   {"HPRD",                  "http://www.hprd.org/protein/"},
   {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},
   {"IMGT/GENE-DB",          "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"},
@@ -171,6 +173,7 @@ static UrlData Nlm_url_base [] = {
   {"MGI",                   "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"},
   {"MIM",                   "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="},
   {"miRBase",               "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="},
+  {"MycoBank",              "http://www.mycobank.org/MycoTaxo.aspx?Link=T&Rec="},
   {"NBRC",                  "http://www.nbrc.nite.go.jp/NBRC2/NBRCCatalogueDetailServlet?ID=NBRC&CAT="},
   {"NextDB",                "http://nematode.lab.nig.ac.jp/cgi-bin/db/ShowGeneInfo.sh?celk="},
   {"niaEST",                "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="},
@@ -192,6 +195,7 @@ static UrlData Nlm_url_base [] = {
   {"RiceGenes",             "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="},
   {"SEED",                  "http://www.theseed.org/linkin.cgi?id="},
   {"SGD",                   "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="},
+  {"SGN",                   "http://www.sgn.cornell.edu/search/est.pl?request_type=7&request_id="},
   {"SubtiList",             "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"},
   {"TAIR",                  "http://www.arabidopsis.org/servlets/TairObject?type=locus&name="},
   {"taxon",                 "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"},
@@ -404,6 +408,17 @@ static void FF_www_get_url (
       url = "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=30&KEN_STR=";
     } else if (StringStr (identifier, "HIX") != NULL) {
       url = "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=31&KEN_STR=";
+    }
+
+
+  } else if (StringCmp (db, "HOMD") == 0) {
+
+    if (StringStr (identifier, "tax_") != NULL ) {
+      url = "http://www.homd.org/taxon=";
+      ident += 4;
+    } else if (StringStr (identifier, "seq_") != NULL ) {
+      url = "http://www.homd.org/seq=";
+      ident += 4;
     }
 
   } else if (StringCmp (db, "IMGT/GENE-DB") == 0) {

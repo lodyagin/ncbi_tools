@@ -375,6 +375,10 @@ SOURCE=..\..\..\object\objtseq.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objvalid.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\pgppop.c
 # End Source File
 # Begin Source File
@@ -496,6 +500,10 @@ SOURCE=..\..\..\api\utilpars.c
 # Begin Source File
 
 SOURCE=..\..\..\api\utilpub.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\valapi.c
 # End Source File
 # Begin Source File
 
@@ -987,6 +995,10 @@ SOURCE=..\..\..\object\objtseq.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objvalid.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\parsegb.h
 # End Source File
 # Begin Source File
@@ -1108,6 +1120,10 @@ SOURCE=..\..\..\api\utilpars.h
 # Begin Source File
 
 SOURCE=..\..\..\api\utilpub.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\valapi.h
 # End Source File
 # Begin Source File
 

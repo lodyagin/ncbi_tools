@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket_connector.c,v 6.10 2008/10/27 20:55:50 kazimird Exp $
+/* $Id: test_ncbi_socket_connector.c,v 6.11 2009/04/10 23:04:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,7 +42,7 @@
 #define TEST_MAX_TRY 2
 #define TEST_TIMEOUT 5.123456
 
-#define MIN_PORT 5001
+#define MIN_PORT 4096
 
 #define _STR(n)      #n
 #define STRINGIFY(n) _STR(n)

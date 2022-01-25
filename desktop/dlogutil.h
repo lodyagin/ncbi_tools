@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.102 $
+* $Revision: 6.104 $
 *
 * File Description: 
 *
@@ -155,6 +155,7 @@ extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 */
 
 extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 procid);
+extern Uint2 GetProcIdForItemEditor (Uint2 entityID, Uint2 itemID, Uint1 itemtype, Uint2 subinputtype);
 extern OMUserDataPtr EntityAlreadyHasViewer (Uint2 entityID);
 extern Boolean MakeViewerIndependent (Uint2 entityID, OMUserDataPtr omudp);
 
@@ -792,6 +793,7 @@ NLM_EXTERN SeqFeatPtr GetSelectedNewFeature (DialoG d);
 NLM_EXTERN void ScrollToMatchingFeatures (DialoG d, SeqFeatPtr sfp);
 NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_features);
 
+NLM_EXTERN void CloseLog (LogInfoPtr lip);
 
 
 #ifdef __cplusplus

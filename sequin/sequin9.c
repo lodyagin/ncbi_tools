@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.477 $
+* $Revision: 6.479 $
 *
 * File Description: 
 *
@@ -3665,7 +3665,7 @@ static void ReplaceLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 length, Int4 
  * act on SEQLOC_INT, SEQLOC_PNT, and SEQLOC_PACKED_PNT and will ignore
  * other types.
  */
-static void 
+extern void 
 ReplaceComplexLocation 
 (SeqLocPtr   slp,
  SeqAlignPtr salp,
@@ -3738,6 +3738,7 @@ GetPropagatedLocation
   
   return new_loc;
 }
+
 
 static Boolean DoFeaturePropThruAlign (
   UpsDataPtr udp,
@@ -5940,7 +5941,7 @@ AdjustCDSForUpdate
   if (nucBsp == NULL) return FALSE;
   
   newloc = SeqLocMergeExEx (nucBsp, sfp->location, NULL, FALSE, FALSE,
-                            MergeOverlapsForThisFeature (sfp), FALSE, FALSE);
+                            MergeOverlapsForThisFeature (sfp), FALSE, FALSE, FALSE);
 
   if (newloc == NULL) return FALSE;
   sfp->location = newloc;

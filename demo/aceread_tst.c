@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/22/08
 *
-* $Revision: 1.25 $
+* $Revision: 1.26 $
 *
 * File Description: 
 *
@@ -1265,6 +1265,25 @@ static char ProcessContigCallback (TContigPtr contig, void *data)
   return 1;
 }
 
+
+static BioSourcePtr BioSourceDescriptorFromTaxId (Int4 taxid)
+{
+  BioSourcePtr biop = NULL;
+  DbtagPtr dbtag;
+
+  if (taxid > 0) {
+    biop = BioSourceNew ();
+    biop->org = OrgRefNew();
+    dbtag = DbtagNew ();
+    dbtag->db = StringSave ("taxon");
+    dbtag->tag = ObjectIdNew ();
+    dbtag->tag->id = taxid;
+    ValNodeAddPointer (&(biop->org->db), 0, dbtag);
+  }
+  return biop;
+}
+
+
 static void ReadLargeAceFile 
 (CharPtr acefile,
  CharPtr asn1_out,
@@ -1299,6 +1318,7 @@ static void ReadLargeAceFile
   SeqDescrPtr     sdp, sdp_next;
   ContigFileListData file_count_list;
   ContigCountCallbackPtr summ;
+  Boolean                has_source = FALSE;
 
   MemSet (&c, 0, sizeof (ContigCallbackData));
 
@@ -1393,6 +1413,7 @@ static void ReadLargeAceFile
   /* read template file */
   c.sbp = NULL;
   c.desc_list = NULL;
+
   if (!StringHasNoText (template_in)) {
     f = FileOpen (template_in, "r");
     if (f == NULL) {
@@ -1408,6 +1429,10 @@ static void ReadLargeAceFile
       } else if (datatype == OBJ_SUBMIT_BLOCK) {
         c.sbp = (SubmitBlockPtr) dataptr;
       } else if (datatype == OBJ_SEQDESC) {
+        sdp = (SeqDescrPtr) datatype;
+        if (sdp->choice == Seq_descr_source) {
+          has_source = TRUE;
+        }
         ValNodeLink (&(c.desc_list), (ValNodePtr) dataptr);
       } else {
         ObjMgrFree (datatype, dataptr);
@@ -1425,6 +1450,14 @@ static void ReadLargeAceFile
         csp->date = DateCurr ();
       }
     }
+  }
+
+  if (taxid > 0 && !has_source) {
+    /* tax lookup? */
+    sdp = SeqDescrNew (NULL);
+    sdp->choice = Seq_descr_source;
+    sdp->data.ptrvalue = BioSourceDescriptorFromTaxId (taxid);
+    ValNodeLink (&(c.desc_list), (ValNodePtr) sdp);
   }
 
   c.atp = AsnFind ("Bioseq-set.seq-set.E");

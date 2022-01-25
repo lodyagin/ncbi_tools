@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/* $Id: ncbi_socket.h,v 6.70 2008/10/31 11:25:51 kazimird Exp $
+/* $Id: ncbi_socket.h,v 6.71 2009/05/04 15:54:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,8 +33,7 @@
  *   Plain portable TCP/IP socket API for:  UNIX, MS-Win, MacOS
  *   Platform-specific library requirements:
  *     [UNIX ]   -DNCBI_OS_UNIX     -lresolv -lsocket -lnsl
- *     [MSWIN]   -DNCBI_OS_MSWIN    wsock32.lib
- *     [MacOS]   -DNCBI_OS_MAC      NCSASOCK -- BSD-style socket emulation lib
+ *     [MSWIN]   -DNCBI_OS_MSWIN    ws2_32.lib
  *
  *********************************
  * Generic:
@@ -452,11 +451,11 @@ typedef enum {
     fSOCK_LogDefault   = eDefault,
     fSOCK_BindAny      = 0,      /** bind to 0.0.0.0 (i.e. any), default     */
     fSOCK_BindLocal    = 0x10,   /** bind to 127.0.0.1 only                  */
-    fSOCK_KeepOnExec   = 0x20,   /** can be applied to most sockets          */
-    fSOCK_CloseOnExec  = 0,      /** can be applied to most sockets          */
+    fSOCK_KeepOnExec   = 0x20,   /** can be applied to all sockets           */
+    fSOCK_CloseOnExec  = 0,      /** can be applied to all sockets           */
     fSOCK_Secure       = 0x40,   /** subsumes CloseOnExec regardless of Keep */
-    fSOCK_KeepOnClose  = 0x80,   /** do not close OS handle on SOCK_Close    */
-    fSOCK_CloseOnClose = 0,      /** do     close OS handle on SOCK_Close    */
+    fSOCK_KeepOnClose  = 0x80,   /** do not close OS handle on SOCK_Close[Ex]*/
+    fSOCK_CloseOnClose = 0,      /** do     close OS handle on SOCK_Close[Ex]*/
     fSOCK_ReadOnWrite       = 0x100,
     fSOCK_InterruptOnSignal = 0x200
 } ESOCK_Flags;
@@ -483,7 +482,7 @@ typedef enum { /* DEPRECATED -- DON'T USE! */
  * @param backlog
  *  [in]  maximal # of pending connections
  *  <b>NOTE:</b> on some systems, "backlog" can be silently limited
- *  down to 128 (or 5).
+ *  down to 128 (or 5), or completely ignored whatsoever.
  * @param lsock
  *  [out] handle of the created listening socket
  * @param flags
@@ -507,7 +506,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_CreateEx
  * @param backlog
  *  [in]  maximal # of pending connections
  *  <b>NOTE:</b> on some systems, "backlog" can be silently limited
- *  down to 128 (or 5).
+ *  down to 128 (or 5), or completely ignored whatsoever.
  * @param lsock
  *  [out] handle of the created listening socket
  * @sa
@@ -1123,6 +1122,9 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Write
  * Break actual connection if any was established.
  * Do not attempt to send anything upon SOCK_Close().
  * This call is available for stream sockets only.
+ * NB:  Even though the underlying OS socket handle may have been marked for
+ *      preservation via fSOCK_KeepOnClose, this call always and unconditially
+ *      closes and destroys the actual OS handle.
  * @param sock
  * Socket handle
  */
@@ -1175,14 +1177,31 @@ extern NCBI_XCONNECT_EXPORT void SOCK_GetPeerAddress
  * @param buf
  *  [out] pointer to provided buffer to store the text to
  * @param buflen
- *  [in] usable size of the buffer above 
+ *  [in]  usable size of the buffer above 
+ * @param format
+ *  [in]  what parts of address to include
  * @return
  *  On success, return its "buf" argument; return 0 on error.
-*/
+ */
+typedef enum {
+    eSAF_Full = 0,  /** address in full, native form                      */
+    eSAF_Port,      /** only numeric port if INET socket, empty otherwise */
+    eSAF_IP         /** only numeric IP if INET socket,   empty otherwise */  
+} ESOCK_AddressFormat;
+
+extern NCBI_XCONNECT_EXPORT char* SOCK_GetPeerAddressStringEx
+(SOCK                sock,
+ char*               buf,
+ size_t              buflen,
+ ESOCK_AddressFormat format
+ );
+
+
+/** Equivalent to SOCK_GetPeerAddressStringEx(.,.,.,eSAF_Full) */
 extern NCBI_XCONNECT_EXPORT char* SOCK_GetPeerAddressString
 (SOCK   sock,
- char*  buf,       
- size_t buflen     
+ char*  buf,
+ size_t buflen
  );
 
 
@@ -1197,8 +1216,8 @@ extern NCBI_XCONNECT_EXPORT char* SOCK_GetPeerAddressString
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_GetOSHandle
 (SOCK   sock,
- void*  handle_buf,  
- size_t handle_size  
+ void*  handle_buf,
+ size_t handle_size
  );
 
 

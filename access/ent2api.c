@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.109 $
+* $Revision: 1.113 $
 *
 * File Description: 
 *
@@ -1220,9 +1220,13 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
       }
       */
       if (StringHasNoText (e2lip->link_descr)) {
-        sprintf (buf, "Database %s link %s has no description", db, lnk);
-        ValNodeCopyStr (head, 0, buf);
-        rsult = FALSE;
+        if (StringICmp (db, "nucest") == 0 && StringICmp (lnk, "nucest_gene_clust") == 0) {
+        } else if (StringICmp (db, "gene") == 0 && StringICmp (lnk, "gene_nucest_clust") == 0) {
+        } else {
+          sprintf (buf, "Database %s link %s has no description", db, lnk);
+          ValNodeCopyStr (head, 0, buf);
+          rsult = FALSE;
+        }
       }
       if (StringHasNoText (e2lip->db_to)) {
         sprintf (buf, "Database %s link %s has no target database", db, lnk);
@@ -1342,6 +1346,10 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Clinical Synopsis") == 0 && StringICmp (str, "Clinical Synopsis Date") == 0) {
             } else if (StringICmp (last, "Volume") == 0 && StringICmp (str, "Volume3D") == 0) {
             } else if (StringICmp (last, "InChI") == 0 && StringICmp (str, "InChIKey") == 0) {
+            } else if (StringICmp (last, "Dataset") == 0 && StringICmp (str, "Dataset ID") == 0) {
+            } else if (StringICmp (last, "Comment") == 0 && StringICmp (str, "Comments") == 0) {
+            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SidExternalID") == 0) {
+            } else if (StringICmp (last, "Platform") == 0 && StringICmp (str, "Platform Reporter Type") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

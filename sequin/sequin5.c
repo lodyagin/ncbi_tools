@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.665 $
+* $Revision: 6.673 $
 *
 * File Description:
 *
@@ -78,6 +78,7 @@
 #include <tax3api.h> /* added for specific-host corrections */
 #include <findrepl.h>
 #include <valid.h> /* added for latloncountry conflict checking */
+#include <vsmutil.h>
 
 static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean directToEditor)
 
@@ -2066,108 +2067,6 @@ static void MoveProteinAnnots (BioseqPtr destBsp,
 }
 
 
-/*=========================================================================*/
-/*                                                                         */
-/* MergeCDS ()                                                             */
-/*                                                                         */
-/*=========================================================================*/
-
-static void MergeCDSCallback (BioseqPtr bsp, Pointer userdata)
-{
-  SeqFeatPtr        cds, first_cds;
-  SeqMgrFeatContext fcontext;
-  Int4              left = -1, right = -1;
-  SeqLocPtr         cover_loc;
-  Boolean           partial_left = FALSE, partial_right = FALSE;
-  Uint1             strand;
-  
-  if (bsp == NULL)
-  {
-    return;
-  }
-  
-  first_cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
-  cds = first_cds;
-  while (NULL != cds)
-  {
-    if (left == -1 || left > fcontext.left)
-    {
-      left = fcontext.left;
-      partial_left = fcontext.partialL;
-    }
-    if (right < fcontext.right)
-    {
-      right = fcontext.right;
-      partial_right = fcontext.partialR;
-    }
-    cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &fcontext);
-  }
-  if (left < 0 || right < 0)
-  {
-    return;
-  }
-  strand = SeqLocStrand (first_cds->location);
-  cover_loc = SeqLocIntNew (left, right, strand, bsp->id);
-  if (strand == Seq_strand_minus)
-  {
-        SetSeqLocPartial (cover_loc, partial_right, partial_left);
-  }
-  else
-  {
-        SetSeqLocPartial (cover_loc, partial_left, partial_right);
-  }
-
-  cds = CreateNewFeatureOnBioseq (bsp, SEQFEAT_CDREGION, cover_loc);
-  cds->partial = (partial_left | partial_right);
-  cds->data.value.ptrvalue = AsnIoMemCopy (first_cds->data.value.ptrvalue,
-                                              (AsnReadFunc) CdRegionAsnRead,
-                                              (AsnWriteFunc) CdRegionAsnWrite);
-  RetranslateOneCDS (cds, first_cds->idx.entityID, TRUE, FALSE);
-}
-
-extern void MergeCDS (IteM i)
-{
-  BaseFormPtr  bfp;
-  SeqEntryPtr  sep;
-  LogInfoPtr   lip;
-
-  /* Get the top level BioseqSet */
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-
-  if (NULL == bfp)
-    return;
-
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (NULL == sep)
-    return;
-
-  WatchCursor ();
-  Update ();
-
-  lip = OpenLog ("Merge CDS Mat Peptides");
-  VisitBioseqsInSep (sep, NULL, MergeCDSCallback);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  VisitBioseqsInSep (sep, lip, ConvertInnerCDSsToMatPeptidesCallback);
-
-  CloseLog (lip);
-  FreeLog (lip);
-  /* Do an update and return successfully */
-
-  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  ArrowCursor ();
-  Update ();
-
-  return;
-}
-
 static Boolean ConvertImpToSpecialRNA 
 (SeqFeatPtr sfp,
  Uint2      featdef_to,
@@ -2727,6 +2626,10 @@ static Boolean ConvertBioSrcToRepeatRegionEx (SeqFeatPtr sfp, Uint2 featdef_to, 
 }
 
 
+static Boolean ConvertCDSToMatPeptide (SeqFeatPtr sfp, Uint2 featdef_to, Pointer extradata)
+{
+  return AutoConvertCDSToMiscFeat (sfp, extradata == NULL ? TRUE : !(*((BoolPtr) extradata)));
+}
 
 extern EnumFieldAssoc  enum_bond_alist [];
 extern EnumFieldAssoc  enum_site_alist [];
@@ -17145,7 +17048,7 @@ static Boolean ConvertAnyToRegion (SeqFeatPtr, Uint2 featdef_to, Pointer extrada
 static Boolean ConvertImpToImp (SeqFeatPtr, Uint2 featdef_to, Pointer extradata);
 static Boolean ConvertRNAToRNA (SeqFeatPtr, Uint2 featdef_to, Pointer extradata);
 static Boolean ConvertProtToProt (SeqFeatPtr, Uint2 featdef_to, Pointer extradata);
-
+static Boolean ConvertCDSToMatPeptide (SeqFeatPtr sfp, Uint2 featdef_to, Pointer extradata);
 
 static ConvertFeatureProcsData ConvertFeaturesTable[] = {
   { SEQFEAT_CDREGION, FEATDEF_CDS,                SEQFEAT_RNA,    FEATDEF_ANY,
@@ -17251,6 +17154,9 @@ static ConvertFeatureProcsData ConvertFeaturesTable[] = {
   { SEQFEAT_PROT,     FEATDEF_ANY,                SEQFEAT_PROT,   FEATDEF_ANY,
        NULL, NULL, NULL, ConvertProtToProt, NULL,
        "Changes type of protein feature." },
+  { SEQFEAT_CDREGION, FEATDEF_CDS,                SEQFEAT_PROT,   FEATDEF_mat_peptide_aa,
+       NULL, NULL, NULL, ConvertCDSToMatPeptide, NULL,
+       "If coding region is overlapped by another coding region, will convert the coding region to a mat-peptide on the overlapping coding region's protein sequence, otherwise if you have checked \"Leave Original Feature\" it will create a mat-peptide with the same protein names and description on the protein sequence for the coding region." }
 };
 
 static Int4 num_convert_feature_table_lines = sizeof (ConvertFeaturesTable) / sizeof (ConvertFeatureProcsData);
@@ -18377,6 +18283,10 @@ static Boolean NewConvertFeaturesByList (SeqEntryPtr sep, FilterSetPtr fsp, Uint
       return FALSE;
     }
   }
+  else if (featdef_from == FEATDEF_CDS && mrfp->featdef_to == FEATDEF_mat_peptide_aa) 
+  {
+    extradata = &(mrfp->leave_original_feature);
+  }
 
   /* adjust feature list if necessary */  
   if (ConvertFeaturesTable[table_line_num].adjust_features != NULL) 
@@ -18437,6 +18347,14 @@ static Boolean NewConvertFeaturesByList (SeqEntryPtr sep, FilterSetPtr fsp, Uint
       ofp->sep = NULL;
 
       /* don't remove protein product if feature wasn't removed */
+      if (protBsp != NULL)
+      {
+        protBsp->idx.deleteme = FALSE;
+      }
+    }
+    else if (sfp->data.choice == SEQFEAT_CDREGION) 
+    {
+      /* failed to convert feature, don't remove product */
       if (protBsp != NULL)
       {
         protBsp->idx.deleteme = FALSE;
@@ -29285,53 +29203,6 @@ extern void ConvertLocusTagToOldLocusTag (IteM i)
   Show (w);   
 }
 
-extern LogInfoPtr OpenLog (CharPtr display_title)
-{
-  LogInfoPtr lip;
-  
-  lip = (LogInfoPtr) MemNew (sizeof (LogInfoData));
-  if (lip == NULL)
-  {
-    return NULL;
-  }
-  TmpNam (lip->path);
-  lip->fp = FileOpen (lip->path, "w");
-  lip->data_in_log = FALSE;
-  lip->display_title = StringSave (display_title);
-  return lip;
-}
-
-extern void CloseLog (LogInfoPtr lip)
-{
-  if (lip == NULL || lip->fp == NULL)
-  {
-    return;
-  }
-  FileClose (lip->fp);
-  lip->fp = NULL;
-  if (lip->data_in_log)
-  {
-    LaunchGeneralTextViewer (lip->path, lip->display_title);
-  }
-  FileRemove (lip->path);  
-}
-
-extern LogInfoPtr FreeLog (LogInfoPtr lip)
-{
-  if (lip != NULL)
-  {
-    lip->display_title = MemFree (lip->display_title);
-    if (lip->fp != NULL)
-    {
-      FileClose (lip->fp);
-      lip->fp = NULL;
-      FileRemove (lip->path);
-    }
-    lip = MemFree (lip);
-  }
-  return lip;
-}
-
 static CharPtr GetLastLineageFromString (CharPtr lineage)
 {
   CharPtr last_semicolon, lineage_start, penultimate_semicolon;
@@ -29737,20 +29608,159 @@ static void CreateMasterCodingRegions (BioseqPtr bsp, Pointer userdata)
 }
 
 
-static void CombineCDSsOnBioseq (BioseqPtr bsp, Pointer userdata)
+static SeqLocPtr 
+CreateProteinLoc 
+(SeqLocPtr  nuc_loc,
+ SeqFeatPtr top_cds,
+ Int4       cds_frame, 
+ BioseqPtr  prot_bsp,
+ LogInfoPtr lip)
 {
-  CombineCDSPtr ccp;
+  SeqLocPtr    prot_loc = NULL;
+  Boolean      partial5, partial3;
   
-  
-  if (bsp == NULL || userdata == NULL)
+  if (nuc_loc == NULL || top_cds == NULL || prot_bsp == NULL
+      || top_cds->location == NULL)
   {
+    return NULL;
+  }
+
+  prot_loc = dnaLoc_to_aaLoc(top_cds, nuc_loc, TRUE, &cds_frame, TRUE);
+  if (prot_loc == NULL) {
+    if (lip != NULL && lip->fp != NULL)
+    {
+      fprintf (lip->fp, "Invalid coordinates for mat_peptide conversion\n");
+      lip->data_in_log = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
+    }
+  } else {
+    /* set partials if necessary? */
+    CheckSeqLocForPartial (nuc_loc, &partial5, &partial3);
+    SetSeqLocPartial (prot_loc, partial5, partial3);
+  }
+
+
+  return prot_loc;
+}
+
+static Boolean ConvertCDSToMatPeptideNoOverlap (SeqFeatPtr sfp, LogInfoPtr lip)
+{
+  SeqMgrFeatContext fcontext;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) {
+    return FALSE;
+  }
+  if (!CreateMatPeptideFromCDS (sfp)) {
+    SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, sfp->idx.itemID, 0, sfp, &fcontext);
+    if (lip != NULL && lip->fp != NULL) {
+      fprintf (lip->fp, "Coding region %s has no product sequence\n", fcontext.label);
+      lip->data_in_log = TRUE;
+    } else {
+      Message (MSG_ERROR, "Coding region %s has no product sequence\n", fcontext.label);
+    }
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
+static void ConvertCDSToMatPeptideNoOverlapCallback (BioseqPtr bsp, Pointer userdata)
+{
+  LogInfoPtr lip;
+  SeqMgrFeatContext fcontext;
+  SeqFeatPtr sfp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) {
     return;
   }
-  
-  ccp = (CombineCDSPtr) userdata;
-  
-  ConvertInnerCDSsToMatPeptidesCallback (bsp, ccp->lip);
+
+  lip = (LogInfoPtr) userdata;
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext)) {
+    ConvertCDSToMatPeptideNoOverlap (sfp, lip);
+  }
 }
+
+
+static void ConvertCDSToMatPeptideOverlap (SeqFeatPtr sfp, SeqFeatPtr top_cds, LogInfoPtr lip)
+{
+  SeqMgrFeatContext gene_context;
+  SeqFeatPtr gene;
+
+  if (sfp == NULL || top_cds == NULL || sfp->data.choice != SEQFEAT_CDREGION || top_cds->data.choice != SEQFEAT_CDREGION) {
+    return;
+  }
+
+  if (!ConvertCDSToMatPeptideForOverlappingCDS (sfp, top_cds, TRUE)) {
+    if (lip != NULL && lip->fp != NULL)
+    {
+      fprintf (lip->fp, "Invalid coordinates for mat_peptide conversion\n");
+      lip->data_in_log = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
+    }
+  } else {
+    /* Mark gene with same location for deletion */
+    gene = SeqMgrGetOverlappingGene (sfp->location, &gene_context);
+    if (gene != NULL && SeqLocCompare (gene->location, sfp->location) == SLC_A_EQ_B)
+    {
+      gene->idx.deleteme = 1;
+    }
+  }
+}
+
+
+static void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userdata)
+{
+  LogInfoPtr        lip;
+  SeqFeatPtr        sfp = NULL;
+  ValNodePtr        top_level_cds_list = NULL;
+  SeqMgrFeatContext context;
+  ValNodePtr        vnp;
+  SeqFeatPtr        top_cds;
+  
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
+  lip = (LogInfoPtr) userdata;
+  
+  sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
+  while (sfp != NULL)
+  {
+    top_cds = NULL;
+    for (vnp = top_level_cds_list;
+         vnp != NULL && top_cds == NULL; 
+         vnp = vnp->next)
+    {
+      top_cds = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (top_cds != NULL)
+      {
+        if (SeqLocCompare (top_cds->location, sfp->location) != SLC_B_IN_A)
+        {
+          top_cds = NULL;
+        }
+      }
+    }
+
+    if (top_cds == NULL)
+    {
+      /* add to list of top level CDSs */
+      ValNodeAddPointer (&top_level_cds_list, 0, sfp);
+    }
+    else
+    {
+      ConvertCDSToMatPeptideOverlap (sfp, top_cds, lip);
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
+  }
+  ValNodeFree (top_level_cds_list);
+}
+
 
 static void DoCombineCDS (ButtoN b)
 {
@@ -29806,7 +29816,11 @@ static void DoCombineCDS (ButtoN b)
     SeqMgrIndexFeatures (ccp->input_entityID, NULL);
   }
   
-  VisitBioseqsInSep (sep, ccp, CombineCDSsOnBioseq);
+  if (ccp->action_choice == 1 || ccp->action_choice == 2) {
+    VisitBioseqsInSep (sep, ccp->lip, ConvertInnerCDSsToMatPeptidesCallback);
+  } else {
+    VisitBioseqsInSep (sep, ccp->lip, ConvertCDSToMatPeptideNoOverlapCallback);
+  }
 
   AsnIoClose (ccp->aip);
   SeqEntrySetScope (old_scope);
@@ -29829,13 +29843,13 @@ static void EnableNewCDSControls (GrouP g)
   ccp = (CombineCDSPtr) GetObjectExtra (g);
   if (ccp == NULL) return;
   
-  if (GetValue (ccp->action_choice_grp) == 1)
+  if (GetValue (ccp->action_choice_grp) == 2)
   {
-    Disable (ccp->new_cds_grp);
+    Enable (ccp->new_cds_grp);
   }
   else
   {
-    Enable (ccp->new_cds_grp);
+    Disable (ccp->new_cds_grp);
   }
 }
 
@@ -29874,7 +29888,7 @@ extern void CombineMultipleCDS (IteM i)
   ccp = (CombineCDSPtr) MemNew (sizeof (CombineCDSData));
   if (ccp == NULL) return;
   
-  w = FixedWindow (-50, -33, -10, -10, "Combine CDS Features", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, "Convert CDS to Mat-peptide", StdCloseWindowProc);
   SetObjectExtra (w, ccp, StdCleanupExtraProc);
   ccp->form = (ForM) w;
   ccp->input_entityID = bfp->input_entityID;
@@ -29882,9 +29896,10 @@ extern void CombineMultipleCDS (IteM i)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  ccp->action_choice_grp = HiddenGroup (h, 0, 2, EnableNewCDSControls);
+  ccp->action_choice_grp = HiddenGroup (h, 0, 3, EnableNewCDSControls);
   RadioButton (ccp->action_choice_grp, "Convert inner CDSs to mat_peptides");
-  RadioButton (ccp->action_choice_grp, "AND Merge multiple CDSs into one CDS");
+  RadioButton (ccp->action_choice_grp, "Merge multiple CDSs into one CDS and convert inner CDSs to mat_peptides");
+  RadioButton (ccp->action_choice_grp, "Create mat-peptide from protein on each CDS");
   SetValue (ccp->action_choice_grp, 1);
   SetObjectExtra (ccp->action_choice_grp, ccp, NULL);
   
@@ -32461,7 +32476,7 @@ static void CleanupSegregateByFieldForm (GraphiC g, VoidPtr data)
 
 
 
-static Int2 NewSegregateBioseqSet (BioseqSetPtr bssp, Nlm_BtnActnProc actn)
+static Int2 NewSegregateBioseqSet (BioseqSetPtr bssp, Nlm_BtnActnProc actn, ESegPage default_type)
 {
   GrouP              c;
   SegByFieldPtr      cfp;
@@ -32611,7 +32626,7 @@ static Int2 NewSegregateBioseqSet (BioseqSetPtr bssp, Nlm_BtnActnProc actn)
                               (HANDLE) cfp->pages[6],
                               NULL);
 
-  SetValue (cfp->seg_choice_grp, 2);
+  SetValue (cfp->seg_choice_grp, default_type);
 
   /* add select all/unselect all buttons */
   k = HiddenGroup (h, 3, 0, NULL);
@@ -32652,7 +32667,7 @@ static Int2 NewSegregateBioseqSet (BioseqSetPtr bssp, Nlm_BtnActnProc actn)
   return OM_MSG_RET_OK;
 }
 
-static Int2 LIBCALLBACK SegregateSetsByFieldEx (Pointer data, Nlm_BtnActnProc actn)
+static Int2 LIBCALLBACK SegregateSetsByFieldEx (Pointer data, Nlm_BtnActnProc actn, ESegPage default_type)
 {
   OMProcControlPtr   ompcp;
 
@@ -32665,13 +32680,13 @@ static Int2 LIBCALLBACK SegregateSetsByFieldEx (Pointer data, Nlm_BtnActnProc ac
     Message (MSG_ERROR, "You must select a set to segregate!");
     return OM_MSG_RET_ERROR;
   } 
-  return NewSegregateBioseqSet (ompcp->input_data, actn);
+  return NewSegregateBioseqSet (ompcp->input_data, actn, default_type);
 }
 
 
 extern Int2 LIBCALLBACK SegregateSetsByField (Pointer data)
 {
-  return SegregateSetsByFieldEx (data, SegregateByField_Callback);
+  return SegregateSetsByFieldEx (data, SegregateByField_Callback, eSegPageText);
 }
 
 extern void NewSegregateBioseqSetMenuItem (IteM i)
@@ -32690,7 +32705,7 @@ extern void NewSegregateBioseqSetMenuItem (IteM i)
   if (sep == NULL || !IS_Bioseq_set (sep)) {
     Message (MSG_ERROR, "This record does not have a top-levelset!");
   } else {
-    NewSegregateBioseqSet (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue), SegregateByField_Callback);
+    NewSegregateBioseqSet (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue), SegregateByField_Callback, eSegPageText);
   }
 }
 
@@ -32766,11 +32781,14 @@ static Boolean IsPlaceholderBioseq (BioseqPtr bsp)
 }
 
 
+/* sequesters is different from segregate - we aren't creating a permanent new set with
+ * the combined descriptors of the previous set; we're creating a temporary holding set.
+ */
 static void SequesterCategorySeqEntries (BioseqSetPtr newset, ClickableItemPtr category)
 {
   ValNodePtr vnp_item;
-  SeqEntryPtr sep, last_sep, prev_sep, remove_sep;
-  BioseqSetPtr bssp, orig_parent;
+  SeqEntryPtr sep, last_sep, prev_sep, remove_sep, set_sep, tmp_sep;
+  BioseqSetPtr bssp, orig_parent, prev_new_parent = NULL, prev_orig_parent = NULL;
   BioseqPtr bsp;
   Int4      set_pos;
 
@@ -32827,30 +32845,50 @@ static void SequesterCategorySeqEntries (BioseqSetPtr newset, ClickableItemPtr c
         } else {
           prev_sep->next = sep->next;
         }
-      }
-      /* set class type if not already set */
-      if (newset->_class == BioseqseqSet_class_genbank) {
-        newset->_class = orig_parent->_class;
+        sep->next = NULL;
       }
 
-      /* add descriptors from the orig_parent to the new parent */
-      AddNewUniqueDescriptors (&(newset->descr), orig_parent->descr);
+      /* if this seq-entry is from the same parent as the previous one, just add this to
+       * our current placeholder.
+       */
+      if (prev_orig_parent != orig_parent) {
+        prev_new_parent = BioseqSetNew ();
+        prev_new_parent->_class = orig_parent->_class;
+        /* add descriptors from the orig_parent to the new parent */
+        AddNewUniqueDescriptors (&(prev_new_parent->descr), orig_parent->descr);
 
-      /* add annotations from the orig_parent to the new parent */
-      AddNewUniqueAnnotations (&(newset->annot), orig_parent->annot);
+        /* add annotations from the orig_parent to the new parent */
+        AddNewUniqueAnnotations (&(prev_new_parent->annot), orig_parent->annot);
 
-      /* add to new parent */
-      sep->next = NULL;
+        /* add new parent to set */
+        set_sep = SeqEntryNew ();
+        set_sep->choice = 2;
+        set_sep->data.ptrvalue = prev_new_parent;
+
+        if (newset->seq_set == NULL) {
+          newset->seq_set = set_sep;
+        } else {
+          for (tmp_sep = newset->seq_set; tmp_sep->next != NULL; tmp_sep = tmp_sep->next) {
+          }
+          tmp_sep->next = set_sep;
+        }
+        SeqMgrLinkSeqEntry (set_sep, OBJ_BIOSEQSET, newset);
+        last_sep = NULL;
+      }
+      /* add seqentry to new parent */
       if (last_sep == NULL) {
-        newset->seq_set = sep;
+        prev_new_parent->seq_set = sep;
       } else {
         last_sep->next = sep;
       }
       last_sep = sep;
-      SeqMgrLinkSeqEntry (sep, OBJ_BIOSEQSET, newset);
+
+      SeqMgrLinkSeqEntry (sep, OBJ_BIOSEQSET, prev_new_parent);
 
       /* create unsequester entry */
       ValNodeAddPointer (&unsequester_list, 0, UnsequesterNew (sep, orig_parent, set_pos));
+
+      prev_orig_parent = orig_parent;
     }
   } else {
     for (vnp_item = category->subcategories; vnp_item != NULL; vnp_item = vnp_item->next) {
@@ -33018,8 +33056,8 @@ static void ReintegrateSequesteredSets (Uint2 entityID)
 {
   BaseFormPtr bfp;
   BioseqViewFormPtr vfp;
-  SeqEntryPtr sep, add_back_sep, next_sep;
-  BioseqSetPtr   bssp;
+  SeqEntryPtr new_parent_sep, sep, add_back_sep, next_sep;
+  BioseqSetPtr   top_bssp, bssp;
   UnsequesterPtr u;
 
   add_back_sep = GetTopSeqEntryForEntityID (entityID);
@@ -33029,28 +33067,37 @@ static void ReintegrateSequesteredSets (Uint2 entityID)
   bfp = GetBaseFormForEntityID (entityID);
   RemoveSeqEntryViewer (bfp->form);
 
-  bssp = (BioseqSetPtr) add_back_sep->data.ptrvalue;
+  /* we created a genbank set to hold the actual parent sets */
+  top_bssp = (BioseqSetPtr) add_back_sep->data.ptrvalue;
 
   /* need to process entries in seq_set in reverse, so that the set_pos will be 
    * correct relative to when the seq-entry was removed */
-  ValNodeReverse (&(bssp->seq_set));
-  sep = bssp->seq_set;
+  ValNodeReverse (&(top_bssp->seq_set));
+  new_parent_sep = top_bssp->seq_set;
 
-  while (sep != NULL) {
-    next_sep = sep->next;
-    sep->next = NULL;
-    u = GetUnsequesterForSep (sep, unsequester_list);
-    if (u == NULL || u->orig_parent == NULL) {
-      AddSepBackToSet (sep, sequester_set, bssp->descr, 0);
-    } else {
-      AddSepBackToSet (sep, u->orig_parent, bssp->descr, u->set_pos);
+  while (new_parent_sep != NULL) {
+    bssp = new_parent_sep->data.ptrvalue;
+    ValNodeReverse (&(bssp->seq_set));
+    sep = bssp->seq_set;
+
+    while (sep != NULL) {
+      next_sep = sep->next;
+      sep->next = NULL;
+      u = GetUnsequesterForSep (sep, unsequester_list);
+      if (u == NULL || u->orig_parent == NULL) {
+        AddSepBackToSet (sep, sequester_set, bssp->descr, 0);
+      } else {
+        AddSepBackToSet (sep, u->orig_parent, bssp->descr, u->set_pos);
+      }
+      sep = next_sep;
     }
-    sep = next_sep;
+    bssp->seq_set = NULL;
+    new_parent_sep = new_parent_sep->next;
   }
 
   ObjMgrDelete (OBJ_SEQENTRY, add_back_sep);
-  bssp->seq_set = NULL;
-  bssp->idx.deleteme = TRUE;
+  top_bssp->seq_set = NULL;
+  top_bssp->idx.deleteme = TRUE;
   DeleteMarkedObjects (entityID, 0, NULL);
 
   DeleteMarkedObjects (sequester_set->idx.entityID, 0, NULL);
@@ -33220,11 +33267,109 @@ static void SequesterSets (ButtoN b)
   }
 }
 
+NLM_EXTERN Boolean OkToSequester (void)
+{
+  if (unsequester_list != NULL || sequester_set != NULL) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
+NLM_EXTERN void LIBCALLBACK SequesterSequenceList (Uint2 entityID, ValNodePtr bsp_list)
+{
+  SeqEntryPtr sep;
+  BioseqSetPtr bssp, new_set;
+  ClickableItemData cid;
+  ObjMgrDataPtr  omdptop;
+  ObjMgrData     omdata;
+  Uint2          parenttype;
+  Pointer        parentptr;
+  Uint2          new_entityID;
+  FormMessageFunc old_message_handler;
+  BaseFormPtr     bfp;
+  BioseqViewFormPtr vfp;
+  SeqEntryPtr       pulled_sep;
+
+  if (bsp_list == NULL) {
+    return;
+  }
+
+  if (unsequester_list != NULL || sequester_set != NULL) {
+    Message (MSG_ERROR, "You are already sequestering a set.  You cannot sequester until you have restored these sequences to the original set.");
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+    return;
+  }
+
+  bssp = FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue);
+  if (bssp == NULL) {
+    Message (MSG_ERROR, "Unable to find top level set");
+    return;
+  }
+
+  WriteTheEntityID (entityID, SEQUESTER_BACKUP_FILE, FALSE);
+  sequester_set = bssp;
+
+  /* create a new set with just the chosen sequences */
+  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+
+  new_set = BioseqSetNew ();
+  new_set->_class = BioseqseqSet_class_genbank;
+
+  MemSet (&cid, 0, sizeof (ClickableItemData));
+  cid.chosen = TRUE;
+  cid.item_list = bsp_list;
+  SequesterCategorySeqEntries (new_set, &cid);
+
+  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata); 
+  DeleteMarkedObjects (entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+
+  pulled_sep = SeqEntryNew ();
+  pulled_sep->choice = 2;
+  pulled_sep->data.ptrvalue = new_set;
+  SeqMgrLinkSeqEntry (pulled_sep, 0, NULL);
+  
+  new_entityID = ObjMgrRegister (OBJ_SEQENTRY, pulled_sep);
+  seqviewprocs.filepath = NULL;
+  seqviewprocs.forceSeparateViewer = TRUE;
+  old_message_handler = seqviewprocs.handleMessages;
+  seqviewprocs.handleMessages = SequesterFormMessage;
+
+
+  SeqEntrySetScope (NULL);
+  GatherProcLaunch (OMPROC_VIEW, FALSE, new_entityID, 1,
+                              OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0);
+
+  seqviewprocs.handleMessages = old_message_handler;
+
+  /* hide viewer with the remaining sequences */
+  bfp = GetBaseFormForEntityID (entityID);
+  if (bfp != NULL) {
+    Hide (bfp->form);
+    vfp = (BioseqViewFormPtr) bfp;
+    Hide (vfp->toolForm);
+  }
+
+  /* get rid of existing validator window, replace with validator for new sequences */
+  FreeValidateWindow ();
+  bfp = GetBaseFormForEntityID (new_entityID);
+  ValSeqEntryForm (bfp->form);
+}
+
 
 extern Int2 LIBCALLBACK SequesterSequences (Pointer data)
 {
   /* note - in future, will need to make sequester dialog modal. */
-  return SegregateSetsByFieldEx (data, SequesterSets);
+  return SegregateSetsByFieldEx (data, SequesterSets, eSegPageId);
 }
 
 
@@ -33244,7 +33389,7 @@ extern void SequesterSequencesMenuItem (IteM i)
   if (sep == NULL || !IS_Bioseq_set (sep)) {
     Message (MSG_ERROR, "This record does not have a top-levelset!");
   } else {
-    NewSegregateBioseqSet (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue), SequesterSets);
+    NewSegregateBioseqSet (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue), SequesterSets, eSegPageId);
   }
 }
 
@@ -37343,6 +37488,38 @@ static Pointer GetBarcodeTestPercentNsResult (Uint1 data_choice, Pointer data, P
 }
 
 
+static Pointer HasBarcodeKeyword (Uint1 data_choice, Pointer data, Pointer metadata)
+{
+  SeqDescrPtr sdp;
+  SeqMgrDescContext context;
+  GBBlockPtr gb;
+  ValNodePtr vnp;
+  Boolean rval = FALSE;
+
+  BarcodeTestResultsPtr res = (BarcodeTestResultsPtr) data;
+  if (res != NULL && res->bsp != NULL) {
+    for (sdp = SeqMgrGetNextDescriptor (res->bsp, NULL, Seq_descr_genbank, &context);
+         sdp != NULL && !rval;
+         sdp = SeqMgrGetNextDescriptor (res->bsp, sdp, Seq_descr_genbank, &context)) {
+      gb = (GBBlockPtr) sdp->data.ptrvalue;
+      if (gb != NULL) {
+        for (vnp = gb->keywords; vnp != NULL && !rval; vnp = vnp->next) {
+          if (StringCmp (vnp->data.ptrvalue, "BARCODE") == 0) {
+            rval = TRUE;
+          }
+        }
+      }
+    }
+  }
+  if (rval) {
+    return StringSave ("TRUE");
+  } else {
+    return NULL;
+  }
+}
+
+
+
 static Int4 BarcodeFormatBarcodeID (ColPtr col, CharPtr name)
 {
   if (col == NULL) return 0;
@@ -37405,6 +37582,7 @@ static BulkEdFieldData barcode_test_fields[] = {
   { "Country", NULL, NULL, GetBarcodeTestCountryResult, NULL, BulkFreeSimpleText, NULL, BulkFormatTrueFalse, BulkDrawTrueFalse, NULL, BulkSimpleTextCopy }, 
   { "Voucher", NULL, NULL, GetBarcodeTestSpecimenVoucherResult, NULL, BulkFreeSimpleText, NULL, BulkFormatTrueFalse, BulkDrawTrueFalse, NULL, BulkSimpleTextCopy }, 
   { "Percent Ns", NULL, NULL, GetBarcodeTestPercentNsResult, BulkDisplaySimpleText, BulkFreeSimpleText, NULL, BarcodeFormatPercentN, NULL, NULL, BulkSimpleTextCopy }, 
+  { "Has BARCODE Keyword", NULL, NULL, HasBarcodeKeyword, NULL, BulkFreeSimpleText, NULL, BulkFormatTrueFalse, BulkDrawTrueFalse, NULL, BulkSimpleTextCopy }, 
   { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}};
 
 static void NavigateToBarcodeTestResultBioseq (ValNodePtr object, Pointer userdata)

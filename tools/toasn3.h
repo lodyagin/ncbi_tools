@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.11 2006/11/07 20:01:24 bollin Exp $
+/*  $Id: toasn3.h,v 6.14 2009/06/03 20:13:16 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -112,7 +112,7 @@ typedef struct toasn3 {
 Int4 ToAsn4(SeqEntryPtr sep);
 Int4 SeqEntryPubsAsn4(SeqEntryPtr sep);
 Int4 SeqEntryToAsn3(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun);
-Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode);
 Int2 seq_loc_compare( SeqLocPtr a, SeqLocPtr b);
 void compare_quals(GBQualPtr PNTR qual1, GBQualPtr PNTR qual2);
 Boolean feat_join(SeqFeatPtr f1, SeqFeatPtr f2, SeqFeatPtr head);
@@ -222,6 +222,10 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
 /* SeriousSeqEntryCleanupBulk does not clean up pseudo products, instead posting a message */
 
 extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep);
+
+/* Genome Pipeline variant that leaves redundant gene xrefs, does not normalize descriptor order */
+
+extern void GpipeSeqEntryCleanup (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

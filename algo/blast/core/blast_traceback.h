@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.50 2006/11/29 17:25:50 bealer Exp $
+/* $Id: blast_traceback.h,v 1.51 2009/03/26 14:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -95,6 +95,7 @@ EBlastEncoding Blast_TracebackGetEncoding(EBlastProgramType program_number);
  * @param gap_align Structure containing gapped alignment information [in]
  * @param hsp Original HSP from the preliminary stage [in] [out]
  */
+NCBI_XBLAST_EXPORT
 Int2
 Blast_HSPUpdateWithTraceback(BlastGapAlignStruct* gap_align, BlastHSP* hsp);
 

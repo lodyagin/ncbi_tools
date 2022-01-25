@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.199 $
+* $Revision: 6.203 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -4941,6 +4941,8 @@ NLM_EXTERN void ClearProteinTitlesInNucProts (Uint2 entityID, Pointer ptr)
   VisitSetsInSep (sep, NULL, ClearProtTitlesNPS);
   DeleteMarkedObjects (entityID, 0, NULL);
 }
+
+
 static void AddProtTitles (BioseqPtr bsp, Pointer userdata)
 {
   Char         buf [512];
@@ -4980,6 +4982,48 @@ NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr)
   VisitBioseqsInSep (sep, NULL, AddProtTitles);
 }
 
+
+NLM_EXTERN void UpdateProteinTitle (BioseqPtr bsp)
+{
+  Char         buf [512];
+  SeqDescrPtr  sdp;
+  ObjValNodePtr ovp;
+  SeqIdPtr     sip;
+  CharPtr      str;
+
+  if (bsp == NULL || !ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  /* we don't create protein titles for these IDs */
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_PIR ||
+        sip->choice == SEQID_SWISSPROT ||
+        sip->choice == SEQID_PATENT ||
+        sip->choice == SEQID_PRF ||
+        sip->choice == SEQID_PDB) return;
+  }
+
+  sdp = BioseqGetSeqDescr (bsp, Seq_descr_title, NULL);
+  if (sdp == NULL) {
+    /* we only update a title if it already exists */
+    return;
+  }
+  if (sdp->extended) {
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+    DeleteMarkedObjects (bsp->idx.entityID, OBJ_BIOSEQ, bsp);
+  }
+
+  if (NewCreateDefLineBuf (NULL, bsp, buf, sizeof (buf), FALSE, FALSE)) {
+    if (! StringHasNoText (buf)) {
+      str = StringSaveNoNull (buf);
+      if (str != NULL) {
+        SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+      }
+    }
+  }
+}
 
 
 /* NEW DEFLINE GENERATOR */
@@ -5054,7 +5098,42 @@ typedef struct deflinestruct {
   /* orgmod fields */
   CharPtr m_isolate;
   CharPtr m_strain;
+
+  /* exception fields */
+  TextFsaPtr m_low_quality_fsa;
 } DefLineData, PNTR DefLinePtr;
+
+static Boolean x_CDShasLowQualityException (
+  DefLinePtr dlp,
+  SeqFeatPtr sfp
+)
+
+{
+  Char        ch;
+  TextFsaPtr  fsa;
+  ValNodePtr  matches;
+  CharPtr     ptr;
+  Int4        state;
+
+  if (dlp == NULL || sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return FALSE;
+
+  if (! sfp->excpt) return FALSE;
+  if (StringHasNoText (sfp->except_text)) return FALSE;
+
+  fsa = dlp->m_low_quality_fsa;
+  if (fsa == NULL) return FALSE;
+
+  state = 0;
+  matches = NULL;
+  for (ptr = sfp->except_text, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    state = TextFsaNext (fsa, state, ch, &matches);
+    if (matches != NULL) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
 
 /* set instance variables from Seq-inst, Seq-ids, MolInfo, etc., but not BioSource */
 static void x_SetFlags (
@@ -6311,20 +6390,23 @@ static CharPtr x_TitleFromProtein (
 {
   BioSourcePtr       biop;
   BioseqPtr          bsp;
+  SeqFeatPtr         cds = NULL;
   Uint2              entityID;
   SeqMgrFeatContext  fcontext;
   GeneRefPtr         grp;
   Boolean            indexed;
   size_t             len;
+  CharPtr            low_qual = "LOW QUALITY PROTEIN: ";
   OrgRefPtr          orp;
   CharPtr            prefix = "";
   ProtRefPtr         prp;
   CharPtr            result = NULL;
+  SeqFeatPtr         sfp = NULL;
   CharPtr            str;
   ValNodePtr         strings = NULL;
   CharPtr            taxname = NULL;
   CharPtr            title = NULL;
-  SeqFeatPtr         sfp;
+  CharPtr            tmp;
   ValNodePtr         vnp;
 
   if (dlp == NULL) return NULL;
@@ -6335,7 +6417,6 @@ static CharPtr x_TitleFromProtein (
   entityID = ObjMgrGetEntityIDForPointer (bsp);
   indexed = (Boolean) (SeqMgrFeaturesAreIndexed (entityID) != 0);
 
-  sfp = NULL;
   if (indexed) {
     sfp = SeqMgrGetBestProteinFeature (bsp, NULL);
   } else {
@@ -6371,11 +6452,13 @@ static CharPtr x_TitleFromProtein (
             SeqMgrIndexFeatures (entityID, NULL);
             indexed = TRUE;
           }
-          sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
-          if (sfp != NULL) {
-            grp = SeqMgrGetGeneXref (sfp);
+          if (cds == NULL) {
+            cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+          }
+          if (cds != NULL) {
+            grp = SeqMgrGetGeneXref (cds);
             if (grp == NULL) {
-              sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
+              sfp = SeqMgrGetOverlappingGene (cds->location, NULL);
               if (sfp != NULL) {
                 grp = (GeneRefPtr) sfp->data.value.ptrvalue;
               }
@@ -6414,11 +6497,13 @@ static CharPtr x_TitleFromProtein (
       SeqMgrIndexFeatures (entityID, NULL);
       indexed = TRUE;
     }
-    sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
-    if (sfp != NULL) {
-      grp = SeqMgrGetGeneXref (sfp);
+    if (cds == NULL) {
+      cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    }
+    if (cds != NULL) {
+      grp = SeqMgrGetGeneXref (cds);
       if (grp == NULL) {
-        sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
+        sfp = SeqMgrGetOverlappingGene (cds->location, NULL);
         if (sfp != NULL) {
           grp = (GeneRefPtr) sfp->data.value.ptrvalue;
         }
@@ -6457,9 +6542,11 @@ static CharPtr x_TitleFromProtein (
       SeqMgrIndexFeatures (entityID, NULL);
       indexed = TRUE;
     }
-    sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
-    if (sfp != NULL) {
-      sfp = SeqMgrGetOverlappingSource (sfp->location, &fcontext);
+    if (cds == NULL) {
+      cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    }
+    if (cds != NULL) {
+      sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
       if (sfp != NULL) {
         biop = (BioSourcePtr) sfp->data.value.ptrvalue;
         if (biop != NULL) {
@@ -6472,15 +6559,39 @@ static CharPtr x_TitleFromProtein (
     }
   }
 
+  if (cds == NULL) {
+    if (! indexed) {
+      SeqMgrIndexFeatures (entityID, NULL);
+      indexed = TRUE;
+    }
+    cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+  }
+  if (cds != NULL) {
+    if (x_CDShasLowQualityException (dlp, cds)) {
+      if (StringStr (title, low_qual) == NULL) {
+        len = StringLen (title) + StringLen (low_qual) + 6;
+        tmp = (CharPtr) MemNew (sizeof (Char) * len);
+        if (tmp != NULL) {
+          StringCat (tmp, low_qual);
+          StringCat (tmp, title);
+          MemFree (title);
+          title = tmp;
+        }
+      }
+    }
+  }
+
   if (StringDoesHaveText (taxname)) {
     if (StringStr (title, taxname) == NULL) {
       len = StringLen (title) + StringLen (taxname) + 6;
-      result = (CharPtr) MemNew (sizeof (Char) * len);
-      if (result != NULL) {
-        StringCat (result, title);
-        StringCat (result, " [");
-        StringCat (result, taxname);
-        StringCat (result, "]");
+      tmp = (CharPtr) MemNew (sizeof (Char) * len);
+      if (tmp != NULL) {
+        StringCat (tmp, title);
+        StringCat (tmp, " [");
+        StringCat (tmp, taxname);
+        StringCat (tmp, "]");
+        MemFree (title);
+        title = tmp;
       }
     }
   }
@@ -6824,6 +6935,11 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   dlp = (DefLinePtr) MemNew (sizeof (DefLineData));
   if (dlp == NULL) return NULL;
 
+  dlp->m_low_quality_fsa = TextFsaNew ();
+  TextFsaAdd (dlp->m_low_quality_fsa, "heterogeneous population sequenced");
+  TextFsaAdd (dlp->m_low_quality_fsa, "low-quality sequence region");
+  TextFsaAdd (dlp->m_low_quality_fsa, "unextendable partial coding region");
+
   /* set flags from record components */
   dlp->m_iip = iip;
   dlp->m_bioseq = bsp;
@@ -6946,6 +7062,8 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   MemFree (prefix);
   MemFree (title);
   MemFree (suffix);
+
+  TextFsaFree (dlp->m_low_quality_fsa);
 
   dlp = MemFree (dlp);
 

@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.49 2008/07/17 17:55:44 kazimird Exp $
+/*  $Id: blast_seqsrc.h,v 1.51 2009/05/27 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -198,12 +198,15 @@ typedef struct BlastSeqSrcGetSeqArg {
      * eBlastEncodingNucleotide, etc [in] */
     EBlastEncoding encoding;
 
-    /** Specify true here to enable this OID's ranges before fetching.
-     * OID ranges are a (somewhat complicated) performance feature that
-     * reduces the amount of nucleotide unpacking needed for some OIDs.
-     * If in doubt, specify FALSE here.
-     * TRUE to use ranges if they exist, FALSE to disable them. [in] */
-    Boolean enable_ranges;
+    /** This option allows the BLAST engine to communicate with the BlastSeqSrc
+     * that the offset ranges for a given OID should be reset and the entire
+     * sequence data should be fetched. The motivation for this option is to
+     * exploit CSeqDB's performance feature that allows to retrieve only
+     * pre-selected portions of the sequence data for the traceback stage.
+     * BlastSeqSrc implementations that do not have this feature can safely
+     * ignore this field.
+     * By default, this should be set to FALSE. [in] */
+    Boolean reset_ranges;
 
     /** Check whether an OID is excluded due to overlapping filtering.
      * The disease is rare, and the test for it is somewhat expensive,
@@ -276,23 +279,28 @@ typedef struct Blast_GiList {
 } Blast_GiList;
 
 /** Allocate a gi list with default size */
+NCBI_XBLAST_EXPORT
 Blast_GiList* Blast_GiListNew(void);
 
 /** Allocate a gi list with the requested size 
  * @param list_size initial list size [in]
  */
+NCBI_XBLAST_EXPORT
 Blast_GiList* Blast_GiListNewEx(size_t list_size);
 
 /** Deallocate memory associated with the gi list
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 Blast_GiList* Blast_GiListFree(Blast_GiList* gilist);
 
 /* Return values */
 
 /** Invalid parameter used in a function call */
+NCBI_XBLAST_EXPORT
 extern const Int2 kBadParameter;
 /** Failure due to out-of-memory condition */
+NCBI_XBLAST_EXPORT
 extern const Int2 kOutOfMemory;
 
 /** Appends to an existing gi list, allocating memory if necessary
@@ -323,7 +331,9 @@ BlastSeqSrcGetGis(const BlastSeqSrc* seq_src, void* oid);
 NCBI_XBLAST_EXPORT
 BlastSeqSrcIterator* BlastSeqSrcIteratorNew(void);
 
-/** How many database sequences to process in one database chunk. */
+/** How many database sequences to process in one database chunk. 
+ * this value is overriden in seqdb implementation, where the number of sequences
+ * is determined by the mmaped slice size */
 extern const unsigned int kBlastSeqSrcDefaultChunkSize;
 
 /** Allocate and initialize an iterator over a BlastSeqSrc. 
@@ -356,6 +366,12 @@ Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src,
  */
 NCBI_XBLAST_EXPORT
 void BlastSeqSrcResetChunkIterator(BlastSeqSrc* seq_src);
+
+/** Set the number of threads for MT mode 
+ * @param nthreads the number of threads [in]
+ */
+NCBI_XBLAST_EXPORT
+void BlastSeqSrcSetNumberOfThreads(BlastSeqSrc* seq_src, int nthreads);
 
 /*****************************************************************************/
 

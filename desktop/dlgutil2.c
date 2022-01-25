@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.203 $
+* $Revision: 6.206 $
 *
 * File Description: 
 *
@@ -1238,7 +1238,7 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
   return TRUE;
 }
 
-static CharPtr TrimParenthesesAndCommasAroundGBString (CharPtr str)
+static CharPtr TrimCommasAndAtSignsAroundGBString (CharPtr str)
 
 {
   Uchar    ch;	/* to use 8bit characters in multibyte languages */
@@ -1249,7 +1249,7 @@ static CharPtr TrimParenthesesAndCommasAroundGBString (CharPtr str)
     dst = str;
     ptr = str;
     ch = *ptr;
-    while (ch != '\0' && (ch < ' ' || ch == '(' || ch == ',')) {
+    while (ch != '\0' && (ch < ' ' || ch == '{' || ch == ',')) {
       ptr++;
       ch = *ptr;
     }
@@ -1264,7 +1264,7 @@ static CharPtr TrimParenthesesAndCommasAroundGBString (CharPtr str)
     ptr = str;
     ch = *ptr;
     while (ch != '\0') {
-      if (ch != ')' && ch != ',') {
+      if (ch != '}' && ch != ',') {
         dst = NULL;
       } else if (dst == NULL) {
         dst = ptr;
@@ -1289,13 +1289,13 @@ static CharPtr CombineSplitGBQual (CharPtr origval, CharPtr newval)
   len = StringLen (origval) + StringLen (newval) + 5;
   str = MemNew (sizeof (Char) * len);
   if (str == NULL) return origval;
-  TrimParenthesesAndCommasAroundGBString (origval);
-  TrimParenthesesAndCommasAroundGBString (newval);
-  StringCpy (str, "(");
+  TrimCommasAndAtSignsAroundGBString (origval);
+  TrimCommasAndAtSignsAroundGBString (newval);
+  StringCpy (str, "{");
   StringCat (str, origval);
   StringCat (str, ",");
   StringCat (str, newval);
-  StringCat (str, ")");
+  StringCat (str, "}");
   /* free original string, knowing return value will replace it */
   MemFree (origval);
   return str;
@@ -1679,6 +1679,22 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "alternative start codon");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 10 :
+      SetTitle (ffp->exceptText, "annotated by transcript or proteomic data");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    case 11 :
+      SetTitle (ffp->exceptText, "heterogeneous population sequenced");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    case 12 :
+      SetTitle (ffp->exceptText, "low-quality sequence region");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    case 13 :
+      SetTitle (ffp->exceptText, "unextendable partial coding region");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1861,6 +1877,10 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "nonconsensus splice site");
       PopupItem (canned, "rearrangement required");
       PopupItem (canned, "alternative start codon");
+      PopupItem (canned, "transcript or proteome data");
+      PopupItem (canned, "heterogeneous population");
+      PopupItem (canned, "low-quality sequence region");
+      PopupItem (canned, "unextendable partial CDS");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
@@ -1882,6 +1902,14 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
           SetValue (canned, 8);
         } else if (StringICmp (sfp->except_text, "alternative start codon") == 0) {
           SetValue (canned, 9);
+        } else if (StringICmp (sfp->except_text, "annotated by transcript or proteomic data") == 0) {
+          SetValue (canned, 10);
+        } else if (StringICmp (sfp->except_text, "heterogeneous population sequenced") == 0) {
+          SetValue (canned, 11);
+        } else if (StringICmp (sfp->except_text, "low-quality sequence region") == 0) {
+          SetValue (canned, 12);
+        } else if (StringICmp (sfp->except_text, "unextendable partial coding region") == 0) {
+          SetValue (canned, 13);
         }
       } else {
         SetValue (canned, 1);
@@ -4063,7 +4091,7 @@ static Pointer MultiSelectionDialogToData (DialoG d)
   
   for (vnp = dlg->selected_list; vnp != NULL; vnp = vnp->next)
   {
-    ValNodeAddInt (&output_list, vnp->choice, vnp->choice);
+    ValNodeAddInt (&output_list, vnp->choice, vnp->data.intvalue);
   }
   return output_list;
 }
@@ -4151,7 +4179,7 @@ static Boolean ChoiceHighlight (DoC doc, Int2 item, Int2 row, Int2 col)
   
   for (vnp = dlg->selected_list; vnp != NULL; vnp = vnp->next)
   {
-    if (vnp->choice == item)
+    if (vnp->data.intvalue == item)
     {
       return TRUE;
     }
@@ -11885,6 +11913,26 @@ AddMandatoryAndOptionalQuals
   }
 }
 
+static GBQualPtr CopyGBQualList (GBQualPtr origgbq)
+
+{
+  GBQualPtr  gbq, gbq_new, head = NULL, last = NULL;
+
+  for (gbq = origgbq; gbq != NULL; gbq = gbq->next) {
+    gbq_new = GBQualNew ();
+    gbq_new->qual = StringSave (gbq->qual);
+    gbq_new->val = StringSave (gbq->val);
+    if (head == NULL) {
+      head = gbq_new;
+    }
+    if (last != NULL) {
+      last->next = gbq_new;
+    }
+    last = gbq_new;
+  }
+
+  return head;
+}
 
 extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual)
 {
@@ -11898,6 +11946,8 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
   Int2            qual;
   Int2            wid;
   PrompT          ill_q = NULL;
+  size_t          len;
+  CharPtr         ptr;
 
   p = HiddenGroup (h, -1, 0, NULL);
   fpf = (NewFieldPagePtr) MemNew (sizeof (NewFieldPage));
@@ -11914,7 +11964,7 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
       fpf->subtype = FEATDEF_ANY;
     } else {
       fpf->subtype = sfp->idx.subtype;
-      gbq = sfp->qual;
+      gbq = CopyGBQualList (sfp->qual); /* make copy so it is not corrupted */
     }
 
     fpf->last_viewed = -1;
@@ -11948,6 +11998,17 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
         AddTemporaryGBQual (&(fpf->new_gbq), gbq_it->qual, gbq, FALSE);
       }
       gbq_it = gbq_it->next;
+    }
+
+    /* replace {} combined qual bookends with () */
+    for (gbq_it = fpf->new_gbq; gbq_it != NULL; gbq_it = gbq_it->next) {
+      ptr = gbq_it->val;
+      if (StringHasNoText (ptr)) continue;
+      len = StringLen (ptr);
+      if (len > 2 && ptr [0] == '{' && ptr [len - 1] == '}') {
+        ptr [0] = '(';
+        ptr [len - 1] = ')';
+      }
     }
 
     /* calculate maximum name width */
@@ -11988,6 +12049,7 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
                     0, 0, programFont, 'c');
     }
   }
+  GBQualFree (gbq); /* free copy */
   return (DialoG) p;
 }
 
@@ -12979,7 +13041,7 @@ NLM_EXTERN ValNodePtr RemoveFeaturesFromReplaceList (DialoG d)
 NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_features)
 {
   FeatureReplaceListDlgPtr dlg;
-  ValNodePtr               vnp, vnp_f, vnp_next, list = NULL, prev = NULL;
+  ValNodePtr               vnp, vnp_f, vnp_next, prev = NULL;
   FeatureReplacePtr        fr;
   Boolean                  found = FALSE;
 

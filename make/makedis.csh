@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh 148594 2008-12-30 15:11:36Z ucko $
+# $Id: makedis.csh 155379 2009-03-23 17:10:14Z coulouri $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -151,7 +151,7 @@ case GNU/Linux:
 	gcc -v
 	switch (`uname -m`)
 	case "ia64":
-		if (-e `which ecc`) then
+		if (-e `which icc`) then
 			set platform=linux_ecc
 		else
 			set platform=linux

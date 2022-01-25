@@ -141,12 +141,12 @@ img#ncbilogo {
 }
 
 div#header {
-	height: 45px;
+	height: 1.2em;
 }
 
 div#header h1 {
-	line-height: 45px;
-	margin-left: 140px;
+	line-height: 1.2em;
+	margin-left: 4em;
 	text-align: left;
 }
 
@@ -159,14 +159,14 @@ ul#topnav {
 	list-style: none;
 	margin: 0;
 	padding: 1px;
-	padding-left: 130px;
+	padding-left: 3.6em;
 	background: black;
 }
 
 ul#topnav li {
 	display: inline;
-	padding-left: 20px;
-	padding-right: 20px;
+	padding-left: 0.5em;
+	padding-right: 0.5em;
 }
 
 ul#topnav li a {

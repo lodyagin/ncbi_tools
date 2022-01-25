@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrezgene
-*    Generated using ASNCODE Revision: 6.16 at Apr 19, 2005 10:58 AM
+*    Generated using ASNCODE Revision: 6.16 at Apr 24, 2009 11:11 AM
 *
 **************************************************/
 
@@ -105,6 +105,39 @@ NLM_EXTERN Boolean LIBCALL GeneTrackAsnWrite PROTO (( GeneTrackPtr , AsnIoPtr, A
 
 /**************************************************
 *
+*    GeneCommentary
+*
+**************************************************/
+typedef struct struct_Gene_commentary {
+   struct struct_Gene_commentary PNTR next;
+   Int4   type;
+   CharPtr   heading;
+   CharPtr   label;
+   CharPtr   text;
+   CharPtr   accession;
+   Int4   version;
+   struct struct_Xtra_Terms PNTR   xtra_properties;
+   ValNodePtr   refs;
+   struct struct_Other_source PNTR   source;
+   ValNodePtr   genomic_coords;
+   ValNodePtr   seqs;
+   struct struct_Gene_commentary PNTR   products;
+   struct struct_Gene_commentary PNTR   properties;
+   struct struct_Gene_commentary PNTR   comment;
+   struct struct_Date PNTR   create_date;
+   struct struct_Date PNTR   update_date;
+} GeneCommentary, PNTR GeneCommentaryPtr;
+
+
+NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryFree PROTO ((GeneCommentaryPtr ));
+NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryNew PROTO (( void ));
+NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GeneCommentaryAsnWrite PROTO (( GeneCommentaryPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    Maps
 *
 **************************************************/
@@ -168,39 +201,6 @@ NLM_EXTERN GeneSourcePtr LIBCALL GeneSourceFree PROTO ((GeneSourcePtr ));
 NLM_EXTERN GeneSourcePtr LIBCALL GeneSourceNew PROTO (( void ));
 NLM_EXTERN GeneSourcePtr LIBCALL GeneSourceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GeneSourceAsnWrite PROTO (( GeneSourcePtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    GeneCommentary
-*
-**************************************************/
-typedef struct struct_Gene_commentary {
-   struct struct_Gene_commentary PNTR next;
-   Int4   type;
-   CharPtr   heading;
-   CharPtr   label;
-   CharPtr   text;
-   CharPtr   accession;
-   Int4   version;
-   struct struct_Xtra_Terms PNTR   xtra_properties;
-   ValNodePtr   refs;
-   struct struct_Other_source PNTR   source;
-   ValNodePtr   genomic_coords;
-   ValNodePtr   seqs;
-   struct struct_Gene_commentary PNTR   products;
-   struct struct_Gene_commentary PNTR   properties;
-   struct struct_Gene_commentary PNTR   comment;
-   struct struct_Date PNTR   create_date;
-   struct struct_Date PNTR   update_date;
-} GeneCommentary, PNTR GeneCommentaryPtr;
-
-
-NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryFree PROTO ((GeneCommentaryPtr ));
-NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryNew PROTO (( void ));
-NLM_EXTERN GeneCommentaryPtr LIBCALL GeneCommentaryAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL GeneCommentaryAsnWrite PROTO (( GeneCommentaryPtr , AsnIoPtr, AsnTypePtr));
 
 
 

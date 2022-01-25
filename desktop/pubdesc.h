@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -96,6 +96,8 @@ extern ForM CreatePubdescFeatForm (Int2 left, Int2 top, CharPtr title,
                                    PubdescEditProcsPtr pepp);
 
 extern Int2 LIBCALLBACK PubdescGenFunc (Pointer data);
+extern WindoW EditCitFeatDirectly (SeqFeatPtr sfp);
+extern WindoW EditCitDescDirectly (SeqDescPtr sdp);
 
 extern DialoG PublicationListDialog (GrouP parent);
 extern void EditPublicationInDialog (DialoG d, Int4 ref_num);

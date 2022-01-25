@@ -1,4 +1,4 @@
-/* $Id: blast_filter.c,v 1.94 2008/11/03 20:59:44 kazimird Exp $
+/* $Id: blast_filter.c,v 1.95 2009/05/27 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_filter.c,v 1.94 2008/11/03 20:59:44 kazimird Exp $";
+    "$Id: blast_filter.c,v 1.95 2009/05/27 17:39:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -1309,7 +1309,7 @@ Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
         stop -= offset;
         
         ASSERT(start < length);
-        ASSERT(stop < length);
+        ASSERT(stop <= length);
         
         for (index = start; index <= stop; index++)
             buffer[index] = kMaskingLetter;

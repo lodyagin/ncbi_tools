@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.70 $
+* $Revision: 6.73 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -1563,6 +1563,34 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
   CharPtr PNTR values
+);
+
+NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+);
+
+/* NcbiCleanup user object for SeriousSeqEntryCleanup time/version stamp */
+
+NLM_EXTERN UserObjectPtr CreateNcbiCleanupUserObject (
+  void
+);
+
+NLM_EXTERN void AddStringToNcbiCleanupUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
+);
+
+NLM_EXTERN void AddIntegerToNcbiCleanupUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  Int4 num
+);
+
+NLM_EXTERN void RemoveAllNcbiCleanupUserObjects (
+  SeqEntryPtr sep
 );
 
 

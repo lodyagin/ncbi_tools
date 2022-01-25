@@ -29,13 +29,20 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: alignval.h,v $
+* Revision 6.19  2009/06/18 17:18:08  bollin
+* Changed FASTA-like validator error to use minimum length of two sequences
+* when comparing, allow N to match anything.
+* Report unexpected alignment types.
+* Corrected problem with missing ShortAln error.
+* Corrected some errors in reporting positions of alignment problems.
+*
 * Revision 6.18  2007/07/05 17:50:49  bollin
 * Added validation INFO when alignment stops before ends of sequences.
 * Added red vertical bar to columns in alignment assistant when weighted
@@ -132,6 +139,7 @@ GetAlignmentColumnPercentIdentities
 #define Err_Segtype 18
 #define Err_Pcnt_ID 20
 #define Err_Short_Aln 21
+#define Err_Unexpected_Alignment_Type 22
 
 #ifdef __cplusplus
 }

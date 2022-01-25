@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.64 $
+* $Revision: 6.65 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.65  2009/03/04 16:34:15  bollin
+* Added function for removing contigs from scaffolds.
+*
 * Revision 6.64  2008/08/26 20:21:01  bollin
 * Fixed bug in function for converting raw sequences to delta, where the
 * gap is specified by location and is a replacement rather than an insertion.
@@ -5808,7 +5811,7 @@ SeqEdInsert (SeqEdJournalPtr sejp)
 *      2) split intervals which span the deletions
 *
 *****************************************************************************/
-static Int2 LIBCALL SeqEdSeqFeatDelete (SeqFeatPtr sfp, BioseqPtr target, Int4 from, Int4 to, Boolean merge)
+NLM_EXTERN Int2 LIBCALL SeqEdSeqFeatDelete (SeqFeatPtr sfp, BioseqPtr target, Int4 from, Int4 to, Boolean merge)
 {
 	ValNode vn;
 	SeqLocPtr tloc;

@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnentgene.h30";
+static char * asnfilename = "asnentgene.h31";
 static AsnValxNode avnx[50] = {
     {20,"live" ,0,0.0,&avnx[1] } ,
     {20,"secondary" ,1,0.0,&avnx[2] } ,
@@ -65,33 +65,33 @@ static AsnValxNode avnx[50] = {
 static AsnType atx[104] = {
   {401, "Entrezgene" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[101]} ,
   {0, "track-info" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[15]} ,
-  {403, "Gene-track" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[3],0,&atx[19]} ,
+  {403, "Gene-track" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[3],0,&atx[47]} ,
   {0, "geneid" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[5]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "status" ,128,1,0,0,1,0,0,0,&avnx[4],&atx[4],&avnx[0],0,&atx[6]} ,
   {0, "current-id" ,128,2,0,1,0,0,0,0,NULL,&atx[9],&atx[7],0,&atx[10]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],NULL,0,NULL} ,
-  {408, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[11]} ,
+  {409, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[11]} ,
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "create-date" ,128,3,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[12]} ,
-  {409, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[72]} ,
+  {410, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[72]} ,
   {0, "update-date" ,128,4,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[13]} ,
   {0, "discontinue-date" ,128,5,0,1,0,0,0,0,NULL,&atx[11],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[4],&avnx[5],0,&atx[16]} ,
   {0, "source" ,128,2,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[18]} ,
-  {406, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[23]} ,
+  {407, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[23]} ,
   {0, "gene" ,128,3,0,0,0,0,0,0,NULL,&atx[19],NULL,0,&atx[20]} ,
-  {404, "Gene-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[21]} ,
+  {405, "Gene-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[21]} ,
   {0, "prot" ,128,4,0,1,0,0,0,0,NULL,&atx[21],NULL,0,&atx[22]} ,
-  {405, "Prot-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[17]} ,
+  {406, "Prot-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[17]} ,
   {0, "rna" ,128,5,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[24]} ,
-  {407, "RNA-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
+  {408, "RNA-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
   {0, "summary" ,128,6,0,1,0,0,0,0,NULL,&atx[25],NULL,0,&atx[26]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "location" ,128,7,0,1,0,0,0,0,NULL,&atx[9],&atx[27],0,&atx[35]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[28],NULL,0,NULL} ,
-  {412, "Maps" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[29],0,&atx[36]} ,
+  {413, "Maps" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[29],0,&atx[36]} ,
   {0, "display-str" ,128,0,0,0,0,0,0,0,NULL,&atx[25],NULL,0,&atx[30]} ,
   {0, "method" ,128,1,0,0,0,0,0,0,NULL,&atx[34],&atx[31],0,NULL} ,
   {0, "proxy" ,128,0,0,0,0,0,0,0,NULL,&atx[25],NULL,0,&atx[32]} ,
@@ -99,7 +99,7 @@ static AsnType atx[104] = {
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {315, "CHOICE" ,0,-1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "gene-source" ,128,8,0,1,0,0,0,0,NULL,&atx[36],NULL,0,&atx[45]} ,
-  {413, "Gene-source" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[37],0,&atx[47]} ,
+  {414, "Gene-source" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[37],0,&atx[56]} ,
   {0, "src" ,128,0,0,0,0,0,0,0,NULL,&atx[25],NULL,0,&atx[38]} ,
   {0, "src-int" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[39]} ,
   {0, "src-str1" ,128,2,0,1,0,0,0,0,NULL,&atx[25],NULL,0,&atx[40]} ,
@@ -110,7 +110,7 @@ static AsnType atx[104] = {
   {0, "extra-terms" ,128,6,0,0,1,0,0,0,&avnx[24],&atx[42],NULL,0,NULL} ,
   {0, "locus" ,128,9,0,1,0,0,0,0,NULL,&atx[9],&atx[46],0,&atx[83]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {414, "Gene-commentary" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[48],0,&atx[56]} ,
+  {404, "Gene-commentary" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[48],0,&atx[19]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[25],0,&atx[49]} ,
   {0, "heading" ,128,1,0,1,0,0,0,0,NULL,&atx[25],NULL,0,&atx[50]} ,
   {0, "label" ,128,2,0,1,0,0,0,0,NULL,&atx[25],NULL,0,&atx[51]} ,
@@ -124,7 +124,7 @@ static AsnType atx[104] = {
   {0, "value" ,128,1,0,0,0,0,0,0,NULL,&atx[25],NULL,0,NULL} ,
   {0, "refs" ,128,7,0,1,0,0,0,0,NULL,&atx[9],&atx[60],0,&atx[62]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[61],NULL,0,NULL} ,
-  {411, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[28]} ,
+  {412, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[28]} ,
   {0, "source" ,128,8,0,1,0,0,0,0,NULL,&atx[9],&atx[63],0,&atx[70]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[64],NULL,0,NULL} ,
   {416, "Other-source" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[65],0,NULL} ,
@@ -135,7 +135,7 @@ static AsnType atx[104] = {
   {0, "post-text" ,128,4,0,1,0,0,0,0,NULL,&atx[25],NULL,0,NULL} ,
   {0, "genomic-coords" ,128,9,0,1,0,0,0,0,NULL,&atx[9],&atx[71],0,&atx[73]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[72],NULL,0,NULL} ,
-  {410, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[61]} ,
+  {411, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[61]} ,
   {0, "seqs" ,128,10,0,1,0,0,0,0,NULL,&atx[9],&atx[74],0,&atx[75]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[72],NULL,0,NULL} ,
   {0, "products" ,128,11,0,1,0,0,0,0,NULL,&atx[9],&atx[76],0,&atx[77]} ,
@@ -169,7 +169,7 @@ static AsnType atx[104] = {
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Entrezgene" , "asnentgene.h30",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Entrezgene" , "asnentgene.h31",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -227,21 +227,6 @@ static AsnModulePtr amp = ampx;
 #define GENE_TRACK_update_date &at[12]
 #define GENE_TRACK_discontinue_date &at[13]
 
-#define MAPS &at[28]
-#define MAPS_display_str &at[29]
-#define MAPS_method &at[30]
-#define MAPS_method_proxy &at[31]
-#define MAPS_method_map_type &at[32]
-
-#define GENE_SOURCE &at[36]
-#define GENE_SOURCE_src &at[37]
-#define GENE_SOURCE_src_int &at[38]
-#define GENE_SOURCE_src_str1 &at[39]
-#define GENE_SOURCE_src_str2 &at[40]
-#define GENE_SOURCE_gene_display &at[41]
-#define GENE_SOURCE_locus_display &at[43]
-#define GENE_SOURCE_extra_terms &at[44]
-
 #define GENE_COMMENTARY &at[47]
 #define GENE_COMMENTARY_type &at[48]
 #define GENE_COMMENTARY_heading &at[49]
@@ -267,6 +252,21 @@ static AsnModulePtr amp = ampx;
 #define GENE_COMMENTARY_comment_E &at[80]
 #define GENE_COMMENTARY_create_date &at[81]
 #define GENE_COMMENTARY_update_date &at[82]
+
+#define MAPS &at[28]
+#define MAPS_display_str &at[29]
+#define MAPS_method &at[30]
+#define MAPS_method_proxy &at[31]
+#define MAPS_method_map_type &at[32]
+
+#define GENE_SOURCE &at[36]
+#define GENE_SOURCE_src &at[37]
+#define GENE_SOURCE_src_int &at[38]
+#define GENE_SOURCE_src_str1 &at[39]
+#define GENE_SOURCE_src_str2 &at[40]
+#define GENE_SOURCE_gene_display &at[41]
+#define GENE_SOURCE_locus_display &at[43]
+#define GENE_SOURCE_extra_terms &at[44]
 
 #define XTRA_TERMS &at[56]
 #define XTRA_TERMS_tag &at[57]

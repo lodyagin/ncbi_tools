@@ -1,4 +1,4 @@
---$Revision: 1.49 $
+--$Revision: 1.54 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -627,7 +627,9 @@ Structured-comment-field-pair ::= SEQUENCE {
 -- these would not appear in pairs --
 Misc-field ::= ENUMERATED {
     genome-project-id (1) ,
-    comment-descriptor (2)
+    comment-descriptor (2) ,
+    defline (3) ,
+    keyword (4)
     }
      
 -- complex constraints --
@@ -756,13 +758,15 @@ ExistingTextOption ::= ENUMERATED {
   append-semi (2) ,
   append-space (3) ,
   append-colon (4) ,
-  append-none (5) ,
-  prefix-semi (6) ,
-  prefix-space (7) ,
-  prefix-colon (8) ,
-  prefix-none (9) ,
-  leave-old (10) ,
-  add-qual (11) }
+  append-comma (5) ,
+  append-none (6) ,
+  prefix-semi (7) ,
+  prefix-space (8) ,
+  prefix-colon (9) ,
+  prefix-comma (10) ,
+  prefix-none (11) ,
+  leave-old (12) ,
+  add-qual (13) }
 
 
 Apply-action ::= SEQUENCE {
@@ -942,7 +946,8 @@ Convert-feature-dst-options ::= CHOICE {
   bond Bond-type ,
   site Site-type ,
   region Region-type ,
-  ncrna-class VisibleString }
+  ncrna-class VisibleString ,
+  remove-original BOOLEAN }
 
 
 Convert-feature-action ::= SEQUENCE {
@@ -1035,7 +1040,8 @@ Descriptor-type ::= ENUMERATED {
   create-date (7) ,
   update-date (8) ,
   mol-info (9) ,
-  structured-comment (10) }
+  structured-comment (10) ,
+  genome-project-id (11) }
 
 Remove-descriptor-action ::= SEQUENCE {
   type Descriptor-type ,

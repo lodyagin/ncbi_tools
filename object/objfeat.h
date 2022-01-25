@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -156,6 +156,7 @@ NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefFree PROTO((SeqFeatXrefPtr sfxp));
 	18 = non-std-residue data.value.ptrvalue = VisibleString ,  -- non-standard residue here in seq
 	19 = het data.value.ptrvalue=CharPtr Heterogen   -- cofactor, prosthetic grp, etc, bound to seq
 	20 = biosrc, data.value.ptrvalue = BioSource
+    21 = cloneref, data.value.ptrvalue = CloneRef
 *   
 *
 *****************************************************************************/
@@ -199,28 +200,29 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatFree PROTO((SeqFeatPtr anp));
 
 NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatToXref PROTO((SeqFeatPtr sfp));
 
-#define SEQFEAT_GENE	1
-#define SEQFEAT_ORG		2
-#define SEQFEAT_CDREGION	3
-#define SEQFEAT_PROT	4
-#define SEQFEAT_RNA		5
-#define SEQFEAT_PUB		6
-#define SEQFEAT_SEQ		7
-#define SEQFEAT_IMP		8
-#define SEQFEAT_REGION	9
-#define SEQFEAT_COMMENT	10
-#define SEQFEAT_BOND	11
-#define SEQFEAT_SITE	12
-#define SEQFEAT_RSITE	13
-#define SEQFEAT_USER	14
-#define SEQFEAT_TXINIT	15
-#define SEQFEAT_NUM		16
-#define SEQFEAT_PSEC_STR	17
-#define SEQFEAT_NON_STD_RESIDUE	18
-#define SEQFEAT_HET		19
-#define SEQFEAT_BIOSRC	20
+#define SEQFEAT_GENE             1
+#define SEQFEAT_ORG              2
+#define SEQFEAT_CDREGION         3
+#define SEQFEAT_PROT             4
+#define SEQFEAT_RNA              5
+#define SEQFEAT_PUB              6
+#define SEQFEAT_SEQ              7
+#define SEQFEAT_IMP              8
+#define SEQFEAT_REGION           9
+#define SEQFEAT_COMMENT         10
+#define SEQFEAT_BOND            11
+#define SEQFEAT_SITE            12
+#define SEQFEAT_RSITE           13
+#define SEQFEAT_USER            14
+#define SEQFEAT_TXINIT          15
+#define SEQFEAT_NUM             16
+#define SEQFEAT_PSEC_STR        17
+#define SEQFEAT_NON_STD_RESIDUE 18
+#define SEQFEAT_HET             19
+#define SEQFEAT_BIOSRC          20
+#define SEQFEAT_CLONEREF        21
 
-#define SEQFEAT_MAX 21 /* size of array needed for seqfeat filter parameters */
+#define SEQFEAT_MAX 22 /* size of array needed for seqfeat filter parameters */
 
 /*****************************************************************************
 *
@@ -745,6 +747,70 @@ NLM_EXTERN TxinitPtr LIBCALL TxinitNew PROTO((void));
 NLM_EXTERN Boolean   LIBCALL TxinitAsnWrite PROTO((TxinitPtr txp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN TxinitPtr LIBCALL TxinitAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN TxinitPtr LIBCALL TxinitFree PROTO((TxinitPtr txp));
+
+
+/**************************************************
+*
+*    CloneSeq
+*
+**************************************************/
+typedef struct clone_seq {
+   struct clone_seq PNTR next;
+   Uint4 OBbits__;
+   Int4        type;
+#define OB__Clone_seq_confidence 0
+   Int4        confidence;
+   ValNodePtr  location;
+   ValNodePtr  seq;
+   DbtagPtr    align_id;
+} CloneSeq, PNTR CloneSeqPtr;
+
+
+NLM_EXTERN CloneSeqPtr LIBCALL CloneSeqFree PROTO ((CloneSeqPtr ));
+NLM_EXTERN CloneSeqPtr LIBCALL CloneSeqNew PROTO (( void ));
+NLM_EXTERN CloneSeqPtr LIBCALL CloneSeqAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CloneSeqAsnWrite PROTO (( CloneSeqPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    CloneSeqSet
+*
+**************************************************/
+typedef struct clone_seq CloneSeqSet;
+typedef struct clone_seq PNTR CloneSeqSetPtr;
+#define CloneSeqSetNew() Clone_seqNew() 
+
+NLM_EXTERN CloneSeqSetPtr LIBCALL CloneSeqSetFree PROTO ((CloneSeqSetPtr ));
+NLM_EXTERN CloneSeqSetPtr LIBCALL CloneSeqSetNew PROTO (( void ));
+NLM_EXTERN CloneSeqSetPtr LIBCALL CloneSeqSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CloneSeqSetAsnWrite PROTO (( CloneSeqSetPtr , AsnIoPtr, AsnTypePtr));
+
+/**************************************************
+*
+*    CloneRef
+*
+**************************************************/
+typedef struct clone_ref {
+   Uint4 OBbits__;
+   CharPtr      name;
+   CharPtr      library;
+   Uint1        concordant;
+   Uint1        unique;
+#define OB__Clone_ref_placement_method 0
+   Int4         placement_method;
+   CloneSeqPtr  clone_seq;
+} CloneRef, PNTR CloneRefPtr;
+
+
+NLM_EXTERN CloneRefPtr LIBCALL CloneRefFree PROTO ((CloneRefPtr ));
+NLM_EXTERN CloneRefPtr LIBCALL CloneRefNew PROTO (( void ));
+NLM_EXTERN CloneRefPtr LIBCALL CloneRefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CloneRefAsnWrite PROTO (( CloneRefPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+
 
 
 #ifdef __cplusplus

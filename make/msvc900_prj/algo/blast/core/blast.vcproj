@@ -3374,7 +3374,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\..\..\..\..\algo\blast\core\hspstream_collector.c"
+				RelativePath="..\..\..\..\..\algo\blast\core\hspfilter_collector.c"
 				>
 				<FileConfiguration
 					Name="ReleaseDLL|Win32"
@@ -4587,7 +4587,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\..\algo\blast\core\hspstream_collector.h"
+				RelativePath="..\..\..\..\..\algo\blast\core\hspfilter_collector.h"
 				>
 			</File>
 			<File

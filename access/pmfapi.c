@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.98 $
+* $Revision: 1.103 $
 *
 * File Description: 
 *
@@ -441,6 +441,73 @@ NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
       ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for ti %lu", (unsigned long) tid);
     } else {
       ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for ti %lu is %s", (unsigned long) tid, str);
+    }
+    MemFree (str);
+  }
+#endif
+
+  return conn;
+}
+
+NLM_EXTERN CONN PubSeqFetchSRAOpenConnection (
+  CharPtr sraid
+)
+
+{
+  Char     buf [32];
+  CONN     conn;
+  Char     query [64];
+#ifdef OS_UNIX
+  CharPtr  str;
+#endif
+
+  if (StringHasNoText (sraid)) return NULL;
+
+#ifdef PUB_SEQ_FETCH_DEBUG
+  sprintf (query, "val=gnl|SRA|%s&save=idf&view=1", sraid);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
+#endif
+
+  /*
+  sprintf (query, "view=0&save=idf&val=gnl|SRA|%s", sraid);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnBinary, eENCOD_None, 0);
+  */
+
+  sprintf (query, "val=gnl|SRA|%s", sraid);
+  conn = QUERY_OpenServiceQuery ("SeqFetch", query, 30);
+
+#ifdef OS_UNIX
+  if (! log_query_url_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_LOG_URL");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_query_url = TRUE;
+      }
+    }
+    log_query_url_set = TRUE;
+  }
+#endif
+
+  if (conn == NULL) {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchSRAOpenConnection failed for sra %s, date/time %s", sraid, buf);
+    return conn;
+  }
+
+#ifdef OS_UNIX
+  if (log_query_url) {
+    str = CONN_Description (conn);
+    if (str == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for sra %s", sraid);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for sra %s is %s", sraid, str);
     }
     MemFree (str);
   }
@@ -1067,10 +1134,12 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
 }
 
 typedef struct psconfirm {
-  Int4   uid;
-  Uint4  tid;
-  Int4   gi;
-  Uint4  ti;
+  Int4     uid;
+  Uint4    tid;
+  CharPtr  sid;
+  Int4     gi;
+  Uint4    ti;
+  CharPtr  si;
 } PsConfirm, PNTR PsConfirmPtr;
 
 static void ConfirmGiInSep (
@@ -1121,6 +1190,31 @@ static void ConfirmTiInSep (
   }
 }
 
+static void ConfirmSraidInSep (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  PsConfirmPtr  psp;
+  SeqIdPtr      sip;
+  CharPtr       sraid;
+  DbtagPtr      dbtag;
+
+  if (bsp == NULL || userdata == NULL) return;
+  psp = (PsConfirmPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice != SEQID_GENERAL) continue;
+    dbtag = (DbtagPtr) sip->data.ptrvalue;
+    if (dbtag == NULL || StringCmp (dbtag->db, "SRA") != 0 || dbtag->tag == NULL) continue;
+    if (dbtag->tag->str != NULL) {
+      sraid = dbtag->tag->str;
+      if (psp->si == NULL || StringCmp (sraid, psp->si) == 0) {
+        psp->si = sraid;
+      }
+    }
+  }
+}
 
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   Int4 uid,
@@ -1183,8 +1277,10 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   if (sep != NULL) {
     ps.uid = uid;
     ps.tid = 0;
+    ps.sid = NULL;
     ps.gi = 0;
     ps.ti = 0;
+    ps.si = NULL;
     VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
     if (ps.gi != uid) {
       ErrPostEx (SEV_ERROR, 0, 0,
@@ -1268,8 +1364,10 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
   if (sep != NULL) {
     ps.uid = 0;
     ps.tid = tid;
+    ps.sid = NULL;
     ps.gi = 0;
     ps.ti = 0;
+    ps.si = NULL;
     VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmTiInSep);
     if (ps.ti != tid) {
       ErrPostEx (SEV_ERROR, 0, 0,
@@ -1284,6 +1382,90 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
     ErrPostEx (SEV_ERROR, 0, 0,
                "PubSeqSynchronousQueryTI failed for ti %lu, date/time %s, URL is %s",
                (long) tid, buf, str);
+  }
+
+  MemFree (str);
+
+  return sep;
+}
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuerySRA (
+  CharPtr sraid
+)
+
+{
+  Char         buf [32];
+  CONN         conn;
+  PsConfirm    ps;
+  SeqEntryPtr  sep;
+  CharPtr      str = NULL;
+#ifdef OS_UNIX
+  clock_t      starttime;
+  clock_t      stoptime;
+  struct tms   timebuf;
+#endif
+
+  if (StringHasNoText (sraid)) return NULL;
+
+#ifdef OS_UNIX
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
+#endif
+
+  conn = PubSeqFetchSRAOpenConnection (sraid);
+
+  if (conn == NULL) return NULL;
+
+  QUERY_SendQuery (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    starttime = times (&timebuf);
+  }
+#endif
+
+  str = CONN_Description (conn);
+  if (StringHasNoText (str)) {
+    str = StringSave ("?");
+  }
+
+  sep = PubSeqWaitForReply (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    stoptime = times (&timebuf);
+    printf ("PubSeqWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
+
+  if (sep != NULL) {
+    ps.uid = 0;
+    ps.tid = 0;
+    ps.sid = sraid;
+    ps.gi = 0;
+    ps.ti = 0;
+    ps.si = NULL;
+    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmSraidInSep);
+    if (StringCmp (ps.si, sraid) != 0) {
+      ErrPostEx (SEV_ERROR, 0, 0,
+                 "PubSeqSynchronousQuerySRA requested sra %s but received sra %s",
+                 sraid, ps.si);
+    }
+  } else {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0,
+               "PubSeqSynchronousQuerySRA failed for sra %s, date/time %s, URL is %s",
+               sraid, buf, str);
   }
 
   MemFree (str);
@@ -1755,6 +1937,7 @@ NLM_EXTERN Int4 AccnListCheckQueue (
 
 static CharPtr pubseqfetchproc = "PubSeqBioseqFetch";
 static CharPtr tracefetchproc = "TraceBioseqFetch";
+static CharPtr srafetchproc = "SRABioseqFetch";
 static CharPtr pubseqseqidtogi = "PubSeqSeqIdForGi";
 static CharPtr pubseqgitoseqid = "PubSeqGiForSeqId";
 
@@ -1935,6 +2118,66 @@ static Int2 LIBCALLBACK TraceBioseqFetchFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static Pointer LIBCALLBACK FreeSraID (Pointer data)
+
+{
+  MemFree (data);
+  return NULL;
+}
+static Int2 LIBCALLBACK SRABioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  DbtagPtr          dbt;
+  ObjectIdPtr       oip;
+  OMUserDataPtr     omdp = NULL;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  CharPtr           sraid = NULL;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  omdp = ObjMgrGetUserData (ompcp->input_entityID, ompp->procid, OMPROC_FETCH, 0);
+  if (omdp != NULL) {
+    sraid = omdp->userdata.ptrvalue;
+    if (sraid == NULL) return OM_MSG_RET_ERROR;
+  } else if (sip->choice == SEQID_GENERAL) {
+    dbt = (DbtagPtr) sip->data.ptrvalue;
+    if (dbt == NULL) return OM_MSG_RET_OK;
+    if (StringICmp (dbt->db, "SRA") != 0) return OM_MSG_RET_OK;
+    oip = dbt->tag;
+    if (oip == NULL || oip->str == NULL) return OM_MSG_RET_OK;
+    sraid = oip->str;
+  }
+
+  if (sraid == NULL) return OM_MSG_RET_OK;
+
+  sep = PubSeqSynchronousQuerySRA (sraid);
+
+  if (sep == NULL) {
+    return OM_MSG_RET_OK;
+  }
+  bsp = BioseqFindInSeqEntry (sip, sep);
+
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  omdp = ObjMgrAddUserData (ompcp->output_entityID, ompp->procid, OMPROC_FETCH, 0);
+  if (omdp != NULL) {
+    omdp->userdata.ptrvalue = StringSave (sraid);
+    omdp->freefunc = FreeSraID;
+  }
+
+  return OM_MSG_RET_DONE;
+}
+
 static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
 
 {
@@ -2018,6 +2261,10 @@ static Int2 LIBCALLBACK PubSeqGiForSeqIdFunc (Pointer data)
 NLM_EXTERN Boolean PubSeqFetchEnable (void)
 
 {
+  ObjMgrProcLoad (OMPROC_FETCH, srafetchproc, srafetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  SRABioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+
   ObjMgrProcLoad (OMPROC_FETCH, tracefetchproc, tracefetchproc,
                   OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
                   TraceBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
@@ -2051,6 +2298,10 @@ NLM_EXTERN Boolean PubSeqFetchEnableEx (
 
 {
   if (fetch) {
+    ObjMgrProcLoad (OMPROC_FETCH, srafetchproc, srafetchproc,
+                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                    SRABioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+
     ObjMgrProcLoad (OMPROC_FETCH, tracefetchproc, tracefetchproc,
                     OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
                     TraceBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
@@ -2090,6 +2341,10 @@ NLM_EXTERN void PubSeqFetchDisable (void)
   ObjMgrProcPtr  ompp;
 
   omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, srafetchproc, OMPROC_FETCH);
+  if (ompp != NULL) {
+    ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
+  }
   ompp = ObjMgrProcFind (omp, 0, tracefetchproc, OMPROC_FETCH);
   if (ompp != NULL) {
     ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);

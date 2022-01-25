@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/27/2007
 *
-* $Revision: 1.52 $
+* $Revision: 1.57 $
 *
 * File Description: 
 * This file contains functions for automatically generating definition lines.
@@ -2092,6 +2092,74 @@ static OrgModAbbrevData orgmod_abbrevs[] = {
   { ORGMOD_pathovar, "pv." }
 };
 
+#define NUM_orgmod_abbrevs sizeof (orgmod_abbrevs) / sizeof (OrgModAbbrevData)
+
+
+
+static Boolean FindModifierTextInTaxname (CharPtr search_text, Int2 subtype, CharPtr taxName)
+{
+  CharPtr value_found, abbrev_start;
+  Int4    value_len, i;
+  Boolean other_abbrev_found;
+
+  value_found = StringStr (taxName, search_text);
+  value_len = StringLen (search_text);
+  while (value_found != NULL)
+  {
+    if (value_found == taxName)
+    {
+      value_found = StringStr (value_found + 1, search_text);
+      continue;
+    }
+    if (*(value_found - 1) != ' ' && *(value_found - 1) != '(')
+    {
+      value_found = StringStr (value_found + 1, search_text);
+      continue;
+    }
+    if (*(value_found - 1) == ')' && *(value_found + value_len) != ')')
+    {
+      value_found = StringStr (value_found + 1, search_text);
+      continue;
+    }
+    if (*(value_found + value_len) != ' ' && *(value_found + value_len) != 0)
+    {
+      value_found = StringStr (value_found + 1, search_text);
+      continue;
+    }
+    other_abbrev_found = FALSE;
+    for (i = 0; i < NUM_orgmod_abbrevs; i++)
+    {
+      abbrev_start = value_found - StringLen (orgmod_abbrevs[i].abbrev) - 1;
+      if (abbrev_start > taxName
+        && StringNCmp (abbrev_start,
+                        orgmod_abbrevs[i].abbrev,
+                        StringLen (orgmod_abbrevs[i].abbrev)) == 0)
+      {
+        if (subtype == orgmod_abbrevs[i].subtype)
+        {
+          return TRUE;
+        }
+        else
+        {
+          other_abbrev_found = TRUE;
+        }
+      }
+    }
+    if ( ! other_abbrev_found 
+      && ( subtype == ORGMOD_strain
+        || subtype == ORGMOD_sub_species
+        || subtype == ORGMOD_specimen_voucher
+        || subtype == ORGMOD_isolate
+        || subtype == ORGMOD_cultivar))
+    {
+      return TRUE;
+    }
+    value_found = StringStr (value_found + 1, search_text);
+  }
+  return FALSE;
+}
+
+
 /* The UseOrgModifier function looks for the values of certain kinds of 
  * modifiers in the taxonomy name, so that they will not be added to the
  * definition line as modifiers if they are already present in the
@@ -2102,15 +2170,11 @@ NLM_EXTERN Boolean UseOrgModifier (
   CharPtr   taxName
 )
 {
-  CharPtr value_found;
-  Int4    value_len;
-  Int4    num_abbrevs, i;
-  CharPtr abbrev_start;
-  Boolean other_abbrev_found;
+  Boolean value_found = FALSE;
+  CharPtr search_text;
+  CharPtr cp;
 
   if (mod == NULL || mod->subname == NULL) return FALSE;
-
-  num_abbrevs = sizeof (orgmod_abbrevs) / sizeof (OrgModAbbrevData);
 
   /* If selected modifiers already appear in the tax Name, */
   /* don't use them in the organism description again */
@@ -2120,62 +2184,20 @@ NLM_EXTERN Boolean UseOrgModifier (
     || mod->subtype == ORGMOD_forma
     || mod->subtype == ORGMOD_forma_specialis
     || mod->subtype == ORGMOD_pathovar
-    || mod->subtype == ORGMOD_specimen_voucher)
+    || mod->subtype == ORGMOD_specimen_voucher
+    || mod->subtype == ORGMOD_isolate
+    || mod->subtype == ORGMOD_cultivar)
   {
-    value_found = StringStr (taxName, mod->subname);
-    value_len = StringLen (mod->subname);
-    while (value_found != NULL)
-    {
-      if (value_found == taxName)
-      {
-        value_found = StringStr (value_found + 1, mod->subname);
-        continue;
-      }
-      if (*(value_found - 1) != ' ' && *(value_found - 1) != '(')
-      {
-        value_found = StringStr (value_found + 1, mod->subname);
-        continue;
-      }
-      if (*(value_found - 1) == ')' && *(value_found + value_len) != ')')
-      {
-        value_found = StringStr (value_found + 1, mod->subname);
-        continue;
-      }
-      if (*(value_found + value_len) != ' ' && *(value_found + value_len) != 0)
-      {
-        value_found = StringStr (value_found + 1, mod->subname);
-        continue;
-      }
-      other_abbrev_found = FALSE;
-      for (i = 0; i < num_abbrevs; i++)
-      {
-        abbrev_start = value_found - StringLen (orgmod_abbrevs[i].abbrev) - 1;
-        if (abbrev_start > taxName
-          && StringNCmp (abbrev_start,
-                         orgmod_abbrevs[i].abbrev,
-                         StringLen (orgmod_abbrevs[i].abbrev)) == 0)
-        {
-          if (mod->subtype == orgmod_abbrevs[i].subtype)
-          {
-            return FALSE;
-          }
-          else
-          {
-            other_abbrev_found = TRUE;
-          }
-        }
-      }
-      if ( ! other_abbrev_found 
-        && ( mod->subtype == ORGMOD_strain
-          || mod->subtype == ORGMOD_sub_species
-          || mod->subtype == ORGMOD_specimen_voucher))
-      {
-        return FALSE;
-      }
-      value_found = StringStr (value_found + 1, mod->subname);
+    if (FindModifierTextInTaxname (mod->subname, mod->subtype, taxName)) {
+      value_found = TRUE;
+    } else if (mod->subtype == ORGMOD_specimen_voucher && (cp = StringChr (mod->subname, ':')) != NULL) {
+      search_text = StringSave (mod->subname);
+      search_text[cp - mod->subname] = ' ';
+      value_found = FindModifierTextInTaxname (search_text, mod->subtype, taxName);
+      search_text = MemFree (search_text);
     }
   }
-  return TRUE;
+  return !value_found;
 }
 
 /* The SetRequiredModifiers function copies the default required values from
@@ -2341,7 +2363,7 @@ NLM_EXTERN SeqDescrPtr GetGenomeProjectIDDescriptor (BioseqPtr bsp)
 
 
 
-static Int4 GetGenomeProjectID (BioseqPtr bsp)
+NLM_EXTERN Int4 GetGenomeProjectID (BioseqPtr bsp)
 {
   SeqMgrDescContext context;
   SeqDescrPtr       sdp;
@@ -12604,6 +12626,49 @@ NLM_EXTERN void ConvertLocalIdsToTSAIds (SeqEntryPtr sep)
 }
 
 
+static void ConvertLocalIdsToBarcodeIdsCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqIdPtr        sip_local = NULL;
+  SeqEntryPtr     top_sep;
+  SeqIdPtr        sip_new;
+  DbtagPtr        dbtag;
+  ObjectIdPtr     oip = NULL;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || data == NULL) {
+    return;
+  }
+
+  top_sep = (SeqEntryPtr) data;
+
+  for (sip_local = bsp->id;
+       sip_local != NULL && sip_local->choice != SEQID_LOCAL;
+       sip_local = sip_local->next)
+  {}
+  if (sip_local == NULL) return;
+  oip = sip_local->data.ptrvalue;
+  if (oip == NULL) return;
+
+  dbtag = DbtagNew ();
+  dbtag->db = StringSave ("uoguelph");
+  dbtag->tag = ObjectIdNew ();
+  if (oip->str == NULL) {
+    dbtag->tag->id = oip->id;
+  } else {
+    dbtag->tag->str = StringSave (oip->str);
+  }
+  sip_new = ValNodeNew (NULL);
+  sip_new->choice = SEQID_GENERAL;
+  sip_new->data.ptrvalue = dbtag;
+  ReplaceSeqIdWithSeqId (sip_local, sip_new, top_sep);
+}     
+          
+  
+NLM_EXTERN void ConvertLocalIdsToBarcodeIds (SeqEntryPtr sep)
+{
+  VisitBioseqsInSep (sep, sep, ConvertLocalIdsToBarcodeIdsCallback);
+}
+
+
 NLM_EXTERN Int4 GetDeflinePosForFieldType (ValNodePtr field)
 {
   Int4    i, rval = -1;
@@ -14513,3 +14578,117 @@ NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first,
   return reformatted_date;
 }
 
+
+NLM_EXTERN Boolean CreateMatPeptideFromCDS (SeqFeatPtr sfp)
+{
+  SeqFeatPtr        orig_prot, new_prot;
+  SeqMgrFeatContext fcontext;
+  SeqLocPtr         prot_loc;
+  ProtRefPtr        prp;
+  BioseqPtr         prot_bsp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) {
+    return FALSE;
+  }
+
+  prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (prot_bsp != NULL) {
+    prot_loc = SeqLocIntNew (0, prot_bsp->length - 1, Seq_strand_plus, SeqLocId (sfp->product));
+    new_prot = CreateNewFeatureOnBioseq (prot_bsp, SEQFEAT_PROT, prot_loc);
+    orig_prot = SeqMgrGetNextFeature (prot_bsp, NULL, 0, FEATDEF_PROT, &fcontext);
+    if (orig_prot != NULL) {
+      prp = AsnIoMemCopy (orig_prot->data.value.ptrvalue, (AsnReadFunc) ProtRefAsnRead, (AsnWriteFunc) ProtRefAsnWrite);
+    } else {
+      prp = ProtRefNew ();
+    }
+    prp->processed = 2;
+    new_prot->data.value.ptrvalue = prp;
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+NLM_EXTERN Boolean ConvertCDSToMatPeptideForOverlappingCDS (SeqFeatPtr sfp, SeqFeatPtr top_cds, Boolean remove_original)
+{
+  BioseqPtr prot_bsp;
+  CdRegionPtr crp;
+  SeqLocPtr   prot_loc;
+  SeqFeatPtr  new_sfp, orig_prot;
+  SeqMgrFeatContext prot_context;
+  ProtRefPtr prp;
+  Int4 frame;
+  Boolean rval = FALSE;
+
+  if (sfp == NULL || top_cds == NULL || sfp->data.choice != SEQFEAT_CDREGION || top_cds->data.choice != SEQFEAT_CDREGION) {
+    return FALSE;
+  }
+
+  prot_bsp = BioseqFindFromSeqLoc (top_cds->product);
+  if (prot_bsp != NULL)
+  {
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      
+    prot_loc = dnaLoc_to_aaLoc(top_cds, sfp->location, TRUE, &frame, TRUE);
+    if (prot_loc != NULL)
+    {
+      /* Create new feature on prot_bsp */
+      new_sfp = CreateNewFeatureOnBioseq (prot_bsp, SEQFEAT_PROT, prot_loc);
+      if (new_sfp != NULL)
+      {
+        prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+        orig_prot = SeqMgrGetNextFeature (prot_bsp, NULL, 0, FEATDEF_PROT, &prot_context);
+        if (orig_prot == NULL) {
+          prp = ProtRefNew ();
+        } else {          
+          prp = AsnIoMemCopy (orig_prot->data.value.ptrvalue, (AsnReadFunc) ProtRefAsnRead, (AsnWriteFunc) ProtRefAsnWrite);
+        }
+        prp->processed = 2;
+        new_sfp->data.value.ptrvalue = prp;
+        prot_bsp->idx.deleteme = TRUE;
+        
+        rval = TRUE;
+      }
+      /* mark old feature for deletion */
+      sfp->idx.deleteme = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN Boolean AutoConvertCDSToMiscFeat (SeqFeatPtr cds, Boolean remove_original)
+{
+  BioseqPtr bsp;
+  SeqFeatPtr top_cds = NULL;
+  SeqMgrFeatContext fcontext;
+  Boolean rval = FALSE;
+
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION) {
+    return FALSE;
+  }
+
+  bsp = BioseqFindFromSeqLoc (cds->location);
+
+  /* find overlapping coding region */
+  for (top_cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+       top_cds != NULL && (top_cds == cds || SeqLocCompare (top_cds->location, cds->location) != SLC_B_IN_A);
+       top_cds = SeqMgrGetNextFeature (bsp, top_cds, SEQFEAT_CDREGION, 0, &fcontext)) {
+  }
+
+  if (top_cds == NULL) {
+    if (remove_original) {
+      rval = FALSE;
+    } else {
+      rval = CreateMatPeptideFromCDS (cds);
+    }
+  } else {
+    rval = ConvertCDSToMatPeptideForOverlappingCDS (cds, top_cds, remove_original);
+  }
+  if (rval) {
+    /* have to remove CDS because ConvertFeature has already created a duplicate if the feature is going to be kept */
+    cds->idx.deleteme = TRUE;
+  }
+  return rval;
+}

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.141 $
+* $Revision: 6.149 $
 *
 * File Description: 
 *
@@ -173,11 +173,44 @@ extern void SetDescriptorPropagate (BioseqSetPtr bssp)
   }
 }
 
+
+static void CopyOneDescriptorToSeqEntry (SeqDescrPtr sdp, SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+
+  if (sdp == NULL || sep == NULL) {
+    return;
+  }
+  
+  /* NOTE - we are using SeqDescAsnRead and SeqDescAsnWrite
+   * instead of SeqDescrAsnWrite and SeqDescrAsnWrite
+   * so that only THIS descriptor is propagated, rather than than chain
+   */
+  if (sep->choice == 1) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    ValNodeLink (&(bsp->descr),
+                  AsnIoMemCopy ((Pointer) sdp,
+                                (AsnReadFunc) SeqDescAsnRead,
+                                (AsnWriteFunc) SeqDescAsnWrite));
+  } else if (sep->choice == 2) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    ValNodeLink (&(bssp->descr),
+                  AsnIoMemCopy ((Pointer) sdp,
+                                (AsnReadFunc) SeqDescAsnRead,
+                                (AsnWriteFunc) SeqDescAsnWrite));
+  }
+}
+
+
 extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
 
 {
   BioseqSetPtr      bssp = NULL;
   OMProcControlPtr  ompcp;
+  SeqDescrPtr sdp;
+  ObjValNodePtr ovp;
+  SeqEntryPtr   sep;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->input_entityID == 0) {
@@ -187,6 +220,25 @@ extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
   switch (ompcp->input_itemtype) {
     case OBJ_BIOSEQSET :
       bssp = (BioseqSetPtr) ompcp->input_data;
+      break;
+    case OBJ_SEQDESC:
+      /* special case - propagate just this descriptor */
+      sdp = (SeqDescrPtr) ompcp->input_data;
+      if (sdp != NULL && sdp->extended > 0) {
+        ovp = (ObjValNodePtr) sdp;
+        if (ovp->idx.parenttype == OBJ_BIOSEQSET && ovp->idx.parentptr != NULL) {
+          bssp = ovp->idx.parentptr;
+          for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+            CopyOneDescriptorToSeqEntry (sdp, sep);
+          }
+          ovp->idx.deleteme = TRUE;
+          DeleteMarkedObjects (ompcp->input_entityID, 0, NULL);
+          ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+          ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+          return OM_MSG_RET_DONE;
+        }
+      }
+      return OM_MSG_RET_ERROR;
       break;
     case 0 :
       Message (MSG_ERROR, "Please select a BioseqSet");
@@ -345,6 +397,29 @@ extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 i
     }
   }
   return NULL;
+}
+
+
+extern Uint2 GetProcIdForItemEditor (Uint2 entityID, Uint2 itemID, Uint1 itemtype, Uint2 subinputtype)
+{
+  ObjMgrPtr     omp;
+	ObjMgrProcPtr ompp=NULL;
+  Uint2         best_procid = 0;
+
+  omp = ObjMgrGet ();
+
+	while ((ompp = ObjMgrProcFindNext(omp, OMPROC_EDIT, itemtype, itemtype, ompp)) != NULL)
+	{
+		if (ompp->subinputtype == subinputtype)
+		{
+      return ompp->procid;
+		}
+		else if (! ompp->subinputtype)  /* general proc found */
+    {
+			best_procid = ompp->procid;
+    }
+	}
+  return best_procid;
 }
 
 
@@ -611,7 +686,7 @@ extern void UpdateGeneLocation
       }
       else
       {
-        slp = SeqLocMerge (bsp, gene->location, new_feat_loc, TRUE, FALSE, hasNulls);
+        slp = SeqLocMergeExEx (bsp, gene->location, new_feat_loc, TRUE, FALSE, TRUE, hasNulls, TRUE, TRUE);
       }
 
       if (slp != NULL) {
@@ -3053,16 +3128,53 @@ static Boolean WriteAuthorDialog (DialoG d, CharPtr filename)
   return FALSE;
 }
 
+
+static void InsertFirstAuthor (ButtoN b)
+{
+  AuthorDialogPtr  adp;
+  AuthListPtr      alp;
+  AuthorPtr        ap;
+  NameStdPtr       nsp;
+  ValNodePtr       vnp;
+
+  adp = (AuthorDialogPtr) GetObjectExtra (b);
+  if (adp == NULL) {
+    return;
+  }
+
+  alp = DialogToPointer (adp->dialog);
+  if (alp != NULL && alp->names != NULL) {
+    vnp = ValNodeNew (NULL);
+    vnp->next = alp->names;
+    alp->names = vnp;
+    if (alp->choice == 1) {
+      ap = AuthorNew ();
+      ap->name = PersonIdNew ();
+      ap->name->choice = 2;
+      nsp = NameStdNew ();
+      ap->name->data = nsp;
+      vnp->data.ptrvalue = ap;
+    } else {
+      vnp->data.ptrvalue = StringSave ("");
+    }
+    PointerToDialog (adp->dialog, alp);
+    SendMessageToDialog (adp->dialog, VIB_MSG_ENTER);
+  }
+  alp = AuthListFree (alp);
+}
+
+
 extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
 
 {
   AuthorDialogPtr  adp;
   GrouP            k;
-  GrouP            p;
+  GrouP            p, list_grp;
   PrompT           p1, p2, p3, p4, p5;
   TagListPtr       tlp;
+  ButtoN           b;
 
-  p = HiddenGroup (prnt, 0, 0, NULL);
+  p = HiddenGroup (prnt, -1, 0, NULL);
 
   adp = (AuthorDialogPtr) MemNew (sizeof (AuthorDialog));
   if (adp != NULL) {
@@ -3076,7 +3188,9 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     adp->exportdialog = WriteAuthorDialog;
     adp->dialogmessage = AuthorDialogMessage;
 
-    adp->strGrp = HiddenGroup (p, -1, 0, NULL);
+    list_grp = HiddenGroup (p, 0, 0, NULL);
+
+    adp->strGrp = HiddenGroup (list_grp, -1, 0, NULL);
     SetGroupSpacing (adp->strGrp, 3, 2);
 
     k = HiddenGroup (adp->strGrp, -4, 0, NULL);
@@ -3089,7 +3203,7 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
                                           AuthorDialogToStrAuthListPtr);
     Hide (adp->strGrp);
 
-    adp->stdGrp = HiddenGroup (p, -1, 0, NULL);
+    adp->stdGrp = HiddenGroup (list_grp, -1, 0, NULL);
     SetGroupSpacing (adp->stdGrp, 3, 2);
 
     k = HiddenGroup (adp->stdGrp, -4, 0, NULL);
@@ -3117,6 +3231,10 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
       AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p4, NULL);
       AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p5, NULL);
     }
+
+    b = PushButton (p, "Insert First Author", InsertFirstAuthor);
+    SetObjectExtra (b, adp, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) list_grp, (HANDLE) b, NULL);
   }
 
   return (DialoG) p;
@@ -5857,6 +5975,71 @@ static void ChangedPartialProc (ButtoN b)
   }
 }
 
+
+static CharPtr MakeBlankLocationLine (CharPtr orig)
+{
+  CharPtr cp, rval = NULL;
+  
+  if (StringHasNoText (orig)) {
+    return StringSave ("");
+  }
+  /* skip first two values, keep the rest */
+  cp = StringChr (orig, '\t');
+  if (cp == NULL) {
+    return StringSave ("");
+  }
+  cp = StringChr (cp + 1, '\t');
+  if (cp == NULL) {
+    return StringSave ("");
+  }
+  cp++;
+
+  rval = (CharPtr) MemNew (sizeof (Char) * (StringLen (cp) + 3));
+  sprintf (rval, "\t\t%s", cp);
+  return rval;
+}
+
+
+static void InsertFirstLocation (ButtoN b)
+{
+  DialoG ivals;
+  TagListPtr tlp;
+  ValNodePtr vnp;
+  Int2 j;
+
+  ivals = (DialoG) GetObjectExtra (b);
+  if (ivals == NULL) {
+    return;
+  }
+  tlp = (TagListPtr) GetObjectExtra (ivals);
+  if (tlp == NULL || tlp->vnp == NULL || StringHasNoText (tlp->vnp->data.ptrvalue)) {
+    return;
+  }
+
+  /* add blank line to current lines */
+  vnp = ValNodeNew (NULL);
+  vnp->data.ptrvalue = MakeBlankLocationLine (tlp->vnp->data.ptrvalue);
+  vnp->next = tlp->vnp;
+  /* disconnect lines from taglist, so they won't be erased by the reset */
+  tlp->vnp = NULL;
+
+  /* reset the dialog */
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+
+  /* attach the lines to the dialog */
+  tlp->vnp = vnp;
+
+  /* redraw dialog */
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  /* adjust scroll bars */
+  for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
+  }
+  tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+}
+
 extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Int2 spacing, Uint2Ptr types,
                                      Uint2Ptr textWidths, EnumFieldAssocPtr PNTR alists,
@@ -5882,6 +6065,7 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
   Int2             j;
   GrouP            m;
   GrouP            p;
+  GrouP            btn_grp;
   PrompT           p1;
   PrompT           p2;
   PrompT           p3;
@@ -5895,6 +6079,7 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
   TagListPtr       tlp;
   SeqAlignPtr      salp_list = NULL, salp;
   Int4             num_cols;
+  ButtoN           b;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -6200,11 +6385,15 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
     interval_types [2] = TAGLIST_POPUP;
     interval_types [3] = TAGLIST_POPUP;
     interval_types [4] = TAGLIST_POPUP;
-    ipp->nullsBetween = CheckBox (m, "'order' (intersperse intervals with gaps)", ChangedPartialProc);
+    btn_grp = HiddenGroup (m, 2, 0, NULL);
+    SetGroupSpacing (btn_grp, 10, 10);
+    ipp->nullsBetween = CheckBox (btn_grp, "'order' (intersperse intervals with gaps)", ChangedPartialProc);
     SetObjectExtra (ipp->nullsBetween, ipp, NULL);
+    b = PushButton (btn_grp, "Insert First Location", InsertFirstLocation);
+    SetObjectExtra (b, ipp->ivals, NULL);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) ipp->ivals,
-                  (HANDLE) q, (HANDLE) ipp->nullsBetween, NULL);
+                  (HANDLE) q, (HANDLE) btn_grp, NULL);
     tlp = (TagListPtr) GetObjectExtra (ipp->ivals);
     if (tlp != NULL) {
       AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p_from, NULL);
@@ -8940,5 +9129,21 @@ NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID)
     newid = ObjMgrGetEntityIDForChoice (currsep);
   }
   return newid;
+}
+
+
+NLM_EXTERN void CloseLog (LogInfoPtr lip)
+{
+  if (lip == NULL || lip->fp == NULL)
+  {
+    return;
+  }
+  FileClose (lip->fp);
+  lip->fp = NULL;
+  if (lip->data_in_log)
+  {
+    LaunchGeneralTextViewer (lip->path, lip->display_title);
+  }
+  FileRemove (lip->path);  
 }
 

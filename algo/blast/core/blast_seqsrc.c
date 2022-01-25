@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.36 2008/07/17 17:55:44 kazimird Exp $
+/*  $Id: blast_seqsrc.c,v 1.37 2009/05/27 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.36 2008/07/17 17:55:44 kazimird Exp $";
+    "$Id: blast_seqsrc.c,v 1.37 2009/05/27 17:39:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 #endif
 
@@ -52,6 +52,9 @@ struct BlastSeqSrc {
     BlastSeqSrcConstructor NewFnPtr;       /**< Constructor */
     BlastSeqSrcDestructor  DeleteFnPtr;    /**< Destructor */
     BlastSeqSrcCopier      CopyFnPtr;      /**< Copier */
+
+   /* Functions to set the number of threads in MT mode */
+    SetInt4FnPtr      SetNumberOfThreads;  /**< Set number of threads */
 
    /* Functions to get information about database as a whole */
     GetInt4FnPtr      GetNumSeqs;     /**< Get number of sequences in set */
@@ -162,6 +165,14 @@ char* BlastSeqSrcGetInitError(const BlastSeqSrc* seq_src)
     }
 
     return strdup(seq_src->InitErrorStr);
+}
+
+void BlastSeqSrcSetNumberOfThreads(BlastSeqSrc* seq_src, int n_threads)
+{
+    if (!seq_src || !seq_src->SetNumberOfThreads) {
+        return;
+    }
+    (*seq_src->SetNumberOfThreads)(seq_src->DataStructure, n_threads);
 }
 
 Int4
@@ -437,6 +448,7 @@ DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr)
 
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(void*, DataStructure)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(char*, InitErrorStr)
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(SetInt4FnPtr, SetNumberOfThreads)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqsStats)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen)

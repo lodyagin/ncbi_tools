@@ -190,7 +190,7 @@ SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.c
+SOURCE=..\..\..\..\..\algo\blast\core\hspfilter_collector.c
 # End Source File
 # Begin Source File
 
@@ -395,7 +395,7 @@ SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.h
+SOURCE=..\..\..\..\..\algo\blast\core\hspfilter_collector.h
 # End Source File
 # Begin Source File
 

@@ -1,4 +1,4 @@
-/* $Id: ncbi_connutil.c,v 6.132 2009/02/11 17:24:31 kazimird Exp $
+/* $Id: ncbi_connutil.c,v 6.133 2009/06/23 16:04:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -1617,6 +1617,7 @@ static const char* s_MIME_SubType[eMIME_Unknown+1] = {
     "plain",
     "xml",
     "xml+soap",
+    "octet-stream",
     "x-unknown"
 };
 

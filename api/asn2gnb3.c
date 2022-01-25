@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.102 $
+* $Revision: 1.111 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -74,6 +74,7 @@ static CharPtr link_encode = "http://www.nhgri.nih.gov/10005107";
 static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
 
+static CharPtr link_gold_stamp_id = "http://genomesonline.org/GOLD_CARDS/";
 
 
 /* ********************************************************************** */
@@ -438,6 +439,7 @@ static CharPtr GetStrForBankit (
 
 static CharPtr reftxt0 = " The reference sequence was derived from ";
 static CharPtr reftxtg = " The reference sequence was generated based on analysis of ";
+static CharPtr reftxti = " The reference sequence is identical to ";
 static CharPtr reftxt1 = " This record is predicted by genome sequence analysis and is not yet supported by experimental evidence.";
 static CharPtr reftxt2 = " This record has not yet been subject to final NCBI review.";
 static CharPtr reftxt3 = " This record has not been reviewed and the function is unknown.";
@@ -446,6 +448,9 @@ static CharPtr reftxt5 = " This record has been curated by ";
 static CharPtr reftxt6 = " This record is predicted by automated computational analysis.";
 static CharPtr reftxt7 = " This record is provided to represent a collection of whole genome shotgun sequences.";
 static CharPtr reftxt9 = " This record is derived from an annotated genomic sequence (";
+static CharPtr reftxt21 = "NCBI contigs are derived from assembled genomic sequence data.";
+static CharPtr reftxt22 = " Features on this sequence have been produced for build ";
+static CharPtr reftxt23 = " of the NCBI's genome annotation";
 static CharPtr reftxt41 = " This record is based on preliminary annotation provided by ";
 
 static CharPtr GetStatusForRefTrack (
@@ -525,12 +530,32 @@ static Boolean URLHasSuspiciousHtml (
   return FALSE;
 }
 
+static Boolean GetGiFromAccnDotVer (CharPtr source, Int4Ptr gip)
+
+{
+  Int4      gi = 0;
+  SeqIdPtr  sip;
+
+  if (StringHasNoText (source) || gip == NULL) return FALSE;
+  *gip = 0;
+
+  sip = SeqIdFromAccessionDotVersion (source);
+  if (sip == NULL) return FALSE;
+  gi = GetGIForSeqId (sip);
+  SeqIdFree (sip);
+  if (gi == 0) return FALSE;
+
+  *gip = gi;
+  return TRUE;
+}
 
 static void AddStrForRefTrack (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   UserObjectPtr uop,
-  Boolean is_na
+  Boolean is_na,
+  CharPtr genomeBuildNumber,
+  CharPtr genomeVersionNumber
 )
 
 {
@@ -541,7 +566,7 @@ static void AddStrForRefTrack (
   Int4          from, to, gi;
   Int2          i = 0;
   Int2          review = 0;
-  Boolean       generated = FALSE;
+  Boolean       generated = FALSE, identical = FALSE;
 
   if ( uop == NULL || ffstring == NULL ) return;
   if ((oip = uop->type) == NULL) return;
@@ -551,6 +576,9 @@ static void AddStrForRefTrack (
     oip = ufp->label;
     if (StringCmp(oip->str, "Assembly") == 0) {
       urf = ufp;
+    } else if (StringCmp(oip->str, "IdenticalTo") == 0) {
+      urf = ufp;
+      identical = TRUE;
     }
     if (StringCmp (oip->str, "Status") == 0) {
       st = (CharPtr) ufp->data.ptrvalue;
@@ -606,9 +634,15 @@ static void AddStrForRefTrack (
     FF_Add_NCBI_Base_URL (ffstring, ref_link);
     FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+    if (review == 8) {
+      FFAddOneString (ffstring, " INFORMATION", FALSE, FALSE, TILDE_IGNORE);
+    }
     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
     FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+    if (review == 8) {
+      FFAddOneString (ffstring, " INFORMATION", FALSE, FALSE, TILDE_IGNORE);
+    }
   }
   FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
   if (review == 1) {
@@ -656,14 +690,20 @@ static void AddStrForRefTrack (
   }
   if (source != NULL) {
     FFAddOneString (ffstring, reftxt9, FALSE, FALSE, TILDE_IGNORE);
-    if (GetWWW (ajp) && ValidateAccn (source) == 0) {
+    gi = 0;
+    if (GetWWW (ajp) && ValidateAccnDotVer (source) == 0 && GetGiFromAccnDotVer (source, &gi)) {
       FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
       if (is_na) {
         FF_Add_NCBI_Base_URL (ffstring, link_seqn);
       } else {
         FF_Add_NCBI_Base_URL (ffstring, link_seqp);
       }
-      FFAddTextToString(ffstring, /* "val=" */ NULL, source, "\">", FALSE, FALSE, TILDE_IGNORE);
+      if (gi > 0) {
+        sprintf (buf, "%ld", (long) gi);
+        FFAddTextToString(ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddTextToString(ffstring, /* "val=" */ NULL, source, "\">", FALSE, FALSE, TILDE_IGNORE);
+      }
       FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
     } else {
@@ -672,8 +712,34 @@ static void AddStrForRefTrack (
     FFAddOneString (ffstring, ").", FALSE, FALSE, TILDE_IGNORE);
   }
   if (i > 0) {
+    if (review == 8 && (genomeBuildNumber != NULL || genomeVersionNumber != NULL)) {
+      FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
+      FFAddOneString (ffstring, genomeBuildNumber, FALSE, FALSE, TILDE_EXPAND);
+      if (StringHasNoText (genomeVersionNumber)) {
+        genomeVersionNumber = "1";
+      }
+      FFAddOneString (ffstring, " version ", FALSE, FALSE, TILDE_EXPAND);
+      FFAddOneString (ffstring, genomeVersionNumber, FALSE, FALSE, TILDE_EXPAND);
+      FFAddOneString (ffstring, reftxt23, FALSE, FALSE, TILDE_EXPAND);
+
+      FFAddOneString (ffstring, " [see ", FALSE, FALSE, TILDE_EXPAND);
+
+      if ( GetWWW(ajp) ) {
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, doc_link);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+      }
+      FFAddOneString (ffstring, "documentation", FALSE, FALSE, TILDE_IGNORE);
+      if ( GetWWW(ajp) ) {
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      }
+
+      FFAddOneString (ffstring, "].  ", FALSE, FALSE, TILDE_EXPAND);
+    }
     if (generated) {
       FFAddOneString (ffstring, reftxtg, FALSE, FALSE, TILDE_IGNORE);
+    } else if (identical) {
+      FFAddOneString (ffstring, reftxti, FALSE, FALSE, TILDE_IGNORE);
     } else {
       FFAddOneString (ffstring, reftxt0, FALSE, FALSE, TILDE_IGNORE);
     }
@@ -701,7 +767,7 @@ static void AddStrForRefTrack (
         }
       }
       if (StringDoesHaveText (accn)) {
-        if (GetWWW (ajp) && ValidateAccn (accn) == 0) {
+        if (GetWWW (ajp) && ValidateAccnDotVer (accn) == 0 && GetGiFromAccnDotVer (accn, &gi)) {
           FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
           if (is_na) {
             FF_Add_NCBI_Base_URL (ffstring, link_seqn);
@@ -714,6 +780,16 @@ static void AddStrForRefTrack (
           } else {
             FFAddTextToString(ffstring, /* "val=" */ NULL, accn, "\">", FALSE, FALSE, TILDE_IGNORE);
           }
+          FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        } else if (GetWWW (ajp) && ValidateAccn (accn) == 0) {
+          FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          if (is_na) {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+          } else {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+          }
+          FFAddTextToString(ffstring, /* "val=" */ NULL, accn, "\">", FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
         } else {
@@ -799,8 +875,8 @@ static CharPtr GetGenomeVersionNumber (
 }
 
 
-static CharPtr reftxt11 = "This record is predicted by automated computational analysis. This record is derived from an annotated genomic sequence";
-static CharPtr reftxt12 = "using gene prediction method:";
+static CharPtr reftxt11 = "This record is predicted by automated computational analysis. This record is derived from a genomic sequence";
+static CharPtr reftxt12 = "annotated using gene prediction method:";
 
 static void FindModelEvidenceUop (
   UserObjectPtr uop,
@@ -1023,11 +1099,6 @@ static Boolean GetGeneAndLocus (
 
   return TRUE;
 }
-
-static CharPtr reftxt21 = "NCBI contigs are derived from assembled genomic sequence data.";
-
-static CharPtr reftxt22 = "Features on this sequence have been produced for build ";
-static CharPtr reftxt23 = " of the NCBI's genome annotation";
 
 static CharPtr nsAreGapsString = "The strings of n's in this record represent gaps between contigs, and the length of each string corresponds to the length of the gap.";
 static CharPtr nsWGSGapsString = "The strings of n's in this record represent gaps between contigs or uncallable bases.";
@@ -1537,10 +1608,10 @@ static CharPtr GetStrForStructuredComment (
       if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
       str = (CharPtr) curr->data.ptrvalue;
       if (StringHasNoText (str)) continue;
-      ValNodeCopyStr (&head, 0, field);  
-      ValNodeCopyStr (&head, 0, " ");  
-      ValNodeCopyStr (&head, 0, str);  
-      ValNodeCopyStr (&head, 0, "\n");  
+      ValNodeCopyStr (&head, 0, field);
+      ValNodeCopyStr (&head, 0, " ");
+      ValNodeCopyStr (&head, 0, str);
+      ValNodeCopyStr (&head, 0, "\n");
     }
   } else {
     for (curr = uop->data; curr != NULL; curr = curr->next) {
@@ -1555,7 +1626,17 @@ static CharPtr GetStrForStructuredComment (
       if (StringHasNoText (str)) continue;
       len = max + StringLen (str) + 4;
       FFStartPrint (ffstring, GENBANK_FMT, 0, max + 1, field, max + 1, 0, max + 1, field, TRUE);
-      FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+      if (GetWWW (ajp) && StringCmp (field, "GOLD Stamp ID") == 0 && StringNCmp (str, "Gi", 2) == 0) {
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_gold_stamp_id);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, ".html", FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+      }
       /*
       FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
       */
@@ -2076,6 +2157,7 @@ NLM_EXTERN void AddCommentBlock (
   SeqIdPtr           sip;
   CharPtr            str;
   Char               taxID [32];
+  Char               tmp [32];
   TextSeqIdPtr       tsip;
   UserFieldPtr       ufp;
   UserObjectPtr      uop = NULL;
@@ -2166,7 +2248,9 @@ NLM_EXTERN void AddCommentBlock (
       if (tsip != NULL) {
         is_other = TRUE;
         if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
-          if (! StringHasNoText (genomeBuildNumber)) {
+          if (hasRefTrackStatus) {
+            /* will print elsewhere */
+          } else if (! StringHasNoText (genomeBuildNumber)) {
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
 
@@ -2191,7 +2275,7 @@ NLM_EXTERN void AddCommentBlock (
               if ( GetWWW(ajp) ) {
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
               }
-              FFAddOneString (ffstring, ":  ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, ": ", FALSE, FALSE, TILDE_IGNORE);
 
               FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
               FFAddOneString (ffstring, genomeBuildNumber, FALSE, FALSE, TILDE_EXPAND);
@@ -2394,18 +2478,25 @@ NLM_EXTERN void AddCommentBlock (
 
               if ( GetWWW(ajp) ) {
                 FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-                if (ISA_na (bsp->mol)) {
+                if (IS_ntdb_accession (name)) {
                   FF_Add_NCBI_Base_URL (ffstring, link_seqn);
                 } else {
                   FF_Add_NCBI_Base_URL (ffstring, link_seqp);
                 }
-                FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+                gi = 0;
+                if (ValidateAccnDotVer (name) == 0 && GetGiFromAccnDotVer (name, &gi)) {
+                  sprintf (tmp, "%ld", (long) gi);
+                  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+                } else {
+                  FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+                }
+                gi = 0;
                 FFAddOneString (ffstring, "?report=graph", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-              }
-              FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
-              if ( GetWWW(ajp) ) {
+                FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              } else {
+                FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
               }
 
               FFAddOneString (ffstring, ")", FALSE, FALSE, TILDE_IGNORE);
@@ -2741,7 +2832,7 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
             }
 
-            AddStrForRefTrack (ajp, ffstring, uop, ISA_na (bsp->mol));
+            AddStrForRefTrack (ajp, ffstring, uop, ISA_na (bsp->mol), genomeBuildNumber, genomeVersionNumber);
 
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
             FFRecycleString(ajp, ffstring);
@@ -4816,6 +4907,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   BioseqPtr          prod;
   ProtRefPtr         prp;
   Boolean            pseudo = FALSE;
+  RNAGenPtr          rgp;
+  RnaRefPtr          rrp;
   SeqEntryPtr        sep;
   SeqIntPtr          sintp;
   SeqIdPtr           sip;
@@ -5035,7 +5128,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                       sip->choice == SEQID_TPD ||
                       sip->choice == SEQID_GPIPE) {
                     tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-                    if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
+                    if (tsip != NULL && (StringDoesHaveText (tsip->accession))) {
                       if (ValidateAccn (tsip->accession) == 0)
                       okay = TRUE;
                     }
@@ -5063,14 +5156,14 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                        sip->choice == SEQID_TPD ||
                        sip->choice == SEQID_GPIPE) {
               tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-              if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
+              if (tsip != NULL && (StringDoesHaveText (tsip->accession))) {
                 if (ValidateAccn (tsip->accession) == 0)
                 okay = TRUE;
               }
             }
           }
         } else {
-          if (sfp->excpt && (! StringHasNoText (sfp->except_text))) {
+          if (sfp->excpt && (StringDoesHaveText (sfp->except_text))) {
             if (StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
               okay = TRUE;
             }
@@ -5089,7 +5182,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
         /* RefSeq allows conflict with accession in comment instead of sfp->cit */
         for (sip = bsp->id; sip != NULL; sip = sip->next) {
           if (sip->choice == SEQID_OTHER) {
-            if (! StringHasNoText (sfp->comment)) {
+            if (StringDoesHaveText (sfp->comment)) {
               okay = TRUE;
             }
           }
@@ -5113,7 +5206,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
         /* compare qualifier can now substitute for citation qualifier */
         gbq = sfp->qual;
         while (gbq != NULL) {
-          if (StringICmp (gbq->qual, "compare") == 0 && (! StringHasNoText (gbq->val))) {
+          if (StringICmp (gbq->qual, "compare") == 0 && (StringDoesHaveText (gbq->val))) {
             okay = TRUE;
             break;
           }
@@ -5126,16 +5219,16 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       /* gene requires /gene or /locus_tag, but desc or syn can be mapped to /gene */
       grp = (GeneRefPtr) sfp->data.value.ptrvalue;
       if (grp != NULL) {
-        if (! StringHasNoText (grp->locus)) {
+        if (StringDoesHaveText (grp->locus)) {
           okay = TRUE;
-        }  else if (! StringHasNoText (grp->locus_tag)) {
+        }  else if (StringDoesHaveText (grp->locus_tag)) {
           okay = TRUE;
-        } else if (! StringHasNoText (grp->desc)) {
+        } else if (StringDoesHaveText (grp->desc)) {
           okay = TRUE;
         } else {
           vnp = grp->syn;
           if (vnp != NULL) {
-            if (! StringHasNoText (vnp->data.ptrvalue)) {
+            if (StringDoesHaveText (vnp->data.ptrvalue)) {
               okay = TRUE;
             }
           }
@@ -5148,7 +5241,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       /* protein_bind or misc_binding require FTQUAL_bound_moiety */
       gbq = sfp->qual;
       while (gbq != NULL) {
-        if (StringICmp (gbq->qual, "bound_moiety") == 0 && (! StringHasNoText (gbq->val))) {
+        if (StringICmp (gbq->qual, "bound_moiety") == 0 && (StringDoesHaveText (gbq->val))) {
           okay = TRUE;
           break;
         }
@@ -5160,7 +5253,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       /* modified_base requires FTQUAL_mod_base */
       gbq = sfp->qual;
       while (gbq != NULL) {
-        if (StringICmp (gbq->qual, "mod_base") == 0 && (! StringHasNoText (gbq->val))) {
+        if (StringICmp (gbq->qual, "mod_base") == 0 && (StringDoesHaveText (gbq->val))) {
           okay = TRUE;
           break;
         }
@@ -5172,7 +5265,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       /* modified_base requires FTQUAL_estimated_length */
       gbq = sfp->qual;
       while (gbq != NULL) {
-        if (StringICmp (gbq->qual, "estimated_length") == 0 && (! StringHasNoText (gbq->val))) {
+        if (StringICmp (gbq->qual, "estimated_length") == 0 && (StringDoesHaveText (gbq->val))) {
           okay = TRUE;
           break;
         }
@@ -5184,11 +5277,21 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       /* ncRNA requires FTQUAL_ncRNA_class */
       gbq = sfp->qual;
       while (gbq != NULL) {
-        if (StringICmp (gbq->qual, "ncRNA_class") == 0 && (! StringHasNoText (gbq->val))) {
+        if (StringICmp (gbq->qual, "ncRNA_class") == 0 && (StringDoesHaveText (gbq->val))) {
           okay = TRUE;
           break;
         }
         gbq = gbq->next;
+      }
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->ext.choice == 3) {
+        rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
+        if (rgp != NULL) {
+          if (StringDoesHaveText (rgp->_class)) {
+            okay = TRUE;
+            break;
+          }
+        }
       }
       break;
 

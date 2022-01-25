@@ -204,6 +204,7 @@ Nigeria	NI	2.6	4.2	14.7	13.9
 Niue	NE	-170.0	-19.2	-169.8	-19.0
 Norfolk Island	NF	168.0	-29.2	168.1	-29.0
 North Korea	KN	124.1	37.5	130.7	43.0
+North Sea	XX	
 Northern Mariana Islands	CQ	144.8	14.1	146.1	20.6
 Norway	NO	4.6	57.9	31.1	71.2
 Oman	MU	51.8	16.6	59.8	25.0

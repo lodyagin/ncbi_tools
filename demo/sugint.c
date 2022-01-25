@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/31/08
 *
-* $Revision: 1.1 $
+* $Revision: 1.4 $
 *
 * File Description:
 *
@@ -71,7 +71,7 @@ static SeqEntryPtr ReadSep (
   return GetTopSeqEntryForEntityID (entityID);
 }
 
-static void ProcessSuggest (
+static Int2 ProcessSuggest (
   FILE *nfp,
   FILE *pfp,
   AsnIoPtr ofp,
@@ -81,6 +81,7 @@ static void ProcessSuggest (
 {
   BioseqPtr    nbsp = NULL, pbsp = NULL;
   SeqEntryPtr  nsep, psep, sep;
+  Int2         rsult = 0;
   SeqAnnotPtr  sap;
   SeqFeatPtr   sfp;
   SeqLocPtr    slp;
@@ -99,7 +100,7 @@ static void ProcessSuggest (
     }
     if (nbsp != NULL && pbsp != NULL) {
       if (ISA_na (nbsp->mol) && ISA_aa (pbsp->mol)) {
-        sap = SuggestCodingRegion (nbsp, pbsp, gencode);
+        sap = SuggestCodingRegionEx (nbsp, pbsp, gencode, &rsult);
 
         if (sap != NULL && sap->type == 1) {
           sfp = (SeqFeatPtr) sap->data;
@@ -107,6 +108,7 @@ static void ProcessSuggest (
             slp = sfp->location;
             if (slp != NULL) {
               SeqLocAsnWrite (slp,  ofp, NULL);
+              rsult = 0;
             }
           }
         }
@@ -118,6 +120,8 @@ static void ProcessSuggest (
 
   SeqEntryFree (nsep);
   SeqEntryFree (psep);
+
+  return rsult;
 }
 
 #define n_argNucInputFile  0
@@ -143,6 +147,7 @@ Int2 Main (void)
   FILE      *nfp, *pfp;
   AsnIoPtr  ofp;
   CharPtr   nucfile, prtfile, outfile;
+  Int2      rsult = 0;
 
   /* standard setup */
 
@@ -203,12 +208,12 @@ Int2 Main (void)
     return 1;
   }
 
-  ProcessSuggest (nfp, pfp, ofp, gencode);
+  rsult = ProcessSuggest (nfp, pfp, ofp, gencode);
 
   AsnIoClose (ofp);
   FileClose (pfp);
   FileClose (nfp);
 
-  return 0;
+  return rsult;
 }
 

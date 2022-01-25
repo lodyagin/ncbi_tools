@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -468,6 +468,7 @@ NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
 *
 *****************************************************************************/
 NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void UpdateProteinTitle (BioseqPtr bsp);
 NLM_EXTERN void ClearProteinTitlesInNucProts (Uint2 entityID, Pointer ptr);
 
 NLM_EXTERN CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 completeness);

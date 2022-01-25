@@ -149,7 +149,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  },
  {
-  name "Bacterial and Plant Plastid" ,
+  name "Bacterial, Archaeal and Plant Plastid" ,
   id 11 ,
   ncbieaa  "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "---M---------------M------------MMMM---------------M------------"

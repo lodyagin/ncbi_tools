@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.53 2008/02/13 22:35:49 camacho Exp $
+/* $Id: blast_api.c,v 1.57 2009/07/08 19:39:36 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -42,10 +42,12 @@
 #include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/blast_traceback.h>
-#include <algo/blast/core/hspstream_collector.h>
+#include <algo/blast/core/blast_hspstream.h>
+#include <algo/blast/core/blast_hspfilter.h>
+#include <algo/blast/core/hspfilter_collector.h>
+#include <algo/blast/api/hspfilter_queue.h>
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_psi.h>
-#include <algo/blast/api/hspstream_queue.h>
 #include <algo/blast/api/blast_mtlock.h>
 #include <algo/blast/api/blast_prelim.h>
 #include <algo/blast/api/blast_seq.h>
@@ -268,36 +270,44 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                       Blast_SummaryReturn* extra_returns)
 {
     Int2 status = 0;
+    const Int4 kNumResults = query_info->num_queries;
+    BlastHSPWriterInfo* writer_info = NULL;
 
     /* If any of the required inputs were NULL, the caller would have exited 
        before getting to this point. ASSERT this here. */
     ASSERT(query && query_info && seq_src && options && sbp);
 
     if (!tf_data) {
-        const Int4 kNumResults = query_info->num_queries;
-        SBlastHitsParameters* blasthit_params=NULL;
-        MT_LOCK lock = NULL;
-        if (options->num_cpus > 1)
-            lock = Blast_MT_LOCKInit();
+        writer_info = BlastHSPCollectorInfoNew(
+                          BlastHSPCollectorParamsNew(
+                                       options->hit_options, 
+                                       options->ext_options->compositionBasedStats,
+                                       options->score_options->gapped_calculation));
+
+        *hsp_stream = BlastHSPStreamNew(
+                                       options->program,
+                                       options->ext_options,
+                                       FALSE,
+                                       kNumResults,
+                                       BlastHSPWriterNew(&writer_info, NULL));
         
-        SBlastHitsParametersNew(options->hit_options, options->ext_options,
-                                options->score_options, &blasthit_params);
-        *hsp_stream =
-            Blast_HSPListCollectorInitMT(options->program, blasthit_params,
-                                         options->ext_options, TRUE,
-                                         kNumResults, lock);
-    } else {
-        /* Initialize the queue HSP stream for tabular formatting. */
-        *hsp_stream = Blast_HSPListQueueInit();
-        if ((status = Blast_TabularFormatDataSetUp(tf_data, options->program,
-                          *hsp_stream, seq_src, query, query_info,
-                          options->score_options, sbp, options->eff_len_options,
-                          options->ext_options, options->hit_options, 
-                          options->db_options)) != 0) {
-            SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
-                "Failed to set up tabular formatting data structure", NULL, FALSE);
-            return status;
+        if (options->num_cpus > 1) {
+            MT_LOCK lock = Blast_MT_LOCKInit();
+            BlastHSPStreamRegisterMTLock(*hsp_stream, lock);
         }
+    } else {
+        writer_info = BlastHSPQueueInfoNew(BlastHSPQueueParamsNew());
+        *hsp_stream = BlastHSPStreamNew(
+                                       options->program,
+                                       options->ext_options,
+                                       FALSE,
+                                       kNumResults,
+                                       BlastHSPWriterNew(&writer_info, NULL));
+        Blast_TabularFormatDataSetUp(tf_data, options->program,
+                           *hsp_stream, seq_src, query, query_info,
+                           options->score_options, sbp, options->eff_len_options,
+                           options->ext_options, options->hit_options, 
+                           options->db_options);
     }
     return status;
 }

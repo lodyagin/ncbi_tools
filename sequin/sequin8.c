@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.524 $
+* $Revision: 6.537 $
 *
 * File Description: 
 *
@@ -68,6 +68,7 @@
 #include <macrodlg.h>
 #include <macroapi.h>
 #include <alignval.h>
+#include <pubdesc.h>
 
 #define DEFLINE_MAX_LEN          380
 #define TEXT_MAX_LEN             64
@@ -4415,6 +4416,7 @@ typedef struct dblinkdialog {
   DIALOG_MESSAGE_BLOCK
   DialoG  traceassm;
   DialoG  biosample;
+  DialoG  probedb;
 } DblinkDialog, PNTR DblinkDialogPtr;
 
 typedef struct dblinkform {
@@ -4447,6 +4449,7 @@ static void UserObjectPtrToDblinkDialog (
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "DBLink") != 0) {
     PointerToDialog (ddp->traceassm, NULL);
     PointerToDialog (ddp->biosample, NULL);
+    PointerToDialog (ddp->probedb, NULL);
     return;
   }
 
@@ -4469,7 +4472,7 @@ static void UserObjectPtrToDblinkDialog (
           if (head != NULL) {
             PointerToDialog (ddp->traceassm, (Pointer) head);
           }
-          ValNodeFreeData (head);
+          head = ValNodeFreeData (head);
         }
       }
     } else if (StringICmp (oip->str, "Bio Sample") == 0) {
@@ -4487,7 +4490,25 @@ static void UserObjectPtrToDblinkDialog (
           if (head != NULL) {
             PointerToDialog (ddp->biosample, (Pointer) head);
           }
-          ValNodeFreeData (head);
+          head = ValNodeFreeData (head);
+        }
+      }
+    } else if (StringICmp (oip->str, "ProbeDB") == 0) {
+      if (curr->choice == 7) {
+        num = curr->num;
+        cpp = (CharPtr PNTR) curr->data.ptrvalue;
+        if (num > 0 && cpp != NULL) {
+          head = NULL;
+          for (i = 0; i < num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              ValNodeCopyStr (&head, 0, str);
+            }
+          }
+          if (head != NULL) {
+            PointerToDialog (ddp->probedb, (Pointer) head);
+          }
+          head = ValNodeFreeData (head);
         }
       }
     }
@@ -4571,6 +4592,33 @@ static Pointer DblinkDialogToUserObjectPtr (
   }
   ValNodeFreeData (head);
 
+  head = (ValNodePtr) DialogToPointer (ddp->probedb);
+  if (head != NULL) {
+    num = 0;
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      num++;
+    }
+    if (num > 0) {
+      cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * num);
+      if (cpp != NULL) {
+        i = 0;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          cpp [i] = str;
+          i++;
+        }
+        if (i > 0) {
+          AddProbeDBIDsToDBLinkUserObject (uop, i, cpp);
+          okay = TRUE;
+        }
+      }
+    }
+  }
+  ValNodeFreeData (head);
+
   if (! okay) {
     uop = UserObjectFree (uop);
   }
@@ -4604,6 +4652,9 @@ static DialoG CreateDblinkDialog (
 
   StaticPrompt (x, "Bio Sample", 10 * stdCharWidth, 0, programFont, 'c');
   ddp->biosample = CreateVisibleStringDialog (x, 3, -1, 15);
+
+  StaticPrompt (x, "ProbeDB", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->probedb = CreateVisibleStringDialog (x, 3, -1, 15);
 
   return (DialoG) p;
 }
@@ -4791,7 +4842,8 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 #define REFGENE_SPLICEVAR  3
 #define REFGENE_RELDREK    4
 #define REFGENE_REJECT     5
-#define REFGENE_UNKNOWN    6
+#define REFGENE_IDENTICAL  6
+#define REFGENE_UNKNOWN    7
 
 typedef struct refgeneuserdialog {
   DIALOG_MESSAGE_BLOCK
@@ -4817,6 +4869,7 @@ static ENUM_ALIST(refgene_alist)
   {"SpliceVar",   REFGENE_SPLICEVAR},
   {"RelatedDrek", REFGENE_RELDREK},
   {"Reject",      REFGENE_REJECT},
+  {"Identical",   REFGENE_IDENTICAL},
   {"Unknown",     REFGENE_UNKNOWN},
 END_ENUM_ALIST
 
@@ -4833,7 +4886,7 @@ static EnumFieldAssocPtr refgene_popups [] = {
 };
 
 static CharPtr refgene_labels [] = {
-  "", "Assembly", "Related", "SpliceVar", "RelatedDrek", "Reject", "Unknown", NULL
+  "", "Assembly", "Related", "SpliceVar", "RelatedDrek", "Reject", "IdenticalTo", "Unknown", NULL
 };
 
 static CharPtr refgene_fields [] = {
@@ -5704,6 +5757,93 @@ static DialoG CreateStruCommDialog (GrouP g)
   return (DialoG) p;
 }
 
+
+static Boolean ExportStructuredCommentForm (ForM f, CharPtr filename)
+{
+  StruCommUserFormPtr  sfp;
+  Char            path [PATH_MAX];
+  UserObjectPtr   uop;
+  AsnIoPtr        aip;
+  Boolean         rval = FALSE;
+#ifdef WIN_MAC
+  FILE            *fp;
+#endif
+
+  sfp = (StruCommUserFormPtr) GetObjectExtra (f);
+  if (sfp == NULL) {
+    return FALSE;
+  }
+
+  uop = DialogToPointer (sfp->data);
+  if (uop == NULL) {
+    Message (MSG_ERROR, "Don't have a valid structured comment yet!");
+    return FALSE;
+  }
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+    fp = FileOpen (path, "r");
+    if (fp != NULL) {
+      FileClose (fp);
+    } else {
+      FileCreate (path, "TEXT", "ttxt");
+    }
+#endif
+  }
+  aip = AsnIoOpen (path, "w");
+  if (aip == NULL) {
+    Message (MSG_ERROR, "Unable to create file %s", path);
+  } else {
+    UserObjectAsnWrite (uop, aip, NULL);
+    AsnIoClose (aip);
+    rval = TRUE;
+  }
+  uop = UserObjectFree (uop);
+  return rval;
+}
+
+
+static Boolean ImportStructuredCommentForm  (ForM f, CharPtr filename)
+{
+  StruCommUserFormPtr  sfp;
+  Char            path [PATH_MAX];
+  UserObjectPtr   uop;
+  AsnIoPtr        aip;
+  Boolean         rval = FALSE;
+
+  sfp = (StruCommUserFormPtr) GetObjectExtra (f);
+  if (sfp == NULL) {
+    return FALSE;
+  }
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  if (path [0] == '\0') {
+    if (!GetInputFileName (path, sizeof (path), "", "TEXT")) {
+      return FALSE;
+    }
+  }
+
+  aip = AsnIoOpen (path, "r");
+  if (aip == NULL) {
+    Message (MSG_ERROR, "Unable to read file %s", path);
+  } else {
+    uop = UserObjectAsnRead (aip, NULL);
+    if (uop == NULL) {
+      Message (MSG_ERROR, "Unable to read structured comment ASN.1 from file");
+    } else {
+      PointerToDialog (sfp->data, uop);
+      uop = UserObjectFree (uop);
+      rval = TRUE;
+    }
+    AsnIoClose (aip);
+  }
+  return rval;
+}
+
+
 static void StruCommUserFormMessage (ForM f, Int2 mssg)
 
 {
@@ -5727,6 +5867,12 @@ static void StruCommUserFormMessage (ForM f, Int2 mssg)
       case VIB_MSG_DELETE :
         StdDeleteTextProc (NULL);
         break;
+      case VIB_MSG_EXPORT :
+        ExportStructuredCommentForm (f, NULL);
+        break;
+      case VIB_MSG_IMPORT :
+        ImportStructuredCommentForm (f, NULL);
+        break;
       default :
         if (sfp->appmessage != NULL) {
           sfp->appmessage (f, mssg);
@@ -5735,6 +5881,71 @@ static void StruCommUserFormMessage (ForM f, Int2 mssg)
     }
   }
 }
+
+
+typedef struct replacestruccmt {
+  UserObjectPtr   deleteThis;
+  UserObjectPtr   replaceWith;
+} ReplaceStrucCmtData, PNTR ReplaceStrucCmtPtr;
+
+
+static void ReplaceAllStructuredCommentsCallback (SeqDescrPtr sdp, Pointer data)
+
+{
+  ReplaceStrucCmtPtr   rp;
+
+  if ((rp = (ReplaceStrucCmtPtr) data) == NULL || sdp == NULL || sdp->choice != Seq_descr_user) {
+    return;
+  }
+
+  if (AsnIoMemComp (sdp->data.ptrvalue, rp->deleteThis, (AsnWriteFunc) UserObjectAsnWrite)) {
+    sdp->data.ptrvalue = UserObjectFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = AsnIoMemCopy (rp->replaceWith, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+  }
+}
+
+
+static void ReplaceAllStructuredCommentsButtonProc (ButtoN b)
+{
+  StruCommUserFormPtr sfp;
+  SeqEntryPtr   sep;
+  ReplaceStrucCmtData rd; 
+  SeqDescrPtr       sdp_orig;
+  SeqMgrDescContext context;
+
+  sfp = (StruCommUserFormPtr) GetObjectExtra (b);
+  if (sfp == NULL) {
+    return;
+  }
+
+  rd.replaceWith = DialogToPointer (sfp->data);
+  if (rd.replaceWith == NULL) {
+    Message (MSG_ERROR, "Must supply text!");
+    rd.replaceWith = UserObjectFree (rd.replaceWith);
+    return;
+  }
+
+  sdp_orig = SeqMgrGetDesiredDescriptor (sfp->input_entityID, NULL, sfp->input_itemID, 0, NULL, &context);
+  if (sdp_orig == NULL || sdp_orig->choice != Seq_descr_user) {
+    Message (MSG_ERROR, "Unable to find original descriptor!");
+    Remove (sfp->form);
+    rd.replaceWith = UserObjectFree (rd.replaceWith);
+    return;
+  }
+  rd.deleteThis = AsnIoMemCopy (sdp_orig->data.ptrvalue, (AsnReadFunc)UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+
+  sep = GetTopSeqEntryForEntityID (sfp->input_entityID);
+  VisitDescriptorsInSep (sep, &rd, ReplaceAllStructuredCommentsCallback);
+
+  rd.deleteThis = UserObjectFree (rd.deleteThis);
+  rd.replaceWith = UserObjectFree (rd.replaceWith);
+  
+  ObjMgrSetDirtyFlag (sfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, sfp->input_entityID,
+                  sfp->input_itemID, sfp->input_itemtype);
+  Remove (sfp->form);
+}
+
 
 static ForM CreateStruCommDescForm (Int2 left, Int2 top, Int2 width,
                                      Int2 height, CharPtr title, ValNodePtr sdp,
@@ -5756,7 +5967,8 @@ static ForM CreateStruCommDescForm (Int2 left, Int2 top, Int2 width,
     sfp->form = (ForM) w;
     sfp->actproc = actproc;
     sfp->formmessage = StruCommUserFormMessage;
-
+    sfp->exportform = ExportStructuredCommentForm;
+    sfp->importform = ImportStructuredCommentForm;
     sfp->sep = sep;
 
 #ifndef WIN_MAC
@@ -5771,10 +5983,19 @@ static ForM CreateStruCommDescForm (Int2 left, Int2 top, Int2 width,
     g = HiddenGroup (w, -1, 0, NULL);
     sfp->data = CreateStruCommDialog (g);
 
-    c = HiddenGroup (w, 2, 0, NULL);
-    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
-    SetObjectExtra (b, sfp, NULL);
+    c = HiddenGroup (w, 3, 0, NULL);
+    if (sdp == NULL) {
+      b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+      SetObjectExtra (b, sfp, NULL);
+    } else {
+      b = DefaultButton (c, "Replace This", StdAcceptFormButtonProc);
+      SetObjectExtra (b, sfp, NULL);
+      b = PushButton (c, "Replace All", ReplaceAllStructuredCommentsButtonProc);
+      SetObjectExtra (b, sfp, NULL);
+    }
+
     PushButton (c, "Cancel", StdCancelButtonProc);
+
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
     RealizeWindow (w);
   }
@@ -6628,6 +6849,25 @@ static Int4 RowDiff (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
 }
 
 
+static Boolean SeqAlignRowConflict (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
+{
+  if (r1 == NULL || r2 == NULL) {
+    return FALSE;
+  }
+  if (r1->start <= r2->start && r1->stop >= r2->start) {
+    return TRUE;
+  } else if (r1->start <= r2->stop && r1->stop >= r2->stop) {
+    return TRUE;
+  } else if (r2->start <= r1->start && r2->start >= r2->start) {
+    return TRUE;
+  } else if (r2->start <= r1->stop && r2->stop >= r2->stop) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
 static Int4 SeqAlignRowLen (SeqAlignRowPtr r) 
 {
   Int4 len = 0;
@@ -6655,12 +6895,12 @@ static SeqAlignSortPtr SeqAlignSortNew (SeqAlignPtr salp)
   }
 
   s = (SeqAlignSortPtr) MemNew (sizeof (SeqAlignSortData));
-  s->salp = salp;
+  s->salp = SeqAlignDup (salp);
 
-  AlnMgr2IndexSingleChildSeqAlign(salp);
+  AlnMgr2IndexSingleChildSeqAlign(s->salp);
 
-  s->row1 = SeqAlignRowNew (SeqAlignStart (salp, 0), SeqAlignStop (salp, 0), SeqAlignStrand (salp, 0));
-  s->row2 = SeqAlignRowNew (SeqAlignStart (salp, 1), SeqAlignStop (salp, 1), SeqAlignStrand (salp, 1));
+  s->row1 = SeqAlignRowNew (SeqAlignStart (s->salp, 0), SeqAlignStop (s->salp, 0), SeqAlignStrand (s->salp, 0));
+  s->row2 = SeqAlignRowNew (SeqAlignStart (s->salp, 1), SeqAlignStop (s->salp, 1), SeqAlignStrand (s->salp, 1));
 
   return s;
 }
@@ -6671,9 +6911,25 @@ static SeqAlignSortPtr SeqAlignSortFree (SeqAlignSortPtr s)
   if (s != NULL) {
     s->row1 = SeqAlignRowFree (s->row1);
     s->row2 = SeqAlignRowFree (s->row2);
+    s->salp = SeqAlignFree (s->salp);
     s = MemFree (s);
   }
   return s;
+}
+
+
+static SeqAlignSortPtr SeqAlignSortCopy (SeqAlignSortPtr s)
+{
+  SeqAlignSortPtr copy = NULL;
+
+  if (s != NULL) {
+    copy = (SeqAlignSortPtr) MemNew (sizeof (SeqAlignSortData));
+    copy->salp = SeqAlignDup (s->salp);
+    AlnMgr2IndexSingleChildSeqAlign(copy->salp);
+    copy->row1 = SeqAlignRowCopy (s->row1);
+    copy->row2 = SeqAlignRowCopy (s->row2);
+  }
+  return copy;
 }
 
 
@@ -6707,6 +6963,39 @@ static ValNodePtr SeqAlignSortListFree (ValNodePtr vnp)
 }
 
 
+static Boolean SeqAlignSortConflict (SeqAlignSortPtr s1, SeqAlignSortPtr s2)
+{
+  if (s1 == NULL || s2 == NULL) {
+    return FALSE;
+  } else if (SeqAlignRowConflict (s1->row1, s2->row1)) {
+    return TRUE;
+  } else if (SeqAlignRowConflict (s1->row2, s2->row2)) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Int4 SeqAlignSortListLongestInterval (ValNodePtr list)
+{
+  Int4 len, max = 0;
+  ValNodePtr vnp;
+  SeqAlignSortPtr s;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    s = vnp->data.ptrvalue;
+    if (s != NULL && s->row1 != NULL) {
+      len = SeqAlignRowLen (s->row1);
+      if (len > max) {
+        max = len;
+      }
+    }
+  }
+  return max;
+}
+
+
 static SeqAlignRowPtr SeqAlignRowFromSeqAlignSort (SeqAlignSortPtr s, Int4 row)
 {
   if (s == NULL) {
@@ -6734,10 +7023,16 @@ static Uint1 SeqAlignSortRowStrand (SeqAlignSortPtr s, Int4 row)
 
 static Uint1 SeqAlignSortListFindBestStrand (ValNodePtr vnp, Int4 row)
 {
-  Int4 num_plus = 0, num_minus = 0;
+  Int4 num_plus = 0, num_minus = 0, num_align, num = 0;
   SeqAlignSortPtr s;
 
-  while (vnp != NULL) {
+  /* count the alignments */
+  num_align = ValNodeLen (vnp);
+
+  /* only look at strands from the first half of the alignments */
+  num_align = num_align / 2;
+
+  while (vnp != NULL && num < num_align) {
     s = (SeqAlignSortPtr) vnp->data.ptrvalue;
     if (s != NULL) {
       if (SeqAlignSortRowStrand(s, row) == Seq_strand_minus) {
@@ -6747,6 +7042,7 @@ static Uint1 SeqAlignSortListFindBestStrand (ValNodePtr vnp, Int4 row)
       }
     }
     vnp = vnp->next;
+    num++;
   }
 
   if (num_minus > num_plus) {
@@ -6768,24 +7064,6 @@ static void SeqAlignSortListMarkStrand (ValNodePtr vnp, Int4 row, Uint1 strand)
 }
 
 
-static ValNodePtr SeqAlignSortListRemoveAll (ValNodePtr list)
-{
-  ValNodePtr vnp;
-  SeqAlignSortPtr s;
-
-  for (vnp = list; vnp != NULL; vnp = vnp->next) {
-    s = vnp->data.ptrvalue;
-    if (s != NULL && s->salp != NULL) {
-      s->salp->next = NULL;
-      s->salp = SeqAlignFree (s->salp);
-    }
-  }
-
-  list = SeqAlignSortListFree (list);
-  return list;
-}
-
-
 static void SeqAlignSortListRemoveMarked (ValNodePtr PNTR list)
 {
   ValNodePtr remove_list;
@@ -6795,7 +7073,7 @@ static void SeqAlignSortListRemoveMarked (ValNodePtr PNTR list)
   }
 
   remove_list = ValNodeExtractList (list, 1);
-  remove_list = SeqAlignSortListRemoveAll (remove_list);
+  remove_list = SeqAlignSortListFree (remove_list);
 }
 
 
@@ -6835,6 +7113,8 @@ static SeqAlignPtr SeqAlignFromSeqAlignSortList (ValNodePtr vnp)
       }
       salp_prev = s->salp;
       s->salp->next = NULL;
+      /* NULL out entry in SeqAlignSort so that it will not be freed later */
+      s->salp = NULL;
     }
     vnp = vnp->next;
   }
@@ -6936,10 +7216,10 @@ static int LIBCALLBACK SortVnpBySeqAlignSortRow2 (VoidPtr ptr1, VoidPtr ptr2)
 }
 
 
-static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row, Int4 fuzz)
+static ValNodePtr SeqAlignSortListMarkRepeats (ValNodePtr PNTR list, Int4 row, Int4 fuzz)
 {
-  ValNodePtr repeat_start, repeat_prev = NULL, vnp_prev = NULL, vnp;
-  ValNodePtr repeat_list = NULL;
+  ValNodePtr repeat_start, vnp, vnp_mark;
+  ValNodePtr repeat_list = NULL, tmp_list;
   SeqAlignSortPtr s1, s2;
   SeqAlignRowPtr  interval, r2;
   Int4            diff;
@@ -6958,7 +7238,6 @@ static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row
   repeat_start = *list;
   s1 = repeat_start->data.ptrvalue;
   interval = SeqAlignRowCopy (SeqAlignRowFromSeqAlignSort(s1, row));
-  vnp_prev = *list;
   for (vnp = (*list)->next; vnp != NULL; vnp = vnp->next) {
     s2 = vnp->data.ptrvalue;
     is_repeat = FALSE;
@@ -6974,7 +7253,6 @@ static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row
       is_repeat = TRUE;
     }
     if (is_repeat) {
-      vnp_prev = vnp;
       if (interval->start > r2->start) {
         interval->start = r2->start;
       }
@@ -6982,20 +7260,15 @@ static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row
         interval->stop = r2->stop;
       }
     } else {
-      if (repeat_start->next == vnp) {
-        repeat_prev = vnp_prev;
-        vnp_prev = vnp;
-      } else {
-        if (repeat_prev == NULL) {
-          *list = vnp;
-        } else {
-          repeat_prev->next = vnp;
+      if (repeat_start->next != vnp) {
+        tmp_list = NULL;
+        for (vnp_mark = repeat_start; vnp_mark != vnp; vnp_mark = vnp_mark->next) {
+          /* add copy to list of repeats */
+          ValNodeAddPointer (&tmp_list, 0, SeqAlignSortCopy (vnp_mark->data.ptrvalue));
+          /* mark as repeat for this row */
+          vnp_mark->choice = row;
         }
-        if (vnp_prev != NULL) {
-          vnp_prev->next = NULL;
-        }
-        ValNodeAddPointer (&repeat_list, 0, repeat_start);
-        vnp_prev = vnp;
+        ValNodeAddPointer (&repeat_list, 0, tmp_list);
       }
       repeat_start = vnp;
       s1 = vnp->data.ptrvalue;
@@ -7005,12 +7278,14 @@ static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row
   }
 
   if (repeat_start->next != NULL) {
-    if (repeat_prev == NULL) {
-      *list = NULL;
-    } else {
-      repeat_prev->next = NULL;
+    tmp_list = NULL;
+    for (vnp_mark = repeat_start; vnp_mark != vnp; vnp_mark = vnp_mark->next) {
+      /* add copy to list of repeats */
+      ValNodeAddPointer (&tmp_list, 0, SeqAlignSortCopy (vnp_mark->data.ptrvalue));
+      /* mark as repeat for this row */
+      vnp_mark->choice = row;
     }
-    ValNodeAddPointer (&repeat_list, 0, repeat_start);
+    ValNodeAddPointer (&repeat_list, 0, tmp_list);
   }
 
   interval = SeqAlignRowFree (interval);
@@ -7296,7 +7571,7 @@ static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_lis
     /* keep longest, mark others for removal */
     vnp = ExtractLongestSeqAlignRow (&repeat_list, row);
     ValNodeLink (sorted_list,vnp);
-    repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+    repeat_list = SeqAlignSortListFree (repeat_list);
   } else {
     s_repeat = repeat_list->data.ptrvalue;
     found = FALSE;
@@ -7304,16 +7579,27 @@ static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_lis
 
     /* find first entry that is after this repeat, and insert before that */
     while (vnp != NULL && !found) {
+      if (SeqAlignSortConflict (s_repeat, vnp->data.ptrvalue)) {
+        found = TRUE;
+        break;
+      }
+
       s = vnp->data.ptrvalue;
       r1 = SeqAlignRowFromSeqAlignSort (s, row);
       r2 = SeqAlignRowFromSeqAlignSort (s_repeat, row);
+
+      if (r1->start == r2->start && r1->stop == r2->stop) {
+        /* this is a duplicate.  throw it away. */
+        found = TRUE;
+        break;
+      }
 
       if (r1->start > r2->start || r2->start - r1->start < fuzz) {
         while (repeat_list != NULL) {
           /* extract best repeat */
           vnp_new = FindBestRepeat (&repeat_list, s_before, vnp->data.ptrvalue, other_row, fuzz);
           if (vnp_new == NULL) {
-            repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+            repeat_list = SeqAlignSortListFree (repeat_list);
           } else {
             RemoveRepeatsCoincidingWithBest (&repeat_list, vnp_new, row, fuzz);
             vnp_new->next = vnp;
@@ -7339,7 +7625,7 @@ static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_lis
         /* extract best repeat */
         vnp_new = FindBestRepeat (&repeat_list, s_before, NULL, other_row, fuzz);
         if (vnp_new == NULL) {
-          repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+          repeat_list = SeqAlignSortListFree (repeat_list);
         } else {
           RemoveRepeatsCoincidingWithBest (&repeat_list, vnp_new, row, fuzz);
           vnp_new->next = NULL;
@@ -7360,6 +7646,55 @@ static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_lis
 }
 
 
+static Int4 FindLongestRepeatInterval (ValNodePtr repeat_list)
+{
+  Int4 len, max = 0;
+  ValNodePtr vnp_r, vnp;
+  SeqAlignSortPtr s;
+
+  for (vnp_r = repeat_list; vnp_r != NULL; vnp_r = vnp_r->next) {
+    for (vnp = vnp_r->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+      s = vnp->data.ptrvalue;
+      if (s != NULL && s->row1 != NULL) {
+        len = SeqAlignRowLen (s->row1);
+        if (len > max) {
+          max = len;
+        }
+      }
+    }
+  }
+  return max;
+}
+
+
+/* note - we want to sort from highest to lowest */
+static int LIBCALLBACK SortVnpByRepeatList (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  Int4        len1, len2;
+  int         rval = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      len1 = SeqAlignSortListLongestInterval (vnp1->data.ptrvalue);
+      len2 = SeqAlignSortListLongestInterval (vnp2->data.ptrvalue);
+      if (len1 < len2) {
+        rval = 1;
+      } else if (len2 < len1) {
+        rval = -1;
+      }
+    }
+  }
+  return rval;
+}
+
+
+
+
 static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
 {
   ValNodePtr list, vnp;
@@ -7367,8 +7702,8 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
   Uint1 strand1, strand2;
   SeqAlignPtr    tmp_salp;
   Int4           fuzz = 15;
-
   Int4           missing = 600;
+  Int4           len1, len2;
 
   if (salp == NULL || *salp == NULL || (*salp)->next == NULL) {
     return;
@@ -7387,8 +7722,14 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
   FindSeqAlignSortWithPoint (list, missing, 1);
 
   if (list != NULL && list->next != NULL) {
-    row1_repeats = SeqAlignSortListExtractRepeats (&list, 1, fuzz);
-    row2_repeats = SeqAlignSortListExtractRepeats (&list, 2, fuzz);
+    row1_repeats = SeqAlignSortListMarkRepeats (&list, 1, fuzz);
+    row1_repeats = ValNodeSort (row1_repeats, SortVnpByRepeatList);
+    row2_repeats = SeqAlignSortListMarkRepeats (&list, 2, fuzz);
+    row2_repeats = ValNodeSort (row2_repeats, SortVnpByRepeatList);
+    vnp = ValNodeExtractList (&list, 1);
+    vnp = SeqAlignSortListFree (vnp);
+    vnp = ValNodeExtractList (&list, 2);
+    vnp = SeqAlignSortListFree (vnp);
 
     FindSeqAlignSortWithPoint (list, missing, 1);
 
@@ -7409,19 +7750,38 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
 
     FindSeqAlignSortWithPoint (list, missing, 1);
 
-    /* for each repeat on row 1, we want to pick the most consistent interval for row 2 */
-    list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
-    for (vnp = row1_repeats; vnp != NULL; vnp = vnp->next) {   
-      InsertBestRepeat (vnp->data.ptrvalue, &list, 1, fuzz);
-    }
-    row1_repeats = ValNodeFree (row1_repeats);
+    len1 = FindLongestRepeatInterval (row1_repeats);
+    len2 = FindLongestRepeatInterval (row2_repeats);
 
-    /* for each repeat on row 2, we want to pick the most consistent interval for row 1 */
-    list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
-    for (vnp = row2_repeats; vnp != NULL; vnp = vnp->next) {   
-      InsertBestRepeat (vnp->data.ptrvalue, &list, 2, fuzz);
+    if (len1 >= len2) {
+      /* for each repeat on row 1, we want to pick the most consistent interval for row 2 */
+      list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+      for (vnp = row1_repeats; vnp != NULL; vnp = vnp->next) {   
+        InsertBestRepeat (vnp->data.ptrvalue, &list, 1, fuzz);
+      }
+      row1_repeats = ValNodeFree (row1_repeats);
+
+      /* for each repeat on row 2, we want to pick the most consistent interval for row 1 */
+      list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
+      for (vnp = row2_repeats; vnp != NULL; vnp = vnp->next) {   
+        InsertBestRepeat (vnp->data.ptrvalue, &list, 2, fuzz);
+      }
+      row2_repeats = ValNodeFree (row2_repeats);
+    } else {
+      /* for each repeat on row 2, we want to pick the most consistent interval for row 1 */
+      list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
+      for (vnp = row2_repeats; vnp != NULL; vnp = vnp->next) {   
+        InsertBestRepeat (vnp->data.ptrvalue, &list, 2, fuzz);
+      }
+      row2_repeats = ValNodeFree (row2_repeats);
+
+      /* for each repeat on row 1, we want to pick the most consistent interval for row 2 */
+      list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+      for (vnp = row1_repeats; vnp != NULL; vnp = vnp->next) {   
+        InsertBestRepeat (vnp->data.ptrvalue, &list, 1, fuzz);
+      }
+      row1_repeats = ValNodeFree (row1_repeats);
     }
-    row2_repeats = ValNodeFree (row2_repeats);
   }
 
   list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
@@ -10311,11 +10671,16 @@ static ValNodePtr GetStringsForSeqIDs (SeqIdPtr sip)
       case SEQID_EMBL :
       case SEQID_DDBJ :
       case SEQID_OTHER :
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
           StringNCpy_0 (buf, tsip->accession, sizeof (buf));
         }
         break;
+
       case SEQID_GI :
         /*
         gi = sip->data.intvalue;
@@ -13927,12 +14292,15 @@ extern void CopyLocusToLocusTag (IteM i)
 
 
 /* data structure and functions for a generic form displaying a clickable list */
+typedef  void  (*Nlm_AddClickableListEntityIDProc) PROTO ((ButtoN, Uint2));
 
 #define CLICKABLE_LIST_FORM_BLOCK   \
   FORM_MESSAGE_BLOCK                \
   ValNodePtr      clickable_list_data; \
   DialoG          clickable_list_dlg;  \
   ButtoN          recheck_btn;         \
+  CharPtr         log_name;            \
+  Nlm_AddClickableListEntityIDProc add_entity_proc;        \
   
 typedef struct clickablelistform {
   CLICKABLE_LIST_FORM_BLOCK
@@ -13986,6 +14354,12 @@ static Int2 LIBCALLBACK ClickableListFormMsgFunc (OMMsgStructPtr ommsp)
       case OM_MSG_FLUSH:
           clfp->clickable_list_data = FreeClickableList (clfp->clickable_list_data);
           PointerToDialog (clfp->clickable_list_dlg, NULL);
+          break;
+      case OM_MSG_CREATE:
+          /* when a new item is created, refresh */
+          if (clfp->add_entity_proc != NULL && clfp->recheck_btn != NULL) {
+              (clfp->add_entity_proc)(clfp->recheck_btn, ommsp->entityID);
+          }
           break;
       default:
           break;
@@ -14117,6 +14491,7 @@ static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
     drfp->dcp = DiscrepancyConfigFree (drfp->dcp);
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
     ClearWindowForReportType ((WindoW) drfp->form);
+    drfp->log_name = MemFree (drfp->log_name);
   }
   StdCleanupFormProc (g, data);
 }
@@ -14288,12 +14663,26 @@ extern void EditDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
   BioseqPtr  bsp;
   SeqDescrPtr sdp;
   ObjValNodePtr ovp;
-  
+  OMUserDataPtr omudp;
+  BaseFormPtr   bfp;
+  SeqSubmitPtr  ssp;
+  Uint2         procid;
+  Boolean       special_flag = FALSE;
+  Uint1         data_choice;
+  WindoW        w;
+
   if (vnp == NULL)
   {
     return;
   }
-  if (vnp->choice == OBJ_SEQFEAT)
+
+  data_choice = vnp->choice;
+  if (data_choice > OBJ_MAX) {
+    special_flag = TRUE;
+    data_choice -= OBJ_MAX;
+  }
+
+  if (data_choice == OBJ_SEQFEAT)
   {
     sfp = (SeqFeatPtr) vnp->data.ptrvalue;
     if (sfp != NULL)
@@ -14307,11 +14696,16 @@ extern void EditDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
           }
         }
       }
-      GatherProcLaunch (OMPROC_EDIT, FALSE, sfp->idx.entityID, sfp->idx.itemID,
-                        OBJ_SEQFEAT, 0, 0, OBJ_SEQFEAT, 0);
+      if (special_flag && sfp->data.choice == SEQFEAT_PUB) {
+        w = EditCitFeatDirectly (sfp);
+        Show (w);
+      } else {
+        GatherProcLaunch (OMPROC_EDIT, FALSE, sfp->idx.entityID, sfp->idx.itemID,
+                          OBJ_SEQFEAT, 0, 0, OBJ_SEQFEAT, 0);
+      }
     }
   }
-  else if (vnp->choice == OBJ_BIOSEQ)
+  else if (data_choice == OBJ_BIOSEQ)
   {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
     if (bsp != NULL)
@@ -14320,14 +14714,39 @@ extern void EditDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
                          OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0);
     }
   }
-  else if (vnp->choice == OBJ_SEQDESC)
+  else if (data_choice == OBJ_SEQDESC)
   {
     sdp = (SeqDescrPtr) (vnp->data.ptrvalue);
     if (sdp != NULL && sdp->extended != 0)
     {
       ovp = (ObjValNodePtr) sdp;
-      GatherProcLaunch (OMPROC_EDIT, FALSE, ovp->idx.entityID, ovp->idx.itemID,
-                         OBJ_SEQDESC, 0, 0, OBJ_SEQDESC, 0);
+      if (special_flag && sdp->choice == Seq_descr_pub) {
+        w = EditCitDescDirectly (sdp);
+        Show (w);
+      } else {
+        GatherProcLaunch (OMPROC_EDIT, FALSE, ovp->idx.entityID, ovp->idx.itemID,
+                          OBJ_SEQDESC, 0, 0, OBJ_SEQDESC, 0);
+      }
+    }
+  }
+  else if (data_choice == OBJ_SEQSUB)
+  {
+    ssp = (SeqSubmitPtr) (vnp->data.ptrvalue);
+    procid = GetProcIdForItemEditor (ssp->idx.entityID, ssp->idx.itemID, OBJ_SEQSUB_CIT, 0);
+    omudp = ItemAlreadyHasEditor (ssp->idx.entityID, ssp->idx.itemID,
+                                    OBJ_SUBMIT_BLOCK, procid);
+    if (omudp == NULL) {
+      GatherProcLaunch (OMPROC_EDIT, FALSE, ssp->idx.entityID, ssp->idx.itemID,
+                        OBJ_SEQSUB_CIT, 0, 0, OBJ_SEQSUB_CIT, 0);
+      omudp = ItemAlreadyHasEditor (ssp->idx.entityID, ssp->idx.itemID,
+                                      OBJ_SUBMIT_BLOCK, procid);
+    }
+    if (omudp != NULL) {
+      bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+      if (bfp != NULL) {
+        Select (bfp->form);
+        SendMessageToForm (bfp->form, NUM_VIB_MSG + 1);
+      }
     }
   }
 
@@ -14416,10 +14835,9 @@ static void EditCDStRNAOverlapCallback (ValNodePtr vnp, Pointer userdata)
 
 static void ExtendPartialsToEndOrGapCallback (ValNodePtr list, Pointer userdata)
 {
-  ValNodePtr vnp, entityID_list = NULL;
-  SeqFeatPtr sfp;
+  ValNodePtr vnp, sep_list = NULL;
   LogInfoPtr lip;
-  CharPtr    orig_location, new_location;
+  Uint2      entityID;
 
   if (Message (MSG_OKC, "Extend partial ends of features to gaps/end of sequence if within two nucleotides?") == ANS_CANCEL) {
     return;
@@ -14427,25 +14845,75 @@ static void ExtendPartialsToEndOrGapCallback (ValNodePtr list, Pointer userdata)
   WatchCursor();
   Update();
   lip = OpenLog ("Extended Features");
-  for (vnp = list; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == OBJ_SEQFEAT && (sfp = vnp->data.ptrvalue) != NULL) {
-      orig_location = SeqLocPrintUseBestID (sfp->location);
-      if (ExtendPartialsToEndOrGap (sfp)) {
-        ValNodeAddInt (&entityID_list, 0, sfp->idx.entityID);
-        new_location = SeqLocPrintUseBestID (sfp->location);
-        fprintf (lip->fp, "Extended %s to %s\n", orig_location, new_location);
-        new_location = MemFree (new_location);
-        lip->data_in_log = TRUE;
-      }
-      orig_location = MemFree (orig_location);
-    }
+
+  FixBacterialExtendablePartials (list, userdata, lip);
+
+  sep_list = GetViewedSeqEntryList ();
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
   }
-  entityID_list = ValNodeSort (entityID_list, SortByIntvalue);
-  ValNodeUnique (&entityID_list, SortByIntvalue, ValNodeFree);
-  for (vnp = entityID_list; vnp != NULL; vnp = vnp->next) {
-    ObjMgrSetDirtyFlag (vnp->data.intvalue, TRUE);
-    ObjMgrSendMsg (OM_MSG_UPDATE, vnp->data.intvalue, 0, 0);
+  sep_list = ValNodeFree (sep_list);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void AddNonExtendableExceptionsCallback (ValNodePtr list, Pointer userdata)
+{
+  ValNodePtr vnp, sep_list = NULL;
+  LogInfoPtr lip;
+  Uint2      entityID;
+
+  if (Message (MSG_OKC, "Add Non-extendable exception to non-extendable partial features?") == ANS_CANCEL) {
+    return;
   }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Added Exceptions to Features");
+  FixBacterialNonExtendablePartials (list, userdata, lip);
+
+  sep_list = GetViewedSeqEntryList ();
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+  sep_list = ValNodeFree (sep_list);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void MarkOverlappingCDSCallback (ValNodePtr list, Pointer userdata)
+{
+  ValNodePtr vnp, sep_list = NULL;
+  LogInfoPtr lip;
+  Uint2      entityID;
+
+  if (Message (MSG_OKC, "Add comment to overlapping coding regions?") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Added Comments to Overlapping Coding Regions");
+  MarkOverlappingCDSs (list, userdata, lip);
+
+  sep_list = GetViewedSeqEntryList ();
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+  sep_list = ValNodeFree (sep_list);
+
   ArrowCursor();
   Update();
   CloseLog (lip);
@@ -14538,12 +15006,21 @@ extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
   SeqDescrPtr   sdp;
   ObjValNodePtr ovp;
   BaseFormPtr   bfp;
+  Boolean       special_flag = FALSE;
+  Uint1         data_choice;
     
   if (vnp == NULL)
   {
     return;
   }
-  if (vnp->choice == OBJ_SEQFEAT)
+
+  data_choice = vnp->choice;
+  if (data_choice > OBJ_MAX) {
+    special_flag = TRUE;
+    data_choice -= OBJ_MAX;
+  }
+
+  if (data_choice == OBJ_SEQFEAT)
   {
     sfp = (SeqFeatPtr) vnp->data.ptrvalue;
     if (sfp != NULL)
@@ -14568,7 +15045,7 @@ extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
       }
     }
   }
-  else if (vnp->choice == OBJ_BIOSEQ)
+  else if (data_choice == OBJ_BIOSEQ)
   {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
     bfp = GetBaseFormForEntityID (bsp->idx.entityID);
@@ -14577,7 +15054,7 @@ extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
       SetBioseqViewTargetByBioseq (bfp, bsp);
     }
   }
-  else if (vnp->choice == OBJ_SEQDESC)
+  else if (data_choice == OBJ_SEQDESC)
   {
     sdp = (SeqDescrPtr) (vnp->data.ptrvalue);
     if (sdp != NULL && sdp->extended != 0)
@@ -14646,6 +15123,10 @@ static void AddBulkEditing (ValNodePtr clickable_list)
         cip->callback_func = ApplyTagToCodingRegionsCallback; 
       } else if (cip->clickable_item_type == DISC_BACTERIAL_PARTIAL_PROBLEMS) {
         cip->callback_func = ExtendPartialsToEndOrGapCallback;
+      } else if (cip->clickable_item_type == DISC_BACTERIAL_PARTIAL_NONEXTENDABLE_PROBLEMS) {
+        cip->callback_func = AddNonExtendableExceptionsCallback;
+      } else if (cip->clickable_item_type == DISC_OVERLAPPING_CDS) {
+        cip->callback_func = MarkOverlappingCDSCallback;
       } else {
         subtype = GetSubtypeForBulkEdit (cip->item_list);
         /* Note - using FEATDEF_rRNA to represent all editable RNA features */
@@ -14662,7 +15143,8 @@ static void AddBulkEditing (ValNodePtr clickable_list)
 static void RecheckDiscrepancyProc (ButtoN b)
 {
   DiscrepancyReportFormPtr drfp;
-  ValNodePtr               sep_list;
+  ValNodePtr               sep_list, vnp;
+  Uint2                    entityID;
 
   drfp = (DiscrepancyReportFormPtr) GetObjectExtra (b);
   if (drfp != NULL)
@@ -14672,7 +15154,55 @@ static void RecheckDiscrepancyProc (ButtoN b)
     drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
     
     sep_list = GetViewedSeqEntryList ();
+    for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+      entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+      SeqMgrClearFeatureIndexes (entityID, NULL);
+      SeqMgrIndexFeatures (entityID, NULL);
+    }
+
     drfp->clickable_list_data = CollectDiscrepancies (drfp->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
+
+    /* add bulk editing where appropriate */
+    AddBulkEditing (drfp->clickable_list_data);
+    
+    PointerToDialog (drfp->clickable_list_dlg, drfp->clickable_list_data);
+    ArrowCursor();
+    Update();
+  }
+}
+
+
+static void AddNewEntityDiscrepancyProc (ButtoN b, Uint2 new_entityID )
+{
+  DiscrepancyReportFormPtr drfp;
+  ValNodePtr               sep_list, vnp;
+  Uint2                    entityID;
+  Boolean                  found = FALSE;
+
+  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (drfp != NULL)
+  {
+    WatchCursor();
+    Update();
+    drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
+    
+    sep_list = GetViewedSeqEntryList ();
+    for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+      entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+      SeqMgrClearFeatureIndexes (entityID, NULL);
+      SeqMgrIndexFeatures (entityID, NULL);
+      if (entityID == new_entityID) {
+        found = TRUE;
+      }
+    }
+    if (!found) {
+      ValNodeAddPointer (&sep_list, 0, GetTopSeqEntryForEntityID (new_entityID));
+      SeqMgrClearFeatureIndexes (new_entityID, NULL);
+      SeqMgrIndexFeatures (new_entityID, NULL);
+    }
+
+    drfp->clickable_list_data = CollectDiscrepancies (drfp->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
+    sep_list = ValNodeFree (sep_list);
 
     /* add bulk editing where appropriate */
     AddBulkEditing (drfp->clickable_list_data);
@@ -14952,6 +15482,60 @@ static void ContractAllDiscReportItems (ButtoN b)
 }
 
 
+static void FixMarkedDiscrepanciesBtn (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+  ValNodePtr vnp, sep_list;
+  Uint2      entityID;
+  LogInfoPtr lip = NULL;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  if (d->log_name != NULL) {
+    lip = OpenLog (d->log_name);
+  }
+  AutofixDiscrepancies (d->clickable_list_data, FALSE, lip);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
+  sep_list = GetViewedSeqEntryList ();
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    entityID = ObjMgrGetEntityIDForChoice (vnp->data.ptrvalue);
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+  d->clickable_list_data = FreeClickableList (d->clickable_list_data);
+  d->clickable_list_data = CollectDiscrepancies (d->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
+  sep_list = ValNodeFree (sep_list);
+
+  /* add bulk editing where appropriate */
+  AddBulkEditing (d->clickable_list_data);
+  
+  PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+
+  ArrowCursor();
+  Update();
+
+}
+
+
+static void MarkFixableDiscrepancies (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+  ChooseFixableDiscrepancies (d->clickable_list_data);
+  PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+}
+
+
 extern void CreateReportWindow (EDiscrepancyReportType report_type)
 {
   DiscrepancyReportFormPtr drfp;
@@ -14985,6 +15569,11 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
 
   /* adjust for report type */
   AdjustConfigForReportType (report_type, drfp->dcp);
+
+  /* Discrepancy Report uses log file for autofix */
+  if (report_type == eReportTypeDiscrepancy) {
+    drfp->log_name = StringSave ("Autofix Changes");
+  }
   
   /* register to receive update messages */
   drfp->userkey = OMGetNextUserKey ();
@@ -15015,12 +15604,20 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
   b = PushButton (c1, "Contract All", ContractAllDiscReportItems);
   SetObjectExtra (b, drfp, NULL);
 
-  c = HiddenGroup (h, 4, 0, NULL);
+  c = HiddenGroup (h, 6, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   b = PushButton (c, "Generate Report", GenerateDiscrepancyReport);
   SetObjectExtra (b, drfp, NULL);
   drfp->recheck_btn = PushButton (c, "Recheck", RecheckDiscrepancyProc);
   SetObjectExtra (drfp->recheck_btn, drfp, NULL);
+  if (report_type == eReportTypeOnCaller) {
+    drfp->add_entity_proc = AddNewEntityDiscrepancyProc;
+  }
+  b = PushButton (c, "Mark Fixable", MarkFixableDiscrepancies);
+  SetObjectExtra (b, drfp, NULL);
+
+  b = PushButton (c, "Fix Marked", FixMarkedDiscrepanciesBtn);
+  SetObjectExtra (b, drfp, NULL);
   
   b = PushButton (c, "Configure", GetReportEditButtonProc (report_type));
   SetObjectExtra (b, drfp, NULL);
@@ -16257,8 +16854,6 @@ static void MakeRNA_ITSChain (ButtoN b)
     Remove (rp->form);
   }
 }
-
-static WindoW RNAITSWindow = NULL;
 
 static void CleanupRNA_ITS (GraphiC g, VoidPtr data)
 

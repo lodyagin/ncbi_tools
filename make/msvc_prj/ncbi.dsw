@@ -408,6 +408,9 @@ Package=<4>
     Project_Dep_Name ncbitool
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name ncbispel
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name ncbitxc2
     End Project Dependency
     Begin Project Dependency

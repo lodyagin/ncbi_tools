@@ -36,162 +36,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 *
-* $Log: lsqfetch.c,v $
-* Revision 6.40  2007/05/07 13:28:35  kans
-* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
-*
-* Revision 6.39  2006/11/17 20:06:36  kans
-* master index has numuid count in angle brackets, so it does not need to load all text lines into memory at once
-*
-* Revision 6.38  2006/11/17 17:45:48  kans
-* master index sorted numerically, stores arrays of numbers, frees temporary chunks immediately
-*
-* Revision 6.37  2006/11/13 16:00:43  kans
-* fixes for indexing in separate directory from asnrelease files
-*
-* Revision 6.36  2006/11/09 22:41:51  kans
-* allow AsnIndex files to be made in separate directory from data source files
-*
-* Revision 6.35  2006/11/09 17:49:38  kans
-* switch to newer AsnIndex method using master index file
-*
-* Revision 6.34  2006/11/08 21:25:41  kans
-* added new functions to handle master asn index file
-*
-* Revision 6.33  2006/11/07 22:35:54  kans
-* fixed valnodecopystr bug, bail if index file already exists
-*
-* Revision 6.32  2006/11/07 21:40:02  kans
-* added CreateMasterAsnIndex
-*
-* Revision 6.31  2006/07/13 17:06:38  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.30  2004/10/27 20:07:14  kans
-* LsqFetch_AsnIoOpen to suppress missing file warning, similar to LsqFetch_FileOpen
-*
-* Revision 6.29  2004/10/26 14:45:30  kans
-* LsqFetch_FileOpen suppresses FileOpen failure INFO message
-*
-* Revision 6.28  2004/10/05 19:11:23  kans
-* separate internal CreateBinaryAsnIndex and CreateTextAsnIndex functions
-*
-* Revision 6.27  2004/10/05 18:56:48  kans
-* AsnIndexedLibFetchEnable only works in text mode, backed out SeqEntryAsnRead change - will later implement use of catenated Seq-entry instead of se2bss processed input if text
-*
-* Revision 6.26  2004/10/05 17:34:16  kans
-* protect all binary search functions against R out of range
-*
-* Revision 6.25  2004/10/05 17:25:04  kans
-* AsnIndexedLibBioseqFetchFunc handles all Seq-id types, passes atp_se to SeqEntryAsnRead
-*
-* Revision 6.24  2004/10/05 16:21:37  kans
-* LocalSeqFetchInit checks for INDEXED_TEXT_ASN and INDEXED_BIN_ASN, calls AsnIndexedLibFetchEnable
-*
-* Revision 6.23  2004/08/04 20:21:04  kans
-* record alfp->binary at correct place in asn indexed fetch enable function
-*
-* Revision 6.22  2004/08/03 17:51:49  kans
-* added AsnIndexedLibFetch enable and disable functions
-*
-* Revision 6.21  2004/08/02 19:10:14  kans
-* added CreateAsnIndex for indexing Bioseq-set ftp release files
-*
-* Revision 6.20  2004/04/13 16:58:32  kans
-* allow alt index to have gi numbers, also test .fsa if .fa fails
-*
-* Revision 6.19  2003/11/13 17:18:02  kans
-* added SearchAltIndex, finished Alt fetch for chimp revision
-*
-* Revision 6.18  2003/11/12 23:49:11  kans
-* SortIfpByID needed LIBCALLBACK for PC
-*
-* Revision 6.17  2003/11/12 23:38:48  kans
-* changing AltIndexedFastaLibFetchEnable prototype, implementation not yet finished
-*
-* Revision 6.16  2003/08/27 21:24:05  kans
-* enable alt indexed fasta looks up previously registered function, changes settings for new path
-*
-* Revision 6.15  2003/08/27 19:27:43  kans
-* added AltIndexedFastaLibFetch functions for chimpanzee genome project
-*
-* Revision 6.14  2002/11/13 23:07:37  johnson
-* Changed make_lib such that it looks to see if it matches the *whole* seq-id
-* (defined by the next character being non-alphanumeric).
-*
-* Revision 6.13  2002/07/19 20:16:33  johnson
-* bug fix in make_lib -- wasn't properly handling sequences >=1000 residues
-*
-* Revision 6.12  2002/01/22 19:50:32  kans
-* IndexedFastaLibBioseqFetchFunc looks for prefix with upper case followed by lower case
-*
-* Revision 6.11  2001/09/21 20:02:04  kans
-* allow U and u to be DNA in CheckDnaResidue for the BLAST guys, even though it is amino acid Selenocysteine in most places
-*
-* Revision 6.10  2001/03/13 16:48:58  kans
-* fixes to saving path, binary search results
-*
-* Revision 6.9  2001/03/12 23:19:33  kans
-* added IndexedFastaLib functions - currently uses genome contig naming conventions
-*
-* Revision 6.8  2001/01/09 00:12:39  kans
-* now handles SEQID_GI
-*
-* Revision 6.7  1999/10/07 16:21:13  kans
-* removed static AddSeqId and SeqIdDupList which were identical to public sequtil functions
-*
-* Revision 6.6  1999/07/20 21:18:39  sicotte
-* add static AddSeqId for linker conflicts
-*
-* Revision 6.5  1999/07/20 21:16:49  sicotte
-* add static SeqIdDupList for linker conflicts
-*
-* Revision 6.4  1999/04/01 22:26:13  sicotte
-* Make lsqfetch Attempt to Parse the fasta defline, otherwise use the supplied SeqId
-*
-* Revision 6.3  1999/03/11 23:39:33  kans
-* sprintf and sscanf casts
-*
-* Revision 6.2  1998/02/06 17:41:33  zjing
-* make the function CheckDnaResidue external
-*
-* Revision 5.3  1997/07/18 21:31:36  zjing
-* move some def to lsqfetch.h
-*
-* Revision 5.2  1997/06/19 18:38:16  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.1  1997/02/12 22:42:43  zjing
-* fix a memory leak
-*
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.9  1996/03/06  18:28:53  zjing
- * .
- *
- * Revision 4.4  1995/10/11  19:29:28  zjing
- * add LIBCALL for find_big_bioseq
- *
- * Revision 4.3  1995/08/23  12:37:08  epstein
- * remove leading white space from conditional compilation
- *
- * Revision 4.2  1995/08/04  17:31:32  kans
- * JZ added LocalSeqFetchInit, LocalSeqFetchDisable
- *
- * Revision 4.1  1995/08/03  20:56:18  kans
- * paths can now be specified in a regular NCBI config file
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.4  1995/07/10  14:20:31  zjing
- * check in default search path for fasta files
- *
-*
-*
 * ==========================================================================
 */
 
@@ -1800,7 +1644,7 @@ typedef struct asnlibftch {
   ValNodePtr    filelist;
   CharPtr PNTR  filenames;
   Int2          numfiles;
-  Int4 PNTR     seqids;
+  CharPtr PNTR  seqids;
   Int4 PNTR     offsets;
   Int2 PNTR     filenums;
   Int4          numids;
@@ -1809,23 +1653,25 @@ typedef struct asnlibftch {
 
 static Boolean SearchMasterAsnIndex (
   AsnLibFetchPtr alfp,
-  Int4 seqid,
+  CharPtr seqid,
   Int4Ptr offsetP,
   Int2Ptr filenumP
 )
 
 {
-  Int4      L, R, mid;
+  int   compare;
+  Int4  L, R, mid;
 
   if (alfp == NULL || alfp->seqids == NULL ||
       alfp->offsets == NULL || alfp->filenums == NULL) return FALSE;
-  if (seqid < 1) return FALSE;
+  if (StringHasNoText (seqid)) return FALSE;
 
   L = 0;
   R = alfp->numids - 1;
   while (L < R) {
     mid = (L + R) / 2;
-    if (alfp->seqids [mid] < seqid) {
+    compare = StringICmp (alfp->seqids [mid], seqid);
+    if (compare < 0) {
       L = mid + 1;
     } else {
       R = mid;
@@ -1833,7 +1679,8 @@ static Boolean SearchMasterAsnIndex (
   }
 
   if (R >= 0 && R < alfp->numids) {
-    if (alfp->seqids [R] == seqid) {
+    compare = StringICmp (alfp->seqids [R], seqid);
+    if (compare == 0) {
       *offsetP = (Int4) alfp->offsets [R];
       *filenumP = (Int2) alfp->filenums [R];
       return TRUE;
@@ -1848,10 +1695,15 @@ static AsnLibFetchPtr FreeMasterAsnIndex (
 )
 
 {
+  Int4  i;
+
   if (alfp == NULL) return NULL;
 
   MemFree (alfp->datapath);
   MemFree (alfp->indexpath);
+  for (i = 0; i < alfp->numids; i++) {
+    MemFree (alfp->seqids [i]);
+  }
   MemFree (alfp->seqids);
   MemFree (alfp->offsets);
   MemFree (alfp->filenums);
@@ -1871,13 +1723,14 @@ static AsnLibFetchPtr ReadMasterAsnIndex (
   AsnLibFetchPtr  alfp;
   Char            ch;
   Int2            col;
+  int             compare;
   FileCache       fc;
   Char            filename [PATH_MAX];
   CharPtr         filenum;
   Int4            idx;
   FILE            *ifp;
   ValNodePtr      lastfile = NULL;
-  Int4            lastseqid;
+  CharPtr         lastseqid;
   Char            line [128];
   CharPtr         offset;
   Boolean         outOfOrder;
@@ -1973,7 +1826,7 @@ static AsnLibFetchPtr ReadMasterAsnIndex (
 
   alfp->filenames = MemNew (sizeof (CharPtr) * (size_t) (alfp->numfiles + 3));
 
-  alfp->seqids = MemNew (sizeof (Int4) * (size_t) (alfp->numids + 2));
+  alfp->seqids = MemNew (sizeof (CharPtr) * (size_t) (alfp->numids + 2));
   alfp->offsets = MemNew (sizeof (Int4) * (size_t) (alfp->numids + 2));
   alfp->filenums = MemNew (sizeof (Int2) * (size_t) (alfp->numids + 2));
 
@@ -2026,8 +1879,8 @@ static AsnLibFetchPtr ReadMasterAsnIndex (
           ch = *ptr;
         }
       }
-      if (sscanf (seqid, "%ld", &val) == 1) {
-        alfp->seqids [idx] = (Int4) val;
+      if (StringDoesHaveText (seqid)) {
+        alfp->seqids [idx] = StringSave (seqid);
       }
       if (sscanf (offset, "%ld", &val) == 1) {
         alfp->offsets [idx] = (Int4) val;
@@ -2048,7 +1901,8 @@ static AsnLibFetchPtr ReadMasterAsnIndex (
   outOfOrder = FALSE;
   lastseqid = alfp->seqids [0];
   for (idx = 1; idx < alfp->numids; idx++) {
-    if (lastseqid >= alfp->seqids [idx]) {
+    compare = StringICmp (lastseqid, alfp->seqids [idx]);
+    if (compare >= 0) {
       outOfOrder = TRUE;
     }
     lastseqid = alfp->seqids [idx];
@@ -2067,7 +1921,7 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
   AsnIoPtr          aip;
   AsnLibFetchPtr    alfp;
   BioseqPtr         bsp;
-  Char              file [FILENAME_MAX], path [PATH_MAX];
+  Char              buf [64], file [FILENAME_MAX], path [PATH_MAX];
   Int2              filenum;
   Int4              offset;
   OMProcControlPtr  ompcp;
@@ -2084,9 +1938,9 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
   if (alfp == NULL) return OM_MSG_RET_ERROR;
   sip = (SeqIdPtr) ompcp->input_data;
   if (sip == NULL) return OM_MSG_RET_ERROR;
-  if (sip->choice != SEQID_GI) return OM_MSG_RET_ERROR;
 
-  if (SearchMasterAsnIndex (alfp, (Int4) sip->data.intvalue, &offset, &filenum)) {
+  SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf));
+  if (SearchMasterAsnIndex (alfp, buf, &offset, &filenum)) {
     if (offset < 0 || filenum < 1) return OM_MSG_RET_ERROR;
     StringCpy (file, alfp->filenames [filenum]);
     tmp = StringStr (file, ".idx");
@@ -2191,22 +2045,36 @@ static void SaveAsnIdxOffset (
   aip = (AsnIdxPtr) userdata;
   if (bsp == NULL || aip == NULL) return;
 
-  sip = SeqIdFindBest (bsp->id, SEQID_GI);
-  if (sip == NULL) {
-    sip = SeqIdFindBest (bsp->id, 0);
-  }
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+      case SEQID_OTHER :
+      case SEQID_GPIPE :
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_PRF :
+      case SEQID_PDB :
+      case SEQID_GI :
+        SeqIdWrite (sip, id, PRINTID_TEXTID_ACC_VER, sizeof (id));
+        if (StringHasNoText (id)) continue;
 
-  SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
-  if (! StringHasNoText (id)) {
+        /* save ID and offset separated by tab character */
 
-    /* save ID and offset separated by tab character */
-
-    sprintf (tmp, "%s\t%ld", id, (long) aip->offset);
-    vnp = ValNodeCopyStr (&(aip->last), 0, tmp);
-    if (aip->head == NULL) {
-      aip->head = vnp;
+        sprintf (tmp, "%s\t%ld", id, (long) aip->offset);
+        vnp = ValNodeCopyStr (&(aip->last), 0, tmp);
+        if (aip->head == NULL) {
+          aip->head = vnp;
+        }
+        aip->last = vnp;
+        break;
+      default :
+        break;
     }
-    aip->last = vnp;
   }
 }
 
@@ -2438,9 +2306,9 @@ NLM_EXTERN void CreateAsnIndex (
 }
 
 typedef struct idxdata {
-  Int4  seqid;
-  Int4  offset;
-  Int2  filenum;
+  CharPtr  seqid;
+  Int4     offset;
+  Int2     filenum;
 } IdxData, PNTR IdxDataPtr;
 
 typedef struct buildidx {
@@ -2489,10 +2357,10 @@ static void AddOneIndex (
         if (ptr != NULL) {
           *ptr = '\0';
           ptr++;
-          if (sscanf (str, "%ld", &val) == 1) {
+          if (StringDoesHaveText (str)) {
             idp = (IdxDataPtr) MemNew (sizeof (IdxData));
             if (idp != NULL) {
-              idp->seqid = (Int4) val;
+              idp->seqid = StringSave (str);
               if (sscanf (ptr, "%ld", &val) == 1) {
                 idp->offset = (Int4) val;
               }
@@ -2516,6 +2384,7 @@ static void AddOneIndex (
 static int LIBCALLBACK SortVnpByBuildIdxSeqid (VoidPtr ptr1, VoidPtr ptr2)
 
 {
+  int         compare;
   IdxDataPtr  idp1, idp2;
   ValNodePtr  vnp1, vnp2;
 
@@ -2526,9 +2395,10 @@ static int LIBCALLBACK SortVnpByBuildIdxSeqid (VoidPtr ptr1, VoidPtr ptr2)
       idp1 = (IdxDataPtr) vnp1->data.ptrvalue;
       idp2 = (IdxDataPtr) vnp2->data.ptrvalue;
       if (idp1 != NULL && idp2 != NULL) {
-        if (idp1->seqid > idp2->seqid) {
+        compare = StringICmp (idp1->seqid, idp2->seqid);
+        if (compare > 0) {
           return 1;
-        } else if (idp1->seqid < idp2->seqid) {
+        } else if (compare < 0) {
           return -1;
         } else return 0;
       }
@@ -2540,6 +2410,7 @@ static int LIBCALLBACK SortVnpByBuildIdxSeqid (VoidPtr ptr1, VoidPtr ptr2)
 static ValNodePtr UniqueVnpByBuildIdx (ValNodePtr list)
 
 {
+  int           compare;
   IdxDataPtr    curr;
   IdxDataPtr    last;
   ValNodePtr    next;
@@ -2553,9 +2424,11 @@ static ValNodePtr UniqueVnpByBuildIdx (ValNodePtr list)
   while (vnp != NULL) {
     next = vnp->next;
     curr = (IdxDataPtr) vnp->data.ptrvalue;
-    if (last->seqid == curr->seqid) {
+    compare = StringICmp (last->seqid, curr->seqid);
+    if (compare == 0) {
       vnp->next = NULL;
       *prev = next;
+      MemFree (curr->seqid);
       ValNodeFreeData (vnp);
     } else {
       last = (IdxDataPtr) vnp->data.ptrvalue;
@@ -2612,7 +2485,7 @@ NLM_EXTERN void CreateMasterAsnIndex (
   for (vnp = bi.head; vnp != NULL; vnp = vnp->next) {
     idp = (IdxDataPtr) vnp->data.ptrvalue;
     if (idp == NULL) continue;
-    fprintf (bi.ofp, "%ld\t%ld\t%d\n", (long) idp->seqid, (long) idp->offset, (int) idp->filenum);
+    fprintf (bi.ofp, "%s\t%ld\t%d\n", idp->seqid, (long) idp->offset, (int) idp->filenum);
   }
 
   ValNodeFreeData (bi.head);

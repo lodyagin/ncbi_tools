@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.39 2007/03/20 15:17:16 kans Exp $
+/* $Id: blast_tabular.c,v 1.41 2009/06/01 14:33:38 maning Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.39 2007/03/20 15:17:16 kans Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.41 2009/06/01 14:33:38 maning Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_tabular.h>
@@ -38,6 +38,7 @@ static char const rcsid[] = "$Id: blast_tabular.c,v 1.39 2007/03/20 15:17:16 kan
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/api/blast_format.h>
+#include <algo/blast/api/hspfilter_queue.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
 #include <algo/blast/core/gencode_singleton.h>
@@ -327,7 +328,7 @@ void* Blast_TabularFormatThread(void* data)
     * FIXME*/
    rdfp = (ReadDBFILE*) _BlastSeqSrcImpl_GetDataStructure(seq_src);
 
-   while (BlastHSPStreamRead(tf_data->hsp_stream, &hsp_list) 
+   while (BlastHSPQueueRead(tf_data->hsp_stream->writer->data, &hsp_list) 
           != kBlastHSPStream_Eof) {
        Int4 subject_length; 
       if (!hsp_list) {

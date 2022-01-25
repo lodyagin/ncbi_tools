@@ -32,7 +32,7 @@ objentgeneAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrezgene
-*    Generated using ASNCODE Revision: 6.16 at Apr 19, 2005 10:50 AM
+*    Generated using ASNCODE Revision: 6.16 at Apr 24, 2009 11:11 AM
 *
 **************************************************/
 
@@ -405,6 +405,7 @@ NLM_EXTERN
 EntrezgeneSetPtr LIBCALL
 EntrezgeneSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -460,6 +461,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 EntrezgeneSetAsnWrite(EntrezgeneSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -685,6 +687,313 @@ GeneTrackAsnWrite(GeneTrackPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    if (ptr -> discontinue_date != NULL) {
       if ( ! DateAsnWrite(ptr -> discontinue_date, aip, GENE_TRACK_discontinue_date)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GeneCommentaryNew()
+*
+**************************************************/
+NLM_EXTERN 
+GeneCommentaryPtr LIBCALL
+GeneCommentaryNew(void)
+{
+   GeneCommentaryPtr ptr = MemNew((size_t) sizeof(GeneCommentary));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GeneCommentaryFree()
+*
+**************************************************/
+NLM_EXTERN 
+GeneCommentaryPtr LIBCALL
+GeneCommentaryFree(GeneCommentaryPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> heading);
+   MemFree(ptr -> label);
+   MemFree(ptr -> text);
+   MemFree(ptr -> accession);
+   AsnGenericUserSeqOfFree(ptr -> xtra_properties, (AsnOptFreeFunc) XtraTermsFree);
+   AsnGenericChoiceSeqOfFree(ptr -> refs, (AsnOptFreeFunc) PubFree);
+   AsnGenericUserSeqOfFree(ptr -> source, (AsnOptFreeFunc) OtherSourceFree);
+   AsnGenericChoiceSeqOfFree(ptr -> genomic_coords, (AsnOptFreeFunc) SeqLocFree);
+   AsnGenericChoiceSeqOfFree(ptr -> seqs, (AsnOptFreeFunc) SeqLocFree);
+   AsnGenericUserSeqOfFree(ptr -> products, (AsnOptFreeFunc) GeneCommentaryFree);
+   AsnGenericUserSeqOfFree(ptr -> properties, (AsnOptFreeFunc) GeneCommentaryFree);
+   AsnGenericUserSeqOfFree(ptr -> comment, (AsnOptFreeFunc) GeneCommentaryFree);
+   DateFree(ptr -> create_date);
+   DateFree(ptr -> update_date);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GeneCommentaryAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GeneCommentaryPtr LIBCALL
+GeneCommentaryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GeneCommentaryPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objentgeneAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GeneCommentary ::= (self contained) */
+      atp = AsnReadId(aip, amp, GENE_COMMENTARY);
+   } else {
+      atp = AsnLinkType(orig, GENE_COMMENTARY);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GeneCommentaryNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GENE_COMMENTARY_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_heading) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> heading = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_label) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> label = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_text) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> text = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_accession) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> accession = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> version = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_xtra_properties) {
+      ptr -> xtra_properties = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) XtraTermsAsnRead, (AsnOptFreeFunc) XtraTermsFree);
+      if (isError && ptr -> xtra_properties == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_refs) {
+      ptr -> refs = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) PubAsnRead, (AsnOptFreeFunc) PubFree);
+      if (isError && ptr -> refs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_source) {
+      ptr -> source = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) OtherSourceAsnRead, (AsnOptFreeFunc) OtherSourceFree);
+      if (isError && ptr -> source == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_genomic_coords) {
+      ptr -> genomic_coords = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
+      if (isError && ptr -> genomic_coords == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_seqs) {
+      ptr -> seqs = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
+      if (isError && ptr -> seqs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_products) {
+      ptr -> products = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
+      if (isError && ptr -> products == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_properties) {
+      ptr -> properties = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
+      if (isError && ptr -> properties == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_comment) {
+      ptr -> comment = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
+      if (isError && ptr -> comment == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_create_date) {
+      ptr -> create_date = DateAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GENE_COMMENTARY_update_date) {
+      ptr -> update_date = DateAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GeneCommentaryFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GeneCommentaryAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GeneCommentaryAsnWrite(GeneCommentaryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objentgeneAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GENE_COMMENTARY);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, GENE_COMMENTARY_type,  &av);
+   if (ptr -> heading != NULL) {
+      av.ptrvalue = ptr -> heading;
+      retval = AsnWrite(aip, GENE_COMMENTARY_heading,  &av);
+   }
+   if (ptr -> label != NULL) {
+      av.ptrvalue = ptr -> label;
+      retval = AsnWrite(aip, GENE_COMMENTARY_label,  &av);
+   }
+   if (ptr -> text != NULL) {
+      av.ptrvalue = ptr -> text;
+      retval = AsnWrite(aip, GENE_COMMENTARY_text,  &av);
+   }
+   if (ptr -> accession != NULL) {
+      av.ptrvalue = ptr -> accession;
+      retval = AsnWrite(aip, GENE_COMMENTARY_accession,  &av);
+   }
+   av.intvalue = ptr -> version;
+   retval = AsnWrite(aip, GENE_COMMENTARY_version,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> xtra_properties, (AsnWriteFunc) XtraTermsAsnWrite, aip, GENE_COMMENTARY_xtra_properties, COMMENTARY_xtra_properties_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> refs, (AsnWriteFunc) PubAsnWrite, aip, GENE_COMMENTARY_refs, GENE_COMMENTARY_refs_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> source, (AsnWriteFunc) OtherSourceAsnWrite, aip, GENE_COMMENTARY_source, GENE_COMMENTARY_source_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> genomic_coords, (AsnWriteFunc) SeqLocAsnWrite, aip, GENE_COMMENTARY_genomic_coords, COMMENTARY_genomic_coords_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> seqs, (AsnWriteFunc) SeqLocAsnWrite, aip, GENE_COMMENTARY_seqs, GENE_COMMENTARY_seqs_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> products, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_products, GENE_COMMENTARY_products_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> properties, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_properties, GENE_COMMENTARY_properties_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> comment, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_comment, GENE_COMMENTARY_comment_E);
+   if (ptr -> create_date != NULL) {
+      if ( ! DateAsnWrite(ptr -> create_date, aip, GENE_COMMENTARY_create_date)) {
+         goto erret;
+      }
+   }
+   if (ptr -> update_date != NULL) {
+      if ( ! DateAsnWrite(ptr -> update_date, aip, GENE_COMMENTARY_update_date)) {
          goto erret;
       }
    }
@@ -1251,313 +1560,6 @@ GeneSourceAsnWrite(GeneSourcePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, GENE_SOURCE_locus_display,  &av);
    av.boolvalue = ptr -> extra_terms;
    retval = AsnWrite(aip, GENE_SOURCE_extra_terms,  &av);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GeneCommentaryNew()
-*
-**************************************************/
-NLM_EXTERN 
-GeneCommentaryPtr LIBCALL
-GeneCommentaryNew(void)
-{
-   GeneCommentaryPtr ptr = MemNew((size_t) sizeof(GeneCommentary));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    GeneCommentaryFree()
-*
-**************************************************/
-NLM_EXTERN 
-GeneCommentaryPtr LIBCALL
-GeneCommentaryFree(GeneCommentaryPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   MemFree(ptr -> heading);
-   MemFree(ptr -> label);
-   MemFree(ptr -> text);
-   MemFree(ptr -> accession);
-   AsnGenericUserSeqOfFree(ptr -> xtra_properties, (AsnOptFreeFunc) XtraTermsFree);
-   AsnGenericChoiceSeqOfFree(ptr -> refs, (AsnOptFreeFunc) PubFree);
-   AsnGenericUserSeqOfFree(ptr -> source, (AsnOptFreeFunc) OtherSourceFree);
-   AsnGenericChoiceSeqOfFree(ptr -> genomic_coords, (AsnOptFreeFunc) SeqLocFree);
-   AsnGenericChoiceSeqOfFree(ptr -> seqs, (AsnOptFreeFunc) SeqLocFree);
-   AsnGenericUserSeqOfFree(ptr -> products, (AsnOptFreeFunc) GeneCommentaryFree);
-   AsnGenericUserSeqOfFree(ptr -> properties, (AsnOptFreeFunc) GeneCommentaryFree);
-   AsnGenericUserSeqOfFree(ptr -> comment, (AsnOptFreeFunc) GeneCommentaryFree);
-   DateFree(ptr -> create_date);
-   DateFree(ptr -> update_date);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    GeneCommentaryAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GeneCommentaryPtr LIBCALL
-GeneCommentaryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   GeneCommentaryPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objentgeneAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GeneCommentary ::= (self contained) */
-      atp = AsnReadId(aip, amp, GENE_COMMENTARY);
-   } else {
-      atp = AsnLinkType(orig, GENE_COMMENTARY);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = GeneCommentaryNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == GENE_COMMENTARY_type) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> type = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_heading) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> heading = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_label) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> label = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_text) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> text = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_accession) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> accession = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_version) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> version = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_xtra_properties) {
-      ptr -> xtra_properties = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) XtraTermsAsnRead, (AsnOptFreeFunc) XtraTermsFree);
-      if (isError && ptr -> xtra_properties == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_refs) {
-      ptr -> refs = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) PubAsnRead, (AsnOptFreeFunc) PubFree);
-      if (isError && ptr -> refs == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_source) {
-      ptr -> source = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) OtherSourceAsnRead, (AsnOptFreeFunc) OtherSourceFree);
-      if (isError && ptr -> source == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_genomic_coords) {
-      ptr -> genomic_coords = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
-      if (isError && ptr -> genomic_coords == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_seqs) {
-      ptr -> seqs = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
-      if (isError && ptr -> seqs == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_products) {
-      ptr -> products = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
-      if (isError && ptr -> products == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_properties) {
-      ptr -> properties = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
-      if (isError && ptr -> properties == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_comment) {
-      ptr -> comment = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GeneCommentaryAsnRead, (AsnOptFreeFunc) GeneCommentaryFree);
-      if (isError && ptr -> comment == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_create_date) {
-      ptr -> create_date = DateAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GENE_COMMENTARY_update_date) {
-      ptr -> update_date = DateAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GeneCommentaryFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GeneCommentaryAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GeneCommentaryAsnWrite(GeneCommentaryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objentgeneAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GENE_COMMENTARY);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   av.intvalue = ptr -> type;
-   retval = AsnWrite(aip, GENE_COMMENTARY_type,  &av);
-   if (ptr -> heading != NULL) {
-      av.ptrvalue = ptr -> heading;
-      retval = AsnWrite(aip, GENE_COMMENTARY_heading,  &av);
-   }
-   if (ptr -> label != NULL) {
-      av.ptrvalue = ptr -> label;
-      retval = AsnWrite(aip, GENE_COMMENTARY_label,  &av);
-   }
-   if (ptr -> text != NULL) {
-      av.ptrvalue = ptr -> text;
-      retval = AsnWrite(aip, GENE_COMMENTARY_text,  &av);
-   }
-   if (ptr -> accession != NULL) {
-      av.ptrvalue = ptr -> accession;
-      retval = AsnWrite(aip, GENE_COMMENTARY_accession,  &av);
-   }
-   av.intvalue = ptr -> version;
-   retval = AsnWrite(aip, GENE_COMMENTARY_version,  &av);
-   AsnGenericUserSeqOfAsnWrite(ptr -> xtra_properties, (AsnWriteFunc) XtraTermsAsnWrite, aip, GENE_COMMENTARY_xtra_properties, COMMENTARY_xtra_properties_E);
-   AsnGenericChoiceSeqOfAsnWrite(ptr -> refs, (AsnWriteFunc) PubAsnWrite, aip, GENE_COMMENTARY_refs, GENE_COMMENTARY_refs_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> source, (AsnWriteFunc) OtherSourceAsnWrite, aip, GENE_COMMENTARY_source, GENE_COMMENTARY_source_E);
-   AsnGenericChoiceSeqOfAsnWrite(ptr -> genomic_coords, (AsnWriteFunc) SeqLocAsnWrite, aip, GENE_COMMENTARY_genomic_coords, COMMENTARY_genomic_coords_E);
-   AsnGenericChoiceSeqOfAsnWrite(ptr -> seqs, (AsnWriteFunc) SeqLocAsnWrite, aip, GENE_COMMENTARY_seqs, GENE_COMMENTARY_seqs_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> products, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_products, GENE_COMMENTARY_products_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> properties, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_properties, GENE_COMMENTARY_properties_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> comment, (AsnWriteFunc) GeneCommentaryAsnWrite, aip, GENE_COMMENTARY_comment, GENE_COMMENTARY_comment_E);
-   if (ptr -> create_date != NULL) {
-      if ( ! DateAsnWrite(ptr -> create_date, aip, GENE_COMMENTARY_create_date)) {
-         goto erret;
-      }
-   }
-   if (ptr -> update_date != NULL) {
-      if ( ! DateAsnWrite(ptr -> update_date, aip, GENE_COMMENTARY_update_date)) {
-         goto erret;
-      }
-   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.24  2009/06/19 19:27:29  bazhin
+* Added support for multiple consortium names.
+*
 * Revision 6.23  2007/12/04 23:29:22  bazhin
 * MergePubIds() renamed to MergeNonPubmedPubIds(). Merging is
 * limited to types DOI and OTHER only.
@@ -396,11 +399,18 @@ static Boolean ten_authors_compare(CitArtPtr capold, CitArtPtr capnew)
 Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
 {
     NameStdPtr namestd;
+    ValNodePtr oldcon;
+    ValNodePtr newcon;
+    ValNodePtr tvnp;
+    ValNodePtr vnp;
     ValNodePtr v;
     AuthorPtr  aup;
+    CharPtr    oldbuf;
+    CharPtr    newbuf;
     CharPtr    mu[10];
-    CharPtr    oldcon;
-    CharPtr    newcon;
+    CharPtr    p;
+    Int4       oldlen;
+    Int4       newlen;
     Int2       num;
     Int2       numnew;
     Int2       numtmp;
@@ -427,24 +437,124 @@ Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
     if(art->authors->choice != 1)
         return(ten_authors_compare(art, art_tmp));
 
+    oldbuf = NULL;
     oldcon = NULL;
+    oldlen = 1;
     for(num = 0, v = art->authors->names; v != NULL; v = v->next)
     {
         aup = v->data.ptrvalue;
         if(aup->name->choice == 2)
             num++;
         else if(aup->name->choice == 5)
-            oldcon = aup->name->data;
+        {
+            p = aup->name->data;
+            oldlen += (StringLen(p) + 2);
+            if(oldcon == NULL)
+            {
+                oldcon = ValNodeNew(NULL);
+                oldcon->data.ptrvalue = p;
+                continue;
+            }
+
+            for(vnp = oldcon; vnp != NULL; vnp = vnp->next)
+            {
+                if(StringICmp(p, vnp->data.ptrvalue) <= 0)
+                {
+                    if(vnp == oldcon)
+                    {
+                        oldcon = ValNodeNew(NULL);
+                        oldcon->data.ptrvalue = p;
+                        oldcon->next = vnp;
+                    }
+                    else
+                    {
+                        tvnp = ValNodeNew(NULL);
+                        tvnp->data.ptrvalue = vnp->data.ptrvalue;
+                        vnp->data.ptrvalue = p;
+                        tvnp->next = vnp->next;
+                        vnp->next = tvnp;
+                    }
+                    break;
+                }
+                if(vnp->next == NULL)
+                {
+                    vnp->next = ValNodeNew(NULL);
+                    vnp->next->data.ptrvalue = p;
+                    break;
+                }
+            }
+        }
+    }
+    if(oldcon != NULL)
+    {
+        oldbuf = MemNew(oldlen);
+        oldbuf[0] = '\0';
+        for(vnp = oldcon; vnp != NULL; vnp = vnp->next)
+        {
+            if(oldbuf[0] != '\0')
+                StringCat(oldbuf, "; ");
+            StringCat(oldbuf, vnp->data.ptrvalue);
+        }
     }
 
+    newbuf = NULL;
     newcon = NULL;
+    newlen = 1;
     for(numtmp = 0, v = art_tmp->authors->names; v != NULL; v = v->next)
     {
         aup = v->data.ptrvalue;
         if(aup->name->choice == 2)
             numtmp++;
         else if(aup->name->choice == 5)
-            newcon = aup->name->data;
+        {
+            p = aup->name->data;
+            newlen += (StringLen(p) + 2);
+            if(newcon == NULL)
+            {
+                newcon = ValNodeNew(NULL);
+                newcon->data.ptrvalue = p;
+                continue;
+            }
+
+            for(vnp = newcon; vnp != NULL; vnp = vnp->next)
+            {
+                if(StringICmp(p, vnp->data.ptrvalue) <= 0)
+                {
+                    if(vnp == newcon)
+                    {
+                        newcon = ValNodeNew(NULL);
+                        newcon->data.ptrvalue = p;
+                        newcon->next = vnp;
+                    }
+                    else
+                    {
+                        tvnp = ValNodeNew(NULL);
+                        tvnp->data.ptrvalue = vnp->data.ptrvalue;
+                        vnp->data.ptrvalue = p;
+                        tvnp->next = vnp->next;
+                        vnp->next = tvnp;
+                    }
+                    break;
+                }
+                if(vnp->next == NULL)
+                {
+                    vnp->next = ValNodeNew(NULL);
+                    vnp->next->data.ptrvalue = p;
+                    break;
+                }
+            }
+        }
+    }
+    if(newcon != NULL)
+    {
+        newbuf = MemNew(newlen);
+        newbuf[0] = '\0';
+        for(vnp = newcon; vnp != NULL; vnp = vnp->next)
+        {
+            if(newbuf[0] != '\0')
+                StringCat(newbuf, "; ");
+            StringCat(newbuf, vnp->data.ptrvalue);
+        }
     }
 
     if(oldcon != NULL)
@@ -453,26 +563,41 @@ Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
         {
             ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoConsortAuthors,
                       "Publication as returned by MedArch lacks consortium authors of the original publication: \"%s\".",
-                      oldcon);
-            aup = AuthorNew();
-            aup->name = PersonIdNew();
-            aup->name->choice = 5;
-            aup->name->data = StringSave(oldcon);
-            v = ValNodeNew(NULL);
-            v->data.ptrvalue = aup;
-            v->next = art_tmp->authors->names;
-            art_tmp->authors->names = v;
-            newcon = oldcon;
+                      oldbuf);
+            for(vnp = oldcon;; vnp = vnp->next)
+            {
+                aup = AuthorNew();
+                aup->name = PersonIdNew();
+                aup->name->choice = 5;
+                aup->name->data = StringSave(vnp->data.ptrvalue);
+                vnp->data.ptrvalue = aup;
+                if(vnp->next == NULL)
+                    break;
+            }
+            vnp->next = art_tmp->authors->names;
+            art_tmp->authors->names = oldcon;
         }
-        else if(StringICmp(oldcon, newcon) != 0)
+        else
         {
-            ErrPostEx(SEV_WARNING, ERR_REFERENCE_DiffConsortAuthors,
-                      "Consortium author names differ. Original is \"%s\". MedArch's is \"%s\".",
-                      oldcon, newcon);
+            if(StringICmp(oldbuf, newbuf) != 0)
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_DiffConsortAuthors,
+                          "Consortium author names differ. Original is \"%s\". MedArch's is \"%s\".",
+                          oldbuf, newbuf);
+            MemFree(newbuf);
+            newbuf = NULL;
+            ValNodeFree(oldcon);
+            ValNodeFree(newcon);
+            newcon = NULL;
         }
+        MemFree(oldbuf);
         if(num == 0)
             return(TRUE);
     }
+
+    if(newcon != NULL)
+        ValNodeFree(newcon);
+    if(newbuf != NULL)
+        MemFree(newbuf);
 
     numnew = 0;
     for(v = art_tmp->authors->names; v != NULL && numnew < 10; v = v->next)

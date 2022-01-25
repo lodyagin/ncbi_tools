@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.21  2009/03/04 16:34:15  bollin
+* Added function for removing contigs from scaffolds.
+*
 * Revision 6.20  2007/05/08 17:18:32  bollin
 * Added functions for identifying AGP gap DeltaSeqs
 *
@@ -682,6 +685,14 @@ SeqEdSeqLocDelete
  BoolPtr   changed,
  BoolPtr   partial5,
  BoolPtr   partial3);
+
+NLM_EXTERN Int2 LIBCALL 
+SeqEdSeqFeatDelete 
+(SeqFeatPtr sfp,
+ BioseqPtr  target,
+ Int4       from,
+ Int4       to,
+ Boolean merge);
 
 NLM_EXTERN void SeqEdJournalFree (SeqEdJournalPtr sejp);
 NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewSeqEdit 

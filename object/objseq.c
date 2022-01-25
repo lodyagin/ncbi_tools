@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -760,11 +760,11 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFree (BioseqPtr bsp)
         }
     }
 
-    if (! SeqMgrDelete(SM_BIOSEQ, (Pointer)bsp))
-        ErrPostEx(SEV_ERROR, 0,0, "BioseqFree: pointer not registered");
-
     SeqIdSetFree(bsp->id);
     BioseqFreeComponents(bsp);
+
+    if (! SeqMgrDelete(SM_BIOSEQ, (Pointer)bsp))
+        ErrPostEx(SEV_ERROR, 0,0, "BioseqFree: pointer not registered");
 
     if (top) {
         ObjMgrDeleteAllInRecord ();
@@ -1015,9 +1015,10 @@ Boolean LIBCALL SeqDataAsnWriteXML(SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, 
     AsnTypePtr tmp;
     DataVal    av;
     Boolean    tofree;
-    Boolean    retval;
+    Boolean    retval = FALSE;
     Uint1      newseqtype;
     ByteStorePtr  bsp;
+    AsnWriteFunc func = NULL;
 
     if((!loaded && !SeqAsnLoad()) || aip == NULL)
         return(FALSE);
@@ -1033,7 +1034,7 @@ Boolean LIBCALL SeqDataAsnWriteXML(SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, 
         return(FALSE);
     }
 
-    if (seqtype == Seq_code_gap) return FALSE;
+    /* if (seqtype == Seq_code_gap) return FALSE; */
     bsp = (ByteStorePtr) sdp;
 
     tofree = FALSE;
@@ -1083,12 +1084,17 @@ Boolean LIBCALL SeqDataAsnWriteXML(SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, 
         tmp = SEQ_DATA_ncbipaa;
     else if(seqtype == Seq_code_ncbistdaa)
         tmp = SEQ_DATA_ncbistdaa;
-    else if(seqtype == Seq_code_gap)
+    else if(seqtype == Seq_code_gap) {
         tmp = SEQ_DATA_gap;
-    else
+        func = (AsnWriteFunc) SeqGapAsnWrite;
+    } else
         tmp = NULL;
 
-    retval = AsnWrite(aip, tmp, &av);
+    if (func != NULL) {
+        retval = (* func) ((SeqGapPtr) sdp, aip, tmp);
+    } else {
+        retval = AsnWrite(aip, tmp, &av);
+    }
 
     AsnUnlinkType(orig);            /* unlink local tree */
     if(tofree != FALSE)

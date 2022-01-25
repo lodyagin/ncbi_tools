@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket.c,v 6.38 2009/01/29 18:09:30 kazimird Exp $
+/* $Id: test_ncbi_socket.c,v 6.40 2009/05/04 15:54:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,7 +54,7 @@
 /* This header must go last */
 #include "test_assert.h"
 
-#define MIN_PORT 5001
+#define MIN_PORT 4096
 #define DEF_PORT 5555
 #define DEF_HOST "localhost"
 
@@ -627,10 +627,20 @@ static void TEST__server(unsigned short port)
 
     /* Accept connections from clients and run test sessions */
     for (;;) {
+        char full[80];
+        char addr[80];
+        char port[10];
         SOCK sock;
 
         status = LSOCK_Accept(lsock, NULL, &sock);
         assert(status == eIO_Success);
+
+        assert(SOCK_GetPeerAddressString  (sock, full,sizeof(full)));
+        SOCK_GetPeerAddressStringEx(sock, addr,sizeof(addr),eSAF_IP);
+        printf("ADDR = %s\n", addr);
+        assert(SOCK_GetPeerAddressStringEx(sock, addr,sizeof(addr),eSAF_IP));
+        assert(SOCK_GetPeerAddressStringEx(sock, port,sizeof(port),eSAF_Port));
+        assert(strcmp(full, strcat(strcat(addr, ":"), port)) == 0);
 
         /* Test the simplest randezvous(plain request-reply)
          * The two peer functions are:

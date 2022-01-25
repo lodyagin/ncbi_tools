@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.211 2009/02/03 18:14:30 kazimird Exp $
+/* $Id: blast_options.c,v 1.213 2009/06/15 18:34:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,13 +34,15 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.211 2009/02/03 18:14:30 kazimird Exp $";
+    "$Id: blast_options.c,v 1.213 2009/06/15 18:34:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/composition_adjustment/composition_constants.h>
+#include <algo/blast/core/hspfilter_collector.h>
+#include <algo/blast/core/hspfilter_besthit.h>
 
 const int kUngappedHSPNumMax = 400;  /**< Suggested max. number of HSPs for an ungapped search. */
 
@@ -131,7 +133,6 @@ SRepeatFilterOptions* SRepeatFilterOptionsFree(SRepeatFilterOptions* repeat_opti
 Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options)
 {
 
-    const char* kRepeatDB = "humrep";
     if (repeat_options == NULL)
         return 1;
 
@@ -139,7 +140,7 @@ Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options)
     if (*repeat_options == NULL)
         return BLASTERR_MEMORY;
 
-    (*repeat_options)->database = strdup(kRepeatDB);
+    (*repeat_options)->database = strdup(kDefaultRepeatFilterDb);
 
     return 0;
 }
@@ -1317,8 +1318,11 @@ BlastHitSavingOptions*
 BlastHitSavingOptionsFree(BlastHitSavingOptions* options)
 
 {
-  sfree(options);
-  return NULL;
+    if (options) {
+        options->hsp_filt_opt = BlastHSPFilteringOptionsFree(options->hsp_filt_opt);
+    }
+    sfree(options);
+    return NULL;
 }
 
 
@@ -1348,6 +1352,8 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
        (*options)->do_sum_stats = FALSE;
    }
 
+   (*options)->hsp_filt_opt = NULL;
+
    return 0;
 
 }
@@ -1372,6 +1378,7 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       options->do_sum_stats = TRUE;
    }
    options->culling_limit = culling_limit;
+   options->hsp_filt_opt = NULL;
 
    return 0;
 
@@ -1415,6 +1422,14 @@ BlastHitSavingOptionsValidate(EBlastProgramType program_number,
 		return BLASTERR_OPTION_VALUE_INVALID;
 	}	
 
+    if (options->hsp_filt_opt) {
+        if (BlastHSPFilteringOptionsValidate(options->hsp_filt_opt) != 0) {
+            Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
+                        "HSP Filtering options invalid");
+            return BLASTERR_OPTION_VALUE_INVALID;
+        }
+    }
+
 	return 0;
 }
 
@@ -1436,6 +1451,7 @@ Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
 
    options->nsg_compatibility_mode = FALSE;
    options->impala_scaling_factor = kPSSM_NoImpalaScaling;
+   options->ignore_unaligned_positions = FALSE;
    
    return 0;
 }
@@ -1530,7 +1546,7 @@ Int2 BLAST_InitDefaultOptions(EBlastProgramType program_number,
                                        (*score_options)->gapped_calculation)))
       return status;
 
-   if ((status=BlastHitSavingOptionsNew(program_number, hit_options,
+   if ((status=BlastHitSavingOptionsNew(program_number, hit_options, 
                                         (*score_options)->gapped_calculation)))
       return status;
 
@@ -1629,3 +1645,152 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
 
    return status;
 }
+
+BlastHSPBestHitOptions* BlastHSPBestHitOptionsNew(double overhang, double score_edge)
+{
+    BlastHSPBestHitOptions* retval = 
+        (BlastHSPBestHitOptions*) calloc(1, sizeof(BlastHSPBestHitOptions));
+    retval->overhang = overhang;
+    retval->score_edge = score_edge;
+    return retval;
+}
+
+Int2
+BlastHSPBestHitOptionsValidate(const BlastHSPFilteringOptions* opts)
+{
+    Int2 retval = 0;    /* assume success */
+    BlastHSPBestHitOptions* best_hit = opts->best_hit;
+
+    if ( !best_hit ) {
+        return retval;
+    }
+
+    if (best_hit->overhang <= kBestHit_OverhangMin ||
+        best_hit->overhang >= kBestHit_OverhangMax) {
+        return -1;
+    }
+
+    if (best_hit->score_edge <= kBestHit_ScoreEdgeMin ||
+        best_hit->score_edge >= kBestHit_ScoreEdgeMax) {
+        return -1;
+    }
+
+    return retval;
+}
+
+BlastHSPBestHitOptions* BlastHSPBestHitOptionsFree(BlastHSPBestHitOptions* opt)
+{
+    if ( !opt ) {
+        return NULL;
+    }
+    sfree(opt);
+    return NULL;
+}
+
+BlastHSPCullingOptions* BlastHSPCullingOptionsNew(int max)
+{
+    BlastHSPCullingOptions* retval = 
+        (BlastHSPCullingOptions*) calloc(1, sizeof(BlastHSPCullingOptions));
+    retval->max_hits = max;
+    return retval;
+}
+
+Int2
+BlastHSPCullingOptionsValidate(const BlastHSPFilteringOptions* opts)
+{
+    Int2 retval = 0;
+    BlastHSPCullingOptions* culling_opts = opts->culling_opts;
+    if (!culling_opts)
+       return retval;
+
+    if (culling_opts->max_hits < 0)
+       return -1;
+
+    return retval;
+}
+
+BlastHSPCullingOptions* 
+BlastHSPCullingOptionsFree(BlastHSPCullingOptions* culling_opts)
+{
+   if (!culling_opts)
+    return NULL;
+
+   sfree(culling_opts);
+   return NULL;
+}
+
+
+BlastHSPFilteringOptions* BlastHSPFilteringOptionsNew()
+{
+    return (BlastHSPFilteringOptions*)calloc(1,
+                                             sizeof(BlastHSPFilteringOptions));
+}
+
+Int2
+BlastHSPFilteringOptions_AddBestHit(BlastHSPFilteringOptions* filt_opts,
+                                    BlastHSPBestHitOptions** best_hit,
+                                    EBlastStage stage)
+{
+    if ( filt_opts == NULL || best_hit == NULL || *best_hit == NULL) {
+        return 1;
+    }
+
+    filt_opts->best_hit = *best_hit;
+    *best_hit = NULL;
+    filt_opts->best_hit_stage = stage;
+
+    return 0;
+}
+
+Int2
+BlastHSPFilteringOptions_AddCulling(BlastHSPFilteringOptions* filt_opts,
+                                    BlastHSPCullingOptions** culling,
+                                    EBlastStage stage)
+{
+    if ( filt_opts == NULL || culling == NULL || *culling == NULL) {
+        return 1;
+    }
+
+    filt_opts->culling_opts = *culling;
+    *culling = NULL;
+    filt_opts->culling_stage = stage;
+
+    return 0;
+}
+
+Int2
+BlastHSPFilteringOptionsValidate(const BlastHSPFilteringOptions* opts)
+{
+    Int2 retval = 0;    /* assume success */
+    Boolean writer_found = FALSE;
+
+    if ( (retval = BlastHSPBestHitOptionsValidate(opts)) != 0) {
+        return retval;
+    }
+    if (opts->best_hit_stage & ePrelimSearch) {
+        writer_found = TRUE;
+    }
+
+    if ( (retval = BlastHSPCullingOptionsValidate(opts)) != 0) {
+        return retval;
+    }
+    if ((opts->culling_stage & ePrelimSearch) && writer_found) {
+        return 1;
+    }
+    writer_found = (opts->culling_stage & ePrelimSearch ? TRUE : FALSE);
+
+    return retval;
+}
+
+BlastHSPFilteringOptions*
+BlastHSPFilteringOptionsFree(BlastHSPFilteringOptions* opts)
+{
+    if ( !opts ) {
+        return NULL;
+    }
+    opts->best_hit = BlastHSPBestHitOptionsFree(opts->best_hit);
+    opts->culling_opts = BlastHSPCullingOptionsFree(opts->culling_opts);
+    sfree(opts);
+    return opts;
+}
+

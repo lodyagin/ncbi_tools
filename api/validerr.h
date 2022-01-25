@@ -68,6 +68,7 @@
 #define ERR_SEQ_INST_ProteinsHaveGeneralID  1,64
 #define ERR_SEQ_INST_HighNContent  1,65
 #define ERR_SEQ_INST_SeqLitDataLength0  1,66
+#define ERR_SEQ_INST_DSmRNA  1,67
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -132,6 +133,8 @@
 #define ERR_SEQ_DESCR_BadCountryCapitalization  2,61
 #define ERR_SEQ_DESCR_WrongVoucherType  2,62
 #define ERR_SEQ_DESCR_UserObjectProblem  2,63
+#define ERR_SEQ_DESCR_TitleHasPMID  2,64
+#define ERR_SEQ_DESCR_BadKeyword  2,65
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -145,6 +148,7 @@
 #define ERR_GENERIC_CollidingSerialNumbers  3,10
 #define ERR_GENERIC_EmbeddedScript  3,11
 #define ERR_GENERIC_PublicationInconsistency  3,12
+#define ERR_GENERIC_SgmlPresentInText  3,13
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -167,6 +171,7 @@
 #define ERR_SEQ_PKG_INSDRefSeqPackaging  4,19
 #define ERR_SEQ_PKG_GPSnonGPSPackaging  4,20
 #define ERR_SEQ_PKG_RefSeqPopSet  4,21
+#define ERR_SEQ_PKG_BioseqSetClassNotSet  4,22
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -333,6 +338,16 @@
 #define ERR_SEQ_FEAT_PseudoCDSmRNArange  5,163
 #define ERR_SEQ_FEAT_ExtendablePartialProblem  5,164
 #define ERR_SEQ_FEAT_GeneXrefNeeded  5,165
+#define ERR_SEQ_FEAT_RubiscoProblem  5,166
+#define ERR_SEQ_FEAT_UnqualifiedException  5,167
+#define ERR_SEQ_FEAT_ProteinNameHasPMID  5,168
+#define ERR_SEQ_FEAT_BadGeneOntologyFormat  5,169
+#define ERR_SEQ_FEAT_InconsistentGeneOntologyTermAndId  5,170
+#define ERR_SEQ_FEAT_MultiplyAnnotatedGenes  5,171
+#define ERR_SEQ_FEAT_ReplicatedGeneSequence  5,172
+#define ERR_SEQ_FEAT_ShortIntron  5,173
+#define ERR_SEQ_FEAT_GeneXrefStrandProblem  5,174
+#define ERR_SEQ_FEAT_CDSmRNAXrefLocationProblem  5,175
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2
@@ -354,6 +369,8 @@
 #define ERR_SEQ_ALIGN_Segtype  6,18
 #define ERR_SEQ_ALIGN_BlastAligns  6,19
 #define ERR_SEQ_ALIGN_PercentIdentity  6,20
+#define ERR_SEQ_ALIGN_ShortAln  6,21
+#define ERR_SEQ_ALIGN_UnexpectedAlignmentType  6,22
 #define ERR_SEQ_GRAPH  7,0
 #define ERR_SEQ_GRAPH_GraphMin  7,1
 #define ERR_SEQ_GRAPH_GraphMax  7,2
@@ -374,6 +391,7 @@
 #define ERR_SEQ_GRAPH_GraphBioseqId  7,17
 #define ERR_SEQ_GRAPH_GraphACGTScoreMany  7,18
 #define ERR_SEQ_GRAPH_GraphNScoreMany  7,19
+#define ERR_SEQ_GRAPH_GraphLocInvalid  7,20
 #define ERR_SEQ_ANNOT  8,0
 #define ERR_SEQ_ANNOT_AnnotIDs  8,1
 #define ERR_SEQ_ANNOT_AnnotLOCs  8,2

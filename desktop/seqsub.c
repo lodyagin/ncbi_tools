@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.36 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -829,6 +829,7 @@ static void CitSubDialogMessage (DialoG d, Int2 mssg)
       pageval = mssg - NUM_VIB_MSG - 1;
       if (pageval < 3)
       {
+        /*ChangeCitsubSubPage (dlg, */
         SetValue (dlg->tbs, pageval);
       }
     }
@@ -1223,6 +1224,7 @@ typedef struct submitform {
   Boolean         firstTime;
   Boolean         contactSeen;
 
+  DialoG          tbs;
   DialoG          submit;
   DialoG          contact;
   DialoG          citsub;
@@ -1601,6 +1603,11 @@ static void SubmitBlockFormMessage (ForM f, Int2 mssg)
       case VIB_MSG_DELETE :
         StdDeleteTextProc (NULL);
         break;
+      case NUM_VIB_MSG + 1 :
+        ChangeSubmitBlockPage (sbfp, CITATION_PAGE, sbfp->currentPage);
+        SetValue (sbfp->tbs, CITATION_PAGE);
+        SendMessageToDialog (sbfp->citsub, NUM_VIB_MSG + 2);
+        break;
       default :
         if (sbfp->appmessage != NULL) {
           sbfp->appmessage (f, mssg);
@@ -1696,7 +1703,6 @@ extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
   GrouP              q;
   SubmitFormPtr      sbfp;
   StdEditorProcsPtr  sepp;
-  DialoG             tbs;
   WindoW             w;
 
   w = NULL;
@@ -1731,9 +1737,9 @@ extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
     j = HiddenGroup (w, -1, 0, NULL);
     SetGroupSpacing (j, 10, 10);
 
-    tbs = CreateFolderTabs (j, submitFormTabs, 0, 0, 0,
-                            SYSTEM_FOLDER_TAB,
-                            ChangeSubmitBlockPage, (Pointer) sbfp);
+    sbfp->tbs = CreateFolderTabs (j, submitFormTabs, 0, 0, 0,
+                                  SYSTEM_FOLDER_TAB,
+                                  ChangeSubmitBlockPage, (Pointer) sbfp);
     sbfp->currentPage = SUBMISSION_PAGE;
     sbfp->firstTime = TRUE;
     sbfp->contactSeen = FALSE;
@@ -2800,6 +2806,7 @@ static void SeqSubmitToTemplatePreviewDialog (DialoG d, Pointer userdata)
   ErrSev                   level;
   Int4                     index;
   BaseBlockPtr             bbp;
+  XtraBlock                extra;
   CharPtr                  string;
   BioseqPtr                bsp = NULL;
   SeqEntryPtr              sep;
@@ -2854,7 +2861,8 @@ static void SeqSubmitToTemplatePreviewDialog (DialoG d, Pointer userdata)
   {
     level = ErrSetMessageLevel (SEV_MAX);
 
-    dlg->ajp = asn2gnbk_setup (bsp, NULL, NULL, (FmtType)GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, NULL);
+    MemSet ((Pointer) &extra, 0, sizeof (XtraBlock));
+    dlg->ajp = asn2gnbk_setup (bsp, NULL, NULL, (FmtType)GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, &extra);
     if (dlg->ajp != NULL) {
       for (index = 0; index < dlg->ajp->numParagraphs; index++) {
         bbp = dlg->ajp->paragraphArray [index];
@@ -3784,7 +3792,6 @@ static CitSubPtr GetCitSubFromPub (PubdescPtr pdp)
 static ContactInfoPtr ContactInfoFromAuthList (AuthListPtr auth_list)
 {
   ContactInfoPtr contact_info = NULL;
-  AffilPtr       affil = NULL;
   ValNodePtr     vnp;
   AuthorPtr      author = NULL;
 

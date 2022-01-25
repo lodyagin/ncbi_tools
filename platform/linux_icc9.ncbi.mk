@@ -1,5 +1,5 @@
 #
-# $Id: linux_icc9.ncbi.mk,v 1.9 2009/02/04 14:24:03 lavr Exp $
+# $Id: linux_icc9.ncbi.mk,v 1.10 2009/04/02 17:38:09 ucko Exp $
 #
 # ICC 9.0 with optimization options for Pentium 4 processor
 
@@ -10,12 +10,12 @@ NCBI_AR=ar
 # stop short, as can otherwise happen (at least with ICC 10).
 NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -D_GCC_NEXT_LIMITS_H -D_GNU_SOURCE
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -i-static -O3 -unroll -tpp7 -fno-builtin-memcpy -fno-builtin-memset
-NCBI_OPTFLAG = -O3 -unroll -tpp7 -fno-builtin-memcpy -fno-builtin-memset
+NCBI_LDFLAGS1 = -i-static -O3 -unroll -fno-builtin-memcpy -fno-builtin-memset
+NCBI_OPTFLAG = -O3 -unroll -fno-builtin-memcpy -fno-builtin-memset
 #
 #for Pentium4 you can try:
-#NCBI_LDFLAGS1 = -i-static -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
-#NCBI_OPTFLAG = -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
+#NCBI_LDFLAGS1 = -i-static -O3 -mcpu=pentium4 -xW -march=pentium4
+#NCBI_OPTFLAG = -O3 -mcpu=pentium4 -xW -march=pentium4
 #
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin

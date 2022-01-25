@@ -29,316 +29,12 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.81 $
+* $Revision: 6.83 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: objmgr.c,v $
-* Revision 6.81  2007/05/08 20:03:22  kans
-* quiet theoretically uninitialized variables detected by CodeWarrior
-*
-* Revision 6.80  2007/02/06 19:46:45  bollin
-* Maximum number of objects is Uint4, not Int2
-*
-* Revision 6.79  2006/11/02 22:38:58  kans
-* ObjMgrReap collects candidates, sorts by touch time, goes through list to remove N squared behavior
-*
-* Revision 6.78  2006/08/25 16:12:33  bollin
-* added ObjMgrReportProc back in
-*
-* Revision 6.77  2006/08/25 15:34:21  bollin
-* rollback of objmgr to earlier version, followed by selective changes to fix
-* Object Manager problems.
-*
-* Revision 6.62  2005/07/18 14:49:53  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.61  2005/04/13 21:22:17  kans
-* ObjMgrRecycleEntityID and ObjMgrRemoveEntityIDFromRecycle cast to Uint4 for calculations, just like ObjMgrNextAvailEntityID already did
-*
-* Revision 6.60  2005/04/08 21:23:08  kans
-* added ObjMgrStatusString function for debugging
-*
-* Revision 6.59  2005/02/01 19:51:58  kans
-* print actual entityID if ObjMgrRecycleEntityID has bad idx or jdx
-*
-* Revision 6.58  2004/10/28 16:00:42  kans
-* ObjMgrFreeCacheFunc uses type == OBJ_MAX to not free temp loaded objects that are still locked, called from ObjMgrAddFunc when autoclean is triggered
-*
-* Revision 6.57  2004/10/15 19:08:36  bollin
-* when removing an object, make sure to also deselect it
-*
-* Revision 6.56  2004/09/07 14:08:27  kans
-* post errors on failure of ObjMgrNextAvailEntityID and ObjMgrRecycleEntityID
-*
-* Revision 6.55  2004/06/09 01:56:43  kans
-* initialize assigned id array from all functions that use it
-*
-* Revision 6.54  2004/06/08 20:48:09  kans
-* changed entityID recycling from small array of integers to bit array of all possible values
-*
-* Revision 6.53  2004/06/08 18:19:01  kans
-* ObjMgrFreeCacheFunc frees all TL_CACHED, and frees TL_LOADED if type == 0
-*
-* Revision 6.52  2004/04/21 19:40:51  kans
-* ObjMgrReap calculate tempcnt based on temp loaded records, but excluded locked ones - more work still to do in other functions to completely avoid unnecessary thrashing
-*
-* Revision 6.51  2004/04/01 13:43:05  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.50  2003/12/22 15:29:28  kans
-* ObjMgrSendMsg calls SeqMgrClearFeatureIndexes on OM_MSG_DEL as well as OM_MSG_UPDATE
-*
-* Revision 6.49  2002/07/30 14:41:45  kans
-* removed omdp->rearranged
-*
-* Revision 6.48  2002/07/29 21:30:17  kans
-* added rearranged flag to omdp
-*
-* Revision 6.47  2002/07/01 14:29:02  kans
-* changed totobj, currobj to Uint4
-*
-* Revision 6.46  2002/06/07 21:24:57  kans
-* update entityID/omdp index in BioseqReloadFunc, ObjMgrConnectFunc, ObjMgrDetachFunc
-*
-* Revision 6.45  2002/06/01 05:52:00  vakatov
-* Fix to R6.44 -- add LIBCALL and NLM_EXTERN modifiers to match the func proto
-*
-* Revision 6.44  2002/05/31 21:53:26  yaschenk
-* changing lookup by EntityID to array[][]
-*
-* Revision 6.43  2001/12/13 13:59:14  kans
-* ObjMgrSendMsg clears feature indexes if OM_MSG_UPDATE
-*
-* Revision 6.42  2001/11/30 12:19:47  kans
-* ObjMgrDelete bails if omdp->bulkIndexFree
-*
-* Revision 6.41  2001/11/19 15:27:52  kans
-* minor fix to ObjMgrDeleteAllInRecord
-*
-* Revision 6.40  2001/11/19 15:26:19  kans
-* added ObjMgrDeleteAllInRecord, still need to bail in ObjMgrDelete if bulkIndexFree, then call from BioseqFree and BioseqSetFree
-*
-* Revision 6.39  2001/11/15 18:15:48  kans
-* set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
-*
-* Revision 6.38  2001/10/02 12:22:57  kans
-* ObjMgrRecordOmdpByEntityID for quick access to top omdp by entity
-*
-* Revision 6.37  2001/05/31 22:58:25  kans
-* added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
-*
-* Revision 6.36  2001/05/31 22:33:02  kans
-* added autoclean and maxobj to ObjMgr structure,  optionally calls ObjMgrReap and ObjMgrFreeCache to completely clear out least recently accessed objects if currobj >= maxobj
-*
-* Revision 6.35  2001/05/24 21:54:34  kans
-* check for incrementing totobj or currobj above UINT2_MAX, reducing currobj below 0
-*
-* Revision 6.34  2001/02/16 21:34:49  ostell
-* changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
-*
-* Revision 6.33  2000/11/28 22:58:08  kans
-* removed omdp->lockcnt == 0 debugging breakpoint statement
-*
-* Revision 6.32  2000/11/28 21:43:54  kans
-* added ObjMgrReportFunc for debugging
-*
-* Revision 6.31  2000/10/30 21:26:08  shavirin
-* Changes and fixes for some MT-safety related problems.
-*
-* Revision 6.30  2000/03/27 23:10:23  kans
-* initial readlock/lookup/unlock removed from ObjMgrDelete by request of EY
-*
-* Revision 6.29  2000/03/23 17:45:44  madden
-* Use ObjMgrWriteLock instead of ObjMgrReadLock in ObjMgrFreeCache
-*
-* Revision 6.28  2000/03/20 23:38:40  aleksey
-* Finally submitted the changes which have been made by serge bazhin
-* and been kept in my local directory.
-*
-* These changes allow to establish user callback functions
-* in 'Asn2ffJobPtr' structure which are called within
-* 'SeqEntryToFlatAjp' function call.
-* The new members are:
-* user_data       - pointer to a user context for passing data
-* ajp_count_index - user defined function
-* ajp_print_data  - user defined function
-* ajp_print_index - user defined function
-*
-* Revision 6.27  1999/10/20 17:17:37  lewisg
-* delete rest of userdata when using OM_OPT_FREE_IF_NO_VIEW in ObjMgrFreeUserDataFunc
-*
-* Revision 6.26  1999/10/18 20:58:47  lewisg
-* add rowID to ObjMgrSendMsgFunc
-*
-* Revision 6.25  1999/09/27 20:03:14  kans
-* added rowID to OMMsgStruct, new ObjMgrSendRowMsg function
-*
-* Revision 6.24  1999/08/13 19:43:35  kans
-* ObjMgrDelete and ObjMgrGetEntityIDForPointer now multithread-safe (EY)
-*
-* Revision 6.23  1999/08/11 15:17:53  kans
-* added ObjMgrFreeByEntityID
-*
-* Revision 6.22  1999/06/11 16:42:39  kans
-* remove from recycle just shrinks stack if removing last element
-*
-* Revision 6.21  1999/06/10 21:10:28  kans
-* added ObjMgrRemoveEntityIDFromRecycle, called from RestoreSeqEntryObjMgrData
-*
-* Revision 6.20  1999/06/01 21:06:48  ywang
-* get rid of (sip1->strand == sip2->strand) in ObjMgrRegionMatch
-*
-* Revision 6.19  1999/05/17 02:11:23  chappey
-* remove the temporary fix
-*
-* Revision 6.18  1999/05/17 00:41:54  chappey
-* temporary fix in ObjMgrRegionComp when SeqLocStop==APPEND_RESIDUE
-*
-* Revision 6.17  1999/02/19 19:24:34  chappey
-* Possible deselection of a region included in a selected region
-*
-* Revision 6.16  1999/01/22 16:19:51  chappey
-* AlsoSelect does not Deselect anymore when selected region of an entityID is already selected. Only one selection remains
-*
-* Revision 6.15  1999/01/21 19:45:32  chappey
-* bug fixed in ObjMgrSelectFunc2, CheckRedondantSelect, ObjMgrRegionComp
-*
-* Revision 6.14  1998/12/02 01:56:24  kans
-* when recycling entityID, check to see if it is already in list, do not add second copy - will see why this is happening later
-*
-* Revision 6.13  1998/11/30 20:59:01  egorov
-* Add ObjMgrNextAvailableEntityID() to avoid overflowing
-*
-* Revision 6.12  1998/10/07 22:25:43  kans
-* reapextra, like freeextra, takes omdp, not omdp->extradata
-*
-* Revision 6.11  1998/10/07 21:20:14  kans
-* ObjMgrAlsoSelect changes (CC)
-*
-* Revision 6.10  1998/09/28 19:54:10  kans
-* made ObjMgrDump debugging function public, no longer conditionally compiled
-*
-* Revision 6.9  1998/08/18 14:57:02  kans
-* protect against nulls in ObjMgrRegionMatch
-*
-* Revision 6.8  1998/07/01 19:11:45  kans
-* added fromProcID, toProcID, OM_MSG_PROCESS, ObjMgrSendProcMsg, time of indexing, ObjMgrGetProcID, moved protFeat and cdsOrRnaFeat to seqmgr structure
-*
-* Revision 6.7  1998/06/26 23:01:24  kans
-* ObjMgrDelete frees extra data
-*
-* Revision 6.6  1998/06/02 16:53:27  kans
-* fixed bug that prevented userdata from being freed, and decrement highest entity if attaching highest to something else
-*
-* Revision 6.5  1997/12/11 14:37:28  ostell
-* corrected a deadlock with DeSelectRegion
-*
-* Revision 6.4  1997/12/05 16:42:42  ostell
-* added objmgrunlock() around "Free if no views"
-*
-* Revision 6.3  1997/11/22 16:49:57  ostell
-* fixed deadlock in ObjMgrReap
-*
-* Revision 6.2  1997/11/19 22:14:35  ostell
-* added support for multithreaded programs
-*
-* Revision 6.1  1997/09/11 15:55:45  ostell
-* Added support for SetColor messages
-*
-* Revision 6.0  1997/08/25 18:06:43  madden
-* Revision changed to 6.0
-*
-* Revision 5.9  1997/08/01 14:12:19  ostell
-* put check for time_t being signed int back into ObjMgrReap for Solaris
-*
-* Revision 5.8  1997/07/31 16:06:07  kans
-* ObjMgrReap lowest time uses UINT4_MAX because of overflow of the number of seconds since 1900
-*
-* Revision 5.7  1997/07/25 21:31:20  ostell
-* free if no view now checks that omudp->messagefunc != NULL instead of checking
-* all of them.
-*
-* Revision 5.6  1997/06/19 18:38:27  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.5  1997/06/02 17:04:09  kans
-* added ObjMgrProcLoadEx
-*
-* Revision 5.4  1997/04/29 16:11:30  kans
-* send deselect message AFTER removing item from list of selected items
-*
- * Revision 5.3  1997/01/22  05:29:46  ostell
- * made objmgrget static
- * made seqmgrget static
- *
- * Revision 5.2  1996/07/30  21:18:15  chappey
- * don't return FALSE in ObjMgrSetTempLoad when index == 0
- *
- * Revision 5.1  1996/06/26  20:07:48  chappey
- * ObjMgrRegionMatch now returs TRUE when the regions are identical
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.14  1996/05/22  21:46:59  kans
- * don't return on OBJ_MSG_RET_DONE in ObjMgrSendStructMsgFunc
- *
- * Revision 4.13  1996/03/05  19:15:01  kans
- * fixed bug in ObjMgrSetOptions and ObjMgrClearOptions
- *
- * Revision 4.12  1996/02/28  04:53:06  ostell
- * added ObjMgrHold suport
- *
- * Revision 4.10  1996/01/22  13:28:11  kans
- * cast first parameter of MemSet to (Pointer) for SunOS compiler
- *
- * Revision 4.9  1996/01/05  14:39:12  ostell
- * fix for control chars in comment
- *
- * Revision 4.7  1995/12/22  20:12:01  ostell
- * added lock in ObjMgrTempLoad to protect new record from ObjMgrReap
- *
- * Revision 4.6  1995/12/22  14:45:45  ostell
- * added do_not_reload_from_cache to OmProcControl so that DataGet
- * functions from gather can control this behvior
- * added protection from recursion in ObjMgrDelete
- *
- * Revision 4.5  1995/12/15  02:47:01  ostell
- * fix to ObjMgrReap so highest time_t is INT4_MAX not UINT4_MAX to compensate
- * for buggy include files from vendors
- *
- * Revision 4.4  1995/10/03  15:50:37  ostell
- * added support for selection by region.. now fully implemented
- *
- * Revision 4.3  1995/10/02  14:36:55  ostell
- * fixed ObjMgrFreeUserData to get options from omp or omdp
- *
- * Revision 4.2  1995/09/30  03:38:31  ostell
- * Changed ObjMgrMessage functions to pass a structure
- * Added support for selecting regions
- * Added ability to remove entity when no more views on it
- *
- * Revision 4.1  1995/09/25  18:06:41  ostell
- * added ObjMgrGenericAsnTextRead
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.25  1995/07/20  18:30:32  kans
- * changed SeqIdPrint to SeqIdWrite
- *
- * Revision 1.24  1995/07/08  15:21:01  ostell
- * Added ObjMgrSetOptions() and related functions
- * Added support for delete of entity when no more user data on it
- * Added support for DirtyFlag
- *
- * Revision 1.23  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -591,6 +287,8 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 	return NULL;
 }
 
+static TNlmMutex  entityid_array_mutex = NULL;
+
 static Uint4    assignedIDsArray [2050];
 static Int2     assignedIDStackPt = 0;
 static Boolean  assignedIDsInited = FALSE;
@@ -604,6 +302,8 @@ static void ObjMgrInitAssignedIDArray (void)
   Int2   jdx;
 
   if (! assignedIDsInited) {
+    ObjMgrWriteLock ();
+
     MemSet ((Pointer) &assignedIDsArray, 0, sizeof assignedIDsArray);
     MemSet ((Pointer) &assignedIDsBitIdx, 0, sizeof (assignedIDsBitIdx));
   
@@ -621,10 +321,13 @@ static void ObjMgrInitAssignedIDArray (void)
 
     assignedIDStackPt = 0;
     assignedIDsInited = TRUE;
+
+    ObjMgrUnlock ();
   }
 }
 
-static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
+
+static Uint2 ObjMgrNextAvailEntityIDInt (ObjMgrPtr omp)
 
 {
   Uint2  entityID;
@@ -677,7 +380,23 @@ static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
   return entityID;
 }
 
-static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
+static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
+
+{
+  Uint2  entityID;
+
+  NlmMutexLockEx (&entityid_array_mutex);
+  ObjMgrWriteLock ();
+
+  entityID = ObjMgrNextAvailEntityIDInt (omp);
+
+  ObjMgrUnlock ();
+  NlmMutexUnlock (entityid_array_mutex);
+
+  return entityID;
+}
+
+static void ObjMgrRecycleEntityIDInt (Uint2 entityID, ObjMgrPtr omp)
 
 {
   Int2   idx, jdx;
@@ -711,8 +430,19 @@ static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
   }
 }
 
-extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
-extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
+static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
+
+{
+  NlmMutexLockEx (&entityid_array_mutex);
+  ObjMgrWriteLock ();
+
+  ObjMgrRecycleEntityIDInt (entityID, omp);
+
+  ObjMgrUnlock ();
+  NlmMutexUnlock (entityid_array_mutex);
+}
+
+static void ObjMgrRemoveEntityIDFromRecycleInt (Uint2 entityID, ObjMgrPtr omp)
 
 {
   Int2   idx, jdx;
@@ -732,6 +462,19 @@ extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
   /* set bit to restore old entityID status to in use */
 
   assignedIDsArray [idx] |= assignedIDsBitIdx [jdx];
+}
+
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
+
+{
+  NlmMutexLockEx (&entityid_array_mutex);
+  ObjMgrWriteLock ();
+
+  ObjMgrRemoveEntityIDFromRecycleInt (entityID, omp);
+
+  ObjMgrUnlock ();
+  NlmMutexUnlock (entityid_array_mutex);
 }
 
 NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
@@ -1413,7 +1156,8 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 		bsp = (BioseqPtr) data;
 		if (bsp != NULL) {
 			/* used for feature indexing, rapid delete from SeqID index */
-			bsp->omdp = (Pointer) omdp;
+            /* may not be thread safe */
+			/* bsp->omdp = (Pointer) omdp; */
 		}
 	}
 
@@ -5120,6 +4864,9 @@ static Uint4 LIBCALL ObjMgrCountAssignedEntityIDs (void)
   Uint4  count = 0, val;
   Int2   idx, jdx;
 
+  NlmMutexLockEx (&entityid_array_mutex);
+  ObjMgrWriteLock ();
+
   if (! assignedIDsInited) {
     ObjMgrInitAssignedIDArray ();
   }
@@ -5136,6 +4883,9 @@ static Uint4 LIBCALL ObjMgrCountAssignedEntityIDs (void)
       }
     }
   }
+
+  ObjMgrUnlock ();
+  NlmMutexUnlock (entityid_array_mutex);
 
   return count;
 }
@@ -5192,7 +4942,6 @@ ObjMgrDeleteIndexOnEntityID(ObjMgrPtr omp,Uint2 entityID)
 	if(omp && omp->entityID_index && omp->entityID_index[h]){
 		omp->entityID_index[h][l]=NULL;
 	}
-
 }
 
 

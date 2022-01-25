@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.185 $
+* $Revision: 1.199 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,7 +63,7 @@
 #endif
 #endif
 
-static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids=";
+static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/pubmed/";
 
 static CharPtr link_go = "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:";
 
@@ -77,11 +77,13 @@ static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
 static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
 
+/*
 static CharPtr ec_link = "http://www.expasy.org/cgi-bin/nicezyme.pl?";
 
 static CharPtr ec_ambig = "http://www.chem.qmw.ac.uk/iubmb/enzyme/";
+*/
 
-
+static CharPtr ec_link = "http://www.expasy.org/enzyme/";
 
 /* ordering arrays for qualifiers and note components */
 
@@ -223,14 +225,15 @@ static FtQualType feat_note_order [] = {
   FTQUAL_prot_missing,
   FTQUAL_seqfeat_note,
   FTQUAL_seqannot_note,
-  FTQUAL_exception_note,
   FTQUAL_region,
   FTQUAL_selenocysteine_note,
   FTQUAL_pyrrolysine_note,
   FTQUAL_prot_names,
   FTQUAL_bond,
   FTQUAL_site,
+  /*
   FTQUAL_rrna_its,
+  */
   FTQUAL_xtra_prod_quals,
   FTQUAL_inference_bad,
   FTQUAL_modelev,
@@ -242,6 +245,7 @@ static FtQualType feat_note_order [] = {
   /* RefSeq-specific qualifiers have same display policy as GO terms */
   FTQUAL_nomenclature,
   FTQUAL_gene_nomen,
+  FTQUAL_exception_note,
   (FtQualType) 0
 };
 
@@ -273,8 +277,8 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "encodes",            Qual_class_encodes        },
   { "estimated_length",   Qual_class_number         },
   { "evidence",           Qual_class_evidence       },
-  { "exception",          Qual_class_string         },
-  { "exception_note",     Qual_class_string         },
+  { "exception",          Qual_class_exception      },
+  { "exception_note",     Qual_class_exception      },
   { "experiment",         Qual_class_quote          },
   { "experiment",         Qual_class_string         },
   { "product",            Qual_class_valnode        },
@@ -1648,6 +1652,7 @@ static Int2 ValidateAccnInternal (
     if (numAlpha == 2 && numDigits == 6) return 0;
     if (numAlpha == 3 && numDigits == 5) return 0;
     if (numAlpha == 4 && numDigits == 8) return 0;
+    if (numAlpha == 4 && numDigits == 9) return 0;
     if (numAlpha == 5 && numDigits == 7) return 0;
   } else if (numUndersc == 1) {
     if (numAlpha != 2 || (numDigits != 6 && numDigits != 8 && numDigits != 9)) return -2;
@@ -2507,13 +2512,15 @@ static Boolean DbxrefAlreadyInGeneXref (
   return FALSE;
 }
 
-static void FF_www_nuc_or_prot_id(
+static void FF_www_nuc_or_prot_id (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr seqid,
+  Int4 gi,
   Boolean is_na
 )
 {
+  Char  buf [32];
 
   if ( GetWWW(ajp) ) {
     FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
@@ -2522,7 +2529,12 @@ static void FF_www_nuc_or_prot_id(
     } else {
       FF_Add_NCBI_Base_URL (ffstring, link_seqp);
     }
-    FFAddOneString(ffstring, seqid, FALSE, FALSE, TILDE_IGNORE);
+    if (gi > 0) {
+      sprintf (buf, "%ld", (long) gi);
+      FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+    } else {
+      FFAddOneString(ffstring, seqid, FALSE, FALSE, TILDE_IGNORE);
+    }
     FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
     FFAddOneString(ffstring, seqid, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -2559,6 +2571,7 @@ static void FF_AddECnumber (
 {
   if (StringHasNoText (str)) return;
   if ( GetWWW(ajp) ) {
+    /*
     if (StringChr (str, '-') != NULL) {
       FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, ec_ambig, FALSE, FALSE, TILDE_IGNORE);
@@ -2573,6 +2586,13 @@ static void FF_AddECnumber (
       FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
     }
+    */
+    FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, ec_link, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
+    FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
     FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
   }
@@ -2869,7 +2889,7 @@ static void FormatFeatureBlockQuals (
   UserObjectPtr        uop;
   ValNodePtr           vnp;
   StringItemPtr        unique;
-  Boolean                indexerVersion;
+  Boolean              indexerVersion;
 
   unique = FFGetString(ajp);
   if ( unique == NULL ) return;
@@ -2912,6 +2932,16 @@ static void FormatFeatureBlockQuals (
             FALSE, TRUE, TILDE_EXPAND);
           FFAddTextToString(ffstring, "\"", qvp [idx].str, "\"",
             FALSE, TRUE, TILDE_EXPAND);
+          FFAddOneChar(ffstring, '\n', FALSE);
+        }
+        break;
+
+      case Qual_class_exception :
+        if (! StringHasNoText (qvp [idx].str)) {
+          FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
+            FALSE, TRUE, TILDE_TO_SPACES);
+          FFAddTextToString(ffstring, "\"", qvp [idx].str, "\"",
+            FALSE, TRUE, TILDE_TO_SPACES);
           FFAddOneChar(ffstring, '\n', FALSE);
         }
         break;
@@ -3451,13 +3481,13 @@ static void FormatFeatureBlockQuals (
             tmp = StringSave (gbq->val);
             str = tmp;
             len = StringLen (str);
-            if (len > 1 && *str == '(' && str [len - 1] == ')' &&
+            if (len > 1 && *str == '(' && str [len - 1] == ')' /* &&
                 StringChr (str + 1, '(') == NULL /* && StringChr (str, ',') != NULL */) {
               str++;
               while (! StringHasNoText (str)) {
                 ptr = StringChr (str, ',');
                 if (ptr == NULL) {
-                  ptr = StringChr (str, ')');
+                  ptr = StringRChr (str, ')');
                 }
                 if (ptr != NULL) {
                   *ptr = '\0';
@@ -3974,6 +4004,12 @@ static void FormatFeatureBlockQuals (
           prod = BioseqFind (sip);
           */
           if (prod != NULL) {
+            gi = 0;
+            for (sip = prod->id; sip != NULL; sip = sip->next) {
+              if (sip->choice == SEQID_GI) {
+                gi = sip->data.intvalue;
+              }
+            }
             choice = 0;
             for (sip = prod->id; sip != NULL; sip = sip->next) {
               if (sip->choice == SEQID_GENBANK ||
@@ -3988,7 +4024,7 @@ static void FormatFeatureBlockQuals (
                 if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                  FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 }
               } else if (sip->choice == SEQID_GI) {
@@ -3996,7 +4032,7 @@ static void FormatFeatureBlockQuals (
                   sprintf (seqid, "%ld", (long) sip->data.intvalue);
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                  FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 }
                 sprintf (seqid, "%ld", (long) sip->data.intvalue);
@@ -4025,7 +4061,7 @@ static void FormatFeatureBlockQuals (
                       if (SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid)) != NULL) {
                         FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                           FALSE, FALSE, TILDE_IGNORE);
-                        FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                        FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                         FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                       }
                     }
@@ -4045,7 +4081,7 @@ static void FormatFeatureBlockQuals (
                 if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                  FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 } else {
                   ajp->relModeError = TRUE;
@@ -4061,7 +4097,7 @@ static void FormatFeatureBlockQuals (
                   if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                     FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                    FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                    FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                     FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                   } else {
                     ajp->relModeError = TRUE;
@@ -4070,7 +4106,7 @@ static void FormatFeatureBlockQuals (
                   sprintf (seqid, "%ld", (long) gi);
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                  FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 } else {
                   ajp->relModeError = TRUE;
@@ -4082,16 +4118,16 @@ static void FormatFeatureBlockQuals (
               FF_www_db_xref(ajp, ffstring, "GI", seqid, bsp);
               FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
             } else if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+              gi = GetGIForSeqId (sip);
               if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                 FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                   FALSE, FALSE, TILDE_IGNORE);
-                FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
+                FF_www_nuc_or_prot_id (ajp, ffstring, seqid, gi, link_is_na);
                 FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
               } else {
                 ajp->relModeError = TRUE;
               }
 
-              gi = GetGIForSeqId (sip);
               if (gi > 0) {
                 sprintf (seqid, "%ld", (long) gi);
                 FFAddOneString(ffstring, "/db_xref=\"", FALSE, FALSE, TILDE_IGNORE);
@@ -4470,6 +4506,20 @@ static void FormatFeatureBlockQuals (
                   FFAddString_NoRedund (unique, prefix, qvp [jdx].str, NULL, TRUE);
                   add_period = FALSE;
                 }
+                prefix = "; ";
+              }
+              break;
+
+            case Qual_class_exception :
+              if (! StringHasNoText (qvp [jdx].str)) {
+                if (! IsEllipsis (qvp [jdx].str)) {
+                  s_RemovePeriodFromEnd (qvp [jdx].str);
+                }
+                if (StringCmp (prefix, "; ") == 0) {
+                  prefix = "~";
+                }
+                FFAddString_NoRedund (unique, prefix, qvp [jdx].str, NULL, TRUE);
+                add_period = FALSE;
                 prefix = "; ";
               }
               break;
@@ -4876,8 +4926,7 @@ static void FF_asn2gb_www_featkey (
   Int4 from,
   Int4 to,
   Uint1 strand,
-  Uint4 itemID,
-  Boolean is_na
+  Uint4 itemID
 )
 
 {
@@ -4933,10 +4982,10 @@ static void FF_asn2gb_www_featkey (
 
   if (gi > 0) {
     FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-    if (is_na) {
-      FF_Add_NCBI_Base_URL (ffstring, link_featn);
-    } else {
+    if (is_aa) {
       FF_Add_NCBI_Base_URL (ffstring, link_featp);
+    } else {
+      FF_Add_NCBI_Base_URL (ffstring, link_featn);
     }
     /* FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE); */
     FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
@@ -5220,6 +5269,10 @@ static CharPtr validRefSeqExceptionString [] = {
   "transcribed product replaced",
   "translated product replaced",
   "transcribed pseudogene",
+  "annotated by transcript or proteomic data",
+  "heterogeneous population sequenced",
+  "low-quality sequence region",
+  "unextendable partial coding region",
   NULL
 };
 
@@ -5279,6 +5332,9 @@ static void ParseException (
           if (StringICmp (tmp, validRefSeqExceptionString [i]) == 0) {
             if (isRefSeq || isRelaxed) {
               ValNodeCopyStr (&excpt, 0, tmp);
+            } else if (StringICmp (tmp, "annotated by transcript or proteomic data") == 0) {
+              ValNodeCopyStr (&excpt, 0, "reasons given in citation");
+              ValNodeCopyStr (&note, 0, tmp);
             } else {
               ValNodeCopyStr (&note, 0, tmp);
             }
@@ -5603,7 +5659,9 @@ static CharPtr FormatFeatureBlockEx (
   Boolean            is_gps = FALSE;
   Boolean            is_journalscan = FALSE;
   Boolean            is_other = FALSE;
+  Boolean            is_misc_rna = FALSE;
   Uint4              itemID;
+  CharPtr            its_prod = NULL;
   CharPtr            key = NULL;
   CharPtr            lasttype = NULL;
   Int4               left = -1;
@@ -5846,6 +5904,11 @@ static CharPtr FormatFeatureBlockEx (
         }
       }
     }
+    if (featdeftype == FEATDEF_CLONEREF) {
+      if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+        key = "misc_feature";
+      }
+    }
   
     /* deal with unmappable impfeats */
   
@@ -5866,7 +5929,7 @@ static CharPtr FormatFeatureBlockEx (
       FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
     } else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 && bsp != NULL /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
       FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1,
-                             fcontext->strand, itemID, ISA_na (bsp->mol));
+                             fcontext->strand, itemID);
     } else {
       FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
     }
@@ -6053,7 +6116,7 @@ static CharPtr FormatFeatureBlockEx (
           if (StringDoesHaveText (grp->locus_tag)) {
             gene = SeqMgrGetGeneByLocusTag (bspx, grp->locus_tag, &gcontext);
           } else if (StringDoesHaveText (grp->locus)) {
-            gene = SeqMgrGetFeatureByLabel (bspx, grp->locus_tag, SEQFEAT_GENE, 0, &gcontext);
+            gene = SeqMgrGetFeatureByLabel (bspx, grp->locus, SEQFEAT_GENE, 0, &gcontext);
           }
           if (gene != NULL) {
             grp = (GeneRefPtr) gene->data.value.ptrvalue;
@@ -6168,11 +6231,11 @@ static CharPtr FormatFeatureBlockEx (
       }
       if (grp != NULL &&
           featdeftype != FEATDEF_variation &&
-          featdeftype != FEATDEF_repeat_region) {
+          (featdeftype != FEATDEF_repeat_region || is_ed)) {
         qvp [FTQUAL_gene_allele].str = grp->allele; /* now propagating /allele */
       }
 
-      if (gene != NULL && featdeftype != FEATDEF_repeat_region) {
+      if (gene != NULL && (featdeftype != FEATDEF_repeat_region || is_ed)) {
         /* now propagate old_locus_tag to almost any underlying feature */
         for (gbq = gene->qual; gbq != NULL; gbq = gbq->next) {
           if (StringHasNoText (gbq->val)) continue;
@@ -6689,9 +6752,11 @@ static CharPtr FormatFeatureBlockEx (
             if (rrp->ext.choice == 1) {
               if (rrp->type == 255) {
                 str = (CharPtr) rrp->ext.value.ptrvalue;
-                if (StringICmp (str, "misc_RNA") == 0 ||
-                    StringICmp (str, "ncRNA") == 0 ||
+                if (StringICmp (str, "ncRNA") == 0 ||
                     StringICmp (str, "tmRNA") == 0) {
+                   /* pick up product from gbqual */
+                 } else if (StringICmp (str, "misc_RNA") == 0) {
+                   is_misc_rna = TRUE;
                    /* pick up product from gbqual */
                  } else {
                   str = (CharPtr) rrp->ext.value.ptrvalue;
@@ -6702,6 +6767,9 @@ static CharPtr FormatFeatureBlockEx (
                 qvp [FTQUAL_product].str = str;
               }
             }
+          }
+          if (rrp->type == 10) {
+            is_misc_rna = TRUE;
           }
           if (rrp->ext.choice == 3) {
             rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
@@ -6725,6 +6793,41 @@ static CharPtr FormatFeatureBlockEx (
                 }
               }
             }
+          }
+        }
+        if (rrp->ext.choice == 3) {
+          rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
+          if (rgp != NULL) {
+            if (StringDoesHaveText (rgp->product)) {
+              str = rgp->product;
+              if (StringNICmp (str, "internal transcribed spacer ", 28) == 0) {
+                str += 28;
+                if (IS_DIGIT (*str) && str [1] == '\0') {
+                  its_prod = str;
+                }
+              }
+            }
+          }
+        }
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringCmp (gbq->qual, "product") != 0) continue;
+          if (StringDoesHaveText (gbq->val)) {
+            str = gbq->val;
+            if (StringNICmp (str, "internal transcribed spacer ", 28) == 0) {
+              str += 28;
+              if (IS_DIGIT (*str) && str [1] == '\0') {
+                its_prod = str;
+              }
+            }
+          }
+        }
+        if (is_misc_rna && StringDoesHaveText (its_prod)) {
+          if (StringCmp (its_prod, "1") == 0) {
+            qvp [FTQUAL_rrna_its].str = "ITS1";
+          } else if (StringCmp (its_prod, "2") == 0) {
+            qvp [FTQUAL_rrna_its].str = "ITS2";
+          } else if (StringCmp (its_prod, "3") == 0) {
+            qvp [FTQUAL_rrna_its].str = "ITS3";
           }
         }
         break;

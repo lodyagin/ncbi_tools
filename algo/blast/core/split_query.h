@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE__SPLIT_QUERY_H
 #define ALGO_BLAST_CORE__SPLIT_QUERY_H
 
-/*  $Id: split_query.h,v 1.1 2007/03/12 19:55:42 kazimird Exp $
+/*  $Id: split_query.h,v 1.3 2009/04/06 20:19:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -170,7 +170,7 @@ SplitQueryBlk_GetQueryIndicesForChunk(const SSplitQueryBlk* squery_blk,
                                       Uint4** query_indices);
 
 /** Value to represent an invalid context */
-extern const Int4 kInvalidContext;
+NCBI_XBLAST_EXPORT extern const Int4 kInvalidContext;
 
 /** Retrieve an array of query contexts for the requested chunk
  * @param squery_blk split query block structure [in]
@@ -225,8 +225,10 @@ SplitQueryBlk_GetChunkOverlapSize(const SSplitQueryBlk* squery_blk);
 /* Return values */
 
 /** Invalid parameter used in a function call */
+NCBI_XBLAST_EXPORT
 extern const Int2 kBadParameter;
 /** Failure due to out-of-memory condition */
+NCBI_XBLAST_EXPORT
 extern const Int2 kOutOfMemory;
 
 #ifdef __cplusplus

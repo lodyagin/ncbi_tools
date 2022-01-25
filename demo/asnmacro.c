@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
@@ -76,7 +76,7 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
       options->filter_string = StringSave ("m L");
       options->word_size = 20;
       options->cutoff_evalue = act_get_eval (60);
-      options->hint = eNone;
+      options->hint = eBlastHint_None;
    }
    else
    {

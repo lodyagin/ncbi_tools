@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.h,v 1.13 2006/01/13 15:59:27 madden Exp $
+/* $Id: twoseq_api.h,v 1.14 2009/05/27 19:29:17 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -77,9 +77,9 @@ enum blast_type {
  * present this only applies to nucleotide searches
  */
 enum blast_hint {
-    eSensitive = 0,     /**< trade off speed for sensitivity */
-    eFast = 1,           /**< trade off sensitivity for speed */
-    eNone = 2           /**< no hint provided, do not attempt to guess what is desired. */
+    eBlastHint_Sensitive = 0,     /**< trade off speed for sensitivity */
+    eBlastHint_Fast = 1,           /**< trade off sensitivity for speed */
+    eBlastHint_None = 2           /**< no hint provided, do not attempt to guess what is desired. */
 };
 
 typedef enum seed_type {

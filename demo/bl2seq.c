@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.88 2007/05/07 13:29:11 kans Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.89 2009/05/27 19:29:17 camacho Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,9 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.88 2007/05/07 13:29:11 kans Exp $
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.89  2009/05/27 19:29:17  camacho
+* Disambiguate eNone enumeration
+*
 * Revision 6.88  2007/05/07 13:29:11  kans
 * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
 *
@@ -711,7 +714,7 @@ Bl2SEQ_SummaryOptionsSet(BLAST_SummaryOptions* *ret_options, EBlastProgramType p
                 return FALSE;
         }
 
-        options->hint = eNone;
+        options->hint = eBlastHint_None;
 
         switch (program_number) {
             case eBlastTypeBlastn:

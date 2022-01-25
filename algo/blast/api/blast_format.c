@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.116 2008/08/26 19:52:23 camacho Exp $
+/* $Id: blast_format.c,v 1.118 2009/06/16 20:39:39 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_format.c,v 1.116 2008/08/26 19:52:23 camacho Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.118 2009/06/16 20:39:39 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_format.h>
@@ -808,6 +808,30 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
       {
             if (align_view < eAlignViewXml)
                 s_AcknowledgeEmptyResults(slp, format_options, format_info, outfp);  /* this query has no results. */
+            else if (align_view == eAlignViewXml)
+            {
+                /* Retrieve this query's Bioseq */
+                Iteration* iterp;
+                /* Call to TxGetQueryIdFromSeqAlign returned NULL. */
+                query_id = SeqLocId(slp);
+      		bsp = BioseqLockById(query_id);
+                iterp = s_XMLBuildOneQueryIteration(NULL, sum_returns, FALSE, ungapped, 
+                                         query_index+1+format_info->num_formatted,
+                                         "No hits found", bsp, NULL);
+                IterationAsnWrite(iterp, xmlp->aip, xmlp->atp);
+                AsnIoFlush(xmlp->aip);
+                IterationFree(iterp);
+      		BioseqUnlock(bsp);
+            }
+            else if (align_view == eAlignViewTabularWithComments)
+            {
+                 query_id = SeqLocId(slp);
+      		 bsp = BioseqLockById(query_id);
+                 PrintTabularOutputHeader(format_info->db_name, bsp, NULL, 
+                                     format_info->program_name,
+                                     0, format_options->believe_query, outfp);
+      		 BioseqUnlock(bsp);
+            }
             continue;
       }
       format_info->is_seqalign_null = FALSE; /* reset flag, at least one query has seqalign */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.99 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -1083,6 +1083,7 @@ static Boolean PopulateFF (
   DocDescrPtr     doscr;
   DocDescrPtr     doscrp;
   Int2            estimate;
+  XtraBlock       extra;
   FeatBlockPtr    fbp;
   FonT            fnt;
   FlatStructPtr   fsp;
@@ -1102,11 +1103,12 @@ static Boolean PopulateFF (
       fsp->sep = sep;
       SetDocData (d, (Pointer) fsp, DocFreeFlat);
       level = ErrSetMessageLevel (SEV_MAX);
+      MemSet ((Pointer) &extra, 0, sizeof (XtraBlock));
       if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
         bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
-        ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, style, flags, 0, custom, NULL);
+        ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, style, flags, 0, custom, &extra);
       } else {
-        ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, style, flags, 0, custom, NULL);
+        ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, style, flags, 0, custom, &extra);
       }
       if (ajp == NULL) return FALSE;
       fsp->ajp = ajp;

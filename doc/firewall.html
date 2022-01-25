@@ -48,7 +48,7 @@
       <p>&nbsp;</p>
 
 			 <p>
-				<i>Last modified:</i> $Date: 2005/05/27 19:57:07 $<br>
+				<i>Last modified:</i> $Date: 2009/04/10 01:00:09 $<br>
 				<i>Latest version: </i>
 				<a href="http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html">
 				  http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html</a>
@@ -109,15 +109,14 @@ have them read the section below.
 <b>The following section is intended for network administrators:</b>
 
 <p>
-Using NCBI services from behind a security firewall requires opening ports in
-your firewall. The ports to open are:
+Using NCBI services from behind a network security firewall requires opening
+ports in your firewall. The ports to open are:
 
 <p align="center">
 <pre>
 Firewall Port        IP Address
 --------------------------------
  5860..5870         130.14.29.112
-    5845            130.14.22.12  (cannot be accessed from outside NCBI!)
 </pre>
 
 <p>
@@ -125,28 +124,32 @@ If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
 
 <p>
-Port 5860 is usually not accessible by the public but reserved
-for NCBI internal purposes only.  However, we recommend that it
-is kept open just as all other ports in the range in case the
-public access will be eventually enabled on this port.
+Even though port 5860 may not routinely be made accessible to the public,
+and is usually reserved for NCBI internal use only, it is recommended that
+the port is kept open through the firewall just as all other ports from the range,
+in case the public access will eventually be enabled on this port as well.
 
 <p>
 To see what ports are currently on, and their status, as reported within
-NCBI, please refer to the following <a href="fwd_check.cgi">Firewall
-Daemon Presence Check</a> page.  Ports marked <b>INTERNAL</b> are
-for NCBI use only and may be inaccessible from your site without,
-however, affecting availability of any services that NCBI provides.
+NCBI, please refer to the following <a href="fwd_check.cgi">Firewall Daemon Presence
+Check</a> page.  Ports marked <b>INTERNAL</b> are solely for NCBI own use, and may be
+inaccessible from your site. That, however, does not affect availability of any
+services that NCBI provides through other (open) firewall ports.
 
 <p>
-TROUBLESHOOTING:  You can test if these ports are accessible from
-your host by just running, for example (see the "Ports to open" list
-above):
+TROUBLESHOOTING:  You can test whether these special ports are connectable from
+your host just by running simple <tt>telnet</tt> command (available on most
+current systems).  To know which ports, at the moment, you should be trying
+from the list above (see the "Ports to open"), first check their status by visiting
+<a href="fwd_check.cgi">Firewall Daemon Presence Check</a> link, then select any
+up-and-running port and do the following (the example assumes port 5861 has
+been shown in operational state):
 <pre>
   telnet 130.14.29.112 5861
 </pre>
-and entering a line of arbitrary text in the telnet session.
-If everything is fine, your TELNET session will look as follows
-(the line "test" is your input here):
+When connected, enter a line of arbitrary text (hitting the &lt;Enter&gt;
+key alone also works):  if everything is fine, the session will look as follows
+(the line "test" is your input there):
 
 <pre>
 | > telnet 130.14.29.112 5861
@@ -159,9 +162,21 @@ If everything is fine, your TELNET session will look as follows
 </pre>
 
 <p>
-There is also an auxiliary UNIX shell script
-<a href="fwd_check.sh">fwd_check.sh</a> to check all of the above
-addresses.
+If your command cannot connect at all (e.g. it hangs then times out), or you see a different
+response from what is shown above, it indicates that the port is not configured correctly.
+
+<p>
+<a href="http://www.ncbi.nlm.nih.gov/sites/entrez?db=Books">NCBI Bookshelf</a> provides more detailed <a
+href="http://www.ncbi.nlm.nih.gov/books/bv.fcgi?rid=toolkit.section.ch_app.Load_Balancing#ch_app.Firewall_Daemon_FWDa">Firewall
+Daemon Documentation</a>, and discusses its integration into the overall
+functions of NCBI dispatching facilities.
+
+<p>
+There is also an auxiliary automated UNIX shell script
+<a href="fwd_check.sh">fwd_check.sh</a> to check all of
+the preset ports, and it is kept in-sync with currently
+configured open ports (so remember to refresh your download
+prior to actual use).
 
 <p>
 Note: Old NCBI clients used different application configuration settings and

@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.32 2007/12/29 18:25:42 kazimird Exp $
+ * $Id: alnread.c,v 1.33 2009/05/06 14:49:32 kazimird Exp $
  *
  * ===========================================================================
  *
@@ -3032,6 +3032,7 @@ static void s_AlignRawSeqFree (TAlignRawSeqPtr arsp)
     free (arsp->id);
     s_LineInfoFree (arsp->sequence_data);
     s_IntLinkFree (arsp->id_lines);
+    free (arsp);
 }
 
 
@@ -3182,6 +3183,7 @@ static void s_AlignFileRawFree (SAlignRawFilePtr afrp)
     s_LineInfoFree (afrp->line_list);
     s_AlignRawSeqFree (afrp->sequences);
     s_IntLinkFree (afrp->offset_list);
+    free (afrp->alphabet);
     free (afrp);
 }
 
@@ -5437,6 +5439,8 @@ static EBool s_ReprocessIds (SAlignRawFilePtr afrp)
                               afrp->report_error_userdata);
         }
     }
+    /* free string count list */
+    s_StringCountFree (list);
     return rval;
 }
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -37,66 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 05-13-93 Schuler     All public functions are now declared LIBCALL.
-*
-*
-* $Log: objsset.c,v $
-* Revision 6.12  2007/02/23 20:50:24  bollin
-* When SEQENTRY_OPTION_MAX_COMPLEX option is set, make sure to disconnect
-* BioseqSet from ObjectManager before assigning it to a new SeqEntry.
-*
-* Revision 6.11  2006/10/19 17:58:11  kans
-* reverted scope clearing in BioseqFree and BioseqSetFree - caused threading hang
-*
-* Revision 6.10  2006/10/17 17:33:53  bollin
-* When deleting a Bioseq or BioseqSet that is the current scope, set the scope
-* to NULL.
-*
-* Revision 6.9  2005/04/26 21:33:00  kans
-* added SEQID_GPIPE
-*
-* Revision 6.8  2004/05/12 20:41:57  kans
-* set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
-*
-* Revision 6.7  2004/04/01 13:43:08  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.6  2002/08/19 20:05:54  kans
-* fixes for SeqEntryAsnGet when asking for nuc-prot retcode but Bioseq is not inside a nuc-prot set
-*
-* Revision 6.5  2002/03/11 22:22:58  kans
-* removed retcode >= 3 test from SeqEntryAsnGet
-*
-* Revision 6.4  2001/11/30 12:20:18  kans
-* ObjMgrDeleteAllInRecord called when freeing top bsp or bssp
-*
-* Revision 6.3  2001/11/16 19:31:09  kans
-* BioseqFree and BioseqSetFree on top-level object call SeqMgrDeleteIndexesInRecord
-*
-* Revision 6.2  2001/08/07 17:22:27  kans
-* added third party annotation SeqIDs to FindBestBioseqLabel
-*
-* Revision 6.1  1998/08/24 18:28:11  kans
-* removed solaris -v -fd warnings
-*
-* Revision 6.0  1997/08/25 18:50:55  madden
-* Revision changed to 6.0
-*
-* Revision 4.2  1997/06/19 18:42:06  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.1  1995/08/29 20:23:05  ostell
-* changed SeqIdPrint to SeqIdWrite
-*
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.8  1995/07/03  19:05:16  ostell
- * fix in SeqEntryAsnRead not to call SeqMgrSeqEntry if pointer is NULL.
- *
- * Revision 3.7  1995/05/15  21:22:00  ostell
- * added Log line
- *
 *
 *
 * ==========================================================================
@@ -430,10 +370,10 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFree (BioseqSetPtr bsp)
 		}
 	}
 
+	BioseqSetFreeComponents(bsp, TRUE);
+
 	if (! SeqMgrDelete(SM_BIOSEQSET, (Pointer)bsp))
 	    ErrPostEx(SEV_ERROR, 0,0, "BioseqSetFree: pointer not registered");
-
-	BioseqSetFreeComponents(bsp, TRUE);
 
 	if (top) {
 		ObjMgrDeleteAllInRecord ();
@@ -478,7 +418,7 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFreeComponents (BioseqSetPtr bsp, Boole
         sep = sepnext;
     }
     sp = bsp->annot;
-	bsp->annot = NULL;
+	  bsp->annot = NULL;
     while (sp != NULL)
     {
         spnext = sp->next;

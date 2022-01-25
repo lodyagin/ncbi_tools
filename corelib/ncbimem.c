@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.27  2009/07/08 19:43:43  madden
+* Use MAP_PRIVATE instead of shared for distributed file systems (RT 15656919)
+*
 * Revision 6.26  2004/09/01 21:21:54  kans
 * if Windows but not DLL, handle functions now implemented with direct pointer
 *
@@ -918,7 +921,7 @@ NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name)
         break;
 
       mem_mapp->mmp_begin = mmap(NULL, mem_mapp->file_size, PROT_READ,
-                                 MAP_SHARED, fd, 0);
+                                 MAP_PRIVATE, fd, 0);
       close(fd);
       if ((void*) mem_mapp->mmp_begin == (void*) MAP_FAILED)
         break;

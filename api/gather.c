@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.52 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -1219,24 +1219,6 @@ static Boolean process_packed_pnt(SeqLocPtr slp, SeqLocPtr head, Int4 r_len, Int
 		return FALSE;
 }
 
-/* functions to speed up targeted feature gather by using seqmgr explore index */
-
-static ObjMgrDataPtr GatherGetOmdpForBioseq (BioseqPtr bsp)
-
-{
-  ObjMgrDataPtr  omdp;
-  ObjMgrPtr      omp;
-
-  if (bsp == NULL) return NULL;
-  omdp = (ObjMgrDataPtr) bsp->omdp;
-  if (omdp != NULL) return omdp;
-  omp = ObjMgrWriteLock ();
-  omdp = ObjMgrFindByData (omp, bsp);
-  ObjMgrUnlock ();
-  bsp->omdp = (Pointer) omdp;
-  return omdp;
-}
-
 static SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByID (BioseqPtr bsp, SeqFeatPtr curr,
                                                     Uint1 seqFeatChoice, Uint1 featDefChoice,
                                                     SeqMgrFeatContext PNTR context)
@@ -1254,7 +1236,7 @@ static SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByID (BioseqPtr bsp, SeqFeatPtr cu
 
   if (curr == NULL) {
     if (bsp == NULL) return NULL;
-    omdp = GatherGetOmdpForBioseq (bsp);
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
     if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
 
     context->omdp = (Pointer) omdp;

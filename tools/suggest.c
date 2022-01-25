@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: suggest.c,v 6.12 2007/03/20 18:27:14 bollin Exp $";
+static char const rcsid[] = "$Id: suggest.c,v 6.14 2009/04/10 17:22:14 kans Exp $";
 
 /*   suggest.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: suggest.c,v 6.12 2007/03/20 18:27:14 bollin Ex
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -39,14 +39,6 @@ static char const rcsid[] = "$Id: suggest.c,v 6.12 2007/03/20 18:27:14 bollin Ex
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* ==========================================================================
-*/
-
-/*
-* =======================================================
-* File Name: suggest.c
 *
 * Author: This is actually a good question!
 *     The initial version (called exons.c) was coded by Webb Miller.
@@ -66,248 +58,6 @@ static char const rcsid[] = "$Id: suggest.c,v 6.12 2007/03/20 18:27:14 bollin Ex
 *     intermediate solutions in a way that the indexers can
 *     use to deal more effectively with strange papers.
 *     
-*     A detailed change log follows:
-*     $Log: suggest.c,v $
-*     Revision 6.12  2007/03/20 18:27:14  bollin
-*     Added sequence ID reporting to Suggest_Intervals messages.
-*
-*     Revision 6.11  2003/05/30 17:25:38  coulouri
-*     add rcsid
-*
-*     Revision 6.10  2003/05/13 16:02:54  coulouri
-*     make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
-*
-*     Revision 6.9  2002/02/06 21:10:38  kans
-*     PlusStrand and MinusStrand prefixed with Suggest to avoid collision with asn2graphic viewer symbols
-*
-*     Revision 6.8  2001/05/25 19:43:53  vakatov
-*     Nested comment typo fixed
-*
-*     Revision 6.7  1998/06/17 21:55:47  kans
-*     fixed 64-bit SGI compiler warnings
-*
-*     Revision 6.6  1998/06/12 20:42:18  kans
-*     fixed most unix compiler warnings
-*
-*     Revision 6.5  1997/12/02 17:43:52  kans
-*     added cast to sprintf, explicit int return values
-*
-*     Revision 6.4  1997/08/27 18:26:19  kans
-*     temporarily convert * to X to avoid bad triptab index
-*
-*     Revision 6.3  1997/08/27 14:50:23  kans
-*     added second protection against table overflow
-*
-*     Revision 6.2  1997/08/26 23:56:02  kans
-*     added protection to bld_table based on purify array bounds violations
-*
-*     Revision 6.1  1997/08/26 19:37:36  kans
-*     added batch functions to process nucleotide once for many proteins
-*
-*     Revision 6.0  1997/08/25 18:54:58  madden
-*     Revision changed to 6.0
-*
-*     Revision 5.4  1997/08/21 20:28:44  kans
-*     fixed correction for alt start codon (Karl)
-*
-*     Revision 5.3  1996/10/16 15:09:05  kans
-*     finished cleaning up linked lists headed by triptab arrays
-*
- * Revision 5.2  1996/10/15  22:39:24  kans
- * cleaned up most memory leaks detected by purify (one big one remains)
- *
- * Revision 5.1  1996/09/27  19:05:18  kans
- * adjusts first interval if first protein residue isn't included, under
- * the assumption that it's using an alternative start codon
- *
- * Revision 5.0  1996/05/28  13:43:15  ostell
- * Set to revision 5.0
- *
- * Revision 1.5  1996/03/27  19:40:25  vakatov
- * Some unused stuff has been eliminated
- *
- * Revision 1.4  1996/03/25  22:13:06  vakatov
- * One more  free() -> MemFree()  correction...
- *
- * Revision 1.3  1996/03/25  21:43:06  vakatov
- * The "reverse" function slightly changed to avoid pointing to the outside
- * of array "r[]" lower limit (to please the Win-16 segmentation quirks)
- *
- * Revision 1.2  1996/03/13  21:07:40  epstein
- * change printfs to ErrPostEx()
- *
- * Revision 1.1  1995/11/28  22:19:10  kans
- * Initial revision
- *
- * Revision 1.4  1995/09/22  21:46:16  kans
- * split big array into 26 small arrays, other cleanups
- *
- * Revision 1.3  1995/08/29  16:29:51  epstein
- * eliminate troublesome header
- *
- * Revision 1.2  1995/08/18  19:52:32  epstein
- * *** empty log message ***
- *
- * Revision 1.1  1995/08/14  18:24:21  epstein
- * Initial revision
- *
- * Revision 1.8  1995/07/07  14:44:05  kans
- * updated genetic codes
- *
- * Revision 1.7  1994/07/26  18:04:55  kans
- * *** empty log message ***
- *
- * Revision 1.6  1994/07/01  14:38:22  kans
- * *** empty log message ***
- *
- * Revision 1.5  1994/06/30  22:36:54  kans
- * *** empty log message ***
- *
- * Revision 1.4  1994/06/24  23:03:46  kans
- * *** empty log message ***
- *
- * Revision 1.3  1994/05/12  18:21:31  kans
- * *** empty log message ***
- *
- * Revision 1.2  1994/04/08  16:24:37  kans
- * *** empty log message ***
- *
- * Revision 1.1  1994/03/17  16:33:30  kans
- * Initial revision
- *
- * Revision 2.90  92/07/22  10:46:21  sirotkin
- * forgot to put in earlier
- * 
- * Revision 2.86  92/04/16  15:37:39  sirotkin
- * looks for stops activated
- * 
- * Revision 2.85  92/02/26  14:57:25  sirotkin
- * fixed desending checks in Int_INt2Ext
- * 
- * Revision 2.83  92/01/13  10:42:47  sirotkin
- * lonum guarenteed to be <= hunum
- * 
- * Revision 2.82  91/11/26  17:22:43  sirotkin
- * passed saber, adds terminal stop, conditionally
- * 
- * Revision 2.81  91/11/18  16:00:34  sirotkin
- * Fixed problem pub 34736 which caused dramtic sugest failure
- * 
- * Revision 2.3  91/10/22  13:14:10  sirotkin
- * Now picks up and rewrites minimum exon and range to explore
- * 
- * Revision 2.2  91/10/11  09:50:00  sirotkin
- * *** empty log message ***
- * 
- * Revision 2.1  91/10/11  09:48:30  sirotkin
- * getting ready for range limitation
- * 
- * Revision 2.0  91/04/25  17:21:02  sirotkin
- * To set revision of procution version
- * 
- * Revision 1.104  91/03/26  15:46:13  sirotkin
- * fixed Dramatic failure test to use pro_len and not dna_len
- * 
- * Revision 1.103  91/03/21  10:36:06  sirotkin
- * changed field string expected on form from
- * exception to genetic_code
- * 
- * Revision 1.102  91/03/01  10:49:02  sirotkin
- * ready to install
- * 
- * Revision 1.101  91/02/19  09:05:00  sirotkin
- * Shoulod be ready for next install
- * 
- * Revision 1.100  91/02/15  09:07:13  sirotkin
- * after bug fixes in redundant with mismatches
- * 
- * Revision 1.99  91/02/14  16:25:15  sirotkin
- * removes redunant intervals, coaleses multiple mismatches
- * removes during consisten set insure one at a time
- * more stringent during weirdness pass 1
- * if unkonw genetic code, uses standard
- * 
- * Revision 1.91  91/01/30  14:10:25  sirotkin
- * This version works with ambigous bases.  When an
- * ambiguous base still allows knowledge of amino acid, that
- * amino acid is used.  Matches ambiguous DNA with unknown amino
- * acids.  Suggests last 2 bases of incomplete codon when will
- * code for correct amino acid.
- * 
- * Revision 1.90  91/01/22  16:23:27  sirotkin
- * markup rev 1.90 mini-load for 23 jan 1991
- * 
- * Revision 1.26  91/01/18  16:05:03  sirotkin
- * changed MAX_DNA to 1000000 from (3*32*1024)
- * 
- * Revision 1.25  91/01/16  17:28:31  sirotkin
- * added checks to genetic code
- * 
- * Revision 1.27  91/01/10  15:13:30  sirotkin
- * back to variable length only
- * 
- * Revision 1.25  90/12/28  15:43:54  sirotkin
- * This version has the variable minimum exon length installed
- * 
- * Revision 1.24  90/12/28  09:03:06  sirotkin
- * Before making TooShort a variable which is set depending upon
- * the aa length and the combined dna_length
- * 
- * Revision 1.23  90/12/21  16:48:41  sirotkin
- * change to keep compiler happy
- * 
- * Revision 1.23  90/12/21  15:28:27  sirotkin
- * tweaks for compiler
- * 
- * Revision 1.22  90/12/20  16:47:43  sirotkin
- * minor cosmetic stuff
- * 
- * Revision 1.22  90/12/19  15:12:27  sirotkin
- * ready to install
- * 
- * Revision 1.21  90/11/26  15:02:12  sirotkin
- * with changes to interval group and writing frame to form
- * 
- * Revision 1.20  90/11/24  16:04:06  sirotkin
- * frame moved from intervals to form
- * 
- * Revision 1.19  90/11/23  12:20:37  sirotkin
- * before moving frame from intervals to form
- * 
- * Revision 1.18  90/11/02  15:34:18  sirotkin
- * commented out DEBUG
- * 
- * Revision 1.17  90/10/31  13:54:11  sirotkin
- * Segmented sequences now work.
- * 
- * Revision 1.14  90/10/22  15:06:38  sirotkin
- * Now reports revision number in the testname field
- * 
- * Revision 1.12  90/10/04  18:00:21  sirotkin
- * Unexpectedly, this version worked for id_seq 9121, the
- * last three intervals (shorter gene)
- * 
- * Revision 1.11  90/10/02  15:30:30  sirotkin
- * Only one change, but important enough for a separate version:
- * changed the constant TooShort from 6 to 4, allowing 5 codon
- * segments.
- * 
- * Revision 1.10  90/09/24  14:41:58  sirotkin
- * logic of selecting best set, fixing overlaps
- * by looking at likely splice sites and tehn
- * insuring consistent set by deleting, fi necessary,
- * all seems to work in this version
- * 
-* only important changes left in below
-revision 1.6        
-date: 90/09/19 11:48:09;  author: sirotkin;  state: Exp;  lines added/del: 450/40
-partially retro-fitted function headers
-----------------------------
-revision 1.1        
-date: 90/09/07 09:18:17;  author: sirotkin;  state: Exp;  
-Initial revision
-=============================================================================
- * 
 ==========================================
 * exons.c - map an amino acid sequence to a DNA coding region
 *
@@ -415,6 +165,7 @@ A new function SeqRevComp() within seq.c is required
 to complement the sequence, if the minus strand was given
 for any particular segment
 
+=============================================================================
 */
 
 /* with the cursor on this line, the following
@@ -487,7 +238,11 @@ typedef struct seqptr {
 static Int4 min_exon_from_form;
 static DBTINYINT last_orient;
 
+/*
 static char	*module = "APT_suggest";
+#define fatal(m)	{ErrPostEx(SEV_FATAL, 1, 0, "%s:  %s", module, m); goto Error;}
+*/
+
 static DBSMALLINT	exception;
 static Int4 * nt_id_seq = NULL;
 #ifdef DEBUG_TOO_SHORT 	
@@ -501,9 +256,6 @@ static	Int4	aori, ahz, aasc;
 
 Int4 Total_len;
 
-#define fatal(m)	{ErrPostEx(SEV_FATAL, 1, 0, "%s:  %s", module, m); goto Error;}
-
-static char * suggest_revision = "$Revision: 6.12 $";
 
 static Int4	suggest_get_frames_init = 1;
 
@@ -1237,9 +989,8 @@ cleanup(void)
 static Int4 APT_suggest(SuggestOutputPtr pSuggestOut, Int4 num_nuc)
 {
 	Int4		i;
-	Int4 suggest_revision_len = strlen(suggest_revision);
 	Int4 nt;
-	DBTINYINT frame_1 =1;
+    Int4 rsult = 0;
 	char nt_msg[512];
 	double combined_length;
 
@@ -1416,10 +1167,13 @@ if (m_top > 0 && m_stk [0].p_pos == 1) {
 		goto Error;
 
 	if ( Total_len < pro_len * .1) {
+        rsult = 1;
+#ifdef DEBUG_TOO_SHORT 	
 		ErrPostEx(SEV_ERROR, 0, 0, "Dramatic Suggest failure: Please check reverse\n on both aa and DNA sequences.\nPlease check that the proper sequences selected.\n");
 		if (min_exon_from_form > -1 || Min_val > 0 || Max_val < dna_len){
 			ErrPostEx(SEV_ERROR, 0, 0, "Since Parameters were set, also check them on the verify form.\n");
 		}
+#endif
 	}
 
 	if (Min_val <=0)
@@ -1437,7 +1191,7 @@ if (m_top > 0 && m_stk [0].p_pos == 1) {
 #ifdef CdCycle
 ErrPostEx(SEV_INFO, 0, 0, "Ending Suggest");
 #endif
-	return 0;
+	return rsult;
 Error:
 	cleanup();
 #ifdef CdCycle
@@ -1596,8 +1350,7 @@ static void ReportSuggestIntervalsError (SeqRecPtr srp, CharPtr gen_txt)
 *
 *****************************************************************************/
 
-static void Suggest_Intervals (SuggestRecPtr sugrp,
-			       SuggestOutputPtr pSuggestOut, Int4 num_nuc)
+static Int2 Suggest_Intervals (SuggestRecPtr sugrp, SuggestOutputPtr pSuggestOut, Int4 num_nuc)
 {
   Boolean    goOn;
   Int4       i;
@@ -1607,6 +1360,7 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
   SeqRecPtr  nucleotide;
   SeqRecPtr  protein;
   Int4       tripdex;
+  Int2       rsult = 0;
   struct trip_node	*h, *oh;
 
   if (sugrp != NULL) {
@@ -1616,15 +1370,24 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
     geneticCode = sugrp->geneticCode;
     if (nucleotide != NULL && protein != NULL && geneticCode != NULL) {
       if ((nucleotide->length +1) / 3 < protein->length) {
+#ifdef DEBUG_TOO_SHORT 	
         ReportSuggestIntervalsError (nucleotide, "Nucleotide is too short to encode protein");
+#endif
+        rsult = 2;
         goOn = FALSE;
       }
       if (nucleotide->length < 18) {
+#ifdef DEBUG_TOO_SHORT 	
         ReportSuggestIntervalsError (nucleotide, "Nucleotide length is too short");
+#endif
+        rsult = 3;
         goOn = FALSE;
       }
       if (protein->length < 6) {
+#ifdef DEBUG_TOO_SHORT 	
         ReportSuggestIntervalsError (protein, "Protein length is too short");
+#endif
+        rsult = 4;
         goOn = FALSE;
       }
 
@@ -1686,7 +1449,9 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
           nt_id_seq[nt] = nt;
         }
 
-        APT_suggest (pSuggestOut, num_nuc);
+        if (APT_suggest (pSuggestOut, num_nuc) != 0) {
+          rsult = 1;
+        }
 
         m_stk = MemFree (m_stk);
 
@@ -1717,6 +1482,7 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
 
     }
   }
+  return rsult;
 }
 
 /* default code (code 0) means use the standard code (code 1) */
@@ -1747,7 +1513,7 @@ static CharPtr geneticCodes [16] = {
 *
 *****************************************************************************/
 
-Int4 Get_Genetic_Code (Int4 code, SuggestRecPtr sugrp)
+extern Int4 Get_Genetic_Code (Int4 code, SuggestRecPtr sugrp)
 
 {
   GeneticCodePtr  codes;
@@ -1815,8 +1581,7 @@ Int4 Get_Genetic_Code (Int4 code, SuggestRecPtr sugrp)
  *	FALSE otherwise
  *
 \*----------------------------------------------------------------------------*/
-Boolean
-InitSuggest(void)
+extern Boolean InitSuggest (void)
 {
     if (!AllObjLoad ()) {
 	Message (MSG_FATAL, "AllObjLoad failed");
@@ -1866,13 +1631,14 @@ InitSuggest(void)
  *	FALSE	- otherwise;
  *
 \*----------------------------------------------------------------------------*/
-Boolean
-ProcessData(SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec)
+
+Int2 ProcessData (SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec)
 {
     Int4	num_nuc;
     Int4	num_prt;
     Int4	len;
     Int4	i;
+    Int2    rsult = 0;
     
     suggestRec.protein.sequence = MemFree(suggestRec.protein.sequence);
     suggestRec.protein.length = 0;
@@ -1882,13 +1648,13 @@ ProcessData(SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec)
     BSSeek(suggestRec.protein.rawSeq, 0L, 0);
     
     for (i = 0; i < num_prt; i++) {
-	OutProteinID(pSuggestOut, i);
+	OutProteinID (pSuggestOut, i);
 	BSRead(suggestRec.protein.segLens, &len, sizeof(len));
 	suggestRec.protein.sequence = MemNew((len + 1) * sizeof(Uint1));
 	len = BSRead(suggestRec.protein.rawSeq,
 		     suggestRec.protein.sequence, len);
 	suggestRec.protein.length = len;
-	Suggest_Intervals(&suggestRec, pSuggestOut, num_nuc);
+	rsult = Suggest_Intervals(&suggestRec, pSuggestOut, num_nuc);
 	suggestRec.minVal = 0L;
 	suggestRec.maxVal = 0L;
 	suggestRec.tooShort = 0L;
@@ -1904,7 +1670,7 @@ ProcessData(SuggestOutputPtr pSuggestOut, Boolean clearNucSeqRec)
     suggestRec.geneticCode = (CharPtr)MemFree(suggestRec.geneticCode);
     genetic_code = NULL;
 
-    return TRUE;
+    return rsult;
 }
 
 

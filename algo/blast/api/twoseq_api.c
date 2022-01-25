@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.59 2007/03/20 15:17:16 kans Exp $
+/* $Id: twoseq_api.c,v 1.61 2009/05/28 14:55:09 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -38,7 +38,6 @@
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_nalookup.h>
-#include <algo/blast/core/hspstream_collector.h>
 #include <algo/blast/core/gencode_singleton.h>
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/api/blast_seqalign.h>
@@ -62,7 +61,7 @@ Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
         return -1;
     }
     
-    new_options->hint = eSensitive;
+    new_options->hint = eBlastHint_Sensitive;
     new_options->program = eChoose;
     new_options->strand = Seq_strand_both;
     new_options->cutoff_evalue = 10.0;
@@ -134,7 +133,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
 
         /* If the query sequence is large enough, set up a megablast search */
 
-        if (basic_options->hint != eNone && 
+        if (basic_options->hint != eBlastHint_None && 
             query_length > MEGABLAST_CUTOFF) {
             do_megablast = TRUE;
             if (basic_options->gapped_calculation)
@@ -148,7 +147,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
            Because a sensitive search is the default, discontig. megablast will 
            be used by default when the first input sequence is large. */
         if (do_megablast && 
-            (basic_options->hint == eSensitive || 
+            (basic_options->hint == eBlastHint_Sensitive || 
              (word_size != 0 && word_size <= 12))) {
             if (word_size == 0 || word_size > 12)
                 word_size = 11;

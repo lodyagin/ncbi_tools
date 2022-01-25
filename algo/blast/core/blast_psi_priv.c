@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi_priv.c,v 1.72 2009/01/27 15:29:32 kazimird Exp $";
+    "$Id: blast_psi_priv.c,v 1.73 2009/05/27 17:39:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -807,7 +807,7 @@ _PSIValidateMSA_StructureGroup(const _PSIMsa* msa)
 }
 
 int
-_PSIValidateMSA(const _PSIMsa* msa)
+_PSIValidateMSA(const _PSIMsa* msa, Boolean ignore_unaligned_positions)
 {
     int retval = PSI_SUCCESS;
 
@@ -820,9 +820,11 @@ _PSIValidateMSA(const _PSIMsa* msa)
         return retval;
     }
 
-    retval = s_PSIValidateAlignedColumns(msa);
-    if (retval != PSI_SUCCESS) {
-        return retval;
+    if ( !ignore_unaligned_positions ) {
+        retval = s_PSIValidateAlignedColumns(msa);
+        if (retval != PSI_SUCCESS) {
+            return retval;
+        }
     }
 
     retval = s_PSIValidateNoGapsInQuery(msa);

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.50 $
+* $Revision: 6.54 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -90,6 +90,7 @@ typedef void (LIBCALLBACK *ValidErrorFunc) (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
   CharPtr label,
@@ -112,7 +113,7 @@ typedef void (LIBCALLBACK *ValidErrorFunc) (
 
 typedef struct validstruct {
     Int2 cutoff;                   /* lowest errmsg to show 0=default */
-    Int2 errors[6];
+    Int4 errors[6];
     SeqEntryPtr sep;               /* top level SeqEntryPtr */
     BioseqSetPtr bssp;               /* current bioseqset */
     BioseqPtr bsp;                 /* current bioseq */
@@ -150,6 +151,7 @@ typedef struct validstruct {
     Boolean inferenceAccnCheck;    /* lookup inference qualifier accession.version reference */
     Boolean testLatLonSubregion;   /* validate coordinates of states and provinces within a country */
     Boolean strictLatLonCountry;   /* bodies of water do not relax country vs. lat_lon mismatch */
+    Boolean rubiscoTest;           /* look for ribulose bisphosphate variants */
     Boolean indexerVersion;        /* special tests for GenBank indexers */
     Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
                                    /* this section used for finer error reporting callback */
@@ -159,6 +161,7 @@ typedef struct validstruct {
                                    /* this section used for internal flags */
     TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
     TextFsaPtr modifiedBases;      /* permitted modified bases in PCR_primer qualifier */
+    TextFsaPtr sgmlStrings;        /* for detecting possible SGML tags in strings */
     Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
     Boolean is_barcode_sep;        /* record has technique barcode */
     Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */

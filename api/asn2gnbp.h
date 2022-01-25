@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -285,6 +285,7 @@ typedef struct XtraData {
   Int4             prevGi;
   Int4             nextGi;
   BlockMask        bkmask;
+  Boolean          reindex;
 } XtraBlock;
 
 

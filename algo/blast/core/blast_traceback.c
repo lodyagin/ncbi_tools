@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.209 2009/01/12 14:19:33 kazimird Exp $
+/* $Id: blast_traceback.c,v 1.212 2009/07/09 15:49:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.209 2009/01/12 14:19:33 kazimird Exp $";
+    "$Id: blast_traceback.c,v 1.212 2009/07/09 15:49:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -359,6 +359,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    const Boolean kGreedyTraceback = (ext_options->eTbackExt == eGreedyTbck);
    const Boolean kTranslateSubject = 
         (Blast_SubjectIsTranslated(program_number) || program_number == eBlastTypeRpsTblastn);
+   const Boolean kFullTranslation = (fence_hit && *fence_hit);
    const Boolean kSmithWaterman = (ext_options->eTbackExt == 
                                    eSmithWatermanTbckFull);
    BlastQueryInfo* query_info = query_info_in;
@@ -375,6 +376,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    
    if (fence_hit) {
        orig_hsplist = BlastHSPListDup(hsp_list);
+       *fence_hit = FALSE;  /* reset fence_hit */
    }
    
    hsp_array = hsp_list->hsp_array;
@@ -479,8 +481,15 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
                  subject = subject_blk->oof_sequence + CODON_LENGTH;
                  if (hsp->subject.frame < 0)
                       subject += subject_length + 1;
+            } else if (kFullTranslation) {
+                 /* previous traceback has hit the fence, will do full translation */
+                 BlastHSP* hsp_new = Blast_HSPNew();
+                 hsp_new->subject.frame = hsp->subject.frame;
+                 hsp_new->subject.offset = -1;
+            	 subject = Blast_HSPGetTargetTranslation(target_t, hsp_new, &subject_length);
+                 hsp_new = Blast_HSPFree(hsp_new);
             } else
-            	subject = Blast_HSPGetTargetTranslation(target_t, hsp, &subject_length);
+            	 subject = Blast_HSPGetTargetTranslation(target_t, hsp, &subject_length);
          }
 
          if (!kIsOutOfFrame && (((hsp->query.gapped_start == 0 && 
@@ -560,6 +569,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
                  adjusted_subject, gap_align, score_params, q_start, s_start, 
                  query_length, adjusted_s_length,
                  fence_hit);
+             ASSERT(!(kFullTranslation && *fence_hit));
          }
          
          fence_error = (fence_hit && *fence_hit);
@@ -1078,6 +1088,9 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
                                     hit_params->options->hitlist_size);
    }
 
+   /* post-traceback pipes */
+   BlastHSPStreamTBackClose(hsp_stream, results);
+
    if (make_up_kbp)
        sbp->kbp_gap[0] = NULL;
 
@@ -1150,6 +1163,8 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                                  interrupt_search, progress_info);
    } else if (ext_params->options->compositionBasedStats > 0 ||
               ext_params->options->eTbackExt == eSmithWatermanTbck) {
+      /* FIXME partial sequence fetching/translation could lead to fence hit
+         and seg fault */
       status =
           Blast_RedoAlignmentCore(program_number, query, query_info, sbp,
                                   hsp_stream, seq_src, default_db_genetic_code,
@@ -1163,10 +1178,6 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
       const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(program_number);
       BlastHSPStreamResultBatch *batch = 
                       Blast_HSPStreamResultBatchInit(query_info->num_queries);
-      const Boolean kSubjectRanges = !(hit_params->restricted_align ||
-                                     score_params->options->is_ooframe ||
-                                     ext_params->options->eTbackExt == 
-                                                     eSmithWatermanTbck);
 
       memset((void*) &seq_arg, 0, sizeof(seq_arg));
 
@@ -1187,8 +1198,8 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
          if (perform_traceback) {
             seq_arg.oid = batch->hsplist_array[0]->oid;
             seq_arg.encoding = encoding;
-            seq_arg.enable_ranges = kSubjectRanges;
             seq_arg.check_oid_exclusion = TRUE;
+            seq_arg.reset_ranges = FALSE;
             
             BlastSequenceBlkClean(seq_arg.seq);
             if (BlastSeqSrcGetSequence(seq_src, &seq_arg) < 0) {
@@ -1242,31 +1253,30 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                                             query_info, pattern_blk);
                } else {
                   Boolean fence_hit = FALSE;
-                  Boolean * fence_hit_ptr = NULL;
-                    
-                  /* prepare to deal with partial subject sequence
-                     ranges, if these are configured and a previous
-                     HSP list has not turned them off */
-                  if (seq_arg.enable_ranges == TRUE)
-                     fence_hit_ptr = &fence_hit;
-                    
                   Blast_TracebackFromHSPList(program_number, hsp_list, query,
                                              seq_arg.seq, query_info, 
                                              gap_align, sbp, score_params,
                                              ext_params->options, hit_params,
                                              seq_arg.seq->gen_code_string,
-                                             fence_hit_ptr);
+                                             &fence_hit);
                     
                   if (fence_hit) {
                      /* Disable range support and refetch the 
                         (whole) subject sequence */
                         
-                     seq_arg.enable_ranges = FALSE;
+                     seq_arg.reset_ranges = TRUE;
                      BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
                      BlastSeqSrcGetSequence(seq_src, &seq_arg);
                         
-                     /* Retry the alignment */
-                       
+                     /* The C toolkit will erase genetic_code, so do it again */
+                     if (Blast_SubjectIsTranslated(program_number) && 
+                         seq_arg.seq->gen_code_string == NULL) {
+                         seq_arg.seq->gen_code_string = 
+                             GenCodeSingletonFind(default_db_genetic_code);
+                         ASSERT(seq_arg.seq->gen_code_string);
+                     }
+            
+                     /* Retry the alignment with fence_hit set*/
                      Blast_TracebackFromHSPList(program_number, hsp_list, 
                                                 query, seq_arg.seq, 
                                                 query_info, gap_align,
@@ -1274,7 +1284,8 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                                                 ext_params->options, 
                                                 hit_params, 
                                                 seq_arg.seq->gen_code_string,
-                                                NULL);
+                                                &fence_hit);
+                     ASSERT(fence_hit == FALSE);
                   } /* fence_hit */
                }    /* !phi_blast */
 
@@ -1305,13 +1316,11 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
       }         /* loop over all batches */
 
       batch = Blast_HSPStreamResultBatchFree(batch);
+      /* post-traceback pipes */
+      BlastHSPStreamTBackClose(hsp_stream, results);
+
       BlastSequenceBlkFree(seq_arg.seq);
    }
-
-   if (hit_params->options->culling_limit > 0)
-      Blast_HSPResultsPerformCulling(results, query_info, 
-                                    hit_params->options->culling_limit,
-                                    query->length);
 
    /* Re-sort the hit lists according to their best e-values, because
       they could have changed. Only do this for a database search. */

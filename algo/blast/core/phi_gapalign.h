@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.h,v 1.3 2006/11/29 17:25:50 bealer Exp $
+/* $Id: phi_gapalign.h,v 1.4 2009/03/27 15:04:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,6 +62,7 @@ extern "C" {
  * @param pattern_blk Detailed pattern information. [in]
  * @return Status, 0 on success, -1 on failure.
  */
+NCBI_XBLAST_EXPORT
 Int2 PHIGappedAlignmentWithTraceback(Uint1* query, Uint1* subject, 
         BlastGapAlignStruct* gap_align, 
         const BlastScoringParameters* score_params,
@@ -83,8 +84,12 @@ Int2 PHIGappedAlignmentWithTraceback(Uint1* query, Uint1* subject,
  *                     pattern match lengths [in]
  * @param hsp_list_ptr Structure containing all saved HSPs [out]
  * @param gapped_stats Return statistics (not filled if NULL) [out]
+ * @param fence_hit Not curently supported for PHI-blast but here
+ *   for compatiability.  Normally true here indicates that an 
+ *   overrun was detected. [out]
  * @return Status, 0 on success, -1 on failure.
  */
+NCBI_XBLAST_EXPORT
 Int2 PHIGetGappedScore (EBlastProgramType program_number, 
         BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
         BLAST_SequenceBlk* subject, 

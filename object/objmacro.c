@@ -31,7 +31,7 @@ objmacroAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at Jan 30, 2009 11:42 AM
+*    Generated using ASNCODE Revision: 6.16 at May 12, 2009  9:09 AM
 *
 **************************************************/
 
@@ -12351,6 +12351,13 @@ ConvertFeatureDstOptionsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.ptrvalue = av.ptrvalue;
    }
+   else if (atp == DST_OPTIONS_remove_original) {
+      choice = ConvertFeatureDstOptions_remove_original;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -12427,6 +12434,10 @@ ConvertFeatureDstOptionsAsnWrite(ConvertFeatureDstOptionsPtr anp, AsnIoPtr aip, 
    case ConvertFeatureDstOptions_ncrna_class:
       av.ptrvalue = anp->data.ptrvalue;
       retval = AsnWrite(aip, DST_OPTIONS_ncrna_class, &av);
+      break;
+   case ConvertFeatureDstOptions_remove_original:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, DST_OPTIONS_remove_original, &av);
       break;
    }
    if (writetype != NULL) {

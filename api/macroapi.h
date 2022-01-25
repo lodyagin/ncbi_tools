@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/15/2007
 *
-* $Revision: 1.75 $
+* $Revision: 1.78 $
 *
 * File Description: 
 *
@@ -154,6 +154,7 @@ NLM_EXTERN Uint1 GetBiomolForRnaType (Int4 rnatype);
 NLM_EXTERN CharPtr GetBiomolNameForRnaType (Int4 rnatype);
 NLM_EXTERN void AddAllRNASubtypesToChoiceList (ValNodePtr PNTR field_list);
 
+/* source qual functions */
 NLM_EXTERN CharPtr GetSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint);
 NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp);
 NLM_EXTERN CharPtr GetQualFromFeatureEx (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp, BatchExtraPtr batch_extra);
@@ -179,7 +180,11 @@ NLM_EXTERN ValNodePtr GetPubFieldList (void);
 NLM_EXTERN CharPtr GetPubFieldFromPub (PubPtr the_pub, Int4 field, StringConstraintPtr scp);
 NLM_EXTERN Int4 GetPubMLStatus (PubPtr the_pub);
 
+/* generic string functions */
 NLM_EXTERN Boolean SetStringValue (CharPtr PNTR existing_val, CharPtr new_val, Uint2 existing_text);
+NLM_EXTERN Boolean RemoveValNodeStringMatch (ValNodePtr PNTR list, StringConstraintPtr scp);
+NLM_EXTERN Boolean SetStringsInValNodeStringList (ValNodePtr PNTR list, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text);
+
 
 NLM_EXTERN Boolean IsStringConstraintEmpty (StringConstraintPtr scp);
 NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstraintPtr scp);
@@ -219,6 +224,7 @@ NLM_EXTERN Boolean IsConversionSupported (Uint2 featdef_from, Uint2 featdef_to);
 
 NLM_EXTERN CharPtr GetTextPortionFromString (CharPtr str, TextPortionPtr text_portion);
 
+NLM_EXTERN Uint2 GetEntityIdFromObject (Uint1 choice, Pointer data);
 
 typedef struct aecrsample {
   FieldTypePtr field;
@@ -329,6 +335,7 @@ NLM_EXTERN ValNodePtr GetBankitCommentsOnSep (SeqEntryPtr sep);
 NLM_EXTERN BioseqPtr GetRepresentativeBioseqFromBioseqSet (BioseqSetPtr bssp);
 
 NLM_EXTERN ValNodePtr ValNodeCopyPtr (ValNodePtr orig);
+NLM_EXTERN SeqLocPtr ParseSimpleSeqLoc (CharPtr str, BioseqPtr bsp);
 
 #ifdef __cplusplus 
 } 

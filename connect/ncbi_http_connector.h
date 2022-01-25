@@ -1,7 +1,7 @@
 #ifndef CONNECT___HTTP_CONNECTOR__H
 #define CONNECT___HTTP_CONNECTOR__H
 
-/* $Id: ncbi_http_connector.h,v 6.17 2008/10/16 18:55:44 kazimird Exp $
+/* $Id: ncbi_http_connector.h,v 6.19 2009/05/04 15:44:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -122,8 +122,11 @@ extern "C" {
  *  fHCC_InsecureRedirect --
  *       for security reasons the following redirects comprise security risk
  *       and, thus, are prohibited:  switching from https to http, and
- *       re-posting data (regradless of the transport, either http or https).
+ *       re-posting data (regardless of the transport, either http or https).
  *       This flag allows such redirects (if needed) to be honored.
+ *  fHCC_NoAutoRetry --
+ *       do not attempt any auto-retries in case of failing connections
+ *       (this flag effectively means having SConnNetInfo::max_try set to 1).
  *
  * NOTE: the URL encoding/decoding (in the "fHCC_Url_*" cases and "info->args")
  *       is performed by URL_Encode() and URL_Decode() -- "ncbi_connutil.[ch]".
@@ -138,9 +141,10 @@ typedef enum {
     fHCC_UrlCodec         = 0x18, /* fHCC_UrlDecodeInput | ...EncodeOutput   */
     fHCC_UrlEncodeArgs    = 0x20, /* URL-encode "info->args"                 */
     fHCC_DropUnread       = 0x40, /* each microsession drops yet unread data */
-    fHCC_NoUpread         = 0x80, /* do not use SOCK_ReadWhileWrite() at all */
+    fHCC_NoUpread         = 0x80, /* do not use SOCK_SetReadOnWrite() at all */
     fHCC_Flushable        = 0x100,/* connector will really flush on Flush()  */
-    fHCC_InsecureRedirect = 0x200 /* any redirect will be honored            */
+    fHCC_InsecureRedirect = 0x200,/* any redirect will be honored            */
+    fHCC_NoAutoRetry      = 0x400 /* no auto-retries allowed                 */
 } EHCC_Flags;
 typedef unsigned int THCC_Flags;  /* bitwise OR of "EHCC_Flags"              */
 
@@ -167,7 +171,7 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnector
 typedef int/*bool*/ (*FHttpParseHTTPHeader)
 (const char* http_header,           /* HTTP header to parse, '\0'-terminated */
  void*       adjust_data,           /* supplemental user data                */
- int/*bool*/ server_error           /* true if HTTP server reported an error */
+ int         server_error           /* != 0 if HTTP error                    */
  );
 
 typedef int/*bool*/ (*FHttpAdjustNetInfo)

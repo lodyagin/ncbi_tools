@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.693 $
+* $Revision: 6.705 $
 *
 * File Description: 
 *
@@ -131,7 +131,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "9.20"
+#define SEQ_APP_VER "9.50"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;
@@ -392,28 +392,101 @@ static void CheckForCookedBioseqs (SeqEntryPtr sep, Pointer mydata, Int4 index, 
 static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp);
 
 
-static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
+typedef enum {
+  eOkToWriteEntity_Cancel = 0,
+  eOkToWriteEntity_Continue,
+  eOkToWriteEntity_Validate
+} EOkToWriteEntity;
+
+static EOkToWriteEntity GetValidationCancelContinue (ValidStructPtr vsp, Boolean allow_review)
+{
+  WindoW w;
+  GrouP  h, c, prompts;
+  PrompT p1, p2;
+  ButtoN b;
+  ModalAcceptCancelData acd;
+  CharPtr msg, msg_format = "Reject %d, Error %d, Warning %d, Info %d";
+  EOkToWriteEntity rval = eOkToWriteEntity_Cancel;
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  acd.third_option = FALSE;
+  
+  w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  prompts = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (prompts, 10, 10);
+  p1 = StaticPrompt (prompts, "Submission failed validation test with:", 0, 0, programFont, 'l');
+
+  msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_format) + 75));
+  sprintf (msg, msg_format, 
+              (int) vsp->errors [4], (int) vsp->errors [3],
+              (int) vsp->errors [2], (int) vsp->errors [1]);
+  p2 = StaticPrompt (h, msg, 0, 0, programFont, 'l'); 
+  msg = MemFree (msg);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) p2, NULL);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Continue", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  if (allow_review) {
+    b = PushButton (c, "Review Errors", ModalThirdOptionButton);
+    SetObjectExtra (b, &acd, NULL);
+  }
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) prompts, (HANDLE) c, NULL);
+  
+  Show(w); 
+  Select (w);
+  while (!acd.accepted && ! acd.cancelled && ! acd.third_option)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Remove (w);
+  if (acd.third_option) 
+  {
+    rval = eOkToWriteEntity_Validate;
+  } 
+  else if (acd.accepted)
+  {
+    rval = eOkToWriteEntity_Continue;
+  }
+  else
+  {
+    rval = eOkToWriteEntity_Cancel;
+  }
+  return rval;
+}
+
+
+static EOkToWriteEntity OkayToWriteTheEntity (Uint2 entityID, ForM f, Boolean allow_review)
 
 {
-  Boolean         allRawOrSeg = TRUE;
-  MsgAnswer       ans = ANS_OK;
-  Int2            errors;
-  Int2            j;
-  ErrSev          oldErrSev;
-  SeqEntryPtr     sep;
-  Char            str [32];
-  ValidStructPtr  vsp;
+  Boolean          allRawOrSeg = TRUE;
+  EOkToWriteEntity rval = eOkToWriteEntity_Continue;
+  Int2             errors;
+  Int2             j;
+  ErrSev           oldErrSev;
+  SeqEntryPtr      sep;
+  Char             str [32];
+  ValidStructPtr   vsp;
 
-  if (entityID < 1) return FALSE;
+  if (entityID < 1) return 0;
   sep = GetTopSeqEntryForEntityID (entityID);
-  if (sep == NULL) return FALSE;
+  if (sep == NULL) return 0;
 
-  if (!FixSpecialCharacters (entityID)) return FALSE;
+  if (!FixSpecialCharacters (entityID)) return 0;
 
   if (GetSequinAppParam ("PREFERENCES", "ASKBEFOREVALIDATE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       if (! (subtoolMode ||smartnetMode || backupMode) ) {
-        if (Message (MSG_YN, "Do you wish to validate this entry?") == ANS_NO) return TRUE;
+        if (Message (MSG_YN, "Do you wish to validate this entry?") == ANS_NO) return 1;
       }
     }
   }
@@ -474,24 +547,18 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
       ArrowCursor ();
       Update ();
       if (subtoolMode || smartnetMode || backupMode) {
-        ans = Message (MSG_OKC, "%s\nReject %d, Error %d, Warning %d, Info %d\n%s",
-                       "Submission failed validation test with:",
-                       (int) vsp->errors [4], (int) vsp->errors [3],
-                       (int) vsp->errors [2], (int) vsp->errors [1],
-                       "Continue anyway?");
+        rval = GetValidationCancelContinue (vsp, allow_review);
       } else {
-        ans = Message (MSG_OKC, validFailMsg);
+        if (Message (MSG_OKC, validFailMsg) == ANS_CANCEL) {
+          rval = eOkToWriteEntity_Cancel;
+        }
       }
     }
     ValidStructFree (vsp);
   }
   ArrowCursor ();
   Update ();
-  if (ans != ANS_OK) {
-    /*SetChecklistValue (checklistForm, 5);*/
-    return FALSE;
-  }
-  return TRUE;
+  return rval;
 }
 
 static void ReplaceString (CharPtr PNTR target, CharPtr newstr)
@@ -969,7 +1036,7 @@ static void PrepareSeqSubmitProc (IteM i)
       EntryCheckGBBlock (sep);
       GetRidOfEmptyFeatsDescStrings (0, sep);
       GetRidOfLocusInSeqIds (0, sep);
-      if (OkayToWriteTheEntity (bfp->input_entityID, bfp->form)) {
+      if (OkayToWriteTheEntity (bfp->input_entityID, bfp->form, FALSE) == eOkToWriteEntity_Continue) {
         /*SetChecklistValue (checklistForm, 7);*/
         path [0] = '\0';
         StringNCpy_0 (path, bfp->filepath, sizeof (path));
@@ -1241,6 +1308,10 @@ static void SmartResetProc (IteM i)
 }
 #endif
 
+static void LaunchValidatorForDone (BaseFormPtr bfp, SeqEntryPtr sep, FormActnFunc revalProc, FormActnFunc continueProc);
+static Boolean SmallInferenceAccnVer (ForM f);
+static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc doneProc);
+
 #ifdef USE_SMARTNET
 static Boolean LIBCALLBACK AllGenBankOrRefSeq (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
 
@@ -1314,7 +1385,28 @@ static Boolean ValNodeListsDiffer (ValNodePtr vnp1, ValNodePtr vnp2)
   return FALSE;
 }
 
-static void SmartnetDoneFunc (BaseFormPtr bfp)
+static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate);
+static void SmartnetDoneNoValidateFunc (ForM f);
+
+static void SmartnetDoneValidateFunc (ForM f)
+{
+  Boolean  inferenceAccnCheck;
+
+  inferenceAccnCheck = SmallInferenceAccnVer (f);
+  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SmartnetDoneValidateFunc, SmartnetDoneNoValidateFunc);
+}
+
+static void SmartnetDoneNoValidateFunc (ForM f)
+{
+  BaseFormPtr bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (f);
+  if (bfp == NULL) return;
+  SmartnetDoneFuncEx (bfp, FALSE);
+}
+
+
+static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
 
 {
     MsgAnswer     ans;
@@ -1331,6 +1423,7 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
 
     Boolean       resetUpdateDate = TRUE;
     ValNodePtr    vnp;
+    EOkToWriteEntity continue_cancel_validate;
 
     if(bfp != NULL) {
         f = bfp->form;
@@ -1392,11 +1485,18 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
             update = TRUE; /* because of NormalizeDescriptorOrder */
             SeqMgrClearFeatureIndexes (bfp->input_entityID, NULL);
 
-            if (! OkayToWriteTheEntity (bfp->input_entityID, f)) {
-                if (update && bfp != NULL) {
-                    ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-                }
-                return;
+            if (validate) {
+              continue_cancel_validate = OkayToWriteTheEntity (bfp->input_entityID, f, TRUE);
+              if (continue_cancel_validate == eOkToWriteEntity_Cancel) {
+                  if (update && bfp != NULL) {
+                      ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+                  }
+                  return;
+              } else if (continue_cancel_validate == eOkToWriteEntity_Validate) {
+                  /* launch validator */
+                  LaunchValidatorForDone (bfp, sep, SmartnetDoneValidateFunc, SmartnetDoneNoValidateFunc);
+                  return;
+              }
             }
             /* ans = Message (MSG_YN, "Reset Update Date?"); */
             ans = ANS_YES;
@@ -1461,6 +1561,13 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
     }
 }
 
+
+static void SmartnetDoneFunc (BaseFormPtr bfp)
+{
+  SmartnetDoneFuncEx (bfp, TRUE);
+}
+
+
 static void SmartnetDoneProc (IteM i)
 
 {
@@ -1471,8 +1578,26 @@ static void SmartnetDoneProc (IteM i)
 }
 #endif
 
-static void SubtoolDoneProc (IteM i)
 
+static void SubtoolDoneFuncEx (ForM f, Boolean validate);
+static void SubtoolDoneNoValidateFunc (ForM f);
+
+static void SubtoolDoneValidateFunc (ForM f)
+{
+  Boolean  inferenceAccnCheck;
+
+  inferenceAccnCheck = SmallInferenceAccnVer (f);
+  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SubtoolDoneValidateFunc, SubtoolDoneNoValidateFunc);
+}
+
+
+static void SubtoolDoneNoValidateFunc (ForM f)
+{
+	SubtoolDoneFuncEx (f, FALSE);
+}
+
+
+static void SubtoolDoneFuncEx (ForM form, Boolean validate)
 {
   MsgAnswer    ans;
   BaseFormPtr  bfp;
@@ -1481,6 +1606,7 @@ static void SubtoolDoneProc (IteM i)
   ValNodePtr   sdp;
   SeqEntryPtr  sep;
   Boolean      update;
+  EOkToWriteEntity continue_review_cancel;
 
   if (subtoolEntityID > 0) {
     sep = GetTopSeqEntryForEntityID (subtoolEntityID);
@@ -1504,16 +1630,23 @@ static void SubtoolDoneProc (IteM i)
       NormalizeDescriptorOrder (sep);
       update = TRUE; /* because of NormalizeDescriptorOrder */
       f = NULL;
-      bfp = (BaseFormPtr) GetObjectExtra (i);
+      bfp = (BaseFormPtr) GetObjectExtra (form);
       if (bfp != NULL) {
         f = bfp->form;
       }
       SeqMgrClearFeatureIndexes (bfp->input_entityID, NULL);
-      if (! OkayToWriteTheEntity (subtoolEntityID, f)) {
-        if (update && bfp != NULL) {
-          ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+      if (validate) {
+        continue_review_cancel = OkayToWriteTheEntity (subtoolEntityID, f, validate);
+        if (continue_review_cancel == eOkToWriteEntity_Cancel) {
+          if (update && bfp != NULL) {
+            ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+          }
+          return;
+        } else if (continue_review_cancel == eOkToWriteEntity_Validate) {
+          /* launch validator */
+          LaunchValidatorForDone (bfp, sep, SubtoolDoneValidateFunc, SubtoolDoneNoValidateFunc);
+          return;
         }
-        return;
       }
       /* ans = Message (MSG_YN, "Reset Update Date?"); */
       ans = ANS_YES;
@@ -1544,6 +1677,18 @@ static void SubtoolDoneProc (IteM i)
     /*SetChecklistValue (checklistForm, 5);*/
   }
   QuitProgram ();
+}
+
+
+static void SubtoolDoneProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (i);
+  if (bfp != NULL) {
+    SubtoolDoneFuncEx (bfp->form, TRUE);
+  }
 }
 #endif
 
@@ -1590,19 +1735,87 @@ static Boolean ReviewErrorsForValidationFailure (void)
   }
 }
 
+
+static void LaunchValidatorForDone (BaseFormPtr bfp, SeqEntryPtr sep, FormActnFunc revalProc, FormActnFunc continueProc)
+{
+  ValidStructPtr  vsp;
+  Int2            verbosity = 2;
+  Char            buf [32];
+  Boolean         allRawOrSeg = TRUE;
+  ErrHookProc     oldErrHook;
+  ErrSev          oldErrSev;
+  Int2            errors;
+  Int2            j;
+
+  WatchCursor ();
+  Update ();
+  vsp = ValidStructNew ();
+  if (vsp != NULL) {
+    /*SetChecklistValue (checklistForm, 6);*/
+
+    verbosity = 2;
+    if (GetSequinAppParam ("SETTINGS", "VALIDATEVERBOSITY", NULL, buf, sizeof (buf))) {
+      if (! StrToInt (buf, &verbosity)) {
+        verbosity = 2;
+      }
+    }
+
+    CreateValidateWindowExEx (ValidNotify, "Sequin Validation Errors",
+                            programFont, SEV_INFO, verbosity, bfp, revalProc, continueProc, TRUE);
+    ClearValidateWindow ();
+    SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
+    if (allRawOrSeg) {
+      vsp->useSeqMgrIndexes = TRUE;
+    }
+    HideValidateDoc ();
+    vsp->suppressContext = ShouldSetSuppressContext ();
+    vsp->justShowAccession = ShouldSetJustShowAccession ();
+    oldErrHook = ErrSetHandler (ValidErrHook);
+    oldErrSev = ErrSetMessageLevel (SEV_NONE);
+    vsp->validateAlignments = TRUE;
+    vsp->alignFindRemoteBsp = TRUE;
+    vsp->doSeqHistAssembly = FALSE;
+    for (j = 0; j < 6; j++) {
+      vsp->errors [j] = 0;
+    }
+    vsp->errfunc = ValidErrCallback;
+    ValidateSeqEntry (sep, vsp);
+    if (indexerVersion && useEntrez) {
+      TaxonValidate (sep, vsp);
+    }
+    ErrSetMessageLevel (oldErrSev);
+    ErrSetHandler (oldErrHook);
+    ErrClear ();
+    ShowValidateDoc ();
+    errors = 0;
+    for (j = 0; j < 6; j++) {
+      errors += vsp->errors [j];
+    }
+    if (errors == 0) {
+      ArrowCursor ();
+      Message (MSG_OK, "Validation test succeeded.");
+      FreeValidateWindow ();
+    } else {
+      RepopulateValidateFilter ();
+    }
+    ValidStructFree (vsp);
+    /*SetChecklistValue (checklistForm, 5);*/
+  }
+  ArrowCursor ();
+  Update ();
+}
+
+
 static void ProcessDoneButton (ForM f)
 
 {
   Boolean         allRawOrSeg = TRUE;
   BaseFormPtr     bfp;
-  Char            buf [32];
   Int2            errors;
   Int2            j;
-  ErrHookProc     oldErrHook;
   ErrSev          oldErrSev;
   SeqEntryPtr     sep;
   CharPtr         str;
-  Int2            verbosity;
   ValidStructPtr  vsp;
   CharPtr         fmt_no_file = "Submission is now written.  Please e-mail to %s.%s";
   CharPtr         missing_annot = "  Please include a brief summary of your submission within your correspondence.";
@@ -1659,62 +1872,7 @@ static void ProcessDoneButton (ForM f)
       ArrowCursor ();
       Update ();
       if (ReviewErrorsForValidationFailure ()) {
-        WatchCursor ();
-        Update ();
-        vsp = ValidStructNew ();
-        if (vsp != NULL) {
-          /*SetChecklistValue (checklistForm, 6);*/
-
-          verbosity = 2;
-          if (GetSequinAppParam ("SETTINGS", "VALIDATEVERBOSITY", NULL, buf, sizeof (buf))) {
-            if (! StrToInt (buf, &verbosity)) {
-              verbosity = 2;
-            }
-          }
-
-          CreateValidateWindowEx (ValidNotify, "Sequin Validation Errors",
-                                  programFont, SEV_INFO, verbosity, bfp, ProcessDoneButton, TRUE);
-          ClearValidateWindow ();
-          SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
-          if (allRawOrSeg) {
-            vsp->useSeqMgrIndexes = TRUE;
-          }
-          HideValidateDoc ();
-          vsp->suppressContext = ShouldSetSuppressContext ();
-          vsp->justShowAccession = ShouldSetJustShowAccession ();
-          oldErrHook = ErrSetHandler (ValidErrHook);
-          oldErrSev = ErrSetMessageLevel (SEV_NONE);
-          vsp->validateAlignments = TRUE;
-          vsp->alignFindRemoteBsp = TRUE;
-          vsp->doSeqHistAssembly = FALSE;
-          for (j = 0; j < 6; j++) {
-            vsp->errors [j] = 0;
-          }
-          vsp->errfunc = ValidErrCallback;
-          ValidateSeqEntry (sep, vsp);
-          if (indexerVersion && useEntrez) {
-            TaxonValidate (sep, vsp);
-          }
-          ErrSetMessageLevel (oldErrSev);
-          ErrSetHandler (oldErrHook);
-          ErrClear ();
-          ShowValidateDoc ();
-          errors = 0;
-          for (j = 0; j < 6; j++) {
-            errors += vsp->errors [j];
-          }
-          if (errors == 0) {
-            ArrowCursor ();
-            Message (MSG_OK, "Validation test succeeded.");
-            FreeValidateWindow ();
-          } else {
-            RepopulateValidateFilter ();
-          }
-          ValidStructFree (vsp);
-          /*SetChecklistValue (checklistForm, 5);*/
-        }
-        ArrowCursor ();
-        Update ();
+        LaunchValidatorForDone (bfp, sep, ProcessDoneButton, NULL);
         return;
       }
     }
@@ -2191,7 +2349,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   ReportBadSpecificHostValues (sep, vsp);
 }
 
-static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck)
+static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc doneProc)
 
 {
   Boolean         allRawOrSeg = TRUE;
@@ -2229,9 +2387,11 @@ static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inf
           }
         }
 
-        validatorWindow = CreateValidateWindowEx (ValidNotify, "Sequin Validation Errors",
+        validatorWindow = CreateValidateWindowExExEx (ValidNotify, "Sequin Validation Errors",
                                                   programFont, SEV_INFO, verbosity, bfp,
-                                                  ValSeqEntryForm, TRUE);
+                                                  revalProc, doneProc, 
+                                                  doneProc == NULL && OkToSequester () ? SequesterSequenceList : NULL,
+                                                  TRUE);
         ClearValidateWindow ();
         SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
         if (allRawOrSeg) {
@@ -2300,6 +2460,13 @@ static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inf
       }
     }
   }
+}
+
+
+static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck)
+
+{
+  ValSeqEntryFormExEx (f, doAligns, limit, inferenceAccnCheck, ValSeqEntryForm, NULL);
 }
 
 static void CountInfAccnVer (SeqFeatPtr sfp, Pointer userdata)
@@ -2968,6 +3135,8 @@ static Boolean HandleOneNewAsnProcEx (BaseFormPtr bfp, Boolean removeold, Boolea
             } else if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
               processonenuc = FALSE;
             } else if (bssp->_class == 0) {
+              processonenuc = FALSE;
+            } else if (bssp->_class == 255) {
               processonenuc = FALSE;
             }
           }

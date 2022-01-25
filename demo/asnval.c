@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.80 $
+* $Revision: 1.96 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "6.2"
+#define ASNVAL_APP_VER "7.2"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -85,6 +85,7 @@ typedef struct valflags {
   Boolean  testLatLonSubregion;
   Boolean  strictLatLonCountry;
   Boolean  indexerVersion;
+  Boolean  automatic;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
@@ -106,6 +107,7 @@ typedef struct valflags {
   Char     longest [64];
   time_t   worsttime;
   Int4     numrecords;
+  Char     path [PATH_MAX];
 } ValFlagData, PNTR ValFlagPtr;
 
 #ifdef INTERNAL_NCBI_ASN2VAL
@@ -592,6 +594,7 @@ static void LIBCALLBACK ValidCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
   CharPtr label,
@@ -641,6 +644,9 @@ static void LIBCALLBACK ValidCallback (
   if (accession == NULL) {
     accession = "";
   }
+  if (featureID == NULL) {
+    featureID = "";
+  }
   if (message == NULL) {
     message = "";
   }
@@ -656,6 +662,9 @@ static void LIBCALLBACK ValidCallback (
     fprintf (fp, "%s [%s.%s] %s %s: %s",
              compatSeverityLabel [severity],
              catname, errname, message, objtype, label);
+    if (StringDoesHaveText (featureID)) {
+      fprintf (fp, " <%s>", featureID);
+    }
     if (location != NULL) {
       fprintf (fp, " %s", location);
     }
@@ -707,8 +716,13 @@ static void LIBCALLBACK ValidCallback (
       urlmssg = MemNew (len * 3 + 2);
       if (urlmssg != NULL) {
         XmlEncode (urlmssg, message);
-        fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" code=\"%s_%s\">%s</message>\n",
-                 severityLabel [severity], accession, catname, errname, urlmssg);
+        if (StringDoesHaveText (featureID)) {
+          fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" feat-id=\"%s\" code=\"%s_%s\">%s</message>\n",
+                   severityLabel [severity], accession, featureID, catname, errname, urlmssg);
+        } else {
+          fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" code=\"%s_%s\">%s</message>\n",
+                   severityLabel [severity], accession, catname, errname, urlmssg);
+        }
         MemFree (urlmssg);
       }
     }
@@ -825,7 +839,7 @@ static void ProcessSingleRecord (
   if (vfp->type == 1) {
     fp = FileOpen (filename, "r");
     if (fp == NULL) {
-      Message (MSG_POSTERR, "Failed to open '%s'", path);
+      Message (MSG_POSTERR, "Failed to open '%s'", filename);
       return;
     }
 
@@ -842,6 +856,7 @@ static void ProcessSingleRecord (
       return;
     }
 
+    SeqMgrHoldIndexing (TRUE);
     switch (vfp->type) {
       case 2 :
         dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -862,6 +877,7 @@ static void ProcessSingleRecord (
       default :
         break;
     }
+    SeqMgrHoldIndexing (FALSE);
 
     AsnIoClose (aip);
 
@@ -987,7 +1003,7 @@ static void ProcessMultipleRecord (
 {
   AsnIoPtr        aip;
   AsnModulePtr    amp;
-  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp;
+  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se = NULL, atp_ssp;
   BioseqPtr       bsp;
   ValNodePtr      bsplist;
   BioseqSetPtr    bssp;
@@ -1054,9 +1070,25 @@ static void ProcessMultipleRecord (
     return;
   }
 
-  atp_se = AsnFind ("Bioseq-set.seq-set.E");
+  if (vfp->type == 4) {
+    atp_se = AsnFind ("Bioseq-set.seq-set.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+      return;
+    }
+  } else if (vfp->type == 5) {
+    atp_se = AsnFind ("Seq-submit.data.entrys.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.data.entrys.E");
+      return;
+    }
+  } else {
+    Message (MSG_POSTERR, "Batch processing type not set properly");
+    return;
+  }
+
   if (atp_se == NULL) {
-    Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+    Message (MSG_POSTERR, "Unable to find ASN.1 type for atp_se");
     return;
   }
 
@@ -1145,7 +1177,10 @@ static void ProcessMultipleRecord (
       aip->io_failure = FALSE;
     }
     if (atp == atp_se) {
+
+      SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
+      SeqMgrHoldIndexing (FALSE);
     
       /* propagate submission citation as descriptor onto each Seq-entry */
 
@@ -1327,6 +1362,88 @@ static void ProcessMultipleRecord (
   }
 }
 
+static void ValidWrapper (
+  SeqEntryPtr sep,
+  Pointer userdata
+)
+
+{
+  BioseqPtr      bsp;
+  ValNodePtr     bsplist;
+  Char           buf [64];
+  SeqEntryPtr    fsep;
+  FILE           *ofp = NULL;
+  CharPtr        ptr;
+  ErrSev         sev;
+  time_t         starttime, stoptime;
+  ValFlagPtr     vfp;
+
+  if (sep == NULL) return;
+  vfp = (ValFlagPtr) userdata;
+  if (vfp == NULL) return;
+
+  starttime = GetSecs ();
+  buf [0] = '\0';
+
+  if (vfp->logfp != NULL) {
+    fsep = FindNthBioseq (sep, 1);
+    if (fsep != NULL && fsep->choice == 1) {
+      bsp = (BioseqPtr) fsep->data.ptrvalue;
+      if (bsp != NULL) {
+        SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+        fprintf (vfp->logfp, "%s\n", buf);
+        fflush (vfp->logfp);
+      }
+    }
+  }
+
+  ptr = StringRChr (vfp->path, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  StringCat (vfp->path, ".val");
+
+  if (vfp->outpath != NULL) {
+    ErrSetLogfile (vfp->outpath, ELOG_APPEND);
+  } else if (vfp->verbosity == 0) {
+    ErrSetLogfile (vfp->path, ELOG_APPEND);
+  } else if (vfp->outfp == NULL) {
+    ofp = FileOpen (vfp->path, "w");
+  }
+
+  bsplist = NULL;
+
+  sev = ErrSetMessageLevel (SEV_WARNING);
+  if (vfp->inferenceAccnCheck) {
+    LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+  }
+  if (vfp->lock) {
+    bsplist = DoLockFarComponents (sep, vfp);
+  }
+  ErrSetMessageLevel (sev);
+
+  DoValidation (sep, vfp, ofp);
+
+  bsplist = UnlockFarComponents (bsplist);
+
+  if (ofp != NULL) {
+    if (vfp->has_errors) {
+      if (vfp->verbosity == 4) {
+        fprintf (ofp, "</asnval>\n");
+      }
+      vfp->has_errors = FALSE;
+    }
+    FileClose (ofp);
+  }
+
+  stoptime = GetSecs ();
+  if (stoptime - starttime > vfp->worsttime && StringDoesHaveText (buf)) {
+    vfp->worsttime = stoptime - starttime;
+    StringCpy (vfp->longest, buf);
+  }
+  (vfp->numrecords)++;
+}
+
 static void ProcessOneRecord (
   CharPtr filename,
   Pointer userdata
@@ -1343,7 +1460,10 @@ static void ProcessOneRecord (
     fflush (vfp->logfp);
   }
 
-  if (vfp->batch) {
+  if (vfp->automatic) {
+    StringNCpy_0 (vfp->path, filename, sizeof (vfp->path));
+    ReadSequenceAsnFile (filename, vfp->binary, vfp->compressed, (Pointer) vfp, ValidWrapper);
+  } else if (vfp->batch) {
     ProcessMultipleRecord (filename, vfp);
   } else {
     ProcessSingleRecord (filename, vfp);
@@ -1380,13 +1500,14 @@ static void ProcessOneRecord (
 #define l_argLockFar      25
 #define T_argThreads      26
 #define L_argLogFile      27
-#define S_argSkipCount    28
-#define B_argBarcodeVal   29
-#define C_argMaxCount     30
+#define K_argSummmary     28
+#define S_argSkipCount    29
+#define B_argBarcodeVal   30
+#define C_argMaxCount     31
 #ifdef INTERNAL_NCBI_ASN2VAL
-#define w_argSeqSubParent 31
-#define H_argAccessHUP    32
-#define y_argAIndexer     33
+#define w_argSeqSubParent 32
+#define H_argAccessHUP    33
+#define y_argAIndexer     34
 #endif
 
 #define LAT_LON_STATE    1
@@ -1429,9 +1550,9 @@ Args myargs [] = {
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Ignore Transcription/Translation Exceptions", "F", NULL, NULL,
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Verbosity", "0", "0", "4",
+  {"Verbosity", "1", "0", "4",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type (a Automatic, z Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Batch File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1449,6 +1570,8 @@ Args myargs [] = {
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Log File", NULL, NULL, NULL,
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Summary to Error File", "F", NULL, NULL,
+    TRUE, 'K', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Skip Count", "0", NULL, NULL,
     TRUE, 'S', ARG_INT, 0.0, 0, NULL},
   {"Barcode Validate", "F", NULL, NULL,
@@ -1470,8 +1593,8 @@ Int2 Main (void)
 {
   Char         app [64];
   CharPtr      asnidx, directory, infile, logfile, outfile, str, suffix;
-  Boolean      batch, binary, compressed, dorecurse,
-               indexed, local, lock, remote, usethreads;
+  Boolean      automatic, batch, binary, compressed, dorecurse,
+               indexed, local, lock, remote, summary, usethreads;
 #ifdef INTERNAL_NCBI_ASN2VAL
   Boolean      hup = FALSE;
 #endif
@@ -1577,12 +1700,16 @@ Int2 Main (void)
   SetAppProperty ("InternalNcbiSequin", (void *) 1024);
 #endif
 
+  automatic = FALSE;
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
 
   str = myargs [a_argType].strvalue;
   if (StringICmp (str, "a") == 0) {
+    type = 1;
+    automatic = TRUE;
+  } else if (StringICmp (str, "z") == 0) {
     type = 1;
   } else if (StringICmp (str, "e") == 0) {
     type = 2;
@@ -1615,11 +1742,13 @@ Int2 Main (void)
   }
 
   logfile = (CharPtr) myargs [L_argLogFile].strvalue;
+  summary = (Boolean) myargs [K_argSummmary].intvalue;
 
   start_time = GetSecs ();
 
   /* populate parameter structure */
 
+  vfd.automatic = automatic;
   vfd.batch = batch;
   vfd.binary = binary;
   vfd.compressed = compressed;
@@ -1710,6 +1839,14 @@ Int2 Main (void)
         fprintf (vfd.outfp, "</asnval>\n");
       }
       vfd.has_errors = FALSE;
+    }
+    if (summary) {
+      fprintf (vfd.outfp, "Finished in %ld seconds\n", (long) run_time);
+      if (StringDoesHaveText (vfd.longest)) {
+        fprintf (vfd.outfp, "Longest processing time %ld seconds on %s\n",
+                 (long) vfd.worsttime, vfd.longest);
+        fprintf (vfd.outfp, "Total number of records %ld\n", (long) vfd.numrecords);
+      }
     }
     FileClose (vfd.outfp);
   }

@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.201 2007/10/23 16:03:23 madden Exp $";
-/* $Id: megablast.c,v 6.201 2007/10/23 16:03:23 madden Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.203 2009/06/01 14:33:38 maning Exp $";
+/* $Id: megablast.c,v 6.203 2009/06/01 14:33:38 maning Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,12 @@ static char const rcsid[] = "$Id: megablast.c,v 6.201 2007/10/23 16:03:23 madden
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.203  2009/06/01 14:33:38  maning
+ * Re-enable "D 4" and "D 5" options for megablast.
+ *
+ * Revision 6.202  2009/06/01 13:54:57  maning
+ * Restore blast_hspstream and blast_hspqueue.   JIRA SB-280.
+ *
  * Revision 6.201  2007/10/23 16:03:23  madden
  * No longer set ungapped_extension as an initial word option
  *
@@ -2079,6 +2085,7 @@ static Int2 Main_new(void)
                        myargs[ARG_OUT].strvalue);
                return (1);
           }
+          break;
        case 4:
           if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
              ErrPostEx(SEV_FATAL, 1, 0, 
@@ -2086,6 +2093,7 @@ static Int2 Main_new(void)
                        myargs[ARG_OUT].strvalue);
                return (1);
           }
+          break;
        case 5:
           if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "wb")) == NULL) {
              ErrPostEx(SEV_FATAL, 1, 0, 
@@ -2093,6 +2101,7 @@ static Int2 Main_new(void)
                        myargs[ARG_OUT].strvalue);
                return (1);
           }
+          break;
        }
    }
 

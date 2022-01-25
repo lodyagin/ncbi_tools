@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.295 2009/02/04 19:15:43 lavr Exp $
+#	$Id: makeall.unx,v 6.302 2009/07/05 22:11:09 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -191,10 +191,10 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objsub.c objprt.c objfdef.c objalignloc.c objtable.c \
 	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c objinsdseq.c objmacro.c \
 	objent2.c ent2api.c pmfapi.c objtax3.c tax3api.c objegkludge.c objentgene.c \
-	objmla2.c mla2api.c qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
-	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
-	sqnutil4.c subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
+	objmla2.c mla2api.c qblastapi.c vecscnapi.c objmim.c objvalid.c mimapi.c cddapi.c \
+	seqport.c sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
+	valid.c valapi.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c \
+	sqnutil3.c sqnutil4.c subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
 	asn2ff5.c asn2ff6.c asn2gnb1.c asn2gnb2.c asn2gnb3.c asn2gnb4.c \
 	asn2gnb5.c asn2gnb6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
@@ -228,7 +228,7 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	smtools.c styleman.c stylemui.c glbpic.c \
 	layout.c saldist.c saled.c salfiles.c salpanel.c salparam.c \
 	salsa.c seqfltr.c seqgraph.c seqgrphx.c seqmtrx.c \
-	seqpcc.c seqanal.c aacomp.c seqscrl.c \
+	seqpcc.c seqanal.c aacomp.c seqscrl.c valdlg.c \
 	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c dotvibrant.c \
 	dlgutil1.c dlgutil2.c e2trmlst.c e2docsum.c asn2graphic.c \
 	medview.c bspview.c gbfview.c gphview.c gphdraw.c gxydraw.c gtrdraw.c \
@@ -290,19 +290,20 @@ SRC60 = aa_ungapped.c blast_diagnostics.c blast_engine.c \
     blast_extend.c blast_filter.c blast_gapalign.c blast_hits.c blast_itree.c \
     blast_lookup.c blast_message.c blast_options.c blast_seg.c blast_seqsrc.c \
     blast_setup.c blast_stat.c blast_traceback.c blast_util.c blast_sw.c \
-    gapinfo.c greedy_align.c hspstream_collector.c link_hsps.c lookup_wrap.c \
+    gapinfo.c greedy_align.c link_hsps.c lookup_wrap.c \
     na_ungapped.c ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
     lookup_util.c blast_encoding.c blast_psi.c blast_psi_priv.c blast_kappa.c \
     matrix_freq_ratios.c blast_hspstream.c blast_parameters.c blast_posit.c \
     phi_gapalign.c blast_program.c blast_query_info.c blast_tune.c \
     blast_aalookup.c blast_nalookup.c blast_aascan.c blast_nascan.c \
-    blast_dynarray.c split_query.c gencode_singleton.c index_ungapped.c
+    blast_dynarray.c split_query.c gencode_singleton.c index_ungapped.c \
+    hspfilter_collector.c
 
 SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
         blast_options_api.c blast_prelim.c blast_returns.c blast_seq.c \
-        blast_seqalign.c blast_tabular.c hspstream_queue.c repeats_filter.c \
+        blast_seqalign.c blast_tabular.c repeats_filter.c \
         seqsrc_multiseq.c seqsrc_readdb.c twoseq_api.c dust_filter.c \
-        blast_message_api.c
+        blast_message_api.c hspfilter_queue.c
 
 SRCALL = $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) \
     $(SRC23) $(SRC28) $(SRC30) $(SRC50) $(SRC60) $(SRC61) $(SRCCOMPADJ)
@@ -335,10 +336,10 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objsub.o objprt.o objfdef.o objalignloc.o objtable.o \
 	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o objinsdseq.o objmacro.o \
 	objent2.o ent2api.o pmfapi.o objtax3.o tax3api.o objegkludge.o objentgene.o \
-	objmla2.o mla2api.o qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
-	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
-	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
-	sqnutil4.o subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
+	objmla2.o mla2api.o qblastapi.o vecscnapi.o objmim.o objvalid.o mimapi.o cddapi.o \
+	seqport.o sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
+	valid.o valapi.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o \
+	sqnutil3.o sqnutil4.o subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
 	asn2ff5.o asn2ff6.o asn2gnb1.o asn2gnb2.o asn2gnb3.o asn2gnb4.o \
 	asn2gnb5.o asn2gnb6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
@@ -382,7 +383,7 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	smtools.o styleman.o stylemui.o glbpic.o \
 	layout.o saldist.o saled.o salfiles.o salpanel.o \
 	salparam.o salsa.o seqfltr.o seqgraph.o seqgrphx.o seqmtrx.o \
-	seqpcc.o seqanal.o aacomp.o seqscrl.o \
+	seqpcc.o seqanal.o aacomp.o seqscrl.o valdlg.o \
 	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o dotvibrant.o \
 	dlgutil1.o dlgutil2.o e2trmlst.o e2docsum.o asn2graphic.o \
 	medview.o bspview.o gbfview.o gphview.o gphdraw.o gxydraw.o gtrdraw.o \
@@ -451,19 +452,20 @@ OBJ60 = aa_ungapped.o blast_diagnostics.o blast_engine.o blast_extend.o \
     blast_filter.o blast_gapalign.o blast_hits.o blast_itree.o blast_lookup.o \
     blast_message.o blast_options.o blast_seg.o blast_seqsrc.o blast_sw.o \
     blast_setup.o blast_stat.o blast_traceback.o blast_util.o \
-    gapinfo.o greedy_align.o hspstream_collector.o link_hsps.o lookup_wrap.o \
+    gapinfo.o greedy_align.o link_hsps.o lookup_wrap.o \
     na_ungapped.o ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
     lookup_util.o blast_encoding.o blast_psi.o blast_psi_priv.o blast_kappa.o \
     matrix_freq_ratios.o blast_hspstream.o blast_parameters.o blast_posit.o \
     phi_gapalign.o blast_program.o blast_query_info.o blast_tune.o \
     blast_aalookup.o blast_nalookup.o blast_aascan.o blast_nascan.o \
-    blast_dynarray.o split_query.o gencode_singleton.o index_ungapped.o
+    blast_dynarray.o split_query.o gencode_singleton.o index_ungapped.o \
+    hspfilter_collector.o
 
 OBJ61 = blast_api.o blast_input.o blast_format.o blast_mtlock.o \
         blast_options_api.o blast_prelim.o blast_returns.o blast_seq.o \
-        blast_seqalign.o blast_tabular.o hspstream_queue.o repeats_filter.o \
+        blast_seqalign.o blast_tabular.o repeats_filter.o \
         seqsrc_multiseq.o seqsrc_readdb.o twoseq_api.o dust_filter.o \
-        blast_message_api.o
+        blast_message_api.o hspfilter_queue.o
 
 
 # NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
@@ -689,6 +691,7 @@ copy :
 	$(SRCCOPY) ../corelib/*.c .
 	$(SRCCOPY) ../corelib/core*.h .
 	$(SRCCOPY) ../asnlib/*.h .
+	-rm -f ../include/asn.h
 	mv asn.h ../include
 	$(SRCCOPY) ../asnlib/*.c .
 	$(SRCCOPY) ../connect/*.c .
@@ -775,6 +778,7 @@ copy :
 	- mkdir -p ../include/algo/blast/core
 	$(SRCCOPY) ../algo/blast/core/*.c .
 	$(SRCCOPY) ../algo/blast/core/*.h .
+	$(SRCCOPY) ../algo/blast/core/*.inl .
 	cp -fp ../algo/blast/core/*.h ../include/algo/blast/core
 	- mkdir -p ../include/algo/blast/composition_adjustment
 	$(SRCCOPY) ../algo/blast/composition_adjustment/*.c .

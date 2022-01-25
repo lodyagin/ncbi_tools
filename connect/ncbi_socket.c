@@ -1,4 +1,4 @@
-/* $Id: ncbi_socket.c,v 6.273 2009/02/27 18:29:30 kazimird Exp $
+/* $Id: ncbi_socket.c,v 6.282 2009/07/13 15:04:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -408,7 +408,12 @@ static const char* s_ID(const SOCK sock, char* buf)
         sname = "TRIGGER";
         break;
     case eSocket:
-        sname = sock->session ? "SSOCK" : "SOCK";
+#ifdef NCBI_OS_UNIX
+        if (sock->path[0])
+            sname = sock->session ? "SUSOCK" : "USOCK";
+        else
+#endif /*NCBI_OS_UNIX*/
+            sname = sock->session ? "SSOCK"  : "SOCK";
         break;
     case eDatagram:
         sname = "DSOCK";
@@ -777,6 +782,7 @@ inline
 #endif /*__GNUC__*/
 static EIO_Status s_InitAPI(int secure)
 {
+    static const struct SOCKSSL_struct kNoSSL = { 0 };
     EIO_Status status = eIO_Success;
 
     if (!s_Initialized  &&  (status = SOCK_InitializeAPI()) != eIO_Success)
@@ -791,8 +797,10 @@ static EIO_Status s_InitAPI(int secure)
         SOCKSSL ssl = s_SSLSetup ? s_SSLSetup() : 0;
         if (ssl  &&  ssl->Init) {
             CORE_LOCK_WRITE;
-            if (!s_SSL  &&  (status = ssl->Init(s_Recv,s_Send)) == eIO_Success)
-                s_SSL = ssl;
+            if (!s_SSL) {
+                s_SSL = ((status = ssl->Init(s_Recv, s_Send)) == eIO_Success
+                         ? ssl : &kNoSSL);
+            }
             CORE_UNLOCK;
         } else
             status = eIO_NotSupported;
@@ -949,7 +957,6 @@ static EIO_Status s_Status(SOCK sock, EIO_Event direction)
 
 
 #if !defined(NCBI_OS_MSWIN)  &&  defined(FD_SETSIZE)
-/*ARGSUSED*/
 static int/*bool*/ x_TryLowerSockFileno(SOCK sock)
 {
     int fd = fcntl(sock->sock, F_DUPFD, STDERR_FILENO + 1);
@@ -1239,10 +1246,19 @@ static EIO_Status s_Select(size_t                n,
                     }
                     /* NB: the bits are XCAOWR */
                     if (!(mask = e.lNetworkEvents)) {
-                        if (sock->type == eListening) {
-                            CORE_LOGF_X(141, eLOG_Warning,
+                        if (sock->type == eListening
+                            &&  (sock->log == eOn  || 
+                                 (sock->log == eDefault  &&  s_Log == eOn))) {
+                            LSOCK lsock = (LSOCK) sock;
+                            ELOG_Level level;
+                            if (lsock->n_log < 10) {
+                                lsock->n_log++;
+                                level = eLOG_Warning;
+                            } else
+                                level = eLOG_Trace;
+                            CORE_LOGF_X(141, level,
                                         ("%s[SOCK::Select] "
-                                         " Possible connection throttling has"
+                                         " Run-away connection has"
                                          " been detected", s_ID(sock, _id)));
                         }
                         break;
@@ -1808,7 +1824,9 @@ static EIO_Status s_Recv(SOCK    sock,
             assert(poll.event == eIO_Read);
             if (status != eIO_Success)
                 return status;
-            assert(poll.revent == eIO_Read  ||  poll.revent == eIO_Close);
+            if (poll.revent == eIO_Close)
+                return eIO_Unknown;
+            assert(poll.revent == eIO_Read);
             continue/*read again*/;
         }
 
@@ -2233,7 +2251,9 @@ static EIO_Status s_Send(SOCK        sock,
             assert(poll.event == eIO_Write);
             if (status != eIO_Success)
                 return status;
-            assert(poll.event == eIO_Write  ||  poll.revent == eIO_Close);
+            if (poll.revent == eIO_Close)
+                return eIO_Unknown;
+            assert(poll.event == eIO_Write);
             continue/*write again*/;
         }
 
@@ -2723,8 +2743,7 @@ static EIO_Status s_Close(SOCK sock, int abort)
 static EIO_Status s_Connect(SOCK            sock,
                             const char*     host,
                             unsigned short  port,
-                            const STimeout* timeout,
-                            int/*bool*/     secure)
+                            const STimeout* timeout)
 {
     union {
         struct sockaddr    sa;
@@ -2744,12 +2763,13 @@ static EIO_Status s_Connect(SOCK            sock,
     assert(sock->type == eSocket  &&  sock->side == eSOCK_Client);
 
     /* initialize internals */
-    if (s_InitAPI(secure) != eIO_Success)
+    if (s_InitAPI(sock->session ? 1/*secure*/ : 0/*regular*/) != eIO_Success)
         return eIO_NotSupported;
 
-    if (secure) {
+    if (sock->session) {
         FSSLCreate sslcreate = s_SSL ? s_SSL->Create : 0;
         void* session;
+        assert(sock->session == SESSION_INVALID);
         if (!sslcreate) {
             session = 0;
             x_error = 0;
@@ -2769,9 +2789,18 @@ static EIO_Status s_Connect(SOCK            sock,
     memset(&addr, 0, sizeof(addr));
 #ifdef NCBI_OS_UNIX
     if (sock->path[0]) {
+        size_t pathlen = strlen(sock->path);
+        if (sizeof(addr.sun.sun_path) <= pathlen++/*account for end '\0'*/) {
+            CORE_LOGF_X(142, eLOG_Error,
+                        ("%s[SOCK::Connect]  Failed to store path"
+                         " \"%s\" (%lu bytes long, %lu bytes allowed)",
+                         s_ID(sock, _id), sock->path, (unsigned long) pathlen,
+                         (unsigned long) sizeof(addr.sun.sun_path)));
+            return eIO_Unknown;
+        }
         addrlen = (SOCK_socklen_t) sizeof(addr.sun);
         addr.sun.sun_family = AF_UNIX;
-        strncpy0(addr.sun.sun_path, sock->path, sizeof(addr.sun.sun_path)-1);
+        memcpy(addr.sun.sun_path, sock->path, pathlen);
     } else
 #endif /*NCBI_OS_UNIX*/
     {
@@ -2940,7 +2969,8 @@ static EIO_Status s_Connect(SOCK            sock,
     }
 
 #ifdef NCBI_OS_UNIX
-    if ((!sock->crossexec  ||  secure)  &&  !s_SetCloexec(x_sock, 1/*true*/)){
+    if ((!sock->crossexec  ||  sock->session)
+        &&  !s_SetCloexec(x_sock, 1/*true*/)){
         x_error = SOCK_ERRNO;
         CORE_LOGF_ERRNO_EXX(129, eLOG_Warning,
                             x_error, SOCK_STRERROR(x_error),
@@ -2980,9 +3010,10 @@ static EIO_Status s_Create(const char*     hostpath,
     x_sock->type      = eSocket;
     x_sock->log       = flags;
     x_sock->side      = eSOCK_Client;
-    x_sock->keep      = flags & fSOCK_KeepOnClose ? 1/*true*/ : 0/*false*/;
-    x_sock->r_on_w    = flags & fSOCK_ReadOnWrite       ? eOn : eDefault;
-    x_sock->i_on_sig  = flags & fSOCK_InterruptOnSignal ? eOn : eDefault;
+    x_sock->session   = flags & fSOCK_Secure ? SESSION_INVALID : 0;
+    x_sock->keep      = flags & fSOCK_KeepOnClose ? 1/*true*/  : 0/*false*/;
+    x_sock->r_on_w    = flags & fSOCK_ReadOnWrite       ? eOn  : eDefault;
+    x_sock->i_on_sig  = flags & fSOCK_InterruptOnSignal ? eOn  : eDefault;
 
 #ifdef NCBI_OS_UNIX
     x_sock->crossexec = flags & fSOCK_KeepOnExec ? 1/*true*/ : 0/*false*/;
@@ -3005,7 +3036,7 @@ static EIO_Status s_Create(const char*     hostpath,
 
 
     /* connect */
-    status = s_Connect(x_sock, hostpath, port, timeout, flags & fSOCK_Secure);
+    status = s_Connect(x_sock, hostpath, port, timeout);
     if (status != eIO_Success)
         SOCK_Close(x_sock);
     else
@@ -3051,7 +3082,7 @@ extern EIO_Status TRIGGER_Create(TRIGGER* trigger, ESwitch log)
 
 #  if defined(NCBI_OS_UNIX)
     {{
-        int fd[2];
+        int fd[3];
 
         if (pipe(fd) < 0) {
             CORE_LOGF_ERRNO_X(28, eLOG_Error, errno,
@@ -3059,6 +3090,20 @@ extern EIO_Status TRIGGER_Create(TRIGGER* trigger, ESwitch log)
                                " Cannot create pipe", x_id));
             return eIO_Closed;
         }
+
+#    ifdef FD_SETSIZE
+        if ((fd[2] = fcntl(fd[1], F_DUPFD, FD_SETSIZE)) < 0) {
+            /* We don't need "out" to be selectable, so move it out
+             * of the way to spare precious "selectable" fd numbers */
+            CORE_LOGF_ERRNO_X(143, eLOG_Warning, errno,
+                              ("TRIGGER#%u[?]: [TRIGGER::Create] "
+                               " Failed to dup(%d) to higher fd(%d))",
+                               x_id, fd[1], FD_SETSIZE));
+        } else {
+            close(fd[1]);
+            fd[1] = fd[2];
+        }
+#    endif /*FD_SETSIZE*/
 
         if (!s_SetNonblock(fd[0], 1/*true*/)  ||
             !s_SetNonblock(fd[1], 1/*true*/)) {
@@ -3473,7 +3518,6 @@ static EIO_Status s_CreateListening(const char*    path,
     (*lsock)->sock     = x_lsock;
     (*lsock)->id       = x_id;
     (*lsock)->port     = port;
-    (*lsock)->backlog  = backlog;
     (*lsock)->type     = eListening;
     (*lsock)->log      = flags;
     (*lsock)->side     = eSOCK_Server;
@@ -3887,7 +3931,7 @@ extern EIO_Status SOCK_Create(const char*     host,
 {
     if (!host  ||  !port)
         return eIO_InvalidArg;
-    return s_Create(host, port, timeout, sock, 0, 0, eDefault);
+    return s_Create(host, port, timeout, sock, 0, 0, fSOCK_LogDefault);
 }
 
 
@@ -3926,7 +3970,7 @@ extern EIO_Status SOCK_CreateOnTop(const void* handle,
                                    size_t      handle_size,
                                    SOCK*       sock)
 {
-    return SOCK_CreateOnTopEx(handle, handle_size, sock, 0,0, fSOCK_LogDefault);
+    return SOCK_CreateOnTopEx(handle, handle_size, sock, 0,0,fSOCK_LogDefault);
 }
 
 
@@ -4052,9 +4096,10 @@ extern EIO_Status SOCK_CreateOnTopEx(const void* handle,
     x_sock->type      = eSocket;
     x_sock->log       = flags;
     x_sock->side      = eSOCK_Server;
-    x_sock->keep      = flags & fSOCK_KeepOnClose ? 1/*true*/ : 0/*false*/;
-    x_sock->r_on_w    = flags & fSOCK_ReadOnWrite       ? eOn : eDefault;
-    x_sock->i_on_sig  = flags & fSOCK_InterruptOnSignal ? eOn : eDefault;
+    x_sock->session   = flags & fSOCK_Secure ? SESSION_INVALID : 0;
+    x_sock->keep      = flags & fSOCK_KeepOnClose ? 1/*true*/  : 0/*false*/;
+    x_sock->r_on_w    = flags & fSOCK_ReadOnWrite       ? eOn  : eDefault;
+    x_sock->i_on_sig  = flags & fSOCK_InterruptOnSignal ? eOn  : eDefault;
     x_sock->r_status  = eIO_Success;
     x_sock->w_status  = eIO_Success;
     x_sock->pending   = 1/*have to check at the nearest I/O*/;
@@ -4066,7 +4111,7 @@ extern EIO_Status SOCK_CreateOnTopEx(const void* handle,
     x_sock->w_buf     = w_buf;
     x_sock->w_len     = datalen;
 
-    if (flags & fSOCK_Secure) {
+    if (x_sock->session) {
         FSSLCreate sslcreate = s_SSL ? s_SSL->Create : 0;
         void* session;
         if (!sslcreate) {
@@ -4159,7 +4204,7 @@ static EIO_Status s_Reconnect(SOCK            sock,
     sock->side      = eSOCK_Client;
     sock->n_read    = 0;
     sock->n_written = 0;
-    return s_Connect(sock, host, port, timeout, sock->session ? 1 : 0);
+    return s_Connect(sock, host, port, timeout);
 }
 
 
@@ -4816,14 +4861,49 @@ extern char* SOCK_GetPeerAddressString(SOCK   sock,
                                        char*  buf,
                                        size_t buflen)
 {
+    return SOCK_GetPeerAddressStringEx(sock, buf, buflen, eSAF_Full);
+}
+
+
+extern char* SOCK_GetPeerAddressStringEx(SOCK                sock,
+                                         char*               buf,
+                                         size_t              buflen,
+                                         ESOCK_AddressFormat format)
+{
+    char port[8];
+    size_t len;
+
     if (!buf  ||  !buflen)
-        return 0;
+        return 0/*error*/;
+    if (format == eSAF_Full) {
 #ifdef NCBI_OS_UNIX
-    if (sock->path[0])
-        strncpy0(buf, sock->path, buflen - 1);
-    else
+        if (sock->path[0])
+            strncpy0(buf, sock->path, buflen - 1);
+        else
 #endif /*NCBI_OS_UNIX*/
-        SOCK_HostPortToString(sock->host, sock->port, buf, buflen);
+            if (!SOCK_HostPortToString(sock->host, sock->port, buf, buflen))
+                return 0/*error*/;
+        return buf;
+    }
+    switch (format) {
+    case eSAF_Port:
+        if ((len = (size_t) sprintf(port, "%hu", sock->port)) >= buflen)
+            return 0/*error*/;
+        memcpy(buf, port, len + 1);
+        break;
+    case eSAF_IP:
+        if (SOCK_ntoa(sock->host, buf, buflen) != 0)
+            return 0/*error*/;
+        break;
+    default:
+#ifdef NCBI_OS_UNIX
+        if (sock->path[0]) {
+            *buf = '\0';
+            break;
+        }
+#endif /*NCBI_OS_UNIX*/
+        return 0/*error*/;
+    }
     return buf;
 }
 

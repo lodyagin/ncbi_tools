@@ -1,4 +1,4 @@
-/*  $Id: socket_io_bouncer.c,v 6.10 2008/10/23 20:55:38 kazimird Exp $
+/*  $Id: socket_io_bouncer.c,v 6.11 2009/04/10 23:04:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,7 +40,7 @@
 /* This header must go last */
 #include "test_assert.h"
 
-#define MIN_PORT 5001
+#define MIN_PORT 4096
 
 
 static FILE* s_LogFile;

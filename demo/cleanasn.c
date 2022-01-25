@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/19/99
 *
-* $Revision: 6.29 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -60,13 +60,17 @@
 #ifdef INTERNAL_NCBI_CLEANASN
 #include <accpubseq.h>
 #endif
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 
-#define CLEANASN_APP_VER "2.2"
+#define CLEANASN_APP_VER "2.8"
 
 CharPtr CLEANASN_APPLICATION = CLEANASN_APP_VER;
 
 typedef struct cleanflags {
   Char          buf [64];
+  Int4          gi;
   Boolean       batch;
   Boolean       binary;
   Boolean       compressed;
@@ -82,6 +86,7 @@ typedef struct cleanflags {
   CharPtr       feat;
   CharPtr       desc;
   CharPtr       mods;
+  ValNodePtr    action_list;
   Boolean       taxon;
   Boolean       pub;
   Int4          okay;
@@ -891,20 +896,145 @@ static void DoModernizeReport (
   MemFree (str4);
 }
 
-static void DoCleanup (
+static ByteStorePtr Se2Bs (
+  SeqEntryPtr sep
+)
+
+{
+  AsnIoBSPtr    aibp;
+  ByteStorePtr  bs;
+
+  if (sep == NULL) return NULL;
+
+  bs = BSNew (1000);
+  if (bs == NULL) return NULL;
+  aibp = AsnIoBSOpen ("w", bs);
+  if (aibp == NULL) return NULL;
+
+  SeqEntryAsnWrite (sep, aibp->aip, NULL);
+
+  AsnIoFlush (aibp->aip);
+  AsnIoBSClose (aibp);
+
+  return bs;
+}
+
+static void RemoveFeatureCitations (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  if (sfp == NULL || sfp->cit == NULL) return;
+
+  sfp->cit = PubSetFree (sfp->cit);
+}
+
+#ifdef OS_UNIX
+static SeqEntryPtr CppBasicCleanup (
   SeqEntryPtr sep,
-  Uint2 entityID,
   CleanFlagPtr cfp
 )
 
 {
-  BioseqPtr    bsp;
-  SeqEntryPtr  fsep;
-  SeqIdPtr     sip, siphead;
+  AsnIoPtr      aip, aop;
+  ByteStorePtr  bs1, bs2;
+  Char          cmmd [256];
+  SeqEntryPtr   csep, nsep;
+  Char          path1 [PATH_MAX];
+  Char          path2 [PATH_MAX];
+  Char          path3 [PATH_MAX];
 
-  if (sep == NULL || cfp == NULL) return;
+  if (sep == NULL || cfp == NULL) return NULL;
+
+  VisitFeaturesInSep (sep, NULL, RemoveFeatureCitations);
+
+  TmpNam (path1);
+  TmpNam (path2);
+  TmpNam (path3);
+
+  aop = AsnIoOpen (path1, "w");
+  SeqEntryAsnWrite (sep, aop, NULL);
+  AsnIoClose (aop);
+
+  sprintf (cmmd, "%s -i %s | cleanasn -a e -o %s",
+           "~/ncbi_cxx/compilers/xCode/build/bin/Debug/test_basic_cleanup",
+           path1, path2);
+  system (cmmd);
+
+  sprintf (cmmd, "cleanasn -i %s -o %s -K b",
+           path1, path3);
+  system (cmmd);
+
+  aip = AsnIoOpen (path3, "r");
+  csep = SeqEntryAsnRead (aip, NULL);
+  AsnIoClose (aip);
+
+  bs1 = Se2Bs (csep);
+
+  aip = AsnIoOpen (path2, "r");
+  nsep = SeqEntryAsnRead (aip, NULL);
+  AsnIoClose (aip);
+
+  bs2 = Se2Bs (nsep);
+
+  if (nsep == NULL) {
+    if (cfp->logfp != NULL) {
+      fprintf (cfp->logfp, "EMPTY %s\n", cfp->buf);
+      fflush (cfp->logfp);
+    }
+  } else if (! BSEqual (bs1, bs2)) {
+    if (cfp->logfp != NULL) {
+      fprintf (cfp->logfp, "BSEC DIFF %s\n", cfp->buf);
+      fflush (cfp->logfp);
+    }
+    if (cfp->gi > 0) {
+      sprintf (cmmd, "echo '' >> ~/Desktop/diffclean.txt");
+      system (cmmd);
+      sprintf (cmmd, "echo '' >> ~/Desktop/diffclean.txt");
+      system (cmmd);
+      sprintf (cmmd, "echo '********** gi|%ld **********' >> ~/Desktop/diffclean.txt", (long) cfp->gi);
+      system (cmmd);
+      sprintf (cmmd, "echo '' >> ~/Desktop/diffclean.txt");
+      system (cmmd);
+      sprintf (cmmd, "diff %s %s >> ~/Desktop/diffclean.txt", path3, path2);
+      system (cmmd);
+    }
+  }
+
+  BSFree (bs1);
+  BSFree (bs2);
+
+  SeqEntryFree (csep);
+
+  sprintf (cmmd, "rm %s; rm %s; rm %s", path1, path2, path3);
+  system (cmmd);
+
+  return nsep;
+}
+#endif
+
+static time_t DoCleanup (
+  SeqEntryPtr sep,
+  Uint2 entityID,
+  CleanFlagPtr cfp,
+  AsnIoPtr aop,
+  AsnTypePtr atp,
+  SeqSubmitPtr ssp
+)
+
+{
+  BioseqPtr    bsp;
+  SeqEntryPtr  fsep, nsep = NULL;
+  SeqIdPtr     sip, siphead;
+  time_t       starttime, stoptime;
+
+  if (sep == NULL || cfp == NULL) return 0;
+
+  starttime = GetSecs ();
 
   StringCpy (cfp->buf, "");
+  cfp->gi = 0;
   fsep = FindNthBioseq (sep, 1);
   if (fsep != NULL && fsep->choice == 1) {
     bsp = (BioseqPtr) fsep->data.ptrvalue;
@@ -912,6 +1042,9 @@ static void DoCleanup (
       siphead = SeqIdSetDup (bsp->id);
       for (sip = siphead; sip != NULL; sip = sip->next) {
         SeqIdStripLocus (sip);
+        if (sip->choice == SEQID_GI) {
+          cfp->gi = (Int4) sip->data.intvalue;
+        }
       }
       SeqIdWrite (siphead, cfp->buf, PRINTID_FASTA_LONG, sizeof (cfp->buf));
       SeqIdSetFree (siphead);
@@ -920,15 +1053,18 @@ static void DoCleanup (
 
   if (StringChr (cfp->report, 'r') != NULL) {
     DoASNReport (sep, cfp);
-    return;
+    stoptime = GetSecs ();
+    return stoptime - starttime;
   }
   if (StringChr (cfp->report, 'g') != NULL) {
     DoGBFFReport (sep, cfp);
-    return;
+    stoptime = GetSecs ();
+    return stoptime - starttime;
   }
   if (StringChr (cfp->report, 'm') != NULL) {
     DoModernizeReport (sep, cfp);
-    return;
+    stoptime = GetSecs ();
+    return stoptime - starttime;
   }
 
   if (cfp->logfp != NULL) {
@@ -939,11 +1075,22 @@ static void DoCleanup (
   if (StringChr (cfp->clean, 'b') != NULL) {
     BasicSeqEntryCleanup (sep);
   }
+#ifdef OS_UNIX
+  if (StringChr (cfp->clean, 'p') != NULL) {
+    nsep = CppBasicCleanup (sep, cfp);
+  }
+#endif
   if (StringChr (cfp->clean, 's') != NULL) {
     SeriousSeqEntryCleanup (sep, NULL, NULL);
   }
+  if (StringChr (cfp->clean, 'g') != NULL) {
+    GpipeSeqEntryCleanup (sep);
+  }
   if (StringChr (cfp->clean, 'n') != NULL) {
     NormalizeDescriptorOrder (sep);
+  }
+  if (StringChr (cfp->clean, 'u') != NULL) {
+    RemoveAllNcbiCleanupUserObjects (sep);
   }
 
   if (StringChr (cfp->modernize, 'g') != NULL) {
@@ -1000,6 +1147,25 @@ static void DoCleanup (
     SeqMgrIndexFeatures (entityID, 0);
     DoAutoDef (sep, entityID);
   }
+
+  if (cfp->action_list != NULL) {
+    ApplyMacroToSeqEntry (sep, cfp->action_list, NULL, NULL);
+  }
+
+  stoptime = GetSecs ();
+
+  if (aop != NULL) {
+	if (ssp != NULL) {
+	  SeqSubmitAsnWrite (ssp, aop, atp);
+	} else if (nsep != NULL) {
+	  SeqEntryAsnWrite (nsep, aop, atp);
+	  SeqEntryFree (nsep);
+	} else {
+	  SeqEntryAsnWrite (sep, aop, atp);
+	}
+  }
+
+  return stoptime - starttime;
 }
 
 static void CleanupSingleRecord (
@@ -1017,6 +1183,7 @@ static void CleanupSingleRecord (
   Char          path [PATH_MAX];
   CharPtr       ptr;
   SeqEntryPtr   sep;
+  SeqSubmitPtr  ssp = NULL;
 
   if (cfp == NULL) return;
 
@@ -1042,6 +1209,7 @@ static void CleanupSingleRecord (
       return;
     }
 
+    SeqMgrHoldIndexing (TRUE);
     switch (cfp->type) {
       case 2 :
         dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -1057,11 +1225,13 @@ static void CleanupSingleRecord (
         break;
       case 5 :
         dataptr = (Pointer) SeqSubmitAsnRead (aip, NULL);
+        ssp = (SeqSubmitPtr) dataptr;
         datatype = OBJ_SEQSUB;
         break;
       default :
         break;
     }
+    SeqMgrHoldIndexing (FALSE);
 
     AsnIoClose (aip);
 
@@ -1122,15 +1292,11 @@ static void CleanupSingleRecord (
       sep = GetTopSeqEntryForEntityID (entityID);
       if (sep != NULL && StringDoesHaveText (path)) {
 
-        DoCleanup (sep, entityID, cfp);
-
         aop = AsnIoOpen (path, "w");
+
+        DoCleanup (sep, entityID, cfp, aop, NULL, ssp);
+
         if (aop != NULL) {
-          if (datatype == OBJ_SEQSUB) {
-            SeqSubmitAsnWrite ((SeqSubmitPtr) dataptr, aop, NULL);
-          } else {
-            SeqEntryAsnWrite (sep, aop, NULL);
-          }
           AsnIoFlush (aop);
           AsnIoClose (aop);
         }
@@ -1162,7 +1328,7 @@ static void CleanupMultipleRecord (
   Char         path [PATH_MAX];
   CharPtr      ptr;
   SeqEntryPtr  sep;
-  time_t       starttime, stoptime, worsttime;
+  time_t       timediff, worsttime;
 #ifdef OS_UNIX
   Char         cmmd [256];
   CharPtr      gzcatprog;
@@ -1269,22 +1435,21 @@ static void CleanupMultipleRecord (
     while ((atp = AsnReadId (aip, cfp->amp, atp)) != NULL) {
       if (atp == cfp->atp_se) {
 
+        SeqMgrHoldIndexing (TRUE);
         sep = SeqEntryAsnRead (aip, atp);
+        SeqMgrHoldIndexing (FALSE);
+
         if (sep != NULL) {
 
           entityID = ObjMgrGetEntityIDForChoice (sep);
 
-          starttime = GetSecs ();
-          DoCleanup (sep, entityID, cfp);
-          stoptime = GetSecs ();
+          timediff = DoCleanup (sep, entityID, cfp, aop, cfp->atp_se, NULL);
 
-          if (stoptime - starttime > worsttime) {
-            worsttime = stoptime - starttime;
+          if (timediff > worsttime) {
+            worsttime = timediff;
             StringCpy (longest, cfp->buf);
           }
           numrecords++;
-
-          SeqEntryAsnWrite (sep, aop, cfp->atp_se);
 
           ObjMgrFreeByEntityID (entityID);
         }
@@ -1370,9 +1535,10 @@ static void CleanupOneRecord (
 #define N_argLink         16
 #define F_argFeat         17
 #define D_argDesc         18
-#define M_argMods         19
-#define T_argTaxonLookup  20
-#define P_argPubLookup    21
+#define X_argMods         19
+#define M_argMacro        20
+#define T_argTaxonLookup  21
+#define P_argPubLookup    22
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -1418,8 +1584,11 @@ Args myargs [] = {
     TRUE, 'm', ARG_STRING, 0.0, 0, NULL},
   {"Cleanup\n"
    "      b BasicSeqEntryCleanup\n"
+   "      p C++ BasicCleanup\n"
    "      s SeriousSeqEntryCleanup\n"
-   "      n Normalize Descriptor Order", NULL, NULL, NULL,
+   "      g GpipeSeqEntryCleanup\n"
+   "      n Normalize Descriptor Order\n"
+   "      u Remove NcbiCleanup User Objects", NULL, NULL, NULL,
     TRUE, 'K', ARG_STRING, 0.0, 0, NULL},
   {"Modernize\n"
    "      g Gene\n"
@@ -1442,7 +1611,9 @@ Args myargs [] = {
     TRUE, 'D', ARG_STRING, 0.0, 0, NULL},
   {"Miscellaneous\n"
    "      d Automatic Definition Line", NULL, NULL, NULL,
-    TRUE, 'M', ARG_STRING, 0.0, 0, NULL},
+    TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
+  {"Macro File", NULL, NULL, NULL,
+    TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
   {"Taxonomy Lookup", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Publication Lookup", "F", NULL, NULL,
@@ -1452,9 +1623,12 @@ Args myargs [] = {
 Int2 Main (void)
 
 {
+  ValNodePtr     action_list;
+  AsnIoPtr       aip;
   Char           app [64], mode, type;
   CleanFlagData  cfd;
-  CharPtr        directory, filter, infile, logfile, outfile, results, str, suffix;
+  CharPtr        directory, filter, infile, logfile, outfile,
+                 macro_file, results, str, suffix;
   Boolean        remote;
   time_t         runtime, starttime, stoptime;
 
@@ -1583,9 +1757,24 @@ Int2 Main (void)
   cfd.link = myargs [N_argLink].strvalue;
   cfd.feat = myargs [F_argFeat].strvalue;
   cfd.desc = myargs [D_argDesc].strvalue;
-  cfd.mods = myargs [M_argMods].strvalue;
+  cfd.mods = myargs [X_argMods].strvalue;
   cfd.taxon = (Boolean) myargs [T_argTaxonLookup].intvalue;
   cfd.pub = (Boolean) myargs [P_argPubLookup].intvalue;
+
+  macro_file = myargs [M_argMacro].strvalue;
+  if (StringDoesHaveText (macro_file)) {
+    aip = AsnIoOpen (macro_file, "r");
+    if (aip == NULL) {
+      Message (MSG_FATAL, "Unable to open macro file '%s'", macro_file);
+      return 1;
+    }
+    action_list = MacroActionListAsnRead (aip, NULL);
+    AsnIoClose (aip);
+    if (action_list == NULL) {
+      Message (MSG_FATAL, "Unable to read macro file '%s'", macro_file);
+    }
+    cfd.action_list = action_list;
+  }
 
   cfd.amp = AsnAllModPtr ();
   cfd.atp_bss = AsnFind ("Bioseq-set");

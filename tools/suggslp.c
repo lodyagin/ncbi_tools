@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: suggslp.c,v 6.3 2007/02/22 22:26:08 kans Exp $";
+static char const rcsid[] = "$Id: suggslp.c,v 6.6 2009/04/16 18:35:41 kans Exp $";
 
 /* suggslp.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: suggslp.c,v 6.3 2007/02/22 22:26:08 kans Exp $
 *
 * Version Creation Date:   11/22/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *	Implementation of Suggest standalone prediction function. Here it
@@ -818,8 +818,7 @@ Get_Prot_ID(Int2 num)
  *	none
  *
 \*----------------------------------------------------------------------------*/
-void
-OutProteinID(SuggestOutputPtr pSuggestOut, Int2 num)
+extern void OutProteinID (SuggestOutputPtr pSuggestOut, Int2 num)
 {
     SeqAnnotPtr	pSeqAnnot;
     SeqFeatPtr	pSeqFeat;
@@ -923,8 +922,7 @@ Get_Nuc_ID(Int2 num)
  *	none
  *
 \*----------------------------------------------------------------------------*/
-void
-OutLocation(SuggestOutputPtr pSuggestOut, Int4 num_nuc)
+extern void OutLocation (SuggestOutputPtr pSuggestOut, Int4 num_nuc)
 {
     IntPtr	thisInt = intlist;
     SeqLocPtr	pSeqLoc;
@@ -992,14 +990,15 @@ OutLocation(SuggestOutputPtr pSuggestOut, Int4 num_nuc)
     }
 }
 
-void SuggestClientService (SuggestIntervalsPtr pSIntervals)
+Int2 SuggestClientService (SuggestIntervalsPtr pSIntervals)
 
 {
   BioseqPtr    bsp;
   SeqEntryPtr  sep;
+  Int2         rsult = 0;
 
   suggestOut.out.pSeqAnnot = NULL;
-  if (pSIntervals == NULL) return;
+  if (pSIntervals == NULL) return rsult;
   GetSuggestParams(&suggestRec, pSIntervals->params);
   i4GenCode = Get_Genetic_Code (pSIntervals->code, &suggestRec);
   sep = pSIntervals->dna;
@@ -1009,12 +1008,13 @@ void SuggestClientService (SuggestIntervalsPtr pSIntervals)
       GetDNAandProtein (pSIntervals, &suggestRec);
       suggestOut.out.pSeqAnnot = SeqAnnotNew ();
       suggestOut.out.pSeqAnnot->type = 1;
-      ProcessData (&suggestOut, (Boolean) (batchNucPtr == NULL));
+      rsult = ProcessData (&suggestOut, (Boolean) (batchNucPtr == NULL));
     }
   }
+  return rsult;
 }
 
-SeqAnnotPtr SuggestCodingRegion (BioseqPtr nuc, BioseqPtr prot, Int2 genCode)
+SeqAnnotPtr SuggestCodingRegionEx (BioseqPtr nuc, BioseqPtr prot, Int2 genCode, Int2Ptr rsult)
 
 {
   SeqAnnotPtr          annot;
@@ -1028,10 +1028,18 @@ SeqAnnotPtr SuggestCodingRegion (BioseqPtr nuc, BioseqPtr prot, Int2 genCode)
   pSIntervals->dna = SeqMgrGetSeqEntryForData (nuc);
   pSIntervals->protein = SeqMgrGetSeqEntryForData (prot);
   pSIntervals->code = (Int4) genCode;
-  SuggestClientService (pSIntervals);
-  annot = suggestOut.out.pSeqAnnot;
+  if (SuggestClientService (pSIntervals) == 0) {
+    annot = suggestOut.out.pSeqAnnot;
+    suggestOut.out.pSeqAnnot = NULL;
+    return annot;
+  }
   suggestOut.out.pSeqAnnot = NULL;
-  return annot;
+  return NULL;
 }
 
+SeqAnnotPtr SuggestCodingRegion (BioseqPtr nuc, BioseqPtr prot, Int2 genCode)
+
+{
+  return SuggestCodingRegionEx (nuc, prot, genCode, NULL);
+}
 

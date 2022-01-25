@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.115 $
+* $Revision: 1.125 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,14 +63,16 @@
 #endif
 #endif
 
-static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids=";
+static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids=";
 
-static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?";
+static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
 
 static CharPtr link_sp = "http://www.uniprot.org/uniprot/";
 
+/*
 static CharPtr link_featn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
+*/
 
 static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
@@ -454,9 +456,7 @@ NLM_EXTERN void AddLocusBlock (
   Char               gene [32];
   Boolean            genome_view;
   GBSeqPtr           gbseq;
-  Int4               gi = 0;
   ValNodePtr         gilistpos;
-  Char               gi_buf [16];
   SeqIdPtr           gpp = NULL;
   Boolean            has_next_pref_ul = FALSE;
   Boolean            hasComment;
@@ -464,7 +464,6 @@ NLM_EXTERN void AddLocusBlock (
   Int2               imol = 0;
   IndxPtr            index;
   Int2               istrand;
-  Boolean            is_aa;
   Boolean            is_nm = FALSE;
   Boolean            is_np = FALSE;
   Boolean            is_nz = FALSE;
@@ -485,7 +484,6 @@ NLM_EXTERN void AddLocusBlock (
   Uint1              origin;
   OrgRefPtr          orp;
   BioseqPtr          parent;
-  CharPtr            prefix = NULL;
   Int4               prevGi;
   SeqDescrPtr        sdp;
   Char               sect [128];
@@ -506,6 +504,12 @@ NLM_EXTERN void AddLocusBlock (
   ValNodePtr         vnp;
   Boolean            wgsmaster = FALSE;
   Int2               moltype, strandedness, topol;
+  /*
+  Int4               gi = 0;
+  Char               gi_buf [16];
+  Boolean            is_aa;
+  CharPtr            prefix = NULL;
+  */
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -1277,6 +1281,7 @@ NLM_EXTERN void AddLocusBlock (
 
   bbp->string = suffix;
 
+  /*
   if (awp->contig && (! awp->showconfeats) && awp->smartconfeats && GetWWW (ajp) &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
     is_aa = ISA_aa (bsp->mol);
@@ -1320,6 +1325,7 @@ NLM_EXTERN void AddLocusBlock (
       MemFree (prefix);
     }
   }
+  */
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
@@ -2214,150 +2220,6 @@ static void FF_asn2gb_www_projID (
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
-static void AddOldProjectBlock (
-  Asn2gbWorkPtr awp
-)
-
-{
-  IntAsn2gbJobPtr    ajp;
-  Asn2gbSectPtr      asp;
-  BaseBlockPtr       bbp;
-  BioseqPtr          bsp;
-  Char               buf [32];
-  UserFieldPtr       curr;
-  SeqMgrDescContext  dcontext;
-  StringItemPtr      ffstring;
-  GBSeqPtr           gbseq;
-  UserObjectPtr      gpuop = NULL;
-  ValNodePtr         head = NULL;
-  Uint4              itemID = 0;
-  ObjectIdPtr        oip;
-  Int4               parentID;
-  CharPtr            prefix;
-  Int4               projectID;
-  SeqDescrPtr        sdp;
-  UserObjectPtr      uop;
-  Int4               val;
-
-  if (awp == NULL) return;
-  ajp = awp->ajp;
-  if (ajp == NULL) return;
-  bsp = awp->bsp;
-  if (bsp == NULL) return;
-  asp = awp->asp;
-  if (asp == NULL) return;
-
-  if (! ISA_na (bsp->mol)) return;
-  if (awp->format != GENBANK_FMT) return;
-
-  if (ajp->gbseq) {
-    gbseq = &asp->gbseq;
-  } else {
-    gbseq = NULL;
-  }
-
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
-  while (sdp != NULL) {
-    uop = (UserObjectPtr) sdp->data.ptrvalue;
-    if (uop != NULL) {
-      oip = uop->type;
-      if (oip != NULL && StringICmp (oip->str, "GenomeProjectsDB") == 0) {
-        gpuop = uop;
-        itemID = dcontext.itemID;
-      }
-    }
-    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
-  }
-  if (gpuop == NULL) return;
-
-  ffstring = FFGetString (ajp);
-  if ( ffstring == NULL ) return;
-
-  bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
-  if (bbp == NULL) return;
-
-  bbp->entityID = awp->entityID;
-  bbp->itemID = itemID;
-  bbp->itemtype = OBJ_SEQDESC;
-
-  FFStartPrint (ffstring, awp->format, 0, 12, "PROJECT", 12, 5, 5, "XX", TRUE);
-
-  prefix = "GenomeProject:";
-  projectID = 0;
-  parentID = 0;
-  for (curr = gpuop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip == NULL) continue;
-    if (StringICmp (oip->str, "ProjectID") == 0) {
-      if (curr->choice == 2) {
-        val = (Int4) curr->data.intvalue;
-        if (projectID > 0) {
-          sprintf (buf, "%ld", (long) projectID);
-          FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-          if (GetWWW (ajp)) {
-            FF_asn2gb_www_projID (ffstring, buf);
-          } else {
-            FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
-          }
-          /*
-          FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
-          */
-          if (gbseq != NULL) {
-            if (head == NULL) {
-              sprintf (buf, "%ld", (long) projectID);
-            } else {
-              sprintf (buf, ", %ld", (long) projectID);
-            }
-            ValNodeCopyStr (&head, 0, buf);
-          }
-          prefix = ",";
-          parentID = 0;
-        }
-        projectID = val;
-      }
-    } else if (StringICmp (oip->str, "ParentID") == 0) {
-      if (curr->choice == 2) {
-        val = (Int4) curr->data.intvalue;
-        parentID = val;
-      }
-    }
-  }
-  if (projectID > 0) {
-    sprintf (buf, "%ld", (long) projectID);
-    FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-    if (GetWWW (ajp)) {
-      FF_asn2gb_www_projID (ffstring, buf);
-    } else {
-      FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
-    }
-    /*
-    FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
-    */
-    if (gbseq != NULL) {
-      if (head == NULL) {
-        sprintf (buf, "%ld", (long) projectID);
-      } else {
-        sprintf (buf, ", %ld", (long) projectID);
-      }
-      ValNodeCopyStr (&head, 0, buf);
-    }
-  }
-
-  bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
-  FFRecycleString (ajp, ffstring);
-
-  if (gbseq != NULL) {
-    if (head != NULL) {
-      gbseq->project = MergeFFValNodeStrs (head);
-      ValNodeFreeData (head);
-    }
-  }
-
-  if (awp->afp != NULL) {
-    DoImmediateFormat (awp->afp, bbp);
-  }
-}
-
 static CharPtr GetDBLinkString (
   UserObjectPtr uop
 )
@@ -2365,6 +2227,7 @@ static CharPtr GetDBLinkString (
 {
   Char          buf1 [256];
   Char          buf2 [256];
+  Char          buf3 [256];
   CharPtr PNTR  cpp;
   Int4          i;
   Int4Ptr       ip;
@@ -2380,6 +2243,7 @@ static CharPtr GetDBLinkString (
 
   buf1 [0] = '\0';
   buf2 [0] = '\0';
+  buf3 [0] = '\0';
 
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
@@ -2416,11 +2280,27 @@ static CharPtr GetDBLinkString (
         }
       }
     }
+    if (StringICmp (oip->str, "ProbeDB") == 0 && ufp->choice == 7) {
+      cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+      if (ufp->num > 0 && cpp != NULL) {
+        str = cpp [0];
+        if (StringDoesHaveText (str)) {
+          sprintf (buf3, "ProbeDB:%s", str);
+          for (i = 1; i < ufp->num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              sprintf (tmp, ",%s", str);
+              StringCat (buf3, tmp);
+            }
+          }
+        }
+      }
+    }
   }
 
-  if (StringHasNoText (buf1) && StringHasNoText (buf2)) return NULL;
+  if (StringHasNoText (buf1) && StringHasNoText (buf2) && StringHasNoText (buf3)) return NULL;
 
-  len = StringLen (buf1) + StringLen (buf2);
+  len = StringLen (buf1) + StringLen (buf2) + StringLen (buf3);
   str = (CharPtr) MemNew (sizeof (Char) * (len + 2));
   if (str == NULL) return NULL;
 
@@ -2437,10 +2317,16 @@ static CharPtr GetDBLinkString (
     prefix = "\n";
   }
 
+  if (StringDoesHaveText (buf3)) {
+    StringCat (str, prefix);
+    StringCat (str, buf3);
+    prefix = "\n";
+  }
+
   return str;
 }
 
-static void AddDblinkBlock (
+NLM_EXTERN void AddDblinkBlock (
   Asn2gbWorkPtr awp
 )
 
@@ -2477,8 +2363,13 @@ static void AddDblinkBlock (
   asp = awp->asp;
   if (asp == NULL) return;
 
+  if (ISA_na (bsp->mol) && awp->format != GENBANK_FMT) return;
+  if (ISA_aa (bsp->mol) && awp->format != GENPEPT_FMT) return;
+
+  /*
   if (! ISA_na (bsp->mol)) return;
   if (awp->format != GENBANK_FMT) return;
+  */
 
   if (ajp->gbseq) {
     gbseq = &asp->gbseq;
@@ -2586,6 +2477,10 @@ static void AddDblinkBlock (
     bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
     FFRecycleString (ajp, ffstring);
     ffstring = FFGetString (ajp);
+
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, bbp);
+    }
   }
 
   if (dbuop != NULL) {
@@ -2609,6 +2504,10 @@ static void AddDblinkBlock (
 
       bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
       MemFree (str);
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, bbp);
+      }
     }
   }
 
@@ -2620,19 +2519,6 @@ static void AddDblinkBlock (
       ValNodeFreeData (head);
     }
   }
-
-  if (awp->afp != NULL) {
-    DoImmediateFormat (awp->afp, bbp);
-  }
-}
-
-NLM_EXTERN void AddProjectBlock (
-  Asn2gbWorkPtr awp
-)
-
-{
-  AddOldProjectBlock (awp);
-  AddDblinkBlock (awp);
 }
 
 /* only displaying PID in GenPept format */
@@ -3407,17 +3293,24 @@ static CharPtr TxtSave (CharPtr text, size_t len)
    return (str);
 }
 
-static Boolean FF_www_dbsource(
+static Boolean FF_www_dbsource (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr str,
   Boolean first,
-  Uint1 choice,
+  SeqIdPtr sip,
   Boolean is_na
 )
+
 {
-  CharPtr  temp, end, text, loc, link=NULL;
-  Int2 j;
+  CharPtr  temp, end, text, loc, link = NULL;
+  Uint1    choice;
+  Int2     j;
+  Int4     gi = 0;
+  Char     gibuf [32];
+
+  if (sip == NULL) return FALSE;
+  choice = sip->choice;
 
   if( GetWWW(ajp) ) {
     if (choice == SEQID_PIR) {
@@ -3468,13 +3361,21 @@ static Boolean FF_www_dbsource(
       if (choice == SEQID_SWISSPROT) {
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
         FF_Add_NCBI_Base_URL (ffstring, link);
+        for (text = temp; text != end; ++text ) {
+          FFAddOneChar (ffstring, *text, FALSE);
+        }
       } else {
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
         FF_Add_NCBI_Base_URL (ffstring, link);
-        FFAddOneString (ffstring, /* "val=" */ NULL, FALSE, FALSE, TILDE_IGNORE);
-      }
-      for (text = temp; text != end; ++text ) {
-        FFAddOneChar(ffstring, *text, FALSE);
+        gi = GetGIForSeqId (sip);
+        if (gi > 0) {
+          sprintf (gibuf, "%ld", (long) gi);
+          FFAddOneString (ffstring, gibuf, FALSE, FALSE, TILDE_IGNORE);
+        } else {
+          for (text = temp; text != end; ++text ) {
+            FFAddOneChar(ffstring, *text, FALSE);
+          }
+        }
       }
       FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
 
@@ -3550,7 +3451,7 @@ NLM_EXTERN void AddDbsourceBlock (
       case SEQID_PRF :
       case SEQID_PDB :
         if (WriteDbsourceID (sip, buf, &is_na)) {
-          FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
+          FF_www_dbsource (ajp, ffstring, buf, TRUE, sip, is_na);
           FFAddNewLine(ffstring);
           unknown = FALSE;
         }
@@ -3606,7 +3507,7 @@ NLM_EXTERN void AddDbsourceBlock (
               }
               if (sip != NULL) {
                 if (WriteDbsourceID (sip, buf, &is_na)) {
-                  FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
+                  FF_www_dbsource (ajp, ffstring, buf, TRUE, sip, is_na);
                   FFAddNewLine(ffstring);
                   unknown = FALSE;
                 }
@@ -3625,7 +3526,7 @@ NLM_EXTERN void AddDbsourceBlock (
                 }
               }
               if (WriteDbsourceID (sip, buf, &is_na)) {
-                FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
+                FF_www_dbsource (ajp, ffstring, buf, TRUE, sip, is_na);
                 FFAddNewLine(ffstring);
                 unknown = FALSE;
               }
@@ -3633,7 +3534,7 @@ NLM_EXTERN void AddDbsourceBlock (
           }
         } else {
           if (WriteDbsourceID (sip, buf, &is_na)) {
-            FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
+            FF_www_dbsource (ajp, ffstring, buf, TRUE, sip, is_na);
             FFAddNewLine(ffstring);
             unknown = FALSE;
           }
@@ -3998,12 +3899,14 @@ NLM_EXTERN void AddKeywordsBlock (
           }
           ValNodeCopyStr (&head, 0, "WGS");
           break;
+        /*
         case MI_TECH_barcode :
           if (head != NULL) {
             ValNodeCopyStr (&head, 0, "; ");
           }
           ValNodeCopyStr (&head, 0, "BARCODE");
           break;
+        */
         case MI_TECH_tsa :
           if (head != NULL) {
             ValNodeCopyStr (&head, 0, "; ");

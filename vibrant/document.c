@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -37,170 +37,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* 01-25-94 DGG + JK    Fixed MapDocPoint bug
-*
-* $Log: document.c,v $
-* Revision 6.22  2008/04/29 13:43:50  kans
-* fixes for warnings caught by mingw cross-compiler
-*
-* Revision 6.21  2008/02/13 18:52:08  bollin
-* Added MapDocPointEx, which allows you to prefer the first matching column to
-* the last matching column.
-*
-* Revision 6.20  2006/09/27 18:30:00  kans
-* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
-*
-* Revision 6.19  2006/07/13 12:29:29  bollin
-* fixed compiler warning
-*
-* Revision 6.18  2005/07/18 15:15:18  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.17  2004/08/06 18:48:28  kans
-* subtle bug in DisplayFancy was missing one call to GetChar
-*
-* Revision 6.16  2004/07/29 01:56:47  kans
-* DisplayFancy can handle DOS line endings when run on Mac
-*
-* Revision 6.15  2004/07/12 18:21:32  kans
-* DrawTableItem had extra LineTo left over when drawing bar
-*
-* Revision 6.14  2004/07/11 16:31:03  kans
-* added is_old_win to DrawTableItem
-*
-* Revision 6.13  2004/07/09 17:43:04  kans
-* cache mechanism abandons binary tree in favor of separate field in itemPtr
-*
-* Revision 6.12  2004/06/17 16:06:46  kans
-* removed artifact on drawing vertical bar on non-Mac platform - always go to barBottom - 1
-*
-* Revision 6.11  2003/03/27 18:23:54  kans
-* increased 16000 character buffer to 24000 to handle long PubMed abstracts (e.g., pmid 12209194 technical report on toxicity studies)
-*
-* Revision 6.10  2003/02/28 19:14:58  kans
-* DrawDocument bails if pixels == 0 to avoid getting stuck in almost infinite loop
-*
-* Revision 6.9  2000/05/22 16:38:24  kans
-* added UpdateColFmt per Serge Bazhin request
-*
-* Revision 6.8  1999/11/05 19:59:35  beloslyu
-* cast inserted
-*
-* Revision 6.7  1999/11/02 19:13:53  kans
-* bulk append allows 32767 paragraphs
-*
-* Revision 6.6  1998/06/17 21:14:14  kans
-* reset document clears first, last highlight item
-*
-* Revision 6.5  1998/06/16 21:14:29  kans
-* fixed test for item between first and last highlight item
-*
-* Revision 6.4  1998/06/12 16:40:19  kans
-* fixed warnings detected by unix compiler
-*
-* Revision 6.3  1998/05/02 19:42:31  kans
-* added SetDocSimpleMode
-*
-* Revision 6.2  1997/11/26 21:29:50  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.1  1997/11/09 00:25:53  kans
-* SaveTableItem does not strip preceeding tabs if tabCount is 0
-*
-* Revision 6.0  1997/08/25 18:55:30  madden
-* Revision changed to 6.0
-*
-* Revision 5.23  1997/08/20 20:48:11  kans
-* DrawTableItem selects curFont after invert, grey, color callbacks
-*
-* Revision 5.22  1997/08/12 18:42:56  kans
-* added SaveDocumentItem
-*
-* Revision 5.21  1997/06/30 18:05:02  kans
-* text per item can be more than 64K
-*
-* Revision 5.20  1997/06/11 14:27:04  kans
-* add SetDocExtra to allow custom cell draw
-*
-* Revision 5.19  1997/06/04 00:06:24  kans
-* support for Japanese by Tomo Koike of DDBJ
-*
-* Revision 5.18  1997/02/25 19:38:09  kans
-* bulk append initializes cache (probably should do for regular append also)
-*
- * Revision 5.17  1997/01/29  16:41:22  kans
- * using StringNCpy_0
- *
- * Revision 5.16  1996/10/28  21:19:17  kans
- * PrintDocument uses Nlm_XrmGetResource ("printCommand") as the command.
- *
- * Revision 5.15  1996/10/17  19:54:45  kans
- * fixed centering calculation on save to file
- *
- * Revision 5.14  1996/10/08  22:11:12  kans
- * get itemPtr of (item - 1) in InvalDocCols
- *
- * Revision 5.13  1996/10/08  14:25:51  kans
- * added InvalDocCols, suppress ddata.draw user callback if not full line
- *
- * Revision 5.12  1996/09/26  14:53:59  kans
- * ddata.cache is an allocated pointer, not a static head, since it needs
- * to be updated by the putCache function, but that function can only get
- * the out-of-synch ddata
- *
- * Revision 5.11  1996/09/26  13:12:15  kans
- * added standard cache callbacks, which use a simple binary tree
- *
- * Revision 5.10  1996/09/26  01:06:12  kans
- * barmax should be int4
- *
- * Revision 5.9  1996/09/25  23:43:17  kans
- * scroll proc uses old pgUp and pgDn, scrolls and updates first, then
- * calculates new pgUp, pgDn, and barmax, for faster performance
- *
- * Revision 5.8  1996/09/25  15:30:32  kans
- * added InvalDocument function
- *
- * Revision 5.7  1996/09/24  16:39:03  kans
- * GetDocText should not change notCached, since it doesn't keep text.
- *
- * Revision 5.6  1996/09/24  16:34:25  kans
- * GetDocText now records numRows, cached flags, back to real itemPtr blocks.
- *
- * Revision 5.5  1996/09/13  21:49:26  kans
- * bulk append item now records font properly
- *
- * Revision 5.4  1996/09/11  19:44:02  kans
- * *** empty log message ***
- *
- * Revision 5.3  1996/09/11  16:21:08  kans
- * add cacheifnever to adjustdocscroll, to pass correct numRows to visBefore
- *
- * Revision 5.2  1996/09/09  11:46:59  kans
- * UpdateLineStarts needed to return Int4.  Now virtual scrolling works.
- *
- * Revision 5.1  1996/09/09  00:15:01  kans
- * now uses AutonomousPanel4, virtual scroll bars, to have > 32K lines
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.3  1996/03/11  19:18:14  kans
- * rearrange text len parameter now int4, to handle titin protein
- *
- * Revision 4.2  1996/03/09  23:37:15  kans
- * additional simplification functions to simulate single choice list
- *
- * Revision 4.1  1996/02/29  15:32:18  kans
- * can now invert cells that have no text (adjacent tabs)
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.78  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -542,7 +378,7 @@ typedef struct celldata {
 } CellData, PNTR CellPtr;
 
 typedef struct parsedata {
-  Int2     numCells;
+  Int4     numCells;
   CellPtr  cellPtr;
 } ParseData, PNTR ParsePtr;
 
@@ -559,8 +395,8 @@ static void RecordCell (ItemPtr itemPtr, ParsePtr parsePtr,
 {
   Int4     cell;
   CellPtr  cellPtr;
-  Int2     newCells;
-  Int2     numCells;
+  Int4     newCells;
+  Int4     numCells;
 
   if (itemPtr != NULL && parsePtr != NULL && col < itemPtr->numCols) {
     numCells = parsePtr->numCells;
@@ -810,7 +646,7 @@ static void RearrangeText (ItemPtr itemPtr, ParsePtr parsePtr, CharPtr text)
   CharPtr  dst;
   Int4     len;
   Int2     minLines;
-  Int2     numCells;
+  Int4     numCells;
   Int2     numCols;
   Int2     numRows;
   Int2     row;
@@ -843,7 +679,7 @@ static void RearrangeText (ItemPtr itemPtr, ParsePtr parsePtr, CharPtr text)
             dst = str;
             for (row = 0; row < numRows; row++) {
               for (col = 0; col < numCols; col++) {
-                cell = (Int2) ((Int4) row * (Int4) numCols + (Int4) col);
+                cell = (Int4) ((Int4) row * (Int4) numCols + (Int4) col);
                 if (cell < numCells) {
                   if (col > 0) {
                     *dst = '\t';

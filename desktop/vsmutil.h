@@ -29,13 +29,23 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vsmutil.h,v $
+* Revision 6.13  2009/05/01 18:10:51  kans
+* added featureID field to ValidErrorFunc callback type
+*
+* Revision 6.12  2009/03/09 15:58:49  bollin
+* Added Sequester button to validator window.
+*
+* Revision 6.11  2009/03/03 16:41:31  bollin
+* Changed "Done" button on Sequin main window to allow users to launch validator
+* window with new "Done" button that will continue the "Done" process.
+*
 * Revision 6.10  2008/09/17 14:18:09  kans
 * CreateValidateWindow variants return validator window handle
 *
@@ -82,11 +92,22 @@ typedef void (LIBCALLBACK *ErrNotifyProc) PROTO((
               Uint2 entityID, Uint4 itemID, Uint2 itemtype,
               Boolean select, Boolean dblClick));
 
+typedef void (LIBCALLBACK *SequesterProc) PROTO((Uint2 entityID, ValNodePtr bsp_list));
+                                                 
 extern WindoW CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
                                     FonT font, ErrSev sev, Int2 verbose);
 extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
                                       FonT font, ErrSev sev, Int2 verbose,
                                       BaseFormPtr bfp, FormActnFunc revalProc,
+                                      Boolean okaytosetviewtarget);
+extern WindoW CreateValidateWindowExEx (ErrNotifyProc notify, CharPtr title,
+                                      FonT font, ErrSev sev, Int2 verbose,
+                                      BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                      Boolean okaytosetviewtarget);
+extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
+                                      FonT font, ErrSev sev, Int2 verbose,
+                                      BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                      SequesterProc sequesterProc,
                                       Boolean okaytosetviewtarget);
 extern void ShowValidateWindow (void);
 extern void ShowValidateDoc (void);
@@ -110,6 +131,7 @@ extern void LIBCALLBACK ValidErrCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
   CharPtr label,

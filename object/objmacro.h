@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at Jan 30, 2009 11:42 AM
+*    Generated using ASNCODE Revision: 6.16 at May 12, 2009  9:09 AM
 *
 **************************************************/
 
@@ -1038,6 +1038,8 @@ NLM_EXTERN Boolean LIBCALL StructuredCommentFieldPairAsnWrite PROTO (( Structure
 /* following #defines are for enumerated type, not used by object loaders */
 #define Misc_field_genome_project_id 1
 #define Misc_field_comment_descriptor 2
+#define Misc_field_defline 3
+#define Misc_field_keyword 4
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Pub_type_any 0
@@ -1337,13 +1339,15 @@ NLM_EXTERN Boolean LIBCALL FieldPairTypeAsnWrite PROTO (( FieldPairTypePtr , Asn
 #define ExistingTextOption_append_semi 2
 #define ExistingTextOption_append_space 3
 #define ExistingTextOption_append_colon 4
-#define ExistingTextOption_append_none 5
-#define ExistingTextOption_prefix_semi 6
-#define ExistingTextOption_prefix_space 7
-#define ExistingTextOption_prefix_colon 8
-#define ExistingTextOption_prefix_none 9
-#define ExistingTextOption_leave_old 10
-#define ExistingTextOption_add_qual 11
+#define ExistingTextOption_append_comma 5
+#define ExistingTextOption_append_none 6
+#define ExistingTextOption_prefix_semi 7
+#define ExistingTextOption_prefix_space 8
+#define ExistingTextOption_prefix_colon 9
+#define ExistingTextOption_prefix_comma 10
+#define ExistingTextOption_prefix_none 11
+#define ExistingTextOption_leave_old 12
+#define ExistingTextOption_add_qual 13
 
 
 
@@ -1764,6 +1768,7 @@ typedef ValNode ConvertFeatureDstOptions;
 #define ConvertFeatureDstOptions_site 2
 #define ConvertFeatureDstOptions_region 3
 #define ConvertFeatureDstOptions_ncrna_class 4
+#define ConvertFeatureDstOptions_remove_original 5
 
 
 NLM_EXTERN ConvertFeatureDstOptionsPtr LIBCALL ConvertFeatureDstOptionsFree PROTO ((ConvertFeatureDstOptionsPtr ));
@@ -1950,6 +1955,7 @@ NLM_EXTERN Boolean LIBCALL MolinfoBlockAsnWrite PROTO (( MolinfoBlockPtr , AsnIo
 #define Descriptor_type_update_date 8
 #define Descriptor_type_mol_info 9
 #define Descriptor_type_structured_comment 10
+#define Descriptor_type_genome_project_id 11
 
 
 

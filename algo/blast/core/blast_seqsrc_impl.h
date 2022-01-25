@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc_impl.h,v 1.10 2008/07/17 17:55:44 kazimird Exp $
+/*  $Id: blast_seqsrc_impl.h,v 1.11 2009/05/27 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -86,6 +86,11 @@ typedef BlastSeqSrc* (*BlastSeqSrcDestructor)
  * Returns the same structure, with modified contents. 
  */
 typedef BlastSeqSrc* (*BlastSeqSrcCopier) (BlastSeqSrc*);
+
+/** Function pointer typedef to set a 4-byte integer. */
+typedef void (*SetInt4FnPtr)
+    (void* seqsrc_impl, /**< BlastSeqSrc implementation's data structure */
+     int arg);
 
 /** Function pointer typedef to return a 4-byte integer. */
 typedef Int4 (*GetInt4FnPtr)
@@ -239,6 +244,7 @@ DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(BlastSeqSrcConstructor, NewFnPtr);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr);
 
+DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(SetInt4FnPtr, SetNumberOfThreads);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqsStats);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen);
@@ -300,6 +306,8 @@ DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(char*, InitErrorStr);
  *  - BlastSeqSrc interface
  *  @code
  *  extern "C" {
+ *  // required signature: SetInt4FnPtr
+ *  void MyDatabaseFormatSetNumberOfThreads(int);
  *  // required signature: GetInt4FnPtr
  *  Int4 MyDatabaseFormatGetNumSeqs(void*, void*);
  *  // required signature: GetInt4FnPtr

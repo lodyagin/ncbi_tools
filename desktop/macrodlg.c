@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.147 $
+* $Revision: 1.157 $
 *
 * File Description: 
 *
@@ -1466,9 +1466,13 @@ static void ExistingTextToDialog (DialoG d, Pointer data)
         SetValue (dlg->action_grp, 2);
         SetValue (dlg->delim_grp, 3);
         break;
-      case ExistingTextOption_append_none :
+      case ExistingTextOption_append_comma :
         SetValue (dlg->action_grp, 2);
         SetValue (dlg->delim_grp, 4);
+        break;
+      case ExistingTextOption_append_none :
+        SetValue (dlg->action_grp, 2);
+        SetValue (dlg->delim_grp, 5);
         break;
       case ExistingTextOption_prefix_semi :
         SetValue (dlg->action_grp, 3);
@@ -1482,9 +1486,13 @@ static void ExistingTextToDialog (DialoG d, Pointer data)
         SetValue (dlg->action_grp, 3);
         SetValue (dlg->delim_grp, 3);
         break;
-      case ExistingTextOption_prefix_none :
+      case ExistingTextOption_prefix_comma :
         SetValue (dlg->action_grp, 3);
         SetValue (dlg->delim_grp, 4);
+        break;
+      case ExistingTextOption_prefix_none :
+        SetValue (dlg->action_grp, 3);
+        SetValue (dlg->delim_grp, 5);
         break;
       case ExistingTextOption_leave_old :
         SetValue (dlg->action_grp, 4);
@@ -1539,6 +1547,9 @@ static Pointer DialogToExistingText (DialoG d)
           existing_text = ExistingTextOption_append_colon;
           break;
         case 4:
+          existing_text = ExistingTextOption_append_comma;
+          break;
+        case 5:
           existing_text = ExistingTextOption_append_none;
           break;
       }
@@ -1555,6 +1566,9 @@ static Pointer DialogToExistingText (DialoG d)
           existing_text = ExistingTextOption_prefix_colon;
           break;
         case 4:
+          existing_text = ExistingTextOption_prefix_comma;
+          break;
+        case 5:
           existing_text = ExistingTextOption_prefix_none;
           break;
       }
@@ -1667,12 +1681,13 @@ static DialoG ExistingTextDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, P
   ppt = StaticPrompt (p, "Separate new text and old text with", 
                       0, dialogTextHeight, programFont, 'c');
   
-  dlg->delim_grp = HiddenGroup (p, 4, 0, ChangeExistingTextDelimChoice);
+  dlg->delim_grp = HiddenGroup (p, 5, 0, ChangeExistingTextDelimChoice);
   SetObjectExtra (dlg->delim_grp, dlg, NULL);
   SetGroupSpacing (dlg->delim_grp, 10, 10);
   RadioButton (dlg->delim_grp, "Semicolon");
   RadioButton (dlg->delim_grp, "Space");
   RadioButton (dlg->delim_grp, "Colon");
+  RadioButton (dlg->delim_grp, "Comma");
   RadioButton (dlg->delim_grp, "Do not separate");
   SetValue (dlg->delim_grp, 1);
   Disable (dlg->delim_grp);
@@ -4717,6 +4732,19 @@ NLM_EXTERN DialoG FeatureTypeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify
 }
 
 
+NLM_EXTERN DialoG FeatureTypeDialogMulti (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  ValNodePtr feature_list = NULL;
+
+  ValNodeAddPointer (&feature_list, Feature_type_any, StringSave ("Any"));
+  AddAllFeaturesToChoiceList (&feature_list);
+  return ValNodeSelectionDialog (h, feature_list, TALL_SELECTION_LIST, ValNodeStringName,
+                                ValNodeSimpleDataFree, ValNodeStringCopy,
+                                ValNodeChoiceMatch, "feature type", 
+                                change_notify, change_userdata, FALSE);
+}
+
+
 static ValNodePtr TestSequenceConstraintDialog (DialoG d)
 {
   SequenceConstraintDlgPtr dlg;
@@ -7574,6 +7602,148 @@ static DialoG StructuredCommentFieldDialog (GrouP h, Nlm_ChangeNotifyProc change
 }
 
 
+typedef struct miscfielddlg {
+  DIALOG_MESSAGE_BLOCK
+  PopuP field_type;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} MiscFieldDlgData, PNTR MiscFieldDlgPtr;
+
+
+static void ChangeMiscFieldChoice (PopuP p)
+{
+  MiscFieldDlgPtr dlg;
+
+  dlg = (MiscFieldDlgPtr) GetObjectExtra (p);
+
+  if (dlg == NULL) {
+    return;
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void MiscFieldToDialog (DialoG d, Pointer data)
+{
+  MiscFieldDlgPtr dlg;
+  ValNodePtr    field;
+
+  dlg = (MiscFieldDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  field = (ValNodePtr) data;
+  if (field == NULL) {
+    SetValue (dlg->field_type, 1);
+  } else {
+    switch (field->data.intvalue) {
+      case Misc_field_genome_project_id:
+        SetValue (dlg->field_type, 1);
+        break;
+      case Misc_field_comment_descriptor:
+        SetValue (dlg->field_type, 2);
+        break;
+      case Misc_field_defline:
+        SetValue (dlg->field_type, 3);
+        break;
+      case Misc_field_keyword:
+        SetValue (dlg->field_type, 4);
+        break;
+    }
+  }
+
+  ChangeMiscFieldChoice (dlg->field_type);
+}
+
+
+static Pointer MiscFieldFromDialog (DialoG d)
+{
+  MiscFieldDlgPtr dlg;
+  ValNodePtr      field;
+  Int2            val;
+
+  dlg = (MiscFieldDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  field = ValNodeNew (NULL);
+  field->choice = FieldType_misc;
+  val = GetValue (dlg->field_type);
+
+  switch (val) {
+    case 1:
+      field->data.intvalue = Misc_field_genome_project_id;
+      break;
+    case 2:
+      field->data.intvalue = Misc_field_comment_descriptor;
+      break;
+    case 3:
+      field->data.intvalue = Misc_field_defline;
+      break;
+    case 4:
+      field->data.intvalue = Misc_field_keyword;
+      break;
+    default:
+      field = ValNodeFree (field);
+      break;
+  }
+  return (Pointer) field;
+}
+
+
+static ValNodePtr TestMiscFieldDialog (DialoG d)
+{
+  ValNodePtr field, err_list = NULL;
+
+  field = DialogToPointer (d);
+  if (field == NULL) {
+    ValNodeAddPointer (&err_list, 0, "bad field");
+  } else {
+    field = ValNodeFree (field);
+  }
+  return err_list;
+}
+
+
+static DialoG MiscFieldDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  MiscFieldDlgPtr dlg;
+  GrouP           p;
+  
+  dlg = (MiscFieldDlgPtr) MemNew (sizeof (MiscFieldDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = MiscFieldToDialog;
+  dlg->fromdialog = MiscFieldFromDialog;
+  dlg->testdialog = TestMiscFieldDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->field_type = PopupList (p, TRUE, ChangeMiscFieldChoice);
+  SetObjectExtra (dlg->field_type, dlg, NULL);
+  PopupItem (dlg->field_type, "Genome Project ID");
+  PopupItem (dlg->field_type, "Comment Descriptor");
+  PopupItem (dlg->field_type, "Definition Line");
+  PopupItem (dlg->field_type, "Keyword");
+  SetValue (dlg->field_type, 1);
+
+  return (DialoG) p;
+}
+
+
 typedef struct fieldtypedlg {
   DIALOG_MESSAGE_BLOCK
   Uint1 field_type;
@@ -7586,6 +7756,7 @@ typedef struct fieldtypedlg {
   DialoG pub_field;
   DialoG rna_field;
   DialoG structured_comment_field;
+  DialoG misc_field;
 } FieldTypeDlgData, PNTR FieldTypeDlgPtr;
 
 
@@ -7606,6 +7777,8 @@ static void FieldTypeToDialog (DialoG d, Pointer data)
   SafeHide (dlg->pub_field);
   SafeHide (dlg->rna_field);
   SafeHide (dlg->structured_comment_field);
+  SafeHide (dlg->misc_field);
+
   vnp = (ValNodePtr) data;
   if (vnp != NULL) {
     switch (vnp->choice) {
@@ -7656,6 +7829,11 @@ static void FieldTypeToDialog (DialoG d, Pointer data)
         SafeShow (dlg->structured_comment_field);
         PointerToDialog (dlg->structured_comment_field, vnp->data.ptrvalue);
         dlg->field_type = FieldType_struc_comment_field;
+        break;
+      case FieldType_misc:
+        SafeShow (dlg->misc_field);
+        PointerToDialog (dlg->misc_field, vnp);
+        dlg->field_type = FieldType_misc;
         break;
     }
   }
@@ -7714,6 +7892,9 @@ static Pointer DialogToFieldType (DialoG d)
       vnp->choice = FieldType_struc_comment_field;
       vnp->data.ptrvalue = DialogToPointer (dlg->structured_comment_field);
       break;
+    case FieldType_misc:
+      vnp = DialogToPointer (dlg->misc_field);
+      break;
   }
   return vnp;
 }
@@ -7749,6 +7930,9 @@ static ValNodePtr TestFieldTypeDialog (DialoG d)
       break;
     case FieldType_struc_comment_field:
       ValNodeLink (&err_list, TestDialog (dlg->structured_comment_field));
+      break;
+    case FieldType_misc:
+      ValNodeLink (&err_list, TestDialog (dlg->misc_field));
       break;
     default :
       ValNodeAddPointer (&err_list, 0, "No field type chosen");
@@ -7786,6 +7970,7 @@ static DialoG FieldTypeDialog (GrouP h, Boolean text_only, Boolean for_remove, N
   dlg->pub_field = PubFieldDialog (p, change_notify, change_userdata);
   dlg->rna_field = RnaQualDialog (p, "RNA Type of Feature to be Edited", change_notify, change_userdata);
   dlg->structured_comment_field = StructuredCommentFieldDialog (p, change_notify, change_userdata);
+  dlg->misc_field = MiscFieldDialog (p, change_notify, change_userdata);
 
   SafeHide (dlg->src_qual);
   SafeHide (dlg->feature_field_grp);
@@ -7794,6 +7979,7 @@ static DialoG FieldTypeDialog (GrouP h, Boolean text_only, Boolean for_remove, N
   SafeHide (dlg->pub_field);
   SafeHide (dlg->rna_field);
   SafeHide (dlg->structured_comment_field);
+  SafeHide (dlg->misc_field);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->src_qual,
                               (HANDLE) dlg->feature_field_grp,
@@ -7802,6 +7988,7 @@ static DialoG FieldTypeDialog (GrouP h, Boolean text_only, Boolean for_remove, N
                               (HANDLE) dlg->pub_field,
                               (HANDLE) dlg->rna_field,
                               (HANDLE) dlg->structured_comment_field,
+                              (HANDLE) dlg->misc_field,
                               NULL);
 
   return (DialoG) p;
@@ -8094,7 +8281,7 @@ static DialoG FieldPairTypeDialog (GrouP h, Boolean for_convert, Nlm_ChangeNotif
   StaticPrompt (dlg->feature_field_grp, "Feature Type", 0, dialogTextHeight, programFont, 'l');
   StaticPrompt (dlg->feature_field_grp, "From", 0, dialogTextHeight, programFont, 'l');
   StaticPrompt (dlg->feature_field_grp, "To", 0, dialogTextHeight, programFont, 'l');
-  dlg->feature_type = FeatureTypeDialog (dlg->feature_field_grp, change_notify, change_userdata);
+  dlg->feature_type = FeatureTypeDialogMulti (dlg->feature_field_grp, change_notify, change_userdata);
   dlg->feature_field_from = FeatQualChoiceDialog (dlg->feature_field_grp, FALSE, change_notify, change_userdata);
   dlg->feature_field_to = FeatQualChoiceDialog (dlg->feature_field_grp, FALSE, change_notify, change_userdata);
   
@@ -8594,6 +8781,24 @@ static void SetEditActionDialogText (DialoG d, CharPtr str_find, CharPtr str_rep
 }
 
 
+static void EditActionDialogMessage (DialoG d, Int2 mssg)
+
+{
+  EditActionDlgPtr dlg;
+
+  dlg = (EditActionDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) {
+      case NUM_VIB_MSG + 1 :
+        SetFieldEditDialogText (dlg->edit, "", "");
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+
 static DialoG 
 EditActionDialog 
 (GrouP h,
@@ -8616,6 +8821,7 @@ EditActionDialog
   dlg->todialog = PointerToEditActionDlg;
   dlg->fromdialog = DialogToEditAction;
   dlg->testdialog = TestEditActionDialog;
+  dlg->dialogmessage = EditActionDialogMessage;
   dlg->autopopulate = autopopulate;
   dlg->autopopulate_data = autopopulate_data;
   dlg->change_notify = change_notify;
@@ -9536,6 +9742,7 @@ EditAECRActionDialog
   ValNodeAddPointer (&val_list, FieldType_rna_field, StringSave ("RNA Qual"));
   ValNodeAddPointer (&val_list, FieldType_molinfo_field, StringSave ("MolInfo Qual"));
   ValNodeAddPointer (&val_list, FieldType_pub, StringSave ("Pub Field"));
+  ValNodeAddPointer (&val_list, FieldType_misc, StringSave ("Misc"));
 
   dlg->single_qual_type_dlg = ValNodeSelectionDialog (dlg->single_field_grp, val_list, TALL_SELECTION_LIST, ValNodeStringName,
                                 ValNodeSimpleDataFree, ValNodeStringCopy,
@@ -10771,7 +10978,15 @@ static Pointer DialogToConvertFeatureAction (DialoG d)
     ValNodeAddPointer (&(action->dst_options), ConvertFeatureDstOptions_region, r);
   } else if (action->type_to == Feature_type_ncRNA) {
     ValNodeAddPointer (&(action->dst_options), ConvertFeatureDstOptions_ncrna_class, DialogToPointer (dlg->ncrna_class_dlg));
+  } else if (action->type_from == Feature_type_cds && action->type_to == Feature_type_mat_peptide_aa) {
+    /* hack for converting from coding region to mat-peptide */
+    action->dst_options = ValNodeNew (NULL);
+    action->dst_options->choice = ConvertFeatureDstOptions_remove_original;
+    action->dst_options->data.boolvalue = !action->leave_original;
   }
+
+
+  action->src_feat_constraint = DialogToPointer (dlg->constraint_dlg);
 
   return action;
 }
@@ -14292,6 +14507,9 @@ static void RemoveMacroActionWindow (WindoW w)
   if (frm != NULL && frm->sample_window != NULL) {
     Remove (frm->sample_window);
   }
+
+  /* clean up userdata */
+  ObjMgrFreeUserData (0, 0, frm->proctype, frm->userkey);
   Remove (w);
 }
 
@@ -14528,6 +14746,9 @@ static CharPtr GetQualTypeName (Uint1 qual_type)
       break;
     case FieldType_struc_comment_field:
       txt = "Structured Comment Field";
+      break;
+    case FieldType_misc:
+      txt = "Misc";
       break;
     default:
       txt = "Unknown";
@@ -15500,6 +15721,36 @@ static void ClearTextSingleMacroAction (ButtoN b)
 }
 
 
+static Int2 LIBCALLBACK SingleMacroActionMsgFunc (OMMsgStructPtr ommsp)
+
+{
+  ObjMgrDataPtr   omdp;
+  OMUserDataPtr   omudp;
+  OneMacroActionPtr frm;
+
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  frm = (OneMacroActionPtr) omudp->userdata.ptrvalue;
+  if (frm == NULL) return OM_MSG_RET_ERROR;
+  switch (ommsp->message) {
+    case OM_MSG_DEL:
+      omdp = ObjMgrGetData (ommsp->entityID);
+      if (omdp != NULL) {
+        if (ObjMgrWholeEntity (omdp, ommsp->itemID, ommsp->itemtype)) {
+          /* clear text here */
+          SendMessageToDialog (frm->action_dlgs[1], NUM_VIB_MSG + 1);
+          return OM_MSG_RET_OK;
+        }
+      }
+      break;
+    default :
+      break;
+  }
+  return OM_MSG_RET_OK;
+}
+
+
+
 /* for executing macro actions without creating a macro script */
 static ForM 
 SingleMacroAction (Uint2 entityID, Boolean indexer_version)
@@ -15511,6 +15762,7 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
   Int4                  i;
   ValNodePtr            val_list = NULL;
   Char                  tmpval[30];
+  OMUserDataPtr         omudp;
 
   frm = (OneMacroActionPtr) MemNew (sizeof (OneMacroActionData));
 
@@ -15523,6 +15775,17 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
   frm->indexer_version = indexer_version;
 
   frm->win_num = AddMacroActionWindow (w);
+
+  /* register to receive update messages */
+  frm->userkey = OMGetNextUserKey ();
+  frm->procid = 0;
+  frm->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (0, 0, frm->proctype, frm->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) frm;
+    omudp->messagefunc = SingleMacroActionMsgFunc;
+  }
+
 
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -15546,6 +15809,7 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
   ValNodeAddPointer (&val_list, FieldType_molinfo_field, StringSave ("MolInfo Qual"));
   ValNodeAddPointer (&val_list, FieldType_pub, StringSave ("Pub Field"));
   ValNodeAddPointer (&val_list, FieldType_struc_comment_field, StringSave ("Structured Comment Field"));
+  ValNodeAddPointer (&val_list, FieldType_misc, StringSave ("Misc"));
 
   frm->single_qual_type_dlg = ValNodeSelectionDialog (frm->single_field_grp, val_list, TALL_SELECTION_LIST, ValNodeStringName,
                                 ValNodeSimpleDataFree, ValNodeStringCopy,
@@ -15671,6 +15935,36 @@ NLM_EXTERN void SingleAECRMacroAction (Uint2 entityID, Boolean indexer_version, 
   action = ValNodeNew (NULL);
   action->choice = MacroActionChoice_aecr;
   action->data.ptrvalue = BuildDefaultAECRAction (AECR_action_type, AECR_qual_type);
+  PointerToForm (f, action);
+  action = MacroActionChoiceFree (action);
+    
+  Show (f);
+  Select (f);
+}
+
+
+NLM_EXTERN void MacroApplyKeyword (Uint2 entityID, Boolean indexer_version)
+{
+  ForM f;
+  ValNodePtr action;
+  AECRActionPtr aecr;
+  ApplyActionPtr apply;
+  
+  f = SingleMacroAction (entityID, indexer_version);
+  action = ValNodeNew (NULL);
+  action->choice = MacroActionChoice_aecr;
+
+  aecr = AECRActionNew ();
+  aecr->action = ValNodeNew (NULL);
+  aecr->action->choice = ActionChoice_apply;
+  apply = ApplyActionNew ();
+  apply->field = ValNodeNew (NULL);
+  apply->field->choice = FieldType_misc;
+  apply->field->data.intvalue = Misc_field_keyword;
+  apply->value = StringSave ("");
+  apply->existing_text = ExistingTextOption_add_qual;
+  aecr->action->data.ptrvalue = apply;
+  action->data.ptrvalue = aecr;
   PointerToForm (f, action);
   action = MacroActionChoiceFree (action);
     
@@ -17584,6 +17878,7 @@ static CharPtr SummarizeMacroAction (ValNodePtr vnp)
 
 /* For using macro functions to apply tables */
 
+/* for configuring how a column in a table will be used */
 typedef struct tabcolumnconfigdlg {
   DIALOG_MESSAGE_BLOCK
   PopuP                    column_action;
@@ -17597,6 +17892,7 @@ typedef struct tabcolumnconfigdlg {
   DialoG                   feature_field;
   DialoG                   cdsgeneprot;
   DialoG                   pub_field;
+  DialoG                   molinfo_field;
 
   ButtoN                   change_mrna;
   GrouP                    apply_options;
@@ -17624,7 +17920,10 @@ typedef enum {
   eTabColumnConfig_Apply_FeatureField,
   eTabColumnConfig_Apply_PubField,
   eTabColumnConfig_Apply_GenomeProjectId,
-  eTabColumnConfig_Apply_CommentDescriptor
+  eTabColumnConfig_Apply_CommentDescriptor,
+  eTabColumnConfig_Apply_Defline,
+  eTabColumnConfig_Apply_Keyword,
+  eTabColumnConfig_Apply_Molinfo
 } ETabColumnConfig;
 
 typedef enum {
@@ -17825,6 +18124,18 @@ static Pointer TabColumnConfigDialogToChoice (DialoG d)
       f->field = ValNodeNew (NULL);
       f->field->choice = FieldType_misc;
       f->field->data.intvalue = Misc_field_comment_descriptor;
+    } else if (val == eTabColumnConfig_Apply_Defline) {
+      f->field = ValNodeNew (NULL);
+      f->field->choice = FieldType_misc;
+      f->field->data.intvalue = Misc_field_defline;
+    } else if (val == eTabColumnConfig_Apply_Keyword) {
+      f->field = ValNodeNew (NULL);
+      f->field->choice = FieldType_misc;
+      f->field->data.intvalue = Misc_field_keyword;
+    } else if (val == eTabColumnConfig_Apply_Molinfo) {
+      f->field = ValNodeNew (NULL);
+      f->field->choice = FieldType_molinfo_field;
+      f->field->data.ptrvalue = DialogToPointer (dlg->molinfo_field);
     }
 
     if (dlg->erase_when_blank == NULL) {
@@ -17882,6 +18193,7 @@ static void TabColumnActionChange (PopuP p)
       Hide (dlg->qual_grp);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      EnableNonTextOptions (dlg->existing_text);
       break;
     case eTabColumnConfig_Apply_SourceQual:
       /* show source qual, hide others */
@@ -17890,9 +18202,11 @@ static void TabColumnActionChange (PopuP p)
       Hide (dlg->feature_field_grp);
       Hide (dlg->cdsgeneprot);
       Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
       Disable (dlg->change_mrna);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      EnableNonTextOptions (dlg->existing_text);
       break;
     case eTabColumnConfig_Apply_FeatureField:
       /* show feature qual, hide others */
@@ -17901,6 +18215,7 @@ static void TabColumnActionChange (PopuP p)
       Show (dlg->feature_field_grp);
       Hide (dlg->cdsgeneprot);
       Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
       config = DialogToPointer (dlg->dialog);
       if (config == NULL || !IsFieldTypeCDSProduct (config->field)) {
         SafeDisable (dlg->change_mrna);
@@ -17910,6 +18225,7 @@ static void TabColumnActionChange (PopuP p)
       config = TabColumnConfigFree (config);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      EnableNonTextOptions (dlg->existing_text);
       break;
     case eTabColumnConfig_Apply_CDSGeneProtField:
       /* show cds-gene-prot qual, hide others */
@@ -17918,6 +18234,7 @@ static void TabColumnActionChange (PopuP p)
       Hide (dlg->feature_field_grp);
       Show (dlg->cdsgeneprot);
       Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
       config = DialogToPointer (dlg->dialog);
       if (config == NULL || !IsFieldTypeCDSProduct (config->field)) {
         SafeDisable (dlg->change_mrna);
@@ -17927,6 +18244,7 @@ static void TabColumnActionChange (PopuP p)
       config = TabColumnConfigFree (config);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      EnableNonTextOptions (dlg->existing_text);
       break;
     case eTabColumnConfig_Apply_PubField:
       Show (dlg->qual_grp);
@@ -17934,21 +18252,53 @@ static void TabColumnActionChange (PopuP p)
       Hide (dlg->feature_field_grp);
       Hide (dlg->cdsgeneprot);
       Show (dlg->pub_field);
+      Hide (dlg->molinfo_field);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      EnableNonTextOptions (dlg->existing_text);
       break;
     case eTabColumnConfig_Apply_GenomeProjectId:
     case eTabColumnConfig_Apply_CommentDescriptor:
+    case eTabColumnConfig_Apply_Defline:
       Show (dlg->qual_grp);
       Hide (dlg->src_qual);
       Hide (dlg->feature_field_grp);
       Hide (dlg->cdsgeneprot);
       Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
       Enable (dlg->apply_options);
       Hide (dlg->match_grp);
+      Disable (dlg->change_mrna);
+      DisableMultiOptions (dlg->existing_text);
+      EnableNonTextOptions (dlg->existing_text);
+      break;
+    case eTabColumnConfig_Apply_Keyword:
+      Show (dlg->qual_grp);
+      Hide (dlg->src_qual);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->cdsgeneprot);
+      Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
+      Enable (dlg->apply_options);
+      Hide (dlg->match_grp);
+      Disable (dlg->change_mrna);
+      EnableMultiOptions (dlg->existing_text);
+      EnableNonTextOptions (dlg->existing_text);
+      break;
+    case eTabColumnConfig_Apply_Molinfo:
+      Show (dlg->qual_grp);
+      Hide (dlg->src_qual);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->cdsgeneprot);
+      Hide (dlg->pub_field);
+      Show (dlg->molinfo_field);
+      Enable (dlg->apply_options);
+      Hide (dlg->match_grp);
+      Disable (dlg->change_mrna);
+      DisableMultiOptions (dlg->existing_text);
+      DisableNonTextOptions (dlg->existing_text);
       break;
   }
-
   if (dlg != NULL && dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
   }
@@ -18060,6 +18410,13 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
         SetValue (dlg->column_action, eTabColumnConfig_Apply_GenomeProjectId);
       } else if (f->field->choice == FieldType_misc && f->field->data.intvalue == Misc_field_comment_descriptor) {
         SetValue (dlg->column_action, eTabColumnConfig_Apply_CommentDescriptor);
+      } else if (f->field->choice == FieldType_misc && f->field->data.intvalue == Misc_field_defline) {
+        SetValue (dlg->column_action, eTabColumnConfig_Apply_Defline);
+      } else if (f->field->choice == FieldType_misc && f->field->data.intvalue == Misc_field_keyword) {
+        SetValue (dlg->column_action, eTabColumnConfig_Apply_Keyword);
+      } else if (f->field->choice == FieldType_molinfo_field) {
+        SetValue (dlg->column_action, eTabColumnConfig_Apply_Molinfo);
+        PointerToDialog (dlg->molinfo_field, f->field->data.ptrvalue);
       }
         
       SafeSetStatus (dlg->change_mrna, f->match_mrna);
@@ -18171,6 +18528,9 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   PopupItem (dlg->column_action, "Apply to Publication Field");
   PopupItem (dlg->column_action, "Apply to Genome Project ID");
   PopupItem (dlg->column_action, "Apply to Comment Descriptor");
+  PopupItem (dlg->column_action, "Apply to Definition Line");
+  PopupItem (dlg->column_action, "Apply to Keyword");
+  PopupItem (dlg->column_action, "Apply to Molinfo");
   SetValue (dlg->column_action, 1);
   
   k = HiddenGroup (p, 0, 0, NULL);
@@ -18192,6 +18552,7 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   dlg->feature_field = LegalFeatQualChoiceDialog (dlg->feature_field_grp, TabColumnConfigFieldChange, dlg);
   dlg->cdsgeneprot = CDSGeneProtFieldDialog (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
   dlg->pub_field = PubFieldDialog (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
+  dlg->molinfo_field = MolinfoFieldChoiceDialog  (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->match_grp, (HANDLE) dlg->qual_grp, NULL);
 
   dlg->change_mrna = CheckBox (p, "Also change mRNA product name", TabColumnConfigButtonChange);
@@ -18200,7 +18561,8 @@ NLM_EXTERN DialoG TabColumnConfigDialog
 
   dlg->apply_options = HiddenGroup (p, -1, 0, NULL);
   if (num_blank > 0 || title == NULL) {
-    dlg->erase_when_blank = CheckBox (dlg->apply_options, "Erase field when table cell is blank", NULL);
+    dlg->erase_when_blank = CheckBox (dlg->apply_options, "Erase field when table cell is blank", TabColumnConfigButtonChange);
+    SetObjectExtra (dlg->erase_when_blank, dlg, NULL);
     if (num_blank == 0) {
       Disable (dlg->erase_when_blank);
     }
@@ -18861,3 +19223,138 @@ NLM_EXTERN DialoG MatchTypeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->match_type, (HANDLE) k, NULL);
   return (DialoG) p;
 }
+
+/* dialog for molinfo fields to be read from table */
+typedef struct molinfofieldchoicedlg {
+  DIALOG_MESSAGE_BLOCK
+  PopuP molinfo_field;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} MolinfoFieldChoiceDlgData, PNTR MolinfoFieldChoiceDlgPtr;
+
+
+static Pointer MolinfoFieldChoiceDialogToChoice (DialoG d)
+{
+  MolinfoFieldChoiceDlgPtr dlg;
+  ValNodePtr vnp;
+  Int2       val;
+
+  dlg = (MolinfoFieldChoiceDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  vnp = ValNodeNew (NULL);
+  val = GetValue (dlg->molinfo_field);
+  switch (val) {
+    case 1:
+      vnp->choice = MolinfoField_molecule;
+      break;
+    case 2:
+      vnp->choice = MolinfoField_technique;
+      break;
+    case 3:
+      vnp->choice = MolinfoField_completedness;
+      break;
+    case 4:
+      vnp->choice = MolinfoField_mol_class;
+      break;
+    case 5:
+      vnp->choice = MolinfoField_topology;
+      break;
+    case 6:
+      vnp->choice = MolinfoField_strand;
+      break;
+    default:
+      vnp->choice = MolinfoField_molecule;
+      break;
+  }
+  return (Pointer) vnp;
+}
+
+
+static void MolinfoFieldChoiceToDialog (DialoG d, Pointer data)
+{
+  MolinfoFieldChoiceDlgPtr dlg;
+  ValNodePtr vnp;
+
+  dlg = (MolinfoFieldChoiceDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  vnp = (ValNodePtr) data;
+  if (vnp == NULL) {
+    SetValue (dlg->molinfo_field, 1);
+  } else {
+    switch (vnp->choice) {
+      case MolinfoField_molecule:
+        SetValue (dlg->molinfo_field, 1);
+        break;
+      case MolinfoField_technique:
+        SetValue (dlg->molinfo_field, 2);
+        break;
+      case MolinfoField_completedness:
+        SetValue (dlg->molinfo_field, 3);
+        break;
+      case MolinfoField_mol_class:
+        SetValue (dlg->molinfo_field, 4);
+        break;
+      case MolinfoField_topology:
+        SetValue (dlg->molinfo_field, 5);
+        break;
+      case MolinfoField_strand:
+        SetValue (dlg->molinfo_field, 6);
+        break;
+      default:
+        SetValue (dlg->molinfo_field, 1);
+        break;
+    }
+  }
+}
+
+
+static void MolinfoFieldChoicePopupChange (PopuP p)
+{
+  MolinfoFieldChoiceDlgPtr dlg;
+
+  dlg = (MolinfoFieldChoiceDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) {
+    return;
+  }
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+NLM_EXTERN DialoG MolinfoFieldChoiceDialog 
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  MolinfoFieldChoiceDlgPtr dlg;
+  GrouP p;
+
+  dlg = (MolinfoFieldChoiceDlgPtr) MemNew (sizeof (MolinfoFieldChoiceDlgData));
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->fromdialog = MolinfoFieldChoiceDialogToChoice;
+  dlg->todialog = MolinfoFieldChoiceToDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->molinfo_field = PopupList (p, TRUE, MolinfoFieldChoicePopupChange);
+  SetObjectExtra (dlg->molinfo_field, dlg, NULL);
+  PopupItem (dlg->molinfo_field, "molecule");
+  PopupItem (dlg->molinfo_field, "technique");
+  PopupItem (dlg->molinfo_field, "completedness");
+  PopupItem (dlg->molinfo_field, "class");
+  PopupItem (dlg->molinfo_field, "topology");
+  PopupItem (dlg->molinfo_field, "strand");
+  SetValue (dlg->molinfo_field, 1);
+
+  return (DialoG) p;
+}
+

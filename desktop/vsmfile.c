@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -126,6 +126,9 @@ Boolean LIBCALL VSMFileInit(void)
 
 	ObjMgrProcLoad(OMPROC_SAVE, "Export Nucleotide Feature Table","Nucleotide Feature Table", 0,0,0,0,NULL,
                            VSMExportNucFeatureTable, PROC_PRIORITY_DEFAULT);
+
+  ObjMgrProcLoad(OMPROC_SAVE, "Save Entries Within Selected Sets", "ASN.1 text files for each entry in selected sets", 0,0,0,0,NULL,
+                           VSMSaveSetsAsFiles, PROC_PRIORITY_DEFAULT);
                            
 	ObjMgrProcLoad(OMPROC_SAVE, "Save As Sorted FASTA Protein File","Sorted FASTA protein file", 0,0,0,0,NULL,
                            VSMFastaSortedProtSave, PROC_PRIORITY_DEFAULT);
@@ -744,6 +747,7 @@ static void VSMExportFeatureTableBioseqCallback (BioseqPtr bsp, Pointer userdata
   CstType         custom_flags = 0;
   Asn2gbJobPtr    ajp;
   BaseBlockPtr    bbp;
+  XtraBlock       extra;
   Int4            index;
   CharPtr         string;
   
@@ -763,8 +767,9 @@ static void VSMExportFeatureTableBioseqCallback (BioseqPtr bsp, Pointer userdata
   {
     custom_flags |= HIDE_SOURCE_FEATS;
   }
+  MemSet ((Pointer) &extra, 0, sizeof (XtraBlock));
   ajp = asn2gnbk_setup (bsp, NULL, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE,
-                           0, 0, custom_flags, NULL);
+                           0, 0, custom_flags, &extra);
                            
   if (ftp->export_only_selected 
       && ! BioseqHasSelectedFeatures (ajp, ftp->hide_sources))
@@ -1174,6 +1179,116 @@ Int2 LIBCALLBACK VSMGenericBinAsnSave ( Pointer data )
 }
 
 
+typedef struct setsave {
+  SelStructPtr sel;
+  CharPtr file_base;
+  Int4 file_num;
+} SetSaveData, PNTR SetSavePtr;
+
+static Boolean SaveSetsInOneSelectedSet (GatherObjectPtr gop)
+
+{
+  SetSavePtr      ssp;
+  SelStructPtr    sel;
+  BioseqSetPtr    bssp;
+  CharPtr         filename, file_fmt = "%s_%d.sqn";
+  SeqEntryPtr     sep;
+  AsnIoPtr        aip;
+#ifdef WIN_MAC
+  FILE *fp;
+#endif
+
+  if (gop == NULL || gop->dataptr == NULL || gop->itemtype != OBJ_BIOSEQSET) return TRUE;
+  ssp = (SetSavePtr) gop->userdata;
+  if (ssp == NULL || StringHasNoText (ssp->file_base)) return TRUE;
+
+  sel = ssp->sel;
+  while (sel != NULL 
+         && (sel->entityID != gop->entityID 
+             || sel->itemtype != gop->itemtype 
+             || sel->itemID != gop->itemID))
+  {
+    sel = sel->next;
+  }
+
+  if (sel == NULL) return TRUE;
+
+  bssp = gop->dataptr;
+   
+  filename = (CharPtr) MemNew (sizeof (Char) + (StringLen (ssp->file_base) + StringLen (file_fmt) + 15));
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    sprintf (filename, file_fmt, ssp->file_base, ssp->file_num);
+    ssp->file_num++;
+#ifdef WIN_MAC
+		fp = FileOpen (filename, "r");
+		if (fp != NULL) {
+			FileClose (fp);
+		} else {
+			FileCreate (filename, "TEXT", "ttxt");
+		}
+#endif
+
+		aip = AsnIoOpen(filename, "w");
+		SeqEntryAsnWrite (sep, aip, NULL);
+    AsnIoClose (aip);
+  }
+  filename = MemFree (filename);
+  return TRUE;
+}
+
+
+Int2 LIBCALLBACK VSMSaveSetsAsFiles (Pointer data)
+{
+	Char filename[255];
+	SelStructPtr  ssp, sel;
+  ValNodePtr entity_list = NULL, vnp;
+  SetSaveData ssd;
+  OMProcControlPtr ompcp;
+
+  ompcp = (OMProcControlPtr) data;
+  ssp = ObjMgrGetSelected();
+  if (ssp == NULL)
+	{
+    Message (MSG_ERROR, "Nothing selected!");
+		return OM_MSG_RET_ERROR;
+	}
+
+  /* get file name to use */	
+	filename[0] = '\0';
+	if (GetOutputFileName(filename, (size_t)254, NULL))
+	{
+		WatchCursor();
+    ssd.file_base = filename;
+    ssd.file_num = 1;
+
+    ssd.sel = ssp;
+
+    /* get list of entity IDs */
+	  for (sel = ssp; sel != NULL; sel = sel->next)
+	  {
+      if (sel->itemtype != OBJ_BIOSEQSET) {
+        continue;
+      }
+	    for (vnp = entity_list;
+	        vnp != NULL && vnp->data.intvalue != sel->entityID;
+	        vnp = vnp->next)
+	    {}
+	    if (vnp == NULL)
+	    {
+	      ValNodeAddInt (&entity_list, 0, sel->entityID);
+        GatherObjectsInEntity (sel->entityID, 0, NULL, SaveSetsInOneSelectedSet, (Pointer) &ssd, NULL);
+	    }
+	  }
+	
+
+    ValNodeFree (entity_list);
+		ArrowCursor();
+	}
+	
+	return OM_MSG_RET_DONE;
+}
+
+
 static Boolean AddToSaveList (GatherContextPtr gcp)
 
 {
@@ -1233,7 +1348,7 @@ Int2 LIBCALLBACK VSMDescriptorAsnSave (Pointer data)
 #ifdef WIN_MAC
   FILE * fp;
 #endif
-  ValNodePtr entity_list = NULL, vnp;
+  ValNodePtr vnp;
   SaveSetSdpData sd;
   ValNodePtr obj_list = NULL;
 

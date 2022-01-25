@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.93 $
+* $Revision: 6.97 $
 *
 * File Description: 
 *
@@ -2722,7 +2722,6 @@ typedef struct fprdata {
   FORM_MESSAGE_BLOCK
   BioseqPtr           bsp;
   SeqAlignPtr         salp;
-  Uint4               selFeatItemID;
   Int4                aln_length;
   Int4                log10_aln_length;
   VieweR              details;
@@ -2736,6 +2735,7 @@ typedef struct fprdata {
   ButtoN              fixCDS;
   ButtoN              fuseJoints;
   ButtoN              accept;
+  ButtoN              leave_dlg_up;
 } FprData, PNTR FprDataPtr;
 
 typedef struct ivalinfo {
@@ -4299,6 +4299,7 @@ static void AcceptFeatProp (
   Boolean            fuse_joints = FALSE;
   Boolean            warned_about_master = FALSE;
   ValNodePtr         seq_for_prop = NULL;
+  SelStructPtr       sel = NULL, ssp;
 
   fdp = (FprDataPtr) GetObjectExtra (b);
   if (fdp == NULL) return;
@@ -4311,8 +4312,14 @@ static void AcceptFeatProp (
     return;
   }
 
-  if (GetValue (fdp->allOrSel) == 1) {
-    fdp->selFeatItemID = 0;
+
+  if (GetValue (fdp->allOrSel) == 2) {
+    sel = ObjMgrGetSelected ();
+    if (sel == NULL) {
+      Message (MSG_ERROR, "You have not selected features to propagate!");
+      SafeShow (fdp->form);
+      return;
+    }
   }
   if (GetValue (fdp->gapSplit) == 1) {
     gapSplit = FALSE;
@@ -4378,16 +4385,15 @@ static void AcceptFeatProp (
   }
   dsp->ids = sip_head;
 
-  if (fdp->selFeatItemID != 0) {
-
-    /* propagate single selected feature */
-
-    sfp = SeqMgrGetDesiredFeature (0, bsp, fdp->selFeatItemID, 0, NULL, &fcontext);
-    if (sfp != NULL) {
-      cds3end = CDSgoesToEnd (bsp, &fcontext);
-      PropagateOneFeat (sfp, gapSplit, fuse_joints, stopCDS, transPast, 
-                        cds3end, seq_for_prop, &warned_about_master);
-    }
+  if (sel != NULL) {
+    for (ssp = sel; ssp != NULL; ssp = ssp->next) {
+      sfp = SeqMgrGetDesiredFeature (ssp->entityID, NULL, ssp->itemID, 0, NULL, &fcontext);
+      if (sfp != NULL) {
+        cds3end = CDSgoesToEnd (bsp, &fcontext);
+        PropagateOneFeat (sfp, gapSplit, fuse_joints, stopCDS, transPast, 
+                          cds3end, seq_for_prop, &warned_about_master);
+      }
+    }    
   } else {
 
     /* propagate all features on bioseq */
@@ -4416,7 +4422,12 @@ static void AcceptFeatProp (
   ObjMgrSetDirtyFlag (entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
 
-  Remove (fdp->form);
+  if (GetStatus (fdp->leave_dlg_up)) {
+    SafeShow (fdp->form);
+  } else {
+    Remove (fdp->form);
+    Update();
+  }
 }
 
 static void SetFeaturePropagateAccept (Pointer userdata)
@@ -4502,6 +4513,55 @@ extern void UpdateSequenceFormActivate (WindoW w)
 #endif
 
 
+static Int2 LIBCALLBACK FeaturePropagateFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  OMUserDataPtr  omudp;
+  FprDataPtr     fp = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  fp = (FprDataPtr) omudp->userdata.ptrvalue;
+  if (fp == NULL) return OM_MSG_RET_ERROR;
+
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          break;
+      case OM_MSG_DESELECT:
+          break;
+
+      case OM_MSG_SELECT: 
+          break;
+      case OM_MSG_DEL:
+          Remove (fp->form);
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          Remove (fp->form);	
+          break;
+      default:
+          break;
+  }
+  return OM_MSG_RET_OK;
+}
+
+
+static void CleanupFeaturePropagateForm (GraphiC g, VoidPtr data)
+
+{
+  FprDataPtr fp;
+
+  fp = (FprDataPtr) data;
+  if (fp != NULL) {
+    ObjMgrFreeUserData (fp->input_entityID, fp->procid, fp->proctype, fp->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
 extern ForM FeaturePropagateForm (
   BioseqPtr bsp,
   SeqAlignPtr salp,
@@ -4519,7 +4579,7 @@ extern ForM FeaturePropagateForm (
   Char        strid [41];
   Char        txt [128];
   WindoW      w;
-  Uint2       entityID;
+  OMUserDataPtr  omudp;
 
   if (bsp == NULL) return NULL;
   fdp = (FprDataPtr) MemNew (sizeof (FprData));
@@ -4527,7 +4587,7 @@ extern ForM FeaturePropagateForm (
   w = FixedWindow (-50, -33, -10, -10, "Feature Propagate", NULL);
   if (w == NULL) return NULL;
 
-  SetObjectExtra (w, (Pointer) fdp, StdCleanupFormProc);
+  SetObjectExtra (w, (Pointer) fdp, CleanupFeaturePropagateForm);
   fdp->form = (ForM) w;
   fdp->formmessage = FeaturePropagateFormMessage;
 
@@ -4536,9 +4596,19 @@ extern ForM FeaturePropagateForm (
   SetActivate (w, UpdateSequenceFormActivate);
 #endif
 
+  /* register to receive update messages */
+  fdp->input_entityID = bsp->idx.entityID;
+  fdp->userkey = OMGetNextUserKey ();
+  fdp->procid = 0;
+  fdp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (fdp->input_entityID, fdp->procid, fdp->proctype, fdp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) fdp;
+    omudp->messagefunc = FeaturePropagateFormMsgFunc;
+  }
+
   fdp->bsp = bsp;
   fdp->salp = salp;
-  fdp->selFeatItemID = selFeatItemID;
 
   sip = SeqIdFindWorst (bsp->id);
   SeqIdWrite (sip, strid, PRINTID_REPORT, sizeof (strid) - 1);
@@ -4553,24 +4623,26 @@ extern ForM FeaturePropagateForm (
 
   seq_choice_grp = HiddenGroup (g, 0, 2, NULL);
   ppt = StaticPrompt (seq_choice_grp, txt, 0, 0, programFont, 'c');
-  entityID = ObjMgrGetEntityIDForPointer (bsp);
   fdp->sequence_list_dlg = SequenceSelectionDialog (seq_choice_grp, 
                                                     SetFeaturePropagateAccept,
                                                     fdp, 
                                                     TRUE, 
                                                     ISA_na (bsp->mol), 
                                                     ISA_aa (bsp->mol), 
-                                                    entityID);
+                                                    fdp->input_entityID);
 
   fdp->allOrSel = HiddenGroup (g, 2, 0, NULL);
   RadioButton (fdp->allOrSel, "All Features");
   b = RadioButton (fdp->allOrSel, "Selected Feature");
-  if (selFeatItemID > 0) {
+#if 1
+  SetValue (fdp->allOrSel, 1);
+#else
+  if (ObjMgrGetSelected () != NULL) {
     SetValue (fdp->allOrSel, 2);
   } else {
-    Disable (b);
     SetValue (fdp->allOrSel, 1);
   }
+#endif
 
   fdp->gapSplit = HiddenGroup (g, 2, 0, NULL);
   RadioButton (fdp->gapSplit, "Extend over gaps");
@@ -4592,6 +4664,7 @@ extern ForM FeaturePropagateForm (
   fdp->accept = DefaultButton (c, "Accept", AcceptFeatProp);
   SetObjectExtra (fdp->accept, (Pointer) fdp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  fdp->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) seq_choice_grp, (HANDLE) fdp->allOrSel,
                 (HANDLE) fdp->gapSplit, (HANDLE) fdp->stopCDS,

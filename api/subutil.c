@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.75 $
+* $Revision: 6.78 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -5434,5 +5434,176 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
     cpp [i] = StringSaveNoNull (values [i]);
   }
   curr->data.ptrvalue = (Pointer) cpp;
+}
+
+NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "ProbeDB") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("ProbeDB");
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
+}
+
+NLM_EXTERN UserObjectPtr CreateNcbiCleanupUserObject (
+  void
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("NcbiCleanup");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN void AddStringToNcbiCleanupUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || StringHasNoText (field) || StringHasNoText (str)) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "NcbiCleanup") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (field);
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (str);
+
+  /* link item at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    uop->data = curr;
+  }
+}
+
+NLM_EXTERN void AddIntegerToNcbiCleanupUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  Int4 num
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || StringHasNoText (field)) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "NcbiCleanup") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (field);
+  curr->label = oip;
+  curr->choice = 2; /* integer */
+  curr->data.intvalue = num;
+
+  /* link item at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    uop->data = curr;
+  }
+}
+
+static void ClearNcbiCleanupDescr (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr    oip;
+  ObjValNodePtr  ovp;
+  UserObjectPtr  uop;
+
+  if (sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "NcbiCleanup") != 0) return;
+  if (sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+  }
+}
+
+NLM_EXTERN void RemoveAllNcbiCleanupUserObjects (
+  SeqEntryPtr sep
+)
+
+{
+  if (sep == NULL) return;
+
+  VisitDescriptorsInSep (sep, NULL, ClearNcbiCleanupDescr);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
 }
 

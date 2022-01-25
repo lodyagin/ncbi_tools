@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.106 2008/11/10 18:17:13 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.112 2009/06/04 16:14:29 kans Exp $";
 
 /*****************************************************************************
 *
@@ -32,6 +32,7 @@ static char *this_module ="toasn3";
 #undef THIS_MODULE
 #endif
 #define THIS_MODULE this_module
+
 
 #define num_bond 5
 static CharPtr feat_bond[num_bond] = {NULL, "disulfide bond", "thiolester bond", "xlink bond", "thioether bond"};
@@ -955,7 +956,7 @@ static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
 Int4 SeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun)
 {
     return SeqEntryToAsn3Ex(sep, strip_old, source_correct, 
-            taxserver, taxfun, NULL);
+            taxserver, taxfun, NULL, FALSE);
 }
 static Boolean is_equiv(SeqEntryPtr sep)
 {
@@ -1037,7 +1038,7 @@ static Int2 GetUpdateDatePos (SeqEntryPtr sep)
 *        txfun - Taxon3ReplaceOrgInSeqEntry
 *        taxmerge - Tax3MergeSourceDescr
 *****************************************************************************/
-Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
+Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode)
 {
     ToAsn3 ta;
     OrgFixPtr ofp = NULL;
@@ -1061,6 +1062,9 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
     if (sep == NULL) {
         return ERR_INPUT;
     }
+
+    RemoveAllNcbiCleanupUserObjects (sep);
+
     update_date_pos = GetUpdateDatePos (sep);
     RemoveEmptyTitleAndPubGenAsOnlyPub (sep);
     if (source_correct) {
@@ -1068,7 +1072,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
     }
     toporg(sep);
     SeqEntryExplore(sep, (Pointer)(&ta), FindOrg);
-    
+
     if (ta.had_biosource) {    
 /* entry is in asn.1 spec 3.0 already do the checks only */
         retval |= INFO_ASNNEW;
@@ -1102,7 +1106,9 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
         EntryChangeGBSource(sep); 
         SeqEntryExplore (sep, NULL, FixProtMolInfo);
         SeqEntryExplore (sep, NULL, FuseMolInfos);
-        SeqEntryExplore(sep, NULL, StripProtXref);
+        if (! gpipeMode) {
+          SeqEntryExplore(sep, NULL, StripProtXref);
+        }
         SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
         /*
         if (qm.same == TRUE) {
@@ -1172,7 +1178,9 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
     EntryChangeGBSource(sep); 
     SeqEntryExplore (sep, NULL, FixProtMolInfo);
     SeqEntryExplore (sep, NULL, FuseMolInfos);
-    SeqEntryExplore(sep, NULL, StripProtXref);
+    if (! gpipeMode) {
+      SeqEntryExplore(sep, NULL, StripProtXref);
+    }
     SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
     /*
     if (qm.same == TRUE) {
@@ -3327,18 +3335,25 @@ static void CheckKeywords(GBBlockPtr gbp, Uint1 tech)
 
 static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
-    BioseqPtr         bsp=NULL;
-    BioseqSetPtr     bssp;
-    ValNodePtr        descr=NULL, vnp;
-    CharPtr            div;
-    GBBlockPtr        gbp;
-    MolInfoPtr        mfp=NULL;
-    Int2 i;
+    BioseqPtr     bsp = NULL;
+    BioseqSetPtr  bssp;
+    ValNodePtr    descr = NULL, vnp;
+    CharPtr       div;
+    GBBlockPtr    gbp;
+    Int2          i;
+    Boolean       is_patent = FALSE;
+    MolInfoPtr    mfp = NULL;
+    SeqIdPtr      sip;
 
     div = (CharPtr) data;
     if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr)(sep->data.ptrvalue);
         descr = bsp->descr;
+        for (sip = bsp->id; sip != NULL; sip = sip->next) {
+          if (sip->choice == SEQID_PATENT) {
+            is_patent = TRUE;
+          }
+        }
     } else {
         bssp = (BioseqSetPtr)(sep->data.ptrvalue);
         descr = bssp->descr;
@@ -3352,9 +3367,7 @@ static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     for (vnp = descr; vnp != NULL; vnp = vnp->next) {
         if (vnp->choice == Seq_descr_genbank) {
             gbp = (GBBlockPtr) vnp->data.ptrvalue;
-            if (gbp == NULL) {
-                return;
-            }
+            if (gbp == NULL) continue;
             if (mfp) {
                 if (mfp->tech == MI_TECH_htgs_0 || 
                         mfp->tech == MI_TECH_htgs_1 || 
@@ -3365,9 +3378,7 @@ static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
                     CheckKeywords(gbp, mfp->tech);
                 }
             }
-            if (gbp->div == NULL) {
-                return;
-            }
+            if (gbp->div == NULL) continue;
             for (i=0; i < TOTAL_TECH; i++) {
                 if (StringCmp(gbp->div, check_tech[i].name) == 0) {
                     break;
@@ -3401,6 +3412,8 @@ static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
                     gbp->div = MemFree(gbp->div);
                 } else if (StringCmp(gbp->div, "UNC") == 0) {
                     gbp->div = MemFree(gbp->div);
+                } else if (StringCmp(gbp->div, "PAT") == 0 && is_patent) {
+                    gbp->div = MemFree(gbp->div);
                 }
             } 
         }
@@ -3415,7 +3428,7 @@ typedef struct gbsrcdata {
   OrgNamePtr  onp;
 } GBSourceData, PNTR GBSourcePtr;
 
-static Boolean AbbrevStrICmp (CharPtr str, CharPtr gbpsrc)
+static Boolean AbbrevStrIEql (CharPtr str, CharPtr gbpsrc)
 
 {
   Char     buf [200];
@@ -3442,7 +3455,7 @@ static Boolean AbbrevStrICmp (CharPtr str, CharPtr gbpsrc)
   *ptr = '\0';
   StringCat (ptr, str);
 
-  return StringICmp (buf, gbpsrc);
+  return (Boolean) (StringICmp (buf, gbpsrc) == 0);
 }
 
 static Boolean CanDeleteGBSource (GBSourcePtr gsp, CharPtr gbpsrc)
@@ -3477,6 +3490,9 @@ static Boolean CanDeleteGBSource (GBSourcePtr gsp, CharPtr gbpsrc)
       ptr++;
       ch = *ptr;
     }
+  } else {
+    str = StringStr (gbpsrc, "strain)");
+    if (str != NULL) return FALSE; /* do not handle this case for now */
   }
   if (foundStrain) {
     *str = '\0';
@@ -3505,11 +3521,23 @@ static Boolean CanDeleteGBSource (GBSourcePtr gsp, CharPtr gbpsrc)
   if (StringDoesHaveText (gsp->common) && StringICmp (gsp->common, gbpsrc) == 0) return TRUE;
   if (StringDoesHaveText (gsp->oldname) && StringICmp (gsp->oldname, gbpsrc) == 0) return TRUE;
 
-  if (StringDoesHaveText (gsp->taxname) && AbbrevStrICmp (gsp->taxname, gbpsrc) == 0) return TRUE;
-  if (StringDoesHaveText (gsp->oldname) && AbbrevStrICmp (gsp->oldname, gbpsrc) == 0) return TRUE;
+  if (StringDoesHaveText (gsp->taxname) && AbbrevStrIEql (gsp->taxname, gbpsrc)) return TRUE;
+  if (StringDoesHaveText (gsp->oldname) && AbbrevStrIEql (gsp->oldname, gbpsrc)) return TRUE;
 
 
   return FALSE;
+}
+
+static void TrimPeriodFromEnd (CharPtr str)
+
+{
+  size_t  len;
+
+  len = StringLen (str);
+  if (len < 2) return;
+  if (str [len - 1] == '.') {
+    str [len - 1] = '\0';
+  }
 }
 
 static void ChangeGBSource (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
@@ -3544,9 +3572,12 @@ static void ChangeGBSource (SeqEntryPtr sep, Pointer data, Int4 index, Int2 inde
             } else if (len > 6 && StringCmp (s + len - 5, " rRNA.") == 0) {
               s [len - 6] = '\0';
             }
+            TrimPeriodFromEnd (s);
+            /*
             if (*(s+StringLen(s)-1) =='.') {
                 *(s+StringLen(s)-1) = '\0';
             }
+            */
             if (CanDeleteGBSource (gsp, s)) {
                 gbp->source = MemFree (gbp->source);
             }
@@ -3608,10 +3639,12 @@ void EntryChangeGBSource (SeqEntryPtr sep)
         if (StringDoesHaveText (orp->taxname)) {
           gsd.taxname = StringSave (orp->taxname);
           TrimSpacesAndJunkFromEnds (gsd.taxname, FALSE);
+          TrimPeriodFromEnd (gsd.taxname);
         }
         if (StringDoesHaveText (orp->common)) {
           gsd.common = StringSave (orp->common);
           TrimSpacesAndJunkFromEnds (gsd.common, FALSE);
+          TrimPeriodFromEnd (gsd.common);
         }
         onp = orp->orgname;
         if (onp != NULL) {
@@ -3621,9 +3654,11 @@ void EntryChangeGBSource (SeqEntryPtr sep)
             if (omp->subtype == ORGMOD_strain) {
               gsd.strain = StringSave (omp->subname);
               TrimSpacesAndJunkFromEnds (gsd.strain, FALSE);
+              TrimPeriodFromEnd (gsd.strain);
             } else if (omp->subtype == ORGMOD_old_name) {
               gsd.oldname = StringSave (omp->subname);
               TrimSpacesAndJunkFromEnds (gsd.oldname, FALSE);
+              TrimPeriodFromEnd (gsd.oldname);
             }
           }
           if (StringDoesHaveText (onp->div)) {

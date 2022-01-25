@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -699,7 +699,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"operon\" , menulabel \"Operon\" , featdef-key 92 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"oriT\" , menulabel \"Origin of Transcription\" , featdef-key 93 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na } ,\n" \
 "{ typelabel \"ncRNA\" , menulabel \"Non-coding RNA\" , featdef-key 94 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
-"{ typelabel \"tmRNA\" , menulabel \"Transfer-messenger RNA\" , featdef-key 95 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na  } } };\n";
+"{ typelabel \"tmRNA\" , menulabel \"Transfer-messenger RNA\" , featdef-key 95 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"CloneRef\" , menulabel \"Clone Reference\" , featdef-key 96 , seqfeat-key 21 , entrygroup 0 , displaygroup 0 , molgroup na  } } };\n";
 #endif
 
 /*****************************************************************************
@@ -982,6 +983,8 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
             return FEATDEF_HET;
         case SEQFEAT_BIOSRC:
             return FEATDEF_BIOSRC;
+        case SEQFEAT_CLONEREF:
+            return FEATDEF_CLONEREF;
     }
 
     return FEATDEF_BAD;
@@ -1392,6 +1395,8 @@ protref:    if (prp->name != NULL)
             bsrcp = (BioSourcePtr)(sfp->data.value.ptrvalue);
             orp = bsrcp->org;
             goto orgref;
+        case SEQFEAT_CLONEREF:
+            break;
         default:
             break;
     }

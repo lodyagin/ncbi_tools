@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.61 $
+* $Revision: 6.66 $
 *
 * File Description: 
 *
@@ -76,6 +76,7 @@ typedef struct effitemdata {
   CharPtr  catname;
   CharPtr  errname;
   CharPtr  accession;
+  CharPtr  featureID;
   CharPtr  message;
   CharPtr  objtype;
   CharPtr  label;
@@ -114,6 +115,8 @@ typedef struct validextra {
   BaseFormPtr    bfp;
   FormActnFunc   revalProc;
   ButtoN         revalBtn;
+  FormActnFunc   continueProc;
+  ButtoN         continueBtn;
   Boolean        okaytosetviewtarget;
   Boolean        indexerVersion;
   Int2           selected_text_start_item;
@@ -128,6 +131,7 @@ typedef struct validextra {
   Int2           selected_text_anchor_col;
   Int2           selected_text_anchor_row;
   Int4           selected_text_anchor_offset;
+  SequesterProc  sequesterProc;
 } ValidExtra, PNTR ValidExtraPtr;
 
 static WindoW  validWindow = NULL;
@@ -360,6 +364,33 @@ static SeqFeatPtr GetSeqFeatGivenIDs (Uint2 entityID, Uint4 itemID, Uint2 itemty
   return sfp;
 }
 
+
+static Boolean FindSdpItem (GatherContextPtr gcp)
+
+{
+  SeqDescrPtr  PNTR sdpp;
+
+  sdpp = (SeqDescrPtr PNTR) gcp->userdata;
+  if (sdpp != NULL && gcp->thistype == OBJ_SEQDESC) {
+    *sdpp = (SeqDescrPtr) gcp->thisitem;
+  }
+  return TRUE;
+}
+
+static SeqDescrPtr GetSeqDescGivenIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
+
+{
+  SeqDescrPtr  sdp;
+
+  sdp = NULL;
+  if (entityID > 0 && itemID > 0 && itemtype == OBJ_SEQFEAT) {
+    GatherItem (entityID, itemID, itemtype, (Pointer) (&sdp), FindSdpItem);
+  }
+  return sdp;
+}
+
+
+
 static void ValDoNotify (ValidExtraPtr vep, Int2 item, Boolean select, Boolean target)
 
 {
@@ -525,6 +556,7 @@ static ValNodePtr FreeErrItemList (ValNodePtr head)
     MemFree (eip->catname);
     MemFree (eip->errname);
     MemFree (eip->accession);
+    MemFree (eip->featureID);
     MemFree (eip->message);
     MemFree (eip->objtype);
     MemFree (eip->label);
@@ -644,6 +676,7 @@ static CharPtr CharPrtProc (DoC d, Int2 item, Pointer ptr)
         StringLen (eip->catname) +
         StringLen (eip->errname) +
         StringLen (eip->accession) +
+        StringLen (eip->featureID) +
         StringLen (eip->message) +
         StringLen (eip->objtype) +
         StringLen (eip->label) +
@@ -1142,6 +1175,246 @@ static void EnableValidatorReportTypeButtons (ButtoN b)
 }
 
 
+static BioseqPtr GetFirstBioseqInSeqEntry (SeqEntryPtr sep)
+{
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp;
+  
+  if (sep == NULL || sep->data.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  else if (IS_Bioseq (sep))
+  {
+    bsp = sep->data.ptrvalue;
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL && bsp == NULL; sep = sep->next)
+    {
+      bsp = GetFirstBioseqInSeqEntry (sep);
+    }
+  }
+  return bsp;
+}
+
+
+static BioseqPtr GetBioseqForDescriptor (ObjValNodePtr ovp)
+{
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sep;
+  
+  if (ovp == NULL || ovp->idx.parentptr == NULL)
+  {
+    return NULL;
+  }
+  else if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+    bsp = (BioseqPtr) ovp->idx.parentptr;
+  } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+    for (sep = bssp->seq_set; sep != NULL && bsp == NULL; sep = sep->next)
+    {
+      bsp = GetFirstBioseqInSeqEntry (sep);
+    }  
+  }
+  return bsp;
+}
+
+
+static BioseqPtr GetBioseqFromErrItem (ErrItemPtr eip)
+{
+  BioseqPtr  bsp = NULL;
+  SeqFeatPtr sfp;
+  SeqDescrPtr sdp;
+  ObjValNodePtr ovp;
+  SeqMgrDescContext context;
+
+  if (eip == NULL) {
+    return NULL;
+  }
+  switch (eip->itemtype) {
+    case OBJ_BIOSEQ:
+      bsp = GetBioseqGivenIDs (eip->entityID, eip->itemID, eip->itemtype);
+      break;
+    case OBJ_SEQFEAT:
+      sfp = GetSeqFeatGivenIDs (eip->entityID, eip->itemID, eip->itemtype);
+      if (sfp != NULL)
+      {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+      }
+      break;
+    case OBJ_SEQDESC:
+      sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &context);
+      if (sdp != NULL && sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        bsp = GetBioseqForDescriptor (ovp);
+      }
+      break;
+  }
+  return bsp;
+}
+
+
+static Int4 FindReportPositionForError (ErrItemPtr eip, ValNodePtr chosen)
+{
+  Int4       pos;
+  ValNodePtr vnp;
+  ErrFltrPtr efp;
+
+  if (eip == NULL || chosen == NULL) return -1;
+
+  for (vnp = chosen, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+  {
+    efp = (ErrFltrPtr) vnp->data.ptrvalue;
+    if (efp != NULL && efp->errcode == eip->errcode 
+        && (efp->subcode == INT_MIN || efp->subcode == eip->subcode))
+    {
+      return pos;
+    }
+  }
+  return -1;
+}
+
+
+static int LIBCALLBACK SortVnpByChoiceAndPtrvalue (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+
+  if (vnp1->choice > vnp2->choice) {
+    return 1;
+  } else if (vnp1->choice < vnp2->choice) {
+    return -1;
+  } else if (vnp1->data.ptrvalue > vnp2->data.ptrvalue) {
+    return 1;
+  } else if (vnp1->data.ptrvalue < vnp2->data.ptrvalue) {
+    return -1;
+  } else {
+    return 0;
+  }
+}
+
+
+static ValNodePtr CollectBioseqsByValidatorReportTypes (ValidExtraPtr vep)
+{
+  ErrFltrPtr  efp;
+  ErrItemPtr  eip;
+  ValNodePtr  chosen = NULL, vnp, bsp_list = NULL;
+  WindoW      w, h, btn_grp, g1 = NULL, c;
+  Int4        num_buttons, i;
+  ValidatorReportTypeData data;
+  ButtoN PNTR btn_array;
+  ButtoN      b;
+  int         last_errcode = 0;
+  ModalAcceptCancelData acd;
+  Int4        pos;
+  BioseqPtr   bsp;
+  
+  if (vep == NULL || vep->errorfilter == NULL) return NULL;
+
+  /* if only one, just select the one */
+  if (vep->errorfilter->next == NULL) 
+  {
+    ValNodeAddPointer (&chosen, 0, vep->errorfilter->data.ptrvalue);
+    return chosen;
+  }
+
+  num_buttons = ValNodeLen (vep->errorfilter);
+  btn_array = (ButtoN PNTR) MemNew (sizeof (ButtoN) * num_buttons);
+
+  data.btn_array = btn_array;
+  data.errorfilter = vep->errorfilter;
+
+  w = MovableModalWindow (-50, -33, -10, -10, "Choose Report Items", NULL);
+  SetGroupSpacing (w, 10, 10);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  btn_grp = HiddenGroup (h, 3, 0, NULL);
+  for (vnp = vep->errorfilter, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+    efp = (ErrFltrPtr) vnp->data.ptrvalue;
+    if (efp == NULL) continue;
+    if (efp->subcode == INT_MIN) {
+      g1 = NormalGroup (btn_grp, 0, 10, efp->text2, programFont, NULL);
+      btn_array[i] = CheckBox (g1, "All", EnableValidatorReportTypeButtons);
+      SetObjectExtra (btn_array[i], &data, NULL);
+      last_errcode = efp->errcode;
+    } else {
+      if (last_errcode != efp->errcode) {
+        g1 = NULL;
+      }
+      btn_array[i] = CheckBox (g1 == NULL ? btn_grp : g1, efp->text3 == NULL ? "" : efp->text3, NULL);
+    }
+  }
+
+  c = HiddenGroup (w, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 2);
+  b = DefaultButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) btn_grp, (HANDLE) c, NULL);
+  RealizeWindow (w);
+
+  Show (w);
+  Select (w);
+  Update ();
+
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    while (!acd.accepted && ! acd.cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+
+    if (acd.accepted)
+    {
+      for (vnp = vep->errorfilter, i = 0; vnp != NULL; vnp = vnp->next, i++)
+      {
+        if (vnp->data.ptrvalue != NULL && GetStatus (btn_array[i])) 
+        {
+          /* add ErrorFilterPtr to list of categories */
+          ValNodeAddPointer (&chosen, 0, vnp->data.ptrvalue);
+        }
+      }
+    }
+  }
+  btn_array = MemFree (btn_array);
+
+  for (vnp = vep->messages; vnp != NULL; vnp = vnp->next) {
+    eip = (ErrItemPtr) vnp->data.ptrvalue;
+    if (eip != NULL) {
+      pos = FindReportPositionForError (eip, chosen);
+      if (pos != -1) {
+        bsp = GetBioseqFromErrItem (eip);
+        ValNodeAddPointer (&bsp_list, OBJ_BIOSEQ, bsp);
+      }
+    }
+  }
+  chosen = ValNodeFree (chosen);
+
+  bsp_list = ValNodeSort (bsp_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&bsp_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+
+  Remove (w);
+  return bsp_list;
+}
+
+
 static ValNodePtr CollectValidatorReportTypes (ValidExtraPtr vep)
 {
   ErrFltrPtr  efp;
@@ -1231,27 +1504,6 @@ static ValNodePtr CollectValidatorReportTypes (ValidExtraPtr vep)
   btn_array = MemFree (btn_array);
   Remove (w);
   return chosen;
-}
-
-
-static Int4 FindReportPositionForError (ErrItemPtr eip, ValNodePtr chosen)
-{
-  Int4       pos;
-  ValNodePtr vnp;
-  ErrFltrPtr efp;
-
-  if (eip == NULL || chosen == NULL) return -1;
-
-  for (vnp = chosen, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
-  {
-    efp = (ErrFltrPtr) vnp->data.ptrvalue;
-    if (efp != NULL && efp->errcode == eip->errcode 
-        && (efp->subcode == INT_MIN || efp->subcode == eip->subcode))
-    {
-      return pos;
-    }
-  }
-  return -1;
 }
 
 
@@ -1456,6 +1708,30 @@ static void MakeValidatorReport (ButtoN b)
 }
 
 
+static void SequesterByValidatorErrors (ButtoN b)
+{
+  ValidExtraPtr  vep;
+  ValNodePtr     bsp_list;
+  BioseqPtr      bsp;
+  Uint2          entityID = 0;
+
+  vep = (ValidExtraPtr) GetObjectExtra (b);
+  if (vep == NULL || vep->sequesterProc == NULL) return;
+  bsp_list = CollectBioseqsByValidatorReportTypes (vep);
+  if (bsp_list == NULL) {
+    Message (MSG_ERROR, "No Bioseqs selected!");
+    return;
+  }
+  if (bsp_list->choice == OBJ_BIOSEQ && bsp_list->data.ptrvalue != NULL) {
+    bsp = (BioseqPtr) bsp_list->data.ptrvalue;
+    entityID = bsp->idx.entityID;
+  }
+
+  (vep->sequesterProc) (entityID, bsp_list);
+  bsp_list = ValNodeFree (bsp_list);
+}
+
+
 static Boolean ValExportProc (ForM f, CharPtr filename)
 
 {
@@ -1646,6 +1922,33 @@ static void RevalidateProc (ButtoN b)
   }
 }
 
+
+static void ContinueProc (ButtoN b)
+
+{
+  BaseFormPtr    bfp;
+  int            i;
+  ValidExtraPtr  vep;
+
+  vep = GetObjectExtra (b);
+  if (vep != NULL) {
+    for (i = SEV_NONE; i <= SEV_MAX; i++) {
+      vep->counts [i] = 0;
+    }
+    vep->totalcount = 0;
+    vep->addedcount = 0;
+    vep->remaining = 0;
+    vep->clicked = 0;
+    vep->selected = 0;
+    vep->dblClick = FALSE;
+    bfp = vep->bfp;
+    if (bfp != NULL && vep->continueProc != NULL) {
+      vep->continueProc (bfp->form);
+    }
+  }
+}
+
+
 static void SetVerbosityAndRepopulate (PopuP p)
 
 {
@@ -1833,9 +2136,10 @@ static CharPtr howToClickText =
 "Double click on an error item to launch the appropriate feature editor.";
 
 /* CreateValidateWindowEx is hidden, allowing a revalidate button */
-extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
+extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
                                     FonT font, ErrSev sev, Int2 verbose,
-                                    BaseFormPtr bfp, FormActnFunc revalProc,
+                                    BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                    SequesterProc sequesterProc,
                                     Boolean okaytosetviewtarget)
 
 {
@@ -1885,7 +2189,7 @@ extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
 
         ppt = MultiLinePrompt (w, canStillSubmitText, stdCharWidth * 30, systemFont);
 
-        c = HiddenGroup (w, 8, 0, NULL);
+        c = HiddenGroup (w, 9, 0, NULL);
         SetGroupSpacing (c, 10, 2);
         /*
         vep->remove = PushButton (c, "Remove", RemoveProc);
@@ -1926,9 +2230,16 @@ extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         } else {
           SetValue (vep->minlevel, 1);
         }
+        /* set up revalidate button */
         vep->revalBtn = PushButton (c, "Revalidate", RevalidateProc);
         SetObjectExtra (vep->revalBtn, vep, NULL);
         Hide (vep->revalBtn);
+
+        /* set up continue button */
+        vep->continueBtn = PushButton (c, "Done", ContinueProc);
+        SetObjectExtra (vep->continueBtn, vep, NULL);
+        Hide (vep->revalBtn);
+
         /*
         Advance (w);
         */
@@ -1994,11 +2305,16 @@ extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
 
         vep->summary = StaticPrompt (w, "", stdCharWidth * 30, 0, systemFont, 'c');
 
-        btn_grp = HiddenGroup (w, 2, 0, NULL);
+        btn_grp = HiddenGroup (w, 3, 0, NULL);
         SetGroupSpacing (btn_grp, 10, 10);
         if (indexerVersion) {
           b = PushButton (btn_grp, "Report", MakeValidatorReport);
           SetObjectExtra (b, vep, NULL);
+          if (sequesterProc != NULL) {
+            vep->sequesterProc = sequesterProc;
+            b = PushButton (btn_grp, "Sequester", SequesterByValidatorErrors);
+            SetObjectExtra (b, vep, NULL);
+          }
         }
 
         b = PushButton (btn_grp, "Dismiss", CloseValidButton);
@@ -2023,10 +2339,36 @@ extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
       } else {
         SafeHide (vep->revalBtn);
       }
+      vep->continueProc = continueProc;
+      if (vep->continueProc != NULL) {
+        SafeShow (vep->continueBtn);
+      } else {
+        SafeHide (vep->continueBtn);
+      }
       vep->okaytosetviewtarget = okaytosetviewtarget;
     }
   }
   return validWindow;
+}
+
+extern WindoW CreateValidateWindowExEx (ErrNotifyProc notify, CharPtr title,
+                                    FonT font, ErrSev sev, Int2 verbose,
+                                    BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                    Boolean okaytosetviewtarget)
+{
+  return CreateValidateWindowExExEx (notify, title,
+                                    font, sev, verbose,
+                                    bfp, revalProc, continueProc,
+                                    NULL,
+                                    okaytosetviewtarget);
+}
+
+extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
+                                    FonT font, ErrSev sev, Int2 verbose,
+                                    BaseFormPtr bfp, FormActnFunc revalProc,
+                                    Boolean okaytosetviewtarget)
+{
+  return CreateValidateWindowExEx (notify, title, font, sev, verbose, bfp, revalProc, NULL, okaytosetviewtarget);
 }
 
 extern WindoW CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
@@ -2384,6 +2726,7 @@ extern void LIBCALLBACK ValidErrCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
   CharPtr label,
@@ -2475,6 +2818,7 @@ extern void LIBCALLBACK ValidErrCallback (
   eip->catname = StringSaveNoNull (catname);
   eip->errname = StringSaveNoNull (errname);
   eip->accession = StringSaveNoNull (accession);
+  eip->featureID = StringSaveNoNull (featureID);
   eip->message = StringSaveNoNull (message);
   eip->objtype = StringSaveNoNull (objtype);
   eip->label = StringSaveNoNull (label);

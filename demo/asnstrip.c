@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.8 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -83,6 +83,7 @@ typedef struct asnstream {
 
 typedef struct stripitems {
   Boolean strip_features;
+  Boolean strip_citsubpubs;
   Boolean strip_noncitsubpubs;
   Boolean strip_comment_descriptors;
 } StripItemsData, PNTR StripItemsPtr;
@@ -190,6 +191,25 @@ static void WriteOneFile (
   }
 }
 
+static void WriteOneSeqSubmitFile (
+  OutputStreamPtr osp,
+  SeqSubmitPtr ssp
+)
+
+{
+  AsnIoPtr   aip;
+
+  aip = AsnIoFromOutputStream (osp);
+  if (aip != NULL) {
+    SeqSubmitAsnWrite (ssp, aip, NULL);
+    AsnIoFlush (aip);
+  }
+  if (aip != osp->aip) {
+    AsnIoClose (aip);
+  }
+}
+
+
 static void DeleteFeatureCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   BioseqPtr prot_bsp;
@@ -227,14 +247,23 @@ static void DeleteDescriptorsCallback (SeqDescrPtr sdp, Pointer userdata)
 
   if (sdp != NULL 
       && (sip = (StripItemsPtr) userdata) != NULL
-      && sdp->extended != 0
-      && ((sip->strip_noncitsubpubs
-           && sdp->choice == Seq_descr_pub
-           && ! IsCitSubPub ((PubdescPtr)sdp->data.ptrvalue))
-          || (sip->strip_comment_descriptors
-              && sdp->choice == Seq_descr_comment))) {
+      && sdp->extended != 0) {
     ovp = (ObjValNodePtr) sdp;
-    ovp->idx.deleteme = TRUE;
+    if (sdp->choice == Seq_descr_pub) {
+      if (sip->strip_noncitsubpubs && sip->strip_citsubpubs) {
+        /* strip all pubs */
+        ovp->idx.deleteme = TRUE;
+      } else if (sip->strip_citsubpubs && IsCitSubPub ((PubdescPtr)sdp->data.ptrvalue)) {
+        /* strip citsubpub */
+        ovp->idx.deleteme = TRUE;
+      } else if (sip->strip_noncitsubpubs && !IsCitSubPub ((PubdescPtr)sdp->data.ptrvalue)) {
+        /* strip noncitsubpub */
+        ovp->idx.deleteme = TRUE;
+      }
+    } else if (sip->strip_comment_descriptors && sdp->choice == Seq_descr_comment) {
+      /* strip comment descriptors */
+      ovp->idx.deleteme = TRUE;
+    }
   }
 }
 
@@ -312,7 +341,7 @@ static Uint2 ProcessOneAsn (
     if (sip->strip_features) {
       VisitFeaturesInSep (sep, NULL, DeleteFeatureCallback);
     }
-    if (sip->strip_noncitsubpubs || sip->strip_comment_descriptors) {
+    if (sip->strip_noncitsubpubs || sip->strip_citsubpubs || sip->strip_comment_descriptors) {
       VisitDescriptorsInSep (sep, sip, DeleteDescriptorsCallback);
     }
     DeleteMarkedObjects (entityID, 0, NULL);
@@ -333,6 +362,7 @@ static Int4 ProcessOneRecord (
   Uint2              entityID;
   FILE               *fp;
   SeqEntryPtr        sep;
+  SeqSubmitPtr       ssp = NULL; 
 
   if (osp == NULL || sip == NULL) return -1;
   fp = OpenOneFile (directory, osp->base, osp->suffix);
@@ -348,7 +378,15 @@ static Int4 ProcessOneRecord (
 
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
-    WriteOneFile (osp, sep);
+    if (!sip->strip_citsubpubs) {
+      SeqMgrIndexFeatures (entityID, NULL);
+      ssp = FindSeqSubmitForSeqEntry (sep);
+    }
+    if (ssp == NULL) {
+      WriteOneFile (osp, sep);
+    } else {
+      WriteOneSeqSubmitFile (osp, ssp);
+    }
   }
 
   ObjMgrFreeByEntityID (entityID);
@@ -396,7 +434,7 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
       if (sip->strip_features) {
         VisitFeaturesInSep (sep, NULL, DeleteFeatureCallback);
       }
-      if (sip->strip_noncitsubpubs) {
+      if (sip->strip_noncitsubpubs || sip->strip_citsubpubs || sip->strip_comment_descriptors) {
         VisitDescriptorsInSep (sep, sip, DeleteDescriptorsCallback);
       }
       DeleteMarkedObjects (entityID, 0, NULL);
@@ -533,7 +571,8 @@ static Boolean SetUpAsnStreamData (AsnStreamPtr asp)
 #define e_argInputSeqEntry     7
 #define d_argOutputBinary      8
 #define z_argStripNonCitSubPubs 9
-#define c_argStripCommentDescriptors 10
+#define Z_argStripCitSubPubs    10
+#define c_argStripCommentDescriptors 11
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -556,6 +595,8 @@ Args myargs [] = {
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Strip non-CitSub Pubs", "F", NULL, NULL,
     TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Strip CitSub Pubs", "F", NULL, NULL,
+    TRUE, 'Z', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Strip Comment Descriptors", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL}
 };
@@ -621,6 +662,7 @@ Int2 Main(void)
   }
 
   /* collect items to be stripped */
+  sid.strip_citsubpubs = (Boolean) myargs [Z_argStripCitSubPubs].intvalue;
   sid.strip_noncitsubpubs = (Boolean) myargs [z_argStripNonCitSubPubs].intvalue;
   sid.strip_features = TRUE; /* by default, for now */
   sid.strip_comment_descriptors = (Boolean) myargs [c_argStripCommentDescriptors].intvalue;

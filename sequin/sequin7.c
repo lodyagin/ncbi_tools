@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.352 $
+* $Revision: 6.359 $
 *
 * File Description: 
 *
@@ -5029,10 +5029,10 @@ static Int4 DoSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
 /*#endif*/
   oldscope = SeqEntrySetScope (sep);
   if (dotaxon) {
-    rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, NULL, Tax3MergeSourceDescr);
+    rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, NULL, Tax3MergeSourceDescr, FALSE);
     DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
   } else {
-    rsult = SeqEntryToAsn3Ex (sep, strip, correct, FALSE, NULL, NULL);
+    rsult = SeqEntryToAsn3Ex (sep, strip, correct, FALSE, NULL, NULL, FALSE);
   }
   SeqEntrySetScope (oldscope);
   return rsult;
@@ -5154,6 +5154,31 @@ static void RemoveMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, I
   }
 }
 
+static void MakeSequinCleanupObject (SeqEntryPtr sep)
+
+{
+  DatePtr        dp;
+  ValNodePtr     sdp;
+  UserObjectPtr  uop;
+
+  dp = DateCurr ();
+  if (dp == NULL) return;
+
+  uop = CreateNcbiCleanupUserObject ();
+  if (uop == NULL) return;
+
+  AddStringToNcbiCleanupUserObject (uop, "method", "SequinCleanup");
+  AddIntegerToNcbiCleanupUserObject (uop, "version", NCBI_CLEANUP_VERSION);
+
+  AddIntegerToNcbiCleanupUserObject (uop, "month", dp->data [2]);
+  AddIntegerToNcbiCleanupUserObject (uop, "day", dp->data [3]);
+  AddIntegerToNcbiCleanupUserObject (uop, "year", dp->data [1] + 1900);
+
+  sdp = NewDescrOnSeqEntry (sep, Seq_descr_user);
+  if (sdp == NULL) return;
+  sdp->data.ptrvalue = uop;
+}
+
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon);
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon)
 
@@ -5166,6 +5191,9 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
 
   rsult = 0;
   sev = ErrSetMessageLevel (SEV_FATAL);
+
+  RemoveAllNcbiCleanupUserObjects (sep);
+
   BasicSeqEntryCleanup (sep);
   EntryChangeImpFeat(sep);     /* change any CDS ImpFeat to real CdRegion */
   /* NormalizePeriodsOnInitials (sep); */ /* put periods on author initials */
@@ -5215,6 +5243,9 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     GetRidOfLocusInSeqIds (0, sep);
     /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
     entityID = ObjMgrGetEntityIDForChoice (sep);
+    SeqMgrIndexFeatures (entityID, NULL);
+    MakeSequinCleanupObject (sep);
+    NormalizeDescriptorOrder (sep);
     SeqMgrIndexFeatures (entityID, NULL);
     CdCheck (sep, NULL);
     BasicSeqEntryCleanup (sep);
@@ -5268,6 +5299,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
   entityID = ObjMgrGetEntityIDForChoice (sep);
   SeqMgrClearFeatureIndexes (entityID, NULL);
+  MakeSequinCleanupObject (sep);
   NormalizeDescriptorOrder (sep);
   SeqMgrIndexFeatures (entityID, NULL);
   CdCheck (sep, NULL);
@@ -7119,299 +7151,6 @@ extern void FixFeatureIntervals (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
-static SeqLocPtr 
-CreateProteinLoc 
-(SeqLocPtr  nuc_loc,
- SeqFeatPtr top_cds,
- Int4       offset,
- Int4       cds_frame, 
- BioseqPtr  prot_bsp,
- LogInfoPtr lip)
-{
-  SeqLocPtr    prot_loc = NULL;
-  SeqIntPtr    sintp_nuc, sintp_prot, sintp_top;
-  Boolean      partial5, partial3;
-  ByteStorePtr bs;
-  CharPtr      prot_str;
-  Boolean      ends_with_stop = FALSE;
-  Int4         prot_len = 0;
-  Char         ch;
-  Int4         from_remainder = 0, to_remainder = 0;
-  
-  if (nuc_loc == NULL || top_cds == NULL || prot_bsp == NULL
-      || top_cds->location == NULL
-      || top_cds->location->choice != SEQLOC_INT
-      || top_cds->location->data.ptrvalue == NULL)
-  {
-    return NULL;
-  }
-  if (nuc_loc->choice != SEQLOC_INT || nuc_loc->data.ptrvalue == NULL)
-  {
-    Message (MSG_ERROR, "Unable to translate locations that are not simple intervals");
-  }
-  else
-  {
-    sintp_top = (SeqIntPtr) (top_cds->location->data.ptrvalue);
-    sintp_nuc = (SeqIntPtr)(nuc_loc->data.ptrvalue);
-    
-    if (sintp_nuc->from < sintp_top->from)
-    {
-      from_remainder = -1;
-    }
-    else if (cds_frame == 1)
-    {
-      from_remainder = (sintp_nuc->from - offset) % 3;
-    }
-    else if (cds_frame == 2)
-    {
-      from_remainder = (sintp_nuc->from - offset + 1) % 3;
-    }
-    else if (cds_frame == 3)
-    {
-      from_remainder = (sintp_nuc->from - offset + 2) % 3;
-    }
-    
-    if (sintp_nuc->to > sintp_top->to)
-    {
-      to_remainder = -1;
-    }
-    else if (sintp_nuc->to < sintp_top->to)
-    {
-      to_remainder = (sintp_nuc->to + 1 - offset) % 3;
-    }
-
-    if (from_remainder != 0 || to_remainder != 0)    
-    {
-      if (lip != NULL && lip->fp != NULL)
-      {
-        fprintf (lip->fp, "Invalid coordinates for mat_peptide conversion\n");
-        lip->data_in_log = TRUE;
-      }
-      else
-      {
-        Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
-      }
-    }
-    else
-    {  
-      bs = ProteinFromCdRegionEx (top_cds, TRUE, FALSE);
-      if (bs != NULL)
-      {
-        prot_str = BSMerge (bs, NULL);
-        prot_len = StringLen (prot_str);
-        ch = prot_str [prot_len - 1];
-        if (ch == '*')
-        {
-          ends_with_stop = TRUE;
-        }
-        MemFree (prot_str);
-        bs = BSFree (bs);
-      }
-
-      sintp_prot = SeqIntNew ();
-      if (sintp_prot != NULL)
-      {
-        CheckSeqLocForPartial (nuc_loc, &partial5, &partial3);
-        sintp_prot->id = SeqIdDup (SeqIdFindBest(prot_bsp->id, 0));
-        sintp_prot->from = (sintp_nuc->from - offset) / 3;
-        sintp_prot->to = (sintp_nuc->to - offset) / 3;
-        if (sintp_prot->to == prot_len - 1)
-        {
-          if (ends_with_stop)
-          {
-            sintp_prot->to --;
-          }
-          else
-          {
-            partial3 = TRUE;
-          }
-        }
-        ValNodeAddPointer (&prot_loc, SEQLOC_INT, sintp_prot);
-        SetSeqLocPartial (prot_loc, partial5, partial3);
-      }
-    }
-  }
-  return prot_loc;
-}
-
-static CharPtr GetCDSProteinDesc (SeqFeatPtr cds)
-{
-  BioseqPtr         bsp;
-  SeqFeatPtr        prot_feat;
-  SeqMgrFeatContext context;
-  ProtRefPtr        prp;
-  
-  if (cds == NULL || cds->product == NULL)
-  {
-    return NULL;
-  }
-  
-  bsp = BioseqFindFromSeqLoc (cds->product);
-  prot_feat = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PROT, 0, &context);
-  if (prot_feat != NULL && prot_feat->data.value.ptrvalue != NULL)
-  {
-    prp = (ProtRefPtr) prot_feat->data.value.ptrvalue;
-    return StringSave (prp->desc);
-  }
-  else
-  {
-    return NULL;
-  }
-}
-
-extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userdata)
-{
-  SeqFeatPtr        sfp = NULL;
-  ValNodePtr        top_level_cds_list = NULL;
-  ValNodePtr        top_level_cds_offset_list = NULL;
-  SeqMgrFeatContext context, gene_context;
-  ValNodePtr        vnp, offset_vnp;
-  SeqFeatPtr        top_cds;
-  BioseqPtr         prot_bsp;
-  SeqLocPtr         prot_loc;
-  Int4              offset = 0, mat_cds_frame;
-  SeqFeatPtr        new_sfp;
-  ProtRefPtr        prp;
-  SeqFeatPtr        gene;
-  CdRegionPtr       crp;
-  LogInfoPtr        lip;
-  
-  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
-  lip = (LogInfoPtr) userdata;
-  
-  sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
-  while (sfp != NULL)
-  {
-    top_cds = NULL;
-    offset = 0;
-    for (vnp = top_level_cds_list, offset_vnp = top_level_cds_offset_list;
-         vnp != NULL && offset_vnp != NULL && top_cds == NULL; 
-         vnp = vnp->next, offset_vnp = offset_vnp->next)
-    {
-      top_cds = (SeqFeatPtr) vnp->data.ptrvalue;
-      if (top_cds != NULL)
-      {
-        if (SeqLocCompare (top_cds->location, sfp->location) == SLC_B_IN_A)
-        {
-          offset = offset_vnp->data.intvalue;
-        }
-        else
-        {
-          top_cds = NULL;
-        }
-      }
-    }
-    /* Only handling the simplest cases of SeqInt locs inside other SeqInt locs */
-    if (top_cds == NULL)
-    {
-      if (sfp->location != NULL 
-          && sfp->location->choice == SEQLOC_INT
-          && sfp->location->data.ptrvalue != NULL
-          && sfp->data.value.ptrvalue != NULL)
-      {
-        /* add to list of top level CDSs */
-        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-        offset = context.left;
-        if (crp->frame == 2)
-        {
-          offset += 1;
-        }
-        else if (crp->frame == 3)
-        {
-          offset += 2;
-        }
-        ValNodeAddPointer (&top_level_cds_list, 0, sfp);
-        ValNodeAddInt (&top_level_cds_offset_list, 0, offset);
-      }
-    }
-    else
-    {
-      prot_bsp = BioseqFindFromSeqLoc (top_cds->product);
-      if (prot_bsp != NULL)
-      {
-        /* convert location by subtracting top_cds start from sfp locations and
-         * divide all locations by 3
-         */
-        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-        mat_cds_frame = 1;
-        if (crp->frame == 2)
-        {
-          mat_cds_frame = 2;
-        }
-        else if (crp->frame == 3)
-        {
-          mat_cds_frame = 3;
-        }
-         
-        prot_loc = CreateProteinLoc (sfp->location, top_cds, 
-                                     offset,
-                                     mat_cds_frame, 
-                                     prot_bsp, lip);
-        if (prot_loc != NULL)
-        {
-          /* Create new feature on prot_bsp */
-          new_sfp = CreateNewFeatureOnBioseq (prot_bsp, SEQFEAT_PROT, prot_loc);
-          if (new_sfp != NULL)
-          {
-            prp = ProtRefNew ();
-            if (prp != NULL)
-            {
-              ValNodeCopyStr (&(prp->name), 0, context.label);
-              prp->processed = 2;
-              prp->desc = GetCDSProteinDesc (sfp);
-            }
-            new_sfp->data.value.ptrvalue = prp;
-            
-            /* mark old product for deletion */
-            prot_bsp = BioseqFindFromSeqLoc (sfp->product);
-            if (prot_bsp != NULL)
-            {
-              prot_bsp->idx.deleteme = 1;
-            }
-         
-            /* Mark old feature for deletion */
-            sfp->idx.deleteme = 1;
-            gene = SeqMgrGetOverlappingGene (sfp->location, &gene_context);
-            if (gene != NULL && SeqLocCompare (gene->location, sfp->location) == SLC_A_EQ_B)
-            {
-              gene->idx.deleteme = 1;
-            }
-          }
-        }
-      }
-    }
-    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
-  }
-  ValNodeFree (top_level_cds_list);
-}
-
-
-
-extern void ConvertInnerCDSsToProteinFeatures (IteM i)
-{
-  BaseFormPtr    bfp;
-  SeqEntryPtr    sep;
-  LogInfoPtr     lip;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  
-  lip = OpenLog ("CDS to Mat Peptide Conversion");
-  VisitBioseqsInSep (sep, lip, ConvertInnerCDSsToMatPeptidesCallback);
-  CloseLog (lip);
-  lip = FreeLog (lip);
-  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();  
-}
-
 typedef struct objstringdata 
 {
   StringConstraintXPtr scp;
@@ -7706,91 +7445,6 @@ extern void ApplyTPAExperimentalKeyword (IteM i)
 extern void ApplyTPAReassemblyKeyword (IteM i)
 {
   ApplyKeyword (i, "TPA:reassembly");
-}
-
-static void DoApplyKeywords (ButtoN b)
-{
-  KeywordFormPtr scfp;
-  SeqEntryPtr    sep;
-  
-  scfp = (KeywordFormPtr) GetObjectExtra (b);
-  if (scfp == NULL)
-  {
-    return;
-  }
-  
-  scfp->pfp = (ParseFieldPtr) DialogToPointer (scfp->string_src_dlg);
-  scfp->fsp = FilterSetNew ();
-  scfp->fsp->scp = (StringConstraintXPtr) DialogToPointer (scfp->string_constraint_dlg);
-  scfp->keyword = SaveStringFromText (scfp->keyword_txt);
-  
-  sep = GetTopSeqEntryForEntityID (scfp->input_entityID);
-  if (sep == NULL) return;
-  
-  VisitBioseqsInSep (sep, scfp, ApplyKeywordCallback);
-
-  scfp->fsp = FilterSetFree (scfp->fsp);
-  scfp->pfp = ParseFieldFree (scfp->pfp);
-
-  ObjMgrSetDirtyFlag (scfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, scfp->input_entityID, 0, 0);
-  ArrowCursor ();
-  Update ();   
-  Remove (scfp->form);  
-}
-
-extern void ApplyKeywordWithStringConstraint (IteM i)
-{
-  BaseFormPtr    bfp;
-  KeywordFormPtr scfp;
-  WindoW         w;
-  PrompT         ppt;
-  GrouP          h, g, c;
-  ButtoN         b;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-
-  scfp = (KeywordFormPtr) MemNew (sizeof (KeywordFormData));
-  if (scfp == NULL) return;
-  
-  w = FixedWindow (-50, -33, -10, -10, "Apply Keywords", StdCloseWindowProc);
-  SetObjectExtra (w, scfp, StdCleanupExtraProc);
-  scfp->form = (ForM) w;
-  scfp->input_entityID = bfp->input_entityID;
-  
-  h = HiddenGroup (w, -1, 0, NULL);
-  SetGroupSpacing (h, 10, 10);
-  
-  g = HiddenGroup (h, 2, 0, NULL);
-  SetGroupSpacing (g, 10, 10);
-  StaticPrompt (g, "Apply Keyword", 0, 0, programFont, 'l');
-  scfp->keyword_txt = DialogText (g, "", 30, NULL);
-  
-  ppt = StaticPrompt (h, "Where", 0, 0, programFont, 'l');
-  scfp->string_src_dlg = ParseFieldDestDialogEx (h, NULL, NULL, FALSE, TRUE);
-
-  scfp->string_constraint_dlg = StringConstraintDialogX (h, NULL, FALSE);
-  
-  c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton (c, "Accept", DoApplyKeywords);
-  SetObjectExtra (b, scfp, NULL);
-  b = PushButton (c, "Cancel", StdCancelButtonProc);
-  
-  AlignObjects (ALIGN_CENTER, (HANDLE) g,
-                              (HANDLE) ppt,
-                              (HANDLE) scfp->string_src_dlg,
-                              (HANDLE) scfp->string_constraint_dlg,
-                              (HANDLE) c,
-                              NULL);
-  RealizeWindow (w);
-  Show (w);
-  Select (w);
-  Update ();
 }
 
 static void DoRemoveKeywords (ButtoN b)
@@ -12235,9 +11889,9 @@ static void BarcodeUndoButton (ButtoN b)
   object_list = GetUndoFromBarcodeUndoList (vstp->undo_list);
   EnableUndoRedo (vstp);
 
-  lip = OpenLog ("BARCODE Keywords Put Back");
+  lip = OpenLog ("BARCODE Tech Put Back");
 
-  ApplyBarcodeKeywords (lip->fp, object_list);
+  ApplyBarcodeTech (lip->fp, object_list);
 
   RefreshBarcodeList (vstp);
   RedrawBarcodeTool (vstp);  
@@ -12261,11 +11915,11 @@ static void BarcodeUndoAllButton (ButtoN b)
   vstp = (BarcodeToolPtr) GetObjectExtra (b);
   if (vstp == NULL) return;
 
-  lip = OpenLog ("BARCODE Keywords Put Back");
+  lip = OpenLog ("BARCODE Tech Put Back");
   while (IsUndoAvailable (vstp->undo_list))
   {
     object_list = GetUndoFromBarcodeUndoList (vstp->undo_list);
-    ApplyBarcodeKeywords (lip->fp, object_list);
+    ApplyBarcodeTech (lip->fp, object_list);
   }
 
   EnableUndoRedo (vstp);
@@ -12296,9 +11950,9 @@ static void BarcodeRedoButton (ButtoN b)
   object_list = GetRedoFromBarcodeUndoList (vstp->undo_list);
   EnableUndoRedo (vstp);
 
-  lip = OpenLog ("BARCODE Keywords Removed");
+  lip = OpenLog ("BARCODE Tech Removed");
 
-  RemoveBarcodeKeywords (lip->fp, object_list);
+  RemoveBarcodeTech (lip->fp, object_list);
 
   RefreshBarcodeList (vstp);
   RedrawBarcodeTool (vstp);  
@@ -12310,6 +11964,57 @@ static void BarcodeRedoButton (ButtoN b)
   lip->data_in_log = TRUE;
   CloseLog (lip);
   lip = FreeLog (lip);  
+}
+
+
+static void RemoveSelectedTechBtn (ButtoN b)
+{
+  BarcodeToolPtr vstp;
+  LogInfoPtr     lip;
+  ValNodePtr     object_list;
+
+  vstp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (vstp == NULL) return;
+
+  object_list = DialogToPointer (vstp->clickable_list);
+
+  if (object_list == NULL)
+  {
+    if (ANS_YES == Message (MSG_YN, "You have not selected any Bioseqs - remove BARCODE tech from all?"))
+    {
+      object_list = vstp->item_list;
+    }
+    else
+    {
+      return;
+    }
+  }
+  
+  lip = OpenLog ("BARCODE Tech Removed");
+  RemoveBarcodeTech (lip->fp, object_list);
+
+  /* put in undo queue */
+  AddToBarcodeUndoList (vstp->undo_list, object_list);
+
+  EnableUndoRedo (vstp);  
+
+  if (object_list != vstp->item_list) 
+  {
+    object_list = ValNodeFree (object_list);
+  }
+
+  RefreshBarcodeList (vstp);
+  RedrawBarcodeTool (vstp);  
+
+  ObjMgrSetDirtyFlag (vstp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, vstp->input_entityID, 0, 0);
+  Update();
+
+  lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
+
 }
 
 
@@ -12339,11 +12044,6 @@ static void RemoveSelectedKeywordsBtn (ButtoN b)
   lip = OpenLog ("BARCODE Keywords Removed");
   RemoveBarcodeKeywords (lip->fp, object_list);
 
-  /* put in undo queue */
-  AddToBarcodeUndoList (vstp->undo_list, object_list);
-
-  EnableUndoRedo (vstp);  
-
   if (object_list != vstp->item_list) 
   {
     object_list = ValNodeFree (object_list);
@@ -12352,6 +12052,7 @@ static void RemoveSelectedKeywordsBtn (ButtoN b)
   RefreshBarcodeList (vstp);
   RedrawBarcodeTool (vstp);  
 
+  DeleteMarkedObjects (vstp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (vstp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, vstp->input_entityID, 0, 0);
   Update();
@@ -12362,6 +12063,51 @@ static void RemoveSelectedKeywordsBtn (ButtoN b)
 
 
 }
+
+
+static void ApplyBarcodeKeywordCallback (BioseqPtr bsp, Pointer data)
+{
+  LogInfoPtr lip;
+  Char id_str[255];
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  if (HasBARCODETech(bsp)) {
+    ApplyBarcodeKeywordToBioseq (bsp);
+  } else if ((lip = (LogInfoPtr) data) != NULL && lip->fp != NULL) {
+    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_FASTA_SHORT, sizeof (id_str) - 1);
+    fprintf (lip->fp, "%s does not have BARCODE tech, BARCODE keyword not added\n", id_str);
+    lip->data_in_log = TRUE;
+  }
+}
+
+
+static void AddBarcodeKeywordBtn (ButtoN b)
+{
+  BarcodeToolPtr vstp;
+  LogInfoPtr     lip;
+  SeqEntryPtr    sep;
+
+  vstp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (vstp == NULL) return;
+  
+  sep = GetTopSeqEntryForEntityID (vstp->input_entityID);
+  lip = OpenLog ("BARCODE Keywords Not Added");
+  VisitBioseqsInSep (sep, lip, ApplyBarcodeKeywordCallback);
+
+  RefreshBarcodeList (vstp);
+  RedrawBarcodeTool (vstp);  
+
+  ObjMgrSetDirtyFlag (vstp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, vstp->input_entityID, 0, 0);
+  Update();
+
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
 
 
 extern void BarcodeRefreshButton (ButtoN b)
@@ -12941,7 +12687,7 @@ static void ReportPolymorphismCallback (BioseqPtr bsp, Pointer data)
   LogInfoPtr lip;
   Char       id_txt[100];
 
-  if (bsp == NULL || data == NULL || !HasBARCODEKeyword(bsp)) {
+  if (bsp == NULL || data == NULL || !HasBARCODETech(bsp)) {
     return;
   }
 
@@ -13036,7 +12782,7 @@ extern void BarcodeTestTool (IteM i)
   drfp->pass_fail_summary = StaticPrompt (h, "0 Pass, 0 Fail", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
   RefreshBarcodeList(drfp);
 
-  c3 = HiddenGroup (h, 9, 0, NULL);
+  c3 = HiddenGroup (h, 10, 0, NULL);
   SetGroupSpacing (c3, 10, 10);
   b = PushButton (c3, "Compliance Report", BarcodeTestComplianceReport);
   SetObjectExtra (b, drfp, NULL);
@@ -13059,10 +12805,14 @@ extern void BarcodeTestTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c3, "Remove BARCODE Keyword from Selected Sequences", RemoveSelectedKeywordsBtn); 
   SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c3, "Add BARCODE Keyword to BARCODE Tech Sequences", AddBarcodeKeywordBtn);
+  SetObjectExtra (b, drfp, NULL);
 
-  c = HiddenGroup (h, 4, 0, NULL);
+  c = HiddenGroup (h, 5, 0, NULL);
   SetGroupSpacing (c, 10, 10);
     
+  b = PushButton (c, "Remove BARCODE Tech from Selected Sequences", RemoveSelectedTechBtn);
+  SetObjectExtra (b, drfp, NULL);
   drfp->undo = PushButton (c, "Undo", BarcodeUndoButton);
   SetObjectExtra (drfp->undo, drfp, NULL);
 
@@ -13071,7 +12821,6 @@ extern void BarcodeTestTool (IteM i)
   
   drfp->redo = PushButton (c, "Redo", BarcodeRedoButton);
   SetObjectExtra (drfp->redo, drfp, NULL);
-
   EnableUndoRedo (drfp);
 
   PushButton (c, "Dismiss", StdCancelButtonProc);

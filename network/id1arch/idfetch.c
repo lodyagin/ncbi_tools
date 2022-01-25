@@ -24,172 +24,9 @@
  * ===========================================================================
  * Author Karl Sirotkin
  *
- $Log: idfetch.c,v $
- Revision 1.42  2008/03/08 03:44:04  ucko
- Comment out one more extraneous explicit CONN_STATELESS setting.
-
- Revision 1.41  2008/03/07 22:12:24  lavr
- #if 0 and comment out explicit STATENESS requirement on service
-
- Revision 1.40  2007/03/27 13:30:10  kans
- moved sqnutils.h early to avoid collision with grp1 define
-
- Revision 1.39  2006/08/02 15:16:04  vysokolo
- Added features tRNA and microRNA
-
- Revision 1.38  2005/05/16 23:18:34  vysokolo
- Added features 'HPRD' and 'STS' to the key '-F'.
-
- Revision 1.37  2005/04/13 14:38:12  kans
- prototype for TryGetGi, send NORMAL_STYLE to SeqEntryToGnbk again
-
- Revision 1.36  2004/10/19 21:51:29  vysokolo
- Bug fix of -s key
-
- Revision 1.35  2004/10/12 21:39:28  vysokolo
- Added intervals of accessions like: "ABC_000123-ABC_000456"
-
- Revision 1.34  2004/10/04 19:30:25  vysokolo
- The "strcasecmp" replaced by "StringICmp"
-
- Revision 1.33  2004/09/30 17:59:26  vysokolo
- Added key -F to enable features by name.
-
- Revision 1.32  2004/05/25 18:41:35  kans
- removed obsolete STREAM_SEQ_PORT_FIRST flag
-
- Revision 1.31  2004/02/18 22:18:45  yaschenk
- adding recognition of gnl|sat_name|ent seqids
-
- Revision 1.30  2004/02/03 21:25:16  yaschenk
- relaxing ranges for -g and -e
-
- Revision 1.29  2003/12/17 20:35:38  kans
- initialize status, send NORMAL_STYLE to SeqEntrytoGnbk instead of 0 (also fixed in asn2gnbk), pass lookup flags
-
- Revision 1.28  2003/11/19 16:35:19  yaschenk
- relaxing ranges for -g and -c
-
- Revision 1.27  2003/03/28 18:48:39  yaschenk
- tuning ObjMgr, adding STREAM_SEQ_PORT_FIRST to SeqEntryToGnbk
-
- Revision 1.26  2003/01/29 23:08:19  yaschenk
- fixing FASTA on far pointers
-
- Revision 1.25  2003/01/21 22:27:23  kans
- new CstType parameter for flatfile generator
-
- Revision 1.24  2002/12/30 22:36:53  yaschenk
- optimizing..
-
- Revision 1.23  2002/11/07 17:21:55  yaschenk
- switching ID1 to new displatcher
-
- Revision 1.22  2002/07/23 19:31:43  butanaev
- Filtered out gi -1
-
- Revision 1.21  2001/11/02 14:24:44  kans
- made Fasta style SeqId args multi-line for Mac window
-
- Revision 1.20  2001/11/02 12:36:20  kans
- now using public Entrez2 server
-
- Revision 1.19  2001/09/28 15:56:04  kans
- look for extra and title fields in Entrez2 docsum
-
- Revision 1.18  2001/09/10 21:09:36  kans
- changed to use new Entrez2DocsumDataPtr - still need to get example of field_name keys
-
- Revision 1.17  2001/02/12 21:57:11  butanaev
- Made 3 retries to EntrezSynchronousQuery() when the NULL is returned.
-
- Revision 1.16  2001/02/08 16:13:46  yaschenk
- fixing wrong check for missing version in _PIR and SP
-
- Revision 1.15  2000/10/06 22:59:44  yaschenk
- strncpy not setting \0 bug
-
- Revision 1.14  2000/08/10 15:17:38  butanaev
- Updated -t 7 mode: strings like 'gi|3|emb|A00003.1|A00003' retreived from
- Entrez2DocsumPtr->caption.
-
- Revision 1.13  2000/08/03 17:01:23  kans
- included ni_lib.h for Mac, removed Mac compiler warnings
-
- Revision 1.12  2000/08/02 16:55:28  yaschenk
- increasing buffer size to 1000
-
- Revision 1.11  2000/08/02 16:17:00  butanaev
- Added:
- -t 7 - to retrieve Entrez DocSums
- -Q filename - to read Entrez query from the file
-
- Revision 1.9  2000/07/13 16:46:54  yaschenk
- adding ObjMgrFreeCache(0) to avoid hitting the limit in ObrMgr
-
- Revision 1.2  2000/06/01 18:05:35  butanaev
- Fixed numerous bugs with control flow...
-
- Revision 1.1  2000/06/01 16:48:22  butanaev
- New functionality:
- -G parameter, which previously accepted the list of gi's,
- now accepts gi,accession,accession.version,fasta seqid,
- which can be mixed.
-
- -q parameter generates the list out of Entrez query
-   when -q is used -d has special meaning:
-   -d n - run query against Nucleotide database
-   -d p - run query against Protein database
-
- -n parameter limits the output to the list of gi's
-
- Revision 1.6  2000/05/24 17:30:42  yaschenk
- make parameter list look better
-
- Revision 1.5  2000/05/23 15:42:08  yaschenk
- adding quality score display
-
- Revision 1.4  2000/03/31 18:35:58  yaschenk
- Adding Jonathan's logic for FF and FASTA
-
- Revision 1.3  2000/03/30 20:43:51  yaschenk
- adding AsnIoReset between Entries
-
- Revision 1.2  1999/11/02 18:27:43  yaschenk
- adding -G parameter to idfetch
-
- Revision 1.1  1998/12/28 17:56:29  yaschenk
- preparing idfetch to go to production
-
- Revision 1.1  1997/05/29 14:34:07  sirotkin
- syncing sampson from mutant for procs. taking source from sampson. this is now current
-
- * Revision 4.0  1995/07/26  13:55:55  ostell
- * force revision to 4.0
- *
- * Revision 1.3  1995/06/21  14:14:29  kans
- * replaced asn2ff_entrez with SeqEntryToFlat
- *
- * Revision 1.2  1995/05/17  17:59:15  epstein
- * add RCS log revision history
- *
- * Revision 1.1  94/08/11  13:26:31  ostell
- * Initial revision
- *
- * Revision 1.3  1993/12/02  10:12:41  kans
- * Includes <ncbi.h> instead of <sys/types.h>
- *
- * Revision 1.2  93/11/24  13:25:56  sirotkin
- * First working version
- *
- * Revision 1.1  93/11/23  16:01:51  sirotkin
- * Initial revision
- *
- revised by OStell for public use.
- *
- * Modified by Eugene Yaschenko for ID1 Server
  *
  */
+
 #include <ncbi.h>
 #include <objsset.h>
 #include <sequtil.h>
@@ -273,7 +110,7 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 static Nlm_Int2 Nlm_WhichArg PROTO(( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
 static void MyBioseqToFasta(BioseqPtr bsp, Pointer userdata);
 
-static Boolean CreateMaxPlexParam();
+static Boolean CreateMaxPlexParam(void);
 static Int4 GetIntervalAccession( const Char* pAccession, Char* pResult);
 
 Int4 giBuffer[1000];
@@ -292,7 +129,6 @@ Int2 Main()
   Boolean has_trouble = FALSE;
   Int4 entity_spec_count = 0;
   CharPtr outmode;
-  Int4 ent = 0;
   Int4 gi = 0;
   FILE * fp_in = NULL;
   SeqIdPtr sip;
@@ -509,12 +345,11 @@ Int2 Main()
      "flaTtened SeqId, format:
      type(name,accession,release,version) or type=accession",
      */
-    static CharPtr name = NULL, release = NULL, version = NULL, number = NULL;
+    static CharPtr name = NULL, release = NULL, number = NULL;
     CharPtr p;
     static CharPtr PNTR fields [] = {&name, &accession, &release, &number};
     Boolean found_equals = FALSE, found_left = FALSE,
-      found_colon = FALSE, flat_seqid_err = FALSE,
-    dna_type = FALSE, any_type = FALSE;
+      found_colon = FALSE, dna_type = FALSE, any_type = FALSE;
     int dex;
     TextSeqIdPtr tsip;
 
@@ -622,6 +457,7 @@ Int2 Main()
     case SEQID_SWISSPROT :
     case SEQID_OTHER :
     case SEQID_PRF :
+    case SEQID_GPIPE :
       tsip = TextSeqIdNew();
       sip->data.ptrvalue = tsip;
       if(accession)
@@ -887,7 +723,9 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
     if((gi = TryGetGi(SEQID_GENBANK, acc, NULL, ver)) ||
        (gi = TryGetGi(SEQID_OTHER, acc, NULL, ver)) ||
        (gi = TryGetGi(SEQID_GENBANK, NULL, acc, ver)) ||
-       (gi = TryGetGi(SEQID_OTHER, NULL, acc, ver)))
+       (gi = TryGetGi(SEQID_OTHER, NULL, acc, ver)) ||
+       (gi = TryGetGi(SEQID_GPIPE, acc, NULL, ver)) ||
+       (gi = TryGetGi(SEQID_GPIPE, NULL, acc, ver)))
       return IdFetch_func(gi,
                           myargs[dbarg].strvalue,
                           myargs[entarg].intvalue,
@@ -1132,11 +970,11 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       switch(myargs[infotypearg].intvalue){
       case 0:
         if(bsp){
-		MyBioseqToFasta(bsp,(Pointer)fp);
+		    MyBioseqToFasta(bsp,(Pointer)fp);
         }
         else
         {
-		VisitBioseqsInSep(sep,(Pointer)fp, MyBioseqToFasta);
+		    VisitBioseqsInSep(sep,(Pointer)fp, MyBioseqToFasta);
         }
         break;
       case 2:
@@ -1155,7 +993,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 DONE:
   if(bsp)
   {
+#if 0
     static Uint2  reap_cnt;
+#endif
     BioseqUnlock(bsp);
 #if 0
     reap_cnt++;
@@ -1269,10 +1109,17 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
 #define FASTA_LINE_SIZE         70
 #define FASTA_LINES_IN_CHUNK    5000
 
+#define SEQPORT_2_SEQSTREAM
+
 static void
 MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
 {
+#ifdef SEQPORT_2_SEQSTREAM
+        SeqInt   si;
+        ValNode  vn;
+#else
         SeqPortPtr      spp=NULL;
+#endif
         Char            buf[2048];
         Char         	str[200];
         ValNodePtr      vnp;
@@ -1291,6 +1138,19 @@ MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
 	while(start < bsp->length){
 		stop=start+step-1;
 		if(stop >= bsp->length) stop=bsp->length-1;
+#ifdef SEQPORT_2_SEQSTREAM
+        MemSet ((Pointer) &si, 0, sizeof (SeqInt));
+        MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+        
+        si.from = start;  si.to = stop;  si.strand = 0;
+        si.id = SeqIdFindBest (bsp->id, 0);
+        
+        vn.choice = SEQLOC_INT;
+        vn.data.ptrvalue = (Pointer) &si;
+        
+        SeqLocFastaStream (&vn, fp, STREAM_ALLOW_NEG_GIS |  
+                           STREAM_EXPAND_GAPS | SUPPRESS_VIRT_SEQ, FASTA_LINE_SIZE, 0, 0);
+#else
 		spp = SeqPortNew(bsp,start,stop,0, (ISA_na(bsp->mol))?Seq_code_iupacna:Seq_code_ncbieaa);
 		if(spp==NULL) return;
 		SeqPortSet_do_virtual(spp, TRUE);
@@ -1302,8 +1162,12 @@ MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
 			SeqPortFree(spp);
 			spp=NULL;
 		}
+#endif
 		start=stop+1;
 	}
+    SeqMgrFreeCache();                                                                                                                    
+    ObjMgrReap(ObjMgrGet());                                                                                                              
+    ObjMgrFreeCache(0);
 }
 
 /*
@@ -1328,7 +1192,7 @@ select * from annot_types;
 9 "microRNA"  efff 13
 */
 
-Boolean CreateMaxPlexParam()
+static Boolean CreateMaxPlexParam(void)
 {
   Char buf[1024];
   Char *ptoken = NULL;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.68 $
+* $Revision: 6.72 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -274,7 +274,7 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
    {
       ssp = (StdSegPtr)(sap->segs);
       pos = 0;
-      for (c=0; c<segment; c++)
+      for (c=0; c<segment-1; c++)
       {
          pos += SeqLocLen(ssp->loc);
          ssp = ssp->next;
@@ -349,13 +349,28 @@ static BioseqPtr BioseqForAlignment (SeqAlignPtr salp)
   BioseqPtr bsp = NULL;
   SeqIdPtr  sip;
   SeqEntryPtr oldscope;
+  DenseDiagPtr ddp;
   
-  AlnMgr2IndexSingleChildSeqAlign(salp);
-  num_rows = AlnMgr2GetNumRows(salp);
   oldscope = SeqEntrySetScope (NULL);
-  for (row = 1; row <= num_rows && bsp == NULL; row++) {
-    sip = AlnMgr2GetNthSeqIdPtr(salp, row);
-    bsp = BioseqFind(sip);
+  /* NOTE - can't index DenseDiag chain during validation because we're examining the individual DenseDiags,
+   * and indexing converts it to DenseSegs.
+   */
+  if (salp->segtype == SAS_DENDIAG && salp->segs != NULL) {
+    ddp = (DenseDiagPtr) salp->segs;
+    while (bsp == NULL && ddp != NULL) {
+      for (sip = ddp->id; bsp == NULL && sip != NULL; sip = sip->next) {
+        bsp = BioseqFind (sip);
+        sip = sip->next;
+      }
+      ddp = ddp->next;
+    }
+  } else {
+    AlnMgr2IndexSingleChildSeqAlign(salp);
+    num_rows = AlnMgr2GetNumRows(salp);
+    for (row = 1; row <= num_rows && bsp == NULL; row++) {
+      sip = AlnMgr2GetNthSeqIdPtr(salp, row);
+      bsp = BioseqFind(sip);
+    }
   }
   SeqEntrySetScope (oldscope);  
   return bsp;
@@ -472,13 +487,13 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Segs");
-      sprintf(string2, "Segment %ld (near alignment position %ld) in the context of %s contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.", (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "Segment %ld (near alignment position %ld) in the context of %s contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.", (long) Intvalue + 1, (long) pos, buf3);
       break;
 
     case Err_Segs_Dim_One:
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Segs");
-      sprintf(string1, "Segment %ld apparently has only one sequence.  Each portion of the alignment must have at least two sequences.  context %s", (long) Intvalue, buf3);
+      sprintf(string2, "Segment %ld apparently has only one sequence.  Each portion of the alignment must have at least two sequences.  context %s", (long) Intvalue, buf3);
       break;
 
     case Err_SeqAlign_Dim_One:
@@ -500,6 +515,11 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
     case Err_Short_Aln:
       sprintf(string1, "ShortAln");
       sprintf(string2, "This alignment is shorter than at least one non-farpointer sequence.");
+      break;
+
+    case Err_Unexpected_Alignment_Type:
+      sprintf(string1, "UnexpectedAlignmentType");
+      sprintf (string2, "This is not a DenseSeg alignment.");
       break;
 
     default:
@@ -998,17 +1018,17 @@ static void ValidateSeqlengthInDenseDiag (DenseDiagPtr ddp, SeqAlignPtr salp)
               AlignValBioseqUnlock (bsp);
               /*verify start*/
               if(stptr[i]<0)
-            ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1);     
-              if(stptr[i]>bslen)
-            ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg+1); 
+            ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg);     
+              if(stptr[i]>=bslen)
+            ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg); 
               
               /*verify length*/
               
               if(ddptemp->len<0)
-            ValMessage (salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1); 
+            ValMessage (salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg); 
               
               if(ddptemp->len+stptr[i]>bslen)
-            ValMessage (salp, Err_Sum_Len_Start, SEV_ERROR, siptemp, sip , numseg+1);  
+            ValMessage (salp, Err_Sum_Len_Start, SEV_ERROR, siptemp, sip , numseg);  
             }
         }
         }
@@ -1225,67 +1245,58 @@ static void ValidateSeqlengthInStdSeg (StdSegPtr ssp, SeqAlignPtr salp)
   BioseqPtr    bsp=NULL;
   SeqLocPtr    slp=NULL, slptemp;
 
-    if(!ssp)
-      ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
-    else
-      for(ssptemp=ssp, numseg=0; ssptemp!=NULL; ssptemp=ssptemp->next, numseg++)
-    { 
+  if(!ssp) {
+    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  } else {
+    for(ssptemp=ssp, numseg=0; ssptemp!=NULL; ssptemp=ssptemp->next, numseg++) { 
       /*get all seqid in current segment*/
       sip=SeqIdInAlignSegs((Pointer)ssptemp, 3, salp);         
       slp=ssptemp->loc;
       if(slp==NULL)
         return;
-      for(slptemp=slp; slptemp!=NULL; slptemp=slptemp->next) 
+      for(slptemp=slp; slptemp!=NULL; slptemp=slptemp->next) { 
+        siptemp=SeqLocId(slptemp);
+        start=SeqLocStart(slptemp);
+        end=SeqLocStop(slptemp);
+        length=SeqLocLen(slptemp);
         
-        { 
-          siptemp=SeqLocId(slptemp);
-          start=SeqLocStart(slptemp);
-          end=SeqLocStop(slptemp);
-          length=SeqLocLen(slptemp);
-         
-          bsp=AlignValBioseqLockById(siptemp);
-          if(bsp)
-        {
+        bsp=AlignValBioseqLockById(siptemp);
+        if(bsp) {
           bslen=bsp->length;
           AlignValBioseqUnlock (bsp);
      
           /*verify start*/
-          if(start!=-1)
-            {
-              if(start<0)
+          if(start<0) {
             ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1);      
-              
-              if(start>bslen-1)
+          }
+            
+          if(start>bslen-1) {
             ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg+1); 
-            }
+          }
           
-          if(end!=-1)
-            {
-              /*verify end*/
-              if(end<0)
+            /*verify end*/
+          if(end<0) {
             ValMessage (salp, Err_End_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1); 
-              if(end>bslen-1)
+          }
+          if(end>bslen-1) {
             ValMessage (salp, Err_End_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg+1); 
-            }
-          
-          
-          if(length!=-1)
-            {
-              
-              /*verify length*/
-              if(length<0)
+          }
+                                  
+          /*verify length*/
+          if(length<0) {
             ValMessage (salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1); 
-              
-              if(length>bslen)
+          }
+            
+          if(length>bslen) {
             ValMessage (salp, Err_Len_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg+1);  
-            }
+          }
         
         }
-        }
+      }
       /*free Seqid if sip is a new chain created by SeqIdinAlignSegs*/      
       SeqIdSetFree(sip);
     }
-
+  }
 }
 
 /******************************************************************
@@ -1325,7 +1336,7 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
         }
           BSRead(psp->present, seqpresence, BSLen(psp->present));
           /*go through each sequence*/
-          for(j=0, siptemp=sip; j<aligndim; siptemp=siptemp->next, j++)
+          for(j=0, siptemp=sip; j<aligndim && siptemp != NULL; siptemp=siptemp->next, j++)
         {  
           bsp=AlignValBioseqLockById(siptemp);
           if(bsp)
@@ -1336,7 +1347,7 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
               /*check start*/
               if(seg_start<0)
             ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , 0);     
-              if(seg_start>bslen)
+              if(seg_start>=bslen)
             ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , 0);
               
               /*go through each segment*/
@@ -1348,7 +1359,7 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
                   /*check start plus seg length*/
                   seg_start=seg_start+lenptr[i];
                   if(seg_start>bslen)
-                 ValMessage (salp, Err_Sum_Len_Start, SEV_ERROR, siptemp, sip, numseg+1);
+                 ValMessage (salp, Err_Sum_Len_Start, SEV_ERROR, siptemp, sip, numseg);
                 }
             }
             }
@@ -1499,12 +1510,12 @@ static Int4 PercentStringMatch (CharPtr string1, CharPtr string2)
   
   for (k = 0; k < min_len; k++)
   {
-      if (string1[k] == string2[k])
+      if (string1[k] == string2[k] || string1[k] == 'N' || string2[k] == 'N')
       {
         num_match++;
       }
   }
-  return (100 * num_match) / max_len;
+  return (100 * num_match) / min_len;
 }
 
 static Boolean CheckForPercentMatch (SeqIdPtr sip_list)
@@ -1551,7 +1562,7 @@ static Boolean CheckForPercentMatch (SeqIdPtr sip_list)
   }
   return TRUE;
 }
- 
+
 
 /******************************************************************
 check if an alignment is FASTA-like.  
@@ -1560,15 +1571,10 @@ If all gaps are at the 3' ends with dimensions>2, it's FASTA-like
 static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
 {
 
-  SeqIdPtr    sip=NULL, siptemp=NULL, SipInSegs=NULL;
+  SeqIdPtr    siptemp=NULL;
   DenseSegPtr dsp;
   Int4Ptr     startp;
-  Boolean     gap, CheckedStatus;
-  StdSegPtr   ssp, ssptemp, ssptemp2;
-  SeqLocPtr   slp, slptemp;
-  ValNodePtr  FinishedSip=NULL, temp;
-  PackSegPtr  psp=NULL;
-  Uint1Ptr    seqpresence=NULL;
+  Boolean     gap;
   Int4        k;
   Int2        j;
   SeqIdPtr    bad_sip = NULL;
@@ -1576,9 +1582,10 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
   /*check only global or partial type*/
   if(salp->type!=1&&salp->type!=3)
     return FALSE;
-  
-  if (salp->segtype==2) 
-  {
+
+  if (salp->segtype != SAS_DENSEG) {
+    ValMessage (salp, Err_Unexpected_Alignment_Type, SEV_ERROR, NULL, NULL, 0);
+  } else {
     dsp = (DenseSegPtr) salp->segs;
     if(!dsp)
     {
@@ -1644,116 +1651,6 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
       }
     }
   }
-  /*packseg*/
-  else if(salp->segtype==4)
-    {
-      psp=(PackSegPtr)salp->segs;
-      if(!psp)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
-      if(psp->dim<=2)
-    return FALSE;
-      else
-    {      
-      if(psp->present)
-        {
-          BSSeek(psp->present, 0, SEEK_SET);
-          seqpresence=MemNew(BSLen(psp->present));
-          if(!seqpresence)
-        {
-          
-          ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory");
-          return FALSE;
-          
-        }
-          BSRead(psp->present, seqpresence, BSLen(psp->present));
-          /*go through each sequence*/
-          for (j=0, siptemp=psp->ids; j<psp->dim&&siptemp; j++, siptemp=siptemp->next)
-        {
-          gap=FALSE;
-          /*go through each segment*/
-          for (k=0; k<psp->numseg; k++)
-            {
-              
-              /*if a segment is not present, set gap flag to true*/
-             if(!(seqpresence[(k*psp->dim+j)/8]&jybitnum[(k*psp->dim+j)%8]))
-            gap = TRUE;     
-             /*if a segment is found later, then it's not  fasta like, no need to check this sequence further */
-             else if(gap)
-               break;
-             /*if no more segment is found for this sequence, then it's  fasta like */
-             if(k==psp->numseg-1&&gap)
-               {
-             ValMessage (salp, Err_Fastalike, SEV_WARNING, siptemp, psp->ids, 0); 
-             return TRUE;
-               }
-           
-            }
-        }
-          MemFree(seqpresence);
-        }
-    }
-      
-    }
-
-  /*stdseg*/
-  else if(salp->segtype==3)
-    {    
-      ssp=(StdSegPtr)salp->segs;
-      if(!ssp)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
-      else
-    for(ssptemp=ssp; ssptemp->next!=NULL; ssptemp=ssptemp->next)
-      {
-        if(ssptemp->dim<=2)
-          continue;
-
-        SipInSegs=SeqIdInAlignSegs((Pointer)ssptemp, 3, salp);
-        slp=ssptemp->loc;
-        for(slptemp=slp; slptemp!=NULL; slptemp=slptemp->next)
-          {
-        gap=FALSE;
-        CheckedStatus=FALSE;
-        sip=SeqLocId(slptemp);
-        if(sip)
-          {
-            /*if a sip has been checked, skip it*/
-            for(temp=FinishedSip; temp!=NULL; temp=temp->next)
-              {
-            if(SeqIdCmp(sip, temp->data.ptrvalue))
-              {
-                CheckedStatus=TRUE;
-                break;
-              }
-              }
-            /*determine whether a sequence (by following its sip) is fasta like */
-            if(!CheckedStatus)
-              {
-            /*keep a record of  checked sip*/
-            ValNodeAddPointer(&FinishedSip, 0, sip);
-            
-            /*go through each seg*/
-            for(ssptemp2=ssptemp->next; ssptemp2!=NULL; ssptemp2=ssptemp2->next)
-              {
-                if(!IsSipContainedInStdseg(sip, ssptemp2))
-                  gap=TRUE;
-                else if(gap)
-                  break;
-                if(!ssptemp2->next&&gap)
-                  {
-                ValMessage (salp, Err_Fastalike, SEV_WARNING, sip, SipInSegs, 0);  
-                ValNodeFree(FinishedSip);
-                SeqIdSetFree(SipInSegs);
-                return TRUE;
-                  }
-              }
-              }
-          }
-          }
-        
-        SeqIdSetFree(SipInSegs);
-      }
-      ValNodeFree(FinishedSip);
-    }
   /*no fasta like sequence is found*/
   return FALSE;
   
@@ -1792,7 +1689,7 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
           sip=ddptemp->id;
           /*empty segment*/
           if(ddptemp->dim==0)   
-            ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg+1);
+            ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg);
         }
         }
     }
@@ -1825,7 +1722,7 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
             {  
               /*all starts are -1 in this segment*/
               if(i==aligndim-1)
-                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, j+1);
+                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, j);
             }
               /*at least one start that is not -1*/
               else
@@ -1858,7 +1755,7 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
                 continue;
               /*all seqloc are empty*/ 
               else
-                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg+1);
+                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg);
             }
               /*at least one non-empty seqloc*/
               else
@@ -1907,7 +1804,7 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
                 continue;
                   /*no sequence is present in this segment*/
                   else if(i==aligndim-1)
-                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, j+1);
+                ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, j);
                 }
               /*at least one sequence is present*/
               else
@@ -1927,21 +1824,60 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
 
 static Boolean IsAlignmentTPA (SeqAlignPtr salp)
 {
-  Int4 row, num_rows;
   Boolean isTPA = FALSE;
   BioseqPtr bsp;
-  SeqIdPtr  sip;
+  SeqIdPtr  sip, tmp_sip;
   SeqEntryPtr oldscope;
-  
-  AlnMgr2IndexSingleChildSeqAlign(salp);
-  num_rows = AlnMgr2GetNumRows(salp);
-  oldscope = SeqEntrySetScope (NULL);
-  for (row = 1; row <= num_rows && !isTPA; row++) {
-    sip = AlnMgr2GetNthSeqIdPtr(salp, row);
-    bsp = BioseqLockById(sip);
-    isTPA = HasTpaUserObject(bsp);
-    BioseqUnlock(bsp);
+  DenseDiagPtr ddp;
+  StdSegPtr    ssp;
+
+  if (salp == NULL) {
+    return FALSE;
   }
+
+  oldscope = SeqEntrySetScope (NULL);
+
+  switch (salp->segtype) {
+    case SAS_DENDIAG:
+      /*densediag */
+      for (ddp = (DenseDiagPtr) salp->segs; ddp != NULL && !isTPA; ddp = ddp->next) {
+        for (sip = SeqIdInAlignSegs((Pointer)ddp, salp->segtype, salp);
+             sip != NULL && !isTPA;
+             sip = sip->next) {
+          bsp = BioseqLockById(sip);
+          isTPA = HasTpaUserObject(bsp);
+          BioseqUnlock(bsp);
+        }
+      }
+      break;
+    case SAS_STD: 
+      /*Stdseg*/
+      for (ssp = (StdSegPtr) salp->segs; ssp != NULL && !isTPA; ssp = ssp->next) {
+        sip = SeqIdInAlignSegs((Pointer)ssp, salp->segtype, salp);
+        for (tmp_sip = sip;
+             tmp_sip != NULL && !isTPA;
+             tmp_sip = tmp_sip->next) {
+          bsp = BioseqLockById(tmp_sip);
+          isTPA = HasTpaUserObject(bsp);
+          BioseqUnlock(bsp);
+        }
+      }
+      /*free Seqid if sip is a new chain created by SeqIdinAlignSegs*/
+      SeqIdSetFree(sip);
+      break;
+    case SAS_DENSEG:
+    case SAS_PACKED:
+      /*Denseseg, Packseg*/
+      for (sip=SeqIdInAlignSegs(salp->segs, salp->segtype, salp);
+           sip != NULL && !isTPA;
+           sip = sip->next) {
+        bsp = BioseqLockById(sip);
+        isTPA = HasTpaUserObject(bsp);
+        BioseqUnlock(bsp);
+      }
+      break;
+  }
+
   SeqEntrySetScope (oldscope);  
   return isTPA;
 }
@@ -1988,6 +1924,7 @@ static Boolean ValidateSeqAlignFunc (SeqAlignPtr salp, Boolean find_remote_bsp)
 {
   Boolean   error=FALSE;
   Uint2     pcnt_identity;
+  SeqAlignPtr salp_test;
   
   if(salp==NULL)
     return FALSE;
@@ -2012,7 +1949,14 @@ static Boolean ValidateSeqAlignFunc (SeqAlignPtr salp, Boolean find_remote_bsp)
   Segment_Gap_In_SeqAlign (salp);
   
   if (!IsAlignmentTPA(salp)) {
-    pcnt_identity = AlignmentPercentIdentityEx (salp, FALSE, TRUE);
+    if (salp->segtype == SAS_DENDIAG) {
+      /* duplicate alignment, to prevent indexing from changing the original type */
+      salp_test = SeqAlignDup (salp);
+      pcnt_identity = AlignmentPercentIdentityEx (salp_test, FALSE, TRUE);
+      salp_test = SeqAlignFree (salp_test);
+    } else {
+      pcnt_identity = AlignmentPercentIdentityEx (salp, FALSE, TRUE);
+    }
 
     if (pcnt_identity < 50) {
       ValMessage (salp, Err_Pcnt_ID, SEV_WARNING, NULL, NULL, pcnt_identity);
@@ -2312,20 +2256,28 @@ static void PopulateSample (Uint1Ptr seqbuf_list, Int4Ptr start_list,
                             Int4 sample_len, BioseqPtr PNTR bsp_list,
                             Int4 row)
 {
-  SeqPortPtr spp;
+  Char ch;
   
   if (seqbuf_list == NULL || start_list == NULL || sample_len < 1 || row < 0 || bsp_list == NULL
       || bsp_list[row] == NULL || start_list[row] < 0 || start_list[row] >= bsp_list[row]->length) {
       return;
   }
-  
-  spp = SeqPortNew (bsp_list[row], start_list[row], 
+
+  ch = *(seqbuf_list + (row + 1) * sample_len);
+
+  SeqPortStreamInt (bsp_list[row],
+                    start_list[row], 
                     MIN (start_list[row] + sample_len - 1, bsp_list[row]->length - 1), 
-                    Seq_strand_plus, Seq_code_iupacna);
-  SeqPortRead  (spp, seqbuf_list + row * sample_len, sample_len);
-  spp = SeqPortFree (spp);
+                    Seq_strand_plus,
+                    0,
+                    seqbuf_list + row * sample_len,
+                    NULL);
+
+  /* put back char overwritten by SeqPortStreamInt */
+  *(seqbuf_list + (row + 1) * sample_len) = ch;
+
 }
- 
+
 
 static Uint1 ComplementChar (Uint1 ch)
 {
@@ -2641,7 +2593,7 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   }
   
   start_list = (Int4Ptr) MemNew (num_rows * sizeof(Int4));
-  seqbuf_list = (Uint1Ptr) MemNew (num_rows * sample_len * sizeof(Uint1));
+  seqbuf_list = (Uint1Ptr) MemNew ((num_rows * sample_len + 1) * sizeof(Uint1));
   for (row = 0; row < num_rows; row++) {
     start_list[row] = 0;
     PopulateSample (seqbuf_list, start_list, 

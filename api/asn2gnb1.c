@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.171 $
+* $Revision: 1.179 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -2301,6 +2301,10 @@ NLM_EXTERN void DoOneSection (
               if (StringCmp (tsip->accession + 9, "000000") == 0) {
                 wgsmaster = TRUE;
               }
+            } else if (StringLen (tsip->accession) == 16) {
+              if (StringCmp (tsip->accession + 9, "0000000") == 0) {
+                wgsmaster = TRUE;
+              }
             }
           }
         }
@@ -2381,9 +2385,9 @@ NLM_EXTERN void DoOneSection (
 
       AddVersionBlock (awp);
 
-      if (ISA_na (bsp->mol)) {
-        AddProjectBlock (awp);
-      }
+      /* if (ISA_na (bsp->mol)) { */
+        AddDblinkBlock (awp);
+      /* } */
 
       if (ISA_aa (bsp->mol)) {
         AddDbsourceBlock (awp);
@@ -3865,6 +3869,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   BioseqPtr        parent = NULL;
   Int4             prevGi = 0;
   Int2             q;
+  Boolean          reindex = TRUE;
   Pointer          remotedata = NULL;
   Asn2gbFreeFunc   remotefree = NULL;
   Asn2gbLockFunc   remotelock = NULL;
@@ -3906,6 +3911,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     prevGi = extra->prevGi;
     nextGi = extra->nextGi;
     bkmask = extra->bkmask;
+    reindex = extra->reindex;
   }
 
   if (slp != NULL) {
@@ -4100,6 +4106,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     bkmask = (BlockMask) (0xFFFFFFFF - FEAT_STATS_MASK - REF_STATS_MASK);
   }
   ajp->bkmask = bkmask;
+  ajp->reindex = reindex;
   ajp->aip = aip;
   ajp->atp = atp;
 
@@ -5418,7 +5425,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
   ObjectIdPtr        oip;
   BioseqPtr          prod;
   SeqFeatPtr         prot;
-  ProtRefPtr         prp;
+  ProtRefPtr         prp = NULL;
   Boolean            pseudo;
   RnaRefPtr          rrp;
   SeqDescrPtr        sdp;
@@ -5504,39 +5511,44 @@ NLM_EXTERN void PrintFtableLocAndQuals (
       prot = SeqMgrGetBestProteinFeature (prod, NULL);
       if (prot != NULL) {
         prp = (ProtRefPtr) prot->data.value.ptrvalue;
-        if (prp != NULL) {
-          geneorprotdb = prp->db;
-          if (prp->name != NULL) {
-            for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-              StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
-              if (! StringHasNoText (str)) {
-                sprintf (tmp, "\t\t\tproduct\t%s\n", str);
-                ValNodeCopyStr (head, 0, tmp);
-              }
-            }
-          }
-          if (prp->desc != NULL) {
-            StringNCpy_0 (str, prp->desc, sizeof (str));
-            if (! StringHasNoText (str)) {
-              sprintf (tmp, "\t\t\tprot_desc\t%s\n", str);
-              ValNodeCopyStr (head, 0, tmp);
-            }
-          }
-          for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+      }
+      if (prp == NULL) {
+        prp = SeqMgrGetProtXref (sfp);
+      }
+      if (prp != NULL) {
+        geneorprotdb = prp->db;
+        if (prp->name != NULL) {
+          for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
             StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
             if (! StringHasNoText (str)) {
-              sprintf (tmp, "\t\t\tfunction\t%s\n", str);
-              ValNodeCopyStr (head, 0, tmp);
-            }
-          }
-          for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
-            StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
-            if (! StringHasNoText (str)) {
-              sprintf (tmp, "\t\t\tEC_number\t%s\n", str);
+              sprintf (tmp, "\t\t\tproduct\t%s\n", str);
               ValNodeCopyStr (head, 0, tmp);
             }
           }
         }
+        if (prp->desc != NULL) {
+          StringNCpy_0 (str, prp->desc, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tprot_desc\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+        for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+          StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tfunction\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+        for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+          StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tEC_number\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+      }
+      if (prot != NULL) {
         AddOneFtableQual (head, "prot_note", prot->comment);
         /*
         StringNCpy_0 (str, prot->comment, sizeof (str));
@@ -6261,6 +6273,9 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
 
   if (iajp->gapvnp != NULL || iajp->remotevnp != NULL) {
     SeqMgrClearFeatureIndexes (ajp->entityID, NULL);
+    if (iajp->reindex) {
+      SeqMgrIndexFeaturesExEx (ajp->entityID, NULL, FALSE, FALSE, NULL);
+    }
   }
 
   if (iajp->gapvnp != NULL) {

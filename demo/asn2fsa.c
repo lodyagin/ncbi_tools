@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.48 $
+* $Revision: 1.53 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "3.1"
+#define ASN2FSA_APP_VER "3.5"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -256,6 +256,7 @@ typedef struct fastaflags {
   Boolean  use_dashes;
   Boolean  far_genomic_qual;
   Boolean  qual_gap_is_zero;
+  Boolean  automatic;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
@@ -553,7 +554,7 @@ static void ProcessSingleRecord (
   Uint2          datatype, entityID = 0;
   Char           file [FILENAME_MAX], path [PATH_MAX];
   StreamFlgType  flags = STREAM_CORRECT_INVAL;
-  FILE           *fp, *ofp = NULL;
+  FILE           *fp;
   ObjMgrPtr      omp;
   SeqEntryPtr    sep;
 
@@ -591,6 +592,7 @@ static void ProcessSingleRecord (
       return;
     }
 
+    SeqMgrHoldIndexing (TRUE);
     switch (ffp->type) {
       case 2 :
         dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -611,6 +613,7 @@ static void ProcessSingleRecord (
       default :
         break;
     }
+    SeqMgrHoldIndexing (FALSE);
 
     AsnIoClose (aip);
 
@@ -833,7 +836,10 @@ static void ProcessMultipleRecord (
 
   while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
     if (atp == atp_se) {
+
+      SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
+      SeqMgrHoldIndexing (FALSE);
 
       starttime = GetSecs ();
       buf [0] = '\0';
@@ -910,6 +916,83 @@ static void ProcessMultipleRecord (
   }
 }
 
+static void FastaWrapper (
+  SeqEntryPtr sep,
+  Pointer userdata
+)
+
+{
+  ValNodePtr     bsplist;
+  FastaFlagPtr   ffp;
+  StreamFlgType  flags = STREAM_CORRECT_INVAL;
+
+  if (sep == NULL) return;
+  ffp = (FastaFlagPtr) userdata;
+  if (ffp == NULL) return;
+
+
+  if (ffp->expand_gaps && ffp->use_dashes) {
+    flags |= EXPAND_GAPS_TO_DASHES;
+  } else if (ffp->expand_gaps) {
+    flags |= STREAM_EXPAND_GAPS;
+  } else if (ffp->use_dashes) {
+    flags |= GAP_TO_SINGLE_DASH;
+  }
+
+  bsplist = NULL;
+  if (ffp->lock) {
+    bsplist = DoLockFarComponents (sep, ffp);
+    if (bsplist != NULL && ffp->fr != NULL) {
+      CacheFarComponents (ffp, bsplist);
+    }
+  }
+
+  if (ffp->nt != NULL) {
+    if (SeqEntryFastaStream (sep, ffp->nt, flags, ffp->linelen, 0, 0,
+                             TRUE, FALSE, ffp->master_style) < 0) {
+      ffp->failed = TRUE;
+    }
+  }
+  if (ffp->aa != NULL) {
+    if (SeqEntryFastaStream (sep, ffp->aa, flags, ffp->linelen, 0, 0,
+                             FALSE, TRUE, ffp->master_style) < 0) {
+      ffp->failed = TRUE;
+    }
+  }
+  if (ffp->ql != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) ffp, PrintQualScores);
+  }
+
+  bsplist = UnlockFarComponents (bsplist);
+}
+
+static void ProcessAutomaticRecord (
+  CharPtr directory,
+  CharPtr base,
+  CharPtr suffix,
+  FastaFlagPtr ffp
+)
+
+{
+  Char  file [FILENAME_MAX], path [PATH_MAX];
+
+  if (ffp == NULL) return;
+
+  if (base == NULL) {
+    base = "";
+  }
+  if (suffix == NULL) {
+    suffix = "";
+  }
+  StringNCpy_0 (path, directory, sizeof (path));
+  sprintf (file, "%s%s", base, suffix);
+  FileBuildPath (path, NULL, file);
+
+  if (StringHasNoText (path)) return;
+
+  ReadSequenceAsnFile (path, ffp->binary, ffp->compressed, (Pointer) ffp, FastaWrapper);
+}
+
 static void ProcessOneRecord (
   CharPtr directory,
   CharPtr base,
@@ -920,7 +1003,9 @@ static void ProcessOneRecord (
 {
   if (ffp == NULL) return;
 
-  if (ffp->batch) {
+  if (ffp->automatic) {
+    ProcessAutomaticRecord (directory, base, suffix, ffp);
+  } else if (ffp->batch) {
     ProcessMultipleRecord (directory, base, suffix, ffp);
   } else {
     ProcessSingleRecord (directory, base, suffix, ffp);
@@ -1137,7 +1222,7 @@ Args myargs [] = {
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Print Quality Score Gap as -1", "F", NULL, NULL,
     TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
+  {"ASN.1 Type (a Automatic, z Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1171,7 +1256,7 @@ Int2 Main (void)
   Char           app [64], sfx [32];
   CharPtr        accn, base, blastdb, directory, fastaidx, ntout,
                  aaout, qlout, frout, logfile, ptr, str, suffix;
-  Boolean        batch, binary, blast, compressed, dorecurse,
+  Boolean        automatic, batch, binary, blast, compressed, dorecurse,
                  expandgaps, fargenomicqual, fasta, local, lock,
                  masterstyle, qualgapzero, remote, usedashes,
                  usethreads;
@@ -1240,12 +1325,16 @@ Int2 Main (void)
   masterstyle = (Boolean) myargs [m_argMaster].intvalue;
   fargenomicqual = (Boolean) myargs [s_argGenomicQual].intvalue;
   qualgapzero = (Boolean) myargs [z_argZeroQualGap].intvalue;
+  automatic = FALSE;
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
 
   str = myargs [a_argType].strvalue;
   if (StringICmp (str, "a") == 0) {
+    type = 1;
+    automatic = TRUE;
+  } else if (StringICmp (str, "z") == 0) {
     type = 1;
   } else if (StringICmp (str, "e") == 0) {
     type = 2;
@@ -1298,6 +1387,7 @@ Int2 Main (void)
   ffd.master_style = masterstyle;
   ffd.far_genomic_qual = fargenomicqual;
   ffd.qual_gap_is_zero = (Boolean) (! qualgapzero);
+  ffd.automatic = automatic;
   ffd.batch = batch;
   ffd.binary = binary;
   ffd.compressed = compressed;

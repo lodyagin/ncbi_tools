@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description:
 *
@@ -178,6 +178,8 @@ typedef struct pubdescpage {
   Boolean       flagPubDelta;
 
   TexT          pmid, muid, serial;
+
+  DialoG        foldertabs;
 
   PubEquivLookupProc  lookupArticle;
   LookupJournalProc   lookupJournal;
@@ -2167,6 +2169,31 @@ static void CleanupPubdescDialog (GraphiC g, VoidPtr data)
   StdCleanupExtraProc (g, data);
 }
 
+
+static void PubdescDialogMessage (DialoG d, Int2 mssg)
+
+{
+  PubdescPagePtr ppp;
+
+  ppp = (PubdescPagePtr) GetObjectExtra (d);
+  if (ppp != NULL) {
+    switch (mssg) {
+      case NUM_VIB_MSG + 1 :
+        if (ppp->pub_choice == PUB_SUB || (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC))
+        {
+          ChangeAuthPage (ppp, 1, GetValue (ppp->foldertabs));
+        } else {
+          ChangeEditPage (ppp, 1, GetValue (ppp->foldertabs));
+        }
+        SetValue (ppp->foldertabs, 1);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+
 static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
                         Uint1 reftype,
                         Uint1 pub_status, Int2 pub_choice,
@@ -2181,7 +2208,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   GrouP                 g11, g12, g13, g14, g15;
   GrouP                 g16, g17, g18, g19, g20, g21, g22, g23;
   ButtoN                lkp;
-  GrouP                 m, m1, m2, m3, m4, m5, m6, m7, m8, m9;
+  GrouP                 m, m2, m3, m4, m5, m6, m7, m8, m9;
   GrouP                 n1, n2, n3, n4;
   GrouP                 p, q, z;
   PrompT                p2, p3, p4, p5, p6;
@@ -2207,6 +2234,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     ppp->todialog = PubdescPtrToPubdescPage;
     ppp->fromdialog = PubdescPageToPubdescPtr;
     ppp->testdialog = TestPubdescDialog;
+    ppp->dialogmessage = PubdescDialogMessage;
 
 /* copy a bunch of flags and defaults got from the init form */
     ppp->reftype = reftype;
@@ -2293,19 +2321,19 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     SetGroupSpacing (g1, 10, 10);
     if (ppp->pub_choice == PUB_SUB)
     {
-      m1 = (GrouP) CreateFolderTabs (g1, CitSubAuthTabs, 0, 0, 0,
+      ppp->foldertabs = CreateFolderTabs (g1, CitSubAuthTabs, 0, 0, 0,
                          PROGRAM_FOLDER_TAB,
                          ChangeAuthPage, (Pointer) ppp);
     }
     else if (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC)
     {
-      m1 = (GrouP) CreateFolderTabs (g1, AuthTabs, 0, 0, 0,
+      ppp->foldertabs = CreateFolderTabs (g1, AuthTabs, 0, 0, 0,
                          PROGRAM_FOLDER_TAB,
                          ChangeAuthPage, (Pointer) ppp);
     }
     else
     {
-      m1 = (GrouP) CreateFolderTabs (g1, AuthTabs, 0, 0, 0,
+      ppp->foldertabs = CreateFolderTabs (g1, AuthTabs, 0, 0, 0,
                          PROGRAM_FOLDER_TAB,
                          ChangeEditPage, (Pointer) ppp);
     }
@@ -2350,7 +2378,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
                                                 &(ppp->EditGroup[2]));
     }
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) m1, (HANDLE) m2, (HANDLE) m3,
+    AlignObjects (ALIGN_CENTER, (HANDLE) ppp->foldertabs, (HANDLE) m2, (HANDLE) m3,
                   NULL);
 
     Hide (pages[thispage]);
@@ -2966,6 +2994,12 @@ static void PubdescDescFormMessage (ForM f, Int2 mssg)
       case VIB_MSG_DELETE :
         StdDeleteTextProc (NULL);
         break;
+      case NUM_VIB_MSG + 1 :
+        /* show affiliation tab */
+        ChangePubdescPage (pfp, 1, GetValue (pfp->foldertabs));
+        SetValue (pfp->foldertabs, 1);
+        SendMessageToDialog (pfp->data, NUM_VIB_MSG + 1);
+        break;
       default :
         if (pfp->appmessage != NULL) {
           pfp->appmessage (f, mssg);
@@ -3142,6 +3176,12 @@ static void PubdescFeatFormMessage (ForM f, Int2 mssg)
         break;
       case VIB_MSG_DELETE :
         StdDeleteTextProc (NULL);
+        break;
+      case NUM_VIB_MSG + 1 :
+        /* show affiliation tab */
+        ChangePubdescPage (pfp, 1, GetValue (pfp->foldertabs));
+        SetValue (pfp->foldertabs, 1);
+        SendMessageToDialog (pfp->data, NUM_VIB_MSG + 1);
         break;
       default :
         if (pfp->appmessage != NULL) {
@@ -3648,6 +3688,136 @@ static void ProcessCitProc (ButtoN b)
   }
   ArrowCursor ();
 }
+
+
+extern WindoW EditCitFeatDirectly (SeqFeatPtr sfp)
+{
+  WindoW w = NULL;
+  PubdescPtr pdp;
+  PubdescFormPtr        pfp;
+  SeqEntryPtr sep;
+  OMUserDataPtr  omudp;
+  Uint2          procid;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PUB) {
+    return NULL;
+  }
+
+  procid = GetProcIdForItemEditor (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, FEATDEF_PUB);
+
+  omudp = ItemAlreadyHasEditor (sfp->idx.entityID, sfp->idx.itemID,
+                                OBJ_SEQFEAT, procid);
+
+  if (omudp == NULL) {
+    sep = GetTopSeqEntryForEntityID (sfp->idx.entityID);
+
+    pdp = sfp->data.value.ptrvalue;
+
+    w = (WindoW) CreatePubdescFeatForm (-50, -33, "Citation Information",
+                                        pdp->reftype, 1, 0,
+                                        FALSE, FALSE,
+                                        sfp, sep, PubdescFeatFormActnProc,
+                                        NULL);
+
+    pfp = GetObjectExtra (w);
+    if (pfp != NULL)
+    {
+
+      pfp->input_entityID = sfp->idx.entityID;
+      pfp->input_itemID = sfp->idx.itemID;
+      pfp->input_itemtype = OBJ_SEQFEAT;
+      pfp->this_itemtype = OBJ_SEQFEAT;
+      pfp->this_subtype = FEATDEF_PUB;
+      pfp->procid = procid;
+      pfp->proctype = OMPROC_EDIT;
+      pfp->userkey = OMGetNextUserKey ();
+      omudp = ObjMgrAddUserData (pfp->input_entityID, pfp->procid,
+                                  OMPROC_EDIT, pfp->userkey);
+      if (omudp != NULL) {
+        omudp->userdata.ptrvalue = (Pointer) pfp;
+        omudp->messagefunc = StdVibrantEditorMsgFunc;
+      }
+
+      SendMessageToForm (pfp->form, VIB_MSG_INIT);
+      PointerToForm (pfp->form, sfp);
+      SendMessageToForm (pfp->form, NUM_VIB_MSG + 1);
+    }
+  } else {
+    pfp = omudp->userdata.ptrvalue;
+    if (pfp != NULL) {
+      SendMessageToForm (pfp->form, NUM_VIB_MSG + 1);
+      w = (WindoW) pfp->form;
+    }
+  }
+  return w;
+}
+
+
+extern WindoW EditCitDescDirectly (SeqDescPtr sdp)
+{
+  WindoW w = NULL;
+  PubdescPtr pdp;
+  PubdescFormPtr        pfp;
+  SeqEntryPtr sep;
+  OMUserDataPtr omudp;
+  Uint2         procid;
+  ObjValNodePtr ovp;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_pub || !sdp->extended) {
+    return NULL;
+  }
+  ovp = (ObjValNodePtr) sdp;
+
+  procid = GetProcIdForItemEditor (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, Seq_descr_pub);
+
+  omudp = ItemAlreadyHasEditor (ovp->idx.entityID, ovp->idx.itemID,
+                                OBJ_SEQDESC, procid);
+
+  if (omudp == NULL) {
+    sep = GetTopSeqEntryForEntityID (ovp->idx.entityID);
+
+    pdp = sdp->data.ptrvalue;
+
+    w = (WindoW) CreatePubdescDescForm (-50, -33, "Citation Information",
+                                        pdp->reftype, 1, 9,
+                                        FALSE, FALSE,
+                                        sdp, sep, PubdescDescFormActnProc,
+                                        NULL);
+
+
+    pfp = GetObjectExtra (w);
+    if (pfp != NULL)
+    {
+
+      pfp->input_entityID = ovp->idx.entityID;
+      pfp->input_itemID = ovp->idx.itemID;
+      pfp->input_itemtype = OBJ_SEQDESC;
+      pfp->this_itemtype = OBJ_SEQDESC;
+      pfp->this_subtype = Seq_descr_pub;
+      pfp->procid = procid;
+      pfp->proctype = OMPROC_EDIT;
+      pfp->userkey = OMGetNextUserKey ();
+      omudp = ObjMgrAddUserData (pfp->input_entityID, pfp->procid,
+                                  OMPROC_EDIT, pfp->userkey);
+      if (omudp != NULL) {
+        omudp->userdata.ptrvalue = (Pointer) pfp;
+        omudp->messagefunc = StdVibrantEditorMsgFunc;
+      }
+
+      SendMessageToForm (pfp->form, VIB_MSG_INIT);
+      PointerToDialog (pfp->data, (Pointer) sdp->data.ptrvalue);
+      SendMessageToForm (pfp->form, NUM_VIB_MSG + 1);
+    }
+  } else {
+    pfp = omudp->userdata.ptrvalue;
+    if (pfp != NULL) {
+      SendMessageToForm (pfp->form, NUM_VIB_MSG + 1);
+      w = (WindoW) pfp->form;
+    }
+  }
+  return w;
+}
+
 
 static void ChangePubStat (GrouP g)
 {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.428 $
+* $Revision: 6.436 $
 *
 * File Description: 
 *
@@ -1347,6 +1347,8 @@ static SeqLocPtr ReduceLocationToSingleBioseq (SeqLocPtr slp, BioseqPtr bsp)
 {
   SeqLocPtr this_slp, prev_slp, next_slp;
   BioseqPtr this_bsp;
+  SeqIntPtr sint;
+  ValNodePtr this_vnp, prev_vnp, next_vnp;
 
   if (slp == NULL || bsp == NULL) return NULL;
 
@@ -1392,6 +1394,35 @@ static SeqLocPtr ReduceLocationToSingleBioseq (SeqLocPtr slp, BioseqPtr bsp)
       }
     }
   }
+  else if (slp->choice == SEQLOC_PACKED_INT) 
+  {
+    prev_vnp = NULL;
+    this_vnp = slp->data.ptrvalue;
+    while (this_vnp != NULL) 
+    {
+      next_vnp = this_vnp->next;
+      sint = this_vnp->data.ptrvalue;
+      this_bsp = BioseqFind (sint->id);
+      if (this_bsp != bsp)
+      {
+        if (prev_vnp == NULL) {
+          slp->data.ptrvalue = next_vnp;
+        } else {
+          prev_vnp->next = next_vnp;
+        }
+        this_vnp->next = NULL;
+        sint = SeqIntFree (sint);
+        this_vnp = ValNodeFree (this_vnp);
+      } else {
+        prev_vnp = this_vnp;
+      }
+      this_vnp = next_vnp;
+    }
+    if (slp->data.ptrvalue == NULL) 
+    {
+      slp = SeqLocFree (slp);
+    }
+  }
   else
   {
     this_bsp = BioseqFind (SeqLocId (slp));
@@ -1407,6 +1438,8 @@ static SeqLocPtr RemoveBioseqFromLocation (SeqLocPtr slp, BioseqPtr bsp)
 {
   SeqLocPtr this_slp, prev_slp, next_slp;
   BioseqPtr this_bsp;
+  SeqIntPtr sint;
+  ValNodePtr this_vnp, prev_vnp, next_vnp;
 
   if (slp == NULL || bsp == NULL) return NULL;
 
@@ -1450,6 +1483,35 @@ static SeqLocPtr RemoveBioseqFromLocation (SeqLocPtr slp, BioseqPtr bsp)
         slp = SeqLocFree (slp);
         slp = this_slp;
       }
+    }
+  }
+  else if (slp->choice == SEQLOC_PACKED_INT) 
+  {
+    prev_vnp = NULL;
+    this_vnp = slp->data.ptrvalue;
+    while (this_vnp != NULL) 
+    {
+      next_vnp = this_vnp->next;
+      sint = this_vnp->data.ptrvalue;
+      this_bsp = BioseqFind (sint->id);
+      if (this_bsp == bsp)
+      {
+        if (prev_vnp == NULL) {
+          slp->data.ptrvalue = next_vnp;
+        } else {
+          prev_vnp->next = next_vnp;
+        }
+        this_vnp->next = NULL;
+        sint = SeqIntFree (sint);
+        this_vnp = ValNodeFree (this_vnp);
+      } else {
+        prev_vnp = this_vnp;
+      }
+      this_vnp = next_vnp;
+    }
+    if (slp->data.ptrvalue == NULL) 
+    {
+      slp = SeqLocFree (slp);
     }
   }
   else
@@ -3715,6 +3777,10 @@ static Int2 LIBCALLBACK UpdateSeqAlignForSeqEntry (SeqEntryPtr sep)
   if (entityID < 1)
      return OM_MSG_RET_ERROR;
   
+  if (IS_Bioseq_set (sep)) {
+    bssp = sep->data.ptrvalue;
+  }
+
   if (GetInputFileName (path, sizeof (path), NULL, "TEXT")) {
     fp = FileOpen (path, "r");
     if (fp != NULL) {
@@ -6132,6 +6198,80 @@ SetExplodedProtein
   SeqEdTranslateOneCDS (sfp, nucbsp, nucbsp->idx.entityID, Sequin_GlobalAlign2Seq);
 }
 
+static ObjectIdPtr ObjectIdFromString (CharPtr str)
+{
+  CharPtr cp;
+  ObjectIdPtr oip;
+
+  oip = ObjectIdNew ();
+
+  if (!StringHasNoText (str)) {
+    cp = str;
+    while (*cp != 0 && isdigit (*cp)) {
+      cp++;
+    }
+    if (*cp == 0) {
+      oip->id = atoi (str);
+    } else {
+      oip->str = StringSave (str);
+    }
+  }
+  return oip;
+}
+
+
+static void IncrementObjectId (ObjectIdPtr oip)
+{
+  Int4 len;
+
+  if (oip == NULL) {
+    return;
+  }
+
+  if (!StringHasNoText (oip->str)) {
+    len = StringLen (oip->str);
+    *(oip->str + len - 1) = *(oip->str + len - 1) + 1;
+  } else {
+    oip->id++;
+  } 
+
+}
+
+
+static void DecrementObjectId (ObjectIdPtr oip)
+{
+  Int4 len;
+
+  if (oip == NULL) {
+    return;
+  }
+
+  if (!StringHasNoText (oip->str)) {
+    len = StringLen (oip->str);
+    *(oip->str + len - 1) = *(oip->str + len - 1) - 1;
+  } else {
+    oip->id--;
+  } 
+
+}
+
+
+static CharPtr ObjectIdLabel (ObjectIdPtr oip)
+{
+  Char buf[15];
+
+  if (oip == NULL) {
+    return NULL;
+  }
+  if (!StringHasNoText (oip->str)) {
+    return StringSave (oip->str);
+  } else {
+    sprintf (buf, "%d", oip->id);
+    return StringSave (buf);
+  }
+}
+
+
 static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
 
 {
@@ -6139,8 +6279,7 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
   ImpFeatPtr     ifp;
   SeqLocPtr      slphead, slp;
   GBQualPtr      gbq;
-  Int2           count;
-  Char           str [16];
+  ObjectIdPtr    exon_count = NULL;
   BioseqPtr      orig_prot = NULL, nucbsp;
   Int4           cum_offset = 0;
   Char           prot_id_str [128];
@@ -6211,7 +6350,6 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
 
 /* if exon, increment /number qualifier */
   gbq = NULL;
-  count = 0;
   if (sfpnew != NULL && sfpnew->data.choice == SEQFEAT_IMP) {
     ifp = (ImpFeatPtr) sfpnew->data.value.ptrvalue;
     if (ifp != NULL) {
@@ -6221,9 +6359,7 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
           gbq = gbq->next;
         }
         if (gbq != NULL) {
-          if (! StrToInt (gbq->val, &count)) {
-            gbq = NULL;
-          }
+          exon_count = ObjectIdFromString (gbq->val);
         }
       }
     }
@@ -6246,9 +6382,8 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
     if (slp->choice != SEQLOC_NULL) {
       if (gbq != NULL) {
         gbq->val = MemFree (gbq->val);
-        count++;
-        sprintf (str, "%d", (int) count);
-        gbq->val = StringSave (str);
+        IncrementObjectId (exon_count);
+        gbq->val = ObjectIdLabel (exon_count);
       }
       sfp = SeqFeatCopy (sfpnew);
       sfp->location = SeqLocFree (sfp->location);
@@ -6417,11 +6552,12 @@ extern void GroupExplodeToolBtn (ButtoN b)
   }
 }
 
+
 static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
                                                SeqLocPtr location,
                                                SeqFeatPtr putafterhere,
                                                Boolean MakeIntrons,
-                                               Int4 first_exon_number)
+                                               ObjectIdPtr first_exon_number)
 
 {
   SeqFeatPtr  curr;
@@ -6440,8 +6576,7 @@ static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
   Int4        tmp;
   Boolean     partial5, partial3;
   GBQualPtr   gbqual;
-  Int4        part_number;
-  Char        number_text [256];
+  ObjectIdPtr part_number;
   ValNodePtr  merge_to_parts_list = NULL;
   ValNodePtr  vnp;
 
@@ -6452,7 +6587,7 @@ static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
   if (slp == NULL) return FALSE;
   first = TRUE;
   last = 0;
-  part_number = first_exon_number;
+  part_number = ObjectIdDup (first_exon_number);
   while (slp != NULL) {
     CheckSeqLocForPartial (slp, &partial5, &partial3);
     next = SeqLocFindNext (location, slp);
@@ -6489,9 +6624,12 @@ static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
           gbqual = GBQualNew ();
           if (gbqual != NULL)
           {
-            sprintf (number_text, "%d", part_number - 1);
+            /* need to use the previous value */
+            DecrementObjectId (part_number);
             gbqual->qual = StringSave ("number");
-            gbqual->val = StringSave (number_text);
+            gbqual->val = ObjectIdLabel (part_number);
+            /* put back to original value */
+            IncrementObjectId (part_number);
             gbqual->next = sfp->qual;
             sfp->qual = gbqual;
           }
@@ -6523,13 +6661,12 @@ static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
         gbqual = GBQualNew ();
         if (gbqual != NULL)
         {
-          sprintf (number_text, "%d", part_number);
           gbqual->qual = StringSave ("number");
-          gbqual->val = StringSave (number_text);
+          gbqual->val = ObjectIdLabel (part_number);
           gbqual->next = sfp->qual;
           sfp->qual = gbqual;
         }
-        part_number ++;
+        IncrementObjectId (part_number);
         if (bsp->repr == Seq_repr_seg)
         {
           ValNodeAddPointer (&merge_to_parts_list, 0, sfp);
@@ -6548,9 +6685,12 @@ static Boolean MakeExonsAndIntronsFromFeature (SeqEntryPtr sep, BioseqPtr bsp,
     MergeFeatureIntervalsToParts (sfp, FALSE);
   }
   ValNodeFree (merge_to_parts_list);
+
+  part_number = ObjectIdFree (part_number);
   
   return TRUE;
 }
+
 
 typedef struct makeexondata {
   FEATURE_FORM_BLOCK
@@ -6561,7 +6701,7 @@ typedef struct makeexondata {
 
   SeqEntryPtr sep;
   Boolean     make_introns;
-  Int4        first_exon_number;
+  ObjectIdPtr first_exon_number;
   Uint1       feature_type;
 } MakeExonData, PNTR MakeExonPtr;
 
@@ -6583,6 +6723,7 @@ static void MakeExonsFromFeatureIntervalsVisitFunc (SeqFeatPtr sfp, Pointer user
   
 }
 
+
 static void DoMakeExonsFromFeatureIntervals (ButtoN b)
 {
   MakeExonPtr mep;
@@ -6600,9 +6741,12 @@ static void DoMakeExonsFromFeatureIntervals (ButtoN b)
   GetTitle (mep->exon_number_field,
             exon_number_str,
             sizeof (exon_number_str) - 1 );
-  mep->first_exon_number = atoi (exon_number_str);
+
+  mep->first_exon_number = ObjectIdFromString (exon_number_str);
+
   VisitFeaturesInSep (mep->sep, mep, 
                       MakeExonsFromFeatureIntervalsVisitFunc);
+  mep->first_exon_number = ObjectIdFree (mep->first_exon_number);
   ObjMgrSetDirtyFlag (mep->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, mep->input_entityID, 0, 0);
   ArrowCursor ();
@@ -6613,31 +6757,13 @@ static void CheckExonNumberText (TexT number_field)
 {
   MakeExonPtr mep;
   Char        exon_number_str [256];
-  CharPtr     cp;
 
   if (number_field == NULL || (mep = (MakeExonPtr)GetObjectExtra (number_field)) == NULL) return;
-
-  GetTitle (mep->exon_number_field,
-            exon_number_str,
-            sizeof (exon_number_str) - 1 );
-  if (exon_number_str [0] == 0) 
-  {
+  if (StringHasNoText (exon_number_str)) {
     Disable (mep->accept);
-    return;
+  } else {
+    Enable (mep->accept);
   }
-
-  for (cp = exon_number_str; cp != NULL && *cp != 0; cp++)
-  {
-    if (*cp != '0' && *cp != '1' && *cp != '2' && *cp != '3'
-      && *cp != '4' && *cp != '5' && *cp != '6' && *cp != '7'
-      && *cp != '8' && *cp != '9')
-    {
-      Disable (mep->accept);
-      return;
-    }
-  }
-  Enable (mep->accept);
-  return;
 }
  
 static void CommonMakeExonsFromFeatureIntervals (
@@ -6717,6 +6843,8 @@ static Int2 LIBCALLBACK MakeExonIntron (Pointer data)
   OMProcControlPtr  ompcp;
   SeqFeatPtr        sfp;
   SeqEntryPtr       sep;
+  ObjectIdPtr       oip;
+  Int2              rval = OM_MSG_RET_ERROR;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->input_itemtype == 0 || ompcp->input_data == NULL)
@@ -6742,15 +6870,18 @@ static Int2 LIBCALLBACK MakeExonIntron (Pointer data)
   nbsp = (BioseqPtr) nsep->data.ptrvalue;
   if (nbsp == NULL) return OM_MSG_RET_ERROR;
 
-  if (MakeExonsAndIntronsFromFeature (sep, nbsp, sfp->location, sfp, TRUE, 1))
+  oip = ObjectIdNew ();
+  oip->id = 1;
+  if (MakeExonsAndIntronsFromFeature (sep, nbsp, sfp->location, sfp, TRUE, oip))
   {
     ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, ompcp->input_itemID,
                    ompcp->input_itemtype);
-    return OM_MSG_RET_DONE;
+    rval = OM_MSG_RET_DONE;
   }
-  else
-    return OM_MSG_RET_ERROR;
+  oip = ObjectIdFree (oip);
+
+  return rval;
 }
 
 static Int2 LIBCALLBACK DetachBioseq (Pointer data)
@@ -8895,48 +9026,12 @@ static Int2 LIBCALLBACK CacheAccnsToDisk (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-static ProtRefPtr FindBestProtRef (Uint2 entityID, SeqFeatPtr cds)
-
-{
-  SeqFeatPtr bestprot;
-  
-  if (cds == NULL) return NULL;
-  bestprot = FindBestProtein (entityID, cds->product);
-  if (bestprot != NULL) {
-    return bestprot->data.value.ptrvalue;
-  } else {
-    return NULL;
-  }
-}
-
-/* if gene location matches mRNA exactly, make it partial on both ends */
-static void MakeMRNAGenesPartial (SeqFeatPtr sfp, Pointer userdata)
-{
-  SeqFeatPtr mrna;
-
-  if (sfp == NULL || userdata == NULL) return;
-  if (sfp->data.choice != SEQFEAT_GENE) return;
-
-  mrna = (SeqFeatPtr) userdata;
-
-  if (SeqLocAinB (mrna->location, sfp->location) != 0) return;
-
-  SetSeqLocPartial (sfp->location, TRUE, TRUE);
-}
-
 static void MRnaFromCdsCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   Boolean       process_this_one = FALSE;
   SelStructPtr  sel;
-  RnaRefPtr     rrp;
-  Char          mRnaName [128];
-  ProtRefPtr    prp;
   Uint2Ptr      entityIDptr;
   Uint2         entityID;
-  ValNodePtr    name;
-  SeqFeatPtr    rna;
-  BioseqPtr     bsp;
-  SeqEntryPtr   sep;
   
   if (sfp == NULL || sfp->idx.subtype != FEATDEF_CDS || userdata == NULL) return;
   entityIDptr = (Uint2Ptr) userdata;
@@ -8960,51 +9055,7 @@ static void MRnaFromCdsCallback (SeqFeatPtr sfp, Pointer userdata)
   }
   if (process_this_one)
   {
-    rrp = RnaRefNew ();
-    if (rrp != NULL) {
-      rrp->type = 2;
-      mRnaName [0] = '\0';
-      prp = FindBestProtRef (entityID, sfp);
-      if (prp != NULL) {
-        name = prp->name;
-        if (name != NULL) {
-          StringNCpy_0 (mRnaName, (CharPtr) name->data.ptrvalue, sizeof (mRnaName));
-        }
-        if (StringHasNoText (mRnaName)) {
-          StringNCpy_0 (mRnaName, prp->desc, sizeof (mRnaName));
-        }
-      }
-      if (! StringHasNoText (mRnaName)) {
-        rrp->ext.choice = 1;
-        rrp->ext.value.ptrvalue = StringSave (mRnaName);
-      }
-      rna = SeqFeatNew ();
-      if (rna != NULL) {
-        rna->data.choice = SEQFEAT_RNA;
-        rna->data.value.ptrvalue = (Pointer) rrp;
-        rna->location = AsnIoMemCopy ((Pointer) sfp->location,
-                                      (AsnReadFunc) SeqLocAsnRead,
-                                      (AsnWriteFunc) SeqLocAsnWrite);
-        /* CheckSeqLocForPartial (rna->location, &noLeft, &noRight); */
-        SetSeqLocPartial (rna->location, TRUE, TRUE); /* now always set */
-        /* rna->partial = (rna->partial || noLeft || noRight); */
-        rna->partial = TRUE;
-        bsp = GetBioseqGivenSeqLoc (rna->location, entityID);
-        if (bsp != NULL) {
-          sep = SeqMgrGetSeqEntryForData (bsp);
-          if (sep != NULL) {
-            CreateNewFeature (sep, NULL, SEQFEAT_RNA, rna);
-          } else {
-            rna->next = sfp->next;
-            sfp->next = rna;
-          }
-          VisitFeaturesOnBsp (bsp, (Pointer) rna, MakeMRNAGenesPartial);
-        } else {
-          rna->next = sfp->next;
-          sfp->next = rna;
-        }
-      }
-    }
+    AddmRNAForCDS (sfp);
   }
 }
 
@@ -13794,46 +13845,6 @@ static AuthListPtr GetAuthorListForPub (PubPtr the_pub)
   return alp;
 }
 
-static AuthListPtr PNTR GetAuthListForPub (PubPtr the_pub)
-{
-  CitGenPtr  cgp;
-  CitSubPtr  csp;
-  CitArtPtr  cap;
-  CitBookPtr cbp;
-  CitPatPtr  cpp;
-
-  if (the_pub == NULL)
-  {
-    return NULL;
-  }
-  switch (the_pub->choice) {
-    case PUB_Gen :
-      cgp = (CitGenPtr) the_pub->data.ptrvalue;
-      return &(cgp->authors);
-      break;
-    case PUB_Sub :
-      csp = (CitSubPtr) the_pub->data.ptrvalue;
-      return &(csp->authors);
-      break;
-    case PUB_Article :
-      cap = (CitArtPtr) the_pub->data.ptrvalue;
-      return &(cap->authors);
-      break;
-    case PUB_Book :
-    case PUB_Man :
-      cbp = (CitBookPtr) the_pub->data.ptrvalue;
-      return &(cbp->authors);
-      break;
-    case PUB_Patent :
-      cpp = (CitPatPtr) the_pub->data.ptrvalue;
-      return &(cpp->authors);
-      break;
-    default :
-      break;
-  }
-  return NULL;
-}
-
 static Boolean SetPubAuthorList (PubPtr the_pub, AuthListPtr alp)
 {
   AffilPtr   old_affil = NULL;
@@ -16657,44 +16668,6 @@ extern void EditPubs (IteM i)
 #endif
 
   EditPubsEx (bfp);
-}
-
-static void RemoveConsortiumFromPub (PubPtr pub)
-{
-  AuthListPtr alp;
-  ValNodePtr  names, prev = NULL, names_next;
-  AuthorPtr   ap;
-  
-  alp = GetAuthorListForPub (pub);
-  if (alp == NULL)
-  {
-    return;
-  }
-  
-  for (names = alp->names; names != NULL; names = names_next) 
-  {
-    names_next = names->next;
-    ap = names->data.ptrvalue;
-    if (ap->name->choice == 5)
-    {
-      ap->name->data = MemFree (ap->name->data);
-      AuthorFree (ap);
-      if (prev == NULL)
-      {
-        alp->names = names->next;
-      }
-      else
-      {
-        prev->next = names->next;
-      }
-      names->next = NULL;
-      names = ValNodeFree (names);
-    }
-    else
-    {
-      prev = names;
-    }
-  }  
 }
 
 static void RemovePubConsortiumFromSeqFeat (SeqFeatPtr sfp, Pointer userdata)

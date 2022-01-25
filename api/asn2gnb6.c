@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.187 $
+* $Revision: 1.196 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -475,6 +475,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GRIN",
   "H-InvDB",
   "HGNC",
+  "HOMD",
   "HSSP",
   "IMGT/GENE-DB",
   "IMGT/HLA",
@@ -489,6 +490,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "MaizeGDB",
   "MGI",
   "MIM",
+  "MycoBank",
   "NBRC",
   "NextDB",
   "niaEST",
@@ -511,6 +513,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "RZPD",
   "SEED",
   "SGD",
+  "SGN",
   "SoyBase",
   "SubtiList",
   "taxon",
@@ -539,6 +542,7 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "FANTOM_DB",
   "FLYBASE",
   "GRIN",
+  "HOMD",
   "IMGT/HLA",
   "IMGT/LIGM",
   "JCM",
@@ -2266,10 +2270,10 @@ NLM_EXTERN CharPtr FFFlatLoc (
 
     CheckSeqLocForPartial (location, &noLeft, &noRight);
     hasNulls = LocationHasNullsBetween (location);
-    loc = SeqLocMergeEx (bsp, location, NULL, FALSE, TRUE, FALSE, hasNulls);
+    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE);
     if (loc == NULL) {
       tmp = TrimLocInSegment (bsp, location, &noLeft, &noRight);
-      loc = SeqLocMergeEx (bsp, tmp, NULL, FALSE, TRUE, FALSE, hasNulls);
+      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE);
       SeqLocFree (tmp);
     }
     if (loc == NULL) {
@@ -2376,10 +2380,10 @@ NLM_EXTERN SeqLocPtr SeqLocReMapEx (
 
     CheckSeqLocForPartial (location, &noLeft, &noRight);
     hasNulls = LocationHasNullsBetween (location);
-    loc = SeqLocMerge (bsp, location, NULL, FALSE, TRUE, hasNulls);
+    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE);
     if (loc == NULL) {
       tmp = TrimLocInSegment (bsp, location, &noLeft, &noRight);
-      loc = SeqLocMerge (bsp, tmp, NULL, FALSE, TRUE, hasNulls);
+      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE);
       SeqLocFree (tmp);
     }
     if (loc == NULL) {
@@ -3102,12 +3106,13 @@ static CharPtr NextPCRReaction (
 #define s_bcrc_base "http://strain.bcrc.firdi.org.tw/BSAS/controller?event=SEARCH&bcrc_no="
 #define s_ccmp_base "http://ccmp.bigelow.org/SD/display.php?strain=CCMP"
 #define s_ccug_base "http://www.ccug.se/default.cfm?page=search_record.cfm&db=mc&s_tests=1&ccugno="
+#define s_dsmz_base "http://www.dsmz.de/microorganisms/search_no.php?q="
 #define s_fsu_base  "http://www.prz.uni-jena.de/data.php?fsu="
 #define s_ku_base   "http://collections.nhm.ku.edu/"
-#define s_mvz_base  "http://mvzarctos.berkeley.edu/SpecimenDetail.cfm?guid="
 #define s_pcc_base  "http://www.pasteur.fr/recherche/banques/PCC/docs/pcc"
 #define s_pcmb_base "http://www2.bishopmuseum.org/HBS/PCMB/results3.asp?searchterm3="
-#define s_uam_base  "http://arctos.database.museum/SpecimenDetail.cfm?GUID="
+#define s_tgrc_base "http://tgrc.ucdavis.edu/Data/Acc/AccDetail.aspx?AccessionNum="
+#define s_uam_base  "http://arctos.database.museum/guid/"
 
 #define s_colon_pfx ":"
 
@@ -3123,6 +3128,7 @@ static CharPtr NextPCRReaction (
 #define s_ccug_inst  "Culture Collection, University of Goteborg, Department of Clinical Bacteriology"
 #define s_crcm_inst  "Charles R. Conner Museum, Washington State University"
 #define s_dgr_inst   "Division of Genomic Resources, University of New Mexico"
+#define s_dsmz_inst  "German Resource Center for Biological Material"
 #define s_fsu_inst   "Fungal Reference Center, University of Jena"
 #define s_ku_inst    "University of Kansas, Museum of Natural History"
 #define s_kwp_inst   "Kenelm W. Philip Collection, University of Alaska Museum of the North"
@@ -3132,6 +3138,7 @@ static CharPtr NextPCRReaction (
 #define s_pcc_inst   "Pasteur Culture Collection of Cyanobacteria"
 #define s_pcmb_inst  "Pacific Center for Molecular Biodiversity"
 #define s_psu_inst   "Portland State University"
+#define s_tgrc_inst  "Tomato Genetics Resource Center, University of California"
 #define s_uam_inst   "University of Alaska Museum of the North"
 #define s_wmnu_inst  "Western New Mexico University Museum"
 
@@ -3155,23 +3162,26 @@ static VouchData Nlm_spec_vouchers [] = {
  { "DGR:Fish",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_dgr_inst  },
  { "DGR:Herp",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_dgr_inst  },
  { "DGR:Mamm",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_dgr_inst  },
+ { "DSM",         s_dsmz_base, FALSE, NULL,         NULL,       s_dsmz_inst },
  { "FSU<DEU>",    s_fsu_base,  FALSE, NULL,         NULL,       s_fsu_inst  },
  { "KU:I",        s_ku_base,   FALSE, s_kui_pfx,    NULL,       s_ku_inst   },
  { "KU:IT",       s_ku_base,   FALSE, s_kuit_pfx,   NULL,       s_ku_inst   },
  { "KWP:Ento",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_kwp_inst  },
  { "MSB:Bird",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_msb_inst  },
  { "MSB:Mamm",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_msb_inst  },
- { "MVZ:Bird",    s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Egg",     s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Herp",    s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Hild",    s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Img",     s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Mamm",    s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZ:Page",    s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
- { "MVZObs:Herp", s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MSB:Para",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_msb_inst  },
+ { "MVZ:Bird",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Egg",     s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Herp",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Hild",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Img",     s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Mamm",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZ:Page",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
+ { "MVZObs:Herp", s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
  { "NBSB:Bird",   s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_nbsb_inst },
  { "PCC",         s_pcc_base,  FALSE, NULL,         s_pcc_sfx,  s_pcc_inst  },
  { "PCMB",        s_pcmb_base, FALSE, NULL,         NULL,       s_pcmb_inst },
+ { "TGRC",        s_tgrc_base, FALSE, NULL,         NULL,       s_tgrc_inst },
  { "PSU:Mamm",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_psu_inst  },
  { "UAM:Bird",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_uam_inst  },
  { "UAM:Bryo",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_uam_inst  },
@@ -3455,6 +3465,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Boolean            is_desc = TRUE;
   Boolean            is_gps = FALSE;
   Boolean            is_other = FALSE;
+  Boolean            is_est_or_gss = FALSE;
   Boolean            is_bc;
   Boolean            is_rf;
   Boolean            is_sc;
@@ -3463,6 +3474,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Uint1              lastomptype;
   Uint1              lastssptype;
   SeqLocPtr          location = NULL;
+  MolInfoPtr         mip;
   CharPtr            notestr;
   SourceType PNTR    notetbl = NULL;
   Boolean            okay;
@@ -3736,6 +3748,16 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   }
 #endif
 
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      if (mip->tech == MI_TECH_est || mip->tech == MI_TECH_survey) {
+        is_est_or_gss = TRUE;
+      }
+    }
+  }
+
   /* now print qualifiers from table */
 
   qualtbl = source_qual_order;
@@ -3933,6 +3955,9 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                     okay = TRUE;
                   } else if (is_sc) {
                     /* expect it to be in legalSrcDbXrefs list */
+                    okay = TRUE;
+                  } else if (is_est_or_gss) {
+                    /* EST and GSS records only have source feature, so allow anything */
                     okay = TRUE;
                   } else {
                     /* suppress regular dbxrefs, also warn in validator */
@@ -4467,11 +4492,11 @@ static void PrintGenome (
   Boolean is_na
 )
 {
-  Char         buf[40], val[166];
+  Char         buf[40], gibuf [32], val[166];
   Boolean      first = TRUE;
   SeqIdPtr     freeid, sid, newid;
   SeqLocPtr    slp;
-  Int4         from, to, start, stop;
+  Int4         from, to, start, stop, gi;
   BioseqPtr    bsp = NULL;
   Int2         p1=0, p2=0;
 
@@ -4494,11 +4519,13 @@ static void PrintGenome (
     newid = NULL;
     freeid = NULL;
     buf [0] = '\0';
+    gi = 0;
     if (sid->choice == SEQID_GI) {
-      if (GetAccnVerFromServer (sid->data.intvalue, buf)) {
+      gi = sid->data.intvalue;
+      if (GetAccnVerFromServer (gi, buf)) {
         /* no need to call GetSeqIdForGI */
       } else {
-        newid = GetSeqIdForGI (sid->data.intvalue);
+        newid = GetSeqIdForGI (gi);
         if (newid != NULL) {
           freeid = newid;
         }
@@ -4523,6 +4550,7 @@ static void PrintGenome (
       newid = sid;
     } else {
       newid = sid;
+      gi = GetGIForSeqId (sid);
     }
     if (prefix != NULL) {
       FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
@@ -4545,7 +4573,7 @@ static void PrintGenome (
     if (SeqLocStrand (slp) == Seq_strand_minus) {
       FFAddOneString(ffstring, "complement(", FALSE, FALSE, TILDE_IGNORE);
     }
-    if ( GetWWW(ajp) ) {
+    if ( GetWWW(ajp) && gi > 0) {
       if (newid == NULL) {
         newid = sid;
       }
@@ -4556,7 +4584,8 @@ static void PrintGenome (
         } else {
           FF_Add_NCBI_Base_URL (ffstring, link_seqp);
         }
-        FFAddTextToString(ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+        sprintf (gibuf, "%ld", (long) gi);
+        FFAddTextToString(ffstring, /* "val=" */ NULL, gibuf, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddTextToString(ffstring, NULL, buf, "</a>", FALSE, FALSE, TILDE_IGNORE);
       }
     } else {

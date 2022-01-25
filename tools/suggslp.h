@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *	Implementation of standalone Suggest prediction function.
@@ -56,8 +56,10 @@ extern SuggestError   suggestError;
 extern SuggestOutput  suggestOut;
 extern SuggestRec     suggestRec;
 
-extern void SuggestClientService PROTO((SuggestIntervalsPtr pSIntervals));
+extern Int2 SuggestClientService PROTO((SuggestIntervalsPtr pSIntervals));
 extern SeqAnnotPtr SuggestCodingRegion PROTO((BioseqPtr nuc, BioseqPtr prot, Int2 genCode));
+extern SeqAnnotPtr SuggestCodingRegionEx PROTO((BioseqPtr nuc, BioseqPtr prot, Int2 genCode, Int2Ptr rsult));
+
 
 extern void SetBatchSuggestNucleotide PROTO((BioseqPtr nuc, Int2 genCode));
 extern void ClearBatchSuggestNucleotide PROTO((void));

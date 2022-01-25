@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.221 2009/01/05 16:54:38 kazimird Exp $
+/* $Id: blast_hits.c,v 1.226 2009/07/13 18:19:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.221 2009/01/05 16:54:38 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.226 2009/07/13 18:19:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -886,7 +886,6 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
     if (target_t->partial == TRUE) /* partial == FALSE translation has already been done. */
     {  
     	 const int kMaxTranslation = 2100; /* Needs to be divisible by three (?) */
-         Boolean needs_translation = TRUE;
          Int4 start = target_t->range[2*context];
          Int4 stop = target_t->range[2*context+1];
          Int4 nucl_length = 0;
@@ -897,8 +896,13 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
     	 Int4 start_shift = 0;
 
          /* HSP coordinates are in terms of protein sequences. */
-         nucl_start = MAX(0, 3*hsp->subject.offset - kMaxTranslation);
-         nucl_end = MIN(target_t->subject_blk->length, 3*hsp->subject.end + kMaxTranslation);
+         if (hsp->subject.offset < 0 ) {
+             nucl_start = 0;
+             nucl_end = target_t->subject_blk->length;
+         } else {
+             nucl_start = MAX(0, 3*hsp->subject.offset - kMaxTranslation);
+             nucl_end = MIN(target_t->subject_blk->length, 3*hsp->subject.end + kMaxTranslation);
+         }
 
          nucl_length = nucl_end - nucl_start;
 
@@ -910,51 +914,40 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
          else
              nucl_shift = nucl_start;
 
-
-         if (start == stop)
-         {
-             target_t->translations[context] = (Uint1*) malloc(translation_length+2);
-             target_t->translations[context][translation_length+1] = 0;
-             target_t->range[2*context] = start_shift;
-             target_t->range[2*context+1] = start_shift + translation_length;
-         } 
-         else if (start_shift < start || start_shift+translation_length > stop)
-         {
-               if (translation_length <= stop-start)
-               {
-                    target_t->range[2*context] = start_shift;
-                    target_t->range[2*context+1] = start_shift+(stop-start);
-               }
-               else
-               {
-                    sfree(target_t->translations[context]);
-                    target_t->translations[context] = (Uint1*) malloc(translation_length+2);
-             	    target_t->translations[context][translation_length+1] = 0;
-                    target_t->range[2*context] = start_shift;
-                    target_t->range[2*context+1] = start_shift+translation_length;
-               }
-         }
-         else
-         {
-               needs_translation = FALSE;
-               
-         }
-
-         if (needs_translation)
-         {
-               Int4 length = 0; /* what do we need this for???? */
+         if (start_shift < start || start_shift+translation_length > stop) {
+               /* needs re-translation */
+               Int4 length = 0; /* actual translation length */
                Uint1* nucl_seq = target_t->subject_blk->sequence + nucl_shift;
                Uint1* nucl_seq_rev = NULL;
-               if (hsp->subject.frame < 0)
+
+               target_t->range[2*context] = start_shift;
+
+               if (translation_length > stop-start) {
+                   /* needs re-allocation */
+                   sfree(target_t->translations[context]);
+                   target_t->translations[context] = (Uint1*) malloc(translation_length+2);
+               }
+
+               if (hsp->subject.frame < 0) {
+                   /* needs reverse sequence */
                    GetReverseNuclSequence(nucl_seq, nucl_length, &nucl_seq_rev);
+               }
+
                length = BLAST_GetTranslation(nucl_seq, nucl_seq_rev,
                        nucl_length, hsp->subject.frame, target_t->translations[context], 
                        target_t->gen_code_string);
-               sfree(nucl_seq_rev);
-         }
-         
-    }
 
+               target_t->range[2*context+1] = start_shift + length;
+
+               sfree(nucl_seq_rev);
+
+               /* partial translation needs to be fenced */
+               if(hsp->subject.offset >= 0) {
+                   target_t->translations[context][0] = FENCE_SENTRY;
+                   target_t->translations[context][length+1] = FENCE_SENTRY;
+               }
+         }
+    }
     if (translated_length)
         *translated_length = target_t->range[2*context+1];
 
@@ -2297,6 +2290,7 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
       for (index1 = 0; index1 < combined_hsp_list->hspcnt; index1++) {
          hsp1 = combined_hsp_list->hsp_array[index1];
          offset_idx = hsp1->context % contexts_per_query;
+         if (split_offsets[offset_idx] < 0) continue;
          if ((hsp1->query.frame >= 0 && hsp1->query.end > 
                          split_offsets[offset_idx]) ||
              (hsp1->query.frame < 0 && hsp1->query.offset < 
@@ -2311,6 +2305,7 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
       for (index2 = 0; index2 < hsp_list->hspcnt; index2++) {
          hsp2 = hsp_list->hsp_array[index2];
          offset_idx = hsp2->context % contexts_per_query;
+         if (split_offsets[offset_idx] < 0) continue;
          if ((hsp2->query.frame < 0 && hsp2->query.end > 
                          split_offsets[offset_idx]) ||
              (hsp2->query.frame >= 0 && hsp2->query.offset < 
@@ -2607,8 +2602,6 @@ static Int2 s_Blast_HitListGrowHSPListArray(BlastHitList* hit_list)
     return 0;
 }
 
-
-
 Int2 Blast_HitListUpdate(BlastHitList* hit_list, 
                          BlastHSPList* hsp_list)
 {
@@ -2898,211 +2891,6 @@ Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
    return 0;
 }
 
-/** Callback used for sorting HSPs by score, with HSPs
- *  from different contexts segregated from each other
- */
-static int
-s_ScoreCompareHSPWithContext(const void* h1, const void* h2)
-{
-   BlastHSP* hsp1,* hsp2;   /* the HSPs to be compared */
-   int result = 0;      /* the result of the comparison */
-   
-   hsp1 = *((BlastHSP**) h1);
-   hsp2 = *((BlastHSP**) h2);
-
-   /* Null HSPs are "greater" than any non-null ones, so they go to the end
-      of a sorted list. */
-   if (!hsp1 && !hsp2)
-       return 0;
-   else if (!hsp1)
-       return 1;
-   else if (!hsp2)
-       return -1;
-
-   if ((result = BLAST_CMP(hsp1->context, hsp2->context)) != 0)
-       return result;
-   return ScoreCompareHSPs(h1, h2);
-}
-
-Int2 
-Blast_HSPResultsSaveRPSHSPList(EBlastProgramType program, 
-                               BlastHSPResults* results, 
-                               BlastHSPList* hsplist_in,
-                               const SBlastHitsParameters* blasthit_params)
-{
-   Int4 index, next_index;
-   BlastHitList* hit_list;
-
-   if (!hsplist_in || hsplist_in->hspcnt == 0)
-      return 0;
-
-   /* Check that the query index is in the correct range. */
-   ASSERT(hsplist_in->query_index < results->num_queries);
-
-   /* Check that program is indeed RPS Blast */
-   ASSERT(Blast_ProgramIsRpsBlast(program));
-
-   /* If hit list for this query has not yet been allocated, do it here. */
-   hit_list = results->hitlist_array[hsplist_in->query_index];
-   if (!hit_list) {
-       results->hitlist_array[hsplist_in->query_index] =
-           hit_list = Blast_HitListNew(blasthit_params->prelim_hitlist_size);
-   }
-
-   /* Sort the input HSPList with context (i.e. oid) as the first priority, 
-      and then score, etc. */
-   qsort(hsplist_in->hsp_array, hsplist_in->hspcnt, sizeof(BlastHSP*), 
-         s_ScoreCompareHSPWithContext);
-
-   /* Sequentially extract HSPs corresponding to one subject into a new 
-      HSPList, and save these new HSPLists in a normal way, as in all other
-      BLAST programs. */
-   next_index = 0;
-   
-   for (index = 0; index < hsplist_in->hspcnt; index = next_index) {
-       BlastHSPList* hsp_list;
-       Int4 oid = hsplist_in->hsp_array[index]->context;
-       Int4 hspcnt;
-       /* Find the first HSP that corresponds to a different subject. 
-          At the same time, set all HSP contexts to 0, since this is what
-          traceback code expects. */
-       for (next_index = index; next_index < hsplist_in->hspcnt; 
-            ++next_index) {
-           if (hsplist_in->hsp_array[next_index]->context != oid)
-               break;
-           hsplist_in->hsp_array[next_index]->context = 0;
-       }
-       hspcnt = next_index - index;
-       hsp_list = Blast_HSPListNew(hspcnt);
-       /* Set the oid field for this HSPList. */
-       hsp_list->oid = oid;
-       hsp_list->query_index = hsplist_in->query_index;
-       /* Save all HSPs corresponding to this subject. */
-       for ( ; index < next_index; ++index)
-           Blast_HSPListSaveHSP(hsp_list, hsplist_in->hsp_array[index]);
-       /* Check that HSPs are correctly sorted by score, as they should be. */
-       ASSERT(Blast_HSPListIsSortedByScore(hsp_list));
-       /* Insert this HSPList into this query's hit list. */
-       Blast_HitListUpdate(hit_list, hsp_list);
-   }
-
-   /* All HSPs have been moved from the input HSPList to new HSPLists, so
-      set the input HSPList's count to 0. */
-   hsplist_in->hspcnt = 0;
-   Blast_HSPListFree(hsplist_in);
-   
-   return 0;
-}
-
-Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* results, 
-        BlastHSPList* hsp_list, const SBlastHitsParameters* blasthit_params)
-{
-
-   if (!hsp_list)
-      return 0;
-
-   if (!results || !blasthit_params)
-      return -1;
-
-   /* The HSP list should already be sorted by score coming into this function.
-    * Still check that this assumption is true.
-    */
-   ASSERT(Blast_HSPListIsSortedByScore(hsp_list));
-   ASSERT(s_BlastCheckBestEvalue(hsp_list) == TRUE);
-   
-   /* Rearrange HSPs into multiple hit lists if more than one query */
-   if (results->num_queries > 1) {
-      BlastHSP* hsp;
-      BlastHSPList** hsp_list_array;
-      BlastHSPList* tmp_hsp_list;
-      Int4 index;
-
-      hsp_list_array = calloc(results->num_queries, sizeof(BlastHSPList*));
-      if (hsp_list_array == NULL)
-         return -1;
-
-      for (index = 0; index < hsp_list->hspcnt; index++) {
-         Boolean can_insert = TRUE;
-         Int4 query_index;
-         hsp = hsp_list->hsp_array[index];
-         query_index = Blast_GetQueryIndexFromContext(hsp->context, program);
-
-         if (!(tmp_hsp_list = hsp_list_array[query_index])) {
-            hsp_list_array[query_index] = tmp_hsp_list = 
-               Blast_HSPListNew(blasthit_params->hsp_num_max);
-            if (tmp_hsp_list == NULL)
-            {
-                 sfree(hsp_list_array);
-                 return -1;
-            }
-            tmp_hsp_list->oid = hsp_list->oid;
-         }
-
-         if (tmp_hsp_list->hspcnt >= tmp_hsp_list->allocated) {
-            if (tmp_hsp_list->do_not_reallocate == FALSE) {
-               BlastHSP** new_hsp_array;
-               Int4 new_size = 
-                  MIN(2*tmp_hsp_list->allocated, tmp_hsp_list->hsp_max);
-               if (new_size == tmp_hsp_list->hsp_max)
-                  tmp_hsp_list->do_not_reallocate = TRUE;
-            
-               new_hsp_array = realloc(tmp_hsp_list->hsp_array, 
-                                    new_size*sizeof(BlastHSP*));
-               if (!new_hsp_array) {
-                  tmp_hsp_list->do_not_reallocate = TRUE;
-                  can_insert = FALSE;
-               } else {
-                  tmp_hsp_list->hsp_array = new_hsp_array;
-                  tmp_hsp_list->allocated = new_size;
-               }
-            }
-            else
-            {
-               can_insert = FALSE;
-            }
-         }
-         if (can_insert) {
-            tmp_hsp_list->hsp_array[tmp_hsp_list->hspcnt++] = hsp;
-         } else {
-            /* FIXME: what if this is not the least significant HSP?? */
-            /* Cannot add more HSPs; free the memory */
-            hsp_list->hsp_array[index] = Blast_HSPFree(hsp);
-         }
-      }
-
-      /* Insert the hit list(s) into the appropriate places in the results 
-         structure */
-      for (index = 0; index < results->num_queries; index++) {
-         if (hsp_list_array[index]) {
-            if (!results->hitlist_array[index]) {
-               results->hitlist_array[index] = 
-                  Blast_HitListNew(blasthit_params->prelim_hitlist_size);
-            }
-            Blast_HitListUpdate(results->hitlist_array[index], 
-                                hsp_list_array[index]);
-         }
-      }
-      sfree(hsp_list_array);
-      /* All HSPs from the hsp_list structure are now moved to the results 
-         structure, so set the HSP count back to 0 */
-      hsp_list->hspcnt = 0;
-      Blast_HSPListFree(hsp_list);
-   } else if (hsp_list->hspcnt > 0) {
-      /* Single query; save the HSP list directly into the results 
-         structure */
-      if (!results->hitlist_array[0]) {
-         results->hitlist_array[0] = 
-            Blast_HitListNew(blasthit_params->prelim_hitlist_size);
-      }
-      Blast_HitListUpdate(results->hitlist_array[0], hsp_list);
-   } else {
-       /* Empty HSPList - free it. */
-       Blast_HSPListFree(hsp_list);
-   }
-       
-   return 0; 
-}
-
 Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results, 
         BlastHSPList* hsp_list, Int4 hitlist_size)
 {
@@ -3186,15 +2974,10 @@ PHIBlast_HSPResultsSplit(const BlastHSPResults* results,
 BlastHSPResults*
 Blast_HSPResultsFromHSPStream(BlastHSPStream* hsp_stream, 
                               size_t num_queries, 
-                              const BlastHitSavingOptions* hit_options, 
-                              const BlastExtensionOptions* ext_options, 
-                              const BlastScoringOptions* scoring_options)
+                              SBlastHitsParameters* bhp)
 {
     BlastHSPResults* retval = NULL;
-    SBlastHitsParameters* bhp = NULL;
     BlastHSPList* hsp_list = NULL;
-
-    SBlastHitsParametersNew(hit_options, ext_options, scoring_options, &bhp);
 
     retval = Blast_HSPResultsNew((Int4) num_queries);
 
@@ -3202,7 +2985,7 @@ Blast_HSPResultsFromHSPStream(BlastHSPStream* hsp_stream,
         Blast_HSPResultsInsertHSPList(retval, hsp_list, 
                                       bhp->prelim_hitlist_size);
     }
-    bhp = SBlastHitsParametersFree(bhp);
+    SBlastHitsParametersFree(bhp);
     return retval;
 }
 
@@ -3297,18 +3080,14 @@ s_TrimResultsByTotalHSPLimit(BlastHSPResults* results, Uint4 total_hsp_limit)
 BlastHSPResults*
 Blast_HSPResultsFromHSPStreamWithLimit(BlastHSPStream* hsp_stream, 
                                    Uint4 num_queries, 
-                                   const BlastHitSavingOptions* hit_options, 
-                                   const BlastExtensionOptions* ext_options, 
-                                   const BlastScoringOptions* scoring_options,
+                                   SBlastHitsParameters* hit_param,
                                    Uint4 max_num_hsps,
                                    Boolean* removed_hsps)
 {
     Boolean rm_hsps = FALSE;
     BlastHSPResults* retval = Blast_HSPResultsFromHSPStream(hsp_stream,
                                                             num_queries,
-                                                            hit_options,
-                                                            ext_options,
-                                                            scoring_options);
+                                                            hit_param);
 
     rm_hsps = s_TrimResultsByTotalHSPLimit(retval, max_num_hsps);
     if (removed_hsps) {

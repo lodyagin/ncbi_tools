@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.32 2008/11/03 20:59:44 kazimird Exp $
+/* $Id: lookup_wrap.c,v 1.33 2009/05/27 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.32 2008/11/03 20:59:44 kazimird Exp $";
+    "$Id: lookup_wrap.c,v 1.33 2009/05/27 17:39:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -119,7 +119,8 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
           if (lookup_wrap->lut_type == eMBLookupTable) {
              BlastMBLookupTableNew(query, lookup_segments, 
                                (BlastMBLookupTable* *) &(lookup_wrap->lut), 
-                               lookup_options, num_table_entries, lut_width);
+                               lookup_options, query_options,
+                               num_table_entries, lut_width);
           }
           else if (lookup_wrap->lut_type == eSmallNaLookupTable) {
              status = BlastSmallNaLookupTableNew(query, lookup_segments,
@@ -129,13 +130,13 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
                 lookup_wrap->lut_type = eNaLookupTable;
                 status = BlastNaLookupTableNew(query, lookup_segments,
                             (BlastNaLookupTable* *) &(lookup_wrap->lut), 
-                             lookup_options, lut_width);
+                             lookup_options, query_options, lut_width);
              }
           }
           else {
              BlastNaLookupTableNew(query, lookup_segments,
                             (BlastNaLookupTable* *) &(lookup_wrap->lut), 
-                             lookup_options, lut_width);
+                             lookup_options, query_options, lut_width);
           }
       }
       break;

@@ -234,6 +234,10 @@ This sequence contains too many Ns.
 $^   SeqLitDataLength0, 66
 A SeqLit component of a delta Bioseq must not have 0 length.
 
+$^   DSmRNA, 67
+This mRNA Bioseq is not single stranded.
+
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -461,6 +465,12 @@ bio_material/culture_collection/specimen_voucher type.
 $^   UserObjectProblem, 63
 The user object is missing required fields or has invalid data.
 
+$^   TitleHasPMID, 64
+The title has (PMID #####) embedded in it.
+
+$^   BadKeyword, 65
+The keyword is not appropriate in this record.
+
 
 $$ GENERIC, 3
 
@@ -506,6 +516,9 @@ Script or other markup tags should not be used in sequence record fields.
 
 $^   PublicationInconsistency, 12
 Some fields in the publication should not be present with other fields.
+
+$^ SgmlPresentInText, 13
+SGML markup is embedded in text.
 
 $$ SEQ_PKG, 4
 
@@ -576,6 +589,9 @@ Genomic product set records should not be packaged with other set types.
 
 $^   RefSeqPopSet, 21
 RefSeq records should not be packaged in a popset.
+
+$^   BioseqSetClassNotSet, 22
+The BioseqSet class field is not set.
 
 
 $$ SEQ_FEAT, 5
@@ -1219,6 +1235,39 @@ $^ GeneXrefNeeded, 165
 This feature has multiple overlapping genes of the same length and same name,
 but no xref to determine which one should be used for the /gene qualifier.
 
+$^ RubiscoProblem, 166
+A protein name contains ribulose and bisphosphate but does not use
+the prefered formal naming convention.
+
+$^ UnqualifiedException, 167
+The feature is marked with an automatically supplied exception qualifier
+that should be replaced or supplemented with more informative information.
+
+$^   ProteinNameHasPMID, 168
+The protein name has (PMID #####) embedded in it.
+
+$^   BadGeneOntologyFormat, 169
+A feature has incorrectly labeled fields in a Gene Ontology (GO) term specification.
+
+$^   InconsistentGeneOntologyTermAndId, 170
+The same GO term should apply to Gene Ontology (GO) term specifications with the same GO ID.
+
+$^   MultiplyAnnotatedGenes, 171
+Two gene features with the same name are annotated at the same location.
+
+$^   ReplicatedGeneSequence, 172
+Two gene features with the same name are annotated at different locations, but the
+underlying sequence is identical.
+
+$^   ShortIntron, 173
+Introns should be longer than 10 nt.
+
+$^ GeneXrefStrandProblem, 174
+This feature has a gene xref that points to a gene on the wrong strand.
+
+$^ CDSmRNAXrefLocationProblem, 175
+The CDS is not contained within the cross-referenced mRNA.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1
@@ -1281,6 +1330,12 @@ BLAST alignments are not desired in records submitted to the sequence database.
 $^   PercentIdentity, 20
 An acceptable percent identity score is 75 percent or higher.
 
+$^   ShortAln, 21
+Alignment is shorter than expected.
+
+$^   UnexpectedAlignmentType 22
+Only DenseSeg alignments are expected.
+
 $$ SEQ_GRAPH, 7
 
 $^   GraphMin, 1
@@ -1342,6 +1397,9 @@ Quality score values for known bases should be above 0.
 
 $^   GraphNScoreMany, 19
 Quality score values for unknown bases should not be above 0.
+
+$^   GraphLocInvalid, 20
+Location for quality score values extends beyond end of sequence.
 
 $$ SEQ_ANNOT, 8
 

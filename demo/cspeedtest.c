@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/17/07
 *
-* $Revision: 1.20 $
+* $Revision: 1.22 $
 *
 * File Description: 
 *
@@ -64,7 +64,7 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   Boolean extProtTitle
 );
 
-#define CSPEEDTEST_APP_VER "1.9"
+#define CSPEEDTEST_APP_VER "2.0"
 
 CharPtr CSPEEDTEST_APPLICATION = CSPEEDTEST_APP_VER;
 
@@ -501,6 +501,7 @@ static void LIBCALLBACK ValidCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
   CharPtr label,
@@ -811,6 +812,7 @@ static void ProcessSingleRecord (
         return;
       }
 
+      SeqMgrHoldIndexing (TRUE);
       switch (cfp->type) {
         case 2 :
           dataptr = (Pointer) SeqEntryAsnRead (aip, NULL);
@@ -831,6 +833,7 @@ static void ProcessSingleRecord (
         default :
           break;
       }
+      SeqMgrHoldIndexing (FALSE);
 
       AsnIoClose (aip);
 
@@ -1068,7 +1071,10 @@ static void ProcessMultipleRecord (
   while ((atp = AsnReadId (aip, cfp->amp, atp)) != NULL) {
     if (atp == cfp->atp_se) {
 
+      SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
+      SeqMgrHoldIndexing (FALSE);
+
       if (sep != NULL) {
 
         entityID = ObjMgrGetEntityIDForChoice (sep);

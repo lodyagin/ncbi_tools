@@ -1,4 +1,4 @@
-/* $Id: ncbi_service.c,v 6.106 2009/02/04 19:29:34 kazimird Exp $
+/* $Id: ncbi_service.c,v 6.108 2009/03/26 15:34:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -207,8 +207,9 @@ static SERV_ITER s_Open(const char*          service,
         for (i = 0; i < n_skip; i++) {
             const char* name = (iter->ismask  ||  skip[i]->type == fSERV_Dns
                                 ? SERV_NameOfInfo(skip[i]) : "");
-            SSERV_Info* temp = SERV_CopyInfoEx(skip[i], !iter->reverse_dns
-                                               ||  *name ? name : s);
+            SSERV_Info* temp = SERV_CopyInfoEx(skip[i],
+                                               !iter->reverse_dns  ||  *name ?
+                                               name : s);
             if (temp) {
                 temp->time = NCBI_TIME_INFINITE;
                 if (!s_AddSkipInfo(iter, name, temp)) {
@@ -319,15 +320,15 @@ SERV_ITER SERV_OpenP(const char*          service,
 static void s_SkipSkip(SERV_ITER iter)
 {
     size_t n;
-    if (!iter->n_skip)
-        return;
     if (iter->time  &&  (iter->ismask  ||  (iter->type & fSERV_Promiscuous)))
         return;
     n = 0;
     while (n < iter->n_skip) {
         SSERV_Info* temp = iter->skip[n];
-        if (temp->time != NCBI_TIME_INFINITE  &&
-            (!iter->time  ||  temp->time < iter->time)) {
+        if (temp->time != NCBI_TIME_INFINITE
+            &&  (!iter->time
+                 ||  ((temp->type != fSERV_Dns  ||  temp->host)
+                      &&  temp->time < iter->time))) {
             if (n < --iter->n_skip) {
                 memmove(iter->skip + n, iter->skip + n + 1,
                         sizeof(*iter->skip)*(iter->n_skip - n));
