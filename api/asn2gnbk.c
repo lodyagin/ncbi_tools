@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.118 $
+* $Revision: 6.120 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -199,7 +199,9 @@ typedef struct int_cds_block {
 
 /* utility functions */
 
-static CharPtr MergeValNodeStrings (ValNodePtr list)
+static CharPtr MergeValNodeStrings (
+  ValNodePtr list
+)
 
 {
   size_t      len;
@@ -228,8 +230,12 @@ static CharPtr MergeValNodeStrings (ValNodePtr list)
   return ptr;
 }
 
-static void AddValNodeString (ValNodePtr PNTR head, CharPtr prefix,
-                              CharPtr string, CharPtr suffix)
+static void AddValNodeString (
+  ValNodePtr PNTR head,
+  CharPtr prefix,
+  CharPtr string,
+  CharPtr suffix
+)
 
 {
   Char     buf [256];
@@ -285,11 +291,18 @@ static void AddValNodeString (ValNodePtr PNTR head, CharPtr prefix,
   }
 }
 
-static Int2 gb_StartPrint (FmtType format, Boolean call_init_buff,
-                           Int2 gb_init_indent, Int2 gb_cont_indent,
-                           CharPtr gb_label, Int2 gb_tab_to,
-                           Int2 eb_init_indent, Int2 eb_cont_indent,
-                           CharPtr eb_line_prefix, Boolean eb_print_xx)
+static Int2 gb_StartPrint (
+  FmtType format,
+  Boolean call_init_buff,
+  Int2 gb_init_indent,
+  Int2 gb_cont_indent,
+  CharPtr gb_label,
+  Int2 gb_tab_to,
+  Int2 eb_init_indent,
+  Int2 eb_cont_indent,
+  CharPtr eb_line_prefix,
+  Boolean eb_print_xx
+)
 
 {
   Int2  result = 0;
@@ -321,9 +334,14 @@ static Int2 gb_StartPrint (FmtType format, Boolean call_init_buff,
 
 /* convertQuotes retains double quotes in the prefix and suffix */
 
-static void gb_AddString (CharPtr prefix, CharPtr string, CharPtr suffix,
-                          Boolean addPeriod, Boolean convertQuotes,
-                          Boolean expandTildes)
+static void gb_AddString (
+  CharPtr prefix,
+  CharPtr string,
+  CharPtr suffix,
+  Boolean addPeriod,
+  Boolean convertQuotes,
+  Boolean expandTildes
+)
 
 {
   Char     buf [256];
@@ -418,7 +436,9 @@ static void gb_AddString (CharPtr prefix, CharPtr string, CharPtr suffix,
   }
 }
 
-static CharPtr gb_MergeString (Boolean call_end_print)
+static CharPtr gb_MergeString (
+  Boolean call_end_print
+)
 
 {
   if (call_end_print) {
@@ -433,7 +453,10 @@ static CharPtr month_names [] = {
   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
 };
 
-static CharPtr DateToGB (CharPtr buf, DatePtr dp)
+static CharPtr DateToGB (
+  CharPtr buf,
+  DatePtr dp
+)
 
 {
   Int2  day;
@@ -479,7 +502,10 @@ static CharPtr DateToGB (CharPtr buf, DatePtr dp)
 
 /* format functions allocate printable string for given paragraph */
 
-static CharPtr DefaultFormatBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr DefaultFormatBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   if (afp == NULL || bbp == NULL) return NULL;
@@ -511,7 +537,10 @@ static CharPtr organellePrefix [] = {
   "Proplastid "
 };
 
-static CharPtr FormatSourceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatSourceBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   BioSourcePtr       biop = NULL;
@@ -596,7 +625,10 @@ static CharPtr FormatSourceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
   return gb_MergeString (FALSE);
 }
 
-static CharPtr FormatOrganismBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatOrganismBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   BioSourcePtr       biop = NULL;
@@ -678,7 +710,10 @@ static CharPtr FormatOrganismBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
 
 /* format references section */
 
-static AuthListPtr GetAuthListPtr (PubdescPtr pdp, CitSubPtr csp)
+static AuthListPtr GetAuthListPtr (
+  PubdescPtr pdp,
+  CitSubPtr csp
+)
 
 {
   AuthListPtr  alp = NULL;
@@ -738,9 +773,13 @@ static AuthListPtr GetAuthListPtr (PubdescPtr pdp, CitSubPtr csp)
   return NULL;
 }
 
-static CharPtr MakeSingleAuthorString (FmtType format, CharPtr prefix,
-                                       CharPtr name, CharPtr initials,
-                                       CharPtr suffix)
+static CharPtr MakeSingleAuthorString (
+  FmtType format,
+  CharPtr prefix,
+  CharPtr name,
+  CharPtr initials,
+  CharPtr suffix
+)
 
 {
   Char     ch;
@@ -814,7 +853,10 @@ static CharPtr MakeSingleAuthorString (FmtType format, CharPtr prefix,
   return str;
 }
 
-static CharPtr GetAuthorsString (FmtType format, AuthListPtr alp)
+static CharPtr GetAuthorsString (
+  FmtType format,
+  AuthListPtr alp
+)
 
 {
   AuthorPtr    ap;
@@ -902,7 +944,9 @@ meet several spaces (spaces and tabs) in succession it replaces them
 with one space. Strips all spaces after '(' and before ')'
 */
 
-static void StrStripSpaces(CharPtr str)
+static void StrStripSpaces (
+  CharPtr str
+)
 
 {
   CharPtr  new_str;
@@ -924,7 +968,9 @@ static void StrStripSpaces(CharPtr str)
   *new_str = '\0';
 }
 
-static Boolean AllCaps (CharPtr p)
+static Boolean AllCaps (
+  CharPtr p
+)
 
 {
   if (p == NULL) return FALSE;
@@ -935,7 +981,9 @@ static Boolean AllCaps (CharPtr p)
   return TRUE;
 }
 
-static void CleanEquals (CharPtr p)
+static void CleanEquals (
+  CharPtr p
+)
 
 {
   if (p == NULL) return;
@@ -947,7 +995,11 @@ static void CleanEquals (CharPtr p)
   }
 }
 
-static CharPtr GetPubTitle (FmtType format, PubdescPtr pdp, CitSubPtr csp)
+static CharPtr GetPubTitle (
+  FmtType format,
+  PubdescPtr pdp,
+  CitSubPtr csp
+)
 
 {
   CitArtPtr        cap;
@@ -1070,7 +1122,9 @@ static CharPtr GetPubTitle (FmtType format, PubdescPtr pdp, CitSubPtr csp)
   return NULL;
 }
 
-static void CleanPubTitle (CharPtr title)
+static void CleanPubTitle (
+  CharPtr title
+)
 
 {
   CharPtr  p;
@@ -1119,7 +1173,10 @@ Return values:
 
 #define MAX_PAGE_DIGITS 12
 
-static Int2 FixPages (CharPtr out_pages, CharPtr in_pages)
+static Int2 FixPages (
+  CharPtr out_pages,
+  CharPtr in_pages
+)
 
 {
 	Boolean dash=TRUE, first_alpha;
@@ -1449,7 +1506,12 @@ static Int2 FixPages (CharPtr out_pages, CharPtr in_pages)
 
 /* !!! still need to add StripParanthesis equivalent !!! */
 
-static void DoSup (ValNodePtr PNTR head, CharPtr issue, CharPtr part_sup, CharPtr part_supi)
+static void DoSup (
+  ValNodePtr PNTR head,
+  CharPtr issue,
+  CharPtr part_sup,
+  CharPtr part_supi
+)
 
 {
 	size_t   len;
@@ -1489,7 +1551,10 @@ static void DoSup (ValNodePtr PNTR head, CharPtr issue, CharPtr part_sup, CharPt
 	MemFree (str);
 }
 
-static CharPtr FormatCitJour (FmtType format, CitJourPtr cjp)
+static CharPtr FormatCitJour (
+  FmtType format,
+  CitJourPtr cjp
+)
 
 {
   Char        buf [256];
@@ -1581,7 +1646,9 @@ static CharPtr FormatCitJour (FmtType format, CitJourPtr cjp)
   return rsult;
 }
 
-static CharPtr MakeAffilStr (AffilPtr afp)
+static CharPtr MakeAffilStr (
+  AffilPtr afp
+)
 
 {
   ValNodePtr  head = NULL;
@@ -1624,7 +1691,10 @@ static CharPtr MakeAffilStr (AffilPtr afp)
   return rsult;
 }
 
-static CharPtr FormatCitBook (FmtType format, CitBookPtr cbp)
+static CharPtr FormatCitBook (
+  FmtType format,
+  CitBookPtr cbp
+)
 
 {
   AffilPtr     afp;
@@ -1759,7 +1829,10 @@ static CharPtr FormatCitBook (FmtType format, CitBookPtr cbp)
   return rsult;
 }
 
-static CharPtr FormatThesis (FmtType format, CitBookPtr cbp)
+static CharPtr FormatThesis (
+  FmtType format,
+  CitBookPtr cbp
+)
 
 {
   AffilPtr     afp;
@@ -1833,7 +1906,10 @@ static CharPtr FormatThesis (FmtType format, CitBookPtr cbp)
   return rsult;
 }
 
-static CharPtr FormatCitArt (FmtType format, CitArtPtr cap)
+static CharPtr FormatCitArt (
+  FmtType format,
+  CitArtPtr cap
+)
 
 {
   CitBookPtr  cbp;
@@ -1868,7 +1944,10 @@ static CharPtr FormatCitArt (FmtType format, CitArtPtr cap)
   return rsult;
 }
 
-static CharPtr FormatCitPat (FmtType format, CitPatPtr cpp)
+static CharPtr FormatCitPat (
+  FmtType format,
+  CitPatPtr cpp
+)
 
 {
   AffilPtr     afp;
@@ -1957,7 +2036,10 @@ static CharPtr FormatCitPat (FmtType format, CitPatPtr cpp)
   return rsult;
 }
 
-static CharPtr FormatCitGen (FmtType format, CitGenPtr cgp)
+static CharPtr FormatCitGen (
+  FmtType format,
+  CitGenPtr cgp
+)
 
 {
   Char        ch;
@@ -2046,7 +2128,9 @@ static CharPtr FormatCitGen (FmtType format, CitGenPtr cgp)
   return rsult;
 }
 
-static CharPtr GetAffil (AffilPtr afp)
+static CharPtr GetAffil (
+  AffilPtr afp
+)
 
 {
 	Boolean need_comma=FALSE;
@@ -2193,7 +2277,10 @@ static CharPtr GetAffil (AffilPtr afp)
 	return string;
 }
 
-static CharPtr FormatCitSub (FmtType format, CitSubPtr csp)
+static CharPtr FormatCitSub (
+  FmtType format,
+  CitSubPtr csp
+)
 
 {
   CharPtr      affil;
@@ -2242,7 +2329,11 @@ static CharPtr FormatCitSub (FmtType format, CitSubPtr csp)
   return rsult;
 }
 
-static CharPtr GetPubJournal (FmtType format, PubdescPtr pdp, CitSubPtr csp)
+static CharPtr GetPubJournal (
+  FmtType format,
+  PubdescPtr pdp,
+  CitSubPtr csp
+)
 
 {
   CitArtPtr        cap;
@@ -2316,7 +2407,9 @@ static CharPtr GetPubJournal (FmtType format, PubdescPtr pdp, CitSubPtr csp)
   return NULL;
 }
 
-static Int4 GetMuid (PubdescPtr pdp)
+static Int4 GetMuid (
+  PubdescPtr pdp
+)
 
 {
   MedlineEntryPtr  mep;
@@ -2343,7 +2436,9 @@ static Int4 GetMuid (PubdescPtr pdp)
   return 0;
 }
 
-static Int4 GetPmid (PubdescPtr pdp)
+static Int4 GetPmid (
+  PubdescPtr pdp
+)
 
 {
   MedlineEntryPtr  mep;
@@ -2377,7 +2472,10 @@ static CharPtr remarksText [] = {
   NULL
 };
 
-static CharPtr FormatReferenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatReferenceBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Asn2gbJobPtr       ajp;
@@ -2755,7 +2853,10 @@ static CharPtr FormatReferenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
   return gb_MergeString (FALSE);
 }
 
-static CharPtr FormatCommentBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatCommentBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   CommentBlockPtr    cbp;
@@ -2851,7 +2952,10 @@ static CharPtr FormatCommentBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
 
 /* format features section */
 
-static Boolean is_real_id (SeqIdPtr sip, SeqIdPtr this_sip)
+static Boolean is_real_id (
+  SeqIdPtr sip,
+  SeqIdPtr this_sip
+)
 
 {
   BioseqPtr  bsp;
@@ -2867,7 +2971,10 @@ static Boolean is_real_id (SeqIdPtr sip, SeqIdPtr this_sip)
   return TRUE;
 }
 
-static Boolean FlatVirtLoc (BioseqPtr bsp, SeqLocPtr location)
+static Boolean FlatVirtLoc (
+  BioseqPtr bsp,
+  SeqLocPtr location
+)
 
 {
   SeqIntPtr  sintp;
@@ -2908,7 +3015,10 @@ static Boolean  order_initialized = FALSE;
 
 static CharPtr lim_str [5] = { "", ">","<", ">", "<" };
 
-static void FlatLocSeqId (ValNodePtr PNTR head, SeqIdPtr sip)
+static void FlatLocSeqId (
+  ValNodePtr PNTR head,
+  SeqIdPtr sip
+)
 
 {
   BioseqPtr    bsp;
@@ -2949,7 +3059,13 @@ static void FlatLocSeqId (ValNodePtr PNTR head, SeqIdPtr sip)
   AddValNodeString (head, NULL, buf, ":");
 }
 
-static void FlatLocCaret (ValNodePtr PNTR head, SeqIdPtr sip, SeqIdPtr this_sip, Int4 point, IntFuzzPtr fuzz)
+static void FlatLocCaret (
+  ValNodePtr PNTR head,
+  SeqIdPtr sip,
+  SeqIdPtr this_sip,
+  Int4 point,
+  IntFuzzPtr fuzz
+)
 
 {
   Char   buf [128];
@@ -3005,8 +3121,13 @@ static void FlatLocCaret (ValNodePtr PNTR head, SeqIdPtr sip, SeqIdPtr this_sip,
   ValNodeCopyStr (head, 0, buf);
 }
 
-static void FlatLocPoint (ValNodePtr PNTR head, SeqIdPtr sip, SeqIdPtr this_sip,
-                          Int4 point, IntFuzzPtr fuzz)
+static void FlatLocPoint (
+  ValNodePtr PNTR head,
+  SeqIdPtr sip,
+  SeqIdPtr this_sip,
+  Int4 point,
+  IntFuzzPtr fuzz
+)
 
 {
   Char   buf [128];
@@ -3056,7 +3177,11 @@ static void FlatLocPoint (ValNodePtr PNTR head, SeqIdPtr sip, SeqIdPtr this_sip,
   ValNodeCopyStr (head, 0, buf);
 }
 
-static void FlatLocElement (ValNodePtr PNTR head, BioseqPtr bsp, SeqLocPtr location)
+static void FlatLocElement (
+  ValNodePtr PNTR head,
+  BioseqPtr bsp,
+  SeqLocPtr location
+)
 
 {
   Boolean     minus_strand = FALSE;
@@ -3147,7 +3272,10 @@ static void FlatLocElement (ValNodePtr PNTR head, BioseqPtr bsp, SeqLocPtr locat
   }
 }
 
-static Boolean FlatNullAhead (BioseqPtr bsp, ValNodePtr location)
+static Boolean FlatNullAhead (
+  BioseqPtr bsp,
+  ValNodePtr location
+)
 
 {
   SeqLocPtr  next;
@@ -3162,7 +3290,11 @@ static Boolean FlatNullAhead (BioseqPtr bsp, ValNodePtr location)
   return FALSE;
 }
 
-static void FlatPackedPoint (ValNodePtr PNTR head, PackSeqPntPtr pspp, BioseqPtr bsp)
+static void FlatPackedPoint (
+  ValNodePtr PNTR head,
+  PackSeqPntPtr pspp,
+  BioseqPtr bsp
+)
 
 {
   Uint1  dex;
@@ -3174,11 +3306,20 @@ static void FlatPackedPoint (ValNodePtr PNTR head, PackSeqPntPtr pspp, BioseqPtr
   }
 }
 
-static void DoFlatLoc (ValNodePtr PNTR head, BioseqPtr bsp,
-                       SeqLocPtr location, Boolean ok_to_complement);
+static void DoFlatLoc (
+  ValNodePtr PNTR head,
+  BioseqPtr bsp,
+  SeqLocPtr location,
+  Boolean ok_to_complement
+);
 
-static void GroupFlatLoc (ValNodePtr PNTR head, BioseqPtr bsp, SeqLocPtr location,
-                          CharPtr prefix, Boolean is_flat_order)
+static void GroupFlatLoc (
+  ValNodePtr PNTR head,
+  BioseqPtr bsp,
+  SeqLocPtr location,
+  CharPtr prefix,
+  Boolean is_flat_order
+)
 
 {
   Boolean        found_non_virt = FALSE;
@@ -3266,8 +3407,12 @@ static void GroupFlatLoc (ValNodePtr PNTR head, BioseqPtr bsp, SeqLocPtr locatio
   }
 }
 
-static void DoFlatLoc (ValNodePtr PNTR head, BioseqPtr bsp,
-                       SeqLocPtr location, Boolean ok_to_complement)
+static void DoFlatLoc (
+  ValNodePtr PNTR head,
+  BioseqPtr bsp,
+  SeqLocPtr location,
+  Boolean ok_to_complement
+)
 
 {
   Boolean        found_null;
@@ -3337,7 +3482,11 @@ static void DoFlatLoc (ValNodePtr PNTR head, BioseqPtr bsp,
   }
 }
 
-static CharPtr FlatLoc (BioseqPtr bsp, SeqLocPtr location, StlType style)
+static CharPtr FlatLoc (
+  BioseqPtr bsp,
+  SeqLocPtr location,
+  StlType style
+)
 
 {
   ValNodePtr  head = NULL;
@@ -3739,7 +3888,10 @@ static Int2 subSourceToSourceIdx [25] = {
   SOURCE_subsource_note
 };
 
-static void SubSourceToQualArray (SubSourcePtr ssp, QualValPtr qvp)
+static void SubSourceToQualArray (
+  SubSourcePtr ssp,
+  QualValPtr qvp
+)
 
 {
   Int2   idx;
@@ -3793,7 +3945,10 @@ static Int2 orgModToSourceIdx [26] = {
   SOURCE_orgmod_note
 };
 
-static void OrgModToQualArray (OrgModPtr omp, QualValPtr qvp)
+static void OrgModToQualArray (
+  OrgModPtr omp,
+  QualValPtr qvp
+)
 
 {
   Int2   idx;
@@ -3866,7 +4021,9 @@ static CharPtr organelleQual [] = {
   "/organelle=\"plastid:proplastid\""
 };
 
-static Boolean StringIsJustQuotes (CharPtr str)
+static Boolean StringIsJustQuotes (
+  CharPtr str
+)
 
 {
   Nlm_Uchar  ch;	/* to use 8bit characters in multibyte languages */
@@ -3884,7 +4041,10 @@ static Boolean StringIsJustQuotes (CharPtr str)
   return TRUE;
 }
 
-static CharPtr FormatSourceFeatBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatSourceFeatBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Asn2gbJobPtr       ajp;
@@ -4664,7 +4824,9 @@ static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "usedin",         FEATUR_usedin         }
 };
 
-static Int2 GbqualToFeaturIndex (CharPtr qualname)
+static Int2 GbqualToFeaturIndex (
+  CharPtr qualname
+)
 
 {
   Int2  L, R, mid;
@@ -4713,7 +4875,9 @@ static FeaturQual illegalGbqualList [NUM_ILLEGAL_QUALS] = {
   { "translation",    Qual_class_quote   },
 };
 
-static Int2 IllegalGbqualToClass (CharPtr qualname)
+static Int2 IllegalGbqualToClass (
+  CharPtr qualname
+)
 
 {
   Int2  L, R, mid;
@@ -4772,7 +4936,10 @@ static CharPtr evidenceText [] = {
   NULL, "experimental", "not_experimental"
 };
 
-static CharPtr SeqCodeNameGet (SeqCodeTablePtr table, Uint1 residue)
+static CharPtr SeqCodeNameGet (
+  SeqCodeTablePtr table,
+  Uint1 residue
+)
 
 {
   Uint1   index;
@@ -4788,7 +4955,11 @@ static CharPtr SeqCodeNameGet (SeqCodeTablePtr table, Uint1 residue)
   return retval;
 }
 
-static CharPtr Get3LetterSymbol (Uint1 seq_code, SeqCodeTablePtr table, Uint1 residue)
+static CharPtr Get3LetterSymbol (
+  Uint1 seq_code,
+  SeqCodeTablePtr table,
+  Uint1 residue
+)
 
 {
   Int2             index;
@@ -4832,7 +5003,11 @@ static CharPtr Get3LetterSymbol (Uint1 seq_code, SeqCodeTablePtr table, Uint1 re
   return retval;
 }
 
-static Int2 MatchRef (ValNodePtr ppr, ReferenceBlockPtr PNTR rbpp, Int2 numReferences)
+static Int2 MatchRef (
+  ValNodePtr ppr,
+  ReferenceBlockPtr PNTR rbpp,
+  Int2 numReferences
+)
 
 {
   Char               buf [121];
@@ -4870,7 +5045,9 @@ static Int2 MatchRef (ValNodePtr ppr, ReferenceBlockPtr PNTR rbpp, Int2 numRefer
   return 0;
 }
 
-static CharPtr TrimSpacesAndJunkFromEnds (CharPtr str)
+static CharPtr TrimSpacesAndJunkFromEnds (
+  CharPtr str
+)
 
 {
   Uchar    ch;	/* to use 8bit characters in multibyte languages */
@@ -4951,7 +5128,10 @@ static CharPtr conflict_msg =
 static CharPtr no_protein_msg =
 "Coding region translates with internal stops";
 
-static CharPtr FormatFeatureBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatFeatureBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Uint1              aa;
@@ -6042,7 +6222,10 @@ static CharPtr FormatFeatureBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
   return gb_MergeString (TRUE);
 }
 
-static CharPtr FormatBasecountBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatBasecountBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Asn2gbJobPtr      ajp;
@@ -6165,7 +6348,12 @@ static CharPtr FormatBasecountBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
   return gb_MergeString (TRUE);
 }
 
-static void PrintSeqLine (FmtType format, CharPtr buf, Int4 start, Int4 stop)
+static void PrintSeqLine (
+  FmtType format,
+  CharPtr buf,
+  Int4 start,
+  Int4 stop
+)
 
 {
   Char  pos [16];
@@ -6190,7 +6378,10 @@ static void PrintSeqLine (FmtType format, CharPtr buf, Int4 start, Int4 stop)
   }
 }
 
-static CharPtr FormatSequenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatSequenceBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Asn2gbJobPtr      ajp;
@@ -6332,13 +6523,19 @@ static CharPtr FormatSequenceBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
 
 /* !!! not yet implemented !!! */
 
-static void PrintGenome (SeqLocPtr slp_head, CharPtr prefix)
+static void PrintGenome (
+  SeqLocPtr slp_head,
+  CharPtr prefix
+)
 
 {
   gb_AddString (prefix, "Not yet implemented", NULL, FALSE, FALSE, FALSE);
 }
 
-static CharPtr FormatContigBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
+static CharPtr FormatContigBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
 
 {
   Asn2gbSectionPtr  asp;
@@ -6408,7 +6605,9 @@ static CharPtr FormatContigBlock (Asn2gbFormatPtr afp, BaseBlockPtr bbp)
 
 /* functions to record sections or blocks in linked lists */
 
-static Asn2gbSectionPtr Asn2gbAddSection (Asn2gbWorkPtr awp)
+static Asn2gbSectionPtr Asn2gbAddSection (
+  Asn2gbWorkPtr awp
+)
 
 {
   Asn2gbSectionPtr  asp;
@@ -6430,7 +6629,11 @@ static Asn2gbSectionPtr Asn2gbAddSection (Asn2gbWorkPtr awp)
   return asp;
 }
 
-static BaseBlockPtr Asn2gbAddBlock (Asn2gbWorkPtr awp, BlockType blocktype, size_t size)
+static BaseBlockPtr Asn2gbAddBlock (
+  Asn2gbWorkPtr awp,
+  BlockType blocktype,
+  size_t size
+)
 
 {
   BaseBlockPtr  bbp;
@@ -6478,7 +6681,9 @@ static CharPtr embl_divs [17] = {
   "SYN", "UNA", "VRL", "VRT", "PAT", "EST", "STS", "HUM"
 };
 
-static void AddLocusBlock (Asn2gbWorkPtr awp)
+static void AddLocusBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -6836,7 +7041,9 @@ static void AddLocusBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (TRUE);
 }
 
-static void AddDeflineBlock (Asn2gbWorkPtr awp)
+static void AddDeflineBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -6893,7 +7100,9 @@ Return values are:
 -3: the original Accession number to be validated was NULL
 */
 
-static Int2 ValidateAccession (CharPtr accession)
+static Int2 ValidateAccession (
+  CharPtr accession
+)
 
 {
   Int2  count;
@@ -6922,7 +7131,9 @@ static Int2 ValidateAccession (CharPtr accession)
 
 /* this definitely needs more work to support all classes, use proper SeqId */
 
-static void AddAccessionBlock (Asn2gbWorkPtr awp)
+static void AddAccessionBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   SeqIdPtr           accn = NULL;
@@ -7045,7 +7256,9 @@ static void AddAccessionBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (TRUE);
 }
 
-static void AddVersionBlock (Asn2gbWorkPtr awp)
+static void AddVersionBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   SeqIdPtr      accn = NULL;
@@ -7154,7 +7367,9 @@ static void AddPidBlock (Asn2gbWorkPtr awp)
 }
 */
 
-static void AddDbsourceBlock (Asn2gbWorkPtr awp)
+static void AddDbsourceBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -7167,7 +7382,9 @@ static void AddDbsourceBlock (Asn2gbWorkPtr awp)
   bbp->string = StringSave ("DBSOURCE\n");
 }
 
-static void AddDateBlock (Asn2gbWorkPtr awp)
+static void AddDateBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -7228,7 +7445,11 @@ static CharPtr STS_kw_array[TOTAL_STSKW] = {
   "STS sequence", "sequence tagged site"
 };
 
-static Int2 MatchArrayString (CharPtr array_string [], Int2 totalstr, CharPtr text)
+static Int2 MatchArrayString (
+  CharPtr array_string [],
+  Int2 totalstr,
+  CharPtr text
+)
 
 {
   Int2 i;
@@ -7242,7 +7463,12 @@ static Int2 MatchArrayString (CharPtr array_string [], Int2 totalstr, CharPtr te
   return (-1);
 }
 
-static Boolean CheckSpecialKeyword (Boolean is_est, Boolean is_sts, Boolean is_gss, CharPtr kwd)
+static Boolean CheckSpecialKeyword (
+  Boolean is_est,
+  Boolean is_sts,
+  Boolean is_gss,
+  CharPtr kwd
+)
 
 {
   if (kwd == NULL) return FALSE;
@@ -7265,7 +7491,10 @@ static Boolean CheckSpecialKeyword (Boolean is_est, Boolean is_sts, Boolean is_g
   return TRUE;
 }
 
-static Boolean KeywordAlreadyInList (ValNodePtr head, CharPtr kwd)
+static Boolean KeywordAlreadyInList (
+  ValNodePtr head,
+  CharPtr kwd
+)
 
 {
   ValNodePtr  vnp;
@@ -7277,7 +7506,9 @@ static Boolean KeywordAlreadyInList (ValNodePtr head, CharPtr kwd)
   return FALSE;
 }
 
-static void AddKeywordsBlock (Asn2gbWorkPtr awp)
+static void AddKeywordsBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -7423,7 +7654,9 @@ static void AddKeywordsBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (TRUE);
 }
 
-static void AddSegmentBlock (Asn2gbWorkPtr awp)
+static void AddSegmentBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -7445,7 +7678,9 @@ static void AddSegmentBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (TRUE);
 }
 
-static void AddSourceBlock (Asn2gbWorkPtr awp)
+static void AddSourceBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -7489,7 +7724,9 @@ static void AddSourceBlock (Asn2gbWorkPtr awp)
   }
 }
 
-static void AddOrganismBlock (Asn2gbWorkPtr awp)
+static void AddOrganismBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -7521,7 +7758,11 @@ static void AddOrganismBlock (Asn2gbWorkPtr awp)
   }
 }
 
-static ReferenceBlockPtr AddPub (Asn2gbWorkPtr awp, ValNodePtr PNTR head, PubdescPtr pdp)
+static ReferenceBlockPtr AddPub (
+  Asn2gbWorkPtr awp,
+  ValNodePtr PNTR head,
+  PubdescPtr pdp
+)
 
 {
   Char               buf [121];
@@ -7722,7 +7963,10 @@ static ReferenceBlockPtr AddPub (Asn2gbWorkPtr awp, ValNodePtr PNTR head, Pubdes
   return rbp;
 }
 
-static int LIBCALLBACK SortReferences (VoidPtr ptr1, VoidPtr ptr2)
+static int LIBCALLBACK SortReferences (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
 
 {
   int                compare;
@@ -7841,7 +8085,13 @@ static int LIBCALLBACK SortReferences (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-static void GetRefsOnBioseq (Asn2gbWorkPtr awp, BioseqPtr target, BioseqPtr bsp, Int4 from, Int4 to)
+static void GetRefsOnBioseq (
+  Asn2gbWorkPtr awp,
+  BioseqPtr target,
+  BioseqPtr bsp,
+  Int4 from,
+  Int4 to
+)
 
 {
   AuthListPtr        alp;
@@ -7956,7 +8206,10 @@ static void GetRefsOnBioseq (Asn2gbWorkPtr awp, BioseqPtr target, BioseqPtr bsp,
   }
 }
 
-static Boolean LIBCALLBACK GetRefsOnSeg (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static Boolean LIBCALLBACK GetRefsOnSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
 
 {
   Asn2gbWorkPtr  awp;
@@ -8011,7 +8264,10 @@ static Boolean LIBCALLBACK GetRefsOnSeg (SeqLocPtr slp, SeqMgrSegmentContextPtr 
   return TRUE;
 }
 
-static void AddReferenceBlock (Asn2gbWorkPtr awp, Asn2gbSectionPtr asp)
+static void AddReferenceBlock (
+  Asn2gbWorkPtr awp,
+  Asn2gbSectionPtr asp
+)
 
 {
   Asn2gbJobPtr       ajp;
@@ -8218,7 +8474,9 @@ static void AddReferenceBlock (Asn2gbWorkPtr awp, Asn2gbSectionPtr asp)
   }
 }
 
-static CharPtr PrintDate (DatePtr dp)
+static CharPtr PrintDate (
+  DatePtr dp
+)
 
 {
   Char    buf [30];
@@ -8245,7 +8503,12 @@ static CharPtr PrintDate (DatePtr dp)
   return NULL;
 }
 
-static void AddHistCommentString (CharPtr prefix, CharPtr suffix, DatePtr dp, SeqIdPtr ids)
+static void AddHistCommentString (
+  CharPtr prefix,
+  CharPtr suffix,
+  DatePtr dp,
+  SeqIdPtr ids
+)
 
 {
   Char        buf [256];
@@ -8281,7 +8544,10 @@ static void AddHistCommentString (CharPtr prefix, CharPtr suffix, DatePtr dp, Se
   ValNodeFreeData (head);
 }
 
-static void AddHTGSCommentString (BioseqPtr bsp, MolInfoPtr mip)
+static void AddHTGSCommentString (
+  BioseqPtr bsp,
+  MolInfoPtr mip
+)
 
 {
   CharPtr      buf = NULL;
@@ -8374,7 +8640,9 @@ static void AddHTGSCommentString (BioseqPtr bsp, MolInfoPtr mip)
   ValNodeFreeData (head);
 }
 
-static CharPtr GetStrForUserObject (UserObjectPtr uop)
+static CharPtr GetStrForUserObject (
+  UserObjectPtr uop
+)
 
 {
   ObjectIdPtr   oip;
@@ -8411,7 +8679,9 @@ static CharPtr GetStrForUserObject (UserObjectPtr uop)
   return ptr;
 }
 
-static void AddCommentBlock (Asn2gbWorkPtr awp)
+static void AddCommentBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BioseqPtr          bsp;
@@ -8638,7 +8908,9 @@ static void AddCommentBlock (Asn2gbWorkPtr awp)
   }
 }
 
-static void AddFeatHeaderBlock (Asn2gbWorkPtr awp)
+static void AddFeatHeaderBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -8666,7 +8938,10 @@ static void AddFeatHeaderBlock (Asn2gbWorkPtr awp)
   bbp->string = gb_MergeString (TRUE);
 }
 
-static int SourceCompare (BioSourcePtr biop1, BioSourcePtr biop2)
+static int SourceCompare (
+  BioSourcePtr biop1,
+  BioSourcePtr biop2
+)
 
 {
   int           compare;
@@ -8716,7 +8991,10 @@ static int SourceCompare (BioSourcePtr biop1, BioSourcePtr biop2)
   return 0;
 }
 
-static Uint2 ComputeSourceHash (CharPtr key, Uint2 start)
+static Uint2 ComputeSourceHash (
+  CharPtr key,
+  Uint2 start
+)
 
 {
   Uint4  h;
@@ -8735,7 +9013,11 @@ static Uint2 ComputeSourceHash (CharPtr key, Uint2 start)
   return (Uint2) h;
 }
 
-static BaseBlockPtr AddSource (Asn2gbWorkPtr awp, ValNodePtr PNTR head, BioSourcePtr biop)
+static BaseBlockPtr AddSource (
+  Asn2gbWorkPtr awp,
+  ValNodePtr PNTR head,
+  BioSourcePtr biop
+)
 
 {
   BaseBlockPtr    bbp;
@@ -8830,7 +9112,10 @@ static BaseBlockPtr AddSource (Asn2gbWorkPtr awp, ValNodePtr PNTR head, BioSourc
   return bbp;
 }
 
-static int LIBCALLBACK SortSources (VoidPtr ptr1, VoidPtr ptr2)
+static int LIBCALLBACK SortSources (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
 
 {
   Uint4           diff;
@@ -8871,7 +9156,13 @@ static int LIBCALLBACK SortSources (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-static void GetSourcesOnBioseq (Asn2gbWorkPtr awp, BioseqPtr target, BioseqPtr bsp, Int4 from, Int4 to)
+static void GetSourcesOnBioseq (
+  Asn2gbWorkPtr awp,
+  BioseqPtr target,
+  BioseqPtr bsp,
+  Int4 from,
+  Int4 to
+)
 
 {
   BaseBlockPtr       bbp;
@@ -8975,7 +9266,10 @@ static void GetSourcesOnBioseq (Asn2gbWorkPtr awp, BioseqPtr target, BioseqPtr b
   }
 }
 
-static Boolean LIBCALLBACK GetSourcesOnSeg (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static Boolean LIBCALLBACK GetSourcesOnSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
 
 {
   Asn2gbWorkPtr  awp;
@@ -9030,7 +9324,9 @@ static Boolean LIBCALLBACK GetSourcesOnSeg (SeqLocPtr slp, SeqMgrSegmentContextP
   return TRUE;
 }
 
-static void AddSourceFeatBlock (Asn2gbWorkPtr awp)
+static void AddSourceFeatBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BioseqPtr       bsp;
@@ -9141,7 +9437,11 @@ static void AddSourceFeatBlock (Asn2gbWorkPtr awp)
   }
 }
 
-static void GetFeatsOnCdsProduct (SeqFeatPtr sfp, BioseqPtr bsp, Asn2gbWorkPtr awp)
+static void GetFeatsOnCdsProduct (
+  SeqFeatPtr sfp,
+  BioseqPtr bsp,
+  Asn2gbWorkPtr awp
+)
 
 {
   FeatureBlockPtr    fbp;
@@ -9217,7 +9517,10 @@ static void GetFeatsOnCdsProduct (SeqFeatPtr sfp, BioseqPtr bsp, Asn2gbWorkPtr a
   }
 }
 
-static Boolean LIBCALLBACK GetFeatsOnBioseq (SeqFeatPtr sfp, SeqMgrFeatContextPtr fcontext)
+static Boolean LIBCALLBACK GetFeatsOnBioseq (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr fcontext
+)
 
 {
   Asn2gbWorkPtr      awp;
@@ -9347,7 +9650,10 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (SeqFeatPtr sfp, SeqMgrFeatContextPt
   return TRUE;
 }
 
-static Boolean LIBCALLBACK GetFeatsOnSeg (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static Boolean LIBCALLBACK GetFeatsOnSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
 
 {
   Asn2gbWorkPtr  awp;
@@ -9412,7 +9718,9 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (SeqLocPtr slp, SeqMgrSegmentContextPtr
   return TRUE;
 }
 
-static void AddFeatureBlock (Asn2gbWorkPtr awp)
+static void AddFeatureBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BioseqPtr  bsp;
@@ -9437,7 +9745,9 @@ static void AddFeatureBlock (Asn2gbWorkPtr awp)
 
 }
 
-static void AddBasecountBlock (Asn2gbWorkPtr awp)
+static void AddBasecountBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -9447,7 +9757,9 @@ static void AddBasecountBlock (Asn2gbWorkPtr awp)
   bbp = Asn2gbAddBlock (awp, BASECOUNT_BLOCK, sizeof (BaseBlock));
 }
 
-static void AddOriginBlock (Asn2gbWorkPtr awp)
+static void AddOriginBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr       bbp;
@@ -9496,7 +9808,9 @@ static void AddOriginBlock (Asn2gbWorkPtr awp)
 
 #define BASES_PER_BLOCK 1200
 
-static void AddSequenceBlock (Asn2gbWorkPtr awp)
+static void AddSequenceBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BioseqPtr         bsp;
@@ -9535,7 +9849,9 @@ static void AddSequenceBlock (Asn2gbWorkPtr awp)
   }
 }
 
-static void AddContigBlock (Asn2gbWorkPtr awp)
+static void AddContigBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -9545,7 +9861,9 @@ static void AddContigBlock (Asn2gbWorkPtr awp)
   bbp = Asn2gbAddBlock (awp, CONTIG_BLOCK, sizeof (BaseBlock));
 }
 
-static void AddSlashBlock (Asn2gbWorkPtr awp)
+static void AddSlashBlock (
+  Asn2gbWorkPtr awp
+)
 
 {
   BaseBlockPtr  bbp;
@@ -9567,9 +9885,16 @@ static void AddSlashBlock (Asn2gbWorkPtr awp)
 
 /* DoOneSection builds a single report for one bioseq or segment */
 
-static void DoOneSection (BioseqPtr target, BioseqPtr parent, BioseqPtr bsp,
-                          SeqLocPtr slp, Uint2 seg, Int4 from, Int4 to,
-                          Asn2gbWorkPtr awp)
+static void DoOneSection (
+  BioseqPtr target,
+  BioseqPtr parent,
+  BioseqPtr bsp,
+  SeqLocPtr slp,
+  Uint2 seg,
+  Int4 from,
+  Int4 to,
+  Asn2gbWorkPtr awp
+)
 
 {
   Asn2gbSectionPtr     asp;
@@ -9722,7 +10047,10 @@ the following functions handle various kinds of input, all calling
 DoOneSection once for each component that gets its own report
 */
 
-static Boolean LIBCALLBACK Asn2Seg (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static Boolean LIBCALLBACK Asn2Seg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
 
 {
   Asn2gbWorkPtr  awp;
@@ -9781,7 +10109,10 @@ static Boolean LIBCALLBACK Asn2Seg (SeqLocPtr slp, SeqMgrSegmentContextPtr conte
   return TRUE;
 }
 
-static void DoOneBioseq (BioseqPtr bsp, Asn2gbWorkPtr awp)
+static void DoOneBioseq (
+  BioseqPtr bsp,
+  Asn2gbWorkPtr awp
+)
 
 {
   Asn2gbJobPtr          ajp;
@@ -9841,7 +10172,10 @@ static void DoOneBioseq (BioseqPtr bsp, Asn2gbWorkPtr awp)
   }
 }
 
-static void DoPopPhyMutSet (SeqEntryPtr sep, Asn2gbWorkPtr awp)
+static void DoPopPhyMutSet (
+  SeqEntryPtr sep,
+  Asn2gbWorkPtr awp
+)
 
 {
   BioseqPtr     bsp;
@@ -9877,7 +10211,10 @@ static void DoPopPhyMutSet (SeqEntryPtr sep, Asn2gbWorkPtr awp)
 
 /* public functions */
 
-static int LIBCALLBACK SortParagraphByIDProc (VoidPtr vp1, VoidPtr vp2)
+static int LIBCALLBACK SortParagraphByIDProc (
+  VoidPtr vp1,
+  VoidPtr vp2
+)
 
 {
   BaseBlockPtr  bbp1, bbp2;
@@ -9902,9 +10239,14 @@ static int LIBCALLBACK SortParagraphByIDProc (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
-NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (BioseqPtr bsp, BioseqSetPtr bssp,
-                                        SeqLocPtr slp, FmtType format,
-                                        ModType mode, StlType style)
+NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
+  BioseqPtr bsp,
+  BioseqSetPtr bssp,
+  SeqLocPtr slp,
+  FmtType format,
+  ModType mode,
+  StlType style
+)
 
 {
   Asn2gbJobPtr      ajp = NULL;
@@ -10100,8 +10442,12 @@ static FormatProc asn2gnbk_fmt_functions [22] = {
   FormatSequenceBlock, FormatContigBlock, DefaultFormatBlock
 };
 
-static void PrintFtableIntervals (ValNodePtr PNTR head, BioseqPtr target,
-                                  SeqLocPtr location, CharPtr label)
+static void PrintFtableIntervals (
+  ValNodePtr PNTR head,
+  BioseqPtr target,
+  SeqLocPtr location,
+  CharPtr label
+)
 
 {
   SeqLocPtr  slp;
@@ -10129,8 +10475,12 @@ static void PrintFtableIntervals (ValNodePtr PNTR head, BioseqPtr target,
   }
 }
 
-static void PrintFtableLocAndQuals (ValNodePtr PNTR head, BioseqPtr target,
-                                    SeqFeatPtr sfp, SeqMgrFeatContextPtr context)
+static void PrintFtableLocAndQuals (
+  ValNodePtr PNTR head,
+  BioseqPtr target,
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+)
 
 {
   DbtagPtr     dbt;
@@ -10285,7 +10635,10 @@ static void PrintFtableLocAndQuals (ValNodePtr PNTR head, BioseqPtr target,
   }
 }
 
-NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int4 paragraph)
+NLM_EXTERN CharPtr asn2gnbk_format (
+  Asn2gbJobPtr ajp,
+  Int4 paragraph
+)
 
 {
   Asn2gbFormat       af;
@@ -10368,7 +10721,9 @@ NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int4 paragraph)
   return str;
 }
 
-NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (Asn2gbJobPtr ajp)
+NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
+  Asn2gbJobPtr ajp
+)
 
 {
   Asn2gbSectionPtr   asp;
@@ -10446,17 +10801,20 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (Asn2gbJobPtr ajp)
   return NULL;
 }
 
-static Boolean LIBCALLBACK LockOrUnockAllSegments (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static Boolean LIBCALLBACK LockAllSegments (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
 
 {
-  BioseqPtr  bsp = NULL;
-  SeqLocPtr  loc;
-  BoolPtr    lockit;
-  SeqIdPtr   sip;
+  BioseqPtr        bsp;
+  SeqLocPtr        loc;
+  SeqIdPtr         sip;
+  ValNodePtr PNTR  vnpp;
 
   if (slp == NULL || context == NULL) return FALSE;
-  lockit = (BoolPtr) context->userdata;
-  if (lockit == NULL) return TRUE;
+  vnpp = (ValNodePtr PNTR) context->userdata;
+  if (vnpp == NULL) return TRUE;
 
   sip = SeqLocId (slp);
   if (sip == NULL) {
@@ -10467,39 +10825,41 @@ static Boolean LIBCALLBACK LockOrUnockAllSegments (SeqLocPtr slp, SeqMgrSegmentC
   }
   if (sip == NULL) return TRUE;
 
-  if (*lockit) {
-    BioseqLockById (sip);
-  } else {
-    BioseqUnlockById (sip);
-  }
+  bsp = BioseqLockById (sip);
+  ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
 
   return TRUE;
 }
 
-static Boolean LIBCALLBACK LockOrUnockAllBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr context)
+static Boolean LIBCALLBACK LockAllBioseqs (
+  BioseqPtr bsp,
+  SeqMgrBioseqContextPtr context
+)
 
 {
-  BoolPtr  lockit;
+  ValNodePtr PNTR  vnpp;
 
   if (bsp == NULL || context == NULL) return FALSE;
-  lockit = (BoolPtr) context->userdata;
-  if (lockit == NULL) return TRUE;
+  vnpp = (ValNodePtr PNTR) context->userdata;
+  if (vnpp == NULL) return TRUE;
 
-  if (*lockit) {
-    BioseqLock (bsp);
-  } else {
-    BioseqUnlock (bsp);
-  }
+  BioseqLock (bsp);
+  ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
 
   if (bsp->repr == Seq_repr_seg) {
-    SeqMgrExploreSegments (bsp, (Pointer) lockit, LockOrUnockAllSegments);
+    SeqMgrExploreSegments (bsp, (Pointer) vnpp, LockAllSegments);
   }
 
   return TRUE;
 }
 
-NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
-                                   ModType mode, StlType style, FILE *fp)
+NLM_EXTERN Boolean SeqEntryToGnbk (
+  SeqEntryPtr sep,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  FILE *fp
+)
 
 {
   Asn2gbJobPtr  ajp;
@@ -10507,9 +10867,10 @@ NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
   BioseqSetPtr  bssp = NULL;
   Uint2         entityID;
   Int4          i;
-  Boolean       lockit;
   Int4          numParagraphs;
   CharPtr       str;
+  ValNodePtr    bsplist = NULL;
+  ValNodePtr    vnp;
 
   if (sep == NULL || fp == NULL) return FALSE;
   if (IS_Bioseq (sep)) {
@@ -10523,19 +10884,16 @@ NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
     SeqMgrIndexFeatures (entityID, NULL);
   }
 
-  lockit = TRUE;
-  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &lockit, LockOrUnockAllBioseqs, TRUE, FALSE, FALSE);
+  /* lock all bioseqs in advance, including remote genome components */
+
+  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &bsplist, LockAllBioseqs, TRUE, FALSE, FALSE);
 
   ajp = asn2gnbk_setup (bsp, bssp, NULL, format, mode, style);
 
-  if (ajp == NULL) {
-    lockit = FALSE;
-    SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &lockit, LockOrUnockAllBioseqs, TRUE, FALSE, FALSE);
-    return FALSE;
-  }
-  ajp->keepSeqPortOpen = TRUE;
+  if (ajp != NULL) {
 
-  if (fp != NULL) {
+    ajp->keepSeqPortOpen = TRUE;
+
     numParagraphs = ajp->numParagraphs;
     for (i = 0; i < numParagraphs; i++) {
       str = asn2gnbk_format (ajp, i);
@@ -10546,12 +10904,19 @@ NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
       }
       MemFree (str);
     }
+
+    asn2gnbk_cleanup (ajp);
   }
 
-  asn2gnbk_cleanup (ajp);
+  /* unlock all pre-locked bioseqs, including remote genome components */
 
-  lockit = FALSE;
-  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &lockit, LockOrUnockAllBioseqs, TRUE, FALSE, FALSE);
+  for (vnp = bsplist; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp != NULL) {
+      BioseqUnlock (bsp);
+    }
+  }
+  bsplist = ValNodeFree (bsplist);
 
   return TRUE;
 }
@@ -10563,11 +10928,23 @@ NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
 
 #ifdef TEST_MODULE_ASN2GNBK
 
-NLM_EXTERN Boolean SeqEntryToFlat (SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode);
-extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+NLM_EXTERN Boolean SeqEntryToFlat (
+  SeqEntryPtr sep,
+  FILE *fp,
+  Uint1 format,
+  Uint1 mode
+);
+
+extern void SeriousSeqEntryCleanup (
+  SeqEntryPtr sep,
+  SeqEntryFunc taxfun,
+  SeqEntryFunc taxmerge
+);
 
 /*
-static void SummarizeQuals (void)
+static void SummarizeQuals (
+  void
+)
 
 {
   FILE  *fp;
@@ -10599,8 +10976,13 @@ static void SummarizeQuals (void)
 }
 */
 
-static Int2 HandleSingleRecord (CharPtr inputFile, CharPtr outputFile,
-                                FmtType format, ModType mode, StlType style)
+static Int2 HandleSingleRecord (
+  CharPtr inputFile,
+  CharPtr outputFile,
+  FmtType format,
+  ModType mode,
+  StlType style
+)
 
 {
   BioseqPtr     bsp;
@@ -10676,7 +11058,10 @@ static Int2 HandleSingleRecord (CharPtr inputFile, CharPtr outputFile,
   return 0;
 }
 
-static void SaveSeqEntry (SeqEntryPtr sep, CharPtr filename)
+static void SaveSeqEntry (
+  SeqEntryPtr sep,
+  CharPtr filename
+)
 
 {
   AsnIoPtr  aop;
@@ -10689,8 +11074,13 @@ static void SaveSeqEntry (SeqEntryPtr sep, CharPtr filename)
   AsnIoClose (aop);
 }
 
-static void SaveAsn2gnbk (SeqEntryPtr sep, CharPtr filename,
-                          FmtType format, ModType mode, StlType style)
+static void SaveAsn2gnbk (
+  SeqEntryPtr sep,
+  CharPtr filename,
+  FmtType format,
+  ModType mode,
+  StlType style
+)
 
 {
   FILE  *fp;
@@ -10703,7 +11093,10 @@ static void SaveAsn2gnbk (SeqEntryPtr sep, CharPtr filename,
   FileClose (fp);
 }
 
-static void SaveAsn2ff (SeqEntryPtr sep, CharPtr filename)
+static void SaveAsn2ff (
+  SeqEntryPtr sep,
+  CharPtr filename
+)
 
 {
   FILE  *fp;
@@ -10721,7 +11114,12 @@ typedef struct hasgidata {
   Boolean  found;
 } HasGiData, PNTR HasGiPtr;
 
-static void LookForGi (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+static void LookForGi (
+  SeqEntryPtr sep,
+  Pointer mydata,
+  Int4 index,
+  Int2 indent
+)
 
 {
   BioseqPtr  bsp;
@@ -10744,7 +11142,10 @@ static void LookForGi (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
   }
 }
 
-static Boolean SeqEntryHasGi (SeqEntryPtr sep, Int4 gi)
+static Boolean SeqEntryHasGi (
+  SeqEntryPtr sep,
+  Int4 gi
+)
 
 {
   HasGiData  hgd;
@@ -10756,10 +11157,19 @@ static Boolean SeqEntryHasGi (SeqEntryPtr sep, Int4 gi)
   return hgd.found;
 }
 
-static void CompareFlatFiles (CharPtr path1, CharPtr path2, CharPtr path3,
-                              SeqEntryPtr sep, FILE* fp,
-                              FmtType format, ModType mode, StlType style,
-                              Boolean batch, Boolean diff, Boolean gbdjoin)
+static void CompareFlatFiles (
+  CharPtr path1,
+  CharPtr path2,
+  CharPtr path3,
+  SeqEntryPtr sep,
+  FILE* fp,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  Boolean batch,
+  Boolean diff,
+  Boolean gbdjoin
+)
 
 {
 #ifdef OS_UNIX
@@ -10821,10 +11231,18 @@ static void CompareFlatFiles (CharPtr path1, CharPtr path2, CharPtr path3,
 #endif
 }
 
-static Int2 HandleMultipleRecords (CharPtr inputFile, CharPtr outputFile,
-                                   CharPtr iomode, FmtType format,
-                                   ModType mode, StlType style, Int4 gi,
-                                   Boolean batch, Boolean diff, Boolean gbdjoin)
+static Int2 HandleMultipleRecords (
+  CharPtr inputFile,
+  CharPtr outputFile,
+  CharPtr iomode,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  Int4 gi,
+  Boolean batch,
+  Boolean diff,
+  Boolean gbdjoin
+)
 
 {
   AsnIoPtr      aip;
@@ -10966,12 +11384,15 @@ Args myargs [] = {
     FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
+
 #ifdef OS_UNIX
-#include <accentr.h>
+#include <accid1.h>
 #include <lsqfetch.h>
 #endif
 
-Int2 Main (void)
+Int2 Main (
+  void
+)
 
 {
   Boolean  batch = FALSE;
@@ -11104,7 +11525,7 @@ Int2 Main (void)
 
 #ifdef OS_UNIX
   if (myargs [r_argRemote].intvalue) {
-    EntrezBioseqFetchEnable ("asn2gnbk", FALSE);
+    ID1BioseqFetchEnable ("asn2gnbk", FALSE);
     LocalSeqFetchInit (FALSE);
   }
 #endif
@@ -11123,12 +11544,10 @@ Int2 Main (void)
 #ifdef OS_UNIX
   if (myargs [r_argRemote].intvalue) {
     LocalSeqFetchDisable ();
-    EntrezBioseqFetchDisable ();
+    ID1BioseqFetchDisable ();
   }
 #endif
-
   return rsult;
 }
-
 #endif /* TEST_MODULE_ASN2GNBK */
 

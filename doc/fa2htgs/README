@@ -1,4 +1,4 @@
-=+= README =+============Last update: April 10, 1998 ============
+=+= README =+============Last update: April 4, 2000 ============
 
 the latest version of this document can be found at:
 
@@ -60,7 +60,7 @@ typing "fa2htgs -" will cause the program to show its command line
 arguments. Below we show these with additional comments (what we show
 within { } does not appear on the command line)
 
-fa2htgs 1.5   arguments:
+fa2htgs 1.9   arguments:
 
   -i  Filename for fasta input [File In]
     default = stdin
@@ -147,7 +147,7 @@ fa2htgs 1.5   arguments:
     default = F
   -u  Take biosource from template ? [T/F]  Optional
     default = F
-  -x  Secondary accession number, separate by comas if multiple, s.t. U10000,L11000 [String]  Optional
+  -x  Secondary accession number, separate by commas if multiple, s.t. U10000,L11000 [String]  Optional
 
       [ ACCESSION AC000000 L00000                               }
       {           ^        ^                                    }
@@ -194,7 +194,7 @@ fa2htgs 1.5   arguments:
      { Using this argument infers that you are NOT using the    }
      {  -i above                                                }
 
-  -P  Contigs to use, separate by comas if multiple [String]  Optional
+  -P  Contigs to use, separate by commas if multiple [String]  Optional
   
      { if -P is not indicated with the -T option, then the      }
      { fragments will go in in the order that they are in the   }
@@ -227,6 +227,39 @@ fa2htgs 1.5   arguments:
      { accessions, and these need not start at base 1 of the    }
      { record.                                                  }
 
+
+  -D  HTGS_DRAFT sequence? [T/F]  Optional
+    default = F
+
+  -S  Strain name? [String]  Optional
+
+  -b  Gap length [Integer]
+    default = 100
+    range from 0 to 1000000000
+  
+  -N  Annotate assembly_fragments [T/F]  Optional
+    default = F
+  
+  -6  SP6 clone (e.g., Contig1,left) [String]  Optional
+  
+  -7  T6 clone (e.g., Contig2,right) [String]  Optional
+  
+  -L  Filename for phrap contig order [File In]  Optional
+  
+     { This is a tab-delimited file that can be used to drive   }
+     { the order of contigs (normally specified by -P), as well }
+     { as indicating the SP6 and T7 ends.  It can also be used  }
+     { when contigs are known to be in opposite orientation.    }
+     { For example:                                             }
+     {                                                          }
+     { Contig2     +       1       SP6     left                 }
+     { Contig3     +       1                                    }
+     { Contig1     -               T7      right                }
+     {                                                          }
+     { The first column is the contig name, the second is the   }
+     { orientation, the third is the fragment_group, the fourth }
+     { indicates the SP6 or T7 end, and the fifth says which    }
+     { side of SP6 or T7 end had vector removed.                }
 
 
 Presented here is an example of a phase 2 submission from an Arabidopsis 

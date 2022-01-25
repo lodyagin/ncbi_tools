@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.15  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
 * Revision 6.14  2000/04/03 21:05:53  lewisg
 * fix launch of cn3d from sequin
 *
@@ -155,6 +158,7 @@ NLM_EXTERN Boolean Cn3D_CheckNetworkUse();
 
 *******************************************************************************/
 NLM_EXTERN void Cn3D_ImportBioseq(IteM i);
+NLM_EXTERN void Cn3D_ImportBioseqGap(IteM i);
 NLM_EXTERN void Cn3D_OpenBiostruc(IteM i);
 NLM_EXTERN void Cn3D_NetOpenBiostruc(IteM i);
 
@@ -166,6 +170,7 @@ NLM_EXTERN void Cn3D_NetOpenBiostruc(IteM i);
 
 *******************************************************************************/
 NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i);
+NLM_EXTERN void Cn3D_ImportBioseqFileGap(IteM i);
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -170,6 +170,7 @@ extern BioseqPageData gnptPageData;
 extern BioseqPageData fstaPageData;
 extern BioseqPageData qualPageData;
 extern BioseqPageData asnPageData;
+extern BioseqPageData xmlPageData;
 extern BioseqPageData dskPageData;
 
 /*

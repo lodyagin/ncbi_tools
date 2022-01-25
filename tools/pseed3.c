@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.30 2000/04/25 19:13:17 dondosha Exp $ */
+/* $Id: pseed3.c,v 6.31 2000/05/12 19:15:50 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.30 $
+$Revision: 6.31 $
 
 $Log: pseed3.c,v $
+Revision 6.31  2000/05/12 19:15:50  shavirin
+Fixed memory leaks in do_the_seed_SEARCH() function.
+
 Revision 6.30  2000/04/25 19:13:17  dondosha
 Assign db_chunk_last to first_db_seq before start of search
 
@@ -1628,13 +1631,6 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
         
         thread_array = MemFree(thread_array);
         
-        NlmMutexDestroy(search->thr_info->db_mutex);
-        search->thr_info->db_mutex = NULL;
-        NlmMutexDestroy(search->thr_info->results_mutex);
-        search->thr_info->results_mutex = NULL;
-        NlmMutexDestroy(search->thr_info->callback_mutex);
-        search->thr_info->callback_mutex = NULL;
-
         *matchIndex = 0;
         *totalOccurrences = 0;
         for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) {
@@ -1654,14 +1650,26 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
         seedResults->listOfMatchingSequences = 
             seedParallelArray[0]->seedResults->listOfMatchingSequences;
     }
-    for (threadIndex=0; threadIndex < search->pbp->process_num; threadIndex++) {
+
+    NlmMutexDestroy(search->thr_info->db_mutex);
+    search->thr_info->db_mutex = NULL;
+    NlmMutexDestroy(search->thr_info->results_mutex);
+    search->thr_info->results_mutex = NULL;
+    NlmMutexDestroy(search->thr_info->callback_mutex);
+    search->thr_info->callback_mutex = NULL;
+    
+    for (threadIndex=0; threadIndex < search->pbp->process_num; 
+         threadIndex++) {
         readdb_destruct(seedParallelArray[threadIndex]->rdpt);
         seedParallelArray[threadIndex]->rdpt = NULL;
         GapAlignBlkDelete(seedParallelArray[threadIndex]->gap_align);
+        MemFree(seedParallelArray[threadIndex]->patternSearch);
+        MemFree(seedParallelArray[threadIndex]->seedSearch);
+        MemFree(seedParallelArray[threadIndex]->seedResults);
         MemFree(seedParallelArray[threadIndex]);
     }
     MemFree(seedParallelArray); 
-    
+
 #ifdef RLIMIT_CPU
     signal(SIGXCPU, SIG_IGN);
 #endif

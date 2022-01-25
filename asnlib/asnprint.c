@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,27 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.9  2000/05/26 14:55:31  ostell
+* remove apostrophes and H from OCTETS for XML
+*
+* Revision 6.8  2000/05/22 15:01:06  ostell
+* added check to AsnXMLTag for ENUM in SETOF/SEQOF
+*
+* Revision 6.7  2000/05/12 20:44:01  ostell
+* make changes to collect comments from spec and print in DTD
+*
+* Revision 6.6  2000/05/11 21:35:44  ostell
+* made elements and ennumerated prettier in DTD
+*
+* Revision 6.5  2000/05/10 15:30:01  ostell
+* fixed CHOICE poping multiple levels deep for XML
+*
+* Revision 6.4  2000/05/10 04:34:12  ostell
+* couple more xml fixes
+*
+* Revision 6.3  2000/05/10 03:12:37  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.2  1999/07/15 18:52:52  shavirin
 * Fixed mantissa overflow in the function AsnPrintReal().
 *
@@ -85,6 +106,144 @@
 
 #include "asnbuild.h"
 
+#define XMLSUBS 5
+static Char xmlsubchars[XMLSUBS] = { '&','<','>','\'','\"' };
+static CharPtr xmlsubstrs[XMLSUBS] = {
+	"&amp;",
+	"&lt;",
+	"&gt;",
+	"&apos;",
+	"&quot;" };
+
+
+static CharPtr GetXMLname(AsnTypePtr atp)
+{
+	if (atp == NULL)
+		return "NULL_PTR";
+	if (atp->XMLname != NULL)
+		return atp->XMLname;
+	if (atp->name != NULL)
+		return atp->name;
+	return "NO_NAME";
+}
+
+static Boolean AsnXMLTag(AsnIoPtr aip, AsnTypePtr atp, Boolean term)
+{
+	Char buf [100];
+	CharPtr tmp;
+	AsnTypePtr atp2;
+	Int2 isa;
+	Boolean noend = FALSE;
+
+	tmp = StringMove(buf, "<");
+	if (term)
+		tmp = StringMove(tmp, "/");
+	if (atp->XMLname != NULL)
+		tmp = StringMove(tmp, atp->XMLname);
+	else
+		tmp = StringMove(tmp, "NONAME_FOUND");
+
+	if (! term)
+	{
+		atp2 = AsnFindBaseType(atp);
+
+	if ((atp == atp2) || (atp->name == NULL))
+	{
+		isa = AsnFindBaseIsa(atp);
+		switch (isa)
+		{
+			case NULL_TYPE:
+				tmp = StringMove(tmp, " /");
+				break; /* done */
+			case BOOLEAN_TYPE:
+			case ENUM_TYPE:
+			case INTEGER_TYPE:
+				noend = TRUE;
+				break;
+			default:
+				break;
+		}
+	}
+
+	}
+	if (! noend)
+		tmp = StringMove(tmp, ">");
+	AsnPrintCharBlock(buf, aip);
+	return noend;
+}
+static Boolean AsnXMLBegin(AsnIoPtr aip, AsnTypePtr atp)
+{
+	AsnTypePtr atp2;
+	Boolean noend;
+
+	noend = AsnXMLTag(aip, atp, FALSE);
+
+	atp2 = AsnFindBaseType(atp);
+	if ((atp2 != NULL) && (atp != atp2))
+	{
+		if ((atp2->name != NULL) && (atp->name != NULL))
+		{
+			if (StringCmp(atp->name, atp2->name))
+			{
+				AsnPrintIndent(TRUE, aip);
+				AsnPrintNewLine(aip);
+				noend = AsnXMLTag(aip, atp2, FALSE);
+			}
+		}
+	}
+	return noend;
+}
+
+static void AsnXMLTerm(AsnIoPtr aip, AsnTypePtr atp)
+{
+	AsnTypePtr atp2;
+
+	atp2 = AsnFindBaseType(atp);
+	if ((atp2 != NULL) && (atp != atp2))
+	{
+		if ((atp2->name != NULL) && (atp->name != NULL))
+		{
+			if (StringCmp(atp->name, atp2->name))
+			{
+				AsnXMLTag(aip, atp2, TRUE);
+				AsnPrintIndent(FALSE, aip);
+				AsnPrintNewLine(aip);
+			}
+		}
+	}
+	AsnXMLTag(aip, atp, TRUE);
+}
+
+static void AsnXMLTermEmpty(AsnIoPtr aip, AsnTypePtr atp)
+{
+	AsnTypePtr atp2;
+	Boolean do_empty = TRUE;
+
+	atp2 = AsnFindBaseType(atp);
+	if ((atp2 != NULL) && (atp != atp2))
+	{
+		if ((atp2->name != NULL) && (atp->name != NULL))
+		{
+			if (StringCmp(atp->name, atp2->name))
+			{
+				AsnPrintCharBlock("/>", aip);
+				AsnPrintIndent(FALSE, aip);
+				AsnPrintNewLine(aip);
+				do_empty = FALSE;
+			}
+		}
+	}
+	if (do_empty)
+	{
+		AsnPrintCharBlock("/>", aip);
+		AsnPrintNewLine(aip);
+	}
+	else
+		AsnXMLTag(aip, atp, TRUE);
+}
+
+static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip);
+
 /*****************************************************************************
 *
 *   void AsnTxtWrite(aip, atp, valueptr)
@@ -95,7 +254,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 	Int2 isa;
 	AsnTypePtr atp2;
 	AsnValxNodePtr avnp;
-	Boolean done, terminalvalue, firstvalue;
+	Boolean done, terminalvalue, firstvalue, isXML = FALSE;
 
 	terminalvalue = TRUE;   /* most are terminal values */
 	if ((! aip->indent_level) && (aip->typestack[0].type == NULL))
@@ -105,6 +264,9 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 
 	if (! AsnTypeValidateOut(aip, atp, dvp))
 		return FALSE;
+
+	if (aip->type & ASNIO_XML)
+		isXML = TRUE;
 
 	atp2 = AsnFindBaseType(atp);
 	isa = atp2->type->isa;
@@ -119,23 +281,40 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 		return TRUE;
 	}
 
-	if (! aip->first[aip->indent_level])
-		AsnPrintNewLine(aip);
-	else
+	if (! aip->first[aip->indent_level]) {
+	    AsnPrintNewLine(aip);
+	} else
 		aip->first[aip->indent_level] = FALSE;
 
 	atp2 = atp;
 	if (firstvalue)       /* first item, need ::= */
 	{
+		if(isXML) {
+			AsnPrintCharBlock("<?xml version=\"1.0\"?>", aip);
+			AsnPrintNewLine(aip);
+			}
+
 		while ((atp2->name == NULL) || (IS_LOWER(*atp2->name)))
 			atp2 = atp2->type;    /* find a Type Reference */
+
+		if (isXML)
+		{
+			AsnPrintCharBlock("<!DOCTYPE ", aip);
+			AsnPrintString(GetXMLname(atp2), aip);
+			AsnPrintCharBlock(" SYSTEM \"ncbi.dtd\">", aip);
+			AsnPrintNewLine(aip);
+		}
 	}
 
-	if (atp2->name != NULL)
+	if(isXML)
 	{
-	 	AsnPrintString(atp2->name, aip);   /* put the element name */
+		AsnXMLBegin(aip, atp2);
+	}
+	else if (atp2->name != NULL)
+	{
+		AsnPrintString(atp2->name, aip);   /* put the element name */
 		if (IS_LOWER(*atp2->name))
-		 	AsnPrintChar(' ', aip);
+			AsnPrintChar(' ', aip);
 		else
 			AsnPrintString(" ::= ", aip);
 	}
@@ -152,10 +331,30 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 				AsnPrintNewLine(aip);
 			}
 			else
+			{
+			
+				if(isXML)
+					AsnPrintIndent(TRUE, aip);
+			
+
 				AsnTypeSetIndent(TRUE, aip, atp);
+
+				if(isXML)
+					AsnPrintNewLine(aip);
+			}
 		}
 		else
+		{
+			
+			if(isXML)
+				AsnPrintIndent(TRUE, aip);
+			
+
 			AsnTypeSetIndent(TRUE, aip, atp);
+
+			if(isXML)
+				AsnPrintNewLine(aip);
+		}
 		aip->first[aip->indent_level] = TRUE;
 		return TRUE;
 	}
@@ -177,6 +376,8 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			break;
 		case BOOLEAN_TYPE:
 			AsnPrintBoolean(dvp->boolvalue, aip);
+			if (isXML)
+				AsnXMLTermEmpty(aip, atp);
 			break;
 		case INTEGER_TYPE:
 		case ENUM_TYPE:
@@ -187,34 +388,59 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			{
 				if (dvp->intvalue == avnp->intvalue)
 				{
+					if (isXML)
+					{
+						AsnPrintString(" value=", aip);
+						AsnPrintChar('\"', aip);
+					}
 					AsnPrintString(avnp->name, aip);
-					done = TRUE;
+					if (isXML)
+					{
+						AsnPrintChar('\"', aip);
+						if (isa == ENUM_TYPE)
+						{
+							AsnXMLTermEmpty(aip, atp);
+							done = TRUE;
+						}
+					}
+					else
+						done = TRUE;
 					avnp = NULL;
 				}
 				else
 					avnp = avnp->next;
 			}
 			if (! done)    /* no name */
+			{
+				if (isXML)
+					AsnPrintCharBlock(">", aip);
 				AsnPrintInteger(dvp->intvalue, aip);
+				if(isXML) AsnXMLTerm(aip, atp);
+			}
 			break;
-		case REAL_TYPE:
+	       case REAL_TYPE:
 			AsnPrintReal(dvp->realvalue, aip);
+			if(isXML) AsnXMLTerm(aip, atp);
 			break;
 		case GENERALSTRING_TYPE:
-			AsnPrintChar('\"', aip);
+			if(!(isXML)) AsnPrintChar('\"', aip);
 			if (! AsnPrintString((CharPtr) dvp->ptrvalue, aip))
 				return FALSE;
-			AsnPrintChar('\"', aip);
+			if(isXML) AsnXMLTerm(aip, atp);
+			else AsnPrintChar('\"', aip);
 			break;
 		case NULL_TYPE:
-			AsnPrintString("NULL", aip);
+			if (! (isXML))
+				AsnPrintString("NULL", aip);
 			break;
 		case OCTETS_TYPE:
 			AsnPrintOctets((ByteStorePtr) dvp->ptrvalue, aip);
+			if(isXML) AsnXMLTerm(aip, atp);
 			break;
 		case STRSTORE_TYPE:
 			if (! AsnPrintStrStore((ByteStorePtr) dvp->ptrvalue, aip))
 				return FALSE;
+			if(isXML) AsnXMLTerm(aip, atp);
 			break;
 		default:
 			AsnIoErrorMsg(aip, 19, AsnErrGetTypeName(atp->name));
@@ -223,15 +449,31 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 
 	if ((terminalvalue) && (aip->type_indent))   /* pop out of choice nests */
 	{
+		done = FALSE;  /* added outer loop for XML pop not in */
+				/* AsnTypeSetIndent */
+                while (! done)
+		{
 		if (AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) == CHOICE_TYPE)
 		{
+			atp2 = aip->typestack[aip->type_indent - 1].type;
 			if (aip->type_indent >= 2)
 				isa = AsnFindBaseIsa(aip->typestack[aip->type_indent - 2].type);
 			else
 				isa = NULL_TYPE;    /* just fake it */
-			if ((isa != SETOF_TYPE) && (isa != SEQOF_TYPE))
+			if (((isa != SETOF_TYPE) && (isa != SEQOF_TYPE)) ||
+				(isXML))
 				AsnPrintIndent(FALSE, aip);
 			AsnTypeSetIndent(FALSE, aip, atp);
+			if(isXML)
+			{
+				AsnPrintNewLine(aip);
+				AsnXMLTerm(aip, atp2);
+			}
+			else
+				done = TRUE;
+		}
+		else
+			done = TRUE;
 		}
 	}
 	return TRUE;														   
@@ -489,7 +731,8 @@ NLM_EXTERN Boolean AsnPrintStrStore (ByteStorePtr bsp, AsnIoPtr aip)
 
 	BSSeek(bsp, 0, SEEK_SET);      /* seek to start */
 	len = BSLen(bsp);
-	AsnPrintChar('\"', aip);
+	if(!(aip->type & ASNIO_XML))
+	    AsnPrintChar('\"', aip);
 	while (len)
 	{
 		if (len < 100)
@@ -502,7 +745,8 @@ NLM_EXTERN Boolean AsnPrintStrStore (ByteStorePtr bsp, AsnIoPtr aip)
 			return FALSE;
 		len -= tlen;
 	}
-	AsnPrintChar('\"', aip);
+	if(!(aip->type & ASNIO_XML))
+	    AsnPrintChar('\"', aip);
 	return TRUE;
 }
 /*****************************************************************************
@@ -522,6 +766,14 @@ NLM_EXTERN void AsnPrintReal (FloatHi realvalue, AsnIoPtr aip)
 
 	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
 		return;
+
+	if (aip->type & ASNIO_XML)
+	{
+		sprintf(tbuf, "%g", (double)realvalue);
+		AsnPrintString(tbuf, aip);
+		return;
+	}
+		
 
 	if (realvalue == 0.0)
 	{
@@ -615,10 +867,23 @@ NLM_EXTERN void AsnPrintBoolean (Boolean value, AsnIoPtr aip)
 	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
 		return;
 
-	if (value)
-		AsnPrintString("TRUE", aip);
+	if (aip->type & ASNIO_XML)
+	{
+		AsnPrintString(" value=", aip);
+		AsnPrintChar('\"', aip);
+		if (value)
+			AsnPrintString("true", aip);
+		else
+			AsnPrintString("false", aip);
+		AsnPrintChar('\"', aip);
+	}
 	else
-		AsnPrintString("FALSE", aip);
+	{
+		if (value)
+			AsnPrintString("TRUE", aip);
+		else
+			AsnPrintString("FALSE", aip);
+	}
 	return;
 }
 
@@ -636,7 +901,8 @@ NLM_EXTERN void AsnPrintOctets (ByteStorePtr ssp, AsnIoPtr aip)
 	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
 		return;
 
-	AsnPrintChar('\'', aip);
+	if (! (aip->type & ASNIO_XML))
+		AsnPrintChar('\'', aip);
 
 	BSSeek(ssp, 0, SEEK_SET);   /* go to start of bytestore */
 	ctr = 0;
@@ -669,8 +935,11 @@ NLM_EXTERN void AsnPrintOctets (ByteStorePtr ssp, AsnIoPtr aip)
 		AsnPrintString(buf, aip);
 	}
 
-	AsnPrintChar('\'', aip);
-	AsnPrintChar('H', aip);
+	if (! (aip->type & ASNIO_XML))
+	{
+		AsnPrintChar('\'', aip);
+		AsnPrintChar('H', aip);
+	}
 	return;
 }
 
@@ -734,7 +1003,8 @@ NLM_EXTERN void AsnPrintIndent (Boolean increase, AsnIoPtr aip)
 				else
 					decr = 0;     /* not referenced choice objects */
 			}
-		} while ((isa == CHOICE_TYPE) && (aip->token != ISMODULE_TOKEN));
+		} while ((isa == CHOICE_TYPE) && (aip->token != ISMODULE_TOKEN) &&
+			(! (aip->type & ASNIO_XML)));
 
 		if (aip->linepos == offset)    /* nothing written yet */
 		{
@@ -773,14 +1043,27 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
 	Boolean do_print = TRUE;
 
 	if (aip->linepos == 0)     /* nothing in buffer yet */
-		return;
+	{
+		if ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN))
+		{            /* print blank line */
+			tmp = aip->linebuf;
+			*tmp = ' ';
+			tmp++;
+			*tmp = '\0';
+			aip->linepos = tmp - aip->linebuf;
+			aip->offset = tmp - (CharPtr)aip->buf;
+		}
+		else
+			return;
+	}
 		
 	if (! (aip->type & ASNIO_CARRIER))           /* really printing */
 	{
 		tpos = aip->indent_level * aip->tabsize;
 		if (tpos == aip->linepos)   /* just an empty indent? */
 		{
-			do_print = FALSE;   /* assume that's the case */
+			if (! ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN)))
+				do_print = FALSE;   /* assume that's the case */
 			for (tmp = aip->linebuf; tpos != 0; tpos--, tmp++)
 			{
 				if (*tmp != ' ')
@@ -796,14 +1079,21 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
 			tmp = aip->linebuf + aip->linepos;
 			if (aip->first[aip->indent_level] == FALSE)    /* not first line of struct */
 			{
+			    if(!(aip->type & ASNIO_XML))  {
 				*tmp = ' '; tmp++;						   /* add commas */
 				*tmp = ','; tmp++;
+			    }
 			}
 			else if (aip->linepos)         /* is first line, remove trailing blanks */
 			{								/* if just indented */
 				tmp--;
 				while ((*tmp == ' ') && (tmp > aip->linebuf))
 					tmp--;
+				tmp++;
+			}
+			if ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN) && (tmp == aip->linebuf))
+			{                   /* print an empty line for formatting */
+				*tmp = ' ';
 				tmp++;
 			}
 			*tmp = '\0';
@@ -840,8 +1130,8 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 	register int templen;
 	Int1 first = 1;
 	register CharPtr current, str;
-	Boolean indent_state;
-	int bad_char = 0, bad_char_ctr = 0;
+	Boolean indent_state, found;
+	int bad_char = 0, bad_char_ctr = 0, i;
 
 	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
 	{
@@ -870,7 +1160,9 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 		if (! first)               /* into multiple lines */
 		{
 			aip->first[aip->indent_level] = TRUE;   /* no commas */
-			AsnPrintNewLine(aip);
+			if (aip->type & ASNIO_XML)  /* don't split XML lines */
+				aip->no_newline = TRUE;
+			AsnPrintNewLine(aip);       /* this call resets no_newline itself */
 			aip->offset -= aip->linepos;
 			aip->linepos = 0;
 		}
@@ -897,11 +1189,32 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 
 				*str = '#';   /* replace with # */
 			}
-			*current = *str;
-			if (*str == '\"')     /* must double quotes */
+			
+			if (aip->type & ASNIO_XML)
 			{
-				current++; aip->linepos++; aip->offset++;
-				*current = '\"';
+				found = FALSE;
+				for (i = 0; (i < XMLSUBS) && (! found); i++)
+				{
+					if (*str == xmlsubchars[i])
+					{
+						current = StringMove(current, xmlsubstrs[i]);
+						current--;
+						aip->linepos += (StringLen(xmlsubstrs[i]) - 1);
+						aip->offset += (StringLen(xmlsubstrs[i]) - 1);
+						found = TRUE;
+					}
+				}
+				if (! found)
+					*current = *str;
+			}
+			else
+			{
+				*current = *str;
+				if (*str == '\"')     /* must double quotes */
+				{
+					current++; aip->linepos++; aip->offset++;
+					*current = '\"';
+				}
 			}
 			current++; str++; templen--;
 		}
@@ -921,6 +1234,8 @@ ret:
 *      prints string on line if there is room
 *      if not prints on next line with no indent.
 *
+*      Now only used by XML printing
+*
 *****************************************************************************/
 NLM_EXTERN void AsnPrintCharBlock (CharPtr str, AsnIoPtr aip)
 
@@ -939,9 +1254,12 @@ NLM_EXTERN void AsnPrintCharBlock (CharPtr str, AsnIoPtr aip)
 
 	if (stringlen > (Uint4)templen)     /* won't fit on line */
 	{
-		aip->first[aip->indent_level] = TRUE;   /* no commas */
-		AsnPrintNewLine(aip);
-		aip->linepos = 0;      /* no indent on broken string */
+			aip->first[aip->indent_level] = TRUE;   /* no commas */
+			if (aip->type & ASNIO_XML)  /* don't split XML lines */
+				aip->no_newline = TRUE;
+			AsnPrintNewLine(aip);       /* this call resets no_newline itself */
+			aip->offset -= aip->linepos;
+			aip->linepos = 0;
 	}
 
 	current = aip->linebuf + aip->linepos;
@@ -994,12 +1312,20 @@ NLM_EXTERN int AsnPrintGetWordBreak (CharPtr str, int maxlen)
 NLM_EXTERN void AsnPrintOpenStruct (AsnIoPtr aip, AsnTypePtr atp)
 
 {
-	AsnPrintChar('{', aip);
-	AsnPrintIndent(TRUE, aip);
-	AsnTypeSetIndent(TRUE, aip, atp);
-	AsnPrintNewLine(aip);
-	aip->first[aip->indent_level] = TRUE;
-	return;
+    if(aip->type & ASNIO_XML) {
+        /* rework for indent? */
+    	AsnPrintIndent(TRUE, aip);
+    	AsnTypeSetIndent(TRUE, aip, atp);
+    	AsnPrintNewLine(aip);
+    	aip->first[aip->indent_level] = TRUE;
+    } else {
+    	AsnPrintChar('{', aip);
+    	AsnPrintIndent(TRUE, aip);
+    	AsnTypeSetIndent(TRUE, aip, atp);
+    	AsnPrintNewLine(aip);
+    	aip->first[aip->indent_level] = TRUE;
+    }
+    return;
 }
 
 /*****************************************************************************
@@ -1010,9 +1336,774 @@ NLM_EXTERN void AsnPrintOpenStruct (AsnIoPtr aip, AsnTypePtr atp)
 NLM_EXTERN void AsnPrintCloseStruct (AsnIoPtr aip, AsnTypePtr atp)
 
 {
-	AsnPrintChar(' ', aip);
-	AsnPrintChar('}', aip);
-	AsnPrintIndent(FALSE, aip);
-	AsnTypeSetIndent(FALSE, aip, atp);
+	AsnTypePtr atp2;
+	Int2 isa;
+
+    if(aip->type & ASNIO_XML) {
+    	AsnPrintIndent(FALSE, aip);
+	    AsnTypeSetIndent(FALSE, aip, atp);
+		AsnPrintNewLine(aip);
+        AsnXMLTerm(aip, atp);
+		while ((aip->type_indent) && 
+			(AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) == CHOICE_TYPE))
+			/* pop out of choice nests */
+		{
+				atp2 = aip->typestack[aip->type_indent - 1].type;
+				if (aip->type_indent >= 2)
+					isa = AsnFindBaseIsa(aip->typestack[aip->type_indent - 2].type);
+				else
+					isa = NULL_TYPE;
+
+				AsnPrintIndent(FALSE, aip);
+
+				AsnTypeSetIndent(FALSE, aip, atp);
+				AsnPrintNewLine(aip);
+				AsnXMLTerm(aip, atp2);
+
+		}
+    } else {
+	    AsnPrintChar(' ', aip);
+	    AsnPrintChar('}', aip);
+	    AsnPrintIndent(FALSE, aip);
+	    AsnTypeSetIndent(FALSE, aip, atp);
+    }
 	return;
+}
+static void AsnXMLCommentBegin(AsnIoPtr aip)
+{
+	AsnPrintCharBlock("<!-- ", aip);
+	return;
+}
+static void AsnXMLCommentEnd(AsnIoPtr aip)
+{
+	AsnPrintCharBlock(" -->", aip);
+	AsnPrintNewLine(aip);
+	return;
+}
+static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
+{
+	AsnTypePtr atp2;
+	Int2 isa;
+	AsnOptionPtr aop;
+	Boolean didone = FALSE, doenum = FALSE, first = TRUE;
+	AsnValxNodePtr avnp;
+
+	aop = NULL;
+	while ((aop = AsnOptionGet(atp->hints, OP_COMMENT, 0, aop)) != NULL)
+	{
+		if (first)
+		{
+			first = FALSE;
+			AsnPrintNewLine(aip);
+			AsnXMLCommentBegin(aip);
+			AsnPrintNewLine(aip);
+		}
+		AsnPrintCharBlock((CharPtr)(aop->data.ptrvalue), aip);
+		AsnPrintNewLine(aip);
+		didone = TRUE;
+	}
+	
+	isa = AsnFindBaseIsa(atp);
+	if ((atp->branch != NULL) && (isa == INTEGER_TYPE) && (isa == ENUM_TYPE))
+	{
+		for (avnp = (AsnValxNodePtr)(atp->branch); avnp != NULL; avnp = avnp->next)
+		{
+			if (avnp->aop != NULL)  /* comments here */
+			{
+				doenum = TRUE;
+				break;
+			}
+		}
+		if (doenum)
+		{
+			for (avnp = (AsnValxNodePtr)(atp->branch); avnp != NULL; avnp = avnp->next)
+			{
+				if (avnp->name != NULL)
+				{
+					if (first)
+					{
+						AsnXMLCommentBegin(aip);
+						AsnPrintNewLine(aip);
+						first = FALSE;
+					}
+					AsnPrintString(avnp->name, aip);
+					if (avnp->aop != NULL)
+					{
+						AsnPrintChar(' ', aip);
+						AsnPrintCharBlock((CharPtr)(avnp->aop->data.ptrvalue),aip);
+					}
+					AsnPrintNewLine(aip);
+					didone = TRUE;
+				}
+			}
+		}
+	}
+	if (didone)
+	{
+		AsnXMLCommentEnd(aip);
+	}
+
+	AsnPrintCharBlock("<!ELEMENT ", aip);
+
+	AsnPrintString(GetXMLname(atp), aip);
+
+	atp2 = AsnFindBaseType(atp);
+	if (atp2 == atp)
+	{
+		if ((isa == ENUM_TYPE) || (isa == BOOLEAN_TYPE) ||
+		    (isa == NULL_TYPE))
+		{
+			AsnPrintString(" ", aip); /* EMPTY tag here */
+			return;
+		}
+	}
+	AsnPrintString(" ( ", aip);
+	return;
+}
+static void AsnXMLElementAdd(CharPtr prev, AsnTypePtr atp, CharPtr repeat,
+			     AsnIoPtr aip, Boolean do_newline)
+{
+	Char buf[100];
+	CharPtr tmp;
+
+	tmp = buf;
+	*tmp = '\0';
+
+	if (prev != NULL)
+	{
+		tmp = StringMove(tmp, " ");
+		tmp = StringMove(tmp, prev);
+		if (! do_newline)
+			tmp = StringMove(tmp, " ");
+
+		AsnPrintCharBlock(buf, aip);
+	}
+
+	if (do_newline)
+	{
+		AsnPrintNewLine(aip);
+		tmp = StringMove(buf, "               ");
+	}
+	tmp = StringMove(tmp, GetXMLname(atp));
+
+	if (repeat != NULL)
+		tmp = StringMove(tmp, repeat);
+
+        AsnPrintString(buf, aip);
+	return;
+}
+static void AsnXMLElementEnd(AsnIoPtr aip)
+{
+	AsnPrintCharBlock(" )>", aip);
+	AsnPrintNewLine(aip);
+	return;
+}
+static void AsnPrintSubTypeXML(AsnTypePtr atp, AsnIoPtr aip)
+{
+	AsnTypePtr atp2, atp3;
+	Int2 isa;
+	Boolean doit = FALSE;
+
+	if (atp == NULL) return;
+	if (atp->branch == NULL) return;
+
+	isa = atp->type->isa;
+	if ((isa == SEQ_TYPE) || (isa == SET_TYPE) || (isa == CHOICE_TYPE))
+		doit = TRUE;
+	else if ((isa == SEQOF_TYPE) || (isa == SETOF_TYPE))
+	{
+		atp2 = (AsnTypePtr)(atp->branch);
+		atp3 = AsnFindBaseType(atp2);
+		if (atp2 == atp3)
+			doit = TRUE;
+	}
+
+	if (doit)
+	{
+		for (atp2 = (AsnTypePtr)(atp->branch); atp2 != NULL; atp2 = atp2->next)
+		{
+			AsnXMLElementStart(atp2, aip);
+			if (AsnPrintTypeXML(atp2, aip))
+				AsnXMLElementEnd(aip);
+		}
+			/* check for nested CHOICE  */
+		for (atp2 = (AsnTypePtr)(atp->branch); atp2 != NULL; atp2 = atp2->next)
+		{
+			isa = AsnFindBaseIsa(atp2);
+			atp3 = AsnFindBaseType(atp2);
+			if (((isa == CHOICE_TYPE) ||
+			     (isa == SEQOF_TYPE) || (isa == SETOF_TYPE) ||
+			     (isa == SEQ_TYPE) || (isa == SET_TYPE)))
+			{
+/*				atp3 = (AsnTypePtr)(atp2->branch);
+				if ((atp3 != NULL) && (ISA_BASETYPE(atp3->type->isa)))
+				{ */
+					AsnPrintNewLine(aip);
+					AsnPrintSubTypeXML(atp2, aip);
+			/*	} */
+			}
+		}
+
+	}
+	return;
+	
+}
+static void AsnPrintTopTypeXML (AsnIoPtr aip, AsnTypePtr atp)
+{
+
+	AsnXMLCommentBegin(aip);
+	AsnPrintString("Definition of ", aip);
+	AsnPrintString(GetXMLname(atp), aip);
+	AsnXMLCommentEnd(aip);
+	AsnPrintNewLine(aip);
+	AsnXMLElementStart(atp, aip);
+	if (AsnPrintTypeXML(atp, aip))
+		AsnXMLElementEnd(aip);
+	AsnPrintNewLine(aip);
+	AsnPrintSubTypeXML(atp, aip);
+	AsnPrintNewLine(aip);
+	AsnPrintNewLine(aip);
+	return;
+}
+
+/*****************************************************************************
+*
+*   void AsnPrintModuleXML(amp, aip)
+*
+*****************************************************************************/
+NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip)
+
+{
+	AsnTypePtr atp;
+	Boolean firstone, done;
+	CharPtr from;
+	AsnOptionPtr aop;
+	Int4 ctr, highest;
+	
+
+	if (! aip->XMLModuleWritten)   /* first module to XML DTD? */
+	{
+		aip->XMLModuleWritten = TRUE;
+		aip->token = ISMODULE_TOKEN;   /* signal to AsnPrintIndent */
+	
+		AsnPrintCharBlock("<!-- ======================== -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!-- NCBI DTD                 -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!-- NCBI ASN.1 mapped to XML -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!-- ======================== -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!-- Entities used to give specificity to #PCDATA -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % INTEGER '#PCDATA'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % ENUM 'EMPTY'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % BOOLEAN 'EMPTY'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % NULL 'EMPTY'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % REAL '#PCDATA'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!ENTITY % OCTETS '#PCDATA'>", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintCharBlock("<!-- ============================================ -->", aip);
+		AsnPrintNewLine(aip);
+		AsnPrintNewLine(aip);
+
+	}
+
+	AsnPrintCharBlock("<!-- ============================================ -->", aip);
+	AsnPrintNewLine(aip);
+	AsnXMLCommentBegin(aip);
+	AsnPrintString("This section mapped from ASN.1 module ", aip);
+	AsnPrintString(amp->modulename, aip);
+	AsnXMLCommentEnd(aip);
+	AsnPrintNewLine(aip);
+
+
+	atp = amp->types;		    /* check for EXPORTS */
+	firstone = TRUE;
+	while (atp != NULL)
+	{
+		if (atp->exported == TRUE)
+		{
+			if (firstone)
+			{
+				AsnXMLCommentBegin(aip);
+				AsnPrintString("Elements used by other modules:", aip);
+				AsnPrintNewLine(aip);
+			}
+			else
+			{
+				AsnPrintString(" ,", aip);
+				AsnPrintNewLine(aip);
+			}
+			AsnPrintString("          ", aip);
+			AsnPrintString(GetXMLname(atp), aip);
+			firstone = FALSE;
+		}
+		atp = atp->next;
+	}
+	if (! firstone)            /* got at least one */
+	{
+		AsnXMLCommentEnd( aip);
+		AsnPrintNewLine(aip);
+		AsnPrintNewLine(aip);
+	}
+
+	atp = amp->types;		    /* check for IMPORTS */
+	firstone = TRUE;
+	from = NULL;
+	while (atp != NULL)
+	{
+		if (atp->imported == TRUE)
+		{
+			if (firstone)
+			{
+				AsnXMLCommentBegin(aip);
+				AsnPrintString("Elements referenced from other modules:  ", aip);
+				AsnPrintNewLine(aip);
+			}
+			else
+			{
+				if (StringCmp((CharPtr) atp->branch, from))    /* new FROM */
+				{
+					AsnPrintString(" FROM ", aip);
+					AsnPrintString(from, aip);
+				}
+				else
+					AsnPrintString(" ,", aip);
+				AsnPrintNewLine(aip);
+			}
+			AsnPrintString("          ", aip);
+			AsnPrintString(GetXMLname(atp), aip);
+			firstone = FALSE;
+			from = (CharPtr) atp->branch;
+		}
+		atp = atp->next;
+	}
+	if (! firstone)            /* got at least one */
+	{
+		AsnPrintString(" FROM ", aip);
+		AsnPrintString(from, aip);
+		AsnXMLCommentEnd(aip);
+		AsnPrintNewLine(aip);
+		AsnPrintNewLine(aip);
+	}
+
+	AsnPrintCharBlock("<!-- ============================================ -->", aip);
+	AsnPrintNewLine(aip);
+
+	aop = NULL;    /* check for order information */
+	highest = 0;
+	for (atp = amp->types; atp != NULL; atp = atp->next)
+	{
+		aop = AsnOptionGet(atp->hints, OP_TYPEORDER, 0, NULL);
+		if (aop != NULL)
+		{
+			if (aop->data.intvalue > highest)
+				highest = aop->data.intvalue;
+		}
+	}
+
+	if (highest)     /* we do have ordering info */
+	{
+		for (ctr = 1; ctr <= highest; ctr++)
+		{
+			done = FALSE;
+			for (atp = amp->types;
+			     (! done) && ( atp != NULL); atp = atp->next)
+			{
+				aop = AsnOptionGet(atp->hints, OP_TYPEORDER,
+						   0, NULL);
+				if (aop != NULL)
+				{
+					if (aop->data.intvalue == ctr)
+					{
+						AsnPrintTopTypeXML(aip, atp);
+						done = TRUE;
+					}
+				}
+			}
+		}
+	}
+	else             /* nope, just do the default order */
+	{
+		atp = amp->types;
+		while (atp != NULL)
+		{
+			if (! atp->imported)
+			{
+				AsnPrintTopTypeXML(aip, atp);
+			}
+		}
+		atp = atp->next;
+	}
+
+	AsnPrintNewLine(aip);
+	return;
+}
+
+/*****************************************************************************
+*
+*   Boolean AsnPrintTypeXML(atp, aip)
+*   	prints a type starting at current line position
+*   	(assumes name already printed)
+*       returns TRUE if AsnElementXMLEnd() needs to be called
+*
+*****************************************************************************/
+static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
+
+{
+	AsnValxNodePtr avnp;
+	AsnTypePtr atp2;
+	Boolean first;
+	Int2 isa;
+	Char buf[100], tbuf[20];
+	CharPtr tmp, repeat = NULL;
+	Boolean retval = TRUE, gotone, isimplied = FALSE;
+
+	isa = atp->type->isa;
+	tmp = buf;
+	*tmp = '\0';
+	gotone = FALSE;    /* assume no default attribute found */
+
+	if (atp->branch != NULL)       /* sub types ? */
+	{
+		switch (isa)
+		{
+			case SETOF_TYPE:
+			case SEQOF_TYPE:
+				if ((atp->optional) || (atp->hasdefault))
+					repeat = "*";
+				else
+					repeat = "+";
+				AsnXMLElementAdd(NULL, atp->branch, repeat, aip, FALSE);
+				break;
+			case INTEGER_TYPE:
+				tmp = StringMove(tmp, "%INTEGER;");
+				AsnPrintString(buf, aip);
+				AsnXMLElementEnd(aip);
+				isimplied = TRUE;   /* don't need named attributes */
+			case ENUM_TYPE:
+				if (*buf == '\0')   /* not INTEGER */
+				{
+					tmp = StringMove(tmp, "%ENUM; >");
+					AsnPrintCharBlock(buf, aip);
+					AsnPrintNewLine(aip);
+				}
+
+				tmp = buf;
+				AsnPrintCharBlock("<!ATTLIST", aip);
+				tmp = StringMove(tmp, " ");
+				tmp = StringMove(tmp, GetXMLname(atp));
+				tmp = StringMove(tmp, " value ( ");
+				AsnPrintString(buf, aip);
+				avnp = (AsnValxNodePtr)atp->branch;
+				first = TRUE;
+				/*
+				aip->first[aip->indent_level] = FALSE;
+				*/
+				while (avnp != NULL)
+				{
+					tmp = buf;
+					*tmp = '\0';
+					if (! first)
+						AsnPrintCharBlock(" |", aip);
+					else
+						first = FALSE;
+					AsnPrintNewLine(aip);
+					tmp = StringMove(tmp, "               ");
+					if (avnp->name != NULL)
+						tmp = StringMove(tmp, avnp->name);
+					else
+					{
+						sprintf(tbuf, "%d", (int)(avnp->intvalue));
+						tmp = StringMove(tmp, tbuf);
+					}
+					AsnPrintString(buf, aip);
+					avnp = avnp->next;
+				}
+				AsnPrintCharBlock(" ) ", aip);
+				if (atp->hasdefault)
+				{
+					tmp = buf;
+					*tmp = '\0';
+					avnp = atp->defaultvalue;
+					while (! (VALUE_ISA_DEFAULT(avnp->valueisa)))
+						avnp = avnp->next;
+					switch (avnp->valueisa)
+					{
+						case VALUE_ISA_PTR:
+							AsnPrintChar('\"', aip);
+							AsnPrintString(avnp->name, aip);
+							AsnPrintChar('\"', aip);
+							gotone = TRUE;
+							break;
+						default:
+							break;
+					}
+				}
+				if (! gotone)    /* no default value */
+				{
+					if (isimplied)
+						AsnPrintString(" #IMPLIED", aip);
+					else
+						AsnPrintString(" #REQUIRED", aip);
+				}
+				AsnPrintCharBlock(" >", aip);
+				AsnPrintNewLine(aip);
+				retval = FALSE;
+				break;
+			case SEQ_TYPE:
+			case SET_TYPE:
+				atp2 = (AsnTypePtr) atp->branch;
+				first = TRUE;
+				aip->first[aip->indent_level] = FALSE;
+				tmp = NULL;
+				while (atp2 != NULL)
+				{
+					if (! first)
+						tmp = ",";
+					else
+						first = FALSE;
+					
+					if ((atp2->optional) || (atp2->hasdefault))
+						repeat = "?";
+					else
+						repeat = NULL;
+
+					AsnXMLElementAdd(tmp, atp2, repeat, aip, TRUE);
+
+					atp2 = atp2->next;
+				}
+
+				break;
+			case CHOICE_TYPE:
+				atp2 = (AsnTypePtr) atp->branch;
+				first = TRUE;
+				aip->first[aip->indent_level] = FALSE;
+				tmp = NULL;
+				while (atp2 != NULL)
+				{
+					if (! first)
+						tmp = "|";
+					else
+						first = FALSE;
+					
+					if ((atp2->optional) || (atp2->hasdefault))
+						repeat = "?";
+					else
+						repeat = NULL;
+
+					AsnXMLElementAdd(tmp, atp2, repeat, aip, TRUE);
+
+					atp2 = atp2->next;
+				}
+
+				break;
+			default:			/* everything else */
+				AsnPrintString(" DEFAULT_BRANCH ", aip);
+				break;          /* do nothing */
+		}
+	}
+	else  /* primitive.. all text */
+	{
+		atp2 = AsnFindBaseType(atp);
+		if (atp2 != NULL)
+		{
+			isa = AsnFindBaseIsa(atp);
+			if (atp2 == atp)   /* this is the bottom */
+			{
+				switch (isa)
+				{
+					case NULL_TYPE:
+						tmp = StringMove(tmp, "%NULL; >");
+						AsnPrintCharBlock(buf, aip);
+						AsnPrintNewLine(aip);
+						return FALSE;
+
+					case BOOLEAN_TYPE:
+						tmp = StringMove(tmp, "%BOOLEAN; >");
+						AsnPrintCharBlock(buf, aip);
+						AsnPrintNewLine(aip);
+
+						tmp = buf;
+						*tmp = '\0';
+						AsnPrintCharBlock("<!ATTLIST ", aip);
+						tmp = StringMove(tmp, GetXMLname(atp));
+						tmp = StringMove(tmp, " value ( true | false ) ");
+						AsnPrintString(buf, aip);
+						gotone = FALSE;
+						if (atp->hasdefault)
+						{
+							avnp = atp->defaultvalue;
+							while (! (VALUE_ISA_DEFAULT(avnp->valueisa)))
+								avnp = avnp->next;
+							switch (avnp->valueisa)
+							{
+								case VALUE_ISA_BOOL:
+									AsnPrintChar('\"', aip);
+									if (avnp->intvalue)
+										AsnPrintString("true",aip);
+									else
+										AsnPrintString("false",aip);
+									AsnPrintChar('\"', aip);
+									gotone = TRUE;
+									break;
+								default:
+									break;
+							}
+						}
+						if (! gotone)
+							AsnPrintString(" #REQUIRED", aip);
+						AsnPrintCharBlock(" >", aip);
+						AsnPrintNewLine(aip);
+						*buf = '\0';
+						retval = FALSE;
+						break;
+					case INTEGER_TYPE:
+						tmp = StringMove(tmp, "%INTEGER;");
+						break;
+					case REAL_TYPE:
+						tmp = StringMove(tmp, "%REAL;");
+						break;
+					case OCTETS_TYPE:
+						tmp = StringMove(tmp, "%OCTETS;");
+						break;
+					default:
+						tmp = StringMove(tmp, "#PCDATA");
+						break;
+				}
+			}
+			else
+			{
+				tmp = StringMove(tmp, GetXMLname(atp2));
+			}
+		}
+		else
+			tmp = StringMove(tmp, "#PCDATA");
+
+		if (*buf != '\0')
+			AsnPrintString(buf, aip);
+	}
+	return retval;
+}
+static void AsnPrintTreeType(Int2 indent, AsnTypePtr atp, CharPtr prefix, FILE *fp)
+{
+	Int2 isa;
+	Uint4 ptr;
+	CharPtr tmp;
+	Char buf[1000];
+	Int2 i;
+	AsnTypePtr atp2;
+
+	if (atp == NULL) return;
+
+	ptr = (Uint4)(atp);
+	isa = atp->isa;
+
+	for (i = 0; i < indent; i++)
+	{
+		buf[i] = '.';
+	}
+	tmp = buf + indent;
+	*tmp = '\0';
+	fprintf(fp, "%s", buf);
+	if ((indent) && (atp->hints != NULL))  /* primary def */
+		fprintf(fp, "#>");
+	if (atp->been_here)
+		fprintf(fp,"&>");
+
+	if (prefix != NULL)
+		fprintf(fp,"%s", prefix);
+	fprintf(fp,"[%ul] ", (unsigned long)ptr);
+	fprintf(fp,"%d ", (int)isa);
+	if (atp->name == NULL)
+		fprintf(fp,"(null) ");
+	else
+		fprintf(fp,"(%s) ", atp->name);
+	if (atp->XMLname == NULL)
+		fprintf(fp,"|null| ");
+	else
+		fprintf(fp,"|%s| ", atp->XMLname);
+	if (atp->type != NULL)
+		fprintf(fp,"type ");
+	else
+		fprintf(fp,"notype ");
+	if (atp->imported)
+		fprintf(fp,"import ");
+	else
+		fprintf(fp,"notimport ");
+	if (atp->branch != NULL)
+		fprintf(fp,"branch\n");
+	else
+		fprintf(fp,"nobranch\n");
+
+	if (atp->been_here)
+		return;
+
+	if ((indent) && (atp->hints != NULL))  /* primary def */
+		return;
+
+	atp->been_here = TRUE;
+	AsnPrintTreeType((indent + 1), atp->type, "TYPE=", fp);
+
+	isa = AsnFindBaseIsa(atp);
+	if (((isa == SEQOF_TYPE) || (isa == SETOF_TYPE) ||
+	    (isa == SEQ_TYPE) || (isa == SET_TYPE) ||
+	    (isa == CHOICE_TYPE) || (isa > 400)) && (! atp->imported))
+	for (atp2 = (AsnTypePtr)(atp->branch); atp2 != NULL; atp2 = atp2->next)
+		AsnPrintTreeType((indent + 1), atp2, "Branch=", fp);
+
+	atp->been_here = FALSE;  /* just prevent recursion */
+	return;
+
+}
+
+NLM_EXTERN void AsnPrintTreeModule(AsnModulePtr amp, FILE * fp)
+{
+	Int4 highest, ctr;
+	AsnOptionPtr aop;
+	AsnTypePtr atp;
+	Boolean done;
+
+	aop = NULL;    /* check for order information */
+	highest = 0;
+	for (atp = amp->types; atp != NULL; atp = atp->next)
+	{
+		aop = AsnOptionGet(atp->hints, OP_TYPEORDER, 0, NULL);
+		if (aop != NULL)
+		{
+			if (aop->data.intvalue > highest)
+				highest = aop->data.intvalue;
+		}
+	}
+
+	if (highest)     /* we do have ordering info */
+	{
+		for (ctr = 1; ctr <= highest; ctr++)
+		{
+			done = FALSE;
+			for (atp = amp->types;
+			     (! done) && ( atp != NULL); atp = atp->next)
+			{
+				aop = AsnOptionGet(atp->hints, OP_TYPEORDER,
+						   0, NULL);
+				if (aop != NULL)
+				{
+					if (aop->data.intvalue == ctr)
+					{
+						AsnPrintTreeType((Int2)0, atp, NULL, fp);
+						fprintf(fp,"\n");
+						done = TRUE;
+					}
+				}
+			}
+		}
+	}
+
 }

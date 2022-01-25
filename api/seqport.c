@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.30 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,16 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.30  2000/05/25 19:40:02  ostell
+* treated Z as E instead of Q for MolWt
+*
+* Revision 6.29  2000/05/25 14:28:20  ostell
+* added support for B,Z in MolWtForLoc(). Increase counters to Int4 for
+* titan. add support for U
+*
+* Revision 6.28  2000/05/23 20:41:16  ostell
+* added MolWtForLoc()
+*
 * Revision 6.27  2000/03/08 17:18:32  kans
 * final fixes for delta seqs with gaps of nonzero length, including those starting with gaps
 *
@@ -4777,3 +4787,77 @@ extern void TestSeqSearch (void)
 
 */
 
+/* Values are in ncbistdaa code order:
+   B is really D or N, but they are close so is treated as D
+   Z is really E or Q, but they are close so is treated as E
+   X is hard to guess, so the calculation fails on X
+
+  -  A  B  C  D  E  F  G  H  I  K  L  M  N  P  Q  R  S  T  V  W  X  Y  Z  U  * 
+*/
+Uint1 C_atoms[26] =
+{ 0, 3, 4, 3, 4, 5, 9, 2, 6, 6, 6, 6, 5, 4, 5, 5, 6, 3, 4, 5,11, 0, 9, 5, 3, 0};
+Uint1 H_atoms[26] =
+{ 0, 5, 5, 5, 5, 7, 9, 3, 7,11,12,11, 9, 6, 7, 8,12, 5, 7, 9,10, 0, 9, 7, 5, 0};
+Uint1 N_atoms[26] =
+{ 0, 1, 1, 1, 1, 1, 1, 1, 3, 1, 2, 1, 1, 2, 1, 2, 4, 1, 1, 1, 2, 0, 1, 1, 1, 0};
+Uint1 O_atoms[26] =
+{ 0, 1, 3, 1, 3, 3, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 0, 2, 3, 1, 0};
+Uint1 S_atoms[26] =
+{ 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+Uint1 Se_atoms[26] =
+{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
+
+/**************************************************************
+*
+*  Returns a protein molecular weight for a SeqLoc
+*    If it cannot calculate the value it returns -1.0
+*    If sequence contains X,B,U,*,orZ it fails
+*
+***************************************************************/
+NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp)
+{
+	SeqPortPtr spp;
+	Int2 residue;
+	Int4	Ccnt,
+		Hcnt,
+		Ncnt,
+		Ocnt,
+		Scnt,
+		Secnt;
+	FloatHi retval = -1.0;
+
+	spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
+	if (spp == NULL)
+		return retval;
+
+	Ccnt = 0;  /* initialize counters */
+	Hcnt = 2;  /* always start with water */
+	Ocnt = 1;  /* H20 */
+	Ncnt = 0;
+	Scnt = 0;
+	Secnt = 0;
+
+	while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+	{
+		if (IS_residue(residue))
+		{
+			if (H_atoms[residue] == 0)  /* unsupported AA */
+				goto erret;         /* bail out */
+			Ccnt += C_atoms[residue];
+			Hcnt += H_atoms[residue];
+			Ncnt += N_atoms[residue];
+			Ocnt += O_atoms[residue];
+			Scnt += S_atoms[residue];
+			Secnt += Se_atoms[residue];
+		}
+		else             /* segmented */
+			goto erret;    /* bail out */
+	}
+
+	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+		 (32.064 * Scnt) + (78.96 * Secnt);
+
+erret:  SeqPortFree(spp);
+	return retval;
+}

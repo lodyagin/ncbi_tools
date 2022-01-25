@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -1015,10 +1015,10 @@ static Int2 NEAR FeatDefLabelContent (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, 
 	CharPtr label = NULL;
 	RnaRefPtr trrp;
 	tRNAPtr trp;
-	Char tbuf[40];
+	Char tbuf[40], snpbuf [64];
 	Int2 len = buflen, diff;
 	GBQualPtr gbp;
-	CharPtr prefix=NULL, suffix=NULL;
+	CharPtr prefix=NULL, suffix=NULL, ptr;
 	PubdescPtr pdp;
 	ValNodePtr vnp;
 	ImpFeatPtr ifp;
@@ -1242,6 +1242,24 @@ protref:    if (prp->name != NULL)
 					{
 						if (! StringICmp("rpt_family", gbp->qual))
 							label = gbp->val;
+					}
+					if (label == NULL)
+						label = typelabel;
+				}
+				else if (! StringICmp("STS", ifp->key))
+				{
+					for (gbp = sfp->qual; ((label == NULL) && (gbp != NULL)); gbp = gbp->next)
+					{
+						if (! StringICmp("standard_name", gbp->qual))
+							label = gbp->val;
+					}
+					if (label == NULL && (! StringHasNoText (sfp->comment))) {
+						StringNCpy_0 (snpbuf, sfp->comment, sizeof (snpbuf));
+						ptr = StringChr (snpbuf, ';');
+						if (ptr != NULL) {
+							*ptr = '\0';
+						}
+						label = snpbuf;
 					}
 					if (label == NULL)
 						label = typelabel;

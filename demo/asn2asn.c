@@ -16,14 +16,15 @@
 *****************************************************************************/
 #include <seqport.h>
 
-#define NUMARG 6
+#define NUMARG 7
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,FALSE,'i',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
 	{"Input asnfile in binary mode","F",NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
 	{"Filename for asn.1 output","stdout", NULL,NULL,TRUE,'o',ARG_FILE_OUT,0.0,0,NULL},
 	{"Output asnfile in binary mode?","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
-    {"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL}};
+    {"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
+	{"Output asnfile in XML?","F", NULL ,NULL ,TRUE,'x',ARG_BOOLEAN,0.0,0,NULL}};
 
 
 /*****************************************************************************
@@ -48,6 +49,7 @@ Int2 Main(void)
 	AsnTypePtr atp, atp2;
 	AsnModulePtr amp;
 	DataVal dv;
+	CharPtr ftype;
 
 					/* check command line arguments */
 
@@ -93,7 +95,13 @@ Int2 Main(void)
 
 	if (myargs[3].strvalue != NULL)   /* output desired? */
 	{
-		if ((aipout = AsnIoOpen (myargs[3].strvalue,myargs[4].intvalue?"wb":"w")) == NULL)
+		ftype = "w";
+		if (myargs[4].intvalue)
+			ftype = "wb";
+		if (myargs[6].intvalue)
+			ftype = "wx";
+
+		if ((aipout = AsnIoOpen (myargs[3].strvalue, ftype)) == NULL)
 		{
 			ErrPostEx(SEV_ERROR,0,0, "Can't open %s", myargs[3].strvalue);
 			ErrShow();

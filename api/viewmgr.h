@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.h,v 1.11 2000/04/17 21:47:52 lewisg Exp $
+/*   $Id: viewmgr.h,v 1.12 2000/05/24 21:42:59 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.h,v 1.11 2000/04/17 21:47:52 lewisg Exp $
+* File Name:  $Id: viewmgr.h,v 1.12 2000/05/24 21:42:59 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.11 $
+* $Revision: 1.12 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.h,v $
+* Revision 1.12  2000/05/24 21:42:59  hurwitz
+* getting hide/show rows to work with DDV and DDE together
+*
 * Revision 1.11  2000/04/17 21:47:52  lewisg
 * do not do double index on viewmgr update, rename menus
 *
@@ -175,7 +178,7 @@ NLM_EXTERN SeqAlign * ViewMgr_GetTarget(SeqAlign *salp);
 
 /*****************************************************************************
 
-Function: ViewMgr_GetTarget
+Function: ViewMgr_GetBegin
 
 Purpose: return the original SeqAlign given the view seqalign
   

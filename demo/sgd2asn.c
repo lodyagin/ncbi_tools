@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/20/99
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -214,7 +214,7 @@ static OrgStuff commonOrgStuff [] = {
 
 /* organism from title overrides organism from command line */
 
-static BioSourcePtr ParseTitleIntoBioSource (
+static BioSourcePtr OldParseTitleIntoBioSource (
   SqnTagPtr stp,
   BioseqPtr bsp,
   CharPtr organism
@@ -521,14 +521,14 @@ static void ProcessOneRecord (
     if (ttl != NULL) {
       stp = SqnTagParse (ttl);
       if (stp != NULL) {
-        biop = ParseTitleIntoBioSource (stp, bsp, organism);
+        biop = OldParseTitleIntoBioSource (stp, bsp, organism);
       }
       SqnTagFree (stp);
     }
     ValNodeFreeData (vnp);
   }
   if (biop == NULL) {
-    biop = ParseTitleIntoBioSource (NULL, bsp, organism);
+    biop = OldParseTitleIntoBioSource (NULL, bsp, organism);
   }
   if (biop != NULL) {
     SeqDescrAddPointer (&(bsp->descr), Seq_descr_source, (Pointer) biop);

@@ -34,6 +34,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
+* Revision 6.163  2000/05/19 18:19:09  thiessen
+* fix label bug on show/hide
+*
+* Revision 6.162  2000/05/04 19:00:05  thiessen
+* fix to worm capping
+*
+* Revision 6.161  2000/05/01 12:20:11  thiessen
+* persist animation speed
+*
 * Revision 6.160  2000/04/25 00:22:34  thiessen
 * save quality settings in config
 *
@@ -2595,9 +2604,13 @@ GrouP LIBCALL LabelControls(Nlm_GrouP prnt)
 
 #ifdef _OPENGL
 
+#define CN3DTICKDEFAULT (6)
+static FloatHi Cn3D_Tick[] = {
+    0.01L, 0.025L, 0.05L, 0.1L, 0.25L, 0.5L, 1.0L, 2.5L, 5.0L, 10.0L, 0.0L};
+
 void Cn3D_SetQualityFromAppParams(void)
 {
-    Char str[8];
+    Char str[64];
     int i;
 
     if (GetAppParam("CN3D", "QUALITY", "BIGCYLSIDES", NULL, str, sizeof(str)))
@@ -2613,8 +2626,17 @@ void Cn3D_SetQualityFromAppParams(void)
     if (GetAppParam("CN3D", "QUALITY", "WORMSIDES", NULL, str, sizeof(str)))
         SafeSetValue(Cn3D_pupQualWormSides, atoi(str)/2 + 1 - QUAL_SIZE_MIN/2);
 
-    for (i=0; i<3; i++)
-        SafeSetStatus(Cn3D_bQualOverall[i], FALSE);
+    if (GetAppParam("CN3D", "SETTINGS", "ANIMATIONSPEED", NULL, str, sizeof(str))) {
+        FloatHi tick;
+        int i;
+
+        tick = atof(str);
+        for (i=0; Cn3D_Tick[i] != 0.0L; i++)
+            if (tick == Cn3D_Tick[i]) break;
+        if (Cn3D_Tick[i] == 0.0L) i = CN3DTICKDEFAULT - 1;
+        Cn3D_ColorData.OGL_Data->Tick = Cn3D_Tick[i];
+        SetValue(Cn3D_pTick, i + 1);
+    }
 }
 
 static void QualityChangePopupProc(Nlm_PopuP p)
@@ -2645,20 +2667,14 @@ static Nlm_Int2 qSet[3][6] = {
     { 30, 16, 16, 10, 10, 20 }  /* high/slow */
 };
 
-#define CN3DTICKDEFAULT (6)
-static FloatHi Cn3D_Tick[] = {
-    0.01L, 0.025L, 0.05L, 0.1L, 0.25L, 0.5L, 1.0L, 2.5L, 5.0L, 10.0L, 0.0L};
-
 static void OverallQualityChangeProc(Nlm_ButtoN pressed)
 {
-    int i, which;
+    int i, which = -1;
 
     for (i=0; i<3; i++) {
-        if (pressed != Cn3D_bQualOverall[i]) {
-            SafeSetStatus(Cn3D_bQualOverall[i], FALSE);
-        } else {
-            SafeSetStatus(Cn3D_bQualOverall[i], TRUE);
+        if (pressed == Cn3D_bQualOverall[i]) {
             which = i;
+            break;
         }
     }
     SafeSetValue(Cn3D_pupQualBigCylSides, qSet[which][0] - QUAL_SIZE_MIN + 1);
@@ -2673,10 +2689,14 @@ static void OverallQualityChangeProc(Nlm_ButtoN pressed)
 static void Cn3D_TickPopupProc(PopuP value)
 {
     Int4 n;
+    Char str[64];
 
     OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
     n = GetValue(Cn3D_pTick);
     Cn3D_ColorData.OGL_Data->Tick = Cn3D_Tick[n - 1];
+
+    sprintf(str, "%g", Cn3D_ColorData.OGL_Data->Tick);
+    SetAppParam("CN3D", "SETTINGS", "ANIMATIONSPEED", str);
 }
 
 static Nlm_GrouP qualityItem(Nlm_GrouP h, char *title, Nlm_PopuP *pup, int def)
@@ -2747,17 +2767,14 @@ Nlm_GrouP LIBCALL OGL_Quality(Nlm_GrouP prnt)
 
     i[++n] = Nlm_HiddenGroup(h, -1, 6, NULL);
     SetGroupSpacing(i[n], 5, 10);
-    p = StaticPrompt(i[n], "Overall Quality / Rendering Speed:",
+    p = StaticPrompt(i[n], "Set Overall Quality / Rendering Speed to:",
                     0, stdLineHeight + 5, systemFont, 'c');
 
     i[++n] = Nlm_HiddenGroup(h, -3, 6, NULL);
     SetGroupSpacing(i[n], 5, 10);
-    Cn3D_bQualOverall[0] = CheckBox(i[n], "low/fast", OverallQualityChangeProc);
-    SetStatus(Cn3D_bQualOverall[0], FALSE);
-    Cn3D_bQualOverall[1] = CheckBox(i[n], "med/med", OverallQualityChangeProc);
-    SetStatus(Cn3D_bQualOverall[1], TRUE);
-    Cn3D_bQualOverall[2] = CheckBox(i[n], "high/slow", OverallQualityChangeProc);
-    SetStatus(Cn3D_bQualOverall[2], FALSE);
+    Cn3D_bQualOverall[0] = PushButton(i[n], "low/fast", OverallQualityChangeProc);
+    Cn3D_bQualOverall[1] = PushButton(i[n], "med/med", OverallQualityChangeProc);
+    Cn3D_bQualOverall[2] = PushButton(i[n], "high/slow", OverallQualityChangeProc);
     AlignObjects(ALIGN_CENTER, (HANDLE) i[6], (HANDLE) i[7], (HANDLE) h, NULL);
 
     bg = Nlm_HiddenGroup(h, 1, 6, NULL);
@@ -3582,7 +3599,7 @@ PMAD GetAtomAfter(PALD pald1, PALD pald2)
 }
 
 #ifdef _OPENGL
-static void RenderHalfWormBond(PALD pald1, PALD pald2, Boolean bCap2,
+static void RenderHalfWormBond(PALD pald1, Boolean bCap1, PALD pald2, Boolean bCap2,
                                DDV_ColorCell * iColor, FloatLo fCylRadius,
                                Int4 iModel)
 #else
@@ -3595,7 +3612,6 @@ static void RenderHalfWormBond(PALD pald1, PALD pald2,
     PMAD pmad0, pmad1, pmad2, pmad3;
     PALD pald0, pald3;
     PMSD pmsdParent;
-    Boolean bCap1 = FALSE;
 
     pmad1 = (PMAD) pald1->pfbParent;
     pmad2 = (PMAD) pald2->pfbParent;
@@ -3622,7 +3638,6 @@ static void RenderHalfWormBond(PALD pald1, PALD pald2,
         fX0 = fX1;
         fY0 = fY1;
         fZ0 = fZ1;
-        bCap1 = TRUE;
     }
     pmad3 = GetAtomAfter(pald1, pald2);
     if (pmad3) {
@@ -3931,7 +3946,7 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel, Int4 iRenderWhat,
 
             if (bDraw) {
 #ifdef _OPENGL
-                Boolean bMidCap;
+                Boolean bCapTo;
                 PMGD pmgdTo;
 #endif
                 paldDrawTo = GetAtomAltLocs(pmadDrawTo, iModel);
@@ -3945,19 +3960,19 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel, Int4 iRenderWhat,
                 }
 #ifdef _OPENGL
                 /* try to avoid visibly open-ended cylinders/worms */
-                bMidCap = FALSE;
+                bCapTo = FALSE;
                 pmgdTo = GetParentGraph((PFB) pmadDrawTo);
                 if (pmgdTo && !pmgdTo->bVisible)
-                    bMidCap = TRUE;
+                    bCapTo = TRUE;
 #endif
                 if (((int) iRenderWhat == RESIDUES) && (IsAtomBackBone(pmadDrawTo))) {
                     /* draw a whole bond to bridge */
 #ifdef _OPENGL
-                    if (!bMidCap && pmgdTo &&
+                    if (!bCapTo && pmgdTo &&
                         ((IsGraphAminoAcid(pmgdTo) && GetStatus(Cn3D_pupPBB) != 3) ||
                          (IsGraphNABase(pmgdTo) && GetStatus(Cn3D_pupNABB) != 3)))
-                        bMidCap = TRUE; /* cap if bond to undrawn backbone atoms */
-                    RenderBond(paldThis, FALSE, paldDrawTo, bMidCap, 
+                        bCapTo = TRUE; /* cap if bond to undrawn backbone atoms */
+                    RenderBond(paldThis, FALSE, paldDrawTo, bCapTo, 
                                &iColor, prKeep->BondWidth);
 #else
                     RenderBond(paldThis, paldDrawTo, &iColor, prKeep->BondWidth);
@@ -3966,8 +3981,27 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel, Int4 iRenderWhat,
                 } else {
                     if (prKeep->Bond == HALF_WORM_BOND) {
 #ifdef _OPENGL
-                        RenderHalfWormBond(paldThis, paldDrawTo, bMidCap, &iColor,
-                                           prKeep->BondWidth, iModel);
+                        /* need cap at atom location if there exists only one 
+                           virtual bond from this atom (to another defined atom) */
+                        Boolean bCapFrom = FALSE;
+                        ValNodePtr pvnTmp;
+                        PMBD pmbdTmp;
+                        for (pvnTmp = pmadThis->pvnBonds; pvnTmp; pvnTmp = pvnTmp->next) {
+                            pmbdTmp = (PMBD) pvnTmp->data.ptrvalue;
+                            if (IsBondVirtual(pmbdTmp) &&
+                                pmbdTmp->pmadFrom && pmbdTmp->pmadFrom->pvnalLocate &&
+                                pmbdTmp->pmadTo && pmbdTmp->pmadTo->pvnalLocate) {
+                                if (!bCapFrom) {
+                                    bCapFrom = TRUE;
+                                } else {
+                                    bCapFrom = FALSE;
+                                    break;
+                                }
+                            }
+                        }
+
+                        RenderHalfWormBond(paldThis, bCapFrom, paldDrawTo, bCapTo, 
+                                           &iColor, prKeep->BondWidth, iModel);
 #else
                         RenderHalfWormBond(paldThis, paldDrawTo, &iColor,
                                            prKeep->BondWidth, iModel);
@@ -4001,10 +4035,10 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel, Int4 iRenderWhat,
                                ensures that ends of OpenGL cylinders for bonds
                                match up correctly  (thiessen) */
                             if (paldThis > paldDrawTo)
-                                RenderBond(paldThis, FALSE, paldMid, bMidCap,
+                                RenderBond(paldThis, FALSE, paldMid, bCapTo,
                                            &iColor, prKeep->BondWidth);
                             else
-                                RenderBond(paldMid, bMidCap, paldThis, FALSE,
+                                RenderBond(paldMid, bCapTo, paldThis, FALSE,
                                            &iColor, prKeep->BondWidth);
 #else
                             RenderBond(paldThis, paldMid, &iColor, prKeep->BondWidth);
@@ -4678,7 +4712,7 @@ static void LabelChainTermini(Int4 iRenderWhat, Int4 iModel,
         PMBD pmbdThis = NULL;
         CharPtr pcN, pcC;
         CharPtr pcChain = NULL;
-        CharPtr pcTemp = NULL;
+        Char pcTemp[32];
 
         PMSD pmsdThis = ToMSDParent((PFB) pmmdThis);
         ASSERT(pmsdThis != NULL);
@@ -4716,15 +4750,12 @@ static void LabelChainTermini(Int4 iRenderWhat, Int4 iModel,
             pcChain = pmmdThis->pcMolName;
         if (!pcChain)
             pcChain = " ";
-        pcTemp = (CharPtr)
-            MemNew((size_t) (StringLen(pcChain) + StringLen(pcN) + 4));
-        if (!pcTemp)
-            return;
         StringCpy(pcTemp, pcChain);
         StringCat(pcTemp, " ");
         StringCat(pcTemp, pcN);
         pdnmgTo = GetFirstGraph(pmmdThis);
-        if (!pdnmgTo)
+        if (!pdnmgTo || !pdnmgTo->data.ptrvalue ||
+            !((PMGD) pdnmgTo->data.ptrvalue)->bVisible)
             return;
         pmadTo = GetMainAtom(pdnmgTo);
         paldTo = GetAtomAltLocs(pmadTo, iModel);
@@ -4744,16 +4775,12 @@ static void LabelChainTermini(Int4 iRenderWhat, Int4 iModel,
                     NULL, paldFrom, paldTo,
                     &(prkNew->Color), prkNew->LJust, prkNew->LScale,
                     RL_EXTRAPOL);
-        MemFree(pcTemp);
-        pcTemp = (CharPtr)
-            MemNew((size_t) (StringLen(pcChain) + StringLen(pcC) + 4));
-        if (!pcTemp)
-            return;
         StringCpy(pcTemp, pcChain);
         StringCat(pcTemp, " ");
         StringCat(pcTemp, pcC);
         pdnmgTo = GetLastGraph(pmmdThis);
-        if (!pdnmgTo)
+        if (!pdnmgTo || !pdnmgTo->data.ptrvalue ||
+            !((PMGD) pdnmgTo->data.ptrvalue)->bVisible)
             return;
         pmadTo = GetMainAtom(pdnmgTo);
         paldTo = GetAtomAltLocs(pmadTo, iModel);
@@ -4773,7 +4800,6 @@ static void LabelChainTermini(Int4 iRenderWhat, Int4 iModel,
                     NULL, paldFrom, paldTo,
                     &(prkNew->Color), prkNew->LJust, prkNew->LScale,
                     RL_EXTRAPOL);
-        MemFree(pcTemp);
     }
 }
 
@@ -4867,8 +4893,8 @@ Cn3D_ColorFuncList Cn3D_ColorList[CN3DFUNCNUM] = {
 {C_BYSECSTRUC,  "Secondary Structure",              Cn3D_Color_BYSECSTRUC},
 {C_BYHYDRO,     "Hydrophobicity",                   Cn3D_Color_BYHYDRO},
 {C_BYOBJECT,    "Cycle Object                    ", Cn3D_Color_BYOBJECT}, /* make long so menus sizes in Render Panel match */
-{C_BYDOMAIN,    "Domain",                           Cn3D_Color_BYDOMAIN},
-{C_BYSTRUCALIGN,"Structure Alignment",              Cn3D_Color_BYSTRUCCONS},
+{C_BYDOMAIN,    "Cycle Domain",                     Cn3D_Color_BYDOMAIN},
+{C_BYSTRUCALIGN,"Alignment",                        Cn3D_Color_BYSTRUCCONS},
 {C_BYSEQCONS,   "Sequence Conservation",            Cn3D_Color_BYSEQCONS}
 };
 

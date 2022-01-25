@@ -32,8 +32,17 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.18 $ 
+/* $Revision: 6.21 $ 
 * $Log: mblast.h,v $
+* Revision 6.21  2000/05/26 19:21:39  dondosha
+* Added two defines for neighboring
+*
+* Revision 6.20  2000/05/12 19:40:17  dondosha
+* Added prototype for BinarySearchInt4; macro MB_HSP_CONTAINED
+*
+* Revision 6.19  2000/05/03 20:20:15  dondosha
+* Added prototype for MegaBlastGappedAlign
+*
 * Revision 6.18  2000/04/12 21:10:05  dondosha
 * Added MegaBlastGetPercentIdentity prototype
 *
@@ -109,6 +118,13 @@ extern "C" {
 #include <mbalign.h>
 
 #define AWAKE_THR_MIN_SIZE 6000000000.0 
+#define MB_DIAG_CLOSE 10
+#define MB_HSP_CONTAINED(qo1,qo2,qe2,so1,so2,se2) \
+(qo1>=qo2 && qo1<=qe2 && so1>=so2 && so1<=se2 && \
+ABS((qo1-so1) - (qo2-so2)) < MB_DIAG_CLOSE)
+
+#define MIN_NEIGHBOR_PERC_IDENTITY 96
+#define MIN_NEIGHBOR_HSP_LENGTH 100
 
 Int2 MegaBlastSetUpSearchInternalByLoc PROTO((BlastSearchBlkPtr search,
 					      SeqLocPtr query_slp, BioseqPtr
@@ -189,7 +205,8 @@ Int4
 MegaBlastExtendHit PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup, 
 		   Int4 s_off, Int4 q_off));
 Int2
-MegaBlastNtWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off));
+MegaBlastNtWordExtend PROTO((BlastSearchBlkPtr search, Uint1Ptr subject0, 
+			     Int4 q_off, Int4 s_off));
 
 Int4 
 MegaBlastWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
@@ -224,6 +241,9 @@ FloatHi
 MegaBlastGetPercentIdentity PROTO((Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
 			    Int4 s_start, Int4 length, Boolean reverse));
 
+Int4 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
+
+Int4 BinarySearchInt4 PROTO((Int4 n, Int4Ptr A, Int4 size));
 
 #ifdef __cplusplus
 }

@@ -31,9 +31,20 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.126 $
+ * $Revision: 6.129 $
  *
  * $Log: vecscrn.h,v $
+ * Revision 6.129  2000/05/09 21:36:40  kitts
+ * Removed unused parameter from VSPrintListFromSeqLocs
+ *
+ * Revision 6.128  2000/05/05 20:11:09  madden
+ * Add VSScreenSequenceByLoc
+ *
+ * Revision 6.127  2000/05/01 16:58:43  kitts
+ *
+ * Added function VSPrintListFromSeqLocs
+ * Added function VSPrintListIdLine
+ *
  * Revision 6.126  2000/03/30 21:04:16  madden
  * Added function VSMakeCombinedSeqLoc
  *
@@ -173,6 +184,8 @@ the information are not desired.
 */
 Int2 LIBCALL VSScreenSequence PROTO((BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
+Int2 LIBCALL VSScreenSequenceByLoc PROTO((SeqLocPtr slp, VSOptionsPtr options, CharPtr database, SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, ValNodePtr *other_returns, ValNodePtr *error_returns));
+
 
 /*
 Performs VecScreen for network application.
@@ -190,7 +203,22 @@ the information are not desired.
 Int2 VSNetScreenSequence PROTO((BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
 
+/* 
+	Prints bar overview and list of matching segments by category
+*/
 Boolean LIBCALL VSPrintOverviewFromSeqLocs PROTO((ValNodePtr vnp, Int4 query_length, FILE *outfp));
+
+
+/* 
+	Prints list of matching segments
+*/
+Boolean LIBCALL VSPrintListFromSeqLocs PROTO((ValNodePtr vnp, FILE *outfp));
+
+
+/* 
+	Prints Id line for list results format
+*/
+Boolean LIBCALL VSPrintListIdLine PROTO((BioseqPtr bsp, CharPtr proginfo, CharPtr database, FILE *outfp));
 
 #ifdef __cplusplus
 }

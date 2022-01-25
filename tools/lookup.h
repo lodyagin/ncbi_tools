@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,9 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.16  2000/05/31 14:04:50  dondosha
+* Added member stack_size to MbStack structure
+*
 * Revision 6.15  2000/03/03 18:00:11  dondosha
 * Added prototype for MegaBlastLookupTableDup, plus cosmetic changes
 *
@@ -222,6 +225,7 @@ typedef struct megablast_lookup_table {
    Uint4 mask; 
    Int4 stack_index;    
    MbStackPtr estack; /* Most recent hits stored here */
+   Int4 stack_size;
 } MbLookupTable, PNTR MbLookupTablePtr;
 
 typedef struct lookup_table {

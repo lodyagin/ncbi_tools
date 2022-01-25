@@ -45,43 +45,43 @@ static AsnValxNode avnx[71] = {
     {20,"premedline" ,11,0.0,&avnx[32] } ,
     {20,"medline" ,12,0.0,&avnx[33] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"paper" ,1,0.0,&avnx[35] } ,
-    {20,"tape" ,2,0.0,&avnx[36] } ,
-    {20,"floppy" ,3,0.0,&avnx[37] } ,
-    {20,"email" ,4,0.0,&avnx[38] } ,
+    {20,"manuscript" ,1,0.0,&avnx[35] } ,
+    {20,"letter" ,2,0.0,&avnx[36] } ,
+    {20,"thesis" ,3,0.0,NULL } ,
+    {20,"paper" ,1,0.0,&avnx[38] } ,
+    {20,"tape" ,2,0.0,&avnx[39] } ,
+    {20,"floppy" ,3,0.0,&avnx[40] } ,
+    {20,"email" ,4,0.0,&avnx[41] } ,
     {20,"other" ,255,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {20,"nameonly" ,0,0.0,&avnx[42] } ,
-    {20,"cas" ,1,0.0,&avnx[43] } ,
+    {20,"nameonly" ,0,0.0,&avnx[45] } ,
+    {20,"cas" ,1,0.0,&avnx[46] } ,
     {20,"ec" ,2,0.0,NULL } ,
-    {20,"ddbj" ,1,0.0,&avnx[45] } ,
-    {20,"carbbank" ,2,0.0,&avnx[46] } ,
-    {20,"embl" ,3,0.0,&avnx[47] } ,
-    {20,"hdb" ,4,0.0,&avnx[48] } ,
-    {20,"genbank" ,5,0.0,&avnx[49] } ,
-    {20,"hgml" ,6,0.0,&avnx[50] } ,
-    {20,"mim" ,7,0.0,&avnx[51] } ,
-    {20,"msd" ,8,0.0,&avnx[52] } ,
-    {20,"pdb" ,9,0.0,&avnx[53] } ,
-    {20,"pir" ,10,0.0,&avnx[54] } ,
-    {20,"prfseqdb" ,11,0.0,&avnx[55] } ,
-    {20,"psd" ,12,0.0,&avnx[56] } ,
-    {20,"swissprot" ,13,0.0,&avnx[57] } ,
+    {20,"ddbj" ,1,0.0,&avnx[48] } ,
+    {20,"carbbank" ,2,0.0,&avnx[49] } ,
+    {20,"embl" ,3,0.0,&avnx[50] } ,
+    {20,"hdb" ,4,0.0,&avnx[51] } ,
+    {20,"genbank" ,5,0.0,&avnx[52] } ,
+    {20,"hgml" ,6,0.0,&avnx[53] } ,
+    {20,"mim" ,7,0.0,&avnx[54] } ,
+    {20,"msd" ,8,0.0,&avnx[55] } ,
+    {20,"pdb" ,9,0.0,&avnx[56] } ,
+    {20,"pir" ,10,0.0,&avnx[57] } ,
+    {20,"prfseqdb" ,11,0.0,&avnx[58] } ,
+    {20,"psd" ,12,0.0,&avnx[59] } ,
+    {20,"swissprot" ,13,0.0,&avnx[60] } ,
     {20,"gdb" ,14,0.0,NULL } ,
-    {20,"other" ,0,0.0,&avnx[59] } ,
-    {20,"comment" ,1,0.0,&avnx[60] } ,
+    {20,"other" ,0,0.0,&avnx[62] } ,
+    {20,"comment" ,1,0.0,&avnx[63] } ,
     {20,"erratum" ,2,0.0,NULL } ,
-    {20,"medline" ,1,0.0,&avnx[62] } ,
-    {20,"pubmed" ,2,0.0,&avnx[63] } ,
+    {20,"medline" ,1,0.0,&avnx[65] } ,
+    {20,"pubmed" ,2,0.0,&avnx[66] } ,
     {20,"ncbigi" ,3,0.0,NULL } ,
-    {20,"publisher" ,1,0.0,&avnx[65] } ,
-    {20,"premedline" ,2,0.0,&avnx[66] } ,
+    {20,"publisher" ,1,0.0,&avnx[68] } ,
+    {20,"premedline" ,2,0.0,&avnx[69] } ,
     {20,"medline" ,3,0.0,NULL } ,
-    {3,NULL,3,0.0,NULL } ,
-    {20,"manuscript" ,1,0.0,&avnx[69] } ,
-    {20,"letter" ,2,0.0,&avnx[70] } ,
-    {20,"thesis" ,3,0.0,NULL } };
+    {3,NULL,3,0.0,NULL } };
 
 static AsnType atx[321] = {
   {401, "Date" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[15]} ,
@@ -160,257 +160,257 @@ static AsnType atx[321] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[50],NULL,0,NULL} ,
   {0, "objects" ,128,11,0,0,0,0,0,0,NULL,&atx[65],&atx[75],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[45],NULL,0,NULL} ,
-  {401, "Pub" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[77],0,&atx[306]} ,
-  {0, "gen" ,128,0,0,0,0,0,0,0,NULL,&atx[78],NULL,0,&atx[134]} ,
-  {411, "Cit-gen" ,1,0,0,0,0,0,1,0,NULL,&atx[79],NULL,0,&atx[296]} ,
-  {407, "Cit-gen" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[80],0,&atx[189]} ,
-  {0, "cit" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[81]} ,
-  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[82],NULL,0,&atx[111]} ,
-  {427, "Auth-list" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[83],0,&atx[139]} ,
-  {0, "names" ,128,0,0,0,0,0,0,0,NULL,&atx[14],&atx[84],0,&atx[110]} ,
-  {0, "std" ,128,0,0,0,0,0,0,0,NULL,&atx[65],&atx[85],0,&atx[106]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[86],NULL,0,NULL} ,
-  {411, "Author" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[87],0,&atx[133]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[88],NULL,0,&atx[89]} ,
-  {413, "Person-id" ,1,0,0,0,0,0,1,0,NULL,&atx[15],NULL,0,&atx[129]} ,
-  {0, "level" ,128,1,0,1,0,0,0,0,NULL,&atx[41],&avnx[7],0,&atx[90]} ,
-  {0, "role" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[9],0,&atx[91]} ,
-  {0, "affil" ,128,3,0,1,0,0,0,0,NULL,&atx[92],NULL,0,&atx[105]} ,
-  {431, "Affil" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[93],0,&atx[152]} ,
-  {0, "str" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[94]} ,
-  {0, "std" ,128,1,0,0,0,0,0,0,NULL,&atx[13],&atx[95],0,NULL} ,
-  {0, "affil" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[96]} ,
-  {0, "div" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[97]} ,
-  {0, "city" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[98]} ,
-  {0, "sub" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[99]} ,
-  {0, "country" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[100]} ,
-  {0, "street" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[101]} ,
-  {0, "email" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[102]} ,
-  {0, "fax" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[103]} ,
-  {0, "phone" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[104]} ,
+  {401, "Cit-art" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[77],0,&atx[122]} ,
+  {0, "title" ,128,0,0,1,0,0,0,0,NULL,&atx[78],NULL,0,&atx[90]} ,
+  {410, "Title" ,1,0,0,0,0,1,0,0,NULL,&atx[44],&atx[79],0,&atx[95]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[14],&atx[80],0,NULL} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[81]} ,
+  {0, "tsub" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[82]} ,
+  {0, "trans" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[83]} ,
+  {0, "jta" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[84]} ,
+  {0, "iso-jta" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[85]} ,
+  {0, "ml-jta" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[86]} ,
+  {0, "coden" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[87]} ,
+  {0, "issn" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[88]} ,
+  {0, "abr" ,128,8,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[89]} ,
+  {0, "isbn" ,128,9,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[91],NULL,0,&atx[120]} ,
+  {427, "Auth-list" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[92],0,&atx[125]} ,
+  {0, "names" ,128,0,0,0,0,0,0,0,NULL,&atx[14],&atx[93],0,&atx[119]} ,
+  {0, "std" ,128,0,0,0,0,0,0,0,NULL,&atx[65],&atx[94],0,&atx[115]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[95],NULL,0,NULL} ,
+  {411, "Author" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[96],0,&atx[169]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[97],NULL,0,&atx[98]} ,
+  {413, "Person-id" ,1,0,0,0,0,0,1,0,NULL,&atx[15],NULL,0,&atx[127]} ,
+  {0, "level" ,128,1,0,1,0,0,0,0,NULL,&atx[41],&avnx[7],0,&atx[99]} ,
+  {0, "role" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[9],0,&atx[100]} ,
+  {0, "affil" ,128,3,0,1,0,0,0,0,NULL,&atx[101],NULL,0,&atx[114]} ,
+  {431, "Affil" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[102],0,&atx[139]} ,
+  {0, "str" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[103]} ,
+  {0, "std" ,128,1,0,0,0,0,0,0,NULL,&atx[13],&atx[104],0,NULL} ,
+  {0, "affil" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[105]} ,
+  {0, "div" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[106]} ,
+  {0, "city" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[107]} ,
+  {0, "sub" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[108]} ,
+  {0, "country" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[109]} ,
+  {0, "street" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[110]} ,
+  {0, "email" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[111]} ,
+  {0, "fax" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[112]} ,
+  {0, "phone" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[113]} ,
   {0, "postal-code" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "is-corr" ,128,4,0,1,0,0,0,0,NULL,&atx[59],NULL,0,NULL} ,
-  {0, "ml" ,128,1,0,0,0,0,0,0,NULL,&atx[65],&atx[107],0,&atx[108]} ,
+  {0, "ml" ,128,1,0,0,0,0,0,0,NULL,&atx[65],&atx[116],0,&atx[117]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "str" ,128,2,0,0,0,0,0,0,NULL,&atx[65],&atx[109],0,NULL} ,
+  {0, "str" ,128,2,0,0,0,0,0,0,NULL,&atx[65],&atx[118],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "affil" ,128,1,0,1,0,0,0,0,NULL,&atx[92],NULL,0,NULL} ,
-  {0, "muid" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[112]} ,
-  {0, "journal" ,128,3,0,1,0,0,0,0,NULL,&atx[113],NULL,0,&atx[125]} ,
-  {410, "Title" ,1,0,0,0,0,1,0,0,NULL,&atx[44],&atx[114],0,&atx[86]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[14],&atx[115],0,NULL} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[116]} ,
-  {0, "tsub" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[117]} ,
-  {0, "trans" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[118]} ,
-  {0, "jta" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[119]} ,
-  {0, "iso-jta" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[120]} ,
-  {0, "ml-jta" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[121]} ,
-  {0, "coden" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[122]} ,
-  {0, "issn" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[123]} ,
-  {0, "abr" ,128,8,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[124]} ,
-  {0, "isbn" ,128,9,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "volume" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[126]} ,
-  {0, "issue" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[127]} ,
-  {0, "pages" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[128]} ,
-  {0, "date" ,128,7,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[130]} ,
-  {414, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[214]} ,
-  {0, "serial-number" ,128,8,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[131]} ,
-  {0, "title" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[132]} ,
-  {0, "pmid" ,128,10,0,1,0,0,0,0,NULL,&atx[133],NULL,0,NULL} ,
-  {412, "PubMedId" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[88]} ,
-  {0, "sub" ,128,1,0,0,0,0,0,0,NULL,&atx[135],NULL,0,&atx[166]} ,
-  {413, "Cit-sub" ,1,0,0,0,0,0,1,0,NULL,&atx[136],NULL,0,&atx[305]} ,
-  {409, "Cit-sub" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[137],0,&atx[113]} ,
-  {0, "authors" ,128,0,0,0,0,0,0,0,NULL,&atx[82],NULL,0,&atx[138]} ,
-  {0, "imp" ,128,1,0,1,0,0,0,0,NULL,&atx[139],NULL,0,&atx[163]} ,
-  {428, "Imprint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[140],0,&atx[192]} ,
-  {0, "date" ,128,0,0,0,0,0,0,0,NULL,&atx[129],NULL,0,&atx[141]} ,
-  {0, "volume" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[142]} ,
-  {0, "issue" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[143]} ,
-  {0, "pages" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[144]} ,
-  {0, "section" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[145]} ,
-  {0, "pub" ,128,5,0,1,0,0,0,0,NULL,&atx[92],NULL,0,&atx[146]} ,
-  {0, "cprt" ,128,6,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[147]} ,
-  {0, "part-sup" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[148]} ,
-  {0, "language" ,128,8,0,0,1,0,0,0,&avnx[13],&atx[2],NULL,0,&atx[149]} ,
-  {0, "prepub" ,128,9,0,1,0,0,0,0,NULL,&atx[41],&avnx[14],0,&atx[150]} ,
-  {0, "part-supi" ,128,10,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[151]} ,
-  {0, "retract" ,128,11,0,1,0,0,0,0,NULL,&atx[152],NULL,0,&atx[155]} ,
-  {432, "CitRetract" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[153],0,NULL} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[17],0,&atx[154]} ,
+  {0, "affil" ,128,1,0,1,0,0,0,0,NULL,&atx[101],NULL,0,NULL} ,
+  {0, "from" ,128,2,0,0,0,0,0,0,NULL,&atx[14],&atx[121],0,&atx[164]} ,
+  {0, "journal" ,128,0,0,0,0,0,0,0,NULL,&atx[122],NULL,0,&atx[150]} ,
+  {402, "Cit-jour" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[123],0,&atx[151]} ,
+  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[78],NULL,0,&atx[124]} ,
+  {0, "imp" ,128,1,0,0,0,0,0,0,NULL,&atx[125],NULL,0,NULL} ,
+  {428, "Imprint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[126],0,&atx[160]} ,
+  {0, "date" ,128,0,0,0,0,0,0,0,NULL,&atx[127],NULL,0,&atx[128]} ,
+  {414, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[183]} ,
+  {0, "volume" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[129]} ,
+  {0, "issue" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[130]} ,
+  {0, "pages" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[131]} ,
+  {0, "section" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[132]} ,
+  {0, "pub" ,128,5,0,1,0,0,0,0,NULL,&atx[101],NULL,0,&atx[133]} ,
+  {0, "cprt" ,128,6,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[134]} ,
+  {0, "part-sup" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[135]} ,
+  {0, "language" ,128,8,0,0,1,0,0,0,&avnx[13],&atx[2],NULL,0,&atx[136]} ,
+  {0, "prepub" ,128,9,0,1,0,0,0,0,NULL,&atx[41],&avnx[14],0,&atx[137]} ,
+  {0, "part-supi" ,128,10,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[138]} ,
+  {0, "retract" ,128,11,0,1,0,0,0,0,NULL,&atx[139],NULL,0,&atx[142]} ,
+  {432, "CitRetract" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[140],0,NULL} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[17],0,&atx[141]} ,
   {0, "exp" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pubstatus" ,128,12,0,1,0,0,0,0,NULL,&atx[156],NULL,0,&atx[157]} ,
-  {424, "PubStatus" ,1,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[21],0,&atx[160]} ,
-  {0, "history" ,128,13,0,1,0,0,0,0,NULL,&atx[158],NULL,0,NULL} ,
-  {426, "PubStatusDateSet" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[159],0,&atx[82]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[160],NULL,0,NULL} ,
-  {425, "PubStatusDate" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[161],0,&atx[158]} ,
-  {0, "pubstatus" ,128,0,0,0,0,0,0,0,NULL,&atx[156],NULL,0,&atx[162]} ,
-  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[129],NULL,0,NULL} ,
-  {0, "medium" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[34],0,&atx[164]} ,
-  {0, "date" ,128,3,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[165]} ,
-  {0, "descr" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "medline" ,128,2,0,0,0,0,0,0,NULL,&atx[167],NULL,0,&atx[256]} ,
-  {404, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[168],NULL,0,&atx[258]} ,
-  {401, "Medline-entry" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[169],0,&atx[234]} ,
-  {0, "uid" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[170]} ,
-  {0, "em" ,128,1,0,0,0,0,0,0,NULL,&atx[171],NULL,0,&atx[172]} ,
-  {405, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[218]} ,
-  {0, "cit" ,128,2,0,0,0,0,0,0,NULL,&atx[173],NULL,0,&atx[215]} ,
-  {403, "Cit-art" ,1,0,0,0,0,0,1,0,NULL,&atx[174],NULL,0,&atx[242]} ,
-  {401, "Cit-art" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[175],0,&atx[179]} ,
-  {0, "title" ,128,0,0,1,0,0,0,0,NULL,&atx[113],NULL,0,&atx[176]} ,
-  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[82],NULL,0,&atx[177]} ,
-  {0, "from" ,128,2,0,0,0,0,0,0,NULL,&atx[14],&atx[178],0,&atx[196]} ,
-  {0, "journal" ,128,0,0,0,0,0,0,0,NULL,&atx[179],NULL,0,&atx[182]} ,
-  {402, "Cit-jour" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[180],0,&atx[183]} ,
-  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[113],NULL,0,&atx[181]} ,
-  {0, "imp" ,128,1,0,0,0,0,0,0,NULL,&atx[139],NULL,0,NULL} ,
-  {0, "book" ,128,1,0,0,0,0,0,0,NULL,&atx[183],NULL,0,&atx[188]} ,
-  {403, "Cit-book" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[184],0,&atx[267]} ,
-  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[113],NULL,0,&atx[185]} ,
-  {0, "coll" ,128,1,0,1,0,0,0,0,NULL,&atx[113],NULL,0,&atx[186]} ,
-  {0, "authors" ,128,2,0,0,0,0,0,0,NULL,&atx[82],NULL,0,&atx[187]} ,
-  {0, "imp" ,128,3,0,0,0,0,0,0,NULL,&atx[139],NULL,0,NULL} ,
-  {0, "proc" ,128,2,0,0,0,0,0,0,NULL,&atx[189],NULL,0,NULL} ,
-  {408, "Cit-proc" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[190],0,&atx[136]} ,
-  {0, "book" ,128,0,0,0,0,0,0,0,NULL,&atx[183],NULL,0,&atx[191]} ,
-  {0, "meet" ,128,1,0,0,0,0,0,0,NULL,&atx[192],NULL,0,NULL} ,
-  {429, "Meeting" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[193],0,&atx[282]} ,
-  {0, "number" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[194]} ,
-  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[129],NULL,0,&atx[195]} ,
-  {0, "place" ,128,2,0,1,0,0,0,0,NULL,&atx[92],NULL,0,NULL} ,
-  {0, "ids" ,128,3,0,1,0,0,0,0,NULL,&atx[197],NULL,0,NULL} ,
-  {423, "ArticleIdSet" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[198],0,&atx[156]} ,
+  {0, "pubstatus" ,128,12,0,1,0,0,0,0,NULL,&atx[143],NULL,0,&atx[144]} ,
+  {424, "PubStatus" ,1,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[21],0,&atx[147]} ,
+  {0, "history" ,128,13,0,1,0,0,0,0,NULL,&atx[145],NULL,0,NULL} ,
+  {426, "PubStatusDateSet" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[146],0,&atx[91]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[147],NULL,0,NULL} ,
+  {425, "PubStatusDate" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[148],0,&atx[145]} ,
+  {0, "pubstatus" ,128,0,0,0,0,0,0,0,NULL,&atx[143],NULL,0,&atx[149]} ,
+  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[127],NULL,0,NULL} ,
+  {0, "book" ,128,1,0,0,0,0,0,0,NULL,&atx[151],NULL,0,&atx[156]} ,
+  {403, "Cit-book" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[152],0,&atx[184]} ,
+  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[78],NULL,0,&atx[153]} ,
+  {0, "coll" ,128,1,0,1,0,0,0,0,NULL,&atx[78],NULL,0,&atx[154]} ,
+  {0, "authors" ,128,2,0,0,0,0,0,0,NULL,&atx[91],NULL,0,&atx[155]} ,
+  {0, "imp" ,128,3,0,0,0,0,0,0,NULL,&atx[125],NULL,0,NULL} ,
+  {0, "proc" ,128,2,0,0,0,0,0,0,NULL,&atx[157],NULL,0,NULL} ,
+  {408, "Cit-proc" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[158],0,&atx[226]} ,
+  {0, "book" ,128,0,0,0,0,0,0,0,NULL,&atx[151],NULL,0,&atx[159]} ,
+  {0, "meet" ,128,1,0,0,0,0,0,0,NULL,&atx[160],NULL,0,NULL} ,
+  {429, "Meeting" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[161],0,&atx[199]} ,
+  {0, "number" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[162]} ,
+  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[127],NULL,0,&atx[163]} ,
+  {0, "place" ,128,2,0,1,0,0,0,0,NULL,&atx[101],NULL,0,NULL} ,
+  {0, "ids" ,128,3,0,1,0,0,0,0,NULL,&atx[165],NULL,0,NULL} ,
+  {423, "ArticleIdSet" ,1,0,0,0,0,0,0,0,NULL,&atx[44],&atx[166],0,&atx[143]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[167],NULL,0,NULL} ,
+  {416, "ArticleId" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[168],0,&atx[171]} ,
+  {0, "pubmed" ,128,0,0,0,0,0,0,0,NULL,&atx[169],NULL,0,&atx[170]} ,
+  {412, "PubMedId" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[97]} ,
+  {0, "medline" ,128,1,0,0,0,0,0,0,NULL,&atx[171],NULL,0,&atx[172]} ,
+  {417, "MedlineUID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[173]} ,
+  {0, "doi" ,128,2,0,0,0,0,0,0,NULL,&atx[173],NULL,0,&atx[174]} ,
+  {418, "DOI" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[175]} ,
+  {0, "pii" ,128,3,0,0,0,0,0,0,NULL,&atx[175],NULL,0,&atx[176]} ,
+  {419, "PII" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[177]} ,
+  {0, "pmcid" ,128,4,0,0,0,0,0,0,NULL,&atx[177],NULL,0,&atx[178]} ,
+  {420, "PmcID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[179]} ,
+  {0, "pmcpid" ,128,5,0,0,0,0,0,0,NULL,&atx[179],NULL,0,&atx[180]} ,
+  {421, "PmcPid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[181]} ,
+  {0, "pmpid" ,128,6,0,0,0,0,0,0,NULL,&atx[181],NULL,0,&atx[182]} ,
+  {422, "PmPid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[165]} ,
+  {0, "other" ,128,7,0,0,0,0,0,0,NULL,&atx[183],NULL,0,NULL} ,
+  {415, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,&atx[17],NULL,0,&atx[167]} ,
+  {404, "Cit-pat" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[185],0,&atx[204]} ,
+  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[186]} ,
+  {0, "authors" ,128,1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,&atx[187]} ,
+  {0, "country" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[188]} ,
+  {0, "doc-type" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[189]} ,
+  {0, "number" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[190]} ,
+  {0, "date-issue" ,128,5,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[191]} ,
+  {0, "class" ,128,6,0,1,0,0,0,0,NULL,&atx[65],&atx[192],0,&atx[193]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "app-number" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[194]} ,
+  {0, "app-date" ,128,8,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[195]} ,
+  {0, "applicants" ,128,9,0,1,0,0,0,0,NULL,&atx[91],NULL,0,&atx[196]} ,
+  {0, "assignees" ,128,10,0,1,0,0,0,0,NULL,&atx[91],NULL,0,&atx[197]} ,
+  {0, "priority" ,128,11,0,1,0,0,0,0,NULL,&atx[65],&atx[198],0,&atx[203]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[199],NULL,0,NULL} ,
-  {416, "ArticleId" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[200],0,&atx[202]} ,
-  {0, "pubmed" ,128,0,0,0,0,0,0,0,NULL,&atx[133],NULL,0,&atx[201]} ,
-  {0, "medline" ,128,1,0,0,0,0,0,0,NULL,&atx[202],NULL,0,&atx[203]} ,
-  {417, "MedlineUID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[204]} ,
-  {0, "doi" ,128,2,0,0,0,0,0,0,NULL,&atx[204],NULL,0,&atx[205]} ,
-  {418, "DOI" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[206]} ,
-  {0, "pii" ,128,3,0,0,0,0,0,0,NULL,&atx[206],NULL,0,&atx[207]} ,
-  {419, "PII" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[208]} ,
-  {0, "pmcid" ,128,4,0,0,0,0,0,0,NULL,&atx[208],NULL,0,&atx[209]} ,
-  {420, "PmcID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[210]} ,
-  {0, "pmcpid" ,128,5,0,0,0,0,0,0,NULL,&atx[210],NULL,0,&atx[211]} ,
-  {421, "PmcPid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[212]} ,
-  {0, "pmpid" ,128,6,0,0,0,0,0,0,NULL,&atx[212],NULL,0,&atx[213]} ,
-  {422, "PmPid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[197]} ,
-  {0, "other" ,128,7,0,0,0,0,0,0,NULL,&atx[214],NULL,0,NULL} ,
-  {415, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,&atx[17],NULL,0,&atx[199]} ,
-  {0, "abstract" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[216]} ,
-  {0, "mesh" ,128,4,0,1,0,0,0,0,NULL,&atx[44],&atx[217],0,&atx[226]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[218],NULL,0,NULL} ,
-  {406, "Medline-mesh" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[219],0,&atx[228]} ,
-  {0, "mp" ,128,0,0,0,1,0,0,0,&avnx[39],&atx[59],NULL,0,&atx[220]} ,
-  {0, "term" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[221]} ,
-  {0, "qual" ,128,2,0,1,0,0,0,0,NULL,&atx[44],&atx[222],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[223],NULL,0,NULL} ,
-  {409, "Medline-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[224],0,&atx[252]} ,
-  {0, "mp" ,128,0,0,0,1,0,0,0,&avnx[40],&atx[59],NULL,0,&atx[225]} ,
-  {0, "subh" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "substance" ,128,5,0,1,0,0,0,0,NULL,&atx[44],&atx[227],0,&atx[232]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[228],NULL,0,NULL} ,
-  {407, "Medline-rn" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[229],0,&atx[247]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[41],0,&atx[230]} ,
-  {0, "cit" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[231]} ,
-  {0, "name" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[44],&atx[233],0,&atx[237]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[234],NULL,0,NULL} ,
-  {402, "Medline-si" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[235],0,&atx[173]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[44],0,&atx[236]} ,
-  {0, "cit" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "idnum" ,128,7,0,1,0,0,0,0,NULL,&atx[44],&atx[238],0,&atx[239]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "gene" ,128,8,0,1,0,0,0,0,NULL,&atx[44],&atx[240],0,&atx[241]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pmid" ,128,9,0,1,0,0,0,0,NULL,&atx[242],NULL,0,&atx[243]} ,
-  {404, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[133],NULL,0,&atx[171]} ,
-  {0, "pub-type" ,128,10,0,1,0,0,0,0,NULL,&atx[44],&atx[244],0,&atx[245]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "mlfield" ,128,11,0,1,0,0,0,0,NULL,&atx[44],&atx[246],0,&atx[255]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[247],NULL,0,NULL} ,
-  {408, "Medline-field" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[248],0,&atx[223]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[58],0,&atx[249]} ,
-  {0, "str" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[250]} ,
-  {0, "ids" ,128,2,0,1,0,0,0,0,NULL,&atx[65],&atx[251],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[252],NULL,0,NULL} ,
-  {410, "DocRef" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[253],0,NULL} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[61],0,&atx[254]} ,
-  {0, "uid" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "status" ,128,12,0,0,1,0,0,0,&avnx[67],&atx[6],&avnx[64],0,NULL} ,
-  {0, "muid" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[257]} ,
-  {0, "article" ,128,4,0,0,0,0,0,0,NULL,&atx[258],NULL,0,&atx[259]} ,
-  {405, "Cit-art" ,1,0,0,0,0,0,1,0,NULL,&atx[174],NULL,0,&atx[260]} ,
-  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[260],NULL,0,&atx[261]} ,
-  {406, "Cit-jour" ,1,0,0,0,0,0,1,0,NULL,&atx[179],NULL,0,&atx[262]} ,
-  {0, "book" ,128,6,0,0,0,0,0,0,NULL,&atx[262],NULL,0,&atx[263]} ,
-  {407, "Cit-book" ,1,0,0,0,0,0,1,0,NULL,&atx[183],NULL,0,&atx[264]} ,
-  {0, "proc" ,128,7,0,0,0,0,0,0,NULL,&atx[264],NULL,0,&atx[265]} ,
-  {408, "Cit-proc" ,1,0,0,0,0,0,1,0,NULL,&atx[189],NULL,0,&atx[266]} ,
-  {0, "patent" ,128,8,0,0,0,0,0,0,NULL,&atx[266],NULL,0,&atx[287]} ,
-  {409, "Cit-pat" ,1,0,0,0,0,0,1,0,NULL,&atx[267],NULL,0,&atx[288]} ,
-  {404, "Cit-pat" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[268],0,&atx[297]} ,
-  {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[269]} ,
-  {0, "authors" ,128,1,0,0,0,0,0,0,NULL,&atx[82],NULL,0,&atx[270]} ,
-  {0, "country" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[271]} ,
-  {0, "doc-type" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[272]} ,
-  {0, "number" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[273]} ,
-  {0, "date-issue" ,128,5,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[274]} ,
-  {0, "class" ,128,6,0,1,0,0,0,0,NULL,&atx[65],&atx[275],0,&atx[276]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "app-number" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[277]} ,
-  {0, "app-date" ,128,8,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[278]} ,
-  {0, "applicants" ,128,9,0,1,0,0,0,0,NULL,&atx[82],NULL,0,&atx[279]} ,
-  {0, "assignees" ,128,10,0,1,0,0,0,0,NULL,&atx[82],NULL,0,&atx[280]} ,
-  {0, "priority" ,128,11,0,1,0,0,0,0,NULL,&atx[65],&atx[281],0,&atx[286]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[282],NULL,0,NULL} ,
-  {430, "Patent-priority" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[283],0,&atx[92]} ,
-  {0, "country" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[284]} ,
-  {0, "number" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[285]} ,
-  {0, "date" ,128,2,0,0,0,0,0,0,NULL,&atx[129],NULL,0,NULL} ,
+  {430, "Patent-priority" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[200],0,&atx[101]} ,
+  {0, "country" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[201]} ,
+  {0, "number" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[202]} ,
+  {0, "date" ,128,2,0,0,0,0,0,0,NULL,&atx[127],NULL,0,NULL} ,
   {0, "abstract" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pat-id" ,128,9,0,0,0,0,0,0,NULL,&atx[288],NULL,0,&atx[295]} ,
-  {410, "Id-pat" ,1,0,0,0,0,0,1,0,NULL,&atx[289],NULL,0,&atx[78]} ,
-  {406, "Id-pat" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[290],0,&atx[79]} ,
-  {0, "country" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[291]} ,
-  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[14],&atx[292],0,&atx[294]} ,
-  {0, "number" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[293]} ,
+  {405, "Cit-let" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[205],0,&atx[208]} ,
+  {0, "cit" ,128,0,0,0,0,0,0,0,NULL,&atx[151],NULL,0,&atx[206]} ,
+  {0, "man-id" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[207]} ,
+  {0, "type" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[34],0,NULL} ,
+  {406, "Id-pat" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[209],0,&atx[214]} ,
+  {0, "country" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[210]} ,
+  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[14],&atx[211],0,&atx[213]} ,
+  {0, "number" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[212]} ,
   {0, "app-number" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "doc-type" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "man" ,128,10,0,0,0,0,0,0,NULL,&atx[296],NULL,0,&atx[301]} ,
-  {412, "Cit-let" ,1,0,0,0,0,0,1,0,NULL,&atx[297],NULL,0,&atx[135]} ,
-  {405, "Cit-let" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[298],0,&atx[289]} ,
-  {0, "cit" ,128,0,0,0,0,0,0,0,NULL,&atx[183],NULL,0,&atx[299]} ,
-  {0, "man-id" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[300]} ,
-  {0, "type" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[68],0,NULL} ,
+  {407, "Cit-gen" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[215],0,&atx[157]} ,
+  {0, "cit" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[216]} ,
+  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[91],NULL,0,&atx[217]} ,
+  {0, "muid" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[218]} ,
+  {0, "journal" ,128,3,0,1,0,0,0,0,NULL,&atx[78],NULL,0,&atx[219]} ,
+  {0, "volume" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[220]} ,
+  {0, "issue" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[221]} ,
+  {0, "pages" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[222]} ,
+  {0, "date" ,128,7,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[223]} ,
+  {0, "serial-number" ,128,8,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[224]} ,
+  {0, "title" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[225]} ,
+  {0, "pmid" ,128,10,0,1,0,0,0,0,NULL,&atx[169],NULL,0,NULL} ,
+  {409, "Cit-sub" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[227],0,&atx[78]} ,
+  {0, "authors" ,128,0,0,0,0,0,0,0,NULL,&atx[91],NULL,0,&atx[228]} ,
+  {0, "imp" ,128,1,0,1,0,0,0,0,NULL,&atx[125],NULL,0,&atx[229]} ,
+  {0, "medium" ,128,2,0,1,0,0,0,0,NULL,&atx[41],&avnx[37],0,&atx[230]} ,
+  {0, "date" ,128,3,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[231]} ,
+  {0, "descr" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {401, "Medline-entry" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[233],0,&atx[257]} ,
+  {0, "uid" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[234]} ,
+  {0, "em" ,128,1,0,0,0,0,0,0,NULL,&atx[235],NULL,0,&atx[236]} ,
+  {405, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[241]} ,
+  {0, "cit" ,128,2,0,0,0,0,0,0,NULL,&atx[237],NULL,0,&atx[238]} ,
+  {403, "Cit-art" ,1,0,0,0,0,0,1,0,NULL,&atx[76],NULL,0,&atx[265]} ,
+  {0, "abstract" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[239]} ,
+  {0, "mesh" ,128,4,0,1,0,0,0,0,NULL,&atx[44],&atx[240],0,&atx[249]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[241],NULL,0,NULL} ,
+  {406, "Medline-mesh" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[242],0,&atx[251]} ,
+  {0, "mp" ,128,0,0,0,1,0,0,0,&avnx[42],&atx[59],NULL,0,&atx[243]} ,
+  {0, "term" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[244]} ,
+  {0, "qual" ,128,2,0,1,0,0,0,0,NULL,&atx[44],&atx[245],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[246],NULL,0,NULL} ,
+  {409, "Medline-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[247],0,&atx[275]} ,
+  {0, "mp" ,128,0,0,0,1,0,0,0,&avnx[43],&atx[59],NULL,0,&atx[248]} ,
+  {0, "subh" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "substance" ,128,5,0,1,0,0,0,0,NULL,&atx[44],&atx[250],0,&atx[255]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[251],NULL,0,NULL} ,
+  {407, "Medline-rn" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[252],0,&atx[270]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[44],0,&atx[253]} ,
+  {0, "cit" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[254]} ,
+  {0, "name" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[44],&atx[256],0,&atx[260]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[257],NULL,0,NULL} ,
+  {402, "Medline-si" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[258],0,&atx[237]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[41],&avnx[47],0,&atx[259]} ,
+  {0, "cit" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "idnum" ,128,7,0,1,0,0,0,0,NULL,&atx[44],&atx[261],0,&atx[262]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "gene" ,128,8,0,1,0,0,0,0,NULL,&atx[44],&atx[263],0,&atx[264]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "pmid" ,128,9,0,1,0,0,0,0,NULL,&atx[265],NULL,0,&atx[266]} ,
+  {404, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[169],NULL,0,&atx[235]} ,
+  {0, "pub-type" ,128,10,0,1,0,0,0,0,NULL,&atx[44],&atx[267],0,&atx[268]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "mlfield" ,128,11,0,1,0,0,0,0,NULL,&atx[44],&atx[269],0,&atx[278]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[270],NULL,0,NULL} ,
+  {408, "Medline-field" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[271],0,&atx[246]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[61],0,&atx[272]} ,
+  {0, "str" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[273]} ,
+  {0, "ids" ,128,2,0,1,0,0,0,0,NULL,&atx[65],&atx[274],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[275],NULL,0,NULL} ,
+  {410, "DocRef" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[276],0,NULL} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[64],0,&atx[277]} ,
+  {0, "uid" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {0, "status" ,128,12,0,0,1,0,0,0,&avnx[70],&atx[6],&avnx[67],0,NULL} ,
+  {401, "Pub" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[280],0,&atx[306]} ,
+  {0, "gen" ,128,0,0,0,0,0,0,0,NULL,&atx[281],NULL,0,&atx[282]} ,
+  {411, "Cit-gen" ,1,0,0,0,0,0,1,0,NULL,&atx[214],NULL,0,&atx[300]} ,
+  {0, "sub" ,128,1,0,0,0,0,0,0,NULL,&atx[283],NULL,0,&atx[284]} ,
+  {413, "Cit-sub" ,1,0,0,0,0,0,1,0,NULL,&atx[226],NULL,0,&atx[305]} ,
+  {0, "medline" ,128,2,0,0,0,0,0,0,NULL,&atx[285],NULL,0,&atx[286]} ,
+  {404, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[232],NULL,0,&atx[288]} ,
+  {0, "muid" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[287]} ,
+  {0, "article" ,128,4,0,0,0,0,0,0,NULL,&atx[288],NULL,0,&atx[289]} ,
+  {405, "Cit-art" ,1,0,0,0,0,0,1,0,NULL,&atx[76],NULL,0,&atx[290]} ,
+  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[290],NULL,0,&atx[291]} ,
+  {406, "Cit-jour" ,1,0,0,0,0,0,1,0,NULL,&atx[122],NULL,0,&atx[292]} ,
+  {0, "book" ,128,6,0,0,0,0,0,0,NULL,&atx[292],NULL,0,&atx[293]} ,
+  {407, "Cit-book" ,1,0,0,0,0,0,1,0,NULL,&atx[151],NULL,0,&atx[294]} ,
+  {0, "proc" ,128,7,0,0,0,0,0,0,NULL,&atx[294],NULL,0,&atx[295]} ,
+  {408, "Cit-proc" ,1,0,0,0,0,0,1,0,NULL,&atx[157],NULL,0,&atx[296]} ,
+  {0, "patent" ,128,8,0,0,0,0,0,0,NULL,&atx[296],NULL,0,&atx[297]} ,
+  {409, "Cit-pat" ,1,0,0,0,0,0,1,0,NULL,&atx[184],NULL,0,&atx[298]} ,
+  {0, "pat-id" ,128,9,0,0,0,0,0,0,NULL,&atx[298],NULL,0,&atx[299]} ,
+  {410, "Id-pat" ,1,0,0,0,0,0,1,0,NULL,&atx[208],NULL,0,&atx[281]} ,
+  {0, "man" ,128,10,0,0,0,0,0,0,NULL,&atx[300],NULL,0,&atx[301]} ,
+  {412, "Cit-let" ,1,0,0,0,0,0,1,0,NULL,&atx[204],NULL,0,&atx[283]} ,
   {0, "equiv" ,128,11,0,0,0,0,0,0,NULL,&atx[302],NULL,0,&atx[304]} ,
-  {403, "Pub-equiv" ,1,0,0,0,0,1,0,0,NULL,&atx[44],&atx[303],0,&atx[167]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
+  {403, "Pub-equiv" ,1,0,0,0,0,1,0,0,NULL,&atx[44],&atx[303],0,&atx[285]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[279],NULL,0,NULL} ,
   {0, "pmid" ,128,12,0,0,0,0,0,0,NULL,&atx[305],NULL,0,NULL} ,
-  {414, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[133],NULL,0,NULL} ,
+  {414, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[169],NULL,0,NULL} ,
   {402, "Pub-set" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[307],0,&atx[302]} ,
   {0, "pub" ,128,0,0,0,0,0,0,0,NULL,&atx[44],&atx[308],0,&atx[309]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[279],NULL,0,NULL} ,
   {0, "medline" ,128,1,0,0,0,0,0,0,NULL,&atx[44],&atx[310],0,&atx[311]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[167],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[285],NULL,0,NULL} ,
   {0, "article" ,128,2,0,0,0,0,0,0,NULL,&atx[44],&atx[312],0,&atx[313]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[258],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[288],NULL,0,NULL} ,
   {0, "journal" ,128,3,0,0,0,0,0,0,NULL,&atx[44],&atx[314],0,&atx[315]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[260],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[290],NULL,0,NULL} ,
   {0, "book" ,128,4,0,0,0,0,0,0,NULL,&atx[44],&atx[316],0,&atx[317]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[262],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[292],NULL,0,NULL} ,
   {0, "proc" ,128,5,0,0,0,0,0,0,NULL,&atx[44],&atx[318],0,&atx[319]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[264],NULL,0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[294],NULL,0,NULL} ,
   {0, "patent" ,128,6,0,0,0,0,0,0,NULL,&atx[44],&atx[320],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[266],NULL,0,NULL} };
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[296],NULL,0,NULL} };
 
 static AsnModule ampx[4] = {
   { "NCBI-General" , "allpub.h61",&atx[0],NULL,&ampx[1],0,0} ,
-  { "NCBI-Pub" , NULL,&atx[76],NULL,&ampx[2],0,0} ,
-  { "NCBI-Biblio" , NULL,&atx[174],NULL,&ampx[3],0,0} ,
-  { "NCBI-Medline" , NULL,&atx[168],NULL,NULL,0,0} };
+  { "NCBI-Biblio" , NULL,&atx[76],NULL,&ampx[2],0,0} ,
+  { "NCBI-Medline" , NULL,&atx[232],NULL,&ampx[3],0,0} ,
+  { "NCBI-Pub" , NULL,&atx[279],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -502,22 +502,269 @@ static AsnModulePtr amp = ampx;
 
 /**************************************************
 *
+*    Defines for Module NCBI-Biblio
+*
+**************************************************/
+
+#define CIT_ART &at[76]
+#define CIT_ART_title &at[77]
+#define CIT_ART_authors &at[90]
+#define CIT_ART_from &at[120]
+#define CIT_ART_from_journal &at[121]
+#define CIT_ART_from_book &at[150]
+#define CIT_ART_from_proc &at[156]
+#define CIT_ART_ids &at[164]
+
+#define CIT_JOUR &at[122]
+#define CIT_JOUR_title &at[123]
+#define CIT_JOUR_imp &at[124]
+
+#define CIT_BOOK &at[151]
+#define CIT_BOOK_title &at[152]
+#define CIT_BOOK_coll &at[153]
+#define CIT_BOOK_authors &at[154]
+#define CIT_BOOK_imp &at[155]
+
+#define CIT_PAT &at[184]
+#define CIT_PAT_title &at[185]
+#define CIT_PAT_authors &at[186]
+#define CIT_PAT_country &at[187]
+#define CIT_PAT_doc_type &at[188]
+#define CIT_PAT_number &at[189]
+#define CIT_PAT_date_issue &at[190]
+#define CIT_PAT_class &at[191]
+#define CIT_PAT_class_E &at[192]
+#define CIT_PAT_app_number &at[193]
+#define CIT_PAT_app_date &at[194]
+#define CIT_PAT_applicants &at[195]
+#define CIT_PAT_assignees &at[196]
+#define CIT_PAT_priority &at[197]
+#define CIT_PAT_priority_E &at[198]
+#define CIT_PAT_abstract &at[203]
+
+#define CIT_LET &at[204]
+#define CIT_LET_cit &at[205]
+#define CIT_LET_man_id &at[206]
+#define CIT_LET_type &at[207]
+
+#define ID_PAT &at[208]
+#define ID_PAT_country &at[209]
+#define ID_PAT_id &at[210]
+#define ID_PAT_id_number &at[211]
+#define ID_PAT_id_app_number &at[212]
+#define ID_PAT_doc_type &at[213]
+
+#define CIT_GEN &at[214]
+#define CIT_GEN_cit &at[215]
+#define CIT_GEN_authors &at[216]
+#define CIT_GEN_muid &at[217]
+#define CIT_GEN_journal &at[218]
+#define CIT_GEN_volume &at[219]
+#define CIT_GEN_issue &at[220]
+#define CIT_GEN_pages &at[221]
+#define CIT_GEN_date &at[222]
+#define CIT_GEN_serial_number &at[223]
+#define CIT_GEN_title &at[224]
+#define CIT_GEN_pmid &at[225]
+
+#define CIT_PROC &at[157]
+#define CIT_PROC_book &at[158]
+#define CIT_PROC_meet &at[159]
+
+#define CIT_SUB &at[226]
+#define CIT_SUB_authors &at[227]
+#define CIT_SUB_imp &at[228]
+#define CIT_SUB_medium &at[229]
+#define CIT_SUB_date &at[230]
+#define CIT_SUB_descr &at[231]
+
+#define TITLE &at[78]
+#define TITLE_E &at[79]
+#define TITLE_E_name &at[80]
+#define TITLE_E_tsub &at[81]
+#define TITLE_E_trans &at[82]
+#define TITLE_E_jta &at[83]
+#define TITLE_E_iso_jta &at[84]
+#define TITLE_E_ml_jta &at[85]
+#define TITLE_E_coden &at[86]
+#define TITLE_E_issn &at[87]
+#define TITLE_E_abr &at[88]
+#define TITLE_E_isbn &at[89]
+
+#define AUTHOR &at[95]
+#define AUTHOR_name &at[96]
+#define AUTHOR_level &at[98]
+#define AUTHOR_role &at[99]
+#define AUTHOR_affil &at[100]
+#define AUTHOR_is_corr &at[114]
+
+#define PUBMEDID &at[169]
+
+#define ARTICLEID &at[167]
+#define ARTICLEID_pubmed &at[168]
+#define ARTICLEID_medline &at[170]
+#define ARTICLEID_doi &at[172]
+#define ARTICLEID_pii &at[174]
+#define ARTICLEID_pmcid &at[176]
+#define ARTICLEID_pmcpid &at[178]
+#define ARTICLEID_pmpid &at[180]
+#define ARTICLEID_other &at[182]
+
+#define MEDLINEUID &at[171]
+
+#define DOI &at[173]
+
+#define PII &at[175]
+
+#define PMCID &at[177]
+
+#define PMCPID &at[179]
+
+#define PMPID &at[181]
+
+#define ARTICLEIDSET &at[165]
+#define ARTICLEIDSET_E &at[166]
+
+#define PUBSTATUS &at[143]
+
+#define PUBSTATUSDATE &at[147]
+#define PUBSTATUSDATE_pubstatus &at[148]
+#define PUBSTATUSDATE_date &at[149]
+
+#define PUBSTATUSDATESET &at[145]
+#define PUBSTATUSDATESET_E &at[146]
+
+#define AUTH_LIST &at[91]
+#define AUTH_LIST_names &at[92]
+#define AUTH_LIST_names_std &at[93]
+#define AUTH_LIST_names_std_E &at[94]
+#define AUTH_LIST_names_ml &at[115]
+#define AUTH_LIST_names_ml_E &at[116]
+#define AUTH_LIST_names_str &at[117]
+#define AUTH_LIST_names_str_E &at[118]
+#define AUTH_LIST_affil &at[119]
+
+#define IMPRINT &at[125]
+#define IMPRINT_date &at[126]
+#define IMPRINT_volume &at[128]
+#define IMPRINT_issue &at[129]
+#define IMPRINT_pages &at[130]
+#define IMPRINT_section &at[131]
+#define IMPRINT_pub &at[132]
+#define IMPRINT_cprt &at[133]
+#define IMPRINT_part_sup &at[134]
+#define IMPRINT_language &at[135]
+#define IMPRINT_prepub &at[136]
+#define IMPRINT_part_supi &at[137]
+#define IMPRINT_retract &at[138]
+#define IMPRINT_pubstatus &at[142]
+#define IMPRINT_history &at[144]
+
+#define MEETING &at[160]
+#define MEETING_number &at[161]
+#define MEETING_date &at[162]
+#define MEETING_place &at[163]
+
+#define PATENT_PRIORITY &at[199]
+#define PATENT_PRIORITY_country &at[200]
+#define PATENT_PRIORITY_number &at[201]
+#define PATENT_PRIORITY_date &at[202]
+
+#define AFFIL &at[101]
+#define AFFIL_str &at[102]
+#define AFFIL_std &at[103]
+#define AFFIL_std_affil &at[104]
+#define AFFIL_std_div &at[105]
+#define AFFIL_std_city &at[106]
+#define AFFIL_std_sub &at[107]
+#define AFFIL_std_country &at[108]
+#define AFFIL_std_street &at[109]
+#define AFFIL_std_email &at[110]
+#define AFFIL_std_fax &at[111]
+#define AFFIL_std_phone &at[112]
+#define AFFIL_std_postal_code &at[113]
+
+#define CITRETRACT &at[139]
+#define CITRETRACT_type &at[140]
+#define CITRETRACT_exp &at[141]
+
+
+/**************************************************
+*
+*    Defines for Module NCBI-Medline
+*
+**************************************************/
+
+#define MEDLINE_ENTRY &at[232]
+#define MEDLINE_ENTRY_uid &at[233]
+#define MEDLINE_ENTRY_em &at[234]
+#define MEDLINE_ENTRY_cit &at[236]
+#define MEDLINE_ENTRY_abstract &at[238]
+#define MEDLINE_ENTRY_mesh &at[239]
+#define MEDLINE_ENTRY_mesh_E &at[240]
+#define MEDLINE_ENTRY_substance &at[249]
+#define MEDLINE_ENTRY_substance_E &at[250]
+#define MEDLINE_ENTRY_xref &at[255]
+#define MEDLINE_ENTRY_xref_E &at[256]
+#define MEDLINE_ENTRY_idnum &at[260]
+#define MEDLINE_ENTRY_idnum_E &at[261]
+#define MEDLINE_ENTRY_gene &at[262]
+#define MEDLINE_ENTRY_gene_E &at[263]
+#define MEDLINE_ENTRY_pmid &at[264]
+#define MEDLINE_ENTRY_pub_type &at[266]
+#define MEDLINE_ENTRY_pub_type_E &at[267]
+#define MEDLINE_ENTRY_mlfield &at[268]
+#define MEDLINE_ENTRY_mlfield_E &at[269]
+#define MEDLINE_ENTRY_status &at[278]
+
+#define MEDLINE_SI &at[257]
+#define MEDLINE_SI_type &at[258]
+#define MEDLINE_SI_cit &at[259]
+
+#define MEDLINE_MESH &at[241]
+#define MEDLINE_MESH_mp &at[242]
+#define MEDLINE_MESH_term &at[243]
+#define MEDLINE_MESH_qual &at[244]
+#define MEDLINE_MESH_qual_E &at[245]
+
+#define MEDLINE_RN &at[251]
+#define MEDLINE_RN_type &at[252]
+#define MEDLINE_RN_cit &at[253]
+#define MEDLINE_RN_name &at[254]
+
+#define MEDLINE_FIELD &at[270]
+#define MEDLINE_FIELD_type &at[271]
+#define MEDLINE_FIELD_str &at[272]
+#define MEDLINE_FIELD_ids &at[273]
+#define MEDLINE_FIELD_ids_E &at[274]
+
+#define MEDLINE_QUAL &at[246]
+#define MEDLINE_QUAL_mp &at[247]
+#define MEDLINE_QUAL_subh &at[248]
+
+#define DOCREF &at[275]
+#define DOCREF_type &at[276]
+#define DOCREF_uid &at[277]
+
+
+/**************************************************
+*
 *    Defines for Module NCBI-Pub
 *
 **************************************************/
 
-#define PUB &at[76]
-#define PUB_gen &at[77]
-#define PUB_sub &at[134]
-#define PUB_medline &at[166]
-#define PUB_muid &at[256]
-#define PUB_article &at[257]
-#define PUB_journal &at[259]
-#define PUB_book &at[261]
-#define PUB_proc &at[263]
-#define PUB_patent &at[265]
-#define PUB_pat_id &at[287]
-#define PUB_man &at[295]
+#define PUB &at[279]
+#define PUB_gen &at[280]
+#define PUB_sub &at[282]
+#define PUB_medline &at[284]
+#define PUB_muid &at[286]
+#define PUB_article &at[287]
+#define PUB_journal &at[289]
+#define PUB_book &at[291]
+#define PUB_proc &at[293]
+#define PUB_patent &at[295]
+#define PUB_pat_id &at[297]
+#define PUB_man &at[299]
 #define PUB_equiv &at[301]
 #define PUB_pmid &at[304]
 
@@ -539,250 +786,3 @@ static AsnModulePtr amp = ampx;
 
 #define PUB_EQUIV &at[302]
 #define PUB_EQUIV_E &at[303]
-
-
-/**************************************************
-*
-*    Defines for Module NCBI-Biblio
-*
-**************************************************/
-
-#define CIT_ART &at[174]
-#define CIT_ART_title &at[175]
-#define CIT_ART_authors &at[176]
-#define CIT_ART_from &at[177]
-#define CIT_ART_from_journal &at[178]
-#define CIT_ART_from_book &at[182]
-#define CIT_ART_from_proc &at[188]
-#define CIT_ART_ids &at[196]
-
-#define CIT_JOUR &at[179]
-#define CIT_JOUR_title &at[180]
-#define CIT_JOUR_imp &at[181]
-
-#define CIT_BOOK &at[183]
-#define CIT_BOOK_title &at[184]
-#define CIT_BOOK_coll &at[185]
-#define CIT_BOOK_authors &at[186]
-#define CIT_BOOK_imp &at[187]
-
-#define CIT_PAT &at[267]
-#define CIT_PAT_title &at[268]
-#define CIT_PAT_authors &at[269]
-#define CIT_PAT_country &at[270]
-#define CIT_PAT_doc_type &at[271]
-#define CIT_PAT_number &at[272]
-#define CIT_PAT_date_issue &at[273]
-#define CIT_PAT_class &at[274]
-#define CIT_PAT_class_E &at[275]
-#define CIT_PAT_app_number &at[276]
-#define CIT_PAT_app_date &at[277]
-#define CIT_PAT_applicants &at[278]
-#define CIT_PAT_assignees &at[279]
-#define CIT_PAT_priority &at[280]
-#define CIT_PAT_priority_E &at[281]
-#define CIT_PAT_abstract &at[286]
-
-#define CIT_LET &at[297]
-#define CIT_LET_cit &at[298]
-#define CIT_LET_man_id &at[299]
-#define CIT_LET_type &at[300]
-
-#define ID_PAT &at[289]
-#define ID_PAT_country &at[290]
-#define ID_PAT_id &at[291]
-#define ID_PAT_id_number &at[292]
-#define ID_PAT_id_app_number &at[293]
-#define ID_PAT_doc_type &at[294]
-
-#define CIT_GEN &at[79]
-#define CIT_GEN_cit &at[80]
-#define CIT_GEN_authors &at[81]
-#define CIT_GEN_muid &at[111]
-#define CIT_GEN_journal &at[112]
-#define CIT_GEN_volume &at[125]
-#define CIT_GEN_issue &at[126]
-#define CIT_GEN_pages &at[127]
-#define CIT_GEN_date &at[128]
-#define CIT_GEN_serial_number &at[130]
-#define CIT_GEN_title &at[131]
-#define CIT_GEN_pmid &at[132]
-
-#define CIT_PROC &at[189]
-#define CIT_PROC_book &at[190]
-#define CIT_PROC_meet &at[191]
-
-#define CIT_SUB &at[136]
-#define CIT_SUB_authors &at[137]
-#define CIT_SUB_imp &at[138]
-#define CIT_SUB_medium &at[163]
-#define CIT_SUB_date &at[164]
-#define CIT_SUB_descr &at[165]
-
-#define TITLE &at[113]
-#define TITLE_E &at[114]
-#define TITLE_E_name &at[115]
-#define TITLE_E_tsub &at[116]
-#define TITLE_E_trans &at[117]
-#define TITLE_E_jta &at[118]
-#define TITLE_E_iso_jta &at[119]
-#define TITLE_E_ml_jta &at[120]
-#define TITLE_E_coden &at[121]
-#define TITLE_E_issn &at[122]
-#define TITLE_E_abr &at[123]
-#define TITLE_E_isbn &at[124]
-
-#define AUTHOR &at[86]
-#define AUTHOR_name &at[87]
-#define AUTHOR_level &at[89]
-#define AUTHOR_role &at[90]
-#define AUTHOR_affil &at[91]
-#define AUTHOR_is_corr &at[105]
-
-#define PUBMEDID &at[133]
-
-#define ARTICLEID &at[199]
-#define ARTICLEID_pubmed &at[200]
-#define ARTICLEID_medline &at[201]
-#define ARTICLEID_doi &at[203]
-#define ARTICLEID_pii &at[205]
-#define ARTICLEID_pmcid &at[207]
-#define ARTICLEID_pmcpid &at[209]
-#define ARTICLEID_pmpid &at[211]
-#define ARTICLEID_other &at[213]
-
-#define MEDLINEUID &at[202]
-
-#define DOI &at[204]
-
-#define PII &at[206]
-
-#define PMCID &at[208]
-
-#define PMCPID &at[210]
-
-#define PMPID &at[212]
-
-#define ARTICLEIDSET &at[197]
-#define ARTICLEIDSET_E &at[198]
-
-#define PUBSTATUS &at[156]
-
-#define PUBSTATUSDATE &at[160]
-#define PUBSTATUSDATE_pubstatus &at[161]
-#define PUBSTATUSDATE_date &at[162]
-
-#define PUBSTATUSDATESET &at[158]
-#define PUBSTATUSDATESET_E &at[159]
-
-#define AUTH_LIST &at[82]
-#define AUTH_LIST_names &at[83]
-#define AUTH_LIST_names_std &at[84]
-#define AUTH_LIST_names_std_E &at[85]
-#define AUTH_LIST_names_ml &at[106]
-#define AUTH_LIST_names_ml_E &at[107]
-#define AUTH_LIST_names_str &at[108]
-#define AUTH_LIST_names_str_E &at[109]
-#define AUTH_LIST_affil &at[110]
-
-#define IMPRINT &at[139]
-#define IMPRINT_date &at[140]
-#define IMPRINT_volume &at[141]
-#define IMPRINT_issue &at[142]
-#define IMPRINT_pages &at[143]
-#define IMPRINT_section &at[144]
-#define IMPRINT_pub &at[145]
-#define IMPRINT_cprt &at[146]
-#define IMPRINT_part_sup &at[147]
-#define IMPRINT_language &at[148]
-#define IMPRINT_prepub &at[149]
-#define IMPRINT_part_supi &at[150]
-#define IMPRINT_retract &at[151]
-#define IMPRINT_pubstatus &at[155]
-#define IMPRINT_history &at[157]
-
-#define MEETING &at[192]
-#define MEETING_number &at[193]
-#define MEETING_date &at[194]
-#define MEETING_place &at[195]
-
-#define PATENT_PRIORITY &at[282]
-#define PATENT_PRIORITY_country &at[283]
-#define PATENT_PRIORITY_number &at[284]
-#define PATENT_PRIORITY_date &at[285]
-
-#define AFFIL &at[92]
-#define AFFIL_str &at[93]
-#define AFFIL_std &at[94]
-#define AFFIL_std_affil &at[95]
-#define AFFIL_std_div &at[96]
-#define AFFIL_std_city &at[97]
-#define AFFIL_std_sub &at[98]
-#define AFFIL_std_country &at[99]
-#define AFFIL_std_street &at[100]
-#define AFFIL_std_email &at[101]
-#define AFFIL_std_fax &at[102]
-#define AFFIL_std_phone &at[103]
-#define AFFIL_std_postal_code &at[104]
-
-#define CITRETRACT &at[152]
-#define CITRETRACT_type &at[153]
-#define CITRETRACT_exp &at[154]
-
-
-/**************************************************
-*
-*    Defines for Module NCBI-Medline
-*
-**************************************************/
-
-#define MEDLINE_ENTRY &at[168]
-#define MEDLINE_ENTRY_uid &at[169]
-#define MEDLINE_ENTRY_em &at[170]
-#define MEDLINE_ENTRY_cit &at[172]
-#define MEDLINE_ENTRY_abstract &at[215]
-#define MEDLINE_ENTRY_mesh &at[216]
-#define MEDLINE_ENTRY_mesh_E &at[217]
-#define MEDLINE_ENTRY_substance &at[226]
-#define MEDLINE_ENTRY_substance_E &at[227]
-#define MEDLINE_ENTRY_xref &at[232]
-#define MEDLINE_ENTRY_xref_E &at[233]
-#define MEDLINE_ENTRY_idnum &at[237]
-#define MEDLINE_ENTRY_idnum_E &at[238]
-#define MEDLINE_ENTRY_gene &at[239]
-#define MEDLINE_ENTRY_gene_E &at[240]
-#define MEDLINE_ENTRY_pmid &at[241]
-#define MEDLINE_ENTRY_pub_type &at[243]
-#define MEDLINE_ENTRY_pub_type_E &at[244]
-#define MEDLINE_ENTRY_mlfield &at[245]
-#define MEDLINE_ENTRY_mlfield_E &at[246]
-#define MEDLINE_ENTRY_status &at[255]
-
-#define MEDLINE_SI &at[234]
-#define MEDLINE_SI_type &at[235]
-#define MEDLINE_SI_cit &at[236]
-
-#define MEDLINE_MESH &at[218]
-#define MEDLINE_MESH_mp &at[219]
-#define MEDLINE_MESH_term &at[220]
-#define MEDLINE_MESH_qual &at[221]
-#define MEDLINE_MESH_qual_E &at[222]
-
-#define MEDLINE_RN &at[228]
-#define MEDLINE_RN_type &at[229]
-#define MEDLINE_RN_cit &at[230]
-#define MEDLINE_RN_name &at[231]
-
-#define MEDLINE_FIELD &at[247]
-#define MEDLINE_FIELD_type &at[248]
-#define MEDLINE_FIELD_str &at[249]
-#define MEDLINE_FIELD_ids &at[250]
-#define MEDLINE_FIELD_ids_E &at[251]
-
-#define MEDLINE_QUAL &at[223]
-#define MEDLINE_QUAL_mp &at[224]
-#define MEDLINE_QUAL_subh &at[225]
-
-#define DOCREF &at[252]
-#define DOCREF_type &at[253]
-#define DOCREF_uid &at[254]

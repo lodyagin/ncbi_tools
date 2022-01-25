@@ -34,8 +34,11 @@ Contents: header file for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.12 $ *
+/* $Revision: 6.13 $ *
 * $Log: posit.h,v $
+* Revision 6.13  2000/04/29 21:49:05  kans
+* removed bad characters on Mac
+*
 * Revision 6.12  1999/11/15 21:47:00  shavirin
 * Added parameter Boolean use_best_align into compactSearchItems structure
 *
@@ -232,3 +235,4 @@ void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
 #endif
 
 #endif /* __POSIT__ */
+

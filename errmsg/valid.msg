@@ -382,6 +382,19 @@ Comments that refer to the conclusions of a specific reference should not be
 cited by a serial number inside brackets (e.g., [3]), but should instead be
 attached as a REMARK on the reference itself.
 
+$^ MultipleCDSproducts, 39
+More than one CDS feature points to the same protein product.  This can happen with
+viral long terminal repeats (LTRs), but GenBank policy is to have each equivalent
+CDS point to a separately accessioned protein Bioseq.
+
+$^ FocusOnBioSourceFeauture, 40
+The /focus flag is only appropriate on BioSource descriptors, not BioSource features.
+
+$^ PeptideFeatOutOfFrame, 41
+The start or stop positions of this processed peptide feature do not occur in between
+codon boundaries.  This may incorrectly overlap other peptides when the features are
+converted to protein coordinates by mapping through the CDS.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1

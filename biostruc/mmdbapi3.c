@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/06/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.20 $
 *
 * File Description: FlatFile Generators for PDB & Kinemage
 *
@@ -44,6 +44,27 @@
 *
 *
 * $Log: mmdbapi3.c,v $
+* Revision 6.20  2000/05/19 21:53:37  lewisg
+* fix header formatting errors
+*
+* Revision 6.19  2000/05/15 23:39:33  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 6.18  2000/05/09 19:51:01  lewisg
+* add new blast header to file>properties
+*
+* Revision 6.17  2000/05/08 20:33:29  lewisg
+* get rid of fault because vastsrch returns null date
+*
+* Revision 6.16  2000/05/08 16:50:47  lewisg
+* fix formatting bugs in pdb format
+*
+* Revision 6.15  2000/05/06 00:05:05  lewisg
+* rework pdb dumpers to use ncbi data
+*
+* Revision 6.14  2000/04/27 22:21:57  lewisg
+* misc bugs/features
+*
 * Revision 6.13  2000/03/31 22:30:47  lewisg
 * fix output of CONECT, create intrabond traverser, misc bugs
 *
@@ -352,6 +373,14 @@ Int1 ElementKinColors[MAX_ELEMENTS]  = {
 	1, /*  */
 	1, /*  */
 	1 /*  */};
+    
+    
+static void MMDB_writeres(Char *pcResNum, Int4 choice)
+{
+    if (choice < 10000)
+        sprintf(pcResNum, "%4d ", choice);
+    else sprintf(pcResNum, "%5d", choice);
+}
 
 
 void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer ptr)
@@ -403,21 +432,10 @@ void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer
 			;
 		       }
 
-		/* get res numbering */
-		pcRes = ParentGraphPDBNo((PFB) pmadThis); /* the PDB number string */
-		if (StringLen(pcRes) > 5)
-                  {
-		   pcResNum = (CharPtr)MemNew((size_t)6*sizeof(char));
-		   StringNCpy(pcResNum, &pcRes[1],5);
-		   pcResNum[5] = '\0';
-                  }
-		else
-		  if (pcRes) pcResNum = StringSave(pcRes);
-		if (!pcResNum)
- 		  {  /* Make up new numbering using residue ID */
-		    pcResNum = (CharPtr)MemNew((size_t)6*sizeof(char));
-		    sprintf(pcResNum, "%5d", (int) pmgdThis->pdnmgLink->choice);
-		  }
+		pcResNum = (CharPtr)MemNew((size_t)6*sizeof(char));
+        if(iIndex) MMDB_writeres(pcResNum, pmgdThis->pdnmgLink->choice);
+        else MMDB_writeres(pcResNum, pmmdThis->pdnmmLink->choice);
+
  		pcChem = StringSave(pmadThis->pcAName);
 		if (!pcChem) 
 		  {
@@ -507,9 +525,9 @@ void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer
 		    fflush(pFile);
 		    if (paldThis->iFloatNo == 4) /* isotropic temp */
 		        {
-			 fprintf(pFile,"%6.2f      %4s\n",
+			 fprintf(pFile,"%6.2f          %2.2s\n",
 				 (float)paldThis->pflvData[4],
-				 pcStruc);
+				 ElementName(pmadThis->pvnmaLink->choice));
 		    	 fflush(pFile);
 			}
 		    else
@@ -519,11 +537,11 @@ void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer
 			      fIsotropic = (FloatLo) (((paldThis->pflvData[4] +
 						    paldThis->pflvData[5] +
 						    paldThis->pflvData[6]) / 3) * 10000);
-			      fprintf(pFile,"%6.2f      %4s\n",
+			      fprintf(pFile,"%6.2f          %2.2s\n",
 				 (float)fIsotropic, /* put calculated isotropic */
-		        	  pcStruc);  /* finish the ATOM string */
+		        	  ElementName(pmadThis->pvnmaLink->choice));  /* finish the ATOM string */
 			      fflush(pFile);
-			      fprintf(pFile,"ANISOU%5ld %4s%s%3s %1s%5s  %6d %6d %6d %6d %6d %6d  %s\n",
+			      fprintf(pFile,"ANISOU%5ld %4s%s%3s %1s%5s  %6d %6d %6d %6d %6d %6d\n",
 				    (long) paldThis->iUniqueId, /* Atom serial No */
 				    pcChem, /* Atom name "cccc" */
 				    pcAlt, /* Alternat loc id char "c" */
@@ -535,13 +553,13 @@ void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer
 				    (int) (paldThis->pflvData[6] * 10000),
 				    (int) (paldThis->pflvData[7] * 10000),
 				    (int) (paldThis->pflvData[8] * 10000),
-				    (int) (paldThis->pflvData[9] * 10000),
-				    pcStruc);
+				    (int) (paldThis->pflvData[9] * 10000));
 			      fflush(pFile);
 			   }
 			 else
 		           { /* neither temp factors */
-			      fprintf(pFile,"%6.2f      %4s\n",(float)0.0,pcStruc);
+			      fprintf(pFile,"%6.2f          %2.2s\n",(float)0.0,
+                      ElementName(pmadThis->pvnmaLink->choice));
 		  	      fflush(pFile);
 		           }
 			} /* else from iFloatNo == 4 */
@@ -629,7 +647,7 @@ CharPtr LIBCALL AuthorListPDB(BiostrucPtr pbsThis)
    CitSubPtr pcsThis = NULL;
    Boolean bFirst = TRUE;
    DataVal dvAuthors;
-   
+
    pcAuthors = StringSave("");
    pbsdrThis = ValNodeFindNext(pbsThis->descr,pbsdrLast,BiostrucDescr_attribution);
    while (pbsdrThis)
@@ -659,363 +677,374 @@ CharPtr LIBCALL AuthorListPDB(BiostrucPtr pbsThis)
 
 void LIBCALL WritePDBHeader(PDNMS pdnmsThis,  FILE *pFile)
 {
-
-   Int4 i, depyear, depday, depmon, chrcnt, prevcnt, linecnt, back, first, adjust;
-   CharPtr cmpnd, src;
-   Char lastchr, nextchr;
-   Boolean lastok, nextok;
-   PMSD pmsdThis = NULL;
-   BiostrucSourcePtr pbssThis = NULL;
-   BiostrucHistoryPtr pbshThis = NULL;
-   ValNodePtr pvnThis = NULL;
-
-
-
-   if (!pdnmsThis) return;
-   pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-   pvnThis = ValNodeFindNext(pmsdThis->pbsBS->descr,NULL,BiostrucDescr_history);
-   if (pvnThis)
-     {
-       pbshThis = (BiostrucHistoryPtr) pvnThis->data.ptrvalue;
-       pbssThis = pbshThis->data_source;
-     }
-
-   /* Output a HEADER record. */
-
-   fprintf(pFile,"HEADER    %s", pmsdThis->pcPdbClass);
-
-   for (i = 0; i < (40 - StringLen( pmsdThis->pcPdbClass )); i++)
-   {
-      fprintf(pFile," ");
-   }
-   fflush(pFile);
-   if(pbssThis) {
-      depyear = pbssThis->database_entry_date->data[1];
-      depday = pbssThis->database_entry_date->data[3];
-      depmon = pbssThis->database_entry_date->data[2];
-   } else {
-       depyear = depday = 0;
-       depmon = 1;
-   }
-   if (!pmsdThis->pcPDBName) pmsdThis->pcPDBName = StringSave("1UNK");
-
-   fprintf(pFile,"%2d-%3s-%02d   %s      %s\n",
-                   (int) depday,
-                   NCBI_months[depmon-1],
-                   (int) depyear%100,
-                   pmsdThis->pcPDBName,
-                   pmsdThis->pcPDBName);
-
-   /* Output a COMPND record. */
-
-   cmpnd = pmsdThis->pcChemName;
-   chrcnt = StringLen(cmpnd);
-   prevcnt = 0;
-
-   linecnt = 1;
-
-   while (chrcnt > 0)
-   {
-      fprintf(pFile, "COMPND");
-      back = 0;
-      if (linecnt > 1)
-      {
-	 fprintf(pFile,"  %2d ",(int) linecnt++);
-	 first = 1;
-      }
-      else
-      {
-	 fprintf(pFile,"    ");
-	 first = 0;
-	 linecnt++;
-      }
-
-      if (chrcnt > (60-first))
-      {
-	 lastchr = cmpnd[prevcnt + 59 - first];
-         nextchr = cmpnd[prevcnt + 59 - first + 1];
-	 lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
-	 nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
-         if (lastok || nextok)
-         {
-	    adjust = 0;
-	    for (i = 0; i < (60-first); i++)
-	    {
-	       if (i==0 && cmpnd[prevcnt]==' ')
-	       {
-                  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",cmpnd[prevcnt+i]);
+    
+    Int4 i, depyear, depday, depmon, chrcnt, prevcnt, linecnt, back, first, adjust;
+    CharPtr cmpnd, src;
+    Char lastchr, nextchr;
+    Boolean lastok, nextok;
+    PMSD pmsdThis = NULL;
+    BiostrucSourcePtr pbssThis = NULL;
+    BiostrucHistoryPtr pbshThis = NULL;
+    ValNodePtr pvnThis = NULL;
+    ValNodePtr descr;
+    Char orgstring[1024];
+    OrgRefPtr org;
+    
+    if (!pdnmsThis) return;
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    pvnThis = ValNodeFindNext(pmsdThis->pbsBS->descr,NULL,BiostrucDescr_history);
+    if (pvnThis)
+    {
+        pbshThis = (BiostrucHistoryPtr) pvnThis->data.ptrvalue;
+        pbssThis = pbshThis->data_source;
+    }
+    
+    /* Output a HEADER record. */
+    
+    fprintf(pFile,"HEADER    %s", pmsdThis->pcPdbClass);
+    
+    for (i = 0; i < (40 - StringLen( pmsdThis->pcPdbClass )); i++)
+    {
+        fprintf(pFile," ");
+    }
+    fflush(pFile);
+    if(pbssThis) {
+        depyear = pbssThis->database_entry_date->data[1];
+        depday = pbssThis->database_entry_date->data[3];
+        depmon = pbssThis->database_entry_date->data[2];
+    } else {
+        depyear = depday = 0;
+        depmon = 1;
+    }
+    if (!pmsdThis->pcPDBName) pmsdThis->pcPDBName = StringSave("1UNK");
+    
+    fprintf(pFile,"%2d-%3s-%02d   %s\n",
+        (int) depday,
+        NCBI_months[depmon-1],
+        (int) depyear%100,
+        pmsdThis->pcPDBName);
+    
+    /* Output a COMPND record. */
+    
+    cmpnd = pmsdThis->pcChemName;
+    chrcnt = StringLen(cmpnd);
+    prevcnt = 0;
+    
+    linecnt = 1;
+    
+    while (chrcnt > 0)
+    {
+        fprintf(pFile, "COMPND");
+        back = 0;
+        if (linecnt > 1)
+        {
+            fprintf(pFile,"  %2d ",(int) linecnt++);
+            first = 1;
+        }
+        else
+        {
+            fprintf(pFile,"    ");
+            first = 0;
+            linecnt++;
+        }
+        
+        if (chrcnt > (60-first))
+        {
+            lastchr = cmpnd[prevcnt + 59 - first];
+            nextchr = cmpnd[prevcnt + 59 - first + 1];
+            lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
+            nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
+            if (lastok || nextok)
+            {
+                adjust = 0;
+                for (i = 0; i < (60-first); i++)
+                {
+                    if (i==0 && cmpnd[prevcnt]==' ')
+                    {
+                        adjust = 1;
+                        continue;
+                    }
+                    
+                    fprintf(pFile,"%c",cmpnd[prevcnt+i]);
+                }
+                
+                if (adjust == 1)
+                    fprintf(pFile, " ");
+                
+                chrcnt = chrcnt - 60 + first;
+                prevcnt = prevcnt + 60 - first;
             }
-
-	    if (adjust == 1)
-	       fprintf(pFile, " ");
-
-	    chrcnt = chrcnt - 60 + first;
-	    prevcnt = prevcnt + 60 - first;
-         }
-         else
-         {
-	    i = prevcnt + 59 - first;
-
-	    do
-	    {
-	       i--;
-	       back++;
-	    }
-	    while ((cmpnd[i]!=' ') && (cmpnd[i]!='.') && (cmpnd[i]!=',') && (i>=0));
-
-	    adjust = 0;
-	    for (i=0; i<(60-first-back); i++)
-	    {
-	       if (i==0 && cmpnd[prevcnt]==' ')
-	       {
-		  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",cmpnd[prevcnt+i]);
-	    }
-	    for (i=0; i<(back+adjust); i++)
-	       fprintf(pFile," ");
-
-	    chrcnt = chrcnt - 60 + first + back;
-	    prevcnt = prevcnt + 60 - first - back;
-	 }
-      }
-      else
-      {
-	 adjust = 0;
-	 for (i=0; i<chrcnt; i++)
-	 {
-	    if (i==0 && cmpnd[prevcnt]==' ')
-	    {
-	       adjust = 1;
-	       continue;
+            else
+            {
+                i = prevcnt + 59 - first;
+                
+                do
+                {
+                    i--;
+                    back++;
+                }
+                while ((cmpnd[i]!=' ') && (cmpnd[i]!='.') && (cmpnd[i]!=',') && (i>=0));
+                
+                adjust = 0;
+                for (i=0; i<(60-first-back); i++)
+                {
+                    if (i==0 && cmpnd[prevcnt]==' ')
+                    {
+                        adjust = 1;
+                        continue;
+                    }
+                    
+                    fprintf(pFile,"%c",cmpnd[prevcnt+i]);
+                }
+                for (i=0; i<(back+adjust); i++)
+                    fprintf(pFile," ");
+                
+                chrcnt = chrcnt - 60 + first + back;
+                prevcnt = prevcnt + 60 - first - back;
             }
-
-	    fprintf(pFile,"%c",cmpnd[prevcnt+i]);
-         }
-
-	 for (i=0; i<(60-first-chrcnt+adjust); i++)
-	    fprintf(pFile," ");
-
-	 chrcnt = 0;
-      }
-
-      fprintf(pFile,"  %s\n",pmsdThis->pcPDBName);
-   }
-
-   /* Output a SOURCE record. */
-
-   src = pmsdThis->pcPdbSource;
-   chrcnt = StringLen(src);
-   prevcnt = 0;
-
-   linecnt = 1;
-
-   while (chrcnt > 0)
-   {
-      fprintf(pFile, "SOURCE");
-      back = 0;
-
-      if (linecnt > 1)
-      {
-	 fprintf(pFile,"  %2d ",(int)linecnt++);
-	 first = 1;
-      }
-      else
-      {
-	 fprintf(pFile,"    ");
-	 first = 0;
-	 linecnt++;
-      }
-
-      if (chrcnt > (60-first))
-      {
-	 lastchr = src[prevcnt + 59 - first];
-         nextchr = src[prevcnt + 59 - first + 1];
-	 lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
-	 nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
-         if (lastok || nextok)
-         {
-	    adjust = 0;
-	    for (i = 0; i < (60-first); i++)
-	    {
-	       if (i==0 && src[prevcnt]==' ')
-	       {
-		  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",src[prevcnt+i]);
+        }
+        else
+        {
+            adjust = 0;
+            for (i=0; i<chrcnt; i++)
+            {
+                if (i==0 && cmpnd[prevcnt]==' ')
+                {
+                    adjust = 1;
+                    continue;
+                }
+                
+                fprintf(pFile,"%c",cmpnd[prevcnt+i]);
             }
-
-	    if (adjust==1)
-	       fprintf(pFile, " ");
-
-	    chrcnt = chrcnt - 60 + first;
-	    prevcnt = prevcnt + 60 - first;
-         }
-         else
-         {
-	    i = prevcnt + 59 - first;
-
-	    do
-	    {
-	       i--;
-	       back++;
-	    }
-	    while ((src[i]!=' ') && (src[i]!='.') && (src[i]!=',') && (i>=0));
-
-	    adjust = 0;
-	    for (i=0; i<(60-first-back); i++)
-	    {
-	       if (i==0 && src[prevcnt]==' ')
-	       {
-		  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",src[prevcnt+i]);
-	    }
-	    for (i=0; i<(back+adjust); i++)
-	       fprintf(pFile," ");
-
-	    chrcnt = chrcnt - 60 + first + back;
-	    prevcnt = prevcnt + 60 - first - back;
-	 }
-      }
-      else
-      {
-	 adjust = 0;
-	 for (i=0; i<chrcnt; i++)
-	 {
-	    if (i==0 && src[prevcnt]==' ')
-	    {
-	       adjust = 1;
-	       continue;
+            
+            for (i=0; i<(60-first-chrcnt+adjust); i++)
+                fprintf(pFile," ");
+            chrcnt = 0;
+        }
+        fprintf(pFile,"\n");
+        
+    }
+    
+    /* Output a SOURCE record. */
+    
+    prevcnt = 0;
+    linecnt = 1;
+    orgstring[0] = '\0';
+    org = NULL;
+    
+    for (descr = ((PMMD)(pmsdThis->pdnmmHead->data.ptrvalue))->pMolDescr; descr != NULL; descr = descr->next) {
+        if (descr->choice == BiomolDescr_organism)
+            org = (OrgRefPtr)((BioSourcePtr)descr->data.ptrvalue)->org;           
+    }
+    
+    if(org) 
+        if(org->common) sprintf(orgstring, "ORGANISM_SCIENTIFIC: %s; ORGANISM_COMMON: %s",
+            org->taxname, org->common);
+        else if (org->taxname) sprintf(orgstring, "ORGANISM_SCIENTIFIC: %s",
+            org->taxname);
+        src = orgstring;
+        chrcnt = StringLen(src);
+        
+        while (chrcnt > 0)
+        {
+            fprintf(pFile, "SOURCE");
+            back = 0;
+            
+            if (linecnt > 1)
+            {
+                fprintf(pFile,"  %2d ",(int)linecnt++);
+                first = 1;
             }
-
-	    fprintf(pFile,"%c",src[prevcnt+i]);
-         }
-
-	 for (i=0; i<(60-first-chrcnt+adjust); i++)
-	    fprintf(pFile," ");
-
-	 chrcnt = 0;
-      }
-
-      fprintf(pFile,"  %s\n",pmsdThis->pcPDBName);
-   }
-  fflush(pFile);
-  /* output an AUTHOR record */
-   src =  AuthorListPDB(pmsdThis->pbsBS);
-   if (src) chrcnt = StringLen(src);
-   else return;
-
-   prevcnt = 0;
-   linecnt = 1;
-
-   while (chrcnt > 0)
-   {
-      fprintf(pFile, "AUTHOR");
-      back = 0;
-
-      if (linecnt > 1)
-      {
-	 fprintf(pFile,"  %2d ",(int)linecnt++);
-	 first = 1;
-      }
-      else
-      {
-	 fprintf(pFile,"    ");
-	 first = 0;
-	 linecnt++;
-      }
-
-      if (chrcnt > (60-first))
-      {
-	 lastchr = src[prevcnt + 59 - first];
-         nextchr = src[prevcnt + 59 - first + 1];
-	 lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
-	 nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
-         if (lastok || nextok)
-         {
-	    adjust = 0;
-	    for (i = 0; i < (60-first); i++)
-	    {
-	       if (i==0 && src[prevcnt]==' ')
-	       {
-		  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",src[prevcnt+i]);
+            else
+            {
+                fprintf(pFile,"    ");
+                first = 0;
+                linecnt++;
             }
-
-	    if (adjust==1)
-	       fprintf(pFile, " ");
-
-	    chrcnt = chrcnt - 60 + first;
-	    prevcnt = prevcnt + 60 - first;
-         }
-         else
-         {
-	    i = prevcnt + 59 - first;
-
-	    do
-	    {
-	       i--;
-	       back++;
-	    }
-	    while ((src[i]!=' ') && (src[i]!='.') && (src[i]!=',') && (i>=0));
-
-	    adjust = 0;
-	    for (i=0; i<(60-first-back); i++)
-	    {
-	       if (i==0 && src[prevcnt]==' ')
-	       {
-		  adjust = 1;
-		  continue;
-               }
-
-	       fprintf(pFile,"%c",src[prevcnt+i]);
-	    }
-	    for (i=0; i<(back+adjust); i++)
-	       fprintf(pFile," ");
-
-	    chrcnt = chrcnt - 60 + first + back;
-	    prevcnt = prevcnt + 60 - first - back;
-	 }
-      }
-      else
-      {
-	 adjust = 0;
-	 for (i=0; i<chrcnt; i++)
-	 {
-	    if (i==0 && src[prevcnt]==' ')
-	    {
-	       adjust = 1;
-	       continue;
+            
+            if (chrcnt > (60-first))
+            {
+                lastchr = src[prevcnt + 59 - first];
+                nextchr = src[prevcnt + 59 - first + 1];
+                lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
+                nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
+                if (lastok || nextok)
+                {
+                    adjust = 0;
+                    for (i = 0; i < (60-first); i++)
+                    {
+                        if (i==0 && src[prevcnt]==' ')
+                        {
+                            adjust = 1;
+                            continue;
+                        }
+                        
+                        fprintf(pFile,"%c",src[prevcnt+i]);
+                    }
+                    
+                    if (adjust==1)
+                        fprintf(pFile, " ");
+                    
+                    chrcnt = chrcnt - 60 + first;
+                    prevcnt = prevcnt + 60 - first;
+                }
+                else
+                {
+                    i = prevcnt + 59 - first;
+                    
+                    do
+                    {
+                        i--;
+                        back++;
+                    }
+                    while ((src[i]!=' ') && (src[i]!='.') && (src[i]!=',') && (i>=0));
+                    
+                    adjust = 0;
+                    for (i=0; i<(60-first-back); i++)
+                    {
+                        if (i==0 && src[prevcnt]==' ')
+                        {
+                            adjust = 1;
+                            continue;
+                        }
+                        
+                        fprintf(pFile,"%c",src[prevcnt+i]);
+                    }
+                    for (i=0; i<(back+adjust); i++)
+                        fprintf(pFile," ");
+                    
+                    chrcnt = chrcnt - 60 + first + back;
+                    prevcnt = prevcnt + 60 - first - back;
+                }
             }
-
-	    fprintf(pFile,"%c",src[prevcnt+i]);
-         }
-
-	 for (i=0; i<(60-first-chrcnt+adjust); i++)
-	    fprintf(pFile," ");
-
-	 chrcnt = 0;
-      }
-
-      fprintf(pFile,"  %s\n",pmsdThis->pcPDBName);
-   }
-  fflush(pFile);
-  if (src) MemFree(src);
-  return;
+            else
+            {
+                adjust = 0;
+                for (i=0; i<chrcnt; i++)
+                {
+                    if (i==0 && src[prevcnt]==' ')
+                    {
+                        adjust = 1;
+                        continue;
+                    }
+                    
+                    fprintf(pFile,"%c",src[prevcnt+i]);
+                }
+                
+                for (i=0; i<(60-first-chrcnt+adjust); i++)
+                    fprintf(pFile," ");
+                
+                chrcnt = 0;
+            }
+            fprintf(pFile,"\n");
+            
+        }
+        fflush(pFile);
+        /* output an AUTHOR record */
+        src =  AuthorListPDB(pmsdThis->pbsBS);
+        if (src) chrcnt = StringLen(src);
+        else return;
+        
+        prevcnt = 0;
+        linecnt = 1;
+        
+        while (chrcnt > 0)
+        {
+            fprintf(pFile, "AUTHOR");
+            back = 0;
+            
+            if (linecnt > 1)
+            {
+                fprintf(pFile,"  %2d ",(int)linecnt++);
+                first = 1;
+            }
+            else
+            {
+                fprintf(pFile,"    ");
+                first = 0;
+                linecnt++;
+            }
+            
+            if (chrcnt > (60-first))
+                
+            {
+                lastchr = src[prevcnt + 59 - first];
+                nextchr = src[prevcnt + 59 - first + 1];
+                lastok = (lastchr==' ') || (lastchr=='.') || (lastchr==',') || (lastchr=='\n') || (lastchr=='\t');
+                nextok = (nextchr==' ') || (nextchr=='.') || (nextchr==',') || (nextchr=='\n') || (nextchr=='\t');
+                if (lastok || nextok)
+                {
+                    adjust = 0;
+                    for (i = 0; i < (60-first); i++)
+                    {
+                        if (i==0 && src[prevcnt]==' ')
+                        {
+                            adjust = 1;
+                            continue;
+                        }
+                        
+                        fprintf(pFile,"%c",src[prevcnt+i]);
+                    }
+                    
+                    if (adjust==1)
+                        fprintf(pFile, " ");
+                    
+                    chrcnt = chrcnt - 60 + first;
+                    prevcnt = prevcnt + 60 - first;
+                }
+                else
+                {
+                    i = prevcnt + 59 - first;
+                    
+                    do
+                    {
+                        i--;
+                        back++;
+                    }
+                    while ((src[i]!=' ') && (src[i]!='.') && (src[i]!=',') && (i>=0));
+                    
+                    adjust = 0;
+                    for (i=0; i<(60-first-back); i++)
+                    {
+                        if (i==0 && src[prevcnt]==' ')
+                        {
+                            adjust = 1;
+                            continue;
+                        }
+                        
+                        fprintf(pFile,"%c",src[prevcnt+i]);
+                    }
+                    for (i=0; i<(back+adjust); i++)
+                        fprintf(pFile," ");
+                    
+                    chrcnt = chrcnt - 60 + first + back;
+                    prevcnt = prevcnt + 60 - first - back;
+                }
+            }
+            else
+            {
+                adjust = 0;
+                for (i=0; i<chrcnt; i++)
+                {
+                    if (i==0 && src[prevcnt]==' ')
+                    {
+                        adjust = 1;
+                        continue;
+                    }
+                    
+                    fprintf(pFile,"%c",src[prevcnt+i]);
+                }
+                
+                for (i=0; i<(60-first-chrcnt+adjust); i++)
+                    fprintf(pFile," ");
+                chrcnt = 0;
+            }
+            fprintf(pFile,"\n");
+   
+        }
+        fflush(pFile);
+        if (src) MemFree(src);
+        return;
 }
 
 
@@ -1044,311 +1073,309 @@ void LIBCALL WritePDBMotifs(PDNMS pdnmsThis,  FILE *pFile)
     Boolean bInTurn = FALSE;
     PMGD pmgdStart = NULL;
     PMGD pmgdEnd = NULL;
-
-
+    
+    
     if (!pdnmsThis) return;
     pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
     pdnmmThis = pmsdThis->pdnmmHead; /* the top of the molecule list */
 #ifdef _DEBUG_3
-printf("Helix scan...\n");
+    printf("Helix scan...\n");
 #endif
-     /* scan for helices */
+    /* scan for helices */
     while (pdnmmThis) /* walk the molecules individually */
-      {
+    {
         pmgdEnd = NULL;
-	pmgdStart = NULL;
-	pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
-	if ((int)pmmdThis->bWhat == AM_PROT)
-	  {
-	    bInHelix = FALSE;
-	    pdnmgThis = pmmdThis->pdnmgHead;
-	    while (pdnmgThis)
-	      {
-		  pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
-		  if (pmgdThis->bPDBSecStru & (Byte) SS_HELIX)
-		    {
-		      if (bInHelix != TRUE)
-		        {
+        pmgdStart = NULL;
+        pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
+        if ((int)pmmdThis->bWhat == AM_PROT)
+        {
+            bInHelix = FALSE;
+            pdnmgThis = pmmdThis->pdnmgHead;
+            while (pdnmgThis)
+            {
+                pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+                if (pmgdThis->bNCBISecStru & (Byte) SS_HELIX)
+                {
+                    if (bInHelix != TRUE)
+                    {
 #ifdef _DEBUG_3
-printf("Helix found...\n");
+                        printf("Helix found...\n");
 #endif
-			    pmgdStart = pmgdThis;
-			    bInHelix = TRUE;
-			} /* not in a helix */
-		    } /* this residue is in a helix */
-		  if ((!(pmgdThis->bPDBSecStru & (Byte) SS_HELIX)) || (pdnmgThis->next == NULL))
-		    {
-		      if (bInHelix == TRUE)
-		        {
-			    bInHelix =  FALSE;
-			    if (pmgdStart)
-			      {
+                        pmgdStart = pmgdThis;
+                        bInHelix = TRUE;
+                    } /* not in a helix */
+                } /* this residue is in a helix */
+                if ((!(pmgdThis->bNCBISecStru & (Byte) SS_HELIX)) || (pdnmgThis->next == NULL))
+                {
+                    if (bInHelix == TRUE)
+                    {
+                        bInHelix =  FALSE;
+                        if (pmgdStart)
+                        {
 #ifdef _DEBUG_3
-printf("Writing Helix record...\n");
+                            printf("Writing Helix record...\n");
 #endif
-			        if ((pmgdThis->pdnmgLink->last) && (!(pmgdThis->bPDBSecStru & (Byte) SS_HELIX)))
-			          pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
-				if ((pdnmgThis->next == NULL) && (pmgdThis->bPDBSecStru & (Byte) SS_HELIX))
-				  pmgdEnd = pmgdThis;
-				/* write out the helix record... */
-				pcSSName = StringSave("   ");
-				if (pmgdStart->pcPDBSS)
-				  {
-				       sprintf(pcSSName, "%3.3s", pmgdStart->pcPDBSS);;
-				  }
-				if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
-				pcResnambeg = StringSave(pmgdStart->pcGraphName);
-		 		if (!pcResnambeg)
-				    pcResnambeg = StringSave("UNK");
-			        if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
-			        pcResnumbeg = StringSave("     ");
-                                if (pmgdStart->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumbeg, "%5.5s", pmgdStart->pcGraphNum);
-				  }
-
-          			pcResnamend = StringSave(pmgdEnd->pcGraphName);
-		 		if (!pcResnamend) pcResnamend = StringSave("UNK");
-			        if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
-				pcResnumend = StringSave("     ");
-                                if (pmgdEnd->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumend, "%5.5s", pmgdEnd->pcGraphNum);
-				  }
-				pcMolnam = pmmdThis->pcMolName;
-				if (!pcMolnam) pcMolnam = " ";
-				fprintf(pFile,  "HELIX  %3d %3s %3s %1s %5s %3s %1s %5s                                  %4s\n",
-				    (int) (++iHlxcnt),
-				    pcSSName,
-				    pcResnambeg,
-				    pcMolnam,
-				    pcResnumbeg,
-				    pcResnamend,
-				    pcMolnam,
-				    pcResnumend,
-				    pmsdThis->pcPDBName);
-				fflush(pFile);
-				if (pcResnambeg) MemFree(pcResnambeg);
-				if (pcResnumbeg) MemFree(pcResnumbeg);
-				if (pcSSName) MemFree(pcSSName);
-				if (pcResnamend) MemFree(pcResnamend);
-  				if (pcResnumend) MemFree(pcResnumend);
-				pmgdEnd =  NULL;
-				pmgdStart =  NULL;
-
-			      } /* there was a last record */
-			    else
-			      { /* reset - some wacky error */
-				  bInHelix =  FALSE;
-				  pmgdEnd =  NULL;
-				  pmgdStart =  NULL;
-			      }
-			} /* helix already started */
-		    }  /* this res not in a helix */
-		  pdnmgThis = pdnmgThis->next;
-	      }
-	  } /* if protien */
-	pdnmmThis = pdnmmThis->next;
-      } /* next molecule */
+                            if ((pmgdThis->pdnmgLink->last) && (!(pmgdThis->bNCBISecStru & (Byte) SS_HELIX)))
+                                pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
+                            if ((pdnmgThis->next == NULL) && (pmgdThis->bNCBISecStru & (Byte) SS_HELIX))
+                                pmgdEnd = pmgdThis;
+                            /* write out the helix record... */
+                            pcSSName = StringSave("   ");
+                            if (pmgdStart->pcNCBISS)
+                            {
+                                sprintf(pcSSName, "%3.3s", pmgdStart->pcNCBISS);;
+                            }
+                            if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
+                            pcResnambeg = StringSave(pmgdStart->pcGraphName);
+                            if (!pcResnambeg)
+                                pcResnambeg = StringSave("UNK");
+                            if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
+                            pcResnumbeg = StringSave("     ");
+                            if (pmgdStart->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumbeg, pmgdStart->pdnmgLink->choice);
+                            }
+                            
+                            pcResnamend = StringSave(pmgdEnd->pcGraphName);
+                            if (!pcResnamend) pcResnamend = StringSave("UNK");
+                            if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
+                            pcResnumend = StringSave("     ");
+                            if (pmgdEnd->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumend, pmgdEnd->pdnmgLink->choice);
+                            }
+                            pcMolnam = pmmdThis->pcMolName;
+                            if (!pcMolnam) pcMolnam = " ";
+                            fprintf(pFile,  "HELIX  %3d %3s %3s %1s %5s %3s %1s %5s\n",
+                                (int) (++iHlxcnt),
+                                pcSSName,
+                                pcResnambeg,
+                                pcMolnam,
+                                pcResnumbeg,
+                                pcResnamend,
+                                pcMolnam,
+                                pcResnumend);
+                            fflush(pFile);
+                            if (pcResnambeg) MemFree(pcResnambeg);
+                            if (pcResnumbeg) MemFree(pcResnumbeg);
+                            if (pcSSName) MemFree(pcSSName);
+                            if (pcResnamend) MemFree(pcResnamend);
+                            if (pcResnumend) MemFree(pcResnumend);
+                            pmgdEnd =  NULL;
+                            pmgdStart =  NULL;
+                            
+                        } /* there was a last record */
+                        else
+                        { /* reset - some wacky error */
+                            bInHelix =  FALSE;
+                            pmgdEnd =  NULL;
+                            pmgdStart =  NULL;
+                        }
+                    } /* helix already started */
+                }  /* this res not in a helix */
+                pdnmgThis = pdnmgThis->next;
+            }
+        } /* if protien */
+        pdnmmThis = pdnmmThis->next;
+    } /* next molecule */
     pmgdStart = NULL;
     pmgdEnd = NULL;
     pdnmmThis = pmsdThis->pdnmmHead; /* top of the molecules */
     /* scan for sheets */
     while (pdnmmThis) /* walk the molecules individually */
-      {
-	pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
-	if ((int)pmmdThis->bWhat == AM_PROT)
-	  {
-	    bInSheet = FALSE;
-	    pdnmgThis = pmmdThis->pdnmgHead;
-	    while (pdnmgThis)
-	      {
-		  pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
-		  if (pmgdThis->bPDBSecStru & (Byte) SS_STRAND)
-		    {
-		      if (bInSheet != TRUE)
-		        {
-			    pmgdStart = pmgdThis;
-			    bInSheet = TRUE;
-			} /* not in a sheet */
-		    } /* this residue is in a sheet */
-		  if ( (!(pmgdThis->bPDBSecStru & (Byte) SS_STRAND))
-		       || (pdnmgThis->next == NULL))
-		    {
-		      if (bInSheet == TRUE)
-		        {
-			    bInSheet =  FALSE;
-			    if (pmgdStart)
-			      {
+    {
+        pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
+        if ((int)pmmdThis->bWhat == AM_PROT)
+        {
+            bInSheet = FALSE;
+            pdnmgThis = pmmdThis->pdnmgHead;
+            while (pdnmgThis)
+            {
+                pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+                if (pmgdThis->bNCBISecStru & (Byte) SS_STRAND)
+                {
+                    if (bInSheet != TRUE)
+                    {
+                        pmgdStart = pmgdThis;
+                        bInSheet = TRUE;
+                    } /* not in a sheet */
+                } /* this residue is in a sheet */
+                if ( (!(pmgdThis->bNCBISecStru & (Byte) SS_STRAND))
+                    || (pdnmgThis->next == NULL))
+                {
+                    if (bInSheet == TRUE)
+                    {
+                        bInSheet =  FALSE;
+                        if (pmgdStart)
+                        {
 #ifdef _DEBUG_3
-printf("Writing sheet record...\n");
+                            printf("Writing sheet record...\n");
 #endif
-			        if ((pmgdThis->pdnmgLink->last) &&
-				     (!(pmgdThis->bPDBSecStru & (Byte) SS_STRAND)) )
-			          pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
-				if ((pdnmgThis->next == NULL) &&
-				      (pmgdThis->bPDBSecStru & (Byte) SS_STRAND) )
-				  pmgdEnd = pmgdThis;
+                            if ((pmgdThis->pdnmgLink->last) &&
+                                (!(pmgdThis->bNCBISecStru & (Byte) SS_STRAND)) )
+                                pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
+                            if ((pdnmgThis->next == NULL) &&
+                                (pmgdThis->bNCBISecStru & (Byte) SS_STRAND) )
+                                pmgdEnd = pmgdThis;
+                            
+                            /* write out the sheet record... */
+                            pcSSName = StringSave("   ");
+                            if (pmgdStart->pcNCBISS)
+                            {
+                                sprintf(pcSSName, "%3.3s", pmgdStart->pcNCBISS);
+                                
+                            }
+                            if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
+                            pcResnambeg = StringSave(pmgdStart->pcGraphName);
+                            if (!pcResnambeg)
+                                pcResnambeg = StringSave("UNK");
+                            if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
+                            pcResnumbeg = StringSave("     ");
+                            if (pmgdStart->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumbeg, pmgdStart->pdnmgLink->choice);
+                            }
 
-				/* write out the sheet record... */
-				pcSSName = StringSave("   ");
-				if (pmgdStart->pcPDBSS)
-				  {
-				      sprintf(pcSSName, "%3.3s", pmgdStart->pcPDBSS);
-
-				  }
-				if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
-				pcResnambeg = StringSave(pmgdStart->pcGraphName);
-		 		if (!pcResnambeg)
-				    pcResnambeg = StringSave("UNK");
-			        if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
-			        pcResnumbeg = StringSave("     ");
-                                if (pmgdStart->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumbeg, "%5.5s", pmgdStart->pcGraphNum);
-				  }
- 			        pcResnamend = StringSave(pmgdEnd->pcGraphName);
-		 		if (!pcResnamend)
-				    pcResnamend = StringSave("UNK");
-			        if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
-                                pcResnumend = StringSave("     ");
-                                if (pmgdEnd->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumend, "%5.5s", pmgdEnd->pcGraphNum);
-				  }
-				pcMolnam = pmmdThis->pcMolName;
-				if (!pcMolnam) pcMolnam = " ";
-				fprintf(pFile,  "SHEET  %3d %3s%2s %3s %1s%5s %3s %1s%5s                                  %4s\n",
-					(int) (++iStcnt),
-					pcSSName,
-					"  ", /* number of strands in the sheet */
-					pcResnambeg,
-					pcMolnam,
-					pcResnumbeg,
-					pcResnamend,
-					pcMolnam,
-					pcResnumend,
-				        pmsdThis->pcPDBName);
-				fflush(pFile);
-				if (pcResnambeg) MemFree(pcResnambeg);
-				if (pcResnumbeg) MemFree(pcResnumbeg);
-			 	if (pcResnamend) MemFree(pcResnamend);
-				if (pcResnumend) MemFree(pcResnumend);
-				if (pcResnamend) MemFree(pcSSName);
-				pmgdEnd = NULL;
-				pmgdStart = NULL;
-
-			      } /* there was a last record */
-			    else
-			      { /* reset - some wacky error */
-				  bInSheet = FALSE;
-				  pmgdEnd = NULL;
-				  pmgdStart = NULL;
-			      }
-			} /* sheet already started */
-		    }  /* this res not in a sheet */
-		  pdnmgThis = pdnmgThis->next;
-	      }
-	  } /* if protien */
-	pdnmmThis = pdnmmThis->next;
-      } /* next molecule */
+                            pcResnamend = StringSave(pmgdEnd->pcGraphName);
+                            if (!pcResnamend)
+                                pcResnamend = StringSave("UNK");
+                            if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
+                            pcResnumend = StringSave("     ");
+                            if (pmgdEnd->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumend, pmgdEnd->pdnmgLink->choice);
+                            }
+                            pcMolnam = pmmdThis->pcMolName;
+                            if (!pcMolnam) pcMolnam = " ";
+                            fprintf(pFile,  "SHEET  %3d %3s%2s %3s %1s%5s %3s %1s%5s\n",
+                                (int) (++iStcnt),
+                                pcSSName,
+                                "  ", /* number of strands in the sheet */
+                                pcResnambeg,
+                                pcMolnam,
+                                pcResnumbeg,
+                                pcResnamend,
+                                pcMolnam,
+                                pcResnumend);
+                            fflush(pFile);
+                            if (pcResnambeg) MemFree(pcResnambeg);
+                            if (pcResnumbeg) MemFree(pcResnumbeg);
+                            if (pcResnamend) MemFree(pcResnamend);
+                            if (pcResnumend) MemFree(pcResnumend);
+                            if (pcResnamend) MemFree(pcSSName);
+                            pmgdEnd = NULL;
+                            pmgdStart = NULL;
+                            
+                        } /* there was a last record */
+                        else
+                        { /* reset - some wacky error */
+                            bInSheet = FALSE;
+                            pmgdEnd = NULL;
+                            pmgdStart = NULL;
+                        }
+                    } /* sheet already started */
+                }  /* this res not in a sheet */
+                pdnmgThis = pdnmgThis->next;
+            }
+        } /* if protien */
+        pdnmmThis = pdnmmThis->next;
+    } /* next molecule */
     pmgdStart = NULL;
     pmgdEnd = NULL;
     pdnmmThis = pmsdThis->pdnmmHead; /* top of the molecules */
     /* scan for turns */
     while (pdnmmThis) /* walk the molecules individually */
-      {
-	pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
-	if ((int)pmmdThis->bWhat == AM_PROT)
-	  {
-	    bInTurn = FALSE;
-	    pdnmgThis = pmmdThis->pdnmgHead;
-	    while (pdnmgThis)
-	      {
-		  pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
-		  if (pmgdThis->bPDBSecStru & (Byte) SS_TURN)
-		    {
-		      if (bInTurn != TRUE)
-		        {
-			    pmgdStart = pmgdThis;
-			    bInTurn = TRUE;
-			} /* not in a turn */
-		    } /* this residue is in a turn */
-		  if ((!(pmgdThis->bPDBSecStru & (Byte) SS_TURN)) || (pdnmgThis->next == NULL))
-		    {
-		      if (bInTurn == TRUE)
-		        {
-			    bInTurn =  FALSE;
-			    if (pmgdStart)
-			      {
+    {
+        pmmdThis = (PMMD) pdnmmThis->data.ptrvalue;
+        if ((int)pmmdThis->bWhat == AM_PROT)
+        {
+            bInTurn = FALSE;
+            pdnmgThis = pmmdThis->pdnmgHead;
+            while (pdnmgThis)
+            {
+                pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
+                if (pmgdThis->bNCBISecStru & (Byte) SS_TURN)
+                {
+                    if (bInTurn != TRUE)
+                    {
+                        pmgdStart = pmgdThis;
+                        bInTurn = TRUE;
+                    } /* not in a turn */
+                } /* this residue is in a turn */
+                if ((!(pmgdThis->bNCBISecStru & (Byte) SS_TURN)) || (pdnmgThis->next == NULL))
+                {
+                    if (bInTurn == TRUE)
+                    {
+                        bInTurn =  FALSE;
+                        if (pmgdStart)
+                        {
 #ifdef _DEBUG_3
-printf("Writing turn record...\n");
+                            printf("Writing turn record...\n");
 #endif
-			        if ((pmgdThis->pdnmgLink->last) && (!(pmgdThis->bPDBSecStru &(Byte) SS_TURN)))
-			          pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
-				if ((pdnmgThis->next == NULL) &&  (pmgdThis->bPDBSecStru & (Byte) SS_TURN))
-				  pmgdEnd = pmgdThis;
-				/* write out the turn record... */
-				pcSSName = StringSave("   ");
-				if (pmgdStart->pcPDBSS)
-				  {
-				        sprintf(pcSSName, "%3.3s", pmgdStart->pcPDBSS);
-				  }
-				if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
-				pcResnambeg = StringSave(pmgdStart->pcGraphName);
-		 		if (!pcResnambeg)
-				    pcResnambeg = StringSave("UNK");
-			        if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
-			        pcResnumbeg = StringSave("     ");
-                                if (pmgdStart->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumbeg, "%5.5s", pmgdStart->pcGraphNum);
-				  }
-				pcResnamend = StringSave(pmgdEnd->pcGraphName);
-		 		if (!pcResnamend)
-				    pcResnamend = StringSave("UNK");
-			        if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
-				pcResnumend = StringSave("     ");
-                                if (pmgdEnd->pcGraphNum)
-                                  {
-                                     sprintf(pcResnumend, "%5.5s", pmgdEnd->pcGraphNum);
-				  }
-				pcMolnam = pmmdThis->pcMolName;
-				if (!pcMolnam) pcMolnam = " ";
-				fprintf(pFile, "TURN   %3d %3s %3s %1s%5s %3s %1s%5s                                    %4s\n",
-					(int) (++iTrncnt),
-					pcSSName,
-					pcResnambeg,
-					pcMolnam,
-					pcResnumbeg,
-					pcResnamend,
-					pcMolnam,
-					pcResnumend,
-				        pmsdThis->pcPDBName);
-				fflush(pFile);
-				if (pcResnambeg) MemFree(pcResnambeg);
-				if (pcResnumbeg) MemFree(pcResnumbeg);
-			 	if (pcResnamend) MemFree(pcResnamend);
-				if (pcResnumend) MemFree(pcResnumend);
-				if (pcSSName) MemFree(pcSSName);
-				pmgdEnd = NULL;
-				pmgdStart = NULL;
-
-			      } /* there was a last record */
-			    else
-			      { /* reset - some wacky error */
-				  bInTurn = FALSE;
-				  pmgdEnd = NULL;
-				  pmgdStart = NULL;
-			      }
-			} /* turn already started */
-		    }  /* this res not in a turn */
-		  pdnmgThis = pdnmgThis->next;
-	      } /* next graph */
-	  } /* if protien */
-	pdnmmThis = pdnmmThis->next;
-      } /* next molecule */
-  return;
+                            if ((pmgdThis->pdnmgLink->last) && (!(pmgdThis->bNCBISecStru &(Byte) SS_TURN)))
+                                pmgdEnd = (PMGD) pmgdThis->pdnmgLink->last->data.ptrvalue;
+                            if ((pdnmgThis->next == NULL) &&  (pmgdThis->bNCBISecStru & (Byte) SS_TURN))
+                                pmgdEnd = pmgdThis;
+                            /* write out the turn record... */
+                            pcSSName = StringSave("   ");
+                            if (pmgdStart->pcNCBISS)
+                            {
+                                sprintf(pcSSName, "%3.3s", pmgdStart->pcNCBISS);
+                            }
+                            if (StringLen(pcSSName)> 3) pcSSName[3] = '\0';
+                            pcResnambeg = StringSave(pmgdStart->pcGraphName);
+                            if (!pcResnambeg)
+                                pcResnambeg = StringSave("UNK");
+                            if (StringLen(pcResnambeg) > 3) pcResnambeg[3] = '\0';
+                            pcResnumbeg = StringSave("     ");
+                            if (pmgdStart->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumbeg, pmgdStart->pdnmgLink->choice);
+                            }
+                            pcResnamend = StringSave(pmgdEnd->pcGraphName);
+                            if (!pcResnamend)
+                                pcResnamend = StringSave("UNK");
+                            if (StringLen(pcResnamend) > 3) pcResnamend[3] = '\0';
+                            pcResnumend = StringSave("     ");
+                            if (pmgdEnd->pdnmgLink)
+                            {
+                                MMDB_writeres(pcResnumend, pmgdEnd->pdnmgLink->choice);
+                            }
+                            pcMolnam = pmmdThis->pcMolName;
+                            if (!pcMolnam) pcMolnam = " ";
+                            fprintf(pFile, "TURN   %3d %3s %3s %1s%5s %3s %1s%5s\n",
+                                (int) (++iTrncnt),
+                                pcSSName,
+                                pcResnambeg,
+                                pcMolnam,
+                                pcResnumbeg,
+                                pcResnamend,
+                                pcMolnam,
+                                pcResnumend);
+                            fflush(pFile);
+                            if (pcResnambeg) MemFree(pcResnambeg);
+                            if (pcResnumbeg) MemFree(pcResnumbeg);
+                            if (pcResnamend) MemFree(pcResnamend);
+                            if (pcResnumend) MemFree(pcResnumend);
+                            if (pcSSName) MemFree(pcSSName);
+                            pmgdEnd = NULL;
+                            pmgdStart = NULL;
+                            
+                        } /* there was a last record */
+                        else
+                        { /* reset - some wacky error */
+                            bInTurn = FALSE;
+                            pmgdEnd = NULL;
+                            pmgdStart = NULL;
+                        }
+                    } /* turn already started */
+                }  /* this res not in a turn */
+                pdnmgThis = pdnmgThis->next;
+            } /* next graph */
+        } /* if protien */
+        pdnmmThis = pdnmmThis->next;
+    } /* next molecule */
+    return;
 }
 
 
@@ -1368,10 +1395,20 @@ void LIBCALL WritePDBRemarks(PDNMS pdnmsThis,  FILE *pFile)
 
    if (!pmsdThis->pbsBS) return;
    if (!pmsdThis->pbsBS->descr) return;
-
-    fprintf(pFile,"REMARK  00 NOTE!  NCBI-MMDB PDB-Format File derived from ASN.1          %s\n",pmsdThis->pcPDBName);
-    fprintf(pFile,"REMARK  00 Refer to original ASN.1 File For data records not included.  %s\n",pmsdThis->pcPDBName);
+    fprintf(pFile,"REMARK  00 NCBI PDB FORMAT VERSION 5.0\n");
+    fprintf(pFile,"REMARK  00 NOTE:  NCBI-MMDB PDB-Format File derived from ASN.1\n");
+    fprintf(pFile,"REMARK  00 Refer to original ASN.1 file or PDB file for data records\n");
+    fprintf(pFile,"REMARK  00 not included.  Changes from original PDB files include:\n");
+    fprintf(pFile,"REMARK  00 - residues are derived by graph matching algorithms.\n");
+    fprintf(pFile,"REMARK  00 - residue numbers always increase numerically (e.g. no 8A).\n");
+    fprintf(pFile,"REMARK  00 - taxonomic information reannotated using NCBI Taxonomy.\n");
+    fprintf(pFile,"REMARK  00 - element names are made consistent.\n");
+    fprintf(pFile,"REMARK  00 - CONECT records are derived algorithmically.\n");
+    fprintf(pFile,"REMARK  00 - Secondary structure is derived algorithmically.\n");
     fflush(pFile);
+#if 0
+    /* we decided not to print out comments since they may refer to residues that
+       have been renumbered */
     pbsdrThis = ValNodeFindNext(pmsdThis->pbsBS->descr,
          pbsdrLast, BiostrucDescr_pdb_comment);
     while (pbsdrThis)
@@ -1391,6 +1428,7 @@ void LIBCALL WritePDBRemarks(PDNMS pdnmsThis,  FILE *pFile)
 	pbsdrThis = ValNodeFindNext(pmsdThis->pbsBS->descr,pbsdrLast,
                    BiostrucDescr_pdb_comment);
      }
+#endif /* 0 */
   return;
 }
 
@@ -1460,10 +1498,8 @@ void LIBCALL WritePDBSeqRes(PDNMS pdnmsThis,  FILE *pFile)
 			    pdnmgRes = pdnmgRes->next;
 			  }
 			rest -= curResCnt;
-			for (i=0; i<(1+(13-curResCnt)*4); i++)
-			    fprintf(pFile, " ");
-			    fprintf(pFile,"%s\n",pmsdThis->pcPDBName);
-			    fflush(pFile);
+            fprintf(pFile,"\n");
+			fflush(pFile);
 		  } /* while pdnmgRes */
 		break;
 	  default:
@@ -1876,7 +1912,7 @@ void LIBCALL WriteKinHeader(PDNMS pdnmsThis,  FILE *pFile)
      {
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
-
+    if(pbssThis->database_entry_date->data[2] >= 1)
    	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%02d\n\n",
                    (int) depday,
                    NCBI_months[pbssThis->database_entry_date->data[2]-1],
@@ -3316,6 +3352,7 @@ static void WriteStrucHTMLHeader(PDNMS pdnmsThis,  FILE *pFile)
    	depyear = pbssThis->database_entry_date->data[1];
    	depday = pbssThis->database_entry_date->data[3];
 
+    if(pbssThis->database_entry_date->data[2] >= 1)
    	fprintf(pFile,"PDB Deposition:\n%2d-%3s-%02d\n\n",
                    (int) depday,
                    NCBI_months[pbssThis->database_entry_date->data[2]-1],
@@ -3336,7 +3373,7 @@ static void WriteStrucHTMLHeader(PDNMS pdnmsThis,  FILE *pFile)
   return;
 }
 
-static void WriteStrucHTMLSeq(PDNMS pdnmsThis,  FILE *pFile)
+NLM_EXTERN void WriteStrucHTMLSeq(PDNMS pdnmsThis,  FILE *pFile)
 {  /* writes out the sequence in UPPERCASE 3 Letter Code PDB Style, 10 per line  */
    /* some of this is from "legacy code" from Hitomi's stuff */
    Int4 resnum,linecnt,rest,curResCnt,i;
@@ -3362,14 +3399,15 @@ static void WriteStrucHTMLSeq(PDNMS pdnmsThis,  FILE *pFile)
 	switch((int)pmmdThis->bWhat)
 	 {
 	  case AM_HET:
-          case AM_POLY:
+      case AM_POLY:
+      case AM_ION:
 		pdnmgRes = pmmdThis->pdnmgHead;
 		pmgdThis = (PMGD) pdnmgRes->data.ptrvalue;
 		if (pmgdThis->pcPDBComment)
 		  {
-		    fprintf(pFile,"\nHeterogen {%d het} Name: %s\n",
-				(int)pdnmmThis->choice,
-				pmgdThis->pcPDBComment);
+            if(StrCmp(pmgdThis->pcPDBComment, "") != 0)
+		        fprintf(pFile,"\nHeterogen Name: %s\n",
+				    pmgdThis->pcPDBComment);
 		  }
 	        break;
 	  case AM_DNA:

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.94 $
+* $Revision: 6.95 $
 *
 * File Description: 
 *
@@ -1336,11 +1336,13 @@ static Boolean seq_char (Char car, Char missingchar, Char gapchar)
   if (car == 'G') return TRUE;
   if (car == 'C') return TRUE;
   if (car == 'U') return TRUE;
+  if (car == 'N') return TRUE;
   if (car == 'a') return TRUE;
   if (car == 't') return TRUE;
   if (car == 'g') return TRUE;
   if (car == 'c') return TRUE;
   if (car == 'u') return TRUE;
+  if (car == 'n') return TRUE;
   if (car == missingchar) return TRUE;
   if (car == gapchar) return TRUE;
   if (car == '*') return TRUE;

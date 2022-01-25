@@ -42,6 +42,7 @@ global LIBRARIES
 global BUILDTEST
 
 global DOOPENGL
+global OPTIMIZE
 
 (* ==== The following steps populate and build the programs ==== *)
 
@@ -55,10 +56,13 @@ with timeout of 60000 seconds
 	end if
 	CreateNENTREZ()
 	CreateSEQUIN()
-	CreateBLASTCL3()	
+	CreateTBL2ASN()
 	CreateFORMATDB()
+	CreateFASTACMD()
+	CreateBL2SEQ()
 	CreateBLASTALL()
 	CreateBLASTPGP()
+	CreateBLASTCL3()
 	
 	if MAKEAPPS = "TRUE" then
 		CompilePrograms()
@@ -88,6 +92,12 @@ on DoSetGlobals()
 		
 		set LIBRARIES to NCBISOURCE & "lib:" as string
 		set BUILDTEST to NCBISOURCE & "build:" as string
+		
+		if MASTER = "PPC" and (exists (file "debug.flg" of folder METRO)) then
+			set OPTIMIZE to "FALSE"
+		else
+			set OPTIMIZE to "TRUE"
+		end if
 		
 		if MASTER = "PPC" and (exists (folder OGLSDK)) then
 			set DOOPENGL to "TRUE"
@@ -162,9 +172,15 @@ on DoSetPreferences()
 					, Peephole Optimizer:false}
 			
 			(* ===== Panel PPC Global Optimizer =====  *)
-			Set Preferences of panel "PPC Global Optimizer" to Â
-				{Optimize For:code_Speed Â
-					, Level:1}
+			if OPTIMIZE = "TRUE" then
+				Set Preferences of panel "PPC Global Optimizer" to Â
+					{Optimize For:code_Speed Â
+						, Level:1}
+			else
+				Set Preferences of panel "PPC Global Optimizer" to Â
+					{Optimize For:code_Speed Â
+						, Level:0}
+			end if
 			
 			(* ===== Panel PPC Linker ===== *)
 			Set Preferences of panel "PPC Linker" to Â
@@ -192,7 +208,7 @@ on DoSetPreferences()
 			Set Preferences of panel "Debugger Target" to Â
 				{Log System Messages:false Â
 					, Stop At Watchpoints:true}
-		
+			
 		else if MASTER = "68K" then
 			(* ===== Panel 68K Processor =====  *)
 			Set Preferences of panel "68K CodeGen" to Â
@@ -299,11 +315,19 @@ on CompilePrograms()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "blastcl3" & SUFFIX & ".µ")
+		open (BUILDTEST & "tbl2asn" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
 		open (BUILDTEST & "formatdb" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "fastacmd" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "bl2seq" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -312,6 +336,10 @@ on CompilePrograms()
 		Close Project
 		
 		open (BUILDTEST & "blastpgp" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "blastcl3" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -343,26 +371,20 @@ on CreateNENTREZ()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set segmentCounter to 1
-		
 		my AddLibraries()
 		
-		set segmentCounter to segmentCounter + 1
+		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
+			"netentr", "ncbibls3", "ncbiid1", "vibnet"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
 		
-		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		repeat with i in {"accentr", "accutils"}
+			Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
+		end repeat
 		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
-		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "demo:entrez.c"} To Segment segmentCounter
+		repeat with i in {"entrez"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -393,39 +415,64 @@ on CreateSEQUIN()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "sequin:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set segmentCounter to 1
-		
 		my AddLibraries()
 		
-		set segmentCounter to segmentCounter + 1
+		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
+			"netentr", "ncbibls3", "ncbimla", "ncbitxc2", "ncbiid1", "vibnet"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
 		
-		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbimla" & SUFFIX, LIBRARIES & "ncbitxc2" & SUFFIX, LIBRARIES & "ncbiid1" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		repeat with i in {"accentr", "accutils"}
+			Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
+		end repeat
 		
-		set segmentCounter to segmentCounter + 1
-		
-		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
-		
-		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		set NCBISEQUIN to NCBISOURCE & "sequin:" as string
-		
-		Add Files {NCBISEQUIN & "sequin1.c", NCBISEQUIN & "sequin2.c", NCBISEQUIN & "sequin3.c"} To Segment segmentCounter
-		Add Files {NCBISEQUIN & "sequin4.c", NCBISEQUIN & "sequin5.c", NCBISEQUIN & "sequin6.c"} To Segment segmentCounter
-		Add Files {NCBISEQUIN & "sequin7.c", NCBISEQUIN & "sequin8.c", NCBISEQUIN & "sequin9.c"} To Segment segmentCounter
-		Add Files {NCBISEQUIN & "sequinx.c"} To Segment segmentCounter
+		repeat with i in {"sequin1", "sequin2", "sequin3", "sequin4", "sequin5", "sequin6", "sequin7", "sequin8", "sequin9", "sequinx"}
+			Add Files {NCBISOURCE & "sequin:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
 		
 	end tell
 end CreateSEQUIN
+
+on CreateTBL2ASN()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "tbl2asn" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"tbl2asn"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"tbl2asn"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"tbl2asn"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateTBL2ASN
 
 on CreateCn3Dv3d()
 	tell application "CodeWarrior IDE 4.0.4"
@@ -450,26 +497,20 @@ on CreateCn3Dv3d()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set segmentCounter to 1
-		
 		my AddLibraries()
 		
-		set segmentCounter to segmentCounter + 1
+		repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
+			"netentr", "ncbibls3", "vibnet"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
 		
-		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		repeat with i in {"accentr", "accutils"}
+			Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
+		end repeat
 		
-		set segmentCounter to segmentCounter + 1
-		
-		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
-		
-		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
+		repeat with i in {"cn3dmain"}
+			Add Files {NCBISOURCE & "cn3d:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -506,30 +547,30 @@ on CreateCn3D()
 			end if
 			my DoSetPaths2()
 			
-			set segmentCounter to 1
-			
 			my AddLibraries()
 			
-			set segmentCounter to segmentCounter + 1
+			repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrantOGL", "ncbidesk", "ncbimmdb", "ncbicn3dOGL", "ncbitool", "netcli", Â
+				"netentr", "ncbibls3", "vibnet"}
+				Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			end repeat
 			
-			Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-			Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrantOGL" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
-			Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3dOGL" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-			Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
-			Add Files {METRO & "OpenGL SDK:Libraries:OpenGLLibraryStub", METRO & "OpenGL SDK:Libraries:OpenGLUtilityStub"} To Segment segmentCounter
+			repeat with i in {"OpenGL SDK:Libraries:OpenGLLibraryStub", "OpenGL SDK:Libraries:OpenGLUtilityStub"}
+				Add Files {METRO & i} To Segment 1
+			end repeat
+			
 			if DOPNG = "TRUE" then
-				Add Files {METRO & "zlib:mac:zlib.ppc.Lib", METRO & "libpng:mac:png.ppc.Lib"} To Segment segmentCounter
+				repeat with i in {"zlib:mac:zlib.ppc.Lib", "libpng:mac:png.ppc.Lib"}
+					Add Files {METRO & i} To Segment 1
+				end repeat
 			end if
 			
-			set segmentCounter to segmentCounter + 1
+			repeat with i in {"accentr", "accutils"}
+				Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
+			end repeat
 			
-			set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
-				
-			Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
-			
-			set segmentCounter to segmentCounter + 1
-			
-			Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
+			repeat with i in {"cn3dmain"}
+				Add Files {NCBISOURCE & "cn3d:" & i & ".c"} To Segment 1
+			end repeat
 			
 			Reset File Paths
 			Close Project
@@ -537,6 +578,196 @@ on CreateCn3D()
 		
 	end tell
 end CreateCn3D
+
+on CreateFORMATDB()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"formatdb"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"formatdb"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"formatdb"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateFORMATDB
+
+on CreateFASTACMD()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "fastacmd" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"fastacmd"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"fastacmd"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"fastacmd"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateFASTACMD
+
+on CreateBL2SEQ()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "bl2seq" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"bl2seq"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"bl2seq"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"bl2seq"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBL2SEQ
+
+on CreateBLASTALL()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastall"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastall"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"blastall"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBLASTALL
+
+on CreateBLASTPGP()
+	tell application "CodeWarrior IDE 4.0.4"
+		
+		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastpgp"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastpgp"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		my AddLibraries()
+		
+		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
+		
+		repeat with i in {"blastpgp"}
+			Add Files {NCBISOURCE & "demo:" & i & ".c"} To Segment 1
+		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBLASTPGP
 
 on CreateBLASTCL3()
 	tell application "CodeWarrior IDE 4.0.4"
@@ -560,152 +791,19 @@ on CreateBLASTCL3()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set segmentCounter to 1
-		
 		my AddLibraries()
 		
-		set segmentCounter to segmentCounter + 1
+		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3"}
+			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+		end repeat
 		
-		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "netcli" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "network:blast3:client:blastcl3.c"} To Segment segmentCounter
+		repeat with i in {"blastcl3"}
+			Add Files {NCBISOURCE & "network:blast3:client:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
 		
 	end tell
 end CreateBLASTCL3
-
-on CreateFORMATDB()
-	tell application "CodeWarrior IDE 4.0.4"
-		
-		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"formatdb"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"formatdb"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "demo:formatdb.c"} To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreateFORMATDB
-
-on CreateBLASTALL()
-	tell application "CodeWarrior IDE 4.0.4"
-		
-		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastall"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastall"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "demo:blastall.c"} To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreateBLASTALL
-
-on CreateBLASTPGP()
-	tell application "CodeWarrior IDE 4.0.4"
-		
-		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastpgp"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastpgp"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
-		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files {NCBISOURCE & "demo:blastpgp.c"} To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreateBLASTPGP
 

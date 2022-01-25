@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.h,v 1.17 2000/04/17 13:30:42 durand Exp $
+/*  $Id: ddvopen.h,v 1.20 2000/05/15 23:39:34 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.17 $
+* $Revision: 1.20 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.h,v $
+* Revision 1.20  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 1.19  2000/05/15 22:00:36  hurwitz
+* put save-edits query into DDV_SlaveQuit where it belongs
+*
+* Revision 1.18  2000/05/11 16:28:44  wheelan
+* made DDV_ShredAln NLM_EXTERN
+*
 * Revision 1.17  2000/04/17 13:30:42  durand
 * removed g_hParent and unused functions DDV_LaunchAlignViewer and DDV_LaunchAlignEditor
 *
@@ -227,6 +236,7 @@ typedef struct _DDV_ImportDialog {
     Int4 mode; /* see below */
     SeqEntry *sep;  /* used to pass new seqentry to call back */
     Bioseq *bsp; /* the bioseq being added */
+    Boolean Gap; /* should the alignment used gapped blast? */
 } DDV_ImportDialog;
 
 /* import to sequence to seqalign */
@@ -276,6 +286,7 @@ extern Boolean DDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos);
 NLM_EXTERN Int4 DDV_Accession2Gi (CharPtr string, DocType type);
 NLM_EXTERN void DDV_ImportBioseqDlg(DDV_ImportDialog *idp);
 NLM_EXTERN void DDV_ImportBioseq(IteM i);
+NLM_EXTERN SeqAlignPtr DDV_ShredAln(SeqAlignPtr sap);
 NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp);
 NLM_EXTERN void DDV_ImportCB(DDV_ImportDialog *idp, SeqAlign *salpdest,
                              SeqAlign *salp);
@@ -290,6 +301,7 @@ NLM_EXTERN ValNodePtr DDV_GetMtdpListForEditor(ValNodePtr row,Int4 from_disp,
 		Int4 to_disp);
 NLM_EXTERN MsaParaGPopListPtr DDV_CreateDataForEditor(MsaParaGPopListPtr mpplp, 
 	Int4 from_disp,Int4 to_disp);
+NLM_EXTERN void DDV_SlaveQuit(WindoW w);
 
 
 #ifdef __cplusplus

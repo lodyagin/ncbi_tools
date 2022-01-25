@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -876,23 +876,29 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
+        } else {
+          ptr = StringISearch (title, "[protein=");
+          if (ptr != NULL) {
+            StringNCpy_0 (str, ptr + 9, sizeof (str));
+            ptr = StringChr (str, ']');
+          }
+        }
+        if (ptr != NULL) {
+          *ptr = '\0';
+          ptr = StringChr (str, ';');
           if (ptr != NULL) {
             *ptr = '\0';
-            ptr = StringChr (str, ';');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              ptr++;
-            }
-            StringNCpy_0 (best, str, maxsize);
-            if (StringHasNoText (best)) {
-              StringNCpy_0 (best, ptr, maxsize);
-            }
-            prp = CreateNewProtRef (str, ptr, ec, activity);
-            if (prp != NULL) {
-              sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-              if (sfp != NULL) {
-                sfp->data.value.ptrvalue = (Pointer) prp;
-              }
+            ptr++;
+          }
+          StringNCpy_0 (best, str, maxsize);
+          if (StringHasNoText (best)) {
+            StringNCpy_0 (best, ptr, maxsize);
+          }
+          prp = CreateNewProtRef (str, ptr, ec, activity);
+          if (prp != NULL) {
+            sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
+            if (sfp != NULL) {
+              sfp->data.value.ptrvalue = (Pointer) prp;
             }
           }
         }
@@ -1048,6 +1054,7 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
         CreateGeneAndProtFeats (nsep, psep, slp, crp, vnpstr, mRnaName, sizeof (mRnaName), &ttl);
         ExciseString (vnpstr, "[gene=", "]");
         ExciseString (vnpstr, "[prot=", "]");
+        ExciseString (vnpstr, "[protein=", "]");
         ExciseString (vnpstr, "[function=", "]");
         ExciseString (vnpstr, "[EC_number=", "]");
         ExciseString (vnpstr, "[orf", "]");

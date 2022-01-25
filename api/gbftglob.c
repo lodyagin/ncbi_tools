@@ -4,6 +4,9 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.12  2000/05/17 16:21:10  kans
+* allele is legal on variation features
+*
 * Revision 6.11  2000/04/03 17:37:20  tatiana
 * evidence added to STS qualifiers
 *
@@ -575,11 +578,11 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"variation",  0, {-1, -1, -1, -1, -1}, 13,
-     {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_frequency, GBQUAL_gene,
+   {"variation",  0, {-1, -1, -1, -1, -1}, 14,
+     {GBQUAL_allele, GBQUAL_citation, GBQUAL_db_xref, GBQUAL_frequency, GBQUAL_gene,
       GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_replace,
       GBQUAL_phenotype, GBQUAL_product, GBQUAL_standard_name, GBQUAL_usedin,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"virion",  0, {-1, -1, -1, -1, -1}, 9,

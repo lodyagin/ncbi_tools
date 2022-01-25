@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.18  2000/05/01 21:21:13  lewisg
+* make features dialogs modal
+*
+* Revision 6.17  2000/04/27 22:21:58  lewisg
+* misc bugs/features
+*
 * Revision 6.16  2000/04/13 13:58:03  durand
 * allowed udv to display reverse complement sequence
 *
@@ -1139,7 +1145,7 @@ Uint2			eID,iID;
 
 	if (vmp->BspTable==NULL) return;
 	
-	d=DocumentWindow(-50, -33 ,-10, -10, szAppName, NULL,NULL);
+	d=/*DocumentWindow*/Nlm_MovableModalWindow(-50, -33 ,-10, -10, szAppName, NULL/*,NULL*/);
 	if (d!=NULL){
 		UDV_set_PullMenus(&vmp->MainMenu,FALSE);
 		/*create some controls*/
@@ -1179,6 +1185,10 @@ Uint2			eID,iID;
 		Show(d);
 	}
 }
+
+static CharPtr udvprotdbs [] = {
+  "swissprot", "nr", "pdb", "month", "kabat", "yeast", NULL
+};
 
 
 static MonitorPtr blastmon = NULL; /* ugh.  used below */
@@ -1272,6 +1282,7 @@ static void UDV_BlastDlgOK(ButtoN g)
         return;
     }
     
+
     BlastInit("udv 1.0", &bl3hp, &bl3rp);
     value = GetValue(bddp->bsp_list); /*one-base value*/
 
@@ -1305,7 +1316,9 @@ static void UDV_BlastDlgOK(ButtoN g)
     
     Remove(hOpenDlg);
 
-    bddp->salp = BlastBioseqNet(bl3hp, bsp, program, "nr",
+    value = GetValue(bddp->db_list); /*one-base value*/
+
+    bddp->salp = BlastBioseqNet(bl3hp, bsp, program, udvprotdbs[value-1],
         options, NULL, NULL, UDV_BlastCallback);
     BLASTOptionDelete(options);
     BioseqUnlock(bsp);
@@ -1349,6 +1362,7 @@ NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp)
     WindoW d;
     Char szName[21]={""};
     ValNode *pvn;
+    Int4 i;
 
     if(bddp == NULL) return;
 
@@ -1368,9 +1382,21 @@ NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp)
         h4 = HiddenGroup(h, 2, 1, NULL);
 /*        StaticPrompt(h4,"Expectation value:",0,0,systemFont,'l');
         bddp->tExpect = DialogText(h4, "0.01", 8, (TxtActnProc) NULL); */
-        StaticPrompt(h4,"Maximum # of segments:",0,0,systemFont,'l');
+        StaticPrompt(h4,"Maximum # of hits:",0,0,systemFont,'l');
         bddp->tMax = DialogText(h4, "20", 5, (TxtActnProc) NULL);
+
+        h4 = HiddenGroup (h, 2, 1, NULL);
+        StaticPrompt (h4, "Choose Database:", 0, 0, programFont, 'c');
         
+#ifdef WIN_MAC
+        bddp->db_list = PopupList(h4, TRUE, NULL);
+#else 
+        bddp->db_list = PopupList(h4, FALSE, NULL);
+#endif
+        for (i = 0; udvprotdbs [i] != NULL; i++)
+            PopupItem(bddp->db_list, udvprotdbs [i]);
+        SetValue(bddp->db_list,1);
+
         h2 = HiddenGroup(h, 2, 1, NULL);
         PushButton(h2, "Ok", UDV_BlastDlgOK);
         PushButton(h2, "Cancel", UDV_BlastDlgCancel);

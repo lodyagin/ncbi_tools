@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.h,v 1.11 2000/02/15 15:31:47 lewisg Exp $
+/*  $Id: ddvgraph.h,v 1.12 2000/05/16 19:43:01 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.11 $
+* $Revision: 1.12 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.h,v $
+* Revision 1.12  2000/05/16 19:43:01  hurwitz
+* grey out create block, delete block, undo, and redo as needed
+*
 * Revision 1.11  2000/02/15 15:31:47  lewisg
 * move DDVRulerDescr to pgppop
 *
@@ -137,8 +140,9 @@ NLM_EXTERN ValNodePtr DDV_GetRulerForEditor(ValNodePtr descr_head,Int4 from_disp
 		Int4 to_disp);
 extern ValNodePtr DDV_ComputeRuler(SeqAlignPtr sap,DDV_Disp_OptPtr ddop);
 extern void	DDV_AdjustDrawingRect(RecT * rcP,UDVFontDataPtr udv_font);
-extern void  DDV_DrawPanelContent_H (PaneL p,DdvMainPtr dmp,RecT PNTR MyUpdateRect,
+extern void DDV_DrawPanelContent_H (PaneL p,DdvMainPtr dmp,RecT PNTR MyUpdateRect,
 		Boolean bSelect);
+extern void DDV_GreyOut(DdvMainWinPtr mWin_d, Boolean Start, Boolean End);
 
 #ifdef __cplusplus
 }

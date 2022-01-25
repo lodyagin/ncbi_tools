@@ -1,2 +1,4 @@
+#!/bin/sh
 rm -f asnpub.all
-cat general.asn pub.asn biblio.asn medline.asn > asnpub.all
+cat general.asn biblio.asn medline.asn pub.asn > asnpub.all
+exit $?

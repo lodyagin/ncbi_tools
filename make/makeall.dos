@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.99 2000/03/21 19:26:51 durand Exp $
+# $Id: makeall.dos,v 6.101 2000/05/24 17:20:23 vakatov Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -31,7 +31,7 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
-	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj \
+	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj +pmfapi.obj \
    +seqport.obj +sequtil.obj +prtutil.obj \
 	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
    +alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
@@ -206,9 +206,9 @@ copy_reg:
 	copy ..\gif\*.h $(INCPATH)
 	copy ..\cn3d\*.h $(INCPATH)
 	copy ..\cn3d\*.c .
+!endif
 	copy ..\ddv\*.h $(INCPATH)
 	copy ..\ddv\*.c .
-!endif
 !endif
 
 copy: copy_reg $(OBJ4_COPY) $(OBJ30_COPY)

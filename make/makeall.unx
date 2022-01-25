@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.126 2000/03/21 19:26:51 durand Exp $
+#	$Id: makeall.unx,v 6.132 2000/05/31 01:52:02 beloslyu Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -112,7 +112,7 @@ LIB37 =
 ULIB38 = libnlmzip.a
 LIB38= $(ULIB38)
 LIB38 = 
-ULIB39 = libhumchr.a
+ULIB39 = libideochr.a
 LIB39= $(ULIB39)
 LIB39 =
 #
@@ -171,7 +171,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
-	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c \
+	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
 	seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c subutil.c edutil.c asn2ff1.c \
@@ -229,7 +229,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c vecscrn.c \
-	mblast.c
+	mblast.c rpsutil.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -245,7 +245,8 @@ SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ff2asn.c ftamain.c gb_ascii.c gen
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 
-SRC39 = humchrow.c humchrom_dat.c humchrom.c humchrdrw.c hc_util.c
+SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
+	bands_abc.c humchrdrw.c cghlite.c cghlieka.c chrom_input.c structure.c
 
 
 # objects needed for versions of asntool and entrez
@@ -266,7 +267,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
 	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o objalignloc.o \
-	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o \
+	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
 	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
 	tofile.o tomedlin.o \
 	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
@@ -334,7 +335,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o vecscrn.o \
-	mblast.o
+	mblast.o rpsutil.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -355,12 +356,13 @@ OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ff2asn.o ftamain.o gb_ascii.o gen
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
-OBJ39 = humchrow.o humchrom_dat.o humchrom.o humchrdrw.o hc_util.o
+OBJ39 = ideochrow.o humchrom_dat.o mschrom_dat.o ideochrom.o ideoorgs.o \
+	bands_abc.o humchrdrw.o cghlite.o cghlieka.o chrom_input.o structure.o
 
 
 ## All things to make
 ##
-all : ln-if-absent copy .WAIT nocopy asntool .WAIT $(DLIB39)
+all : ln-if-absent copy .WAIT nocopy asntool .WAIT #$(DLIB39)
 
 ln-if-absent:	../make/ln-if-absent
 	rm -f ln-if-absent
@@ -476,26 +478,46 @@ dcompr.o: dcompr.c
 streamprocs.o: streamprocs.c
 	$(CC) $(CFLAGS) $<
 
-humchrow.o:	humchrow.c
+ideochrow.o:	ideochrow.c
 	$(CC) $(CFLAGS) $<
 humchrom_dat.o:	humchrom_dat.c
 	$(CC) $(CFLAGS) $<
-humchrom.o:	humchrom.c
+mschrom_dat.o:	mschrom_dat.c
+	$(CC) $(CFLAGS) $<
+ideochrom.o:	ideochrom.c
+	$(CC) $(CFLAGS) $<
+ideoorgs.o:	ideoorgs.c
 	$(CC) $(CFLAGS) $<
 humchrdrw.o:	humchrdrw.c
 	$(CC) $(CFLAGS) $<
-hc_util.o:	hc_util.c
+bands_abc.o:	bands_abc.c
+	$(CC) $(CFLAGS) $<
+cghlite.o:	cghlite.c
+	$(CC) $(CFLAGS) $<
+cghlieka.o:	cghlieka.c
+	$(CC) $(CFLAGS) $<
+chrom_input.o:	chrom_input.c
+	$(CC) $(CFLAGS) $<
+structure.o:	structure.c
 	$(CC) $(CFLAGS) $<
 hc_gen_obj.o:	hc_gen_obj.c
 	$(CC) $(CFLAGS) $<
+ideo_gen_obj.o:	ideo_gen_obj.c
+	$(CC) $(CFLAGS) $<
 
-humchrom_dat.c: hc_gen_obj humchrom.dat
-	- ./hc_gen_obj -d humchrom.dat -f humchrom_dat
+humchrom_dat.c: ideo_gen_obj humchrom.dat
+	- ./ideo_gen_obj -d humchrom.dat -f humchrom_dat -o HC
 	- mv -f humchrom_dat.h ../include
+
+mschrom_dat.c : ideo_gen_obj mschrom.dat
+	- ./ideo_gen_obj -d mschrom.dat -f mschrom_dat -o MS
+	- mv -f mschrom_dat.h ../include
 
 hc_gen_obj: hc_gen_obj.o humchrom.o $(LIB1)
 	$(CC) $(LDFLAGS) -o hc_gen_obj hc_gen_obj.o humchrom.o $(LIB1) $(OTHERLIBS)
 
+ideo_gen_obj: ideo_gen_obj.o ideochrom.o ideoorgs.o
+	$(CC) $(LDFLAGS) -o ideo_gen_obj ideo_gen_obj.o ideochrom.o ideoorgs.o $(LIB1) $(OTHERLIBS)
 
 ## use subordinate makefile for building shared libraries
 ##

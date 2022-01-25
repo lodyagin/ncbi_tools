@@ -394,9 +394,9 @@ PubmedUrlAsnWrite(PubmedUrlPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
    retval = TRUE;
-
 erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
 

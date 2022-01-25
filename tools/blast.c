@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.207 2000/04/25 19:05:13 dondosha Exp $
+/* $Id: blast.c,v 6.219 2000/05/25 21:03:56 dondosha Exp $
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
 *
 *  This software/database is a "United States Government Work" under the
 *  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
+*  the author's offical duties as a United States Government employee and
 *  thus cannot be copyrighted.  This software/database is freely available
 *  to the public for use. The National Library of Medicine and the U.S.
 *  Government have not placed any restriction on its use or reproduction.
@@ -47,9 +47,45 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.207 $
+ * $Revision: 6.219 $
  *
  * $Log: blast.c,v $
+ * Revision 6.219  2000/05/25 21:03:56  dondosha
+ * In BlastSaveCurrentHitlist assign hspcnt for result hitlist correctly
+ *
+ * Revision 6.218  2000/05/24 19:48:06  dondosha
+ * Moved initialization of qid_array in megablast to search set-up
+ *
+ * Revision 6.217  2000/05/19 19:36:18  madden
+ * Fix for longer words in BlastNtWordFinder, do not call BlastNTPreliminaryGappedScore
+ *
+ * Revision 6.216  2000/05/17 17:13:36  dondosha
+ * Removed some unused variables
+ *
+ * Revision 6.215  2000/05/16 19:59:24  madden
+ * Do no set ignore_small_gaps to TRUE
+ *
+ * Revision 6.214  2000/05/12 19:42:29  dondosha
+ * Use array instead of linked list of query ids in megablast
+ *
+ * Revision 6.213  2000/05/12 18:53:25  shavirin
+ * Fixed memory leak with OIDList.
+ *
+ * Revision 6.212  2000/05/11 18:02:23  shavirin
+ * Minor change for using gi_list together with oid-databasees.
+ *
+ * Revision 6.211  2000/05/09 19:42:49  shavirin
+ * Fixed in BlastGetDbChunk() no-mutex regular database case.
+ *
+ * Revision 6.210  2000/05/03 17:08:26  shavirin
+ * Fixed minor bug in the function BLASTSetUpSearchWithReadDbInternal().
+ *
+ * Revision 6.209  2000/05/01 21:24:54  dondosha
+ * Changed greedy_gapped_align to MegaBlastGreedyAlign
+ *
+ * Revision 6.208  2000/04/28 17:51:49  shavirin
+ * Replaced define RPS_BLAST with checking parameter is_rps_blast.
+ *
  * Revision 6.207  2000/04/25 19:05:13  dondosha
  * Before search assign db_chunk_last to first_db_seq
  *
@@ -2508,14 +2544,13 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
 		done = FALSE;
 		*start = thr_info->last_db_seq;
 		*stop = thr_info->final_db_seq;
-	    }
-	    else
-	    {
+	    } else {
 		thr_info->realdb_done = TRUE;
+                done = TRUE;
 	    }
 	}
     }
-
+    
     return done;
 }
 
@@ -2660,7 +2695,7 @@ do_blast_search(VoidPtr ptr)
     Int2 status;
     Int4 index, index1, start=0, stop=0, id_list_length;
     Int4Ptr id_list=NULL;
-    
+
     search = (BlastSearchBlkPtr) ptr;
     if (search->thr_info->blast_gi_list || search->rdfp->oidlist) {
         id_list = MemNew((search->thr_info->db_chunk_size+33)
@@ -2708,6 +2743,7 @@ do_blast_search(VoidPtr ptr)
 		   status = BlastReapHitlistByEvalue(search);
 		   status = BlastReevaluateWithAmbiguities(search, index);
 		}
+
                 if (search->handle_results)
                     search->handle_results((VoidPtr) search);
 		else
@@ -2723,6 +2759,7 @@ do_blast_search(VoidPtr ptr)
         if (time_out_boolean)
             break;
     }
+    
     if (id_list)
         id_list = MemFree(id_list);
     
@@ -2832,7 +2869,7 @@ do_the_blast_run(BlastSearchBlkPtr search)
             search->queue_callback(search->semid, 3, -1);
         }
 #endif
-        
+
         for (index=1; index<search->pbp->process_num; index++) {
 #ifdef BLAST_COLLECT_STATS
             search->first_pass_hits += array[index]->first_pass_hits;
@@ -3927,7 +3964,7 @@ available) this needs to be set higher up. */
 	{
 		avglen = BLAST_NT_AVGLEN;
 		/* Use only one type of gap for blastn */
-		search->pbp->ignore_small_gaps = TRUE;
+		search->pbp->ignore_small_gaps = FALSE;
 	}
 
 	if (blast_set_parameters(search, options->dropoff_1st_pass, options->dropoff_2nd_pass, avglen, search->searchsp_eff, options->window_size) != 0)
@@ -4208,341 +4245,335 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 
 {
 
-	BlastSearchBlkPtr search;
-	Boolean multiple_hits, options_alloc=FALSE;
-	Int2 status, first_context, last_context;
-        Int8	dblen;
-	Int4	query_length;
-        ValNodePtr	vnp;
-        Int4		i;
-	Nlm_FloatHi	searchsp_eff=0;
-	Boolean		use_private_gilist = FALSE;
-	OIDListPtr	alias_oidlist;
-	Int4		mask_index, virtual_mask_index;
-	Uint4		oid_bit, virtual_oid_bit;
-	ReadDBFILEPtr	tmprdfp;
+    BlastSearchBlkPtr search;
+    Boolean multiple_hits, options_alloc=FALSE;
+    Int2 status, first_context, last_context;
+    Int8	dblen;
+    Int4	query_length;
+    ValNodePtr	vnp;
+    Int4		i;
+    Nlm_FloatHi	searchsp_eff=0;
+    Boolean		use_private_gilist = FALSE;
+    OIDListPtr	alias_oidlist;
+    Int4		mask_index, virtual_mask_index;
+    Uint4		oid_bit, virtual_oid_bit;
+    ReadDBFILEPtr	tmprdfp;
+    
+    /* Allocate default options if none are allocated yet. */
+    if (options == NULL) {
+        options = BLASTOptionNew(prog_name, FALSE);
+        options_alloc = TRUE;
+    }
+    
+    
+    /* non-NULL gi_list means that standalone program called the function */
+    /* non-NULL options->gilist means that server got this gilist from client */
+    if(options->gilist) {
+        /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
         
-	/* Allocate default options if none are allocated yet. */
-	if (options == NULL)
-	{
-		options = BLASTOptionNew(prog_name, FALSE);
-		options_alloc = TRUE;
-	}
-
-     
-	/* non-NULL gi_list means that standalone program called the function */
-	/* non-NULL options->gilist means that server got this gilist from client */
-        if(options->gilist) {
-                /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
-
-            gi_list = MemNew(ValNodeLen(options->gilist) * sizeof(BlastDoubleInt4));
-            
-            for (vnp=options->gilist, i=0; vnp; vnp = vnp->next, ++i) {
-                gi_list[i].gi = vnp->data.intvalue;
-            }
-            gi_list_total = i;
+        gi_list = MemNew(ValNodeLen(options->gilist) * sizeof(BlastDoubleInt4));
+        
+        for (vnp=options->gilist, i=0; vnp; vnp = vnp->next, ++i) {
+            gi_list[i].gi = vnp->data.intvalue;
         }
+        gi_list_total = i;
+    }
+    
+    /* Using "options->gifile" file and gi_list,
+       construct new gi_list with all needed gis */
+    
+    
+    if (options->gifile && StringCmp(options->gifile, "")) {
+        Int4	gi_list_total_2;
+        BlastDoubleInt4Ptr	gi_list_2, tmptr;
+        Int4	size = sizeof(BlastDoubleInt4);
+        Char	buf[PATH_MAX], blast_dir[PATH_MAX];
         
-	/* Using "options->gifile" file and gi_list,
-	   construct new gi_list with all needed gis */
-
-
-        if (options->gifile && StringCmp(options->gifile, "")) {
-            Int4	gi_list_total_2;
-            BlastDoubleInt4Ptr	gi_list_2, tmptr;
-            Int4	size = sizeof(BlastDoubleInt4);
-            Char	buf[PATH_MAX], blast_dir[PATH_MAX];
-
-                /**
-                 * first looking in current directory, then checking .ncbirc,
-                 * then $BLASTDB and then assuming BLASTDB_DIR
-                 */
-	    if (FileLength(options->gifile) > 0) {
-	    	char *path = Nlm_FilePathFind(options->gifile);
-	    	if (StringLen(path) > 0) {
-	    		StringCpy(blast_dir, path);
-	    	}
-	    	else {
-	    		StringCpy(blast_dir, ".");
-	    	}
-	    	MemFree(path);
-	    }
-	    else {
+        /**
+         * first looking in current directory, then checking .ncbirc,
+         * then $BLASTDB and then assuming BLASTDB_DIR
+         */
+        if (FileLength(options->gifile) > 0) {
+            char *path = Nlm_FilePathFind(options->gifile);
+            if (StringLen(path) > 0) {
+                StringCpy(blast_dir, path);
+            } else {
+                StringCpy(blast_dir, ".");
+            }
+            MemFree(path);
+        } else {
 #ifdef OS_UNIX
-		if (getenv("BLASTDB"))
-		    Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
-		else
+            if (getenv("BLASTDB"))
+                Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
+            else
 #endif
-		    Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
-	    }
-            sprintf(buf, "%s%s%s", blast_dir, DIRDELIMSTR, options->gifile);
-
-            gi_list_2 = GetGisFromFile(buf, &gi_list_total_2);
-
-                /* replace or append this list to main one */
-            if (gi_list && gi_list_2) {
-                    /* append */
-                tmptr = MemNew((gi_list_total+gi_list_total_2)*size);
-                MemCpy(tmptr, gi_list, gi_list_total * size);
-                MemCpy(tmptr+gi_list_total, gi_list_2, gi_list_total_2 * size);
-
-                MemFree(gi_list);
-                MemFree(gi_list_2);
-                
-                gi_list = tmptr;
-                gi_list_total += gi_list_total_2;
-            }
-            else if (gi_list_2) {
-                    /* replace */
-                gi_list = gi_list_2;
-                gi_list_total = gi_list_total_2;
-            }
+                Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
         }
-	if (options->window_size != 0)
-		multiple_hits = TRUE;
-	else
-		multiple_hits = FALSE;
-
-	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
-
-	if (query_slp)
-		query_length = SeqLocLen(query_slp);
-	else
-		query_length = query_bsp->length;
-		
-	/* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
-
-	if (search)
-	{
-	   /* Allocate and fill the offsets array in the
-	      BlastSearchBlk structure */
-
-		readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
-
-		if (seqid_list)
-			BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num),
-				seqid_list, NULL, NULL, 
-				NULL, 0);
-
-		if (gi_list)
-		{
-			/* transform the list into OID mask */
-
-		    Int4		i;
-		    Int4		maxoid, virtual_oid, oid;
-		    OIDListPtr		oidlist;
-		    Int4		total, laststop;
-		    Int4		start;
-		    Boolean		done;
-
-		    BlastDoubleInt4Ptr PNTR gi_list_pointers;
-
-		    use_private_gilist = TRUE;
-
-		    gi_list_pointers = MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
-
-		    maxoid = 0;
-		    for (i=0; i < gi_list_total; i++) {
-			/* get virtual OID and start possition for the database this gi is in */
-			gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
-			gi_list[i].start = start;
-			maxoid = MAX(maxoid, gi_list[i].ordinal_id);
-			gi_list_pointers[i] = &(gi_list[i]);
-		    }
-
-		    /* allocate space for mask for virtual database */
-		    oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-		    oidlist->total = maxoid + 1;
-		    total = maxoid/MASK_WORD_SIZE + 2;
-		    oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
-
-		    /* Merge this list with virtual database (OID list) */
-
-		    for (i=0; i < gi_list_total; i++) {
-			/* get start possition in that database */
-			start = gi_list[i].start;
-
-			/* find out if this is an mask database */
-
-			done = FALSE;
-			tmprdfp = search->rdfp;
-
-			alias_oidlist = NULL;
-			while (tmprdfp && !done) {
-			    if (tmprdfp->start == start) {
-				alias_oidlist = tmprdfp->oidlist;
-				done = TRUE;
-			    } else if (tmprdfp->start > start) {
-				done = TRUE;
-			    } else {
-				tmprdfp = tmprdfp->next;
-			    }
-			}
-
-			/* populate the mask */
-			virtual_oid = gi_list[i].ordinal_id;
-
-			if (virtual_oid >= 0) {
-			    virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-			    if (alias_oidlist) {
-				mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
-				oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
-			    }
-
-			    virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-
-			    if ((!alias_oidlist) ||
-				    (alias_oidlist && alias_oidlist->list && 
-				     (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
-				oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-			    }
-			}
-		    }
-
-		    for (i=0; i<total; i++) {
-			oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
-		    }
-
-		    search->rdfp->oidlist = oidlist;
-
-		    /* in this case, the case when we have .gil file, the only database mask
-		       should be used in Blast Search, so set number of sequences for the first
-		       database in rdfp list to 0 avoiding search this real database: */
-		    search->rdfp->num_seqs = 0;
-
-		    /* Adjust db size; the size should be equal to size of the
-		       .gil */
-		    if (!options->use_real_db_size)
-		       BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), 
-			    NULL, NULL, oidlist, NULL, 0);
-
-		    /* keep list of gi's (needed for formating) */
-		    if (options->sort_gi_list)
-		       HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), compare);
-		    search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
-		} else {
-		    /* Ok, we do not have a gi-list specified, but maybe
-		       we have an a mask database in the list of databases,
-		       we need to create one mask for all such databases */
-		    OIDListPtr		virtual_oidlist = NULL;
-		    Int4		final_virtual_db_seq=0, final_db_seq=0;
-		    Int4		mask, oid, virtual_oid, maskindex,
-					virtual_mask_index, total_virtual_mask,
-					base;
-		    Uint4		virtual_oid_bit;
-
-		    tmprdfp = search->rdfp;
-		    while (tmprdfp) {
-
-			final_virtual_db_seq = tmprdfp->stop;
-			if (!tmprdfp->oidlist)
-			    final_db_seq = tmprdfp->stop;
-			tmprdfp = tmprdfp->next;
-		    }
-
-		    tmprdfp = search->rdfp;
-		    while (tmprdfp) {
-			if (tmprdfp->oidlist) {
-			    if (!virtual_oidlist) {
-				/* create new oidlist for virtual database */
-				virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-				virtual_oidlist->total = final_virtual_db_seq + 1;
-				total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
-				virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
-                                /* use the 'memory' field to OIDListFee this memory after use */
-                                virtual_oidlist->memory = virtual_oidlist->list;
-			    }
-			    /* Now populate the virtual_oidlist */
-			    maskindex = 0;
-			    base = 0;
-
-			    while (maskindex < (tmprdfp->oidlist->total/MASK_WORD_SIZE +1)) {
-				/* for each long-word mask */
-				mask = Nlm_SwapUint4(tmprdfp->oidlist->list[maskindex]);
-
-				i = 0;
-				while (mask) {
-				    if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-					oid = base + i;
-					virtual_oid = oid + tmprdfp->start;
-
-					virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-					virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-					virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-				    }
-				    mask <<= 1;
-				    i++;
-				}
-				maskindex++;
-				base += MASK_WORD_SIZE;
-			    }
-
-			    /* free old mask */
-			    tmprdfp->oidlist = OIDListFree(tmprdfp->oidlist);
-			}
-			tmprdfp = tmprdfp->next;
-		    }
-		    if (virtual_oidlist) {
-			for (i=0; i<total_virtual_mask; i++) {
-			    virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
-			}
-		    }
-		    search->rdfp->oidlist = virtual_oidlist;
-
-		    readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
-
-		}
-		/* Intended for use when a list of gi's is sent in, but the real size is needed. */
-		/* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
-			if this were not required. */
-		if (options->use_real_db_size) {
-		   readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
-		   if (gi_list)
-		      search->dbseq_num = MIN(search->dbseq_num, gi_list_total);
-		}
-
-#if 0
-		/* use length and num of seqs of the database from alias file */
-		if (search->rdfp->aliaslen && !gi_list)
-		    dblen = search->rdfp->aliaslen;
-		if (search->rdfp->aliasnseq && !gi_list) 
-		    search->dbseq_num = search->rdfp->aliasnseq;
-#endif
-		/* command-line/options trump alias file. */
-		if (options->db_length > 0)
-			dblen = options->db_length;
-		if (options->dbseq_num > 0)
-			search->dbseq_num = options->dbseq_num;
-		if (options->searchsp_eff > 0)
-			searchsp_eff = options->searchsp_eff;
-
-                if (StringCmp(prog_name, "tblastn") == 0 || StringCmp(prog_name, "tblastx") == 0)
-                {
-                        dblen /= 3.0;
-                        searchsp_eff /= 3.0;
+        sprintf(buf, "%s%s%s", blast_dir, DIRDELIMSTR, options->gifile);
+        
+        gi_list_2 = GetGisFromFile(buf, &gi_list_total_2);
+        
+        /* replace or append this list to main one */
+        if (gi_list && gi_list_2) {
+            /* append */
+            tmptr = MemNew((gi_list_total+gi_list_total_2)*size);
+            MemCpy(tmptr, gi_list, gi_list_total * size);
+            MemCpy(tmptr+gi_list_total, gi_list_2, gi_list_total_2 * size);
+            
+            MemFree(gi_list);
+            MemFree(gi_list_2);
+            
+            gi_list = tmptr;
+            gi_list_total += gi_list_total_2;
+        } else if (gi_list_2) {
+            /* replace */
+            gi_list = gi_list_2;
+            gi_list_total = gi_list_total_2;
+        }
+    }
+    if (options->window_size != 0)
+        multiple_hits = TRUE;
+    else
+        multiple_hits = FALSE;
+    
+    BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
+    
+    if (query_slp)
+        query_length = SeqLocLen(query_slp);
+    else
+        query_length = query_bsp->length;
+    
+    /* On the first call query length is used for the subject length. */
+    search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
+    
+    if (search) {
+        /* Allocate and fill the offsets array in the
+           BlastSearchBlk structure */
+        
+        readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
+        
+        if (seqid_list)
+            BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num),
+                                 seqid_list, NULL, NULL, 
+                                 NULL, 0);
+        
+        if (gi_list) {
+            /* transform the list into OID mask */
+            
+            Int4		i;
+            Int4		maxoid, virtual_oid;
+            OIDListPtr		oidlist;
+            Int4		total;
+            Int4		start;
+            Boolean		done;
+            
+            BlastDoubleInt4Ptr PNTR gi_list_pointers;
+            
+            use_private_gilist = TRUE;
+            
+            gi_list_pointers = MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
+            
+            maxoid = 0;
+            for (i=0; i < gi_list_total; i++) {
+                /* get virtual OID and start possition for the database this gi is in */
+                gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
+                gi_list[i].start = start;
+                maxoid = MAX(maxoid, gi_list[i].ordinal_id);
+                gi_list_pointers[i] = &(gi_list[i]);
+            }
+            
+            /* allocate space for mask for virtual database */
+            oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+            oidlist->total = maxoid + 1;
+            total = maxoid/MASK_WORD_SIZE + 2;
+            oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
+            oidlist->memory = oidlist->list;
+            
+            /* Merge this list with virtual database (OID list) */
+            
+            for (i=0; i < gi_list_total; i++) {
+                /* get start possition in that database */
+                start = gi_list[i].start;
+                
+                /* find out if this is an mask database */
+                
+                done = FALSE;
+                tmprdfp = search->rdfp;
+                
+                alias_oidlist = NULL;
+                while (tmprdfp && !done) {
+                    if (tmprdfp->start == start) {
+                        alias_oidlist = tmprdfp->oidlist;
+                        done = TRUE;
+                    } else if (tmprdfp->start > start) {
+                        done = TRUE;
+                    } else {
+                        tmprdfp = tmprdfp->next;
+                    }
                 }
-		search->dblen = dblen;
-		search->searchsp_eff = searchsp_eff;
-		status = BLASTSetUpSearchInternalByLoc (search, query_slp, query_bsp, prog_name, qlen, options, callback);
-		if (status != 0)
-		{
-	  		ErrPostEx(SEV_WARNING, 0, 0, "SetUpBlastSearch failed.");
-			search->query_invalid = TRUE;
-		}
-
-		if (search->pbp->is_megablast_search) 
-		   search = GreedyAlignMemAlloc(search);
-		else 
-		   search->abmp = NULL;
-	}
-
-	if (options_alloc)
-		options = BLASTOptionDelete(options);
-
-	search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
-
-	return search;
+                
+                /* populate the mask */
+                virtual_oid = gi_list[i].ordinal_id;
+                
+                if (virtual_oid >= 0) {
+                    virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+                    if (alias_oidlist) {
+                        mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
+                        oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
+                    }
+                    
+                    virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+                    
+                    if ((!alias_oidlist) ||
+                        (alias_oidlist && alias_oidlist->list && 
+                         (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
+                        oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+                    }
+                }
+            }
+            
+            for (i=0; i<total; i++) {
+                oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
+            }
+            
+            search->rdfp->oidlist = oidlist;
+            
+            /* in this case, the case when we have .gil file, the only database mask
+               should be used in Blast Search, so set number of sequences for the first
+               database in rdfp list to 0 avoiding search this real database: */
+            search->rdfp->num_seqs = 0;
+            
+            /* Adjust db size; the size should be equal to size of the
+               .gil */
+            if (!options->use_real_db_size)
+                BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), 
+                                     NULL, NULL, oidlist, NULL, 0);
+            
+            /* keep list of gi's (needed for formating) */
+            if (options->sort_gi_list)
+                HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), compare);
+            search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
+        } else {
+            /* Ok, we do not have a gi-list specified, but maybe
+               we have an a mask database in the list of databases,
+               we need to create one mask for all such databases */
+            OIDListPtr		virtual_oidlist = NULL;
+            Int4		final_virtual_db_seq=0, final_db_seq=0;
+            Int4		mask, oid, virtual_oid, maskindex,
+                virtual_mask_index, total_virtual_mask,
+                base;
+            Uint4		virtual_oid_bit;
+            
+            tmprdfp = search->rdfp;
+            while (tmprdfp) {
+                
+                final_virtual_db_seq = tmprdfp->stop;
+                if (!tmprdfp->oidlist)
+                    final_db_seq = tmprdfp->stop;
+                tmprdfp = tmprdfp->next;
+            }
+            
+            tmprdfp = search->rdfp;
+            while (tmprdfp) {
+                if (tmprdfp->oidlist) {
+                    if (!virtual_oidlist) {
+				/* create new oidlist for virtual database */
+                        virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+                        virtual_oidlist->total = final_virtual_db_seq + 1;
+                        total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
+                        virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
+                                /* use the 'memory' field to OIDListFee this memory after use */
+                        virtual_oidlist->memory = virtual_oidlist->list;
+                    }
+                    /* Now populate the virtual_oidlist */
+                    maskindex = 0;
+                    base = 0;
+                    
+                    while (maskindex < (tmprdfp->oidlist->total/MASK_WORD_SIZE +1)) {
+				/* for each long-word mask */
+                        mask = Nlm_SwapUint4(tmprdfp->oidlist->list[maskindex]);
+                        
+                        i = 0;
+                        while (mask) {
+                            if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+                                oid = base + i;
+                                virtual_oid = oid + tmprdfp->start;
+                                
+                                virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+                                virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+                                virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+                            }
+                            mask <<= 1;
+                            i++;
+                        }
+                        maskindex++;
+                        base += MASK_WORD_SIZE;
+                    }
+                    
+                    /* free old mask */
+                    tmprdfp->oidlist = OIDListFree(tmprdfp->oidlist);
+                }
+                tmprdfp = tmprdfp->next;
+            }
+            if (virtual_oidlist) {
+                for (i=0; i<total_virtual_mask; i++) {
+                    virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
+                }
+            }
+            search->rdfp->oidlist = virtual_oidlist;
+            
+            readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
+            
+        }
+        /* Intended for use when a list of gi's is sent in, but the real size is needed. */
+        /* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
+           if this were not required. */
+        if (options->use_real_db_size) {
+            readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num),
+                                 TRUE);
+            /*if (gi_list)
+              search->dbseq_num = MIN(search->dbseq_num, gi_list_total); */
+        }
+        
+#if 0
+        /* use length and num of seqs of the database from alias file */
+        if (search->rdfp->aliaslen && !gi_list)
+            dblen = search->rdfp->aliaslen;
+        if (search->rdfp->aliasnseq && !gi_list) 
+            search->dbseq_num = search->rdfp->aliasnseq;
+#endif
+        /* command-line/options trump alias file. */
+        if (options->db_length > 0)
+            dblen = options->db_length;
+        if (options->dbseq_num > 0)
+            search->dbseq_num = options->dbseq_num;
+        if (options->searchsp_eff > 0)
+            searchsp_eff = options->searchsp_eff;
+        
+        if (StringCmp(prog_name, "tblastn") == 0 || StringCmp(prog_name, "tblastx") == 0) {
+            dblen /= 3.0;
+            searchsp_eff /= 3.0;
+        }
+        search->dblen = dblen;
+        search->searchsp_eff = searchsp_eff;
+        status = BLASTSetUpSearchInternalByLoc (search, query_slp, query_bsp, prog_name, qlen, options, callback);
+        if (status != 0) {
+            ErrPostEx(SEV_WARNING, 0, 0, "SetUpBlastSearch failed.");
+            search->query_invalid = TRUE;
+        }
+        
+        if (search->pbp->is_megablast_search) 
+            search = GreedyAlignMemAlloc(search);
+        else 
+            search->abmp = NULL;
+        
+        search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
+    }
+    
+    if (options_alloc)
+        options = BLASTOptionDelete(options);
+    
+    return search;
 }
 
 /*
@@ -4968,11 +4999,13 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
 			status = BlastPreliminaryGappedScore(search, search->subject->sequence, search->subject->length, inner_frame);
 			status = BlastGetGappedScore(search, search->subject->length, search->subject->sequence, inner_frame);
 		}
+/*
 		else if (!search->pbp->do_sum_stats && !search->pbp->is_megablast_search)
                 {
                      status = BlastNTPreliminaryGappedScore(search, search->subject->sequence, search->subject->length);
                      status = BlastNTGetGappedScore(search, search->subject->length, search->subject->sequence);
                 }
+*/
 	}
 
 
@@ -5139,10 +5172,13 @@ BlastWordFinder(BlastSearchBlkPtr search)
 	else
 	{
 		wfp=search->wfp_second;
-		if (pbp->cutoff_s2_set == TRUE)
-			pbp->cutoff_s2 = pbp->cutoff_s2_max;
-		else
-			pbp->cutoff_s2 = MIN(pbp->cutoff_s_second, pbp->cutoff_s2_max);
+		if (!search->pbp->is_megablast_search) {
+		   if (pbp->cutoff_s2_set == TRUE)
+		      pbp->cutoff_s2 = pbp->cutoff_s2_max;
+		   else
+		      pbp->cutoff_s2 = MIN(pbp->cutoff_s_second,
+					   pbp->cutoff_s2_max);
+		}
 		pbp->X = pbp->dropoff_2nd_pass;
 	}
 
@@ -5247,11 +5283,11 @@ the size of the word. */
 		lookup_pos++;
 
                 if(num_hits > 3){
-#ifdef RPS_BLAST
-                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
-#else
-                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    if(search->pbp->is_rps_blast) {
+                        lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+                    } else {
+                        lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+                    }
                 }
 
  		s_off = s-subject0;
@@ -5310,11 +5346,11 @@ the size of the word. */
 		lookup_pos++;
 
                 if(num_hits > 3){
-#ifdef RPS_BLAST
+                    if(search->pbp->is_rps_blast) {
                 	lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
-#else
+                    } else {
                 	lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    }
 		}
 
 		s_off = s-subject0;
@@ -5565,12 +5601,11 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
                 lookup_pos++;
                 
                 if(num_hits > 3){
-#ifdef RPS_BLAST
-                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4
-) *lookup_pos);
-#else
-                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    if(search->pbp->is_rps_blast) {
+                        lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+                    } else {
+                        lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+                    }
                 }
                 /* Changed by TLM. */
                 s_off = (Int4) (s - subject0);
@@ -5656,11 +5691,11 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 		lookup_pos++;
                 
 		if(num_hits > 3){
-#ifdef RPS_BLAST
-                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
-#else
-                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    if(search->pbp->is_rps_blast) {
+                        lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+                    } else {
+                        lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+                    }
 		}
                 
                 /* Changed by TLM. */
@@ -5750,11 +5785,11 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 		lookup_pos++;
                 
 		if(num_hits>3){
-#ifdef RPS_BLAST
-                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
-#else
-                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    if(search->pbp->is_rps_blast) {
+                        lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+                    } else {
+                        lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+                    }
 		}
                 /* Changed by TLM. */
 	    	s_off = (Int4) (s - subject0);
@@ -5845,11 +5880,11 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 		lookup_pos++;
                 
 		if(num_hits > 3){
-#ifdef RPS_BLAST
-                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
-#else
-                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
-#endif
+                    if(search->pbp->is_rps_blast) {
+                        lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+                    } else {
+                        lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+                    }
 		}
                 
                 /* Changed by TLM. */
@@ -6591,7 +6626,7 @@ BlastNtWordExtend(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag r
 
 	/* extend to the left */
 	if (search->pbp->is_megablast_search) {
-	   ndiff = greedy_gapped_align(q, q_avail, s, s_avail, FALSE, -2*X,
+	   ndiff = MegaBlastGreedyAlign(q, q_avail, s, s_avail, FALSE, -2*X,
 					   2*search->sbp->reward,
 					   -2*search->sbp->penalty, 
 					   &q_ext, &s_ext, search->abmp, NULL);
@@ -6602,7 +6637,7 @@ BlastNtWordExtend(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag r
 	      (q_ext + s_ext)*search->sbp->reward/2 - 
 	      ndiff*(search->sbp->reward - search->sbp->penalty);
 	   
-	   ndiff = greedy_gapped_align(query0, q_off, subject0, 
+	   ndiff = MegaBlastGreedyAlign(query0, q_off, subject0, 
 					   s_off*READDB_COMPRESSION_RATIO, TRUE,
 					   -2*X, 2*search->sbp->reward, 
 					   -2*search->sbp->penalty, 
@@ -7024,7 +7059,7 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
         lookup_index = index;
 /* Determines when to stop scanning the database; does not include remainder. */
         s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
-	compression_factor = wfp->compression_ratio*compressed_wordsize;
+	compression_factor = wfp->compression_ratio*lookup->reduced_wordsize;
 	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
 
 	search_context = search->context;
@@ -7140,8 +7175,8 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 				}
 			}
 			/* extend to the right */
-			p = *(subject0 + s_off);
-			q = query0 + q_off;
+			p = *(subject0 + s_off + extra_bytes_needed);
+			q = query0 + q_off + 4*extra_bytes_needed;
 			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
 			{
 				right = 0;
@@ -7290,8 +7325,8 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 				}
 			}
 			/* extend to the right */
-			p = *(subject0 + s_off);
-			q = query0 + q_off;
+			p = *(subject0 + s_off + extra_bytes_needed);
+			q = query0 + q_off + 4*extra_bytes_needed;
 			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
 			{
 				right = 0;
@@ -7712,7 +7747,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 				index1++;
 				hsp = current_hitlist->hsp_array[index1];
 			}
-
+			if (index1==hspmax) break;
 			if (current_evalue > hsp->evalue)
 				current_evalue = hsp->evalue;
 			if (high_score < hsp->score)
@@ -7773,6 +7808,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 				break;
 			hsp = current_hitlist->hsp_array[index1];
 		}
+		/* Check if there were less HSPs than expected */
+		result_hitlist->hspcnt = index;
 		result_hitlist->best_evalue = current_evalue;
 		result_hitlist->high_score = high_score;
 	}
@@ -8266,7 +8303,6 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	Int4 max_q_diff;
  	Int4 path_changed;  /* will be set if an element is removed that may change an existing path */
  	Int4 first_pass, use_current_max; 
-	LinkHelpStruct * next_lh_addr;	
 	LinkHelpStruct *lh_helper=0;
 
 	if (search == NULL || hitlist == NULL)
@@ -8530,7 +8566,7 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 			  /* for (H2=H->prev; H2!=NULL; H2=H2->prev,H2_index--) */
 			  for (H2_index=H_index-1; H2_index>1; H2_index=H2_index-1) 
 			    {
-			        Int4 b0,b1,b2,b3,b4,b5;
+			        Int4 b1,b2,b3,b4,b5;
 				Int4 q_off_t,s_off_t,sum;
 
 				/* s_frame = lh_helper[H2_index].s_frame; */
@@ -8595,7 +8631,6 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		     H_index = 2;
 		     for (H=hp_start.next; H!=NULL; H=H->next,H_index++) 
 		     {
-		        Int4 next_sum;
 		        Int4 H_hsp_num=0;
 			Int4 H_hsp_sum=0;
 			Nlm_FloatHi H_hsp_xsum=0.0;

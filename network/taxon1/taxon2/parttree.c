@@ -31,6 +31,9 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.9  2000/05/11 21:45:03  soussov
+* fixes bug in lookup by secondary taxid
+*
 * Revision 1.8  1999/07/19 18:02:33  soussov
 * fixed bug with realloc
 *
@@ -210,11 +213,15 @@ Boolean tax_ptree_addNode(TreePtr ptree, Int4 tax_id)
 	    s= 9 + StringLen(lineage[i]->node_label);
 	    nid= tree_addChild(cursor, lineage[i], s);
 	    tree_toNode(cursor, nid);
+	    if((i == 0) && (tax_id != lineage[0]->tax_id)) {
+		lineage[0]->tax_id= tax_id;
+		ptree_spy(ptree, 0, TREE_NODE_ADDED, nid, nid, lineage[0], s);
+	    }
 	    MemFree(lineage[i]);
 	}
 	while(i--);
     }
-
+    
     tree_closeCursor(cursor);
     MemFree(lineage);
     return TRUE;

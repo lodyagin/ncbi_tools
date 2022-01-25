@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.h,v 1.27 2000/04/21 23:00:50 hurwitz Exp $
+/*  $Id: ddvcreate.h,v 1.28 2000/05/04 22:43:38 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.27 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.h,v $
+* Revision 1.28  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
 * Revision 1.27  2000/04/21 23:00:50  hurwitz
 * can launch DDE from DDV
 *
@@ -257,6 +260,8 @@ NLM_EXTERN void DDV_LayoutISOColors(DDV_ColorGlobal *pcg,ValNodePtr * row_list,I
 /* create display for a single aligned block or an unaligned region */
 NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 BlockIndex);
 NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int4 UAIndex);
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplay(SeqAlignPtr sap, Int4 BlockIndex,
+                                                Boolean IsUnAligned, Int4* pNumBlocks);
 
 #ifdef __cplusplus
 }

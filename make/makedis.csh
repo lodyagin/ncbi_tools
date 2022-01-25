@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.42 2000/04/13 14:14:42 thiessen Exp $
+# $Id: makedis.csh,v 1.45 2000/05/19 16:00:51 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -175,7 +175,7 @@ endif
 # then add the appropriate flags and libraries for PNG support
 if ("$?LIBPNG_DIR" == "1" && "$?ZLIB_DIR" == "1") then
     set PNG_INCLUDE="-D_PNG -I$LIBPNG_DIR -I$ZLIB_DIR"
-    set PNG_LIBS="-L$LIBPNG_DIR -lpng -L$ZLIB_DIR -lz"
+    set PNG_LIBS="$LIBPNG_DIR/libpng.a $ZLIB_DIR/libz.a"
 else
     set PNG_INCLUDE=""
     set PNG_LIBS=""
@@ -195,7 +195,8 @@ if ( "$HAVE_MOTIF" == 1 ) then
 	set NET_VIB=(BLIB31=libvibnet.a \
 		VIBLIBS=\"$NCBI_DISTVIBLIBS $OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin Nentrez Cn3Dv3d udv ddv blastcl3 blast.REAL $OGL_TARGETS\") 
+		VIB=\"Psequin Nentrez Cn3Dv3d udv ddv blastcl3 blast.REAL \
+		idfetch $OGL_TARGETS\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -204,7 +205,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 blast.REAL\") 
+	set NET_VIB=(VIB=\"blastcl3\") 
 endif
 
 set CMD='make $MFLG \

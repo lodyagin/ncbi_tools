@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.21  2000/05/09 17:00:18  kans
+* suppresses full-length biosource features
+*
+* Revision 6.20  2000/05/08 19:24:22  lewisg
+* fix UDV_CreateParaGList to stop at last character instead of one before
+*
 * Revision 6.19  2000/04/13 13:57:33  durand
 * allowed udv to display reverse complement sequence
 *
@@ -737,6 +743,7 @@ Boolean bFirst=TRUE,bTrouve=FALSE;
 Boolean IsTransNeeded=FALSE;
 SeqMgrFeatContextPtr context;
 SeqAnnotPtr sap;
+ValNode vn;
 
 	if (!context2->sfp) return (TRUE);
 
@@ -765,6 +772,15 @@ SeqAnnotPtr sap;
 	sap = context2->sap;
 	if (sap && sap->desc!=NULL) return(TRUE);
 	if (context2->seqfeattype==SEQFEAT_PUB) return(TRUE);
+	if (context2->seqfeattype == SEQFEAT_BIOSRC) {
+	  if (context2->bsp != NULL) {
+        MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+        vn.choice = SEQLOC_WHOLE;
+        vn.data.ptrvalue = (Pointer) SeqIdFindBest (context2->bsp->id, 0);
+        vn.next = NULL;
+        if (SeqLocCompare (sfp->location, &vn) == SLC_A_EQ_B) return TRUE;
+	  }
+	}
 	
 	context=UDV_ConvertFeatContext(context2,pgfl->cumOffset,pgfl->bsp_part_length);
 	if (!context) return(TRUE);
@@ -1081,7 +1097,7 @@ Int4		nParaG=0;				/*ParaG counter*/
 	
 	/*(re)populate ParaG structure; if a previous structure already
 	exists, use it; avoid a lot of MemNew/MemFree*/
-	while(!(start>=to)){
+	while(!(start>to)){
 		if (vnp1){
 			pgp=(ParaGPtr)vnp1->data.ptrvalue;
 

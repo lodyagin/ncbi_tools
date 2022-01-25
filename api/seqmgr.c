@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.121 $
+* $Revision: 6.124 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.124  2000/05/25 20:04:13  dondosha
+* Fixed bug in SeqIdIndexElementCmp
+*
+* Revision 6.123  2000/05/24 21:13:48  ostell
+* added SeqMgrHoldIndexing() support
+*
+* Revision 6.122  2000/05/16 18:23:51  kans
+* find appropriate bioseq subfunctions call BioseqFindCore, not BioseqFind
+*
 * Revision 6.121  2000/04/12 18:46:01  durand
 * fixed a bug in RecordOneFeature (JK)
 *
@@ -539,8 +548,9 @@ static Boolean NEAR SeqMgrGenericSelect PROTO((SeqLocPtr region, Int2 type,
                                              Uint1Ptr rgb));
 static BioseqPtr NEAR BioseqReloadFunc PROTO((SeqIdPtr sid, ObjMgrDataPtr omdp));
 
-static Boolean NEAR SeqMgrProcessNonIndexedBioseq PROTO((void));
-static Boolean NEAR SeqMgrAddIndexElement PROTO((SeqMgrPtr smp, BioseqPtr bsp, CharPtr buf));
+static Boolean NEAR SeqMgrProcessNonIndexedBioseq PROTO((Boolean force_it));
+static Boolean NEAR SeqMgrAddIndexElement PROTO((SeqMgrPtr smp, BioseqPtr bsp, CharPtr buf,
+                                                  Boolean sort_now));
 static void NEAR RevStringUpper PROTO((CharPtr str));
 static BSFetchTop NEAR SeqMgrGetFetchTop (void);
 
@@ -1168,7 +1178,7 @@ done_cache:
 
 	bsp = NULL; /* resetting it */
 
-	SeqMgrProcessNonIndexedBioseq();	/* make sure all are indexed */
+	SeqMgrProcessNonIndexedBioseq(TRUE);	/* make sure all are indexed */
 
 		/* stringify as in SeqMgrAdd */
 
@@ -2893,7 +2903,9 @@ NLM_EXTERN Boolean LIBCALL SeqMgrDelete (Uint2 type, Pointer data)
 	return ObjMgrDelete(type, data);
 }
 
-static Boolean NEAR SeqMgrAddIndexElement(SeqMgrPtr smp, BioseqPtr bsp, CharPtr buf)
+
+
+static Boolean NEAR SeqMgrAddIndexElement(SeqMgrPtr smp, BioseqPtr bsp, CharPtr buf, Boolean sort_now)
 {
 	SeqIdIndexElementPtr sip, PNTR sipp;
 	SeqIdIndexBlockPtr sibp, prev;
@@ -2923,9 +2935,9 @@ static Boolean NEAR SeqMgrAddIndexElement(SeqMgrPtr smp, BioseqPtr bsp, CharPtr 
 		   smp->BioseqIndexData = sibp;
 
 	   smp->BioseqIndex = MemNew((smp->BioseqIndexNum + 100) * 
-sizeof(SeqIdIndexElementPtr));
+				     sizeof(SeqIdIndexElementPtr));
 	   MemCopy(smp->BioseqIndex, sipp, (smp->BioseqIndexNum * 
-sizeof(SeqIdIndexElementPtr)));
+					    sizeof(SeqIdIndexElementPtr)));
 	   MemFree(sipp);
 	   smp->BioseqIndexNum += 100;
 	   sipp = smp->BioseqIndex;
@@ -2939,6 +2951,12 @@ sizeof(SeqIdIndexElementPtr)));
 	sip->str = StringSave(buf);
 	newstr = sip->str;
 	RevStringUpper(newstr);  /* try to avoid case check */
+
+	if (! sort_now)
+	{
+		smp->BioseqIndexCnt++;     /* got one more */
+		return TRUE;
+	}
 
 	imin = 0;                   /* find where it goes */
 	imax = i-1;
@@ -2980,11 +2998,47 @@ sizeof(SeqIdIndexElementPtr)));
 
 /*****************************************************************************
 *
-*   SeqMgrProcessNonIndexedBioseq()
-*   	Indexes a BioseqPtr by SeqId(s)
+*   SeqMgrHoldIndexing(Boolean hold)
+*       stops sequence indexing to allow bulk loading if hold = TRUE
+*       starts it when hold = FALSE;
+*       uses a counter so you must call it the same number of times
+*        with TRUE as with FALSE
+*       when the counter decrements to 0, it will index what it has.
 *
 *****************************************************************************/
-static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
+NLM_EXTERN void LIBCALL SeqMgrHoldIndexing (Boolean hold)
+{
+	SeqMgrPtr smp;
+
+	smp = SeqMgrWriteLock();
+	if (hold)
+		smp->hold_indexing++;
+	else
+		smp->hold_indexing--;
+	SeqMgrUnlock();
+
+	if (! smp->hold_indexing)
+		SeqMgrProcessNonIndexedBioseq(FALSE);
+
+	return;
+}
+
+int LIBCALLBACK SeqIdIndexElementCmp (VoidPtr a, VoidPtr b);
+
+int LIBCALLBACK SeqIdIndexElementCmp (VoidPtr a, VoidPtr b)
+{
+	return (int)(StringCmp((*(SeqIdIndexElementPtr PNTR)a)->str,
+			       (*(SeqIdIndexElementPtr PNTR)b)->str));
+}
+
+/*****************************************************************************
+*
+*   SeqMgrProcessNonIndexedBioseq(Boolean force_it)
+*   	Indexes a BioseqPtr by SeqId(s)
+*       If ! force_it, respects the smp->don't index flag
+*
+*****************************************************************************/
+static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 {
 	BioseqPtr PNTR bspp, bsp;
 	Int4 i, total, k;
@@ -2996,9 +3050,11 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 	TextSeqIdPtr tsip;
 	SeqMgrPtr smp;
 	Int2 version = 0;
+	Boolean sort_now = TRUE;
 
 	smp = SeqMgrReadLock();
-	if (! smp->NonIndexedBioseqCnt)
+	if ((! smp->NonIndexedBioseqCnt) ||           /* nothing to index */
+	    ((! force_it) && (smp->hold_indexing)))   /* holding off on indexing */
 	{
 		SeqMgrUnlock();
 		return TRUE;
@@ -3006,13 +3062,17 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 	SeqMgrUnlock();
 
 	smp = SeqMgrWriteLock();
-	if (! smp->NonIndexedBioseqCnt)
+        if ((! smp->NonIndexedBioseqCnt) ||           /* nothing to index */
+            ((! force_it) && (smp->hold_indexing)))   /* holding off on indexing */
 	{
 		SeqMgrUnlock();
 		return TRUE;
 	}
 
 	total = smp->NonIndexedBioseqCnt;
+	if (total > 100)   /* heap sort is faster */
+		sort_now = FALSE;
+
 	bspp = smp->NonIndexedBioseq;
 	for (i = 0; i < total; i++)
 	{
@@ -3030,7 +3090,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 					{
 					case SEQID_GI:
 						sprintf(buf, "%ld", (long)(sip->data.ptrvalue));
-						SeqMgrAddIndexElement(smp, bsp, buf);
+						SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
 						break;
 					case SEQID_EMBL:
 					case SEQID_DDBJ:
@@ -3053,17 +3113,17 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 							tmp = tsip->accession;
 							tsip->accession = NULL;
 							SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
-							SeqMgrAddIndexElement(smp, bsp, buf);
+							SeqMgrAddIndexElement(smp, bsp, buf,sort_now);
 							tsip->accession = tmp;
 						}
 						tmp = tsip->name;
 						tsip->name = NULL;
  						SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
-						SeqMgrAddIndexElement(smp, bsp, buf);
+						SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
 						if (version) {
 						  tsip->version = 0;
 						  SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
-						  SeqMgrAddIndexElement(smp, bsp, buf);
+						  SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
 						  tsip->version = version;
 						}
 						tsip->name = tmp;
@@ -3072,7 +3132,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 						break;
 					default:
   						SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
-						SeqMgrAddIndexElement(smp, bsp, buf);
+						SeqMgrAddIndexElement(smp, bsp, buf, sort_now);
 						break;
 					}
 				}
@@ -3094,6 +3154,12 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 	}
 
 	smp->NonIndexedBioseqCnt = total;
+
+	if (! sort_now)   /* sort at the end */
+	{
+		HeapSort((VoidPtr) (smp->BioseqIndex), (size_t)(smp->BioseqIndexCnt),
+			  sizeof(SeqIdIndexElementPtr), SeqIdIndexElementCmp);
+	}
 
 	SeqMgrUnlock();
 
@@ -3135,7 +3201,7 @@ sizeof(BioseqPtr)));
 
 	SeqMgrUnlock();
 
-	SeqMgrProcessNonIndexedBioseq();
+	SeqMgrProcessNonIndexedBioseq(FALSE);
 
 	return TRUE;
 }
@@ -3632,7 +3698,7 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
     if (tryfirst != NULL && SeqIdIn (sip, tryfirst->id)) {
       bsp = tryfirst;
     } else {
-      bsp = BioseqFind (sip);
+      bsp = BioseqFindCore (sip);
     }
 
     /* first see if this is raw local part of segmented bioseq */
@@ -3657,7 +3723,7 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
   if (slp == NULL) return NULL;
   sip = SeqLocId (slp);
   if (sip == NULL) return NULL;
-  part = BioseqFind (sip);
+  part = BioseqFindCore (sip);
   if (part == NULL) return NULL;
   omdp = SeqMgrGetOmdpForBioseq (part);
   while (omdp != NULL) {
@@ -3701,7 +3767,7 @@ static BioseqPtr FindFirstLocalBioseq (SeqLocPtr loc)
   while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
     sip = SeqLocId (slp);
     if (sip != NULL) {
-      bsp = BioseqFind (sip);
+      bsp = BioseqFindCore (sip);
       if (bsp != NULL) return bsp;
     }
   }

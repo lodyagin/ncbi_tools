@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.9  2000/05/05 19:28:31  kans
+* type for OCTET STRING really is ByteStorePtr, so this is now used instead of Pointer (KS)
+*
 * Revision 6.8  1999/08/02 14:18:55  sirotkin
 * some compiler nits.
 *
@@ -115,7 +118,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.8 $";
+static char     RCS_Rev [] = "$Revision: 6.9 $";
 
 /*******************
  * Interator structure
@@ -3109,7 +3112,7 @@ AsnCodeLookupType (AsnTypePtr atp)
       	    retval = "Int4";
       	    break;
       	 case OCTETS_TYPE:
-      	    retval = "Pointer";
+      	    retval = "ByteStorePtr";
       	    break;
       	 case NULL_TYPE:
       	    retval = "Uint1";

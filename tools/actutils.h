@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.5  2000/05/04 16:45:20  wheelan
+* changes to profile builder to accomodate IBMed BLAST results
+*
 * Revision 6.4  2000/04/18 13:57:14  wheelan
 * added AlnMgrForcePairwiseContinuousEx
 *
@@ -153,7 +156,7 @@ NLM_EXTERN ACTProfilePtr ACT_ProfileNew(Boolean nuc);
 NLM_EXTERN ACTProfilePtr ACT_ProfileFree(ACTProfilePtr app);
 NLM_EXTERN ACTProfilePtr ACT_ProfileSetFree(ACTProfilePtr app);
 
-NLM_EXTERN void ACT_BuildProfile(SeqLocPtr slp, ACTProfilePtr app);
+NLM_EXTERN void ACT_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length);
 NLM_EXTERN FloatHi ACT_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app);
 NLM_EXTERN void ACT_EstimateConfidence(ACTProfilePtr app);
 NLM_EXTERN ACTProfilePtr ACT_SortProfilesByConfidence(ACTProfilePtr app);

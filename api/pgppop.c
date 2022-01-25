@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.58 2000/04/19 12:33:32 durand Exp $
+/*  $Id: pgppop.c,v 6.59 2000/05/19 14:30:52 wheelan Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.58 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.59  2000/05/19 14:30:52  wheelan
+* fixed problem with formatting PDB ids
+*
 * Revision 6.58  2000/04/19 12:33:32  durand
 * for HTML output, replaced double quote char. by a spacein the defline
 *
@@ -2068,12 +2071,13 @@ static ValNodePtr DDV_DisplayParaG(ValNodePtr vnp,Int4 i,Boolean ShowScale,
 		DDV_ColorGlobal * gclr,ValNodePtr mask)		
 {
 ParaGPtr 		pgp;	/*ParaG data*/
-CharPtr			szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine;
+CharPtr			szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine, idstring;
 BioseqPtr       bsp;
 SeqIdPtr        sip;
-Int4            bspLength,size,stop,nCompt2,pos,gi,diff,disp,bsp_start,bsp_stop;
+Int4            bspLength,size,stop,nCompt2,pos,gi,diff,disp,bsp_start,bsp_stop, n, j;
 Char 			szBuf4[WWW_SCRIPT_SIZE]={""};	/*Entrez query*/
 Uint1			bsp_strand;
+Char		tmpstr[99];
 	
 	if (vnp==NULL) return(NULL);
 
@@ -2157,7 +2161,23 @@ Uint1			bsp_strand;
 					sprintf(szBuf4,szEntrezScript,gi,(IsAA ? "p" : "n"));
 				}
 				else{
-					sprintf(szBuf4,"javascript:void(0)");
+					if (pgp->sip->choice == SEQID_PDB)
+					{
+						n = j = 0;
+						idstring = StringSave(szSeqAcc);
+						while (idstring[n] != '\0')
+						{
+							if (idstring[n] != '_')
+							{
+								tmpstr[j] = idstring[n];
+								j++;
+							}
+							n++;
+						}
+						tmpstr[j] = '\0';
+						sprintf(szBuf4,szEntrezScriptSMART,tmpstr,(IsAA ? "p" : "n"));
+					} else
+						sprintf(szBuf4,"javascript:void(0)");
 				}
 				if (szSeqName){
 					szFLine=DDV_ConcatStr(szFLine,"<a href=\"");

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.59 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -400,6 +400,7 @@ extern void GenerateAutoDefLinesWithMods (IteM i);
 extern void GenerateAutoDefLinesSmartMods (IteM i);
 
 extern void EditEvidenceFlag (IteM i);
+extern void EditExceptionFlag (IteM i);
 extern void EditFeaturePartials (IteM i);
 extern void MakeGroupsOf200 (IteM i);
 

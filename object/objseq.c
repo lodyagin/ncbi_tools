@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -849,6 +849,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
 	DataVal av;
 	AsnTypePtr atp;
 	Boolean retval = FALSE;
+	Uint1 newcode;
 
 	if (! loaded)
 	{
@@ -891,6 +892,17 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
         av.intvalue = bsp->strand;
         if (! AsnWrite(aip, SEQ_INST_strand, &av)) goto erret;
     }
+
+	              /** for XML, make it text ****/
+    if (aip->type & ASNIO_XML)
+    {
+	if (ISA_aa(bsp->mol))
+		newcode = Seq_code_ncbieaa;
+	else
+		newcode = Seq_code_iupacna;
+	BioseqConvert(bsp, newcode);
+    }
+
     if (bsp->seq_data != NULL)
     {
 		if (! SeqDataAsnWrite(bsp->seq_data, bsp->seq_data_type, aip, SEQ_INST_seq_data))

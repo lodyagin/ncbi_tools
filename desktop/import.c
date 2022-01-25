@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -1932,6 +1932,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"HTGS 2",            15},
   {"HTGS 3",            16},
   {"FLI_cDNA",          17},
+  {"HTC",               18},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -1949,6 +1950,7 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"HTGS 2",            15},
   {"HTGS 3",            16},
   {"FLI_cDNA",          17},
+  {"HTC",               18},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -2009,7 +2011,7 @@ static Uint1 check_biomol (Uint1 biomol)
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > 18 && tech != 255) return 0;
+  if (tech > 19 && tech != 255) return 0;
   return tech;
 }
 

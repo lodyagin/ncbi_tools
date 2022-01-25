@@ -31,9 +31,32 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.125 $
+ * $Revision: 6.129 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.129  2000/05/19 20:40:34  kitts
+ * 1. Fixed bug in VSMakeCombinedSeqLoc preventing "No hits" being
+ *    reported when none of the blast hits were significant.
+ * 2. Fixed bug in VSCombineSeqLoc causing overlaps to be missed
+ *    when alignment filtering is off.
+ * 3. Fixed bug in CombineSeqLoc to allow all SeqLocs in a linked
+ *    list to be processed.
+ * 4. Added checks to several functions to prevent "No hits"
+ *    being reported when the search fails.
+ * 5. Other minor changes.
+ *
+ * Revision 6.128  2000/05/09 21:43:48  kitts
+ * Removed unused parameter from VSPrintListFromSeqLocs
+ * Moved "No hits" output from VSPrintListFromSeqLocs to vecscreen.c
+ *
+ * Revision 6.127  2000/05/05 20:11:09  madden
+ * Add VSScreenSequenceByLoc
+ *
+ * Revision 6.126  2000/05/01 16:58:42  kitts
+ *
+ * Added function VSPrintListFromSeqLocs
+ * Added function VSPrintListIdLine
+ *
  * Revision 6.125  2000/03/30 21:04:16  madden
  * Added function VSMakeCombinedSeqLoc
  *
@@ -300,6 +323,11 @@ VSOptionsNew(void)
 
 	options->number_of_classes = 3;
 	options->classes = MemNew(2*(options->number_of_classes)*sizeof(Int4));
+	if (options->classes == NULL) 
+	{
+		MemFree(options);
+		return NULL;
+	}
 	options->classes[0] = 24;
 	options->classes[1] = 30;
 	options->classes[2] = 19;
@@ -421,19 +449,30 @@ CombineSeqLoc (SeqLocPtr seqloc)
 {
 	Int4 start, stop;
 	SeqLocPtr retval=NULL, seqloc_var, new_seqloc=NULL;
+	SeqLocPtr my_seqloc=NULL, tmp_seqloc;
 	SeqIntPtr seq_int;
 
-	if (seqloc == NULL)
+	if (seqloc == NULL || seqloc->choice != SEQLOC_PACKED_INT)
 		return NULL;
 
-	if (seqloc->choice == SEQLOC_PACKED_INT)
-		seqloc = seqloc->data.ptrvalue;
+	while (seqloc)
+	{
+		tmp_seqloc = seqloc->data.ptrvalue;
+		while (tmp_seqloc)
+		{
+			ValNodeLink(&my_seqloc, (SeqLocPtr) AsnIoMemCopy ((Pointer) tmp_seqloc,
+                                     (AsnReadFunc) SeqLocAsnRead,
+                                     (AsnWriteFunc) SeqLocAsnWrite));
+			tmp_seqloc = tmp_seqloc->next;
+		}
+		seqloc = seqloc->next;
+	}
 
-	seqloc = (SeqLocPtr) ValNodeSort ((ValNodePtr) seqloc, MySeqLocSortByStartPosition);
+	my_seqloc = (SeqLocPtr) ValNodeSort ((ValNodePtr) my_seqloc, MySeqLocSortByStartPosition);
 
-	start = SeqLocStart(seqloc);
-	stop = SeqLocStop(seqloc);
-	seqloc_var = seqloc;
+	start = SeqLocStart(my_seqloc);
+	stop = SeqLocStop(my_seqloc);
+	seqloc_var = my_seqloc;
 
 	while (seqloc_var)
 	{
@@ -564,14 +603,18 @@ VSMakeSeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length, V
 	Uint2Ptr HitsPerBase=NULL;
 	Int4 last_start=INT4_MAX, last_stop=-1;
 
-	seqalign = *seqalign_ptr;
+	if (seqalign_ptr == NULL || vnp == NULL)
+	        return FALSE;
 	
 	if (options == NULL)
 	{
 		options = VSOptionsNew();
+		if (options == NULL)
+		        return FALSE;
 		own_options = TRUE;
 	}
 
+	seqalign = *seqalign_ptr;
 	while (seqalign)
 	{
 		next = seqalign->next;
@@ -696,12 +739,16 @@ VSMakeSeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length, V
 Boolean LIBCALL
 VSCombineSeqLoc(ValNodePtr PNTR vnp, Int4 query_length, VSOptionsPtr options)
 {
-	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc4=NULL, tmp_slp=NULL;
+	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc4=NULL;
 	SeqLocPtr n_seqloc1=NULL, n_seqloc2=NULL, n_seqloc3=NULL;
+	SeqLocPtr tmp_slp=NULL, combo_slp=NULL;
 	ValNodePtr var;
 
-	if (vnp == NULL || *vnp == NULL)
+	if (vnp == NULL || options == NULL)
 		return FALSE;
+
+	if (*vnp == NULL)
+		return TRUE;
 
 	var = *vnp;
 	while (var)
@@ -726,28 +773,33 @@ VSCombineSeqLoc(ValNodePtr PNTR vnp, Int4 query_length, VSOptionsPtr options)
 	if (seqloc1)
 	{
 		n_seqloc1 = CombineSeqLoc(seqloc1);
-		seqloc2 = CheckForOverlap(n_seqloc1, seqloc2);
 		seqloc1 = SeqLocSetFree(seqloc1);
 		ValNodeAddPointer(vnp, 1, n_seqloc1);	
 	}
 
 	if (seqloc2)
 	{
+		seqloc2 = CheckForOverlap(n_seqloc1, seqloc2);
 		n_seqloc2 = CombineSeqLoc(seqloc2);
-		seqloc3 = CheckForOverlap(n_seqloc2, seqloc3);
 		seqloc2 = SeqLocSetFree(seqloc2);
 		ValNodeAddPointer(vnp, 2, n_seqloc2);	
 	}
 
 	if (seqloc3)
 	{
+		tmp_slp = SeqLocDupAll(n_seqloc1);
+		tmp_slp = SeqLocLink(&tmp_slp, SeqLocDupAll(n_seqloc2));
+		combo_slp = CombineSeqLoc(tmp_slp);
+		tmp_slp = SeqLocSetFree(tmp_slp);
+		seqloc3 = CheckForOverlap(combo_slp, seqloc3);
 		n_seqloc3 = CombineSeqLoc(seqloc3);
 		seqloc3 = SeqLocSetFree(seqloc3);
 		ValNodeAddPointer(vnp, 3, n_seqloc3);	
 	}
 
+	combo_slp = SeqLocSetFree(combo_slp);
 
-
+	tmp_slp = NULL;
 	tmp_slp = SeqLocDupAll(n_seqloc1);
 	tmp_slp = SeqLocLink(&tmp_slp, SeqLocDupAll(n_seqloc2));
 	tmp_slp = SeqLocLink(&tmp_slp, SeqLocDupAll(n_seqloc3));
@@ -770,7 +822,7 @@ VSCombineSeqLoc(ValNodePtr PNTR vnp, Int4 query_length, VSOptionsPtr options)
 }
 
 /*
-	For a give SeqAlignPtr, make and merge SeqLoc's corresponding to these.
+	For a given SeqAlignPtr, make and merge SeqLoc's corresponding to these.
 
 	This function calls VSMakeSeqLoc and VSCombineSeqLoc.
 
@@ -781,27 +833,41 @@ Int2 LIBCALL
 VSMakeCombinedSeqLoc(SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, Int4 length, VSOptionsPtr options)
 {
 	Boolean delete_options=FALSE;
+	Boolean not_failed;
 	Int2 retval=0;
 	ValNodePtr var;
 
-	if (seqalign_ptr == NULL || *seqalign_ptr == NULL || vnpp == NULL)
+	if (seqalign_ptr == NULL || vnpp == NULL)
+		return -1;
+
+	*vnpp = NULL;
+
+	if (*seqalign_ptr == NULL)
 		return 0;
 	
 	if (options == NULL)
 	{
 		options = VSOptionsNew();
+		if (options == NULL)
+		        return -1;
 		delete_options = TRUE;
 	}
 
-	VSMakeSeqLoc(seqalign_ptr, vnpp, length, options);
-	VSCombineSeqLoc(vnpp, length, options);
-	retval = INT2_MAX;
-	var = *vnpp;
-	while (var)
+	not_failed = VSMakeSeqLoc(seqalign_ptr, vnpp, length, options);
+        if (not_failed)
+	        not_failed = VSCombineSeqLoc(vnpp, length, options);
+
+        if (not_failed)
 	{
-		retval = MIN(retval, (Int2) var->choice);
-		var = var->next;
+	        retval = *vnpp ? INT2_MAX : 0;
+	        var = *vnpp;
+	        while (var)
+	        {
+		        retval = MIN(retval, (Int2) var->choice);
+		        var = var->next;
+	        }
 	}
+	else retval = -1;
 
 	if (delete_options)
 		options = VSOptionsFree(options);
@@ -823,16 +889,12 @@ VSScreenSequence(BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlign
 	Boolean delete_options = FALSE;
 	Int2 retval=0;
 	SeqAlignPtr seqalign;
-	ValNodePtr var;
 
 	if (bsp == NULL)
 		return -1;
 
-
 	if (seqalign_ptr)
 		*seqalign_ptr = NULL;
-
-	*vnpp = NULL;
 
 	blast_options = VSBlastOptionNew();
 	if (blast_options == NULL)
@@ -841,6 +903,8 @@ VSScreenSequence(BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlign
 	if (options == NULL)
 	{
 		options = VSOptionsNew();
+		if (options == NULL)
+		        return -1;
 		delete_options = TRUE;
 	}
 
@@ -856,7 +920,6 @@ VSScreenSequence(BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlign
 			*seqalign_ptr = seqalign;
 	}
 
-
 	if (delete_options)
 		options = VSOptionsFree(options);
 
@@ -866,7 +929,35 @@ VSScreenSequence(BioseqPtr bsp, VSOptionsPtr options, CharPtr database, SeqAlign
 }
 
 /* 
-	Prints bar overview 
+Performs VecScreen for vector filtering.
+
+Note: if 'options' is NULL, default values will be used.  This is STRONGLY recommended.
+*/
+
+Int2 LIBCALL
+VSScreenSequenceByLoc(SeqLocPtr slp, VSOptionsPtr options, CharPtr database, SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnpp, ValNodePtr *other_returns, ValNodePtr *error_returns)
+
+{
+	BioseqPtr bsp;
+	Int2 retval=0;
+
+	if (slp == NULL)
+		return -1;
+
+
+	bsp = BioseqLockById(SeqLocId(slp));
+	if (bsp == NULL)
+		return -1;
+
+	retval = VSScreenSequence(bsp, options, database, seqalign_ptr, vnpp, other_returns, error_returns);
+
+	BioseqUnlock(bsp);
+
+	return retval;
+}
+
+/* 
+	Prints bar overview and list of matching segments by category
 */
 
 Boolean LIBCALL
@@ -876,6 +967,9 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	CharPtr buffer50=NULL, buffer25=NULL, buffer20=NULL, buffer15=NULL;
 	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc4=NULL, tmp;
 	ValNodePtr var=NULL;
+
+        if (outfp == NULL || query_length < 1)
+		return FALSE;
 
 	var = vnp;
 	while (var)
@@ -898,6 +992,9 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		}
 		var = var->next;
 	}
+
+	if (!seqloc1 && !seqloc2 && !seqloc3 && !seqloc4)
+		return TRUE;
 
 	if (seqloc1)
 	{
@@ -938,7 +1035,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF0000(000M)> <B>Strong </B>  ");
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF00FF(000M)> <B>Moderate </B>  ");
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)00FF00(000M)> <B>Weak </B>\n");
-        fprintf(outfp, "   <B>Segment of suspect origin: </B>");
+	fprintf(outfp, "   <B>Segment of suspect origin: </B>");
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FFFF00(000M)>\n\n");
 
 
@@ -947,7 +1044,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (seqloc1->choice == SEQLOC_PACKED_INT)
 			tmp = seqloc1->data.ptrvalue;
-                fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Strong\">Strong match</A>:  ");
+		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Strong\" TARGET=\"VecScreenInfo\">Strong match</A>:  ");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -963,7 +1060,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (seqloc2->choice == SEQLOC_PACKED_INT)
 			tmp = seqloc2->data.ptrvalue;
-                fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Moderate\">Moderate match</A>:");
+		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Moderate\" TARGET=\"VecScreenInfo\">Moderate match</A>:");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -979,7 +1076,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (seqloc3->choice == SEQLOC_PACKED_INT)
 			tmp = seqloc3->data.ptrvalue;
-                fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Weak\">Weak match</A>:    ");
+		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Weak\" TARGET=\"VecScreenInfo\">Weak match</A>:    ");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -995,7 +1092,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (seqloc4->choice == SEQLOC_PACKED_INT)
 			tmp = seqloc4->data.ptrvalue;
-                fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Suspect\">Suspect origin</A>:");
+		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Suspect\" TARGET=\"VecScreenInfo\">Suspect origin</A>:");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -1007,11 +1104,217 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		}
 	}
 
-
 	fprintf(outfp, "\n");
 
+	return TRUE;
+}
+
+
+
+/* 
+	Prints list of matching segments
+*/
+
+Boolean LIBCALL
+VSPrintListFromSeqLocs (ValNodePtr vnp, FILE *outfp)
+
+{
+	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc4=NULL, tmp;
+	ValNodePtr var=NULL;
+
+        if (outfp == NULL)
+		return FALSE;
+
+	var = vnp;
+	while (var)
+	{
+		if (var->choice == 1)
+		{
+			seqloc1 = var->data.ptrvalue;
+		}
+		else if (var->choice == 2)
+		{
+			seqloc2 = var->data.ptrvalue;
+		}
+		else if (var->choice == 3)
+		{
+			seqloc3 = var->data.ptrvalue;
+		}
+		else if (var->choice == 4)
+		{
+			seqloc4 = var->data.ptrvalue;
+		}
+		var = var->next;
+	}
+
+	if (!seqloc1 && !seqloc2 && !seqloc3 && !seqloc4)
+		return TRUE;
+
+	if (seqloc1)
+	{
+		if (seqloc1->choice == SEQLOC_PACKED_INT)
+			tmp = seqloc1->data.ptrvalue;
+		fprintf(outfp, "Strong match\n");
+		while (tmp)
+		{
+			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			tmp = tmp->next;
+		}
+	}
+
+	if (seqloc2)
+	{
+		if (seqloc2->choice == SEQLOC_PACKED_INT)
+			tmp = seqloc2->data.ptrvalue;
+		fprintf(outfp, "Moderate match\n");
+		while (tmp)
+		{
+			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			tmp = tmp->next;
+		}
+	}
+
+	if (seqloc3)
+	{
+		if (seqloc3->choice == SEQLOC_PACKED_INT)
+			tmp = seqloc3->data.ptrvalue;
+		fprintf(outfp, "Weak match\n");
+		while (tmp)
+		{
+			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			tmp = tmp->next;
+		}
+	}
+
+	if (seqloc4)
+	{
+		if (seqloc4->choice == SEQLOC_PACKED_INT)
+			tmp = seqloc4->data.ptrvalue;
+		fprintf(outfp, "Suspect origin\n");
+		while (tmp)
+		{
+			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			tmp = tmp->next;
+		}
+	}
+
+	return TRUE;
+}
+
+
+#define BUFFER_LENGTH 255
+
+/* 
+	Prints Id line for list results format
+*/
+
+Boolean LIBCALL
+VSPrintListIdLine (BioseqPtr query_bsp, CharPtr proginfo, CharPtr database, FILE *outfp)
+
+{ 
+
+	Char            idbuf [BUFFER_LENGTH];
+	CharPtr         dbdef, ptr, chptr;
+	Int4            length;
+	ReadDBFILEPtr   rdfp, rdfp_var;
+	Boolean         first_title;
+
+
+	if (outfp == NULL)
+		return FALSE;
+
+
+	/* prepare Query ID string for output */
+
+	ptr = NULL; chptr = NULL;
+
+	if (query_bsp) 
+		ptr = BioseqGetTitle (query_bsp);
+
+	if (ptr) {
+		while (IS_WHITESP(*ptr))
+			ptr++;
+
+		if (*ptr == '"') {
+			ptr++;
+			chptr = StringChr (ptr, '"');
+		}
+		else {
+			chptr = StringPBrk (ptr, " \t");
+		}
+	}
+
+	if (ptr && *ptr != '\0') {
+		StringNCpy_0 (idbuf, ptr, (chptr ? MIN((chptr - ptr) + 1, BUFFER_LENGTH) : BUFFER_LENGTH));
+	} 
+	else {
+		StringCpy (idbuf, "Id_unknown");
+	}
+
+
+	/* prepare database description(s) for output */
+
+	dbdef = NULL; rdfp = NULL;
+
+	if (database)
+		rdfp = readdb_new_ex(database, READDB_DB_IS_NUC, FALSE);
+
+	if (rdfp) {
+		rdfp_var = rdfp;
+		length = 0;
+		while (rdfp_var) {
+			length += StringLen(readdb_get_title(rdfp_var));
+			length += 3;
+			rdfp_var = rdfp_var->next;
+		}
+		dbdef = MemNew(length*sizeof(Char));
+	}
+
+	if (dbdef) {
+		ptr = dbdef;
+		rdfp_var = rdfp;
+	
+		first_title = TRUE;
+		while (rdfp_var) {
+			chptr = readdb_get_title(rdfp_var);
+	    
+			if(chptr == NULL) {
+				rdfp_var = rdfp_var->next;
+				continue;
+			}
+	    
+			if(!first_title) {
+				*ptr = ';';
+				ptr++;
+				*ptr = ' ';
+				ptr++;
+			}
+			else
+				first_title = FALSE;	     
+	    
+			StringCpy(ptr, readdb_get_title(rdfp_var));	 
+
+			length = StringLen(ptr);
+			ptr += length;
+
+			rdfp_var = rdfp_var->next;
+		}
+
+		*ptr = '\0';
+
+		rdfp = ReadDBFreeSharedInfo(rdfp);
+		rdfp = readdb_destruct(rdfp);
+
+	}
+
+
+	fprintf(outfp, ">Vector %s Screen: %s Database: %s\n", 
+		idbuf, proginfo ? proginfo : "unknown", dbdef ? dbdef : "unknown");
+
+	dbdef = MemFree(dbdef);
 
 	return TRUE;
 
 }
+
 

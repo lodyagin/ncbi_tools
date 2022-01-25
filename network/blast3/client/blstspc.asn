@@ -1,4 +1,4 @@
---$Revision: 1.15 $
+--$Revision: 1.16 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -169,7 +169,8 @@ Blast-parameters ::= SEQUENCE {
 	strand-option	INTEGER OPTIONAL,	-- indicates strand to use.
 	phi-pattern	VisibleString OPTIONAL,	-- indicates, that this is phi-blast search and supplies pattern
 	use-real-db-size BOOLEAN OPTIONAL,  -- db size not to be adjusted for list of gis'.
-        use-best-align   BOOLEAN OPTIONAL   -- option is to use alignments choosen by user in PSM computation API
+        use-best-align   BOOLEAN OPTIONAL,   -- option is to use alignments choosen by user in PSM computation API
+        is-rps-blast   BOOLEAN OPTIONAL   -- option to set RPS BLAST search
 }
 
 				-- series of these when the request is queued

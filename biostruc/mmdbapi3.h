@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/06/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Contains FlatFile Generators for PDB & Kinemage
 *
@@ -40,6 +40,9 @@
 * 08/30/95 C. Hogue    Moved globals out - into mmdbapi3.c
 *
 * $Log: mmdbapi3.h,v $
+* Revision 6.1  2000/05/09 19:51:02  lewisg
+* add new blast header to file>properties
+*
 * Revision 6.0  1997/08/25 18:11:13  madden
 * Revision changed to 6.0
 *
@@ -163,6 +166,7 @@ NLM_EXTERN Int2 LIBCALL WriteKinAllModel(PDNMS pdnmsThis, FILE *pFile, Int2 iCol
 NLM_EXTERN Int2 LIBCALL WriteStructSummary(PDNMS pdnmsThis,  FILE *pFile);
 void LIBCALL WriteFASTAMolecule(PDNMM pdnmmThis, FILE *File, Int4 LineLen);
 void LIBCALL WriteFASTASeqHet(PDNMS pdnmsThis,  FILE *pFile);
+NLM_EXTERN void WriteStrucHTMLSeq(PDNMS pdnmsThis,  FILE *pFile);
 
 
 #ifdef __cplusplus

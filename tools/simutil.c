@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: simutil.c,v $
+* Revision 6.6  2000/04/28 19:10:47  kans
+* check_strand_mol protected against bsp == NULL
+*
 * Revision 6.5  1999/12/17 20:47:06  egorov
 * Fix 'gcc -Wall' warnings
 *
@@ -171,7 +174,7 @@ Boolean check_strand_mol (SeqLocPtr loc, BoolPtr is_dna)
 	BioseqPtr bsp;
 	
 	bsp = BioseqFindCore(SeqLocId(loc));
-	*is_dna = (bsp->mol != Seq_mol_aa);
+	*is_dna = (bsp == NULL || bsp->mol != Seq_mol_aa);
 	if(SeqLocStrand (loc) == Seq_strand_both)
 	{
 		if(*is_dna)

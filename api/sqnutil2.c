@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.53 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -1245,6 +1245,256 @@ NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag)
   return NULL;
 }
 
+/* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
+
+static CharPtr biosource_genome_list [] = {
+  "?", "genomic", "chloroplast", "chromoplast", "kinetoplast",
+  "mitochondrion", "plastid", "macronuclear", "extrachromosomal",
+  "plasmid", "transposon", "insertion sequence", "cyanelle",
+  "proviral", "virion", "nucleomorph", "apicoplast", "leucoplast",
+  "proplastid", NULL
+};
+
+static CharPtr biosource_orgmod_list [] = {
+  "?", "?", "strain", "substrain", "type", "subtype", "variety",
+  "serotype", "serogroup", "serovar" "cultivar", "pathovar", "chemovar",
+  "biovar", "biotype", "group", "subgroup", "isolate", "common name",
+  "acronym", "dosage", "natural host", "sub-species", "specimen-voucher",
+  NULL
+};
+
+static CharPtr biosource_subsource_list [] = {
+  "?", "chromosome", "map", "clone", "subclone", "haplotype",
+  "genotype", "sex", "cell-line", "cell-type", "tissue-type",
+  "clone-lib", "dev-stage", "frequency", "germline", "rearranged",
+  "lab-host", "pop-variant", "tissue-lib", "plasmid-name",
+  "transposon-name", "ins-seq-name", "plastid-name", "country",
+  NULL
+};
+
+NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
+  SqnTagPtr stp,
+  CharPtr organism,
+  BioSourcePtr biop
+)
+
+{
+  Int2          i;
+  OrgModPtr     omp;
+  OrgNamePtr    onp;
+  OrgRefPtr     orp;
+  SubSourcePtr  ssp;
+  CharPtr       str;
+  int           val;
+
+  if (stp == NULL && StringHasNoText (organism)) return biop;
+
+  if (biop == NULL) {
+    biop = BioSourceNew ();
+    if (biop == NULL) return biop;
+  }
+  if (biop->org == NULL) {
+    biop->org = OrgRefNew ();
+  }
+  orp = biop->org;
+  if (orp->orgname == NULL) {
+    orp->orgname = OrgNameNew ();
+  }
+  onp = orp->orgname;
+
+  str = SqnTagFind (stp, "organism");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "org");
+  }
+  if (organism == NULL) {
+    organism = str;
+  }
+  if (! StringHasNoText (organism)) {
+    if (StringICmp (orp->taxname, organism) != 0) {
+
+      /* if command line or fasta defline organism doesn't match, clear template */
+
+      biop->org = OrgRefFree (biop->org);
+      biop->subtype = SubSourceFree (biop->subtype);
+
+      /* then recreate orgref and orgname structures, save organism name */
+
+      biop->org = OrgRefNew ();
+      orp = biop->org;
+      orp->orgname = OrgNameNew ();
+      onp = orp->orgname;
+
+      orp->taxname = StringSave (organism);
+    }
+  }
+
+  if (stp == NULL) return biop;
+
+  str = SqnTagFind (stp, "location");
+  if (str != NULL) {
+    if (StringICmp (str, "mitochondrial") == 0) {
+      str = "mitochondrion";
+    } else if (StringICmp (str, "provirus") == 0) {
+      str = "proviral";
+    }
+    for (i = 0; biosource_genome_list [i] != NULL; i++) {
+      if (StringICmp (str, biosource_genome_list [i]) == 0) {
+        biop->genome = (Uint1) i;
+      }
+    }
+  }
+
+  for (i = 0; biosource_orgmod_list [i] != NULL; i++) {
+    str = SqnTagFind (stp, biosource_orgmod_list [i]);
+    if (str != NULL) {
+      for (omp = onp->mod;
+           omp != NULL && omp->subtype != (Uint1) i;
+           omp = omp->next) continue;
+      if (omp != NULL) {
+        omp->subname = MemFree (omp->subname);
+        omp->subname = StringSave (str);
+      } else {
+        omp = OrgModNew ();
+        if (omp != NULL) {
+          omp->subtype = (Uint1) i;
+          omp->subname = StringSave (str);
+          omp->next = onp->mod;
+          onp->mod = omp;
+        }
+      }
+    }
+  }
+
+  for (i = 0; biosource_subsource_list [i] != NULL; i++) {
+    str = SqnTagFind (stp, biosource_subsource_list [i]);
+    if (str != NULL) {
+      for (ssp = biop->subtype;
+           ssp != NULL && ssp->subtype != (Uint1) i;
+           ssp = ssp->next) continue;
+      if (ssp != NULL) {
+        ssp->name = MemFree (ssp->name);
+        ssp->name = StringSave (str);
+      } else {
+        ssp = SubSourceNew ();
+        if (ssp != NULL) {
+          ssp->subtype = (Uint1) i;
+          ssp->name = StringSave (str);
+          ssp->next = biop->subtype;
+          biop->subtype = ssp;
+        }
+      }
+    }
+  }
+
+  str = SqnTagFind (stp, "division");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "div");
+  }
+  if (str != NULL) {
+    onp->div = MemFree (onp->div);
+    onp->div = StringSave (str);
+  }
+
+  str = SqnTagFind (stp, "lineage");
+  if (str != NULL) {
+    onp->lineage = MemFree (onp->lineage);
+    onp->lineage = StringSave (str);
+  }
+
+  str = SqnTagFind (stp, "gcode");
+  if (str != NULL && sscanf (str, "%d", &val) == 1) {
+    onp->gcode = (Uint1) val; /* cytoplasmic */
+  }
+
+  str = SqnTagFind (stp, "mgcode");
+  if (str != NULL && sscanf (str, "%d", &val) == 1) {
+    onp->mgcode = (Uint1) val; /* mitochondrial */
+  }
+
+  str = SqnTagFind (stp, "note");
+  if (str != NULL) {
+    ssp = SubSourceNew ();
+    if (ssp != NULL) {
+      ssp->subtype = (Uint1) SUBSRC_other;
+      ssp->name = StringSave (str);
+      ssp->next = biop->subtype;
+      biop->subtype = ssp;
+    }
+  }
+
+  return biop;
+}
+
+static CharPtr molinfo_biomol_list [] = {
+  "?", "genomic", "precursor RNA", "mRNA", "rRNA", "tRNA", "snRNA",
+  "scRNA", "peptide", "other-genetic", "genomic-mRNA", NULL
+};
+
+NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
+  SqnTagPtr stp,
+  MolInfoPtr mip
+)
+
+{
+  Int2     i;
+  CharPtr  str;
+
+  if (stp == NULL) return mip;
+
+  if (mip == NULL) {
+    mip = MolInfoNew ();
+    if (mip == NULL) return mip;
+  }
+
+  str = SqnTagFind (stp, "moltype");
+  if (str != NULL) {
+    for (i = 0; molinfo_biomol_list [i] != NULL; i++) {
+      if (StringICmp (str, molinfo_biomol_list [i]) == 0) {
+        mip->biomol = (Uint1) i;
+      }
+    }
+  }
+
+  return mip;
+}
+
+NLM_EXTERN BioseqPtr ParseTitleIntoBioseq (
+  SqnTagPtr stp,
+  BioseqPtr bsp
+)
+
+{
+  CharPtr  str;
+
+  if (stp == NULL || bsp == NULL) return bsp;
+
+  str = SqnTagFind (stp, "topology");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "top");
+  }
+  if (str != NULL) {
+    if (StringICmp (str, "linear") == 0) {
+      bsp->topology = TOPOLOGY_LINEAR;
+    } else if (StringICmp (str, "circular") == 0) {
+      bsp->topology = TOPOLOGY_CIRCULAR;
+    }
+  }
+
+  str = SqnTagFind (stp, "molecule");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "mol");
+  }
+  if (str != NULL) {
+    if (StringICmp (str, "dna") == 0) {
+      bsp->mol = Seq_mol_dna;
+    } else if (StringICmp (str, "rna") == 0) {
+      bsp->mol = Seq_mol_rna;
+    }
+  }
+
+  return bsp;
+}
+
 /* PHRAP file reading functions */
 
 static Boolean HasNoText (CharPtr str)
@@ -1685,9 +1935,38 @@ static ValNodePtr ParseContigOrFeatureTableString (CharPtr contigs, Boolean tabD
   return vnp;
 }
 
+/* ReversePhrap coerces BioseqReverse to work on the SeqGraph byte store */
+
+static void ReversePhrap (SeqGraphPtr sgp, Pointer userdata)
+
+{
+  ByteStorePtr  bs;
+  Bioseq        bsq;
+
+  if (sgp == NULL || sgp->values == NULL) return;
+  if (StringICmp (sgp->title, "Phrap Quality") != 0) return;
+  if (sgp->flags [1] != 0 || sgp->flags [2] != 3) return;
+
+  bs = (ByteStorePtr) sgp->values;
+
+  MemSet ((Pointer) &bsq, 0, sizeof (Bioseq));
+  bsq.repr = Seq_repr_raw;
+  bsq.mol = Seq_mol_na;
+  bsq.length = BSLen (bs);
+  bsq.seq_data_type = Seq_code_iupacna;
+  bsq.seq_data = bs;
+
+  BioseqReverse (&bsq);
+}
+
 NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs)
 
 {
+  BioseqPtr    bsp;
+  Char         ch;
+  CharPtr      id;
+  size_t       len;
+  Boolean      minus;
   SeqEntryPtr  sep, lastsep, nextsep, newhead;
   ValNodePtr   vnphead, vnp;
 
@@ -1698,8 +1977,23 @@ NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs)
   for (vnp = vnphead; vnp != NULL; vnp = vnp->next) {
     sep = head;
     lastsep = NULL;
-    while (sep != NULL && StringCmp ((CharPtr) vnp->data.ptrvalue,
-           BioseqGetLocalIdStr ((BioseqPtr) sep->data.ptrvalue)) != 0) {
+    id = (CharPtr) vnp->data.ptrvalue;
+    len = StringLen (id);
+    minus = FALSE;
+
+    /* look for + or - after accession, indicating orientation */
+
+    if (len > 1) {
+      ch = id [len - 1];
+      if (ch == '+') {
+        id [len - 1] = '\0';
+      } else if (ch == '-') {
+        id [len - 1] = '\0';
+        minus = TRUE;
+      }
+    }
+    while (sep != NULL &&
+           StringCmp (id, BioseqGetLocalIdStr ((BioseqPtr) sep->data.ptrvalue)) != 0) {
       lastsep = sep;
       sep = sep->next;
     }
@@ -1713,6 +2007,19 @@ NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs)
         sep->next = NULL;
         ValNodeLink (&newhead, sep);
       }
+
+      /* if - orientation, reverse complement sequence */
+
+      if (minus) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (bsp != NULL) {
+          BioseqRevComp (bsp);
+
+          /* and then reverse phrap scores */
+
+          VisitGraphsOnBsp (bsp, NULL, ReversePhrap);
+        }
+      }
     }
   }
   for (sep = head; sep != NULL; sep = nextsep) {
@@ -1723,6 +2030,59 @@ NLM_EXTERN SeqEntryPtr SetPhrapContigOrder (SeqEntryPtr head, CharPtr contigs)
   }
   ValNodeFreeData (vnphead);
   return newhead;
+}
+
+/* ReadAsnFastaOrFlatFile section */
+
+/* GetSeqId skips past LOCUS or ID, or starts past >, skips any white space, then
+takes the next token as the seqID.  The return value points to the remaining
+copied text, which for feature tables may contain a desired Seq-annot name. */
+
+static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag, Boolean trimwhite)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (seqid != NULL) {
+    *seqid = '\0';
+  }
+  if (str == NULL || seqid == NULL) return FALSE;
+  if (skiptag) {
+    ch = *str;
+    while (ch != '\0' && (! IS_WHITESP (ch))) {
+      str++;
+      ch = *str;
+    }
+  }
+  ch = *str;
+  while (IS_WHITESP (ch)) {
+    str++;
+    ch = *str;
+  }
+  StringNCpy_0 (seqid, str, max);
+  str = seqid;
+  while (ch != '\0' && (! IS_WHITESP (ch))) {
+    str++;
+    ch = *str;
+  }
+  if (ch == '\0') return NULL;
+  *str = '\0';
+  str++;
+  ch = *str;
+  while (ch != '\0' && (IS_WHITESP (ch))) {
+    str++;
+    ch = *str;
+  }
+  if (trimwhite) {
+    ptr = str;
+    while (ch != '\0' && (! IS_WHITESP (ch))) {
+      ptr++;
+      ch = *ptr;
+    }
+    *ptr = '\0';
+  }
+  return str;
 }
 
 /* Build contig section */
@@ -1755,8 +2115,8 @@ static void  AddNucToContig (CharPtr accnString, Int4 from, Int4 to,
   slp->choice = SEQLOC_INT;
   slp->data.ptrvalue = (Pointer) sintp;
 
-  sip = ValNodeNew (NULL);
   if (isgap) {
+    sip = ValNodeNew (NULL);
     /* sip = MakeUniqueSeqID ("gap_"); */
     dp = DbtagNew ();
     dp->db = StringSave ("SeqLit");
@@ -1780,13 +2140,18 @@ static void  AddNucToContig (CharPtr accnString, Int4 from, Int4 to,
       ch = *ptr;
     }
     if (allDigits && sscanf (accnString, "%ld", &val) == 1) {
+      sip = ValNodeNew (NULL);
       sip->choice = (Uint1) SEQID_GI;
       sip->data.intvalue = val;
     } else {
-      tsip = TextSeqIdNew ();
-      tsip->accession = StringSave (accnString);
-      sip->choice = (Uint1) SEQID_GENBANK;
-      sip->data.ptrvalue = tsip;
+      sip = SeqIdFromAccession (accnString, 0, NULL);
+      if (sip == NULL) {
+        sip = ValNodeNew (NULL);
+        tsip = TextSeqIdNew ();
+        tsip->accession = StringSave (accnString);
+        sip->choice = (Uint1) SEQID_GENBANK;
+        sip->data.ptrvalue = tsip;
+      }
     }
   }
 
@@ -1978,7 +2343,7 @@ static void FreeFeatureTable (ValNodePtr head)
   ValNodeFreeData (head);
 }
 
-NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
+NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, CharPtr seqid, CharPtr title)
 
 {
   BioseqPtr    bsp;
@@ -1989,7 +2354,9 @@ NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
   Int4         lineNum;
   Int4         pos;
   SeqEntryPtr  sep;
+  SeqIdPtr     sip = NULL;
   CharPtr      str;
+  Char         tmp [128];
   ValNodePtr   vnp;
 
   if (fp == NULL) return NULL;
@@ -1997,6 +2364,10 @@ NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
   pos = ftell (fp);
   str = ReadALine (line, sizeof (line), fp);
   if (str != NULL && StringNICmp (line, ">Contig", 7) == 0) {
+    if (seqid == NULL && title == NULL) {
+      title = GetSeqId (tmp, line, sizeof (tmp), TRUE, FALSE);
+      seqid = tmp;
+    }
     str = ReadALine (line, sizeof (line), fp);
   }
   while (str != NULL) {
@@ -2028,7 +2399,20 @@ NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
   bsp->repr = Seq_repr_seg;
   bsp->seq_ext_type = 1;
   bsp->length = 0;
-  bsp->id = MakeUniqueSeqID ("contig_");
+  if (! StringHasNoText (seqid)) {
+    sip = SeqIdFindBest (MakeSeqID (seqid), 0);
+  }
+  if (sip == NULL) {
+    sip = MakeUniqueSeqID ("contig_");
+  }
+  bsp->id = sip;
+
+  if (! StringHasNoText (title)) {
+    str = StringSaveNoNull (title);
+    if (str != NULL) {
+      SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+    }
+  }
 
   if (coordinatesOnMaster) {
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
@@ -2070,57 +2454,10 @@ NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
   return sep;
 }
 
-/* ReadAsnFastaOrFlatFile section */
-
-/* GetSeqId skips past LOCUS or ID, or starts past >, skips any white space, then
-takes the next token as the seqID.  The return value points to the remaining
-copied text, which for feature tables may contain a desired Seq-annot name. */
-
-static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag, Boolean trimwhite)
+NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
 
 {
-  Char     ch;
-  CharPtr  ptr;
-
-  if (seqid != NULL) {
-    *seqid = '\0';
-  }
-  if (str == NULL || seqid == NULL) return FALSE;
-  if (skiptag) {
-    ch = *str;
-    while (ch != '\0' && (! IS_WHITESP (ch))) {
-      str++;
-      ch = *str;
-    }
-  }
-  ch = *str;
-  while (IS_WHITESP (ch)) {
-    str++;
-    ch = *str;
-  }
-  StringNCpy_0 (seqid, str, max);
-  str = seqid;
-  while (ch != '\0' && (! IS_WHITESP (ch))) {
-    str++;
-    ch = *str;
-  }
-  if (ch == '\0') return NULL;
-  *str = '\0';
-  str++;
-  ch = *str;
-  while (ch != '\0' && (IS_WHITESP (ch))) {
-    str++;
-    ch = *str;
-  }
-  if (trimwhite) {
-    ptr = str;
-    while (ch != '\0' && (! IS_WHITESP (ch))) {
-      ptr++;
-      ch = *ptr;
-    }
-    *ptr = '\0';
-  }
-  return str;
+  return ReadContigListEx (fp, coordinatesOnMaster, NULL, NULL);
 }
 
 /* PreCheckSeqForProteinType saves the current file position, then reads lines of
@@ -2851,6 +3188,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
 {
   Uint1           aa;
+  CdRegionPtr     crp;
   Uint1           curraa;
   DbtagPtr        db;
   GBQualPtr       gbq;
@@ -2860,6 +3198,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   Int2            j;
   GBQualPtr       last;
   size_t          len;
+  int             num;
   ObjectIdPtr     oip;
   PubdescPtr      pdp;
   ProtRefPtr      prp = NULL;
@@ -3045,6 +3384,13 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       return;
     } else if (qnum == GBQUAL_transl_except) {
       if (ParseCodeBreak (sfp, val)) return;
+    } else if (qnum == GBQUAL_codon_start) {
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (sscanf (val, "%d", &num) == 1 && crp != NULL) {
+        if (num > 0 || num < 4) {
+          crp->frame = (Uint1) num;
+        }
+      }
     }
   } else if (sfp->data.choice == SEQFEAT_RNA) {
     if (qnum == GBQUAL_product) {
@@ -3973,7 +4319,6 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   Int2           numDigits;
   Int2           numLetters;
   Int4           numLinks;
-  ObjectIdPtr    oip;
   ObjMgrDataPtr  omdp;
   ObjMgrPtr      omp;
   ObjMgrTypePtr  omtp = NULL;
@@ -3993,11 +4338,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   CharPtr        tag;
   CharPtr        title = NULL;
   CharPtr        tmp;
-  UserFieldPtr   ufp;
   Int4           uid;
-  UserObjectPtr  uop;
   long int       val;
   ValNodePtr     vnp;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
 
   if (fp == NULL) return NULL;
 
@@ -4261,7 +4607,8 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           if (StringISearch (line, "Master") != NULL) {
             coordinatesOnMaster = TRUE;
           }
-          sep = ReadContigList (fp, coordinatesOnMaster);
+          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
+          sep = ReadContigListEx (fp, coordinatesOnMaster, seqid, annotname);
           if (sep != NULL && IS_Bioseq (sep)) {
             bsp = (BioseqPtr) sep->data.ptrvalue;
             if (bsp != NULL) {
@@ -5215,7 +5562,7 @@ NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, Qua
         ptr = buf;
         buf [0] = '\0';
       }
-      sprintf (tmp, "%4d", (int) 0);
+      sprintf (tmp, "%3d", (int) 0);
       ptr = StringMove (ptr, tmp);
       curpos++;
       c80++;
@@ -5234,7 +5581,11 @@ NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, Qua
         ptr = buf;
         buf [0] = '\0';
       }
-      sprintf (tmp, "%4d", (int) val);
+      if (val < 100) {
+        sprintf (tmp, "%3d", (int) val);
+      } else {
+        sprintf (tmp, "%4d", (int) val);
+      }
       ptr = StringMove (ptr, tmp);
       curpos++;
       c80++;
@@ -5251,7 +5602,7 @@ NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, Qua
       ptr = buf;
       buf [0] = '\0';
     }
-    sprintf (tmp, "%4d", (int) 0);
+    sprintf (tmp, "%3d", (int) 0);
     ptr = StringMove (ptr, tmp);
     curpos++;
     c80++;

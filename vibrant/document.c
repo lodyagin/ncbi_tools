@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,9 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.9  2000/05/22 16:38:24  kans
+* added UpdateColFmt per Serge Bazhin request
+*
 * Revision 6.8  1999/11/05 19:59:35  beloslyu
 * cast inserted
 *
@@ -2198,6 +2201,30 @@ static ColXPtr CacheColFmt (DoC d, ColPtr colFmt)
     }
   }
   return rsult;
+}
+
+/*****************************************************************************
+*
+*   UpdateColFmt (d, *col)
+*       Returns the maximum height of all fonts used in an item
+*
+*****************************************************************************/
+
+extern void UpdateColFmt (DoC d, ColPtr col)
+
+{
+  DocData  dd;
+  ItemPtr  itemPtr;
+  Int2     item;
+
+  GetPanelExtra ((PaneL) d, &dd);
+  for (item = 0; item < dd.numItems; item++) {
+    itemPtr = GetItemPtr (&dd, item);
+    if (itemPtr != NULL) {
+      itemPtr->colFmt = CacheColFmt (d, col);
+    }
+  }
+  SetPanelExtra ((PaneL) d, &dd);
 }
 
 /*****************************************************************************

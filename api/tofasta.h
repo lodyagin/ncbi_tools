@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.10  2000/05/30 19:44:45  ostell
+* added FastaSeqLineEx() with another parameter, do_virtual
+*
 * Revision 6.9  2000/04/03 22:09:26  kans
 * added ClearGenBankKeywords for RefSeq processing
 *
@@ -342,9 +345,23 @@ NLM_EXTERN SeqPortPtr FastaSeqPort PROTO((BioseqPtr bsp, Boolean is_na,
 *     fills buf with linelen bases
 *     assumes buf[linelen] = '\0'
 *     returns FALSE when no more residues to print
+*     here for backward compatibility. Is the same as calling
+*      FastaSeqLineEx() with do_virtual = FALSE;
 *
 *****************************************************************************/
 NLM_EXTERN Boolean FastaSeqLine PROTO((SeqPortPtr spp, CharPtr buf, Int2 linelen, Boolean is_na));
+
+/****************************************************************************
+*
+*  FastaSeqLineEx(spp, buf, linelen, is_na, do_virtual)
+*
+*    adds a parameter to indicate if virtual sequences should be shown
+*     this is necessary in order to avoid showing SEQPORT_VIRT return
+*     (gap of 0 length) as '-', when do_virtual is TRUE. 
+*
+*****************************************************************************/
+NLM_EXTERN Boolean FastaSeqLineEx(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boolean is_na, Boolean
+do_virtual);
 
 Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot);
 

@@ -32,8 +32,32 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.207 $
+* $Revision: 6.215 $
 * $Log: blastutl.c,v $
+* Revision 6.215  2000/05/24 20:53:48  dondosha
+* Fixed a bug in previous change
+*
+* Revision 6.214  2000/05/24 19:49:07  dondosha
+* Create qid_array for the new search in BlastSearchDuplicate, if megablast
+*
+* Revision 6.213  2000/05/22 19:49:35  dondosha
+* Initialize vnp to NULL in BlastSeqLocFilterEx
+*
+* Revision 6.212  2000/05/16 20:00:02  madden
+* fix for formatting db names
+*
+* Revision 6.211  2000/05/12 19:41:54  dondosha
+* Free qid_array in BlastSearchBlkDestruct
+*
+* Revision 6.210  2000/05/05 20:10:22  madden
+* Add vecscreen filtering capability
+*
+* Revision 6.209  2000/04/29 18:55:53  wheelan
+* temporary fix for BlastTwoSequences NULL return problem
+*
+* Revision 6.208  2000/04/28 16:52:31  madden
+* Fix for ungapped search of subset databases
+*
 * Revision 6.207  2000/04/10 17:26:28  madden
 * Add BLASTResultFreeHsp to free memory as it is no longer needed
 *
@@ -1001,6 +1025,7 @@ Contents: Utilities for BLAST
 #include <salpedit.h>
 #include <mbalign.h>
 #include <mblast.h>
+#include <vecscrn.h>
 
 
 /* Window size used to scan HSP for highest score region, where gapped
@@ -1485,7 +1510,7 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 	BLASTResultsStructPtr	result_struct;
 	DenseDiagPtr		ddp_head=NULL, ddp;
 	SeqIdPtr		gi_list=NULL, sip, sip_subject,
-	   sip_subject_start, query_id;
+	   sip_subject_start, query_id, new_sip;
 	StdSegPtr		ssp_head=NULL, ssp;
 	SeqAlignPtr		last, seqalign_head, seqalign, sap_head;
 	SeqIdPtr		new_subject_seqid;
@@ -1548,11 +1573,13 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 	    else
 			subject_length = 0;
 
-	/* needs to change last arg? */
-	gi_list = BlastGetAllowedGis(search, results->subject_id, NULL);
+	gi_list = BlastGetAllowedGis(search, results->subject_id, &new_sip);
 	/* right now sip_subject should only contain one ID.  At some
 	point it will contain multiple ID's for identical sequences. */
-	    sip_subject = sip_subject_start;
+            if (new_sip != NULL)
+               sip_subject = new_sip;
+            else
+               sip_subject = sip_subject_start;
 	    while (sip_subject)
 	    {
 	    	seqalign = SeqAlignNew();
@@ -1653,8 +1680,10 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 	     }
 	     if (sip_subject_start)
 			sip_subject_start = SeqIdFree(sip_subject_start);
+	     if (new_sip)
+			new_sip = SeqIdFree(new_sip);
+	     gi_list = SeqIdSetFree(gi_list);
 	}
-	gi_list = SeqIdSetFree(gi_list);
 
 	return seqalign_head;
 }
@@ -1695,7 +1724,8 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
 	search = BLASTPerformSearch(search, subject_length, subject_seq);
 	if (StringCmp(search->prog_name, "blastn") == 0 || search->pbp->gapped_calculation == FALSE)
 	{
-            if (search->pbp->do_sum_stats == TRUE)
+            if (search->pbp->do_sum_stats == TRUE && 
+		search->pbp->is_megablast_search == FALSE)
                 status = BlastLinkHsps(search);
             else
                 status = BlastGetNonSumStatsEvalue(search);
@@ -1711,13 +1741,13 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
 	   /*BlastAdjustHitOffsets(search);*/
 	}
 	
-	if (search->pbp->is_megablast_search)
-	   seqalign = search->result_struct->results[0]->seqalign;
-	else if (StringCmp(search->prog_name, "blastn") == 0 &&
-                search->pbp->gapped_calculation == TRUE)
-	{
-		/* kbp_gap used in Traceback function. */
-		search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
+	if (search->pbp->is_megablast_search) {
+	   if (search->result_struct->results[0] != NULL)
+	        seqalign = search->result_struct->results[0]->seqalign;
+	} else if (StringCmp(search->prog_name, "blastn") == 0 &&
+		   search->pbp->gapped_calculation == TRUE) {
+	        /* kbp_gap used in Traceback function. */
+	        search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
                 result_struct = search->result_struct;
                 hitlist_count = result_struct->hitlist_count;
 		if (hitlist_count > 0)
@@ -3156,7 +3186,7 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
 	ValNodePtr other_returns=NULL;
 	
 	head = NULL;
-	if (search->thr_info->blast_gi_list || (search->rdfp && search->rdfp->oidlist))
+	if (search->thr_info->blast_gi_list)
 	{
 		dbinfo = MemNew(sizeof(TxDfDbInfo));
 		dbinfo->total_length = search->dblen;
@@ -3173,8 +3203,14 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
 		dbinfo->name = StringSave(readdb_get_filename(rdfp_var));	
 		dbinfo->definition = StringSave(readdb_get_title(rdfp_var));	
 		dbinfo->date = StringSave(readdb_get_date(rdfp_var));	
-		dbinfo->total_length = readdb_get_dblen(rdfp_var);
-		dbinfo->number_seqs = readdb_get_num_entries(rdfp_var);
+		if (rdfp_var->aliaslen)
+			dbinfo->total_length = rdfp_var->aliaslen;
+		else
+			dbinfo->total_length = readdb_get_dblen(rdfp_var);
+		if (rdfp_var->aliasnseq)
+			dbinfo->number_seqs = rdfp_var->aliasnseq;
+		else
+			dbinfo->number_seqs = readdb_get_num_entries(rdfp_var);
 		if (head == NULL)
 		{
 			head = dbinfo;
@@ -3517,6 +3553,7 @@ BlastSearchBlkDuplicate (BlastSearchBlkPtr search)
 
 	BlastSearchBlkPtr new_search;
 	Int2 index, last_context;
+	SeqIdPtr qid;
 
 	if (search == NULL)
 		return NULL;
@@ -3616,7 +3653,14 @@ BlastSearchBlkDuplicate (BlastSearchBlkPtr search)
 
 	new_search->handle_results = search->handle_results;
 	new_search->query_id = SeqIdSetDup(search->query_id);
-
+	if (search->pbp->is_megablast_search) {
+	   new_search->qid_array = (SeqIdPtr PNTR) 
+	      MemNew((search->last_context/2 + 1)*sizeof(SeqIdPtr));
+	   for (qid=new_search->query_id, index=0; 
+		qid && index<=search->last_context/2; 
+		qid=qid->next, index++)
+	      new_search->qid_array[index] = qid;
+	}
         new_search->thr_info = search->thr_info;
         new_search->queue_callback = search->queue_callback;
         new_search->semid = search->semid;
@@ -3835,7 +3879,6 @@ BlastSearchBlkPtr LIBCALL
 BlastSearchBlkDestruct (BlastSearchBlkPtr search)
 
 {
-
 	if (search != NULL)
 	{
 		if (search->allocated & BLAST_SEARCH_ALLOC_QUERY)
@@ -3900,6 +3943,8 @@ BlastSearchBlkDestruct (BlastSearchBlkPtr search)
 		{
 			search->query_id = SeqIdSetFree(search->query_id);
 		}
+		
+		search->qid_array = MemFree(search->qid_array);
 
 		if (search->translation_buffer_size > 0)
 		{
@@ -4928,20 +4973,22 @@ BlastSeqLocFilterEx(SeqLocPtr slp, CharPtr instructions, BoolPtr mask_at_hash)
 
 {
 	BioseqPtr bsp;
-	BLAST_OptionsBlkPtr options;
-	Boolean do_all=FALSE, do_seg=FALSE, do_coil_coil=FALSE, do_dust=FALSE, do_repeats=FALSE;
+	BLAST_OptionsBlkPtr repeat_options, vs_options;
+	Boolean do_all=FALSE, do_seg=FALSE, do_coil_coil=FALSE, do_dust=FALSE, do_repeats=FALSE, do_vecscreen=FALSE;
 	Boolean myslp_allocated;
 	CharPtr buffer=NULL;
-	CharPtr ptr, database=NULL, error_msg;
+	CharPtr ptr, repeat_database=NULL, vs_database=NULL, error_msg;
 	Int2 seqloc_num;
 	Int4 window_cc, linker_cc, window_dust, level_dust, minwin_dust, linker_dust;
-	SeqLocPtr cc_slp=NULL, dust_slp=NULL, seg_slp=NULL, seqloc_head=NULL, repeat_slp=NULL;
+	SeqLocPtr cc_slp=NULL, dust_slp=NULL, seg_slp=NULL, seqloc_head=NULL, repeat_slp=NULL, vs_slp=NULL;
 	PccDatPtr pccp;
 	Nlm_FloatHiPtr scores;
 	Nlm_FloatHi cutoff_cc;
 	SegParamsPtr sparamsp=NULL;
+	SeqAlignPtr seqalign;
 	SeqIdPtr sip;
-	SeqLocPtr myslp;
+	SeqLocPtr myslp, seqloc_var, seqloc_tmp;
+	ValNodePtr vnp=NULL, vnp_var;
 
 	cutoff_cc = CC_CUTOFF;
 
@@ -5004,20 +5051,31 @@ BlastSeqLocFilterEx(SeqLocPtr slp, CharPtr instructions, BoolPtr mask_at_hash)
 			}
 			else if (*ptr == 'R')
 			{
-				options = BLASTOptionNew("blastn", TRUE);
-				options->expect_value = 0.1;
-				options->penalty = -1;
-				options->wordsize = 11;
-				options->gap_x_dropoff_final = 90;
-				options->dropoff_2nd_pass = 40;
-				options->gap_open = 2;
-				options->gap_extend = 1;
+				repeat_options = BLASTOptionNew("blastn", TRUE);
+				repeat_options->expect_value = 0.1;
+				repeat_options->penalty = -1;
+				repeat_options->wordsize = 11;
+				repeat_options->gap_x_dropoff_final = 90;
+				repeat_options->dropoff_2nd_pass = 40;
+				repeat_options->gap_open = 2;
+				repeat_options->gap_extend = 1;
 				ptr = load_options_to_buffer(ptr+1, buffer);
 				if (buffer[0] != NULLB)
-					parse_blast_options(options, buffer, &error_msg, &database);
-				if (database == NULL)
-					database = StringSave("humlines.lib  humsines.lib  retrovir.lib");
+					parse_blast_options(repeat_options, buffer, &error_msg, &repeat_database);
+				if (repeat_database == NULL)
+					repeat_database = StringSave("humlines.lib  humsines.lib  retrovir.lib");
 				do_repeats = TRUE;
+			}
+			else if (*ptr == 'V')
+			{
+				vs_options = VSBlastOptionNew();
+				ptr = load_options_to_buffer(ptr+1, buffer);
+				if (buffer[0] != NULLB)
+					parse_blast_options(vs_options, buffer, &error_msg, &vs_database);
+				vs_options = BLASTOptionDelete(vs_options);
+				if (vs_database == NULL)
+					vs_database = StringSave("UniVec_Core");
+				do_vecscreen = TRUE;
 			}
 			else if (*ptr == 'L')
 			{ /* do low-complexity filtering; dust for blastn, otherwise seg.*/
@@ -5085,8 +5143,47 @@ one strand).  In that case we make up a double-stranded one as we wish to look a
 			{
 				myslp = slp;
 			}
-			repeat_slp = BioseqHitRangeEngineByLoc(myslp, "blastn", database, options, NULL, NULL, NULL, NULL, NULL, 0);
-			options = BLASTOptionDelete(options);
+			repeat_slp = BioseqHitRangeEngineByLoc(myslp, "blastn", repeat_database, repeat_options, NULL, NULL, NULL, NULL, NULL, 0);
+			repeat_options = BLASTOptionDelete(repeat_options);
+			if (myslp_allocated)
+				SeqLocFree(myslp);
+			seqloc_num++;
+		}
+		if (do_vecscreen)
+		{
+		/* Either the SeqLocPtr is SEQLOC_WHOLE (both strands) or SEQLOC_INT (probably 
+one strand).  In that case we make up a double-stranded one as we wish to look at both strands. */
+			myslp_allocated = FALSE;
+			if (slp->choice == SEQLOC_INT)
+			{
+				myslp = SeqLocIntNew(SeqLocStart(slp), SeqLocStop(slp), Seq_strand_both, SeqLocId(slp));
+				myslp_allocated = TRUE;
+			}
+			else
+			{
+				myslp = slp;
+			}
+			VSScreenSequenceByLoc(myslp, NULL, vs_database, &seqalign, &vnp, NULL, NULL);
+			vnp_var = vnp;
+			while (vnp_var)
+			{
+				seqloc_tmp = vnp_var->data.ptrvalue;
+				if (vs_slp == NULL)
+				{
+					vs_slp = seqloc_tmp;
+				}
+				else
+				{
+					seqloc_var = vs_slp;
+					while (seqloc_var->next)
+						seqloc_var = seqloc_var->next;
+					seqloc_var->next = seqloc_tmp;
+				}
+				vnp_var->data.ptrvalue = NULL;
+				vnp_var = vnp_var->next;
+			}
+			vnp = ValNodeFree(vnp);
+			seqalign = SeqAlignSetFree(seqalign);
 			if (myslp_allocated)
 				SeqLocFree(myslp);
 			seqloc_num++;
@@ -5107,6 +5204,8 @@ one strand).  In that case we make up a double-stranded one as we wish to look a
 			seqloc_head = dust_slp;
 		if (repeat_slp)
 			seqloc_head = repeat_slp;
+		if (vs_slp)
+			seqloc_head = vs_slp;
 	}
 	else
 	{
@@ -5118,6 +5217,8 @@ one strand).  In that case we make up a double-stranded one as we wish to look a
 			ValNodeAddPointer(&seqloc_head, SEQLOC_MIX, dust_slp);
 		if (repeat_slp)
 			ValNodeAddPointer(&seqloc_head, SEQLOC_MIX, repeat_slp);
+		if (vs_slp)
+			ValNodeAddPointer(&seqloc_head, SEQLOC_MIX, vs_slp);
 	}
 
 	BioseqUnlock(bsp);
@@ -6922,7 +7023,7 @@ BlastHitListPurge(BLAST_HitListPtr hitlist)
 {
 	BLAST_HSPPtr PNTR hsp_array;
 	Int4 hspcnt_max, index;
-
+	
 	if (hitlist == NULL)
 		return 1;
 
@@ -6935,7 +7036,7 @@ BlastHitListPurge(BLAST_HitListPtr hitlist)
 
 	for (index=0; index<hspcnt_max; index++) 
 	   hsp_array[index] = MemFree(hsp_array[index]);
-
+	
 	hitlist->hspcnt = 0;
 	hitlist->hspcnt_max = 0;
 	hitlist->further_process = FALSE;
@@ -7339,7 +7440,7 @@ bove.*/
 			return;
 		}
 		else
-		{ /* Delete the last HPS on the list. */
+		{ /* Delete the last HSP on the list. */
 			hspcnt = current_hitlist->hspcnt--;
 			hsp_array[hspcnt-1] = MemFree(hsp_array[hspcnt-1]);
 		}

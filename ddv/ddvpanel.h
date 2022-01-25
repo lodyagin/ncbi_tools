@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.h,v 1.21 2000/04/21 23:00:50 hurwitz Exp $
+/*  $Id: ddvpanel.h,v 1.25 2000/05/15 22:00:36 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.21 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.h,v $
+* Revision 1.25  2000/05/15 22:00:36  hurwitz
+* put save-edits query into DDV_SlaveQuit where it belongs
+*
+* Revision 1.24  2000/04/29 21:49:24  kans
+* removed bad characters on Mac
+*
+* Revision 1.23  2000/04/27 20:05:55  kans
+* added stub functions for Sequin
+*
+* Revision 1.22  2000/04/27 19:57:59  hurwitz
+* scroll to aligned block on launch of DDE
+*
 * Revision 1.21  2000/04/21 23:00:50  hurwitz
 * can launch DDE from DDV
 *
@@ -184,6 +196,7 @@ typedef struct ddvexporttextemsg {/*used by the Display Styles Dlg box*/
 
 ******************************************************************************/
 extern Char szAppName[];
+extern Char szAppName2[];
 
 
 /******************************************************************************
@@ -216,10 +229,16 @@ extern void DDV_SetRulerAttribInPGP(ValNodePtr ParaG_Head, Uint1 RulerStyle);
 extern void DDV_SortPGPLineNum(ValNodePtr PNTR Head, Int4 nBsp);
 extern void DDV_CleanupDDVPdata_g (DdvMainPtr dmp);
 extern void DDV_TimerProc (WindoW w);
+NLM_EXTERN void DDVResetProc (PaneL p);
+
+NLM_EXTERN void DDV_Save(ButtoN g);
+NLM_EXTERN void DDV_NoSave(ButtoN g);
+NLM_EXTERN void DDV_Cancel(ButtoN g);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* ndef _DDVPANEL_ */
+
 

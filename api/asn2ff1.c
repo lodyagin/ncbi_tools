@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.85 $
-* $Revision: 6.85 $
+* $Revision: 6.90 $
+* $Revision: 6.90 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -58,6 +58,8 @@
 #endif
 
 #define NUM_OF_ESTIMATES 20
+
+static void PrintSeqRegion (Asn2ffJobPtr ajp, GBEntryPtr gbp);
 
 static Int2 line_estimate[NUM_OF_ESTIMATES] = {
 1, /* 0; Locus, Segment, Base Count, Origin, Feature Header lines */
@@ -2229,18 +2231,24 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 					line_estimate[0], A2F_OTHER, gbp);
 				LoadPap(pap, PrintOriginLine, ajp, 0, (Uint1)0, (Uint1)0, 
 					line_estimate[0], A2F_OTHER, gbp);
-				seqblks_num = GetNumOfSeqBlks(ajp, gbp);
-				for (index=0; index < seqblks_num; index++) {
-					if (seqblks_num == index+1) {
-						LoadPap(pap, PrintSeqBlk, ajp, index, 
-						(Uint1)1, (Uint1)0, line_estimate[9], 
-								A2F_SEQUENCE, gbp);
-					} else {
-						LoadPap(pap, PrintSeqBlk, ajp, index, 
-						(Uint1)0, (Uint1)0, line_estimate[9], 
-								A2F_SEQUENCE, gbp);
+				if (ajp->slp) {
+					LoadPap(pap, PrintSeqRegion, ajp, index, 
+							(Uint1)1, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+				} else {
+					seqblks_num = GetNumOfSeqBlks(ajp, gbp);
+					for (index=0; index < seqblks_num; index++) {
+						if (seqblks_num == index+1) {
+							LoadPap(pap, PrintSeqBlk, ajp, index, 
+							(Uint1)1, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+						} else {
+							LoadPap(pap, PrintSeqBlk, ajp, index, 
+							(Uint1)0, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+						}
 					}
-				} 
+				}
 			} else {
 				LoadPap(pap, PrintLastLine, ajp, 0, (Uint1)0, (Uint1)0, 
 					line_estimate[0], A2F_OTHER, gbp);
@@ -3074,24 +3082,13 @@ void CheckSeqPort (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start)
 				SeqPortSeek(spp, start, SEEK_SET);
 		} else {
 			SeqPortFree(spp);
-			if (ajp->slp) {
-				spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
-			/*	start1 = start - spp->start - SeqLocStart(ajp->slp);*/
-				start1 = start - spp->start;
-			} else {
-				spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-				start1 = start - spp->start;
-			}
+			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
+			start1 = start - spp->start;
 			if (start1 != spp->curpos)
 				SeqPortSeek(spp, start1, SEEK_SET);
 		}
 	} else {
-		if (ajp->slp) {
-			spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
-		/*	start1 = start - spp->start - SeqLocStart(ajp->slp);*/
-		} else {
-			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-		}
+		spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
 		start1 = start - spp->start;
 		if (start1 != spp->curpos) 
 			SeqPortSeek(spp, start1, SEEK_SET);
@@ -4503,20 +4500,35 @@ void PrintSeqBlk (Asn2ffJobPtr ajp, GBEntryPtr gbp)
         Int4 start, stop, index=ajp->pap_index;
         Uint1 last=ajp->pap_last;
 		DescrStructPtr dsp;
+
 		dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 		gbp->descr = dsp;
 		dsp->entityID = gbp->entityID;
 		dsp->itemID = gbp->itemID;
 		dsp->itemtype = gbp->itemtype;
         if (index == 0) {
+			if (ajp->slp != NULL) {
+				start = SeqLocStart(ajp->slp);
+			} else {
 				start = 0;
+            }    
         } else {
                 start = index*SEQ_BLK_SIZE;
+                if (ajp->slp) {
+					start = index*SEQ_BLK_SIZE + SeqLocStart(ajp->slp);
+               }
         }
         if (last != LAST) {
                 stop = (index+1)*SEQ_BLK_SIZE - 1;
+                if (ajp->slp) {
+					stop = (index+1)*SEQ_BLK_SIZE - 1 + SeqLocStart(ajp->slp);
+               }
         } else {
+			if (ajp->slp != NULL) {
+				stop = SeqLocStart(ajp->slp) + SeqLocLen(ajp->slp) - 1;
+            } else {
                 stop = -1;
+            }
         }
         if (ajp->format == EMBLPEPT_FMT) {
         	PrintEPSequence(ajp, gbp, start, stop);
@@ -4807,9 +4819,6 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		loc_start = 0;
 	}
 	total = start;
-	if (ajp->slp) {
-		total += SeqLocStart(ajp->slp);
-	}
 	if (ajp->format == GENBANK_FMT || ajp->format == SELECT_FMT)
 	{
 		ff_StartPrint(0, 0, ASN2FF_GB_MAX, NULL);
@@ -4820,10 +4829,8 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
 			SeqPortSet_do_virtual(spp, TRUE);
 		}
-		if (stop == -1)
+		if (stop == -1) {
 			stop = spp->stop;
-		if (ajp->slp && stop > SeqLocLen(ajp->slp)) {
-			stop = SeqLocLen(ajp->slp);
 		}
 		for (index=start; index<=stop; index += 10) {
 			if (stop < (index+10)) {
@@ -4868,9 +4875,6 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 					ptr = &buffer[0];
 					ff_AddString(ptr);
 					NewContLine();
-			if (ajp->slp) {
-				total += SeqLocStart(ajp->slp);
-			}
 					sprintf(ptr, "%9ld ", (long) (total+1 - loc_start));
 					ptr += StringLen(ptr);
 				}
@@ -5102,4 +5106,62 @@ Boolean find_item (GatherContextPtr gcp)
 		break;
 	}
 	return TRUE;
+}
+static void PrintSeqRegion (Asn2ffJobPtr ajp, GBEntryPtr gbp)
+{
+	SeqPortPtr spp;
+	Uint1 residue;
+	Char buffer[MAX_BTP_BUF], num_buffer[10];
+	CharPtr ptr = &(buffer[0]), num_ptr;
+	Int4 total;
+	BioseqPtr bsp;
+
+	if (ajp == NULL || ajp->slp == NULL) {
+		return;
+	}
+	bsp = gbp->bsp;
+	total = 0;
+	ff_StartPrint(0, 0, ASN2FF_GB_MAX, NULL);
+	spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
+	if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+		SeqPortSet_do_virtual(spp, TRUE);
+	}
+	while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+		if (!IS_residue(residue) && residue != INVALID_RESIDUE) {
+			continue;
+		}
+		if (ajp->only_one) {
+			if (residue == SEQPORT_VIRT) {
+				*ptr = '\0';
+				ff_AddString(buffer);
+				NewContLine();
+				MemSet(buffer, ' ', ptr - buffer);
+				continue;
+			}
+		}
+		if (residue == INVALID_RESIDUE) {
+			residue = (Uint1) 'X';
+		}
+		if (ROUNDUP(total, 60) == total) {
+			if (total > 0) {
+				*ptr = '\0';
+				ptr = &buffer[0];
+				ff_AddString(ptr);
+				NewContLine();
+			}
+			sprintf(ptr, "%9ld ", (long) (total+1));
+			ptr += StringLen(ptr);
+		} else if (ROUNDUP(total, 10) == total) {
+			*ptr++ = ' ';
+		}
+		*ptr++ = TO_LOWER(residue);
+		total++;
+	
+	}
+	*ptr = '\0';
+	ptr = &buffer[0];
+	ff_AddString(ptr);
+	SeqPortFree(spp);
+	ff_EndPrint();
+	PrintTerminator();
 }

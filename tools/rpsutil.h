@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.4 2000/03/28 20:32:27 shavirin Exp $
+/* $Id: rpsutil.h,v 6.5 2000/05/02 17:57:19 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.5  2000/05/02 17:57:19  shavirin
+* Corrected path to RPS Databases changed definition of RPSInit() function.
+*
 * Revision 6.4  2000/03/28 20:32:27  shavirin
 * Added functions RPSInfoDetach and RPSInfoAttach.
 *
@@ -124,11 +127,9 @@ typedef struct _RPSInfo {
                 
    Parameters:  database - BLAST database of the sequence set corresponding 
                            to PSI matrix set
-                MatrixFile - name of file with all PSI matrixes
    Returns:     Poiner to created RPSInfoPtr
   ------------------------------------------------------------------*/
-RPSInfoPtr RPSInit(CharPtr database, CharPtr MatrixFile, CharPtr LookupFile,
-                   Int4 query_is_prot);
+RPSInfoPtr RPSInit(CharPtr database, Int4 query_is_prot);
 
 /* ----------------------  RPSClose --------------------------
    Purpose:     De-initialize main structures of the RPS Search

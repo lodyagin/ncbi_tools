@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object manager for module GenBank-General,
 *   					EMBL-General, PIR-General, SWISSPROT-General
@@ -43,6 +43,9 @@
 *
 *
 * $Log: objblock.h,v $
+* Revision 6.1  2000/04/29 19:51:02  kans
+* removed strange characters at end that prevented Mac compilation
+*
 * Revision 6.0  1997/08/25 18:49:30  madden
 * Revision changed to 6.0
 *
@@ -249,6 +252,6 @@ NLM_EXTERN PdbBlockPtr	LIBCALL PdbBlockFree	PROTO((PdbBlockPtr pdbp));
 #else
 #define NLM_EXTERN
 #endif
-
 #endif
+
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.20  2000/05/17 17:22:44  dondosha
+* Added prototype for GetAccessionFromSeqId
+*
+* Revision 6.19  2000/05/03 17:56:05  sicotte
+* Added BC prefix ; changed refseq SeqID
+*
 * Revision 6.18  2000/02/04 16:13:17  kans
 * added prefix parameter to MakeNewProteinSeqIdEx
 *
@@ -590,6 +596,8 @@ NLM_EXTERN SeqIdPtr SeqIdFindBest PROTO(( SeqIdPtr sip, Uint1 target));
 NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip);
 NLM_EXTERN CharPtr SeqIdPrint PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format));
 NLM_EXTERN CharPtr SeqIdWrite PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format, Int2 buflen));
+NLM_EXTERN Boolean GetAccessionFromSeqId PROTO((SeqIdPtr sip, Int4Ptr gi, 
+				     CharPtr PNTR id));
 NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
 
 /*****************************************************************************
@@ -1027,7 +1035,7 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 #define ACCN_REFSEQ_mRNA 34
 #define ACCN_REFSEQ_CONTIG 35
 #define ACCN_REFSEQ_CHROMOSOME 36
-
+#define ACCN_NCBI_cDNA 37 
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
@@ -1046,7 +1054,7 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
    Define to detect Genbank's accessions: Genbank-subsumed GSDB accession numbers
    are defined to be Genbank's as well as GSDB DIRSUB records.
 */
-#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT))
+#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA))
 
 /* NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
    REFSEQ project

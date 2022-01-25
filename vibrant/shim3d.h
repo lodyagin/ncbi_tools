@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/29/99
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:
 *  header file for shims to replace Viewer3D with OpenGL
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.h,v $
+* Revision 6.30  2000/05/16 17:38:44  thiessen
+* do glGenLists after context init on X11 - for Mesa 3.2
+*
 * Revision 6.29  2000/04/17 15:54:27  thiessen
 * add cylinder arrows; misc graphics tweaks
 *
@@ -355,6 +358,7 @@ extern TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt, Nlm_Uint2Ptr width,
                                    Nlm_MenU ma_action_menu,
                                    Nlm_MAInitOGLFunc ma_init_func,
                                    Nlm_VoidPtr ma_init_data);
+extern void OGL_InitializeLists(TOGL_Data * OGL_Data);
 extern void OGL_LoadName(Nlm_VoidPtr PtrValue);
 extern Nlm_VoidPtr OGL_Hit(TOGL_Data * OGL_Data);
 extern void OGL_Select(TOGL_Data * OGL_Data, Nlm_Boolean SelectMode);

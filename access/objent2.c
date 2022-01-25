@@ -32,6 +32,7 @@ objent2AsnLoad(void)
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
 *    Generated using ASNCODE Revision: 6.8 at Apr 6, 2000  5:13 PM
+*    Manual addition to swap bytes in id list if IS_LITTLE_ENDIAN
 *
 **************************************************/
 
@@ -136,7 +137,12 @@ Entrez2IdListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> uids = av.ptrvalue;
+      /* ptr -> uids = av.ptrvalue; */
+
+      /* manually added */
+      ptr -> uids = BSDupAndSwapUint4 ((ByteStorePtr) av.ptrvalue);
+      BSFree ((ByteStorePtr) av.ptrvalue);
+
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -197,8 +203,15 @@ Entrez2IdListAsnWrite(Entrez2IdListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    av.intvalue = ptr -> num;
    retval = AsnWrite(aip, ENTREZ2_ID_LIST_num,  &av);
    if (ptr -> uids != NULL) {
-      av.ptrvalue = ptr -> uids;
+      /* av.ptrvalue = ptr -> uids; */
+
+      /* manually added */
+      av.ptrvalue = BSDupAndSwapUint4 ((ByteStorePtr) ptr -> uids);
+
       retval = AsnWrite(aip, ENTREZ2_ID_LIST_uids,  &av);
+
+      /* manually added */
+      BSFree ((ByteStorePtr) av.ptrvalue);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

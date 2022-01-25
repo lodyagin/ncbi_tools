@@ -32,8 +32,11 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.28 $ 
+/* $Revision: 6.29 $ 
 * $Log: blast.h,v $
+* Revision 6.29  2000/04/28 19:49:36  shavirin
+* Added definition of the function DefineToFrame().
+*
 * Revision 6.28  2000/03/31 17:01:26  dondosha
 * Added explanation for use of blastx in two sequences search
 *
@@ -449,6 +452,8 @@ Int2
 BlastNtWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag real_diag, Int2 context));
 
 Boolean MegaBlastBuildLookupTable PROTO((BlastSearchBlkPtr search));
+
+Int2 DefineToFrame PROTO((Uint1 define));
 
 #ifdef OS_UNIX
 Boolean HeyIAmInMemory(Int4 program);

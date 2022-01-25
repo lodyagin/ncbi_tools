@@ -1,4 +1,4 @@
-/*   $Id: seqcons.h,v 6.14 2000/04/06 19:03:20 thiessen Exp $
+/*   $Id: seqcons.h,v 6.15 2000/04/27 13:36:19 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: seqcons.h,v 6.14 2000/04/06 19:03:20 thiessen Exp $
+* File Name:  $Id: seqcons.h,v 6.15 2000/04/27 13:36:19 thiessen Exp $
 *
 * Authors:  Paul Thiessen
 *
@@ -35,6 +35,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: seqcons.h,v $
+* Revision 6.15  2000/04/27 13:36:19  thiessen
+* change algorithm GUI names
+*
 * Revision 6.14  2000/04/06 19:03:20  thiessen
 * new BLOSUM62 conservation coloring
 *
@@ -98,8 +101,8 @@ extern "C" {
 
 /**** identities and number of available algorithms ****/
 enum {
-    CSC_BYBLOSUM62=0, /* first one must be 0 */
-    CSC_BYVARIETY,
+    CSC_BYVARIETY=0, /* first one must be 0 */
+    CSC_BYBLOSUM62,
     CSC_SHOWIDENTITY,
     CSC_SHOWALIGNED,
     CSC_NUMALGORITHMS

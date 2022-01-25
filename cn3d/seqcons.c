@@ -1,4 +1,4 @@
-/*   $Id: seqcons.c,v 6.21 2000/04/11 17:14:20 thiessen Exp $
+/*   $Id: seqcons.c,v 6.23 2000/05/05 13:28:59 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: seqcons.c,v 6.21 2000/04/11 17:14:20 thiessen Exp $
+* File Name:  $Id: seqcons.c,v 6.23 2000/05/05 13:28:59 thiessen Exp $
 *
 * Authors:  Paul Thiessen
 *
@@ -35,6 +35,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: seqcons.c,v $
+* Revision 6.23  2000/05/05 13:28:59  thiessen
+* fix to handle updated profiler
+*
+* Revision 6.22  2000/04/27 13:36:19  thiessen
+* change algorithm GUI names
+*
 * Revision 6.21  2000/04/11 17:14:20  thiessen
 * remove warning for zero-length alignment
 *
@@ -193,6 +199,7 @@ static void CSC_Algorithm_ShowVariety(void)
     int c, pr, offset, maxResTypes = 1, nResTypes, nRows, i = 0;
     Nlm_Int4 foundFlags, typeBit;
     double scale;
+    FloatHi freqSum;
 
     /* static cache for color varieties */
     if (vSize != CSC_CurrentNColumns) {
@@ -208,8 +215,10 @@ static void CSC_Algorithm_ShowVariety(void)
     for (app = CSC_CurrentProfile; app; app = app->next) {
         for (c = 0; c < app->len; c++) {
             foundFlags = nResTypes = 0;
-            for (pr = 0; pr < CSC_CurrentProfileRows; pr++) {
-                if (app->freq[pr][c] > 0.0) {
+            freqSum = 0.0;
+            for (pr = 1; pr < CSC_CurrentProfileRows; pr++) {
+                if (((int) (app->freq[pr][c] + 0.001)) > 0) {
+                    freqSum += app->freq[pr][c];
                     typeBit = ((Nlm_Int4) 1) << pr;
                     if (!(foundFlags & typeBit)) {
                         nResTypes++;
@@ -219,6 +228,7 @@ static void CSC_Algorithm_ShowVariety(void)
             }
             /* each gap counts as an additional variety */
             nResTypes += nRows - app->numseq;
+            nResTypes += app->numseq - ((int) (freqSum + 0.001));
 
             variety[i++] = nResTypes;
             if (nResTypes > maxResTypes)
@@ -329,6 +339,7 @@ static void CSC_Algorithm_ByBlosum62(void)
     ACTProfilePtr app;
     int c, pr1, pr2, offset, maxScore, minScore, nRows, i = 0, sum, nGaps;
     double scale;
+    FloatHi freqSum;
 
     if (CSC_CurrentProfile->nuc) {
         Message(MSG_POST, "Can't do BLOSUM coloring on nucleotides!\nWill do \"Variety\" coloring instead.");
@@ -350,23 +361,26 @@ static void CSC_Algorithm_ByBlosum62(void)
     for (app = CSC_CurrentProfile; app; app = app->next) {
         for (c = 0; c < app->len; c++) {
             sum = 0;
+            freqSum = 0.0;
             
             /* count all "identity" pair scores */
             for (pr1 = 1; pr1 < 26; pr1++) {
-                sum += ((int) (app->freq[pr1][c] * (app->freq[pr1][c] - 1) / 2))
+                sum += ((int) (app->freq[pr1][c] * (app->freq[pr1][c] - 1) / 2 + 0.001))
                     * CSC_GetBlosumScore(pr1, pr1);
+                freqSum += app->freq[pr1][c];
             }
 
             /* then count all non-identical pairs */
             for (pr1 = 1; pr1 < 26 - 1; pr1++) {
                 for (pr2 = pr1 + 1; pr2 < 26; pr2++) {
-                    sum += ((int) (app->freq[pr1][c] * app->freq[pr2][c]))
+                    sum += ((int) (app->freq[pr1][c] * app->freq[pr2][c] + 0.001))
                         * CSC_GetBlosumScore(pr1, pr2);
                 }
             }
 
             /* then count all pairs with (and amongst) gaps */
             nGaps = nRows - app->numseq;
+            nGaps += app->numseq - ((int) (freqSum + 0.001));
             sum += (nGaps * (nGaps - 1) / 2 + nGaps * (nRows - nGaps))
                 * CSC_GetBlosumScore(-1, -1);
 
@@ -409,9 +423,9 @@ static void CSC_Algorithm_ShowIdentity(void)
     
     for (; app; app = app->next) {
         for (c = 0; c < app->len; offset += 3, c++) {
-            for (pr = 0; pr < CSC_CurrentProfileRows; pr++) {
-                if (app->freq[pr][c] == 0.0) continue;
-                else if (((int) app->freq[pr][c]) == nRows) {
+            for (pr = 1; pr < CSC_CurrentProfileRows; pr++) {
+                if (((int) (app->freq[pr][c] + 0.001)) == 0) continue;
+                else if (((int) (app->freq[pr][c] + 0.001)) == nRows) {
                     CSC_CurrentColors[offset] = CSC_FullIdentityColor[0];
                     CSC_CurrentColors[offset+1] = CSC_FullIdentityColor[1];
                     CSC_CurrentColors[offset+2] = CSC_FullIdentityColor[2];
@@ -448,11 +462,12 @@ typedef struct _CSC_AlgorithmFuncListItem {
     CSC_AlgorithmFunc function;
 } CSC_AlgorithmFuncListItem;
 
+/* must be in the same order as the enum in seqcons.h */
 static CSC_AlgorithmFuncListItem CSC_AlgorithmFuncList[] = {
-    { CSC_BYBLOSUM62, "By BLOSUM62", CSC_Algorithm_ByBlosum62 },
-    { CSC_BYVARIETY, "By Variety", CSC_Algorithm_ShowVariety },
-    { CSC_SHOWIDENTITY, "Show Identity", CSC_Algorithm_ShowIdentity },
-    { CSC_SHOWALIGNED, "Show Aligned", CSC_Algorithm_ShowAligned }
+    { CSC_BYVARIETY, "Variety", CSC_Algorithm_ShowVariety },
+    { CSC_BYBLOSUM62, "Weighted Variety", CSC_Algorithm_ByBlosum62 },
+    { CSC_SHOWIDENTITY, "Identity", CSC_Algorithm_ShowIdentity },
+    { CSC_SHOWALIGNED, "Aligned", CSC_Algorithm_ShowAligned }
 };
 
 static Nlm_Int2 CSC_CurrentAlgorithm = -1;

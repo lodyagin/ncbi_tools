@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.h,v 1.31 2000/04/26 21:54:27 hurwitz Exp $
+/*  $Id: ddvmain.h,v 1.33 2000/05/19 13:48:31 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.31 $
+* $Revision: 1.33 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.h,v $
+* Revision 1.33  2000/05/19 13:48:31  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 1.32  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
 * Revision 1.31  2000/04/26 21:54:27  hurwitz
 * added save function to tell AlnMgr about edits made in DDE
 *
@@ -255,7 +261,9 @@ typedef struct ddvmenu {
   IteM Orig;
     /*Align menu */
     MenU Align;
-    MenU AlignBlast;
+    MenU AddRow;
+    MenU FromFile;
+    MenU FromNet;
     IteM Deselect;
     IteM BlastFile;
     IteM BlastNet;

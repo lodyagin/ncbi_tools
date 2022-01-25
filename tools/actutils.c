@@ -28,13 +28,28 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.9 $
+* $Revision: 6.14 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.14  2000/05/05 11:53:10  wheelan
+* bug fixes in ACT_MakeProfileFromSA
+*
+* Revision 6.13  2000/05/04 16:45:19  wheelan
+* changes to profile builder to accomodate IBMed BLAST results
+*
+* Revision 6.12  2000/05/03 19:59:42  wheelan
+* added fix for NULL alignments
+*
+* Revision 6.11  2000/05/02 12:00:21  wheelan
+* fixed memory leaks
+*
+* Revision 6.10  2000/05/01 19:54:26  wheelan
+* fixed memory leak
+*
 * Revision 6.9  2000/04/22 15:54:57  wheelan
 * bug fixes in profile maker
 *
@@ -450,78 +465,95 @@ NLM_EXTERN ACTProfilePtr ACT_ProfileSetFree(ACTProfilePtr app)
    return NULL;
 }
 
-NLM_EXTERN void ACT_BuildProfile(SeqLocPtr slp, ACTProfilePtr app)
+NLM_EXTERN void ACT_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length)
 {
    Int4        i;
    Int4        len;
    Uint1       res;
    SeqPortPtr  spp;
 
-   if (app == NULL || slp == NULL)
+   if (app == NULL)
       return;
+   if (slp == NULL)
+   {
+      *count = *count+length;
+      if ((*app)->len <= *count)
+      {
+         *count = 0;
+         *app = (*app)->next;
+      }
+      return;
+   }
    len = SeqLocLen(slp);
    if (len <= 0)
       return;
-   if (app->len == 0)
+   if ((*app)->len == 0)
    {
-      app->len = len;
-      if (app->nuc)
+      (*app)->len = len;
+      if ((*app)->nuc)
       {
          for (i=0; i<ACT_NUCLEN; i++)
          {
-            app->freq[i] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            (*app)->freq[i] = (FloatHiPtr)MemNew((*app)->len*sizeof(FloatHi));
          }
       } else
       {
          for (i=0; i<ACT_PROTLEN; i++)
          {
-            app->freq[i] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            (*app)->freq[i] = (FloatHiPtr)MemNew((*app)->len*sizeof(FloatHi));
          }
       }
    } else
    {
-      if (len != app->len) /* seqloc is not the same length as the */
-         return;           /* existing profile -- don't add it     */
+      if (len > (*app)->len) /* seqloc is longer than the */
+         return;          /* existing profile -- don't add it     */
    }
-   if (app->nuc)
+   if ((*app)->nuc)
       spp = SeqPortNewByLoc(slp, Seq_code_ncbi4na);
    else
       spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
    if (spp == NULL)
       return;
-   app->numseq++;
+   if (*count == 0)
+     (*app)->numseq++;
    i=0;
-   if (app->nuc == FALSE)
+   if ((*app)->nuc == FALSE)
    {
-      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i+*count<((*app)->len))
       {
-         app->freq[res][i]++;
+         (*app)->freq[res][i+*count]++;
          i++;
       }
    } else
    {
-      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i+*count<((*app)->len))
       {
          if (res == 1)
          {
-            app->freq[0][i]++;
+            (*app)->freq[0][i+*count]++;
          } else if (res == 2)
          {
-            app->freq[1][i]++;
+            (*app)->freq[1][i+*count]++;
          } else if (res == 4)
          {
-            app->freq[2][i]++;
+            (*app)->freq[2][i+*count]++;
          } else if (res == 8)
          {
-            app->freq[3][i]++;
+            (*app)->freq[3][i+*count]++;
          } else
          {
-            app->freq[4][i]++;
+            (*app)->freq[4][i+*count]++;
          }
          i++;
       }
    }
    SeqPortFree(spp);
+   if (len+*count == (*app)->len)
+   {
+      *app = (*app)->next;
+      *count = 0;
+   } else
+      *count = *count + len;
    return;
 }
 
@@ -675,7 +707,9 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
    ACTProfilePtr    app_head;
    ACTProfilePtr    app_prev;
    BioseqPtr        bsp;
+   Int4             count;
    Int4             i;
+   Int4             j;
    Boolean          more;
    Boolean          nuc;
    Int4             numrows;
@@ -689,7 +723,7 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
    if (sap->saip->indextype == INDEX_PARENT)
    {
       amaip = (AMAlignIndexPtr)(sap->saip);
-      if (amaip->mstype == AM_NEATINDEX || amaip->mstype == AM_LITE)
+      if (amaip->mstype == AM_NEATINDEX || amaip->mstype == AM_LITE || amaip->mstype == AM_NULL)
          return NULL;
    }
    sip = AlnMgrGetNthSeqIdPtr(sap, 1);
@@ -705,15 +739,58 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
    amp->to_m = -1;
    amp->row_num = 1;
    app_head = NULL;
-   while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)))
+   if (sap->saip->indextype == INDEX_PARENT)
    {
-      app = ACT_ProfileNew(nuc);
-      if (app_head != NULL)
+      for (i=0; i<amaip->numseg; i++)
       {
-         app_prev->next = app;
-         app_prev = app;
-      } else
-         app_head = app_prev = app;
+         app = ACT_ProfileNew(nuc);
+         app->len = amaip->lens[i];
+         if (nuc)
+         {
+            for (j=0; j<ACT_NUCLEN; j++)
+            {
+               app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            }
+         } else
+         {
+            for (j=0; j<ACT_PROTLEN; j++)
+            {
+               app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            }
+         }
+         if (app_head != NULL)
+         {
+            app_prev->next = app;
+            app_prev = app;
+         } else
+            app_head = app_prev = app;
+      }
+   } else
+   {
+      while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)))
+      {
+         app = ACT_ProfileNew(nuc);
+         app->len = amp->to_b - amp->from_b + 1;;
+         if (nuc)
+         {
+            for (j=0; j<ACT_NUCLEN; j++)
+            {
+               app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            }
+         } else
+         {
+            for (j=0; j<ACT_PROTLEN; j++)
+            {
+               app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+            }
+         }
+         if (app_head != NULL)
+         {
+            app_prev->next = app;
+            app_prev = app;
+         } else
+            app_head = app_prev = app;
+      }
    }
    numrows = AlnMgrGetNumRows(sap);
    for (i=1; i<=numrows; i++)
@@ -724,18 +801,21 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
       app = app_head;
       sip = AlnMgrGetNthSeqIdPtr(sap, i);
       bsp = BioseqLockById(sip);
+      count = 0;
       while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)) && app != NULL)
       {
          if (amp->gap == 0 && bsp != NULL)
          {
             slp = SeqLocIntNew(amp->from_b, amp->to_b, amp->strand, sip);
-            ACT_BuildProfile(slp, app);
-         }
-         app = app->next;
+            ACT_BuildProfile(slp, &app, &count, 0);
+            SeqLocFree(slp);
+         } else if (amp->gap != 0)
+            ACT_BuildProfile(NULL, &app, &count, (amp->to_b - amp->from_b + 1));
       }
       BioseqUnlockById(sip);
    }
    ACT_EstimateConfidence(app_head);
+   AlnMsgFree(amp);
    return app_head;
 }
 
@@ -847,16 +927,6 @@ NLM_EXTERN Boolean ACT_AddBioseqToSAByProfile(SeqAlignPtr sap, BioseqPtr bsp)
    MemFree(abp->currpos);
    MemFree(abp->numats);
    MemFree(abp);
-   if (scorearrayminus != NULL)
-   {
-      for (i=0; i<nprof; i++)
-      {
-         MemFree(atsminus[i]);
-      }
-      MemFree(atsminus);
-      MemFree(scorearrayminus);
-      MemFree(aposminus->posarray);
-   }
    return FALSE;
 }
 
@@ -1193,6 +1263,8 @@ NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuousEx(SeqAlignPtr sap, Int4 sta
             sap_new = GlobalBandByLoc(gbsp, slp1, slp2, is_prot, G_BAND_QUADRATIC);
             am_fix_strand(sap_new, strand1, strand2);
             gbsp = GlobalBandStructDelete(gbsp);
+            SeqLocFree(slp1);
+            SeqLocFree(slp2);
             sap_tmp = (SeqAlignPtr)(sap->segs);
             while (sap_tmp->next != NULL)
             {
@@ -1314,6 +1386,8 @@ NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuousEx(SeqAlignPtr sap, Int4 sta
          sap_new = GlobalBandByLoc(gbsp, slp1, slp2, is_prot, G_BAND_QUADRATIC);
          am_fix_strand(sap_new, strand1, strand2);
          gbsp = GlobalBandStructDelete(gbsp);
+         SeqLocFree(slp1);
+         SeqLocFree(slp2);
          sap_tmp = (SeqAlignPtr)(sap->segs);
          while (sap_tmp->next != NULL)
          {

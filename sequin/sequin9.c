@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -3205,5 +3205,199 @@ extern void ResolveExistingLocalIDs (IteM i)
   }
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void SetSourceFocus (IteM i);
+extern void ClearSourceFocus (IteM i);
+
+static void TouchFocus (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BioSourcePtr  biop;
+  BoolPtr       bptr;
+  Boolean       is_focus;
+
+  if (sdp->choice != Seq_descr_source) return;
+  bptr = (BoolPtr) userdata;
+  is_focus = *bptr;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+  biop->is_focus = is_focus;
+}
+
+static void CommonSourceFocus (IteM i, Boolean setfocus)
+
+{
+  BaseFormPtr   bfp;
+  Boolean       flag;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  flag = setfocus;
+  VisitDescriptorsInSep (sep, (Pointer) &flag, TouchFocus);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void SetSourceFocus (IteM i)
+
+{
+  CommonSourceFocus (i, TRUE);
+}
+
+extern void ClearSourceFocus (IteM i)
+
+{
+  CommonSourceFocus (i, FALSE);
+}
+
+typedef struct acchist {
+  DESCRIPTOR_FORM_BLOCK
+  SeqEntryPtr     sep;
+  TexT            which;
+  Int2            pos;
+} AccHist, PNTR AccHistPtr;
+
+static void ExAcToHisProc (BioseqPtr bsp, Pointer userdata)
+
+{
+  CharPtr       accn;
+  AccHistPtr    ahp;
+  GBBlockPtr    gbp;
+  SeqHistPtr    hist;
+  Int2          i;
+  SeqDescrPtr   sdp;
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
+  ValNodePtr    vnp;
+  Uint4         whichdb;
+
+  ahp = (AccHistPtr) userdata;
+  sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
+  if (sdp == NULL) return;
+  gbp = (GBBlockPtr) sdp->data.ptrvalue;
+  if (gbp == NULL) return;
+  for (vnp = gbp->extra_accessions, i = 1;
+       vnp != NULL && i < ahp->pos;
+       vnp = vnp->next, i++) continue;
+  if (vnp == NULL) return;
+  accn = (CharPtr) vnp->data.ptrvalue;
+  if (StringHasNoText (accn)) return;
+  hist = bsp->hist;
+  if (hist != NULL) {
+    for (sip = hist->replace_ids; sip != NULL; sip = sip->next) {
+      switch (sip->choice) {
+        case SEQID_GENBANK :
+        case SEQID_EMBL :
+        case SEQID_DDBJ :
+          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+          if (tsip != NULL) {
+            if (StringICmp (tsip->accession, accn) == 0) return;
+          }
+          break;
+        default :
+          break;
+      }
+    }
+  }
+  if (hist == NULL) {
+    hist = SeqHistNew ();
+    bsp->hist = hist;
+  }
+  if (hist == NULL) return;
+  sip = ValNodeNew (hist->replace_ids);
+  if (hist->replace_ids == NULL) {
+     hist->replace_ids = sip;
+  }
+  if (sip == NULL) return;
+  tsip = TextSeqIdNew ();
+  if (tsip == NULL) return;
+  tsip->accession = StringSave (accn);
+  whichdb = WHICH_db_accession (accn);
+  if (ACCN_IS_EMBL (whichdb)) {
+    sip->choice = SEQID_EMBL;
+  } else if (ACCN_IS_DDBJ (whichdb)) {
+    sip->choice = SEQID_DDBJ;
+  } else {
+    sip->choice = SEQID_GENBANK;
+  }
+  sip->data.ptrvalue = (Pointer) tsip;
+}
+
+static void DoProcessExtraAccToHis (ButtoN b)
+
+{
+  AccHistPtr  ahp;
+  Char        str [16];
+  int         val;
+
+  ahp = (AccHistPtr) GetObjectExtra (b);
+  if (ahp == NULL) return;
+  Hide (ahp->form);
+  WatchCursor ();
+  Update ();
+  GetTitle (ahp->which, str, sizeof (str));
+  if (sscanf (str, "%d", &val) == 1 && val > 0) {
+    ahp->pos = (Int2) val;
+    VisitBioseqsInSep (ahp->sep, (Pointer) ahp, ExAcToHisProc);
+  }
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (ahp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ahp->input_entityID, 0, 0);
+  Remove (ahp->form);
+}
+
+extern void ExtraAccToHistByPos (IteM i);
+extern void ExtraAccToHistByPos (IteM i)
+
+{
+  AccHistPtr    ahp;
+  ButtoN        b;
+  BaseFormPtr   bfp;
+  GrouP         c, g, h;
+  SeqEntryPtr   sep;
+  WindoW        w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  ahp = (AccHistPtr) MemNew (sizeof (AccHist));
+  if (ahp == NULL) return;
+  w = FixedWindow (-50, -33, -10, -10, "Secondary to History", StdCloseWindowProc);
+  SetObjectExtra (w, ahp, StdCleanupFormProc);
+  ahp->form = (ForM) w;
+  ahp->formmessage = NULL;
+
+  ahp->sep = sep;
+  ahp->input_entityID = bfp->input_entityID;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Secondary Accession Position", 0, dialogTextHeight, programFont, 'l');
+  ahp->which = DialogText (g, "", 5, NULL);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", DoProcessExtraAccToHis);
+  SetObjectExtra (b, ahp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
 }
 

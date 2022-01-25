@@ -47,8 +47,12 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.40 $
+ * $Revision: 6.41 $
  * $Log: blastkar.c,v $
+ * Revision 6.41  2000/05/26 17:29:54  shavirin
+ * Added array of pos frequencies into BLAST_Matrix structure and it's
+ * handling.
+ *
  * Revision 6.40  2000/04/17 20:41:37  madden
  * Added BLAST_MatrixFetch
  *
@@ -876,19 +880,26 @@ BLAST_MatrixPtr LIBCALL
 BLAST_MatrixDestruct(BLAST_MatrixPtr blast_matrix)
 
 {
-	Int4 index;
-	if (blast_matrix == NULL)
-		return NULL;
+    Int4 index;
+    if (blast_matrix == NULL)
+        return NULL;
+    
+    blast_matrix->name = MemFree(blast_matrix->name);
+    for (index=0; index<blast_matrix->rows; index++) {
+        MemFree(blast_matrix->matrix[index]);
+    }
+    MemFree(blast_matrix->matrix);
 
-	blast_matrix->name = MemFree(blast_matrix->name);
-	for (index=0; index<blast_matrix->rows; index++)
-	{
-		MemFree(blast_matrix->matrix[index]);
-	}
-	MemFree(blast_matrix->matrix);
-	MemFree(blast_matrix);
+    if(blast_matrix->posFreqs != NULL) {
+        for (index = 0; index < blast_matrix->rows; index++) {
+            MemFree(blast_matrix->posFreqs[index]);
+        }
+        MemFree(blast_matrix->posFreqs);
+    }
 
-	return NULL;
+    MemFree(blast_matrix);
+
+    return NULL;
 }
 
 
@@ -902,49 +913,56 @@ BLAST_MatrixPtr LIBCALL
 BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
 
 {
-	BLAST_MatrixPtr blast_matrix;
-	FloatHi karlinK = 0.0;
-	Int4 index1, index2, dim1, dim2;
-	Int4Ptr PNTR matrix, PNTR original_matrix;
+    BLAST_MatrixPtr blast_matrix;
+    FloatHi karlinK = 0.0;
+    Int4 index1, index2, dim1, dim2;
+    Int4Ptr PNTR matrix, PNTR original_matrix;
+    Nlm_FloatHi **posFreqs;
 
-	if (sbp == NULL)
-		return NULL;
+    if (sbp == NULL)
+        return NULL;
+    
+    blast_matrix = (BLAST_MatrixPtr) MemNew(sizeof(BLAST_Matrix));
+    
+    if (sbp->posMatrix) {
+        dim1 = sbp->query_length + 1;
+        dim2 = sbp->alphabet_size;
+        original_matrix = sbp->posMatrix;
+    } else {
+        dim1 = sbp->alphabet_size;
+        dim2 = sbp->alphabet_size;
+        original_matrix = sbp->matrix;
+    }
+    if (sbp->kbp_gap_psi[0])
+        karlinK = sbp->kbp_gap_psi[0]->K;
+    
+    matrix = MemNew(dim1*sizeof(Int4Ptr));
+    for (index1=0; index1<dim1; index1++) {
+        matrix[index1] = MemNew(dim2*sizeof(Int4));
+        for (index2=0; index2<dim2; index2++) {
+            matrix[index1][index2] = original_matrix[index1][index2];
+        }
+    }
 
-	blast_matrix = (BLAST_MatrixPtr) MemNew(sizeof(BLAST_Matrix));
+    /* Copying posFreqs to the BLAST_Matrix */
+    if(sbp->posFreqs != NULL) {
+        posFreqs = MemNew(dim1*sizeof(Nlm_FloatHi *));
+        for (index1 = 0; index1 < dim1; index1++) {
+            matrix[index1] = MemNew(dim2*sizeof(Nlm_FloatHi));
+            for (index2=0; index2 < dim2; index2++) {
+                posFreqs[index1][index2] = sbp->posFreqs[index1][index2];
+            }
+        }
+    }
 
-	if (sbp->posMatrix)
-	{
-		dim1 = sbp->query_length + 1;
-		dim2 = sbp->alphabet_size;
-		original_matrix = sbp->posMatrix;
-	}
-	else
-	{
-		dim1 = sbp->alphabet_size;
-		dim2 = sbp->alphabet_size;
-		original_matrix = sbp->matrix;
-	}
-	if (sbp->kbp_gap_psi[0])
-		karlinK = sbp->kbp_gap_psi[0]->K;
-
-	matrix = MemNew(dim1*sizeof(Int4Ptr));
-	for (index1=0; index1<dim1; index1++)
-	{
-		matrix[index1] = MemNew(dim2*sizeof(Int4));
-		for (index2=0; index2<dim2; index2++)
-		{
-			matrix[index1][index2] = original_matrix[index1][index2];
-		}
-	}
-
-	blast_matrix->is_prot = sbp->protein_alphabet;
-	blast_matrix->name = StringSave(sbp->name);
-	blast_matrix->rows = dim1;
-	blast_matrix->columns = dim2;
-	blast_matrix->matrix = matrix;
-	blast_matrix->karlinK = karlinK;
-
-	return blast_matrix;
+    blast_matrix->is_prot = sbp->protein_alphabet;
+    blast_matrix->name = StringSave(sbp->name);
+    blast_matrix->rows = dim1;
+    blast_matrix->columns = dim2;
+    blast_matrix->matrix = matrix;
+    blast_matrix->karlinK = karlinK;
+    
+    return blast_matrix;
 }
 
 /* 

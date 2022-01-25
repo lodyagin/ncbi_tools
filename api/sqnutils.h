@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.50 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
@@ -195,6 +195,24 @@ NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp);
 
 NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
 
+/* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
+
+NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
+  SqnTagPtr stp,
+  CharPtr organism,
+  BioSourcePtr biop
+);
+
+NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
+  SqnTagPtr stp,
+  MolInfoPtr mip
+);
+
+NLM_EXTERN BioseqPtr ParseTitleIntoBioseq (
+  SqnTagPtr stp,
+  BioseqPtr bsp
+);
+
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
   if they are packaged in the same directory as the executing program. */
 
@@ -278,6 +296,7 @@ lengths, and (optional) strands.  Gaps of a given length (with 0 start and stop)
 allowed. */
 
 NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster);
+NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, CharPtr seqid, CharPtr title);
 
 /* ReadAsnFastaOrFlatFile reads object manager-registered ASN.1, FASTA, GenBank, EMBL, GenPept,
 Feature table, Restriction table, Contig table, Message response, or saved UID list, with the
@@ -373,6 +392,20 @@ NLM_EXTERN void VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFu
 
 typedef void (*VisitElementsFunc) (SeqEntryPtr sep, Pointer userdata);
 NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback);
+
+/* visits all SeqIds within a SeqLoc */
+
+typedef void (*VisitSeqIdFunc) (SeqIdPtr sip, Pointer userdata);
+NLM_EXTERN void VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
+
+/* visits all publication descriptors or features */
+
+typedef void (*VisitPubdescsFunc) (PubdescPtr pdp, Pointer userdata);
+NLM_EXTERN void VisitPubdescsOnBsp (BioseqPtr bsp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN void VisitPubdescsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN void VisitPubdescsInSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN void VisitPubdescsOnSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN void VisitPubdescsInSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
 
 /* function to scan binary ASN.1 file of entire release as Bioseq-set, simple explore from successive top seps */
 

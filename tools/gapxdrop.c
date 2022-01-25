@@ -32,8 +32,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.29 $ 
+/* $Revision: 6.31 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.31  2000/05/16 19:59:39  madden
+* Fix for rpsblast extensions
+*
+* Revision 6.30  2000/05/02 17:17:13  madden
+* Changes to prevent gapping between sequences in rps-blast
+*
 * Revision 6.29  2000/03/29 21:54:28  dondosha
 * Made GapXEditScriptNew public for use in MegaBlastFillHspGapInfo
 *
@@ -754,7 +760,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   dp_ptr dyn_prog;
   Int4 i, j, cb, j_r, g, decline_penalty;
   register Int4 c, d, e, m, tt, h, X, f;
-  Int4 best_score = 0;
+  Int4 best_score = 0, h_original=0;
   Int4Ptr *matrix;
   register Int4Ptr wa;
   register dp_ptr dp;
@@ -768,7 +774,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   matrix = gap_align->matrix;
   *pei = *pej = 0;
   m = (g=gap_align->gap_open) + gap_align->gap_extend;
-  h = gap_align->gap_extend;
+  h_original = h = gap_align->gap_extend;
   decline_penalty = gap_align->decline_align;
   X = gap_align->x_parameter;
 
@@ -805,9 +811,17 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
       }
       else {
 	  if(reversed || reverse_sequence)
+	  {
 	      wa = gap_align->posMatrix[M - j_r];
+		if (A[M-j_r] == NULLB)  /* Prevents gapping through a NULL byte in rps-blast. */
+			break;
+	  }
 	  else
+	  {
 	      wa = gap_align->posMatrix[j_r + query_offset];
+		if (A[j_r] == NULLB)
+			break;
+	  }
       }
       e = c =f = MININT;
       Bptr = &B[tt];

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ff5.c,v $
+ * Revision 6.10  2000/05/15 23:13:35  kans
+ * format_thesis forgot to add space for afp->affil
+ *
  * Revision 6.9  1998/12/09 18:45:09  tatiana
  * a bug fixed in GetAuthors()
  *
@@ -1224,6 +1227,7 @@ static CharPtr format_thesis (Uint1 format, ValNodePtr the_pub, Boolean make_ind
 				}
 
 			} else if (afp->choice == 2){
+				aflen += 3 + StringLen(afp -> affil);
 				aflen += 3 + StringLen(afp -> div);
 				aflen += 3 + StringLen(afp -> street);
 				aflen += 3 + StringLen(afp -> city);

@@ -100,6 +100,9 @@
 #define ERR_SEQ_FEAT_CDSmRNArange  5,36
 #define ERR_SEQ_FEAT_OverlappingPeptideFeat  5,37
 #define ERR_SEQ_FEAT_SerialInComment  5,38
+#define ERR_SEQ_FEAT_MultipleCDSproducts  5,39
+#define ERR_SEQ_FEAT_FocusOnBioSourceFeauture  5,40
+#define ERR_SEQ_FEAT_PeptideFeatOutOfFrame  5,41
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

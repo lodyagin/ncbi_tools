@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.104 $
+* $Revision: 6.109 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,21 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
+* Revision 6.109  2000/05/16 20:24:23  thiessen
+* don't display alignseq
+*
+* Revision 6.108  2000/05/16 18:13:32  lewisg
+* fix cdd load bug
+*
+* Revision 6.107  2000/05/16 12:44:55  lewisg
+* fix coloring bug for strucseqs
+*
+* Revision 6.106  2000/05/16 11:08:44  wheelan
+* changed sap to salp in SAM_ReplaceGI call at line 505
+*
+* Revision 6.105  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
 * Revision 6.104  2000/04/20 23:27:45  lewisg
 * misc bug fixes
 *
@@ -482,6 +497,37 @@ SeqEntryPtr Cn3DFetchSeqEntry(PMSD pmsdThis)
 
     return NULL;
 }
+
+static SeqAnnot * Cn3D_ShredCBlast(SeqAnnot *sap)
+{
+    SeqAlign *salp;
+    SeqAnnot *sapout, *saptmp;
+
+    if (sap == NULL) return NULL;
+    
+    saptmp = sap;
+    while (saptmp) {
+        if (saptmp->type == 2) {
+            salp = saptmp->data;
+            break;
+        }
+        saptmp = saptmp->next;
+    }
+    
+    if (salp) {
+        if(am_guess_numrows(salp) > 2) return sap;
+        SAM_ReplaceGI(salp);
+        AlnMgrIndexSeqAlign(salp);
+        AlnMgrMakeMultipleByScore(salp);
+        AlnMgrDeleteHidden(salp, FALSE);
+        sapout = SeqAnnotNew();
+        sapout->data = DDV_ShredAln(salp);
+        if(sapout->data == NULL) return sap;
+        sapout->type = 2;
+        return sapout;
+    } else return NULL;
+}
+
 
 /*
 sets alignment bits in master structure given pairwise seqaligns
@@ -932,7 +978,6 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
     PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
     BiostrucAlignSeqPtr pbsasThis = NULL;
     SeqAnnotPtr sap = NULL;
-    SeqAlignPtr salp = NULL;
 
 
     do { {                      /* TRY */
@@ -947,7 +992,6 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
             PDNTRN pdnTransform = NULL;
             PARS parsThis;
             BiostrucPtr pbsThis;
-            SeqAnnot *sap;
 
             switch (mime->choice) {
 
@@ -1001,21 +1045,26 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                 MMDB_OpenTraverse(pmsdThis);
                 Cn3D_MarkStrucSeqs(pdnms, bsssp->seqalign);
 
-                Cn3D_RegisterSeqAnnot(bsssp->seqalign, TRUE, TRUE);
+                sap = Cn3D_ShredCBlast(bsssp->seqalign);
+                Cn3D_RegisterSeqAnnot(sap, TRUE, TRUE);
                 Cn3D_RegisterSeqEntry(bsssp->sequences);
                 parsThis = NewStructureRenderSet();
                 parsThis->PBBColor = C_BYSEQCONS;
                 parsThis->ConsColAlg = CSC_SHOWIDENTITY;
                 Cn3D_SetPars(parsThis, pdnms);
                 /* after indexing/IBM, store "original" row numbers in corresponding MMD */
-                Cn3D_StoreAlignRowNumsInMMDs(bsssp->seqalign);
+                Cn3D_StoreAlignRowNumsInMMDs(sap);
                 break;
 
             case NcbiMimeAsn1_alignseq:
+                /*
                 pbsasThis = (BiostrucAlignSeqPtr) mime->data.ptrvalue;
-                sap = pbsasThis->seqalign;
-                Cn3D_RegisterSeqAnnot(pbsasThis->seqalign, TRUE, TRUE);
+                sap = Cn3D_ShredCBlast(pbsasThis->seqalign);
+                Cn3D_RegisterSeqAnnot(sap, TRUE, TRUE);
                 Cn3D_RegisterSeqEntry(pbsasThis->sequences);
+                */
+                Message(MSG_ERROR, "Cn3D: Sorry, can't view alignments without structures (yet).");
+                exit(-1);
                 return retval;
 
             case NcbiMimeAsn1_alignstruc: /* this is the code that received alignments */
@@ -1523,13 +1572,14 @@ static void Cn3D_ImportCB(DDV_ImportDialog *idp, SeqAlign *salpdest,
   Purpose : Import a single bioseq via the net
 
 *******************************************************************************/
-NLM_EXTERN void Cn3D_ImportBioseq(IteM i)
+static void Cn3D_sImportBioseq(Boolean Gap)
 {
     DDV_ImportDialog *idp;
 
     idp = MemNew(sizeof(DDV_ImportDialog));
     if(idp == NULL) return;
 
+    idp->Gap = Gap;
     Cn3D_StartNet(TRUE);
     if (!Cn3D_ColorData.EntrezOn) {
         Message(MSG_ERROR, "Blast requires network access");     
@@ -1552,6 +1602,17 @@ NLM_EXTERN void Cn3D_ImportBioseq(IteM i)
     DDV_ImportBioseqDlg(idp);
 }
 
+NLM_EXTERN void Cn3D_ImportBioseq(IteM i)
+{
+    Cn3D_sImportBioseq(FALSE);
+}
+
+NLM_EXTERN void Cn3D_ImportBioseqGap(IteM i)
+{
+    Cn3D_sImportBioseq(TRUE);
+}
+
+
 /*******************************************************************************
 
   Function : Cn3D_ImportBioseqFile()
@@ -1559,7 +1620,7 @@ NLM_EXTERN void Cn3D_ImportBioseq(IteM i)
   Purpose : Import a single bioseq from a fasta file
 
 *******************************************************************************/
-NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
+static void Cn3D_sImportBioseqFile(Boolean Gap)
 {
     DDV_ImportDialog *idp;
     SeqEntry *sep;  /* need to deallocate! */
@@ -1592,6 +1653,7 @@ NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
     idp = MemNew(sizeof(DDV_ImportDialog));
     if(idp == NULL) return;
     idp->sep = sep;
+    idp->Gap = Gap;
     idp->sipslave = SAM_ExtractSips(sep);
 
     if(Cn3D_ColorData.sap == NULL) {
@@ -1609,4 +1671,14 @@ NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
         DDV_DoAlign(idp);
     }
 
+}
+
+NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
+{
+    Cn3D_sImportBioseqFile(FALSE);
+}
+
+NLM_EXTERN void Cn3D_ImportBioseqFileGap(IteM i)
+{
+    Cn3D_sImportBioseqFile(TRUE);
 }

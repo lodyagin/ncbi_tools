@@ -1040,6 +1040,23 @@ References
 Release History
 ---------------
 
+Notes for 2.0.13 release:
+
+Enhancements:
+
+1.) The output format for pairwise alignments was changed to
+put each new gi (if the sequence has redundant gi's) on a
+new line.  If HTML output is specified then each gi is hyperlinked.
+
+Bug fixes:
+
+1.) An NCBI toolkit problem parsing the new RefSeq format in FASTA files
+(two bars instead of three) was fixed.  This fix applies to all
+BLAST binaries (formatdb, blastall, blastpgp, etc.).
+
+2.) A problem that caused BLAST version 2.0.12 under NT to freeze in
+multithreaded mode has been fixed.
+
 Notes for 2.0.12 release:
 
 Enhancements:

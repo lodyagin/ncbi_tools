@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.260 $
+* $Revision: 6.266 $
 *
 * File Description: 
 *
@@ -122,7 +122,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "3.27"
+#define SEQ_APP_VER "3.30"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -159,6 +159,7 @@ Char            globalPath [PATH_MAX];
 static SequinBlockPtr  globalsbp = NULL;
 
 static Boolean useUdv = FALSE;
+static Boolean useXml = FALSE;
 
 ForM  startupForm = NULL;
 
@@ -2452,6 +2453,20 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
    }
    if (line[0] == '>')  /* FASTA sequences or FASTA alignment */
    {
+      if (StringNCmp (line, ">PubMed", 7) == 0 ||
+          StringNCmp (line, ">Protein", 8) == 0 ||
+          StringNCmp (line, ">Nucleotide", 11) == 0 ||
+          StringNCmp (line, ">Structure", 10) == 0 ||
+          StringNCmp (line, ">Genome", 7) == 0 ||
+          StringNCmp (line, ">Feature", 8) == 0 ||
+          StringNCmp (line, ">Vector", 7) == 0 ||
+          StringNCmp (line, ">Restriction", 12) == 0 ||
+          StringNCmp (line, ">Contig", 7) == 0 ||
+          StringNCmp (line, ">Virtual", 8) == 0 ||
+          StringNCmp (line, ">Message", 8) == 0) {
+        MemFree(line);
+      	return SQACT_NOTTXTALN;
+      }
       MemFree(line);
       line = FGetLine(fp);
       prevlen = -1;
@@ -2496,6 +2511,58 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
    }
 }
 
+static Uint1 sq_transform_code(Uint1 res, Int4 which)
+{
+   if (which == 4) /* ncbi2na */
+   {
+      if (res == 1)
+         return 0;
+      else if (res == 3)
+         return 1;
+      else if (res == 7)
+         return 2;
+      else if (res == 18)
+         return 3;
+      else
+         return 0;
+   } else if (which == 2) /* ncbi4na */
+   {
+      if (res == 1)
+         return 1;
+      else if (res == 3)
+         return 2;
+      else if (res == 12)
+         return 3;
+      else if (res == 7)
+         return 4;
+      else if (res == 16)
+         return 5;
+      else if (res == 17)
+         return 6;
+      else if (res == 19)
+         return 7;
+      else if (res == 18)
+         return 8; 
+      else if (res == 20)
+         return 9;
+      else if (res == 22)
+         return 10;
+      else if (res == 8)
+         return 11;
+      else if (res == 10)
+         return 12;
+      else if (res == 4)
+         return 13;
+      else if (res == 2)
+         return 14;
+      else if (res == 13)
+         return 15;
+       else
+         return 15;
+   }
+   return 0;
+}
+
 static void SQACT_FixBioseqs (BioseqPtr bsp, Pointer userdata)
 {
    Uint1Ptr           array;
@@ -2514,10 +2581,7 @@ static void SQACT_FixBioseqs (BioseqPtr bsp, Pointer userdata)
 
    if (bsp == NULL)
       return;
-   if (bsp->length < 100)
-      len = bsp->length;
-   else
-      len = 100;
+   len = bsp->length-1;
    compact = 2;
    spp = SeqPortNew(bsp, 0, len, 0, Seq_code_ncbistdaa);
    while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
@@ -2530,23 +2594,13 @@ static void SQACT_FixBioseqs (BioseqPtr bsp, Pointer userdata)
          compact = 4;
    }
    SeqPortFree(spp);
-   bsp->mol = Seq_mol_na;
-   SeqMgrIndexFeatures(0, (Pointer)(bsp));
-   vnp = NULL;
-   vnp = SeqMgrGetNextDescriptor(bsp, vnp, Seq_descr_molinfo, &context);
-   if (vnp != NULL)
-   {
-      vnp = context.sdp;
-      mip = (MolInfoPtr)(vnp->data.ptrvalue);
-      mip->biomol = 1;
-   }
    bs = BSNew((bsp->length+compact-1)/compact);
    array = (Uint1Ptr)MemNew((bsp->length+compact)*sizeof(Uint1));
    spp = SeqPortNew(bsp, 0, len, 0, Seq_code_ncbistdaa);
    for (i=0; i<bsp->length; i++)
    {
       res = SeqPortGetResidue(spp);
-      array[i] = res;
+      array[i] = sq_transform_code(res, compact);
    }
    for (i=0; i<compact; i++)
       array[i+bsp->length] = 0;
@@ -2554,7 +2608,7 @@ static void SQACT_FixBioseqs (BioseqPtr bsp, Pointer userdata)
       shift = 2;
    else
       shift = 4;
-   for (j=0; j<bsp->length; j++)
+   for (j=0; j<bsp->length; j+=compact)
    {
       res = 0;
       res1 = 0;
@@ -2568,6 +2622,22 @@ static void SQACT_FixBioseqs (BioseqPtr bsp, Pointer userdata)
    }
    MemFree(bsp->seq_data);
    bsp->seq_data = bs;
+   if (compact == 4)
+      bsp->seq_data_type = Seq_code_ncbi2na;
+   else
+      bsp->seq_data_type = Seq_code_ncbi4na;
+   bsp->mol = Seq_mol_na;
+   bsp->repr = Seq_repr_raw;
+   SeqMgrIndexFeatures(0, (Pointer)(bsp));
+   vnp = NULL;
+   vnp = SeqMgrGetNextDescriptor(bsp, vnp, Seq_descr_molinfo, &context);
+   if (vnp != NULL)
+   {
+      vnp = context.sdp;
+      mip = (MolInfoPtr)(vnp->data.ptrvalue);
+      mip->biomol = 1;
+   }
+   MemFree(array);
 }
 
 static Boolean CommonReadNewAsnProc (Handle obj, Boolean removeold, Boolean askForSubmit)
@@ -4536,6 +4606,11 @@ static void CommonAddSeq (IteM i, Int2 type)
             ptr = StringISearch (title, "[org=");
             StringNCpy_0 (str, ptr + 5, sizeof (str));
             ptr = StringChr (str, ']');
+            if (ptr == NULL) {
+              ptr = StringISearch (title, "[organism=");
+              StringNCpy_0 (str, ptr + 10, sizeof (str));
+              ptr = StringChr (str, ']');
+            }
             if (ptr != NULL) {
               *ptr = '\0';
               biop = BioSourceNew ();
@@ -4586,6 +4661,7 @@ static void CommonAddSeq (IteM i, Int2 type)
             AddToSubSource (biop, title, "[subsource=", 255);
             ExciseString (title, "[subsource=", "]");
             ExciseString (title, "[org=", "]");
+            ExciseString (title, "[organism=", "]");
             if (bsp != NULL) {
               ptr = StringISearch (title, "[molecule=");
               if (ptr != NULL) {
@@ -6491,6 +6567,7 @@ extern void SetupBioseqPageList (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
   if (useUdv) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &udvPageData);
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &ddvPageData);
   } else {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
   }
@@ -6521,6 +6598,9 @@ extern void SetupBioseqPageList (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &fstaPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &qualPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
+  if (useXml) {
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &xmlPageData);
+  }
 
   if (extraServices || useDesktop) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
@@ -7966,6 +8046,18 @@ static void ReadSettings (void)
       loadSaveUidListOK = FALSE;
     }
   }
+
+  if (GetAppParam ("SEQUIN", "SETTINGS", "USEUDV", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useUdv = TRUE;
+    }
+  }
+
+  if (GetAppParam ("SEQUIN", "SETTINGS", "USEXML", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useXml = TRUE;
+    }
+  }
 }
 
 static void DoQuit (ButtoN b)
@@ -8566,6 +8658,8 @@ Int2 Main (void)
           nohelpMode = TRUE;
         else if (StringCmp (argv[i], "-udv") == 0)
           useUdv = TRUE;
+        else if (StringCmp (argv[i], "-xml") == 0)
+          useXml = TRUE;
         else if (StringCmp (argv[i], "-gc") == 0) {
             indexerVersion = FALSE;
             extraServices = TRUE;

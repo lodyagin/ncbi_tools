@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.61  2000/05/15 15:52:50  bazhin
+* Removed memory leak in "PrintSourceFeat()".
+*
 * Revision 6.60  2000/03/30 20:37:29  kans
 * added tilde to newline code in PrintImpFeatEx (thanks to Sergei B)
 *
@@ -996,6 +999,8 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		if (sfp_out->location == NULL) {
 			sfp_out->location = keep_loc;
 		}
+		else
+			SeqLocFree(keep_loc);
 	}
 	flat2asn_install_feature_user_string("source", ifp->loc);
 	if (gbp->feat && gbp->feat->sfpSourcesize != 0) {

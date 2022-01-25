@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.7  2000/05/02 22:02:15  vakatov
+* Nlm_TextCallback():  get rid of an extra condition
+*
 * Revision 6.6  2000/03/31 19:20:03  thiessen
 * fix recursion bug
 *
@@ -2604,7 +2607,7 @@ static void Nlm_TextCallback(Widget w,
 {
   XmAnyCallbackStruct *cbs = (XmAnyCallbackStruct *)call_data;
 
-  if (cbs->event != NULL && allowTextCallback)
+  if ( allowTextCallback )
     Nlm_DoAction( (Nlm_GraphiC)client_data );
 }
 
@@ -2618,7 +2621,6 @@ static void Nlm_FocusCallback(Widget w, XtPointer client_data, XtPointer call_da
 
 
 static void Nlm_LoseFocusCallback (Widget w, XtPointer client_data, XtPointer call_data)
-
 {
   XmAnyCallbackStruct  *cbs;
   Nlm_TexT             t;

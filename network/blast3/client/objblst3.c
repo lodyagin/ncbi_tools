@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.8 at Nov 12, 1999 11:06 AM
+*    Generated using ASNCODE Revision: 6.8 at Apr 28, 2000  1:20 PM
 *
 **************************************************/
 
@@ -1272,6 +1272,13 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> use_best_align = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_is_rps_blast) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_rps_blast = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1495,6 +1502,8 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, BLAST_PARAMETERS_use_real_db_size,  &av);
    av.boolvalue = ptr -> use_best_align;
    retval = AsnWrite(aip, BLAST_PARAMETERS_use_best_align,  &av);
+   av.boolvalue = ptr -> is_rps_blast;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_is_rps_blast,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

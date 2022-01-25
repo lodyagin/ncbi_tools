@@ -26,6 +26,12 @@
 * Author Karl Sirotkin
 *
 $Log: idfetch.c,v $
+Revision 1.6  2000/05/24 17:30:42  yaschenk
+make parameter list look better
+
+Revision 1.5  2000/05/23 15:42:08  yaschenk
+adding quality score display
+
 Revision 1.4  2000/03/31 18:35:58  yaschenk
 Adding Jonathan's logic for FF and FASTA
 
@@ -69,6 +75,12 @@ syncing sampson from mutant for procs. taking source from sampson. this is now c
 *
 * RCS Modification History:
 * $Log: idfetch.c,v $
+* Revision 1.6  2000/05/24 17:30:42  yaschenk
+* make parameter list look better
+*
+* Revision 1.5  2000/05/23 15:42:08  yaschenk
+* adding quality score display
+*
 * Revision 1.4  2000/03/31 18:35:58  yaschenk
 * Adding Jonathan's logic for FF and FASTA
 *
@@ -106,8 +118,13 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex);
 
 Args myargs[] = {
 	{"Filename for output ","stdout", NULL,NULL,FALSE,'o',ARG_FILE_OUT, 0.0,0,NULL},
-	{"Output type: 1=text asn.1 2=binary asn.1 3=genbank (Seq-entry only) 4=genpept (Seq-entry only) 5=fasta (table for history)",
-	  "1", "1", "5", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
+	{"Output type:\t\
+1=text asn.1\n\t\t\t\
+2=Binary asn.1\n\t\t\t\
+3=Genbank (Seq-entry only)\n\t\t\t\
+4=genpept (Seq-entry only)\n\t\t\t\
+5=fasta (table for history)\n\t\t\t\
+6=quality scores (Seq-entry only)\n","1", "1", "6", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
 	{"Database to use",NULL,NULL,NULL,TRUE,'d',ARG_STRING,0.0,0,NULL},
 	{"Entity number ( retrieval number ) to dump" ,"0","0","99999999",TRUE,'e',ARG_INT,0.0,0,NULL},
         {"Type of lookup:\t\
@@ -118,13 +135,17 @@ Args myargs[] = {
 4 - get gi revision history (any change to asn.1)\n", "0","0","4",TRUE,'i',ARG_INT,0.0,0,NULL},
 	{"GI id for single Entity to dump" ,"0","1","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
 	{"File with list of gi's to dump",NULL,NULL,NULL,TRUE,'G',ARG_FILE_IN,0.0,0,NULL},
-	{"Maximum complexity of Entity dump (only for -i 0 )" ,"0","0","4",TRUE,'c',ARG_INT,0.0,0,NULL},
+	{"Max complexity:\t\
+0 - get the whole blob\n\t\t\t\
+1 - get the bioseq of interest\n\t\t\t\
+2 - get the minimal bioseq-set containing the bioseq of interest\n\t\t\t\
+3 - get the minimal nuc-prot containing the bioseq of interest\n\t\t\t\
+4 - get the minimal pub-set containing the bioseq of interest\n" ,"0","0","4",TRUE,'c',ARG_INT,0.0,0,NULL},
  	{"flaTtened SeqId, format: \n		\'type(name,accession,release,version)\'\n			as \'5(HUMHBB)\' or \n		type=accession, or \n		type:number ",
 		NULL,NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
  	{"Fasta style SeqId ENCLOSED IN QUOTES: lcl|int or str bbs|int bbm|int gb|acc|loc emb|acc|loc pir|acc|name sp|acc|name pat|country|patent|seq gi|int dbj|acc|loc prf|acc|name pdb|entry|chain  ",
 	NULL,NULL,NULL,TRUE,'s',ARG_STRING,0.0,0,NULL},
-        {"Log file for errors and feedback about IDs assigned", NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT,
-                0.0,0,NULL}
+        {"Log file", NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT,0.0,0,NULL}
 };
 int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
@@ -191,8 +212,12 @@ Int2 Main()
 				ErrSetOpts (ERR_TEE, ERR_LOG_ON);
 			}
 	}
-	if(myargs[infotypearg].intvalue>1 && (myargs[outtypearg].intvalue == 3 || myargs[outtypearg].intvalue == 4)){
-		ErrPostEx(SEV_ERROR,0,0,"-t 3 or -t 4 can be used only with -i 0");
+	if(   myargs[infotypearg].intvalue>1 
+           && (   myargs[outtypearg].intvalue == 3 
+	       || myargs[outtypearg].intvalue == 4
+	       || myargs[outtypearg].intvalue == 6
+	      )){
+		ErrPostEx(SEV_ERROR,0,0,"-t 3,4,6 can be used only with -i 0");
 		has_trouble=TRUE;
 		goto FATAL;
 	}
@@ -239,6 +264,7 @@ Int2 Main()
 			case 3:
 			case 4:
 			case 5:
+			case 6:
 				fp = FileOpen((CharPtr)myargs[fileoutarg].strvalue, outmode);
 				if (fp == NULL)
 				{
@@ -414,6 +440,20 @@ FATAL:
 	return(has_trouble?1:0);
 }
 
+static void
+PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+{
+        BioseqPtr  bsp;
+        FILE       *fp;
+
+        if (IS_Bioseq (sep)) {
+                bsp = (BioseqPtr) sep->data.ptrvalue;
+                fp = (FILE*) data;
+                PrintQualityScores (bsp, fp);
+        }
+}
+
+
 static Boolean
 IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 {
@@ -526,6 +566,9 @@ IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 				retval=FALSE;
                                 goto DONE;
 			}
+			break;
+		 case 6:
+			SeqEntryExplore (sep, (Pointer) fp, PrintQualScores);
 			break;
 		 case 5:
 			switch(myargs[infotypearg].intvalue){

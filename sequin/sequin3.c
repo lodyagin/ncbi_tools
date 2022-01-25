@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.136 $
+* $Revision: 6.141 $
 *
 * File Description: 
 *
@@ -513,6 +513,7 @@ static void ForceCleanupBtn (IteM i, ButtoN b, Boolean validate)
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
+  SeqMgrClearFeatureIndexes (bfp->input_entityID, NULL);
   SeqEntryExplore (sep, (Pointer) bfp, CleanupGenbankBlockCallback);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
@@ -4503,6 +4504,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"HTGS 2",            15},
   {"HTGS 3",            16},
   {"FLI_cDNA",          17},
+  {"HTC",               19},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -7235,6 +7237,9 @@ static void MakeToolBarWindow (IteM i)
 extern void LookupAllPubs (IteM i);
 extern void ResolveExistingLocalIDs (IteM i);
 extern void PromoteAlignsToBestIDProc (IteM i);
+extern void SetSourceFocus (IteM i);
+extern void ClearSourceFocus (IteM i);
+extern void ExtraAccToHistByPos (IteM i);
 
 extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
@@ -7404,6 +7409,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   i = CommandItem (s, "Edit Feature Evidence", EditEvidenceFlag);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Edit Feature Exception", EditExceptionFlag);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Edit Feature Partials", EditFeaturePartials);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
@@ -7437,6 +7444,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     SetupEditSecondary (s, bfp);
     i = CommandItem (s, "Convert Accession to LocalID", ConvertToLocalProc);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Extra Accession to History by Position", ExtraAccToHistByPos);
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
     i = CommandItem (s, "Promote Features to Best ID", PromoteToBestIDProc);
@@ -7501,6 +7510,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
   }
   i = CommandItem (s, "Force Locus Fixup", ForceLocusFixup);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Set Source Focus", SetSourceFocus);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Clear Source Focus", ClearSourceFocus);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Fuse Features", FuseFeature);

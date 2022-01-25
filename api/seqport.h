@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.15  2000/05/23 20:41:17  ostell
+* added MolWtForLoc()
+*
 * Revision 6.14  1999/11/17 00:56:33  kans
 * improved seqsearch fsa, removed protein part, still need to allow single mismatch
 *
@@ -618,6 +621,16 @@ NLM_EXTERN void SeqSearchReset (
 NLM_EXTERN SeqSearchPtr SeqSearchFree (
   SeqSearchPtr tbl
 );
+
+
+/**************************************************************
+*
+*  Returns a protein molecular weight for a SeqLoc
+*    If it cannot calculate the value it returns -1.0
+*    If sequence contains X,B,U,*,orZ it fails
+*
+***************************************************************/
+NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp);
 
 
 #ifdef __cplusplus

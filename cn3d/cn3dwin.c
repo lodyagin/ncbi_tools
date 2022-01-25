@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.155 2000/04/25 00:22:35 thiessen Exp $
+/*  $Id: cn3dwin.c,v 6.159 2000/05/17 22:27:36 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
+* Revision 6.159  2000/05/17 22:27:36  lewisg
+* rename viewer controls
+*
+* Revision 6.158  2000/05/16 17:38:43  thiessen
+* do glGenLists after context init on X11 - for Mesa 3.2
+*
+* Revision 6.157  2000/05/09 19:51:01  lewisg
+* add new blast header to file>properties
+*
+* Revision 6.156  2000/04/27 22:21:57  lewisg
+* misc bugs/features
+*
 * Revision 6.155  2000/04/25 00:22:35  thiessen
 * save quality settings in config
 *
@@ -1658,7 +1670,7 @@ static void Cn3D_ShowCtrlProc(IteM i);
 
 
 static CharPtr cn3dControlFormTabs[] = {
-    "Style", "Label", "Show/Hide", "Annotations",
+    "Style", "Label", "Show/Hide", "Annotate",
 #ifdef _OPENGL
     "Quality",
 #endif                          /* _OPENGL */
@@ -1948,6 +1960,15 @@ void LaunchSequenceWindow(void)
     Cn3D_AlignEdit(i);
 }
 
+static void Cn3D_AboutPrint(PDNMS pdnmsThisSlave, FILE *fp) 
+{
+    WritePDBHeader(pdnmsThisSlave, fp);
+    WritePDBRemarks(pdnmsThisSlave, fp);
+    WritePDBMotifs(pdnmsThisSlave, fp);
+    WriteStrucHTMLSeq(pdnmsThisSlave, fp);
+    fprintf(fp, "\n\n\n\n\n\n\n\n\n\n");
+}
+
 static void Cn3D_AboutStruc(IteM i)
 {
     PMSD pmsdThis;
@@ -1978,15 +1999,12 @@ static void Cn3D_AboutStruc(IteM i)
     TmpNam(path);
     fp = FileOpen(path, "w");
     if (fp != NULL) {
-        WriteStructSummary(pdnmsThis, fp);
-        fprintf(fp, "\n\n\n\n\n\n\n\n\n\n");
+        Cn3D_AboutPrint(pdnmsThis, fp);
         /* loop through the slave structures */
         if (pmsdThis->pdnmsSlaves != NULL) {
             pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
             while (pdnmsThisSlave) {
-                WriteStructSummary(pdnmsThisSlave, fp);
-                fprintf(fp, "\n\n\n\n\n\n\n\n\n\n");
-
+                Cn3D_AboutPrint(pdnmsThisSlave, fp);
                 pdnmsThisSlave = pdnmsThisSlave->next;
             }
         }
@@ -2336,6 +2354,9 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
     /* now that all windows are realized, set X OpenGL context  (thiessen) */
     Nlm_SetOGLContext(NULL, NULL);
 #endif
+#ifdef _OPENGL
+    OGL_InitializeLists(OGL_Data);
+#endif
 
     Cn3dObjMgrGetSelected();
     Cn3D_Redraw(TRUE);
@@ -2344,7 +2365,7 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
     Cn3D_Window_Alive = TRUE;
 
     Cn3D_wCtrls =
-        FixedWindow(-10, -33, -10, -10, "Viewer Controls", Cn3D_HideCtrl);
+        FixedWindow(-10, -33, -10, -10, "Drawing settings", Cn3D_HideCtrl);
     Cn3D_gWinGP = Viewer3DGroups(Cn3D_wCtrls);
     RealizeWindow(Cn3D_wCtrls);
 

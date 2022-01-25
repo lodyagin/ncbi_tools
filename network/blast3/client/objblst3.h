@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.8 at Nov 12, 1999 11:06 AM
+*    Generated using ASNCODE Revision: 6.8 at Apr 28, 2000  1:20 PM
 *
 **************************************************/
 
@@ -141,6 +141,7 @@ typedef struct struct_Blast_parameters {
    CharPtr   phi_pattern;
    Uint1   use_real_db_size;
    Uint1   use_best_align;
+   Uint1   is_rps_blast;
 } BlastParameters, PNTR BlastParametersPtr;
 
 

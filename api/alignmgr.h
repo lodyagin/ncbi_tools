@@ -28,13 +28,40 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.48 $
+* $Revision: 6.57 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.57  2000/05/24 15:46:27  wheelan
+* added AlnMgrRemoveInconsistentFromPairwiseSet and AlnMgrSortAlnSetByNthRowPos
+*
+* Revision 6.56  2000/05/16 17:14:38  wheelan
+* added AlnMgrIsIBMable, AlnMgrIsEditable; made am_guess_numrows extern
+*
+* Revision 6.55  2000/05/09 14:23:01  wheelan
+* added AlnMgrMakeMultipleByScoreEx
+*
+* Revision 6.54  2000/05/08 13:16:44  wheelan
+* added AlnMgrGetNumAlnBlocks and AlnMgrGetNthBlockRange
+*
+* Revision 6.53  2000/05/05 11:53:53  wheelan
+* added comment
+*
+* Revision 6.52  2000/05/03 19:30:59  wheelan
+* added AM_NULL define
+*
+* Revision 6.51  2000/05/02 19:50:38  hurwitz
+* fixed some bugs with launching DDE from DDV, added new alnMgr fn for positioning DDE on proper column
+*
+* Revision 6.50  2000/05/02 11:59:51  wheelan
+* added SASeqDatFree
+*
+* Revision 6.49  2000/05/01 12:12:51  wheelan
+* AlnMgrMapBioseqToSeqAlign now takes Int4 instead of Uint4
+*
 * Revision 6.48  2000/04/22 15:53:41  wheelan
 * added AlnMgrIndexLite
 *
@@ -221,10 +248,20 @@ extern "C" {
 #define AM_SEGMENTED_MASTERSLAVE 2
 #define AM_NEATINDEX 3
 #define AM_LITE 4
+#define AM_NULL 5
 
 /* values for AlnMgrGetNthRowTail */
 #define LEFT_TAIL 1
 #define RIGHT_TAIL 0
+
+/* values for AlnMgrIsIBMable and AlnMgrIsEditable */
+#define AM_ERROR        0
+#define AM_NOIBM        1
+#define AM_IBMCHANGE    2
+#define AM_IBMNOCHANGE  3
+#define AM_NOEDIT       4
+#define AM_EDITGAPS     5
+#define AM_EDITNOGAP    6
 
 /***************************************************************************
 *
@@ -253,9 +290,11 @@ typedef struct saindex{
    Uint4Ptr     aligncoords;
    Int4 master;
    SASeqDatPtr PNTR  ssdp;
+   Int4  numseqs;
 } SAIndex, PNTR SAIndexPtr;
 
 NLM_EXTERN SASeqDatPtr SASeqDatNew(void);
+NLM_EXTERN void SASeqDatFree(SASeqDatPtr ssdp);
 NLM_EXTERN SAIndexPtr SAIndexNew(void);
 NLM_EXTERN Boolean SAIndexFree(VoidPtr index);
 
@@ -515,8 +554,33 @@ NLM_EXTERN SeqIdPtr AlnMgrPropagateUpSeqIdPtrs(SeqAlignPtr sap, Int4Ptr num);
 NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsBySapList(AMAlignIndexPtr amaip);
 NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsByRow(AMAlignIndexPtr amaip);
 
+/***************************************************************************
+*
+*  AlnMgrRemoveInconsistentFromPairwiseSet is a greedy function to make
+*  a consistent (nonoverlapping, linear) subset of alignments from a
+*  set of pairwise alignments (often BLAST output, gapped or ungapped).
+*  The input seqalign should either not be indexed or indexed using
+*  AlnMgrIndexLite (just call it on the BLAST output).  fuzz specifies
+*  how much overlap, if any, is allowed between alignments that are kept (for
+*  example, if fuzz = 5, any alignments that overlap by 5 or less are
+*  considered consistent).  If fuzz is less than 0, this will force spaces
+*  between alignments (not sure why someone would want to do that, but
+*  it is allowed).
+*
+***************************************************************************/
+NLM_EXTERN void AlnMgrRemoveInconsistentFromPairwiseSet(SeqAlignPtr sap, Int4 fuzz);
 NLM_EXTERN Boolean AlnMgrMakeMultipleByScore(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrMakeMultipleByScoreEx(SeqAlignPtr sap, Int4 fuzz);
 NLM_EXTERN SeqAlignPtr AlnMgrDupTopNByScore(SeqAlignPtr sap, Int4 n);
+
+/***************************************************************************
+*
+*  AlnMgrSortAlnSetByNthRowPos sorts a set of alignments so that they
+*  are in (increasing) order along the specified row (to make sense, this
+*  set of alignments should all have the same rows).
+*
+***************************************************************************/
+NLM_EXTERN void AlnMgrSortAlnSetByNthRowPos(SeqAlignPtr sap, Int4 row);
 
 
 /**********************************************************************
@@ -631,6 +695,18 @@ NLM_EXTERN Int4 AlnMgrGetNumSegments(SeqAlignPtr sap);
 
 /***************************************************************************
 *
+*  AlnMgrGetNumAlnBlocks returns the number of separate aligned regions
+*  in the seqalign.  A return value of -1 indicates an error; a return
+*  value of 0 indicates a NULL alignment (only one unaligned region and
+*  no aligned regions.
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgrGetNumAlnBlocks(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrGetNthBlockRange(SeqAlignPtr sap, Int4 n, Int4Ptr from, Int4Ptr to);
+
+
+/***************************************************************************
+*
 *  AlnMgrGetNthAlignedSegInNthRow is similar to AlnMgrGetNextAlignBit,
 *  but it takes an extra argument -- the number (1-based) of the segment
 *  for which you want the alignment.  Fill in the AlnMsg structure as for
@@ -669,6 +745,7 @@ NLM_EXTERN Boolean AlnMgrGetNextNthSeqRange(SeqAlignPtr sap, Int4 n, Int4Ptr sta
 *
 ********************************************************************************/
 NLM_EXTERN Boolean AlnMgrGetNthRowTail(SeqAlignPtr sap, Int4 n, Uint1 which_tail, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand);
+NLM_EXTERN Int4 AlnMgrGetMaxTailLength (SeqAlignPtr sap, Uint1 which_tail);
 NLM_EXTERN Boolean AlnMgrGetNthUnalignedForNthRow(SeqAlignPtr sap, Int4 unaligned, Int4 row, Int4Ptr start, Int4Ptr stop);
 NLM_EXTERN Uint1 AlnMgrGetStrand(SeqAlignPtr sap, SeqIdPtr sip);
 NLM_EXTERN Uint1 AlnMgrGetNthStrand(SeqAlignPtr sap, Int4 n);
@@ -711,7 +788,7 @@ NLM_EXTERN Int4 AlnMgrMapRowCoords(SeqAlignPtr sap, Uint4 pos, Int4 row, SeqIdPt
 *  specified.
 *
 ********************************************************************************/
-NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlign(SeqAlignPtr sap, Uint4 pos, Int4 row_num, SeqIdPtr master);
+NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlign(SeqAlignPtr sap, Int4 pos, Int4 row_num, SeqIdPtr master);
 
 
 /***********************************************************************
@@ -775,6 +852,7 @@ NLM_EXTERN SeqAlignPtr AlnMgrTossNeatRows(SeqAlignPtr sap, Int4Ptr throwarray, I
 *
 ***************************************************************************/
 NLM_EXTERN Boolean AlnMgrMakeMultByIntersectOnMaster(SeqAlignPtr sap, Boolean allinblock);
+NLM_EXTERN Int4 am_guess_numrows(SeqAlignPtr sap);
 
 /***************************************************************************
 *
@@ -892,6 +970,20 @@ NLM_EXTERN Boolean AlnMgrDeleteChildByPointer(SeqAlignPtr parent, SeqAlignPtr ch
 **********************************************************************/
 NLM_EXTERN Boolean AlnMgrDeleteNthRow(SeqAlignPtr sap, Int4 row);
 NLM_EXTERN void AlnMgrDeleteHidden(SeqAlignPtr sap, Boolean UseOM);
+
+/***************************************************************************
+*
+*  Both AlnMgrReplaceBlock and AlnMgrAddBlock require a flattened multiple
+*  alignment plus a dense-seg structure (with the same number of rows
+*  as the multiple alignment.  Discontinuous multiple alignments are fine,
+*  and gapped alignments can also be edited; multiple pairwise alignments
+*  cannot be edited (first call AlnMgrGetSubAlign to flatten the alignment,
+*  or only edit one of the alignments in the set).  If the addition,
+*  removal, or replacement of a block causes an unaligned region to
+*  disappear, the functions will merge adjacent blocks to get rid of
+*  unaligned regions of length 0.
+*
+***************************************************************************/
 NLM_EXTERN Boolean AlnMgrReplaceBlock(SeqAlignPtr sap, DenseSegPtr new_block, Int4 block_num);
 NLM_EXTERN Boolean AlnMgrAddBlock(SeqAlignPtr sap, DenseSegPtr new_block);
 
@@ -903,6 +995,8 @@ NLM_EXTERN Boolean AlnMgrAddBlock(SeqAlignPtr sap, DenseSegPtr new_block);
 NLM_EXTERN  Boolean AlnMgrIsSAPDiscAli(SeqAlignPtr sap);
 
 NLM_EXTERN Boolean AlnMgrIsSAPNULL(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrIsIBMable(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrIsEditable(SeqAlignPtr sap);
 
 
 #ifdef __cplusplus

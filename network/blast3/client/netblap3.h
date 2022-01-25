@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.22  2000/05/04 18:09:26  shavirin
+* Added new function  BLASTGetUidsFromQuery().
+*
 * Revision 1.21  1999/11/24 21:42:31  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -219,6 +222,8 @@ NLM_EXTERN BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameter
 
 NLM_EXTERN BlastDbinfoPtr LIBCALL Blast3GetDbinfo(BlastNet3Hptr bl3hptr);
 
+NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids, 
+                                      Boolean is_na, Boolean count_only);
 #ifdef __cplusplus
 }
 #endif

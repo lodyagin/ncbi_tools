@@ -29,22 +29,25 @@ ASNDHUFF_EXE = asndhuff.___
 
 # CONSOLE only
 !ifdef CONSOLE
-T_SOCKET_EXE = test_ncbi_socket.___
-T_SOCK_EXE   = test_ncbisock.___
-FMERGE_EXE   = fmerge.___
-FORMATDB_EXE = formatdb.___
-FASTACMD_EXE = fastacmd.___
-BLASTALL_EXE = blastall.___
-BLASTPGP_EXE = blastpgp.___
-SEEDTOP_EXE  = seedtop.___
-MAKEMAT_EXE  = makemat.___
-COPYMAT_EXE  = copymat.___
-IMPALA_EXE   = impala.___
-BL2SEQ_EXE   = bl2seq.___
-MEGABLST_EXE = megablst.___
-FA2HTGS_EXE  = fa2htgs.___
-VECSCREEN_EXE  = vecscreen.___
-GIL2BIN_EXE  = gil2bin.___
+!ifndef DLL
+T_SOCKET_EXE  = test_ncbi_socket.___
+!endif
+T_SOCK_EXE    = test_ncbisock.___
+FMERGE_EXE    = fmerge.___
+FORMATDB_EXE  = formatdb.___
+FASTACMD_EXE  = fastacmd.___
+BLASTALL_EXE  = blastall.___
+BLASTPGP_EXE  = blastpgp.___
+SEEDTOP_EXE   = seedtop.___
+MAKEMAT_EXE   = makemat.___
+COPYMAT_EXE   = copymat.___
+IMPALA_EXE    = impala.___
+BL2SEQ_EXE    = bl2seq.___
+MEGABLST_EXE  = megablst.___
+FA2HTGS_EXE   = fa2htgs.___
+VECSCREEN_EXE = vecscreen.___
+GIL2BIN_EXE   = gil2bin.___
+TBL2ASN_EXE   = tbl2asn.___
 !endif
 
 
@@ -79,7 +82,8 @@ $(IMPALA_EXE)   \
 $(BL2SEQ_EXE)	\
 $(MEGABLST_EXE) \
 $(VECSCREEN_EXE) \
-$(GIL2BIN_EXE)
+$(GIL2BIN_EXE) \
+$(TBL2ASN_EXE)
 
 
 ##################################################
@@ -282,8 +286,8 @@ $(T_SOCKET_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
 TEST_NAME = test_ncbi_socket
-TEST_OBJ = test_ncbi_socket_.obj $(LIB1)
-TEST_LIB = 
+TEST_OBJ = test_ncbi_socket_.obj
+TEST_LIB =  $(LIB1)
 MAIN_OBJ =
 $(INCLUDE_EXE)
 <<
@@ -448,6 +452,19 @@ MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = gil2bin
 TEST_OBJ = gil2bin.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef TBL2ASN_EXE
+$(TBL2ASN_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = tbl2asn
+TEST_OBJ = tbl2asn.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

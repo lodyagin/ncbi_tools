@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/8/00
 *
-* $Revision: 6.4 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -56,11 +56,11 @@
 #include <explore.h>
 
 static CharPtr xreftypes [] = {
-  "SNP", "STS", "Clone", "LOCUS", NULL
+  "SNP", "STS", "Clone", "LOCUS", "MODELCDS", "MODELMRNA", "contig", "component", NULL
 };
 
 static CharPtr xreftags [] = {
-  "dbSNP", "dbSTS", "clone", "LocusID", NULL
+  "dbSNP", "dbSTS", "clone", "LocusID", "cdsModel", "mrnaModel", "contig", "seq", NULL
 };
 
 #define FINDDBXREFBUFSIZE 40
@@ -372,14 +372,67 @@ static void LookForClones (
   }
 }
 
+static Boolean GeneCDSmRNA (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+)
+
+{
+  FILE       *fp;
+  SeqFeatPtr  gene;
+  GeneRefPtr  grp;
+
+  fp = (FILE*) context->userdata;
+
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) return TRUE;
+
+  gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+  if (gene != NULL) {
+    PrintReportLine (fp, 1, gene, sfp);
+  }
+
+  return TRUE;
+}
+
 typedef struct mdfiles {
   FILE     *fp;
   FILE     *snpfp;
   FILE     *stsfp;
   FILE     *clonefp;
   FILE     *locusfp;
+  FILE     *modelfp;
+  FILE     *contigfp;
+  FILE     *seqfp;
   CharPtr  chrom;
 } MdFiles, PNTR MdFilesPtr;
+
+static FILE* FileForType (MdFilesPtr mfp, Int2 type)
+
+{
+  if (mfp == NULL) return NULL;
+  switch (type) {
+    case 0 :
+      return mfp->snpfp;
+    case 1 :
+      return mfp->stsfp;
+    case 2 :
+      return mfp->clonefp;
+    case 3 :
+      return mfp->locusfp;
+    case 4 :
+    case 5 :
+      /* combine MODELCDS and MODELMRNA into seq_model.md */
+      return mfp->modelfp;
+    case 6 :
+      return mfp->contigfp;
+    case 7 :
+      return mfp->seqfp;
+    default :
+      break;
+  }
+  return NULL;
+}
 
 static Boolean ExamineBSPs (
   BioseqPtr bsp,
@@ -388,6 +441,7 @@ static Boolean ExamineBSPs (
 
 {
   VoidPtr            clonearray, exonarray;
+  Boolean            featDefs [FEATDEF_MAX];
   FILE               *fp;
   Int2               i, j, type;
   Char               label [FINDDBXREFBUFSIZE];
@@ -445,6 +499,13 @@ static Boolean ExamineBSPs (
     clone = SeqMgrGetNextFeature (bsp, clone, 0, FEATDEF_misc_feature, &sfpcontext);
   }
 
+  /* now find genes overlapping mRNA and CDS */
+
+  MemSet ((Pointer) &featDefs, 0, sizeof (featDefs));
+  featDefs [FEATDEF_CDS] = TRUE;
+  featDefs [FEATDEF_mRNA] = TRUE;
+  SeqMgrExploreFeatures (bsp, (Pointer) mfp->fp, GeneCDSmRNA, NULL, NULL, featDefs);
+
   MemFree (exonarray);
   MemFree (clonearray);
 
@@ -453,23 +514,7 @@ static Boolean ExamineBSPs (
     /* first extra line */
 
     for (type = 0; xreftypes [type] != NULL; type++) {
-      fp = NULL;
-      switch (type) {
-        case 0 :
-          fp = mfp->snpfp;
-          break;
-        case 1 :
-          fp = mfp->stsfp;
-          break;
-        case 2 :
-          fp = mfp->clonefp;
-          break;
-        case 3 :
-          fp = mfp->locusfp;
-          break;
-        default :
-          break;
-      }
+      fp = FileForType (mfp, type);
       if (fp != NULL) {
         fprintf (fp, "%ld\t%s\t0\t0\t+\t-1\t%s\tstart\t10\n",
                  (long) taxid, mfp->chrom,
@@ -483,23 +528,7 @@ static Boolean ExamineBSPs (
     while (sfp != NULL) {
 
       if (FindDbxref (sfp, &type, label)) {
-        fp = NULL;
-        switch (type) {
-          case 0 :
-            fp = mfp->snpfp;
-            break;
-          case 1 :
-            fp = mfp->stsfp;
-            break;
-          case 2 :
-            fp = mfp->clonefp;
-            break;
-          case 3 :
-            fp = mfp->locusfp;
-            break;
-          default :
-            break;
-        }
+        fp = FileForType (mfp, type);
         if (fp != NULL && sfpcontext.ivals != NULL) {
           strand = '+';
           if (sfpcontext.strand == Seq_strand_minus) {
@@ -528,23 +557,7 @@ static Boolean ExamineBSPs (
     /* second extra line */
 
     for (type = 0; xreftypes [type] != NULL; type++) {
-      fp = NULL;
-      switch (type) {
-        case 0 :
-          fp = mfp->snpfp;
-          break;
-        case 1 :
-          fp = mfp->stsfp;
-          break;
-        case 2 :
-          fp = mfp->clonefp;
-          break;
-        case 3 :
-          fp = mfp->locusfp;
-          break;
-        default :
-          break;
-      }
+      fp = FileForType (mfp, type);
       if (fp != NULL) {
         fprintf (fp, "%ld\t%s\t%ld\t%ld\t+\t-2\t%s\tend\t10\n",
                  (long) taxid, mfp->chrom,
@@ -684,7 +697,6 @@ static void CorrectFeatureSeqIds (
 
 {
   PromoteSeqLocList (sfp->location, (SeqIdPtr) userdata);
-  PromoteSeqLocList (sfp->product, (SeqIdPtr) userdata);
 }
 
 static void ProcessOneContig (
@@ -826,6 +838,18 @@ static void ProcessOneContig (
       StringNCpy_0 (path, directory, sizeof (path));
       FileBuildPath (path, NULL, "seq_locus.md");
       mf.locusfp = FileOpen (path, "a");
+
+      StringNCpy_0 (path, directory, sizeof (path));
+      FileBuildPath (path, NULL, "seq_model.md");
+      mf.modelfp = FileOpen (path, "a");
+
+      StringNCpy_0 (path, directory, sizeof (path));
+      FileBuildPath (path, NULL, "seq_contig.md");
+      mf.contigfp = FileOpen (path, "a");
+
+      StringNCpy_0 (path, directory, sizeof (path));
+      FileBuildPath (path, NULL, "seq_component.md");
+      mf.seqfp = FileOpen (path, "a");
     }
 
     /* visit callback for all primary nucleotides (not parts of segments) */
@@ -838,6 +862,9 @@ static void ProcessOneContig (
     FileClose (mf.stsfp);
     FileClose (mf.clonefp);
     FileClose (mf.locusfp);
+    FileClose (mf.modelfp);
+    FileClose (mf.contigfp);
+    FileClose (mf.seqfp);
   }
 
   /* clean up memory object */

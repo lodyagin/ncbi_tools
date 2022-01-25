@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.17 2000/02/03 21:00:38 beloslyu Exp $
+/* $Id: batch.c,v 6.18 2000/05/09 13:37:01 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.18  2000/05/09 13:37:01  shavirin
+* Use functions IS_ntdb_accession() and IS_protdb_accession() to
+* verify accession number.
+*
 * Revision 6.17  2000/02/03 21:00:38  beloslyu
 * fix the NCBI_Date initialization
 *
@@ -1048,49 +1052,6 @@ static ByteStorePtr GetGisFromOrg(CharPtr org, Int4Ptr GiNum, Int4 seqtype)
   return bsp;
 }
 
-static Boolean IS_NOT_accession (CharPtr word)
-{
-    Int4 len, i;
-    
-    if(word == NULL)
-        return TRUE;
-    
-    if((len = StringLen(word)) == 0)
-        return TRUE;
-
-    /* Testing, that this is 6 length accession */
-    
-    if(len == 6 && isalpha(word[0])) {
-        for(i = 1; i < len; i++) {
-            if(!isdigit(word[i]))
-                break;
-        }
-        
-        if (i == len) return FALSE; /* This is accession */   
-    }
-    
-    if(len == 8 && isalpha(word[0])  && isalpha(word[1])) {
-        for(i = 2; i < len; i++) {
-            if(!isdigit(word[i])) {
-                break;
-            }
-        }
-        if (i == len) return FALSE; /* This is accession */
-    }
-
-    if(len == 9 && 
-       TO_UPPER(word[0]) == 'N' && isalpha(word[1]) && word[2] ==  '_') {
-        for(i = 3; i < len; i++) {
-            if(!isdigit(word[i])) {
-                break;
-            }
-        }
-        if (i == len) return FALSE; /* This is accession */
-    }
-    
-    return TRUE;
-}
-
 static BatchAccListPtr GetAccList(BatchParamPtr batchP,
                                   Int4Ptr TotalItems) 
 {
@@ -1166,11 +1127,7 @@ static BatchAccListPtr GetAccList(BatchParamPtr batchP,
             }
         }
         if(k != j) { 
-            /* Thanks to Mark for this useful function! */
-            /*            if(!IS_ntdb_accession(TmpBuff) && 
-                          !IS_protdb_accession(TmpBuff)) */
-            
-            if(IS_NOT_accession(TmpBuff)){
+            if(!IS_ntdb_accession(TmpBuff) && !IS_protdb_accession(TmpBuff)) {
                 printf("**** WARNING: Gi/Accession \"%s\" is not valid\r\n", 
                        TmpBuff);
                 NumNotValid++;

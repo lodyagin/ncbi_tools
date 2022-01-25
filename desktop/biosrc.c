@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -1037,6 +1037,9 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       SetEnumPopup (gbp->genome, gbp->genomeAlist, (UIEnum) biop->genome);
       SetEnumPopup (gbp->origin, biosource_origin_alist, (UIEnum) biop->origin);
       SafeSetStatus (gbp->is_focus, biop->is_focus);
+      if (biop->is_focus) {
+        SafeEnable (gbp->is_focus);
+      }
       orp = biop->org;
       if (orp != NULL) {
         gbp->origTaxName = StringSave (orp->taxname);
@@ -1817,7 +1820,8 @@ static void CleanupBioSourceDialog (GraphiC g, VoidPtr data)
 }
 
 static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
-                                     BioSourcePtr biop, GenBioFormPtr gfp)
+                                     BioSourcePtr biop, GenBioFormPtr gfp,
+                                     Boolean diableFocusControl)
 
 {
   ButtoN         b;
@@ -1934,6 +1938,9 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     SetValue (gbp->origin, 0);
 
     gbp->is_focus = CheckBox (gbp->orgGrp [1], "Biological focus (if multiple source features)", NULL);
+    if (diableFocusControl) {
+      Disable (gbp->is_focus);
+    }
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) f, NULL);
 
     Hide (gbp->orgGrp [1]);
@@ -2376,7 +2383,7 @@ extern ForM CreateBioSourceDescForm (Int2 left, Int2 top, Int2 width,
     if (sdp != NULL && sdp->choice == Seq_descr_source) {
       biop = sdp->data.ptrvalue;
     }
-    gfp->data = CreateBioSourceDialog (g, NULL, gfp->pages, biop, gfp);
+    gfp->data = CreateBioSourceDialog (g, NULL, gfp->pages, biop, gfp, FALSE);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) gfp->foldertabs, (HANDLE) gfp->data, NULL);
 
@@ -2510,7 +2517,7 @@ extern ForM CreateBioSourceFeatForm (Int2 left, Int2 top, Int2 width,
     if (sfp != NULL && sfp->data.choice == SEQFEAT_BIOSRC) {
       biop = sfp->data.value.ptrvalue;
     }
-    gfp->data = CreateBioSourceDialog (h, NULL, gfp->pages, biop, gfp);
+    gfp->data = CreateBioSourceDialog (h, NULL, gfp->pages, biop, gfp, TRUE);
  
     s = HiddenGroup (h, -1, 0, NULL);
     CreateCommonFeatureGroup (s, (FeatureFormPtr) gfp, sfp, FALSE, TRUE);

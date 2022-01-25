@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.c,v 1.62 2000/04/26 21:54:27 hurwitz Exp $
+/*  $Id: ddvpanel.c,v 1.82 2000/05/25 21:40:43 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,73 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.62 $
+* $Revision: 1.82 $
 *
 * File Description: window management module of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.c,v $
+* Revision 1.82  2000/05/25 21:40:43  hurwitz
+* rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
+*
+* Revision 1.81  2000/05/24 21:43:00  hurwitz
+* getting hide/show rows to work with DDV and DDE together
+*
+* Revision 1.80  2000/05/23 22:00:15  hurwitz
+* working on launch of DDE from DDV
+*
+* Revision 1.79  2000/05/19 13:48:31  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 1.78  2000/05/16 19:43:01  hurwitz
+* grey out create block, delete block, undo, and redo as needed
+*
+* Revision 1.77  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 1.76  2000/05/15 22:00:36  hurwitz
+* put save-edits query into DDV_SlaveQuit where it belongs
+*
+* Revision 1.75  2000/05/12 21:18:13  hurwitz
+* added window asking if user wants to save unsaved edits for dde
+*
+* Revision 1.74  2000/05/10 21:54:54  hurwitz
+* free memory when DDE is closed
+*
+* Revision 1.73  2000/05/10 16:17:00  hurwitz
+* can show tails for just 1 aligned block
+*
+* Revision 1.72  2000/05/09 17:56:49  hurwitz
+* bug fix of vertical scrolling problem
+*
+* Revision 1.71  2000/05/08 22:48:33  hurwitz
+* on launch of DDE, merge nodes that are same MsaTxtDisp alignment and gap
+*
+* Revision 1.70  2000/05/05 20:24:13  hurwitz
+* some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
+*
+* Revision 1.69  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
+* Revision 1.68  2000/04/28 14:43:37  hurwitz
+* send message to DDV after edits in DDE are accepted by AlnMgr
+*
+* Revision 1.67  2000/04/27 22:24:36  lewisg
+* misc bugs
+*
+* Revision 1.66  2000/04/27 20:05:54  kans
+* added stub functions for Sequin
+*
+* Revision 1.65  2000/04/27 19:57:59  hurwitz
+* scroll to aligned block on launch of DDE
+*
+* Revision 1.64  2000/04/27 15:38:02  hurwitz
+* changed wording on menu
+*
+* Revision 1.63  2000/04/27 13:33:42  durand
+* SpacerSize min value fixed to 1; update view when SpacerSize is changed
+*
 * Revision 1.62  2000/04/26 21:54:27  hurwitz
 * added save function to tell AlnMgr about edits made in DDE
 *
@@ -259,8 +319,10 @@
 #include <pgppop.h>
 #include <vsm.h>
 #include <salfiles.h>
+#include <viewmgr.h>
 
 Char szAppName[]="DDV";
+Char szAppName2[]="DDE";
 
 
 /*local text*/
@@ -290,7 +352,8 @@ static void DDV_Next(IteM i);
 static void DDV_Orig(IteM i);
 static void DDV_DoEditFunction(IteM i, Int4 WhichOne);
 static void DDV_LaunchEditor(IteM i);
-static void DDV_SaveEdits(IteM i);
+static void DDV_CallSaveEdits(IteM i);
+static void DDV_SaveEdits(DdvMainPtr dmp);
 
 /*******************************************************************************
 
@@ -422,7 +485,7 @@ DdvMainPtr 	dmp;
 	/*compute new values*/
 	dmp->GrData.udv_vscrl.ScrollPage=
 		DDV_CalcVHScrollPgUD((Int2)(dmp->GrData.udv_panel.cyClient-
-			dmp->GrData.udv_panel.cyScale),
+			3*dmp->GrData.udv_panel.cyScale/2-5),
 			dmp->GrData.udv_font.LineHeight);
 	
 	if (dmp->GrData.udv_panel.nTotLines>dmp->GrData.udv_vscrl.ScrollPage){
@@ -869,6 +932,9 @@ DdvMainPtr dmp;
 
 	if (data){
 		dmp=(DdvMainPtr)data;
+    if (dmp->bEditor) {
+      DDE_FreeStack(dmp->dsp);
+    }
 		DDV_CleanupDDVPdata_g (dmp);
 	}
 }
@@ -1029,23 +1095,76 @@ extern void DDV_WinMainProgQuit(WindoW w)
 *******************************************************************************/
 static void QuitProc(IteM i)
 {
-DdvMainWinPtr 	mWin_d;
-WindoW			hWinMain;
+WindoW  hWinMain;
 
-	hWinMain=(WindoW)ParentWindow(i);
-
-	if (!hWinMain) return;
-
-	mWin_d = (DdvMainWinPtr) GetObjectExtra((Handle)hWinMain);
-
-	if (mWin_d==NULL) return;
-	
-	if (mWin_d->AutonomeViewer) 
-		QuitProgram(); /*standalone DDV*/
-	else 
-		Remove(hWinMain);/*slave viewer : just kill the main window*/
-	
+  hWinMain=(WindoW)ParentWindow(i);
+  if (!hWinMain) return;
+  DDV_SlaveQuit(hWinMain);
 }
+
+NLM_EXTERN void DDV_Save(ButtoN g) {
+/*----------------------------------------------------------------------------
+*  save edits, quit pop-up, quit DDE
+*---------------------------------------------------------------------------*/
+  WindoW         hDialog;
+  WindoW         hWinMain;
+  DdvMainWinPtr  mWin_d;
+  DdvMainPtr     dmp;
+
+  /* quit pop-up */
+	hDialog = (WindoW)ParentWindow(g);
+	if (!hDialog) return;
+	Remove(hDialog);
+
+  /* save the edits */
+  hWinMain = (WindoW) GetObjectExtra(hDialog);
+  mWin_d = (DdvMainWinPtr) GetObjectExtra(hWinMain);
+	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+  DDV_SaveEdits(dmp);
+
+  /* quit DDE */
+  if (mWin_d->AutonomeViewer)
+    QuitProgram(); /*standalone DDV*/
+  else
+    Remove(hWinMain);/*slave viewer : just kill the main window*/
+}
+
+
+NLM_EXTERN void DDV_NoSave(ButtoN g) {
+/*----------------------------------------------------------------------------
+*  quit pop-up, quit DDE
+*---------------------------------------------------------------------------*/
+  WindoW         hDialog;
+  WindoW         hWinMain;
+  DdvMainWinPtr  mWin_d;
+
+  /* quit the pop-up */
+	hDialog = (WindoW)ParentWindow(g);
+	if (!hDialog) return;
+	Remove(hDialog);
+
+  /* quit DDE */
+  hWinMain = (WindoW) GetObjectExtra(hDialog);
+  mWin_d = (DdvMainWinPtr) GetObjectExtra(hWinMain);
+  if (mWin_d->AutonomeViewer)
+    QuitProgram(); /*standalone DDV*/
+  else
+    Remove(hWinMain);/*slave viewer : just kill the main window*/
+}
+
+
+NLM_EXTERN void DDV_Cancel(ButtoN g) {
+/*----------------------------------------------------------------------------
+*  quit pop-up
+*---------------------------------------------------------------------------*/
+  WindoW  hDialog;
+
+  /* quit the pop-up */
+	hDialog = (WindoW)ParentWindow(g);
+	if (!hDialog) return;
+	Remove(hDialog);
+}
+
 
 /*******************************************************************************
 
@@ -1291,8 +1410,8 @@ Int4                j;
 		/*size of the spacer*/
 		GetTitle(dsmp->edit1, title, 9);
 		value=(Int2)atoi(title);
-		if (value<0)
-			dumdp->SpacerSize=0;
+		if (value<1)
+			dumdp->SpacerSize=1;
 		else if (value>20){
 			dumdp->SpacerSize=20;
 		}
@@ -1575,7 +1694,7 @@ ParaGPtr      pgp;
      |->chk2           check for color display 
      |
      |->g0             main group for "Disc. SeqAlign display options"
-	 |   |->g1 
+     |   |->g1 
      |   |   |->g2     radio group 1 (spacer/seq.)
      |   |   |->g3
      |   |       |->g4 TexT ctrl, spacer size
@@ -1674,12 +1793,15 @@ ParaGPtr      pgp;
 	SetTitle(dsmp->edit1, szBuf);
 
 	/*depending on the SAP type, init some controls*/
+  DDV_DispStyles_DiscSetCtrlVal(dsmp,&(dmp->ddo));
+/*  
 	if (AlnMgrIsSAPDiscAli(dmp->MSA_d.pgp_l.sap)){
 		DDV_DispStyles_DiscSetCtrlVal(dsmp,&(dmp->ddo));
 	}
 	else{
 		Disable(g1);
 	}
+*/
 }
 
 
@@ -1816,14 +1938,13 @@ DdvMainWinPtr 	mWin_d;/*program data*/
 		SeparatorItem(m);
 	}
 	else{
-		mWin_d->MainMenu.FileExport=CommandItem(m,"Export...",DDV_ExportTexte);
-		SeparatorItem(m);
-    /* for editor allow save of edits */
-    if (bEditor) {
-      mWin_d->MainMenu.SaveEdits=CommandItem(m,"Save",DDV_SaveEdits);
+        mWin_d->MainMenu.FileExport=CommandItem(m,"Export...",DDV_ExportTexte);
+        /* for editor allow save of edits */
+        if (bEditor) {
+            mWin_d->MainMenu.SaveEdits=CommandItem(m,"Save",DDV_CallSaveEdits);
+        }
+        SeparatorItem(m);
     }
-		SeparatorItem(m);
-	}
 	mWin_d->MainMenu.QuitViewer=CommandItem(m,"Quit/Q",QuitProc);
 
 	/*Edit Menu*/	
@@ -1844,27 +1965,41 @@ DdvMainWinPtr 	mWin_d;/*program data*/
     mWin_d->MainMenu.Prev=CommandItem(m,"Undo  (Ctrl + z)", DDV_Prev);
     mWin_d->MainMenu.Next=CommandItem(m,"Redo  (Ctrl + y)", DDV_Next);
     mWin_d->MainMenu.Orig=CommandItem(m,"Restore original", DDV_Orig);
+    /* to start, can undo or redo anything */
+    Disable(mWin_d->MainMenu.Prev);
+    Disable(mWin_d->MainMenu.Next);
 	}
+
+#if defined (_LAUNCH_DDE)
+	if (mWin_d->AutonomeViewer){
+    mWin_d->MainMenu.Align = PulldownMenu(w, "Alignment/A");
+    mWin_d->MainMenu.Hide=CommandItem(mWin_d->MainMenu.Align,
+        "Hide or Show Rows...",DDV_HideDlgItem);
+  }
+#endif
 	
     /* Align menu */
     if(vgp != NULL) {
         if(vgp->MasterViewer == SAMVIEWCN3D) {
             mWin_d->MainMenu.Align = PulldownMenu(w, "Alignment/A");
             mWin_d->MainMenu.Hide=CommandItem(mWin_d->MainMenu.Align,
-                "Hide Rows...",DDV_HideDlgItem);
+                "Hide or Show Rows...",DDV_HideDlgItem);
             mWin_d->MainMenu.Deselect=CommandItem(mWin_d->MainMenu.Align,
-                "Deselect All",DDV_DeselectItem);            
+                "Deselect All",DDV_DeselectItem);           
             SeparatorItem(mWin_d->MainMenu.Align);
+            mWin_d->MainMenu.AddRow = SubMenu(mWin_d->MainMenu.Align, "Add New Row");
+            mWin_d->MainMenu.FromFile = SubMenu(mWin_d->MainMenu.AddRow, "From FASTA file");
+                CommandItem(mWin_d->MainMenu.FromFile,
+                    "By gapped BLAST...", (Nlm_ItmActnProc)vgp->BlastFileGap);
+                CommandItem(mWin_d->MainMenu.FromFile,
+                    "By ungapped BLAST...", (Nlm_ItmActnProc)vgp->BlastFile);
             if (vgp->NetStartProc) {
-                mWin_d->MainMenu.AlignBlast = SubMenu(mWin_d->MainMenu.Align, "Align to");
-                mWin_d->MainMenu.BlastFile = CommandItem(mWin_d->MainMenu.AlignBlast,
-                    "FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
-                mWin_d->MainMenu.BlastNet = CommandItem(mWin_d->MainMenu.AlignBlast,
-                    "Network Download...", (Nlm_ItmActnProc)vgp->BlastNet);
-            } else {
-                mWin_d->MainMenu.BlastFile = CommandItem(mWin_d->MainMenu.Align,
-                    "Align FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
-            }
+                mWin_d->MainMenu.FromNet = SubMenu(mWin_d->MainMenu.AddRow, "Download from Entrez");
+                CommandItem(mWin_d->MainMenu.FromNet,
+                    "By gapped BLAST...", (Nlm_ItmActnProc)vgp->BlastNetGap);
+                CommandItem(mWin_d->MainMenu.FromNet,
+                    "By ungapped BLAST...", (Nlm_ItmActnProc)vgp->BlastNet);
+            } 
         }
     }
 
@@ -1879,8 +2014,11 @@ DdvMainWinPtr 	mWin_d;/*program data*/
 	mWin_d->MainMenu.MouseMode=ChoiceGroup(s,SelectMouseMode);
 	ChoiceItem(mWin_d->MainMenu.MouseMode,"Query");
 	ChoiceItem(mWin_d->MainMenu.MouseMode,"Select");
-	if (bEditor)
-		ChoiceItem(mWin_d->MainMenu.MouseMode,"Edit");
+#if !defined(_NO_GAPS)
+  if (bEditor)
+    ChoiceItem(mWin_d->MainMenu.MouseMode,"Edit");
+#endif
+
 	switch(dmp->MouseMode){
 		case DDV_MOUSEMODE_QUERY:
 			SetValue(mWin_d->MainMenu.MouseMode,1);
@@ -2832,16 +2970,7 @@ BaR                 hsb;
     DDE_CreateBlock(ddesp, 15, 40, TRUE);
   }
 
-  dmp->MSA_d.pgp_l.LengthAli   = ddesp->pEdit->pPopList->LengthAli;
-  dmp->MSA_d.pgp_l.nBsp        = ddesp->pEdit->pPopList->nBsp;
-  dmp->MSA_d.pgp_l.sabp        = ddesp->pEdit->pPopList->sabp;
-  dmp->MSA_d.pgp_l.sap         = ddesp->pEdit->pPopList->sap;
-  dmp->MSA_d.pgp_l.TableHead   = ddesp->pEdit->pPopList->TableHead;
-  dmp->MSA_d.pgp_l.DisplayVert = ddesp->pEdit->pPopList->DisplayVert;
-  dmp->MSA_d.pgp_l.bspp        = ddesp->pEdit->pPopList->bspp;
-  dmp->MSA_d.pgp_l.DisplayType = ddesp->pEdit->pPopList->DisplayType;
-  dmp->MSA_d.pgp_l.RulerDescr  = ddesp->pEdit->pPopList->RulerDescr;
-  dmp->MSA_d.pgp_l.entitiesTbl = ddesp->pEdit->pPopList->entitiesTbl;
+  MemCopy(&(dmp->MSA_d.pgp_l), ddesp->pEdit->pPopList, sizeof(MsaParaGPopList));
 
   DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
     &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);
@@ -2936,15 +3065,31 @@ static void DDV_LaunchEditor(IteM i)
 }
 
 
-static void DDV_SaveEdits(IteM i)
+static void DDV_CallSaveEdits(IteM i) {
+/*----------------------------------------------------------------------------
+*  get DDVMainPtr and call DDV_SaveEdits
+*---------------------------------------------------------------------------*/
+  WindoW		     hWinMain;
+  DdvMainWinPtr  mWin_d;
+  DdvMainPtr 	   dmp;
+
+	hWinMain=(WindoW)ParentWindow(i);
+	if (hWinMain==NULL) return;
+	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+	if (mWin_d==NULL) return;
+	if (mWin_d->hWndDDV==NULL) return;
+	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+	if (dmp==NULL) return;
+
+  DDV_SaveEdits(dmp);
+}
+
+
+static void DDV_SaveEdits(DdvMainPtr dmp) {
 /*----------------------------------------------------------------------------
 *  create a DenseSeg for the block that has been created or edited.
 *  pass this info to the AlnMgr and tell it to add or replace the block.
 *---------------------------------------------------------------------------*/
-{
-  DdvMainWinPtr  mWin_d;
-  DdvMainPtr 	   dmp;
-  WindoW		     hWinMain;
   Int4*          pStarts;
   Int4*          pLens;
   Uint1*         pStrands;
@@ -2953,18 +3098,14 @@ static void DDV_SaveEdits(IteM i)
   SeqAlignPtr    sap;
   SeqId          head;
   SeqIdPtr       sip_prev, sip;
+  DDVUpdateMSG   dum;
+  MsaParaGPopListPtr  mpplp;
+  Boolean        ReDraw;
+  BaR            hsb;
+  Int4           HPos, Col;
 
   /* note:       dsp is DenseSegPtr */
   /*        dmp->dsp is DDE_StackPtr */
-
-	/*get some data*/
-	hWinMain=(WindoW)ParentWindow(i);
-	if (hWinMain==NULL) return;
-	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
-	if (mWin_d==NULL) return;
-	if (mWin_d->hWndDDV==NULL) return;
-	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
-	if (dmp==NULL) return;
 
   NumRows = dmp->dsp->pEdit->TotalNumRows;
   NumSegs = DDE_GetNumSegmentsInBlock(dmp->dsp->pEdit, 0);
@@ -3004,6 +3145,7 @@ static void DDV_SaveEdits(IteM i)
 
   NumBlocksAtLastSave = dmp->dsp->NumBlocks;
 
+  ReDraw = FALSE;
   if ((NumBlocksAtLastSave==1) && (NumBlocksNow==0)) {
     /* delete block */
     AlnMgrReplaceBlock(sap, NULL, dmp->dsp->LaunchBlock+1);
@@ -3011,13 +3153,61 @@ static void DDV_SaveEdits(IteM i)
   if ((NumBlocksAtLastSave==1) && (NumBlocksNow==1)) {
     /* replace block */
     AlnMgrReplaceBlock(sap, dsp, dmp->dsp->LaunchBlock+1);
+    ReDraw = TRUE;
   }
   if ((NumBlocksAtLastSave==0) && (NumBlocksNow==1)) {
     /* add block */
     AlnMgrAddBlock(sap, dsp);
+    dmp->dsp->IsUnAligned = FALSE;
+    ReDraw = TRUE;
   }
 
+  /* indicate there are no edits to save */
+  dmp->dsp->SomethingToSave = FALSE;
+
   dmp->dsp->NumBlocks = NumBlocksNow;
+
+  /* tell DDV to rebuild its display */
+	dum.type = UPDATE_TYPE_VIEWMGR;
+	dum.data = NULL;
+  ViewMgr_Update(dmp->MSA_d.pgp_l.viewed_sap);
+	ObjMgrSendProcMsg(OM_MSG_UPDATE, dmp->MSA_d.entityID, dmp->MSA_d.itemID,
+    OBJ_SEQALIGN, 0, 0, (Pointer)&dum);
+
+  /* redraw the display when 2 aligned blocks are merged */
+  /* if merging with preceeding block, launch block is decremented */
+  /* (there's no need to redraw when the first block is left aligned */
+  /* or when the last block is right aligned.  however, since I have */
+  /* no way of knowing how many blocks there are, a right aligned last */
+  /* block always causes a redraw) */
+  if (ReDraw) {
+    if (DDE_FirstColumnIsAligned(dmp->dsp->pEdit)) {
+      if (dmp->dsp->LaunchBlock == 0) {
+        ReDraw = FALSE;
+      }
+      else {
+        dmp->dsp->LaunchBlock--;
+      }
+    }
+    else if (!DDE_LastColumnIsAligned(dmp->dsp->pEdit)) {
+      ReDraw = FALSE;
+    }
+  }
+
+  if (ReDraw) {
+    mpplp = DDE_CreateDisplay(sap, dmp->dsp->LaunchBlock,
+                                   dmp->dsp->IsUnAligned, &dmp->dsp->NumBlocks);
+    mpplp->viewed_sap = dmp->dsp->pEdit->pPopList->viewed_sap;
+    dmp->dsp->pEdit = DDE_New(mpplp, dmp->dsp->pEdit->TotalNumRows);
+    DDE_MergeNodesLists(dmp->dsp->pEdit);
+    DDE_Add(dmp->dsp);
+    /* position block at 5th col */
+    hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
+    HPos = GetBarValue(hsb);
+    Col = DDE_GetAlignStart(dmp->dsp->pEdit, 0);
+    DDV_ReDrawAtCol(dmp, HPos+Col-5);
+  }
+
   return;
 }
 
@@ -3034,12 +3224,8 @@ static void DDV_DoEditFunction(IteM i, Int4 WhichOne)
 {
 DdvMainWinPtr       mWin_d;
 DdvMainPtr 	        dmp;
-WindoW		          hWinMain, temport;
+WindoW		          hWinMain;
 DDE_StackPtr        ddesp;
-RecT 	              rcP;
-static Int4         PassCount = 0;
-BaR                 hsb;
-Boolean             NeedReDraw = FALSE;
 
 	/*get some data*/
 	hWinMain=(WindoW)ParentWindow(i);
@@ -3052,91 +3238,100 @@ Boolean             NeedReDraw = FALSE;
 
   ddesp = dmp->dsp;
   
-  if (PassCount >= 0) {
-    switch (WhichOne) {
-      case MOVE_ROW_LEFT:
-        DDE_ShiftRow(ddesp, 4, -1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case MOVE_ROW_RIGHT:
-        DDE_ShiftRow(ddesp, 4,  1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case MOVE_LEFT_BOUNDARY_LEFT:
-        DDE_ShiftLeftBoundary(ddesp, 0, -1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case MOVE_LEFT_BOUNDARY_RIGHT:
-        DDE_ShiftLeftBoundary(ddesp, 0,  1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case MOVE_RIGHT_BOUNDARY_LEFT:  
-        DDE_ShiftRightBoundary(ddesp, 0, -1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case MOVE_RIGHT_BOUNDARY_RIGHT:
-        DDE_ShiftRightBoundary(ddesp, 0,  1, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case DDE_DELETE_BLOCK:
-        if (DDE_DeleteBlock(ddesp, 0, TRUE)) {
-          NeedReDraw = TRUE;
-        }
-        break;
-      case DDE_CREATE_BLOCK:
-        /* switch to the mode that allows block creation */
-        dmp->SavedMouseMode = dmp->MouseMode;
-        dmp->MouseMode = DDV_MOUSEMODE_CREATEBLOCK;
-        CrossCursor();
-        break;
-      case DDE_PREV:
-        if (DDE_Prev(ddesp)) NeedReDraw = TRUE;
-        break;
-      case DDE_NEXT:
-        if (DDE_Next(ddesp)) NeedReDraw = TRUE;
-        break;
-      case DDE_ORIG:
-        DDE_GetOriginal(ddesp, TRUE);
-        NeedReDraw = TRUE;
-        break;
-      case DDE_LAUNCH_EDITOR:
-        dmp->SavedMouseMode = dmp->MouseMode;
-        dmp->MouseMode = DDV_MOUSEMODE_LAUNCHEDITOR;
-        CrossCursor();
-        break;
-    }
+  switch (WhichOne) {
+    case MOVE_ROW_LEFT:
+      DDE_ShiftRow(ddesp, 4, -1, TRUE, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case MOVE_ROW_RIGHT:
+      DDE_ShiftRow(ddesp, 4,  1, TRUE, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case MOVE_LEFT_BOUNDARY_LEFT:
+      DDE_ShiftLeftBoundary(ddesp, 0, -1, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case MOVE_LEFT_BOUNDARY_RIGHT:
+      DDE_ShiftLeftBoundary(ddesp, 0,  1, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case MOVE_RIGHT_BOUNDARY_LEFT:  
+      DDE_ShiftRightBoundary(ddesp, 0, -1, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case MOVE_RIGHT_BOUNDARY_RIGHT:
+      DDE_ShiftRightBoundary(ddesp, 0,  1, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case DDE_DELETE_BLOCK:
+      if (DDE_DeleteBlock(ddesp, 0, TRUE)) {
+        DDV_ReDraw(dmp);
+      }
+      break;
+    case DDE_CREATE_BLOCK:
+      /* switch to the mode that allows block creation */
+      dmp->SavedMouseMode = dmp->MouseMode;
+      dmp->MouseMode = DDV_MOUSEMODE_CREATEBLOCK;
+      CrossCursor();
+      break;
+    case DDE_PREV:
+      if (DDE_Prev(ddesp)) {
+        DDV_ReDraw(dmp);
+      }
+      break;
+    case DDE_NEXT:
+      if (DDE_Next(ddesp)){
+        DDV_ReDraw(dmp);
+      }
+      break;
+    case DDE_ORIG:
+      DDE_GetOriginal(ddesp, TRUE);
+      DDV_ReDraw(dmp);
+      break;
+    case DDE_LAUNCH_EDITOR:
+      dmp->SavedMouseMode = dmp->MouseMode;
+      dmp->MouseMode = DDV_MOUSEMODE_LAUNCHEDITOR;
+      CrossCursor();
+      break;
   }
-
-  if (NeedReDraw) {
-    dmp->MSA_d.pgp_l.LengthAli   = ddesp->pEdit->pPopList->LengthAli;
-    dmp->MSA_d.pgp_l.nBsp        = ddesp->pEdit->pPopList->nBsp;
-    dmp->MSA_d.pgp_l.sabp        = ddesp->pEdit->pPopList->sabp;
-    dmp->MSA_d.pgp_l.sap         = ddesp->pEdit->pPopList->sap;
-    dmp->MSA_d.pgp_l.TableHead   = ddesp->pEdit->pPopList->TableHead;
-    dmp->MSA_d.pgp_l.DisplayVert = ddesp->pEdit->pPopList->DisplayVert;
-    dmp->MSA_d.pgp_l.bspp        = ddesp->pEdit->pPopList->bspp;
-    dmp->MSA_d.pgp_l.DisplayType = ddesp->pEdit->pPopList->DisplayType;
-    dmp->MSA_d.pgp_l.RulerDescr  = ddesp->pEdit->pPopList->RulerDescr;
-    dmp->MSA_d.pgp_l.entitiesTbl = ddesp->pEdit->pPopList->entitiesTbl;
-
-    DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
-      &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);
-
-    /* recalculate window size */
-    DDV_WhatSize(dmp);
-    /* adjust horizontal scroll bar */
-    hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
-    DDV_UpdateHScrollVal(dmp->hWndDDV, FALSE, GetBarValue(hsb));
-
-    PassCount++;
-
-    temport=SavePort(mWin_d->hWndDDV);
-    Select(mWin_d->hWndDDV);
-    ObjectRect(mWin_d->hWndDDV, &rcP);
-    InvalRect(&rcP);
-    Update();
-    RestorePort(temport);
-  } /* end of redraw */
-
+  if (dmp->bEditor) {
+    DDV_GreyOut(mWin_d, DDE_AtStartOfStack(dmp->dsp), DDE_AtEndOfStack(dmp->dsp));
+  }
  	return;
 }
+
+
+NLM_EXTERN void DDVResetProc (PaneL p)
+
+{
+}
+
+static void PopulateDDV (BioseqViewPtr bvp)
+
+{
+}
+
+static void ShowDDV (BioseqViewPtr bvp, Boolean show)
+
+{
+}
+
+static void SelectDDV (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+                       Uint2 selitemtype, SeqLocPtr region,
+                       Boolean select, Boolean scrollto)
+
+{
+}
+
+static void ResizeDDV (BioseqViewPtr bvp)
+
+{
+}
+
+BioseqPageData ddvPageData = {
+  "Multiple", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateDDV, ShowDDV, SelectDDV,
+  NULL, NULL,
+  NULL, NULL, ResizeDDV, NULL
+};
+

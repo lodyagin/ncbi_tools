@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.47 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.52  2000/05/19 13:48:31  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 6.51  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 6.50  2000/04/28 13:51:20  kans
+* db_list is a PopuP, not a scrolling LisT
+*
+* Revision 6.49  2000/04/27 22:21:58  lewisg
+* misc bugs/features
+*
+* Revision 6.48  2000/04/27 19:47:31  kans
+* implemented udv reset and select (PD+JK)
+*
 * Revision 6.47  2000/04/13 13:58:03  durand
 * allowed udv to display reverse complement sequence
 *
@@ -396,10 +411,10 @@ extern "C" {
 		MenU ScalePos;		/*scale position command*/
 		ChoicE ScalePosChoice; /*scale pos value (sub-menu)*/
 		IteM RefreshScreen;	/*redraw the entire screen*/
-        MenU AlignBlast;
-        IteM BlastFile;
-        IteM BlastNet;
-        IteM BlastMany;
+    MenU AddRow;
+    MenU FromFile;
+    MenU FromNet;
+    IteM BlastMany;
 		IteM ConfigNet;/*Entrez Network configuration*/
 		IteM HelpAbout;	/*what's that ?*/
 	} UDVMainMenu, PNTR UDVMainMenuPtr;
@@ -493,6 +508,7 @@ extern "C" {
     typedef struct _UDV_BlastDlgData {
         ValNode *pvnSips;		/* list of sips in structure */
         LisT bsp_list;		/* listbox of bsps */
+        PopuP db_list;		/* listbox of databases */
         ButtoN bGap;   /* should the alignment be gapped? */
         TexT tMax;
         TexT tExpect;
@@ -593,6 +609,7 @@ extern "C" {
 				ViewerDialogDataPtr PNTR vdp,FonT f);
 	NLM_EXTERN Boolean CreateMainControls(WindoW w,ViewerMainPtr vmp,SAM_ViewGlobal *vgp);
 	NLM_EXTERN void UnDViewerVScrlProc (BaR sb, SlatE s, Int4 newval,  Int4 oldval);
+	NLM_EXTERN void UDVResetProc (PaneL p);
 
 	/*sequence buffer management*/
 	NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to, 

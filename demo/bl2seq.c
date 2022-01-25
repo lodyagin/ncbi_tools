@@ -25,6 +25,9 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.6  2000/05/24 20:36:08  dondosha
+* If megablast is used, set cutoff_s and cutoff_s2 parameters
+*
 * Revision 6.5  2000/04/10 15:23:33  dondosha
 * Added option to use MegaBlast for search
 *
@@ -249,7 +252,10 @@ Int2 Main (void)
 
 	options->strand_option = myargs[16].intvalue;
 	options->is_megablast_search = (Boolean) myargs[18].intvalue;
-
+	if (options->is_megablast_search) {
+	   options->cutoff_s2 = options->wordsize - 4;
+	   options->cutoff_s = options->wordsize;
+	}
 	if (myargs[6].strvalue || myargs[17].intvalue)
 		seqalign = BlastTwoSequencesEx(query_bsp, subject_bsp, NULL, options, &other_returns, &error_returns);
 	else

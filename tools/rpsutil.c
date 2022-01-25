@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.20 2000/04/13 18:49:59 shavirin Exp $
+/* $Id: rpsutil.c,v 6.22 2000/05/08 20:52:20 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.22  2000/05/08 20:52:20  shavirin
+* Updated query_gapped_start in case when hsp hits 2 boundaries.
+*
+* Revision 6.21  2000/05/02 17:57:19  shavirin
+* Corrected path to RPS Databases changed definition of RPSInit() function.
+*
 * Revision 6.20  2000/04/13 18:49:59  shavirin
 * Fixed serious memory leaks.
 *
@@ -169,11 +175,11 @@ void RPSInfoDetach(RPSInfoPtr rpsinfo)
     return;
 }
 
-RPSInfoPtr RPSInit(CharPtr dbname, CharPtr MatrixFile, CharPtr LookupFile,
-                   Int4 query_is_prot)
+RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
 {
     RPSInfoPtr rpsinfo;
     Int4Ptr header;
+    Char rps_matrix[128], rps_lookup[128];
 
     rpsinfo = MemNew(sizeof(RPSInfo));
     
@@ -184,7 +190,12 @@ RPSInfoPtr RPSInit(CharPtr dbname, CharPtr MatrixFile, CharPtr LookupFile,
 
     ReadDBBioseqFetchEnable ("rpsblast", dbname, FALSE, TRUE); 
     
-    if((rpsinfo->mmMatrix = Nlm_MemMapInit(MatrixFile)) == NULL) {
+
+    sprintf(rps_matrix, "%s.rps", rpsinfo->rdfp->full_filename);
+    sprintf(rps_lookup, "%s.loo", rpsinfo->rdfp->full_filename);
+    
+    
+    if((rpsinfo->mmMatrix = Nlm_MemMapInit(rps_matrix)) == NULL) {
         ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: mmap of matrix failed");
         return (NULL);
     }
@@ -206,7 +217,7 @@ RPSInfoPtr RPSInit(CharPtr dbname, CharPtr MatrixFile, CharPtr LookupFile,
 
     /* Now initializing lookup tables */
 
-    rpsinfo->lookup = RPSInitLookup(LookupFile);
+    rpsinfo->lookup = RPSInitLookup(rps_lookup);
 
     
     return rpsinfo;
@@ -708,6 +719,7 @@ Boolean RPSUpdateCoordinates(ReadDBFILEPtr rdfp, BLASTResultHitlistPtr result,
                 hspcnt = result->hspcnt;
             } else {
                 hsp_array[index].query_length = subject_length_real;
+                hsp_array[index].query_gapped_start = hsp_array[index].query_offset + hsp_array[index].query_length;
             }
         }
         

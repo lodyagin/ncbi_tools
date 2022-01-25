@@ -30,7 +30,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 27
+#define NUMARG 31
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -48,17 +48,21 @@ Args myargs[NUMARG] = {
    {"Title for sequence?",NULL, NULL ,NULL ,TRUE,'d',ARG_STRING,0.0,0,NULL},
    {"Take comment from template ?","F", NULL ,NULL ,TRUE,'m',ARG_BOOLEAN,0.0,0,NULL},
    {"Take biosource from template ?","F", NULL ,NULL ,TRUE,'u',ARG_BOOLEAN,0.0,0,NULL},
-   {"Secondary accession number, separate by comas if multiple, s.t. U10000,L11000", NULL, NULL ,NULL ,TRUE,'x',ARG_STRING,0.0,0,NULL},
+   {"Secondary accession number, separate by commas if multiple, s.t. U10000,L11000", NULL, NULL ,NULL ,TRUE,'x',ARG_STRING,0.0,0,NULL},
    {"Clone library name?",NULL, NULL ,NULL ,TRUE,'C',ARG_STRING,0.0,0,NULL},
    {"Map?",NULL, NULL ,NULL ,TRUE,'M',ARG_STRING,0.0,0,NULL},
    {"Filename for the comment:",NULL,NULL,NULL,TRUE,'O',ARG_FILE_IN,0.0,0,NULL} ,
    {"Filename for phrap input",NULL,NULL,NULL,TRUE,'T',ARG_FILE_IN,0.0,0,NULL} ,
-   {"Contigs to use, separate by comas if multiple", NULL, NULL ,NULL ,TRUE,'P',ARG_STRING,0.0,0,NULL},
+   {"Contigs to use, separate by commas if multiple", NULL, NULL ,NULL ,TRUE,'P',ARG_STRING,0.0,0,NULL},
    {"Filename for accession list input",NULL,NULL,NULL,TRUE,'A',ARG_FILE_IN,0.0,0,NULL} ,
    {"Coordinates are on the resulting sequence ?","F", NULL ,NULL ,TRUE,'X',ARG_BOOLEAN,0.0,0,NULL},
    {"HTGS_DRAFT sequence?","F", NULL ,NULL ,TRUE,'D',ARG_BOOLEAN,0.0,0,NULL},
    {"Strain name?",NULL, NULL ,NULL ,TRUE,'S',ARG_STRING,0.0,0,NULL},
    {"Gap length","100", "0" ,"1000000000" ,FALSE,'b',ARG_INT,0.0,0,NULL},
+   {"Annotate assembly_fragments","F", NULL ,NULL ,TRUE,'N',ARG_BOOLEAN,0.0,0,NULL},
+   {"SP6 clone (e.g., Contig1,left)",NULL, NULL ,NULL ,TRUE,'6',ARG_STRING,0.0,0,NULL},
+   {"T7 clone (e.g., Contig2,right)",NULL, NULL ,NULL ,TRUE,'7',ARG_STRING,0.0,0,NULL},
+   {"Filename for phrap contig order",NULL,NULL,NULL,TRUE,'L',ARG_FILE_IN,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -177,15 +181,21 @@ static Boolean AddExtraAc2Entry (SeqEntryPtr entry , CharPtr extra_ac )
 
 } /* AddExtraAc2Entry */
 
+typedef struct resqseqgph {
+  Int2         index;
+  SeqGraphPtr  sgp;
+} ResqSeqgph, PNTR ResqSeqgphPtr;
+
 static void RescueSeqGraphs (BioseqPtr bsp, Int2 index, ValNodePtr PNTR vnpp)
 
 {
-  SeqAnnotPtr   nextsap;
-  SeqGraphPtr   nextsgp;
-  Pointer PNTR  prevsap;
-  Pointer PNTR  prevsgp;
-  SeqAnnotPtr   sap;
-  SeqGraphPtr   sgp;
+  SeqAnnotPtr    nextsap;
+  SeqGraphPtr    nextsgp;
+  Pointer PNTR   prevsap;
+  Pointer PNTR   prevsgp;
+  ResqSeqgphPtr  rsp;
+  SeqAnnotPtr    sap;
+  SeqGraphPtr    sgp;
 
   if (bsp == NULL || vnpp == NULL) return;
   sap = bsp->annot;
@@ -199,7 +209,10 @@ static void RescueSeqGraphs (BioseqPtr bsp, Int2 index, ValNodePtr PNTR vnpp)
         nextsgp = sgp->next;
         *(prevsgp) = sgp->next;
         sgp->next = NULL;
-        ValNodeAddPointer (vnpp, index, (Pointer) sgp);
+        rsp = (ResqSeqgphPtr) MemNew (sizeof (ResqSeqgph));
+        rsp->index = index;
+        rsp->sgp = sgp;
+        ValNodeAddPointer (vnpp, 0, (Pointer) rsp);
         sgp = nextsgp;
       }
     }
@@ -383,11 +396,111 @@ static CharPtr ReadSingleStringFromFile (CharPtr filename)
   return str;
 }
 
+static CharPtr BioseqGetLocalIdStr (BioseqPtr bsp)
+
+{
+  ObjectIdPtr  oip;
+  SeqIdPtr     sip;
+
+  if (bsp == NULL) return NULL;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_LOCAL) {
+      oip = (ObjectIdPtr) sip->data.ptrvalue;
+      if (oip != NULL && oip->str != NULL) {
+        return oip->str;
+      }
+    }
+  }
+  return NULL;
+}
+
+static void MakeAssemblyFragments (BioseqPtr bsp, CharPtr name, Int2 index,
+                                   CharPtr sp6_clone, CharPtr sp6_end,
+                                   CharPtr t7_clone, CharPtr t7_end,
+                                   Uint1 frag)
+
+{
+  DeltaSeqPtr  dsp;
+  Int4         from, to;
+  ImpFeatPtr   ifp;
+  SeqLitPtr    litp;
+  SeqFeatPtr   sfp;
+  SeqInt       sint;
+  Char         str [128];
+  Char         tmp [32];
+  ValNode      vn;
+
+  if (bsp == NULL || name == NULL || index < 1) return;
+  from = 0;
+  to = 0;
+  if (bsp->repr == Seq_repr_delta && bsp->seq_ext_type == 4) {
+    for (dsp = (DeltaSeqPtr) (bsp->seq_ext);
+         dsp != NULL && index > 1; dsp = dsp->next, index--) {
+      if (dsp->choice == 1) {
+        from += SeqLocLen ((SeqLocPtr) dsp->data.ptrvalue);
+      } else if (dsp->choice == 2) {
+        litp = (SeqLitPtr) dsp->data.ptrvalue;
+        if (litp != NULL) {
+          from += litp->length;
+        }
+      }
+    }
+  }
+  if (dsp != NULL && dsp->choice == 2) {
+    litp = (SeqLitPtr) dsp->data.ptrvalue;
+    if (litp != NULL) {
+      to = litp->length + from - 1;
+    }
+  }
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+  vn.choice = SEQLOC_INT;
+  vn.data.ptrvalue = &sint;
+
+  MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+  sint.id = SeqIdDup (SeqIdFindBest (bsp->id, 0));
+
+  sint.from = from;
+  sint.to = to;
+  sint.strand = Seq_strand_plus;
+
+  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_IMP, &vn);
+  ifp = ImpFeatNew ();
+  sfp->data.value.ptrvalue = (Pointer) ifp;
+  ifp->key = StringSave ("misc_feature");
+
+  sprintf (str, "assembly_name:%s", name);
+  if (frag > 0) {
+    sprintf (tmp, "~fragment_group:%d", (int) frag);
+    StringCat (str, tmp);
+  }
+  if (StringICmp (name, sp6_clone) == 0) {
+    StringCat (str, "~clone_end:SP6");
+    if (sp6_end != NULL) {
+      StringCat (str, "~vector_side:");
+      StringCat (str, sp6_end);
+    }
+  } else if (StringICmp (name, t7_clone) == 0) {
+    StringCat (str, "~clone_end:T7");
+    if (t7_end != NULL) {
+      StringCat (str, "~vector_side:");
+      StringCat (str, t7_end);
+    }
+  }
+  sfp->comment = StringSaveNoNull (str);
+}
+
 /*****************************************************************************
 *
 *   Main program loop to read, process, write SeqEntrys
 *
 *****************************************************************************/
+typedef struct reqcontig {
+  Int2  index;
+  Char  str [41];
+} ResqContig, PNTR ResqContigPtr;
+
+#define MAX_FIELDS  8
+
 Int2 Main(void)
 {
    AsnIoPtr aip;
@@ -398,22 +511,29 @@ Int2 Main(void)
    BioseqPtr bsp, the_bsp;
    Uint1 htgs_phase; /* a value from 0-3 */
    Uint1 MI_htgs_phase;  /* mapping of htgs_phase to MI_TECH_htgs_? */
+   Uint2 frag;
    CharPtr  newstr, accession, remark, center, organism, clone, seqbuf,
       seqname, strain, chromosome, title, extra_ac, clone_lib, map,
-      comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname;
-   Char  instr[120];
+      comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname,
+      contig_table, sp6_clone, t7_clone, sp6_end = NULL, t7_end = NULL,
+      pstring = NULL;
+   Char  instr[120], buf [256], dumsp6 [64], dumt7 [64];
+   CharPtr field [MAX_FIELDS], ptr;
    Int4   totalen, filelen, len, length = 0, cumlength = 0, gaplen;
    SeqLitPtr slp;
-   Int2 errs;
+   Int2 errs, numFields;
    BioseqSetPtr bssp;
-   ValNodePtr vnp, PNTR prevpnt, next;
-   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster, htgsDraft, usedelta = FALSE;
+   ValNodePtr vnp, vnp2, PNTR prevpnt, next;
+   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster,
+      htgsDraft, usedelta = FALSE, do_contig, left_end, right_end;
    Int2 index = 0;
-   ValNodePtr rescuedsgps = NULL;
+   ValNodePtr rescuedsgps = NULL, rescuedcontigs = NULL, fragmentgroups = NULL;
    ValNodePtr seqlitlist = NULL;
    IntFuzzPtr ifp;
-
-   CharPtr tool_ver = "fa2htgs 1.8";
+   int frg;
+   ResqSeqgphPtr rsp;
+   ResqContigPtr rcp;
+   CharPtr tool_ver = "fa2htgs 2.0";
 
                /* check command line arguments */
 
@@ -450,6 +570,148 @@ Int2 Main(void)
    htgsDraft = (Boolean) myargs[24].intvalue;
    strain = myargs[25].strvalue;
    gaplen = myargs[26].intvalue;
+   do_contig = (Boolean) myargs [27].intvalue;
+   sp6_clone = myargs [28].strvalue;
+   t7_clone = myargs [29].strvalue;
+   contig_table = myargs [30].strvalue;
+
+   dumsp6 [0] = '\0';
+   dumt7 [0] = '\0';
+   if (StringHasNoText (sp6_clone)) {
+     sp6_clone = NULL;
+   }
+   if (StringHasNoText (t7_clone)) {
+     t7_clone = NULL;
+   }
+
+   if (StringHasNoText (contigs)) {
+     if (! StringHasNoText (contig_table)) {
+       if ((fp = FileOpen (contig_table, "r")) == NULL) {
+         ErrPostEx(SEV_ERROR,0,0, "Can't open %s", contig_table);
+         ErrShow();
+         return 1;
+       }
+       while (fgets (buf, sizeof (buf), fp) != NULL) {
+         MemSet ((Pointer) field, 0, sizeof (field));
+
+/*
+*  parse tab-delimited output line into array of fields, avoiding use of
+*  strtok so that empty columns (adjacent tabs) are properly assigned to
+*  field array
+*/
+
+         ptr = buf;
+         for (numFields = 0; numFields < MAX_FIELDS && ptr != NULL; numFields++) {
+           field [numFields] = ptr;
+           ptr = StringChr (ptr, '\t');
+           if (ptr == NULL) {
+             ptr = StringChr (ptr, '\n');
+           }
+           if (ptr == NULL) {
+             ptr = StringChr (ptr, '\r');
+           }
+           if (ptr != NULL) {
+             *ptr = '\0';
+             ptr++;
+           }
+         }
+
+         if (! StringHasNoText (field [0])) {
+           StringNCpy_0 (instr, field [0], sizeof (instr) - 2);
+           if (! StringHasNoText (field [1])) {
+             if (StringNICmp (field [1], "-", 1) == 0) {
+               StringCat (instr, "-");
+             }
+           }
+           ValNodeCopyStr (&rescuedcontigs, 0, instr);
+           if (! StringHasNoText (field [2])) {
+             if (sscanf (field [2], "%d", &frg) == 1) {
+               ValNodeCopyStr (&fragmentgroups, (Uint1) frg, field [0]);
+             }
+           }
+           left_end = FALSE;
+           right_end = FALSE;
+           if (! StringHasNoText (field [3])) {
+              if (! StringHasNoText (field [4])) {
+                if (StringNICmp (field [4], "l", 1) == 0) {
+                 left_end = TRUE;
+                } else if (StringNICmp (field [4], "r", 1) == 0) {
+                  right_end = TRUE;
+                }
+              }
+              if (StringICmp (field [3], "sp6") == 0) {
+                StringCpy (dumsp6, field [0]);
+                if (left_end) {
+                  StringCat (dumsp6, ",left");
+                } else if (right_end) {
+                  StringCat (dumsp6, ",right");
+                }
+                if (sp6_clone == NULL) {
+                  sp6_clone = dumsp6;
+                }
+              } else if (StringICmp (field [3], "t7") == 0) {
+                StringCpy (dumt7, field [0]);
+                if (left_end) {
+                  StringCat (dumt7, ",left");
+                } else if (right_end) {
+                  StringCat (dumt7, ",right");
+                }
+                if (t7_clone == NULL) {
+                  t7_clone = dumt7;
+                }
+              }
+           }
+         }
+       }
+       FileClose (fp);
+
+       len = 0;
+       for (vnp = rescuedcontigs; vnp != NULL; vnp = vnp->next) {
+         len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
+       }
+       if (len > 1) {
+         pstring = MemNew ((size_t) (len + 2));
+         contigs = pstring;
+         for (vnp = rescuedcontigs; vnp != NULL; vnp = vnp->next) {
+           if (vnp != rescuedcontigs) {
+             StringCat (pstring, ",");
+           }
+           StringCat (pstring, (CharPtr) vnp->data.ptrvalue);
+         }
+       }
+ 
+       rescuedcontigs = ValNodeFreeData (rescuedcontigs);
+     }
+   }
+
+   if (sp6_clone != NULL) {
+     sp6_end = StringChr (sp6_clone, ',');
+     if (sp6_end != NULL) {
+       *sp6_end = '\0';
+       sp6_end++;
+       if (StringICmp (sp6_end, "left") == 0) {
+         sp6_end = "left";
+       } else if (StringICmp (sp6_end, "right") == 0) {
+         sp6_end = "right";
+       } else {
+         sp6_end = NULL;
+       }
+     }
+   }
+   if (t7_clone != NULL) {
+     t7_end = StringChr (t7_clone, ',');
+     if (t7_end != NULL) {
+       *t7_end = '\0';
+       t7_end++;
+       if (StringICmp (t7_end, "left") == 0) {
+         t7_end = "left";
+       } else if (StringICmp (t7_end, "right") == 0) {
+         t7_end = "right";
+       } else {
+         t7_end = NULL;
+       }
+     }
+   }
 
    UseLocalAsnloadDataAndErrMsg (); /* finds data directory without a .ncbirc file */
 
@@ -691,6 +953,14 @@ Int2 Main(void)
          }
          cumlength += bsp->length;
          RescueSeqGraphs (bsp, index, &rescuedsgps);
+         if (do_contig) {
+            rcp = (ResqContigPtr) MemNew (sizeof (ResqContig));
+            if (rcp != NULL) {
+              rcp->index = index;
+              StringNCpy_0 (rcp->str, BioseqGetLocalIdStr (bsp), sizeof (rcp->str));
+              ValNodeAddPointer (&rescuedcontigs, 0, (Pointer) rcp);
+            }
+         }
          SeqEntryFree(sep);
          sep = nextsep;
       }
@@ -800,11 +1070,29 @@ Int2 Main(void)
 
    if (bsp != NULL) {
      for (vnp = rescuedsgps; vnp != NULL; vnp = vnp->next) {
-       OffsetAndLinkSeqGraph (bsp, (SeqGraphPtr) vnp->data.ptrvalue, (Int2) vnp->choice);
-       vnp->data.ptrvalue = NULL;
+       rsp = (ResqSeqgphPtr) vnp->data.ptrvalue;
+       if (rsp != NULL) {
+         OffsetAndLinkSeqGraph (bsp, rsp->sgp, (Int2) rsp->index);
+       }
+     }
+     for (vnp = rescuedcontigs; vnp != NULL; vnp = vnp->next) {
+       rcp = (ResqContigPtr) vnp->data.ptrvalue;
+       if (rcp != NULL) {
+         frag = 0;
+         for (vnp2 = fragmentgroups; vnp2 != NULL; vnp2 = vnp2->next) {
+           if (StringICmp ((CharPtr) vnp2->data.ptrvalue, rcp->str) == 0) {
+             frag = (Uint1) vnp2->choice;
+           }
+         }
+         MakeAssemblyFragments (bsp, rcp->str, (Int2) rcp->index,
+                                sp6_clone, sp6_end, t7_clone, t7_end, frag);
+       }
      }
    }
    rescuedsgps = ValNodeFreeData (rescuedsgps);
+   rescuedcontigs = ValNodeFreeData (rescuedcontigs);
+   fragmentgroups = ValNodeFreeData (fragmentgroups);
+   MemFree (pstring);
 
    for (vnp = seqlitlist; vnp != NULL; vnp = vnp->next) {
      slp = (SeqLitPtr) vnp->data.ptrvalue;

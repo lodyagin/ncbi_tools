@@ -1,4 +1,4 @@
-/*  $Id: pgppop.h,v 6.33 2000/03/31 21:33:22 durand Exp $
+/*  $Id: pgppop.h,v 6.35 2000/05/24 21:42:59 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: pgppop.h,v $
+* Revision 6.35  2000/05/24 21:42:59  hurwitz
+* getting hide/show rows to work with DDV and DDE together
+*
+* Revision 6.34  2000/05/19 14:30:53  wheelan
+* fixed problem with formatting PDB ids
+*
 * Revision 6.33  2000/03/31 21:33:22  durand
 * added new default color schemas for BLAST
 *
@@ -256,6 +262,7 @@ typedef struct ddvrulerdescr{
 		Int4 nBsp;					/*number of Bioseq after...*/
 		SABlockPtr sabp;/*indexed seqalign*/
 		SeqAlignPtr sap;
+    SeqAlignPtr viewed_sap;  /* so that DDE can remember DDV's sap */
 		ValNodePtr PNTR TableHead;	/*Table list of the heads of the ValNode
 									ParaG list for each bioseq*/
 		ValNodePtr DisplayVert;		/*List of ParaG Ready for display*/
@@ -385,6 +392,7 @@ do { Int4 _i;  for (_i=0; _i<(Int4)_diff; _i++) *_str=DDV_ConcatStr(*_str," "); 
 
 /*Entrez and PopSet Viewer scripts*/
 #define szEntrezScript "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?uid=%d&form=6&db=%s&Dopt=g"
+#define szEntrezScriptSMART "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?uid=%s&form=6&db=%s&Dopt=g"
 #define szSeqNameStatus "<a href=\"%s\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='%s';return true\">"
 #define WWWDDV_save_script1 "wwwddv.cgi"
 #define WWWDDV_script "wwwddv.cgi?gi=%d&from=%d&to=%d&disp=%u"

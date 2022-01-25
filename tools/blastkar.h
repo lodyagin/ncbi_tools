@@ -32,8 +32,12 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.15 $ 
+/* $Revision: 6.16 $ 
 * $Log: blastkar.h,v $
+* Revision 6.16  2000/05/26 17:29:55  shavirin
+* Added array of pos frequencies into BLAST_Matrix structure and it's
+* handling.
+*
 * Revision 6.15  2000/04/17 20:41:37  madden
 * Added BLAST_MatrixFetch
 *
@@ -357,6 +361,7 @@ typedef struct _blast_matrix {
 		Int4	rows,		
 			columns;
 		Int4Ptr PNTR matrix;
+                Nlm_FloatHi ** posFreqs;
 		FloatHi karlinK;
 } BLAST_Matrix, PNTR BLAST_MatrixPtr;
 

@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.25 2000/03/01 19:44:44 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.26 2000/05/16 20:26:01 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,10 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.26  2000/05/16 20:26:01  vakatov
+* [WIN32_THREADS_AVAIL] Changed the locking policy for nested RW-locks.
+* // Fully tested on Solaris(native and POSIX), Win-NT, IRIX, and Linux
+*
 * Revision 6.25  2000/03/01 19:44:44  vakatov
 * NlmMutexUnlock() -- fixed by Haruna N. Cofer (Applications - Chem/Bio,
 * SGI; haruna@sgi.com) for an intermittent deadlock happening on SGI/IRIX
@@ -1074,26 +1078,7 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore)
 /********************************************************************/
 
 
-#if defined(_DEBUG_HARD) && defined(WIN32_THREADS_AVAIL)
-#define DO_RW(source_code) source_code
-#define IF_RW X_ASSERT
-#else
-#define DO_RW(source_code)
-#define IF_RW(x)
-#endif
-
-#define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
-
-
-#if   defined (SOLARIS_THREADS_AVAIL)
-
-typedef struct TNlmRWlockTag {
-  rwlock_t rwlock; /* native Solaris-style RW-lock */
-} structRWlock;
-
-#elif defined (POSIX_THREADS_AVAIL)
-
-/* [POSIX-only for now]  Nested locking policy:
+/* [POSIX and WIN32]  Nested locking policy:
  *   W after R -- never allowed;
  *   W after W -- allowed if the W-lock is owned by the same thread;
  *   R after W -- allowed if the W-lock is owned by the same thread (and,
@@ -1102,41 +1087,53 @@ typedef struct TNlmRWlockTag {
  *                performed in another thread)
  *   U after W -- only if the W-lock is owned by the same thread
  */
+
+#define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
+
+
+#if defined(SOLARIS_THREADS_AVAIL)
+
 typedef struct TNlmRWlockTag {
-  /* if W-locked -- keeps the lock owner;
-   * also, exclusively for the reason of being easier to debug: 
-   *   if R-locked -- may (but may not!) keep the owner of one of the R-locks,
-   *   if Unlocked -- keeps what it kept just before the last unlock.
-   */
-  TNlmThread owner;
-
-  /* < 0 -- negative # of locks if locked by writers or nested writers/readers
-   * = 0 -- not locked
-   * > 0 -- # of readers
-   */
-  Int4 readers;
-
-  /* protects members of this RW from being modified by more than one thread
-   * at once
-   */
-  pthread_mutex_t  mutex;
-
-  pthread_cond_t   cond_r;  /* condition variable for readers  */
-  pthread_cond_t   cond_w;  /* condition variable for writers  */
+    rwlock_t rwlock; /* native Solaris-style RW-lock */
 } structRWlock;
 
-#elif defined (WIN32_THREADS_AVAIL)
+#elif defined(POSIX_THREADS_AVAIL)
 
 typedef struct TNlmRWlockTag {
-  DO_RW( TNlmThread owner; )
-  Int4    readers; /* -1 if writer, else # of readers     */
-  HANDLE  mutex;   /* mutex to protect "readers" variable */
-  HANDLE  sema_rw; /* semaphore for readers and writers   */
-  HANDLE  sema_w;  /* semaphore for writers               */
+    /* if W-locked -- keeps the lock owner;
+     * also, exclusively for the reason of being easier to debug: 
+     *   if R-locked -- may(but may not!) keep the owner of one of the R-locks,
+     *   if Unlocked -- keeps what it kept just before the last unlock
+     */
+    TNlmThread owner;
+
+    /* < 0 -- # of locks by writers or nested writers/readers
+     * = 0 -- not locked
+     * > 0 -- # of locks by readers
+     */
+    Int4 readers;
+
+    /* protects members of this RW from being modified by more than one thread
+     * at once
+     */
+    pthread_mutex_t  mutex;
+
+    pthread_cond_t   cond_r;  /* condition variable for readers  */
+    pthread_cond_t   cond_w;  /* condition variable for writers  */
+} structRWlock;
+
+#elif defined(WIN32_THREADS_AVAIL)
+
+typedef struct TNlmRWlockTag {
+    TNlmThread owner;   /* see comment above (for POSIX_THREADS_AVAIL) */
+    Int4       readers; /* see comment above (for POSIX_THREADS_AVAIL) */
+    HANDLE     mutex;   /* mutex to protect "readers" variable */
+    HANDLE     sema_rw; /* semaphore for readers and writers   */
+    HANDLE     sema_w;  /* semaphore for writers               */
 } structRWlock;
 
 #else
-#define NO_RWLOCK
+#  define NO_RWLOCK
 #endif
 
 
@@ -1148,7 +1145,7 @@ NLM_EXTERN TNlmRWlock NlmRWinit(void)
 
   int err_code = 0;
   TNlmRWlock RW;
-  if ((RW = (TNlmRWlock)Calloc(1, sizeof(structRWlock))) == NULL)
+  if ((RW = (TNlmRWlock) Calloc(1, sizeof(structRWlock))) == NULL)
       return NULL;
 
 #if defined(SOLARIS_THREADS_AVAIL)
@@ -1172,7 +1169,7 @@ NLM_EXTERN TNlmRWlock NlmRWinit(void)
 
 #elif defined (WIN32_THREADS_AVAIL)
   RW->readers = 0;
-  if ( !(RW->mutex = CreateMutex(NULL, FALSE, NULL) ) ) {
+  if ( !(RW->mutex = CreateMutex(NULL, FALSE, NULL)) ) {
     err_code = 1;
   } else {
     if ( !(RW->sema_rw = CreateSemaphore(NULL, 1, 1, NULL)) ) {
@@ -1206,7 +1203,6 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
 #else
 
   int err_code = 0;
-  IF_RW ( RW->readers == 0 );
 
 #if defined(SOLARIS_THREADS_AVAIL)
   err_code = rwlock_destroy(&RW->rwlock);
@@ -1222,6 +1218,7 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
+  ASSERT(RW->readers == 0);
   if ( !CloseHandle(RW->mutex) )
     err_code |= 0x1;
   if ( !CloseHandle(RW->sema_rw) )
@@ -1230,7 +1227,7 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
     err_code |= 0x4;
 #endif
 
-  X_ASSERT ( err_code == 0 );
+  X_ASSERT(err_code == 0);
   Free(RW);
   return err_code ? -1 : 0;
 #endif /* else!NO_RWLOCK */
@@ -1239,355 +1236,499 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
 
 NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
 {
-#ifdef NO_RWLOCK
-  return 0;
-#else
+#if defined(NO_RWLOCK)
+    return 0;
 
-  int err_code = 0;
-  IF_RW ( RW->readers >= 0  ||  RW->owner != NlmThreadSelf() );
-
-#if defined(SOLARIS_THREADS_AVAIL)
-  err_code = rw_rdlock(&RW->rwlock);
+#elif defined(SOLARIS_THREADS_AVAIL)
+    int err_code = rw_rdlock(&RW->rwlock);
+    X_ASSERT(err_code == 0);
+    return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
-  /* protect members of "*RW" from being changed by other threads */
-  err_code = pthread_mutex_lock(&RW->mutex);
-
-  /* obtain R-lock */
-  if (err_code == 0) {
     TNlmThread this_thread = NlmThreadSelf();
+
+    /* protect members of "*RW" from being changed by other threads */
+    int err_code = pthread_mutex_lock(&RW->mutex);
+    if (err_code != 0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* obtain R-lock */
     if (RW->readers < 0  &&  RW->owner == this_thread) {
-      /* W-locked by this the same thread already */
-      RW->readers--;  /* treate it as a W-lock then */
+        /* W-locked by this the same thread already */
+        RW->readers--;  /* treate it as a W-lock then */
     } else if (RW->readers <= 0) {
-      /* Unlocked or W-locked by another thread(s) */
-      /* if W-locked by another thread(s) -- wait here until it is Unlocked */
-      while (RW->readers < 0)
-        pthread_cond_wait(&RW->cond_r, &RW->mutex);
-      /* ...not locked, or it can be R-locked by other thread by now */
-      ASSERT(RW->readers >= 0);
-      RW->readers++;
-      RW->owner = this_thread;
+        /* Unlocked or W-locked by another thread */
+        /* if W-locked by another thread -- wait here until it's Unlocked */
+        while (RW->readers < 0) {
+            pthread_cond_wait(&RW->cond_r, &RW->mutex);
+        }
+        /* ...not locked, or it can be R-locked by other thread by now */
+        ASSERT(RW->readers >= 0);
+        RW->readers++;
+        RW->owner = this_thread;
     } else {
-      /* R-locked already -- increment the # of R-locks; may reset the owner */
-      RW->readers++;
-      if (RW->owner == RW_UNKNOWN_OWNER)
+        /* R-locked already -- increment # of R-locks;  may reset the owner */
+        RW->readers++;
+        if (RW->owner == RW_UNKNOWN_OWNER) {
+            RW->owner = this_thread;
+        }
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
+    return 0;
+
+#elif defined(WIN32_THREADS_AVAIL)
+    TNlmThread this_thread = NlmThreadSelf();
+
+    /* protect members of "*RW" from being changed by other threads */
+    if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* treate R-lock as W-lock if W-locked by this the same thread already */
+    if (RW->readers < 0  &&  RW->owner == this_thread) {
+        RW->readers--;
+        X_VERIFY(ReleaseMutex(RW->mutex));
+        return 0;
+    }
+
+    /* wait if W-locked by another thread */
+    if (RW->readers < 0) {
+        HANDLE obj[2];
+        DWORD  wait_res;
+        obj[0] = RW->mutex;
+        obj[1] = RW->sema_rw;
+        X_VERIFY(ReleaseMutex(RW->mutex));/* allow other threads to do stuff */
+        wait_res = WaitForMultipleObjects(2, obj, TRUE, INFINITE);
+        if (WAIT_OBJECT_0 <= wait_res  &&  wait_res < WAIT_OBJECT_0 + 2) {
+            LONG prev_sema;
+            X_VERIFY(ReleaseSemaphore(RW->sema_rw, 1, &prev_sema));
+            X_ASSERT(prev_sema == 0);
+        } else {
+            X_ASSERT(0);
+            return -1;
+        }
+    }
+    X_ASSERT(RW->readers >= 0);
+
+    /* first reader:  lock against writers and assign the owner */
+    if (RW->readers == 0) {
+        if (WaitForSingleObject(RW->sema_w, 0) != WAIT_OBJECT_0) {
+            X_VERIFY(ReleaseMutex(RW->mutex));
+            X_ASSERT(0);
+            return -1;
+        }
         RW->owner = this_thread;
     }
 
-    /* release members of "*RW" for changing by other threads */
-    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
-  }
+    /* increment the "readers" counter */
+    RW->readers++;
 
-#elif defined(WIN32_THREADS_AVAIL)
-  {{
-    HANDLE obj[2];  obj[0] = RW->mutex;  obj[1] = RW->sema_rw;
-    if (WaitForMultipleObjects(2, obj, TRUE, INFINITE) != WAIT_OBJECT_0)
-      err_code = 1;
-    else {
-      LONG prev_sema;
-      X_ASSERT ( RW->readers >= 0 );
-      if (RW->readers == 0  &&  /* (first reader locks against writers) */
-          WaitForSingleObject(RW->sema_w, 0) != WAIT_OBJECT_0)
-        err_code = 2; /* cannot lock writer semaphore */
-      else {
-        RW->readers++;
-        DO_RW ( RW->owner = NlmThreadSelf(); )
-      }
-      X_VERIFY ( ReleaseSemaphore(RW->sema_rw, 1, &prev_sema) );
-      X_ASSERT ( prev_sema == 0 );
-      X_VERIFY ( ReleaseMutex(RW->mutex) );
-    } /* "sema_w" is locked now -- so that nobody can acquire write lock */
-  }}
+    /* release the "*RW" protective mutex */
+    X_VERIFY(ReleaseMutex(RW->mutex));
+    return 0;
 #endif
-
-  X_ASSERT ( err_code == 0 );
-  return err_code ? -1 : 0;
-#endif /* else!NO_RWLOCK */
 }
 
 
 NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
 {
-#ifdef NO_RWLOCK
-  return 0;
-#else
+#if defined(NO_RWLOCK)
+    return 0;
 
-  int err_code = 0;
-  IF_RW ( RW->readers == 0  ||  RW->owner != NlmThreadSelf() );
-
-#if defined(SOLARIS_THREADS_AVAIL)
-  err_code = rw_wrlock(&RW->rwlock);
+#elif defined(SOLARIS_THREADS_AVAIL)
+    int err_code = rw_wrlock(&RW->rwlock);
+    X_ASSERT(err_code == 0);
+    return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
-  /* protect members of "*RW" from being changed by other threads */
-  err_code = pthread_mutex_lock(&RW->mutex);
-
-  /* obtain W-lock */
-  if (err_code == 0) {
     TNlmThread this_thread = NlmThreadSelf();
-    if (RW->readers < 0  &&  RW->owner == this_thread) {
-      /* W-locked by this the same thread already */
-      RW->readers--;
-    } else if (RW->readers == 0  ||  RW->owner != this_thread) {
-      /* Unlocked or RW-locked by another thread(s) */
-      /* if RW-locked by another thread(s) -- wait here until it is Unlocked */
-      while (RW->readers != 0)
-        pthread_cond_wait(&RW->cond_w, &RW->mutex);
-      /* ...not locked now */
-      RW->readers = -1;
-      RW->owner   = this_thread;
-    } else {
-      /* already R-locked by this thread (sorry, it's not always detectable) */
-      ASSERT(0);
-      err_code = -1;
+
+    /* protect members of "*RW" from being changed by other threads */
+    int err_code = pthread_mutex_lock(&RW->mutex);
+    if (err_code != 0) {
+        X_ASSERT(0);
+        return -1;
     }
 
-    /* release members of "*RW" for changing by other threads */
-    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
-  }
+    /* obtain W-lock */
+    if (RW->readers < 0  &&  RW->owner == this_thread) {
+        /* W-locked by this the same thread already */
+        RW->readers--;
+    } else if (RW->readers == 0  ||  RW->owner != this_thread) {
+        /* Unlocked or RW-locked by another thread(s) */
+        /* RW-locked by another thread(s) -- wait here until it is Unlocked */
+        while (RW->readers != 0) {
+            pthread_cond_wait(&RW->cond_w, &RW->mutex);
+        }
+        /* ...not locked now */
+        RW->readers = -1;
+        RW->owner   = this_thread;
+    } else {
+        /* already R-locked by this thread (not always detectable) */
+        ASSERT(0);
+        err_code = -1;
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
+    return 0;
 
 #elif defined(WIN32_THREADS_AVAIL)
-  {{
+    TNlmThread this_thread = NlmThreadSelf();
     HANDLE obj[3];
-    obj[0] = RW->mutex;  obj[1] = RW->sema_rw; obj[2] = RW->sema_w;
-    if (WaitForMultipleObjects(3, obj, TRUE, INFINITE) != WAIT_OBJECT_0)
-      err_code = 1;
-    else {
-      X_ASSERT ( RW->readers == 0 );
-      RW->readers = -1;
-      DO_RW ( RW->owner = NlmThreadSelf(); )
-      X_VERIFY ( ReleaseMutex(RW->mutex) );
-    } /* both "sema_rw" and "sema_w" are locked now -- so   */
-      /* that nobody can acquire neither read nor write lock */
-  }}
-#endif
+    DWORD  wait_res;
 
-  X_ASSERT ( err_code == 0 );
-  return err_code ? -1 : 0;
-#endif /* else!NO_RWLOCK */
+    /* protect members of "*RW" from being changed by other threads */
+    if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* already W-locked by this the same thread already */
+    if (RW->readers < 0  &&  RW->owner == this_thread) {
+        RW->readers--;
+        X_VERIFY(ReleaseMutex(RW->mutex));
+        return 0;
+    }
+
+    /* array of sync-objects to wait for */
+    /* (on success, both "sema_rw" and "sema_w" will be locked, so that */
+    /*  no other thread can acquire either read or write lock) */
+    obj[0] = RW->sema_rw;
+    obj[1] = RW->sema_w;
+    obj[2] = RW->mutex;
+
+    /* not locked by anybody:  sure lock 'n' go */
+    if (RW->readers == 0) {
+        wait_res = WaitForMultipleObjects(2, obj, TRUE,0);
+        if (wait_res < WAIT_OBJECT_0  ||  WAIT_OBJECT_0 + 2 <= wait_res) {
+            X_VERIFY(ReleaseMutex(RW->mutex));
+            X_ASSERT(0);
+            return -1;
+        }
+        RW->readers = -1;
+        RW->owner = this_thread;
+        X_VERIFY(ReleaseMutex(RW->mutex));
+        return 0;
+    }
+
+    /* RW-locked by other thread(s):  wait until all locks are free */
+    X_VERIFY(ReleaseMutex(RW->mutex)); /* allow other threads to do stuff */
+    wait_res = WaitForMultipleObjects(3, obj, TRUE, INFINITE);
+    if (wait_res < WAIT_OBJECT_0  ||  WAIT_OBJECT_0 + 3 <= wait_res) {
+        X_ASSERT(0);
+        return -1;
+    }
+    X_ASSERT(RW->readers == 0);
+    RW->readers = -1;
+    RW->owner = this_thread;
+    X_VERIFY(ReleaseMutex(RW->mutex));
+    return 0;
+#endif
 }
 
 
 NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
 {
-#ifdef NO_RWLOCK
-  return 0;
-#else
-
-  int err_code = 0;
-  IF_RW ( RW->readers != 0 );
-#ifdef _TRACE_HARD
-  fprintf(stderr, "%ld\n", (long)RW->readers );
+#if !defined (NO_RWLOCK)
+#  ifdef _TRACE_HARD
+    int dummy = fprintf(stderr, "%ld\n", (long) RW->readers);
+#  endif
 #endif
-  IF_RW ( RW->readers > 0  ||  RW->owner == NlmThreadSelf() );
 
-#if defined(SOLARIS_THREADS_AVAIL)
-  err_code = rw_unlock(&RW->rwlock);
+
+#if defined(NO_RWLOCK)
+    return 0;
+
+#elif defined(SOLARIS_THREADS_AVAIL)
+    int err_code =  rw_unlock(&RW->rwlock);
+    X_ASSERT(err_code == 0);
+    return err_code ? -1 : 0;
 
 #elif defined (POSIX_THREADS_AVAIL)
-  /* protect members of "*RW" from being changed by other threads */
-  err_code = pthread_mutex_lock(&RW->mutex);
+    TNlmThread this_thread = NlmThreadSelf();
 
-  /* unlock (R or W) */
-  if (err_code == 0) {
-    ASSERT( RW->readers != 0 );
-    if (RW->readers < 0  &&  RW->owner != NlmThreadSelf()) {
-        /* attempted to Unlock a W-lock held by another thread -- trouble! */
-        ASSERT(0);
-        err_code = 1;
-    } else if (RW->readers == -1) {
-      /* only one W-lock left -- allow for both R- and W-locks */
-      if ((err_code = pthread_cond_broadcast(&RW->cond_r)) == 0)
-        err_code = pthread_cond_signal(&RW->cond_w);
-      if (err_code == 0)
-        RW->readers = 0;
-    } else if (RW->readers < 1) {
-      /* nested W-lock -- just decrement the # of W-locks left */
-      RW->readers++;
-    } else if (RW->readers == 1) {
-      /* one R-lock left -- allow for W-locks (R-locks are allowed already)  */
-      if ((err_code = pthread_cond_signal(&RW->cond_w)) == 0)
-        RW->readers = 0;
-    } else {
-      /* nested R-lock -- decrement the # of R-locks left;  loose the owner */
-      RW->owner = RW_UNKNOWN_OWNER;
-      RW->readers--;
+    /* protect members of "*RW" from being changed by other threads */
+    int err_code = pthread_mutex_lock(&RW->mutex);
+    if (err_code != 0) {
+        X_ASSERT(0);
+        return -1;
     }
 
-    /* release members of "*RW" for changing by other threads */
-    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
-  }
+    /* catch the illegal uses of RW-unlock */
+    ASSERT(RW->readers != 0);
+    if (RW->readers < 0  &&  RW->owner != this_thread) {
+        /* attempted to Unlock a W-lock held by another thread -- trouble! */
+        X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
+        ASSERT(0);
+        return -1;
+    }
+
+    /* do unlock (R or W) */
+    if (RW->readers == -1) {
+        /* only one W-lock left -- allow for both R- and W-locks */
+        if ((err_code = pthread_cond_broadcast(&RW->cond_r)) == 0)
+            err_code = pthread_cond_signal(&RW->cond_w);
+        if (err_code == 0)
+            RW->readers = 0;
+    } else if (RW->readers < 1) {
+        /* nested W-lock -- just decrement the # of W-locks left */
+        RW->readers++;
+    } else if (RW->readers == 1) {
+        /* one R-lock left - allow for W-locks (R-locks are allowed already) */
+        if ((err_code = pthread_cond_signal(&RW->cond_w)) == 0)
+            RW->readers = 0;
+    } else {
+        /* nested R-lock -- decrement the # of R-locks left; loose the owner */
+        RW->owner = RW_UNKNOWN_OWNER;
+        RW->readers--;
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
+    ASSERT(err_code == 0);
+    return err_code ? -1 : 0;
 
 #elif defined(WIN32_THREADS_AVAIL)
-  if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0)
-    err_code = 1; /* cannot block access to the readers variable */
-  else {
-    if (RW->readers == -1  ||  RW->readers == 1) { /* unlock all */
-      LONG prev_sema;
-      if (RW->readers == -1  && !ReleaseSemaphore(RW->sema_rw, 1, &prev_sema))
-        err_code = 2;
-      else if ( !ReleaseSemaphore(RW->sema_w,  1, &prev_sema) )
-        err_code = 3;
-      else {
-        RW->readers = 0; /* unlocked for both readers and writers */
-      }
-      X_ASSERT ( prev_sema == 0 );
-    }
-    else { /* more than one reader -- just decrease the readers counter */
-      X_ASSERT ( RW->readers > 1 );
-      RW->readers--;  /* yet leave it locked for writers */
-    }
-    DO_RW ( if (err_code == 0)  RW->owner = RW_UNKNOWN_OWNER; )
-    X_VERIFY ( ReleaseMutex(RW->mutex) );
-  }
-#endif
+    TNlmThread this_thread = NlmThreadSelf();
 
-  X_ASSERT ( err_code == 0 );
-  return err_code ? -1 : 0;
-#endif /* else!NO_RWLOCK */
+    /* protect members of "*RW" from being changed by other threads */
+    if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* catch the illegal uses of RW-unlock */
+    ASSERT(RW->readers != 0);
+    if (RW->readers < 0  &&  RW->owner != this_thread) {
+        /* attempted to Unlock a W-lock held by another thread -- trouble! */
+        X_VERIFY(ReleaseMutex(RW->mutex));
+        ASSERT(0);
+        return -1;
+    }
+
+    /* do unlock (R or W) */
+    if (RW->readers == -1  ||  RW->readers == 1) {
+        /* only one R or W lock left -- unlock everything */
+        LONG prev_sema;
+        if (RW->readers == -1) {
+            X_VERIFY(ReleaseSemaphore(RW->sema_rw, 1, &prev_sema));
+            X_ASSERT(prev_sema == 0);
+        }
+        X_VERIFY(ReleaseSemaphore(RW->sema_w,  1, &prev_sema));
+        X_ASSERT(prev_sema == 0);
+        RW->readers = 0;
+    } else {
+        /* more than one reader or writer left -- just update the counter */
+        X_ASSERT(RW->readers < -1  ||  1 < RW->readers);
+        if (RW->readers > 0)
+            RW->readers--;
+        else
+            RW->readers++;
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(ReleaseMutex(RW->mutex));
+    return 0;
+#endif
 }
 
 
 NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
 {
-#ifdef NO_RWLOCK
-  return 0;
-#else
+#if defined(NO_RWLOCK)
+    return 0;
 
-  int err_code = 0;
-#if defined(SOLARIS_THREADS_AVAIL)
-  err_code = rw_tryrdlock(&RW->rwlock);
-  if (err_code == 0  ||  err_code == EBUSY)
+#elif defined(SOLARIS_THREADS_AVAIL)
+    int err_code = rw_tryrdlock(&RW->rwlock);
+    if (err_code != 0  &&  err_code != EBUSY) {
+        ASSERT(0);
+        return -1;
+    }
     return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
-  TNlmThread this_thread = NlmThreadSelf();
-  /* quick check -- dont care to lock here */
-  if (RW->readers < 0  &&  RW->owner != this_thread)
-    return -1;
+    int err_code;
+    TNlmThread this_thread = NlmThreadSelf();
 
-  /* protect members of "*RW" from being changed by other threads */
-  err_code = pthread_mutex_lock(&RW->mutex);
+    /* quick check -- dont care to lock here */
+    if (RW->readers < 0  &&  RW->owner != this_thread)
+        return -1;
 
-  /* trying to obtain R-lock */
-  if (err_code == 0) {
-    if (RW->readers == 0) {
-      /* Unlocked -- do R-lock, store ownership to help catch "W after R" */
-      RW->readers = 1;
-      RW->owner   = this_thread;
-    } else if (RW->readers > 0) {
-      /* R-locked already -- increment the # of R-locks; may reset the owner */
-      RW->readers++;
-      if (RW->owner == RW_UNKNOWN_OWNER)
-        RW->owner = this_thread;
-    } else {
-      /* W-locked already -- check if locked by the same thread (nested W) */
-      if (RW->owner == this_thread)
-        RW->readers--;  /* nested locking (interpret R as W here) */
-      else
-        err_code = -1;  /* cannot R-lock instantaneously */
+    /* protect members of "*RW" from being changed by other threads */
+    err_code = pthread_mutex_lock(&RW->mutex);
+    if (err_code != 0) {
+        X_ASSERT(0);
+        return -1;
     }
 
-    /* release members of "*RW" for changing by other threads */
-    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
+    /* trying to obtain R-lock */
+    if (RW->readers == 0) {
+        /* Unlocked -- do R-lock, store ownership to help catch "W after R" */
+        RW->readers = 1;
+        RW->owner   = this_thread;
+    } else if (RW->readers > 0) {
+        /* R-locked already -- increment # of R-locks;  may reset the owner */
+        RW->readers++;
+        if (RW->owner == RW_UNKNOWN_OWNER)
+            RW->owner = this_thread;
+    } else {
+        /* W-locked already -- check if locked by the same thread (nested W) */
+        if (RW->owner == this_thread)
+            RW->readers--;  /* nested locking (interpret R as W here) */
+        else
+            err_code = -1;  /* cannot R-lock instantaneously */
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return err_code;
-  }
 
 #elif defined(WIN32_THREADS_AVAIL)
-  if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0)
-    err_code = 1; /* cannot lock access to the readers variable */
-  else {
-    if (RW->readers == -1) {
-      X_VERIFY ( ReleaseMutex(RW->mutex) );
-      return -1; /* locked by writer */
-    }
-    X_ASSERT ( RW->readers >= 0 );
-    if (RW->readers != 0  ||  /* first reader tries to lock writer semaphore */
-        WaitForSingleObject(RW->sema_w, 0) == WAIT_OBJECT_0) {
-      RW->readers++;
-      DO_RW ( RW->owner = NlmThreadSelf(); )
-    }
-    else
-      err_code = 2; /* cannot lock writers semaphore */
-    X_VERIFY ( ReleaseMutex(RW->mutex) );
-  }
-#endif
+    int err_code;
+    TNlmThread this_thread = NlmThreadSelf();
 
-  X_ASSERT ( err_code == 0 );
-  return err_code ? -1 : 0;
-#endif /* else!NO_RWLOCK */
+    /* quick check -- dont care to lock here */
+    if (RW->readers < 0  &&  RW->owner != this_thread)
+        return -1;
+
+    /* protect members of "*RW" from being changed by other threads */
+    if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* trying to obtain R-lock */
+    err_code = 0;
+
+    if (RW->readers < 0) {
+        /* W-locked... */
+        if (RW->owner == this_thread)
+            RW->readers--; /* ...by this thread -- nested;  interpret R as W */
+        else
+            err_code = -1; /* ...by another thread -- cannot obtain lock now */
+    } else if (RW->readers > 0) {
+        /* R-locked */
+        RW->readers++;
+    } else {
+        /* not locked -- lock the writer semaphore */
+        if (WaitForSingleObject(RW->sema_w, 0) == WAIT_OBJECT_0) {
+            RW->readers = 1;
+            RW->owner = this_thread;
+        } else {
+            ASSERT(0);
+            err_code = -1;
+        }
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(ReleaseMutex(RW->mutex));
+    return err_code;
+#endif
 }
 
 
 NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
 {
-#ifdef NO_RWLOCK
-  return 0;
-#else
+#if defined(NO_RWLOCK)
+    return 0;
 
-  int err_code = 0;
-#if defined(SOLARIS_THREADS_AVAIL)
-  err_code = rw_trywrlock(&RW->rwlock);
-  if (err_code == 0  ||  err_code == EBUSY)
+#elif defined(SOLARIS_THREADS_AVAIL)
+    int err_code = rw_trywrlock(&RW->rwlock);
+    if (err_code != 0  &&  err_code != EBUSY) {
+        ASSERT(0);
+        return -1;
+    }
     return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
-  TNlmThread this_thread = NlmThreadSelf();
-  /* quick check -- dont care to lock here */
-  if (RW->readers > 0  ||
-      (RW->readers < 0  &&  RW->owner != this_thread))
-    return -1;
+    int err_code;
+    TNlmThread this_thread = NlmThreadSelf();
 
-  /* protect members of "*RW" from being changed by other threads */
-  err_code = pthread_mutex_lock(&RW->mutex);
+    /* quick check -- dont care to lock here */
+    if (RW->readers > 0  ||
+        (RW->readers < 0  &&  RW->owner != this_thread))
+        return -1;
 
-  /* trying to obtain W-lock */
-  if (err_code == 0) {
-    if (RW->readers == 0) {
-      /* Unlocked -- do W-lock, store ownership */
-      RW->readers = -1;
-      RW->owner   = this_thread;
-    } else if (RW->readers > 0) {
-      /* R-locked already -- cannot W-lock instantaneously */
-      err_code = -1;
-    } else {
-      /* W-locked already -- check if locked by the same thread (nested W) */
-      if (RW->owner == this_thread)
-        RW->readers--;  /* nested locking (interpret R as W here) */
-      else
-        err_code = -1;  /* cannot W-lock instantaneously */
+    /* protect members of "*RW" from being changed by other threads */
+    err_code = pthread_mutex_lock(&RW->mutex);
+    if (err_code != 0) {
+        X_ASSERT(0);
+        return err_code;
     }
 
-    /* release members of "*RW" for changing by other threads */
-    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
+    /* trying to obtain W-lock */
+    if (RW->readers == 0) {
+        /* Unlocked -- do W-lock, store ownership */
+        RW->readers = -1;
+        RW->owner   = this_thread;
+    } else if (RW->readers > 0) {
+        /* R-locked already -- cannot W-lock right away */
+        err_code = -1;
+    } else {
+        /* W-locked already -- check if locked by the same thread (nested W) */
+        if (RW->owner == this_thread)
+            RW->readers--;  /* nested locking (interpret R as W here) */
+        else
+            err_code = -1;  /* cannot W-lock instantaneously */
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return err_code;
-  }
 
 #elif defined(WIN32_THREADS_AVAIL)
-  if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0)
-    err_code = 1; /* cannot lock access to the readers variable */
-  else {
-    if (RW->readers != 0) {
-      X_VERIFY ( ReleaseMutex(RW->mutex) );
-      return -1; /* already locked */
-    } else {
-      HANDLE obj[2];
-      obj[0] = RW->sema_rw;  obj[1] = RW->sema_w;
-      if (WaitForMultipleObjects(2, obj, TRUE, 0) == WAIT_OBJECT_0) {
-        RW->readers = -1;
-        DO_RW ( RW->owner = NlmThreadSelf(); )
-      }
-      else
-        err_code = 2;
-    }
-    X_VERIFY ( ReleaseMutex(RW->mutex) );
-  }
-#endif
+    int err_code;
+    TNlmThread this_thread = NlmThreadSelf();
 
-  X_ASSERT ( err_code == 0 );
-  return err_code ? -1 : 0;
-#endif /* else!NO_RWLOCK */
+    /* quick check -- dont care to lock here */
+    if (RW->readers > 0  ||
+        (RW->readers < 0  &&  RW->owner != this_thread))
+        return -1;
+
+    /* protect members of "*RW" from being changed by other threads */
+    if (WaitForSingleObject(RW->mutex, INFINITE) != WAIT_OBJECT_0) {
+        X_ASSERT(0);
+        return -1;
+    }
+
+    /* trying to obtain W-lock */
+    err_code = 0;
+
+    if (RW->readers < 0) {
+        /* W-locked... */
+        if (RW->owner == this_thread)
+            RW->readers--; /* ...by this thread -- nested */
+        else
+            err_code = -1; /* ...by another thread -- cannot obtain lock now */
+    } else if (RW->readers > 0) {
+        /* R-locked -- cannot obtain lock now */
+        err_code = -1;
+    } else {
+        /* not locked -- lock writer and reader semaphores */
+        HANDLE obj[2];
+        DWORD  wait_res;
+        obj[0] = RW->sema_rw;
+        obj[1] = RW->sema_w;
+        wait_res = WaitForMultipleObjects(2, obj, TRUE, 0);
+        if (WAIT_OBJECT_0 <= wait_res  &&  wait_res < WAIT_OBJECT_0 + 2) {
+            RW->readers = -1;
+            RW->owner = this_thread;
+        } else {
+            X_ASSERT(0);
+            err_code = -1;
+        }
+    }
+
+    /* release the "*RW" protective mutex */
+    X_VERIFY(ReleaseMutex(RW->mutex));
+    return err_code;
+#endif
 }
 
 
@@ -1812,12 +1953,14 @@ NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex)
   Int4 err_code = 0;
 
 #ifndef NO_MUTEX
+  TNlmThread this_thread = NlmThreadSelf();
+
   if ( !theMutex ) {
     X_ASSERT ( FALSE );
     return 0;
   }
 
-  if (!NlmThreadCompare(theMutex->owner, NlmThreadSelf())  ||
+  if (!NlmThreadCompare(theMutex->owner, this_thread)  ||
       theMutex->counter == 0) {
     X_ASSERT ( FALSE );
     return -1;
@@ -1838,12 +1981,12 @@ NLM_EXTERN Int4 NlmMutexUnlock(TNlmMutex theMutex)
 
 #ifdef _TRACE_HARD
   fprintf(stderr, "Mutex unlock ,  = [%2ld :%8ld / %3ld] :: %10ld\n",
-          (long)NlmThreadSelf(), (long)theMutex, (long)theMutex->counter,
-          (long)err_code);
+          (long) this_thread, (long) theMutex, (long) theMutex->counter,
+          (long) err_code);
 #endif
 
   if (err_code != 0) {
-    theMutex->owner = NlmThreadSelf();
+    theMutex->owner = this_thread;
     theMutex->counter++;
   }
 #endif /* ndef NO_MUTEX */
@@ -2353,20 +2496,46 @@ static VoidPtr TEST__MyThread(VoidPtr arg)
   }
 #endif /* DO_TLS */
 
+
 #ifdef DO_RWLOCK
+
+#  if defined(POSIX_THREADS_AVAIL) || defined(WIN32_THREADS_AVAIL)
+#    define RW_SMART
+#  endif
+
   {{ /* test RWlock functionality */
     static int iii = 0;
     static int var = 0;
     if ( ++iii % 5 ) { /* reader */
       for (i = 0;  i < 500;  i++) {
         int x_var, j;
+
         if (NlmRWtryrdlock(RWlock) != 0)
           VERIFY ( !NlmRWrdlock(RWlock) );
+#  ifdef RW_SMART 
+        if (i % 6 == 0)
+          VERIFY ( !NlmRWrdlock(RWlock) );
+        if (i % 12 == 0) {
+          VERIFY ( !NlmRWtryrdlock(RWlock) );
+          VERIFY ( !NlmRWunlock(RWlock) );
+        }
+#  endif
+
         x_var = var;
         for (j = 0;  j < 10;  j++)
           fprintf(STDERR, "%s", "");
         ASSERT ( x_var == var );
+
+#  ifdef RW_SMART 
+        if (i % 7 == 0) {
+          VERIFY ( !NlmRWtryrdlock(RWlock) );
+          VERIFY ( !NlmRWunlock(RWlock) );
+        }
+        if (i % 6 == 0)
+          VERIFY ( !NlmRWunlock(RWlock) );
+#  endif
         VERIFY ( !NlmRWunlock(RWlock) );
+
         for (j = 0;  j < 50;  j++)
           fprintf(STDERR, "%s", "");
         if (x_var != var)
@@ -2378,16 +2547,40 @@ static VoidPtr TEST__MyThread(VoidPtr arg)
         int j;
         if (NlmRWtrywrlock(RWlock) != 0)
           VERIFY ( !NlmRWwrlock(RWlock) );
+#  ifdef RW_SMART 
+        if (i % 4 == 0)
+          VERIFY ( !NlmRWwrlock(RWlock) );
+        if (i % 6 == 0)
+          VERIFY ( !NlmRWrdlock(RWlock) );
+        if (i % 8 == 0)
+          VERIFY ( !NlmRWtrywrlock(RWlock) );
+        if (i % 10 == 0)
+          VERIFY ( !NlmRWtryrdlock(RWlock) );
+#  endif
+
         var++;
         for (j = 0;  j < 7;  j++, var++)
           fprintf(STDERR, "%s", "");
+
+#  ifdef RW_SMART 
+        if (i % 4 == 0)
+          VERIFY ( !NlmRWunlock(RWlock) );
+        if (i % 6 == 0)
+          VERIFY ( !NlmRWunlock(RWlock) );
+        if (i % 8 == 0)
+          VERIFY ( !NlmRWunlock(RWlock) );
+        if (i % 10 == 0)
+          VERIFY ( !NlmRWunlock(RWlock) );
+#  endif
         VERIFY ( !NlmRWunlock(RWlock) );
+
         for (j = 0;  j < 20;  j++)
           fprintf(STDERR, "%s", "");
       }
     }
   }}
 #endif /* DO_RWLOCK */
+
 
 #ifdef DO_TLS
   for (i = 0;  i < N_TLS;  i++) {

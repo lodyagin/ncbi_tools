@@ -314,6 +314,7 @@ static Int4 g_band3_align(Uint1Ptr A, Uint1Ptr B,
 				      MemFree(state[0]);
   MemFree(state);
   MemFree(tmp);
-
   return(v);
 }
+
+

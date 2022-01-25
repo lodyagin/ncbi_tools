@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.11 $
+* $Revision: 1.13 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #include <asn.h>
 #include <objent2.h>
 #include <connectn.h>
+#include <urlquery.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -59,6 +60,8 @@
 extern "C" {
 #endif
 
+
+/* See synchronous and asynchronous code examples at bottom of this header */
 
 /* utility functions */
 
@@ -74,7 +77,7 @@ NLM_EXTERN void EntrezSetServer (
   CharPtr host_path
 );
 
-/* connection functions */
+/* low-level connection functions */
 
 NLM_EXTERN CONN EntrezOpenConnection (
   void
@@ -86,11 +89,42 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 
 /*
  EntrezSynchronousQuery opens connection, sends
- Entrez2Request ASN.1 query, and waits for reply
+ Entrez2Request ASN.1 query, and waits for reply,
+ cleaning up connection afterwards.
 */
 
 NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   Entrez2RequestPtr e2rq
+);
+
+/*
+ EntrezAsynchronousQuery opens connection, sends
+ request, and queues completion routine using urlquery
+ queueing mechanism.
+
+ EntrezCheckQueue should be called several times a
+ second with a timer.  It calls QUERY_CheckQueue to
+ poll connection, which calls completion routine when
+ result is available, cleaning up connection afterwards.
+
+ EntrezReadReply takes conn and status parameters from
+ completion routine and reads Entrez2ReplyPtr.
+*/
+
+NLM_EXTERN Boolean EntrezAsynchronousQuery (
+  Entrez2RequestPtr e2rq,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 EntrezCheckQueue (
+  QUEUE* queue
+);
+
+NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
+  CONN conn,
+  EConnStatus status
 );
 
 /* request creation functions */
@@ -205,7 +239,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
   Int4 uid
 );
 
-/* reply extraction functions */
+/* reply extraction functions - these free the enclosing Entrez2ReplyPtr */
 
 NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
   Entrez2ReplyPtr e2ry
@@ -242,6 +276,66 @@ NLM_EXTERN Entrez2IdListPtr EntrezExtractLinkedReply (
 NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
   Entrez2ReplyPtr e2ry
 );
+
+/* sample synchronous query code:
+
+  {
+    Entrez2RequestPtr  e2rq;
+    Entrez2ReplyPtr    e2ry;
+
+    e2rq = EntrezCreateDocSumRequest ("nucleotide", 1322283, 0, NULL, NULL);
+    e2ry = EntrezSynchronousQuery (e2rq);
+    e2rq = Entrez2RequestFree (e2rq);
+    ...
+    Entrez2ReplyFree (e2ry); -- except if you already extracted subreply
+    
+  }
+
+*/
+
+/* sample asynchronous query code:
+
+callback (completion routine):
+
+  static Boolean LIBCALLBACK MyQueryResultProc (
+    CONN conn,
+    VoidPtr userdata,
+    EConnStatus status
+  )
+
+  {
+    Entrez2ReplyPtr  e2ry;
+
+    e2ry = EntrezReadReply (conn, status);
+    if (e2ry != NULL) {
+      ...
+      Entrez2ReplyFree (e2ry); -- except if you already extracted subreply
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+static queue variable:
+
+  static QUEUE  myquerylist = NULL;
+
+calling function:
+
+  {
+    Entrez2RequestPtr  e2rq;
+
+    e2rq = EntrezCreateDocSumRequest ("nucleotide", 1322283, 0, NULL, NULL);
+    EntrezAsynchronousQuery (e2rq, &myquerylist, MyQueryResultProc, NULL);
+    e2rq = Entrez2RequestFree (e2rq);
+  }
+
+via timer call:
+
+  {
+    EntrezCheckQueue (&myquerylist);
+  }
+
+*/
 
 
 #ifdef __cplusplus

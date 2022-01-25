@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.49 $
+* $Revision: 6.55 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,24 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.55  2000/05/22 17:37:01  sicotte
+* add BD prefix to WHICH_db_accession
+*
+* Revision 6.54  2000/05/17 17:20:43  dondosha
+* Added function GetAccessionFromSeqId, used in standalone programs blastclust and megablast
+*
+* Revision 6.53  2000/05/10 16:56:33  kans
+* SeqIdParse stops looking for expected_tokens when done is TRUE, avoids reading past end of string for ref|xxx| with two bars
+*
+* Revision 6.52  2000/05/05 13:24:50  kans
+* For SEQID_OTHER (RefSeq), SeqIdWrite will not print third vertical bar (originally for when there would be periodic releases - obsolete now that RefSeq is part of Entrez), and SeqIdParse will not upper case the tsip->name (LOCUS)
+*
+* Revision 6.51  2000/05/04 15:07:54  kans
+* SeqIdParse sends SEV_INFO, not SEV_ERROR, since blast uses it to test IDs for validity
+*
+* Revision 6.50  2000/05/03 17:56:05  sicotte
+* Added BC prefix ; changed refseq SeqID
+*
 * Revision 6.49  2000/03/29 15:53:50  sicotte
 * Added BB predix for DDBJ EST to WHICH_db_accession
 *
@@ -2947,11 +2965,13 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
 			if (tsip->name != NULL)
 				Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
+			/*
 			if (sip->choice == SEQID_OTHER) {
 				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
 				if (tsip->release != NULL)
 					Nlm_LabelCopyNext(&tmp, tsip->release, &buflen);
 			}
+			*/
             break;
         case SEQID_PATENT:
 			patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
@@ -3011,6 +3031,74 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 
     }
     return tmp;
+}
+
+/* The following function finds either an integer or a string id from
+   SeqIdPtr */
+
+Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+				     CharPtr PNTR id)
+{
+   Boolean numeric_id_type = FALSE;
+   Int2 id_len;
+   GiimPtr gip;
+   ObjectIdPtr oip;
+   CharPtr ptr;
+   TextSeqIdPtr textsip;
+   DbtagPtr dbtag;
+   PatentSeqIdPtr psip;
+   PDBSeqIdPtr pdbsip;
+
+   *id = NULL;
+   *gi = 0;
+
+   switch (sip->choice) {
+   case SEQID_GI: case SEQID_GIBBSQ: case SEQID_GIBBMT:
+      *gi = sip->data.intvalue;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_GIIM:
+      gip = (GiimPtr) sip->data.ptrvalue;
+      *gi = gip->id;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_LOCAL:
+      oip = (ObjectIdPtr) sip->data.ptrvalue;
+      ptr = oip->str;
+      
+      id_len = StringLen(oip->str);
+      *id = (CharPtr) MemNew(id_len+1);
+      sprintf(*id, "%s", oip->str);
+      break;
+   case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: 
+   case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF: 
+   case SEQID_OTHER:
+      textsip = (TextSeqIdPtr)sip->data.ptrvalue;
+      id_len = StringLen(textsip->accession);
+      *id = (CharPtr) MemNew(id_len+1);
+      sprintf(*id, "%s", textsip->accession);
+      break;
+   case SEQID_GENERAL:
+      dbtag = (DbtagPtr) sip->data.ptrvalue;
+      id_len = StringLen(dbtag->tag->str);
+      *id = (CharPtr) MemNew(id_len+1);
+      sprintf(*id, "%s", dbtag->tag->str);
+      break;
+   case SEQID_PATENT:
+      psip = (PatentSeqIdPtr) sip->data.ptrvalue;
+      *gi = (Int4) psip->seqid;
+      numeric_id_type = TRUE;
+      break;
+   case SEQID_PDB:
+      pdbsip = (PDBSeqIdPtr) sip->data.ptrvalue;
+      id_len = StringLen(pdbsip->mol);
+      *id = (CharPtr) MemNew(id_len+4);
+      sprintf(*id, "%s%d", pdbsip->mol, pdbsip->chain);
+      break;
+   default: break;
+   }
+ 
+   return numeric_id_type;
 }
 
 /*****************************************************************************
@@ -3095,7 +3183,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 
 						/* copy and tokenize - token\0token\0\n */
 		for (numtoken=0, strt=tmp;
-			((i < 40) && (numtoken < (Int2)(expect_tokens[type])));
+			((i < 40) && (numtoken < (Int2)(expect_tokens[type])) && (! done));
 			i++,buf++,tmp++)
 		{
 			if ((*buf == d) || (*buf == '\0'))
@@ -3193,11 +3281,13 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				if (*tokens[1] != '\0')
 				{
 					tsip->name = StringSave(tokens[1]);
-					tmp = tsip->name;
-					while (*tmp != '\0')
-					{
-						*tmp = TO_UPPER(*tmp);
-						tmp++;
+					if (type != SEQID_OTHER) {
+						tmp = tsip->name;
+						while (*tmp != '\0')
+						{
+							*tmp = TO_UPPER(*tmp);
+							tmp++;
+						}
 					}
 				}
         	    break;
@@ -3261,7 +3351,7 @@ ret:
 erret:
 	StringNCpy(localbuf, tp, 40);
 	localbuf[40] = '\0';
-	ErrPostEx(SEV_ERROR, 0,0, "SeqIdParse Failure at %s", localbuf);
+	ErrPostEx(SEV_INFO, 0,0, "SeqIdParse Failure at %s", localbuf);
 	if (sip == head)
 		head = NULL;
 	else
@@ -7349,7 +7439,7 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version
             tsp->accession = StringSave(accession);
             sip->data.ptrvalue = tsp;
             sip->choice = SEQID_OTHER;
-            tsp->name = StringSave("REFSEQ");
+            tsp->name = NULL;/*  StringSave("REFSEQ"); */
             tsp->version = version;
         } else {
             sip = ValNodeNew(NULL);
@@ -7576,6 +7666,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
+          } else if((StringICmp(temp,"BC")==0)) { /* NCBI long cDNA project : MGC */
+              retcode = ACCN_NCBI_cDNA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL's direct submission */
               retcode = ACCN_EMBL_DIRSUB;
@@ -7599,7 +7691,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_HTGS;
           } else if ((StringICmp(temp,"BA") == 0)) {      /* DDBJ CON division */
               retcode = ACCN_DDBJ_CON;
-
+          } else if ((StringICmp(temp,"BC") == 0)) {      /* DDBJ PATENT division */
+              retcode = ACCN_DDBJ_PATENT;
           } else {
               retval = FALSE;
               break;
@@ -7830,4 +7923,3 @@ NLM_EXTERN SeqIdPtr SeqIdListfromSeqLoc (ValNodePtr vnpslp)
   }
   return sip;
 }
-

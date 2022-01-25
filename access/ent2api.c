@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.11 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -112,7 +112,7 @@ NLM_EXTERN void EntrezSetServer (
   }
 }
 
-/* connection functions */
+/* low-level connection functions */
 
 NLM_EXTERN CONN EntrezOpenConnection (
   void
@@ -124,13 +124,13 @@ NLM_EXTERN CONN EntrezOpenConnection (
   CharPtr  host_path = e2_host_path;
 
   if (StringHasNoText (host_machine)) {
-    host_machine = "neptune.nlm.nih.gov";
+    host_machine = "www.ncbi.nlm.nih.gov";
   }
   if (host_port == 0) {
-    host_port = 5701;
+    host_port = 80;
   }
   if (StringHasNoText (host_path)) {
-    host_path = "/entrez/utils/entrez2server.cgi";
+    host_path = "/entrez/utils/entrez2server.fcgi";
   }
 
   return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
@@ -148,8 +148,9 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 
 {
   AsnIoConnPtr     aicp;
+  time_t           currtime, starttime;
   Entrez2ReplyPtr  e2ry = NULL;
-  Int2             max;
+  Int2             max = 0;
   EConnStatus      status;
   STimeout         timeout;
 #ifdef OS_MAC
@@ -161,15 +162,15 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 #ifdef OS_MAC
   timeout.sec = 0;
   timeout.usec = 0;
-  max = 30;
 #else
-  timeout.sec = 1;
+  timeout.sec = 100;
   timeout.usec = 0;
-  max = 30;
 #endif
 
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max > 0) {
-    max--;
+  starttime = GetSecs ();
+  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+    currtime = GetSecs ();
+    max = currtime - starttime;
 #ifdef OS_MAC
     WaitNextEvent (0, &currEvent, 0, NULL);
 #endif
@@ -183,6 +184,8 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 
   return e2ry;
 }
+
+/* high-level connection functions */
 
 NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   Entrez2RequestPtr e2rq
@@ -206,6 +209,56 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
 
   e2ry = EntrezWaitForReply (conn);
 
+  return e2ry;
+}
+
+NLM_EXTERN Boolean EntrezAsynchronousQuery (
+  Entrez2RequestPtr e2rq,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+)
+
+{
+  AsnIoConnPtr  aicp;
+  CONN          conn;
+
+  if (e2rq == NULL) return FALSE;
+
+  conn = EntrezOpenConnection ();
+
+  aicp = QUERY_AsnIoConnOpen ("wb", conn);
+  Entrez2RequestAsnWrite (e2rq, aicp->aip, NULL);
+  AsnIoFlush (aicp->aip);
+  QUERY_AsnIoConnClose (aicp);
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (queue, conn, resultproc, userdata);
+
+  return TRUE;
+}
+
+NLM_EXTERN Int4 EntrezCheckQueue (QUEUE* queue)
+
+{
+  return QUERY_CheckQueue (queue);
+}
+
+NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
+  CONN conn,
+  EConnStatus status
+)
+
+{
+  AsnIoConnPtr     aicp;
+  Entrez2ReplyPtr  e2ry = NULL;
+
+  if (conn != NULL && status == eCONN_Success) {
+    aicp = QUERY_AsnIoConnOpen ("rb", conn);
+    e2ry = Entrez2ReplyAsnRead (aicp->aip, NULL);
+    QUERY_AsnIoConnClose (aicp);
+  }
   return e2ry;
 }
 

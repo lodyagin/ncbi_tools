@@ -31,6 +31,9 @@
  * Version Creation Date: 6/16/98
  *
  * $Log: vastchkid.c,v $
+ * Revision 6.7  2000/05/26 22:31:40  ywang
+ * assign local for various types of seq features
+ *
  * Revision 6.6  1999/07/21 22:33:43  ywang
  * assign local id to seq-annot
  *
@@ -282,6 +285,10 @@ Boolean ReplaceBioseqId(SeqIdPtr sip, Char *PDBName, Char Chain, BioseqPtr bsp)
   SeqIntPtr  sintp = NULL;
   SeqIdPtr  sip_temp = NULL;
  
+  SeqLocPtr slp_mix = NULL;
+  SeqPntPtr spp = NULL;
+  SeqBondPtr sbp = NULL;
+
   pdb_seq_id = GetPdbSeqId(bsp->id);
           /* may need to be modified according to how bioseq id is */
           /* in bioseq fetched from Entrez, PDBSeqId exists, but not sure */
@@ -298,16 +305,45 @@ Boolean ReplaceBioseqId(SeqIdPtr sip, Char *PDBName, Char Chain, BioseqPtr bsp)
         sfp = sap->data;
         while(sfp){
            slp = sfp->location;
-           if(slp != NULL ) sintp = slp->data.ptrvalue;
-           else return TRUE;
-           if(sintp) {
-              sip_temp = sintp->id;
-              sintp->id = sip;
-    /*        sip_temp = SeqIdFree(sip_temp); */
-              /* cause problem when slave is a duplication of master */
-              /* might be related to the way how the sequence is made */
-              /* or fetched */
+           if(slp != NULL ) {
+              if(slp->choice == SEQLOC_INT) {
+                 sintp = slp->data.ptrvalue;
+                 if(sintp) {
+                    sip_temp = sintp->id;
+                    sintp->id = sip;
+          /*        sip_temp = SeqIdFree(sip_temp); */
+                 /* cause problem when slave is a duplication of master */
+                 /* might be related to the way how the sequence is made */
+                 /* or fetched */
+                }
+              }
+              else if(slp->choice == SEQLOC_BOND){
+                 sbp = slp->data.ptrvalue;
+                 spp = sbp->a;
+                 if(spp) spp->id = sip;
+                 spp = sbp->b;
+                 if(spp) spp->id = sip;
+              }
+              else if(slp->choice == SEQLOC_MIX){
+                 slp_mix = slp->data.ptrvalue;
+                 while(slp_mix){
+                    if(slp_mix->choice == SEQLOC_INT){
+                       sintp = slp_mix->data.ptrvalue;
+                       if(sintp) sintp->id = sip;
+                    }
+                    else if(slp_mix->choice == SEQLOC_BOND){
+                       sbp = slp_mix->data.ptrvalue;
+                       spp = sbp->a;
+                       if(spp) spp->id = sip;
+                       spp = sbp->b;
+                       if(spp) spp->id = sip;
+                    }
+                    slp_mix = slp_mix->next;
+                 }
+              }         
            }
+           else return TRUE;
+
            sfp = sfp->next;
         }
      }     

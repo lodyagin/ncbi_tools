@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.100 2000/04/13 14:10:29 thiessen Exp $
+#	$Id: makenet.unx,v 6.105 2000/05/17 20:11:10 beloslyu Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -519,7 +519,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nbatch2 Nentrcmd genget seqget idfetch session test_ncbi_socket test_ncbisock debug_server
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nbatch2 Nbatch3 Nentrcmd genget seqget idfetch session test_ncbi_socket test_ncbisock debug_server
 
 .WAIT:
 	echo Waiting...go
@@ -657,6 +657,7 @@ copy :
 	$(SRCCOPY) ../demo/entrcmd.c .
 	$(SRCCOPY) ../demo/batch.c .
 	$(SRCCOPY) ../demo/nbatch.c .
+	$(SRCCOPY) ../demo/qbatch.c .
 	$(SRCCOPY) ../demo/elecpcr.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/genget.c .
@@ -1085,7 +1086,7 @@ Cn3Dv3d    : $(OBJCN3D) $(BENTREZLIBS) netentcf
 		$(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # new (current) OpenGL version
-Cn3D : $(OBJCN3D) $(BENTREZLIBS) netentcf
+Cn3D : $(OBJCN3D) $(BENTREZLIBS) netentcf $(BLIB36)
 	$(CC) -o Cn3D $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB3000) $(LIB20) \
 		$(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
 		$(LIB400) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
@@ -1158,6 +1159,9 @@ Nbatch : batch.c
 
 Nbatch2 : nbatch.c
 	$(CC) -o Nbatch2 $(LDFLAGS) nbatch.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+Nbatch3 : qbatch.c
+	$(CC) -o Nbatch3 $(LDFLAGS) qbatch.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (electronic PCR)
 
@@ -1341,11 +1345,14 @@ session : $(SRCSESSION) $(BSRVNETCLILIB)
 salogif.o:	salogif.c
 	$(CC) $(CFLAGS) salogif.c
 
+wwwbutl.o:	wwwbutl.c
+	 $(CC) $(CFLAGS) wwwbutl.c
+
 wwwblast.o:	wwwblast.c
 	$(CC) $(CFLAGS) wwwblast.c
 
-blast.REAL:	wwwblast.o salogif.o $(THREAD_OBJ)
-	$(CC) $(LDFLAGS) wwwblast.o salogif.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+blast.REAL:	wwwblast.o salogif.o wwwbutl.o $(THREAD_OBJ)
+	$(CC) $(LDFLAGS) wwwblast.o salogif.o wwwbutl.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 	
 #test_ncbi_socket
 

@@ -63,7 +63,7 @@ LIBPATH = $(NCBI_ALTLIB)
 # DEF = -DINTERNAL_NCBI_SEQUIN -DSALSA_DEBUG 
 SRC = algorend.o cn3dentr.o cn3dmain.o cn3dmatn.o cn3dmesh.o cn3dmodl.o \
 cn3dmsel.o cn3dmsg.o cn3dopen.o cn3dsave.o cn3dshim.o \
-cn3dwin.o cn3dxprt.o seqcons.o rowmgr.o cn3dstyl.o
+cn3dwin.o cn3dxprt.o seqcons.o cn3dstyl.o
 EXE = Cn3D
 
 

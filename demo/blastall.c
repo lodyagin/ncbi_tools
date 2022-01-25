@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.42 2000/04/25 20:50:45 dondosha Exp $
+/* $Id: blastall.c,v 6.45 2000/05/26 19:28:44 shavirin Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,15 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.45  2000/05/26 19:28:44  shavirin
+ * Added adjustment of dropoff_1st_pass if dropoff_1st_pass > dropoff_2nd_pass
+ *
+ * Revision 6.44  2000/05/26 18:48:23  shavirin
+ * Added two new parameters; '-y' and '-Z'
+ *
+ * Revision 6.43  2000/05/09 15:57:26  shavirin
+ * Added call to the function ReadDBBioseqSetDbGeneticCode().
+ *
  * Revision 6.42  2000/04/25 20:50:45  dondosha
  * Removed unavailable option to use greedy algorithm
  *
@@ -392,6 +401,10 @@ static Args myargs [] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence", /* 31 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
+    { "Dropoff (X) for blast extensions in bits (default if zero)", /* 32 */
+      "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
+    { "X dropoff value for final gapped alignment (in bits)", /* 33 */
+      "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -494,6 +507,10 @@ Int2 Main (void)
         options->gap_extend = myargs[8].intvalue;
     if (myargs[9].intvalue != 0)
         options->gap_x_dropoff = myargs[9].intvalue;
+
+    if(myargs[33].intvalue != 0) 
+        options->gap_x_dropoff_final = myargs[33].intvalue;
+
     if (StringICmp(myargs[6].strvalue, "T") == 0) {
         if (StringICmp("blastn", blast_program) == 0)
             options->filter_string = StringSave("D");
@@ -530,6 +547,12 @@ Int2 Main (void)
         options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
     
     options->strand_option = myargs[28].intvalue;
+
+    if(myargs [32].floatvalue != 0.0) {
+        options->dropoff_2nd_pass  = myargs [32].floatvalue;
+        if(options->dropoff_1st_pass > options->dropoff_2nd_pass)
+            options->dropoff_1st_pass = options->dropoff_2nd_pass;
+    }
     
     print_options = 0;
     align_options = 0;
@@ -686,7 +709,8 @@ Int2 Main (void)
         }
         
         ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
-        
+        ReadDBBioseqSetDbGeneticCode(options->db_genetic_code);
+
         if (seqalign) {
             seqannot = SeqAnnotNew();
             seqannot->type = 2;

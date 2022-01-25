@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.110 $
+* $Revision: 6.112 $
 *
 * File Description: 
 *
@@ -330,6 +330,307 @@ extern void EditEvidenceFlag (IteM i)
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = PushButton (c, "Accept", DoEvidence);
+  SetObjectExtra (b, efp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) q, (HANDLE) k, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+}
+
+typedef struct exceptionformdata {
+  FEATURE_FORM_BLOCK
+
+  LisT           objlist;
+  TexT           findthis;
+  Uint2          itemtype;
+  Uint2          subtype;
+  GrouP          xception;
+  TexT           xceptText;
+  Boolean        excpt;
+  CharPtr        except_text;
+  ObjMgrPtr      omp;
+  ObjMgrTypePtr  omtp;
+  ValNodePtr     head;
+  Boolean        stringfound;
+  Char           findStr [128];
+} ExceptionFormData, PNTR ExceptionFormPtr;
+
+static void LIBCALLBACK AsnWriteExceptionCallBack (AsnExpOptStructPtr pAEOS)
+
+{
+  ExceptionFormPtr  efp;
+  CharPtr          pchFind;
+  CharPtr          pchSource;
+
+  efp = (ExceptionFormPtr) pAEOS->data;
+  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
+	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
+	pchFind = efp->findStr;
+	if (StringSearch (pchSource, pchFind) != NULL) {
+	  efp->stringfound = TRUE;
+	}
+  }
+}
+
+static Boolean ExceptionHasSubstring (ObjMgrTypePtr omtp, AsnIoPtr aip, Pointer ptr, ExceptionFormPtr efp)
+
+{
+  efp->stringfound = FALSE;
+  (omtp->asnwrite) (ptr, aip, NULL);
+  return efp->stringfound;
+}
+
+static void ExceptionCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  AsnExpOptPtr      aeop;
+  AsnIoPtr          aip;
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp;
+  ExceptionFormPtr  efp;
+  Boolean           notext;
+  ObjMgrTypePtr     omtp;
+  SeqAnnotPtr       sap;
+  SeqFeatPtr        sfp;
+  Uint2             subtype;
+
+  if (mydata == NULL) return;
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  efp = (ExceptionFormPtr) mydata;
+  if (efp == NULL) return;
+  omtp = efp->omtp;
+  if (omtp == NULL || omtp->subtypefunc == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sap = bsp->annot;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sap = bssp->annot;
+  } else return;
+  GetTitle (efp->findthis, efp->findStr, sizeof (efp->findStr) - 1);
+  notext = StringHasNoText (efp->findStr);
+  aip = AsnIoNullOpen ();
+  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteExceptionCallBack);
+  if (aeop != NULL) {
+    aeop->user_data = (Pointer) efp;
+  }
+  while (sap != NULL) {
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL) {
+        subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
+        if (efp->subtype == 0 || subtype == efp->subtype ||
+           (efp->subtype == FEATDEF_IMP &&
+            subtype >= FEATDEF_allele && subtype <= FEATDEF_site_ref)) {
+          if (notext || ExceptionHasSubstring (omtp, aip, (Pointer) sfp, efp)) {
+            sfp->excpt = efp->excpt;
+            if (sfp->excpt) {
+              if (! StringHasNoText (efp->except_text)) {
+                sfp->except_text = MemFree (sfp->except_text);
+                sfp->except_text = StringSave (efp->except_text);
+              }
+            } else {
+              sfp->except_text = MemFree (sfp->except_text);
+            }
+          }
+        }
+        sfp = sfp->next;
+      }
+    }
+    sap = sap->next;
+  }
+  AsnIoClose (aip);
+}
+
+static void DoException (ButtoN b)
+
+{
+  ExceptionFormPtr  efp;
+  SeqEntryPtr      sep;
+  Uint2            subtype;
+  Int2             val;
+  ValNodePtr       vnp;
+
+  efp = GetObjectExtra (b);
+  if (efp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (efp->input_entityID);
+  if (sep == NULL) return;
+  Hide (efp->form);
+  WatchCursor ();
+  Update ();
+  efp->itemtype = OBJ_SEQFEAT;
+  subtype = 0;
+  vnp = NULL;
+  val = GetValue (efp->objlist);
+  if (val > 0) {
+    vnp = efp->head;
+    while (vnp != NULL && val > 1) {
+      val--;
+      vnp = vnp->next;
+    }
+  }
+  if (vnp != NULL) {
+    subtype = vnp->choice;
+  }
+  efp->omp = ObjMgrGet ();
+  efp->omtp = NULL;
+  if (efp->omp != NULL) {
+    efp->omtp = ObjMgrTypeFind (efp->omp, efp->itemtype, NULL, NULL);
+  }
+  efp->subtype = subtype;
+  efp->excpt = (Boolean) (GetValue (efp->xception) == 2);
+  if (efp->excpt) {
+    efp->except_text = SaveStringFromText (efp->xceptText);
+  } else {
+    efp->except_text = NULL;
+  }
+  if (efp->itemtype != 0 && efp->omtp != NULL) {
+    SeqEntryExplore (sep, (Pointer) efp, ExceptionCallback);
+  }
+  MemFree (efp->except_text);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (efp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, efp->input_entityID, 0, 0);
+  Remove (efp->form);
+}
+
+static void ExceptionMessageProc (ForM f, Int2 mssg)
+
+{
+  ExceptionFormPtr  efp;
+
+  efp = (ExceptionFormPtr) GetObjectExtra (f);
+  if (efp != NULL) {
+    if (efp->appmessage != NULL) {
+      efp->appmessage (f, mssg);
+    }
+  }
+}
+
+static void CleanupExceptionPage (GraphiC g, VoidPtr data)
+
+{
+  ExceptionFormPtr  efp;
+
+  efp = (ExceptionFormPtr) data;
+  if (efp != NULL) {
+    ValNodeFreeData (efp->head);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+extern void EditExceptionFlag (IteM i)
+
+{
+  BaseFormPtr        bfp;
+  ButtoN             b;
+  GrouP              c;
+  FeatDefPtr         curr;
+  ExceptionFormPtr   efp;
+  GrouP              g;
+  GrouP              h;
+  ValNodePtr         head;
+  GrouP              k;
+  Uint1              key;
+  CharPtr            label = NULL;
+  Int2               listHeight;
+  PrompT             ppt;
+  GrouP              q;
+  SeqEntryPtr        sep;
+  StdEditorProcsPtr  sepp;
+  Uint2              subtype;
+  ValNodePtr         vnp;
+  WindoW             w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  efp = (ExceptionFormPtr) MemNew (sizeof (ExceptionFormData));
+  if (efp == NULL) return;
+  w = FixedWindow (-50, -33, -10, -10, "Feature Exception", StdCloseWindowProc);
+  SetObjectExtra (w, efp, CleanupExceptionPage);
+  efp->form = (ForM) w;
+  efp->formmessage = ExceptionMessageProc;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    efp->appmessage = sepp->handleMessages;
+  }
+
+  efp->input_entityID = bfp->input_entityID;
+  efp->input_itemID = bfp->input_itemID;
+  efp->input_itemtype = bfp->input_itemtype;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  g = HiddenGroup (h, 0, 2, NULL);
+  StaticPrompt (g, "Feature", 0, 0, programFont, 'c');
+  if (indexerVersion) {
+    listHeight = 16;
+  } else {
+    listHeight = 8;
+  }
+  efp->objlist = SingleList (g, 16, listHeight, NULL);
+  head = ValNodeNew (NULL);
+  if (head != NULL) {
+    head->choice = 0;
+    head->data.ptrvalue = StringSave ("[ALL FEATURES]");
+  }
+  curr = FeatDefFindNext (NULL, &key, &label, FEATDEF_ANY, TRUE);
+  while (curr != NULL) {
+    if (key != FEATDEF_BAD) {
+      subtype = curr->featdef_key;
+      if (subtype != FEATDEF_misc_RNA &&
+          subtype != FEATDEF_precursor_RNA &&
+          subtype != FEATDEF_mat_peptide &&
+          subtype != FEATDEF_sig_peptide &&
+          subtype != FEATDEF_transit_peptide) {
+        vnp = ValNodeNew (head);
+        /* if (head == NULL) {
+          head = vnp;
+        } */
+        if (vnp != NULL) {
+          vnp->choice = subtype;
+          vnp->data.ptrvalue = StringSave (curr->typelabel);
+        }
+      }
+    }
+    curr = FeatDefFindNext (curr, &key, &label, FEATDEF_ANY, TRUE);
+  }
+  if (head != NULL) {
+    head = SortValNode (head, SortByVnpChoice);
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      ListItem (efp->objlist, (CharPtr) vnp->data.ptrvalue);
+    }
+  }
+  efp->head = head;
+
+  q = HiddenGroup (h, -2, 0, NULL);
+  ppt = StaticPrompt (q, "Exception  ", 0, stdLineHeight, programFont, 'l');
+  efp->xception = HiddenGroup (q, -2, 0, NULL);
+  RadioButton (efp->xception, "Clear");
+  RadioButton (efp->xception, "Set");
+  SetValue (efp->xception, 1);
+  StaticPrompt (q, "Explanation", 0, dialogTextHeight, programFont, 'l');
+  efp->xceptText = DialogText (q, "", 12, NULL);
+  AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) efp->xception, NULL);
+
+  k = HiddenGroup (h, 0, 2, NULL);
+  StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
+  efp->findthis = DialogText (k, "", 14, NULL);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton (c, "Accept", DoException);
   SetObjectExtra (b, efp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -1208,6 +1509,7 @@ static void DoOnePub (PubdescPtr pdp)
       }
     }
     if (tmp != NULL) {
+      MedlineToISO (tmp);
       if (pmid != 0) {
         ValNodeAddInt (&tmp, PUB_PMid, pmid);
       }
@@ -1349,6 +1651,7 @@ static void LookupPublications (SeqAnnotPtr sap)
             tmp = MedArchGetPubPmId (uid);
           }
           if (tmp != NULL) {
+            MedlineToISO (tmp);
             tmp->next = vnp;
             pdp->pub = tmp;
           }
@@ -1364,6 +1667,53 @@ static void LookupPublications (SeqAnnotPtr sap)
     ArrowCursor ();
     Update ();
   }
+}
+
+static void PromotePubs (SeqFeatPtr first, BioseqPtr bsp, Uint2 entityID)
+
+{
+  MsgAnswer    ans;
+  Boolean      asked = FALSE;
+  PubdescPtr   pdp;
+  SeqDescrPtr  sdp;
+  SeqEntryPtr  sep;
+  SeqFeatPtr   sfp;
+  ValNode      vn;
+
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+  vn.choice = SEQLOC_WHOLE;
+  vn.data.ptrvalue = (Pointer) SeqIdFindBest (bsp->id, 0);
+  vn.next = NULL;
+
+  for (sfp = first; sfp != NULL; sfp = sfp->next) {
+    if (sfp->data.choice == SEQFEAT_PUB) {
+      if (SeqLocCompare (sfp->location, &vn) == SLC_A_EQ_B) {
+        if (! asked) {
+          ans = Message (MSG_YN, "Do you wish to convert full-length publication features to descriptors?");
+          if (ans == ANS_NO) return;
+          asked = TRUE;
+        }
+      }
+    }
+  }
+
+  sep = GetBestTopParentForData (entityID, bsp);
+  for (sfp = first; sfp != NULL; sfp = sfp->next) {
+    if (sfp->data.choice == SEQFEAT_PUB) {
+      if (SeqLocCompare (sfp->location, &vn) == SLC_A_EQ_B) {
+        sfp->idx.deleteme = TRUE;
+        sfp->data.choice = SEQFEAT_COMMENT;
+        pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+        sfp->data.value.ptrvalue = NULL;
+        sdp = CreateNewDescriptor (sep, Seq_descr_pub);
+        if (sdp != NULL) {
+          sdp->data.ptrvalue = (Pointer) pdp;
+        }
+      }
+    }
+  }
+
+  DeleteMarkedObjects (entityID, 0, NULL);
 }
 
 extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
@@ -1407,6 +1757,7 @@ extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
       Message (MSG_ERROR, "SmartAttachSeqAnnotToSeqEntry failed");
     } else if (sfp != NULL) {
       PromoteXrefs (sfp, bsp, entityID);
+      PromotePubs (sfp, bsp, entityID);
     }
   }
   return entityID;

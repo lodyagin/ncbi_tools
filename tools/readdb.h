@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.56 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,15 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.59  2000/05/22 18:46:23  dondosha
+* Merged all Boolean members in ReadDBFILE structure into a single Int4
+*
+* Revision 6.58  2000/05/09 15:54:20  shavirin
+* Added function ReadDBBioseqSetDbGeneticCode().
+*
+* Revision 6.57  2000/05/03 16:18:34  dondosha
+* Added prototype for FastaToBlastDB
+*
 * Revision 6.56  2000/03/13 18:36:38  madden
 * Added insert_ctrlA Boolean to readdb_get_bioseq_ex
 *
@@ -397,6 +406,13 @@ belong to the same sequence. */
 #define READDB_DB_IS_PROT 1
 #define READDB_DB_UNKNOWN 2
 
+#define READDB_CONTENTS_ALLOCATED  0x00000001
+#define READDB_IS_PROT             0x00000002
+#define READDB_HANDLE_COMMON_INDEX 0x00000004
+#define READDB_NOT_FIRST_TIME      0x00000008
+#define READDB_NO_SEQ_FILE         0x00000010
+#define READDB_KEEP_HDR_AND_SEQ    0x00000020
+
 /* Choices for how much to initialize on startup in readdb_new_internal. */
 #define READDB_NEW_DO_ALL (Uint1) 1 /* attempt to memory map all files. */
 #define READDB_NEW_DO_REPORT (Uint1) 2 /* Only open the nin or pin files for a database report. */
@@ -514,16 +530,25 @@ typedef struct read_db_shared_info {
 
 typedef struct read_db_file {
 	struct read_db_file PNTR next;
-/* the contents of this struct. were allocated, or not.  Does NOT include
-the actual structure and buffer, below. */
-	Boolean contents_allocated;
+        Int4 parameters; /* All boolean parameters */
+   /* Bits: 0 - contents allocated
+            1 - is protein
+	    2 - handle common index
+	    3 - not first time
+	    4 - do not open sequence files
+	    5 - do not close header and sequence files in readdb_get_link
+   */
+   /* 0: Are contents of this struct allocated, or not?  Does NOT include
+      the actual structure and buffer, below. */
+   /* 1: If TRUE, sequence is protein, otherwise dna. */
+   /* 2: TRUE only for the initial thread;  needed for proper freeing of the CommonIndex */
+   /* 3: For recursive calls to readdb_new_ex2. */
 	CharPtr filename;	/* name of the input (w/o extensions). */
 	CharPtr aliasfilename;	/* name of the alias of input */
 /* The files pointers for "file" (above), the index file, the file 
 containing the headers, and the sequence file. */
         NlmMFILEPtr indexfp, headerfp, sequencefp;
 	Int4	header_index_offset;	/* offset to beginning of header index in indexfp. */
-	Boolean is_prot; /* If TRUE, sequence is protein, otherwise dna. */
 	CharPtr title,	/* Database Title. */
 		date;	/* Date and time database was prepared. */
 	Int4 num_seqs, /* Number of sequences in the database. */
@@ -545,12 +570,10 @@ if there is no mem-mapping or it failed. */
         ISAMObjectPtr sisam_opt;  /* Object for string search */
 	Uint1Ptr buffer;
 	Int4 allocated_length;
-	Boolean			handle_common_index; /* TRUE only for a initial thread;  needs for proper freeing of the CommonIndex */
 	CommonIndexHeadPtr	cih;	/* head of the common index */
 	Int2			filebit;/* bit corresponding to the DB file */
 	Int2			aliasfilebit;/* bit corresponding to the DB alias file */
 	OIDListPtr		oidlist; /* structure containing a list of ordinal ID's. */
-	Boolean			not_first_time; /* For recursive calls to readdb_new_ex2. */
 	Int4			sparse_idx; /* Sparse indexes indicator */
         Char                    full_filename[PATH_MAX]; /* Full path for the file */
         ReadDBSharedInfoPtr     shared_info;
@@ -807,6 +830,8 @@ Boolean LIBCALL readdb_get_filebits PROTO((ReadDBFILEPtr rdfp, Int4 ordinal_id, 
 
 Boolean LIBCALL ReadDBBioseqFetchEnable PROTO((CharPtr program, CharPtr dbname, Boolean is_na, Boolean now));
 
+Boolean LIBCALL ReadDBBioseqSetDbGeneticCode PROTO((Int4 db_genetic_code));
+
 void LIBCALL ReadDBBioseqFetchDisable PROTO((void));
 
 /* Converts a SeqIdPtr to an ordinal_id, which readdb can use to look
@@ -954,7 +979,12 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
 
-Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr output_file));
+Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
+					    output_file));
+
+Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, CharPtr basename, 
+			   Int4 Bases_In_Volume));
+
 #ifdef __cplusplus
 }
 #endif

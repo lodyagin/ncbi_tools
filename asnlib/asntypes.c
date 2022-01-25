@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   Routines to deal with internal operations on AsnType objects.
@@ -43,6 +43,12 @@
 * 02-24-94 Schuler     Make AsnTypeStringToHex LIBCALL too
 *
 * $Log: asntypes.c,v $
+* Revision 6.5  2000/05/26 14:51:23  ostell
+* fixed uninitialized variable
+*
+* Revision 6.4  2000/05/10 03:12:37  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.2  1998/06/12 19:27:56  kans
 * fixed unix compiler warnings
 *
@@ -196,8 +202,9 @@ NLM_EXTERN void AsnTypeSetIndent (Boolean increase, AsnIoPtr aip, AsnTypePtr atp
 				aip->type_indent--;
 		} while ((aip->type_indent) &&
 			(AsnFindBaseIsa(aip->typestack[aip->type_indent-1].type) == CHOICE_TYPE)
-			 && (aip->token != ISMODULE_TOKEN));
+			 && (aip->token != ISMODULE_TOKEN) && (!(aip->type & ASNIO_XML)));
 		/* this is to pop out of choice nests */
+		/* XML popping is formatted at ends */
 	}
 	return;
 }
@@ -869,6 +876,145 @@ NLM_EXTERN void LIBCALL  AsnUnlinkType (AsnTypePtr type)
 	return;
 }
 
+static void AddXMLname(AsnTypePtr atp, AsnTypePtr PNTR typestack, Int2 stackptr)
+{
+	Char buf[80];
+	AsnTypePtr atp2;
+	Boolean found=FALSE, getparent=TRUE, doitem = FALSE, done = FALSE;
+	CharPtr tmp;
+	Int2 i, isa;
+
+	if (atp->XMLname == NULL)   /* only do it once */
+	{
+		tmp = buf; *tmp = '\0';
+		if (atp->name == NULL)
+		{
+			doitem = TRUE;
+		}
+		else if (IS_UPPER(*(atp->name)))
+		{
+			getparent = FALSE;
+			tmp = StringMove(tmp, atp->name);
+		}
+
+		if ((getparent) && (stackptr))
+		{
+			atp2 = typestack[stackptr - 1];
+			isa = AsnFindBaseIsa(atp2);
+			if ((doitem) && ((isa == SEQOF_TYPE) || (isa == SETOF_TYPE)))
+			{
+				atp2 = AsnFindBaseType(atp);
+				if (atp2 != NULL)
+				{
+				if (atp2->name == NULL)
+				{
+					atp2 = typestack[stackptr - 1];
+					if (atp->type != NULL)
+					{
+						if (ISA_BASETYPE(atp->type->isa))
+						{
+							if (atp2->XMLname != NULL)
+							{
+								tmp = StringMove(tmp, atp2->XMLname);
+								getparent = FALSE;
+								found = TRUE;
+							}
+						}
+					}
+				}
+				else
+				{
+					if (atp2->XMLname != NULL)
+						tmp = StringMove(tmp, atp2->XMLname);
+					else if (atp2->name != NULL)
+						tmp = StringMove(tmp, atp2->name);
+					if (*buf != '\0')
+					{
+						doitem = FALSE;
+						getparent = FALSE;
+						done = TRUE;
+						found = TRUE;
+					}
+				}
+				}
+			}
+
+			atp2 = typestack[stackptr - 1];
+			if ((getparent) && (atp2->XMLname != NULL))  /* already nested */
+			{
+				tmp = StringMove(tmp, atp2->XMLname);
+				tmp = StringMove(tmp, "_");
+				getparent = FALSE;
+				found = TRUE;
+			}
+
+			if ((stackptr) && (getparent))
+			{
+				found = FALSE;
+
+				for (i = (stackptr - 1); (i >= 0) && (! found); i--)
+				{
+					atp2 = AsnFindBaseType(typestack[i]);
+					if ((atp2 != NULL) && (atp2->name != NULL) && (IS_UPPER(*(atp2->name))))
+					{
+						while (i < stackptr)
+						{
+							atp2 = AsnFindBaseType(typestack[i]);
+							if (atp2->name == NULL)
+								tmp = StringMove(tmp, "E");
+							else
+								tmp = StringMove(tmp, atp2->name);
+							tmp = StringMove(tmp, "_");
+							i++;
+						}
+						found = TRUE;
+					}
+				}
+			}
+
+			if ((! done) && found)
+			{
+				if (doitem)
+					tmp = StringMove(tmp, "_E");
+				else
+					tmp = StringMove(tmp, atp->name);
+			}
+		}
+
+
+		if (*buf != '\0')
+		{
+			atp->XMLname = StringSave(buf);
+		}
+	}
+
+	atp2 = AsnFindBaseType(atp);
+	if ((! atp->imported) && (atp2 != NULL) && (atp2->type != NULL))
+	{
+		isa = atp2->type->isa;
+		if ((isa == SEQ_TYPE) || (isa == SET_TYPE))
+		{
+			typestack[stackptr] = atp;
+			for (atp2 = atp->branch; atp2 != NULL; atp2 = atp2->next)
+				AddXMLname(atp2, typestack, (Int2)(stackptr + 1));
+		}
+		else if ((isa == SEQOF_TYPE) || (isa == SETOF_TYPE))
+		{
+			typestack[stackptr] = atp;
+			for (atp2 = atp->branch; atp2 != NULL; atp2 = atp2->next)
+				AddXMLname(atp2, typestack, (Int2)(stackptr + 1));
+		}			
+		else if (isa == CHOICE_TYPE)
+		{
+			typestack[stackptr] = atp;
+			for (atp2 = atp->branch; atp2 != NULL; atp2 = atp2->next)
+				AddXMLname(atp2, typestack, (Int2)(stackptr + 1));
+		}
+	}
+
+	return;
+
+}
 /*****************************************************************************
 *
 *   void AsnModuleLink(amp)
@@ -878,7 +1024,7 @@ NLM_EXTERN void LIBCALL  AsnUnlinkType (AsnTypePtr type)
 *****************************************************************************/
 NLM_EXTERN void LIBCALL  AsnModuleLink (AsnModulePtr amp)
 {
-	AsnTypePtr atp, atp2;
+	AsnTypePtr atp, atp2, typestack[10];
 	AsnModulePtr currmod, mod;
 	Boolean found;
 
@@ -926,6 +1072,22 @@ NLM_EXTERN void LIBCALL  AsnModuleLink (AsnModulePtr amp)
 		}
 		currmod = currmod->next;
 	}
+
+	/*** Fill in the XML names *********/
+
+	currmod = amp;
+	while (currmod != NULL)
+	{
+		atp = currmod->types;
+		while (atp != NULL)
+		{
+			AddXMLname(atp, typestack, (Int2)0);
+			atp = atp->next;
+		}
+		currmod = currmod->next;
+	}
+
+
 	return;
 }
 

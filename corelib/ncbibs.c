@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.5  2000/05/26 23:34:58  kans
+* added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
+*
 * Revision 6.4  1999/11/05 19:59:09  beloslyu
 * Fixed the error with size_t vs Int4 comparisons
 *
@@ -833,6 +836,12 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL  Nlm_BSFree (Nlm_ByteStorePtr bsp)
 	return (Nlm_ByteStorePtr) Nlm_MemFree(bsp);
 }
 
+/*****************************************************************************
+*
+*   ByteStorePtr Nlm_BSDup(bsp)
+*
+*****************************************************************************/
+
 #define BUFSIZE 256
 
 NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup (Nlm_ByteStorePtr source)
@@ -855,6 +864,46 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup (Nlm_ByteStorePtr source)
       count = MIN (sourceLen, (Nlm_Int4) BUFSIZE);
       while (count > 0 && sourceLen > 0) {
         Nlm_BSRead (source, buf, count);
+        Nlm_BSWrite (dest, buf, count);
+        sourceLen -= count;
+        count = MIN (sourceLen, (Nlm_Int4) BUFSIZE);
+      }
+      /* for neatness, make the duplicate point to the
+	     same location as the old one */
+      Nlm_BSSeek(dest, sourceLoc, SEEK_SET);
+    }
+    /* restore original location */
+    Nlm_BSSeek(source, sourceLoc, SEEK_SET);
+  }
+  return dest;
+}
+
+/* for copying and swapping of UID lists passed over network to BIG_ENDIAN server */
+
+NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDupAndSwapUint4 (Nlm_ByteStorePtr source)
+
+{
+  Nlm_Byte          buf [BUFSIZE + 4];
+  Nlm_Int4          count;
+  Nlm_ByteStorePtr  dest;
+  Nlm_Int4          sourceLen;
+  Nlm_Int4          sourceLoc;
+  Nlm_Int4          swapLen;
+
+  dest = NULL;
+  if (source != NULL) {
+    sourceLen = Nlm_BSLen (source);
+    dest = Nlm_BSNew (sourceLen);
+    /* read the original location */
+    sourceLoc = Nlm_BSTell(source);
+    Nlm_BSSeek(source, 0L, SEEK_SET);
+    if (dest != NULL) {
+      count = MIN (sourceLen, (Nlm_Int4) BUFSIZE);
+      while (count > 0 && sourceLen > 0) {
+        swapLen = Nlm_BSRead (source, buf, count);
+        swapLen /= 4;
+        /* swap Uint4 if IS_LITTLE_ENDIAN */
+        Nlm_SwapUint4Buff (buf, swapLen);
         Nlm_BSWrite (dest, buf, count);
         sourceLen -= count;
         count = MIN (sourceLen, (Nlm_Int4) BUFSIZE);

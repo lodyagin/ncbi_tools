@@ -1,4 +1,4 @@
-/*  $RCSfile: salogif.c,v $  $Revision: 6.1 $  $Date: 2000/03/20 19:00:28 $
+/*  $RCSfile: salogif.c,v $  $Revision: 6.2 $  $Date: 2000/05/12 19:21:45 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -25,13 +25,16 @@
 *
 * Author:	Jinghui Zhang
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *	 The Blast Search result visualization utilities  
 *
 * --------------------------------------------------------------------------
 * $Log: salogif.c,v $
+* Revision 6.2  2000/05/12 19:21:45  shavirin
+* Fixed memory leak in print_defline_for_sequence().
+*
 * Revision 6.1  2000/03/20 19:00:28  shavirin
 * Initial revision in the new location.
 *
@@ -127,106 +130,107 @@ static Boolean print_score_evalue
 static Boolean print_defline_for_sequence
 (SeqAlignPtr align, AlignRegionPtr arp, CharPtr buffer, Int4Ptr gi_return)
 {
-  SeqIdPtr sip;
-  Char name[101], buffer_id[101];
-  BioseqPtr bsp;
-  Char buf[101];
-  CharPtr title;
-  Int4 score_len;
-  Char score_buf[101];
-  Int4 totle_len = 80;
-  Int4 title_len, len, j;
-  SeqIdPtr gi_list, tmp_sip, bestid;
+    SeqIdPtr sip;
+    Char name[101], buffer_id[101];
+    BioseqPtr bsp;
+    Char buf[101];
+    CharPtr title;
+    Int4 score_len;
+    Char score_buf[101];
+    Int4 totle_len = 80;
+    Int4 title_len, len, j;
+    SeqIdPtr gi_list, tmp_sip, bestid;
+    Boolean title_allocated = FALSE;
 
-  while(align) {
-    sip = TxGetSubjectIdFromSeqAlign(align);
-    if(sip != NULL) {
-      MuskSeqIdWrite(sip, name, 19, PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
-      if(StringCmp(name, arp->seq_name) == 0) {
-	gi_list = GetUseThisGi(align);
-        bsp = BioseqLockById(sip);
-        title = NULL;
-        if(bsp != NULL) {
-		if (gi_list == NULL)
-		{
+    while(align) {
+        sip = TxGetSubjectIdFromSeqAlign(align);
+        if(sip != NULL) {
+            MuskSeqIdWrite(sip, name, 19, PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
+            if(StringCmp(name, arp->seq_name) == 0) {
+                gi_list = GetUseThisGi(align);
+                bsp = BioseqLockById(sip);
+                title = NULL;
+                if(bsp != NULL) {
+                    if (gi_list == NULL) {
 			MuskSeqIdWrite(bsp->id, name, 10, PRINTID_TEXTID_ACCESSION, TRUE, FALSE);
 			title = BioseqGetTitle(bsp);
-		}
-		else
-		{
+                    } else {
 			FilterTheDefline(bsp, gi_list, buffer_id, 100, &title);
+                        title_allocated = TRUE;
 			tmp_sip = SeqIdParse(buffer_id);
 			bestid = SeqIdFindBest(tmp_sip, SEQID_GI);
 			if (bestid != NULL && bestid->choice == SEQID_GI)
-			*gi_return = bestid->data.intvalue;
+                            *gi_return = bestid->data.intvalue;
 			MuskSeqIdWrite(tmp_sip, name, 10, PRINTID_TEXTID_ACCESSION, TRUE, FALSE);
-		}
-        }
-        else
-          StringCpy(name, arp->seq_name);
-        score_len = 0;
-        score_buf[0] = '\0';
-        if(print_score_evalue(arp->e_val, arp->score, score_buf))
-          score_len = StringLen(score_buf);
-
-        title_len = totle_len - StringLen(name) - score_len -2;
-        if(score_len > 0)
-          title_len -= 2;
-        StringCpy(buffer, name);
-        if(title != NULL) {
-          for(j = 0, len = 0; len < title_len; ++len)
-            {
-              if(title[len] == '\0')
-                break;
-              else
-                {
-                  /* if(title[len] = '<')
-                     {
-                     buf[j] = '&';
-                     buf[j+1] = 'l';
-                     buf[j+2] = 't';
-                     buf[j+3] = ';';
-                     j+=4;
-                     }
-                     else if(title[len] == '>')
-                     {
-                     buf[j] = '&';
-                     buf[j+1] = 'g';
-                     buf[j+2] = 't';
-                     buf[j+3] = ';';
-                     j+=4;
-                     }
-                     else
-                     buf[j++] = title[len]; */
-                  buf[len] = title[len];
-                  if(buf[len] == '<' || buf[len] == '>')
-                    buf[len] = ' ';
-                  else if(buf[len] == '\'')
-                    buf[len] = '-';
-                  else if(buf[len] == '\"')
-                    buf[len] = ' ';
+                        SeqIdSetFree(tmp_sip);
+                    }
+                } else {
+                    StringCpy(name, arp->seq_name);
                 }
+
+                score_len = 0;
+                score_buf[0] = '\0';
+                if(print_score_evalue(arp->e_val, arp->score, score_buf))
+                    score_len = StringLen(score_buf);
+                
+                title_len = totle_len - StringLen(name) - score_len -2;
+                if(score_len > 0)
+                    title_len -= 2;
+                StringCpy(buffer, name);
+                if(title != NULL) {
+                    for(j = 0, len = 0; len < title_len; ++len) {
+                        if(title[len] == '\0')
+                            break;
+                        else {
+                            /* if(title[len] = '<')
+                               {
+                               buf[j] = '&';
+                               buf[j+1] = 'l';
+                               buf[j+2] = 't';
+                               buf[j+3] = ';';
+                               j+=4;
+                               }
+                               else if(title[len] == '>')
+                               {
+                               buf[j] = '&';
+                               buf[j+1] = 'g';
+                               buf[j+2] = 't';
+                               buf[j+3] = ';';
+                               j+=4;
+                               }
+                               else
+                               buf[j++] = title[len]; */
+                            buf[len] = title[len];
+                            if(buf[len] == '<' || buf[len] == '>')
+                                buf[len] = ' ';
+                            else if(buf[len] == '\'')
+                                buf[len] = '-';
+                            else if(buf[len] == '\"')
+                                buf[len] = ' ';
+                        }
+                    }
+                    buf[len] = '\0';
+                    
+                    len = StringLen(buffer);
+                    sprintf(buffer+len, "  %s", buf);
+
+                    if(title_allocated)
+                        MemFree(title);
+                }
+                if(score_len > 0) {
+                    len = StringLen(buffer);
+                    sprintf(buffer+len, "..%s", score_buf);
+                }
+                
+                if(bsp != NULL)
+                    BioseqUnlock(bsp);
+                return TRUE;
             }
-          buf[len] = '\0';
-
-          len = StringLen(buffer);
-          sprintf(buffer+len, "  %s", buf);
         }
-        if(score_len > 0)
-          {
-            len = StringLen(buffer);
-            sprintf(buffer+len, "..%s", score_buf);
-          }
-
-        if(bsp != NULL)
-          BioseqUnlock(bsp);
-        return TRUE;
-      }
+        align = align->next;
     }
-    align = align->next;
-  }
-
-  return FALSE;
+        
+    return FALSE;
 }
 
 

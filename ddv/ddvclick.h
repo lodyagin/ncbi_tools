@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.h,v 1.4 2000/04/05 20:52:35 hurwitz Exp $
+/*  $Id: ddvclick.h,v 1.6 2000/05/05 20:24:13 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.4 $
+* $Revision: 1.6 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.h,v $
+* Revision 1.6  2000/05/05 20:24:13  hurwitz
+* some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
+*
+* Revision 1.5  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
 * Revision 1.4  2000/04/05 20:52:35  hurwitz
 * added GUI control for shifting left and right alignment boundaries
 *
@@ -103,6 +109,8 @@ NLM_EXTERN Int4 DDV_GetHPixelPosGivenColNumber(DdvMainPtr dmp, RecT rc, Int4 Col
 NLM_EXTERN Int4 DDV_GetVPixelPosGivenRowNumber(DdvMainPtr dmp, RecT rc, Int4 Row);
 NLM_EXTERN void DDV_GetVPixelPosOfEmptySpace(DdvMainPtr dmp, RecT rc, Int4* pTop, Int4* pBot);
 NLM_EXTERN Int4 DDV_GetColNumberGivenMousePos(DdvMainPtr dmp, RecT rc, PoinT pt);
+NLM_EXTERN void DDV_ReDraw(DdvMainPtr dmp);
+NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col);
 
 #ifdef __cplusplus
 }

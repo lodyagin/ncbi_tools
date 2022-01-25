@@ -34,6 +34,18 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.63  2000/05/30 15:08:57  shavirin
+* Rolled back revision without swaping UIDs from Entrez query.
+*
+* Revision 1.60  2000/05/05 18:44:05  shavirin
+* Added protection against uids== NULL in BLASTGetUidsFromQuery().
+*
+* Revision 1.59  2000/05/04 18:09:26  shavirin
+* Added new function  BLASTGetUidsFromQuery().
+*
+* Revision 1.58  2000/04/28 18:05:46  shavirin
+* Added parameter is_rps_blast to Network BLAST ASN.1
+*
 * Revision 1.57  2000/04/18 16:30:37  madden
 * Fix memory leaks
 *
@@ -207,7 +219,7 @@
 #include <blastpat.h>
 #include <netblap3.h>
 #include <vecscrn.h>
-
+#include <ent2api.h>
 
 #define BLAST_SERVER_RETRIES  2
 
@@ -691,6 +703,7 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->db_dir_prefix = StringSave(options->db_dir_prefix);
 #endif
         parameters->use_best_align = options->use_best_align;
+        parameters->is_rps_blast = options->is_rps_blast;
         
 	return parameters;
 }
@@ -2387,6 +2400,7 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
 		}
 #endif
         	options->use_best_align = parameters->use_best_align;
+        	options->is_rps_blast = parameters->is_rps_blast;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {
@@ -2394,4 +2408,72 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
 	}
 
         return options;
+}
+/* This function is interface to the Entrez2 engine. It may be used
+   to get list of gis corresponding to the Entrez Boolean string or
+   just number of such hits in the Entrez database */
+
+NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids, 
+                                      Boolean is_na, Boolean count_only)
+{
+    Entrez2ReplyPtr e2ry;
+    Entrez2RequestPtr  e2rq;
+    E2ReplyPtr e2rp;
+    Int4 count = 0;
+    Entrez2BooleanReplyPtr e2br;
+    Entrez2IdListPtr e2idlist;
+    
+    if(uids != NULL)
+        *uids = NULL;
+    
+    EntrezSetProgramName ("BLAST API");
+    EntrezSetServer ("www.ncbi.nlm.nih.gov", 80, 
+                     "/entrez/utils/entrez2server.fcgi");
+    
+    e2rq = EntrezCreateBooleanRequest (!count_only, FALSE, 
+                                       is_na? "Nucleotide" : "Protein", 
+                                       query, 0, 0, NULL, 0, 0);
+    
+    e2ry = EntrezSynchronousQuery (e2rq);
+    
+    if (e2ry == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, 
+                  "NULL returned from EntrezSynchronousQuery()");
+        return -1;
+    }
+
+    if((e2rp = e2ry->reply) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Invalid ASN.1: E2ReplyPtr==NULL");
+        return -1;
+    }
+    
+    switch(e2rp->choice) {
+        
+    case E2Reply_error:
+        ErrPostEx(SEV_ERROR, 0, 0, (CharPtr) e2rp->data.ptrvalue);
+        count = -1;
+        break;
+    case E2Reply_eval_boolean:
+        e2br = (Entrez2BooleanReplyPtr) e2rp->data.ptrvalue;
+        count = e2br->count;
+        if((e2idlist = e2br->uids) != NULL) {
+            count = e2idlist->num;
+            if(uids != NULL) {
+                *uids = MemNew(sizeof(Int4)*count);
+                BSSeek((ByteStorePtr) e2idlist->uids, 0, SEEK_SET);
+                BSRead((ByteStorePtr) e2idlist->uids, *uids, sizeof(Int4)*count);
+            }
+        }
+        break;
+    default:
+        ErrPostEx(SEV_ERROR, 0, 0, "Invalid reply type from the server: %d", e2rp->choice);
+        count = -1;
+        break;
+        
+    }
+    
+    Entrez2ReplyFree(e2ry);
+    Entrez2RequestFree(e2rq);
+
+    return count;
 }

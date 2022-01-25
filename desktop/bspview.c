@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.74 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -1097,6 +1097,13 @@ static void ResizeViewForm (WindoW w)
     s.bottom = bottom;
     SetPosition (bfp->bvd.udv, &s);
     AdjustPrnt (bfp->bvd.udv, &s, FALSE);
+  }
+  if (bfp->bvd.ddv != NULL) {
+    GetPosition (bfp->bvd.ddv, &s);
+    s.right = width - 10;
+    s.bottom = bottom;
+    SetPosition (bfp->bvd.ddv, &s);
+    AdjustPrnt (bfp->bvd.ddv, &s, FALSE);
   }
   /*
   if (bfp->bvd.vwr != NULL) {
@@ -2825,14 +2832,14 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     bfp->bvd.udvParentGrp = HiddenGroup (h, -1, 0, NULL);
     bfp->bvd.udv = AutonomousPanel4 (bfp->bvd.udvParentGrp, pixwidth, pixheight,
                                      UDV_draw_viewer, UnDViewerVScrlProc, NULL,
-                                     sizeof (ViewerDialogDataPtr), NULL, NULL);
+                                     sizeof (ViewerDialogDataPtr), UDVResetProc, NULL);
     SetObjectExtra (bfp->bvd.udvParentGrp, (Pointer) &(bfp->bvd), NULL);
     Hide (bfp->bvd.udvParentGrp);
 
     bfp->bvd.ddvParentGrp = HiddenGroup (h, -1, 0, NULL);
     bfp->bvd.ddv = AutonomousPanel4 (bfp->bvd.ddvParentGrp, pixwidth, pixheight,
                                      DDV_DrawViewer, DDV_VScrlProc, DDV_HScrlProc,
-                                     sizeof (DdvMainPtr), NULL, NULL);
+                                     sizeof (DdvMainPtr), DDVResetProc, NULL);
     SetObjectExtra (bfp->bvd.ddvParentGrp, (Pointer) &(bfp->bvd), NULL);
     Hide (bfp->bvd.ddvParentGrp);
 

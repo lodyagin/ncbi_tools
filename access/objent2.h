@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.8 at Apr 6, 2000  5:13 PM
+*    Generated using ASNCODE Revision: 6.8 at May 5, 2000  3:06 PM
 *
 **************************************************/
 
@@ -33,7 +33,7 @@ objent2AsnLoad PROTO((void));
 typedef struct struct_Entrez2_id_list {
    CharPtr   db;
    Int4   num;
-   Pointer   uids;
+   ByteStorePtr   uids;
 } Entrez2IdList, PNTR Entrez2IdListPtr;
 
 
@@ -430,7 +430,7 @@ NLM_EXTERN Boolean LIBCALL Entrez2HierNodeAsnWrite PROTO (( Entrez2HierNodePtr ,
 typedef struct struct_Entrez2_link_set {
    struct struct_Entrez2_id_list PNTR   ids;
    Int4   data_size;
-   Pointer   data;
+   ByteStorePtr   data;
 } Entrez2LinkSet, PNTR Entrez2LinkSetPtr;
 
 

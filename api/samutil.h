@@ -1,4 +1,4 @@
-/*   $Id: samutil.h,v 1.37 2000/04/26 21:53:22 hurwitz Exp $
+/*   $Id: samutil.h,v 1.45 2000/05/25 21:40:42 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,43 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.h,v 1.37 2000/04/26 21:53:22 hurwitz Exp $
+* File Name:  $Id: samutil.h,v 1.45 2000/05/25 21:40:42 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.37 $
+* $Revision: 1.45 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.h,v $
+* Revision 1.45  2000/05/25 21:40:42  hurwitz
+* rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
+*
+* Revision 1.44  2000/05/19 13:48:32  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 1.43  2000/05/16 19:43:02  hurwitz
+* grey out create block, delete block, undo, and redo as needed
+*
+* Revision 1.42  2000/05/15 23:39:33  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 1.41  2000/05/12 21:18:14  hurwitz
+* added window asking if user wants to save unsaved edits for dde
+*
+* Revision 1.40  2000/05/05 20:24:14  hurwitz
+* some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
+*
+* Revision 1.39  2000/05/04 22:43:39  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
+* Revision 1.38  2000/05/02 19:50:37  hurwitz
+* fixed some bugs with launching DDE from DDV, added new alnMgr fn for positioning DDE on proper column
+*
 * Revision 1.37  2000/04/26 21:53:22  hurwitz
 * added save function to tell AlnMgr about edits made in DDE
 *
@@ -225,6 +249,8 @@ typedef  struct  _SAM_ViewerGlobal {
   StartNetworkProc NetStartProc;
   void *BlastFile;
   void *BlastNet;
+  void *BlastFileGap;
+  void *BlastNetGap;
   void *BlastMany;
 } SAM_ViewGlobal, PNTR SAM_ViewGlobalPtr;
 
@@ -274,7 +300,9 @@ typedef struct DDE_stack {
   Int4          BlockIndex;          /* record of block that's being adjusted */
   Int4          LeftBoundary;        /* record of whether Left or Right boundary shift */
   Int4          LaunchBlock;         /* record of block editor was launched on */
+  Boolean       IsUnAligned;         /* record of whether block editor was launched on is aligned */
   Int4          NumBlocks;           /* num blocks at last save */
+  Boolean       SomethingToSave;     /* whether there are edits to save */
 } DDE_Stack, PNTR DDE_StackPtr;
 
 /*=====================================================================
@@ -284,11 +312,14 @@ NLM_EXTERN DDE_StackPtr DDE_NewStack(MsaParaGPopListPtr pPopList);
 NLM_EXTERN DDE_StackPtr DDE_FreeStack(DDE_StackPtr pStack);
 NLM_EXTERN Boolean DDE_RestoreRowOrder(DDE_StackPtr pStack, Boolean Save);
 NLM_EXTERN Boolean DDE_HideRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_HideAllRows(DDE_StackPtr pStack, Boolean Save);
 NLM_EXTERN Boolean DDE_HideNewRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
 NLM_EXTERN Boolean DDE_ShowRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
+NLM_EXTERN Boolean DDE_ShowAllRows(DDE_StackPtr pStack, Boolean Save);
 NLM_EXTERN Boolean DDE_ShowNewRow(DDE_StackPtr pStack, Int4 Row, Boolean Save);
 NLM_EXTERN Boolean DDE_MoveRow(DDE_StackPtr pStack, Int4 From, Int4 To, Boolean Save);
-NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Boolean Save);
+NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Boolean Save,
+                                Boolean ShiftBack);
 NLM_EXTERN Boolean DDE_InsertGap(DDE_StackPtr pStack, Int4 Row, Int4 Pos, Boolean Save);
 NLM_EXTERN Boolean DDE_RemoveGap(DDE_StackPtr pStack, Int4 Row, Int4 Pos, Boolean Save);
 NLM_EXTERN Boolean DDE_ShiftLeftBoundary(DDE_StackPtr pStack, Int4 BlockIndex, Int4 NumChars, Boolean Save);
@@ -303,21 +334,30 @@ NLM_EXTERN Boolean DDE_DeSelectCol(DDE_StackPtr pStack, Int4 ColStart, Int4 ColS
 NLM_EXTERN Boolean DDE_Add(DDE_StackPtr pStack);
 NLM_EXTERN Boolean DDE_Prev(DDE_StackPtr pStack);
 NLM_EXTERN Boolean DDE_Next(DDE_StackPtr pStack);
+NLM_EXTERN Boolean DDE_AtStartOfStack(DDE_StackPtr pStack);
+NLM_EXTERN Boolean DDE_AtEndOfStack(DDE_StackPtr pStack);
 NLM_EXTERN void DDE_GetOriginal(DDE_StackPtr pStack, Boolean Save);
 NLM_EXTERN Int4 DDE_GetIndexOfMaster(DDE_StackPtr pStack);
 NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Int4 DDE_GetAlignStop(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Int4 DDE_GetBlockWidth(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Int4 DDE_GetNumBlocks(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Int4 DDE_GetNumBlocks2(MsaParaGPopListPtr pPopList);
 NLM_EXTERN Boolean DDE_IsColValid(MsaParaGPopListPtr pPopList, Int4 Col,
                                   Int4 PNTR pBlockIndex, Boolean PNTR pUnAligned);
 NLM_EXTERN Int4    DDE_GetNumSegmentsInBlock(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Boolean DDE_CreateArraysForDenseSeg(DDE_InfoPtr pEditInfo, Int4 BlockIndex,
                                                Int4 PNTR pStarts, Int4 PNTR pLens);
+NLM_EXTERN Int4    DDE_GetFirstDisplayCoord(MsaParaGPopListPtr pPopList);
+NLM_EXTERN Boolean DDE_IsLeftAlignedGapInRows(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Boolean DDE_IsRightAlignedGapInRows(DDE_InfoPtr pEditInfo);
+NLM_EXTERN void    DDE_RemoveAlignedGapsFromEnds(DDE_InfoPtr pEditInfo);
+NLM_EXTERN void    DDE_RemoveAlignedGapsFromEndOfRow(DDE_StackPtr pStack, Int4 Row, Boolean RightSide);
 
 /*=====================================================================
 *  here are some helper functions
 *======================================================================*/
-NLM_EXTERN DDE_InfoPtr  DDE_New(MsaParaGPopListPtr pPopList);
+NLM_EXTERN DDE_InfoPtr  DDE_New(MsaParaGPopListPtr pPopList, Int4 TotalNumRows);
 NLM_EXTERN DDE_InfoPtr  DDE_Free(DDE_InfoPtr pEditInfo);
 NLM_EXTERN DDE_InfoPtr  DDE_Copy(DDE_InfoPtr pEditInfo);
 NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList);
@@ -330,6 +370,7 @@ NLM_EXTERN Int4        DDE_GetInsertRow(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN Boolean     DDE_IsBefore(DDE_InfoPtr pEditInfo, Int4 Row1, Int4 Row2);
 NLM_EXTERN ParaGPtr    DDE_GetParaGPtr(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr2(MsaParaGPopListPtr pPopList, Int4 Row);
 NLM_EXTERN void        DDE_SetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr vnp);
 NLM_EXTERN ValNodePtr  DDE_AddMsaTxtNode(ValNodePtr ptxtList, Int4 from, Int4 to,
                             Boolean IsGap, Boolean IsUnAligned, Boolean Before);
@@ -380,13 +421,13 @@ NLM_EXTERN Boolean     DDE_ShiftLeftBoundaryLeft1(DDE_InfoPtr pEditInfo, Int4 Bl
 NLM_EXTERN Boolean     DDE_ShiftLeftBoundaryRight1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Boolean     DDE_ShiftRightBoundaryLeft1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Boolean     DDE_ShiftRightBoundaryRight1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
-NLM_EXTERN void        DDE_ReMakeRuler(DDE_InfoPtr pEditInfo);
-NLM_EXTERN ValNodePtr  DDE_ReMakeRulerForRow(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN ValNodePtr  DDE_ReMakeRuler(MsaParaGPopListPtr pPopList);
+NLM_EXTERN ValNodePtr  DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Row);
 NLM_EXTERN Boolean     DDE_AreIdenticalRulers(ValNodePtr pRuler1, ValNodePtr pRuler2);
 NLM_EXTERN Boolean     DDE_AreIdenticalRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2);
 NLM_EXTERN Boolean     DDE_MergeNodes(ValNodePtr ptxtList);
 NLM_EXTERN void        DDE_MergeNodesLists(DDE_InfoPtr pEditInfo);
-NLM_EXTERN Int4        DDE_GetFirstAlignIndex(DDE_InfoPtr pEditInfo);
+NLM_EXTERN Int4        DDE_GetFirstAlignIndex(MsaParaGPopListPtr pPopList);
 NLM_EXTERN void        DDE_Verify(DDE_InfoPtr pEditInfo);
 NLM_EXTERN ValNodePtr  DDE_SplitNode(ValNodePtr ptxtList, Int4 Offset);
 NLM_EXTERN void        DDE_SetTextStyle(MsaTxtDispPtr msap);

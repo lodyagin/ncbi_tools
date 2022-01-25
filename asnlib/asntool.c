@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,12 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.6  2000/05/10 17:45:00  ostell
+* fixed duplicate command line arguments
+*
+* Revision 6.5  2000/05/10 03:12:37  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.4  1998/03/25 23:31:39  kans
 * params to register new object manager type, give optional non-default label
 *
@@ -95,16 +101,21 @@
 #include "asnbuild.h"
 #include "asntool.h"
 
-extern void AsnTxtReadValFile PROTO((AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPtr encode));
-extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPtr encode));
+extern void AsnTxtReadValFile PROTO((AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout,
+				     AsnIoPtr encode, AsnIoPtr xaipout));
+extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout,
+				     AsnIoPtr encode, AsnIoPtr xaipout));
 
-#define NUMARGS 21
+#define NUMARGS 24
 
 Args asnargs[NUMARGS] = {
 	{"ASN.1 Module File",NULL,NULL,NULL,FALSE,'m',ARG_FILE_IN,0.0,0,NULL},
 	{"ASN.1 Module File", NULL,NULL,NULL,TRUE,'f',ARG_FILE_OUT,0.0,0,NULL},
+	{"XML DTD File", NULL,NULL,NULL,TRUE,'X',ARG_FILE_OUT,0.0,0,NULL},
+	{"ASN.1 Tree Dump File", NULL,NULL,NULL,TRUE,'T',ARG_FILE_OUT,0.0,0,NULL},
 	{"Print Value File",NULL,NULL,NULL,TRUE,'v',ARG_FILE_IN,0.0,0,NULL},
 	{"Print Value File",NULL,NULL,NULL,TRUE,'p',ARG_FILE_OUT,0.0,0,NULL},
+	{"XML Data File", NULL,NULL,NULL,TRUE,'x',ARG_FILE_OUT,0.0,0,NULL},
 	{"Binary Value File (type required)",NULL,NULL,NULL,TRUE,'d',ARG_FILE_IN,0.0,0,NULL},
 	{"Binary Value Type",NULL,NULL,NULL,TRUE,'t',ARG_STRING,0.0,0,NULL},
 	{"Binary Value File",NULL,NULL,NULL,TRUE,'e',ARG_FILE_OUT,0.0,0,NULL},
@@ -131,20 +142,26 @@ Args asnargs[NUMARGS] = {
 
 Int2 Main (void)
 {
-Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
-     , p_argPrintFileOut = 3, d_argBinaryFileIn = 4
-     , t_argAsnTypeName = 5, e_argBinaryFileOut = 6
-     , o_argHeadFile = 7, l_argLoadFile = 8
-     , b_argBufferSize = 9, w_argTokenMax = 10
+Int2 m_argModuleIn=0, f_arg_moduleOut=1, 
+	X_argDTDModuleOut=2, T_argTreeDumpOut=3, 
+	v_argPrintFileIn = 4, p_argPrintFileOut = 5,
+	x_argXMLDataOut=6, d_argBinaryFileIn = 7
+     , t_argAsnTypeName = 8, e_argBinaryFileOut = 9
+     , o_argHeadFile = 10, l_argLoadFile = 11
+     , b_argBufferSize = 12, w_argTokenMax = 13
 /*--- args below here are capitilized and for code generation, only--*/
 /*--  Except for the 'M' arg, which will also affect normal use ---*/
-     , G_argGenerateCode = 11, M_argMoreModuleFiles = 12
-     , B_argCodeFileName = 13, D_argCodeGenDebugLevel = 14
-     , S_argDebugFileName = 15, I_argExtraIncludeName = 16
-     , Z_argBitTwiddle  = 17, K_argLoadName = 18, J_objMgrEntry = 19, L_objMgrLabel = 20;
+     , G_argGenerateCode = 14, M_argMoreModuleFiles = 15
+     , B_argCodeFileName = 16, D_argCodeGenDebugLevel = 17
+     , S_argDebugFileName = 18, I_argExtraIncludeName = 19
+     , Z_argBitTwiddle = 20, K_argLoadName = 21
+	, J_objMgrEntry = 22, L_objMgrLabel = 23;
+
 	AsnIoPtr aip = NULL,
 		aipout = NULL,
+		xaipout = NULL,
 		aipencode = NULL;
+	FILE * fp;
 	AsnModulePtr amp = NULL,
 				currentmod = NULL,
 				nextmod;
@@ -159,7 +176,7 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 	ErrSetFatalLevel(SEV_MAX);
         ErrSetMessageLevel(SEV_MIN);
 
-	if (! GetArgs("AsnTool 3", NUMARGS, asnargs))
+	if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
 		return 1;
         ErrClear();
 
@@ -198,8 +215,6 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 
 	while ((nextmod = AsnLexTReadModule(aip)) != NULL )
 	{
-		if (aipout != NULL)
-			AsnPrintModule(nextmod, aipout);
 
 		if (amp == NULL)
 			amp = nextmod;
@@ -237,9 +252,6 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 /*--- read the modules in this current file ---*/
 	     while ((nextmod = AsnLexTReadModule(aip)) != NULL )
 	     {
-		     if (aipout != NULL)
-			     AsnPrintModule(nextmod, aipout);
-
 		     if (amp == NULL)
 			     amp = nextmod;
 		     else
@@ -253,11 +265,6 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 
 	aip = AsnIoClose(aip);
 
-	AsnModuleLink(amp);      /* link up modules where possible */
- acip -> amp = amp;
-	
-	aipout = AsnIoClose(aipout);
-
 	if (amp == NULL)
 	{
 		ErrPostEx(SEV_FATAL,0,0, "Unable to continue due to bad ASN.1 module");
@@ -265,11 +272,90 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 		return 1;
 	}
 
+
+	AsnModuleLink(amp);      /* link up modules where possible */
+	
+	if (asnargs[f_arg_moduleOut].strvalue != NULL)
+	{
+		if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
+		{
+			ErrShow();
+			return 1;
+		}
+
+		currentmod = amp;
+		do
+		{
+			AsnPrintModule(currentmod, aipout);
+			if (currentmod == acip->last_amp)  /* last main module */
+				currentmod = NULL;
+			else
+				currentmod = currentmod->next;
+		} while (currentmod != NULL);
+
+		aipout = AsnIoClose(aipout);
+	}
+	
+	if (asnargs[X_argDTDModuleOut].strvalue != NULL)
+	{
+		if ((aipout = AsnIoOpen(asnargs[X_argDTDModuleOut].strvalue, "wx")) == NULL)
+		{
+			ErrShow();
+			return 1;
+		}
+
+		currentmod = amp;
+		do
+		{
+			AsnPrintModuleXML(currentmod, aipout);
+			if (currentmod == acip->last_amp)  /* last main module */
+				currentmod = NULL;
+			else
+				currentmod = currentmod->next;
+		} while (currentmod != NULL);
+
+		aipout = AsnIoClose(aipout);
+	}
+	
+	if (asnargs[T_argTreeDumpOut].strvalue != NULL)
+	{
+		if ((fp = FileOpen(asnargs[T_argTreeDumpOut].strvalue, "w")) == NULL)
+		{
+			ErrShow();
+			return 1;
+		}
+
+		currentmod = amp;
+		do
+		{
+			AsnPrintTreeModule(currentmod, fp);
+			if (currentmod == acip->last_amp)  /* last main module */
+				currentmod = NULL;
+			else
+				currentmod = currentmod->next;
+		} while (currentmod != NULL);
+
+		FileClose(fp);
+	}
+
+
+ acip -> amp = amp;
+	
                              /* print a value file */
 
 	if (asnargs[p_argPrintFileOut].strvalue != NULL)
 	{
 		if ((aipout = AsnIoOpen(asnargs[p_argPrintFileOut].strvalue, "w")) == NULL)
+		{
+			ErrShow();
+			return 1;
+		}
+	}
+                             /* print an XML file */
+
+	if (asnargs[x_argXMLDataOut].strvalue != NULL)
+	{
+		if ((xaipout = AsnIoOpen(asnargs[x_argXMLDataOut].strvalue, "wx")) == NULL)
 		{
 			ErrShow();
 			return 1;
@@ -284,7 +370,7 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 			return 1;
 		}
 
-		AsnTxtReadValFile(amp, aip, aipout, aipencode);
+		AsnTxtReadValFile(amp, aip, aipout, aipencode, xaipout);
                 ErrShow();
 	}
 
@@ -318,10 +404,11 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 	    }
 
 
-		AsnBinReadValFile(atp, aip, aipout, aipencode);
+		AsnBinReadValFile(atp, aip, aipout, aipencode, xaipout);
                 ErrShow();
 	}
 
+	AsnIoClose(xaipout);
 	AsnIoClose(aipout);
 	AsnIoClose(aip);
 	AsnIoClose(aipencode);
@@ -358,24 +445,30 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1, v_argPrintFileIn = 2
 *   	prints to aipout if aipout != NULL
 *
 *****************************************************************************/
-void AsnTxtReadValFile (AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPtr aipencode)
+void AsnTxtReadValFile (AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout,
+			AsnIoPtr aipencode, AsnIoPtr xaipout)
 
 {
 	AsnTypePtr atp;
 	DataVal value;
-	Boolean read_value, print_value, encode_value, restart;
+	Boolean read_value, print_value, encode_value, restart, xmlvalue;
 
 	if (aipout != NULL)
 		print_value = TRUE;
 	else
 		print_value = FALSE;
 
+	if (xaipout != NULL)
+		xmlvalue = TRUE;
+	else
+		xmlvalue = FALSE;
+
 	if (aipencode != NULL)
 		encode_value = TRUE;
 	else
 		encode_value = FALSE;
 
-	if (print_value || encode_value)
+	if (print_value || encode_value || xmlvalue)
 		read_value = TRUE;
 	else
 		read_value = FALSE;
@@ -398,6 +491,11 @@ void AsnTxtReadValFile (AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPt
 				AsnPrintNewLine(aipout);
 				AsnPrintNewLine(aipout);
 			}
+			if (xmlvalue)
+			{
+				AsnPrintNewLine(xaipout);
+				AsnPrintNewLine(xaipout);
+			}
 			restart = FALSE;
 		}
 
@@ -410,6 +508,11 @@ void AsnTxtReadValFile (AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPt
 			if (print_value)
 			{
 				if (! AsnTxtWrite(aipout, atp, &value))
+					return;
+			}
+			if (xmlvalue)
+			{
+				if (! AsnTxtWrite(xaipout, atp, &value))
 					return;
 			}
 			if (encode_value)
@@ -442,23 +545,29 @@ void AsnTxtReadValFile (AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPt
 *   	prints to aipout if aipout != NULL
 *
 *****************************************************************************/
-void AsnBinReadValFile (AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPtr aipencode)        /* type of message */
+void AsnBinReadValFile (AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout,
+			AsnIoPtr aipencode, AsnIoPtr xaipout)        /* type of message */
 
 {
 	DataVal value;
-	Boolean read_value, print_value, encode_value;
+	Boolean read_value, print_value, encode_value, xmlvalue;
 
 	if (aipout != NULL)
 		print_value = TRUE;
 	else
 		print_value = FALSE;
 
+	if (xaipout != NULL)
+		xmlvalue = TRUE;
+	else
+		xmlvalue = FALSE;
+
 	if (aipencode != NULL)
 		encode_value = TRUE;
 	else
 		encode_value = FALSE;
 
-	if (print_value || encode_value)
+	if (print_value || encode_value || xmlvalue)
 		read_value = TRUE;
 	else
 		read_value = FALSE;
@@ -473,6 +582,11 @@ void AsnBinReadValFile (AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout, AsnIoPtr 
 			if (print_value)
 			{
 				if (! AsnTxtWrite(aipout, atp, &value))
+					return;
+			}
+			if (xmlvalue)
+			{
+				if (! AsnTxtWrite(xaipout, atp, &value))
 					return;
 			}
 			if (encode_value)

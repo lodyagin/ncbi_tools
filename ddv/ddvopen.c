@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.61 2000/04/21 23:00:50 hurwitz Exp $
+/*  $Id: ddvopen.c,v 1.80 2000/05/24 21:43:00 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.61 $
+* $Revision: 1.80 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,63 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.80  2000/05/24 21:43:00  hurwitz
+* getting hide/show rows to work with DDV and DDE together
+*
+* Revision 1.79  2000/05/23 22:00:14  hurwitz
+* working on launch of DDE from DDV
+*
+* Revision 1.78  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 1.77  2000/05/15 22:00:36  hurwitz
+* put save-edits query into DDV_SlaveQuit where it belongs
+*
+* Revision 1.76  2000/05/12 21:18:13  hurwitz
+* added window asking if user wants to save unsaved edits for dde
+*
+* Revision 1.75  2000/05/12 16:15:25  hurwitz
+* reverted to not doing IntersectOnMaster for DDE, now determined by call to ViewMgr_Attach
+*
+* Revision 1.74  2000/05/11 16:28:44  wheelan
+* made DDV_ShredAln NLM_EXTERN
+*
+* Revision 1.73  2000/05/10 22:03:29  thiessen
+* temporary fix for CN3D_[TRIM,SHRED] not defined
+*
+* Revision 1.72  2000/05/10 16:47:25  wheelan
+* added CN3D_SHRED and CN3D_TRIM options; added ddv_shred_aln
+*
+* Revision 1.71  2000/05/09 14:21:54  wheelan
+* added ddv_truncate_overlaps
+*
+* Revision 1.70  2000/05/08 16:29:27  wheelan
+* change to ungapped BLAST
+*
+* Revision 1.69  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
+* Revision 1.68  2000/05/03 17:48:30  hurwitz
+* keep DDV in same column when DDE does a save
+*
+* Revision 1.67  2000/05/03 16:16:51  hurwitz
+* fixed bug fix from yesterday
+*
+* Revision 1.66  2000/05/02 19:50:38  hurwitz
+* fixed some bugs with launching DDE from DDV, added new alnMgr fn for positioning DDE on proper column
+*
+* Revision 1.65  2000/04/28 14:43:37  hurwitz
+* send message to DDV after edits in DDE are accepted by AlnMgr
+*
+* Revision 1.64  2000/04/27 22:21:58  lewisg
+* misc bugs/features
+*
+* Revision 1.63  2000/04/27 19:57:59  hurwitz
+* scroll to aligned block on launch of DDE
+*
+* Revision 1.62  2000/04/27 13:33:41  durand
+* SpacerSize min value fixed to 1; update view when SpacerSize is changed
+*
 * Revision 1.61  2000/04/21 23:00:50  hurwitz
 * can launch DDE from DDV
 *
@@ -280,6 +337,10 @@
 #include <viewmgr.h>
 #include <actutils.h>
 
+
+#if !defined(CN3D_TRIM) && !defined(CN3D_SHRED)
+#define CN3D_SHRED 1
+#endif
 
 /*extern WindoW g_hParent = NULL;*/
 static void DDV_RegisterMsgFuncOnBsp(Uint2 bsp_eID,DdvMainPtr dmp);
@@ -669,7 +730,7 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 
   Function : DDV_MSG_UPDATE_ViewMgr()
   
-  Purpose : rebuilt a display after update message from the ViewMgr
+  Purpose : rebuild a display after update message from the ViewMgr
   
   Return value : OM_MSG_RET_OK if success
 
@@ -678,14 +739,22 @@ static Int2 DDV_MSG_UPDATE_ViewMgr(OMMsgStructPtr ommsp)
 {
 DdvMainPtr    dmp;  /*DDV panel data*/
 OMUserDataPtr omudp;/*user data set when registering DDV panel*/
+BaR           hsb;
+Int4          HPos;
 
 	omudp = (OMUserDataPtr)(ommsp->omuserdata);
 	if (omudp == NULL) return(OM_MSG_RET_ERROR);
 
 	dmp=(DdvMainPtr)omudp->userdata.ptrvalue;
 	if (dmp == NULL) return(OM_MSG_RET_ERROR);
+
+  if (dmp->bEditor) return(OM_MSG_RET_OK);
 	
-    /*delete the current display*/
+  /* get the current column */
+  hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
+  HPos = GetBarValue(hsb);
+  
+  /*delete the current display*/
 	if (dmp->MSA_d.pgp_l.TableHead) 
 		DDV_DeleteDisplayList(&dmp->MSA_d.pgp_l);
 	if (dmp->MSA_d.pgp_l.RulerDescr) 
@@ -703,9 +772,12 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 		DDV_BuildBspEntitiesTbl(dmp->MSA_d.pgp_l.TableHead,
 			dmp->MSA_d.pgp_l.nBsp);
 	if (!dmp->MSA_d.pgp_l.entitiesTbl)
-		return(OM_MSG_RET_ERROR);	
+		return(OM_MSG_RET_ERROR);
+
 	/*build the Master Ruler descriptor*/
-	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
+  /* Patrick's ComputeRuler isn't working right, so I substituted mine -- Dave H. */
+  /* dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo)); */
+  DDE_ReMakeRuler(&dmp->MSA_d.pgp_l);
 
 	/*delete old tables*/
     if(dmp->MasterViewer != SAMVIEWCN3D) {
@@ -717,9 +789,13 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
         }
     }
     
-    DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
+  DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
 	DDV_WhatSize(dmp);
 	DDV_SetupWin(dmp->hWndDDV,TRUE,NULL);
+
+  /* put col back to where it was */
+  SetValue(hsb, HPos);
+
 	Update();
 
     return(OM_MSG_RET_OK);
@@ -742,6 +818,7 @@ Boolean     bResetScrolls=FALSE,
 			bRebuildDisplay=FALSE,
 			bSwitchColors=FALSE,
 			bUpdateColors=FALSE;
+Uint1       oldSpacerSize;
 
 	if (!hWndDDV || !dumdp)
 		return(OM_MSG_RET_OK);
@@ -754,12 +831,12 @@ Boolean     bResetScrolls=FALSE,
 	if (!Visible(hWndDDV))
 		return(OM_MSG_RET_OK);
 	
-	
+	oldSpacerSize=dmp->ddo.SpacerSize;
 	dmp->ddo.SpacerSize=dumdp->SpacerSize;
 
 	/*rebuild the display, if needed*/	
 	if ((dmp->ddo.DispDiscStyle!=dumdp->DispDiscStyle) ||
-		(dmp->ddo.SpacerSize!=dumdp->SpacerSize) ||
+		(oldSpacerSize!=dumdp->SpacerSize) ||
 		(dmp->ddo.DiscJustification!=dumdp->DiscJustification) ||
 		(dmp->ddo.ShowLeftTail!=dumdp->ShowLeftTail)||
 		(dmp->ddo.ShowRightTail!=dumdp->ShowRightTail)){
@@ -1162,18 +1239,41 @@ Uint2         bsp_eID;
   Return value : handle to the DDV panel
 
 *******************************************************************************/
-static Boolean DDV_StartPanel_Slave(DdvMainPtr dmp,SeqAlignPtr sap,
-		Uint2 input_entityID,Uint2 input_itemID,Boolean bEditor)
+static Boolean DDV_StartPanel_Slave(DdvMainPtr dmp, SeqAlignPtr sap,
+		Uint2* pInput_entityID, Uint2* pInput_itemID, Boolean bEditor)
 {
 DDV_ColorGlobal * dcgp;
-Boolean  DebugDDE;
 MsaParaGPopListPtr  mpplp;
+BaR  hsb;
+Int4  HPos, Col, RetVal;
+SeqAlignPtr  new_sap;
 	
-	WatchCursor();
+  WatchCursor();
 
-	/*get the SeqAlign and build a default display structure*/
-	if (ViewMgr_Attach(sap, FALSE, FALSE, input_entityID,
-        input_itemID) < 1) return (FALSE);
+#if defined(_LAUNCH_DDE)
+  if (!dmp->bEditor) {
+    if (AlnMgrIsIBMable(sap)) {
+      if (!AlnMgrNeatlyIndex(sap)) return(FALSE);
+      if (!AlnMgrMakeMultByIntersectOnMaster(sap, TRUE)) return(FALSE);
+      /* need a message to user saying info may be lost when doing GetSubAlign */
+    }
+    new_sap = AlnMgrGetSubAlign(sap, NULL, 0, -1);
+    if (!new_sap) return(FALSE);
+    RetVal = AlnMgrIsEditable(new_sap);
+    if (!RetVal) return(FALSE);
+    SeqAlignSetFree(sap);
+    sap = new_sap;
+    *pInput_entityID = ObjMgrRegister(OBJ_SEQALIGN, (Pointer)sap);
+    *pInput_itemID = GatherItemIDByData(*pInput_entityID, OBJ_SEQALIGN, (Pointer)sap);
+    AssignIDsInEntity(*pInput_entityID, OBJ_SEQALIGN, (Pointer)sap);
+#if defined(_NO_GAPS)
+    if (RetVal == AM_EDITGAPS) return(FALSE);
+#endif
+  }
+#endif
+
+	if (ViewMgr_Attach(sap, FALSE, FALSE, *pInput_entityID, *pInput_itemID) < 1)
+    return (FALSE);
 	
 	/*if we have a NULL SeqAlign, switch the display style to show
 	the sequences, not a spacer*/
@@ -1183,21 +1283,11 @@ MsaParaGPopListPtr  mpplp;
     	dmp->ddo.DiscJustification=DISP_JUST_LEFT;
 	}
 
-  /* for testing editor functions */
   if (bEditor) {
     dmp->dsp = (DDE_StackPtr) GetAppProperty("ddeinterndata");
-    if (dmp->dsp == NULL) {
-  /*    mpplp = DDE_CreateDisplayForBlock(sap, 1); */
-      mpplp = DDE_CreateDisplayForUnAligned(sap, 4);
-      if (mpplp == NULL) {return(FALSE);}
-      mpplp->entitiesTbl = DDV_BuildBspEntitiesTbl(mpplp->TableHead, mpplp->nBsp);
-      if (!mpplp->entitiesTbl) {return(FALSE);}
-      mpplp->RulerDescr = DDV_ComputeRuler(sap, &(dmp->ddo));
-      dmp->dsp = DDE_NewStack(mpplp);
-    }
-    else {
-      mpplp = dmp->dsp->pEdit->pPopList;
-    }
+    if (dmp->dsp == NULL) {return(FALSE);}
+    mpplp = dmp->dsp->pEdit->pPopList;
+    /* copy paragraphs from DDE_Stack into the ones that are displayed */
     MemCopy(&(dmp->MSA_d.pgp_l),mpplp,sizeof(MsaParaGPopList));
   }
   else {
@@ -1211,8 +1301,8 @@ MsaParaGPopListPtr  mpplp;
 	  dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(sap,&(dmp->ddo));
   }
 
-	dmp->MSA_d.entityID=input_entityID;
-	dmp->MSA_d.itemID=input_itemID;
+	dmp->MSA_d.entityID=*pInput_entityID;
+	dmp->MSA_d.itemID=*pInput_itemID;
 
 /*
 #if defined(_DEBUG_DDE)
@@ -1225,10 +1315,9 @@ MsaParaGPopListPtr  mpplp;
 #endif
 */
 
-
 	/*get the color stuff from the sap object. Usually I can do that
 	when DDV is loaded from Cn3D*/
-	dcgp=DDV_GetColorGlobalEx((Pointer) sap);
+	dcgp=DDV_GetColorGlobal((Pointer) sap);
 
 	/*init the colours*/
 	if (dcgp==NULL){
@@ -1254,6 +1343,23 @@ MsaParaGPopListPtr  mpplp;
 	/*Update();*/
 
   CaptureSlateFocus((SlatE)dmp->hWndDDV);
+
+  /* scroll display horizontally so aligned region is shown at position 5 */
+  if (DDE_GetNumBlocks2(&(dmp->MSA_d.pgp_l))) {
+    hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
+    HPos = GetBarValue(hsb);
+    if (bEditor) {
+      Col = DDE_GetAlignStart(dmp->dsp->pEdit, 0);
+    }
+    else {
+      Col = 0;
+      if (dmp->ddo.ShowLeftTail) {
+        Col = AlnMgrGetMaxTailLength(sap, LEFT_TAIL);
+      }
+    }
+    SetValue(hsb, HPos+Col-5);
+  }
+
 	return(TRUE);
 }
 
@@ -1302,8 +1408,8 @@ DdvMainPtr          dmp;
 	
 	dmp = (DdvMainPtr) GetAppProperty("ddvinterndata");
 	if (!dmp) goto error;
-	if (!DDV_StartPanel_Slave(dmp,sap,ompcp->input_entityID,
-		ompcp->input_itemID,bEditor)) goto error;
+	if (!DDV_StartPanel_Slave(dmp, sap, &ompcp->input_entityID,
+		&ompcp->input_itemID, bEditor)) goto error;
 	
 	
 	/*attach a Msg Func on the current seqalign*/
@@ -1423,8 +1529,8 @@ SAM_ViewGlobal      *vgp;
             mWin_d->NetStartProc = vgp->NetStartProc;
         }
         
-        if (!DDV_StartPanel_Slave(dmp,sap,ompcp->input_entityID,
-            ompcp->input_itemID,bEditor)) 
+        if (!DDV_StartPanel_Slave(dmp, sap, &ompcp->input_entityID,
+            &ompcp->input_itemID, bEditor)) 
             goto error;
         
 		/*when the user will close DDV, DDV won't delete any data excepts
@@ -2109,9 +2215,40 @@ DDVNetOpenPtr       dnopp;
 	Update ();
 }
 
-static void DDV_SlaveQuit(WindoW w)
+NLM_EXTERN void DDV_SlaveQuit(WindoW hWinMain)
 {
-	Remove(w);
+  DdvMainWinPtr  mWin_d;
+  DdvMainPtr     dmp;
+  WindoW				 hDialog;
+  GrouP          g1, g2;
+  Boolean        QuitElseWhere = FALSE;
+
+	mWin_d = (DdvMainWinPtr) GetObjectExtra((Handle)hWinMain);
+	if (mWin_d==NULL) return;
+
+  /* if there are unsaved edits, ask the user if they'd like to save */
+  dmp = (DdvMainPtr)GetObjectExtra(mWin_d->hWndDDV);
+  if (dmp->bEditor) {
+    if (dmp->dsp->SomethingToSave) {
+      QuitElseWhere = TRUE;
+      hDialog = MovableModalWindow(-30, -20,  -10,  -10, "DDE - Save Query",  NULL);
+      g1 = HiddenGroup(hDialog, 1, 1, NULL);
+      StaticPrompt(g1, "Save Changes?", 0, stdLineHeight, systemFont, 'c');
+      g2 = HiddenGroup(hDialog, 3, 1, NULL);
+      PushButton(g2, "Yes", DDV_Save);
+      PushButton(g2, "No",  DDV_NoSave);
+      PushButton(g2, "Cancel", DDV_Cancel);
+      SetObjectExtra (hDialog, (Pointer)hWinMain, NULL);
+      Select(hDialog);
+      Show(hDialog);
+    }
+  }
+  if (!QuitElseWhere) {
+    if (mWin_d->AutonomeViewer)
+      QuitProgram(); /*standalone DDV*/
+    else
+      Remove(hWinMain);/*slave viewer : just kill the main window*/
+  }
 }
 
 /*******************************************************************************
@@ -2133,21 +2270,26 @@ Int2	Margins;
 DdvMainWinPtr mWin_d;
 WindoW	w; 
 Boolean bRet;
+Char AppName[40];
+
+  /* use "DDE" for editor, "DDV" for viewer, for title */
+  if (bEditor) {StringCpy(AppName, szAppName2);}
+  else         {StringCpy(AppName, szAppName);}
 	
 	/*init data blocks*/
 	mWin_d=(DdvMainWinPtr)MemNew(sizeof(DdvMainWin));
 	if (!mWin_d) return(NULL);
 	
 	/*main window*/
-	Margins=10*stdCharWidth;
+	Margins=15*stdCharWidth;
     if(vgp == NULL)
         w=DocumentWindow(Margins,Margins ,-10, -10,
-           szAppName, 
+           AppName, 
            DDV_SlaveQuit,
            DDV_WinMainResize);
     else
         w=DocumentWindow(vgp->Rect.left,vgp->Rect.top ,-10, -10,
-            szAppName, 
+            AppName, 
             DDV_SlaveQuit,
             DDV_WinMainResize);
 
@@ -2240,6 +2382,160 @@ static void DDV_ImportEnableProc(TexT t)
     return;
 }
 
+static SeqAlignPtr ddv_truncate_overlaps (SeqAlignPtr sap)
+{
+   AMAlignIndexPtr  amaip;
+   DenseDiagPtr     ddp;
+   DenseDiagPtr     ddp_head;
+   DenseDiagPtr     ddp_prev;
+   DenseSegPtr      dsp1;
+   DenseSegPtr      dsp2;
+   Int4             i;
+   SeqAlignPtr      salp;
+   Int4             start1;
+   Int4             start2;
+   Int4             stop1;
+   Int4             stop2;
+   Int4             tmp;
+
+   if (sap == NULL) return(NULL);
+   if (sap->saip == NULL) return(NULL);
+   if (sap->saip->indextype != INDEX_PARENT) return(NULL);
+
+   amaip = (AMAlignIndexPtr)(sap->saip);
+   for (i=0; i<amaip->numsaps-1; i++)
+   {
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &start2, &stop2);
+      if (start2 <= stop1)
+      {
+         dsp1 = (DenseSegPtr)(amaip->saps[i]->segs);
+         dsp2 = (DenseSegPtr)(amaip->saps[i+1]->segs);
+         dsp1->lens[0] = dsp1->lens[0] - (stop1-start2)/2;
+         tmp = dsp1->starts[0]+dsp1->lens[0];
+         tmp = tmp - dsp2->starts[0];
+         dsp2->starts[1] = tmp + dsp2->starts[1];
+         dsp2->starts[0] = dsp1->starts[0]+dsp1->lens[0];
+         dsp2->lens[0] = stop2 - dsp2->starts[0] + 1;
+         SAIndexFree(amaip->saps[i]->saip);
+         SAIndexFree(amaip->saps[i+1]->saip);
+         amaip->saps[i]->saip = amaip->saps[i+1]->saip = NULL;
+         AlnMgrIndexSingleChildSeqAlign(amaip->saps[i]);
+         AlnMgrIndexSingleChildSeqAlign(amaip->saps[i+1]);
+      }
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &start1, &stop1);
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &start2, &stop2);
+      if (start2 <= stop1)
+      {
+         dsp1 = (DenseSegPtr)(amaip->saps[i]->segs);
+         dsp2 = (DenseSegPtr)(amaip->saps[i+1]->segs);
+         dsp1->lens[0] = dsp1->lens[0] - (stop1-start2)/2;
+         tmp = dsp1->starts[1]+dsp1->lens[0];
+         tmp = tmp - dsp2->starts[1];
+         dsp2->starts[0] = tmp + dsp2->starts[0];
+         dsp2->starts[1] = dsp1->starts[1]+dsp1->lens[0];
+         dsp2->lens[0] = stop2 - dsp2->starts[1] + 1;
+         SAIndexFree(amaip->saps[i]->saip);
+         SAIndexFree(amaip->saps[i+1]->saip);
+         amaip->saps[i]->saip = amaip->saps[i+1]->saip = NULL;
+         AlnMgrIndexSingleChildSeqAlign(amaip->saps[i]);
+         AlnMgrIndexSingleChildSeqAlign(amaip->saps[i+1]);
+      }
+   }
+   ddp_head = ddp_prev = NULL;
+   for (i=0; i<amaip->numsaps; i++)
+   {
+      ddp = DenseDiagNew();
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &start2, &stop2);
+      dsp1 = (DenseSegPtr)(amaip->saps[i]->segs);
+      ddp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
+      ddp->dim = 2;
+      ddp->id = dsp1->ids;
+      dsp1->ids = NULL;
+      ddp->starts[0] = start1;
+      ddp->starts[1] = start2;
+      ddp->len = stop1 - start1 + 1;
+      if (ddp_head != NULL)
+      {
+         ddp_prev->next = ddp;
+         ddp_prev = ddp;
+      } else
+         ddp_head = ddp_prev = ddp;
+   }
+   salp = SeqAlignNew();
+   salp->dim = 2;
+   salp->segtype = SAS_DENDIAG;
+   salp->type = SAT_DIAGS;
+   salp->segs = (Pointer)(ddp_head);
+   SeqAlignFree(sap);
+   return salp;
+}
+
+NLM_EXTERN SeqAlignPtr DDV_ShredAln(SeqAlignPtr sap)
+{
+   AMAlignIndexPtr  amaip;
+   AlnMsgPtr        amp1;
+   AlnMsgPtr        amp2;
+   DenseDiagPtr     ddp;
+   DenseDiagPtr     ddp_head;
+   DenseDiagPtr     ddp_prev;
+   Int4             i;
+   Boolean          more1;
+   Boolean          more2;
+   SeqAlignPtr      salp;
+
+   if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
+      return NULL;
+   amaip = (AMAlignIndexPtr)(sap->saip);
+   if (amaip->numrows > 2)
+      return NULL;
+   amp1 = AlnMsgNew();
+   amp2 = AlnMsgNew();
+   ddp_head = ddp_prev = NULL;
+   for (i=0; i<amaip->numsaps; i++)
+   {
+      amp1 = AlnMsgReNew(amp1);
+      amp2 = AlnMsgReNew(amp2);
+      amp1->from_m = amp2->from_m = 0;
+      amp1->to_m = amp2->to_m = -1;
+      amp1->row_num = 1;
+      amp2->row_num = 2;
+      while ((more1 = AlnMgrGetNextAlnBit(amaip->saps[i], amp1)) && (more2 = AlnMgrGetNextAlnBit(amaip->saps[i], amp2)))
+      {
+         if (amp1->gap == 0 && amp2->gap == 0)
+         {
+            ddp = DenseDiagNew();
+            ddp->dim = 2;
+            ddp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
+            ddp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
+            ddp->id = AlnMgrGetNthSeqIdPtr(sap, 1);
+            ddp->id->next = AlnMgrGetNthSeqIdPtr(sap, 2);
+            ddp->starts[0] = amp1->from_b;
+            ddp->starts[1] = amp2->from_b;
+            ddp->len = amp1->to_b - amp1->from_b + 1;
+            ddp->strands[0] = AlnMgrGetNthStrand(sap, 1);
+            ddp->strands[1] = AlnMgrGetNthStrand(sap, 2);
+            if (ddp_head != NULL)
+            {
+               ddp_prev->next = ddp;
+               ddp_prev = ddp;
+            } else 
+               ddp_head = ddp_prev = ddp;
+         }
+      }
+   }
+   salp = SeqAlignNew();
+   salp->type = SAT_DIAGS;
+   salp->segtype = SAS_DENDIAG;
+   salp->dim = 2;
+   salp->segs = (Pointer)(ddp_head);
+   SeqAlignFree(sap);
+   AlnMsgFree(amp1);
+   AlnMsgFree(amp2);
+   return salp;
+}
+
 /*******************************************************************************
 
   Function : DDV_DoAlign
@@ -2256,9 +2552,10 @@ NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
     Char str[32];
     Bioseq *bsp1 = NULL, *bsp2 = NULL;
     SeqId si;
-    SeqAlign *sap;
+    SeqAlign *sap, *salp;
     Int4 value, i;
     ValNode *pvn;
+    ErrSev sev;
     
     if(idp->mode & DDVIMP2SE) {
         value = GetValue(idp->DDV_lsip); /*one-base value*/
@@ -2300,12 +2597,16 @@ NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
         BioseqUnlock(bsp2);
         goto out2;
     }
+
+    sev = ErrSetMessageLevel(SEV_FATAL);
     
 /*    sap = ACT_GlobalAlignSimple(bsp1, bsp2, TRUE); */
     if(ISA_aa(bsp1->mol))
-        sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE, "blastp");
+        sap = DDV_Blast2Seqs(bsp1, bsp2, idp->Gap, "blastp");
     else 
-        sap = DDV_Blast2Seqs(bsp1, bsp2, TRUE, "blastn");
+        sap = DDV_Blast2Seqs(bsp1, bsp2, idp->Gap, "blastn");
+
+    ErrSetMessageLevel(sev);
     BioseqUnlock(bsp1);
     BioseqUnlock(bsp2);
     
@@ -2315,7 +2616,20 @@ NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
     }
     
     SAM_ReplaceGI(sap);
-    if(idp->callback) idp->callback(idp, idp->sap, sap);
+    AlnMgrIndexSeqAlign(sap);
+
+    if(idp->Gap) {
+        AlnMgrMakeMultipleByScore(sap);
+        AlnMgrDeleteHidden(sap, FALSE);
+        salp = DDV_ShredAln(sap);
+    } else {
+        AlnMgrMakeMultipleByScoreEx(sap, 10);
+        AlnMgrDeleteHidden(sap, FALSE);
+        salp = ddv_truncate_overlaps(sap);
+    }
+
+    if(idp->callback) idp->callback(idp, idp->sap, salp);
+    /*SeqAlignFree(sap);*/
     
 out2:
     MemFree(idp->userdata);
@@ -2543,7 +2857,7 @@ NLM_EXTERN SeqAlign *DDV_Blast2Seqs(Bioseq *bsp1, Bioseq *bsp2, Boolean gapped,
     if(bsp1 == NULL || bsp2 == NULL || progname == NULL) return NULL;
     options = BLASTOptionNew(progname, gapped);
     if(options == NULL) return NULL;
-    options->discontinuous = FALSE;
+/*    options->discontinuous = FALSE; */
     salp = BlastTwoSequences(bsp1, bsp2, progname, options);
     BLASTOptionDelete(options);
     return salp;

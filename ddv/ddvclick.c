@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.c,v 1.34 2000/04/26 21:54:27 hurwitz Exp $
+/*  $Id: ddvclick.c,v 1.43 2000/05/25 21:40:42 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,40 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.34 $
+* $Revision: 1.43 $
 *
 * File Description: mouse management code for DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.c,v $
+* Revision 1.43  2000/05/25 21:40:42  hurwitz
+* rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
+*
+* Revision 1.42  2000/05/24 21:42:59  hurwitz
+* getting hide/show rows to work with DDV and DDE together
+*
+* Revision 1.41  2000/05/19 13:48:31  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 1.40  2000/05/16 19:43:01  hurwitz
+* grey out create block, delete block, undo, and redo as needed
+*
+* Revision 1.39  2000/05/08 22:48:33  hurwitz
+* on launch of DDE, merge nodes that are same MsaTxtDisp alignment and gap
+*
+* Revision 1.38  2000/05/05 20:24:13  hurwitz
+* some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
+*
+* Revision 1.37  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
+* Revision 1.36  2000/05/02 19:50:38  hurwitz
+* fixed some bugs with launching DDE from DDV, added new alnMgr fn for positioning DDE on proper column
+*
+* Revision 1.35  2000/04/27 17:01:44  hurwitz
+* small fixes to shift row and shift boundary
+*
 * Revision 1.34  2000/04/26 21:54:27  hurwitz
 * added save function to tell AlnMgr about edits made in DDE
 *
@@ -162,9 +189,9 @@
 #include <pgppop.h>
 #include <samutil.h>
 #include <tofasta.h>
+#include <viewmgr.h>
 
 /*static MonitorPtr  mon=NULL;*/
-static void    ReDraw(DdvMainPtr dmp);
 static Boolean OnAlignmentBoundary(PoinT pt, PaneL p, DdvMainPtr dmp,
                                    Int4* pBlockIndex, Boolean* pLeftBoundary,
                                    Int4* pCol, Int4* pHPos);
@@ -747,6 +774,7 @@ Return value: none
 NLM_EXTERN void DDV_ClickProc(PaneL p, PoinT pt)
 {
 DdvMainPtr 	   dmp;
+DdvMainWinPtr  mWin_d;
 RecT           rcP, rcP2;
 Int4           bsp_coord, SeqAlign_coord, Disp_coord, Line_num,bsp_start,bsp_stop,
                old_pos, ParaGLine_Num, VPos, HPos;
@@ -762,6 +790,7 @@ DdvMainWinPtr  dmwp;
 BioseqPtr      bsp;
 Char           buf[81];
 ParaGPtr       pgp;
+Int4           i, NumRows;
 
 MsaParaGPopListPtr  mpplp;
 SeqAlignPtr         sap;
@@ -770,6 +799,8 @@ DDE_StackPtr        dsp;
 	/*get the panel data*/
 	dmp = (DdvMainPtr) GetObjectExtra(p);
 	if (dmp==NULL) return;
+  mWin_d = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
+  if (mWin_d == NULL) return;
 	
 	ObjectRect(p,&rcP);
 
@@ -790,24 +821,26 @@ DDE_StackPtr        dsp;
       if ((Col >= 0) && (Col < dmp->MSA_d.pgp_l.LengthAli)) {
         /* get the block or unaligned-region index */
         DDE_IsColValid(&(dmp->MSA_d.pgp_l), Col, &BlockIndex, &IsUnAligned);
+        /* get pointer to original seqAlign */
+        sap = ViewMgr_GetBegin(dmp->MSA_d.pgp_l.sap);
         /* create display for editor */
-        sap = dmp->MSA_d.pgp_l.sap;
-        if (IsUnAligned) {
-          mpplp = DDE_CreateDisplayForUnAligned(sap, BlockIndex);
-          NumBlocks = 0;
-        }
-        else {
-          mpplp = DDE_CreateDisplayForBlock(sap, BlockIndex);
-          NumBlocks = 1;
-        }
-        ASSERT(mpplp != NULL);
-        mpplp->entitiesTbl = DDV_BuildBspEntitiesTbl(mpplp->TableHead, mpplp->nBsp);
-        ASSERT(mpplp->entitiesTbl != NULL);
-        mpplp->RulerDescr = DDV_ComputeRuler(sap, &(dmp->ddo));
+        mpplp = DDE_CreateDisplay(sap, BlockIndex, IsUnAligned, &NumBlocks);
+        mpplp->viewed_sap = dmp->MSA_d.pgp_l.sap;
+        /* create the stack used by editor */
         dsp = DDE_NewStack(mpplp);
-        /* record which block is being edited */
+        DDE_MergeNodesLists(dsp->pEdit);
+        /* record which block is being edited, etc */
         dsp->LaunchBlock = BlockIndex;
-        dsp->NumBlocks = NumBlocks;
+        dsp->NumBlocks =   NumBlocks;
+        dsp->IsUnAligned = IsUnAligned;
+        /* hide the rows in DDE that are hidden in DDV */
+        NumRows = dsp->pEdit->TotalNumRows;
+        for (i=0; i<NumRows; i++) {
+          if (ViewMgr_TRow2VRow(dmp->MSA_d.pgp_l.sap, i+1) == -1) {
+            DDE_HideRow(dsp, i, FALSE);
+          }
+        }
+        DDE_Add(dsp);
         /* launch the editor as a slave */
         SetAppProperty("ddeinterndata",(void*)dsp);
         GatherProcLaunch(OMPROC_EDIT, FALSE, dmp->MSA_d.entityID, 
@@ -1098,6 +1131,10 @@ DDE_StackPtr        dsp;
             ObjMgrSendMsg(OM_MSG_MOUSEUP, dmp->MSA_d.entityID, 
 						dmp->MSA_d.itemID, OBJ_SEQALIGN);
 	}
+
+  if (dmp->bEditor) {
+    DDV_GreyOut(mWin_d, DDE_AtStartOfStack(dmp->dsp), DDE_AtEndOfStack(dmp->dsp));
+  }
 }
 
 
@@ -1277,40 +1314,39 @@ static Boolean  LineToErase=TRUE;
       break;
     case MS_ACTION_SHIFT_ROW:
 			ObjectRect(p,&rcP);
+      Col = DDV_GetColNumberGivenMousePos(dmp, rcP, pt);
+      DDV_GetCurrentDispRange(dmp->hWndDDV,&(dmp->GrData),
+        dmp->MSA_d.pgp_l.LengthAli,&from_col,&to_col,&from_row,&to_row);
       /* if we're still in a legal area */
-			if (DDV_GetCoordsGivenAClick(dmp,&rcP,&pt,
-				&bsp_coord,&SeqAlign_coord,&Disp_coord,&Line_num,
-				&ParaGLine_num, &uWhere,&cur_pgp)){
-        DDV_GetCurrentDispRange(dmp->hWndDDV,&(dmp->GrData),
-          dmp->MSA_d.pgp_l.LengthAli,&from_col,&to_col,&from_row,&to_row);
-        if ((Disp_coord>=from_col) && (Disp_coord<=to_col)) {
-          /* if a new box needs to be drawn */
-          if (dmp->dsp->SaveCol != Disp_coord) {
-            ObjectRect(p,&rcP);
-            SavedVPos = DDV_GetVPixelPosGivenRowNumber(dmp, rcP, dmp->dsp->SaveRow);
-            SavedHPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, dmp->dsp->SaveCol);
-            /* erase old box */
-            rcP2.left =    SavedHPos - dmp->GrData.udv_font.ColWidth;
-            rcP2.right =   SavedHPos;
-            rcP2.top =     SavedVPos - dmp->GrData.udv_font.LineHeight;
-            rcP2.bottom =  SavedVPos;
-            InvertMode();
-            UDV_draw_rectangle(rcP2, FALSE);
-            /* draw new box */
-            dmp->dsp->SaveCol = Disp_coord;
-            HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Disp_coord);
-            rcP2.left =    HPos - dmp->GrData.udv_font.ColWidth;
-            rcP2.right =   HPos;
-            rcP2.top =     SavedVPos - dmp->GrData.udv_font.LineHeight;
-            rcP2.bottom =  SavedVPos;
-            UDV_draw_rectangle(rcP2, FALSE);
-          }
+      if ((Col>=from_col) && (Col<=to_col) && PtInRect(pt, &rcP)) {
+        /* if a new box needs to be drawn */
+        if (dmp->dsp->SaveCol != Col) {
+          ObjectRect(p,&rcP);
+          SavedVPos = DDV_GetVPixelPosGivenRowNumber(dmp, rcP, dmp->dsp->SaveRow);
+          SavedHPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, dmp->dsp->SaveCol);
+          /* erase old box */
+          rcP2.left =    SavedHPos - dmp->GrData.udv_font.ColWidth;
+          rcP2.right =   SavedHPos;
+          rcP2.top =     SavedVPos - dmp->GrData.udv_font.LineHeight;
+          rcP2.bottom =  SavedVPos;
+          InvertMode();
+          UDV_draw_rectangle(rcP2, FALSE);
+          /* draw new box */
+          dmp->dsp->SaveCol = Col;
+          HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Col);
+          rcP2.left =    HPos - dmp->GrData.udv_font.ColWidth;
+          rcP2.right =   HPos;
+          rcP2.top =     SavedVPos - dmp->GrData.udv_font.LineHeight;
+          rcP2.bottom =  SavedVPos;
+          UDV_draw_rectangle(rcP2, FALSE);
         }
       }
       break;
     case MS_ACTION_SHIFT_BOUNDARY:
       /* if we're still in a legit area */
       ObjectRect(p, &rcP);
+      InsetRect(&rcP,4,4);
+      DDV_AdjustDrawingRect(&rcP,&(dmp->GrData.udv_font));
       rcP.left += dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale;
       if (PtInRect(pt, &rcP)) {
         ObjectRect(p, &rcP);
@@ -1318,21 +1354,24 @@ static Boolean  LineToErase=TRUE;
         Col = DDV_GetColNumberGivenMousePos(dmp, rcP, pt);
         /* if column has changed since vertical bar was last drawn */
         if (Col != dmp->dsp->SaveCol) {
-          /* get horizontal pixel position of old column */
-          HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, dmp->dsp->SaveCol);
-          /* adjust for drawing bar preceeding left boundary */
-          if (dmp->dsp->LeftBoundary) HPos -= dmp->GrData.udv_font.ColWidth;
-          /* erase old vertical bar */
-          InvertMode();
-          UDV_draw_vertical_bar(rcP, HPos, TRUE);
-          /* get horizontal pixel position of new column */
-          HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Col);
-          /* adjust for drawing bar preceeding left boundary */
-          if (dmp->dsp->LeftBoundary) HPos -= dmp->GrData.udv_font.ColWidth;
-          /* draw the new vertical bar */
-          UDV_draw_vertical_bar(rcP, HPos, TRUE);
-          /* save the column */
-          dmp->dsp->SaveCol = Col;
+          /* and the column's legal */
+          if ((Col >= 0) && (Col < dmp->MSA_d.pgp_l.LengthAli)) {
+            /* get horizontal pixel position of old column */
+            HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, dmp->dsp->SaveCol);
+            /* adjust for drawing bar preceeding left boundary */
+            if (dmp->dsp->LeftBoundary) HPos -= dmp->GrData.udv_font.ColWidth;
+            /* erase old vertical bar */
+            InvertMode();
+            UDV_draw_vertical_bar(rcP, HPos, TRUE);
+            /* get horizontal pixel position of new column */
+            HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Col);
+            /* adjust for drawing bar preceeding left boundary */
+            if (dmp->dsp->LeftBoundary) HPos -= dmp->GrData.udv_font.ColWidth;
+            /* draw the new vertical bar */
+            UDV_draw_vertical_bar(rcP, HPos, TRUE);
+            /* save the column */
+            dmp->dsp->SaveCol = Col;
+          }
         }
       }
       break;
@@ -1471,7 +1510,7 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
             /* move the saved row to this line number */
             DDE_MoveRow(dmp->dsp, dmp->dsp->FromRow, Line_num-1, TRUE);
             dmp->deri.curEditRow = Line_num-1;
-            ReDraw(dmp);
+            DDV_ReDraw(dmp);
           }
           /* otherwise */
           else {
@@ -1492,8 +1531,8 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
     case MS_ACTION_SHIFT_ROW:
       /* shift row by diff between original col position and last position */
       Shift = dmp->dsp->SaveCol - dmp->dsp->FromCol;
-      if (DDE_ShiftRow(dmp->dsp, dmp->dsp->SaveRow, Shift, TRUE)) {
-        ReDraw(dmp);
+      if (DDE_ShiftRow(dmp->dsp, dmp->dsp->SaveRow, Shift, TRUE, TRUE)) {
+        DDV_ReDraw(dmp);
       }
       else {
         /* if no shift was done, erase the boxes */
@@ -1514,18 +1553,18 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
       Shift = dmp->dsp->SaveCol - dmp->dsp->FromCol;
       if (dmp->dsp->LeftBoundary) {
         DDE_ShiftLeftBoundary(dmp->dsp, dmp->dsp->BlockIndex, Shift, TRUE);
-        ReDraw(dmp);
+        DDV_ReDraw(dmp);
       }
       else {
         DDE_ShiftRightBoundary(dmp->dsp, dmp->dsp->BlockIndex, Shift, TRUE);
-        ReDraw(dmp);
+        DDV_ReDraw(dmp);
       }
       ArrowCursor();
       break;
     case MS_ACTION_CREATE_BLOCK:
       DDE_CreateBlock(dmp->dsp, dmp->dsp->FromCol, dmp->dsp->SaveCol, TRUE);
       dmp->MouseMode = dmp->SavedMouseMode;
-      ReDraw(dmp);
+      DDV_ReDraw(dmp);
       ArrowCursor();
       break;
 	}	
@@ -1534,6 +1573,9 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
 	dmp->ms.Action_type=MS_ACTION_FEAT_NOTHING;
 	/*update InfoPanel*/
 	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
+  if (dmp->bEditor) {
+    DDV_GreyOut(dmwp, DDE_AtStartOfStack(dmp->dsp), DDE_AtEndOfStack(dmp->dsp));
+  }
 	if (dmwp && dmp->MouseMode!=DDV_MOUSEMODE_EDIT)
 		SetTitle(dmwp->InfoPanel,"Ready !");
 	ArrowCursor();
@@ -1773,6 +1815,8 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
 	/*get the panel data*/
 	dmp = (DdvMainPtr) GetObjectExtra(s);
 	if (dmp==NULL) return;
+	dmwp = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
+  if (dmwp == NULL) return;
 	
 	/*get scroll handles and data*/
 	hsb = GetSlateHScrollBar ((SlatE) dmp->hWndDDV);
@@ -1843,20 +1887,20 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
     case 0x1a:
       /* for ctrl-z, undo the last edit */
       if (DDE_Prev(dmp->dsp)) {
-        ReDraw(dmp);
+        DDV_ReDraw(dmp);
       }
       break;
     case 0x19:
       /* for ctrl-y, redo the last undone edit */
       if (DDE_Next(dmp->dsp)) {
-        ReDraw(dmp);
+        DDV_ReDraw(dmp);
       }
       break;
     case NLM_DEL:
       /* delete key pressed -- remove a gap and leave carat in place */
 			if (dmp->MouseMode==DDV_MOUSEMODE_EDIT){
         if (DDE_RemoveGap(dmp->dsp, dmp->dci.new_row-1, dmp->dci.new_col+1, TRUE)) {
-          ReDraw(dmp);
+          DDV_ReDraw(dmp);
         }
       }
       break;
@@ -1864,7 +1908,7 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
       /* backspace key pressed -- remove gap to the left and move carat left */
 			if (dmp->MouseMode==DDV_MOUSEMODE_EDIT){
         if (DDE_RemoveGap(dmp->dsp, dmp->dci.new_row-1, dmp->dci.new_col, TRUE)) {
-          ReDraw(dmp);
+          DDV_ReDraw(dmp);
         }
       }
 		case NLM_LEFT:
@@ -1883,7 +1927,7 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
       /* space bar pressed -- insert a gap and move carat to the right */
 			if (dmp->MouseMode==DDV_MOUSEMODE_EDIT){
         if (DDE_InsertGap(dmp->dsp, dmp->dci.new_row-1, dmp->dci.new_col+1, TRUE)) {
-          ReDraw(dmp);
+          DDV_ReDraw(dmp);
         }
       }
 		case NLM_RIGHT:
@@ -1926,9 +1970,11 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
 			Beep ();
 			break;
 	}
+  if (dmp->bEditor) {
+    DDV_GreyOut(dmwp, DDE_AtStartOfStack(dmp->dsp), DDE_AtEndOfStack(dmp->dsp));
+  }
 
 	/*update InfoPanel with position*/
-	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
 	if (dmwp && dmp->MouseMode==DDV_MOUSEMODE_EDIT){
 		Char szAccess[21];
 		DDV_GetSeqNameGivenRow(dmp->MSA_d.pgp_l.TableHead, dmp->dci.new_row,
@@ -1944,7 +1990,8 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
 	}
 }
 
-static void ReDraw(DdvMainPtr dmp) {
+
+NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col) {
 /*------------------------------------------
 *  resize, redraw.
 *------------------------------------------*/
@@ -1953,16 +2000,38 @@ static void ReDraw(DdvMainPtr dmp) {
   RecT 	         rcP;
   BaR            hsb;
 
-  dmp->MSA_d.pgp_l.LengthAli   = dmp->dsp->pEdit->pPopList->LengthAli;
-  dmp->MSA_d.pgp_l.nBsp        = dmp->dsp->pEdit->pPopList->nBsp;
-  dmp->MSA_d.pgp_l.sabp        = dmp->dsp->pEdit->pPopList->sabp;
-  dmp->MSA_d.pgp_l.sap         = dmp->dsp->pEdit->pPopList->sap;
-  dmp->MSA_d.pgp_l.TableHead   = dmp->dsp->pEdit->pPopList->TableHead;
-  dmp->MSA_d.pgp_l.DisplayVert = dmp->dsp->pEdit->pPopList->DisplayVert;
-  dmp->MSA_d.pgp_l.bspp        = dmp->dsp->pEdit->pPopList->bspp;
-  dmp->MSA_d.pgp_l.DisplayType = dmp->dsp->pEdit->pPopList->DisplayType;
-  dmp->MSA_d.pgp_l.RulerDescr  = dmp->dsp->pEdit->pPopList->RulerDescr;
-  dmp->MSA_d.pgp_l.entitiesTbl = dmp->dsp->pEdit->pPopList->entitiesTbl;
+  MemCopy(&(dmp->MSA_d.pgp_l), dmp->dsp->pEdit->pPopList, sizeof(MsaParaGPopList));
+
+  DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
+    &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);
+  /* recalculate window size */
+  DDV_WhatSize(dmp);
+  /* adjust horizontal scroll bar */
+  hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
+  DDV_UpdateHScrollVal(dmp->hWndDDV, FALSE, GetBarValue(hsb));
+
+	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
+  temport=SavePort(dmwp->hWndDDV);
+  Select(dmwp->hWndDDV);
+  ObjectRect(dmwp->hWndDDV, &rcP);
+  InvalRect(&rcP);
+  SetValue(hsb, Col);
+  Update();
+  RestorePort(temport);
+ 	return;
+}
+
+
+NLM_EXTERN void DDV_ReDraw(DdvMainPtr dmp) {
+/*------------------------------------------
+*  resize, redraw.
+*------------------------------------------*/
+  DdvMainWinPtr  dmwp;
+  WindoW         temport;
+  RecT 	         rcP;
+  BaR            hsb;
+
+  MemCopy(&(dmp->MSA_d.pgp_l), dmp->dsp->pEdit->pPopList, sizeof(MsaParaGPopList));
 
   DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
     &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);

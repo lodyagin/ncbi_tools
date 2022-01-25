@@ -29,13 +29,40 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.41 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.50  2000/05/19 13:48:31  hurwitz
+* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
+*
+* Revision 6.49  2000/05/18 13:42:16  lewisg
+* get rid of features list for all but standalone udv
+*
+* Revision 6.48  2000/05/17 21:32:41  lewisg
+* disable feature search except for standalone udv
+*
+* Revision 6.47  2000/05/15 23:39:34  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 6.46  2000/05/09 17:00:46  kans
+* remove monitor when creating udv panel
+*
+* Revision 6.45  2000/05/01 21:21:13  lewisg
+* make features dialogs modal
+*
+* Revision 6.44  2000/04/27 22:21:58  lewisg
+* misc bugs/features
+*
+* Revision 6.43  2000/04/27 19:50:59  kans
+* implemented udv reset and select (PD+JK)
+*
+* Revision 6.42  2000/04/27 15:38:02  hurwitz
+* changed wording on menu
+*
 * Revision 6.41  2000/04/20 23:27:43  lewisg
 * misc bug fixes
 *
@@ -654,7 +681,7 @@ static Int2 LIBCALLBACK UDV_OM_MsgFunc (OMMsgStructPtr ommsp)
 OMUserDataPtr omudp;
 /*BioseqPtr bsp;*/
 ViewerDialogDataPtr vdp;
-ViewerMainPtr vmp;
+ViewerMainPtr vmp = NULL;
    
 	omudp = (OMUserDataPtr)(ommsp->omuserdata);
 	vdp = (ViewerDialogDataPtr)(omudp->userdata.ptrvalue);
@@ -1389,35 +1416,41 @@ UdvGlobalsPtr   ugp;
 
     if(vgp != NULL) {
         if(vgp->MasterViewer == SAMVIEWCN3D) {
-            vmp->MainMenu.Align = PulldownMenu(w, "Alignment/A");
+            vmp->MainMenu.Align = PulldownMenu(w, "Align/A");
+            vmp->MainMenu.AddRow = SubMenu(vmp->MainMenu.Align, "Add New Row");
+                vmp->MainMenu.FromFile = SubMenu(vmp->MainMenu.AddRow, "From FASTA file");
+                CommandItem(vmp->MainMenu.FromFile,
+                    "By gapped BLAST...", (Nlm_ItmActnProc)vgp->BlastFileGap);
+                CommandItem(vmp->MainMenu.FromFile,
+                    "By ungapped BLAST...", (Nlm_ItmActnProc)vgp->BlastFile);
             if (vgp->NetStartProc) {
-                vmp->MainMenu.AlignBlast = SubMenu(vmp->MainMenu.Align, "Align to");
-                vmp->MainMenu.BlastFile = CommandItem(vmp->MainMenu.AlignBlast,
-                    "FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
-                vmp->MainMenu.BlastNet = CommandItem(vmp->MainMenu.AlignBlast,
-                    "Network Download...", (Nlm_ItmActnProc)vgp->BlastNet);
-                vmp->MainMenu.BlastMany = CommandItem(vmp->MainMenu.Align, 
-                    "Blast...", (Nlm_ItmActnProc)vgp->BlastMany);
-            } else {
-                vmp->MainMenu.BlastFile = CommandItem(vmp->MainMenu.Align,
-                    "Align FASTA File...", (Nlm_ItmActnProc)vgp->BlastFile);
+                vmp->MainMenu.FromNet = SubMenu(vmp->MainMenu.AddRow, "Download from Entrez");
+                CommandItem(vmp->MainMenu.FromNet,
+                    "By gapped BLAST...",  (Nlm_ItmActnProc)vgp->BlastNetGap);
+                CommandItem(vmp->MainMenu.FromNet,
+                    "By ungapped BLAST...",  (Nlm_ItmActnProc)vgp->BlastNet);
+/*                vmp->MainMenu.BlastMany = CommandItem(vmp->MainMenu.Align, 
+                    "Blast...", (Nlm_ItmActnProc)vgp->BlastMany); */
             }
         }
     }
-    
+
+
 	/*Options menu*/
 	m=PulldownMenu(w,"Options");
 	vmp->MainMenu.Options=m;
 	vmp->MainMenu.ShowFeature=StatusItem(m,"Show features",
 			ShowFeatProc);
 	SetStatus(vmp->MainMenu.ShowFeature,TRUE);
-	vmp->MainMenu.ShowFeatureList=StatusItem(m,"Features List...",
-			ShowFeaturesListDlg);
-	vmp->MainMenu.SearchForFeature=CommandItem(m,"Search for features...",
-			UDV_SearchFeatForKey);
-	SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
-	SeparatorItem(m);
-
+    if(vgp == NULL) {
+        vmp->MainMenu.ShowFeatureList=StatusItem(m,"Features List...",
+            ShowFeaturesListDlg);
+        SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
+        vmp->MainMenu.SearchForFeature=CommandItem(m,"Search for features...",
+            UDV_SearchFeatForKey);
+        SeparatorItem(m);
+    }
+    
     if(vgp == NULL) {
 		vmp->MainMenu.ShowRevComp=StatusItem(m,"Show reverse complement",
 			UDV_ShowReverseComplement);
@@ -1889,7 +1922,6 @@ Boolean		ShowTop=TRUE;
 Boolean		ShowTick=TRUE;
 Boolean		nRet=FALSE;
 RecT 		rcP;
-MonitorPtr  mon;
 WindoW		temport;
 
 	/*size of UDV_VIEWER*/
@@ -1905,8 +1937,10 @@ WindoW		temport;
 	vdp->bsp_i.bsp_itemType=itype;
 
 	WatchCursor();
+	/*
 	mon = MonitorStrNewEx (szAppName, 30, FALSE);
 	MonitorStrValue (mon, "Preparing display...");
+	*/
 	Update ();
 
 	/*Populate ParaG - compute TotalLines*/
@@ -1959,7 +1993,9 @@ WindoW		temport;
 fin:
 	RestorePort(temport);
 	ArrowCursor();
+	/*
 	MonitorFree (mon);
+	*/
 	return(nRet);
 }
 
@@ -2085,6 +2121,16 @@ Char          szRange[100];
 		Select (vmp->gotoVal);
 		Message (MSG_OK, szRange);
 	}
+}
+
+NLM_EXTERN void UDVResetProc (PaneL p)
+
+{
+  ViewerDialogDataPtr  vdp;
+
+  vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
+  if (vdp == NULL) return;
+  UDV_FreeVDPstruct (vdp, FALSE);
 }
 
 /*******************************************************************************
@@ -2272,11 +2318,31 @@ Uint2 eID, iID;
 	return(TRUE);
 }
 
+static void InitSelectUDV (ViewerDialogDataPtr vdp)
+
+{
+  Uint2         entityID;
+  SelStructPtr  sel;
+
+  if (vdp == NULL) return;
+  entityID = vdp->bsp_i.bsp_entityID;
+  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+    if (entityID == sel->entityID && sel->itemtype == OBJ_SEQFEAT) {
+      UDV_select_feature (vdp->UnDViewer, vdp, entityID,
+					      sel->itemID, TRUE);
+    }
+  }
+}
+
 static void PopulateUDV (BioseqViewPtr bvp)
 
 {
+  ViewerDialogDataPtr  vdp;
+
   if (bvp == NULL) return;
   UDV_InitForSequin (bvp->udv, bvp);
+  vdp = (ViewerDialogDataPtr) GetObjectExtra (bvp->udv);
+  InitSelectUDV (vdp);
 }
 
 static void ShowUDV (BioseqViewPtr bvp, Boolean show)
@@ -2308,6 +2374,27 @@ static void SelectUDV (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
                        Boolean select, Boolean scrollto)
 
 {
+  OMMsgStruct     omms;
+  OMMsgStructPtr  ommsp;
+  OMUserData      omud;
+  ViewerDialogDataPtr  vdp;
+
+  MemSet ((Pointer) &omms, 0, sizeof (OMMsgStruct));
+  MemSet ((Pointer) &omud, 0, sizeof (OMUserData));
+  ommsp = &omms;
+  if (select) {
+    ommsp->message = OM_MSG_SELECT;
+  } else {
+    ommsp->message = OM_MSG_DESELECT;
+  }
+  ommsp->entityID = selentityID;
+  ommsp->itemID = selitemID;
+  ommsp->itemtype = selitemtype;
+  ommsp->region = (Pointer) region;
+  ommsp->omuserdata = &omud;
+  vdp = (ViewerDialogDataPtr) GetObjectExtra (bvp->udv);
+  omud.userdata.ptrvalue = (Pointer) vdp;
+  UDV_OM_MsgFunc (ommsp);
 }
 
 static void ResizeUDV (BioseqViewPtr bvp)
@@ -3098,12 +3185,13 @@ PopuP pop;
 PrompT txt;
 
 	Margins=4*stdCharWidth;
-	w=DocumentWindow(Margins,Margins ,
+	w=/*DocumentWindow*/Nlm_MovableModalWindow(Margins,Margins ,
 			(Int2)((screenRect.right-screenRect.left)/2-2*Margins), 
 			(Int2)((screenRect.bottom-screenRect.top)/3-2*Margins), 
 			"Features List", 
-			FeatListDlgQuit,
-			FeatListDlgProc);
+			FeatListDlgQuit/*,
+			FeatListDlgProc*/);
+    Nlm_SetResize(w, FeatListDlgProc);
 
 	if (w==NULL){
 		Message (MSG_ERROR, "Dialog creation failed.");

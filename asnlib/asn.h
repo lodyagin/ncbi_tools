@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,12 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.5  2000/05/12 20:44:01  ostell
+* make changes to collect comments from spec and print in DTD
+*
+* Revision 6.4  2000/05/10 03:12:36  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.3  1998/02/27 17:22:18  vakatov
 * [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
 *
@@ -134,14 +140,6 @@ extern "C" {
 #define END_STRUCT 		412		/* } found */
 #endif
 
-typedef struct asnvaluenode {
-	Int2 valueisa;
-	CharPtr name;		/* use for strings and named int */
-	Int4 intvalue;		    /* use for int and boolean */
-	FloatHi realvalue;
-	struct asnvaluenode PNTR next;
-}	AsnValxNode, PNTR AsnValxNodePtr;
-
    /******* AsnOptions allow customization of AsnIo and AsnType ****/
 
 typedef Pointer (LIBCALLBACK * AsnOptFreeFunc) PROTO ((Pointer));
@@ -154,6 +152,17 @@ typedef struct asnopt {
 	AsnOptFreeFunc freefunc;  /* function to free data.ptrvalue */
 	struct asnopt PNTR next;
 } AsnOption, PNTR AsnOptionPtr;
+
+   /******** AsnValXNode holds ENUM, Named Integer, Default values *****/
+
+typedef struct asnvaluenode {
+	Int2 valueisa;
+	CharPtr name;		/* use for strings and named int */
+	Int4 intvalue;		    /* use for int and boolean */
+	FloatHi realvalue;
+	struct asnvaluenode PNTR next;
+	AsnOptionPtr aop;           /* for comments */
+}	AsnValxNode, PNTR AsnValxNodePtr;
 
    /******** AsnType is a node in the AsnTool parse tree *******/
 
@@ -174,6 +183,8 @@ typedef struct asntype {
 	Int2 tmp;     /* for temporary ->type link to local tree */
 	struct asntype PNTR next;
 	AsnOptionPtr hints;         /* used to customize the type by application */
+	CharPtr XMLname;            /* for reading/writing XML */
+	Boolean been_here;          /* needed for printing DTD */
 }	AsnType, PNTR AsnTypePtr;
 
 typedef struct asnmodule {
@@ -195,6 +206,7 @@ typedef struct asnmodule {
 #define ASNIO_OUT   8
 #define ASNIO_FILE  16
 #define ASNIO_CARRIER   32     /* is a pure iterator */
+#define ASNIO_XML 64
 
 #define ASNIO_TEXT_IN	21     /* AsnIo.type */
 #define ASNIO_TEXT_OUT	25
@@ -275,6 +287,8 @@ typedef struct asnio {
 	Uint1 fix_non_print; /* fix non-printing chars in VisibleStrings (see below)*/
 	Boolean scan_for_start;  /* if TRUE, scan over garbage in print form */
 	Int2 spec_version;    /* used for filtering between asn.1 spec versions */
+	Boolean no_newline;   /* to suppress internal newlines in long XML strings */
+	Boolean XMLModuleWritten; /* to put header on first XML DTD only */
 } AsnIo, PNTR AsnIoPtr;
 
 
@@ -487,6 +501,9 @@ NLM_EXTERN Boolean LIBCALL AsnTxtBufWrite PROTO ((AsnIoPtr aip, AsnTypePtr atp, 
 #define OP_NCBIHINTS   -7
 #define OP_GESTALT     -8
 #define OP_NCBIOBJSTR  -9
+#define OP_TYPEORDER   -10     /* for printing out DTD or spec */
+#define OP_COMMENTBEFORE -11   /*  ditto */
+#define OP_COMMENT     -12      /*  ditto */
 
 /****** these are the possible returns from AsnFindBaseIsa() *****/
 /****** the numbers are arbitrary, but should never be changed ***/

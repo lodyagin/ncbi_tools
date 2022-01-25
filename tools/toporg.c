@@ -3276,6 +3276,8 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   msev = ErrSetMessageLevel (SEV_MAX);
   lsev = ErrSetLogLevel (SEV_MAX);
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
+  /* clear indexes, since CleanupEmptyFeatCallback removes genes, etc. */
+  SeqMgrClearFeatureIndexes (entityID, NULL);
   MemSet ((Pointer) objMgrFilter, FALSE, sizeof (objMgrFilter));
   objMgrFilter [OBJ_SEQFEAT] = TRUE;
   GatherObjectsInEntity (entityID, 0, NULL, MarkMovedGeneGbquals, (Pointer) &hasMarkedGenes, objMgrFilter);
@@ -3309,14 +3311,15 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   RenormalizeNucProtSets (sep, TRUE);
   StripTitleFromProtsInNucProts (sep);
   move_cds (sep);
+  /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
+  SeqMgrIndexFeatures (entityID, NULL);
   CdCheck (sep, NULL);
   if (hasMarkedGenes) {
-    SeqMgrIndexFeatures (entityID, NULL);
     MemSet ((Pointer) objMgrFilter, FALSE, sizeof (objMgrFilter));
     objMgrFilter [OBJ_SEQFEAT] = TRUE;
     GatherObjectsInEntity (entityID, 0, NULL, DeleteBadMarkedGeneXrefs, NULL, objMgrFilter);
-    SeqMgrClearFeatureIndexes (entityID, NULL);
   }
+  SeqMgrClearFeatureIndexes (entityID, NULL);
   BasicSeqEntryCleanup (sep);
   ErrSetMessageLevel (msev);
   ErrSetLogLevel (lsev);

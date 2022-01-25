@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.10 2000/04/19 18:53:31 dondosha Exp $
+/* $Id: mbalign.c,v 6.14 2000/05/24 19:51:28 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,24 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.14  2000/05/24 19:51:28  dondosha
+* Do not use readdb when megablast is used for two sequences
+*
+* Revision 6.13  2000/05/17 17:12:39  dondosha
+* Removed unused variable
+*
+* Revision 6.12  2000/05/12 19:45:32  dondosha
+* Subject sequence is now passed in ncbi4na encoding
+*
+* Revision 6.11  2000/05/01 21:23:40  dondosha
+* Changed greedy_align_basic to MegaBlastGreedyAlign, added MegaBlastAffineGreedyAlign
+*
 * Revision 6.10  2000/04/19 18:53:31  dondosha
 * Bug fix: allow to extend through gap and masked characters, but not end-points
 *
@@ -293,7 +305,7 @@ space_ptr new_space(Int4 MAX_D)
     
     p = Nlm_Malloc(sizeof(space_type));
     amount = MAX_SPACE;
-    p->space_array = Nlm_Malloc(sizeof(three_val)*amount);
+    p->space_array = Nlm_Malloc(sizeof(ThreeVal)*amount);
     p->used = 0; 
     p->size = amount;
 
@@ -306,9 +318,9 @@ void free_space(space_ptr sp)
     sp = MemFree(sp);
 }
 
-three_val *get_space(space_ptr S, Int4 amount)
+ThreeValPtr get_space(space_ptr S, Int4 amount)
 {
-    three_val *s = S->space_array+S->used;
+    ThreeValPtr s = S->space_array+S->used;
     if (amount < 0) 
         return NULL;  
 
@@ -352,7 +364,7 @@ static Int4 gdb3(Int4Ptr a, Int4Ptr b, Int4Ptr c)
     return g;
 }
 
-static Int4 get_lastC(three_val **flast_d, Int4Ptr lower, Int4Ptr upper, 
+static Int4 get_lastC(ThreeValPtr PNTR flast_d, Int4Ptr lower, Int4Ptr upper, 
                       Int4Ptr d, Int4 diag, Int4 Mis_cost, Int4Ptr row1)
 {
     Int4 row;
@@ -374,7 +386,7 @@ static Int4 get_lastC(three_val **flast_d, Int4Ptr lower, Int4Ptr upper,
     }
 }
 
-static Int4 get_last_ID(three_val **flast_d, Int4Ptr lower, Int4Ptr upper, 
+static Int4 get_last_ID(ThreeValPtr PNTR flast_d, Int4Ptr lower, Int4Ptr upper, 
                         Int4Ptr d, Int4 diag, Int4 GO_cost, 
                         Int4 GE_cost, Int4 IorD)
 {
@@ -393,14 +405,14 @@ static Int4 get_last_ID(three_val **flast_d, Int4Ptr lower, Int4Ptr upper,
     return IorD;
 }
 
-static Int4 get_lastI(three_val **flast_d, Int4Ptr lower, Int4Ptr upper, 
+static Int4 get_lastI(ThreeValPtr PNTR flast_d, Int4Ptr lower, Int4Ptr upper, 
                       Int4Ptr d, Int4 diag, Int4 GO_cost, Int4 GE_cost)
 {
     return get_last_ID(flast_d, lower, upper, d, diag, GO_cost, GE_cost, sI);
 }
 
 
-static int get_lastD(three_val **flast_d, Int4Ptr lower, Int4Ptr upper, 
+static int get_lastD(ThreeValPtr PNTR flast_d, Int4Ptr lower, Int4Ptr upper, 
                      Int4Ptr d, Int4 diag, Int4 GO_cost, Int4 GE_cost)
 {
     return get_last_ID(flast_d, lower, upper, d, diag, GO_cost, GE_cost, sD);
@@ -629,7 +641,7 @@ int gap_align_basic(
         MAX_D, 			/* maximum cost */
         ORIGIN,
         return_val = 0;
-    three_val **flast_d;	/* rows containing the last d */
+    ThreeValPtr PNTR flast_d;	/* rows containing the last d */
     Int4Ptr max_row;		/* reached for cost d=0, ... len1.  */
     Int4 Mis_cost, GO_cost, GE_cost;
     Int4 D_diff, gd;
@@ -686,10 +698,10 @@ int gap_align_basic(
 	/* hit last row; stop search */
 	return row*match_score;
     }
-    flast_d = MemNew((MAX(max_d, max_cost) + 2) * sizeof(three_val *));
+    flast_d = MemNew((MAX(max_d, max_cost) + 2) * sizeof(ThreeValPtr));
     if (S==NULL) {
         space = 0;
-        flast_d[0] = MemNew((MAX_D + MAX_D + 6) * sizeof(three_val) * (max_cost+1));
+        flast_d[0] = MemNew((MAX_D + MAX_D + 6) * sizeof(ThreeVal) * (max_cost+1));
         for (k = 1; k <= max_cost; k++)
             flast_d[k] = flast_d[k-1] + MAX_D + MAX_D + 6;
     } else {
@@ -931,7 +943,6 @@ static SeqAlignPtr MBMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
 {
     SeqAlignPtr sap;
     DenseSegPtr dsp;
-    Int4 index;
     
     sap = SeqAlignNew();
     
@@ -1082,32 +1093,77 @@ SeqAlignPtr MBCreateSeqAlign(gal_t *galp, SeqIdPtr subject_id,
 
 BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
 {
-   Int4 max_d, Xdrop, d_diff;
-
+   Int4 max_d, max_d_1, Xdrop, d_diff, max_len, max_cost, gd, i;
+   Int4 reward, penalty, gap_open, gap_extend;
+   Int4 Mis_cost, GE_cost;
+   
    if (search == NULL) 
       return search;
+   
+   if (search->sbp->reward % 2 == 1) {
+      reward = 2*search->sbp->reward;
+      penalty = -2*search->sbp->penalty;
+      Xdrop = 2*search->pbp->gap_x_dropoff;
+      gap_open = 2*search->pbp->gap_open;
+      gap_extend = 2*search->pbp->gap_extend;
+   } else {
+      reward = search->sbp->reward;
+      penalty = -search->sbp->penalty;
+      Xdrop = search->pbp->gap_x_dropoff;
+      gap_open = search->pbp->gap_open;
+      gap_extend = search->pbp->gap_extend;
+   }
+   if (search->rdfp)
+      max_len = readdb_get_maxlen(search->rdfp);
+   else
+      max_len = search->dblen;
+   max_d = (Int4) (max_len / ERROR_FRACTION + 1);
 
-   max_d = (Int4) (search->context->query->length/
-				   ERROR_FRACTION + 1);
-   Xdrop = -2*search->pbp->dropoff_2nd_pass;
-   d_diff = ICEIL(Xdrop+search->sbp->reward, 
-		  2*(-search->sbp->penalty+search->sbp->reward));
+   search->abmp = (GreedyAlignMemPtr) Malloc(sizeof(GreedyAlignMem));
 
-   search->abmp = (GreedyAlignMemPtr) Nlm_Malloc(sizeof(GreedyAlignMem));
-   search->abmp->flast_d = (Int4 **) Nlm_Malloc((max_d + 2) * sizeof(Int4 *));
-   search->abmp->flast_d[0] = Nlm_Malloc((max_d + max_d + 6) * sizeof(Int4) * 2);
-   search->abmp->flast_d[1] = search->abmp->flast_d[0] + max_d + max_d + 6;
-   search->abmp->max_row_free = Nlm_Malloc(sizeof(Int4) * (max_d + 1 + d_diff));
+   if (search->pbp->gap_open==0 && search->pbp->gap_extend==0) {
+      d_diff = ICEIL(Xdrop+reward/2, penalty+reward);
+   
+      search->abmp->flast_d = (Int4Ptr PNTR) Malloc((max_d + 2) * sizeof(Int4Ptr));
+      search->abmp->flast_d[0] = Malloc((max_d + max_d + 6) * sizeof(Int4) * 2);
+      search->abmp->flast_d[1] = search->abmp->flast_d[0] + max_d + max_d + 6;
+      search->abmp->flast_d_affine = NULL;
+      search->abmp->uplow_free = NULL;
+   } else {
+      search->abmp->flast_d = NULL;
+      Mis_cost = reward + penalty;
+      GE_cost = gap_extend+reward/2;
+      max_d_1 = max_d;
+      max_d *= GE_cost;
+      max_cost = MAX(Mis_cost, gap_open+GE_cost);
+      gd = gdb3(&Mis_cost, &gap_open, &GE_cost);
+      d_diff = ICEIL(Xdrop+reward/2, gd);
+      search->abmp->uplow_free = MemNew(sizeof(Int4)*2*(max_d+1+max_cost));
+      search->abmp->flast_d_affine = (ThreeValPtr PNTR) 
+	 Malloc((MAX(max_d, max_cost) + 2) * sizeof(ThreeValPtr));
+      search->abmp->flast_d_affine[0] = 
+	 MemNew((2*max_d_1 + 6) * sizeof(ThreeVal) * (max_cost+1));
+      for (i = 1; i <= max_cost; i++)
+	 search->abmp->flast_d_affine[i] = 
+	    search->abmp->flast_d_affine[i-1] + 2*max_d_1 + 6;
+   }
+   search->abmp->max_row_free = Malloc(sizeof(Int4) * (max_d + 1 + d_diff));
    
    return search;
 }
 
 GreedyAlignMemPtr GreedyAlignMemFree(GreedyAlignMemPtr abmp)
 {
-   free(abmp->flast_d[0]);
-   free(abmp->max_row_free);
-   free(abmp->flast_d);
-   free(abmp);
+   if (abmp->flast_d) {
+      MemFree(abmp->flast_d[0]);
+      MemFree(abmp->flast_d);
+   } else {
+      MemFree(abmp->flast_d_affine[0]);
+      MemFree(abmp->flast_d_affine);
+      MemFree(abmp->uplow_free);
+   }
+   MemFree(abmp->max_row_free);
+   MemFree(abmp);
    return abmp;
 }
 
@@ -1126,12 +1182,12 @@ len2 corresponds to the unpacked (true) length.
  *   e1, e2          - endpoint of the computed alignment
  *   edit_script     -
  */
-Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
-			     const UcharPtr s2, Int4 len2,
-			     Boolean reverse, Int4 xdrop_threshold, 
-			     Int4 match_cost, Int4 mismatch_cost,
-			     Int4 *e1, Int4 *e2, GreedyAlignMemPtr abmp, 
-			     edit_script_t *S)
+Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
+			  const UcharPtr s2, Int4 len2,
+			  Boolean reverse, Int4 xdrop_threshold, 
+			  Int4 match_cost, Int4 mismatch_cost,
+			  Int4Ptr e1, Int4Ptr e2, 
+			  GreedyAlignMemPtr abmp, edit_script_t *S)
 {
     Int4 col,			/* column number */
         d,				/* current distance */
@@ -1141,16 +1197,16 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
         MAX_D, 			/* maximum cost */
         ORIGIN,
         return_val = 0;
-    Int4 **flast_d = abmp->flast_d; /* rows containing the last d */
-    Int4 *max_row;		/* reached for cost d=0, ... len1.  */
+    Int4Ptr PNTR flast_d = abmp->flast_d; /* rows containing the last d */
+    Int4Ptr max_row;		/* reached for cost d=0, ... len1.  */
     
     Int4 X_pen = xdrop_threshold;
     Int4 M_half = match_cost/2;
     Int4 Op_cost = mismatch_cost + M_half*2;
     Int4 D_diff = ICEIL(X_pen+M_half, Op_cost);
     
-    Int4 /**max_row_free,*/ x, cur_max, b_diag = 0, best_diag = INT_MAX/2;
-    Int4 *max_row_free = abmp->max_row_free;
+    Int4 x, cur_max, b_diag = 0, best_diag = INT_MAX/2;
+    Int4Ptr max_row_free = abmp->max_row_free;
     Char nlower = 0, nupper = 0;
     space_ptr space;
     
@@ -1159,10 +1215,12 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
     *e1 = *e2 = 0;
     
     if (reverse)
-	for (row = 0; row < len2 && row < len1 && (s1[len1-1-row] == READDB_UNPACK_BASE_N(s2[(len2-1-row)/4], row%4)); row++)
+       /*for (row = 0; row < len2 && row < len1 && (s2[len2-1-row] == READDB_UNPACK_BASE_N(s1[(len1-1-row)>>2], row&3)); row++)*/
+	for (row = 0; row < len2 && row < len1 && (s2[len2-1-row] == ncbi4na_to_blastna[s1[len1-1-row]]); row++)
 	    /*empty*/ ;
     else
-	for (row = 0; row < len2 && row < len1 && (s1[row] == READDB_UNPACK_BASE_N(s2[row/4], (3-(row%4)))); row++)
+       /*for (row = 0; row < len2 && row < len1 && (s2[row] == READDB_UNPACK_BASE_N(s1[row>>2], (3-(row&3)))); row++)*/
+	for (row = 0; row < len2 && row < len1 && (s2[row] == ncbi4na_to_blastna[s1[row]]); row++)
 	    /*empty*/ ;
     
     *e1 = row;
@@ -1214,29 +1272,35 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
 	    /* Slide down the diagonal. Don't do this if reached 
 	       the end point, which has value 0x08 */
 	    if (reverse) {
-	       if (s1[len1 - row] != 0x08) {
-		  while (row < len1 && col < len2 && s1[len1-1-row] == READDB_UNPACK_BASE_N(s2[(len2-1-col)/4], col%4)) {
+	       if (s2[len2 - row] != 0x08) {
+		  /*while (row < len2 && col < len1 && s2[len2-1-row] == READDB_UNPACK_BASE_N(s1[(len1-1-col)>>2], col&3)) {*/
+		  while (row < len2 && col < len1 && s2[len2-1-row] == ncbi4na_to_blastna[s1[len1-1-col]]) {
 		     ++row;
 		     ++col;
 		  }
-	       } else 
+	       } else {
 		  row--;
-	    } else if (s1[row-1] != 0x08) { 
-	       while (row < len1 && col < len2 && s1[row] == READDB_UNPACK_BASE_N(s2[col/4], (3-col%4))) {
+		  col--;
+	       }
+	    } else if (s2[row-1] != 0x08) { 
+	       /* while (row < len2 && col < len1 && s2[row] == READDB_UNPACK_BASE_N(s1[col>>2], (3-col&3))) {*/
+	       while (row < len2 && col < len1 && s2[row] == ncbi4na_to_blastna[s1[col]]) {
 		    ++row;
 		    ++col;
 		}
-	    } else
+	    } else {
 	       row--;
+	       col--;
+	    }
 	    flast_d[d][k] = row;
 	    if (row + col > cur_max) {
 		cur_max = row + col;
 		b_diag = k;
 	    }
-	    if (row == len1) {
+	    if (row == len2) {
 		flower = k+1; nlower = 1;
 	    }
-	    if (col == len2) {
+	    if (col == len1) {
 		fupper = k-1; nupper = 1;
 	    }
 	}
@@ -1245,8 +1309,8 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
 	    max_row[d] = k;
 	    return_val = d;
 	    best_diag = b_diag;
-	    *e1 = flast_d[d][b_diag];
-	    *e2 = (*e1)+b_diag-ORIGIN;
+	    *e2 = flast_d[d][b_diag];
+	    *e1 = (*e2)+b_diag-ORIGIN;
 	} else {
 	    max_row[d] = max_row[d - 1];
 	}
@@ -1258,13 +1322,13 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
 	if (S==NULL)
 	   flast_d[d] = flast_d[d - 2];
 	else 
-	   flast_d[d] = (Int4 *) get_space(space, fupper-flower+5)-flower+2;
+	   flast_d[d] = (Int4Ptr) get_space(space, fupper-flower+5)-flower+2;
     }
     
     if (S!=NULL) { /*trace back*/
         Int4 row1, col1, diag1, diag;
         d = return_val; diag = best_diag;
-        row = *e1; col = *e2;
+        row = *e2; col = *e1;
         while (d > 0) {
             diag1 = get_last(flast_d, d, diag, &row1);
             col1 = row1+diag1-ORIGIN;
@@ -1286,6 +1350,269 @@ Int4 greedy_gapped_align(const UcharPtr s1, Int4 len1,
     }
     return return_val;
 }
+
+
+Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1, 
+				 const UcharPtr s2, Int4 len2,
+				 Boolean reverse, Int4 xdrop_threshold, 
+				 Int4 match_score, Int4 mismatch_score, 
+				 Int4 gap_open, Int4 gap_extend,
+				 Int4Ptr e1, Int4Ptr e2, 
+				 GreedyAlignMemPtr abmp, edit_script_t *S)
+{
+    Int4 col,			/* column number */
+        d,			/* current distance */
+        k,			/* current diagonal */
+        flower, fupper,         /* boundaries for searching diagonals */
+        row,		        /* row number */
+        MAX_D, 			/* maximum cost */
+        ORIGIN,
+        return_val = 0;
+    ThreeValPtr PNTR flast_d;	/* rows containing the last d */
+    Int4Ptr max_row_free = abmp->max_row_free;
+    Int4Ptr max_row;		/* reached for cost d=0, ... len1.  */
+    Int4 Mis_cost, GO_cost, GE_cost;
+    Int4 D_diff, gd;
+    Int4 M_half;
+    Int4 max_cost;
+    Int4 *lower, *upper;
+    
+    Int4 x, cur_max, b_diag = 0, best_diag = INT_MAX/2;
+    Char nlower = 0, nupper = 0;
+    space_ptr space;
+    Int4 stop_condition;
+    Int4 max_d;
+    Int4Ptr uplow_free;
+    
+    if (match_score % 2 == 1) {
+        match_score *= 2;
+        mismatch_score *= 2;
+        xdrop_threshold *= 2;
+        gap_open *= 2;
+	gap_extend *= 2;
+    }
+    M_half = match_score/2;
+    if (gap_extend == 0)
+       gap_extend = mismatch_score + M_half;
+    
+    if (gap_open == 0 && gap_extend == mismatch_score+M_half) {
+        return MegaBlastGreedyAlign(s1, len1, s2, len2, reverse, 
+				    xdrop_threshold, match_score, 
+				    mismatch_score, e1, e2, abmp, S);
+    }
+
+    Mis_cost = mismatch_score + match_score;
+    GO_cost = gap_open;
+    GE_cost = gap_extend+M_half;
+    gd = gdb3(&Mis_cost, &GO_cost, &GE_cost);
+    D_diff = ICEIL(xdrop_threshold+M_half, gd);
+    
+    
+    MAX_D = (Int4) (len1/ERROR_FRACTION + 1);
+    max_d = MAX_D*GE_cost;
+    ORIGIN = MAX_D + 2;
+    max_cost = MAX(Mis_cost, GO_cost+GE_cost);
+    *e1 = *e2 = 0;
+    
+    if (reverse)
+       /*for (row = 0; row < len2 && row < len1 && (s2[len2-1-row] == READDB_UNPACK_BASE_N(s1[(len1-1-row)>>2], row&3)); row++)*/
+	for (row = 0; row < len2 && row < len1 && (s2[len2-1-row] == ncbi4na_to_blastna[s1[len1-1-row]]); row++)
+	    /*empty*/ ;
+    else
+       /*for (row = 0; row < len2 && row < len1 && (s2[row] == READDB_UNPACK_BASE_N(s1[row>>2], (3-(row&3)))); row++)*/
+	for (row = 0; row < len2 && row < len1 && (s2[row] == ncbi4na_to_blastna[s1[row]]); row++)
+	    /*empty*/ ;
+    
+    *e1 = row;
+    *e2 = row;
+    if (row == len1 || row == len2) {
+        if (S != NULL)
+            edit_script_rep(S, row);
+	/* hit last row; stop search */
+	return row*match_score;
+    }
+    /*flast_d = MemNew((MAX(max_d, max_cost) + 2) * sizeof(ThreeValPtr));*/
+    flast_d = abmp->flast_d_affine;
+    if (S==NULL) {
+        space = 0;
+        /*flast_d[0] = MemNew((MAX_D + MAX_D + 6) * sizeof(ThreeVal) * (max_cost+1));
+        for (k = 1; k <= max_cost; k++) 
+	flast_d[k] = flast_d[k-1] + MAX_D + MAX_D + 6;*/
+    } else { 
+        space = new_space(MAX_D);
+        /*flast_d[0] = get_space(space, 1)-ORIGIN; 
+        flast_d[1] = get_space(space, 3)-ORIGIN+1;*/
+    }
+    max_row = max_row_free + D_diff;
+    for (k = 0; k < D_diff; k++)
+	max_row_free[k] = 0;
+    /*uplow_free = MemNew(sizeof(Int4)*2*(max_d+1+max_cost));*/
+    uplow_free = abmp->uplow_free;
+    lower = uplow_free;
+    upper = uplow_free+max_d+1+max_cost;
+    /* next 3 lines set boundary for -1,-2,...,-max_cost+1*/
+    for (k = 0; k < max_cost; k++) {lower[k] =LARGE;  upper[k] = -LARGE;}
+    lower += max_cost;
+    upper += max_cost; 
+    
+    flast_d[0][ORIGIN].C = row;
+    flast_d[0][ORIGIN].I = flast_d[0][ORIGIN].D = -2;
+    max_row[0] = (row + row)*M_half;
+    lower[0] = upper[0] = ORIGIN;
+    
+    flower = ORIGIN - 1;
+    fupper = ORIGIN + 1;
+    
+    d = 1;
+    stop_condition = 1;
+    while (d <= max_d) {
+	Int4 fl0, fu0;
+	x = max_row[d - D_diff] + gd * d - xdrop_threshold;
+	x = ICEIL(x, M_half);
+	if (x < 0) x=0;
+	cur_max = 0;
+	fl0 = flower;
+	fu0 = fupper;
+	for (k = fl0; k <= fu0; k++) {
+	    row = -2;
+	    if (k+1 <= upper[d-GO_cost-GE_cost] && k+1 >= lower[d-GO_cost-GE_cost]) 
+                row = flast_d[d-GO_cost-GE_cost][k+1].C;
+	    if (k+1  <= upper[d-GE_cost] && k+1 >= lower[d-GE_cost] &&
+		row < flast_d[d-GE_cost][k+1].D) 
+                row = flast_d[d-GE_cost][k+1].D;
+	    row++;
+	    if (row+row+k-ORIGIN >= x) 
+	      flast_d[d][k].D = row;
+	    else flast_d[d][k].D = -2;
+	    row = -1; 
+	    if (k-1 <= upper[d-GO_cost-GE_cost] && k-1 >= lower[d-GO_cost-GE_cost]) 
+                row = flast_d[d-GO_cost-GE_cost][k-1].C;
+	    if (k-1  <= upper[d-GE_cost] && k-1 >= lower[d-GE_cost] &&
+		row < flast_d[d-GE_cost][k-1].I) 
+                row = flast_d[d-GE_cost][k-1].I;
+	    if (row+row+k-ORIGIN >= x) 
+                flast_d[d][k].I = row;
+	    else flast_d[d][k].I = -2;
+            
+	    row = MAX(flast_d[d][k].I, flast_d[d][k].D);
+	    if (k <= upper[d-Mis_cost] && k >= lower[d-Mis_cost]) 
+                row = MAX(flast_d[d-Mis_cost][k].C+1,row);
+            
+	    col = row + k - ORIGIN;
+	    if (row + col >= x)
+		fupper = k;
+	    else {
+		if (k == flower)
+		    flower++;
+		else
+		    flast_d[d][k].C = -2;
+		continue;
+	    }
+	    /* slide down the diagonal */
+	    if (reverse) {
+	       if (s2[len2 - row] != 0x08) {
+		  /* while (row < len2 && col < len1 && s2[len2-1-row] ==
+		     READDB_UNPACK_BASE_N(s1[(len1-1-col)>>2], col&3)) {*/
+		  while (row < len2 && col < len1 && s2[len2-1-row] ==
+			 ncbi4na_to_blastna[s1[len1-1-col]]) {
+		    ++row;
+		    ++col;
+		  }
+	       } else {
+		  row--;
+		  col--;
+	       }
+	    } else if (s2[row-1] != 0x08) {
+	       /*while (row < len2 && col < len1 && s2[row] == READDB_UNPACK_BASE_N(s1[col>>2], (3-col&3))) {*/
+		while (row < len2 && col < len1 && s2[row] == ncbi4na_to_blastna[s1[col]]) {
+		    ++row;
+		    ++col;
+		}
+	    } else {
+	       row--;
+	       col--;
+	    }
+	    flast_d[d][k].C = row;
+	    if (row + col > cur_max) {
+		cur_max = row + col;
+		b_diag = k;
+	    }
+	    if (row == len2) {
+		flower = k; nlower = k+1;
+	    }
+	    if (col == len1) {
+		fupper = k; nupper = k-1;
+	    }
+	}
+	k = cur_max*M_half - d * gd;
+	if (max_row[d - 1] < k) {
+	    max_row[d] = k;
+	    return_val = d;
+	    best_diag = b_diag;
+	    *e2 = flast_d[d][b_diag].C;
+	    *e1 = (*e2)+b_diag-ORIGIN;
+	} else {
+	    max_row[d] = max_row[d - 1];
+	}
+	if (flower <= fupper) {
+            stop_condition++;
+            lower[d] = flower; upper[d] = fupper;
+	} else {
+            lower[d] = LARGE; upper[d] = -LARGE;
+	}
+	if (lower[d-max_cost] <= upper[d-max_cost]) stop_condition--;
+	if (stop_condition == 0) break;
+	d++;
+	flower = MIN(lower[d-Mis_cost], MIN(lower[d-GO_cost-GE_cost], lower[d-GE_cost])-1);
+	if (nlower) flower = MAX(flower, nlower);
+	fupper = MAX(upper[d-Mis_cost], MAX(upper[d-GO_cost-GE_cost], upper[d-GE_cost])+1);
+	if (nupper) fupper = MIN(fupper, nupper);
+	if (d > max_cost) {
+	   if (S==NULL) {
+	      /*if (d > max_cost)*/
+	      flast_d[d] = flast_d[d - max_cost-1];
+	   } else 
+	      flast_d[d] = get_space(space, fupper-flower+1)-flower;
+	}
+    }
+    
+    if (S!=NULL) { /*trace back*/
+        Int4 row1, diag, state;
+        d = return_val; diag = best_diag;
+        row = *e2; state = sC;
+        while (d > 0) {
+            if (state == sC) {
+                /* diag will not be changed*/
+                state = get_lastC(flast_d, lower, upper, &d, diag, Mis_cost, &row1);
+                if (row-row1 > 0) edit_script_rep(S, row-row1);
+                row = row1;
+            } else {
+                if (state == sI) {
+                    /*row unchanged */
+                    state = get_lastI(flast_d, lower, upper, &d, diag, GO_cost, GE_cost);
+                    diag--;
+                    edit_script_ins(S,1);
+                } else {
+                    edit_script_del(S,1);
+                    state = get_lastD(flast_d, lower, upper, &d, diag, GO_cost, GE_cost);
+                    diag++;
+                    row--;
+                }
+            }
+        }
+        edit_script_rep(S, flast_d[0][ORIGIN].C);
+        if (!reverse) 
+            edit_script_reverse_inplace(S);
+        free_space(space);
+    }/* else {
+        MemFree(flast_d[0]);
+	}*/
+    return_val = max_row[return_val];
+    /*MemFree(flast_d);
+      MemFree(uplow_free);*/
+    return return_val;
+}
+
 
 
 /* ------------------------------------------------------------ */

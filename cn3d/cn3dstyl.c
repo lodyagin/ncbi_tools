@@ -1,4 +1,4 @@
-/*   $Id: cn3dstyl.c,v 6.9 2000/04/20 23:27:45 lewisg Exp $
+/*   $Id: cn3dstyl.c,v 6.10 2000/05/10 14:15:40 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: cn3dstyl.c,v 6.9 2000/04/20 23:27:45 lewisg Exp $
+* File Name:  $Id: cn3dstyl.c,v 6.10 2000/05/10 14:15:40 thiessen Exp $
 *
 * Author: Yanli Wang
 *
@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dstyl.c,v $
+* Revision 6.10  2000/05/10 14:15:40  thiessen
+* fix minor GUI bug in Annotate panel
+*
 * Revision 6.9  2000/04/20 23:27:45  lewisg
 * misc bug fixes
 *
@@ -620,6 +623,9 @@ static PARS GetNewSpecialAlgorRenderSet(void)
     pars->NTResiduesOn = TRUE;
     pars->NTResColor = C_BYCHOICE;
 
+    pars->PBBLabelStyle |= L_WHITE;
+    pars->NTBBLabelStyle |= L_WHITE;
+
     pars->PBBColRGB[0] = pars->PBBColRGB[1] = pars->PBBColRGB[2] =
     pars->PResColRGB[0] = pars->PResColRGB[1] = pars->PResColRGB[2] =
     pars->NTBBColRGB[0] = pars->NTBBColRGB[1] = pars->NTBBColRGB[2] =
@@ -868,108 +874,87 @@ static void ChangeSpecialLabelsProc(void)
     pars->PBBLabelInterval = (Uint1) GetValue(Cn3D_pupLabelAA);
     pars->NTBBLabelInterval = (Uint1) GetValue(Cn3D_pupLabelNT);
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 2; i++) {
+
         nameval = GetValue(Cn3D_bLName[i]);
-        if (nameval == 3)
-            codeval = (Uint1) L_1LETR;
-        else
+        switch (nameval) {
+        case 2:
             codeval = (Uint1) L_3LETR;
+            break;
+        case 3:
+            codeval = (Uint1) L_1LETR;
+            break;
+        case 4:
+            codeval = (Uint1) L_PDB;
+            break;
+        case 1: default:
+            codeval = 0;
+        }
         switch (i) {
         case 0:                /* aa */
             /* clear bits */
-            pars->PBBLabelStyle =
-                pars->PBBLabelStyle & ~((Uint1) (L_3LETR | L_1LETR));
+            pars->PBBLabelStyle &= ~((Uint1) (L_3LETR | L_1LETR | L_PDB));
             /* set bit */
-            pars->PBBLabelStyle = pars->PBBLabelStyle | (Uint1) codeval;
+            pars->PBBLabelStyle |= codeval;
             break;
         case 1:                /* na   */
-            pars->NTBBLabelStyle =
-                pars->NTBBLabelStyle & ~((Uint1) (L_3LETR | L_1LETR));
-            pars->NTBBLabelStyle = pars->NTBBLabelStyle | (Uint1) codeval;
+            pars->NTBBLabelStyle &= ~((Uint1) (L_3LETR | L_1LETR | L_PDB));
+            pars->NTBBLabelStyle |= codeval;
             break;
-        default:;
+        default: ;
+        }
+
+        NameOn = (Boolean) (nameval > 1);
+        switch (i) {
+        case 0:                /* aa */
+            if (NameOn)
+                pars->PBBLabelStyle |= (Uint1) L_NAME;
+            else
+                pars->PBBLabelStyle &= (Uint1) ~L_NAME;
+            break;
+        case 1:                /* na   */
+            if (NameOn)
+                pars->NTBBLabelStyle |= (Uint1) L_NAME;
+            else
+                pars->NTBBLabelStyle &= (Uint1) ~L_NAME;
+            break;
+        default: ;
         }
 
         NumOn = GetStatus(Cn3D_bLNum[i]);
         switch (i) {
         case 0:                /* aa */
             if (NumOn)
-                pars->PBBLabelStyle = pars->PBBLabelStyle | (Uint1) L_NUM;
+                pars->PBBLabelStyle |= (Uint1) L_NUM;
             else
-                pars->PBBLabelStyle =
-                    pars->PBBLabelStyle & (Uint1) ~ L_NUM;
+                pars->PBBLabelStyle &= (Uint1) ~L_NUM;
             break;
         case 1:                /* na   */
             if (NumOn)
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle | (Uint1) L_NUM;
+                pars->NTBBLabelStyle |= (Uint1) L_NUM;
             else
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle & (Uint1) ~ L_NUM;
+                pars->NTBBLabelStyle &= (Uint1) ~L_NUM;
             break;
-        default:
-            ;
+        default: ;
         }
-        NameOn = (Boolean) (nameval > 1);
-        switch (i) {
-        case 0:                /* aa */
-            if (NameOn)
-                pars->PBBLabelStyle = pars->PBBLabelStyle | (Uint1) L_NAME;
-            else
-                pars->PBBLabelStyle =
-                    pars->PBBLabelStyle & (Uint1) ~ L_NAME;
-            break;
-        case 1:                /* na   */
-            if (NameOn)
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle | (Uint1) L_NAME;
-            else
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle & (Uint1) ~ L_NAME;
-            break;
-        default:
-            ;
-        }
-        PDBOn = (Boolean) (nameval == 4);
-        switch (i) {
-        case 0:                /* aa */
-            if (PDBOn)
-                pars->PBBLabelStyle = pars->PBBLabelStyle | (Uint1) L_PDB;
-            else
-                pars->PBBLabelStyle =
-                    pars->PBBLabelStyle & (Uint1) ~ L_PDB;
-            break;
-        case 1:                /* na   */
-            if (PDBOn)
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle | (Uint1) L_PDB;
-            else
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle & (Uint1) ~ L_PDB;
-            break;
-        default:
-            ;
-        }
+
         WhiteOn = GetStatus(Cn3D_bLWhite[i]);
         switch (i) {
         case 0:                /* aa */
             if (WhiteOn)
-                pars->PBBLabelStyle =
-                    pars->PBBLabelStyle | (Uint1) L_WHITE;
+                pars->PBBLabelStyle |= (Uint1) L_WHITE;
             else
-                pars->PBBLabelStyle =
-                    pars->PBBLabelStyle & (Uint1) ~ L_WHITE;
+                pars->PBBLabelStyle &= (Uint1) ~L_WHITE;
             break;
         case 1:                /* na   */
             if (WhiteOn)
-                pars->NTBBLabelStyle = pars->NTBBLabelStyle | (Uint1)
-                    L_WHITE;
+                pars->NTBBLabelStyle |= (Uint1) L_WHITE;
             else
-                pars->NTBBLabelStyle =
-                    pars->NTBBLabelStyle & (Uint1) ~ L_WHITE; break;
-        default:
-            ;
+                pars->NTBBLabelStyle &= (Uint1) ~L_WHITE;
+            break;
+        default: ;
         }
+
 #ifndef _OPENGL
         TopOn = GetStatus(Cn3D_bLTop[i]);
         switch (i) {
@@ -1083,34 +1068,26 @@ static void ModelSetLabelCtrls(PARS pars)
     SafeSetStatus(Cn3D_lOnOffLabel[3], pars->NTTermLabelOn);
 
     for (i = 0; i < 2; i++) {
-        val = 1;
-        style = 1;
-        size = 1;
-        switch (i) {
-        case 0:
+        if (i == 0) {
             style = pars->PBBLabelStyle;
             size = pars->PBBLabelScale;
-            break;
-        case 1:
+        } else {
             style = pars->NTBBLabelStyle;
             size = pars->NTBBLabelScale;
-            break;
-        default:
-            break;
         }
-        if (!(Boolean) (style & (Uint1) (L_NAME))) {
-            val = 1;
-        } else if ((Boolean) (style & (Uint1) (L_3LETR))) {
-            val = 2;
-        } else if ((Boolean) (style & (Uint1) (L_1LETR))) {
-            val = 3;
-        } else if ((Boolean) (style & (Uint1) L_PDB)) {
-            val = 4;
+        val = 1;
+        if (style & L_NAME) {
+            if (style & L_3LETR) {
+                val = 2;
+            } else if (style & L_1LETR) {
+                val = 3;
+            } else if (style & L_PDB) {
+                val = 4;
+            }
         }
         SafeSetValue(Cn3D_bLName[i], val);
-        SafeSetStatus(Cn3D_bLNum[i], (Boolean) (style & (Uint1) L_NUM));
-        SafeSetStatus(Cn3D_bLWhite[i],
-                      (Boolean) (style & (Uint1) ~ L_WHITE));
+        SafeSetStatus(Cn3D_bLNum[i], (Boolean) (style & L_NUM));
+        SafeSetStatus(Cn3D_bLWhite[i], (Boolean) (style & L_WHITE));
 #ifndef _OPENGL
         SafeSetStatus(Cn3D_bLTop[i], (Boolean) (style & (Uint1) LA_FRONT));
         SafeSetValue(Cn3D_pupLabelSize[i], size);

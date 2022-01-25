@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   ByteStore typedefs, prototypes, and defines
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbibs.h,v $
+* Revision 6.3  2000/05/26 23:34:58  kans
+* added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
+*
 * Revision 6.2  1999/01/27 01:59:52  kans
 * cleaned up comment problem
 *
@@ -158,6 +161,9 @@ NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Write (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Read (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len);
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Write (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len);
 
+/* for copying and swapping of UID lists passed over network to BIG_ENDIAN server */
+
+NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDupAndSwapUint4 (Nlm_ByteStorePtr source);
 
 
 #define ByteStore Nlm_ByteStore
@@ -176,6 +182,7 @@ NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Write (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr
 #define BSRead Nlm_BSRead
 #define BSGetByte Nlm_BSGetByte
 #define BSPutByte Nlm_BSPutByte
+#define BSDupAndSwapUint4 Nlm_BSDupAndSwapUint4
 
 #ifdef __cplusplus
 }

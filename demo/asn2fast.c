@@ -21,8 +21,8 @@ Args myargs[NUMARG] = {
 	{"Limit to GenBank","F",NULL,NULL,TRUE,'g',ARG_BOOLEAN,0.0,0,NULL},
 	{"Instantiate virtual sequences","F",NULL,NULL,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
 	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
-	{"Output Quality Scores Filename","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
-	{"Produce Quality Scores File","F",NULL,NULL,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
+	{"Produce output file of Quality Scores (DNA sequences only)","F",NULL,NULL,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
+	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL}
 };
 
 static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
@@ -33,6 +33,14 @@ static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
 
 	if (IS_Bioseq (sep)) {
 		bsp = (BioseqPtr) sep->data.ptrvalue;
+
+		/* WARNING: we're assuming here that asn2fast's quality-score
+		   output is DNA-centric, thus protein bioseqs can be ignored
+		   in the PrintQualScores callback. --MLC, 5/2000 */
+
+		if (ISA_aa(bsp->mol))
+		  return;
+
 		fp = (FILE*) data;
 		PrintQualityScores (bsp, fp);
 	}
@@ -278,7 +286,7 @@ void FindGenBank (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 	   bsp = (BioseqPtr)(sep->data.ptrvalue); 
 	                    /* GenBank is a limited view of the world */
-	   if ((ISA_na(bsp->mol)) && (bsp->repr == Seq_repr_raw))
+	   if ( (ISA_na(bsp->mol)) && ( (bsp->repr == Seq_repr_raw) || (bsp->repr == Seq_repr_delta) ) )
 	   {
 			for (vnp = bsp->id; vnp != NULL; vnp = vnp->next)
 			{

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: document.h,v $
+* Revision 6.2  2000/05/22 16:38:24  kans
+* added UpdateColFmt per Serge Bazhin request
+*
 * Revision 6.1  1998/05/02 19:42:36  kans
 * added SetDocSimpleMode
 *
@@ -231,6 +234,7 @@ extern void Nlm_InvalDocRows PROTO((Nlm_DoC d, Nlm_Int2 item, Nlm_Int2 from, Nlm
 extern void Nlm_InvalDocCols PROTO((Nlm_DoC d, Nlm_Int2 item, Nlm_Int2 from, Nlm_Int2 to));
 extern void Nlm_InvalDocument PROTO((Nlm_DoC d));
 extern void Nlm_ForceFormat PROTO((Nlm_DoC d, Nlm_Int2 item));
+extern void Nlm_UpdateColFmt (Nlm_DoC d, Nlm_ColPtr col);
 
 extern void Nlm_AdjustDocScroll PROTO((Nlm_DoC d));
 extern void Nlm_SetDocAutoAdjust PROTO((Nlm_DoC d, Nlm_Boolean autoAdjust));
@@ -302,6 +306,7 @@ extern void Nlm_DisplayFancy  PROTO((Nlm_DoC d, Nlm_CharPtr file, Nlm_ParPtr par
 #define InvalDocCols Nlm_InvalDocCols
 #define InvalDocument Nlm_InvalDocument
 #define ForceFormat Nlm_ForceFormat
+#define UpdateColFmt Nlm_UpdateColFmt
 #define AdjustDocScroll Nlm_AdjustDocScroll
 #define SetDocAutoAdjust Nlm_SetDocAutoAdjust
 #define SetDocTabstops Nlm_SetDocTabstops

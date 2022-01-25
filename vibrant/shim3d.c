@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.66 $
+* $Revision: 6.67 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.67  2000/05/16 17:38:44  thiessen
+* do glGenLists after context init on X11 - for Mesa 3.2
+*
 * Revision 6.66  2000/04/20 18:53:57  thiessen
 * misc tweaks/fixes
 *
@@ -2336,9 +2339,6 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
     if (OGL_Data->Layers == NULL)
         return NULL;
 
-    OGL_Data->Layers->FirstLayer = glGenLists((GLsizei) OGLMAXLAYERS);
-    OGL_Data->Layers->FirstLayer++; /* avoid weird bug in windows OpenGL */
-    OGL_Data->Layers->LastLayer = OGL_Data->Layers->FirstLayer;
     OGL_Data->Layers->SelectedLayer = 0;
     OGL_SetLayers(OGL_Data, FALSE); /* null all the layers out */
 
@@ -2436,6 +2436,12 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
     return OGL_Data;
 }
 
+void OGL_InitializeLists(TOGL_Data * OGL_Data)
+{
+    OGL_Data->Layers->FirstLayer = glGenLists((GLsizei) OGLMAXLAYERS);
+    OGL_Data->Layers->FirstLayer++; /* avoid weird bug in windows OpenGL */
+    OGL_Data->Layers->LastLayer = OGL_Data->Layers->FirstLayer;
+}
 
 #ifdef WIN_MAC
 static Nlm_Boolean drawingOffscreen = FALSE;

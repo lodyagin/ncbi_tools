@@ -43,6 +43,7 @@ global NCBISOURCE
 global LIBRARIES
 
 global DOOPENGL
+global OPTIMIZE
 
 (* ==== These subroutines set paths and other preferences during population ==== *)
 
@@ -64,6 +65,12 @@ on DoSetGlobals()
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
+		
+		if MASTER = "PPC" and (exists (file "debug.flg" of folder METRO)) then
+			set OPTIMIZE to "FALSE"
+		else
+			set OPTIMIZE to "TRUE"
+		end if
 		
 		if MASTER = "PPC" and (exists (folder OGLSDK)) then
 			set DOOPENGL to "TRUE"
@@ -138,9 +145,15 @@ on DoSetPreferences()
 					, Peephole Optimizer:false}
 			
 			(* ===== Panel PPC Global Optimizer =====  *)
-			Set Preferences of panel "PPC Global Optimizer" to Â
-				{Optimize For:code_Speed Â
-					, Level:1}
+			if OPTIMIZE = "TRUE" then
+				Set Preferences of panel "PPC Global Optimizer" to Â
+					{Optimize For:code_Speed Â
+						, Level:1}
+			else
+				Set Preferences of panel "PPC Global Optimizer" to Â
+					{Optimize For:code_Speed Â
+						, Level:0}
+			end if
 			
 			(* ===== Panel PPC Linker ===== *)
 			Set Preferences of panel "PPC Linker" to Â
@@ -310,17 +323,12 @@ with timeout of 60000 seconds
 			end if
 			my DoSetPaths2()
 			
-			set NCBIVIBRANT to NCBISOURCE & "vibrant:" as string
-			
-			Add Files {NCBIVIBRANT & "ncbidraw.c", NCBIVIBRANT & "vibbutns.c", NCBIVIBRANT & "vibextra.c", NCBIVIBRANT & "vibfiles.c", NCBIVIBRANT & "vibforms.c"} To Segment 1
-			Add Files {NCBIVIBRANT & "vibgroup.c", NCBIVIBRANT & "viblists.c", NCBIVIBRANT & "vibmenus.c", NCBIVIBRANT & "vibprmpt.c", NCBIVIBRANT & "vibsbars.c"} To Segment 1
-			Add Files {NCBIVIBRANT & "vibslate.c", NCBIVIBRANT & "vibtexts.c", NCBIVIBRANT & "vibutils.c", NCBIVIBRANT & "vibwndws.c"} To Segment 1
-			
-			Add Files {NCBIVIBRANT & "document.c", NCBIVIBRANT & "drawing.c", NCBIVIBRANT & "mapping.c", NCBIVIBRANT & "palette.c", NCBIVIBRANT & "picture.c"} To Segment 2
-			Add Files {NCBIVIBRANT & "table.c", NCBIVIBRANT & "viewer.c", NCBIVIBRANT & "diagnost.c", NCBIVIBRANT & "image.c", NCBIVIBRANT & "pictur3d.c"} To Segment 2
-			Add Files {NCBIVIBRANT & "prim3d1.c", NCBIVIBRANT & "prim3d2.c", NCBIVIBRANT & "prim3d3.c", NCBIVIBRANT & "prim3d4.c", NCBIVIBRANT & "prim3d5.c"} To Segment 2
-			Add Files {NCBIVIBRANT & "viewer3d.c", NCBIVIBRANT & "vibmouse.c", NCBIVIBRANT & "imagelst.c", NCBIVIBRANT & "treeview.c", NCBIVIBRANT & "shim3d.c"} To Segment 2
-			Add Files {NCBIVIBRANT & "odlbox.c"} To Segment 2
+			repeat with i in {"ncbidraw", "vibbutns", "vibextra", "vibfiles", "vibforms", "vibgroup", "viblists", "vibmenus", Â
+				"vibprmpt", "vibsbars", "vibslate", "vibtexts", "vibutils", "vibwndws", "document", "drawing", "mapping", Â
+				"palette", "picture", "table", "viewer", "diagnost", "image", "pictur3d", "prim3d1", "prim3d2", "prim3d3", Â
+				"prim3d4", "prim3d5", "viewer3d", "vibmouse", "imagelst", "treeview", "shim3d", "odlbox"}
+				Add Files {NCBISOURCE & "vibrant:" & i & ".c"} To Segment 1
+			end repeat
 			
 			Reset File Paths
 			Close Project
@@ -345,12 +353,10 @@ with timeout of 60000 seconds
 			end if
 			my DoSetPaths2()
 			
-			set NCBICN3D to NCBISOURCE & "cn3d:" as string
-			
-			Add Files {NCBICN3D & "algorend.c", NCBICN3D & "cn3dwin.c", NCBICN3D & "cn3dentr.c", NCBICN3D & "cn3dmsel.c", NCBICN3D & "cn3dopen.c"} To Segment 1
-			Add Files {NCBICN3D & "cn3dsave.c", NCBICN3D & "cn3dxprt.c"} To Segment 1
-			Add Files {NCBICN3D & "cn3dmsg.c", NCBICN3D & "cn3dmatn.c", NCBICN3D & "cn3dmodl.c", NCBICN3D & "cn3dshim.c"} To Segment 1
-			Add Files {NCBICN3D & "cn3dmesh.c", NCBICN3D & "cn3dstyl.c", NCBICN3D & "seqcons.c"} To Segment 1
+			repeat with i in {"algorend", "cn3dwin", "cn3dentr", "cn3dmsel", "cn3dopen", "cn3dsave", "cn3dxprt", "cn3dmsg", Â
+				"cn3dmatn", "cn3dmodl", "cn3dshim", "cn3dmesh", "cn3dstyl", "seqcons"}
+				Add Files {NCBISOURCE & "cn3d:" & i & ".c"} To Segment 1
+			end repeat
 			
 			Reset File Paths
 			Close Project
@@ -368,9 +374,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
-		
-		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c", NCBICDROMLIB & "accmmdbs.c", NCBICDROMLIB & "acccn3ds.c"} To Segment 1
+		repeat with i in {"accentr", "accutils", "accmmdbs", "acccn3ds"}
+			Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -387,9 +393,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:entrez:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBIENTREZ to NCBISOURCE & "network:entrez:client:" as string
-		
-		Add Files {NCBIENTREZ & "netentr.c", NCBIENTREZ & "netlib.c", NCBIENTREZ & "objneten.c"} To Segment 1
+		repeat with i in {"netentr", "netlib", "objneten"}
+			Add Files {NCBISOURCE & "network:entrez:client:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -406,11 +412,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:nsclilib:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBINSCLILIB to NCBISOURCE & "network:nsclilib:" as string
-		
-		Add Files {NCBINSCLILIB & "ncbicli.c", NCBINSCLILIB & "ncbiurl.c", NCBINSCLILIB & "ni_disp.c", NCBINSCLILIB & "ni_encrs.c"} To Segment 1
-		Add Files {NCBINSCLILIB & "ni_error.c", NCBINSCLILIB & "ni_lib_.c", NCBINSCLILIB & "ni_macdv.c", NCBINSCLILIB & "ni_msg.c"} To Segment 1
-		Add Files {NCBINSCLILIB & "ni_www.c", NCBINSCLILIB & "ni_debug.c"} To Segment 1
+		repeat with i in {"ncbicli", "ncbiurl", "ni_disp", "ni_encrs", "ni_error", "ni_lib_", "ni_macdv", "ni_msg", "ni_www", "ni_debug"}
+			Add Files {NCBISOURCE & "network:nsclilib:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -426,9 +430,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBIBLAST3 to NCBISOURCE & "network:blast3:client:" as string
-		
-		Add Files {NCBIBLAST3 & "netblap3.c", NCBIBLAST3 & "objblst3.c"} To Segment 1
+		repeat with i in {"netblap3", "objblst3"}
+			Add Files {NCBISOURCE & "network:blast3:client:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -444,9 +448,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:id1arch:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBIID1ARCH to NCBISOURCE & "network:id1arch:" as string
-		
-		Add Files {NCBIID1ARCH & "id1gen.c", NCBIID1ARCH & "id1arch.c", NCBIID1ARCH & "accid1.c"} To Segment 1
+		repeat with i in {"id1gen", "id1arch", "accid1"}
+			Add Files {NCBISOURCE & "network:id1arch:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -462,9 +466,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:medarch:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBIMEDARCH to NCBISOURCE & "network:medarch:client:" as string
-		
-		Add Files {NCBIMEDARCH & "medarch.c", NCBIMEDARCH & "medutil.c", NCBIMEDARCH & "objmla.c"} To Segment 1
+		repeat with i in {"medarch", "medutil", "objmla"}
+			Add Files {NCBISOURCE & "network:medarch:client:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -482,11 +486,13 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:taxon2:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBITAXON2 to NCBISOURCE & "network:taxon1:taxon2:" as string
-		set NCBITAXONCOMMON to NCBISOURCE & "network:taxon1:common:" as string
+		repeat with i in {"parttree", "taxcs", "tc2proc", "txcdproc"}
+			Add Files {NCBISOURCE & "network:taxon1:taxon2:" & i & ".c"} To Segment 1
+		end repeat
 		
-		Add Files {NCBITAXON2 & "parttree.c", NCBITAXON2 & "taxcs.c", NCBITAXON2 & "tc2proc.c", NCBITAXON2 & "txcdproc.c"} To Segment 1
-		Add Files {NCBITAXONCOMMON & "objtax1.c", NCBITAXONCOMMON & "taxutil.c"} To Segment 1
+		repeat with i in {"objtax1", "taxutil"}
+			Add Files {NCBISOURCE & "network:taxon1:common:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project
@@ -502,9 +508,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:vibnet:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		set NCBIVIBNET to NCBISOURCE & "network:vibnet:" as string
-		
-		Add Files {NCBIVIBNET & "netcnfg.c", NCBIVIBNET & "trmlst.c", NCBIVIBNET & "docsum.c"} To Segment 1
+		repeat with i in {"netcnfg", "trmlst", "docsum"}
+			Add Files {NCBISOURCE & "network:vibnet:" & i & ".c"} To Segment 1
+		end repeat
 		
 		Reset File Paths
 		Close Project

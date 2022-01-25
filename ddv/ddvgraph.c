@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.c,v 1.32 2000/04/26 21:54:27 hurwitz Exp $
+/*  $Id: ddvgraph.c,v 1.35 2000/05/16 19:43:00 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.32 $
+* $Revision: 1.35 $
 *
 * File Description: graphic engine of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.c,v $
+* Revision 1.35  2000/05/16 19:43:00  hurwitz
+* grey out create block, delete block, undo, and redo as needed
+*
+* Revision 1.34  2000/05/09 22:24:06  hurwitz
+* extend ruler to cover tails even when there's only 1 aligned block in the alignment
+*
+* Revision 1.33  2000/05/09 19:53:17  hurwitz
+* extended ruler to cover tails
+*
 * Revision 1.32  2000/04/26 21:54:27  hurwitz
 * added save function to tell AlnMgr about edits made in DDE
 *
@@ -488,9 +497,24 @@ ValNodePtr       vnp=NULL,vnp_head=NULL;
 Int4             disp_start=0,length,TotAliLength=0,r=0;
 Boolean          bUnAligned;
 
-	if (AlnMgrIsSAPDiscAli(sap)){
-		while(AlnMgrGetNextLengthBit(sap,&length,&r)){
+  /* make ruler for LEFT_TAIL */
+  if ((ddop->DispDiscStyle == MSA_TXT_STYLE_2) && (ddop->ShowLeftTail)) {
+    length = AlnMgrGetMaxTailLength(sap, LEFT_TAIL);
+    if (length) {
+	    drdp=(DDVRulerDescrPtr)MemNew(sizeof(DDVRulerDescr));
+	    drdp->disp_start=disp_start;
+	    drdp->disp_stop=disp_start+length-1;
+	    drdp->bUnAligned=TRUE;
+      drdp->align_start = -1;
+      disp_start += length;
+	    vnp_head=ValNodeAddPointer(NULL,0,(Pointer)drdp);
+	    vnp=vnp_head;
+    }
+  }
 
+  if (AlnMgrIsSAPDiscAli(sap)){
+    /* make ruler for multiple blocks */
+		while(AlnMgrGetNextLengthBit(sap,&length,&r)){
 			if (length<0){
 				bUnAligned=TRUE;
 				switch(ddop->DispDiscStyle){/*user's display choice*/
@@ -515,6 +539,7 @@ Boolean          bUnAligned;
 				drdp->align_start=TotAliLength;/*SeqAlign Coord*/
 			else
 				drdp->align_start=-1;/*drdp->disp_start;*//*Disp Coord*/
+
 			if (!vnp_head){
 				vnp_head=ValNodeAddPointer(NULL,0,(Pointer)drdp);
 				vnp=vnp_head;
@@ -526,14 +551,38 @@ Boolean          bUnAligned;
 			if (bUnAligned==FALSE) 
 				TotAliLength+=length;
 		}
-	} else if (sap->type == SAT_MASTERSLAVE){
+	}
+
+  else if (sap->type == SAT_MASTERSLAVE){
+    /* make ruler for a single block */
 		drdp=(DDVRulerDescrPtr)MemNew(sizeof(DDVRulerDescr));
-		drdp->disp_start=0;
+		drdp->disp_start=disp_start;
 		length=AlnMgrGetAlnLength(sap,FALSE);
 		drdp->disp_stop=disp_start+length-1;
+    drdp->bUnAligned = FALSE;
 		drdp->align_start=0;
-		vnp_head=ValNodeAddPointer(NULL,0,(Pointer)drdp);
+		if (!vnp_head){
+			vnp_head=ValNodeAddPointer(NULL,0,(Pointer)drdp);
+			vnp=vnp_head;
+		}
+		else{
+			vnp=ValNodeAddPointer(&vnp,0,(Pointer)drdp);
+		}
 	}
+
+  /* make ruler for RIGHT_TAIL */
+  if ((ddop->DispDiscStyle == MSA_TXT_STYLE_2) && (ddop->ShowRightTail)) {
+    length = AlnMgrGetMaxTailLength(sap, RIGHT_TAIL);
+    if (length) {
+	    drdp=(DDVRulerDescrPtr)MemNew(sizeof(DDVRulerDescr));
+	    drdp->disp_start=disp_start;
+	    drdp->disp_stop=disp_start+length-1;
+	    drdp->bUnAligned=TRUE;
+      drdp->align_start = -1;
+      disp_start += length;
+	    vnp = ValNodeAddPointer(&vnp,0,(Pointer)drdp);
+    }
+  }
 
 	return(vnp_head);
 }
@@ -1142,6 +1191,7 @@ static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp) {
   Int4  TopVPos, BotVPos;
   Int4  i, NumBlocks;
   RecT  rcP, rcBanner;
+  DdvMainWinPtr  mWin_d;
 
   ObjectRect(p, &rcP);
   DDV_GetVPixelPosOfEmptySpace(dmp, rcP, &TopVPos, &BotVPos);
@@ -1165,6 +1215,32 @@ static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp) {
   }
 
   ResetClip();
+
+  /* grey out either "create block" or "delete block" option */
+  if (dmp->hParent){
+	  mWin_d = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
+    if (NumBlocks == 0) {
+      Disable(mWin_d->MainMenu.DeleteBlock);
+       Enable(mWin_d->MainMenu.CreateBlock);
+    }
+    else {
+       Enable(mWin_d->MainMenu.DeleteBlock);
+      Disable(mWin_d->MainMenu.CreateBlock);
+    }
+  }
+
+}
+
+
+extern void DDV_GreyOut(DdvMainWinPtr mWin_d, Boolean Start, Boolean End) {
+/*******************************************************************************
+  grey out "undo" if Start is TRUE.
+  grey out "redo" if End is TRUE.
+*******************************************************************************/
+  if (Start) { Disable(mWin_d->MainMenu.Prev); }
+  else       {  Enable(mWin_d->MainMenu.Prev); }
+  if (End)   { Disable(mWin_d->MainMenu.Next); }
+  else       {  Enable(mWin_d->MainMenu.Next); }
 }
 
 

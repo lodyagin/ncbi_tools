@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -604,7 +604,7 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
       ajp->non_strict = TRUE;
       ajp->Spop = spop;
       ajp->show_gene = show_gene;
-      if (IsAGenomeRecord (sep) ||
+      if (/* IsAGenomeRecord (sep) || */
           IsSegmentedBioseqWithoutParts (sep)) {
         ajp->only_one = TRUE;
         ajp->genome_view = TRUE;
@@ -751,7 +751,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
         ajp->non_strict = TRUE;
         ajp->Spop = spop;
         ajp->show_gene = show_gene;
-        if (IsAGenomeRecord (sep) ||
+        if (/* IsAGenomeRecord (sep) || */
             IsSegmentedBioseqWithoutParts (sep)) {
           ajp->only_one = TRUE;
           ajp->genome_view = TRUE;
@@ -1041,7 +1041,7 @@ static void PopulateQuality (BioseqViewPtr bvp)
   Update ();
 }
 
-static void PopulateAsn (BioseqViewPtr bvp)
+static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr mode)
 
 {
   AsnIoPtr     aipout;
@@ -1049,7 +1049,6 @@ static void PopulateAsn (BioseqViewPtr bvp)
   DoC          doc;
   Uint2        entityID;
   FonT         fnt;
-  FILE         *fp;
   Int2         into;
   Int2         item;
   Char         path [PATH_MAX];
@@ -1096,39 +1095,48 @@ static void PopulateAsn (BioseqViewPtr bvp)
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
   TmpNam (path);
-  fp = FileOpen (path, "w");
-  if (fp != NULL) {
+  aipout = AsnIoOpen (path, mode);
+  if (aipout != NULL) {
     fnt = programFont;
     if (bvp != NULL && bvp->displayFont != NULL) {
       fnt = bvp->displayFont;
     }
-    aipout = AsnIoNew (ASNIO_TEXT_OUT, fp, NULL, NULL, NULL);
-    if (aipout != NULL) {
-      if (SeqEntryAsnWrite (sep, aipout, NULL)) {
-        AsnIoClose (aipout);
-        if (bvp->useScrollText) {
-          if (! FileToScrollText (txt, path)) {
-            SetTitle (txt, "(Text is too large to be displayed in this control.)");
-          }
-        } else {
-          DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
-          SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
-          SetDocAutoAdjust (doc, FALSE);
-          ForceFormat (doc, item);
-          SetDocAutoAdjust (doc, TRUE);
-          AdjustDocScroll (doc);
-          GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
-          CorrectBarValue (sb, startsAt + into);
-          UpdateDocument (doc, 0, 0);
+    if (SeqEntryAsnWrite (sep, aipout, NULL)) {
+      AsnIoClose (aipout);
+      if (bvp->useScrollText) {
+        if (! FileToScrollText (txt, path)) {
+          SetTitle (txt, "(Text is too large to be displayed in this control.)");
         }
       } else {
-        AsnIoClose (aipout);
+        DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
+        SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
+        SetDocAutoAdjust (doc, FALSE);
+        ForceFormat (doc, item);
+        SetDocAutoAdjust (doc, TRUE);
+        AdjustDocScroll (doc);
+        GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
+        CorrectBarValue (sb, startsAt + into);
+        UpdateDocument (doc, 0, 0);
       }
+    } else {
+      AsnIoClose (aipout);
     }
   }
   FileRemove (path);
   ArrowCursor ();
   Update ();
+}
+
+static void PopulateXML (BioseqViewPtr bvp)
+
+{
+  PopulateAsnOrXML (bvp, "wx");
+}
+
+static void PopulateAsn (BioseqViewPtr bvp)
+
+{
+  PopulateAsnOrXML (bvp, "w");
 }
 
 static void ShowFlatFile (BioseqViewPtr bvp, Boolean show)
@@ -1600,6 +1608,13 @@ BioseqPageData qualPageData = {
 BioseqPageData asnPageData = {
   "ASN.1", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateAsn, ShowFastaOrAsn, NULL,
+  CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
+  ExportAsnAfterConfirming, NULL, ResizeFlatFileFastaOrAsn, NULL
+};
+
+BioseqPageData xmlPageData = {
+  "XML", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateXML, ShowFastaOrAsn, NULL,
   CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
   ExportAsnAfterConfirming, NULL, ResizeFlatFileFastaOrAsn, NULL
 };

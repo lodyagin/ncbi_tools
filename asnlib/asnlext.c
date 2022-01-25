@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Routines for parsing ASN.1 module definitions.  Extends asnlex.c
@@ -44,6 +44,18 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlext.c,v $
+* Revision 6.6  2000/05/15 20:23:30  ostell
+* more checks for COMMENT_TOKEN added
+*
+* Revision 6.5  2000/05/15 15:44:40  ostell
+* caught another COMMENT_TOKEN return
+*
+* Revision 6.4  2000/05/12 20:44:00  ostell
+* make changes to collect comments from spec and print in DTD
+*
+* Revision 6.3  2000/05/10 03:12:37  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.2  1997/12/16 14:51:48  kans
 * header needed for asntool/asncode merge
 *
@@ -208,12 +220,22 @@ NLM_EXTERN AsnModulePtr LIBCALL  AsnLoadModules (AsnIoPtr aip)
 NLM_EXTERN AsnModulePtr AsnLexTReadModule (AsnIoPtr aip)
 {
 	AsnModulePtr amp;
+	AsnOptionPtr aop;
+	DataVal dv;
 
 					/* get name and look for valid start */
 
 	amp = AsnLexTStartModule(aip);
 	if (amp == NULL)
 		return amp;
+
+	aop = AsnIoOptionGet(aip, OP_TYPEORDER, 0, NULL);
+	if (aop == NULL)
+	{
+		MemSet(&dv, 0, sizeof(DataVal));
+		aop = AsnIoOptionNew(aip, OP_TYPEORDER, 0, dv, NULL);
+	}
+	aop->data.intvalue = 1;  /* start the order counter */
 
 			   		/* scan declarations */
 	
@@ -250,10 +272,17 @@ NLM_EXTERN Int2 AsnLexTReadTypeAssign (AsnIoPtr aip, AsnModulePtr amp)
 {
 	AsnTypePtr atp;
 	Int2 token;
+	AsnOptionPtr aop;
 
 							/* store the typereference */
 
 	atp = AsnTypeNew(aip, amp);
+	aop = AsnIoOptionGet(aip, OP_TYPEORDER, 0, NULL);
+	if (aop != NULL)   /* add ordered display */
+	{
+		AsnOptionNew(&(atp->hints), OP_TYPEORDER, 0, aop->data, NULL);
+		aop->data.intvalue++;
+	}
 
 	if ((token = AsnLexTWord(aip)) != ISDEF)
 	{
@@ -268,6 +297,22 @@ NLM_EXTERN Int2 AsnLexTReadTypeAssign (AsnIoPtr aip, AsnModulePtr amp)
 	return token;
 }
 
+static void AsnLexTAddTypeComment(AsnIoPtr aip, AsnOptionPtr PNTR aopp)
+{
+	AsnOptionPtr aop, aop2;
+	DataVal dv;
+
+	aop = NULL;                 /* check for comments before this type */
+	aop2 = NULL;
+	while ((aop = AsnIoOptionGet(aip, OP_COMMENT, 0, aop)) != NULL)
+	{
+		dv.ptrvalue = aop->data.ptrvalue;
+		aop->data.ptrvalue = NULL;
+		aop2 = AsnOptionNew(aopp, OP_COMMENT, 0, dv, DefAsnOptionFree);
+	}
+	if (aop2 != NULL)   /* got some */
+		AsnIoOptionFree(aip, OP_COMMENT, 0);   /* clear them out */
+}
 /*****************************************************************************
 *
 *   Int2 AsnLexTReadType(aip, amp, atp)
@@ -282,10 +327,16 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 {
 	Int2 isa;
 	Boolean first;
-	AsnValxNodePtr avnp;
+	AsnValxNodePtr avnp, prevavnp;
 	Int2 token;
 
 	token = aip->token;
+
+	if (token == COMMENT_TOKEN)
+	{
+		AsnLexTAddTypeComment(aip, &(atp->hints));
+		token = AsnLexTWord(aip);
+	}
 
 	if (token == IMPLICIT_TOKEN) 
 	{
@@ -343,6 +394,11 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 	isa = atp->type->isa;
 	
 	token = AsnLexTWord(aip);   /* read next token */
+
+	AsnLexTAddTypeComment(aip, &(atp->hints));  /* check for stored comments */
+
+	if (token == COMMENT_TOKEN)
+		token = AsnLexTWord(aip);
             
  					/*********** SubType Processing *********************/
 	if (token == OPEN_PAREN)
@@ -368,7 +424,14 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 									 /* read named integers */
 			first = TRUE;
 			avnp = NULL;
+			prevavnp = NULL;
 			token = AsnLexTWord(aip);
+			if (token == COMMENT_TOKEN)
+			{
+			    AsnLexTAddTypeComment(aip, &(atp->hints));  /* check for stored comments */
+			    token = AsnLexTWord(aip);
+		        }
+			    
 			while (token != END_STRUCT)
 			{
 				avnp = AsnValxNodeNew(avnp, VALUE_ISA_NAMED_INT);
@@ -381,7 +444,15 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 						return 0;
 					}
 					else
+					{
 						token = AsnLexTWord(aip);
+						if (token == COMMENT_TOKEN)
+						{
+							AsnLexTAddTypeComment(aip, &(prevavnp->aop));
+							token = AsnLexTWord(aip);
+						}
+					}
+							
 				}
 				else
 				{
@@ -409,8 +480,18 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 					return 0;
 				}
 				token = AsnLexTWord(aip);
+				if (token == COMMENT_TOKEN)
+					token = AsnLexTWord(aip);
+
+				AsnLexTAddTypeComment(aip, &(avnp->aop));  /* check for stored comments */
+				prevavnp = avnp;
 			}
 			token = AsnLexTWord(aip);
+			if (token == COMMENT_TOKEN)
+			{
+				AsnLexTAddTypeComment(aip, &(prevavnp->aop));
+				token = AsnLexTWord(aip);
+			}
 			break;
 		case SETOF_TYPE:			/* create branch for type */
 		case SEQOF_TYPE:
@@ -419,11 +500,11 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 			break;
 		case SEQ_TYPE:
 		case SET_TYPE:
-			atp->branch = AsnLexTReadElementTypeList(aip, amp);
+			atp->branch = AsnLexTReadElementTypeList(aip, amp, atp);
 			token = aip->token;
 			break;
 		case CHOICE_TYPE:
-			atp->branch = AsnLexTReadAlternativeTypeList(aip, amp);
+			atp->branch = AsnLexTReadAlternativeTypeList(aip, amp, atp);
 			token = aip->token;
 			break;
 	}
@@ -438,7 +519,7 @@ NLM_EXTERN Int2 AsnLexTReadType (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp)
 *   	returns token to following element
 *
 *****************************************************************************/
-NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp)
+NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr parent)
 {
 	Int2 token;
 	AsnTypePtr atp, atp1, atplast, atp2;
@@ -454,6 +535,12 @@ NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp
 		return NULL;
 	}
 	token = AsnLexTWord(aip);
+	if (token == COMMENT_TOKEN)
+	{
+		if (parent != NULL)
+			AsnLexTAddTypeComment(aip, &(parent->hints));
+		token = AsnLexTWord(aip);
+	}
 
 	while (token != END_STRUCT)
 	{
@@ -465,7 +552,15 @@ NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp
 				return NULL;
 			}
 			else
+			{
 				token = AsnLexTWord(aip);
+				if (token == COMMENT_TOKEN)
+				{
+					if (atplast != NULL)
+						AsnLexTAddTypeComment(aip, &(atplast->hints));
+					token = AsnLexTWord(aip);
+				}
+			}
 		}
 
 		if (token == COMPS_TOKEN)        /* COMPONENTS OF */
@@ -481,6 +576,11 @@ NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp
 		{
 			atp = AsnElementTypeNew(aip);
 			token = AsnLexTWord(aip);
+			if (token == COMMENT_TOKEN)
+			{
+				AsnLexTAddTypeComment(aip, &(atp->hints));
+				token = AsnLexTWord(aip);
+			}
 		}
 								/* add to chain */
 		if (atp1 == NULL)
@@ -534,19 +634,31 @@ NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList (AsnIoPtr aip, AsnModulePtr amp
 			token = AsnLexTWord(aip);
 		}
 		atplast = atp;
+
+		AsnLexTAddTypeComment(aip, &(atplast->hints));
+		if (token == COMMENT_TOKEN)
+			token = AsnLexTWord(aip);
+
 	}
 	token = AsnLexTWord(aip);   /* read following item */
+	if (token == COMMENT_TOKEN)
+	{
+		if (atplast != NULL)
+			AsnLexTAddTypeComment(aip, &(atplast->hints));
+		token = AsnLexTWord(aip);
+	}
 	return atp1;
 }
 
 /*****************************************************************************
 *
-*	AsnTypePtr AsnLexTReadAlternativeTypeList(aip, amp)
+*	AsnTypePtr AsnLexTReadAlternativeTypeList(aip, amp, parent)
 *   	assumes has read first { already
 *   	returns token to following element
 *
 *****************************************************************************/
-NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr amp)
+NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr
+						      parent)
 {
 	Int2 token;
 	AsnTypePtr atp, atp1, atplast;
@@ -561,6 +673,12 @@ NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr
 		return NULL;
 	}
 	token = AsnLexTWord(aip);
+	if (token == COMMENT_TOKEN)
+	{
+		if (parent != NULL)
+			AsnLexTAddTypeComment(aip, &(parent->hints));
+		token = AsnLexTWord(aip);
+	}
 
 	while (token != END_STRUCT)
 	{
@@ -572,7 +690,15 @@ NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr
 				return NULL;
 			}
 			else
+			{
 				token = AsnLexTWord(aip);
+				if (token == COMMENT_TOKEN)
+				{
+					if (atplast != NULL)
+						AsnLexTAddTypeComment(aip, &(atplast->hints));
+					token = AsnLexTWord(aip);
+				}
+			}
 		}
 
 		if (token != IDENT)	     /* not named */
@@ -583,6 +709,11 @@ NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr
 		{
 			atp = AsnElementTypeNew(aip);
 			token = AsnLexTWord(aip);
+			if (token == COMMENT_TOKEN)
+			{
+				AsnLexTAddTypeComment(aip, &(atp->hints));
+				token = AsnLexTWord(aip);
+			}
 		}
 								/* add to chain */
 		if (atp1 == NULL)
@@ -592,8 +723,18 @@ NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList (AsnIoPtr aip, AsnModulePtr
 
 		token = AsnLexTReadType(aip, amp, atp);
 		atplast = atp;
+
+		AsnLexTAddTypeComment(aip, &(atplast->hints));
+		if (token == COMMENT_TOKEN)
+			token = AsnLexTWord(aip);
 	}
 	token = AsnLexTWord(aip);   /* read following item */
+	if (token == COMMENT_TOKEN)
+	{
+		if (atplast != NULL)
+			AsnLexTAddTypeComment(aip, &(atplast->hints));
+		token = AsnLexTWord(aip);
+	}
 	return atp1;
 }
 
@@ -623,6 +764,12 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 	amp = (AsnModulePtr) MemNew(sizeof(AsnModule));
 
 	token = AsnLexTWord(aip);    /* get the module name or $Revision: */
+
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
+	}
+
 
 	if (token == REVISION_TOKEN)            /* revision of file */
 	{
@@ -656,6 +803,11 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 		}
 			
 		token = AsnLexTWord(aip);     /* get the module name */
+
+		while (token == COMMENT_TOKEN)
+		{
+			token = AsnLexTWord(aip);
+		}
 	}
 
 	if (token != REF)
@@ -680,12 +832,22 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 
 	token = AsnLexTWord(aip);
 
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
+	}
+
 	if (token == START_STRUCT)       /* it has an object identifier */
 	{
 		AsnIoErrorMsg(aip, 68);
 		    /* skip object identifier */
 		AsnLexSkipStruct(aip);
 		token = AsnLexTWord(aip);  /* next token */
+	}
+
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
 	}
 
 	if (token != DEF_TOKEN)        /* DEFINITIONS */
@@ -696,6 +858,11 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 	else
 		token = AsnLexTWord(aip);
 
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
+	}
+
 	if (token != ISDEF)           /* ::= */
 	{
 		AsnIoErrorMsg(aip, 69, "::=", aip->linenumber);
@@ -704,6 +871,11 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 	else
 		token = AsnLexTWord(aip);
 
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
+	}
+
 	if (token != BEGIN_TOKEN)    /* BEGIN */
 	{
 		AsnIoErrorMsg(aip, 69, asnwords[BEGIN_TOKEN - 401], aip->linenumber);
@@ -711,6 +883,11 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 	}
 	else
 		token = AsnLexTWord(aip);
+
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
+	}
 
 	if (token == EXPORTS_TOKEN)     /* read any EXPORTS */
 	{
@@ -737,7 +914,7 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 				}
 			   	wasref = FALSE;
 			}
-			else
+			else if (token != COMMENT_TOKEN)
 			{
 				AsnIoErrorMsg(aip, 59, ' ', aip->linenumber);
 				return NULL;
@@ -746,6 +923,11 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 						   /* get next after semi-colon */
 
 		token = AsnLexTWord(aip);
+	}
+
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
 	}
 
 	if (token == IMPORTS_TOKEN)             /* IMPORTS */
@@ -804,13 +986,18 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 				token = AsnLexTWord(aip);
 				wasref = FALSE;
 			}
-			else
+			else if (token != COMMENT_TOKEN)
 				AsnIoErrorMsg(aip, 96, aip->linenumber);
 
 			token = AsnLexTWord(aip);
 		}
 						   /* get next after semi-colon */
 		token = AsnLexTWord(aip);
+	}
+
+        while (token == COMMENT_TOKEN)
+        {
+                token = AsnLexTWord(aip);
 	}
 
 	if (token == EXPORTS_TOKEN)     /* EXPORTS out of place */
@@ -841,6 +1028,36 @@ NLM_EXTERN Int2 AsnLexTMatchToken (AsnIoPtr aip)
 	}
 	return 0;     /* not found */
 }
+static AsnLexTAddComment(CharPtr cbeg, CharPtr cend, AsnIoPtr aip)
+{
+	AsnOptionPtr aop;
+	Char tchar;
+	CharPtr comment;
+	Boolean allblanks = TRUE;
+	DataVal dv;
+
+	/**
+	for (comment = cbeg; comment != cend; comment++)
+	{
+		if (! IS_WHITESP(*comment))
+		{
+			allblanks = FALSE;
+			break;
+		}
+	}
+	
+	if (allblanks) return;
+	**/
+
+	tchar = *cend;
+	*cend = '\0';
+	comment = StringSave(cbeg);
+	*cend = tchar;
+	dv.ptrvalue = comment;
+
+	AsnIoOptionNew(aip, OP_COMMENT, 0, dv, NULL);
+	return;
+}
 /*****************************************************************************
 *
 *   Int2 AsnLexTWord(aip)
@@ -855,10 +1072,12 @@ NLM_EXTERN Int2 AsnLexTWord (AsnIoPtr aip)
 	Int1 state;
 	Int2 token, asntype, linepos;
 	int done;
-	Boolean first = FALSE;
+	Boolean first = FALSE, hitnewline = FALSE;
+	CharPtr commentptr;
 
 	if (! aip->bytes)   /* no data loaded */
 	{
+		hitnewline = TRUE;
 		first = TRUE;
 		AsnIoGets(aip);
 	}
@@ -871,6 +1090,7 @@ NLM_EXTERN Int2 AsnLexTWord (AsnIoPtr aip)
 
 	while (*pos == '\n' || *pos == '\r')    /* skip empty lines */
 	{
+		hitnewline = TRUE;
 		pos = AsnIoGets(aip);
 
 		if (pos == NULL)
@@ -938,6 +1158,7 @@ NLM_EXTERN Int2 AsnLexTWord (AsnIoPtr aip)
 			{
 				if (*pos == '\n' || *pos == '\r')
 				{
+					hitnewline = TRUE;
 					pos = AsnIoGets(aip);
 
 					if (pos == NULL)
@@ -978,22 +1199,38 @@ NLM_EXTERN Int2 AsnLexTWord (AsnIoPtr aip)
 						}
 					}
 				}
+				commentptr = pos;
 				
 				done = 0;
 				while (! done)   /* skip to end of comment */
 				{
 					if ((*pos == '-') && (*(pos +1) == '-'))
 					{
+						if (token != REVISION_TOKEN)
+						{
+							AsnLexTAddComment(commentptr, pos, aip);
+							if ((! hitnewline) && (aip->token != COMMENT_TOKEN))
+								token = COMMENT_TOKEN;
+						}
 						pos += 2;
 						done = 1;
 					}
 					else if (*pos == '\n' || *pos == '\r')
+					{
+						if (token != REVISION_TOKEN)
+						{
+							AsnLexTAddComment(commentptr, pos, aip);
+							if ((! hitnewline) && (aip->token != COMMENT_TOKEN))
+								token = COMMENT_TOKEN;
+						}
+
 						done = 1;
+					}
 					else
 						pos++;
 				}
 
-				if (token == REVISION_TOKEN)
+				if ((token == REVISION_TOKEN) || (token == COMMENT_TOKEN))
 				{
 					aip->linepos = pos - aip->linebuf;
 					aip->state = state;

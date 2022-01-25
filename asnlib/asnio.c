@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.7  2000/05/10 03:12:37  ostell
+* added support for XML DTD and XML data output
+*
 * Revision 6.6  1999/07/30 20:34:25  vakatov
 * AsnIoGets():  rewritten -- to handle an incremental read
 *
@@ -152,6 +155,11 @@ NLM_EXTERN AsnIoPtr LIBCALL  AsnIoOpen (CharPtr file_name, CharPtr mode)
 		type = ASNIO_TEXT_IN;
 	else if (! StringCmp(mode, "w"))
 		type = ASNIO_TEXT_OUT;
+	else if (! StringCmp(mode, "wx"))
+	{
+		type = ASNIO_TEXT_OUT;
+		type |= ASNIO_XML;
+	}
 	else if (! StringCmp(mode, "rb"))
 		type = ASNIO_BIN_IN;
 	else if (! StringCmp(mode, "wb"))
@@ -494,9 +502,14 @@ NLM_EXTERN void AsnIoPuts (AsnIoPtr aip)
 	if (aip->linepos == 0)
 		return;
 
-	aip->linebuf[aip->linepos] = '\n';
+	if (! aip->no_newline)
+	{
+		aip->linebuf[aip->linepos] = '\n';
+		aip->offset++;
+	}
+
 	aip->linepos = 0;
-	aip->offset++;
+
     if ((aip->bytes - aip->offset) > (aip->linelength + 20))  /* room left */
         aip->linebuf = (CharPtr)aip->buf + aip->offset;
     else
@@ -504,6 +517,9 @@ NLM_EXTERN void AsnIoPuts (AsnIoPtr aip)
         AsnIoWriteBlock(aip);    /* write it out */
         aip->linebuf = (CharPtr)aip->buf;   /* reset line pointer */
     }
+
+	if (aip->no_newline)
+		aip->no_newline = FALSE;
 
     return;
 }
@@ -707,7 +723,7 @@ NLM_EXTERN Int2 AsnIoWriteBlock (AsnIoPtr aip)
 	}
 	if (aip->type & ASNIO_TEXT)   /* check for full line */
 	{
-		if (aip->buf[aip->offset - 1] == '\n')
+		if ((aip->buf[aip->offset - 1] == '\n') || (aip->no_newline))
 		{
 			aip->length = 0;
 			aip->offset = 0;					 /* write space used */

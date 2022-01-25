@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.15 2000/04/13 18:50:55 shavirin Exp $
+/* $Id: rpsblast.c,v 6.16 2000/05/02 18:01:32 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.16  2000/05/02 18:01:32  shavirin
+* Adjusted to changes in RPSInti() function.
+*
 * Revision 6.15  2000/04/13 18:50:55  shavirin
 * Fixed serious memory leaks.
 *
@@ -720,7 +723,6 @@ VoidPtr RPSEngineThread(VoidPtr data)
 Int2 Main(void)
 {
     FILE *fd;
-    Char rps_matrix[128], rps_lookup[128];
     RPSInfoPtr rpsinfo_main;
     Int4 i;
 
@@ -748,17 +750,10 @@ Int2 Main(void)
     if((fd = FileOpen(myargs [6].strvalue, "w")) != NULL)
         FileClose(fd);
     
-    /* Initializing RPS Database */
-
-    sprintf(rps_matrix, "%s.rps", myargs [1].strvalue);
-    sprintf(rps_lookup, "%s.loo", myargs [1].strvalue);
-    
     /* Initializing RPS Blast database */
     
-    /* sprintf(buffer, "%s.mat", myargs[1].strvalue); */
     /*  myargs[2].intvalue == query is protein, default = 1 */
     if((rpsinfo_main = RPSInit(myargs [1].strvalue, 
-                               rps_matrix, rps_lookup,
                                myargs[2].intvalue)) == NULL) {
         ErrPostEx(SEV_ERROR, 0,0, 
                   "Failure to initialize RPS Blast database");

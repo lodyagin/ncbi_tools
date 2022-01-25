@@ -31,8 +31,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.7 $ 
+/* $Revision: 6.8 $ 
 * $Log: gapxdrop.h,v $
+* Revision 6.8  2000/05/16 18:36:15  dondosha
+* Added prototype for GXECollectDataForSeqalign
+*
 * Revision 6.7  2000/03/29 21:54:57  dondosha
 * Added prototype for GapXEditScriptNew
 *
@@ -274,6 +277,12 @@ Int4 LIBCALL ALIGN PROTO((Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 GapXEditScriptPtr 
 GapXEditScriptNew PROTO((GapXEditScriptPtr old));
 
+Boolean GXECollectDataForSeqalign PROTO((GapXEditBlockPtr edit_block, 
+                                  GapXEditScriptPtr curr_in, Int4 numseg,
+                                  Int4Ptr PNTR start_out, 
+                                  Int4Ptr PNTR length_out,
+                                  Uint1Ptr PNTR strands_out,
+                                  Int4Ptr start1, Int4Ptr start2));
 #ifdef __cplusplus
 }
 #endif

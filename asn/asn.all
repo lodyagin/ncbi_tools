@@ -8,30 +8,151 @@
 --
 --**********************************************************************
 
---$Revision: 6.0 $
---*********************************************************************
+--$Revision: 6.1 $
+--**********************************************************************
 --
---  access.asn
+--  NCBI General Data elements
+--  by James Ostell, 1990
+--  Version 3.0 - June 1994
 --
---     messages for data access
---
---*********************************************************************
+--**********************************************************************
 
-NCBI-Access DEFINITIONS ::=
+NCBI-General DEFINITIONS ::=
 BEGIN
 
-EXPORTS Link-set;
+EXPORTS Date, Person-id, Object-id, Dbtag, Int-fuzz, User-object;
 
-    -- links between same class = neighbors
-    -- links between other classes = links
+-- StringStore is really a VisibleString.  It is used to define very
+--   long strings which may need to be stored by the receiving program
+--   in special structures, such as a ByteStore, but it's just a hint.
+--   AsnTool stores StringStores in ByteStore structures.
+-- OCTET STRINGs are also stored in ByteStores by AsnTool
+-- 
+-- typedef struct bsunit {             /* for building multiline strings */
+   -- Nlm_Handle str;            /* the string piece */
+   -- Nlm_Int2 len_avail,
+       -- len;
+   -- struct bsunit PNTR next; }       /* the next one */
+-- Nlm_BSUnit, PNTR Nlm_BSUnitPtr;
+-- 
+-- typedef struct bytestore {
+   -- Nlm_Int4 seekptr,       /* current position */
+      -- totlen,             /* total stored data length in bytes */
+      -- chain_offset;       /* offset in ByteStore of first byte in curchain */
+   -- Nlm_BSUnitPtr chain,       /* chain of elements */
+      -- curchain;           /* the BSUnit containing seekptr */
+-- } Nlm_ByteStore, PNTR Nlm_ByteStorePtr;
+--
+-- AsnTool incorporates this as a primitive type, so the definition
+--   is here just for completness
+-- 
+--  StringStore ::= [APPLICATION 1] IMPLICIT OCTET STRING
+--
 
-Link-set ::= SEQUENCE {
-    num INTEGER ,                         -- number of links to this doc type
-    uids SEQUENCE OF INTEGER OPTIONAL ,     -- the links
-    weights SEQUENCE OF INTEGER OPTIONAL }  -- the weights
+-- Date is used to replace the (overly complex) UTCTtime, GeneralizedTime
+--  of ASN.1
+--  It stores only a date
+--
+
+Date ::= CHOICE {
+    str VisibleString ,        -- for those unparsed dates
+    std Date-std }             -- use this if you can
+
+Date-std ::= SEQUENCE {        -- NOTE: this is NOT a unix tm struct
+    year INTEGER ,             -- full year (including 1900)
+    month INTEGER OPTIONAL ,   -- month (1-12)
+    day INTEGER OPTIONAL ,     -- day of month (1-31)
+    season VisibleString OPTIONAL ,  -- for "spring", "may-june", etc
+    hour INTEGER OPTIONAL ,    -- hour of day (0-23)
+    minute INTEGER OPTIONAL ,  -- minute of hour (0-59)
+    second INTEGER OPTIONAL }  -- second of minute (0-59)
+
+-- Dbtag is generalized for tagging
+-- eg. { "Social Security", str "023-79-8841" }
+-- or  { "member", id 8882224 }
+
+Dbtag ::= SEQUENCE {
+    db VisibleString ,          -- name of database or system
+    tag Object-id }         -- appropriate tag
+
+-- Object-id can tag or name anything
+--
+
+Object-id ::= CHOICE {
+    id INTEGER ,
+    str VisibleString }
+
+-- Person-id is to define a std element for people
+--
+
+Person-id ::= CHOICE {
+    dbtag Dbtag ,               -- any defined database tag
+    name Name-std ,             -- structured name
+    ml VisibleString ,          -- MEDLINE name (semi-structured)
+                                --    eg. "Jones RM"
+    str VisibleString }         -- unstructured name
+
+Name-std ::= SEQUENCE { -- Structured names
+    last VisibleString ,
+    first VisibleString OPTIONAL ,
+    middle VisibleString OPTIONAL ,
+    full VisibleString OPTIONAL ,    -- full name eg. "J. John Poop, Esq"
+    initials VisibleString OPTIONAL,  -- first + middle initials
+    suffix VisibleString OPTIONAL ,   -- Jr, Sr, III
+    title VisibleString OPTIONAL }    -- Dr., Sister, etc
+
+--**** Int-fuzz **********************************************
+--*
+--*   uncertainties in integer values
+
+Int-fuzz ::= CHOICE {
+    p-m INTEGER ,                    -- plus or minus fixed amount
+    range SEQUENCE {                 -- max to min
+        max INTEGER ,
+        min INTEGER } ,
+    pct INTEGER ,                    -- % plus or minus (x10) 0-1000
+    lim ENUMERATED {                 -- some limit value
+        unk (0) ,                    -- unknown
+        gt (1) ,                     -- greater than
+        lt (2) ,                     -- less than
+        tr (3) ,                     -- space to right of position
+        tl (4) ,                     -- space to left of position
+        circle (5) ,                 -- artificial break at origin of circle
+        other (255) } ,              -- something else
+    alt SET OF INTEGER }             -- set of alternatives for the integer
+
+
+--**** User-object **********************************************
+--*
+--*   a general object for a user defined structured data item
+--*    used by Seq-feat and Seq-descr
+
+User-object ::= SEQUENCE {
+    class VisibleString OPTIONAL ,   -- endeavor which designed this object
+    type Object-id ,                 -- type of object within class
+    data SEQUENCE OF User-field }    -- the object itself
+
+User-field ::= SEQUENCE {
+    label Object-id ,                -- field label
+    num INTEGER OPTIONAL ,           -- required for strs, ints, reals, oss
+    data CHOICE {                    -- field contents
+        str VisibleString ,
+        int INTEGER ,
+        real REAL ,
+        bool BOOLEAN ,
+        os OCTET STRING ,
+        object User-object ,         -- for using other definitions
+        strs SEQUENCE OF VisibleString ,
+        ints SEQUENCE OF INTEGER ,
+        reals SEQUENCE OF REAL ,
+        oss SEQUENCE OF OCTET STRING ,
+        fields SEQUENCE OF User-field ,
+        objects SEQUENCE OF User-object } }
+
 
 
 END
+
 --$Revision: 6.1 $
 --****************************************************************
 --
@@ -284,223 +405,6 @@ END
 --$Revision: 6.0 $
 --**********************************************************************
 --
---  NCBI Sequence Feature Definition Module
---  by James Ostell, 1994
---
---**********************************************************************
-
-NCBI-FeatDef DEFINITIONS ::=
-BEGIN
-
-EXPORTS FeatDef, FeatDefSet, FeatDispGroup, FeatDispGroupSet;
-
-
-FeatDef ::= SEQUENCE {
-    typelabel VisibleString ,	   -- short label for type eg "CDS"
-    menulabel VisibleString ,	   -- label for a menu eg "Coding Region"
-    featdef-key INTEGER ,		   -- unique for this feature definition
-    seqfeat-key INTEGER ,		   -- SeqFeat.data.choice from objfeat.h
-    entrygroup INTEGER ,		   -- Group for data entry
-    displaygroup INTEGER ,		   -- Group for data display
-    molgroup FeatMolType           -- Type of Molecule used for
-}
-
-FeatMolType ::= ENUMERATED {
-	aa (1),  -- proteins
-    na (2),  -- nucleic acids
-    both (3) }  -- both
-
-FeatDefSet ::= SEQUENCE OF FeatDef   -- collections of defintions
-
-FeatDispGroup ::= SEQUENCE {
-	groupkey INTEGER ,
-    groupname VisibleString }
-
-FeatDispGroupSet ::= SEQUENCE OF FeatDispGroup
-
-FeatDefGroupSet ::= SEQUENCE {
-	groups FeatDispGroupSet ,
-	defs FeatDefSet }
-
-END
-
-    
---$Revision: 6.1 $
---**********************************************************************
---
---  NCBI General Data elements
---  by James Ostell, 1990
---  Version 3.0 - June 1994
---
---**********************************************************************
-
-NCBI-General DEFINITIONS ::=
-BEGIN
-
-EXPORTS Date, Person-id, Object-id, Dbtag, Int-fuzz, User-object;
-
--- StringStore is really a VisibleString.  It is used to define very
---   long strings which may need to be stored by the receiving program
---   in special structures, such as a ByteStore, but it's just a hint.
---   AsnTool stores StringStores in ByteStore structures.
--- OCTET STRINGs are also stored in ByteStores by AsnTool
--- 
--- typedef struct bsunit {             /* for building multiline strings */
-   -- Nlm_Handle str;            /* the string piece */
-   -- Nlm_Int2 len_avail,
-       -- len;
-   -- struct bsunit PNTR next; }       /* the next one */
--- Nlm_BSUnit, PNTR Nlm_BSUnitPtr;
--- 
--- typedef struct bytestore {
-   -- Nlm_Int4 seekptr,       /* current position */
-      -- totlen,             /* total stored data length in bytes */
-      -- chain_offset;       /* offset in ByteStore of first byte in curchain */
-   -- Nlm_BSUnitPtr chain,       /* chain of elements */
-      -- curchain;           /* the BSUnit containing seekptr */
--- } Nlm_ByteStore, PNTR Nlm_ByteStorePtr;
---
--- AsnTool incorporates this as a primitive type, so the definition
---   is here just for completness
--- 
---  StringStore ::= [APPLICATION 1] IMPLICIT OCTET STRING
---
-
--- Date is used to replace the (overly complex) UTCTtime, GeneralizedTime
---  of ASN.1
---  It stores only a date
---
-
-Date ::= CHOICE {
-    str VisibleString ,        -- for those unparsed dates
-    std Date-std }             -- use this if you can
-
-Date-std ::= SEQUENCE {        -- NOTE: this is NOT a unix tm struct
-    year INTEGER ,             -- full year (including 1900)
-    month INTEGER OPTIONAL ,   -- month (1-12)
-    day INTEGER OPTIONAL ,     -- day of month (1-31)
-    season VisibleString OPTIONAL ,  -- for "spring", "may-june", etc
-    hour INTEGER OPTIONAL ,    -- hour of day (0-23)
-    minute INTEGER OPTIONAL ,  -- minute of hour (0-59)
-    second INTEGER OPTIONAL }  -- second of minute (0-59)
-
--- Dbtag is generalized for tagging
--- eg. { "Social Security", str "023-79-8841" }
--- or  { "member", id 8882224 }
-
-Dbtag ::= SEQUENCE {
-    db VisibleString ,          -- name of database or system
-    tag Object-id }         -- appropriate tag
-
--- Object-id can tag or name anything
---
-
-Object-id ::= CHOICE {
-    id INTEGER ,
-    str VisibleString }
-
--- Person-id is to define a std element for people
---
-
-Person-id ::= CHOICE {
-    dbtag Dbtag ,               -- any defined database tag
-    name Name-std ,             -- structured name
-    ml VisibleString ,          -- MEDLINE name (semi-structured)
-                                --    eg. "Jones RM"
-    str VisibleString }         -- unstructured name
-
-Name-std ::= SEQUENCE { -- Structured names
-    last VisibleString ,
-    first VisibleString OPTIONAL ,
-    middle VisibleString OPTIONAL ,
-    full VisibleString OPTIONAL ,    -- full name eg. "J. John Poop, Esq"
-    initials VisibleString OPTIONAL,  -- first + middle initials
-    suffix VisibleString OPTIONAL ,   -- Jr, Sr, III
-    title VisibleString OPTIONAL }    -- Dr., Sister, etc
-
---**** Int-fuzz **********************************************
---*
---*   uncertainties in integer values
-
-Int-fuzz ::= CHOICE {
-    p-m INTEGER ,                    -- plus or minus fixed amount
-    range SEQUENCE {                 -- max to min
-        max INTEGER ,
-        min INTEGER } ,
-    pct INTEGER ,                    -- % plus or minus (x10) 0-1000
-    lim ENUMERATED {                 -- some limit value
-        unk (0) ,                    -- unknown
-        gt (1) ,                     -- greater than
-        lt (2) ,                     -- less than
-        tr (3) ,                     -- space to right of position
-        tl (4) ,                     -- space to left of position
-        circle (5) ,                 -- artificial break at origin of circle
-        other (255) } ,              -- something else
-    alt SET OF INTEGER }             -- set of alternatives for the integer
-
-
---**** User-object **********************************************
---*
---*   a general object for a user defined structured data item
---*    used by Seq-feat and Seq-descr
-
-User-object ::= SEQUENCE {
-    class VisibleString OPTIONAL ,   -- endeavor which designed this object
-    type Object-id ,                 -- type of object within class
-    data SEQUENCE OF User-field }    -- the object itself
-
-User-field ::= SEQUENCE {
-    label Object-id ,                -- field label
-    num INTEGER OPTIONAL ,           -- required for strs, ints, reals, oss
-    data CHOICE {                    -- field contents
-        str VisibleString ,
-        int INTEGER ,
-        real REAL ,
-        bool BOOLEAN ,
-        os OCTET STRING ,
-        object User-object ,         -- for using other definitions
-        strs SEQUENCE OF VisibleString ,
-        ints SEQUENCE OF INTEGER ,
-        reals SEQUENCE OF REAL ,
-        oss SEQUENCE OF OCTET STRING ,
-        fields SEQUENCE OF User-field ,
-        objects SEQUENCE OF User-object } }
-
-
-
-END
-
---$Revision: 6.0 $
---**********************************************************************
---
---  MEDLARS data definitions
---  Grigoriy Starchenko, 1997
---
---**********************************************************************
-
-NCBI-Medlars DEFINITIONS ::=
-BEGIN
-
-EXPORTS Medlars-entry, Medlars-record;
-
-IMPORTS PubMedId FROM NCBI-Biblio;
-
-Medlars-entry ::= SEQUENCE {     -- a MEDLARS entry
-    pmid PubMedId,               -- All entries in PubMed must have it
-    muid INTEGER OPTIONAL,       -- Medline(OCCS) id
-    recs SET OF Medlars-record   -- List of Medlars records
-}
-
-Medlars-record ::= SEQUENCE {
-    code INTEGER,                -- Unit record field type integer form
-    abbr VisibleString OPTIONAL, -- Unit record field type abbreviation form
-    data VisibleString           -- Unit record data
-}
-
-END
---$Revision: 6.0 $
---**********************************************************************
---
 --  MEDLINE data definitions
 --  James Ostell, 1990
 --
@@ -588,203 +492,72 @@ DocRef ::= SEQUENCE {           -- reference to a document
 
 END
 
---$Revision: 6.4 $
---****************************************************************
+--$Revision: 6.0 $
+--**********************************************************************
 --
---  NCBI MIME type (chemical/ncbi-asn1-ascii and chemical/ncbi-asn1-binary)
---  by Jonathan Epstein, February 1996
+--  PUBMED data definitions
 --
---****************************************************************
+--**********************************************************************
 
-NCBI-Mime DEFINITIONS ::=
+NCBI-PubMed DEFINITIONS ::=
 BEGIN
 
-EXPORTS Ncbi-mime-asn1;
-IMPORTS Biostruc, Biostruc-annot-set FROM MMDB
-	Seq-entry FROM NCBI-Seqset
-	Seq-annot FROM NCBI-Sequence
-	Medline-entry FROM NCBI-Medline;
-	
-Ncbi-mime-asn1 ::= CHOICE {
-	entrez	Entrez-general,			-- just a structure
-	alignstruc	Biostruc-align,			-- structures & sequences & alignments
-	alignseq	Biostruc-align-seq,	-- sequence alignment
-    strucseq    Biostruc-seq,	-- structure & sequences
-    strucseqs   Biostruc-seqs	    -- structure & sequences & alignments 
-	-- others may be added here in the future
+EXPORTS Pubmed-entry, Pubmed-url;
+
+IMPORTS PubMedId FROM NCBI-Biblio
+        Medline-entry FROM NCBI-Medline;
+
+Pubmed-entry ::= SEQUENCE {        -- a PubMed entry
+    -- PUBMED records must include the PubMedId
+    pmid PubMedId,
+
+    -- Medline entry information
+    medent Medline-entry OPTIONAL,
+
+    -- Publisher name
+    publisher VisibleString OPTIONAL,
+
+    -- List of URL to publisher cite
+    urls SET OF Pubmed-url OPTIONAL,
+
+    -- Publisher's article identifier
+    pubid VisibleString OPTIONAL
 }
 
-Biostruc-align ::= SEQUENCE {
-	master	Biostruc,
-	slaves	SET OF Biostruc,
-	alignments	Biostruc-annot-set,	-- structure alignments
-	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }
+Pubmed-url ::= SEQUENCE {
+    location VisibleString OPTIONAL, -- Location code
+    url VisibleString                -- Selected URL for location
+}
 
-Biostruc-align-seq ::= SEQUENCE {	-- display seq structure align only
-	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }	
-
-Biostruc-seq ::= SEQUENCE {	-- display  structure seq added by yanli 
-    structure Biostruc,
-	sequences SET OF Seq-entry }
-
-Biostruc-seqs ::= SEQUENCE { -- display blast alignment along with neighbor's structure added by yanli 
-    structure Biostruc,
-	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }
-
-Entrez-style ::= ENUMERATED {
-	docsum (1),
-	genbank (2) ,
-	genpept (3) ,
-	fasta (4) ,
-	asn1 (5) ,
-	graphic (6) ,
-	alignment (7) ,
-	globalview (8) ,
-	report (9) ,
-	medlars (10) ,
-	embl (11) ,
-	pdb (12) ,
-	kinemage (13) }
-
-Entrez-general ::= SEQUENCE {
-	title VisibleString OPTIONAL,
-	data CHOICE {
-		ml	Medline-entry ,
-		prot	Seq-entry ,
-		nuc	Seq-entry ,
-		genome	Seq-entry ,
-		structure Biostruc ,
-		strucAnnot Biostruc-annot-set } ,
-	style Entrez-style ,
-	location VisibleString OPTIONAL }
 END
 --$Revision: 6.0 $
---********************************************************************
+--**********************************************************************
 --
---  Print Templates
---  James Ostell, 1993
+--  MEDLARS data definitions
+--  Grigoriy Starchenko, 1997
 --
---
---********************************************************************
+--**********************************************************************
 
-NCBI-ObjPrt DEFINITIONS ::=
+NCBI-Medlars DEFINITIONS ::=
 BEGIN
 
-EXPORTS PrintTemplate, PrintTemplateSet;
+EXPORTS Medlars-entry, Medlars-record;
 
-PrintTemplate ::= SEQUENCE {
-    name TemplateName ,  -- name for this template
-    labelfrom VisibleString OPTIONAL,    -- ASN.1 path to get label from
-    format PrintFormat }
+IMPORTS PubMedId FROM NCBI-Biblio;
 
-TemplateName ::= VisibleString
-
-PrintTemplateSet ::= SEQUENCE OF PrintTemplate
-
-PrintFormat ::= SEQUENCE {
-    asn1 VisibleString ,    -- ASN.1 partial path for this
-    label VisibleString OPTIONAL ,   -- printable label
-    prefix VisibleString OPTIONAL,
-    suffix VisibleString OPTIONAL,
-    form PrintForm }
-
-PrintForm ::=   CHOICE {      -- Forms for various ASN.1 components
-    block PrintFormBlock,
-    boolean PrintFormBoolean,
-    enum PrintFormEnum,
-    text PrintFormText,
-    use-template TemplateName,
-    user UserFormat ,
-    null NULL }               -- rarely used
-
-UserFormat ::= SEQUENCE {
-    printfunc VisibleString ,
-    defaultfunc VisibleString OPTIONAL }
-
-PrintFormBlock ::= SEQUENCE {  -- for SEQUENCE, SET
-    separator VisibleString OPTIONAL ,
-    components SEQUENCE OF PrintFormat }
-
-PrintFormBoolean ::= SEQUENCE {
-    true VisibleString OPTIONAL ,
-    false VisibleString OPTIONAL }
-
-PrintFormEnum ::= SEQUENCE {
-    values SEQUENCE OF VisibleString OPTIONAL }
-
-PrintFormText ::= SEQUENCE {
-    textfunc VisibleString OPTIONAL }
-    
-END
-
---$Revision: 6.3 $
---****************************************************************
---
---  NCBI Project Definition Module
---  by Jim Ostell and Jonathan Kans, 1998
---
---****************************************************************
-
-NCBI-Project DEFINITIONS ::=
-BEGIN
-
-EXPORTS Project, Project-item;
-
-IMPORTS Date FROM NCBI-General
-        PubMedId FROM NCBI-Biblio
-        Seq-id, Seq-loc FROM NCBI-Seqloc
-        Seq-annot, Pubdesc FROM NCBI-Sequence
-        Seq-entry FROM NCBI-Seqset
-        Pubmed-entry FROM NCBI-PubMed;
-
-Project ::= SEQUENCE {
-    descr Project-descr OPTIONAL ,
-    data Project-item }
-
-Project-item ::= CHOICE {
-    pmuid SET OF INTEGER ,
-    protuid SET OF INTEGER ,
-    nucuid SET OF INTEGER ,
-    sequid SET OF INTEGER ,
-    genomeuid SET OF INTEGER ,
-    structuid SET OF INTEGER ,
-    pmid SET OF PubMedId ,
-    protid SET OF Seq-id ,
-    nucid SET OF Seq-id ,
-    seqid SET OF Seq-id ,
-    genomeid SET OF Seq-id ,
-    structid NULL ,
-    pment SET OF Pubmed-entry ,
-    protent SET OF Seq-entry ,
-    nucent SET OF Seq-entry ,
-    seqent SET OF Seq-entry ,
-    genomeent SET OF Seq-entry ,
-    structent NULL ,
-    seqannot SET OF Seq-annot ,
-    loc SET OF Seq-loc ,
-    proj SET OF Project
+Medlars-entry ::= SEQUENCE {     -- a MEDLARS entry
+    pmid PubMedId,               -- All entries in PubMed must have it
+    muid INTEGER OPTIONAL,       -- Medline(OCCS) id
+    recs SET OF Medlars-record   -- List of Medlars records
 }
 
-Project-descr ::= SEQUENCE {
-    id SET OF Project-id ,
-    name VisibleString OPTIONAL ,
-    descr SET OF Projdesc OPTIONAL }
-
-Projdesc ::= CHOICE {
-    pub Pubdesc ,
-    date Date ,
-    comment VisibleString ,
-    title VisibleString
+Medlars-record ::= SEQUENCE {
+    code INTEGER,                -- Unit record field type integer form
+    abbr VisibleString OPTIONAL, -- Unit record field type abbreviation form
+    data VisibleString           -- Unit record data
 }
 
-Project-id ::= VisibleString
-
 END
-
-
 --$Revision: 6.0 $
 --********************************************************************
 --
@@ -836,41 +609,123 @@ END
 --$Revision: 6.0 $
 --**********************************************************************
 --
---  PUBMED data definitions
+--  NCBI Sequence location and identifier elements
+--  by James Ostell, 1990
+--
+--  Version 3.0 - 1994
 --
 --**********************************************************************
 
-NCBI-PubMed DEFINITIONS ::=
+NCBI-Seqloc DEFINITIONS ::=
 BEGIN
 
-EXPORTS Pubmed-entry, Pubmed-url;
+EXPORTS Seq-id, Seq-loc, Seq-interval, Packed-seqint, Seq-point, Packed-seqpnt,
+        Na-strand, Giimport-id;
 
-IMPORTS PubMedId FROM NCBI-Biblio
-        Medline-entry FROM NCBI-Medline;
+IMPORTS Object-id, Int-fuzz, Dbtag, Date FROM NCBI-General
+        Id-pat FROM NCBI-Biblio
+        Feat-id FROM NCBI-Seqfeat;
 
-Pubmed-entry ::= SEQUENCE {        -- a PubMed entry
-    -- PUBMED records must include the PubMedId
-    pmid PubMedId,
+--*** Sequence identifiers ********************************
+--*
 
-    -- Medline entry information
-    medent Medline-entry OPTIONAL,
+Seq-id ::= CHOICE {
+    local Object-id ,      -- local use
+    gibbsq INTEGER ,         -- Geninfo backbone seqid
+    gibbmt INTEGER ,         -- Geninfo backbone moltype
+    giim Giimport-id ,       -- Geninfo import id
+    genbank Textseq-id ,
+    embl Textseq-id ,
+    pir Textseq-id ,
+    swissprot Textseq-id ,
+    patent Patent-seq-id ,
+    other Textseq-id ,       -- catch all
+    general Dbtag ,          -- for other databases
+    gi INTEGER ,             -- GenInfo Integrated Database
+    ddbj Textseq-id ,        -- DDBJ
+    prf Textseq-id ,         -- PRF SEQDB
+    pdb PDB-seq-id }         -- PDB sequence
 
-    -- Publisher name
-    publisher VisibleString OPTIONAL,
+Patent-seq-id ::= SEQUENCE {
+    seqid INTEGER ,         -- number of sequence in patent
+    cit Id-pat }           -- patent citation
 
-    -- List of URL to publisher cite
-    urls SET OF Pubmed-url OPTIONAL,
+Textseq-id ::= SEQUENCE {
+    name VisibleString OPTIONAL ,
+    accession VisibleString OPTIONAL ,
+    release VisibleString OPTIONAL ,
+    version INTEGER OPTIONAL }
 
-    -- Publisher's article identifier
-    pubid VisibleString OPTIONAL
-}
+Giimport-id ::= SEQUENCE {
+    id INTEGER ,               -- the id to use here
+    db VisibleString OPTIONAL ,  -- dbase used in
+    release VisibleString OPTIONAL }   -- the release
 
-Pubmed-url ::= SEQUENCE {
-    location VisibleString OPTIONAL, -- Location code
-    url VisibleString                -- Selected URL for location
-}
+PDB-seq-id ::= SEQUENCE {
+    mol PDB-mol-id ,          -- the molecule name
+    chain INTEGER DEFAULT 32 ,-- a single ASCII character, chain id
+    rel Date OPTIONAL }   -- release date, month and year
+
+PDB-mol-id ::= VisibleString  -- name of mol, 4 chars
+    
+--*** Sequence locations **********************************
+--*
+
+Seq-loc ::= CHOICE {
+    null NULL ,           -- not placed
+    empty Seq-id ,        -- to NULL one Seq-id in a collection
+    whole Seq-id ,        -- whole sequence
+    int Seq-interval ,    -- from to
+    packed-int Packed-seqint ,
+    pnt Seq-point ,
+    packed-pnt Packed-seqpnt ,
+    mix Seq-loc-mix ,
+    equiv Seq-loc-equiv ,  -- equivalent sets of locations
+    bond Seq-bond ,
+    feat Feat-id }         -- indirect, through a Seq-feat
+    
+
+Seq-interval ::= SEQUENCE {
+    from INTEGER ,
+    to INTEGER ,
+    strand Na-strand OPTIONAL ,
+    id Seq-id ,    -- WARNING: this used to be optional
+    fuzz-from Int-fuzz OPTIONAL ,
+    fuzz-to Int-fuzz OPTIONAL }
+
+Packed-seqint ::= SEQUENCE OF Seq-interval
+
+Seq-point ::= SEQUENCE {
+    point INTEGER ,
+    strand Na-strand OPTIONAL ,
+    id Seq-id ,     -- WARNING: this used to be optional
+    fuzz Int-fuzz OPTIONAL }
+
+Packed-seqpnt ::= SEQUENCE {
+    strand Na-strand OPTIONAL ,
+    id Seq-id ,
+    fuzz Int-fuzz OPTIONAL ,
+    points SEQUENCE OF INTEGER }
+
+Na-strand ::= ENUMERATED {          -- strand of nucleid acid
+    unknown (0) ,
+    plus (1) ,
+    minus (2) ,               
+    both (3) ,                -- in forward orientation
+    both-rev (4) ,            -- in reverse orientation
+    other (255) }
+
+Seq-bond ::= SEQUENCE {         -- bond between residues
+    a Seq-point ,           -- connection to a least one residue
+    b Seq-point OPTIONAL }  -- other end may not be available
+
+Seq-loc-mix ::= SEQUENCE OF Seq-loc   -- this will hold anything
+
+Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 
 END
+    
+
 --$Revision: 6.1 $
 --**********************************************************************
 --
@@ -1274,101 +1129,123 @@ END
 --$Revision: 6.0 $
 --**********************************************************************
 --
---  NCBI Sequence Alignment elements
+--  NCBI Sequence Collections
 --  by James Ostell, 1990
+--
+--  Version 3.0 - 1994
 --
 --**********************************************************************
 
-NCBI-Seqalign DEFINITIONS ::=
+NCBI-Seqset DEFINITIONS ::=
 BEGIN
 
-EXPORTS Seq-align, Score, Score-set, Seq-align-set;
+EXPORTS Bioseq-set, Seq-entry;
 
-IMPORTS Seq-id, Seq-loc , Na-strand FROM NCBI-Seqloc
-        Object-id FROM NCBI-General;
+IMPORTS Bioseq, Seq-annot, Seq-descr FROM NCBI-Sequence
+        Object-id, Dbtag, Date FROM NCBI-General;
 
---*** Sequence Alignment ********************************
+--*** Sequence Collections ********************************
 --*
 
-Seq-align-set ::= SET OF Seq-align
-
-Seq-align ::= SEQUENCE {
-    type ENUMERATED {
-        not-set (0) ,
-        global (1) ,
-        diags (2) ,		-- unbroken, but not ordered, diagonals
-        partial (3) ,           -- mapping pieces together
-	disc (4) ,              -- discontinuous alignment
-        other (255) } ,
-    dim INTEGER OPTIONAL ,     -- dimensionality
-    score SET OF Score OPTIONAL ,   -- for whole alignment
-    segs CHOICE {                   -- alignment data
-        dendiag SEQUENCE OF Dense-diag ,
-        denseg Dense-seg ,
-        std SEQUENCE OF Std-seg ,
-	packed Packed-seg ,
-	disc Seq-align-set } ,
-    bounds SET OF Seq-loc OPTIONAL }  -- regions of sequence over which align
-                                      --  was computed
-
-Dense-diag ::= SEQUENCE {         -- for (multiway) diagonals
-    dim INTEGER DEFAULT 2 ,    -- dimensionality
-    ids SEQUENCE OF Seq-id ,   -- sequences in order
-    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order
-    len INTEGER ,                 -- len of aligned segments
-    strands SEQUENCE OF Na-strand OPTIONAL ,
-    scores SET OF Score OPTIONAL }
-
-    -- Dense-seg: the densist packing for sequence alignments only.
-    --            a start of -1 indicates a gap for that sequence of
-    --            length lens.
-    --
-    -- id=100  AAGGCCTTTTAGAGATGATGATGATGATGA
-    -- id=200  AAGGCCTTTTAG.......GATGATGATGA
-    -- id=300  ....CCTTTTAGAGATGATGAT....ATGA
-    --
-    -- dim = 3, numseg = 6, ids = { 100, 200, 300 }
-    -- starts = { 0,0,-1, 4,4,0, 12,-1,8, 19,12,15, 22,15,-1, 26,19,18 }
-    -- lens = { 4, 8, 7, 3, 4, 4 }
-    --
-
-Dense-seg ::= SEQUENCE {          -- for (multiway) global or partial alignments
-    dim INTEGER DEFAULT 2 ,       -- dimensionality
-    numseg INTEGER ,              -- number of segments here
-    ids SEQUENCE OF Seq-id ,      -- sequences in order
-    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order within segs
-    lens SEQUENCE OF INTEGER ,    -- lengths in ids order within segs
-    strands SEQUENCE OF Na-strand OPTIONAL ,
-    scores SEQUENCE OF Score OPTIONAL }  -- score for each seg
-
-Packed-seg ::= SEQUENCE {         -- for (multiway) global or partial alignments
-    dim INTEGER DEFAULT 2 ,       -- dimensionality
-    numseg INTEGER ,              -- number of segments here
-    ids SEQUENCE OF Seq-id ,      -- sequences in order
-    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order for whole alignment
-    present OCTET STRING ,        -- Boolean if each sequence present or absent in
-                                  --   each segment
-    lens SEQUENCE OF INTEGER ,    -- length of each segment
-    strands SEQUENCE OF Na-strand OPTIONAL ,
-    scores SEQUENCE OF Score OPTIONAL }  -- score for each segment
-
-Std-seg ::= SEQUENCE {
-    dim INTEGER DEFAULT 2 ,       -- dimensionality
-    ids SEQUENCE OF Seq-id OPTIONAL ,
-    loc SEQUENCE OF Seq-loc ,
-    scores SET OF Score OPTIONAL }
-
--- use of Score is discouraged for external ASN.1 specifications
-Score ::= SEQUENCE {
+Bioseq-set ::= SEQUENCE {      -- just a collection
     id Object-id OPTIONAL ,
-    value CHOICE {
-        real REAL ,
-        int INTEGER  } }
+    coll Dbtag OPTIONAL ,          -- to identify a collection
+    level INTEGER OPTIONAL ,       -- nesting level
+    class ENUMERATED {
+        not-set (0) ,
+        nuc-prot (1) ,              -- nuc acid and coded proteins
+        segset (2) ,                -- segmented sequence + parts
+        conset (3) ,                -- constructed sequence + parts
+        parts (4) ,                 -- parts for 2 or 3
+        gibb (5) ,                  -- geninfo backbone
+        gi (6) ,                    -- geninfo
+        genbank (7) ,               -- converted genbank
+        pir (8) ,                   -- converted pir
+        pub-set (9) ,               -- all the seqs from a single publication
+        equiv (10) ,                -- a set of equivalent maps or seqs
+        swissprot (11) ,            -- converted SWISSPROT
+        pdb-entry (12) ,            -- a complete PDB entry
+        mut-set (13) ,              -- set of mutations
+        pop-set (14) ,              -- population study
+        phy-set (15) ,              -- phylogenetic study
+        other (255) } DEFAULT not-set ,
+    release VisibleString OPTIONAL ,
+    date Date OPTIONAL ,
+    descr Seq-descr OPTIONAL ,
+    seq-set SEQUENCE OF Seq-entry ,
+    annot SET OF Seq-annot OPTIONAL }
 
--- use of Score-set is encouraged for external ASN.1 specifications
-Score-set ::= SET OF Score
+Seq-entry ::= CHOICE {
+        seq Bioseq ,
+        set Bioseq-set } 
 
-END 
+END
+
+--$Revision: 6.0 $
+--  *********************************************************************
+--
+--  These are code and conversion tables for NCBI sequence codes
+--  ASN.1 for the sequences themselves are define in seq.asn
+--
+--  Seq-map-table and Seq-code-table REQUIRE that codes start with 0
+--    and increase continuously.  So IUPAC codes, which are upper case
+--    letters will always have 65 0 cells before the codes begin.  This
+--    allows all codes to do indexed lookups for things
+--
+--  Valid names for code tables are:
+--    IUPACna
+--    IUPACaa
+--    IUPACeaa
+--    IUPACaa3     3 letter amino acid codes : parallels IUPACeaa
+--                   display only, not a data exchange type
+--    NCBI2na
+--    NCBI4na
+--    NCBI8na
+--    NCBI8aa
+--    NCBIstdaa
+--     probability types map to IUPAC types for display as characters
+
+NCBI-SeqCode DEFINITIONS ::=
+BEGIN
+
+EXPORTS Seq-code-table, Seq-map-table, Seq-code-set;
+
+Seq-code-type ::= ENUMERATED {              -- sequence representations
+    iupacna (1) ,              -- IUPAC 1 letter nuc acid code
+    iupacaa (2) ,              -- IUPAC 1 letter amino acid code
+    ncbi2na (3) ,              -- 2 bit nucleic acid code
+    ncbi4na (4) ,              -- 4 bit nucleic acid code
+    ncbi8na (5) ,              -- 8 bit extended nucleic acid code
+    ncbipna (6) ,              -- nucleic acid probabilities
+    ncbi8aa (7) ,              -- 8 bit extended amino acid codes
+    ncbieaa (8) ,              -- extended ASCII 1 letter aa codes
+    ncbipaa (9) ,              -- amino acid probabilities
+    iupacaa3 (10) ,            -- 3 letter code only for display
+    ncbistdaa (11) }           -- consecutive codes for std aas, 0-25
+
+Seq-map-table ::= SEQUENCE { -- for tables of sequence mappings 
+    from Seq-code-type ,      -- code to map from
+    to Seq-code-type ,        -- code to map to
+    num INTEGER ,             -- number of rows in table
+    start-at INTEGER DEFAULT 0 ,   -- index offset of first element
+    table SEQUENCE OF INTEGER }  -- table of values, in from-to order
+
+Seq-code-table ::= SEQUENCE { -- for names of coded values
+    code Seq-code-type ,      -- name of code
+    num INTEGER ,             -- number of rows in table
+    one-letter BOOLEAN ,   -- symbol is ALWAYS 1 letter?
+    start-at INTEGER DEFAULT 0 ,   -- index offset of first element
+    table SEQUENCE OF
+        SEQUENCE {
+            symbol VisibleString ,      -- the printed symbol or letter
+            name VisibleString } ,      -- an explanatory name or string
+    comps SEQUENCE OF INTEGER OPTIONAL } -- pointers to complement nuc acid
+
+Seq-code-set ::= SEQUENCE {    -- for distribution
+    codes SET OF Seq-code-table OPTIONAL ,
+    maps SET OF Seq-map-table OPTIONAL }
+
+END
 
 --$Revision: 6.0 $
 --*********************************************************************
@@ -1599,72 +1476,6 @@ PDB-block ::= SEQUENCE {          -- PDB specific descriptions
 PDB-replace ::= SEQUENCE {
     date Date ,
     ids SEQUENCE OF VisibleString }   -- entry ids replace by this one
-
-END
-
---$Revision: 6.0 $
---  *********************************************************************
---
---  These are code and conversion tables for NCBI sequence codes
---  ASN.1 for the sequences themselves are define in seq.asn
---
---  Seq-map-table and Seq-code-table REQUIRE that codes start with 0
---    and increase continuously.  So IUPAC codes, which are upper case
---    letters will always have 65 0 cells before the codes begin.  This
---    allows all codes to do indexed lookups for things
---
---  Valid names for code tables are:
---    IUPACna
---    IUPACaa
---    IUPACeaa
---    IUPACaa3     3 letter amino acid codes : parallels IUPACeaa
---                   display only, not a data exchange type
---    NCBI2na
---    NCBI4na
---    NCBI8na
---    NCBI8aa
---    NCBIstdaa
---     probability types map to IUPAC types for display as characters
-
-NCBI-SeqCode DEFINITIONS ::=
-BEGIN
-
-EXPORTS Seq-code-table, Seq-map-table, Seq-code-set;
-
-Seq-code-type ::= ENUMERATED {              -- sequence representations
-    iupacna (1) ,              -- IUPAC 1 letter nuc acid code
-    iupacaa (2) ,              -- IUPAC 1 letter amino acid code
-    ncbi2na (3) ,              -- 2 bit nucleic acid code
-    ncbi4na (4) ,              -- 4 bit nucleic acid code
-    ncbi8na (5) ,              -- 8 bit extended nucleic acid code
-    ncbipna (6) ,              -- nucleic acid probabilities
-    ncbi8aa (7) ,              -- 8 bit extended amino acid codes
-    ncbieaa (8) ,              -- extended ASCII 1 letter aa codes
-    ncbipaa (9) ,              -- amino acid probabilities
-    iupacaa3 (10) ,            -- 3 letter code only for display
-    ncbistdaa (11) }           -- consecutive codes for std aas, 0-25
-
-Seq-map-table ::= SEQUENCE { -- for tables of sequence mappings 
-    from Seq-code-type ,      -- code to map from
-    to Seq-code-type ,        -- code to map to
-    num INTEGER ,             -- number of rows in table
-    start-at INTEGER DEFAULT 0 ,   -- index offset of first element
-    table SEQUENCE OF INTEGER }  -- table of values, in from-to order
-
-Seq-code-table ::= SEQUENCE { -- for names of coded values
-    code Seq-code-type ,      -- name of code
-    num INTEGER ,             -- number of rows in table
-    one-letter BOOLEAN ,   -- symbol is ALWAYS 1 letter?
-    start-at INTEGER DEFAULT 0 ,   -- index offset of first element
-    table SEQUENCE OF
-        SEQUENCE {
-            symbol VisibleString ,      -- the printed symbol or letter
-            name VisibleString } ,      -- an explanatory name or string
-    comps SEQUENCE OF INTEGER OPTIONAL } -- pointers to complement nuc acid
-
-Seq-code-set ::= SEQUENCE {    -- for distribution
-    codes SET OF Seq-code-table OPTIONAL ,
-    maps SET OF Seq-map-table OPTIONAL }
 
 END
 
@@ -2254,122 +2065,101 @@ END
 --$Revision: 6.0 $
 --**********************************************************************
 --
---  NCBI Sequence location and identifier elements
+--  NCBI Sequence Alignment elements
 --  by James Ostell, 1990
---
---  Version 3.0 - 1994
 --
 --**********************************************************************
 
-NCBI-Seqloc DEFINITIONS ::=
+NCBI-Seqalign DEFINITIONS ::=
 BEGIN
 
-EXPORTS Seq-id, Seq-loc, Seq-interval, Packed-seqint, Seq-point, Packed-seqpnt,
-        Na-strand, Giimport-id;
+EXPORTS Seq-align, Score, Score-set, Seq-align-set;
 
-IMPORTS Object-id, Int-fuzz, Dbtag, Date FROM NCBI-General
-        Id-pat FROM NCBI-Biblio
-        Feat-id FROM NCBI-Seqfeat;
+IMPORTS Seq-id, Seq-loc , Na-strand FROM NCBI-Seqloc
+        Object-id FROM NCBI-General;
 
---*** Sequence identifiers ********************************
+--*** Sequence Alignment ********************************
 --*
 
-Seq-id ::= CHOICE {
-    local Object-id ,      -- local use
-    gibbsq INTEGER ,         -- Geninfo backbone seqid
-    gibbmt INTEGER ,         -- Geninfo backbone moltype
-    giim Giimport-id ,       -- Geninfo import id
-    genbank Textseq-id ,
-    embl Textseq-id ,
-    pir Textseq-id ,
-    swissprot Textseq-id ,
-    patent Patent-seq-id ,
-    other Textseq-id ,       -- catch all
-    general Dbtag ,          -- for other databases
-    gi INTEGER ,             -- GenInfo Integrated Database
-    ddbj Textseq-id ,        -- DDBJ
-    prf Textseq-id ,         -- PRF SEQDB
-    pdb PDB-seq-id }         -- PDB sequence
+Seq-align-set ::= SET OF Seq-align
 
-Patent-seq-id ::= SEQUENCE {
-    seqid INTEGER ,         -- number of sequence in patent
-    cit Id-pat }           -- patent citation
+Seq-align ::= SEQUENCE {
+    type ENUMERATED {
+        not-set (0) ,
+        global (1) ,
+        diags (2) ,		-- unbroken, but not ordered, diagonals
+        partial (3) ,           -- mapping pieces together
+	disc (4) ,              -- discontinuous alignment
+        other (255) } ,
+    dim INTEGER OPTIONAL ,     -- dimensionality
+    score SET OF Score OPTIONAL ,   -- for whole alignment
+    segs CHOICE {                   -- alignment data
+        dendiag SEQUENCE OF Dense-diag ,
+        denseg Dense-seg ,
+        std SEQUENCE OF Std-seg ,
+	packed Packed-seg ,
+	disc Seq-align-set } ,
+    bounds SET OF Seq-loc OPTIONAL }  -- regions of sequence over which align
+                                      --  was computed
 
-Textseq-id ::= SEQUENCE {
-    name VisibleString OPTIONAL ,
-    accession VisibleString OPTIONAL ,
-    release VisibleString OPTIONAL ,
-    version INTEGER OPTIONAL }
+Dense-diag ::= SEQUENCE {         -- for (multiway) diagonals
+    dim INTEGER DEFAULT 2 ,    -- dimensionality
+    ids SEQUENCE OF Seq-id ,   -- sequences in order
+    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order
+    len INTEGER ,                 -- len of aligned segments
+    strands SEQUENCE OF Na-strand OPTIONAL ,
+    scores SET OF Score OPTIONAL }
 
-Giimport-id ::= SEQUENCE {
-    id INTEGER ,               -- the id to use here
-    db VisibleString OPTIONAL ,  -- dbase used in
-    release VisibleString OPTIONAL }   -- the release
+    -- Dense-seg: the densist packing for sequence alignments only.
+    --            a start of -1 indicates a gap for that sequence of
+    --            length lens.
+    --
+    -- id=100  AAGGCCTTTTAGAGATGATGATGATGATGA
+    -- id=200  AAGGCCTTTTAG.......GATGATGATGA
+    -- id=300  ....CCTTTTAGAGATGATGAT....ATGA
+    --
+    -- dim = 3, numseg = 6, ids = { 100, 200, 300 }
+    -- starts = { 0,0,-1, 4,4,0, 12,-1,8, 19,12,15, 22,15,-1, 26,19,18 }
+    -- lens = { 4, 8, 7, 3, 4, 4 }
+    --
 
-PDB-seq-id ::= SEQUENCE {
-    mol PDB-mol-id ,          -- the molecule name
-    chain INTEGER DEFAULT 32 ,-- a single ASCII character, chain id
-    rel Date OPTIONAL }   -- release date, month and year
+Dense-seg ::= SEQUENCE {          -- for (multiway) global or partial alignments
+    dim INTEGER DEFAULT 2 ,       -- dimensionality
+    numseg INTEGER ,              -- number of segments here
+    ids SEQUENCE OF Seq-id ,      -- sequences in order
+    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order within segs
+    lens SEQUENCE OF INTEGER ,    -- lengths in ids order within segs
+    strands SEQUENCE OF Na-strand OPTIONAL ,
+    scores SEQUENCE OF Score OPTIONAL }  -- score for each seg
 
-PDB-mol-id ::= VisibleString  -- name of mol, 4 chars
-    
---*** Sequence locations **********************************
---*
+Packed-seg ::= SEQUENCE {         -- for (multiway) global or partial alignments
+    dim INTEGER DEFAULT 2 ,       -- dimensionality
+    numseg INTEGER ,              -- number of segments here
+    ids SEQUENCE OF Seq-id ,      -- sequences in order
+    starts SEQUENCE OF INTEGER ,  -- start OFFSETS in ids order for whole alignment
+    present OCTET STRING ,        -- Boolean if each sequence present or absent in
+                                  --   each segment
+    lens SEQUENCE OF INTEGER ,    -- length of each segment
+    strands SEQUENCE OF Na-strand OPTIONAL ,
+    scores SEQUENCE OF Score OPTIONAL }  -- score for each segment
 
-Seq-loc ::= CHOICE {
-    null NULL ,           -- not placed
-    empty Seq-id ,        -- to NULL one Seq-id in a collection
-    whole Seq-id ,        -- whole sequence
-    int Seq-interval ,    -- from to
-    packed-int Packed-seqint ,
-    pnt Seq-point ,
-    packed-pnt Packed-seqpnt ,
-    mix Seq-loc-mix ,
-    equiv Seq-loc-equiv ,  -- equivalent sets of locations
-    bond Seq-bond ,
-    feat Feat-id }         -- indirect, through a Seq-feat
-    
+Std-seg ::= SEQUENCE {
+    dim INTEGER DEFAULT 2 ,       -- dimensionality
+    ids SEQUENCE OF Seq-id OPTIONAL ,
+    loc SEQUENCE OF Seq-loc ,
+    scores SET OF Score OPTIONAL }
 
-Seq-interval ::= SEQUENCE {
-    from INTEGER ,
-    to INTEGER ,
-    strand Na-strand OPTIONAL ,
-    id Seq-id ,    -- WARNING: this used to be optional
-    fuzz-from Int-fuzz OPTIONAL ,
-    fuzz-to Int-fuzz OPTIONAL }
+-- use of Score is discouraged for external ASN.1 specifications
+Score ::= SEQUENCE {
+    id Object-id OPTIONAL ,
+    value CHOICE {
+        real REAL ,
+        int INTEGER  } }
 
-Packed-seqint ::= SEQUENCE OF Seq-interval
+-- use of Score-set is encouraged for external ASN.1 specifications
+Score-set ::= SET OF Score
 
-Seq-point ::= SEQUENCE {
-    point INTEGER ,
-    strand Na-strand OPTIONAL ,
-    id Seq-id ,     -- WARNING: this used to be optional
-    fuzz Int-fuzz OPTIONAL }
-
-Packed-seqpnt ::= SEQUENCE {
-    strand Na-strand OPTIONAL ,
-    id Seq-id ,
-    fuzz Int-fuzz OPTIONAL ,
-    points SEQUENCE OF INTEGER }
-
-Na-strand ::= ENUMERATED {          -- strand of nucleid acid
-    unknown (0) ,
-    plus (1) ,
-    minus (2) ,               
-    both (3) ,                -- in forward orientation
-    both-rev (4) ,            -- in reverse orientation
-    other (255) }
-
-Seq-bond ::= SEQUENCE {         -- bond between residues
-    a Seq-point ,           -- connection to a least one residue
-    b Seq-point OPTIONAL }  -- other end may not be available
-
-Seq-loc-mix ::= SEQUENCE OF Seq-loc   -- this will hold anything
-
-Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
-
-END
-    
+END 
 
 --$Revision: 6.0 $
 --**********************************************************************
@@ -2423,61 +2213,6 @@ Byte-graph ::= SEQUENCE {              -- integer from 0-255
     min INTEGER ,
     axis INTEGER ,
     values OCTET STRING }
-
-END
-
---$Revision: 6.0 $
---**********************************************************************
---
---  NCBI Sequence Collections
---  by James Ostell, 1990
---
---  Version 3.0 - 1994
---
---**********************************************************************
-
-NCBI-Seqset DEFINITIONS ::=
-BEGIN
-
-EXPORTS Bioseq-set, Seq-entry;
-
-IMPORTS Bioseq, Seq-annot, Seq-descr FROM NCBI-Sequence
-        Object-id, Dbtag, Date FROM NCBI-General;
-
---*** Sequence Collections ********************************
---*
-
-Bioseq-set ::= SEQUENCE {      -- just a collection
-    id Object-id OPTIONAL ,
-    coll Dbtag OPTIONAL ,          -- to identify a collection
-    level INTEGER OPTIONAL ,       -- nesting level
-    class ENUMERATED {
-        not-set (0) ,
-        nuc-prot (1) ,              -- nuc acid and coded proteins
-        segset (2) ,                -- segmented sequence + parts
-        conset (3) ,                -- constructed sequence + parts
-        parts (4) ,                 -- parts for 2 or 3
-        gibb (5) ,                  -- geninfo backbone
-        gi (6) ,                    -- geninfo
-        genbank (7) ,               -- converted genbank
-        pir (8) ,                   -- converted pir
-        pub-set (9) ,               -- all the seqs from a single publication
-        equiv (10) ,                -- a set of equivalent maps or seqs
-        swissprot (11) ,            -- converted SWISSPROT
-        pdb-entry (12) ,            -- a complete PDB entry
-        mut-set (13) ,              -- set of mutations
-        pop-set (14) ,              -- population study
-        phy-set (15) ,              -- phylogenetic study
-        other (255) } DEFAULT not-set ,
-    release VisibleString OPTIONAL ,
-    date Date OPTIONAL ,
-    descr Seq-descr OPTIONAL ,
-    seq-set SEQUENCE OF Seq-entry ,
-    annot SET OF Seq-annot OPTIONAL }
-
-Seq-entry ::= CHOICE {
-        seq Bioseq ,
-        set Bioseq-set } 
 
 END
 
@@ -2542,5 +2277,270 @@ Contact-info ::= SEQUENCE {      -- who to contact to discuss the submission
     middle-initial VisibleString OPTIONAL ,
     contact Author OPTIONAL }           -- WARNING: this will replace the above
 
+END
+
+--$Revision: 6.3 $
+--****************************************************************
+--
+--  NCBI Project Definition Module
+--  by Jim Ostell and Jonathan Kans, 1998
+--
+--****************************************************************
+
+NCBI-Project DEFINITIONS ::=
+BEGIN
+
+EXPORTS Project, Project-item;
+
+IMPORTS Date FROM NCBI-General
+        PubMedId FROM NCBI-Biblio
+        Seq-id, Seq-loc FROM NCBI-Seqloc
+        Seq-annot, Pubdesc FROM NCBI-Sequence
+        Seq-entry FROM NCBI-Seqset
+        Pubmed-entry FROM NCBI-PubMed;
+
+Project ::= SEQUENCE {
+    descr Project-descr OPTIONAL ,
+    data Project-item }
+
+Project-item ::= CHOICE {
+    pmuid SET OF INTEGER ,
+    protuid SET OF INTEGER ,
+    nucuid SET OF INTEGER ,
+    sequid SET OF INTEGER ,
+    genomeuid SET OF INTEGER ,
+    structuid SET OF INTEGER ,
+    pmid SET OF PubMedId ,
+    protid SET OF Seq-id ,
+    nucid SET OF Seq-id ,
+    seqid SET OF Seq-id ,
+    genomeid SET OF Seq-id ,
+    structid NULL ,
+    pment SET OF Pubmed-entry ,
+    protent SET OF Seq-entry ,
+    nucent SET OF Seq-entry ,
+    seqent SET OF Seq-entry ,
+    genomeent SET OF Seq-entry ,
+    structent NULL ,
+    seqannot SET OF Seq-annot ,
+    loc SET OF Seq-loc ,
+    proj SET OF Project
+}
+
+Project-descr ::= SEQUENCE {
+    id SET OF Project-id ,
+    name VisibleString OPTIONAL ,
+    descr SET OF Projdesc OPTIONAL }
+
+Projdesc ::= CHOICE {
+    pub Pubdesc ,
+    date Date ,
+    comment VisibleString ,
+    title VisibleString
+}
+
+Project-id ::= VisibleString
+
+END
+
+
+--$Revision: 6.0 $
+--*********************************************************************
+--
+--  access.asn
+--
+--     messages for data access
+--
+--*********************************************************************
+
+NCBI-Access DEFINITIONS ::=
+BEGIN
+
+EXPORTS Link-set;
+
+    -- links between same class = neighbors
+    -- links between other classes = links
+
+Link-set ::= SEQUENCE {
+    num INTEGER ,                         -- number of links to this doc type
+    uids SEQUENCE OF INTEGER OPTIONAL ,     -- the links
+    weights SEQUENCE OF INTEGER OPTIONAL }  -- the weights
+
+
+END
+--$Revision: 6.0 $
+--**********************************************************************
+--
+--  NCBI Sequence Feature Definition Module
+--  by James Ostell, 1994
+--
+--**********************************************************************
+
+NCBI-FeatDef DEFINITIONS ::=
+BEGIN
+
+EXPORTS FeatDef, FeatDefSet, FeatDispGroup, FeatDispGroupSet;
+
+
+FeatDef ::= SEQUENCE {
+    typelabel VisibleString ,	   -- short label for type eg "CDS"
+    menulabel VisibleString ,	   -- label for a menu eg "Coding Region"
+    featdef-key INTEGER ,		   -- unique for this feature definition
+    seqfeat-key INTEGER ,		   -- SeqFeat.data.choice from objfeat.h
+    entrygroup INTEGER ,		   -- Group for data entry
+    displaygroup INTEGER ,		   -- Group for data display
+    molgroup FeatMolType           -- Type of Molecule used for
+}
+
+FeatMolType ::= ENUMERATED {
+	aa (1),  -- proteins
+    na (2),  -- nucleic acids
+    both (3) }  -- both
+
+FeatDefSet ::= SEQUENCE OF FeatDef   -- collections of defintions
+
+FeatDispGroup ::= SEQUENCE {
+	groupkey INTEGER ,
+    groupname VisibleString }
+
+FeatDispGroupSet ::= SEQUENCE OF FeatDispGroup
+
+FeatDefGroupSet ::= SEQUENCE {
+	groups FeatDispGroupSet ,
+	defs FeatDefSet }
+
+END
+
+    
+--$Revision: 6.4 $
+--****************************************************************
+--
+--  NCBI MIME type (chemical/ncbi-asn1-ascii and chemical/ncbi-asn1-binary)
+--  by Jonathan Epstein, February 1996
+--
+--****************************************************************
+
+NCBI-Mime DEFINITIONS ::=
+BEGIN
+
+EXPORTS Ncbi-mime-asn1;
+IMPORTS Biostruc, Biostruc-annot-set FROM MMDB
+	Seq-entry FROM NCBI-Seqset
+	Seq-annot FROM NCBI-Sequence
+	Medline-entry FROM NCBI-Medline;
+	
+Ncbi-mime-asn1 ::= CHOICE {
+	entrez	Entrez-general,			-- just a structure
+	alignstruc	Biostruc-align,			-- structures & sequences & alignments
+	alignseq	Biostruc-align-seq,	-- sequence alignment
+    strucseq    Biostruc-seq,	-- structure & sequences
+    strucseqs   Biostruc-seqs	    -- structure & sequences & alignments 
+	-- others may be added here in the future
+}
+
+Biostruc-align ::= SEQUENCE {
+	master	Biostruc,
+	slaves	SET OF Biostruc,
+	alignments	Biostruc-annot-set,	-- structure alignments
+	sequences SET OF Seq-entry,	-- sequences
+	seqalign SET OF Seq-annot }
+
+Biostruc-align-seq ::= SEQUENCE {	-- display seq structure align only
+	sequences SET OF Seq-entry,	-- sequences
+	seqalign SET OF Seq-annot }	
+
+Biostruc-seq ::= SEQUENCE {	-- display  structure seq added by yanli 
+    structure Biostruc,
+	sequences SET OF Seq-entry }
+
+Biostruc-seqs ::= SEQUENCE { -- display blast alignment along with neighbor's structure added by yanli 
+    structure Biostruc,
+	sequences SET OF Seq-entry,	-- sequences
+	seqalign SET OF Seq-annot }
+
+Entrez-style ::= ENUMERATED {
+	docsum (1),
+	genbank (2) ,
+	genpept (3) ,
+	fasta (4) ,
+	asn1 (5) ,
+	graphic (6) ,
+	alignment (7) ,
+	globalview (8) ,
+	report (9) ,
+	medlars (10) ,
+	embl (11) ,
+	pdb (12) ,
+	kinemage (13) }
+
+Entrez-general ::= SEQUENCE {
+	title VisibleString OPTIONAL,
+	data CHOICE {
+		ml	Medline-entry ,
+		prot	Seq-entry ,
+		nuc	Seq-entry ,
+		genome	Seq-entry ,
+		structure Biostruc ,
+		strucAnnot Biostruc-annot-set } ,
+	style Entrez-style ,
+	location VisibleString OPTIONAL }
+END
+--$Revision: 6.0 $
+--********************************************************************
+--
+--  Print Templates
+--  James Ostell, 1993
+--
+--
+--********************************************************************
+
+NCBI-ObjPrt DEFINITIONS ::=
+BEGIN
+
+EXPORTS PrintTemplate, PrintTemplateSet;
+
+PrintTemplate ::= SEQUENCE {
+    name TemplateName ,  -- name for this template
+    labelfrom VisibleString OPTIONAL,    -- ASN.1 path to get label from
+    format PrintFormat }
+
+TemplateName ::= VisibleString
+
+PrintTemplateSet ::= SEQUENCE OF PrintTemplate
+
+PrintFormat ::= SEQUENCE {
+    asn1 VisibleString ,    -- ASN.1 partial path for this
+    label VisibleString OPTIONAL ,   -- printable label
+    prefix VisibleString OPTIONAL,
+    suffix VisibleString OPTIONAL,
+    form PrintForm }
+
+PrintForm ::=   CHOICE {      -- Forms for various ASN.1 components
+    block PrintFormBlock,
+    boolean PrintFormBoolean,
+    enum PrintFormEnum,
+    text PrintFormText,
+    use-template TemplateName,
+    user UserFormat ,
+    null NULL }               -- rarely used
+
+UserFormat ::= SEQUENCE {
+    printfunc VisibleString ,
+    defaultfunc VisibleString OPTIONAL }
+
+PrintFormBlock ::= SEQUENCE {  -- for SEQUENCE, SET
+    separator VisibleString OPTIONAL ,
+    components SEQUENCE OF PrintFormat }
+
+PrintFormBoolean ::= SEQUENCE {
+    true VisibleString OPTIONAL ,
+    false VisibleString OPTIONAL }
+
+PrintFormEnum ::= SEQUENCE {
+    values SEQUENCE OF VisibleString OPTIONAL }
+
+PrintFormText ::= SEQUENCE {
+    textfunc VisibleString OPTIONAL }
+    
 END
 

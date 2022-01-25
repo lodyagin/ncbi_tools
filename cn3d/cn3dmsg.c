@@ -33,6 +33,15 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.101  2000/05/19 17:46:57  thiessen
+* fix redraw from DDV show/hide bug
+*
+* Revision 6.100  2000/05/15 23:39:33  lewisg
+* shred cblast, add menu items for gapped/ungapped, fix pdbheaders
+*
+* Revision 6.99  2000/04/27 22:21:57  lewisg
+* misc bugs/features
+*
 * Revision 6.98  2000/04/20 23:27:44  lewisg
 * misc bug fixes
 *
@@ -315,7 +324,9 @@ void Cn3D_LaunchSeqEntry(ValNode * pvnsep)
     vg.FetchProc = NULL;
     vg.NetStartProc = Cn3D_StartNet;
     vg.BlastFile = (void *)Cn3D_ImportBioseqFile;
+    vg.BlastFileGap = (void *)Cn3D_ImportBioseqFileGap;
     vg.BlastNet = (void *)Cn3D_ImportBioseq;
+    vg.BlastNetGap = (void *)Cn3D_ImportBioseqGap;
     vg.BlastMany = (void *)Cn3D_BlastDlg;
     SetAppProperty(SAM_ViewString, &vg);
     entityID = ObjMgrGetEntityIDForPointer(pvnsep);
@@ -411,7 +422,9 @@ void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
         vg.FetchProc = NULL;
         vg.NetStartProc = Cn3D_StartNet;
         vg.BlastFile = (void *)Cn3D_ImportBioseqFile;
+        vg.BlastFileGap = (void *)Cn3D_ImportBioseqFileGap;
         vg.BlastNet = (void *)Cn3D_ImportBioseq;
+        vg.BlastNetGap = (void *)Cn3D_ImportBioseqGap;
         vg.BlastMany = (void *)Cn3D_BlastDlg;
         SetAppProperty(SAM_ViewString, &vg);
         GatherSpecificProcLaunch(0, "DDV", OMPROC_VIEW,
@@ -606,6 +619,8 @@ static Int2 LIBCALLBACK SeqStrucMediaMsgFunc(OMMsgStructPtr ommsp)
             Nlm_AllLayerSet3D(Cn3D_v3d, TRUE);
 #endif /* else _OPENGL */
             Cn3D_DisplayProc(NULL);
+            /*Cn3D_Redraw(FALSE);*/
+
             break;
         default:
             break;

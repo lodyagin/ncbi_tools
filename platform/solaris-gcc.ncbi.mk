@@ -1,10 +1,10 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.4 1999/12/14 00:29:10 beloslyu Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.5 2000/06/23 18:31:44 beloslyu Exp $
 #
 # If you want to use gcc on solaris you need to copy this
 # file to solaris.ncbi.mk
 #
-NCBI_DEFAULT_LCL = gcc
+NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_CC = gcc
 NCBI_CFLAGS1 = -c 
@@ -27,12 +27,12 @@ NCBI_OTHERLIBS = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lm
 # NCBI_MT_OTHERLIBS & NCBI_THREAD_OBJ are only used by master makefiles
 # (i.e., coremake's "make.master"), and are not intended to be used by
 # users' makefiles
-NCBI_MT_OTHERLIBS = -lthread
+NCBI_MT_OTHERLIBS = -lpthread
 
 NCBI_OPTIONAL_LIBS = BLIB42=libctutils.a BLIB43=libosutils.a
 
 NCBI_THREAD_OBJ = ncbithr.o
-NCBI_OTHERLIBS_MT = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lthread -lm
+NCBI_OTHERLIBS_MT = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lpthread -lm
 NCBI_THR_OBJ = $(NCBI_LIBDIR)/ncbithr.o
 NCBI_THR_ALTOBJ = $(NCBI_ALTLIB)/ncbithr.o
 # CodeCenter can't handle the thread library; J. Epstein 5/22/96
@@ -55,12 +55,12 @@ NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a
 
 NCBI_SYBLIBS_CT = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lblk -lct -lcs -ltcl -lcomn -lintl -ltli
 #reentrant version:
-NCBI_SYBLIBS_CT_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lblk_r -lct_r -lcs_r -ltcl_r -lcomn_r -lintl_r -ltli_r -lthread -ldl
+NCBI_SYBLIBS_CT_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lblk_r -lct_r -lcs_r -ltcl_r -lcomn_r -lintl_r -ltli_r -lpthread -ldl
 
 #to compile an Open Server
 NCBI_SYBLIBS_OS = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv -lblk -lct -lcs -ltcl -lcomn -lintl -ltli
 #reentrant version:
-NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -lct_r -lcs_r -ltcl_r -lcomn_r -lintl_r -ltli_r -lthread -ldl
+NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -lct_r -lcs_r -ltcl_r -lcomn_r -lintl_r -ltli_r -lpthread -ldl
 
 #NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/netopt/SUNWmotif/include -L/usr/openwin/lib -L/netopt/SUNWmotif/lib -DWIN_MOTIF
 NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)

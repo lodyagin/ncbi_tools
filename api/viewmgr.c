@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.21 2000/04/17 21:46:55 lewisg Exp $
+/*   $Id: viewmgr.c,v 1.23 2000/05/12 16:15:26 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.21 2000/04/17 21:46:55 lewisg Exp $
+* File Name:  $Id: viewmgr.c,v 1.23 2000/05/12 16:15:26 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.21 $
+* $Revision: 1.23 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.23  2000/05/12 16:15:26  hurwitz
+* reverted to not doing IntersectOnMaster for DDE, now determined by call to ViewMgr_Attach
+*
+* Revision 1.22  2000/05/10 19:02:36  hurwitz
+* for dde, always do IntersectOnMaster
+*
 * Revision 1.21  2000/04/17 21:46:55  lewisg
 * do not do double index on viewmgr update, rename menus
 *
@@ -532,9 +538,12 @@ NLM_EXTERN SeqAlign * ViewMgr_GetBeginIndexed(SeqAlign *salp)
     if(pInfo == NULL) return NULL;
 
     if(!pInfo->BeginIndexed) {
-        if(pInfo->Intersect) 
+        if(pInfo->Intersect) {
             AlnMgrMakeMultByIntersectOnMaster(pInfo->pBeginIndexed, TRUE);
-        else AlnMgrIndexSeqAlign(pInfo->pBeginIndexed);
+        }
+        else {
+            AlnMgrIndexSeqAlign(pInfo->pBeginIndexed);
+        }
         pInfo->BeginIndexed = TRUE;
     }
     return pInfo->pBeginIndexed;

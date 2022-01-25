@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.31  2000/05/24 21:13:49  ostell
+* added SeqMgrHoldIndexing() support
+*
 * Revision 6.30  2000/01/07 22:58:04  kans
 * added dnaStop field to map sig_peptide, etc., onto DNA coordinates to choose proper flatfile segment for display
 *
@@ -259,6 +262,7 @@ typedef struct seqmng {        /* functions for sequence data management */
 	SeqIdIndexElementPtr PNTR BioseqIndex;  /* pointers to index elements */
 	SeqIdIndexBlockPtr BioseqIndexData;    /* what BioseqIndex points to */
 	Boolean is_write_locked;
+	Int4 hold_indexing;      /* set by SeqMgrHoldIndexing */
 } SeqMgr, PNTR SeqMgrPtr;
 
 /**** All replaced in Object Manager ************/
@@ -282,6 +286,18 @@ NLM_EXTERN Boolean LIBCALL SeqMgrAdd PROTO((Uint2 type, Pointer data));
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqMgrDelete PROTO((Uint2 type, Pointer data));
+
+/*****************************************************************************
+*
+*   SeqMgrHoldIndexing(Boolean hold)
+*       stops sequence indexing to allow bulk loading if hold = TRUE
+*       starts it when hold = FALSE;
+*       uses a counter so you must call it the same number of times
+*        with TRUE as with FALSE
+*       when the counter decrements to 0, it will index what it has.
+*
+*****************************************************************************/
+NLM_EXTERN void LIBCALL SeqMgrHoldIndexing PROTO((Boolean hold));
 
 /*****************************************************************************
 *

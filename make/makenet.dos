@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.56 2000/04/13 18:18:44 vakatov Exp $
+# $Id: makenet.dos,v 6.57 2000/04/27 18:31:27 vakatov Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -155,8 +155,8 @@ copy :
 !ifdef OPENGL
 	copy nentrez.rc nentrez_ogl.rc
 	copy sequin.rc sequin_ogl.rc
-	copy cn3d.rc cn3d_v3d.rc
 !endif
+	copy cn3d.rc cn3d_v3d.rc
 !endif
 ##########################################################
 

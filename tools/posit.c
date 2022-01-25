@@ -30,10 +30,13 @@ Author: Alejandro Schaffer
 
 Contents: utilities for position-based BLAST.
 
-$Revision: 6.39 $ 
+$Revision: 6.40 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.40  2000/05/01 12:48:33  madden
+ * changed rules for gaps in processing alignments with -B
+ *
  * Revision 6.39  2000/03/02 21:47:07  shavirin
  * Added missing variable for POSIT_DEBUG case
  *
@@ -2271,6 +2274,7 @@ static void posProcessAlignment(posSearchItems *posSearch, compactSearchItems *c
   Int4 *queryDesc; /*position correspondence between alignment and query*/
   Int4 seqIndex; /*counter for sequences*/
   posDesc ** alignArray;
+  Int4 queryLength; /*length of query sequence*/
 
   alignArray = posReadAlignment(compactSearch, fileName, numSeqs,  numBlocks, alignLength, numCols, error_return);
   queryDesc = (Int4 *) MemNew(alignLength * sizeof(Int4));
@@ -2302,6 +2306,7 @@ static void posProcessAlignment(posSearchItems *posSearch, compactSearchItems *c
     }
     alignPos++;
   }
+  queryLength = queryPos;
   for(seqIndex = 1; seqIndex < numSeqs; seqIndex++) {
     for(linePos = 0; linePos < alignLength; linePos++) {
       if (queryDesc[linePos] != GAP_HERE) {
@@ -2317,6 +2322,19 @@ static void posProcessAlignment(posSearchItems *posSearch, compactSearchItems *c
 	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].rightExtent = compactSearch->qlength;
 	}
       }
+    }
+  }
+  /*make terminal gaps unused*/
+  for(seqIndex = 1; seqIndex < numSeqs; seqIndex++) {
+    linePos = 0;
+    while((linePos < queryLength) && (posSearch->posDescMatrix[seqIndex][linePos].letter == GAP_CHAR)) {
+      posSearch->posDescMatrix[seqIndex][linePos].used = FALSE;
+      linePos++;
+    }
+    linePos = queryLength - 1;
+    while((linePos >= 0) && (posSearch->posDescMatrix[seqIndex][linePos].letter == GAP_CHAR)) {
+      posSearch->posDescMatrix[seqIndex][linePos].used = FALSE;
+      linePos--;
     }
   }
   BlastConstructErrorMessage("posProcessAlignment", "Alignment recovered successfully\n", 1, error_return);

@@ -145,6 +145,10 @@ SOURCE=..\api\edutil.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\ent2api.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\ffprint.c
 # End Source File
 # Begin Source File
@@ -590,6 +594,10 @@ SOURCE=..\asnstat\echo_asn.h
 # Begin Source File
 
 SOURCE=..\api\edutil.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\access\ent2api.h
 # End Source File
 # Begin Source File
 

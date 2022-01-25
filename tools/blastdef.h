@@ -31,8 +31,17 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.87 $ 
+/* $Revision: 6.90 $ 
 * $Log: blastdef.h,v $
+* Revision 6.90  2000/05/26 20:04:57  madden
+* Raise version and date
+*
+* Revision 6.89  2000/05/12 19:40:59  dondosha
+* Added qid_array element to BlastSearchBlk
+*
+* Revision 6.88  2000/05/01 19:04:31  shavirin
+* Changed parameter level in BlastErrorMsg structure from Uint1 to Uint2.
+*
 * Revision 6.87  2000/04/21 20:48:05  madden
 * Change version and date
 *
@@ -667,8 +676,8 @@ extern "C" {
 #include <mbalign.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.12"
-#define BLAST_RELEASE_DATE "Apr-21-2000"
+#define BLAST_ENGINE_VERSION "2.0.13"
+#define BLAST_RELEASE_DATE "May-26-2000"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -1227,7 +1236,7 @@ typedef struct _blast_hit_range {
 */
 
 typedef struct _blast_error_msg {
-    Uint1 level;/* corresponds to levels of ErrPostEx [none(0), info(1), warn(2), error(3) and fatal(4)] */
+    Uint2 level;/* corresponds to levels of ErrPostEx [none(0), info(1), warn(2), error(3) and fatal(4)] */
     CharPtr msg;
 } BlastErrorMsg, *BlastErrorMsgPtr;
 
@@ -1600,6 +1609,7 @@ a field is allocated, then it's bit is non-zero.
     int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
    GreedyAlignMemPtr abmp;
    Int4 PNTR query_context_offsets;
+   SeqIdPtr PNTR qid_array;
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
     
 

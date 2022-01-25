@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnio.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnlext.h,v $
+* Revision 6.1  2000/05/12 20:44:00  ostell
+* make changes to collect comments from spec and print in DTD
+*
 * Revision 6.0  1997/08/25 18:10:11  madden
 * Revision changed to 6.0
 *
@@ -118,6 +121,7 @@
 #define IDENT_TOKEN		456		/* IDENTIFIER (goes with OBJECT) */
 #define REVISION_TOKEN  457     /* $Revision   (NCBI only) */
 #define ISMODULE_TOKEN 458 /* signal from PrintModule to AsnPrintIndent */
+#define COMMENT_TOKEN 459  /* for comment on same line as an element */
 
 /*****************************************************************************
 *
@@ -128,8 +132,10 @@
 NLM_EXTERN AsnModulePtr AsnLexTReadModule PROTO((AsnIoPtr aip));
 NLM_EXTERN Int2 AsnLexTReadTypeAssign PROTO((AsnIoPtr aip, AsnModulePtr amp));
 NLM_EXTERN Int2 AsnLexTReadType PROTO((AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp));
-NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList PROTO((AsnIoPtr aip, AsnModulePtr amp));
-NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList PROTO((AsnIoPtr aip, AsnModulePtr amp));
+NLM_EXTERN AsnTypePtr AsnLexTReadElementTypeList PROTO((AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr
+parent));
+NLM_EXTERN AsnTypePtr AsnLexTReadAlternativeTypeList PROTO((AsnIoPtr aip, AsnModulePtr amp,
+AsnTypePtr parent));
 NLM_EXTERN AsnModulePtr AsnLexTStartModule PROTO((AsnIoPtr aip));
 NLM_EXTERN Int2 AsnLexTMatchToken PROTO((AsnIoPtr aip));
 NLM_EXTERN Int2 AsnLexTWord PROTO((AsnIoPtr aip));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.86 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -305,7 +305,9 @@ static void FormatFastaDoc (FastaPagePtr fpp)
           StringCat (str, "No gene name detected\n");
         }
         if (LookForSearchString (title, "[prot=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Prot", tmp);
+          AddReportLine (str, "Protein", tmp);
+        } else if (LookForSearchString (title, "[protein=", tmp, FastaFormatBufLen - 1)) {
+          AddReportLine (str, "Protein", tmp);
         } else {
           StringCat (str, "No protein name detected\n");
         }
@@ -319,6 +321,9 @@ static void FormatFastaDoc (FastaPagePtr fpp)
       }
       if (title != NULL && fpp->is_na && (! fpp->is_mrna)) {
         if (LookForSearchString (title, "[org=", tmp, FastaFormatBufLen - 1)) {
+          AddReportLine (str, "Organism", tmp);
+        }
+        if (LookForSearchString (title, "[organism=", tmp, FastaFormatBufLen - 1)) {
           AddReportLine (str, "Organism", tmp);
         }
         if (LookForSearchString (title, "[lineage=", tmp, FastaFormatBufLen - 1)) {
@@ -400,6 +405,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         if (! fpp->is_na) {
           ExciseString (title, "[gene=", "]");
           ExciseString (title, "[prot=", "]");
+          ExciseString (title, "[protein=", "]");
           ExciseString (title, "[orf", "]");
           ExciseString (title, "[comment", "]");
         } else if (fpp->is_mrna) {
@@ -409,6 +415,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
           ExciseString (title, "[comment=", "]");
         } else {
           ExciseString (title, "[org=", "]");
+          ExciseString (title, "[organism=", "]");
           ExciseString (title, "[lineage=", "]");
           for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
             MakeSearchStringFromAlist (lookfor, ap->name);
@@ -845,6 +852,9 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
             if (LookForSearchString (title, "[org=", tmp, PhylipFormatBufLen - 1)) {
               AddReportLine (str, "Organism", tmp);
             }
+            if (LookForSearchString (title, "[organism=", tmp, PhylipFormatBufLen - 1)) {
+              AddReportLine (str, "Organism", tmp);
+            }
             if (LookForSearchString (title, "[lineage=", tmp, PhylipFormatBufLen - 1)) {
               AddReportLine (str, "Lineage", tmp);
             }
@@ -902,6 +912,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
           title = StringSaveNoNull (ttl);
           if (title != NULL) {
             ExciseString (title, "[org=", "]");
+            ExciseString (title, "[organism=", "]");
             ExciseString (title, "[lineage=", "]");
             for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
               MakeSearchStringFromAlist (lookfor, ap->name);
@@ -1112,7 +1123,8 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
                   ttl = SeqEntryGetTitle (tmp);
                   if (ttl != NULL) {
                     if (bssp->_class == BioseqseqSet_class_phy_set) {
-                      if (StringISearch (ttl, "[org=") != NULL) {
+                      if (StringISearch (ttl, "[org=") != NULL ||
+                          StringISearch (ttl, "[organism=") != NULL) {
                         seqtitles++;
                       }
                     } else if (StringISearch (ttl, "[") != NULL) {
@@ -1614,7 +1626,8 @@ static Boolean NotEnoughOrgTitles (SequencesFormPtr sqfp, SeqEntryPtr sep)
     SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
     if (title != NULL) {
       if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
-        if (StringISearch (title, "[org=") != NULL) {
+        if (StringISearch (title, "[org=") != NULL ||
+            StringISearch (title, "[organism=") != NULL) {
           seqtitles++;
         }
       } else if (StringISearch (title, "[") != NULL) {
@@ -2106,9 +2119,16 @@ static Boolean HasMinimalInformation (BioseqPtr pbsp)
   }
   if (StringHasNoText (str)) return FALSE;
   ptr = StringISearch (title, "[prot=");
-  if (ptr == NULL) return FALSE;
-  StringNCpy_0 (str, ptr + 6, sizeof (str));
-  ptr = StringChr (str, ']');
+  if (ptr != NULL) {
+    StringNCpy_0 (str, ptr + 6, sizeof (str));
+    ptr = StringChr (str, ']');
+  } else {
+    ptr = StringISearch (title, "[protein=");
+    if (ptr != NULL) {
+      StringNCpy_0 (str, ptr + 9, sizeof (str));
+      ptr = StringChr (str, ']');
+    }
+  }
   if (ptr == NULL) return FALSE;
   *ptr = '\0';
   ptr = StringChr (str, ';');
@@ -2296,16 +2316,22 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
+        } else {
+          ptr = StringISearch (title, "[protein=");
+          if (ptr != NULL) {
+            StringNCpy_0 (str, ptr + 9, sizeof (str));
+            ptr = StringChr (str, ']');
+          }
+        }
+        if (ptr != NULL) {
+          *ptr = '\0';
+          ptr = StringChr (str, ';');
           if (ptr != NULL) {
             *ptr = '\0';
-            ptr = StringChr (str, ';');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              ptr++;
-            }
-            SetTitle (fpfp->protName, str);
-            SetTitle (fpfp->protDesc, ptr);
+            ptr++;
           }
+          SetTitle (fpfp->protName, str);
+          SetTitle (fpfp->protDesc, ptr);
         }
         ptr = StringISearch (title, "[comment=");
         if (ptr != NULL) {
@@ -2324,6 +2350,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
         }
         ExciseString (title, "[gene=", "]");
         ExciseString (title, "[prot=", "]");
+        ExciseString (title, "[protein=", "]");
         ExciseString (title, "[orf", "]");
         ExciseString (title, "[comment", "]");
         TrimSpacesAroundString (title);
@@ -2561,6 +2588,13 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
       ptr = StringISearch (title, "[org=");
       if (ptr != NULL) {
         StringNCpy_0 (str, ptr + 5, PROC_NUC_STR_SIZE);
+      } else {
+        ptr = StringISearch (title, "[organism=");
+        if (ptr != NULL) {
+          StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
+        }
+      }
+      if (ptr != NULL) {
         ptr = StringChr (str, ']');
         if (ptr != NULL) {
           *ptr = '\0';
@@ -2749,6 +2783,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
         */
       }
       ExciseString (title, "[org=", "]");
+      ExciseString (title, "[organism=", "]");
       ExciseString (title, "[lineage=", "]");
       ExciseString (title, "[molecule=", "]");
       ExciseString (title, "[moltype=", "]");
@@ -3348,6 +3383,12 @@ static SeqEntryPtr FindRnaByRefOnRna (SeqEntryPtr sep, SeqEntryPtr psep)
     FindBioseqWithString (sep, Seq_mol_rna, "[prot=", tmp, &msep);
     if (msep != NULL) {
       ExciseStringFromBioseq (msep, "[prot=", "]");
+      return msep;
+    }
+  } else if (LookForStringInBioseq (psep, Seq_mol_aa, "[protein=", tmp, sizeof (tmp) - 1)) {
+    FindBioseqWithString (sep, Seq_mol_rna, "[protein=", tmp, &msep);
+    if (msep != NULL) {
+      ExciseStringFromBioseq (msep, "[protein=", "]");
       return msep;
     }
   }
@@ -3978,6 +4019,16 @@ static ValNodePtr FastaTestSequencesForm (ForM f)
                 *ptr = '\0';
                 head = ValNodeFreeData (head);
               }
+            } else {
+              ptr = StringISearch (title, "[organism=");
+              if (ptr != NULL) {
+                StringNCpy_0 (str, ptr + 10, sizeof (str));
+                ptr = StringChr (str, ']');
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                  head = ValNodeFreeData (head);
+                }
+              }
             }
           }
         }
@@ -4112,7 +4163,8 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
             ttl = SeqEntryGetTitle (tmp);
             if (ttl != NULL) {
               if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
-                if (StringISearch (ttl, "[org=") != NULL) {
+                if (StringISearch (ttl, "[org=") != NULL ||
+                    StringISearch (ttl, "[organism=") != NULL) {
                   seqtitles++;
                 }
               } else if (StringISearch (ttl, "[") != NULL) {
@@ -4281,6 +4333,16 @@ static ValNodePtr PhylipTestSequencesForm (ForM f)
               if (ptr != NULL) {
                 *ptr = '\0';
                 head = ValNodeFreeData (head);
+              }
+            } else {
+              ptr = StringISearch (title, "[organism=");
+              if (ptr != NULL) {
+                StringNCpy_0 (str, ptr + 10, sizeof (str));
+                ptr = StringChr (str, ']');
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                  head = ValNodeFreeData (head);
+                }
               }
             }
           }

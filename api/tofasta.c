@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.59 $
+* $Revision: 6.66 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.66  2000/05/30 19:44:44  ostell
+* added FastaSeqLineEx() with another parameter, do_virtual
+*
+* Revision 6.65  2000/05/25 16:53:31  kans
+* FastaToSeqEntryInternalExEx and MakeTrustedID called by FastaToSeqEntryForDb to delay seqid indexing
+*
+* Revision 6.64  2000/05/23 21:11:13  madden
+* use fgets in place of getc
+*
+* Revision 6.63  2000/05/19 15:18:04  kans
+* parsing of >? now skips white space before scanning size, so can handle >?# and >? #
+*
+* Revision 6.62  2000/05/16 15:12:50  kans
+* moved SeqMgrAddToBioseqIndex call after assignment of bsp->id
+*
+* Revision 6.61  2000/04/28 20:10:44  kans
+* if organism has virus in name, and /virion or /proviral, do not add organelle to NC_ defline
+*
+* Revision 6.60  2000/04/27 15:30:26  kans
+* changed proviral to provirus if NC_ and not plasmid
+*
 * Revision 6.59  2000/04/26 21:27:30  kans
 * more changes to genome defline, cleanup of its code
 *
@@ -1053,7 +1074,7 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
             spp = FastaSeqPort(bsp, is_na, mfp->do_virtual, code);
             if (spp == NULL) return FALSE;
             
-            while (FastaSeqLine(spp, mfp->buf, mfp->seqlen, is_na))
+            while (FastaSeqLineEx(spp, mfp->buf, mfp->seqlen, is_na, mfp->do_virtual))
                 (*(mfp->myfunc))(bsp, FASTA_SEQLINE, mfp->buf, StringLen(mfp->buf),
                                  mfp->mydata);
             
@@ -1137,6 +1158,21 @@ static Int4 FastaReadSequenceChunk
  CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
  );
 
+static SeqEntryPtr FastaToSeqEntryInternalExEx
+(
+ VoidPtr input,           /* input pointer (file or memory) */
+ Int4 type,               /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char,  /* returned pointer to next FASTA sequence */
+ Boolean is_na,           /* type of sequence */
+ CharPtr PNTR errormsg,   /* error messge for debugging */
+ Boolean parseSeqId,      /* Parse SeqID from def line */
+ CharPtr special_symbol,  /* Returns special symbol if no SeqEntry */
+ CharPtr prefix,          /* prefix for localID if not parsable */
+ Int2Ptr ctrptr,          /* starting point for constructing unique ID */
+ SeqLocPtr PNTR mask_ptr, /* Pointer to a SeqLoc to Fill with Masking information */
+ Boolean trustID
+ );
+
 /********* FINCTIONS *********/
 
 /*****************************************************************************
@@ -1194,9 +1230,9 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryForDb
     SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information from lowercased letters */
   )
 {
-  return FastaToSeqEntryInternalEx ((void *) fp, FASTA_FILE_IO,
+  return FastaToSeqEntryInternalExEx ((void *) fp, FASTA_FILE_IO,
                                  NULL, is_na, errormsg, parseSeqId,
-                                 NULL, prefix, ctrptr, mask_ptr);	 
+                                 NULL, prefix, ctrptr, mask_ptr, TRUE);	 
 }
 
 /*****************************************************************************
@@ -1247,26 +1283,28 @@ static Int4 FastaReadSequenceChunk
     /* Type of input depends upon calling function */
     
     if(type == FASTA_FILE_IO) {
-        fd = (FILE *) input;
+	fd = (FILE *) input;
+	if ((ch = getc(fd)) == EOF)
+		return 0;
+        if(ch == '>' || ch == '&' || ch == '{' || ch == '}' || ch == '[' || ch == ']') 
+	{
+		ungetc(ch, fd);
+                if (special_symbol != NULL) {
+                        *special_symbol = (Char) ch;
+                }
+		return 0;
+	}
+	sequence[0] = (Uint1) ch;
+	fgets((CharPtr) sequence+1, length-1, fd);
     } else {   /* type == FASTA_MEM_IO */
         if((firstchar = (const Char PNTR) input) == NULL)
             return 0;
     }
     
     if(type == FASTA_FILE_IO) {
-        for(i=0; i < length && (ch = getc(fd)) != EOF; i++) {      
-            if((sequence[i] = (Char) ch) == '>' || (Char) ch == '&' || (Char) ch == '{' ||
-                (Char) ch == '}' || (Char) ch == '[' || (Char) ch == ']') {
-                if((i == 0) || 
-                   (i > 0 && (sequence[i-1] == '\n' || 
-                              sequence[i-1] == '\r'))) {
-                    ungetc(ch, fd);
-                    if (special_symbol != NULL) {
-                        *special_symbol = (Char) ch;
-                    }
-                    break;
-                }
-            }
+        for(i=0; i < length; i++) {      
+	    if (sequence[i] == '\n' || sequence[i] == '\r')
+		break;
         }
     } else { /* type = FASTA_MEM_IO */
         for(i =0; i < length && (ch = *firstchar) != NULLB; firstchar++, i++) {
@@ -1614,18 +1652,48 @@ static Boolean FastaReadSequenceInternalEx
     return TRUE;
 }
 
-NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
+static SeqIdPtr MakeTrustedID (CharPtr prefix, Int2Ptr ctrptr)
+
+{
+  Char buf[40];
+  ValNodePtr newid;
+  ObjectIdPtr oid;
+  Int2 start = 1;
+
+	if (ctrptr != NULL) {
+		start = *ctrptr;
+	}
+	if (start < 1) {
+		start = 1;
+	}
+
+	sprintf (buf, "%d", (int) start);
+
+	newid = ValNodeNew (NULL);
+	oid = ObjectIdNew ();
+	newid->choice = SEQID_LOCAL;
+	newid->data.ptrvalue = oid;
+
+	oid->str = StringSave (buf);
+	if (ctrptr != NULL) {
+		*ctrptr = start + 1;
+	}
+	return newid;
+}
+
+static SeqEntryPtr FastaToSeqEntryInternalExEx
 (
- VoidPtr input,          /* input pointer (file or memory) */
- Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
- CharPtr PNTR next_char, /* returned pointer to next FASTA sequence */
- Boolean is_na,          /* type of sequence */
- CharPtr PNTR errormsg,  /* error messge for debugging */
- Boolean parseSeqId,     /* Parse SeqID from def line */
- CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
- CharPtr prefix,         /* prefix for localID if not parsable */
- Int2Ptr ctrptr,         /* starting point for constructing unique ID */
- SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information */
+ VoidPtr input,           /* input pointer (file or memory) */
+ Int4 type,               /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char,  /* returned pointer to next FASTA sequence */
+ Boolean is_na,           /* type of sequence */
+ CharPtr PNTR errormsg,   /* error messge for debugging */
+ Boolean parseSeqId,      /* Parse SeqID from def line */
+ CharPtr special_symbol,  /* Returns special symbol if no SeqEntry */
+ CharPtr prefix,          /* prefix for localID if not parsable */
+ Int2Ptr ctrptr,          /* starting point for constructing unique ID */
+ SeqLocPtr PNTR mask_ptr, /* Pointer to a SeqLoc to Fill with Masking information */
+ Boolean trustID
  )
 {
     SeqEntryPtr    sep = NULL;
@@ -1705,8 +1773,6 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
     }
     bsp->repr = Seq_repr_raw;
 
-    SeqMgrAddToBioseqIndex (bsp);
-    
     /*  ------------- */
     
     /* Now reading defline into memory */
@@ -1786,8 +1852,13 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
                 bsp->id = MakeSeqID (ptr);
             }
             
-            if (bsp->id == NULL) 
-                bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+            if (bsp->id == NULL) {
+            	if (trustID) {
+                  bsp->id = MakeTrustedID (prefix, ctrptr);
+            	} else {
+                  bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+            	}
+            }
             if (chptr != NULL) {
                 if((vnp = SeqDescrNew(NULL)) != NULL) {
                     vnp->choice = Seq_descr_title;
@@ -1802,7 +1873,10 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
             bsp->id = MakeSeqID ("lcl|gap");
             bsp->repr = Seq_repr_virtual;
             
-            if(sscanf(defline + 2, "%ld", &len) == 1 && len > 0) {
+            ptr = defline + 1;
+            while (IS_WHITESP(*ptr))
+                ptr++;
+            if(*ptr != '\0' && sscanf(ptr, "%ld", &len) == 1 && len > 0) {
                 bsp->length =  (Int4) len;
             } else {
                 bsp->length = -1;
@@ -1813,12 +1887,18 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
         
     } else {  /* if ch == '>' EMPTY DEFLINE */ 
         /* Defline is upsent - creating default defline */
-        bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+        if (trustID) {
+          bsp->id = MakeTrustedID (prefix, ctrptr);
+        } else {
+          bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+        }
 
         if(type == FASTA_FILE_IO)
             ungetc(ch, fd);
     }
         
+    SeqMgrAddToBioseqIndex (bsp);
+    
     /* OK, now processing sequence */
     
     if(!FastaReadSequenceInternalEx(input, type, next_char, is_na,
@@ -1832,6 +1912,26 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
     
     BioseqPack(bsp);     /* Trying to pack Bioseq more */
     return sep;
+}
+
+NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternalEx
+(
+ VoidPtr input,          /* input pointer (file or memory) */
+ Int4 type,              /* type of inquiry FASTA_MEM_IO or FASTA_FILE_IO */
+ CharPtr PNTR next_char, /* returned pointer to next FASTA sequence */
+ Boolean is_na,          /* type of sequence */
+ CharPtr PNTR errormsg,  /* error messge for debugging */
+ Boolean parseSeqId,     /* Parse SeqID from def line */
+ CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+ CharPtr prefix,         /* prefix for localID if not parsable */
+ Int2Ptr ctrptr,         /* starting point for constructing unique ID */
+ SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information */
+ )
+
+{
+  return FastaToSeqEntryInternalExEx (input, type, next_char, is_na, errormsg,
+                                      parseSeqId, special_symbol, prefix, ctrptr,
+                                      mask_ptr, FALSE);
 }
 
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
@@ -2601,7 +2701,7 @@ static CharPtr organelleByItself [] = {
   NULL,
   NULL,
   "cyanelle",
-  "proviral",
+  "provirus",
   "virion",
   "nucleomorph",
   "apicoplast",
@@ -2705,6 +2805,11 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 			orgnl = organelleWithPlasmid [genome];
 		} else {
 			orgnl = organelleByItself [genome];
+		}
+		if (StringISearch (name, "virus") != NULL) {
+			if (genome == 13 || genome == 14) {
+				orgnl = NULL;
+			}
 		}
 	}
 
@@ -3153,6 +3258,12 @@ NLM_EXTERN SeqPortPtr FastaSeqPort(BioseqPtr bsp, Boolean is_na, Boolean do_virt
 *****************************************************************************/
 NLM_EXTERN Boolean FastaSeqLine(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boolean is_na)
 {
+	return FastaSeqLineEx(spp, buf, linelen, is_na, FALSE);
+}
+
+NLM_EXTERN Boolean FastaSeqLineEx(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boolean is_na, Boolean
+do_virtual)
+{
 	Int2 ctr = 0;
 	Uint1 residue;
 	Int4 pos;
@@ -3189,7 +3300,7 @@ NLM_EXTERN Boolean FastaSeqLine(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boole
                                                    SeqPortSeek(spp, -1, SEEK_CUR);
 						return TRUE;
 					}
-					else			   /* first one */
+					else if (! do_virtual)	   /* first one */
 					{
 						buf[ctr] = '-';
 						buf[ctr + 1] = '\0';

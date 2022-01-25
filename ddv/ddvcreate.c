@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.c,v 1.45 2000/04/21 23:00:50 hurwitz Exp $
+/*  $Id: ddvcreate.c,v 1.50 2000/05/10 16:17:00 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.45 $
+* $Revision: 1.50 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.c,v $
+* Revision 1.50  2000/05/10 16:17:00  hurwitz
+* can show tails for just 1 aligned block
+*
+* Revision 1.49  2000/05/08 13:16:00  wheelan
+* replaced segment-based counting with block-based counting
+*
+* Revision 1.48  2000/05/04 22:43:38  hurwitz
+* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
+*
+* Revision 1.47  2000/05/03 19:34:38  wheelan
+* added fix for NULL alignments
+*
+* Revision 1.46  2000/05/03 14:51:02  thiessen
+* revert to ~ gap char for Cn3D
+*
 * Revision 1.45  2000/04/21 23:00:50  hurwitz
 * can launch DDE from DDV
 *
@@ -623,13 +638,14 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopLis
    if (sap->saip->indextype == INDEX_PARENT)
    {
       amaip = (AMAlignIndexPtr)sap->saip;
-      if (sap->type == SAT_PARTIAL || (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_SEGMENTED_MASTERSLAVE))
+      if (sap->type == SAT_PARTIAL || 
+         (sap->type == SAT_MASTERSLAVE && (amaip->mstype == AM_SEGMENTED_MASTERSLAVE || 
+                                           amaip->mstype == AM_NULL ||
+                                           amaip->mstype == AM_MASTERSLAVE)))
       {
-         if (!DDV_CreateDisplay_DiscAlign(sap,mpplp,LineSize,ddop))
-            return FALSE;
-         else
-            return TRUE;
-      } else if (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_MASTERSLAVE)
+         return(DDV_CreateDisplay_DiscAlign(sap,mpplp,LineSize,ddop));
+      } 
+      else if (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_MASTERSLAVE)
       {
          mpplp->sap = sap;
          if (start==(Int4)-1 && stop==(Int4)-1)
@@ -995,7 +1011,7 @@ ValNodePtr vnp_head;
 
 /*******************************************************************************
 
-  Function : DDV_CreateDisplay_DiscAlign()
+  Function : DDV_BuildDisp_BlockEditor()
   
   Purpose : create a display for a Disc. SeqAlign
 
@@ -1525,7 +1541,7 @@ DescriDispPtr   ddp;
 	if (!AlnMgrIsSAPDiscAli(sap)) return(NULL);
 	
 	/*get the number of block(s)*/
-	nBlock=AlnMgrGetNumSegments(sap);
+	nBlock=AlnMgrGetNumAlnBlocks(sap);
 	if (block_num<0 || block_num>nBlock-1){
 		return(NULL);
 	}
@@ -2386,7 +2402,7 @@ NLM_EXTERN void DDV_InitCn3DSAPdispStyles(DDV_Disp_OptPtr ddop)
 	ddop->DispDiscStyle=MSA_TXT_STYLE_2;
 	ddop->SpacerSize=0;
     ddop->DiscJustification=DISP_JUST_SPLIT;
-	ddop->UAGapStyle=MSA_TXT_STYLE_GAP;
+    ddop->UAGapStyle=MSA_TXT_STYLE_UAGAP; /* use different unaligned gap chars ('~') */
 	ddop->AGapStyle=MSA_TXT_STYLE_GAP;
 
 	/*ruler style*/
@@ -3088,7 +3104,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 Bl
   }
 
   NumRows = AlnMgrGetNumRows(sap);
-  NumBlocks = AlnMgrGetNumSegments(sap);
+  NumBlocks = AlnMgrGetNumAlnBlocks(sap);
   if ((BlockIndex < 0) || (BlockIndex >= NumBlocks)) {
     return(NULL);
   }
@@ -3123,7 +3139,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 Bl
   ValNodeAddPointer(&head, 0, ddp1);
 
   /* make node for aligned block and add it to linked list */
-  AlnMgrGetNthSegmentRange(sap, BlockIndex+1, &start, &stop);
+  AlnMgrGetNthBlockRange(sap, BlockIndex+1, &start, &stop);
   ddp2 = MemNew(sizeof(DescriDisp));
   ddp2->from = start;
   ddp2->to = stop;
@@ -3222,7 +3238,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int
   }
 
   NumRows = AlnMgrGetNumRows(sap);
-  NumBlocks = AlnMgrGetNumSegments(sap);
+  NumBlocks = AlnMgrGetNumAlnBlocks(sap);
   if ((UAIndex < 0) || (UAIndex > NumBlocks)) {
     return(NULL);
   }
@@ -3272,3 +3288,30 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int
     return(NULL);
   }
 }
+
+
+NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplay(SeqAlignPtr sap, Int4 BlockIndex,
+                                                Boolean IsUnAligned, Int4* pNumBlocks) {
+/*----------------------------------------------------------------------------
+*  build display, ruler, entitiesTbl for either an
+*  unaligned region or an aligned block
+*---------------------------------------------------------------------------*/
+  MsaParaGPopListPtr  mpplp;
+ 
+  if (IsUnAligned) {
+    mpplp = DDE_CreateDisplayForUnAligned(sap, BlockIndex);
+    *pNumBlocks = 0;
+  }
+  else {
+    mpplp = DDE_CreateDisplayForBlock(sap, BlockIndex);
+    *pNumBlocks = 1;
+  }
+  ASSERT(mpplp != NULL);
+
+  mpplp->entitiesTbl = DDV_BuildBspEntitiesTbl(mpplp->TableHead, mpplp->nBsp);
+  ASSERT(mpplp->entitiesTbl != NULL);
+
+  DDE_ReMakeRuler(mpplp);
+  return(mpplp);
+}
+

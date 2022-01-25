@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,18 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.35  2000/05/31 14:06:11  dondosha
+* Added warning messages when 12mers are masked in megablast
+*
+* Revision 6.34  2000/05/22 18:06:54  dondosha
+* Fixed bug in masking at hash for megablast
+*
+* Revision 6.33  2000/05/17 17:38:26  dondosha
+* Removed several debugging statements, introduced by previous revision
+*
+* Revision 6.32  2000/05/17 17:15:56  dondosha
+* In megablast, clean the hash table from patterns with too many positions in query
+*
 * Revision 6.31  2000/04/10 17:27:15  madden
 * Deallocate old lookup table memory before search
 *
@@ -803,57 +815,81 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    register Int4 ecode;
    register Int4 mask;
    Uint1 val, nuc_mask = 0xfc;
+   MbLookupTablePtr mb_lt;
+   Int4 masked_word_count = 0;
+   
+   if (lookup == NULL)
+      return FALSE;
 
-    if (lookup == NULL)
-        return FALSE;
+   if(lookup->position_aux) 
+      lookup->position_aux = MemFree(lookup->position_aux);
     
-    if(lookup->position_aux) 
-        lookup->position_aux = MemFree(lookup->position_aux);
-    
-    lookup->mb_lt = (MbLookupTablePtr) MemNew(sizeof(MbLookupTable));
+   mb_lt = (MbLookupTablePtr) MemNew(sizeof(MbLookupTable));
     
    if (lookup->wordsize<3) 
-      lookup->mb_lt->width = 2;
+      mb_lt->width = 2;
    else
-      lookup->mb_lt->width = 3;
-   lookup->mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
-   lookup->mb_lt->max_positions = 0; /* Do we want to use this at all? */
-   lookup->mb_lt->hashsize = (1<<(8*lookup->mb_lt->width)); 
-   mask = lookup->mb_lt->mask = (1 << (8*lookup->mb_lt->width - 2)) - 1;
+      mb_lt->width = 3;
+   mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
+   /* KLUDGE!!! - need to modify */
+   mb_lt->max_positions = search->pbp->block_width; 
+   mb_lt->hashsize = (1<<(8*mb_lt->width)); 
+   mask = mb_lt->mask = (1 << (8*mb_lt->width - 2)) - 1;
 
-   lookup->mb_lt->hashtable = (Int4Ptr)
-      MemNew(lookup->mb_lt->hashsize*sizeof(Int4));
+   mb_lt->hashtable = (Int4Ptr)
+      MemNew(mb_lt->hashsize*sizeof(Int4));
 
-   lookup->mb_lt->next_pos = (Int4Ptr) MemNew(query_length*sizeof(Int4));
+   mb_lt->next_pos = (Int4Ptr) MemNew(query_length*sizeof(Int4));
 
    seq = search->context[search->first_context].query->sequence_start;
    pos = search->context[search->first_context].query->sequence;
    ecode = 0;
-   for (index = 1; index < lookup->mb_lt->width*READDB_COMPRESSION_RATIO; ++index)
+   for (index = 1; index < mb_lt->width*READDB_COMPRESSION_RATIO; ++index) {
       ecode = (ecode << 2) + (Int4) (*++seq);
+      if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
+	 *seq &= 0x03;
+   }
 
-    while (index <= query_length) {
-       val = *++seq;
-       if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
-	  ecode = 0;
-	  pos = seq + READDB_COMPRESSION_RATIO*lookup->mb_lt->width;
-	  if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
-	     *seq &= 0x03;
-       } else {
-	  /* get next base */
-	  ecode = ((ecode & mask) << 2) + val;
-	  if (seq >= pos) {
-	     lookup->mb_lt->next_pos[index] = lookup->mb_lt->hashtable[ecode];
-	     lookup->mb_lt->hashtable[ecode] = index;
-	  }
-       }
-       index++;
-    }
-    lookup->mb_lt->mask = (1 << (lookup->mb_lt->width*8 - 8)) - 1;
-    lookup->mb_lt->estack = 
-       (MbStackPtr) MemNew(MBSTACK_SIZE*sizeof(MbStack));
-
-    return TRUE;
+   while (index <= query_length) {
+      val = *++seq;
+      if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
+	 ecode = 0;
+	 pos = seq + READDB_COMPRESSION_RATIO*mb_lt->width;
+	 if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
+	    *seq &= 0x03;
+      } else {
+	 /* get next base */
+	 ecode = ((ecode & mask) << 2) + val;
+	 if (seq >= pos) {
+	    mb_lt->next_pos[index] = mb_lt->hashtable[ecode];
+	    mb_lt->hashtable[ecode] = index;
+	 }
+      }
+      index++;
+   }
+   /* Now remove the hash entries that have too many positions */
+   if (mb_lt->max_positions>0) {
+      for (ecode=0; ecode<mb_lt->hashsize; ecode++) {
+	 Int4 pcount;
+	 for (index=mb_lt->hashtable[ecode], pcount=0; 
+	      index>0; index=mb_lt->next_pos[index], pcount++);
+	 if (pcount>mb_lt->max_positions) {
+	    mb_lt->hashtable[ecode] = 0;
+	    ErrPostEx(SEV_WARNING, 0, 0, "%lx - %d", ecode, pcount);
+	    masked_word_count++;
+	 }
+      }
+      if (masked_word_count)
+	 ErrPostEx(SEV_WARNING, 0, 0, "Masked %d %dmers", masked_word_count,
+		   4*mb_lt->width);
+	 
+   }
+   mb_lt->mask = (1 << (mb_lt->width*8 - 8)) - 1;
+   mb_lt->estack = 
+      (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
+   mb_lt->stack_size = MBSTACK_SIZE;
+   lookup->mb_lt = mb_lt;
+   return TRUE;
 }
 
 LookupTablePtr
@@ -881,7 +917,7 @@ LookupTablePtr MegaBlastLookupTableDup(LookupTablePtr lookup)
    new_lookup->mb_lt = 
       (MbLookupTablePtr) MemDup(lookup->mb_lt, sizeof(MbLookupTable));
    new_lookup->mb_lt->estack = 
-       (MbStackPtr) MemNew(MBSTACK_SIZE*sizeof(MbStack));
+       (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
 
    return new_lookup;
 }
