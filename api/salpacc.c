@@ -21,7 +21,7 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.c,v 6.23 1999/09/09 15:57:40 sicotte Exp $
+ * $Id: salpacc.c,v 6.26 1999/11/24 21:24:25 vakatov Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
@@ -147,7 +147,7 @@ NLM_EXTERN Boolean LIBCALL SeqAlignFindSeqId (SeqAlignPtr salphead, SeqIdPtr sip
   for (salp = salphead; salp!= NULL; salp=salp->next)
   {
      tmpsip = SeqIdPtrFromSeqAlign (salp);
-     if ((SeqIdOrderInList(sip, tmpsip)) > 0)
+     if ((SeqIdOrderInBioseqIdList(sip, tmpsip)) > 0)
      {
         return TRUE;
      }
@@ -262,7 +262,7 @@ NLM_EXTERN Int4 LIBCALL SeqAlignLengthForId (SeqAlignPtr salp, SeqIdPtr sip)
 
   if (salp==NULL)
      return 0;
-  index = SeqIdOrderInList(sip,SeqIdPtrFromSeqAlign(salp));
+  index = SeqIdOrderInBioseqIdList(sip,SeqIdPtrFromSeqAlign(salp));
   if (index==0)
      return 0;
   if (salp->segtype == 2) {
@@ -481,7 +481,7 @@ NLM_EXTERN Int4 LIBCALL SeqAlignStop (SeqAlignPtr salp, Int2 index)
         startp = ddp->starts;
         if (index > 0)
            startp += index;
-        val = *startp + ddp->len;
+        val = *startp + ddp->len - 1;
      }
   } 
   else if (salp->segtype == 2) 
@@ -1264,7 +1264,7 @@ NLM_EXTERN Uint4 LIBCALL SeqAlignCountSegs(SeqAlignPtr salp) {
 }
 
 
-extern void SeqAlignAddInSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap)
+NLM_EXTERN void SeqAlignAddInSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap)
 {
   BioseqSetPtr bssp;
   BioseqPtr    bsp;

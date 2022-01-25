@@ -31,8 +31,50 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.61 $ 
+/* $Revision: 6.73 $ 
 * $Log: blastdef.h,v $
+* Revision 6.73  2000/01/20 19:12:00  madden
+* Change BLAST version and date
+*
+* Revision 6.72  2000/01/13 18:10:43  madden
+* Fix problem with incorrect stat values for blastn and missing hits
+*
+* Revision 6.71  2000/01/11 17:02:48  shavirin
+* Added element theCacheSize into BLAST_OptionsBlk and BLAST_ParameterBlk.
+*
+* Revision 6.70  1999/12/31 14:23:19  egorov
+* Add support for using mixture of real and maks database with gi-list files:
+* 1. Change logic of creating rdfp list.
+* 2. BlastGetDbChunk gets real databases first, then masks.
+* 3. Propoper calculation of database sizes using alias files.
+* 4. Change to CommonIndex to support using of mask databases.
+* 5. Use correct gis in formated output (BlastGetAllowedGis()).
+* 6. Other small changes
+*
+* Revision 6.69  1999/12/21 20:04:15  egorov
+* gi_list now contains start position for corresponding database
+*
+* Revision 6.68  1999/11/30 18:23:08  shavirin
+* Added parameter max_num_patterns to the BLAST_OptionsBlkPtr structure
+*
+* Revision 6.67  1999/11/15 22:03:31  madden
+* added Boolean isFirstAlignment to SWResults
+*
+* Revision 6.66  1999/11/12 20:57:39  shavirin
+* Added parameter use_best_align into BLAST_ParameterBlkPtr
+*
+* Revision 6.65  1999/11/12 16:37:30  shavirin
+* Added new option use_best_align into Blast options.
+*
+* Revision 6.64  1999/10/26 20:45:19  madden
+* Add use_real_db_size option
+*
+* Revision 6.63  1999/10/05 17:42:54  shavirin
+* Removed global variables from blast.c
+*
+* Revision 6.62  1999/09/28 20:14:31  madden
+* Joerg changes to mimize cache misses
+*
 * Revision 6.61  1999/08/31 13:42:23  madden
 * Moved SWResults to blastdef.h from profiles.h
 *
@@ -582,8 +624,8 @@ extern "C" {
 #include <gapxdrop.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.10"
-#define BLAST_RELEASE_DATE "Aug-26-1999"
+#define BLAST_ENGINE_VERSION "2.0.11"
+#define BLAST_RELEASE_DATE "Jan-20-2000"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -758,6 +800,13 @@ typedef struct _blast_optionsblk {
 	Boolean		tweak_parameters, /* For impala related stuff. */
 			smith_waterman;
         CharPtr         phi_pattern;    /* Pattern for PHI-Blast search */
+	Boolean		use_real_db_size; /* Use real DB size.  meant for use if a list of gis' is submitted, 
+					but statistics should be based upon the real database. */
+        Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
+        Int4 max_num_patterns;     /* Maximum number of patterns to be used in PHI-Blast search */
+        Int4 theCacheSize; /* Size of cache to be used while building lookup
+                              table */
+	Boolean no_check_score;
 	} BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -834,10 +883,20 @@ typedef struct _blast_parameterblk {
 	Int4		first_db_seq,		/* 1st sequence in db to be compared. */
 			final_db_seq;		/* Final sequence to be compared. */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
+        Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
+         Int4 theCacheSize; /* Size of cache to be used while building lookup
+                               table */
+	Boolean no_check_score;
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
 
+/* Structure to keep track of the last hit and diag level. */
+
+typedef struct cfj_mod_struct{
+    Int4 last_hit;
+    Int4 diag_level;
+} CfjModStruct;
 /*
 	BLAST_ExtendWord contains information about which diagonals
 	have been extended over (i.e., which diagonals have been 
@@ -845,10 +904,10 @@ typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
 	context as every context is different.
 */
 typedef struct _blast_extend_word {
-		Int4Ptr	_buffer, /* The "real" buffer for diag_level, version,
+		Int4Ptr	_buffer; /* The "real" buffer for diag_level, version,
 				and last_hit arrays. */
-			diag_level, /* How far the "diagonal" has been traversed. */
-			last_hit;/* keeps track of last hit for Multiple hits. */
+                CfjModStruct *combo_array;
+                Int4Ptr version; /* still needed?? */
 		Int4	actual_window; /* The actual window used if the multiple
 				hits method was used and a hit was found. */	
 	} BLAST_ExtendWord, PNTR BLAST_ExtendWordPtr;
@@ -1054,10 +1113,10 @@ typedef struct _blast_all_words {
 	} BlastAllWord, *BlastAllWordPtr;
 		
 typedef struct _blast_seqid_list {
-		SeqIdPtr 	seqid_list;	/* A list of SeqId's (may or may not be in the database) that should
-						serve as subject sequences for BLAST'ing. */
-		Uint1 		mode;	/* Either BLAST_OWN, or BLAST_NOT_OWN.  Specifies whether they should be deleted. */
-	} BlastSeqIdList, *BlastSeqIdListPtr;
+    SeqIdPtr 	seqid_list;	/* A list of SeqId's (may or may not be in the database) that should serve as subject sequences for BLAST'ing. */
+    Uint1 		mode;	/* Either BLAST_OWN, or BLAST_NOT_OWN.  Specifies whether they should be deleted. */
+    SeqIdPtr seqid_ptr;
+} BlastSeqIdList, *BlastSeqIdListPtr;
 		
 
 /*
@@ -1065,18 +1124,18 @@ typedef struct _blast_seqid_list {
 */
 typedef struct _double_int4 {
         Int4    gi,
-                ordinal_id;
+                ordinal_id,
+		start;
 } BlastDoubleInt4, *BlastDoubleInt4Ptr;
 
 
 typedef struct _blast_gi_list {
-		BlastDoubleInt4Ptr	gi_list;	/* List of gi's. */
-		BlastDoubleInt4Ptr	*gi_list_pointer;	/* Pointer to above list. */
-		Int4		current,	/* Current position in gi list. */
-				total;		/* total number of gi's. */
-	} BlastGiList, *BlastGiListPtr;
-
-
+    BlastDoubleInt4Ptr gi_list;	/* List of gi's. */
+    BlastDoubleInt4Ptr *gi_list_pointer;	/* Pointer to above list. */
+    Int4 current;	       /* Current position in gi list. */
+    Int4 total;		       /* total number of gi's. */
+} BlastGiList, *BlastGiListPtr;
+        
 /*
 	used for keeping start and stop of hits to query, for ALU filtering.
 */
@@ -1093,41 +1152,115 @@ typedef struct _blast_hit_range {
 */
 
 typedef struct _blast_error_msg {
-	Uint1 level;/* corresponds to levels of ErrPostEx [none(0), info(1), warn(2), error(3) and fatal(4)] */
-	CharPtr msg;
+    Uint1 level;/* corresponds to levels of ErrPostEx [none(0), info(1), warn(2), error(3) and fatal(4)] */
+    CharPtr msg;
 } BlastErrorMsg, *BlastErrorMsgPtr;
 
 /*
-	Holds data for each "context" (which is generally equal to
-	one frame of the query).  blastx would have six contexts,
-	blastp would have one.
-*/
+  Holds data for each "context" (which is generally equal to
+  one frame of the query).  blastx would have six contexts,
+  blastp would have one.
+  */
 
 typedef struct _blast_context_structure {
-	Boolean query_allocated;/* The BlastSequenceBlkPtr IS allocated. */
-	BlastSequenceBlkPtr query;  /* query sequence. */
-	BLAST_ExtendWordPtr ewp;/* keep track of diagonal etc. for each frame */
-	ValNodePtr location;    /* Where to start/stop masking. */
-		} BLASTContextStruct, PNTR BLASTContextStructPtr;
-
-/* Structure used for full Smith-Waterman results. */
-
+    Boolean query_allocated;/* The BlastSequenceBlkPtr IS allocated. */
+    BlastSequenceBlkPtr query;  /* query sequence. */
+    BLAST_ExtendWordPtr ewp;/* keep track of diagonal etc. for each frame */
+    ValNodePtr location;    /* Where to start/stop masking. */
+} BLASTContextStruct, PNTR BLASTContextStructPtr;
+    
+    /* Structure used for full Smith-Waterman results. */
+    
 typedef struct SWResults {
-  Uint1Ptr seq;
-  Int4 seqStart;
-  Int4 seqEnd;
-  Int4 queryStart;
-  Int4 queryEnd;
-  Int4 *reverseAlignScript;
-  BLAST_Score score;
-  Nlm_FloatHi eValue;
-  Nlm_FloatHi eValueThisAlign;
-  Nlm_FloatHi Lambda;
-  Nlm_FloatHi logK;
-  SeqIdPtr subject_id;  /*used to display the sequence in alignment*/
-  struct SWResults *next;
+    Uint1Ptr seq;
+    Int4 seqStart;
+    Int4 seqEnd;
+    Int4 queryStart;
+    Int4 queryEnd;
+    Int4 *reverseAlignScript;
+    BLAST_Score score;
+    Nlm_FloatHi eValue;
+    Nlm_FloatHi eValueThisAlign;
+    Nlm_FloatHi Lambda;
+    Nlm_FloatHi logK;
+    SeqIdPtr subject_id;  /*used to display the sequence in alignment*/
+    struct SWResults *next;
+    Boolean isFirstAlignment;
 } SWResults;
+    
+/* Average sizes of protein and nucl. sequences. */
+#define BLAST_AA_AVGLEN 300
+#define BLAST_NT_AVGLEN 1000
 
+/* How many ticks should be emitted total. */
+#define BLAST_NTICKS 50
+#define BLAST_DB_CHUNK_SIZE 500
+
+/* period of sending out a star/message. */
+#define STAR_MSG_PERIOD 60
+
+typedef struct _BlastThrInfo {
+
+    TNlmMutex db_mutex;  /*lock for access to database*/
+    TNlmMutex results_mutex; /*lock for storing results */
+    TNlmMutex callback_mutex; /*lock for issuing update ticks on the screen*/
+    /* Mutex for recalculation of ambiguities, in BlastReevaluateWithAmbiguities */
+    TNlmMutex ambiguities_mutex;
+    /*
+      SeqId lists if only a certain number of the database sequences will be
+      used for the search.
+      */
+    BlastSeqIdListPtr blast_seqid_list;
+
+
+    /*
+      GI List to be used if database will be searched by GI.
+      current is the current element in the array being worked on.
+      global_gi_being_used specifies that it will be used.
+      */
+    Int4 gi_current;
+    BlastGiListPtr blast_gi_list;
+    
+    /* db_chunk_size is used, if the db is smaller than BLAST_DB_CHUNK_SIZE */
+    Int4 db_chunk_size;
+
+    /* The last db sequence to be assigned.  Used only in get_db_chunk after
+       the acquisition of the "db_mutex" (above). */
+    Int4 db_chunk_last;
+
+    /* the last sequence in the database to be compared against. */
+    Int4 final_db_seq;
+    Int4 number_seqs_done;  /*number of sequences already tested*/
+    Int4 db_incr;  /*size of a database chunk to get*/
+    Int4 last_db_seq;
+
+    /* How many positive hits were found (set by ReapHitlist, read by tick_proc
+       and star_proc). */
+    Int4 number_of_pos_hits;
+
+    /* Use by star_proc to determine whether to emit a star. */
+    time_t last_tick;
+    
+    /* tells star_proc to check that a star should be emitted. */
+    TNlmThread awake_thr;
+    Boolean awake;
+    
+    /* tells index_proc to check that a message should be emitted. */
+    TNlmThread index_thr;
+    Boolean awake_index;
+    
+    /*
+      Callback functions to indicate progress, or lack thereof.
+      */
+    int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives));
+    int (LIBCALLBACK *star_callback)PROTO((Int4 done, Int4 positives));
+    int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives));
+
+    /* whether real databases are done */
+    Boolean	realdb_done;
+
+} BlastThrInfo, PNTR BlastThrInfoPtr;
+    
 /*
 	Structure used for matrix rescaling. 
 */
@@ -1169,10 +1302,11 @@ typedef struct _blast_matrix_rescale {
 #define BLAST_SEARCH_ALLOC_TRANS_INFO 1024
 #define BLAST_SEARCH_ALLOC_ALL_WORDS 2048
 #define BLAST_SEARCH_ALLOC_QUERY_SLP 4096
-#define BLAST_SEARCH_ALLOC_GILIST 8192
+/* #define BLAST_SEARCH_ALLOC_GILIST 8192 */
+#define BLAST_SEARCH_ALLOC_THRINFO 8192 /* 16384 */
 
 typedef struct blast_search_block {
-	Int4		allocated; 
+    Int4 allocated; 
 /* bit fields specify which structures from below are allocated.  If 
 a field is allocated, then it's bit is non-zero. 
 
@@ -1196,196 +1330,201 @@ a field is allocated, then it's bit is non-zero.
 */
 
 /*
-	Specifies whether the search is position based or not.
-*/
-	Boolean positionBased;
-	Boolean posConverged;
-/*
-	Specifies that the query sequence was invalid (e.g., XXXXXXXXXXXXXXXXXXXXXX).
-*/
-	Boolean query_invalid;
-/*
-	The BLASTContextStructPtr is an array and each element contains
-	information about the query sequence and the frame number.
-	If there are six frames (e.g., blastx) then the BLASTContextStructPtr
-	is six elements long; if there's one frame (e.g., blastp) then
-	BLASTContextStructPtr is one element long.
-
-	number_of_contexts states how long the context array is.
-*/	
-	BLASTContextStructPtr context;
-	Int2	first_context,
-		last_context;
-/* 
-	The GapAlignBlkPtr used by ALIGN (in gapxdrop.c) for gapped alignments.
-*/
-	
-	GapAlignBlkPtr gap_align;
-
-/*
-	All the possible words.
-*/
-	BlastAllWordPtr all_words;
-/*
+  Specifies whether the search is position based or not.
+  */
+    Boolean positionBased;
+    Boolean posConverged;
+    /*
+      Specifies that the query sequence was invalid (e.g., XXXXXXXXXXXXXXXXXXXXXX).
+      */
+    Boolean query_invalid;
+    /*
+      The BLASTContextStructPtr is an array and each element contains
+      information about the query sequence and the frame number.
+      If there are six frames (e.g., blastx) then the BLASTContextStructPtr
+      is six elements long; if there's one frame (e.g., blastp) then
+      BLASTContextStructPtr is one element long.
+      
+      number_of_contexts states how long the context array is.
+      */	
+    BLASTContextStructPtr context;
+    Int2	first_context,
+        last_context;
+    /* 
+       The GapAlignBlkPtr used by ALIGN (in gapxdrop.c) for gapped alignments.
+       */
+    
+    GapAlignBlkPtr gap_align;
+    
+    /*
+      All the possible words.
+      */
+    BlastAllWordPtr all_words;
+    /*
         Set the context_factor, which specifies how many different 
         ways the query or db is examined (e.g., blastn looks at both
         stands of query, context_factor is 2).
-*/
-	Int2 context_factor;
-
-/*
-	What type of search (e.g., blastp, blastx, etc.)?
-*/
-	CharPtr prog_name;
-	Uint1 prog_number;
-/*
-	translation_table and translation_table_rc holds the translation
-	from ncbi2na to ncbistdaa for normal and reverse-complement
-	translations.  Only used and initialized with tblast[nx].
-	Initialized by GetPrivatTranslationTable
-*/
-	Uint1Ptr translation_table,
-		 translation_table_rc;
-
-/*
-	ValNodePtr containing error messages. 
-*/
-	ValNodePtr error_return;
-
-/*
-	ValNodePtr containing masking SeqLocPtr's
-*/
-	ValNodePtr mask;
-/*
-	What genetic codes are we using to translate the query or database
-	when needed.  Based upon NCBI genetic codes.
-*/
-	CharPtr genetic_code,		/* genetic code used for query. */
-		db_genetic_code;	/* genetic code used for database. */
-
-/* 	
+        */
+    Int2 context_factor;
+    
+    /*
+      What type of search (e.g., blastp, blastx, etc.)?
+      */
+    CharPtr prog_name;
+    Uint1 prog_number;
+    /*
+      translation_table and translation_table_rc holds the translation
+      from ncbi2na to ncbistdaa for normal and reverse-complement
+      translations.  Only used and initialized with tblast[nx].
+      Initialized by GetPrivatTranslationTable
+      */
+    Uint1Ptr translation_table,
+        translation_table_rc;
+    
+    /*
+      ValNodePtr containing error messages. 
+      */
+    ValNodePtr error_return;
+    
+    /*
+      ValNodePtr containing masking SeqLocPtr's
+      */
+    ValNodePtr mask;
+    /*
+      What genetic codes are we using to translate the query or database
+      when needed.  Based upon NCBI genetic codes.
+      */
+    CharPtr genetic_code,		/* genetic code used for query. */
+        db_genetic_code;	/* genetic code used for database. */
+    
+    /* 	
 	The BlastSequenceBlk's subject hold info about the subject.  
 	Info about the original sequence is in original_seq.  This will
 	be NULL if the sequence was not translated. 
-*/
-	Uint1Ptr translation_buffer;	/* Buffer for (tblast[nx]) db translations*/
-	Int4 translation_buffer_size;	/* size of translation_buffer. */
-	CharPtr original_seq;	/* Original (i.e.,  untransl.) sequence. */
-	BlastSequenceBlkPtr	subject;/* subject sequence. */
-
-/*
-	SeqLocPtr for the query, owned by the called and not by BLAST.
-*/
-	SeqLocPtr query_slp;
-
-/* Id's for the query and subject. */
-	SeqIdPtr		query_id;	/* ID for the query, any form. */
-	Int4			subject_id;	/* the number of the subject, in the DB. */
-	BLAST_ParameterBlkPtr pbp;	/* options selected. */
-	BLAST_ScoreBlkPtr sbp;		/* info on scoring. */
-	BLAST_ExtendWordParamsPtr ewp_params; /* parameters for extensions.*/
-
-/* 	For the two-pass method two BLAST_WordFinderPtr's are required.
+        */
+    Uint1Ptr translation_buffer;	/* Buffer for (tblast[nx]) db translations*/
+    Int4 translation_buffer_size;	/* size of translation_buffer. */
+    CharPtr original_seq;	/* Original (i.e.,  untransl.) sequence. */
+    BlastSequenceBlkPtr	subject;/* subject sequence. */
+    
+    /*
+      SeqLocPtr for the query, owned by the called and not by BLAST.
+      */
+    SeqLocPtr query_slp;
+    
+    /* Id's for the query and subject. */
+    SeqIdPtr		query_id;	/* ID for the query, any form. */
+    Int4			subject_id;	/* the number of the subject, in the DB. */
+    BLAST_ParameterBlkPtr pbp;	/* options selected. */
+    BLAST_ScoreBlkPtr sbp;		/* info on scoring. */
+    BLAST_ExtendWordParamsPtr ewp_params; /* parameters for extensions.*/
+    
+    /* 	For the two-pass method two BLAST_WordFinderPtr's are required.
 	The actual wfp's are in wfp_first and wfp_second.  "wfp" is just
 	a pointer to one of those two.  If they have been allocated (at all)
 	is signified by setting the bit-fields above. 
-*/
-	BLAST_WordFinderPtr     wfp, 	/* find initial words. */
-				wfp_first, /* words for first pass. */
-				wfp_second;/* words for second pass. */
-/*	For the two-pass this should be set to TRUE on the first (preliminary)
+        */
+    BLAST_WordFinderPtr     wfp, 	/* find initial words. */
+        wfp_first, /* words for first pass. */
+        wfp_second;/* words for second pass. */
+    /*	For the two-pass this should be set to TRUE on the first (preliminary)
 	pass and FALSE on the second pass.
-*/
-	Boolean			prelim;
+        */
+    Boolean			prelim;
 /*
-	The "current" hit, that is the one being worked on right now.  
-	If a hitlist is deemed significant, then "current_hitlist" is 
-	moved to "seqalign".  current_hitlist_purge specifies 
-	whether the hitlist should be purged after each call to a
-	WordFinder; it will generally be purged except for non-initial
-	frames of tblast[nx].
-*/
-	Boolean			current_hitlist_purge;
-	BLAST_HitListPtr	current_hitlist;
-/*
-	The worst evalue seen by this thread so far.
-	Only filled in if the hitlist is already full, otherwise
-	it should be DBL_MAX.
-*/
-	Nlm_FloatHi	worst_evalue;
-/*
-	Size of the HSP array on the "current_hitlist"
-*/
-	Int4 hsp_array_size;
-/*
-	Contains hits that are significant. 
-*/
-	Int4			result_size;
-	BLASTResultsStructPtr	result_struct;
+  The "current" hit, that is the one being worked on right now.  
+  If a hitlist is deemed significant, then "current_hitlist" is 
+  moved to "seqalign".  current_hitlist_purge specifies 
+  whether the hitlist should be purged after each call to a
+  WordFinder; it will generally be purged except for non-initial
+  frames of tblast[nx].
+  */
+    Boolean			current_hitlist_purge;
+    BLAST_HitListPtr	current_hitlist;
+    /*
+      The worst evalue seen by this thread so far.
+      Only filled in if the hitlist is already full, otherwise
+      it should be DBL_MAX.
+      */
+    Nlm_FloatHi	worst_evalue;
+    /*
+      Size of the HSP array on the "current_hitlist"
+      */
+    Int4 hsp_array_size;
+    /*
+      Contains hits that are significant. 
+      */
+    Int4			result_size;
+    BLASTResultsStructPtr	result_struct;
+    
+    Int8			dblen;	/* total length of the database. */
+    Int8                    dblen_eff;      /* effective length of the database. */
+    Int8                    dblen_eff_real;      /* effective length of the database. */
+    Int4                    dbseq_num;      /* number of sequences in the database. */
+    Int4                    length_adjustment; /* amount removed from end of query and db sequences. */
+    Nlm_FloatHi		searchsp_eff;	/* Effective search space (used for statistics). */
+    ReadDBFILEPtr		rdfp, /* I/O PTR for database files. */
+        rdfp_list;	/* linked rdfp list of all databases. */
+    /* The subject info (id and defline) is kept here for the current sequence
+       if the readdb facility is not used.  This structure should only
+       be used if rdfp is NULL.
+       */
+    BLASTSubjectInfoPtr subject_info;
+    /*
+      A list of SeqId's from the database to use for the BLAST run.
+      */
+    /* BlastSeqIdListPtr blast_seqid_list; */
+    /* BlastGiListPtr	blast_gi_list; */
+    
+    /* Data used in threads - previously global variables */
 
-	Int8			dblen;	/* total length of the database. */
-	Int8                    dblen_eff;      /* effective length of the database. */
-	Int8                    dblen_eff_real;      /* effective length of the database. */
-	Int4                    dbseq_num;      /* number of sequences in the database. */
-	Int4                    length_adjustment; /* amount removed from end of query and db sequences. */
-	Nlm_FloatHi		searchsp_eff;	/* Effective search space (used for statistics). */
-	ReadDBFILEPtr		rdfp, /* I/O PTR for database files. */
-				rdfp_list;	/* linked rdfp list of all databases. */
-/* The subject info (id and defline) is kept here for the current sequence
-	if the readdb facility is not used.  This structure should only
-	be used if rdfp is NULL.
+    BlastThrInfoPtr thr_info;
+    
+    /*
+      start and stop of query that must be included for an alignment
+      to be counted.  The Boolean whole_query specifies whether these
+      are valid (i.e., have been set) or not.
+      */
+    Boolean whole_query;
+    Int4 required_start, required_end;
+    
+    /*
+      Callback functions to indicate progress, or lack thereof.
 */
-	BLASTSubjectInfoPtr subject_info;
-/*
-	A list of SeqId's from the database to use for the BLAST run.
-*/
-	BlastSeqIdListPtr blast_seqid_list;
-	BlastGiListPtr	blast_gi_list;
-/*
-	start and stop of query that must be included for an alignment
-	to be counted.  The Boolean whole_query specifies whether these
-	are valid (i.e., have been set) or not.
-*/
-	Boolean whole_query;
-	Int4 required_start, required_end;
-
-/*
-	Callback functions to indicate progress, or lack thereof.
-*/
-	int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives));
-	int (LIBCALLBACK *star_callback)PROTO((Int4 done, Int4 positives));
-/*
-        Callback function to handle results (e.g., print them out for neighboring)
-        in place of BlastSaveCurrentHitlist.
-*/
-        int (LIBCALLBACK *handle_results)PROTO((VoidPtr search));
-/*	
+    /* int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives)); */
+    /* int (LIBCALLBACK *star_callback)PROTO((Int4 done, Int4 positives)); */
+    /*
+      Callback function to handle results (e.g., print them out for neighboring)
+      in place of BlastSaveCurrentHitlist.
+      */
+    int (LIBCALLBACK *handle_results)PROTO((VoidPtr search));
+    /*	
 	Output stream to put results to
-*/
-	VoidPtr		output;
-/*
-	These "counters" keep track of how often certain operations
-	were performed.
-
-	This counting is performed only if BLAST_COLLECT_STATS is defined.
-*/
-	Int4	first_pass_hits,	/* no. of hits on 1st pass. */
-		second_pass_hits,	/* no. of hits on 2nd pass. */
-		second_pass_trys,	/* no. of seqs that made it to 2nd pass. */
-		first_pass_extends,	/* no. extended on 1st pass. */
-		second_pass_extends,	/* no. extended on 2nd pass. */
-		first_pass_good_extends,/* no. successfully extended on 1st pass. */
-		second_pass_good_extends,/* no. successfully extended on 2nd pass. */
-		number_of_seqs_better_E,/* how many sequences were better than E. */
-		prelim_gap_no_contest,	/* No. of HSP's under E=10 alone. */
-		prelim_gap_passed,	/* No. of HSP's that passed prelim gapping. */
-		prelim_gap_attempts,	/* No. of HSP's we attempted to gap. */
-		real_gap_number_of_hsps, /* How many HSP's were gapped in BlastGetGappedScore. */
-                semid;                  /* Here will be stored ID of load-ballance semaphore */
-	/* Callback for the queueing system. */
-	int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
+        */
+    VoidPtr		output;
+    /*
+      These "counters" keep track of how often certain operations
+      were performed.
+      
+      This counting is performed only if BLAST_COLLECT_STATS is defined.
+      */
+    Int4	first_pass_hits,	/* no. of hits on 1st pass. */
+        second_pass_hits,	/* no. of hits on 2nd pass. */
+        second_pass_trys,	/* no. of seqs that made it to 2nd pass. */
+        first_pass_extends,	/* no. extended on 1st pass. */
+        second_pass_extends,	/* no. extended on 2nd pass. */
+        first_pass_good_extends,/* no. successfully extended on 1st pass. */
+        second_pass_good_extends,/* no. successfully extended on 2nd pass. */
+        number_of_seqs_better_E,/* how many sequences were better than E. */
+        prelim_gap_no_contest,	/* No. of HSP's under E=10 alone. */
+        prelim_gap_passed,	/* No. of HSP's that passed prelim gapping. */
+        prelim_gap_attempts,	/* No. of HSP's we attempted to gap. */
+        real_gap_number_of_hsps, /* How many HSP's were gapped in BlastGetGappedScore. */
+        semid;                  /* Here will be stored ID of load-ballance semaphore */
+    /* Callback for the queueing system. */
+    int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
-
+    
 
 
 #ifdef __cplusplus

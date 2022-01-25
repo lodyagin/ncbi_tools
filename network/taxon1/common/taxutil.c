@@ -542,11 +542,13 @@ static Boolean TaxCmpOrgById(BioSourcePtr b1, BioSourcePtr b2)
 		if (d1->tag->id == d2->tag->id) {
 			return TRUE;
 		} else {
+			/*
 			if (tax1_join(d1->tag->id, d2->tag->id) != 1) {
 				return TRUE;
 			} else {
 				return FALSE;
 			}
+			*/
 		}
 	} else if (StringICmp(b1->org->taxname, b2->org->taxname) == 0) {
 			return TRUE;

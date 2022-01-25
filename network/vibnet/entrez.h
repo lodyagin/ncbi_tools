@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -71,7 +71,7 @@ extern "C" {
 typedef void (*EntrezRetrieveDocsProc) (ForM f, Int2 num, Int2 parents, Int4Ptr uids, Int2 db);
 typedef void (*EntrezProjectToFormProc) (ForM f, Pointer proj);
 typedef void (*EntrezSimpleSeqProc) (ForM f, ValNodePtr simpleSeqs);
-typedef void (*EntrezNamedUidListProc) (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db);
+typedef void (*EntrezNamedUidListProc) (ForM f, CharPtr term, Int4 num, Int4Ptr uids, Int2 db);
 typedef void (*EntrezLaunchViewerProc) (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db);
 
 typedef struct entrezglobals {
@@ -114,7 +114,7 @@ extern void RetrieveDocuments (ForM f, Int2 num, Int2 parents, Int4Ptr uids, Int
 
 extern void RetrieveSimpleSeqs (ForM f, ValNodePtr simpleSeqs);
 
-extern void LoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db);
+extern void LoadNamedUidList (ForM f, CharPtr term, Int4 num, Int4Ptr uids, Int2 db);
 
 extern void LaunchRecordViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db);
 

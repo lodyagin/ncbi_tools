@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.13 $
+* $Revision: 6.16 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,15 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.16  1999/12/20 19:57:45  kans
+* added AddStatusToRefGeneTrackUserObject
+*
+* Revision 6.15  1999/12/14 17:32:45  ostell
+* changed protoplast to proplastid
+*
+* Revision 6.14  1999/10/05 20:36:01  kans
+* added more GENOME_ types (JO)
+*
 * Revision 6.13  1999/08/05 20:43:44  kans
 * added CreateSubmissionUserObject (JP)
 *
@@ -677,6 +686,10 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 #define GENOME_cyanelle 12
 #define GENOME_proviral 13
 #define GENOME_virion 14
+#define GENOME_nucleomorph 15
+#define GENOME_apicoplast 16
+#define GENOME_leucoplast 17
+#define GENOME_proplastid 18
 
 /********************************************
 *  Genome describes the type of genome from which the DNA or gene for
@@ -697,6 +710,7 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
         cyanelle (12) ,
         proviral (13) ,
         virion (14) } DEFAULT unknown ,
+         more types added, see GENOME_.. above
 **********************************************/
  
 NLM_EXTERN Boolean AddGenomeToEntry (
@@ -1386,6 +1400,7 @@ NLM_EXTERN Boolean AddPhrapGraph (
 
 /* internal functions for reference gene project */
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
+NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi,
                                                       Boolean sequenceChange,

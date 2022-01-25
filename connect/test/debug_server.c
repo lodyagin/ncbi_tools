@@ -1,4 +1,4 @@
-/*  $Id: debug_server.c,v 6.3 1999/08/16 21:58:03 vakatov Exp $
+/*  $Id: debug_server.c,v 6.4 1999/10/19 19:18:15 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,30 +28,37 @@
 * File Description:
 *  Listen on the specified socket; on connection, run the specified server
 *  with its standard i/o attached to the socket.
-*  Allow to log the traffic to files.
+*  Log all client/server traffic.
 *
-*    UNIX only!!!
+*  Requirements:
+*    OS:         UNIX only! -- tested for Solaris, IRIX, OSF1, Linux
+*    Modules:    "ncbi_socket.[ch]", "ncbi_buffer.[ch]" with -DNCBI_OS_UNIX
+*    Libraries:  -lsocket -lnsl
+*  Build example:
+*    cc -o debug_server -g debug_server.c ../ncbi_socket.c ../ncbi_buffer.c \
+*       -DNCBI_OS_UNIX -I.. -lsocket -lnsl
+*    NOTE:  some platforms dont need "-lsocket" and/or "-lnsl"
 *
 * --------------------------------------------------------------------------
 * $Log: debug_server.c,v $
+* Revision 6.4  1999/10/19 19:18:15  vakatov
+* Switched to the new low-level "ncbi_socket.[ch]" API (independent of
+* the NCBI C toolkit).
+* Portability fixes; tested for Solaris, IRIX, OSF1, Linux.
+*
 * Revision 6.3  1999/08/16 21:58:03  vakatov
 * Dont set $HTTP_USER_AGENT if it's already set in the environment
 *
 * Revision 6.2  1999/08/13 22:01:07  vakatov
 * Use the SOCK_GET_NATIVE_HANDLE macro to get "native" socket handle
-*
-* Revision 6.1  1999/08/12 19:22:30  vakatov
-* Initial revision
-*
 * ==========================================================================
 */
 
-#define __EXTENSIONS__
+#ifndef __EXTENSIONS__
+#  define __EXTENSIONS__
+#endif
 
-#include <ncbilcl.h>
-#include <ncbistd.h>
-#include <ncbierr.h>
-#include <ncbisock.h>
+#include "ncbi_socket.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -59,14 +66,12 @@
 #include <limits.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/poll.h>
 #include <unistd.h>
-#include <sys/stropts.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <fcntl.h>
-#include <arpa/inet.h>
 #include <signal.h>
 #include <wait.h>
+#include <errno.h>
 #include <assert.h>
 
 
@@ -75,9 +80,13 @@
  *  Static / Auxiliary
  *****************************************************************************/
 
-
+/* Program name
+ */
 static const char* s_Progname = 0;
 
+
+/* Usage info printout
+ */
 static void s_Usage(const char* message)
 {
   if ( message )
@@ -116,12 +125,25 @@ static void s_Usage(const char* message)
 }
 
 
-#define SOCK_VERIFY(err_code)  do { \
-  if (err_code != eSOCK_ESuccess) {\
-    perror( SOCK_ErrCodeStr(err_code) ); \
+/* Verify status returned by a SOCK function
+ */
+#define SOCK_VERIFY(status)  do { \
+  if (status != eSOCK_Success) {\
+    perror( SOCK_StatusStr(status) ); \
     exit(99); } \
 } while(0)
 
+
+/* Catching signals to enforce an early termination
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+static void s_SigChildHandler(int sig);
+static void s_SigIntHandler(int sig);
+#ifdef __cplusplus
+}
+#endif
 
 static int s_ServerExit = 0 /* false */;
 static void s_SigChildHandler(int sig)
@@ -134,6 +156,7 @@ static void s_SigIntHandler(int sig)
 {
   s_DoExit = 1 /* true */;
 }
+
 
 
 /*****************************************************************************
@@ -165,7 +188,7 @@ typedef enum {
 
 /* Monitored i/o streams
  */
-static pollfd_t s_IOpoll[eIOE_SizeOf];
+static struct pollfd s_IOpoll[eIOE_SizeOf];
 
 
 /* Data buffers
@@ -301,11 +324,12 @@ static void s_PerformIO(void)
   /* FromClient */
   if ( s_IOpoll[eIOE_FromClient].revents ) {
     if (s_IOpoll[eIOE_FromClient].revents & POLLIN) {
-      ESOCK_ErrCode err_code;
-      Uint4 n_read;
+      ESOCK_Status status;
+      size_t n_read;
       assert( !s_CS.size );
-      if ((err_code = SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read))
-          != eSOCK_ESuccess)
+      if ((status =
+           SOCK_Read(sock, s_CS.buf, sizeof(s_CS.buf), &n_read, eSOCK_Read))
+          != eSOCK_Success)
         s_ClientHup = 1 /* true */;
 
       if ( log_inf_fp ) {
@@ -313,10 +337,10 @@ static void s_PerformIO(void)
           fprintf(log_inf_fp, "\
 FROM_CLIENT [%lu:%lu]\n",
                   (unsigned long)s_CS.n_total_store,
-                  (unsigned long)(s_CS.n_total_store + n_read));
+                  (unsigned long)(s_CS.n_total_store + n_read - 1));
         if ( s_ClientHup ) {
           fprintf(log_inf_fp, "\
-### FROM_CLIENT(READ): %s\n", SOCK_ErrCodeStr(err_code));
+### FROM_CLIENT(READ): %s\n", SOCK_StatusStr(status));
         }
       }
       if (log_inp_fd != -1  &&
@@ -329,6 +353,10 @@ FROM_CLIENT [%lu:%lu]\n",
       }
       s_CS.size           = n_read;
       s_CS.n_total_store += n_read;
+    } else if (s_IOpoll[eIOE_FromClient].revents & POLLOUT) {
+      static int s_POLLOUT = 0;
+      if ( !s_POLLOUT++ )
+        fprintf(stderr, "Warning:    a poor implementation of poll()\n");
     } else {
       if ( log_inf_fp )
         fprintf(log_inf_fp, "\
@@ -359,7 +387,7 @@ FROM_CLIENT [%lu:%lu]\n",
           fprintf(log_inf_fp, "\
 TO_STDIN    [%lu:%lu]\n",
                   (unsigned long)s_CS.n_total_flush,
-                  (unsigned long)(s_CS.n_total_flush + n_written));
+                  (unsigned long)(s_CS.n_total_flush + n_written - 1));
         }
         if (n_written == (ssize_t)n_write)
           s_CS.size = s_CS.n_skip = 0;
@@ -401,7 +429,7 @@ TO_STDIN    [%lu:%lu]\n",
           fprintf(log_inf_fp, "\
 \tFROM_STDOUT [%lu:%lu]\n",
                   (unsigned long)s_SC.n_total_store,
-                  (unsigned long)(s_SC.n_total_store + n_read));
+                  (unsigned long)(s_SC.n_total_store + n_read - 1));
         }
         if (log_out_fd != -1  &&
             write(log_out_fd, s_SC.buf, n_read) != n_read) {
@@ -450,7 +478,7 @@ TO_STDIN    [%lu:%lu]\n",
           fprintf(log_inf_fp, "\
 \t\tFROM_STDERR [%lu:%lu]\n",
                   (unsigned long)s_ErrTotal,
-                  (unsigned long)(s_ErrTotal + n_read));
+                  (unsigned long)(s_ErrTotal + n_read - 1));
         }
         if (log_err_fd != -1  &&
             write(log_err_fd, x_err_buf, n_read) <= 0) {
@@ -484,13 +512,13 @@ TO_STDIN    [%lu:%lu]\n",
   /* ToClient */
   if ( s_IOpoll[eIOE_ToClient].revents ) {
     if (s_IOpoll[eIOE_ToClient].revents & POLLOUT) {
-      ESOCK_ErrCode err_code;
-      Uint4 n_written;
-      Uint4 n_write = s_SC.size - s_SC.n_skip;
+      ESOCK_Status status;
+      size_t n_written;
+      size_t n_write = s_SC.size - s_SC.n_skip;
       assert( s_SC.size );
 
-      if ((err_code = SOCK_Write(sock, s_SC.buf + s_SC.n_skip, n_write,
-                                 &n_written)) != eSOCK_ESuccess)
+      if ((status = SOCK_Write(sock, s_SC.buf + s_SC.n_skip, n_write,
+                               &n_written)) != eSOCK_Success)
         s_ClientHup = 1 /* true */;
 
 
@@ -499,10 +527,10 @@ TO_STDIN    [%lu:%lu]\n",
           fprintf(log_inf_fp, "\
 \tTO_CLIENT   [%lu:%lu]\n",
                   (unsigned long)s_SC.n_total_flush,
-                  (unsigned long)(s_SC.n_total_flush + n_written));
+                  (unsigned long)(s_SC.n_total_flush + n_written - 1));
         if ( s_ClientHup ) {
           fprintf(log_inf_fp, "\
-### TO_CLIENT(WRITE): %s\n", SOCK_ErrCodeStr(err_code));
+### TO_CLIENT(WRITE): %s\n", SOCK_StatusStr(status));
         }
       }
 
@@ -511,6 +539,10 @@ TO_STDIN    [%lu:%lu]\n",
       else
         s_SC.n_skip += n_written;
       s_SC.n_total_flush += n_written;
+    } else if (s_IOpoll[eIOE_ToClient].revents & POLLIN) {
+      static int s_POLLIN = 0;
+      if ( !s_POLLIN++ )
+        fprintf(stderr, "Warning:    a poor implementation of poll()\n");
     } else {
       fprintf(log_inf_fp, "\
 ### TO_CLIENT(POLL@%lu): %s\n",
@@ -602,15 +634,15 @@ static void s_OnExitStat(void)
 
   fprintf(log_inf_fp, "\n");
   fprintf(log_inf_fp, "\
-*** STDIN:   %lu received from client (%lu sent to server)\n",
+*** STDIN:   %5lu received from client (%lu sent to server)\n",
           (unsigned long)s_CS.n_total_store,
           (unsigned long)s_CS.n_total_flush);
   fprintf(log_inf_fp, "\
-*** STDOUT:  %lu received from server (%lu sent to client)\n",
+*** STDOUT:  %5lu received from server (%lu sent to client)\n",
           (unsigned long)s_SC.n_total_store,
           (unsigned long)s_SC.n_total_flush);
   fprintf(log_inf_fp, "\
-*** STDERR:  %lu received from server\n",
+*** STDERR:  %5lu received from server\n",
           (unsigned long)s_ErrTotal);
   fflush(log_inf_fp);
 }
@@ -659,7 +691,7 @@ extern int main(int argc, char* argv[], char* envp[])
   const char*    server    = (argc > 3) ? argv[3] : "";
 
   /* traffic logs */
-  char  x_logname[PATH_MAX];  /* base log file name derived from "logname " */
+  char x_logname[PATH_MAX];  /* base log file name derived from "logname " */
 
   /* pipes to the server std streams */
   int inp_pipe[2];
@@ -667,12 +699,9 @@ extern int main(int argc, char* argv[], char* envp[])
   int err_pipe[2];
 
 
-  /* Setup the NCBI error posting to write to STDERR
+  /* Errors and warnings go to STDERR
    */
-  ErrSetLogfile("stderr", 0);
-  ErrSetFatalLevel(SEV_FATAL);
-  ErrSetMessageLevel(SEV_MIN);
-  ErrSetOptFlags(EO_SHOW_FILELINE | EO_SHOW_ERRTEXT | EO_SHOW_MSGTEXT);
+  SOCK_SetErrStream(stderr, 0);
 
 
   /* Store program name
@@ -704,13 +733,9 @@ extern int main(int argc, char* argv[], char* envp[])
    */
   {{
     /* get local host name */
-    char local_host[MAXHOSTNAMELEN];
-    local_host[0] = local_host[sizeof(local_host)-1] = '\0';
-    if (gethostname(local_host, sizeof(local_host)) != 0  ||
-        local_host[sizeof(local_host)-1] != '\0') {
+    char local_host[1024];
+    if (SOCK_gethostname(local_host, sizeof(local_host)) != 0)
       perror("Cannot get local host name");
-      local_host[0] = '\0';
-    }
 
     /* printout the parsed cmd.-line arguments */
     fprintf(stderr, "\
@@ -800,17 +825,17 @@ SERVER:   '%s'\
    */
   fprintf(stderr, "----- Accept connection from a client... ");
   {{
-    LSOCK    lsock;
-    STimeout timeout;
+    LSOCK         lsock;
+    SSOCK_Timeout timeout;
     SOCK_VERIFY( LSOCK_Create(port, 1, &lsock) );
-    SOCK_VERIFY( LSOCK_Accept(lsock, NULL, &sock) );
+    SOCK_VERIFY( LSOCK_Accept(lsock, 0, &sock) );
     SOCK_VERIFY( LSOCK_Close(lsock) );
     timeout.sec  = 0;
     timeout.usec = 0;
-#ifdef _DEBUG
-    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, 0, 0, 0) );
+#if defined(NDEBUG)
+    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, &timeout) );
 #else
-    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, &timeout, 0, 0) );
+    SOCK_VERIFY( SOCK_SetTimeout(sock, eSOCK_OnReadWrite, 0) );
 #endif
   }}
   fprintf(stderr, "done\n");
@@ -900,10 +925,12 @@ SERVER:   '%s'\
   }
 
 
-  /* Prepare i/o to be monitored by s_DispatchIO()
+  /* Prepare the i/o to be monitored by s_DispatchIO()
    */
-  SOCK_GET_NATIVE_HANDLE(sock, s_IOpoll[eIOE_FromClient].fd);
-  SOCK_GET_NATIVE_HANDLE(sock, s_IOpoll[eIOE_ToClient].fd);
+  SOCK_VERIFY( SOCK_GetOSHandle(sock, &s_IOpoll[eIOE_FromClient].fd,
+                                sizeof(s_IOpoll[eIOE_FromClient].fd)) );
+  s_IOpoll[eIOE_ToClient].fd = s_IOpoll[eIOE_FromClient].fd;
+
   s_IOpoll[eIOE_ToStdin].fd    = inp_pipe[1];
   s_IOpoll[eIOE_FromStdout].fd = out_pipe[0];
   s_IOpoll[eIOE_FromStderr].fd = err_pipe[0];

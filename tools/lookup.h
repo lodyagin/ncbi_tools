@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,19 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.11  2000/01/11 17:27:02  shavirin
+* Added elements theTable and theCacheSize into LookupTable
+* Added parameters theCacheSize into lookup_new and BLAST_WordFinderNew
+*
+* Revision 6.9  1999/12/21 21:33:24  shavirin
+* Added parameter mod_lookup_table_memory to the lookup structure.
+*
+* Revision 6.8  1999/09/29 17:20:12  madden
+* Deallocate ModLookupPositionPtr memory
+*
+* Revision 6.7  1999/09/28 20:14:34  madden
+* Joerg changes to mimize cache misses
+*
 * Revision 6.6  1999/09/16 16:56:39  madden
 * Changes to lookup_new for long words
 *
@@ -141,25 +154,68 @@ typedef struct lookup_memory {
 
 
 
-typedef struct lookup_position {
+typedef struct orig_lookup_position {
 	Int4	position;		/* position along the query */
 	Int1 context;	/* "context" of hit, for use by BLASTContextStructPtr.*/
-	struct lookup_position *next;	/* other positions */
-} LookupPosition, PNTR LookupPositionPtr;
+	struct orig_lookup_position *next;	/* other positions */
+} OrigLookupPosition, PNTR OrigLookupPositionPtr;
+
+/* some defines for the pv_array, as this changes from 32-bit to 64-bit systems. */
+#if LONG_BIT==64
+
+#define PV_ARRAY_TYPE Uint8	/* The pv_array 'native' type. */
+#define PV_ARRAY_BYTES 8	/* number of BYTES in 'native' type. */
+#define PV_ARRAY_BTS 6		/* bits-to-shift from lookup_index to pv_array index. */
+#define PV_ARRAY_MASK 63	/* amount to mask off. */
+
+#else
+
+#define PV_ARRAY_TYPE Uint4	/* The pv_array 'native' type. */
+#define PV_ARRAY_BYTES 4	/* number of BYTES in 'native' type. */
+#define PV_ARRAY_BTS 5		/* bits-to-shift from lookup_index to pv_array index. */
+#define PV_ARRAY_MASK 31	/* amount to mask off. */
+
+#endif
+
+#define PV_ARRAY_FACTOR 0.5	/* The fraction of sites that must have at least one hit to not use PV_ARRAY. */
+
+/* Define LookupPosition (ie a hit_info) such that it can be loaded into a register */
+typedef Uint4 ModLookupPosition;
+typedef Uint4 *ModLookupPositionPtr;
+
+#define hinfo_get_pos(h) ((h)&0xffffff)
+#define hinfo_get_context(h) (((h)>>24)&0xff)
+
+#define hinfo_set(ptr_hinfo,p,c) ( *(ptr_hinfo) = (( ((Uint4)(c)) << 24) | ((Uint4)(p))) )
+
+#if 1                           /* To be deleted */
+typedef struct mod_lt_entry {
+    Int4 num_used;       /* num valid positions */
+    ModLookupPosition entries[3]; /* first postion */
+} ModLAEntry, PNTR ModLAEntryPtr;
+#endif
 
 typedef struct lookup_table {
-	Int4	char_size,		/* number of bits per residue/bp */
-		wordsize,		/* size of "word" */
-		reduced_wordsize,	/* size of word */
-		array_size,		/* size of table's array. */
-		mask;		/* Used to mask off top set of bits. */
-	LookupPositionPtr PNTR position;	/* positions of the hits. */
-	LookupPositionPtr PNTR position_aux;	/* auxillary structure for keeping track of 
-						the last saved hit, to speed up saving of hits
-						on very long sequences. */
-	LookupMemoryPtr mem_struct,	/* contains memory. */
-			mem_struct_start;	/* Start of LookupMemoryPtr chain. */
-	size_t		memory_chunk;	/* chunk size of memory. */
+    Int4 char_size,		/* number of bits per residue/bp */
+        wordsize,		/* size of "word" */
+        reduced_wordsize,       /* size of word */
+        array_size,		/* size of table's array. */
+        mask;		/* Used to mask off top set of bits. */
+    OrigLookupPositionPtr PNTR position;	/* positions of the hits. */
+    OrigLookupPositionPtr PNTR position_aux;	/* auxillary structure for keeping track of the last saved hit, to speed up saving of hits on very long sequences. */
+    LookupMemoryPtr mem_struct,	/* contains memory. */
+        mem_struct_start;	/* Start of LookupMemoryPtr chain. */
+    size_t memory_chunk;	/* chunk size of memory. */
+    PV_ARRAY_TYPE *pv_array;                /* presence vector, used for quick presence check */
+    Int4 num_pos_added;
+    Int4 num_unique_pos_added;
+#if 1                           /* To be deleted */
+    ModLAEntry *mod_lt;	        /* The new&improved lookup table */
+#endif
+    Uint4Ptr theTable;          /* Lookup table with variable length */
+    Int4     theCacheSize;    /* Size of cache determines lookup length */
+    ModLookupPositionPtr 	mod_lookup_table_memory; /* Memory for new and improved lookup table. */
+    Int4 mod_lookup_table_size;/* Size for new and improved lookup table */
 } LookupTable, PNTR LookupTablePtr;
 
 
@@ -174,7 +230,7 @@ typedef struct _blast_wordfinder {
         } BLAST_WordFinder, PNTR BLAST_WordFinderPtr;
 
 
-LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize));
+LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize, Int4 theCacheSize));
 
 LookupTablePtr LIBCALL lookup_destruct PROTO((LookupTablePtr lookup));
 
@@ -187,7 +243,7 @@ Uint1Ptr LIBCALL lookup_find_init PROTO((LookupTablePtr lookup, Int4 PNTR lookup
 Boolean lookup_position_aux_destruct PROTO((LookupTablePtr lookup));
 
 BLAST_WordFinderPtr BLAST_WordFinderDestruct PROTO((BLAST_WordFinderPtr wfp));
-BLAST_WordFinderPtr BLAST_WordFinderNew PROTO((Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down));
+BLAST_WordFinderPtr BLAST_WordFinderNew PROTO((Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down, Int4 theCacheSize));
 
 
 #ifdef __cplusplus

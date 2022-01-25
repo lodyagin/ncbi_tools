@@ -1,4 +1,4 @@
-/*   cn3dpane.h
+/*   cn3dmesh.h
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -21,28 +21,67 @@
 *  warranties of performance, merchantability or fitness for any particular
 *  purpose.
 *
+* ===========================================================================
+*
+* File Name:  cn3dmesh.h
+*
+* Author:  
+*
+* Version Creation Date:   
+*
+* $Revision: 6.2 $
+*
+* File Description: 
+*                   
+*
+* Modifications:  
+* --------------------------------------------------------------------------
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
+*
+* ==========================================================================
 */
 
-/* cn3dopen.h */
+/* cn3dmesh.h */
 
-#ifndef _CN3DPANE_
-#define _CN3DPANE_ 1
-  
+#ifndef _CN3DMESH_
+#define _CN3DMESH_
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
-extern  Boolean Cn3D_fAlignOn, Cn3D_fUnalignOn; 
-extern GrouP LIBCALL AlignControls_bak PROTO((Nlm_GrouP prnt));
-extern void LIBCALL ResetAlignCtrls(void);
 
+extern void Cn3D_OpenMesh(Nlm_IteM i);
 
+typedef struct _Cn3D_Vert {
+    Nlm_FloatHi Vertex[3];
+    Nlm_FloatHi Normal[3];
+} Cn3D_Vert;
+
+typedef struct _Cn3D_Edge {
+    Nlm_Int4 Vertex[2];
+} Cn3D_Edge;
+
+typedef struct _Cn3D_Tri {
+    Nlm_Int4 Edge[3];
+    Nlm_Int4 Vertex[3];
+    Nlm_Int4 Atom;
+} Cn3D_Tri;
+
+typedef struct _Cn3D_Mesh {
+    Cn3D_Vert *Vertices;
+    Cn3D_Edge *Edges;
+    Cn3D_Tri *Tri;
+    Int4 NumTri;
+    Int4 NumVert;
+    Int4 NumEdge;
+} Cn3D_Mesh;
+
+extern Cn3D_Mesh Mesh;
+
+extern Boolean MeshLoaded;
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif
-
-
-

@@ -1322,6 +1322,7 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 				sprintf(buf, "%d", gilist->data.intvalue);
 				anp->label = StringSave(buf);
 				anp->keep_label = TRUE;
+				gilist = SeqIdSetFree(gilist);
 			    } else {
 				anp->label = StringSave(label);
 			    }

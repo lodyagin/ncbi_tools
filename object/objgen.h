@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -40,6 +40,34 @@
 *
 *
 * $Log: objgen.h,v $
+* Revision 6.9  2000/01/20 17:04:27  beloslyu
+* new function DateClean to properly clean the date was added
+*
+* Revision 6.8  2000/01/20 15:13:16  ostell
+* added hour/minute/second fields to Date
+* added DateTimeCurr()
+*
+* Revision 6.7  1999/11/03 17:58:26  kans
+* added SeqDescrAddPointer
+*
+* Revision 6.6  1999/10/05 17:24:14  kans
+* added SeqDescrAdd
+*
+* Revision 6.5  1999/09/28 14:56:00  kans
+* rename ObjValNodeNew to SeqDescrNew
+*
+* Revision 6.4  1999/09/27 17:48:38  kans
+* using GatherIndex structure
+*
+* Revision 6.3  1999/09/24 23:09:23  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
+* Revision 6.2  1999/09/23 00:07:44  kans
+* ObjValNodeNew implemented
+*
+* Revision 6.1  1999/09/22 23:37:18  kans
+* added EXTRA_OBJMGR_FIELDS and ObjValNode
+*
 * Revision 6.0  1997/08/25 18:50:00  madden
 * Revision changed to 6.0
 *
@@ -75,6 +103,37 @@
 extern "C" {
 #endif
 
+/* gather/objmgr fields to be added to bioseq, features, descriptors, etc. */
+
+#define EXTRA_OBJMGR_FIELDS \
+  Uint2             entityID;   \
+  Uint2             itemID;     \
+  Uint2             itemtype;   \
+  Uint1             subtype;    \
+  Uint1             deleteme;   \
+  Uint2             parenttype; \
+  Pointer           parentptr;  \
+  Pointer PNTR      prevlink;
+
+/* structure containing gather/objmgr fields to add as a block to other structures */
+
+typedef struct gatherindex {
+  EXTRA_OBJMGR_FIELDS
+} GatherIndex, PNTR GatherIndexPtr;
+
+/* extended valnode for linking seqdesc, perhaps seqid and seqloc */
+
+typedef struct objvalnode {
+  ValNode      vn;
+  GatherIndex  idx;
+} ObjValNode, PNTR ObjValNodePtr;
+
+/* ValNode equivalent functions that allocate ObjValNode size */
+
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrNew (ValNodePtr vnp);
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrAdd (ValNodePtr PNTR head);
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrAddPointer (ValNodePtr PNTR head, Int2 choice, VoidPtr value);
+
 /*****************************************************************************
 *
 *   loader
@@ -96,22 +155,30 @@ NLM_EXTERN Boolean LIBCALL GeneralAsnLoad PROTO((void));
 *        [1] - year (- 1900)
 *        [2] - month (1-12)  optional
 *   	 [3] - day (1-31)	 optional
+*        [4] - hour (0-23) optional 255=not set
+*        [5] - minute (0-59) optional 255=not set
+*        [6] - second (0-59) optional 255=not set
+*        [7] - not currently used
 *
 *****************************************************************************/
 
+#define NOT_SET 255
 
 typedef struct date {
-	Uint1 data[4];      /* see box above */
+	Uint1 data[8];      /* see box above */
 	CharPtr str;		/* str or season or NULL */
 } NCBI_Date, PNTR NCBI_DatePtr;
 #define DatePtr NCBI_DatePtr
 
+
 NLM_EXTERN NCBI_DatePtr LIBCALL DateNew PROTO((void));
+NLM_EXTERN NCBI_DatePtr LIBCALL DateClean PROTO((NCBI_DatePtr dp));
 NLM_EXTERN NCBI_DatePtr LIBCALL DateFree PROTO((NCBI_DatePtr dp));
 NLM_EXTERN Boolean      LIBCALL DateWrite PROTO((NCBI_DatePtr dp, Int2 year, Int2 month, Int2 day, CharPtr season));
 NLM_EXTERN Boolean      LIBCALL DateRead PROTO((NCBI_DatePtr dp, Int2Ptr year, Int2Ptr month, Int2Ptr day, CharPtr season));
 NLM_EXTERN Boolean      LIBCALL DatePrint PROTO((NCBI_DatePtr dp, CharPtr buf));
-NLM_EXTERN NCBI_DatePtr LIBCALL DateCurr PROTO((void));
+NLM_EXTERN NCBI_DatePtr LIBCALL DateCurr PROTO((void)); /* time fields not set */
+NLM_EXTERN NCBI_DatePtr LIBCALL DateTimeCurr PROTO((void)); /* fills time fields too */
 NLM_EXTERN NCBI_DatePtr LIBCALL DateDup PROTO((NCBI_DatePtr dp));
 NLM_EXTERN Boolean      LIBCALL DateAsnWrite PROTO((NCBI_DatePtr dp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN NCBI_DatePtr LIBCALL DateAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));

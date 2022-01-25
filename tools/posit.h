@@ -34,8 +34,14 @@ Contents: header file for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.10 $ *
+/* $Revision: 6.12 $ *
 * $Log: posit.h,v $
+* Revision 6.12  1999/11/15 21:47:00  shavirin
+* Added parameter Boolean use_best_align into compactSearchItems structure
+*
+* Revision 6.11  1999/10/21 16:15:04  shavirin
+* Removed unused array and all references to array threshSequences
+*
 * Revision 6.10  1999/09/03 17:23:48  madden
 * Eliminated use of posMaxThresh field in posSearchItems
 *
@@ -150,7 +156,6 @@ typedef struct posSearchItems {
   BLAST_Score **posMatrix;
   BLAST_Score **posPrivateMatrix;
   Nlm_FloatHi **posFreqs;
-  Int4 *threshSequences;   /*Which sequences are below p-value threshold*/
   Int4 posNumSequences;
   Int4 posResultsCounter;
   Int4 *posResultSequences;
@@ -167,18 +172,18 @@ typedef struct posSearchItems {
 } posSearchItems;
 
 typedef struct compactSearchItems {
-  Uint1Ptr  query;
-  Int4 qlength;
-  Boolean gapped_calculation;
-  Int4 alphabetSize;
-  Int4 pseudoCountConst;
-  Nlm_FloatHi ethresh;
-  Nlm_FloatHi lambda;
-  Nlm_FloatHi *standardProb;
-  Int4Ptr  *matrix;
-  BLAST_KarlinBlkPtr *kbp_std, *kbp_psi, *kbp_gap_std, *kbp_gap_psi;
-  Nlm_FloatHi	lambda_ideal,
-		K_ideal;
+    Uint1Ptr  query;
+    Int4 qlength;
+    Boolean gapped_calculation;
+    Int4 alphabetSize;
+    Int4 pseudoCountConst;
+    Nlm_FloatHi ethresh;
+    Nlm_FloatHi lambda;
+    Nlm_FloatHi *standardProb;
+    Int4Ptr  *matrix;
+    BLAST_KarlinBlkPtr *kbp_std, *kbp_psi, *kbp_gap_std, *kbp_gap_psi;
+    Nlm_FloatHi	lambda_ideal, K_ideal;
+    Boolean use_best_align;
 } compactSearchItems;
   
 

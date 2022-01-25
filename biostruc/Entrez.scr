@@ -1,10 +1,13 @@
 /*
- * $Id: Entrez.scr,v 6.14 1999/07/01 21:40:20 kimelman Exp $
+ * $Id: Entrez.scr,v 6.15 1999/10/22 17:50:35 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez.scr,v $
+ * Revision 6.15  1999/10/22 17:50:35  kimelman
+ * synced to OS
+ *
  * Revision 6.14  1999/07/01 21:40:20  kimelman
  * qa_checks extended
  *
@@ -129,7 +132,7 @@ create proc
 id_get_asnprop ( @sat_key int)
 as
   select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), 
-          length=datalength(blob), owner=convert(smallint,0),"unknown","N/A"
+          length=datalength(blob), owner=convert(smallint,0),"unknown","N/A",class=convert(tinyint,0)
     from  Struct
    where  acc = @sat_key
  

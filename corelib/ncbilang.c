@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 5/27/97
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbilang.c,v $
+* Revision 6.2  1999/12/21 17:52:40  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
 * Revision 6.1  1997/11/26 21:26:16  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -201,18 +204,30 @@ static int SJIS2ndByte(unsigned char ch)
 }
 #endif
 
+/* Nlm_LetterByte
+ *
+ *  Pass in a pointer to a string and we return the number of bytes
+ *  per character that the underlying OS is using...
+ */
 
 NLM_EXTERN int Nlm_LetterByte(const char* str)
 {
 	int byte = 0x0F0F;	/* magic number to assert. */
 
 #ifdef OS_MAC
+    /* This should work regardless of the language/script system in use...
+     * if more languages are supported in the future, this function shouldn't need
+     * to be changed. pjc 12/99
+     */
 	if ((str == NULL) || (*str == '\0')) {
 		byte = 0;
 	}
 	else {
-		byte = (CharType((char*)str, 0) & smChar2byte) ? 2 : 1;
-	}
+    	long script = GetScriptManagerVariable(smSysScript);
+    	long lang = GetScriptVariable((short)script, smScriptLang);
+
+   	    byte = (CharacterType((char*)str, 0, lang) & smChar2byte) ? 2:1;
+    }
 #endif /*OS_MAC*/
 
 #ifdef WIN16

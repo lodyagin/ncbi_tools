@@ -1,0 +1,97 @@
+--**********************************************************************
+--
+--  Definitions for CDD's 
+--
+--  NCBI Structure Group
+--
+--  National Center for Biotechnology Information
+--  National Institutes of Health
+--  Bethesda, MD 20894 USA
+--
+--  October 1999
+--
+--   asntool -B objcdd -G -m cdd.asn 
+--   -M asn.all,mmdb1.asn,mmdb2.asn,mmdb3.asn -w 100 -o cdd.h -K cdd.h
+--   -I objseq.h
+-- 
+--**********************************************************************
+
+NCBI-Cdd DEFINITIONS ::=
+-- NCBI Conserved Domain Definition
+
+BEGIN
+
+EXPORTS  Cdd-id, Cdd-id-set, Cdd, Cdd-set, Cdd-tree, Cdd-tree-set;
+
+IMPORTS  Date       FROM NCBI-General
+         Pub        FROM NCBI-Pub
+         Biostruc-feature-set FROM MMDB-Features
+         Seq-annot  FROM NCBI-Sequence;
+
+-- Cdd's should not exist without a unique integer id, but alternative 
+-- id's may be present as well.
+
+Global-id ::= SEQUENCE {
+             accession      VisibleString,
+             release        VisibleString OPTIONAL,
+             version        INTEGER OPTIONAL,   -- version 0 is the seed
+             database       VisibleString OPTIONAL   -- this is NOT the source!
+             }                                       -- rather the database the
+                                                     -- object resides in
+
+Cdd-id ::= CHOICE {
+             uid            INTEGER,
+             gid            Global-id
+             }
+
+Cdd-id-set ::= SEQUENCE OF Cdd-id
+
+-- the Cdd-tree contains the hierarchy of CDDs.  This object is separate from
+-- the Cdd's themselves to allow it to be retrieved separately and to
+-- operate as an index.
+
+Cdd-tree ::= SEQUENCE {
+            id            Cdd-id,
+            parents       Cdd-id-set,
+            children      Cdd-id-set,
+            name          VisibleString
+            }
+
+Cdd-tree-set ::= SEQUENCE OF Cdd-tree
+
+-- The description of CDD's refers to the specific set of aligned sequences,
+-- the region that is being aligned and the information contained in the
+-- alignment. It may contain a lengthy comment
+-- describing the function of the domain as well as its origin and all
+-- other anecdotal information that can't be pressed into a rigid scheme.
+-- Crosslinks to reference papers available in PubMed are possible as well.
+-- There can be as many of these as you want in the CDD.
+
+Cdd-descr ::= CHOICE {
+                comment    VisibleString,
+                reference  Pub
+              }
+
+-- the Cdd is the basic ASN.1 object storing an annotated and curated
+-- set of alignments (formulated as a set of pairwise master-slave
+-- alignments). 
+-- The alignment data are contained in Seq-align-sets and Biostruc-feature-sets.
+-- Version numbers are meant to be updated every time the Cdd is changed in
+-- a way that does not require the id's to be changed.
+
+Cdd ::= SEQUENCE {
+  name          VisibleString,
+  othernames    SEQUENCE OF VisibleString OPTIONAL,  -- alternative names for the CDD
+  categories    SEQUENCE OF VisibleString OPTIONAL,  -- intracellular, extracellular, etc.
+  id            Cdd-id,
+  description   SEQUENCE OF Cdd-descr OPTIONAL,
+  create-date   Date OPTIONAL,
+  source        VisibleString OPTIONAL,  -- the database the seeds were created
+                                         -- from, e.g. SMART, PFAM, etc..
+  seqannot      Seq-annot,               -- contains the alignment
+  strucalign    Biostruc-feature-set OPTIONAL  -- contains vast alignment
+}
+
+Cdd-set ::= SEQUENCE OF Cdd
+
+END

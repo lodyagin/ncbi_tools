@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.85 $
+* $Revision: 6.91 $
 *
 * File Description: 
 *
@@ -147,8 +147,6 @@ static CharPtr get_first_notemptyline (FILE *fp)
      MemFree (str);
      str = FGetLine (fp);
   }
-  if (str)
-     MemFree (str);
   return str;
 }
 
@@ -1415,6 +1413,15 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
      lg_seq = 0;
      n_seq = 0;
      while (str) {
+        /* the following break statement bypassed sequence reading */
+        /*
+        tmp = StringStr(str, "MATRIX");
+        if (tmp == NULL)
+           tmp = StringStr(str, "matrix");
+        if (tmp != NULL) {
+           break;
+        }
+        */
         if (n_seq == 0) {
            tmp = StringStr(str, "NTAX");
            if (tmp == NULL)  
@@ -1568,8 +1575,8 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
                       else
                          str[j] = '-';
                    }
-                   else if (str[j] == '?')
-                      str[j] = 'N';
+                   else if (str[j] == missingchar)
+                      str[j] = '-';
                    if ((str[j] >= 'A' && str[j] <= 'Z') || str[j]=='*' || str[j] == '-') { 
                       tmp [lgseq[i_seq]] = str[j]; 
                       ++lgseq [i_seq];
@@ -1606,8 +1613,11 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
      lg_seq = lmax;
   else if (lmax < lg_seq) 
   {
-     if (lg_seq < LENGTHMAX )
+     if (lg_seq < LENGTHMAX ) {
         Message(MSG_OK, "Length in file %d != alignment length %d", (int) lg_seq, (int) lmax);
+        /**** FREE DATA STRUCT ***********/
+        return NULL;
+     }
      lg_seq = lmax;
   }
   *offset_line = top_lines;
@@ -1747,6 +1757,8 @@ extern SeqEntryPtr ReadInterleaveAlign (CharPtr path, Uint1 mol_type)
         sep = ReadLocalAlignment (SALSAA_NEXUS, path);
      else
         sep = ReadLocalAlignment (SALSA_NEXUS, path);
+     if (str)
+        MemFree (str);
      return sep;
   }
   if (sscanf (str, "%d %ld", &val1, &val2) == 2) {
@@ -1757,6 +1769,8 @@ extern SeqEntryPtr ReadInterleaveAlign (CharPtr path, Uint1 mol_type)
         else 
            sep = ReadLocalAlignment (SALSA_PHYLIP, path);
      } 
+     if (str)
+        MemFree (str);
      return sep;
   }
   ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet"); 
@@ -1791,6 +1805,8 @@ extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
         sep = ReadLocalAlignment (SALSAA_FASTGAP, path);
      else 
         sep = ReadLocalAlignment (SALSA_FASTGAP, path);
+     if (str)
+        MemFree (str);
      return sep;
   }
   tmp = StringStr(str, "NEXUS");
@@ -1800,6 +1816,8 @@ extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
   {
      if (!ISA_aa(mol_type))
         sep = ReadLocalAlignment (SALSA_PAUP, path);
+     if (str)
+        MemFree (str);
      return sep;
   }
   tmp = StringStr(str, "MACAWDATAFILE");
@@ -1809,6 +1827,8 @@ extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
   {
      if (!ISA_aa(mol_type))
         sep = ReadLocalAlignment (SALSA_MACAW, path);
+     if (str)
+        MemFree (str);
      return sep;
   }
   ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet");
@@ -1820,7 +1840,9 @@ extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
   SeqEntryPtr sep = NULL;
   Uint1       mol_type=Seq_mol_na;
   Char        name [PATH_MAX];
+  ErrSev      errlev;
  
+
   if (is_prot)
      mol_type = Seq_mol_aa;
   if (path == NULL)
@@ -1830,6 +1852,7 @@ extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
      }
      path = name;
   }
+  errlev = ErrSetMessageLevel (SEV_FATAL);
   sep = AsnReadForSalsa (path);
   if (sep==NULL) {
      sep = ReadInterleaveAlign (path, mol_type);
@@ -1837,6 +1860,7 @@ extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
   if (sep==NULL) {
      sep = ReadContiguouseAlign (path, mol_type);
   }
+  ErrSetMessageLevel (errlev);
   return sep;
 }
 
@@ -1929,6 +1953,7 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
 extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp)
 {
   SeqAlignPtr      salp = NULL,
+                   salptmp,
                    salp_original=NULL;
   SeqAnnotPtr      sap = NULL;
   SeqEntryPtr      sep = NULL;
@@ -1938,6 +1963,7 @@ extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp)
   Boolean          new_seqalign=FALSE,
                    ok=FALSE,
                    replace_salp=FALSE;
+  MsgAnswer        ans;
 
   if (adp==NULL)
      return NULL;
@@ -1945,23 +1971,41 @@ extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp)
   importslp = CCReadAnythingLoop (NULL, adp->seq_info);
   if (importslp != NULL) 
   {
-     if (adp->sap_original != NULL) {
-        salp_original = (SeqAlignPtr)(adp->sap_original->data);
-        if (salp_original->dim==2 || is_dim2seqalign (salp_original))
-           salp_original=salp_original;
-        else {
-           if (salp_original->dim == 1)
-              replace_salp = TRUE;
-           salp_original=NULL;
-        }
-     }
-     if (salp_original)
-        ok=SeqAlignSeqLocComp (salp_original, importslp); 
-     if (!ok)
+     if (adp->sap_original != NULL) 
      {
-        slp = (SeqLocPtr) adp->master.region;
-        if (slp!=NULL) 
+        salp_original = (SeqAlignPtr)(adp->sap_original->data);
+        if (salp_original)
+           ok=SeqAlignSeqLocComp (salp_original, importslp); 
+        if (!ok)
         {
+           if (salp_original->dim==2 || is_dim2seqalign (salp_original))
+              salp_original=salp_original;
+           else if (salp_original->dim == 1)
+           {
+              replace_salp = TRUE;
+              salp_original=NULL;
+           }
+           else {
+              ans = Message (MSG_OKC, "You have a multiple alignment.\n Importing a sequence will convert it into a multiple pairwise alignment.\n Do you want to continue ?");
+              if (ans != ANS_CANCEL) { 
+                 salptmp = multseqalign_to_pairseqalign (salp_original);
+                 if (salptmp) {
+                    SeqAlignListFree (salp_original);
+                    adp->sap_original->data = (Pointer) salptmp;
+                    salp_original = salptmp;
+                 }
+                 else
+                    salp_original=NULL;
+              }
+              else 
+                 salp_original=NULL;
+           }
+        }
+        if (salp_original)
+        {
+         slp = (SeqLocPtr) adp->master.region;
+         if (slp!=NULL) 
+         {
            ValNodeAddPointer (&sqloc, 0, (Pointer)slp);
            sqloc->next = importslp;
            salp = SeqLocListToSeqAlign (sqloc, (Int2)adp->align_format, NULL);
@@ -1978,9 +2022,10 @@ extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp)
               else
                  Message (MSG_OK, "No significant similarity detected. No alignment produced");
            }
-        }
-        if (!new_seqalign && !replace_salp)
+         }
+         if (!new_seqalign && !replace_salp)
            salp = SeqAlignSetFree (salp);
+      }
      }
      else
         Message(MSG_OK, "Can not import a sequence already in the editor"); 
@@ -2042,6 +2087,7 @@ static void FetchTextProc (TexT t)
 static SeqAlignPtr align_this (SeqEntryPtr sep, SeqLocPtr master, SeqAnnotPtr sap, WindoW editor_window, EditAlignDataPtr adp)
 {
   SeqAlignPtr  salp = NULL, 
+               salptmp,
                salp_original = NULL;
   ValNodePtr   vnp=NULL,
                vnp2=NULL;
@@ -2049,6 +2095,7 @@ static SeqAlignPtr align_this (SeqEntryPtr sep, SeqLocPtr master, SeqAnnotPtr sa
   Boolean      ok = FALSE,
                new_seqalign = FALSE,
                replace_salp = FALSE;
+  MsgAnswer    ans;
 
   if (sep==NULL)
      return NULL;
@@ -2063,10 +2110,25 @@ static SeqAlignPtr align_this (SeqEntryPtr sep, SeqLocPtr master, SeqAnnotPtr sa
         salp_original = (SeqAlignPtr)(sap->data);
         if (salp_original->dim==2 || is_dim2seqalign (salp_original))
            salp_original=salp_original;
-        else {
-           if (salp_original->dim == 1)
+        else if (salp_original->dim == 1)
+        {
               replace_salp = TRUE;
-           salp_original=NULL;
+              salp_original=NULL;
+        }
+        else {
+           ans = Message (MSG_OKC, "You have a multiple alignment.\n Importing a sequence will convert it into a multiple pairwise alignment.\n Do you want to continue ?");
+           if (ans != ANS_CANCEL) { 
+              salptmp = multseqalign_to_pairseqalign (salp_original);
+              if (salptmp) 
+              {
+                 adp->sap_original->data = (Pointer) salptmp;
+                 salp_original = salptmp;
+              }
+              else
+                 salp_original=NULL;
+           }
+           else 
+              salp_original=NULL;
         }
      } 
      if (salp_original)
@@ -2164,74 +2226,34 @@ static void CCDownloadProc (ButtoN b)
   sep = NULL;
   uid = 0;
   accn = NULL;
-/*
-  EntrezInit("Salsa", TRUE, NULL);
-*/
   if (GetValue (ffp->accntype) == 1) {
     accn = &(str [0]);
-  } else {
+  } 
+  else {
     if (! StrToLong (str, &uid)) {
      uid = 0;
     }
   }
   sep = svpp->download ("Salsa", accn, uid, is_na, &is_newbsp);
-  /*
-  if (uid > 0) {
-    ValNodeAddInt (&sip2, SEQID_GI, (Int4) uid);
-    bsp=BioseqLockById(sip2);
-    ValNodeFree(sip2);
-    if (bsp) {
-       sep = SeqMgrGetSeqEntryForData ((Pointer)bsp);
-    }
-    else {
-       sep = EntrezSeqEntryGet (uid, -2);
-       is_newbsp=(Boolean) (sep!=NULL);
-    }
-    */
-/*
-    EntrezFini (); 
-*/
-    if (sep == NULL) {
-      Message (MSG_OK, "Unable to find this record in the database.");
-    }
-    else { 
-       Remove (w);
-       if (IS_Bioseq(sep))
-       {
-          if (!is_newbsp) 
-          {
-             sep = SeqEntryNewForBioseq ((BioseqPtr)sep->data.ptrvalue);
-          } 
-          if (sep!=NULL) {
-             bsp=(BioseqPtr)sep->data.ptrvalue;
-             if (bsp) 
-             {
-                entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer)bsp);
-                if (entityID>0)
-                   align_this(sep, (SeqLocPtr)ffp->adp->master.region, ffp->adp->sap_original, ffp->editor_window, ffp->adp);
-                else 
-                   SeqEntryFree (sep); 
-             }
-             else 
-                SeqEntryFree (sep); 
-          }
-       }
-       else {
-          ErrPostEx (SEV_ERROR, 0, 0, "Unable to process object type.");
-          SeqEntryFree (sep); 
-       } 
-    } 
-/*
+  if (sep == NULL) {
+     Message (MSG_OK, "Unable to find this record in the database.");
   }
-  else {
-    EntrezFini (); 
-    Message (MSG_OK, "Unable to find this record in the database.");
-  }
-*/
-  ArrowCursor ();
-  Show (w);
-  Select (w);
-  Select (ffp->accession);
+  else { 
+     Remove (w);
+     if (!is_newbsp) 
+     {
+        if (IS_Bioseq(sep)) {
+           sep = SeqEntryNewForBioseq ((BioseqPtr)sep->data.ptrvalue);
+        } else {
+           SeqEntryFree (sep);
+           sep=NULL;
+        }
+     } 
+     if (sep!=NULL) {
+        align_this(sep, (SeqLocPtr)ffp->adp->master.region, 
+                           ffp->adp->sap_original, ffp->editor_window, ffp->adp);
+     }
+  } 
   ArrowCursor ();
   return;
 }
@@ -2781,6 +2803,7 @@ extern Boolean ShowFeatureFunc (EditAlignDataPtr adp)
   Boolean          seq_select = FALSE;
 
   switch_featOrder (adp, 1);
+  adp->seqfeat = SeqfeatlistFree (adp->seqfeat);
   for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
      anp = (AlignNodePtr) vnp->data.ptrvalue;
      if ( anp != NULL ) {
@@ -3057,7 +3080,7 @@ extern ValNodePtr update_featpept (EditAlignDataPtr adp, ValNodePtr feathead, Re
   return feathead;
 }
 
-static Boolean anp_has_feature (ValNodePtr anp_list)
+static Boolean anpp_has_feature (ValNodePtr anp_list)
 {
   ValNodePtr vnp;
   AlignNodePtr anp;
@@ -3076,11 +3099,12 @@ static Boolean anp_has_feature (ValNodePtr anp_list)
            }
         }
      }
-     if (!featb)
-        return FALSE;
+     if (featb)
+        return TRUE;
   }
-  return TRUE;
+  return FALSE;
 }
+
 extern void ShowFeatureProc (PaneL pnl, Boolean invalidate) 
 {
   WindoW             temport;
@@ -3099,7 +3123,7 @@ extern void ShowFeatureProc (PaneL pnl, Boolean invalidate)
   WatchCursor ();
   if ( adp->showfeat ) {
         ok = TRUE;
-        if (!anp_has_feature (adp->anp_list)) 
+        if (!anpp_has_feature (adp->anp_list)) 
            ok = (Boolean) ShowFeatureFunc (adp);
         if (ok) {
            Enable (wdp->hidefeatitem);
@@ -3109,7 +3133,7 @@ extern void ShowFeatureProc (PaneL pnl, Boolean invalidate)
   }
   else  {
         ok = TRUE;
-        if (anp_has_feature (adp->anp_list)) 
+        if (anpp_has_feature (adp->anp_list)) 
            ok = (Boolean) HideFeatureFunc (adp);
         if (ok) {
            Disable (wdp->hidefeatitem);

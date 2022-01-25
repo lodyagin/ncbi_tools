@@ -1,4 +1,4 @@
-/*  $Id: udvdef.h,v 6.3 1999/07/27 13:57:41 durand Exp $
+/*  $Id: udvdef.h,v 6.8 2000/01/05 21:07:50 durand Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   07/09/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.8 $
 *
 * File Description: this file is the companion of udviewer.h
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvdef.h,v $
+* Revision 6.8  2000/01/05 21:07:50  durand
+* update mouse click actions and DrawSequence function for a better use from ddv and cn3d
+*
+* Revision 6.7  1999/11/18 14:44:42  durand
+* add UDVMapInfo data structure for the Entrez sequence viewer
+*
+* Revision 6.6  1999/11/03 13:45:34  durand
+* add MS_ACTION_SELECT_FULL_SEQ define for DDV
+*
+* Revision 6.5  1999/10/02 15:11:09  durand
+* update the code to be used by wwwudv
+*
+* Revision 6.4  1999/09/22 14:26:31  durand
+* add fields for DDV mouse management
+*
 * Revision 6.3  1999/07/27 13:57:41  durand
 * modify display type defines
 *
@@ -63,6 +78,26 @@ extern "C" {
 
 *******************************************************************************/
 #include <ncbi.h>
+
+/*******************************************************************************
+
+	STRUCTURES
+
+*******************************************************************************/
+typedef union datablock {
+        Pointer ptrvalue;
+        Uint4   uintvalue;
+} DataBlock, PNTR DataBlockPtr;
+
+typedef struct udvmapinfo {/*use to build the image map of the Entrez viewer*/
+	Int2  left;       /*RecT for the map location*/
+	Int2  top;        /*note: I cannot use the Vibrant RecT because */
+	Int2  right;      /*udvdef.h is in API and must be Vibrant free.*/
+	Int2  bottom;
+	Uint1     Type;  /*data type*/
+	DataBlock data;  /*data itself*/
+} UDVMapInfo, PNTR UDVMapInfoPtr;
+
 
 /*******************************************************************************
 
@@ -110,9 +145,11 @@ extern "C" {
 #define LAYOUT_LOWER_CASE	2
 	
 	/*Mouse actions*/
-#define MS_ACTION_FEAT_NOTHING	1 /*no action*/
-#define MS_ACTION_FEAT_CURSOR	2 /* double cursor for features*/
-#define MS_ACTION_RESIZE_WIN	3 /*resize cxName region*/	
+#define MS_ACTION_FEAT_NOTHING	  1 /*no action*/
+#define MS_ACTION_FEAT_CURSOR	  2 /* double cursor for features*/
+#define MS_ACTION_RESIZE_WIN	  3 /*resize cxName region*/	
+#define MS_ACTION_SELECT_SEQ	  4 /*select letters on the sequence*/	
+#define MS_ACTION_SELECT_FULL_SEQ 5 /*select full sequence*/
 
 	/*************************************************************************
 
@@ -150,8 +187,17 @@ extern "C" {
 #define UDV_REGION_PARAGLIST     ((Uint1)3)
 #define UDV_REGION_SEQALIGNRULER ((Uint1)4) /*use by DDV only*/
 
+	/*main display types*/
 #define DDV_DISP_HORZ ((Uint4)1)
 #define DDV_DISP_VERT ((Uint4)2)
+#define DDV_DISP_LABEL ((Uint4)4)
+
+/*timer control*/
+#define UDV_SET_TIMER 1
+#define UDV_TEST_TIMER 2
+/*action associated with the timer*/
+#define UDV_INVAL_REGION 1
+#define UDV_NOTHING 2
 	
 #ifdef __cplusplus
 }

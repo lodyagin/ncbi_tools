@@ -28,15 +28,15 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: salsap.h,v $
+* Revision 6.3  1999/11/24 21:24:28  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
 *
 * ==========================================================================
 */
@@ -52,6 +52,17 @@
 #include <salpacc.h> 
 /* For prototype for SeqAlignGapCount Function */
 #include <salpstat.h> 
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 NLM_EXTERN SeqIdPtr LIBCALL SeqAlignIDList (SeqAlignPtr salp);
 
@@ -170,8 +181,9 @@ NLM_EXTERN SeqAlignPtr LIBCALL  DenseSegToDenseDiag (SeqAlignPtr salp);
 NLM_EXTERN SeqAlignPtr LIBCALL aaSeqAlign_to_dnaSeqAlign (SeqAlignPtr salp, ValNodePtr vnp, 
 	ValNodePtr framep);
 
-extern SeqAnnotPtr aaSeqAnnot_to_dnaSeqAnnotFunc (SeqAnnotPtr PNTR sapnahead, 
-	SeqAlignPtr salpnew, ValNodePtr vnp, ValNodePtr framep);
+NLM_EXTERN SeqAnnotPtr aaSeqAnnot_to_dnaSeqAnnotFunc
+(SeqAnnotPtr PNTR sapnahead, 
+ SeqAlignPtr salpnew, ValNodePtr vnp, ValNodePtr framep);
 	
 /**
 *SeqAlign and SeqEntry
@@ -198,5 +210,22 @@ NLM_EXTERN SeqAlignPtr LIBCALL DeleteRegion (SeqIntPtr sip, SeqAlignPtr salp);
 
 NLM_EXTERN SeqAlignPtr LIBCALL DenseDiagToDenseSegFunc (SeqAlignPtr salp, Boolean add_ends);
 NLM_EXTERN SeqAlignPtr LIBCALL DenseDiagToDenseSeg (SeqAlignPtr salp, Boolean add_ends);
+
+NLM_EXTERN SeqAnnotPtr multseqalign_from_pairseqalign (SeqAlignPtr salp);
+NLM_EXTERN SeqAlignPtr PairSeqAlign2MultiSeqAlign (SeqAlignPtr salp);
+NLM_EXTERN Int2 LIBCALLBACK MultSeqAlignFromPairSeqAlign (Pointer data);
+
+NLM_EXTERN SeqAlignPtr LIBCALL multseqalign_to_pairseqalign (SeqAlignPtr salp);
+
+#ifdef __cplusplus
+}
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
 #endif

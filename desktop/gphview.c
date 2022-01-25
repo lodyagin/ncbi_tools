@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description:
 *
@@ -257,7 +257,7 @@ static void ReleaseMap (VieweR vwr, SegmenT seg, PoinT pt)
       } else {
         ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
       }
-    } else {
+    } else if (! bvp->wasShiftKey) {
       ObjMgrDeSelect (0, 0, 0, 0, NULL);
     }
   }
@@ -384,7 +384,7 @@ static void ReleaseGraphic (VieweR vwr, SegmenT seg, PoinT pt)
       } else {
         ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
       }
-    } else {
+    } else if (! bvp->wasShiftKey) {
       ObjMgrDeSelect (0, 0, 0, 0, NULL);
     }
   }
@@ -1323,7 +1323,7 @@ static void ReleaseAlignment (VieweR vwr, SegmenT seg, PoinT pt)
       } else {
         ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
       }
-    } else {
+    } else if (! bvp->wasShiftKey) {
       ObjMgrDeSelect (0, 0, 0, 0, NULL);
     }
   }
@@ -1686,7 +1686,7 @@ static void ReleaseSalsa (PaneL pnl, PoinT pt)
       } else {
         ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
       }
-    } else {
+    } else if (! bvp->wasShiftKey) {
       ObjMgrDeSelect (0, 0, 0, 0, NULL);
     }
   }
@@ -1821,7 +1821,9 @@ static void ReleaseDesktop (VieweR vwr, SegmenT s, PoinT pt)
   itemID = primID;
   itemtype = segID;
   if (primID == 0 || segID == 0) {
-    ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    if (! bvp->wasShiftKey) {
+      ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    }
     return;
   }
   if (itemID == VSM_PICT_UP_BUTTON) {

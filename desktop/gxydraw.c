@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: sentinel dot plots
 *
@@ -38,12 +38,16 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gxydraw.c,v $
+* Revision 6.6  1999/10/04 17:46:23  kans
+* include vibrant.h
+*
 * Revision 6.5  1998/09/16 19:00:37  kuzio
 * cvs logs
 *
 * ==========================================================================
 */
 
+#include <vibrant.h>
 #include <seqport.h>
 #include <drawingp.h>
 #include <gxydraw.h>

@@ -400,14 +400,16 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
        maxLength = lengthArray[i];
      posCheckpointFreeMemory(posSearch, queryLength);
      FileClose(thisProfileFile);
+     thisProfileFile = NULL;
      FileClose(thisSequenceFile);
+     thisSequenceFile = NULL;
      MemFree(query);
      SeqEntryFree(sep);
      BLAST_ScoreBlkDestruct(sbp);
      MemFree(compactSearch->standardProb);
      if (success) {
        MemFree(matrixFileName);
-       if ('\0' == directoryPrefix[0]) 
+       if ('\0' != directoryPrefix[0]) 
          MemFree(relativeMatrixFileName);
      }
    }

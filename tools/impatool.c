@@ -176,8 +176,8 @@ IMPALAGetReference(Boolean html)
           ;
 	} else
 		add_string_to_bufferEx("Reference: Alejandro A. Schaffer, Yuri I. Wolf, Chris P. Ponting, ", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("Eugene V. Koonin, L. Aravind, Stephen F. Altschul (1999), ", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("\"Software to Match a Protein Sequence Against a Collection of ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("Eugene V. Koonin, L. Aravind, Stephen F. Altschul (2000), ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("\"IMPALA: Matching a Protein Sequence Against a Collection of ", &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("\"PSI-BLAST-Constructed Position-Specific Score Matrices\",", &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("Bioinformatics, to appear.", &ret_buffer, &ret_buffer_length, TRUE);
 	return ret_buffer;

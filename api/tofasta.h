@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.5  1999/09/20 18:37:55  shavirin
+* Added definition of the function Int4 GetOrderBySeqId().
+*
 * Revision 6.4  1998/02/23 16:51:27  egorov
 * Changes to make the tofasta.c independent on readdb.h
 *
@@ -313,6 +316,8 @@ NLM_EXTERN SeqPortPtr FastaSeqPort PROTO((BioseqPtr bsp, Boolean is_na,
 *
 *****************************************************************************/
 NLM_EXTERN Boolean FastaSeqLine PROTO((SeqPortPtr spp, CharPtr buf, Int2 linelen, Boolean is_na));
+
+Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot);
 
 #ifdef __cplusplus
 }

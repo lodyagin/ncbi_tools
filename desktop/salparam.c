@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
@@ -2498,7 +2498,7 @@ static void PropagateFeatureProc (ButtoN b)
      sap = SeqAnnotBoolSegToDenseSeg (adp->sap_align);
      salp = (SeqAlignPtr) sap->data;
      vnpfeat = NULL;
-     vnpf = adp->seqfeat;
+     vnpf = adp->allseqfeat;
      kmax = CountItems (dbdp->lst3);
      jmax = CountItems (dbdp->lst2);
      for (k=1; k<=kmax; k++)
@@ -2579,7 +2579,7 @@ static void select_lst_sseq (LisT lst)
      for (j=1; j<=jmax; j++) 
      {
         val = GetItemStatus (lst, j);
-        vnpf = adp->seqfeat;
+        vnpf = adp->allseqfeat;
         kmax = CountItems (dbdp->lst3);
         for (k=1; k<=kmax; k++)
         {
@@ -2621,7 +2621,7 @@ static void select_lst_feat (LisT lst)
      jmax = CountItems (dbdp->lst1);
      for (j=1; j<=jmax; j++) 
      {
-        vnpf = adp->seqfeat;
+        vnpf = adp->allseqfeat;
         kmax = CountItems (lst);
         val = FALSE;
         for (k=1; k<=kmax; k++)
@@ -2700,30 +2700,13 @@ static void selectall3 (ButtoN b)
   selectall (dbdp->lst3);
 }
 
-static ValNodePtr ShowAllFeatureFunc (EditAlignDataPtr adp)
-{
-  AlignNodePtr     anp;
-  ValNodePtr       vnp,
-                   allseqfeat = NULL;
-  SeqLocPtr        slp;
-
-  for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
-     anp = (AlignNodePtr) vnp->data.ptrvalue;
-     if ( anp != NULL ) {
-           slp = CollectSeqLocFromAlignNode (anp);
-           CollectFeatureForAlign (slp, anp, adp->featOrder, adp->groupOrder);
-           allseqfeat = CollectFeatureForEditor (slp, allseqfeat, anp->seq_entityID, anp->bsp_itemID, adp->featOrder, TRUE);
-     }
-  }
-  return allseqfeat;
-}
-
 static ValNodePtr AddAllFeatureFunc (EditAlignDataPtr adp, ValNodePtr allseqfeat)
 {
   AlignNodePtr     anp;
   ValNodePtr       vnp;
   SeqLocPtr        slp;
 
+  allseqfeat = SeqfeatlistFree (allseqfeat);
   for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
      anp = (AlignNodePtr) vnp->data.ptrvalue;
      if ( anp != NULL ) {
@@ -2763,9 +2746,8 @@ NLM_EXTERN void PropagateFeatDialog (IteM i)
   w = ParentWindow (i);
   if ( ( adp = GetAlignEditData (w) ) == NULL ) 
      return;
-  adp->seqfeat = AddAllFeatureFunc (adp, adp->seqfeat);
-
-  allseqfeat = adp->seqfeat;
+  adp->allseqfeat = AddAllFeatureFunc (adp, adp->allseqfeat);
+  allseqfeat = adp->allseqfeat;
   wdialog = FixedWindow (-50, -33, -10, -10, "Feature Propagation", StdCloseWindowProc);
   dbdp = (DialogBoxDataPtr) MemNew (sizeof (DialogBoxData));
   SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);

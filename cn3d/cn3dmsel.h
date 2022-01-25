@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Reusable group for model selection in mmdbapi 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dmsel.h,v $
+* Revision 6.1  1999/10/29 14:15:29  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.0  1997/08/25 18:13:37  madden
 * Revision changed to 6.0
 *
@@ -51,7 +54,7 @@
 *
 * ==========================================================================
 */
- 
+
 /* cn3dmsel.h for model selection */
 
 #ifndef _CN3DMSEL_
@@ -62,11 +65,9 @@ extern "C" {
 #endif
 
 Int2Ptr LIBCALL PickedModels(Int4Ptr piNumModels);
-GrouP LIBCALL Cn3D_ModelSelect(GrouP g,  Boolean KeepVectors);
+GrouP LIBCALL Cn3D_ModelSelect(GrouP g, Boolean KeepVectors);
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif
- 

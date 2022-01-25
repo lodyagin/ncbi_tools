@@ -1,4 +1,4 @@
-/*  $Id: cn3dentr.h,v 6.1 1999/01/14 19:07:16 kans Exp $
+/*  $Id: cn3dentr.h,v 6.2 1999/10/29 14:15:27 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dentr.h,v $
+* Revision 6.2  1999/10/29 14:15:27  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.1  1999/01/14 19:07:16  kans
 * network availability is configurable
 *
@@ -63,24 +66,22 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 /* Set Query callback and data
  */
-NLM_EXTERN void   LIBCALL Cn3D_SetQueryCallback(BeepHook, VoidPtr);
+NLM_EXTERN void LIBCALL Cn3D_SetQueryCallback(BeepHook, VoidPtr);
 
 /* Create CN3D window with some Entrez specifics;  return the created WindoW
  */
-NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(ItmActnProc netconfig, Boolean usingEntrez);
+NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(ItmActnProc netconfig,
+                                         Boolean usingEntrez);
 
 #ifdef __cplusplus
 }
 #endif
-
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT
 #define NLM_EXTERN NLM_EXPORT
 #else
 #define NLM_EXTERN
 #endif
-
-#endif  /* _CN3DENTR_ */
+#endif                          /* _CN3DENTR_ */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,15 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.15  1999/12/30 16:36:38  kans
+* additional cleanup (Churchill)
+*
+* Revision 6.14  1999/12/27 22:21:01  shavirin
+* Fixed FileWrite() function for size == 0
+*
+* Revision 6.13  1999/12/21 17:52:39  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
 * Revision 6.12  1998/06/26 20:39:41  vakatov
 * Added FilePathFind() -- complimentary to FileNameFind()
 *
@@ -118,6 +127,10 @@
 #define THIS_FILE  _this_file
 
 #include "corepriv.h"
+#ifdef OS_MAC
+#include <Navigation.h>
+#include <Script.h>
+#endif
 
 #ifdef OS_UNIX_SUN
 #define DEFAULT_CDROM "/dev/sr0"
@@ -225,36 +238,6 @@ static long Nlm_MacGetDirID (Nlm_CharPtr pathname, short newVRefNum, OSErr *errp
   }
 }
 
-static OSErr Nlm_SetDefault (short newVRefNum, long newDirID, short *oldVRefNum, long *oldDirID)
-
-{
-  OSErr  error;
-
-  error = HGetVol (NULL, oldVRefNum, oldDirID);
-  if (error == noErr) {
-    error = HSetVol (NULL, newVRefNum, newDirID);
-  }
-  return (error);
-}
-
-static OSErr Nlm_RestoreDefault (short oldVRefNum, long oldDirID)
-
-{
-  OSErr  error;
-  short  defaultVRefNum;
-  long   defaultDirID;
-  long   defaultProcID;
-
-  error = GetWDInfo (oldVRefNum, &defaultVRefNum, &defaultDirID, &defaultProcID);
-  if (error == noErr) {
-    if (defaultDirID != fsRtDirID) {
-      error = SetVol (NULL, oldVRefNum);
-    } else {
-      error = HSetVol (NULL, oldVRefNum, oldDirID);
-    }
-  }
-  return (error);
-}
 #endif
 
 /*****************************************************************************
@@ -266,87 +249,11 @@ static OSErr Nlm_RestoreDefault (short oldVRefNum, long oldDirID)
 *
 *****************************************************************************/
 
-#ifdef OS_MAC
-#ifndef COMP_THINKC
-#define USE_MPW_FILE_OPEN
-#endif
-#endif
+/* p_churchill 12/99 removed MPW conditional compilation
+ */
 
 static Nlm_FileOpenHook _hookFile = NULL;
 
-#ifdef USE_MPW_FILE_OPEN
-/*
-*  MPWOptimizationErrorBypass was called in order to avoid an apparent MPC C
-*  compiler optimization problem that resulted in the newDirID value sometimes
-*  appearing to be 0.  Placing any debugging statement (or this dummy function)
-*  after the statement that gets newDirID and before the statement that uses it
-*  originally appeared to fix the problem.  Upon further investigation, it turns
-*  out to be a problem with a UNIX to Mac file server product.  The problem did
-*  not occur when compiling under THINK C.
-*/
-
-static Nlm_Int2 Nlm_MPWOptimizationErrorBypass (short newVRefNum, long newDirID)
-{
-  return 0;
-}
-
-/*
-*  In MPW, if a temporary file is written first, without being created, it is
-*  created on the hard disk, rather than in the appropriate path.  This code
-*  creates the file in the desired location.
-*/
-
-static void Nlm_MPWCreateOutputFile (Nlm_CharPtr pathname, Nlm_CharPtr filename)
-
-{
-  OSErr     err;
-  FILE      *f;
-  Nlm_Char  temp [256];
-
-  f = fopen (filename, "r");
-  if (f == NULL) {
-    Nlm_StringNCpy_0(temp, pathname, sizeof(temp));
-    Nlm_CtoPstr ((Nlm_CharPtr) temp);
-    err = Create ((StringPtr) temp, 0, '    ', 'TEXT');
-  } else {
-    fclose (f);
-  }
-}
-
-static FILE * LIBCALL  Nlm_MPWFileOpen (Nlm_CharPtr pathname, Nlm_CharPtr mode)
-
-{
-  Nlm_Boolean  createfile;
-  OSErr        err;
-  FILE         *f;
-  long         newDirID;
-  short        newVRefNum;
-  long         oldDirID;
-  short        oldVRefNum;
-  Nlm_CharPtr  ptr;
-
-  newVRefNum = Nlm_MacGetVRefNum (pathname, &err);
-  newDirID = Nlm_MacGetDirID (pathname, newVRefNum, &err);
-  ptr = Nlm_StringRChr (pathname, (int) DIRDELIMCHR);
-  createfile = (Nlm_Boolean) (strchr (mode, 'w') != NULL);
-  if (ptr != NULL) {
-    ptr++;
-	Nlm_MPWOptimizationErrorBypass (newVRefNum, newDirID);
-    err = Nlm_SetDefault (newVRefNum, newDirID, &oldVRefNum, &oldDirID);
-	if (createfile) {
-	  Nlm_MPWCreateOutputFile (pathname, ptr);
-	}
-    f = fopen (ptr, mode);
-    err = Nlm_RestoreDefault (oldVRefNum, oldDirID);
-  } else {
-    if (createfile) {
-	  Nlm_MPWCreateOutputFile (pathname, pathname);
-	}
-    f = fopen (pathname, mode);
-  }
-  return f;
-}
-#endif
 
 NLM_EXTERN FILE * LIBCALL Nlm_FileOpen(const char *filename, const char *mode)
 {
@@ -377,44 +284,35 @@ NLM_EXTERN FILE * LIBCALL Nlm_FileOpen(const char *filename, const char *mode)
       f = fopen(filename, mode);
 
 #elif defined(OS_MAC)
-  {{
+  {
     OSType    fCreator;
     Nlm_Int2  fError;
     FInfo     fInfo;
     OSType    fType;
     Nlm_Char  temp [256];
+
     Nlm_StringNCpy_0(temp, filename, sizeof(temp));
     Nlm_CtoPstr ((Nlm_CharPtr) temp);
-    fError = GetFInfo ((StringPtr) temp, 0, &fInfo);
-    if (fError == 0) {
+    fError = HGetFInfo( 0, 0, (StringPtr) temp, &fInfo);
+    if (fError == noErr) {
       fCreator = fInfo.fdCreator;
       fType = fInfo.fdType;
     } else {
-      if (strchr(mode, 'b') != NULL)
-        fType = '    ';
-      else
-        fType = 'TEXT';
-      fCreator = '    ';
+        fCreator = '    ';
+        if (strchr(mode, 'b') != NULL)
+            fType = '    ';
+        else
+            fType = 'TEXT';
     }
-#ifdef USE_MPW_FILE_OPEN
-    {{
-      Nlm_Char localmode [16];
-      Nlm_Char path [PATH_MAX];
-      Nlm_StringNCpy_0(path, filename, sizeof(path));
-      Nlm_StringNCpy_0(localmode, mode, sizeof(localmode));
-      f = Nlm_MPWFileOpen(path, localmode);
-    }}
-#else
-    f = fopen (filename,mode);
-#endif /* USE_MPW_FILE_OPEN */
+    f = fopen( filename, mode);
 
-    fError = GetFInfo ((StringPtr) temp, 0, &fInfo);
-    if (fError == 0) {
+    fError = HGetFInfo( 0, 0, (StringPtr) temp, &fInfo);
+    if (fError == noErr) {
       fInfo.fdCreator = fCreator;
       fInfo.fdType = fType;
-      fError = SetFInfo ((StringPtr) temp, 0, &fInfo);
+      fError = HSetFInfo ( 0, 0, (StringPtr) temp,&fInfo);
     }
-  }} /* def OS_MAC */
+  } /* def OS_MAC */
 
 #elif defined(OS_VMS) && defined(DCC4DW12)
   /* never used */ 
@@ -499,19 +397,19 @@ NLM_EXTERN size_t LIBCALL Nlm_FileRead
 NLM_EXTERN size_t LIBCALL Nlm_FileWrite
 (const void *ptr, size_t size, size_t n, FILE *stream)
 {
-  size_t cnt;
-  if (n   &&  (SIZE_MAX / n)  <  size) {
-    ErrPostEx(SEV_WARNING,E_Programmer,0,"FileWrite:  size > SIZE_MAX");
-    return 0;
-  }
-  if (!ptr  ||  !stream)
-    return 0;
-
-  cnt = fwrite(ptr,size,n,stream);
-  if (cnt != n)
-    ErrPostEx(SEV_FATAL,E_File,E_FWrite,"File write error");
-
-  return cnt;
+    size_t cnt;
+    if (n   &&  (SIZE_MAX / n)  <  size) {
+        ErrPostEx(SEV_WARNING,E_Programmer,0,"FileWrite:  size > SIZE_MAX");
+        return 0;
+    }
+    if (!ptr  ||  !stream || !size)
+        return 0;
+    
+    cnt = fwrite(ptr,size,n,stream);
+    if (cnt != n)
+        ErrPostEx(SEV_FATAL,E_File,E_FWrite,"File write error");
+    
+    return cnt;
 }
 
 /*****************************************************************************
@@ -687,16 +585,16 @@ NLM_EXTERN Nlm_Int4 LIBCALL Nlm_FileLengthEx(const Nlm_Char* fileName)
 
 #ifdef OS_MAC
   {{
-    ParamBlockRec params;
-    Nlm_Char      path[256];
+    HParamBlockRec  params;
+    Nlm_Char        path[256];
 
     Nlm_StringNCpy_0(path, fileName, sizeof(path));
+    Nlm_CtoPstr((Nlm_CharPtr) path);
     params.fileParam.ioNamePtr = (StringPtr)path;
     params.fileParam.ioVRefNum = 0;
     params.fileParam.ioFDirIndex = 0;
-    Nlm_CtoPstr((Nlm_CharPtr) path);
-    return (PBGetFInfo(&params, FALSE) == noErr) ?
-      params.fileParam.ioFlLgLen : -1;
+    return (PBHGetFInfo(&params, FALSE) == noErr) ?
+            params.fileParam.ioFlLgLen : -1;
   }}
 #else
   {{
@@ -768,27 +666,31 @@ static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
 NLM_EXTERN void LIBCALL Nlm_FileCreate (Nlm_CharPtr fileName, Nlm_CharPtr type, Nlm_CharPtr creator)
 
 {
-  FILE      *fp;
 #ifdef WIN_MAC
-  OSType    fCreator;
   Nlm_Int2  fError;
-  OSType    fType;
   Nlm_Char  temp [256];
+  OSType    fType;
+  OSType    fCreator;
+  FSSpec    spec;
+#else
+  FILE      *fp;
 #endif
 
   if (fileName != NULL && fileName [0] != '\0') {
+
 #ifdef WIN_MAC
-    if (type != NULL || creator != NULL) {
-      fp = Nlm_FileOpen (fileName, "r");
-      if (fp == NULL) {
+    // note: the following assumes either full pathname or that the current
+    // directory is the proper location to find/create the file
+
+    Nlm_StringNCpy_0(temp, fileName, sizeof(temp));
+    Nlm_CtoPstr ( temp);
+    fError = FSMakeFSSpec( 0, 0, (StringPtr)temp, &spec);
+    
+    // file not found, so create it...
+    if( fError == fnfErr){
         fType = Nlm_GetOSType (type, 'TEXT');
         fCreator = Nlm_GetOSType (creator, '    ');
-        Nlm_StringNCpy_0(temp, fileName, sizeof(temp));
-        Nlm_CtoPstr ((Nlm_CharPtr) temp);
-        fError = Create ((StringPtr) temp, 0, fCreator, fType);
-      } else {
-        Nlm_FileClose (fp);
-      }
+        FSpCreate( &spec, fCreator, fType, smSystemScript);
     }
 #else
     fp = Nlm_FileOpen (fileName, "w");
@@ -1057,8 +959,6 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
     long         gesResponse;
     long         newDirID;
     short        newVRefNum;
-    long         oldDirID;
-    short        oldVRefNum;
     CInfoPBRec   params;
     Nlm_Char     temp [PATH_MAX];
     Nlm_CharPtr  tmp;
@@ -1072,12 +972,10 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
                        kCreateFolder, &newVRefNum, &newDirID);
       if (err == noErr) {
         useTempFolder = TRUE;
-        err = Nlm_SetDefault (newVRefNum, newDirID, &oldVRefNum, &oldDirID);
       }
     }
     filename = tmpnam (NULL);
     if (useTempFolder) {
-      err = Nlm_RestoreDefault (oldVRefNum, oldDirID);
       temp [0] = '\0';
       params.dirInfo.ioNamePtr = (StringPtr) directory;
       params.dirInfo.ioDrParID = newDirID;

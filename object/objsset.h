@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.3  1999/09/27 17:48:38  kans
+* using GatherIndex structure
+*
+* Revision 6.2  1999/09/24 23:09:24  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
 * Revision 6.1  1998/05/29 20:49:26  kans
 * added BioseqseqSet_class_gen_prod_set, currently same as _other (255)
 *
@@ -87,8 +93,6 @@
 extern "C" {
 #endif
 
-typedef ValNode SeqEntry, FAR *SeqEntryPtr;
-
 /*****************************************************************************
 *
 *   loader
@@ -116,6 +120,8 @@ typedef struct seqset {
     ValNodePtr descr;
     SeqEntryPtr seq_set;
     SeqAnnotPtr annot;
+	GatherIndex idx;        /* internal gather/objmgr tracking fields */
+	SeqEntryPtr seqentry;   /* internal seqentry that points to this bioseqset */
 } BioseqSet, PNTR BioseqSetPtr;
 
 NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetNew PROTO((void));

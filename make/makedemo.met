@@ -23,6 +23,9 @@ property MASTER : "PPC"
 
 property MAKEAPPS : "TRUE"
 
+-- property DOPNG : "TRUE"
+property DOPNG : "FALSE"
+
 (* ==== These symbols will be derived ==== *)
 
 global PREFIX
@@ -47,14 +50,11 @@ with timeout of 60000 seconds
 	
 	DoSetGlobals()
 	
-	CreateNENTREZ()
-	
-	CreateSEQUIN()
 	CreateCn3D()
-	
+	CreateNENTREZ()
+	CreateSEQUIN()
 	CreatePOWBLAST()
-	CreateBLASTCL3()
-	
+	CreateBLASTCL3()	
 	CreateFORMATDB()
 	CreateBLASTALL()
 	CreateBLASTPGP()
@@ -142,7 +142,11 @@ on DoSetPreferences()
 				, Unused Variables:true Â
 				, Unused Arguments:false Â
 				, Extra Commas:true Â
-				, Extended Error Checking:true}
+				, Extended Error Checking:true Â
+				, Hidden Virtual Functions:true Â
+				, Implicit Arithmetic Conversions:false Â
+				, NonInlined Functions:true Â
+				, Inconsistent Class Struct:true}
 		
 		if MASTER = "PPC" then
 			
@@ -156,6 +160,11 @@ on DoSetPreferences()
 					, Traceback Tables:TB_None Â
 					, Schedule:false Â
 					, Peephole Optimizer:false}
+			
+			(* ===== Panel PPC Global Optimizer =====  *)
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed Â
+					, Level:1}
 			
 			(* ===== Panel PPC Linker ===== *)
 			Set Preferences of panel "PPC Linker" to Â
@@ -179,6 +188,11 @@ on DoSetPreferences()
 					, Expand Uninitialized Data:false Â
 					, Fragment Name:""}
 			
+			(* ===== Panel Debugger =====  *)
+			Set Preferences of panel "Debugger Target" to Â
+				{Log System Messages:false Â
+					, Stop At Watchpoints:true}
+		
 		else if MASTER = "68K" then
 			(* ===== Panel 68K Processor =====  *)
 			Set Preferences of panel "68K CodeGen" to Â
@@ -266,15 +280,19 @@ end AddLibraries
 on CompilePrograms()
 	tell application "CodeWarrior IDE 4.0"
 		
+		open (BUILDTEST & "cn3dOGL" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
 		open (BUILDTEST & "nentrez" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
 		open (BUILDTEST & "sequin" & SUFFIX & ".µ")
-		Make Project
-		Close Project
-		
-		open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -438,10 +456,64 @@ on CreateCn3D()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
 		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
+		
+		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+		
+		Create Project {BUILDTEST & "cn3dOGL" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3dOGL"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3dOGL"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Libraries:", origin:absolute}}}
+		if DOPNG = "TRUE" then
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:mac:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:mac:", origin:absolute}}}
+		end if
+		my DoSetPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {LIBRARIES & "ncbiid1" & SUFFIX, LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrantOGL" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3dOGL" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
+		Add Files {METRO & "OpenGL SDK:Libraries:OpenGLLibraryStub", METRO & "OpenGL SDK:Libraries:OpenGLUtilityStub"} To Segment segmentCounter
+		if DOPNG = "TRUE" then
+			Add Files {METRO & "zlib:mac:zlib.ppc.Lib", METRO & "libpng:mac:png.ppc.Lib"} To Segment segmentCounter
+		end if
 		
 		set segmentCounter to segmentCounter + 1
 		

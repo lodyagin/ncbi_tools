@@ -1,6 +1,6 @@
 #######################################################################
 #
-# $Id: devel.mk,v 6.3 1999/06/22 23:07:26 kimelman Exp $ 
+# $Id: devel.mk,v 6.4 1999/11/09 17:44:35 kimelman Exp $ 
 #
 
 # SGI options
@@ -183,13 +183,13 @@ loader.install: loader.compile loader_check.sh index/st_configure.sh PubStruct_c
 	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(loaddir) ; ./st_configure.sh
 
 loader.test: loader.install
-	mkdir mmdb
-	cp /net/vaster/mmdb/mmdb/data/1.val.gz mmdb
+	[ ! -d mmdb_test ] || rm -rf mmdb_test
+	mkdir mmdb_test
+	cp /net/vaster/mmdb/mmdb/data/1.val.gz mmdb_test
 	echo 1 >.testset
 	dsql -S MOZART_SYS10 -U kimelman -P kmlmNu <PubStruct_proc.scr
-	$(loaddir)/PubStruct_control.sh --DBserver MOZART_SYS10 --load_list .testset --dbpath ./mmdb --enforce
-	ls -l mmdb
-	rm -rf mmdb .testset
+	$(loaddir)/PubStruct_control.sh --DBserver MOZART_SYS10 --load_list .testset --path ./mmdb_test --enforce
+	rm -rf mmdb_test .testset
 
 #
 # source dependencies 

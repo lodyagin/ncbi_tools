@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.26 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -53,6 +53,27 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.33  2000/01/21 17:17:52  kans
+* MatchAAGeneToFeat now calls SeqMgrGetOverlappingGene on CDS first, avoids multiple targeted gathers, just like MatchNAGeneToFeat has done since feature indexing was first implemented
+*
+* Revision 6.32  1999/12/22 22:08:19  tatiana
+* strand check fixed
+*
+* Revision 6.31  1999/12/13 19:51:47  tatiana
+* Seq_strand_unknown added to strand check
+*
+* Revision 6.30  1999/12/09 14:33:07  tatiana
+* check the starnd for mapping gene
+*
+* Revision 6.29  1999/11/05 14:55:53  tatiana
+* check foe embl_feat added the get_feats in Gather
+*
+* Revision 6.28  1999/10/07 15:17:20  bazhin
+* Bug fixed.
+*
+* Revision 6.27  1999/10/06 20:21:50  bazhin
+* Removed memory leak in get_feats() function.
+*
 * Revision 6.26  1999/06/04 21:03:52  tatiana
 * a bug fixed in MatchAAGeneToFeat()
 *
@@ -1733,7 +1754,7 @@ static Boolean get_feats (GatherContextPtr gcp)
 				ofp->sfpGenesize, bsp, ofp->seg_bsp, gcp->entityID, 
 					gcp->itemID, gcp->thistype, gcp->new_loc, NULL, 0, temp);
 			if (ofp->show_gene) {
-				if (r_trunc == TRUE) {
+				if (r_trunc && !ofp->embl_feat && ASN2FF_SHOW_GB_STYLE) {
 					break;
 				}
 			    ofp->List = EnlargeSortList(ofp->List, ofp->sfpListsize);
@@ -1901,6 +1922,8 @@ static Boolean get_feats (GatherContextPtr gcp)
 /* if opp->list[index].slp !=NULL I shoud use it*/
 					}
 				}
+				if(opp->list != NULL && opp->list->nsp != NULL)
+					NoteStructFree(opp->list->nsp);
 				MemFree(opp->list);
 				MemFree(opp);
 				MemFree(sep);
@@ -1931,7 +1954,7 @@ static Boolean get_feats (GatherContextPtr gcp)
 static Boolean is_embl(GBEntryPtr gbp)
 {
 	CharPtr prefix = EMBL_AC;
-	static CharPtr	embl_accpref[EMBL_PREFNUM] = {"AJ", "AL", "AM", "AN"};
+	static CharPtr	embl_accpref[EMBL_PREFNUM] = {"AJ", "AL", "AM", "AN", "AX"};
 	Boolean retval = FALSE;
 	Int2 i;
 	
@@ -2059,7 +2082,8 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	Int2 			best_gene = -1, index;
 	Int4 			diff_lowest, diff_current;
 	SeqFeatPtr		gene = NULL, best_gene_feat = NULL, sfp;
-
+	Uint1			sg, sf;
+	
 	if (p == NULL)
 		return;
 	if ((sfp = p->sfp) == NULL)
@@ -2106,7 +2130,15 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	p = ofp->Genelist;
 	for (index=0; index < ofp->sfpGenesize; index++, p++) {
 		gene = p->sfp;
-		diff_current = SeqLocAinB(sfp->location, gene->location);
+		sg = SeqLocStrand(gene->location);
+		sf = SeqLocStrand(sfp->location);
+		if (sf == sg ||
+         		(sg == Seq_strand_unknown && sf != Seq_strand_minus) ||
+          			(sf == Seq_strand_unknown && sg != Seq_strand_minus)) {
+			diff_current = SeqLocAinB(sfp->location, gene->location);
+		} else {
+			continue;
+		}
 		if (! diff_current)   /* perfect match */ {
 			best_gene = index;
 			best_gene_feat = gene;
@@ -2230,6 +2262,18 @@ NLM_EXTERN void MatchAAGeneToFeat (OrganizeFeatPtr ofp, SortStructPtr p)
 		return;
 	}
 	bsp = BioseqFind(SeqLocId(sfp->location));
+
+	best_gene_feat = SeqMgrGetOverlappingGene (sfp->location, NULL);
+	if (best_gene_feat != NULL) {
+		grp = best_gene_feat->data.value.ptrvalue;
+		gsp = p->gsp;
+		GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
+		if (bsp && bsp->id->choice == SEQID_OTHER) {
+			GetDBXrefFromGene(grp, sfp);
+		}
+		return;
+	}
+
 	gofp = GetGeneListForCds(p->entityID, bsp);
 	if (gofp == NULL) {
 		return;
@@ -2402,7 +2446,8 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 	ofp = CreateOrganizeFeat();
 	ofp->lock_bsp = NULL;
-	bsp = gbp->bsp;
+	if ((bsp = gbp->bsp) == NULL)
+		return;
 	ofp->embl_feat = is_embl(gbp);
 	MemSet ((Pointer) (&gsc), 0, sizeof (GatherScope));
 	MemSet ((Pointer) (gsc.ignore), (int)(TRUE),
@@ -2415,7 +2460,7 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (ajp->format == GENPEPT_FMT) {
 		gsc.get_feats_product = TRUE;
 	}
-	gsc.seglevels = 1;
+	gsc.seglevels = 0;
 	if (ajp->slp != NULL) {
 		gsc.target = ajp->slp;
 		gsc.convert_loc = TRUE;

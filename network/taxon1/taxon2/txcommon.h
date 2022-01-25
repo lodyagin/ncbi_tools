@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcommon.h,v $
+* Revision 1.4  1999/12/20 17:05:16  soussov
+* taxid4gi added
+*
 * Revision 1.3  1999/01/28 15:43:11  soussov
 * rename the formal argument
 *
@@ -224,5 +227,6 @@ Int2    tax_getGCId(CharPtr gc_txt);
 Boolean tax_dumpGCs(void (*dmpFunc)(VoidPtr, Int2, CharPtr), VoidPtr usrData);
 
 Boolean tax_matchName(CharPtr orgName, CharPtr str, Int4 mode);
+Int4 tax_getTaxId4GI(Int4 gi);
 
 #endif

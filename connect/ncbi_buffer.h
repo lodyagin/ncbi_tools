@@ -1,7 +1,7 @@
 #ifndef NCBI_BUFFER__H
 #define NCBI_BUFFER__H
 
-/*  $Id: ncbi_buffer.h,v 6.1 1999/08/17 19:45:22 vakatov Exp $
+/*  $Id: ncbi_buffer.h,v 6.2 1999/10/12 16:30:10 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_buffer.h,v $
+ * Revision 6.2  1999/10/12 16:30:10  vakatov
+ * include <string.h> to define "size_t"
+ *
  * Revision 6.1  1999/08/17 19:45:22  vakatov
  * Moved all real code from NCBIBUF to NCBI_BUFFER;  the code has been cleaned
  * from the NCBI C toolkit specific types and API calls.
@@ -56,6 +59,9 @@
 #if defined(NCBIBUF__H)
 #  error "<ncbibuf.h> and <ncbi_buffer.h> must never be #include'd together"
 #endif
+
+/* This is only needed to define "size_t"... */
+#include <string.h>
 
 
 #ifdef __cplusplus

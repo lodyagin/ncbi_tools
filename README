@@ -755,7 +755,7 @@ relevant ncbilcl.h file) are shown below.  Those marked with an asterisk
   gcc           Gnu gcc (under SunOS, not Solaris)
   hp *          Hewlett Packard
   lna*          Linux on DEC Alpha
-  lnx           Linux
+  lnx           Linux (RedHat Linux release 5.2 with kernel 2.0.36)
   met           Macintosh Metrowerks compiler
   mpw           Macintosh Programmer's Workshop
   msc           Microsoft C for DOS
@@ -801,7 +801,8 @@ ALL -
 Unix
     tested on Sun Sparc (Solaris 2.6, Sunos 4.1.3),
 	Silicon Graphics IRIX 5.* and 6.*, DEC Alpha with OSF/1 V4.0,
-	Linux (kernel 2.0.33) on Intel, Sun Solaris for Intel (Solaris 2.7).
+	Linux (Red Hat Linux release 5.2 with kernel 2.0.36) on Intel,
+	Sun Solaris for Intel (Solaris 2.7).
 
 	Run the script ncbi/make/makedis.csh keeping it's output in the
 	separate file:

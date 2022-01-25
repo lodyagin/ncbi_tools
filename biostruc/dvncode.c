@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   25 JULY 95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *   	Doubly-linked list functions like ValNode ones.
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dvncode.c,v $
+* Revision 6.2  1999/11/10 23:19:39  lewisg
+* rewrite of selection code for ddv
+*
 * Revision 6.1  1999/04/26 20:49:59  lewisg
 * changed arguments named list to fix visual c++ bug
 *
@@ -327,6 +330,7 @@ DValNodePtr LIBCALL DValNodeFree (DValNodePtr dvp)
 {
 	DValNodePtr next;
 /* unlinks the rest of the chain if there is one */
+    if (dvp == NULL) return NULL;
 	if (dvp->last)
 		  dvp->last->next = NULL;
 	while (dvp)

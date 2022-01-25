@@ -1,4 +1,4 @@
-/*  $Id: connectn.c,v 6.3 1999/04/05 15:32:53 vakatov Exp $
+/*  $Id: connectn.c,v 6.4 1999/11/01 16:14:23 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connectn.c,v $
+* Revision 6.4  1999/11/01 16:14:23  vakatov
+* s_CONN_Read() -- milder error levels when hitting EOF
+*
 * Revision 6.3  1999/04/05 15:32:53  vakatov
 * CONN_Wait():  be more mild and discrete about the posted error severity
 *
@@ -484,7 +487,7 @@ static EConnStatus s_CONN_Read
                 x_connector, status);
       return eCONN_Success;
     } else {
-      s_ErrPost((status == eCONN_Closed ? SEV_WARNING : SEV_ERROR), 82,
+      s_ErrPost((status == eCONN_Closed ? SEV_INFO : SEV_WARNING), 82,
                 "[CONN_Read]  Cannot read data", x_connector, status);
       return status;  /* error or EOF */
     }

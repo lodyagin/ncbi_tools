@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.11 $
+* $Revision: 6.25 $
 *
 * File Description: Main entry point for Cn3d 
 *                   
@@ -37,6 +37,48 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.h,v $
+* Revision 6.25  2000/01/18 22:49:16  lewisg
+* send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
+*
+* Revision 6.24  2000/01/14 21:40:41  lewisg
+* add translucent spheres, ion labels, new cpk, fix misc bugs
+*
+* Revision 6.23  2000/01/04 15:55:50  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.22  1999/12/11 01:30:34  lewisg
+* fix bugs with sharing colors between ddv and cn3d
+*
+* Revision 6.21  1999/11/22 14:46:43  thiessen
+* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
+*
+* Revision 6.20  1999/11/18 00:21:42  lewisg
+* draw speedups and selection on mouseup
+*
+* Revision 6.19  1999/11/10 23:19:40  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.18  1999/11/02 23:06:07  lewisg
+* fix cn3d to launch correctly if there is no seqentry associated with bioseq
+*
+* Revision 6.17  1999/11/02 13:47:32  kans
+* no star between DDV_ColorFunc and Function
+*
+* Revision 6.16  1999/11/01 22:10:27  lewisg
+* add ability to call color functions by type, and add this to cn3d
+*
+* Revision 6.15  1999/10/29 14:15:28  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.14  1999/10/15 20:56:39  lewisg
+* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
+*
+* Revision 6.13  1999/10/05 23:18:19  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.12  1999/09/21 18:09:16  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.11  1999/04/06 16:06:11  coremake
 * Fixes of typos
 *
@@ -118,22 +160,21 @@
 #define CN3D_COLOR_TURN 2
 #define CN3D_COLOR_COIL 3
 /* total number of colors in fixed palette */
-#define CN3D_COLOR_MAX 33
+#define CN3D_COLOR_MAX 37
 /* total number of colors allowed in indexed palettes. keep room for background */
 #define CN3D_MAX_PALETTE 100
+/* the number of color functions used by Cn3D*/
+#define CN3DFUNCNUM 10
 
-#ifdef _OPENGL
 #include <vibrant.h>
-#include <shim3d.h>
-#else
-#include <viewer3d.h>
-#endif
+
 #include <math.h>
 #include <objalign.h>
 #include <mmdbapi.h>
 #include <salmedia.h>
+#include <ddvcolor.h>
 
-
+ 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -145,46 +186,33 @@
 extern "C" {
 #endif
 
-    /* standard color entry */
-typedef struct _Cn3D_Color {
-    ResidueColorCell ColorCell;  /* pointer to the color cell */
-    Char * Name;  /* the name of the color */
-    Char * Paints;  /* what the color paints */
-    Int4 Index; /* an index assigned to the colors after they are allocated */
-} TCn3D_Color;
+/* the typedef of a list used to keep track of the color functions */
+typedef struct _Cn3D_ColorFuncList {
+    Int2 Value;
+    Char *Name;
+    DDV_ColorFunc Function;
+} Cn3D_ColorFuncList;
 
-typedef struct _Cn3D_ColorData {
-    TCn3D_Color SSColors[CN3D_COLOR_SS];  /* secondary structure palette */
-    TCn3D_Color Highlight;  /* this is the highlight color */
-    ValNodePtr Palette;  /* valnode list of Cn3D_Colors.  type is TCn3D_Color */
-#ifdef _OPENGL
-    TOGL_Data * OGL_Data; /* pointer to OGL data */
-#endif
-} TCn3D_ColorData;
+/* list of the color functions */
+extern Cn3D_ColorFuncList Cn3D_ColorList[];
 
-extern ResidueColorCell Cn3d_PaletteRGB[];   /* yanli */
-
-extern TCn3D_ColorData Cn3D_ColorData;  /* where all dynamic color info is kept */
-#ifndef _OPENGL
-    extern Viewer3D Cn3D_v3d;  /* the 3d view pane */
-#endif
+extern Uint1 Cn3d_PaletteRGB[CN3D_COLOR_MAX][3];
 
 extern void LIBCALL Cn3D_EnableFileOps(void);
 extern void LIBCALL Cn3D_DisableFileOps(void);
 extern void LIBCALL Cn3D_DisableMenus(void);
 extern void LIBCALL Cn3D_EnableMenus(void);
-extern Boolean LIBCALL readErrors (void);
-#ifndef _OPENGL
-extern void LIBCALL Cn3D_SaveActiveCam(void);
-#endif
-NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New); 
+extern Boolean LIBCALL readErrors(void);
+
+NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New);
 NLM_EXTERN void LIBCALL Cn3D_ResetActiveStrucProc(void);
-extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu, ItmActnProc netconfig, Boolean usingEntrez);
+extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
+                              ItmActnProc netconfig, Boolean StandAlone);
 
 /*extern void LaunchAlignViewer (SeqAlignPtr salp);*/
-extern Boolean LIBCALL VASTInit (void);
-extern BiostrucAnnotSetPtr LIBCALL VASTBsAnnotSetGet (Int4 uid);
-extern void Cn3DResizeProc (WindoW w);
+extern Boolean LIBCALL VASTInit(void);
+extern BiostrucAnnotSetPtr LIBCALL VASTBsAnnotSetGet(Int4 uid);
+extern void Cn3DResizeProc(WindoW w);
 
 /* for salsa */
 /*extern Int2 LIBCALLBACK AlgViewFunc (Pointer data); 
@@ -194,12 +222,10 @@ extern Int2 LIBCALLBACK SeqEditFunc PROTO((Pointer data)); */
 #ifdef __cplusplus
 }
 #endif
-
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT
 #define NLM_EXTERN NLM_EXPORT
 #else
 #define NLM_EXTERN
 #endif
-
 #endif

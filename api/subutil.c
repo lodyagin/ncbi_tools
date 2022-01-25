@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.15 $
+* $Revision: 6.20 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.20  1999/12/23 17:26:29  kans
+* free old reftrack status string if replacing
+*
+* Revision 6.19  1999/12/20 20:35:12  kans
+* fixed problem with add refseq status field
+*
+* Revision 6.18  1999/12/20 19:57:44  kans
+* added AddStatusToRefGeneTrackUserObject
+*
+* Revision 6.17  1999/12/08 20:00:14  kans
+* AddOrgModToEntry calls OrgNameNew if necessary
+*
+* Revision 6.16  1999/10/05 17:24:54  kans
+* SeqDescrNew and SeqDescrAdd for new descriptors
+*
 * Revision 6.15  1999/08/05 20:43:44  kans
 * added CreateSubmissionUserObject (JP)
 *
@@ -628,7 +643,7 @@ static BioseqPtr NCBISubNewBioseq (
 	bsp->repr = Seq_repr_raw;   /* default case */
 /*	if (molecule_type != 0)
 	{
-		vnp = ValNodeNew(NULL);
+		vnp = SeqDescrNew(NULL);
 		bsp->descr = vnp;
 		vnp->choice = Seq_descr_mol_type;
 		vnp->data.intvalue = molecule_type;
@@ -636,7 +651,7 @@ static BioseqPtr NCBISubNewBioseq (
 */
 	if (molecule_type != 0)
 	{
-		vnp = ValNodeNew(NULL);
+		vnp = SeqDescrNew(NULL);
 		bsp->descr = vnp;
 		vnp->choice = Seq_descr_molinfo;
 		mip = (MolInfoPtr) vnp->data.ptrvalue;
@@ -1866,12 +1881,12 @@ NLM_EXTERN ValNodePtr NewDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 	if (IS_Bioseq(entry))
 	{
 		bsp = (BioseqPtr)(entry->data.ptrvalue);
-		vnp = ValNodeAdd(&(bsp->descr));
+		vnp = SeqDescrAdd(&(bsp->descr));
 	}
 	else
 	{
 		bssp = (BioseqSetPtr)(entry->data.ptrvalue);
-		vnp = ValNodeAdd(&(bssp->descr));
+		vnp = SeqDescrAdd(&(bssp->descr));
 	}
 	if (vnp != NULL)
 		vnp->choice = (Uint1)type;
@@ -1895,7 +1910,7 @@ NLM_EXTERN ValNodePtr GetDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 				return vnp;
 			}
 		}
-		vnp = ValNodeAdd(&(bsp->descr));
+		vnp = SeqDescrAdd(&(bsp->descr));
 	}
 	else
 	{
@@ -1905,7 +1920,7 @@ NLM_EXTERN ValNodePtr GetDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 				return vnp;
 			}
 		}
-		vnp = ValNodeAdd(&(bssp->descr));
+		vnp = SeqDescrAdd(&(bssp->descr));
 	}
 	if (vnp != NULL)
 		vnp->choice = (Uint1)type;
@@ -2226,6 +2241,9 @@ NLM_EXTERN Boolean AddOrgModToEntry (
 		return FALSE;
 	}
 	orp = bio->org;
+	if (orp->orgname == NULL) {
+		orp->orgname = OrgNameNew ();
+	}
 	if (orp->orgname == NULL)
 		return FALSE;
 	onp = orp->orgname;
@@ -2384,7 +2402,7 @@ NLM_EXTERN Boolean AddModifierToEntry (
 	{
 		if (tmp->choice == Seq_descr_modif)  /* have one already */
 		{
-			vnp = ValNodeNew((ValNodePtr)(tmp->data.ptrvalue));
+			vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
 			break;
 		}
 		tmp = tmp->next;
@@ -2393,7 +2411,7 @@ NLM_EXTERN Boolean AddModifierToEntry (
 	if (vnp == NULL)   /* first one */
 	{
 		tmp = NewDescrOnSeqEntry (entry, Seq_descr_modif);
-		vnp = ValNodeNew((ValNodePtr)(tmp->data.ptrvalue));
+		vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
 		tmp->data.ptrvalue = (Pointer)vnp;
 	}
 
@@ -3889,6 +3907,45 @@ NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void)
   return uop;
 }
 
+NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+
+  if (uop == NULL || status == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Status") == 0) {
+      break;
+    }
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Status");
+    curr->label = oip;
+    curr->choice = 1; /* visible string */
+
+    /* link status at beginning of list */
+
+    curr->next = uop->data;
+    uop->data = curr;
+  }
+
+  if (curr == NULL || curr->choice != 1) return;
+
+  /* replace any existing status indication */
+
+  curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
+
+  curr->data.ptrvalue = (Pointer) StringSave (status);
+}
+
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi,
                                                       Boolean sequenceChange,
@@ -3921,6 +3978,9 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     oip->str = StringSave (field);
     curr->label = oip;
     curr->choice = 11; /* user fields */
+
+    /* link new set at end of list */
+
     if (prev != NULL) {
       prev->next = curr;
     } else {

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.6  1999/09/28 12:09:56  kans
+* added alignID field
+*
+* Revision 6.5  1999/09/27 17:48:37  kans
+* using GatherIndex structure
+*
+* Revision 6.4  1999/09/24 23:09:23  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
 * Revision 6.3  1999/09/07 17:00:26  kans
 * added entityID, itemID, itemtype fields for new Alignment Indexing functions
 *
@@ -194,9 +203,8 @@ typedef struct seqalign {
 	SeqLocPtr bounds;      /* sequence of SeqLocPtr */
     SeqIdPtr master;   /* for SAT_MASTERSLAVE */
     SeqAlignIndexPtr saip;  /* for added Alignment Indexing structures */
-    Uint2 entityID,   /* for new Alignment Indexing functions */
-        itemID,
-        itemtype;
+	GatherIndex idx;      /* internal gather/objmgr tracking fields */
+	Uint2 alignID;        /* unique number assigned to alignment */
 } SeqAlign, PNTR SeqAlignPtr;
 
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignNew PROTO((void));

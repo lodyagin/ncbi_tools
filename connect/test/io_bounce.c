@@ -1,4 +1,4 @@
-/* $Id: io_bounce.c,v 6.5 1999/07/21 20:49:08 vakatov Exp $ */
+/* $Id: io_bounce.c,v 6.6 1999/10/12 16:28:08 vakatov Exp $ */
 /* Author:  Denis Vakatov, NCBI */
 /* This is a simple prog that pumps STDIN to STDOUT and to log file */
 /* cc io_bounce.c -o io_bounce */
@@ -15,6 +15,8 @@ extern int main(int argc, char** argv)
 {
   char buf[10];
   int  fd = -1;
+
+  close(2);
 
   if (argc > 1  &&  *argv[1] != '-') {
     fd = creat(argv[1], 0666);

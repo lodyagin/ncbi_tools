@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.45 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,42 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.45  2000/01/16 19:08:55  kans
+* MakeCompleteChromTitle handles plasmids, does not need completedness flag set, does not override existing title descriptor in CreateDefLine
+*
+* Revision 6.44  1999/12/15 19:15:33  kans
+* FindProtDefLine now handles gene xrefs, initializes diff_lowest to INT4_MAX so SeqLocAinB test works
+*
+* Revision 6.43  1999/12/14 21:47:02  kans
+* FindProtDefLine already did gene product with grp->locus, now cascades down to first synonym, then description
+*
+* Revision 6.42  1999/11/30 20:58:56  kans
+* fasta read functions also report error for question mark in input data
+*
+* Revision 6.41  1999/10/30 00:38:53  kans
+* CreateDefLine says complete chromosome only for NC_ reference sequence, and say SEQUENCING IN PROGRESS unless HTGS_DRAFT keyword, in which case say WORKING DRAFT SEQUENCE
+*
+* Revision 6.40  1999/10/06 20:29:55  bazhin
+* Removed memory leak.
+*
+* Revision 6.39  1999/10/05 21:44:06  kans
+* CreateDefLine calls SimpleSegSeqTitle for bsp->repr == Seq_repr_seg if no title descriptor - more work to be done later
+*
+* Revision 6.38  1999/09/30 21:38:19  kans
+* create title valnode with SeqDescrNew
+*
+* Revision 6.37  1999/09/29 18:34:29  kans
+* fix to CreateDefLine to return title IDs unless actually using MolInfo
+*
+* Revision 6.36  1999/09/22 23:03:05  kans
+* changed wording of complete mitochondrial chromosome
+*
+* Revision 6.35  1999/09/22 22:36:11  kans
+* added MakeCompleteChromTitle so CreateDefLine generates standard title for complete chromosome
+*
+* Revision 6.34  1999/09/20 18:36:30  shavirin
+* Added function Int4 GetOrderBySeqId().
+*
 * Revision 6.33  1999/08/05 11:37:04  kans
 * allow # or ! as comment symbols
 *
@@ -365,6 +401,8 @@
 #include <tofasta.h>
 #include <gather.h>
 #include <sqnutils.h>  /* MakeSeqID */
+#include <subutil.h>   /* MOLECULE_TYPE_GENOMIC */
+#include <explore.h>
 
 static Uint1 na_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
  	255, /* 0 = not set */
@@ -430,7 +468,16 @@ Proteins:
 *
 *****************************************************************************/
 
-
+Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot)
+{
+    if(choice > NUM_SEQID)
+        return -1;
+    
+    if(is_prot)
+        return aa_order[choice];
+    else 
+        return na_order[choice];
+}
 
 /*****************************************************************************
 *
@@ -1312,7 +1359,7 @@ static Boolean FastaReadSequenceInternal
                     out_index++;
                 }
             } else if (errormsg != NULL){ 
-                if(IS_ALPHA(byte_from) || byte_from == '-') {
+                if(IS_ALPHA(byte_from) || byte_from == '-' || byte_from == '?') {
                     (badchar [(int) (byte_from)])++;
                     badchars++;
                 }
@@ -1375,6 +1422,14 @@ static Boolean FastaReadSequenceInternal
             }
         }
         ch = '-';
+        if ((badchar[ch]) > 0) {
+            sprintf (tmp, "%s%d %c%s", 
+                     chptr, badchar[ch], ch,
+                     badchar[ch] == 1 ? "" : "s");
+            StringCat (ptr, tmp);
+            chptr = ", ";
+        }
+        ch = '?';
         if ((badchar[ch]) > 0) {
             sprintf (tmp, "%s%d %c%s", 
                      chptr, badchar[ch], ch,
@@ -1565,7 +1620,7 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
             if (bsp->id == NULL) 
                 bsp->id = MakeNewProteinSeqId (NULL, NULL);
             if (chptr != NULL) {
-                if((vnp = ValNodeNew(NULL)) != NULL) {
+                if((vnp = SeqDescrNew(NULL)) != NULL) {
                     vnp->choice = Seq_descr_title;
                     while (IS_WHITESP(*chptr))
                         chptr++;
@@ -1789,6 +1844,8 @@ static Boolean get_descr_on_top (GatherContextPtr gcp)
             if (tmp->data.ptrvalue != NULL) {
                 dsp->vnp = tmp;
                 iip = (ItemInfoPtr) MemNew(sizeof(ItemInfo));
+                if(dsp->iip != NULL)
+                    MemFree(dsp->iip);
                 dsp->iip = iip;
                 iip->entityID = gcp->entityID;
                 iip->itemID = gcp->itemID;
@@ -2027,10 +2084,10 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 	ProtRefPtr prp;
 	SeqFeatXrefPtr xref;
 	GeneRefPtr grp=NULL;
-	ValNodePtr vnp, v;
+	ValNodePtr vnp, v, syn;
 	SeqLocPtr loc;
-	CharPtr title = NULL, s;
-	Int4 diff_lowest = 0, diff_current;
+	CharPtr title = NULL, s, geneprod;
+	Int4 diff_lowest = /* 0 */ INT4_MAX, diff_current;
 	Int2 length = 0;
 	SeqFeatPtr best_gene = NULL;
 		
@@ -2066,8 +2123,21 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 					grp = (GeneRefPtr) xref->data.value.ptrvalue;
 				}
 			}
-			if (grp && grp->locus) {
-				title = StringSave(grp->locus);
+			if (grp) {
+				geneprod = NULL;
+				if (grp->locus != NULL) {
+					geneprod = grp->locus;
+				} else if (grp->syn != NULL) {
+					syn = grp->syn;
+					geneprod = (CharPtr) syn->data.ptrvalue;
+				} else if (grp->desc != NULL) {
+					geneprod = (CharPtr) grp->desc;
+				}
+				if (geneprod != NULL) {
+					s = (CharPtr) MemNew(StringLen(geneprod) + 15);
+					sprintf(s, "%s gene product", geneprod);
+					title = s;
+				}
 			}
 			if (title == NULL) {
 				vnp = GatherGenesForCDS(loc);
@@ -2087,16 +2157,110 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 				ValNodeFree(vnp);
 				if (best_gene != NULL) {
 					grp = (GeneRefPtr) best_gene->data.value.ptrvalue;
-					if (grp && grp->locus) {
-						s = (CharPtr) MemNew(StringLen(grp->locus) + 15);
-						sprintf(s, "%s gene product", grp->locus);
-						title = s;
+					if (grp) {
+						geneprod = NULL;
+						if (grp->locus != NULL) {
+							geneprod = grp->locus;
+						} else if (grp->syn != NULL) {
+							syn = grp->syn;
+							geneprod = (CharPtr) syn->data.ptrvalue;
+						} else if (grp->desc != NULL) {
+							geneprod = (CharPtr) grp->desc;
+						}
+						if (geneprod != NULL) {
+							s = (CharPtr) MemNew(StringLen(geneprod) + 15);
+							sprintf(s, "%s gene product", geneprod);
+							title = s;
+						}
 					}
 				}
 			}
 		}
 	}
 	return title;
+}
+
+static CharPtr SimpleSegSeqTitle (BioseqPtr bsp)
+
+{
+  BioSourcePtr       biop;
+  SeqMgrFeatContext  ccontext;
+  SeqFeatPtr         cds;
+  CharPtr            complete = "gene, complete cds";
+  SeqMgrDescContext  dcontext;
+  SeqMgrFeatContext  gcontext;
+  SeqFeatPtr         gene;
+  size_t             len;
+  CharPtr            locus = NULL;
+  ObjMgrDataPtr      omdp;
+  ObjMgrPtr          omp;
+  OrgRefPtr          orp;
+  CharPtr            organism = NULL;
+  CharPtr            product = NULL;
+  SeqDescrPtr        sdp;
+  CharPtr            title;
+
+  if (bsp == NULL) return NULL;
+
+  /* check to see if feature indexing has been called */
+
+  omdp = (ObjMgrDataPtr) bsp->omdp;
+  if (omdp == NULL) return NULL;
+  omp = ObjMgrReadLock ();
+  omdp = ObjMgrFindTop (omp, omdp);
+  ObjMgrUnlock ();
+  if (omdp == NULL) return NULL;
+  if (omdp->indexed == 0) return NULL;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp == NULL) return NULL;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return NULL;
+  orp = biop->org;
+  if (orp != NULL && (! StringHasNoText (orp->taxname))) {
+    organism = orp->taxname;
+  } else {
+    organism = "Unknown";
+  }
+
+  cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &ccontext);
+  if (cds != NULL) {
+    if (cds->partial) {
+      complete = "gene, partial cds";
+    }
+    product = ccontext.label;
+    gene = SeqMgrGetOverlappingGene (cds->location, &gcontext);
+    if (gene != NULL) {
+      locus = gcontext.label;
+    }
+  }
+
+  len = StringLen (organism) + StringLen (product) + StringLen (locus) + StringLen (complete);
+  title = (CharPtr) MemNew (len + 10);
+
+  if (organism != NULL) {
+    StringCat (title, organism);
+  }
+
+  if (product != NULL) {
+    StringCat (title, " ");
+    StringCat (title, product);
+  }
+
+  if (locus != NULL) {
+    StringCat (title, " (");
+    StringCat (title, locus);
+    StringCat (title, ")");
+  }
+
+  if (product != NULL || locus != NULL) {
+    StringCat (title, " ");
+    StringCat (title, complete);
+  }
+
+  TrimSpacesAroundString (title);
+
+  return title;
 }
 
 static CharPtr UseOrgMods(BioseqPtr bsp)
@@ -2184,6 +2348,98 @@ static CharPtr UseOrgMods(BioseqPtr bsp)
 	return def;
 }
 
+static CharPtr MakeCompleteChromTitle (BioseqPtr bsp)
+
+{
+	ItemInfoPtr   iip = NULL;
+	ValNodePtr    vnp;
+	BioSourcePtr  biop;
+	OrgRefPtr     orp;
+	SubSourcePtr  ssp;
+	CharPtr       name = NULL, chr = NULL, pls = NULL, def = NULL;
+	Int2          deflen = 40; /* starts with space for all fixed text */
+	Boolean       mito;
+	Boolean       plasmid;
+		
+	if (bsp == NULL) {
+		return NULL;
+	}
+	if ((vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_source)) == NULL) {
+		return NULL;
+	}
+	biop = (BioSourcePtr) vnp->data.ptrvalue;
+	if (biop == NULL) {
+		return NULL;
+	}
+    orp = biop->org;
+    if (orp == NULL || orp->taxname == NULL) {
+		return NULL;
+    }
+	name = orp->taxname;
+	deflen += StringLen(orp->taxname);
+	mito = (Boolean) (biop->genome == GENOME_kinetoplast || biop->genome == GENOME_mitochondrion);
+	plasmid = (Boolean) (biop->genome == GENOME_plasmid);
+
+	for (ssp = biop->subtype; ssp; ssp=ssp->next) {
+		if (ssp->subtype == SUBSRC_chromosome) {
+			if (ssp->name != NULL) {
+				chr = ssp->name;
+				deflen += StringLen(ssp->name);
+			}
+		} else if (ssp->subtype == SUBSRC_plasmid_name) {
+			if (ssp->name != NULL) {
+				pls = ssp->name;
+				deflen += StringLen(ssp->name);
+			}
+		}
+	}
+
+	def = (CharPtr) MemNew(deflen+1);
+	if (plasmid) {
+		if (name && (! pls)) {
+			StringCat (def, name);
+			StringCat (def, " Plasmid complete sequence");
+			return def;
+		}
+		if (pls) {
+			if (StringNICmp (pls, "Plasmid ", 8) != 0) {
+				StringCat(def, "Plasmid ");
+			}
+			StringCat(def, pls);
+			StringCat (def, " complete sequence");
+			return def;
+		}
+	} else {
+		if (name) {
+			StringCat(def, name);
+		}
+		if (pls) {
+			if (name) {
+				StringCat (def, " ");
+			}
+			if (mito) {
+				StringCat (def, "Mitochondrial ");
+			}
+			if (StringNICmp (pls, "Plasmid ", 8) != 0) {
+				StringCat(def, "Plasmid ");
+			}
+			StringCat(def, pls);
+			StringCat (def, " complete sequence");
+			return def;
+		}
+	}
+	if (mito) {
+		StringCat (def, " mitochondrion, complete genome");
+		return def;
+	}
+	StringCat (def, " complete chromosome");
+	if (chr && (! mito)) {
+		StringCat (def, " ");
+		StringCat(def, chr);
+	}
+	return def;
+}
+
 /*****************************************************************************
 *
 *   CreateDefLine(iip, bsp, buf, buflen, tech)
@@ -2208,12 +2464,29 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	static Char tbuf[80];
 	static CharPtr htgs[2] = {
 		"unordered", "ordered" };
-	static CharPtr htg_phrase[2] = {
+	static CharPtr htg_phrase[3] = {
 		"LOW-PASS SEQUENCE SAMPLING",
-		"WORKING DRAFT SEQUENCE" };
-	Boolean htg_tech = FALSE;
+		"WORKING DRAFT SEQUENCE",
+		"*** SEQUENCING IN PROGRESS ***" };
+	Boolean htg_tech = FALSE, htgs_draft = FALSE, is_nc = FALSE;
+	MolInfoPtr mip;
+	GBBlockPtr gbp = NULL;
+	SeqIdPtr sip;
+	TextSeqIdPtr tsip;
+	ItemInfo ii;
 
 	if ((bsp == NULL) || (buf == NULL) || buflen == 0) return FALSE;
+
+	for (sip = bsp->id; sip != NULL; sip = sip->next) {
+		if (sip->choice == SEQID_OTHER) {
+			tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+			if (tsip != NULL && tsip->accession != NULL) {
+				if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
+					is_nc = TRUE;
+				}
+			}
+		}
+	}
 
 	buflen--;
 	buf[buflen] = '\0';
@@ -2226,6 +2499,10 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		diff = LabelCopyExtra(buf, accession, buflen, "(", ") ");
 		buflen -= diff;
 		buf += diff;
+	}
+	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank);
+	if (vnp != NULL) {
+		gbp = (GBBlockPtr) vnp->data.ptrvalue;
 	}
 	diff = 0;
 	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
@@ -2243,6 +2520,22 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		if (title == NULL || *title == '\0') {
 			title = UseOrgMods(bsp);
 			organism = NULL;
+		}
+	} else if (is_nc && title == NULL) {
+		/* manufacture complete chromosome titles if not already present */
+		vnp = GatherDescrOnBioseq (&ii, bsp, Seq_descr_molinfo);
+		if (vnp != NULL) {
+			mip = (MolInfoPtr) vnp->data.ptrvalue;
+			if (mip != NULL &&
+			    mip->biomol == MOLECULE_TYPE_GENOMIC /* && mip->completeness == 1 */) {
+				title = MakeCompleteChromTitle (bsp);
+				organism = NULL;
+				if (iip != NULL) {
+					iip->entityID = ii.entityID;
+					iip->itemID = ii.itemID;
+					iip->itemtype = ii.itemtype;
+				}
+			}
 		}
 	}
 /* some titles may have zero length */
@@ -2292,7 +2585,12 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 			if (title != NULL) {
 				diff = LabelCopy(buf, title, buflen);
 			} else if (!htg_tech) {
-				title = UseOrgMods(bsp);
+				if (bsp->repr == Seq_repr_seg) {
+					title = SimpleSegSeqTitle (bsp);
+				}
+				if (title == NULL) {
+					title = UseOrgMods(bsp);
+				}
 				if (title != NULL) {
 					diff = LabelCopy(buf, title, buflen);
 				} else {
@@ -2330,14 +2628,29 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		} else {
 			doit = FALSE;
 			if (phase == 0) {
-			if (StringStr(title, "LOW-PASS") == NULL) {
-				doit = TRUE;
-				i = 0;
-			}
-			}
-			else if (StringStr(title, "WORKING DRAFT") == NULL) {
-				doit = TRUE;
-				i = 1;
+				if (StringStr(title, "LOW-PASS") == NULL) {
+					doit = TRUE;
+					i = 0;
+				}
+			} else {
+				if (gbp != NULL) {
+					for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+						if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
+							htgs_draft = TRUE;
+						}
+					}
+				}
+				if (htgs_draft) {
+					if (StringStr(title, "WORKING DRAFT") == NULL) {
+						doit = TRUE;
+						i = 1;
+					}
+				} else {
+					if (StringStr(title, "SEQUENCING IN") == NULL) {
+						doit = TRUE;
+						i = 2;
+					}
+				}
 			}
 
 			if (doit)

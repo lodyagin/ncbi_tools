@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager interface for module NCBI-Seqres
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objres.h,v $
+* Revision 6.3  1999/09/27 17:48:38  kans
+* using GatherIndex structure
+*
+* Revision 6.2  1999/09/24 23:09:23  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
 * Revision 6.1  1998/12/09 20:37:53  kans
 * changed compl to compr to avoid new c++ symbol collision
 *
@@ -114,6 +120,7 @@ typedef struct seqgraph {
         axis;
     Pointer values;  /* real=array of FloatHi, int=array of Int4, */
     struct seqgraph PNTR next;              /* byte = ByteStore */
+	GatherIndex idx;      /* internal gather/objmgr tracking fields */
 } SeqGraph, PNTR SeqGraphPtr;
 
 NLM_EXTERN SeqGraphPtr LIBCALL SeqGraphNew PROTO((void));

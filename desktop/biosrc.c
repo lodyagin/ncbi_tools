@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -119,6 +119,10 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Cyanelle",            12},
   {"Proviral",            13},
   {"Virion",              14},
+  {"Nucleomorph",         15},
+  {"Apicoplast",          16},
+  {"Leucoplast",          17},
+  {"Protoplast",          18},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
@@ -136,6 +140,10 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Cyanelle",            12},
   {"Proviral",            13},
   {"Virion",              14},
+  {"Nucleomorph",         15},
+  {"Apicoplast",          16},
+  {"Leucoplast",          17},
+  {"Protoplast",          18},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_origin_alist)
@@ -716,12 +724,40 @@ static void AutoScrollTax (GenBioPagePtr gbp, TexT t, Boolean isSciName,
 static void TaxNameText (TexT t)
 
 {
-  GenBioPagePtr  gbp;
+  DbtagPtr         dbt;
+  GenBioPagePtr    gbp;
+  ValNodePtr       head;
+  ValNodePtr       nextvnp;
+  ValNodePtr PNTR  prevvnp;
+  ValNodePtr       vnp;
 
   gbp = (GenBioPagePtr) GetObjectExtra (t);
   if (gbp != NULL) {
     gbp->typedSciName = TRUE;
     AutoScrollTax (gbp, t, TRUE, TRUE, TRUE);
+    SafeSetTitle (gbp->lineage, "");
+    SafeSetTitle (gbp->gbDiv, "");
+    head = DialogToPointer (gbp->db);
+    if (head != NULL) {
+      prevvnp = &head;
+      vnp = head;
+      while (vnp != NULL) {
+        nextvnp = vnp->next;
+        dbt = (DbtagPtr) vnp->data.ptrvalue;
+        if (dbt != NULL) {
+          if (StringICmp (dbt->db, "taxon") == 0) {
+            *prevvnp = vnp->next;
+            vnp->next = NULL;
+            DbtagFree (dbt);
+            ValNodeFree (vnp);
+          } else {
+            prevvnp = (ValNodePtr PNTR) &(vnp->next);
+          }
+        }
+        vnp = nextvnp;
+      }
+      PointerToDialog (gbp->db, head);
+    }
   }
 }
 

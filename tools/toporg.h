@@ -39,6 +39,7 @@ void CheckCitSubNew PROTO((ValNodePtr vnp));
 void CmpPub PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
 void MoveSegmPubs PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
 void MoveNPPubs PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
+void MovePopPhyMutPubs (SeqEntryPtr sep);
 ValNodePtr AddToList PROTO((ValNodePtr list, ValNodePtr check, PubdescPtr pdp));
 BioSourcePtr BioSourceMerge PROTO((BioSourcePtr host, BioSourcePtr guest));
 BioSourcePtr BioSourceCommon PROTO((BioSourcePtr host, BioSourcePtr guest));

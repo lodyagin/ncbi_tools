@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.26 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,28 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.26  2000/01/12 18:44:50  ostell
+* added a check for 0 length gap in delta seq and treated it as a NULL
+* location.
+*
+* Revision 6.25  1999/11/17 01:07:43  kans
+* implemented allowOneMismatch
+*
+* Revision 6.24  1999/11/17 00:56:33  kans
+* improved seqsearch fsa, removed protein part, still need to allow single mismatch
+*
+* Revision 6.23  1999/11/13 01:47:31  kans
+* fixed bug in SeqSearchGotoState, preparse protein pattern to get accurate length, treat U as T in nucleotide complement and expansion instead of mapping U to T, which did not allow selenocysteine
+*
+* Revision 6.22  1999/11/12 21:00:49  kans
+* added TransTableProcessBioseq for 6-frame translation, SeqSearchAddNucleotidePattern and SeqSearchAddProteinPattern for SeqSearch
+*
+* Revision 6.21  1999/11/11 00:58:27  kans
+* added SeqSearch sequence search finite state machine - still need more functions to add protein patterns, read from rsite file
+*
+* Revision 6.20  1999/10/06 22:09:02  kans
+* ComposeCodonsRecognizedString to handle degenerate codons
+*
 * Revision 6.19  1999/08/07 20:51:49  kans
 * map ncbi4na alphabet to finite state machine
 *
@@ -816,9 +838,11 @@ slitp->seq_data_type, newcode);
 							spps->bp = 
 slitp->seq_data;
 						else
-							spps->isa_virtual = 
-TRUE;
-						
+						{
+							spps->isa_virtual = TRUE;
+						        if (slitp->length == 0)
+								spps->isa_null = TRUE;
+						}
 					}
 		
 			    	if (spps == NULL)
@@ -3379,6 +3403,123 @@ NLM_EXTERN SPCompressPtr SPCompressDNA(SeqPortPtr spp)
 
 /*****************************************************************************
 *
+*   ComposeCodonsRecognizedString (trna, buf, buflen);
+*       Copies codon recognized string to buf, returns number of codons
+*
+*****************************************************************************/
+
+static int LIBCALLBACK SortCodonByName (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  CharPtr     str1;
+  CharPtr     str2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      str1 = (CharPtr) vnp1->data.ptrvalue;
+      str2 = (CharPtr) vnp2->data.ptrvalue;
+      if (str1 != NULL && str2 != NULL) {
+        return StringICmp (str1, str2);
+      } else {
+        return 0;
+      }
+    } else {
+      return 0;
+    }
+  } else {
+    return 0;
+  }
+}
+
+static Uint1 MakeDegenerateBase (Uint1 ch1, Uint1 ch2, Uint1Ptr chrToInt, CharPtr intToChr)
+
+{
+  Uint1  idx;
+
+  idx = chrToInt [(int) ch1] | chrToInt [(int) ch2];
+  return intToChr [(int) idx];
+}
+
+NLM_EXTERN Int2 ComposeCodonsRecognizedString (tRNAPtr trna, CharPtr buf, size_t buflen)
+
+{
+  Char          ch;
+  Uint1         chrToInt [256];
+  Uint1         codon [4];
+  Int2          count = 0;
+  ValNodePtr    head, next, vnp;
+  Int2          i, j, k;
+  CharPtr       intToChr = "?ACMGRSVUWYHKDBN";
+  CharPtr       prefix, ptr, str1, str2;
+  Pointer PNTR  prev;
+
+  if (trna == NULL || buf == NULL || buflen < 25) return 0;
+
+  *buf = '\0';
+  codon [3] = '\0';
+  head = NULL;
+
+  for (j = 0; j < 6; j++) {
+    if (trna->codon [j] < 64) {
+      if (CodonForIndex (trna->codon [j], Seq_code_iupacna, codon)) {
+        for (k = 0; k < 3; k++) {
+          if (codon [k] == 'T') {
+            codon [k] = 'U';
+          }
+        }
+        ValNodeCopyStr (&head, 0, (CharPtr) codon);
+      }
+    }
+  }
+
+  head = ValNodeSort (head, SortCodonByName);
+
+  if (head == NULL) return 0;
+
+  for (i = 0; i < 256; i++) {
+    chrToInt [i] = 0;
+  }
+  for (i = 1; i < 16; i++) {
+    ch = intToChr [i];
+    chrToInt [(int) ch] = i;
+  }
+
+  count = ValNodeLen (head);
+  str1 = (CharPtr) head->data.ptrvalue;
+  vnp = head->next;
+  prev = (Pointer PNTR) &(head->next);
+  while (vnp != NULL) {
+    next = vnp->next;
+    str2 = (CharPtr) vnp->data.ptrvalue;
+    if (str1 != NULL && str2 != NULL &&
+        str1 [0] == str2 [0] && str1 [1] == str2 [1]) {
+      str1 [2] = MakeDegenerateBase (str1 [2], str2 [2], chrToInt, intToChr);
+      *prev = next;
+      vnp->next = NULL;
+      ValNodeFreeData (vnp);
+    } else {
+      str1 = str2;
+      prev = (Pointer PNTR) &(vnp->next);
+    } 
+    vnp = next;
+  }
+
+  for (vnp = head, ptr = buf, i = 0, prefix = NULL; vnp != NULL;
+       vnp = vnp->next, prefix = ", ", i++) {
+    ptr = StringMove (ptr, prefix);
+    ptr = StringMove (ptr, (CharPtr) vnp->data.ptrvalue);
+  }
+
+  ValNodeFreeData (head);
+  return count;
+}
+
+/*****************************************************************************
+*
 *   TransTableNew (Int2 genCode);
 *       Initializes TransTable finite state machine for 6-frame translation
 *       and open reading frame search, allowing nucleotide ambiguity characters
@@ -3605,9 +3746,956 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   return tbl;
 }
 
+/* convenience function calls SeqSearchProcessCharacter for entire bioseq */
+
+NLM_EXTERN void TransTableProcessBioseq (
+  TransTablePtr tbl,
+  TransTableMatchProc matchProc,
+  Pointer userdata,
+  BioseqPtr bsp
+)
+
+{
+  Boolean     altStart, atgStart, orfStop;
+  Byte        bases [400];
+  Char        ch;
+  Int2        ctr, frame, i, j, state;
+  Int4        position;
+  Uint1       residue;
+  SeqPortPtr  spp;
+
+  if (tbl == NULL || matchProc == NULL || bsp == NULL) return;
+
+  if (! ISA_na (bsp->mol)) return;
+
+  spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
+  if (spp == NULL) return;
+
+  if (bsp->repr == Seq_repr_delta) {
+    SeqPortSet_do_virtual (spp, TRUE);
+  }
+
+  /* read first block of bases, reality check on length */
+
+  ctr = SeqPortRead (spp, bases, sizeof (bases));
+  if (ctr < 6) {
+    SeqPortFree (spp);
+    return;
+  }
+
+  state = 0;
+  position = 0;
+  frame = 0;
+
+  i = 0;
+  residue = (Uint1) bases [i];
+
+  /* prime finite state machine with first two bases */
+
+  for (j = 0; j < 2 && residue != SEQPORT_EOF; j++) {
+    if (IS_residue (residue)) {
+      state = NextCodonState (tbl, state, residue);
+    }
+    i++;
+    residue = (Uint1) bases [i];
+  }
+
+  /* loop on all remaining bases */
+
+  while (residue != SEQPORT_EOF) {
+    if (IS_residue (residue)) {
+      state = NextCodonState (tbl, state, residue);
+
+      /* get amino acid for codon on top strand */
+
+      ch = GetCodonResidue (tbl, state, TTBL_TOP_STRAND);
+      atgStart = IsATGStart (tbl, state, TTBL_TOP_STRAND);
+      altStart = IsAltStart (tbl, state, TTBL_TOP_STRAND);
+      orfStop = IsOrfStop (tbl, state, TTBL_TOP_STRAND);
+      matchProc (position, ch, atgStart, altStart, orfStop, frame, Seq_strand_plus, userdata);
+
+      /* get amino acid for codon on top strand */
+
+      ch = GetCodonResidue (tbl, state, TTBL_BOT_STRAND);
+      atgStart = IsATGStart (tbl, state, TTBL_BOT_STRAND);
+      altStart = IsAltStart (tbl, state, TTBL_BOT_STRAND);
+      orfStop = IsOrfStop (tbl, state, TTBL_BOT_STRAND);
+      matchProc (position, ch, atgStart, altStart, orfStop, frame, Seq_strand_minus, userdata);
+
+      /* advance base position, also keep track of frame */
+
+      position++;
+      frame++;
+      if (frame > 2) {
+        frame = 0;
+      }
+    }
+
+    /* increment base counter */
+
+    i++;
+    if (i >= ctr) {
+      i = 0;
+
+      /* read next block of bases */
+
+      ctr = SeqPortRead (spp, bases, sizeof (bases));
+      if (ctr < 0) {
+        bases [0] = -ctr;
+      } else if (ctr < 1) {
+        bases [0] = SEQPORT_EOF;
+      }
+    }
+    residue = (Uint1) bases [i];
+  }
+
+  SeqPortFree (spp);
+}
+
 NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl)
 
 {
   return MemFree (tbl);
 }
+
+/*****************************************************************************
+*
+*   SeqSearch
+*       Initializes SeqSearch finite state machine for sequence searching
+*       Based on Practical Algorithms for Programmers by Binstock and Rex
+*
+*****************************************************************************/
+
+/* general purpose DNA sequence search finite state machine */
+
+typedef struct seqpattern {
+  CharPtr           name;
+  CharPtr           pattern;
+  Int2              cutSite;
+  Uint1             strand;
+  struct seqpattern * next;
+} SeqPatternItem, PNTR SeqPatternPtr;
+
+typedef struct seqmatch {
+  CharPtr         name;
+  CharPtr         pattern;
+  Int2            cutSite;
+  Uint1           strand;
+  struct seqmatch * next;
+} SeqMatchItem, PNTR SeqMatchPtr;
+
+typedef struct seqstate {
+  Int2         onfailure;
+  Int2         transitions [5]; /* N = 0, A = 1, C = 2, G = 3, T = 4 */
+  SeqMatchPtr  matches;
+} SeqStateItem, PNTR SeqStatePtr;
+
+typedef struct SeqSearch {
+  SeqStatePtr         stateArray;
+  SeqPatternPtr       patternList;
+  Int2                maxState;
+  Int2                highState;
+  Int2                currentState;
+  Int4                currentPos;
+  Boolean             primed;
+  Boolean             allowOneMismatch;
+  SeqSearchMatchProc  matchproc;
+  Pointer             userdata;
+  Uint1               letterToIdx [256];
+  Uint1               letterToComp [256];
+} SeqSearchData;
+
+#define FAIL_STATE -1
+
+/* returns next state given current state and next character */
+
+static Int2 SeqSearchGotoState (
+  SeqSearchPtr tbl,
+  Int2 state,
+  Char ch,
+  Boolean zeroFailureReturnsZero
+)
+
+{
+  int          index;
+  Int2         newstate;
+  SeqStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  index = tbl->letterToIdx [(int) (Uint1) ch];
+  newstate = sp->transitions [index];
+
+  if (newstate != 0) return newstate;
+
+  if (state == 0 && zeroFailureReturnsZero) return 0;
+
+  return FAIL_STATE;
+}
+
+/* returns state to check next if current pattern broken */
+
+static Int2 SeqSearchFailState (
+  SeqSearchPtr tbl,
+  Int2 state
+)
+
+{
+  SeqStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  return sp->onfailure;
+}
+
+/* add a single character transition from one state to another */
+
+static void SeqSearchAddTransition (
+  SeqSearchPtr tbl,
+  Int2 oldState,
+  Char ch,
+  Int2 newState
+)
+
+{
+  int          index;
+  SeqStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) oldState]);
+  index = tbl->letterToIdx [(int) (Uint1) ch];
+  sp->transitions [index] = newState;
+}
+
+/* given state should report a successful match */
+
+static void SeqSearchAddOutput (
+  SeqSearchPtr tbl,
+  Int2 state,
+  CharPtr name,
+  CharPtr pattern,
+  Int2 cutSite,
+  Uint1 strand
+)
+
+{
+  SeqMatchPtr  mp;
+  SeqStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+    if (StringCmp (name, mp->name) == 0) return;
+  }
+
+  mp = (SeqMatchPtr) MemNew (sizeof (SeqMatchItem));
+  if (mp == NULL) return;
+
+  mp->name = StringSave (name);
+  mp->pattern = StringSave (pattern);
+  mp->cutSite = cutSite;
+  mp->strand = strand;
+
+  mp->next = sp->matches;
+  sp->matches = mp;
+}
+
+/* add one nucleotide sequence pattern to the finite state machine */
+
+static Int2 SeqSearchEnterNucWord (
+  SeqSearchPtr tbl,
+  Int2 highState,
+  Int2 maxState,
+  CharPtr name,
+  CharPtr pattern,
+  Int2 cutSite,
+  Uint1 strand
+)
+
+{
+  Char     ch;
+  Int2     next, patLen, state;
+  CharPtr  ptr;
+
+  state = 0;
+  next = 0;
+
+  patLen = StringLen (pattern);
+
+  /* try to overlay beginning of pattern onto existing table */
+
+  for (ptr = pattern, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    next = SeqSearchGotoState (tbl, state, ch, FALSE);
+    if (next == FAIL_STATE) break;
+    state = next;
+  }
+
+  /* now create new states for remaining characters in pattern */
+
+  for ( ; ch != '\0'; ptr++, ch = *ptr) {
+    highState++;
+    SeqSearchAddTransition (tbl, state, ch, highState);
+    state = highState;
+  }
+
+  /* at end of pattern record match information */
+
+  SeqSearchAddOutput (tbl, state, name, pattern, cutSite, strand);
+
+  return highState;
+}
+
+/* FIFO queue and other functions for building failure states */
+
+static void SeqSearchQueueAdd (
+  Int2Ptr queue,
+  Int2 qbeg,
+  Int2 val
+)
+
+{
+  Int2  q;
+
+  q = queue [qbeg];
+  if (q == 0) {
+    queue [qbeg] = val;
+  } else {
+    for ( ; queue [q] != 0; q = queue [q]) continue;
+    queue [q] = val;
+  }
+  queue [val] = 0;
+}
+
+static void SeqSearchFindFail (
+  SeqSearchPtr tbl,
+  Int2 state,
+  Int2 newState,
+  Char ch
+)
+
+{
+  SeqMatchPtr  mp;
+  Int2         next;
+  SeqStatePtr  sp;
+
+  /* traverse existing failure path */
+
+  while ((next = SeqSearchGotoState (tbl, state, ch, TRUE)) == FAIL_STATE) {
+    state = SeqSearchFailState (tbl, state);
+  }
+
+  /* add new failure state */
+
+  sp = &(tbl->stateArray [(int) newState]);
+  sp->onfailure = next;
+
+  /* add matches of substring at new state */
+
+  sp = &(tbl->stateArray [(int) next]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+    SeqSearchAddOutput (tbl, newState, mp->name, mp->pattern,
+                        mp->cutSite, mp->strand);
+  }
+}
+
+static void SeqSearchComputeFail (
+  SeqSearchPtr tbl,
+  Int2Ptr queue
+)
+
+{
+  Char         charToNuc [5] = "NACGT";
+  Char         ch;
+  Int2         qbeg, r, s, state;
+  int          index;
+  SeqStatePtr  sp;
+
+  qbeg = 0;
+  queue [0] = 0;
+
+  /* queue up states reached directly from state 0 (depth 1) */
+
+  sp = &(tbl->stateArray [0]);
+  for (index = 0; index < 5; index++) {
+    ch = charToNuc [index];
+    s = sp->transitions [index];
+    if (s == 0) continue;
+    sp->onfailure = 0;
+    SeqSearchQueueAdd (queue, qbeg, s);
+  }
+
+  while (queue [qbeg] != 0) {
+    r = queue [qbeg];
+    qbeg = r;
+
+    /* depth 1 states beget depth 2 states, etc. */
+
+    sp = &(tbl->stateArray [r]);
+    for (index = 0; index < 5; index++) {
+      ch = charToNuc [index];
+      s = sp->transitions [index];
+      if (s == 0) continue;
+      SeqSearchQueueAdd (queue, qbeg, s);
+
+      /*
+         Search for nucleotide sequences GTCGAC and TCATGA
+
+         State   Substring   Transitions   Failure
+           2       GT          C ->   3       7
+           3       GTC         G ->   4       ?
+           ...
+           7       T           C ->   8       0
+           8       TC          A ->   9
+
+         For example, r = 2 (GT), if 'C' would go to s = 3 (GTC).
+         From previous computation, 2 (GT) fails to 7 (T).  So we
+         are not in a pattern starting with GT, but we may be in
+         a pattern starting with the next character after G, or T.
+         Thus, check state 7 (T) for any transitions using 'C'.
+         Since 7 (T) 'C' -> 8 (TC), therefore set fail [3] -> 8.
+      */
+
+      state = SeqSearchFailState (tbl, r);
+      SeqSearchFindFail (tbl, state, s, ch);
+    }
+  }
+}
+
+/* on first character, populate state transition table */
+
+static void SeqSearchPrimeStateArray (
+  SeqSearchPtr tbl
+)
+
+{
+  Int2           highState, maxState;
+  SeqPatternPtr  pp;
+  Int2Ptr        queue;
+  SeqStatePtr    stateArray;
+
+  if (tbl == NULL || tbl->primed || tbl->patternList == NULL) return;
+
+  for (maxState = 1, pp = tbl->patternList; pp != NULL; pp = pp->next) {
+    maxState += StringLen (pp->pattern);
+  }
+
+  if (maxState > 4000) {
+    Message (MSG_POST, "FiniteStateSearch cannot handle %d states", (int) maxState);
+    return;
+  }
+
+  stateArray = (SeqStatePtr) MemNew (sizeof (SeqStateItem) * (size_t) maxState);
+  queue = (Int2Ptr) MemNew (sizeof (Int2) * maxState);
+
+  if (stateArray == NULL || queue == NULL) {
+    MemFree (stateArray);
+    MemFree (queue);
+    Message (MSG_POST, "SequenceSearch unable to allocate buffers");
+    return;
+  }
+
+  tbl->stateArray = stateArray;
+  tbl->maxState = maxState;
+
+  for (highState = 0, pp = tbl->patternList; pp != NULL; pp = pp->next) {
+    highState = SeqSearchEnterNucWord (tbl, highState, maxState, pp->name,
+                                       pp->pattern, pp->cutSite, pp->strand);
+  }
+
+  SeqSearchComputeFail (tbl, queue);
+
+  MemFree (queue);
+
+  tbl->highState = highState;
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+  tbl->primed = TRUE;
+}
+
+/* for testing, print summary of transition table */
+
+/*
+static void PrintSeqSearchTable (
+  SeqSearchPtr tbl,
+  FILE *fp
+)
+
+{
+  Int2         i;
+  SeqMatchPtr  mp;
+  SeqStatePtr  sp;
+  Int2         state;
+
+  if (tbl == NULL || fp == NULL) return;
+  if (! tbl->primed) {
+    SeqSearchPrimeStateArray (tbl);
+  }
+  if (tbl->stateArray == NULL) return;
+  if (tbl->highState > 99) return;
+
+  fprintf (fp, "State Fail N A C G T\n");
+
+  for (state = 0; state <= tbl->highState; state++) {
+    sp = &(tbl->stateArray [(int) state]);
+    fprintf (fp, " %3d  %3d", (int) state, (int) sp->onfailure);
+
+    for (i = 0; i < 5; i++) {
+      if (sp->transitions [i] != 0) {
+        fprintf (fp, "%3d", (int) sp->transitions [i]);
+      } else {
+        fprintf (fp, "   ");
+      }
+    }
+
+    for (mp = sp->matches; mp != NULL; mp = mp->next) {
+      fprintf (fp, " %s", mp->name);
+    }
+
+    fprintf (fp, "\n");
+  }
+}
+*/
+
+/* create empty nucleotide sequence search finite state machine */
+
+NLM_EXTERN SeqSearchPtr SeqSearchNew (
+  SeqSearchMatchProc matchproc,
+  Pointer userdata,
+  Boolean allowOneMismatch
+)
+
+{
+  Char          charToNuc [5] = "NACGT";
+  Char          ch, lttr;
+  CharPtr       complementBase = " TVGH  CD  M KN   YWAABS R ";
+  Int2          i;
+  SeqSearchPtr  tbl;
+
+  if (matchproc == NULL) return NULL;
+  tbl = (SeqSearchPtr) MemNew (sizeof (SeqSearchData));
+  if (tbl == NULL) return NULL;
+
+  tbl->stateArray = NULL;
+  tbl->patternList = NULL;
+  tbl->maxState = 0;
+  tbl->highState = 0;
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+  tbl->matchproc = matchproc;
+  tbl->userdata = userdata;
+  tbl->primed = FALSE;
+  tbl->allowOneMismatch = allowOneMismatch;
+
+  /* initialize table to convert character to transition index from 0 to 4 */
+
+  for (i = 0; i < 256; i++) {
+    tbl->letterToIdx [i] = 0;
+  }
+  for (i = 0; i < 5; i++) {
+    ch = charToNuc [i];
+    tbl->letterToIdx [(int) ch] = i;
+    ch = TO_LOWER (ch);
+    tbl->letterToIdx [(int) ch] = i;
+  }
+  tbl->letterToIdx [(int) 'U'] = tbl->letterToIdx [(int) 'T'];
+  tbl->letterToIdx [(int) 'u'] = tbl->letterToIdx [(int) 'T'];
+
+  /* initialize table to convert character to complement character */
+
+  for (i = 0; i < 256; i++) {
+    tbl->letterToComp [i] = '\0';
+  }
+  for (ch = 'A', i = 1; ch <= 'Z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      tbl->letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+  for (ch = 'a', i = 1; ch <= 'z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      tbl->letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+
+  return tbl;
+}
+
+/* table to expand ambiguity letter to all matching nucleotide letters */
+
+static CharPtr  nucExpandList [26] = {
+  "A",
+  "CGT",
+  "C",
+  "AGT",
+  "",
+  "",
+  "G",
+  "ACT",
+  "",
+  "",
+  "GT",
+  "",
+  "AC",
+  "ACGT",
+  "",
+  "",
+  "",
+  "AG",
+  "CG",
+  "T",
+  "T",
+  "ACG",
+  "AT",
+  "",
+  "CT",
+  ""
+};
+
+/* recursive function to expand and store appropriate individual patterns */
+
+static void StoreSeqPattern (
+  SeqSearchPtr tbl,
+  CharPtr name,
+  CharPtr str,
+  Int2 cutSite,
+  Uint1 strand
+)
+
+{
+  SeqPatternPtr  pp;
+
+  pp = (SeqPatternPtr) MemNew (sizeof (SeqPatternItem));
+  if (pp == NULL) return;
+
+  pp->name = StringSave (name);
+  pp->pattern = StringSave (str);
+  pp->cutSite = cutSite;
+  pp->strand = strand;
+
+  pp->next = tbl->patternList;
+  tbl->patternList = pp;
+}
+
+static void ExpandSeqPattern (
+  SeqSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  Int2 cutSite,
+  Uint1 strand,
+  size_t patLen,
+  CharPtr str,
+  Int2 position
+)
+
+{
+  Char     ch, lttr;
+  Int2     idx;
+  CharPtr  ptr;
+
+  if (position < patLen) {
+
+    /* given ambiguity letter, get index into nucExpandList */
+
+    ch = pattern [position];
+    idx = ch - 'A';
+    ptr = nucExpandList [idx];
+
+    /* put every ACGT letter at current position, recurse for next position */
+
+    for (lttr = *ptr; lttr != '\0'; ptr++, lttr = *ptr) {
+      str [position] = lttr;
+      ExpandSeqPattern (tbl, name, pattern, cutSite, strand,
+                       patLen, str, position + 1);
+    }
+
+    /* do not run into pattern storage section of code located below */
+
+    return;
+  }
+
+  /* when position reaches pattern length, store one fully expanded string */
+
+  StoreSeqPattern (tbl, name, str, cutSite, strand);
+
+  if (! tbl->allowOneMismatch) return;
+
+  for (idx = 0; idx < patLen; idx++) {
+    ch = str [idx];
+
+    /* put N at every position if a single mismatch is allowed */
+
+    str [idx] = 'N';
+
+    StoreSeqPattern (tbl, name, str, cutSite, strand);
+
+    /* now restore proper character, go on to put N in next position */
+
+    str [idx] = ch;
+  }
+}
+
+/* add restriction site to sequence search finite state machine */
+
+NLM_EXTERN void SeqSearchAddNucleotidePattern (
+  SeqSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  Int2 cutSite
+)
+
+{
+  Char     ch, comp [128], pat [128], str [128];
+  Int2     i, j;
+  size_t   len;
+  Uint1    strand;
+  Boolean  symmetric = TRUE;
+
+  if (tbl == NULL || StringHasNoText (name) || StringHasNoText (pattern)) return;
+
+  StringNCpy_0 (pat, pattern, sizeof (pat));
+  TrimSpacesAroundString (pat);
+
+  len = StringLen (pat);
+
+  /* upper case working copy of pattern string */
+
+  for (i = 0; i < len; i++) {
+    ch = pat [i];
+    pat [i] = TO_UPPER (ch);
+  }
+
+  /* reverse complement pattern to see if it is symetrical */
+
+  for (i = 0, j = len - 1; i < len; i++, j--) {
+    ch = pat [i];
+    comp [j] = tbl->letterToComp [(int) (Uint1) ch];
+  }
+  comp [len] = '\0';
+  symmetric = (Boolean) (StringICmp (pat, comp) == 0);
+
+  if (symmetric) {
+    strand = Seq_strand_both;
+  } else {
+    strand = Seq_strand_plus;
+  }
+
+  /* record expansion of entered pattern */
+
+  MemSet ((Pointer) str, 0, sizeof (str));
+  ExpandSeqPattern (tbl, name, pat, cutSite, strand, len, str, 0);
+
+  if (symmetric) return;
+
+  /* record expansion of reverse complement of asymmetric pattern */
+
+  MemSet ((Pointer) str, 0, sizeof (str));
+  ExpandSeqPattern (tbl, name, comp, len - cutSite, Seq_strand_minus, len, str, 0);
+}
+
+/* program passes each character in turn to finite state machine */
+
+NLM_EXTERN void SeqSearchProcessCharacter (
+  SeqSearchPtr tbl,
+  Char ch
+)
+
+{
+  Int2         curr, next;
+  SeqMatchPtr  mp;
+  SeqStatePtr  sp;
+
+  if (tbl == NULL) return;
+  if (! tbl->primed) {
+    SeqSearchPrimeStateArray (tbl);
+  }
+  if (tbl->stateArray == NULL) return;
+
+  curr = tbl->currentState;
+
+  /* loop through failure states until match or back to state 0 */
+
+  while ((next = SeqSearchGotoState (tbl, curr, ch, TRUE)) == FAIL_STATE) {
+    curr = SeqSearchFailState (tbl, curr);
+  }
+
+  tbl->currentState = next;
+  (tbl->currentPos)++;
+
+  /*
+     States while traversing search sequence containing EcoRI site (GAATTC)
+                                                        ------
+     AAGCTTGCATGCCTGCAGGTCGACTCTAGAGGATCCCCGGGTACCGAGCTCGAATTCGAGCTCGGTACCCGGGGATCCTC
+     00100010001000100110012000001211200000111000012100012345612100011000001111200000
+                                                        *
+  */
+
+  /* report any matches at current state to callback function */
+
+  sp = &(tbl->stateArray [(int) next]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+    tbl->matchproc (tbl->currentPos - StringLen (mp->pattern),
+                    mp->name, mp->pattern, mp->cutSite,
+                    mp->strand, tbl->userdata);
+  }
+}
+
+/* convenience function calls SeqSearchProcessCharacter for entire nucleotide bioseq */
+
+NLM_EXTERN void SeqSearchProcessBioseq (
+  SeqSearchPtr tbl,
+  BioseqPtr bsp
+)
+
+{
+  Byte        bases [400];
+  Uint1       residue;
+  Int2        ctr, i;
+  SeqPortPtr  spp;
+
+  SeqSearchReset (tbl);
+
+  if (tbl == NULL || bsp == NULL) return;
+
+  if (! ISA_na (bsp->mol)) return;
+
+  spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
+  if (spp == NULL) return;
+
+  if (bsp->repr == Seq_repr_delta) {
+    SeqPortSet_do_virtual (spp, TRUE);
+  }
+
+  /* use SeqPortRead rather than SeqPortGetResidue for faster performance */
+
+  ctr = SeqPortRead (spp, bases, sizeof (bases));
+  i = 0;
+  residue = (Uint1) bases [i];
+  while (residue != SEQPORT_EOF) {
+    if (IS_residue (residue)) {
+      SeqSearchProcessCharacter (tbl, (Char) residue);
+    }
+    i++;
+    if (i >= ctr) {
+      i = 0;
+      ctr = SeqPortRead (spp, bases, sizeof (bases));
+      if (ctr < 0) {
+        bases [0] = -ctr;
+      } else if (ctr < 1) {
+        bases [0] = SEQPORT_EOF;
+      }
+    }
+    residue = (Uint1) bases [i];
+  }
+
+  SeqPortFree (spp);
+
+  SeqSearchReset (tbl);
+}
+
+/* reset state and position to allow another run with same search patterns */
+
+NLM_EXTERN void SeqSearchReset (
+  SeqSearchPtr tbl
+)
+
+{
+  if (tbl == NULL) return;
+
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+}
+
+/* clean up sequence search finite state machine allocated memory */
+
+static SeqPatternPtr FreePatternList (
+  SeqPatternPtr pp
+)
+
+{
+  SeqPatternPtr  next;
+
+  while (pp != NULL) {
+    next = pp->next;
+    pp->next = NULL;
+    MemFree (pp->name);
+    MemFree (pp->pattern);
+    MemFree (pp);
+    pp = next;
+  }
+
+  return NULL;
+}
+
+static SeqMatchPtr FreeMatchList (
+  SeqMatchPtr mp
+)
+
+{
+  SeqMatchPtr  next;
+
+  while (mp != NULL) {
+    next = mp->next;
+    mp->next = NULL;
+    MemFree (mp->name);
+    MemFree (mp->pattern);
+    MemFree (mp);
+    mp = next;
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN SeqSearchPtr SeqSearchFree (
+  SeqSearchPtr tbl
+)
+
+{
+  Int2  maxState, state;
+
+  if (tbl == NULL) return NULL;
+
+  maxState = tbl->maxState;
+
+  for (state = 0; state < maxState; state++) {
+    FreeMatchList (tbl->stateArray [state].matches);
+  }
+
+  FreePatternList (tbl->patternList);
+
+  MemFree (tbl->stateArray);
+  return MemFree (tbl);
+}
+
+/*
+
+static CharPtr testseq =
+"AAGCTTGCATGCCTGCAGGTCGACTCTAGAGGATCCCCGGGTACCGAGCTCGAATTCGAGCTCGGTACCCGGGGATCCTC";
+
+static void MatchProc (Int4 position, CharPtr name, CharPtr pattern,
+                       Int2 cutSite, Uint1 strand, Pointer userdata)
+
+{
+  Message (MSG_POST, "Name '%s', Pattern '%s', Position %ld",
+           name, pattern, (long) position);
+}
+
+
+extern void TestSeqSearch (void);
+extern void TestSeqSearch (void)
+
+{
+  Char          ch;
+  CharPtr       ptr;
+  SeqSearchPtr  tbl;
+
+  tbl = SeqSearchNew (MatchProc, NULL, FALSE);
+  if (tbl == NULL) return;
+
+  SeqSearchAddNucleotidePattern (tbl, "AmbiG", "GRATYC", 1);
+
+  for (ptr = testseq, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    SeqSearchProcessCharacter (tbl, ch);
+  }
+
+  SeqSearchFree (tbl);
+}
+
+*/
 

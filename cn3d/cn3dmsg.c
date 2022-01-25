@@ -33,6 +33,99 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.83  2000/01/18 22:49:16  lewisg
+* send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
+*
+* Revision 6.82  2000/01/11 01:16:47  lewisg
+* fix color selection in Cn3D, other misc. bugs
+*
+* Revision 6.81  2000/01/08 23:16:26  lewisg
+* add missing ifdef
+*
+* Revision 6.80  2000/01/08 00:47:53  lewisg
+* fixes to selection, update, color
+*
+* Revision 6.79  2000/01/06 01:19:40  kans
+* fixed SendUpdate problem found by Mac compiler
+*
+* Revision 6.78  2000/01/06 00:04:42  lewisg
+* selection bug fixes, update message outbound, animation APIs moved to vibrant
+*
+* Revision 6.77  2000/01/04 15:55:50  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.76  1999/12/28 23:06:35  lewisg
+* udv/cn3d communication
+*
+* Revision 6.75  1999/12/28 15:08:44  lewisg
+* remove remaining mediainfo code
+*
+* Revision 6.74  1999/12/15 23:17:47  lewisg
+* make cn3d launch udv, fix launching of non-autonomous udv, add mouseup message
+*
+* Revision 6.73  1999/12/11 01:30:35  lewisg
+* fix bugs with sharing colors between ddv and cn3d
+*
+* Revision 6.72  1999/12/03 23:17:23  lewisg
+* Patrick's new global update msg, argument passing when launching ddv, experimental editing
+*
+* Revision 6.71  1999/12/02 20:31:59  lewisg
+* put seqentries into bioseqset and fix calling convention in alignmgr.c
+*
+* Revision 6.70  1999/12/01 19:06:07  thiessen
+* added alignmgr.h header
+*
+* Revision 6.69  1999/12/01 16:15:54  lewisg
+* interim checkin to fix blocking memory leak
+*
+* Revision 6.68  1999/11/24 21:44:19  vakatov
+* Minor formal fixes
+*
+* Revision 6.67  1999/11/24 15:23:19  lewisg
+* added color selection dialogs for SS
+*
+* Revision 6.66  1999/11/22 17:29:54  lewisg
+* add back color selection dialogs, fix viewer3d half-selection bug
+*
+* Revision 6.65  1999/11/22 14:46:44  thiessen
+* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
+*
+* Revision 6.64  1999/11/18 00:21:42  lewisg
+* draw speedups and selection on mouseup
+*
+* Revision 6.63  1999/11/15 18:30:08  lewisg
+* get rid of extra redraws when selecting
+*
+* Revision 6.62  1999/11/12 16:06:34  lewisg
+* fix sequentry to valnode conversion
+*
+* Revision 6.61  1999/11/10 23:19:41  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.60  1999/11/03 18:15:10  kans
+* added prototypes needed by other files
+*
+* Revision 6.59  1999/11/02 23:06:07  lewisg
+* fix cn3d to launch correctly if there is no seqentry associated with bioseq
+*
+* Revision 6.58  1999/11/01 22:10:27  lewisg
+* add ability to call color functions by type, and add this to cn3d
+*
+* Revision 6.57  1999/10/29 14:15:29  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.56  1999/10/15 20:56:39  lewisg
+* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
+*
+* Revision 6.55  1999/10/06 00:01:25  kans
+* minor changes
+*
+* Revision 6.54  1999/10/05 23:18:20  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.53  1999/09/21 18:09:15  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.52  1999/08/04 21:18:01  lewisg
 * modularized open operations to allow sequin to launch cn3d
 *
@@ -78,561 +171,476 @@
 * Revision 6.38  1998/12/16 20:13:33  ywang
 * remove return warning for FillSeqinfoForSeqEditViewProcs
 *
- * Revision 6.37  1998/12/09  20:41:18  ywang
- * get rid of GetGIForSeqId
- *
- * Revision 6.36  1998/10/27  15:55:52  ywang
- * add functions for testing color by sequence conservation
- *
- * Revision 6.35  1998/10/21  21:16:07  ywang
- * put highlight RGB in the application property structure
- *
- * Revision 6.34  1998/10/19  20:16:05  ywang
- * add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
- *
- * Revision 6.33  1998/10/16  22:06:08  ywang
- * make global color array for sequence display
- *
- * Revision 6.32  1998/09/23  22:08:42  ywang
- * to record checkin log
- *
+* Revision 6.37  1998/12/09  20:41:18  ywang
+* get rid of GetGIForSeqId
+*
+* Revision 6.36  1998/10/27  15:55:52  ywang
+* add functions for testing color by sequence conservation
+*
+* Revision 6.35  1998/10/21  21:16:07  ywang
+* put highlight RGB in the application property structure
+*
+* Revision 6.34  1998/10/19  20:16:05  ywang
+* add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
+*
+* Revision 6.33  1998/10/16  22:06:08  ywang
+* make global color array for sequence display
+*
+* Revision 6.32  1998/09/23  22:08:42  ywang
+* to record checkin log
+*
 * ===========================================================================  */
 
 #include <vibrant.h>
 #include <document.h>
 #include <vsm.h>
-#include <sequtil.h>   /* for sequence load funcs */
+#include <sequtil.h>            /* for sequence load funcs */
 #include <objsub.h>
 #include <string.h>
-#include <saledit.h>
 #include <objmgr.h>
 #include <cn3dmsg.h>
-#include <salmedia.h>
 #include <mmdbapi.h>
 #include <accentr.h>
 #include <lsqfetch.h>
-#include <salsap.h>
+#include <cn3dmain.h>
+#include <samutil.h>
+#include <sqnutils.h>
+#include <algorend.h>
+#include <cn3dshim.h>
+#include <alignmgr.h>
 
 
-Boolean Cn3D_ObjMgrOpen = FALSE;
-Boolean Cn3D_SalsaOpen = FALSE;
-Boolean Salsa_BioseqUpdate = FALSE;
-Boolean Cn3D_ReColor = FALSE;
-Int4 Num_Bioseq = 0, Num_Biostruc = 0;
-Int4 Num_ActiveSlave = 0;
-
-/* MediaInfo mediadata[MaxObj];  */
-MediaInfo **mediadata;
-Uint2 sap_entityID = 0, sap_itemID = 0;
-
-/*-----------------------------------------*/
-void LaunchMediaViewer(BioseqPtr bsp)
+void Cn3D_RegisterColor(void)
 {
-  Uint2            entityID = 0;
-  Int2             handled = 0;
-  Uint2            options = 0;
+    DDV_ColorQueue *pColorQueue;
+    Int4 i;
 
-  Uint2            itemID = 0;
-
-  if(bsp != NULL) {
-      entityID = BioseqFindEntity(bsp->id, &itemID);
-      if(entityID == 0) entityID = ObjMgrRegister(OBJ_BIOSEQ, (Pointer) bsp);    
-      options = ObjMgrGetOptions(entityID);
-      options |= OM_OPT_FREE_IF_NO_VIEW;
-      ObjMgrSetOptions(options, entityID);
-      /* handled = GatherProcLaunch (OMPROC_VIEW, FALSE, entityID, 1, OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0); */
-      handled = GatherSpecificProcLaunch (0, "Seq-Struc Communication", OMPROC_VIEW, FALSE, entityID, 1, OBJ_BIOSEQ);
-      BioseqUnlock( bsp );
-   }
-}
-/*-----------------------------------------*/
-extern void MediaLaunch(void)
-{
-  BioseqPtr bsp = NULL;
-
-  if(Num_Bioseq == 0) return;
-  bsp = BioseqLockById(mediadata[0]->sip);
-  if(bsp == NULL) {
-/*   ErrPostEx (SEV_ERROR, 0, 0, " BioseqLockById failed in MediaLaunch!\n");*/
-     Cn3D_ObjMgrOpen = FALSE;
-     return;
-  }
-  else {
-     LaunchMediaViewer ((BioseqPtr) bsp);
-  }
-
-}
-/*-----------------------------------------*/
-static SeqIdPtr make_sip(Int4 id) {
-
-  SeqIdPtr     sip=NULL;
-
-  sip = ValNodeNew (NULL);
-  if (sip != NULL) {
-     sip->choice = SEQID_GI;
-     sip->data.intvalue = id;
-  }
-  return sip;
-}
-/*-----------------------------------------*/
-static void FillSeqinfoForSeqEditViewProcs(void)
-{
-  SeqEditViewProcsPtr svpp = NULL;
-
-  Int4 iCount = 0;
-
-  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-  if(svpp != NULL){
-     for(iCount = 0; iCount < Num_Bioseq; iCount++){
-        ValNodeAddPointer(&svpp->seqinfo, (Int2)(iCount + 1), (MediaInfoPtr) mediadata[iCount]);
-     }
-
-     svpp->colorR_HL = 255; svpp->colorG_HL = 255; svpp->colorB_HL = 0;
-  }
-
-}
-/*-----------------------------------------*/
-static ResidueColorCellPtr NewRGB(void)
-{
-  ResidueColorCellPtr rgbNew = NULL;
-
-  rgbNew = (ResidueColorCellPtr) MemNew(sizeof(ResidueColorCell));
-  return rgbNew;
-}
-/*------------------------------------------*/
-void ClearMediaData(void)
-{
-  Int4 iCount = 0;
-  ValNodePtr seq_color = NULL, next = NULL;
-
-  SeqEditViewProcsPtr svpp = NULL;
-
-  if(Num_Bioseq > 0){
-    for(iCount = 0; iCount < Num_Bioseq; iCount++){
-       mediadata[iCount]->sip = SeqIdFree(mediadata[iCount]->sip);
-       MemFree(mediadata[iCount]->bAligned);
-       seq_color = mediadata[iCount]->seq_color;
-       while(seq_color){
-          next = seq_color->next;
-          MemFree(seq_color->data.ptrvalue);
-          ValNodeFree(seq_color);
-          seq_color = next;
-       }
-       mediadata[iCount] = MemFree(mediadata[iCount]);
+    /* add the regular coloring functions for residues */
+    for (i = 0; i < CN3DFUNCNUM; i++) {
+        pColorQueue = DDV_NewColorQueue(Cn3D_ColorList[i].Function, 
+            Cn3D_ColorList[i].Name, DDV_PRILO, FALSE, Cn3D_ColorData.sepprocid);
+        DDV_AddColorFunc(Cn3D_ColorData.pDDVColorGlobal, pColorQueue);
     }
 
-    mediadata = MemFree(mediadata); 
-    Num_Bioseq = 0;
-  }
-
-  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");  
-  if(svpp != NULL){
-     svpp->seqinfo = NULL;
-  }
-
-  return;
+    /* add the user defined colors as an override */
+    pColorQueue = DDV_NewColorQueue(Cn3D_ColorSpecial, "Cn3D Special",
+                                    DDV_PRIHI, TRUE, Cn3D_ColorData.sepprocid);
+    DDV_AddColorFunc(Cn3D_ColorData.pDDVColorGlobal, pColorQueue);
 }
-/*------------------------------------------*/
-void Cn3DAddMediaDataColorTable()
+
+
+/*****************************************************************************
+
+Function: Cn3D_LaunchSeqEntry()
+
+Purpose: Launch the Bioseq viewer on all Bioseqs contained in a SeqEntry.
+  
+Parameters: pvnsep, the valnode list of SeqEntries
+
+*****************************************************************************/
+
+static void Cn3D_SetRect(RecT *Rect)
 {
-  Int4 iCount = 0, length = 0;
-  ResidueColorCellPtr rgbNew = NULL;
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     for(length = 0; length < mediadata[iCount]->length; length++){ 
-        rgbNew = NewRGB(); 
-        rgbNew->rgb[0] = 255; rgbNew->rgb[1] = 255; rgbNew->rgb[2] = 255;
-        ValNodeAddPointer(&mediadata[iCount]->seq_color, (Int2)(length+1), (Pointer) rgbNew);   
-     }
-
-  }
-
-  FillSeqinfoForSeqEditViewProcs();
+    RecT cn3drc;
+    
+    if(Rect == NULL) return;
+    ObjectRect(Cn3D_ColorData.Cn3D_w, &cn3drc);
+    Rect->top = cn3drc.bottom + 50;
+    Rect->bottom = screenRect.bottom - 100;
+    if(Rect->bottom - Rect->top < 200) Rect->top =
+        Rect->bottom - 200;
+    Rect->left = cn3drc.left;
+    Rect->right = screenRect.right - 100;
+    if(Rect->right - Rect->left < 400) Rect->left =
+        Rect->right - 400;
 }
-/*-----------------------------------------*/
-extern void MediaDataLoad2(PDNMM pdnmmHead)
+
+void Cn3D_LaunchSeqEntry(ValNode * pvnsep)
 {
-  PDNMM pdnmmHead_tmp = NULL;
-  PMMD  pmmdThis = NULL;
-  BioseqPtr bsp = NULL;
-  SeqIdPtr sip = NULL;
-  Int4 thisGi = 0;
-  Int2 iCount = 0;
-  Int4 iRes = 0;
-  Uint2 entityID = 0, itemID = 0;
+    Uint2 entityID, itemID;
+    ValNode *pvnSips, *pvnSipsHold;
+    SeqId *sip;
+    SeqEntry *sep;
+    SAM_ViewGlobal vg;
 
-                                          /* allocate memory for mediadata */     
-  pdnmmHead_tmp = pdnmmHead;
-  while(pdnmmHead_tmp){
-     pmmdThis = pdnmmHead_tmp->data.ptrvalue;
-     if(pmmdThis == NULL) goto errot_tmp;
-     if(pmmdThis->bWhat != (Byte) AM_PROT && pmmdThis->bWhat != (Byte) AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto errot_tmp;
-     iCount++;
-     errot_tmp:
-     pdnmmHead_tmp = pdnmmHead_tmp->next;
-  }
-
-  Num_Bioseq = iCount;
-
-  if(Num_Bioseq == 0) return;
-
-  mediadata = (Pointer) MemNew((size_t) (Num_Bioseq * sizeof(Pointer)));
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     mediadata[iCount] = (MediaInfoPtr) MemNew(sizeof (MediaInfo));
-  }
-
-  iCount = 0;
-  while(pdnmmHead){
-     pmmdThis = pdnmmHead->data.ptrvalue;
-     if(pmmdThis == NULL) goto errot;
-     if(pmmdThis->bWhat != (Byte) AM_PROT && pmmdThis->bWhat != (Byte) AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto errot;
-     else thisGi = pmmdThis->iGi;     
-               /* pmmdThis->iGi is either 0 or what it should be from mmdbapi */
-               /* in one biostruc-sequence case from MMDB, it should NOT be zero for NA and Protein */
-/*   sip = make_sip (thisGi);  */
-     sip = pmmdThis->pSeqId;
-     mediadata[iCount]->sip = SeqIdDup(sip);
-     mediadata[iCount]->Gi = thisGi;
-     bsp = BioseqLockById (sip); /* Remember always lock first! */
-                                 /* and by the way to get bsp->length */
-     if (bsp!=NULL) {
-        mediadata[iCount]->length = bsp->length;
-        BioseqUnlock (bsp);
-     }
-     else mediadata[iCount]->length = 0;
-
-     entityID = BioseqFindEntity(sip, &itemID);
-     mediadata[iCount]->entityID = entityID;
-     mediadata[iCount]->itemID = itemID;
-     mediadata[iCount]->itemtype = OBJ_BIOSEQ;
-     mediadata[iCount]->bVisible = 1;
-     mediadata[iCount]->bAligned = (BytePtr) MemNew((size_t)(mediadata[iCount]->length + 1) * sizeof(Byte));
-     for(iRes = 0; iRes < mediadata[iCount]->length; iRes++){
-        mediadata[iCount]->bAligned[iRes] = 0;
-     }
-
-     iCount++;
-     errot:
-     pdnmmHead = pdnmmHead->next;
-  }
-
-  Cn3DAddMediaDataColorTable(); 
-  Num_ActiveSlave = iCount - 1;
-}
-/*-----------------------------------------*/
-Int4 Cn3DGetGIForSeqId(SeqIdPtr sid)
-{                                 /* used to avoid network connection */
-    BioseqPtr bsp = NULL;
-    SeqIdPtr sip = NULL;
-    Int4 gi = 0;
-
-    if (sid == NULL)
-        return gi;
-
-    while(sid){
-       if (sid->choice == SEQID_GI) {
-          return sid->data.intvalue;
-       }
-       sid = sid->next;
+    for(sep = pvnsep; sep != NULL; sep = sep->next) {
+        
+        pvnSips = SAM_ExtractSips(sep);
+        if (pvnSips == NULL) return;
+        pvnSipsHold = pvnSips;
+        
+        for (; pvnSips != NULL; pvnSips = pvnSips->next) {
+            sip = (SeqId *) pvnSips->data.ptrvalue;
+            if (sip == NULL) continue;
+            entityID = BioseqFindEntity(sip, &itemID);
+            Cn3D_SetRect((RecT *)&vg.Rect);
+            vg.MasterViewer = SAMVIEWCN3D;
+            vg.FetchProc = NULL;
+            SetAppProperty(SAM_ViewString, &vg);
+            GatherSpecificProcLaunch(0, "OneD-Viewer", OMPROC_VIEW,
+                FALSE, entityID, itemID, OBJ_BIOSEQ);
+            RemoveAppProperty(SAM_ViewString);
+        }
+        ValNodeFree(pvnSipsHold);
     }
 
-    bsp = BioseqFindCore(sid);
-    if (bsp != NULL)
-    {
-        for (sip = bsp->id; sip != NULL; sip = sip->next)
-        {
-            if (sip->choice == SEQID_GI)
-                return sip->data.intvalue;
+}
+
+/*****************************************************************************
+
+Function: Cn3D_RegisterSeqEntry()
+
+Purpose: Adds a message func to the SeqEntry and makes it
+         OM_OPT_FREE_IF_NO_VIEW
+  
+Parameters: pvnsep, a valnode list of SeqEntries
+
+*****************************************************************************/
+
+void Cn3D_RegisterSeqEntry(ValNode * pvnsep)
+{
+    Int2 entityID;
+    SeqEntry *sep;
+    BioseqSet *bssp;
+    
+    
+    bssp = BioseqSetNew ();
+    if (bssp == NULL) return;
+    bssp->_class = BioseqseqSet_class_genbank;
+    bssp->seq_set = pvnsep;
+    
+    sep = SeqEntryNew ();
+    if (sep == NULL) return;
+    sep->choice = 2;  /* Bioseq-set */
+    sep->data.ptrvalue = (Pointer) bssp;
+    
+    SeqMgrLinkSeqEntry(sep, 0, NULL);
+    
+    entityID = ObjMgrGetEntityIDForPointer(sep);
+    Cn3D_ColorData.pvnsep = sep;
+    
+    GatherSpecificProcLaunch(0, "Seq-Struc Communication", OMPROC_VIEW,
+        FALSE, entityID, 0, OBJ_BIOSEQSET);
+    SAM_MakeViewerFree((void *) sep);
+    if(Cn3D_ColorData.pDDVColorGlobal == NULL) {
+        Cn3D_ColorData.pDDVColorGlobal = DDV_GetColorGlobalEx((void *) sep);
+        DDV_LoadSSColor(Cn3D_ColorData.pDDVColorGlobal, "CN3D");
+    }
+    Cn3D_RegisterColor();
+}
+
+
+
+SeqAnnot *Cn3D_MakeFakeAnnot(SeqEntry *sep)
+{
+    SeqAnnot *sap = NULL;
+    SeqAlign *salp = NULL;
+    DenseSeg *pDenseSeg = NULL;  /* the denseseg in the new seq align */
+    ValNode *pvnSips = NULL;
+    
+    pDenseSeg = SAM_NewDenseSeg(1, 1, FALSE);
+    if(pDenseSeg == NULL) ThrowError;
+    
+    pvnSips = SAM_ExtractSips(sep);
+    if(pvnSips == NULL) ThrowError;  
+   
+    pDenseSeg->ids = SeqIdDup((SeqId *)pvnSips->data.ptrvalue);
+    pDenseSeg->starts[0] = 0;
+    pDenseSeg->lens[0] = 128;
+
+    salp = SAM_NewSeqAlign((Uint1)SAT_GLOBAL, (Uint1)SAS_DENSEG,
+        pDenseSeg, 1);
+    
+    sap = SeqAnnotNew();
+    if(sap == NULL || salp == NULL) ThrowError;
+    sap->data = salp;
+    return sap;
+
+error:
+    if(salp == NULL) DenseSegFree(pDenseSeg);
+    ValNodeFree(pvnSips);
+    SeqAnnotFree(sap);
+    SeqAlignFree(salp);
+    return NULL;
+}
+
+/*****************************************************************************
+
+Function: Cn3D_LaunchSeqAnnot()
+
+Purpose: Launch the SeqAlign viewer on all SeqAligns contained in a SeqAnnot.
+  
+Parameters: sap, the SeqAnnot
+
+*****************************************************************************/
+
+void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
+{
+    Int2 entityID, itemID;
+    SeqAlign *salp;
+    SAM_ViewGlobal vg;
+    RecT cn3drc;
+
+
+    for (; sap != NULL; sap = sap->next) {
+        if (sap->data == NULL)
+            continue;
+        salp = sap->data;
+        entityID = ObjMgrGetEntityIDForPointer(salp);
+        
+        itemID =
+            GetItemIDGivenPointer(entityID, OBJ_SEQALIGN, (void *) salp);
+
+        ObjectRect(Cn3D_ColorData.Cn3D_w, &cn3drc);
+        Cn3D_SetRect((RecT *)&vg.Rect);
+        vg.MasterViewer = SAMVIEWCN3D;
+        vg.FetchProc = NULL;
+        SetAppProperty(SAM_ViewString, &vg);
+        GatherSpecificProcLaunch(0, "DDV", OMPROC_VIEW,
+            FALSE, entityID, itemID, OBJ_SEQALIGN);
+
+        RemoveAppProperty(SAM_ViewString);
+    }
+}
+
+
+/*****************************************************************************
+
+Function: Cn3D_RegisterSeqAnnot()
+
+Purpose: Adds a message func to the SeqAnnot and makes it
+         OM_OPT_FREE_IF_NO_VIEW
+  
+Parameters: sap, the SeqAnnot pointer
+
+*****************************************************************************/
+
+void Cn3D_RegisterSeqAnnot(SeqAnnot * sap)
+{
+    Int2 entityID;
+    SeqAlign *salp;
+
+    Cn3D_ColorData.sap = sap;
+
+    /* index the seq aligns */
+    for (; sap != NULL; sap = sap->next) {
+        if (sap->data == NULL) continue;
+        salp = sap->data;
+        entityID = ObjMgrRegister(OBJ_SEQALIGN, (void *) salp);
+        GatherSpecificProcLaunch(0, "Cn3D SeqAnnot", OMPROC_VIEW,
+                             FALSE, entityID, 0, OBJ_SEQALIGN);
+        SAM_MakeViewerFree((void *) salp);
+        if(Cn3D_ColorData.pDDVColorGlobal == NULL) {
+            Cn3D_ColorData.pDDVColorGlobal = DDV_GetColorGlobalEx((void *) salp);
+            DDV_LoadSSColor(Cn3D_ColorData.pDDVColorGlobal, "CN3D");
+        }
+        else DDV_GetColorGlobalEx((void *) salp);
+
+        if(!AlnMgrIndexSeqAlign(salp)) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Alignment not in correct format");
+            return;
         }
     }
-
-    return gi;
-
+    Cn3D_RegisterColor();
 }
-/*-----------------------------------------*/
-extern void MediaDataLoad(SeqAlignPtr salp)
-{
-  SeqIdPtr      sip = NULL, sip2 = NULL;
-  Int4 iCount = 0;
-  Int4 iRes = 0;
-  Boolean FirstNode = TRUE;
-  Uint2 entityID = 0, itemID = 0;
-  BioseqPtr bsp = NULL;
-  SeqAlignPtr salp_tmp = NULL;
 
-                                    /* allocate memory for mediadata */
-  salp_tmp = salp;
-  while(salp_tmp){
-     sip2 = SeqAlignId (salp_tmp, 0);
-     if (sip2 != NULL) {
-       if(!FirstNode) sip2 = sip2->next;
-       for(sip = sip2; sip != NULL; sip = sip->next){
-          iCount++;
-          FirstNode = FALSE;
-       }
-     }
-     salp_tmp = salp_tmp->next;
-  }
-  Num_Bioseq = iCount;
 
-  if(Num_Bioseq == 0) return;  /* important */
+/*****************************************************************************
 
-  mediadata = (Pointer) MemNew((size_t)(Num_Bioseq * sizeof(Pointer)));
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     mediadata[iCount] = (MediaInfoPtr) MemNew(sizeof(MediaInfo));
-  }
+Function: Cn3D_SendUpdate()
 
-  iCount = 0;
-  FirstNode = TRUE;
-
-  while(salp){
-     sip2 = SeqAlignId (salp, 0);
-     if (sip2 != NULL) {
-       if(!FirstNode) sip2 = sip2->next;
-       for(sip = sip2; sip != NULL; sip = sip->next){
-          mediadata[iCount]->sip = SeqIdDup(sip);
-          mediadata[iCount]->Gi = Cn3DGetGIForSeqId(sip);
-                 /* NCBI general GetGIForSeqId(sip) can go to EntrezInit eventually */
-          mediadata[iCount]->bVisible = TRUE; 
-          iCount++;
-          FirstNode = FALSE;
-       }
-     }
-     salp = salp->next;
-  }
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     bsp = BioseqLockById(mediadata[iCount]->sip);  /* lock first, and by the way to get bsp->length */
-     if(bsp != NULL) {
-        mediadata[iCount]->length = bsp->length;
-        mediadata[iCount]->sip = SeqIdDup(SeqIdFindBest(bsp->id,0));
-              /* to use the complete set of SeqId */
-        BioseqUnlock( bsp );
-     }
-     else mediadata[iCount]->length = 0;
-
-     entityID = BioseqFindEntity(mediadata[iCount]->sip, &itemID);
-     mediadata[iCount]->entityID = entityID;
-     mediadata[iCount]->itemID = itemID;
-     mediadata[iCount]->itemtype = OBJ_BIOSEQ;
-     mediadata[iCount]->bVisible = 1;
-     mediadata[iCount]->bAligned = (BytePtr) MemNew((size_t)(mediadata[iCount]->length + 1) * sizeof(Byte));
-     for(iRes = 0; iRes < mediadata[iCount]->length; iRes++){
-        mediadata[iCount]->bAligned[iRes] = 0; 
-     }
-  }  
+Purpose: Sends an update message to everyone about everything.
   
-  Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq();
-  Cn3DCheckAlignmentStatusForStrucSeqs();
+*****************************************************************************/
 
-  Cn3DAddMediaDataColorTable(); 
-}
-/*-----------------------------------------*/
-extern void MediaRegister(void)
+NLM_EXTERN void Cn3D_SendUpdate()
 {
-  REGISTER_BIOSEQ_BIOSTRUC_MEDIA;
+    DDVUpdateMSG  dump;
+    Uint2 entityID, itemID;
+    SeqAlign *salp;
+    SeqAnnot *sap;
+    ValNode *pvnSips, *pvnSipsHold;
+    SeqId *sip;
 
+    dump.data = NULL;
+	dump.type = UPDATE_TYPE_EDIT_DELBSP;
+    
+    for (sap = Cn3D_ColorData.sap; sap != NULL; sap = sap->next) {        
+        if (sap->data == NULL) continue;
+        salp = sap->data;
+        entityID = ObjMgrGetEntityIDForPointer(salp);
+        itemID =
+            GetItemIDGivenPointer(entityID, OBJ_SEQALIGN, (void *) salp);
+               
+        ObjMgrSendProcMsg(OM_MSG_UPDATE, entityID,itemID,
+            OBJ_SEQALIGN,0,0,(Pointer)&dump);
+    }
+    
+    if (Cn3D_ColorData.pvnsep) {
+        pvnSips = SAM_ExtractSips(Cn3D_ColorData.pvnsep);
+        if (pvnSips != NULL) {
+            pvnSipsHold = pvnSips;
+            
+            for (; pvnSips != NULL; pvnSips = pvnSips->next) {
+                sip = (SeqId *) pvnSips->data.ptrvalue;
+                if (sip == NULL) continue;
+                entityID = BioseqFindEntity(sip, &itemID);
+
+                ObjMgrSendProcMsg(OM_MSG_UPDATE, entityID,itemID,
+                    OBJ_BIOSEQ,0,0,(Pointer)&dump);
+            }
+            ValNodeFree(pvnSipsHold);            
+        }
+    }
 }
-/*-----------------------------------------*/
-static Boolean Cn3D_alreadyRegistered = FALSE; /* used to keep entrez and objmgr from being restarted */
 
-extern void Cn3dObjRegister(void)
-{
-  PDNMS pdnmsMaster = NULL;
-  PMSD pmsdMaster = NULL, pmsdSlave = NULL;
-  SeqAnnotPtr psaAlign = NULL;
-  SeqAlignPtr salp = NULL;
-  PDNMM pdnmmHead = NULL, pdnmmHead_tmp = NULL;
-  PMMD  pmmdThis = NULL;
 
-  ObjMgrPtr omp = NULL;
-
-  if(!Cn3D_alreadyRegistered){
-                            /* to add the ability to open salsa */
-     MediaRegister();                      
-     SalsaRegister();
-
-     Cn3D_alreadyRegistered = TRUE;
-
-     omp = ObjMgrGet();
-     omp->maxtemp = 60;
-     ObjMgrSetHold();     /* magic line? */
-  }
-
-/*pdnmsMaster = GetMasterModelstruc();    
-  if(pdnmsMaster == NULL) pdnmsMaster = (PDNMS) GetSelectedModelstruc(); */
-
-  Cn3D_ObjMgrOpen = TRUE;   
-
-  pdnmsMaster = (PDNMS) GetSelectedModelstruc();
-          /* always use this--lewis's opinion */
-
-  if(pdnmsMaster == NULL) {
-/*   ErrPostEx (SEV_ERROR, 0, 0, " GetSelectedModelstruc is NULL: return! ");  */
-     return;
-  }
-
-  pmsdMaster = (PMSD) pdnmsMaster->data.ptrvalue;
-
-  pdnmmHead = pmsdMaster->pdnmmHead;
-
-  if(pmsdMaster->pdnmsSlaves != NULL)
-  {
-     pmsdSlave = pmsdMaster -> pdnmsSlaves -> data.ptrvalue;
-  }
-  if(pmsdMaster->psaAlignment != NULL)
-     psaAlign = pmsdMaster->psaAlignment;
-  else if( pmsdSlave!=NULL) {
-     if (pmsdSlave->psaAlignment != NULL)
-        psaAlign = pmsdSlave->psaAlignment;
-  }
-
-  if (psaAlign == NULL)
-  {
-     MediaDataLoad2 (pdnmmHead);
-     MediaLaunch();
-     Cn3DSetHLColorForSalsa();
-     return;
-  }
-
-  if (psaAlign!=NULL && psaAlign->data!=NULL)
-  {
-    salp=(SeqAlignPtr)psaAlign->data;
-
-    MediaDataLoad (salp);
-    MediaLaunch();
-    Cn3DSetHLColorForSalsa();
-
-  }  
-
-  return;
-}
 /*-----------------------------------------*/
 static Int2 LIBCALLBACK SeqStrucMediaMsgFunc(OMMsgStructPtr ommsp)
 {
-  OMUserDataPtr      omudp = NULL;
-  MediaViewPtr       mvp = NULL;
- 
-  SelStructPtr sel = NULL;
+    OMUserDataPtr omudp = NULL;
+    SelStructPtr sel = NULL;
 
-  Boolean highlight = FALSE;
+    omudp = (OMUserDataPtr) (ommsp->omuserdata);
 
-  omudp = (OMUserDataPtr)(ommsp->omuserdata);
-  mvp = (MediaViewPtr) omudp->userdata.ptrvalue;
-  if(mvp == NULL){
-      return OM_MSG_RET_ERROR;
-  }
+    switch (ommsp->message) {
+    case OM_MSG_UPDATE:
+        break;
 
-  switch (ommsp->message)
-  {
-      case OM_MSG_UPDATE:
-           break;
+    case OM_MSG_SELECT:
 
-      case OM_MSG_SELECT:
+        if (ommsp->itemtype == OBJ_SEQALIGN)
+            return OM_MSG_RET_OK;
+        if (ommsp->itemtype == OBJ_SEQFEAT)
+            return OM_MSG_RET_OK;
 
-           if(ommsp->itemtype == OBJ_SEQALIGN) return OM_MSG_RET_OK;
-           if(ommsp->itemtype == OBJ_SEQFEAT) return OM_MSG_RET_OK;
+        sel = ObjMgrGetSelected();
+        while (sel != NULL) {
+            MediaHL(sel, TRUE); /* highlight in cn3d */
+            sel = sel->next;
+        }
 
-           sel = ObjMgrGetSelected();
-           while(sel != NULL) {
-               highlight = TRUE;
-               MediaHL(sel, highlight);  /* highlight in cn3d */
-               sel = sel->next;
-           }
-           break;
+        break;
 
-      case OM_MSG_DESELECT:
+    case OM_MSG_DESELECT:
 
-           if(ommsp->itemtype == OBJ_SEQALIGN) return OM_MSG_RET_OK;
-           if(ommsp->itemtype == OBJ_SEQFEAT) return OM_MSG_RET_OK;
+        if (ommsp->itemtype == OBJ_SEQALIGN)
+            return OM_MSG_RET_OK;
+        if (ommsp->itemtype == OBJ_SEQFEAT)
+            return OM_MSG_RET_OK;
 
-           sel = (SelStructPtr) MemNew(sizeof(SelStruct));
-           sel->entityID = ommsp->entityID;
-           sel->itemtype = ommsp->itemtype;
-           sel->itemID = ommsp->itemID;
-           sel->region = ommsp->region;
-           sel->regiontype = ommsp->regiontype;
-           if(sel) {
-               highlight = FALSE;
-               MediaHL(sel, highlight);  /* highlight in cn3d */
-           }
-           break;
+        sel = (SelStructPtr) MemNew(sizeof(SelStruct));
+        sel->entityID = ommsp->entityID;
+        sel->itemtype = ommsp->itemtype;
+        sel->itemID = ommsp->itemID;
+        sel->region = ommsp->region;
+        sel->regiontype = ommsp->regiontype;
+        if (sel) MediaHL(sel, FALSE); /* highlight in cn3d */
 
-      case OM_MSG_SETCOLOR:
-           break;
+        break;
 
-  }
+    case OM_MSG_MOUSEUP:
+#ifdef _OPENGL
+        if(OGL_IsPlaying(Cn3D_ColorData.OGL_Data)) {
+            OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+            OGL_AllLayerOnProc(Cn3D_ColorData.OGL_Data);
+        }
+#else /* _OPENGL */
+        if(IsPlaying3D()) {
+            StopPlaying3D();
+            Nlm_AllLayerSet3D(Cn3D_v3d, TRUE);
+        }
+#endif /* else _OPENGL */
+        Cn3D_Redraw(FALSE);
+        break;
+        
 
-  return OM_MSG_RET_OK;
+    }
+
+    return OM_MSG_RET_OK;
 
 }
+
 /*-----------------------------------------*/
 extern Int2 LIBCALLBACK SeqStrucMediaFunc(Pointer data)
 {
-  MediaViewPtr        mvp = NULL;
-  OMProcControlPtr    ompcp = NULL;
-  OMUserDataPtr       omudp = NULL;
-  SelStruct           ss;
-  BioseqPtr           bsp = NULL;
+    OMProcControlPtr ompcp = NULL;
+    OMUserDataPtr omudp = NULL;
 
-  Uint2 slave_entityID = 0, slave_itemID = 0;
-  Int4 iCount = 0;
- 
+    ompcp = (OMProcControlPtr) data;
+    if (ompcp == NULL || ompcp->proc == NULL) {
+        Message(MSG_ERROR, "Data NULL [1]");
+        return OM_MSG_RET_ERROR;
+    }
 
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) {
-      Message (MSG_ERROR, "Data NULL [1]");
-      return OM_MSG_RET_ERROR;
-  }
+    switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQSET:
+    case OBJ_BIOSEQ:
+        break;
+    default:
+        return OM_MSG_RET_ERROR;
+    }
 
-  switch (ompcp->input_itemtype) {
-      case OBJ_BIOSEQ :
-           bsp = (BioseqPtr) ompcp->input_data;
-           break;
-      case 0 :
-           return OM_MSG_RET_ERROR;
-      default :
-           return OM_MSG_RET_ERROR;
-  }
+    if (ompcp->input_data == NULL) {
+        Message(MSG_ERROR, "Data NULL [2]");
+        return OM_MSG_RET_ERROR;
+    }
 
-  if (bsp == NULL) {
-      Message (MSG_ERROR, "Data NULL [2]");
-      return OM_MSG_RET_ERROR;
-  }
+    Cn3D_ColorData.sepprocid = ompcp->proc->procid;
 
-  mvp = (MediaViewPtr) MemNew(sizeof (MediaView));
+    omudp =
+        ObjMgrAddUserData(ompcp->input_entityID, ompcp->proc->procid,
+                          OMPROC_VIEW, Cn3D_ColorData.userkey);
+    if (omudp != NULL) {
+        omudp->messagefunc = SeqStrucMediaMsgFunc;
+    }
+    return OM_MSG_RET_OK;
 
-  ss.entityID = ompcp->input_entityID;
-  ss.itemID = ompcp->input_itemID;
-  ss.itemtype = ompcp->input_itemtype;
-  ss.regiontype =0;
-  ss.region = NULL;
+}
 
-  if(mvp != NULL){
-      mvp->input_entityID = ompcp->input_entityID;
-      mvp->input_itemID = ompcp->input_itemID;
-      mvp->input_itemtype = ompcp->input_itemtype;
-      mvp->this_itemtype = OBJ_SEQANNOT;
-      mvp->this_subtype = 0;
-      mvp->procid = ompcp->proc->procid;
-      mvp->proctype = ompcp->proc->proctype;
-      mvp->userkey = OMGetNextUserKey ();
-      omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, OMPROC_EDIT, mvp->userkey);
-      if (omudp != NULL) {
-          omudp->userdata.ptrvalue = (Pointer) mvp;
-          omudp->messagefunc =  SeqStrucMediaMsgFunc;
-      }
-  }
+/*****************************************************************************
 
-  for(iCount = 1; iCount < Num_Bioseq; iCount++){  /* skip first one */
-      slave_entityID = BioseqFindEntity(mediadata[iCount]->sip, &slave_itemID);
-      omudp = ObjMgrAddUserData(slave_entityID, ompcp->proc->procid, OMPROC_EDIT, mvp->userkey);
-      if(omudp != NULL){
-          omudp->userdata.ptrvalue = (Pointer) mvp;
-          omudp->messagefunc =  SeqStrucMediaMsgFunc;
-      }
-  }
+Function: Cn3D_AnnotEditFunc()
 
-  return OM_MSG_RET_OK;
+Purpose: The object manager callback to register a SeqAnnot.
+  
+Parameters: data, the OMProcControlPtr.
 
+Returns: OM_MSG_RET_*
+
+*****************************************************************************/
+
+extern Int2 LIBCALLBACK Cn3D_AnnotEditFunc(Pointer data)
+{
+    OMProcControlPtr ompcp = NULL;
+    OMUserDataPtr omudp = NULL;
+
+    ompcp = (OMProcControlPtr) data;
+    if (ompcp == NULL || ompcp->proc == NULL) {
+        Message(MSG_ERROR, "Data NULL [1]");
+        return OM_MSG_RET_ERROR;
+    }
+
+    switch (ompcp->input_itemtype) {
+    case OBJ_SEQANNOT:
+    case OBJ_SEQALIGN:
+        break;
+    case 0:
+        return OM_MSG_RET_ERROR;
+    default:
+        return OM_MSG_RET_ERROR;
+    }
+
+    if (ompcp->input_data == NULL) {
+        Message(MSG_ERROR, "Data NULL [2]");
+        return OM_MSG_RET_ERROR;
+    }
+    Cn3D_ColorData.sapprocid = ompcp->proc->procid;
+    omudp = ObjMgrAddUserData(ompcp->input_entityID, ompcp->proc->procid,
+                              OMPROC_EDIT, Cn3D_ColorData.userkey);
+    if (omudp != NULL) {
+        omudp->messagefunc = SeqStrucMediaMsgFunc;
+    }
+
+    return OM_MSG_RET_OK;
 }

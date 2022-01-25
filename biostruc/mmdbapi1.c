@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -44,6 +44,12 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.32  1999/11/02 23:06:08  lewisg
+* fix cn3d to launch correctly if there is no seqentry associated with bioseq
+*
+* Revision 6.31  1999/10/05 23:18:17  lewisg
+* add ddv and udv to cn3d with memory management
+*
 * Revision 6.30  1999/06/07 21:23:36  ywang
 * add iUserDefinedFeatureOld, FeatureOnOld to MGD
 *
@@ -709,13 +715,8 @@ printf("in FreeMSD ");
 /* leak.  the slaves point to the master pExtra, but since pExtra is part of cn3d, I don't want
         to put logic in here that is dependent on cn3d. if (pmsdThis->pExtra) MemFree(pmsdThis->pExtra); */
         if (pmsdThis->pdnmsSlaves) FreeListDNMS(pmsdThis->pdnmsSlaves);
-        if (pmsdThis->psaAlignment) SeqAnnotFree(pmsdThis->psaAlignment);
-/* leak problem with salsa. if (pmsdThis->pseSequences) SeqEntryFree(pmsdThis->pseSequences);*/
-/*another leak.  SeqAnnotFree tries to free undef'd fields in the Seqannot.  maybe make up fake 
-names in vastsrv?        if (pmsdThis->pseqaSeqannot) SeqAnnotFree(pmsdThis->pseqaSeqannot);*/
  	MemFree(pmsdThis);
 
-/* yet another leak.  need to free up the feature pointers.  I wish this were c++ */
        }
 }
 
@@ -4438,6 +4439,7 @@ PDNMS LIBCALL Biostruc2Modelstruc(PDNMS PNTR ppdnmsList, BiostrucPtr pbsBS, PRGD
      pmsdThis->bAligned = 0;  /* nothing aligned to it */
      pmsdThis->pbAligned = NULL;
      pmsdThis->bMaster = TRUE; /* default to being a master structure */
+     pmsdThis->iMimeType = 0;
 
 		   /* non-MMDB dependent info */ 
 	   pmsdThis->pcSName = StringSave(pcFetch);

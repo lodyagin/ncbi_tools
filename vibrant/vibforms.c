@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.11  1999/10/21 16:50:40  kans
+* use SafeSetValue for enum lists and spreadsheets
+*
+* Revision 6.10  1999/10/20 22:09:44  kans
+* AlistDialogData public, has userdata field, convenience functions set userdata, initial value
+*
+* Revision 6.9  1999/10/18 21:47:39  kans
+* MakeEnumFieldAlistFromValNodeList strips paren and changes slash to dash
+*
+* Revision 6.8  1999/10/18 15:33:03  kans
+* added MakeEnumFieldAlistFromValNodeList
+*
 * Revision 6.7  1999/08/20 15:57:07  kans
 * CreateEnumListDialog calculates width if passed in 0
 *
@@ -277,7 +289,7 @@ Boolean InitEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pdef)
     MemFree (titles);
   }
   if (ii > 0) {
-    SetValue (lst, ii);
+    SafeSetValue (lst, ii);
     return TRUE;
   } else
     return FALSE;
@@ -295,7 +307,7 @@ void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val)
 {
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
-     if (al->value == val) { SetValue (lst, i); return; }
+     if (al->value == val) { SafeSetValue (lst, i); return; }
   Message(MSG_POSTERR, "SetEnumPopup: %ld", (long)val);
 } 
 
@@ -312,7 +324,7 @@ void SetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
 {
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
-     if (StringICmp (al->name, name) == 0) { SetValue (lst, i); return; }
+     if (StringICmp (al->name, name) == 0) { SafeSetValue (lst, i); return; }
   Message(MSG_POSTERR, "SetEnumPopupByName: %s", name);
 }
 
@@ -402,6 +414,50 @@ EnumFieldAssocPtr FreeEnumFieldAlist (EnumFieldAssocPtr alist)
   return NULL;
 }
 
+EnumFieldAssocPtr MakeEnumFieldAlistFromValNodeList (ValNodePtr vlist)
+
+{
+  EnumFieldAssocPtr  ap, newap;
+  Char               ch;
+  size_t             count, i;
+  CharPtr            ptr;
+  ValNodePtr         vnp;
+
+  if (vlist == NULL) return NULL;
+  count = ValNodeLen (vlist);
+  if (count < 1) return NULL;
+
+  newap = MemNew (sizeof (EnumFieldAssoc) * (count + 1));
+  if (newap == NULL) return NULL;
+
+  for (ap = newap, vnp = vlist, i = 0;
+       vnp != NULL && i < count;
+       vnp = vnp->next, ap++, i++) {
+    ap->name = StringSaveNoNull ((CharPtr) vnp->data.ptrvalue);
+    ptr = StringStr (ap->name, " (");
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    if (ap->name != NULL) {
+      ptr = ap->name;
+      ch = *ptr;
+      while (ch != '\0') {
+        if (ch == '/') {
+          *ptr = '-';
+        }
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    ap->value = (UIEnum) vnp->choice;
+  }
+
+  ap->name = NULL;
+  ap->value = 0;
+
+  return newap;
+}
+
 PopuP CreateEnumPopupListInitVal (GrouP prnt, Boolean macLike, PupActnProc actn,
                                   VoidPtr data, EnumFieldAssocPtr al, UIEnum val)
 
@@ -429,12 +485,6 @@ PopuP CreateEnumPopupListInitName (GrouP prnt, Boolean macLike, PupActnProc actn
 }
 
 /* popup list autonomous dialog - copies alist, frees on cleanup */
-
-typedef struct alistdialogdata {
-  DIALOG_MESSAGE_BLOCK
-  PopuP                pop;
-  EnumFieldAssoc PNTR  alist;
-} AlistDialogData, PNTR AlistDialogPtr;
 
 static void UIEnumPtrToEnumPopupDialog (DialoG d, Pointer data)
 
@@ -482,7 +532,7 @@ static void ClearEnumPopupDialog (GraphiC g, VoidPtr data)
 }
 
 PopuP CreateEnumPopupDialog (GrouP prnt, Boolean macLike, PupActnProc actn,
-                             EnumFieldAssocPtr al)
+                             EnumFieldAssocPtr al, UIEnum val, Pointer userdata)
 
 {
   AlistDialogPtr  adp;
@@ -502,15 +552,14 @@ PopuP CreateEnumPopupDialog (GrouP prnt, Boolean macLike, PupActnProc actn,
   adp->fromdialog = EnumPopupDialogToUIEnumPtr;
   adp->pop = p;
   adp->alist = DuplicateEnumFieldAlist (al);
+  adp->userdata = userdata;
   InitEnumPopup (p, adp->alist, NULL);
-  /*
   SetEnumPopup (p, adp->alist, val);
-  */
   return p;
 }
 
 LisT CreateEnumListDialog (GrouP prnt, Int2 width, Int2 height, LstActnProc actn,
-                           EnumFieldAssocPtr al)
+                           EnumFieldAssocPtr al, UIEnum val, Pointer userdata)
 
 {
   AlistDialogPtr     adp;
@@ -545,9 +594,11 @@ LisT CreateEnumListDialog (GrouP prnt, Int2 width, Int2 height, LstActnProc actn
   adp->fromdialog = EnumPopupDialogToUIEnumPtr;
   adp->pop = (PopuP) p;
   adp->alist = DuplicateEnumFieldAlist (al);
+  adp->userdata = userdata;
   for (ap = adp->alist; ap->name != NULL; ap++) {
     ListItem (p, ap->name);
   }
+  SetEnumPopup ((PopuP) p, adp->alist, val);
   return p;
 }
 
@@ -1445,7 +1496,7 @@ static void RedrawTagList (DialoG d)
                 SetEnumPopup ((PopuP) GetTagListControl (tlp, i, j), tlp->alists [j], (UIEnum) 0);
               }
             } else {
-              SetValue (GetTagListControl (tlp, i, j), 0);
+              SafeSetValue (GetTagListControl (tlp, i, j), 0);
             }
             break;
           default :
@@ -1466,7 +1517,7 @@ static void RedrawTagList (DialoG d)
             if (tlp->alists != NULL) {
               SetEnumPopup ((PopuP) GetTagListControl (tlp, i, j), tlp->alists [j], (UIEnum) 0);
             } else {
-              SetValue (GetTagListControl (tlp, i, j), 0);
+              SafeSetValue (GetTagListControl (tlp, i, j), 0);
             }
             break;
           default :
@@ -1668,10 +1719,10 @@ static TexT FindNextText (TagListPtr tlp, Int2 i, Int2 j)
         }
         val = GetValue (tlp->bar);
         if (val < tlp->max) {
-          SetValue (tlp->bar, val + 1);
+          SafeSetValue (tlp->bar, val + 1);
         } else {
           CheckExtendTag (tlp);
-          SetValue (tlp->bar, tlp->max);
+          SafeSetValue (tlp->bar, tlp->max);
         }
       }
     }
@@ -1778,7 +1829,7 @@ static void ResetTagList (DialoG d)
             if (tlp->alists != NULL) {
               SetEnumPopup ((PopuP) GetTagListControl (tlp, i, j), tlp->alists [j], (UIEnum) 0);
             } else {
-              SetValue (GetTagListControl (tlp, i, j), 0);
+              SafeSetValue (GetTagListControl (tlp, i, j), 0);
             }
             break;
           default :

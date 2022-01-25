@@ -29,14 +29,81 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.32 $
 *
-* File Description: 
+* File Description:
 *       Vibrant slate (universal drawing environment) functions
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.32  2000/01/12 15:13:01  thiessen
+* fixed minor OpenGL memory leak
+*
+* Revision 6.31  2000/01/11 02:55:15  thiessen
+* working off-screen OpenGL rendering on Win32
+*
+* Revision 6.30  2000/01/07 19:37:06  thiessen
+* fix minor OpenGL problems
+*
+* Revision 6.29  2000/01/07 16:28:36  thiessen
+* fixed broken header conflicts
+*
+* Revision 6.28  2000/01/07 01:17:33  kans
+* needed to include ncbi.h first
+*
+* Revision 6.27  2000/01/07 00:22:46  thiessen
+* fixes for LessTif and OpenGL X visual selection
+*
+* Revision 6.26  2000/01/06 17:23:36  thiessen
+* various OpenGL improvements
+*
+* Revision 6.25  1999/12/07 19:18:58  thiessen
+* fixed font color problem in OpenGL on SGI
+*
+* Revision 6.24  1999/12/06 14:44:00  thiessen
+* made OpenGL font selection work in X/Motif
+*
+* Revision 6.23  1999/11/23 19:24:16  thiessen
+* better solution to OpenGL render rect setting on Mac
+*
+* Revision 6.22  1999/11/19 18:07:24  thiessen
+* added label capability for OpenGL version on Mac and Motif
+*
+* Revision 6.21  1999/11/03 15:38:04  thiessen
+* minor fix for Mac/OpenGL
+*
+* Revision 6.20  1999/10/27 20:18:11  thiessen
+* rearrangement of OpenGL color depth priorities
+*
+* Revision 6.19  1999/10/26 13:11:05  thiessen
+* added resize callback to Motif 3DSlate
+*
+* Revision 6.18  1999/10/25 19:40:46  thiessen
+* (temporary) fix so that Mac/OpenGL version correctly lets user resize window
+*
+* Revision 6.17  1999/10/05 17:35:23  thiessen
+* minor fix to glX initialization
+*
+* Revision 6.16  1999/10/04 14:27:17  thiessen
+* hacked partial compatibility with Mesa OpenGL implementation - does *not* work when rendering inside vibrant window in Motif
+*
+* Revision 6.15  1999/09/27 18:28:30  thiessen
+* Made 24-bit and doublebuffered OpenGL modes work on Mac; also should select
+* mode like X
+*
+* Revision 6.14  1999/09/27 16:28:41  thiessen
+* hacked in ability to use higher-than-8-bit color mode in OpenGL in a separate (non-vibrant) X-window
+*
+* Revision 6.13  1999/09/22 20:09:04  thiessen
+* port of OpenGL code to Macintosh
+*
+* Revision 6.12  1999/09/21 13:45:30  thiessen
+* port of Lewis's OpenGL code to X/Motif
+*
+* Revision 6.11  1999/09/20 20:12:56  lewisg
+* change typedefs for a colorcell, add triangle generator, fix incorrect return values
+*
 * Revision 6.10  1999/07/06 14:51:42  kans
 * resize scroll bar was one pixel too small
 *
@@ -145,11 +212,24 @@
 #include <vibincld.h>
 
 #ifdef _OPENGL
+
 #ifdef WIN32  /* braindead MS GL header dependency */
 #include <windows.h>
-#endif /* WIN32 */
+
+#elif defined(WIN_MOTIF)
+#include <GL/glx.h>
+
+#elif defined(WIN_MAC)
+#include <agl.h>
+
+#else
+  OpenGL has not yet been implemented for this platform!
+
+#endif
+
 #include <GL/gl.h>
 #include <GL/glu.h>
+
 #endif /* _OPENGL */
 
 
@@ -164,8 +244,6 @@
 #ifdef WIN_MOTIF
 #define Nlm_SlateTool Widget
 #endif /* WIN_MOTIF */
-
-
 
 
 typedef  struct  Nlm_slatedata {
@@ -184,8 +262,9 @@ typedef  struct  Nlm_slatedata {
   Nlm_SltCharProc  keyProc;
   Nlm_Boolean      hasFocus;
   Nlm_Int4         policy;
-#if _OPENGL
+#ifdef _OPENGL
   Nlm_ColorMTool   cMap;  /* used to hold the palette */
+  Nlm_Int2         cMapStatus;
 #endif /* _OPENGL */
 } Nlm_SlateData;
 
@@ -202,7 +281,7 @@ typedef  struct  Nlm_paneldata {
 } Nlm_PanelData;
 
 
-/* 
+/*
 *  Panel data is on top of a slate record to allow simple and
 *  autonomous panels (such as repeat buttons) to be implemented
 *  as single entities.
@@ -704,7 +783,7 @@ static Nlm_Boolean Nlm_HandleSlateInput(Nlm_SlatE s, Nlm_Char ch)
   Nlm_SltCharProc keyProc   = Nlm_GetSlateCharProc( s );
 
   if ((policy & FOCUS_NAVIG)  ||  !has_focus  ||  !keyProc)
-    { /* try standard slate navigation keys, if activated */  
+    { /* try standard slate navigation keys, if activated */
       Nlm_BaR  vsb = Nlm_GetSlateVScrollBar( s );
       Nlm_BaR  hsb = Nlm_GetSlateHScrollBar( s );
 
@@ -950,6 +1029,7 @@ static void Nlm_DrawSlate (Nlm_GraphiC s)
 
   if (Nlm_GetVisible (s) && Nlm_GetAllParentsVisible (s) && okayToDrawContents) {
     Nlm_GetRect (s, &r);
+
     vsb = Nlm_GetSlateVScrollBar ((Nlm_SlatE) s);
     hsb = Nlm_GetSlateHScrollBar ((Nlm_SlatE) s);
     if (vsb != NULL) {
@@ -958,6 +1038,7 @@ static void Nlm_DrawSlate (Nlm_GraphiC s)
     if (hsb != NULL) {
       r.bottom += Nlm_hScrollBarHeight;
     }
+
     if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
       if (vsb != NULL) {
         Nlm_DoDraw ((Nlm_GraphiC) vsb);
@@ -1530,7 +1611,10 @@ static void Nlm_RemoveSlate (Nlm_GraphiC s, Nlm_Boolean savePort)
   DestroyWindow (h);
 #endif
 #ifdef WIN_MOTIF
+#ifndef LESSTIF_VERSION
+  /* causes crash using LessTif - is this necessary? (thiessen) */
   XtUnrealizeWidget(h);
+#endif
   XtDestroyWidget (h);
   Nlm_DelSubwindowShell ( Nlm_GetParentWindow((Nlm_GraphiC)s),
                           (Nlm_ShellTool) h );
@@ -1774,7 +1858,7 @@ static void Nlm_SetSlatePosition(Nlm_GraphiC s, Nlm_RectPtr r,
                        XmNx, (Position) sr.left,
                        XmNy, (Position) sr.top,
                        XmNwidth, (Dimension) (sr.right - sr.left + 1),
-                       XmNheight, (Dimension) (sr.bottom - sr.top + 1), 
+                       XmNheight, (Dimension) (sr.bottom - sr.top + 1),
                        NULL);
       }
       Nlm_InvalSlate (s, vsb, hsb);
@@ -2592,12 +2676,18 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
 
 
 #ifdef _OPENGL
-/* 
+/*
 Nlm_Set3DColorMap sets the color map for an OpenGL window.  A separate function
 is necessary because on windows, the pallete must be set using the device context
 bound to the OpenGL context.  Changing the palette of the parent window has no effect.
-lyg 
+lyg
 */
+
+
+#ifdef WIN_MOTIF
+void ** Cn3D_GetCurrentOGLDisplayHndl(void);
+void ** Cn3D_GetCurrentOGLVisinfoHndl(void);
+#endif
 
 extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
                              Nlm_Uint1Ptr red, Nlm_Uint1Ptr green,
@@ -2610,11 +2700,6 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
   LOGPALETTE    * palette;
   PALETTEENTRY  * p;
 #endif
-#ifdef WIN_MAC
-  Nlm_Int2        i;
-  RGBColor        col;
-#endif
-
 
   if (w == NULL  ||  totalColors > 256)
     return;
@@ -2653,27 +2738,39 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
 #endif
 
 #ifdef WIN_MAC
-  if ( wdata.cMap != NULL ){
-    if ( wdata.cMapStatus ){
-      SetPalette( wdata.handle, NULL, FALSE);
-    }
-    DisposePalette ( wdata.cMap );
-    wdata.cMap = NULL;
-  }
-  wdata.cMapStatus = 0;
-  if ( totalColors!=0 ) {
-    wdata.cMap = NewPalette(totalColors,(CTabHandle)0,pmTolerant,0);
-    if ( wdata.cMap != NULL ) {
-      for( i=0; i<totalColors; i++ ) {
-        col.red   = (Nlm_Uint2)red[i]<<8 | (Nlm_Uint2)red[i];
-        col.green = (Nlm_Uint2)green[i]<<8 | (Nlm_Uint2)green[i];
-        col.blue  = (Nlm_Uint2)blue[i]<<8 | (Nlm_Uint2)blue[i];
-        SetEntryColor(wdata.cMap,i,&col);
-      }
-      SetPalette( wdata.handle, wdata.cMap, FALSE);
-      ActivatePalette ( wdata.handle );
-      wdata.cMapStatus = 1;
-    }
+  {
+    /* use OpenGL context's own color map (but set window's cmap to same...)  (thiessen) */
+  	Nlm_Int2        i;
+  	RGBColor        col;
+  	GLint cme[4];
+    AGLContext ctx = aglGetCurrentContext();
+  	WindowPtr OGLwin = (WindowPtr) aglGetDrawable(ctx);
+
+		if ( wdata.cMap != NULL ){
+			if ( wdata.cMapStatus ){
+			  SetPalette( OGLwin, NULL, FALSE);
+			}
+			DisposePalette ( wdata.cMap );
+			wdata.cMap = NULL;
+		}
+		wdata.cMapStatus = 0;
+		if ( totalColors!=0 ) {
+			wdata.cMap = NewPalette(totalColors,(CTabHandle)0,pmTolerant,0);
+			if ( wdata.cMap != NULL ) {
+			  for( i=0; i<totalColors; i++ ) {
+			    col.red   = (Nlm_Uint2)red[i]<<8 | (Nlm_Uint2)red[i];
+			    col.green = (Nlm_Uint2)green[i]<<8 | (Nlm_Uint2)green[i];
+			    col.blue  = (Nlm_Uint2)blue[i]<<8 | (Nlm_Uint2)blue[i];
+			    SetEntryColor(wdata.cMap,i,&col);
+			    /* agl expects rgb colors from [0..65535] */
+			    cme[0]=i; cme[1]=col.red*256; cme[2]=col.green*256; cme[3]=col.blue*256;
+			    aglSetInteger(ctx,AGL_COLORMAP_ENTRY,cme);
+			  }
+			  SetPalette( OGLwin, wdata.cMap, FALSE);
+			  ActivatePalette ( OGLwin );
+			  wdata.cMapStatus = 1;
+			}
+		}
   }
 #endif
 
@@ -2682,9 +2779,13 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
     unsigned long  pixel;
     int            n_savedColors = 0;
     XColor         colorCells[256];
+    Display **dpyh = (Display **) Cn3D_GetCurrentOGLDisplayHndl();
+    Display *dpy = *dpyh;
+
+    if (!dpy) return;
 
     /* Uninstall, store first several colors and free current
-     * colormap -- if necessary */ 
+     * colormap -- if necessary */
     if ( wdata.cMap )
       {
         n_savedColors = 32;
@@ -2693,23 +2794,23 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
 
         if ( wdata.cMapStatus )
           {
-            XUninstallColormap(Nlm_currentXDisplay, wdata.cMap);
+            XUninstallColormap(dpy, wdata.cMap);
             wdata.cMapStatus = 0;
           }
 
-        if ( !wdata.cMap_fixed )
-          {
+        /*if ( !wdata.cMap_fixed )
+          { */
             if (totalColors != 0)
-              {            
+              {
                 for (pixel = 0;  pixel < n_savedColors;  pixel++)
                   colorCells[pixel].pixel = pixel;
-                XQueryColors(Nlm_currentXDisplay, wdata.cMap,
+                XQueryColors(dpy, wdata.cMap,
                              colorCells, n_savedColors);
               }
 
-            XFreeColormap(Nlm_currentXDisplay, wdata.cMap);
+            XFreeColormap(dpy, wdata.cMap);
             wdata.cMap = (Nlm_ColorMTool) 0;
-          }
+         /* } */
       }
 
     if (totalColors == 0)
@@ -2721,29 +2822,41 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
         XVisualInfo    visinfo;
         unsigned long  plane_m[1];
         unsigned long  pixels[256];
+        int defaultdepth;
+        Boolean testvisual;
 
-        if (!XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
-                              8, PseudoColor, &visinfo)  &&
-            !XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
-                              8, GrayScale,   &visinfo))
-          break;  /* no matching visuals found */
+        defaultdepth = DefaultDepth(dpy,
+                  DefaultScreen(dpy));
+#ifdef OS_UNIX_LINUX
+        if(!Nlm_CheckX(&visinfo))
+#else /* OS_UNIX_LINUX */
+        if( !(XMatchVisualInfo(dpy,
+                         DefaultScreen(dpy),
+                         8,PseudoColor,&visinfo) ||
+            XMatchVisualInfo(dpy,
+                         DefaultScreen(dpy),
+                         8,GrayScale,&visinfo)) )
+#endif /* else OS_UNIX_LINUX */
+        break;  /* no matching visuals found */
 
-        wdata.cMap = XCreateColormap(Nlm_currentXDisplay,
-                                     RootWindow(Nlm_currentXDisplay,
-                                                Nlm_currentXScreen),
+#ifdef OS_UNIX_LINUX
+        if(visinfo.class > PseudoColor) break;  /* no palette needed */
+#endif
+        wdata.cMap = XCreateColormap(dpy,
+                                     RootWindow(dpy, DefaultScreen(dpy)),
                                      visinfo.visual, AllocNone);
-        if (wdata.cMap == DefaultColormap(Nlm_currentXDisplay,
-                                          Nlm_currentXScreen))
+        if (wdata.cMap == DefaultColormap(dpy,
+                                          DefaultScreen(dpy)))
           {
             wdata.cMap = (Nlm_ColorMTool) 0;
             break;  /* hardware colormap is immutable */
           }
 
-        if ( !XAllocColorCells ( Nlm_currentXDisplay, wdata.cMap, FALSE,
+        if ( !XAllocColorCells ( dpy, wdata.cMap, FALSE,
                                  (unsigned long*) plane_m, 0,
                                  (unsigned long*) pixels, totalColors) )
           {
-            XFreeColormap (Nlm_currentXDisplay,wdata.cMap);
+            XFreeColormap (dpy,wdata.cMap);
             wdata.cMap = (Nlm_ColorMTool) 0;
             break;  /* cannot allocate color cells for the new colormap */
           }
@@ -2757,20 +2870,19 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
           (Nlm_Uint2)green[pixel];
         colorCells[pixel].blue  = (((Nlm_Uint2)blue [pixel]) << 8) |
           (Nlm_Uint2)blue [pixel];
-        
+
         colorCells[pixel].flags = DoRed | DoGreen | DoBlue;
         colorCells[pixel].pixel = pixel;
         colorCells[pixel].pad = 0;
       }
-    XStoreColors(Nlm_currentXDisplay, wdata.cMap,
+    XStoreColors(dpy, wdata.cMap,
                  colorCells + n_savedColors,
                  (int)(pixel - n_savedColors));
 
-    XInstallColormap(Nlm_currentXDisplay, wdata.cMap);
-    XSetWindowColormap (Nlm_currentXDisplay, XtWindow( wdata.shell ),
+    XInstallColormap(dpy, wdata.cMap);
+    XSetWindowColormap (dpy, XtWindow( wdata.handle ),
                         wdata.cMap);
-#if 0
-    /* hopefully we don't need all of this shell stuff */
+/*
     {{
       Nlm_ShellDataPtr sptr = wdata.allShells;
       while (sptr != NULL)
@@ -2780,7 +2892,7 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
           sptr = sptr->next;
         }
     }}
-#endif /* 0 */
+*/
 
     wdata.cMapStatus = 1;
   }  while ( 0 );
@@ -2788,6 +2900,205 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
 
   Nlm_SetSlateData ((Nlm_SlatE)w, &wdata);
 }
+
+/*
+ * This defines a list of choices for opengl graphics type - that way we can
+ * try different color attributes (in order of decreasing "quality") for the
+ * opengl window, since not every color type is always available (especially
+ * in X).
+ */
+static int Nlm_OGLColorPreferences[][4] = {
+/* dbl.buf.  cIndexBits  RGBbits  z-depth  */
+/*
+/* */
+  {   1    ,      0    ,    8   ,    8     },
+  {   1    ,      0    ,    4   ,    8     },
+  {   1    ,     16    ,    0   ,    8     },
+  {   1    ,      8    ,    0   ,    8     },
+
+  {   1    ,      0    ,    8   ,    16    },
+  {   1    ,      0    ,    4   ,    16    },
+  {   1    ,     16    ,    0   ,    16    },
+  {   1    ,      8    ,    0   ,    16    },
+
+  {   0    ,      0    ,    8   ,    8     },
+  {   0    ,      0    ,    4   ,    8     },
+  {   0    ,     16    ,    0   ,    8     },
+  {   0    ,      8    ,    0   ,    8     },
+
+  {   0    ,      0    ,    8   ,    16    },
+  {   0    ,      0    ,    4   ,    16    },
+  {   0    ,     16    ,    0   ,    16    },
+  {   0    ,      8    ,    0   ,    16    },
+
+  {   1    ,      0    ,    8   ,    0     },
+  {   1    ,      0    ,    4   ,    0     },
+  {   1    ,     16    ,    0   ,    0     },
+  {   1    ,      8    ,    0   ,    0     },
+
+  {   0    ,      0    ,    8   ,    0     },
+  {   0    ,      0    ,    4   ,    0     },
+  {   0    ,     16    ,    0   ,    0     },
+  {   0    ,      8    ,    0   ,    0     },
+
+  {  -1    ,      0    ,    0   ,    0     }
+};
+
+
+#ifdef WIN_MOTIF
+
+/*
+  This is a bit crude, but in order to ensure that X and OpenGL
+  will cooperate, need to create a (temporary and unseen) window
+  to check whether OpenGL rendering context can be successfully
+  attached to a window with the selected visual. This is called
+  early on by vibrant to determine the visual that will be used
+  for the application.
+*/
+XVisualInfo * Nlm_GetBestOGLVisual(void)
+{
+    int i, nAttribs, attribs[20], success=0;
+    Display *dpy = Nlm_currentXDisplay;
+    static XVisualInfo *visinfo = NULL;
+
+    if (visinfo) return visinfo; /* only need to do this once */
+
+    if (!glXQueryExtension(dpy, NULL, NULL)) {
+        puts("X server has no GLX extension - required to use OpenGL!");
+        exit(10);
+    }
+
+    for (i=0; Nlm_OGLColorPreferences[i][0] != -1; i++) {
+
+        GLXContext glCtx;
+        Colormap        cmap;
+        XSetWindowAttributes swa;
+        Window          win;
+
+        nAttribs = 0;
+        attribs[nAttribs++] = GLX_USE_GL;
+        if (Nlm_OGLColorPreferences[i][0])
+            attribs[nAttribs++] = GLX_DOUBLEBUFFER;
+        if (Nlm_OGLColorPreferences[i][1]) {
+            attribs[nAttribs++] = GLX_BUFFER_SIZE;
+            attribs[nAttribs++] = Nlm_OGLColorPreferences[i][1];
+        } else {
+            attribs[nAttribs++] = GLX_RGBA;
+            attribs[nAttribs++] = GLX_RED_SIZE;
+            attribs[nAttribs++] = Nlm_OGLColorPreferences[i][2];
+            attribs[nAttribs++] = GLX_GREEN_SIZE;
+            attribs[nAttribs++] = Nlm_OGLColorPreferences[i][2];
+            attribs[nAttribs++] = GLX_BLUE_SIZE;
+            attribs[nAttribs++] = Nlm_OGLColorPreferences[i][2];
+        }
+        if (Nlm_OGLColorPreferences[i][3]) {
+            attribs[nAttribs++] = GLX_DEPTH_SIZE;
+            attribs[nAttribs++] = Nlm_OGLColorPreferences[i][3];
+        }
+        attribs[nAttribs++] = None;
+
+        visinfo = glXChooseVisual(dpy, DefaultScreen(dpy), attribs);
+        if (!visinfo) continue;
+
+        glCtx = glXCreateContext(dpy, visinfo, None, GL_TRUE);
+        if (!glCtx) {
+            XFree(visinfo);
+            continue;
+        }
+
+        cmap = XCreateColormap(dpy, RootWindow(dpy, visinfo->screen),
+                               visinfo->visual, AllocNone);
+        swa.colormap = cmap;
+        swa.border_pixel = 0;
+        swa.event_mask = ExposureMask | ButtonPressMask | StructureNotifyMask;
+        win = XCreateWindow(dpy, RootWindow(dpy, visinfo->screen),
+                            0, 0, 25, 25, 0, visinfo->depth,
+                            InputOutput, visinfo->visual,
+                            CWBorderPixel | CWColormap | CWEventMask, &swa);
+        XSetStandardProperties(dpy, win, "test", "test", None, NULL, 0, NULL);
+
+        success = glXMakeCurrent(dpy, win, glCtx);
+
+        if (success) glXMakeCurrent(dpy, None, NULL);
+        glXDestroyContext(dpy, glCtx);
+        XDestroyWindow(dpy, win);
+        XFreeColormap(dpy, cmap);
+
+        if (success) 
+            break;
+        else
+            XFree(visinfo);
+    }
+
+    if (!success) {
+        puts("Couldn't find X visual appropriate for OpenGL!");
+        exit(1);
+    }
+    return visinfo;
+}
+
+/*
+   Call this function twice - once with proper arguments to store window
+   and context; then later, once all windows are realized, call with
+   both arguments NULL to actually set the stored context. (thiessen)
+*/
+
+void Nlm_SetOGLContext(Nlm_SlateTool a, Nlm_Boolean *im)
+{
+  static Nlm_SlateTool area;
+  static Nlm_Boolean *indexed=NULL;
+  static int alreadyDone=FALSE;
+
+  if (a != NULL) {
+    area = a;
+    indexed = im;
+
+  } else {
+
+    GLXContext glCtx;
+    XVisualInfo **visinfo = (XVisualInfo **) Cn3D_GetCurrentOGLVisinfoHndl();
+    Display **display = (Display **) Cn3D_GetCurrentOGLDisplayHndl();
+    int success;
+
+    if (alreadyDone)
+      return;
+    else
+      alreadyDone = TRUE;
+
+    *visinfo = Nlm_GetBestOGLVisual();
+    if ((*visinfo)->depth < 12)
+      *indexed = TRUE;
+    else
+      *indexed = FALSE;
+
+    *display = XtDisplay(area);
+
+    glCtx = glXCreateContext(*display, *visinfo, None, GL_TRUE);
+    success = glXMakeCurrent(*display, XtWindow(area), glCtx);
+    if (!glCtx || !success) {
+        puts("glXMakeCurrent on Cn3D window failed!\n");
+        exit(2);
+    }
+  }
+
+}
+
+/* Callback for 3DSlate that tells OpenGL window has been resized */
+static void Nlm_OGLResizeViewport(Widget w,
+                                  XtPointer client_data,
+				                  XtPointer call_data)
+{
+  Nlm_RecT r;
+
+#ifdef MESA
+  if (!glXGetCurrentContext()) return;
+#endif
+
+  Nlm_GetRect ((Nlm_GraphiC) client_data, &r);
+  glViewport(0,0,r.right-r.left+1,r.bottom-r.top+1);
+}
+
+#endif /* WIN_MOTIF */
 
 
 static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
@@ -2805,7 +3116,7 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
   Nlm_WindowTool  wptr;
 #ifdef WIN_MOTIF
   Cardinal        n;
-  Arg             wargs [10];
+  Arg             wargs [20];
   String          trans =
     "<Btn1Down>:     slate(down)   ManagerGadgetArm()  \n\
      <Btn1Up>:       slate(up)     ManagerGadgetActivate() \n\
@@ -2862,47 +3173,123 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
     pf = ChoosePixelFormat(hDC, &pfd);
     if (pf == 0) {
 	MessageBox(NULL, "ChoosePixelFormat() failed:  "
-		   "Cannot find a suitable pixel format.", "Error", MB_OK); 
-    } 
- 
+		   "Cannot find a suitable pixel format.", "Error", MB_OK);
+    }
+
     if (SetPixelFormat(hDC, pf, &pfd) == FALSE) {
 	MessageBox(NULL, "SetPixelFormat() failed:  "
 		   "Cannot set format specified.", "Error", MB_OK);
-    } 
+    }
 
-    DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
+    /*DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);*/
 
 	hRC = wglCreateContext(hDC);
     wglMakeCurrent(hDC, hRC);
-	glEnable(GL_DEPTH_TEST);
 /* Do not ReleaseDC(h, hDC).  GL owns this */
 
 #endif
 
 #ifdef WIN_MOTIF
-  n = 0;
-  XtSetArg (wargs [n], XmNx, (Position) r.left); n++;
-  XtSetArg (wargs [n], XmNy, (Position) r.top); n++;
+
+  n=0;
   XtSetArg (wargs [n], XmNwidth, (Dimension) (r.right - r.left + 1)); n++;
   XtSetArg (wargs [n], XmNheight, (Dimension) (r.bottom - r.top + 1)); n++;
+  XtSetArg (wargs [n], XmNx, (Position) r.left); n++;
+  XtSetArg (wargs [n], XmNy, (Position) r.top); n++;
   XtSetArg (wargs [n], XmNmarginHeight, 0); n++;
   XtSetArg (wargs [n], XmNmarginWidth, 0); n++;
   XtSetArg (wargs [n], XmNborderWidth, (Dimension) 0); n++;
   XtSetArg (wargs [n], XmNtranslations, XtParseTranslationTable (trans)); n++;
   h = XtCreateManagedWidget ((String) "", xmDrawingAreaWidgetClass,
                              wptr, wargs, n);
-  Nlm_AddSubwindowShell(Nlm_GetParentWindow((Nlm_GraphiC)s), (Nlm_ShellTool)h);
+  Nlm_AddSubwindowShell(Nlm_GetParentWindow((Nlm_GraphiC)s), (Nlm_ShellTool)h); /* */
 
   XtVaSetValues(h, XmNuserData, (XtPointer)s, NULL);
+
+  XtAddCallback(h, XmNresizeCallback, Nlm_OGLResizeViewport, (XtPointer)s);
   XtAddCallback(h, XmNexposeCallback, Nlm_SlateDrawCallback,  (XtPointer)s);
   XtAddCallback(h, XmNinputCallback,  Nlm_SlateInputCallback, (XtPointer)s);
   XtAddEventHandler(h, FocusChangeMask, FALSE, Nlm_SlateFocusCB, (XtPointer)s);
+
   XtManageChild( h );
+
+  Nlm_SetOGLContext(h, IndexMode);
+
 #endif
+
+#ifdef WIN_MAC
+  /* set up opengl format and context  (thiessen) */
+  {
+    GLint attrib[20];
+    int na, i;
+    GLboolean success=GL_FALSE;
+    AGLPixelFormat fmt;
+    static AGLContext ctx; /* should really be destroyed later... */
+    /*GLint wrect[4];*/
+
+    h = wptr; /* */
+
+    for (i=0; Nlm_OGLColorPreferences[i][0] != -1; i++) {
+
+    	na = 0;
+    	attrib[na++] = AGL_MINIMUM_POLICY;
+    	attrib[na++] = AGL_ROBUST;
+      if (Nlm_OGLColorPreferences[i][0]) attrib[na++] = AGL_DOUBLEBUFFER;
+
+	    if (Nlm_OGLColorPreferences[i][1]) {
+	      attrib[na++] = AGL_BUFFER_SIZE;
+	      attrib[na++] = Nlm_OGLColorPreferences[i][1];
+	      *IndexMode = TRUE;
+	    } else {
+		    attrib[na++] = AGL_RGBA;
+		    attrib[na++] = AGL_RED_SIZE;
+		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
+		    attrib[na++] = AGL_GREEN_SIZE;
+		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
+		    attrib[na++] = AGL_BLUE_SIZE;
+		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
+		    *IndexMode = FALSE;
+		  }
+
+	    if (Nlm_OGLColorPreferences[i][3]) {
+	    	attrib[na++] = AGL_DEPTH_SIZE;
+	    	attrib[na++] = Nlm_OGLColorPreferences[i][3];
+	    }
+
+	    attrib[na++] = AGL_NONE;
+
+	    if ((fmt=aglChoosePixelFormat(NULL, 0, attrib)) == NULL) {
+	      continue;
+	    }
+	    if ((ctx=aglCreateContext(fmt,NULL)) == NULL) {
+	      aglDestroyPixelFormat(fmt);
+	      continue;
+	    }
+	    if (!aglSetDrawable(ctx,h)) {
+	      aglDestroyPixelFormat(fmt);
+	      aglDestroyContext(ctx);
+	      continue;
+	    }
+	    success = aglSetCurrentContext(ctx);
+	    aglDestroyPixelFormat(fmt);
+	    if (success == GL_TRUE) {
+	    	break;
+	    } else {
+	      aglDestroyContext(ctx);
+	    }
+
+    }
+    if (success == GL_FALSE) return;
+
+    /* make opengl context use its own colormap - tracking with parent window's
+       colormap didn't work for some reason... (thiessen) */
+    if (*IndexMode) aglDisable(ctx, AGL_COLORMAP_TRACKING);
+  }
+#endif /* WIN_MAC */
 
   if (vScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.left = r.right /* + 1 */ 
+    r.left = r.right /* + 1 */;
     r.right += Nlm_vScrollBarWidth;
     if (vscrl4 != NULL) {
       vsb = Nlm_VertScrollBar4((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4)vscrl4);
@@ -2916,7 +3303,7 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   if (hScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.top = r.bottom /* + 1 */ 
+    r.top = r.bottom /* + 1 */;
     r.bottom += Nlm_hScrollBarHeight;
     if (hscrl4 != NULL) {
       hsb = Nlm_HorizScrollBar4 ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4) hscrl4);
@@ -3657,7 +4044,7 @@ static void MyCls_OnLButtonDown(HWND hwnd, BOOL fDoubleClick,
 {
   Nlm_SlatE s = (Nlm_SlatE)GetProp(hwnd, (LPSTR)"Nlm_VibrantProp");
   Nlm_PaneL p = (Nlm_PaneL)s;
-                
+
   Nlm_SlateTool h;
   Nlm_PanelData pdata;
   Nlm_PoinT     pt;

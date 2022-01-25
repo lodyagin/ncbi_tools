@@ -169,7 +169,7 @@ Int2 Main(void)
     
     fd_ind = FileOpen(IndexFile, "w");
     for(i = 0; i < MaxIndexCount; i++)
-      fprintf(fd_ind, "%d\n", index[i]); 
+      fprintf(fd_ind, "%ld\n", index[i]); 
     FileClose(fd_ind);
 	
     if(JobMode == INDEX_MODE) {
@@ -232,7 +232,7 @@ Uint4Ptr GetIndexFromIndex(FILE *fd, Uint4Ptr MaxIndexCount)
 
  index = MemNew(IndexSize*4);
  
- while (fscanf(fd, "%d", &gi) > 0) {
+ while (fscanf(fd, "%ld", &gi) > 0) {
    
    if(i == IndexSize) {
      IndexSize += INCLENGTH;
@@ -261,7 +261,7 @@ Uint4Ptr GetIndexFromFasta(FILE *fd, Uint4Ptr MaxIndexCount)
     start = str;
     while((pos = StringStr(start, "\1gi|")) != NULL  ||
           (pos = StringStr(start, ">gi|")) != NULL) {
-      if(!sscanf(pos+4, "%d", &gi)) {
+      if(!sscanf(pos+4, "%ld", &gi)) {
         ErrLogPrintf("Error parsing gi number. Indexing failed...\n");
         exit(1);
       }
@@ -283,7 +283,6 @@ Uint4Ptr GetIndexFromFasta(FILE *fd, Uint4Ptr MaxIndexCount)
 
 Boolean IfGiInIndex(Uint4Ptr index, Uint4 MaxIndexCount, Uint4 gi)
 {
-  Boolean AllDone = FALSE;
   Uint4 high_index, low_index, new_index; 
 
   if(MaxIndexCount == 0 || index == NULL || gi == 0)
@@ -343,7 +342,7 @@ static FMergeIDPtr NextFastaFromFasta(FILE *fd)
   start = str;
   while((pos = StringStr(str, "\1gi|")) != NULL ||
         (pos = StringStr(str, ">gi|")) != NULL) {
-    if(!sscanf(pos+4, "%d", &gi)) {
+    if(!sscanf(pos+4, "%ld", &gi)) {
       ErrLogPrintf("Error parsing gi number. Indexing failed...\n");
       exit(1);
     }
@@ -412,7 +411,7 @@ Int4 MergeFMergeID(FMergeIDPtr fasta, FILE *fd, FILE *fd_ind,
     }
     TotalNot++;
 
-    fprintf(fd_ind, "%d\n", id->gi);
+    fprintf(fd_ind, "%ld\n", id->gi);
 
     if(SomeNew)
       fprintf(fd, "\1%s", id->defline);

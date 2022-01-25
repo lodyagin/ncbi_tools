@@ -46,19 +46,34 @@ Detailed Contents:
 
 	- calculate pseuod-scores from p-values.
 
-******************************************************************************/
-
-/* $Revision: 6.32 $ */
-/* $Log: blastkar.c,v $
-/* Revision 6.32  1999/08/20 14:42:17  madden
-/* Changed Robinson frequencies per Stephen A. request
-/*
-/* Revision 6.31  1999/08/05 13:13:34  madden
-/* Improved help messages for permitted matrices and gap values
-/*
-/* Revision 6.30  1999/07/30 13:25:51  shavirin
-/* Fixed bug in the function BLAST_MatrixFill which created wrong matrix size.
-/*
+****************************************************************************** 
+ * $Revision: 6.37 $
+ * $Log: blastkar.c,v $
+ * Revision 6.37  2000/01/11 21:23:13  shavirin
+ * Increased size of index from Int2 to Int4 in BlastPSIMaxScoreGet() function
+ *
+ * Revision 6.36  1999/12/22 21:06:34  shavirin
+ * Added new function BlastPSIMaxScoreGet().
+ *
+ * Revision 6.35  1999/12/16 19:17:22  egorov
+ * Code cleanup
+ *
+ * Revision 6.34  1999/11/29 14:17:46  egorov
+ * Use LnFactorial instead of log(Factorial)
+ *
+ * Revision 6.33  1999/11/23 21:38:40  egorov
+ * Nlm_Factorial(num) causes overflow if num>170;  return DBL_MAX if num>170.
+ * It does not influence program's logic because this large number of HSPs is bogus anyway.
+ *
+ * Revision 6.32  1999/08/20 14:42:17  madden
+ * Changed Robinson frequencies per Stephen A. request
+ *
+ * Revision 6.31  1999/08/05 13:13:34  madden
+ * Improved help messages for permitted matrices and gap values
+ *
+ * Revision 6.30  1999/07/30 13:25:51  shavirin
+ * Fixed bug in the function BLAST_MatrixFill which created wrong matrix size.
+ *
  * Revision 6.29  1998/12/31 18:17:04  madden
  * Added strand option
  *
@@ -1347,7 +1362,7 @@ BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
 			  }
 		}
 		a1chars[a1cnt++] = ch;
-		m = &matrix[ch][0];
+		m = &matrix[(int)ch][0];
 		index2 = 0;
 		while (cp != NULL)
 		{
@@ -1370,7 +1385,7 @@ BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
 				score = (BLAST_Score)xscore;
 			}
 
-			m[a2chars[index2++]] = score;
+			m[(int)a2chars[index2++]] = score;
 
 			cp = Nlm_StrTok(NULL, TOKSTR);
 		}
@@ -1422,6 +1437,37 @@ gaps), then use other scores. */
 		sbp->hiscore = BLAST_SCORE_1MAX;
 
 	return 0;
+}
+
+/* maxscore for PSI Blast depends not on the residue, but on the position
+   in the posMatrix, so maxscore array has size of the length of posMatrix */
+/* SSH */
+BLAST_ScorePtr BlastPSIMaxScoreGet(BLAST_ScorePtr PNTR posMatrix, 
+                                   Int4 start, Int4 length)
+{
+    BLAST_Score score, maxscore;
+    BLAST_ScorePtr maxscore_pos;
+    Int4 index1, index2;
+    
+    if(posMatrix == NULL)
+        return NULL;
+    
+    maxscore_pos = MemNew(length * sizeof(BLAST_Score));
+    
+    for (index1 = start; index1 < length; index1++) {
+        maxscore = BLAST_SCORE_MIN;
+        for (index2 = 0; index2 < PSI_ALPHABET_SIZE; index2++) {
+            score = posMatrix[index1][index2];
+            if (score <= BLAST_SCORE_MIN || score >= BLAST_SCORE_MAX)
+                continue;
+            if (score > maxscore) {
+                maxscore = score;
+            }
+        }
+
+        maxscore_pos[index1] = maxscore;
+    }    
+    return maxscore_pos;
 }
 
 static BLASTMatrixStructurePtr
@@ -1525,7 +1571,7 @@ BlastResCompStr(BLAST_ScoreBlkPtr sbp, BLAST_ResCompPtr rcp, CharPtr str, Int4 l
 
 	for (lp = str, lpmax = lp+length; lp < lpmax; lp++)
 	{
-		++rcp->comp[*lp];
+		++rcp->comp[(int)(*lp)];
 	}
 
 	/* Don't count ambig. residues. */
@@ -3083,7 +3129,7 @@ BlastSmallGapSumE(BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_Fl
 	Nlm_FloatHi sum_p, sum_e;
 		
 	score_prime -= kbp->logK + log((Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length) + (num-1)*(kbp->logK + 2*log((Nlm_FloatHi)gap));
-	score_prime -= log(Nlm_Factorial((int) num)); 
+	score_prime -= LnFactorial((Nlm_FloatHi) num); 
 
 	sum_p = BlastSumP(num, score_prime);
 
@@ -3119,7 +3165,8 @@ BlastLargeGapSumE(BLAST_KarlinBlkPtr kbp, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_
         lcl_query_length = (Nlm_FloatHi) query_length;
         lcl_subject_length = (Nlm_FloatHi) subject_length;
 
-	score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length)) - log(Nlm_Factorial((int) num)); 
+	score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length)) 
+	    - LnFactorial((Nlm_FloatHi) num); 
 
 	sum_p = BlastSumP(num, score_prime);
 

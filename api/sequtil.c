@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.45 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.45  1999/12/22 15:46:19  sicotte
+* Added prefix AZ
+*
+* Revision 6.44  1999/11/22 17:28:01  kans
+* allow RefSeq ID to have two or (expected) three tokens
+*
+* Revision 6.43  1999/10/12 13:46:42  kans
+* AX and AY added to WHICH_db_accession
+*
 * Revision 6.42  1999/08/31 20:49:03  shavirin
 * Added case 5 (discontinous alignment) in function TxGetIdFromSeqAlign().
 *
@@ -3084,7 +3093,9 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				numtoken++;
 				if (*buf == '\0')
 				{
-					if (numtoken < (Int2)(expect_tokens[type]))
+					if (type == SEQID_OTHER && numtoken == 2)
+						done = TRUE;
+					else if (numtoken < (Int2)(expect_tokens[type]))
 						goto erret;
 					else
 						done = TRUE;
@@ -7511,7 +7522,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               break;
           }
       } else if (IS_DIGIT(*(s+2))) {
-          /* New 8-character protein accession, two letters + 6 digits */
+          /* New 8-character accession, two letters + 6 digits */
           temp = (CharPtr) MemNew(3);
           temp[0] = *s; s++;
           temp[1] = *s; s++;
@@ -7525,7 +7536,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
-          } else if ((StringICmp(temp,"AF") == 0)) {      /* NCBI direct submission */
+          } else if ((StringICmp(temp,"AF") == 0) ||
+                     (StringICmp(temp,"AY") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
@@ -7536,7 +7548,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_OTHER;
           } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
               retcode = ACCN_NCBI_GSDB;
-          } else if ((StringICmp(temp,"AQ") == 0))  {     /* NCBI GSS */
+          } else if ((StringICmp(temp,"AQ") == 0) ||
+                     (StringICmp(temp,"AZ") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
@@ -7547,6 +7560,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_EMBL_GENOME;
           } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL's CON division */
               retcode = ACCN_EMBL_CON;
+          } else if ((StringICmp(temp,"AX") == 0)) {      /* EMBL's patent division */
+              retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
                      (StringICmp(temp,"AV") == 0)) {      /* DDBJ EST's */

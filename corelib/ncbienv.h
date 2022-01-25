@@ -1,4 +1,5 @@
-/*  $Id: ncbienv.h,v 6.1 1999/02/12 16:01:41 vakatov Exp $
+
+/*  $Id: ncbienv.h,v 6.2 1999/11/29 19:58:50 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +30,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   	protokeys for portable string routines
@@ -37,6 +38,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.h,v $
+* Revision 6.2  1999/11/29 19:58:50  vakatov
+* To parse command-line arguments:
+* + ECmdLineQuote, Nlm_ParseCmdLineArguments(), Nlm_FreeCmdLineArguments()
+*
 * Revision 6.1  1999/02/12 16:01:41  vakatov
 * Added a draft version of Nlm_GetEnvParamEx()
 * Got rid of the old "PROTO" and "LIBCALL" prototype junk, etc.
@@ -114,6 +119,27 @@ NLM_EXTERN size_t Nlm_GetEnvParam
 (const Char* conf_file, const Char* conf_section,
  const Char* env_conf_name, Char* buf, size_t bufsize, const Char* dflt);
 
+/* Parse cmd.-line args and create (NULL-terminated) "argv" array of values.
+ * Use "prog_name" to compose "argv[0]";  if "prog_name" is NULL then
+ * use the value of app.property "ProgramName" instead.
+ * The resultant argv must be deallocated by the caller using
+ * Nlm_FreeCmdLineArguments().
+ * On error, do nothing and return FALSE.
+ */
+typedef enum { /* specifies whether " and ' have special meaning */
+  eProcessQuotes,  /* `aa "bb c"' -->  argv[]:  {`aa', `bb c'} */
+  eIgnoreQuotes    /* `aa "bb c"' -->  argv[]:  {`aa', `"bb', `c"'} */
+} ECmdLineQuote;
+
+NLM_EXTERN Nlm_Boolean Nlm_ParseCmdLineArguments
+(const char* prog_name, const char* cmd_line, int* argc_ptr, char*** argv_ptr,
+ ECmdLineQuote quote_handling);
+
+/* Deallocate all dynamic memory occupied by "argv".
+ * NOTE:  the "argv" must be created by Nlm_ParseCmdLineArguments()
+ */
+NLM_EXTERN void Nlm_FreeCmdLineArguments(char** argv);
+
 
 #define GetAppParamInt(a,b,c,d)   (int)GetAppParamLong(a,b,c,(long)(d))
 #define SetAppParamInt(a,b,c,d)   SetAppParamLong(a,b,c,(long)(d))
@@ -132,6 +158,8 @@ NLM_EXTERN size_t Nlm_GetEnvParam
 #define GetAppParamInt4 GetAppParamLong
 #define GetEnvParamEx Nlm_GetEnvParamEx
 #define GetEnvParam   Nlm_GetEnvParam
+#define ParseCmdLineArguments Nlm_ParseCmdLineArguments
+#define FreeCmdLineArguments  Nlm_FreeCmdLineArguments
 
 
 #ifdef __cplusplus

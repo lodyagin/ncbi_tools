@@ -1,4 +1,4 @@
-/*   $Id: blocks.h,v 6.1 1999/07/06 19:49:14 kans Exp $
+/*   $Id: blocks.h,v 6.2 1999/11/26 15:42:24 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: Creating an editable version of a seqalign
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: blocks.h,v $
+* Revision 6.2  1999/11/26 15:42:24  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
 * Revision 6.1  1999/07/06 19:49:14  kans
 * initial public checkin
 *
@@ -77,17 +80,23 @@
 #ifndef _NCBI_DDV_BLOCKS_
 #define _NCBI_DDV_BLOCKS_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
-
 #include <ncbi.h>
 #include <salsap.h>
 #include <salutil.h>
 #include <objseq.h>
 #include <salpedit.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /*
   Gapless segment for the Display SeqAlign
@@ -143,28 +152,26 @@ typedef struct _ddv_seginfo {
 } DDV_SegInfo, * DDV_SegInfoPtr;
 
 /* Transform an N-dim Multiple SeqAlign into the Block SeqAlign (dsp only) */
-SABlockPtr Blockify(SeqAlignPtr sap);
+NLM_EXTERN SABlockPtr Blockify(SeqAlignPtr sap);
 
-SABlockPtr IndexBlocks(SABlockPtr sabp);
-SABlockPtr IndexNewBlocks(SABlockPtr sabp);
-void GetBlockInfo(SABlockPtr sabp, Int4Ptr length, Int4Ptr numbioseqs, Int4Ptr numblocks, Int4Ptr validate);
-void CleanupBlocks(SABlockPtr sabp);
-SABlockPtr SAMergeBlocks(SABlockPtr sabp1, SABlockPtr sabp2);
-Int4 GetBlockOrientation(Int4Ptr shift, SegmentPtr segp1, SegmentPtr segp2, Int4 index1, Int4 index2);
-SABlockPtr SquishBlocks(SABlockPtr sabp);
-SABlockPtr SARemoveSequence(Int4 BspID, SeqIdPtr sip, SABlockPtr sabp);
-SABlockPtr RearrangeSegments(Int4 BspID, SABlockPtr sabp, Int4 position);
-SABlockPtr TeenyBlock(SABlockPtr sabp, Int4 from, Int4 to);
-SABlockPtr SASplitBlock(SABlockPtr sabp, Int4 from);
-SABlockPtr AddEmptyBlocks(SABlockPtr sabp, Int4 n, Boolean beginning, Boolean end);
-SABlockPtr AddEmptySegments(SABlockPtr sabp);
-SABlockPtr FillInUnaligned(SABlockPtr sabp);
-SeqAlignPtr DeBlockify(SABlockPtr sabp);
-SeqIdPtr GetSeqIdList(SABlockPtr sabp);
-SeqAlignPtr SeqAlignListMergeAll(SeqAnnotPtr sap);
-static void FlipSequence(SegmentPtr segp, Int4 len);
-static void CalcMinusBounds(SegmentPtr segp, SegmentPtr PNTR segp_storage);
-SegmentPtr PropagateStrandInfo(SegmentPtr segp);
+NLM_EXTERN SABlockPtr IndexBlocks(SABlockPtr sabp);
+NLM_EXTERN SABlockPtr IndexNewBlocks(SABlockPtr sabp);
+NLM_EXTERN void GetBlockInfo(SABlockPtr sabp, Int4Ptr length, Int4Ptr numbioseqs, Int4Ptr numblocks, Int4Ptr validate);
+NLM_EXTERN void CleanupBlocks(SABlockPtr sabp);
+NLM_EXTERN SABlockPtr SAMergeBlocks(SABlockPtr sabp1, SABlockPtr sabp2);
+NLM_EXTERN Int4 GetBlockOrientation(Int4Ptr shift, SegmentPtr segp1, SegmentPtr segp2, Int4 index1, Int4 index2);
+NLM_EXTERN SABlockPtr SquishBlocks(SABlockPtr sabp);
+NLM_EXTERN SABlockPtr SARemoveSequence(Int4 BspID, SeqIdPtr sip, SABlockPtr sabp);
+NLM_EXTERN SABlockPtr RearrangeSegments(Int4 BspID, SABlockPtr sabp, Int4 position);
+NLM_EXTERN SABlockPtr TeenyBlock(SABlockPtr sabp, Int4 from, Int4 to);
+NLM_EXTERN SABlockPtr SASplitBlock(SABlockPtr sabp, Int4 from);
+NLM_EXTERN SABlockPtr AddEmptyBlocks(SABlockPtr sabp, Int4 n, Boolean beginning, Boolean end);
+NLM_EXTERN SABlockPtr AddEmptySegments(SABlockPtr sabp);
+NLM_EXTERN SABlockPtr FillInUnaligned(SABlockPtr sabp);
+NLM_EXTERN SeqAlignPtr DeBlockify(SABlockPtr sabp);
+NLM_EXTERN SeqIdPtr GetSeqIdList(SABlockPtr sabp);
+NLM_EXTERN SeqAlignPtr SeqAlignListMergeAll(SeqAnnotPtr sap);
+NLM_EXTERN SegmentPtr PropagateStrandInfo(SegmentPtr segp);
 
 
 /*******************************************************************************
@@ -178,7 +185,7 @@ SegmentPtr PropagateStrandInfo(SegmentPtr segp);
   Return value : -
 
 *******************************************************************************/
-extern void blk_PrintSABP(SABlockPtr sabp);
+NLM_EXTERN void blk_PrintSABP(SABlockPtr sabp);
 
 /*****************************************************************************
 *
@@ -200,7 +207,7 @@ extern void blk_PrintSABP(SABlockPtr sabp);
 *
 *****************************************************************************/
 
-SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn);
+NLM_EXTERN SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn);
 
 /*****************************************************************************
 *
@@ -210,7 +217,7 @@ SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn);
 *
 *****************************************************************************/
 
-Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow);
+NLM_EXTERN Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow);
 
 /*****************************************************************************
 *
@@ -220,7 +227,7 @@ Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow);
 
 typedef void (*pfnSAFunction)(Segment *pSegment, void *pData);
 
-Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData);
+NLM_EXTERN Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData);
 
 /*****************************************************************************
 *
@@ -228,7 +235,7 @@ Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData);
 *
 *****************************************************************************/
 
-void SAClearMove(Segment *pSegment, void *pData);
+NLM_EXTERN void SAClearMove(Segment *pSegment, void *pData);
 
 /*****************************************************************************
 *
@@ -238,8 +245,8 @@ void SAClearMove(Segment *pSegment, void *pData);
 
 typedef void (*pfnSABlockFunction)(SABlock *sabp, void *pData);
 
-Int4 SATraverseBlock(SABlock *sabpHead, pfnSABlockFunction pFunction,
-         void *pData);
+NLM_EXTERN Int4 SATraverseBlock
+(SABlock *sabpHead, pfnSABlockFunction pFunction, void *pData);
 
 /*****************************************************************************
 *
@@ -247,10 +254,18 @@ Int4 SATraverseBlock(SABlock *sabpHead, pfnSABlockFunction pFunction,
 *
 *****************************************************************************/
 
-void SARegionBounds(SABlock *sabp, void *pData);
+NLM_EXTERN void SARegionBounds(SABlock *sabp, void *pData);
+
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif

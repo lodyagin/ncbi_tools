@@ -32,8 +32,62 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.58 $
+* $Revision: 6.74 $
 * $Log: blastool.c,v $
+* Revision 6.74  2000/01/21 22:24:09  madden
+* Use Nlm_Int8tostr in place of Ltostr
+*
+* Revision 6.73  2000/01/13 18:10:43  madden
+* Fix problem with incorrect stat values for blastn and missing hits
+*
+* Revision 6.72  2000/01/07 16:01:24  madden
+* Use readdb_get_totals_ex to get db number to report
+*
+* Revision 6.71  1999/12/31 14:23:19  egorov
+* Add support for using mixture of real and maks database with gi-list files:
+* 1. Change logic of creating rdfp list.
+* 2. BlastGetDbChunk gets real databases first, then masks.
+* 3. Propoper calculation of database sizes using alias files.
+* 4. Change to CommonIndex to support using of mask databases.
+* 5. Use correct gis in formated output (BlastGetAllowedGis()).
+* 6. Other small changes
+*
+* Revision 6.70  1999/12/21 20:03:23  egorov
+* readdb_gi2seq() has new parameter.  Use NULL here.
+*
+* Revision 6.69  1999/12/21 16:58:00  madden
+* Fix command-line parser for options in case there is no space between option and value
+*
+* Revision 6.68  1999/12/17 20:47:04  egorov
+* Fix 'gcc -Wall' warnings
+*
+* Revision 6.67  1999/12/16 19:16:49  egorov
+* Return a value from not-void function
+*
+* Revision 6.66  1999/12/14 15:35:13  madden
+* Added BlastPrintFilterWarning
+*
+* Revision 6.65  1999/11/30 19:00:51  madden
+* Added Nlm_SwapUint4 calls for the ordinal ID list
+*
+* Revision 6.64  1999/11/26 22:26:49  madden
+* Change gap_x_dropoff value for blastn
+*
+* Revision 6.63  1999/11/09 14:16:53  madden
+* made sum_stats default again, rolling back rev 6.61
+*
+* Revision 6.62  1999/11/02 15:22:18  madden
+* Add BlastParceInputString and BlastGetLetterIndex
+*
+* Revision 6.61  1999/10/27 21:01:32  madden
+* made do_sum_stats not default
+*
+* Revision 6.60  1999/09/29 17:14:50  shavirin
+* Fixed memory leak in BLASTOptionsDelete()
+*
+* Revision 6.59  1999/09/22 20:59:20  egorov
+* Add blast db mask stuff
+*
 * Revision 6.58  1999/09/16 16:54:43  madden
 * Allow longer wordsizes
 *
@@ -343,6 +397,8 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 	Char buffer[128];
 	CharPtr ret_buffer;
 	Int2 ret_buffer_length;
+	Int4 num_entries;
+	Int8 total_length;
 	Nlm_FloatHi evalue;
 
 	pbp = search->pbp;
@@ -365,7 +421,9 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		sprintf(buffer, "Number of Hits to DB: %ld", (long) search->second_pass_hits);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		
-	    	sprintf(buffer, "Number of Sequences: %ld", (long) readdb_get_num_entries(search->rdfp));
+		readdb_get_totals_ex(search->rdfp, &total_length, &num_entries, TRUE);
+		
+	    	sprintf(buffer, "Number of Sequences: %ld", (long) num_entries);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		sprintf(buffer, "Number of extensions: %ld", (long) search->second_pass_extends);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -377,8 +435,9 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		sprintf(buffer, "Number of Hits to DB: 1st pass: %ld, 2nd pass: %ld", 
 			(long) search->first_pass_hits, (long) search->second_pass_hits);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+		readdb_get_totals_ex(search->rdfp, &total_length, &num_entries, TRUE);
 		sprintf(buffer, "Number of Sequences: 1st pass: %ld, 2nd pass: %ld", 
-			(long) readdb_get_num_entries(search->rdfp), (long) search->second_pass_trys);
+			(long) num_entries, (long) search->second_pass_trys);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		sprintf(buffer, "Number of extensions: 1st pass: %ld, 2nd pass: %ld", 
 			(long) search->first_pass_extends, (long) search->second_pass_extends);
@@ -390,7 +449,7 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 
 	if (pbp->cutoff_e > 0.1)
 	{
-		sprintf(buffer, "Number of sequences better than %4.1lf: %ld", 
+		sprintf(buffer, "Number of sequences better than %4.1f: %ld", 
 			pbp->cutoff_e, (long) search->number_of_seqs_better_E);
 	}
 	else
@@ -782,7 +841,7 @@ PrintDbReport(TxDfDbInfoPtr dbinfo, Int4 line_length, FILE *outfp)
 		ff_AddString(dbinfo->date);
 		NewContLine();
 		ff_AddString("Number of letters in database: "); 
-		ff_AddString(Ltostr((long) dbinfo->total_length, 1));
+		ff_AddString(Nlm_Int8tostr((Int8) dbinfo->total_length, 1));
 		NewContLine();
 		ff_AddString("Number of sequences in database:  ");
 		ff_AddString(Ltostr((long) dbinfo->number_seqs, 1));
@@ -793,7 +852,7 @@ PrintDbReport(TxDfDbInfoPtr dbinfo, Int4 line_length, FILE *outfp)
 		ff_AddString("Subset of the database(s) listed below");
 		NewContLine();
 		ff_AddString("   Number of letters searched: "); 
-		ff_AddString(Ltostr((long) dbinfo->total_length, 1));
+		ff_AddString(Nlm_Int8tostr((Int8) dbinfo->total_length, 1));
 		NewContLine();
 		ff_AddString("   Number of sequences searched:  ");
 		ff_AddString(Ltostr((long) dbinfo->number_seqs, 1));
@@ -980,6 +1039,70 @@ BlastPrintPhiReference(Boolean html, Int4 line_length, FILE *outfp)
 
 	return TRUE;
 }
+CharPtr scan_to_break (CharPtr ptr)
+{
+
+	while (*ptr != NULLB)
+	{
+		if (*ptr == ';')
+		{
+			ptr++;
+			break;
+		}
+		ptr++;
+	}
+
+	return ptr;
+}
+
+Boolean LIBCALL
+BlastPrintFilterWarning (CharPtr filter_string, Int4 line_length, FILE *outfp, Boolean html)
+
+{
+	CharPtr ptr;
+
+	ptr = filter_string;
+
+	if (filter_string == NULL || outfp == NULL)
+		return FALSE;
+
+	while (*ptr != NULLB)
+	{
+		if (*ptr == 'S')
+		{
+			ptr = scan_to_break(ptr);
+		}
+		else if (*ptr == 'C')
+		{
+			ptr = scan_to_break(ptr);
+		}
+		else if (*ptr == 'D')
+		{
+			ptr = scan_to_break(ptr);
+		}
+		else if (*ptr == 'R')
+		{
+			ptr = scan_to_break(ptr);
+			if (html)
+				fprintf(outfp, "<B>NOTE:</B>");
+			else
+				fprintf(outfp, "NOTE:");
+			fprintf(outfp, " This query has been filtered for human repeats.\n");
+			fprintf(outfp, "This filtering is effective for 70-90%% of all repeats.\n\n");
+		}
+		else if (*ptr == 'L')
+		{ /* do low-complexity filtering; dust for blastn, otherwise seg.*/
+			ptr = scan_to_break(ptr);
+		}
+		else
+		{
+			ptr++;
+		}
+	}
+
+	return TRUE;
+
+}
 
 /*
 	Initialize the options structure.
@@ -1051,10 +1174,11 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->gap_open  = 5;
 		options->gap_extend  = 2;
                 options->decline_align = INT2_MAX;
-		options->gap_x_dropoff  = 50;
+		options->gap_x_dropoff  = 20;
 		options->gap_x_dropoff_final  = 50;
 		options->gap_trigger  = 25.0;
 		options->strand_option  = BLAST_BOTH_STRAND;
+		options->no_check_score  = FALSE;
 	}
 	else
 	{
@@ -1074,6 +1198,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->reward  = 0;
 		options->gap_decay_rate = 0.5;
 		options->gap_prob = 0.5;
+		options->no_check_score  = TRUE;
 		if (gapped)
 		{
 			options->two_pass_method = FALSE;
@@ -1139,20 +1264,20 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 */
 BLAST_OptionsBlkPtr LIBCALL 
 BLASTOptionDelete(BLAST_OptionsBlkPtr options)
-
 {
-	if (options == NULL)
-		return NULL;
-
-	if (options->matrix != NULL)
-		MemFree(options->matrix);
-
-	if (options->program_name != NULL)
-		MemFree(options->program_name);
-
-	options = MemFree(options);
-
-	return options;
+    if (options == NULL)
+        return NULL;
+    
+    if (options->matrix != NULL)
+        MemFree(options->matrix);
+    
+    if (options->program_name != NULL)
+        MemFree(options->program_name);
+    
+    MemFree(options->filter_string);
+    
+    options = MemFree(options);
+    return options;
 }
 
 
@@ -1485,7 +1610,7 @@ BlastGetSequenceFromBioseq (BioseqPtr bsp, Int4Ptr length)
 */
 
 Boolean
-BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total)
+BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total)
 
 {
 	Int4 count, db_number_start, index, ordinal_id;
@@ -1493,31 +1618,10 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 	SeqIdPtr sip;
 
 		
-	readdb_get_totals(rdfp, &db_length_start, &db_number_start);
-
-	/* zero is a legal ordinal ID, so -1 must be used here. */
-	for (index=0; index<gi_list_total; index++)
-	{
-		gi_list[index].ordinal_id = -1;
-	}
-
 	count = 0;
 	db_length_private = 0;
-	if (gi_list)
-	{
-		for (index=0; index<gi_list_total; index++)
-		{	/* If this is not -1, it's been filled in. */
-			if (gi_list[index].ordinal_id >= 0)
-				continue;
-			gi_list[index].ordinal_id = readdb_gi2seq(rdfp, gi_list[index].gi);
-			gi_list_pointers[index] = &(gi_list[index]);
-			if (gi_list[index].ordinal_id < 0)
-				continue;
-			count++;
-			db_length_private += readdb_get_sequence_length(rdfp, gi_list[index].ordinal_id);
-		}
-	}
-	else if (seqid_list)
+
+	if (seqid_list)
 	{
 		sip = seqid_list;
 		while (sip)
@@ -1528,12 +1632,32 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 			sip = sip->next;
 		}
 	}
+	else if (oidlist) {
 
+	    Uint4	mask, base=0, maskindex, i;
+	    Uint4	total_mask = oidlist->total/MASK_WORD_SIZE + 1;
 
-	if (db_length_private > 0)
-		*db_length = db_length_private;
-	else
-		*db_length = count*(db_length_start/db_number_start);
+	    maskindex = 0;
+
+	    while (maskindex < total_mask) {
+		/* for each long-word mask */
+		mask = Nlm_SwapUint4(oidlist->list[maskindex]);
+		i = 0;
+		while (mask) {
+		    if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+			count++;
+			db_length_private +=
+			    readdb_get_sequence_length(rdfp, base + i);
+		    }
+		    mask <<= 1;
+		    i++;
+		}
+		maskindex++;
+		base += MASK_WORD_SIZE;
+	    }
+	}
+
+	*db_length = db_length_private;
 	*db_number = count;
 
 	return TRUE;
@@ -2591,4 +2715,98 @@ fillCandLambda(seedSearchItems * seedSearch, Char *matrixName, BLAST_OptionsBlkP
       }
     }
   }
+}
+
+/* 
+	Used by BlastParceInputString to get the 'index' of the
+	option and to check it's validity.
+*/
+Int4 BlastGetLetterIndex(CharPtr letters, Char ch)
+{
+    Int4 index;
+
+    for(index = 0; letters[index] != NULLB; index++) {
+	if (letters[index] == ch) {
+	    return index;
+	}
+    }
+    return -1;
+}
+
+/*
+	Parses a string of input options.
+	For use in the Web page and filtering options. 
+	Not for use in command-line programs - use GetArgs.
+*/
+
+Boolean BlastParceInputString(CharPtr string, 
+	CharPtr letters, 
+	CharPtr PNTR *values_in,
+	CharPtr PNTR ErrorMessage)
+{
+    CharPtr chptr;
+    Int4 i, index = 0, max_par_num;
+    Char option[1024];
+    CharPtr PNTR values;
+    Char message[1024];
+
+    if(string == NULL || letters == NULL || 
+	    *letters == '\0' || values_in == NULL) {
+	return FALSE;
+    }
+
+    max_par_num = StringLen(letters);
+
+    values = (CharPtr PNTR)MemNew(max_par_num * sizeof(CharPtr));
+    *values_in = values;
+
+    chptr = string;
+
+    while(1) {
+	while(IS_WHITESP(*chptr)) /* Rolling spaces */
+	    chptr++;
+
+	if(*chptr == NULLB)   /* Check for NULLB */
+	    break;
+
+	if (*chptr != '-') {   /* Check for the option sign */
+	    sprintf(message, "Invalid input string started from \"%s\"", 
+		    chptr);
+	    *ErrorMessage = StringSave(message);
+	    return FALSE;
+	} else {
+	    chptr++;
+	}
+
+	/* checking index in options table */
+
+	if((index = BlastGetLetterIndex(letters, *chptr)) < 0) {
+	    sprintf(message, "Character \'%c\' is not a valid option", 
+		    *chptr);
+	    *ErrorMessage = StringSave(message);
+	    return FALSE;
+	}
+
+	if(*chptr == NULLB)   /* Check for NULLB */
+	    break;
+
+	chptr++;
+
+	while(IS_WHITESP(*chptr)) /* Rolling spaces */
+	    chptr++;
+
+	if(*chptr == NULLB)   /* Check for NULLB */
+	    break;
+
+	for(i=0; !IS_WHITESP(*chptr) && *chptr != NULLB; i++, chptr++) {
+	    option[i] = *chptr;
+	}
+
+	option[i] = NULLB;
+
+	MemFree(values[index]);
+	values[index] = StringSave(option);
+    }
+
+    return TRUE;
 }

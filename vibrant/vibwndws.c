@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.35 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,24 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.35  2000/01/13 23:37:14  beloslyu
+* changes because of port to HP-UX 11.0
+*
+* Revision 6.34  2000/01/07 00:22:47  thiessen
+* fixes for LessTif and OpenGL X visual selection
+*
+* Revision 6.33  1999/12/30 16:47:10  kans
+* Carbon changes (Churchill)
+*
+* Revision 6.32  1999/12/21 18:04:24  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
+* Revision 6.31  1999/12/07 19:18:58  thiessen
+* fixed font color problem in OpenGL on SGI
+*
+* Revision 6.30  1999/10/27 20:17:32  thiessen
+* when _OPENGL is defined, make Motif choose a better-than-8-bit color depth, if possible
+*
 * Revision 6.29  1999/07/21 17:57:42  vakatov
 * GetArgs_ST():  fixed array boundary read
 *
@@ -542,7 +560,7 @@
 #endif
 #endif
 
-#if defined(WIN_MOTIF) && defined(_DEBUG)
+#if defined(WIN_MOTIF) && defined(_DEBUG) && !defined(__hpux)
 #include <X11/Xmu/Editres.h>
 #endif
 
@@ -551,7 +569,9 @@
 #ifdef OS_AXP_VMS
 #include <Xm/StdCmap.h>
 #else
+#if !defined(__hpux)
 #include <X11/Xmu/StdCmap.h>
+#endif /* !defined(__hpux) */
 #endif
 #endif
 
@@ -1761,6 +1781,8 @@ static Boolean Nlm_XrmGetResource2 PROTO((const char *_basename,
                                           const char *_resource,
                                           XrmValuePtr value));
 
+extern XVisualInfo * Nlm_GetBestOGLVisual(void); /* in vibslate.c */
+
 static Colormap Nlm_VibrantDefaultColormapEx(Visual **visual, int *depth)
 {
   static Nlm_Boolean vibrant_cMap_ready = FALSE;
@@ -1800,6 +1822,25 @@ static Colormap Nlm_VibrantDefaultColormapEx(Visual **visual, int *depth)
                            &vibrant_cMap, &vibrant_visual, &vibrant_depth))
         break;
 
+#ifdef _OPENGL
+      /* we want better-than-8-bit color for OpenGL, if possible, so force
+         vibrant to try those first, using glX selection of a visual/depth
+         appropriate for OpenGL */
+      {
+        XVisualInfo *visinfo = Nlm_GetBestOGLVisual();
+        if (!visinfo) {
+          puts("Can't find OpenGL-appropriate visual!");
+          exit(1);
+        }
+        vibrant_visual = visinfo->visual;
+        vibrant_depth = visinfo->depth;
+        /* create an X colormap since probably not using default visual */
+        vibrant_cMap = XCreateColormap(
+          Nlm_currentXDisplay,
+          RootWindow(Nlm_currentXDisplay, visinfo->screen), \
+          visinfo->visual, AllocNone);
+      }
+#else
       /* Try use the XA_RGB_DEFAULT_MAP standard colormap of 8-bit depth */
       if ( Nlm_StandardColormap(&vibrant_cMap,&vibrant_visual,&vibrant_depth) )
         break;
@@ -1808,6 +1849,8 @@ static Colormap Nlm_VibrantDefaultColormapEx(Visual **visual, int *depth)
       vibrant_cMap  = DefaultColormap(Nlm_currentXDisplay, Nlm_currentXScreen);
       vibrant_visual= DefaultVisual  (Nlm_currentXDisplay, Nlm_currentXScreen);
       vibrant_depth = DefaultDepth   (Nlm_currentXDisplay, Nlm_currentXScreen);
+#endif /* ! _OPENGL */
+
     }}
 
   if ( visual )
@@ -2589,10 +2632,12 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   XtSetArg (wargs[n], XmNdeleteResponse,   XmDO_NOTHING); n++;
   XtSetArg (wargs[n], XmNallowShellResize, (Boolean)FALSE); n++;
 
+#ifndef _OPENGL
   if (motif_n_colorcells != 0  &&
       Nlm_BusyColormap(motif_n_colorcells, 256, &cMap, &visual, &depth))
     is_cMap = TRUE;
   else
+#endif
     cMap = Nlm_VibrantDefaultColormapEx(&visual, &depth);
   motif_n_colorcells = 0;
 
@@ -5328,7 +5373,7 @@ static Nlm_Boolean Nlm_SetupWindows (void)
 {
   Nlm_PoinT  pt;
   Nlm_RecT   r;
-  SysEnvRec  sysenv;
+  long  gval;
 
   Nlm_ReturnCursor (&cross, 2);
   Nlm_ReturnCursor (&iBeam, 1);
@@ -5376,8 +5421,13 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   registeredDropProc = NULL;
   registeredServiceProc = NULL;
   registeredResultProc = NULL;
-  SysEnvirons (1, &sysenv);
-  hasColorQD = sysenv.hasColorQD;
+
+    /* gestalt for quickdraw features are defined as bits in a bitfield
+       for example gestaltHasColor = 0, thus we need to test for lsb set
+     */
+  if( Gestalt( gestaltQuickdrawFeatures, &gval) == noErr){
+      hasColorQD = (gval && (1 << gestaltHasColor));
+  }
   return TRUE;
 }
 #endif
@@ -6148,23 +6198,9 @@ static void ParseSetupArguments(HINSTANCE hInstance, Nlm_CharPtr lpszCmdLine)
 
 static void Nlm_GetReady (void)
 {
-#ifdef COMP_THINKC
-  KeyMap  keys;
-
-  GetKeys (keys);
-  if ((keys [1] & 1) != 0) {
-    Nlm_GetSet ();
-  }
-#endif
-#ifdef COMP_MPW
-  KeyMap  keys;
-
-  GetKeys (&keys);
-  if ((keys [1] & 1) != 0) {
-    Nlm_GetSet ();
-  }
-#endif
-#ifdef COMP_METRO
+/* p_churchill removed conditional compilation for Think C and MPW 12/99
+ */
+#ifdef OS_MAC
   KeyMap  keys;
 
   GetKeys (keys);
@@ -6238,7 +6274,7 @@ static void Nlm_CleanUpWindows (void)
 }
 
 #ifdef WIN_MAC
-main ()
+void main ()
 {
   long gval;
   Nlm_Int2  i;
@@ -6251,6 +6287,13 @@ main ()
 #endif
 
   MaxApplZone ();
+#if TARGET_API_MAC_CARBON >= 1
+  // carbon changes the API: pass the number of master pointers to allocate
+  MoreMasters (1280);
+  FlushEvents (everyEvent, 0);
+  InitCursor ();
+  // the rest of the toolbox is done for us can't init them...
+#else
   for (i = 0; i < 20; i++) {
     MoreMasters ();
   }
@@ -6262,6 +6305,7 @@ main ()
   TEInit ();
   InitDialogs (0);
   InitCursor ();
+#endif
 
   err = Gestalt (gestaltAppleEventsAttr, &gval);
   if (err == noErr && ((short) gval & (1 << gestaltAppleEventsPresent)) != 0) {

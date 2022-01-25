@@ -1,7 +1,7 @@
 #ifndef NCBICLI__H
 #define NCBICLI__H
 
-/*  $RCSfile: ncbicli.h,v $  $Revision: 4.6 $  $Date: 1999/06/24 17:59:36 $
+/*  $RCSfile: ncbicli.h,v $  $Revision: 4.7 $  $Date: 1999/11/09 22:02:13 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.h,v $
+* Revision 4.7  1999/11/09 22:02:13  vakatov
+* Get rid of S.Shavirin's ad-hoc proto
+*
 * Revision 4.6  1999/06/24 17:59:36  vakatov
 * Untie the HTTP and regular proxy servers: SRV_HTTP_PROXY_***, SRV_PROXY_HOST
 *
@@ -130,18 +133,6 @@ NLM_EXTERN SOCK NIC_GetSOCK
 NLM_EXTERN Boolean NIC_CloseService
 (NIC nic
  );
-
-
-#ifdef SERGEI_SHAVIRIN_CUT_AND_PASTE
-/* Sergei Shavirin's temporary ad hoc API */
-typedef VoidPtr NETC_HandlePtr;
-Boolean NET_Connect(VoidPtr handle);
-NETC_HandlePtr NET_GenericGetService (CharPtr defService, 
-                                      CharPtr configSection, 
-                                      Int4 interface);
-Int2 NET_ServiceDisconnect(NETC_HandlePtr handle);
-SOCK NET_GetSOCK(NETC_HandlePtr handle);
-#endif /* SERGEI_SHAVIRIN_CUT_AND_PASTE */
 
 
 #ifdef __cplusplus

@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,62 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.53  2000/01/12 21:03:52  egorov
+* 1. Introduce Fastacmd API function - Fastacmd_Search
+* 2. Rearrange order of functions to have Fastacmd, ID1, and CommonIndex stuff separate.
+*
+* Revision 6.52  2000/01/07 16:00:25  madden
+* Alias db length is Int8 instead of Uint4
+*
+* Revision 6.51  2000/01/03 15:46:16  lewisg
+* add prototype for readdb_get_num_entries_total_real
+*
+* Revision 6.50  1999/12/31 14:23:21  egorov
+* Add support for using mixture of real and maks database with gi-list files:
+* 1. Change logic of creating rdfp list.
+* 2. BlastGetDbChunk gets real databases first, then masks.
+* 3. Propoper calculation of database sizes using alias files.
+* 4. Change to CommonIndex to support using of mask databases.
+* 5. Use correct gis in formated output (BlastGetAllowedGis()).
+* 6. Other small changes
+*
+* Revision 6.49  1999/12/22 20:34:34  dondosha
+* Add full_filename and shared_info to ReadDBFile structure, plus prototypes of related routines
+*
+* Revision 6.48  1999/12/21 20:00:27  egorov
+* Add new parameter into readdb_gi2seq()
+*
+* Revision 6.47  1999/12/17 21:33:01  egorov
+* Add support for the 'month' subset.
+*
+* Revision 6.46  1999/12/15 17:34:32  egorov
+* 1. Introduce MASK_WORD_SIZE constant variable.
+* 2. Introduce DI_Record structure for fileld of DI index file.
+* 3. Introduce UpdateIndexStruct which is used in callback for UpdateCommonIndexFile.
+* 4. Add new field to ReadDbFile structure - aliasfilename, which used
+*    while deciding which gi to use.
+*
+* Revision 6.45  1999/11/26 22:06:59  madden
+* Added READDB_UNPACK_BASE_N macro
+*
+* Revision 6.44  1999/11/23 22:02:27  madden
+* Added readdb_get_totals_ex that may use alias file values
+*
+* Revision 6.43  1999/11/23 21:51:24  madden
+* Changes for freeing OIDlist
+*
+* Revision 6.42  1999/11/12 14:16:14  madden
+* Allow other initialization states in readdb_new_ex2
+*
+* Revision 6.41  1999/09/24 18:59:16  egorov
+* Add functions prototypes
+*
+* Revision 6.40  1999/09/23 15:02:53  egorov
+* Use more descriptive name
+*
+* Revision 6.39  1999/09/22 21:50:57  egorov
+* Add mask DB stuff
+*
 * Revision 6.38  1999/09/13 16:18:40  shavirin
 * Added function readdb_get_bioseq_ex, which has possibility
 * to bypass ObjMgr registration.
@@ -311,6 +367,7 @@ extern "C" {
 #define READDB_UNPACK_BASE_2(x) (((x)>>4) & 0x03)
 #define READDB_UNPACK_BASE_3(x) (((x)>>2) & 0x03)
 #define READDB_UNPACK_BASE_4(x) ((x) & 0x03)
+#define READDB_UNPACK_BASE_N(x, N) (((x)>>(2*(N))) & 0x03)
 
 /* Default location of the databases. */
 #ifdef OS_UNIX    
@@ -330,6 +387,14 @@ belong to the same sequence. */
 #define READDB_DB_IS_NUC 0
 #define READDB_DB_IS_PROT 1
 #define READDB_DB_UNKNOWN 2
+
+/* Choices for how much to initialize on startup in readdb_new_internal. */
+#define READDB_NEW_DO_ALL (Uint1) 1 /* attempt to memory map all files. */
+#define READDB_NEW_DO_REPORT (Uint1) 2 /* Only open the nin or pin files for a database report. */
+#define READDB_NEW_DO_SEARCH (Uint1) 4 /* Only open the nin (or pin) and nsq 
+					  (or psq) files for a search. */
+#define READDB_NEW_INDEX (Uint1) 8 /* Open only index (nin or pin) files for
+				      memory mapping */
 
 /* The following variables are shared by formatdb and readdb. */
 /* version of formatdb. */
@@ -388,7 +453,7 @@ Int4 LIBCALL NlmTellMFILE PROTO((NlmMFILEPtr mfp));
 #define INDEXFN		"/net/cruncher/usr/ncbi/db/disk.blast/blast2/comindex/mmfile.idx"
 #define RECORDFN	"/net/cruncher/usr/ncbi/db/disk.blast/blast2/comindex/mmfile.rec"
 */
-#define INDEX_FN	"comindex.mm"
+#define COMMONINDEX_FN	"comindex.mm"
 #define DB_CONFIG_FN	"dblist.txt"
 
 typedef struct  CommonIndex{
@@ -419,13 +484,29 @@ typedef struct	CommonIndexHead {
     Int4		maxgi; /* maximum GI number permited */
 } CommonIndexHead, *CommonIndexHeadPtr;
 
+typedef	struct	OIDList {
+    CharPtr	filename;	/* name of the file containing OID list */
+    Uint4Ptr	list;		/* array of OID's */
+    Uint4Ptr	memory;		/* memory to keep the OID's (element list).
+				if this is NULL, then list is memory mapped. */
+    Int4	total;		/* number of elements in the array */
+    NlmMFILEPtr mfp;		/* Used for memory-mapped file. */
+} OIDList, *OIDListPtr;
+
+OIDListPtr OIDListFree (OIDListPtr oidlist);
+
+typedef struct read_db_shared_info {
+   Int2 nthreads;
+   NlmMFILEPtr headerfp, sequencefp;
+} ReadDBSharedInfo, *ReadDBSharedInfoPtr;
+
 typedef struct read_db_file {
 	struct read_db_file PNTR next;
 /* the contents of this struct. were allocated, or not.  Does NOT include
 the actual structure and buffer, below. */
-	Boolean contents_allocated,
-		indices_initialized;	/* The indices were initialized. */
+	Boolean contents_allocated;
 	CharPtr filename;	/* name of the input (w/o extensions). */
+	CharPtr aliasfilename;	/* name of the alias of input */
 /* The files pointers for "file" (above), the index file, the file 
 containing the headers, and the sequence file. */
         NlmMFILEPtr indexfp, headerfp, sequencefp;
@@ -439,6 +520,8 @@ containing the headers, and the sequence file. */
 		stop;	/* last ordinal id in this file. */
 	Uint4 totlen,	/* Total length of database. */
 	      maxlen;	/* Length of longest sequence in database. */
+	Int8 aliaslen;	/* Length of the database as read from alias file */
+	Uint4 aliasnseq;/* Number of seqs of the database as read from alias file */
 /* The "index" arrays specify the offsets (in files) of the header and 
 sequence information. */
 	Uint4Ptr header_index,	sequence_index, ambchar_index;	
@@ -453,13 +536,17 @@ if there is no mem-mapping or it failed. */
 	Boolean			handle_common_index; /* TRUE only for a initial thread;  needs for proper freeing of the CommonIndex */
 	CommonIndexHeadPtr	cih;	/* head of the common index */
 	Int2			filebit;/* bit corresponding to the DB file */
-	CharPtr			oidfile; /* file containing a list of ordinal ID's. */
+	Int2			aliasfilebit;/* bit corresponding to the DB alias file */
+	OIDListPtr		oidlist; /* structure containing a list of ordinal ID's. */
 	Boolean			not_first_time; /* For recursive calls to readdb_new_ex2. */
 	Int4			sparse_idx; /* Sparse indexes indicator */
+        Char                    full_filename[PATH_MAX]; /* Full path for the file */
+        ReadDBSharedInfoPtr     shared_info;
 } ReadDBFILE, PNTR ReadDBFILEPtr;
 
 /* Function prototypes */
-Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int2 *dbid, ReadDBFILEPtr rdfp);
+Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int4 alias_dbmask,
+	Int2Ptr dbid, Int2Ptr alias_dbid, ReadDBFILEPtr rdfp);
 Int2	DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_prot);
 CharPtr	DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
 Boolean	DBisProt(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
@@ -472,6 +559,8 @@ Int2	bit_engine_firstbit (Int4 word);
 Int2Ptr	bit_engine_arr(Int4 word);
 Int2	bit_engine_numofbits(Int4 word);
 Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path);
+CharPtr	FindBlastDBFile (CharPtr filename);
+CharPtr	FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot);
 
 /* mmap's */
  
@@ -480,6 +569,15 @@ NLM_EXTERN Nlm_MemMapPtr EA_MemMapInit(const Nlm_Char PNTR name, Boolean readonl
 /****************************************************************************/
 /* FINCTION DEFINITIONS */
 /****************************************************************************/
+/*
+  Open the sequence and header files for memory mapping 
+*/
+Boolean ReadDBOpenMHdrAndSeqFiles PROTO((ReadDBFILEPtr rdfp));
+/* Deallocate the memory mapping of header and sequence files */
+ReadDBFILEPtr ReadDBCloseMHdrAndSeqFiles PROTO((ReadDBFILEPtr rdfp));
+/* Free the memory allocated for shared information */
+ReadDBFILEPtr ReadDBFreeSharedInfo PROTO((ReadDBFILEPtr rdfp));
+
 /* 
 Intitialize the readdb structure using the database "filename".
 If no database is used, set filename to NULL. 
@@ -494,7 +592,7 @@ ReadDBFILEPtr LIBCALL readdb_new_ex PROTO((CharPtr filename, Uint1 is_prot, Bool
 
 /* allows a list of ordinalid's (or list of list of ordinal id's) to be specified.
 */
-ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot, Boolean init_indices, CharPtr oidlist));
+ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidlist));
 
 
 /* 
@@ -531,6 +629,16 @@ Boolean LIBCALL readdb_compare PROTO((ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2))
 
 Boolean LIBCALL readdb_get_totals PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num));
 
+/*
+        Get total length and number of sequences in multiple databases.
+        if 'use_alias' is TRUE, values from the alias file will be used
+        if non-zero.
+*/
+
+Boolean LIBCALL
+readdb_get_totals_ex PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num, Boolean use_alias));
+
+
 
 /* 
 Get the sequence with sequence_number and put it in buffer.  No memory
@@ -556,7 +664,7 @@ Int4 LIBCALL readdb_get_sequence_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_num
    other negative value if NISAM library faults. Non-negative value
    means success. Use numeric ISAM indexes.
 */
-Int4 LIBCALL readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi);
+Int4 LIBCALL readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start);
 
 /* Gets sequence number by SeqId number. Returnes -1 if gi not found or
    other negative value if SISAM library faults. Non-negative value
@@ -629,6 +737,11 @@ Get the total number of entries in all the files.
 */
 Int4 LIBCALL readdb_get_num_entries_total PROTO((ReadDBFILEPtr rdfp));
 
+/*
+Obtains the total number of real database sequences from all the ReadDBFILE structures. 
+*/
+
+Int4 LIBCALL readdb_get_num_entries_total_real PROTO((ReadDBFILEPtr rdfp));
 
 /* 
 Get the length of the longest sequence in the database. 
@@ -766,6 +879,9 @@ typedef struct formatdb
     
 } FormatDB, *FormatDBPtr;
 
+
+#define	MASK_WORD_SIZE	32
+
 /* Function prototypes for formatdb library*/
 
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
@@ -793,6 +909,31 @@ Boolean LIBCALL PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 
 Boolean LIBCALL PrintDbInformationBasic PROTO((CharPtr database, Boolean is_aa, Int4 line_length, CharPtr definition, Int4 number_seqs, Int8 total_length, FILE *outfp, Boolean html));
 
 Boolean FDBAddSeqEntry(FormatDBPtr fdbp, SeqEntryPtr sep);
+
+/* ID1 dump stuff */
+
+typedef	struct di_record {
+    Int4	oid, gi, taxid, owner, div, len, hash;
+	Int4	gi_threshold; /* for 'month' subset */
+} DI_Record, *DI_RecordPtr;
+
+Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
+	Boolean(*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
+	FILE *out, Int4 gi_threshold);
+
+typedef	struct updateindex_struct {
+    FILE	*cifile;/* CommonIndex file */
+    Int2	shift;	/* database shift in mask */
+    FILE	*fout;	/* output stream */
+} UpdateIndexStruct, *UpdateIndexStructPtr;
+
+
+Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
+		FILE *fout, CharPtr difile, Int4 gi_threshold);
+
+/* Fastacmd API */
+Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
+	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
 
 #ifdef __cplusplus
 }

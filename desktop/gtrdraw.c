@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: sentinal trees
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gtrdraw.c,v $
+* Revision 6.4  1999/10/04 17:46:23  kans
+* include vibrant.h
+*
 * Revision 6.3  1998/10/01 16:37:10  kuzio
 * cast
 *
@@ -47,6 +50,7 @@
 * ==========================================================================
 */
 
+#include <vibrant.h>
 #include <drawingp.h>
 #include <gtrdraw.h>
 

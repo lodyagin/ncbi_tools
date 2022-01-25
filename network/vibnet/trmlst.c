@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -289,7 +289,7 @@ static void DoTLLoadUidList (TermFormPtr tfp)
   Int2              db = -1;
   EntrezGlobalsPtr  egp;
   FILE              *fp;
-  Int2              num;
+  Int4              num;
   Char              path [PATH_MAX];
   Char              str [32];
   Int4              uid;
@@ -328,7 +328,7 @@ static void DoTLLoadUidList (TermFormPtr tfp)
         }
       }
       BSSeek (bsp, 0L, 0);
-      num = (Int2) ((BSLen (bsp)) / sizeof (Int4));
+      num = (Int4) ((BSLen (bsp)) / sizeof (Int4));
       uids = (Int4Ptr) BSMerge (bsp, NULL);
       if (uids != NULL) {
         loadedlist++;
@@ -2862,7 +2862,7 @@ static void ChangeDatabase (PopuP p)
   DoReset (tfp, FALSE);
 }
 
-extern void LoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db)
+extern void LoadNamedUidList (ForM f, CharPtr term, Int4 num, Int4Ptr uids, Int2 db)
 
 {
   Char         str [64];
@@ -2893,9 +2893,9 @@ extern void LoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2
   }
   StringCpy (str, "*");
   StringNCpy (str + 1, term, sizeof (str) - 3);
-  EntrezCreateNamedUidList (str, db, 0, (Int4) num, uids);
+  EntrezCreateNamedUidList (str, db, 0, num, uids);
   tempPort = SavePort (tfp->chosen);
-  LoadChosen (tfp, str, STATE_ON, TRUE, (Int4) num, TRUE);
+  LoadChosen (tfp, str, STATE_ON, TRUE, num, TRUE);
   SafeHide (tfp->advBoolText);
   SafeShow (tfp->chosen);
   tfp->usingAdv = FALSE;

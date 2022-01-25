@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.15 1999/02/24 16:49:23 kans Exp $
+/* $Id: batch.c,v 6.16 1999/10/21 21:10:04 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.16  1999/10/21 21:10:04  shavirin
+* Added possibility to retrive RefSeq accessions.
+*
 * Revision 6.15  1999/02/24 16:49:23  kans
 * use accutils copy of IS_ntdb_accession and IS_protdb_accession
 *
@@ -427,7 +430,7 @@ Args dump_args[NUMARGS] = {
   {"ID (accession or gi)",
    NULL, NULL,NULL,TRUE,'u',ARG_STRING, 0.0,0,NULL},
   {"Logfile name:",
-   "stdout", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL}
+   "nbatch.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL}
 };
 
 static BatchParamPtr MakeCommandLineParameters(void)
@@ -1051,7 +1054,7 @@ static Boolean IS_NOT_accession (CharPtr word)
     
     if((len = StringLen(word)) == 0)
         return TRUE;
-    
+
     /* Testing, that this is 6 length accession */
     
     if(len == 6 && isalpha(word[0])) {
@@ -1072,6 +1075,16 @@ static Boolean IS_NOT_accession (CharPtr word)
         if (i == len) return FALSE; /* This is accession */
     }
 
+    if(len == 9 && 
+       TO_UPPER(word[0]) == 'N' && isalpha(word[1]) && word[2] ==  '_') {
+        for(i = 3; i < len; i++) {
+            if(!isdigit(word[i])) {
+                break;
+            }
+        }
+        if (i == len) return FALSE; /* This is accession */
+    }
+    
     return TRUE;
 }
 

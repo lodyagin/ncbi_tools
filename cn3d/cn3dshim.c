@@ -34,6 +34,66 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dshim.c,v $
+* Revision 6.22  2000/01/18 22:49:16  lewisg
+* send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
+*
+* Revision 6.21  2000/01/08 00:47:53  lewisg
+* fixes to selection, update, color
+*
+* Revision 6.20  2000/01/06 00:04:42  lewisg
+* selection bug fixes, update message outbound, animation APIs moved to vibrant
+*
+* Revision 6.19  2000/01/04 15:55:51  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.18  1999/12/29 22:55:03  lewisg
+* get rid of seqalign id
+*
+* Revision 6.17  1999/12/28 15:08:44  lewisg
+* remove remaining mediainfo code
+*
+* Revision 6.16  1999/12/27 23:14:12  lewisg
+* add colormgr show/hide in Cn3D
+*
+* Revision 6.15  1999/12/23 21:40:33  lewisg
+* move animation controls to dialog
+*
+* Revision 6.14  1999/12/02 20:31:59  lewisg
+* put seqentries into bioseqset and fix calling convention in alignmgr.c
+*
+* Revision 6.13  1999/12/01 16:15:54  lewisg
+* interim checkin to fix blocking memory leak
+*
+* Revision 6.12  1999/11/30 22:46:37  vakatov
+* Cast callback arg in Cn3D_SizeCB() lest to cast the callback func.type
+*
+* Revision 6.11  1999/11/12 16:06:34  lewisg
+* fix sequentry to valnode conversion
+*
+* Revision 6.10  1999/11/10 23:19:42  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.9  1999/11/02 23:06:08  lewisg
+* fix cn3d to launch correctly if there is no seqentry associated with bioseq
+*
+* Revision 6.8  1999/10/29 14:15:30  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.7  1999/10/18 15:32:50  lewisg
+* move ClearSequences() to cn3dshim.c
+*
+* Revision 6.6  1999/10/15 20:56:40  lewisg
+* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
+*
+* Revision 6.5  1999/10/05 23:18:24  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.4  1999/09/22 20:07:39  thiessen
+* minor fix for mac compiler
+*
+* Revision 6.3  1999/09/21 18:09:15  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.2  1999/04/06 14:23:30  lewisg
 * add opengl replacement for viewer3d
 *
@@ -48,162 +108,145 @@
 #include <cn3dmsg.h>
 #include <ncbi.h>
 #include <cn3dshim.h>
+#include <seqmgr.h>
+#include <salpacc.h>
 
-/* constructor for TCn3D_Color structure */
-void Cn3D_ConstructColor(TCn3D_Color * Color, Nlm_Uint1 Red, Nlm_Uint1 Green, Nlm_Uint1 Blue)
+/*****************************************************************************
+
+Function: Cn3D_UseNetwork()
+
+Purpose:  Determines if Cn3D should use the network
+  
+Returns:  TRUE if yes
+
+*****************************************************************************/
+
+NLM_EXTERN Boolean Cn3D_UseNetwork()
 {
-    if(Color == NULL) return;
-    Color->Name = NULL;
-    Color->Paints = NULL;
-    Color->Index = 0;
-    Cn3D_SetColorCell(&(Color->ColorCell), Red, Green, Blue);
+    Char str[64];
+
+    if (GetAppParam
+        ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof(str))) {
+        if (StringICmp(str, "TRUE") == 0) return TRUE;
+    }
+    return FALSE;
+}
+
+/*****************************************************************************
+
+Function: Cn3D_SetVisible()
+
+Purpose: Sets the visible bit for a chain in the biostruc AND the color
+        manager
+  
+Parameters: pColorGlobal
+            pmmdThis: the chain
+            fVisible: TRUE if the chain is to be visible
+
+*****************************************************************************/
+
+NLM_EXTERN void Cn3D_SetVisible(DDV_ColorGlobal *pColorGlobal, PMMD pmmdThis,
+                                Boolean fVisible)
+{
+    if(pmmdThis == NULL) return;
+    if(pmmdThis->pSeqId == NULL) return;
+    DDV_SetVisible(pColorGlobal, pmmdThis->pSeqId, -1, fVisible);
+    pmmdThis->bVisible = fVisible;
 }
 
 
-void Cn3D_CopyColorCell(ResidueColorCell * Destination,  ResidueColorCell * Source)
+/*****************************************************************************
+
+Function: Cn3D_IsVisible()
+
+Purpose: Gets the visible bit for a chain in the biostruc.
+  
+Parameters: pColorGlobal
+            pmmdThis: the chain
+
+Returns:  TRUE if visible
+
+*****************************************************************************/
+
+NLM_EXTERN Boolean Cn3D_IsVisible(DDV_ColorGlobal *pColorGlobal,
+                                   PMMD pmmdThis)
 {
-    if(Destination == NULL || Source == NULL) return;
-    MemCpy(Destination, Source, sizeof(ResidueColorCell));
+    if(pmmdThis == NULL) return FALSE;
+    return pmmdThis->bVisible;
+}
+
+/*****************************************************************************
+
+Function: ClearSequences()
+
+Purpose: Deletes the Cn3D messagefunc from userdata on the SeqAnnots and
+         SeqEntries presently displayed.
+  
+*****************************************************************************/
+
+void ClearSequences(void)
+{
+    Uint2 entityID;
+    SeqAnnot *sap;
+    SeqAlign *salp;
+    
+    if (Cn3D_ColorData.sap != NULL) {
+        for (sap = Cn3D_ColorData.sap; sap != NULL; sap = sap->next) {        
+            if (sap->data == NULL) continue;
+            salp = sap->data;
+            entityID = ObjMgrGetEntityIDForPointer(salp);
+            ObjMgrFreeUserData(entityID, Cn3D_ColorData.sapprocid, OMPROC_EDIT,
+                Cn3D_ColorData.userkey);               
+            ObjMgrSendMsg(OM_MSG_FLUSH, entityID, 0, 0);
+        }
+    }
+        
+    entityID =
+        ObjMgrGetEntityIDForPointer((void *) Cn3D_ColorData.pvnsep);
+    ObjMgrFreeUserData(entityID, Cn3D_ColorData.sepprocid, OMPROC_VIEW,
+        Cn3D_ColorData.userkey);
+    ObjMgrSendMsg(OM_MSG_FLUSH, entityID, 0, 0);
+    
+    if(Cn3D_ColorData.IsUserData == FALSE)
+        DDV_DeleteColorGlobal(Cn3D_ColorData.pDDVColorGlobal);
+    Cn3D_ColorData.pDDVColorGlobal = NULL;
+    
+    return;
 }
 
 
-void Cn3D_SetColorCell(ResidueColorCell * ColorCell, Nlm_Uint1 Red, Nlm_Uint1 Green, Nlm_Uint1 Blue)
-{
-    if(ColorCell == NULL) return;
-    ColorCell->rgb[0] = Red;
-    ColorCell->rgb[1] = Green;
-    ColorCell->rgb[2] = Blue;
-}
-
-
-/* destructor for Color structure */
-void Cn3D_DestructColor(TCn3D_Color * Color)
-{
-    if (Color == NULL) return;
-    MemFree(Color->Name);
-    MemFree(Color->Paints);
-}
-
-
-void Cn3D_DefaultSSColor(TCn3D_ColorData * ColorData)
-{
-    if(ColorData == NULL) return;
-    Cn3D_SetColorCell(&(ColorData->SSColors[CN3D_COLOR_HELIX].ColorCell), 0, 255, 0);
-    Cn3D_SetColorCell(&(ColorData->SSColors[CN3D_COLOR_STRAND].ColorCell), 255, 165, 0);
-    Cn3D_SetColorCell(&(ColorData->SSColors[CN3D_COLOR_TURN].ColorCell), 255, 69, 0);
-    Cn3D_SetColorCell(&(ColorData->SSColors[CN3D_COLOR_COIL].ColorCell), 0, 255, 255);
-}
-
-
-/* constructor for TCn3D_Color structure */
+/* constructor for DDV_ColorEntry structure */
 void Cn3D_ConstructColorData(TCn3D_ColorData * ColorData
 #ifdef _OPENGL
                              , TOGL_Data * OGL_Data
 #endif
-                             )
+                             , Boolean StandAlone)
 {
-    if (ColorData == NULL) return;
+
+    if (ColorData == NULL)
+        return;
 #ifdef _OPENGL
-    if(OGL_Data == NULL) return;
+    if (OGL_Data == NULL)
+        return;
 #endif
-    Cn3D_ConstructColor(&(ColorData->SSColors[CN3D_COLOR_HELIX]), 0, 255, 0);
-    ColorData->SSColors[CN3D_COLOR_HELIX].Name = StringSave("Helix");
-    Cn3D_ConstructColor(&(ColorData->SSColors[CN3D_COLOR_STRAND]), 255, 165, 0);
-    ColorData->SSColors[CN3D_COLOR_STRAND].Name = StringSave("Strand");
-    Cn3D_ConstructColor(&(ColorData->SSColors[CN3D_COLOR_TURN]), 255, 69, 0);
-    ColorData->SSColors[CN3D_COLOR_TURN].Name = StringSave("Turn");
-    Cn3D_ConstructColor(&(ColorData->SSColors[CN3D_COLOR_COIL]), 0, 255, 255);
-    ColorData->SSColors[CN3D_COLOR_COIL].Name = StringSave("Coil");
-    Cn3D_ConstructColor(&(ColorData->Highlight), 255, 255, 0);
-    ColorData->SSColors[CN3D_COLOR_COIL].Name = StringSave("Highlight");
-    
-    ColorData->Palette = NULL;
+    ColorData->sap = NULL;
+    ColorData->pvnsep = NULL;
+    ColorData->StandAlone = StandAlone;
+    ColorData->pDDVColorGlobal = NULL;
+    ColorData->IsUserData = FALSE;
 #ifdef _OPENGL
     ColorData->OGL_Data = OGL_Data;
 #endif
+    ColorData->AnimateDlg.Cn3D_wAnimate = NULL;
+    ColorData->Cn3D_w = NULL;
 }
 
 /* destructor for Color structure */
 void Cn3D_DestructColorData(TCn3D_ColorData * ColorData)
 {
-    Nlm_Int4 i;
-    
-    if(ColorData == NULL) return;
-    for (i=0;i<CN3D_COLOR_SS; i++) 
-        Cn3D_DestructColor(&(ColorData->SSColors[i]));
-    Cn3D_FreePalette(&(ColorData->Palette));
-}
-
-
-void Cn3D_FreePalette(ValNodePtr * Palette)
-/* free a palette */
-{
-    ValNodePtr Index;
-    
-    if(Palette == NULL) return;
-    Index = *Palette;
-    while (Index) {
-        Cn3D_DestructColor((TCn3D_Color *)(Index->data.ptrvalue));
-        Index = Index->next;
-    }
-    ValNodeFree(*Palette);
-    *Palette = NULL;
-}
-
-
-void Cn3D_RequestColor(TCn3D_ColorData * ColorData, ResidueColorCell * ColorCell)
-/* ask for a new color to be put on the palette */
-{
-    TCn3D_Color * NewColor;
-    
-    if(ColorData == NULL || ColorCell == NULL) return;
-    if ( Cn3D_SearchColor(ColorData->Palette, ColorCell) == NULL ) {
-        NewColor = MemNew(sizeof(TCn3D_Color));
-        if (!NewColor) return;
-        Cn3D_ConstructColor(NewColor, ColorCell->rgb[0], ColorCell->rgb[1], ColorCell->rgb[2]);
-        ValNodeAddPointer(&(ColorData->Palette), 0, NewColor);
-    }
-    return;
-}
-
-
-ValNodePtr Cn3D_SearchColor(ValNodePtr Palette, ResidueColorCell * ColorCell)
-/* search for a color in the palette */
-{
-    if(ColorCell == NULL) return NULL;
-    while(Palette) {
-        if(((TCn3D_Color *)(Palette->data.ptrvalue))->ColorCell.rgb[0] == ColorCell->rgb[0] &&
-            ((TCn3D_Color *)(Palette->data.ptrvalue))->ColorCell.rgb[1] == ColorCell->rgb[1]  &&
-            ((TCn3D_Color *)(Palette->data.ptrvalue))->ColorCell.rgb[2] == ColorCell->rgb[2] )
-            return Palette;
-        Palette = Palette->next;
-    }
-    return NULL;
-}
-
-
-void Cn3D_SetColorChoice(ValNodePtr Palette)
-/* sets the valnode choice value according to position in palette */
-{
-    Nlm_Int4 i = 0;
-    
-    while(Palette) {
-        ((TCn3D_Color *)(Palette->data.ptrvalue))->Index = i;
-        i++;
-        Palette = Palette->next;
-    }
-}
-
-
-Nlm_Int4 Cn3D_ColorIndex(TCn3D_ColorData * ColorData, ResidueColorCell * ColorCell)
-/* returns the index into the palette for a given color */
-{
-    ValNodePtr Color;
-    
-    if(ColorData == NULL || ColorCell == NULL) return 0;
-    Color = Cn3D_SearchColor(ColorData->Palette, ColorCell);
-    if ( Color == NULL ) return 0;
-    else return ((TCn3D_Color *)(Color->data.ptrvalue))->Index;
+    if (ColorData == NULL)
+        return;
+    DDV_DeleteColorGlobal(ColorData->pDDVColorGlobal);
 }
 
 
@@ -212,32 +255,36 @@ Nlm_Int4 Cn3D_ColorIndex(TCn3D_ColorData * ColorData, ResidueColorCell * ColorCe
 #ifdef _OPENGL
 
 
-static void LIBCALLBACK Cn3D_SizeCB(PFB pfbThis, Nlm_Int4 iModel, Nlm_Int4 iIndex, TOGL_BoundBox * BoundBox)
+static void LIBCALLBACK Cn3D_SizeCB(PFB pfbThis, Nlm_Int4 iModel,
+                                    Nlm_Int4 iIndex,
+                                    Pointer ptr)
 /* callback used to find the bounding box of the atoms of a structure */
 {
+    TOGL_BoundBox* BoundBox = (TOGL_BoundBox*) ptr;
     PMAD pmadThis = NULL;
     PALD paldThis = NULL;
     Nlm_FloatLoPtr pflvDataThis = NULL;
     Nlm_Int4 i;
-    
-    if(pfbThis == NULL || BoundBox == NULL) return;
-    if (pfbThis->bMe == (Byte) AM_MAD)  /* is this molecular atom data? */
-    {  /* iIndex isn't used */
+
+    if (pfbThis == NULL || BoundBox == NULL)
+        return;
+    if (pfbThis->bMe == (Byte) AM_MAD) { /* is this molecular atom data? *//* iIndex isn't used */
         pmadThis = (PMAD) pfbThis;
         paldThis = GetAtomLocs(pmadThis, iModel);
-        while (paldThis)
-        {  
+        while (paldThis) {
             pflvDataThis = paldThis->pflvData;
-            if(BoundBox->set == FALSE ) {  /* if the bounding box has not been used, set it */
-                for (i=0; i<6; i++ ) {
-                    BoundBox->x[i] = pflvDataThis[i/(int)2];
+            if (BoundBox->set == FALSE) { /* if the bounding box has not been used, set it */
+                for (i = 0; i < 6; i++) {
+                    BoundBox->x[i] = pflvDataThis[i / (int) 2];
                     BoundBox->set = TRUE;
                 }
-            }
-            else {
-                for (i=0; i<6; i += 2 ) {  /* check to see if the atom lies outside the bound box */
-                    if( pflvDataThis[i/(Nlm_Int4)2] < BoundBox->x[i] ) BoundBox->x[i] = pflvDataThis[i/(Nlm_Int4)2];
-                    if( pflvDataThis[i/(Nlm_Int4)2] > BoundBox->x[i+1] ) BoundBox->x[i+1] = pflvDataThis[i/(Nlm_Int4)2];
+            } else {
+                for (i = 0; i < 6; i += 2) { /* check to see if the atom lies outside the bound box */
+                    if (pflvDataThis[i / (Nlm_Int4) 2] < BoundBox->x[i])
+                        BoundBox->x[i] = pflvDataThis[i / (Nlm_Int4) 2];
+                    if (pflvDataThis[i / (Nlm_Int4) 2] >
+                        BoundBox->x[i + 1]) BoundBox->x[i + 1] =
+                            pflvDataThis[i / (Nlm_Int4) 2];
                 }
             }
             paldThis = paldThis->next;
@@ -251,117 +298,110 @@ static void LIBCALLBACK Cn3D_SizeCB(PFB pfbThis, Nlm_Int4 iModel, Nlm_Int4 iInde
 void LIBCALL Cn3D_Size(TOGL_BoundBox * BoundBox, PDNMS pdnmsThis)
 /* find coordinates of the bounding box of a structure */
 {
-    if(BoundBox == NULL || pdnmsThis == NULL) return;
+    if (BoundBox == NULL || pdnmsThis == NULL)
+        return;
     OGL_ClearBoundBox(BoundBox);
     BoundBox->set = FALSE;
-    TraverseModels(pdnmsThis, TRAVERSE_ATOM, 0, BoundBox,  Cn3D_SizeCB);
+    TraverseModels(pdnmsThis, TRAVERSE_ATOM, 0, BoundBox, Cn3D_SizeCB);
 }
 
 
 /* Buttons on the OGL Viewer UI */
 
-static ButtoN  OGL_allButton;
-static ButtoN  OGL_rewindButton;
-static ButtoN  OGL_prevButton;
-static ButtoN  OGL_nextButton;
+static ButtoN OGL_allButton;
+static ButtoN OGL_rewindButton;
+static ButtoN OGL_prevButton;
+static ButtoN OGL_nextButton;
 #ifndef WIN_MAC
-static ButtoN  OGL_playButton;
-#endif /* ndef WIN_MAC */
+static ButtoN OGL_playButton;
+#endif                          /* ndef WIN_MAC */
 
 
 /* the OpenGL UI */
 
 static void AllLayerOnProc(Nlm_ButtoN b)
-{   
-    OGL_AllLayerOnProc((TOGL_Data *)Nlm_GetObjectExtra( b ));
+{
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    OGL_AllLayerOnProc(Cn3D_ColorData.OGL_Data);
     OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
 }
 
 static void RewindLayerProc(Nlm_ButtoN b)
-{   
-    OGL_RewindLayerProc((TOGL_Data *)Nlm_GetObjectExtra( b ));
+{
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    OGL_RewindLayerProc(Cn3D_ColorData.OGL_Data);
     OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
 }
 
 static void PrevLayerProc(Nlm_ButtoN b)
-{   
-    OGL_PrevLayerProc((TOGL_Data *)Nlm_GetObjectExtra( b ));
+{
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    OGL_PrevLayerProc(Cn3D_ColorData.OGL_Data);
     OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
 }
 
 static void NextLayerProc(Nlm_ButtoN b)
-{   
-    OGL_NextLayerProc((TOGL_Data *)Nlm_GetObjectExtra( b ));
+{
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    OGL_NextLayerProc(Cn3D_ColorData.OGL_Data);
     OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
-}
-
-
-extern Nlm_Boolean OGL_IsPlaying(void)
-{
-#ifdef WIN_MAC
-    return FALSE;
-#else
-    return (Nlm_Boolean)(OGL_playButton  &&  Nlm_GetStatus(OGL_playButton));
-#endif
-}
-
-extern void OGL_StopPlaying(void) 
-{
-#ifndef WIN_MAC
-    if ( OGL_playButton ) Nlm_SetStatus(OGL_playButton, FALSE);
-#endif
 }
 
 static void PlayOGL(Nlm_ButtoN b)
 {
 #ifndef WIN_MAC
-    TOGL_Data * OGL_Data;
-    
-    OGL_Data = (TOGL_Data *)Nlm_GetObjectExtra( b );
-    
-    while (!Nlm_QuittingProgram()  &&  OGL_IsPlaying())
-    {
-        OGL_Play(OGL_Data);
-        OGL_DrawViewer3D(Cn3D_ColorData.OGL_Data);
-        
-        while ( Nlm_EventAvail() )
-            Nlm_ProcessAnEvent();
+    if( OGL_IsPlaying(Cn3D_ColorData.OGL_Data)) {
+        OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+        return;
     }
+    OGL_StartPlaying(Cn3D_ColorData.OGL_Data);
 #endif
 }
 
-
-Nlm_GrouP LIBCALL  OGL_Controls ( Nlm_GrouP prnt)
+static void Cn3D_AnimateCloseProc(ButtoN b)
 {
-    Nlm_GrouP g, h;
-    
-    g = Nlm_HiddenGroup ( prnt, -1, 0, NULL );
-    if (!g) return NULL;
-    
-    h = Nlm_HiddenGroup (g, 1, 5, NULL);
-    
-    /* set up the procedures to run */
-    
-    OGL_allButton    = Nlm_PushButton(h, "all",  AllLayerOnProc);
-    OGL_rewindButton = Nlm_PushButton(h, "<<", RewindLayerProc);
-    OGL_prevButton   = Nlm_PushButton(h, "<",  PrevLayerProc);
-    OGL_nextButton   = Nlm_PushButton(h, ">",  NextLayerProc);
-#ifndef WIN_MAC
-    OGL_playButton =  Nlm_CheckBox(h, "Animate", PlayOGL);
-#endif
-    
-    /* add pointers to global info */
-    
-    Nlm_SetObjectExtra(OGL_allButton,    (Nlm_VoidPtr) (Cn3D_ColorData.OGL_Data), NULL);
-    Nlm_SetObjectExtra(OGL_rewindButton, (Nlm_VoidPtr) (Cn3D_ColorData.OGL_Data), NULL);
-    Nlm_SetObjectExtra(OGL_prevButton,   (Nlm_VoidPtr) (Cn3D_ColorData.OGL_Data), NULL);
-    Nlm_SetObjectExtra(OGL_nextButton,   (Nlm_VoidPtr) (Cn3D_ColorData.OGL_Data), NULL);
-#ifndef WIN_MAC
-    Nlm_SetObjectExtra(OGL_playButton,   (Nlm_VoidPtr) (Cn3D_ColorData.OGL_Data), NULL);
-#endif    
-    
-    return g;
+    WindoW hAnimateDlg;
+
+	hAnimateDlg= (WindoW)ParentWindow(b);
+	if(hAnimateDlg == NULL) return;	
+
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    Remove(Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate);
+    Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate = NULL;
+    return;
 }
 
 
-#endif /* _OPENGL */
+NLM_EXTERN void Cn3D_Animate(IteM i)
+{
+    GrouP h;
+   
+    if(Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate != NULL) return;
+    Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate =
+        FixedWindow(-30, -20, -10, -10, "Model and Animation Controls",
+                    NULL);
+    OGL_StopPlaying(Cn3D_ColorData.OGL_Data);
+    h = HiddenGroup(Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate, 
+#ifndef WIN_MAC
+        6,
+#else
+        7,
+#endif
+        1, NULL);
+
+
+    OGL_rewindButton = Nlm_PushButton(h, "|<<", RewindLayerProc);
+    OGL_prevButton = Nlm_PushButton(h, "|< ", PrevLayerProc);
+#ifndef WIN_MAC
+    OGL_playButton = Nlm_PushButton(h, " > ", PlayOGL);
+#endif
+    OGL_nextButton = Nlm_PushButton(h, ">| ", NextLayerProc);
+    OGL_allButton = Nlm_PushButton(h, "All", AllLayerOnProc);
+    PushButton(h, "Close", (BtnActnProc) Cn3D_AnimateCloseProc);
+
+    Show(Cn3D_ColorData.AnimateDlg.Cn3D_wAnimate);
+    return;
+}
+
+
+#endif                          /* _OPENGL */

@@ -32,8 +32,29 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.50 $ 
+/* $Revision: 6.57 $ 
 * $Log: blastpri.h,v $
+* Revision 6.57  2000/01/11 17:04:48  shavirin
+* Added parameter theCacheSize into BlastSearchBlkNew and BlastSearchBlkNewExtra
+*
+* Revision 6.56  1999/12/22 21:07:19  shavirin
+* Added definition of the function BlastNewFindWordsEx()
+*
+* Revision 6.55  1999/12/14 15:35:13  madden
+* Added BlastPrintFilterWarning
+*
+* Revision 6.54  1999/11/29 12:58:59  madden
+* Added prototypes for BlastNTGetGappedScore, BlastNTPreliminaryGappedScore and BlastNtSaveCurrentHsp
+*
+* Revision 6.53  1999/11/02 15:24:03  madden
+* Add BlastParceInputString and BlastGetLetterIndex
+*
+* Revision 6.52  1999/10/05 18:16:07  shavirin
+* Functions tick_proc and get_db_chunk were renamed and become public.
+*
+* Revision 6.51  1999/09/22 20:59:56  egorov
+* Add mask DB stuff
+*
 * Revision 6.50  1999/08/20 19:48:37  madden
 * Changed call to BlastSearchBlkNew(Extra)
 *
@@ -498,6 +519,12 @@ Boolean LIBCALL AcknowledgeBlastQuery PROTO((BioseqPtr bsp, Int4 line_length, FI
 Boolean LIBCALL PrintDbReport PROTO((TxDfDbInfoPtr dbinfo, Int4 line_length, FILE *outfp));
 
 /*
+	Print a warning about the filtering used.
+*/
+Boolean LIBCALL BlastPrintFilterWarning PROTO((CharPtr filter_string, Int4 line_length, FILE *outfp, Boolean html));
+
+
+/*
 	print out some of the Karlin-Altschul parameters.
 */
 Boolean LIBCALL PrintKAParameters PROTO((Nlm_FloatHi Lambda, Nlm_FloatHi K, Nlm_FloatHi H, Int4 line_length, FILE *outfp, Boolean gapped));
@@ -521,9 +548,11 @@ Boolean LIBCALL PrintTildeSepLines PROTO((CharPtr buffer, Int4 line_length, FILE
 
 Int2 LIBCALL BlastFindWords PROTO((BlastSearchBlkPtr search, Int4 start, Int4 len, BLAST_Score threshold, Int1 context_index));
 
-/*AAS*/
+
 Int2 LIBCALL BlastNewFindWords PROTO((BlastSearchBlkPtr search, Int4 start, Int4 len, BLAST_Score threshold, Int1 context_index));
 
+Int2 BlastNewFindWordsEx(LookupTablePtr lookup, BLAST_ScorePtr PNTR posMatrix, Int4 start, Int4 len, BlastAllWordPtr all_words, BLAST_Score threshold, Int4 wordsize, Int1 context_index);
+    
 Int2 LIBCALL BlastLinkHsps PROTO ((BlastSearchBlkPtr search));
 
 Int2 LIBCALL BlastReapHitlistByEvalue PROTO ((BlastSearchBlkPtr search));
@@ -542,10 +571,10 @@ Int2 LIBCALL BlastTimeFillStructure PROTO((BlastTimeKeeperPtr btkp));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDuplicate PROTO((BlastSearchBlkPtr search));
 
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, Int4 window_size));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, Int4 window_size, Int4 theCacheSize));
 
 /* Allocates a search Block, except it only attaches to the rdfp, does not allocate it. */
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp, Int4 window_size));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp, Int4 window_size, Int4 theCacheSize));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
 
@@ -564,6 +593,8 @@ SeqAlignPtr LIBCALL BlastGetGapAlgnTbckWithReaddb PROTO((BlastSearchBlkPtr searc
 Int2 LIBCALL BlastGetGappedScoreWithReaddb PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
 Int2 LIBCALL BlastGetGappedScore PROTO((BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subject, Int2 frame));
+
+Int2 LIBCALL BlastNTGetGappedScore PROTO((BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr subject));
 
 
 SeqIdPtr LIBCALL BlastGetSubjectId PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean ordinal_number, ValNodePtr *vnpp));
@@ -597,12 +628,17 @@ Nlm_FloatHi LIBCALL GetDbSubjRatio PROTO((BlastSearchBlkPtr search, Int4 subject
 
 Int2 LIBCALL BlastPreliminaryGappedScore PROTO((BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, Int2 frame));
 
+Int2 LIBCALL BlastNTPreliminaryGappedScore PROTO((BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length));
+
+
 Int2 LIBCALL BlastHitListPurge PROTO((BLAST_HitListPtr hitlist));
 
 Int4 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt, Boolean clear_num));
 
 
 void BlastSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context));
+
+void BlastNtSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context, Int4 query_gap_start, Int4 subject_gap_start));
 
 CharPtr FormatBlastParameters PROTO((BlastSearchBlkPtr search));
 
@@ -658,7 +694,7 @@ Uint1Ptr BlastGetSequenceFromBioseq PROTO((BioseqPtr bsp, Int4Ptr length));
 BlastSeqIdListPtr BlastSeqIdListNew PROTO((void));
 BlastSeqIdListPtr BlastSeqIdListDestruct PROTO((BlastSeqIdListPtr seqid_list));
 
-Boolean BlastAdjustDbNumbers PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total));
+Boolean BlastAdjustDbNumbers PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total));
 
 BlastGiListPtr BlastGiListDestruct PROTO((BlastGiListPtr blast_gi_list, Boolean contents));
 BlastGiListPtr BlastGiListNew PROTO((BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 total));
@@ -676,10 +712,10 @@ BlastMatrixRescalePtr BlastMatrixRescaleDestruct PROTO((BlastMatrixRescalePtr ma
         starts the awake thread using static variables in this file.
 */
 
-void BlastStartAwakeThread PROTO((BlastSearchBlkPtr search));
+void BlastStartAwakeThread PROTO((BlastThrInfoPtr thr_info));
 
 /* Change the awake flag.  This thread will die in one second. */
-void BlastStopAwakeThread PROTO((void));
+void BlastStopAwakeThread PROTO((BlastThrInfoPtr thr_info));
 
 SeqLocPtr HitRangeToSeqLoc PROTO((BlastHitRangePtr bhrp, Int4 link_value, Boolean combine));
 
@@ -705,7 +741,19 @@ int LIBCALLBACK score_compare_hsps PROTO((VoidPtr v1, VoidPtr v2));
 
 Int2 LIBCALL BlastGetNonSumStatsEvalue PROTO((BlastSearchBlkPtr search));
 
+Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop, 
+                        Int4Ptr id_list, Int4Ptr id_list_number, 
+                        BlastThrInfoPtr thr_info);
+void BlastTickProc(Int4 sequence_number, BlastThrInfoPtr thr_info);
+
+Boolean BlastParceInputString(CharPtr string, CharPtr letters, CharPtr PNTR *values_in, CharPtr PNTR ErrorMessage);
+
+Int4 BlastGetLetterIndex(CharPtr letters, Char ch);
+
+
+
 #ifdef __cplusplus
 }
 #endif
 #endif /* !__BLASTPRI__ */
+

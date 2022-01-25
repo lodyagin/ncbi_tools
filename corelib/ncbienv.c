@@ -1,4 +1,4 @@
-/*  $Id: ncbienv.c,v 6.8 1999/03/24 22:12:49 vakatov Exp $
+/*   ncbienv.c
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.12 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,19 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.12  1999/12/30 16:36:37  kans
+* additional cleanup (Churchill)
+*
+* Revision 6.11  1999/12/21 18:22:17  kans
+* new blessed file finding function needed to convert filename back to C string for fopen
+*
+* Revision 6.10  1999/12/21 17:52:39  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
+* Revision 6.9  1999/11/29 19:58:49  vakatov
+* To parse command-line arguments:
+* + ECmdLineQuote, Nlm_ParseCmdLineArguments(), Nlm_FreeCmdLineArguments()
+*
 * Revision 6.8  1999/03/24 22:12:49  vakatov
 * Nlm_ReadConfigFile():  free "Nlm_bottomComment" to avoid mem.leak
 *
@@ -175,6 +188,7 @@
 #include <Gestalt.h>
 #include <Folders.h>
 #include <Processes.h>
+#include <Script.h>
 #endif /* OS_MAC */
 
 
@@ -243,7 +257,14 @@ static Nlm_Boolean destroyDeadComments = FALSE;
 *
 *****************************************************************************/
 
-static Nlm_Int2 Nlm_WorkGetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, Nlm_Int2 buflen, Nlm_Boolean searchTransient)
+static Nlm_Int2 
+Nlm_WorkGetAppParam(const Nlm_Char* file, 
+                    const Nlm_Char* section, 
+                    const Nlm_Char* type, 
+                    const Nlm_Char* dflt, 
+                    Nlm_Char* buf, 
+                    Nlm_Int2 buflen, 
+                    Nlm_Boolean searchTransient)
 {
   Nlm_env_itemPtr  eip;
   FILE             *fp;
@@ -615,136 +636,122 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
 
 #ifdef OS_MAC
 /*****************************************************************************
-*
-*   Nlm_OpenConfigFile (file, writeMode, create)
-*      returns a file pointer to the specified configuration file.
-*      1)  looks in the System Folder for "file.cnf"
-*      2)  then looks in System Folder:Preferences for "file.cnf"
-*
-*****************************************************************************/
+ *
+ *   Nlm_OpenConfigFile (file, writeMode, create)
+ *
+ *       file        char string with name of file to open or optionally create
+ *       writeMode   don't know what this does, but all calling functions seem
+ *                   to pass FALSE??
+ *       create      Boolean to create the file if it doesn't already exist
+ *
+ *  Returns:
+ *      A ncbi FILE pointer to the specified configuration file.  NULL if all
+ *      fails for some reason
+ *
+ *      1)  Finds "System Folder:Preferences" for "file.cnf"
+ *
+ *  Implementation Notes:
+ *      Implicit assumptions:
+ *      System softare is 6.0.5 or newer (Gestalt)
+ *      System softare is 7.0 or newer (FindFolder)
+ *
+ *  We find the active preferences folder and either open a pre-existing file
+ *  or create a new one with type 'TEXT' and creator '    '.  The absolute
+ *  pathname is not derived or needed, since we can use HSetVol to perform the
+ *  MacOS equivalent of a "cd" command.
+ *
+ *   pchurchill 12/10/99
+ *
+ *****************************************************************************/
 
-static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm_Boolean create)
-
+static FILE* 
+Nlm_OpenConfigFile(const Nlm_Char* file,
+                   Nlm_Boolean writeMode,
+                   Nlm_Boolean create )
 {
-  WDPBRec      block;
-  Nlm_Char     directory [PATH_MAX];
-  long         dirID;
-  OSErr        err;
-  OSType       fCreator;
-  Nlm_Int2     fError;
-  FILE         *fp;
-  FInfo        finfo;
-  OSType       fType;
-  long         gesResponse;
-  Nlm_Int2     i;
-  Nlm_Int2     len;
-  CInfoPBRec   params;
-  Nlm_Char     str [FILENAME_MAX+1];
-  SysEnvRec    sysenv;
-  Nlm_Char     temp [PATH_MAX+1];
-  Nlm_Char*  tmp;
-  short        vRefNum;
+    Nlm_Char    str [FILENAME_MAX+1];
+    Nlm_Int2    len;
+    long        gesResponse;
+    OSErr       err;
+    long        dirID, saveDirID;
+    short       vRefNum, saveVRefNum;
+    FSSpec      spec;
+    FILE        *fp = NULL;
+    int         i;
 
-  fp = NULL;
-  if (file != NULL) {
+    if( file == NULL || *file == '\0' ){
+        return NULL;
+    }
+
+    // copy no more than (FILENAME_MAX - 4) to allow for the length of our postfix
     Nlm_StringNCpy_0(str, file, sizeof(str) - 4);
     if ( ! Nlm_Qualified (str) ) {
-      Nlm_StringCat(str, ".cnf");
+        // if the user has already supplied a name with .xxx use that name
+        // otherwise add the .cnf here
+        Nlm_StringCat(str, ".cnf");
     }
+    // if the name isn't all lowercase, make it so now 
     len = (Nlm_Int2) Nlm_StringLen (str);
     for (i = 0; i < len; i++) {
       str [i] = TO_LOWER (str [i]);
     }
-    if (SysEnvirons (curSysEnvVers, &sysenv) == noErr) {
-      block.ioNamePtr = NULL;
-      block.ioVRefNum = sysenv.sysVRefNum;
-      block.ioWDIndex = 0;
-      block.ioWDProcID = 0;
-      PBGetWDInfo (&block, FALSE);
-      dirID = block.ioWDDirID;
-      vRefNum = block.ioWDVRefNum;
-      temp [0] = '\0';
-      params.dirInfo.ioNamePtr = (StringPtr) directory;
-      params.dirInfo.ioDrParID = dirID;
-      do {
-        params.dirInfo.ioVRefNum = vRefNum;
-        params.dirInfo.ioFDirIndex = -1;
-        params.dirInfo.ioDrDirID = params.dirInfo.ioDrParID;
-        err = PBGetCatInfo (&params, FALSE);
-        Nlm_PtoCstr ((Nlm_Char*) directory);
-        Nlm_StringCat (directory, DIRDELIMSTR);
-        Nlm_StringCat (directory, temp);
-        Nlm_StringCpy (temp, directory);
-      } while (params.dirInfo.ioDrDirID != fsRtDirID);
-      tmp = Nlm_StringMove (directory, temp);
-      tmp = Nlm_StringMove (tmp, str);
-      fp = Nlm_FileOpen (directory, "r");
-      if (fp == NULL) {
-        if (! Gestalt (gestaltFindFolderAttr, &gesResponse) &&
-            (gesResponse & (1 << gestaltFindFolderPresent))) {
-          err = FindFolder(kOnSystemDisk, kPreferencesFolderType,
-                           kCreateFolder, &vRefNum, &dirID);
-          if (err == noErr) {
-            params.dirInfo.ioNamePtr = (StringPtr) directory;
-            params.dirInfo.ioDrDirID = dirID;
-            params.dirInfo.ioVRefNum = vRefNum;
-            params.dirInfo.ioFDirIndex = -1;
-            err = PBGetCatInfo (&params, FALSE);
-            Nlm_PtoCstr ((Nlm_Char*) directory);
-            Nlm_StringCat (temp, directory);
-            Nlm_StringCat (temp, DIRDELIMSTR);
-            tmp = Nlm_StringMove (directory, temp);
-            tmp = Nlm_StringMove (tmp, str);
-          } else {
-            tmp = Nlm_StringMove (directory, temp);
-            tmp = Nlm_StringMove (tmp, "Preferences");
-            tmp = Nlm_StringMove (tmp, DIRDELIMSTR);
-            tmp = Nlm_StringMove (tmp, str);
-          }
-        } else {
-          tmp = Nlm_StringMove (directory, temp);
-          tmp = Nlm_StringMove (tmp, "Preferences");
-          tmp = Nlm_StringMove (tmp, DIRDELIMSTR);
-          tmp = Nlm_StringMove (tmp, str);
-        }
-        fp = Nlm_FileOpen (directory, "r");
-      }
-      if (fp == NULL && create) {
-        tmp = Nlm_StringMove (directory, temp);
-        tmp = Nlm_StringMove (tmp, str);
-        fp = Nlm_FileOpen (directory, "w");
-        Nlm_StringCpy (temp, directory);
-        Nlm_CtoPstr ((Nlm_Char*) temp);
-        fError = GetFInfo ((StringPtr) temp, 0, &finfo);
-        if (fError == 0) {
-          finfo.fdCreator = 'ttxt';
-          finfo.fdType = 'TEXT';
-          fError = SetFInfo ((StringPtr) temp, 0, &finfo);
-        }
-        Nlm_FileClose (fp);
-        fp = Nlm_FileOpen (directory, "r");
-      }
-      Nlm_StringCpy (temp, directory);
-      if (writeMode && fp != NULL) {
-        Nlm_FileClose (fp);
-        Nlm_CtoPstr ((Nlm_Char*) temp);
-        fType = 'TEXT';
-        fCreator = '    ';
-        fError = GetFInfo ((StringPtr) temp, 0, &finfo);
-        if (fError == 0) {
-          fCreator = finfo.fdCreator;
-          fType = finfo.fdType;
-        }
-        fp = Nlm_FileOpen (directory, "w");
-        fError = GetFInfo ((StringPtr) temp, 0, &finfo);
-        if (fError == 0) {
-          finfo.fdCreator = fCreator;
-          finfo.fdType = fType;
-          fError = SetFInfo ((StringPtr) temp, 0, &finfo);
-        }
-      }
+    
+    // convert to pascal string for Mac toolbox
+    Nlm_CtoPstr( str);
+
+    // Make sure we can use FindFolder() if not, then report error and
+    // return NULL
+    if ( Gestalt (gestaltFindFolderAttr, &gesResponse) != noErr ||
+        (gesResponse & (1 << gestaltFindFolderPresent) == 0)) {
+        // notify user of the error
+        Nlm_Message( MSG_OK, "We need Mac OS 7.0 or newer, continue at your own risk.");
+        return NULL;
     }
-  }
+
+    // store the current active directory
+    HGetVol( (StringPtr) 0, &saveVRefNum, &saveDirID);
+
+    // first look for file in "system", then "preferences".  Only create it
+    // in prefs if both of those fail...
+    err = FindFolder(kOnSystemDisk, kSystemFolderType,
+                       kDontCreateFolder, &vRefNum, &dirID);
+    if (err == noErr) {
+        err = FSMakeFSSpec( vRefNum, dirID, (StringPtr)str, &spec);
+    }
+
+    if( err != noErr){
+        // i.e. file not in "system"
+        // find the preferences folder in the active System folder
+        err = FindFolder(kOnSystemDisk, kPreferencesFolderType,
+                       kCreateFolder, &vRefNum, &dirID);
+        if (err == noErr) {
+            err = FSMakeFSSpec( vRefNum, dirID, (StringPtr)str, &spec);
+        }
+    }
+
+    // convert to back to C string for fopen
+    Nlm_PtoCstr( str);
+
+    if( err == noErr){      // the file is already there
+        HSetVol( (StringPtr) 0, vRefNum, dirID);
+        fp = fopen (str, "r");
+        HSetVol( (StringPtr) 0, saveVRefNum, saveDirID);
+    }
+    else if( err == fnfErr && create){
+        // no file with that name was found, create one
+        err = FSpCreate( &spec, '    ', 'TEXT', smSystemScript);
+        if( err == noErr){
+            // set the default directory (same as doing "cd" in unix)
+            // and actually open the file
+            HSetVol( (StringPtr) 0, vRefNum, dirID);
+            fp = fopen (str, "w");
+            HSetVol( (StringPtr) 0, saveVRefNum, saveDirID);
+        }
+        if( fp == NULL){
+            Nlm_Message( MSG_OK, 
+            "Couldn't create the preferences file, is the boot volume locked?");
+        }
+    }
   return fp;
 }
 #endif /* OS_MAC */
@@ -1314,6 +1321,11 @@ static void Nlm_FreeConfigStruct_ST(void)
 #endif /* else !OS_MSWIN */
 
 
+/*****************************************************************************
+*   Nlm_Qualified ()
+*      Appears to check if we've got an n.3 notation sting (i.e. if there is
+*       a "." in the last 4 chars of the string passed)
+*****************************************************************************/
 static Nlm_Boolean Nlm_Qualified( const Nlm_Char* path )
 {
   Nlm_Int4 l,k;
@@ -1683,39 +1695,22 @@ static char **targv = NULL;
 
 
 #ifdef WIN_MAC
-#ifdef __CONDITIONALMACROS__
 static FSSpec       apFileSpec;
-#endif
 static Str255       apName;
 static Handle       apParam;
 static short        apRefNum;
 
 static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
 {
-#ifdef __CONDITIONALMACROS__
-  long                 gval;
   ProcessInfoRec       pirec;
   ProcessSerialNumber  psn;
 
-  if (Gestalt (gestaltSystemVersion, &gval) == noErr && (short) gval >= 7 * 256) {
-    GetCurrentProcess (&psn);
-    pirec.processInfoLength = sizeof (ProcessInfoRec);
-    pirec.processName = NULL;
-    pirec.processAppSpec = &apFileSpec;
-    GetProcessInformation (&psn, &pirec);
-    Nlm_PtoCstr ((Nlm_Char*) apFileSpec.name);
-  } else {
-#ifdef PROC_MC680X0
-    GetAppParms (apName, &apRefNum, &apParam);
-    Nlm_PtoCstr ((Nlm_Char*) apName);
-#else
-    return FALSE;
-#endif
-  }
-#else
-  GetAppParms (apName, &apRefNum, &apParam);
-  Nlm_PtoCstr ((Nlm_Char*) apName);
-#endif
+  GetCurrentProcess (&psn);
+  pirec.processInfoLength = sizeof (ProcessInfoRec);
+  pirec.processName = NULL;
+  pirec.processAppSpec = &apFileSpec;
+  GetProcessInformation (&psn, &pirec);
+  Nlm_PtoCstr ((Nlm_Char*) apFileSpec.name);
 
   SetAppProperty("ProgramName",(void*)apName);
   return TRUE;
@@ -1724,7 +1719,6 @@ static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
 
 static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
-#ifdef __CONDITIONALMACROS__
   CInfoPBRec  block;
   Nlm_Char    path [256];
   Nlm_Char    temp [256];
@@ -1754,46 +1748,6 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
       Nlm_StringNCpy_0(buf, path, maxsize);
     }
   }
-#else
-  WDPBRec      block;
-  Nlm_Char     directory [PATH_MAX];
-  Nlm_Int4     dirID;
-  OSErr        err;
-  CInfoPBRec   params;
-  Nlm_Char     temp [PATH_MAX];
-  Nlm_Char*  tmp;
-  short        vRefNum;
-
-  if (buf != NULL && maxsize > 0) {
-    *buf = '\0';
-    if (wasSetup) {
-      memset (&block, 0, sizeof (WDPBRec));
-      block.ioNamePtr = NULL;
-      block.ioVRefNum = apRefNum;
-      block.ioWDIndex = 0;
-      block.ioWDProcID = 0;
-      PBGetWDInfo (&block, FALSE);
-      dirID = block.ioWDDirID;
-      vRefNum = block.ioWDVRefNum;
-      temp [0] = '\0';
-      params.dirInfo.ioNamePtr = (StringPtr) directory;
-      params.dirInfo.ioDrParID = dirID;
-      do {
-        params.dirInfo.ioVRefNum = vRefNum;
-        params.dirInfo.ioFDirIndex = -1;
-        params.dirInfo.ioDrDirID = params.dirInfo.ioDrParID;
-        err = PBGetCatInfo (&params, FALSE);
-        Nlm_PtoCstr ((Nlm_Char*) directory);
-        Nlm_StringCat (directory, DIRDELIMSTR);
-        Nlm_StringCat (directory, temp);
-        Nlm_StringCpy (temp, directory);
-      } while (params.dirInfo.ioDrDirID != fsRtDirID);
-      tmp = Nlm_StringMove (directory, temp);
-      tmp = Nlm_StringMove (tmp, (Nlm_Char*) apName);
-      Nlm_StringNCpy_0(buf, directory, maxsize);
-    }
-  }
-#endif
 }
 #endif /* WIN_MAC */
 
@@ -1876,6 +1830,111 @@ NLM_EXTERN void Nlm_FreeConfigStruct(void)
   NlmMutexLockEx( &corelibMutex );
   Nlm_FreeConfigStruct_ST();
   NlmMutexUnlock( corelibMutex );
+}
+
+
+NLM_EXTERN Nlm_Boolean Nlm_ParseCmdLineArguments
+(const char* prog_name, const char* cmd_line, int* argc_ptr, char*** argv_ptr,
+ ECmdLineQuote quote_handling)
+{
+  char*  str;
+  char*  p;
+  int    xx_argc;
+  char** xx_argv;
+
+  /* Check args */
+  if (!argc_ptr  ||  !argv_ptr)
+    return FALSE;
+
+  /* Figure out program name */
+  if ( !prog_name )
+    prog_name = (const char *) GetAppProperty("ProgramName");
+  if ( !prog_name )
+    prog_name = "";
+
+  /* Special case -- no cmd.-line parameters */
+  if ( cmd_line ) {
+    const char* sss;
+    for (sss = cmd_line;  *sss  &&  isspace(*sss);  sss++) continue;
+    if ( !*sss )
+      cmd_line = 0;
+  }
+  if ( !cmd_line ) {
+    *argc_ptr = 1;
+    *argv_ptr = (char**) Nlm_MemNew(2 * sizeof(char*));
+    (*argv_ptr[0]) = Nlm_StringSave(prog_name);
+    return TRUE;
+  }
+
+  /* Allocate string to hold "argv[]" values and fill it with
+   * the program name and the command string */
+  {{
+    size_t size = strlen(prog_name) + strlen(cmd_line) + 2;
+    str = (char*) Nlm_MemNew(size);
+
+    strcpy(str, prog_name);
+    strcpy(str + strlen(prog_name) + 1, cmd_line);
+  }}
+
+  /* Count command-line arguments and separate them by '\0' */
+  xx_argc = 1;
+  for (p = str + strlen(prog_name) + 1;  *p; ) {
+    if ( isspace(*p) ) {
+      *p++ = '\0';
+      continue;
+    }
+
+    if (quote_handling == eProcessQuotes  &&  (*p == '\''  ||  *p == '"')) {
+      char quote = *p;
+      xx_argc++;
+      while (*(++p)  &&  *p != quote) continue;
+      if ( *p )
+        *p++ = '\0';
+      continue;
+    }
+
+    xx_argc++;
+    while (*p  &&  !isspace(*p))
+      p++;
+  }
+
+  /* Allocate and fill out "xx_argv" */
+  {{
+    int   n = 1;
+    char *s = str + strlen(prog_name) + 1;
+    xx_argv = (char**) Nlm_MemNew((xx_argc + 1) * sizeof(char*));
+    xx_argv[0] = str;
+    while (n < xx_argc) {
+      while ( !*s )
+        s++;
+      if (quote_handling == eProcessQuotes  &&  (*s == '\''  ||  *s == '"'))
+        s++; /* -- skip the leading quote */
+      xx_argv[n++] = s;
+      while ( *s )
+        s++;
+    }
+    xx_argv[n] = 0;
+#ifdef _DEBUG
+    while (s < p  &&  !*s)
+      s++;
+    ASSERT ( s == p );
+#endif
+  }}
+
+  *argc_ptr = xx_argc;
+  *argv_ptr = xx_argv;
+  return TRUE;
+}
+
+
+NLM_EXTERN void Nlm_FreeCmdLineArguments(char** argv)
+{
+  if ( !argv )
+    return;
+
+  ASSERT( argv[0] );
+  Nlm_MemFree( argv[0] );
+  Nlm_MemFree( argv );
 }
 
 

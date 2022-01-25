@@ -34,6 +34,47 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.56  2000/01/20 18:37:13  madden
+* Add vecscrn.h to includes
+*
+* Revision 1.55  2000/01/20 18:33:36  madden
+* Use VSMakeSeqLoc in place of VSMakeDisplaySeqLoc
+*
+* Revision 1.54  2000/01/20 14:35:06  madden
+* Updated VecScreen calls
+*
+* Revision 1.53  1999/12/03 16:43:22  egorov
+* Add additional mutex in formating, which protects network fetch callbacks
+* from MT-unsafe operations.
+*
+* Revision 1.52  1999/12/02 22:14:27  shavirin
+* Fixed bug with printing H parameter in the bottom of Blast output.
+*
+* Revision 1.51  1999/11/24 21:42:30  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 1.50  1999/11/16 15:52:55  egorov
+* Put additional mutex to protect GenericGetService function
+*
+* Revision 1.49  1999/11/12 16:35:00  shavirin
+* Added adjustement of use_best_align parameters in OptionsToParameters
+* and parameteresTooptions().
+*
+* Revision 1.48  1999/11/05 16:59:30  madden
+* Fix more leaks
+*
+* Revision 1.47  1999/11/05 15:30:08  madden
+* Fix some memory leaks
+*
+* Revision 1.46  1999/10/27 15:57:52  madden
+* Changes for use_real_db_size
+*
+* Revision 1.45  1999/10/27 13:00:02  madden
+* Changes to return-parts
+*
+* Revision 1.44  1999/09/22 14:06:26  madden
+* NULL out gilist to prevent double freeing
+*
 * Revision 1.43  1999/08/19 19:37:48  shavirin
 * Added new functions corresponding to the PHI/PSI Blast.
 *
@@ -162,6 +203,7 @@
 #include <jzmisc.h>
 #include <blastpat.h>
 #include <netblap3.h>
+#include <vecscrn.h>
 
 
 #define BLAST_SERVER_RETRIES  2
@@ -479,8 +521,11 @@ static Boolean BlastInitEx (CharPtr program_name, BlastNet3Hptr bl3hp, BlastResp
        	 	ErrPostEx(SEV_ERROR, 0, 0, "NI_ServiceGet [%s] (%s)", ni_errlist[ni_errno], ni_errtext);
 		return FALSE;
 	}
-	
+
+	NlmMutexLockEx(&dispatcher_lock);
     	svcp = NI_GenericGetService(dispatcher, NULL, "NETBLAST", "blast3", FALSE);
+	NlmMutexUnlock(dispatcher_lock);
+
     	if (svcp == NULL)
     	{
        	 	ErrPostEx(SEV_ERROR, 0, 0, "NI_ServiceGet [%s] (%s)", ni_errlist[ni_errno], ni_errtext);
@@ -510,7 +555,7 @@ static Boolean BlastInitEx (CharPtr program_name, BlastNet3Hptr bl3hp, BlastResp
 *
 *****************************************************************************/
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 BlastInit (CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNTR respp)
 
 {
@@ -518,8 +563,8 @@ BlastInit (CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNT
 
 	if (bl3hpp == NULL)
 	{
-       	 	ErrPostEx(SEV_ERROR, 0, 0, "BlastInitMT, BlastNet3Hptr PNTR is NULL");
-		return FALSE;
+     ErrPostEx(SEV_ERROR, 0, 0, "BlastInitMT, BlastNet3Hptr PNTR is NULL");
+     return FALSE;
 	}
 
 	bl3hp_pri = (BlastNet3Hptr) MemNew(sizeof(BlastNet3Hptr));
@@ -560,7 +605,7 @@ static Boolean s_BlastFini (BlastNet3Hptr bl3hptr)
 
 /* the only thing done here is to suppress errors */
 
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BlastFini (BlastNet3Hptr bl3hptr)
 
 {
@@ -580,7 +625,7 @@ BlastFini (BlastNet3Hptr bl3hptr)
     return retval;
 }
 
-BlastParametersPtr LIBCALL
+NLM_EXTERN BlastParametersPtr LIBCALL
 BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 
 {
@@ -638,6 +683,11 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->strand_option = options->strand_option;
 
         parameters->phi_pattern = StringSave(options->phi_pattern);
+        parameters->use_real_db_size = options->use_real_db_size;
+#if 0
+        parameters->db_dir_prefix = StringSave(options->db_dir_prefix);
+#endif
+        parameters->use_best_align = options->use_best_align;
         
 	return parameters;
 }
@@ -646,10 +696,8 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 	Translates the BlastDbinfoPtr into TxDfDbInfoPtr.
 */
 
-TxDfDbInfoPtr LIBCALL
+NLM_EXTERN TxDfDbInfoPtr LIBCALL
 NetDbinfo2TxDbinfo(BlastDbinfoPtr net_dbinfo)
-
-
 {
 	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 
@@ -671,7 +719,7 @@ NetDbinfo2TxDbinfo(BlastDbinfoPtr net_dbinfo)
 	return dbinfo_head;
 }
 
-BlastNet3BlockPtr LIBCALL
+NLM_EXTERN BlastNet3BlockPtr LIBCALL
 BlastNet3BlockDestruct(BlastNet3BlockPtr blnet)
 
 {
@@ -679,6 +727,9 @@ BlastNet3BlockDestruct(BlastNet3BlockPtr blnet)
 	if (blnet == NULL)
 		return NULL;
 
+	/* The entire gilist is not copied, so this prevents an error. */
+	if (blnet->parameters)
+		blnet->parameters->gilist = NULL;
 	BlastParametersFree(blnet->parameters);
 	/* individual elements freed elsewhere. */
 	response = blnet->response;
@@ -698,7 +749,7 @@ BlastNet3BlockDestruct(BlastNet3BlockPtr blnet)
 /*
 	Creates a new BlastNet3BlockNew, used for searching.
 */
-BlastNet3BlockPtr LIBCALL
+NLM_EXTERN BlastNet3BlockPtr LIBCALL
 BlastNet3BlockNew(CharPtr program, CharPtr dbname)
 
 {
@@ -761,7 +812,7 @@ static BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choi
 }
 
 
-BlastDbinfoPtr LIBCALL
+NLM_EXTERN BlastDbinfoPtr LIBCALL
 BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
 
 {
@@ -784,7 +835,11 @@ BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
 	response = GetResponsePtr(response, BlastResponse_db_info_specific);
 
 	if (response)
+	{
 		dbinfo = (BlastDbinfoPtr) response->data.ptrvalue;
+		response->data.ptrvalue = NULL;
+		BlastResponseFree(response);
+	}
 
 	dbinfo_get->name = NULL;	/* Not owned by this function. */
         BlastRequestFree(request);
@@ -792,7 +847,7 @@ BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
 	return dbinfo;
 }
 
-BlastDbinfoPtr LIBCALL
+NLM_EXTERN BlastDbinfoPtr LIBCALL
 BlastGetDbInfo (BlastNet3BlockPtr blnet3blkptr)
 
 {
@@ -821,7 +876,7 @@ BlastGetDbInfo (BlastNet3BlockPtr blnet3blkptr)
 	return dbinfo_head;
 }
 
-BlastMatrixPtr LIBCALL
+NLM_EXTERN BlastMatrixPtr LIBCALL
 NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr)
 
 {
@@ -837,7 +892,7 @@ NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr)
 	return matrix;
 }
 
-CharPtr LIBCALL
+NLM_EXTERN CharPtr LIBCALL
 BlastGetParameterBuffer (BlastNet3BlockPtr blnet3blkptr)
 
 {
@@ -855,7 +910,7 @@ BlastGetParameterBuffer (BlastNet3BlockPtr blnet3blkptr)
 /*
 	Find the BlastKABlkPtr of the type (gapped or ungapped) specified.
 */
-BlastKABlkPtr LIBCALL
+NLM_EXTERN BlastKABlkPtr LIBCALL
 BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 
 {
@@ -883,7 +938,7 @@ BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 /*
 	Converts 'standard' BLAST matrix to network matrix. 
 */
-BlastMatrixPtr LIBCALL
+NLM_EXTERN BlastMatrixPtr LIBCALL
 BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
 
 {
@@ -929,7 +984,7 @@ BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
 /*
 	Coverts the 'network' matrix to a 'tools' matrix.
 */
-BLAST_MatrixPtr LIBCALL
+NLM_EXTERN BLAST_MatrixPtr LIBCALL
 BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
 
 {
@@ -965,7 +1020,7 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
 	return blast_matrix;
 }
 
-ValNodePtr LIBCALL
+NLM_EXTERN ValNodePtr LIBCALL
 BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
 
 {
@@ -981,7 +1036,11 @@ BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
 		if (response)
 		{
 			blast_mask = (BlastMaskPtr) response->data.ptrvalue;
+			/* location is turned over to calling routine to be deallocated. */
 			ValNodeAddPointer(&mask_loc, blast_mask->frame, blast_mask->location);
+			blast_mask->location = NULL;
+			BlastMaskFree(blast_mask);
+			response->data.ptrvalue;
 			response = response->next;	
 		}
 	}
@@ -1021,7 +1080,7 @@ PrivateBlastGetBioseq(BlastNet3Hptr bl3hptr, CharPtr database, SeqIdPtr sip, Boo
 	return bsp;
 }
 
-BioseqPtr LIBCALL
+NLM_EXTERN BioseqPtr LIBCALL
 BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip)
 
 {
@@ -1037,7 +1096,7 @@ BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip)
 
 */
 
-SeqAlignPtr LIBCALL
+NLM_EXTERN SeqAlignPtr LIBCALL
 BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status)
 
 {
@@ -1090,9 +1149,68 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean 
 	return seqalign;
 }
 
+/*
+	Functions to submit BLAST runs and get back parts.
+
+*/
+
+static BlastPartsPtr 
+BlastBioseqByParts (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status)
+
+{
+	BlastRequestPtr request = NULL;
+	BlastSearchPtr search = NULL;
+	BlastResponsePtr response;
+	ValNodePtr node;
+	BlastPartsPtr blast_parts=NULL;
+	Uint1 err_id;
+
+#if 0        
+	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id);
+#endif        
+
+	search = BlastSearchNew();
+	search->program = blnet3blkptr->prog_type;
+/*
+	search->query = (struct struct_Bioseq *) blnet3blkptr->bsp;
+*/
+	search->query = blnet3blkptr->bsp;
+	search->database = blnet3blkptr->dbname;
+	search->parameters = blnet3blkptr->parameters;
+	search->mask = blnet3blkptr->mask;
+	search->matrix = BlastMatrixToBlastNetMatrix(blnet3blkptr->blast_matrix);
+	search->return_parts = TRUE;
+	ValNodeAddPointer(&request, BlastRequest_search, search);
+	*status = SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback, TRUE);
+	
+	blnet3blkptr->response = response;
+	node = GetResponsePtr(response, BlastResponse_parts);
+	if (node)
+            blast_parts = (BlastPartsPtr) node->data.ptrvalue;
+	
+	if (error_returns)
+	{
+	    node = GetResponsePtr(response, BlastResponse_error);
+	    if (node)
+	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
+	}
+
+	/* These four are not allocated here. */
+	search->query = NULL;
+	search->database = NULL;
+	search->parameters = NULL;
+	search->mask = NULL;
+        BlastRequestFree(request);
+#if 0        
+	BlastDeleteUserErrorString(err_id);
+#endif        
+
+	return blast_parts;
+}
+
 /* ------------ Set os functions to support PHI-Blast ----------- */
 
-BlastPhialignPtr LIBCALL
+NLM_EXTERN BlastPhialignPtr LIBCALL
 SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, 
             Boolean PNTR status, ValNodePtr PNTR vnp_out)
      
@@ -1153,7 +1271,7 @@ SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns,
     return bphp;
 }
 
-BlastPhialignPtr LIBCALL
+NLM_EXTERN BlastPhialignPtr LIBCALL
 SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, 
                   CharPtr database, BLAST_OptionsBlkPtr options, 
                   ValNodePtr *other_returns, ValNodePtr *error_returns, 
@@ -1249,7 +1367,7 @@ SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program,
 
 /* -------------------------------------------------------------- */
 
-CharPtr LIBCALL 
+NLM_EXTERN CharPtr LIBCALL 
 Blast3GetMotd(BlastNet3Hptr bl3hptr)
 
 {
@@ -1271,7 +1389,7 @@ Blast3GetMotd(BlastNet3Hptr bl3hptr)
 	return string;
 }
 
-BlastDbinfoPtr LIBCALL 
+NLM_EXTERN BlastDbinfoPtr LIBCALL 
 Blast3GetDbinfo(BlastNet3Hptr bl3hptr)
 
 {
@@ -1408,7 +1526,11 @@ static void BlastNetFetchCleanup (TNlmTls tls, VoidPtr ptr)
 {
 	BlastNetFetchStructPtr bnfsp = (BlastNetFetchStructPtr) ptr;
 
-	MemFree(bnfsp);
+	if (bnfsp)
+	{
+		bnfsp->dbname = MemFree(bnfsp->dbname);
+		MemFree(bnfsp);
+	}
 	return;
 }
 
@@ -1543,7 +1665,7 @@ BlastNetFetchCompare (BlastNetFetchStructPtr blfsp1, BlastNet3Hptr bl3hp, CharPt
 
 **********************************************************************/
 
-Boolean LIBCALL 
+NLM_EXTERN Boolean LIBCALL 
 BlastNetBioseqFetchEnable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na, Boolean now)
 
 {
@@ -1610,7 +1732,7 @@ BlastNetBioseqFetchEnable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na, Bo
 *	Calls readdb_destruct if necessary to deallocate resources.
 *
 *****************************************************************************/
-void LIBCALL BlastNetBioseqFetchDisable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na)
+NLM_EXTERN void LIBCALL BlastNetBioseqFetchDisable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na)
 {
         ObjMgrPtr omp;
         ObjMgrProcPtr ompp;
@@ -1642,7 +1764,7 @@ void LIBCALL BlastNetBioseqFetchDisable(BlastNet3Hptr bl3hp, CharPtr dbname, Boo
 	Note that the network connection must be established beforehand
 	(i.e., BlastNet3BlockPtr blnet should be initialized).
 */
-SeqAlignPtr LIBCALL
+NLM_EXTERN SeqAlignPtr LIBCALL
 BlastBioseqNet(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback)
 
 {
@@ -1651,7 +1773,7 @@ BlastBioseqNet(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr data
 	return BlastBioseqNetCore(bl3hp, bsp, program, database, options, other_returns, error_returns, callback, NULL, &status);
 }
 
-SeqAlignPtr LIBCALL
+NLM_EXTERN SeqAlignPtr LIBCALL
 BlastSeqLocNet(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback)
 
 {
@@ -1661,7 +1783,7 @@ BlastSeqLocNet(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr data
 }
 
 
-SeqAlignPtr LIBCALL
+NLM_EXTERN SeqAlignPtr LIBCALL
 BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status)
 
 {
@@ -1752,7 +1874,98 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 	return seqalign;
 }
 
-SeqAlignPtr LIBCALL
+NLM_EXTERN BlastPartsPtr LIBCALL
+BlastBioseqNetReturnParts(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status)
+
+{
+	BlastKABlkPtr ka_blk;
+	BlastDbinfoPtr dbinfo;
+	BlastMatrixPtr net_matrix;
+	BLAST_MatrixPtr matrix;
+	BlastNet3BlockPtr blnet;
+	BlastPartsPtr blast_parts;
+	Boolean options_allocated = FALSE;
+	CharPtr params_buffer;
+	Int2 status;
+	TxDfDbInfoPtr txdbinfo;
+	ValNodePtr descr, mask;
+
+	if (bl3hp == NULL || bsp == NULL || program == NULL || database == NULL)
+		return NULL;
+
+	if (error_returns)
+		*error_returns = NULL;
+
+	if (other_returns)
+		*other_returns = NULL;
+
+	/* If no options, use default. */
+	if (options == NULL)
+	{
+		options = BLASTOptionNew(program, FALSE);
+		options_allocated = TRUE;
+	}
+
+	status = BLASTOptionValidateEx(options, program, error_returns);
+	if (status != 0)
+	{	/* error messages in other_returns? */
+		return NULL;
+	}
+
+	blnet = BlastNet3BlockNew(program, database);
+	/* 
+	Remove the Seq-descr as this is not needed for 
+	BLASTing and the title often contains none-ASCII
+	characters.  Keep the pointer and replace. 
+	*/
+	descr = bsp->descr;
+	bsp->descr = NULL;
+
+	blnet->bsp = bsp;
+	blnet->parameters = BlastOptionsToParameters(options);
+        if (options_allocated)
+        {
+                options = BLASTOptionDelete(options);
+        }
+
+	blnet->callback = callback;
+	blnet->bl3hptr = bl3hp;
+	blnet->blast_matrix = blast_matrix;
+
+	blast_parts = BlastBioseqByParts(blnet, error_returns, ret_status);
+	if (other_returns)
+	{
+		*other_returns = NULL;
+		mask = BlastGetMaskedLoc(blnet);
+		if (mask)
+			ValNodeLink(other_returns, mask);
+		dbinfo = BlastGetDbInfo(blnet);
+		txdbinfo = NetDbinfo2TxDbinfo(dbinfo);
+		ValNodeAddPointer (other_returns, TXDBINFO, txdbinfo);
+		dbinfo = BlastDbinfoFree(dbinfo);
+		params_buffer = BlastGetParameterBuffer(blnet);
+		ValNodeAddPointer(other_returns, TXPARAMETERS, params_buffer);
+		ka_blk = BlastGetKaParams(blnet, FALSE);
+		if (ka_blk)
+			ValNodeAddPointer (other_returns, TXKABLK_NOGAP, ka_blk);
+		ka_blk = BlastGetKaParams(blnet, TRUE);
+		if (ka_blk)
+			ValNodeAddPointer (other_returns, TXKABLK_GAP, ka_blk);
+		net_matrix = NetBlastGetMatrix(blnet);
+		matrix = BlastNetMatrixToBlastMatrix(net_matrix);
+		net_matrix = BlastMatrixFree(net_matrix);
+		if (matrix)
+			ValNodeAddPointer (other_returns, TXMATRIX, matrix);
+	}
+
+	blnet = BlastNet3BlockDestruct(blnet);
+
+	bsp->descr = descr;
+
+	return blast_parts;
+}
+
+NLM_EXTERN SeqAlignPtr LIBCALL
 BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status)
 
 {
@@ -1858,7 +2071,7 @@ BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr 
 	return seqalign;
 }
 
-#if EA
+#if 0
 FILE *global_fp;
 #endif
 
@@ -1867,7 +2080,7 @@ callback (BlastResponsePtr brp, Boolean PNTR cancel)
 
 {
 
-#if EA
+#if 0
         fprintf(global_fp, ".");
         fflush(global_fp);
 #endif
@@ -1879,186 +2092,178 @@ static Boolean
 TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
 
 {
-	BlastDbinfoPtr dbinfo;
-	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
-	BlastPruneSapStructPtr prune;
-	BLAST_MatrixPtr matrix;
-	Boolean query_is_na, db_is_na;
-	Boolean status;
-	CharPtr params_buffer=NULL;
-	Int4 number_of_hits_private=0, length;
-	SeqAlignPtr seqalign;
-        SeqAnnotPtr seqannot=NULL;
-	TxDfDbInfoPtr tx_dbinfo=NULL, tx_dbinfo_head;
-	ValNodePtr mask_loc, other_returns, error_returns, vnp, vnp1=NULL;
-        Uint1 align_type;
-        Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
-
-        MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
-        MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
-
-	if (bsp == NULL && slp == NULL)
-		return FALSE;
-
-	if (bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
-		return FALSE;
-
-#if EA
-NlmMutexLockEx(&formating_mutex);
+    BlastDbinfoPtr dbinfo;
+    BlastKABlkPtr ka_params=NULL, ka_params_gap=NULL;
+    BlastPruneSapStructPtr prune;
+    BLAST_MatrixPtr matrix;
+    Boolean query_is_na, db_is_na;
+    Boolean status;
+    CharPtr params_buffer=NULL;
+    Int4 number_of_hits_private=0, length;
+    SeqAlignPtr seqalign;
+    SeqAnnotPtr seqannot=NULL;
+    TxDfDbInfoPtr tx_dbinfo=NULL, tx_dbinfo_head;
+    ValNodePtr mask_loc, mask_loc_start, other_returns, error_returns, vnp, vnp1=NULL;
+    Uint1 align_type;
+    Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
+    
+    MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+    MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+    
+    if (bsp == NULL && slp == NULL)
+        return FALSE;
+    
+    if (bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
+        return FALSE;
+    
+    align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
+#if 0
+    global_fp = outfp;
 #endif
+    
+    init_buff_ex(85);
+    dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
+    if (dbinfo)
+        PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, outfp, html);
+    dbinfo = BlastDbinfoFree(dbinfo);
+    free_buff();
+    
+    fprintf(outfp, "Searching");
+    
+    if (bsp)
+        seqalign = BlastBioseqNetCore(bl3hp, bsp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
+    else
+        seqalign = BlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
+    
+    fprintf(outfp, "done");
+    
+    if (overview) {
+        fprintf(outfp, "\n\n");
+        if (bsp)
+            length= bsp->length;
+        else
+            length= SeqLocLen(slp);
+        
+        VSMakeSeqLoc(&seqalign, &vnp1, length, NULL);
+        VSPrintOverviewFromSeqLocs(vnp1, length, outfp);
+    }
+    
+    BlastErrorPrintExtra(error_returns, TRUE, outfp);
+    
+    mask_loc = NULL;
+    for (vnp=other_returns; vnp; vnp = vnp->next) {
+        switch (vnp->choice) {
+        case TXDBINFO:
+            tx_dbinfo = (TxDfDbInfoPtr) vnp->data.ptrvalue;
+            break;
+        case TXKABLK_NOGAP:
+            ka_params = (BlastKABlkPtr) vnp->data.ptrvalue;
+            break;
+        case TXKABLK_GAP:
+            ka_params_gap = (BlastKABlkPtr) vnp->data.ptrvalue;
+            break;
+        case TXPARAMETERS:
+            params_buffer = (CharPtr) vnp->data.ptrvalue;
+            break;
+        case TXMATRIX:
+            /* This function should not use matrix */
+            matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
+            BLAST_MatrixDestruct(matrix);
+            break;
+        case SEQLOC_MASKING_NOTSET:
+        case SEQLOC_MASKING_PLUS1:
+        case SEQLOC_MASKING_PLUS2:
+        case SEQLOC_MASKING_PLUS3:
+        case SEQLOC_MASKING_MINUS1:
+        case SEQLOC_MASKING_MINUS2:
+        case SEQLOC_MASKING_MINUS3:
+            ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+            break;
+        default:
+            break;
+        }
+    }	
+    
+    NlmMutexLockEx(&formating_mutex);
+    
+    if (seqalign) {
+        seqannot = SeqAnnotNew();
+        seqannot->type = 2;
+        AddAlignInfoToSeqAnnot(seqannot, align_type);
+        seqannot->data = seqalign;
+        prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
+        ObjMgrSetHold();
+        init_buff_ex(85);
+        PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
+        free_buff();
+        
+        prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
+        seqannot->data = prune->sap;
+        if (align_options & TXALIGN_MASTER)
+            ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, NULL);
+        else
+            ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, FormatScoreFunc);
+        seqannot->data = seqalign;
+        number_of_hits_private = prune->original_number; 
+        prune = BlastPruneSapStructDestruct(prune);
+        ObjMgrClearHold();
+    }
+    
+    mask_loc_start = mask_loc;
+    while (mask_loc) {
+        SeqLocSetFree(mask_loc->data.ptrvalue);
+        mask_loc = mask_loc->next;
+    }
+    ValNodeFree(mask_loc_start);
+    
+    if (verbose) {
+        init_buff_ex(85);
+        tx_dbinfo_head = tx_dbinfo;
+        while (tx_dbinfo) {
+            PrintDbReport(tx_dbinfo, 70, outfp);
+            tx_dbinfo = tx_dbinfo->next;
+        }
+        tx_dbinfo_head = TxDfDbInfoDestruct(tx_dbinfo_head);
+        
+        if (ka_params) {
+            PrintKAParameters(ka_params->lambda, ka_params->k, ka_params->h, 70, outfp, FALSE);
+            MemFree(ka_params);
+        }
 
-	align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
-#if EA
-	global_fp = outfp;
-#endif
+        if (ka_params_gap) {
+            PrintKAParameters(ka_params_gap->lambda, ka_params_gap->k, ka_params_gap->h, 70, outfp, TRUE);
+            MemFree(ka_params_gap);
+        }
+        
+        PrintTildeSepLines(params_buffer, 70, outfp);
+        MemFree(params_buffer);
+        free_buff();
+    }
+    
+    other_returns = ValNodeFree(other_returns);
+    
+    NlmMutexUnlock(formating_mutex);
 
-       	init_buff_ex(85);
-	dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
-	if (dbinfo)
-       		PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, outfp, html);
-	dbinfo = BlastDbinfoFree(dbinfo);
-       	free_buff();
-#if EA
-NlmMutexUnlock(formating_mutex);
-#endif
-
-	fprintf(outfp, "Searching");
-
-	if (bsp)
-		seqalign = BlastBioseqNetCore(bl3hp, bsp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
-	else
-		seqalign = BlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
-
-	fprintf(outfp, "done");
-		
-	if (overview)
-	{
-		fprintf(outfp, "\n\n");
-		if (bsp)
-			length= bsp->length;
-		else
-			length= SeqLocLen(slp);
-
-		MakeDisplaySeqLoc(&seqalign, &vnp1, length);
-                PrintOverviewFromSeqLocs(vnp1, length, outfp);
-	}
-
-	BlastErrorPrintExtra(error_returns, TRUE, outfp);
-	
-	mask_loc = NULL;
-	for (vnp=other_returns; vnp; vnp = vnp->next)
-	{
-			switch (vnp->choice) {
-				case TXDBINFO:
-					tx_dbinfo = (TxDfDbInfoPtr) vnp->data.ptrvalue;
-					break;
-				case TXKABLK_NOGAP:
-					ka_params = (BLAST_KarlinBlkPtr) vnp->data.ptrvalue;
-					break;
-				case TXKABLK_GAP:
-					ka_params_gap = (BLAST_KarlinBlkPtr) vnp->data.ptrvalue;
-					break;
-				case TXPARAMETERS:
-					params_buffer = (CharPtr) vnp->data.ptrvalue;
-					break;
-				case TXMATRIX:
-        /* This function should not use matrix */
-					matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
-                                        BLAST_MatrixDestruct(matrix);
-					break;
-				case SEQLOC_MASKING_NOTSET:
-				case SEQLOC_MASKING_PLUS1:
-				case SEQLOC_MASKING_PLUS2:
-				case SEQLOC_MASKING_PLUS3:
-				case SEQLOC_MASKING_MINUS1:
-				case SEQLOC_MASKING_MINUS2:
-				case SEQLOC_MASKING_MINUS3:
-					ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
-					break;
-				default:
-					break;
-			}
-	}	
-
-#if EA
-NlmMutexLockEx(&formating_mutex);
-#endif
-
-	if (seqalign)
-	{
-		seqannot = SeqAnnotNew();
-        	seqannot->type = 2;
-		AddAlignInfoToSeqAnnot(seqannot, align_type);
-        	seqannot->data = seqalign;
-		prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
-		ObjMgrSetHold();
-       		init_buff_ex(85);
-                PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
-                free_buff();
-
-		prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
-		seqannot->data = prune->sap;
-		if (align_options & TXALIGN_MASTER)
-			ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, NULL);
-		else
-			ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, FormatScoreFunc);
-		seqannot->data = seqalign;
-		number_of_hits_private = prune->original_number; 
-		prune = BlastPruneSapStructDestruct(prune);
-		ObjMgrClearHold();
-	}
-
-	if (verbose)
-	{
-       		init_buff_ex(85);
-		tx_dbinfo_head = tx_dbinfo;
-		while (tx_dbinfo)
-		{
-                	PrintDbReport(tx_dbinfo, 70, outfp);
-			tx_dbinfo = tx_dbinfo->next;
-		}
-		tx_dbinfo_head = TxDfDbInfoDestruct(tx_dbinfo_head);
-
-		if (ka_params)
-		{
-                	PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
-			MemFree(ka_params);
-		}
-
-		if (ka_params_gap)
-		{
-                	PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
-			MemFree(ka_params_gap);
-		}
-
-                PrintTildeSepLines(params_buffer, 70, outfp);
-                MemFree(params_buffer);
-                free_buff();
-	}
-
-#if EA
-NlmMutexUnlock(formating_mutex);
-#endif
-	if (seqannot)
-		seqannot = SeqAnnotFree(seqannot);
-
-	if (number_of_hits)
-		*number_of_hits = number_of_hits_private;
-
-	return status;
+    if (seqannot)
+        seqannot = SeqAnnotFree(seqannot);
+    
+    if (number_of_hits)
+        *number_of_hits = number_of_hits_private;
+    
+    return status;
 }
 /*
-	Formats a 'traditional' BLAST report.
+  Formats a 'traditional' BLAST report.
 */
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits)
 
 {
 	return TraditionalBlastReportEngine(NULL, bsp, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, BLAST_OVERVIEW_NONE);
 }
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 TraditionalBlastReportExtra(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
 
 {
@@ -2066,14 +2271,14 @@ TraditionalBlastReportExtra(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet
 }
 
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 TraditionalBlastReportLoc(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits)
 
 {
 	return TraditionalBlastReportEngine(slp, NULL, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, BLAST_OVERVIEW_NONE);
 }
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
 
 {
@@ -2086,7 +2291,7 @@ TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, Blast
         BLAST_OptionsBlkPtr (used by blast).
 */
 
-BLAST_OptionsBlkPtr
+NLM_EXTERN BLAST_OptionsBlkPtr
 parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr PNTR error_return)
 
 {
@@ -2163,6 +2368,13 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                     options->phi_pattern = StringSave(parameters->phi_pattern);
                     options->isPatternSearch = TRUE;
                 }
+        	options->use_real_db_size = parameters->use_real_db_size;
+#if 0
+                if(parameters->db_dir_prefix) {
+                    options->db_dir_prefix = StringSave(parameters->db_dir_prefix);
+		}
+#endif
+        	options->use_best_align = parameters->use_best_align;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {

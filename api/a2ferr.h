@@ -10,6 +10,7 @@
 #define ERR_ACCESSION  3,0
 #define ERR_ACCESSION_BadAccessNum  3,1
 #define ERR_ACCESSION_NoAccessNum  3,2
+#define ERR_ACCESSION_No_VERSION_Number  3,3
 #define ERR_LOCUS  4,0
 #define ERR_LOCUS_ChangedLocusName  4,1
 #define ERR_LOCUS_BadLocusName  4,2

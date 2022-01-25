@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.9 $
+* $Revision: 6.13 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -92,11 +92,12 @@ typedef enum {
   DATE_BLOCK,
   KEYWORDS_BLOCK,
   SEGMENT_BLOCK,
+  SOURCE_BLOCK,
   ORGANISM_BLOCK,
   REFERENCE_BLOCK,
   COMMENT_BLOCK,
   FEATHEADER_BLOCK,
-  SOURCE_BLOCK,
+  SOURCEFEAT_BLOCK,
   FEATURE_BLOCK,
   BASECOUNT_BLOCK,
   ORIGIN_BLOCK,
@@ -109,7 +110,8 @@ typedef enum {
   Uint2             entityID;  \
   Uint2             itemID;    \
   Uint2             itemtype;  \
-  Int2              section;   \
+  Int4              section;   \
+  Int4              paragraph; \
   BlockType         blocktype; \
   CharPtr           string;    \
 
@@ -123,12 +125,11 @@ typedef struct asn2gb_base_block {
 /* organism block includes SOURCE and ORGANISM sections */
 /* source (feat) block should be the same as the organism block */
 
-/* references are grouped by published, unpublished, sites, and cit-subs */
+/* references are grouped by published, unpublished, and cit-subs */
 
 typedef enum {
   REF_CAT_PUB = 1,
   REF_CAT_UNP,
-  REF_CAT_SIT,
   REF_CAT_SUB
 } RefType;
 
@@ -139,6 +140,7 @@ typedef struct reference_block {
   CharPtr           uniquestr;
   Int2              serial;
   RefType           category;
+  Boolean           sites;
 } ReferenceBlock, PNTR ReferenceBlockPtr;
 
 /* featdeftype allows specific feature classes to be identified */
@@ -178,7 +180,7 @@ typedef struct asn2gbsection {
   /* local array pointing to all blocks in this section */
 
   BaseBlockPtr       PNTR blockArray;
-  Int2               numBlocks;
+  Int4               numBlocks;
 
   /* referenceks for feature citation matching, serial number assignment */
 
@@ -210,12 +212,16 @@ typedef struct asn2gb_job {
   /* each accession report from LOCUS to // is a single section */
 
   Asn2gbSectionPtr    PNTR sectionArray;
-  Int2                numSections;
+  Int4                numSections;
 
   /* master array pointing to all blocks in all sections */
 
   BaseBlockPtr        PNTR paragraphArray;
-  Int2                numParagraphs;
+  Int4                numParagraphs;
+
+  /* sorted array to get paragraphs for entityID/itemtype/itemID */
+
+  BaseBlockPtr        PNTR paragraphByIDs;
 
 } Asn2gbJob, PNTR Asn2gbJobPtr;
 
@@ -239,7 +245,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (BioseqPtr bsp, BioseqSetPtr bssp,
                                         SeqLocPtr slp, FmtType format,
                                         ModType mode, StlType style);
 
-NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int2 paragraph);
+NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int4 paragraph);
 
 NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (Asn2gbJobPtr ajp);
 

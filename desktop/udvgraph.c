@@ -29,13 +29,71 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.14 $
+* $Revision: 6.33 $
 *
-* File Description: 
-*
+* File Description: mouse management, graphic engine of the sequence viewer
+*                   part of this code is also used for the WWW Entrez viewer
+*                   (WWW_UDV define)
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvgraph.c,v $
+* Revision 6.33  2000/01/08 00:47:54  lewisg
+* fixes to selection, update, color
+*
+* Revision 6.32  2000/01/05 21:06:36  durand
+* update mouse click actions and DrawSequence function for a better use from ddv and cn3d
+*
+* Revision 6.31  1999/12/29 22:55:03  lewisg
+* get rid of seqalign id
+*
+* Revision 6.30  1999/12/15 23:17:47  lewisg
+* make cn3d launch udv, fix launching of non-autonomous udv, add mouseup message
+*
+* Revision 6.29  1999/12/02 13:48:16  durand
+* fix a bug for Entrez sequence viewer
+*
+* Revision 6.28  1999/11/29 15:17:54  durand
+* designed a new GUI; fixed problems under Win95 and Linux
+*
+* Revision 6.27  1999/11/19 15:01:48  durand
+* speed up mouse selection ; avoid sequence flashing during selection ; update menu functionalities
+*
+* Revision 6.26  1999/11/18 14:54:22  durand
+* add a new function to create an image map given a ParaG structure - Entrez sequence viewer only
+*
+* Revision 6.25  1999/11/09 23:26:25  kans
+* include jzmisc.h for swap prototype
+*
+* Revision 6.24  1999/11/09 21:06:58  durand
+* add sequence selection manager
+*
+* Revision 6.23  1999/11/05 14:54:27  durand
+* update logo position
+*
+* Revision 6.22  1999/11/02 13:38:18  durand
+* update selection code for Entrez sequence viewer
+*
+* Revision 6.21  1999/10/14 16:14:25  kans
+* added include for asn2ff6.h for GetProductSeqId and GetGINumFromSip
+*
+* Revision 6.20  1999/10/14 13:34:33  durand
+* use BioseqFind to get product (CDS display)
+*
+* Revision 6.19  1999/10/13 17:08:17  durand
+* use smaller font for WWW release of the viewer
+*
+* Revision 6.18  1999/10/02 15:11:15  durand
+* update the code to be used by wwwudv
+*
+* Revision 6.17  1999/09/29 20:09:51  durand
+* modify some parts of the code to be used by the cgi-bin release of UDV
+*
+* Revision 6.16  1999/09/27 14:10:31  durand
+* switch to ddvcolor to allow UDV working from Cn3D (LG and PD)
+*
+* Revision 6.15  1999/09/20 21:57:41  durand
+* switch UDV_draw_double_cursor from static to NLM_EXTERN
+*
 * Revision 6.14  1999/09/13 20:37:17  durand
 * update UDV_Draw_scale for DDV
 *
@@ -66,11 +124,17 @@
 */
 
 #include <udviewer.h>
-#include <salmedia.h>
-#include <saledit.h>
+#include <udvdef.h>
+#include <ddvcolor.h>
+#include <asn2ff6.h>
+#include <jzmisc.h>
 
 static RecT  UDV_calc_RCdraw(Int4 StartLine,Int4 nLines, RecT rcP,
 		Int2 decal_gauche,Int4 decal_haut,Int2 LineHeight);
+#ifndef WWW_UDV
+static void UDV_draw_panel(PaneL p,ViewerDialogDataPtr vdp,RecT PNTR MyUpdateRect,
+	Boolean bSelect);	
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -81,6 +145,7 @@ Purpose: create a simple set of fonts for the logo
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void LogoFontCreate(FonT PNTR f1,FonT PNTR f2,FonT PNTR f3)
 {
 
@@ -103,7 +168,7 @@ NLM_EXTERN void LogoFontCreate(FonT PNTR f1,FonT PNTR f2,FonT PNTR f3)
 #endif
 
 }
-
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -129,8 +194,9 @@ NLM_EXTERN FonT UDV_InitFont(UDVFontDataPtr udvfp)
 		udvfp->hFnt = ParseFont ("fixed, 12");
 #endif
 
-	udvfp->UseDefaultColorLetter=TRUE;
-	udvfp->LetterColor=(Uint4)FONT_DEF_COLOR;
+#ifdef WWW_UDV
+		udvfp->hFnt = ParseFont ("fixed, 10");
+#endif
 
 	return(udvfp->hFnt);
 }
@@ -241,9 +307,9 @@ NLM_EXTERN void  UDV_Init_ScaleData(UnDViewerGraphDataPtr GrDataPtr)
 	GrDataPtr->udv_scale.ShowMMinorTick=TRUE;
 	GrDataPtr->udv_scale.MajorTickEvery=(Int2)SCALE_MAJOR_TICK_EVERY;
 	GrDataPtr->udv_scale.MinorTickEvery=(Int2)SCALE_MINOR_TICK_EVERY;
-	GrDataPtr->udv_scale.ScaleColor=(Uint4)SCALE_LETTER_COLOR;
+/*	GrDataPtr->udv_scale.ScaleColor=(Uint4)SCALE_LETTER_COLOR;
 	GrDataPtr->udv_scale.TickMajColor=(Uint4)SCALE_MAJTICK_COLOR;
-	GrDataPtr->udv_scale.TickMinColor=(Uint4)SCALE_MINTICK_COLOR;
+	GrDataPtr->udv_scale.TickMinColor=(Uint4)SCALE_MINTICK_COLOR;*/
 	GrDataPtr->udv_scale.cxLeftScale=(Int2)SCALE_WIDTH_IF_LEFT*
 					GrDataPtr->udv_font.cxChar;
 
@@ -260,6 +326,7 @@ Purpose: Init Graphical values for the UnDViewer. Called one times at the
 Return value: none (results are in GrDataPtr)
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void  UDV_Init_GraphData(PaneL p,UnDViewerGraphDataPtr GrDataPtr)
 {
 RecT rc;	
@@ -279,7 +346,7 @@ RecT rc;
 	}
 
 }
-
+#endif
 /*****************************************************************************
 
 Function: UDV_BuildFeatColorTable()
@@ -300,22 +367,22 @@ Uint1 i;
 		pClr[i]=GetColorRGB(0,0,0);
 
 	/*Warning: values are one-based*/
-	pClr[FEATDEF_GENE]=GetColorRGB(0,0,0);			/*black*/
+	pClr[FEATDEF_GENE]=GetColorRGB(128,128,128);			/*gray*/
 	
-	pClr[FEATDEF_precursor_RNA]=GetColorRGB(255,150,255);/*pink*/
-	pClr[FEATDEF_misc_RNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_preRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_mRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_tRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_rRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_snRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_scRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_otherRNA]=GetColorRGB(255,150,255);
-	pClr[FEATDEF_prim_transcript]=GetColorRGB(255,150,255);
-	
-	pClr[FEATDEF_CDS]=GetColorRGB(0,0,255);	/*blue*/
-	pClr[FEATDEF_exon]=GetColorRGB(0,0,255);
-	pClr[FEATDEF_intron]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_precursor_RNA]=GetColorRGB(0,0,255);/*blue*/
+	pClr[FEATDEF_misc_RNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_preRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_mRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_tRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_rRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_snRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_scRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_otherRNA]=GetColorRGB(0,0,255);
+	pClr[FEATDEF_prim_transcript]=GetColorRGB(0,0,255);
+
+	pClr[FEATDEF_CDS]=GetColorRGB(255,150,255);	/*pink*/
+	pClr[FEATDEF_exon]=GetColorRGB(255,150,255);
+	pClr[FEATDEF_intron]=GetColorRGB(255,150,255);
 
 	pClr[FEATDEF_PROT]=GetColorRGB(0,128,0);		/*dk green*/
 	pClr[FEATDEF_mat_peptide]=GetColorRGB(0,128,0);
@@ -340,6 +407,26 @@ Uint1 i;
 	pClr[FEATDEF_BOND]=GetColorRGB(255,92,255);	/*pink*/
 
 	return(pClr);
+}
+
+/*****************************************************************************
+
+Function: UDV_Build_Other_Colors()
+
+Purpose: create the colors for font, rulers,...
+
+Return value: none (results stored in GrData)
+
+*****************************************************************************/
+NLM_EXTERN void UDV_Build_Other_Colors(UnDViewerGraphDataPtr GrDataPtr)
+{
+	/*font*/
+	GrDataPtr->udv_font.UseDefaultColorLetter=TRUE;
+	GrDataPtr->udv_font.LetterColor=(Uint4)FONT_DEF_COLOR;
+	/*ruler*/
+	GrDataPtr->udv_scale.ScaleColor=(Uint4)SCALE_LETTER_COLOR;
+	GrDataPtr->udv_scale.TickMajColor=(Uint4)SCALE_MAJTICK_COLOR;
+	GrDataPtr->udv_scale.TickMinColor=(Uint4)SCALE_MINTICK_COLOR;
 }
 
 /*****************************************************************************
@@ -454,34 +541,154 @@ Uint1 i;
 	}	
 }
 
+/*******************************************************************************
+
+  Function : UDV_GetCurrentDispRange()
+  
+  Purpose : get first,last position of the sequence on the screen
+  
+  Return value : -
+
+*******************************************************************************/
+#ifndef WWW_UDV
+NLM_EXTERN void	UDV_GetCurrentDispRange(ViewerDialogDataPtr vdp,
+		Int4Ptr from_bsp,Int4Ptr to_bsp,Int4Ptr from_line,Int4Ptr to_line)
+{
+ValNodePtr vnp,vnp2;
+ParaGPtr   pgp;
+Int4       from_row,to_row;
+
+	*from_bsp=0;
+	*to_bsp=0;
+	if (vdp==NULL) return;
+	
+	/*rows displayed in the screen*/
+	from_row=vdp->udv_graph.udv_vscrl.ScrollPos;
+	if (vdp->udv_graph.udv_vscrl.ScrollPage==0){
+		to_row=vdp->udv_graph.udv_panel.nTotLines;
+	}
+	else{
+		to_row=from_row+vdp->udv_graph.udv_vscrl.ScrollPage;
+		if (to_row>vdp->udv_graph.udv_panel.nTotLines) 
+			to_row=vdp->udv_graph.udv_panel.nTotLines;
+	}
+	/*find the ParaG where from_row is Located*/
+	vnp=vdp->ParaG;
+	while(vnp){
+		if (vnp->data.ptrvalue){
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			if ((pgp->StartLine<=from_row)&&((pgp->StartLine+pgp->nLines)>=from_row)){
+					break;
+			}
+		}
+		vnp=vnp->next;
+	}
+	*from_bsp=pgp->StartLetter;
+	/*find the ParaG where to_row is Located*/
+	vnp2=vnp;
+	while(vnp2){
+		if (vnp2->data.ptrvalue){
+			pgp=(ParaGPtr)vnp2->data.ptrvalue;
+			if ((pgp->StartLine<=to_row)&&((pgp->StartLine+pgp->nLines)>=to_row)){
+					break;
+			}
+		}
+		vnp2=vnp2->next;
+	}	
+	*to_bsp=pgp->StopLetter;
+	
+	if (from_line) *from_line=from_row;
+	if (to_line) *to_line=to_row;
+}
+#endif
+
+/*******************************************************************************
+
+  Function : UDV_InvalRegion()
+  
+  Purpose : invalidate a specific region of a sequence within a ParaG
+  
+  Return value : -
+
+*******************************************************************************/
+#ifndef WWW_UDV
+NLM_EXTERN void UDV_InvalRegion(PaneL UnDViewer,UnDViewerGraphDataPtr GrData,
+		ParaGPtr pgp,Int4 start_inval,Int4 stop_inval,Boolean IsSelect)
+{
+Int4 				decal_haut,StartLine;
+ValNodePtr 			vnp,vnp2;
+RecT 				rc,rcP;
+Int2				decal_gauche,left_pos,right_pos;
+ViewerDialogDataPtr vdp;
+WindoW              w,temport;
+ViewerMainPtr       vmp;
+
+	/*get some usefull data...*/
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (UnDViewer);
+
+	if (vdp == NULL) return;
+
+    temport=SavePort(ParentWindow(UnDViewer));
+	Select(UnDViewer);
+	ObjectRect(UnDViewer,&rcP);
+	
+	StartLine=pgp->StartLine;
+	if (GrData->udv_scale.ShowMajorTick) StartLine++;
+	if (GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
+			GrData->udv_scale.ScalePosition==SCALE_POS_BOTH) StartLine++;
+
+	decal_haut=GrData->udv_vscrl.ScrollPos*
+			GrData->udv_font.LineHeight-VIEWER_VERT_MARGIN;	
+	decal_gauche=GrData->udv_panel.cxName+rcP.left+
+			GrData->udv_scale.cxLeftScale;
+	
+	left_pos=(Int2)(start_inval-pgp->StartLetter);
+	left_pos+=(left_pos/LETTER_BLOCK_WIDTH);
+	right_pos=(Int2)(stop_inval-pgp->StartLetter);
+	right_pos+=(right_pos/LETTER_BLOCK_WIDTH);
+	rc.top=(Int2)(StartLine*GrData->udv_font.LineHeight+rcP.top-decal_haut);
+	rc.bottom=(Int2)(rc.top+GrData->udv_font.LineHeight)+GrData->udv_font.LineHeight/3;
+	rc.left=decal_gauche+left_pos*GrData->udv_font.cxChar;
+	rc.right=decal_gauche+right_pos*GrData->udv_font.cxChar+2*GrData->udv_font.cxChar;
+	if (!IsSelect){
+		InvalRect(&rc);
+	}
+	else{
+		UDV_draw_panel(UnDViewer,vdp,&rc,IsSelect);
+	}
+    RestorePort(temport);
+}
+#endif
+
+
 /*****************************************************************************
 
 Function: UDV_calc_pos()
 
-Purpose: draw a vertical cursor to track position of a feature
+Purpose: get the bsp_coord given some data (current ParaG,...)
 
 Parameters:	GrData; graphical data object
 			pt; mouse position
 			rcClip; region where pgp is included
 			pgp; ParaG data
 			szPos; used to put pos as a string
-
+			
 Return value: pos (1-based value)
 
 *****************************************************************************/
-static Int4  UDV_calc_pos(UnDViewerGraphDataPtr GrData,PoinT pt,
-		RecT rcClip,ParaGPtr pgp,CharPtr szPos)
+static Int4  UDV_calc_pos(UnDViewerGraphDataPtr GrData,PoinT * pt,
+		RecT * rcClip,ParaGPtr pgp,CharPtr szPos)
 {
-Int2 xMargin,i;
+Int2 xMargin,i,max;
 Int4 pos,start,stop;
 
 
-	xMargin=rcClip.left+GrData->udv_font.cxChar;
+	xMargin=rcClip->left+GrData->udv_font.cxChar;
 
-	pos=(Int4)((pt.x-xMargin+GrData->udv_font.cxChar/2)/
+	pos=(Int4)((pt->x-xMargin+GrData->udv_font.cxChar/2)/
 		GrData->udv_font.cxChar);
-
-	for (i=0;i<GrData->udv_panel.nBlockByLine+1;i++){
+	max=GrData->udv_panel.nBlockByLine+1;
+	for (i=0;i<max;i++){
 		start=i*LETTER_BLOCK_WIDTH+i;
 		stop=start+LETTER_BLOCK_WIDTH;
 		if (pos>=start && pos<stop) {pos=pos-i; break;}
@@ -493,7 +700,7 @@ Int4 pos,start,stop;
 	pos++;
 	
 	if (szPos!=NULL) sprintf(szPos,"%d",pos);
-	
+
 	return(pos);
 }
 
@@ -515,6 +722,7 @@ Parameters: ParaG; list to check
 Return value: TRUE if feature has been found in the ParaG list
 
 *****************************************************************************/
+#ifndef WWW_UDV
 static Boolean  UDV_find_item(ValNodePtr ParaG,BioseqPtr bsp,
 		Uint2 entityID,Uint2 itemID,Uint2 itemType,CharPtr szFeatureName,
 		ParaGPtr PNTR pgpFeat,Uint2Ptr nLineDecal,UDV_Item_SelectPtr isp)
@@ -581,6 +789,7 @@ Boolean bFound=FALSE;		/*TRUE if feature found*/
 	}
 	return(bFound);
 }
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -602,6 +811,7 @@ Parameters: GrData; graphical data object
 Return value: TRUE if  the user has clicked within a feat
 
 *****************************************************************************/
+#ifndef WWW_UDV
 static Boolean  UDV_click_item(UnDViewerGraphDataPtr GrData,PoinT pt,
 		RecT rc,ParaGPtr pgp,BspInfo bsp_i,Uint2Ptr entityID,
 		Uint2Ptr itemID,Uint2Ptr itemType,Uint2Ptr index)
@@ -648,7 +858,7 @@ Boolean IsTransNeeded=FALSE;
 				/*pos is a 1-based value*/
 				if(pt.x<GrData->udv_panel.cxName-2)
 					pos=context.left;
-				else pos=UDV_calc_pos(GrData,pt,rc,pgp,NULL)-1;
+				else pos=UDV_calc_pos(GrData,&pt,&rc,pgp,NULL)-1;
 				/*HET feature correction for the ends*/
 				if(context.featdeftype== FEATDEF_HET){
 					context.right=context.ivals[2*context.numivals-1];
@@ -668,6 +878,7 @@ Boolean IsTransNeeded=FALSE;
 	}
 	return(InFeat);
 }
+#endif /*WWW_UDV*/
 
 
 /*****************************************************************************
@@ -738,7 +949,7 @@ Parameters:	rcClip; draw only when the mouse is within rcClip
 Return value: none
 
 *****************************************************************************/
-static void UDV_draw_double_cursor(RecT rcClip,PoinT pos)
+NLM_EXTERN void UDV_draw_double_cursor(RecT rcClip,PoinT pos)
 {
 	if (PtInRect(pos,&rcClip)){
 		Dotted();
@@ -768,26 +979,20 @@ Parameters:	p; UDV panel
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_select_feature(PaneL p,ViewerDialogDataPtr vdp,
 			Uint2 entityID,Uint2 itemID,Boolean bRepos)
 {
-/*ViewerDialogDataPtr vdp;*/
-ParaGPtr 			pgp_select;	/*selected pgp*/
-RecT 				rcI;		/*InfoPanel Rect size*/
-CharPtr 			szFeatName; /*used to modify the InfoPanel Text*/
-WindoW 				temport;	/*to allow a safe draw*/
-Uint2 				nLineDecal=0;
-Int4 				decal;
-Boolean				ShowTop=FALSE,
-					ShowTick=FALSE;
+ParaGPtr pgp_select;	/*selected pgp*/
+Char 	 szFeatName[500]; /*used to modify the InfoPanel Text*/
+WindoW 	 temport;	/*to allow a safe draw*/
+Uint2 	 nLineDecal=0;
+Int4 	 decal;
+Boolean	 ShowTop=FALSE,
+		 ShowTick=FALSE;
 
 	if (vdp == NULL) return;
 
-	if (vdp->InfoPanel) szFeatName=(CharPtr) GetObjectExtra (vdp->InfoPanel);
-	else szFeatName=NULL;
-
-	/*if szFeatName is Null, not a problem: UDV_find_feature()
-		does nothing with it*/
 	vdp->Old_Item_select=vdp->Item_select;
 	/*compute the position (number of lines) of the first feature within the ParaG
 	by taking into account the scale*/
@@ -822,13 +1027,18 @@ Boolean				ShowTop=FALSE,
 				UnDViewerVScrlUpdate(p,FALSE,CurPos);
 				/*create new buffer*/
 				UDV_create_buffer(&vdp->udv_graph,vdp->ParaG,&vdp->bsp_i,NULL);
-				temport=SavePort((WindoW)p);
+				temport=SavePort((WindoW)ParentWindow(p));
 				Select(p);
 				ObjectRect(p,&rcP);
 				InvalRect(&rcP);
 				RestorePort(temport);
 			}
-			else UDV_draw_viewer(p);
+			else {
+				temport=SavePort((WindoW)ParentWindow(p));
+				Select(p);
+				UDV_draw_viewer(p);
+				RestorePort(temport);
+			}
 
 			vdp->Old_Item_select.eIDsel=(Uint2)-1;
 			vdp->Old_Item_select.iIDsel=(Uint2)-1;
@@ -836,23 +1046,18 @@ Boolean				ShowTop=FALSE,
 	}
 	if (vdp->InfoPanel) {/*InfoPanel doesn't exist for slave viewer*/
 		/*use only for the Autonomous version of the viewer*/
-		temport=SavePort((WindoW)vdp->InfoPanel);
-		Select(vdp->InfoPanel);
-		ObjectRect(vdp->InfoPanel,&rcI);
-		InvalRect(&rcI);
-		RestorePort(temport);
+		SetTitle(vdp->InfoPanel,szFeatName);
 	}
 }
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
-Function: UDV_ClickMouse()
+Function: UDV_SendBSPSelectMsg()
 
-Purpose: manage Mouse-Click
+Purpose: send a Msg to select a piece of sequence
 
-Parameters:	p; panel handle (currently unused)
-			vdp; viewer data struct
-			pt; new position
+Parameters:	
 
 Note: this function MUST be called by external software using this viewer
 
@@ -860,134 +1065,96 @@ Note: this function MUST be called by external software using this viewer
 Return value: none
 
 *****************************************************************************/
-NLM_EXTERN void UDV_ClickMouse(PaneL p, ViewerDialogDataPtr vdp,PoinT pt)
+#ifndef WWW_UDV
+static void UDV_SendBSPSelectMsg(ViewerDialogDataPtr vdp,Int4 bsp_coord,
+		ParaGPtr cur_pgp,PoinT * pt)
 {
-ValNodePtr 			vnp;
-ParaGPtr 			pgp=NULL;
-RecT 				rc /* ,rc2 */ ,rcP;
-Int4 				decal_top;
-Boolean 			bFind=FALSE;
-Int2				decal_left;
+Int4        first_bsp_coord, bsp_coord_old;
+Uint1       direction;/*use to tell ObjMgr the direction of the mouse (left,right)*/
+SeqLocPtr   slp;/*to send an AlsoSelectMsg*/
+Uint2       bsp_eID,bsp_iID;
+Boolean     bDeselectAll=TRUE;
 
-	if (vdp == NULL) return;
+	if (ctrlKey || shftKey)
+		bDeselectAll=FALSE;
+
+	/*is the mouse going to the left or to the right ?*/
+	/*don't forget to check the strand...  ;-) */
+	bsp_coord_old=vdp->UDV_ms.old_col;
+	first_bsp_coord=vdp->UDV_ms.first_col;
+
+	if (vdp->UDV_ms.oldPos.x<pt->x)
+		direction=Seq_strand_plus;
+	else
+		direction=Seq_strand_minus;
 	
-	Select(p);
-	
-	/*Is mouse is in the ParaG or Name region ?*/
-	if ((pt.x>(vdp->udv_graph.udv_panel.cxName+
-			vdp->udv_graph.udv_scale.cxLeftScale+
-			vdp->udv_graph.udv_font.cxChar)) /*|| 
-			pt.x<vdp->udv_graph.udv_panel.cxName-2*/){
+	/*save the new position*/
+	vdp->UDV_ms.oldPos=vdp->UDV_ms.newPos=*pt;
+	vdp->UDV_ms.old_col=bsp_coord;
+	vdp->UDV_ms.old_pgp=cur_pgp;
 
-		ObjectRect(p,&rcP);
-		decal_top=vdp->udv_graph.udv_vscrl.ScrollPos*
-				vdp->udv_graph.udv_font.LineHeight-VIEWER_VERT_MARGIN;
-		decal_left=vdp->udv_graph.udv_panel.cxName+rcP.left+
-				vdp->udv_graph.udv_scale.cxLeftScale;
+	/*'from' (first_bsp_coord) always less than 'to' (bsp_coord)*/
+	if (first_bsp_coord>bsp_coord)
+		swap(&first_bsp_coord,&bsp_coord);
 
-		/*look for the ParaG*/
-		if (vdp->ParaG){
-			for(vnp=vdp->ParaG ; vnp!=NULL ; vnp=vnp->next){
-				if (vnp->data.ptrvalue){
-					pgp=(ParaGPtr)vnp->data.ptrvalue;
-
-					/*Compute Int2 rect*/
-					if (((pgp->StartLine+pgp->nLines)*
-							vdp->udv_graph.udv_font.LineHeight+rcP.top)
-							>=decal_top){
-						rc=UDV_calc_RCdraw(pgp->StartLine,pgp->nLines,rcP,
-							decal_left,decal_top,
-							vdp->udv_graph.udv_font.LineHeight);
-						
-						/*rc2.left=0;
-						rc2.right=vdp->udv_graph.udv_panel.cxName-2;
-						rc2.top=rc.top;
-						rc2.bottom=rc.bottom;*/
-						/*   ParaG           or  Name         region*/
-						if (PtInRect(pt,&rc) /*|| PtInRect(pt,&rc2)*/){
-							vdp->UDV_ms.rcClip=rc;
-							bFind=TRUE;
-							break;
-						}
-					}
-				}
-			}		
-		}
-		if (bFind){
-			Boolean ClickFeat=FALSE;
-			Uint2 entityID;
-			Uint2 itemID;
-			Uint2 itemType;
-			Uint2 index;
-			/*is the user clicks on a feature*/
-			if (vdp->udv_graph.udv_panel.ShowFeatures){
-				ClickFeat=UDV_click_item(&vdp->udv_graph,pt,rc,pgp,vdp->bsp_i,
-					&entityID,&itemID,&itemType,&index);
-				
-			}
-			if (ClickFeat){
-				ObjMgrSendMsg(OM_MSG_SELECT,entityID,itemID,OBJ_SEQFEAT);
-			}
-			/*click outside a feature*/
-			if (!ClickFeat){/*disable feat select*/
-				/*prepare the deselection*/
-				vdp->Old_Item_select=vdp->Item_select;
-				vdp->Item_select.eIDsel=(Uint2)-1;
-				vdp->Item_select.iIDsel=(Uint2)-1;
-				vdp->Item_select.iTypeSel=(Uint2)-1;
-				/*draw viewer: do the deselection*/
-				UDV_draw_viewer(p);
-				/*feat select is now invalidated*/
-				vdp->Item_select=vdp->Old_Item_select;
-			}
-			if (!ClickFeat){/*show cursor*/
-				WindoW temport;
-
-				temport=SavePort((WindoW)p);
-				Select(p);
-				vdp->UDV_ms.oldPos=pt;
-				vdp->UDV_ms.newPos=pt;
-				vdp->UDV_ms.Action_type=MS_ACTION_FEAT_CURSOR;
-				InvertMode();	
-				UDV_draw_vert_cursor(vdp->UDV_ms.rcClip,
-						vdp->UDV_ms.oldPos);
-				UDV_draw_horz_cursor(&vdp->udv_graph,vdp->UDV_ms.rcClip,
-						vdp->UDV_ms.oldPos);
-				vdp->UDV_ms.pgp=pgp;
-				MoveTo((Int2)(pt.x+2),(Int2)(pt.y-2));
-				UDV_calc_pos(&vdp->udv_graph,pt,vdp->UDV_ms.rcClip,
-					vdp->UDV_ms.pgp,vdp->UDV_ms.szPos);
-#ifndef WIN_MSWIN
-				if (PtInRect(vdp->UDV_ms.oldPos,&vdp->UDV_ms.rcClip)){
-					SelectFont(vdp->udv_graph.udv_font.hFnt);
-					PaintString(vdp->UDV_ms.szPos);
-				}
-#endif
-				PlusCursor();
-				RestorePort(temport);
-				Update();
-			}
-		}
+	/*now, we can send the Select message*/
+	/* first_pgp, old_pgp & cur_pgp have the same sip... 
+	they are on a same row; I can use one of them*/
+	slp = SeqLocIntNew (first_bsp_coord, bsp_coord, direction, vdp->bsp_i.bsp->id);
+	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+	if (bsp_eID!=0 && bsp_iID!=0 && slp){
+		/*if (!bDeselectAll){*/
+			ObjMgrAlsoSelect (bsp_eID, bsp_iID, 
+				OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
+		/*}
+		else{
+			ObjMgrSelect (bsp_eID, bsp_iID, 
+				OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
+		}*/
 	}
-
-	/*Is mouse within the Name list region (left of ParaG) ?*/
-	if (pt.x>=vdp->udv_graph.udv_panel.cxName && 
-		pt.x<=vdp->udv_graph.udv_panel.cxName+3){
-			ObjectRect(p,&rc);
-			rc.left=5*vdp->udv_graph.udv_font.cxChar; /*min value*/
-			rc.right=2*PANEL_NAME_WIDTH*vdp->udv_graph.udv_font.cxChar;/*max val*/
-			pt.x=vdp->udv_graph.udv_panel.cxName;
-			vdp->UDV_ms.oldPos=pt;
-			vdp->UDV_ms.newPos=pt;
-			vdp->UDV_ms.rcClip=rc;
-			vdp->UDV_ms.Action_type=MS_ACTION_RESIZE_WIN;
-			InvertMode();	
-			UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
-				vdp->UDV_ms.oldPos);
-			CrossCursor();
+	else{
+		if (slp) SeqLocFree(slp);
 	}
-
 }
+#endif /*WWW_UDV*/
+
+/*****************************************************************************
+
+Function: UDV_AutoSelectAllSeq()
+
+Purpose: send a Msg to select/deselect the full sequnce
+
+Return value: none
+
+*****************************************************************************/
+#ifndef WWW_UDV
+static void UDV_AutoSelectAllSeq(ViewerDialogDataPtr vdp,Boolean bSelect)
+{
+SeqLocPtr   slp;
+Uint2       bsp_eID,bsp_iID;
+
+	slp = SeqLocIntNew (0, vdp->bsp_i.bspLength-1, Seq_strand_plus, 
+			vdp->bsp_i.bsp->id);
+	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+	if (bsp_eID!=0 && bsp_iID!=0 && slp){
+		if (bSelect)
+			ObjMgrSelect (bsp_eID, bsp_iID, 
+				OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
+		else
+			ObjMgrDeSelect (bsp_eID, bsp_iID, 
+				OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
+	}
+	else{
+		if (slp) SeqLocFree(slp);
+	}
+}
+#endif /*WWW_UDV*/
+
+
 
 /*****************************************************************************
 
@@ -1003,66 +1170,60 @@ Parameters:	p; panel handle (currently unused)
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_ClickProc(PaneL p, PoinT pt)
 {
 WindoW 				w;
 ViewerDialogDataPtr vdp;
 ValNodePtr 			vnp;
-ParaGPtr 			pgp=NULL;
-RecT 				rc /* ,rc2 */ ,rcP;
-Int4 				decal_top;
-Boolean 			bFind=FALSE;
 ViewerMainPtr		vmp;
+SeqLocPtr           slp;
+ParaGPtr 			pgp=NULL;
+RecT 				rc,rcP;
+Int4 				decal_top,pos,old_pos,decal,limit,dec,dec2;
+Boolean 			bFind=FALSE;
 Int2				decal_left;
-
-	/*get the parent Window of the Panel*/
-	w=ParentWindow(p);
-	
-	if (w==NULL) return;
+Uint2               bsp_eID,bsp_iID;
 
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
-
-	if (vmp==NULL) return;
-	
-	vdp=vmp->vdp;
-
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
 	if (vdp == NULL) return;
 	
 	/*Select(p);*/
-	
-	/*Is mouse is in the ParaG or Name region ?*/
-	if ((pt.x>(vdp->udv_graph.udv_panel.cxName+
+	dec=vdp->udv_graph.udv_panel.cxName+
 			vdp->udv_graph.udv_scale.cxLeftScale+
-			vdp->udv_graph.udv_font.cxChar)) /*|| 
-			pt.x<vdp->udv_graph.udv_panel.cxName-2*/){
-
+			vdp->udv_graph.udv_font.cxChar;
+	dec2=dec+(vdp->udv_graph.udv_panel.nCharByLine+
+		vdp->udv_graph.udv_panel.nBlockByLine)*
+		vdp->udv_graph.udv_font.cxChar;
+	/*does the mouse located in the ParaG or Name region ?*/
+	if (pt.x>=dec && pt.x<=dec2){
 		ObjectRect(p,&rcP);
 		decal_top=vdp->udv_graph.udv_vscrl.ScrollPos*
 				vdp->udv_graph.udv_font.LineHeight-VIEWER_VERT_MARGIN;
 		decal_left=vdp->udv_graph.udv_panel.cxName+rcP.left+
 				vdp->udv_graph.udv_scale.cxLeftScale;
-
+		if (vdp->udv_graph.udv_vscrl.ScrollPage>0)
+			limit=decal_top+vdp->udv_graph.udv_vscrl.ScrollPage*
+				vdp->udv_graph.udv_font.LineHeight+rcP.top;
+		else
+			limit=decal_top+vdp->udv_graph.udv_panel.nTotLines*
+				vdp->udv_graph.udv_font.LineHeight+rcP.top;
 		/*look for the ParaG*/
 		if (vdp->ParaG){
 			for(vnp=vdp->ParaG ; vnp!=NULL ; vnp=vnp->next){
 				if (vnp->data.ptrvalue){
 					pgp=(ParaGPtr)vnp->data.ptrvalue;
 
-					/*Compute Int2 rect*/
-					if (((pgp->StartLine+pgp->nLines)*
-							vdp->udv_graph.udv_font.LineHeight+rcP.top)
-							>=decal_top){
+					/*Compute rect*/
+					decal=pgp->StartLine*
+							vdp->udv_graph.udv_font.LineHeight+rcP.top;
+					if (decal>limit) break;
+					if (decal>=decal_top){
 						rc=UDV_calc_RCdraw(pgp->StartLine,pgp->nLines,rcP,
 							decal_left,decal_top,
 							vdp->udv_graph.udv_font.LineHeight);
-						
-						/*rc2.left=0;
-						rc2.right=vdp->udv_graph.udv_panel.cxName-2;
-						rc2.top=rc.top;
-						rc2.bottom=rc.bottom;*/
-						/*   ParaG           or  Name         region*/
-						if (PtInRect(pt,&rc) /*|| PtInRect(pt,&rc2)*/){
+						if (PtInRect(pt,&rc)){
 							vdp->UDV_ms.rcClip=rc;
 							bFind=TRUE;
 							break;
@@ -1077,15 +1238,18 @@ Int2				decal_left;
 			Uint2 itemID;
 			Uint2 itemType;
 			Uint2 index;
-			/*is the user clicks on a feature*/
-			if (vdp->udv_graph.udv_panel.ShowFeatures){
+			/*does the user click on a feature*/
+			if (vdp->udv_graph.udv_panel.ShowFeatures &&
+				vdp->UDV_ms.Action_type==MS_ACTION_FEAT_NOTHING){
 				ClickFeat=UDV_click_item(&vdp->udv_graph,pt,rc,pgp,vdp->bsp_i,
 					&entityID,&itemID,&itemType,&index);
 				/*future implementation: if ClickFeat==TRUE, send a message 
 				SELECT to ObjManager*/
 				if (ClickFeat) {
 					ObjMgrSendMsg(OM_MSG_SELECT,entityID,itemID,OBJ_SEQFEAT);
-					if (vmp->hFeatDlg){/*update Features List Dlg if needed*/
+					if (vdp->Parent) 
+						vmp=(ViewerMainPtr)GetObjectExtra(vdp->Parent);
+					if (vmp && vmp->hFeatDlg){/*update Features List Dlg if needed*/
 						FLMDataPtr	pflm=
 								(FLMDataPtr)GetObjectExtra(vmp->hFeatDlg);
 						if (pflm){
@@ -1120,11 +1284,7 @@ Int2				decal_left;
 				}
 			}
 			/*click outside a feature*/
-			if (!ClickFeat){/*disable feat select*/
-				WindoW temport;
-				RecT rcI;
-				CharPtr szFeatName;
-		
+			if (!ClickFeat){/*disable old feat select, then select letters*/
 				/*prepare the deselection*/
 				vdp->Old_Item_select=vdp->Item_select;
 				vdp->Item_select.eIDsel=(Uint2)-1;
@@ -1132,50 +1292,39 @@ Int2				decal_left;
 				vdp->Item_select.iTypeSel=(Uint2)-1;
 				/*draw viewer: do the deselection*/
 				UDV_draw_viewer(p);
-				/*erase the InfoPanel string properly*/
-				if (vdp->InfoPanel){
-					szFeatName=(CharPtr) GetObjectExtra (vdp->InfoPanel);
-					MemSet(szFeatName,0,sizeof(szFeatName));
-					temport=SavePort((WindoW)vdp->InfoPanel);
-					Select(vdp->InfoPanel);
-					ObjectRect(vdp->InfoPanel,&rcI);
-					InvalRect(&rcI);
-					RestorePort(temport);
-				}
 				/*feat select is now invalidated*/
 				vdp->Item_select=vdp->Old_Item_select;
-			}
-			if (!ClickFeat){/*show cursor*/
-				WindoW temport;
+				
+				/*select letters*/
+				if (!(ctrlKey || shftKey))
+					ObjMgrDeSelectAll ();
 
-				temport=SavePort((WindoW)p);
-				Select(p);
-				vdp->UDV_ms.oldPos=pt;
-				vdp->UDV_ms.newPos=pt;
-				vdp->UDV_ms.Action_type=MS_ACTION_FEAT_CURSOR;
-				InvertMode();	
-				UDV_draw_vert_cursor(vdp->UDV_ms.rcClip,
-						vdp->UDV_ms.oldPos);
-				UDV_draw_horz_cursor(&vdp->udv_graph,vdp->UDV_ms.rcClip,
-						vdp->UDV_ms.oldPos);
-				vdp->UDV_ms.pgp=pgp;
-				MoveTo((Int2)(pt.x+2),(Int2)(pt.y-2));
-				UDV_calc_pos(&vdp->udv_graph,pt,vdp->UDV_ms.rcClip,
-					vdp->UDV_ms.pgp,vdp->UDV_ms.szPos);
-#ifndef WIN_MSWIN
-				if (PtInRect(vdp->UDV_ms.oldPos,&vdp->UDV_ms.rcClip)){
-					SelectFont(vdp->udv_graph.udv_font.hFnt);
-					PaintString(vdp->UDV_ms.szPos);
+				pos=UDV_calc_pos(&vdp->udv_graph,&pt,&vdp->UDV_ms.rcClip,
+					pgp,NULL)-1;
+				if (shftKey){
+					bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+					bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+							OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+					if (bsp_eID!=0 && bsp_iID!=0){
+						slp=UDV_GetClosetSeqLocGivenBspPos(vdp->bsp_i.bsp->id,bsp_eID, 
+							bsp_iID, pos, &old_pos, TRUE);
+						if (slp){
+							ObjMgrAlsoSelect (bsp_eID, bsp_iID, 
+								OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
+						}
+					}
+					return;
 				}
-#endif
-				PlusCursor();
-				RestorePort(temport);
-				Update();
+					
+				vdp->UDV_ms.newPos=pt;
+				vdp->UDV_ms.Action_type=MS_ACTION_SELECT_SEQ;
+				vdp->UDV_ms.first_col=pos;
+				vdp->UDV_ms.first_pgp=pgp;
+				UDV_SendBSPSelectMsg(vdp, pos, pgp, &pt);
 			}
 		}
-	}
-
-	/*Is mouse within the Name list region (left of ParaG) ?*/
+	}else
+	/*does the mouse located on the 3D line (between Name list region and ParaG) ?*/
 	if (pt.x>=vdp->udv_graph.udv_panel.cxName && 
 		pt.x<=vdp->udv_graph.udv_panel.cxName+3){
 			ObjectRect(p,&rc);
@@ -1191,8 +1340,129 @@ Int2				decal_left;
 				vdp->UDV_ms.oldPos);
 			CrossCursor();
 	}
-}
+	else
+	/*does the mouse located on the left-ruler area*/
+	/*if (pt.x>=vdp->udv_graph.udv_panel.cxName+vdp->udv_graph.udv_font.cxChar &&
+		pt.x<(vdp->udv_graph.udv_panel.cxName+
+			vdp->udv_graph.udv_scale.cxLeftScale+
+			vdp->udv_graph.udv_font.cxChar)){
+			vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
+			ObjMgrDeSelectAll ();
+			UDV_AutoSelectAllSeq(vdp,TRUE);
+	}
+	else*/{
+		WindoW temport;
+		RecT rcI;
+		CharPtr szFeatName;
 
+			/*deselect the sequence*/
+			ObjMgrDeSelectAll ();
+			/*deselection of a the feature*/
+			memset(&vdp->Item_select,(Uint2)-1,sizeof(vdp->Item_select));
+			memset(&vdp->Old_Item_select,(Uint2)-1,sizeof(vdp->Old_Item_select));
+			temport=SavePort((WindoW)p);
+			Select(p);
+			ObjectRect(p,&rc);
+			InvalRect(&rc);
+			RestorePort(temport);
+			if (vdp->InfoPanel){
+				SetTitle(vdp->InfoPanel,"Ready !");
+			}
+	}
+}
+#endif /*WWW_UDV*/
+
+
+/*****************************************************************************
+
+Function: UDV_ManageDragHoldActions()
+
+Purpose: manage Mouse-Drag and Mouse-Hold for sequence letters selection ONLY
+
+Parameters:	p; panel handle (currently unused)
+			vdp; viewer data struct
+			pt; new position
+
+Return value: none
+
+*****************************************************************************/
+#ifndef WWW_UDV
+void UDV_ManageDragHoldActions(PaneL p, ViewerDialogDataPtr vdp,PoinT pt,
+	Boolean bHold)
+{			
+ValNodePtr 			vnp;
+ParaGPtr 			pgp=NULL;
+RecT 				rc,rcP;
+Int4 				decal_top,pos,nLines,decal,limit;
+Boolean 			bFind=FALSE;
+Int2				decal_left;
+
+	/*does the mouse located in the ParaG or Name region ?*/
+	if ((pt.x>(vdp->udv_graph.udv_panel.cxName+
+			vdp->udv_graph.udv_scale.cxLeftScale+
+			vdp->udv_graph.udv_font.cxChar))){
+
+		ObjectRect(p,&rcP);
+		decal_top=vdp->udv_graph.udv_vscrl.ScrollPos*
+				vdp->udv_graph.udv_font.LineHeight-VIEWER_VERT_MARGIN;
+		decal_left=vdp->udv_graph.udv_panel.cxName+rcP.left+
+				vdp->udv_graph.udv_scale.cxLeftScale;
+		if (vdp->udv_graph.udv_vscrl.ScrollPage>0)
+			limit=decal_top+vdp->udv_graph.udv_vscrl.ScrollPage*
+				vdp->udv_graph.udv_font.LineHeight+rcP.top;
+		else
+			limit=decal_top+vdp->udv_graph.udv_panel.nTotLines*
+				vdp->udv_graph.udv_font.LineHeight+rcP.top;
+		/*look for the ParaG*/
+		if (vdp->ParaG){
+			nLines=0;
+			if (vdp->udv_graph.udv_scale.ShowMajorTick) nLines++;
+			if (vdp->udv_graph.udv_scale.ScalePosition==SCALE_POS_TOP || 
+					vdp->udv_graph.udv_scale.ScalePosition==SCALE_POS_BOTH) nLines++;
+			for(vnp=vdp->ParaG ; vnp!=NULL ; vnp=vnp->next){
+				if (vnp->data.ptrvalue){
+					pgp=(ParaGPtr)vnp->data.ptrvalue;
+					/*Compute rect; because drag is allowed only for selection
+					of letters, restrict the RecT on the sequence*/
+					decal=pgp->StartLine*
+							vdp->udv_graph.udv_font.LineHeight+rcP.top;
+					if (decal>limit) break;
+					if (decal>=decal_top){
+						rc=UDV_calc_RCdraw(pgp->StartLine+nLines,1,rcP,
+							decal_left,decal_top,
+							vdp->udv_graph.udv_font.LineHeight);
+						if (PtInRect(pt,&rc)){
+							vdp->UDV_ms.rcClip=rc;
+							bFind=TRUE;
+							break;
+						}
+					}
+				}
+			}		
+		}
+		if (bHold){/*vertical auto-scroll, if needed (only on Hold mouse action)*/
+			BaR vsb;
+			Int4 old_pos;	
+
+				vsb = GetSlateVScrollBar ((SlatE) vdp->UnDViewer);
+				old_pos=GetBarValue(vsb);
+				if (pt.y>=rcP.bottom-15){
+					SetValue(vsb,old_pos+2);
+				}
+				else if (pt.y<=rcP.top+15){
+					SetValue(vsb,old_pos-2);
+				}
+		}
+		if (bFind){
+			pos=UDV_calc_pos(&vdp->udv_graph,&pt,&vdp->UDV_ms.rcClip,
+				pgp,NULL)-1;
+			if (vdp->UDV_ms.old_col==pos)
+				return;
+			UDV_SendBSPSelectMsg(vdp, pos, pgp, &pt);
+		}
+	}
+}
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -1209,54 +1479,31 @@ Note: this function MUST be called by external software using this viewer
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_DragMouse(PaneL p, ViewerDialogDataPtr vdp,PoinT pt)
 {
-WindoW 				temport;
 
 	if (vdp == NULL) return;
 
-	if (vdp->UDV_ms.Action_type==MS_ACTION_FEAT_NOTHING) return;
-	
-	if (vdp->UDV_ms.Action_type==MS_ACTION_FEAT_CURSOR){
-		InvertMode();	
-		UDV_draw_vert_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-		UDV_draw_horz_cursor(&vdp->udv_graph,vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-			MoveTo((Int2)(vdp->UDV_ms.oldPos.x+2),(Int2)(vdp->UDV_ms.oldPos.y-2));
-#ifndef WIN_MSWIN
-		if (PtInRect(vdp->UDV_ms.oldPos,&vdp->UDV_ms.rcClip)){
-			SelectFont(vdp->udv_graph.udv_font.hFnt);
-			PaintString(vdp->UDV_ms.szPos);
-		}
-#endif
-		vdp->UDV_ms.newPos=pt;
-		UDV_draw_vert_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.newPos);
-		UDV_draw_horz_cursor(&vdp->udv_graph,vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.newPos);
-		MoveTo((Int2)(vdp->UDV_ms.newPos.x+2),(Int2)(vdp->UDV_ms.newPos.y-2));
-		UDV_calc_pos(&vdp->udv_graph,pt,vdp->UDV_ms.rcClip,vdp->UDV_ms.pgp,
-				vdp->UDV_ms.szPos);
-#ifndef WIN_MSWIN
-		if (PtInRect(vdp->UDV_ms.newPos,&vdp->UDV_ms.rcClip)){
-			PaintString(vdp->UDV_ms.szPos);
-		}
-#endif
-		vdp->UDV_ms.oldPos=vdp->UDV_ms.newPos;
+	switch(vdp->UDV_ms.Action_type){
+		case MS_ACTION_FEAT_NOTHING:
+			break;
+		case MS_ACTION_SELECT_SEQ:
+			UDV_ManageDragHoldActions(p,vdp,pt,FALSE);
+			break;
+		case MS_ACTION_RESIZE_WIN:
+			InvertMode();	
+			UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
+				vdp->UDV_ms.oldPos);
+			vdp->UDV_ms.newPos=pt;
+			UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
+				vdp->UDV_ms.newPos);
+			vdp->UDV_ms.oldPos=vdp->UDV_ms.newPos;
+			Update();
+			break;
 	}
-	
-	if (vdp->UDV_ms.Action_type==MS_ACTION_RESIZE_WIN){
-		InvertMode();	
-		UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-		vdp->UDV_ms.newPos=pt;
-		UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.newPos);
-		vdp->UDV_ms.oldPos=vdp->UDV_ms.newPos;
-	}
-	Update();
 }
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -1270,26 +1517,19 @@ Parameters:	p; panel handle (currently unused)
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_DragProc(PaneL p, PoinT pt)
 {
 WindoW 				w;
 ViewerDialogDataPtr vdp;
 ViewerMainPtr		vmp;
 
-	/*get the parent Window of the Panel*/
-	w=ParentWindow(p);
-	
-	if (w==NULL) return;
-
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
-
-	if (vmp==NULL) return;
-	
-	vdp=vmp->vdp;
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
 	
 	UDV_DragMouse(p,vdp,pt);
 }
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -1306,64 +1546,49 @@ Note: this function MUST be called by external software using this viewer
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_ReleaseMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt)
 {
-WindoW 	temport;
-
+Uint2       bsp_eID,bsp_iID;
 
 	if (vdp == NULL) return;
 	
-	if (vdp->UDV_ms.Action_type==MS_ACTION_FEAT_NOTHING) return;
+	switch(vdp->UDV_ms.Action_type){
+		case MS_ACTION_FEAT_NOTHING:
+            bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	        bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			                        OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+            ObjMgrSendMsg(OM_MSG_MOUSEUP, bsp_eID, bsp_iID, OBJ_BIOSEQ);
+			break;
+		case MS_ACTION_SELECT_SEQ:
+            bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	        bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			                        OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+            ObjMgrSendMsg(OM_MSG_MOUSEUP, bsp_eID, bsp_iID, OBJ_BIOSEQ);
+			break;
+		case MS_ACTION_RESIZE_WIN:
+			InvertMode();	
+			UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
+				vdp->UDV_ms.oldPos);
+			/*redraw panel with new 'cxName' value*/
+			if (PtInRect(vdp->UDV_ms.newPos,&vdp->UDV_ms.rcClip)){
+				RecT rc;
 
-	temport=SavePort((WindoW)p);
-	Select(p);
-
-	if (vdp->UDV_ms.Action_type==MS_ACTION_FEAT_CURSOR){
-		InvertMode();	
-		UDV_draw_vert_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-		UDV_draw_horz_cursor(&vdp->udv_graph,vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-		MoveTo((Int2)(vdp->UDV_ms.oldPos.x+2),(Int2)(vdp->UDV_ms.oldPos.y-2));
-		UDV_calc_pos(&vdp->udv_graph,pt,vdp->UDV_ms.rcClip,vdp->UDV_ms.pgp,
-				vdp->UDV_ms.szPos);
-#ifndef WIN_MSWIN
-		if (PtInRect(vdp->UDV_ms.oldPos,&vdp->UDV_ms.rcClip)){
-			SelectFont(vdp->udv_graph.udv_font.hFnt);
-			PaintString(vdp->UDV_ms.szPos);
-		}
-#endif
+				ObjectRect(p,&rc);
+				rc.left=0;/*for obscure reasons, not == 0*/
+				rc.top=0;
+				vdp->udv_graph.udv_panel.cxName=vdp->UDV_ms.newPos.x;
+				UDV_resize_viewer( p, vdp);
+				InvalRect(&rc);
+			}
+			break;
 	}
-
-	if (vdp->UDV_ms.Action_type==MS_ACTION_RESIZE_WIN){
-		InvertMode();	
-		UDV_draw_double_cursor(vdp->UDV_ms.rcClip,
-			vdp->UDV_ms.oldPos);
-		/*redraw panel with new 'cxName' value*/
-		if (PtInRect(vdp->UDV_ms.newPos,&vdp->UDV_ms.rcClip)){
-			RecT rc;
-
-			/*Select(p);*/
-			ObjectRect(p,&rc);
-			rc.left=0;/*for obscure reasons, not == 0*/
-			rc.top=0;
-			vdp->udv_graph.udv_panel.cxName=vdp->UDV_ms.newPos.x;
-			UDV_resize_viewer( p, vdp);
-			InvalRect(&rc);
-		}
-
-	}	
-
-	vdp->UDV_ms.oldPos.x=0;
-	vdp->UDV_ms.oldPos.y=0;
-	vdp->UDV_ms.newPos.x=0;
-	vdp->UDV_ms.newPos.y=0;
-	LoadRect(&vdp->UDV_ms.rcClip,0,0,0,0);
+	
+	memset(&(vdp->UDV_ms),0,sizeof(UDV_mouse_select));
 	vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
-	vdp->UDV_ms.pgp=NULL;
 	ArrowCursor();
-	RestorePort(temport);
 }
+#endif /*WWW_UDV*/
 
 /*****************************************************************************
 
@@ -1377,26 +1602,58 @@ Parameters:	p; panel handle (currently unused)
 Return value: none
 
 *****************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_ReleaseProc(PaneL p, PoinT pt)
 {
 WindoW 				w;
 ViewerDialogDataPtr vdp;
 ViewerMainPtr		vmp;
 
-	/*get the parent Window of the Panel*/
-	w=ParentWindow(p);
-	
-	if (w==NULL) return;
-
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
-
-	if (vmp==NULL) return;
-	
-	vdp=vmp->vdp;
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
 
 	UDV_ReleaseMouse(p,vdp,pt);
 }
+#endif /*WWW_UDV*/
+
+
+/*****************************************************************************
+
+Function: UDV_HoldProc()
+
+Purpose: manage Mouse-Hold
+
+Parameters:	p; panel handle (currently unused)
+			pt; new position
+
+Return value: none
+
+*****************************************************************************/
+#ifndef WWW_UDV
+NLM_EXTERN void UDV_HoldProc(PaneL p, PoinT pt)
+{
+WindoW 				w;
+ViewerDialogDataPtr vdp;
+ViewerMainPtr		vmp;
+
+	/*get some usefull data...*/
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
+
+	if (vdp==NULL) return;
+		
+	switch(vdp->UDV_ms.Action_type){
+		case MS_ACTION_FEAT_NOTHING:
+			break;
+		case MS_ACTION_SELECT_SEQ:
+			UDV_ManageDragHoldActions(p,vdp,pt,TRUE);
+			break;
+		case MS_ACTION_RESIZE_WIN:
+			break;
+		default:
+			break;
+	}
+}
+#endif
 
 /*******************************************************************************
 
@@ -1411,7 +1668,7 @@ ViewerMainPtr		vmp;
   Return value : none
 
 *******************************************************************************/
-void static  UDV_draw_helixDNA(Int2 x,Int2 y,Int2 cxChar,Int2 cyChar,
+static void UDV_draw_helixDNA(Int2 x,Int2 y,Int2 cxChar,Int2 cyChar,
 		Boolean bEnd)
 {
 
@@ -1521,16 +1778,16 @@ PoinT box[4];
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 static void  draw_logo(RecT rcP,FonT f1,FonT f2,FonT f3,CharPtr szTxt0,
 	CharPtr szTxt4)
 {
-/*Char szTxt0[]="UnD-Viewer";
-Char szTxt4[]=", a sequence viewer for GenBank";*/
 Char szTxt1[]="01101011";
 Char szTxt2[]="National Center for";
 Char szTxt3[]="Biotechnology Information";
-Int2 pos,cxChar=7,cyChar=13,cxGlobal;
+Int2 pos,cxChar=7,cyChar=13,cxGlobal,cyGlobal;
 Int2 w1,w2,w3,y,x;
+RecT rcL;
 
 	/*some computation for positionning*/
 	SelectFont(f1);
@@ -1539,31 +1796,35 @@ Int2 w1,w2,w3,y,x;
 	w2=StringWidth(szTxt2);
 	w3=StringWidth(szTxt3);
 	cxGlobal=22*cxChar+w1+w2;
-	
-	x=(rcP.right-rcP.left)/2-(cxGlobal/2);
+	cyGlobal=10*cyChar;
+	x=(rcP.right-rcP.left)/2;
 	y=(rcP.bottom-rcP.top)/2;
-	
+	rcL.left=rcP.left+x-(cxGlobal/2);
+	rcL.top=rcP.top+y-(6*cyChar)/2;
+	rcL.right=rcL.left+cxGlobal;
+	rcL.bottom=rcL.top+6*cyChar;
+
 	/*double DNA helix*/
-	UDV_draw_helixDNA(x,y,cxChar,cyChar,FALSE);
-	UDV_draw_helixDNA((Int2)(x+6*cxChar),y,cxChar,cyChar,FALSE);
-	UDV_draw_helixDNA((Int2)(x+12*cxChar),y,cxChar,cyChar,TRUE);
+	UDV_draw_helixDNA(rcL.left,rcL.bottom,cxChar,cyChar,FALSE);
+	UDV_draw_helixDNA((Int2)(rcL.left+6*cxChar),rcL.bottom,cxChar,cyChar,FALSE);
+	UDV_draw_helixDNA((Int2)(rcL.left+12*cxChar),rcL.bottom,cxChar,cyChar,TRUE);
 
 	/*Undviewer*/
 	SelectFont(f3);
 	Blue();
-	MoveTo((Int2)(x+2*cxChar),(Int2)(y-6*cyChar));
+	MoveTo((Int2)(rcL.left+2*cxChar),(Int2)(rcL.bottom-6*cyChar));
 	PaintString(szTxt0);
 
 	Black();
-	MoveTo((Int2)(x+StringWidth(szTxt0)+3*cxChar),(Int2)(y-6*cyChar));
+	MoveTo((Int2)(rcL.left+StringWidth(szTxt0)+3*cxChar),(Int2)(rcL.bottom-6*cyChar));
 	SelectFont(f1);
 	PaintString(szTxt4);
 
 	/*01101011*/
-	pos=x+13*cxChar;
+	pos=rcL.left+13*cxChar;
 	SelectFont(f1);
 	Black();
-	MoveTo(pos,y);
+	MoveTo(pos,rcL.bottom);
 	PaintString(szTxt1);
 	pos+=w1;
 
@@ -1571,11 +1832,12 @@ Int2 w1,w2,w3,y,x;
 	SelectFont(f2);
 	pos+=(w3/2+2*cxChar);
 
-	MoveTo((Int2)(pos-w2/2),(Int2)(y-cyChar));
+	MoveTo((Int2)(pos-w2/2),(Int2)(rcL.bottom-cyChar));
 	PaintString(szTxt2);
-	MoveTo((Int2)(pos-w3/2),(Int2)(y+cyChar));
+	MoveTo((Int2)(pos-w3/2),(Int2)(rcL.bottom+cyChar));
 	PaintString(szTxt3);
 }
+#endif /*WWW_UDV*/
 
 /*******************************************************************************
 
@@ -1918,14 +2180,32 @@ Int2 			nCompt=0,
 				numivals2=0,
 				cxChar_2;
 ByteStorePtr	bs=NULL;
+SeqIdPtr sip=NULL;
+Int4 gi=0;
+Boolean bGiForProductOk=FALSE;
+BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
-	bs = ProteinFromCdRegion (context->sfp, TRUE);
-	if (bs){
-		str = (CharPtr) BSMerge (bs, NULL);
-		BSFree (bs);
+	if (context->sfp->product){
+		prot=BioseqFind(SeqLocId(context->sfp->product));
+		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
+		if (sip){
+			CharPtr str2;
+			gi = GetGINumFromSip(sip);
+			if (gi>0) bGiForProductOk=TRUE;
+			str2=UDV_Read_Sequence (sip,0,prot->length-1, 
+				TRUE,prot->length-1);
+			if (!str2) return;
+			str=str2;
+		}
 	}
-	else return;
+	else{
+		bs = ProteinFromCdRegion (context->sfp, TRUE);
+		if (bs){
+			str = (CharPtr) BSMerge (bs, NULL);
+			BSFree (bs);
+		}
+	}
 
 	if (!str) return;	
 
@@ -1961,7 +2241,7 @@ ByteStorePtr	bs=NULL;
 	/*vertical pos: just below the CDS colour box (pos: y)*/
 	y_prot=y+GrData->udv_font.LineHeight-GrData->udv_font.cyChar/2;
 	/*NOTICE : I draw from right to left; whereas normally I draw always 
-		from left to right*/				
+		from left to right*/			
 	if (UseDefClr) SetColor(DefClr);
 	
 	while(stop_prot>=start){
@@ -2026,14 +2306,32 @@ Int2 			n2=0,
 				numivals2=0;
 ByteStorePtr	bs=NULL;
 Char szBuf[SZBUF_SIZE]={""};
+Boolean bGiForProductOk=FALSE;
+SeqIdPtr sip=NULL;
+Int4 gi=0;
+BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
-	bs = ProteinFromCdRegion (context->sfp, TRUE);
-	if (bs){
-		str = (CharPtr) BSMerge (bs, NULL);
-		BSFree (bs);
+	if (context->sfp->product){
+		prot=BioseqFind(SeqLocId(context->sfp->product));
+		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
+		if (sip){
+			CharPtr str2;
+			gi = GetGINumFromSip(sip);
+			if (gi>0) bGiForProductOk=TRUE;
+			str2=UDV_Read_Sequence (sip,0,prot->length-1, 
+				TRUE,prot->length-1);
+			if (!str2) return;
+			str=str2;
+		}
 	}
-	else return;
+	else{
+		bs = ProteinFromCdRegion (context->sfp, TRUE);
+		if (bs){
+			str = (CharPtr) BSMerge (bs, NULL);
+			BSFree (bs);
+		}
+	}
 
 	if (!str) return;	
 	MemSet(szBuf,' ',SZBUF_SIZE-1);	
@@ -2078,10 +2376,10 @@ Char szBuf[SZBUF_SIZE]={""};
 	while(start_prot<=stop){
 		n2=start_prot-StartLetter+(start_prot-StartLetter)/LETTER_BLOCK_WIDTH
 			-nCompt;
-		if (n2<SZBUF_SIZE-1)
+		if (n2<SZBUF_SIZE-1){
 			szBuf[n2]=str[n];
+		}
 		start_prot+=3;
-		/*nCompt+=3;*/
 		n++;
 	}
 
@@ -2158,7 +2456,7 @@ PoinT arrow[3];
 
 	if (clr!=(Uint4)-1) SetColor(clr);
 	else Black();
-	y-=3;
+	/*y-=3;*/
 	
 	arrow[0].x=start_x;
 	arrow[0].y=y;
@@ -2333,10 +2631,11 @@ Int2 y2;
   Return value : none
 
 *******************************************************************************/
-static void  UDV_Draw_features(UnDViewerGraphDataPtr GrData,
+NLM_EXTERN void  UDV_Draw_features(UnDViewerGraphDataPtr GrData,
 					BspInfoPtr bsp_i,Boolean UseDefClr,Uint4 DefClr,
 					ParaGPtr pgp,RecT PNTR rc,Uint4Ptr pClr,
-					UDV_Item_Select is,UDV_Item_Select old_is)
+					UDV_Item_Select * is,UDV_Item_Select * old_is,
+					Uint4 DisplayType)
 {
 Int2 y,ybase;				/*text position*/
 Int2 xMargin;				/*initial margins*/
@@ -2347,12 +2646,12 @@ Uint2 iID,idx,lineID;		/*used to retrieve a desired Feature*/
 SeqMgrFeatContextPtr context;	/*used to retrieve feature data*/
 SeqMgrFeatContext context2;	/*used to retrieve feature data*/
 Int4 start,stop/*,OccupyTo*/;	/*limit of the feature to draw*/
-Int2 start_x,stop_x,		/*id. but in pixels*/
+Int2 start_x,stop_x,stop_x2,		/*id. but in pixels*/
 	start_nat,stop_nat;		/*ends of the feature : box, arrow*/
 Int2 i,numivals2,i_decal,j;	/*counters*/
 Uint4	clr;				/*color used to draw feature*/		
 Boolean b_draw_line,bCDS,b_connect_left,b_connect_right,
-		b_end_left,b_end_right;
+		b_end_left,b_end_right,bDraw;
 Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 BioseqPtr parent;
 SeqMgrSegmentContext contextPart;
@@ -2385,7 +2684,7 @@ SeqMgrSegmentContext contextPart;
 
 		if (context) {
 			MemFree(context->ivals);
-			context=MemFree(context);
+			context=(SeqMgrFeatContextPtr)MemFree(context);
 		}
 		context=UDV_ConvertFeatContext(&context2,contextPart.cumOffset,
 			bsp_i->bsp->length);
@@ -2426,6 +2725,7 @@ SeqMgrSegmentContext contextPart;
 			nLines++;
 		}*/
 		nLines=lineID;
+		bDraw=FALSE;
 		while (TRUE){
 			b_connect_left=FALSE;
 			b_connect_right=FALSE;
@@ -2470,6 +2770,7 @@ SeqMgrSegmentContext contextPart;
 					UDV_draw_thin_line(start_x,stop_x,y,
 							GrData->udv_font.LineHeight);
 					/*OccupyTo=pgp->StopLetter;*/
+					bDraw=TRUE;
 				}
 				if (context->strand==Seq_strand_plus || 
 						context->strand==Seq_strand_unknown){
@@ -2487,7 +2788,7 @@ SeqMgrSegmentContext contextPart;
 			/*compute the limits of the feature within ParaG*/
 			start=_max_(context->ivals[i],pgp->StartLetter);
 			stop=_min_(context->ivals[i+1],pgp->StopLetter);
-
+			bDraw=TRUE;
 			/*are there connections; exons/introns for example*/
 				/*on the left*/
 			if (context->strand==Seq_strand_plus || 
@@ -2593,7 +2894,7 @@ SeqMgrSegmentContext contextPart;
 				GrData->udv_font.cxChar+xMargin;
 			stop_x=((stop-pgp->StartLetter)+((stop-pgp->StartLetter)/
 				LETTER_BLOCK_WIDTH))*GrData->udv_font.cxChar+xMargin;
-
+			stop_x2=stop_x;/*use below to display a label; wwwudv only*/
 			/*colour*/
 			if (pClr){
 				clr=pClr[context->featdeftype];
@@ -2609,8 +2910,6 @@ SeqMgrSegmentContext contextPart;
 						if (clr!=(Uint4)-1) SetColor(clr);
 						MoveTo(start_x-GrData->udv_font.cxChar/2,y);
 						PaintChar('H');
-						/*UDV_draw_big_arrow_feat(start_x,y,GrData->udv_font.cxChar,
-							GrData->udv_font.cyChar,clr);*/
 						b_connect_left=FALSE;
 						b_connect_right=FALSE;
 						break;
@@ -2669,7 +2968,7 @@ SeqMgrSegmentContext contextPart;
 							UDV_draw_CDS_minus(context,start,stop,
 								pgp->StartLetter,
 								GrData,y,i,xMargin, UseDefClr, DefClr);
-						nLines++;
+						/*nLines++;*/
 						/*WARNING: do not add anything between FEATDEF_CDS 
 						and the following default case because after the 
 						translation, I must draw a box*/						
@@ -2685,10 +2984,9 @@ SeqMgrSegmentContext contextPart;
 				UDV_draw_big_arrow_feat(start_x,y,GrData->udv_font.cxChar,
 					GrData->udv_font.cyChar,clr);
 			}
-			/*OccupyTo=stop;*/
 			/*select feature, if needed*/
-			if (old_is.eIDsel!=-1){
-				if (old_is.iIDsel==iID){
+			if (old_is && old_is->eIDsel!=(Uint2)-1){
+				if (old_is->iIDsel==iID){
 					RecT rcSel;
 
 					rcSel.left=start_x-5;
@@ -2700,15 +2998,15 @@ SeqMgrSegmentContext contextPart;
 					UDV_draw_select(rcSel);
 				}
 			}
-			if (is.eIDsel!=-1){
-				if (is.iIDsel==iID){
+			if (is && is->eIDsel!=(Uint2)-1){
+				if (is->iIDsel==iID){
 					RecT rcSel;
 
 					rcSel.left=start_x-5;
 					rcSel.top=y-GrData->udv_font.LineHeight+1;
 					rcSel.right=stop_x+5;
 					if (!bCDS) rcSel.bottom=y;
-					else rcSel.bottom=y+GrData->udv_font.LineHeight;
+					else rcSel.bottom=y+GrData->udv_font.LineHeight-2;
 					Red();
 					UDV_draw_select(rcSel);
 				}
@@ -2758,11 +3056,197 @@ SeqMgrSegmentContext contextPart;
 				i=i+i_decal;
 				if (i<0) break;
 			}
-		}		
-/*		y+=GrData->udv_font.LineHeight;
-		if (bCDS) y+=GrData->udv_font.LineHeight;*/
+		}
+		if (bDraw && (DisplayType&DDV_DISP_LABEL)){
+			if (pClr){
+				SetColor(pClr[context->featdeftype]);
+			}
+			else Magenta();
+			MoveTo(_max_(stop_x2,stop_x)+GrData->udv_font.cxChar,y);
+			PaintString(context->label);		
+			Black();
+		}
 	}
 	Black();	
+}
+
+/*******************************************************************************
+
+  Function : UDV_Draw_features_MAP()
+  
+  Purpose : create an image map
+  
+  Parameters : 	GrData; graphical data (font size, etc)
+  				bsp_i ; general data of the Bioseq
+				pgp; data of the ParaG
+				rc; rectangle containing this ParaG
+				vnpp_map; to put the image map info
+
+  Note : this is a light version of UDV_Draw_features()				
+
+  Return value : TRUE if success
+
+*******************************************************************************/
+NLM_EXTERN Boolean UDV_Draw_features_MAP(UnDViewerGraphDataPtr GrData,
+					BspInfoPtr bsp_i,ParaGPtr pgp,RecT PNTR rc,Uint2 entityID,
+					ValNodePtr PNTR vnpp_map)
+{
+BioseqPtr parent;
+UDVMapInfoPtr umip;
+SeqMgrSegmentContext contextPart;
+SeqMgrFeatContextPtr context;	/*used to retrieve feature data*/
+SeqMgrFeatContext context2;	/*used to retrieve feature data*/
+ValNodePtr vnp,vnp_map;		/*Features list of itemID and index values*/
+Int4 start,stop;			/*limit of the feature to draw*/
+Int2 y,ybase;				/*text position*/
+Int2 xMargin;				/*initial margins*/
+Int2 nTicks=0,nLet=0;		/*y decal*/
+Uint2 iID,idx,lineID;		/*used to retrieve a desired Feature*/
+Int2 start_x,stop_x;		/*ends of the feature : box, arrow*/
+Int2 i,numivals2,i_decal,j;	/*counters*/
+
+	if (!pgp->pFeatList) return(TRUE);
+	vnp_map=NULL;
+	
+	/*compute position*/
+	if (GrData->udv_scale.ShowMajorTick) nTicks++;
+	if (GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
+					GrData->udv_scale.ScalePosition==SCALE_POS_BOTH) nLet++;
+	
+	xMargin=rc->left+GrData->udv_font.cxChar;
+	ybase=rc->top+(nTicks+nLet+1)*GrData->udv_font.LineHeight;
+
+	/*the current bsp is just a segment ?*/
+	parent=SeqMgrGetParentOfPart(bsp_i->bsp,&contextPart);
+	context=NULL;
+	
+	/*descriptor node for the sequence itself*/
+	/*map rect*/
+	umip=(UDVMapInfoPtr)MemNew(sizeof(UDVMapInfo));
+	if (umip==NULL){
+		if (vnp_map) ValNodeFreeData(vnp_map);
+		return(FALSE);
+	}
+	umip->left=xMargin-5;
+	umip->bottom=ybase;
+	umip->top=umip->bottom-GrData->udv_font.LineHeight+1;
+	umip->right=((pgp->StopLetter-pgp->StartLetter)+((pgp->StopLetter-pgp->StartLetter)/
+				LETTER_BLOCK_WIDTH))*GrData->udv_font.cxChar+xMargin+5;
+	umip->Type=OBJ_BIOSEQ;
+	umip->data.uintvalue=(Uint4)entityID;
+	ValNodeAddPointer(vnpp_map,0,(Pointer)umip);
+
+	/*draw : loop on all features in a ParaG*/
+	for(j=0,vnp=pgp->pFeatList;j<pgp->nFeat;j++,vnp=vnp->next){
+		if (vnp == NULL) break;
+		/*index_g=(Uint8)vnp->data.bigintvalue;*/
+		UDV_BigDecodeIdxFeat ((Uint8)vnp->data.bigintvalue, &iID,&idx,&lineID,NULL);
+		/*get desired feature given iID and idx*/
+		if (!SeqMgrGetDesiredFeature(bsp_i->bsp_entityID,
+				(parent!=NULL ? parent : bsp_i->bsp),
+                iID,idx,NULL,&context2)) continue;
+
+
+		if (context) {
+			MemFree(context->ivals);
+			context=(SeqMgrFeatContextPtr)MemFree(context);
+		}
+		context=UDV_ConvertFeatContext(&context2,contextPart.cumOffset,
+			bsp_i->bsp->length);
+		if (!context) continue;
+		/*depending on the strand, various things are possible :*/
+			/*PLUS/MINUS : if region (start!=stop)-> draw big box, with arrow*/
+
+			/*UNKNOWN : if region (start!=stop)-> draw big box, without arrow*/
+
+			/*PLUS/MINUS/UNKNOWN : if single letter (start==stop)-> draw 
+			vertical arrow*/
+		
+		/*HET feature correction for the ends*/
+		if(context->featdeftype== FEATDEF_HET){
+			context->right=context->ivals[2*context->numivals-1];
+		}
+
+		/*temporary situation; will be modified in the future*/
+		if (context->strand>Seq_strand_minus ||
+			context->strand==Seq_strand_unknown) context->strand=Seq_strand_plus;
+
+		/*strand PLUS*/
+		if (context->strand==Seq_strand_plus){
+			numivals2=context->numivals*2;
+			i=0;
+			i_decal=2;
+		}
+		
+		/*strand MINUS*/
+		if (context->strand==Seq_strand_minus){
+			numivals2=2*context->numivals-2;
+			i=numivals2;
+			i_decal=-2;
+		}		
+
+		while (TRUE){
+			/*if ivals.stop > end ParaG -> end */
+			if (context->ivals[i]>pgp->StopLetter) break;
+			/*skip if not yet in the ParaG*/
+			if (context->ivals[i+1]<pgp->StartLetter) {
+				if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
+					i=i+i_decal;
+					if (i>numivals2-2) break;
+					else continue;
+				}					
+				if (context->strand==Seq_strand_minus){
+					i=i+i_decal;
+					if (i<0) break;
+					else continue;
+				}
+			}									
+			/*compute the limits of the feature within ParaG*/
+			start=_max_(context->ivals[i],pgp->StartLetter);
+			stop=_min_(context->ivals[i+1],pgp->StopLetter);
+
+			/*compute limits of the drawing... zero based values from the left 
+				of ParaG rc*/
+			start_x=((start-pgp->StartLetter)+
+				((start-pgp->StartLetter)/LETTER_BLOCK_WIDTH))*
+				GrData->udv_font.cxChar+xMargin;
+			stop_x=((stop-pgp->StartLetter)+((stop-pgp->StartLetter)/
+				LETTER_BLOCK_WIDTH))*GrData->udv_font.cxChar+xMargin;
+			
+			y=ybase+lineID*GrData->udv_font.LineHeight;
+
+			/*map rect*/
+			umip=(UDVMapInfoPtr)MemNew(sizeof(UDVMapInfo));
+			if (umip==NULL){
+				if (vnp_map) ValNodeFreeData(vnp_map);
+				return(FALSE);
+			}
+			umip->left=start_x-5;
+			umip->top=y-GrData->udv_font.LineHeight+1;
+			umip->right=stop_x+5;
+			if (context->featdeftype==FEATDEF_CDS) 
+				umip->bottom=y+GrData->udv_font.LineHeight;
+			else 
+				umip->bottom=y;
+			
+			/*map nodes list*/
+			umip->Type=OBJ_SEQFEAT;
+			umip->data.uintvalue=UDV_EncodeIdxFeat(iID,idx);
+			ValNodeAddPointer(vnpp_map,0,(Pointer)umip);
+
+			if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
+				i=i+i_decal;
+				if (i>numivals2-2) break;
+			}
+			if (context->strand==Seq_strand_minus){
+				i=i+i_decal;
+				if (i<0) break;
+			}
+		}
+	}
+	return(TRUE);
 }
 
 /*******************************************************************************
@@ -2782,6 +3266,7 @@ SeqMgrSegmentContext contextPart;
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 static void  UDV_Draw_features_label(UnDViewerGraphDataPtr GrData,
 					BspInfoPtr bsp_i,ParaGPtr pgp,RecT PNTR rc,Uint4Ptr pClr,
 					UDV_Item_Select is,UDV_Item_Select old_is)
@@ -2829,7 +3314,7 @@ Uint2 j;					/*counter*/
 				}
 				PaintString (szBuf);
 				/*select if needed*/
-				if (old_is.eIDsel!=-1){
+				if (old_is.eIDsel!=(Uint2)-1){
 					if (old_is.iIDsel==iID){
 						RecT rcSel;
 						
@@ -2841,7 +3326,7 @@ Uint2 j;					/*counter*/
 						UDV_draw_select(rcSel);
 					}
 				}
-				if (is.eIDsel!=-1){
+				if (is.eIDsel!=(Uint2)-1){
 					if (is.iIDsel==iID){
 						RecT rcSel;
 						
@@ -2866,6 +3351,7 @@ Uint2 j;					/*counter*/
 	}
 	Black();	
 }
+#endif /*WWW_UDV*/
 
 
 /*******************************************************************************
@@ -2881,6 +3367,7 @@ Uint2 j;					/*counter*/
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 static void  UDV_Draw_sequence_name(UnDViewerGraphDataPtr GrData,
 					BspInfoPtr bsp_i,RecT PNTR rc)
 {
@@ -2901,34 +3388,8 @@ Int2 nTicks=0,nLet=0;	/*y decal*/
 	MoveTo(x,y);
 	PaintString (bsp_i->bspAccNum);
 }
+#endif /*WWW_UDV*/
 
-/*******************************************************************************
-
-  Function : GiveClrFromIdx()
-  
-  Purpose : retrieve a colour
-  
-  Parameters : 	idx;position within the bsp (zero-based)
-  				seq_color; colour table
-				
-  Return value : pointer to colour struct
-
-*******************************************************************************/
-static ResidueColorCellPtr GiveClrFromIdx(Int4 idx,ValNodePtr seq_color)
-{
-Int4  i;
-
-	i=0;
-	while(seq_color){
-		if (i==idx) {
-			return((ResidueColorCellPtr)seq_color->data.ptrvalue);	
-		}
-		seq_color=seq_color->next;
-		i++;
-	}
-
-   return NULL;
-}
 
 /*******************************************************************************
 
@@ -2951,22 +3412,24 @@ Int4  i;
   Return value : none
 
 *******************************************************************************/
-static void  UDV_Draw_sequence(UnDViewerGraphDataPtr GrData,ValNodePtr vnp_color,
-					Boolean UseDefClr,Uint4 DefClr,
+NLM_EXTERN void  UDV_Draw_sequence(UnDViewerGraphDataPtr GrData,
+                    DDV_ColorGlobal *svpp ,Boolean UseDefClr,Uint4 DefClr,
 					ParaGPtr pgp,RecT PNTR rc,Int4 start_decal,Int4 StartLetter,
-					CharPtr szSequence)
+					CharPtr szSequence, SeqId *sip,ValNodePtr vnp_bsp,
+					Boolean bSelect)
 {
-Int4 pos,taille,stop;	/*scale start at...(used to draw text)*/
+Int4 pos,taille,stop,bsp_pos,	/*scale start at...(used to draw text)*/
+	 bsp_pos_goto;
 Int2 x,y,ldecal,hdecal;	/*text position*/
 Int2 xMargin;			/*initial margins*/
 Int2 nTicks=0,nLet=0;	/*y decal*/
 Uint1 residue;			/*letter and sequence length to retrieve*/
 Uint2 nCompt=0,nCompt2=0;
 CharPtr szBuf;
-ResidueColorCellPtr rgb;
-Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
+DDV_ColorCell  *rgb,*highlighClr;
+Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor,hlClr;
+RecT  rcSel;
 
-	
 	/*alloc a buffer*/
 	taille=pgp->StopLetter-pgp->StartLetter+
 		(pgp->StopLetter-pgp->StartLetter)/LETTER_BLOCK_WIDTH+5;
@@ -2986,13 +3449,53 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
 	ldecal=GrData->udv_font.cxChar/2;
 	hdecal=nTicks+nLet+1;
 
-	if (UseDefClr || vnp_color==NULL) SetColor(DefClr);
+	if (UseDefClr) SetColor(DefClr);
 	newColor=(Uint4)-1;
 	stop=pgp->StopLetter+2;
 	y=y+hdecal*GrData->udv_font.LineHeight;
 	x=xMargin-ldecal;
-	/*draw!*/
-	if (vnp_color==NULL){
+
+		
+#ifndef WWW_UDV
+	/* -A- Draw the selection; this code is not used by Entrez cgi-bin viewer*/
+	if (bSelect) Yellow();
+	else White();
+	bsp_pos_goto=GrData->GotoLetter-1;
+	bsp_pos=start_decal+(StartLetter-start_decal);
+
+	while(pos<stop){
+		if(UDV_IsLetterSelected(vnp_bsp,bsp_pos)&& 
+				bsp_pos!=bsp_pos_goto ){
+			rcSel.left=x+((bsp_pos-pgp->StartLetter)+
+				(bsp_pos-pgp->StartLetter)/LETTER_BLOCK_WIDTH)*
+				GrData->udv_font.cxChar-1;
+			rcSel.top=y-GrData->udv_font.LineHeight;
+			rcSel.bottom=y;
+			rcSel.right=rcSel.left+GrData->udv_font.cxChar;
+			PaintRect(&rcSel);
+		}
+		bsp_pos++;
+		pos++;
+	}
+#endif
+
+	pos=pgp->StartLetter+1;	
+	/* -B- Draw the highlight  GoTo letter*/
+	if (bsp_pos_goto>=pgp->StartLetter && bsp_pos_goto<=pgp->StopLetter){
+		Red();
+		rcSel.left=x+((bsp_pos_goto-pgp->StartLetter)+
+			(bsp_pos_goto-pgp->StartLetter)/LETTER_BLOCK_WIDTH)*
+			GrData->udv_font.cxChar-1;
+		rcSel.top=y-GrData->udv_font.LineHeight;
+		rcSel.bottom=y;
+		rcSel.right=rcSel.left+GrData->udv_font.cxChar;
+		PaintRect(&rcSel);
+	}
+
+	/* -C- Draw the letters*/
+	if (svpp==NULL){/*means we don't use the Color Manager*/
+		if (bSelect) Yellow();
+		else White();
 		while(pos<stop){
 			residue=(Uint1)szSequence[StartLetter-start_decal+(nCompt++)];
 			szBuf[nCompt2++]=residue;
@@ -3002,29 +3505,36 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
 				szBuf[nCompt2]=' ';
 				nCompt2++;
 			}
-
 			pos++;		
 		}
+		Black();
 		MoveTo(x,y);
 		PaintString(szBuf);
 	}
-	else{ /*use vnp_color table of colours; complex colour scheme*/
+	else{ /*use The Color Manager*/
+	    highlighClr =
+    	    DDV_SearchColorCellbyName(svpp->pvnSpecialColors, "Highlight");
+		if (highlighClr)
+			hlClr = GetColorRGB (highlighClr->rgb[0], highlighClr->rgb[1],highlighClr->rgb[2]);
+		else 
+			hlClr = GetColorRGB (255,255,0);
 		while(pos<stop){
 			/*retrieve colour*/
-			rgb=GiveClrFromIdx(pos-1,vnp_color);
+			bsp_pos=start_decal+(StartLetter-start_decal)+nCompt;
+			rgb=DDV_GetColor(svpp, sip, -1, bsp_pos);
 			if(rgb != NULL ){
 			   curColor = GetColorRGB (rgb->rgb[0], rgb->rgb[1],rgb->rgb[2]);
 			}
 			else curColor=blackColor;
 			/*new colour?*/
 			if (curColor!=newColor){
-				newColor=curColor;
 				if (szBuf[0]!='\0'){/*something to draw ?*/
 					szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
 					MoveTo(x,y);
 					SetColor(newColor);
 					PaintString(szBuf);
 				}
+				newColor=curColor;
 				x+=(nCompt2*GrData->udv_font.cxChar);
 				nCompt2=0;
 				szBuf[nCompt2]='\0';
@@ -3073,9 +3583,10 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
 NLM_EXTERN void UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
 		Boolean ShowMajorTick,Boolean ShowMMinorTick,Uint1 ScalePosition,
 		Int4 StartLetter,Int4 StopLetter,RecT PNTR rc,Int2 LeftDecal,
-		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth)
+		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth,
+		Uint4 DisplayType)
 {
-Int4 pos,AliPos;				/*scale start at...(used to draw text)*/
+Int4 pos,AliPos,stop;				/*scale start at...(used to draw text)*/
 Int2 x,y,y2,y3,y4,xDecal;	/*text position*/
 Int2 xMargin,yMargin;	/*initial margins*/
 Char szBuf[15]={""};	/*scale value*/
@@ -3096,14 +3607,19 @@ Int2 cxChar_2,cyChar_4;
 	y2=(Int2)(y+GrData->udv_font.LineHeight);
 	AliPos=AlignPos+1;/*switch to 1-based value*/
 	ScaleMaxVal++;
-	/*scale on top ?*/
+
+	if (DisplayType&DDV_DISP_VERT)
+		stop=StopLetter+2;
+	else
+		stop=StopLetter+1;
+		
 	if ((ScalePosition==SCALE_POS_TOP || 
 					ScalePosition==SCALE_POS_BOTH)){
-		while(pos<StopLetter+1){
-
+		while(pos<stop){
 			if (/*(pos==StartLetter+1) ||*/ !(AliPos % LETTER_BLOCK_WIDTH)
 					&& AliPos!=ScaleMaxVal){
 				sprintf(szBuf,"%d",AliPos);
+
 				SetColor(GrData->udv_scale.ScaleColor);
 				/*scale on top or both*/
 				if(ShowMajorTick){/*center text on the tick*/
@@ -3302,6 +3818,7 @@ RecT rc;
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 static void  UDV_draw_empty_panel(RecT rc,UnDViewerGraphDataPtr GrData,
 	Boolean ShowText)
 {
@@ -3319,6 +3836,7 @@ static void  UDV_draw_empty_panel(RecT rc,UnDViewerGraphDataPtr GrData,
 	MoveTo((Int2)(rc.left+5),(Int2)(rc.top+3*GrData->udv_font.cyChar));
 	PaintString("to draw.");
 }
+#endif /*WWW_UDV*/
 
 /*******************************************************************************
 
@@ -3334,21 +3852,21 @@ static void  UDV_draw_empty_panel(RecT rc,UnDViewerGraphDataPtr GrData,
   Return value : none
 
 *******************************************************************************/
-static void UDV_draw_panel(PaneL p,ViewerDialogDataPtr vdp)	
+#ifndef WWW_UDV
+static void UDV_draw_panel(PaneL p,ViewerDialogDataPtr vdp,RecT PNTR MyUpdateRect,
+	Boolean bSelect)	
 {
-WindoW 				temport;
 Int4 				stop,decal_haut,from_row,to_row,nTotRow,nLinesDraw;
-ValNodePtr 			vnp,vnp2;
+ValNodePtr 			vnp,vnp2,vnp_bsp;
 ParaGPtr 			pgp;
 RecT 				rc,rcP,rcP_old;
 Int2				decal_gauche;
-SeqEditViewProcsPtr svpp=NULL;
+DDV_ColorGlobal     *svpp=NULL;
 ValNodePtr          vnp_seqinfo=NULL;
-ValNodePtr          vnp_color = NULL;
-MediaInfoPtr        MIPtr=NULL;
+SelStructPtr        ssp;/*used to get the selected region(s)*/
+Uint2               bsp_eID,bsp_iID;
+ViewerMainPtr 	    vmp;
 
-	temport=SavePort(ParentWindow(p));
-	Select (p);
 	/*restrict panel drawing area: 'add' little margins*/
 	ObjectRect(p,&rcP);
 	rcP_old=rcP;
@@ -3361,6 +3879,14 @@ MediaInfoPtr        MIPtr=NULL;
 		return;
 	}
 
+	if (vdp->Parent){
+		vmp=(ViewerMainPtr)GetObjectExtra(vdp->Parent);
+		if (vmp->Show_logo){
+			UDV_Logo_onDraw(p);
+			return;
+		}
+	}
+	
 	if (vdp->ParaG == NULL) {
 		UDV_draw_empty_panel(rcP,&vdp->udv_graph,FALSE);
 		ResetClip();	
@@ -3372,25 +3898,12 @@ MediaInfoPtr        MIPtr=NULL;
 		ResetClip();	
 		return;
 	}
-
-	/*decal_haut=UDV_calc_decalRC(vdp->ParaG,vdp->udv_graph.udv_vscrl.ScrollPos,
-		vdp->udv_graph.udv_vscrl.ScrollMax,vdp->udv_graph.udv_vscrl.ScrollPage,
-		vdp->udv_graph.udv_panel.nTotLines,vdp->udv_graph.udv_font.LineHeight,
-		&vnp,&stop);*/
 	
 	decal_haut=vdp->udv_graph.udv_vscrl.ScrollPos*vdp->udv_graph.udv_font.LineHeight-
 			VIEWER_VERT_MARGIN;	
 
-/*printf("%d..%d\n",rcP.top,rcP.bottom);*/
-	if (vdp->udv_graph.bFirst){
-		from_row=0;
-		to_row=(rcP.bottom-rcP.top)/vdp->udv_graph.udv_font.LineHeight+1;
-		vdp->udv_graph.bFirst=FALSE;
-	}
-	else{
-		from_row=(updateRect.top-rcP.top)/vdp->udv_graph.udv_font.LineHeight-1;
-		to_row=(updateRect.bottom-rcP.top)/vdp->udv_graph.udv_font.LineHeight+1;
-	}
+	from_row=(MyUpdateRect->top-rcP.top)/vdp->udv_graph.udv_font.LineHeight-1;
+	to_row=(MyUpdateRect->bottom-rcP.top)/vdp->udv_graph.udv_font.LineHeight+1;
 	if (from_row<0 && to_row<0) return;		
 	if (from_row<0) from_row=0;
 	if (to_row<0) to_row=0;
@@ -3415,20 +3928,14 @@ MediaInfoPtr        MIPtr=NULL;
 	}	
 
 	/*retrieve the colours table for the bsp*/
-	svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-	if (svpp) {
-		vnp_seqinfo = svpp->seqinfo;
-		while(vnp_seqinfo){
-			MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
-			if (MIPtr->entityID==vdp->bsp_i.bsp_entityID && 
-				MIPtr->itemID==vdp->bsp_i.bsp_itemID){
-				vnp_color=MIPtr->seq_color;
-				break;
-		}
-		vnp_seqinfo=vnp_seqinfo->next;
-		}
-	}
-	
+#ifndef WWW_UDV
+	svpp = (DDV_ColorGlobal *)DDV_GetColorGlobalEx((void *)vdp->bsp_i.bsp);
+#endif
+
+#ifdef WWW_UDV
+	svpp = NULL;
+#endif
+
 	/*draw ParaG until out of panel*/
 	SelectFont(vdp->udv_graph.udv_font.hFnt);
 
@@ -3452,6 +3959,17 @@ MediaInfoPtr        MIPtr=NULL;
 	decal_gauche=vdp->udv_graph.udv_panel.cxName+rcP_old.left+
 			vdp->udv_graph.udv_scale.cxLeftScale;
 	nLinesDraw=0;		
+	
+	/*get selected regions*/
+	ssp=ObjMgrGetSelected();
+	vnp_bsp=NULL;
+	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+	if (bsp_eID!=0 && bsp_iID!=0){
+		vnp_bsp=UDV_GetSelectedRegions(ssp,bsp_eID,bsp_iID);
+	}
+
 	for(vnp2=vnp ; vnp2 != NULL ; vnp2=vnp2->next){
 		if (vnp2->data.ptrvalue){
 			pgp=(ParaGPtr)vnp2->data.ptrvalue;
@@ -3459,7 +3977,7 @@ MediaInfoPtr        MIPtr=NULL;
 			rc=UDV_calc_RCdraw(pgp->StartLine,pgp->nLines,rcP_old,
 					decal_gauche,decal_haut,vdp->udv_graph.udv_font.LineHeight);
 
-		/*Numerical scale*/
+		/*ruler*/
 			if (vdp->udv_graph.udv_panel.ShowScale)
 				UDV_Draw_scale(&vdp->udv_graph,
 					vdp->udv_graph.udv_scale.ShowMajorTick,
@@ -3469,14 +3987,14 @@ MediaInfoPtr        MIPtr=NULL;
 					vdp->udv_graph.udv_font.cxChar,
 					vdp->bsp_i.bspLength,pgp->StartLetter,
 					TRUE,
-					vdp->udv_graph.udv_font.cxChar);
+					vdp->udv_graph.udv_font.cxChar,DDV_DISP_VERT);
 		/*Sequence*/
 			if (vdp->bsp_i.SeqBuf)
-				UDV_Draw_sequence(&vdp->udv_graph,vnp_color,
+				UDV_Draw_sequence(&vdp->udv_graph,svpp,
 					vdp->udv_graph.udv_font.UseDefaultColorLetter,
 					vdp->udv_graph.udv_font.LetterColor,
 					pgp,&rc,vdp->bsp_i.StartBuf,pgp->StartLetter,
-					vdp->bsp_i.SeqBuf);
+					vdp->bsp_i.SeqBuf,vdp->bsp_i.bsp->id,vnp_bsp,bSelect);
 		/*Sequence name*/
 			UDV_Draw_sequence_name(&vdp->udv_graph,&vdp->bsp_i,&rc);
 		/*Features*/
@@ -3484,22 +4002,24 @@ MediaInfoPtr        MIPtr=NULL;
 				UDV_Draw_features(&vdp->udv_graph,&vdp->bsp_i,
 					vdp->udv_graph.udv_font.UseDefaultColorLetter,
 					vdp->udv_graph.udv_font.LetterColor,pgp,&rc,
-					vdp->udv_graph.pClr,vdp->Item_select,vdp->Old_Item_select);
+					vdp->udv_graph.pClr,&(vdp->Item_select),&(vdp->Old_Item_select),
+					DDV_DISP_VERT);
 				/*Feature names
 					UDV_Draw_features_label(&vdp->udv_graph,&vdp->bsp_i,pgp,
 						&rc,
 						vdp->udv_graph.pClr,vdp->Item_select,
 						vdp->Old_Item_select);*/
 			}
-			nLinesDraw+=pgp->nLines;
-			if (nLinesDraw>nTotRow) break;
+			/*nLinesDraw+=pgp->nLines;
+			if (nLinesDraw>nTotRow) break;*/
+			if ((pgp->StartLine+pgp->nLines)>to_row) break;
 			/*if (pgp->StartLine > stop) break;*/
 		}		
 	}	
 
 	ResetClip();	
-	RestorePort(temport);
 }
+#endif /*WWW_UDV*/
 
 /*******************************************************************************
 
@@ -3514,22 +4034,20 @@ MediaInfoPtr        MIPtr=NULL;
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void  UDV_draw_viewer (PaneL p)
 {
 WindoW 	w;
-ViewerMainPtr		vmp;
+ViewerDialogDataPtr vdp;
 
-	/*get the parent Window of the Panel*/
-	w=ParentWindow(p);
-	if (w==NULL) return;
-	
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
 
-	if (vmp==NULL) return;
+	if (vdp==NULL) return;
 
-	UDV_draw_panel(p,vmp->vdp);
+	UDV_draw_panel(p,vdp,&updateRect,TRUE);
 }
+#endif /*WWW_UDV*/
 
 
 /*******************************************************************************
@@ -3543,24 +4061,18 @@ ViewerMainPtr		vmp;
   Return value : none
 
 *******************************************************************************/
+#ifndef WWW_UDV
 NLM_EXTERN void UDV_Logo_onDraw (PaneL p)
 {
-WindoW 				w,temport;
-RecT 				/*rc,*/rcP;
-/*ViewerMainPtr		vmp;*/
+WindoW 				w;
+RecT 				rcP;
 UDVLogoDataPtr		ldp;
 
-	/*get the parent Window of the Panel*/
-	w=ParentWindow(p);
-	if (w==NULL) return;
-	
 	/*get some usefull data...*/
-	/*vmp = (ViewerMainPtr) GetObjectExtra (w);*/
 	ldp = (UDVLogoDataPtr) GetAppProperty ("UDVLogoData");
 
 	if (ldp==NULL) return;
 	
-	temport=SavePort(ParentWindow(p));
 	Select (p);
 	/*restrict panel drawing area: 'add' little margins*/
 	ObjectRect(p,&rcP);
@@ -3574,67 +4086,6 @@ UDVLogoDataPtr		ldp;
 	ResetClip();	
 
 	/*3D border*/
-	Black();
-	FrameRect(&rcP);
-	InsetRect(&rcP,-1,-1);
-	LtGray();
-	FrameRect(&rcP);
-	InsetRect(&rcP,-1,-1);
-	FrameRect(&rcP);
-	Black();
-	InsetRect(&rcP,-2,-2);
-	FrameRect(&rcP);
-	RestorePort(temport);
 }
+#endif /*WWW_UDV*/
 
-/*******************************************************************************
-
-  Function : UDV_InfoPanelDrawProc()
-  
-  Purpose : draw the content of the Info panel
-  
-  Parameters :	handle of the panel
-  
-  Return value : none
-
-*******************************************************************************/
-NLM_EXTERN void UDV_InfoPanelDrawProc(PaneL p)
-{
-RecT 				rc;
-CharPtr 			szFeatName;
-WindoW 				w,temport;
-ViewerDialogDataPtr vdp;
-ViewerMainPtr		vmp;
-
-	w=ParentWindow(p);
-	
-	if (w==NULL) return;
-
-	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
-
-	if (vmp==NULL) return;
-	temport=SavePort(w);
-
-	Select(p);
-	vdp=vmp->vdp;
-
-	if (vdp) SelectFont(vdp->udv_graph.udv_font.hFnt);
-	else return;
-	
-	szFeatName=(CharPtr) GetObjectExtra (p);
-
-	ObjectRect(p,&rc);
-	LtGray();
-	PaintRect(&rc);
-	Black();
-	FrameRect(&rc);
-	if (szFeatName){
-		MoveTo((Int2)(rc.left+10),
-				(Int2)(rc.bottom-vdp->udv_graph.udv_font.cyChar/4));
-		Black();
-		PaintString(szFeatName);
-	}
-	Black();
-	RestorePort(temport);
-}

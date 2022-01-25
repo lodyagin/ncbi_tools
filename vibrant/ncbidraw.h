@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant drawing procedure definitions
@@ -37,6 +37,16 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.h,v $
+* Revision 6.8  2000/01/24 16:11:13  lewisg
+* speed up seqid comparison in color manager, make fast windows version of SetColor()
+*
+* Revision 6.7  1999/10/20 23:10:04  vakatov
+* + Nlm_SetCurrentGIF(), + Nlm_DestroyGIF() proto.
+* Get rid of the (now obsolete) PROTO macro; added more comments.
+*
+* Revision 6.6  1999/10/04 17:16:32  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.5  1998/07/14 16:44:26  vakatov
 * Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
 *
@@ -73,7 +83,6 @@
 *
 * Revision 2.12  1995/07/14  17:48:26  kans
 * new CopyPixmap (AS)
-*
 * ==========================================================================
 */
 
@@ -82,6 +91,10 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef _NCBI_
+#include <ncbi.h>
 #endif
 
 /***  PORTABLE GRAPHIC PRIMITIVE OBJECT TYPES  ***/
@@ -143,8 +156,8 @@ extern  Nlm_Int2  Nlm_stdCharWidth;
 
 /***  DRAWING PROCEDURES  ***/
 
-void         Nlm_SetUpDrawingTools PROTO((void));
-void         Nlm_CleanUpDrawingTools PROTO((void));
+void         Nlm_SetUpDrawingTools (void);
+void         Nlm_CleanUpDrawingTools(void);
 
 /*
 *  It is not necessary to create a new font when switching colors.  The
@@ -155,46 +168,47 @@ void         Nlm_CleanUpDrawingTools PROTO((void));
 *  ScrollRect will erase and invalidate all invalid regions.
 */
 
-void         Nlm_ResetDrawingTools PROTO((void));
+void         Nlm_ResetDrawingTools(void);
 
-void         Nlm_CopyMode PROTO((void));
-void         Nlm_MergeMode PROTO((void));
-void         Nlm_InvertMode PROTO((void));
-void         Nlm_EraseMode PROTO((void));
+void         Nlm_CopyMode(void);
+void         Nlm_MergeMode(void);
+void         Nlm_InvertMode(void);
+void         Nlm_EraseMode(void);
 
-void         Nlm_Black PROTO((void));
-void         Nlm_Red PROTO((void));
-void         Nlm_Green PROTO((void));
-void         Nlm_Blue PROTO((void));
-void         Nlm_Cyan PROTO((void));
-void         Nlm_Magenta PROTO((void));
-void         Nlm_Yellow PROTO((void));
-void         Nlm_White PROTO((void));
-void         Nlm_Gray PROTO((void));
-void         Nlm_LtGray PROTO((void));
-void         Nlm_DkGray PROTO((void));
-void         Nlm_SelectColor PROTO((Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue));
-Nlm_Uint4    Nlm_GetColorRGB PROTO((Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue));
-Nlm_Uint4    Nlm_GetColor PROTO((void));
-void         Nlm_SetColor PROTO((Nlm_Uint4 color));
-void         Nlm_InvertColors PROTO((void));
-void         Nlm_DecodeColor PROTO((Nlm_Uint4 color, Nlm_Uint1Ptr red, Nlm_Uint1Ptr green, Nlm_Uint1Ptr blue));
+void         Nlm_Black(void);
+void         Nlm_Red(void);
+void         Nlm_Green(void);
+void         Nlm_Blue(void);
+void         Nlm_Cyan(void);
+void         Nlm_Magenta(void);
+void         Nlm_Yellow(void);
+void         Nlm_White(void);
+void         Nlm_Gray(void);
+void         Nlm_LtGray(void);
+void         Nlm_DkGray(void);
+void         Nlm_SelectColor(Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue);
+Nlm_Uint4    Nlm_GetColorRGB(Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue);
+Nlm_Uint4    Nlm_GetColor(void);
+void         Nlm_SetColorEx (Nlm_Uint4 color);
+void         Nlm_SetColor(Nlm_Uint4 color);
+void         Nlm_InvertColors(void);
+void         Nlm_DecodeColor(Nlm_Uint4 color, Nlm_Uint1Ptr red, Nlm_Uint1Ptr green, Nlm_Uint1Ptr blue);
 
-void         Nlm_Solid PROTO((void));
-void         Nlm_Dark PROTO((void));
-void         Nlm_Medium PROTO((void));
-void         Nlm_Light PROTO((void));
-void         Nlm_Empty PROTO((void));
-void         Nlm_SetPenPattern PROTO((Nlm_VoidPtr pattern));
-void         Nlm_Dotted PROTO((void));
-void         Nlm_Dashed PROTO((void));
-void         Nlm_WidePen PROTO((Nlm_Int2 width));
+void         Nlm_Solid(void);
+void         Nlm_Dark(void);
+void         Nlm_Medium(void);
+void         Nlm_Light(void);
+void         Nlm_Empty(void);
+void         Nlm_SetPenPattern(Nlm_VoidPtr pattern);
+void         Nlm_Dotted(void);
+void         Nlm_Dashed(void);
+void         Nlm_WidePen(Nlm_Int2 width);
 
-/* Under X11       -- full functionality(pen offset, dash length and gap length);
-   Under Win-NT    -- parameter "offset" ignored(always zero)
-   Other platforms -- exactly analogous to "Nlm_Dotted()"
-   */
-void Nlm_SetPenDash PROTO((Nlm_Uint1 offset, Nlm_Uint1 dash, Nlm_Uint1 gap));
+/* Under X11       -- pen offset, dash length and gap length
+ * Under Win-NT    -- parameter "offset" ignored(always zero)
+ * Other platforms -- exactly analogous to "Nlm_Dotted()"
+ */
+void Nlm_SetPenDash(Nlm_Uint1 offset, Nlm_Uint1 dash, Nlm_Uint1 gap);
 
 /* esl++ */
 /***  FONT HANDLING PROCEDURES  ***/
@@ -240,108 +254,108 @@ typedef struct Nlm_fontspec {
   Nlm_Uint1 family;
 } Nlm_FontSpec, PNTR Nlm_FontSpecPtr;
 
-Nlm_FonT     Nlm_CreateFont PROTO((Nlm_FontSpecPtr fsp));
-Nlm_FonT     Nlm_GetResidentFont PROTO((Nlm_FontSpecPtr fsp));
-Nlm_FonT     Nlm_CopyFont PROTO((Nlm_FonT font));
-Nlm_FonT     Nlm_DeleteFont PROTO((Nlm_FonT font));
-Nlm_FonT     Nlm_FindNextResidentFont PROTO((Nlm_FonT font));
-Nlm_Boolean  Nlm_GetFontSpec PROTO((Nlm_FonT font, Nlm_FontSpecPtr fsp));
-Nlm_Boolean  Nlm_EqualFontSpec PROTO((Nlm_FontSpecPtr fsp1, Nlm_FontSpecPtr fsp2));
+Nlm_FonT     Nlm_CreateFont(Nlm_FontSpecPtr fsp);
+Nlm_FonT     Nlm_GetResidentFont(Nlm_FontSpecPtr fsp);
+Nlm_FonT     Nlm_CopyFont(Nlm_FonT font);
+Nlm_FonT     Nlm_DeleteFont(Nlm_FonT font);
+Nlm_FonT     Nlm_FindNextResidentFont(Nlm_FonT font);
+Nlm_Boolean  Nlm_GetFontSpec(Nlm_FonT font, Nlm_FontSpecPtr fsp);
+Nlm_Boolean  Nlm_EqualFontSpec(Nlm_FontSpecPtr fsp1, Nlm_FontSpecPtr fsp2);
 
 /*
 *  The functions below return the specifications for common fonts.
 *  The return value points to the static buffer that is owerwritten
 *  by next call to any of these functions.
-*  Example: FonT f = CreateFont (Times (24, STYLE_BOLD_ITALIC));
+*  Example: FonT f = CreateFont (Times (24, STYLE_BOLD_ITALIC);
 */
-extern Nlm_FontSpecPtr Nlm_Helvetica PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_Times PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_Courier PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_Symbol PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_Gothic PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_Minchou PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_GothicFixed PROTO((Nlm_Int2 size, Nlm_Uint1 style));
-extern Nlm_FontSpecPtr Nlm_MinchouFixed PROTO((Nlm_Int2 size, Nlm_Uint1 style));
+extern Nlm_FontSpecPtr Nlm_Helvetica(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_Times(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_Courier(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_Symbol(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_Gothic(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_Minchou(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_GothicFixed(Nlm_Int2 size, Nlm_Uint1 style);
+extern Nlm_FontSpecPtr Nlm_MinchouFixed(Nlm_Int2 size, Nlm_Uint1 style);
 
 /* esl++ end */
 
-Nlm_FonT     Nlm_GetFont PROTO((Nlm_CharPtr name, Nlm_Int2 size, Nlm_Boolean bld, Nlm_Boolean itlc, Nlm_Boolean undrln, Nlm_CharPtr fmly));
-Nlm_FonT     Nlm_GetFontEx PROTO((Nlm_CharPtr name, Nlm_Int2 size, Nlm_Boolean bld, Nlm_Boolean itlc, Nlm_Boolean undrln, Nlm_CharPtr fmly, Nlm_CharPtr chset, Nlm_Boolean fixed));
-Nlm_FonT     Nlm_ParseFont PROTO((Nlm_CharPtr spec));
-Nlm_FonT     Nlm_ParseFontEx PROTO((Nlm_CharPtr scrSpec, Nlm_CharPtr prtSpec));
-void         Nlm_SelectFont PROTO((Nlm_FonT f));
-void         Nlm_AssignPrinterFont PROTO((Nlm_FonT scrnFont, Nlm_FonT prtrFont));
+Nlm_FonT     Nlm_GetFont(Nlm_CharPtr name, Nlm_Int2 size, Nlm_Boolean bld, Nlm_Boolean itlc, Nlm_Boolean undrln, Nlm_CharPtr fmly);
+Nlm_FonT     Nlm_GetFontEx(Nlm_CharPtr name, Nlm_Int2 size, Nlm_Boolean bld, Nlm_Boolean itlc, Nlm_Boolean undrln, Nlm_CharPtr fmly, Nlm_CharPtr chset, Nlm_Boolean fixed);
+Nlm_FonT     Nlm_ParseFont(Nlm_CharPtr spec);
+Nlm_FonT     Nlm_ParseFontEx(Nlm_CharPtr scrSpec, Nlm_CharPtr prtSpec);
+void         Nlm_SelectFont(Nlm_FonT f);
+void         Nlm_AssignPrinterFont(Nlm_FonT scrnFont, Nlm_FonT prtrFont);
 
-Nlm_Int2     Nlm_CharWidth PROTO((Nlm_Char ch));
-Nlm_Int2     Nlm_StringWidth PROTO((const Nlm_Char* text));
-Nlm_Int2     Nlm_TextWidth PROTO((const Nlm_Char* text, size_t len));
-Nlm_Int2     Nlm_Ascent PROTO((void));
-Nlm_Int2     Nlm_Descent PROTO((void));
-Nlm_Int2     Nlm_Leading PROTO((void));
-Nlm_Int2     Nlm_FontHeight PROTO((void));
-Nlm_Int2     Nlm_LineHeight PROTO((void));
-Nlm_Int2     Nlm_MaxCharWidth PROTO((void));
+Nlm_Int2     Nlm_CharWidth(Nlm_Char ch);
+Nlm_Int2     Nlm_StringWidth(const Nlm_Char* text);
+Nlm_Int2     Nlm_TextWidth(const Nlm_Char* text, size_t len);
+Nlm_Int2     Nlm_Ascent(void);
+Nlm_Int2     Nlm_Descent(void);
+Nlm_Int2     Nlm_Leading(void);
+Nlm_Int2     Nlm_FontHeight(void);
+Nlm_Int2     Nlm_LineHeight(void);
+Nlm_Int2     Nlm_MaxCharWidth(void);
 
 /* Calculate(based on the presently active font) and return maximum
  * number of characters from the string "str" which can be fit into
  * "*max_width" pixels.
  * Return 0 if the "str" is NULL or empty or if the curr.font is NULL.
  */
-size_t Nlm_FitStringWidth PROTO((const Nlm_Char PNTR str, Nlm_Int4 max_width));
+size_t Nlm_FitStringWidth(const Nlm_Char PNTR str, Nlm_Int4 max_width);
 
-void         Nlm_SetPen PROTO((Nlm_PoinT pt));
-void         Nlm_GetPen PROTO((Nlm_PointPtr pt));
+void         Nlm_SetPen(Nlm_PoinT pt);
+void         Nlm_GetPen(Nlm_PointPtr pt);
 
-void         Nlm_PaintChar PROTO((Nlm_Char ch));
-void         Nlm_PaintString PROTO((Nlm_CharPtr text));
-void         Nlm_PaintStringEx PROTO((Nlm_CharPtr text, Nlm_Int2 x, Nlm_Int2 y));
-void CDECL   Nlm_PaintText VPROTO((char *format, ...));
+void         Nlm_PaintChar(Nlm_Char ch);
+void         Nlm_PaintString(Nlm_CharPtr text);
+void         Nlm_PaintStringEx(Nlm_CharPtr text, Nlm_Int2 x, Nlm_Int2 y);
+void CDECL   Nlm_PaintText(char *format, ...);
 
-void         Nlm_DrawString PROTO((Nlm_RectPtr r, Nlm_CharPtr text, Nlm_Char jst, Nlm_Boolean gray));
-void         Nlm_DrawText PROTO((Nlm_RectPtr r, Nlm_CharPtr text, size_t len, Nlm_Char jst, Nlm_Boolean gray));
+void         Nlm_DrawString(Nlm_RectPtr r, Nlm_CharPtr text, Nlm_Char jst, Nlm_Boolean gray);
+void         Nlm_DrawText(Nlm_RectPtr r, Nlm_CharPtr text, size_t len, Nlm_Char jst, Nlm_Boolean gray);
 
-void         Nlm_MoveTo PROTO((Nlm_Int2 x, Nlm_Int2 y));
-void         Nlm_LineTo PROTO((Nlm_Int2 x, Nlm_Int2 y));
-void         Nlm_DrawLine PROTO((Nlm_PoinT pt1, Nlm_PoinT pt2));
+void         Nlm_MoveTo(Nlm_Int2 x, Nlm_Int2 y);
+void         Nlm_LineTo(Nlm_Int2 x, Nlm_Int2 y);
+void         Nlm_DrawLine(Nlm_PoinT pt1, Nlm_PoinT pt2);
 
-void         Nlm_LoadPt PROTO((Nlm_PointPtr pt, Nlm_Int2 x, Nlm_Int2 y));
-void         Nlm_AddPt PROTO((Nlm_PoinT src, Nlm_PointPtr dst));
-void         Nlm_SubPt PROTO((Nlm_PoinT src, Nlm_PointPtr dst));
-Nlm_Boolean  Nlm_EqualPt PROTO((Nlm_PoinT p1, Nlm_PoinT p2));
-Nlm_Boolean  Nlm_PtInRect PROTO((Nlm_PoinT pt, Nlm_RectPtr r));
-Nlm_Boolean  Nlm_PtInRgn PROTO((Nlm_PoinT pt, Nlm_RegioN rgn));
+void         Nlm_LoadPt(Nlm_PointPtr pt, Nlm_Int2 x, Nlm_Int2 y);
+void         Nlm_AddPt(Nlm_PoinT src, Nlm_PointPtr dst);
+void         Nlm_SubPt(Nlm_PoinT src, Nlm_PointPtr dst);
+Nlm_Boolean  Nlm_EqualPt(Nlm_PoinT p1, Nlm_PoinT p2);
+Nlm_Boolean  Nlm_PtInRect(Nlm_PoinT pt, Nlm_RectPtr r);
+Nlm_Boolean  Nlm_PtInRgn(Nlm_PoinT pt, Nlm_RegioN rgn);
 
-void         Nlm_LoadRect PROTO((Nlm_RectPtr r, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt));
-void         Nlm_UpsetRect PROTO((Nlm_RectPtr r, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt));
-void         Nlm_OffsetRect PROTO((Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy));
-void         Nlm_InsetRect PROTO((Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy));
-Nlm_Boolean  Nlm_SectRect PROTO((Nlm_RectPtr src1, Nlm_RectPtr src2, Nlm_RectPtr dst));
-Nlm_Boolean  Nlm_UnionRect PROTO((Nlm_RectPtr src1, Nlm_RectPtr src2, Nlm_RectPtr dst));
-Nlm_Boolean  Nlm_EqualRect PROTO((Nlm_RectPtr r1, Nlm_RectPtr r2));
-Nlm_Boolean  Nlm_EmptyRect PROTO((Nlm_RectPtr r));
-Nlm_Boolean  Nlm_RectInRect PROTO((Nlm_RectPtr r1, Nlm_RectPtr r2));
-Nlm_Boolean  Nlm_RectInRgn PROTO((Nlm_RectPtr r, Nlm_RegioN rgn));
+void         Nlm_LoadRect(Nlm_RectPtr r, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt);
+void         Nlm_UpsetRect(Nlm_RectPtr r, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt);
+void         Nlm_OffsetRect(Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy);
+void         Nlm_InsetRect(Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy);
+Nlm_Boolean  Nlm_SectRect(Nlm_RectPtr src1, Nlm_RectPtr src2, Nlm_RectPtr dst);
+Nlm_Boolean  Nlm_UnionRect(Nlm_RectPtr src1, Nlm_RectPtr src2, Nlm_RectPtr dst);
+Nlm_Boolean  Nlm_EqualRect(Nlm_RectPtr r1, Nlm_RectPtr r2);
+Nlm_Boolean  Nlm_EmptyRect(Nlm_RectPtr r);
+Nlm_Boolean  Nlm_RectInRect(Nlm_RectPtr r1, Nlm_RectPtr r2);
+Nlm_Boolean  Nlm_RectInRgn(Nlm_RectPtr r, Nlm_RegioN rgn);
 
-void         Nlm_EraseRect PROTO((Nlm_RectPtr r));
-void         Nlm_FrameRect PROTO((Nlm_RectPtr r));
-void         Nlm_PaintRect PROTO((Nlm_RectPtr r));
-void         Nlm_InvertRect PROTO((Nlm_RectPtr r));
-void         Nlm_ScrollRect PROTO((Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy));
+void         Nlm_EraseRect(Nlm_RectPtr r);
+void         Nlm_FrameRect(Nlm_RectPtr r);
+void         Nlm_PaintRect(Nlm_RectPtr r);
+void         Nlm_InvertRect(Nlm_RectPtr r);
+void         Nlm_ScrollRect(Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy);
 
-void         Nlm_EraseOval PROTO((Nlm_RectPtr r));
-void         Nlm_FrameOval PROTO((Nlm_RectPtr r));
-void         Nlm_PaintOval PROTO((Nlm_RectPtr r));
-void         Nlm_InvertOval PROTO((Nlm_RectPtr r));
+void         Nlm_EraseOval(Nlm_RectPtr r);
+void         Nlm_FrameOval(Nlm_RectPtr r);
+void         Nlm_PaintOval(Nlm_RectPtr r);
+void         Nlm_InvertOval(Nlm_RectPtr r);
 
-void         Nlm_EraseRoundRect PROTO((Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt));
-void         Nlm_FrameRoundRect PROTO((Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt));
-void         Nlm_PaintRoundRect PROTO((Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt));
-void         Nlm_InvertRoundRect PROTO((Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt));
+void         Nlm_EraseRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt);
+void         Nlm_FrameRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt);
+void         Nlm_PaintRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt);
+void         Nlm_InvertRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt);
 
-void         Nlm_EraseArc PROTO((Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end));
-void         Nlm_FrameArc PROTO((Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end));
-void         Nlm_PaintArc PROTO((Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end));
-void         Nlm_InvertArc PROTO((Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end));
+void         Nlm_EraseArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end);
+void         Nlm_FrameArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end);
+void         Nlm_PaintArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end);
+void         Nlm_InvertArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end);
 
 /* Special case of an arc(90 grad) */
 typedef enum {
@@ -352,44 +366,44 @@ typedef enum {
 } Nlm_EQuadrant;
 #define EQuadrant Nlm_EQuadrant
 
-void         Nlm_EraseQuadrant  PROTO((Nlm_RectPtr r, Nlm_EQuadrant quadrant));
-void         Nlm_FrameQuadrant  PROTO((Nlm_RectPtr r, Nlm_EQuadrant quadrant));
-void         Nlm_PaintQuadrant  PROTO((Nlm_RectPtr r, Nlm_EQuadrant quadrant));
-void         Nlm_InvertQuadrant PROTO((Nlm_RectPtr r, Nlm_EQuadrant quadrant));
+void         Nlm_EraseQuadrant(Nlm_RectPtr r, Nlm_EQuadrant quadrant);
+void         Nlm_FrameQuadrant(Nlm_RectPtr r, Nlm_EQuadrant quadrant);
+void         Nlm_PaintQuadrant(Nlm_RectPtr r, Nlm_EQuadrant quadrant);
+void         Nlm_InvertQuadrant(Nlm_RectPtr r, Nlm_EQuadrant quadrant);
 
 
-void         Nlm_ErasePoly PROTO((Nlm_Int2 num, Nlm_PointPtr pts));
-void         Nlm_FramePoly PROTO((Nlm_Int2 num, Nlm_PointPtr pts));
-void         Nlm_PaintPoly PROTO((Nlm_Int2 num, Nlm_PointPtr pts));
-void         Nlm_InvertPoly PROTO((Nlm_Int2 num, Nlm_PointPtr pts));
+void         Nlm_ErasePoly(Nlm_Int2 num, Nlm_PointPtr pts);
+void         Nlm_FramePoly(Nlm_Int2 num, Nlm_PointPtr pts);
+void         Nlm_PaintPoly(Nlm_Int2 num, Nlm_PointPtr pts);
+void         Nlm_InvertPoly(Nlm_Int2 num, Nlm_PointPtr pts);
 
-Nlm_RegioN   Nlm_CreateRgn PROTO((void));
-Nlm_RegioN   Nlm_DestroyRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_ClearRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_LoadRectRgn PROTO((Nlm_RegioN rgn, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt));
-void         Nlm_OffsetRgn PROTO((Nlm_RegioN rgn, Nlm_Int2 dx, Nlm_Int2 dy));
-void         Nlm_SectRgn PROTO((Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst));
-void         Nlm_UnionRgn PROTO((Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst));
-void         Nlm_DiffRgn PROTO((Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst));
-void         Nlm_XorRgn PROTO((Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst));
-Nlm_Boolean  Nlm_EqualRgn PROTO((Nlm_RegioN rgn1, Nlm_RegioN rgn2));
-Nlm_Boolean  Nlm_EmptyRgn PROTO((Nlm_RegioN rgn));
+Nlm_RegioN   Nlm_CreateRgn(void);
+Nlm_RegioN   Nlm_DestroyRgn(Nlm_RegioN rgn);
+void         Nlm_ClearRgn(Nlm_RegioN rgn);
+void         Nlm_LoadRectRgn(Nlm_RegioN rgn, Nlm_Int2 lf, Nlm_Int2 tp, Nlm_Int2 rt, Nlm_Int2 bt);
+void         Nlm_OffsetRgn(Nlm_RegioN rgn, Nlm_Int2 dx, Nlm_Int2 dy);
+void         Nlm_SectRgn(Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst);
+void         Nlm_UnionRgn(Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst);
+void         Nlm_DiffRgn(Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst);
+void         Nlm_XorRgn(Nlm_RegioN src1, Nlm_RegioN src2, Nlm_RegioN dst);
+Nlm_Boolean  Nlm_EqualRgn(Nlm_RegioN rgn1, Nlm_RegioN rgn2);
+Nlm_Boolean  Nlm_EmptyRgn(Nlm_RegioN rgn);
 
-void         Nlm_EraseRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_FrameRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_PaintRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_InvertRgn PROTO((Nlm_RegioN rgn));
+void         Nlm_EraseRgn(Nlm_RegioN rgn);
+void         Nlm_FrameRgn(Nlm_RegioN rgn);
+void         Nlm_PaintRgn(Nlm_RegioN rgn);
+void         Nlm_InvertRgn(Nlm_RegioN rgn);
 
-void         Nlm_ClipRect PROTO((Nlm_RectPtr r));
-void         Nlm_ClipRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_ResetClip PROTO((void));
+void         Nlm_ClipRect(Nlm_RectPtr r);
+void         Nlm_ClipRgn(Nlm_RegioN rgn);
+void         Nlm_ResetClip(void);
 
-void         Nlm_ValidRect PROTO((Nlm_RectPtr r));
-void         Nlm_InvalRect PROTO((Nlm_RectPtr r));
-void         Nlm_ValidRgn PROTO((Nlm_RegioN rgn));
-void         Nlm_InvalRgn PROTO((Nlm_RegioN rgn));
+void         Nlm_ValidRect(Nlm_RectPtr r);
+void         Nlm_InvalRect(Nlm_RectPtr r);
+void         Nlm_ValidRgn(Nlm_RegioN rgn);
+void         Nlm_InvalRgn(Nlm_RegioN rgn);
 
-void         Nlm_CopyBits PROTO((Nlm_RectPtr r, Nlm_VoidPtr source));
+void         Nlm_CopyBits(Nlm_RectPtr r, Nlm_VoidPtr source);
 
 typedef struct {
   Nlm_Uint1 red;
@@ -397,29 +411,45 @@ typedef struct {
   Nlm_Uint1 blue;
 } Nlm_RGBColoR, PNTR Nlm_RGBColoRPtr;
 
-void         Nlm_CopyPixmap PROTO((Nlm_RectPtr r, Nlm_Int1Ptr source, 
-                                   Nlm_Uint1 totalColors, 
-                                   Nlm_RGBColoRPtr colorTable));
+void         Nlm_CopyPixmap(Nlm_RectPtr r, Nlm_Int1Ptr source, 
+                            Nlm_Uint1 totalColors, 
+                            Nlm_RGBColoRPtr colorTable);
 
-/*
- * Try to read alternate color set from the user-specified file;
+/* Try to read alternate color set from the user-specified file;
  * <table_index> <red> <green> <blue> [<name>].
  * Return number of updated colors
  */ 
-size_t Nlm_UpdateColorTable PROTO((Nlm_RGBColoR table[], size_t table_size,
-                                   const Nlm_Char PNTR filename));
+size_t Nlm_UpdateColorTable(Nlm_RGBColoR table[], size_t table_size,
+                            const Nlm_Char PNTR filename);
 #define UpdateColorTable Nlm_UpdateColorTable
 
 
-Nlm_Boolean Nlm_CreateGIF PROTO((Nlm_Int2 width, Nlm_Int2 height,
-                                 Nlm_Boolean transparent));
-#define CreateGIF     Nlm_CreateGIF
+/* [WIN_GIF] Create a GIF image with the given attributes, and set it as
+ * the current drawable.
+ */
+Nlm_Boolean Nlm_CreateGIF(Nlm_Int2 width, Nlm_Int2 height,
+                          Nlm_Boolean transparent);
+#define CreateGIF Nlm_CreateGIF
 
-Nlm_Boolean Nlm_SaveGIF PROTO((FILE PNTR out));
-#define SaveGIF       Nlm_SaveGIF
+/* [WIN_GIF] Save current GIF drawable to output stream "out".
+ */
+Nlm_Boolean Nlm_SaveGIF(FILE* out);
+#define SaveGIF Nlm_SaveGIF
+
+/* [WIN_GIF] Destroy current GIF drawable (if any).
+ */
+void Nlm_DestroyGIF(void);
+#define DestroyGIF Nlm_DestroyGIF
+
+/* [WIN_GIF] Make GIF image "im" be the current drawable.
+ * Return the previous one.
+ */
+struct gdImageStruct* Nlm_SetCurrentGIF(struct gdImageStruct* im);
+#define SetCurrentGIF Nlm_SetCurrentGIF
+
 
 /* If the application is using GUI or just drawing(picture) functionality */
-Nlm_Boolean Nlm_VibrantIsGUI PROTO((void));
+Nlm_Boolean Nlm_VibrantIsGUI(void);
 #define VibrantIsGUI Nlm_VibrantIsGUI
 
 #ifdef __cplusplus

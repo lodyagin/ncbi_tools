@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.14 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.17  1999/12/02 13:47:32  durand
+* add new function for Entrez sequence viewer
+*
+* Revision 6.16  1999/11/03 13:46:15  durand
+* add UDV_GetStrandinPGP, UDV_GetStrandinPGPList and UDV_GetBspRangeinPGPList for DDV
+*
+* Revision 6.15  1999/10/02 15:11:09  durand
+* update the code to be used by wwwudv
+*
 * Revision 6.14  1999/09/16 18:51:52  durand
 * move MsaTxtDisp struct from pgppop.h to udvseq.h
 *
@@ -506,11 +515,111 @@ MsaTxtDispPtr mtdp;
 	for(vnp2=pgp->ptxtList;vnp2!=NULL;vnp2=vnp2->next){
 		mtdp=(MsaTxtDispPtr)(vnp2->data.ptrvalue);
 		if (mtdp){
-			if (mtdp->IsGap==0) {
+			if (mtdp->IsGap==FALSE) {
 				*from=MIN(*from,mtdp->from);
 				*to=MAX(*to,mtdp->to);
 			}
 		}
+	}
+}
+
+/*******************************************************************************
+
+Function: UDV_GetStrandinPGP()
+
+Purpose: get the strand of the sequence in a ParaG.
+
+Parameters: pgp; the ParaG to analyse
+            strand; return value
+
+*******************************************************************************/
+NLM_EXTERN void UDV_GetStrandinPGP(ParaGPtr pgp,Uint1Ptr strand)
+{
+ValNodePtr    vnp2;
+MsaTxtDispPtr mtdp;
+
+	if (!pgp->ptxtList) return;
+	*strand=Seq_strand_unknown;
+		
+	for(vnp2=pgp->ptxtList;vnp2!=NULL;vnp2=vnp2->next){
+		mtdp=(MsaTxtDispPtr)(vnp2->data.ptrvalue);
+		if (mtdp && mtdp->IsGap==FALSE) {
+			*strand=mtdp->strand;
+			break;
+		}
+	}
+}
+
+/*******************************************************************************
+
+Function: UDV_GetStrandinPGPList()
+
+Purpose: get the strand of the sequence in a list of ParaG (usually called
+by DDV to scan a row).
+
+Parameters: pgp_list; list of ParaG (row) to analyse
+            strand; return value
+
+*******************************************************************************/
+NLM_EXTERN void UDV_GetStrandinPGPList(ValNodePtr pgp_list,Uint1Ptr strand)
+{
+ValNodePtr    vnp,vnp2;
+MsaTxtDispPtr mtdp;
+ParaGPtr   pgp;
+
+	if (!pgp_list) return;
+	*strand=Seq_strand_unknown;
+	
+	vnp=pgp_list;
+	while(vnp){
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		if (pgp){
+			vnp2=pgp->ptxtList;
+			while(vnp2){
+				mtdp=(MsaTxtDispPtr)(vnp2->data.ptrvalue);
+				if (mtdp && mtdp->IsGap==FALSE) {
+					*strand=mtdp->strand;
+					return;
+				}
+				vnp2=vnp2->next;
+			}
+		}
+		vnp=vnp->next;
+	}
+}
+
+/*******************************************************************************
+
+Function: UDV_GetBspRangeinPGPList()
+
+Purpose: get the start,stop (bsp coord)  of the sequence in a list of ParaG 
+(usually called by DDV to scan a row).
+
+Note : bsp_start is always less than bsp_stop (so, don't forget to swap 
+the values if minus strand)
+
+*******************************************************************************/
+NLM_EXTERN void UDV_GetBspRangeinPGPList(ValNodePtr pgp_list,
+	Int4Ptr bsp_start,Int4Ptr bsp_stop)
+{
+ValNodePtr vnp;
+ParaGPtr   pgp;
+Int4       from_bsp,to_bsp;
+	
+	*bsp_start=INT4_MAX;
+	*bsp_stop=INT4_MIN;
+	vnp=pgp_list;
+	while(vnp){
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		if (pgp){
+			UDV_ComputeBspCoordRangeinPGP(pgp,&from_bsp,&to_bsp);
+			/*skip full-gapped ParaG*/
+			if (from_bsp!=INT4_MAX && to_bsp!=INT4_MIN){
+				*bsp_start=MIN(*bsp_start,from_bsp);
+				*bsp_stop=MAX(*bsp_stop,to_bsp);
+			}
+		}
+		vnp=vnp->next;
 	}
 }
 
@@ -711,7 +820,7 @@ SeqAnnotPtr sap;
 
 			if (FeatInParaG){
 				nLines=1;decal=0;
-				if (pgfl->DispType&DDV_DISP_VERT){
+				if (pgfl->DispType&DDV_DISP_VERT){/*UDV*/
 					if (bFirst) {
 						pgfl->ParaG_next_head=vnp;
 						bFirst=FALSE;
@@ -737,10 +846,15 @@ SeqAnnotPtr sap;
 							}
 						}
 						pgp->OccupyTo=context->right;
+						/*this is mainly for wwwudv in order to display labels*/
+						if ((pgfl->DispType&DDV_DISP_VERT) && 
+							(pgfl->DispType&DDV_DISP_LABEL)){
+							pgp->OccupyTo+=StringLen(context->label);
+						}
 					}
 					PosFeat=pgp->nFeatLines;
 				}
-				else{
+				else{/*DDV (MSA only)*/
 					if (context->sfp->data.choice==SEQFEAT_CDREGION) {
 						/*IsTransNeeded=UDV_IsTranslationNeeded(context,pgp);
 						if (IsTransNeeded) {*/
@@ -754,7 +868,7 @@ SeqAnnotPtr sap;
 						when I populate the first ParaG with the current feature. To
 						populate next ParaG with the same feature, see B./
 
-						/*PosFeat is used for every ParaG where the current feature
+						/PosFeat is used for every ParaG where the current feature
 						is located. In that way, the feature always belongs to the
 						same line from one ParaG to the next one*/
 						PosFeat=0;/*always base 1 for a line number;*/
@@ -1058,8 +1172,9 @@ Int4		nParaG=0;				/*ParaG counter*/
   Return value : TRUE if features found; otherwise FALSE (see also nTotL)
 
 *******************************************************************************/
-NLM_EXTERN Boolean UDV_PopulateParaGFeatures(BioseqPtr bsp,ValNodePtr ParaG_vnp,
-			Boolean ShowFeatures,Int4Ptr nTotL,Uint4 DispType,Int2Ptr nFeatFound)
+NLM_EXTERN Boolean UDV_PopParaGFeaturesEx(BioseqPtr bsp,ValNodePtr ParaG_vnp,
+			Boolean ShowFeatures,Int4Ptr nTotL,Uint4 DispType,Int2Ptr nFeatFound,
+			BoolPtr FeatDefTable,Int4 from_bsp,Int4 to_bsp)
 {
 ParaGFeaturesInLoc pgfl;	/*used for the Explore features function*/
 ValNodePtr vnp;				/*to scan ParaG list*/
@@ -1093,21 +1208,22 @@ Int2 nFeat;
 	/*convert the from-to of the segment to the "master" bioseq
 	coordinates system*/
 	if (parent){
-		from=context.cumOffset;
-		to=from+context.to-context.from;
+		from=context.cumOffset+from_bsp;
+		/*to=from+context.to-context.from;*/
+		to=context.cumOffset+to_bsp;
 		slp=SeqLocIntNew(from, to, Seq_strand_plus, parent->id);
 		pgfl.cumOffset=context.cumOffset;
 		pgfl.bsp_part_length=bsp->length;
 	}
 	else{
-		slp=NULL;
+		slp=SeqLocIntNew (from_bsp, to_bsp, Seq_strand_plus, bsp->id);;
 		pgfl.cumOffset=0;
 		pgfl.bsp_part_length=bsp->length;
 	}
 
 	/*Explore the features */
 	nFeat=SeqMgrExploreFeatures ((parent!=NULL ? parent : bsp), (Pointer) &pgfl, 
-				UDV_ParaGFTableFeatures, slp, NULL, NULL);
+				UDV_ParaGFTableFeatures, slp, NULL, FeatDefTable);
 
 	if (nFeatFound){
 		*nFeatFound=nFeat;
@@ -1133,6 +1249,7 @@ Int2 nFeat;
 	}
 	else nRet=FALSE;
 
+	MemFree(slp);
 /*DEBUG purpose : check the feature content of each ParaG
 {{
 ValNodePtr vnp2;
@@ -1155,6 +1272,12 @@ Uint2 eID,idx,line,not;
 }}*/
 
 	return(nRet);
+}
+NLM_EXTERN Boolean UDV_PopulateParaGFeatures(BioseqPtr bsp,ValNodePtr ParaG_vnp,
+			Boolean ShowFeatures,Int4Ptr nTotL,Uint4 DispType,Int2Ptr nFeatFound)
+{
+	return(UDV_PopParaGFeaturesEx(bsp,ParaG_vnp,ShowFeatures,nTotL,DispType,
+		nFeatFound,NULL,0,bsp->length-1));
 }
 
 /*******************************************************************************

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: urk utilities
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkutil.c,v $
+* Revision 6.4  1999/10/18 18:03:40  madden
+* Remove Entrez calls from tools lib function
+*
 * Revision 6.3  1999/01/27 15:08:42  kuzio
 * ErrorDescString
 *
@@ -107,32 +110,13 @@ extern CharPtr FastaTitle (BioseqPtr bsp, CharPtr pretext, CharPtr posttext)
 
 extern CharPtr ErrorDescString (SeqIdPtr sip)
 {
-  SeqIdPtr    sipt;
-  Int4        gi;
+  SeqIdPtr    bestid;
   CharPtr     errbuf;
 
-  if (sip->choice == SEQID_GI)
-    gi = sip->data.intvalue;
-  else
-    gi = EntrezFindSeqId (sip);
-  sipt = EntrezSeqIdForGI (gi);
-  if (sipt == NULL)
-    sipt = SeqIdDup (sip);
-  sipt->next = NULL;
-  if (sipt->choice != SEQID_GI && gi > 0)
-  {
-    sipt->next = (SeqIdPtr) ValNodeNew (NULL);
-    sipt->next->choice = SEQID_GI;
-    sipt->next->data.intvalue = gi;
-  }
-
-/* PRINTID_FASTA_SHORT PRINTID_FASTA_LONG */
-/* (sip, SEQID_GI) or (sip, 0)  undefined */
+  bestid = SeqIdFindBest(sip, SEQID_GI);
 
   errbuf = (CharPtr) MemNew ((size_t) (sizeof (Char) * 32));
-  SeqIdWrite (sipt, errbuf, PRINTID_FASTA_LONG, 32-1);
-  SeqIdFree (sipt->next);
-  SeqIdFree (sipt);
+  SeqIdWrite (bestid, errbuf, PRINTID_FASTA_LONG, 32-1);
 
   return errbuf;
 }

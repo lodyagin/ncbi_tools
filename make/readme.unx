@@ -562,19 +562,15 @@ cfe: Warning 653: urkcnsrt.c, line 744: (previous declaration of 'FindNuc' at li
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmsel.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dopen.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dsave.c
-        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dslct.c
-        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dwipe.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dxprt.c
-        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF naybor.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dwin.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dentr.c
-        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dpane.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmsg.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmatn.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmodl.c
         cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dshim.c
          rm -f libncbicn3d.a
-        ar cru libncbicn3d.a algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o cn3dslct.o  cn3dwipe.o cn3dxprt.o naybor.o cn3dwin.o cn3dentr.o  cn3dpane.o cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o
+        ar cru libncbicn3d.a algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o cn3dxprt.o cn3dwin.o cn3dentr.o  cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o
         cp -p libncbicn3d.a ../lib
         ls -l ../lib/libncbicn3d.a
 -rw-r--r--    1 dima dima 401956 Jul 14 14:30 ../lib/libncbicn3d.a
@@ -965,5 +961,5 @@ Good luck!
 
 
 =======================================================================	
- $Id: readme.unx,v 6.11 1999/07/14 18:56:50 beloslyu Exp $
+ $Id: readme.unx,v 6.12 1999/11/03 14:33:50 lewisg Exp $
 =======================================================================	

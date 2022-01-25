@@ -46,9 +46,107 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.127 $
+ * $Revision: 6.157 $
  *
  * $Log: blast.c,v $
+ * Revision 6.157  2000/01/14 15:17:13  madden
+ * Set no_check_score in pbp
+ *
+ * Revision 6.156  2000/01/13 18:10:41  madden
+ * Fix problem with incorrect stat values for blastn and missing hits
+ *
+ * Revision 6.155  2000/01/13 14:27:04  madden
+ * Fixed other problem in BlastWordFinder_contig()
+ *
+ * Revision 6.154  2000/01/12 18:52:23  shavirin
+ * Fixed lookup_pos in BlastWordFinder_contig().
+ *
+ * Revision 6.153  2000/01/11 18:36:25  shavirin
+ * Added functions, those handle dynamic lookup table.
+ *
+ * Revision 6.152  2000/01/11 15:32:46  dondosha
+ * Fixed memory leaks in opening shared header and sequence file memory maps
+ *
+ * Revision 6.151  2000/01/04 22:52:25  madden
+ * Restored code for using real db size
+ *
+ * Revision 6.150  1999/12/31 14:23:18  egorov
+ * Add support for using mixture of real and maks database with gi-list files:
+ * 1. Change logic of creating rdfp list.
+ * 2. BlastGetDbChunk gets real databases first, then masks.
+ * 3. Propoper calculation of database sizes using alias files.
+ * 4. Change to CommonIndex to support using of mask databases.
+ * 5. Use correct gis in formated output (BlastGetAllowedGis()).
+ * 6. Other small changes
+ *
+ * Revision 6.149  1999/12/29 19:03:59  shavirin
+ * Relative pointers in BlastWordFinder_mh_contig() updated to 8 byte pointers
+ *
+ * Revision 6.148  1999/12/29 18:57:03  shavirin
+ * Added possibility to use relative pointers in BlastWordFinder_mh_contig().
+ *
+ * Revision 6.147  1999/12/22 21:55:38  dondosha
+ * Close header and sequence files when search is done
+ *
+ * Revision 6.146  1999/12/21 20:05:48  egorov
+ * Change logic of generating mask file when we have a gi-list file,
+ * real database and mask database.  In fact, this is a big bug fix.
+ *
+ * Revision 6.145  1999/12/16 19:17:34  egorov
+ * Code cleanup
+ *
+ * Revision 6.144  1999/12/02 14:39:35  egorov
+ * When both mask and gi_list are specified, do not overwrite calculated
+ * number of sequences and database length with values from alias file.
+ *
+ * Revision 6.143  1999/11/30 19:00:49  madden
+ * Added Nlm_SwapUint4 calls for the ordinal ID list
+ *
+ * Revision 6.142  1999/11/26 22:26:13  madden
+ * Added BlastNT functions for nucl. extensions
+ *
+ * Revision 6.141  1999/11/24 21:43:35  madden
+ * Added Nlm_SwapUint4 call to make database masks work with both big and small endian systems
+ *
+ * Revision 6.140  1999/11/12 20:57:39  shavirin
+ * Added parameter use_best_align into BLAST_ParameterBlkPtr
+ *
+ * Revision 6.139  1999/10/27 21:33:00  madden
+ * Use housekeeping threads only for larger sequences
+ *
+ * Revision 6.138  1999/10/26 20:45:18  madden
+ * Add use_real_db_size option
+ *
+ * Revision 6.137  1999/10/19 17:41:20  madden
+ * Ensure that ThreadJoin is called on every thread created
+ *
+ * Revision 6.136  1999/10/14 17:57:44  madden
+ * Fix for database size set by user, remove ununsed variables
+ *
+ * Revision 6.135  1999/10/12 19:34:08  madden
+ * Call MutexDestroy on callback_mutex
+ *
+ * Revision 6.134  1999/10/08 17:39:57  egorov
+ * Store input gi list to pick up correct definition for redundant sequences
+ *
+ * Revision 6.133  1999/10/05 18:16:06  shavirin
+ * Functions tick_proc and get_db_chunk were renamed and become public.
+ *
+ * Revision 6.132  1999/10/05 17:42:53  shavirin
+ * Removed global variables from blast.c
+ *
+ * Revision 6.131  1999/10/01 21:07:12  shavirin
+ * Chanded definition and adjusted function get_db_list().
+ *
+ * Revision 6.130  1999/09/28 20:14:32  madden
+ * Joerg changes to mimize cache misses
+ *
+ * Revision 6.129  1999/09/22 21:54:08  egorov
+ * remove debug info
+ *
+ * Revision 6.128  1999/09/22 21:03:55  egorov
+ * Add mask DB stuff
+ *
  * Revision 6.127  1999/09/16 16:54:23  madden
  * Changes to BlastNtWordFinder for long words
  *
@@ -1482,14 +1580,12 @@ Detailed Contents:
 #include <signal.h>
 #endif
 
-/* How many ticks should be emitted total. */
-#define BLAST_NTICKS 50
 /* 
 The last database sequence a tick (progress indicator) was issued for
 and the increments (i.e., number of db sequences completed) that a tick 
 should be emitted. 
 */
-Int4	last_db_seq=0, db_incr=0;
+/* Int4	last_db_seq=0, db_incr=0; */
 
 /*
 	Set to TRUE if the process has timed out.
@@ -1500,61 +1596,61 @@ Boolean time_out_boolean=FALSE;
 	SeqId lists if only a certain number of the database sequences will be
 	used for the search.
 */
-SeqIdPtr global_seqid_list=NULL, global_seqid_ptr;
+/* SeqIdPtr global_seqid_list=NULL, global_seqid_ptr; */
 
 /*
 	GI List to be used if database will be searched by GI.
 	current is the current element in the array being worked on.
 	global_gi_being_used specifies that it will be used.
 */
-Int4 global_gi_current=0;
-Boolean global_gi_being_used=FALSE;
+
+/* Int4 global_gi_current=0;
+   Boolean global_gi_being_used=FALSE; */
 
 /* Function to emit progress messages, set by user. */
-int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives));
-int (LIBCALLBACK *star_callback)PROTO((Int4 done, Int4 positives));
-int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives));
+/* int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives)); */
+
+/* int (LIBCALLBACK *star_callback)PROTO((Int4 done, Int4 positives));
+   int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives)); */
 
 /* tells star_proc to check that a star should be emitted. */
-TNlmThread awake_thr=NULL;
-Boolean awake;
+/* TNlmThread awake_thr=NULL;
+   Boolean awake; */
 
 /* tells index_proc to check that a message should be emitted. */
-TNlmThread index_thr=NULL;
-Boolean awake_index;
+/* TNlmThread index_thr=NULL;
+   Boolean awake_index; */
 
 /* period of sending out a star/message. */
-#define PERIOD 60
+/* #define PERIOD 60 */
 
 /* Use by star_proc to determine whether to emit a star. */
-time_t last_tick=0;
+/* time_t last_tick=0; */
 
 /* How many positive hits were found (set by ReapHitlist, read by tick_proc
 and star_proc). */
-Int4 number_of_pos_hits=0;
+/* Int4 number_of_pos_hits=0; */
 
-/* Mutex for recalculation of ambiguities, in BlastReevaluateWithAmbiguities */
-TNlmMutex ambiguities_mutex=NULL;
 /* Mutex for assignment of db seqs to search. */
-TNlmMutex db_mutex=NULL;
+/* TNlmMutex db_mutex=NULL; */
+
 /* Mutex for insertion of results into list. */
-TNlmMutex results_mutex=NULL;
+/* TNlmMutex results_mutex = NULL; */
 /* Mutex for the callbacks (star_proc, tick_proc, index_proc). */
-TNlmMutex callback_mutex=NULL;
+/* TNlmMutex callback_mutex=NULL; */
+
 /* The last db sequence to be assigned.  Used only in get_db_chunk after
 the acquisition of the "db_mutex" (above). */
-Int4 db_chunk_last=0;
+/* Int4 db_chunk_last=0; */
+
 /* the last sequence in the database to be compared against. */
-Int4 final_db_seq;
+/* Int4 final_db_seq; */
 
 /* Default size of the chunks be that are assigned in the function get_db_chunk. */
 /* Actually db_chunk_size is used, which is smaller if the db is smaller. */
-#define BLAST_DB_CHUNK_SIZE 500
-Int4 db_chunk_size;
 
-/* Average sizes of protein and nucl. sequences. */
-#define BLAST_AA_AVGLEN 300
-#define BLAST_NT_AVGLEN 1000
+/* #define BLAST_DB_CHUNK_SIZE 500
+   Int4 db_chunk_size; */
 
 static Int4 BlastExtendWordSearch PROTO((BlastSearchBlkPtr search, Boolean multiple_hits));
 
@@ -1576,13 +1672,16 @@ static Int4 BlastWordFinder_mh_contig PROTO((BlastSearchBlkPtr search, LookupTab
 
 static BLAST_HSPPtr link_hsps PROTO((BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR hsp_array));
 
-static Int2 LIBCALL BlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_seq, Int4 effective_length));
-
 static Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4 dropoff_number_of_bits_1st_pass, Int4 dropoff_number_of_bits_2nd_pass, Nlm_FloatHi avglen, Nlm_FloatHi searchsp, Int4 window));
 
 static Int4 BlastNtWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 static Int4 BlastNtWordFinder_mh PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
+/* DEBUGGING stuff */
+#ifdef BLAST_TIMER
+clock_t	last_clock = 0;
+#endif
+/* end DEBUGGING stuff */
 
 static Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean reverse_complement));
 
@@ -1596,21 +1695,19 @@ static Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean r
 	has been obtained in "get_db_chunk".
 */
 
-static void
-tick_proc(Int4 sequence_number)
+void BlastTickProc(Int4 sequence_number, BlastThrInfoPtr thr_info)
 
 {
-	if(tick_callback && (sequence_number > (last_db_seq+db_incr)))
-	{
-		NlmMutexLockEx(&callback_mutex);
-		last_db_seq += db_incr;
-		tick_callback(sequence_number, number_of_pos_hits);
-		last_tick = Nlm_GetSecs();
-		NlmMutexUnlock(callback_mutex);
-	}
-	return;
+    if(thr_info->tick_callback && 
+       (sequence_number > (thr_info->last_db_seq + thr_info->db_incr))) {
+        NlmMutexLockEx(&thr_info->callback_mutex);
+        thr_info->last_db_seq += thr_info->db_incr;
+        thr_info->tick_callback(sequence_number, thr_info->number_of_pos_hits);
+        thr_info->last_tick = Nlm_GetSecs();
+        NlmMutexUnlock(thr_info->callback_mutex);
+    }
+    return;
 }
-
 
 /*
 	Sends out a message every PERIOD (i.e., 60 secs.) for the index.
@@ -1623,31 +1720,29 @@ index_proc(VoidPtr dummy)
 
 {
 
-/* Sleep only works on UNIX.  An ifdef is used until
-a portable solution can be found. */
+    /* Sleep only works on UNIX.  An ifdef is used until
+       a portable solution can be found. */
 #ifdef OS_UNIX
-
-	Int2 index;
-
-	while (awake_index)
-	{
-		for (index=0; index<PERIOD; index++)
-		{
-			sleep(1);
-			if (awake_index == FALSE)
-				break;
-		}
-
-		if (awake_index && index_callback)
-		{
-			NlmMutexLockEx(&callback_mutex);
-			last_tick = Nlm_GetSecs();
-			index_callback(0, 0);
-			NlmMutexUnlock(callback_mutex);
-		}
-	}
+    
+    Int2 index;
+    BlastThrInfoPtr thr_info = (BlastThrInfoPtr) dummy;
+    
+    while (thr_info->awake_index) {
+        for (index=0; index < STAR_MSG_PERIOD; index++) {
+            sleep(1);
+            if (thr_info->awake_index == FALSE)
+                break;
+        }
+        
+        if (thr_info->awake_index && thr_info->index_callback) {
+            NlmMutexLockEx(&thr_info->callback_mutex);
+            thr_info->last_tick = Nlm_GetSecs();
+            thr_info->index_callback(0, 0);
+            NlmMutexUnlock(thr_info->callback_mutex);
+        }
+    }
 #endif
-	return dummy;
+    return dummy;
 }
 
 /*
@@ -1661,43 +1756,39 @@ static VoidPtr
 star_proc(VoidPtr dummy)
 
 {
-/* Sleep only works on UNIX.  An ifdef is used until
-a portable solution can be found. */
+    /* Sleep only works on UNIX.  An ifdef is used until
+       a portable solution can be found. */
 #ifdef OS_UNIX
-
-	time_t now;
-	Int2 index;
-
-	now = Nlm_GetSecs();
-	while (awake)
-	{
-		if (now-last_tick < PERIOD/2)
-		{
-			for (index=0; index<PERIOD; index++)
-			{
-				sleep(1);
-				if (awake == FALSE)
-					break;
-			}
-		}
-
-		if (awake)
-		{
-			NlmMutexLockEx(&callback_mutex);
-			now = Nlm_GetSecs();
-			if (now-last_tick > PERIOD)
-			{
-				if (star_callback)
-				{
-					star_callback(db_chunk_last, number_of_pos_hits);
-					last_tick = now;
-				}
-			}
-			NlmMutexUnlock(callback_mutex);
-		}
-	}
+    
+    time_t now;
+    Int2 index;
+    BlastThrInfoPtr thr_info = (BlastThrInfoPtr) dummy;
+    
+    now = Nlm_GetSecs();
+    while (thr_info->awake) {
+        if (now - thr_info->last_tick < STAR_MSG_PERIOD / 2) {
+            for (index = 0; index < STAR_MSG_PERIOD; index++) {
+                sleep(1);
+                if (thr_info->awake == FALSE)
+                    break;
+            }
+        }
+        
+        if (thr_info->awake) {
+            NlmMutexLockEx(&thr_info->callback_mutex);
+            now = Nlm_GetSecs();
+            if (now-thr_info->last_tick > STAR_MSG_PERIOD) {
+                if (thr_info->star_callback) {
+                    thr_info->star_callback(thr_info->db_chunk_last, 
+                                            thr_info->number_of_pos_hits);
+                    thr_info->last_tick = now;
+                }
+            }
+            NlmMutexUnlock(thr_info->callback_mutex);
+        }
+    }
 #endif
-	return dummy;
+    return dummy;
 }
 
 /*
@@ -1807,6 +1898,10 @@ being checked for. */
 	}
 }
 
+
+#if 0
+/* TODO: The following function is not used in that file */
+
 /*
 	Check that the HSP's pass through the region of the
 	query that is required, if this is requried.
@@ -1901,6 +1996,8 @@ CheckForRequiredRegion (BlastSearchBlkPtr search, Boolean strict)
 	return 0;
 }
 
+#endif
+
 /*
 	This function reevaluates the HSP's from a blast run, checking that
 	ambiguity characters, ignored until now, don't change the score or
@@ -1980,10 +2077,10 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	{
 		return longest_hsp_length;
 	}
-
-        if (ambiguities_mutex)
-                NlmMutexLock(ambiguities_mutex);
-
+        
+        if (search->thr_info->ambiguities_mutex)
+            NlmMutexLock(search->thr_info->ambiguities_mutex);
+        
 	bsp = readdb_get_bioseq(search->rdfp, sequence_number);
 
 	for (index=0; index<hspcnt_max; index++)
@@ -2114,8 +2211,8 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	}
 
 	bsp = BioseqFree(bsp);
-        if (ambiguities_mutex)
-                NlmMutexUnlock(ambiguities_mutex);
+        if (search->thr_info->ambiguities_mutex)
+                NlmMutexUnlock(search->thr_info->ambiguities_mutex);
 	nt_seq_start = MemFree(nt_seq_start);
 
 /* Save HSP's again, discarding those that have been NULLed out. */
@@ -2145,128 +2242,128 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	completed.
 */
 
-static Boolean
-get_db_chunk(BlastSearchBlkPtr search, Int4Ptr start, Int4Ptr stop, Int4Ptr id_list, Int4Ptr id_list_number)
-
+Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop, 
+                     Int4Ptr id_list, Int4Ptr id_list_number, 
+                     BlastThrInfoPtr thr_info)
+     
 {
-	BlastGiListPtr blast_gi_list;
-	Boolean done=FALSE;
-        Int4 index, index1, number, gi_list_start, gi_list_end, ordinal_id, last_ordinal_id;
-	SeqIdPtr sip;
+    Boolean done=FALSE;
+    Int4 ordinal_id;
+    SeqIdPtr sip;
 
+    *id_list_number = 0;
+    
+    if (thr_info->realdb_done) {
+	if (rdfp->oidlist) {
+	    /* Virtual database.   Create id_list using mask file */
+	    OIDListPtr oidlist = rdfp->oidlist;
+	    Uint4	mask;
+	    Int4	maskindex, base, i;
+	    Boolean	cont;
+	    Int4	oidindex;
+	    Int4	total_mask = oidlist->total/MASK_WORD_SIZE + 1;
 
-	if (global_gi_being_used)
-	{
-		blast_gi_list = search->blast_gi_list;
-		if (global_gi_current < blast_gi_list->total)
-		{
-			*id_list_number = 0;
-			number = 0;
-			while (*id_list_number == 0)
-			{
-				NlmMutexLock(db_mutex);
-				number = MIN(db_chunk_size, ((blast_gi_list->total)-global_gi_current));
-				if (number <= 0)
-				{
-					NlmMutexUnlock(db_mutex);
-					break;
-				}
+	    NlmMutexLockEx(&thr_info->db_mutex);
 
-				gi_list_start = global_gi_current;
-				global_gi_current += number;
-				gi_list_end = global_gi_current;
-				
-				NlmMutexUnlock(db_mutex);
-				index1 = 0;
-				last_ordinal_id = -1;
-				for (index=gi_list_start; index<gi_list_end; index++)
-				{
-					ordinal_id = blast_gi_list->gi_list_pointer[index]->ordinal_id;
-					if (ordinal_id >= 0 && last_ordinal_id != ordinal_id)
-					{
-						id_list[index1] = ordinal_id;
-						last_ordinal_id = ordinal_id;
-						index1++;
-					}
-				}
-				*id_list_number = index1;
+	    if (thr_info->gi_current < total_mask) {
+
+		oidindex = 0;
+		maskindex = thr_info->gi_current;
+		base = thr_info->gi_current * MASK_WORD_SIZE;
+		cont = TRUE;
+
+		while (cont) {
+		    /* for each long-word mask */
+		    mask = Nlm_SwapUint4(oidlist->list[maskindex]);
+
+		    i = 0;
+		    while (mask) {
+			if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+			    id_list[oidindex++] = base + i;
 			}
+			mask <<= 1;
+			i++;
+		    }
+		    maskindex++;
+		    base += MASK_WORD_SIZE;
+		    if (maskindex >= total_mask ||
+			    oidindex > thr_info->db_chunk_size) {
+			cont = FALSE;
+		    }
 		}
-		else
-		{
-			done = TRUE;
-		}
+		thr_info->gi_current = maskindex;
+		NlmMutexUnlock(thr_info->db_mutex);
+
+		*id_list_number = oidindex;
+	    } else {
+		done = TRUE;
+	    }
+
+	    NlmMutexUnlock(thr_info->db_mutex);
+	} else {
+	    done = TRUE;
 	}
-	else if (global_seqid_list)
-	{    /* global_seqid_list indicates there is a list of selected ID's, 
-	     global_seqid_ptr is the position in the list. */
-		NlmMutexLock(db_mutex);
-		sip = global_seqid_ptr;
-		if (sip == NULL)
-		{
-			NlmMutexUnlock(db_mutex);
-			return TRUE;
-		}
-
-		ordinal_id = SeqId2OrdinalId(search->rdfp, sip);
-		while (ordinal_id < 0 && sip)
-		{
-			global_seqid_ptr = global_seqid_ptr->next;
-			sip = global_seqid_ptr;
-			ordinal_id = SeqId2OrdinalId(search->rdfp, sip);
-		}
-
-		if (global_seqid_ptr)
-		{
-			*start = ordinal_id;
-			*stop = ordinal_id+1;
-			done = FALSE;
-			global_seqid_ptr = global_seqid_ptr->next;
-		}
-		else
-		{
-			done = TRUE;
-		}
-
-		NlmMutexUnlock(db_mutex);
-	}
-	else
-	{
-		if (db_mutex)
-		{
-			NlmMutexLock(db_mutex);
-
-			/* Emit a tick if needed. */
-			tick_proc(db_chunk_last);
-			*start = db_chunk_last;
-			if (db_chunk_last < final_db_seq)
-			{
-				*stop = MIN((db_chunk_last+db_chunk_size), final_db_seq);
-			}
-			else 
-			{/* Already finished. */
-				*stop = db_chunk_last;
-				done = TRUE;
-			}
-			db_chunk_last = *stop;
-			NlmMutexUnlock(db_mutex);
-		}
-		else
-		{
-			if (*stop != final_db_seq)
-			{
-				done = FALSE;
-				*start = last_db_seq;
-				*stop = final_db_seq;
-			}
-			else
-			{
-				done = TRUE;
-			}
-		}
+    } else if (thr_info->blast_seqid_list) {
+	/* global_seqid_list indicates there is a list of selected ID's, 
+	   global_seqid_ptr is the position in the list. */
+	NlmMutexLock(thr_info->db_mutex);
+	sip = thr_info->blast_seqid_list->seqid_ptr;
+	if (sip == NULL) {
+	    NlmMutexUnlock(thr_info->db_mutex);
+	    return TRUE;
 	}
 
-	return done;
+	ordinal_id = SeqId2OrdinalId(rdfp, sip);
+	while (ordinal_id < 0 && sip) {
+	    thr_info->blast_seqid_list->seqid_ptr = 
+		thr_info->blast_seqid_list->seqid_ptr->next;
+	    sip = thr_info->blast_seqid_list->seqid_ptr;
+	    ordinal_id = SeqId2OrdinalId(rdfp, sip);
+	}
+
+	if (thr_info->blast_seqid_list->seqid_ptr) {
+	    *start = ordinal_id;
+	    *stop = ordinal_id+1;
+	    done = FALSE;
+	    thr_info->blast_seqid_list->seqid_ptr = 
+		thr_info->blast_seqid_list->seqid_ptr->next;
+	} else {
+	    done = TRUE;
+	}
+
+	NlmMutexUnlock(thr_info->db_mutex);
+    } else {
+	/* we have real database with start/stop specified */
+	if (thr_info->db_mutex) {
+	    NlmMutexLock(thr_info->db_mutex);
+
+	    /* Emit a tick if needed. */
+	    BlastTickProc(thr_info->db_chunk_last, thr_info);
+	    *start = thr_info->db_chunk_last;
+	    if (thr_info->db_chunk_last < thr_info->final_db_seq) {
+		*stop = MIN((thr_info->db_chunk_last + 
+			    thr_info->db_chunk_size), 
+			thr_info->final_db_seq);
+	    } else {/* Already finished. */
+		*stop = thr_info->db_chunk_last;
+		thr_info->realdb_done = TRUE;
+	    }
+	    thr_info->db_chunk_last = *stop;
+	    NlmMutexUnlock(thr_info->db_mutex);
+	} else {
+	    if (*stop != thr_info->final_db_seq) {
+		done = FALSE;
+		*start = thr_info->last_db_seq;
+		*stop = thr_info->final_db_seq;
+	    }
+	    else
+	    {
+		thr_info->realdb_done = TRUE;
+	    }
+	}
+    }
+
+    return done;
 }
 
 #ifdef RLIMIT_CPU
@@ -2330,10 +2427,12 @@ do_gapped_blast_search(VoidPtr ptr)
 	Int4Ptr id_list=NULL;
 
 	search = (BlastSearchBlkPtr) ptr;
-	if (global_gi_being_used)
-		id_list = MemNew(db_chunk_size*sizeof(Int4));
+	if (search->thr_info->blast_gi_list || search->rdfp->oidlist) {
+            id_list = MemNew((search->thr_info->db_chunk_size+33)
+                             *sizeof(Int4));
+        }
 
-	while (get_db_chunk(search, &start, &stop, id_list, &id_list_length) != TRUE)
+	while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, &id_list_length, search->thr_info) != TRUE)
 	{
 	    if (id_list)
 	    {
@@ -2350,14 +2449,12 @@ do_gapped_blast_search(VoidPtr ptr)
 			else
 				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
-			if (db_mutex == NULL)
-				tick_proc(index1);
+			if (search->thr_info->db_mutex == NULL)
+                            BlastTickProc(index1, search->thr_info);
 			if (time_out_boolean == TRUE)
-				break;	
+                            break;	
 		}
-             }
-	     else
-	     {
+             } else if (!search->thr_info->realdb_done) {
 		for (index=start; index<stop; index++)
 		{
 			search = BLASTPerformSearchWithReadDb(search, index);
@@ -2370,8 +2467,8 @@ do_gapped_blast_search(VoidPtr ptr)
 			else
 				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
-			if (db_mutex == NULL)
-				tick_proc(index);
+			if (search->thr_info->db_mutex == NULL)
+				BlastTickProc(index, search->thr_info);
 			if (time_out_boolean == TRUE)
 				break;	
 		}
@@ -2391,236 +2488,221 @@ static VoidPtr
 do_blast_search(VoidPtr ptr)
 
 {
-	BlastSearchBlkPtr search;
-	Int2 status;
-	Int4 index, index1, start=0, stop=0, id_list_length;
-	Int4Ptr id_list=NULL;
-
-	search = (BlastSearchBlkPtr) ptr;
-	if (global_gi_being_used)
-		id_list = MemNew(db_chunk_size*sizeof(Int4));
-
-	while (get_db_chunk(search, &start, &stop, id_list, &id_list_length) != TRUE)
-	{
-	    if (id_list)
-	    {
-		for (index=0; index<id_list_length; index++)
-		{
-			index1 = id_list[index];
-			search = BLASTPerformSearchWithReadDb(search, index1);
-			if (search->pbp->do_sum_stats == TRUE)
-				status = BlastLinkHsps(search);
-			else
-				status = BlastGetNonSumStatsEvalue(search);
-			status = BlastReapHitlistByEvalue(search);
-			status = BlastReevaluateWithAmbiguities(search, index1);
-			if (search->handle_results)
-				search->handle_results((VoidPtr) search);
-			else
-				BlastSaveCurrentHitlist(search);
-			/* Emit a tick if needed and we're not MT. */
-			if (db_mutex == NULL)
-				tick_proc(index1);
-			if (time_out_boolean == TRUE)
-				break;	
-		}
-	     }
-	     else
-	     {
-		for (index=start; index<stop; index++)
-		{
-			search = BLASTPerformSearchWithReadDb(search, index);
-			if (search->pbp->do_sum_stats == TRUE)
-				status = BlastLinkHsps(search);
-			else
-				status = BlastGetNonSumStatsEvalue(search);
-			status = BlastReapHitlistByEvalue(search);
-			status = BlastReevaluateWithAmbiguities(search, index);
-			if (search->handle_results)
-				search->handle_results((VoidPtr) search);
-			else
-				BlastSaveCurrentHitlist(search);
-			/* Emit a tick if needed and we're not MT. */
-			if (db_mutex == NULL)
-				tick_proc(index);
-			if (time_out_boolean == TRUE)
-				break;	
-		}
-	     }
-		/* Get out if "stop" was the last seq. */
-		if (time_out_boolean)
-			break;
-	}
-
-	if (id_list)
-		id_list = MemFree(id_list);
-
-	return (VoidPtr) search;
+    BlastSearchBlkPtr search;
+    Int2 status;
+    Int4 index, index1, start=0, stop=0, id_list_length;
+    Int4Ptr id_list=NULL;
+    
+    search = (BlastSearchBlkPtr) ptr;
+    if (search->thr_info->blast_gi_list || search->rdfp->oidlist) {
+        id_list = MemNew((search->thr_info->db_chunk_size+33)
+                         *sizeof(Int4));
+    }
+    
+    while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, &id_list_length, search->thr_info) != TRUE) {
+        if (search->thr_info->realdb_done && id_list) {
+            for (index=0; index<id_list_length; index++) {
+                index1 = id_list[index];
+                search = BLASTPerformSearchWithReadDb(search, index1);
+                if (search->pbp->do_sum_stats == TRUE)
+                    status = BlastLinkHsps(search);
+                else
+                    status = BlastGetNonSumStatsEvalue(search);
+                status = BlastReapHitlistByEvalue(search);
+                status = BlastReevaluateWithAmbiguities(search, index1);
+                if (search->handle_results)
+                    search->handle_results((VoidPtr) search);
+                else
+                    BlastSaveCurrentHitlist(search);
+                /* Emit a tick if needed and we're not MT. */
+                if (search->thr_info->db_mutex == NULL)
+                    BlastTickProc(index1, search->thr_info);
+                if (time_out_boolean == TRUE)
+                    break;	
+            }
+        } else if (!search->thr_info->realdb_done) {
+            for (index=start; index<stop; index++) {
+                search = BLASTPerformSearchWithReadDb(search, index);
+                if (search->pbp->do_sum_stats == TRUE)
+                    status = BlastLinkHsps(search);
+                else
+                    status = BlastGetNonSumStatsEvalue(search);
+                status = BlastReapHitlistByEvalue(search);
+                status = BlastReevaluateWithAmbiguities(search, index);
+                if (search->handle_results)
+                    search->handle_results((VoidPtr) search);
+                else
+                    BlastSaveCurrentHitlist(search);
+                /* Emit a tick if needed and we're not MT. */
+                if (search->thr_info->db_mutex == NULL)
+                    BlastTickProc(index, search->thr_info);
+                if (time_out_boolean == TRUE)
+                    break;	
+            }
+        }
+        /* Get out if "stop" was the last seq. */
+        if (time_out_boolean)
+            break;
+    }
+    
+    if (id_list)
+        id_list = MemFree(id_list);
+    
+    return (VoidPtr) search;
 } 
 
 void LIBCALL
 do_the_blast_run(BlastSearchBlkPtr search)
 
 {
-	BlastSearchBlkPtr PNTR array;
-	Char buffer[256];
-	Int2 index;
-	Int4 number_of_entries, num_seq;
-        Int8	total_length;
-	ReadDBFILEPtr rdfp;
-	TNlmThread PNTR thread_array;
-	VoidPtr status=NULL;
+    BlastSearchBlkPtr PNTR array;
+    Char buffer[256];
+    Int2 index;
+    Int4 number_of_entries, num_seq;
+    Int8	total_length;
+    ReadDBFILEPtr rdfp;
+    TNlmThread PNTR thread_array;
+    VoidPtr status=NULL;
+    
+    if (search == NULL)
+        return;
+    
+    search->thr_info->db_chunk_size = BLAST_DB_CHUNK_SIZE;
+    
+#if 0    
+    readdb_get_totals(search->rdfp, &total_length, &num_seq);	
+#else
+    num_seq = search->dbseq_num;
+#endif
+    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
+    search->thr_info->last_db_seq = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
+    if (search->pbp->final_db_seq == 0)
+        search->thr_info->final_db_seq = readdb_get_num_entries_total_real(search->rdfp);
+    else
+        search->thr_info->final_db_seq = search->pbp->final_db_seq;
+    
+    search->thr_info->db_chunk_last = 0;
+    
+    if (search->thr_info->blast_gi_list || search->rdfp->oidlist)
+        search->thr_info->gi_current = 0;
 
-	if (search == NULL)
-		return;
+    /* guess if we need to search any real database */
+    if (search->thr_info->final_db_seq == 0) {
+	/* that means that we have only mask and no real database should be searched */
+	search->thr_info->realdb_done = TRUE;
+    } else {
+	/* otherwise, we need to start searching all real databases */
+	search->thr_info->realdb_done = FALSE;
+    }
+    
+    BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
+        rdfp = search->rdfp;
+        number_of_entries = INT4_MAX;
+        /* Look for smallest database. */
+        while (rdfp) {
+            number_of_entries = MIN(number_of_entries, readdb_get_num_entries(rdfp));
+            rdfp = rdfp->next;
+        }
+        /* Divide up the chunks differently if db is small. */
+        if (search->thr_info->db_chunk_size*(search->pbp->process_num) > number_of_entries){
+            /* check that it is at least one. */
+            search->thr_info->db_chunk_size = MAX(number_of_entries/(search->pbp->process_num), 1);
+        }
+        NlmMutexInit(&search->thr_info->db_mutex);
+        NlmMutexInit(&search->thr_info->results_mutex);
+        NlmMutexInit(&search->thr_info->ambiguities_mutex);
+        
+        array = (BlastSearchBlkPtr PNTR) MemNew((search->pbp->process_num)*sizeof(BlastSearchBlkPtr));
+        array[0] = search;
+        for (index=1; index<search->pbp->process_num; index++) {
+            array[index] = BlastSearchBlkDuplicate(search);	
+        }
+        
+        thread_array = (TNlmThread PNTR) MemNew((search->pbp->process_num)*sizeof(TNlmThread));
+        for (index=0; index<search->pbp->process_num; index++) {
+            if (search->pbp->gapped_calculation &&
+                StringCmp(search->prog_name, "blastn") != 0)
+                thread_array[index] = NlmThreadCreateEx(do_gapped_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
+            else
+                thread_array[index] = NlmThreadCreateEx(do_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
+            
+            if (NlmThreadCompare(thread_array[index], NULL_thread)) {
+                ErrPostEx(SEV_ERROR, 0, 0, "Unable to open thread.");
+            }
+        }
 
-	db_chunk_size = BLAST_DB_CHUNK_SIZE;
-	tick_callback = search->tick_callback;
-	
-	readdb_get_totals(search->rdfp, &total_length, &num_seq);	
-	db_incr = num_seq / BLAST_NTICKS;
-	last_db_seq = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
-	if (search->pbp->final_db_seq == 0)
-		final_db_seq = readdb_get_num_entries_total(search->rdfp);
-	else
-		final_db_seq = search->pbp->final_db_seq;
-
-	global_gi_being_used = FALSE;
-	db_chunk_last = 0;
-	if (search->blast_gi_list)
-	{
-		global_gi_current = 0;
-		global_gi_being_used = TRUE;
-	}
-	else if (search->blast_seqid_list)
-	{
-		global_seqid_list = search->blast_seqid_list->seqid_list;
-		global_seqid_ptr = search->blast_seqid_list->seqid_list;
-	}
-	else
-	{
-		global_seqid_list = NULL;
-		global_seqid_ptr = NULL;
-	}
-
-	BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
-
-	if (NlmThreadsAvailable() && search->pbp->process_num > 1)
-	{
-		rdfp = search->rdfp;
-		number_of_entries = INT4_MAX;
-		/* Look for smallest database. */
-		while (rdfp)
-		{
-			number_of_entries = MIN(number_of_entries, readdb_get_num_entries(rdfp));
-			rdfp = rdfp->next;
-		}
-		/* Divide up the chunks differently if db is small. */
-		if (db_chunk_size*(search->pbp->process_num) > number_of_entries)
-		{
-			/* check that it is at least one. */
-			db_chunk_size = MAX(number_of_entries/(search->pbp->process_num), 1);
-		}
-		NlmMutexInit(&db_mutex);
-		NlmMutexInit(&results_mutex);
-		NlmMutexInit(&ambiguities_mutex);
-
-		array = (BlastSearchBlkPtr PNTR) MemNew((search->pbp->process_num)*sizeof(BlastSearchBlkPtr));
-		array[0] = search;
-		for (index=1; index<search->pbp->process_num; index++)
-		{
-			array[index] = BlastSearchBlkDuplicate(search);	
-		}
-
-		thread_array = (TNlmThread PNTR) MemNew((search->pbp->process_num)*sizeof(TNlmThread));
-		for (index=0; index<search->pbp->process_num; index++)
-		{
-			if (search->pbp->gapped_calculation &&
-				StringCmp(search->prog_name, "blastn") != 0)
-				thread_array[index] = NlmThreadCreateEx(do_gapped_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
-			else
-				thread_array[index] = NlmThreadCreateEx(do_blast_search, (VoidPtr) array[index], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
-
-			if (NlmThreadCompare(thread_array[index], NULL_thread))
-			{
-				ErrPostEx(SEV_ERROR, 0, 0, "Unable to open thread.");
-			}
-		}
-
-		for (index=0; index<search->pbp->process_num; index++)
-		{
-			NlmThreadJoin(thread_array[index], &status);
-		}
+        for (index=0; index<search->pbp->process_num; index++) {
+            NlmThreadJoin(thread_array[index], &status);
+        }
 
 #ifdef OS_UNIX
-                if(search->pbp->process_num > 1 && 
-			search->semid > 0 &&
-				search->queue_callback) {
-                    /* despite the fact, that this function may
-                       return error - it will not be fatal for a
-                       given blast search */
-/*
-                    BQ_IncSemaphore(search->semid, 3, 
-                                    search->pbp->process_num -1);
-*/
-                    search->queue_callback(search->semid, 3, 
-                                    search->pbp->process_num -1);
-                }
+        if(search->pbp->process_num > 1 && 
+           search->semid > 0 &&
+           search->queue_callback) {
+            /* despite the fact, that this function may
+               return error - it will not be fatal for a
+               given blast search */
+            /*
+              BQ_IncSemaphore(search->semid, 3, 
+              search->pbp->process_num -1);
+              */
+            search->queue_callback(search->semid, 3, 
+                                   search->pbp->process_num -1);
+        }
 #endif
-
-		for (index=1; index<search->pbp->process_num; index++)
-		{
+        
+        for (index=1; index<search->pbp->process_num; index++) {
 #ifdef BLAST_COLLECT_STATS
-			search->first_pass_hits += array[index]->first_pass_hits;
-			search->second_pass_hits += array[index]->second_pass_hits;
-			search->second_pass_trys += array[index]->second_pass_trys;
-			search->first_pass_extends += array[index]->first_pass_extends;
-			search->second_pass_extends += array[index]->second_pass_extends;
-			search->first_pass_good_extends += array[index]->first_pass_good_extends;
-			search->second_pass_good_extends += array[index]->second_pass_good_extends;
-			search->number_of_seqs_better_E += array[index]->number_of_seqs_better_E;
-			search->prelim_gap_no_contest += array[index]->prelim_gap_no_contest;
-			search->prelim_gap_passed += array[index]->prelim_gap_passed;
-			search->prelim_gap_attempts += array[index]->prelim_gap_attempts;
-			search->real_gap_number_of_hsps += array[index]->real_gap_number_of_hsps;
+            search->first_pass_hits += array[index]->first_pass_hits;
+            search->second_pass_hits += array[index]->second_pass_hits;
+            search->second_pass_trys += array[index]->second_pass_trys;
+            search->first_pass_extends += array[index]->first_pass_extends;
+            search->second_pass_extends += array[index]->second_pass_extends;
+            search->first_pass_good_extends += array[index]->first_pass_good_extends;
+            search->second_pass_good_extends += array[index]->second_pass_good_extends;
+            search->number_of_seqs_better_E += array[index]->number_of_seqs_better_E;
+            search->prelim_gap_no_contest += array[index]->prelim_gap_no_contest;
+            search->prelim_gap_passed += array[index]->prelim_gap_passed;
+            search->prelim_gap_attempts += array[index]->prelim_gap_attempts;
+            search->real_gap_number_of_hsps += array[index]->real_gap_number_of_hsps;
 #endif
-			/* Not copied at thread start. */
-			search->blast_seqid_list = NULL;
+            /* Not copied at thread start. */
+            /* search->blast_seqid_list = NULL; */
+            array[index] = BlastSearchBlkDestruct(array[index]);	
+        }
+        array = MemFree(array);
 
-			array[index] = BlastSearchBlkDestruct(array[index]);	
-		}
-		array = MemFree(array);
-		thread_array = MemFree(thread_array);
+	/* Free the header and sequence file pointers */
+	search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
+	search->rdfp = ReadDBFreeSharedInfo(search->rdfp);
 
-		NlmMutexDestroy(db_mutex);
-		db_mutex = NULL;
-		NlmMutexDestroy(results_mutex);
-		results_mutex = NULL;
-		NlmMutexDestroy(ambiguities_mutex);
-		ambiguities_mutex = NULL;
-	}
-	else
-	{
-		if (search->pbp->gapped_calculation &&
-				StringCmp(search->prog_name, "blastn") != 0)
-			do_gapped_blast_search((VoidPtr) search);
-		else
-			do_blast_search((VoidPtr) search);
-	}
-
-	if (time_out_boolean)
-	{
-		sprintf(buffer, "CPU limit exceeded");
-		BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
-	}
-	else
-	{
+        thread_array = MemFree(thread_array);
+        
+        NlmMutexDestroy(search->thr_info->db_mutex);
+        search->thr_info->db_mutex = NULL;
+        NlmMutexDestroy(search->thr_info->results_mutex);
+        search->thr_info->results_mutex = NULL;
+        NlmMutexDestroy(search->thr_info->ambiguities_mutex);
+        search->thr_info->ambiguities_mutex = NULL;
+    } else {
+        if (search->pbp->gapped_calculation &&
+            StringCmp(search->prog_name, "blastn") != 0)
+            do_gapped_blast_search((VoidPtr) search);
+        else
+            do_blast_search((VoidPtr) search);
+    }
+    
+    if (time_out_boolean) {
+        sprintf(buffer, "CPU limit exceeded");
+        BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
+    } else {
 #ifdef RLIMIT_CPU
-		signal(SIGXCPU, SignalIgnore);
+        signal(SIGXCPU, SignalIgnore);
 #endif
-	}
-
-	return;
+    }
+    
+    return;
 }
 
 static Uint1
@@ -2756,6 +2838,7 @@ HackSeqLocId(SeqLocPtr slp, SeqIdPtr id)
 }
 
 #define DROPOFF_NUMBER_OF_BITS 10.0
+#define INDEX_THR_MIN_SIZE 20000
 static Int2
 BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
@@ -2781,7 +2864,6 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 	Uint1Ptr sequence;
 	Uint1Ptr query_seq, query_seq_start, query_seq_rev, query_seq_start_rev;
 	ValNodePtr vnp;
-	VoidPtr thr_status=NULL;
 
 	if (options == NULL)
 	{
@@ -2925,11 +3007,12 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 		options->filter_string = BlastConstructFilterString(options->filter);
 
 	/* If the query is translated do this below. */ 
-	if (StringCmp(prog_name, "blastx") && StringCmp(prog_name, "tblastx"))
+	if (StringCmp(prog_name, "blastx") && StringCmp(prog_name, "tblastx")) {
 		if (private_slp)
 			filter_slp = BlastSeqLocFilterEx(private_slp, options->filter_string, &mask_at_hash);
 		else if (private_slp_rev)
 			filter_slp = BlastSeqLocFilterEx(private_slp_rev, options->filter_string, &mask_at_hash);
+	}
 
 
 	/* 
@@ -3162,7 +3245,12 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 
 	search->sbp->penalty = options->penalty;
 	search->sbp->reward = options->reward;
+        
+        /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
+	search->pbp->use_best_align = options->use_best_align;
 
+        /* This cache size to be used while creating lookup table */
+        search->pbp->theCacheSize = options->theCacheSize;
 	
 	/* Should culling be used at all? */
 	search->pbp->perform_culling = options->perform_culling;
@@ -3410,6 +3498,8 @@ available) this needs to be set higher up. */
 	if (options->dropoff_2nd_pass == 0)
 		options->dropoff_2nd_pass = (Int4) DROPOFF_NUMBER_OF_BITS;
 
+	search->pbp->no_check_score = options->no_check_score;
+
 	if (StringCmp(search->prog_name, "blastn") != 0)
 	{
 		avglen = BLAST_AA_AVGLEN;
@@ -3424,23 +3514,15 @@ available) this needs to be set higher up. */
 	if (blast_set_parameters(search, options->dropoff_1st_pass, options->dropoff_2nd_pass, avglen, search->searchsp_eff, options->window_size) != 0)
 		return 1;
 
-	/* If index_thr is running from the last search, then wait for the join. */
-	/* This pointer is NULL on the first search ever. */
-	if (index_thr)
-	{
-		NlmThreadJoin(index_thr, &thr_status);
-		index_thr = NULL;
+	search->thr_info->awake_index = FALSE;
+	if (NlmThreadsAvailable() && (search->context_factor*query_length) > INDEX_THR_MIN_SIZE) {
+            search->thr_info->awake_index = TRUE;
+            search->thr_info->last_tick = Nlm_GetSecs();
+            search->thr_info->index_thr = 
+                NlmThreadCreate(index_proc, search->thr_info);
+            search->thr_info->index_callback = callback;
 	}
-
-	awake_index = FALSE;
-	if (NlmThreadsAvailable())
-	{
-		awake_index = TRUE;
-		last_tick = Nlm_GetSecs();
-		index_thr = NlmThreadCreate(index_proc, NULL);
-		index_callback = callback;
-	}
-
+        
 	/* Only do this if this is not a pattern search. */
 	if (options->isPatternSearch == FALSE)
 	{
@@ -3459,11 +3541,10 @@ available) this needs to be set higher up. */
 			    status = BlastFindWords(search, search->required_start, search->required_end, options->threshold_first, (Uint1) index);
 			  else
 			    status = BlastFindWords(search, search->required_start, search->required_end, options->threshold_first, (Uint1) index);
-			if (status != 0)
-			{
-				awake_index = FALSE;
-				ErrPostEx(SEV_WARNING, 0, 0, "BlastFindWords returned non-zero status");
-				return 1;
+			if (status != 0) {
+                            search->thr_info->awake_index = FALSE;
+                            ErrPostEx(SEV_WARNING, 0, 0, "BlastFindWords returned non-zero status");
+                            return 1;
 			}
 		}
 		search->wfp = search->wfp_second;
@@ -3491,14 +3572,14 @@ available) this needs to be set higher up. */
 
 		if (status > 0)
 		{
-			awake_index = FALSE;
+			search->thr_info->awake_index = FALSE;
 			sprintf(buffer, "No valid letters to be indexed");
 			BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
 			return 1;
 		}
 		else if (status < 0)
 		{
-			awake_index = FALSE;
+			search->thr_info->awake_index = FALSE;
 			sprintf(buffer, "Error finding words");
 			BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
 			return 1;
@@ -3510,7 +3591,8 @@ available) this needs to be set higher up. */
 	Turn off the index thread by setting this flag.  Don't wait for a join, as the
 	search will take much longer than the one second for this to die.
 	*/
-	awake_index = FALSE;
+	search->thr_info->awake_index = FALSE;
+
 
 	if (private_slp && private_slp_delete)
 		private_slp = SeqLocFree(private_slp);
@@ -3646,14 +3728,18 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 {
 
 	BlastSearchBlkPtr search;
-	Boolean multiple_hits, options_alloc=FALSE, gil_not_owned=FALSE;
-	BlastDoubleInt4Ptr PNTR gi_list_pointers;
+	Boolean multiple_hits, options_alloc=FALSE;
 	Int2 status, first_context, last_context;
         Int8	dblen;
 	Int4	query_length;
         ValNodePtr	vnp;
         Int4		i;
 	Nlm_FloatHi	searchsp_eff=0;
+	Boolean		use_private_gilist = FALSE;
+	OIDListPtr	alias_oidlist;
+	Int4		mask_index, virtual_mask_index;
+	Uint4		oid_bit, virtual_oid_bit;
+	ReadDBFILEPtr	tmprdfp;
         
 	/* Allocate default options if none are allocated yet. */
 	if (options == NULL)
@@ -3663,11 +3749,8 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 	}
 
      
-	if (gi_list) /* If the gilist is not owned, don't set BLAST_SEARCH_ALLOC_GILIST flag. */
-		gil_not_owned = TRUE;
-
-            /* non-NULL gi_list means that standalone program called the function */
-            /* non-NULL options->gilist means that server got this gilist from client */
+	/* non-NULL gi_list means that standalone program called the function */
+	/* non-NULL options->gilist means that server got this gilist from client */
         if(options->gilist) {
                 /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
 
@@ -3679,8 +3762,8 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
             gi_list_total = i;
         }
         
-            /* Using "options->gifile" file and gi_list,
-               construct new gi_list with all needed gis */
+	/* Using "options->gifile" file and gi_list,
+	   construct new gi_list with all needed gis */
 
 
         if (options->gifile && StringCmp(options->gifile, "")) {
@@ -3746,34 +3829,201 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 	else
 		query_length = query_bsp->length;
 		
-/* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
+	/* On the first call query length is used for the subject length. */
+	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size, options->theCacheSize);
 
 	if (search)
 	{
 		readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
 
 		if (seqid_list)
-			BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), seqid_list, NULL, NULL, 0);
+			BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num),
+				seqid_list, NULL, NULL, 
+				NULL, 0);
 
 		if (gi_list)
 		{
-			gi_list_pointers = MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
-			BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), NULL, gi_list, gi_list_pointers, gi_list_total);
-			HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), compare);
-		        /* Add gi list if search is being done that way. */
-        		search->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
-			if (gil_not_owned == FALSE)
-				search->allocated += BLAST_SEARCH_ALLOC_GILIST;
-		}
+			/* transform the list into OID mask */
 
+		    Int4		i;
+		    Int4		maxoid, virtual_oid, oid;
+		    OIDListPtr		oidlist;
+		    Int4		total, laststop;
+		    Int4		start;
+		    Boolean		done;
+
+		    BlastDoubleInt4Ptr PNTR gi_list_pointers;
+
+		    use_private_gilist = TRUE;
+
+		    gi_list_pointers = MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
+
+		    maxoid = 0;
+		    for (i=0; i < gi_list_total; i++) {
+			/* get virtual OID and start possition for the database this gi is in */
+			gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
+			gi_list[i].start = start;
+			maxoid = MAX(maxoid, gi_list[i].ordinal_id);
+			gi_list_pointers[i] = &(gi_list[i]);
+		    }
+
+		    /* allocate space for mask for virtual database */
+		    oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+		    oidlist->total = maxoid + 1;
+		    total = maxoid/MASK_WORD_SIZE + 2;
+		    oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
+
+		    /* Merge this list with virtual database (OID list) */
+
+		    for (i=0; i < gi_list_total; i++) {
+			/* get start possition in that database */
+			start = gi_list[i].start;
+
+			/* find out if this is an mask database */
+
+			done = FALSE;
+			tmprdfp = search->rdfp;
+
+			alias_oidlist = NULL;
+			while (tmprdfp && !done) {
+			    if (tmprdfp->start == start) {
+				alias_oidlist = tmprdfp->oidlist;
+				done = TRUE;
+			    } else if (tmprdfp->start > start) {
+				done = TRUE;
+			    } else {
+				tmprdfp = tmprdfp->next;
+			    }
+			}
+
+			/* populate the mask */
+			virtual_oid = gi_list[i].ordinal_id;
+
+			if (virtual_oid >= 0) {
+			    virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+			    if (alias_oidlist) {
+				mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
+				oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
+			    }
+
+			    virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+
+			    if ((!alias_oidlist) ||
+				    (alias_oidlist && alias_oidlist->list && 
+				     (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
+				oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+			    }
+			}
+		    }
+
+		    for (i=0; i<total; i++) {
+			oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
+		    }
+
+		    search->rdfp->oidlist = oidlist;
+
+		    /* in this case, the case when we have .gil file, the only database mask
+		       should be used in Blast Search, so set number of sequences for the first
+		       database in rdfp list to 0 avoiding search this real database: */
+		    search->rdfp->num_seqs = 0;
+
+		    /* Adjust db size; the size should be equal to size of the .gil */
+		    BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), 
+			    NULL, NULL, oidlist, NULL, 0);
+
+		    /* keep list of gi's (needed for formating) */
+		    HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), compare);
+		    search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
+		} else {
+		    /* Ok, we do not have a gi-list specified, but maybe
+		       we have an a mask database in the list of databases,
+		       we need to create one mask for all such databases */
+		    OIDListPtr		virtual_oidlist = NULL;
+		    Int4		final_virtual_db_seq=0, final_db_seq=0;
+		    Int4		mask, oid, virtual_oid, maskindex,
+					virtual_mask_index, total_virtual_mask,
+					base;
+		    Uint4		virtual_oid_bit;
+
+		    tmprdfp = search->rdfp;
+		    while (tmprdfp) {
+
+			final_virtual_db_seq = tmprdfp->stop;
+			if (!tmprdfp->oidlist)
+			    final_db_seq = tmprdfp->stop;
+			tmprdfp = tmprdfp->next;
+		    }
+
+		    tmprdfp = search->rdfp;
+		    while (tmprdfp) {
+			if (tmprdfp->oidlist) {
+			    if (!virtual_oidlist) {
+				/* create new oidlist for virtual database */
+				virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+				virtual_oidlist->total = final_virtual_db_seq + 1;
+				total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
+				virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
+			    }
+			    /* Now populate the virtual_oidlist */
+			    maskindex = 0;
+			    base = 0;
+
+			    while (maskindex < (tmprdfp->oidlist->total/MASK_WORD_SIZE +1)) {
+				/* for each long-word mask */
+				mask = Nlm_SwapUint4(tmprdfp->oidlist->list[maskindex]);
+
+				i = 0;
+				while (mask) {
+				    if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+					oid = base + i;
+					virtual_oid = oid + tmprdfp->start;
+
+					virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+					virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+					virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+				    }
+				    mask <<= 1;
+				    i++;
+				}
+				maskindex++;
+				base += MASK_WORD_SIZE;
+			    }
+
+			    /* free old mask */
+			    tmprdfp->oidlist = OIDListFree(tmprdfp->oidlist);
+			}
+			tmprdfp = tmprdfp->next;
+		    }
+		    if (virtual_oidlist) {
+			for (i=0; i<total_virtual_mask; i++) {
+			    virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
+			}
+		    }
+		    search->rdfp->oidlist = virtual_oidlist;
+
+		    readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
+
+		}
+		/* Intended for use when a list of gi's is sent in, but the real size is needed. */
+		/* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
+			if this were not required. */
+		if (options->use_real_db_size)
+			readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
+
+#if 0
+		/* use length and num of seqs of the database from alias file */
+		if (search->rdfp->aliaslen && !gi_list)
+		    dblen = search->rdfp->aliaslen;
+		if (search->rdfp->aliasnseq && !gi_list) 
+		    search->dbseq_num = search->rdfp->aliasnseq;
+#endif
+		/* command-line/options trump alias file. */
 		if (options->db_length > 0)
 			dblen = options->db_length;
-		if (options->searchsp_eff > 0)
-			searchsp_eff = options->searchsp_eff;
-
 		if (options->dbseq_num > 0)
 			search->dbseq_num = options->dbseq_num;
+		if (options->searchsp_eff > 0)
+			searchsp_eff = options->searchsp_eff;
 
                 if (StringCmp(prog_name, "tblastn") == 0 || StringCmp(prog_name, "tblastx") == 0)
                 {
@@ -3877,7 +4127,7 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
 /* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context, options->window_size);
+	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context, options->window_size, options->theCacheSize);
 
 	if (search)
 	{
@@ -4191,6 +4441,11 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
 			status = BlastPreliminaryGappedScore(search, search->subject->sequence, search->subject->length, inner_frame);
 			status = BlastGetGappedScore(search, search->subject->length, search->subject->sequence, inner_frame);
 		}
+		else if (!search->pbp->do_sum_stats)
+                {
+                     status = BlastNTPreliminaryGappedScore(search, search->subject->sequence, search->subject->length);
+                     status = BlastNTGetGappedScore(search, search->subject->length, search->subject->sequence);
+                }
 	}
 
 
@@ -4282,7 +4537,7 @@ can tell that there is a NULLB there and stop the extension.
 
 */
 
-static Int2 LIBCALL
+Int2 LIBCALL
 BlastSequenceAddSequence (BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_length, Int4 effective_length)
 
 {
@@ -4376,11 +4631,21 @@ BlastWordFinder(BlastSearchBlkPtr search)
 	}
 }
 
+/* This function was updated to use mod_lt instead of the original lookup table, 
+ * but was not heavily optimized or tested.
+ * (Modifications listed in comments before BlastWordFinder_mh_contig.)
+ * -cfj
+ */
+
 /*
 	Search a sequence with contiguous words.
 */
-static Int4 
+static Int4
+#ifdef DYNAMIC_CACHE
+BlastWordFinder_contig_old(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
 BlastWordFinder_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
 {
 	register Uint1Ptr	s, s_end;
 	register Int4	char_size, lookup_index, mask;
@@ -4389,16 +4654,16 @@ BlastWordFinder_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	BLAST_ExtendWordParamsPtr	ewp_params;
 	Boolean			prelim, succeed_to_right;
 	Uint1Ptr			subject0;
-	register Int4  PNTR diag_level;
+	CfjModStruct *combo_array;
 	Int4	 index=0;
-	register LookupPositionPtr PNTR position;
-	register LookupPositionPtr lookup_pos;
-	Int2		context, last_context;
+	register ModLookupPosition hit_info;
+	Int2		context;
 	Int4		q_off, s_off, offset, word_width;
 	register Int4 bits_to_shift, min_diag_length, min_diag_mask;
 	Int4	number_of_hits=0;
-
-	diag_level = NULL;	/* Gets rid of warning. */
+	register Int4 num_hits;
+	register ModLookupPositionPtr lookup_pos;
+	ModLAEntry *mod_lt=lookup->mod_lt;
 	ewp_params=search->ewp_params;
 	prelim = search->prelim;
 
@@ -4435,13 +4700,11 @@ the size of the word. */
 
 	s = lookup_find_init(lookup, &index, s);
 	lookup_index = index;
-	position = lookup->position;
-	lookup_pos=NULL;
+
         /* Determines when to stop scanning the database. */
         s_end = subject0 + search->subject->length;
 	if ((search->last_context-search->first_context+1) > 1)
 	{
-	    last_context = -1; /* The context is never -1 in reality. */
 	    for (;;) 
 	    {
 		do {
@@ -4450,28 +4713,41 @@ the size of the word. */
         		lookup_index = (((lookup_index) & mask)<<char_size) + *s;
 			if (s == s_end)
 				goto NormalReturn;
-		} while (*(position + lookup_index) == NULL);
+		} while (mod_lt[lookup_index].num_used == 0);
 
-		lookup_pos = *(position + lookup_index);
+		num_hits = mod_lt[lookup_index].num_used;
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
 
-		s_off = s-subject0;
+                if(num_hits > 3){
+#ifdef RPS_BLAST
+                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+#else
+                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+#endif
+                }
+
+ 		s_off = s-subject0;
 		diag_tmp = s_off + min_diag_length;
 		/* Extend each hit in the linked list */
 		do {
 #ifdef BLAST_COLLECT_STATS
-			number_of_hits++;
+		    number_of_hits++;
 #endif
-		    q_off = lookup_pos->position;
-		    context = lookup_pos->context;
+		    q_off = hinfo_get_pos(hit_info);
+		    context = hinfo_get_context(hit_info);
+		    num_hits--;
+		    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+		    lookup_pos++;
+
 		    diag = diag_tmp - q_off;
+
 		    real_diag = diag & min_diag_mask;
-		    if (context != last_context)
-		    {
-                                ewp=search->context[context].ewp;
-                                diag_level = ewp->diag_level;
-                                last_context = context;
-                    }
-		    if (diag_level[real_diag] > (s_off+offset))
+		    ewp=search->context[context].ewp;
+		    combo_array = ewp->combo_array;
+
+		    if (combo_array[real_diag].diag_level > (s_off+offset))
 		    {
 			continue;
 		    }
@@ -4483,13 +4759,13 @@ the size of the word. */
 		      if (BlastNewWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
 			goto ErrorReturn;
                     }
-		} while ((lookup_pos = lookup_pos->next) != NULL);
+		} while (num_hits>0);
 	   }
 	}
 	else	/* only one context. */
 	{
 	   ewp=search->context[search->first_context].ewp;
-           diag_level = ewp->diag_level;
+	   combo_array = ewp->combo_array;
 	   for (;;) 
 	   {
 		do {
@@ -4499,21 +4775,37 @@ the size of the word. */
         		lookup_index += *s;
 			if (s == s_end)
 				goto NormalReturn;
-		} while (*(position + lookup_index) == NULL);
+		} while (mod_lt[lookup_index].num_used == 0);
 
-		lookup_pos = *(position + lookup_index);
+
+		num_hits = mod_lt[lookup_index].num_used;
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
+
+                if(num_hits > 3){
+#ifdef RPS_BLAST
+                	lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+#else
+                	lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+#endif
+		}
 
 		s_off = s-subject0;
 		diag_tmp = s_off + min_diag_length;
 		/* Extend each hit in the linked list */
 		do {
 #ifdef BLAST_COLLECT_STATS
-			number_of_hits++;
+		    number_of_hits++;
 #endif
-		    q_off = lookup_pos->position;
+		    q_off = hinfo_get_pos(hit_info);
+		    num_hits--;
+		    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+		    lookup_pos++;
+
 		    diag = diag_tmp - q_off;
 		    real_diag = diag & min_diag_mask;
-		    if (diag_level[real_diag] > (s_off+offset))
+		    if (combo_array[real_diag].diag_level > (s_off+offset))
 		    {
 			continue;
 		    }
@@ -4525,7 +4817,7 @@ the size of the word. */
 		      if (BlastNewWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
 			goto ErrorReturn;
 		    }
-		} while ((lookup_pos = lookup_pos->next) != NULL);
+		} while (num_hits>0);
 	   }
 	}
 
@@ -4540,6 +4832,241 @@ NormalReturn:
 ErrorReturn:
 	BlastExtendWordExit(search);
 	return 3;
+}
+
+/* ------------------------------------------------------------------
+   
+   This function was updated to use lookup table with dynamical size
+   Idea based on mod_lt structure with variable cache size 
+
+   Elements in the Table references as:
+       
+   *(theTable + theArraySize*index) == .num_used
+   
+   if(.num_used <= theCasheSize)
+   *(theTable + theArraySize*index + [1...theCasheSize]) == .entries
+   else
+   *(theTable + theArraySize*index + [1...theCasheSize-2]) == .entries
+   *(theTable + theArraySize*index + [1...theCasheSize-1]) &
+   *(theTable + theArraySize*index + [1...theCasheSize]) == address of
+   extended memory chunk
+   
+   ---------------------------------------------------------------- */
+
+static Int4 
+#ifdef DYNAMIC_CACHE
+BlastWordFinder_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
+BlastWordFinder_contig_new(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
+{
+    register Uint1Ptr	s, s_end;
+    register Int4	char_size, lookup_index, mask;
+    register BLAST_Diag	diag, diag_tmp, real_diag;
+    BLAST_ExtendWordPtr     ewp;
+    BLAST_ExtendWordParamsPtr	ewp_params;
+    Boolean			prelim, succeed_to_right;
+    Uint1Ptr			subject0;
+    CfjModStruct *combo_array;
+    Int4	 index=0;
+    register ModLookupPosition hit_info;
+    Int2		context;
+    Int4		q_off, s_off, offset, word_width;
+    register Int4 bits_to_shift, min_diag_length, min_diag_mask;
+    Int4	number_of_hits=0, change_hit = 0;
+    register Int4 num_hits;
+    register ModLookupPositionPtr lookup_pos, extended_pos;
+    /*    ModLAEntry *mod_lt=lookup->mod_lt; */
+    Uint4Ptr theTable;
+    Int4 theCacheSize, theArraySize;
+    
+    theTable = lookup->theTable;
+    theCacheSize = lookup->theCacheSize;
+    theArraySize = theCacheSize + 1;
+
+    
+    ewp_params=search->ewp_params;
+    prelim = search->prelim;
+    
+    /* this function only does final run, prelim is done by BlastWordFinder_mh_contig */
+    if (prelim)
+        return 1;
+    
+    char_size = lookup->char_size;
+    mask = lookup->mask;
+    offset = ewp_params->offset;
+    subject0 = s = search->subject->sequence;
+    min_diag_length = ewp_params->min_diag_length;
+    bits_to_shift = ewp_params->bits_to_shift;
+    min_diag_mask = ewp_params->min_diag_mask;
+    
+    /* The word_width tells how "long" a word is; if it's contiguous then it's
+       the size of the word. */
+    word_width = lookup->wordsize;
+    
+    
+    if (search->current_hitlist == NULL) {
+        search->current_hitlist = BlastHitListNew(search); 
+    } else { /* Scrub the hitlist. */
+        if (search->current_hitlist_purge)
+            BlastHitListPurge(search->current_hitlist);
+    }
+    
+    /* subject is too short to find anything! */
+    if (word_width > search->subject->length)
+        return 0;
+    
+    s = lookup_find_init(lookup, &index, s);
+    lookup_index = index;
+    
+    /* Determines when to stop scanning the database. */
+    s_end = subject0 + search->subject->length;
+    if ((search->last_context-search->first_context+1) > 1) {
+        for (;;)  {
+            do {
+                /* lookup a contiguous word. */
+                s++;
+                lookup_index = (((lookup_index) & mask)<<char_size) + *s;
+                if (s == s_end)
+                    goto NormalReturn;
+            } while (*(theTable + theArraySize*lookup_index) == 0);
+            
+            /* num_hits = mod_lt[lookup_index].num_used; */
+            num_hits = *(theTable + theArraySize*lookup_index);
+            
+            /* lookup_pos = mod_lt[lookup_index].entries;*/
+            lookup_pos = (theTable + theArraySize*lookup_index + 1);
+
+            hit_info = *((Uint4 *) lookup_pos);
+            lookup_pos++;
+            
+            if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                change_hit = num_hits + 2 - theCacheSize;
+            } else {
+                change_hit = -1;
+            }
+
+            s_off = s-subject0;
+            diag_tmp = s_off + min_diag_length;
+            /* Extend each hit in the linked list */
+
+            do {
+#ifdef BLAST_COLLECT_STATS
+                number_of_hits++;
+#endif
+
+                q_off = hinfo_get_pos(hit_info);
+                context = hinfo_get_context(hit_info);
+                
+                num_hits--;
+                
+                if(num_hits == change_hit) {
+                    lookup_pos = extended_pos;
+                }
+                
+                hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                
+                lookup_pos++;
+                
+                diag = diag_tmp - q_off;
+                
+                real_diag = diag & min_diag_mask;
+                ewp=search->context[context].ewp;
+                combo_array = ewp->combo_array;
+                
+                if (combo_array[real_diag].diag_level > (s_off+offset)) {
+                    continue;
+                }
+                if (!(search->positionBased)) {
+                    if (BlastWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+			goto ErrorReturn;
+                }
+                else {
+                    if (BlastNewWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+			goto ErrorReturn;
+                }
+            } while (num_hits > 0);
+        }
+    } else {	/* only one context. */
+        ewp=search->context[search->first_context].ewp;
+        combo_array = ewp->combo_array;
+        for (;;)  {
+            do {
+                /* lookup a contiguous word. */
+                lookup_index = (((lookup_index) & mask)<<char_size);
+                s++;
+                lookup_index += *s;
+                if (s == s_end)
+                    goto NormalReturn;
+            } while (*(theTable + theArraySize*lookup_index) == 0);
+            
+            num_hits = *(theTable + theArraySize*lookup_index);
+            lookup_pos = (theTable + theArraySize*lookup_index + 1);
+            hit_info = *((Uint4 *) lookup_pos);
+            lookup_pos++;
+            
+            if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                change_hit = num_hits + 2 - theCacheSize;
+            } else {
+                change_hit = -1;
+            }
+            
+            s_off = s-subject0;
+            diag_tmp = s_off + min_diag_length;
+            /* Extend each hit in the linked list */
+            do {
+#ifdef BLAST_COLLECT_STATS
+                number_of_hits++;
+#endif
+                q_off = hinfo_get_pos(hit_info);
+                
+                num_hits--;
+
+                if(num_hits == change_hit) {
+                    lookup_pos = extended_pos;
+                }
+                
+                hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                
+                lookup_pos++;
+                                
+                diag = diag_tmp - q_off;
+                real_diag = diag & min_diag_mask;
+                if (combo_array[real_diag].diag_level > (s_off+offset)) {
+                    continue;
+                }
+                if (!(search->positionBased)) {
+                    if (BlastWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+			goto ErrorReturn;
+                } else {
+                    if (BlastNewWordExtend(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+			goto ErrorReturn;
+                }
+            } while (num_hits>0);
+        }
+    }
+    
+ NormalReturn:
+    if (search->prelim)
+        search->first_pass_hits += number_of_hits;
+    else
+        search->second_pass_hits += number_of_hits;
+    BlastExtendWordExit(search);
+    return search->current_hitlist->hspcnt;
+    
+ ErrorReturn:
+    BlastExtendWordExit(search);
+    return 3;
 }
 
 /***************************************************************************
@@ -4626,221 +5153,989 @@ BlastWordFinder_mh(BlastSearchBlkPtr search)
 	5.) the combination of the version and the 'real_diag' provide a unique location
 	for the diagonal.
 
+
+
+	modifications (cfj):
+ 	 - changed hash_table entries to reduce cache misses (see comments in lookup.c)
+	 - when walking through sequence, precompute next_index and prefetch the entry
+	 - combined last_hit/version/diag_level into array of struct for better locality.
+	 - eliminated the need for the version[] array by changing the value stored as diag_level.
+	     (This is done by measuring diag_level along s (rather than q) -- With this measure, 
+	     previous hits found in XX[real_diag] will either really be from the same diag, or will 
+	     have a diag_level and last_hit much smaller (by at least min_diag_length) than the current 
+	     position.)
+
+
 ******************************************************************************/
-	
+
+
 
 static Int4
+#ifdef DYNAMIC_CACHE
+BlastWordFinder_mh_contig_old(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
 BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
 {
-	register Uint1Ptr	s, s_end;
-	register BLAST_Diag	diag, diag_tmp, real_diag;
-	BLAST_ExtendWordPtr     ewp, ewp_pointer[40];
-	BLAST_ExtendWordParamsPtr     ewp_params;
-	Boolean			prelim, succeed_to_right;
-	Uint1Ptr	subject0;
-	Int4		q_off, s_off;
-	Int2		context, last_context;
-	register Int4 diff, offset, s_pos, window;
-	register bits_to_shift, min_diag_length, min_diag_mask;
-	Int4  PNTR diag_level, PNTR last_hit, PNTR last_hit_p;
-	register LookupPositionPtr lookup_pos;
-	register LookupPositionPtr PNTR position;
-	register Int4 char_size, lookup_index, mask, wordsize;
-	Int4 word_width, index=0, number_of_hits=0;
+    register Uint1Ptr	s;
+    register Uint1Ptr s_end;
+    Uint1Ptr	subject0;
+    BLAST_Diag	diag, diag_tmp, real_diag;
+    BLAST_ExtendWordPtr     ewp, ewp_pointer[40];
+    Uint4 q_off;
+    register Int4 s_off;
+    Uint2 context;
+    Int4 diff, offset, s_pos, window;
+    Int4 min_diag_length, min_diag_mask;
+    Int4 *last_hit_p;
+    CfjModStruct *combo_array;
+    CfjModStruct *ca_ptr[40];
+    register ModLookupPositionPtr lookup_pos;
+    register Uint4 hit_info;
+    
+    Int4 char_size, lookup_index, mask, wordsize;
+    Int4 next_lindex;
+    Int4 * next_nhits_addr;
+    Int4 word_width, index=0, number_of_hits=0;
+    register Int4 num_hits;
+    register Int4 next_nhits;
+    
+    BLAST_ExtendWordParamsPtr     ewp_params;
+    Boolean			prelim, succeed_to_right;
+    ModLAEntry *mod_lt=lookup->mod_lt;
+    PV_ARRAY_TYPE *pv_array = lookup->pv_array;
+    register PV_ARRAY_TYPE PNTR next_pv_array_addr;
+    register PV_ARRAY_TYPE next_pv_val,pv_val;
+    
+    ewp = NULL;	/* Gets rid of a warning. */
+    
+    ewp_params=search->ewp_params;
+    prelim = search->prelim;
+    
+    /* The word_width tells how "long" a word is; for a contiguous word it's
+       the length of the word. */
+    word_width = lookup->wordsize;
+    
+    wordsize = lookup->wordsize;
+    char_size = lookup->char_size;
+    mask = lookup->mask;
+    subject0 = s = (Uint1Ptr) search->subject->sequence;
+    
+    window = ewp_params->window;
+    offset = ewp_params->offset;
+    min_diag_length = ewp_params->min_diag_length;
+    min_diag_mask = ewp_params->min_diag_mask;
+    
+    if (search->current_hitlist == NULL) {
+        search->current_hitlist = BlastHitListNew(search); 
+    } else { /* Scrub the hitlist. */
+        if (search->current_hitlist_purge)
+            BlastHitListPurge(search->current_hitlist);
+    }
+    
+    /* subject is too short to find anything! */
+    if (word_width > search->subject->length)
+        return 0;
+    
+    /* Move along string to appropriate starting point. */
+    s = lookup_find_init(lookup, &index, s);
+    lookup_pos=NULL;
+    lookup_index = index;
+    /* Determines when to stop scanning the database. */
+    s_end = subject0 + search->subject->length;
+    
+    if (pv_array) {
+        if ((search->last_context-search->first_context+1) > 1) { 
+            /* Only used if more than one context. */
+            for (index=search->first_context; index<=search->last_context; index++){
+                ewp_pointer[index] = search->context[index].ewp;
+                ca_ptr[index]=ewp_pointer[index]->combo_array;
+            }
+            s_off = (Int4) (s - subject0);
+            next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+            for (;;) {
+                do {
+                    /* lookup a contiguous word. */
+                    s++;
+                    lookup_index = next_lindex;
+                    
+                    if (s == s_end)
+                        goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+                    pv_val = next_pv_val;
+                    next_pv_val = *next_pv_array_addr;
+                    
+                } while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
 
-	ewp = NULL;	/* Gets rid of a warning. */
-	diag_level = NULL;	/* Gets rid of a warning. */
-	last_hit = NULL;	/* Gets rid of a warning. */
-
-	ewp_params=search->ewp_params;
-	prelim = search->prelim;
-
-/* The word_width tells how "long" a word is; for a contiguous word it's
-the length of the word. */
-	word_width = lookup->wordsize;
-
-	wordsize = lookup->wordsize;
-	char_size = lookup->char_size;
-	mask = lookup->mask;
-	subject0 = s = search->subject->sequence;
-
-	window = ewp_params->window;
-	offset = ewp_params->offset;
-	min_diag_length = ewp_params->min_diag_length;
-	bits_to_shift = ewp_params->bits_to_shift;
-	min_diag_mask = ewp_params->min_diag_mask;
-
-	if (search->current_hitlist == NULL)
-	{
-		search->current_hitlist = BlastHitListNew(search); 
-	}
-	else
-	{ /* Scrub the hitlist. */
-		if (search->current_hitlist_purge)
-			BlastHitListPurge(search->current_hitlist);
-	}
-
-	/* subject is too short to find anything! */
-	if (word_width > search->subject->length)
-		return 0;
-
-	/* Move along string to appropriate starting point. */
-	s = lookup_find_init(lookup, &index, s);
-	lookup_pos=NULL;
-	position = lookup->position;
-	lookup_index = index;
-	/* Determines when to stop scanning the database. */
-	s_end = subject0 + search->subject->length;
-	if ((search->last_context-search->first_context+1) > 1)
-	{   /* Only used if more than one context. */
-	    for (index=search->first_context; index<=search->last_context; index++)
-		ewp_pointer[index] = search->context[index].ewp;
-
-	    last_context = -1; /* The context is never -1 in reality. */
-	    for (;;) 
-	    {
-		do {
-			/* lookup a contiguous word. */
-			s++;
-        		lookup_index = (((lookup_index) & mask)<<char_size) + *s;
-			if (s == s_end)
-				goto NormalReturn;
-		} while (*(position + lookup_index) == NULL);
-		
-		lookup_pos = *(position + lookup_index);
-
-
-		s_off = (Int4) (s - subject0);
-		s_pos = s_off + offset;
-		diag_tmp = s_off + min_diag_length;
-	/* Extend each hit in the linked list */
-	/* Each link corresponds to different hits on the query sequence */
-		do {
-#ifdef BLAST_COLLECT_STATS
-			number_of_hits++;
+                num_hits = mod_lt[lookup_index].num_used;
+                
+                /* Changed by TLM. */
+                lookup_pos = mod_lt[lookup_index].entries;
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > 3){
+#ifdef RPS_BLAST
+                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4
+) *lookup_pos);
+#else
+                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
 #endif
-			q_off = (Int4) lookup_pos->position;
-			context = lookup_pos->context;
-			diag = diag_tmp - q_off;
-		        real_diag = diag & min_diag_mask;
-                        if (context != last_context)
-                        {
-                                ewp = ewp_pointer[context];
-				last_hit = ewp->last_hit;
-                                last_context = context;
-                        }
-
-			last_hit_p = &last_hit[real_diag];
-			diff = s_pos - *last_hit_p;
-
-/* diff is always greater than window for the first time in a function. */
-			if (diff >= window)
-			{
-			    	*last_hit_p = s_pos;
-			}
-			else if (diff >= wordsize)
-			{
-			    succeed_to_right = TRUE;
-			    if (ewp->diag_level[real_diag] <= (s_off+offset))
-			    {
-				ewp->actual_window = diff;
-				if (!(search->positionBased)) {
-				  if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+                }
+                /* Changed by TLM. */
+                s_off = (Int4) (s - subject0);
+                
+                s_pos = s_off + offset;
+                diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+                do {  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    q_off = hinfo_get_pos(hit_info);
+                    context = hinfo_get_context(hit_info);
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    
+                    diag = diag_tmp - q_off;
+                    real_diag = (diag_tmp - q_off) & min_diag_mask;
+                    /* conxtext dependent values */
+                    combo_array = ca_ptr[context];
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    num_hits--;
+                    lookup_pos++;
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp = ewp_pointer[context];
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
 				    goto ErrorReturn;
-				}
-				else {
-				  if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag,  real_diag, &succeed_to_right, context) != 0)
 				    goto ErrorReturn;
-                                }
-			    	if (search->current_hitlist->hspcnt > 0 && prelim)
-					goto NormalReturn;
-			     } 
-			     if (succeed_to_right)
-			     	*last_hit_p = 0;
-			     else
-			     	*last_hit_p = s_pos;
-			}
-		} while ((lookup_pos = lookup_pos->next) != NULL);
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
 	    }
-	}
-	else	/* Only one context. */
-	{
+	} else { /* Only one context. */
+	
 	    ewp=search->context[search->first_context].ewp;
-            last_hit = ewp->last_hit;
-            diag_level = ewp->diag_level;
-	    for (;;) 
-	    {
-		do {
-			/* lookup a contiguous word. */
-        		lookup_index = (((lookup_index) & mask)<<char_size);
-			s++;
-        		lookup_index += *s;
-			if (s == s_end)
-				goto NormalReturn;
-		} while (*(position + lookup_index) == NULL);
-		
-		lookup_pos = *(position + lookup_index);
-
+	    combo_array=ewp->combo_array;
+            
+            next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+            for (;;) {
+	        do {
+                    /* lookup a contiguous word. */
+                    s++;
+                    lookup_index = next_lindex;
+                    
+                    if (s == s_end)
+                        goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+                    pv_val = next_pv_val;
+                    next_pv_val = *next_pv_array_addr;
+                    
+		} while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+                
+		num_hits = mod_lt[lookup_index].num_used;
+                
+                /* Changed by TLM. */
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
+                
+		if(num_hits > 3){
+#ifdef RPS_BLAST
+                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+#else
+                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+#endif
+		}
+                
+                /* Changed by TLM. */
 		s_off = (Int4) (s - subject0);
 		s_pos = s_off + offset;
 		diag_tmp = s_off + min_diag_length;
-	/* Extend each hit in the linked list */
-	/* Each link corresponds to different hits on the query sequence */
-		do {
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+		do {  /* for each hit */
+                    
 #ifdef BLAST_COLLECT_STATS
-			number_of_hits++;
+                    number_of_hits++;
 #endif
-			q_off = (Int4) lookup_pos->position;
-			diag = diag_tmp - q_off;
-		        real_diag = diag & min_diag_mask;
-
-			diff = s_pos - last_hit[real_diag];
-
-/* diff is always greater than window for the first time in a function. */
-			if (diff >= window)
-			{
-			    	last_hit[real_diag] = s_pos;
-			}
-			else if (diff >= wordsize)
-			{
-			    succeed_to_right = TRUE;
-			    if (diag_level[real_diag] <= (s_off+offset))
-			    {
-				ewp->actual_window = diff;
-				if (!(search->positionBased)) {
-				  if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+                    /* Changed by TLM. */
+                    q_off = hit_info;
+                    num_hits--;
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                    
+                    diag = diag_tmp - q_off;
+                    real_diag = diag & min_diag_mask;
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
 				    goto ErrorReturn;
-				}
-				else {
-				  if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
 				    goto ErrorReturn;
-				}
-			    	if (search->current_hitlist->hspcnt > 0 && prelim)
-					goto NormalReturn;
-			     } 
-			     if (succeed_to_right)
-			     	last_hit[real_diag] = 0;
-			     else
-			     	last_hit[real_diag] = s_pos;
-			}
-		} while ((lookup_pos = lookup_pos->next) != NULL);
-	   }
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits > 0); /* end for pos_cnt... */
+                
+                
+            }
 	}
-
-
-NormalReturn:
-	if (search->prelim)
-		search->first_pass_hits += number_of_hits;
-	else
-		search->second_pass_hits += number_of_hits;
-	BlastExtendWordExit(search);
-	return search->current_hitlist->hspcnt;
-
-ErrorReturn:
-	BlastExtendWordExit(search);
-	return 3;
+    } else {
+	if ((search->last_context-search->first_context+1) > 1) {
+            /* Only used if more than one context. */
+            for (index=search->first_context; index<=search->last_context; index++){
+		ewp_pointer[index] = search->context[index].ewp;
+		ca_ptr[index]=ewp_pointer[index]->combo_array;
+            }
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	    next_nhits_addr=&mod_lt[next_lindex].num_used ;
+	    next_nhits=*next_nhits_addr;
+	    s_off = (Int4) (s - subject0);
+	    for (;;) {
+		do {
+                    /* lookup a contiguous word. */
+                    lookup_index = next_lindex;
+                    s++; 
+                    
+                    if (s == s_end) goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    
+                    next_nhits_addr = &mod_lt[next_lindex].num_used;
+                    
+                    num_hits = next_nhits;
+                    next_nhits=*next_nhits_addr;
+                    
+		} while (num_hits == 0); 
+                
+                /* Changed by TLM. */
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
+                
+		if(num_hits>3){
+#ifdef RPS_BLAST
+                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+#else
+                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+#endif
+		}
+                /* Changed by TLM. */
+	    	s_off = (Int4) (s - subject0);
+                
+		s_pos = s_off + offset;
+		diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+ 		/* printf(" dtmp:%3d     ",diag_tmp); */
+		do{  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    q_off = hinfo_get_pos(hit_info);
+                    context = hinfo_get_context(hit_info);
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    
+                    diag = diag_tmp - q_off;
+                    real_diag = (diag_tmp - q_off) & min_diag_mask;
+                    /* conxtext dependent values */
+                    combo_array = ca_ptr[context];
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    num_hits--;
+                    lookup_pos++;
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp = ewp_pointer[context];
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
+	    }
+	} else { /* Only one context. */
+            
+	    ewp=search->context[search->first_context].ewp;
+	    combo_array=ewp->combo_array;
+            
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            /* CHanged by TLM. 
+               next_nhits_addr=&mod_lt[next_lindex].num_used ;
+               next_nhits=*next_nhits_addr;
+            */
+	    next_nhits=mod_lt[next_lindex].num_used ;
+	    for (;;) {
+		do {
+                    /* lookup a contiguous word. */
+                    lookup_index = next_lindex;
+                    s++; 
+                    if (s == s_end) goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    /* CHanged by TLM. 
+                       next_nhits_addr = &mod_lt[next_lindex].num_used;
+                    */
+                    
+                    num_hits = next_nhits;
+                    next_nhits=mod_lt[next_lindex].num_used;
+                    
+		} while (num_hits == 0); 
+                
+                
+                /* Changed by TLM. */
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
+                
+		if(num_hits > 3){
+#ifdef RPS_BLAST
+                    lookup_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *lookup_pos);
+#else
+                    lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+#endif
+		}
+                
+                /* Changed by TLM. */
+		s_off = (Int4) (s - subject0);
+		s_pos = s_off + offset;
+		diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+		do {  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    /* Changed by TLM. */
+                    q_off = hit_info;
+                    num_hits--;
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                    
+                    diag = diag_tmp - q_off;
+                    real_diag = diag & min_diag_mask;
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+/* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
+            }  /* for(;;) */
+	}
+    }
+    
+ NormalReturn:
+    if (search->prelim)
+        search->first_pass_hits += number_of_hits;
+    else
+        search->second_pass_hits += number_of_hits;
+    BlastExtendWordExit(search);
+    return search->current_hitlist->hspcnt;
+    
+ ErrorReturn:
+    BlastExtendWordExit(search);
+    return 3;
 }
 
+static Int4
+#ifdef DYNAMIC_CACHE
+BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
+BlastWordFinder_mh_contig_new(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
+{
+    register Uint1Ptr	s;
+    register Uint1Ptr s_end;
+    Uint1Ptr	subject0;
+    BLAST_Diag	diag, diag_tmp, real_diag;
+    BLAST_ExtendWordPtr     ewp, ewp_pointer[40];
+    Uint4 q_off;
+    register Int4 s_off;
+    Uint2 context;
+    Int4 diff, offset, s_pos, window;
+    Int4 min_diag_length, min_diag_mask;
+    Int4 *last_hit_p;
+    CfjModStruct *combo_array;
+    CfjModStruct *ca_ptr[40];
+    register ModLookupPositionPtr lookup_pos, extended_pos;
+    register Uint4 hit_info;
+    
+    Int4 char_size, lookup_index, mask, wordsize;
+    Int4 next_lindex;
+    Int4 * next_nhits_addr;
+    Int4 word_width, index=0, number_of_hits=0;
+    register Int4 num_hits;
+    register Int4 next_nhits;
+    
+    BLAST_ExtendWordParamsPtr     ewp_params;
+    Boolean			prelim, succeed_to_right;
+    /*    ModLAEntry *mod_lt=lookup->mod_lt; */
+
+    PV_ARRAY_TYPE *pv_array = lookup->pv_array;
+    register PV_ARRAY_TYPE PNTR next_pv_array_addr;
+    register PV_ARRAY_TYPE next_pv_val,pv_val;
+
+    Uint4Ptr theTable;
+    Int4 theCacheSize, theArraySize, change_hit = 0;
+    
+    theTable = lookup->theTable;
+    theCacheSize = lookup->theCacheSize;
+    theArraySize = theCacheSize + 1;
+    
+    ewp = NULL;	/* Gets rid of a warning. */
+    
+    ewp_params=search->ewp_params;
+    prelim = search->prelim;
+    
+    /* The word_width tells how "long" a word is; for a contiguous word it's
+       the length of the word. */
+    word_width = lookup->wordsize;
+    
+    wordsize = lookup->wordsize;
+    char_size = lookup->char_size;
+    mask = lookup->mask;
+    subject0 = s = (Uint1Ptr) search->subject->sequence;
+    
+    window = ewp_params->window;
+    offset = ewp_params->offset;
+    min_diag_length = ewp_params->min_diag_length;
+    min_diag_mask = ewp_params->min_diag_mask;
+    
+    if (search->current_hitlist == NULL) {
+        search->current_hitlist = BlastHitListNew(search); 
+    } else { /* Scrub the hitlist. */
+        if (search->current_hitlist_purge)
+            BlastHitListPurge(search->current_hitlist);
+    }
+    
+    /* subject is too short to find anything! */
+    if (word_width > search->subject->length)
+        return 0;
+    
+    /* Move along string to appropriate starting point. */
+    s = lookup_find_init(lookup, &index, s);
+    lookup_pos=NULL;
+    lookup_index = index;
+    /* Determines when to stop scanning the database. */
+    s_end = subject0 + search->subject->length;
+    
+    if (pv_array) {
+        if ((search->last_context-search->first_context+1) > 1) { 
+            /* Only used if more than one context. */
+            for (index=search->first_context; index<=search->last_context; index++){
+                ewp_pointer[index] = search->context[index].ewp;
+                ca_ptr[index]=ewp_pointer[index]->combo_array;
+            }
+            s_off = (Int4) (s - subject0);
+            next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+            for (;;) {
+                do {
+                    /* lookup a contiguous word. */
+                    s++;
+                    lookup_index = next_lindex;
+                    
+                    if (s == s_end)
+                        goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+                    pv_val = next_pv_val;
+                    next_pv_val = *next_pv_array_addr;
+                    
+                } while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+                
+                num_hits = *(theTable + theArraySize*lookup_index);
+                
+                /* lookup_pos = mod_lt[lookup_index].entries;*/
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+                
+                /* Changed by TLM. */
+                s_off = (Int4) (s - subject0);
+                
+                s_pos = s_off + offset;
+                diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+                do {  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    q_off = hinfo_get_pos(hit_info);
+                    context = hinfo_get_context(hit_info);
+
+                    num_hits--;
+
+                    if(num_hits == change_hit) {
+                        lookup_pos = extended_pos;
+                    }
+
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                                        
+                    diag = diag_tmp - q_off;
+                    real_diag = (diag_tmp - q_off) & min_diag_mask;
+                    /* conxtext dependent values */
+                    combo_array = ca_ptr[context];
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp = ewp_pointer[context];
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag,  real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
+	    }
+	} else { /* Only one context. */
+            
+	    ewp=search->context[search->first_context].ewp;
+	    combo_array=ewp->combo_array;
+            
+            next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+            for (;;) {
+	        do {
+                    /* lookup a contiguous word. */
+                    s++;
+                    lookup_index = next_lindex;
+                    
+                    if (s == s_end)
+                        goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+                    pv_val = next_pv_val;
+                    next_pv_val = *next_pv_array_addr;
+                    
+		} while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+                
+                num_hits = *(theTable + theArraySize*lookup_index);
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+                
+                /* Changed by TLM. */
+                s_off = (Int4) (s - subject0);
+                s_pos = s_off + offset;
+		diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+		do {  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    /* Changed by TLM. */
+                    q_off = hit_info;
+
+                    num_hits--;
+
+                    if(num_hits == change_hit) {
+                        lookup_pos = extended_pos;
+                    }
+
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                                        
+                    diag = diag_tmp - q_off;
+                    real_diag = diag & min_diag_mask;
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits > 0); /* end for pos_cnt... */
+                
+                
+            }
+	}
+    } else {
+	if ((search->last_context-search->first_context+1) > 1) {
+            /* Only used if more than one context. */
+            for (index=search->first_context; index<=search->last_context; index++){
+		ewp_pointer[index] = search->context[index].ewp;
+		ca_ptr[index]=ewp_pointer[index]->combo_array;
+            }
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+
+            next_nhits_addr = (Int4Ptr)(theTable + theArraySize*next_lindex);
+	    next_nhits=*next_nhits_addr;
+	    s_off = (Int4) (s - subject0);
+	    for (;;) {
+		do {
+                    /* lookup a contiguous word. */
+                    lookup_index = next_lindex;
+                    s++; 
+                    
+                    if (s == s_end) goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    
+                    /* next_nhits_addr = &mod_lt[next_lindex].num_used; */
+                    next_nhits_addr = (Int4Ptr)(theTable + theArraySize*next_lindex);
+                    
+                    num_hits = next_nhits;
+                    next_nhits=*next_nhits_addr;
+                    
+		} while (num_hits == 0); 
+
+
+                num_hits = *(theTable + theArraySize*lookup_index);
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+                
+                /* Changed by TLM. */
+	    	s_off = (Int4) (s - subject0);
+                
+		s_pos = s_off + offset;
+		diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+ 		/* printf(" dtmp:%3d     ",diag_tmp); */
+		do{  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    q_off = hinfo_get_pos(hit_info);
+                    context = hinfo_get_context(hit_info);
+
+                    num_hits--;
+
+                    if(num_hits == change_hit) {
+                        lookup_pos = extended_pos;
+                    }
+
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                                        
+                    diag = diag_tmp - q_off;
+                    real_diag = (diag_tmp - q_off) & min_diag_mask;
+                    /* conxtext dependent values */
+                    combo_array = ca_ptr[context];
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+                    /* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp = ewp_pointer[context];
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, context) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
+	    }
+	} else { /* Only one context. */
+            
+	    ewp=search->context[search->first_context].ewp;
+	    combo_array=ewp->combo_array;
+            
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+            /* CHanged by TLM. 
+               next_nhits_addr=&mod_lt[next_lindex].num_used ;
+               next_nhits=*next_nhits_addr;
+            */
+
+            next_nhits = *(theTable + theArraySize*next_lindex);
+
+	    for (;;) {
+		do {
+                    /* lookup a contiguous word. */
+                    lookup_index = next_lindex;
+                    s++; 
+                    if (s == s_end) goto NormalReturn;
+                    
+                    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+                    /* CHanged by TLM. 
+                       next_nhits_addr = &mod_lt[next_lindex].num_used;
+                    */
+                    
+                    num_hits = next_nhits;
+                    next_nhits = *(theTable + theArraySize*next_lindex);
+		} while (num_hits == 0); 
+                
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+
+                /* Changed by TLM. */
+                
+		s_off = (Int4) (s - subject0);
+		s_pos = s_off + offset;
+		diag_tmp = s_off + min_diag_length;
+                
+                /* Extend each hit in the linked list */
+                /* Each link corresponds to different hits on the query sequence */
+		do {  /* for each hit */
+                    
+#ifdef BLAST_COLLECT_STATS
+                    number_of_hits++;
+#endif
+                    /* Changed by TLM. */
+                    q_off = hit_info;
+
+                    num_hits--;
+
+                    if(num_hits == change_hit) {
+                        lookup_pos = extended_pos;
+                    }
+
+                    hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+                    lookup_pos++;
+                                        
+                    diag = diag_tmp - q_off;
+                    real_diag = diag & min_diag_mask;
+                    
+                    last_hit_p = &combo_array[real_diag].last_hit;
+                    diff = s_pos - *last_hit_p;
+                    
+/* diff is always greater than window for the first time in a function. */
+                    if (diff >= window) {
+                        *last_hit_p = s_pos;
+                    } else if (diff >= wordsize) {
+                        succeed_to_right = TRUE;
+                        if (combo_array[real_diag].diag_level <= (s_off+offset)) {
+                            ewp->actual_window = diff;
+                            if (!(search->positionBased)) {
+                                if (BlastWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            } else {
+                                if (BlastNewWordExtend_prelim(search, q_off, s_off, word_width, diag, real_diag, &succeed_to_right, 0) != 0)
+				    goto ErrorReturn;
+                            }
+                            if (search->current_hitlist->hspcnt > 0 && prelim)
+                                goto NormalReturn;
+                            
+                        } 
+                        if (succeed_to_right)
+                            *last_hit_p = 0;
+                        else
+                            *last_hit_p = s_pos;
+                    }
+		} while(num_hits>0); /* end for pos_cnt... */
+            }  /* for(;;) */
+	}
+    }
+    
+ NormalReturn:
+    if (search->prelim)
+        search->first_pass_hits += number_of_hits;
+    else
+        search->second_pass_hits += number_of_hits;
+    BlastExtendWordExit(search);
+    return search->current_hitlist->hspcnt;
+    
+ ErrorReturn:
+    BlastExtendWordExit(search);
+    return 3;
+}
 
 /* BlastWordExtend -- extend a word-sized hit to a longer match */
 static Int2
@@ -4983,7 +6278,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q_right" was the last position on the query sequence.
 	ewp_params->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
+	ewp->combo_array[real_diag].diag_level = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5145,7 +6440,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q_right" was the last position on the query sequence.
 	ewp_params->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
+	ewp->combo_array[real_diag].diag_level = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5287,7 +6582,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q" was the last position on the query sequence.
 	ewp->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q - query - q_off + word_width + s_off + search->ewp_params->offset;
+	ewp->combo_array[real_diag].diag_level = q - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5429,7 +6724,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q" was the last position on the query sequence.
 	ewp->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q - query -q_off + word_width + s_off + search->ewp_params->offset;
+	ewp->combo_array[real_diag].diag_level = q - query -q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5674,7 +6969,7 @@ has no remainder. */
 
 	/* Record how far this diagonal has been traversed */
 	/* 	ewp->combo_array[real_diag].diag_level = q_end - query0 + search->ewp_params->offset; */
-	ewp->diag_level[real_diag] = (q_end - query0 - q_off) + s_off*READDB_COMPRESSION_RATIO + search->ewp_params->offset;
+	ewp->combo_array[real_diag].diag_level = (q_end - query0 - q_off) + s_off*READDB_COMPRESSION_RATIO + search->ewp_params->offset;
 
 
 
@@ -5683,18 +6978,41 @@ has no remainder. */
 #ifdef BLAST_COLLECT_STATS
 		search->second_pass_good_extends++;
 #endif
+	   if (search->pbp->do_sum_stats)
 		BlastSaveCurrentHsp(search, score, (q_beg-query0), (q_beg-query0+READDB_COMPRESSION_RATIO*s_off-q_off), (q_end-q_beg), context);
+	   else
+		BlastNtSaveCurrentHsp(search, score, (q_beg-query0), (q_beg-query0+READDB_COMPRESSION_RATIO*s_off-q_off), (q_end-q_beg), context, q_off, READDB_COMPRESSION_RATIO*s_off);
 
 	}
 
 	return 0;
 }
+
 /*
 	search_nt_orig -- an adaptation of the original search_nt() function
 	of BLASTN
+
+	* Can this ever be called?
+	*  - It is only called for blastn, only from BlastWordFinder_mh().
+	*  - BlastWordFinder_mh() is only called if BlastExtendWordSearch() is called w/ multiphe_hits==TRUE
+	*  - BlastExtendWordSearch() is called in 2 places:
+	*       BLASTPerform2PassSearch(called w/ multiple_hits=TRUE)
+	*         which is called from BLASTPerfromSearch if search->pbp->two_pass_method
+	*       BLASTPerformFinalSearch(called w/ search->pbp->multiple_hits_only)
+	*  * so multiple_hits_only, or two_pass_method must be set for this to be called.
+	*  For blastn, these are set to false in blastool, blastutl. 
+	*  These can be set to TRUE in blastpgp.c, but can blastn alse be true in this case?
+	*
+	*  I have updated the array accesses to use the new mod_lt[], as the other WordFinder routines
+	*  now do, but I have not been able to test this change.
+	* -cfj
 */
 static Int4
+#ifdef DYNAMIC_CACHE
+BlastNtWordFinder_mh_old(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
 BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
 {
 	register Uint1Ptr s, s_end;
 	Uint1Ptr subject0;
@@ -5702,17 +7020,18 @@ BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	BLAST_ExtendWordPtr     ewp;
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	BLAST_WordFinderPtr	wfp;
-        register Int4  PNTR diag_level, PNTR last_hit;
+	CfjModStruct *combo_array;
         register Int4  diff, window, lookup_index, mask;
         Int4  char_size, index=0, current_count;
-        register LookupPositionPtr PNTR position;
-        register LookupPositionPtr lookup_pos;
-        Int2            context, last_context;
+	register ModLookupPosition hit_info;
+        Int2            context;
         Int4            s_pos, q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
         register Int4 bits_to_shift, min_diag_length, min_diag_mask;
-
-	diag_level = NULL;	/* Gets rid of a warning. */
-	last_hit = NULL;	/* Gets rid of a warning. */
+	register Int4 num_hits;
+	register ModLookupPositionPtr lookup_pos;
+#if 1
+	ModLAEntry *mod_lt=lookup->mod_lt;
+#endif
 
 	ewp_params=search->ewp_params;
 
@@ -5745,16 +7064,11 @@ BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
 
 	s = lookup_find_init(lookup, &index, s);
         lookup_index = index;
-        position = lookup->position;
-        lookup_pos=NULL;
 /* Determines when to stop scanning the database; does not include remainder. */
         s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
 	compression_factor = wfp->compression_ratio*compressed_wordsize;
 	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
 
-/* The last_context is never -1, so that context is not equal to 
-last_context (if statement below). */
-	last_context = -1;
 	for (;;) {
 	        do {
                         /* lookup a contiguous word. */
@@ -5762,31 +7076,40 @@ last_context (if statement below). */
                         lookup_index = (((lookup_index) & mask)<<char_size) + *s;
                         if (s == s_end)
                                 goto NormalReturn;
-                } while (*(position + lookup_index) == NULL);
+		} while (mod_lt[lookup_index].num_used == 0);
 
-                lookup_pos = *(position + lookup_index);
+		num_hits = mod_lt[lookup_index].num_used;
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);
+		lookup_pos++;
+
+		if(num_hits>3){
+		  lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+		}
 
 		s_off = s-subject0+1;
 		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
 		s_pos = (s-subject0)*READDB_COMPRESSION_RATIO+offset;
 		/* Extend each hit in the linked list */
 		do {
-		    	q_off = lookup_pos->position;
-			context = lookup_pos->context;
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
 		    	diag = diag_tmp - q_off;
 		    	real_diag = diag & min_diag_mask;
-		    	if (context != last_context)
-		    	{
-                                ewp=search->context[context].ewp;
-                                last_hit = ewp->last_hit;
-                                diag_level = ewp->diag_level;
-                                last_context = context;
-                    	}
-			diff = s_pos - last_hit[real_diag];
+
+			/* conxtext dependent values */
+			ewp=search->context[context].ewp;
+			combo_array=ewp->combo_array;
+
+			diff = s_pos - combo_array[real_diag].last_hit;
 
 			if (diff >= window)
 			{
-				last_hit[real_diag] = s_pos;
+				combo_array[real_diag].last_hit = s_pos;
 			}
 			else if (diff >= wordsize)
 			{
@@ -5794,19 +7117,19 @@ last_context (if statement below). */
 				search->second_pass_hits++;
 #endif
         			current_count = search->current_hitlist->hspcnt;
-				if (diag_level[real_diag] <= (q_off+offset))
+				if (combo_array[real_diag].diag_level <= (s_off*READDB_COMPRESSION_RATIO+offset))
 				{
 					if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
 						goto ErrorReturn;
 				}
 				/* If no HSP's saved, save last hit. */
 				if (current_count == search->current_hitlist->hspcnt)
-					last_hit[real_diag] = s_pos;
+					combo_array[real_diag].last_hit = s_pos;
 				else
-					last_hit[real_diag] = 0;
+					combo_array[real_diag].last_hit = 0;
 			}
 
-		} while ((lookup_pos = lookup_pos->next) != NULL);
+		} while (num_hits>0);
 	}
 
 NormalReturn:
@@ -5822,7 +7145,11 @@ ErrorReturn:
 	of BLASTN
 */
 static Int4
+#ifdef DYNAMIC_CACHE
+BlastNtWordFinder_old(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
 BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
 {
 	BLASTContextStructPtr search_context;
 	register Uint1Ptr s, s_end;
@@ -5832,16 +7159,27 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	BLAST_ExtendWordPtr     ewp;
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	BLAST_WordFinderPtr	wfp;
-        register Int4  PNTR diag_level;
-        register Int4  lookup_index, mask;
+	CfjModStruct *combo_array;
+        Int4  lookup_index, mask;
         Int4  char_size, index=0, query_length=0;
-        register LookupPositionPtr PNTR position;
-        register LookupPositionPtr lookup_pos;
-        Int2            context, last_context, left, right;
-        Int4            q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor, extra_bytes, extra_bytes_needed, my_index;
-        register Int4 bits_to_shift, min_diag_length, min_diag_mask;
 
-	diag_level = NULL;	/* Gets rid of a warning. */
+	register ModLookupPosition hit_info;
+
+	register PV_ARRAY_TYPE PNTR next_pv_array_addr;
+	register PV_ARRAY_TYPE next_pv_val,pv_val;
+	register ModLookupPositionPtr lookup_pos;
+	register Int4 num_hits;
+	register Int4 next_nhits;
+	Int4 * next_nhits_addr;
+	
+
+        Int2            context, left, right;
+        Int4            q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
+	Int4	extra_bytes, extra_bytes_needed, my_index;
+        Int4 bits_to_shift, min_diag_length, min_diag_mask;
+	int next_lindex;
+	PV_ARRAY_TYPE *pv_array = lookup->pv_array;
+	ModLAEntry *mod_lt=lookup->mod_lt;
 	query0 = NULL;	/* Gets rid of a warning. */
 	p = 255;	/* Gets rid of a warning. */
 	ewp_params=search->ewp_params;
@@ -5855,6 +7193,7 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
         bits_to_shift = ewp_params->bits_to_shift;
         min_diag_mask = ewp_params->min_diag_mask;
 
+
         if (search->current_hitlist == NULL)
         {
                 search->current_hitlist = BlastHitListNew(search);
@@ -5864,8 +7203,8 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
                 if (search->current_hitlist_purge)
                         BlastHitListPurge(search->current_hitlist);
         }
-
-	compressed_wordsize = lookup->reduced_wordsize;
+	
+	compressed_wordsize = lookup->wordsize;
 	wordsize = wfp->wordsize;
 	extra_bytes = lookup->wordsize - compressed_wordsize;
 
@@ -5875,43 +7214,223 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 
 	s = lookup_find_init(lookup, &index, s);
         lookup_index = index;
-        position = lookup->position;
-        lookup_pos=NULL;
 /* Determines when to stop scanning the database; does not include remainder. */
         s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
-	compression_factor = wfp->compression_ratio*lookup->reduced_wordsize;
-	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*lookup->wordsize;
+	compression_factor = wfp->compression_ratio*compressed_wordsize;
+	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
 
-/* The last_context is never -1, so that context is not equal to 
-last_context (if statement below). */
-	last_context = -1;
 	search_context = search->context;
 	/* The length of query is the same for both strands. */
 	query_length = search_context[search->first_context].query->length;
-	extra_bytes_needed = extra_bytes;
-	if (extra_bytes_needed)
-	{
-	    for (;;) {
+        extra_bytes_needed = extra_bytes;
+        if (extra_bytes_needed)
+        {
+	/** The first for() loop is optimized for sparse tables (which rarely hit), the second for dense */
+	if(pv_array){
+	  /* We use the pv_array here, since (on short-med queries) most lookups fail */
+
+	  next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	  next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+	  for (;;) {
 	        do {
                         /* lookup a contiguous word. */
                         s++;
-                        lookup_index = (((lookup_index) & mask)<<char_size) + *s;
+                        lookup_index = next_lindex;
+
                         if (s == s_end)
                                 goto NormalReturn;
-                } while (*(position + lookup_index) == NULL);
 
-                lookup_pos = *(position + lookup_index);
+			next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+			next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+			pv_val = next_pv_val;
+			next_pv_val = *next_pv_array_addr;
 
+		}while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+
+		num_hits = mod_lt[lookup_index].num_used;
 		s_off = s-subject0+1;
 		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+		if(num_hits>3){
+		  lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+		}
+
+
 		/* Extend each hit in the linked list */
 		do {
-		    	q_off = lookup_pos->position;
-			context = lookup_pos->context;
-		    	diag = diag_tmp - q_off;
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
 
 			query0 = search_context[context].query->sequence;
 			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+			/* Check for extra bytes if required for longer words. */
+			if (extra_bytes_needed)
+			{
+				/* extend to the right */
+				p = *((Uint1Ptr) search->subject->sequence + s_off);
+				q = query0 + q_off;
+				my_index=0;
+				while (extra_bytes_needed)
+				{
+				/* Note: no check is done that q[0-3] is not an ambiguity code.  Could be done, but might slow things down. */
+					packed_query = (q[0]<<6) + (q[1]<<4) + (q[2]<<2) + q[3]; 
+					if (p != packed_query)
+						break;
+					q += 4;
+					extra_bytes_needed--;
+					my_index++;
+					p = *((Uint1Ptr) search->subject->sequence + s_off + my_index);
+				}
+				if (extra_bytes_needed)
+				{ /* extra_bytes_needed next round. */
+					extra_bytes_needed = extra_bytes;
+					continue; /* not enough bytes found. */
+				}
+				extra_bytes_needed = extra_bytes;
+			}
+
+
+			q = query0 + q_off - compression_factor;
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
+	  } /* end for(;;) */
+
+	}else{
+	  /* Dense version - doesn't use pv_array */
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	    next_nhits_addr=&mod_lt[next_lindex].num_used ;
+	    next_nhits=*next_nhits_addr;
+	    
+	    for (;;) {
+	        do {
+			/* lookup a contiguous word. */
+			lookup_index = next_lindex;
+			s++; 
+ 
+			if (s == s_end) goto NormalReturn;
+
+        		next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+
+			next_nhits_addr = &mod_lt[next_lindex].num_used;
+
+			num_hits = next_nhits;
+			next_nhits=*next_nhits_addr;
+		} while (num_hits == 0);  
+
+		lookup_pos = mod_lt[lookup_index].entries;
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+
+		if(num_hits>3){
+		  lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+		}
+
+
+		/* Extend each hit in the linked list */
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+
+			query0 = search_context[context].query->sequence;
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
 
 			/* Check for extra bytes if required for longer words. */
 			if (extra_bytes_needed)
@@ -5942,7 +7461,7 @@ last_context (if statement below). */
 			q = query0 + q_off - compression_factor;
 			if (s_off > compressed_wordsize)
 				p = *(subject0 + s_off - compressed_wordsize - 1);
-		
+
 			/* extend to the left */
 			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
 			{
@@ -5974,9 +7493,8 @@ last_context (if statement below). */
 				}
 			}
 			/* extend to the right */
-			p = *((Uint1Ptr) search->subject->sequence + s_off + extra_bytes_needed);
-			q = query0 + q_off + 4*extra_bytes_needed;
-
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
 			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
 			{
 				right = 0;
@@ -6006,17 +7524,13 @@ last_context (if statement below). */
 					}
 				}
 			}
-
 			if (left + right >= virtual_wordsize)
 			{
-		    		if (context != last_context)
-		    		{
-                               		ewp=search_context[context].ewp;
-                               		last_context = context;
-                    		}
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
 				/* Check if this diagonal has already been explored. */
 		    		real_diag = diag & min_diag_mask;
-		    		if (ewp->diag_level[real_diag] >= (s_off*READDB_COMPRESSION_RATIO+offset))
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
 		    		{
 					continue;
 		    		}
@@ -6026,37 +7540,65 @@ last_context (if statement below). */
 				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
 					goto ErrorReturn;
 			}
-		} while ((lookup_pos = lookup_pos->next) != NULL);
-	    }
+		} while (num_hits>0);
+	   }
+         }
 	}
-	else
+	else /* extra_bytes not needed. */
 	{
-	    for (;;) {
+	/** The first for() loop is optimized for sparse tables (which rarely hit), the second for dense */
+	if(pv_array){
+	  /* We use the pv_array here, since (on short-med queries) most lookups fail */
+
+	  next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	  next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+	  for (;;) {
 	        do {
                         /* lookup a contiguous word. */
                         s++;
-                        lookup_index = (((lookup_index) & mask)<<char_size) + *s;
+                        lookup_index = next_lindex;
+
                         if (s == s_end)
                                 goto NormalReturn;
-                } while (*(position + lookup_index) == NULL);
 
-                lookup_pos = *(position + lookup_index);
+			next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+			next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+			pv_val = next_pv_val;
+			next_pv_val = *next_pv_array_addr;
 
+		}while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+
+		num_hits = mod_lt[lookup_index].num_used;
 		s_off = s-subject0+1;
 		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		lookup_pos = mod_lt[lookup_index].entries;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+		if(num_hits>3){
+		  lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+		}
+
+
 		/* Extend each hit in the linked list */
 		do {
-		    	q_off = lookup_pos->position;
-			context = lookup_pos->context;
-		    	diag = diag_tmp - q_off;
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
 
 			query0 = search_context[context].query->sequence;
-			q_end = query0 + query_length;
 
 			q = query0 + q_off - compression_factor;
+
 			if (s_off > compressed_wordsize)
 				p = *(subject0 + s_off - compressed_wordsize - 1);
-		
+
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
 			/* extend to the left */
 			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
 			{
@@ -6088,9 +7630,8 @@ last_context (if statement below). */
 				}
 			}
 			/* extend to the right */
-			p = *((Uint1Ptr) search->subject->sequence + s_off);
+			p = *(subject0 + s_off);
 			q = query0 + q_off;
-
 			if (s >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
 			{
 				right = 0;
@@ -6120,17 +7661,13 @@ last_context (if statement below). */
 					}
 				}
 			}
-
 			if (left + right >= virtual_wordsize)
 			{
-		    		if (context != last_context)
-		    		{
-                               		ewp=search_context[context].ewp;
-                               		last_context = context;
-                    		}
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
 				/* Check if this diagonal has already been explored. */
 		    		real_diag = diag & min_diag_mask;
-		    		if (ewp->diag_level[real_diag] >= (s_off*READDB_COMPRESSION_RATIO+offset))
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
 		    		{
 					continue;
 		    		}
@@ -6140,8 +7677,1028 @@ last_context (if statement below). */
 				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
 					goto ErrorReturn;
 			}
-		} while ((lookup_pos = lookup_pos->next) != NULL);
+		} while (num_hits>0);
+	  } /* end for(;;) */
+
+	}else{
+	  /* Dense version - doesn't use pv_array */
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	    next_nhits_addr=&mod_lt[next_lindex].num_used ;
+	    next_nhits=*next_nhits_addr;
+	    
+	    for (;;) {
+	        do {
+			/* lookup a contiguous word. */
+			lookup_index = next_lindex;
+			s++; 
+ 
+			if (s == s_end) goto NormalReturn;
+
+        		next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+
+			next_nhits_addr = &mod_lt[next_lindex].num_used;
+
+			num_hits = next_nhits;
+			next_nhits=*next_nhits_addr;
+		} while (num_hits == 0);  
+
+		lookup_pos = mod_lt[lookup_index].entries;
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+
+		if(num_hits>3){
+		  lookup_pos=*((ModLookupPositionPtr PNTR) lookup_pos);
+		}
+
+
+		/* Extend each hit in the linked list */
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+
+			query0 = search_context[context].query->sequence;
+
+			q = query0 + q_off - compression_factor;
+
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
 	    }
+	  }
+	}
+
+NormalReturn:
+	BlastExtendWordExit(search);
+        return search->current_hitlist->hspcnt;
+
+ErrorReturn:
+	BlastExtendWordExit(search);
+	return 3;
+}
+
+static Int4
+#ifdef DYNAMIC_CACHE
+BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
+BlastNtWordFinder_mh_new(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
+{
+	register Uint1Ptr s, s_end;
+	Uint1Ptr subject0;
+	BLAST_Diag	diag, diag_tmp, real_diag;
+	BLAST_ExtendWordPtr     ewp;
+	BLAST_ExtendWordParamsPtr     ewp_params;
+	BLAST_WordFinderPtr	wfp;
+	CfjModStruct *combo_array;
+        register Int4  diff, window, lookup_index, mask;
+        Int4  char_size, index=0, current_count;
+	register ModLookupPosition hit_info;
+        Int2            context;
+        Int4            s_pos, q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
+        register Int4 bits_to_shift, min_diag_length, min_diag_mask;
+	register Int4 num_hits;
+	register ModLookupPositionPtr lookup_pos, extended_pos;
+        Uint4Ptr theTable;
+        Int4 theCacheSize, theArraySize, change_hit = 0;
+        
+        theTable = lookup->theTable;
+        theCacheSize = lookup->theCacheSize;
+        theArraySize = theCacheSize + 1;
+
+	ewp_params=search->ewp_params;
+
+	wfp = search->wfp_second;
+        char_size = lookup->char_size;
+        mask = lookup->mask;
+        offset = ewp_params->offset;
+        window = ewp_params->window;
+        subject0 = s = (Uint1Ptr) search->subject->sequence;
+        min_diag_length = ewp_params->min_diag_length;
+        bits_to_shift = ewp_params->bits_to_shift;
+        min_diag_mask = ewp_params->min_diag_mask;
+
+        if (search->current_hitlist == NULL)
+        {
+                search->current_hitlist = BlastHitListNew(search);
+        }
+        else
+        { /* Scrub the hitlist. */
+                if (search->current_hitlist_purge)
+                        BlastHitListPurge(search->current_hitlist);
+        }
+
+	compressed_wordsize = lookup->wordsize;
+	wordsize = wfp->wordsize;
+
+/* The subject sequence is too short, exit this function now. */
+	if (wordsize > search->subject->length)
+		goto NormalReturn;
+
+	s = lookup_find_init(lookup, &index, s);
+        lookup_index = index;
+/* Determines when to stop scanning the database; does not include remainder. */
+        s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
+	compression_factor = wfp->compression_ratio*compressed_wordsize;
+	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
+
+	for (;;) {
+	        do {
+                        /* lookup a contiguous word. */
+                        s++;
+                        lookup_index = (((lookup_index) & mask)<<char_size) + *s;
+                        if (s == s_end)
+                                goto NormalReturn;
+		} while (*(theTable + theArraySize*lookup_index) == 0);
+
+
+                num_hits = *(theTable + theArraySize*lookup_index);
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		s_pos = (s-subject0)*READDB_COMPRESSION_RATIO+offset;
+		/* Extend each hit in the linked list */
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+
+                        if(num_hits == change_hit) {
+                            lookup_pos = extended_pos;
+                        }
+
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+		    	diag = diag_tmp - q_off;
+		    	real_diag = diag & min_diag_mask;
+
+			/* conxtext dependent values */
+			ewp=search->context[context].ewp;
+			combo_array=ewp->combo_array;
+
+			diff = s_pos - combo_array[real_diag].last_hit;
+
+			if (diff >= window)
+			{
+				combo_array[real_diag].last_hit = s_pos;
+			}
+			else if (diff >= wordsize)
+			{
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+        			current_count = search->current_hitlist->hspcnt;
+				if (combo_array[real_diag].diag_level <= (s_off*READDB_COMPRESSION_RATIO+offset))
+				{
+					if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+						goto ErrorReturn;
+				}
+				/* If no HSP's saved, save last hit. */
+				if (current_count == search->current_hitlist->hspcnt)
+					combo_array[real_diag].last_hit = s_pos;
+				else
+					combo_array[real_diag].last_hit = 0;
+			}
+
+		} while (num_hits>0);
+	}
+
+NormalReturn:
+	BlastExtendWordExit(search);
+        return search->current_hitlist->hspcnt;
+
+ErrorReturn:
+	BlastExtendWordExit(search);
+	return 3;
+}
+
+/*
+	search_nt_orig -- an adaptation of the original search_nt() function
+	of BLASTN
+*/
+
+static Int4
+#ifdef DYNAMIC_CACHE
+BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#else
+BlastNtWordFinder_new(BlastSearchBlkPtr search, LookupTablePtr lookup)
+#endif
+{
+	BLASTContextStructPtr search_context;
+	register Uint1Ptr s, s_end;
+	Uint1Ptr q, q_end, subject0, query0;
+	Uint1		p, packed_query;
+	BLAST_Diag	diag, diag_tmp, real_diag;
+	BLAST_ExtendWordPtr     ewp;
+	BLAST_ExtendWordParamsPtr     ewp_params;
+	BLAST_WordFinderPtr	wfp;
+	CfjModStruct *combo_array;
+        Int4  lookup_index, mask;
+        Int4  char_size, index=0, query_length=0;
+
+	register ModLookupPosition hit_info;
+
+	register PV_ARRAY_TYPE PNTR next_pv_array_addr;
+	register PV_ARRAY_TYPE next_pv_val,pv_val;
+	register ModLookupPositionPtr lookup_pos, extended_pos;
+	register Int4 num_hits;
+	register Int4 next_nhits;
+	Int4 * next_nhits_addr;
+	
+
+        Int2            context, left, right;
+        Int4            q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
+	Int4	extra_bytes, extra_bytes_needed, my_index;
+        Int4 bits_to_shift, min_diag_length, min_diag_mask;
+	int next_lindex;
+	PV_ARRAY_TYPE *pv_array = lookup->pv_array;
+
+        Uint4Ptr theTable;
+        Int4 theCacheSize, theArraySize, change_hit = 0;
+        
+        theTable = lookup->theTable;
+        theCacheSize = lookup->theCacheSize;
+        theArraySize = theCacheSize + 1;
+
+	query0 = NULL;	/* Gets rid of a warning. */
+	p = 255;	/* Gets rid of a warning. */
+	ewp_params=search->ewp_params;
+
+	wfp = search->wfp_second;
+        char_size = lookup->char_size;
+        mask = lookup->mask;
+        offset = ewp_params->offset;
+        subject0 = s = (Uint1Ptr) search->subject->sequence;
+        min_diag_length = ewp_params->min_diag_length;
+        bits_to_shift = ewp_params->bits_to_shift;
+        min_diag_mask = ewp_params->min_diag_mask;
+
+
+        if (search->current_hitlist == NULL)
+        {
+                search->current_hitlist = BlastHitListNew(search);
+        }
+        else
+        { /* Scrub the hitlist. */
+                if (search->current_hitlist_purge)
+                        BlastHitListPurge(search->current_hitlist);
+        }
+	
+	compressed_wordsize = lookup->wordsize;
+	wordsize = wfp->wordsize;
+	extra_bytes = lookup->wordsize - compressed_wordsize;
+
+/* The subject sequence is too short, exit this function now. */
+	if (wordsize > search->subject->length)
+		goto NormalReturn;
+
+	s = lookup_find_init(lookup, &index, s);
+        lookup_index = index;
+/* Determines when to stop scanning the database; does not include remainder. */
+        s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
+	compression_factor = wfp->compression_ratio*compressed_wordsize;
+	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
+
+	search_context = search->context;
+	/* The length of query is the same for both strands. */
+	query_length = search_context[search->first_context].query->length;
+        extra_bytes_needed = extra_bytes;
+        if (extra_bytes_needed)
+        {
+	/** The first for() loop is optimized for sparse tables (which rarely hit), the second for dense */
+	if(pv_array){
+	  /* We use the pv_array here, since (on short-med queries) most lookups fail */
+
+	  next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	  next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+	  for (;;) {
+	        do {
+                        /* lookup a contiguous word. */
+                        s++;
+                        lookup_index = next_lindex;
+
+                        if (s == s_end)
+                                goto NormalReturn;
+
+			next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+			next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+			pv_val = next_pv_val;
+			next_pv_val = *next_pv_array_addr;
+
+		}while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+
+                num_hits = *(theTable + theArraySize*lookup_index);
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                hit_info = *((Uint4 *) lookup_pos);
+                lookup_pos++;
+
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif		/* Extend each hit in the linked list */
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+                        
+                        if(num_hits == change_hit) {
+                            lookup_pos = extended_pos;
+                        }
+                        
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+			query0 = search_context[context].query->sequence;
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+			/* Check for extra bytes if required for longer words. */
+			if (extra_bytes_needed)
+			{
+				/* extend to the right */
+				p = *((Uint1Ptr) search->subject->sequence + s_off);
+				q = query0 + q_off;
+				my_index=0;
+				while (extra_bytes_needed)
+				{
+				/* Note: no check is done that q[0-3] is not an ambiguity code.  Could be done, but might slow things down. */
+					packed_query = (q[0]<<6) + (q[1]<<4) + (q[2]<<2) + q[3]; 
+					if (p != packed_query)
+						break;
+					q += 4;
+					extra_bytes_needed--;
+					my_index++;
+					p = *((Uint1Ptr) search->subject->sequence + s_off + my_index);
+				}
+				if (extra_bytes_needed)
+				{ /* extra_bytes_needed next round. */
+					extra_bytes_needed = extra_bytes;
+					continue; /* not enough bytes found. */
+				}
+				extra_bytes_needed = extra_bytes;
+			}
+
+
+			q = query0 + q_off - compression_factor;
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
+	  } /* end for(;;) */
+
+	}else{
+	  /* Dense version - doesn't use pv_array */
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	    next_nhits_addr= (Int4Ptr) (theTable + theArraySize*next_lindex);
+	    next_nhits=*next_nhits_addr;
+	    
+	    for (;;) {
+	        do {
+			/* lookup a contiguous word. */
+			lookup_index = next_lindex;
+			s++; 
+ 
+			if (s == s_end) goto NormalReturn;
+
+        		next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+
+			next_nhits_addr = (Int4Ptr) (theTable + theArraySize*next_lindex);
+
+			num_hits = next_nhits;
+			next_nhits=*next_nhits_addr;
+		} while (num_hits == 0);  
+
+		lookup_pos = (theTable + theArraySize*lookup_index + 1);
+                
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+                
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+                
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+
+                        if(num_hits == change_hit) {
+                            lookup_pos = extended_pos;
+                        }
+
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+			query0 = search_context[context].query->sequence;
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+
+			/* Check for extra bytes if required for longer words. */
+			if (extra_bytes_needed)
+			{
+				/* extend to the right */
+				p = *((Uint1Ptr) search->subject->sequence + s_off);
+				q = query0 + q_off;
+				my_index=0;
+				while (extra_bytes_needed)
+				{
+				/* Note: no check is done that q[0-3] is not an ambiguity code.  Could be done, but might slow things down. */
+					packed_query = (q[0]<<6) + (q[1]<<4) + (q[2]<<2) + q[3]; 
+					if (p != packed_query)
+						break;
+					q += 4;
+					extra_bytes_needed--;
+					my_index++;
+					p = *((Uint1Ptr) search->subject->sequence + s_off + my_index);
+				}
+				if (extra_bytes_needed)
+				{ /* extra_bytes_needed next round. */
+					extra_bytes_needed = extra_bytes;
+					continue; /* not enough bytes found. */
+				}
+				extra_bytes_needed = extra_bytes;
+			}
+
+			q = query0 + q_off - compression_factor;
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
+	   }
+         }
+	}
+	else /* extra_bytes not needed. */
+	{
+	/** The first for() loop is optimized for sparse tables (which rarely hit), the second for dense */
+	if(pv_array){
+	  /* We use the pv_array here, since (on short-med queries) most lookups fail */
+
+	  next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	  next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+	  for (;;) {
+	        do {
+                        /* lookup a contiguous word. */
+                        s++;
+                        lookup_index = next_lindex;
+
+                        if (s == s_end)
+                                goto NormalReturn;
+
+			next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+			next_pv_array_addr = &pv_array[next_lindex>>PV_ARRAY_BTS];
+			pv_val = next_pv_val;
+			next_pv_val = *next_pv_array_addr;
+
+		}while ((pv_val&(((PV_ARRAY_TYPE) 1)<<(lookup_index&PV_ARRAY_MASK))) == 0); 
+
+                num_hits = *(theTable + theArraySize*lookup_index);
+                
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+                lookup_pos = (theTable + theArraySize*lookup_index + 1);
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+
+                        if(num_hits == change_hit) {
+                            lookup_pos = extended_pos;
+                        }
+                        
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+
+			query0 = search_context[context].query->sequence;
+
+			q = query0 + q_off - compression_factor;
+
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
+	  } /* end for(;;) */
+
+	}else{
+	  /* Dense version - doesn't use pv_array */
+	    next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+	    next_nhits_addr= (Int4Ptr) (theTable + theArraySize*next_lindex);
+	    next_nhits=*next_nhits_addr;
+	    
+	    for (;;) {
+	        do {
+			/* lookup a contiguous word. */
+			lookup_index = next_lindex;
+			s++; 
+ 
+			if (s == s_end) goto NormalReturn;
+
+        		next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
+
+			next_nhits_addr = (Int4Ptr) (theTable + theArraySize*next_lindex);
+
+			num_hits = next_nhits;
+			next_nhits=*next_nhits_addr;
+		} while (num_hits == 0);  
+
+		lookup_pos = (theTable + theArraySize*lookup_index + 1);
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		hit_info = *((Uint4 *) lookup_pos);		  
+		lookup_pos++;
+
+
+                if(num_hits > theCacheSize){
+#ifdef RPS_BLAST
+                    extended_pos = (ModLookupPositionPtr) ((Uint1Ptr) lookup->mod_lookup_table_memory + (Uint4) *(theTable + theArraySize*lookup_index + theCacheSize - 1));
+#else
+                    extended_pos =*((ModLookupPositionPtr PNTR) (theTable + theArraySize*lookup_index + theCacheSize - 1));
+#endif
+                    change_hit = num_hits + 2 - theCacheSize;
+                } else {
+                    change_hit = -1;
+                }
+
+		/* Extend each hit in the linked list */
+		do {
+		        q_off = hinfo_get_pos(hit_info);
+			context = hinfo_get_context(hit_info);
+			num_hits--;
+
+                        if(num_hits == change_hit) {
+                            lookup_pos = extended_pos;
+                        }
+
+			hit_info = *((Uint4 *) lookup_pos); /* load next hit_info */
+			lookup_pos++;
+
+			query0 = search_context[context].query->sequence;
+
+			q = query0 + q_off - compression_factor;
+
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+
+			q_end = query0 + query_length;
+		    	diag = diag_tmp - q_off;
+
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *(subject0 + s_off);
+			q = query0 + q_off;
+			if (s >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+			if (left + right >= virtual_wordsize)
+			{
+                               	ewp=search_context[context].ewp;
+                                combo_array = ewp->combo_array;
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+				if (combo_array[real_diag].diag_level >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while (num_hits>0);
+	    }
+	  }
 	}
 
 NormalReturn:
@@ -6280,8 +8837,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	}
 
 /* For MP BLAST we check that no other thread is attempting to insert results. */
-	if (results_mutex)
-		NlmMutexLock(results_mutex);
+	if (search->thr_info->results_mutex)
+            NlmMutexLock(search->thr_info->results_mutex);
 
 /* This is the structure that is identical on every thread. */
 	result_struct = search->result_struct;
@@ -6303,8 +8860,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
                 {       /* Array is full, delete the entry. */
                         search->current_hitlist = BlastHitListDestruct(search->current_hitlist);
                         result_hitlist = BLASTResultHitlistFree(result_hitlist);
-                        if (results_mutex)
-                                NlmMutexUnlock(results_mutex); /* Free mutex. */
+                        if (search->thr_info->results_mutex)
+                            NlmMutexUnlock(search->thr_info->results_mutex); /* Free mutex. */
                         return 0;
                 }
                 else
@@ -6319,8 +8876,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	    	else if (deleted == 0) 
 		{
 	      		result_hitlist = BLASTResultHitlistFree(result_hitlist);
-	      		if (results_mutex)
-				NlmMutexUnlock(results_mutex);	/* Free mutex. */
+	      		if (search->thr_info->results_mutex)
+                            NlmMutexUnlock(search->thr_info->results_mutex);	/* Free mutex. */
 	      		return retval;
 		}
                 new_index = hitlist_count;
@@ -6334,8 +8891,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	      hitlist_count = result_struct->hitlist_count = BlastPurgeResultList(results, hitlist_count);
 	    else if (deleted == 0) {
 	      result_hitlist = BLASTResultHitlistFree(result_hitlist);
-	      if (results_mutex)
-		NlmMutexUnlock(results_mutex);	/* Free mutex. */
+	      if (search->thr_info->results_mutex)
+		NlmMutexUnlock(search->thr_info->results_mutex);	/* Free mutex. */
 	      return retval;
 	    }
 	    if (hitlist_count > 0)
@@ -6411,8 +8968,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 		result_struct->hitlist_count++;	
 	}
 
-	if (results_mutex)
-		NlmMutexUnlock(results_mutex);	/* Free mutex. */
+	if (search->thr_info->results_mutex)
+            NlmMutexUnlock(search->thr_info->results_mutex);	/* Free mutex. */
 
 	return retval;
 }
@@ -6467,7 +9024,7 @@ blast_set_parameters(BlastSearchBlkPtr search,
 		e = 0.;
 
 	meff = (Nlm_FloatHi) search->context[search->first_context].query->length;
-	BlastCutoffs_simple(&s, &e, kbp, searchsp, TRUE);
+	BlastCutoffs_simple(&s, &e, kbp, searchsp, FALSE);
 
 	/* Determine the secondary cutoff score, S2, to use */
 	if (e2 == 0. && !pbp->cutoff_s2_set)
@@ -7035,7 +9592,8 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 		for (index=0; index<hitlist->hspcnt; index++)
 		{
 			hsp = hsp_array[index];
-			if (hsp->evalue > cutoff)
+			if (hsp->evalue > cutoff &&
+				(search->pbp->no_check_score || search->pbp->cutoff_s > hsp->score))
 			{
 				hsp_array[index] = MemFree(hsp_array[index]);
 				hsp_deleted = TRUE;
@@ -7059,7 +9617,7 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 		}
 		else
 		{
-			number_of_pos_hits++;
+			search->thr_info->number_of_pos_hits++;
 			search->number_of_seqs_better_E++;
 		}
 	}
@@ -7136,40 +9694,31 @@ BlastTimeFillStructure(BlastTimeKeeperPtr btkp)
 */
 
 void
-BlastStartAwakeThread(BlastSearchBlkPtr search)
+BlastStartAwakeThread(BlastThrInfoPtr thr_info)
 {
-	VoidPtr status=NULL;
+    VoidPtr status=NULL;
+    
+    /* If awake_thr is running from the last search, then wait for the join. */
+    /* This pointer is NULL on the first search ever. */
+    if (thr_info->awake_thr) {
+        NlmThreadJoin(thr_info->awake_thr, &status);
+        thr_info->awake_thr = NULL;
+    }
+    
+    if (NlmThreadsAvailable()) {
+        thr_info->awake = TRUE;
+        /* last tick is used by 'star_proc' */
+        thr_info->awake_thr = 
+            NlmThreadCreate(star_proc, thr_info);
+    }
 
-	/* If awake_thr is running from the last search, then wait for the join. */
-	/* This pointer is NULL on the first search ever. */
-	if (awake_thr)
-	{
-		NlmThreadJoin(awake_thr, &status);
-		awake_thr = NULL;
-	}
-
-	star_callback = NULL;
-	if (NlmThreadsAvailable())
-	{
-		awake = TRUE;
-		/* last tick is used by 'star_proc' */
-		awake_thr = NlmThreadCreate(star_proc, NULL);
-		star_callback = search->star_callback;
-	}
+    return;
 }
 
 /* Change the awake flag.  This thread will die in one second. */
 void 
-BlastStopAwakeThread(void)
+BlastStopAwakeThread(BlastThrInfoPtr thr_info)
 {
-        VoidPtr status=NULL;
-
-        awake = FALSE;
-
-        if (awake_thr)
-        {
-                NlmThreadJoin(awake_thr, &status);
-                awake_thr = NULL;
-        }
+    thr_info->awake = FALSE;
+    
 }
-

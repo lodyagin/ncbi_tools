@@ -28,13 +28,70 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.14 $
+* $Revision: 6.33 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.33  2000/01/12 17:43:20  wheelan
+* added AlnMgrGetNumSegments, AlnMgrDeleteRow
+*
+* Revision 6.32  1999/11/30 14:36:27  wheelan
+* added AlnMgrMakeMultipleByScore
+*
+* Revision 6.31  1999/11/26 15:42:21  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 6.30  1999/11/18 19:30:24  wheelan
+* added AlnMgrDeleteChildByPointer
+*
+* Revision 6.29  1999/10/25 18:16:44  wheelan
+* Added AlnMgrGetUniqueSeqs
+*
+* Revision 6.28  1999/10/19 19:25:57  wheelan
+* added is_aligned return to AlnMgrGetNextNthSeqRange; removed static functions; changed structures for AlnMgrMakeSegmentedMasterSlave
+*
+* Revision 6.27  1999/10/15 21:51:03  durand
+* add AlnMgrIsSAPDiscAli()
+*
+* Revision 6.26  1999/10/15 15:41:20  wheelan
+* fixed typo
+*
+* Revision 6.25  1999/10/15 15:15:05  wheelan
+* added defines for AlnMgrGetNthRowTail
+*
+* Revision 6.24  1999/10/15 13:48:32  wheelan
+* added AlnMgrGetNthRowTail
+*
+* Revision 6.23  1999/10/14 16:10:31  kans
+* new includes and prototypes added
+*
+* Revision 6.22  1999/10/13 19:28:35  wheelan
+* added speedup for segmented master-slave creation
+*
+* Revision 6.21  1999/10/07 13:37:33  wheelan
+* added AlnMgrIndexSingleSeqAlign
+*
+* Revision 6.20  1999/10/06 19:34:49  wheelan
+* added several viewer and editor management functions (AlnMgrCopy . . . )
+*
+* Revision 6.19  1999/10/05 15:15:18  wheelan
+* added AlnMgrGetNthUnalignedForNthRow
+*
+* Revision 6.18  1999/10/04 14:58:17  wheelan
+* added AlnMgrMapBioseqToSeqAlign
+*
+* Revision 6.17  1999/09/23 16:03:28  wheelan
+* Added structures and functions to support segmented master-slave alignments
+*
+* Revision 6.16  1999/09/22 13:20:04  wheelan
+* Added AlnMgrGetNextNthSeqRange and structures for segmented master-slave handling
+*
+* Revision 6.15  1999/09/21 19:14:15  wheelan
+* added functions to make segmented master-slave, added fields to AlnMsg and AMAlignIndex structures
+*
 * Revision 6.14  1999/09/17 16:55:59  wheelan
 * added AlnMgrPropagateSeqIdsBySapList
 *
@@ -84,6 +141,13 @@
 #ifndef _ALIGNMGR_
 #define _ALIGNMGR_
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -93,6 +157,7 @@ extern "C" {
 #include <salutil.h>
 #include <sequtil.h>
 #include <salpedit.h>
+#include <samutil.h>
 
 /* for SAIndex indextype field */
 #define INDEX_SEGS 1
@@ -106,6 +171,13 @@ extern "C" {
 #define CHECK_ERROR -2
 #define NO_OVERLAP -1
 
+/* values for amaip->mstype */
+#define AM_MASTERSLAVE 1
+#define AM_SEGMENTED_MASTERSLAVE 2
+
+/* values for AlnMgrGetNthRowTail */
+#define LEFT_TAIL 1
+#define RIGHT_TAIL 0
 
 /***************************************************************************
 *
@@ -136,9 +208,9 @@ typedef struct saindex{
    SASeqDatPtr PNTR  ssdp;
 } SAIndex, PNTR SAIndexPtr;
 
-SASeqDatPtr SASeqDatNew(void);
-SAIndexPtr SAIndexNew(void);
-Boolean SAIndexFree(VoidPtr index);
+NLM_EXTERN SASeqDatPtr SASeqDatNew(void);
+NLM_EXTERN SAIndexPtr SAIndexNew(void);
+NLM_EXTERN Boolean SAIndexFree(VoidPtr index);
 
 /***************************************************************************
 *
@@ -159,12 +231,15 @@ typedef struct row_source {
    Uint4Ptr    which_saps;
    Uint4Ptr    num_in_sap;
    Uint4       numsaps;
+   Uint1       strand;
+   struct row_source PNTR next;
 } RowSource, PNTR RowSourcePtr;
 
-RowSourcePtr RowSourceNew(void);
-RowSourcePtr RowSourceFree(RowSourcePtr rsp);
+NLM_EXTERN RowSourcePtr RowSourceNew(void);
+NLM_EXTERN RowSourcePtr RowSourceFree(RowSourcePtr rsp);
 
 typedef struct amaligndat {
+   SeqIdPtr    sip;
    SeqAlignPtr PNTR saps;
    Int4        numsaps;
    Uint2Ptr    segments;
@@ -174,10 +249,12 @@ typedef struct amaligndat {
 typedef struct amalignindex {
    Uint1 indextype;
    SeqAlignIndexFreeFunc freefunc;
+   Int2 mstype;
    Uint4Ptr aligncoords;
    SeqAlignPtr PNTR  saps;
    Uint4 numseg;
    Int4Ptr lens;
+   Int4Ptr ulens;
    Int4Ptr starts;
    Int4 alnsaps; /* the number of child seqaligns contained in the multiple */
    Int4 numsaps; /* the total number of child seqaligns */
@@ -187,12 +264,13 @@ typedef struct amalignindex {
    Uint4 numrows;
    Int4 master; /*tells which row is the master row*/
    AMAlignDatPtr PNTR amadp;
+   SeqAlignPtr parent;
 } AMAlignIndex, PNTR AMAlignIndexPtr;
 
-AMAlignIndexPtr AMAlignIndexNew(void);
-Boolean AMAlignIndexFree(VoidPtr index);
-AMAlignDatPtr AMAlignDatNew(void);
-AMAlignDatPtr AMAlignDatFree(AMAlignDatPtr amadp);
+NLM_EXTERN AMAlignIndexPtr AMAlignIndexNew(void);
+NLM_EXTERN Boolean AMAlignIndexFree(VoidPtr index);
+NLM_EXTERN AMAlignDatPtr AMAlignDatNew(void);
+NLM_EXTERN AMAlignDatPtr AMAlignDatFree(AMAlignDatPtr amadp);
 
 
 /***************************************************************************
@@ -217,7 +295,7 @@ typedef struct messagestruct {
    Int4      from_m;
    Int4      to_m;
    SeqIdPtr  which_bsq;
-   Int4      row_num;
+   Int4      row_num;  /*  1-based numbering  */
 /* ONLY set by AlnMgrGetNextAlnBit*/
    Int4      from_b;
    Int4      to_b;
@@ -228,21 +306,84 @@ typedef struct messagestruct {
    Int4      prev_sap;
    Int4      len_left;
    Boolean   send_space;
+   Uint2     place;
 } AlnMsg, PNTR AlnMsgPtr;
 
-AlnMsgPtr AlnMsgNew(void);
+NLM_EXTERN AlnMsgPtr AlnMsgNew(void);
+NLM_EXTERN AlnMsgPtr AlnMsgReNew(AlnMsgPtr amp);
 
+/* used by AlnMgrMakeMultSegments */
 typedef struct am_tinyinfo {
-   Int4  start;
+   Int4   start;
+   Int4   stop;
    Uint4  numgap;
    Uint2  which;
+   Int4   numsap;
 } AMTinyInfo, PNTR AMTinyInfoPtr;
 
+typedef struct am_aligninfo {
+   SeqAlignPtr  align;
+   Int4 align_len;
+} AMAlignInfo, PNTR AMAlignInfoPtr;
 
-SeqAlignIndexPtr SeqAlignIndexNew(void);
 
+/* used by AlnMgrMakeSegmentedMasterSlave */
+typedef struct am_msms {
+   Int4         start;
+   Int4         stop;
+   Int4         sstart;
+   Int4         sstop;
+   Uint1        strand;
+   SeqIdPtr     sip;
+   SeqAlignPtr  sap;
+   Int4         nsap;
+   Int4         n;
+   Int4         count;
+   Int4         masternum;
+   struct am_msms PNTR next;
+} AMmsms, PNTR AMmsmsPtr;
 
-Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap);
+typedef struct am_tinymsinfo {
+   Int4       start;
+   AMmsmsPtr  ams;
+} AMTinyMSInfo, PNTR AMTinyMSInfoPtr;
+
+typedef struct am_siplist {
+   SeqIdPtr  sip;
+   Int4      first_row;
+   struct am_siplist PNTR next;
+} AMsiplist, PNTR AMsiplistPtr;
+
+NLM_EXTERN SeqAlignIndexPtr SeqAlignIndexNew(void);
+
+/********************************************************************************
+*
+*  AlnMgrIndexSingleSeqAlign indexes (in place) only the first seqalign or
+*  seqalign set in the chain that is passed in.  It will extensively
+*  rearrange the first seqalign given.
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrIndexSingleSeqAlign(SeqAlignPtr sap);
+
+NLM_EXTERN Boolean AlnMgrIndexSingleChildSeqAlign(SeqAlignPtr sap);
+
+/********************************************************************************
+*
+*  AlnMgrReIndexSeqAlign frees the parent indexes, indexes any child
+*  seqaligns that are not indexed (it assumes that any indexed child 
+*  seqaligns are correctly indexed), and reindexes the set.
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrReIndexSeqAlign(SeqAlignPtr sap);
+
+/********************************************************************************
+*
+*  AlnMgrIndexSeqAlign indexes (in place) the ENTIRE chain of seqaligns
+*  and seqalign sets passed in, and extensively rearranges the seqalign.   
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap);
+
 
 /***************************************************************************
 *
@@ -257,7 +398,7 @@ Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap);
 *
 ***************************************************************************/
 
-Boolean AlnMgrAnythingToSeg (SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrAnythingToSeg (SeqAlignPtr sap);
 
 /***********************************************************************
 *
@@ -273,10 +414,13 @@ Boolean AlnMgrAnythingToSeg (SeqAlignPtr sap);
 *  in).
 *
 ***********************************************************************/
-Boolean AlnMgrIndexLinkedSegs (SeqAlignPtr sap);
-Boolean AlnMgrIndexParentSA(SeqAlignPtr sap);
-SeqIdPtr AlnMgrPropagateUpSeqIdPtrs(SeqAlignPtr sap, Int4Ptr num);
-SeqIdPtr  AlnMgrPropagateSeqIdsBySapList(AMAlignIndexPtr amaip);
+NLM_EXTERN Boolean AlnMgrIndexLinkedSegs (SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrIndexParentSA(SeqAlignPtr sap);
+NLM_EXTERN SeqIdPtr AlnMgrPropagateUpSeqIdPtrs(SeqAlignPtr sap, Int4Ptr num);
+NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsBySapList(AMAlignIndexPtr amaip);
+NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsByRow(AMAlignIndexPtr amaip);
+
+NLM_EXTERN Boolean AlnMgrMakeMultipleByScore(SeqAlignPtr sap);
 
 
 /**********************************************************************
@@ -286,7 +430,7 @@ SeqIdPtr  AlnMgrPropagateSeqIdsBySapList(AMAlignIndexPtr amaip);
 *  indexes for that seqalign.
 *
 ***********************************************************************/
-void am_print_seqalign_indexes(SeqAlignPtr sap);
+NLM_EXTERN void am_print_seqalign_indexes(SeqAlignPtr sap);
 
 
 /**********************************************************************
@@ -298,7 +442,7 @@ void am_print_seqalign_indexes(SeqAlignPtr sap);
 *  If the indexes aren't present, it will try to create them.
 *
 **********************************************************************/
-Int4 AlnMgrCheckAlignForParent(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrCheckAlignForParent(SeqAlignPtr sap);
 
 
 /***********************************************************************
@@ -309,9 +453,7 @@ Int4 AlnMgrCheckAlignForParent(SeqAlignPtr sap);
 *  without defining special structures for every type of sort.
 *
 ***********************************************************************/
-SeqAlignPtr PNTR AlnMgrSortSeqAligns (SeqAlignPtr sap, int (LIBCALLBACK *compare)(VoidPtr, VoidPtr, VoidPtr), VoidPtr userdata, Int4Ptr numsap);
-static void heapsort_with_userdata (VoidPtr b, size_t nel, size_t width, int (LIBCALLBACK *compar)PROTO((VoidPtr, VoidPtr, VoidPtr)), VoidPtr userdata);
-static void heapify_with_userdata(CharPtr base0, CharPtr base, CharPtr lim, CharPtr last, size_t width, int(LIBCALLBACK *compar)PROTO((VoidPtr, VoidPtr, VoidPtr)), VoidPtr userdata);
+NLM_EXTERN SeqAlignPtr PNTR AlnMgrSortSeqAligns (SeqAlignPtr sap, int (LIBCALLBACK *compare)(VoidPtr, VoidPtr, VoidPtr), VoidPtr userdata, Int4Ptr numsap);
 
 /**********************************************************************
 *
@@ -324,7 +466,7 @@ static void heapify_with_userdata(CharPtr base0, CharPtr base, CharPtr lim, Char
 *  check for them and remove them.
 *
 **********************************************************************/
-int LIBCALLBACK AlnMgrCompareIncreasingBySeqIdPtr (VoidPtr base, VoidPtr large_son, VoidPtr userdata);
+NLM_EXTERN int LIBCALLBACK AlnMgrCompareIncreasingBySeqIdPtr (VoidPtr base, VoidPtr large_son, VoidPtr userdata);
 
 /*********************************************************************
 *
@@ -333,25 +475,23 @@ int LIBCALLBACK AlnMgrCompareIncreasingBySeqIdPtr (VoidPtr base, VoidPtr large_s
 *  structure to guide a heapsort of all the seqaligns.
 *
 *********************************************************************/
-int LIBCALLBACK AlnMgrFindFirst(VoidPtr base, VoidPtr large_son, VoidPtr userdata);
-int LIBCALLBACK AlnMgrCompareTips(VoidPtr base, VoidPtr large_son);
+NLM_EXTERN int LIBCALLBACK AlnMgrFindFirst(VoidPtr base, VoidPtr large_son, VoidPtr userdata);
+NLM_EXTERN int LIBCALLBACK AlnMgrCompareTips(VoidPtr base, VoidPtr large_son);
+
 
 /************************************************************************
 *
 *  AlnMgrGetNextLengthBit should be called iteratively on an alignment
 *  to return the lengths of all the aligned and unaligned pieces in
-*  the alignment.  Don't change the value in r, just pass in a pointer 
-*  to an allocated Int4 set to 0 initially.  length will be positive
-*  for aligned regions and negative for unaligned regions (it is
-*  set to the negative of the largest unaligned sequence in the region).
-*  AlnMgrGetNextLengthBit calls AlnMgrGetMaxUnalignedLength to get
-*  the lengths of the unaligned regions.  This function makes a lot of
-*  assumptions about the relationship between sap1 and sap2; call it
-*  with much hesitation.
+*  the alignment.  Don't change the value in r, just pass in a pointer
+*  to an allocated Int4 set to 0 initially.  The lengths of the unaligned
+*  pieces are precomputed using AlnMgrGetMaxUnalignedLength; if no
+*  precomputed values are found, this function is used to compute the
+*  lengths on the fly.
 *
 ************************************************************************/
-Boolean AlnMgrGetNextLengthBit(SeqAlignPtr sap, Int4Ptr length, Int4Ptr r);
-Int4 AlnMgrGetMaxUnalignedLength(SeqAlignPtr sap1, SeqAlignPtr sap2);
+NLM_EXTERN Boolean AlnMgrGetNextLengthBit(SeqAlignPtr sap, Int4Ptr length, Int4Ptr r);
+NLM_EXTERN Int4 AlnMgrGetMaxUnalignedLength(SeqAlignPtr sap1, SeqAlignPtr sap2);
 
 
 /*************************************************************************
@@ -367,30 +507,99 @@ Int4 AlnMgrGetMaxUnalignedLength(SeqAlignPtr sap1, SeqAlignPtr sap2);
 *  retrieve the required data from the indexes.
 *
 *************************************************************************/
-Boolean AlnMgrGetNextAlnBit(SeqAlignPtr sap, AlnMsgPtr amp);
-Uint4 binary_search_on_uint4_list(Uint4Ptr list, Uint4 pos, Uint4 listlen);
-Int4 binary_search_on_uint2_list(Uint2Ptr list, Uint2 ele, Uint2 listlen);
-Int4 binary_search_by_chunk(Int4Ptr list, Int4 ele, Int4 listlen, Int4 chunksize, Int4 offset);
-Int4 binary_search_segment_array(SASeqDatPtr ssdp, Int4 pos, Int4 numseq, Int4 offset, DenseSegPtr dsp);
+NLM_EXTERN Boolean AlnMgrGetNextAlnBit(SeqAlignPtr sap, AlnMsgPtr amp);
 
+/********************************************************************************
+*
+*  binary search functions
+*
+********************************************************************************/
+NLM_EXTERN Uint4 binary_search_on_uint4_list(Uint4Ptr list, Uint4 pos, Uint4 listlen);
+NLM_EXTERN Int4 binary_search_on_uint2_list(Uint2Ptr list, Uint2 ele, Uint2 listlen);
+NLM_EXTERN Int4 binary_search_by_chunk(Int4Ptr list, Int4 ele, Int4 listlen, Int4 chunksize, Int4 offset);
+NLM_EXTERN Int4 binary_search_segment_array(SASeqDatPtr ssdp, Int4 pos, Int4 numseq, Int4 offset, DenseSegPtr dsp);
 
 
 /************************************************************************
 *
 *  These are several utility functions which get needed data from the
-*  indexes.  "N" refers to row number.
+*  indexes.  "N" refers to row number (using a 1-based numbering system).
 *
 ************************************************************************/
-Int4 AlnMgrGetAlnLength(SeqAlignPtr sap, Boolean fill_in);
-Int4 AlnMgrGetNumSeqs(SeqAlignPtr sap);
-SeqIdPtr AlnMgrGetNthSeqIdPtr(SeqAlignPtr sap, Int4 n);
-void AlnMgrGetNthSeqRangeInSA(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
-Uint1 AlnMgrGetStrand(SeqAlignPtr sap, SeqIdPtr sip);
-Uint1 AlnMgrGetNthStrand(SeqAlignPtr sap, Int4 n);
-Int4 AlnMgrGetNForSip(SeqAlignPtr sap, SeqIdPtr sip);
-Int4 AlnMgrGetSapForSip(AMAlignIndexPtr amaip, SeqIdPtr sip, Int4 which);
-Int4 AlnMgrMapToBsqCoords(SeqAlignPtr sap, Uint4 pos, SeqIdPtr sip, SeqIdPtr master); 
-Int4 AlnMgrMapRowCoords(SeqAlignPtr sap, Uint4 pos, Int4 row, SeqIdPtr master);
+NLM_EXTERN Int4 AlnMgrGetAlnLength(SeqAlignPtr sap, Boolean fill_in);
+NLM_EXTERN Int4 AlnMgrGetNumSeqs(SeqAlignPtr sap);
+NLM_EXTERN SeqIdPtr AlnMgrGetUniqueSeqs(SeqAlignPtr sap, Int4Ptr n);
+NLM_EXTERN SeqIdPtr AlnMgrGetNthSeqIdPtr(SeqAlignPtr sap, Int4 n);
+NLM_EXTERN void AlnMgrGetNthSeqRangeInSA(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
+NLM_EXTERN Int4 AlnMgrGetNumSegments(SeqAlignPtr sap);
+
+/********************************************************************************
+*
+*  AlnMgrGetNextNthSeqRange is called recursively to return the lengths of
+*  all aligned and all internal unaligned regions of any row in a seqalign.
+*  If there is an error, or if the function is called past the last block,
+*  the function returns FALSE.  Set where to point to an allocated integer
+*  equal to 0 on the first call and don't change it during the loop.  Set
+*  the boolean unaligned to FALSE to get only the aligned regions, and TRUE to
+*  get the aligned regions plus all internal unaligned regions.  For unaligned
+*  regions, *is_aligned will be FALSE.
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrGetNextNthSeqRange(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop, Int4Ptr where, BoolPtr is_aligned, Boolean unaligned);
+
+
+/********************************************************************************
+*
+*  AlnMgrGetNthRowTail retrieves the blocks of sequence on either end of the
+*  alignment, by row.  which_tail is LEFT_TAIL to retrieve the ends which come
+*  before alignment coordinate 0, and RIGHT_TAIL to retrieve the other ends.
+*  The function returns TRUE if successful, FALSE for an error.
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrGetNthRowTail(SeqAlignPtr sap, Int4 n, Uint1 which_tail, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand);
+NLM_EXTERN Boolean AlnMgrGetNthUnalignedForNthRow(SeqAlignPtr sap, Int4 unaligned, Int4 row, Int4Ptr start, Int4Ptr stop);
+NLM_EXTERN Uint1 AlnMgrGetStrand(SeqAlignPtr sap, SeqIdPtr sip);
+NLM_EXTERN Uint1 AlnMgrGetNthStrand(SeqAlignPtr sap, Int4 n);
+NLM_EXTERN Int4 AlnMgrGetNForSip(SeqAlignPtr sap, SeqIdPtr sip);
+NLM_EXTERN Int4 AlnMgrGetNForSap(AMAlignIndexPtr amaip, SeqAlignPtr sap);
+
+/********************************************************************************
+*
+*  AlnMgrGetAllNForSip is called in a while loop to return all the rows that a
+*  seqid appears in in a given seqalign.  Use n = 0 to start, and then on
+*  return, if the return is TRUE, n will be the row number of the next row
+*  that the seqid appears in.  If the return is FALSE, either there was an
+*  error or there are no (more) rows containing that seqid.
+*
+********************************************************************************/
+NLM_EXTERN Boolean AlnMgrGetAllNForSip(SeqAlignPtr sap, SeqIdPtr sip, Int4Ptr n);
+
+NLM_EXTERN Int4 AlnMgrGetSapForSip(AMAlignIndexPtr amaip, SeqIdPtr sip, Int4 which);
+NLM_EXTERN Int4 AlnMgrMapToBsqCoords(SeqAlignPtr sap, Uint4 pos, SeqIdPtr sip, SeqIdPtr master); 
+
+/********************************************************************************
+*
+*  AlnMgrMapRowCoords maps a position in a given row to the bioseq coordinate
+*  of that row.  If master is NULL, the alignment is taken to be flattened;
+*  otherwise it is an alignment according to that master (this will change the
+*  correspondence between row coordinates and bioseq coordinates).  The return
+*  value will be either a positive bioseq coordinate, or -1 if the bioseq is
+*  gapped at that row position.
+*
+********************************************************************************/
+NLM_EXTERN Int4 AlnMgrMapRowCoords(SeqAlignPtr sap, Uint4 pos, Int4 row, SeqIdPtr master);
+
+/********************************************************************************
+*
+*  AlnMgrMapBioseqToSeqAlign takes a position in bioseq coordinates in a
+*  row and maps it to seqalign coordinates, using the given master as
+*  the alignment master (if master is NULL the alignment is flat).  A
+*  return value of -1 indicates an error; a return value of -2 indicates
+*  that the given bioseq coordinates are not contained in the alignment
+*  specified.
+*
+********************************************************************************/
+NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlign(SeqAlignPtr sap, Uint4 pos, Int4 row_num, SeqIdPtr master);
 
 
 /***********************************************************************
@@ -401,17 +610,17 @@ Int4 AlnMgrMapRowCoords(SeqAlignPtr sap, Uint4 pos, Int4 row, SeqIdPtr master);
 *  parent.
 *
 ***********************************************************************/
-Boolean AlnMgrMakeFakeMultiple(SeqAlignPtr sap);
-void AlnMgrMakeAlignCoords(SeqAlignPtr sap);
-Boolean AlnMgrMergeIntoMSMultByMaster(AMAlignIndexPtr amaip, Int4Ptr lens, Uint4Ptr numseg);
-Boolean AlnMgrMergeSegments(Int4Ptr lens, SeqAlignPtr sap, SeqIdPtr master, Int4Ptr where, Int4 which);
-Boolean AlnMgrFillInStarts(SeqAlignPtr PNTR saparray, Int4Ptr starts, Int4 numseg, Int4Ptr lens, Int4 numsaps, Uint4Ptr aligncoords);
-Int4 AlnMgrGetStartFromMaster(SeqAlignPtr sap, Int4 start);
-Uint4 AlnMgrGetMasterGapStartForSeg(SeqAlignPtr sap, Int4 which_gap, Uint4Ptr aligncoord);
-Boolean AlnMgrReconcileGaps(Int4Ptr lens, Uint4Ptr aligncoords, Int4 num);
-Boolean AlnMgrMakeMultSegments(AMAlignIndexPtr amaip);
+NLM_EXTERN Boolean AlnMgrMakeFakeMultiple(SeqAlignPtr sap);
+NLM_EXTERN void AlnMgrMakeAlignCoords(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrMergeIntoMSMultByMaster(AMAlignIndexPtr amaip, Int4Ptr lens, Uint4Ptr numseg);
+NLM_EXTERN Boolean AlnMgrMergeSegments(Int4Ptr lens, SeqAlignPtr sap, SeqIdPtr master, Int4Ptr where, Int4 which);
+NLM_EXTERN Boolean AlnMgrFillInStarts(SeqAlignPtr PNTR saparray, Int4Ptr starts, Int4 numseg, Int4Ptr lens, Int4 numsaps, Uint4Ptr aligncoords);
+NLM_EXTERN Int4 AlnMgrGetStartFromMaster(SeqAlignPtr sap, Int4 start);
+NLM_EXTERN Uint4 AlnMgrGetMasterGapStartForSeg(SeqAlignPtr sap, Int4 which_gap, Uint4Ptr aligncoord);
+NLM_EXTERN Boolean AlnMgrReconcileGaps(Int4Ptr lens, Uint4Ptr aligncoords, Int4 num);
+NLM_EXTERN Boolean AlnMgrMakeMultSegments(AMAlignIndexPtr amaip);
 
-Int4 AlnMgrCheckOverlapping(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrCheckOverlapping(SeqAlignPtr sap);
 
 /******************************************************************************
 *
@@ -420,17 +629,17 @@ Int4 AlnMgrCheckOverlapping(SeqAlignPtr sap);
 *  for the merge of the list (for memory allocation in AlnMgrMakeFakeMultiple).
 *
 *******************************************************************************/
-Int4 AlnMgrGetMaxSegments(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrGetMaxSegments(SeqAlignPtr sap);
 
 /*******************************************************************************
 *
 *  Row Management functions:
 *
 *******************************************************************************/
-Int4 AlnMgrGetNumRows(SeqAlignPtr sap);
-Int4 AlnMgrGetMaxRowsForParentPartial(SeqAlignPtr sap);
-Boolean AlnMgrGetRowsForPartial(SeqAlignPtr sap);
-Boolean AlnMgrGetRowsForMasterSlave(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrGetNumRows(SeqAlignPtr sap);
+NLM_EXTERN Int4 AlnMgrGetMaxRowsForParentPartial(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrGetRowsForPartial(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrGetRowsForMasterSlave(SeqAlignPtr sap);
 
 
 /*******************************************************************************
@@ -440,7 +649,7 @@ Boolean AlnMgrGetRowsForMasterSlave(SeqAlignPtr sap);
 *  in which case that SeqIdPtr is returned (if it's the same in all children).
 *
 *******************************************************************************/
-SeqIdPtr AlnMgrFindMaster(SeqAlignPtr sap);
+NLM_EXTERN SeqIdPtr AlnMgrFindMaster(SeqAlignPtr sap);
 
 /*******************************************************************************
 *
@@ -449,15 +658,52 @@ SeqIdPtr AlnMgrFindMaster(SeqAlignPtr sap);
 *  or once and only one in the seqalign if a child is given.
 *
 *******************************************************************************/
-Boolean AlnMgrCheckRealMaster(SeqAlignPtr sap, SeqIdPtr master);
+NLM_EXTERN Boolean AlnMgrCheckRealMaster(SeqAlignPtr sap, SeqIdPtr master);
 
-void AlnMgrSetMaster(SeqAlignPtr sap, SeqIdPtr master);
-void AlnMgrMakeMasterPlus(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrMakeSegmentedMasterSlave(SeqAlignPtr sap);
+NLM_EXTERN int LIBCALLBACK AlnMgrCompareAMS(VoidPtr base, VoidPtr large_son);
+NLM_EXTERN int LIBCALLBACK AlnMgrCompareMasterAMS(VoidPtr base, VoidPtr large_son);
 
-SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master, Int4 from, Int4 to);
+NLM_EXTERN Boolean AlnMgrForceMasterSlave(SeqAlignPtr sap);
+
+NLM_EXTERN void AlnMgrSetMaster(SeqAlignPtr sap, SeqIdPtr master);
+NLM_EXTERN void AlnMgrMakeMasterPlus(SeqAlignPtr sap);
+
+NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master, Int4 from, Int4 to);
+
+/********************************************************************************
+*
+*   viewer and editor management functions  
+* 
+********************************************************************************/ 
+
+NLM_EXTERN SeqAlignPtr AlnMgrCopyIndexedParentSeqAlign(SeqAlignPtr sap);
+NLM_EXTERN RowSourcePtr AlnMgrCopyRowSource(RowSourcePtr rsp);
+NLM_EXTERN AMAlignDatPtr AlnMgrCopyamadp(AMAlignDatPtr amadp, SeqAlignPtr sap_tmp, SeqAlignPtr seg_head);
+NLM_EXTERN SeqAlignIndexPtr AlnMgrCopyIndexesForChildSeqAlign(SeqAlignPtr sap);
+NLM_EXTERN SASeqDatPtr  AlnMgrCopySASeqDat(SASeqDatPtr ssdp);
+NLM_EXTERN SeqAlignPtr AlnMgrCopyAndIndexSingleAlignment(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrCopyIndexedParentIntoSap(SeqAlignPtr sap, SeqAlignPtr target);
+NLM_EXTERN Boolean AlnMgrDeleteChildByPointer(SeqAlignPtr parent, SeqAlignPtr child);
+NLM_EXTERN void AlnMgrDeleteRow(SeqAlignPtr sap, Int4 row);
+
+/********************************************************************************
+*
+*   SeqAlign types  
+* 
+********************************************************************************/ 
+NLM_EXTERN  Boolean AlnMgrIsSAPDiscAli(SeqAlignPtr sap);
+
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif

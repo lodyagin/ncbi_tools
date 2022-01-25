@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.26 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.28  1999/11/12 23:06:56  kans
+* DoLoadNamedUidList takes Int4 num argument
+*
+* Revision 6.27  1999/11/04 15:53:20  kans
+* raised version number for public release
+*
 * Revision 6.26  1999/08/27 15:59:09  kans
 * removed obsolete load and save uid list commands
 *
@@ -181,7 +187,7 @@
 
 #include <entrez.h>
 
-#define ENTREZ_APP_VERSION "7.00"
+#define ENTREZ_APP_VERSION "7.05"
 
 static ForM  termListForm = NULL;
 static ForM  docSumForm = NULL;
@@ -1083,7 +1089,7 @@ static void DoRetrieveDocuments (ForM f, Int2 num, Int2 parents, Int4Ptr uids, I
   RetrieveDocuments (docSumForm, num, parents, uids, db);
 }
 
-static void DoLoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db)
+static void DoLoadNamedUidList (ForM f, CharPtr term, Int4 num, Int4Ptr uids, Int2 db)
 
 {
   LoadNamedUidList (termListForm, term, num, uids, db);

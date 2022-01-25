@@ -8,6 +8,9 @@
 /************************************************************/ 
 /*
 * $Log: prunebsc.c,v $
+* Revision 6.2  1999/11/06 15:56:15  addess
+* got rid of two useless lines of code
+*
 * Revision 6.1  1999/05/07 20:01:09  kans
 * renaming prunebiostruc to prunebsc
 *
@@ -329,7 +332,7 @@ static BiostrucModelPtr PruneModel(BiostrucModelPtr bsmp, ValNodePtr pvnIds, Int
       numatoms = atmp->number_of_ptrs;
       molidx = (Boolean *)MemNew(numatoms * sizeof(Boolean));
      
-      for (index = 0, pvnMolId = atmp->molecule_ids; index < numatoms,
+      for (index = 0, pvnMolId = atmp->molecule_ids;
            pvnMolId != NULL; index++, pvnMolId = pvnMolId->next)
       {
         pvnId = pvnIds;
@@ -576,7 +579,6 @@ BiostrucPtr LIBCALL PruneBiostruc(BiostrucPtr bsp, CharPtr chain)
       if (!bsp2->chemical_graph->molecule_graphs->next)
       {
         bsp2->chemical_graph->molecule_graphs->next = het;
-        bsp2->chemical_graph->molecule_graphs->next->id;
         currenthet = bsp2->chemical_graph->molecule_graphs->next;
         ValNodeAddInt(&pvnIds, 0, currenthet->id);
         het = het->next;

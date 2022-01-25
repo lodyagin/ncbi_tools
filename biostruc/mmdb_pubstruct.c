@@ -1,4 +1,4 @@
-/*  $Id: mmdb_pubstruct.c,v 6.2 1999/08/02 19:50:51 kimelman Exp $
+/*  $Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: mmdb_pubstruct.c,v 6.2 1999/08/02 19:50:51 kimelman Exp $
+* File Name:  $Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $
 *
 * File Description: Defines MMDB access using sybase retrival.
 *                   
@@ -33,6 +33,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdb_pubstruct.c,v $
+* Revision 6.3  1999/12/01 23:27:26  kimelman
+* added guards to avoid repeatable connect/disconnect
+*
 * Revision 6.2  1999/08/02 19:50:51  kimelman
 * keep connection alive foor mmdbsrv & vastsrv sessions
 *
@@ -64,6 +67,7 @@
 #include <assert.h>
 
 
+static int  pubstruct_init=0;
 static Char pubstruct[PATH_MAX];
 static ps_handle_t db = NULL;
 
@@ -86,7 +90,9 @@ MMDBEvalPDB (CharPtr str)
     if(is_mmdb)
       id=atol(eval);
   }
+  MMDBInit();
   id = PubStruct_pdb2mmdb1(db, eval);
+  MMDBFini();
   return  id;
 }
 
@@ -101,13 +107,15 @@ MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
   char       *item;
   Int4        sat_key   = 0;
   Int4        state     = 0;
-  char       *dbserver = (pubstruct[0]?pubstruct:NULL);
+  /*   char       *dbserver = (pubstruct[0]?pubstruct:NULL); */
+
+  MMDBInit();
 
   /*
    * THE following block should be defined ONLY for server which show up internal blob revisions in DB
    */
 #ifdef INTERNAL_SERVER
-                          /* printf("MMDBBiostrucGet_pubstruct(%s,%d)\n",dbserver,uid); */
+  /* printf("MMDBBiostrucGet_pubstruct(%s,%d)\n",dbserver,uid); */
   if(WWWFindName(info, "sat_key") >=0) 
     {
       index = WWWFindName(info, "sat_key");
@@ -139,21 +147,28 @@ MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
   else if (state==0)
     aip = PubStruct_viewasn1(db, uid);
 
-  if(!aip)
-    return NULL;
-  
-  pbs = BiostrucAsnGet(aip, NULL,  mdlLvl,  maxModels);
-  PubStruct_closeasn (aip,1);
+  if(aip)
+    {
+      pbs = BiostrucAsnGet(aip, NULL,  mdlLvl,  maxModels);
+      PubStruct_closeasn (aip,1);
+    }
+  MMDBFini();
   return pbs;
 }
 
 Boolean LIBCALL
 MMDBInit (void)
 {
-  GetAppParam("mmdb", "MMDB", "PubStruct", "", pubstruct, sizeof(pubstruct));
-  if (pubstruct[0]==0) {
-    strcpy(pubstruct,"PUBSEQ_OS:PubStruct=anyone,allowed");
-  }
+  pubstruct_init++;
+  if(db)
+    return TRUE;
+  if(pubstruct_init==1)
+    {
+      GetAppParam("mmdb", "MMDB", "PubStruct", "", pubstruct, sizeof(pubstruct));
+      if (pubstruct[0]==0) {
+        strcpy(pubstruct,"PUBSEQ_OS:PubStruct=anyone,allowed");
+      }
+    }
   db = PubStruct_connect(pubstruct);
   if(!db)
     {
@@ -166,13 +181,19 @@ MMDBInit (void)
 void LIBCALL
 MMDBFini (void)
 {
+  pubstruct_init--;
+  if(pubstruct_init>0)
+    return;
   if(db)
-    PubStruct_disconnect(db);
+    {
+      PubStruct_disconnect(db);
+      db = NULL;
+    }
   return;
 }
 
 CharPtr LIBCALL
 MMDB_configuration(void)
 {
-  return "Version:\t$Id: mmdb_pubstruct.c,v 6.2 1999/08/02 19:50:51 kimelman Exp $\nConfiguration: PubStruct" ;
+  return "Version:\t$Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $\nConfiguration: PubStruct" ;
 }

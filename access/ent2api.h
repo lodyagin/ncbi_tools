@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.3 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -45,6 +45,7 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <objent2.h>
+#include <connectn.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -59,9 +60,32 @@ extern "C" {
 #endif
 
 
+/* utility functions */
+
 NLM_EXTERN void EntrezSetProgramName (
   CharPtr progname
 );
+
+/* connection functions */
+
+NLM_EXTERN CONN EntrezOpenConnection (
+  void
+);
+
+NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
+  CONN conn
+);
+
+/*
+ EntrezSynchronousQuery opens connection, sends
+ Entrez2Request ASN.1 query, and waits for reply
+*/
+
+NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
+  Entrez2RequestPtr e2rq
+);
+
+/* request creation functions */
 
 NLM_EXTERN Entrez2IdListPtr EntrezCreateEntrezIdList (
   CharPtr db,
@@ -174,6 +198,44 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
   Int4 uid
 );
 
+/* reply extraction functions */
+
+NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2BooleanReplyPtr EntrezExtractBooleanReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2DocsumListPtr EntrezExtractDocsumReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Int4 EntrezExtractTermPosReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2TermListPtr EntrezExtractTermListReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2TermNodePtr EntrezExtractTermNodeReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2LinkSetPtr EntrezExtractLinksReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2IdListPtr EntrezExtractLinkedReply (
+  Entrez2ReplyPtr e2ry
+);
+
+NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
+  Entrez2ReplyPtr e2ry
+);
+
 
 #ifdef __cplusplus
 }
@@ -187,3 +249,4 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
 #endif
 
 #endif /* _ENT2API_ */
+

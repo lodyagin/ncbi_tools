@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.14 1999/08/23 19:14:34 vakatov Exp $
+* $Id: ncbierr.c,v 6.15 1999/10/01 14:41:39 kans Exp $
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.15  1999/10/01 14:41:39  kans
+* added SEV_REJECT between SEV_ERROR and SEV_FATAL
+*
 * Revision 6.14  1999/08/23 19:14:34  vakatov
 * Let SEV_MAX not be an exception among the "SEV_*"
 *
@@ -229,10 +232,10 @@ typedef struct AppErrInfo *AppErrInfoPtr;
 static char * _szPropKey = "_AppErrInfo";
 
 static char * _szSevKey [SEV_MAX + 1] = {
-  "", "SEV_INFO", "SEV_WARNING", "SEV_ERROR", "SEV_FATAL", "SEV_MAX"};
+  "", "SEV_INFO", "SEV_WARNING", "SEV_ERROR", "SEV_REJECT", "SEV_FATAL", "SEV_MAX"};
 
 static char * _szSevDef [SEV_MAX + 1] = {
-  "", "NOTE:", "WARNING:", "ERROR:", "FATAL ERROR:", "FATAL ERROR:" };
+  "", "NOTE:", "WARNING:", "ERROR:", "REJECT:", "FATAL ERROR:", "FATAL ERROR:" };
 
 static char * _szSeverity[SEV_MAX + 1];
 

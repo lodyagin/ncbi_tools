@@ -773,8 +773,7 @@ static Boolean ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLoc
 static Boolean ApplyNewSeqFeat (ValNodePtr vnpfeat, Int4 stoptransl, Boolean keep_protID)
 {
   BioseqPtr        target_bsp;
-  ValNodePtr       vnpf,
-                   vnp;
+  ValNodePtr       vnpf;
   ApplyFormData    af;
   SelEdStructPtr   sesp;
   SeqFeatPtr       sfp;
@@ -941,7 +940,7 @@ static Boolean ApplyNewSeqFeat (ValNodePtr vnpfeat, Int4 stoptransl, Boolean kee
 ***
 **********************************************************************/
 
-static void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, Uint2 target_entityID, SeqEntryPtr target_sep, ValNodePtr seqfeat, Uint1 gap_choice)
+NLM_EXTERN void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, Uint2 target_entityID, SeqEntryPtr target_sep, ValNodePtr seqfeat, Uint1 gap_choice)
 {
   BioseqPtr        target_bsp;
   SeqFeatPtr       source_sfp;
@@ -1000,7 +999,6 @@ static void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, 
 
 NLM_EXTERN void PropagateFeatureByApply (PropaStructPtr psp)
 {
-  SeqEntryPtr      top_source_sep;
   BioseqPtr        target_bsp;
   SeqFeatPtr       source_sfp, 
                    source_dup;
@@ -1064,8 +1062,13 @@ NLM_EXTERN void PropagateFeatureByApply (PropaStructPtr psp)
               }
            }
         }
-        /* top_source_sep = GetTopSeqEntryForEntityID (psp->source_entityID);
-        ObjMgrFree (OBJ_SEQENTRY, (Pointer)top_source_sep); */
+/* ************
+{{
+  SeqEntryPtr      top_source_sep;
+        top_source_sep = GetTopSeqEntryForEntityID (psp->source_entityID);
+        ObjMgrFree (OBJ_SEQENTRY, (Pointer)top_source_sep); 
+}}
+********** */
         ObjMgrFreeByEntityID (psp->source_entityID);
         val = ApplyNewSeqFeat (vnpfeat, psp->stoptransl, psp->keep_protID);
      }
@@ -1097,8 +1100,8 @@ NLM_EXTERN PropaStructPtr CreatePropaStruc (SeqIdPtr target_id,
   {
         psp = (PropaStructPtr) MemNew (sizeof (PropaStruct));
         psp->sap=SeqAnnotForSeqAlign(salp);
-        source_sep = SeqMgrGetSeqEntryForData ((Pointer)source_bsp);
-        psp->source_entityID = SeqMgrGetEntityIDForSeqEntry (source_sep);
+        psp->source_sep = SeqMgrGetSeqEntryForData ((Pointer)source_bsp);
+        psp->source_entityID = SeqMgrGetEntityIDForSeqEntry (psp->source_sep);
         psp->source_bspitemID = GetItemIDGivenPointer (psp->source_entityID, 
                                                OBJ_BIOSEQ, source_bsp);
 
@@ -1108,16 +1111,19 @@ NLM_EXTERN PropaStructPtr CreatePropaStruc (SeqIdPtr target_id,
                                                OBJ_BIOSEQ, target_bsp);
 
         source_slp = SeqLocIntNew (0, source_bsp->length-1, Seq_strand_plus, source_id);
+        psp->source_seqfeat = NULL;
         psp->source_seqfeat = CollectFeatureForEditor (source_slp, 
                                       psp->source_seqfeat, psp->source_entityID,
                                       psp->source_bspitemID, NULL, TRUE);
         target_slp = SeqLocIntNew (0, target_bsp->length-1, Seq_strand_plus, 
                                       target_id);
+        psp->target_seqfeat = NULL;
         psp->target_seqfeat = CollectFeatureForEditor (target_slp, 
                                       psp->target_seqfeat, psp->target_entityID, 
                                       psp->target_bsp_itemID, NULL, TRUE);
         BioseqUnlock (target_bsp); 
         BioseqUnlock (source_bsp); 
+/*** TODO free source_slp, target_slp ********/
   }
   return psp;
 }

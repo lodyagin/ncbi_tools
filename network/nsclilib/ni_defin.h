@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *
@@ -48,6 +48,9 @@
 *
 * RCS Modification History:
 * $Log: ni_defin.h,v $
+* Revision 6.1  1999/11/23 21:43:30  vakatov
+* [WIN32] Always #define NETP_INET_WSOCK for Win32
+*
 * Revision 6.0  1997/08/25 18:38:29  madden
 * Revision changed to 6.0
 *
@@ -137,6 +140,9 @@
 #define LOG_SOCKET(x,y) NI_LogSocket(x,y,__FILE__,__LINE__)
 #endif /* NI_NOSOCK_LOGGING */
 
+#if defined(WIN32)  &&  !defined(NETP_INET_WSOCK)
+#  define NETP_INET_WSOCK
+#endif
 
 #ifdef NETP_INET_WSOCK
 /* ** the following was extracted from <winsock.h> ** */

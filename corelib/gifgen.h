@@ -46,6 +46,13 @@
  *       GIF generator header file
  *
  * $Log: gifgen.h,v $
+ * Revision 6.9  1999/10/26 15:47:35  vakatov
+ * + gdImageGifEx(), gdFWrite -- to specify an alternative GIF write func
+ * (with V.Chetvernin)
+ *
+ * Revision 6.8  1999/10/20 19:49:21  vakatov
+ * + gdImageGetDimensions()
+ *
  * Revision 6.7  1999/08/13 21:23:09  vakatov
  * Renamed "gd[Set|Get]ImageColor()" to "gdImage[Set|Get]Color()"
  *
@@ -248,7 +255,22 @@ NLM_EXTERN int        gdImageColorExact     (gdImagePtr im,
                                              int r, int g, int b);
 NLM_EXTERN void       gdImageColorDeallocate   (gdImagePtr im, int color);
 NLM_EXTERN void       gdImageColorTransparent  (gdImagePtr im, int color);
-NLM_EXTERN void       gdImageGif            (gdImagePtr im, FILE *out);
+
+/* Write out "size" bytes starting from address "buf".
+ * Return the # of succesfully written bytes. */
+typedef size_t (*gdFWrite)(const void* buf, size_t size, void* userdata);
+
+/* Write in GIF format using write callback "func"
+ */
+NLM_EXTERN void       gdImageGifEx          (gdImagePtr im,
+                                             gdFWrite   func,
+                                             void*      userdata);
+
+/* Write the image to file stream "out" in GIF format
+ */
+NLM_EXTERN void       gdImageGif            (gdImagePtr im, FILE* out);
+
+
 NLM_EXTERN void       gdImageArc            (gdImagePtr im, int cx, int cy,
                                              int w, int h,
                                              int s, int e, int color);
@@ -286,6 +308,11 @@ NLM_EXTERN void       gdImageCopyResized    (gdImagePtr dst,
 NLM_EXTERN int        gdImageSetClip        (gdImagePtr im,
                                              const gdRect *clip,
                                              gdRect *old_clip);
+
+
+/* Get the image's width and height. ("width" and "height" can be NULLs).
+ */
+NLM_EXTERN void gdImageGetDimensions(gdImagePtr im, int* width, int* height);
 
 
 /* Determine a minimal rectangular area "rect" inside image "im" such that

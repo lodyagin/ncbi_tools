@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.24 $
+* $Revision: 6.30 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,24 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.30  2000/01/07 22:58:04  kans
+* added dnaStop field to map sig_peptide, etc., onto DNA coordinates to choose proper flatfile segment for display
+*
+* Revision 6.29  2000/01/07 02:32:31  kans
+* added SeqMgrGetSfpProductList for access to bspextra->prodlisthead
+*
+* Revision 6.28  2000/01/07 02:17:45  kans
+* removed featsBySap, added prodlisthead, to support gather by get_feats_product
+*
+* Revision 6.27  2000/01/05 19:16:46  kans
+* added featsBySap field to be used to speed up targeted feature gather
+*
+* Revision 6.26  1999/12/27 19:57:45  kans
+* binary search needed precomputed index to handle overlapping gene (mRNA, CDS, etc.) features, so after binary search it can back up to the appropriate first feature to check in a linear scan
+*
+* Revision 6.25  1999/11/05 19:53:15  kans
+* SeqMgrIndexAlignments called by SeqMgrIndexFeatures, but can now be called separately even if you do not index features
+*
 * Revision 6.24  1999/08/25 22:08:00  kans
 * made MakeReversedSeqIdString public
 *
@@ -726,6 +744,7 @@ typedef struct smfeatitem {
   Int4         right;    /* extreme right on bioseq (second copy spanning origin is > length) */
   Int4Ptr      ivals;    /* array of start/stop pairs */
   Int2         numivals; /* number of start/stop pairs in ivals array */
+  Int4         dnaStop;  /* last stop on protein mapped to DNA coordinate for flatfile */
   Boolean      partialL; /* left end is partial */
   Boolean      partialR; /* right end is partial */
   Boolean      farloc;   /* location has an accession not packaged in entity */
@@ -734,6 +753,7 @@ typedef struct smfeatitem {
   Uint2        itemID;   /* storing itemID so no need to gather again */
   Boolean      ignore;   /* ignore this second copy of a feature spanning the origin */
   Uint2        index;    /* position index needed for SeqMgrGetDesiredFeature */
+  Int4         overlap;  /* for xxxByPos, index of leftmost candidate that overlaps this */
 } SMFeatItem, PNTR SMFeatItemPtr;
 
 typedef struct smfeatblock {
@@ -759,6 +779,7 @@ typedef struct bioseqextra {
   ObjMgrDataPtr       omdp;
   SeqFeatPtr          protFeat;       /* protein feature on whole protein bioseq gives name */
   SeqFeatPtr          cdsOrRnaFeat;   /* cds or rna whose product points to this bioseq */
+  ValNodePtr          prodlisthead;   /* all features whose product points to this bioseq */
 
   SMFeatBlockPtr      featlisthead;   /* linked list of SMFeatItem chunks, arrays point to elements */
   SMFeatBlockPtr      featlisttail;   /* current block in linked list of SMFeatItem chunks */
@@ -819,11 +840,14 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrFreeBioseqExtraFunc PROTO((Pointer data));
 *     to top of entity containing index to all feature itemIDs regardless of
 *     what bioseq they are indexed on
 *   SeqMgrGetDesiredFeature in explore.h is the preferred public function
+*   SeqMgrGetSfpProductList returns linked list of features whose sfp->product
+*     points to the given bioseq
 *
 *****************************************************************************/
 
 NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemPtr PROTO((SeqFeatPtr sfp));
 NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID, BioseqPtr bsp, Uint2 itemID));
+NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetSfpProductList (BioseqPtr bsp);
 
 /*****************************************************************************
 *
@@ -833,6 +857,14 @@ NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID,
 *****************************************************************************/
 
 NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip));
+
+/*****************************************************************************
+*
+*   SeqMgrIndexAlignments called by SeqMgrIndexFeatures, can be called separately
+*
+*****************************************************************************/
+
+NLM_EXTERN void LIBCALL SeqMgrIndexAlignments (Uint2 entityID);
 
 /*****************************************************************************
 *

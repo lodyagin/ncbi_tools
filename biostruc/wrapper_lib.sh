@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# $Id: wrapper_lib.sh,v 6.5 1999/06/11 20:12:47 kimelman Exp $
+# $Id: wrapper_lib.sh,v 6.10 1999/12/06 23:10:24 kimelman Exp $
 #
 # this is CGI handler wrapper library. It works as a membrane between httpd and actual
 # cgi program and allow to run new technological version of such program in
@@ -32,7 +32,7 @@ basic_settings() {
         chmod a+rw $TMPdir
     fi
 
-    trap atexit 0,1
+    trap atexit 0 1 15 9 
 }
 
 res_name() {
@@ -53,6 +53,7 @@ run_cgi() {
   esac
   [ x$stats = x ] || timep="/usr/bin/time -p"
   (
+     trap '' 0 1 15 9
      cd `dirname $prg`
      $timep ./`basename $prg` $options <$input_file >$res_fname 2>$res_fname.2
   )  &
@@ -79,13 +80,27 @@ prestart_checks() {
   fi
 }
 
-run_all() {
+run_one() {
+    texec=$1
+    res_name $texec
+    if true ; then
+        input_file=$res_fname.in
+        cat >$input_file
+        rf=$res_fname
+        $texec $options 2>$res_fname.2 >$rf <$input_file
+        cat $rf
+    else
+        rf=/dev/null
+        $texec $options 2>$res_fname.2
+        
+    fi
+    rcode=$?             # end get it return code and
+    if [ $rcode -ne 0 ] ; then 
+      report_failure $texec $rcode $rf $res_fname.2
+    fi
+}
 
-    # stage 0 : store input stream
-    check_executables $*
-
-    prestart_checks
-
+run_2plus() {
     # stage A : store input stream
     res_name input
     input_file=$res_fname
@@ -103,8 +118,9 @@ run_all() {
     # wait for termination of all of them
     #
     main_result=
+    main_result_rc=0
 
-    for execname in $EXECs ; do # for every runned version of sgi program
+    for execname in $EXECs ; do # for every runned version of cgi program
         # get it's process id
         set -- $waitedID
         wid=$1 ; shift ; waitedID="$*"
@@ -114,13 +130,15 @@ run_all() {
         proc_res $execname   # and process the result
         if [ $rcode -ne 0 ] ; then 
             # report mmdbsrv.REAL failure
-            report_failure $execname $rcode $res_fname $res_fname.2 
+            report_failure $execname $rcode $res_fname $res_fname.2
+            main_result_rc=$rcode
             continue
         fi
         if [ x$main_result = x ] ; then
             main_result=$res_fname
             # output result of first program
             cat $main_result
+            main_result_rc=0
             continue
         fi
         # here we have: a: 0 result code & more than 1 output 
@@ -130,6 +148,29 @@ run_all() {
             report_failure $execname $rcode $res_fname.diff $res_fname.2
         fi
     done
+    if [ x$main_result = x -a $main_result_rc = 158 ] ; then
+        printf "Content-type: text/html\n\n"
+        printf "<HTML><BODY bgcolor=\"#FDA51F\" color=\"#000000\">\n"
+        printf "<PRE>\n"
+        printf "Your request exceeded maximum allowed CPU usage.<BR>\n"
+        printf "Please, return back and make smaller request.<BR>\n"
+        printf "</PRE>\n"
+        printf "</BODY></HTML>\n"
+    fi
+}
+
+run_all() {
+
+    # stage 0 : 
+    check_executables $*
+
+    prestart_checks
+
+    if [ `echo $EXECs | wc -w ` -eq 1 ] ; then 
+        run_one $EXECs
+    else
+        run_2plus
+    fi
 }
 
 #
@@ -265,11 +306,16 @@ EOF
 report_failure() { # $execname $rcode $res_fname $res_fname.2
     rf_execn=$1
     rf_code=$2 
+    if [ x$rf_code = x158 ] ; then
+        ttl="Exceeded cpu limit: killed"
+    else
+        ttl="failed with status $rf_code"
+    fi 
     rf_rn=$3
     rf_rn2=$4
     get_victim $rf_execn
     mail $victim <<EOF
-Subject: $rf_execn failed with status $rf_code
+Subject: $rf_execn $ttl
 
 HTTP_HOST=${HTTP_HOST}
 HTTP_REFERER=${HTTP_REFERER}
@@ -279,7 +325,8 @@ REQUEST_METHOD=${REQUEST_METHOD}
 REQUEST_URI=${REQUEST_URI}
 SYBASE=${SYBASE}
 COMMAND_LINE=${options}
-
+`df -k /tmp` - /tmp
+`df -k /var/tmp` - /var/tmp
 ====================================================================
 Input file:
 `cat $input_file`

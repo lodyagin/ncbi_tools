@@ -1,5 +1,5 @@
 #! /bin/sh
-#  $Id: make-tool.sh,v 6.5 1999/06/14 17:59:48 kimelman Exp $
+#  $Id: make-tool.sh,v 6.6 1999/12/06 18:31:22 kimelman Exp $
 #  $RCSfile: make-tool.sh,v $
 
 progname=$0
@@ -153,11 +153,11 @@ case $1 in
         else
             ext=NEW
         fi
-	cp $fname ${webdir}/$fname.$ext
+	cp $fname ${webdir}/$fname
 	cd ${webdir} 
         [ -r $fbase ] || ln -s wrapper.sh $fbase ;
         [ ! -r $fbase.$ext ] || rm -f $fbase.$ext
-        ln -s $fname.$ext $fbase.$ext
+        ln -s $fname $fbase.$ext
 	whoami >${fbase}.recepient
         ;;
     --test)
@@ -165,9 +165,9 @@ case $1 in
         binary=$3
         mode=$4
         if [ x$mode = xproduction ] ; then
-            ext=REAL
+            ext=
         else
-            ext=NEW
+            ext=.NEW
         fi
         cmdline="$5"
         cd $webdir
@@ -175,7 +175,7 @@ case $1 in
         SYBASE=$SYBASE_conf
         LANG=
         export SYBASE LANG
-        echo "" | ./$binary.$ext "$cmdline" >/dev/null
+        echo "" | ./$binary$ext "$cmdline" >/dev/null
         ;;
     *)
         usage $*

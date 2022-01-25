@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/19/93
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: mapping.c,v $
+* Revision 6.4  1999/10/04 17:16:31  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.3  1999/08/06 19:29:45  vakatov
 * "NormalizeBox()":  bottom >= top!
 *
@@ -47,8 +50,8 @@
 * ==========================================================================
 */
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_
@@ -72,7 +75,7 @@
 *****************************************************************************/
 
 extern void Nlm_LoadBox
-(BoxPtr box, Int4 left, Int4 top, Int4 right, Int4 bottom)
+(Nlm_BoxPtr box, Int4 left, Int4 top, Int4 right, Int4 bottom)
 {
   if (box != NULL) {
     box->left = left;
@@ -83,7 +86,7 @@ extern void Nlm_LoadBox
 }
 
 extern void Nlm_OutsetBox
-(BoxPtr box, Int4 dX, Int4 dY )
+(Nlm_BoxPtr box, Int4 dX, Int4 dY )
 {
   register BoxPtr boxP;
 
@@ -102,7 +105,7 @@ extern void Nlm_OutsetBox
 *****************************************************************************/
 
 extern void Nlm_MapWorldPointToPixel
-(PointPtr pt, PntPtr pnt, ScalePtr scale)
+(Nlm_PointPtr pt, Nlm_PntPtr pnt, Nlm_ScalePtr scale)
 {
   if (pt != NULL && pnt != NULL && scale != NULL) {
     pt->x = (Nlm_Int2)((scale->offsetX + pnt->x) / scale->scaleX);
@@ -118,7 +121,7 @@ extern void Nlm_MapWorldPointToPixel
 *****************************************************************************/
 
 extern void Nlm_MapPixelPointToWorld
-(PntPtr pnt, PointPtr pt, ScalePtr scale)
+(Nlm_PntPtr pnt, Nlm_PointPtr pt, Nlm_ScalePtr scale)
 {
   if (pnt != NULL && pt != NULL && scale != NULL) {
     pnt->x = (Int4)pt->x * scale->scaleX - scale->offsetX;
@@ -127,7 +130,7 @@ extern void Nlm_MapPixelPointToWorld
 }
 
 extern void Nlm_MapWorldBoxToRect
-(RectPtr r, BoxPtr box, ScalePtr scale )
+(Nlm_RectPtr r, Nlm_BoxPtr box, Nlm_ScalePtr scale )
 {
   Int4 curScale;
 
@@ -142,7 +145,7 @@ extern void Nlm_MapWorldBoxToRect
 }
 
 extern void Nlm_MapRectToWorldBox
-(BoxPtr box, RectPtr r, ScalePtr scale)
+(Nlm_BoxPtr box, Nlm_RectPtr r, Nlm_ScalePtr scale)
 {
   Int4 curScale;
 
@@ -188,7 +191,7 @@ static Int4 MapY (Int4 pntY, VScalePtr scale)
 *****************************************************************************/
 
 extern Boolean BoxInViewport
-(RectPtr rct, BoxPtr box, VScalePtr scale)
+(Nlm_RectPtr rct, Nlm_BoxPtr box, VScalePtr scale)
 {
   if (!box  ||  !scale  ||
       MAX(box->left, scale->port.left) > MIN(box->right, scale->port.right)  ||
@@ -216,7 +219,7 @@ extern Boolean BoxInViewport
 *
 *****************************************************************************/
 extern Boolean LineIntoVPort
-(Int4Ptr x1, Int4Ptr y1, Int4Ptr x2, Int4Ptr y2, BoxPtr worldWindow)
+(Int4Ptr x1, Int4Ptr y1, Int4Ptr x2, Int4Ptr y2, Nlm_BoxPtr worldWindow)
 {
   register Int4 ax;
   register Int4 bx;
@@ -425,7 +428,7 @@ extern Boolean LineIntoVPort
 *
 *****************************************************************************/
 extern Boolean IsLineInVPort
-(Int4 x1, Int4 y1, Int4 x2, Int4 y2, BoxPtr worldWindow) 
+(Int4 x1, Int4 y1, Int4 x2, Int4 y2, Nlm_BoxPtr worldWindow) 
 {
   register Int4 ax;
   BoxInfo  winW;
@@ -503,7 +506,7 @@ extern Boolean IsLineInVPort
 *****************************************************************************/
 
 extern void NormalizeBox
-(BoxInfo* box)
+(Nlm_BoxInfo* box)
 {
   Int4  swap;
   if (box->left > box->right) {

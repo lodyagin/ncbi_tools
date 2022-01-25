@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -70,6 +70,8 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
                                     BaseFormPtr bfp, FormActnFunc revalProc,
                                     Boolean okaytosetviewtarget);
 extern void ShowValidateWindow (void);
+extern void ShowValidateDoc (void);
+extern void HideValidateDoc (void);
 extern void RepopulateValidateFilter (void);
 extern void ClearValidateWindow (void);
 extern void FreeValidateWindow (void);

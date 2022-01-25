@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnfeat.h60";
+static char * asnfilename = "asnfeat.h62";
 static AsnValxNode avnx[168] = {
     {2,NULL,0,0.0,NULL } ,
     {20,"other" ,0,0.0,&avnx[2] } ,
@@ -416,7 +416,7 @@ static AsnType atx[233] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[84],NULL,0,NULL} };
 
 static AsnModule ampx[8] = {
-  { "NCBI-Seqfeat" , "asnfeat.h60",&atx[0],NULL,&ampx[1],0,0} ,
+  { "NCBI-Seqfeat" , "asnfeat.h62",&atx[0],NULL,&ampx[1],0,0} ,
   { "NCBI-Rsite" , NULL,&atx[152],NULL,&ampx[2],0,0} ,
   { "NCBI-RNA" , NULL,&atx[121],NULL,&ampx[3],0,0} ,
   { "NCBI-Gene" , NULL,&atx[16],NULL,&ampx[4],0,0} ,

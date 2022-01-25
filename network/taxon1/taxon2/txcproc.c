@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcproc.c,v $
+* Revision 1.6  1999/12/20 17:05:17  soussov
+* taxid4gi added
+*
 * Revision 1.5  1998/07/27 16:55:08  soussov
 * Subtree version
 *
@@ -92,7 +95,7 @@ Boolean txc_connect2Server(CharPtr srv_name, CharPtr usr, CharPtr passwd, CharPt
     CS_BOOL val= CS_TRUE;
     CS_INT t_out= 40;
 
-    cs_ctx_alloc(CS_VERSION_110, &te_context);
+    cs_ctx_global(CS_VERSION_110, &te_context);
     ct_init(te_context, CS_VERSION_110);
     ct_config(te_context, CS_SET, CS_TIMEOUT, &t_out, CS_UNUSED, NULL);
 
@@ -2496,4 +2499,96 @@ Int4 tax_SSgetNodes(Uint1 stype, CharPtr sname, Uint1 mode, Int4Ptr* ids)
 
     *ids= p_id;
     return nof_nodes;   
+}
+
+Int4 tax_getTaxId4GI(Int4 gi)
+{
+    CS_COMMAND *cmd;
+    CS_DATAFMT parfmt;
+    CS_INT res_type, rows_read, tax_id= 0;
+    Boolean more_results= TRUE;
+    Boolean more_fetch;
+    int nnn= 64;
+
+    if(ct_cmd_alloc(te_link, &cmd) != CS_SUCCEED) return 0;
+
+    /* build command: tax_getTaxId4GI @gi */
+
+    if(ct_command(cmd, CS_RPC_CMD, "tax_getTaxId4GI", CS_NULLTERM, CS_UNUSED) != CS_SUCCEED) {
+	ct_cmd_drop(cmd);
+	return 0;
+    }
+        
+    memset(&parfmt, 0, sizeof(CS_DATAFMT));
+    strcpy(parfmt.name, "@gi");
+    parfmt.namelen= CS_NULLTERM;
+    parfmt.datatype= CS_INT_TYPE;
+    parfmt.maxlength= sizeof(Int4);
+    parfmt.status= CS_INPUTVALUE;
+    parfmt.locale= NULL;
+    if(ct_param(cmd, &parfmt, &gi, parfmt.maxlength, CS_UNUSED) != CS_SUCCEED) {
+	ct_cmd_drop(cmd);
+	return 0;
+    }
+
+    /* send this command to server */
+    if(ct_send(cmd) != CS_SUCCEED) {
+	ct_cmd_drop(cmd);
+	return 0;
+    }
+        
+    while(more_results && (--nnn > 0)) {
+	switch(ct_results(cmd, &res_type)) {
+	case CS_FAIL :
+	    if(ct_cancel(NULL, cmd, CS_CANCEL_ALL) != CS_SUCCEED) {
+		ct_close(te_link, CS_FORCE_CLOSE);
+	    }
+	case CS_CANCELED :
+	    ct_cmd_drop(cmd);
+	    return 0;
+
+	case CS_END_RESULTS :
+	    more_results= FALSE;
+	    break;
+
+	case CS_SUCCEED :
+	    if(res_type == CS_STATUS_RESULT) {
+		more_fetch= TRUE;
+		parfmt.datatype= CS_INT_TYPE;
+		parfmt.format= CS_FMT_UNUSED;
+		parfmt.maxlength= 4;
+		parfmt.scale= CS_SRC_VALUE;
+		parfmt.precision= CS_SRC_VALUE;
+		parfmt.count= 1;
+		if(ct_bind(cmd, 1, &parfmt, &tax_id, NULL, NULL) != CS_SUCCEED) break;
+		while(more_fetch) {
+		    switch(ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&rows_read)) {
+		    case CS_SUCCEED :
+			continue;
+
+		    case CS_ROW_FAIL :
+			break;
+
+		    case CS_END_DATA :
+			more_fetch= FALSE;
+			continue;
+
+		    default :
+			/* this is a error */
+			more_fetch= FALSE;
+			if(ct_cancel(NULL, cmd, CS_CANCEL_ALL) != CS_SUCCEED) {
+			    ct_close(te_link, CS_FORCE_CLOSE);
+			}
+			ct_cmd_drop(cmd);
+			return 0;
+		    }
+		}
+	    }
+	    continue;
+
+	default : break;
+	}
+    }
+    ct_cmd_drop(cmd);
+    return tax_id;		
 }

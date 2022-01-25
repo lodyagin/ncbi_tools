@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -40,6 +40,27 @@
 *
 *
 * $Log: objfeat.h,v $
+* Revision 6.8  2000/01/16 19:18:32  kans
+* added specialCleanupFlag field to SeqFeatXref structure
+*
+* Revision 6.7  1999/12/14 17:30:39  ostell
+* changed protoplast to proplastid
+*
+* Revision 6.6  1999/10/06 18:45:27  kans
+* fixed nested comment warning
+*
+* Revision 6.5  1999/10/05 20:23:17  kans
+* fixed typo
+*
+* Revision 6.4  1999/10/05 19:05:45  ostell
+* added comments on BioSource.genome
+*
+* Revision 6.3  1999/09/27 17:48:37  kans
+* using GatherIndex structure
+*
+* Revision 6.2  1999/09/24 23:09:23  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
 * Revision 6.1  1998/06/29 20:31:30  kans
 * explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
 *
@@ -136,6 +157,7 @@ typedef struct seqfeatxref {
     Choice id;      
     Choice data;
     struct seqfeatxref PNTR next;
+    Boolean specialCleanupFlag; /* marks converted gbquals for extra checking within SeriousSeqEntryCleanup */
 } SeqFeatXref, PNTR SeqFeatXrefPtr;
 
 NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefNew PROTO((void));
@@ -208,6 +230,7 @@ typedef struct seqfeat {
 	Boolean pseudo;      /* pseudogene feature ? */
 	CharPtr except_text;   /* explanation of biological exception */
     struct seqfeat PNTR next;
+	GatherIndex idx;      /* internal gather/objmgr tracking fields */
 } SeqFeat, PNTR SeqFeatPtr;
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatNew PROTO((void));
@@ -546,6 +569,31 @@ NLM_EXTERN SubSourcePtr LIBCALL SubSourceFree PROTO((SubSourcePtr ssp));
 NLM_EXTERN Boolean    LIBCALL SubSourceSetAsnWrite PROTO((SubSourcePtr ssp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetFree PROTO((SubSourcePtr ssp));
+
+/******************************
+* BioSource
+    current values for genome are: */
+    /* 0 unknown */
+    /* 1 genomic */
+    /* 2 chloroplast */
+    /* 3 chromoplast */
+    /* 4 kinteoplast */
+    /* 5 mitochondrion */
+    /* 6 plastid */
+    /* 7 macronuclear */
+    /* 8 extrachrom */
+    /* 9 plasmid */
+    /* 10 transposon */
+    /* 11 insertion_seq */
+    /* 12 cyanelle */
+    /* 13 proviral */
+    /* 14 virion */
+        /* Below are new in ASN.1 spec */
+    /* 15 nucleomorph */
+    /* 16 apicoplast */
+    /* 17 leucoplast */
+    /* 18 proplastid */
+
 
 typedef struct biosource {
 	Uint1 genome,

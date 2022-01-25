@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/06/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.11 $
 *
 * File Description: FlatFile Generators for PDB & Kinemage
 *
@@ -44,6 +44,18 @@
 *
 *
 * $Log: mmdbapi3.c,v $
+* Revision 6.11  2000/01/18 22:49:16  lewisg
+* send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
+*
+* Revision 6.10  2000/01/14 21:40:39  lewisg
+* add translucent spheres, ion labels, new cpk, fix misc bugs
+*
+* Revision 6.9  1999/12/22 22:49:20  lewisg
+* fix color bugs: no color in color by domain, selection overrides cpk and temperature
+*
+* Revision 6.8  1999/10/06 16:47:47  addess
+* added line feeds and space filling to END and CONECT reocrds in write pdb function
+*
 * Revision 6.7  1998/08/26 18:02:42  kans
 * fixed -v -fd warnings
 *
@@ -200,8 +212,8 @@ Int4 TempsKine[KIN_COLOR_THERM] = {0,500,1000,1500,2000,2500,3000,3500,4000,5000
 
 
 /* this assigns a color pair for color-by-molecule number */
-Int1 ColorNumKinBB[10] = {0,6,8,4,12,5,9,11,12,15};
-Int1 ColorNumKinSC[10] = {0,7,18,3,13,17,19,10,14,20};
+Int1 ColorNumKinBB[10] = {14,6,8,4,12,5,9,11,12};
+Int1 ColorNumKinSC[10] = {14,7,18,3,13,17,19,10,14,20};
 Int1 ColorNumKinAC[10] = {0,1,2,14,17,6,8,4,1};
 
 
@@ -231,109 +243,109 @@ CharPtr KineColors[KIN_COLOR_MAX] = {
 
 Int1 ElementKinColors[MAX_ELEMENTS]  = {
  	16,
-	15,
-	0,
-	19,
-	14,
-	4,
-	20,
-	5,
-	12,
-	11,
-	0,
-	7,
-	1,
-	17,
-	17,
-	2,
-	9,
-	8,
-	0,
-	6,
-	13,
-	17,
-	17,
-	19,
-	17,
-	14,
-	11,
-	17,
-	17,
-	19,
-	18,
-	17,
-	17,
-	19,
-	19,
-	18,
-	0,
-	6,
-	13,
-	17,
-	17,
-	17,
-	17,
-	17,
-	17,
-	19,
-	19,
-	15,
-	17,
-	17,
-	17,
-	17,
-	19,
-	3,
-	0,
-	6,
-	13,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	11,
-	19,
-	8,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	10,
-	15,
-	1,
-	15,
-	1,
-	1,
-	3,
-	0,
-	1,
-	1,
-	1,
-	1,
-	1,
-	10,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1};
+	15, /* H */
+	15, /* He */
+	15, /* Li */
+	15, /* Be */
+	34, /* B */
+	20, /* C */
+	17, /* N */
+	12, /* O */
+	8, /* F */
+	34, /* Ne */
+	36, /* Na */
+	15, /* Mg */
+	15, /* Al */
+	34, /* Si */
+	11, /* P */
+	19, /* S */
+	8, /* Cl */
+	34, /* Ar */
+	35, /* K */
+	15, /* Ca */
+	15, /* Sc */
+	15, /* Ti */
+	15, /* V */
+	15, /* Cr */
+	15, /* Mn */
+	33, /* Fe */
+	15, /* Co */
+	15, /* Ni */
+	4, /* Cu */
+	15, /* Zn */
+	15, /* Ga */
+	34, /* Ge */
+	34, /* As */
+	34, /* Se */
+	21, /* Br */
+	34, /* Kr */
+	15, /* Rb */
+	15, /* Sr */
+	15, /* Y */
+	15, /* Zr */
+	15, /* Nb */
+	15, /* Mo */
+	15, /* Tc */
+	15, /* Ru */
+	15, /* Rh */
+	15, /* Pd */
+	15, /* Ag */
+	15, /* Cd */
+	15, /* In */
+	15, /* Sn */
+	15, /* Sb */
+	34, /* Te */
+	21, /* I */
+	34, /* Xe */
+	15, /* Cs */
+	15, /* Ba */
+	15, /* La */
+	15, /* Ce */
+	15, /* Pr */
+	15, /* Nd */
+	15, /* Pm */
+	15, /* Sm */
+	15, /* Eu */
+	15, /* Gd */
+	15, /* Tb */
+	15, /* Dy */
+	15, /* Ho */
+	15, /* Er */
+	15, /* Tm */
+	15, /* Yb */
+	15, /* Lu */
+	15, /* Hf */
+	15, /* Ta */
+	15, /* W */
+	15, /* Re */
+	15, /* Os */
+	15, /* Ir */
+	15, /* Pt */
+	19, /* Au */
+	15, /* Hg */
+	15, /* Tl */
+	15, /* Pb */
+	15, /* Bi */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1, /*  */
+	1 /*  */};
 
 
 void LIBCALLBACK WriteAtomOrHet(PFB pfbThis, Int4 iModel,  Int4 iIndex,  Pointer ptr)
@@ -1509,7 +1521,7 @@ void LIBCALLBACK PDBConnect(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr)
 		     if (paldFrom && paldTo)
 			{  /* only does the first one in a model */
 			    /* have to match up above stuff */
-			    fprintf(pFile, "CONECT%5ld%5ld\n",
+			    fprintf(pFile, "CONECT%5ld%5ld                  \n",
 				(long) paldFrom->iUniqueId,
 				(long) paldTo->iUniqueId);
 			    fflush(pFile);
@@ -1525,7 +1537,7 @@ void LIBCALLBACK PDBConnect(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr)
 		     if (paldFrom && paldTo)
 			{  /* only does the first one in a model */
 			    /* have to match up above stuff */
-			    fprintf(pFile, "CONECT%5ld%5ld\n",
+			    fprintf(pFile, "CONECT%5ld%5ld                  \n",
 				(long) paldFrom->iUniqueId,
 				(long) paldTo->iUniqueId);
 			    fflush(pFile);
@@ -1581,7 +1593,7 @@ Int2 LIBCALL WritePDBModelList(PDNMS pdnmsThis,  FILE *pFile,  Int2 iNumModels, 
        {
 	   WritePDBConnect(pdnmsThis, i2Vec[iIndex], pFile);
        }
-    fprintf(pFile, "END");
+    fprintf(pFile, "END\n");
     fflush(pFile);
     return 1;
 }

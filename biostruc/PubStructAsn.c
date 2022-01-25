@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.27 1999/08/02 21:53:12 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.30 1999/12/01 23:25:35 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.30  1999/12/01 23:25:35  kimelman
+ * cleanup handle on no data
+ *
+ * Revision 6.29  1999/11/29 23:29:47  kimelman
+ * bugfix: pending & eos processign at db_close on permanent connection
+ *
+ * Revision 6.28  1999/11/09 17:44:35  kimelman
+ * recovery added for DB timeout promlems
+ *
  * Revision 6.27  1999/08/02 21:53:12  kimelman
  * on fail postprocessing
  *
@@ -222,9 +231,12 @@ pubstruct_db_close(DB_stream_t *db)
           CTlib_TYPERES(restype);
         }
       while ( retcode == CS_SUCCEED );
+      db->pending=0;
+      db->eos=0;
     }
   if(db->close_disabled)
     return;
+
  errexit:
   db->clu.context = NULL; /* avoid cleaning context */
   CTLibDrop(&db->clu);
@@ -266,6 +278,7 @@ pubstruct_db_open(char *server,ps_action_t action)
   if (server == NULL)
     server = DEF_SRV;
   db->pending=0;
+  db->eos=0;
   db->srv = MemNew(strlen(server)+1);
   {
     char *os = strstr(server,"_OS");
@@ -314,9 +327,11 @@ dbio_read(Pointer ptr, CharPtr obuf, Int4 count)
   CS_RETCODE       retcode;
 
   assert(db->action == PS_READ);
-
   if (db->eos)
-    return 0;
+    {
+      ErrPostEx(SEV_INFO,0,0,"Attempt to read after EOS");
+      return 0;
+    }
   CTRUN_POST (ct_get_data(cmd, 1,(CS_TEXT*)obuf,(CS_INT)count, &bytes));
   CTRUN_TYPECODE (retcode,2); /* print result code in debug mode */
   if (bytes < count )
@@ -504,7 +519,7 @@ pubstruct_openblob (DB_stream_t *db, int mmdb_id)
     }
   cmd = db->clu.ctcmd;
 #ifdef DEBUG_MODE
-  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"execute(%s)",buf);
+  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"pubstruct_openblob: execute(%s)",buf);
 #endif
   CTRUN ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
   CTRUN ( ct_send(cmd) );
@@ -528,8 +543,13 @@ pubstruct_openblob (DB_stream_t *db, int mmdb_id)
                   goto loopexit;
                 }
             }
-          if (restype == CS_STATUS_RESULT)
-            goto errexit;
+          if (restype == CS_STATUS_RESULT) {
+            int da = db->close_disabled;
+            db->close_disabled = 1;
+            pubstruct_db_close(db);
+            db->close_disabled = da;
+            return -1; /* no data */
+          }
           CTRUN1( ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT),0);
           CTRUN1 ( ct_results(cmd,&restype),0);
           CTlib_TYPERES(restype);
@@ -772,11 +792,25 @@ pubstruct_openasn (DB_stream_t *db, Int4 *accp,int mmdb_id)
     }
   if ( db->action == PS_READ )
     {
-      if (!pubstruct_openblob(db,mmdb_id))
+      int try=0;
+      int rc;
+      while (try++<10)
         {
-          pubstruct_db_close(db);
-          return NULL;
+          rc = pubstruct_openblob(db,mmdb_id);
+          ErrPostEx(SEV_INFO,0,0,"#######PubStruct openblob(acc=%d;mmdb=%d) = %d (1-ok,-1-no data,0-fail)\n",
+                    db->acc,mmdb_id,rc);
+          if(rc==1) break; /* Normal exit */
+          fprintf(stderr,"#######PubStruct openblob(acc=%d;mmdb=%d) = %d\n",db->acc,mmdb_id,rc);
+          if(rc<0) return NULL;
+          CTLibDisconnect(&db->clu);
+          sleep(2);
+          ErrPostEx(SEV_ERROR, 0, 0,"PubStruct reconnecting");
+          fprintf(stderr,"PubStruct reconnecting");
+          if(!CTLibConnect(&db->clu,NULL))
+            return NULL;
         }
+      if(rc==0)
+        return NULL;
     }
   return pubstruct_openasnio(db);
 }
@@ -1045,6 +1079,7 @@ PubStruct_load(FILE *infile, int state_out, char *server)
     {
       int txt = db->iodesc.total_txtlen;
       aip = pubstruct_newasn (db,(state_out>=0?state_out:-state_out-1),&acc);
+      if(!aip) return 0;
       db->iodesc.total_txtlen = txt;
       if (!PubStruct_closeasn (aip,1))
         return 0;
@@ -1128,7 +1163,7 @@ PubStruct_lookup1(ps_handle_t db,Int4 mmdb,int state)
   CTlib_TYPERES(restype);
   if (restype == CS_STATUS_RESULT)
     {
-      ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT);
+      CTRUN(ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT));
       CTRUN ( ct_results(cmd,&restype));
       CTlib_TYPERES(restype);
     }
@@ -1207,6 +1242,7 @@ PubStruct_pdb2mmdb(char *server,CharPtr pdb)
   db = pubstruct_db_open(server,PS_READ);
   if(!db) return 0;
   mmdb_id = PubStruct_pdb2mmdb1(db,pdb);
+  
   pubstruct_db_close(db);
   return mmdb_id;
 }

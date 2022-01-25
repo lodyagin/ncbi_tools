@@ -587,6 +587,9 @@ SubSourcePtr remove_subtype(SubSourcePtr head, SubSourcePtr x)
 	if (head == NULL) {
 		return NULL;
 	}
+	if (x == NULL) {
+		return SubSourceSetFree (head);
+	}
 	if (x == head) {
 		head = x->next;
 		x->next = NULL;
@@ -610,6 +613,9 @@ OrgModPtr remove_OrgMod(OrgModPtr head, OrgModPtr x)
 	
 	if (head == NULL) {
 		return NULL;
+	}
+	if (x == NULL) {
+		return OrgModSetFree (head);
 	}
 	if (x == head) {
 		head = x->next;
@@ -1245,7 +1251,7 @@ static Boolean get_src (GatherContextPtr gcp)
 			vnp = (ValNodePtr) (gcp->thisitem);
 			if (vnp->choice == Seq_descr_source) {
 				if (vnp->data.ptrvalue != NULL) {
-					new = ValNodeNew(NULL);
+					new = SeqDescrNew(NULL);
 					new = MemCopy(new, vnp, sizeof(ValNode));
 					new->next = NULL;
 					*vnpp = new;

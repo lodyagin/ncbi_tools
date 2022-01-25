@@ -31,6 +31,9 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2pdb.c,v $
+ * Revision 6.9  1999/10/13 20:19:35  zimmerma
+ * DZ: Removed use of temporary files - html output redirected to stdout
+ *
  * Revision 6.8  1999/05/07 13:59:42  zimmerma
  * Changed call to InstBSAnnotSet() to pass Chain and SlaveChain params
  *
@@ -261,35 +264,22 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
       return 0; 
      }		
  
-    								       
-  strcpy(OutputName,GetTempName("vast3")); 
-  if(!(OutputFile = FileOpen(OutputName,WRITE)))
-    {
-       printf("Content-type: text/html\n\n");
-       printf("<h2>Error</h2>\n");
-       printf("Temp File Open Failed At Vast3 WWW-Server<p>\n");
-       CloseMMDBAPI();
-       MMDBFini();
-       VASTFini();
-      exit(1);
-    }
-    
- /* PDB FILE GENERATOR */   
+  /* PDB FILE GENERATOR */   
 
    if (iPDB == 2)
      {
-       fprintf(OutputFile, "Content-type: application/octet-stream\n\n");
+       fprintf(stdout, "Content-type: application/octet-stream\n\n");
      }
    else if (iPDB == 1)
      {
-       fprintf(OutputFile, "Content-type: text/html\n\n");  
-       fprintf(OutputFile, "<HTML><body><pre>\n");
+       fprintf(stdout, "Content-type: text/html\n\n");  
+       fprintf(stdout, "<HTML><body><pre>\n");
      }
    else
      { /* MIME */
-       fprintf(OutputFile,"Content-type: chemical/x-pdb\n\n");
+       fprintf(stdout,"Content-type: chemical/x-pdb\n\n");
      }
-  iTest = WritePDBOneModel(pdnmsSlave, OutputFile,  0);
+  iTest = WritePDBOneModel(pdnmsSlave, stdout,  0);
   
   if (!iTest)
     {
@@ -304,22 +294,16 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
     }
   if (iPDB == 1)
      {
-       fprintf(OutputFile, "</pre></body></HTML>\n"); 
+       fprintf(stdout, "</pre></body></HTML>\n"); 
 
      }
 
   
-  fflush(OutputFile);
-  if (OutputFile != stdout)
-    {
-      fclose(OutputFile);
-      PrintFile(OutputName);
-    }
+  fflush(stdout);
     
   CloseMMDBAPI();
   MMDBFini();
   VASTFini();
-  RemoveTempFiles();   
   return 0;
 }
 

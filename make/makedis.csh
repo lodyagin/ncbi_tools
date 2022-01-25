@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.30 1999/08/23 20:29:01 beloslyu Exp $
+# $Id: makedis.csh,v 1.40 2000/01/31 17:55:34 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -21,7 +21,7 @@
 #  purpose.                                                                
 #                                                                          
 #  Please cite the author in any work or product based on this material.   
-# Author: Karl Sirotkin <sirotkin@ncbi.nlm.nih.gov>
+#  Author: Karl Sirotkin <sirotkin@ncbi.nlm.nih.gov>
 #
 #
 # Script to untar and make the NCBI toolkit on Solaris.
@@ -60,6 +60,10 @@ else
 endif
 
 set os=`uname -s`
+
+#by default any Unix has Motif installed. In case of Linux do a check later.
+set HAVE_MOTIF=1
+
 switch ($os)
 case SunOS:
 	switch (`uname -r`)
@@ -77,11 +81,11 @@ case SunOS:
 	breaksw
 case IRIX*:
 	switch (`uname -r`)
-	case "5.*":
-		set platform=sgi5
-		breaksw
 	case "4.*":
 		set platform=sgi4
+		breaksw
+	case "5.*":
+		set platform=sgi5
 		breaksw
 	case "6.*":
 		set platform=sgi
@@ -96,9 +100,26 @@ case OSF1:
 	breaksw
 case Linux:
 	set platform=linux
+	#check do we have Motif on linux installed
+	set HAVE_MOTIF=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 )
+		if (-d $i/Xm) then
+			set HAVE_MOTIF=1
+			echo Motif found at $i/Xm
+			break
+		endif
+	end
+endif
 	breaksw
 case NetBSD:
 	set platform=netbsd
+	breaksw
+case AIX:
+	set platform=r6k
+	breaksw
+case HP-UX:
+	set platform=hpux
 	breaksw
 default:
 	echo Platform not found : `uname -a`
@@ -124,7 +145,8 @@ eval `sed -e 's/^ *#.*//g' -e 's/\$(\([a-zA-Z_]*\))/\${\1}/g' -e 's/ *= */=/g' -
 unset noglob
 
 cd ncbi/build
-cp ../make/*.unx .
+ln -s ../make/*.unx .
+ln -s ../make/ln-if-absent .
 mv makeall.unx makefile
 
 #  Inherited to this system is the requirement to use:
@@ -135,21 +157,80 @@ mv makeall.unx makefile
 #  BLIB31=libvibnet.a 
 #
 
-set CMD='make $MFLG CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+# if $OPENGL_TARGETS (in <platform>.ncbi.mk) is defined, 
+# then add the appropriate flags, libraries, and binaries for OpenGL apps
+if ("$?OPENGL_TARGETS" == "1") then
+    set OGL_NCBI_LIBS="$OPENGL_NCBI_LIBS"
+    set OGL_INCLUDE="$OPENGL_INCLUDE"
+    set OGL_LIBS="$OPENGL_LIBS"
+    set OGL_TARGETS="$OPENGL_TARGETS"
+else
+    set OGL_NCBI_LIBS=""
+    set OGL_INCLUDE=""
+    set OGL_LIBS=""
+    set OGL_TARGETS=""
+endif
+
+# if LIBPNG_DIR and ZLIB_DIR (in <platform>.ncbi.mk) are defined, 
+# then add the appropriate flags and libraries for PNG support
+if ("$?LIBPNG_DIR" == "1" && "$?ZLIB_DIR" == "1") then
+    set PNG_INCLUDE="-D_PNG -I$LIBPNG_DIR -I$ZLIB_DIR"
+    set PNG_LIBS="-L$LIBPNG_DIR -lpng -L$ZLIB_DIR -lz"
+else
+    set PNG_INCLUDE=""
+    set PNG_LIBS=""
+endif
+
+if ( "$HAVE_MOTIF" == 1 ) then
+	set ALL_VIB=(LIB30=libncbicn3d.a \
+		LIB28=libvibgif.a \
+		LIB4=libvibrant.a \
+		LIB20=libncbidesk.a \
+		$OGL_NCBI_LIBS \
+		VIBFLAG=\"$NCBI_VIBFLAG\" \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS\")
+	set DEMO_VIB=(LIB4=-lvibrant \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
+		VIBFLAG=\"$NCBI_VIBFLAG\")
+	set NET_VIB=(BLIB31=libvibnet.a \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS $OGL_LIBS $PNG_LIBS\" \
+		VIBFLAG=\"$NCBI_VIBFLAG\" \
+		VIB=\"Psequin Nentrez Cn3D udv ddv blastcl3 $OGL_TARGETS\") 
+else # no Motif, build only ascii-based applications
+    set OGL_NCBI_LIBS=""
+    set OGL_INCLUDE=""
+    set OGL_LIBS=""
+    set OGL_TARGETS=""
+
+	set ALL_VIB=()
+	set DEMO_VIB=()
+	set NET_VIB=(VIB=\"blastcl3\") 
+endif
+
+set CMD='make $MFLG \
+   CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE $PNG_INCLUDE\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" \
    SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
-   RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
-   LIB30=libncbicn3d.a LIB28=libvibgif.a LIB4=libvibrant.a \
-   LIB20=libncbidesk.a VIBFLAG=\"$NCBI_VIBFLAG\" all'
+   RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" $ALL_VIB all'
 eval echo $CMD
 eval echo $CMD | sh 
 
 set make_stat = $status
 
+if ( $make_stat != 0 ) then
+	cat <<EoF
+
+Fatal error building NCBI core libraries.
+Please be sure that you have X11 and Motif libraries installed.
+The NCBI toolkit FAQ at ftp://ncbi.nlm.nih.gov/toolbox/FAQ.html may be helpful.
+
+EoF
+	exit 1
+endif
+
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" \
-   VIBLIBS=\"$NCBI_DISTVIBLIBS\" LIB4=-lvibrant VIBFLAG=\"$NCBI_VIBFLAG\"'
+   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" $DEMO_VIB'
 eval echo $CMD
 eval echo $CMD | sh 
 
@@ -166,28 +247,25 @@ rm -f blastall blastpgp seedtop
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\"  \
-   VIBLIBS=\"$NCBI_DISTVIBLIBS\" LIB4=-lvibrant \
    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=$NCBI_MT_OTHERLIBS \
-   VIBFLAG=\"$NCBI_VIBFLAG\" blastall blastpgp seedtop'
+   $DEMO_VIB blastall blastpgp seedtop'
 eval echo $CMD
 eval echo $CMD | sh 
 
 set threaded_demo_stat = $status
 
-set CMD='make $MFLG -f makenet.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+set CMD='make $MFLG -f makenet.unx \
+   CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-   CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
-   VIBFLAG=\"$NCBI_VIBFLAG\" NETENTREZVERSION=\"$NETENTREZVERSION\" \
-   VIB=\"Psequin Nentrez Cn3D powblast pblcmd blastcl3\" \
-   BLIB31=libvibnet.a OTHERLIBS=\"$NCBI_OTHERLIBS\"'
+   CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+   NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
 eval echo $CMD
 eval echo $CMD | sh 
 
 set net_stat = $status
 
-if ($net_stat != 0 || $make_stat != 0 || $demo_stat != 0 || $threaded_demo_stat != 0) then
-
-   echo FAILURE primary make status = $make_stat, demo = $demo_stat, net = $net_stat, threaded_demo_stat = $threaded_demo_stat
+if ($make_stat != 0 || $demo_stat != 0 || $threaded_demo_stat != 0 || $net_stat != 0) then
+   echo FAILURE primary make status = $make_stat, demo = $demo_stat, threaded_demo = $threaded_demo_stat, net = $net_stat
    exit 1
 else
    # we are in ncbi/build directory now. Let us make the VERSION file
@@ -200,8 +278,10 @@ else
 endif
 
 BADPLATFORM:
-  echo 'Your platform is not supported.'
-  echo 'To port ncbi toolkit to your platform consult'
-  echo 'the files platform/*.ncbi.mk'
-
+cat << EoF
+Your platform is not supported.
+To port ncbi toolkit to your platform consult
+the files ./ncbi/platform/*.ncbi.mk
+The NCBI toolkit FAQ at ftp://ncbi.nlm.nih.gov/toolbox/FAQ.html may be useful.
+EoF
 exit 0

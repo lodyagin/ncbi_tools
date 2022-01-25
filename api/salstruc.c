@@ -29,6 +29,18 @@ o                            PUBLIC DOMAIN NOTICE
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.9  1999/11/24 21:24:29  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 6.8  1999/10/07 21:51:02  chappey
+* fixes compilation warnings
+*
+* Revision 6.7  1999/10/07 06:17:43  chappey
+* move multseqalign_from_pairseqalign from salstruc.c to salsap.c
+*
+* Revision 6.6  1999/09/30 19:00:15  chappey
+* remove unused parameter in SeqAlignTranslate
+*
 * Revision 6.5  1999/09/07 00:18:35  chappey
 * Setting right scope when collecting (gather) features for Bioseq
 *
@@ -352,7 +364,7 @@ o                            PUBLIC DOMAIN NOTICE
 
 
 
-extern SelStructPtr BufferFree (SelStructPtr ssp)
+NLM_EXTERN SelStructPtr BufferFree (SelStructPtr ssp)
 {
   SelStructPtr   ssptmp, ssptmp2, next;
   SelEdStructPtr sep;
@@ -390,7 +402,7 @@ extern SelStructPtr BufferFree (SelStructPtr ssp)
 ***    SetupDataBuffer
 ***    minbufferlength = (Int4) ( WINPERBUF * MAXCharLine * j );
 *******************************************************************/
-extern EditAlignDataPtr SetupDataBuffer (EditAlignDataPtr adp)
+NLM_EXTERN EditAlignDataPtr SetupDataBuffer (EditAlignDataPtr adp)
 {
   if (adp==NULL) 
      return NULL;
@@ -405,7 +417,7 @@ extern EditAlignDataPtr SetupDataBuffer (EditAlignDataPtr adp)
 ***    SetupDataPanel
 ***
 *******************************************************************/
-extern EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp)
+NLM_EXTERN EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp)
 {
   Int4  j;
   Int4  lg;
@@ -678,7 +690,7 @@ static CharPtr get_substring (CharPtr str, Int4 drw_start, Int4 drw_width)
   return strp;
 }
 
-extern CharPtr next_notemptyline (ValNodePtr anp_list, ValNodePtr linebuff, Int2 numberalignline, Int2 *index, Int4 start, Int4 *drw_width, TextAlignBufPtr *tdp, AlignNodePtr *anp)
+NLM_EXTERN CharPtr next_notemptyline (ValNodePtr anp_list, ValNodePtr linebuff, Int2 numberalignline, Int2 *index, Int4 start, Int4 *drw_width, TextAlignBufPtr *tdp, AlignNodePtr *anp)
 {
   TextAlignBufPtr tdptmp;
   ValNodePtr      vnp;
@@ -799,7 +811,7 @@ static void GetPerCol (EditAlignDataPtr adp, Int4 hoffset)
 /*********************************************************************
 ***  is_feature_to_buffer
 *********************************************************************/
-extern SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list)
+NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list)
 {
   SelEdStructPtr  cds;
   SeqIdPtr        sip;
@@ -840,7 +852,7 @@ extern SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID,
 }
 
 /******************************************************************/
-extern ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boolean include_stop)
+NLM_EXTERN ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boolean include_stop)
 {
   ByteStorePtr  bs;
   ValNodePtr    code;
@@ -887,7 +899,7 @@ extern ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boole
 }
 
 /******************************************************************/
-static CharPtr SeqAlignTranslate (SeqAlignPtr salp, Uint2 entityID, Int4 from, Int4 to, Uint1 codonbase, SeqIdPtr sip, Int2 seqnumber, Uint1 strand, ValNodePtr sqlocs)
+static CharPtr SeqAlignTranslate (SeqAlignPtr salp, Uint2 entityID, Int4 from, Int4 to, Uint1 codonbase, SeqIdPtr sip, Uint1 strand, ValNodePtr sqlocs)
 {
   SeqLocPtr    slp;
   SeqIntPtr    sit;
@@ -1095,7 +1107,7 @@ static SelStructPtr MakeRf (SelStructPtr buffer, Uint2 entityID, Uint2 itemID, U
   SelEdStructPtr  rf;
   CharPtr         trans;
 
-  trans = (CharPtr) SeqAlignTranslate (salp, entityID, fromseq, toseq, (Uint1)(j), bspsip, adp->seqnumber, strand, adp->sqloc_list);
+  trans = (CharPtr) SeqAlignTranslate (salp, entityID, fromseq, toseq, (Uint1)(j), bspsip, strand, adp->sqloc_list);
   if (trans != NULL) {
      if ( adp->prot_mode == PUTPROT ) {
         if (strand == Seq_strand_minus) trans = prot_to_rputprot (trans);
@@ -1199,7 +1211,7 @@ static void arrange_buffer (EditAlignDataPtr adp)
          ssp =new_seledstruct(LINE0,EDITDEF_SCB,EDITDEF_SCB,0,LINE0,from, to, NULL, 0, FALSE, NULL, NULL, 0, 1);
          addssp (&(adp->buffer), 0, EDITDEF_SCB, (Pointer) ssp, EDITDEF_SCB);
   }
-  bufstr =next_notemptyline (adp->anp_list, adp->linebuff, adp->numberalignline, &index, from, &length, &tdp, &anp);
+  bufstr =next_notemptyline (adp->anp_list, adp->linebuff, (Int2)adp->numberalignline, &index, from, &length, &tdp, &anp);
   if ( index > adp->numberalignline ) {
          return;
   }
@@ -1291,7 +1303,7 @@ WriteLog ("ARRANGFEATE %d %d   %d %d %d %d  %d   %d  \n", entityID, itemID, tdp-
          index++;
          length = adp->bufferlength;
          bufstr = next_notemptyline (adp->anp_list, adp->linebuff, 
-                     adp->numberalignline, &index, from, &length, &tdp, &anp);
+                     (Int2)adp->numberalignline, &index, from, &length, &tdp, &anp);
   }
   adp->buffertail = adp->buffer;
   if (adp->buffertail !=NULL)
@@ -1642,7 +1654,7 @@ static Int4 get_tot_line (EditAlignDataPtr adp, Int4 line_len, Int4 left, Int4 r
   return line;
 }
  
-extern void data_collect_arrange (EditAlignDataPtr adp, Boolean recollect)
+NLM_EXTERN void data_collect_arrange (EditAlignDataPtr adp, Boolean recollect)
 {
   ValNodePtr         list = NULL, 
                      vnp = NULL;
@@ -1799,7 +1811,7 @@ static void print_line (FILE *fout, CharPtr label, CharPtr txt, Int2 leftmargin,
 
   txtp = txt;
   if (is_emptyline) {
-     for (j=0; j< StringLen(txt); j++, txtp++) 
+     for (j=0; j< (Int4)StringLen(txt); j++, txtp++) 
         if (*txtp != '-') { 
            goOn=TRUE; break; }
      if (!goOn) return;
@@ -1849,7 +1861,7 @@ static CharPtr restrict_todiff (CharPtr str1, CharPtr str0)
 /************************************************
 ****  get_master sequence  
 ************************************************/
-extern CharPtr get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN CharPtr get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
 {
   ValNodePtr      vnp;
   TextAlignBufPtr tap;
@@ -1877,7 +1889,7 @@ extern CharPtr get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Ui
 /************************************************************************
 ***  read_buffer_fromalignnode
 *************************************************************************/
-extern Boolean read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *linebuff, Int4 bufferstart, Int4 minbufferlength, Int2 *numberalignline)
+NLM_EXTERN Boolean read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *linebuff, Int4 bufferstart, Int4 minbufferlength, Int2 *numberalignline)
 {
   AlignNodePtr  anp;
   ValNodePtr    curr;      /*for the list of AlignNodePtr*/
@@ -1974,7 +1986,7 @@ static void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
   }
 }
 
-extern Boolean BioseqTrimN (BioseqPtr bsp, SeqEntryPtr sep)
+NLM_EXTERN Boolean BioseqTrimN (BioseqPtr bsp, SeqEntryPtr sep)
 {
   SeqIdPtr      sip;
   SeqLocPtr     slp1 = NULL,
@@ -2053,7 +2065,7 @@ static Boolean is_newfeat_static (ValNodePtr feathead, Uint2 eID, Uint2 subtype,
   return TRUE;
 }
 
-extern ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Uint2 itemsubtype)
+NLM_EXTERN ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Uint2 itemsubtype)
 {
   SelEdStructPtr   psp, 
                    prepsp, tmp;
@@ -2347,7 +2359,7 @@ static Boolean slpfeatcollfunc(GatherContextPtr gcp)
 *   csop: the option for gathering the features
 *   
 ******************************************************************/
-extern ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat)
+NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat)
 {
   CollectSeqOption cs_option;
   GatherScope      gs;
@@ -2451,7 +2463,7 @@ static void print_firstlinePHYLIP (FILE *fout, Int2 seqnumber, Int4 length)
   fprintf (fout, "%7d%5d\n", seqnumber, length);
 }
 
-extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ssp, Int2 leftmargin, Int4 printfrom, Int4 printto, Boolean html_option)
+NLM_EXTERN void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ssp, Int2 leftmargin, Int4 printfrom, Int4 printto, Boolean html_option)
 {
   ValNodePtr      linebuff=NULL;
   TextAlignBufPtr tdp;
@@ -2494,7 +2506,7 @@ extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ss
      index = 1;
      widthtmp = (Int4)width;
      bufstr = next_notemptyline (adp->anp_list, linebuff, numberalignline, 
-                                &index, 0, &widthtmp, &tdp, &anp);
+                                &index, (Int4)0, &widthtmp, &tdp, &anp);
      while ( index <= numberalignline && bufstr != NULL) 
      {
          if ( OBJ_(tdp->feattype) == OBJ_BIOSEQ ) {
@@ -2528,7 +2540,7 @@ extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ss
             }
             for (j=0; j<3;j++) {
                if (rf_on (adp->params, entityID, itemID, j))  {
-                   trans = (CharPtr) SeqAlignTranslate (salp, entityID, from, from + widthtmp - 1,  (Uint1)(j), bspsip, adp->seqnumber, Seq_strand_plus, adp->sqloc_list);
+                   trans = (CharPtr) SeqAlignTranslate (salp, entityID, from, from + widthtmp - 1,  (Uint1)(j), bspsip, Seq_strand_plus, adp->sqloc_list);
                    if ( adp->prot_mode == PUTPROT )
                       trans = prot_to_putprot (trans);
                    print_line (fout, "RF >", trans, leftmargin, adp->columnpcell, NULL, html_option, FALSE);
@@ -2536,7 +2548,7 @@ extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ss
             }
             for (j=3, k=2; j<6;j++, k--) {
                if (rf_on (adp->params, entityID, itemID, j))  {
-                   trans = (CharPtr) SeqAlignTranslate (salp, entityID, from, from + widthtmp - 1,  (Uint1)k, bspsip, adp->seqnumber, Seq_strand_minus, adp->sqloc_list);
+                   trans = (CharPtr) SeqAlignTranslate (salp, entityID, from, from + widthtmp - 1,  (Uint1)k, bspsip, Seq_strand_minus, adp->sqloc_list);
                    if ( adp->prot_mode == PUTPROT )
                       trans = prot_to_rputprot (trans);
                    print_line (fout, "RF <", trans, leftmargin, adp->columnpcell, NULL, html_option, FALSE);
@@ -2546,7 +2558,7 @@ extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ss
          index++;
          widthtmp = width;
          bufstr = next_notemptyline (adp->anp_list, linebuff, numberalignline, 
-                                     &index, 0, &widthtmp, &tdp, &anp);
+                                     &index, (Int4)0, &widthtmp, &tdp, &anp);
      }
      firstline = FALSE;
      from += width;
@@ -2557,7 +2569,7 @@ extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ss
   return;
 }
 
-extern void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f)
+NLM_EXTERN void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f)
 {
   BioseqPtr bsp;
   CharPtr   str,
@@ -2606,502 +2618,6 @@ extern void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f)
       }
      }
   }
-}
-
-
-extern SeqAnnotPtr multseqalign_from_pairseqalign (SeqAlignPtr salp)
-{
-  SeqAlignPtr      salptmp,
-                   tmp;
-  DenseSegPtr      dsp = NULL;
-  SeqPortPtr       spp;
-  SeqLocPtr        slp;
-  SeqIdPtr         sip, 
-                   siphead, siptmp, 
-                   sipcur;
-  BioseqPtr        bsp;
-  CharPtr          bufferin[500];
-  CharPtr          bufferout[500];
-  CharPtr          buffertmp[2];
-  Int4Ptr          starttmp;
-  Int4Ptr          lenp;
-  Uint1Ptr         strandp;
-
-  Int4             algfrom, algto, alglens;
-  Int4             seqfrom, seqto;
-  Int4             cur;
-  Int4             dsp_len, bsp_len, sum_lens;
-  Int4             max_lens = 0;
-  Int4             seqoffset;
-  Int4             gapoffset;
-  Int4             gaptotal;
-  Int4             step = SALSALENLIMIT;
-  Int2             curnseq;
-  Int2             j;
-  Int4             k, k1, k2, k3;
-  Char             c1, c2;
-
-  ValNodePtr       vnp;
-  ValNodePtr       vnpfrom;
-  ValNodePtr       vnpstrand;
-  SeqAnnotPtr      sap;
- 
-  Int4             letter;
-  Uint1            strandtmp = Seq_strand_unknown;
-  Boolean          strand_nonull;
-  Boolean          ok;
-  CharPtr       str;
-
-  if (salp==NULL)
-     return NULL;
-
-  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next) {
-     if (salptmp->type > 0 && salptmp->segtype==2) {
-        dsp = (DenseSegPtr) salptmp->segs;
-        break;
-     }
-  }  
-  if (dsp==NULL)
-     return NULL;
-  siptmp = SeqIdDup (dsp->ids);
-  bsp = BioseqLockById (siptmp);
-  SeqIdFree (siptmp);
-  if (bsp == NULL) {
-     return NULL;
-  }
-  bsp_len = bsp->length;
-  sip = SeqIdFindBest(bsp->id, 0);
-  BioseqUnlock (bsp);
-
-  /*----- check if not all sequences start with gaps ----*/
-  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next) {
-     if (salptmp->type > 0 && salptmp->segtype==2) {
-	dsp = (DenseSegPtr) salptmp->segs;
-        for (j=0, starttmp=dsp->starts; j<dsp->dim; j++, starttmp++)
-           if ( *starttmp > -1) 
-              break;
-        ok = (Boolean) (j < dsp->dim);
-        if (!ok)
-           break;
-     }
-  }
-  if (!ok)
-     return NULL;
-  /*---- find longest seqalign --------*/
-  sum_lens = 0;
-  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next) {
-     if (salptmp->type > 0 && salptmp->segtype==2) {
-        dsp_len = SeqAlignStart(salptmp, 0) + SeqAlignLength (salptmp);
-        if (dsp_len > sum_lens)
-           sum_lens = dsp_len; 
-     }
-  }  
-  if (sum_lens > SALSALENLIMIT) {
-     ErrPostEx (SEV_ERROR, 0, 0, "Too long alignment.\n Wait for next Sequin version");
-     return NULL;
-  }
-  step = 2*sum_lens;
-  step = MIN ((Int4)step, (Int4)SALSALENLIMIT);
-  for (j=0; j<2; j++) 
-  {
-     str = (CharPtr)MemNew ((size_t) ((step+10) * sizeof(Char)));
-     buffertmp[j] = str;
-     for (k=0; k<step; k++) buffertmp[j][k] = '-';
-     str = (CharPtr)MemNew ((size_t) ((step+10) * sizeof(Char)));
-     bufferout[j] = str;
-     for (k=0; k<step; k++) bufferout[j][k] = '-';
-     str = (CharPtr)MemNew ((size_t) ((step+10) * sizeof(Char)));
-     bufferin[j] = str;
-     for (k=0; k<step; k++) bufferin[j][k] = '-';
-  }  
-  siphead = SeqIdDup (sip);
-  sipcur = siphead;
-  vnpstrand = NULL;
-  vnpfrom = NULL;
-  ValNodeAddInt (&vnpfrom, 1, (Int4) 0);
-
-  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next) 
-     if (salptmp->type > 0 && salptmp->segtype==2) 
-        break;
-
-  /**************** if 1rst sequence start with gaps in one alignment ***/
-  gapoffset = gaptotal = 0;
-  for (tmp=salptmp, j=0; tmp!=NULL; tmp=tmp->next, j++) {
-     if (tmp->type > 0 && tmp->segtype==2) {
-        dsp = (DenseSegPtr) tmp->segs;
-        if (*(dsp->starts) < 0) { 
-           if (j==0)
-              gapoffset = *(dsp->lens);
-           if (*(dsp->lens) > gaptotal) {
-              gaptotal = *(dsp->lens);
-           }
-        }
-     }
-  }
-  if (gaptotal > 0) {
-     if (gaptotal <= gapoffset)
-        gapoffset = gaptotal - gapoffset; 
-  }
-  algfrom = 0;
-  algto = 1;
-  for (cur = algfrom; cur < algto; cur += 2*step)
-  {
-     curnseq = 2;
-     dsp = (DenseSegPtr) salptmp->segs;
-     seqoffset = *(dsp->starts);
-     strand_nonull = (Boolean) (dsp->strands != NULL);
-     if (strand_nonull)
-        strandp = dsp->strands;
-     else
-        strandtmp = Seq_strand_unknown;
-     for (sip = dsp->ids, j=0; sip!=NULL; sip=sip->next, j++)
-     {
-        starttmp = dsp->starts;
-        if (j==0) {
-           seqfrom = 0;
-        } else {
-           starttmp += j;
-           seqfrom = *starttmp;
-        }
-        lenp = dsp->lens;
-        dsp_len = 0;
-        sum_lens = 0;
-        for(k=0; k < dsp->numseg; k++, lenp++, starttmp += dsp->dim) {
-           if ( *starttmp >= 0 ) dsp_len += *lenp;
-           sum_lens += *lenp;
-        }
-        siptmp = SeqIdDup (sip);
-        bsp = BioseqLockById (siptmp);
-        SeqIdFree (siptmp);
-        if (bsp == NULL) {
-           return NULL;
-        }
-        seqto = MIN ((Int4) (seqfrom + step), (Int4) (bsp->length -1));
-        if ( j != 0 ) {
-           siptmp = SeqIdDup(SeqIdFindBest(bsp->id, 0));
-           sipcur->next = siptmp;
-           sipcur = siptmp;
-           starttmp = dsp->starts;
-           starttmp += j;
-           lenp = dsp->lens;
-           for(k=0; k < dsp->numseg; k++, lenp++, starttmp += dsp->dim) 
-              if ( *starttmp >= 0 ) break;
-           if (strand_nonull && *strandp==Seq_strand_minus)
-              ValNodeAddInt (&vnpfrom, 1, (Int4) (*starttmp+*lenp));
-           else 
-              ValNodeAddInt (&vnpfrom, 1, (Int4) *starttmp);
-        }
-        BioseqUnlock (bsp);
-        if (strand_nonull)
-           strandtmp = *strandp;
-        slp = SeqLocIntNew (0, seqto, strandtmp, sip);
-        if ( slp == NULL) {
-           return NULL;
-        }
-        spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-        SeqLocFree (slp);
-/**
-        SeqIdWrite (sip, strLog, PRINTID_FASTA_LONG, 120);
-        if (spp!=NULL) WriteLog("mergesalp2 %s\n", strLog);
-        else WriteLog("PRINTFspp NULL\n");
-        WriteLog("1>  %ld  %ld    %ld %ld  > %ld   \n", dsp_len, sum_lens, seqto, seqoffset, seqfrom);
-**/
-        if (seqoffset < 0) seqoffset = 0;  /*!!!!!!!!!!!!!!!!!!!!*/
-
-        if ( j == 0 && seqoffset > seqfrom) {
-           seqfrom = ReadBufferFromSep (spp, bufferin[j], (Int4)seqfrom,
-                                         (Int4)(seqfrom + seqoffset), 0);
-        }
-/**
-WriteLog ("3> %d  %d   %ld  %ld \n", j, seqfrom, sum_lens, seqfrom + sum_lens);
-**/
-        alglens = readbuff_fromseqalign (spp, salptmp, j, bufferin[j], seqfrom, seqfrom + sum_lens, seqoffset+gapoffset, strandtmp);
-        if (alglens == 0) {
-           return NULL;
-        }
-/**
-        WriteLog("4>  %d  %ld   %ld %ld   %ld < %ld   %d\n", j, alglens, sum_lens, seqfrom+sum_lens, seqfrom + dsp_len, bsp_len, strandtmp);
-**/
-        if ( j == 0 && (seqfrom + dsp_len) < bsp_len) {
-           alglens = ReadBufferFromSep (spp, bufferin[j], 
-                           (Int4)(seqfrom + dsp_len), (Int4)bsp_len, alglens);
-           bufferin[j][alglens] = '-';
-        }
-        else { 
-           for (k = alglens; k < step; k++) 
-              if (bufferin[j][k] != '-') bufferin[j][k] = '-';
-        }
-        SeqPortFree(spp);
-        ValNodeAddInt (&vnpstrand, 1, (Int4)(strandtmp));
-        if (strand_nonull)
-           strandp++;
-     }
-     for (salptmp = salptmp->next; salptmp != NULL; salptmp = salptmp->next)
-     {
-      if (salptmp->type > 0 && salptmp->segtype==2)
-      {
-/**
-WriteLog ("\n\nCURRENT ALIGN %d\n", curnseq);
-**/
-       dsp = (DenseSegPtr) salptmp->segs;
-       seqoffset = *(dsp->starts);
-       if (seqoffset < 0) {
-          gapoffset = gaptotal - *(dsp->lens);
-       }
-       else 
-          gapoffset = 0;
-       strand_nonull = (Boolean) (dsp->strands != NULL);
-       if (strand_nonull)
-           strandp = dsp->strands;
-       else
-           strandtmp = Seq_strand_unknown;
-       for (sip = dsp->ids, j=0; sip!=NULL; sip=sip->next, j++)
-       {
-           dsp = (DenseSegPtr) salptmp->segs;
-           for (k=0; k<step; k++) 
-              buffertmp[j][k] = '-';
-           starttmp = dsp->starts;
-           starttmp += j;
-           if (j == 0) seqfrom = 0;
-           else seqfrom = *starttmp;
-           lenp = dsp->lens;
-           dsp_len = 0;
-           sum_lens = 0;
-           for(k=0; k < dsp->numseg; k++, lenp++, starttmp += dsp->dim) {
-              if ( *starttmp >= 0 ) 
-                 dsp_len += *lenp;
-              sum_lens += *lenp;
-           }
-           siptmp = SeqIdDup (sip);
-           bsp = BioseqLockById (siptmp);
-           SeqIdFree (siptmp);
-           if (bsp == NULL){
-              return NULL;
-           }
-           seqto = MIN ((Int4) (seqfrom + step), (Int4) (bsp->length -1));
-           if ( j != 0 ) {
-              siptmp = SeqIdDup(SeqIdFindBest(bsp->id, 0));
-              sipcur->next = siptmp;
-              sipcur = siptmp;
-              starttmp = dsp->starts;
-              starttmp += j;
-              lenp = dsp->lens;
-              for(k=0; k < dsp->numseg; k++, lenp++, starttmp += dsp->dim) 
-                 if ( *starttmp >= 0 ) break;
-              if (strand_nonull && *strandp==Seq_strand_minus)
-                 ValNodeAddInt (&vnpfrom, 1, (Int4) (*starttmp+*lenp));
-              else 
-                 ValNodeAddInt (&vnpfrom, 1, (Int4) *starttmp);
-           }
-           BioseqUnlock (bsp);
-           if (strand_nonull)
-              strandtmp = *strandp;
-           slp = SeqLocIntNew (0, seqto, strandtmp, sip);
-           if ( slp == NULL) {
-              return NULL;
-           }
-           spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-           SeqLocFree (slp);
-/**
-           SeqIdWrite (sip, strLog, PRINTID_FASTA_LONG, 120);
-           if (spp!=NULL) WriteLog ("mergesalp2 %s\n", strLog);
-           else WriteLog ("spp NULL\n");
-           WriteLog ("1>  %ld  %ld  from %ld  to %ld  offset %ld  \n", dsp_len, sum_lens, seqfrom, seqto, seqoffset);
-**/
-           if (seqoffset < 0) seqoffset = 0;  /*!!!!!!!!!!!!!!!!!!!!*/
-           if ( j == 0 && seqoffset > seqfrom) {
-              seqfrom = ReadBufferFromSep (spp, buffertmp[j], (Int4)seqfrom,
-                                         (Int4)(seqfrom + seqoffset), 0);
-           }
-/**
-           if ( j == 0)
-             WriteLog ("2> %d   %ld  %ld \n", seqfrom, sum_lens, seqfrom + sum_lens);
-           else
-             WriteLog ("2> %d   %ld  %ld \n", seqfrom, sum_lens, seqfrom + sum_lens);
-**/
-           alglens = readbuff_fromseqalign (spp, salptmp, j, buffertmp[j], seqfrom, seqfrom + sum_lens, (seqoffset + gapoffset), strandtmp);
-           if (alglens == 0) {
-              return NULL;
-           }
-/**
-           WriteLog ("3> %d  %c%c%c \n", j, buffertmp[j][0], buffertmp[j][1], buffertmp[j][2]);
-           WriteLog ("4>  %ld     %ld %ld  %ld < %ld\n", alglens, sum_lens, sum_lens + seqfrom, seqfrom + dsp_len, bsp_len);
-**/
-           if ( j == 0 && (seqfrom + dsp_len) < bsp_len) {
-              alglens = ReadBufferFromSep (spp, buffertmp[j], (Int4)(seqfrom + dsp_len), (Int4)bsp_len, alglens);
-           }
-           else { 
-              for (k = alglens; k < step; k++) 
-                 if (buffertmp[j][k] != '-') buffertmp[j][k] = '-';
-           }
-           SeqPortFree(spp);
-           if (j>0)
-              ValNodeAddInt (&vnpstrand, 1, (Int4)strandtmp);
-           if (strand_nonull)
-              strandp++;
-       }
-       str = (CharPtr)MemNew ((size_t) ((step+10) * sizeof(Char)));
-       bufferout [curnseq] = str;
-       for (j=0; j < curnseq + 1; j++) {
-           for (k=0; k<step; k++) 
-              bufferout [j][k] = '-';
-       }  
-       k1=k2=k3=letter=0;
-       while ( k1 < step && k2 < step && k3 < step)
-       {
-           c1 = bufferin[0][k1];
-           c2 = buffertmp[0][k2];
-           if ((c1 != '-' && c2 != '-') || (c1 == '-' && c2 == '-')) {
-              if (c1 != '-' && c2 != '-' && c1 != c2) {
-/**
-                 WriteLog ("ERROR %d [%c]  %d [%c] %c%c%c%c%c  %c%c%c%c%c", k1, c1, k2, c2, c1,bufferin[0][k1+1], bufferin[0][k1+2], bufferin[0][k1+3], bufferin[0][k1+4], c2,buffertmp[0][k2+1], buffertmp[0][k2+2], buffertmp[0][k2+3], buffertmp[0][k2+4]); 
-**/
-                 break;
-              }
-              for (j = 0; j < curnseq; ++j) {
-                 bufferout[j][k3] = bufferin[j][k1];
-              }
-              for (j = 1; j < 2; ++j) {
-                 bufferout[curnseq + j -1][k3] = buffertmp[j][k2];
-              }
-              if (bufferout[0][k3] !='-') letter++;
-/***
-              WriteLog ("%d %d>%c ", (int)k3, (int)letter, c2);
-              for (j=0; j<curnseq + 1; j++) WriteLog ("%c", bufferout[j][k3]);
-              WriteLog ("\n");
-***/
-              k1++;
-              k2++;
-              k3++;
-           }
-           else if (c1 == '-' && c2 != '-') {
-              for (j = 0; j < curnseq; ++j) {
-                 bufferout[j][k3] = bufferin[j][k1];
-              }
-              if (bufferout[0][k3] !='-') letter++;
-/***
-              WriteLog ("%d %d*%c ", (int)k3, (int)letter, c2);
-              for (j=0; j<curnseq + 1; j++) WriteLog ("%c", bufferout[j][k3]);
-              WriteLog ("\n");
-***/
-              k1++;
-              k3++;
-           }
-           else if (c1 != '-' && c2 == '-') {
-              for (j = 1; j < 2; ++j) {
-                 bufferout[curnseq + j -1][k3] = buffertmp[j][k2];
-              }
-              if (bufferout[0][k3] !='-') letter++;
-/***
-              WriteLog ("%d %d<%c ", (int)k3, (int)letter,c2);
-              for (j=0; j<curnseq + 1; j++) WriteLog ("%c", bufferout[j][k3]);
-              WriteLog ("\n");
-***/
-              k2++;
-              k3++;
-           }
-       }
-       if (k3 > 0) {
-           if (k3 > max_lens) 
-              max_lens = k3;
-           for (j=0; j < curnseq ; j++) {
-              for (k=0; k<step; k++) {
-                 bufferin[j][k] = bufferout[j][k];
-              }
-           }
-           str = (CharPtr)MemNew ((size_t) ((step+10) * sizeof(Char)));
-           bufferin[j] = str;
-           for (k=0; k<step; k++) {
-              bufferin[j][k] = bufferout[j][k] ;
-           }
-           curnseq++;
-       }
-      }
-     }
-  }
-  MemFree (buffertmp[0]);
-  MemFree (buffertmp[1]);
-  for (j=0; j < curnseq ; j++) 
-     MemFree (bufferout[j]);
-  
-  vnp = NULL;
-  for (j=0; j < curnseq; j++) {
-     ValNodeAddPointer (&vnp, 0, (Pointer)(bufferin[j])); 
-  }
-  sap = LocalAlignToSeqAnnotDimn (vnp, siphead, vnpfrom, curnseq, max_lens, vnpstrand, TRUE);
-  sipcur = siphead;
-  while (sipcur) {
-     siptmp = sipcur->next;
-     SeqIdFree (sipcur);
-     sipcur = siptmp;
-  }
-  ValNodeFreeData (vnp);
-  ValNodeFree (vnpfrom);
-  ValNodeFree (vnpstrand);
-  return sap;
-}
-
-extern SeqAlignPtr PairSeqAlign2MultiSeqAlign (SeqAlignPtr salp)
-{
-  SeqAnnotPtr sap;
-  SeqAlignPtr salptmp = NULL;
-
-  if (salp!=NULL) 
-  {
-   if (is_dim2seqalign (salp)) 
-   {
-     sap = multseqalign_from_pairseqalign (salp);
-     if (sap!=NULL && sap->type==2) 
-     {
-        salptmp = (SeqAlignPtr) sap->data;
-        sap->data = NULL;
-        SeqAnnotFree (sap);
-/******************************** DO NOT FREE Original SeqAlign anymore 
-        salp = SeqAlignSetFree (salp);
-****************************************/
-     }
-   }
-  }
-  return salptmp;   
-}
-
-
-extern Int2 LIBCALLBACK MultSeqAlignFromPairSeqAlign (Pointer data)
-
-{
-  OMProcControlPtr  ompcp;
-  SeqAnnotPtr       sap;
-  SeqAlignPtr       salp;
-  Uint2             entityID;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
-  switch (ompcp->input_itemtype) {
-    case OBJ_SEQALIGN :
-      break;
-    case 0 :
-      return OM_MSG_RET_ERROR;
-    default :
-      return OM_MSG_RET_ERROR;
-  }
-  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
-  salp = (SeqAlignPtr)ompcp->input_data;
-  if (salp == NULL) return OM_MSG_RET_ERROR;
-  if (is_dim2seqalign (salp))  {
-     SortSeqAlign (&salp);
-     sap = multseqalign_from_pairseqalign (salp);
-  } else {
-     sap = SeqAnnotNew ();
-     sap->type = 2;
-     sap->data = (Pointer) salp;
-  }
-  if (sap != NULL) {
-    entityID = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
-    if (entityID > 0) {
-      ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
-    }
-  }
-  return OM_MSG_RET_DONE;
 }
 
 

@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.13 $ 
+/* $Revision: 6.14 $ 
 * $Log: blastkar.h,v $
+* Revision 6.14  1999/12/22 21:06:35  shavirin
+* Added new function BlastPSIMaxScoreGet().
+*
 * Revision 6.13  1999/09/16 17:38:42  madden
 * Add posFreqs for position-specific frequencies
 *
@@ -234,6 +237,7 @@ of K, so high accuracy is generally unwarranted.
 #define BLASTNA_SIZE 16
 /* Identifies the blastna alphabet, for use in blast only. */
 #define BLASTNA_SEQ_CODE 99	
+#define PSI_ALPHABET_SIZE  26 /* For PSI Blast this is the only 26 */
 
 extern Uint1 ncbi4na_to_blastna[BLASTNA_SIZE];
 
@@ -379,6 +383,8 @@ Int2 LIBCALL BlastScoreBlkMatFill PROTO((BLAST_ScoreBlkPtr sbp, CharPtr matrix))
 Int2 LIBCALL BlastScoreBlkMatRead PROTO((BLAST_ScoreBlkPtr sbp, FILE *fp));
  
 Int2 LIBCALL BlastScoreBlkMaxScoreSet PROTO((BLAST_ScoreBlkPtr sbp));
+BLAST_ScorePtr BlastPSIMaxScoreGet(BLAST_ScorePtr PNTR posMatrix, 
+                                   Int4 start, Int4 length);
 
 BLAST_ResCompPtr LIBCALL BlastResCompNew PROTO((BLAST_ScoreBlkPtr sbp));
 

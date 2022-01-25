@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.8 1999/02/23 17:17:32 madden Exp $
+/* $Id: fastacmd.c,v 6.12 2000/01/12 21:05:00 egorov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,25 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.8 $
+* $Revision: 6.12 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.12  2000/01/12 21:05:00  egorov
+* Use Fastacmd API
+*
+* Revision 6.11  1999/12/21 21:26:22  egorov
+* Use new parameter of readdb_gi2seq function
+*
+* Revision 6.10  1999/12/17 20:48:54  egorov
+* Fix 'gcc -Wall' warnings and remove old stuff.
+*
+* Revision 6.9  1999/09/28 19:02:47  egorov
+* In the new version of the 'fastacmd' there is not need to
+* specify database name if search a GI.
+*
 * Revision 6.8  1999/02/23 17:17:32  madden
 * Remove unused static _accession functions
 *
@@ -80,20 +93,11 @@
 #include <tofasta.h>
 #include <readdb.h>
 
-
-#define BUFFER_LENGTH 128
-
-typedef struct FCMDAccList {
-    CharPtr acc;
-    Int4 gi;
-    struct FCMDAccList *next;
-} FCMDAccList, PNTR FCMDAccListPtr;
-
 #define NUMARG 5
 
 static Args myargs [NUMARG] = {
     { "Database", 
-      "nr", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL},
+      NULL, NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
     { "Search string: GIs, accessions and locuses may be used delimited\n"
       "      by comma or space)",
       NULL, NULL, NULL, TRUE, 's', ARG_STRING, 0.0, 0, NULL},
@@ -105,202 +109,25 @@ static Args myargs [NUMARG] = {
       "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL}
 };
 
-static FCMDAccListPtr GetAccList(CharPtr file, Int4Ptr TotalItems);
-static void FCMDAccListFree(FCMDAccListPtr falp);
-
 Int2 Main (void)
- 
 {
-  BioseqPtr bsp;
-  ReadDBFILEPtr rdfp;
-  Int4 i, fid, TotalItems=0, count;
-  FCMDAccListPtr falp, falp_tmp;
-  CharPtr buffer = NULL;
-  FILE *fd;
-  Int4Ptr ids = NULL;
+    CharPtr	database, searchstr, batchfile;
+    Int4	linelen;
+    Boolean	dupl;
 
-  if (! GetArgs ("fastacmd", NUMARG, myargs)) {
-      return (1);
-  }
-
-  if( !ErrSetLogfile ("stderr", ELOG_APPEND) ) {
-      exit(1);
-  }
-
-  if((rdfp = readdb_new_ex(myargs [0].strvalue, READDB_DB_UNKNOWN, FALSE)) == NULL) {
-      fprintf(stderr, "ERROR: Cannot initialize readdb engine. Exiting...\n");
-      return(1);
-  }
-
-  if(myargs[1].strvalue != NULL) {
-      if((falp =  GetAccList(myargs[1].strvalue, &TotalItems)) == NULL) {
-          fprintf(stderr, "ERROR: No valid Gis/Accessions found. Exiting...\n");
-          return(1);
-      }
-  } else if(myargs[2].strvalue != NULL){
-      if((fd = FileOpen(myargs[2].strvalue, "r")) == NULL)
-          return (1);
-
-      buffer = WWWReadFileInMemory(fd, 0, TRUE);
-
-      if((falp =  GetAccList(buffer, &TotalItems)) == NULL) {
-          fprintf(stderr, "ERROR: No valid Gis/Accessions found. Exiting...\n");
-          return(1);
-      }
-  }
-
-  /*  printf("**** %d Gis/Accessions present in "
-      "Fastacmd request\n\n", TotalItems); */
-  
-  for (falp_tmp = falp; falp_tmp != NULL; falp_tmp = falp_tmp->next) {  
-      
-      if(falp_tmp->gi != 0) {
-          fid = readdb_gi2seq(rdfp, falp_tmp->gi);
-      } else {
-          if(myargs[3].intvalue == 0) {
-              fid = readdb_acc2fasta(rdfp, falp_tmp->acc);
-          } else {
-              count = 0;
-              fid = readdb_acc2fastaEx(rdfp, falp_tmp->acc, &ids, &count);
-          }
-      }
-      
-      if(fid < 0 && fid != -1) { 
-          fprintf(stderr, "Accesion search failed for \"%s\" "
-                 "with error code %d\n", falp_tmp->acc, fid);
-          return 1;
-      } else if (fid == -1) {
-          fprintf(stderr, "Entry \"%s\" not found\n", falp_tmp->acc);
-      } else if (ids == NULL) { /* gi or SeqId */
-          bsp = readdb_get_bioseq(rdfp, fid);   
-          BioseqRawToFastaExtra(bsp, stdout, myargs[4].intvalue);
-          BioseqFree(bsp);  
-      } else {
-          for(i = 0; i < count; i++) {
-              bsp = readdb_get_bioseq(rdfp, ids[i]);   
-              BioseqRawToFastaExtra(bsp, stdout, myargs[4].intvalue);
-              BioseqFree(bsp);
-          }
-      }   
-  }
-  readdb_destruct(rdfp);
-  MemFree(buffer);
-  FCMDAccListFree(falp);
-  return 0;
-} 
-
-static FCMDAccListPtr GetAccList(CharPtr file, 
-                                 Int4Ptr TotalItems)
-{
-    Char TmpBuff[128];
-    Int4 i, j, k;
-    Int4 FileLen = 0;
-    FCMDAccListPtr AccList = NULL;
-    FCMDAccListPtr AccListTmp, AccListLast;
-    Int4 NumNotValid = 0;
-    Int4 gi = 0;
-  
-  if(file == NULL || file[0] == NULLB) {
-    *TotalItems = 0;
-    return NULL;
-  }
-  
-  FileLen = StringLen(file);
-  
-  for(i = 0; i < FileLen; i++) {
-      
-      if(isspace(file[i]) || file[i] == ',') /* Rolling spaces */
-          continue;
-      
-      /* This is defence from badly formatted requests */
-      
-      if(NumNotValid > 10) {
-          fprintf(stderr, "**** ERROR: Too many invalid Gis/Accessions, "
-                 "parsing aborted\n");
-          *TotalItems = 0;
-          return NULL;
-      }
-      
-      /* Rolling spaces */
-      
-      j= 0;
-      while (j < 128  && i < FileLen) { 
-          TmpBuff[j] = file[i];
-          j++; i++;
-          if(file[i] == ',')  /* Comma is valid delimiter */
-              break;
-      }
-      TmpBuff[j] = NULLB;
-    
-      /* Is gi/accession too long ??? */
-
-      if(j == 128) {
-          fprintf(stderr, "**** WARNING: Gi/Accession \"%s\" is too long\r\n", 
-                 TmpBuff);
-          NumNotValid++;
-          
-          while(!isspace(file[i]) || 
-                file[i] == ',' || 
-                file[i] == NULLB) /* Rolling until spaces */
-              i++;
-          continue;  /* Next may be valid ... who knows...?? */   
-      }
-      
-      /* Now validating accession/gi */
-      
-      for(k =0; k < j; k++) {
-          if(!IS_DIGIT(TmpBuff[k])) {
-              break;
-          }
-      }
-
-      if(k == j)
-          gi = atol(TmpBuff);
-      
-      /* If this is valid Accession check and tranfer it to gi */
-      
-      /* It we come here - we got valid text ID */
-      
-      if(AccList == NULL) { /* first element */
-          AccList = (FCMDAccListPtr) MemNew(sizeof(FCMDAccList));
-          AccListTmp = AccList;
-          AccListTmp->acc = StringSave(TmpBuff);
-          AccListTmp->gi = gi;
-          AccListTmp->next = NULL;
-          AccListLast=AccListTmp;
-          *TotalItems = *TotalItems +1; 
-      } else {
-          AccListTmp = (FCMDAccListPtr) MemNew(sizeof(FCMDAccList));
-          AccListLast->next = AccListTmp;
-          AccListTmp->acc = StringSave(TmpBuff);
-          AccListTmp->gi = gi;
-          AccListTmp->next = NULL;
-          AccListLast = AccListTmp;
-          *TotalItems = *TotalItems +1;
-      }
-  }
-  if(NumNotValid) {
-      fprintf(stderr, "**** %d invalid Gi%s/Accession%s present in fastacmd "
-             "request\r\n", 
-             NumNotValid,
-             NumNotValid == 1 ? "" : "s",
-             NumNotValid == 1 ? "" : "s"
-             );
-  }
-  return AccList;
-}
-
-static void FCMDAccListFree(FCMDAccListPtr falp)
-{
-    FCMDAccListPtr falp_tmp, falp_next;
-
-    if(falp == NULL)
-        return;
-
-    for(falp_tmp = falp; falp_tmp != NULL; falp_tmp=falp_next) {
-        falp_next = falp_tmp->next;
-        MemFree(falp_tmp->acc);
-        MemFree(falp_tmp);
+    if (! GetArgs ("fastacmd", NUMARG, myargs)) {
+	return (1);
     }
-}
 
+    if( !ErrSetLogfile ("stderr", ELOG_APPEND) ) {
+	exit(1);
+    }
+
+    database = myargs[0].strvalue;
+    searchstr = myargs[1].strvalue;
+    batchfile = myargs[2].strvalue;
+    dupl = myargs[3].intvalue;
+    linelen = myargs[4].intvalue;
+
+    Fastacmd_Search (searchstr, database, batchfile, dupl, linelen, (stdout));
+}

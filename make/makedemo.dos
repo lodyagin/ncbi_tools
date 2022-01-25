@@ -26,11 +26,11 @@ GETFEAT_EXE  = getfeat.___
 CHECKSUB_EXE = checksub.___
 ASN2FF_EXE   = asn2ff.___
 ASNDHUFF_EXE = asndhuff.___
-FA2HTGS_EXE  = fa2htgs.___
 
-# WIN32 CONSOLE only
-!ifdef WIN32
-!ifndef MSWINDOWS
+# CONSOLE only
+!ifdef CONSOLE
+T_SOCKET_EXE = test_ncbi_socket.___
+T_SOCK_EXE   = test_ncbisock.___
 FMERGE_EXE   = fmerge.___
 FORMATDB_EXE = formatdb.___
 FASTACMD_EXE = fastacmd.___
@@ -39,24 +39,13 @@ BLASTPGP_EXE = blastpgp.___
 SEEDTOP_EXE  = seedtop.___
 MAKEMAT_EXE  = makemat.___
 COPYMAT_EXE  = copymat.___
-IMPALA_EXE  = impala.___
-BL2SEQ_EXE  = bl2seq.___
-!endif
+IMPALA_EXE   = impala.___
+BL2SEQ_EXE   = bl2seq.___
+MEGABLST_EXE = megablst.___
+FA2HTGS_EXE  = fa2htgs.___
+VECSCREEN_EXE  = vecscreen.___
 !endif
 
-# exclusions
-!ifdef B16
-!undef TESTOBJ_EXE
-!undef SEQTEST_EXE
-!undef DOSIMPLE_EXE
-!undef GETSEQ_EXE
-!undef CDSCAN_EXE
-!undef GETFEAT_EXE
-!undef CHECKSUB_EXE
-!undef ASN2FF_EXE
-!undef ASNDHUFF_EXE
-!undef FA2HTGS_EXE
-!endif
 
 nocopy: \
 $(TESTCORE_EXE) \
@@ -74,17 +63,21 @@ $(GETFEAT_EXE)  \
 $(CHECKSUB_EXE) \
 $(ASN2FF_EXE)   \
 $(ASNDHUFF_EXE) \
-$(FA2HTGS_EXE)	\
-$(FORMATDB_EXE)	\
-$(FMERGE_EXE)	\
-$(FASTACMD_EXE)	\
-$(BLASTALL_EXE)	\
+$(FA2HTGS_EXE)	 \
+$(FORMATDB_EXE) \
+$(T_SOCKET_EXE) \
+$(T_SOCK_EXE)   \
+$(FMERGE_EXE)   \
+$(FASTACMD_EXE) \
+$(BLASTALL_EXE) \
 $(BLASTPGP_EXE) \
 $(SEEDTOP_EXE)  \
-$(MAKEMAT_EXE) \
-$(COPYMAT_EXE) \
-$(IMPALA_EXE) \
-$(BL2SEQ_EXE)
+$(MAKEMAT_EXE)  \
+$(COPYMAT_EXE)  \
+$(IMPALA_EXE)   \
+$(BL2SEQ_EXE)	\
+$(MEGABLST_EXE) \
+$(VECSCREEN_EXE) 
 
 
 ##################################################
@@ -94,6 +87,7 @@ copy :
 	echo "NO COPY"
 !else
 	copy ..\demo\*.* .
+	copy ..\connect\test\test_ncbi*.* .
 !endif
 
 
@@ -280,6 +274,30 @@ RES = 1
 $(INCLUDE_EXE)
 <<
 !endif
+##################################################
+!ifdef T_SOCKET_EXE
+$(T_SOCKET_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = test_ncbi_socket
+TEST_OBJ = test_ncbi_socket.obj ncbi_socket.obj ncbi_buffer.obj
+TEST_LIB = 
+TEST_OPT = -DNCBI_C
+MAIN_OBJ =
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef T_SOCK_EXE
+$(T_SOCK_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = test_ncbisock
+TEST_OBJ = test_ncbisock.obj
+TEST_LIB = $(LIB1)
+$(INCLUDE_EXE)
+<<
+!endif
 ##########################################################
 !ifdef FMERGE_EXE
 $(FMERGE_EXE):
@@ -390,6 +408,32 @@ MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = bl2seq
 TEST_OBJ = bl2seq.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef MEGABLST_EXE
+$(MEGABLST_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = megablst
+TEST_OBJ = megablst.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef VECSCREEN_EXE
+$(VECSCREEN_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = vecscreen
+TEST_OBJ = vecscreen.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

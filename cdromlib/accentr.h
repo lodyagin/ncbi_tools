@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* RCS $Id: accentr.h,v 6.0 1997/08/25 18:12:31 madden Exp $
+* RCS $Id: accentr.h,v 6.1 2000/01/12 20:17:13 vakatov Exp $
 *
 * Author:  Ostell
 *
@@ -51,90 +51,66 @@
 * 05-16-94 Schuler     Added RCS Log directive.  Comments will henceforth
 *                      be inserted automatically into the source at the
 *                      time it is checked into the system. 
-$Log: accentr.h,v $
-Revision 6.0  1997/08/25 18:12:31  madden
-Revision changed to 6.0
-
-Revision 5.10  1997/07/28 13:30:41  ostell
-Moved GetUniGeneIDForSeqId() to seqmgr.c
-
-Revision 5.9  1997/06/26 21:55:14  vakatov
-[PC] DLL'd "ncbicdr.lib", "ncbiacc.lib", "ncbinacc.lib" and "ncbicacc.lib"
-
-Revision 5.8  1996/12/02 22:20:52  brandon
-*** empty log message ***
-
- * Revision 5.7  1996/12/02  22:14:52  brandon
- * *** empty log message ***
- *
- * Revision 5.6  1996/12/02  22:10:46  brandon
- * *** empty log message ***
- *
- * Revision 5.5  1996/09/23  21:21:33  shavirin
- * Added definition for the function AccessionToFasta
- *
- * Revision 5.4  1996/08/14  19:56:09  epstein
- * add APIs for fetching pieces of biostruc annots
- *
- * Revision 5.3  1996/08/14  17:08:29  brandon
- * *** empty log message ***
- *
- * Revision 5.1  1996/08/14  15:15:05  brandon
- * added date parameter to tleval functions
- *
- * Revision 5.0  1996/05/28  13:55:34  ostell
- * Set to revision 5.0
- *
- * Revision 4.8  1996/05/14  21:02:10  epstein
- * adjust field descriptions to reflect current reality
- *
- * Revision 4.7  1996/03/29  18:52:51  epstein
- * add support for structure alignments
- *
- * Revision 4.6  1996/03/11  21:51:03  ostell
- * made GetUniGeneIDForSeqId() externally visible
- *
- * Revision 4.5  1995/10/11  13:39:29  epstein
- * add EntrezIsInited() function
- *
- * Revision 4.4  1995/10/02  02:35:50  epstein
- * add range-checking
- *
- * Revision 4.3  1995/08/28  23:20:47  kans
- * Biostruc_supported restored
- *
- * Revision 4.2  1995/08/21  19:42:16  epstein
- * add cluster analysis
- *
- * Revision 4.1  1995/08/11  20:25:53  epstein
- * add max-models support for biostrucs
- *
- * Revision 4.0  1995/07/26  13:50:32  ostell
- * force revision to 4.0
- *
- * Revision 2.44  1995/07/25  18:47:57  kans
- * revert to no Biostruc_supported
- *
- * Revision 2.43  1995/07/05  19:15:46  ostell
- * changed prototype for BiostrucAvail to be included only once
- *
- * Revision 2.42  1995/06/29  15:57:46  epstein
- * added Complexity argument when fetching structures
- *
- * Revision 2.41  95/06/26  18:07:13  kans
- * restored #define Biostruc_supported
- * 
- * Revision 2.39  1995/06/23  16:02:43  kans
- * support for accmmdbs.c stub to resolve symbols without MMDB link
- *
- * Revision 2.38  1995/06/22  21:21:22  kans
- * #define Biostruc_supported
- *
- * Revision 2.37  1995/05/16  14:12:46  schuler
- * Automatic comment insertion enabled
- *
-
-
+* $Log: accentr.h,v $
+* Revision 6.1  2000/01/12 20:17:13  vakatov
+* Get rid of the LIBCALL specifier at EntrezSeqEntryGet()
+*
+* Revision 5.10  1997/07/28 13:30:41  ostell
+* Moved GetUniGeneIDForSeqId() to seqmgr.c
+* 
+* Revision 5.9  1997/06/26 21:55:14  vakatov
+* [PC] DLL'd "ncbicdr.lib", "ncbiacc.lib", "ncbinacc.lib" and "ncbicacc.lib"
+*
+* Revision 5.5  1996/09/23  21:21:33  shavirin
+* Added definition for the function AccessionToFasta
+*
+* Revision 5.4  1996/08/14  19:56:09  epstein
+* add APIs for fetching pieces of biostruc annots
+*
+* Revision 5.1  1996/08/14  15:15:05  brandon
+* added date parameter to tleval functions
+*
+* Revision 4.8  1996/05/14  21:02:10  epstein
+* adjust field descriptions to reflect current reality
+*
+* Revision 4.7  1996/03/29  18:52:51  epstein
+* add support for structure alignments
+*
+* Revision 4.6  1996/03/11  21:51:03  ostell
+* made GetUniGeneIDForSeqId() externally visible
+*
+* Revision 4.5  1995/10/11  13:39:29  epstein
+* add EntrezIsInited() function
+*
+* Revision 4.4  1995/10/02  02:35:50  epstein
+* add range-checking
+*
+* Revision 4.3  1995/08/28  23:20:47  kans
+* Biostruc_supported restored
+*
+* Revision 4.2  1995/08/21  19:42:16  epstein
+* add cluster analysis
+*
+* Revision 4.1  1995/08/11  20:25:53  epstein
+* add max-models support for biostrucs
+*
+* Revision 2.44  1995/07/25  18:47:57  kans
+* revert to no Biostruc_supported
+*
+* Revision 2.43  1995/07/05  19:15:46  ostell
+* changed prototype for BiostrucAvail to be included only once
+*
+* Revision 2.42  1995/06/29  15:57:46  epstein
+* added Complexity argument when fetching structures
+*
+* Revision 2.41  95/06/26  18:07:13  kans
+* restored #define Biostruc_supported
+* 
+* Revision 2.39  1995/06/23  16:02:43  kans
+* support for accmmdbs.c stub to resolve symbols without MMDB link
+*
+* Revision 2.38  1995/06/22  21:21:22  kans
+* #define Biostruc_supported
 * ==========================================================================
 */
 
@@ -167,18 +143,6 @@ Revision 5.8  1996/12/02 22:20:52  brandon
 #include <mmdbapi1.h>
 #include <mmdbapi2.h>
 #include <mmdbapi3.h>
-#else
-typedef struct { int bogus; } Biostruc, *BiostrucPtr;
-
-/*****************************************************************************
-*
-*   BiostrucAvail is in the accmmdbs.c stub (returning FALSE) and in
-*      bios2ff7.c (returning TRUE).  The stub file also has BiostrucAsnRead
-*      and BiostrucAsnWrite empty functions for proper linking without MMDB.
-*
-*****************************************************************************/
-
-NLM_EXTERN Boolean LIBCALL BiostrucAvail PROTO((void));
 #endif
 
 
@@ -192,6 +156,22 @@ NLM_EXTERN Boolean LIBCALL BiostrucAvail PROTO((void));
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+#ifndef Biostruc_supported
+typedef struct { int bogus; } Biostruc, *BiostrucPtr;
+
+/*****************************************************************************
+*
+*   BiostrucAvail is in the accmmdbs.c stub (returning FALSE) and in
+*      bios2ff7.c (returning TRUE).  The stub file also has BiostrucAsnRead
+*      and BiostrucAsnWrite empty functions for proper linking without MMDB.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL BiostrucAvail(void);
+#endif
+
 
 /* --- Type Definitions --- */
 
@@ -271,7 +251,7 @@ typedef struct FastaSeq {
 #define TERM__EXPLODE 1
 
 
-typedef Boolean (*DocSumListCallBack) PROTO((DocSumPtr dsp, DocUid uid));
+typedef Boolean (*DocSumListCallBack)(DocSumPtr dsp, DocUid uid);
 
 
 typedef struct EntrezHierarchyChild {
@@ -314,122 +294,122 @@ typedef struct EntrezNeighborText {
 
 /**** Initialize and close session *********************/
 
-/* Note:                                                                      */
-/*   The EntrezInitWithExtras() capability is provided for backwards          */
-/*   compatability until May, 1994.  This name was introduced as a temporary  */
-/*   interface to EntrezInit(), to smooth the transition for EntrezInit()'s   */
-/*   use of three parameters; previously it took no parameters.               */
-/*                                                                            */
-/*                                  - J. Epstein, 17 Feb 1994                 */
+/* Note:                                                                     */
+/*   The EntrezInitWithExtras() capability is provided for backwards         */
+/*   compatability until May, 1994.  This name was introduced as a temporary */
+/*   interface to EntrezInit(), to smooth the transition for EntrezInit()'s  */
+/*   use of three parameters; previously it took no parameters.              */
+/*                                                                           */
+/*                                  - J. Epstein, 17 Feb 1994                */
 
 #define EntrezInitWithExtras(a,b,c) EntrezInit(a,b,c)
-NLM_EXTERN Boolean LIBCALL EntrezInit PROTO((CharPtr appl_id, Boolean no_warnings, BoolPtr is_network));
-NLM_EXTERN Boolean LIBCALL EntrezIsInited PROTO((void));
-NLM_EXTERN void LIBCALL EntrezFini PROTO((void));
+NLM_EXTERN Boolean LIBCALL EntrezInit(CharPtr appl_id, Boolean no_warnings, BoolPtr is_network);
+NLM_EXTERN Boolean LIBCALL EntrezIsInited(void);
+NLM_EXTERN void LIBCALL EntrezFini(void);
 
 /**** Get names and numbers of fields and types ********/
 
-NLM_EXTERN EntrezInfoPtr LIBCALL EntrezGetInfo PROTO((void));
+NLM_EXTERN EntrezInfoPtr LIBCALL EntrezGetInfo(void);
 
 /**** Creates a term node from the uid parameter ********/
-NLM_EXTERN void LIBCALL EntrezCreateNamedUidList PROTO((CharPtr term, DocType type, DocField field, Int4 num, DocUidPtr uids));
-NLM_EXTERN void LIBCALL EntrezCreateNamedUidListX PROTO((CharPtr term, DocType type, DocField field, ByteStorePtr bsp));
+NLM_EXTERN void LIBCALL EntrezCreateNamedUidList(CharPtr term, DocType type, DocField field, Int4 num, DocUidPtr uids);
+NLM_EXTERN void LIBCALL EntrezCreateNamedUidListX(CharPtr term, DocType type, DocField field, ByteStorePtr bsp);
 
 /**** Get detailed text information about the current status *****/
-NLM_EXTERN CharPtr LIBCALL EntrezDetailedInfo PROTO((void));
+NLM_EXTERN CharPtr LIBCALL EntrezDetailedInfo(void);
 
 /**** Get Links and Neighbors **************************/
 
-NLM_EXTERN Int4 LIBCALL EntrezGetMaxLinks PROTO((void));
-NLM_EXTERN Int4 LIBCALL EntrezSetUserMaxLinks PROTO((Int4 usermax));
-NLM_EXTERN Int4 LIBCALL EntrezGetUserMaxLinks PROTO((void));
+NLM_EXTERN Int4 LIBCALL EntrezGetMaxLinks(void);
+NLM_EXTERN Int4 LIBCALL EntrezSetUserMaxLinks(Int4 usermax);
+NLM_EXTERN Int4 LIBCALL EntrezGetUserMaxLinks(void);
 
-NLM_EXTERN LinkSetPtr LIBCALL EntrezUidLinks PROTO((DocType type, DocUid uid, DocType link_to_type));
-NLM_EXTERN Int2 LIBCALL EntrezLinkUidList PROTO((LinkSetPtr PNTR result, DocType type, DocType link_to_type, Int2 numuid, Int4Ptr uids, Boolean mark_missing));
+NLM_EXTERN LinkSetPtr LIBCALL EntrezUidLinks(DocType type, DocUid uid, DocType link_to_type);
+NLM_EXTERN Int2 LIBCALL EntrezLinkUidList(LinkSetPtr PNTR result, DocType type, DocType link_to_type, Int2 numuid, Int4Ptr uids, Boolean mark_missing);
 
 /**** Get Summaries ************************************/
 
-NLM_EXTERN DocSumPtr LIBCALL EntrezDocSum PROTO((DocType type, DocUid uid));
-NLM_EXTERN DocSumPtr LIBCALL DocSumFree PROTO((DocSumPtr dsp));
-NLM_EXTERN Int2 LIBCALL EntrezDocSumListGet PROTO((Int2 numuid, DocType type, DocUidPtr uids, DocSumListCallBack callback));
-NLM_EXTERN Int2 LIBCALL EntrezMlSumListGet PROTO((DocSumPtr PNTR result, Int2 numuid, Int4Ptr uids));
-NLM_EXTERN Int2 LIBCALL EntrezSeqSumListGet PROTO((DocSumPtr PNTR result, Int2 numuid, DocType type, Int4Ptr uids));
+NLM_EXTERN DocSumPtr LIBCALL EntrezDocSum(DocType type, DocUid uid);
+NLM_EXTERN DocSumPtr LIBCALL DocSumFree(DocSumPtr dsp);
+NLM_EXTERN Int2 LIBCALL EntrezDocSumListGet(Int2 numuid, DocType type, DocUidPtr uids, DocSumListCallBack callback);
+NLM_EXTERN Int2 LIBCALL EntrezMlSumListGet(DocSumPtr PNTR result, Int2 numuid, Int4Ptr uids);
+NLM_EXTERN Int2 LIBCALL EntrezSeqSumListGet(DocSumPtr PNTR result, Int2 numuid, DocType type, Int4Ptr uids);
 
 /**** Get Term Lists ***********************************/
 
-typedef Boolean (*TermListProc) PROTO((CharPtr term, Int4 special, Int4 total));
+typedef Boolean (*TermListProc)(CharPtr term, Int4 special, Int4 total);
 
-NLM_EXTERN Int2 LIBCALL EntrezTermListByPage PROTO((DocType type, DocField field, Int2 page, Int2 numpage, TermListProc proc));
-NLM_EXTERN Int2 LIBCALL EntrezTermListByTerm PROTO((DocType type, DocField field, CharPtr term, Int2 numterms, TermListProc proc, Int2Ptr first_page));
+NLM_EXTERN Int2 LIBCALL EntrezTermListByPage(DocType type, DocField field, Int2 page, Int2 numpage, TermListProc proc);
+NLM_EXTERN Int2 LIBCALL EntrezTermListByTerm(DocType type, DocField field, CharPtr term, Int2 numterms, TermListProc proc, Int2Ptr first_page);
 
-NLM_EXTERN Boolean LIBCALL EntrezFindTerm PROTO((DocType type, DocField field, CharPtr term, Int4Ptr spcl, Int4Ptr totl));
+NLM_EXTERN Boolean LIBCALL EntrezFindTerm(DocType type, DocField field, CharPtr term, Int4Ptr spcl, Int4Ptr totl);
 
 /**** Look up terms with Boolean operations ************/
 
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLNew PROTO((DocType type));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddTerm PROTO((ValNodePtr elst, CharPtr term, DocType type, DocField field, Boolean special));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddTermWithRange PROTO((ValNodePtr elst, CharPtr term, DocType type, DocField field, Boolean special, CharPtr highRange));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddLParen PROTO((ValNodePtr elst));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddRParen PROTO((ValNodePtr elst));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddAND PROTO((ValNodePtr elst));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddOR PROTO((ValNodePtr elst));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddBUTNOT PROTO((ValNodePtr elst));
-NLM_EXTERN ValNodePtr LIBCALL EntrezTLFree PROTO((ValNodePtr elst));
-NLM_EXTERN LinkSetPtr LIBCALL EntrezPMTLEval PROTO((ValNodePtr elst, void * edc));
-NLM_EXTERN Int4 LIBCALL EntrezPMTLEvalCount PROTO((ValNodePtr elst, void * edc));
-NLM_EXTERN ByteStorePtr LIBCALL EntrezPMTLEvalX PROTO((ValNodePtr elst, void * edc));
-NLM_EXTERN LinkSetPtr LIBCALL EntrezTLEval PROTO((ValNodePtr elst));
-NLM_EXTERN Int4 LIBCALL EntrezTLEvalCount PROTO((ValNodePtr elst));
-NLM_EXTERN ByteStorePtr LIBCALL EntrezTLEvalX PROTO((ValNodePtr elst));
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLNew(DocType type);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddTerm(ValNodePtr elst, CharPtr term, DocType type, DocField field, Boolean special);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddTermWithRange(ValNodePtr elst, CharPtr term, DocType type, DocField field, Boolean special, CharPtr highRange);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddLParen(ValNodePtr elst);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddRParen(ValNodePtr elst);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddAND(ValNodePtr elst);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddOR(ValNodePtr elst);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLAddBUTNOT(ValNodePtr elst);
+NLM_EXTERN ValNodePtr LIBCALL EntrezTLFree(ValNodePtr elst);
+NLM_EXTERN LinkSetPtr LIBCALL EntrezPMTLEval(ValNodePtr elst, void * edc);
+NLM_EXTERN Int4 LIBCALL EntrezPMTLEvalCount(ValNodePtr elst, void * edc);
+NLM_EXTERN ByteStorePtr LIBCALL EntrezPMTLEvalX(ValNodePtr elst, void * edc);
+NLM_EXTERN LinkSetPtr LIBCALL EntrezTLEval(ValNodePtr elst);
+NLM_EXTERN Int4 LIBCALL EntrezTLEvalCount(ValNodePtr elst);
+NLM_EXTERN ByteStorePtr LIBCALL EntrezTLEvalX(ValNodePtr elst);
 
 
 /**** Look Up a Uid from a SeqId using the Terms list ****/
 
-NLM_EXTERN Int4 LIBCALL EntrezFindSeqId PROTO((SeqIdPtr sip));
+NLM_EXTERN Int4 LIBCALL EntrezFindSeqId(SeqIdPtr sip);
 
 /**** Look Up the source SeqId given a GI ****************/
 
-NLM_EXTERN SeqIdPtr LIBCALL EntrezSeqIdForGI PROTO ((Int4 gi));
+NLM_EXTERN SeqIdPtr LIBCALL EntrezSeqIdForGI(Int4 gi);
 
 /**** Look Up the Fasta entry given a GI or Accession ****/
 
-NLM_EXTERN FastaSeqPtr LIBCALL AccessionToFasta PROTO ((CharPtr string));
+NLM_EXTERN FastaSeqPtr LIBCALL AccessionToFasta(CharPtr string);
 
 /**** Get Sequence or MEDLINE data **********************/
 
-NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet PROTO((SeqEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Int2 retcode, Boolean mark_missing));
-NLM_EXTERN SeqEntryPtr LIBCALL EntrezSeqEntryGet PROTO((Int4 uid, Int2 retcode));
+NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet(SeqEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Int2 retcode, Boolean mark_missing);
+NLM_EXTERN SeqEntryPtr EntrezSeqEntryGet(Int4 uid, Int2 retcode);
 
-NLM_EXTERN Int2 LIBCALL EntrezMedlineEntryListGet PROTO((MedlineEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Boolean mark_missing));
-NLM_EXTERN MedlineEntryPtr LIBCALL EntrezMedlineEntryGet PROTO((Int4 uid));
+NLM_EXTERN Int2 LIBCALL EntrezMedlineEntryListGet(MedlineEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Boolean mark_missing);
+NLM_EXTERN MedlineEntryPtr LIBCALL EntrezMedlineEntryGet(Int4 uid);
 
 #ifdef _PMENTREZ_
-Int2 LIBCALL EntrezPubmedEntryListGet PROTO((PubmedEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Boolean mark_missing));
-PubmedEntryPtr LIBCALL EntrezPubmedEntryGet PROTO((Int4 uid));
+Int2 LIBCALL EntrezPubmedEntryListGet(PubmedEntryPtr PNTR result, Int2 numuid, Int4Ptr uids, Boolean mark_missing);
+PubmedEntryPtr LIBCALL EntrezPubmedEntryGet(Int4 uid);
 #endif
 
-NLM_EXTERN BiostrucPtr LIBCALL EntrezBiostrucGet PROTO((DocUid uid, Int4 mdlLvl, Int4 maxModels));
-NLM_EXTERN BiostrucAnnotSetPtr LIBCALL EntrezBiostrucAnnotSetGet PROTO((DocUid uid));
-NLM_EXTERN LinkSetPtr LIBCALL EntrezBiostrucFeatIds PROTO((DocUid mmdbid, Int2 feature_type, Int4 feature_set_id));
-NLM_EXTERN BiostrucAnnotSetPtr LIBCALL EntrezBiostrucAnnotSetGetByFid PROTO((DocUid mmdbid, Int4 feature_id, Int4 feature_set_id));
+NLM_EXTERN BiostrucPtr LIBCALL EntrezBiostrucGet(DocUid uid, Int4 mdlLvl, Int4 maxModels);
+NLM_EXTERN BiostrucAnnotSetPtr LIBCALL EntrezBiostrucAnnotSetGet(DocUid uid);
+NLM_EXTERN LinkSetPtr LIBCALL EntrezBiostrucFeatIds(DocUid mmdbid, Int2 feature_type, Int4 feature_set_id);
+NLM_EXTERN BiostrucAnnotSetPtr LIBCALL EntrezBiostrucAnnotSetGetByFid(DocUid mmdbid, Int4 feature_id, Int4 feature_set_id);
 
 
-NLM_EXTERN EntrezHierarchyPtr LIBCALL EntrezHierarchyGet PROTO((CharPtr term,DocType type, DocField fld));
-NLM_EXTERN EntrezHierarchyPtr LIBCALL EntrezHierarchyFree PROTO ((EntrezHierarchyPtr ehp));
+NLM_EXTERN EntrezHierarchyPtr LIBCALL EntrezHierarchyGet(CharPtr term,DocType type, DocField fld);
+NLM_EXTERN EntrezHierarchyPtr LIBCALL EntrezHierarchyFree(EntrezHierarchyPtr ehp);
 
 /***** Neighbor text on-the-fly ***********/
-NLM_EXTERN EntrezNeighborTextPtr LIBCALL EntrezNeighborTextFree PROTO ((EntrezNeighborTextPtr ));
-NLM_EXTERN EntrezNeighborTextPtr LIBCALL EntrezNeighborTextNew PROTO (( void ));
-NLM_EXTERN LinkSetPtr LIBCALL EntrezDoNeighborText PROTO((EntrezNeighborTextPtr entp));
-NLM_EXTERN Boolean LIBCALL EntrezCanNeighborText PROTO((void));
+NLM_EXTERN EntrezNeighborTextPtr LIBCALL EntrezNeighborTextFree(EntrezNeighborTextPtr );
+NLM_EXTERN EntrezNeighborTextPtr LIBCALL EntrezNeighborTextNew(void);
+NLM_EXTERN LinkSetPtr LIBCALL EntrezDoNeighborText(EntrezNeighborTextPtr entp);
+NLM_EXTERN Boolean LIBCALL EntrezCanNeighborText(void);
 
 
-NLM_EXTERN Boolean LIBCALL EntrezExpandedMedlineFeatures PROTO((void));
-NLM_EXTERN Int4 LIBCALL EntrezClusterAnalysis PROTO((DocUidPtr uids, Int4 numuids, DocField fld, Int4 minCluster, Int4 maxCluster, Int4 maxTerms, CharPtr *terms, Int4Ptr termTotals));
+NLM_EXTERN Boolean LIBCALL EntrezExpandedMedlineFeatures(void);
+NLM_EXTERN Int4 LIBCALL EntrezClusterAnalysis(DocUidPtr uids, Int4 numuids, DocField fld, Int4 minCluster, Int4 maxCluster, Int4 maxTerms, CharPtr *terms, Int4Ptr termTotals);
 
 /***** on-the-fly BLAST *****/
-NLM_EXTERN LinkSetPtr LIBCALL EntrezBlastBioseq PROTO((BioseqPtr bsp, DocType db, CharPtr program, CharPtr database, CharPtr options, Boolean usemonitor));
-NLM_EXTERN Boolean LIBCALL EntrezCanBlast PROTO((void));
+NLM_EXTERN LinkSetPtr LIBCALL EntrezBlastBioseq(BioseqPtr bsp, DocType db, CharPtr program, CharPtr database, CharPtr options, Boolean usemonitor);
+NLM_EXTERN Boolean LIBCALL EntrezCanBlast(void);
 
 /*****************************************************************************
 *
@@ -445,11 +425,12 @@ NLM_EXTERN Boolean LIBCALL EntrezCanBlast PROTO((void));
 *     call, and yours will be call AFTER entrez.
 *   
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL EntrezBioseqFetchEnable PROTO((CharPtr progname, Boolean now));
-NLM_EXTERN void LIBCALL EntrezBioseqFetchDisable PROTO((void));
+NLM_EXTERN Boolean LIBCALL EntrezBioseqFetchEnable(CharPtr progname, Boolean now);
+NLM_EXTERN void LIBCALL EntrezBioseqFetchDisable(void);
+
 
 #ifdef __cplusplus
-}
+}  /* extern "C" */
 #endif
 
 #undef NLM_EXTERN

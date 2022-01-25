@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.h,v $
+* Revision 6.1  1999/10/29 14:15:30  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.0  1997/08/25 18:13:43  madden
 * Revision changed to 6.0
 *
@@ -56,18 +59,14 @@
 
 #ifndef _CN3DSAVE_
 #define _CN3DSAVE_ 1
-  
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
- 
-MenU LIBCALL Cn3D_SaveSub (MenU m);   
+MenU LIBCALL Cn3D_SaveSub(MenU m);
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif
-
- 

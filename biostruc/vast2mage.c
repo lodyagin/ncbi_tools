@@ -31,6 +31,9 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2mage.c,v $
+ * Revision 6.9  1999/10/13 20:19:35  zimmerma
+ * DZ: Removed use of temporary files - html output redirected to stdout
+ *
  * Revision 6.8  1999/05/07 13:53:02  zimmerma
  * Changed call to InstBSAnnotSet() to pass Chain and SlaveChain params
  *
@@ -564,33 +567,23 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 		return 0;
 	}
  
-	strcpy(OutputName, GetTempName("vast3")); 
-
-	if((OutputFile = FileOpen(OutputName,WRITE)) == NULL) {
-		printf("Content-type: text/html\n\n");
-		printf("<h2>VASTSERV Error (VastToMage)</h2>\n");
-		printf("<h3>Temp file open failed.</h3>\n");
-		CloseMMDBAPI();
-		return 0;
-	}
-
 	/* Kinemage file generation */
      
      if (iPDB == 2)
      {
-       fprintf(OutputFile, "Content-type: application/octet-stream\n\n");
+       fprintf(stdout, "Content-type: application/octet-stream\n\n");
      }
      else if (iPDB == 1)
      {
-       fprintf(OutputFile, "Content-type: text/html\n\n");  
-       fprintf(OutputFile, "<HTML><body><pre>\n");
+       fprintf(stdout, "Content-type: text/html\n\n");  
+       fprintf(stdout, "<HTML><body><pre>\n");
      }
      else
-       fprintf(OutputFile, "Content-type: chemical/x-kinemage\n\n"); /* MIME */
+       fprintf(stdout, "Content-type: chemical/x-kinemage\n\n"); /* MIME */
   
 	bRender = (Byte) (KIN_VIRTUAL | KIN_HET);
 	iColor = KIN_COLOR_NUMBER;
-	iTest = WriteKinPairAlign(pdnmsMaster, pdnmsSlave, OutputFile, iColor, bRender);
+	iTest = WriteKinPairAlign(pdnmsMaster, pdnmsSlave, stdout, iColor, bRender);
 
   if (!iTest)
     {
@@ -604,12 +597,7 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
       exit(1);
     }
  
-  fflush(OutputFile);
-  if (OutputFile != stdout)
-    {
-      fclose(OutputFile);
-      PrintFile(OutputName);
-    }
+  fflush(stdout);
     
   CloseMMDBAPI();
   MMDBFini();

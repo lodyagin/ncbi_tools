@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
  * $Log: ffprint.c,v $
+ * Revision 6.6  1999/10/07 19:22:21  bazhin
+ * Changed Int2 to Int4 for one variable. To prevent coredump.
+ *
+ * Revision 6.5  1999/10/06 20:25:28  bazhin
+ * Removed memory leak.
+ *
  * Revision 6.4  1999/08/31 14:36:06  tatiana
  * ff_print_string_mem() added
  *
@@ -204,6 +210,8 @@ NLM_EXTERN void LIBCALL asn2ff_set_output (FILE *fp, CharPtr line_return)
 	bfp->fp = fp;
 	if (line_return)
 	{
+		if(bfp->line_return != NULL)
+			MemFree(bfp->line_return);
 		bfp->line_return = StringSave(line_return);
 	}
 }
@@ -413,7 +421,8 @@ NLM_EXTERN CharPtr LIBCALL ff_print_string_mem (CharPtr string)
 
 {
 	CharPtr s, buff, bu;
-	Int2	i, l, ll;
+	Int2	i, l;
+	Int4	ll;
 	BuffStructPtr bfp;
 
 	bfp = GetBuffStruct();

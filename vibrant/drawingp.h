@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: drawingp.h,v $
+* Revision 6.1  1999/10/04 17:16:32  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.0  1997/08/25 18:55:43  madden
 * Revision changed to 6.0
 *
@@ -62,8 +65,8 @@
 #ifndef _DRAWINGP_
 #define _DRAWINGP_
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_

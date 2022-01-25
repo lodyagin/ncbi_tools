@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   	portable math functions
@@ -42,6 +42,9 @@
 * 12-22-93 Schuler     Converted ERRPOST((...)) to ErrPostEx(...)
 *
 * $Log: ncbimath.c,v $
+* Revision 6.3  1999/11/24 17:29:16  sicotte
+* Added LnFactorial function
+*
 * Revision 6.2  1997/11/26 21:26:18  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -776,4 +779,14 @@ NLM_EXTERN long LIBCALL Nlm_RandomNum(void)
 		if (rJ < state)
 			rJ = &state[DIM(state)-1];
 	return (r>>1)&0x7fffffff; /* discard the least-random bit */
+}
+
+NLM_EXTERN Nlm_FloatHi LIBCALL Nlm_LnFactorial (Nlm_FloatHi x) {
+    if(x<0.0) 
+        ErrPostEx(SEV_WARNING,0,0,"LogFact: Negative Argument to Factorial function!\n");
+    if(x<=0.0)
+        return 0.0;
+    else
+        return Nlm_LnGamma(x+1.0);
+        
 }

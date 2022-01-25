@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.8 at Aug 11, 1999  4:42 PM
+*    Generated using ASNCODE Revision: 6.8 at Nov 12, 1999 11:06 AM
 *
 **************************************************/
 
@@ -164,6 +164,13 @@ BlastSearchAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_SEARCH_return_parts) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> return_parts = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -241,6 +248,8 @@ BlastSearchAsnWrite(BlastSearchPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   av.boolvalue = ptr -> return_parts;
+   retval = AsnWrite(aip, BLAST_SEARCH_return_parts,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -595,6 +604,9 @@ BlastResponseFree(ValNodePtr anp)
    case BlastResponse_phialign:
       BlastPhialignFree(anp -> data.ptrvalue);
       break;
+   case BlastResponse_parts:
+      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) BlastPartsFree);
+      break;
    }
    return MemFree(anp);
 }
@@ -748,6 +760,14 @@ BlastResponseAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = BlastResponse_phialign;
       func = (AsnReadFunc) BlastPhialignAsnRead;
    }
+   else if (atp == BLAST_RESPONSE_parts) {
+      choice = BlastResponse_parts;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) BlastPartsAsnRead,             (AsnOptFreeFunc) BlastPartsFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -881,6 +901,9 @@ BlastResponseAsnWrite(BlastResponsePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case BlastResponse_phialign:
       writetype = BLAST_RESPONSE_phialign;
       func = (AsnWriteFunc) BlastPhialignAsnWrite;
+      break;
+   case BlastResponse_parts:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) BlastPartsAsnWrite, aip, BLAST_RESPONSE_parts, BLAST_RESPONSE_parts_E);
       break;
    }
    if (writetype != NULL) {
@@ -1235,6 +1258,20 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> phi_pattern = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_use_real_db_size) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> use_real_db_size = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_use_best_align) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> use_best_align = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1454,6 +1491,10 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> phi_pattern;
       retval = AsnWrite(aip, BLAST_PARAMETERS_phi_pattern,  &av);
    }
+   av.boolvalue = ptr -> use_real_db_size;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_use_real_db_size,  &av);
+   av.boolvalue = ptr -> use_best_align;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_use_best_align,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -2950,6 +2991,338 @@ BlastSeqIdAsnWrite(BlastSeqIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    BlastSequenceNew()
+*
+**************************************************/
+NLM_EXTERN 
+BlastSequencePtr LIBCALL
+BlastSequenceNew(void)
+{
+   BlastSequencePtr ptr = MemNew((size_t) sizeof(BlastSequence));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BlastSequenceFree()
+*
+**************************************************/
+NLM_EXTERN 
+BlastSequencePtr LIBCALL
+BlastSequenceFree(BlastSequencePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqAlignFree(ptr -> align);
+   BSFree(ptr -> db_seq);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BlastSequenceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BlastSequencePtr LIBCALL
+BlastSequenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BlastSequencePtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BlastSequence ::= (self contained) */
+      atp = AsnReadId(aip, amp, BLAST_SEQUENCE);
+   } else {
+      atp = AsnLinkType(orig, BLAST_SEQUENCE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BlastSequenceNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BLAST_SEQUENCE_align) {
+      ptr -> align = SeqAlignAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_SEQUENCE_db_seq) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> db_seq = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BlastSequenceFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BlastSequenceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BlastSequenceAsnWrite(BlastSequencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BLAST_SEQUENCE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> align != NULL) {
+      if ( ! SeqAlignAsnWrite(ptr -> align, aip, BLAST_SEQUENCE_align)) {
+         goto erret;
+      }
+   }
+   if (ptr -> db_seq != NULL) {
+      av.ptrvalue = ptr -> db_seq;
+      retval = AsnWrite(aip, BLAST_SEQUENCE_db_seq,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    BlastPartsNew()
+*
+**************************************************/
+NLM_EXTERN 
+BlastPartsPtr LIBCALL
+BlastPartsNew(void)
+{
+   BlastPartsPtr ptr = MemNew((size_t) sizeof(BlastParts));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BlastPartsFree()
+*
+**************************************************/
+NLM_EXTERN 
+BlastPartsPtr LIBCALL
+BlastPartsFree(BlastPartsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> defline);
+   AsnGenericUserSeqOfFree(ptr -> sequence, (AsnOptFreeFunc) BlastSequenceFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BlastPartsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BlastPartsPtr LIBCALL
+BlastPartsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BlastPartsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BlastParts ::= (self contained) */
+      atp = AsnReadId(aip, amp, BLAST_PARTS);
+   } else {
+      atp = AsnLinkType(orig, BLAST_PARTS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BlastPartsNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BLAST_PARTS_defline) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> defline = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARTS_sequence) {
+      ptr -> sequence = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) BlastSequenceAsnRead, (AsnOptFreeFunc) BlastSequenceFree);
+      if (isError && ptr -> sequence == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BlastPartsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BlastPartsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BlastPartsAsnWrite(BlastPartsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BLAST_PARTS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> defline != NULL) {
+      av.ptrvalue = ptr -> defline;
+      retval = AsnWrite(aip, BLAST_PARTS_defline,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> sequence, (AsnWriteFunc) BlastSequenceAsnWrite, aip, BLAST_PARTS_sequence, BLAST_PARTS_sequence_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

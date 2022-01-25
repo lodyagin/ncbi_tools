@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.12 1999/08/25 20:18:49 shavirin Exp $
+/* $Id: ncbisam.c,v 6.16 1999/12/18 15:27:50 egorov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,26 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.12 $
+* $Revision: 6.16 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.16  1999/12/18 15:27:50  egorov
+* Fix NT compilation problem
+*
+* Revision 6.15  1999/12/17 20:47:05  egorov
+* Fix 'gcc -Wall' warnings
+*
+* Revision 6.14  1999/12/06 20:56:12  egorov
+* fwrite() writes two bytes for '\n' if file is open not in binary mode,
+* so MakeISAMIndex worked incorrectly.
+* What to Blast programs, formatdb now works correctly on NT machine.
+*
+* Revision 6.13  1999/11/08 19:05:21  shavirin
+* Fixed minor SGI warning.
+*
 * Revision 6.12  1999/08/25 20:18:49  shavirin
 * Added possibility to store user-specified Int4 options in the index
 * header.
@@ -203,7 +217,7 @@ ISAMObjectPtr ISAMObjectNew(ISAMType type,       /* Type of ISAM */
 {
     ISAMDataPtr data;
     Char name[MAX_FILENAME_LEN];
-    CharPtr ch, ch1;
+	CharPtr ch, ch1;
 
     if(DBFile == NULL)
         return NULL;
@@ -690,7 +704,7 @@ static ISAMErrorCode ISAMMakeStringIndex(
     
     /* Create the sample file. */
     
-    if (!(tf_fd = FileOpen(data->IndexFileName, "w")))
+    if (!(tf_fd = FileOpen(data->IndexFileName, "wb")))
         return ISAMBadFileName;
     
     /* Write the term counts and offsets to the sample file. */
@@ -1045,18 +1059,18 @@ ISAMErrorCode ISAMCreateDatabase(CharPtr PNTR files,
     sprintf(filename, "%s%ld.%s",
             data->CAName, (long) ca_count, data->CADBExt);
 
-    if((out_fd = FileOpen(data->DBFileName, "w")) == NULL)
+    if((out_fd = FileOpen(data->DBFileName, "bw")) == NULL)
         return ISAMBadFileName;
     
     sprintf(filename, "%s%ld.%s", 
             data->CAName, (long) ca_count, data->CADBExt);
     
-    if((ca_fd  = FileOpen(filename, "w")) == NULL)
+    if((ca_fd  = FileOpen(filename, "bw")) == NULL)
         return ISAMBadFileName;
     
     sprintf(filename, "%s%ld.%s", 
             data->CAName, (long) ca_count, data->CAOffExt);
-    if((off_fd = FileOpen(filename, "w")) == NULL)
+    if((off_fd = FileOpen(filename, "bw")) == NULL)
         return ISAMBadFileName;
 
     if(data->max_line_size == 0) {
@@ -1142,12 +1156,12 @@ ISAMErrorCode ISAMCreateDatabase(CharPtr PNTR files,
 
                     sprintf(filename, "%s%ld.%s", 
                             data->CAName, (long) ca_count, data->CADBExt);
-                    if((ca_fd  = FileOpen(filename, "w")) == NULL)
+                    if((ca_fd  = FileOpen(filename, "bw")) == NULL)
                         return ISAMBadFileName;
                     
                     sprintf(filename, "%s%ld.%s", 
                             data->CAName, (long) ca_count, data->CAOffExt);
-                    if((off_fd = FileOpen(filename, "w")) == NULL)
+                    if((off_fd = FileOpen(filename, "bw")) == NULL)
                         return ISAMBadFileName;
                 }
 
@@ -1228,7 +1242,7 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
     Int4Ptr FileInfo;
     Int4 Version, IsamType, DBFileLength;
     ISAMDataPtr data;
-    Int4 reserved1, reserved2;
+    Int4 reserved2;
 
     if(object == NULL)
         return ISAMBadParameter;
@@ -1311,7 +1325,7 @@ ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option)
     ISAMErrorCode error;
     
     if(object == NULL)
-        return -1;
+        return ISAMMiscError;
     
     data = (ISAMDataPtr) object;
     

@@ -603,10 +603,10 @@ void    SeqHistPrintTable (ID1SeqHistPtr ishp,FILE PNTR fp)
 			}
                         if(shp->replace_date){
                                 if(shp->replace_date->data[0]){
-                                        sprintf(repl_date,"%0.2d/%0.2d/%0.2d",
+                                        sprintf(repl_date,"%0.2d/%0.2d/%0.4d",
                                                         shp->replace_date->data[2],
                                                         shp->replace_date->data[3],
-                                                        shp->replace_date->data[1]);
+                                                        1900+shp->replace_date->data[1]);
                                 }else{
                                         sprintf(repl_date,"%-20s",shp->replace_date->str);
                                 }

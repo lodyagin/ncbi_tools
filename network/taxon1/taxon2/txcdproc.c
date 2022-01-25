@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.5 $
+* $Revision: 1.7 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,12 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.7  1999/12/20 17:05:16  soussov
+* taxid4gi added
+*
+* Revision 1.6  1999/10/21 19:20:57  soussov
+* time tracking added
+*
 * Revision 1.5  1998/07/27 16:54:04  soussov
 * bug in txc_getChildren fixed
 *
@@ -80,6 +86,7 @@ static char *this_file = __FILE__;
 #include <objtax1.h>
 #include <txclient.h>
 #include <taxinc.h>
+#include <time.h>
 
 #define TAXARCH_SERV_RETRIES 4
 
@@ -98,6 +105,22 @@ static Boolean num_attached = 0;
 static Boolean reallyFinal = TRUE;
 static NI_DispatcherPtr dispatcher;
 static Boolean (*myNetInit) PROTO((void));
+
+static int tax_track= 0;
+static clock_t tax_time1;
+
+static void report_service_error(CharPtr proc_name, Taxon1RespPtr taxbp)
+{
+    if(taxbp == NULL) {
+	ErrPostEx(SEV_ERROR, 0, 0, "%s got NULL responce from service");
+    }
+    else if(taxbp->choice == Taxon1Resp_error) {
+	Taxon1ErrorPtr tep= taxbp->data.ptrvalue;
+	if(tep != NULL) {
+	    ErrPostEx(tep->level, 0, 0, "%s got %s", proc_name, tep->msg? tep->msg : "Empty message");
+	}
+    }
+}
 
 /*****************************************************************************
 *
@@ -154,10 +177,15 @@ static Boolean TaxServInit(void)
     asnin= svcp->raip;
     asnout= svcp->waip;
 
+    if(getenv("TAX_TRACK_TIME") != NULL) {
+	tax_track= 1;
+    }
+
     /**********************************************************/
 
     taxrp= ValNodeNew(NULL);
     taxrp->choice = Taxon1Req_init;
+    if(tax_track) tax_time1= clock();
     Taxon1ReqAsnWrite(taxrp, asnout, NULL);
     AsnIoReset(asnout);
     Taxon1ReqFree (taxrp);
@@ -168,6 +196,11 @@ static Boolean TaxServInit(void)
     else  {
         taxbp->data.ptrvalue = NULL;
         Taxon1RespFree (taxbp);
+	if(tax_track) {
+	    double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+	    printf("tax1_init() %f\n", diff);
+	}
+	    
         return TRUE;
     }
 }
@@ -255,6 +288,7 @@ static Taxon1NamePtr s_findname(CharPtr sname)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_findname) {
+	report_service_error("tax_findByName", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -273,6 +307,7 @@ static Taxon1NamePtr findname(CharPtr sname)
     ErrDesc err;
     Taxon1NamePtr tnp = NULL;
 
+    if(tax_track) tax_time1= clock();
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_IGNORE, 0);
@@ -285,6 +320,11 @@ static Taxon1NamePtr findname(CharPtr sname)
 	
 	if(!ReestablishNetTaxArch()) break;
     }
+    if(tax_track) {
+	double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+	printf("tax1_findByName() %f\n", diff);
+    }
+	
 
     return(tnp);
 }
@@ -338,6 +378,7 @@ static Taxon1NamePtr s_getorgnames(Int4 tax_id)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getorgnames) {
+	report_service_error("tax_getOrgNames", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -423,6 +464,7 @@ static Int4 s_getdesignator(CharPtr sname)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
     
     if(taxbp->choice != Taxon1Resp_getdesignator) {
+	report_service_error("tax_getDesignator", taxbp);
 	Taxon1RespFree(taxbp);
 	return 0;
     }
@@ -478,6 +520,7 @@ static Int4 s_getunique(CharPtr sname)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
     
     if(taxbp->choice != Taxon1Resp_getunique) {
+	report_service_error("tax_uniqueName", taxbp);
 	Taxon1RespFree(taxbp);
 	return 0;
     }
@@ -534,6 +577,7 @@ static Int4 s_getidbyorg(OrgRefPtr orgRef)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
     
     if(taxbp->choice != Taxon1Resp_getidbyorg) {
+	report_service_error("txc_getTaxIdByOrgRef", taxbp);
 	Taxon1RespFree(taxbp);
 	return 0;
     }
@@ -551,6 +595,7 @@ static Int4 getidbyorg(OrgRefPtr orgRef)
     ErrDesc err;
     Int4 tax_id= 0;
 
+    if(tax_track) tax_time1= clock();
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_IGNORE, 0);
@@ -563,6 +608,12 @@ static Int4 getidbyorg(OrgRefPtr orgRef)
 	
 	if(!ReestablishNetTaxArch()) break;
     }
+
+    if(tax_track) {
+	double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+	printf("tax1_getTaxIdByOrgRef() %f\n", diff);
+    }
+    
 
     return tax_id;
 }
@@ -610,6 +661,7 @@ static Taxon1InfoPtr s_getlineage(Int4 tax_id)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getlineage) {
+	report_service_error("txc_getLineage", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -629,6 +681,7 @@ static Taxon1InfoPtr getlineage(Int4 tax_id)
     ErrDesc err;
     Taxon1InfoPtr tnp = NULL;
 
+    if(tax_track) tax_time1= clock();
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_IGNORE, 0);
@@ -640,6 +693,11 @@ static Taxon1InfoPtr getlineage(Int4 tax_id)
         if (!ErrFetch(&err))  break; /* success */
 	
 	if(!ReestablishNetTaxArch()) break;
+    }
+
+    if(tax_track) {
+	double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+	printf("tax1_getLineage() %f\n", diff);
     }
 
     return(tnp);
@@ -699,6 +757,7 @@ static Taxon1InfoPtr s_getchildren(Int4 tax_id)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getchildren) {
+	report_service_error("txc_getChildren", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -788,6 +847,7 @@ static Taxon1InfoPtr s_getcde(void)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getcde) {
+	report_service_error("txc_loadNameClasses", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -855,6 +915,7 @@ static Taxon1InfoPtr s_getranks(void)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getranks) {
+	report_service_error("txc_loadRanks", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -921,6 +982,7 @@ static Taxon1InfoPtr s_getdivs(void)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getdivs) {
+	report_service_error("txc_loadDivisions", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -996,6 +1058,7 @@ static Taxon1InfoPtr s_getgcs(void)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getgcs) {
+	report_service_error("txc_loadGCs", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -1198,6 +1261,7 @@ static _subspecPtr s_SSget(Int4 tax_id, _subspecPtr ss)
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
     if(taxbp->choice != Taxon1Resp_getorgmod) {
+	report_service_error("tax_SSget", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
     }
@@ -1227,6 +1291,7 @@ _subspecPtr tax_SSget(Int4 tax_id, _subspecPtr ss)
     ErrDesc err;
     _subspecPtr res= NULL;
 
+    if(tax_track) tax_time1= clock();
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_IGNORE, 0);
@@ -1239,6 +1304,65 @@ _subspecPtr tax_SSget(Int4 tax_id, _subspecPtr ss)
 	
 	if(!ReestablishNetTaxArch()) break;
     }
+    if(tax_track) {
+	double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+	printf("tax1_SSget() %f\n", diff);
+    }
 
     return res;
+}
+
+static Int4 s_getTaxId4GI(Int4 gi)
+{
+    Taxon1ReqPtr taxrp;
+    Taxon1RespPtr taxbp;
+    Int4 tax_id;
+
+    if((taxrp= ValNodeNew(NULL)) == NULL) return 0;
+    taxrp->choice= Taxon1Req_id4gi;
+    taxrp->data.intvalue= gi;
+    Taxon1ReqAsnWrite(taxrp, asnout, NULL);
+    AsnIoReset(asnout);
+    Taxon1ReqFree(taxrp);
+
+    if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
+    
+    if(taxbp->choice != Taxon1Resp_id4gi) {
+	report_service_error("tax_getTaxId4GI", taxbp);
+	Taxon1RespFree(taxbp);
+	return 0;
+    }
+
+    tax_id= taxbp->data.intvalue;
+    Taxon1RespFree(taxbp);
+
+    return tax_id;
+}
+
+static Int4 getTaxId4GI(Int4 gi)
+{
+    Int4 i;
+    short erract;
+    ErrDesc err;
+    Int4 tax_id= 0;
+
+    for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
+        ErrGetOpts(&erract, NULL);
+        ErrSetOpts(ERR_IGNORE, 0);
+        ErrFetch(&err);
+
+        tax_id = s_getTaxId4GI(gi);
+
+        ErrSetOpts(erract, 0);
+        if (!ErrFetch(&err))  break; /* success */
+	
+	if(!ReestablishNetTaxArch()) break;
+    }
+
+    return tax_id;
+}
+
+Int4 tax_getTaxId4GI(Int4 gi)
+{
+    return getTaxId4GI(gi);
 }

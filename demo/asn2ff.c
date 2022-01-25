@@ -53,7 +53,8 @@ Args myargs[] = {
 	{"Complex sets (phy-set,mut-set, pop-set)?",
 	"T",NULL,NULL,TRUE,'k',ARG_BOOLEAN,0.0,0,NULL},
 	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
-	{"Use VERSION?","F",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
+	{"Use VERSION?","T",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
+	{"Show Bankit comments?","F",NULL,NULL,TRUE,'C',ARG_BOOLEAN,0.0,0,NULL},
 	};
 
 
@@ -132,7 +133,9 @@ Int2 Main(void)
 	BioseqPtr bsp;
 	Boolean useSeqMgrIndexes;
 	CharPtr PNTR tmpstr = NULL, tstr;
-	
+	ValNode v;
+	LinkStrPtr lsp;
+	CharPtr str;
 	if ( ! GetArgs("asn2ff", sizeof(myargs)/sizeof(Args), myargs))
 		return 1;
 	ErrSetMessageLevel(SEV_NONE);
@@ -290,6 +293,9 @@ Int2 Main(void)
 	if (myargs[20].intvalue) {
 		ajp->help = TRUE;
 	}
+	if (myargs[26].intvalue) {
+		ajp->bankit = TRUE;
+	}
 	useSeqMgrIndexes = (Boolean)(myargs[24].intvalue);
 	/* get pointer to all loaded ASN.1 modules */
 	amp = AsnAllModPtr();
@@ -354,15 +360,18 @@ Int2 Main(void)
 		the_set = SeqEntryAsnRead(aip, NULL);
 		total++;
 /*********TEST*******
-	SeqEntryToFlatEx (the_set, fp, ajp->format, ajp->mode, NULL, 0);
-	exit (1);
-		for (tmpstr= AjpToStrArray(ajp, the_set); *tmpstr != NULL; tmpstr++) {
-			printf("%s", *tmpstr);
-		}
-		if (mode == PARTIAL_MODE) {
+	v.choice = SEQID_GI;
+	v.data.intvalue = 455854;
+	SeqEntryToFlatEx (the_set, fp, ajp->format, ajp->mode, &v, 0);
+			if (mode == PARTIAL_MODE) {
 			SeqEntryToPartRpt(the_set, stdout);
-*********TEST*******/
-		if (myargs[23].intvalue) { /* complex sets */
+	for (lsp=SeqEntryToStrArrayEx(the_set,  ajp->format, 5866992, TRUE); lsp;
+		lsp=lsp->next) {
+		printf ("%s", lsp->line);
+	}
+	exit (0);
+ *********TEST*******/
+   		if (myargs[23].intvalue) { /* complex sets */
 			IndexASeqEntry (the_set, useSeqMgrIndexes);
 	 		if (SeqEntryToFlatAjp (ajp, the_set, fp, ajp->format, ajp->mode)) {
 				num++;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -43,6 +43,9 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
+* Revision 6.26  1999/10/05 23:18:17  lewisg
+* add ddv and udv to cn3d with memory management
+*
 * Revision 6.25  1999/06/07 21:23:36  ywang
 * add iUserDefinedFeatureOld, FeatureOnOld to MGD
 *
@@ -661,9 +664,6 @@ typedef struct Nlm_msd
      void PNTR pExtra;
      PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
      BiostrucAnnotSetPtr psaStrucAlignment; 
-     SeqAnnotPtr psaAlignment;  /* if this is a slave, here is the alignment to the master */
-     SeqEntryPtr pseSequences;  /* the sequences for the master and slaves */
-     SeqAnnotPtr pseqaSeqannot; /* the seq annot pointers containing the seq aligns */
      }MSD,  *PMSD;
  
 

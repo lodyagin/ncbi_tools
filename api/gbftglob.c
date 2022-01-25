@@ -4,6 +4,18 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.8  2000/01/21 21:06:44  kans
+* reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
+*
+* Revision 6.7  2000/01/21 20:48:19  kans
+* changes to merge several source qualifiers under new organelle qualifier
+*
+* Revision 6.6  1999/12/22 21:50:56  kans
+* when frequency was added to source qual legal list, the count number was not raised, bumping country off of the recognized list - my fault
+*
+* Revision 6.5  1999/12/15 23:28:37  kans
+* frequency is legal qualifier for source feature
+*
 * Revision 6.4  1999/02/05 15:40:47  tatiana
 * GBQUAL_country added
 *
@@ -115,8 +127,9 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"translation", Class_text}, {"transl_except", Class_pos_aa}, 
  {"transl_table", Class_int}, {"transposon", Class_text}, 
  {"usedin", Class_token}, {"variety", Class_text}, {"virion", Class_none},
- {"focus", Class_none}, { "specimen_voucher", Class_text}, {"protein_id", Class_text}, { "country", Class_text},
-
+ {"focus", Class_none}, { "specimen_voucher", Class_text},
+ {"protein_id", Class_text}, { "country", Class_text},
+ {"organelle", Class_text},
  };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -477,12 +490,12 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 44,
+   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 46,
      {GBQUAL_cell_line, GBQUAL_cell_type, GBQUAL_chloroplast, 
       GBQUAL_chromoplast, GBQUAL_chromosome,
-      GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_cultivar,
+      GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_country, GBQUAL_cultivar,
       GBQUAL_cyanelle, GBQUAL_db_xref, GBQUAL_dev_stage, GBQUAL_focus,
-      GBQUAL_germline, GBQUAL_haplotype,
+      GBQUAL_frequency, GBQUAL_germline, GBQUAL_haplotype,
       GBQUAL_lab_host, GBQUAL_insertion_seq, GBQUAL_isolate, GBQUAL_kinetoplast,
       GBQUAL_label, GBQUAL_macronuclear, GBQUAL_map, GBQUAL_mitochondrion,
       GBQUAL_note, GBQUAL_plasmid, GBQUAL_pop_variant, 
@@ -490,8 +503,8 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_serotype, GBQUAL_specific_host, GBQUAL_strain, GBQUAL_sub_clone, 
       GBQUAL_sub_species, GBQUAL_sub_strain, GBQUAL_tissue_lib, 
       GBQUAL_tissue_type, GBQUAL_transposon, GBQUAL_usedin, 
-      GBQUAL_specimen_voucher, GBQUAL_variety, GBQUAL_virion, GBQUAL_country,
-      -1, -1, -1, -1, -1, -1}},
+      GBQUAL_specimen_voucher, GBQUAL_variety, GBQUAL_virion,
+      GBQUAL_organelle, -1, -1, -1, -1}},
    {"stem_loop",  0, {-1, -1, -1, -1, -1}, 11,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene,

@@ -31,6 +31,9 @@
  * Version Creation Date: 03/18/98
  *
  * $Log: vast2cn3d.c,v $
+ * Revision 6.11  1999/10/13 20:19:35  zimmerma
+ * DZ: Removed use of temporary files - html output redirected to stdout
+ *
  * Revision 6.10  1998/11/20 20:03:55  addess
  * related to platform independence of VAST Search
  *
@@ -462,13 +465,10 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
          }
         /* Make a linked list of sequence alignments of master and slaves */
         pbsf=pbsfs->features;
-        while (pbsf)
-        {
-          if (!psaAlignHead)
-          {
+        while (pbsf) {
+          if (!psaAlignHead) {
             psaAlignHead = fnPBSFtoPSA (pbsf);  /* get the sequence alignments */
-            if (psaAlignHead == NULL || psaAlignHead->data == NULL) 
-            {
+            if (psaAlignHead == NULL || psaAlignHead->data == NULL) {
 		printf("Content-type: text/html\n\n");
 		printf("<h2>VASTSERV Error (VastToCn3d)</h2>\n");
 		printf("<h3>Unable to create SeqAnnot.</h3>\n");
@@ -476,151 +476,58 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 	    }
             salpHead = (SeqAlignPtr)(psaAlignHead->data);
             salpTail = salpHead;
-            psaAlignTail = psaAlignHead;
           }
-          else
-          {
-             psaAlignTail->next = fnPBSFtoPSA (pbsf);
-             salpTail->next = (SeqAlignPtr)(psaAlignTail->next->data);
-             if (psaAlignTail == NULL || psaAlignTail->data == NULL) 
-             {
+          else {
+             psaAlignTail = fnPBSFtoPSA (pbsf);
+             salpTail->next = (SeqAlignPtr)(psaAlignTail->data);
+             if (psaAlignTail == NULL || psaAlignTail->data == NULL) {
 		printf("Content-type: text/html\n\n");
 		printf("<h2>VASTSERV Error (VastToCn3d)</h2>\n");
 		printf("<h3>Unable to create SeqAnnot.</h3>\n");
 		return 0;
 	     }
-             psaAlignTail = psaAlignTail->next;
              salpTail = salpTail->next;
              salpTail->next = NULL;
-             psaAlignTail->next = NULL;
           }
           pbsf = pbsf->next;
         }
         
-      
-  
-  strcpy(OutputName,GetTempName("vast3")); 
-  if(!(OutputFile = FileOpen(OutputName,WRITE)))
-    {
-       printf("Content-type: text/html\n\n");
-       printf("<h2>Error</h2>\n");
-       printf("Temp File Open Failed At Vast3 WWW-Server<p>\n");
-       CloseMMDBAPI();
-       MMDBFini();
-       VASTFini();
-      exit(1);
-    }
+  pbsaStruct->master = pbsMaster;
+  pbsaStruct->slaves = pbsSlaveHead;
+  pbsaStruct->alignments = pbsaShort;
+  pbsaStruct->seqalign = psaAlignHead;
 
+  pvnNcbi = ValNodeNew(NULL);
+  pvnNcbi->choice =  NcbiMimeAsn1_alignstruc;
+  pvnNcbi->data.ptrvalue = pbsaStruct;
+  pvnNcbi = (NcbiMimeAsn1Ptr) CheckId(pvnNcbi, JobID);      /* to check identity, yanli  */
 
-	/*
-	if ( !EntrezInit("Cn3D", FALSE, &is_network)) {
-		printf("Content-type: text/html\n\n");
-		printf("<h2>VASTSERV Error (VastToCn3d)</h2>\n");
-		printf("<h3>Unable to start Entrez.</h3>\n");
-		return 0;
-	}
-	*/
+  OutputFile = stdout;
 
+  if (iPDB == 0)		/* cn3d MIME */
+    printf ("Content-type: chemical/ncbi-asn1-binary\n\n");
 
-    /*salp =(SeqAlignPtr)(psaAlignHead->data);*/
-    /* This portion of the code will not be used */
-    /*while (salpHead)
-    {
-      dsp = (DenseSegPtr) salpHead->segs;
-      sip = dsp->ids;
-      while (sip != NULL)
-      {
-        uid = EntrezFindSeqId(sip);
-        if (!uidmaster)
-        { 
-          uidmaster = uid;
-          sep = EntrezSeqEntryGet(uidmaster, retcode);
-          ValNodeLink(&(pbsaStruct->sequences), sep);
-        }
-        
-        if (uid == uidmaster)
-        {
-          sip = sip->next;
-          continue;
-        }
-        
-	else
-        {
-          if (!uid) {
-		printf("Content-type: text/html\n\n");
-		printf("<h2>VASTSERV Error (VastToCn3d)</h2>\n");
-		printf("<h3>Unable to get sequence ID.</h3>\n");
-		return 0;
-	  }
-        
-          sep = EntrezSeqEntryGet(uid, retcode);
+  else if (iPDB == 1) {		/* "See File" */
+    printf ("Content-type: text/html\n\n");
+    printf ("<HTML><body><pre>\n");
+  }
 
-	  if ( sep == NULL ) {
-		printf("Content-type: text/html\n\n");
-		printf("<h2>VASTSERV Error (VastToCn3d)</h2>\n");
-		printf("<h3>Unable to get SeqEntry.</h3>\n");
-		return 0;
-	  }
-	  ValNodeLink(&(pbsaStruct->sequences), sep);
-          sip = sip->next;
-        }
-      }
-      salpHead = salpHead->next;
-    }*/
-    /* End of commented out portion */
-    
-	pbsaStruct->master = pbsMaster;
-	pbsaStruct->slaves = pbsSlaveHead;
-	pbsaStruct->alignments = pbsaShort;
-	pbsaStruct->seqalign = psaAlignHead;
+  else				/* "Save File" */
+    printf ("Content-type: application/octet-stream\n\n");
 
-	pvnNcbi = ValNodeNew(NULL);
-	pvnNcbi->choice =  NcbiMimeAsn1_alignstruc;
-	pvnNcbi->data.ptrvalue = pbsaStruct;
-        pvnNcbi = (NcbiMimeAsn1Ptr) CheckId(pvnNcbi, JobID);       
-        /* to check identity, yanli  */
-	
-        strcpy(OutputName, GetTempName("vast3")); 
-	if((OutputFile = FileOpen(OutputName,WRITE)) == NULL) {
-		printf("Content-type: text/html\n\n");
-		printf("<h2>VASTSERV Error (VastToCn3D)</h2>\n");
-		printf("<h3>Temp file open failed.</h3>\n");
-		CloseMMDBAPI();
-		return 0;
-	}
+  if (iPDB != 1)
+    paiFile = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
 
-	/* cn3d file generation */
-	if (iPDB == 0)
-	      fprintf(OutputFile, "Content-type: chemical/ncbi-asn1-binary\n\n"); /* MIME */
-	else if (iPDB == 1) {
-		/* corresponds to "See File" */
-		fprintf(OutputFile, "Content-type: text/html\n\n");
-		fprintf(OutputFile, "<HTML><body><pre>\n");
-	}
-	else
-	      fprintf(OutputFile, "Content-type: application/octet-stream\n\n");
+  else
+    paiFile = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
 
-      fflush(OutputFile);
-  if (OutputFile != stdout)
-    {
-      
-	if (iPDB != 1)
-        	paiFile = AsnIoNew(ASNIO_BIN_OUT, OutputFile, NULL, NULL, NULL);
-	else
-		paiFile = AsnIoNew(ASNIO_TEXT_OUT, OutputFile, NULL, NULL, NULL);
+  NcbiMimeAsn1AsnWrite(pvnNcbi, paiFile, NULL);
+  AsnIoFlush(paiFile);
+  AsnIoClose(paiFile);
 
-	NcbiMimeAsn1AsnWrite(pvnNcbi, paiFile, NULL);
-	AsnIoFlush(paiFile);
-	AsnIoClose(paiFile);
-	 
-      PrintFile(OutputName);    
-    }
-  
   CloseMMDBAPI();
   MMDBFini();
   VASTFini();
-  RemoveTempFiles();   
   return 0;
 
 } /* end of VastToCn3D */
-

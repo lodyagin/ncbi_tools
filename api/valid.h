@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.4  1999/12/24 01:21:06  kans
+* added validateAlignments flag controlling call to ValidateSeqAlignWithinValidator
+*
 * Revision 6.3  1999/07/22 22:04:36  kans
 * added suppressContext flag
 *
@@ -137,6 +140,7 @@ typedef struct validstruct {
 	Boolean justwarnonspell;       /* severity WARNING instead of ERROR on spell */
 	Boolean useSeqMgrIndexes;      /* new style indexing to speed up validation */
 	Boolean suppressContext;       /* suppress context part of message */
+	Boolean validateAlignments;    /* call alignval test suite */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

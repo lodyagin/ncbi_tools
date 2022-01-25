@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.24 1999/09/16 18:52:26 durand Exp $
+/*  $Id: pgppop.c,v 6.39 1999/12/29 22:55:02 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,53 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.24 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: pgppop.c,v $
+* Revision 6.39  1999/12/29 22:55:02  lewisg
+* get rid of seqalign id
+*
+* Revision 6.38  1999/12/20 14:37:53  durand
+* transfer some PopSet Viewer functions from here to wwwddv.c; update the code to better use Color Manager for BLAST outputs
+*
+* Revision 6.37  1999/12/08 22:40:54  durand
+* add the code to produce colored BLAST outputs
+*
+* Revision 6.36  1999/12/07 18:46:33  durand
+* add DDV_GetBspCoordGivenPgpList function
+*
+* Revision 6.35  1999/11/26 15:42:25  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 6.34  1999/10/29 14:14:24  durand
+*  add DDV_GetBspCoordGivenDispCoord() and DDV_GetDispCoordGivenBspCoord()
+*
+* Revision 6.33  1999/10/20 13:13:53  durand
+* add new fields in data structure for DDV
+*
+* Revision 6.32  1999/10/08 17:50:28  durand
+* move DDV_DisplayBlastSAP from pgppop.c to ddvcreate.c due to conflict between api and ddv
+*
+* Revision 6.31  1999/10/07 19:18:46  durand
+* Modified function DDV_DisplayBlastSAP to use AlignMgr
+*
+* Revision 6.30  1999/09/29 17:16:44  shavirin
+* Modified function DDV_DisplayBlastSAP(): added new parameter and printing
+* of the BLAST scores.
+*
+* Revision 6.29  1999/09/29 13:42:27  durand
+* add middle line for BLAST output
+*
+* Revision 6.27  1999/09/28 19:49:30  shavirin
+* Changed definition of the function DDV_DisplayBlastSAP()
+*
+* Revision 6.26  1999/09/28 13:06:39  durand
+* add a first set of functions to display CDS in PopSet Viewer
+*
 * Revision 6.24  1999/09/16 18:52:26  durand
 * redesign the PopSet viewer toolbar
 *
@@ -55,6 +95,46 @@
 * fixed bug in DDV_GetSeqAlign
 *
 * $Log: pgppop.c,v $
+* Revision 6.39  1999/12/29 22:55:02  lewisg
+* get rid of seqalign id
+*
+* Revision 6.38  1999/12/20 14:37:53  durand
+* transfer some PopSet Viewer functions from here to wwwddv.c; update the code to better use Color Manager for BLAST outputs
+*
+* Revision 6.37  1999/12/08 22:40:54  durand
+* add the code to produce colored BLAST outputs
+*
+* Revision 6.36  1999/12/07 18:46:33  durand
+* add DDV_GetBspCoordGivenPgpList function
+*
+* Revision 6.35  1999/11/26 15:42:25  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 6.34  1999/10/29 14:14:24  durand
+*  add DDV_GetBspCoordGivenDispCoord() and DDV_GetDispCoordGivenBspCoord()
+*
+* Revision 6.33  1999/10/20 13:13:53  durand
+* add new fields in data structure for DDV
+*
+* Revision 6.32  1999/10/08 17:50:28  durand
+* move DDV_DisplayBlastSAP from pgppop.c to ddvcreate.c due to conflict between api and ddv
+*
+* Revision 6.31  1999/10/07 19:18:46  durand
+* Modified function DDV_DisplayBlastSAP to use AlignMgr
+*
+* Revision 6.30  1999/09/29 17:16:44  shavirin
+* Modified function DDV_DisplayBlastSAP(): added new parameter and printing
+* of the BLAST scores.
+*
+* Revision 6.29  1999/09/29 13:42:27  durand
+* add middle line for BLAST output
+*
+* Revision 6.27  1999/09/28 19:49:30  shavirin
+* Changed definition of the function DDV_DisplayBlastSAP()
+*
+* Revision 6.26  1999/09/28 13:06:39  durand
+* add a first set of functions to display CDS in PopSet Viewer
+*
 * Revision 6.24  1999/09/16 18:52:26  durand
 * redesign the PopSet viewer toolbar
 *
@@ -176,19 +256,17 @@
 */
 #include <stdio.h>
 #include <ncbi.h>
-
-/*
-#include <biocol.h>
-*/
 #include <blocks.h>
 #include <pgppop.h>
 #include <tofasta.h>
 #include <udvdef.h>
 #include <udvseq.h>
 #include <salstruc.h>
-
 #include <sqnutils.h>
 #include <alignval.h>
+#include <asn2ff6.h>
+#include <subutil.h>
+#include <ddvcolor.h>
 
 #define DDV_COLOR_MAX 33 
  static Uint1 DDV_PaletteRGB[DDV_COLOR_MAX][3] =
@@ -293,20 +371,35 @@ static CharPtr DDV_PaletteRGB_NAV[DDV_COLOR_MAX] =
 #define DDVCOL_HIGHLIGHT 31
 #define DDVCOL_BACKGROUND 32
 
-typedef struct getbsppop{
-	Int4 nCompt;
-	FILE *fp;
-	}GetBspPop, PNTR GetBspPopPtr;
+/*******************************************************************************
 
-/*Entrez and PopSet Viewer scripts*/
-#define szEntrezScript "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?uid=%d&form=6&db=%s&Dopt=g"
-#define szSeqNameStatus "<a href=\"%s\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='%s';return true\">"
-#define WWWDDV_script "wwwddv.cgi?gi=%d&from=%d&to=%d&disp=%u"
-#define WWWDDV_script2 "wwwddv.cgi?gis=%s&disp=%u"
-#define WWWDDV_save_script1 "wwwddv.cgi"
+  Function : DDV_ConcatStr()
+  
+  Purpose : merge to CharPtr; realloc if needed
+  
+  Parameters : 	src; CharPtr source
+  				newStr; CharPtr to add to src
 
-static void DDV_ToolsScript(SeqEntryPtr sep, Uint4 disp_format,FILE *fp, 
-	Boolean ForToolbar);
+  Return value : the merging result of src and newStr
+
+*******************************************************************************/
+static CharPtr DDV_ConcatStr(CharPtr src,CharPtr newStr)
+{
+CharPtr retScr;
+
+	if(src==NULL){
+		retScr=StringSave(newStr);
+	}
+	else{
+		retScr=(CharPtr)MemNew((StringLen(src)+StringLen(newStr)+4)*sizeof(Char));
+		if (!retScr) return(NULL);
+		StringCpy(retScr,src);
+		StringCat(retScr,newStr);
+		MemFree(src);
+	}
+	
+	return(retScr);
+}
 
 /*******************************************************************************
 
@@ -347,7 +440,7 @@ static CharPtr ConvertToLower (CharPtr str)
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_DeleteTxtList(ValNodePtr PNTR vnp)
+NLM_EXTERN void DDV_DeleteTxtList(ValNodePtr PNTR vnp)
 {
 ValNodePtr 	vnp2;
 MsaTxtDispPtr mtdp;
@@ -371,7 +464,7 @@ MsaTxtDispPtr mtdp;
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_DeleteParaGList(ValNodePtr PNTR vnp)
+NLM_EXTERN void DDV_DeleteParaGList(ValNodePtr PNTR vnp)
 {
 ValNodePtr 	vnp2;
 ParaGPtr pgp;
@@ -398,7 +491,7 @@ ParaGPtr pgp;
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_DeleteDisplayList(MsaParaGPopListPtr mpplp)
+NLM_EXTERN void DDV_DeleteDisplayList(MsaParaGPopListPtr mpplp)
 {
 Int4 i;
 
@@ -413,6 +506,408 @@ Int4 i;
 	}
 }
 
+/*******************************************************************************
+
+  Function : DDV_WWW_get_CDS_minus()
+  
+  Purpose : get the translation of a CDS located on a PLUS strand
+  
+  Parameters : context; feature data (see explore.h for a def of the structure)
+  				start; get the sequence from...
+				stop;... to.
+				StartLetter; beginning of a ParaG (zero-based value)
+				i; order number of the exon (if CDS is exon-encoded)
+  				szDNA; DNA sequence
+				LineSize; size of a line
+				
+  Return value : none
+
+*******************************************************************************/
+static void DDV_WWW_get_CDS_minus(SeqMgrFeatContextPtr context,Int4 start,
+			Int4 stop,Int4 StartLetter,Int2 i,CharPtr szDNA,CharPtr szTrans,
+			Int2 LineSize)
+{						
+CharPtr      	str=NULL;
+Int4			il=0,
+				pos=0,
+				n=0,
+				stop_prot=0,
+				gap,
+				limit;
+Int2 			n2,nCompt,
+				decal=0,
+				numivals2=0;
+ByteStorePtr	bs=NULL;
+Boolean bGiForProductOk=FALSE;
+SeqIdPtr sip=NULL;
+Int4 gi=0,size_trans;
+BioseqPtr prot;
+
+	/*retrieve the protein sequence; need to be optimized in future release*/
+	if (context->sfp->product){
+		prot=BioseqFind(SeqLocId(context->sfp->product));
+		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
+		if (sip){
+			gi = GetGINumFromSip(sip);
+			if (gi>0) bGiForProductOk=TRUE;
+			str=UDV_Read_Sequence (sip,0,prot->length-1, 
+				TRUE,prot->length-1);
+		}
+	}
+	else{
+		bs = ProteinFromCdRegion (context->sfp, TRUE);
+		if (bs){
+			str = (CharPtr) BSMerge (bs, NULL);
+			BSFree (bs);
+		}
+	}
+
+	if (!str) return;	
+
+	/*count the lenght of the intron(s)*/
+	numivals2=context->numivals*2;
+	if (i>0){
+		for(nCompt=i;nCompt>0;nCompt-=2){
+			il+=(context->ivals[nCompt-2]-
+				context->ivals[nCompt+1]-1);
+		}
+	}
+
+	pos=context->ivals[1]-il-stop;
+	/*place the current position within the correct translation frame*/
+	if (pos % 3){
+		if (!((pos-1) % 3)){
+			pos=(pos-1)/3;
+			decal=-1;
+		}
+		else if (!((pos+1) % 3)){
+			pos=(pos+1)/3;
+			decal=1;
+		}						
+	}else {
+		pos=pos/3;
+		decal=0;
+	}
+
+	n=pos;
+	stop_prot=stop-decal-1; /*-1 == middle of the codon*/
+	
+	LineSize--;
+	gap=0;
+	if (szTrans){
+		start--;
+		while(stop_prot>start){
+			limit=stop_prot-StartLetter+gap+1;
+			gap=0;
+			for(i=0;i<limit;i++){
+				if (szDNA[i]=='-') gap++;
+			}
+			if (szDNA[limit-1]=='-'){
+				while(szDNA[i]){
+					if (szDNA[i]=='-') gap++;
+					else break;
+					i++;
+				}
+			}
+			n2=stop_prot-StartLetter+gap+(stop_prot-StartLetter+gap)/LETTER_BLOCK_WIDTH;
+			if (str[n])
+				szTrans[n2]=str[n];
+			else 
+				break;
+			
+			stop_prot-=3;
+			n++;
+		}
+	}
+
+	if (str){
+		MemFree (str);
+	}
+}
+
+
+/*******************************************************************************
+
+  Function : DDV_WWW_get_CDS_plus()
+  
+  Purpose : get the translation of a CDS located on a PLUS strand
+  
+  Parameters : context; feature data (see explore.h for a def of the structure)
+  				start; get the sequence from...
+				stop;... to.
+				StartLetter; beginning of a ParaG (zero-based value)
+				i; order number of the exon (if CDS is exon-encoded)
+  				szDNA; DNA sequence
+				LineSize; size of a line
+				
+  Return value : none
+
+*******************************************************************************/
+static void DDV_WWW_get_CDS_plus(SeqMgrFeatContextPtr context,Int4 start,
+			Int4 stop,Int4 StartLetter,Int4 size_pgp,
+			Int2 i,CharPtr szDNA,CharPtr szTrans,
+			Int2 LineSize,Uint1 strand)
+{						
+CharPtr      	str=NULL;
+Int4			il=0,
+				pos=0,
+				n=0,
+				start_prot,
+				stop_prot,
+				limit,
+				gap;
+Int2 			n2=0,
+				decal=0,
+				numivals2=0,
+				nCompt=0;
+ByteStorePtr	bs=NULL;
+Boolean bGiForProductOk=FALSE;
+SeqIdPtr sip=NULL;
+Int4 gi=0,size_trans;
+BioseqPtr prot;
+
+	/*retrieve the protein sequence; need to be optimized in future release*/
+	if (context->sfp->product){
+		prot=BioseqFind(SeqLocId(context->sfp->product));
+		sip=(SeqIdPtr)GetProductSeqId(context->sfp->product);
+		if (sip){
+			gi = GetGINumFromSip(sip);
+			if (gi>0) bGiForProductOk=TRUE;
+			str=UDV_Read_Sequence (sip,0,prot->length-1, 
+				TRUE,prot->length);
+		}
+	}
+	else{
+		bs = ProteinFromCdRegion (context->sfp, TRUE);
+		if (bs){
+			str = (CharPtr) BSMerge (bs, NULL);
+			BSFree (bs);
+		}
+	}
+
+	if (!str) return;	
+	/*count the lenght of the intron(s)*/
+	numivals2=context->numivals*2;
+	if (i>0 && i<numivals2){
+		for(nCompt=2;nCompt<i+2;nCompt+=2){
+			il+=(context->ivals[nCompt]-
+				context->ivals[nCompt-1]-1);
+		}
+	}
+
+	pos=start-il-context->ivals[0];
+						
+	/*place the current position within the correct translation frame*/
+	if (pos % 3){
+		if (!((pos-1) % 3)){
+			pos=(pos-1)/3;
+			decal=-1;
+		}
+		else if (!((pos+1) % 3)){
+			pos=(pos+1)/3;
+			decal=1;
+		}						
+	}else {
+		pos=pos/3;
+		decal=0;
+	}
+
+	n=pos;
+	LineSize--;
+	gap=0;
+	
+	if (strand==Seq_strand_minus)
+		szDNA=reverse_string(szDNA);
+
+	size_pgp--;
+	
+	if (szTrans){
+		start_prot=start+decal+1;
+		stop++;
+		while(start_prot<stop){
+			limit=start_prot-StartLetter+gap+1;
+
+			gap=0;
+			for(i=0;i<limit;i++){
+				if (szDNA[i]=='-') gap++;
+			}
+			if (szDNA[(strand==Seq_strand_minus ? limit : limit-1)]=='-'){
+				while(szDNA[i]){
+					if (szDNA[i]=='-') gap++;
+					else break;
+					i++;
+				}
+			}
+			if (strand!=Seq_strand_minus){
+				n2=start_prot-StartLetter+gap;
+				n2+=(n2/LETTER_BLOCK_WIDTH);
+			}
+			else{
+				n2=size_pgp-(start_prot-StartLetter+gap);
+				n2+=(n2/LETTER_BLOCK_WIDTH);
+			}
+			if (n2>LineSize) break;
+			if (str[n])
+				szTrans[n2]=str[n];
+			else 
+				break;
+			start_prot+=3;
+			n++;
+		}
+	}
+	if (str){
+		MemFree (str);
+	}
+}
+
+
+NLM_EXTERN void DDV_DispFeaturesForPGP(ParaGPtr pgp,BioseqPtr bsp,CharPtr PNTR szFLine,Int4 disp,
+	Int2 LineSize, CharPtr szDNA, Uint1 strand)
+{
+SeqMgrFeatContext    context2;
+SeqMgrFeatContextPtr context=NULL;
+SeqMgrSegmentContext contextPart;
+ValNodePtr           vnp4;
+BioseqPtr            parent;
+CharPtr              szTrans;
+Int4                 from_bsp,to_bsp,start,stop,i,numivals2,i_decal;
+Int2                 jj;
+Uint2                iID,idx;
+Boolean              bDispTrans=FALSE;
+
+	/*the current bsp is just a segment ?*/
+	parent=SeqMgrGetParentOfPart(bsp,&contextPart);
+	context=NULL;
+	szTrans=NULL;
+	
+	LineSize+=(LineSize/LETTER_BLOCK_WIDTH);
+	szTrans=(CharPtr)MemNew(LineSize*sizeof(Char));
+
+	if (szTrans==NULL) return;
+
+	/*for each feature...*/
+	for(jj=0,vnp4=pgp->pFeatList;jj<pgp->nFeat;jj++,vnp4=vnp4->next){
+		
+		if (vnp4 == NULL) break;
+		
+		/*...get desired feature given iID and idx...*/
+		UDV_BigDecodeIdxFeat ((Uint8)vnp4->data.bigintvalue, &iID,&idx,NULL,NULL);
+		if (!SeqMgrGetDesiredFeature(0,
+			(parent!=NULL ? parent : bsp),iID,idx,NULL,&context2)) continue;
+		/*...then copy the original context feature data ...*/
+		if (context) {
+			MemFree(context->ivals);
+			context=MemFree(context);
+		}
+		if (context) {
+			MemFree(context->ivals);
+			context=MemFree(context);
+		}
+		/*...before I modify it*/
+		context=UDV_ConvertFeatContext(&context2,contextPart.cumOffset,
+			bsp->length);
+		if (!context) continue;
+		/*temporary situation; will be modified in the future*/
+		if (context->strand>Seq_strand_minus ||
+			context->strand==Seq_strand_unknown) context->strand=Seq_strand_plus;
+
+		/*if circular DNA with feature overlapping the junction*/
+		if(context->left<0 && context->bsp->topology==TOPOLOGY_CIRCULAR){
+			/*technically, just for the purpose of a display, a feature
+			overlapping the ends of a circular DNA covers all the sequence; that is
+			because I ALWAYS display from LEFT to RIGHT.*/
+			context->left=0;
+			context->right=context->bsp->length-1;
+			
+			/*strand PLUS*/
+			if (context->strand==Seq_strand_plus){
+				numivals2=2*context->numivals-2;
+				i=numivals2;
+				i_decal=-2;
+			}
+
+			/*strand MINUS*/
+			if (context->strand==Seq_strand_minus){
+				numivals2=context->numivals*2;
+				i=0;
+				i_decal=2;
+			}		
+		}
+		else{
+			if (context->left<0){
+				context->left=0;
+			}
+			/*strand PLUS*/
+			if (context->strand==Seq_strand_plus){
+				numivals2=context->numivals*2;
+				i=0;
+				i_decal=2;
+			}
+
+			/*strand MINUS*/
+			if (context->strand==Seq_strand_minus){
+				numivals2=2*context->numivals-2;
+				i=numivals2;
+				i_decal=-2;
+			}		
+		}
+		
+		MemSet(szTrans,'.',(LineSize-1)*sizeof(Char));
+		
+		while (TRUE){
+			/*get the bsp coords for the current ParaG*/
+			UDV_ComputeBspCoordRangeinPGP(pgp,&from_bsp,&to_bsp);
+			/*the ParaG only contains a gap ?*/
+			if (from_bsp==INT4_MAX && to_bsp==INT4_MIN) break;
+			/*if ivals.stop > end ParaG -> end of drawing*/
+			if (context->ivals[i]>to_bsp) break;
+			/*if ivals.stop<= start ParaG : not yet in the current ParaG*/
+			if (context->ivals[i+1]<from_bsp) {
+				if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
+					i=i+i_decal;
+					if (i>numivals2-2 || i<0) break;
+					else continue;
+				}					
+				if (context->strand==Seq_strand_minus){
+					i=i+i_decal;
+					if (i<0) break;
+					else continue;
+				}
+			}
+			/*...only display CDS */
+			if(context->featdeftype==FEATDEF_CDS){
+				/*compute the limits of the feature within ParaG*/
+				start=MAX(context->ivals[i],from_bsp);
+				stop=MIN(context->ivals[i+1],to_bsp);
+				if (start>stop) continue;
+				if (context->strand!=Seq_strand_minus)
+					DDV_WWW_get_CDS_plus(context,start,
+						stop,from_bsp,pgp->StopLetter-pgp->StartLetter,
+						i,szDNA,szTrans,LineSize,strand);
+				/*else
+					DDV_WWW_get_CDS_minus(context,start,
+						stop,from_bsp,i,szDNA,szTrans,LineSize);*/
+				bDispTrans=TRUE;
+			}/*end if(CDS)*/
+			if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
+				i=i+i_decal;
+				if (i>numivals2-2 || i<0) break;
+			}
+			if (context->strand==Seq_strand_minus){
+				i=i+i_decal;
+				if (i<0) break;
+			}
+		}/*end while()*/
+		if (bDispTrans){
+			*szFLine=DDV_ConcatStr(*szFLine,"\n");
+			DDV_AddBlank2(disp,szFLine);
+			*szFLine=DDV_ConcatStr(*szFLine,szTrans);
+			bDispTrans=FALSE;
+		}
+	}/*end for()*/
+}	
 
 /*******************************************************************************
 
@@ -427,7 +922,7 @@ Int4 i;
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_ResetParaGSeqAlignCoord(MsaParaGPopListPtr mpplp,Int2 LineSize)
+NLM_EXTERN void DDV_ResetParaGSeqAlignCoord(MsaParaGPopListPtr mpplp,Int2 LineSize)
 {
 Int4 i,decal;
 Int2 OldLineSize;
@@ -471,7 +966,7 @@ ParaGPtr pgp;
   Return value : TRUE if success
 
 *******************************************************************************/
-extern Boolean DDV_PopDisplay2(SABlockPtr sabp,MsaParaGPopListPtr mpplp,
+NLM_EXTERN Boolean DDV_PopDisplay2(SABlockPtr sabp,MsaParaGPopListPtr mpplp,
 			Int4 nBSP,Uint1 MasterScaleStyle,Boolean ShowTick,
 			Int2 cbl,Int4 nBlockToPop,Int4 ali_from,Int4 ali_to)
 {
@@ -730,6 +1225,19 @@ Int4		gFrom,gTo,gDecal_L,gDecal_R;/*used to prepare a display from a range*/
 		}
 	}/*end for(block)*/
 
+	/*hack : sometimes a NULL node is added at the end: remove it*/
+	for(i=0;i<nBSP;i++){
+		vnp=mpplp->TableHead[i];
+		while(vnp){
+			vnp2=vnp->next;
+			if (vnp2 && vnp2->data.ptrvalue==NULL){
+				ValNodeFree(vnp2);
+				vnp->next=NULL;
+			}
+			vnp=vnp->next;
+		}
+	}
+	
 	/*size of the align to display*/
 	mpplp->LengthAli=AbsLengthAli;
 	mpplp->nBsp=countSeg;
@@ -739,12 +1247,63 @@ Int4		gFrom,gTo,gDecal_L,gDecal_R;/*used to prepare a display from a range*/
 	return(TRUE);
 }
 	/*small version of DDV_PopDisplay2*/
-extern Boolean DDV_PopDisplay(SABlockPtr sabp,MsaParaGPopListPtr mpplp,
+NLM_EXTERN Boolean DDV_PopDisplay(SABlockPtr sabp,MsaParaGPopListPtr mpplp,
 			Int4 nBSP,Uint1 MasterScaleStyle,Boolean ShowTick,
 			Int2 cbl,Int4 nBlockToPop)
 {
 	return(DDV_PopDisplay2(sabp, mpplp,nBSP, MasterScaleStyle, ShowTick,
 			 cbl, nBlockToPop,-1,-1));
+}
+
+/*******************************************************************************
+
+  Function : GetClrFromClrGlobal()
+  
+  Purpose : get the color of a letter using ColorManager
+  				
+  Return value : - (see szColor)
+
+*******************************************************************************/
+static void GetClrFromClrGlobal(DDV_ColorGlobal * gclr,Int4 bsp_coord,
+	SeqIdPtr sip, CharPtr szColor,Uint1Ptr style)
+{
+DDV_ColorCell * dclrp;
+Uint4 i,idx;
+Uint1 rgb1[4],rgb2[4];	
+Boolean bFound;
+
+	dclrp=DDV_GetColor(gclr,sip, -1, bsp_coord);
+	bFound=FALSE;
+	(*style)=0;
+	
+	if (dclrp){
+		rgb1[0]=dclrp->rgb[0];
+		rgb1[1]=dclrp->rgb[1];
+		rgb1[2]=dclrp->rgb[2];
+		rgb1[3]=0;
+		for(i=0;i<DDV_COLOR_MAX;i++){
+			rgb2[0]=DDV_PaletteRGB[i][0];
+			rgb2[1]=DDV_PaletteRGB[i][1];
+			rgb2[2]=DDV_PaletteRGB[i][2];
+			rgb2[3]=0;
+			if (*((Uint4Ptr)rgb1 )== *((Uint4Ptr)rgb2)){
+				idx=i;
+				bFound=TRUE;
+				break;
+			}
+		}
+		if (dclrp->UseItalic)
+			(*style)|=DDV_TXTSTYLE_ITALIC;
+		if (dclrp->UseBold)
+			(*style)|=DDV_TXTSTYLE_BOLD;
+		if (dclrp->UseUnderline)
+			(*style)|=DDV_TXTSTYLE_UNDERLINE;
+	}
+	
+	if (!bFound){
+		idx=DDVCOL_BLACK;
+	}
+	StringCpy(szColor,DDV_PaletteRGB_NAV[idx]);
 }
 
 /*******************************************************************************
@@ -797,37 +1356,43 @@ static void GetClrFromLetter(Char residue,Boolean IsAA,CharPtr szColor)
 	}
 }
 
-/*******************************************************************************
 
-  Function : ConcatStr()
-  
-  Purpose : merge to CharPtr; realloc if needed
-  
-  Parameters : 	src; CharPtr source
-  				newStr; CharPtr to add to src
-
-  Return value : the merging result of src and newStr
-
-*******************************************************************************/
-static CharPtr ConcatStr(CharPtr src,CharPtr newStr)
-{
-CharPtr retScr;
-
-	if(src==NULL){
-		retScr=StringSave(newStr);
-	}
-	else{
-		retScr=(CharPtr)MemNew((StringLen(src)+StringLen(newStr)+1)*sizeof(Char));
-		if (!retScr) return(NULL);
-		StringCpy(retScr,src);
-		StringCat(retScr,newStr);
-		MemFree(src);
-	}
-	
-	return(retScr);
+#define DDV_DumpStyles(_newStyle,_newColor,_boldOpen,_italicOpen,_underlineOpen,_colorOpen,_szSequence,_szBuf)\
+{\
+	if (_newStyle&DDV_TXTSTYLE_BOLD){\
+		_szSequence=DDV_ConcatStr(_szSequence,"<B>");\
+		_boldOpen=TRUE;\
+	}\
+	if (_newStyle&DDV_TXTSTYLE_ITALIC){\
+		_szSequence=DDV_ConcatStr(_szSequence,"<I>");\
+		_italicOpen=TRUE;\
+	}\
+	if (_newStyle&DDV_TXTSTYLE_UNDERLINE){\
+		_szSequence=DDV_ConcatStr(_szSequence,"<U>");\
+		_underlineOpen=TRUE;\
+	}\
+	_szSequence=DDV_ConcatStr(_szSequence,"<FONT COLOR=#");\
+	_colorOpen=TRUE;\
+	_szSequence=DDV_ConcatStr(_szSequence,_newColor);\
+	_szSequence=DDV_ConcatStr(_szSequence,">");\
+	_szSequence=DDV_ConcatStr(_szSequence,_szBuf);\
+	if (_colorOpen){\
+		_szSequence=DDV_ConcatStr(_szSequence,"</FONT>");\
+		_colorOpen=FALSE;\
+	}\
+	if (_underlineOpen){\
+		_szSequence=DDV_ConcatStr(_szSequence,"</U>");\
+		_underlineOpen=FALSE;\
+	}\
+	if (_italicOpen){\
+		_szSequence=DDV_ConcatStr(_szSequence,"</I>");\
+		_italicOpen=FALSE;\
+	}\
+	if (_boldOpen){\
+		_szSequence=DDV_ConcatStr(_szSequence,"</B>");\
+		_boldOpen=FALSE;\
+	}\
 }
-
-
 /*******************************************************************************
 
   Function : DDV_Print_Sequence()
@@ -845,13 +1410,16 @@ CharPtr retScr;
   Return value : -
 
 *******************************************************************************/
-static CharPtr  DDV_Print_Sequence(CharPtr szSeq,Boolean bUseColour,Boolean IsAA)
+static CharPtr  DDV_Print_Sequence(CharPtr szSeq,Boolean bUseColour,Boolean IsAA,
+		ParaGPtr pgp, DDV_ColorGlobal * gclr)
 {
 CharPtr szBuf,szTmp,szSequence=NULL;
-Int4    pos,taille,stop;			
+Int4    pos,taille,stop,bsp_coord;
 Char    residue;					
 Uint2   nCompt=0,nCompt2=0;
 Char    curColor[10],newColor[10]={""};
+Uint1   curStyle,newStyle;
+Boolean boldOpen,italicOpen,underlineOpen,colorOpen;
 	
 	/*alloc a buffer*/
 	taille=StringLen(szSeq)+1;
@@ -866,7 +1434,8 @@ Char    curColor[10],newColor[10]={""};
 	/*prepare the colour display*/
 	pos=1;	
 	stop=taille+1;
-
+	newStyle=curStyle=0;
+	boldOpen=italicOpen=underlineOpen=colorOpen=FALSE;
 	/*draw!*/
 	if (!bUseColour){/*black-colour display*/
 		szTmp=StringChr(szSeq,'\0');
@@ -877,36 +1446,41 @@ Char    curColor[10],newColor[10]={""};
 	else{ /*use colour-coded alphabet fo NA & AA*/
 		while(pos<stop){
 			residue=szSeq[nCompt];
-			/*retrieve colour*/
-			GetClrFromLetter(residue,IsAA,curColor);
-			/*new colour?*/
-			if (StringCmp(curColor,newColor)){
+			/*retrieve "standard" colors if Color Manger is not used*/
+			if (gclr==NULL){
+				GetClrFromLetter(residue,IsAA,curColor);
+			}
+			else{/*use Color Manager to get the colors*/
+				bsp_coord=DDV_GetBspCoordGivenDispCoord(pgp,pgp->StartLetter+nCompt);
+				if (bsp_coord!=(Int4)-1)/*bsp letter*/
+					GetClrFromClrGlobal(gclr,bsp_coord,pgp->sip,curColor,&curStyle);
+				else/*gap*/{
+					StringCpy(curColor,DDV_PaletteRGB_NAV[DDVCOL_BLACK]);
+					curStyle=0;
+				}
+					
+			}
+			/*new colour? or new style?*/
+			if (StringCmp(curColor,newColor) || curStyle!=newStyle){
 				if (szBuf[0]!='\0'){/*something to draw ?*/
 					szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
-					/*fprintf(fp,"<FONT COLOR=#%s>%s</FONT>",newColor,szBuf);*/
-					szSequence=ConcatStr(szSequence,"<FONT COLOR=#");
-					szSequence=ConcatStr(szSequence,newColor);
-					szSequence=ConcatStr(szSequence,">");
-					szSequence=ConcatStr(szSequence,szBuf);
-					szSequence=ConcatStr(szSequence,"</FONT>");
+					DDV_DumpStyles(newStyle,newColor,boldOpen,italicOpen,
+						underlineOpen,colorOpen,szSequence,szBuf);
 				}
 				StringCpy(newColor,curColor);
+				newStyle=curStyle;
 				nCompt2=0;
 				szBuf[nCompt2]='\0';
 			}
 			szBuf[nCompt2++]=residue;
 			
-			/*each LETTER_BLOCK_WIDTH, add a blank column*/
+			/*each LETTER_BLOCK_WIDTH, add a empty column*/
 			pos++;nCompt++;		
 		}
 		if (szBuf[0]!='\0'){/*something to draw ?*/
 			szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
-			/*fprintf(fp,"<FONT COLOR=#%s>%s</FONT>",newColor,szBuf);*/
-			szSequence=ConcatStr(szSequence,"<FONT COLOR=#");
-			szSequence=ConcatStr(szSequence,newColor);
-			szSequence=ConcatStr(szSequence,">");
-			szSequence=ConcatStr(szSequence,szBuf);
-			szSequence=ConcatStr(szSequence,"</FONT>");
+			DDV_DumpStyles(newStyle,newColor,boldOpen,italicOpen,
+				underlineOpen,colorOpen,szSequence,szBuf);
 		}
 	}
 	MemFree(szBuf);
@@ -931,12 +1505,6 @@ Char    curColor[10],newColor[10]={""};
   Return value : -
 
 *******************************************************************************/
-#define DDV_AddBlank(_diff, _fp) \
-do { Int4 _i;  for (_i=0; _i<(Int4)_diff; _i++) fprintf(_fp," "); } while(0)
-
-#define DDV_AddBlank2(_diff, _str) \
-do { Int4 _i;  for (_i=0; _i<(Int4)_diff; _i++) *_str=ConcatStr(*_str," "); } while(0)
-
 static CharPtr DDV_DisplayTopScale(Int4 from,Int4 to,Int4 offset,Uint4 disp_format,
 	Uint1 what)
 {
@@ -976,20 +1544,20 @@ Char 	szBlank[TABLE_LEFT_MARGIN+5]={""};
 			pos++;i++;
 		}
 		if (what==SCALE_NUM) /*fprintf(fp,"\n");*/
-			szScale=ConcatStr(szScale,"\n");
+			szScale=DDV_ConcatStr(szScale,"\n");
 		if(disp_format&DISP_FULL_HTML){
 			/*fprintf(fp,"<font color=#700777>");*/
-			szScale=ConcatStr(szScale,"<font color=#700777>");
+			szScale=DDV_ConcatStr(szScale,"<font color=#700777>");
 			DDV_AddBlank2(offset,&szScale);
-			szScale=ConcatStr(szScale,szText);
+			szScale=DDV_ConcatStr(szScale,szText);
 			/*fprintf(fp,"%s",szText);*/
-			szScale=ConcatStr(szScale,"</font>\n");
+			szScale=DDV_ConcatStr(szScale,"</font>\n");
 			/*fprintf(fp,"</font>\n");*/
 		}else if(disp_format&DISP_FULL_TXT){
 			DDV_AddBlank2(offset,&szScale);
 			/*fprintf(fp,"%s\n",szText);*/
-			szScale=ConcatStr(szScale,szText);
-			szScale=ConcatStr(szScale,"\n");
+			szScale=DDV_ConcatStr(szScale,szText);
+			szScale=DDV_ConcatStr(szScale,"\n");
 		}
 		MemFree(szText);
 	}
@@ -1016,7 +1584,7 @@ Char 	szBlank[TABLE_LEFT_MARGIN+5]={""};
   Return value : TRUE if success; see also bsp_strand,bsp_start,bsp_stop
 
 *******************************************************************************/
-extern Boolean DDV_GetSequenceFromParaG(ParaGPtr pgp,
+NLM_EXTERN Boolean DDV_GetSequenceFromParaG(ParaGPtr pgp,
 	CharPtr PNTR szSequence,Int4 bspLength,Boolean IsAA,Uint1 PNTR bsp_strand,
 	Int4 PNTR bsp_start,Int4 PNTR bsp_stop)
 {
@@ -1068,8 +1636,8 @@ Int4 last_from=0,old_from=INT4_MAX;
 	for(vnp2=pgp->ptxtList;vnp2!=NULL;vnp2=vnp2->next){
 		mtdp=(MsaTxtDispPtr)(vnp2->data.ptrvalue);
 		if (mtdp){
-			strand=mtdp->strand;
 			if (mtdp->IsGap==0) {
+				strand=mtdp->strand;
 				from=MIN(from,mtdp->from);
 				to=MAX(to,mtdp->to);
 				if (!bOk) bOk=TRUE;
@@ -1105,6 +1673,7 @@ Int4 last_from=0,old_from=INT4_MAX;
 						c=' ';
 						break;
 					case MSA_TXT_STYLE_GAP:
+					case MSA_TXT_STYLE_2:
 						c='-';
 						break;
 				}
@@ -1140,6 +1709,345 @@ Int4 last_from=0,old_from=INT4_MAX;
 	return(TRUE);
 }
 
+/*****************************************************************************
+
+Function: DDV_GetBspCoordGivenDispCoord()
+
+Purpose: compute a BSP coord given a display coord and a ParaG 
+
+Return value: BSP coord
+
+*****************************************************************************/
+NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp,Int4 disp_pos)
+{
+MsaTxtDispPtr  mtdp;
+ValNodePtr     vnp;
+Int4           pgp_start,diff,bsp_coord;
+
+	bsp_coord=(Int4)-1;
+	pgp_start=pgp->StartLetter;
+	vnp=pgp->ptxtList;
+	while(vnp){
+		mtdp=(MsaTxtDispPtr)vnp->data.ptrvalue;
+		diff=mtdp->to-mtdp->from;
+		if (disp_pos>=pgp_start && disp_pos<=(pgp_start+diff)){
+			if (mtdp->TextStyle == MSA_TXT_STYLE_SEQ){
+				bsp_coord=mtdp->from+(disp_pos-pgp_start);
+				if(mtdp->strand==Seq_strand_minus){
+					bsp_coord=mtdp->to-(bsp_coord-mtdp->from);
+				}
+			}
+			else{
+				bsp_coord=(Int4)-1;
+			}
+			break;
+		}
+		pgp_start+=diff+1;
+		vnp=vnp->next;
+	}
+
+	return(bsp_coord);
+}
+
+/*****************************************************************************
+
+Function: DDV_GetBspCoordGivenPgpList()
+
+Purpose: get a bsp_coord given a list of ParaG (for example a row in a SeqAlign)
+         and a display coordinates.
+		 
+Return value: bsp coord
+
+*****************************************************************************/
+NLM_EXTERN Int4 DDV_GetBspCoordGivenPgpList(ValNodePtr ParaG_List,Int4 disp_pos)
+{
+ValNodePtr vnp;
+ParaGPtr   pgp,TheParaG;
+Boolean    bFound;
+Int4       bsp_coord;
+
+	bFound=FALSE;
+	vnp=ParaG_List;
+	bsp_coord=(Int4)-1;
+	while(vnp){
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		if (disp_pos>=pgp->StartLetter && disp_pos<=pgp->StopLetter){
+			bFound=TRUE;
+			TheParaG=pgp;
+			break;
+		}
+		vnp=vnp->next;
+	}
+	if (bFound){
+		bsp_coord=DDV_GetBspCoordGivenDispCoord(TheParaG,disp_pos);
+	}
+	return(bsp_coord);
+}
+
+/*****************************************************************************
+
+Function: DDV_GetDispCoordGivenBspCoord()
+
+Purpose: compute a display coord given a Bioseq coord and the ParaG list of
+    a row (SeqAlign)
+
+Return value: disp coord
+
+*****************************************************************************/
+NLM_EXTERN Int4 DDV_GetDispCoordGivenBspCoord(ValNodePtr vnp_head,Int4 bsp_pos)
+{
+MsaTxtDispPtr  mtdp;
+ValNodePtr     vnp,vnp2;
+ParaGPtr       pgp;
+Int4           pgp_start,diff,disp_coord,bsp_start_pgp,bsp_stop_pgp;
+
+	disp_coord=(Int4)-1;
+	vnp2=vnp_head;
+	while(vnp2){
+		pgp=(ParaGPtr)vnp2->data.ptrvalue;
+		UDV_ComputeBspCoordRangeinPGP(pgp,&bsp_start_pgp,&bsp_stop_pgp);
+		if(bsp_start_pgp<=bsp_pos && bsp_pos<=bsp_stop_pgp){
+			pgp_start=pgp->StartLetter;
+			vnp=pgp->ptxtList;
+			while(vnp){
+				mtdp=(MsaTxtDispPtr)vnp->data.ptrvalue;
+				diff=mtdp->to-mtdp->from;
+				if (mtdp->TextStyle == MSA_TXT_STYLE_SEQ &&
+				    (mtdp->from<=bsp_pos && bsp_pos<=mtdp->to)){
+					if(mtdp->strand==Seq_strand_minus){
+						disp_coord=pgp_start+(mtdp->to-bsp_pos);
+					}
+					else{
+						disp_coord=pgp_start+(bsp_pos-mtdp->from);
+					}
+				}
+				
+				pgp_start+=diff+1;
+				vnp=vnp->next;
+			}
+		}
+		vnp2=vnp2->next;
+	}
+
+	return(disp_coord);
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetFormattedSequence_1()
+  
+  Purpose : format a sequence given upper/lower case status for each letter
+  
+  Parameters : 	pgp; the paragraph containing the sequence szSeq.
+                szSeq; the sequence
+				gclr; contains the letters' layout data
+				
+  
+*******************************************************************************/
+static void DDV_GetFormattedSequence_1(ParaGPtr pgp,CharPtr szSeq,
+		DDV_ColorGlobal * gclr)
+{
+DDV_ColorCell * dclrp;
+Int4            i,dp;
+Boolean         isAlpha;
+		
+	i=0;
+
+	while(szSeq[i]){
+		if (szSeq[i]!=' '){
+			if (isalpha(szSeq[i])){
+				isAlpha=TRUE;
+				dp=DDV_GetBspCoordGivenDispCoord(pgp,pgp->StartLetter+i);
+				if (dp==(Int4)-1)
+					dclrp=NULL;
+				else
+					dclrp=DDV_GetColor(gclr,pgp->sip, -1, dp);
+			}
+			else {
+				isAlpha=FALSE;
+			}
+
+			if (isAlpha && dclrp)
+				szSeq[i]=(dclrp->LowerCase ? TO_LOWER(szSeq[i]) : szSeq[i]);
+		}
+		i++;
+	}
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetBLASTCompLine_1()
+  
+  Purpose : get the middle line of a BLAST pairwise seqAlign
+  
+*******************************************************************************/
+NLM_EXTERN CharPtr DDV_GetBLASTCompLine_1(CharPtr szQuery, CharPtr szSubject, 
+		Int4Ptr PNTR matrix)
+{
+Int4    stop,pos;
+CharPtr szMiddleLine;
+
+	stop=StringLen(szSubject);
+	szMiddleLine=(CharPtr)MemNew((stop+1)*sizeof(Char));
+	if (szMiddleLine){
+		pos=0;
+		while(pos<stop){
+			if (matrix){
+				if(IS_ALPHA(szQuery[pos]) && IS_ALPHA(szSubject[pos])){
+					if(szQuery[pos]==szSubject[pos]){
+						szMiddleLine[pos]=szQuery[pos];
+					}
+					else{
+						if (matrix[szSubject[pos]][szQuery[pos]]>0){
+							szMiddleLine[pos]='+';
+						}
+						else{
+							szMiddleLine[pos]=' ';
+						}
+					}
+				}
+				else{
+					szMiddleLine[pos]=' ';
+				}
+
+			}
+			else{
+				if(szQuery[pos]==szSubject[pos])
+					szMiddleLine[pos]='|';
+				else
+					szMiddleLine[pos]=' ';
+			}
+			pos++;
+		}
+	}
+
+	return(szMiddleLine);
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetBLASTCompLine_2()
+  
+  Purpose : get the middle line of a BLAST pairwise seqAlign
+  
+*******************************************************************************/
+NLM_EXTERN CharPtr DDV_GetBLASTCompLine_2(ParaGPtr pgpQuery, ParaGPtr pgpSubject, 
+		Int4Ptr PNTR matrix)
+{
+CharPtr   szQuery,szSubject,szComp;
+BioseqPtr bsp;
+Boolean   IsAA;
+Int4      bspLength;
+
+	szComp=szQuery=szSubject=NULL;
+	/*get the query sequence*/
+	szQuery=(CharPtr)MemNew((pgpQuery->StopLetter-pgpQuery->StartLetter+3)*sizeof(Char));
+	if (!szQuery) return(NULL);
+	bsp=BioseqLockById(pgpQuery->sip);
+	if (!bsp) goto error;
+	bspLength=BioseqGetLen(bsp);
+	IsAA=ISA_aa(bsp->mol);
+	BioseqUnlockById(pgpQuery->sip);
+	if (!DDV_GetSequenceFromParaG(pgpQuery,&szQuery,bspLength,IsAA,NULL,
+			NULL,NULL)) goto error;
+	/*get the subject sequence*/
+	szSubject=(CharPtr)MemNew((pgpSubject->StopLetter-pgpSubject->StartLetter+3)*sizeof(Char));
+	if (!szSubject) goto error;
+	bsp=BioseqLockById(pgpSubject->sip);
+	if (!bsp) goto error;
+	bspLength=BioseqGetLen(bsp);
+	IsAA=ISA_aa(bsp->mol);
+	BioseqUnlockById(pgpSubject->sip);
+	if (!DDV_GetSequenceFromParaG(pgpSubject,&szSubject,bspLength,IsAA,NULL,
+			NULL,NULL)) goto error;
+
+	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix);
+error:
+	if (szQuery) MemFree(szQuery);
+	if (szSubject) MemFree(szSubject);
+	return(szComp);
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetBLASTCompLine_3()
+  
+  Purpose : get the middle line of a BLAST pairwise seqAlign
+  
+*******************************************************************************/
+NLM_EXTERN CharPtr DDV_GetBLASTCompLine_3(CharPtr szQuery, ParaGPtr pgpSubject, 
+		Int4Ptr PNTR matrix)
+{
+CharPtr   szSubject,szComp;
+BioseqPtr bsp;
+Boolean   IsAA;
+Int4      bspLength;
+
+	szComp=szSubject=NULL;
+	/*get the subject sequence*/
+	szSubject=(CharPtr)MemNew((pgpSubject->StopLetter-pgpSubject->StartLetter+3)*sizeof(Char));
+	if (!szSubject) goto error;
+	bsp=BioseqLockById(pgpSubject->sip);
+	if (!bsp) goto error;
+	bspLength=BioseqGetLen(bsp);
+	IsAA=ISA_aa(bsp->mol);
+	BioseqUnlockById(pgpSubject->sip);
+	if (!DDV_GetSequenceFromParaG(pgpSubject,&szSubject,bspLength,IsAA,NULL,
+			NULL,NULL)) goto error;
+			
+	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix);
+error:
+	if (szSubject) MemFree(szSubject);
+	return(szComp);
+}
+
+/*******************************************************************************
+
+  Function : DDV_HideMaskedLetters()
+  
+  Purpose : replace sequence letters with 'X' in masked regions (BLAST)
+  
+*******************************************************************************/
+static void DDV_HideMaskedLetters(CharPtr szSeqMaster,ParaGPtr pgp,ValNodePtr mask)
+{
+ValNodePtr      vnp;
+SeqLocPtr       slp;
+Int4            i,bsp_start,bsp_stop,mask_start,mask_stop,scan_from,
+                scan_to,max,real_pos;
+ValNode         vn;
+
+	if (!szSeqMaster || !pgp || !mask) return;
+	
+	memset(&vn,0,sizeof(ValNode));
+	vn.data.ptrvalue=(Pointer)pgp;
+
+	/*get query sequence range*/
+	UDV_ComputeBspCoordRangeinPGP(pgp,&bsp_start,&bsp_stop);
+	max=StringLen(szSeqMaster);
+	
+	/*scan the mask list*/
+	vnp=mask;
+	while(vnp){
+		slp=(SeqLocPtr)vnp->data.ptrvalue;
+		if (slp){
+			mask_start=SeqLocStart(slp);
+			mask_stop=SeqLocStop(slp);
+			/*check if the masked region is in the bsp range*/
+			if (mask_stop>=bsp_start && mask_start<=bsp_stop){
+				scan_from=_max_(mask_start,bsp_start);
+				scan_to=_min_(mask_stop,bsp_stop)+1;
+				for(i=scan_from;i<scan_to;i++){
+					real_pos=DDV_GetDispCoordGivenBspCoord(&vn,i)-pgp->StartLetter;
+					if (real_pos>=0 && real_pos<max){
+						szSeqMaster[real_pos]='X';
+					}
+				}
+			}
+		}
+		vnp=vnp->next;
+	}
+}
+
 /*******************************************************************************
 
   Function : DDV_DisplayParaG()
@@ -1155,6 +2063,9 @@ Int4 last_from=0,old_from=INT4_MAX;
 				IsAA; TRUE means protein
 				bDispPhilouName;used for PHYLIP format
 				szFormattedLine; see 'Return value'
+				szSeqMaster; sequence of a master (used to display variations)
+				matrix; matrix used for BLAST output
+				gclr; enhanced display options (colors, upper/lower case,...)
 				
   Return value : the next node in the ParaG ValNode List of a sequence;
                 fill szFormattedLine with the info ready to display
@@ -1162,12 +2073,12 @@ Int4 last_from=0,old_from=INT4_MAX;
 *******************************************************************************/
 static ValNodePtr DDV_DisplayParaG(ValNodePtr vnp,Int4 i,Boolean ShowScale,
 		Uint4 disp_format,CharPtr szSeqAcc,CharPtr szSeqName,Boolean IsAA,
-		Boolean bDispPhilouName,Int4 max_length,Int4 max_scale,
-		CharPtr PNTR szFormattedLine)		
+		Boolean bDispPhilouName,Int4 max_length,Int4 max_scale,Int2 LineSize,
+		CharPtr PNTR szFormattedLine,CharPtr PNTR szSeqMaster, Int4Ptr PNTR matrix,
+		DDV_ColorGlobal * gclr,ValNodePtr mask)		
 {
-static CharPtr  szSeqMaster=NULL;
 ParaGPtr 		pgp;	/*ParaG data*/
-CharPtr			szSequence,szDisp,szFLine=NULL,szTmp;
+CharPtr			szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine;
 BioseqPtr       bsp;
 SeqIdPtr        sip;
 Int4            bspLength,size,stop,nCompt2,pos,gi,diff,disp,bsp_start,bsp_stop;
@@ -1181,13 +2092,7 @@ Uint1			bsp_strand;
 
 	szSequence=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+3)*sizeof(Char));
 
-	if (szSequence) MemSet(szSequence,0,(pgp->StopLetter-pgp->StartLetter+2)
-			*sizeof(Char));
-	else return(NULL);
-
-	if(i==1){/*to retrieve the sequence of the Master*/
-		if (szSeqMaster) MemFree(szSeqMaster);
-	}
+	if (!szSequence) return(NULL);
 
 	/*get some bsp info*/	
 	sip=SeqIdFindBest(pgp->sip,0);
@@ -1195,12 +2100,18 @@ Uint1			bsp_strand;
 	bsp=BioseqLockById(sip);
 	if (!bsp) goto error;
 	bspLength=BioseqGetLen(bsp);
-	BioseqUnlockById(sip);
+
 	if (!DDV_GetSequenceFromParaG(pgp,&szSequence,bspLength,IsAA,&bsp_strand,
 			&bsp_start,&bsp_stop)) goto error;
 
-	/*switch to lower case if needed*/
-	if (disp_format&TEXT_LOWERCASE){
+	if (gclr){/*format the output; only upper/lower case letters are lait out in 
+	          this function*/
+		DDV_GetFormattedSequence_1(pgp,szSequence,gclr);
+	}
+	else if (disp_format&TEXT_LOWERCASE || ISA_na(bsp->mol)){
+	/*switch to lower case if needed; this is for the PopSet viewer: it displays
+	DNA sequences using ALWAYS lower case letters. We don't need a complex gclr
+	data structure here (this takes time to create...)*/
 		szSequence=ConvertToLower(szSequence);
 	}
 	
@@ -1223,7 +2134,7 @@ Uint1			bsp_strand;
 			szTmp=DDV_DisplayTopScale(pgp->StartLetter,
 				pgp->StopLetter,disp,disp_format,SCALE_NUM);
 			if (szTmp){
-				szFLine=ConcatStr(szFLine,szTmp);
+				szFLine=DDV_ConcatStr(szFLine,szTmp);
 				MemFree(szTmp);
 			}
 		}
@@ -1231,14 +2142,14 @@ Uint1			bsp_strand;
 			szTmp=DDV_DisplayTopScale(pgp->StartLetter,
 				pgp->StopLetter,disp,disp_format,SCALE_TICK);
 			if (szTmp){
-				szFLine=ConcatStr(szFLine,szTmp);
+				szFLine=DDV_ConcatStr(szFLine,szTmp);
 				MemFree(szTmp);
 			}
 		}
 		/*display order num if needed*/
 		if (disp_format&DISP_ORDER_NUM){ /*fprintf(fp,"[%4i] ",i);*/
 			sprintf(szBuf4,"[%4i] ",i);
-			szFLine=ConcatStr(szFLine,szBuf4);
+			szFLine=DDV_ConcatStr(szFLine,szBuf4);
 		}
 		/*display sequence name*/
 		if (*szSeqAcc) {
@@ -1251,51 +2162,67 @@ Uint1			bsp_strand;
 					sprintf(szBuf4,"javascript:void(0)");
 				}
 				if (szSeqName){
-					szFLine=ConcatStr(szFLine,"<a href=\"");
-					szFLine=ConcatStr(szFLine,szBuf4);
-					szFLine=ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
-					szFLine=ConcatStr(szFLine,szSeqName);
-					szFLine=ConcatStr(szFLine,"';return true\">");
+					szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
+					szFLine=DDV_ConcatStr(szFLine,szBuf4);
+					szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
+					szFLine=DDV_ConcatStr(szFLine,szSeqName);
+					szFLine=DDV_ConcatStr(szFLine,"';return true\">");
 					/*fprintf(fp,szSeqNameStatus,szBuf4,szSeqName);*/
 				}
 				else{
-					szFLine=ConcatStr(szFLine,"<a href=\"");
-					szFLine=ConcatStr(szFLine,szBuf4);
-					szFLine=ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
-					szFLine=ConcatStr(szFLine,"unknown name");
-					szFLine=ConcatStr(szFLine,"';return true\">");
+					szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
+					szFLine=DDV_ConcatStr(szFLine,szBuf4);
+					szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
+					szFLine=DDV_ConcatStr(szFLine,"unknown name");
+					szFLine=DDV_ConcatStr(szFLine,"';return true\">");
 					/*fprintf(fp,szSeqNameStatus,szBuf4,"unknown name");*/
 				}
 			}
 			/*fprintf(fp,"%s",szSeqAcc);*/
-			szFLine=ConcatStr(szFLine,szSeqAcc);
+			szFLine=DDV_ConcatStr(szFLine,szSeqAcc);
 			if (disp_format&DISP_FULL_HTML) 
 				/*fprintf(fp,"</a>");*/
-				szFLine=ConcatStr(szFLine,"</a>");
+				szFLine=DDV_ConcatStr(szFLine,"</a>");
 		}
 		else {
 			/*fprintf(fp,"unknown");*/
-			szFLine=ConcatStr(szFLine,"unknown");
+			szFLine=DDV_ConcatStr(szFLine,"unknown");
 		}
 		DDV_AddBlank2(diff,&szFLine);
 		/*display strand if needed*/
 		if (disp_format&DISP_STRAND){
+			Char szStuff[]="< >";
+			Int1 iStuff=1;
+			
+			if (bsp_start==INT4_MAX){
+				iStuff=1;
+			}
+			else {
+				if (bsp_strand==Seq_strand_minus)
+					iStuff=0;
+				else
+					iStuff=2;
+			}
 			/*fprintf(fp,"%-2s", (bsp_strand==Seq_strand_minus ? "<" : ">"));*/
-			sprintf(szBuf4,"%-2s", (bsp_strand==Seq_strand_minus ? "<" : ">"));
-			szFLine=ConcatStr(szFLine,szBuf4);
+			if (bsp_strand==Seq_strand_minus)
+				szFLine=DDV_ConcatStr(szFLine,"<FONT COLOR=#FF0000>");
+			sprintf(szBuf4,"%c ", szStuff[iStuff]);
+			szFLine=DDV_ConcatStr(szFLine,szBuf4);
+			if (bsp_strand==Seq_strand_minus)
+				szFLine=DDV_ConcatStr(szFLine,"</FONT>");
 		}
 		/*display bsp coord if needed*/
 		if (disp_format&DISP_BSP_COORD){
 			Char szBuf2[15]={""};
 			Int4 iVal;
 			
-			if (bsp_strand==Seq_strand_minus) iVal=bsp_stop;
+			if (bsp_strand==Seq_strand_minus) iVal=bsp_stop;/**/
 			else iVal=bsp_start;
 
 			if (iVal!=INT4_MAX) {
 				sprintf(szBuf2,"%i",++iVal);/*switch to base one*/
 				/*fprintf(fp,"%i", iVal);*/
-				szFLine=ConcatStr(szFLine,szBuf2);
+				szFLine=DDV_ConcatStr(szFLine,szBuf2);
 				DDV_AddBlank2(MAX(2,max_scale-StringLen(szBuf2)+2),&szFLine);
 			} 
 			else DDV_AddBlank2(max_scale+2,&szFLine);
@@ -1305,21 +2232,22 @@ Uint1			bsp_strand;
 			if (szSeqAcc) {/*name only*/
 				/*fprintf(fp,"%-10s ",szSeqAcc);*/
 				sprintf(szBuf4,"%-10s ",szSeqAcc);
-				szFLine=ConcatStr(szFLine,szBuf4);
+				szFLine=DDV_ConcatStr(szFLine,szBuf4);
 			}
 			else {
 				/*fprintf(fp,"%-10s ","unknown");*/
-				szFLine=ConcatStr(szFLine,"unknown");
+				szFLine=DDV_ConcatStr(szFLine,"unknown");
 			}
 		}
 		else {
 			/*fprintf(fp,"%-10s "," ");*/
 			sprintf(szBuf4,"%-10s "," ");
-			szFLine=ConcatStr(szFLine,szBuf4);
+			szFLine=DDV_ConcatStr(szFLine,szBuf4);
 		}
 	}
+	/*right now, I consider the first sequence of the SeqAlign is the master*/
 	if (i==1){
-		szSeqMaster=StringSave(szSequence);
+		*szSeqMaster=StringSave(szSequence);
 	}
 	/*display sequence*/
 	size=StringLen(szSequence);
@@ -1335,11 +2263,11 @@ Uint1			bsp_strand;
 				if(disp_format&VIEW_FULLSEQ){
 					szDisp[nCompt2++]=szSequence[pos-1];
 				}else if(disp_format&VIEW_VARIA){
-					if(szSeqMaster && i!=1){
+					if(*szSeqMaster && i!=1){
 						if(szSequence[pos-1]=='-'){
 							szSequence[pos-1]='-';
 						}
-						if(szSequence[pos-1]!=szSeqMaster[pos-1]){
+						if(szSequence[pos-1]!=(*szSeqMaster)[pos-1]){
 							szDisp[nCompt2++]=szSequence[pos-1];
 						}
 						else{
@@ -1356,17 +2284,17 @@ Uint1			bsp_strand;
 				}
 				pos++;
 			}
-			szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA);
+			szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr);
 			if (szTmp){
-				szFLine=ConcatStr(szFLine,szTmp);
+				szFLine=DDV_ConcatStr(szFLine,szTmp);
 				MemFree(szTmp);
 			}
 			MemFree(szDisp);
 		}
 		else{
-			szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA);
+			szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr);
 			if (szTmp){
-				szFLine=ConcatStr(szFLine,szTmp);
+				szFLine=DDV_ConcatStr(szFLine,szTmp);
 				MemFree(szTmp);
 			}
 		}
@@ -1374,14 +2302,14 @@ Uint1			bsp_strand;
 	else{/*AFSDDGTFDGGDFDTEGDFGDFDGETDFGD*/
 		if(disp_format&VIEW_FULLSEQ){
 			if(disp_format&DISP_FULL_HTML){/*output format*/
-				szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA);
+				szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr);
 				if (szTmp){
-					szFLine=ConcatStr(szFLine,szTmp);
+					szFLine=DDV_ConcatStr(szFLine,szTmp);
 					MemFree(szTmp);
 				}
 			}else {
 				/*fprintf(fp,"%s",szSequence);*/
-				szFLine=ConcatStr(szFLine,szSequence);
+				szFLine=DDV_ConcatStr(szFLine,szSequence);
 			}
 		}else if(disp_format&VIEW_VARIA){
 			szDisp=(CharPtr)MemNew((size+1)*sizeof(Char));
@@ -1390,8 +2318,8 @@ Uint1			bsp_strand;
 				pos=0;
 				stop=size+1;
 				while(pos<stop){
-					if(szSeqMaster && i!=1){
-						if(szSequence[pos]!=szSeqMaster[pos]){
+					if(*szSeqMaster && i!=1){
+						if(szSequence[pos]!=(*szSeqMaster)[pos]){
 							szDisp[pos]=szSequence[pos];
 						}
 						else{
@@ -1407,27 +2335,27 @@ Uint1			bsp_strand;
 					pos++;
 				}
 				if(disp_format&DISP_FULL_HTML){/*output format*/
-					szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA);
+					szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr);
 					if (szTmp){
-						szFLine=ConcatStr(szFLine,szTmp);
+						szFLine=DDV_ConcatStr(szFLine,szTmp);
 						MemFree(szTmp);
 					}
 				}else{
 					/*fprintf(fp,"%s",szDisp);*/
-					szFLine=ConcatStr(szFLine,szDisp);
+					szFLine=DDV_ConcatStr(szFLine,szDisp);
 				}
 				MemFree(szDisp);
 			}
 			else {
 				if(disp_format&DISP_FULL_HTML){/*output format*/
-					szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA);
+					szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr);
 					if (szTmp){
-						szFLine=ConcatStr(szFLine,szTmp);
+						szFLine=DDV_ConcatStr(szFLine,szTmp);
 						MemFree(szTmp);
 					}
 				}else{
 					/*fprintf(fp,"%s",szSequence);*/
-					szFLine=ConcatStr(szFLine,szSequence);
+					szFLine=DDV_ConcatStr(szFLine,szSequence);
 				}
 			}
 		}
@@ -1436,20 +2364,47 @@ Uint1			bsp_strand;
 	if (disp_format&DISP_BSP_COORD){
 		Int4 iVal;
 
-		if (bsp_strand==Seq_strand_minus) iVal=bsp_start;
+		if (bsp_strand==Seq_strand_minus) iVal=bsp_start;/**/
 		else iVal=bsp_stop;
 		
 		if (iVal!=INT4_MIN) {
 			/*fprintf(fp,"  %i", iVal+1);*/
 			sprintf(szBuf4,"  %i", iVal+1);
-			szFLine=ConcatStr(szFLine,szBuf4);
+			szFLine=DDV_ConcatStr(szFLine,szBuf4);
 		}
 		else DDV_AddBlank2(max_scale+2,&szFLine);
 	}
-	
+
+	/*hide the masked region(s) on the master (usually, this is for BLAST only)*/	
+	if (i==1 && mask){
+		DDV_HideMaskedLetters(*szSeqMaster,pgp,mask);
+	}
+
+	/*build the BLAST middle line of the alignment*/
+	if(disp_format&DISP_BLAST_MIDLINE && i>1){
+		szMiddleLine=DDV_GetBLASTCompLine_1(*szSeqMaster, szSequence,matrix);
+		if (szMiddleLine){
+			szTmp=(CharPtr)MemNew((disp+1)*sizeof(Char));
+			MemSet(szTmp,' ',disp);
+			/*DDV_AddBlank2(disp,&szTmp);*/
+			szTmp=DDV_ConcatStr(szTmp,szMiddleLine);
+			szTmp=DDV_ConcatStr(szTmp,"\n");
+			szTmp=DDV_ConcatStr(szTmp,szFLine);
+			MemFree(szFLine);
+			szFLine=szTmp;
+			MemFree(szMiddleLine);
+		}
+	}
+
+	/*hack: for test purpose (features display on SeqAlign)*/
+	/*DDV_DispFeaturesForPGP(pgp, bsp, &szFLine, disp, LineSize, szSequence,
+			bsp_strand);*/
+
+
 error:
+	if (bsp)BioseqUnlockById(sip);
 	MemFree(szSequence);
-	szFLine=ConcatStr(szFLine,"\n");
+	szFLine=DDV_ConcatStr(szFLine,"\n");
 	/*fprintf(fp,"\n");*/
 	*szFormattedLine=szFLine;
 	
@@ -1515,44 +2470,44 @@ Char 	szWWW[WWW_SCRIPT_SIZE]={""};
 	MemSet(szWide,'.',(wide-lGoLeft-lGoRight)*sizeof(Char));
 	szWide[wide-lGoLeft-lGoRight]='\0';
 	/*fprintf(fp,"<pre>");*/
-	szFLine=ConcatStr(szFLine,"<pre>");
+	szFLine=DDV_ConcatStr(szFLine,"<pre>");
 	if(fromL!=0 && toL!=0){
 		sprintf(szWWW,WWWDDV_script,gi,fromL,toL,disp_format);
 		/*fprintf(fp,"&lt;&lt<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
 onMouseOver=\"window.status='Click to view this region';return true\" >%s</a>",szWWW,szGoLeft);*/
-		szFLine=ConcatStr(szFLine,"&lt;&lt<a href=\"");
-		szFLine=ConcatStr(szFLine,szWWW);
-		szFLine=ConcatStr(szFLine,"\" onMouseOut=\"window.status='';return true\" ");
-		szFLine=ConcatStr(szFLine,"onMouseOver=\"window.status='Click to view this region';return true\" >");
-		szFLine=ConcatStr(szFLine,szGoLeft);
-		szFLine=ConcatStr(szFLine,"</a>");
+		szFLine=DDV_ConcatStr(szFLine,"&lt;&lt<a href=\"");
+		szFLine=DDV_ConcatStr(szFLine,szWWW);
+		szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status='';return true\" ");
+		szFLine=DDV_ConcatStr(szFLine,"onMouseOver=\"window.status='Click to view this region';return true\" >");
+		szFLine=DDV_ConcatStr(szFLine,szGoLeft);
+		szFLine=DDV_ConcatStr(szFLine,"</a>");
 	}
 	else{
 		/*fprintf(fp,"%s",szGoLeft);*/
-		szFLine=ConcatStr(szFLine,szGoLeft);
+		szFLine=DDV_ConcatStr(szFLine,szGoLeft);
 	}
 	/*fprintf(fp,"<FONT COLOR=#FFFFFF>%s</FONT>",szWide);*/
-	szFLine=ConcatStr(szFLine,"<FONT COLOR=#FFFFFF>");
-	szFLine=ConcatStr(szFLine,szWide);
-	szFLine=ConcatStr(szFLine,"</FONT>");
+	szFLine=DDV_ConcatStr(szFLine,"<FONT COLOR=#FFFFFF>");
+	szFLine=DDV_ConcatStr(szFLine,szWide);
+	szFLine=DDV_ConcatStr(szFLine,"</FONT>");
 	
 	if(fromR!=0 && toR!=0){
 		sprintf(szWWW,WWWDDV_script,gi,fromR,toR,disp_format);
 		/*fprintf(fp,"<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
 onMouseOver=\"window.status='Click to view this region';return true\" >%s</a>&gt;&gt",szWWW,szGoRight);*/
-		szFLine=ConcatStr(szFLine,"<a href=\"");
-		szFLine=ConcatStr(szFLine,szWWW);
-		szFLine=ConcatStr(szFLine,"\" onMouseOut=\"window.status='';return true\" ");
-		szFLine=ConcatStr(szFLine,"onMouseOver=\"window.status='Click to view this region';return true\" >");
-		szFLine=ConcatStr(szFLine,szGoRight);
-		szFLine=ConcatStr(szFLine,"</a>&gt;&gt");
+		szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
+		szFLine=DDV_ConcatStr(szFLine,szWWW);
+		szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status='';return true\" ");
+		szFLine=DDV_ConcatStr(szFLine,"onMouseOver=\"window.status='Click to view this region';return true\" >");
+		szFLine=DDV_ConcatStr(szFLine,szGoRight);
+		szFLine=DDV_ConcatStr(szFLine,"</a>&gt;&gt");
 	}
 	else{
 		/*fprintf(fp,"%s",szGoRight);*/
-		szFLine=ConcatStr(szFLine,szGoRight);
+		szFLine=DDV_ConcatStr(szFLine,szGoRight);
 	}
 	/*fprintf(fp,"</PRE>");*/
-	szFLine=ConcatStr(szFLine,"</pre>");
+	szFLine=DDV_ConcatStr(szFLine,"</pre>");
 
 	MemFree(szWide);
 	return(szFLine);
@@ -1574,6 +2529,8 @@ onMouseOver=\"window.status='Click to view this region';return true\" >%s</a>&gt
 				LineSize; size of each line of sequence
 				fp; file to put the ouptut
 				bspp; filled here withthe formatted text
+				matrix; matrix used for BLAST output
+				gclr; enhanced display options (colors, upper/lower case,...)
 				 
   Return value : - (see bspp)
 
@@ -1581,9 +2538,10 @@ onMouseOver=\"window.status='Click to view this region';return true\" >%s</a>&gt
          text is directly sent to fp.
 		 
 *******************************************************************************/
-extern void DDV_AffichageParaG(MsaParaGPopListPtr mpplp,Int4 gi,Int4 from,Int4 to,
+NLM_EXTERN void DDV_AffichageParaG(MsaParaGPopListPtr mpplp,Int4 gi,Int4 from,Int4 to,
 		Int4 TotalAliLength,Int4 numBlockAffich,Uint4 disp_format,Int2 LineSize,
-		FILE *fp,ByteStorePtr PNTR bspp)
+		FILE *fp,ByteStorePtr PNTR bspp,Int4Ptr PNTR matrix,DDV_ColorGlobal * gclr,
+		ValNodePtr mask)
 {
 Int4 			i,j=0,max_length=INT4_MIN,max_scale=INT4_MIN;
 ValNodePtr PNTR TableDesc=NULL;
@@ -1597,6 +2555,7 @@ BioseqPtr 		bsp;
 BoolPtr 		IsAAp;
 Boolean			bDispPhilouName=TRUE;
 SeqIdPtr        sip;
+CharPtr  		szSeqMaster=NULL;
 
 	/*if bspp is not allocated*/
 	if (fp==NULL && (*bspp)==NULL){
@@ -1614,7 +2573,7 @@ SeqIdPtr        sip;
 	MemSet(szSeqAcc,0,mpplp->nBsp*sizeof(CharPtr));	
 	MemSet(szSeqName,0,mpplp->nBsp*sizeof(CharPtr));	
 	MemSet(IsAAp,0,mpplp->nBsp*sizeof(Boolean));	
-	if (numBlockAffich>0) j=2;
+	if (!(disp_format&DISPE_TABLE)) j=2;
 	else j=0;
 
 	for(i=0;i<mpplp->nBsp;i++){
@@ -1624,7 +2583,7 @@ SeqIdPtr        sip;
 		if (pgp){/*create the name table*/
 			bsp=BioseqLockById(pgp->sip);
 			if (bsp){
-				Int2 j;
+				Int2 jj;
 				if (disp_format&SEQNAME_BLAST_STD){ 
 					if (i==0) 
 						StringCpy(szBuf,"Query:");
@@ -1644,10 +2603,10 @@ SeqIdPtr        sip;
 				szSeqName[i]=(CharPtr)MemNew(100*sizeof(Char));
 				if (szSeqName[i]){
 					FastaDefLine(bsp, szSeqName[i], 99, NULL, NULL, 0);
-					j=0;
-					while(szSeqName[i][j]){
-						if (szSeqName[i][j]=='\'') szSeqName[i][j]=' ';
-						j++;
+					jj=0;
+					while(szSeqName[i][jj]){
+						if (szSeqName[i][jj]=='\'') szSeqName[i][jj]=' ';
+						jj++;
 					}
 				}
 				
@@ -1664,18 +2623,18 @@ SeqIdPtr        sip;
 	if(disp_format&DISP_FULL_HTML){/*output format*/
 		if (numBlockAffich>0){/*nav arrow*/
 			szTmp=DDV_Nav_Arrows(gi,TotalAliLength,numBlockAffich,disp_format,LineSize);
-			szFline=ConcatStr(szFline,szTmp);
+			szFline=DDV_ConcatStr(szFline,szTmp);
 			MemFree(szTmp);
 		}
-		/*fprintf(fp,"<table>");*/
-		/*fprintf(fp,"<tr><td bgcolor=%s><pre>",szColor[j]);*/
-		szFline=ConcatStr(szFline,"<table><tr><td bgcolor=");
-		szFline=ConcatStr(szFline,szColor[j]);
-		szFline=ConcatStr(szFline,"><pre>");
+		if (disp_format&DISPE_TABLE){
+			szFline=DDV_ConcatStr(szFline,"<table><tr><td bgcolor=");
+			szFline=DDV_ConcatStr(szFline,szColor[j]);
+			szFline=DDV_ConcatStr(szFline,">");
+		}
+		szFline=DDV_ConcatStr(szFline,"<pre>");
 	}else if(disp_format&DISP_PHYLIP_TXT){
-		/*fprintf(fp,"%7d  %d\n",mpplp->nBsp,mpplp->LengthAli);*/
 		sprintf(szBuf,"%7d  %d\n",mpplp->nBsp,mpplp->LengthAli);
-		szFline=ConcatStr(NULL,szBuf);
+		szFline=DDV_ConcatStr(NULL,szBuf);
 	}
 
 	if(szFline){
@@ -1691,38 +2650,38 @@ SeqIdPtr        sip;
 		szFline=NULL;
 		TableDesc[i-1]=DDV_DisplayParaG(TableDesc[i-1],i,(Boolean)(i==1 ? TRUE : FALSE),
 			disp_format,szSeqAcc[i-1],szSeqName[i-1],IsAAp[i-1],bDispPhilouName,
-			max_length,max_scale,&szFline);
+			max_length,max_scale,LineSize,&szFline,&szSeqMaster,matrix,gclr,mask);
 		if (szFline){
 			if (fp)
 				fprintf(fp,"%s",szFline);
 			else
 				BSWrite(*bspp, (VoidPtr)szFline, StringLen(szFline));
-			/*fprintf(fp,"%s",szFline);*/
 			MemFree(szFline);
 		}
 		i++;
 		if (i>mpplp->nBsp){
 			i=1;
+			if (szSeqMaster) 
+				szSeqMaster=MemFree(szSeqMaster);
 			if(disp_format&DISP_FULL_HTML){
-				/*fprintf(fp,"</pre></td></tr>");*/
-				szFline=ConcatStr(NULL,"</pre></td></tr>");
+				szFline=DDV_ConcatStr(NULL,"</pre>");
+				if (disp_format&DISPE_TABLE){
+					szFline=DDV_ConcatStr(NULL,"</td></tr>");
+				}
 				if(szFline){
 					if (fp)
 						fprintf(fp,"%s",szFline);
 					else
 						BSWrite(*bspp, (VoidPtr)szFline, StringLen(szFline));
-					/*fprintf(fp,"%s",szFline);*/
 					MemFree(szFline);
 				}
 			}else if((disp_format&DISP_PHYLIP_TXT) || (disp_format&DISP_FULL_TXT)){
-				/*fprintf(fp,"\n");*/
-				szFline=ConcatStr(NULL,"\n");
+				szFline=DDV_ConcatStr(NULL,"\n");
 				if(szFline){
 					if (fp)
 						fprintf(fp,"%s",szFline);
 					else
 						BSWrite(*bspp, (VoidPtr)szFline, StringLen(szFline));
-					/*fprintf(fp,"%s",szFline);*/
 					MemFree(szFline);
 				}
 			}
@@ -1730,16 +2689,17 @@ SeqIdPtr        sip;
 				if (j==1) j=0; else j=1;
 			}
 			if(disp_format&DISP_FULL_HTML){
-				/*fprintf(fp,"<tr><td bgcolor=%s><pre>",szColor[j]);*/
-				szFline=ConcatStr(NULL,"<tr><td bgcolor=");
-				szFline=ConcatStr(szFline,szColor[j]);
-				szFline=ConcatStr(szFline,"><pre>");
+				if (disp_format&DISPE_TABLE){
+					szFline=DDV_ConcatStr(NULL,"<tr><td bgcolor=");
+					szFline=DDV_ConcatStr(szFline,szColor[j]);
+					szFline=DDV_ConcatStr(szFline,">");
+				}
+				szFline=DDV_ConcatStr(szFline,"<pre>");
 				if(szFline){
 					if (fp)
 						fprintf(fp,"%s",szFline);
 					else
 						BSWrite(*bspp, (VoidPtr)szFline, StringLen(szFline));
-					/*fprintf(fp,"%s",szFline);*/
 					MemFree(szFline);
 				}
 			}else if(disp_format&DISP_PHYLIP_TXT){
@@ -1750,12 +2710,13 @@ SeqIdPtr        sip;
 	}
 
 	if(disp_format&DISP_FULL_HTML){
-		/*fprintf(fp,"</pre></td></tr>");
-		fprintf(fp,"</table>");*/
-		szFline=ConcatStr(szFline,"</pre></td></tr></table>");
+		szFline=DDV_ConcatStr(szFline,"</pre>");
+		if (disp_format&DISPE_TABLE){
+			szFline=DDV_ConcatStr(szFline,"</td></tr></table>");
+		}
 		if (numBlockAffich>0)/*nav arrow*/{
 			szTmp=DDV_Nav_Arrows(gi,TotalAliLength,numBlockAffich,disp_format,LineSize);
-			szFline=ConcatStr(szFline,szTmp);
+			szFline=DDV_ConcatStr(szFline,szTmp);
 			MemFree(szTmp);
 		}
 		if(szFline){
@@ -1763,7 +2724,6 @@ SeqIdPtr        sip;
 				fprintf(fp,"%s",szFline);
 			else
 				BSWrite(*bspp, (VoidPtr)szFline, StringLen(szFline));
-			/*fprintf(fp,"%s",szFline);*/
 			MemFree(szFline);
 		}
 	}
@@ -1876,52 +2836,79 @@ Int4 i=0,j=0,len=StringLen(szSequence);
   Purpose : create the FASTA file for a full Indexed SeqAlign
   
   Parameters :  sabp; indexed seqalign
-  				FasType; see pgppop.h (display format )
-				SAsize;size of the indexed seqalign
 				fp; file to put the FASTA
   
   Return value : TRUE if success 
 
 *******************************************************************************/
-extern Boolean DDV_GetFullFASTAforIdxAli(SABlockPtr sabp,Uint4 disp_format,
-	Int4 SAsize,FILE *fp)
+NLM_EXTERN Boolean DDV_GetFullFASTAforIdxAli(SABlockPtr sabp,FILE *fp)
 {
 SegmentPtr	segph;
 BioseqPtr	bsp;	
-Char DefLine[255];
-CharPtr szBuf;
 
-	if(disp_format&DISP_FASTA_NOGAP){
-		/*scan the first block in SABP to retrieve each BSP*/
-		for (segph=sabp->segp_head; segph!=NULL;segph=segph->next){
-			bsp=BioseqLockById(segph->sip);
-			if (bsp){
-				BioseqToFasta(bsp,fp,(Boolean)ISA_na(bsp->mol));
-				BioseqUnlock(bsp);
-			}
-		}
-	}
-	else{
-		szBuf=(CharPtr)MemNew((SAsize+1)*sizeof(Char));
-		if (!szBuf) return (FALSE);
-		/*scan the first block in SABP to retrieve each BSP*/
-		for (segph=sabp->segp_head; segph!=NULL;segph=segph->next){
-			bsp=BioseqLockById(segph->sip);
-			if (bsp){
-				/*print the FASTA header for the bioseq*/
-				FastaId(bsp,DefLine,254);
-				fprintf(fp,">%s ",DefLine);
-				CreateDefLine(NULL, bsp, DefLine, 254, 0,NULL, NULL);
-				fprintf(fp,"%s\n",DefLine);
-				/*get and print the sequence with gaps*/
-				MemSet(szBuf,0,(SAsize+1)*sizeof(Char));
-				DDV_GetGappedSequence(segph,szBuf,(Boolean)ISA_aa(bsp->mol));
-				DDV_PrintFastaGappedSequence(szBuf,fp);
-				BioseqUnlock(bsp);
-			}
+	/*scan the first block in SABP to retrieve each BSP*/
+	for (segph=sabp->segp_head; segph!=NULL;segph=segph->next){
+		bsp=BioseqLockById(segph->sip);
+		if (bsp){
+			BioseqToFasta(bsp,fp,(Boolean)ISA_na(bsp->mol));
+			BioseqUnlockById(segph->sip);
 		}
 	}
 	return(TRUE);	
+}
+
+/*******************************************************************************
+
+  Function : DDV_GetFullGapFASTAforIdxAli()
+  
+  Purpose : create the gapped FASTA file for a full Indexed SeqAlign
+  
+  Parameters :  mpplp; indexed seqalign
+				fp; file to put the FASTA
+  
+  Return value : TRUE if success 
+
+*******************************************************************************/
+NLM_EXTERN Boolean DDV_GetFullGapFASTAforIdxAli(MsaParaGPopListPtr mpplp,FILE *fp)
+{
+Int4 i,bspLength;
+ParaGPtr 		pgp;
+ValNodePtr    vnp;
+BioseqPtr bsp;
+Boolean   IsAA;
+CharPtr szSeq;
+Char DefLine[255];
+
+	for (i=0;i<mpplp->nBsp;i++){
+		vnp=mpplp->TableHead[i];
+		/*get some BSP data*/
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		bsp=BioseqLockById(pgp->sip);
+		if (!bsp) continue;
+		bspLength=BioseqGetLen(bsp);
+		IsAA=ISA_aa(bsp->mol);
+		/*print the FASTA header for the bioseq*/
+		FastaId(bsp,DefLine,254);
+		fprintf(fp,">%s ",DefLine);
+		CreateDefLine(NULL, bsp, DefLine, 254, 0,NULL, NULL);
+		fprintf(fp,"%s\n",DefLine);
+		BioseqUnlockById(pgp->sip);
+		/*print the gapped sequence*/
+		while(vnp){
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			szSeq=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+3)*sizeof(Char));
+			if (szSeq){
+				if (!DDV_GetSequenceFromParaG(pgp,&szSeq,bspLength,IsAA,NULL,
+					NULL,NULL)) continue;
+				fprintf(fp,szSeq);
+				fprintf(fp,"\n");
+				MemFree(szSeq);
+			}
+			vnp=vnp->next;
+		}
+	}
+	fprintf(fp,"\n");
+	return(TRUE);
 }
 
 /*******************************************************************************
@@ -1931,8 +2918,8 @@ CharPtr szBuf;
   Purpose : print the name/author of the PopSet study
   
 *******************************************************************************/
-extern void DDV_PrintStudyName(CharPtr szPopSetName,CharPtr szPopSetAuth,
-		Int4 pmid,FILE *fp)
+NLM_EXTERN void DDV_PrintStudyName(CharPtr szPopSetName,CharPtr szPopSetAuth,
+		CharPtr szJournalTitle,Int4 pmid,FILE *fp)
 {
 	if (StringLen(szPopSetName)>0 && StringLen(szPopSetAuth)>0) {
 		if (StringStr(szPopSetName,"* no title *") || 
@@ -1943,11 +2930,19 @@ extern void DDV_PrintStudyName(CharPtr szPopSetName,CharPtr szPopSetAuth,
 			if (pmid!=0){
 				fprintf(fp,"<h2>%s (",szPopSetName);
 				fprintf(fp,"<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=%d&dopt=Abstract\">",pmid);
-				fprintf(fp,"%s <i>et al.</i></a>)<BR></h2>",szPopSetAuth);
+				fprintf(fp,"%s <i>et al.</i>",szPopSetAuth);
+				if (StringLen(szJournalTitle)>0)
+					fprintf(fp,"</a>, <i>%s</i>)<BR></h2>",szJournalTitle);
+				else
+					fprintf(fp,"</a>)<BR></h2>");
 			}
 			else{
-				fprintf(fp,"<h2>%s (%s <i>et al.</i>, <i>unpublished</i>)<BR></h2>", 
+				fprintf(fp,"<h2>%s (%s <i>et al.</i>", 
 					szPopSetName,szPopSetAuth);
+				if (StringLen(szJournalTitle)>0)
+					fprintf(fp,", <i>%s</i>)<BR></h2>",szJournalTitle);
+				else
+					fprintf(fp,")<BR></h2>");
 			}
 		}
 	}
@@ -1956,351 +2951,6 @@ extern void DDV_PrintStudyName(CharPtr szPopSetName,CharPtr szPopSetAuth,
 	}
 }
 
-/*******************************************************************************
-
-  Function : PrintHTML_Header()
-  
-  Purpose : print the header of the HTML file; used only for debugging
-  
-  Parameters : none
-  
-  Return value : none 
-
-*******************************************************************************/
-extern void PrintHTML_Header(Uint4 type,FILE *fp)
-{
-	if ((type&DISP_PHYLIP_TXT) || (type&DISP_FASTA_NOGAP) || 
-			(type&DISP_FASTA_GAP) || (type&DISP_FULL_TXT)){/*FASTA/PHYLIP output*/
-		fprintf(fp,"Content-type: SeqAlign\n\n");
-		return;
-	}
-	fprintf(fp,"Content-type: text/html\n\n");
-	fprintf(fp,"<HTML>\n");
-	fprintf(fp,"<HEAD>\n");
-	fprintf(fp,"<TITLE>WWW DeuxD-Viewer (beta)</TITLE>\n");
-	fprintf(fp,"<link rel=\"stylesheet\" href=\"http://www.ncbi.nlm.nih.gov/corehtml/ncbi.css\">");
-	fprintf(fp,"</HEAD>\n");
-	fprintf(fp,"<BODY BGCOLOR=FFFFFF>\n");
-}
-
-
-/*******************************************************************************
-
-  Function : PrintHTML_Tail()
-  
-  Purpose : print the tail of the HTML file; used only for debugging
-  
-  Parameters : none
-  
-  Return value : none 
-
-*******************************************************************************/
-extern void PrintHTML_Tail(Uint4 type,FILE *fp)
-{
-	if ((type&DISP_PHYLIP_TXT) || (type&DISP_FASTA_NOGAP) || 
-			(type&DISP_FASTA_GAP) || (type&DISP_FULL_TXT)){
-		return;
-	}
-	fprintf(fp,"\n</BODY>\n");
-	fprintf(fp,"</HTML>\n");
-}
-
-static void printGIorGIs(URLDataPtr udp,FILE *fp){
-	if (!(udp->disp_format&ALIGN_REBUILD)){
-		fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"gi\" VALUE=\"%d\"> \n",udp->gi);
-	}
-	else{
-		fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"gis\" VALUE=\"%s\"> \n",udp->szGIs);
-	}
-}
-/******************************************************************************/
-static void PrintSaveScript(URLDataPtr udp,FILE *fp)
-{
-Uint4 disp_format;
-
-
-	/*form for text format*/
-	disp_format=RULER_TOP;
-	disp_format|=RULER_TICK;
-	disp_format|=DISPE_SHOWBLOCK;
-	if (udp->disp_format&VIEW_FULLSEQ) disp_format|=VIEW_FULLSEQ;
-	else disp_format|=VIEW_VARIA;
-	disp_format|=DISP_FULL_TXT;
-	if (udp->disp_format&DISP_STRAND) disp_format|=DISP_STRAND;
-	if (udp->disp_format&DISP_BSP_COORD) disp_format|=DISP_BSP_COORD;
-	if (udp->disp_format&ALIGN_REBUILD) disp_format|=ALIGN_REBUILD;
-	
-	fprintf(fp,"<br><span class=\"GUTTER1\">Save Alignment:</span><br>\n");
-	fprintf(fp,"<FORM NAME=\"alitxt\" ACTION=\"%s\" METHOD=\"GET\" \n",WWWDDV_save_script1);
-	fprintf(fp,"ENCTYPE=\"application/x-www-form-urlencoded\"> \n");
-	printGIorGIs(udp,fp);
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"disp\" VALUE=\"%d\"> \n",disp_format);
-	fprintf(fp,"<a href=\"javascript:document.alitxt.submit()\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to save the sequence alignment in a file (text format)';\
-return true\" class=\"GUTTER2\">Text format</a>");
-	fprintf(fp,"</FORM> \n");
-
-	/*form for Phylip format*/
-	disp_format=VIEW_FULLSEQ;
-	disp_format|=DISP_PHYLIP_TXT;
-	if (udp->disp_format&ALIGN_REBUILD) disp_format|=ALIGN_REBUILD;
-	fprintf(fp,"<FORM NAME=\"philou\" ACTION=\"%s\" METHOD=\"GET\" \n",WWWDDV_save_script1);
-	fprintf(fp,"ENCTYPE=\"application/x-www-form-urlencoded\"> \n");
-	printGIorGIs(udp,fp);
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"disp\" VALUE=\"%d\"> \n",disp_format);
-	fprintf(fp,"<a href=\"javascript:document.philou.submit()\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to save the sequence alignment in a file (PHYLIP format)';\
-return true\" class=\"GUTTER2\">PHYLIP format</a>");
-	fprintf(fp,"</FORM> \n");
-
-	/*form 1 for FASTA*/
-	disp_format=DISP_FASTA_GAP;
-	if (udp->disp_format&ALIGN_REBUILD) disp_format|=ALIGN_REBUILD;
-	fprintf(fp,"<FORM NAME=\"fasta1\" ACTION=\"%s\" METHOD=\"GET\" \n",WWWDDV_save_script1);
-	fprintf(fp,"ENCTYPE=\"application/x-www-form-urlencoded\"> \n");
-	printGIorGIs(udp,fp);
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"disp\" VALUE=\"%d\"> \n",disp_format);
-	fprintf(fp,"<a href=\"javascript:document.fasta1.submit()\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to save the sequence alignment in a file (FASTA format with gaps)';\
-return true\" class=\"GUTTER2\">FASTA format with gaps</a>");
-	fprintf(fp,"</FORM> \n");
-
-	/*form 2 for FASTA*/
-	disp_format=DISP_FASTA_NOGAP;
-	if (udp->disp_format&ALIGN_REBUILD) disp_format|=ALIGN_REBUILD;
-	fprintf(fp,"<FORM NAME=\"fasta2\" ACTION=\"%s\" METHOD=\"GET\" \n",WWWDDV_save_script1);
-	fprintf(fp,"ENCTYPE=\"application/x-www-form-urlencoded\"> \n");
-	printGIorGIs(udp,fp);
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"disp\" VALUE=\"%d\"> \n",disp_format);
-	fprintf(fp,"<a href=\"javascript:document.fasta2.submit()\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to save the sequence alignment in a file (FASTA format without gaps)';\
-return true\" class=\"GUTTER2\">FASTA format without gaps</a>");
-	fprintf(fp,"</FORM>");
-}
-
-/******************************************************************************/
-extern void PrintPopContHeader(URLDataPtr udp,FILE *fp)
-{
-	fprintf(fp,"<!--  the contents   --> \n");
-	fprintf(fp,"<table border=0 width=615 cellspacing=0 cellpadding=0>\n");
-	fprintf(fp,"  <tr valign=\"TOP\"> <!--  left column   --> \n");
-	fprintf(fp,"    <td width=145> \n");
-	fprintf(fp,"	<img src=\"spacer10.GIF\" width=145 height=1 border=0>\n");
-	DDV_ToolsScript(udp->sep,udp->disp_format,fp,TRUE);
-	fprintf(fp,"	</td><td>");
-}
-
-/******************************************************************************/
-extern void PrintPopSizeAliTable(Int4 sapLength,Int4 sapNumBioseqs,FILE *fp)
-{
-	/*display the size of the SeqAlign*/
-	fprintf(fp,"<TABLE border=1 cellpadding=6 cellspacing=0 bgcolor=#e6eeee>\n");
-	fprintf(fp,"<tr valign=\"top\">\n");
-    fprintf(fp,"<td class=\"SMALL1\" bgcolor=#CCCCFF>Alignment Length</td>\n");
-	fprintf(fp,"<td class=\"SMALL1\">%d</td></tr>",sapLength);
-	fprintf(fp,"<tr valign=\"top\">\n");
-    fprintf(fp,"<td class=\"SMALL1\" bgcolor=#CCCCFF># of Sequences</td>\n");
-	fprintf(fp,"<td class=\"SMALL1\">%d</td></tr>",sapNumBioseqs);
-	fprintf(fp,"</TD></TR></TABLE>\n");
-}
-
-/******************************************************************************/
-extern void PrintPopRightContent(URLDataPtr udp,Int4 sapLength,Int4 sapNumBioseqs,FILE *fp,
-		Int4 numBlockAffich,Int2 LineSize)
-{
-
-Char szWWW[3*WWW_SCRIPT_SIZE]={""};
-Int4 i,j,k,min,max;
-Uint4 disp_format;
-		
-	fprintf(fp,"<!--  the contents   --> \n");
-	fprintf(fp,"<table border=0 width=615 cellspacing=0 cellpadding=0>\n");
-	fprintf(fp,"  <tr valign=\"TOP\"> <!--  left column   --> \n");
-	fprintf(fp,"    <td width=125> \n");
-	fprintf(fp,"<img src=\"spacer10.GIF\" width=125 height=1 border=0>\n");
-
-	/*display the size of the SeqAlign*/
-	PrintPopSizeAliTable(sapLength,sapNumBioseqs,fp);
-
-	fprintf(fp,"<br><span class=\"GUTTER1\">Display Options:</span><br>\n");
-
-	/*colour code*/
-	if (udp->disp_format&DISPE_COLOR) disp_format=udp->disp_format^DISPE_COLOR;
-	else disp_format=udp->disp_format|DISPE_COLOR;
-
-	if (!(udp->disp_format&ALIGN_REBUILD))
-		sprintf(szWWW,WWWDDV_script,udp->gi,udp->from+1,udp->to+1,disp_format);
-	else
-		sprintf(szWWW,WWWDDV_script2,udp->szGIs,disp_format);
-	fprintf(fp,"<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to use sequence colour codes';return true\" \
-class=\"GUTTER2\"> Colour Display</a>\n",szWWW);
-	if (udp->disp_format&DISPE_COLOR) fprintf(fp,"<span class=\"GUTTER1\">  x</span>\n<BR>");
-	else fprintf(fp,"<br>");
-	/*fprintf(fp,"<br>");*/
-
-	/*display the view style Full Seq*/
-	if (udp->disp_format&VIEW_VARIA){
-		disp_format=udp->disp_format^VIEW_VARIA;
-		disp_format|=VIEW_FULLSEQ;
-	}else if (udp->disp_format&VIEW_FULLSEQ){
-		disp_format=udp->disp_format;
-	}
-
-	if (!(udp->disp_format&ALIGN_REBUILD))
-		sprintf(szWWW,WWWDDV_script,udp->gi,udp->from+1,udp->to+1,disp_format);
-	else
-		sprintf(szWWW,WWWDDV_script2,udp->szGIs,disp_format);
-		
-	fprintf(fp,"<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to view the full sequences';return true\" \
-class=\"GUTTER2\">\n",szWWW);
-	fprintf(fp,"Full Sequences</a> \n");
-	if (udp->disp_format&VIEW_FULLSEQ){
-		fprintf(fp,"<span class=\"GUTTER1\">&gt;&gt;</span>\n");
-	}
-	fprintf(fp,"<br>");
-	/*display the view style Varia*/
-	if (udp->disp_format&VIEW_FULLSEQ){
-		disp_format=udp->disp_format^VIEW_FULLSEQ;
-		disp_format|=VIEW_VARIA;
-	}else if (udp->disp_format&VIEW_VARIA){
-		disp_format=udp->disp_format;
-	}
-	if (!(udp->disp_format&ALIGN_REBUILD))
-		sprintf(szWWW,WWWDDV_script,udp->gi,udp->from+1,udp->to+1,disp_format);
-	else
-		sprintf(szWWW,WWWDDV_script2,udp->szGIs,disp_format);
-	fprintf(fp,"<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to view only the variations';return true\" class=\"GUTTER2\">\n",szWWW);
-	fprintf(fp,"Variations</a> \n");
-	if (udp->disp_format&VIEW_VARIA){
-		fprintf(fp,"<span class=\"GUTTER1\">&gt;&gt;</span>\n");
-	}
-	fprintf(fp,"<br><br>");
-
-	/*display block style*/
-	if (!(udp->disp_format&ALIGN_REBUILD)){
-		
-		fprintf(fp,"<TABLE border=0 cellpadding=0 cellspacing=0>\n");
-		sprintf(szWWW,WWWDDV_script,udp->gi,1,sapLength,udp->disp_format);
-		fprintf(fp,"<tr><td><a href=\"%s\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to view the full sequence alignment on a single page';\
-return true\" class=\"GUTTER2\">\n",szWWW);
-		fprintf(fp,"All Blocks</a></td>\n");
-		if (numBlockAffich==0) fprintf(fp,"<td><span class=\"GUTTER1\">&gt;&gt;</span>\n");
-		else fprintf(fp,"<td>");
-		fprintf(fp,"</td></tr>");
-
-		fprintf(fp,"<tr><td>");
-		fprintf(fp,"<span class=\"GUTTER2\">By Block :</span></td><td></td></tr>\n");
-		i=1;
-		fprintf(fp,"<tr><td></td><td>");
-
-		k=sapLength/LineSize;
-		if (sapLength%LineSize) k++;
-
-		for(j=0;j<k;j++,i++){
-			min=j*LineSize+1;
-			max=_min_((j+1)*LineSize,sapLength);
-			sprintf(szWWW,WWWDDV_script,udp->gi,min,max,udp->disp_format);
-			fprintf(fp,"<a href=\"%s\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to view this region';return true\" \
-class=\"GUTTER2\">   [%d..%d]</a>\n",szWWW,min,max);
-			if (numBlockAffich==i) fprintf(fp,"<span class=\"GUTTER1\">  &gt;&gt;</span>\n");
-			if (j<(k-1)) fprintf(fp,"<br>");
-		}
-		fprintf(fp,"</td></tr></table>\n");
-	}	
-	
-	/*tool bar*/
-	fprintf(fp,"<BR>");
-	if (!(udp->disp_format&ALIGN_REBUILD))
-		DDV_ToolsScript(udp->sep,udp->disp_format,fp,TRUE);
-
-	/*save script*/
-	PrintSaveScript(udp,fp);
-	
-	
-	fprintf(fp,"    <!-- right content column  -->\n"); 
-	fprintf(fp,"    <!-- extra column to force things over the gif border -->\n"); 
-	fprintf(fp,"    <td width=15><img src=spacer10.GIF width=15 height=1 border=0>\n");
-	fprintf(fp,"    </td>\n");
-	fprintf(fp,"    <td border=0> \n");
-
-	return;
-}
-
-/******************************************************************************/
-extern void PrintPopulationTail(Uint4 type,FILE *fp)
-{
-	if ((type&DISP_PHYLIP_TXT) || (type&DISP_FASTA_NOGAP) || 
-			(type&DISP_FASTA_GAP) || (type&DISP_FULL_TXT)){
-		return;
-	}
-	fprintf(fp,"<HR width=\"90%\" noshade>\n");
-	fprintf(fp,"<a href=\"#top\">[Top]</a>");
-	fprintf(fp,"<font size=-1><ADDRESS>Comments and suggestions to: [<A HREF=\"mailto:info@ncbi.nlm.nih.gov\">info@ncbi.nlm.nih.gov</A>]</ADDRESS></font></td></tr></table>\n");
-	fprintf(fp,"<!--  end of content  -->\n"); 
-	fprintf(fp,"</table>\n");
-	fprintf(fp,"</body>\n");
-	fprintf(fp,"</html>\n");
-}
-
-/******************************************************************************/
-extern void PrintPopulationHeadG(Uint4 type,FILE *fp)
-{
-	if ((type&DISP_PHYLIP_TXT) || (type&DISP_FASTA_NOGAP) || 
-			(type&DISP_FASTA_GAP) || (type&DISP_FULL_TXT)){
-/*		fprintf(fp,"Content-type: application/octet-stream\n\n");*/
-		fprintf(fp,"Content-type: SeqAlign\n\n");
-		return;
-	}
-	fprintf(fp,"Content-type: text/html\n\n");
-	fprintf(fp,"<html>\n");
-	fprintf(fp,"<head>\n");
-	fprintf(fp,"  <title>Population</title>\n");
-	fprintf(fp,"  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\">\n");
-	fprintf(fp," <META NAME=\"keywords\" CONTENT=\"insert your keywords for the search engine\">\n");
-	fprintf(fp," <META NAME=\"description\" CONTENT=\"insert the description to be displayed by the search engine.  Also searched by the search engine.\">\n");
-	fprintf(fp,"  <link rel=\"stylesheet\" href=\"http://www.ncbi.nlm.nih.gov/corehtml/ncbi.css\">\n");
-	fprintf(fp,"</head>\n");
-}
-
-/******************************************************************************/
-extern void PrintPopulationBar(CharPtr db,FILE *fp)
-{
-	fprintf(fp,"<body bgcolor=\"#FFFFFF\" background=\"http://www.ncbi.nlm.nih.gov/corehtml/bkgd.gif\" text=\"#000000\" link=\"#000099\" vlink=\"#6666CC\">\n");
-	fprintf(fp,"<a name=\"top\"></a>");
-	fprintf(fp,"<!--  the header   -->\n"); 
-	fprintf(fp,"<TABLE border=0><TR><TD>\n");
-	fprintf(fp,"<table border=0 width=600 cellspacing=0 cellpadding=0>\n");
-	fprintf(fp,"   <tr> <td width=140><a href=http://www.ncbi.nlm.nih.gov> <img src=\"http://www.ncbi.nlm.nih.gov/corehtml/left.GIF\" width=130 height=45 border=0></a></td>\n");
-	/*if (StringCmp(db, "n") == 0) {
-		fprintf(fp,"    <td width=360 class=\"head1\" valign=\"BOTTOM\"> <span class=\"H1\">Entrez Nucleotides</span></td>\n");
-	} else if (StringCmp(db, "p") == 0) {
-		fprintf(fp,"    <td width=360 class=\"head1\" valign=\"BOTTOM\"> <span class=\"H1\">Entrez Proteins</span></td>\n");
-	}*/
-	fprintf(fp,"    <td align=\"left\"> <IMG SRC=\"/entrez/query/static/gifs/entrez_popset.gif\"></td>\n");
-	fprintf(fp,"  </tr>\n");
-	fprintf(fp,"</table>\n");
-	fprintf(fp,"<TD></TR><TR><TD>\n");
-	fprintf(fp,"<!--  the quicklinks bar   -->\n"); 
-	fprintf(fp,"<table CLASS=\"table-text\" border=0 width=600 cellspacing=0 cellpadding=3 bgcolor=\"#000000\">\n");
-	fprintf(fp,"  <tr><td colspan=3>\n");
-	fprintf(fp,"<table border=0 width=600 cellspacing=0 cellpadding=1>\n");
-	fprintf(fp,"<tr bgcolor=\"#000000\">  \n"); 
-	fprintf(fp,"    <td width=85><a href=http://www.ncbi.nlm.nih.gov/BLAST/ class=\"BAR\">BLAST</a></td>\n");
-	fprintf(fp,"   <td width=85><a href=\"/entrez/query.fcgi?db=PubMed\" class=\"BAR\">PubMed</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"/entrez/query.fcgi?db=Nucleotide\" class=\"BAR\">Nucleotide</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"/entrez/query.fcgi?db=Protein\" class=\"BAR\">Protein</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"/entrez/query.fcgi?db=Genome\" class=\"BAR\">Genome</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"/entrez/query.fcgi?db=Structure\" class=\"BAR\">Structure</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"/entrez/query.fcgi?db=Popset\"  class=\"BAR\">PopSet</a></td>\n");
-	fprintf(fp,"    <td width=85><a href=\"http://www.ncbi.nlm.nih.gov/Taxonomy/taxonomyhome.html\"  class=\"BAR\">Taxonomy</a></td>\n");
-	fprintf(fp,"  </tr></table></td></tr>\n");
-	fprintf(fp,"   </table></TD></TR></TABLE>\n");
-}
 /*******************************************************************************
 
   Function : DDV_GetFirstAuthor()
@@ -2338,19 +2988,49 @@ PersonIdPtr  pid;
 
 /*******************************************************************************
 
-  Function : DDV_AnalysePubDesc()
+  Function : DDV_GetPubValues()
   
-  Purpose : analyse a PubDesc pointer and get Author name and title
+  Purpose : analyse a Imprint pointer and get "82 (21), 7289-7293 (1985)"
   
-  Parameters : 	pdp; PubDesc pointer
-  				szPopSetName; fills here with a title
-				szPopSetAuth;fills here with the first author name
+  Parameters : 	imp; should contains 82 (21), 7289-7293 (1985)
+  				szBuf; where to put "82 (21), 7289-7293 (1985)"
   
-  Return value : - (see 'name')
+  Return value : TRUE if imp!=NULL (see also 'szBuf')
 
 *******************************************************************************/
+static Boolean DDV_GetPubValues(ImprintPtr imp,CharPtr szImp)
+{
+Int2         year=(Int2)-1;
+Char         szBuf[6]={""};
+
+	if (szImp==NULL) return(FALSE);
+	
+	StringCpy(szImp," ");
+	DateRead (imp->date,&year, NULL, NULL, NULL);
+	if (imp->volume){
+		StringCat(szImp,imp->volume);
+	}
+	if (imp->issue){
+		StringCat(szImp," (");
+		StringCat(szImp,imp->volume);
+		StringCat(szImp,")");
+	}
+	if (imp->pages){
+		StringCat(szImp,", ");
+		StringCat(szImp,imp->pages);
+	}
+	if (year!=(Int2)-1){
+		StringCat(szImp," (");
+		sprintf(szBuf,"%d",year);
+		StringCat(szImp,szBuf);
+		StringCat(szImp,")");
+	}
+	
+	return(TRUE);
+}
+
 static void	DDV_AnalysePubDesc(PubdescPtr pdp, CharPtr szPopSetName,
-		CharPtr szPopSetAuth,Int4Ptr pmid)
+		CharPtr szPopSetAuth,CharPtr szJournalTitle,Int4Ptr pmid)
 {
 ValNodePtr   vnp,vnp2;
 CitArtPtr    cap;
@@ -2358,11 +3038,10 @@ CitGenPtr    cgp;
 CitSubPtr    csp;
 CitPatPtr    cpp;
 CitBookPtr   cbp;
+ImprintPtr   imp;
 MedlineEntryPtr mep;
+Char         szBuf[80+1]={""};
 
-	/*tests for debug only*/
-	/*PubLabel(pdp->pub, szPopSetAuth, INFO_SIZE, OM_LABEL_CONTENT);*/
-	/*PubLabel (pdp->pub, szPopSetName, INFO_SIZE, OM_LABEL_SUMMARY);*/
 	for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
 		switch(vnp->choice){
 			case PUB_Article:/*article*/
@@ -2373,6 +3052,18 @@ MedlineEntryPtr mep;
 						StringNCpy(szPopSetName,(CharPtr)vnp2->data.ptrvalue,INFO_SIZE);
 					}
 				}
+				if (cap->from==1/*journal type*/){
+					CitJourPtr cjp=(CitJourPtr)cap->fromptr;
+					if (cjp && cjp->title && cjp->title->data.ptrvalue){
+						StringNCpy(szBuf,(CharPtr)(cjp->title->data.ptrvalue),80);
+						StringCpy(szJournalTitle,szBuf);
+						imp=cjp->imp;
+						if (imp){
+							if (DDV_GetPubValues(imp,szBuf))
+								StringCat(szJournalTitle,szBuf);
+						}
+					}
+				}
 				DDV_GetFirstAuthor (cap->authors, szPopSetAuth);
 				break;
 			case PUB_Gen:/*gen*/
@@ -2380,6 +3071,9 @@ MedlineEntryPtr mep;
 				if (!cgp) break;
 				if (cgp->title && *(cgp->title))
 					StringNCpy(szPopSetName,cgp->title,INFO_SIZE);
+				if (cgp->journal && cgp->journal->data.ptrvalue){
+					StringNCpy(szJournalTitle,(CharPtr)(cgp->journal->data.ptrvalue),INFO_SIZE);
+				}
 				DDV_GetFirstAuthor (cgp->authors, szPopSetAuth);
 				break;
 			case PUB_Sub:/*Sub*/
@@ -2387,6 +3081,7 @@ MedlineEntryPtr mep;
 				if (!csp) break;
 				if (csp->descr && *(csp->descr))
 					StringNCpy(szPopSetName,csp->descr,INFO_SIZE);
+				StringCpy(szJournalTitle,"direct submission");
 				DDV_GetFirstAuthor (csp->authors, szPopSetAuth);
 				break;
 			case PUB_Patent:/*Pat*/
@@ -2404,6 +3099,15 @@ MedlineEntryPtr mep;
 						StringNCpy(szPopSetName,(CharPtr)vnp2->data.ptrvalue,INFO_SIZE);
 					}
 				}
+				if (cbp->title && cbp->title->data.ptrvalue){
+					StringNCpy(szBuf,(CharPtr)(cbp->title->data.ptrvalue),80);
+					StringCpy(szJournalTitle,szBuf);
+					imp=cbp->imp;
+					if (imp){
+						if (DDV_GetPubValues(imp,szBuf))
+							StringCat(szJournalTitle,szBuf);
+					}
+				}
 				DDV_GetFirstAuthor (cbp->authors, szPopSetAuth);
 				break;
 			case PUB_Medline:/*Medline*/
@@ -2413,6 +3117,18 @@ MedlineEntryPtr mep;
 				for (vnp2 = cap->title; vnp2 != NULL; vnp2 = vnp2->next) {
 					if(vnp2->choice==Cit_title_name){
 						StringNCpy(szPopSetName,(CharPtr)vnp2->data.ptrvalue,INFO_SIZE);
+					}
+				}
+				if (cap->from==1/*journal type*/){
+					CitJourPtr cjp=(CitJourPtr)cap->fromptr;
+					if (cjp && cjp->title && cjp->title->data.ptrvalue){
+						StringNCpy(szBuf,(CharPtr)(cjp->title->data.ptrvalue),80);
+						StringCpy(szJournalTitle,szBuf);
+						imp=cjp->imp;
+						if (imp){
+							if (DDV_GetPubValues(imp,szBuf))
+								StringCat(szJournalTitle,szBuf);
+						}
 					}
 				}
 				DDV_GetFirstAuthor (cap->authors, szPopSetAuth);
@@ -2451,8 +3167,8 @@ MedlineEntryPtr mep;
   Return value : - (see 'szPopSetName' & 'szPopSetAuth')
 
 *******************************************************************************/
-extern void	DDV_GetArticleInfo(SeqEntryPtr sep,CharPtr szPopSetName,
-	CharPtr szPopSetAuth,Int4Ptr pmid)
+NLM_EXTERN void	DDV_GetArticleInfo(SeqEntryPtr sep,CharPtr szPopSetName,
+	CharPtr szPopSetAuth,CharPtr szJournalTitle,Int4Ptr pmid)
 {
 BioseqSetPtr bssp;
 PubdescPtr   pdp;
@@ -2462,6 +3178,7 @@ ValNodePtr   vnp3;
 	
 	*szPopSetName='\0';
 	*szPopSetAuth='\0';
+	*szJournalTitle='\0';
 	*pmid=0;
 	
 	if (IS_Bioseq_set (sep)) {/*a Pop-set is a BSSP*/
@@ -2473,7 +3190,7 @@ ValNodePtr   vnp3;
     					pdp = (PubdescPtr) vnp3->data.ptrvalue;
 						if (pdp){
 							DDV_AnalysePubDesc(pdp,szPopSetName,
-								szPopSetAuth,pmid);
+								szPopSetAuth,szJournalTitle,pmid);
 						}
 					}
 				}
@@ -2527,7 +3244,7 @@ static void	DDV_AnalyseBiosource(BioSourcePtr biop, CharPtr PNTR szTaxName,
 
 *******************************************************************************/
 
-extern void	DDV_GetEntryBioSource(SeqEntryPtr sep,ValNodePtr PNTR vnpp)
+NLM_EXTERN void	DDV_GetEntryBioSource(SeqEntryPtr sep,ValNodePtr PNTR vnpp)
 {
 BioseqSetPtr bssp;
 BioSourcePtr biop;
@@ -2582,190 +3299,6 @@ ValNodePtr PNTR	vnpp;
 	}
 }
 
-
-/*******************************************************************************
-
-  Function : DDV_SearchBioseq_2()
-  
-  Purpose : store bsps of a SeqEntry ; release for DDV_ToolsScript (see below)
-  
-  Parameters : see Toolbox doc !
-  
-  Return value : none 
-
-*******************************************************************************/
-static Boolean LIBCALLBACK DDV_SearchBioseq_2 (BioseqPtr bsp, 
-			SeqMgrBioseqContextPtr context)
-{
-ValNodePtr PNTR	BspTable;
-Int4 		    uid=0;
-
-	BspTable=(ValNodePtr PNTR)context->userdata;
-
-	if (bsp) {
-		uid=GetGIForSeqId(bsp->id);
-		if (uid!=0){
-			ValNodeAddInt(BspTable,1,uid);
-		}
-	}
-
-	return(TRUE);
-}
-
-
-/*******************************************************************************
-
-  Function : DDV_SearchBioseq_1()
-  
-  Purpose : store bsps of a SeqEntry ; release for DDV_GetBspList (see below)
-  
-  Parameters : see Toolbox doc !
-  
-  Return value : none 
-
-*******************************************************************************/
-static Boolean LIBCALLBACK DDV_SearchBioseq_1 (BioseqPtr bsp, 
-			SeqMgrBioseqContextPtr context)
-{
-/*Int4Ptr pCompt;*/
-Char szSeqAcc[15]={""};
-Char szSeqName[100]={""};
-Char szBuf4[WWW_SCRIPT_SIZE]={""};	/*Entrez query*/
-Int4 gi;
-SeqIdPtr sip;
-GetBspPopPtr gbpp;	
-
-	gbpp=(GetBspPopPtr)context->userdata;
-
-	gbpp->nCompt++;
-	
-	/*prepare a HTML display*/
-	fprintf(gbpp->fp,"[%4i] ",gbpp->nCompt);
-	/*access code*/
-	SeqIdWrite(bsp->id, szSeqAcc, PRINTID_TEXTID_ACCESSION, 14);
-	/*seq title*/
-	FastaDefLine(bsp, szSeqName, 99, NULL, NULL, 0);
-	/*Gi number*/
-	sip=SeqIdFindBest(bsp->id,0);
-	if (sip==NULL) sip=bsp->id;
-	if (sip){
-		gi=GetGIForSeqId(sip);
-		if(gi>0){
-			sprintf(szBuf4,szEntrezScript,gi,(ISA_aa(bsp->mol) ? "p" : "n"));
-		}
-		else{
-			sprintf(szBuf4,"javascript:void(0)");
-		}
-		if (StringLen(szSeqName)){
-                Int2 j=0;
-	     		while(szSeqName[j]){
-        			if (szSeqName[j]=='\'') szSeqName[j]=' ';
-				    j++;
-		       	}
-			fprintf(gbpp->fp,szSeqNameStatus,szBuf4,szSeqName);
-		}
-		else{
-			fprintf(gbpp->fp,szSeqNameStatus,szBuf4,"unknown name");
-		}
-	}
-	fprintf(gbpp->fp,"%10s ",szSeqAcc);
-	if (sip) fprintf(gbpp->fp,"</a>  ");
-	fprintf(gbpp->fp,": %s<br>\n",szSeqName);
-	return(TRUE);
-}
-
-/*******************************************************************************
-
-  Function : DDV_GetBspList()
-  
-  Purpose : retrieve (a list of) BSPs (if the SeqEntry doesn't contain any
-  		SeqAligns).
-  
-  Parameters : 	sep; seqentry
-  
-  Return value : - 
-
-*******************************************************************************/
-extern void DDV_GetBspList(SeqEntryPtr sep,FILE *fp)
-{
-
-Int2 entityID;
-GetBspPop gbp;
-
-	gbp.nCompt=0;
-	gbp.fp=fp;
-		
-	fprintf(fp,"<font color=\"#9933ff\"><h4>Please note that this population study ");
-	fprintf(fp,"does not contain any sequence alignments. <br>");
-	fprintf(fp,"Here is the list of the sequences reported in the entry:</h4></font><br>\n");
-	/*scan for any BSPs*/
-	entityID=SeqMgrIndexFeatures(0, (Pointer)sep);
-	fprintf(fp,"<pre>\n");
-	SeqMgrExploreBioseqs (entityID, NULL, (Pointer)&gbp, 
-			DDV_SearchBioseq_1, TRUE, FALSE, TRUE);
-	fprintf(fp,"<TABLE border=1 cellpadding=6 cellspacing=0 bgcolor=#e6eeee>\n");
-	fprintf(fp,"<tr>");
-    fprintf(fp,"<td>Total : %i sequence(s).</td>\n",gbp.nCompt);
-	fprintf(fp,"</TD></TR></TABLE>\n");
-	fprintf(fp,"</pre>\n");
-}
-
-/*******************************************************************************
-
-  Function : DDV_ToolsScript()
-  
-  Purpose : print out a form to run a SeqAlign rebuild.
-  
-  Parameters : 	sep; seqentry to analyse
-  				disp_format; format display
-  				fp; file
-				ForToolbar; TRUE only for the PopSet Viewer
-				
-  Return value : - 
-
-*******************************************************************************/
-static void DDV_ToolsScript(SeqEntryPtr sep, Uint4 disp_format,FILE *fp, 
-	Boolean ForToolbar)
-{
-ValNodePtr uid_list=NULL,vnp;
-Int2 entityID;
-Uint4 disp_format2;
-
-	entityID=SeqMgrIndexFeatures(0, (Pointer)sep);
-	SeqMgrExploreBioseqs (entityID, NULL, (Pointer)&uid_list, 
-			DDV_SearchBioseq_2, TRUE, FALSE, TRUE);
-	if (ForToolbar)
-		fprintf(fp,"<span class=\"GUTTER1\">Tools:</span><br>\n");
-	
-	fprintf(fp,"<FORM NAME=\"realign1\" ACTION=\"%s\" METHOD=\"GET\" \n",WWWDDV_save_script1);
-	fprintf(fp,"ENCTYPE=\"application/x-www-form-urlencoded\"> \n");
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"gis\" VALUE=\"");
-	vnp=uid_list;
-	while(vnp){
-		fprintf(fp,"%lda",(Int4)vnp->data.intvalue);
-		vnp=vnp->next;
-	}
-	fprintf(fp,"\">\n");
-/*	disp_format2=disp_format;*/
-	disp_format2=RULER_TOP;
-	disp_format2|=RULER_TICK;
-	disp_format2|=DISPE_SHOWBLOCK;
-	disp_format2|=VIEW_VARIA;
-	disp_format2|=DISP_FULL_HTML;
-	disp_format2|=DISP_ORDER_NUM; 
-	disp_format2|=DISP_STRAND;
-	disp_format2|=DISP_BSP_COORD;
-	disp_format2|=ALIGN_REBUILD;
-
-	fprintf(fp,"<INPUT TYPE=\"hidden\" NAME=\"disp\" VALUE=\"%d\"> \n",disp_format2);
-	fprintf(fp,"<a href=\"javascript:document.realign1.submit()\" onMouseOut=\"window.status='';return true\" \
-onMouseOver=\"window.status='Click to build a new sequence alignment';\
-return true\" %s>%s</a>",(ForToolbar ? "class=\"GUTTER2\"" : " "),
-	(ForToolbar ? "Align" : "- build a master-slave sequence alignment."));
-	fprintf(fp,"</FORM> \n");
-	
-}
-
 /*******************************************************************************
 
   Function : DDV_DisplayDefaultAlign()
@@ -2781,7 +3314,7 @@ return true\" %s>%s</a>",(ForToolbar ? "class=\"GUTTER2\"" : " "),
   Return value : FALSE if failed 
 
 *******************************************************************************/
-extern Boolean DDV_DisplayDefaultAlign(SeqAlignPtr sap,Int4 gi,Int4 from,Int4 to,
+NLM_EXTERN Boolean DDV_DisplayDefaultAlign(SeqAlignPtr sap,Int4 gi,Int4 from,Int4 to,
 		Uint4 disp_format,Pointer disp_data,FILE *fp)
 {
 SABlockPtr		sabp=NULL;/*indexed SeqAlign*/
@@ -2804,11 +3337,10 @@ ByteStorePtr   PNTR byteSpp;
 	if (from==-1) from=0;
 	if (to==-1) to=sapLength-1;
 
-	if (disp_format&DISP_FASTA_NOGAP || /*FASTA output*/
-			disp_format&DISP_FASTA_GAP){/*don't need a ParaG structure*/
-		DDV_GetFullFASTAforIdxAli(sabp,disp_format,sapLength,fp);
+	if (disp_format&DISP_FASTA_NOGAP){/*don't need a ParaG structure*/
+		DDV_GetFullFASTAforIdxAli(sabp,fp);
 	}
-	else{/*HTML and PHYLIP: need a ParaG structure*/
+	else{/*HTML, gapped FASTA and PHYLIP: need a ParaG structure*/
 		/*build the ParaG list for the display*/
 		if (disp_data){
 			dobp=(DDVOptionsBlockPtr)disp_data;
@@ -2828,8 +3360,13 @@ ByteStorePtr   PNTR byteSpp;
 		}		
 
 		/*Create the display */
-		DDV_AffichageParaG(&mppl,gi,from,to,sapLength,numBlockAffich,disp_format,
-			LineSize,fp,byteSpp);
+		if (disp_format&DISP_FASTA_GAP){/*gapped FASTA output*/
+			DDV_GetFullGapFASTAforIdxAli(&mppl,fp);
+		}
+		else{/*HTML of Phylip output*/
+			DDV_AffichageParaG(&mppl,gi,from,to,sapLength,numBlockAffich,disp_format,
+				LineSize,fp,byteSpp,dobp->matrix,NULL,NULL);
+		}
 
 		/*done... delete data*/
 		DDV_DeleteDisplayList(&mppl);
@@ -2855,7 +3392,7 @@ error:
   Return value : a buffer with the sequence 
 
 *******************************************************************************/
-extern CharPtr DDV_ReadSeqGivenSpp(SeqPortPtr spp,Int4 from,Int4 to,Uint1 strand,
+NLM_EXTERN CharPtr DDV_ReadSeqGivenSpp(SeqPortPtr spp,Int4 from,Int4 to,Uint1 strand,
 	Boolean IsAA,BoolPtr bError)
 {
 Int4 len,seek,i;
@@ -2905,7 +3442,7 @@ Byte residue;
   Return value : an open seqport 
 
 *******************************************************************************/
-extern SeqPortPtr DDV_OpenBspFullSeqPort(BioseqPtr bsp,Uint1 strand)
+NLM_EXTERN SeqPortPtr DDV_OpenBspFullSeqPort(BioseqPtr bsp,Uint1 strand)
 {
 SeqPortPtr spp;
 
@@ -2936,7 +3473,7 @@ SeqPortPtr spp;
   Return value : a pointer to an initialized BspInfo structure 
 
 *******************************************************************************/
-extern BspInfoPtr DDV_BspInfoNew(Boolean InitInfo,Boolean InitSeqPort,SeqIdPtr sip,
+NLM_EXTERN BspInfoPtr DDV_BspInfoNew(Boolean InitInfo,Boolean InitSeqPort,SeqIdPtr sip,
 		Uint1 strand)
 {
 BspInfoPtr bip;
@@ -2977,7 +3514,7 @@ BspInfoPtr bip;
   Return value : NULL, always 
 
 *******************************************************************************/
-extern BspInfoPtr DDV_BspInfoDelete(BspInfoPtr bip)
+NLM_EXTERN BspInfoPtr DDV_BspInfoDelete(BspInfoPtr bip)
 { 
 	if(bip) {
 		if (bip->spp) SeqPortFree(bip->spp);
@@ -3000,7 +3537,7 @@ extern BspInfoPtr DDV_BspInfoDelete(BspInfoPtr bip)
   Return value : NULL, always 
 
 *******************************************************************************/
-extern BspInfoPtr DDV_BspInfoDeleteList(BspInfoPtr bip)
+NLM_EXTERN BspInfoPtr DDV_BspInfoDeleteList(BspInfoPtr bip)
 {
 BspInfoPtr next;
 
@@ -3023,7 +3560,7 @@ BspInfoPtr next;
   Return value : -
 
 *******************************************************************************/
-extern void DDV_LocateParaG(ValNodePtr PNTR TableHead,Int4 nBsp)
+NLM_EXTERN void DDV_LocateParaG(ValNodePtr PNTR TableHead,Int4 nBsp)
 {
 ParaGPtr pgp;
 Int4 StartLine=0,StartLine2=0,i;
@@ -3122,7 +3659,7 @@ Boolean bClose=TRUE;
   Return value : TRUE if success
 
 *******************************************************************************/
-extern Boolean DDV_CreateDisplay(SeqAlignPtr sap,MsaParaGPopListPtr mpplp)
+NLM_EXTERN Boolean DDV_CreateDisplay(SeqAlignPtr sap,MsaParaGPopListPtr mpplp)
 {
 Int4 numBlocks;
 Boolean nRet;
@@ -3150,7 +3687,7 @@ Boolean nRet;
 	return(nRet);
 }
 
-Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
+NLM_EXTERN Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
                          Uint4 disp_format)
 {
     
@@ -3174,11 +3711,11 @@ Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
     /*retrieve the size of the alignment*/
     GetBlockInfo(sabp, &sapLength, &sapNumBioseqs,&numBlocks,NULL);
     
-    if ((disp_format & DISP_FASTA_NOGAP) || /*FASTA output*/
-        (disp_format & DISP_FASTA_GAP)){ /*don't need a ParaG structure*/
-        DDV_GetFullFASTAforIdxAli(sabp, disp_format, sapLength, stdout);
-    } else {   /* HTML or Phylip : need to create the ParaG structure */
-        
+    if (disp_format & DISP_FASTA_NOGAP){ /*don't need a ParaG structure*/
+        DDV_GetFullFASTAforIdxAli(sabp, stdout);
+    } 
+	else {   /* HTML, gapped FASTA and Phylip : 
+		need to create the ParaG structure */
         /* for a nice view, always start as a multiple of LETTER_BLOCK_WIDTH */
         restdiv = from % LETTER_BLOCK_WIDTH;
         from = from-restdiv;
@@ -3202,21 +3739,15 @@ Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
         if ((to - from + 1) < sapLength) {
             numBlockAffich = from/ParaG_Size+1;
         }	
-        
-        if (disp_format & DISP_FULL_HTML) {
-
-            /* PrintPopulationBar(NULL, stdout); */ /* PubMed header */
-            
-            /*name of the output: title of the article*/
-            /*DDV_GetArticleInfo(sep, szPopSetName, szPopSetAuth);*/
-            /* PrintPopRightContent(szPopSetName,szPopSetAuth, udp, 
-               sapLength,sapNumBioseqs, stdout, 
-               numBlockAffich); */
-        }
-        
+                
+		if (disp_format&DISP_FASTA_GAP){/*gapped FASTA output*/
+			DDV_GetFullGapFASTAforIdxAli(&mppl,stdout);
+		}
         /*Create the HTML display for the Population division*/
-        DDV_AffichageParaG(&mppl, gi, from, to, sapLength,
-                           numBlockAffich, disp_format, ParaG_Size,stdout,NULL);
+		else{/*HTML of Phylip output*/
+	        DDV_AffichageParaG(&mppl, gi, from, to, sapLength,
+            numBlockAffich, disp_format, ParaG_Size,stdout,NULL,NULL,NULL,NULL);
+		}
         /*done... delete data*/
         DDV_DeleteDisplayList(&mppl);
     }
@@ -3224,47 +3755,6 @@ Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
     if (sabp) CleanupBlocks(sabp);
     
     return TRUE;
-}
-
-/*******************************************************************************
-
-  Function : DDV_DisplayBlastSAP()
-  
-  Purpose : test function to display a BLAST output.
-  
-  Parameters : 	sap; seqalign
-
-  Return value : -
-
-*******************************************************************************/
-extern void DDV_DisplayBlastSAP(SeqAlignPtr sap)
-{
-Uint4 option;
-FILE  *fp;
-SeqAlignPtr sap2;
-DDVOptionsBlock dob;
-
-
-	if (!sap) return;
-
-	fp=fopen("zblastout.txt","w");
-	if (!fp) return;
-  
-  	/*init display format*/
-	option =VIEW_FULLSEQ;
-	option|=DISP_FULL_TXT;
-	option|=DISP_BSP_COORD;
-	option|=TEXT_LOWERCASE;
-	option|=SEQNAME_BLAST_STD;
-	dob.LineSize=(Int2)60;
-	
-	sap2=sap;
-	while(sap2){
-		DDV_DisplayDefaultAlign (sap2, 0, -1,-1, option, &dob, fp);
-		sap2=sap2->next;
-	}
-	fclose(fp);
-
 }
 
 /*******************************************************************************
@@ -3278,7 +3768,7 @@ DDVOptionsBlock dob;
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_SearchAli(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+NLM_EXTERN void DDV_SearchAli(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 {
 ValNodePtr PNTR	vnpp;
 BioseqPtr     bsp;
@@ -3301,8 +3791,8 @@ SeqAlignPtr   salp;
 		if (sap2->type == 2) {/*seqalign*/
 			salp=(SeqAlignPtr)sap2->data;
 			while(salp){
-				if (!(*vnpp)) *vnpp=ValNodeAddPointer(NULL,0,(Pointer)salp);
-				else ValNodeAddPointer(vnpp,0,(Pointer)salp);
+				if (!(*vnpp)) *vnpp=ValNodeAddPointer(NULL,OBJ_SEQALIGN,(Pointer)salp);
+				else ValNodeAddPointer(vnpp,OBJ_SEQALIGN,(Pointer)salp);
 				salp=salp->next;
 			}
 		}
@@ -3323,7 +3813,7 @@ SeqAlignPtr   salp;
   Return value : none 
 
 *******************************************************************************/
-extern void DDV_GetSeqAlign(Pointer dataptr,Uint2 datatype,
+NLM_EXTERN void DDV_GetSeqAlign(Pointer dataptr,Uint2 datatype,
 		ValNodePtr PNTR vnp)
 {
 BioseqPtr     bsp;
@@ -3352,13 +3842,13 @@ SeqAnnotPtr   sap;
 		}
 	}
 	else if(datatype==OBJ_SEQALIGN){
-		ValNodeAddPointer(vnp,0,(SeqAlignPtr)dataptr);
+		ValNodeAddPointer(vnp,OBJ_SEQALIGN,(SeqAlignPtr)dataptr);
 	}
 	else if(datatype==OBJ_SEQANNOT){
 		sap=(SeqAnnotPtr)dataptr;
 		while (sap != NULL) {
 			if (sap->type == 2) {/*seqalign*/
-				ValNodeAddPointer(vnp,0,sap->data);
+				ValNodeAddPointer(vnp,OBJ_SEQALIGN,sap->data);
 			}
 			sap=sap->next;
 		}
@@ -3372,7 +3862,7 @@ SeqAnnotPtr   sap;
   Purpose : display a summary for a PopSet entry
   
 *******************************************************************************/
-extern void DDV_PrintPopSetSummary(SeqEntryPtr sep, Int4 gi, FILE *FileOut)
+NLM_EXTERN void DDV_PrintPopSetSummary(SeqEntryPtr sep, Int4 gi, FILE *FileOut)
 {
 ValNodePtr  vnp_sap,vnp_biosrc,vnp_biosrc2,vnp,vnp2;
 SeqAlignPtr sap;
@@ -3482,9 +3972,11 @@ PopSourcePtr psp,psp2;
 			}
 			vnp=vnp->next;i++;
 		}
-		if (i>1 && bPairwise){
+/*		if (i>1 && bPairwise){
 			DDV_ToolsScript(sep, disp_format,FileOut, FALSE);
 		}
+todo: update the above line because DDV_ToolsScript is now in wwwddv.c*/
+
 		fprintf(FileOut,"<BR></UL>\n");
 		ValNodeFree(vnp_sap);
 	}
@@ -3497,7 +3989,7 @@ PopSourcePtr psp,psp2;
 			fprintf(FileOut," onMouseOut=\"window.status='';return true\" \
 onMouseOver=\"window.status='Click to see the list of sequences'; return true\" >");
 			fprintf(FileOut,"- view the list of sequences</a>, or <BR>\n");
-			DDV_ToolsScript(sep, disp_format,FileOut, FALSE);
+			/*DDV_ToolsScript(sep, disp_format,FileOut, FALSE);*/
 		}
 	}
 	fprintf(FileOut,"</UL></UL>\n");
@@ -3509,7 +4001,7 @@ COLOMBE FOR KARL
 ***************************************************************
 ***************************************************************/
 
-extern void PrintSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
+NLM_EXTERN void PrintSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
                                    Int4 index, Int2 indent)
 {
   BioseqPtr          bsp;
@@ -3570,7 +4062,7 @@ extern void PrintSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
   }
 }
 
-extern ByteStorePtr SeqAlignToBS (Uint2 entityID)
+NLM_EXTERN ByteStorePtr SeqAlignToBS (Uint2 entityID)
 {{
   SeqEntryPtr sep;
   ByteStorePtr bsp = NULL;

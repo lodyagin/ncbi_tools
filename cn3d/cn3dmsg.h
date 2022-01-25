@@ -33,6 +33,33 @@
 *
 * Modifications:
 * $Log: cn3dmsg.h,v $
+* Revision 6.53  2000/01/06 00:04:42  lewisg
+* selection bug fixes, update message outbound, animation APIs moved to vibrant
+*
+* Revision 6.52  1999/12/28 15:08:44  lewisg
+* remove remaining mediainfo code
+*
+* Revision 6.51  1999/12/01 16:15:54  lewisg
+* interim checkin to fix blocking memory leak
+*
+* Revision 6.50  1999/11/22 14:46:44  thiessen
+* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
+*
+* Revision 6.49  1999/11/10 23:19:41  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.48  1999/11/03 18:15:10  kans
+* added prototypes needed by other files
+*
+* Revision 6.47  1999/10/29 14:15:29  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.46  1999/10/05 23:18:24  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.45  1999/09/21 18:09:15  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.44  1999/08/04 21:19:46  lewisg
 * modularized open operations to allow sequin to launch cn3d
 *
@@ -103,12 +130,7 @@
 #include <vibrant.h>
 #include <salsa.h>
 #include <salmedia.h>
-
-#ifdef _OPENGL
-#include <shim3d.h>
-#else
-#include <viewer3d.h>
-#endif
+#include <ddvcolor.h>
 
 #include <mmdbapi1.h>
 
@@ -116,68 +138,114 @@
 extern "C" {
 #endif
 
-#define MaxObj 16
-
-extern Boolean Cn3D_ObjMgrOpen;
-extern Boolean Cn3D_SalsaOpen;
-extern Boolean Salsa_BioseqUpdate;
-extern Boolean Cn3D_ReColor;
-extern Int4 Num_Bioseq, Num_Biostruc;
-extern Int4 Num_ActiveSlave;
-
-extern Uint2 sap_entityID, sap_itemID;
-
-
-/* extern MediaInfo mediadata[MaxObj];  */
-extern MediaInfo **mediadata;  /* put no limitation on mediadata size in principle */
-
-typedef struct mediaview{
-FORM_MESSAGE_BLOCK
-} MediaView, PNTR MediaViewPtr;
 
 #define REGISTER_BIOSEQ_BIOSTRUC_MEDIA ObjMgrProcLoad(OMPROC_VIEW, "Seq-Struc Communication", "Media", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, SeqStrucMediaFunc, 0)
+#define REGISTER_SEQANNOT_BIOSTRUC_MEDIA ObjMgrProcLoad(OMPROC_VIEW, "Cn3D SeqAnnot", "Media", OBJ_SEQANNOT, 0, OBJ_SEQANNOT, 0, NULL, Cn3D_AnnotEditFunc, 0)
+
+/*****************************************************************************
+
+Function: Cn3D_LaunchSeqEntry()
+
+Purpose: Launch the Bioseq viewer on all bioseqs contained in a SeqEntry.
+
+Parameters: pvnsep, the valnode list of SeqEntries
+
+*****************************************************************************/
+
+void Cn3D_LaunchSeqEntry(ValNode * pvnsep);
+
+
+/*****************************************************************************
+
+Function: Cn3D_RegisterSeqEntry()
+
+Purpose: Adds a message func to the SeqEntry and makes it
+     OM_OPT_FREE_IF_NO_VIEW
+
+Parameters: pvnsep, a valnode list of SeqEntries
+
+*****************************************************************************/
+
+void Cn3D_RegisterSeqEntry(ValNode * pvnsep);
+
+
+/*****************************************************************************
+
+Function: Cn3D_LaunchSeqAnnot()
+
+Purpose: Launch the SeqAlign viewer on all SeqAligns contained in a SeqAnnot.
+
+Parameters: sap, the SeqAnnot
+
+*****************************************************************************/
+
+void Cn3D_LaunchSeqAnnot(SeqAnnot * sap);
+
+
+/*****************************************************************************
+
+Function: Cn3D_RegisterSeqAnnot()
+
+Purpose: Adds a message func to the SeqAnnot and makes it
+     OM_OPT_FREE_IF_NO_VIEW
+
+Parameters: sap, the SeqAnnot pointer
+
+*****************************************************************************/
+
+void Cn3D_RegisterSeqAnnot(SeqAnnot * sap);
+
+SeqAnnot *Cn3D_MakeFakeAnnot(SeqEntry *sep);
+
 
 extern Int2 LIBCALLBACK SeqStrucMediaFunc PROTO((Pointer data));
 extern void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight);
-extern void MediaRegister(void);
-extern void MediaLaunch(void);
-extern void MediaDataLoad(SeqAlignPtr salp);
-extern void MediaDataLoad2(PDNMM pdnmmHead);
 extern void MediaHL(SelStructPtr sel, Boolean highlight);
-extern void fnCHLresidueRedraw(void);
 extern void fnPreCHLresidue(PDNMG pdnmgThis, Boolean highlight);
-/* extern PMMD FindMM(Int4 Gi, Int4 iCount); */
-extern PMMD FindMM(SeqIdPtr sip, Int4 iCount);   
-extern void DoCHighlightSeg(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr, Boolean highlight);
-extern void fnCHLresidue(PDNMG pdnmgThis,
-#ifndef _OPENGL
-                         Viewer3D  vvv,
-#endif
-                         Boolean highlight);
+extern PDNMM FindMM(void);
+extern void DoCHighlightSeg(PFB pfbThis, Int4 iModel, Int4 iIndex,
+                            Pointer ptr, Boolean highlight);
 extern void LaunchMediaViewer(BioseqPtr bsp);
 extern void SalsaRegister(void);
-extern void LaunchSalsa(SeqAlignPtr salp);
-extern void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb);
-extern void ResetSalsaColor(void);
-extern void Cn3DSendColorMsg(void);
-extern void ColorSalsa(void);
-extern void Cn3dObjRegister(void);
 extern void Cn3dObjMgrGetSelected(void);
-extern void DoMediaHL(PMMD  pmmdThis, Int4 from, Int4 to, Boolean highlight);
+extern void DoMediaHL(PMMD pmmdThis, Int4 from, Int4 to,
+                      Boolean highlight);
 extern void LaunchSequenceWindow(void);
-extern void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap);
-extern ResidueColorCell * GetColorIndexForMG(PMGD pmgdThis);
-extern void LIBCALLBACK Cn3DCheckAndDoHighlight PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
-extern void Cn3DSendColorMsgForBioseq(Int4 iCount);
-extern void Cn3DColorSalsaForStrucSeqs(void);
-extern void Cn3DCheckAlignmentStatusForStrucSeqs(void);
-extern void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void);
-extern void ClearMediaData(void);
-extern void Cn3DSetHLColorForSalsa(void);
+extern void LIBCALLBACK Cn3DCheckAndDoHighlight
+    PROTO((PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr));
+
+extern void Cn3D_RegisterColor(void);
+
+
+/*****************************************************************************
+
+Function: Cn3D_AnnotEditFunc()
+
+Purpose: The object manager callback to register a SeqAnnot.
+
+Parameters: data, the OMProcControlPtr.
+
+Returns: OM_MSG_RET_*
+
+*****************************************************************************/
+
+extern Int2 LIBCALLBACK Cn3D_AnnotEditFunc(Pointer data);
+
+
+/*****************************************************************************
+
+Function: Cn3D_SendUpdate()
+
+Purpose: Sends an update message to everyone about everything.
+  
+*****************************************************************************/
+
+NLM_EXTERN void Cn3D_SendUpdate();
+
+
+
+
 #ifdef __cplusplus
 }
 #endif
-
-
-#endif /* _CN3DMSG_ */
-
+#endif                          /* _CN3DMSG_ */

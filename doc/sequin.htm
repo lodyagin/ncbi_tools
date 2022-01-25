@@ -1095,6 +1095,33 @@ services. Your network administrator may have done this already. If not, please
 have them contact NCBI for further instructions on setting up firewalls to work
 with NCBI services.
 
+<p align="justify">
+<b>The following section is intended for network administrators:</b>
+
+<p align="justify">
+Using NCBI services from behind a security firewall requires opening ports in
+your firewall. The ports to open are:
+
+<p align="center">
+<pre>
+Firewall Port        IP Address
+--------------------------------
+    5853            130.14.22.1
+    5859            130.14.22.2
+    5840            130.14.22.8
+    5845            130.14.22.12
+</pre>
+
+<p align="justify">
+If your firewall is not transparent, the firewall port number
+should be mapped to the same port number on the external host.
+
+<p align="justify">
+Note: Old NCBI clients used different application configuration settings and
+ports than listed above. If you need to support such clients, which are being
+obsoleted, please contact <a href="mailto:info@ncbi.nlm.nih.gov">
+<tt>info@ncbi.nlm.nih.gov</tt></a> for further information.
+
 <p align="left">
 <a name="formatexamples">
 <font size=4>

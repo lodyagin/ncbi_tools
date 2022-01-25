@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -40,6 +40,12 @@
 * 022495   Alex
 *
 * $Log: picturep.h,v $
+* Revision 6.2  1999/10/13 17:45:47  kans
+* added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
+*
+* Revision 6.1  1999/10/04 17:16:33  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.0  1997/08/25 18:56:27  madden
 * Revision changed to 6.0
 *
@@ -59,8 +65,8 @@
 #ifndef _PICTUREP_
 #define _PICTUREP_
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_
@@ -133,6 +139,9 @@ typedef struct Nlm_genprec {
   Nlm_Int1       highlight;
   Nlm_AttPData   att;
   Nlm_Uint2      primID;
+  Nlm_Uint2      entityID;
+  Nlm_Uint2      itemID;
+  Nlm_Uint2      itemtype;
   Nlm_PrimDefPtr pdp;
   double         data;
 } Nlm_GenPRec, PNTR Nlm_GenPPtr;

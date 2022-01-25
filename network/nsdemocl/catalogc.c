@@ -29,7 +29,7 @@
 * 
 * Version Creation Date:	1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description: Client to request services catalog from the dispatcher
 *
@@ -45,6 +45,12 @@
 *
 * RCS Modification History:
 * $Log: catalogc.c,v $
+* Revision 6.3  2000/01/13 16:31:22  shavirin
+* Added environment and notice of old dispatcher name.
+*
+* Revision 6.2  2000/01/13 16:12:38  beloslyu
+* to be sure we are testing an old dispatcher
+*
 * Revision 6.1  1998/09/14 19:57:52  shavirin
 * Initial revision with this filename.
 *
@@ -106,13 +112,17 @@ main(int argc, CharPtr argv[])
     NI_ReqPtr	reqp;	/* for user constructed request */
     CharPtr             module;
     NI_DispatcherPtr    disp;
-    
+    static CharPtr env_string = "SRV_CONN_MODE=DISPATCHER";
+
 #ifdef COMP_THINKC
     argc = ccommand(&argv);
 #endif /* COMP_THINKC */
     module = argv[0];
     
 #ifdef OS_UNIX
+
+    putenv(env_string);
+
     while ((c = getopt(argc, argv, "d:s:u:")) != -1)
 	switch (c) {
 	  case 'd':
@@ -168,7 +178,9 @@ main(int argc, CharPtr argv[])
 	printf("\nUnable to initiate services - %s\n", ni_errlist[ni_errno]);
 	exit(1);
     }
-    printf("\n=== Connected to NCBI Dispatcher ===\n");
+    printf("\n=== Connected to NCBI Dispatcher '%s' ===\n", 
+           disp->dispHostName);
+
     printf("\nEnter \"cat\" to get a catalog or \"catbars\" to get a machine-parsable catalog\n");
     
     while (getService(svcname, disp) == 0) {

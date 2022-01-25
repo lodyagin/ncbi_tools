@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.25 $
+* $Revision: 6.28 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.28  2000/01/07 00:22:47  thiessen
+* fixes for LessTif and OpenGL X visual selection
+*
+* Revision 6.27  1999/12/30 16:58:52  kans
+* Carbon changes - printing still not resolved (Churchill)
+*
+* Revision 6.26  1999/12/21 18:48:44  kans
+* rearranged mac get input/output filename functions, soon to expect nav services and to retire SFGetFile and SFPutFile as not Carbon compliant
+*
 * Revision 6.25  1999/08/23 19:36:39  vakatov
 * Nlm_VibMessageHook():  the error posting window should not disappear
 * momentarily on FATAL ERROR -- as we want user to see error message(s)
@@ -1872,7 +1881,13 @@ extern Nlm_Handle Nlm_DoRemove (Nlm_GraphiC a, Nlm_Boolean savePort)
   void            (*rmv) PROTO((Nlm_GraphiC, Nlm_Boolean));
 
   cont = TRUE;
+  
+#if !defined(WIN_MOTIF) || !defined(LESSTIF_VERSION)
+  /* using LessTif (on Linux), this eventually causes a segfault down the
+     line when quitting the application - is this really necessary? (thiessen) */
   Nlm_DoHide (a, TRUE, savePort);
+#endif
+
   classPtr = Nlm_GetClassPtr (a);
   while (classPtr != NULL && cont) {
     rmv = classPtr->remove;
@@ -3830,7 +3845,11 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
 
   w = Nlm_CurrentWindow ();
 #ifdef WIN_MAC
+#if TARGET_API_MAC_CARBON >= 1
   PrOpen ();
+#else
+  PrOpen ();
+#endif
   if (prHdl == NULL) {
     prHdl = (THPrint) Nlm_HandNew (sizeof (TPrint));
     if (prHdl != NULL) {
@@ -3916,6 +3935,8 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
     if (prerr != noErr) {
       Nlm_Message (MSG_ERROR, "PrCloseDoc error %d", prerr);
     }
+// This call is not supported under Carbon, need to figure out
+// how Apple wants us to deal with this ...  churchill 12/28/99
     PrPicFile (prHdl, 0L, 0L, 0L, &prStat);
     prerr = PrError ();
     if (prerr != noErr) {
@@ -3924,7 +3945,11 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
     prPort = NULL;
     Nlm_UseWindow (w);
   }
+#if TARGET_API_MAC_CARBON >= 1
   PrClose ();
+#else
+  PrClose ();
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (w != NULL) {
@@ -4426,6 +4451,13 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
+#ifdef PROC_PPC
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
+  }
+  return FALSE;
+#endif
+#ifdef PROC_MC680X0
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   SFTypeList     fTypeList;
@@ -4442,11 +4474,6 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Char       str [5];
   Nlm_PoinT      where;
 
-#ifdef PROC_PPC
-  if (Nlm_usesMacNavServices) {
-    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
-  }
-#endif
   where.x = 90;
   where.y = 100;
   lengthTypes = sizeof (fileTypes);
@@ -4494,6 +4521,8 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Update ();
   return rsult;
 #endif
+#endif
+
 #ifdef WIN_MSWIN
   char  szDirName [256];
   char  szFile [256];
@@ -4552,6 +4581,7 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
     return FALSE;
   }
 #endif
+
 #ifdef WIN_MOTIF
   XmString  dirmask;
   char      *lastSlash;
@@ -4761,6 +4791,13 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
+#ifdef PROC_PPC
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
+  }
+  return FALSE;
+#endif
+#ifdef PROC_MC680X0
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   unsigned char  original [256];
@@ -4774,11 +4811,6 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   PenState       state;
   Nlm_PoinT      where;
 
-#ifdef PROC_PPC
-  if (Nlm_usesMacNavServices) {
-    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
-  }
-#endif
   where.x = 90;
   where.y = 100;
   GetPenState (&state);
@@ -4810,6 +4842,8 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Update ();
   return rsult;
 #endif
+#endif
+
 #ifdef WIN_MSWIN
   FILE  *f;
   char  szDirName [256];
@@ -4865,6 +4899,7 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
     return FALSE;
   }
 #endif
+
 #ifdef WIN_MOTIF
   char   *lastSlash;
   char    str [256];
@@ -5354,7 +5389,6 @@ extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_C
 
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator);
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator)
-
 {
   OSType    fCreator;
   Nlm_Int2  fError;
@@ -5370,7 +5404,7 @@ extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, N
   }
   Nlm_StringNCpy_0 (temp, filename, sizeof(temp));
   Nlm_CtoPstr ((Nlm_CharPtr) temp);
-  fError = GetFInfo ((StringPtr) temp, 0, &fInfo);
+  fError = HGetFInfo ( 0, 0, (StringPtr) temp, &fInfo);
   if (fError == 0) {
     fType = fInfo.fdType;
     fCreator = fInfo.fdCreator;

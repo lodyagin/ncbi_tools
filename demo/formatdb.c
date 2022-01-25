@@ -30,11 +30,20 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.30 $
+   $Revision: 6.33 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.33  1999/12/21 18:31:38  madden
+   Fixed bug with writing alias file.
+
+   Revision 6.32  1999/12/17 20:48:54  egorov
+   Fix 'gcc -Wall' warnings and remove old stuff.
+
+   Revision 6.31  1999/12/16 15:53:23  egorov
+   Typo fixed
+
    Revision 6.30  1999/09/10 16:30:35  shavirin
    Fixed problems with formating proteins by formatdb
 
@@ -259,7 +268,7 @@ FDB_optionsPtr FDB_CreateCLOptions(void)
 Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
                            Int4 volumes, Boolean is_protein)
 {
-    Char filenamebuf[128], buffer[64];
+    Char filenamebuf[128];
     time_t tnow;
     Int4 i;
     FILE *fd;
@@ -280,10 +289,10 @@ Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename,
         fprintf(fd, "#TITLE\n#\n");
     
     /* Now printing volume databases */
-    fprintf(fd, "DBLIST ", title);
+    fprintf(fd, "DBLIST ");
     
     for(i = 0; i < volumes; i++) {
-        fprintf(fd, "%s.%02d ", basename, i);
+        fprintf(fd, "%s.%02ld ", basename, i);
     }
     fprintf(fd, "\n#\n");
     
@@ -300,11 +309,8 @@ Int2 Main(void)
 {
     SeqEntryPtr sep;
     FormatDBPtr	fdbp;
-    Uint1 group_segs = 0;
     FDB_optionsPtr options;
     BioseqPtr bsp;
-    BioseqSetPtr bssp;
-    ByteStorePtr seq_data_new;
     Int4 count = 0, volume = 0;
     Char basename[128], filenamebuf[128];
     FILE *fd;
@@ -319,7 +325,7 @@ Int2 Main(void)
         StringCpy(basename, options->db_file);
     
     if(Bases_In_Volume > 1) {
-        sprintf(filenamebuf, "%s.%02d", basename, volume); 
+        sprintf(filenamebuf, "%s.%02ld", basename, volume); 
         MemFree(options->base_name);
         options->base_name = StringSave(filenamebuf);
         volume++;
@@ -359,7 +365,7 @@ Int2 Main(void)
                         return 9;
                     
                     if(Bases_In_Volume > 1) {
-                        sprintf(filenamebuf, "%s.%02d", basename, volume); 
+                        sprintf(filenamebuf, "%s.%02ld", basename, volume); 
                         MemFree(options->base_name);
                         options->base_name = StringSave(filenamebuf);
                         volume++;

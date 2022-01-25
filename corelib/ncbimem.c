@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.16  1999/11/05 21:48:48  vakatov
+* [MMAP_AVAIL]  cast to get rid of a warning on the pointer comparison
+*
 * Revision 6.15  1999/08/25 17:40:12  madden
 * ifdef for AIX fcntl.h
 *
@@ -1216,7 +1219,7 @@ NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name)
       mem_mapp->mmp_begin = mmap(NULL, mem_mapp->file_size, PROT_READ,
                                  MAP_SHARED, fd, 0);
       close(fd);
-      if (mem_mapp->mmp_begin == MAP_FAILED)
+      if ((void *) mem_mapp->mmp_begin == (void *) MAP_FAILED)
         break;
     }}
 #endif

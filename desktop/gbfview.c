@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.22 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -50,11 +50,18 @@
 static ParData ffParFmt = {FALSE, FALSE, FALSE, FALSE, TRUE, 0, 0};
 static ColData ffColFmt = {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE};
 
+typedef struct docdescrstruct {
+  Uint2  entityID, itemID, itemtype;
+  Int2   docitem;
+} DocDescrStruct, PNTR DocDescrPtr;
+
 typedef struct flatstruct {
-  Asn2ffJobPtr     ajp;
-  FFPrintArrayPtr  pap;
-  SeqEntryPtr      sep;
-  Int4             pap_size;
+  Asn2ffJobPtr      ajp;
+  FFPrintArrayPtr   pap;
+  SeqEntryPtr       sep;
+  Int4              pap_size;
+  Int4              numdescr;
+  DocDescrPtr       descr;
 } FlatStruct, PNTR FlatStructPtr;
 
 static Boolean GetIDsFromDoc (DoC d, Int2 item, Uint2Ptr entityPtr,
@@ -464,6 +471,7 @@ static void DocFreeFlat (DoC d, VoidPtr data)
     fsp = (FlatStructPtr) data;
     asn2ff_cleanup (fsp->ajp);
     MemFree (fsp->ajp);
+    MemFree (fsp->descr);
     MemFree (fsp);
   }
 }
@@ -477,17 +485,26 @@ static CharPtr FFPrintFunc (DoC d, Int2 index, Pointer data)
   DescrStructPtr   descr;
   FlatStructPtr    fsp;
   ErrSev           level;
+  SeqEntryPtr      oldsep = NULL;
   OMUserDataPtr    omudp;
   FFPrintArrayPtr  pap;
   CharPtr          str = NULL;
+  SeqEntryPtr      topsep;
 
   bvp = (BioseqViewPtr) GetObjectExtra (d);
   fsp = (FlatStructPtr) data;
   if (bvp == NULL || bvp->bsp == NULL || fsp == NULL) return StringSave ("?\n");
   level = ErrSetMessageLevel (SEV_MAX);
   bsp = BioseqLock (bvp->bsp);
-  str = FFPrint (fsp->pap, (Int4) (index - 1), fsp->pap_size);
   bfp = (BaseFormPtr) GetObjectExtra (bvp->form);
+  if (bfp != NULL) {
+    topsep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+    oldsep = SeqEntrySetScope (topsep);
+  }
+  str = FFPrint (fsp->pap, (Int4) (index - 1), fsp->pap_size);
+  if (oldsep != NULL) {
+    SeqEntrySetScope (oldsep);
+  }
   if (bfp != NULL) {
     pap = fsp->pap;
     if (pap != NULL) {
@@ -522,16 +539,44 @@ static Boolean DeltaLitOnly (BioseqPtr bsp)
   return TRUE;
 }
 
+static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
+
+{
+  DocDescrPtr  descr1;
+  DocDescrPtr  descr2;
+
+  descr1 = (DocDescrPtr) vp1;
+  descr2 = (DocDescrPtr) vp2;
+  if (descr1 == NULL || descr2 == NULL) return 0;
+
+  if (descr1->entityID > descr2->entityID) return 1;
+  if (descr1->entityID < descr2->entityID) return -1;
+
+  if (descr1->itemtype > descr2->itemtype) return 1;
+  if (descr1->itemtype < descr2->itemtype) return -1;
+
+  if (descr1->itemID > descr2->itemID) return 1;
+  if (descr1->itemID < descr2->itemID) return -1;
+
+  if (descr1->docitem > descr2->docitem) return 1;
+  if (descr1->docitem < descr2->docitem) return -1;
+
+  return 0;
+}
+
 static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode, Boolean show_gene)
 
 {
-  Asn2ffJobPtr   ajp;
-  BioseqViewPtr  bvp;
-  FonT           fnt;
-  FlatStructPtr  fsp;
-  Int4           index;
-  ErrSev         level;
-  Boolean        rsult;
+  Asn2ffJobPtr    ajp;
+  BioseqViewPtr   bvp;
+  DescrStructPtr  descr;
+  DocDescrPtr     doscr;
+  DocDescrPtr     doscrp;
+  FonT            fnt;
+  FlatStructPtr   fsp;
+  Int4            index;
+  ErrSev          level;
+  Boolean         rsult;
 
   rsult = FALSE;
   if (d != NULL && sep != NULL && bsp != NULL && spop != NULL) {
@@ -567,14 +612,38 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
         ajp->only_one = TRUE;
         ajp->genome_view = TRUE;
       }
+      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+        ajp->bankit = TRUE;
+      }
       fsp->pap_size = asn2ff_setup (ajp, &(fsp->pap));
       if (fsp->pap_size > 0) {
         asn2ff_set_output (NULL, "\n");
+        fsp->numdescr = 0;
         for (index = 0; index < fsp->pap_size; index++) {
           AppendItem (d, FFPrintFunc, (Pointer) fsp, FALSE,
                       fsp->pap [index].estimate, &ffParFmt,
                       &ffColFmt, fnt);
+          if (fsp->pap [index].descr != NULL) {
+            (fsp->numdescr)++;
+          }
         }
+        doscrp = (DocDescrPtr) MemNew (sizeof (DocDescrStruct) * (size_t) (fsp->numdescr + 1));
+        fsp->descr = doscrp;
+        fsp->numdescr = 0;
+        if (doscrp != NULL) {
+          for (index = 0; index < fsp->pap_size; index++) {
+            descr = fsp->pap [index].descr;
+            if (descr != NULL) {
+              doscr = &(doscrp [fsp->numdescr]);
+              doscr->entityID = descr->entityID;
+              doscr->itemID = descr->itemID;
+              doscr->itemtype = descr->itemtype;
+              doscr->docitem = index + 1;
+              (fsp->numdescr)++;
+            }
+          }
+        }
+        HeapSort (doscrp, (size_t) fsp->numdescr, sizeof (DocDescrStruct), SortDescrProc);
         rsult = TRUE;
       }
       ErrSetMessageLevel (level);
@@ -646,6 +715,8 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
     if (bvp->viewWholeEntity) {
       sep = GetTopSeqEntryForEntityID (entityID);
     } else if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
+      sep = GetBestTopParentForData (entityID, bsp);
+    } else if (ISA_aa (bsp->mol) && bsp->repr == Seq_repr_seg) {
       sep = GetBestTopParentForData (entityID, bsp);
     }
   } else {
@@ -998,26 +1069,75 @@ static void ShowFastaOrAsn (BioseqViewPtr bvp, Boolean show)
   }
 }
 
+static Int2 FindFFParagraph (DocDescrPtr doscr, Int4 numdescr,
+                             Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+
+{
+  DocDescrPtr  dsp;
+  Int4         L, R, mid;
+  Int2         rsult;
+
+  L = 0;
+  R = numdescr - 1;
+  while (L <= R) {
+    mid = (L + R) / 2;
+    dsp = &(doscr [mid]);
+    if (dsp == NULL) return 0;
+    if (dsp->entityID > entityID) {
+      R = mid - 1;
+    } else if (dsp->entityID < entityID) {
+      L = mid + 1;
+    } else if (dsp->itemtype > itemtype) {
+      R = mid - 1;
+    } else if (dsp->itemtype < itemtype) {
+      L = mid + 1;
+    } else if (dsp->itemID > itemID) {
+      R = mid - 1;
+    } else if (dsp->itemID < itemID) {
+      L = mid + 1;
+    } else {
+      rsult = dsp->docitem;
+      /* scan to first paragraph for item */
+      while (mid >= 0) {
+        dsp = &(doscr [mid]);
+        if (dsp != NULL) {
+          if (dsp->entityID == entityID &&
+              dsp->itemtype == itemtype &&
+              dsp->itemID == itemID) {
+            rsult = dsp->docitem;
+          }
+        }
+        mid--;
+      }
+      return rsult;
+    }
+  }
+
+  return 0;
+}
+
+
 static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
                             Uint2 selitemtype, SeqLocPtr region,
                             Boolean select, Boolean scrollto)
 
 {
-  Int2     bottom;
-  DoC      doc;
-  Uint2    entityID;
-  Int2     item;
-  Uint2    itemID;
-  Uint2    itemtype;
-  Boolean  needToScroll;
-  Int2     numItems;
-  RecT     rct;
-  BaR      sb;
-  Int2     scrollhere;
-  Int4     startsAt;
-  WindoW   tempPort;
-  CharPtr  text;
-  Int2     top;
+  Int2           bottom = 0;
+  DoC            doc;
+  FlatStructPtr  fsp;
+  Uint2          entityID;
+  Uint2          itemID;
+  Uint2          itemtype;
+  Int2           item;
+  Boolean        needToScroll;
+  Int2           numItems;
+  RecT           rct;
+  BaR            sb;
+  Int2           scrollhere;
+  Int4           startsAt;
+  WindoW         tempPort;
+  CharPtr        text;
+  Int2           top = 0;
 
   if (bvp == NULL) return;
   if (! bvp->highlightSelections) return;
@@ -1029,22 +1149,75 @@ static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemI
   GetDocParams (doc, &numItems, NULL);
   needToScroll = TRUE;
   scrollhere = 0;
-  for (item = 1; item <= numItems; item++) {
-    if (GetIDsFromDoc (doc, item, &entityID, &itemID, &itemtype)) {
-      if (entityID == selentityID &&
-          itemID == selitemID &&
-          itemtype == selitemtype) {
-        if (ItemIsVisible (doc, item, &top, &bottom, NULL)) {
-          needToScroll = FALSE;
-          ObjectRect (doc, &rct);
-          InsetRect (&rct, 4, 4);
-          rct.right = rct.left + 4;
-          rct.top = top;
-          rct.bottom = bottom;
-          InsetRect (&rct, -1, -1);
-          InvalRect (&rct);
-        } else if (scrollhere == 0) {
-          scrollhere = item;
+  fsp = (FlatStructPtr) GetDocData (doc);
+  if (fsp != NULL && fsp->descr != NULL && fsp->numdescr > 0) {
+    if (GetScrlParams (doc, NULL, &item, NULL)) {
+      while (item <= numItems && ItemIsVisible (doc, item, &top, &bottom, NULL)) {
+        if (GetIDsFromDoc (doc, item, &entityID, &itemID, &itemtype)) {
+          if (entityID == selentityID &&
+              itemID == selitemID &&
+              itemtype == selitemtype) {
+            needToScroll = FALSE;
+            ObjectRect (doc, &rct);
+            InsetRect (&rct, 4, 4);
+            rct.right = rct.left + 4;
+            rct.top = top;
+            rct.bottom = bottom;
+            InsetRect (&rct, -1, -1);
+            InvalRect (&rct);
+          }
+        }
+        item++;
+      }
+    }
+    scrollhere = FindFFParagraph (fsp->descr, fsp->numdescr,
+                                  selentityID, selitemID, selitemtype);
+    if (scrollhere > 0) {
+      if (ItemIsVisible (doc, scrollhere, &top, &bottom, NULL)) {
+        needToScroll = FALSE;
+      }
+      ObjectRect (doc, &rct);
+      InsetRect (&rct, 4, 4);
+      rct.right = rct.left + 4;
+      rct.top = top;
+      rct.bottom = bottom;
+      InsetRect (&rct, -1, -1);
+      InvalRect (&rct);
+    } else if (selitemtype == OBJ_BIOSEQ) { /* not preindexed in fsp descr */
+      ObjectRect (doc, &rct);
+      InsetRect (&rct, 4, 4);
+      rct.right = rct.left + 4;
+      rct.top = top;
+      rct.bottom = bottom;
+      InsetRect (&rct, -1, -1);
+      InvalRect (&rct);
+    }
+  }
+  /* for items currently not preindexed (LOCUS, ORGANISM), do a short linear search */
+  if (/* scrollhere == 0 && */ selitemID > 0 /* && needToScroll */) {
+    for (item = 1; item <= numItems && item < 10; item++) {
+      if (GetIDsFromDoc (doc, item, &entityID, &itemID, &itemtype)) {
+        if (entityID == selentityID &&
+            itemID == selitemID &&
+            itemtype == selitemtype) {
+          /*
+          if (ItemIsVisible (doc, item, &top, &bottom, NULL)) {
+            needToScroll = FALSE;
+            ObjectRect (doc, &rct);
+            InsetRect (&rct, 4, 4);
+            rct.right = rct.left + 4;
+            rct.top = top;
+            rct.bottom = bottom;
+            InsetRect (&rct, -1, -1);
+            InvalRect (&rct);
+          } else if (scrollhere == 0) {
+            scrollhere = item;
+          }
+          */
+          if (needToScroll) {
+            scrollhere = item;
+            item = 10; /* break the for loop */
+          }
         }
       }
     }

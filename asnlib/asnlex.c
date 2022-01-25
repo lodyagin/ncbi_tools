@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlex.c,v $
+* Revision 6.3  1999/12/23 17:25:44  kans
+* AsnTxtReadVal checks for NULL atp - same as recent check in AsnBinReadVal
+*
 * Revision 6.2  1998/06/12 19:27:51  kans
 * fixed unix compiler warnings
 *
@@ -312,6 +315,10 @@ NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 	retval = 1;  /* assume success */
     currpsp = & aip->typestack[aip->type_indent];
 	curr_type = currpsp->type;
+
+	if (atp == NULL)
+		return 0;
+
 	base_type = AsnFindBaseType(atp);     
     if (base_type == NULL)     /* not found */
     {

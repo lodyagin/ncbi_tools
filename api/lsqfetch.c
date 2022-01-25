@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.7  1999/10/07 16:21:13  kans
+* removed static AddSeqId and SeqIdDupList which were identical to public sequtil functions
+*
 * Revision 6.6  1999/07/20 21:18:39  sicotte
 * add static AddSeqId for linker conflicts
 *
@@ -56,6 +59,9 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.7  1999/10/07 16:21:13  kans
+* removed static AddSeqId and SeqIdDupList which were identical to public sequtil functions
+*
 * Revision 6.6  1999/07/20 21:18:39  sicotte
 * add static AddSeqId for linker conflicts
 *
@@ -113,50 +119,6 @@
 #ifndef _LSQFETCH_
 #include <lsqfetch.h>
 #endif
-
-/*********************************************************
-***
-***    AddSeqId  : create a new seqid and add at the end
-***                of the list starting with sip_head
-***
-**********************************************************/
-static SeqIdPtr AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip)
-{
-  SeqIdPtr sip_tmp, 
-           sip_copy;
-
-  sip_copy = SeqIdDup (sip);
-  sip_tmp = sip_copy->next;
-  sip_copy->next = NULL;
-  if (sip_tmp!=NULL)
-     SeqIdFree (sip_tmp);
-  if ( (sip_tmp = *sip_head) != NULL ) {
-     while (sip_tmp->next != NULL) 
-        sip_tmp = sip_tmp->next; 
-     sip_tmp->next = sip_copy;
-  }  
-  else {
-     *sip_head = sip_copy;
-  }
-  return (*sip_head);
-
-}
-
-/*******************************************************
-***
-***   SeqIdDupList : duplicate a list of SeqIdPtr (static here for linker conflicts *
-***
-*******************************************************/
-static SeqIdPtr SeqIdDupList (SeqIdPtr id_list)
-{
-  SeqIdPtr     sip=NULL;
-  SeqIdPtr     sid;
-
-  for (sid = id_list; sid != NULL; sid = sid->next) {
-         sip = AddSeqId (&sip, sid);  
-  }
-  return sip;
-}
 
 /* #include <accentr.h> */
 

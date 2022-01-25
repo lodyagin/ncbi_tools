@@ -1,4 +1,4 @@
-/* $Id: ncbithr.h,v 6.8 1998/02/27 17:13:58 vakatov Exp $ */
+/* $Id: ncbithr.h,v 6.9 1999/10/14 18:44:36 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.h
@@ -35,6 +35,9 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.h,v $
+* Revision 6.9  1999/10/14 18:44:36  vakatov
+* For better consistency, include <ncbilcl.h> to <ncbistd.h>
+*
 * Revision 6.8  1998/02/27 17:13:58  vakatov
 * [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
 *
@@ -75,7 +78,7 @@
 #ifndef __NLM_THREAD__
 #define __NLM_THREAD__
 
-#include <ncbi.h>
+#include <ncbistd.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT

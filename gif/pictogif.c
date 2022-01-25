@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   11/23/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: pictogif.c,v $
+* Revision 6.2  1999/10/20 23:14:00  vakatov
+* + Nlm_Picture2gdImage() -- to draw in gdImage.
+* Nlm_PictureToGIF() -- restore current GIF image (if any) when the
+* dump is complete.
+*
 * Revision 6.1  1998/07/02 18:19:29  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -47,11 +52,14 @@
 #include <mappingp.h>
 #include <drawingp.h>
 #include <ncbigif.h>
+#include <gifgen.h>
+
 
 /****************************************************************************/
 /* DEFINES */
 /****************************************************************************/
 #define PROXIMITY    2
+
 
 /****************************************************************************/
 /* STATIC FUNCTIONS */
@@ -133,23 +141,63 @@ NLM_EXTERN Boolean Nlm_PictureToGIF
  Int2 align, Int4 scaleX, Int4 scaleY,
  Boolean transparent)
 {
-  PicPPtr      pic;
   Nlm_DrawInfo dInfo;
 
-  if ( out != NULL && picture != NULL && gifWidth > 0 && gifHeight > 0 
-       && scaleX != 0 && scaleY != 0 ) {
-    pic = (PicPPtr) picture;
-    if (pic->base.code == PICTURE) {
-      if ( !Nlm_CreateGIF ( gifWidth, gifHeight, transparent )) return FALSE;
-      if ( !Nlm_MakeScaleGIF ( picture, gifWidth, gifHeight, pntX, pntY,
-          align, scaleX, scaleY, &(dInfo.scale) )) return FALSE;
-      dInfo.checked = FALSE;
-      dInfo.curattrib = blackAttPData;
-      dInfo.highlight = 0;
-      Nlm_DrawSegment ( (SegPPtr)picture, &dInfo );
-      Nlm_SaveGIF ( out );
+  if (!out  ||  !picture  ||  !scaleX  ||  !scaleY  ||
+      gifWidth <= 0  ||  gifHeight <= 0  ||
+      ((PicPPtr) picture)->base.code != PICTURE)
+    return FALSE;
+
+  if ( !Nlm_MakeScaleGIF(picture, gifWidth, gifHeight, pntX, pntY,
+                         align, scaleX, scaleY, &dInfo.scale) )
+    return FALSE;
+  
+  {{ /* Draw */
+    gdImage* im_prev = Nlm_SetCurrentGIF(0);
+    if ( !Nlm_CreateGIF(gifWidth, gifHeight, transparent) ) {
+      Nlm_SetCurrentGIF(im_prev);
+      return FALSE;
     }
-  }
+    dInfo.checked  = FALSE;
+    dInfo.curattrib = blackAttPData;
+    dInfo.highlight = 0;
+    Nlm_DrawSegment((SegPPtr)picture, &dInfo);
+    Nlm_SaveGIF(out);
+    Nlm_DestroyGIF();
+    Nlm_SetCurrentGIF(im_prev);
+  }}
+
+  return TRUE;
+}
+
+
+NLM_EXTERN Boolean Nlm_Picture2gdImage
+(struct gdImageStruct* im, SegmenT picture,
+ Int4 pntX, Int4 pntY, Int2 align, Int4 scaleX, Int4 scaleY)
+{
+  Nlm_DrawInfo dInfo;
+
+  if (!im  ||  !picture  ||  !scaleX  ||  !scaleY  ||
+      ((PicPPtr) picture)->base.code != PICTURE)
+    return FALSE;
+
+  {{ /* Scale and position of the picture in the GD image */
+    int width, height;
+    gdImageGetDimensions(im, &width, &height);
+    if ( !Nlm_MakeScaleGIF(picture, (Int2)width, (Int2)height, pntX, pntY,
+                           align, scaleX, scaleY, &dInfo.scale) )
+      return FALSE;
+  }}
+
+  dInfo.checked   = FALSE;
+  dInfo.curattrib = blackAttPData;
+  dInfo.highlight = 0;
+
+  {{ /* Draw */
+    gdImage* im_prev = Nlm_SetCurrentGIF(im);
+    Nlm_DrawSegment((SegPPtr) picture, &dInfo);
+    Nlm_SetCurrentGIF(im_prev);
+  }}
   return TRUE;
 }
 

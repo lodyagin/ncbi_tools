@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.125 $
+* $Revision: 6.129 $
 *
 * File Description:
 *
@@ -1069,6 +1069,333 @@ void ConvertToLocalProc (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
  
+static SeqIdPtr SeqIdFindBestForPromotion (SeqIdPtr sip)
+
+{
+  Uint1  order [NUM_ORDER];
+
+  SeqIdBestRank (order, NUM_ORDER);
+  order [SEQID_OTHER] = 52;
+  return SeqIdSelect (sip, order, NUM_ORDER);
+}
+
+static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
+
+{
+  SeqIdPtr     bestid, newid, oldid;
+  BioseqPtr    bsp;
+  ObjectIdPtr  oip;
+  TextSeqId    tsi;
+  SeqId        vn;
+
+  bsp = BioseqFind (sip);
+  if (bsp == NULL && alsoCheckLocalAccn && sip->choice == SEQID_LOCAL) {
+    oip = (ObjectIdPtr) sip->data.ptrvalue;
+    if (oip != NULL && (! StringHasNoText (oip->str))) {
+      MemSet ((Pointer) &vn, 0, sizeof (SeqId));
+      MemSet ((Pointer) &tsi, 0, sizeof (TextSeqId));
+      tsi.accession = oip->str;
+      vn.choice = SEQID_GENBANK;
+      vn.data.ptrvalue = (Pointer) &tsi;
+      bsp = BioseqFind (&vn);
+    }
+  }
+  if (bsp == NULL) return;
+
+  bestid = SeqIdFindBestForPromotion (bsp->id);
+  if (bestid == NULL) return;
+  newid = SeqIdDup (bestid);
+  if (newid == NULL) return;
+
+  oldid = ValNodeNew (NULL);
+  if (oldid == NULL) return;
+
+  MemCopy (oldid, sip, sizeof (ValNode));
+  oldid->next = NULL;
+
+  sip->choice = newid->choice;
+  sip->data.ptrvalue = newid->data.ptrvalue;
+
+  SeqIdFree (oldid);
+  ValNodeFree (newid);
+
+  SeqIdStripLocus (sip);
+}
+
+static void PromoteSeqIdList (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
+
+{
+  while (sip != NULL) {
+    PromoteSeqId (sip, alsoCheckLocalAccn);
+    sip = sip->next;
+  }
+}
+
+static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
+
+{
+  SeqLocPtr      loc;
+  PackSeqPntPtr  psp;
+  SeqBondPtr     sbp;
+  SeqIntPtr      sinp;
+  SeqIdPtr       sip;
+  SeqPntPtr      spp;
+
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_NULL :
+        break;
+      case SEQLOC_EMPTY :
+      case SEQLOC_WHOLE :
+        sip = (SeqIdPtr) slp->data.ptrvalue;
+        PromoteSeqIdList (sip, alsoCheckLocalAccn);
+        break;
+      case SEQLOC_INT :
+        sinp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sinp != NULL) {
+          sip = sinp->id;
+          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+        }
+        break;
+      case SEQLOC_PNT :
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL) {
+          sip = spp->id;
+          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+        }
+        break;
+      case SEQLOC_PACKED_PNT :
+        psp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if (psp != NULL) {
+          sip = psp->id;
+          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+        }
+        break;
+      case SEQLOC_PACKED_INT :
+      case SEQLOC_MIX :
+      case SEQLOC_EQUIV :
+        loc = (SeqLocPtr) slp->data.ptrvalue;
+        while (loc != NULL) {
+          PromoteSeqLocList (loc, alsoCheckLocalAccn);
+          loc = loc->next;
+        }
+        break;
+      case SEQLOC_BOND :
+        sbp = (SeqBondPtr) slp->data.ptrvalue;
+        if (sbp != NULL) {
+          spp = (SeqPntPtr) sbp->a;
+          if (spp != NULL) {
+            sip = spp->id;
+            PromoteSeqIdList (sip, alsoCheckLocalAccn);
+          }
+          spp = (SeqPntPtr) sbp->b;
+          if (spp != NULL) {
+            sip = spp->id;
+            PromoteSeqIdList (sip, alsoCheckLocalAccn);
+          }
+        }
+        break;
+      case SEQLOC_FEAT :
+        break;
+      default :
+        break;
+    }
+    slp = slp->next;
+  }
+}
+
+static Boolean PromoteIDsProc (GatherObjectPtr gop)
+
+{
+  CodeBreakPtr  cbp;
+  CdRegionPtr   crp;
+  RnaRefPtr     rrp;
+  SeqFeatPtr    sfp;
+  tRNAPtr       trp;
+
+  if (gop->itemtype != OBJ_SEQFEAT) return TRUE;
+  sfp = (SeqFeatPtr) gop->dataptr;
+  if (sfp == NULL) return TRUE;
+
+  PromoteSeqLocList (sfp->location, FALSE);
+
+  PromoteSeqLocList (sfp->product, FALSE);
+
+  switch (sfp->data.choice) {
+    case SEQFEAT_CDREGION :
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp != NULL && crp->code_break != NULL) {
+        for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+          PromoteSeqLocList (cbp->loc, FALSE);
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->type == 3 && rrp->ext.choice == 2) {
+        trp = rrp->ext.value.ptrvalue;
+        if (trp != NULL && trp->anticodon != NULL) {
+          PromoteSeqLocList (trp->anticodon, FALSE);
+        }
+      }
+      break;
+    default :
+      break;
+  }
+
+  return TRUE;
+}
+
+void PromoteToBestIDProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  oldscope, sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  oldscope = SeqEntrySetScope (sep);
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteIDsProc, NULL, NULL);
+
+  SeqEntrySetScope (oldscope);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean PromoteAlignIDsProc (GatherObjectPtr gop)
+
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  PackSegPtr    psp;
+  SeqAlignPtr   sap;
+  SeqLocPtr     slp;
+  StdSegPtr     ssp;
+
+  if (gop->itemtype != OBJ_SEQALIGN) return TRUE;
+  sap = (SeqAlignPtr) gop->dataptr;
+  if (sap == NULL) return TRUE;
+
+  switch (sap->segtype) {
+    case SAS_DENDIAG :
+      for (ddp = sap->segs; ddp != NULL; ddp = ddp->next) {
+        PromoteSeqIdList (ddp->id, TRUE);
+      }
+      break;
+    case SAS_DENSEG :
+      dsp = sap->segs;
+      if (dsp != NULL) {
+        PromoteSeqIdList (dsp->ids, TRUE);
+      }
+      break;
+    case SAS_STD :
+      for (ssp = sap->segs; ssp != NULL; ssp = ssp->next) {
+        PromoteSeqIdList (ssp->ids, TRUE);
+        for (slp = ssp->loc; slp != NULL; slp = slp->next) {
+          PromoteSeqLocList (slp, TRUE);
+        }
+      }
+      break;
+    case SAS_PACKED :
+      psp = (PackSegPtr) sap->segs;
+      if (psp != NULL) {
+        PromoteSeqIdList (psp->ids, TRUE);
+      }
+      break;
+    case SAS_COMPSEQ :
+      break;
+    default :
+      break;
+  }
+
+  return TRUE;
+}
+
+extern void PromoteAlignsToBestIDProc (IteM i);
+void PromoteAlignsToBestIDProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  oldscope, sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  oldscope = SeqEntrySetScope (sep);
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteAlignIDsProc, NULL, NULL);
+
+  SeqEntrySetScope (oldscope);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean RemoveIDsProc (GatherObjectPtr gop)
+
+{
+  BioseqPtr      bsp;
+  SeqIdPtr       nextid, sip;
+  SeqIdPtr PNTR  previd;
+
+  if (gop->itemtype != OBJ_BIOSEQ) return TRUE;
+  bsp = (BioseqPtr) gop->dataptr;
+  if (bsp == NULL) return TRUE;
+
+  previd = (SeqIdPtr PNTR) &(bsp->id);
+  sip = bsp->id;
+  while (sip != NULL) {
+    nextid = sip->next;
+    if (sip->choice == SEQID_GENBANK) {
+      *previd = sip->next;
+      sip->next = NULL;
+      SeqIdFree (sip);
+    } else {
+      previd = (SeqIdPtr PNTR) &(sip->next);
+    }
+    sip = sip->next;
+  }
+
+  return TRUE;
+}
+
+void RemoveIDsFromBioseqs (IteM i)
+
+{
+  MsgAnswer    ans;
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  ans = Message (MSG_OKC, "Currently deletes all GenBank/EMBL/DDBJ SeqIDs");
+  if (ans == ANS_CANCEL) return;
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, RemoveIDsProc, NULL, NULL);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 /*#ifdef USE_BLAST*/
 #define POST_PROCESS_BANDALGN  1
 #define POST_PROCESS_NONE      2
@@ -5196,6 +5523,10 @@ static CharPtr style2Txt = "\
 1208    1612\n\
 1683    1949\n";
 
+static CharPtr nolongersupportedmessage =
+"This function has been superseded.  Use File->Open to read the\n\
+5-column feature table format described in the Sequin Quick Guide.";
+
 void AutoParseFeatureTableProc (IteM i)
 
 {
@@ -5223,6 +5554,8 @@ void AutoParseFeatureTableProc (IteM i)
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
+
+  if (Message (MSG_OK, nolongersupportedmessage) == ANS_OK) return; /* forces return */
 
   w = NULL;
   ppp = MemNew (sizeof (PreParseData));

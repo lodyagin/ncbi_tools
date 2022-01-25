@@ -493,7 +493,7 @@ static void FixMol (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	}
 	while (mfp != NULL) {
 		if (mfp->index == index && mfp->molinfo != NULL) {
-			tmp = ValNodeNew(vnp);
+			tmp = SeqDescrNew(vnp);
 			tmp->choice = Seq_descr_molinfo;
 			tmp->data.ptrvalue = mfp->molinfo;
 		}
@@ -625,7 +625,7 @@ static void FixOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	for (; ofp != NULL; ofp = ofp->next) {
 		if (ofp->desc == TRUE) {
 			if (ofp->index == index && ofp->bsp != NULL) {
-				tmp = ValNodeNew(vnp);
+				tmp = SeqDescrNew(vnp);
 				tmp->choice = Seq_descr_source;
 				tmp->data.ptrvalue = ofp->bsp;
 			}
@@ -1441,6 +1441,8 @@ void FindOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 Int4 BSComparison(BioSourcePtr one, BioSourcePtr two)
 {
 	OrgRefPtr orp1, orp2;
+	OrgNamePtr onp1, onp2;
+	OrgModPtr omp1, omp2;
 	SubSourcePtr ssp1, ssp2;
 	CharPtr name1 = NULL, name2 = NULL;
 	CharPtr subname1 = NULL, subname2 = NULL;
@@ -1485,26 +1487,28 @@ Int4 BSComparison(BioSourcePtr one, BioSourcePtr two)
 	 	retval = -1;
 	}
 	
-/* Compare clones */
-	for (ssp1 = one->subtype; ssp1; ssp1= ssp1->next) {
-		if (ssp1->subtype == 3) {  /* clone */
-			subname1 = ssp1->name;
-		}
+/* Compare clones - now all subsource and orgmod modifiers */
+
+	for (ssp1 = one->subtype, ssp2 = two->subtype;
+		ssp1 != NULL && ssp2 != NULL;
+		ssp1 = ssp1->next, ssp2 = ssp2->next) {
+		if (ssp1->subtype != ssp2->subtype) return -1;
+		if (StringICmp (ssp1->name, ssp2->name) != 0) return -1;
 	}
-	for (ssp2 = two->subtype; ssp2; ssp2= ssp2->next) {
-		if (ssp2->subtype == 3) {  /* clone */
-			subname2 = ssp2->name;
-		}
+	if (ssp1 != NULL || ssp2 != NULL) return -1;
+
+	onp1 = orp1->orgname;
+	onp2 = orp2->orgname;
+	if (onp1 == NULL || onp2 == NULL) return retval;
+
+	for (omp1 = onp1->mod, omp2 = onp2->mod;
+		omp1 != NULL && omp2 != NULL;
+		omp1 = omp1->next, omp2 = omp2->next) {
+		if (omp1->subtype != omp2->subtype) return -1;
+		if (StringICmp (omp1->subname, omp2->subname) != 0) return -1;
 	}
-	if (subname1 == NULL) {
-		if (subname2 != NULL)
-			return -1;
-	} else if (subname2 == NULL) {
-		return -1;
-	}
-	if (StringCmp(subname1, subname2) != 0) {
-		return -1;
-	}
+	if (omp1 != NULL || omp2 != NULL) return -1;
+
 	return retval;
 }
 
@@ -1876,7 +1880,7 @@ void CkOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	tmp_sfp = (SeqFeatPtr) (sap->data);
 	sfp = SeqFeatExtractList(&(tmp_sfp), SEQFEAT_BIOSRC);
 	if (sfp != NULL) {
-		tmp = ValNodeNew(vnp);
+		tmp = SeqDescrNew(vnp);
 		tmp->choice = Seq_descr_source;
 		tmp->data.ptrvalue = AsnIoMemCopy(sfp->data.value.ptrvalue, 
 		(AsnReadFunc) BioSourceAsnRead, (AsnWriteFunc) BioSourceAsnWrite);
@@ -2020,7 +2024,7 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 		bs = v->data.ptrvalue;
 		if (bsrc == NULL) {
 			bsrc = BioSourceMerge(bsrc, bs);
-			tmp = ValNodeAdd(&(bssp->descr));
+			tmp = SeqDescrAdd(&(bssp->descr));
 			tmp->choice = Seq_descr_source;
 			tmp->data.ptrvalue = bsrc;
 		} else if (CmpOrgById(bsrc, bs) == TRUE) {
@@ -2054,7 +2058,7 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 			bs = vnp->data.ptrvalue;
 			if (bsrc == NULL) {
 				bsrc = BioSourceMerge(bsrc, bs);
-				tmp = ValNodeNew(bssp->descr);
+				tmp = SeqDescrNew(bssp->descr);
 				tmp->choice = Seq_descr_source;
 				tmp->data.ptrvalue = bsrc;
 			} else if (CmpOrgById(bsrc, bs) == TRUE) {
@@ -2757,7 +2761,7 @@ static Boolean get_src (GatherContextPtr gcp)
 			vnp = (ValNodePtr) (gcp->thisitem);
 			if (vnp->choice == Seq_descr_source) {
 				if (vnp->data.ptrvalue != NULL) {
-					new = ValNodeNew(NULL);
+					new = SeqDescrNew(NULL);
 					new = MemCopy(new, vnp, sizeof(ValNode));
 					new->next = NULL;
 					*vnpp = new;
@@ -4343,7 +4347,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 				if (StringCmp(ifp->key, "transit_peptide") == 0)
 					prot->processed = 4;
 				if (f1->comment != NULL) {
-					if (prot->processed == 2 || prot->name == NULL) {
+					if ((prot->processed == 2 || prot->name == NULL) && StringICmp (f1->comment, "putative") != 0) {
 						ValNodeAddStr(&(prot->name), 0,StringSave(f1->comment));
 					} else {
 						sfp->comment = StringSave(f1->comment);
@@ -4399,6 +4403,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			if (bsp) {
 				if (bsp->annot == NULL) {
 					sap = SeqAnnotNew();
+					sap->type = 1;
 					bsp->annot = sap;
 				} else {
 					sap = bsp->annot;

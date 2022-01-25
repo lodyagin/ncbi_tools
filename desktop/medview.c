@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -115,10 +115,13 @@ static ColData  mshFmt [1] = {
 static Boolean DisplayArticle (DoC d, MedlineEntryPtr mep, Boolean showMesh)
 
 {
+  size_t              len;
+  MedlineViewFormPtr  mfp;
   MedlinePtr          mPtr;
   ParData             para;
+  CharPtr             ptr;
   RecT                r;
-  MedlineViewFormPtr  mfp;
+  CharPtr             tmp;
 
   mfp = (MedlineViewFormPtr) GetObjectExtra (d);
   if (mfp != NULL) {
@@ -181,10 +184,12 @@ static Boolean DisplayArticle (DoC d, MedlineEntryPtr mep, Boolean showMesh)
           ClearString ();
         }
         if (mPtr->abstract != NULL) {
-          AddString (mPtr->abstract);
-          AddString ("\n");
-          AppendText (d, buffer, NULL, NULL, mfp->abstractfnt);
-          ClearString ();
+          len = StringLen (mPtr->abstract);
+          tmp = (CharPtr) MemNew (sizeof (Char) * (len + 10));
+          ptr = StringMove (tmp, mPtr->abstract);
+          ptr = StringMove (ptr, "\n");
+          AppendText (d, tmp, NULL, NULL, mfp->abstractfnt);
+          MemFree (tmp);
         }
         if (showMesh) {
           if (mPtr->mesh != NULL) {

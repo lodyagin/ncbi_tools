@@ -99,8 +99,20 @@ end createFolders
 on copyPrefixes()
 	tell application "Finder"
 		
+		if (exists (file "ncbic.pfx" of folder INCLUDEFILES)) then
+			delete file "ncbic.pfx" of (folder INCLUDEFILES)
+		end if
+		
 		if (exists (file "net.pfx" of folder INCLUDEFILES)) then
 			delete file "net.pfx" of (folder INCLUDEFILES)
+		end if
+		
+		if (exists (file "opengl.pfx" of folder INCLUDEFILES)) then
+			delete file "opengl.pfx" of (folder INCLUDEFILES)
+		end if
+		
+		if (exists (file "opengl-png.pfx" of folder INCLUDEFILES)) then
+			delete file "opengl-png.pfx" of (folder INCLUDEFILES)
 		end if
 		
 		if (exists (file "gif.pfx" of folder INCLUDEFILES)) then
@@ -119,8 +131,11 @@ on copyPrefixes()
 			delete file "tax2.pfx" of (folder INCLUDEFILES)
 		end if
 		
+		copy {file "ncbic.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
 		copy {file "net.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
 		copy {file "gif.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
+		copy {file "opengl.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
+		copy {file "opengl-png.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
 		copy {file "blast.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
 		copy {file "medarch.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}
 		copy {file "tax2.pfx" of folder "macmet" of folder "link" of folder NCBISOURCE} to {folder INCLUDEFILES}

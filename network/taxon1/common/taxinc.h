@@ -162,6 +162,14 @@ Int4 tax1_getTaxId4Str(CharPtr search_str, CharPtr* orgname, Int4Ptr *Ids_out);
 
 Boolean tax1_isAlive(void);
 
+/***************************************************
+ * Get tax_id for given gi
+ * returns:
+ *       tax_id if found
+ *       0      if no data or error
+ */
+Int4 tax1_getTaxId4GI(Int4 gi);
+
 #ifdef __cplusplus
 /* { */ }
 #endif

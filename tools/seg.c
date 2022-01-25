@@ -292,120 +292,115 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
 
 SeqLocPtr SeqlocSegAa (SeqLocPtr slpin, SegParamsPtr sparamsp)
 
-  {
-   SeqPortPtr	spp=NULL;
-   SeqLocPtr	slp = NULL;
-   SequencePtr seqwin;
-   SegPtr segs;
-   Int4 index, len;
-   Int4 start, stop, temp;
-   CharPtr seq;
-   Uint1       residue;
-
-/* error msg stuff */
-
-   ErrSetOptFlags (EO_MSG_CODES);
-   SegParamsCheck (sparamsp);
-
-/* bail on null bioseq */
-
-   if (!slpin)
-     {
-       ErrPostEx (SEV_ERROR, 0, 0, "no seqloc");
-       ErrShow ();
-       return (slp);
-     }
-
-/* only simple intervals */
-
-   if (slpin->choice != SEQLOC_INT &&
-       slpin->choice != SEQLOC_WHOLE) return(slp);
-
-/* get coordinate range */
-
-   start = SeqLocStart(slpin);
-   stop = SeqLocStop(slpin);
-   if (stop<start)
-     {
-      temp = start;
-      start = stop;
-      stop = temp;
-     }
-
-   len = stop - start + 1;
-
-/* check seg parameters */
-
-   if (!sparamsp)
-     {
-      sparamsp = SegParamsNewAa();
-      SegParamsCheck (sparamsp);
-      if (!sparamsp)
-        {
-         ErrPostEx (SEV_WARNING, 0, 0, "null parameters object");
-         ErrShow();
-         return(slp);
+{
+    SeqPortPtr	spp=NULL;
+    SeqLocPtr	slp = NULL;
+    SequencePtr seqwin;
+    SegPtr segs;
+    Int4 index, len;
+    Int4 start, stop, temp;
+    CharPtr seq;
+    Uint1       residue;
+    Boolean params_allocated = FALSE;
+    
+    /* error msg stuff */
+    
+    ErrSetOptFlags (EO_MSG_CODES);
+    SegParamsCheck (sparamsp);
+    
+    /* bail on null bioseq */
+    
+    if (!slpin) {
+        ErrPostEx (SEV_ERROR, 0, 0, "no seqloc");
+        ErrShow ();
+        return (slp);
+    }
+    
+    /* only simple intervals */
+    
+    if (slpin->choice != SEQLOC_INT &&
+        slpin->choice != SEQLOC_WHOLE) return(slp);
+    
+    /* get coordinate range */
+    
+    start = SeqLocStart(slpin);
+    stop = SeqLocStop(slpin);
+    if (stop<start) {
+        temp = start;
+        start = stop;
+        stop = temp;
+    }
+    
+    len = stop - start + 1;
+    
+    /* check seg parameters */
+    
+    if (!sparamsp) {
+        params_allocated = TRUE;
+        sparamsp = SegParamsNewAa();
+        SegParamsCheck (sparamsp);
+        if (!sparamsp) {
+            ErrPostEx (SEV_WARNING, 0, 0, "null parameters object");
+            ErrShow();
+            return(slp);
         }
-     }
-
-/* make an old-style genwin sequence window object */
-
-   seq = (CharPtr) MemNew((len+1)*sizeof(Char));
-   spp = SeqPortNewByLoc(slpin, Seq_code_ncbieaa);
-   if (spp == NULL) {
-      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortNew failure");
-      ErrShow();
-   }
-
-   if (!seq)
-   {
-      ErrPostEx (SEV_ERROR, 0, 0, "memory allocation failure");
-      ErrShow();
-	  SeqPortFree(spp);
-      return(slp);
-   }
-
+    }
+    
+    /* make an old-style genwin sequence window object */
+    
+    seq = (CharPtr) MemNew((len+1)*sizeof(Char));
+    spp = SeqPortNewByLoc(slpin, Seq_code_ncbieaa);
+    if (spp == NULL) {
+        ErrPostEx (SEV_ERROR, 0, 0, "SeqPortNew failure");
+        ErrShow();
+    }
+    
+    if (!seq) {
+        ErrPostEx (SEV_ERROR, 0, 0, "memory allocation failure");
+        ErrShow();
+        SeqPortFree(spp);
+        return(slp);
+    }
+    
    index = 0;
-   while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
-     {
-      if (IS_residue(residue))
-        {
-         seq[index] = residue;
-         index++;
-        }
-      else if (residue == SEQPORT_EOS)
-        {
-         continue; /*[Segment boundary]*/
-        }
-      else if (residue == SEQPORT_VIRT)
-        {
-         continue; /*[Virtual Sequence]*/
-        } 
-     }
-
+   while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+       if (IS_residue(residue)) {
+           seq[index] = residue;
+           index++;
+       } else if (residue == SEQPORT_EOS) {
+           continue; /*[Segment boundary]*/
+       } else if (residue == SEQPORT_VIRT) {
+           continue; /*[Virtual Sequence]*/
+       } 
+   }
+   
    seq[index] = NULLB;
-
+   
    seqwin = SeqNew();
    seqwin->seq = (CharPtr) seq;
    seqwin->length = len;
    seqwin->palpha = AlphaCopy(sparamsp->palpha);
    
-/* seg the sequence */
-
+   /* seg the sequence */
+   
    segs = (SegPtr) NULL;
    SegSeq (seqwin, sparamsp, &segs, 0);
 
-/* convert segs to seqlocs */
-
+   /* convert segs to seqlocs */
+   
    slp = SeqlocSegsToSeqLoc(slpin, segs);   
-
-/* clean up & return */
-
+   
+   /* clean up & return */
+   
    SeqFree (seqwin);
    SegFree (segs);
    SeqPortFree(spp);
+
+   if(params_allocated)
+       SegParamsFree(sparamsp);
+   
    return (slp);
-  }
+}
 
 /*---------------------------------------------------------(SegsToSeqLoc)---*/
 

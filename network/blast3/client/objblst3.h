@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.8 at Aug 11, 1999  4:42 PM
+*    Generated using ASNCODE Revision: 6.8 at Nov 12, 1999 11:06 AM
 *
 **************************************************/
 
@@ -44,6 +44,7 @@ typedef struct struct_Blast_search {
    struct struct_Blast_parameters PNTR   parameters;
    ValNodePtr   mask;
    struct struct_Blast_matrix PNTR   matrix;
+   Uint1   return_parts;
 } BlastSearch, PNTR BlastSearchPtr;
 
 
@@ -91,6 +92,7 @@ typedef ValNode BlastResponse;
 #define BlastResponse_done 17
 #define BlastResponse_fini 18
 #define BlastResponse_phialign 19
+#define BlastResponse_parts 20
 
 
 NLM_EXTERN BlastResponsePtr LIBCALL BlastResponseFree PROTO ((BlastResponsePtr ));
@@ -137,6 +139,8 @@ typedef struct struct_Blast_parameters {
    Uint1   perform_culling;
    Int4   strand_option;
    CharPtr   phi_pattern;
+   Uint1   use_real_db_size;
+   Uint1   use_best_align;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -342,6 +346,44 @@ NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdFree PROTO ((BlastSeqIdPtr ));
 NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdNew PROTO (( void ));
 NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastSeqIdAsnWrite PROTO (( BlastSeqIdPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BlastSequence
+*
+**************************************************/
+typedef struct struct_Blast_sequence {
+   struct struct_Blast_sequence PNTR next;
+   struct struct_Seq_align PNTR   align;
+   Pointer   db_seq;
+} BlastSequence, PNTR BlastSequencePtr;
+
+
+NLM_EXTERN BlastSequencePtr LIBCALL BlastSequenceFree PROTO ((BlastSequencePtr ));
+NLM_EXTERN BlastSequencePtr LIBCALL BlastSequenceNew PROTO (( void ));
+NLM_EXTERN BlastSequencePtr LIBCALL BlastSequenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastSequenceAsnWrite PROTO (( BlastSequencePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BlastParts
+*
+**************************************************/
+typedef struct struct_Blast_parts {
+   struct struct_Blast_parts PNTR next;
+   CharPtr   defline;
+   struct struct_Blast_sequence PNTR   sequence;
+} BlastParts, PNTR BlastPartsPtr;
+
+
+NLM_EXTERN BlastPartsPtr LIBCALL BlastPartsFree PROTO ((BlastPartsPtr ));
+NLM_EXTERN BlastPartsPtr LIBCALL BlastPartsNew PROTO (( void ));
+NLM_EXTERN BlastPartsPtr LIBCALL BlastPartsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastPartsAsnWrite PROTO (( BlastPartsPtr , AsnIoPtr, AsnTypePtr));
 
 
 

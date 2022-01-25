@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -2554,6 +2554,7 @@ typedef struct gbblockpage {
   TexT          date;
   TexT          div;
   TexT          taxonomy;
+  ButtoN        htgsDraft;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2570,6 +2571,10 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
 {
   GBBlockPtr      gbp;
   GenBankPagePtr  gpp;
+  ValNodePtr      head;
+  Boolean         isDraft;
+  CharPtr         str;
+  ValNodePtr      vnp;
 
   gpp = (GenBankPagePtr) GetObjectExtra (d);
   gbp = (GBBlockPtr) data;
@@ -2579,9 +2584,23 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
     SetTitle (gpp->date, gbp->date);
     SetTitle (gpp->div, gbp->div);
     SetTitle (gpp->taxonomy, gbp->taxonomy);
-    PointerToDialog (gpp->kywds, gbp->keywords);
+    for (head = NULL, vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringICmp (str, "HTGS_DRAFT") != 0) {
+        ValNodeCopyStr (&head, 0, str);
+      }
+    }
+    PointerToDialog (gpp->kywds, head);
+    ValNodeFreeData (head);
     PointerToDialog (gpp->xaccns, gbp->extra_accessions);
     PointerToDialog (gpp->entryDate, gbp->entry_date);
+    isDraft = FALSE;
+    for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+      if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
+        isDraft = TRUE;
+      }
+    }
+    SafeSetStatus (gpp->htgsDraft, isDraft);
   }
 }
 
@@ -2590,6 +2609,8 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
 {
   GBBlockPtr      gbp;
   GenBankPagePtr  gpp;
+  Boolean         noDraft;
+  ValNodePtr      vnp;
 
   gbp = NULL;
   gpp = (GenBankPagePtr) GetObjectExtra (d);
@@ -2604,6 +2625,17 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
       gbp->keywords = DialogToPointer (gpp->kywds);
       gbp->extra_accessions = DialogToPointer (gpp->xaccns);
       gbp->entry_date = DialogToPointer (gpp->entryDate);
+      if (GetStatus (gpp->htgsDraft)) {
+        noDraft = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
+            noDraft = FALSE;
+          }
+        }
+        if (noDraft) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_DRAFT");
+        }
+      }
     }
   }
   return (Pointer) gbp;
@@ -2617,6 +2649,7 @@ static void DeleteKeywordProc (ButtoN b)
   gpp = (GenBankPagePtr) GetObjectExtra (b);
   if (gpp != NULL) {
     PointerToDialog (gpp->kywds, NULL);
+    SafeSetStatus (gpp->htgsDraft, FALSE);
   }
 }
 
@@ -2632,6 +2665,8 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
   GrouP           m;
   GrouP           p;
   GrouP           s;
+  Boolean         showKeywords;
+  ValNodePtr      vnp;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -2704,14 +2739,24 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
     }
 
     b = NULL;
-    f2 = HiddenGroup (m, 0, 2, NULL);
-    if (internal || (gbp != NULL && gbp->keywords != NULL)) {
+    f2 = HiddenGroup (m, 0, 3, NULL);
+    showKeywords = FALSE;
+    if (gbp != NULL && gbp->keywords != NULL) {
+      vnp = gbp->keywords;
+      if (vnp->next != NULL || StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") != 0) {
+        showKeywords = TRUE;
+      }
+    }
+    if (internal || showKeywords) {
       StaticPrompt (f2, "Keywords", 0, 0, programFont, 'c');
       gpp->kywds = CreateVisibleStringDialog (f2, 3, -1, 15);
-      if (internal) {
-        b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);
-        SetObjectExtra (b, gpp, NULL);
-      }
+    }
+    if (internal || genome || (gbp != NULL && gbp->keywords != NULL)) {
+      gpp->htgsDraft = CheckBox (f2, "HTGS_DRAFT", NULL);
+    }
+    if (internal) {
+      b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);
+      SetObjectExtra (b, gpp, NULL);
     }
 
     f4 = HiddenGroup (m, 2, 0, NULL);

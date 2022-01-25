@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.17  1999/12/21 17:52:40  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
 * Revision 6.16  1999/07/29 15:58:48  kans
 * added bigintvalue, ValNodeAddBigInt (PD)
 *
@@ -1102,32 +1105,19 @@ NLM_EXTERN Nlm_Boolean LIBCALL NodeListDelete (ValNodePtr head, Nlm_Int2 item)
 *****************************************************************************/
 
 #ifdef OS_MAC
+/*  p_churchill 12/99 removed conditional compilation support for 
+ *  THINKC and MPW
+ */
 void Nlm_CtoPstr (Nlm_CharPtr str)
 
 {
-#ifdef COMP_THINKC
-  c2pstr ((char *) str);
-#endif
-#ifdef COMP_MPW
-  c2pstr ((char *) str);
-#endif
-#ifdef COMP_METRO
   C2PStr ((char *) str);
-#endif
 }
 
 void Nlm_PtoCstr (Nlm_CharPtr str)
 
 {
-#ifdef COMP_THINKC
-  p2cstr ((StringPtr) str);
-#endif
-#ifdef COMP_MPW
-  p2cstr ((StringPtr) str);
-#endif
-#ifdef COMP_METRO
   P2CStr ((StringPtr) str);
-#endif
 }
 #endif
 

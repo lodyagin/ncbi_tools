@@ -57,17 +57,22 @@ Contents: utilities for IMPALA
 #define   ARG_MATRIX 16
 #define   ARG_MATRICES_DB 17
 #define   ARG_DB_LENGTH  18
+#define   ARG_NUM_DEFLINES 20
+#define   ARG_NUM_ALIGNS 21
 
 
-#define PRO_VERSION "1.0"
-#define PRO_DATE "4-August-1999"
+#define PRO_VERSION "1.1"
+#define PRO_DATE "20-December-1999"
 #define PRO_MAX_HIT_LIST 250
 #define PRO_NUM_TICKS 50
 
 #define PRO_ALPHABET_SIZE  26
+#define SORT_THRESHOLD 20
 
 #define PRO_DEFAULT_SCALING_UP  100
 #define PRO_DEFAULT_SCALING_DOWN 0.01
+
+#define RPS_MAGIC_NUMBER 7702
 
 #define Xchar 21
 #define Xscore (-1)

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   	prototypes for portable math library
@@ -40,6 +40,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbimath.h,v $
+* Revision 6.1  1999/11/24 17:29:16  sicotte
+* Added LnFactorial function
+*
 * Revision 6.0  1997/08/25 18:16:37  madden
 * Revision changed to 6.0
 *
@@ -89,6 +92,9 @@ NLM_EXTERN Nlm_FloatHi LIBCALL Nlm_Expm1 PROTO((Nlm_FloatHi));
 /* Factorial */
 NLM_EXTERN Nlm_FloatHi LIBCALL Nlm_Factorial PROTO((Int4));
 
+/* Logarithm of the factorial Fn */
+NLM_EXTERN Nlm_FloatHi LIBCALL Nlm_LnFactorial PROTO((FloatHi x));
+
 /* gamma(x) */
 NLM_EXTERN Nlm_FloatHi LIBCALL Nlm_Gamma PROTO((Nlm_FloatHi));
 
@@ -137,6 +143,7 @@ NLM_EXTERN long LIBCALL Nlm_RandomNum PROTO((void));
 #define Log1p	Nlm_Log1p
 #define Expm1	Nlm_Expm1
 #define Factorial	Nlm_Factorial
+#define LnFactorial	Nlm_LnFactorial
 #define Gamma	Nlm_Gamma
 #define LnGamma	Nlm_LnGamma
 #define DiGamma	Nlm_DiGamma

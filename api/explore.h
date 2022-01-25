@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -118,6 +118,7 @@ typedef struct seqmgrfeatcontext {
   CharPtr       label;
   Int4          left;
   Int4          right;
+  Int4          dnaStop;
   Boolean       partialL;
   Boolean       partialR;
   Boolean       farloc;
@@ -354,12 +355,16 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext PROTO((BioseqPtr bsp,
 *
 *****************************************************************************/
 
+#define SIMPLE_OVERLAP   0
+#define CONTAINED_WITHIN 1
+#define CHECK_INTERVALS  2
+
 NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex PROTO((BioseqPtr bsp, Int4Ptr num,
                                                           Uint1 seqFeatChoice, Uint1 featDefChoice));
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature PROTO((SeqLocPtr slp, Uint2 subtype,
                                                                  VoidPtr featarray, Int4 numfeats,
-                                                                 Int4Ptr position, Boolean containedWithin,
+                                                                 Int4Ptr position, Int2 overlapType,
                                                                  SeqMgrFeatContext PNTR context));
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex PROTO((BioseqPtr bsp, VoidPtr featarray,

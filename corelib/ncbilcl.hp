@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *      (this file has not been tested for accuracy)
 *
 * File Description:
@@ -43,6 +43,9 @@
 * 15.Nov94 C.Dailey    Made things based on __STDC__ so it will work with ANSI
 *
 * $Log: ncbilcl.hp,v $
+* Revision 6.1  2000/01/13 23:37:12  beloslyu
+* changes because of port to HP-UX 11.0
+*
 * Revision 6.0  1997/08/25 18:15:59  madden
 * Revision changed to 6.0
 *
@@ -77,6 +80,7 @@ added Log line
 /*      Desired or available feature list                               */
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
+#define SYSV_STREAMS_AVAIL  /* System V STREAMS module available */
 
 /*----------------------------------------------------------------------*/
 /*      Defines needed to trigger the correct inclusions in system files*/
@@ -84,13 +88,12 @@ added Log line
 /*----------------------------------------------------------------------*/
 #define _INCLUDE_POSIX_SOURCE
 #define _INCLUDE_XOPEN_SOURCE
-#define _INCLUDE_HPUX_SOURCE
-
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
 #include <sys/types.h>
+#include <sys/resource.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <stddef.h>
@@ -104,16 +107,13 @@ added Log line
 #include <errno.h>
 #include <float.h>
 
+#define POSIX_THREADS_AVAIL
+#define _POSIX_C_SOURCE 199506L
+#define _XOPEN_SOURCE_EXTENDED
+
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */
 /*----------------------------------------------------------------------*/
-#if !defined(__STDC__)
-#define VAR_ARGS	/* use Sun's varargs.h, not ANSI's stdarg.h */
-#define signed	/* "signed" keyword not accepted by Sun C */
-#define const	/* "const" keyword not accepted by Sun C */
-#define noalias	/* "noalias" keyword not accepted by Sun C */
-#define volatile	/* "volatile" keyword not accepted by Sun C */
-#endif
 #ifndef SEEK_SET
 #define SEEK_SET	0
 #define SEEK_CUR	1
@@ -174,5 +174,5 @@ added Log line
 /*----------------------------------------------------------------------*/
 #define MAXALLOC	0x40000000 /* Largest permissible memory request */
 
-#endif
+#endif /* _NCBILCL_ */
 

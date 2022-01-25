@@ -1,4 +1,4 @@
-# $Id: make_gen.dos,v 6.9 1999/03/15 22:54:52 vakatov Exp $
+# $Id: make_gen.dos,v 6.11 1999/12/01 19:07:29 vakatov Exp $
 ########################################################################
 #  This file specifies attributes common for the NCBI toolkit
 #  makefiles "makeall.dos", "makedemo.dos", "makenet.dos",
@@ -9,26 +9,16 @@
 #	library aliases;
 #	some rules.
 #
+#  All this is to build 32-bit libs, DLLs and applications for MS-Windows
 ########################################################################
 
 #####
-#       Microsoft Visual C/C++ 32-bit MSWindows (GUI application)
-#               [ "nmake MSW=1 WIN32=1" ]
-#       Microsoft Visual C/C++ 32-bit MSWindows (Console application)
-#               [ "nmake MSW=1 WIN32C=1" ]
-#       Microsoft Visual C/C++ 16-bit MSWindows (GUI application)
-#               [ "nmake MSW=1" ]
-#
-#       Borland C/C++ 4.5 for 32-bit MSWindows (GUI application)
-#               [ "make BWN=1" ]
-#       Borland C/C++ 4.5 for 32-bit MSWindows (Console application)
-#               [ "make BCN=1" ]
-#       Borland C/C++ 4.5 for 16-bit MSWindows (GUI application)
-#               [ "make B16=1" ]
+#  Microsoft Visual C/C++ 4.2, 5.x, 6.x
+#     nmake MS=1 [DBUG=1] [CONSOLE=1] [DLL=1]
+# 
+#  Borland C/C++ 4.5, 5.0
+#     make -N BOR=1 [DBUG=1] [CONSOLE=1]
 #####
-
-RC   = rc
-LINK = link
 
 
 !ifndef DLL
@@ -37,33 +27,31 @@ LINK = link
 
 
 ##################################################
-# Microsoft C under MS Windows
-!ifdef MSW
-GOTONE = 1
+# Microsoft C/C++
+!ifdef MS
+COMP_OK = 1
+
 CC = cl
+RC   = rc
+LINK = link
 
 !ifdef DBUG
 DFLAGS = -Od -Zi -D_DEBUG
 !endif
 
-!ifdef WIN32C
-WIN32 = 1
+!ifdef CONSOLE
 SUB_SYS = CONSOLE
 !else
-!ifdef WIN32W
-WIN32 = 1
-!endif
-MSWINDOWS = 1
 SUB_SYS = WINDOWS
 !endif
 
-!ifdef WIN32
 !ifdef DBUG
 DBUG_SFX = d
 DBUG_FLG = /DEBUG
 !else
 DFLAGS = -O2
 !endif
+
 !ifdef DLL
 !ifdef NCBI_DLL
 CFLAGS0 = /MD$(DBUG_SFX) -DNLM_IMPORT="extern __declspec(dllimport)" -DNLM_EXPORT="__declspec(dllexport)"
@@ -73,77 +61,37 @@ CFLAGS0 = /MD$(DBUG_SFX)
 !else
 CFLAGS0 = /MT$(DBUG_SFX)
 !endif
+
 CFLAGS1 = -c -YX -DWIN32 -W3 $(DFLAGS) $(CFLAGS0)
 LDFLAGS1 = -YX -W3 $(DFLAGS)
-LFLAGS = /SUBSYSTEM:$(SUB_SYS) $(DBUG_FLG) /NODEFAULTLIB:LIBC
+LFLAGS = /SUBSYSTEM:$(SUB_SYS) $(DBUG_FLG) /NODEFAULTLIB:LIBC$(DBUG_SFX)
 STDLIB0 = oldnames.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib
-
-!else
-
-LFLAGS0 = /NOE /NOD /ONERROR:NOEXE /PACKC /PACKD
-ALIGN = 64
-NSEGS = 500
-!ifdef DBUG
-LFLAGS = $(LFLAGS0) /CO
-!else
-DFLAGS = -O
-LFLAGS = $(LFLAGS0)
-!endif
-
-CFLAGS0 = -AL -G2s -GA -Gt4 -W3 -DWIN16 $(DFLAGS)
-CFLAGS1  = $(CFLAGS0) -c
-LDFLAGS1 = $(CFLAGS0)
-STDLIB0= commdlg llibcew libw oldnames shell
+NETLIBS = wsock32.lib
+!ifdef OPENGL
+OGL_LIBS = opengl32.lib glu32.lib
 !endif
 !endif
-# Microsoft C under MS Windows
+# Microsoft C/C++
 ##################################################
 
 
 ##################################################
-# Borland C++ 4.5 under MSWindows
-!ifdef BWN
-WIN32     = 1
-MSWINDOWS = 1
-STD_OBJ   = c0w32
-LDFLAGS01 = -aa
-BORLAND   = 1
-!endif
+# Borland C/C++
+!ifdef BOR
+COMP_OK = 1
 
-!ifdef BCN
-WIN32     = 1
+CC   = bcc32
+RC   = brcc32
+LINK = tlink32
+
+!ifdef CONSOLE
 STD_OBJ   = c0x32
 LDFLAGS01 = -ap
-BORLAND   = 1
-!endif
-
-!ifdef B16
-MSWINDOWS = 1
-BORLAND   = 1
-!endif
-
-
-!ifdef BORLAND
-GOTONE = 1
-
-###  WIN32 / WIN16
-!ifdef WIN32
-RC   = brcc32
-CC   = bcc32
-LINK = tlink32
-STDLIB0 = import32 cw32mt
-W32_W16   = -N -DWIN32 -Di386 -WM
-LDFLAGS02 = -Tpe
 !else
-CC   = bcc
-LINK = tlink
-STD_OBJ = c0wl
-STDLIB0  = mathwl import cwl
-W32_W16   = -Ff=16 -a2 -ml -DWIN16
-LDFLAGS02 = -Twe -d
+STD_OBJ   = c0w32
+LDFLAGS01 = -aa
 !endif
 
-### DEBUG / OPTIMIZE
 !ifdef DBUG
 D_FLAG  = -v
 CFLAGS0 = -Od -D_DEBUG
@@ -151,31 +99,19 @@ CFLAGS0 = -Od -D_DEBUG
 CFLAGS0 = -k- -O2
 !endif
 
-### Ultimate Flags:
-CFLAGS1  = -i65 -w- -c $(D_FLAG) $(W32_W16) $(CFLAGS0)
-LDFLAGS1 = -c -m $(D_FLAG) $(LDFLAGS01) $(LDFLAGS02)
-LIBFLAGS = /C /E /P64
+CFLAGS1  = -i65 -w- -c $(D_FLAG) -N -DWIN32 -Di386 -WM $(CFLAGS0)
+LDFLAGS1 = -c -m $(D_FLAG) $(LDFLAGS01) -Tpe
+LIBFLAGS = /C /E /P128
+STDLIB0 = import32 cw32mt
 !endif
-# Borland C++ 4.5 under MSWindows
+# Borland C/C++
 ##################################################
-
-
-##################################################
-# NETWORK & ENCRIPTION
-
-!ifdef WIN32
-!ifdef MSW
-NETLIBS = wsock32.lib
-!endif
-!else
-NETLIBS = winsock.lib
-!endif
 
 
 ##################################################
 # Check for proper platform
-!ifndef GOTONE
-!error PLATFORM NOT DEFINED!! [ MSW, BWN, BCN, B16 ]
+!ifndef COMP_OK
+!error PLATFORM NOT DEFINED -- must be one of MS, BOR
 !endif
 
 
@@ -200,7 +136,7 @@ COPY_BIN = copy
 
 ##################################################
 # Compiler and linker flags
-CFLAGS  = -DNETP_INET_WSOCK $(CFLAGS1) -I$(INCPATH)
+CFLAGS  = $(CFLAGS1) -I$(INCPATH)
 LDFLAGS = $(LDFLAGS1)
 STDLIB  = $(NETLIBS) $(STDLIB0)
 
@@ -208,10 +144,8 @@ STDLIB  = $(NETLIBS) $(STDLIB0)
 ##################################################
 # List of NCBI libraries
 
-!ifdef WIN32
 MT_OBJ   = $(LIBPATH)\ncbithr.obj
 MAIN_OBJ = $(LIBPATH)\ncbimain.obj
-!endif
 
 XLIB1= ncbi
 LIB1 = $(LIBPATH)\$(XLIB1).lib
@@ -266,38 +200,39 @@ LIB29 = $(LIB40)
 XLIB41= ncbiid1
 LIB41 = $(LIBPATH)\$(XLIB41).lib
 
-!ifdef MSWINDOWS
+!ifndef CONSOLE
 XLIB4 = vibrant
 LIB4 = $(LIBPATH)\$(XLIB4).lib
+
 XLIB20= ncbidesk
 XLIB28= vibgif
-!ifdef WIN32
+
 XLIB30 = ncbicn3d
 LIB30 = $(LIBPATH)\$(XLIB30).lib
-!endif
+
 XLIB31 = vibnet
 LIB31 = $(LIBPATH)\$(XLIB31).lib
+
+!ifdef OPENGL
+XLIB4_OGL = vibrant_ogl
+LIB4_OGL = $(LIBPATH)\$(XLIB4_OGL).lib
+XLIB30_OGL = ncbicn3d_ogl
+LIB30_OGL = $(LIBPATH)\$(XLIB30_OGL).lib
+!endif
 !endif
 
 LIB20 = $(LIBPATH)\ncbidesk.lib
 
-# special case: GIF-dump applications are console; and still require
-# some of Vibrant functionality
-# (actually, Vibrant should has been splitted to GUI and non-GUI parts)
-LIB28 = $(LIBPATH)\vibgif.lib $(LIBPATH)\vibrant.lib
+# special case: GIF-dump applications are console
+LIB28 = $(LIBPATH)\vibgif.lib
 
 XNETCLILIB = netcli$(ENCR)
 NETCLILIB = $(LIBPATH)\$(XNETCLILIB).lib
 XENTREZLIBS = $(XLIB8) $(XLIB7) $(XNETCLILIB) $(XLIB3)
 ENTREZLIBS  = $(LIB8)  $(LIB7)  $(NETCLILIB)  $(LIB3)
 
-
 ##################################################
-!ifdef WIN32
 DEL = -del
-!else
-DEL = del
-!endif
 
 
 
@@ -307,7 +242,7 @@ DEL = del
 ## All things to make
 ##
 
-all:    copy nocopy
+all:  copy nocopy
 
 
 ##################################################
@@ -317,7 +252,6 @@ clean:
 	$(DEL) *.h
 	$(DEL) *.obj
 	$(DEL) *.lib
-	$(DEL) *.def
 	$(DEL) *.rc
 	$(DEL) *.res
 	$(DEL) *.map
@@ -333,41 +267,32 @@ clean:
 
 ##################################################
 # Templates to use in the application build rules
-!ifdef MSW
-PLATF0 = MSW=$(MSW)
-!ifdef WIN32
-!ifdef WIN32C
-PLATF1 = WIN32C=$(WIN32C)
-!else
-PLATF1 = WIN32W=$(WIN32W)
-!endif
-!endif
-X_PLATF = $(PLATF0)^
-$(PLATF1)
+
+!ifdef MS
+X_COMPILER = MS=$(MS)
 !endif
 
-!ifdef BORLAND
+!ifdef BOR
 MAKE = $(MAKE) -N
-!ifdef BWN
-X_PLATF = BWN=$(BWN)
-!endif
-!ifdef BCN
-X_PLATF = BCN=$(BCN)
-!endif
-!ifdef B16
-X_PLATF = B16=$(B16)
-!endif
+X_COMPILER = BOR=$(BOR)
 !endif
 
 !ifdef DBUG
 X_DBUG = DBUG=$(DBUG)
 !endif
+
+!ifdef CONSOLE
+X_CONSOLE = CONSOLE=$(CONSOLE)
+!endif
+
 !ifdef DLL
 X_DLL = DLL=$(DLL)
 !endif
+
 !ifdef MT
 X_MT = MT=$(MT)
 !endif
+
 !ifdef NCOPY_BIN
 X_NCOPY_BIN = NCOPY_BIN=$(NCOPY_BIN)
 !endif
@@ -376,18 +301,24 @@ X_NCOPY_BIN = NCOPY_BIN=$(NCOPY_BIN)
 X_ENCR = ENCR=$(ENCR)
 !endif
 
+!ifdef OPENGL
+X_OPENGL = OPENGL=$(OPENGL)
+!endif
+
 DLL_AVAIL = NCBI_DLL=1
 
 INCLUDE_GEN = ^
 LIBPATH=$(LIBPATH)^
 INCPATH=$(INCPATH)^
 BINPATH=$(BINPATH)^
-$(X_PLATF)^
+$(X_COMPILER)^
 $(X_DBUG)^
+$(X_CONSOLE)^
 $(X_DLL)^
 $(X_MT)^
 $(X_NCOPY_BIN)^
 $(X_ENCR)^
+$(X_OPENGL)^
 !include $(LIBPATH)\make_gen.dos
 
 INCLUDE_EXE = !include $(LIBPATH)\make_exe.dos

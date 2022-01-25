@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   04/03/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: viewer3d.c,v $
+* Revision 6.5  2000/01/11 01:16:45  lewisg
+* fix color selection in Cn3D, other misc. bugs
+*
 * Revision 6.4  1998/08/12 23:04:06  vakatov
 * [64-bit platforms]  Made "idBuffer" be VoidPtr[] rather than Int4[];
 * Fixed bugs mostly caused by casting between Int4 vars and 8-byte pointers
@@ -1021,7 +1024,7 @@ static void Nlm_AllLayerSetStates3D(Viewer3D vvv, Nlm_Boolean state)
 }
 
 
-static void Nlm_AllLayerSet3D(Viewer3D vvv, Nlm_Boolean state)
+NLM_EXTERN void Nlm_AllLayerSet3D(Viewer3D vvv, Nlm_Boolean state)
 {
   Spher3D  sph;
   double   dx, dy, dz;

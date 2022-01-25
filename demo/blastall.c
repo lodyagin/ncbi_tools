@@ -22,24 +22,30 @@
 * of the author(s) as the source of the software or data would be         *
 * appreciated.                                                            *
 *                                                                         *
-**************************************************************************/
-/* $Revision 1.0$ */ 
-/* $Log: blastall.c,v $
-/* Revision 6.32  1999/08/26 14:58:06  madden
-/* Use float for db length
-/*
-/* Revision 6.31  1999/05/26 13:12:56  madden
-/* Initialized matrix to NULL
-/*
-/* Revision 6.30  1999/03/31 16:58:04  madden
-/* Removed static FindProt and FindNuc
-/*
-/* Revision 6.29  1999/02/10 21:12:26  madden
-/* Added HTML and GI list option, fixed filtering
-/*
-/* Revision 6.28  1999/01/22 17:24:51  madden
-/* added line breaks for alignment views
-/*
+************************************************************************** 
+ * $Revision 1.0$ *  
+ * $Log: blastall.c,v $
+ * Revision 6.34  1999/12/17 20:48:53  egorov
+ * Fix 'gcc -Wall' warnings and remove old stuff.
+ *
+ * Revision 6.33  1999/10/12 19:35:26  madden
+ * Deallocate Mask information
+ *
+ * Revision 6.32  1999/08/26 14:58:06  madden
+ * Use float for db length
+ *
+ * Revision 6.31  1999/05/26 13:12:56  madden
+ * Initialized matrix to NULL
+ *
+ * Revision 6.30  1999/03/31 16:58:04  madden
+ * Removed static FindProt and FindNuc
+ *
+ * Revision 6.29  1999/02/10 21:12:26  madden
+ * Added HTML and GI list option, fixed filtering
+ *
+ * Revision 6.28  1999/01/22 17:24:51  madden
+ * added line breaks for alignment views
+ *
  * Revision 6.27  1998/12/31 18:18:27  madden
  * Added strand option
  *
@@ -184,20 +190,6 @@ tick_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 	return 0;
 }
 
-static int LIBCALLBACK
-star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
-
-{
-
-#ifdef OS_UNIX
-
-	fprintf(global_fp, "%s", "*");
-	fflush(global_fp);
-#endif
-	return 0;
-}
-
-
 #define NUMARG 31
 
 static Args myargs [NUMARG] = {
@@ -277,18 +269,15 @@ Int2 Main (void)
 	BlastPruneSapStructPtr prune;
 	Boolean db_is_na, query_is_na, show_gi, believe_query=FALSE;
 	Boolean html=FALSE;
-	Char buffer[256];
-	CharPtr ret_buffer=NULL, params_buffer=NULL;
+	CharPtr params_buffer=NULL;
 	Int4 number_of_descriptions, number_of_alignments;
-	ObjectIdPtr obidp;
 	SeqAlignPtr  seqalign;
         SeqAnnotPtr seqannot;
 	SeqEntryPtr sep;
-	SeqIdPtr seqid_list=NULL;
 	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 	Uint1 align_type, align_view;
 	Uint4 align_options, print_options;
-	ValNodePtr  mask_loc, vnp, other_returns, error_returns;
+	ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
 
 	CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
 	FILE *infp, *outfp;
@@ -631,6 +620,13 @@ Int2 Main (void)
                 PrintTildeSepLines(params_buffer, 70, outfp);
                 MemFree(params_buffer);
                 free_buff();
+		mask_loc_start = mask_loc;
+		while (mask_loc)
+		{
+			SeqLocSetFree(mask_loc->data.ptrvalue);
+			mask_loc = mask_loc->next;
+		}
+		ValNodeFree(mask_loc_start);
 
 		fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
 

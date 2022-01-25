@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.6 $
+* $Revision: 6.10 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.10  1999/12/20 20:47:12  kans
+* oldscope test was wrong everywhere
+*
+* Revision 6.9  1999/12/15 20:52:16  kans
+* added IndexedSeqFeatsCopy if SeqMgrFeaturesAreIndexed
+*
+* Revision 6.8  1999/12/07 20:32:13  kans
+* for most editing functions, if BioseqFind failed, temporarily clear scope/try again/reset scope
+*
+* Revision 6.7  1999/11/19 19:54:19  kans
+* SeqLocAdd checks for NULL slp before dereferencing
+*
 * Revision 6.6  1998/09/03 20:43:52  kans
 * added delta bioseq support to BioseqCopy
 *
@@ -134,6 +146,7 @@
 */
 
 #include <edutil.h>
+#include <explore.h>
 
 
 
@@ -206,6 +219,8 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Bool
 {
 	SeqLocPtr tmp, last, retval = NULL;
 	Boolean merged = FALSE;   /* intervals were merged */
+
+	if (slp == NULL) return NULL;
 
 	last = NULL;
 	if (* head != NULL)
@@ -624,8 +639,16 @@ NLM_EXTERN Boolean LIBCALL BioseqDelete (SeqIdPtr target, Int4 from, Int4 to, Bo
 	SeqLocPtr PNTR newheadptr;
 	SeqFeatPtr sfpcurr, sfpnext, sfpprev;
 	Int2 dropped;
+	SeqEntryPtr oldscope;
 
 	bsp = BioseqFind(target);
+	if (bsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			bsp = BioseqFind(target);
+			SeqEntrySetScope (oldscope);
+		}
+	}
 	if (bsp == NULL) return retval;
 
 	if ((from < 0) || (from >= bsp->length) || (to < 0) ||
@@ -801,9 +824,17 @@ NLM_EXTERN Boolean LIBCALL BioseqOverwrite (SeqIdPtr target, Int4 pos, Uint1 res
 {
 	BioseqPtr bsp;
 	Boolean retval = FALSE;
+	SeqEntryPtr oldscope;
 
 
 	bsp = BioseqFind(target);
+	if (bsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			bsp = BioseqFind(target);
+			SeqEntrySetScope (oldscope);
+		}
+	}
 	if (bsp == NULL) return retval;
 
 	if ((pos < 0) || (pos >= bsp->length)) return retval;
@@ -1576,11 +1607,19 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4
 	Boolean handled = FALSE, split;
 	SeqFeatPtr sfp, newsfp, lastsfp;
 	DeltaSeqPtr dsp;
+	SeqEntryPtr oldscope;
 
 
 	if ((sourceid == NULL) || (from < 0)) return FALSE;
 
 	oldbsp = BioseqFind(sourceid);
+	if (oldbsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			oldbsp = BioseqFind(sourceid);
+			SeqEntrySetScope (oldscope);
+		}
+	}
 	if (oldbsp == NULL) return NULL;
 
 	len = to - from + 1;
@@ -1597,6 +1636,13 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4
 		tmp->data.ptrvalue = (Pointer)oid;
 		oid->str = StringSave("Clipboard");
 		tmpbsp = BioseqFind(tmp);   /* old clipboard present? */
+		if (tmpbsp == NULL) {
+			oldscope = SeqEntrySetScope (NULL);
+			if (oldscope != NULL) {
+				tmpbsp = BioseqFind(tmp);
+				SeqEntrySetScope (oldscope);
+			}
+		}
 		if (tmpbsp != NULL)
 			BioseqFree(tmpbsp);
 		newbsp->id = tmp;
@@ -1885,10 +1931,10 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocCopyPart (SeqLocPtr the_segs, Int4 from, Int4
 *   SeqFeatCopy(new, old, from, to, strand)
 *
 *****************************************************************************/
-NLM_EXTERN Int2 LIBCALL SeqFeatsCopy (BioseqPtr newbsp, BioseqPtr oldbsp, Int4 from, Int4 to, Uint1 strand)
+static Int2 LIBCALL IndexedSeqFeatsCopy (BioseqPtr newbsp, BioseqPtr oldbsp, Int4 from, Int4 to, Uint1 strand)
+
 {
 	Int2 ctr=0;
-	BioseqContextPtr bcp;
 	SeqFeatPtr head=NULL, sfp, last=NULL, newsfp;
 	SeqInt si;
 	ValNode vn;
@@ -1900,6 +1946,119 @@ NLM_EXTERN Int2 LIBCALL SeqFeatsCopy (BioseqPtr newbsp, BioseqPtr oldbsp, Int4 f
 	CodeBreakPtr cbp, prevcbp, nextcbp;
 	RnaRefPtr rrp;
 	tRNAPtr trp;
+	SeqMgrFeatContext fcontext;
+
+	region = &vn;
+	vn.choice = SEQLOC_INT;
+	vn.data.ptrvalue = (Pointer)(&si);
+	si.from = from;
+	si.to = to;
+	si.id = oldbsp->id;
+	si.if_from = NULL;
+	si.if_to = NULL;
+
+	sfp = NULL;
+	while ((sfp = SeqMgrGetNextFeature (oldbsp, sfp, 0, 0, &fcontext)) != NULL)
+	{
+		/* can exit once past rightmost limit */
+		if (fcontext.left > to) return ctr;
+
+		if (fcontext.right >= from && fcontext.left <= to) {
+
+			split = FALSE;
+			newloc = SeqLocCopyRegion(newbsp->id, sfp->location, oldbsp, from, to, strand, &split);
+			if (newloc != NULL)   /* got one */
+			{
+				newsfp = (SeqFeatPtr)AsnIoMemCopy((Pointer)sfp, (AsnReadFunc)SeqFeatAsnRead, (AsnWriteFunc)SeqFeatAsnWrite);
+				SeqLocFree(newsfp->location);
+				newsfp->location = newloc;
+				if (split)
+					newsfp->partial = TRUE;
+				if (last == NULL)  /* first one */
+				{
+					sap = SeqAnnotNew();
+					if (newbsp->annot == NULL)
+						newbsp->annot = sap;
+					else
+					{
+						for (saptmp = newbsp->annot; saptmp->next != NULL; saptmp = saptmp->next)
+							continue;
+						saptmp->next = sap;
+					}
+					sap->type = 1;   /* feature table */
+					sap->data = (Pointer)newsfp;
+				}
+				else
+					last->next = newsfp;
+				last = newsfp;
+
+				switch (newsfp->data.choice)
+				{
+					case SEQFEAT_CDREGION:   /* cdregion */
+						crp = (CdRegionPtr)(newsfp->data.value.ptrvalue);
+						prevcbp = NULL;
+						for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
+						{
+							nextcbp = cbp->next;
+							cbp->loc = SeqLocCopyRegion(newbsp->id, cbp->loc, oldbsp, from, to, strand, &split);
+							if (cbp->loc == NULL)
+							{
+								if (prevcbp != NULL)
+									prevcbp->next = nextcbp;
+								else
+									crp->code_break = nextcbp;
+								cbp->next = NULL;
+								CodeBreakFree(cbp);
+							}
+							else
+								prevcbp = cbp;
+						}
+						break;
+					case SEQFEAT_RNA:
+						rrp = (RnaRefPtr)(newsfp->data.value.ptrvalue);
+						if (rrp->ext.choice == 2)   /* tRNA */
+						{
+							trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
+							if (trp->anticodon != NULL)
+							{
+								trp->anticodon = SeqLocCopyRegion(newbsp->id, trp->anticodon, oldbsp, from, to, strand, &split);
+							}
+						}
+						break;
+					default:
+						break;
+				}
+			}
+		}
+		
+	}
+	return ctr;
+}
+
+NLM_EXTERN Int2 LIBCALL SeqFeatsCopy (BioseqPtr newbsp, BioseqPtr oldbsp, Int4 from, Int4 to, Uint1 strand)
+{
+	Int2 ctr=0;
+	BioseqContextPtr bcp = NULL;
+	SeqFeatPtr head=NULL, sfp, last=NULL, newsfp;
+	SeqInt si;
+	ValNode vn;
+	ValNodePtr region;
+	SeqLocPtr newloc;
+	Boolean split = FALSE;
+	SeqAnnotPtr sap = NULL, saptmp;
+	CdRegionPtr crp;
+	CodeBreakPtr cbp, prevcbp, nextcbp;
+	RnaRefPtr rrp;
+	tRNAPtr trp;
+	Uint2 entityID;
+
+	if (oldbsp == NULL) return ctr;
+
+	entityID = ObjMgrGetEntityIDForPointer (oldbsp);
+	if (entityID > 0 && SeqMgrFeaturesAreIndexed (entityID)) {
+		/* indexed version should be much faster */
+		return IndexedSeqFeatsCopy (newbsp, oldbsp, from, to, strand);
+	}
 
 	bcp = BioseqContextNew(oldbsp);
 	if (bcp == NULL) return ctr;
@@ -1982,6 +2141,7 @@ NLM_EXTERN Int2 LIBCALL SeqFeatsCopy (BioseqPtr newbsp, BioseqPtr oldbsp, Int4 f
 		}
 		
 	}
+	BioseqContextFree (bcp);
 	return ctr;
 }
 
@@ -2495,11 +2655,19 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 	CodeBreakPtr cbp, prevcbp, nextcbp;
 	RnaRefPtr rrp;
 	tRNAPtr trp;
+	SeqEntryPtr oldscope;
 
 
 	if ((from_id == NULL) || (to_id == NULL)) return FALSE;
 
 	tobsp = BioseqFind(to_id);
+	if (tobsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			tobsp = BioseqFind(to_id);
+			SeqEntrySetScope (oldscope);
+		}
+	}
 	if (tobsp == NULL) return FALSE;
 
 	len = BioseqGetLen(tobsp);
@@ -2512,6 +2680,13 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 	if ((pos < 0) || (pos > len)) return FALSE;
 
 	frombsp = BioseqFind(from_id);
+	if (frombsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			frombsp = BioseqFind(from_id);
+			SeqEntrySetScope (oldscope);
+		}
+	}
 	if (frombsp == NULL) return FALSE;
 	
 	from_type = ISA_na(frombsp->mol);

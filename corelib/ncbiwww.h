@@ -1,4 +1,4 @@
-/* $Id: ncbiwww.h,v 6.2 1999/08/18 18:48:40 shavirin Exp $
+/* $Id: ncbiwww.h,v 6.3 1999/09/29 19:08:43 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   This file contains main definitions to read and process HTTP 
@@ -37,6 +37,9 @@
 *   Currently it works for all ncbi supported platforms.
 *
 * $Log: ncbiwww.h,v $
+* Revision 6.3  1999/09/29 19:08:43  shavirin
+* Added new functions: WWWGetLastValueByName and WWWFindNameEx
+*
 * Revision 6.2  1999/08/18 18:48:40  shavirin
 * Increased number of MAX_WWW_ENTRIES to 4096.
 *
@@ -356,6 +359,15 @@ NLM_EXTERN Int4 WWWGetPort(WWWInfoPtr info);
   ------------------------------------------------------------------*/
 NLM_EXTERN Int4 WWWFindName(WWWInfoPtr info, CharPtr find);
 
+/* ----------------------  WWWFindName  -------------------------
+   Purpose:     This function look for Name in WWW Entries structure
+                starting from specifix index value
+   Parameters:  info - WWWInfo structure
+                find - Name to find
+                index - index value to start with
+   Returns:     index in WWWEntry structue if "find" found and -1 if not 
+  ------------------------------------------------------------------*/
+NLM_EXTERN Int4 WWWFindNameEx(WWWInfoPtr info_in, CharPtr find, Int4 index);
 
 /* ----------------------  WWWGetNameByIndex  ----------------------
    Purpose:     This function get Name correspondig to specific
@@ -387,6 +399,15 @@ NLM_EXTERN CharPtr WWWGetValueByIndex(WWWInfoPtr info, Int4 index);
   ------------------------------------------------------------------*/
 NLM_EXTERN CharPtr WWWGetValueByName(WWWInfoPtr info, CharPtr name);
 
+/* -------------------  WWWGetValueByName  ---------------------
+   Purpose:     This function get LAST Value correspondig to specific
+                Name if there are more then one.
+   Parameters:  info - WWWInfo structure
+                name - name to look for
+                start - Index in WWW Entries structure to start from
+   Returns:     Pointer to Value or NULL if Name was not found 
+  ------------------------------------------------------------------*/
+NLM_EXTERN CharPtr WWWGetLastValueByName(WWWInfoPtr info_in, CharPtr find);
 
 /* -------------------  WWWSubstituteValue  ---------------------
    Purpose:     This function substitute "old" value by "new"

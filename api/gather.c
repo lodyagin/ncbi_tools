@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -39,6 +39,57 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.30  2000/01/07 03:01:42  kans
+* indexed speedup only if raw bioseq not part of segmented bioseq
+*
+* Revision 6.29  2000/01/07 02:48:13  kans
+* useSeqMgrIndexes now works with get_feats_location and get_feats_product, should be suitable for e2index speedup
+*
+* Revision 6.28  2000/01/07 00:56:02  kans
+* targeted bioseq presents features right after bioseq is visited
+*
+* Revision 6.27  2000/01/07 00:18:25  kans
+* targeted bioseq gather visits each seqannot, presents features in seqannot index
+*
+* Revision 6.26  2000/01/06 23:32:13  kans
+* targeted bioseq gather visits each seqfeat, checks against feature/bioseq index
+*
+* Revision 6.25  1999/11/30 17:07:51  egorov
+* Protect against dividing by zero.
+*
+* Revision 6.24  1999/10/29 18:06:26  kans
+* added GetPointerForIDs (with SW)
+*
+* Revision 6.23  1999/09/30 18:33:09  kans
+* delete marked objects corrects gatherindex.prevlink on remaining objects
+*
+* Revision 6.22  1999/09/29 21:10:53  kans
+* delete marked seqannot also frees seqannot if it has no remaining sap->data components
+*
+* Revision 6.21  1999/09/29 18:24:53  kans
+* added DeleteMarkedObjects
+*
+* Revision 6.20  1999/09/28 18:10:15  kans
+* added DeleteMarkedObjectsProc callback - not yet tested
+*
+* Revision 6.19  1999/09/28 12:10:24  kans
+* finished implementing lightweight GatherObjectsInEntity
+*
+* Revision 6.18  1999/09/27 22:02:45  kans
+* further implementation of lightweight gather replacement
+*
+* Revision 6.17  1999/09/27 17:46:59  kans
+* uses GatherIndex structure
+*
+* Revision 6.16  1999/09/26 20:44:25  kans
+* implemented most of VisitProc callbacks
+*
+* Revision 6.15  1999/09/26 00:17:14  kans
+* VisitObjectsInEntity prototype added
+*
+* Revision 6.14  1999/09/25 01:46:08  kans
+* AssignIDsInEntity split into internal function that can also call callback, EXTRA_OBJMGR_FIELDS values assigned to some objects
+*
 * Revision 6.13  1999/09/07 17:59:52  kans
 * AssignIDsInEntity takes datatype and dataptr for when entityID is 0, allowing unlinked components to be updated
 *
@@ -246,6 +297,8 @@
 #include <gather.h>
 #include <edutil.h>
 #include <subutil.h>
+#include <objfdef.h>
+#include <explore.h>
 
 static Boolean NEAR GatherSeqEntryFunc PROTO((SeqEntryPtr sep, InternalGCCPtr igccp, Pointer parent, Uint2 parenttype, SeqEntryPtr prev, Boolean in_scope, Pointer PNTR prevlink));
 static Boolean NEAR GatherItemFunc PROTO((Uint2 entityID, Uint2 itemID, Uint2 itemtype,
@@ -1419,6 +1472,102 @@ static Boolean process_packed_pnt(SeqLocPtr slp, SeqLocPtr head, Int4 r_len, Int
 		return FALSE;
 }
 
+/* functions to speed up targeted feature gather by using seqmgr explore index */
+
+static Boolean NEAR ExploreSeqFeat (
+  InternalGCCPtr gccp,
+  BioseqPtr bsp,
+  Boolean in_scope
+)
+
+{
+  SeqMgrFeatContext  fcontext;
+  GatherContextPtr   gcp;
+  GatherScopePtr     gsp;
+  SeqFeatPtr         sfp;
+  Boolean            takecit;
+  ValNodePtr         vnp;
+
+  /* gccp->locatetype is known to be NULL if target used */
+
+  if (gccp == NULL || bsp == NULL) return TRUE;
+
+  gcp = &(gccp->gc);
+  gsp = &(gccp->scope);
+
+  if (gsp->ignore [OBJ_SEQFEAT]) return TRUE;
+  if (gsp->ignore [OBJ_SEQFEAT_CIT]) {
+    takecit = FALSE;
+  } else {
+    takecit = TRUE;
+  }
+
+  gcp->num_interval = 0;
+
+  if (gsp->get_feats_location) {
+    sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+    while (sfp != NULL) {
+
+      gcp->previtem = NULL;
+      gcp->prevtype = OBJ_SEQFEAT;
+
+      gcp->parentitem = sfp->idx.parentptr;
+      gcp->parenttype = sfp->idx.parenttype;
+
+      gcp->itemID = sfp->idx.itemID;
+      gcp->thisitem = (Pointer) sfp;
+      gcp->thistype = OBJ_SEQFEAT;
+      gcp->prevlink = sfp->idx.prevlink;
+
+      gcp->product = FALSE;
+
+      GatherAddToStack (gcp);
+      if (! (*(gccp->userfunc)) (gcp)) return FALSE;
+
+      if (sfp->cit != NULL && takecit) {
+        if (! GatherPubSet (gccp, sfp->cit, 1, OBJ_SEQFEAT, (Pointer) sfp,
+                            (Pointer PNTR) &(sfp->cit), in_scope))
+          return FALSE;
+      }
+
+      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+    }
+  }
+
+  if (gsp->get_feats_product) {
+    for (vnp = SeqMgrGetSfpProductList (bsp); vnp != NULL; vnp = vnp->next) {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (sfp != NULL) {
+
+        gcp->previtem = NULL;
+        gcp->prevtype = OBJ_SEQFEAT;
+
+        gcp->parentitem = sfp->idx.parentptr;
+        gcp->parenttype = sfp->idx.parenttype;
+
+        gcp->itemID = sfp->idx.itemID;
+        gcp->thisitem = (Pointer) sfp;
+        gcp->thistype = OBJ_SEQFEAT;
+        gcp->prevlink = sfp->idx.prevlink;
+
+        gcp->product = TRUE;
+
+        GatherAddToStack (gcp);
+        if (! (*(gccp->userfunc)) (gcp)) return FALSE;
+
+        if (sfp->cit != NULL && takecit) {
+          if (! GatherPubSet (gccp, sfp->cit, 1, OBJ_SEQFEAT, (Pointer) sfp,
+                              (Pointer PNTR) &(sfp->cit), in_scope))
+            return FALSE;
+        }
+      }
+    }
+  }
+
+  /* ignoring sfp->cit on non-targeted records, not keeping counter in synch */
+
+  return TRUE;
+}
 
 static Boolean NEAR GatherSeqFeat(InternalGCCPtr gccp, SeqFeatPtr sfp,
            Uint1 ttype, Pointer tparent, Pointer PNTR prevlink, Boolean in_scope, Uint1 sfptype)
@@ -2133,7 +2282,7 @@ static Int4 calculate_mag_val (StdSegPtr ssp, SeqIdPtr m_sip, BoolPtr inverse)
 				s_slp = slp;
 		}
 
-		if(m_slp != NULL && s_slp)
+		if(m_slp && s_slp && SeqLocLen(m_slp) && SeqLocLen(s_slp))
 		{
 			if(!is_fuzz_loc(m_slp) && !is_fuzz_loc(s_slp))
 			{
@@ -2878,9 +3027,14 @@ static Boolean NEAR GatherSeqAnnot(InternalGCCPtr gccp, SeqAnnotPtr sap,
 		gcp->indent++;
 		switch (sap->type)
 		{
+		
 			case 1:     /* feature table */
-				if (! GatherSeqFeat(gccp, (SeqFeatPtr)(sap->data), thistype, (Pointer)sap, &(sap->data), in_scope, OBJ_SEQFEAT))
-					return FALSE;
+				if (gccp->useSeqMgrIndexes) {
+					/* now sending targeted features all at once regardless of packaging - so do nothing here */
+				} else {
+					if (! GatherSeqFeat(gccp, (SeqFeatPtr)(sap->data), thistype, (Pointer)sap, &(sap->data), in_scope, OBJ_SEQFEAT))
+						return FALSE;
+				}
 				break;
 			case 2:     /* alignments */
 				if (! GatherSeqAlign(gccp, (SeqAlignPtr)(sap->data), thistype, (Pointer)sap, &(sap->data), in_scope, TRUE, OBJ_SEQALIGN))
@@ -3320,6 +3474,13 @@ static Boolean NEAR GatherBioseqFunc (InternalGCCPtr gccp, BioseqPtr bsp,
 	if (! GatherSeqAnnot(gccp, bsp->annot, thistype, (Pointer)bsp,
 		                   (Pointer PNTR)&(bsp->annot), in_scope))
 		return FALSE;
+
+	/* now send targeted features all at once regardless of packaging */
+	if (gccp->useSeqMgrIndexes && bsp == gccp->bsp) {
+		if (! ExploreSeqFeat (gccp, bsp, in_scope)) {
+			return FALSE;
+		}
+	}
 
 	gcp->indent--;
 
@@ -3840,6 +4001,29 @@ static Boolean NEAR GatherBioseqPartsFunc (InternalGCCPtr gccp, Pointer top)
 	return TRUE;
 }
 
+static Boolean WholeLocOnBioseq (BioseqPtr bsp, SeqLocPtr slp)
+
+{
+  SeqIntPtr sintp;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL || slp == NULL) return FALSE;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) return FALSE;
+  if (! SeqIdIn (sip, bsp->id)) return FALSE;
+
+  if (slp->choice == SEQLOC_WHOLE) return TRUE;
+  if (slp->choice == SEQLOC_INT) {
+    sintp = (SeqIntPtr) slp->data.ptrvalue;
+    if (sintp != NULL &&
+        sintp->from == 0 &&
+        sintp->to == bsp->length - 1) return TRUE;
+  }
+
+  return FALSE;
+}
+
 static Boolean NEAR IGCCBuild (InternalGCCPtr ip, ObjMgrDataPtr omdp, Pointer userdata, GatherItemProc userfunc, GatherScopePtr scope)
 {
 	Boolean in_scope = TRUE;
@@ -3853,6 +4037,7 @@ static Boolean NEAR IGCCBuild (InternalGCCPtr ip, ObjMgrDataPtr omdp, Pointer us
 	Boolean reload_from_cache = TRUE;   /* default behavior */
 	DeltaSeqPtr dsp;
 	SeqLocPtr loc = NULL;
+	Uint2 entityID;
 
 	if ((omdp == NULL) || (userfunc == NULL)) return FALSE;
 
@@ -3973,6 +4158,28 @@ static Boolean NEAR IGCCBuild (InternalGCCPtr ip, ObjMgrDataPtr omdp, Pointer us
 				}
 			}
 			loc = SeqLocFree (loc);
+		}
+
+		/* if targeted gather, try to use feature indexing for speed */
+		if (bsp != NULL && bsp->repr == Seq_repr_raw &&
+			SeqMgrGetParentOfPart (bsp, NULL) == NULL &&
+			ip->segloc == NULL && ip->scope.useSeqMgrIndexes &&
+			(ip->scope.get_feats_location || ip->scope.get_feats_product) &&
+			(! (ip->scope.ignore [OBJ_SEQFEAT]))) {
+
+			/* target must be whole or full length interval on bioseq */
+			if (! WholeLocOnBioseq (bsp, ip->scope.target)) return TRUE;
+
+			entityID = ObjMgrGetEntityIDForPointer (bsp);
+
+			/* index features if not already done */
+			if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+				SeqMgrIndexFeatures (entityID, NULL);
+			}
+
+			if (SeqMgrFeaturesAreIndexed (entityID) != 0) {
+				ip->useSeqMgrIndexes = TRUE;
+			}
 		}
 	}
 
@@ -5782,127 +5989,572 @@ NLM_EXTERN Boolean LIBCALL GatherOverWrite (Pointer oldptr, Pointer newptr, Uint
 
 /*****************************************************************************/
 
-/* AssignIDsInEntity section */
+/* AssignIDsInEntity/VisitObjectsInEntity section */
 
 typedef struct internalacc {
-  Uint2  entityID;
-  Int2   itemIDs [OBJ_MAX];
+  Uint2             entityID;
+  Int2              itemIDs [OBJ_MAX];
+  Boolean           assignIDs;
+  GatherObjectProc  callback;
+  Pointer           userdata;
+  BoolPtr           objMgrFilter;
 } InternalACC, PNTR InternalACCPtr;
 
-static void AssignSeqEntry (InternalACCPtr iap, SeqEntryPtr sep);
-
-static void AssignSeqAlign (InternalACCPtr iap, SeqAlignPtr sap, Uint1 itemtype)
+static void AssignIDs (InternalACCPtr iap, GatherIndexPtr gip, Uint1 itemtype, Uint1 subtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
-  if (iap == NULL || sap == NULL) return;
+  if (iap == NULL || gip == NULL) return;
 
-  while (sap != NULL) {
-    (iap->itemIDs [itemtype])++;
-    sap->entityID = iap->entityID;
-    sap->itemID = iap->itemIDs [itemtype];
-    sap->itemtype = itemtype;
-    sap = sap->next;
+  if (iap->assignIDs) {
+    gip->entityID = iap->entityID;
+    gip->itemID = iap->itemIDs [itemtype];
+    gip->itemtype = itemtype;
+    gip->subtype = subtype;
+    gip->deleteme = 0;
+    gip->parenttype = parenttype;
+    gip->parentptr = parent;
+    gip->prevlink = prevlink;
   }
 }
 
-static void AssignSeqHist (InternalACCPtr iap, SeqHistPtr shp)
+static Boolean VisitCallback (InternalACCPtr iap, Pointer dataptr, Uint1 itemtype, Uint1 subtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
-  if (iap == NULL || shp == NULL) return;
-  (iap->itemIDs [OBJ_SEQHIST])++;
+  GatherObject  go;
 
-  AssignSeqAlign (iap, shp->assembly, OBJ_SEQHIST_ALIGN);
+  if (dataptr == NULL || iap == NULL || itemtype >= OBJ_MAX) return TRUE;
+
+  if (iap->callback != NULL) {
+    if (iap->objMgrFilter == NULL || iap->objMgrFilter [itemtype]) {
+      go.entityID = iap->entityID;
+      go.itemID = iap->itemIDs [itemtype];
+      go.itemtype = itemtype;
+      go.subtype = subtype;
+      go.parenttype = parenttype;
+      go.dataptr = dataptr;
+      go.parentptr = parent;
+      go.prevlink = prevlink;
+      go.userdata = iap->userdata;
+      if (! iap->callback (&go)) return FALSE;
+    }
+  }
+
+  return TRUE;
 }
 
-static void AssignSeqAnnot (InternalACCPtr iap, SeqAnnotPtr sap)
+static Boolean VisitSeqEntry (InternalACCPtr iap, SeqEntryPtr sep, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink);
+
+static Boolean VisitPub (InternalACCPtr iap, ValNodePtr pub, Uint1 itemtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
-  if (iap == NULL || sap == NULL) return;
+  if (iap == NULL || pub == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) pub, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitPubSet (InternalACCPtr iap, ValNodePtr vnp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1       itemtype = OBJ_PUB_SET;
+  ValNodePtr  pub;
+
+  if (iap == NULL || vnp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) vnp, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  prevlink = (Pointer PNTR) &(vnp->data.ptrvalue);
+  for (pub = (ValNodePtr) vnp->data.ptrvalue; pub != NULL; pub = pub->next) {
+    if (! VisitPub (iap, pub, OBJ_SEQFEAT_CIT, (Pointer) vnp, itemtype, prevlink)) return FALSE;
+    prevlink = (Pointer PNTR) &(pub->next);
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqFeat (InternalACCPtr iap, SeqFeatPtr sfp, Uint1 itemtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  if (iap == NULL || sfp == NULL) return TRUE;
+
+  if ((! iap->assignIDs) && iap->callback != NULL) {
+    if (iap->objMgrFilter != NULL && (! iap->objMgrFilter [itemtype])) {
+      return TRUE;
+    }
+  }
+
+  while (sfp != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->assignIDs) {
+      AssignIDs (iap, &(sfp->idx), itemtype, FindFeatDefType (sfp), parent, parenttype, prevlink);
+    }
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) sfp, itemtype, sfp->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+    }
+
+    if (sfp->cit != NULL) {
+      if (! VisitPubSet (iap, sfp->cit, (Pointer) sfp, itemtype, (Pointer PNTR) &(sfp->cit))) return FALSE;
+    }
+
+    prevlink = (Pointer PNTR) &(sfp->next);
+    sfp = sfp->next;
+  }
+
+  return TRUE;
+}
+
+static Uint2 nextAlignID = 0;
+
+static Boolean VisitSeqAlign (InternalACCPtr iap, SeqAlignPtr sap, Uint1 itemtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  if (iap == NULL || sap == NULL) return TRUE;
+
+  if ((! iap->assignIDs) && iap->callback != NULL) {
+    if (iap->objMgrFilter != NULL && (! iap->objMgrFilter [itemtype])) {
+      return TRUE;
+    }
+  }
 
   while (sap != NULL) {
-    (iap->itemIDs [OBJ_SEQANNOT])++;
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->assignIDs) {
+      AssignIDs (iap, &(sap->idx), itemtype, sap->type, parent, parenttype, prevlink);
+      if (sap->alignID == 0) {
+        nextAlignID++;
+        sap->alignID = nextAlignID;
+      }
+    }
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) sap, itemtype, sap->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+    }
+
+    if (sap->segtype == SAS_DISC) {
+      if (! VisitSeqAlign (iap, (SeqAlignPtr) sap->segs, OBJ_SEQALIGN, (Pointer) sap, itemtype, (Pointer PNTR) &(sap->segs))) return FALSE;
+    }
+
+    prevlink = (Pointer PNTR) &(sap->next);
+    sap = sap->next;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqGraph (InternalACCPtr iap, SeqGraphPtr sgp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SEQGRAPH;
+
+  if (iap == NULL || sgp == NULL) return TRUE;
+
+  if ((! iap->assignIDs) && iap->callback != NULL) {
+    if (iap->objMgrFilter != NULL && (! iap->objMgrFilter [itemtype])) {
+      return TRUE;
+    }
+  }
+
+  while (sgp != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->assignIDs) {
+      AssignIDs (iap, &(sgp->idx), itemtype, 0, parent, parenttype, prevlink);
+    }
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) sgp, itemtype, sgp->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+    }
+
+    prevlink = (Pointer PNTR) &(sgp->next);
+    sgp = sgp->next;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqAnnot (InternalACCPtr iap, SeqAnnotPtr sap, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SEQANNOT;
+
+  if (iap == NULL || sap == NULL) return TRUE;
+
+  while (sap != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->assignIDs) {
+      AssignIDs (iap, &(sap->idx), itemtype, sap->type, parent, parenttype, prevlink);
+    }
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) sap, itemtype, sap->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+    }
+
     switch (sap->type) {
-      case 2 :
-        AssignSeqAlign (iap, (SeqAlignPtr) sap->data, OBJ_SEQALIGN);
+      case 1 : /* feature table */
+        if (! VisitSeqFeat (iap, (SeqFeatPtr) sap->data, OBJ_SEQFEAT, (Pointer) sap, itemtype, (Pointer PNTR) &(sap->data))) return FALSE;
+        break;
+      case 2 : /* alignments */
+        if (! VisitSeqAlign (iap, (SeqAlignPtr) sap->data, OBJ_SEQALIGN, (Pointer) sap, itemtype, (Pointer PNTR) &(sap->data))) return FALSE;
+        break;
+      case 3 : /* graphs */
+        if (! VisitSeqGraph (iap, (SeqGraphPtr) sap->data, (Pointer) sap, itemtype, (Pointer PNTR) &(sap->data))) return FALSE;
         break;
       default :
         break;
     }
+
+    prevlink = (Pointer PNTR) &(sap->next);
     sap = sap->next;
   }
+
+  return TRUE;
 }
 
-static void AssignBioseq (InternalACCPtr iap, BioseqPtr bsp)
+static Boolean VisitSeqDescr (InternalACCPtr iap, SeqDescrPtr sdp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
-  if (iap == NULL || bsp == NULL) return;
-  (iap->itemIDs [OBJ_BIOSEQ])++;
+  Uint1          itemtype = OBJ_SEQDESC;
+  ObjValNodePtr  ovp;
 
-  AssignSeqHist (iap, bsp->hist);
+  if (iap == NULL || sdp == NULL) return TRUE;
 
-  AssignSeqAnnot (iap, bsp->annot);
-}
-
-static void AssignBioseqSet (InternalACCPtr iap, BioseqSetPtr bssp)
-
-{
-  SeqEntryPtr  sep;
-
-  if (iap == NULL || bssp == NULL) return;
-  (iap->itemIDs [OBJ_BIOSEQSET])++;
-
-  AssignSeqAnnot (iap, bssp->annot);
-
-  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-    AssignSeqEntry (iap, sep);
+  if ((! iap->assignIDs) && iap->callback != NULL) {
+    if (iap->objMgrFilter != NULL && (! iap->objMgrFilter [itemtype])) {
+      return TRUE;
+    }
   }
-}
 
-static void AssignSeqEntry (InternalACCPtr iap, SeqEntryPtr sep)
+  while (sdp != NULL) {
+    (iap->itemIDs [itemtype])++;
 
-{
-  if (iap == NULL || sep == NULL) return;
+    if (iap->assignIDs) {
+      if (sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        AssignIDs (iap, &(ovp->idx), itemtype, sdp->choice, parent, parenttype, prevlink);
+      } else {
+        ErrPostEx (SEV_ERROR, 0, 0, "Descriptor item %d is not an ObjValNode",
+                   (int) iap->itemIDs [itemtype]);
+      }
+    }
 
-  if (IS_Bioseq (sep)) {
-    AssignBioseq (iap, (BioseqPtr) sep->data.ptrvalue);
-  } else if (IS_Bioseq_set (sep)) {
-    AssignBioseqSet (iap, (BioseqSetPtr) sep->data.ptrvalue);
+    if (iap->callback != NULL) {
+      if (sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        if (! VisitCallback (iap, (Pointer) sdp, itemtype, ovp->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+      }
+    }
+
+    prevlink = (Pointer PNTR) &(sdp->next);
+    sdp = sdp->next;
   }
+
+  return TRUE;
 }
 
-static void AssignSeqSubmit (InternalACCPtr iap, SeqSubmitPtr ssp)
+static Boolean VisitSeqHist (InternalACCPtr iap, SeqHistPtr shp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
-  SeqEntryPtr  sep;
+  Uint1  itemtype = OBJ_SEQHIST;
 
-  if (iap == NULL || ssp == NULL) return;
-  (iap->itemIDs [OBJ_SEQSUB])++;
+  if (iap == NULL || shp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
 
-  switch (ssp->datatype) {
-    case 1 :
-      for (sep = (SeqEntryPtr) ssp->data; sep != NULL; sep = sep->next) {
-        AssignSeqEntry (iap, sep);
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) shp, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  VisitSeqAlign (iap, shp->assembly, OBJ_SEQHIST_ALIGN, (Pointer) shp, itemtype, (Pointer PNTR) &(shp->assembly));
+
+  return TRUE;
+}
+
+static Boolean VisitSeqIds (InternalACCPtr iap, SeqIdPtr sip, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SEQID;
+
+  if (iap == NULL || sip == NULL) return TRUE;
+
+  while (sip != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) sip, itemtype, sip->choice, parent, parenttype, prevlink)) return FALSE;
+    }
+
+    prevlink = (Pointer PNTR) &(sip->next);
+    sip = sip->next;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitDelta (InternalACCPtr iap, DeltaSeqPtr dsp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_BIOSEQ_DELTA;
+
+  if (iap == NULL || dsp == NULL) return TRUE;
+
+  while (dsp != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) dsp, itemtype, dsp->choice, parent, parenttype, prevlink)) return FALSE;
+    }
+
+    prevlink = (Pointer PNTR) &(dsp->next);
+    dsp = dsp->next;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSegment (InternalACCPtr iap, SeqLocPtr head, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1      itemtype = OBJ_BIOSEQ_SEG;
+  SeqLocPtr  slp;
+
+  if (iap == NULL || head == NULL) return TRUE;
+
+  slp = NULL;
+  while ((slp = SeqLocFindNext (head, slp)) != NULL) {
+    (iap->itemIDs [itemtype])++;
+
+    if (iap->callback != NULL) {
+      if (! VisitCallback (iap, (Pointer) slp, itemtype, slp->choice, parent, parenttype, prevlink)) return FALSE;
+    }
+    prevlink = (Pointer PNTR) &(slp->next);
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitBioseq (InternalACCPtr iap, BioseqPtr bsp, SeqEntryPtr curr, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  SeqLocPtr  head;
+  Uint1      itemtype = OBJ_BIOSEQ;
+  ValNode    vn;
+
+  if (iap == NULL || bsp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->assignIDs) {
+    AssignIDs (iap, &(bsp->idx), itemtype, bsp->repr, parent, parenttype, prevlink);
+    bsp->seqentry = curr;
+  }
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) bsp, itemtype, bsp->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  switch (bsp->repr) {
+    case Seq_repr_map :
+      if (iap->objMgrFilter == NULL || iap->objMgrFilter [OBJ_BIOSEQ_MAPFEAT]) {
+        if (! VisitSeqFeat (iap, (SeqFeatPtr) bsp->seq_ext, OBJ_BIOSEQ_MAPFEAT, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->seq_ext))) return FALSE;
       }
       break;
-    case 2 :
-      AssignSeqAnnot (iap, (SeqAnnotPtr) ssp->data);
+    case Seq_repr_seg :
+      if (iap->objMgrFilter == NULL || iap->objMgrFilter [OBJ_BIOSEQ_SEG]) {
+        vn.choice = SEQLOC_MIX;
+        vn.extended = 0;
+        vn.data.ptrvalue = bsp->seq_ext;
+        vn.next = NULL;
+        head = &vn;
+        if (! VisitSegment (iap, head, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->seq_ext))) return FALSE;
+      }
+      break;
+    case Seq_repr_ref :
+      if (iap->objMgrFilter == NULL || iap->objMgrFilter [OBJ_BIOSEQ_SEG]) {
+        head = (SeqLocPtr) bsp->seq_ext;
+        if (! VisitSegment (iap, head, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->seq_ext))) return FALSE;
+      }
+      break;
+    case Seq_repr_delta :
+      if (iap->objMgrFilter == NULL || iap->objMgrFilter [OBJ_BIOSEQ_DELTA]) {
+        if (! VisitDelta (iap, (DeltaSeqPtr) bsp->seq_ext, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->seq_ext))) return FALSE;
+      }
       break;
     default :
       break;
   }
+
+  if (! VisitSeqHist (iap, bsp->hist, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->hist))) return FALSE;
+
+  if (! VisitSeqDescr (iap, bsp->descr, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->descr))) return FALSE;
+
+  if (! VisitSeqAnnot (iap, bsp->annot, (Pointer) bsp, itemtype, (Pointer PNTR) &(bsp->annot))) return FALSE;
+
+  return TRUE;
+}
+
+static Boolean VisitBioseqSet (InternalACCPtr iap, BioseqSetPtr bssp, SeqEntryPtr curr, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1        itemtype = OBJ_BIOSEQSET;
+  SeqEntryPtr  sep;
+
+  if (iap == NULL || bssp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->assignIDs) {
+    AssignIDs (iap, &(bssp->idx), itemtype, bssp->_class, parent, parenttype, prevlink);
+    bssp->seqentry = curr;
+  }
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) bssp, itemtype, bssp->idx.subtype, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  if (! VisitSeqDescr (iap, bssp->descr, (Pointer) bssp, itemtype, (Pointer PNTR) &(bssp->descr))) return FALSE;
+
+  if (! VisitSeqAnnot (iap, bssp->annot, (Pointer) bssp, itemtype, (Pointer PNTR) &(bssp->annot))) return FALSE;
+
+  prevlink = (Pointer PNTR) &(bssp->seq_set);
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    if (! VisitSeqEntry (iap, sep, (Pointer) bssp, itemtype, prevlink)) return FALSE;
+    prevlink = (Pointer PNTR) &(sep->next);
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqEntry (InternalACCPtr iap, SeqEntryPtr sep, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  if (iap == NULL || sep == NULL) return TRUE;
+
+  if (IS_Bioseq (sep)) {
+    if (! VisitBioseq (iap, (BioseqPtr) sep->data.ptrvalue, sep, parent, parenttype, prevlink)) return FALSE;
+  } else if (IS_Bioseq_set (sep)) {
+    if (! VisitBioseqSet (iap, (BioseqSetPtr) sep->data.ptrvalue, sep, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqSubCit (InternalACCPtr iap, CitSubPtr csp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SEQSUB_CIT;
+
+  if (iap == NULL || csp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) csp, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSeqSubContact (InternalACCPtr iap, ContactInfoPtr cip, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SEQSUB_CONTACT;
+
+
+  if (iap == NULL || cip == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) cip, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  return TRUE;
+}
+
+static Boolean VisitSubBlock (InternalACCPtr iap, SubmitBlockPtr sbp, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
+
+{
+  Uint1  itemtype = OBJ_SUBMIT_BLOCK;
+
+  if (iap == NULL || sbp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) sbp, itemtype, 0, parent, parenttype, prevlink)) return FALSE;
+  }
+
+  if (! VisitSeqSubContact (iap, sbp->contact, (Pointer) sbp, itemtype, (Pointer PNTR) &(sbp->contact))) return FALSE;
+
+  if (! VisitSeqSubCit (iap, sbp->cit, (Pointer) sbp, itemtype, (Pointer PNTR) &(sbp->cit))) return FALSE;
+
+  return TRUE;
+}
+
+static Boolean VisitSeqSubmit (InternalACCPtr iap, SeqSubmitPtr ssp)
+
+{
+  Uint1         itemtype = OBJ_SEQSUB;
+  Pointer PNTR  prevlink;
+  SeqEntryPtr   sep;
+
+  if (iap == NULL || ssp == NULL) return TRUE;
+  (iap->itemIDs [itemtype])++;
+
+  if (iap->assignIDs) {
+    AssignIDs (iap, &(ssp->idx), itemtype, 0, NULL, 0, NULL);
+  }
+
+  if (iap->callback != NULL) {
+    if (! VisitCallback (iap, (Pointer) ssp, itemtype, 0, NULL, 0, NULL)) return FALSE;
+  }
+
+  if (! VisitSubBlock (iap, ssp->sub, (Pointer) ssp, itemtype, (Pointer PNTR) &(ssp->sub))) return FALSE;
+
+  prevlink = (Pointer PNTR) &(ssp->data);
+  switch (ssp->datatype) {
+    case 1 : /* Seq-entrys */
+      for (sep = (SeqEntryPtr) ssp->data; sep != NULL; sep = sep->next) {
+        if (! VisitSeqEntry (iap, sep, (Pointer) ssp, itemtype, prevlink)) return FALSE;
+        prevlink = (Pointer PNTR) &(sep->next);
+      }
+      break;
+    case 2 : /* Seq-annots */
+      if (! VisitSeqAnnot (iap, (SeqAnnotPtr) ssp->data, (Pointer) ssp, itemtype, prevlink)) return FALSE;
+      break;
+    case 3 : /* SeqIds */
+      if (! VisitSeqIds (iap, (SeqIdPtr) ssp->data, (Pointer) ssp, itemtype, prevlink)) return FALSE;
+      break;
+    default :
+      break;
+  }
+
+  return TRUE;
 }
 
 /*****************************************************************************
 *
-*   AssignIDsInEntity explores registered entity in gather order, assigning
-*     entityID/itemID/itemtype numbers to actual objects (SeqAlign so far).
-*     It could also assign a parent pointer to allow rapid traversal up the
-*     data model hierarchy, functionality currently provided by the object
-*     manager.
+*   AssignIDsInEntity (entityID, datatype, dataptr)
+*   	Assigns entityID/itemID/itemtype, parent pointer, and prevlink to several
+*       data objects.  If entityID is > 0 it looks up the registered datatype and
+*       dataptr from the object manager.  Otherwise it uses the remaining parameters,
+*       assigning entityID 0 to the unregistered components.
+*
+*   GatherObjectsInEntity (entityID, datatype, dataptr, callback, userdata, objMgrFilter)
+*   	Calls callback for objects within entity.  If the objMgrFilter parameter is NULL,
+*       every object type is visited, otherwise the array length should be OBJ_MAX, and
+*       the elements are from the OBJ_ list.
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr)
+static Boolean VisitEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr,
+                            Boolean assignIDs, GatherObjectProc callback,
+                            Pointer userdata, BoolPtr objMgrFilter)
 
 {
   InternalACC    iac;
@@ -5911,6 +6563,10 @@ NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Po
 
   MemSet ((Pointer) &iac, 0, sizeof (InternalACC));
   iac.entityID = entityID;
+  iac.assignIDs = assignIDs;
+  iac.callback = callback;
+  iac.userdata = userdata;
+  iac.objMgrFilter = objMgrFilter;
 
   if (entityID > 0) {
     omp = ObjMgrReadLock ();
@@ -5930,32 +6586,355 @@ NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Po
 
   switch (datatype) {
     case OBJ_SEQENTRY :
-      AssignSeqEntry (&iac, (SeqEntryPtr) dataptr);
+      VisitSeqEntry (&iac, (SeqEntryPtr) dataptr, NULL, 0, NULL);
       break;
     case OBJ_BIOSEQ :
-      AssignBioseq (&iac, (BioseqPtr) dataptr);
+      VisitBioseq (&iac, (BioseqPtr) dataptr, NULL, NULL, 0, NULL);
       break;
     case OBJ_BIOSEQSET :
-      AssignBioseqSet (&iac, (BioseqSetPtr) dataptr);
+      VisitBioseqSet (&iac, (BioseqSetPtr) dataptr, NULL, NULL, 0, NULL);
+      break;
+    case OBJ_SEQDESC :
+      VisitSeqDescr (&iac, (SeqDescrPtr) dataptr, NULL, 0, NULL);
       break;
     case OBJ_SEQANNOT :
-      AssignSeqAnnot (&iac, (SeqAnnotPtr) dataptr);
+      VisitSeqAnnot (&iac, (SeqAnnotPtr) dataptr, NULL, 0, NULL);
+      break;
+    case OBJ_SEQFEAT :
+      VisitSeqFeat (&iac, (SeqFeatPtr) dataptr, OBJ_SEQFEAT, NULL, 0, NULL);
       break;
     case OBJ_SEQALIGN :
-      AssignSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQALIGN);
+      VisitSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQALIGN, NULL, 0, NULL);
+      break;
+    case OBJ_SEQGRAPH :
+      VisitSeqGraph (&iac, (SeqGraphPtr) dataptr, NULL, 0, NULL);
       break;
     case OBJ_SEQSUB :
-      AssignSeqSubmit (&iac, (SeqSubmitPtr) dataptr);
+      VisitSeqSubmit (&iac, (SeqSubmitPtr) dataptr);
+      break;
+    case OBJ_SUBMIT_BLOCK :
+      VisitSubBlock (&iac, (SubmitBlockPtr) dataptr, NULL, 0, NULL);
+      break;
+    case OBJ_SEQSUB_CONTACT :
+      VisitSeqSubContact (&iac, (ContactInfoPtr) dataptr, NULL, 0, NULL);
       break;
     case OBJ_SEQHIST :
-      AssignSeqHist (&iac, (SeqHistPtr) dataptr);
+      VisitSeqHist (&iac, (SeqHistPtr) dataptr, NULL, 0, NULL);
       break;
     case OBJ_SEQHIST_ALIGN :
-      AssignSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQHIST_ALIGN);
+      VisitSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQHIST_ALIGN, NULL, 0, NULL);
+      break;
+    case OBJ_PUB :
+      VisitPub (&iac, (ValNodePtr) dataptr, OBJ_PUB, NULL, 0, NULL);
+      break;
+    case OBJ_SEQSUB_CIT :
+      VisitSeqSubCit (&iac, (CitSubPtr) dataptr, NULL, 0, NULL);
+      break;
+    case OBJ_SEQID :
+      VisitSeqIds (&iac, (SeqIdPtr) dataptr, NULL, 0, NULL);
       break;
     default :
       return FALSE;
   }
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr)
+
+{
+  return VisitEntity (entityID, datatype, dataptr, TRUE, NULL, NULL, NULL);
+}
+
+NLM_EXTERN Boolean LIBCALL GatherObjectsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr,
+                                                  GatherObjectProc callback, Pointer userdata, BoolPtr objMgrFilter)
+
+{
+  if (callback == NULL) return FALSE;
+  return VisitEntity (entityID, datatype, dataptr, FALSE, callback, userdata, objMgrFilter);
+}
+
+typedef struct getptrforid {
+  Uint2    entityID;
+  Uint2    itemID;
+  Uint2    itemtype;
+  Pointer  dataptr;
+} GetPtrForId, PNTR GetPtrForIdPtr;
+
+static Boolean GetPointerProc (GatherObjectPtr gop)
+
+{
+  GetPtrForIdPtr  gfp;
+
+  if (gop == NULL) return TRUE;
+  gfp = (GetPtrForIdPtr) gop->userdata;
+  if (gfp == NULL) return TRUE;
+  if (gfp->itemID != gop->itemID || gfp->itemtype != gop->itemtype) return TRUE;
+  gfp->dataptr = gop->dataptr;
+  return TRUE;
+}
+
+NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+
+{
+  GetPtrForId  gfi;
+  Boolean      objMgrFilter [OBJ_MAX];
+
+  if (itemtype >= OBJ_MAX) return NULL;
+
+  MemSet ((Pointer) objMgrFilter, FALSE, sizeof (objMgrFilter));
+  objMgrFilter [itemtype] = TRUE;
+  gfi.entityID = entityID;
+  gfi.itemID = itemID;
+  gfi.itemtype = itemtype;
+  gfi.dataptr = NULL;
+
+  GatherObjectsInEntity (entityID, 0, NULL, GetPointerProc, &gfi, objMgrFilter);
+
+  return gfi.dataptr;
+}
+
+/*****************************************************************************
+*
+*   DeleteMarkedObjects (entityID, datatype, dataptr)
+*   	Unlinks and removes all objects whose GatherIndex.deleteme flag is not 0.
+*
+*****************************************************************************/
+
+static void DeleteMarkedSeqFeat (SeqFeatPtr sfp, Pointer PNTR prevlink)
+
+{
+  SeqFeatPtr  next;
+
+  while (sfp != NULL) {
+    next = sfp->next;
+
+    if (sfp->idx.deleteme != 0) {
+      *prevlink = sfp->next;
+      sfp->next = NULL;
+      SeqFeatFree (sfp);
+    } else {
+      sfp->idx.prevlink = prevlink;
+      prevlink = (Pointer PNTR) &(sfp->next);
+    }
+
+    sfp = next;
+  }
+}
+
+static void DeleteMarkedSeqAlign (SeqAlignPtr sap, Pointer PNTR prevlink)
+
+{
+  SeqAlignPtr  next;
+
+  while (sap != NULL) {
+    next = sap->next;
+
+    if (sap->idx.deleteme != 0) {
+      *prevlink = sap->next;
+      sap->next = NULL;
+      SeqAlignFree (sap);
+    } else {
+      sap->idx.prevlink = prevlink;
+      prevlink = (Pointer PNTR) &(sap->next);
+    }
+
+    sap = next;
+  }
+}
+
+static void DeleteMarkedSeqGraph (SeqGraphPtr sgp, Pointer PNTR prevlink)
+
+{
+  SeqGraphPtr  next;
+
+  while (sgp != NULL) {
+    next = sgp->next;
+
+    if (sgp->idx.deleteme != 0) {
+      *prevlink = sgp->next;
+      sgp->next = NULL;
+      SeqGraphFree (sgp);
+    } else {
+      sgp->idx.prevlink = prevlink;
+      prevlink = (Pointer PNTR) &(sgp->next);
+    }
+
+    sgp = next;
+  }
+}
+
+static void DeleteMarkedSeqAnnot (SeqAnnotPtr sap, Pointer PNTR prevlink)
+
+{
+  SeqAnnotPtr  next;
+
+  while (sap != NULL) {
+    next = sap->next;
+
+    if (sap->idx.deleteme == 0) {
+      switch (sap->type) {
+        case 1 :
+          DeleteMarkedSeqFeat ((SeqFeatPtr) sap->data, (Pointer PNTR) &(sap->data));
+          break;
+        case 2 :
+          DeleteMarkedSeqAlign ((SeqAlignPtr) sap->data, (Pointer PNTR) &(sap->data));
+          break;
+        case 3 :
+          DeleteMarkedSeqGraph ((SeqGraphPtr) sap->data, (Pointer PNTR) &(sap->data));
+          break;
+        default :
+          break;
+      }
+      if (sap->data == NULL) {
+        sap->idx.deleteme = 1;
+      }
+    }
+
+    if (sap->idx.deleteme != 0) {
+      *prevlink = sap->next;
+      sap->next = NULL;
+      SeqAnnotFree (sap);
+    } else {
+      sap->idx.prevlink = prevlink;
+      prevlink = (Pointer PNTR) &(sap->next);
+    }
+  
+    sap = next;
+  }
+}
+
+static void DeleteMarkedSeqDescr (SeqDescrPtr sdp, Pointer PNTR prevlink)
+
+{
+  SeqDescrPtr    next;
+  ObjValNodePtr  ovp;
+
+  while (sdp != NULL) {
+    next = sdp->next;
+
+    ovp = (ObjValNodePtr) sdp;
+    if (sdp->extended != 0 && ovp->idx.deleteme != 0) {
+      *prevlink = sdp->next;
+      sdp->next = NULL;
+      SeqDescFree (sdp);
+    } else {
+      if (sdp->extended != 0) {
+        ovp->idx.prevlink = prevlink;
+      }
+      prevlink = (Pointer PNTR) &(sdp->next);
+    }
+
+    sdp = next;
+  }
+}
+
+static void DeleteMarkedSeqEntry (SeqEntryPtr sep, Pointer PNTR prevlink)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   next;
+  Boolean       unlink;
+
+  while (sep != NULL) {
+    next = sep->next;
+    unlink = FALSE;
+    bsp = NULL;
+    bssp = NULL;
+
+    if (IS_Bioseq (sep)) {
+
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (bsp != NULL) {
+        if (bsp->idx.deleteme != 0) {
+          unlink = TRUE;
+        } else {
+          DeleteMarkedSeqDescr (bsp->descr, (Pointer PNTR) &(bsp->descr));
+          DeleteMarkedSeqAnnot (bsp->annot, (Pointer PNTR) &(bsp->annot));
+        }
+      }
+
+    } else if (IS_Bioseq_set (sep)) {
+
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL) {
+        if (bssp->idx.deleteme != 0) {
+          unlink = TRUE;
+        } else {
+          DeleteMarkedSeqDescr (bssp->descr, (Pointer PNTR) &(bssp->descr));
+          DeleteMarkedSeqAnnot (bssp->annot, (Pointer PNTR) &(bssp->annot));
+          DeleteMarkedSeqEntry (bssp->seq_set, (Pointer PNTR) &(bssp->seq_set));
+        }
+      }
+    }
+    if (unlink) {
+      *prevlink = sep->next;
+      sep->next = NULL;
+      SeqEntryFree (sep);
+    } else {
+      if (bsp != NULL) {
+        bsp->idx.prevlink = prevlink;
+      } else if (bssp != NULL) {
+        bssp->idx.prevlink = prevlink;
+      }
+      prevlink = (Pointer PNTR) &(sep->next);
+    }
+    sep = next;
+  }
+}
+
+NLM_EXTERN Boolean DeleteMarkedObjects (Uint2 entityID, Uint2 datatype, Pointer dataptr)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  ObjMgrDataPtr  omdp;
+  ObjMgrPtr      omp;
+  SeqEntryPtr    sep = NULL;
+  SeqSubmitPtr   ssp;
+
+  if (entityID > 0) {
+    omp = ObjMgrReadLock ();
+    omdp = ObjMgrGetDataStruct (omp, entityID);
+    ObjMgrUnlock();
+    if (omdp == NULL) return FALSE;
+    if (omdp->choicetype == OBJ_SEQENTRY) {
+      datatype = omdp->choicetype;
+      dataptr = omdp->choice;
+    } else {
+      datatype = omdp->datatype;
+      dataptr = omdp->dataptr;
+    }
+  }
+
+  if (datatype == 0 || dataptr == NULL) return FALSE;
+
+  switch (datatype) {
+    case OBJ_SEQENTRY :
+      sep = (SeqEntryPtr) dataptr;
+      break;
+    case OBJ_BIOSEQ :
+      bsp = (BioseqPtr) dataptr;
+      sep = bsp->seqentry;
+      break;
+    case OBJ_BIOSEQSET :
+      bssp = (BioseqSetPtr) dataptr;
+      sep = bssp->seqentry;
+      break;
+    case OBJ_SEQSUB :
+      ssp = (SeqSubmitPtr) dataptr;
+      if (ssp->datatype == 1) {
+        sep = (SeqEntryPtr) ssp->data;
+      }
+      break;
+    default :
+      return FALSE;
+  }
+
+  if (sep == NULL) return FALSE;
+
+  DeleteMarkedSeqEntry (sep, (Pointer PNTR) &sep);
 
   return TRUE;
 }

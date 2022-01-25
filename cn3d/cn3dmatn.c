@@ -33,6 +33,30 @@
 *
 * Modifications:
 * $Log: cn3dmatn.c,v $
+* Revision 6.91  2000/01/11 01:16:46  lewisg
+* fix color selection in Cn3D, other misc. bugs
+*
+* Revision 6.90  1999/11/23 16:16:17  vakatov
+* Fixed a (dangerous!) cast of the callback function Cn3D_FindMMCB()
+*
+* Revision 6.89  1999/11/18 00:21:42  lewisg
+* draw speedups and selection on mouseup
+*
+* Revision 6.88  1999/11/15 18:30:08  lewisg
+* get rid of extra redraws when selecting
+*
+* Revision 6.87  1999/11/10 23:19:40  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.86  1999/10/29 14:15:28  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.85  1999/10/05 23:18:20  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.84  1999/09/21 18:09:16  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.83  1999/07/07 15:44:00  ywang
 * set Cn3D_ObjMgrOpen FALSE as GatherProcLaunch returns OM_MSG_RET_ERROR or OM_MSG_RET_NOPROC
 *
@@ -108,30 +132,30 @@
 * Revision 6.59  1999/01/19 17:31:51  ywang
 * switch color message from many to once
 *
- * Revision 6.58  1998/12/16  22:49:39  ywang
- * fix compiling warnings on Win32
- *
- * Revision 6.57  1998/12/16  19:32:20  ywang
- * improve highlight residues function when rerendering
- *
- * Revision 6.56  1998/10/27  15:55:51  ywang
- * add functions for testing color by sequence conservation
- *
- * Revision 6.55  1998/10/21  15:51:26  ywang
- * reset residue color for salsa before cn3d redraws so that residues shown in salsa will become black if they are not shown in cn3d window
- *
- * Revision 6.54  1998/10/19  20:16:06  ywang
- * add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
- *
- * Revision 6.53  1998/10/19  17:43:02  kans
- * prototype needed for Cn3DSendColorMsg
- *
+* Revision 6.58  1998/12/16  22:49:39  ywang
+* fix compiling warnings on Win32
+*
+* Revision 6.57  1998/12/16  19:32:20  ywang
+* improve highlight residues function when rerendering
+*
+* Revision 6.56  1998/10/27  15:55:51  ywang
+* add functions for testing color by sequence conservation
+*
+* Revision 6.55  1998/10/21  15:51:26  ywang
+* reset residue color for salsa before cn3d redraws so that residues shown in salsa will become black if they are not shown in cn3d window
+*
+* Revision 6.54  1998/10/19  20:16:06  ywang
+* add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
+*
+* Revision 6.53  1998/10/19  17:43:02  kans
+* prototype needed for Cn3DSendColorMsg
+*
 * Revision 6.52  1998/10/16 22:06:09  ywang
 * make global color array for sequence display
 *
- * Revision 6.51  1998/10/07  21:19:50  kans
- * ObjMgrAlsoSelect changes (CC)
- *
+* Revision 6.51  1998/10/07  21:19:50  kans
+* ObjMgrAlsoSelect changes (CC)
+*
 * Revision 6.50  1998/09/23 22:07:32  ywang
 * fix file name error
 * 
@@ -140,16 +164,12 @@
 #include <vibrant.h>
 #include <document.h>
 #include <vsm.h>
-#include <sequtil.h>   /* for sequence load funcs */
+#include <sequtil.h>            /* for sequence load funcs */
 #include <objsub.h>
 #include <string.h>
 #include <saledit.h>
 #include <objmgr.h>
-#include <mmdbapi.h>   /* the MMDB-API header */
-#include <mmdbapi1.h>
-#include <mmdbapi2.h>
-#include <mmdbapi3.h>
-#include <mmdbapi4.h>
+#include <mmdbapi.h>            /* the MMDB-API header */
 #include <mmdbdata.h>
 #include <cn3dmsg.h>
 #include <salmedia.h>
@@ -158,836 +178,227 @@
 #include <algorend.h>
 #include <cn3dshim.h>
 #include <objmime.h>
+#include <udviewer.h>           /* udv */
+#include <ddvopen.h>            /* ddv */
 
 extern Int1 bColorAlignments[];
-/*----------------------------------------------*/
-void SalsaRegister(void)
+
+
+static void LIBCALLBACK Cn3D_FindMMCB(PFB pfbThis, Nlm_Int4 iModel,
+                                      Nlm_Int4 iIndex,
+                                      Pointer ptr)
 {
+    PDNMM* ModelList = (PDNMM*) ptr;
+    PMMD pmmdThis = NULL;
 
-    REGISTER_NEW_BIOSEQ_EDIT;
-    REGISTER_NEW_SEQALIGN_EDIT;
-    REGISTER_NEW_SEQALIGN_VIEW;
-    REGISTER_NEW_SEQANNOT_EDIT;
-
+    if (pfbThis == NULL) return;
+    if (pfbThis->bMe == (Byte) AM_MMD) { /* is this molecular model data? */
+        pmmdThis = (PMMD) pfbThis;
+        if (pmmdThis->pSeqId)
+            DValNodeAddPointer (ModelList, 0, pmmdThis);
+    }
 }
-/*----------------------------------------------*/
-void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap)
+
+
+
+PDNMM FindMM(void)
+/* find coordinates of the bounding box of a structure */
 {
-  Uint2            entityID = 0,
-                   itemID = 0;
-  Int2             handled = 0;
-  Uint2            options = 0;
+    PDNMM ModelList = NULL;
+    PDNMS pdnmsThis = NULL, pdnmsThisSlave = NULL;
+    PMSD pmsdThis = NULL;
 
-  if (sap != NULL) {
-     entityID = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
-     options = ObjMgrGetOptions(entityID);
-     options |= OM_OPT_FREE_IF_NO_VIEW;
-     ObjMgrSetOptions(options, entityID);
-     itemID = GetItemIDGivenPointer (entityID, OBJ_SEQANNOT, (Pointer) sap);
-     handled = GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, OBJ_SEQANNOT, 0, 0, OBJ_SEQANNOT, 0);
+    pdnmsThis = GetSelectedModelstruc();
+    if(pdnmsThis == NULL) return NULL;
 
-     if(handled == OM_MSG_RET_ERROR || handled == OM_MSG_RET_NOPROC) {
-        Cn3D_ObjMgrOpen = FALSE;
+    TraverseModels(pdnmsThis, TRAVERSE_MOLECULE, 0, &ModelList, Cn3D_FindMMCB);
+
+    pmsdThis = pdnmsThis->data.ptrvalue;
+    if(pmsdThis == NULL) return ModelList;
+
+    for(pdnmsThis = pmsdThis->pdnmsSlaves; pdnmsThis != NULL;
+            pdnmsThis = pdnmsThis->next) {
+        TraverseModels(pdnmsThis, TRAVERSE_MOLECULE, 0, &ModelList,
+                       Cn3D_FindMMCB);
+    }
+    
+    return ModelList;
+}
+
+
+/*----------------------------------------------*/
+void DoMediaHL(PMMD pmmdThis, Int4 from, Int4 to, Boolean highlight)
+{
+    PDNMG pdnmgThis = NULL;
+
+    PMGD pmgdThis = NULL;
+    PVNMA pvnmaThis = NULL;
+    PMAD pmadThis = NULL;
+    PVNAL pvnalThis = NULL;
+    PALD paldThis = NULL;
+
+    Byte MainAtom = 0;
+
+
+    pdnmgThis = pmmdThis->pdnmgHead;
+    if (pdnmgThis == NULL)
         return;
-     }
-     sap_entityID = entityID;
-     sap_itemID = itemID;
-     Cn3D_SalsaOpen = TRUE;
-  }
-}
-/*----------------------------------------------*/
-void LaunchSalsa(SeqAlignPtr salp)
-{
-  SeqAnnotPtr   sap = NULL, sap2 = NULL;
 
-    sap = SeqAnnotNew ();
-    sap->type = 2;
-    sap->data = (Pointer) salp;
-    sap2 = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
-    sap->data = NULL;
-    SeqAnnotFree (sap);
-    Cn3DLaunchAnnotAlignEditor (sap2);
-}
-/*----------------------------------------------*/
-PMMD FindMM(SeqIdPtr sip, Int4 iCount){
+    pmgdThis = pdnmgThis->data.ptrvalue;
+    if ((pmgdThis->bWhat & (Byte) RES_RNA)
+        || (pmgdThis->bWhat & (Byte) RES_DNA)) MainAtom = AM_PALPHA;
+    if (pmgdThis->bWhat & (Byte) RES_AA)
+        MainAtom = AM_CALPHA;
 
-  PDNMS pdnmsThis = NULL, pdnmsThisSlave = NULL;
-  PMSD  pmsdThis = NULL;
-  PDNMM pdnmmHead = NULL;
-  PMMD  pmmdThis = NULL;
-  PDNML pdnmlThis = NULL;
-
-  Boolean MM_found = FALSE;
-  Int4 slaveCount = 0;
-
-  SeqIdPtr tmp_sip = NULL;
-
-  Boolean bSingleMS = FALSE, bMaster = FALSE;
-
-  pdnmsThis = GetSelectedModelstruc();
-  if(pdnmsThis == NULL) {
-/*   ErrPostEx (SEV_ERROR, 0, 0, " GetSelectedModelstruc is NULL: return! "); */
-     return(NULL);
-  }
-
-  pdnmsThisSlave = ((PMSD)(pdnmsThis->data.ptrvalue))->pdnmsSlaves;
-  if(pdnmsThisSlave == NULL) bSingleMS = TRUE;
-  else if(iCount == -1){
-     bMaster = TRUE;
-  }
-  else pdnmsThis = pdnmsThisSlave;
- 
-
-/*if(iCount == -1) {
-      pdnmsThis = GetMasterModelstruc();
-      if(pdnmsThis == NULL) {
-         bSingleMS = TRUE;
-         pdnmsThis = GetSelectedModelstruc();
-      }
-      else bMaster = TRUE;
-      if(pdnmsThis == NULL) {
-          return NULL;
-      } 
-  }
-  else
-  {
-    if(pdnmsThis = GetMasterModelstruc())
-    {
-      pdnmsThis = ((PMSD)(pdnmsThis->data.ptrvalue))->pdnmsSlaves;
-    }
-    else {
-       bSingleMS = TRUE;
-       pdnmsThis = GetSelectedModelstruc();
-    }
-  }  */
-
-  while (pdnmsThis && !MM_found){
-      if(!bSingleMS && !bMaster){
-         if(slaveCount != iCount) goto errot;
-      }
-      pmsdThis = pdnmsThis->data.ptrvalue;
-      pdnmmHead = pmsdThis->pdnmmHead;
-      while(pdnmmHead){
-          pmmdThis = pdnmmHead->data.ptrvalue;
-          if(pmmdThis){
-              tmp_sip = pmmdThis->pSeqId;
-              if(SeqIdForSameBioseq(tmp_sip, sip)){
-                  MM_found = TRUE;
-                  return(pmmdThis);
-              }
-           }
-
-           pdnmmHead = pdnmmHead->next;
-       }
-
-      errot:
-      pdnmsThis = pdnmsThis->next;    
-      if(!bSingleMS) slaveCount++;
-  }
-
-  return(NULL);
-
-}
-/*----------------------------------------------*/
-void DoMediaHL(PMMD  pmmdThis, Int4 from, Int4 to, Boolean highlight)
-{
-  PDNMG pdnmgThis = NULL;
-
-  PMGD  pmgdThis = NULL;
-  PVNMA pvnmaThis = NULL;
-  PMAD  pmadThis = NULL;
-  PVNAL pvnalThis = NULL;
-  PALD  paldThis = NULL;
-
-  Byte MainAtom = 0;
+    while (pdnmgThis) {
+        if (pdnmgThis->choice <= to && pdnmgThis->choice >= from) {
+            pmgdThis = pdnmgThis->data.ptrvalue;
+            if (pmgdThis == NULL)
+                goto setout;
 
 
-  pdnmgThis = pmmdThis->pdnmgHead;
-  if(pdnmgThis == NULL) return;
-
-  pmgdThis = pdnmgThis->data.ptrvalue;
-  if ((pmgdThis->bWhat & (Byte) RES_RNA) || (pmgdThis->bWhat & (Byte) RES_DNA)) MainAtom = AM_PALPHA;
-  if (pmgdThis->bWhat & (Byte) RES_AA) MainAtom = AM_CALPHA;
-
-  if(from <= 1) from = 1;
-  while(pdnmgThis){
-      if(pdnmgThis->choice <= to && pdnmgThis->choice >= from){
-          pmgdThis = pdnmgThis->data.ptrvalue;
-          if(pmgdThis == NULL) goto setout;
-
-                    /* following to deal with the simplest CA-only model */
-                    /* similar check should do for DNA/RNA in future */
-                    /* GetMainAtom could be used here */
-
-/*        while(pvnmaThis){  */
-/*           pmadThis = pvnmaThis->data.ptrvalue;  */
-/*           if(StringCmp(pmadThis->pcAName, " CA ") == 0) break;  */
-/*           if (pmadThis->bWhat & MainAtom) break;  */
-/*           pvnmaThis = pvnmaThis->next;  */
-/*        }   */
-
-          fnPreCHLresidue(pdnmgThis, highlight);
-      }
+            fnPreCHLresidue(pdnmgThis, highlight);
+        }
       setout:
-      pdnmgThis = pdnmgThis->next;
-  }
+        pdnmgThis = pdnmgThis->next;
+    }
 
-  fnCHLresidueRedraw();
 
 }
+
 /*----------------------------------------------*/
 void MediaHL(SelStructPtr sel, Boolean highlight)
 {
-                                     /* media action -- highlight... */
-  SeqLocPtr  slp = NULL;
-  SeqIntPtr  sintp = NULL;
-  SeqIdPtr   sip = NULL;
-  Int4 from = 0, to = 0; 
-  Int4 length = 0, iCount = 0;
-  Boolean MM_found = FALSE;
+    /* media action -- highlight... */
+    SeqLocPtr slp = NULL;
+    SeqIntPtr sintp = NULL;
+    SeqIdPtr sip = NULL;
+    Int4 from = 0, to = 0;
+    PDNMM ModelList,iList;
+    PMMD pmmdThis;
+    Bioseq *bsp;
 
-Char str[100];
+    slp = sel->region;
+    if (slp == NULL) return;
+    sintp = slp->data.ptrvalue;
+    if(sintp == NULL) return;
+    sip = sintp->id;
 
-  PMMD  pmmdThis = NULL;
+    from = SeqLocStart(slp);
+    to = SeqLocStop(slp);
 
-  from = SeqLocStart(sel->region);
-  to   = SeqLocStop(sel->region);
+    if(to == LAST_RESIDUE || to == APPEND_RESIDUE ) {
+        bsp = BioseqLockById(sip);
+        if (bsp) {
+            to = bsp->length-1;
+            BioseqUnlock(bsp);
+        }
+    }
 
-  if(from == -2 && to == -2) return;
-  if(from == -2 && to > 0) from = to;
-    /* for salsa dashes at C-terminal of sequence */
-
-  from = from + 1; to = to + 1;
     /* residue starts with number 1 in structure, but with number 0 in sequence */
-  slp = sel->region;
-  if(slp == NULL) return;
-  sintp = slp->data.ptrvalue;
-  sip = sintp->id;
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-
-/** for debugging porpuse **/
-SeqIdWrite(sip, str, PRINTID_REPORT, sizeof (str));
-SeqIdWrite(mediadata[iCount]->sip, str, PRINTID_REPORT, sizeof (str));
-
-     if (SeqIdForSameBioseq(sip, mediadata[iCount]->sip) )
-     {
-       if(to == -1){
-          length = mediadata[iCount]->length;
-          to = length;   /* correct end position, see objmgr APPEND_RESIDUE */
-       }
-       pmmdThis = FindMM(mediadata[iCount]->sip, iCount - 1);
-       if(pmmdThis != NULL){
-          DoMediaHL(pmmdThis, from, to, highlight);
-       }
-     }
-  }
+    from++;
+    to++;
+        
+    ModelList = FindMM();
+    
+    for(iList = ModelList; iList != NULL; iList = iList->next) {
+        pmmdThis = iList->data.ptrvalue;
+        if(pmmdThis == NULL) continue;
+        if (SeqIdForSameBioseq(sip, pmmdThis->pSeqId))
+            DoMediaHL(pmmdThis, from, to, highlight);
+    }
+    DValNodeFree(ModelList);
 
 }
 
-/*----------------------------------------------*/
+/* selection originating from Cn3D */
 void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
 {
-  PMGD pmgdThis = NULL;
-  PMMD pmmdThis = NULL;
-  SeqIdPtr  sip = NULL;
-  SeqLocPtr  slp = NULL;
-  SelStructPtr sel = NULL;
+    PMGD pmgdThis = NULL;
+    PMMD pmmdThis = NULL;
+    SeqLocPtr slp = NULL;
 
-  PMSD  pmsdThis = NULL;
-  PDNMS pdnmsMaster = NULL;
-  PMSD  pmsdMaster = NULL;
-  PDNMS pdnmsSlaves = NULL;
+    Uint2 entityID, itemID;
+    Int4 from, to;
 
-  Int4 Gi = 0, iCount = 0;
-  Uint2 entityID = 0, itemID = 0, itemtype = 0;
-  Int4 from = 0, to = 0;
-  Boolean bMaster = FALSE, bSlave = FALSE, RegisterThis = FALSE, bSingleMS = FALSE;
-  
-  Boolean select_success = FALSE;
-  SeqIdPtr sipThis, sip_dup = NULL;
+    pmgdThis = pdnmgThis->data.ptrvalue;
+    pmmdThis = GetParentMol((PFB) pmgdThis);  
 
-  if(!Cn3D_ObjMgrOpen){
-       fnPreCHLresidue(pdnmgThis, highlight);
-       return;
-  }
+    if (pmmdThis == NULL)return;
 
-  if(Num_Bioseq == 0) return;   /* important */
+    if(pmmdThis->pSeqId) {
+        entityID = BioseqFindEntity(pmmdThis->pSeqId, &itemID);
+        from = pdnmgThis->choice - 1;
+        to = pdnmgThis->choice - 1;
+        slp = SeqLocIntNew(from, to, 0, pmmdThis->pSeqId);
+        if (highlight)
+            ObjMgrAlsoSelect(entityID, itemID, OBJ_BIOSEQ, OM_REGION_SEQLOC,
+            slp);
+        /* now explicitly use ObjMgrDeSelect */
+        else
+            ObjMgrDeSelect(entityID, itemID, OBJ_BIOSEQ, OM_REGION_SEQLOC,
+            slp);
+        ObjMgrSendMsg(OM_MSG_MOUSEUP, entityID, itemID, OBJ_BIOSEQ);
 
-  pmgdThis = pdnmgThis->data.ptrvalue;
-  pmmdThis = GetParentMol((PFB)pmgdThis);
-
-  if(pmmdThis == NULL) {
-      return;
-  }
-
-  sip = pmmdThis->pSeqId;
-
-  pmsdThis = ToMSDParent((PFB) pmgdThis);
-
-  pdnmsMaster = GetSelectedModelstruc();
-           /* always use GetSelectedMOdelstruc */
-  if(pdnmsMaster){
-     if(pmsdThis == pdnmsMaster->data.ptrvalue) {
-        pmsdMaster = pdnmsMaster->data.ptrvalue;
-        if(pmsdMaster->pdnmsSlaves != NULL) bMaster = TRUE;
-        else bSingleMS = TRUE;
-     }
-     else {
-        pmsdMaster = pdnmsMaster->data.ptrvalue;
-        pdnmsSlaves = pmsdMaster->pdnmsSlaves;
-
-        iCount = 0;
-
-        while(pdnmsSlaves) {
-           if(pmsdThis == pdnmsSlaves->data.ptrvalue) {
-              bSlave = TRUE;
-              break;
-           }
-           iCount++;
-           pdnmsSlaves = pdnmsSlaves->next;
-        }
-      }
-  }
-
-  if(!bSingleMS){
-     if(!bMaster && !bSlave) {
+    }
+    else {
         fnPreCHLresidue(pdnmgThis, highlight);
-        return;
-     }
-     if(bMaster) {
-        if(SeqIdForSameBioseq(sip, mediadata[0]->sip)){
-           sipThis = mediadata[0]->sip;        
-           RegisterThis = TRUE;
-        }
-     }
-     else{
-        iCount = iCount + 1;
-        if(SeqIdForSameBioseq(sip, mediadata[iCount]->sip)) {      
-           sipThis = mediadata[iCount]->sip;
-           RegisterThis = TRUE;
-                  /* get rid of Gi, use SeqId to match Seqeuence and Structure */
-        }        
+#ifdef _OPENGL
+        Cn3D_Redraw(FALSE);
+#else
+        RedrawViewer3D(Cn3D_v3d);
+#endif
+
     }
-  }
-  else {
-     for(iCount = 0; iCount < Num_Bioseq; iCount++){
-        if(SeqIdForSameBioseq(sip, mediadata[iCount]->sip)) {
-           sipThis = mediadata[iCount]->sip;
-           RegisterThis = TRUE;
-           break;
-                     /* could get rid of Gi later on, but since for */
-                     /* one struc-seq from MMDB Gi should be there for */
-                     /* protein/NA, let Gi be here for the moment */
-        }
-     }    
-  }
- 
-  if(!RegisterThis){
-      fnPreCHLresidue(pdnmgThis, highlight);
-      return;
-  }
 
-  entityID = BioseqFindEntity(sipThis, &itemID);
-  itemtype = OBJ_BIOSEQ;
-  from = pdnmgThis->choice; 
-  to = pdnmgThis->choice;
-  from = (Int4)(from -1); 
-  to = (Int4)(to -1);   
-  sip_dup = SeqIdDup(sipThis);
-  slp = SeqLocIntNew (from, to, 0, sip_dup);
-
-  if(highlight)select_success = ObjMgrAlsoSelect(entityID, itemID, itemtype, OM_REGION_SEQLOC, slp);
-      /* now explicitly use ObjMgrDeSelect */
-  else select_success = ObjMgrDeSelect(entityID, itemID, itemtype, OM_REGION_SEQLOC, slp);
-
-  if(sip_dup) sip_dup = SeqIdFree(sip_dup);
 }
+
+
 /*-----------------------------------------------*/
-void Cn3DSendColorMsgForBioseq(Int4 iCount)
+void LIBCALLBACK Cn3DCheckAndDoHighlight(PFB pfbThis, Int4 iModel,
+                                         Int4 iIndex, Pointer ptr)
 {
-  SeqIdPtr sip = NULL;
-  SelStructPtr  sel = NULL;
-  SeqIdPtr      sip_dup = NULL;
-  Int4 from = 0, to = 0;
-  Uint1Ptr rgb = NULL;
+    PMGD pmgdThis = NULL;
+    PDNMG pdnmgThis = NULL;
+    PMMD pmmdThis = NULL;
+    PMSD pmsdThis = NULL;
 
-  rgb = (Uint1Ptr) &(Cn3d_PaletteRGB[C_default]); /*GetRGB((Int2) 0);*/
+    pmgdThis = (PMGD) pfbThis;
+    if (pmgdThis && pmgdThis->bHighlighted == 1) {
+        pdnmgThis = pmgdThis->pdnmgLink;
 
-  sel = (SelStructPtr)MemNew((size_t)sizeof(SelStruct));
-  if(sel != NULL) {
-     sel->entityID = mediadata[iCount]->entityID;
-     sel->itemtype = OBJ_BIOSEQ;
-     sel->itemID = mediadata[iCount]->itemID;
-     sel->regiontype = OM_REGION_SEQLOC;
-     sip_dup = SeqIdDup(mediadata[iCount]->sip);
-
-     from = 0; to = mediadata[iCount]->length - 1;
-
-     sel->region = (SeqLocPtr)SeqLocIntNew(from, to, Seq_strand_unknown, sip_dup);
-
-     ObjMgrSetColor(sel->entityID, sel->itemID, sel->itemtype, sel->regiontype, sel->region,  rgb);
-
-     sel->next = NULL;
-     if(sel->region != NULL) SeqLocFree ((SeqLocPtr) sel->region);
-     sel = MemFree(sel);
-
-     sip_dup = SeqIdFree(sip_dup);
-  }
-
-}
-/*-----------------------------------------------*/
-void Cn3DSendColorMsg(void)
-{
-  Int4 iCount;
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     Cn3DSendColorMsgForBioseq(iCount);
-  }
-
-}
-/*-----------------------------------------------*/
-void ColorSalsa_old(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, Uint1Ptr rgb)
-{
-  SelStructPtr  sel = NULL ;
-  SeqIdPtr      sip_dup = NULL;
-
-  if(Num_Bioseq == 0) return;    /* important */
-
-  sel = (SelStructPtr)MemNew((size_t)sizeof(SelStruct));
-  if(sel != NULL) {
-     sel->entityID = entityID;
-     sel->itemtype = OBJ_BIOSEQ;
-     sel->itemID = itemID;
-     sel->regiontype = OM_REGION_SEQLOC;
-     sip_dup = SeqIdDup(sip);
-     sel->region = (SeqLocPtr)SeqLocIntNew(from, to, Seq_strand_unknown, sip_dup);
-
-     ObjMgrSetColor(sel->entityID, sel->itemID, sel->itemtype, sel->regiontype, sel->region,  rgb);      
-
-     sel->next = NULL;
-     if(sel->region != NULL) SeqLocFree ((SeqLocPtr) sel->region);
-     sel = MemFree(sel);
-
-     sip_dup = SeqIdFree(sip_dup);
-  }
-}
-/*-----------------------------------------------*/
-void PrepareColorMsg_old(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb)
-{
-
-  SeqIdPtr  sip = 0;
-  Uint2 entityID = 0, itemID = 0;
-
-  if(Num_Bioseq == 0) return; /* important */
-
-  sip = mediadata[iCount]->sip;
-  entityID = mediadata[iCount]->entityID;
-  itemID = mediadata[iCount]->itemID;
-
-  ColorSalsa_old(entityID, itemID, sip, from, to, rgb);
-
-}
-/*------------------------------------------------*/
-void Cn3DSetResidueColorForSalsa(Int4 iCount, PMGD pmgdThis, Uint1Ptr rgb)
-{
-  PDNMG pdnmgThis = NULL;
-  ResidueColorCellPtr rgbThis = NULL;
-  Int2 iRes = 1;
-
-  ValNodePtr vnp = NULL;
-
-  pdnmgThis = pmgdThis->pdnmgLink;
-
-  vnp = mediadata[iCount]->seq_color;
-  while(vnp){
-     if(iRes == pdnmgThis->choice){
-        rgbThis = vnp->data.ptrvalue;
-        *rgbThis->rgb = *rgb; *(rgbThis->rgb + 1)= *(rgb + 1); *(rgbThis->rgb + 2)= *(rgb + 2);
-        break;
-     }
-     iRes++;
-     vnp = vnp->next;
-  }
-
-}
-/*-----------------------------------------------*/
-void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb)
-{
-  SelStructPtr  sel = NULL;
-  Int4  iCount = 0, Gi = 0;
-  Int4  from = 0, to = 0;
-
-  Boolean bMaster = FALSE, bSingleMS = FALSE;
-
-  PMMD pmmdThis = NULL;
-  PDNMG pdnmgThis = NULL;
-  PDNMS pdnmsMaster = NULL;
-  PMSD  pmsdMaster = NULL;
-  PMSD  pmsdThis = NULL;
-
-  PDNMS pdnmsSlaves = NULL;
- 
-  SeqIdPtr sip = NULL;
-
-  if(!Cn3D_ObjMgrOpen) return;
-
-  if(Num_Bioseq == 0) return; /* important */
-
-  pmsdThis = ToMSDParent((PFB) pmgdThis);
-
-  pdnmsMaster = GetSelectedModelstruc();
-              /* always use GetSelectedModelstruc */
-
-  if(pdnmsMaster){
-     if(pmsdThis == pdnmsMaster->data.ptrvalue) {
-        pmsdMaster = pdnmsMaster->data.ptrvalue;
-        if(pmsdMaster->pdnmsSlaves != NULL) bMaster = TRUE;
-        else bSingleMS = TRUE;
-     }
-     else {
-        pmsdMaster = pdnmsMaster->data.ptrvalue;
-        pdnmsSlaves = pmsdMaster->pdnmsSlaves;
-
-        iCount = 0;
-
-        while(pdnmsSlaves) {
-           if(pmsdThis == pdnmsSlaves->data.ptrvalue) {
-              break;
-           }
-           iCount++;
-           pdnmsSlaves = pdnmsSlaves->next;
-        }
-     }
-  }
-
-  pmmdThis = GetParentMol((PFB)pmgdThis);
-  if(pmmdThis == NULL) {
-     return;
-  }
-  sip = pmmdThis->pSeqId;
-  if(sip == NULL) {
-/*   ErrPostEx (SEV_ERROR, 0, 0, " SeqId is NULL: return! ");  */
-     return;
-  }
-
-  pdnmgThis = pmgdThis->pdnmgLink;
-  from = pdnmgThis->choice - 1;
-  to   = pdnmgThis->choice - 1;
- 
-  if(!bSingleMS){
-     if(bMaster) {
-         if(SeqIdForSameBioseq(sip, mediadata[0]->sip)){
-            Cn3DSetResidueColorForSalsa(0, pmgdThis, rgb);
-/*          PrepareColorMsg(0, from, to, rgb);  */
-                     /* here the order and SeqId matters */
-         }
-     }
-     else{
-        iCount = iCount + 1;
-        if(SeqIdForSameBioseq(sip, mediadata[iCount]->sip)) {
-           Cn3DSetResidueColorForSalsa(iCount, pmgdThis, rgb);
-/*         PrepareColorMsg(iCount, from, to, rgb);  */
-                    /* here the order and SeqId matters */
-         }
-     }
-  }
-  else{
-     for(iCount = 0; iCount < Num_Bioseq; iCount++){
-        if(SeqIdForSameBioseq(sip, mediadata[iCount]->sip)) {
-           Cn3DSetResidueColorForSalsa(iCount, pmgdThis, rgb);
-/*         PrepareColorMsg(iCount, from, to, rgb);  */
-           break;      /* could get rid of Gi later on */
-                       /* but since for one biostruc-seq (from MMDB) case, */
-                       /* Gi should be there for Rna/Protein, let it be there */
-        }
-     }
-  }
-         
-}
-/*-----------------------------------------------*/
-void ResetSalsaColor(void)
-{
-  Int4 from = 0, to = 0;
-  Int4 length = 0, iCount = 0;
-  Uint2 entityID = 0, itemID = 0;
-  SeqIdPtr sip = NULL;
-  Uint1Ptr rgb = NULL;
-
-  ResidueColorCellPtr rgbThis = NULL;
-  ValNodePtr vnp = NULL;
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     vnp = mediadata[iCount]->seq_color;
-     while(vnp){
-        rgbThis = vnp->data.ptrvalue;
-        rgbThis->rgb[0] = 0; rgbThis->rgb[1] = 0; rgbThis->rgb[2] = 0;
-        vnp = vnp->next;
-     }
-  }
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     if(!mediadata[iCount]->bVisible) continue;
-     sip = mediadata[iCount]->sip;
-     length = (Int4) mediadata[iCount]->length;
-     from = 0; to = length - 1;
-     entityID = mediadata[iCount]->entityID;
-     itemID = mediadata[iCount]->itemID;
-     rgb = (Uint1Ptr) &(Cn3d_PaletteRGB[C_black]);  /* black--default color */
-     
-/*   ColorSalsa(entityID, itemID, sip, from, to, (Uint1Ptr)rgb);   */
-  }
-
-}
-/*-----------------------------------------------*/
-void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void)
-{
-  PDNMS pdnmsThis = NULL;
-  PMSD  pmsdThis = NULL;
-  PMMD pmmdThis = NULL;
-  PDNMG pdnmgThis = NULL;
-  PMGD  pmgdThis = NULL;
-  
-  pdnmsThis = GetSelectedModelstruc();
-  if(!pdnmsThis) return;
-  pmsdThis = pdnmsThis->data.ptrvalue;
-  if(!pmsdThis) return;
-
-  pmmdThis = GetMMFromMSDBySeqId(pmsdThis, mediadata[0]->sip);
-  if(!pmmdThis) return;
-
-  pdnmgThis = pmmdThis->pdnmgHead;
-  while(pdnmgThis){
-   if(pdnmgThis->choice <= mediadata[0]->length){
-     pmgdThis = pdnmgThis->data.ptrvalue;
-     if(pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned)){
-        mediadata[0]->bAligned[pdnmgThis->choice - 1] = 1;
-     }
-     else mediadata[0]->bAligned[pdnmgThis->choice - 1] = 0;
-     
-     pdnmgThis = pdnmgThis->next;
+        fnPreCHLresidue(pdnmgThis, TRUE);
     }
-   else break;
-                  /* add protection when weird data occurs */
- /* e.g.,seq-id is the same for biostruc & seqalign, but not for sequences */
-  }
 
 }
-/*-----------------------------------------------*/
-void Cn3DCheckAlignmentStatusForStrucSeqs(void)
-{
-  PDNMS pdnmsThis = NULL;
-  PMSD  pmsdThis = NULL;
 
-  SeqIdPtr sipThis = NULL;
-  SeqAnnotPtr sap = NULL;
-  SeqAlignPtr salp = NULL, salp_curr = NULL;
-  DenseSegPtr dssp = NULL;
-  Int4Ptr starts = NULL;
-  Int4Ptr lens = NULL;
-
-  Int4 numseg = 0, nres = 0, iCount = 0;
-  Int4 from = 0, to = 0, master_from = 0;
-
-  pdnmsThis = GetSelectedModelstruc();
-  if(!pdnmsThis) return;
-  pmsdThis = pdnmsThis->data.ptrvalue;
-  if(!pmsdThis) return;
-
-  sap = pmsdThis->psaAlignment;
-  if(sap == NULL) return;
-  
-
-  while(sap){
-     if(sap->type == 2){
-        salp = sap->data;
-        break;
-     }
-     sap = sap->next;
-  }
-
-  if(salp == NULL) return;
-
-  iCount = 1;
-  while(salp){
-     if(mediadata[iCount]->bVisible != 1) {
-        for(nres = 0; nres < mediadata[iCount]->length; nres++){
-           mediadata[iCount]->bAligned[nres] = 0;
-        }
-     }
-     else {
-
-     dssp = salp->segs;
-     starts = dssp->starts;
-     lens = dssp->lens;
-
-     for(numseg = 0; numseg < dssp->numseg; numseg++, lens++){
-        master_from = *starts;
-        if(master_from == -1) {
-           starts++; starts++; continue;
-        }
-
-        starts++;
-        from = *starts; to = from + *lens;
-        if(*starts == -1) { starts++; continue;}
-        
-        for(nres = from; nres < to; nres++, master_from++){
-         if(master_from <= mediadata[0]->length && nres <= mediadata[iCount]->length){
-           if(mediadata[0]->bAligned[master_from] == 1) {
-              mediadata[iCount]->bAligned[nres] = 1;
-           }
-         }
-        }
-     
-        starts++;
-     }
-
-     }
-     iCount++;
-     salp = salp->next;
-  }
-
-}
-/*-----------------------------------------------*/
-void Cn3DColorSalsaForStrucSeqs(void)
-{
-  Int4 iCount = 0;
-  Int4 iRes = 0;
-
-  ResidueColorCellPtr rgbThis = NULL;
-  ResidueColorCell rgb;
-  ValNodePtr vnp = NULL;
-
-  Byte bAligned = FALSE;
-
-  for(iCount = 1; iCount < Num_Bioseq; iCount++){
-     iRes = 0;
-     Cn3D_CopyColorCell(&rgb, &(Cn3d_PaletteRGB[bColorAlignments[(iCount % NUM_SLAVES)]]));
-     vnp = mediadata[iCount]->seq_color;
-     while(vnp){
-        rgbThis = vnp->data.ptrvalue;
-/*      bAligned = Cn3DCheckAlignmentStatusForStrucSeqs(iRes, mediadata[iCount]->sip); */
-        if(iRes <= mediadata[iCount]->length) bAligned = mediadata[iCount]->bAligned[iRes];
-        if(bAligned == 0) {
-           rgbThis->rgb[0] = rgb.rgb[0]; rgbThis->rgb[1] = rgb.rgb[1]; rgbThis->rgb[2] = rgb.rgb[2];
-        }
-        else {
-            rgbThis->rgb[0] = 255; rgbThis->rgb[1] = 0; rgbThis->rgb[2] = 0;
-        }
-        vnp = vnp->next;
-        iRes++;
-     }
-  }
-
-}
-/*-----------------------------------------------*/
-void ColorSalsa(void)
-{
-  PDNMS pdnmsThis = NULL;
-  PMSD  pmsdThis = NULL;
-  PARS  pars = NULL;
-
-  pdnmsThis = GetSelectedModelstruc();
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if(!pars) return;
-
-  pmsdThis = pdnmsThis->data.ptrvalue;
-  if(pmsdThis == NULL) return;
-
-  if(pmsdThis->iMimeType == NcbiMimeAsn1_strucseqs){
-     if(pars->PResiduesOn){
-        if (pars->PResColor == C_BYCONS) Cn3DColorSalsaForStrucSeqs();
-     }
-     else if(pars->PBBColor == C_BYCONS){
-        Cn3DColorSalsaForStrucSeqs(); 
-     }
-  }    
-
-  Cn3DSendColorMsg();
-}
-/*-----------------------------------------------*/
-/* void Cn3dObjMgrGetSelected(void)
-{
-  SelStructPtr sel = NULL;
-  Boolean highlight = FALSE;
-
-  sel = ObjMgrGetSelected();
-  while(sel != NULL) {
-     highlight = TRUE;
-     MediaHL(sel, highlight); 
-     sel = sel->next;
-  }
-
-}   */
-/*-----------------------------------------------*/
-void LIBCALLBACK Cn3DCheckAndDoHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr)
-{
-  PMGD pmgdThis = NULL;
-  PDNMG  pdnmgThis = NULL;
-  PMMD  pmmdThis = NULL;
-  PMSD  pmsdThis = NULL;
-
-  pmgdThis = (PMGD) pfbThis;
-  if(pmgdThis && pmgdThis->bHighlighted == 1){
-     pdnmgThis = pmgdThis->pdnmgLink;
-
-     fnPreCHLresidue(pdnmgThis, TRUE);
-  }
-
-}
 /*-----------------------------------------------*/
 void Cn3dObjMgrGetSelected(void)
 {
-  PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
-  PMSD pmsdMaster = NULL, pmsdSlave = NULL; 
+    PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
+    PMSD pmsdMaster = NULL, pmsdSlave = NULL;
 
-       /* replace old function which depends on ObjMgr */
-       /* by doing so, highlight for non ObjMgr registered residues will */
-       /* also be picked up when do Cn3D_Redraw */
+    /* replace old function which depends on ObjMgr */
+    /* by doing so, highlight for non ObjMgr registered residues will */
+    /* also be picked up when do Cn3D_Redraw */
 
-  pdnmsMaster = GetSelectedModelstruc();
-  if(pdnmsMaster != NULL){
-      pmsdMaster = pdnmsMaster->data.ptrvalue;
- 
-      if(pmsdMaster->bVisible == 1) { 
-         TraverseGraphs(pdnmsMaster, 0, 0, NULL, Cn3DCheckAndDoHighlight);
-      }
-      pdnmsSlave = pmsdMaster->pdnmsSlaves;
-      while(pdnmsSlave) {
-         pmsdSlave = pdnmsSlave->data.ptrvalue;
-         if(pmsdSlave->bVisible == 1) {
-            TraverseGraphs(pdnmsSlave, 0, 0, NULL, Cn3DCheckAndDoHighlight);
-         }
-         pdnmsSlave = pdnmsSlave->next;
-      }
-   }
-}
-/*-----------------------------------------------*/
-ResidueColorCell * GetColorIndexForMG(PMGD pmgdThis)
-{
-  PDNMG pdnmgThis = NULL;
-  PMMD pmmdThis = NULL;
- 
-  ValNodePtr seq_color = NULL;
-  ResidueColorCellPtr rgb = NULL;
+    pdnmsMaster = GetSelectedModelstruc();
+    if (pdnmsMaster != NULL) {
+        pmsdMaster = pdnmsMaster->data.ptrvalue;
 
-  Int4 iCount = 0;
-
-  pdnmgThis = pmgdThis->pdnmgLink;
-  pmmdThis = GetParentMol((PFB)pmgdThis);
-
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     if(SeqIdForSameBioseq(pmmdThis->pSeqId, mediadata[iCount]->sip)){
-        seq_color = mediadata[iCount]->seq_color;
-        while(seq_color){
-           if(seq_color->choice == pdnmgThis->choice){
-              rgb = seq_color->data.ptrvalue;
-              break;
-           }
-           seq_color = seq_color->next;
+        if (pmsdMaster->bVisible == 1) {
+            TraverseGraphs(pdnmsMaster, 0, 0, NULL,
+                           Cn3DCheckAndDoHighlight);
         }
-     }
-  }
+        pdnmsSlave = pmsdMaster->pdnmsSlaves;
+        while (pdnmsSlave) {
+            pmsdSlave = pdnmsSlave->data.ptrvalue;
+            if (pmsdSlave->bVisible == 1) {
+                TraverseGraphs(pdnmsSlave, 0, 0, NULL,
+                               Cn3DCheckAndDoHighlight);
+            }
+            pdnmsSlave = pdnmsSlave->next;
+        }
+    }
 
-  return rgb;
 }

@@ -1,14 +1,19 @@
 @echo off
-rem  $Revision: 6.7 $
+rem  $Revision: 6.10 $
 rem  +++++ Denis Vakatov, NCBI // vakatov@peony.nlm.nih.gov +++++
 
 echo  *** Running:  %0  ***
 
-if "%__PATH_16%"==""  set __PATH_16=c:\msvc
-rem if "%__PATH_32%"==""  set __PATH_32=c:\msdev
-rem if "%__PATH_32%"==""  set __PATH_32=C:\Program Files\DevStudio\SharedIDE\bin;C:\Program Files\DevStudio\VC
-if "%__PATH_32%"==""  set __PATH_32=C:\Program Files\Microsoft Visual Studio\Common\MSDev98\Bin;C:\Program Files\Microsoft Visual Studio\Vc98
-if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc45
+if "%__PATH_MS%"==""  set __PATH_MS=C:\Program Files\Microsoft Visual Studio\Common\MSDev98\Bin;C:\Program Files\Microsoft Visual Studio\Vc98
+rem if "%__PATH_MS%"==""  set __PATH_MS=C:\Program Files\DevStudio\SharedIDE\bin;C:\Program Files\DevStudio\VC
+rem if "%__PATH_MS%"==""  set __PATH_MS=c:\msdev
+
+if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc5
+rem if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc45
+
+rem set OPENGL=1
+rem set LIBPNG_DIR=..\..\libpng
+rem set ZLIB_DIR=..\..\zlib
 
 
 echo  ***** Copy/Build/User flag  *****
@@ -57,28 +62,21 @@ set __CONSOLE=CONSOLE
 :end_W_C
 
 
-echo  ***** MSVC-16/32/DLL32; Borland-16/32  *****
+echo  ***** MSVC; DLL(msvc); Borland  *****
 
-if "%1"=="16"   goto l_16
-if "%1"=="32"   goto l_32
-if "%1"=="32D"  goto l_32D
-if "%1"=="BOR"  goto l_BOR
-if "%1"=="B16"  goto l_B16
-
+if "%1"=="M"  goto l_MS
+if "%1"=="D"  goto l_DLL
+if "%1"=="B"  goto l_BOR
 goto l_USAGE
-:l_16
-set __COMP=WWWWW
-set BASE_PATH=%__PATH_16%
+
+:l_MS
+set __COMP=MS
+set BASE_PATH=%__PATH_MS%
 set __MAKE=nmake
 goto end_COMP
-:l_32
-set __COMP=WIN32
-set BASE_PATH=%__PATH_32%
-set __MAKE=nmake
-goto end_COMP
-:l_32D
-set __COMP=WIN32D
-set BASE_PATH=%__PATH_32%
+:l_DLL
+set __COMP=DLL
+set BASE_PATH=%__PATH_MS%
 set __MAKE=nmake
 goto end_COMP
 :l_BOR
@@ -86,10 +84,7 @@ set __COMP=BOR
 set BASE_PATH=%__PATH_BOR%
 set __MAKE=make -N
 goto end_COMP
-:l_B16
-set __COMP=B16
-set BASE_PATH=%__PATH_BOR%
-set __MAKE=make -N
+
 :end_COMP
 
 
@@ -138,8 +133,8 @@ echo  ***** Usage  *****
 
 :l_USAGE
 echo "Usage:"
-echo " ncbimake {16|32|32D|BOR|B16} {W|C} {O|D} [noexe | copy | user <makefile> <toolkit_path>]"
-echo " (16)/(32)-bit MSVC++;  (32D)LL MSVC++;  (BOR)land 32-bit;  (B16)Borland 16-bit"
+echo " ncbimake {M|B|D} {W|C} {O|D} [noexe | copy | user <makefile> <toolkit_path>]"
+echo " (M)icrosoft / (B)orland compiler / (D)LL"
 echo " (W)indows/(C)onsole application"
 echo " (D)ebug/(O)ptimized version"
 echo " "
@@ -151,14 +146,14 @@ echo "  (user)  -- must be followed by(both):"
 echo "     <makefile>      -- user's makefile basename (will be completed by .MAK)"
 echo "     <toolkit_path>  -- path to the NCBI toolkit"
 echo " "
-echo "For more details please see in MAKE/README.DOS"
+echo "For more details read MAKE/README.DOS"
 
 
 echo  ***** Exit  *****
 
 :l_EXIT
 set __PATH_16=
-set __PATH_32=
+set __PATH_MS=
 set __PATH_BOR=
 
 echo  *** Exiting:  %0  ***

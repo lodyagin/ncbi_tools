@@ -1751,3 +1751,13 @@ Boolean tax1_isAlive(void)
     return (tax1_getTaxIdByName("dog") > 1)? TRUE : FALSE;
 }
 
+/***************************************************
+ * Get tax_id for given gi
+ * returns:
+ *       tax_id if found
+ *       0      if no data or error
+ */
+Int4 tax1_getTaxId4GI(Int4 gi)
+{
+    return tax_getTaxId4GI(gi);
+}

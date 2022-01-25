@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.16  1999/10/07 18:17:18  madden
+* Remove FindProt, FindNuc and SeqAlignToFasta
+*
 * Revision 1.15  1999/08/20 16:37:15  shavirin
 * Added protection against invalid program type.
 *
@@ -104,64 +107,6 @@
 #include <sqnutils.h>
 
 
-static Boolean LIBCALL
-SeqAlignToFasta(SeqAlignPtr sap, FILE *fp)
-
-{
-	BioseqPtr bsp;
-	SeqIdPtr last_id=NULL, id;
-
-	if (sap == NULL || fp == NULL)
-		return FALSE;
-
-	while (sap)
-	{
-		id = TxGetSubjectIdFromSeqAlign(sap);
-		if (last_id)
-		{
-			if(SeqIdComp(id, last_id) != SIC_YES)
-			{
-				bsp = BioseqLockById(id);
-				BioseqToFasta(bsp, fp, ISA_na(bsp->mol));
-				BioseqUnlock(bsp);
-			}
-		}
-		last_id = id;
-		sap = sap->next;
-	}
-
-	return TRUE;
-}
-
-/* find the last nucleotide bioseq in the bioseqset */
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_na(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
-/* find the last protein bioseq in the bioseqset */
-static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_aa(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
 /*
 	Montior hook to print to stderr for UNIX clients.
 */

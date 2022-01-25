@@ -32,8 +32,17 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.19 $ 
+/* $Revision: 6.22 $ 
 * $Log: blast.h,v $
+* Revision 6.22  2000/01/14 18:27:45  shavirin
+* Added definitions of WordExtend* functions.
+*
+* Revision 6.21  1999/12/29 18:55:29  shavirin
+* Added definition of non-static function BlastSequenceAddSequence().
+*
+* Revision 6.20  1999/09/22 20:55:07  egorov
+* Add time measure stuff
+*
 * Revision 6.19  1999/07/01 13:03:24  sicotte
 * Updated for DenseDiag and Moved seqalign_reverse_strand from blastutl.c(blast.h) to SeqAlignListReverseStrand in salpedit.ch and fixed call in salutil.c
 *
@@ -330,6 +339,7 @@ BLASTSubjectInfoPtr LIBCALL BLASTSubjectInfoDestruct PROTO((BLASTSubjectInfoPtr 
 
 void LIBCALL do_the_blast_run PROTO((BlastSearchBlkPtr search));
 
+Int2 LIBCALL BlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_seq, Int4 effective_length));
 
 /*
 	Blast two sequences and return a SeqAlign.
@@ -402,12 +412,37 @@ SeqLocPtr LIBCALL BioseqHitRangeEngineByLoc PROTO((SeqLocPtr slp, CharPtr progna
 
 SeqLocPtr LIBCALL BioseqHitRangeEngine PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
 
+BLAST_ExtendWordParamsPtr BLAST_ExtendWordParamsNew (Int4 qlen, Boolean multiple_hits, Int4 window_size);
+BLAST_ExtendWordPtr BLAST_ExtendWordNew (BLAST_ExtendWordParamsPtr ewp_params);
+BLAST_ExtendWordPtr LIBCALL BLAST_ExtendWordDestruct (BLAST_ExtendWordPtr ewp);
+
 
 void LIBCALL updateLambdaK PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent));
 
 #ifdef OS_UNIX
 Boolean HeyIAmInMemory(Int4 program);
 #endif
+
+/* DEBUG */
+/* time mesuaring utilities */
+
+/* #define BLAST_TIMER */
+
+#ifdef BLAST_TIMER
+clock_t last_clock;
+#define	start_timer	last_clock = clock();
+
+#define	stop_timer(msg) { \
+    clock_t	current_clock = clock(), since; \
+    since = current_clock - last_clock; \
+    fprintf(stderr, "TIME [%s] - %5.2f\n", msg, ((double) since) / CLOCKS_PER_SEC); \
+    last_clock = current_clock; \
+}
+#else
+#define	start_timer ;
+#define	stop_timer ;
+#endif
+/* end of DEBUG block */
 
 
 #ifdef __cplusplus

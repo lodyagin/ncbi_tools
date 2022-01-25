@@ -1,5 +1,6 @@
 
 
+#include <vibrant.h>
 #include <drawseq.h>
 #include <edutil.h>
 
@@ -320,7 +321,7 @@ static Boolean  AddFeatNodeListLabel(SegmenT p_seg, ValNodePtr fnp_node, Uint1 l
 	Uint2 p_entityID = 0;
 	
 /*	if(label_align > MSM_LABEL_RIGHT || label_align < MSM_LABEL_TOP)*/
-	if(label_align > 3 || label_align < 0)
+	if(label_align > 3 /* || label_align < 0 */)
 		return FALSE;
 	while(fnp_node)
 	{

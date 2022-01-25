@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.7  1999/10/20 22:09:44  kans
+* AlistDialogData public, has userdata field, convenience functions set userdata, initial value
+*
+* Revision 6.6  1999/10/18 15:33:04  kans
+* added MakeEnumFieldAlistFromValNodeList
+*
 * Revision 6.5  1999/06/16 20:55:02  kans
 * added CreateEnumListDialog using SingleList
 *
@@ -172,6 +178,7 @@ extern Nlm_Boolean Nlm_WhereInEnumPopup (Nlm_EnumFieldAssocPtr al, Nlm_CharPtr n
 extern void Nlm_SortEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
 extern Nlm_EnumFieldAssocPtr Nlm_DuplicateEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
 extern Nlm_EnumFieldAssocPtr Nlm_FreeEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
+extern Nlm_EnumFieldAssocPtr Nlm_MakeEnumFieldAlistFromValNodeList (ValNodePtr vlist);
 
 /* convenience functions that create the popup, set extra object data, init the popup, and set the value */
 extern Nlm_PopuP Nlm_CreateEnumPopupListInitVal (Nlm_GrouP prnt, Nlm_Boolean macLike, Nlm_PupActnProc actn,
@@ -247,13 +254,22 @@ extern void Nlm_SendMessageToDialog (Nlm_DialoG d, Nlm_Int2 mssg);
 extern Nlm_Boolean Nlm_ImportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 extern Nlm_Boolean Nlm_ExportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 
+/* popup list autonomous dialogs - copies alist, frees on cleanup */
+
+typedef struct alistdialogdata {
+  DIALOG_MESSAGE_BLOCK
+  Nlm_PopuP                pop;
+  Nlm_EnumFieldAssoc PNTR  alist;
+  Pointer                  userdata;
+} Nlm_AlistDialogData, PNTR Nlm_AlistDialogPtr;
+
 /* convenience function that creates enumerated popup as a dialog, copies alist, cleans up on freeing */
 extern Nlm_PopuP Nlm_CreateEnumPopupDialog (Nlm_GrouP prnt, Nlm_Boolean macLike, Nlm_PupActnProc actn,
-                                            Nlm_EnumFieldAssocPtr al);
+                                            Nlm_EnumFieldAssocPtr al, Nlm_UIEnum val, Pointer userdata);
 
 /* convenience function that creates enumerated single list as a dialog, copies alist, cleans up on freeing */
 extern Nlm_LisT Nlm_CreateEnumListDialog (Nlm_GrouP prnt, Nlm_Int2 width, Nlm_Int2 height, Nlm_LstActnProc actn,
-                                          Nlm_EnumFieldAssocPtr al);
+                                          Nlm_EnumFieldAssocPtr al, Nlm_UIEnum val, Pointer userdata);
 /*****************************************************************************
 *
 *   A form is a general collection of associated Vibrant objects.
@@ -477,6 +493,7 @@ extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 #define SortEnumFieldAlist Nlm_SortEnumFieldAlist
 #define DuplicateEnumFieldAlist Nlm_DuplicateEnumFieldAlist
 #define FreeEnumFieldAlist Nlm_FreeEnumFieldAlist
+#define MakeEnumFieldAlistFromValNodeList Nlm_MakeEnumFieldAlistFromValNodeList
 #define CreateEnumPopupListInitVal Nlm_CreateEnumPopupListInitVal
 #define CreateEnumPopupListInitName Nlm_CreateEnumPopupListInitName
 #define HandleActnProc Nlm_HandleActnProc
@@ -513,6 +530,8 @@ extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 #define SendMessageToDialog Nlm_SendMessageToDialog
 #define ImportDialog Nlm_ImportDialog
 #define ExportDialog Nlm_ExportDialog
+#define AlistDialogData Nlm_AlistDialogData
+#define AlistDialogPtr Nlm_AlistDialogPtr
 #define CreateEnumPopupDialog Nlm_CreateEnumPopupDialog
 #define CreateEnumListDialog Nlm_CreateEnumListDialog
 #define ForM Nlm_ForM

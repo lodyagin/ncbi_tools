@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.46  2000/01/04 15:55:50  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.45  1999/11/02 21:42:23  kans
+* genpept view only gets sep for bsp, not for top of entity
+*
+* Revision 6.44  1999/09/21 17:20:56  kans
+* added progress monitor when exporting reports
+*
 * Revision 6.43  1999/08/25 18:58:52  kans
 * Boolean bit flags are now unsigned int - int for AIX, unsigned since document.[ch] already used that style
 *
@@ -950,6 +959,7 @@ static CharPtr FetchEmbl (DoC d, Int2 item, Pointer ptr)
 static CharPtr FetchGenPept (DoC d, Int2 item, Pointer ptr)
 
 {
+  BioseqPtr    bsp;
   CharPtr      failed;
   FILE         *fp;
   ErrSev       level;
@@ -968,7 +978,9 @@ static CharPtr FetchGenPept (DoC d, Int2 item, Pointer ptr)
   retcode = GetSequenceComplexity (sfp);
   sep = EntrezSeqEntryGet (uid, retcode);
   */
-  sep = SeqEntryLockByGi (uid);
+  bsp = BioseqLockByGi (uid);
+  if (bsp == NULL) return failed;
+  sep = SeqMgrGetSeqEntryForData (bsp);
   if (sep == NULL) return failed;
   str = NULL;
   TmpNam (path);
@@ -2262,6 +2274,7 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
   Int2          i;
   CharPtr PNTR  labels;
   Boolean       lastChoiceIsUidList = FALSE;
+  MonitorPtr    mon;
   Boolean       newline;
   Int2          num;
   Char          path [PATH_MAX];
@@ -2338,19 +2351,20 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
               }
             }
           }
-        } else if (num == 0) {
-          SaveDocument (sfp->docsum, fp);
         } else {
+          mon = MonitorIntNewEx ("Saving Documents", 0, sfp->numUids, FALSE);
           newline = FALSE;
           for (i = 0; i < sfp->numUids; i++) {
-            if (sfp->state [i].checked) {
+            if (num == 0 || sfp->state [i].checked) {
               if (newline) {
                 fputc ('\n', fp);
               }
               SaveDocumentItem (sfp->docsum, fp, i + 1);
+              MonitorIntValue (mon, i);
               newline = TRUE;
             }
           }
+          MonitorFree (mon);
         }
         FileClose (fp);
         sfp->filepath = MemFree (sfp->filepath);
@@ -4051,7 +4065,6 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
 /*  ClearStructures (); lyg */
   w = (WindoW) Cn3DWin_Entrez(NULL, TRUE);
   if (w != NULL) {
-    Cn3D_useEntrez = TRUE;  /* tells Cn3D it can use netentrez. lyg */
     Cn3D_OpenStart();
     pdnms = MakeAModelstruc (bsp); /* moved here from before window creation. lyg */
     if (pdnms == NULL) {

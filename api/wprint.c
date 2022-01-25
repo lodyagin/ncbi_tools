@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -45,6 +45,24 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.30  2000/01/11 17:14:13  tatiana
+ * check for web symbols added in PrintComment
+ *
+ * Revision 6.29  1999/12/21 14:27:10  tatiana
+ * version added to CONTIG line
+ *
+ * Revision 6.28  1999/11/02 19:57:04  tatiana
+ * a typo fixed in PrintGenome
+ *
+ * Revision 6.27  1999/11/02 16:31:20  tatiana
+ * fixed PrintGenome()
+ *
+ * Revision 6.26  1999/10/01 16:40:24  vakatov
+ * Fixed a stack memory overrun bug in PrintDate()
+ *
+ * Revision 6.25  1999/09/29 17:20:38  tatiana
+ * SeqIdFindBest changed to SeqIdSelect for CONTIG line
+ *
  * Revision 6.24  1999/08/31 18:31:24  tatiana
  * OLDQUERY ifdef added
  *
@@ -315,8 +333,8 @@ static HeadTailProc tail = NULL;
 NLM_EXTERN CharPtr PrintDate(NCBI_DatePtr date)
 {
 	CharPtr retval = NULL;
-	char month[4], year[5]  , day[3];
-	char result[14];
+	char month[4], year[5], day[3];
+	char result[15];
 
 	if ( date -> data[0] == 0){
 /*---string---*/
@@ -1433,7 +1451,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 {
 	SeqLocPtr	slp, sslp;
 	Boolean		first = TRUE;
-	static Char		buf[11], val[166];
+	static Char		buf[14], val[166];
 	SeqIdPtr	sid, newid;
 	Int4 		from, to, start, stop, beg, end, lcur, lprev;
 	SeqIntPtr 	sint;
@@ -1443,6 +1461,24 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 	Boolean		is_network, is_link = FALSE;
 	Int2 p1=0, p2=0;
 	DeltaSeqPtr dsp;
+	static Uint1 fasta_order[NUM_SEQID] = { 
+ 	33, /* 0 = not set */
+	20, /* 1 = local Object-id */
+	15,  /* 2 = gibbsq */
+	16,  /* 3 = gibbmt */
+	30, /* 4 = giim Giimport-id */
+	10, /* 5 = genbank */
+	10, /* 6 = embl */
+	10, /* 7 = pir */
+	10, /* 8 = swissprot */
+	15,  /* 9 = patent */
+	20, /* 10 = other TextSeqId */
+	20, /* 11 = general Dbtag */
+	255,  /* 12 = gi */
+	10, /* 13 = ddbj */
+	10, /* 14 = prf */
+	12  /* 15 = pdb */
+    };
 	
 	Int2	l, ll;
 	CharPtr	s, prefix;
@@ -1513,7 +1549,11 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 					} else {
 						newid = sid;
 					}
-					SeqIdWrite(SeqIdFindBest(newid, SEQID_GENBANK), buf, PRINTID_TEXTID_ACCESSION, 10);
+					if (ajp->show_version) {
+					SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID), buf, PRINTID_TEXTID_ACC_VER, 13);
+					} else {
+					SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID), buf, PRINTID_TEXTID_ACCESSION, 10);
+					}
 					if (www && newid) {
 						l = StringLen(link_seq);
 						if (newid->choice == SEQID_GENERAL) {
@@ -1533,7 +1573,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 							}
 						} else {
 							prefix = 
-							"<a href=%suid=gb|%s|&form=6&db=n&Dopt=g>";
+							"<a href=%suid=%s&form=6&db=n&Dopt=g>";
 							ll = StringLen(prefix); 
 							s = (CharPtr)MemNew(l+ ll + 10);
 							sprintf(s, prefix, link_seq, buf);
@@ -1570,7 +1610,13 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 		} else {
 			ff_AddChar(',');
 		}
-		SeqIdWrite(SeqIdFindBest(newid, SEQID_GENBANK), buf, PRINTID_TEXTID_ACCESSION, 10);
+		if (ajp->show_version) {
+			SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID),
+				buf, PRINTID_TEXTID_ACC_VER, 13);
+		} else {
+			SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID),
+				buf, PRINTID_TEXTID_ACCESSION, 10);
+		}
 		if (www && newid) {
 			l = StringLen(link_seq);
 			if (newid->choice == SEQID_GENERAL) {
@@ -1630,6 +1676,9 @@ void PrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 #endif
 	ff_StartPrint(0, 12, ASN2FF_GB_MAX, NULL);
 	if (www && ajp->format == GRAPHIK_FMT) {
+		if (gbp->bsp && gbp->bsp->seq_ext == NULL) {
+			return;
+		}
 		ff_AddString("<b>CONTIG</b>&nbsp;&nbsp;&nbsp;");
 	} else {
 		ff_AddString("CONTIG");
@@ -1689,7 +1738,7 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 {
 	Int2	l, ll;
 	Int4	gi;
-	CharPtr	s, prefix=NULL, p, link=NULL;
+	CharPtr	s, prefix=NULL, p, link=NULL, www_str;
 
 	if (string == NULL) {
 		return;
@@ -1720,7 +1769,8 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 		AddLink("<a href=http://www.ncbi.nlm.nih.gov/LocusLink/refseq.html>");
 		ff_AddString("REFSEQ:");
 		AddLink("</a>");
-		ff_AddString(p);
+		www_str = www_featloc(p);
+		ff_AddString(www_str);
 		ff_EndPrint();
 		return;
 	}
@@ -1741,7 +1791,8 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 			p++;
 		string = p;
 	}
-	ff_AddStringWithTildes(string);
+	www_str = www_featloc(string);
+	ff_AddStringWithTildes(www_str);
 	ff_EndPrint();
 
 	return;

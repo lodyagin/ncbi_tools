@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.14  1999/11/17 00:56:33  kans
+* improved seqsearch fsa, removed protein part, still need to allow single mismatch
+*
+* Revision 6.13  1999/11/12 21:00:50  kans
+* added TransTableProcessBioseq for 6-frame translation, SeqSearchAddNucleotidePattern and SeqSearchAddProteinPattern for SeqSearch
+*
+* Revision 6.12  1999/11/11 00:58:28  kans
+* added SeqSearch sequence search finite state machine - still need more functions to add protein patterns, read from rsite file
+*
+* Revision 6.11  1999/10/06 22:09:02  kans
+* ComposeCodonsRecognizedString to handle degenerate codons
+*
 * Revision 6.10  1999/08/06 20:22:19  kans
 * TransTable simplified to eliminate single and double letter states
 *
@@ -496,6 +508,15 @@ NLM_EXTERN Boolean SPRebuildDNA(SPCompressPtr spc);
 
 /*****************************************************************************
 *
+*   ComposeCodonsRecognizedString (trna, buf, buflen);
+*       Copies codon recognized string to buf, returns number of codons
+*
+*****************************************************************************/
+
+NLM_EXTERN Int2 ComposeCodonsRecognizedString (tRNAPtr trna, CharPtr buf, size_t buflen);
+
+/*****************************************************************************
+*
 *   TransTableNew (Int2 genCode);
 *       Initializes TransTable finite state machine for 6-frame translation
 *       and open reading frame search, allowing nucleotide ambiguity characters
@@ -527,6 +548,76 @@ NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl);
 #define IsOrfStop(tbl,cur,stnd) ((Boolean) (GetCodonResidue(tbl,cur,stnd) == '*'))
 #define IsATGStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur == TTBL_CAT_STATE) : (cur == TTBL_ATG_STATE))))
 #define IsAltStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur != TTBL_CAT_STATE) : (cur != TTBL_ATG_STATE))))
+
+typedef void (LIBCALLBACK *TransTableMatchProc) (Int4 position, Char residue, Boolean atgStart, Boolean altStart, Boolean orfStop, Int2 frame, Uint1 strand, Pointer userdata);
+
+/* convenience function calls user callback for each strand of entire bioseq */
+
+NLM_EXTERN void TransTableProcessBioseq (
+  TransTablePtr tbl,
+  TransTableMatchProc matchProc,
+  Pointer userdata,
+  BioseqPtr bsp
+);
+
+/*****************************************************************************
+*
+*   SeqSearch
+*       Initializes SeqSearch finite state machine for sequence searching
+*       Based on Practical Algorithms for Programmers by Binstock and Rex
+*
+*****************************************************************************/
+
+struct SeqSearch;
+typedef struct SeqSearch* SeqSearchPtr;
+
+typedef void (LIBCALLBACK *SeqSearchMatchProc) (Int4 position, CharPtr name, CharPtr pattern, Int2 cutSite, Uint1 strand, Pointer userdata);
+
+/* create empty nucleotide sequence search finite state machine */
+
+NLM_EXTERN SeqSearchPtr SeqSearchNew (
+  SeqSearchMatchProc matchproc,
+  Pointer userdata,
+  Boolean allowOneMismatch
+);
+
+/*
+   add nucleotide pattern or restriction site to sequence search finite state
+   machine, uses ambiguity codes, e.g., R = A and G, H = A, C and T
+*/
+
+NLM_EXTERN void SeqSearchAddNucleotidePattern (
+  SeqSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  Int2 cutSite
+);
+
+/* program passes each character in turn to finite state machine */
+
+NLM_EXTERN void SeqSearchProcessCharacter (
+  SeqSearchPtr tbl,
+  Char ch
+);
+
+/* convenience function calls SeqSearchProcessCharacter for entire bioseq */
+
+NLM_EXTERN void SeqSearchProcessBioseq (
+  SeqSearchPtr tbl,
+  BioseqPtr bsp
+);
+
+/* reset state and position to allow another run with same search patterns */
+
+NLM_EXTERN void SeqSearchReset (
+  SeqSearchPtr tbl
+);
+
+/* clean up sequence search finite state machine allocated memory */
+
+NLM_EXTERN SeqSearchPtr SeqSearchFree (
+  SeqSearchPtr tbl
+);
 
 
 #ifdef __cplusplus

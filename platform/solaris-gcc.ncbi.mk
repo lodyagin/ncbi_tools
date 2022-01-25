@@ -1,5 +1,8 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.2 1999/08/12 18:32:41 beloslyu Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.4 1999/12/14 00:29:10 beloslyu Exp $
+#
+# If you want to use gcc on solaris you need to copy this
+# file to solaris.ncbi.mk
 #
 NCBI_DEFAULT_LCL = gcc
 NCBI_MAKE_SHELL = /usr/bin/sh
@@ -66,5 +69,5 @@ NCBI_DBUGEXTRA = -xsb
 
 #
 #FastCGI library for Sun C compilers ver 4.2 and ver 5.0
-LIBFASTCGI=-lfcgi`sh -c 'CC -V 2>&1'|cut -f4 -d' '`
+LIBFASTCGI=-lfcgi
 NETENTREZVERSION = 2.02c2ASN1SPEC6 

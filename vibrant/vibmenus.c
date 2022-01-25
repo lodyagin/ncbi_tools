@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.9  1999/12/30 16:47:09  kans
+* Carbon changes (Churchill)
+*
 * Revision 6.8  1999/04/22 15:18:57  vakatov
 * Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
 * "post-mortem" callbacks(registered by XtAddEventHandler()) get
@@ -781,6 +784,10 @@ static void Nlm_CheckMenuItem (Nlm_MenU m, Nlm_ItemTool itool,
 static void Nlm_DeskAccProc (Nlm_ChoicE c)
 
 {
+#if TARGET_API_MAC_CARBON >= 1
+    // Carbon will create, fill, and handle everything in the Apple menu
+    return;
+#else
   Nlm_MenuTool  h;
   Nlm_MenU      m;
   Nlm_Char      temp [256];
@@ -789,6 +796,7 @@ static void Nlm_DeskAccProc (Nlm_ChoicE c)
   h = Nlm_GetMenuHandle (m);
   GetMenuItemText (h, currentItemNum, (StringPtr) temp);
   OpenDeskAcc ((StringPtr) temp);
+#endif
 }
 #endif
 

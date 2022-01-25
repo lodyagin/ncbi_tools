@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.4  2000/01/07 00:22:46  thiessen
+* fixes for LessTif and OpenGL X visual selection
+*
 * Revision 6.3  1998/07/22 17:35:24  kans
 * reset list turns off drawing mode if invisible
 *
@@ -1369,7 +1372,12 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
     Widget hsb;
     XtVaGetValues(XtParent(c), XmNhorizontalScrollBar, &hsb, NULL);
     XtVaSetValues(hsb, XmNheight,            (Dimension)1,   NULL);
+#ifdef LESSTIF_VERSION
+    /* widget of width 0 causes LessTif to complain - why do this? */
+    XtVaSetValues(hsb, XmNwidth,             (Dimension)1,   NULL);
+#else
     XtVaSetValues(hsb, XmNwidth,             (Dimension)0,   NULL);
+#endif
     XtVaSetValues(hsb, XmNborderWidth,       (Dimension)0,   NULL);
     XtVaSetValues(hsb, XmNmappedWhenManaged, (Boolean)FALSE, NULL);
   }}

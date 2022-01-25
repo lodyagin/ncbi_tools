@@ -607,8 +607,8 @@ the model at the beginning of the round.
 
 There are several blastpgp parameters specifically for PSI-BLAST:
 -j   is the maximum number of rounds (default 1; i.e., regular BLAST)
--e   is the e-value threshold for including sequences in the
-     score matrix model (default 0.01)
+-h   is the e-value threshold for including sequences in the
+     score matrix model (default 0.001)
 -c   is the "constant" used in the pseudocount formula specified in the
      paper (default 10)
 
@@ -1039,6 +1039,31 @@ References
 
 Release History
 ---------------
+Notes for 2.0.11 release:
+
+Enhancements:
+
+1.) Optimizations were contributed by Chris Joerg of COMPAQ.  These changes
+reduce the number of cache misses, unroll loops, and make some instructions
+unnecessary.  These improvements can speed up BLAST for long sequences
+several-fold.
+
+2.) A database is now only memory-mapped while being searched.  If multiple databases
+are searched and the total exceeds the allowed memory-map limit this allows 
+all databases to be searched as memory-mapped files.  If a database cannot
+be memory-mapped it is read as an ordinary file, rather than causing an error.
+
+Bug fixes:
+
+1.) Formatdb was fixed to correct a problem with FASTA string identifiers under NT.
+
+2.) Blastpgp was fixed to prevent a core-dump under LINUX
+
+3.) BLASTN was found to miss some hits near the expect value cutoff.  This has been
+corrected.
+
+
+
 Notes for 2.0.10 release:
 
 Enhancements:

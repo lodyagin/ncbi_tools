@@ -1,4 +1,4 @@
-# $Id: make_lib.dos,v 6.6 1998/06/24 17:55:29 vakatov Exp $
+# $Id: make_lib.dos,v 6.8 1999/11/26 16:03:21 vakatov Exp $
 ########################################################################
 #  This file describes rules to build NCBI-toolkit-based library.
 #  Below is an example of using this file(along with another template
@@ -36,17 +36,17 @@ LIBRARY = $(LIB_NAME).lib
 XCFLAGS = $(LIB_PREOPT) $(CFLAGS) $(LIB_OPT)
 
 .c.obj:
-        $(CC) $(XCFLAGS) $*.c
+	$(CC) $(XCFLAGS) $*.c
 
 .cxx.obj:
-        $(CC) $(XCFLAGS) $*.cxx
+	$(CC) $(XCFLAGS) $*.cxx
 
 !ifdef NCBI_DLL
 !ifdef RES
 LIB_RC  = $(LIB_NAME).rc
 LIB_RES = $(LIB_NAME).res
 $(LIB_RES): $(TEST_RC) $(RES_DEP)
-    $(RC) -r -I$(INCPATH) -I$(LIBPATH) $(LIB_RC)
+	$(RC) -r -I$(INCPATH) -I$(LIBPATH) $(LIB_RC)
 !endif
 !endif
 
@@ -64,20 +64,25 @@ regex.obj:  regex.c
 -DREGEX_NCBI -DREGEX_MALLOC $(XCFLAGS) $*.c
 <<
 ###
+ncbi_socket.obj:  ncbi_socket.c
+	$(CC) @<<
+-DNCBI_C $(XCFLAGS) $*.c
+<<
+###
 ncbidrwg.c:  ncbidraw.c
 	copy ncbidraw.c ncbidrwg.c
 ###
 naccentr.c:  accentr.c
 	copy accentr.c naccentr.c
 naccentr.obj: naccentr.c
-        $(CC) @<<
+	$(CC) @<<
 $(XCFLAGS) -D_NETENT_ $*.c
 <<
 ###
 caccentr.c:  accentr.c
 	copy accentr.c caccentr.c
 caccentr.obj: caccentr.c
-        $(CC) @<<
+	$(CC) @<<
 $(XCFLAGS) -D_NET_AND_CD_ $*.c
 <<
 ###
@@ -96,7 +101,9 @@ tc2proc.obj: tc2proc.c
 $(XCFLAGS) -DTAXSERVICE $*.c
 <<
 
+
 ########################################################################
+
 
 copy:   $(LIBRARY)
 nocopy: $(LIBRARY)
@@ -107,23 +114,14 @@ XLIB_LIB = $(LIB_LIB)
 
 $(LIBRARY) : $(LIB_OBJ1) $(LIB_RES) $(XLIB_LIB)
 	$(DEL) $@
-!ifdef BORLAND
+!ifdef BOR
 	tlib $@ $(LIBFLAGS) @<<
 $(LIB_OBJ)
 <<
 !else
-!ifdef WIN32
 !ifdef NCBI_DLL
-        link /DLL /NODEFAULTLIB:LIBC $(DBUG_FLG) /OUT:$@ /MAP:$*.map /IMPLIB:$*.lib $(LIB_OBJ1) $(LIB_RES) $(XLIB_LIB) $(LIB_STDLIB) $(STDLIB)
+	link /DLL /NODEFAULTLIB:LIBC $(DBUG_FLG) /OUT:$@ /MAP:$*.map /IMPLIB:$*.lib $(LIB_OBJ1) $(LIB_RES) $(XLIB_LIB) $(LIB_STDLIB) $(STDLIB)
 !else
-        lib /OUT:$@ $(LIB_OBJ1)
-!endif
-!else
-	lib /PAGESIZE:128 @<<
-$@
-y
-$(LIB_OBJ1)
-;
-<<
+	lib /OUT:$@ $(LIB_OBJ1)
 !endif
 !endif

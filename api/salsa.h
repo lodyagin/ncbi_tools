@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -333,6 +333,7 @@ typedef struct editaligndata {
   Int4            caret_orig;
   ValNodePtr      feat;
   ValNodePtr      seqfeat;
+  ValNodePtr      allseqfeat;
   Uint4           nfeat;
   Uint1           prot_mode;
   Uint2           printid;
@@ -384,7 +385,8 @@ typedef struct propastruct {
                source_bspitemID, 
                target_entityID, 
                target_bsp_itemID;
-  SeqEntryPtr  target_sep;
+  SeqEntryPtr  target_sep,
+               source_sep;
   ValNodePtr   source_seqfeat, 
                target_seqfeat;
   Uint1        gap_choice;

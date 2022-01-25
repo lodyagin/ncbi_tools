@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   03/29/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  3D-Viewer API
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: viewer3d.h,v $
+* Revision 6.3  2000/01/11 01:16:45  lewisg
+* fix color selection in Cn3D, other misc. bugs
+*
 * Revision 6.2  1998/08/12 23:04:07  vakatov
 * [64-bit platforms]  Made "idBuffer" be VoidPtr[] rather than Int4[];
 * Fixed bugs mostly caused by casting between Int4 vars and 8-byte pointers
@@ -341,6 +344,8 @@ extern Uint1         Nlm_GetLayerTop3D    PROTO((void));
 extern Boolean       Nlm_IsPlaying3D      PROTO((void));
 extern void          Nlm_StopPlaying3D    PROTO((void));
 extern void          Nlm_StartPlaying3D   PROTO((Nlm_Viewer3D viewer));
+extern void          Nlm_AllLayerSet3D(Nlm_Viewer3D viewer, Nlm_Boolean state);
+
 
 
 /*****************************************************************************

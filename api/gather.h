@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.10  2000/01/06 00:54:50  kans
+* added useSeqMgrIndexes field to GatherScope and InternalGCC structures, will implement indexed feature table exploration tomorrow
+*
+* Revision 6.9  1999/10/29 18:06:27  kans
+* added GetPointerForIDs (with SW)
+*
+* Revision 6.8  1999/09/29 18:24:54  kans
+* added DeleteMarkedObjects
+*
+* Revision 6.7  1999/09/28 18:10:16  kans
+* added DeleteMarkedObjectsProc callback - not yet tested
+*
+* Revision 6.6  1999/09/28 12:10:25  kans
+* finished implementing lightweight GatherObjectsInEntity
+*
+* Revision 6.5  1999/09/26 20:44:26  kans
+* implemented most of VisitProc callbacks
+*
+* Revision 6.4  1999/09/26 00:17:14  kans
+* VisitObjectsInEntity prototype added
+*
 * Revision 6.3  1999/09/07 17:59:53  kans
 * AssignIDsInEntity takes datatype and dataptr for when entityID is 0, allowing unlinked components to be updated
 *
@@ -244,6 +265,7 @@ typedef struct gatherscope {
 								   is not NULL and get_feats... is TRUE */
 	SeqIdPtr newid;             /* SeqId to use if convert_loc is TRUE */
 	Boolean do_not_reload_from_cache;  /* if TRUE, gather does not automatically reload cached entity */
+	Boolean useSeqMgrIndexes;   /* explore targeted feature tables with feature indexing functions */
 } GatherScope, PNTR GatherScopePtr;
 
 typedef struct internalgcc {
@@ -265,6 +287,7 @@ typedef struct internalgcc {
 	Pointer locatePtr;          /* data item to locate */
 	ObjMgrDataPtr omdp;         /* top level omdp in entity */
 	Boolean reloaded;           /* TRUE if entity was reloaded from cache by IGCCBuild() */
+	Boolean useSeqMgrIndexes;   /* explore targeted feature tables with feature indexing functions */
 } InternalGCC, PNTR InternalGCCPtr;
 
 
@@ -543,14 +566,54 @@ NLM_EXTERN Boolean LIBCALL GatherOverWrite PROTO((Pointer oldptr, Pointer newptr
 /*****************************************************************************
 *
 *   AssignIDsInEntity (entityID, datatype, dataptr)
-*   	Assigns entityID/itemID/itemtype, later parent pointer, to SeqAligns,
-*       later most other objects.  If entityID is > 0 it looks up the registered
-*       datatype and dataptr from the object manager.  Otherwise it uses the
-*       remaining parameters, assigning entityID 0 to the unregistered components.
+*   	Assigns entityID/itemID/itemtype, parent pointer, and prevlink to several
+*       data objects.  If entityID is > 0 it looks up the registered datatype and
+*       dataptr from the object manager.  Otherwise it uses the remaining parameters,
+*       assigning entityID 0 to the unregistered components.
+*
+*   GatherObjectsInEntity (entityID, datatype, dataptr, callback, userdata, objMgrFilter)
+*   	Calls callback for objects within entity.  If the objMgrFilter parameter is NULL,
+*       every object type is visited, otherwise the array length should be OBJ_MAX, and
+*       the elements are from the OBJ_ list.
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL AssignIDsInEntity PROTO((Uint2 entityID, Uint2 datatype, Pointer dataptr));
+typedef struct gatherobject {
+  Uint2             entityID;
+  Uint2             itemID;
+  Uint2             itemtype;
+  Uint1             subtype;
+  Uint2             parenttype;
+  Pointer           dataptr;
+  Pointer           parentptr;
+  Pointer PNTR      prevlink;
+  Pointer           userdata;
+} GatherObject, PNTR GatherObjectPtr;
+
+typedef Boolean (*GatherObjectProc) (GatherObjectPtr gop);
+
+NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr);
+
+NLM_EXTERN Boolean LIBCALL GatherObjectsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr,
+                                                  GatherObjectProc callback, Pointer userdata, BoolPtr objMgrFilter);
+
+/*****************************************************************************
+*
+*   DeleteMarkedObjects (entityID, datatype, dataptr)
+*   	Unlinks and removes all objects whose GatherIndex.deleteme flag is not 0.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean DeleteMarkedObjects (Uint2 entityID, Uint2 datatype, Pointer dataptr);
+
+/*****************************************************************************
+*
+*   GetPointerForIDs (entityID, itemID, itemtype)
+*   	Finds pointer of specified object (GatherItem replacement).
+*
+*****************************************************************************/
+
+NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
 
 
 #ifdef __cplusplus

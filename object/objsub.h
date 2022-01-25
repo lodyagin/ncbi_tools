@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* RCS $Id: objsub.h,v 6.0 1997/08/25 18:51:04 madden Exp $
+* RCS $Id: objsub.h,v 6.2 1999/09/27 17:48:39 kans Exp $
 *
 * Author:  James Ostell
 *   
 * Version Creation Date: 6/20/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager interface for module NCBI-Sub
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objsub.h,v $
+* Revision 6.2  1999/09/27 17:48:39  kans
+* using GatherIndex structure
+*
+* Revision 6.1  1999/09/26 19:42:51  kans
+* added EXTRA_OBJMGR_FIELDS to SeqSubmit
+*
 * Revision 6.0  1997/08/25 18:51:04  madden
 * Revision changed to 6.0
 *
@@ -153,6 +159,7 @@ typedef struct seqsub {
 	SubmitBlockPtr sub;
 	Uint1 datatype;
 	Pointer data;
+	GatherIndex idx;     /* internal gather/objmgr tracking fields */
 } SeqSubmit, PNTR SeqSubmitPtr;
 
 NLM_EXTERN SeqSubmitPtr LIBCALL SeqSubmitNew PROTO((void));

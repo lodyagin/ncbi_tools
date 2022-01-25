@@ -29,13 +29,58 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.15 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.30  2000/01/11 15:03:18  durand
+* remove network stuff
+*
+* Revision 6.29  2000/01/10 15:18:40  durand
+* use Entrez instead of ID1
+*
+* Revision 6.28  2000/01/05 21:06:38  durand
+* update mouse click actions and DrawSequence function for a better use from ddv and cn3d
+*
+* Revision 6.27  2000/01/03 21:06:38  durand
+* update the way the udv main window is created
+*
+* Revision 6.26  1999/12/03 23:17:23  lewisg
+* Patrick's new global update msg, argument passing when launching ddv, experimental editing
+*
+* Revision 6.25  1999/11/29 15:17:55  durand
+* designed a new GUI; fixed problems under Win95 and Linux
+*
+* Revision 6.24  1999/11/19 15:01:47  durand
+* speed up mouse selection ; avoid sequence flashing during selection ; update menu functionalities
+*
+* Revision 6.23  1999/11/18 14:54:23  durand
+* add a new function to create an image map given a ParaG structure - Entrez sequence viewer only
+*
+* Revision 6.22  1999/11/09 21:06:58  durand
+* add sequence selection manager
+*
+* Revision 6.21  1999/10/21 13:00:33  durand
+* add new fields in UDV_mouse_select struct
+*
+* Revision 6.20  1999/10/20 20:07:44  durand
+* add first_row and first_col to UDV_mouse_select
+*
+* Revision 6.19  1999/10/02 15:11:16  durand
+* update the code to be used by wwwudv
+*
+* Revision 6.18  1999/09/29 20:09:51  durand
+* modify some parts of the code to be used by the cgi-bin release of UDV
+*
+* Revision 6.17  1999/09/22 14:26:50  durand
+* add fields for DDV mouse management
+*
+* Revision 6.16  1999/09/20 21:57:41  durand
+* switch UDV_draw_double_cursor from static to NLM_EXTERN
+*
 * Revision 6.15  1999/09/08 15:36:58  beloslyu
 * Typo fixed
 *
@@ -90,6 +135,7 @@ extern "C" {
 #include <explore.h>
 #include <gather.h>
 #include <ncbi.h>
+#include <ncbistr.h>
 #include <objfdef.h>
 #include <objseq.h>
 #include <objsub.h>
@@ -102,6 +148,9 @@ extern "C" {
 #include <odlbox.h>
 #include <udvseq.h>
 #include <udvdef.h>
+
+#include <ddvcolor.h>
+#include <samutil.h>
 
 /*******************************************************************************
 
@@ -217,7 +266,7 @@ extern "C" {
 		Uint4			DisplayOptions;/*bits vector to encode display options*/
 		UDVLetterLayout NA_LayoutPal[5];
 		UDVLetterLayout AA_LayoutPal[26];
-		Boolean         bFirst;/*need to be removed in a future release*/
+		Int4            GotoLetter;/*letter to highlight after a GoTo action; one-based value*/
 		} UnDViewerGraphData, PNTR UnDViewerGraphDataPtr;
 
 	typedef struct udv_item_select {
@@ -233,6 +282,14 @@ extern "C" {
 		PoinT		newPos;			/*new pos of the mouse*/
 		ParaGPtr	pgp;			/*current ParaG data*/
 		Char        szPos[20];		/*current position within the bsp*/
+		Int4        old_row;        /*used by DDV only (display coords); 
+									set when 'on_click' and every 'on_drag'*/
+		Int4        old_col;        /*
+									set when 'on_click' and every 'on_drag'*/
+		ParaGPtr    old_pgp;        /*pgp where old_col was located*/
+		Int4        first_row;      /*set only when 'on_click'*/
+		Int4        first_col;      /*set only when 'on_click'*/
+		ParaGPtr    first_pgp;      /*pgp where first_col was located*/
 		} UDV_mouse_select,PNTR UDV_mouse_selectPtr;
 
 	typedef  struct  scanfeat {/*use to scan feature when the user clicks
@@ -242,6 +299,13 @@ extern "C" {
 		Int4 index;		/*position within the Feature List Box*/
 		} ScanFeat, PNTR ScanFeatPtr;
 
+	typedef struct udvtimerdata {/*used with the UDV timer*/
+		Int4 pos;/*one-based; bsp coord*/
+		Int2 delay;
+		Uint1 status;
+		Uint1 action;
+	}UDVTimerData, PNTR UDVTimerDataPtr;
+
 	typedef struct viewerdialogdata {
 		Uint2 				procid;		/*identification of ObjMgr User Data*/
 		Uint2 				proctype;	/* idem */
@@ -250,18 +314,23 @@ extern "C" {
 		UnDViewerGraphData 	udv_graph;	/*UnDviewer graphical panel info*/
 		ValNodePtr 			ParaG;		/*ParaG data of the entire display*/
 		PaneL				UnDViewer;	/*handle of the seq viewer panel*/
-		PaneL				InfoPanel;	/*handle of the info panel*/
+		PrompT				InfoPanel;	/*handle of the info panel*/
+		WindoW              Parent;  /*only valid for Autonomous viewer*/
 		UDV_mouse_select	UDV_ms;		/*used for mouse manipulation*/
 		UDV_Item_Select		Item_select;/*selected Item*/
 		UDV_Item_Select		Old_Item_select;/*old selected Item*/
 		Boolean				ClickFeatFromDlg;/*click from Feat List Dlg==TRUE*/
-		Boolean				AlreadyInit;	/*to avoid multiple init*/
+		UDVTimerData		udt;
 		} ViewerDialogData, PNTR ViewerDialogDataPtr;
 
 	typedef struct udvmainmenu {/*handles of the main menu commands*/
 		MenU File;
 		MenU Options;
 		MenU Help;
+#ifdef _DDVEDIT
+        MenU Insert;
+        IteM InsertBlock;
+#endif /* _DDVEDIT */
 		IteM FileOpen;		/*open file command*/
 		IteM EntrezOpen;	/*open from Entrez command*/
 		IteM FileClose;		/*close file command*/
@@ -271,7 +340,9 @@ extern "C" {
 		IteM ShowFeatureList;	/*show feature on/off command*/
 		IteM SearchForFeature;/*search features by keyword*/
 		MenU ScalePos;		/*scale position command*/
+		ChoicE ScalePosChoice; /*scale pos value (sub-menu)*/
 		IteM RefreshScreen;	/*redraw the entire screen*/
+		IteM ConfigNet;/*Entrez Network configuration*/
 		IteM HelpAbout;	/*what's that ?*/
 	} UDVMainMenu, PNTR UDVMainMenuPtr;
 
@@ -284,13 +355,17 @@ extern "C" {
 	} UDVLogoData, PNTR UDVLogoDataPtr;
 		
 	typedef struct viewermain {
+		Boolean             UseNetwork;/*true if UDV is connected to Entrez*/
 			/*main win menu*/
 		UDVMainMenu			MainMenu;		/*menu command list*/
 			/*Features List DlgBox*/
 		WindoW				hFeatDlg;
-			/*Logo Panel*/
+			/*Panel component*/
+		ButtoN              gotoBtn;
+		TexT                gotoVal;
 		PaneL				Logo_Panel;
 		Boolean				Show_logo;
+		GrouP               StatusGroup;
 			/*viewer data used only when AutonomeViewer is TRUE */
 		Boolean				AutonomeViewer;
 		Pointer				dataptr;		/*identification of the object*/
@@ -304,7 +379,7 @@ extern "C" {
 		} ViewerMain, PNTR ViewerMainPtr;
 
 #define REGISTER_UDV_AUTONOMOUS ObjMgrProcLoad(OMPROC_VIEW, \
-		"UnD-Viewer", "SingleSeqViewer", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, \
+		"OneD-Viewer", "SingleSeqViewer", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, \
 		NULL, UDV_ObjRegAutonomous, 0)	
 	
 	/*struture passed to the FEAT List dialog box*/
@@ -337,10 +412,13 @@ extern "C" {
 	*/
 
 	typedef SeqEntryPtr (*UdvFetchSeqEntryProc) (Int4 uid, Int2 retcode);
+	typedef Boolean (*StartNetworkProc) (Boolean UseNetwork);
 
 	typedef  struct  udvglobals {
 		ViewerMainPtr         vmp;
 		UdvFetchSeqEntryProc  fetchSepProc;
+		Nlm_ItmActnProc   NetCfgMenuProc;
+		StartNetworkProc  NetStartProc;
 		} UdvGlobals, PNTR UdvGlobalsPtr;
 
 /*******************************************************************************
@@ -350,6 +428,15 @@ extern "C" {
 
 *******************************************************************************/
 	/*drawing and UDV graphical management*/
+	NLM_EXTERN ValNodePtr UDV_GetSelectedRegions(SelStructPtr om_ssp, Uint2 bsp_eID,
+		Uint2 bsp_iID);
+	NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos);
+	NLM_EXTERN SeqLocPtr UDV_GetClosetSeqLocGivenBspPos(SeqIdPtr sip, Uint2 eID, 
+		Uint2 iID, Int4 bsp_pos, Int4Ptr old_pos, Boolean bModify);
+	NLM_EXTERN void UDV_InvalRegion(PaneL UnDViewer,UnDViewerGraphDataPtr GrData,
+		ParaGPtr pgp,Int4 start_inval,Int4 stop_inval,Boolean IsSelect);
+	NLM_EXTERN void	UDV_GetCurrentDispRange(ViewerDialogDataPtr vdp,
+		Int4Ptr from_bsp,Int4Ptr to_bsp,Int4Ptr from_line,Int4Ptr to_line);
 	NLM_EXTERN void LogoFontCreate(FonT PNTR f1,FonT PNTR f2,FonT PNTR f3);
 	NLM_EXTERN FonT UDV_InitFont(UDVFontDataPtr udvfp);
 	NLM_EXTERN Int2 UDV_ComputeLineHeight(Int2 cyChar);
@@ -359,6 +446,7 @@ extern "C" {
 	NLM_EXTERN void UDV_ComputeBlockByLine(Int2 cxClient,Int2 cxName,
 				Int2 cxLeftScale,Int2 cxChar,Int2Ptr nCharByLine,
 				Int2Ptr nBlockByLine);
+	NLM_EXTERN void UDV_Build_Other_Colors(UnDViewerGraphDataPtr GrDataPtr);
 	NLM_EXTERN void  UDV_Init_ScaleData(UnDViewerGraphDataPtr GrDataPtr);
 	NLM_EXTERN void UDV_Init_GraphData(PaneL p, 
 											UnDViewerGraphDataPtr GrDataPtr);
@@ -367,18 +455,30 @@ extern "C" {
 	NLM_EXTERN void UDV_Build_AA_LayoutPalette(UnDViewerGraphDataPtr GrData);
 	NLM_EXTERN void UDV_select_feature(PaneL p,ViewerDialogDataPtr vdp,
 			Uint2 entityID,Uint2 itemID,Boolean bRepos);
-	NLM_EXTERN void UDV_ClickMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt);
+	NLM_EXTERN void UDV_draw_double_cursor(RecT rcClip,PoinT pos);
 	NLM_EXTERN void UDV_ClickProc(PaneL p, PoinT pt);
 	NLM_EXTERN void UDV_DragMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt);
 	NLM_EXTERN void UDV_DragProc(PaneL p, PoinT pt);
 	NLM_EXTERN void UDV_ReleaseMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt);
 	NLM_EXTERN void UDV_ReleaseProc(PaneL p, PoinT pt);
+	NLM_EXTERN void UDV_HoldProc(PaneL p, PoinT pt);
+	NLM_EXTERN void UDV_Draw_features(UnDViewerGraphDataPtr GrData,
+		BspInfoPtr bsp_i,Boolean UseDefClr,Uint4 DefClr,
+		ParaGPtr pgp,RecT PNTR rc,Uint4Ptr pClr,
+		UDV_Item_Select * is,UDV_Item_Select * old_is,Uint4 DisplayType);
+	NLM_EXTERN Boolean UDV_Draw_features_MAP(UnDViewerGraphDataPtr GrData,
+					BspInfoPtr bsp_i,ParaGPtr pgp,RecT PNTR rc,Uint2 entityID,
+					ValNodePtr PNTR vnpp_map);
+	NLM_EXTERN void UDV_Draw_sequence(UnDViewerGraphDataPtr GrData,
+        DDV_ColorGlobal *svpp ,Boolean UseDefClr,Uint4 DefClr,
+		ParaGPtr pgp,RecT PNTR rc,Int4 start_decal,Int4 StartLetter,
+		CharPtr szSequence, SeqId *sip,ValNodePtr vnp_bsp,Boolean bSelect);
 	NLM_EXTERN void UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
 		Boolean ShowMajorTick,Boolean ShowMMinorTick,Uint1 ScalePosition,
 		Int4 StartLetter,Int4 StopLetter,RecT PNTR rc,Int2 LeftDecal,
-		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth);
+		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth,
+		Uint4 DisplayType);
 	NLM_EXTERN void UDV_draw_viewer (PaneL p);
-	NLM_EXTERN void UDV_InfoPanelDrawProc(PaneL p);
 	NLM_EXTERN void UDV_Logo_onDraw (PaneL p);
 
 	/*Features List Dialog Box*/
@@ -389,9 +489,10 @@ extern "C" {
 	NLM_EXTERN Int2 LIBCALLBACK UDV_ObjRegAutonomous (Pointer data);
 	NLM_EXTERN void UDV_WinMainCleanupExtraProc (GraphiC g, VoidPtr data);
 	NLM_EXTERN void UDV_Resize_Logo_Panel (WindoW Parent,RecT PNTR rcL);
-	NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr PNTR vdp);
+	NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr vdp,Boolean final);
 	NLM_EXTERN void UDV_set_PullMenus(UDVMainMenuPtr mmp,Boolean enable);
 	NLM_EXTERN void UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable);
+	NLM_EXTERN void UDV_set_MainControls(ViewerMainPtr vmp,Boolean enable);
 	NLM_EXTERN void UDV_SetupMenus(WindoW w,Boolean isEntrezOk);
 	NLM_EXTERN void	UDV_resize_viewer(PaneL p,ViewerDialogDataPtr vdp);
 	NLM_EXTERN void UnDViewerVScrlUpdate(PaneL p,Boolean bInit,Int4 CurPos);
@@ -400,6 +501,7 @@ extern "C" {
 			Uint2 iID,Uint2 itype,ViewerDialogDataPtr vdp);
 	NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,
 				ViewerDialogDataPtr PNTR vdp,FonT f);
+	NLM_EXTERN Boolean CreateMainControls(WindoW w,ViewerMainPtr vmp,SAM_ViewGlobal *vgp);
 
 	/*sequence buffer management*/
 	NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to, 

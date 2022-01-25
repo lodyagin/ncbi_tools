@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -47,6 +47,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistd.h,v $
+* Revision 6.5  1999/10/14 18:44:35  vakatov
+* For better consistency, include <ncbilcl.h> to <ncbistd.h>
+*
 * Revision 6.4  1999/04/14 20:04:47  vakatov
 * For better consistency, moved <ncbiopt.h> from <ncbi.h> to <ncbistd.h>
 *
@@ -74,6 +77,7 @@
 #ifndef _NCBISTD_
 #define _NCBISTD_
 
+#include <ncbilcl.h>
 #include <ncbiopt.h>
 
 #ifndef LITTLE_ENDIAN

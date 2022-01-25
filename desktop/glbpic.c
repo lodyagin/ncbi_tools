@@ -19,6 +19,7 @@
 * ==========================================================================
 */
 
+#include <vibrant.h>
 #include <glbpic.h>
 #include <fstyle.h>
 #include <lsqfetch.h>

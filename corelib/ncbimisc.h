@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,9 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.13  1999/09/22 23:08:26  kans
+* added extended flag to valnode for SeqDesc, maybe later SeqId and SeqLoc
+*
 * Revision 6.12  1999/07/29 15:58:48  kans
 * added bigintvalue, ValNodeAddBigInt (PD)
 *
@@ -166,9 +169,10 @@ typedef union dataval {
 }	DataVal, PNTR DataValPtr;
 
 typedef struct valnode {
-	Nlm_Uint1 choice;            /* to pick a choice */
-	DataVal data;            /* attached data */
-	struct valnode PNTR next;   /* next in linked list */
+	Nlm_Uint1 choice;          /* to pick a choice */
+	Nlm_Uint1 extended;        /* extra fields reserved to NCBI allocated in structure */
+	DataVal data;              /* attached data */
+	struct valnode PNTR next;  /* next in linked list */
 } ValNode, PNTR ValNodePtr;
 
 /*****************************************************************************

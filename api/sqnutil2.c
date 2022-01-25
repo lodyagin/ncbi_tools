@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.28 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -440,21 +440,26 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
   curr = SeqLocFindNext (slp, NULL);
   while (curr != NULL) {
     if (curr->choice != SEQLOC_NULL) {
-      slrp = MemNew (sizeof (SeqLocRange));
-      if (slrp != NULL) {
-        slrp->left = GetOffsetInBioseq (curr, target, SEQLOC_LEFT_END);
-        slrp->right = GetOffsetInBioseq (curr, target, SEQLOC_RIGHT_END);
-        slrp->strand = SeqLocStrand (curr);
-        if (head == NULL) {
-          head = slrp;
-        } else if (last != NULL) {
-          last->next = slrp;
-        } else {
-          ErrPostEx (SEV_ERROR, 0, 0, "SeqLocMerge list problem");
-          SeqLocRangeFree (head);
-          return NULL;
-        }
+      left = GetOffsetInBioseq (curr, target, SEQLOC_LEFT_END);
+      right = GetOffsetInBioseq (curr, target, SEQLOC_RIGHT_END);
+      strand = SeqLocStrand (curr);
+      if (left != -1 && right != -1) {
+        slrp = MemNew (sizeof (SeqLocRange));
+        if (slrp != NULL) {
+          slrp->left = left;
+          slrp->right = right;
+          slrp->strand = strand;
+          if (head == NULL) {
+            head = slrp;
+          } else if (last != NULL) {
+            last->next = slrp;
+          } else {
+            ErrPostEx (SEV_ERROR, 0, 0, "SeqLocMerge list problem");
+            SeqLocRangeFree (head);
+            return NULL;
+          }
         last = slrp;
+        }
       }
     }
     curr = SeqLocFindNext (slp, curr);
@@ -2062,7 +2067,7 @@ NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster)
 takes the next token as the seqID.  The return value points to the remaining
 copied text, which for feature tables may contain a desired Seq-annot name. */
 
-static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag)
+static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag, Boolean trimwhite)
 
 {
   Char     ch;
@@ -2098,12 +2103,14 @@ static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag
     str++;
     ch = *str;
   }
-  ptr = str;
-  while (ch != '\0' && (! IS_WHITESP (ch))) {
-    ptr++;
-    ch = *ptr;
+  if (trimwhite) {
+    ptr = str;
+    while (ch != '\0' && (! IS_WHITESP (ch))) {
+      ptr++;
+      ch = *ptr;
+    }
+    *ptr = '\0';
   }
-  *ptr = '\0';
   return str;
 }
 
@@ -2299,6 +2306,7 @@ static SimpleSeqPtr ByteStoreToSimpleSeq (ByteStorePtr bs, CharPtr seqid, CharPt
 #define strandStr  field [STRAND_TAG]
 
 static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
+                                   BoolPtr partial5P, BoolPtr partial3P,
                                    CharPtr PNTR featP, CharPtr PNTR qualP, CharPtr PNTR valP)
 
 {
@@ -2306,13 +2314,17 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
   CharPtr     field [NUM_FTABLE_COLUMNS];
   Int2        i;
   ValNodePtr  parsed;
+  Boolean     partial5 = FALSE;
+  Boolean     partial3 = FALSE;
   Int4        start;
   Int4        stop;
+  CharPtr     str;
   Int4        tmp;
   long int    val;
   ValNodePtr  vnp;
 
   if (line == NULL || HasNoText (line)) return FALSE;
+  if (*line == '[') return FALSE; /* offset and other instructions encoded in brackets */
   parsed = ParseContigOrFeatureTableString (line, TRUE);
   if (parsed == NULL) return FALSE;
 
@@ -2332,13 +2344,23 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
   }
 
   badNumber = FALSE;
-  if (startStr != NULL && sscanf (startStr, "%ld", &val) == 1) {
+  str = startStr;
+  if (str != NULL && *str == '<') {
+    partial5 = TRUE;
+    str++;
+  }
+  if (str != NULL && sscanf (str, "%ld", &val) == 1) {
     start = val;
   } else {
     start = -1;
     badNumber = TRUE;
   }
-  if (stopStr != NULL && sscanf (stopStr, "%ld", &val) == 1) {
+  str = stopStr;
+  if (str != NULL && *str == '>') {
+    partial3 = TRUE;
+    str++;
+  }
+  if (str != NULL && sscanf (str, "%ld", &val) == 1) {
     stop = val;
   } else {
     stop = -1;
@@ -2366,6 +2388,8 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
 
   *startP = start;
   *stopP = stop;
+  *partial5P = partial5;
+  *partial3P = partial3;
   *featP = featType;
   *qualP = qualType;
   *valP = qualVal;
@@ -2670,6 +2694,146 @@ static Uint1 ParseCodon (CharPtr str)
 
 extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val);
 
+static CharPtr orgRefList [] = {
+  "", "organism", "mitochondrion", "div", "lineage", "gcode", "mgcode", NULL
+};
+
+static CharPtr orgModList [] = {
+  "", "", "Strain", "Substrain", "Type", "Subtype", "Variety",
+  "Serotype", "Serogroup", "Serovar", "Cultivar", "Pathovar",
+  "Chemovar", "Biovar", "Biotype", "Group", "Subgroup", "Isolate",
+  "Common", "Acronym", "Dosage", "Natural-host", "Sub-species",
+  "Specimen-voucher", "Old Name", "Note", NULL
+};
+
+static CharPtr subSourceList [] = {
+  "", "Chromosome", "Map", "Clone", "Subclone", "Haplotype",
+  "Genotype", "Sex", "Cell-line", "Cell-type", "Tissue-type",
+  "Clone-lib", "Dev-stage", "Frequency", "Germline", "Rearranged",
+  "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name",
+  "Transposon-name", "Ins-seq-name", "Plastid-name", "Country",
+  NULL
+};
+
+static OrgNamePtr GetOrMakeOnp (OrgRefPtr orp)
+
+{
+  OrgNamePtr  onp;
+
+  if (orp == NULL) return NULL;
+  if (orp->orgname != NULL) return orp->orgname;
+  onp = OrgNameNew ();
+  orp->orgname = onp;
+  return onp;
+}
+
+static Boolean ParseQualIntoBioSource (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
+
+{
+  BioSourcePtr  biop;
+  Int2          found, j;
+  int           num;
+  OrgModPtr     omp;
+  OrgNamePtr    onp;
+  OrgRefPtr     orp;
+  SubSourcePtr  ssp;
+  CharPtr       str;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return FALSE;
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  if (biop == NULL) return FALSE;
+  orp = biop->org;
+  if (orp == NULL) return FALSE;
+
+  found = 0;
+  for (j = 0, str = orgRefList [j]; str != NULL; j++, str = orgRefList [j]) {
+    if (StringICmp (qual, str) == 0) {
+      found = j;
+    }
+  }
+  if (found > 0) {
+    switch (found) {
+      case 1 :
+        orp->taxname = MemFree (orp->taxname);
+        orp->taxname = StringSave (val);
+        break;
+      case 2 :
+        biop->genome = GENOME_mitochondrion;
+        break;
+      case 3 :
+        onp = GetOrMakeOnp (orp);
+        if (onp == NULL) return FALSE;
+        onp->div = MemFree (onp->div);
+        onp->div = StringSave (val);
+        break;
+      case 4 :
+        onp = GetOrMakeOnp (orp);
+        if (onp == NULL) return FALSE;
+        onp->lineage = MemFree (onp->lineage);
+        onp->lineage = StringSave (val);
+        break;
+      case 5 :
+        onp = GetOrMakeOnp (orp);
+        if (onp == NULL) return FALSE;
+        if (sscanf (val, "%d", &num) == 1) {
+          onp->gcode = (Uint1) num;
+        }
+        break;
+      case 6 :
+        onp = GetOrMakeOnp (orp);
+        if (onp == NULL) return FALSE;
+        if (sscanf (val, "%d", &num) == 1) {
+          onp->mgcode = (Uint1) num;
+        }
+        break;
+      default :
+        break;
+    }
+    return TRUE;
+  }
+
+  found = 0;
+  for (j = 0, str = orgModList [j]; str != NULL; j++, str = orgModList [j]) {
+    if (StringICmp (qual, str) == 0) {
+      found = j;
+    }
+  }
+  if (found > 0) {
+    if (found == 24) {
+      found = 254;
+    } else if (found == 25) {
+      found = 255;
+    }
+    onp = GetOrMakeOnp (orp);
+    if (onp == NULL) return FALSE;
+    omp = OrgModNew ();
+    if (omp == NULL) return FALSE;
+    omp->subtype = (Uint1) found;
+    omp->subname = StringSave (val);
+    omp->next = onp->mod;
+    onp->mod = omp;
+    return TRUE;
+  }
+
+  found = 0;
+  for (j = 0, str = subSourceList [j]; str != NULL; j++, str = subSourceList [j]) {
+    if (StringICmp (qual, str) == 0) {
+      found = j;
+    }
+  }
+  if (found > 0) {
+    ssp = SubSourceNew ();
+    if (ssp == NULL) return FALSE;
+    ssp->subtype = (Uint1) found;
+    ssp->name = StringSave (val);
+    ssp->next = biop->subtype;
+    biop->subtype = ssp;
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
 NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
 
 {
@@ -2681,6 +2845,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   Boolean         isGeneSyn = FALSE;
   Int2            j;
   GBQualPtr       last;
+  size_t          len;
   PubdescPtr      pdp;
   ProtRefPtr      prp = NULL;
   Int2            qnum;
@@ -2692,7 +2857,9 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   SeqFeatXrefPtr  xref;
 
   if (sfp == NULL || HasNoText (qual) ||
-      (HasNoText (val) && StringCmp (qual, "pseudo") != 0)) return;
+      (HasNoText (val) &&
+       StringCmp (qual, "pseudo") != 0 &&
+       StringCmp (qual, "mitochondrion") != 0)) return;
   qnum = GBQualNameValid (qual);
   if (qnum <= -1) {
     if (StringNCmp (qual, "gene_syn", 8) == 0) {
@@ -2734,13 +2901,24 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
           ValNodeAddInt (&(pdp->pub), PUB_Muid, (Int4) uid);
         }
       }
+    } else if (sfp->data.choice == SEQFEAT_BIOSRC && ParseQualIntoBioSource (sfp, qual, val)) {
     } else {
       ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_UnknownImpFeatQual, "Unknown qualifier %s", qual);
     }
     return;
   }
   if (qnum == GBQUAL_note) {
-    sfp->comment = StringSave (val);
+    if (sfp->comment == NULL) {
+      sfp->comment = StringSave (val);
+    } else {
+      len = StringLen (sfp->comment) + StringLen (val) + 5;
+      str = MemNew (sizeof (Char) * len);
+      StringCpy (str, sfp->comment);
+      StringCat (str, "; ");
+      StringCat (str, val);
+      sfp->comment = MemFree (sfp->comment);
+      sfp->comment = str;
+    }
     return;
   } else if (qnum == GBQUAL_gene && sfp->data.choice != SEQFEAT_GENE) {
     if (StringCmp (val, "-") == 0) {
@@ -2870,6 +3048,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       }
       return;
     }
+  } else if (sfp->data.choice == SEQFEAT_BIOSRC) {
+    if (ParseQualIntoBioSource (sfp, qual, val)) return;
   }
 
   gbq = GBQualNew ();
@@ -2887,15 +3067,18 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   }
 }
 
-NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start, Int4 stop)
+NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip,
+                                            Int4 start, Int4 stop,
+                                            Boolean partial5, Boolean partial3)
 
 {
-  Int4       flip;
-  SeqLocPtr  rsult = NULL;
-  SeqIntPtr  sintp;
-  SeqLocPtr  slp;
-  Int2       strand;
-  SeqLocPtr  tmp;
+  Int4        flip;
+  IntFuzzPtr  ifp;
+  SeqLocPtr   rsult = NULL;
+  SeqIntPtr   sintp;
+  SeqLocPtr   slp;
+  Int2        strand;
+  SeqLocPtr   tmp;
 
   if (sip == NULL) return NULL;
 
@@ -2911,6 +3094,35 @@ NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 st
   sintp->to = stop;
   sintp->strand = strand;
   sintp->id = SeqIdDup (sip);
+
+  if (partial5) {
+    ifp = IntFuzzNew ();
+    if (ifp != NULL) {
+      ifp->choice = 4;
+      if (strand == Seq_strand_minus || strand == Seq_strand_both_rev) {
+        sintp->if_to = ifp;
+        ifp->a = 1;
+      } else {
+        sintp->if_from = ifp;
+        ifp->a = 2;
+      }
+    }
+  }
+
+  if (partial3) {
+    ifp = IntFuzzNew ();
+    if (ifp != NULL) {
+      ifp->choice = 4;
+      if (strand == Seq_strand_minus || strand == Seq_strand_both_rev) {
+        sintp->if_from = ifp;
+        ifp->a = 2;
+      } else {
+        sintp->if_to = ifp;
+        ifp->a = 1;
+      }
+    }
+  }
+
   slp = ValNodeAddPointer (NULL, SEQLOC_INT, (Pointer) sintp);
 
   if (loc == NULL) return slp;
@@ -2952,6 +3164,7 @@ NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 st
 static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
 
 {
+  BioSourcePtr   biop;
   CdRegionPtr    crp;
   AnnotDescrPtr  desc;
   CharPtr        feat;
@@ -2962,6 +3175,11 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   CharPtr        label;
   Char           line [1023];
   CharPtr        loc;
+  long int       num;
+  Int4           offset = 0;
+  OrgRefPtr      orp;
+  Boolean        partial5;
+  Boolean        partial3;
   PubdescPtr     pdp;
   Int4           pos;
   SeqFeatPtr     prev;
@@ -2973,7 +3191,9 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   SeqIdPtr       sip;
   Int4           start;
   Int4           stop;
+  SqnTagPtr      stp;
   CharPtr        str;
+  CharPtr        tmp;
   CharPtr        val;
 
   if (fp == NULL || seqid == NULL) return NULL;
@@ -2998,7 +3218,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
         return sap;
       }
 
-      if (ParseFeatTableLine (line, &start, &stop, &feat, &qual, &val)) {
+      if (ParseFeatTableLine (line, &start, &stop, &partial5, &partial3, &feat, &qual, &val)) {
         if (feat != NULL && start >= 0 && stop >= 0) {
 
           if (sap == NULL) {
@@ -3069,6 +3289,16 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                 rrp->type = rnatype;
               }
 
+            } else if (StringCmp (feat, "source") == 0) {
+
+              sfp->data.choice = SEQFEAT_BIOSRC;
+              biop = BioSourceNew ();
+              if (biop != NULL) {
+                orp = OrgRefNew ();
+                biop->org = orp;
+                sfp->data.value.ptrvalue = (Pointer) biop;
+              }
+
             } else if (StringCmp (feat, "Region") == 0) {
 
               sfp->data.choice = SEQFEAT_REGION;
@@ -3111,15 +3341,25 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
               }
             }
 
-            sfp->location = AddIntervalToLocation (NULL, sip, start, stop);
+            sfp->location = AddIntervalToLocation (NULL, sip, start + offset, stop + offset, partial5, partial3);
+
+            if (partial5 || partial3) {
+              sfp->partial = TRUE;
+            }
           }
 
         } else if (start >= 0 && stop >= 0 && feat == NULL && qual == NULL && val == NULL && sfp != NULL) {
 
-          sfp->location = AddIntervalToLocation (sfp->location, sip, start, stop);
+          sfp->location = AddIntervalToLocation (sfp->location, sip, start + offset, stop + offset, partial5, partial3);
+
+          if (partial5 || partial3) {
+            sfp->partial = TRUE;
+          }
 
         } else if (sfp != NULL && qual != NULL &&
-                   (val != NULL || StringCmp (qual, "pseudo") == 0)) {
+                   (val != NULL ||
+                    StringCmp (qual, "pseudo") == 0 ||
+                    StringCmp (qual, "mitochondrion") == 0)) {
 
           AddQualifierToFeature (sfp, qual, val);
 
@@ -3136,6 +3376,19 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
           ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Qualifier '%s' has no value on %s feature at %s", qual, label, loc);
           MemFree (loc);
         }
+
+      } else if (*line == '[') {
+
+        stp = SqnTagParse (line);
+        if (stp != NULL) {
+          tmp = SqnTagFind (stp, "offset");
+          if (tmp != NULL) {
+            if (sscanf (tmp, "%ld", &num) == 1) {
+              offset = (Int4) num;
+            }
+          }
+        }
+        SqnTagFree (stp);
       }
 
 /* Uncomment next lines if Purify reports memory leaks here. */
@@ -3145,6 +3398,185 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
       MemFree (qual);
       MemFree (val);
       */
+
+    }
+
+    pos = ftell (fp);
+    str = ReadALine (line, sizeof (line), fp);
+  }
+
+  SeqIdFree (sip);
+  return sap;
+}
+
+/* ReadVecScreenTable reads lines of vector screen output into a Seq-annot. */
+
+static SeqAnnotPtr ReadVecScreenTable (FILE *fp, CharPtr seqid, CharPtr annotname)
+
+{
+  Char            ch;
+  CharPtr         database = NULL;
+  Char            date [32];
+  DatePtr         dp;
+  AnnotDescrPtr   desc;
+  GeneRefPtr      grp;
+  ImpFeatPtr      ifp;
+  Char            line [1023];
+  Char            matchtype [64];
+  Char            note [128];
+  Int4            pos;
+  SeqFeatPtr      prev;
+  CharPtr         ptr;
+  SeqAnnotPtr     sap = NULL;
+  CharPtr         screen = NULL;
+  SeqFeatPtr      sfp = NULL;
+  SeqIdPtr        sip;
+  long int        start;
+  long int        stop;
+  CharPtr         str;
+  SeqFeatXrefPtr  xref;
+
+  if (fp == NULL || seqid == NULL) return NULL;
+  sip = SeqIdFindBest (MakeSeqID (seqid), 0);
+  if (sip == NULL) return NULL;
+  matchtype [0] = '\0';
+
+  date [0] = '\0';
+  dp = DateCurr ();
+  DatePrint (dp, date);
+  DateFree (dp);
+
+  ptr = StringStr (annotname, "Database:");
+  if (ptr != NULL) {
+    ptr += 9;
+    ch = *ptr;
+    while (ch == ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    database = ptr;
+  }
+
+  ptr = StringStr (annotname, "Screen:");
+  if (ptr != NULL) {
+    ptr += 7;
+    ch = *ptr;
+    while (ch == ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    screen = ptr;
+    while (ch != '\0' && ch != ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    *ptr = '\0';
+  }
+
+  pos = ftell (fp);
+  str = ReadALine (line, sizeof (line), fp);
+  while (str != NULL) {
+
+    if (! HasNoText (line)) {
+
+      if (StringNCmp (line, ">", 1) == 0 ||
+          StringNCmp (line, "LOCUS ", 6) == 0 ||
+          StringNCmp (line, "ID ", 3) == 0 ||
+          StringStr (line, "::=") != NULL) {
+        fseek (fp, pos, SEEK_SET);
+        SeqIdFree (sip);
+        return sap;
+      } else if (StringNCmp (line, "//", 2) == 0) {
+        SeqIdFree (sip);
+        return sap;
+      }
+
+      if (sscanf (line, "%ld\t%ld", &start, &stop) == 2) {
+        start--;
+        stop--;
+
+        if (start >= 0 && stop >= 0) {
+          if (! HasNoText (matchtype)) {
+
+            if (sap == NULL) {
+              sap = SeqAnnotNew ();
+              if (sap != NULL) {
+                sap->type = 1;
+                if (! HasNoText (annotname)) {
+                  desc = ValNodeNew (NULL);
+                  if (desc != NULL) {
+                    desc->choice = Annot_descr_name;
+                    desc->data.ptrvalue = StringSave ("VecScreen");
+                    sap->desc = desc;
+                  }
+                }
+              }
+            }
+
+            if (sfp == NULL) {
+              sfp = SeqFeatNew ();
+              if (sfp != NULL) {
+
+                /* make misc_feature for now */
+
+                sfp->data.choice = SEQFEAT_IMP;
+                ifp = ImpFeatNew ();
+                if (ifp != NULL) {
+                  ifp->key = StringSave ("misc_feature");
+                }
+                AddQualifierToFeature (sfp, "standard_name", "Vector Contamination");
+                AddQualifierToFeature (sfp, "phenotype", matchtype);
+
+                if ((! StringHasNoText (database)) && (! StringHasNoText (screen))) {
+                  sprintf (note, "Screened against %s using %s on %s", database, screen, date);
+                  sfp->comment = StringSave (note);
+                }
+
+                /* suppress /gene */
+
+                grp = GeneRefNew ();
+                if (grp != NULL) {
+                  xref = SeqFeatXrefNew ();
+                  sfp->xref = xref;
+                  if (xref != NULL) {
+                    xref->data.choice = SEQFEAT_GENE;
+                    xref->data.value.ptrvalue = (Pointer) grp;
+                  }
+                }
+
+                sfp->data.value.ptrvalue = (Pointer) ifp;
+
+                if (sap != NULL) {
+                  if (sap->data != NULL) {
+                    prev = sap->data;
+                    while (prev->next != NULL) {
+                      prev = prev->next;
+                    }
+                    prev->next = sfp;
+                  } else {
+                    sap->data = (Pointer) sfp;
+                  }
+                }
+
+                sfp->location = AddIntervalToLocation (NULL, sip, (Int4) start, (Int4) stop, FALSE, FALSE);
+              }
+
+            } else {
+
+              sfp->location = AddIntervalToLocation (sfp->location, sip, (Int4) start, (Int4) stop, FALSE, FALSE);
+
+            }
+          }
+        }
+
+      } else {
+        StringNCpy_0 (matchtype, line, sizeof (matchtype));
+        sfp = NULL;
+        if (StringCmp (matchtype, "No hits found") == 0) {
+          sprintf (note, "No vector hits found for %s", seqid);
+          Message (MSG_POST, "%s\n", note);
+        }
+      }
 
     }
 
@@ -3698,7 +4130,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
         } else if (StringNICmp (line, ">Feature", 8) == 0) {
 
-          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE);
+          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
           if (! HasNoText (seqid)) {
             sap = ReadFeatureTable (fp, seqid, annotname);
             if (sap != NULL && sap->type == 1) {
@@ -3735,9 +4167,25 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             }
           }
 
+        } else if (StringNICmp (line, ">Vector", 7) == 0) {
+
+          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, FALSE);
+          if (! HasNoText (seqid)) {
+            sap = ReadVecScreenTable (fp, seqid, annotname);
+            if (sap != NULL) {
+              if (datatypeptr != NULL) {
+                *datatypeptr = OBJ_SEQANNOT;
+              }
+              if (entityIDptr != NULL) {
+                *entityIDptr = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
+              }
+              return (Pointer) sap;
+            }
+          }
+
         } else if (StringNICmp (line, ">Restriction", 12) == 0) {
 
-          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE);
+          annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE, TRUE);
           if (! HasNoText (seqid)) {
             sap = ReadRestrictionSiteTable (fp, seqid, annotname);
             if (sap != NULL) {
@@ -3805,6 +4253,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             tmp = StringChr (line + 1, ' ');
             if (tmp != NULL) {
               tmp++;
+              TrimSpacesAroundString (tmp);
               title = StringSaveNoNull (tmp);
             }
           }
@@ -3820,8 +4269,16 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
             }
           }
           if (parseFastaSeqId) {
-            GetSeqId (seqid, line + 1, sizeof (seqid), FALSE);
+            GetSeqId (seqid, line + 1, sizeof (seqid), FALSE, TRUE);
             if (! HasNoText (seqid)) {
+              tmp = StringStr (line + 1, seqid);
+              if (tmp != NULL) {
+                tmp += StringLen (seqid);
+                if (! StringHasNoText (tmp)) {
+                  TrimSpacesAroundString (tmp);
+                  title = StringSaveNoNull (tmp);
+                }
+              }
               bs = ReadFlatFileDNA (fp, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
             }
           } else {
@@ -3836,7 +4293,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
         mayBePlainFasta = FALSE;
         mayBeAccessionList = FALSE;
-        GetSeqId (seqid, line, sizeof (seqid), TRUE);
+        GetSeqId (seqid, line, sizeof (seqid), TRUE, TRUE);
 
       } else if (StringNCmp (line, "ORIGIN ", 7) == 0 || StringNCmp (line, "SQ ", 3) == 0) {
 
@@ -3852,7 +4309,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           ch = *tmp;
           while (ch != '\0') {
             if (IS_WHITESP (ch)) {
-            } else if (! (IS_ALPHA (ch) || ch == '*' || ch == '-')) {
+            } else if (! (IS_ALPHA (ch) || IS_DIGIT (ch) || ch == '*' || ch == '-')) {
               mayBePlainFasta = FALSE;
             } else if (protPtr != NULL) {
               ch = TO_UPPER (ch);
@@ -4038,5 +4495,320 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   }
 
   return NULL;
+}
+
+/* general purpose text finite state machine */
+/* based on Practical Algorithms for Programmers by Binstock and Rex */
+
+typedef struct fsagoto {
+  Char             ch;
+  Int2             newstate;
+  struct fsagoto * next;
+} GotoItem, PNTR GotoPtr;
+
+typedef struct fsastate {
+  GotoPtr       transition;
+  ValNodePtr    matchfound;
+  Int2          onfailure;
+} StateItem, PNTR StatePtr;
+
+#define FAIL_STATE -1
+
+static Int2 GotoState (StatePtr stateTable, Int2 state,
+                       Char ch, Boolean zeroFailureReturnsZero)
+
+{
+  GotoPtr  gp;
+
+  for (gp = stateTable [state].transition; gp != NULL; gp = gp->next) {
+    if (gp->ch == ch) return gp->newstate;
+  }
+
+  if (state == 0 && zeroFailureReturnsZero) return 0;
+
+  return FAIL_STATE;
+}
+
+#define FailState(stateTable,state) stateTable [state].onfailure
+
+static void AddTransition (StatePtr stateTable, Int2 oldState,
+                           Char ch, Int2 newState)
+
+{
+  GotoPtr  gp;
+  GotoPtr  prev;
+
+  gp = (GotoPtr) MemNew (sizeof (GotoItem));
+  if (gp == NULL) return;
+
+  gp->ch = ch;
+  gp->newstate = newState;
+
+  prev = stateTable [oldState].transition;
+  if (prev == NULL) {
+    stateTable [oldState].transition = gp;
+  } else {
+    while (prev->next != NULL) {
+      prev = prev->next;
+    }
+    prev->next = gp;
+  }
+}
+
+static void AddOutput (StatePtr stateTable, Int2 state, CharPtr word)
+
+{
+  ValNodePtr  vnp;
+
+  for (vnp = stateTable [state].matchfound; vnp != NULL; vnp = vnp->next) {
+    if (StringCmp (word, (CharPtr) vnp->data.ptrvalue) == 0) return;
+  }
+
+  ValNodeCopyStr (&(stateTable [state].matchfound), 0, word);
+}
+
+static Int2 EnterWord (StatePtr stateTable, CharPtr word,
+                       Int2 highState, Int2 maxState)
+
+{
+  Char     ch;
+  Int2     next;
+  CharPtr  ptr;
+  Int2     state;
+
+  state = 0;
+  next = 0;
+
+  /* try to overlay beginning of word onto existing table */
+
+  for (ptr = word, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    next = GotoState (stateTable, state, ch, FALSE);
+    if (next == FAIL_STATE) break;
+    state = next;
+  }
+
+  /* now create new states for remaining characters in word */
+
+  for ( ; ch != '\0'; ptr++, ch = *ptr) {
+    highState++;
+    AddTransition (stateTable, state, ch, highState);
+    state = highState;
+  }
+
+  /* at end of word record match information */
+
+  AddOutput (stateTable, state, word);
+
+  return highState;
+}
+
+static void QueueAdd (Int2Ptr queue, Int2 qbeg, Int2 val)
+
+{
+  Int2  q;
+
+  q = queue [qbeg];
+  if (q == 0) {
+    queue [qbeg] = val;
+  } else {
+    for ( ; queue [q] != 0; q = queue [q]) continue;
+    queue [q] = val;
+  }
+  queue [val] = 0;
+}
+
+static void FindFail (StatePtr stateTable, Int2 state,
+                      Int2 newState, Char ch)
+
+{
+  Int2        next;
+  ValNodePtr  vnp;
+
+  /* traverse existing failure path */
+
+  while ((next = GotoState (stateTable, state, ch, TRUE)) == FAIL_STATE) {
+    state = FailState (stateTable, state);
+  }
+
+  /* add new failure state */
+
+  stateTable [newState].onfailure = next;
+
+  /* add matches of substring at new state */
+
+  for (vnp = stateTable [next].matchfound; vnp != NULL; vnp = vnp->next) {
+    AddOutput (stateTable, newState, (CharPtr) vnp->data.ptrvalue);
+  }
+}
+
+static void ComputeFail (StatePtr stateTable, Int2Ptr queue, Int2 highState)
+
+{
+  GotoPtr  gp;
+  Int2     qbeg, r, s, state;
+
+  qbeg = 0;
+  queue [0] = 0;
+
+  /* queue up states reached directly from state 0 (depth 1) */
+
+  for (gp = stateTable [0].transition; gp != NULL; gp = gp->next) {
+    s = gp->newstate;
+    stateTable [s].onfailure = 0;
+    QueueAdd (queue, qbeg, s);
+  }
+
+  while (queue [qbeg] != 0) {
+    r = queue [qbeg];
+    qbeg = r;
+
+    /* depth 1 states beget depth 2 states, etc. */
+
+    for (gp = stateTable [r].transition; gp != NULL; gp = gp->next) {
+      s = gp->newstate;
+      QueueAdd (queue, qbeg, s);
+
+      /*
+         State   Substring   Transitions   Failure
+           2       st          a ->   3       6
+           3       sta         l ->   4
+           6       t           a ->   7       0
+           7       ta          p ->   8
+
+         For example, r = 2 (st), if 'a' would go to s = 3 (sta).
+         From previous computation, 2 (st) fails to 6 (t).
+         Thus, check state 6 (t) for any transitions using 'a'.
+         Since 6 (t) 'a' -> 7 (ta), therefore set fail [3] -> 7.
+      */
+
+      state = FailState (stateTable, r);
+      FindFail (stateTable, state, s, gp->ch);
+    }
+  }
+}
+
+typedef struct TextFsa {
+  StatePtr      statePtr;
+  ValNodePtr    siteList;
+  Int2          maxState;
+  Boolean       primed;
+} TextFsaData;
+
+static void PrimeStateTable (TextFsaPtr tbl)
+
+{
+  Int2        highState, maxState;
+  Int2Ptr     queue;
+  StatePtr    stateTable;
+  ValNodePtr  vnp;
+  CharPtr     word;
+
+  if (tbl == NULL || tbl->siteList == NULL || tbl->primed) return;
+
+  for (maxState = 1, vnp = tbl->siteList; vnp != NULL; vnp = vnp->next) {
+    word = (CharPtr) vnp->data.ptrvalue;
+    maxState += StringLen (word);
+  }
+
+  if (maxState > 4000) {
+    Message (MSG_POST, "FiniteStateSearch cannot handle %d states", (int) maxState);
+    return;
+  }
+
+  stateTable = (StatePtr) MemNew (sizeof (StateItem) * (size_t) maxState);
+  queue = (Int2Ptr) MemNew (sizeof (Int2) * maxState);
+
+  if (stateTable == NULL || queue == NULL) {
+    MemFree (stateTable);
+    MemFree (queue);
+    Message (MSG_POST, "FiniteStateSearch unable to allocate buffers");
+    return;
+  }
+
+  for (highState = 0, vnp = tbl->siteList; vnp != NULL; vnp = vnp->next) {
+    word = (CharPtr) vnp->data.ptrvalue;
+    highState = EnterWord (stateTable, word, highState, maxState);
+  }
+
+  ComputeFail (stateTable, queue, highState);
+
+  MemFree (queue);
+
+  tbl->statePtr = stateTable;
+  tbl->maxState = maxState;
+  tbl->primed = TRUE;
+}
+
+NLM_EXTERN TextFsaPtr TextFsaNew (void)
+
+{
+  TextFsaPtr  tbl;
+
+  tbl = (TextFsaPtr) MemNew (sizeof (TextFsaData));
+  if (tbl == NULL) return NULL;
+  tbl->statePtr = NULL;
+  tbl->siteList = NULL;
+  tbl->primed = FALSE;
+  return tbl;
+}
+
+NLM_EXTERN void TextFsaAdd (TextFsaPtr tbl, CharPtr word)
+
+{
+  if (tbl == NULL) return;
+  ValNodeCopyStr (&(tbl->siteList), 0, word);
+}
+
+NLM_EXTERN Int2 TextFsaNext (TextFsaPtr tbl, Int2 currState,
+                             Char ch, ValNodePtr PNTR matches)
+
+{
+  Int2      next;
+  StatePtr  statePtr;
+
+  if (tbl == NULL) return 0;
+  if (! tbl->primed) {
+    PrimeStateTable (tbl);
+  }
+  statePtr = tbl->statePtr;
+  if (statePtr == NULL) return 0;
+
+  while ((next = GotoState (statePtr, currState, ch, TRUE)) == FAIL_STATE) {
+    currState = FailState (statePtr, currState);
+  }
+
+  if (matches != NULL) {
+    *matches = statePtr [next].matchfound;
+  }
+
+  return next;
+}
+
+NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
+
+{
+  GotoPtr   gp;
+  Int2      maxState;
+  GotoPtr   nxtgp;
+  Int2      state;
+  StatePtr  statePtr;
+
+  if (tbl == NULL) return NULL;
+  statePtr = tbl->statePtr;
+  if (statePtr == NULL) return NULL;
+  maxState = tbl->maxState;
+
+  for (state = 0; state < maxState; state++) {
+    gp = statePtr [state].transition;
+    while (gp != NULL) {
+      nxtgp = gp->next;
+      MemFree (gp);
+      gp = nxtgp;
+    }
+    ValNodeFreeData (statePtr [state].matchfound);
+  }
+
+  MemFree (statePtr);
+  return MemFree (tbl);
 }
 

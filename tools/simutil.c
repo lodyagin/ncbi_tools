@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: simutil.c,v $
+* Revision 6.5  1999/12/17 20:47:06  egorov
+* Fix 'gcc -Wall' warnings
+*
 * Revision 6.4  1999/03/12 18:38:02  kans
 * fixed ErrPostEx problems
 *
@@ -478,7 +481,6 @@ SeqAlignPtr make_align(Int4Ptr x, Int4Ptr y, Int2 n, FloatHi score, FloatHiPtr S
 {
   ScorePtr scp;
   SeqAlignPtr sap;
-  Int4 i=0;
   Uint1 strand;
   EditScriptPtr esp;
 

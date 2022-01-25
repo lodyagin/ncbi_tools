@@ -61,7 +61,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignBioseqDeleteById (SeqAlignPtr salphead, S
   {
      nextsalp = salp->next; 
      tmpsip =SeqIdPtrFromSeqAlign (salp);
-     if ((SeqIdOrderInList(sip, tmpsip)) > 0) 
+     if ((SeqIdOrderInBioseqIdList(sip, tmpsip)) > 0) 
      {
         if (salp->segtype == 1 || salp->dim == 2) 
         {
@@ -92,7 +92,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignBioseqDeleteById (SeqAlignPtr salphead, S
               SeqIdFree (tmpsip);
               k=0;
               for (j=0; j<dsp->dim*dsp->numseg; j++) {
-                 if (((j-index+1) % (dsp->dim))!=0) {
+                 if (((j-index) % (dsp->dim))!=0) {
                     dsp->starts[k] = dsp->starts[j];
                     k++;
                  }
@@ -100,7 +100,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignBioseqDeleteById (SeqAlignPtr salphead, S
               k=0;
               if (dsp->strands) {
                for (j=0; j<dsp->dim*dsp->numseg; j++) {
-                 if (((j-index+1) % (dsp->dim))!=0) {
+                 if (((j-index) % (dsp->dim))!=0) {
                     dsp->strands[k] = dsp->strands[j];
                     k++;
                  }
@@ -158,7 +158,7 @@ static void SeqAlignBioseqDeleteByIdCallback (SeqEntryPtr sep, Pointer mydata,
 
 NLM_EXTERN Pointer LIBCALL SeqAlignBioseqDeleteByIdFromSeqEntry (SeqEntryPtr sep, SeqIdPtr sip)
 {
-  SeqEntryExplore (sep, (Pointer)&sip, SeqAlignBioseqDeleteByIdCallback);
+  SeqEntryExplore (sep, (Pointer)sip, SeqAlignBioseqDeleteByIdCallback);
   return sep;
 }
 

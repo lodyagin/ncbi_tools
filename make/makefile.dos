@@ -1,4 +1,4 @@
-# $Id: makefile.dos,v 6.2 1998/06/24 18:10:46 vakatov Exp $
+# $Id: makefile.dos,v 6.3 1999/11/26 16:03:25 vakatov Exp $
 ##################################################
 ###  Makefile to build one of PC version of NCBI toolkit
 #####
@@ -13,62 +13,46 @@ INC_BASE   = ..\include
 
 ARG_BASE = NCOPY_BIN=1
 
+# Debug/Release
 !ifdef DBUG
 DEBUG_SFX = _d
 DEBUG_FLG = DBUG=1
 !endif
 
+# Console/GUI
 !ifdef CONSOLE
-WIN_FLG = C
-!else
-WIN_FLG = W
+CONSOLE_FLG = CONSOLE=1
 !endif
 
-!ifdef WIN32D
-WIN32   = 1
-DLL_SFX = _
-DLL_FLG = DLL=1
+# Compiler, DLL
+!ifdef DLL
+BUILD_SFX    = dll
+DLL_FLG      = DLL=1
+COMPILER_FLG = MS=1
 !endif
-
-!ifdef WIN32
-BLD_SFX = m32
-BIT_FLG = MSW=1 WIN32$(WIN_FLG)=1
-INC_SFX = 32
-!else
+!ifdef MS
+BUILD_SFX    = ms
+COMPILER_FLG = MS=1
+!endif
 !ifdef BOR
-BLD_SFX = b32
-BIT_FLG = B$(WIN_FLG)N=1
-INC_SFX = 32
-ARG_EXTRA = -N
-!else
-!ifdef CONSOLE
-!error CONSOLE APPLICATIONS ARE NOT AVAILABLE UNDER 16-BIT MS-WINDOWS!!!
-!endif
-!ifdef B16
-BLD_SFX = b16
-BIT_FLG = B16=1
-INC_SFX = 16
-ARG_EXTRA = -N
-!else
-BLD_SFX = m16
-BIT_FLG = MSW=1
-INC_SFX = 16
-!endif
-!endif
+BUILD_SFX    = bor
+COMPILER_FLG = BOR=1
+ARG_EXTRA    = -N
 !endif
 
-
-BUILD = $(BUILD_BASE)$(DEBUG_SFX)$(DLL_SFX).$(BLD_SFX)
-INC   = $(INC_BASE).$(INC_SFX)
-ARG   = $(ARG_EXTRA) $(ARG_BASE) $(DEBUG_FLG) $(DLL_FLG) $(BIT_FLG) INCPATH=$(INC)
-FLAG  = flag$(DEBUG_SFX)$(DLL_SFX).$(BLD_SFX)
+# Compose names, flags, etc.
+BUILD = $(BUILD_BASE)$(DEBUG_SFX).$(BUILD_SFX)
+INC   = $(INC_BASE)
+ARG   = $(ARG_EXTRA) $(ARG_BASE) $(COMPILER_FLG) $(CONSOLE_FLG) $(DEBUG_FLG) $(DLL_FLG) INCPATH=$(INC)
+FLAG  = flag$(DEBUG_SFX).$(BUILD_SFX)
 
 !undef DBUG
 !undef CONSOLE
-!undef WIN32
+!undef MS
+!undef DLL
 !undef BOR
 
-# must be run from inside the BUILD directory
+# BUILD::  must be run from inside the BUILD directory
 nocopy: make_exe.dos make_lib.dos make_gen.dos makeall.dos makedemo.dos makenet.dos $(FLAG)
         $(MAKE) -f makeall.dos  $(ARG) nocopy
         $(MAKE) -f makedemo.dos $(ARG) nocopy
@@ -79,7 +63,7 @@ noexe: make_lib.dos make_gen.dos makeall.dos makedemo.dos makenet.dos $(FLAG)
         $(MAKE) -f makenet.dos  $(ARG) noexe
 
 
-# must be run from inside the MAKE directory
+# COPY::   must be run from inside the MAKE directory
 copy:
         mkdir ..\$(BUILD)
         copy *.dos ..\$(BUILD)
@@ -90,9 +74,9 @@ copy:
         $(MAKE) -f makedemo.dos $(ARG) copy
         $(MAKE) -f makenet.dos  $(ARG) copy
 
-# can be run from any directory
+# USER::   can be run from any directory
 # by the time, the relevant sources must be deployed and all needed libraries
 # must be built - using the "copy" and "nocopy" targets, with the same options
-# (it uses only files from the relevant INCLUDE.* and BUILD*.* directories)
+# (it uses only files from the relevant BUILD*.* directories)
 user: $(MAKEUSER)
         $(MAKE) -f $(MAKEUSER) $(ARG) LIBPATH=$(BUILD)

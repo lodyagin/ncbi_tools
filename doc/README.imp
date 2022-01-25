@@ -76,7 +76,7 @@ Arguments to makemat:
        default = 11
     -E Cost to extend a gap (optional)
        default = 1
-    -M Underlying amino acid scoring matrix (optional)
+    -U Underlying amino acid scoring matrix (optional)
        default = BLOSUM62
     -d Underlying sequence database used to create profiles (optional)
        default = nr
@@ -199,7 +199,7 @@ schaffer@helix.nih.gov
 Reference:
 
   Schaffer, A.A., Wolf, Y.I., Ponting, C.P. Koonin, E.V.,
-Aravind, L., Altschul, S. F., Software to Match a Protein Sequence 
+Aravind, L., Altschul, S. F., IMPALA: Matching a Protein Sequence 
 Against a Collection of PSI-BLAST-Constructed Position-Specific 
 Score Matrices, Bioninformatics, to appear.
 

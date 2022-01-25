@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/20/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -53,14 +53,16 @@
 #include <sqnutils.h>
 #include <subutil.h>
 #include <toasn3.h>
+#include <valid.h>
+#include <asn2ff.h>
+#include <explore.h>
 
-static Pointer ReadYeastFile (CharPtr directory, CharPtr base, CharPtr suffix, Uint2Ptr datatype)
+static Pointer ReadOneFile (CharPtr directory, CharPtr base, CharPtr suffix, Uint2Ptr datatype)
 
 {
   Pointer  dataptr;
-  Char     file [FILENAME_MAX];
+  Char     file [FILENAME_MAX], path [PATH_MAX];
   FILE*    fp;
-  Char     path [PATH_MAX];
 
   *datatype = 0;
 
@@ -78,12 +80,11 @@ static Pointer ReadYeastFile (CharPtr directory, CharPtr base, CharPtr suffix, U
   return dataptr;
 }
 
-static void WriteYeastFile (CharPtr directory, CharPtr base, CharPtr suffix, SeqEntryPtr sep)
+static void WriteOneFile (CharPtr directory, CharPtr base, CharPtr suffix, SeqEntryPtr sep)
 
 {
   AsnIoPtr  aip;
-  Char      file [FILENAME_MAX];
-  Char      path [PATH_MAX];
+  Char      file [FILENAME_MAX], path [PATH_MAX];
 
   StringNCpy_0 (path, directory, sizeof (path));
   sprintf (file, "%s.%s", base, suffix);
@@ -98,7 +99,56 @@ static void WriteYeastFile (CharPtr directory, CharPtr base, CharPtr suffix, Seq
   AsnIoClose (aip);
 }
 
-static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp)
+static void ValidateOneFile (CharPtr directory, CharPtr base, CharPtr suffix, SeqEntryPtr sep)
+
+{
+  Char            file [FILENAME_MAX], path [PATH_MAX];
+  ErrSev          oldErrSev;
+  ValidStructPtr  vsp;
+
+  StringNCpy_0 (path, directory, sizeof (path));
+  sprintf (file, "%s.%s", base, suffix);
+  FileBuildPath (path, NULL, file);
+
+  ErrSetOptFlags (EO_LOGTO_USRFILE);
+  ErrSetLogfile (path, ELOG_APPEND | ELOG_NOCREATE);
+
+  vsp = ValidStructNew ();
+  if (vsp != NULL) {
+    vsp->useSeqMgrIndexes = TRUE;
+    vsp->suppressContext = TRUE;
+    oldErrSev = ErrSetMessageLevel (SEV_NONE);
+    ValidateSeqEntry (sep, vsp);
+    ValidStructFree (vsp);
+    ErrSetMessageLevel (oldErrSev);
+  }
+
+  ErrSetLogfile (NULL, ELOG_APPEND | ELOG_NOCREATE);
+  ErrClearOptFlags  (EO_LOGTO_USRFILE);
+}
+
+static void FlatfileOneFile (CharPtr directory, CharPtr base, CharPtr suffix, SeqEntryPtr sep)
+
+{
+  Char    file [FILENAME_MAX], path [PATH_MAX];
+  FILE    *fp;
+  ErrSev  oldErrSev;
+
+  StringNCpy_0 (path, directory, sizeof (path));
+  sprintf (file, "%s.%s", base, suffix);
+  FileBuildPath (path, NULL, file);
+
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return;
+
+  oldErrSev = ErrSetMessageLevel (SEV_MAX);
+  SeqEntryToFlat (sep, fp, GENBANK_FMT, SEQUIN_MODE);
+  ErrSetMessageLevel (oldErrSev);
+
+  FileClose (fp);
+}
+
+static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp, BioseqPtr bsp)
 
 {
   BioSourcePtr  biop = NULL;
@@ -110,9 +160,18 @@ static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp)
   OrgRefPtr     orp;
   SubSourcePtr  ssp;
   CharPtr       str;
+  int           val;
 
   if (stp == NULL) return NULL;
 
+  str = SqnTagFind (stp, "top");
+  if (str != NULL && bsp != NULL) {
+    if (StringICmp (str, "linear") == 0) {
+      bsp->topology = TOPOLOGY_LINEAR;
+    } else if (StringICmp (str, "circular") == 0) {
+      bsp->topology = TOPOLOGY_CIRCULAR;
+    }
+  }
   str = SqnTagFind (stp, "org");
   if (str == NULL) return NULL;
    biop = BioSourceNew ();
@@ -135,7 +194,7 @@ static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp)
       if (dbt != NULL) {
         oip = ObjectIdNew ();
         if (oip != NULL) {
-          oip->id = 7227;
+          oip->id = 4932;
           dbt->db = StringSave ("taxon");
           dbt->tag = oip;
           db->data.ptrvalue = (Pointer) dbt;
@@ -143,6 +202,52 @@ static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp)
         }
       }
     }
+  } else if (StringICmp (orp->taxname, "Escherichia coli") == 0) {
+    onp->gcode = 11; /* bacterial */
+    onp->div = StringSave ("BCT");
+    onp->lineage = StringSave ("Bacteria; Proteobacteria; gamma subdivision; Enterobacteriaceae; Escherichia");
+    db = ValNodeNew (NULL);
+    if (db != NULL) {
+      dbt = DbtagNew ();
+      if (dbt != NULL) {
+        oip = ObjectIdNew ();
+        if (oip != NULL) {
+          oip->id = 562;
+          dbt->db = StringSave ("taxon");
+          dbt->tag = oip;
+          db->data.ptrvalue = (Pointer) dbt;
+          orp->db = db;
+        }
+      }
+    }
+  } else if (StringICmp (orp->taxname, "Helicobacter pylori") == 0) {
+    onp->gcode = 11; /* bacterial */
+    onp->div = StringSave ("BCT");
+    onp->lineage = StringSave ("Bacteria; Proteobacteria; epsilon subdivision; Helicobacter group; Helicobacter");
+    db = ValNodeNew (NULL);
+    if (db != NULL) {
+      dbt = DbtagNew ();
+      if (dbt != NULL) {
+        oip = ObjectIdNew ();
+        if (oip != NULL) {
+          oip->id = 210;
+          dbt->db = StringSave ("taxon");
+          dbt->tag = oip;
+          db->data.ptrvalue = (Pointer) dbt;
+          orp->db = db;
+        }
+      }
+    }
+  }
+
+  str = SqnTagFind (stp, "gcode");
+  if (str != NULL && sscanf (str, "%d", &val) == 1) {
+    onp->gcode = (Uint1) val; /* cytoplasmic */
+  }
+
+  str = SqnTagFind (stp, "mgcode");
+  if (str != NULL && sscanf (str, "%d", &val) == 1) {
+    onp->mgcode = (Uint1) val; /* mitochondrial */
   }
 
   str = SqnTagFind (stp, "location");
@@ -175,13 +280,13 @@ static BioSourcePtr ParseTitleIntoBioSource (SqnTagPtr stp)
   return biop;
 }
 
-static void ProcessYeastRecord (CharPtr directory, CharPtr base)
+static void ProcessOneRecord (CharPtr directory, CharPtr base,
+                              Boolean validate, Boolean flatfile)
 
 {
   BioSourcePtr  biop;
   BioseqPtr     bsp;
-  Uint2         datatype;
-  Uint2         entityID;
+  Uint2         datatype, entityID;
   Int2          genCode;
   MolInfoPtr    mip;
   SeqAnnotPtr   sap;
@@ -191,12 +296,16 @@ static void ProcessYeastRecord (CharPtr directory, CharPtr base)
   CharPtr       ttl;
   ValNodePtr    vnp;
 
-  Message (MSG_POST, "%s\n", base);
+  Message (MSG_POST, "Processing %s\n", base);
 
-  bsp = (BioseqPtr) ReadYeastFile (directory, base, "fsa", &datatype);
+  bsp = (BioseqPtr) ReadOneFile (directory, base, "fsa", &datatype);
   if (bsp == NULL || datatype != OBJ_BIOSEQ) {
     ObjMgrFree (datatype, (Pointer) bsp);
     return;
+  }
+
+  if (bsp->mol == Seq_mol_na) {
+    bsp->mol = Seq_mol_dna;
   }
 
   vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
@@ -204,23 +313,26 @@ static void ProcessYeastRecord (CharPtr directory, CharPtr base)
     ttl = (CharPtr) vnp->data.ptrvalue;
     if (ttl != NULL) {
       stp = SqnTagParse (ttl);
-      biop = ParseTitleIntoBioSource (stp);
+      if (stp != NULL) {
+        biop = ParseTitleIntoBioSource (stp, bsp);
+      }
       SqnTagFree (stp);
       if (biop != NULL) {
-        ValNodeAddPointer (&(bsp->descr), Seq_descr_source, (Pointer) biop);
-      }
-      mip = MolInfoNew ();
-      if (mip != NULL) {
-        mip->biomol = 1;
-        ValNodeAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
+        SeqDescrAddPointer (&(bsp->descr), Seq_descr_source, (Pointer) biop);
       }
     }
     ValNodeFreeData (vnp);
   }
 
+  mip = MolInfoNew ();
+  if (mip != NULL) {
+    mip->biomol = MOLECULE_TYPE_GENOMIC;
+    SeqDescrAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
+  }
+
   entityID = ObjMgrRegister (datatype, (Pointer) bsp);
 
-  sap = (SeqAnnotPtr) ReadYeastFile (directory, base, "tbl", &datatype);
+  sap = (SeqAnnotPtr) ReadOneFile (directory, base, "tbl", &datatype);
   if (sap != NULL && datatype == OBJ_SEQANNOT && sap->type == 1) {
     sfp = (SeqFeatPtr) sap->data;
     if (sfp != NULL) {
@@ -234,7 +346,19 @@ static void ProcessYeastRecord (CharPtr directory, CharPtr base)
     sep = GetTopSeqEntryForEntityID (entityID);
     if (sep != NULL) {
       SeriousSeqEntryCleanup (sep, NULL, NULL);
-      WriteYeastFile (directory, base, "sqn", sep);
+      WriteOneFile (directory, base, "sqn", sep);
+      if (validate || flatfile) {
+        SeqMgrIndexFeatures (entityID, 0);
+      }
+      if (validate) {
+        Message (MSG_POST, "Validating %s\n", base);
+        ValidateOneFile (directory, base, "val", sep);
+      }
+      if (flatfile) {
+        Message (MSG_POST, "Flatfile %s\n", base);
+        sep = FindNucSeqEntry (sep);
+        FlatfileOneFile (directory, base, "gbf", sep);
+      }
     }
   } else {
     ObjMgrFree (datatype, (Pointer) sap);
@@ -247,20 +371,19 @@ Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
     TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
   {"Only this file", NULL, NULL, NULL,
-    TRUE, 'f', ARG_STRING, 0.0, 0, NULL}
+    TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
+  {"Validate", "F", NULL, NULL,
+    TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Generate GenBank file", "F", NULL, NULL,
+    TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
 
 {
-  Int2     i;
-  CharPtr  yeastFiles [18] = {
-    "chr01", "chr02", "chr03", "chr04",
-    "chr05", "chr06", "chr07", "chr08",
-    "chr09", "chr10", "chr11", "chr12",
-    "chr13", "chr14", "chr15", "chr16",
-    "chrmt", NULL
-  };
+  CharPtr     base, directory, ptr;
+  Boolean     flatfile, validate;
+  ValNodePtr  head, vnp;
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
@@ -284,16 +407,36 @@ Int2 Main (void)
     return 1;
   }
 
-  if (! GetArgs ("yeastfeat", sizeof (myargs) / sizeof (Args), myargs)) {
+  if (! GetArgs ("sgd2asn", sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 
-  if (! StringHasNoText (myargs [1].strvalue)) {
-    ProcessYeastRecord (myargs [0].strvalue, myargs [1].strvalue);
-  } else {
-    for (i = 0; yeastFiles [i] != NULL; i++) {
-      ProcessYeastRecord (myargs [0].strvalue, yeastFiles [i]);
+  directory = (CharPtr) myargs [0].strvalue;
+  base = (CharPtr) myargs [1].strvalue;
+  validate = (Boolean) myargs [2].intvalue;
+  flatfile = (Boolean) myargs [3].intvalue;
+
+  if (! StringHasNoText (base)) {
+    ptr = StringStr (base, ".fsa");
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ProcessOneRecord (directory, base, validate, flatfile);
     }
+  } else {
+    head = DirCatalog (directory);
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == 0) {
+        base = (CharPtr) vnp->data.ptrvalue;
+        if (! StringHasNoText (base)) {
+          ptr = StringStr (base, ".fsa");
+          if (ptr != NULL) {
+            *ptr = '\0';
+            ProcessOneRecord (directory, base, validate, flatfile);
+          }
+        }
+      }
+    }
+    ValNodeFreeData (head);
   }
 
   return 0;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.81 $
+* $Revision: 6.85 $
 *
 * File Description: 
 *
@@ -1593,6 +1593,62 @@ static void SeqEntryPtrToModifierDialog (DialoG d, PopuP p, Pointer data, FixNuc
   }
 }
 
+static CharPtr noOrgInTitleReject =
+"sequences have organism information in titles. " \
+"It is critical to annotate the data file with organism and source information. " \
+"Sequin will not continue until you supply this information.";
+
+static Boolean NotEnoughOrgTitles (SequencesFormPtr sqfp, SeqEntryPtr sep)
+
+{
+  MsgAnswer  ans;
+  Int2       seqtitles = 0;
+  Int2       seqtotals = 0;
+  Char       str [256];
+  CharPtr    title;
+
+  if (sqfp == NULL || sep == NULL) return FALSE;
+
+  while (sep != NULL) {
+    title = NULL;
+    SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
+    if (title != NULL) {
+      if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+        if (StringISearch (title, "[org=") != NULL) {
+          seqtitles++;
+        }
+      } else if (StringISearch (title, "[") != NULL) {
+        seqtitles++;
+      }
+    }
+    sep = sep->next;
+    seqtotals++;
+  }
+
+  if (seqtotals != seqtitles) {
+    sprintf (str, "None");
+    if (seqtitles > 0) {
+      sprintf (str, "Only %d", (int) seqtitles);
+    }
+    ArrowCursor ();
+    Update ();
+    Beep ();
+    if (! indexerVersion) {
+      if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+        Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleReject);
+        return TRUE;
+      }
+    } else {
+      if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+        ans = Message (MSG_YN, "%s of %d %s (Regular version will block here - continue?)", str, (int) seqtotals, noOrgInTitleReject);
+        if (ans == ANS_NO) return TRUE;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
 static void AcceptNucleotideFixup (ButtoN b)
 
 {
@@ -1609,6 +1665,12 @@ static void AcceptNucleotideFixup (ButtoN b)
     if (fnfp->oldModVal != 0) {
       sep = sqfp->currConfirmSeq;
       ModifierDialogToSeqEntryPtr (fnfp->modifiers, fnfp->modType, sep, fnfp);
+    }
+    sep = sqfp->currConfirmSeq;
+    if (NotEnoughOrgTitles (sqfp, sep)) {
+      Show (fnfp->form);
+      Update ();
+      return;
     }
     Remove (fnfp->form);
     Update ();
@@ -3978,7 +4040,11 @@ static CharPtr noOrgInTitleAbort =
 "sequences have organism information in titles. " \
 "It is critical to annotate the data file with organism and source information. " \
 "Sequin will not continue processing this submission. " \
-"Please read the Sequin Quick Guide section on preparing the data files before proceeding.";
+"Please read the Sequin Quick Guide section on preparing the data files before proceeding. " \
+"Do you wish to launch your browser on the Sequin Quick Guide automatically?";
+
+static CharPtr pleaseReadLocalGuide =
+"Please read your local copy of the Sequin Quick Guide before annotating your data file.";
 
 static CharPtr noSrcInTitleAbort =
 "sequences have source information in titles. " \
@@ -3991,6 +4057,7 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
 {
   Int2              ambig;
   Int2              annotType;
+  MsgAnswer         ans;
   Uint2             biomol;
   BioSourcePtr      biop;
   BioseqSetPtr      bssp;
@@ -4064,8 +4131,12 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
             Beep ();
             if (! indexerVersion) {
               if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
-                Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleAbort);
-                LaunchSequinQuickGuide ();
+                ans = Message (MSG_YN, "%s of %d %s", str, (int) seqtotals, noOrgInTitleAbort);
+                if (ans == ANS_YES) {
+                  LaunchSequinQuickGuide ();
+                } else {
+                  Message (MSG_OK, "%s", pleaseReadLocalGuide);
+                }
                 allowUnableToProcessMessage = FALSE;
                 QuitProgram ();
                 return NULL; /* aborting */
@@ -6061,14 +6132,35 @@ static void CancelFetchProc (ButtoN b)
 static void FetchTextProc (TexT t)
 
 {
+  Boolean       alldigits;
+  Char          ch;
   FetchFormPtr  ffp;
+  CharPtr       ptr;
+  Char          str [32];
 
   ffp = (FetchFormPtr) GetObjectExtra (t);
   if (ffp == NULL) return;
-  if (TextHasNoText (t)) {
+  GetTitle (t, str, sizeof (str));
+  if (StringHasNoText (str)) {
     SafeDisable (ffp->accept);
   } else {
     SafeEnable (ffp->accept);
+    TrimSpacesAroundString (str);
+    alldigits = TRUE;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (! IS_DIGIT (ch)) {
+        alldigits = FALSE;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    if (alldigits) {
+      SafeSetValue (ffp->accntype, 2);
+    } else {
+      SafeSetValue (ffp->accntype, 1);
+    }
   }
 }
 
@@ -6123,6 +6215,7 @@ extern void CommonFetchFromNet (BtnActnProc actn, BtnActnProc cancel)
     if (sepp != NULL) {
       SetActivate (w, sepp->activateForm);
     }
+    Select (ffp->accession);
     Show (w);
     Select (w);
     Update ();

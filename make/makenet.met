@@ -25,6 +25,9 @@ property MASTER : "PPC"
 
 property MAKELIBS : "TRUE"
 
+-- property DOPNG : "TRUE"
+property DOPNG : "FALSE"
+
 (* ==== These symbols will be derived ==== *)
 
 global PREFIX
@@ -120,7 +123,11 @@ on DoSetPreferences()
 				, Unused Variables:true Â
 				, Unused Arguments:false Â
 				, Extra Commas:true Â
-				, Extended Error Checking:true}
+				, Extended Error Checking:true Â
+				, Hidden Virtual Functions:true Â
+				, Implicit Arithmetic Conversions:false Â
+				, NonInlined Functions:true Â
+				, Inconsistent Class Struct:true}
 		
 		if MASTER = "PPC" then
 			
@@ -134,6 +141,11 @@ on DoSetPreferences()
 					, Traceback Tables:TB_None Â
 					, Schedule:false Â
 					, Peephole Optimizer:false}
+			
+			(* ===== Panel PPC Global Optimizer =====  *)
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed Â
+					, Level:1}
 			
 			(* ===== Panel PPC Linker ===== *)
 			Set Preferences of panel "PPC Linker" to Â
@@ -156,6 +168,11 @@ on DoSetPreferences()
 					, Share Data Section:false Â
 					, Expand Uninitialized Data:false Â
 					, Fragment Name:""}
+			
+			(* ===== Panel Debugger =====  *)
+			Set Preferences of panel "Debugger Target" to Â
+				{Log System Messages:false Â
+					, Stop At Watchpoints:true}
 			
 		else if MASTER = "68K" then
 			(* ===== Panel 68K Processor =====  *)
@@ -221,6 +238,14 @@ end DoSetPaths2
 on DoCompileLibraries()
 	tell application "CodeWarrior IDE 4.0"
 		
+		open (LIBRARIES & "vibrantOGL" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
 		open (LIBRARIES & "ncbiNacc" & SUFFIX & ".µ")
 		Make Project
 		Close Project
@@ -230,10 +255,6 @@ on DoCompileLibraries()
 		Close Project
 		
 		open (LIBRARIES & "netcli" & SUFFIX & ".µ")
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbibls2" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -276,6 +297,67 @@ with timeout of 60000 seconds
 		activate
 		
 		(* ==== This subsection populates all the libraries with the appropriate source files ==== *)
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "vibrantOGL" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"vibrantOGLppc"}
+		Set Preferences of panel "68K Project" to {File Name:"vibrantOGL68k"}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "vibrant:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
+		if DOPNG = "TRUE" then
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
+		else if DOPNG = "FALSE" then
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+		end if
+		my DoSetPaths2()
+		
+		set NCBIVIBRANT to NCBISOURCE & "vibrant:" as string
+		
+		Add Files {NCBIVIBRANT & "ncbidraw.c", NCBIVIBRANT & "vibbutns.c", NCBIVIBRANT & "vibextra.c", NCBIVIBRANT & "vibfiles.c", NCBIVIBRANT & "vibforms.c"} To Segment 1
+		Add Files {NCBIVIBRANT & "vibgroup.c", NCBIVIBRANT & "viblists.c", NCBIVIBRANT & "vibmenus.c", NCBIVIBRANT & "vibprmpt.c", NCBIVIBRANT & "vibsbars.c"} To Segment 1
+		Add Files {NCBIVIBRANT & "vibslate.c", NCBIVIBRANT & "vibtexts.c", NCBIVIBRANT & "vibutils.c", NCBIVIBRANT & "vibwndws.c"} To Segment 1
+		
+		Add Files {NCBIVIBRANT & "document.c", NCBIVIBRANT & "drawing.c", NCBIVIBRANT & "mapping.c", NCBIVIBRANT & "palette.c", NCBIVIBRANT & "picture.c"} To Segment 2
+		Add Files {NCBIVIBRANT & "table.c", NCBIVIBRANT & "viewer.c", NCBIVIBRANT & "diagnost.c", NCBIVIBRANT & "image.c", NCBIVIBRANT & "pictur3d.c"} To Segment 2
+		Add Files {NCBIVIBRANT & "prim3d1.c", NCBIVIBRANT & "prim3d2.c", NCBIVIBRANT & "prim3d3.c", NCBIVIBRANT & "prim3d4.c", NCBIVIBRANT & "prim3d5.c"} To Segment 2
+		Add Files {NCBIVIBRANT & "viewer3d.c", NCBIVIBRANT & "vibmouse.c", NCBIVIBRANT & "imagelst.c", NCBIVIBRANT & "treeview.c", NCBIVIBRANT & "shim3d.c"} To Segment 2
+		Add Files {NCBIVIBRANT & "odlbox.c"} To Segment 2
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbicn3dOGL" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbicn3dOGLppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbicn3dOGL68k"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Headers:", origin:absolute}}}
+		if DOPNG = "TRUE" then
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl-png.pfx"}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:", origin:absolute}}}
+		else if DOPNG = "FALSE" then
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"opengl.pfx"}
+		end if
+		my DoSetPaths2()
+		
+		set NCBICN3D to NCBISOURCE & "cn3d:" as string
+		
+		Add Files {NCBICN3D & "algorend.c", NCBICN3D & "cn3dwin.c", NCBICN3D & "cn3dentr.c", NCBICN3D & "cn3dmsel.c", NCBICN3D & "cn3dopen.c"} To Segment 1
+		Add Files {NCBICN3D & "cn3dsave.c", NCBICN3D & "cn3dxprt.c"} To Segment 1
+		Add Files {NCBICN3D & "cn3dmsg.c", NCBICN3D & "cn3dmatn.c", NCBICN3D & "cn3dmodl.c", NCBICN3D & "cn3dshim.c"} To Segment 1
+		Add Files {NCBICN3D & "cn3dmesh.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
 		
 		(* ================================================================================ *)
 		Create Project {LIBRARIES & "ncbiNacc" & SUFFIX & ".µ"}
@@ -331,25 +413,6 @@ with timeout of 60000 seconds
 		Add Files {NCBINSCLILIB & "ncbicli.c", NCBINSCLILIB & "ncbiurl.c", NCBINSCLILIB & "ni_disp.c", NCBINSCLILIB & "ni_encrs.c"} To Segment 1
 		Add Files {NCBINSCLILIB & "ni_error.c", NCBINSCLILIB & "ni_lib_.c", NCBINSCLILIB & "ni_macdv.c", NCBINSCLILIB & "ni_msg.c"} To Segment 1
 		Add Files {NCBINSCLILIB & "ni_www.c", NCBINSCLILIB & "ni_debug.c"} To Segment 1
-		
-		Reset File Paths
-		Close Project
-		
-		
-		(* ================================================================================ *)
-		Create Project {LIBRARIES & "ncbibls2" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "PPC Project" to {File Name:"ncbibls2ppc"}
-		Set Preferences of panel "68K Project" to {File Name:"ncbibls268k"}
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"blast.pfx"}
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast2:client:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		set NCBIBLAST2 to NCBISOURCE & "network:blast2:client:" as string
-		
-		Add Files {NCBIBLAST2 & "blast2.c", NCBIBLAST2 & "blstout2.c", NCBIBLAST2 & "netblap2.c", NCBIBLAST2 & "objblst2.c"} To Segment 1
-		Add Files {NCBIBLAST2 & "blastasn.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project

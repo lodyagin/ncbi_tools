@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Taxon1
-*    Generated using ASNCODE Revision: 6.0 at Feb 2, 1998  4:16 PM
+*    Generated using ASNCODE Revision: 6.8 at Dec 16, 1999 10:55 AM
 *
 **************************************************/
 
@@ -41,6 +41,7 @@ typedef ValNode Taxon1Req;
 #define Taxon1Req_lookup 14
 #define Taxon1Req_getorgmod 15
 #define Taxon1Req_fini 16
+#define Taxon1Req_id4gi 17
 
 
 NLM_EXTERN Taxon1ReqPtr LIBCALL Taxon1ReqFree PROTO ((Taxon1ReqPtr ));
@@ -86,6 +87,7 @@ typedef ValNode Taxon1Resp;
 #define Taxon1Resp_lookup 15
 #define Taxon1Resp_getorgmod 16
 #define Taxon1Resp_fini 17
+#define Taxon1Resp_id4gi 18
 
 
 NLM_EXTERN Taxon1RespPtr LIBCALL Taxon1RespFree PROTO ((Taxon1RespPtr ));

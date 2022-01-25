@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,12 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.4  2000/01/18 19:40:51  ostell
+* added support for PubStatusDate, ArticleIds
+*
+* Revision 6.3  2000/01/05 18:44:12  kans
+* increased buffer size in AuthListMatch, which was overflowing
+*
 * Revision 6.2  1998/08/24 18:27:59  kans
 * removed solaris -v -fd warnings
 *
@@ -776,6 +782,8 @@ NLM_EXTERN CitArtPtr LIBCALL CitArtNew (void)
 *****************************************************************************/
 NLM_EXTERN CitArtPtr LIBCALL CitArtFree (CitArtPtr cap)
 {
+    ArticleIdPtr aip, aipnext;
+
     if (cap == NULL)
         return cap;
 
@@ -785,6 +793,13 @@ NLM_EXTERN CitArtPtr LIBCALL CitArtFree (CitArtPtr cap)
         CitJourFree((CitJourPtr) cap->fromptr);
     else                     /* book or proceedings */
         CitBookFree((CitBookPtr) cap->fromptr);
+
+    for (aip = cap->ids; aip != NULL; )
+    {
+        aipnext = aip->next;
+        ArticleIdFree(aip);
+        aip = aipnext;
+    }
 	return (CitArtPtr)MemFree(cap);
 }
 
@@ -798,6 +813,8 @@ NLM_EXTERN CitArtPtr LIBCALL CitArtAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	CitArtPtr cap=NULL;
 	DataVal av;
 	AsnTypePtr atp;
+        ArticleIdPtr aidp;
+        ArticleIdPtr PNTR aidp_add;
 
 	if (! loaded)
 	{
@@ -864,9 +881,25 @@ NLM_EXTERN CitArtPtr LIBCALL CitArtAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     if (cap->fromptr == NULL)
         goto erret;
 
-    AsnReadId(aip, amp, atp);
+    atp = AsnReadId(aip, amp, atp);
     if (atp == NULL)
         goto erret;
+
+    if (atp == CIT_ART_ids)
+    {
+       if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+       aidp_add = &(cap->ids);
+       while ((atp = AsnReadId(aip, amp, atp)) == ARTICLEIDSET_E)
+       {
+          aidp = ArticleIdAsnRead(aip, atp);
+          if (aidp == NULL) goto erret;
+          *aidp_add = aidp;
+          aidp_add = &(aidp->next);
+       }
+       if (AsnReadVal(aip, atp, &av) <= 0) goto erret;  /* END STRUCT */
+       atp = AsnReadId(aip, amp, atp);
+       
+    }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* end of SEQUENCE */
 ret:
 	AsnUnlinkType(orig);
@@ -886,6 +919,7 @@ NLM_EXTERN Boolean LIBCALL CitArtAsnWrite (CitArtPtr cap, AsnIoPtr aip, AsnTypeP
 	DataVal av;
 	AsnTypePtr atp;
     Boolean retval = FALSE;
+        ArticleIdPtr aidp;
 
 	if (! loaded)
 	{
@@ -929,6 +963,17 @@ NLM_EXTERN Boolean LIBCALL CitArtAsnWrite (CitArtPtr cap, AsnIoPtr aip, AsnTypeP
     if (retval == FALSE)
         goto erret;
     retval = FALSE;
+
+    if (cap->ids != NULL)
+    {
+       if (! AsnOpenStruct(aip, CIT_ART_ids, (Pointer)cap)) goto erret;
+       for (aidp = cap->ids; aidp != NULL; aidp = aidp->next)
+       {
+          if (! ArticleIdAsnWrite(aidp, aip, ARTICLEIDSET_E)) goto erret;
+       }
+       if (! AsnCloseStruct(aip, CIT_ART_ids, (Pointer)cap)) goto erret;
+    }
+
     if (! AsnCloseStruct(aip, atp, (Pointer)cap))    /* close the SEQUENCE */
         goto erret;
     retval = TRUE;
@@ -957,6 +1002,8 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintNew (void)
 *****************************************************************************/
 NLM_EXTERN ImprintPtr LIBCALL ImprintFree (ImprintPtr ip)
 {
+    PubStatusDatePtr psdp, psdpnext;
+
     if (ip == NULL)
         return ip;
 
@@ -971,6 +1018,12 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintFree (ImprintPtr ip)
 	MemFree(ip->part_supi);
     AffilFree(ip->pub);
 	CitRetractFree(ip->retract);
+    for (psdp = ip->history; psdp != NULL; )
+    {
+       psdpnext = psdp->next;
+       PubStatusDateFree(psdp);
+       psdp = psdpnext;
+    }
 	return (ImprintPtr)MemFree(ip);
 }
 
@@ -984,6 +1037,8 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	ImprintPtr ip=NULL;
 	DataVal av;
 	AsnTypePtr atp, oldatp;
+        PubStatusDatePtr psdp;
+        PubStatusDatePtr PNTR psdp_add;
 
 	if (! loaded)
 	{
@@ -1014,6 +1069,7 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     if (ip->date == NULL)
         goto erret;
 
+    psdp_add = &(ip->history);
     while ((atp = AsnReadId(aip, amp, atp)) != oldatp)
     {
         if (atp == NULL)
@@ -1035,6 +1091,13 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 			ip->retract = CitRetractAsnRead(aip, atp);
 			if (ip->retract == NULL) goto erret;
 		}
+        else if (atp == PUBSTATUSDATESET_E)
+        {
+          psdp = PubStatusDateAsnRead(aip, atp);
+          if (psdp == NULL) goto erret;
+          *psdp_add = psdp;
+          psdp_add = &(psdp->next);
+	}
         else
         {
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
@@ -1054,6 +1117,9 @@ NLM_EXTERN ImprintPtr LIBCALL ImprintAsnRead (AsnIoPtr aip, AsnTypePtr orig)
                 ip->prepub = (Uint1)av.intvalue;
             else if (atp == IMPRINT_part_supi)
                 ip->part_supi = (CharPtr)av.ptrvalue;
+            else if (atp == IMPRINT_pubstatus)
+                ip->pubstatus = (Uint1)(av.intvalue);
+
         }
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
@@ -1075,6 +1141,7 @@ NLM_EXTERN Boolean LIBCALL ImprintAsnWrite (ImprintPtr ip, AsnIoPtr aip, AsnType
 	DataVal av;
 	AsnTypePtr atp;
     Boolean retval = FALSE;
+	PubStatusDatePtr psdp;
 
 	if (! loaded)
 	{
@@ -1149,6 +1216,21 @@ NLM_EXTERN Boolean LIBCALL ImprintAsnWrite (ImprintPtr ip, AsnIoPtr aip, AsnType
     {
         if (! CitRetractAsnWrite(ip->retract, aip, IMPRINT_retract))
             goto erret;
+    }
+    if (ip->pubstatus)
+    {
+        av.intvalue = (Int4)(ip->pubstatus);
+        if (! AsnWrite(aip, IMPRINT_pubstatus, &av)) goto erret;
+    }
+    if (ip->history != NULL)
+    {
+	if (! AsnOpenStruct(aip, IMPRINT_history, (Pointer)ip)) goto erret;
+        for (psdp = ip->history; psdp != NULL; psdp = psdp->next)
+        {
+           if (! PubStatusDateAsnWrite(psdp, aip, PUBSTATUSDATESET_E))
+             goto erret;
+	}
+        if (! AsnCloseStruct(aip, IMPRINT_history, (Pointer)ip)) goto erret;
     }
     if (! AsnCloseStruct(aip, atp, (Pointer)ip))
         goto erret;
@@ -3205,7 +3287,7 @@ NLM_EXTERN Int2 LIBCALL AuthListMatch(AuthListPtr a, AuthListPtr b, Boolean all)
 {
 	Int2 retval = 1, i;
 	size_t len, tlen;
-	Char name[2][40];
+	Char name[2][256];
 	ValNodePtr vnp[2];
 	Uint1 listtype[2];
 	AuthorPtr ap;
@@ -3576,3 +3658,330 @@ erret:
 	return retval;
 }
 
+
+/*****************************************************************************
+*
+*   ArticleIdNew()
+*
+*****************************************************************************/
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdNew (void)
+{
+	ArticleIdPtr aidp;
+
+	aidp = (ArticleIdPtr)MemNew(sizeof(ArticleId));
+	return aidp;
+}
+
+/*****************************************************************************
+*
+*   ArticleIdFree()
+*
+*****************************************************************************/
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdFree (ArticleIdPtr aidp)
+{
+	if (aidp == NULL)
+		return aidp;
+	
+	switch (aidp->choice)
+	{
+		case ARTICLEID_DOI:   /* string types */
+		case ARTICLEID_PII:
+		case ARTICLEID_PMCPID:
+		case ARTICLEID_PMPID:
+			MemFree (aidp->data.ptrvalue);
+			break;
+
+		case ARTICLEID_OTHER:   /* dbtag */
+			DbtagFree ((DbtagPtr)(aidp->data.ptrvalue));
+			break;
+		default:              /* integer types */
+			break;
+	}
+
+	return (ArticleIdPtr)MemFree(aidp);
+}
+
+/*****************************************************************************
+*
+*   ArticleIdAsnRead(aip, atp)
+*
+*****************************************************************************/
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
+{
+	ArticleIdPtr aidp=NULL;
+	AsnTypePtr atp;
+        Uint1 choice = 0;
+        DataVal av;
+
+	if (! loaded)
+	{
+		if (! BiblioAsnLoad())
+			return aidp;
+	}
+
+	if (aip == NULL)
+		return aidp;
+
+	if (orig == NULL)           /* ArticleId ::= */
+		atp = AsnReadId(aip, amp, ARTICLEID);
+	else
+		atp = AsnLinkType(orig, ARTICLEID);
+    if (atp == NULL)
+        return aidp;
+
+	aidp = ArticleIdNew();
+    if (aidp == NULL)
+        goto erret;
+
+    if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the CHOICE */
+    atp = AsnReadId(aip, amp, atp);   /* read the CHOICE id */
+    if (atp == NULL)
+        goto erret;
+
+    if (atp == ARTICLEID_pubmed)
+	choice = 1;
+    else if (atp == ARTICLEID_medline)
+	choice = 2;
+    else if (atp == ARTICLEID_doi)
+	choice = 3;
+    else if (atp == ARTICLEID_pii)
+	choice = 4;
+    else if (atp == ARTICLEID_pmcid)
+	choice = 5;
+    else if (atp == ARTICLEID_pmcpid)
+        choice = 6;
+    else if (atp == ARTICLEID_pmpid)
+        choice = 7;
+    else if (atp == ARTICLEID_other)
+        choice = 8;
+    else
+    {
+       ErrPostEx(SEV_ERROR, 0,0, "Unrecognized ArticleId");
+	goto erret;
+    }
+
+    aidp->choice = choice;
+    if (choice == ARTICLEID_OTHER)
+    {
+       aidp->data.ptrvalue = DbtagAsnRead(aip, atp);
+       if (aidp->data.ptrvalue == NULL)
+	  goto erret;
+    }
+    else
+    {
+       if (AsnReadVal(aip, atp, &(aidp->data)) <= 0)
+          goto erret;
+    }
+
+ret:
+	AsnUnlinkType(orig);
+	return aidp;
+erret:
+    aidp = ArticleIdFree(aidp);
+    goto ret;
+}
+
+/*****************************************************************************
+*
+*   ArticleIdAsnWrite(aidp, aip, atp)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL ArticleIdAsnWrite (ArticleIdPtr aidp, AsnIoPtr aip, AsnTypePtr orig)
+{
+	DataVal av;
+	AsnTypePtr atp, atp2;
+    Boolean retval = FALSE;
+
+	if (! loaded)
+	{
+		if (! BiblioAsnLoad())
+			return FALSE;
+	}
+
+	if (aip == NULL)
+		return FALSE;
+
+	atp = AsnLinkType(orig, ARTICLEID);
+    if (atp == NULL)
+        return FALSE;
+
+	if (aidp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    if (! aidp->choice)
+	goto erret;
+
+    if (! AsnWrite(aip, atp, &av))   /* write the tag */
+        goto erret;
+
+    atp2 = NULL;
+    switch (aidp->choice)
+    {
+	case ARTICLEID_PUBMED:
+          atp2 = ARTICLEID_pubmed;
+          break;
+	case ARTICLEID_MEDLINE:
+          atp2 = ARTICLEID_medline;
+          break;
+	case ARTICLEID_DOI:
+          atp2 = ARTICLEID_doi;
+          break;
+	case ARTICLEID_PII:
+          atp2 = ARTICLEID_pii;
+          break;
+	case ARTICLEID_PMCID:
+          atp2 = ARTICLEID_pmcid;
+          break;
+	case ARTICLEID_PMCPID:
+          atp2 = ARTICLEID_pmcpid;
+          break;
+	case ARTICLEID_PMPID:
+          atp2 = ARTICLEID_pmpid;
+          break;
+        case ARTICLEID_OTHER:
+          atp2 = ARTICLEID_other;
+          break;
+	default:
+          break;
+    }
+
+    if (aidp->choice == ARTICLEID_OTHER)
+    {
+        if (! DbtagAsnWrite((DbtagPtr)(aidp->data.ptrvalue), aip, atp2))
+           goto erret;
+    }
+    else if (atp2 != NULL)
+   {
+        if (! AsnWrite(aip, atp2, &(aidp->data)))
+           goto erret;
+   }
+   else
+        goto erret;
+
+    retval = TRUE;
+erret:
+	AsnUnlinkType(orig);
+	return retval;
+}
+
+
+/*****************************************************************************
+*
+*   PubStatusDateNew()
+*
+*****************************************************************************/
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateNew (void)
+{
+	PubStatusDatePtr psdp;
+
+	psdp = (PubStatusDatePtr)MemNew(sizeof(PubStatusDate));
+	return psdp;
+}
+
+/*****************************************************************************
+*
+*   PubStatusDateFree()
+*
+*****************************************************************************/
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateFree (PubStatusDatePtr psdp)
+{
+	if (psdp == NULL)
+		return psdp;
+        DateFree (psdp->date);
+	return (PubStatusDatePtr)MemFree(psdp);
+}
+
+/*****************************************************************************
+*
+*   PubStatusDateAsnRead(aip, atp)
+*
+*****************************************************************************/
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateAsnRead (AsnIoPtr aip, AsnTypePtr orig)
+{
+	PubStatusDatePtr psdp=NULL;
+	DataVal av;
+	AsnTypePtr atp, oldatp;
+
+	if (! loaded)
+	{
+		if (! BiblioAsnLoad())
+			return psdp;
+	}
+
+	if (aip == NULL)
+		return psdp;
+
+	if (orig == NULL)           /* PubStatusDate ::= */
+		atp = AsnReadId(aip, amp, PUBSTATUSDATE);
+	else
+		atp = AsnLinkType(orig, PUBSTATUSDATE);
+    if (atp == NULL)
+        return psdp;
+
+	psdp = PubStatusDateNew();
+    if (psdp == NULL)
+        goto erret;
+
+    oldatp = atp;
+    if (AsnReadVal(aip, atp, &av) <= 0) goto erret; /* read the START STRUCT */
+    atp = AsnReadId(aip, amp, atp);   /* read the PubStatus */
+    if (atp == NULL)
+        goto erret;
+    if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+    psdp->pubstatus = (Uint1)(av.intvalue);
+    atp = AsnReadId(aip, amp, atp);
+    if (atp == NULL) goto erret;
+    psdp->date = DateAsnRead(aip, atp);
+    if (psdp->date == NULL)
+       goto erret;
+    atp = AsnReadId(aip, amp, atp);
+    if (atp == NULL) goto erret;
+    if (AsnReadVal(aip, oldatp, &av) <= 0) goto erret;    /* read the END STRUCT */
+
+ret:
+	AsnUnlinkType(orig);
+	return psdp;
+erret:
+    psdp = PubStatusDateFree(psdp);
+    goto ret;
+}
+
+/*****************************************************************************
+*
+*   PubStatusDateAsnWrite(psdp, aip, atp)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL PubStatusDateAsnWrite (PubStatusDatePtr psdp, AsnIoPtr aip, AsnTypePtr orig)
+{
+	DataVal av;
+	AsnTypePtr atp;
+    Boolean retval = FALSE;
+
+	if (! loaded)
+	{
+		if (! BiblioAsnLoad())
+			return FALSE;
+	}
+
+	if (aip == NULL)
+		return FALSE;
+
+	atp = AsnLinkType(orig, PUBSTATUSDATE);
+    if (atp == NULL)
+        return FALSE;
+
+	if (psdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    if (! AsnOpenStruct(aip, atp, (Pointer)psdp))
+        goto erret;
+
+    av.intvalue = (Int4)(psdp->pubstatus);
+    if (! AsnWrite(aip, PUBSTATUSDATE_pubstatus, &av)) goto erret;
+    if (! DateAsnWrite(psdp->date, aip, PUBSTATUSDATE_date)) goto erret;
+
+    if (! AsnCloseStruct(aip, atp, (Pointer)psdp)) goto erret;
+
+    retval = TRUE;
+erret:
+	AsnUnlinkType(orig);
+	return retval;
+}

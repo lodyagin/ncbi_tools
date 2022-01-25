@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.18 1999/06/07 18:43:17 madden Exp $
+/* $Id: txalign.h,v 6.22 1999/11/24 21:24:33 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.18 $
+* $Revision: 6.22 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,18 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.22  1999/11/24 21:24:33  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 6.21  1999/11/09 22:15:08  shavirin
+* Added parameter follower to the Blast score printing function
+*
+* Revision 6.20  1999/10/07 16:08:05  shavirin
+* Passed matrix to the function FormatScoreFromSeqAlign().
+*
+* Revision 6.19  1999/09/29 17:15:38  shavirin
+* Added new funtion FormatScoreFromSeqAlign()
+*
 * Revision 6.18  1999/06/07 18:43:17  madden
 * added TXALIGN_NO_DUMPGNL if dumpgnl is not desired
 *
@@ -490,13 +502,17 @@ typedef struct MarkSeqAlign {
 } MarkSeqAlign, PNTR MarkSeqAlignPtr;
 
 
-SeqIdPtr LIBCALL GetUseThisGi PROTO((SeqAlignPtr seqalign));
-Boolean LIBCALL FilterTheDefline PROTO((BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 buffer_id_length, CharPtr PNTR titlepp));
+NLM_EXTERN SeqIdPtr LIBCALL GetUseThisGi PROTO((SeqAlignPtr seqalign));
+NLM_EXTERN Boolean LIBCALL FilterTheDefline PROTO((BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 buffer_id_length, CharPtr PNTR titlepp));
 
 
 /* Printoverview stuff. */
-Boolean LIBCALL MakeDisplaySeqLoc PROTO((SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length));
-Boolean LIBCALL PrintOverviewFromSeqLocs PROTO((ValNodePtr vnp, Int4 query_length, FILE *outfp));
+NLM_EXTERN Boolean LIBCALL MakeDisplaySeqLoc PROTO((SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length));
+NLM_EXTERN Boolean LIBCALL PrintOverviewFromSeqLocs PROTO((ValNodePtr vnp, Int4 query_length, FILE *outfp));
+
+NLM_EXTERN Boolean FormatScoreFromSeqAlign
+(SeqAlignPtr sap, Uint4 option, FILE *fp,
+Int4Ptr PNTR matrix, Boolean follower);    
 
 
 #ifdef __cplusplus

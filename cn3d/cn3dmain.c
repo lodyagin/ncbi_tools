@@ -34,6 +34,36 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.51  2000/01/11 01:16:46  lewisg
+* fix color selection in Cn3D, other misc. bugs
+*
+* Revision 6.50  2000/01/08 00:47:53  lewisg
+* fixes to selection, update, color
+*
+* Revision 6.49  2000/01/04 15:55:50  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.48  1999/11/22 14:46:41  thiessen
+* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
+*
+* Revision 6.46  1999/11/10 23:19:40  lewisg
+* rewrite of selection code for ddv
+*
+* Revision 6.45  1999/11/03 16:24:20  lewisg
+* get rid of non-existing includes
+*
+* Revision 6.44  1999/10/29 14:15:27  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.43  1999/10/05 23:18:19  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.42  1999/09/21 18:09:16  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
+* Revision 6.41  1999/09/21 13:59:22  thiessen
+* port of Lewis's OpenGL code to X/Motif
+*
 * Revision 6.40  1999/09/16 17:16:20  ywang
 * open multiple salsa window for data with multiple seq-annot data
 *
@@ -160,7 +190,7 @@
 */
 
 #include <ncbi.h>
-#include <vibrant.h>  /* for netentcf */
+#include <vibrant.h>            /* for netentcf */
 #include <netcnfg.h>
 #include <cn3dmain.h>
 #include <objmime.h>
@@ -172,67 +202,55 @@
 #include <sequtil.h>
 #include <saledit.h>
 #include <lsqfetch.h>
-#include <cn3dpane.h>
-#include <algorend.h>
 #include <cn3dopen.h>
-#include <cn3dmsg.h>
 #include <salmedia.h>
 #include <sqnutils.h>
+#include <ddvmain.h>
+#include <cn3dshim.h>
 
-extern Boolean viewalign_only;
+extern void Cn3D_SaveActiveCam(void);
+extern Nlm_Boolean Nlm_Call_SetPosition3D(Nlm_RecT *);
+extern Nlm_Boolean Nlm_Call_SaveImageGIF(CharPtr);
 
 static Boolean LIBCALLBACK OpenMimeFile(CharPtr filename)
 {
-#ifdef OS_MAC
-  /* the Web browsers on other platforms get upset if you delete the file, */
-  /* but apparently on the Mac you must delete it */
-  return OpenMimeFileWithDeletion(filename, TRUE);
-#else
-  return OpenMimeFileWithDeletion(filename, FALSE);
-#endif
+/*#ifdef OS_MAC
+    /* the Web browsers on other platforms get upset if you delete the file, */
+    /* but apparently on the Mac you must delete it */
+    /*return OpenMimeFileWithDeletion(filename, TRUE);
+#else */
+    return OpenMimeFileWithDeletion(filename, FALSE);
+/*#endif */
 }
 
 /******* SEQUENCE EDITOR *********/
-static SeqEditViewProcs    seqedprocs;
+static SeqEditViewProcs seqedprocs;
 /******** END ************/
 
-static void ConfigAccepted (void)
-
-{
-  SetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", "TRUE");
-  Message (MSG_OK, "Setting will take affect when you restart Cn3D");
+static void ConfigAccepted(void)
+ {
+    SetAppParam("CN3D", "SETTINGS", "NETWORKAVAILABLE", "TRUE");
+    Message(MSG_OK, "Setting will take affect when you restart Cn3D");
 }
 
-static void ConfigCancelled (void)
-
+static void ConfigCancelled(void)
 {
-  Message (MSG_OK, "No changes to the network configuration have been made");
 }
 
-static void ConfigTurnedOff (void)
-
-{
-  SetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", "FALSE");
-  Message (MSG_OK, "Setting will take affect when you restart Cn3D");
+static void ConfigTurnedOff(void)
+ {
+    SetAppParam("CN3D", "SETTINGS", "NETWORKAVAILABLE", "FALSE");
+    Message(MSG_OK, "Setting will take affect when you restart Cn3D");
 }
 
-static void NetConfigureProc (IteM i)
+static void NetConfigureProc(IteM i)
+ {
+    Boolean netCurrentlyOn = FALSE;
 
-{
-  Boolean  netCurrentlyOn = FALSE;
-  Char     str [32];
-
-  if (GetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof (str))) {
-    if (StringICmp (str, "TRUE") == 0) {
-      netCurrentlyOn = TRUE;
-    }
-  }
-  if (Cn3D_useEntrez) {
-    netCurrentlyOn = TRUE;
-  }
-  ShowNetConfigForm (NULL, NULL,
-                     ConfigAccepted, ConfigCancelled,
-                     ConfigTurnedOff, netCurrentlyOn);
+    if (Cn3D_ColorData.UseEntrez) ShowNetConfigForm(NULL,
+        NULL, ConfigAccepted, ConfigCancelled, ConfigTurnedOff, TRUE);
+    else ShowNetConfigForm(NULL, NULL, ConfigAccepted, ConfigCancelled,
+                      ConfigTurnedOff, FALSE);
 }
 
 
@@ -241,211 +259,152 @@ static void Cn3D_PrintImage(Char * str)
 {
     BiostrucPtr pbsBiostruc = NULL;
     PDNMS pdnmsModelstruc = NULL;
-    PMSD  pmsdThis = NULL;
-    Int4 MdlNo,  MdlLvl;
+    PMSD pmsdThis = NULL;
+    Int4 MdlNo, MdlLvl;
     PDNML pdnmlThis = NULL;
     PDNML pdnmlFirst = NULL;
     PMLD pmldThis = NULL;
     PMLD pmldOne = NULL;
     PMLD pmldAll = NULL;
     PMLD pmldVec = NULL;
-    
-    SetNeighborOff();   /* we don't load in neighbors thru this route */
-#ifndef _OPENGL
+
+    SetNeighborOff();           /* we don't load in neighbors thru this route */
     Cn3D_SaveActiveCam();
-#endif
     ClearStructures();
-    
-    MdlLvl = ALLSIMPLEMDL;   
-    MdlNo = 1; 
-       
-    pbsBiostruc = FetchBS(str,  INP_GI, MdlLvl, MdlNo, GetMMDBAPIbExtent());
-    if (pbsBiostruc != NULL)
-    {
-        pdnmsModelstruc= MakeAModelstruc(pbsBiostruc);	
-    }	
-    if (pdnmsModelstruc == NULL)
-    {
+
+    MdlLvl = ALLSIMPLEMDL;
+    MdlNo = 1;
+
+    pbsBiostruc = FetchBS(str, INP_GI, MdlLvl, MdlNo, GetMMDBAPIbExtent());
+    if (pbsBiostruc != NULL) {
+        pdnmsModelstruc = MakeAModelstruc(pbsBiostruc);
+    }
+    if (pdnmsModelstruc == NULL) {
         /* return a not found error here */
         return;
-    }    
+    }
     /* turn off backbone model if "All" models present */
     pmsdThis = (PMSD) pdnmsModelstruc->data.ptrvalue;
     pdnmlThis = pmsdThis->pdnmlModels;
     /* set up for doing one model or animation */
-    while (pdnmlThis)
-    {
+    while (pdnmlThis) {
         pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
         if (pmldThis->iType == Model_type_ncbi_vector)
             pmldVec = pmldThis;
         if (pmldThis->iType == Model_type_ncbi_backbone)
             pmldOne = pmldThis;
-        if(pmldThis->iType == Model_type_ncbi_all_atom)
+        if (pmldThis->iType == Model_type_ncbi_all_atom)
             pmldAll = pmldThis;
         pdnmlThis = pdnmlThis->next;
     }
     if ((pmldOne != NULL) && (pmldAll != NULL))
         pmldOne->bSelected &= (Byte) 0xFE;
-     
+
     Cn3D_ResetActiveStrucProc();
-    
+
     return;
 }
 
 
-static SeqEntryPtr LIBCALLBACK SeqEdDownload (CharPtr program, CharPtr accession, Int4 uid, Boolean is_na, BoolPtr is_new)
-
-{
-  BioseqPtr    bsp;
-  LinkSetPtr   lsp;
-  SeqEntryPtr  sep = NULL;
-  Int2         seqtype;
-  SeqId        sid;
-  Char         str [64];
-
-  EntrezInit (program, TRUE, NULL);
-  if (! StringHasNoText (accession)) {
-    if (is_na) {
-      seqtype = TYP_NT;
-    } else {
-      seqtype = TYP_AA;
-    }
-    sprintf (str, "\"%s\" [ACCN]", accession);
-    lsp = EntrezTLEvalString (str, seqtype, -1, NULL, NULL);
-    if (lsp != NULL) {
-      if (lsp->uids)
-         uid = lsp->uids [0];
-    }
-    LinkSetFree (lsp);
-  }
-  if (uid > 0) {
-    sid.choice = SEQID_GI;
-    sid.data.intvalue = uid;
-    sid.next = NULL;
-    bsp = BioseqLockById (&sid);
-    if (bsp != NULL) {
-      sep = SeqMgrGetSeqEntryForData (bsp);
-      BioseqUnlock (bsp);
-    } else {
-      sep = EntrezSeqEntryGet (uid, -2);
-      if (is_new != NULL) {
-        *is_new = TRUE;
-      }
-    }
-  }
-  EntrezFini ();
-  return sep;
-}
 
 Int2 Main(void)
 {
-  char buffer [PATH_MAX];
-  WindoW www;
-  Boolean  netCurrentlyOn = FALSE;
-  Char     str [32];
+    char buffer[PATH_MAX];
+    WindoW www;
+    Boolean netCurrentlyOn = FALSE;
+    ObjMgrPtr omp;
 
 
+    ErrSetFatalLevel(SEV_MAX);
 
-  ErrSetFatalLevel( SEV_MAX );
+    UseLocalAsnloadDataAndErrMsg();
+    if (!OpenMMDBAPI(0, NULL))
+        return 1;
 
-  UseLocalAsnloadDataAndErrMsg();
-  if ( !OpenMMDBAPI(0, NULL) )
-    return 1;
-
-  SeqAsnLoad();
-
-
-  if (GetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof (str))) {
-    if (StringICmp (str, "TRUE") == 0) {
-      Cn3D_useEntrez = TRUE;
-    }
-  }
-
-  if (Cn3D_useEntrez) {
-    EntrezBioseqFetchEnable ("Cn3D", FALSE);
-    EntrezInit("Cn3D", TRUE, NULL);
-  }
-
-/******* SEQUENCE EDITOR *********/
-  MemSet ((Pointer) (&seqedprocs), 0, sizeof (SeqEditViewProcs));
-  if(Cn3D_useEntrez)seqedprocs.download = SeqEdDownload;
-  SetAppProperty ("SeqEditDisplayForm", &seqedprocs);
-/******** END ************/
-  
+    SeqAsnLoad();
 
 #ifdef WIN_MAC
-    DeskAccGroup( AppleMenu( NULL ) );
+    DeskAccGroup(AppleMenu(NULL));
 #endif
 
-  www = Cn3DWin(NULL, NULL, NetConfigureProc, Cn3D_useEntrez);
-  if ( www )
-    {
-      if (GetAppParam("Cn3D","demo","mandatory_file","", buffer, sizeof(buffer)) > 0)
-	{
-	  OpenMimeFileWithDeletion(buffer, FALSE);
-	} else {
+    /* increment maximum # of objects held in memory */
+    omp = ObjMgrWriteLock();
+    if (omp != NULL)
+        omp->maxtemp = DDV_MAXTEMP;
+    ObjMgrUnlock();
+
+    /*register the sequence and alignment viewers */
+    REGISTER_UDV_AUTONOMOUS;    /* udv */
+    REG_DDV_SLA_VIEW;           /* ddv */
+
+    if(Cn3D_UseNetwork()) Cn3D_ColorData.UseEntrez = TRUE;
+    else Cn3D_ColorData.UseEntrez = FALSE;
+    Cn3D_ColorData.EntrezOn = FALSE;
+
+
+    www = Cn3DWin(NULL, NULL, NetConfigureProc, TRUE);
+    if (www) {
+        if (GetAppParam
+            ("Cn3D", "demo", "mandatory_file", "", buffer,
+             sizeof(buffer)) > 0) {
+            OpenMimeFileWithDeletion(buffer, FALSE);
+        } else {
 #if defined(OS_UNIX) || defined(WIN_MSWIN)
-	  if (GetArgc() == 2)
-	    OpenMimeFile( GetArgv()[1] );
-      else if (GetArgc() == 4) {
-          /* 
-             runs Cn3D in batch mode to produce gifs.  Arguments are mmdb id, width, and height.  
-             gifs are saved with a file name constructed using the mmdb id.
-           */
-          CharPtr defname;
-          Nlm_RecT rect;
+            if (GetArgc() == 2)
+                OpenMimeFile(GetArgv()[1]);
+            else if (GetArgc() == 4) {
+                /*
+                   runs Cn3D in batch mode to produce gifs.  Arguments are mmdb id, width, and height.
+                   gifs are saved with a file name constructed using the mmdb id.
+                 */
+                CharPtr defname;
+                Nlm_RecT rect;
 
-          rect.left = 0;
-          rect.right = atoi(GetArgv()[2]);
-          rect.top = 0;
-          rect.bottom = atoi(GetArgv()[3]);
-          if(rect.right < 1 || rect.bottom < 1) return 0;
+                rect.left = 0;
+                rect.right = atoi(GetArgv()[2]);
+                rect.top = 0;
+                rect.bottom = atoi(GetArgv()[3]);
+                if (rect.right < 1 || rect.bottom < 1)
+                    return 0;
 
-          defname = StringSave(GetArgv()[1]);
-          if (atoi(defname) < 1 ) return 0;
-          Cn3D_PrintImage(defname);
-          StringCat(defname, ".gif");
-          Show(www);
-          Cn3D_Redraw(TRUE);
-#if _OPENGL
-          OGL_SetPosition3D(Cn3D_ColorData.OGL_Data, &rect);
-#else /* _OPENGL */
-          SetPosition3D(Cn3D_v3d, &rect);
-#endif /* else _OPENGL */
-          Update();
-          SaveImageGIF(Nlm_GetViewerImage3D(Cn3D_v3d), defname);
-          return 0;
-     } 
-	  else {
-	    if (GetAppParam("Cn3D","demo","optional_file","", buffer, sizeof(buffer)) > 0)
-	      {
-		OpenMimeFileWithDeletion(buffer, FALSE);
-	      }
-	  }
+                defname = StringSave(GetArgv()[1]);
+                if (atoi(defname) < 1)
+                    return 0;
+                Cn3D_PrintImage(defname);
+                StringCat(defname, ".gif");
+                Show(www);
+                Cn3D_Redraw(TRUE);
+                Nlm_Call_SetPosition3D(&rect);
+                Update();
+                Nlm_Call_SaveImageGIF(defname);
+                return 0;
+            }
+            else {
+                if (GetAppParam
+                    ("Cn3D", "demo", "optional_file", "", buffer,
+                     sizeof(buffer)) > 0) {
+                    OpenMimeFileWithDeletion(buffer, FALSE);
+                }
+            }
 #endif
 #if defined(WIN_MAC)  ||  defined(WIN_MSWIN)
-	  RegisterDropProc( OpenMimeFile );
+            RegisterDropProc(OpenMimeFile);
 #endif
-	}
+        }
 
-/*    if(!viewalign_only) Show( www ); */
-      Show( www );
-/*    if(Mime_ReadIn) LaunchSequenceWindow(); */    /*  yanli */
-      ProcessEvents();
-  }
-
-  CloseMMDBAPI();
-  
-
-  /* to do: delete OGL global information in viewer3D.  lyg */
-
-  if (Cn3D_useEntrez) {
-    EntrezBioseqFetchDisable ();
-    if (EntrezIsInited ()) {
-      EntrezFini ();
+        Show(www);
+        ProcessEvents();
     }
-  }
 
-  return 0;
+    CloseMMDBAPI();
+
+
+    /* to do: delete OGL global information in viewer3D.  lyg */
+
+    if (Cn3D_ColorData.EntrezOn) {
+        EntrezBioseqFetchDisable();
+        EntrezFini();
+    }
+
+    return 0;
 }
-

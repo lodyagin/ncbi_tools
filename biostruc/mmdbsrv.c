@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.21 1999/06/17 14:44:09 zimmerma Exp $
+/* $Id: mmdbsrv.c,v 6.22 1999/10/13 20:13:18 zimmerma Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.22  1999/10/13 20:13:18  zimmerma
+* DZ: Removed use of temporary files - html ouput redirected to stdout
+*
 * Revision 6.21  1999/06/17 14:44:09  zimmerma
 * Added static char variable for cvsId in order to use unix "what"
 *
@@ -361,88 +364,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.21 1999/06/17 14:44:09 zimmerma Exp $";
-
-static FILE    *GlobalDisplayFile = NULL;
-static Char    GlobalDisplayName[PATH_MAX];
-static CharPtr SendFileName;
-static Int4    SendFileBytesOutput;
-
-
-
-/* Several of these routines are from Brandon Brylawski's WWW code */
-
-static void PrintFileTimedOut(int sig)
-/* This is called if the alarm in WWWSendFile goes off, indicating that 
-   part of a file took way too long to display. */
-{
-  ErrLogPrintf("#WWWSendFile timed out : wrote %ld of %ld bytes.\n",
-  	    SendFileBytesOutput, FileLength(SendFileName)); 
-  FileRemove(GlobalDisplayName);
-  exit(1);
-}
-
-
-
-/* This routine displays the given file to standard output.  It buffers and
- * safeguards it appropriately.
- *
- * The semantics have been changed from an earlier version.  Previously,
- * WWWSendFile had a single parameter, the file name 'Name', and opened the
- * file for reading.  It turned out that the safeguarding was insufficient.
- * E.g. if the user interrupted the data transfer during a "See File" or
- * "Save File" then the temporary file was left sitting in /var/tmp.  To
- * guard against this, the calling routine for WWWSendFile must now itself
- * open the file for reading, unlink it, and then call WWWSendFile with
- * the name and FILE pointer.  When WWWSendFile returns the caller should
- * close and remove the file.
- */
-
-static Int4 WWWSendFile(CharPtr Name, FILE *File)
-{
-#define ALARM_SECS 120
-#define PF_BUFSIZE 1500
-
-  char FullName[200], Buffer[PF_BUFSIZE];
-  Int4 NumChars;
-
-  if (!Name)
-    return 0;
-
-  SendFileName = Name;
-  SendFileBytesOutput = 0;
-
-#ifdef OS_UNIX
-  signal(SIGALRM, PrintFileTimedOut);
-#endif
-
-  if (!File)
-    return 0;
-
-  /* It is assumed the file is already open for reading! */
-  do
-    {
-      NumChars = FileRead(Buffer,sizeof(char),PF_BUFSIZE,File);
-      alarm(ALARM_SECS); 
-      if (FileWrite(Buffer,sizeof(char),NumChars,stdout) != NumChars)
-	{
-	  ErrLogPrintf("#WWWSendFile PrintFile write error!\n");
-	  alarm(0);
-	  break;
-	}
-      fflush(stdout);
-      SendFileBytesOutput += NumChars;
-      alarm(0);
-    }
-  while(NumChars == PF_BUFSIZE);
-
-  alarm(ALARM_SECS); 
-  fflush(stdout);
-  alarm(0);
-  return SendFileBytesOutput;
-}
-
-
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.22 1999/10/13 20:13:18 zimmerma Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 
@@ -828,7 +750,7 @@ PrintStructureView(PDNMS ModelStruc, FILE *File)
         if (ModelStruc == NULL) return;         
 
 	pmsd = (PMSD) ModelStruc->data.ptrvalue;
-	fprintf(File, "<FORM METHOD=POST ACTION=\"%s%s\">\n", URLcgi, CGIName);
+	fprintf(File, "<FORM METHOD=POST ACTION=\"%s%s\">\n", URLcgi, "mmdbsrv");
 	fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%ld>\n", (long) pmsd->iMMDBid);
 	WWWPrintFileData(CODEFILE, File);
 }
@@ -1256,189 +1178,145 @@ static void DumpMime(AsnIoPtr aip, CharPtr title, VoidPtr datum)
 
 static Int4
 SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
-			Int4 Models, Int4 Color, Int4 Render)
+		  Int4 Models, Int4 Color, Int4 Render)
 {
-	BiostrucPtr bsp;
-	PDNMS ModelStruc;
-	Int4 count, i4Sent = 0, error_flag = 0;
-	AsnIoPtr aip;
+  BiostrucPtr bsp;
+  PDNMS ModelStruc;
+  Int4 count, i4Sent = 0, error_flag = 0;
+  AsnIoPtr aip;
         
-        /* yanli start */
-        NcbiMimeAsn1Ptr mime;
-        BiostrucSeqPtr bssp;
-        BiostrucGraphPtr bsgp;
-        MoleculeGraphPtr mgp;
-        SeqIdPtr sip;
-        SeqEntryPtr sep;
-        Int2 retcode = 3;
-        Int4 This_uid = 0;
+  /* yanli start */
+  NcbiMimeAsn1Ptr mime;
+  BiostrucSeqPtr bssp;
+  BiostrucGraphPtr bsgp;
+  MoleculeGraphPtr mgp;
+  SeqIdPtr sip;
+  SeqEntryPtr sep;
+  Int2 retcode = 3;
+  Int4 This_uid = 0;
 
-	GlobalDisplayName[0] = '\0';
-	StringCat(GlobalDisplayName, TmpNam(NULL)); 
-
-	if ((GlobalDisplayFile = FileOpen(GlobalDisplayName, WRITE)) == NULL) {
-		printf("Content-type: text/html\r\n\r\n");
-		printf("<h2>Error</h2>\n");
-		printf("%s: Temp File Named [%s] Failed to open on Server<p>\n", CGIName,
-			GlobalDisplayName);
-		printf("Contact %s\n", MAILTO);
-		return 0;
-	}
-    
-	if ((bsp = MMDBBiostrucGet((DocUid) uid, Complexity, Models)) == NULL) {
-		fflush(GlobalDisplayFile);
-		FileClose(GlobalDisplayFile);
-		FileRemove(GlobalDisplayName);
-		printf("Content-type: text/html\r\n\r\n");
-		printf("<h2>Error</h2>\n");
-		printf("Structure with UID = %ld failed to fetch on Server<p>\n", (long) uid);
-		printf("No such structure available on this MMDB server.\n");
-		return 0;
-	}
+  if ((bsp = MMDBBiostrucGet((DocUid) uid, Complexity, Models)) == NULL) {
+    printf("Content-type: text/html\r\n\r\n");
+    printf("<h2>Error</h2>\n");
+    printf("Structure with UID = %ld failed to fetch on Server<p>\n", (long) uid);
+    printf("No such structure available on this MMDB server.\n");
+    return 0;
+  }
 
   /*yanli*/
-        bsgp = bsp->chemical_graph;
-        mgp = bsgp->molecule_graphs;
-        sip = mgp->seq_id;
-        /*  This_uid =  EntrezFindSeqId(sip);    */
-        while(sip != NULL){
-          if(sip->choice == 12) This_uid = sip->data.intvalue;
-          sip = sip->next;
-        }
-        sep = EntrezSeqEntryGet(This_uid, retcode);
+  bsgp = bsp->chemical_graph;
+  mgp = bsgp->molecule_graphs;
+  sip = mgp->seq_id;
+  /*  This_uid =  EntrezFindSeqId(sip);    */
+  while(sip != NULL){
+    if(sip->choice == 12) This_uid = sip->data.intvalue;
+    sip = sip->next;
+  }
+  sep = EntrezSeqEntryGet(This_uid, retcode);
      
-        bssp = BiostrucSeqNew();
-        bssp->structure = bsp;
-        ValNodeLink(&(bssp->sequences), sep);     
+  bssp = BiostrucSeqNew();
+  bssp->structure = bsp;
+  ValNodeLink(&(bssp->sequences), sep);     
         
-        mime = (NcbiMimeAsn1Ptr) ValNodeNew(NULL);    /* yanli */
-        mime->choice = NcbiMimeAsn1_strucseq;
-        mime->data.ptrvalue = bssp;
+  mime = (NcbiMimeAsn1Ptr) ValNodeNew(NULL);    /* yanli */
+  mime->choice = NcbiMimeAsn1_strucseq;
+  mime->data.ptrvalue = bssp;
   /*---yanli*/
         
-	/* the following headers are format-independent */
-	switch (Mime) {
-	case SAVE_FILE:
-		fprintf(GlobalDisplayFile, "Content-type: application/octet-stream\r\n\r\n");
-		break;
-	case SEE_FILE:
-		fprintf(GlobalDisplayFile, "Content-type: text/html\r\n\r\n");
-		fprintf(GlobalDisplayFile, "<HTML><PRE>\r\n");
-		break;
-	}
+  /* the following headers are format-independent */
+  switch (Mime) {
+  case SAVE_FILE:
+    printf("Content-type: application/octet-stream\r\n\r\n");
+    break;
+  case SEE_FILE:
+    printf ("Content-type: text/html\r\n\r\n");
+    printf ("<HTML><PRE>\r\n");
+    break;
+  }
 
-	if (Filetype == 'j') {
-		/* Cn3D v2.0 asn.1 format */
-		switch (Mime) {
-		case LAUNCH_VIEWER:
-			fprintf(GlobalDisplayFile, "Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
-			aip = AsnIoNew(ASNIO_BIN_OUT, GlobalDisplayFile, NULL, NULL, NULL);
-  	        	DumpMime(aip, "MIME", bssp);    
-			break;
-		case SAVE_FILE:
-  			aip = AsnIoNew(ASNIO_BIN_OUT, GlobalDisplayFile, NULL, NULL, NULL);   
-            		NcbiMimeAsn1AsnWrite(mime, aip, NULL);
-			break;
-		case SEE_FILE:
-			aip = AsnIoNew(ASNIO_TEXT_OUT, GlobalDisplayFile, NULL, NULL, NULL);
-            		NcbiMimeAsn1AsnWrite(mime, aip, NULL);
-			break;
-		}
+  if (Filetype == 'j') {
+    /* Cn3D v2.0 asn.1 format */
+    switch (Mime) {
+    case LAUNCH_VIEWER:
+      printf ("Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
+      aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
+      DumpMime(aip, "MIME", bssp);    
+      break;
+    case SAVE_FILE:
+      aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);   
+      NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+      break;
+    case SEE_FILE:
+      aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
+      NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+      break;
+    }
 
-		AsnIoReset(aip);
-		AsnIoClose(aip);
-	}
-	else if (Filetype == 'i') {
-		/* Cn3D v1.0 asn.1 format.  Included for backwards compatibility, in case users
-		 * want to stick with their old Cn3D for some reason.
-		 */
-		switch (Mime) {
-		case LAUNCH_VIEWER:
-			fprintf(GlobalDisplayFile, "Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
-			aip = AsnIoNew(ASNIO_BIN_OUT, GlobalDisplayFile, NULL, NULL, NULL);
-			DumpMime_v1(aip, "MIME", Entrez_style_report, Data_data_structure, bsp);
-			break;
-		case SAVE_FILE:
-			aip = AsnIoNew(ASNIO_BIN_OUT, GlobalDisplayFile, NULL, NULL, NULL);
-			BiostrucAsnWrite(bsp, aip, NULL);
-			break;
-		case SEE_FILE:
-			aip = AsnIoNew(ASNIO_TEXT_OUT, GlobalDisplayFile, NULL, NULL, NULL);
-			BiostrucAsnWrite(bsp, aip, NULL);
-			break;
-		}
-
-		AsnIoReset(aip);
-		AsnIoClose(aip);
-	}
-	else if (Filetype == 'r') {
-		/* RasMol format */
-		if (Mime == LAUNCH_VIEWER)
-			fprintf(GlobalDisplayFile, "Content-type: chemical/x-pdb\r\n\r\n");
-
-		ModelStruc = MakeAModelstruc(bsp);
-		bssp->structure = NULL;  /* already linked into modelstruc */
-		WritePDBAllModel(ModelStruc, GlobalDisplayFile);
-		ClearStructures();
-	}
-	else if (Filetype == 'k') {
-		/* Mage format */
-		if (Mime == LAUNCH_VIEWER)
-			fprintf(GlobalDisplayFile, "Content-type: chemical/x-kinemage\r\n\r\n");
-
-		ModelStruc = MakeAModelstruc(bsp);
-		bssp->structure = NULL;  /* already linked into modelstruc */
-		WriteKinAllModel(ModelStruc, GlobalDisplayFile, Color, Render);
-		ClearStructures();
-	}
-	else {
-		error_flag = 1;
-		printf("Content-type: text/html\r\n\r\n");
-		printf("<h2>Error</h2>\n");
-		printf("Unknown file type on structure fetch.<p>\n");
-		printf("Contact %s\n", MAILTO);
-	}
-
-	if ((Mime == SEE_FILE) && (!error_flag))
-		fprintf(GlobalDisplayFile, "</PRE></HTML>\r\n");
-
-	fflush(GlobalDisplayFile);
-	FileClose(GlobalDisplayFile);
-
-	if (!error_flag) {
-		FILE *sendfile;
-
-		sendfile = FileOpen(GlobalDisplayName, READ);
-
-		/* This unlink ensures that in case the process is killed during the
-		 * WWWSendFile, that the file will be removed (e.g. if a data transfer
-		 * interrupt occurs).
-		 */
-		if (unlink(GlobalDisplayName) != 0) {
-			printf("Content-type: text/html\r\n\r\n");
-			printf("<h2>Error in SendStructureMIME</h2>\n");
-			printf("Unlink of temp file %s failed!\n", GlobalDisplayName);
-			printf("Contact %s\n", MAILTO);
-			return 0;
-		}
-
-		i4Sent = WWWSendFile(GlobalDisplayName, sendfile);
-		FileClose(sendfile);
-	}
-	else
-		i4Sent = 0;
-
-	FileRemove(GlobalDisplayName);
-         NcbiMimeAsn1Free(mime);           /* yanli */
-	return i4Sent;
-
+    AsnIoReset(aip);
+    AsnIoClose(aip);
+  }
+  else if (Filetype == 'i') {
+    /* Cn3D v1.0 asn.1 format.  Included for backwards compatibility, in case users
+     * want to stick with their old Cn3D for some reason.
+     */
+    switch (Mime) {
+    case LAUNCH_VIEWER:
+      printf ("Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
+      aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
+      DumpMime_v1(aip, "MIME", Entrez_style_report, Data_data_structure, bsp);
+      break;
+    case SAVE_FILE:
+      aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
+      BiostrucAsnWrite(bsp, aip, NULL);
+      break;
+    case SEE_FILE:
+      aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
+      BiostrucAsnWrite(bsp, aip, NULL);
+      break;
+    }
+    
+    AsnIoReset(aip);
+    AsnIoClose(aip);
+  }
+  else if (Filetype == 'r') {
+    /* RasMol format */
+    if (Mime == LAUNCH_VIEWER)
+      printf ("Content-type: chemical/x-pdb\r\n\r\n");
+    
+    ModelStruc = MakeAModelstruc(bsp);
+    bssp->structure = NULL;  /* already linked into modelstruc */
+    WritePDBAllModel(ModelStruc, stdout);
+    ClearStructures();
+  }
+  else if (Filetype == 'k') {
+    /* Mage format */
+    if (Mime == LAUNCH_VIEWER)
+      printf ("Content-type: chemical/x-kinemage\r\n\r\n");
+    
+    ModelStruc = MakeAModelstruc(bsp);
+    bssp->structure = NULL;  /* already linked into modelstruc */
+    WriteKinAllModel(ModelStruc, stdout, Color, Render);
+    ClearStructures();
+  }
+  else {
+    error_flag = 1;
+    printf("Content-type: text/html\r\n\r\n");
+    printf("<h2>Error</h2>\n");
+    printf("Unknown file type on structure fetch.<p>\n");
+    printf("Contact %s\n", MAILTO);
+  }
+  
+  if ((Mime == SEE_FILE) && (!error_flag))
+    printf ("</PRE></HTML>\r\n");
+  
+  NcbiMimeAsn1Free(mime);           /* yanli */
+  return 1;
+  
 } /* end SendStructureMIME */
-
 
 
 static Int4  SendSummaryPage(Int4Ptr Uids, Int4 NumToDisplay, Int4 Save)
 {
-
   BiostrucPtr bsp;
   ValNodePtr descr;
   PDNMS ModelStruc;
@@ -1447,93 +1325,62 @@ static Int4  SendSummaryPage(Int4Ptr Uids, Int4 NumToDisplay, Int4 Save)
   Char tax_save[MAX_TBUFF];
   FILE *sendfile;
    
-     GlobalDisplayName[0] = '\0';
-     StringCat(GlobalDisplayName, TmpNam(NULL)); 
-     if  (!(GlobalDisplayFile = FileOpen(GlobalDisplayName,WRITE)))
-	   {
-	     printf("Content-type: text/html\n\n");
-	     printf("<h2>Error</h2>\n");
-	     printf("%s: Temp File Named [%s] Failed to open on Server<p>\n", CGIName, GlobalDisplayName);
-	     printf("Contact %s\n", MAILTO);
-             return 0;
-	   }   
-	   
-     if (Save == 2)
-      fprintf(GlobalDisplayFile, "Content-type: application/octet-stream\n\n");  
-     else
-      fprintf(GlobalDisplayFile, "Content-type: text/html\n\n");  
+  if (Save == 2)
+    printf ("Content-type: application/octet-stream\n\n");  
+  else
+    printf ("Content-type: text/html\n\n");  
      
-     if (!GlobalNonHtmlOutput)
-      {
-	if (GlobalTitles) 
-	    WWWPrintFileData(HEADFILE,  GlobalDisplayFile);
-	else
-	    fprintf(GlobalDisplayFile, "<html>\n<title>MMDB Structure Summary</title><body>"); 
-      }
+  if (!GlobalNonHtmlOutput) {
+    if (GlobalTitles) 
+      WWWPrintFileData(HEADFILE,  stdout);
+    else
+      printf ( "<html>\n<title>MMDB Structure Summary</title><body>"); 
+  }
   for (count = 0; count < NumToDisplay; count++)
-     {
-	  uid = Uids[count];
-	  bsp = MMDBBiostrucGet((DocUid) uid,3,0);
-	  if (bsp == NULL)
-	    {
-	      fprintf(GlobalDisplayFile,
-		      "%sNo structure found for UID %ld.%s\n",
-		      GlobalNonHtmlOutput ? "\n" : "<P><h4>",uid,
-		      GlobalNonHtmlOutput ? "\n" : "</h4><P>");
-              if (!GlobalNonHtmlOutput) 
-	        fprintf(GlobalDisplayFile, "<HR SIZE=5 NOSHADE><BR>\n");
-	      continue;
-	    }
+    {
+      uid = Uids[count];
+      bsp = MMDBBiostrucGet((DocUid) uid,3,0);
+      if (bsp == NULL)
+	{
+	  printf ("%sNo structure found for UID %ld.%s\n",
+		  GlobalNonHtmlOutput ? "\n" : "<P><h4>",uid,
+		  GlobalNonHtmlOutput ? "\n" : "</h4><P>");
+	  if (!GlobalNonHtmlOutput) 
+	    printf ("<HR SIZE=5 NOSHADE><BR>\n");
+	  continue;
+	}
 
-	  if (!GlobalNonHtmlOutput) {
-		CharPtr name;
+      if (!GlobalNonHtmlOutput) {
+	CharPtr name;
 
-		for (descr = bsp->descr, name = NULL; descr != NULL; descr = descr->next) {
-			if (descr->choice == BiomolDescr_name) {
-				name = descr->data.ptrvalue;
-				break;
-			}
-		}
-
-		taxret = SaveTaxonomyInfo(bsp, tax_save, MAX_TBUFF, name);
+	for (descr = bsp->descr, name = NULL; descr != NULL; descr = descr->next) {
+	  if (descr->choice == BiomolDescr_name) {
+	    name = descr->data.ptrvalue;
+	    break;
 	  }
-
-	  ModelStruc = MakeAModelstruc(bsp);  
-	  PrintStructureInfo(ModelStruc, GlobalDisplayFile, (taxret) ? tax_save : NULL);
-
-          if (!GlobalNonHtmlOutput) /* Rest of View/Save stuff */
-	    {
-	       PrintStructureLinks(ModelStruc, GlobalDisplayFile);
-	       PrintStructureView(ModelStruc,  GlobalDisplayFile);
-	       fprintf(GlobalDisplayFile, "<HR SIZE=5 NOSHADE><BR>\n");
-   	    }
-	 
-	  ClearStructures();
+	}
+	taxret = SaveTaxonomyInfo(bsp, tax_save, MAX_TBUFF, name);
       }
+
+      ModelStruc = MakeAModelstruc(bsp);  
+      PrintStructureInfo(ModelStruc, stdout, (taxret) ? tax_save : NULL);
+
+      if (!GlobalNonHtmlOutput) /* Rest of View/Save stuff */
+	{
+	  PrintStructureLinks(ModelStruc, stdout);
+	  PrintStructureView(ModelStruc,  stdout);
+	  printf ("<HR SIZE=5 NOSHADE><BR>\n");
+	}
+	 
+      ClearStructures();
+    }
   if (!GlobalNonHtmlOutput)
     if (GlobalTitles)
-      WWWPrintFileData(TAILFILE, GlobalDisplayFile );
+      WWWPrintFileData(TAILFILE, stdout);
     else
-      fprintf(GlobalDisplayFile, "</html>");
+      printf ("</html>");
   
-  
-  fflush(GlobalDisplayFile);
-  FileClose(GlobalDisplayFile);
-  sendfile = FileOpen(GlobalDisplayName, READ);
-
-  if (unlink(GlobalDisplayName) != 0) {
-    printf("Content-type: text/html\r\n\r\n");
-    printf("<h2>Error in SendSummaryPage</h2>\n");
-    printf("Unlink of temp file %s failed!\n", GlobalDisplayName);
-    printf("Contact %s\n", MAILTO);
-    return 0;
-  }
-
-  i4Sent = WWWSendFile(GlobalDisplayName, sendfile);
-  FileClose(sendfile);
-  FileRemove(GlobalDisplayName);
-  return i4Sent;
-    
+  return 1;
 } /* SendSummaryPage() */
 
 

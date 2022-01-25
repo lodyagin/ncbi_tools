@@ -332,7 +332,7 @@ static BLAST_Score ** allocateMatrix(Int4 maxSequenceLength, Int4 alphabetSize)
    the number of positions is dbSequenceLength
    kbp keeps the Karlin-Altschul parameters */
 static void readkbp(FILE * thisMatrixFile, Int4 dbSequenceLength, 
-              BLAST_KarlinBlkPtr kbp)
+              BLAST_KarlinBlkPtr kbp, Char *sequenceFileName)
 {
   Char c; /*index over alphabet*/
   Int4 i; /*row index for matrix*/
@@ -345,7 +345,7 @@ static void readkbp(FILE * thisMatrixFile, Int4 dbSequenceLength,
 
   fscanf(thisMatrixFile, "%d", &lengthInFile);
   if (dbSequenceLength != lengthInFile) {
-    ErrPostEx(SEV_FATAL, 0, 0, "profile: length in sequence file is %ld, length in matrix file is %ld\n", (long) dbSequenceLength, (long) lengthInFile);
+    ErrPostEx(SEV_FATAL, 0, 0, "profile: for file %s length in sequence file is %ld, length in matrix file is %ld, probably due to a blank in sequence file\n", sequenceFileName, (long) dbSequenceLength, (long) lengthInFile);
     return;
   }
   sequence = (Char *) MemNew((dbSequenceLength+1) * sizeof(Char));
@@ -866,6 +866,7 @@ static Nlm_FloatHi specialSmithWatermanScoreOnly(Uint1 * query,
    *dbEnd = bestDbPos;
    *score = bestScore;
    returnEvalue = scoreToEvalue(effSearchSpace, bestScore,  kbp);
+   return(returnEvalue);
 }
 
 /*computes where optimal Smith-Waterman local alignment starts given the
@@ -1323,7 +1324,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
      dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
 			       &subject_id, FALSE, maxLength+2, i+1);
 
-     readkbp(thisMatrixFile, dbSequenceLength, kbp);
+     readkbp(thisMatrixFile, dbSequenceLength, kbp, oneSequenceFileName);
 
      for (p = 0, row = startPos; p < dbSequenceLength; p++, row++)
         posMatrix[p] = (BLAST_Score *) &(bigMatrix[row][0]);
@@ -1335,14 +1336,15 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 						     gap_align->gap_extend,  
 						     &queryEnd, &dbEnd, &score, kbp, L, (Nlm_FloatHi) 
 						     proDemographics->effSearchSpace,  minGappedK, numForbidden, forbiddenRanges);
-       else 
+       else { 
 	 firstEvalue = basicSmithWatermanScoreOnly(querySequence, queryLength, 
 						   dbSequence, dbSequenceLength, posMatrix, gap_align->gap_open, 
 						   gap_align->gap_extend,  
 						   &queryEnd, &dbEnd, &score, kbp, L, (Nlm_FloatHi) 
 						   proDemographics->effSearchSpace,  minGappedK);
-       FileClose(thisSequenceFile);
-       FileClose(thisMatrixFile);
+	 FileClose(thisSequenceFile);
+	 FileClose(thisMatrixFile);
+       }
        if (firstEvalue < ethreshfirst) {        
 	 if (!foundMatchForThisMatrix) {
 	   fillResidueProbability(querySequence, queryLength, resProb);
@@ -1518,7 +1520,7 @@ static Boolean PrintVersionInfo(FILE *outfp)
    return(TRUE);
 }
 
-#define NUMARG 20
+#define NUMARG 22
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -1560,8 +1562,13 @@ static Args myargs [NUMARG] = {
   { "Effective length of the database (default is 0 for actual size, use -1 for size computed in makemat)",
         "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
   { "Print help; overrides all other arguments",
-        "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL}
+        "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Number of one-line descriptions to print",
+      "250", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
+  { "Number of alignments to show ",
+    "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL}
 };  
+
 
 
 Int2  Main(void)
@@ -1638,7 +1645,7 @@ Int2  Main(void)
      return 1;
 
 
-   if ((Boolean) myargs[7].intvalue) {
+   if ((Boolean) myargs[19].intvalue) {
      IMPALAPrintHelp(FALSE, 90, "impala", stdout);
      return(1);
    }
@@ -1833,7 +1840,6 @@ Int2  Main(void)
           }
 
 #ifdef OS_UNIX
-	  search->tick_callback =  tick_callback;
 	  fprintf(global_fp, "%s", "Searching");
 	  fflush(global_fp);
 #endif
@@ -1887,7 +1893,9 @@ Int2  Main(void)
 
 	  /*other_returns = BlastOtherReturnsPrepare(search);*/
 	  BlastErrorPrint(search->error_return);
-          number_of_descriptions = number_of_alignments = PRO_MAX_HIT_LIST;
+          number_of_descriptions = myargs[ARG_NUM_DEFLINES].intvalue;
+          number_of_alignments = myargs[ARG_NUM_ALIGNS].intvalue;
+
 	  if (head)
 	    {
 	      if (seqannot)

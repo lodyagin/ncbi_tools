@@ -29,13 +29,34 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.5 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvmain.c,v $
+* Revision 6.12  2000/01/12 14:01:17  durand
+* fix a cast to avoid compiling error on NT
+*
+* Revision 6.11  2000/01/11 15:04:02  durand
+* add Entrez network stuff
+*
+* Revision 6.10  2000/01/10 15:19:07  durand
+* use Entrez instead of ID1
+*
+* Revision 6.9  2000/01/03 21:05:58  durand
+* update the way the udv main window is created
+*
+* Revision 6.8  1999/11/29 15:18:48  durand
+* designed a new GUI; fixed problems under Win95 and Linux
+*
+* Revision 6.7  1999/11/09 21:09:17  durand
+* reduce the size of the main window at startup
+*
+* Revision 6.6  1999/09/29 20:08:59  durand
+* set UdvGlobals before using getArgs
+*
 * Revision 6.5  1999/07/30 20:10:15  durand
 * updates for the new Entrez graphical viewer
 *
@@ -47,36 +68,136 @@
 * ==========================================================================
 */
 
-#include <accentr.h>
-#include <accid1.h>
 #include <udviewer.h>
+#include <accentr.h>
+#include <netcnfg.h>
 
 /*local text*/
-static Char szAppName[]="UnD-Viewer";
+static Char szAppName[]="OneD-Viewer";
 
 /*******************************************************************************
 
-  Function : UDV_ID1Init()
+  Function : UDV_ConfigAccepted()
   
-  Purpose : Init the connexion to ID1 
+  Purpose : Entrez Network COnfiguration Dialog Box; accept a new config
   
-  Parameters : -
-  
-  Return value : TRUE if success 
+  Return value : none 
 
 *******************************************************************************/
-static Boolean  UDV_ID1Init(void)
+static void UDV_ConfigAccepted(void)
 {
-MonitorPtr  mon;
-Boolean     rsult;
+    SetAppParam("UDV", "SETTINGS", "NETWORKAVAILABLE", "TRUE");
+    Message(MSG_OK, "Setting will take affect when you restart OneD-Viewer");
+}
 
-	mon = MonitorStrNewEx (szAppName, 30, FALSE);
-	MonitorStrValue (mon, "Connecting to ID1 service");
-	Update ();
-	rsult = ID1BioseqFetchEnable(szAppName,TRUE);
-	MonitorFree (mon);
-	Update ();
-	return rsult;
+/*******************************************************************************
+
+  Function : UDV_ConfigCancelled()
+  
+  Purpose : Entrez Network COnfiguration Dialog Box; close dlg without modif.
+  
+  Return value : none 
+
+*******************************************************************************/
+static void UDV_ConfigCancelled(void)
+{
+}
+
+/*******************************************************************************
+
+  Function : UDV_ConfigTurnedOff()
+  
+  Purpose : Entrez Network COnfiguration Dialog Box; cancel Entrez connection
+  
+  Return value : none 
+
+*******************************************************************************/
+static void UDV_ConfigTurnedOff(void)
+{
+    SetAppParam("UDV", "SETTINGS", "NETWORKAVAILABLE", "FALSE");
+    Message(MSG_OK, "Setting will take affect when you restart OneD-Viewer");
+}
+
+/*******************************************************************************
+
+  Function : UDV_ConfigNetwork()
+  
+  Purpose : call the Entrez Network COnfiguration Dialog Box
+  
+  Return value : none 
+
+*******************************************************************************/
+static void UDV_ConfigNetwork(IteM i)
+{
+ViewerMainPtr vmp;
+WindoW        hParent;
+
+	/*get main data block*/
+	hParent=(WindoW)ParentWindow(i);
+	if (!hParent) return;
+	vmp = (ViewerMainPtr) GetObjectExtra (hParent);
+
+    if (vmp->UseNetwork) ShowNetConfigForm(NULL,NULL, UDV_ConfigAccepted, 
+		UDV_ConfigCancelled, UDV_ConfigTurnedOff, TRUE);
+    else ShowNetConfigForm(NULL, NULL, UDV_ConfigAccepted, UDV_ConfigCancelled,
+                      UDV_ConfigTurnedOff, FALSE);
+}
+
+/*******************************************************************************
+
+  Function : UDV_StartEntrez()
+  
+  Purpose :  start connection to Entrez Server.
+  				    
+  Return value : -
+
+*******************************************************************************/
+static Boolean UDV_StartEntrez(Boolean UseNetwork)
+{
+Boolean bRet;
+
+	bRet=FALSE;
+	
+    if (!UseNetwork) {
+		bRet=FALSE; 
+	}
+	else{
+    	if (!EntrezIsInited()) {
+        	if(EntrezBioseqFetchEnable(szAppName, FALSE)) {
+            	if (EntrezInit(szAppName, TRUE, NULL)) 
+					bRet=TRUE;
+				else
+					bRet=FALSE;
+        	}
+			else {
+				bRet=FALSE;
+			}
+    	}
+		else{
+			bRet=TRUE;
+		}
+	}
+	return(bRet);
+}
+
+/*****************************************************************************
+
+Function: UDV_UseNetwork()
+
+Purpose:  Determines if UDV should use the network
+  
+Returns:  TRUE if yes
+
+*****************************************************************************/
+static Boolean UDV_UseNetwork(void)
+{
+Char str[64];
+
+    if (GetAppParam
+        ("UDV", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof(str))) {
+        if (StringICmp(str, "TRUE") == 0) return TRUE;
+    }
+    return FALSE;
 }
 
 /*******************************************************************************
@@ -95,12 +216,12 @@ Int2 Main(void)
 ViewerMainPtr 	vmp;
 WindoW			w; 
 Int2			Margins;
-Boolean 		isID1Ok;
+Boolean 		UseNetwork;
 RecT			rcL;
 UdvGlobals      ug;
 UDVLogoData		ldp;
 	
-	ErrSetMessageLevel(SEV_NONE);
+	ErrSetMessageLevel(SEV_WARNING);
 	ErrSetOptFlags(EO_SHOW_CODES);
 	ErrSetOptFlags(EO_XLATE_CODES);
 	MemSet(&ug,0,sizeof(UdvGlobals));
@@ -108,11 +229,11 @@ UDVLogoData		ldp;
 	/*init some important stuffs*/
 	UseLocalAsnloadDataAndErrMsg();
 
-	isID1Ok=UDV_ID1Init();
+/*	isID1Ok=UDV_ID1Init();
 	if (!isID1Ok){
 		Message (MSG_ERROR, "Unable to connect Network.");
 	}
-
+*/
 	if (! AllObjLoad()){
 		Message (MSG_ERROR, "AsnObjLoad() failed.");
 		return(1);
@@ -152,10 +273,8 @@ UDVLogoData		ldp;
 	REGISTER_UDV_AUTONOMOUS;
 	
 	/*main window*/
-	Margins=4*stdCharWidth;
-	w=DocumentWindow(Margins,Margins ,
-			(Int2)((screenRect.right-screenRect.left)-2*Margins), 
-			(Int2)((screenRect.bottom-screenRect.top)-2*Margins), 
+	Margins=20*stdCharWidth;
+	w=DocumentWindow(Margins,Margins , -10 , -10 ,
 			szAppName, 
 			UDV_WinMainProgQuit,
 			UDV_WinMainResize);
@@ -170,28 +289,36 @@ UDVLogoData		ldp;
 	/*this is an autonomous viewer*/
 	vmp->AutonomeViewer=TRUE;
 
+	/*Should use a connection to Entrez ?*/
+	vmp->UseNetwork=UDV_UseNetwork();
+	UseNetwork=vmp->UseNetwork;
 	/*init menu*/
-	UDV_SetupMenus(w,isID1Ok);
-
+	UDV_SetupMenus(w,UseNetwork);
 	UDV_set_MainMenus(&vmp->MainMenu,FALSE);
-	/*init logo_panel*/
+	/*create the windows*/
+	CreateMainControls(w,vmp,NULL);
+	UDV_set_MainControls(vmp,FALSE);
+
+	/*init logo data*/
 	LogoFontCreate(&ldp.f1,&ldp.f2,&ldp.f3);
-	StringCpy(ldp.szTitle,"UnD-Viewer");
+	StringCpy(ldp.szTitle,szAppName);
 	StringCpy(ldp.szDesc,", a sequence viewer for GenBank");
 	SetAppProperty("UDVLogoData",(Pointer)&ldp);	
-	vmp->Logo_Panel=AutonomousPanel4(w,10,10,UDV_Logo_onDraw,
-			NULL,NULL,0,NULL,NULL);
-	UDV_Resize_Logo_Panel (w,&rcL);
-	SetPosition (vmp->Logo_Panel, &rcL );
-	AdjustPrnt (vmp->Logo_Panel, &rcL, FALSE);
-	vmp->Show_logo=TRUE;	
+	vmp->Show_logo=TRUE;
 	SetAppProperty("AutonomousUDVViewer",(Pointer)vmp);	
 	
 	/*ProcessUpdatesFirst(FALSE);*/
 	
 	RealizeWindow(w);
+	UDV_WinMainResize(w);
 	Show(w);
 
+	ug.fetchSepProc=(UdvFetchSeqEntryProc)EntrezSeqEntryGet;
+	ug.NetCfgMenuProc=UDV_ConfigNetwork;
+	ug.NetStartProc=UDV_StartEntrez;	
+	ug.vmp=vmp;
+	SetAppProperty("UdvGlobals",(Pointer)&ug);
+	
 	/*is there a file to open on the command line ?*/
 	if (GetArgc()>1){
 		/*is GetArgv()[1] a file name ?*/
@@ -204,13 +331,11 @@ UDVLogoData		ldp;
 		}
 	}
 
-	ug.fetchSepProc=ID1SeqEntryGet;
-	ug.vmp=vmp;
-	SetAppProperty("UdvGlobals",(Pointer)&ug);
-	
 	ProcessEvents();
 
-	ID1BioseqFetchDisable();
+	/*ID1BioseqFetchDisable();*/
+	/*close network connection, if needed*/
+	if (UseNetwork && EntrezIsInited()) EntrezBioseqFetchDisable();
 
 	RemoveAppProperty("AutonomousUDVViewer");	
 	RemoveAppProperty("UDVLogoData");	

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.24 $
+* $Revision: 6.27 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.27  1999/10/20 17:17:37  lewisg
+* delete rest of userdata when using OM_OPT_FREE_IF_NO_VIEW in ObjMgrFreeUserDataFunc
+*
+* Revision 6.26  1999/10/18 20:58:47  lewisg
+* add rowID to ObjMgrSendMsgFunc
+*
+* Revision 6.25  1999/09/27 20:03:14  kans
+* added rowID to OMMsgStruct, new ObjMgrSendRowMsg function
+*
 * Revision 6.24  1999/08/13 19:43:35  kans
 * ObjMgrDelete and ObjMgrGetEntityIDForPointer now multithread-safe (EY)
 *
@@ -260,7 +269,7 @@ static Boolean NEAR ObjMgrTypeExtend PROTO((ObjMgrPtr omp));
 *
 *****************************************************************************/
 static Boolean NEAR ObjMgrSendMsgFunc PROTO((ObjMgrPtr omp, ObjMgrDataPtr omdp,
-				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype,
+				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype, Uint2 rowID,
 				Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata));
 static Boolean NEAR ObjMgrSendStructMsgFunc PROTO((ObjMgrPtr omp, ObjMgrDataPtr omdp,
 				OMMsgStructPtr ommsp));
@@ -428,7 +437,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 	ObjMgrDump(NULL, "ObjMgrAddEntityID-A");
 #endif
 
-	ObjMgrSendMsgFunc(omp, omdp, OM_MSG_CREATE, omdp->EntityID, 0, 0, 0, 0, NULL);
+	ObjMgrSendMsgFunc(omp, omdp, OM_MSG_CREATE, omdp->EntityID, 0, 0, 0, 0, 0, NULL);
 
 #ifdef DEBUG_OBJMGR
 	ObjMgrDump(NULL, "ObjMgrAddEntityID-B");
@@ -437,7 +446,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 	return omdp->EntityID;
 }
 static Boolean NEAR ObjMgrSendMsgFunc (ObjMgrPtr omp, ObjMgrDataPtr omdp,
-				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype,
+				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype, Uint2 rowID,
 				Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata)
 {
 	OMMsgStruct omms;
@@ -451,6 +460,7 @@ static Boolean NEAR ObjMgrSendMsgFunc (ObjMgrPtr omp, ObjMgrDataPtr omdp,
 	omms.fromProcID = fromProcID;
 	omms.toProcID = toProcID;
 	omms.procmsgdata = procmsgdata;
+    omms.rowID = rowID;
 	
 	return ObjMgrSendStructMsgFunc (omp, omdp, &omms);
 }
@@ -1367,6 +1377,8 @@ static Boolean NEAR ObjMgrFreeUserDataFunc (ObjMgrPtr omp, Uint2 entityID,
 				if (omtp != NULL)
 				{
 					omdp->being_freed = TRUE; /* flag not to call this func */
+                    /* get rid of extra user data */
+                    ObjMgrFreeUserDataFunc(omp, entityID, 0, 0, 0);
 					is_write_locked = omp->is_write_locked;
 					ObjMgrUnlock();
 					(*(omtp->freefunc))(ptr);
@@ -1460,7 +1472,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 
 	if (omdp->EntityID != 0)
 	{
-		ObjMgrSendMsgFunc(omp, omdp, OM_MSG_DEL, omdp->EntityID, 0, 0, 0, 0, NULL);
+		ObjMgrSendMsgFunc(omp, omdp, OM_MSG_DEL, omdp->EntityID, 0, 0, 0, 0, 0, NULL);
 		ObjMgrDeSelectFunc(omp, omdp->EntityID,0,0,0,NULL);
 		if (! omdp->being_freed)  /* ObjMgrFreeUserData can call delete */
 		{
@@ -1577,7 +1589,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrAddToClipBoard (Uint2 entityID, Pointer ptr)
 	omdp->clipboard = TRUE;
 	omp->clipboard = omdp;
 
-	ObjMgrSendMsgFunc(omp, omdp, OM_MSG_TO_CLIPBOARD, omdp->EntityID, 0, 0, 0, 0, NULL);
+	ObjMgrSendMsgFunc(omp, omdp, OM_MSG_TO_CLIPBOARD, omdp->EntityID, 0, 0, 0, 0, 0, NULL);
 
 	retval = TRUE;
 erret:
@@ -1694,7 +1706,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrConnectFunc (ObjMgrPtr omp, Uint2 type, Pointer
 	if ((omdp->EntityID != 0) && (parentdata != NULL))
 	{                         /* registered type, inform any attached procs */
 
-		ObjMgrSendMsgFunc(omp, omdp, OM_MSG_CONNECT, omdp->EntityID, 0, 0, 0, 0, NULL);
+		ObjMgrSendMsgFunc(omp, omdp, OM_MSG_CONNECT, omdp->EntityID, 0, 0, 0, 0, 0, NULL);
 		ObjMgrDeSelectFunc(omp, omdp->EntityID,0,0,0,NULL);
 		ObjMgrFreeUserDataFunc(omp, omdp->EntityID, 0, 0, 0);
 
@@ -2370,7 +2382,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 
 		omp->reaping = TRUE;
 		ditch->tempload = TL_CACHED;
-		ObjMgrSendMsgFunc(omp, ditch, OM_MSG_CACHED, ditch->EntityID, 0, 0, 0, 0, NULL);
+		ObjMgrSendMsgFunc(omp, ditch, OM_MSG_CACHED, ditch->EntityID, 0, 0, 0, 0, 0, NULL);
 		omp->tempcnt--;
 		is_write_locked = omp->is_write_locked;
 
@@ -4045,7 +4057,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID
 	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
 	if (omdp != NULL)
 	{
-		ObjMgrSendMsgFunc(omp, omdp, msg, entityID, itemID, itemtype, 0, 0, NULL);
+		ObjMgrSendMsgFunc(omp, omdp, msg, entityID, itemID, itemtype, 0, 0, 0, NULL);
 		retval = TRUE;
 	}
 	ObjMgrUnlock();
@@ -4063,7 +4075,24 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg(Uint2 msg, Uint2 entityID, Uint2 it
 	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
 	if (omdp != NULL)
 	{
-		ObjMgrSendMsgFunc(omp, omdp, msg, entityID, itemID, itemtype, fromProcID, toProcID, procmsgdata);
+		ObjMgrSendMsgFunc(omp, omdp, msg, entityID, itemID, itemtype, 0, fromProcID, toProcID, procmsgdata);
+		retval = TRUE;
+	}
+	ObjMgrUnlock();
+	return retval;
+}
+
+NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg(Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 rowID)
+{
+	ObjMgrPtr omp;
+	ObjMgrDataPtr omdp;
+	Boolean retval = FALSE;
+
+	omp = ObjMgrReadLock();
+	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
+	if (omdp != NULL)
+	{
+		ObjMgrSendMsgFunc(omp, omdp, msg, entityID, itemID, itemtype, rowID, 0, 0, NULL);
 		retval = TRUE;
 	}
 	ObjMgrUnlock();

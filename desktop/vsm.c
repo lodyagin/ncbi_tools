@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -2660,6 +2660,7 @@ static OMUserDataPtr NEAR VSMAddPictureToEntity (VSMWinPtr vsmwp, Uint2 entityID
 	ValNodePtr vnp;
 	Pointer ptr;
 	SelStructPtr ssp;
+	VSeqMgrPtr vsmp;
 
 	if (vsmwp == NULL) return NULL;
 											  /* already have it? */
@@ -2688,6 +2689,11 @@ static OMUserDataPtr NEAR VSMAddPictureToEntity (VSMWinPtr vsmwp, Uint2 entityID
 	ptr = omdp->dataptr;
 	
 	vsmpp->expansion += expand;
+
+	vsmp = vsmwp->vsmp;
+	if (vsmp != NULL) {
+		vsmp->extraLevel = TRUE;
+	}
 
 	seg = VSMEntityDraw(omdp, vsmpp, vsmwp->vsmp);
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.5  1999/10/26 20:17:04  kans
+* allocate separate string for abstract since some may be very long
+*
+* Revision 6.4  1999/10/01 17:20:08  kans
+* fixed stack overflow found by DV
+*
 * Revision 6.3  1999/03/11 23:32:08  kans
 * sprintf casts
 *
@@ -185,16 +191,19 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
   Int2            i;
   ImprintPtr      imp = NULL;
   CharPtr         issue = NULL;
+  size_t          len;
   MedlineMeshPtr  mesh;
   ValNodePtr      names;
   CharPtr         p;
   CharPtr         pages = NULL;
   ParData         para;
+  CharPtr         ptr;
   ValNodePtr      qual;
   Boolean         rsult;
   Char            str [32];
   MedlineRnPtr    substance;
   ValNodePtr      title;
+  CharPtr         tmp;
   CharPtr         volume = NULL;
   ValNodePtr      xref;
   CharPtr         lpTemp;
@@ -227,8 +236,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     if ( mep->pub_type != NULL ) {
       ClearString ();
       AddString ("PT  -\t");
-      sprintf (str, "%s", (CharPtr) mep->pub_type->data.ptrvalue);
-      AddString (str);
+      AddString ((CharPtr) mep->pub_type->data.ptrvalue);
       AddString ("\n");
       rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
       ClearString ();
@@ -453,11 +461,14 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     ClearString ();
     abstract = mep->abstract;
     if (abstract != NULL) {
-      AddString ("AB  -\t");
-      AddString (abstract);
-      AddString ("\n");
+      len = StringLen (abstract);
+      tmp = (CharPtr) MemNew (sizeof (Char) * (len + 10));
+      ptr = StringMove (tmp, "AB  -\t");
+      ptr = StringMove (ptr, abstract);
+      ptr = StringMove (ptr, "\n");
+      rsult = (Boolean) (SendTextToFile (fp, tmp, &para, table) && rsult);
+      MemFree (tmp);
     }
-    rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
     ClearString ();
     if (cit != NULL && authors != NULL) {
       affil = authors->affil;
@@ -905,9 +916,12 @@ static ColData  mshFmt [1] = {{0, 80, 0, 'l', FALSE, FALSE, TRUE}};
 static Boolean MedlineEntryToDocOrAbsFile (MedlineEntryPtr mep, FILE *fp, Boolean showMesh)
 
 {
+  size_t      len;
   MedlinePtr  mPtr;
   ParData     para;
+  CharPtr     ptr;
   Boolean     rsult;
+  CharPtr     tmp;
 
   rsult = TRUE;
   if (fp != NULL && mep != NULL) {
@@ -953,10 +967,12 @@ static Boolean MedlineEntryToDocOrAbsFile (MedlineEntryPtr mep, FILE *fp, Boolea
           ClearString ();
         }
         if (mPtr->abstract != NULL) {
-          AddString (mPtr->abstract);
-          AddString ("\n");
-          rsult = (Boolean) (SendTextToFile (fp, buffer, NULL, NULL) && rsult);
-          ClearString ();
+          len = StringLen (mPtr->abstract);
+          tmp = (CharPtr) MemNew (sizeof (Char) * (len + 10));
+          ptr = StringMove (tmp, mPtr->abstract);
+          ptr = StringMove (ptr, "\n");
+          rsult = (Boolean) (SendTextToFile (fp, tmp, NULL, NULL) && rsult);
+          MemFree (tmp);
         }
         if (showMesh) {
           if (mPtr->mesh != NULL) {

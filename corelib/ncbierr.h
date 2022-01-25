@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.4 1999/05/20 20:07:03 sirotkin Exp $
+* $Id: ncbierr.h,v 6.5 1999/10/01 14:41:39 kans Exp $
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,9 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.5  1999/10/01 14:41:39  kans
+* added SEV_REJECT between SEV_ERROR and SEV_FATAL
+*
 * Revision 6.4  1999/05/20 20:07:03  sirotkin
 * ErrPostItem bullet proofed as per vakatov
 *
@@ -197,7 +200,7 @@ typedef int (LIBCALLBACK *ErrHookProc) PROTO((const ErrDesc *err));
 |                           POSTING AN ERROR                                |
 \***************************************************************************/
 
-enum _ErrSev { SEV_NONE=0, SEV_INFO, SEV_WARNING, SEV_ERROR, SEV_FATAL, SEV_MAX };
+enum _ErrSev { SEV_NONE=0, SEV_INFO, SEV_WARNING, SEV_ERROR, SEV_REJECT, SEV_FATAL, SEV_MAX };
 typedef enum _ErrSev ErrSev;
 
 #define SEV_MIN  SEV_INFO

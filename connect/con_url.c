@@ -1,4 +1,4 @@
-/*  $Id: con_url.c,v 6.12 1999/08/04 21:06:44 vakatov Exp $
+/*  $Id: con_url.c,v 6.13 1999/12/09 21:07:17 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: con_url.c,v $
+* Revision 6.13  1999/12/09 21:07:17  vakatov
+* #ifdef TEST__HitURL::Main():  use VERIFY rather then ASSERT
+*
 * Revision 6.12  1999/08/04 21:06:44  vakatov
 * s_VT_Read() -- check for the returned HTTP reply status
 *
@@ -750,7 +753,7 @@ Int2 Main(void)
   {{
     CONNECTOR connector = URL_CreateConnector(0, user_header, 0);
     ASSERT( connector );
-    ASSERT( CONN_Create(connector, &conn) == eCONN_Success );
+    VERIFY( CONN_Create(connector, &conn) == eCONN_Success );
   }}
 
   {{ /* Pump data from the input file to URL */

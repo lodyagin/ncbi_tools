@@ -1,4 +1,4 @@
-/* $Id: wwwutils.c,v 6.8 1999/01/26 19:43:28 vakatov Exp $
+/* $Id: wwwutils.c,v 6.9 1999/09/29 19:08:29 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   This file contains functions to read and process HTTP 
@@ -38,6 +38,9 @@
 *   
 *---------------------------------------------------------------------------
 * $Log: wwwutils.c,v $
+* Revision 6.9  1999/09/29 19:08:29  shavirin
+* Added new functions: WWWGetLastValueByName and WWWFindNameEx
+*
 * Revision 6.8  1999/01/26 19:43:28  vakatov
 * Adopted for 32-bit MS-Windows DLLs
 *
@@ -401,6 +404,26 @@ NLM_EXTERN Int4 WWWFindName(WWWInfoPtr info_in, CharPtr find)
 
   return -1;
 }
+NLM_EXTERN Int4 WWWFindNameEx(WWWInfoPtr info_in, CharPtr find, Int4 index)
+{
+    
+    Int4 i;
+    WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
+    
+    if(!info || !find)
+        return -1;
+    
+    if(index >= info->num_entries)
+        return -1;
+    
+    for(i = index; i < info->num_entries; i++) {
+        if (!StringICmp(info->entries[i]->name, find)) {
+            return i;
+        }
+    }
+    
+    return -1;
+}
 
 NLM_EXTERN CharPtr WWWGetNameByIndex(WWWInfoPtr info_in, Int4 index) 
 {
@@ -434,6 +457,23 @@ NLM_EXTERN CharPtr WWWGetValueByName(WWWInfoPtr info_in, CharPtr find)
     return NULL;
   
   return info->entries[index]->val;
+}
+
+NLM_EXTERN CharPtr WWWGetLastValueByName(WWWInfoPtr info_in, CharPtr find) 
+{
+    Int4 index;
+    WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
+    CharPtr retvalue = NULL;
+    
+    if(!info || !info->entries || !find)
+        return NULL;
+    
+    index = 0;
+    
+    while((index = WWWFindNameEx(info_in, find, index)) >= 0)
+        retvalue = info->entries[index]->val;
+    
+    return retvalue;
 }
 
 NLM_EXTERN WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -842,8 +842,8 @@ typedef struct protgatherlist {
   ObjMgrPtr  omp;
   SeqLocPtr  slp;
   Int4       min;
-  Char       protName [128];
-  Char       protDesc [128];
+  CharPtr    protName;
+  CharPtr    protDesc;
   Uint2      entityID;
   Uint2      itemID;
   Uint2      itemtype;
@@ -884,13 +884,13 @@ static Boolean ProtMatchFunc (GatherContextPtr gcp)
           if (diff < pgp->min) {
             pgp->min = diff;
             prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-            pgp->protName [0] = '\0';
-            pgp->protDesc [0] = '\0';
+            pgp->protName = MemFree (pgp->protName);
+            pgp->protDesc = MemFree (pgp->protDesc);
             vnp = prp->name;
             if (vnp != NULL) {
-              StringNCpy_0 (pgp->protName, (CharPtr) vnp->data.ptrvalue, sizeof (pgp->protName));
+              pgp->protName = StringSave ((CharPtr) vnp->data.ptrvalue);
             }
-            StringNCpy_0 (pgp->protDesc, prp->desc, sizeof (pgp->protDesc));
+            pgp->protDesc = StringSave (prp->desc);
             pgp->entityID = gcp->entityID;
             pgp->itemID = gcp->itemID;
             pgp->itemtype = gcp->thistype;
@@ -911,8 +911,8 @@ static void SetBestProteinFeature (CdRgnFormPtr cfp, SeqLocPtr product)
   ProtGatherList  pgl;
 
   if (cfp == NULL) return;
-  pgl.protName [0] = '\0';
-  pgl.protDesc [0] = '\0';
+  pgl.protName = NULL;
+  pgl.protDesc = NULL;
   pgl.entityID = 0;
   pgl.itemID = 0;
   pgl.itemtype = 0;
@@ -937,6 +937,8 @@ static void SetBestProteinFeature (CdRgnFormPtr cfp, SeqLocPtr product)
   cfp->protItemID = pgl.itemID;
   cfp->protItemtype = pgl.itemtype;
   cfp->protFound = pgl.protFound;
+  MemFree (pgl.protName);
+  MemFree (pgl.protDesc);
 }
 
 static void SetProteinLengthDisplay (PrompT p, Int4 length)

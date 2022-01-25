@@ -20,7 +20,7 @@ Currently NCBI prepares the binaries for the following platforms:
 	SGI       -- IRIX 5.3
 	Sun/Sparc -- Solaris 2.6
 	Intel x86 -- Solaris 2.7
-	Intel x86 -- Linux 2.0.36
+	Intel x86 -- Red Hat Linux release 5.2 with kernel 2.0.36
 	Intel x86 -- Microsoft NT or Windows 95 (32bit)
 	Motorola 68000   -- MacOS
 	Motorola PowerPC -- MacOS

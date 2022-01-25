@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,25 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.8  2000/01/20 17:04:27  beloslyu
+* new function DateClean to properly clean the date was added
+*
+* Revision 6.7  2000/01/20 15:13:16  ostell
+* added hour/minute/second fields to Date
+* added DateTimeCurr()
+*
+* Revision 6.6  1999/11/03 17:58:26  kans
+* added SeqDescrAddPointer
+*
+* Revision 6.5  1999/10/05 17:24:14  kans
+* added SeqDescrAdd
+*
+* Revision 6.4  1999/09/28 14:56:00  kans
+* rename ObjValNodeNew to SeqDescrNew
+*
+* Revision 6.3  1999/09/23 00:07:45  kans
+* ObjValNodeNew implemented
+*
 * Revision 6.2  1998/08/24 18:28:04  kans
 * removed solaris -v -fd warnings
 *
@@ -78,6 +97,57 @@
 
 static Boolean loaded = FALSE;
 
+/* ValNode equivalent functions that allocate ObjValNode size */
+
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrNew (ValNodePtr vnp)
+
+{
+	ValNodePtr newnode;
+
+	newnode = (ValNodePtr) Nlm_MemNew(sizeof(ObjValNode));
+	if (newnode == NULL) return NULL;
+	newnode->extended = 1; /* extended flag indicates extra fields are present */
+	if (vnp != NULL)
+    {
+        while (vnp->next != NULL)
+            vnp = vnp->next;
+		vnp->next = newnode;
+    }
+	return newnode;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrAdd (ValNodePtr PNTR head)
+
+{
+	ValNodePtr newnode;
+
+	if (head != NULL)
+	{
+		newnode = SeqDescrNew (*head);
+		if (*head == NULL)
+			*head = newnode;
+	}
+	else
+		newnode = SeqDescrNew (NULL);
+
+	return newnode;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL SeqDescrAddPointer (ValNodePtr PNTR head, Int2 choice, VoidPtr value)
+
+{
+	ValNodePtr newnode;
+
+	newnode = SeqDescrAdd (head);
+	if (newnode != NULL)
+	{
+		newnode->choice = (Uint1) choice;
+		newnode->data.ptrvalue = value;
+	}
+
+	return newnode;
+}
+
 /*****************************************************************************
 *
 *   GeneralAsnLoad()
@@ -108,6 +178,9 @@ NLM_EXTERN NCBI_DatePtr LIBCALL DateNew (void)
 	NCBI_DatePtr dp = NULL;
 	
 	dp = (NCBI_DatePtr)MemNew(sizeof(NCBI_Date));
+        dp->data[4] = 255;  /* hour not set */
+        dp->data[5] = 255;  /* minute not set */
+        dp->data[6] = 255;  /* second not set */
 	return dp;
 }
 
@@ -127,6 +200,23 @@ NLM_EXTERN NCBI_DatePtr LIBCALL DateFree (NCBI_DatePtr dp)
 
 /*****************************************************************************
 *
+*   DateClean(dp)
+*
+*****************************************************************************/
+NLM_EXTERN NCBI_DatePtr LIBCALL DateClean (NCBI_DatePtr dp)
+{
+    if (dp == NULL)
+        return dp;
+
+	memset(dp, 0, sizeof(NCBI_Date));
+	dp->data[4] = 255;  /* hour not set */
+	dp->data[5] = 255;  /* minute not set */
+	dp->data[6] = 255;  /* second not set */
+	return dp;
+}
+
+/*****************************************************************************
+*
 *   DateWrite(dp, year, month, day, season)
 *   if dp->data[0] not set
 *   	if year != 0, it's a std date
@@ -142,6 +232,10 @@ NLM_EXTERN Boolean LIBCALL DateWrite (NCBI_DatePtr dp, Int2 year, Int2 month, In
 
 	if (dp->str != NULL)    /* remove previous string if any */
 		MemFree(dp->str);
+
+        dp->data[4] = 255;   /* set time fields to not-set */
+        dp->data[5] = 255;
+        dp->data[6] = 255;
 
 	if (year == 0)       /* date-str */
 	{
@@ -280,6 +374,30 @@ NLM_EXTERN NCBI_DatePtr LIBCALL DateCurr (void)
 
 /*****************************************************************************
 *
+*   DateTimeCurr()
+*
+*****************************************************************************/
+NLM_EXTERN NCBI_DatePtr LIBCALL DateTimeCurr (void)
+{
+	NCBI_DatePtr dp;
+	Nlm_DayTime dt;
+
+	dp = DateNew();
+	if (dp == NULL) return dp;
+	GetDayTime(&dt);
+	dp->data[0] = (Uint1)1;    /* date.std */
+	dp->data[1] = (Uint1)dt.tm_year;
+	dp->data[2] = (Uint1)(dt.tm_mon + 1);
+	dp->data[3] = (Uint1)dt.tm_mday;
+        dp->data[4] = (Uint1)(dt.tm_hour);
+        dp->data[5] = (Uint1)(dt.tm_min);
+        dp->data[6] = (Uint1)(dt.tm_sec);
+
+	return dp;
+}
+
+/*****************************************************************************
+*
 *   DateDup(dp)
 *
 *****************************************************************************/
@@ -361,6 +479,21 @@ NLM_EXTERN Boolean LIBCALL DateAsnWrite (NCBI_DatePtr dp, AsnIoPtr aip, AsnTypeP
 			av.ptrvalue = dp->str;
 			if (! AsnWrite(aip, DATE_STD_season, &av)) goto erret;
 		}
+		if (dp->data[4] < 24)
+		{
+			av.intvalue = dp->data[4];
+			if (! AsnWrite(aip, DATE_STD_hour, &av)) goto erret;
+		}
+		if (dp->data[5] < 60)
+		{
+			av.intvalue = dp->data[5];
+			if (! AsnWrite(aip, DATE_STD_minute, &av)) goto erret;
+		}
+		if (dp->data[6] < 60)
+		{
+			av.intvalue = dp->data[6];
+			if (! AsnWrite(aip, DATE_STD_second, &av)) goto erret;
+		}
 
 		if (! AsnCloseStruct(aip, DATE_std, (Pointer)dp))
             goto erret;
@@ -435,6 +568,12 @@ NLM_EXTERN NCBI_DatePtr LIBCALL DateAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 				dp->data[3] = (Uint1)av.intvalue;
 			else if (atp == DATE_STD_season)
 				dp->str = (CharPtr)av.ptrvalue;
+			else if (atp == DATE_STD_hour)
+				dp->data[4] = (Uint1)av.intvalue;
+			else if (atp == DATE_STD_minute)
+				dp->data[5] = (Uint1)av.intvalue;
+			else if (atp == DATE_STD_second)
+				dp->data[6] = (Uint1)av.intvalue;
 		}
         if (atp == NULL) goto erret;
 		if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read last END_STRUCT */

@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.8 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: picture.h,v $
+* Revision 6.11  1999/10/13 17:45:46  kans
+* added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
+*
+* Revision 6.10  1999/10/04 19:39:09  kans
+* include vibdefns.h
+*
+* Revision 6.9  1999/10/04 17:16:32  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.8  1998/07/01 18:27:43  vakatov
 * Use "const" qualifier somewhere
 *
@@ -76,8 +85,12 @@
 #ifndef _PICTURE_
 #define _PICTURE_
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
+#endif
+
+#ifndef _VIBDEFNS_
+#include <vibdefns.h>
 #endif
 
 #ifdef __cplusplus
@@ -396,7 +409,9 @@ Nlm_VoidPtr userdata, Nlm_SegmentExploreProc callback));
 
 /*Working with primitive */
 
-extern Nlm_PrimitivE Nlm_GetPrimitive PROTO((Nlm_SegmenT segment, Uint2 primCt));
+extern Nlm_PrimitivE Nlm_GetPrimitive PROTO((Nlm_SegmenT segment, Nlm_Uint2 primCt));
+extern void Nlm_SetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2 entityID, Nlm_Uint2 itemID, Nlm_Uint2 itemtype, Nlm_Uint2 primID));
+extern void Nlm_GetPrimitiveIDs PROTO((Nlm_PrimitivE prim, Nlm_Uint2Ptr entityIDPtr, Nlm_Uint2Ptr itemIDPtr, Nlm_Uint2Ptr itemtypePtr, Nlm_Uint2Ptr primIDPtr));
 extern void Nlm_GetPrimDrawAttribute PROTO((Nlm_PrimitivE prim, 
 Nlm_Uint1Ptr color, Nlm_Int1Ptr plinestyle, Nlm_Int1Ptr pshading, 
 Nlm_Int1Ptr ppenwidth, Nlm_Int1Ptr pmode, Nlm_Int1Ptr phighlight));
@@ -495,6 +510,8 @@ extern Nlm_enumPrimAddOrder Nlm_ChangeAddPrimOrder
 #define UnlinkSegment Nlm_UnlinkSegment
 #define ExploreSegment Nlm_ExploreSegment
 #define GetPrimitive Nlm_GetPrimitive
+#define SetPrimitiveIDs Nlm_SetPrimitiveIDs
+#define GetPrimitiveIDs Nlm_GetPrimitiveIDs
 #define GetPrimDrawAttribute Nlm_GetPrimDrawAttribute
 #define ChangePrimAttribute Nlm_ChangePrimAttribute
 #define OffsetPrim Nlm_OffsetPrim

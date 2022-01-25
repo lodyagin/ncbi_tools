@@ -60,6 +60,19 @@
 
 #define BAND_LIMIT 100
  
+typedef struct nodehit
+{
+  Int2        index;
+  Boolean     open;
+  SeqAlignPtr salp;
+  Int4        score;
+  Nlm_FloatHi bit_score;
+  Nlm_FloatHi evalue;
+  struct nodehit PNTR     child;
+  struct nodehit PNTR     next;
+} NodeHit, PNTR NodeHitPtr;
+
+static ValNodePtr traverseGraph (NodeHitPtr head, NodeHitPtr node, Int2 total, Int2 level, Int2Ptr tab, ValNodePtr vnp, Boolean * change);
 
 NLM_EXTERN MashPtr MashNew (Boolean is_prot)
 {
@@ -630,7 +643,7 @@ static SeqLocPtr TranslateSeqLoc (SeqLocPtr slp, Int2 genCode, Uint1 *frame)
   if (bsp != NULL) {
      bsp->repr = Seq_repr_raw;
      bsp->mol = Seq_mol_aa;
-     bsp->seq_data_type = genCode;
+     bsp->seq_data_type = (Uint1)genCode;
      bsp->seq_data = bs;
      bsp->length = BSLen (bs);
      bsp->id = MakeNewProteinSeqId (slp, NULL);
@@ -1020,18 +1033,6 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
 }
 
 /*************************************/
-typedef struct nodehit
-{
-  Int2        index;
-  Boolean     open;
-  SeqAlignPtr salp;
-  Int4        score;
-  Nlm_FloatHi bit_score;
-  Nlm_FloatHi evalue;
-  struct nodehit PNTR     child;
-  struct nodehit PNTR     next;
-} NodeHit, PNTR NodeHitPtr;
-
 static Boolean possible_child (SeqAlignPtr salp1, SeqAlignPtr salp2, Uint1 choice)
 {
   Int4         start, stop, start2, stop2,
@@ -1219,7 +1220,9 @@ static ValNodePtr find_maxsolution (ValNodePtr vnp, NodeHitPtr head, Int2 total,
   for (tmp=vnp; tmp!=NULL; tmp=tmp->next)
   {
      tab = (Int2Ptr) tmp->data.ptrvalue;
-     sum = intronlg = alignlen = 0;
+     sum = 0;
+     intronlg = (float)0.00;
+     alignlen = 0;
      for (j=0; j<total; j++) 
      {
       if (tab[j] > -1) 
@@ -1284,7 +1287,7 @@ static ValNodePtr get_solutions (ValNodePtr vnp, NodeHitPtr head, Int2 total, In
               j;
   float       intronlg;
   float       minintron;
-  float       bestratio=0;
+  float       bestratio=0.00;
   Int4        bestratio1=0;
   float       x, y, z;
   Boolean     first=TRUE;
@@ -1297,7 +1300,9 @@ static ValNodePtr get_solutions (ValNodePtr vnp, NodeHitPtr head, Int2 total, In
     if(tmp->choice==0) 
     {
      tab = (Int2Ptr) tmp->data.ptrvalue;
-     sum = intronlg = alignlens = 0;
+     sum = 0;
+     intronlg = (float)0.00;
+     alignlens = 0;
      first = TRUE;
      for (j=0; j<total; j++) 
      {
@@ -1326,11 +1331,11 @@ static ValNodePtr get_solutions (ValNodePtr vnp, NodeHitPtr head, Int2 total, In
          x = (float)sum / (float)maxscore;
          y = (float)intronlg / (float)minintron; 
          z = (float)alignlens / (float)maxalignlens;
-         if ((Int4)(1000*x*z) > bestratio1 && (float)(x*z/y) > (float)bestratio) {
+         if ((Int4)(1000.0*x*z) > bestratio1 && (float)(x*z/y) > (float)bestratio) {
 /****
 WriteLog ("FFF %ld %ld =%f / %f %d = %f/  %d %d  %f    %f   %f %ld  ++ %d %d %d %d  %f  %f\n", (long)sum, (long)maxscore, x, intronlg, j-1, y, alignlens, maxalignlens, z, (float)((x*z)/y), (float)bestratio, (long)bestratio1, abs(stop - start1), alignlens, start1, stop, (float)(abs(stop - start1) - alignlens), (float)minintron );
 *****/
-            bestratio1 = (Int4) 1000*(x*z);
+            bestratio1 = (Int4) 1000*(Int4)(x*z);
             bestratio = (float)(x*z/y);
             bestvnp = tmp;
          }

@@ -1,4 +1,4 @@
---$Revision: 1.12 $
+--$Revision: 1.15 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -20,8 +20,7 @@ EXPORTS	Blast-search, Blast-request,
 	
 IMPORTS Bioseq FROM NCBI-Sequence
 	Seq-id, Seq-loc FROM NCBI-Seqloc
-	Seq-align-set FROM NCBI-Seqalign;
-
+	Seq-align, Seq-align-set FROM NCBI-Seqalign;
 
 Blast-request ::= CHOICE {
 	init	VisibleString ,	-- Init of connection, client name may be sent.
@@ -53,7 +52,8 @@ Blast-search ::= SEQUENCE {
 	database	VisibleString ,		-- BLAST db to search
 	parameters	Blast-parameters OPTIONAL, 	-- search parameters
 	mask		Seq-loc OPTIONAL,		-- locations on query to mask
-	matrix		Blast-matrix OPTIONAL		-- PSI-BLAST matrix to use in search.
+	matrix		Blast-matrix OPTIONAL,		-- PSI-BLAST matrix to use in search.
+	return-parts	BOOLEAN OPTIONAL		-- Return the results in an Blast-parts block
 }
 
 
@@ -75,6 +75,21 @@ Blast-dbinfo ::= SEQUENCE {
 	number-seqs	INTEGER		-- how many sequence in database.
 }
 
+-- The SeqAlign for one single alignment as well as the database sequence covering that region.
+Blast-sequence ::= SEQUENCE {
+	align		Seq-align,	-- ALignment for this sequence
+	-- That part of the sequence covered by the Seq-align.  
+	-- ncbi4na is used for nucleotides, ncbistdaa for proteins.
+	-- The sequence refers to the plus strand, even if the alignment
+	-- is really on the minus strand.
+	db-seq		OCTET STRING	
+}
+
+
+Blast-parts ::= SEQUENCE {
+	defline		VisibleString, -- The FASTA definition line.
+	sequence	SET OF Blast-sequence
+}
 
 Blast-matrix ::= SEQUENCE {
 	is-protein	BOOLEAN ,	-- Is the matrix for proteins
@@ -152,7 +167,9 @@ Blast-parameters ::= SEQUENCE {
 	block-width	INTEGER OPTIONAL,	-- width of block to be used in culling
 	perform-culling	BOOLEAN OPTIONAL,	-- perform culling?
 	strand-option	INTEGER OPTIONAL,	-- indicates strand to use.
-        phi-pattern     VisibleString OPTIONAL  -- indicates, that this is phi-blast search and supplies pattern
+	phi-pattern	VisibleString OPTIONAL,	-- indicates, that this is phi-blast search and supplies pattern
+	use-real-db-size BOOLEAN OPTIONAL,  -- db size not to be adjusted for list of gis'.
+        use-best-align   BOOLEAN OPTIONAL   -- option is to use alignments choosen by user in PSM computation API
 }
 
 				-- series of these when the request is queued
@@ -208,10 +225,12 @@ Blast-error ::= SEQUENCE {
     },
     msg VisibleString OPTIONAL
 }
+
 Blast-phialign ::= SEQUENCE {
         numaligns  INTEGER,             -- number of aligns
 	seqloc	   SEQUENCE OF Seq-loc  -- region locations
 }
+
 
 Blast-response ::= CHOICE {
 	init Blast-version ,		-- acknowledges init
@@ -250,7 +269,8 @@ Blast-response ::= CHOICE {
 	progress	Blast-Progress ,-- regular messages emitted during search
 	done	Blast-Progress ,	-- one emitted at end of search
 	fini NULL,               -- acknowledge fini
-        phialign Blast-phialign -- The result of PHI-Blast 
+	phialign Blast-phialign, -- The result of PHI-Blast
+	parts		SEQUENCE OF Blast-parts -- the resutls in the Blast-parts format, rather than a Seq-align.
 }
 
 END

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objseq.h,v $
+* Revision 6.4  1999/09/27 17:48:38  kans
+* using GatherIndex structure
+*
+* Revision 6.3  1999/09/24 23:09:23  kans
+* adds EXTRA_OBJMGR_FIELDS to several objects
+*
 * Revision 6.2  1998/10/13 20:59:05  kans
 * Bioseq has new slot for omdp, to be used by SeqMgr indexing functions
 *
@@ -128,6 +134,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef ValNode SeqEntry, FAR *SeqEntryPtr;
 
 /*****************************************************************************
 *
@@ -259,6 +267,7 @@ typedef struct seqannot {
     Uint1 type;             /* 1=ftable, 2=align, 3=graph 4=ids 5=locs */
     Pointer data;
     struct seqannot PNTR next;
+	GatherIndex idx;        /* internal gather/objmgr tracking fields */
 } SeqAnnot, PNTR SeqAnnotPtr;
 
 NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotNew PROTO((void));
@@ -409,6 +418,8 @@ typedef struct bioseq {
     SeqAnnotPtr annot;
 	SeqHistPtr hist;
 	Pointer omdp;           /* internal objmgrdataptr to speed up indexed functions */
+	GatherIndex idx;        /* internal gather/objmgr tracking fields */
+	SeqEntryPtr seqentry;   /* internal seqentry that points to this bioseq */
 } Bioseq, PNTR BioseqPtr;
 
 NLM_EXTERN BioseqPtr LIBCALL BioseqNew PROTO((void));
@@ -518,6 +529,9 @@ typedef struct op_objseq {
 #define Seq_descr_molinfo 24
 
 #define SEQDESCR_MAX 25 /* size of array needed for seqdescr filter parameters */
+
+/* SeqDescr/SeqDesc will start to be allocated as ObjValNodes with vnp->extended
+   set to 1 and EXTRA_OBJMGR_FIELDS fields available with a cast pointer */
 
 typedef ValNode SeqDescr, FAR *SeqDescrPtr;
 

@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.4  1999/11/22 14:46:45  thiessen
+* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
+*
 * Revision 6.3  1999/06/22 15:14:50  lewisg
 * fix image library so that works on linux with > 8 bits
 *
@@ -529,7 +532,7 @@ Nlm_Boolean Nlm_LoadImageClip(Nlm_Image image)
 
 Nlm_Boolean Nlm_SaveImageGIF(Nlm_Image image, Nlm_CharPtr fileName)
 {
-#if defined(WIN_MOTIF) || defined(WIN_MSWIN) || defined(WIN_MAC)
+#if !defined(_OPENGL) && (defined(WIN_MOTIF) || defined(WIN_MSWIN) || defined(WIN_MAC))
   Nlm_PImagePtr nlm_image = (Nlm_PImagePtr)image;
   gdImagePtr gd_image;
   Nlm_Int2 convert[256];

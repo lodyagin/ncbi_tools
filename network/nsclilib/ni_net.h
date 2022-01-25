@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: ni_net.h,v $
+* Revision 6.1  1999/11/23 21:43:30  vakatov
+* [WIN32] Always #define NETP_INET_WSOCK for Win32
+*
 * Revision 6.0  1997/08/25 18:39:09  madden
 * Revision changed to 6.0
 *
@@ -83,20 +86,6 @@
 #include <s_time.h>
 #define _NI_NET_
 #endif /* NETP_INET_MACTCP */
-
-#ifdef NETP_INET_WSOCK
-#undef NEAR
-#undef FAR
-#undef Beep
-#undef PASCAL
-#undef CDECL
-#undef TRUE
-#undef FALSE
-#define STRICT
-#include <windows.h>
-#include <winsock.h>
-#define _NI_NET_
-#endif /* NETP_INET_WSOCK */
 
 #ifdef NETP_INET_NEWT
 #undef TRUE
@@ -171,6 +160,23 @@
 #define _NI_NET_
 #endif /* NETP_INET_UCX */
 
+
+#if defined(WIN32)  &&  !defined(_NI_NET_)  &&  !defined(NETP_INET_WSOCK)
+#  define NETP_INET_WSOCK
+#endif
+#ifdef NETP_INET_WSOCK
+#  undef NEAR
+#  undef FAR
+#  undef Beep
+#  undef PASCAL
+#  undef CDECL
+#  undef TRUE
+#  undef FALSE
+#  define STRICT
+#  include <windows.h>
+#  include <winsock.h>
+#  define _NI_NET_
+#endif /* NETP_INET_WSOCK */
 
 /* default */
 #ifndef _NI_NET_

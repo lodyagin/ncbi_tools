@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accentr.c,v 6.5 1999/01/06 14:18:35 grisha Exp $
+ * RCS $Id: accentr.c,v 6.6 2000/01/12 20:17:12 vakatov Exp $
  *
  * Author:  Ostell
  *
@@ -48,6 +48,9 @@
  *                      modification comments.
  *
  * Revision $Log: accentr.c,v $
+ * Revision Revision 6.6  2000/01/12 20:17:12  vakatov
+ * Revision Get rid of the LIBCALL specifier at EntrezSeqEntryGet()
+ * Revision
  * Revision Revision 6.5  1999/01/06 14:18:35  grisha
  * Revision add defines to switch ID0/ID1 usage
  * Revision
@@ -277,7 +280,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.5 $"
+#define REVISION_STR "$Revision: 6.6 $"
 
 #include <accentr.h>
 #include <seqmgr.h>
@@ -2350,7 +2353,7 @@ NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet (SeqEntryPtr PNTR result, Int2 num
 *       get one SeqEntry
 *
 *****************************************************************************/
-NLM_EXTERN SeqEntryPtr LIBCALL EntrezSeqEntryGet (Int4 uid, Int2 retcode)
+NLM_EXTERN SeqEntryPtr EntrezSeqEntryGet (Int4 uid, Int2 retcode)
 
 {
     SeqEntryPtr sep = NULL;

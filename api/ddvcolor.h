@@ -1,4 +1,4 @@
-/*   $Id: ddvcolor.h,v 6.2 1999/07/19 19:12:21 lewisg Exp $
+/*   $Id: ddvcolor.h,v 1.13 1999/12/29 22:55:02 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,64 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: ddvcolor.h,v 6.2 1999/07/19 19:12:21 lewisg Exp $
+* File Name:  $Id: ddvcolor.h,v 1.13 1999/12/29 22:55:02 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   6/2/99
 *
-* $Revision: 6.2 $
+* $Revision: 1.13 $
 *
 * File Description: Shared color information for viewers
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcolor.h,v $
+* Revision 1.13  1999/12/29 22:55:02  lewisg
+* get rid of seqalign id
+*
+* Revision 1.12  1999/12/13 23:20:43  lewisg
+* bug fixes: duplicate color structures eliminated, clear color doesn't clear case
+*
+* Revision 1.11  1999/12/10 20:59:22  durand
+* add support for italic, bold and underlined letters
+*
+* Revision 1.10  1999/11/24 21:24:24  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 1.9  1999/11/24 15:23:19  lewisg
+* added color selection dialogs for SS
+*
+* Revision 1.8  1999/11/22 17:29:54  lewisg
+* add back color selection dialogs, fix viewer3d half-selection bug
+*
+* Revision 1.7  1999/11/01 22:10:26  lewisg
+* add ability to call color functions by type, and add this to cn3d
+*
+* Revision 1.6  1999/10/25 20:28:48  lewisg
+* move ddvcolor to libncbiobj
+*
+* Revision 6.6  1999/10/15 20:56:40  lewisg
+* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
+*
+* Revision 6.5  1999/10/08 23:20:36  lewisg
+* add case and box attributes to DDV_ColorCell
+*
+* Revision 6.4  1999/10/05 23:18:26  lewisg
+* add ddv and udv to cn3d with memory management
+*
+* Revision 6.3  1999/09/21 18:09:13  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
+* Revision 1.8  1999/09/01 23:02:59  lewisg
+* binary search in color functions
+*
+* Revision 1.7  1999/08/13 22:08:16  lewisg
+* color manager updated to use alignment coords
+*
+* Revision 1.6  1999/08/09 18:09:33  lewisg
+* copy of ddvcolor from distrib to avoid changing daily build
+*
 * Revision 6.2  1999/07/19 19:12:21  lewisg
 * fix bug adding new pColor in old pMediaInfo.  Also added ability to detect overlaps when allocating new pColor
 *
@@ -72,31 +117,41 @@
 #ifndef DDVCOLOR_H
 #define DDVCOLOR_H
 
+#include <ncbilcl.h>
+#include <ncbistd.h>
+#include <objall.h>
+#include <binary.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <ncbilcl.h>
-#include <ncbistd.h>
-#include <objall.h>
 
-
-/* a single coordinate on a sequence */
-typedef struct _DDV_Position {
-    Int4 lPosition;
-    Boolean fAlign;  /* is this an alignment coord?  otherwise bioseq coord */
-} DDV_Position;
-
-/* a range on a sequence */
+/* the default size of the buffer to allocate. */
+#define DDV_BUFSIZE 1024
+    
+typedef struct _DDV_Id {
+    Boolean fAlign;  /* pointing to alignment or sequence? */
+    SeqId *sip;  /* for the sequence. duplicate */
+    Int4 lRow; /* for the alignment */
+} DDV_Id;
+        
+/* a range on a sequence or alignment row */
 typedef struct _DDV_Range {
     Int4 lFrom;
     Int4 lTo;
-    Boolean fAlign;  /* is this an alignment coord?  otherwise bioseq coord */
 } DDV_Range;
 
 typedef struct _DDV_ColorCell {
   Uint1 rgb[3];  /* standard rgb color cell */
+  Boolean LowerCase:1, TopBox:1, RightBox:1, BottomBox:1, LeftBox:1, UseBold:1, UseItalic:1, UseUnderline:1;
 } DDV_ColorCell;
 
 typedef struct _DDV_Color {
@@ -113,7 +168,7 @@ typedef struct _DDV_ColorEntry {
 } DDV_ColorEntry;
 
 typedef struct _DDV_MediaInfo {
-SeqId *sip;  /* this should be a duplicate */
+DDV_Id Id;  /* the id for either sequence or alignment row */ 
 ValNode *pvnColor;  /* ValNode list of DDV_Color associated with the object */
 Boolean fVisible;  /* is the sequence visible? */
 } DDV_MediaInfo;
@@ -136,6 +191,8 @@ ValNode *pvnAllColorFns; /* Valnode list of all color functions that can
 ValNode *Palette;         /* ValNode list of DDV_ColorEntries */
 ValNode *pvnSpecialColors;  /* ValNode list of DDV_ColorEntries.  used for
                             highlight, secondary structure, etc. */
+B_Global *pSearchMI;      /* used to search the MediaInfo structure for sips */
+B_Global *pSearchMIRow;      /* used to search the MediaInfo structure for sips */
 } DDV_ColorGlobal;
 
 /*****************************************************************************
@@ -159,9 +216,9 @@ ValNode *pvnSpecialColors;  /* ValNode list of DDV_ColorEntries.  used for
 *****************************************************************************/
 
 /* standard lPriority's */
-#define DDVPRIHI 20
-#define DDVPRIMED 0
-#define DDVPRILO -20
+#define DDV_PRIHI 20
+#define DDV_PRIMED 0
+#define DDV_PRILO -20
 
 typedef void (*DDV_ColorFunc)(DDV_ColorGlobal *pColorGlobal, void *pData,
                                 DDV_Range *pRange);
@@ -172,18 +229,11 @@ Char * szName;      /* the menu name.  must be unique if used by SAM to add
 DDV_ColorFunc  pfnColorFunc;
 Int4 lPriority;     /* order that the functions are called */
 Boolean fOverride;  /* ignore priority and only call this function */
+Uint2 procid;       /* the procid of the viewer that owns this function */
 struct _DDV_ColorQueue * next; /* these are used to sort the color functions */
 struct _DDV_ColorQueue * prev;  /* *not* for storing them together. */
 } DDV_ColorQueue;
 
-/*****************************************************************************
-*
-*   Set default values for DDV_Position.  
-*
-*****************************************************************************/
-
-Int4 DDV_DefaultPosition(DDV_Position *pPosition, Int4 lPosition, 
-                         Boolean fAlign);
 
 /*****************************************************************************
 *
@@ -191,8 +241,7 @@ Int4 DDV_DefaultPosition(DDV_Position *pPosition, Int4 lPosition,
 *
 *****************************************************************************/
 
-Int4 DDV_DefaultRange(DDV_Range *pRange, Int4 lFrom, Int4 lTo, 
-                         Boolean fAlign);
+NLM_EXTERN Int4 DDV_DefaultRange(DDV_Range *pRange, Int4 lFrom, Int4 lTo);
 
 /*****************************************************************************
 *
@@ -201,7 +250,7 @@ Int4 DDV_DefaultRange(DDV_Range *pRange, Int4 lFrom, Int4 lTo,
 *
 *****************************************************************************/
 
-DDV_ColorEntry * DDV_CreateColorEntry(Char *szName, Nlm_Uint1 Red,
+NLM_EXTERN DDV_ColorEntry * DDV_CreateColorEntry(Char *szName, Nlm_Uint1 Red,
                           Nlm_Uint1 Green, Nlm_Uint1 Blue);
 
 /*****************************************************************************
@@ -210,7 +259,7 @@ DDV_ColorEntry * DDV_CreateColorEntry(Char *szName, Nlm_Uint1 Red,
 *
 *****************************************************************************/
 
-void DDV_DeleteColorEntry(DDV_ColorEntry *Color);
+NLM_EXTERN void DDV_DeleteColorEntry(DDV_ColorEntry *Color);
 
 /*****************************************************************************
 *
@@ -220,7 +269,7 @@ void DDV_DeleteColorEntry(DDV_ColorEntry *Color);
 *
 *****************************************************************************/
 
-void DDV_FreePalette(ValNode **Palette);
+NLM_EXTERN void DDV_FreePalette(ValNode **Palette);
 
 /*****************************************************************************
 *
@@ -228,7 +277,7 @@ void DDV_FreePalette(ValNode **Palette);
 *
 *****************************************************************************/
 
-void DDV_SetColorChoice(ValNode *Palette);
+NLM_EXTERN void DDV_SetColorChoice(ValNode *Palette);
 
 /*****************************************************************************
 *
@@ -236,7 +285,8 @@ void DDV_SetColorChoice(ValNode *Palette);
 *
 *****************************************************************************/
 
-DDV_ColorEntry * DDV_SearchColor(ValNode *Palette, DDV_ColorCell *ColorCell);
+NLM_EXTERN DDV_ColorEntry * DDV_SearchColor(ValNode *Palette,
+                                            DDV_ColorCell *ColorCell);
 
 /*****************************************************************************
 *
@@ -245,7 +295,8 @@ DDV_ColorEntry * DDV_SearchColor(ValNode *Palette, DDV_ColorCell *ColorCell);
 *
 *****************************************************************************/
 
-DDV_ColorEntry * DDV_SearchColorbyName(ValNode *Palette, Char *szName);
+NLM_EXTERN DDV_ColorEntry * DDV_SearchColorbyName(ValNode *Palette,
+                                                  Char *szName);
 
 /*****************************************************************************
 *
@@ -254,7 +305,7 @@ DDV_ColorEntry * DDV_SearchColorbyName(ValNode *Palette, Char *szName);
 *
 *****************************************************************************/
 
-DDV_ColorCell * DDV_SearchColorCellbyName(ValNode *Palette, Char *szName);
+NLM_EXTERN DDV_ColorCell * DDV_SearchColorCellbyName(ValNode *Palette, Char *szName);
 
 /*****************************************************************************
 *
@@ -262,7 +313,7 @@ DDV_ColorCell * DDV_SearchColorCellbyName(ValNode *Palette, Char *szName);
 *
 *****************************************************************************/
 
-void DDV_RequestColor(ValNode **Palette, DDV_ColorCell *ColorCell);
+NLM_EXTERN void DDV_RequestColor(ValNode **Palette, DDV_ColorCell *ColorCell);
 
 /*****************************************************************************
 *
@@ -271,7 +322,8 @@ void DDV_RequestColor(ValNode **Palette, DDV_ColorCell *ColorCell);
 *
 *****************************************************************************/
 
-void DDV_RequestColorbyName(ValNode **Palette, DDV_ColorEntry *pColorIn);
+NLM_EXTERN void DDV_RequestColorbyName(ValNode **Palette,
+                                       DDV_ColorEntry *pColorIn);
 
 /*****************************************************************************
 *
@@ -280,7 +332,16 @@ void DDV_RequestColorbyName(ValNode **Palette, DDV_ColorEntry *pColorIn);
 *
 *****************************************************************************/
 
-Int4 DDV_ColorIndex(ValNode *Palette, DDV_ColorCell *ColorCell);
+NLM_EXTERN Int4 DDV_ColorIndex(ValNode *Palette, DDV_ColorCell *ColorCell);
+
+
+/*****************************************************************************
+*
+*   Sets colors in a ColorCell.
+*
+*****************************************************************************/
+
+NLM_EXTERN void DDV_SetColorInCell(DDV_ColorCell *pColorTo, Uint1 *Color);
 
 
 /*****************************************************************************
@@ -290,7 +351,8 @@ Int4 DDV_ColorIndex(ValNode *Palette, DDV_ColorCell *ColorCell);
 *
 *****************************************************************************/
 
-Int4 DDV_CopyColorCell(DDV_ColorCell * pDestination,  DDV_ColorCell * pSource);
+NLM_EXTERN Int4 DDV_CopyColorCell(DDV_ColorCell * pDestination,
+                                  DDV_ColorCell * pSource);
 
 /*****************************************************************************
 *
@@ -299,46 +361,34 @@ Int4 DDV_CopyColorCell(DDV_ColorCell * pDestination,  DDV_ColorCell * pSource);
 *
 *****************************************************************************/
 
-Int4 DDV_SetColorCell(DDV_ColorCell * pColorCell, Nlm_Uint1 Red,
+NLM_EXTERN Int4 DDV_SetColorCell(DDV_ColorCell * pColorCell, Nlm_Uint1 Red,
                       Nlm_Uint1 Green, Nlm_Uint1 Blue);
 
+
 /*****************************************************************************
-*
-*   Checks to see if a pPosition is inside pRange.
-*   If it is, return 1
-*   If it isn't, return 0
-*   If pPosition and pRange don't have the same coordinate system, return -1
-*
+
+Function: DDV_CreateColorCell()
+
+Purpose: Creates a new DDV_ColorCell and initializes it.
+          
+Parameters: none
+
+Returns: pointer to new DDV_ColorCell or NULL on error
+
 *****************************************************************************/
 
-Int4 DDV_InRange(DDV_Position *pPosition, DDV_Range *pRange);
+NLM_EXTERN DDV_ColorCell * DDV_CreateColorCell(void);
+
 
 /*****************************************************************************
 *
-*   Checks to see if pRange1 overlaps pRange2.
-*   If it does completely, return DDV_TOTALLAP
-*   If it doesn't, return DDV_NOLAP
-*   If pRange1 overlaps the front of pRange2, return DDV_FRONTLAP
-*   If pRange1 overlaps the rear of pRange2, return DDV_BACKLAP
-*   If pPosition and pRange don't have the same coordinate system, return -1
-*
-*****************************************************************************/
-
-Int4 DDV_RangeOverlap(DDV_Range *pRange1, DDV_Range *pRange2);
-
-#define DDV_NOLAP 0
-#define DDV_TOTALLAP 1
-#define DDV_FRONTLAP 2
-#define DDV_BACKLAP 3
-
-/*****************************************************************************
-*
-*   Returns a DDV_ColorCell for a given position if it is inside of pColor.
+*   Returns a DDV_ColorCell for a given lPosition if it is inside of pColor.
 *   Returns NULL otherwise.
 *
 *****************************************************************************/
 
-DDV_ColorCell * DDV_GetCellByPosition(DDV_Color *pColor, DDV_Position *pPosition);
+NLM_EXTERN DDV_ColorCell * DDV_GetCellByPosition(DDV_Color *pColor,
+                                                 Int4 lPosition);
 
 /*****************************************************************************
 *
@@ -347,21 +397,20 @@ DDV_ColorCell * DDV_GetCellByPosition(DDV_Color *pColor, DDV_Position *pPosition
 *
 *****************************************************************************/
 
-Int4 DDV_SetCellByPosition(DDV_Color * pColor, DDV_Position *pPosition,
+NLM_EXTERN Int4 DDV_SetCellByPosition(DDV_Color * pColor, Int4 lPosition,
                  DDV_ColorCell *pColorCell);
 
 /*****************************************************************************
 *
-*   Creates a DDV_Color that spans the entire object given by sip with
-*   coordinates lFrom to lTo and using fAlign coordinates.
+*   Creates a DDV_Color that spans the entire object with
+*   coordinates lFrom to lTo.
 *   The default color is black.
 *   Returns NULL on error.
 *
 *****************************************************************************/
 
-DDV_Color * DDV_CreateDefaultColor(DDV_ColorGlobal *pColorGlobal,
-                                        SeqId *sip, Int4 lFrom, Int4 lTo,
-                                        Boolean fAlign);
+NLM_EXTERN DDV_Color * DDV_CreateDefaultColor(DDV_ColorGlobal *pColorGlobal,
+                                        Int4 lFrom, Int4 lTo);
 
 /*****************************************************************************
 *
@@ -370,38 +419,20 @@ DDV_Color * DDV_CreateDefaultColor(DDV_ColorGlobal *pColorGlobal,
 *
 *****************************************************************************/
 
-Int4 DDV_DeleteColor(DDV_Color *pColor);
+NLM_EXTERN Int4 DDV_DeleteColor(DDV_Color *pColor);
 
 /*****************************************************************************
 *
 *   Creates a new DDV_MediaInfo structure.  Creates a default color structure
-*   for the given object specified by sip.  Duplicates the sip.
-*   Inserts the given pColor as valnode entry.  Sets fVisible.
+*   for the given object specified by sip OR row.
+*   Inserts the given pColor and sets fVisible.  Duplicates the sip.
 *
 *   Returns NULL on error.
 *
 *****************************************************************************/
 
-DDV_MediaInfo * DDV_NewMediaInfo(SeqId *sip, DDV_Color *pColor,
-                                  Boolean fVisible);
-
-/*****************************************************************************
-*
-*   Creates a default MediaInfo structure and adds it to pColorGlobal
-*   for the given object specified by sip. Duplicates the sip.  Sequence is
-*   visible by default.  Coordinates lFrom to lTo and using fAlign coordinates.
-*
-*   Returns 0 on error.
-*
-*****************************************************************************/
-
-Int4 DDV_DefaultMediaInfoByLen(DDV_ColorGlobal * pColorGlobal, SeqId *sip,
-                               Int4 lFrom, Int4 lTo, Boolean fAlign);
-
-/* simplified version of above that retrieves the length and sets the coordinate
-   system to sequence */
-
-Int4 DDV_DefaultMediaInfo(DDV_ColorGlobal * pColorGlobal, SeqId *sip);
+NLM_EXTERN DDV_MediaInfo* DDV_NewMediaInfo
+(SeqId *sip, Int4 lRow, DDV_Color *pColor, Boolean fVisible);
 
 /*****************************************************************************
 *
@@ -415,7 +446,45 @@ Int4 DDV_DefaultMediaInfo(DDV_ColorGlobal * pColorGlobal, SeqId *sip);
 *
 *****************************************************************************/
 
-ValNode * DDV_SipList(DDV_ColorGlobal *pColorGlobal);
+NLM_EXTERN ValNode * DDV_IdList(DDV_ColorGlobal *pColorGlobal);
+
+/*****************************************************************************
+*
+*   Creates a default MediaInfo structure if necessary and adds it to
+*   pColorGlobal for the given object specified by sip OR lRow.
+*   Duplicates the sip.
+*   The sequence is visible by default.
+*
+*   If the coordinates do not exist in the MediaInfo structure (whether the 
+*   MediaInfo was freshly created or not) then a DDV_Color is added to the
+*   MediaInfo to cover the coordinate requested.
+*
+*   Coordinates lFrom to lTo.
+*
+*****************************************************************************/
+
+
+NLM_EXTERN Int4 DDV_DefaultMediaInfoByLen
+(DDV_ColorGlobal * pColorGlobal, SeqId *sip, Int4 lRow, Int4 lFrom, Int4 lTo);
+
+/* simplified version of above that retrieves the length and sets the coordinate
+   system to sequence */
+
+NLM_EXTERN Int4 DDV_DefaultMediaInfo(DDV_ColorGlobal* pColorGlobal,SeqId *sip);
+
+/*****************************************************************************
+*
+*   Returns a ValNode list, each element of which points to the SeqId of a
+*   sequence that has a corresponding DDV_MediaInfo structure in pColorGlobal.
+*
+*   The Valnode list should be freed by the calling routine.  However, the 
+*   SeqIds pointed to by the list should *not* be freed.
+*
+*   Returns NULL on error.
+*
+*****************************************************************************/
+
+NLM_EXTERN ValNode * DDV_SipList(DDV_ColorGlobal *pColorGlobal);
 
 /*****************************************************************************
 *
@@ -425,7 +494,7 @@ ValNode * DDV_SipList(DDV_ColorGlobal *pColorGlobal);
 *
 *****************************************************************************/
 
-Int4 DDV_DeleteMediaInfo(DDV_MediaInfo *pMediaInfo);
+NLM_EXTERN Int4 DDV_DeleteMediaInfo(DDV_MediaInfo *pMediaInfo);
 
 
 /*****************************************************************************
@@ -435,8 +504,9 @@ Int4 DDV_DeleteMediaInfo(DDV_MediaInfo *pMediaInfo);
 *
 *****************************************************************************/
 
-DDV_ColorQueue * DDV_NewColorQueue(DDV_ColorFunc pfnColorFunc, Char * szName,
-                              Int4 lPriority, Boolean fOverride);
+NLM_EXTERN DDV_ColorQueue * DDV_NewColorQueue
+(DDV_ColorFunc pfnColorFunc, Char * szName,
+Int4 lPriority, Boolean fOverride, Uint2 procid);
 
 /*****************************************************************************
 *
@@ -445,7 +515,31 @@ DDV_ColorQueue * DDV_NewColorQueue(DDV_ColorFunc pfnColorFunc, Char * szName,
 *
 *****************************************************************************/
 
-Int4 DDV_DeleteColorQueue(DDV_ColorQueue *pColorQueue);
+NLM_EXTERN Int4 DDV_DeleteColorQueue(DDV_ColorQueue *pColorQueue);
+
+#define DDVRED(y) ((y)>>16&0xff)
+#define DDVGRN(y) ((y)>>8&0xff)
+#define DDVBLU(y) ((y)&0xff)
+
+/*****************************************************************************
+
+Function: DDV_SetPaletteColor()
+
+Purpose: Sets a single color in the palette.  Trys to read the color out of 
+         the configuration file.  If it isn't there, puts it in the file using
+         the supplied default
+  
+Parameters: pColorGlobal, the color global object
+            ParamFile, the name of the app property parameter file
+            ColorName, the name of the color
+            red, grn, blue, the default color
+
+*****************************************************************************/
+
+NLM_EXTERN void DDV_SetPaletteColor
+(DDV_ColorGlobal * pColorGlobal, Char * ColorName, 
+ Char * ParamFile, Uint1 red, Uint1 grn, Uint1 blu);
+
 
 /*****************************************************************************
 *
@@ -455,7 +549,10 @@ Int4 DDV_DeleteColorQueue(DDV_ColorQueue *pColorQueue);
 *
 *****************************************************************************/
 
-Int4 DDV_DefaultSSColor(DDV_ColorGlobal * pColorGlobal);
+NLM_EXTERN Int4 DDV_DefaultSSColor
+(DDV_ColorGlobal * pColorGlobal, Char *ParamFile);
+NLM_EXTERN void DDV_LoadSSColor
+(DDV_ColorGlobal * pColorGlobal, Char *ParamFile);
 
 /*****************************************************************************
 *
@@ -464,7 +561,7 @@ Int4 DDV_DefaultSSColor(DDV_ColorGlobal * pColorGlobal);
 *
 *****************************************************************************/
 
-DDV_ColorGlobal * DDV_CreateColorGlobal(Boolean fDefaultColor);
+NLM_EXTERN DDV_ColorGlobal * DDV_CreateColorGlobal(Boolean fDefaultColor);
 
 /*****************************************************************************
 *
@@ -473,16 +570,27 @@ DDV_ColorGlobal * DDV_CreateColorGlobal(Boolean fDefaultColor);
 *
 *****************************************************************************/
 
-Int4 DDV_DeleteColorGlobal(DDV_ColorGlobal *pColorGlobal);
+NLM_EXTERN Int4 DDV_DeleteColorGlobal(DDV_ColorGlobal *pColorGlobal);
 
 /*****************************************************************************
 *
-*   Delete all information for the given SeqId.
+*   Completely deallocate all of the DDV_Color structures in pColorGlobal
+*   This is intended for simple minded garbage collection.
 *   Returns 1 on success, 0 on failure
 *
 *****************************************************************************/
 
-Int4 DDV_RemoveMediaInfo(DDV_ColorGlobal *pColorGlobal, SeqId *sip);
+NLM_EXTERN Int4 DDV_ClearColor(DDV_ColorGlobal *pColorGlobal);
+
+/*****************************************************************************
+*
+*   Delete all information for the given sip OR lRow.
+*   Returns 1 on success, 0 on failure
+*
+*****************************************************************************/
+
+NLM_EXTERN Int4 DDV_RemoveMediaInfo(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
+                         Int4 lRow);
 
 /*****************************************************************************
 *
@@ -491,97 +599,83 @@ Int4 DDV_RemoveMediaInfo(DDV_ColorGlobal *pColorGlobal, SeqId *sip);
 *
 *****************************************************************************/
 
-Int4 DDV_AddMediaInfo(DDV_ColorGlobal *pColorGlobal,
+NLM_EXTERN Int4 DDV_AddMediaInfo(DDV_ColorGlobal *pColorGlobal,
                               DDV_MediaInfo *pMediaInfo);
 
 /*****************************************************************************
 *
-*   Compare two SeqId to make sure all valnodes compare exactly
+*   Given a sip OR lRow, return the associated DDV_MediaInfo.
 *
 *****************************************************************************/
 
-Boolean DDV_SeqIdCompare(SeqId *sip1, SeqId *sip2);
+NLM_EXTERN DDV_MediaInfo * DDV_GetMediaInfo
+(DDV_ColorGlobal *pColorGlobal, SeqId * sip, Int4 lRow);
 
 /*****************************************************************************
 *
-*   Given an SeqId, return the associated DDV_MediaInfo.
+*   Given an sip OR lRow, return the visible state.
 *
 *****************************************************************************/
 
-DDV_MediaInfo * DDV_GetMediaInfo(DDV_ColorGlobal *pColorGlobal, SeqId *sip);
+NLM_EXTERN Boolean DDV_IsVisible(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
+                      Int4 lRow);
 
 /*****************************************************************************
 *
-*   Given an SeqId, return the visible state of the SeqId.
-*
-*****************************************************************************/
-
-Boolean DDV_IsVisible(DDV_ColorGlobal *pColorGlobal, SeqId *sip);
-
-/*****************************************************************************
-*
-*   Set the visible state (fVisible) of a SeqId.
+*   Set the visible state (fVisible) of a sip OR lRow.
 *   Returns 1 on success, 0 on failure.
 *
 *****************************************************************************/
 
-Int4 DDV_SetVisible(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                    Boolean fVisible);
+NLM_EXTERN Int4 DDV_SetVisible(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
+                    Int4 lRow, Boolean fVisible);
 
 /*****************************************************************************
 *
-*   Retrieve a color for an SeqId at position pPositionor at lPosition in
-*   the fAlign coordinate system.
-*   Returns a DDV_ColorCell containing the color.  NULL on failure
+*   Retrieve a color for a sip OR lRow at lPosition in.
+*   Returns a DDV_ColorCell containing the color.  NULL on failure.
 *
 *   The DDV_ColorCell returned is read only.
 *
 *****************************************************************************/
 
-DDV_ColorCell * DDV_GetColorSimple(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                             Int4 lPosition, Boolean fAlign);
-
-DDV_ColorCell * DDV_GetColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                             DDV_Position *pPosition);
+NLM_EXTERN DDV_ColorCell * DDV_GetColor
+(DDV_ColorGlobal *pColorGlobal, SeqId *sip, Int4 lRow, Int4 lPosition);
 
 /*****************************************************************************
 *
-*   Set a color for in a DDV_MediaInfo at position pPosition.  The color set is
+*   Set a color for in a DDV_MediaInfo at lPosition.  The color set is
 *   pColorCell.
 *   Returns 1 on success, 0 on failure.
 *
 *****************************************************************************/
 
-Int4 DDV_SetColorInMediaInfo(DDV_ColorGlobal *pColorGlobal,
-                             DDV_MediaInfo *pMediaInfo, DDV_Position *pPosition,
+NLM_EXTERN Int4 DDV_SetColorInMediaInfo(DDV_ColorGlobal *pColorGlobal,
+                             DDV_MediaInfo *pMediaInfo, Int4 lPosition,
                              DDV_ColorCell *pColorCell);
 
 /*****************************************************************************
 *
-*   Set a color for an SeqId at position pPosition or at lPosition in
-*   the fAlign coordinate system.  The color set is
+*   Set a color for a sip OR lRow at lPosition.  The color set is
 *   pColorCell.  Makes a copy of pColorCell.
 *   Returns 1 on success, 0 on failure.
 *
 *****************************************************************************/
 
-Int4 DDV_SetColorSimple(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                  Int4 lPosition, Boolean fAlign, DDV_ColorCell *pColorCell);
-
-Int4 DDV_SetColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                  DDV_Position *pPosition, DDV_ColorCell *pColorCell);
+NLM_EXTERN Int4 DDV_SetColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
+                  Int4 lRow, Int4 lPosition, DDV_ColorCell *pColorCell);
 
 /*****************************************************************************
 *
-*   Set a color for an SeqId at lPosition in
-*   the fAlign coordinate system.  Uses Uint1's for input.
+*   Set a color for a sip OR lRow at lPosition.
+*   Uses Uint1's for color input.
 *   Returns 1 on success, 0 on failure.
 *
 *****************************************************************************/
 
-Int4 DDV_SetColorbyColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
-                         Int4 lPosition, Boolean fAlign, Uint1 red,
-                         Uint1 green, Uint1 blue);
+NLM_EXTERN Int4 DDV_SetColorbyColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
+                         Int4 lRow, Int4 lPosition,
+                         Uint1 red, Uint1 green, Uint1 blue);
 
 /*****************************************************************************
 *
@@ -599,8 +693,8 @@ Int4 DDV_SetColorbyColor(DDV_ColorGlobal *pColorGlobal, SeqId *sip,
 *
 *****************************************************************************/
 
-Int4 DDV_ColorExecute(DDV_ColorGlobal *pColorGlobal, void * pData,
-                      DDV_Range *pRange);
+NLM_EXTERN Int4 DDV_ColorExecute(DDV_ColorGlobal *pColorGlobal, void * pData,
+                      DDV_Range *pRange, char *szName);
 
 /*****************************************************************************
 *
@@ -609,7 +703,7 @@ Int4 DDV_ColorExecute(DDV_ColorGlobal *pColorGlobal, void * pData,
 *
 *****************************************************************************/
 
-void DDV_DefaultColor(DDV_ColorGlobal *pColorGlobal, void *pData,
+NLM_EXTERN void DDV_DefaultColor(DDV_ColorGlobal *pColorGlobal, void *pData,
                                 DDV_Range *pRange);
 
 /*****************************************************************************
@@ -619,7 +713,7 @@ void DDV_DefaultColor(DDV_ColorGlobal *pColorGlobal, void *pData,
 *
 *****************************************************************************/
 
-Int4 DDV_AddColorFunc(DDV_ColorGlobal *pColorGlobal,
+NLM_EXTERN Int4 DDV_AddColorFunc(DDV_ColorGlobal *pColorGlobal,
                        DDV_ColorQueue *pColorQueue);
 
 /*****************************************************************************
@@ -629,12 +723,72 @@ Int4 DDV_AddColorFunc(DDV_ColorGlobal *pColorGlobal,
 *
 *****************************************************************************/
 
-Int4 DDV_DeleteColorFunc(DDV_ColorGlobal *pColorGlobal,
+NLM_EXTERN Int4 DDV_DeleteColorFunc(DDV_ColorGlobal *pColorGlobal,
                        DDV_ColorFunc  pfnColorFunc);
+
+
+/*****************************************************************************
+
+Function: DDV_AddColorGlobal()
+
+Purpose: Adds a DDV_ColorGlobal to an entity as userdata.
+  
+Parameters: pColorGlobal, the OMProcControlPtr.
+            pObject, pointer to the entity.
+
+Returns: 1 on success, 0 on failure
+
+Notes: - will only add to objects registered with the object manager
+       - adds a free function to the userdata
+       - the DDV_ColorGlobal userdata is identified by proc type
+         OMPROC_COLORMGR
+
+*****************************************************************************/
+
+NLM_EXTERN Int4 DDV_AddColorGlobal
+(DDV_ColorGlobal *pColorGlobal, void * pObject);
+
+
+/*****************************************************************************
+
+Function: DDV_GetColorGlobal()
+
+Purpose: Returns the DDV_ColorGlobal attached to an entity as userdata.
+  
+Parameters: pObject, pointer to the entity.
+
+Returns: DDV_ColorGlobal * on success, NULL on failure
+
+*****************************************************************************/
+
+NLM_EXTERN DDV_ColorGlobal * DDV_GetColorGlobal(void * pObject);
+
+
+/*****************************************************************************
+
+Function: DDV_GetColorGlobalEx()
+
+Purpose: Returns the DDV_ColorGlobal attached to an entity as userdata. If 
+         none is attached, create one and attach it.
+  
+Parameters: pObject, pointer to the entity.
+
+Returns: DDV_ColorGlobal * on success, NULL on failure
+
+*****************************************************************************/
+
+NLM_EXTERN DDV_ColorGlobal * DDV_GetColorGlobalEx(void * pObject);
 
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif /* DDVCOLOR_H */

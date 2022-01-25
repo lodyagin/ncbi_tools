@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.9 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.h,v $
+* Revision 6.16  2000/01/24 19:37:18  durand
+* add field szEditSeq in ParaG
+*
+* Revision 6.15  1999/12/02 13:47:32  durand
+* add new function for Entrez sequence viewer
+*
+* Revision 6.14  1999/11/03 13:46:15  durand
+* add UDV_GetStrandinPGP, UDV_GetStrandinPGPList and UDV_GetBspRangeinPGPList for DDV
+*
+* Revision 6.13  1999/10/29 14:14:53  durand
+* add text styles for DDV
+*
+* Revision 6.12  1999/10/20 13:13:54  durand
+* add new fields in data structure for DDV
+*
+* Revision 6.11  1999/10/04 19:52:56  durand
+* add new text MSA_TXT_STYLE_2
+*
 * Revision 6.9  1999/09/16 18:51:53  durand
 * move MsaTxtDisp struct from pgppop.h to udvseq.h
 *
@@ -112,11 +130,20 @@ extern "C" {
 /*****************************************************************************
 	text styles
 *****************************************************************************/
-#define MSA_TXT_STYLE_SEQ		1	/*sequence type                 */
-#define MSA_TXT_STYLE_GAP		2	/*gap type                      */
-#define MSA_TXT_STYLE_NONE		3	/*nothing                       */
-#define MSA_TXT_STYLE_1         4   /*style 1 = 5 "space" char.     */
-#define SPACER_TXT_BLANK 5  /*use with MSA_TXT_STYLE_1*/
+#define MSA_TXT_STYLE_SEQ		    1	/*sequence type                 */
+#define MSA_TXT_STYLE_GAP		    2	/*gap type                      */
+#define MSA_TXT_STYLE_NONE		    3	/*nothing                       */
+#define MSA_TXT_STYLE_1             4   /*style 1 = 5 "space" char.     */
+#define MSA_TXT_STYLE_REG_ALIGN		5	/*aligned region                 */
+#define MSA_TXT_STYLE_REG_UNALIGN	6	/*unaligned region                 */
+#define MSA_TXT_STYLE_2             7   /*for a disc. ali, display unaligned seq.*/
+#define SPACER_TXT_BLANK            5  /*use with MSA_TXT_STYLE_1*/
+
+/*text justification for UnAligned region; used only by DDV */
+#define DISP_JUST_LEFT    ((Uint1)1)
+#define DISP_JUST_RIGHT   ((Uint1)2)
+#define DISP_JUST_CENTER  ((Uint1)3)
+#define DISP_JUST_SPLIT   ((Uint1)4)
 
 /*******************************************************************************
 
@@ -133,6 +160,7 @@ extern "C" {
 		Int4		SegID;		/*identifiers of the Indexed SeqAlign*/
 		Int4		BspID;
 		Boolean		IsGap;		/*display a gap                      */
+		Boolean     IsUnAligned;/*unaligned region                   */
 		Uint1		TextStyle;	/*seqence/gap_text/gap/...           */
 		Uint1		strand;		/*plus, minus, etc.*/
 	} MsaTxtDisp, PNTR MsaTxtDispPtr;
@@ -148,6 +176,7 @@ typedef struct parag {/*Paragraph information*/
 								values)*/
 	ValNodePtr 	ptxtList;/*text to draw - MSA*/
 	SeqIdPtr	sip;/*identification of the bioseq - MSA*/
+	Char *szEditSeq; /*used by DDV only for editi*/
 	Int4 OccupyTo;				/*used to populate features; vertical disp*/
 	Int2 MinLine;				/*used to populate features;horz display*/
 	Int2 nFeatLines;			/*number of lines with features*/
@@ -237,6 +266,9 @@ NLM_EXTERN ValNodePtr UDV_CreateParaGList(Int2 nCharByLine,
 NLM_EXTERN Boolean UDV_PopulateParaGFeatures(BioseqPtr bsp,
 		ValNodePtr ParaG_vnp,Boolean ShowFeatures,Int4Ptr nTotL,
 		Uint4 DispType,Int2Ptr nFeatFound);
+NLM_EXTERN Boolean UDV_PopParaGFeaturesEx(BioseqPtr bsp,ValNodePtr ParaG_vnp,
+			Boolean ShowFeatures,Int4Ptr nTotL,Uint4 DispType,Int2Ptr nFeatFound,
+			BoolPtr FeatDefTable,Int4 from_bsp,Int4 to_bsp);
 /*Sequence reader*/
 NLM_EXTERN CharPtr UDV_Read_SequenceEx (SeqIdPtr sip, Int4 from, Int4 to, 
 		Boolean IsProt,Int2 len,Uint1 strand);
@@ -244,6 +276,10 @@ NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to,
 		Boolean IsProt,Int2 len);
 NLM_EXTERN void UDV_ComputeBspCoordRangeinPGP(ParaGPtr pgp,Int4Ptr from, 
 		Int4Ptr to);
+NLM_EXTERN void UDV_GetStrandinPGP(ParaGPtr pgp,Uint1Ptr strand);
+NLM_EXTERN void UDV_GetStrandinPGPList(ValNodePtr pgp_list,Uint1Ptr strand);
+NLM_EXTERN void UDV_GetBspRangeinPGPList(ValNodePtr pgp_list,
+	Int4Ptr bsp_start,Int4Ptr bsp_stop);
 
 
 

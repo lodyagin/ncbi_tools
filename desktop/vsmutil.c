@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -71,8 +71,12 @@ typedef struct validextra {
   FonT           font;
   ButtoN         find;
   TexT           searchfor;
+  PrompT         showncount;
   PrompT         summary;
-  Int2           counts [6];
+  Int4           counts [6];
+  Int4           totalcount;
+  Int4           addedcount;
+  Int4           remaining;
   Int2           clicked;
   Int2           selected;
   Boolean        dblClick;
@@ -150,10 +154,14 @@ static void ClickValid (DoC d, PoinT pt)
 
   vep = GetObjectExtra (d);
   if (vep != NULL) {
-    vep->clicked = 0;
-    vep->dblClick = dblClick;
-    vep->shftKey = shftKey;
     MapDocPoint (d, pt, &item, &row, NULL, NULL);
+    if (item > 0 && row > 0 && vep->clicked == item) {
+      vep->dblClick = dblClick;
+    } else {
+      vep->dblClick = FALSE;
+    }
+    vep->clicked = 0;
+    vep->shftKey = shftKey;
     if (item > 0 && row > 0) {
       vep->clicked = item;
     }
@@ -344,6 +352,7 @@ extern void ClearValidateWindow (void)
     vep = GetObjectExtra (validWindow);
     if (vep != NULL) {
       Reset (vep->doc);
+      vep->selected = 0;
       vep->messages = ValNodeFreeData (vep->messages);
       for (vnp = vep->errorfilter; vnp != NULL; vnp = vnp->next) {
         efp = (ErrFltrPtr) vnp->data.ptrvalue;
@@ -362,9 +371,13 @@ extern void ClearValidateWindow (void)
       SetValue (vep->filter, 1);
       Show (vep->filter);
       SetTitle (vep->summary, "");
+      SetTitle (vep->showncount, "");
       for (sev = SEV_NONE; sev <= SEV_MAX; sev++) {
         vep->counts [sev] = 0;
       }
+      vep->totalcount = 0;
+      vep->addedcount = 0;
+      vep->remaining = 0;
       SetTitle (vep->searchfor, "");
       if (Enabled (vep->find)) {
         Disable (vep->find);
@@ -429,12 +442,15 @@ static void RepopVal (PopuP p)
   int            sev;
   int            subcode;
   CharPtr        str;
+  Char           tmp [32];
   ValidExtraPtr  vep;
   ValNodePtr     vnp;
 
   vep = GetObjectExtra (p);
   if (vep != NULL) {
     Reset (vep->doc);
+    vep->addedcount = 0;
+    vep->selected = 0;
     minlev = GetValue (vep->minlevel);
     filt = GetValue (vep->filter);
     efp = NULL;
@@ -465,6 +481,7 @@ static void RepopVal (PopuP p)
             okay = TRUE;
           }
           if (okay) {
+            (vep->addedcount)++;
             AppendItem (vep->doc, CharPrtProc, vnp->data.ptrvalue, FALSE,
                         (StringLen (vnp->data.ptrvalue) / 50) + 1,
                         &valParFmt, valColFmt, vep->font);
@@ -473,6 +490,14 @@ static void RepopVal (PopuP p)
       }
       MemFree (str);
     }
+    if (vep->addedcount > 1) {
+      sprintf (tmp, " %ld items shown", (long) vep->addedcount);
+    } else if (vep->addedcount > 0) {
+      sprintf (tmp, " %ld item shown", (long) vep->addedcount);
+    } else {
+      StringCpy (tmp, "");
+    }
+    SafeSetTitle (vep->showncount, tmp);
     UpdateDocument (vep->doc, 0, 0);
   }
 }
@@ -629,6 +654,9 @@ static void RevalidateProc (ButtoN b)
     for (i = SEV_NONE; i <= SEV_MAX; i++) {
       vep->counts [i] = 0;
     }
+    vep->totalcount = 0;
+    vep->addedcount = 0;
+    vep->remaining = 0;
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
@@ -664,6 +692,9 @@ static void SetVerbosityAndRevalidate (PopuP p)
     for (i = SEV_NONE; i <= SEV_MAX; i++) {
       vep->counts [i] = 0;
     }
+    vep->totalcount = 0;
+    vep->addedcount = 0;
+    vep->remaining = 0;
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
@@ -878,7 +909,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
           doSuppressContext = TRUE;
         }
         StaticPrompt (c, "Severity", 0, popupMenuHeight, programFont, 'l');
-        vep->minlevel = PopupList (c, FALSE, SetVerbosityAndRevalidate);
+        vep->minlevel = PopupList (c, FALSE, RepopVal); /* was SetVerbosityAndRevalidate */
         SetObjectExtra (vep->minlevel, vep, NULL);
         PopupItem (vep->minlevel, "INFO");
         PopupItem (vep->minlevel, "WARN");
@@ -905,12 +936,14 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         SetValue (vep->filter, 1);
         Break (w);
 
-        f = HiddenGroup (w, 4, 0, NULL);
+        f = HiddenGroup (w, 6, 0, NULL);
         vep->find = PushButton (f, "Find", ValFindProc);
         SetObjectExtra (vep->find, vep, NULL);
         Disable (vep->find);
         vep->searchfor = DialogText (f, "", 15, ValTextProc);
         SetObjectExtra (vep->searchfor, vep, NULL);
+        vep->showncount = StaticPrompt (f, " 0000000 items shown", 0, dialogTextHeight, systemFont, 'l');
+        SetTitle (vep->showncount, "");
 
         g = HiddenGroup (w, 0, -5, NULL);
         h = HiddenGroup (g, 5, 0, NULL);
@@ -933,6 +966,9 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         for (i = SEV_NONE; i <= SEV_MAX; i++) {
           vep->counts [i] = 0;
         }
+        vep->totalcount = 0;
+        vep->addedcount = 0;
+        vep->remaining = 0;
         vep->clicked = 0;
         vep->selected = 0;
         vep->dblClick = FALSE;
@@ -988,6 +1024,48 @@ extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
   CreateValidateWindowEx (notify, title, font, sev, verbose, NULL, NULL, FALSE);
 }
 
+extern void ShowValidateDoc (void)
+
+{
+  Char           str [64];
+  ValidExtraPtr  vep;
+
+  if (validWindow == NULL) return;
+  vep = GetObjectExtra (validWindow);
+  if (vep == NULL) return;
+  RepopVal (vep->filter);
+  SafeShow (vep->doc);
+  SafeShow (vep->searchfor);
+  sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
+           (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
+           (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
+  SafeSetTitle (vep->summary, str);
+  if (vep->addedcount > 1) {
+    sprintf (str, " %ld items shown", (long) vep->addedcount);
+  } else if (vep->addedcount > 0) {
+    sprintf (str, " %ld item shown", (long) vep->addedcount);
+  } else {
+    StringCpy (str, "");
+  }
+  SafeSetTitle (vep->showncount, str);
+  Update ();
+  ShowValidateWindow ();
+  Update ();
+}
+
+extern void HideValidateDoc (void)
+
+{
+  ValidExtraPtr  vep;
+
+  if (validWindow == NULL) return;
+  vep = GetObjectExtra (validWindow);
+  if (vep == NULL) return;
+  SafeHide (vep->doc);
+  SafeHide (vep->searchfor);
+  Update ();
+}
+
 extern void ShowValidateWindow (void)
 
 {
@@ -1006,9 +1084,15 @@ extern void ShowValidateWindow (void)
       }
     }
     if (! Visible (validWindow)) {
-      Show (validWindow);
+      if (vep->totalcount > 0) {
+        Show (validWindow);
+      }
     }
-    Select (validWindow);
+    if (Visible (validWindow)) {
+      if (Visible (vep->doc)) {
+        Select (validWindow);
+      }
+    }
   }
 }
 
@@ -1101,6 +1185,7 @@ extern void RepopulateValidateFilter (void)
     Hide (vep->filter);
     Update ();
     Reset (vep->filter);
+    vep->selected = 0;
     PopupItem (vep->filter, "ALL");
     SetValue (vep->filter, 1);
     vnp = vep->errorfilter;
@@ -1207,7 +1292,7 @@ static void ProcessValidMessage (ValidExtraPtr vep, CharPtr text1, CharPtr text2
 {
   CharPtr     buf;
   size_t      len;
-  Int2        numItems;
+  /* Int2        numItems; */
   Char        str [64];
   ValNodePtr  vnp;
 
@@ -1230,11 +1315,16 @@ static void ProcessValidMessage (ValidExtraPtr vep, CharPtr text1, CharPtr text2
       if (vnp != NULL) {
         vnp->data.ptrvalue = buf;
         if (sev >= minlev || sev == SEV_NONE) {
+          (vep->addedcount)++;
+          /*
           AppendItem (vep->doc, CharPrtProc, vnp->data.ptrvalue, FALSE,
                       (StringLen (vnp->data.ptrvalue) / 50) + 1,
                       &valParFmt, valColFmt, vep->font);
           GetDocParams (vep->doc, &numItems, NULL);
-          UpdateDocument (vep->doc, numItems, numItems);
+          if (Visible (vep->doc) && AllParentsVisible (vep->doc)) {
+            UpdateDocument (vep->doc, numItems, numItems);
+          }
+          */
         }
       }
     }
@@ -1262,10 +1352,34 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
         sev = SEV_MAX;
       }
       (vep->counts [sev])++;
-      sprintf (str, "INFO: %d      WARNING: %d      ERROR: %d      REJECT: %d",
-               (int) vep->counts [SEV_INFO], (int) vep->counts [SEV_WARNING],
-               (int) vep->counts [SEV_ERROR], (int) vep->counts [SEV_FATAL]);
-      SetTitle (vep->summary, str);
+      (vep->totalcount)++;
+      if (vep->remaining > 0) {
+        (vep->remaining)--;
+      }
+      if (vep->remaining < 1) {
+        sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
+                 (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
+                 (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
+        if (vep->totalcount < 30) {
+          vep->remaining = 1;
+        } else if (vep->totalcount < 100) {
+          vep->remaining = 5;
+        } else if (vep->totalcount < 300) {
+          vep->remaining = 20;
+        } else if (vep->totalcount < 1000) {
+          vep->remaining = 50;
+        } else if (vep->totalcount < 3000) {
+          vep->remaining = 100;
+        } else if (vep->totalcount < 10000) {
+          vep->remaining = 200;
+        } else if (vep->totalcount < 30000) {
+          vep->remaining = 500;
+        } else {
+          vep->remaining = 1000;
+	    }
+        SetTitle (vep->summary, str);
+        Update ();
+      }
       if (text1 == NULL) {
         text1 = severityLabel [sev];
       }
@@ -1293,7 +1407,11 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
       ProcessValidMessage (vep, text1, text2, text3, sev, errcode,
                            subcode, entityID, itemID, itemtype,
                            message, expanded, context, ctxlen, minlev); 
-      Select (validWindow);
+      /*
+      if (Visible (validWindow)) {
+        Select (validWindow);
+      }
+      */
     }
   }
 }

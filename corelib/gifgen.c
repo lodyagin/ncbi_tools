@@ -46,6 +46,9 @@
  *       GIF drawing functions
  *
  * $Log: gifgen.c,v $
+ * Revision 6.12  1999/10/20 19:48:39  vakatov
+ * + gdImageGetDimensions()
+ *
  * Revision 6.11  1999/08/13 21:23:08  vakatov
  * Renamed "gd[Set|Get]ImageColor()" to "gdImage[Set|Get]Color()"
  *
@@ -393,6 +396,12 @@ static void
          im->tileColorMap[p]);
    }
 }      
+
+#ifdef __cplusplus
+extern "C" {
+  static int LIBCALLBACK gdCompareInt(Nlm_VoidPtr a, Nlm_VoidPtr b);
+}
+#endif
 
 static 
 /*FCN*/int LIBCALLBACK gdCompareInt(Nlm_VoidPtr a, Nlm_VoidPtr b)
@@ -1839,6 +1848,15 @@ NLM_EXTERN int gdImageSetClip(gdImagePtr im,
   s_ComposeEffClip(im);
 
   return was_clip;
+}
+
+
+NLM_EXTERN void gdImageGetDimensions(gdImagePtr im, int* width, int* height)
+{
+  if ( width )
+    *width = im->sx;
+  if ( height )
+    *height = im->sy;
 }
 
 

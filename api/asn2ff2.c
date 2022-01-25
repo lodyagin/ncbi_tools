@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -212,12 +212,12 @@ static CharPtr SeqIdWriteProc (Asn2ffJobPtr ajp, SeqIdPtr sip)
 	if (ajp->show_version) {
 		if (! StdFormatPrint((Pointer)sip, 
 			(AsnWriteFunc)SeqIdAsnWrite, "VersionSeqId", Spop)) {
-		    	ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+		    	ErrPostStr (SEV_WARNING, 0, 0, "VersionSeqId_StdFormatPrint failed");
 		}
 	} else {
 		if (! StdFormatPrint((Pointer)sip, 
 			(AsnWriteFunc)SeqIdAsnWrite, "StdSeqId", Spop)) {
-		    	ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+		    	ErrPostStr (SEV_WARNING, 0, 0, "StdSeqId_StdFormatPrint failed");
 		}
 	}
 	if (Spop->ptr != NULL && *((CharPtr) (Spop->ptr)) != '\0') 
@@ -237,7 +237,7 @@ static CharPtr BioseqIdPrintProc (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		return NULL;
 	if (! StdFormatPrint((Pointer)bsp, 
 		(AsnWriteFunc)BioseqAsnWrite, "StdBioseqId", Spop))
-		    ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+		    ErrPostStr (SEV_WARNING, 0, 0, "StdBioseqId_StdFormatPrint failed");
 
 	if (Spop->ptr != NULL && *((CharPtr) (Spop->ptr)) != '\0') 
 		return Spop->ptr;
@@ -255,7 +255,7 @@ static CharPtr TableIdPrintProc (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		return NULL;
 
 	if (! StdFormatPrint((Pointer)bsp, 
-		(AsnWriteFunc)BioseqAsnWrite, "StdBioseqId", Spop)) {
+		(AsnWriteFunc)BioseqAsnWrite, "TableIdPrintProcStdBioseqId", Spop)) {
                     ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
 	}
 	if (Spop->ptr != NULL && *((CharPtr) (Spop->ptr)) != '\0') 
@@ -270,7 +270,7 @@ static CharPtr SPBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 
 	if (! StdFormatPrint((Pointer)vnp->data.ptrvalue, 
 		(AsnWriteFunc)SPBlockAsnWrite, "StdSPBlock", Spop)) {
-                    ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+                    ErrPostStr (SEV_WARNING, 0, 0, "StdSPBlockStdFormatPrint failed");
 	}
 	if (Spop->ptr != NULL && *((CharPtr) (Spop->ptr)) != '\0') 
 		return Spop->ptr;
@@ -420,6 +420,47 @@ static ComStructPtr tie_next_comm(ComStructPtr head, ComStructPtr next)
 	return head;
 }
 
+static CharPtr GetStrForBankit(UserObjectPtr uop)
+{
+    ObjectIdPtr		oip;
+	UserFieldPtr	ufp, tmp, u;
+	CharPtr			ptr=NULL, ptr1 = NULL, str;
+	Int2			i=0, acclen, ptrlen = 0;
+	CharPtr			p;
+	
+	if ((oip = uop->type) == NULL) return NULL;
+	if (StringCmp(oip->str, "Submission") != 0) return NULL;
+	for (ufp=uop->data; ufp; ufp=ufp->next) {
+		oip = ufp->label;
+		if (StringCmp(oip->str, "UniVecComment") == 0) {
+			if (ufp->data.ptrvalue) {
+				ptrlen = (StringLen("Vector Explanation: ")
+							+ StringLen(ufp->data.ptrvalue) + 1);
+				ptr = (CharPtr) MemNew(ptrlen);
+				sprintf(ptr, "Vector Explanation: %s", ufp->data.ptrvalue);
+			}
+		}
+	}
+	for (ufp=uop->data; ufp; ufp=ufp->next) {
+		oip = ufp->label;
+		if (StringCmp(oip->str, "AdditionalComment") == 0) {
+			if (ufp->data.ptrvalue) {
+				ptr1 = (CharPtr) MemNew(StringLen("Bankit Comment: ")
+							+ StringLen(ufp->data.ptrvalue) + 2 + ptrlen);
+				if (ptr) {
+					sprintf(ptr1, "%s~Bankit Comment: %s", 
+									ptr, ufp->data.ptrvalue);
+				} else {
+					sprintf(ptr1, "Bankit Comment: %s", ufp->data.ptrvalue);
+				}
+				return ptr1;
+			}
+		}
+	}
+	
+	return ptr;
+}
+
 static CharPtr GetStrForUserObject(UserObjectPtr uop)
 {
     ObjectIdPtr		oip;
@@ -526,13 +567,34 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 		if (vnp == NULL) {
 			continue;
 		}
+		if (choice == Seq_descr_user) {
+			if (ajp->bankit && 
+				(new_string = GetStrForBankit(vnp->data.ptrvalue))) {
+				csp = ComStructNew();
+				csp->string = new_string;
+				csp->gsdb_id = FALSE;
+				csp->entityID = dsp->entityID;
+				csp->itemID = dsp->itemID;
+				csp->itemtype = dsp->itemtype;
+				gbp->comm = tie_next_comm(gbp->comm, csp);
+				gbp->comm_num++;
+			}
+			if ((new_string = GetStrForUserObject(vnp->data.ptrvalue))) {
+				csp = ComStructNew();
+				csp->gsdb_id = FALSE;
+				csp->string = StringSave(new_string);
+				new_string = MemFree(new_string);
+				csp->entityID = dsp->entityID;
+				csp->itemID = dsp->itemID;
+				csp->itemtype = dsp->itemtype;
+				gbp->comm = tie_next_comm(gbp->comm, csp);
+				gbp->comm_num++;
+			}
+		}
 		csp = ComStructNew();
 		csp->string = NULL;
 		csp->gsdb_id = FALSE;
 		switch (choice) {
-		case Seq_descr_user:
-			csp->string = GetStrForUserObject(vnp->data.ptrvalue);
-			break;
 		case Seq_descr_comment:
 			csp->string = StringSave(vnp->data.ptrvalue);
 			break;
@@ -545,6 +607,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 			str = CheckEndPunctuation(new_string, '.');
 			new_string = MemFree(new_string);
 			csp->string = StringSave(str);
+			MemFree(str);
 			break;
 		case Seq_descr_molinfo:
 			if ((mfp = vnp->data.ptrvalue) != NULL) {
@@ -608,7 +671,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 							sprintf(buffer, " It currently~* consists of %ld contigs. Gaps between the contigs~* are represented as runs of N. The order of the pieces~* is believed to be correct as given, however the sizes~* of the gaps between them are based on estimates that have~* provided by the submittor.", (long) (num_s-num_g));
 							tmp = Cat2Strings(tmp, buffer, "", 0);
 						}
-						tmp3 = StringSave("* This sequence will be replaced~* by the finished sequence as soon as it is available and~* the accession number will be preserved");
+						tmp3 = StringSave("* This sequence will be replaced~* by the finished sequence as soon as it is available and~* the accession number will be preserved.");
 						tmp = Cat2Strings(tmp, tmp3, "~", 0);
 						csp->string = Cat2Strings(tmp, buf, "~", 0);
 					} else if ((str = StringForSeqTech(mfp->tech)) != NULL) {
@@ -633,7 +696,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 		default:
 			break;
 		}
-		if (csp->string != NULL) {
+		if (choice != Seq_descr_user && csp->string) {
 			csp->entityID = dsp->entityID;
 			csp->itemID = dsp->itemID;
 			csp->itemtype = dsp->itemtype;
@@ -642,6 +705,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 		} else {
 			MemFree(csp);
 		}
+		MemFree(vnp);
 		MemFree(dsp);
 	}
 	ValNodeFree(tvnp);
@@ -657,7 +721,7 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	SeqHistPtr hist;
 	Int2 num_gi;
 	DatePtr dat;
-	CharPtr strd;
+	CharPtr strd = NULL;
 	
 	gbp->comm_num = 0;
 	GetCommentByChoice(ajp, gbp, Seq_descr_user);
@@ -702,6 +766,8 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			csp = ComStructNew();
 			csp->string = MemNew((128 + 16*num_gi)*sizeof(Char));
 			sprintf(csp->string, "[WARNING] On %s this sequence was replaced by a newer version", strd);
+			if(strd != NULL)
+				strd = MemFree(strd);
 			for (sid=hist->replaced_by_ids; sid; sid=sid->next) {
 				if (sid->choice == SEQID_GI) {
 					sprintf(tmp, " gi:%ld", (long) sid->data.intvalue);
@@ -731,6 +797,8 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			csp = ComStructNew();
 			csp->string = MemNew((128 + 16*num_gi)*sizeof(Char));
 			sprintf(csp->string, "On %s this sequence version replaced", strd);
+			if(strd != NULL)
+				strd = MemFree(strd);
 			for (sid=hist->replace_ids; sid; sid=sid->next) {
 				if (sid->choice == SEQID_GI) {
 					sprintf(tmp, " gi:%ld", (long) sid->data.intvalue);

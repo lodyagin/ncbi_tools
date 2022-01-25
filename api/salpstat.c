@@ -205,10 +205,13 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignScoreFix(SeqAlignPtr seqalign,FloatHi sco
   return seqalign;
 }
 /*
-  Creates a DNA Scoring Matrix
+  Creates a DNA Scoring Matrix: For the alphabet size =16 (alsize==16), 
+  assumes that the alphabet is 
+  ncbi4na, and fills scoring matric for  ambiguity codes
+  to free matrix, just use Free(matrix).
  */
 
-static Int4Ptr PNTR   DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize){
+NLM_EXTERN Int4Ptr PNTR   DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize){
   Int4Ptr PNTR alignMatrix;
   Int4 i,j,k;
   Int4 nbase1,nbase2;
@@ -218,9 +221,9 @@ static Int4Ptr PNTR   DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize){
   /* If "ncbi'ized" the codes.. could make matrix this way,
      then use the ncbi translation tools 
      */
-  if(alsize !=4 && alsize!=16) {
+  /*  if(alsize !=4 && alsize!=16) {
     ErrPostEx(SEV_WARNING,0,0,"DNAScoringMatrix: No ambiguity codes for alphabet size=%ld\n",alsize);
-  }
+    } */
   alignMatrix= (Int4Ptr PNTR) Calloc(alsize*(alsize+1),
                                      MAX(sizeof(Int4),sizeof(Int4Ptr)));
   for(i=0;i<alsize;i++) {

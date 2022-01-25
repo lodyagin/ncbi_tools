@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.4 $
+* $Revision: 6.10 $
 *
-* File Description: 
+* File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.10  2000/01/11 15:03:19  durand
+* remove network stuff
+*
+* Revision 6.9  2000/01/10 15:18:40  durand
+* use Entrez instead of ID1
+*
+* Revision 6.8  1999/11/29 15:17:55  durand
+* designed a new GUI; fixed problems under Win95 and Linux
+*
+* Revision 6.7  1999/11/19 15:01:48  durand
+* speed up mouse selection ; avoid sequence flashing during selection ; update menu functionalities
+*
+* Revision 6.6  1999/11/09 21:06:59  durand
+* add sequence selection manager
+*
+* Revision 6.5  1999/10/02 15:11:16  durand
+* update the code to be used by wwwudv
+*
 * Revision 6.4  1999/09/07 15:32:39  durand
 * add BBS and RefSeq to databases list
 *
@@ -72,7 +90,7 @@
 		LisT	bsp_list;		/*listbox of bsps*/
 	} UDVChooseSeq, PNTR UDVChooseSeqPtr;
 
-	static Char szAppName[]="UnD-Viewer";
+	static Char szAppName[]="OneD-Viewer";
 
 	static Uint1 DataBaseID[]={
 				SEQID_GENBANK,
@@ -126,28 +144,14 @@ WindoW 	w;
 	CorrectBarPage(vsb,0,0);
 	
 	/*reset winmain title*/
-	if (EraseMainTitle && p){
-		w=ParentWindow(p);
-		if (w) SetTitle(w,szAppName);
+	if (EraseMainTitle){
+		if (vdp->Parent) 
+			SetTitle(vdp->Parent,szAppName);
 	}
 	
 	/*reset infopanel title*/
-	if(EraseInfoPanel && vdp->InfoPanel){
-		CharPtr szFeatName=(CharPtr) GetObjectExtra (vdp->InfoPanel);
-		RecT rcI;
-		WindoW temport;
-		
-		if (szFeatName) {
-			MemSet(szFeatName,0,sizeof(szFeatName));
-			temport = SavePort(vdp->InfoPanel);
-			Select(vdp->InfoPanel);
-			ObjectRect(vdp->InfoPanel,&rcI);
-			rcI.left=0;rcI.top=0;
-			InvalRect(&rcI);
-			Update();
-			RestorePort(temport);
-		}
-	}
+	if (EraseInfoPanel && vdp->InfoPanel) 
+		SetTitle(vdp->InfoPanel,"Ready !");
 }
 
 /*******************************************************************************
@@ -200,7 +204,8 @@ Boolean 	bRet=TRUE,bReadOk=FALSE;
 Pointer     dataptr;
 Uint2       datatype,entityID,eID,iID;
 MonitorPtr  mon;
-PaneL		p1,p2;
+RecT        rcP;
+WindoW      temport;
 	
 	if (vmp->hFeatDlg){/*Features List Dlg Box*/
 		SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
@@ -209,14 +214,12 @@ PaneL		p1,p2;
 	}
 	/*free data, remove viewer*/
 	if (vmp->vdp){
-		p1=vmp->vdp->UnDViewer;
-		p2=vmp->vdp->InfoPanel;
-		vmp->vdp=UDV_FreeVDPstruct(&vmp->vdp);
+		UDV_FreeVDPstruct(vmp->vdp,FALSE);
 
+		SetValue(vmp->MainMenu.ScalePosChoice,3);
+		SetStatus(vmp->MainMenu.ShowFeature,TRUE);
 		UDV_set_MainMenus(&vmp->MainMenu,FALSE);
-		
-		Remove(p1);
-		if (p2) Remove(p2);
+		UDV_set_MainControls(vmp,FALSE);
 	}
 	if (vmp->BspTable){
 		ValNodeFree(vmp->BspTable);
@@ -285,32 +288,18 @@ PaneL		p1,p2;
 	bsp=GetBioseqGivenIDs (eID, iID, OBJ_BIOSEQ);
 	if (bsp){
 		vmp->BspChoice=1;
-		/*temport=SavePort(w);
-		Select(vmp->vdp->UnDViewer);
-		ObjectRect(vmp->vdp->UnDViewer,&rcP);
-		UDV_init_bsp_forViewer(w,bsp,eID,iID,OBJ_BIOSEQ,vmp->vdp);
-
-		if (vmp->vdp->ParaG){
-			UDV_set_MainMenus(&vmp->MainMenu,TRUE);
-			rcP.top=0;rcP.left=0;
-			InvalRect(&rcP);
-			Update();
-		}
-		else{
-			if (vmp->BspTable) ValNodeFree(vmp->BspTable);
-			vmp->BspTable=NULL;
-			UDV_set_MainMenus(&vmp->MainMenu,FALSE);
-			UDV_Init_vdp_struct(vmp->vdp,FALSE,TRUE,TRUE);
-		}
-		RestorePort(temport);*/
-		/*Ask ObjMgr for the viewer*/
 		ArrowCursor();
 		MonitorFree (mon);
 		vmp->Show_logo=FALSE;	
-		Hide(vmp->Logo_Panel);
-		/*ask ObjMgr to load the viewer panel*/
 		GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
 			OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
+
+		temport=SavePort(vmp->hWndMain);
+		Select(vmp->vdp->UnDViewer);
+		ObjectRect(vmp->vdp->UnDViewer,&rcP);
+		InvalRect(&rcP);
+		Update();
+		RestorePort(temport);
 	}
 	else {
 		MonitorFree (mon);
@@ -321,20 +310,16 @@ PaneL		p1,p2;
 
 error:
 	if (!bRet){/*show the logo in case of error*/
-		RecT rcL;
-		UDV_Resize_Logo_Panel (vmp->hWndMain,&rcL);
-		SetPosition (vmp->Logo_Panel, &rcL );
-		AdjustPrnt (vmp->Logo_Panel, &rcL, FALSE);
 		vmp->Show_logo=TRUE;	
-		Show(vmp->Logo_Panel);
 		UDV_set_MainMenus(&vmp->MainMenu,FALSE);
+		UDV_set_MainControls(vmp,FALSE);
 	}
 	return (bRet);
 }
 
 /*******************************************************************************
 
-  Function : AccessionToGi_ID1()
+  Function : AccessionToGi_Entrez()
   
   Purpose : given s string, retrieve the UID 
   
@@ -345,7 +330,7 @@ error:
   Return value : none 
 
 *******************************************************************************/
-static Int4 AccessionToGi_ID1 (CharPtr string,Int2 type)
+static Int4 AccessionToGi_Entrez (CharPtr string,Int2 type)
 {
 SeqIdPtr 	sip;
 Int4 		uid=0;
@@ -375,13 +360,6 @@ Uint1 		Choice;
 			tsip->name=StringSave(string);
 			tsip->accession=StringSave(string);
 			uid=GetGIForSeqId(sip);
-
-			/*MemFree(tsip->name);
-			tsip->name=NULL;
-			if (uid==0){
-				tsip->accession=StringSave(string);
-				uid=GetGIForSeqId(sip);
-			}*/
 			
 			TextSeqIdFree(tsip);
 			break;
@@ -468,7 +446,7 @@ UdvGlobalsPtr   ugp=NULL;
 
 	AccessType=GetValue(unop->AccessType);
 	WatchCursor();
-	uid=AccessionToGi_ID1(szAccess,AccessType);	
+	uid=AccessionToGi_Entrez(szAccess,AccessType);	
 	/*Connect ID1 with a valid UID*/
 	if (uid==0){
 		ArrowCursor();
@@ -487,9 +465,7 @@ UdvGlobalsPtr   ugp=NULL;
 		if (ugp && ugp->fetchSepProc) {
 				sep=ugp->fetchSepProc(uid, 0);
 		}
-		
-		/*sep=ID1SeqEntryGet(uid, 0);*/
-		
+				
 		ArrowCursor();
 		MonitorFree (mon);
 		if (sep){
@@ -591,6 +567,7 @@ GrouP			c,g;
 WindoW			w,hWinMain;
 UDVNetOpenPtr 	unop;
 ViewerMainPtr 	vmp;
+UdvGlobalsPtr ugp;
 
 	hWinMain=(WindoW)ParentWindow(i);
 
@@ -598,6 +575,12 @@ ViewerMainPtr 	vmp;
 	
 	vmp = (ViewerMainPtr) GetObjectExtra (hWinMain);
 	if (vmp==NULL) return;
+
+	/*init the Network, if needed*/
+	ugp=(UdvGlobalsPtr)GetAppProperty("UdvGlobals");
+	if (ugp && ugp->NetStartProc){
+		if (!ugp->NetStartProc(vmp->UseNetwork)) return;
+	}
 
 	w = FixedWindow (-50, -33, -10, -10, "Download From NCBI", NULL);
 
@@ -778,6 +761,7 @@ ViewerMainPtr 		vmp;
 Char 				szFName[PATH_MAX]={""};
 Boolean				isBinary;
 FILE				*fp;
+UdvGlobalsPtr       ugp;
 
 	hOpenDlg=(WindoW)ParentWindow(g);
 
@@ -788,6 +772,13 @@ FILE				*fp;
 		w=dfodp->parent;
 		vmp = (ViewerMainPtr) GetObjectExtra (w);
 		if (vmp!=NULL){
+			/*try to connect Entrez; if failure, still ok : the user can
+			use DDV with a local file. Otherwise he/she will be in trouble ;-)*/
+			ugp=(UdvGlobalsPtr)GetAppProperty("UdvGlobals");
+			if (ugp && ugp->NetStartProc){
+				if (!ugp->NetStartProc(vmp->UseNetwork)) return;
+			}
+
 			Enable(vmp->MainMenu.FileOpen);
 			/*file name*/
 			GetTitle(dfodp->FNameEditCtrl, szFName, sizeof(szFName));
@@ -846,7 +837,7 @@ TexT				t1;
 	MemSet(dfodp,0,sizeof(DlgFileOpenData));
 
     hOpenDlg = FixedWindow(-30, -20,  -10,  -10, 
-				"UnD-Viewer - Open a local file",  NULL);
+				"OneD-Viewer - Open a local file",  NULL);
     g = NormalGroup(hOpenDlg, 2, 1, "File name:",  systemFont, NULL);
     SetGroupMargins(g, 10, 10);
     SetGroupSpacing(g, 10, 20);  
@@ -897,7 +888,7 @@ NLM_EXTERN void UDV_FileClose(IteM i)
 {
 ViewerMainPtr 		vmp;
 WindoW				hWinMain;
-RecT				rcL;
+RecT				rcL,rcP;
 PaneL				p1,p2;
 
 	hWinMain=(WindoW)ParentWindow(i);
@@ -916,11 +907,7 @@ PaneL				p1,p2;
 		vmp->hFeatDlg=NULL;
 	}
 
-	/*free data, remove viewer*/
-	p1=vmp->vdp->UnDViewer;
-	p2=vmp->vdp->InfoPanel;
-
-	vmp->vdp=UDV_FreeVDPstruct(&vmp->vdp);
+	UDV_FreeVDPstruct(vmp->vdp,FALSE);
 
 	if (vmp->BspTable){
 		ValNodeFree(vmp->BspTable);
@@ -934,17 +921,20 @@ PaneL				p1,p2;
 		vmp->entityID=0;
 	}
 
+	/*Update main window title and menus*/
+	SetValue(vmp->MainMenu.ScalePosChoice,3);
+	SetStatus(vmp->MainMenu.ShowFeature,TRUE);
 	UDV_set_MainMenus(&vmp->MainMenu,FALSE);
+	UDV_set_MainControls(vmp,FALSE);
+	SetTitle(hWinMain,szAppName);	
+	SetTitle(vmp->vdp->InfoPanel,"Ready !");
 	
-	Remove(p1);
-	if (p2) Remove(p2);
-	
-	UDV_Resize_Logo_Panel (hWinMain,&rcL);
-	SetPosition (vmp->Logo_Panel, &rcL );
-	AdjustPrnt (vmp->Logo_Panel, &rcL, FALSE);
 	vmp->Show_logo=TRUE;	
-	Show(vmp->Logo_Panel);
-
+	Select(vmp->vdp->UnDViewer);
+	Select(vmp->vdp->UnDViewer);
+	ObjectRect(vmp->vdp->UnDViewer,&rcP);
+	InvalRect(&rcP);
+	Update();
 }
 
 /*******************************************************************************
@@ -964,12 +954,12 @@ ViewerDialogDataPtr vdp;
 UDVChooseSeqPtr 	ucsp;
 ViewerMainPtr 		vmp;
 Int2 				value;
-WindoW				hOpenDlg;
+WindoW				hOpenDlg,temport;
 ValNodePtr			vnp;
 Uint2				nCompt=1,eID,iID;
 BioseqPtr			bsp=NULL;
+RecT                rcP;
 Char 				szBuf[255]={""};
-PaneL				p1,p2;
 
 	hOpenDlg=(WindoW)ParentWindow(g);
 	if (!hOpenDlg) return;
@@ -991,7 +981,7 @@ PaneL				p1,p2;
 	/*look for a new bsp*/
 	for (vnp=vmp->BspTable ; vnp!=NULL ;vnp=vnp->next){
 		if (nCompt==value){
-			UDV_DecodeIdxFeat ((Uint4)vnp->data.ptrvalue,&eID,&iID);
+			UDV_DecodeIdxFeat ((Uint4)vnp->data.intvalue,&eID,&iID);
 			bsp=GetBioseqGivenIDs (eID, iID, OBJ_BIOSEQ);
 			vmp->BspChoice=value;
 			break;
@@ -1006,31 +996,26 @@ PaneL				p1,p2;
 			vmp->hFeatDlg=NULL;
 		}
 		/*free data, remove viewer*/
-		p1=vmp->vdp->UnDViewer;
-		p2=vmp->vdp->InfoPanel;
-		vmp->vdp=UDV_FreeVDPstruct(&vmp->vdp);
+		UDV_FreeVDPstruct(vmp->vdp,FALSE);
 
+		SetValue(vmp->MainMenu.ScalePosChoice,3);
+		SetStatus(vmp->MainMenu.ShowFeature,TRUE);
 		UDV_set_MainMenus(&vmp->MainMenu,FALSE);
+		UDV_set_MainControls(vmp,FALSE);
 		
-		Remove(p1);
-		if (p2) Remove(p2);
-
 		GatherProcLaunch(OMPROC_VIEW, FALSE, eID, iID, OBJ_BIOSEQ, 
 			OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0);
 	
-/*		UDV_Init_vdp_struct(vdp, TRUE,TRUE,TRUE);
 		temport=SavePort(ucsp->hWndMain);
 		Select(vdp->UnDViewer);
 		ObjectRect(vdp->UnDViewer,&rcP);
-		UDV_init_bsp_forViewer(ucsp->hWndMain,bsp,eID,iID,OBJ_BIOSEQ,vdp);	
 		sprintf(szBuf,"%s - [%s - %d letters]",szAppName,
 					vdp->bsp_i.bspAccNum,
 					vdp->bsp_i.bspLength);
 		SetTitle(ucsp->hWndMain,szBuf);
-		rcP.left=0;rcP.top=0;
 		InvalRect(&rcP);
 		Update();
-		RestorePort(temport);*/
+		RestorePort(temport);
 	}
 error:
 
@@ -1116,14 +1101,14 @@ Uint2			eID,iID;
 		h1=HiddenGroup(h, 0, 2,  NULL);
 		StaticPrompt(h1,"Choose a sequence :",0,0,systemFont,'l');
 
-		lBox=SingleList(h1,20,6,NULL/*(LstActnProc)UDV_CSeq_LB_Proc*/);
+		lBox=SingleList(h1,20,6,NULL);
 
 		g1=HiddenGroup(h, 0, 2, NULL);
 		PushButton(g1, "Ok",UDV_CSeq_okProc);
 		PushButton(g1, "Cancel",UDV_CSeq_cancelProc);
 		/*fill in the list box*/
 		for (vnp=vmp->BspTable ; vnp!=NULL ;vnp=vnp->next){
-			UDV_DecodeIdxFeat ((Uint4)vnp->data.ptrvalue,&eID,&iID);
+			UDV_DecodeIdxFeat ((Uint4)vnp->data.intvalue,&eID,&iID);
 			bsp=GetBioseqGivenIDs (eID, iID, OBJ_BIOSEQ);
 			if (bsp){
 				SeqIdWrite(bsp->id,szName,

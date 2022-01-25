@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.4  1999/11/05 19:59:09  beloslyu
+* Fixed the error with size_t vs Int4 comparisons
+*
 * Revision 6.3  1999/08/25 17:43:04  madden
 * Removed extra comment starts
 *
@@ -117,20 +120,22 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_BSMerge (Nlm_ByteStorePtr bsp, Nlm_VoidPtr d
 {
 	Nlm_BytePtr tmp, from;
 	Nlm_BSUnitPtr bsup;
-    Nlm_Int4 size;
+    size_t size;
 
 	if (bsp == NULL)
 		return NULL;
 
     size = Nlm_BSLen(bsp) + 1;
     if (size > SIZE_MAX) {
+		ErrPostEx(SEV_ERROR, 0, 0, "size[%u] is bigger then SIZE_MAX[%u]",
+			size, SIZE_MAX);
         /* should post an error here */
         return NULL;
     }
 
 	if (dest == NULL)         /* allocate storage with room for null at end */
 	{
-		dest = Nlm_MemNew((size_t) size);
+		dest = Nlm_MemNew(size);
 		if (dest == NULL) return dest;
 	}
 

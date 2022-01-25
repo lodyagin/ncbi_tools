@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.56 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *
@@ -64,10 +64,12 @@ static char *time_of_compilation = "now";
 #include <bspview.h>
 #include <findrepl.h>
 #include <toasn3.h>
+#include <toporg.h>
 #include <taxutil.h>
 #include <utilpub.h>
 #include <salsap.h>
 #include <salptool.h>
+#include <explore.h>
 
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
 (
@@ -1107,6 +1109,7 @@ typedef struct fa2htgsform {
   DialoG             contigorder;
   EnumFieldAssocPtr  alists [1];
   GrouP              htgsphase;
+  ButtoN             draft;
   TexT               orgname;
   TexT               seqname;
   ButtoN             update;
@@ -1114,6 +1117,7 @@ typedef struct fa2htgsform {
   TexT               knownlength;
   TexT               remark;
   TexT               clone;
+  TexT               strain;
   TexT               chromosome;
   TexT               title;
   DialoG             secondaries;
@@ -1157,6 +1161,38 @@ static SeqIdPtr  SqnMakeAc2GBSeqId(CharPtr accession)
 *   AddExtraAc2Entry:
 *                                             Hsiu-Chuan 4-11-97, modified by JK
 ****************************************************************/
+static void SqnAddDraft2Entry (SeqEntryPtr entry)
+
+{
+   BioseqPtr  bsp;
+   ValNodePtr vnp;
+   GBBlockPtr gbp;
+
+   if (entry == NULL) return;
+
+   bsp = (BioseqPtr)(entry->data.ptrvalue);
+
+   for (gbp= NULL, vnp = bsp->descr; vnp != NULL; vnp = vnp->next)
+   {
+       if (vnp->choice == Seq_descr_genbank)
+       {
+          gbp = vnp->data.ptrvalue;
+          break;
+       }
+   }
+
+   if (gbp == NULL)
+   {
+      vnp = (ValNodePtr) NewDescrOnSeqEntry (entry, Seq_descr_genbank);
+      gbp = GBBlockNew();
+      vnp->data.ptrvalue = (Pointer)gbp;
+   }
+
+   if (gbp != NULL) {
+      ValNodeCopyStr (&gbp->keywords, 0, "HTGS_DRAFT");
+   }
+}
+
 static Boolean SqnAddExtraAc2Entry (SeqEntryPtr entry , ValNodePtr extra_accs )
 {
    BioseqPtr  bsp;
@@ -1377,15 +1413,15 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   Int2 htgs_phase = -1;
   Uint1 tech;
   CharPtr seqname = NULL, accession = NULL, orgname = NULL;
-  CharPtr clone = NULL, chromosome = NULL;
+  CharPtr clone = NULL, strain = NULL, chromosome = NULL;
   CharPtr remark = NULL, title = NULL, seqbuf = NULL;
   Int4 length = 0, cumlength = 0;
   BioseqPtr bsp;
   BioseqSetPtr bssp;
   SeqLitPtr slp;
   ValNodePtr vnp, PNTR prevpnt, next, extra_accs;
-  Boolean lastwasraw;
-  Char str [32];
+  Boolean lastwasraw, draft;
+  Char str [64];
   long int val;
   Int2 index = 0;
   ValNodePtr rescuedsgps = NULL;
@@ -1403,10 +1439,12 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
     accession = SaveStringFromText (ffp->accession);
   }
   clone = SaveStringFromText (ffp->clone);
+  strain = SaveStringFromText (ffp->strain);
   chromosome = SaveStringFromText (ffp->chromosome);
   remark = SaveStringFromText (ffp->remark);
   title = SaveStringFromText (ffp->title);
   extra_accs = DialogToPointer (ffp->secondaries);
+  draft = GetStatus (ffp->draft);
 
   length = 0;
 /* may need to really calculate length */
@@ -1421,7 +1459,8 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
    oldsep = (SeqEntryPtr)(ssp->data);  /* clear out template */
    ssp->data = NULL;
    MemFree(ssp->sub->tool);
-   ssp->sub->tool = StringSave(SEQUIN_APPLICATION);
+   sprintf (str, "Sequin %s", SEQUIN_APPLICATION);
+   ssp->sub->tool = StringSave (str);
    nsp = MemNew(sizeof(NCBISub));
    nsp->ssp = ssp;
    nsp->submittor_key = StringSave (genomeCenter);
@@ -1602,6 +1641,8 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
       AddSubSourceToEntry(nsp, the_entry, 3, clone);
    if (chromosome != NULL)
        AddSubSourceToEntry(nsp, the_entry, 1, chromosome);
+   if (clone != NULL)
+      AddOrgModToEntry(nsp, the_entry, 2, strain);
    if (title != NULL)
       AddTitleToEntry(nsp, the_entry, title);
    if (ffp->readPhrap) {
@@ -1610,6 +1651,10 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
 
    if (extra_accs != NULL) {
       SqnAddExtraAc2Entry(the_entry, extra_accs);
+   }
+
+   if (draft) {
+      SqnAddDraft2Entry(the_entry);
    }
 
    AddBiomolToEntry(nsp, the_entry, 1);
@@ -2327,6 +2372,8 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (ffp->htgsphase, "HTGS-1");
     RadioButton (ffp->htgsphase, "HTGS-2");
     RadioButton (ffp->htgsphase, "HTGS-3");
+    ffp->draft = CheckBox (g, "Draft", NULL);
+    StaticPrompt (g, "", 0, stdLineHeight, programFont, 'l');
   }
 
   StaticPrompt (g, "Organism", 0, dialogTextHeight, programFont, 'l');
@@ -2354,6 +2401,10 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
   StaticPrompt (g, "Clone", 0, dialogTextHeight, programFont, 'l');
   ffp->clone = DialogText (g, "", 10, (TxtActnProc) SetFa2htgsAcceptBtn);
   SetObjectExtra (ffp->clone, ffp, NULL);
+
+  StaticPrompt (g, "Strain", 0, dialogTextHeight, programFont, 'l');
+  ffp->strain = DialogText (g, "", 10, (TxtActnProc) SetFa2htgsAcceptBtn);
+  SetObjectExtra (ffp->strain, ffp, NULL);
 
   wid = MaxStringWidths (secaccstrings) + 2;
   sa = MultiLinePrompt (g, "Secondary Accessions", wid, programFont);
@@ -4535,23 +4586,27 @@ extern CharPtr SearchForString (CharPtr str, CharPtr sub, Boolean case_counts, B
   return ptr;
 }
 
-static void FindInFlatFile (Uint2 entityID, Uint1 format, Uint1 mode,
+static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                            Uint1 format, Uint1 mode,
                             CharPtr sub, Boolean case_counts, Boolean whole_word)
 
 {
   Asn2ffJobPtr     ajp;
   Boolean          already;
+  BioseqPtr        bsp;
   DescrStructPtr   descr;
   unsigned int     entID;
   Int4             index;
-  unsigned int     itemID;
-  unsigned int     itemtype;
+  unsigned int     itmID;
+  unsigned int     itmtype;
   ErrSev           level;
+  SeqEntryPtr      oldsep;
   FFPrintArrayPtr  pap = NULL;
   Int4             pap_size;
   SeqEntryPtr      sep;
   SelStructPtr     sel;
   CharPtr          string;
+  SeqEntryPtr      topsep;
 
   ajp = (Asn2ffJobPtr) MemNew (sizeof (Asn2ffJob));
   if (ajp == NULL) return;
@@ -4559,7 +4614,12 @@ static void FindInFlatFile (Uint2 entityID, Uint1 format, Uint1 mode,
   WatchCursor ();
   Update ();
 
-  sep = GetTopSeqEntryForEntityID (entityID);
+  bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (bsp->repr == Seq_repr_seg) {
+    sep = GetBestTopParentForData (entityID, bsp);
+  }
+  /* sep = GetTopSeqEntryForEntityID (entityID); */
   ajp->sep = sep;
   ajp->mode = mode;
   ajp->format = format;
@@ -4574,6 +4634,10 @@ static void FindInFlatFile (Uint2 entityID, Uint1 format, Uint1 mode,
     ajp->only_one = TRUE;
     ajp->genome_view = TRUE;
   }
+  ajp->bankit = TRUE;
+
+  topsep = GetTopSeqEntryForEntityID (entityID);
+  oldsep = SeqEntrySetScope (topsep);
 
   pap_size = asn2ff_setup (ajp, &pap);
   if (pap_size > 0) {
@@ -4586,17 +4650,17 @@ static void FindInFlatFile (Uint2 entityID, Uint1 format, Uint1 mode,
           if (pap [index].descr) {
             descr = pap [index].descr;
             entID = descr->entityID;
-            itemID = descr->itemID;
-            itemtype = descr->itemtype;
+            itmID = descr->itemID;
+            itmtype = descr->itemtype;
             pap [index].descr = MemFree (pap [index].descr);
             already = FALSE;
             for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
-              if (sel->entityID == entID && sel->itemID == itemID && sel->itemtype == itemtype) {
+              if (sel->entityID == entID && sel->itemID == itmID && sel->itemtype == itmtype) {
                 already = TRUE;
               }
             }
             if (! already) {
-              ObjMgrAlsoSelect (entID, itemID, itemtype, 0, NULL);
+              ObjMgrAlsoSelect (entID, itmID, itmtype, 0, NULL);
             }
           }
         }
@@ -4606,6 +4670,8 @@ static void FindInFlatFile (Uint2 entityID, Uint1 format, Uint1 mode,
     MemFree (pap);
   }
   asn2ff_cleanup (ajp);
+
+  SeqEntrySetScope (oldsep);
 
   MemFree (ajp);
   ErrSetMessageLevel (level);
@@ -4628,7 +4694,8 @@ static void FindFlatProc (ButtoN b)
   caseCounts = GetStatus (ffp->caseCounts);
   wholeWord = GetStatus (ffp->wholeWord);
   CompressSpaces (findme);
-  FindInFlatFile (ffp->input_entityID, GENBANK_FMT, SEQUIN_MODE,
+  FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
+                  ffp->input_itemtype, GENBANK_FMT, SEQUIN_MODE,
                   findme, caseCounts, wholeWord);
 }
 
@@ -4734,7 +4801,8 @@ static void FindFormMessage (ForM f, Int2 mssg)
 }
 
 static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
-                            Uint2 entityID, Boolean flatfile)
+                            Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                            Boolean flatfile)
 
 {
   ButtoN             b;
@@ -4754,6 +4822,8 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     ffp->form = (ForM) w;
     ffp->formmessage = FindFormMessage;
     ffp->input_entityID = entityID;
+    ffp->input_itemID = itemID;
+    ffp->input_itemtype = itemtype;
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -4820,7 +4890,8 @@ extern void FindStringProc (IteM i)
   bfp = GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    w = CreateFindForm (-90, -66, "Find", bfp->input_entityID, FALSE);
+    w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
+                        bfp->input_itemID, bfp->input_itemtype, FALSE);
     Show (w);
     Select (w);
   }
@@ -4838,7 +4909,8 @@ extern void FindFlatfileProc (IteM i)
   bfp = GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    w = CreateFindForm (-90, -66, "Flat File Find", bfp->input_entityID, TRUE);
+    w = CreateFindForm (-90, -66, "Flat File Find", bfp->input_entityID,
+                        bfp->input_itemID, bfp->input_itemtype, TRUE);
     Show (w);
     Select (w);
   }
@@ -5462,7 +5534,9 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon)
 
 {
+  Uint2       entityID;
   MonitorPtr  mon;
+  Boolean     needstaxfix;
   Int4        rsult;
   ErrSev      sev;
 
@@ -5491,7 +5565,12 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     ValidateSeqAlignandACCInSeqEntry (sep, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE); /* remove components with seqID accXNNNNN */
   }
   SeqEntryExplore (sep, NULL, CheckSeqAlignCallback); /* remove alignments with single dimension */
-  if ((! force) && (! NoBiosourceOrTaxonId (sep))) {
+  needstaxfix = FALSE;
+  if (! force) {
+    needstaxfix = NoBiosourceOrTaxonId (sep);
+  }
+  if ((! force) && (! needstaxfix)) {
+    ConvertFullLenSourceFeatToDesc (sep);
     /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
     EntryChangeGBSource (sep);   /* at least remove redundant information in GBBlocks */
     EntryCheckGBBlock (sep);
@@ -5526,6 +5605,13 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     Update ();
   }
 /*#endif*/
+
+  /* set dirty flag if no lineage or division in any biosource */
+  if (dotaxon && needstaxfix) {
+    entityID = ObjMgrGetEntityIDForChoice (sep);
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+  }
+
   rsult = DoSeqEntryToAsn3 (sep, strip, correct, force, dotaxon, mon);
 /*#ifdef USE_TAXON*/
   if (dotaxon) {
@@ -5537,7 +5623,9 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     Update ();
   }
 /*#endif*/
+  ConvertFullLenSourceFeatToDesc (sep);
   /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
+  MovePopPhyMutPubs (sep);
   EntryChangeGBSource (sep);   /* remove redundant information in GBBlocks again */
   EntryCheckGBBlock (sep);
   /* SeqEntryMoveDbxrefs (sep); */ /* db_xref gbqual to sfp->dbxref */
@@ -5570,17 +5658,23 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
 
 {
   Boolean         atEnd;
+  ByteStorePtr    bs;
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
+  Char            ch;
+  Boolean         dash_at_end;
   SeqLocPtr       firstSlp;
   SeqLocPtr       lastSlp;
   ObjMgrTypePtr   omtp;
   Boolean         partial5;
   Boolean         partial3;
   PartialFormPtr  pfp;
+  CharPtr         prot;
+  CharPtr         ptr;
   SeqAnnotPtr     sap;
   SeqFeatPtr      sfp;
   SeqLocPtr       slp;
+  Boolean         star_at_end;
   Uint1           strand;
   Uint2           subtype;
 
@@ -5604,6 +5698,33 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
         subtype = (*(omtp->subtypefunc)) ((Pointer) sfp);
         if (pfp->subtype == 0 || subtype == pfp->subtype) {
           CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+          dash_at_end = FALSE;
+          star_at_end = FALSE;
+          if (subtype == FEATDEF_CDS) {
+            bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+            if (bs != NULL) {
+              prot = BSMerge (bs, NULL);
+              bs = BSFree (bs);
+              if (prot != NULL) {
+                ptr = prot;
+                ch = *ptr;
+                if (ch == '-') {
+                  dash_at_end = TRUE;
+                }
+                while (ch != '\0') {
+                  /* *ptr = TO_UPPER (ch); */
+                  if (ch == '*') {
+                    star_at_end = TRUE;
+                  } else {
+                    star_at_end = FALSE;
+                  }
+                  ptr++;
+                  ch = *ptr;
+                }
+                prot = MemFree (prot);
+              }
+            }
+          }
           firstSlp = NULL;
           lastSlp = NULL;
           slp = SeqLocFindNext (sfp->location, NULL);
@@ -5640,10 +5761,20 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                     }
                     break;
                   case 3 :
+                    if (dash_at_end && subtype == FEATDEF_CDS) {
+                      partial5 = TRUE;
+                    }
+                    break;
+                  case 4 :
                     partial5 = FALSE;
                    break;
-                  case 4 :
+                  case 5 :
                     if (! atEnd) {
+                      partial5 = FALSE;
+                    }
+                    break;
+                  case 6 :
+                    if ((! dash_at_end) && subtype == FEATDEF_CDS) {
                       partial5 = FALSE;
                     }
                     break;
@@ -5679,10 +5810,20 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
                     }
                     break;
                   case 3 :
-                    partial3 = FALSE;
+                    if ((! star_at_end) && subtype == FEATDEF_CDS) {
+                      partial3 = TRUE;
+                    }
                     break;
                   case 4 :
+                    partial3 = FALSE;
+                    break;
+                  case 5 :
                     if (! atEnd) {
+                      partial3 = FALSE;
+                    }
+                    break;
+                  case 6 :
+                    if (star_at_end && subtype == FEATDEF_CDS) {
                       partial3 = FALSE;
                     }
                     break;
@@ -5876,19 +6017,23 @@ extern void EditFeaturePartials (IteM i)
   pfp->change5 = PopupList (k, TRUE, NULL);
   PopupItem (pfp->change5, "Set");
   PopupItem (pfp->change5, "Set only if at 5' end");
+  PopupItem (pfp->change5, "Set if bad start codon");
   PopupItem (pfp->change5, "Clear");
   PopupItem (pfp->change5, "Clear if not at 5' end");
+  PopupItem (pfp->change5, "Clear if good start codon");
   PopupItem (pfp->change5, "Do not change");
-  SetValue (pfp->change5, 5);
+  SetValue (pfp->change5, 7);
 
   StaticPrompt (k, "3' policy", 0, stdLineHeight, programFont, 'l');
   pfp->change3 = PopupList (k, TRUE, NULL);
   PopupItem (pfp->change3, "Set");
   PopupItem (pfp->change3, "Set only if at 3' end");
+  PopupItem (pfp->change3, "Set if bad stop codon");
   PopupItem (pfp->change3, "Clear");
   PopupItem (pfp->change3, "Clear if not at 3' end");
+  PopupItem (pfp->change3, "Clear if good stop codon");
   PopupItem (pfp->change3, "Do not change");
-  SetValue (pfp->change3, 5);
+  SetValue (pfp->change3, 7);
 
   x = HiddenGroup (h, 2, 0, NULL);
   /* StaticPrompt (x, "Constraints", 0, stdLineHeight, programFont, 'l'); */
@@ -5909,6 +6054,7 @@ extern void EditFeaturePartials (IteM i)
   Update ();
 }
 
+/*
 static Boolean AddOrgToDefGatherFunc (GatherContextPtr gcp)
 
 {
@@ -5940,45 +6086,80 @@ static Boolean AddOrgToDefGatherFunc (GatherContextPtr gcp)
   }
   return TRUE;
 }
+*/
 
-static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subsource)
+static void AppendOrgToString (Uint2 entityID, SeqDescrPtr sdp, CharPtr text)
+
+{
+  CharPtr     def;
+  CharPtr     ptr;
+  CharPtr     str;
+
+  def = (CharPtr) sdp->data.ptrvalue;
+  if (StringHasNoText (def)) return;
+
+  ptr = StringISearch (def, text);
+  if (ptr != NULL && ptr == def) return;
+  str = MemNew ((StringLen (text) + StringLen (def) + 4) * sizeof (Char));
+  if (str != NULL) {
+    StringCpy (str, text);
+    StringCat (str, " ");
+    StringCat (str, def);
+    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = str;
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+  }
+}
+
+static void AddOrgToDefElement (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subsource)
 
 {
   EnumFieldAssocPtr  ap;
   BioSourcePtr       biop;
+  BioseqPtr          bsp;
   BioseqSetPtr       bssp;
   Char               ch;
-  GatherScope        gs;
+  SeqMgrDescContext  dcontext;
   OrgModPtr          mod;
   OrgNamePtr         onp;
   OrgRefPtr          orp;
   CharPtr            ptr;
+  SeqDescrPtr        sdp;
   SubSourcePtr       ssp;
   Char               str [96];
   Char               text [64];
+  CharPtr            title;
 
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 1 || bssp->_class == 2 ||
+                         bssp->_class == 4)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        AddOrgToDef (entityID, sep, orgmod, subsource);
+        AddOrgToDefElement (entityID, sep, orgmod, subsource);
       }
       return;
     }
   }
+  if (! IS_Bioseq (sep)) return;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
   biop = NULL;
   text [0] = '\0';
   str [0] = '\0';
-  SeqEntryToBioSource (sep, NULL, str, sizeof (str) - 1, &biop);
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp != NULL) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+  }
+  if (biop == NULL) return;
+  /* SeqEntryToBioSource (sep, NULL, str, sizeof (str) - 1, &biop); */
   if (orgmod == 0 && subsource == 0) {
-    /*
+    orp = biop->org;
+    if (orp == NULL) return;
+    StringNCpy_0 (str, orp->taxname, sizeof (str));
     ptr = StringSearch (str, "(");
     if (ptr != NULL) {
       *ptr = '\0';
     }
-    */
     TrimSpacesAroundString (str);
     if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
       StringCpy (str, "HIV-1");
@@ -6034,6 +6215,7 @@ static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subs
       StringCat (str, text);
     }
   }
+  /*
   MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   gs.seglevels = 1;
   gs.get_feats_location = FALSE;
@@ -6044,6 +6226,39 @@ static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subs
   gs.ignore[OBJ_SEQDESC] = FALSE;
   gs.scope = sep;
   GatherSeqEntry (sep, (Pointer) str, AddOrgToDefGatherFunc, &gs);
+  */
+  sdp = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
+  if (sdp == NULL) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+    if (sdp == NULL) return;
+    title = (CharPtr) sdp->data.ptrvalue;
+    if (title == NULL) return;
+    sdp = SeqDescrAdd (&(bsp->descr));
+    if (sdp == NULL) return;
+    sdp->choice = Seq_descr_title;
+    sdp->data.ptrvalue = StringSave (title);
+  }
+  if (sdp == NULL) return;
+  AppendOrgToString (entityID, sdp, str);
+}
+
+static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subsource)
+
+{
+  BioseqSetPtr       bssp;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
+                         bssp->_class == 14 || bssp->_class == 15)) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        AddOrgToDef (entityID, sep, orgmod, subsource);
+      }
+      return;
+    }
+  }
+  AddOrgToDefElement (entityID, sep, orgmod, subsource);
 }
 
 extern void CommonAddOrgOrModsToDefLines (IteM i, Int2 orgmod, Int2 subsource, ButtoN b)
@@ -6102,7 +6317,7 @@ static void RemoveAlignmentCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
       prevsalp = (Pointer PNTR) &(sap->data);
       while (salp != NULL) {
         nextsalp = salp->next;
-        if (salp->type >= 0 && salp->type <= 255) {
+        if (salp->type <= 255) {
           *(prevsalp) = salp->next;
           salp->next = NULL;
           SeqAlignFree (salp);

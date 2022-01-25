@@ -1,4 +1,5 @@
 
+#include <vibrant.h>
 #include <mapgene.h>
 #include <prtgene.h>
 #include <seqmgr.h>

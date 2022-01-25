@@ -1,4 +1,4 @@
-/* $Id: netscape.c,v 6.3 1998/05/29 15:43:11 vakatov Exp $
+/* $Id: netscape.c,v 6.6 2000/01/13 23:37:14 beloslyu Exp $
  * Copyright © 1996 Netscape Communications Corporation, all rights reserved.
 * ===========================================================================
 *
@@ -30,12 +30,21 @@
 *
 * Initial Version Creation Date: 11/08/1997
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description:
 *        API to remote-control Netscape(run Netscape browsers, open URLs)
 *
 * $Log: netscape.c,v $
+* Revision 6.6  2000/01/13 23:37:14  beloslyu
+* changes because of port to HP-UX 11.0
+*
+* Revision 6.5  1999/11/08 21:04:40  sinyakov
+* Corrected const char* to char* assignmetn warning
+*
+* Revision 6.4  1999/10/15 21:19:40  sinyakov
+* Fixed NS_SendCommand() to support long URLs
+*
 * Revision 6.3  1998/05/29 15:43:11  vakatov
 * Patched this funny unstable prototype for "gethostname()"
 *
@@ -55,7 +64,9 @@
 #ifdef WIN_X
 
 #include <X11/Xatom.h>
+#if !defined(__hpux)
 #include <X11/Xmu/WinUtil.h>
+#endif
 
 #define MOZILLA_VERSION_PROP   "_MOZILLA_VERSION"
 #define MOZILLA_LOCK_PROP      "_MOZILLA_LOCK"
@@ -553,7 +564,7 @@ extern Nlm_Boolean NS_SendCommand(NS_WindowPtr   window,
 {
     int status = 0, find_status = EXACT_URL_MATCH;
     NS_Window nswin;
-    Nlm_Char  command[128];
+    Nlm_CharPtr command = 0;
 
     if(!window  ||  (!cmd  &&  !url))
         return FALSE;
@@ -587,17 +598,16 @@ extern Nlm_Boolean NS_SendCommand(NS_WindowPtr   window,
     XSelectInput(nswin->dpy, nswin->window, 
                  (PropertyChangeMask|StructureNotifyMask));
     
-    if ( cmd ) {
-      strcpy(command, cmd);
-    } else {
+    if ( !cmd ) {
+      const Nlm_Char *wintag_t = wintag ? wintag : "VibrantInterface";
+      command = (Nlm_CharPtr) MemNew (strlen (url) + strlen (wintag_t) + 20);
       sprintf(command, "openURL(%s, %s)",
-              url, wintag ? wintag : "VibrantInterface");
+              url, wintag_t);
     }
-    ASSERT ( strlen(command) < sizeof(command) );
-
+    
     NS_Obtain_lock(nswin); 
     
-    status = NS_Command(nswin, command, raise);
+    status = NS_Command(nswin, cmd ? cmd : command, raise);
     
     /* When status = 6, it means the window has been destroyed */
     /* It is invalid to free the lock when window is destroyed. */
@@ -606,6 +616,8 @@ extern Nlm_Boolean NS_SendCommand(NS_WindowPtr   window,
 
     if(find_status == SOME_WINDOW_FOUND)
         NS_Find_window (nswin, url);
+
+    MemFree(command);
     
     return status ? FALSE : TRUE;
 }

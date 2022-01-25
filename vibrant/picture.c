@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: picture.c,v $
+* Revision 6.4  1999/10/13 17:45:46  kans
+* added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
+*
+* Revision 6.3  1999/10/04 17:16:33  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.2  1998/06/30 00:32:02  vakatov
 * Nlm_AddAttribute():  pass "color" as constant
 *
@@ -81,8 +87,8 @@
 * ==========================================================================
 */
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_
@@ -647,6 +653,47 @@ PrimitivE Nlm_GetPrimitive (SegmenT segment, Uint2 primCt)
     }
   }
   return (PrimitivE) item;
+}
+
+void Nlm_SetPrimitiveIDs (PrimitivE prim, Uint2 entityID, Uint2 itemID,
+                          Uint2 itemtype, Uint2 primID)
+
+{
+  GenPPtr   gpp;
+  BasePPtr  item;
+
+  item = (BasePPtr) prim;
+  if (item != NULL && item->code == GENERIC) {
+    gpp = (GenPPtr) item;
+    gpp->entityID = entityID;
+    gpp->itemID = itemID;
+    gpp->itemtype = itemtype;
+    gpp->primID = primID;
+  }
+}
+
+void Nlm_GetPrimitiveIDs (PrimitivE prim, Uint2Ptr entityIDPtr, Uint2Ptr itemIDPtr,
+                          Uint2Ptr itemtypePtr, Uint2Ptr primIDPtr)
+
+{
+  GenPPtr   gpp;
+  BasePPtr  item;
+  item = (BasePPtr) prim;
+  if (item != NULL && item->code == GENERIC) {
+    gpp = (GenPPtr) item;
+    if (entityIDPtr != NULL) {
+      *entityIDPtr = gpp->entityID;
+    }
+    if (itemIDPtr != NULL) {
+      *itemIDPtr = gpp->itemID;
+    }
+    if (itemtypePtr != NULL) {
+      *itemtypePtr = gpp->itemtype;
+    }
+    if (primIDPtr != NULL) {
+      *primIDPtr = gpp->primID;
+    }
+  }
 }
 
 /*****************************************************************************

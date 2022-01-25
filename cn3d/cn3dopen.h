@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,15 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.8  2000/01/21 15:59:05  lewisg
+* add check for binary/ascii files
+*
+* Revision 6.7  2000/01/04 15:55:51  lewisg
+* don't hang on disconnected network and fix memory leak/hang at exit
+*
+* Revision 6.6  1999/10/29 14:15:30  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.5  1999/08/04 21:18:01  lewisg
 * modularized open operations to allow sequin to launch cn3d
 *
@@ -71,32 +80,28 @@
 
 #ifndef _CN3DOPEN2_
 #define _CN3DOPEN2_ 1
-  
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #include <objmime.h>
-
 #define MAX_MDLNO 1000
 #define PRINT_FORM_MIME_NAME "Ncbi-mime-asn1"
- 
-extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m, Boolean usingEntrez));
-extern Boolean OpenMimeFileWithDeletion PROTO((CharPtr filename, Boolean removeIt));
-extern void LIBCALLBACK fnClearMarkedResidues PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
-extern ValNodePtr fnMarkAlignedResidues PROTO((PDNMS pdnmsMaster, PDNMS pdnmsSlave, BiostrucFeaturePtr pbsfThis));
+#define PRINT_FORM_BIOSTRUC "Biostruc"
+extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m));
+extern Boolean OpenMimeFileWithDeletion
+    PROTO((CharPtr filename, Boolean removeIt));
+extern void LIBCALLBACK fnClearMarkedResidues
+    PROTO((PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr));
+extern ValNodePtr fnMarkAlignedResidues
+    PROTO(
+        (PDNMS pdnmsMaster, PDNMS pdnmsSlave,
+         BiostrucFeaturePtr pbsfThis));
 NLM_EXTERN Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime);
 NLM_EXTERN void Cn3D_OpenEnd();
 NLM_EXTERN void Cn3D_OpenStart();
-extern Boolean Cn3D_useEntrez;
-
-
-
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif
-
- 

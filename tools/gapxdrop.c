@@ -32,8 +32,30 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.18 $ 
+/* $Revision: 6.25 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.25  1999/12/17 20:47:04  egorov
+* Fix 'gcc -Wall' warnings
+*
+* Revision 6.24  1999/11/26 22:07:48  madden
+* Added PerformNtGappedAlignment and ALIGN_packed_nucl
+*
+* Revision 6.23  1999/10/29 14:50:48  shavirin
+* Workaround to bypass DECLINE regions.
+*
+* Revision 6.22  1999/10/27 16:40:34  shavirin
+* Produced more correct discontinuous SeqAlign if DECLINE regions exists.
+*
+* Revision 6.21  1999/10/04 18:28:45  madden
+* Add ALIGN_EX and SEMI_ALIGN_EX that do not require reversing sequences
+*
+* Revision 6.20  1999/09/23 15:28:23  shavirin
+* Temporary disabled ability to create discontinuous alignment.
+*
+* Revision 6.19  1999/09/21 15:52:53  shavirin
+* Added possibility to create discontinuous alignment in case when at
+* leaset one DECLINE_ALIGN region exists in results of BLAST search.
+*
 * Revision 6.18  1999/08/27 18:07:34  shavirin
 * Passed parameter decline_align from top to the engine.
 *
@@ -210,6 +232,14 @@ Contents: Functions to perform a gapped alignment on two sequences.
 	            is also needed.
 
 	Use best_score to cut unfeasible points. quadratic space and row-wise
+
+	modification (cfj):
+	- These routines can be told to changes their access to A and B, so that they are passed pointers to the 
+	  forward sequence, but act as if they had been past pointers to reversed sequences.
+	  (This is done just as the accesses to posMatrix are flipped if reverse is set.)
+	  This obviates the need to actually reverse A and B, which in some runs was almost 20% of 
+	  the total runtime.
+	  This option is invoked by setting reverse_sequence. 
 */
 
 
@@ -333,10 +363,161 @@ GapXDropStateDestroy(GapXDropStateArrayStructPtr state_struct)
 	return NULL;
 }
 
-Int4 LIBCALL 
-ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
-		Int4Ptr S, Int4Ptr pei, Int4Ptr pej, Int4Ptr PNTR sapp, 
-		GapAlignBlkPtr gap_align, Int4 query_offset, Boolean reversed)
+/*
+        Aligns two nucleotide sequences, one (A) should be packed in the
+        same way as the BLAST databases, the other (B) should contain one
+        basepair/byte.
+        Boolean reverse_sequence: do reverse the sequence.
+*/
+
+static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M, 
+		Int4Ptr pei, Int4Ptr pej, GapAlignBlkPtr gap_align,
+		Int4 query_offset, Boolean reverse_sequence)
+{ 
+  dp_ptr dyn_prog;
+  Int4 i, j, cb, j_r, g, decline_penalty;
+  register Int4 c, d, e, m, tt, h, X, f;
+  Int4 best_score = 0;
+  Int4Ptr *matrix;
+  register Int4Ptr wa;
+  register dp_ptr dp;
+  Uint1Ptr Bptr;
+  Uint1 base_pair;
+  Int4 B_increment=1;
+  
+  matrix = gap_align->matrix;
+  *pei = *pej = 0;
+  m = (g=gap_align->gap_open) + gap_align->gap_extend;
+  h = gap_align->gap_extend;
+  decline_penalty = gap_align->decline_align;
+  X = gap_align->x_parameter;
+
+  if (X < m)
+	X = m;
+
+  if(N <= 0 || M <= 0) return 0;
+
+  j = (N + 2) * sizeof(dp_node);
+  dyn_prog = (dp_ptr)Nlm_Malloc(j);
+
+  dyn_prog[0].CC = 0; c = dyn_prog[0].DD = -m;
+  dyn_prog[0].FF = -m;
+  for(i = 1; i <= N; i++) {
+    if(c < -X) break;
+    dyn_prog[i].CC = c;
+    dyn_prog[i].DD = c - m; 
+    dyn_prog[i].FF = c-m;
+    c -= h;
+  }
+
+  if(reverse_sequence)
+    B_increment=-1;
+  else
+    B_increment=1;
+
+  tt = 0;  j = i;
+  for (j_r = 1; j_r <= M; j_r++) {
+	if(reverse_sequence)
+	{
+		base_pair = READDB_UNPACK_BASE_N(A[(M-j_r)/4], ((j_r-1)%4));
+            	wa = matrix[base_pair];
+	}
+        else
+	{
+		base_pair = READDB_UNPACK_BASE_N(A[1+((j_r-1)/4)], (3-((j_r-1)%4)));
+            	wa = matrix[base_pair];
+	}
+      e = c =f = MININT;
+      Bptr = &B[tt];
+      if(reverse_sequence)
+	Bptr = &B[N-tt];
+/*
+      Bptr += B_increment;
+*/
+      for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
+	Bptr += B_increment;
+	  d = dp->DD;
+	  if (e < f) e = f;
+	  if (d < f) d = f;
+	  if (c < d || c < e) {
+	      if (d < e) {
+		  c = e;
+	      } else {
+		  c = d; 
+	      }
+	      if (best_score - c > X) {
+		  c = dp->CC+wa[*Bptr]; f = dp->FF;
+		  if (tt == i) tt++;
+		  else { dp->CC =dp->FF= MININT;}
+	      } else {
+		  cb = i;
+                  if ((c-=m) > (d-=h)) {
+                      dp->DD = c;
+                  } else {
+                      dp->DD = d;
+                  }
+                  if (c > (e-=h)) {
+                      e = c;
+                  }
+                  c+=m;
+		  d = dp->CC+wa[*Bptr]; dp->CC = c; c=d;
+		  d = dp->FF; dp->FF = f-decline_penalty; f = d;
+	      }
+	  } else {
+	      if (best_score - c > X){
+		  c = dp->CC+wa[*Bptr]; f= dp->FF;
+		  if (tt == i) tt++;
+		  else { dp->CC =dp->FF= MININT;}
+	      } else {
+		  cb = i; 
+		  if (c > best_score) {
+		      best_score = c;
+		      *pei = j_r; *pej = i;
+		  } 
+		  if ((c-=m) > (d-=h)) {
+		      dp->DD = c; 
+		  } else {
+		      dp->DD = d;
+		  } 
+		  if (c > (e-=h)) {
+		      e = c;
+		  } 
+		  c+=m;
+		  d = dp->FF;
+		  if (c-g>f) dp->FF = c-g-decline_penalty; else dp->FF = f-decline_penalty;
+		  f = d;
+		  d = dp->CC+wa[*Bptr]; dp->CC = c; c = d;
+	      }
+	  }
+	  dp++;
+      }
+      if (tt == j) break;
+      if (cb < j-1) { j = cb+1;}
+      else while (e >= best_score-X && j <= N) {
+	  dyn_prog[j].CC = e; dyn_prog[j].DD = e-m;dyn_prog[j].FF = e-g-decline_penalty;
+	  e -= h; j++;
+      }
+      if (j <= N) {
+	  dyn_prog[j].DD = dyn_prog[j].CC = dyn_prog[j].FF = MININT; j++;
+      }
+  }
+  
+
+  MemFree(dyn_prog);
+
+  return best_score;
+}
+/*
+	Boolean revered: has the sequence been reversed? Used for psi-blast
+	Boolean reverse_sequence: do reverse the sequence.
+	Two Booleans are used to emulate behavior before the sequence could be reversed.
+*/
+
+
+static Int4
+ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei, 
+	Int4Ptr pej, Int4Ptr PNTR sapp, GapAlignBlkPtr gap_align, 
+	Int4 query_offset, Boolean reversed, Boolean reverse_sequence)
 	
 { 
   data_t data;
@@ -352,6 +533,9 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   Int4Ptr *matrix;
   register Int4 X;
   GapXDropStateArrayStructPtr state_struct;
+  Int4 next_c;
+  Uint1Ptr Bptr;
+  Int4 B_increment=1;
   
   matrix = gap_align->matrix;
   *pei = *pej = 0;
@@ -400,6 +584,11 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   }
   state_struct->used = i+1;
   
+  if(reverse_sequence)
+    B_increment=-1;
+  else
+    B_increment=1;
+ 
   tt = 0;  j = i;
   for(j_r = 1; j_r <= M; j_r++) {
      /* Protection against divide by zero. */
@@ -411,18 +600,29 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
     state[j_r] = state_array - tt + 1;
     stp = state[j_r];
     tt_start = tt; 
-    if (!(gap_align->positionBased)) /*AAS*/
-      wa = matrix[A[j_r]]; 
+    if (!(gap_align->positionBased)){ /*AAS*/
+      if(reverse_sequence)
+        wa = matrix[A[M-j_r]];
+      else
+        wa = matrix[A[j_r]];
+      }
     else {
-      if(reversed)
+      if(reversed || reverse_sequence)
         wa = gap_align->posMatrix[M - j_r];
       else
         wa = gap_align->posMatrix[j_r + query_offset];
     }
     e = c = f= MININT;
-    
-    for (cb = i = tt, dp = &dyn_prog[i-1]; i < j; i++) {
-	d = (++dp)->DD;
+    Bptr = &B[tt];
+    if(reverse_sequence)
+      Bptr = &B[N-tt];
+
+    for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
+        Int4 next_f;
+        d = (dp)->DD;
+        Bptr += B_increment;
+        next_c = dp->CC+wa[*Bptr];   /* Bptr is & B[i+1]; */
+        next_f = dp->FF;
 	st = 0;
 	if (c < f) {c = f; st = 3;}
 	if (f > d) {d = f; std = 60;} 
@@ -436,9 +636,8 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	  if (c < e) {c=e; st=1;}
 	}
 	if (best_score - c > X){
-	  c = dp->CC+wa[B[i+1]]; f= dp->FF;
 	  if (tt == i) tt++;
-	  else { dp->CC = dp->FF =  MININT; }
+	  else { dp->CC =  MININT; }
 	} else {
 	  cb = i;
 	  if (c > best_score) {
@@ -457,16 +656,17 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	    st+=ste;
 	  }
 	  c+=m; 
-	  d = dp->FF;
 	  if (f < c-gap_open) { 
 	    dp->FF = c-gap_open-decline_penalty; 
 	  } else {
 	    dp->FF = f-decline_penalty; st+= 5; 
 	  }
-	  f = d;
-	  d = dp->CC+wa[B[i+1]]; dp->CC = c; c = d;      
+	  dp->CC = c;
 	}
 	stp[i] = st;
+	c = next_c;
+	f = next_f;
+	dp++;
     }
     if (tt == j) { j_r++; break;}
     if (cb < j-1) { j = cb+1;}
@@ -519,10 +719,24 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   return best_score;
 }
 
-Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+Int4 LIBCALL 
+ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+		Int4Ptr S, Int4Ptr pei, Int4Ptr pej, Int4Ptr PNTR sapp, 
+		GapAlignBlkPtr gap_align, Int4 query_offset, Boolean reversed)
+	
+{ 
+	return ALIGN_EX(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed, FALSE);
+}
+
+/*
+	Boolean revered: has the sequence been reversed? Used for psi-blast
+	Boolean reverse_sequence: do reverse the sequence.
+	Two Booleans are used to emulate behavior before the sequence could be reversed.
+*/
+static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		Int4Ptr S, Int4Ptr pei, Int4Ptr pej, 
 		Boolean score_only, Int4Ptr PNTR sapp, GapAlignBlkPtr gap_align,
-		Int4 query_offset, Boolean reversed)
+		Int4 query_offset, Boolean reversed, Boolean reverse_sequence)
 		
 { 
   dp_ptr dyn_prog;
@@ -532,9 +746,12 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   Int4Ptr *matrix;
   register Int4Ptr wa;
   register dp_ptr dp;
+  Uint1Ptr Bptr;
+  Int4 B_increment=1;
   
-  if(!score_only)
-    return ALIGN(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed);
+  if(!score_only) {
+    return ALIGN_EX(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed, reverse_sequence);
+  }
   
   matrix = gap_align->matrix;
   *pei = *pej = 0;
@@ -561,18 +778,31 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
     c -= h;
   }
 
+  if(reverse_sequence)
+    B_increment=-1;
+  else
+    B_increment=1;
+
   tt = 0;  j = i;
   for (j_r = 1; j_r <= M; j_r++) {
-      if (!(gap_align->positionBased)) /*AAS*/
-	  wa = matrix[A[j_r]]; 
+      if (!(gap_align->positionBased)){ /*AAS*/
+        if(reverse_sequence)
+            wa = matrix[A[M-j_r]];
+        else
+            wa = matrix[A[j_r]];
+      }
       else {
-	  if(reversed)
+	  if(reversed || reverse_sequence)
 	      wa = gap_align->posMatrix[M - j_r];
 	  else
 	      wa = gap_align->posMatrix[j_r + query_offset];
       }
       e = c =f = MININT;
+      Bptr = &B[tt];
+      if(reverse_sequence)
+	Bptr = &B[N-tt];
       for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
+	Bptr += B_increment;
 	  d = dp->DD;
 	  if (e < f) e = f;
 	  if (d < f) d = f;
@@ -583,7 +813,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		  c = d; 
 	      }
 	      if (best_score - c > X) {
-		  c = dp->CC+wa[B[i+1]]; f = dp->FF;
+		  c = dp->CC+wa[*Bptr]; f = dp->FF;
 		  if (tt == i) tt++;
 		  else { dp->CC =dp->FF= MININT;}
 	      } else {
@@ -597,12 +827,12 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
                       e = c;
                   }
                   c+=m;
-		  d = dp->CC+wa[B[i+1]]; dp->CC = c; c=d;
+		  d = dp->CC+wa[*Bptr]; dp->CC = c; c=d;
 		  d = dp->FF; dp->FF = f-decline_penalty; f = d;
 	      }
 	  } else {
 	      if (best_score - c > X){
-		  c = dp->CC+wa[B[i+1]]; f= dp->FF;
+		  c = dp->CC+wa[*Bptr]; f= dp->FF;
 		  if (tt == i) tt++;
 		  else { dp->CC =dp->FF= MININT;}
 	      } else {
@@ -623,7 +853,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		  d = dp->FF;
 		  if (c-g>f) dp->FF = c-g-decline_penalty; else dp->FF = f-decline_penalty;
 		  f = d;
-		  d = dp->CC+wa[B[i+1]]; dp->CC = c; c = d;
+		  d = dp->CC+wa[*Bptr]; dp->CC = c; c = d;
 	      }
 	  }
 	  dp++;
@@ -644,6 +874,17 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 
   return best_score;
 }
+
+Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+		Int4Ptr S, Int4Ptr pei, Int4Ptr pej, 
+		Boolean score_only, Int4Ptr PNTR sapp, GapAlignBlkPtr gap_align,
+		Int4 query_offset, Boolean reversed)
+		
+{ 
+	return SEMI_G_ALIGN_EX(A, B, M, N, S, pei, pej, score_only, sapp, gap_align, 
+		query_offset, reversed, FALSE);
+}
+
 
 
 /*
@@ -791,17 +1032,7 @@ TracebackToGapXEditBlock(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4
 
 }
 
-static Int4
-reverse_seq(Uint1Ptr seq, Uint1Ptr pos, Uint1Ptr target) 
-{
-    Uint1Ptr c;
 
-    for (c = pos; c >= seq; c--) 
-	*target++ = *c;
-    *target = '\0';
-
-    return (Int4) (pos-c);
-}
 /*
 	Destruct Function for GapAlignBlk.  If "state" is not NULL, then
 	it's deallocated.
@@ -842,15 +1073,13 @@ GapAlignBlkNew(Int4 state_column_length, Int4 state_row_length)
 	return gap_align;
 }
 
-
 Boolean LIBCALL
-PerformGappedAlignment(GapAlignBlkPtr gap_align)
+PerformNtGappedAlignment(GapAlignBlkPtr gap_align)
 
 {
 	Boolean found_start, found_end;
 	Int4 q_length=0, s_length=0, middle_score, score_right, score_left, private_q_start, private_s_start;
-	Int4 include_query, index;
-	Uint1Ptr q_left=NULL, s_left=NULL;
+	Int4 include_query=0, index;
 	Uint1Ptr query, subject, query_var, subject_var;
 
 	if (gap_align == NULL)
@@ -861,18 +1090,13 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
 
 	query = gap_align->query;
 	subject = gap_align->subject;
-	include_query = gap_align->include_query;
 	score_left = 0;
 	if (gap_align->q_start != 0 && gap_align->s_start != 0)
 	{
 		found_start = TRUE;
-		q_left = (Uint1Ptr) Nlm_Malloc((gap_align->q_start+2)*sizeof(Uint1));
-		s_left = (Uint1Ptr) Nlm_Malloc((gap_align->s_start+2)*sizeof(Uint1));
-
-		q_length = reverse_seq(query, query+gap_align->q_start, q_left);
-		s_length = reverse_seq(subject, subject+gap_align->s_start, s_left);
-
-		score_left = SEMI_G_ALIGN(q_left-1, s_left-1, q_length, s_length, NULL, &private_q_start, &private_s_start, TRUE, NULL, gap_align, gap_align->q_start, TRUE);
+		q_length = (gap_align->q_start+1);
+		s_length = (gap_align->s_start+1);
+		score_left = ALIGN_packed_nucl(query, subject, q_length, s_length, &private_q_start, &private_s_start, gap_align, gap_align->q_start, TRUE);
 		gap_align->query_start = q_length - private_q_start;
 		gap_align->subject_start = s_length - private_s_start;
 	}
@@ -900,7 +1124,7 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
 	if (gap_align->q_start+include_query < gap_align->query_length && gap_align->s_start+include_query < gap_align->subject_length)
 	{
 		found_end = TRUE;
-		score_right = SEMI_G_ALIGN(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, NULL, &(gap_align->query_stop), &(gap_align->subject_stop), TRUE, NULL, gap_align, gap_align->q_start+include_query, FALSE);
+		score_right = ALIGN_packed_nucl(query+gap_align->q_start+include_query, subject+(gap_align->s_start+include_query)/4, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, &(gap_align->query_stop), &(gap_align->subject_stop), gap_align, gap_align->q_start+include_query, FALSE);
 		gap_align->query_stop += gap_align->q_start+include_query;
 		gap_align->subject_stop += gap_align->s_start+include_query;
 	}
@@ -917,8 +1141,79 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
 		gap_align->subject_stop = gap_align->s_start + include_query - 1;
 	}
 
-	q_left = MemFree(q_left);
-	s_left = MemFree(s_left);
+	gap_align->score = score_right+score_left+middle_score;
+
+	return TRUE;
+}
+
+Boolean LIBCALL
+PerformGappedAlignment(GapAlignBlkPtr gap_align)
+
+{
+	Boolean found_start, found_end;
+	Int4 q_length=0, s_length=0, middle_score, score_right, score_left, private_q_start, private_s_start;
+	Int4 include_query, index;
+	Uint1Ptr query, subject, query_var, subject_var;
+
+	if (gap_align == NULL)
+		return FALSE;
+
+	found_start = FALSE;
+	found_end = FALSE;
+
+	query = gap_align->query;
+	subject = gap_align->subject;
+	include_query = gap_align->include_query;
+	score_left = 0;
+	if (gap_align->q_start != 0 && gap_align->s_start != 0)
+	{
+		found_start = TRUE;
+		q_length = (gap_align->q_start+1);
+		s_length = (gap_align->s_start+1);
+		score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, NULL, &private_q_start, &private_s_start, TRUE, NULL, gap_align, gap_align->q_start, FALSE, TRUE);
+		gap_align->query_start = q_length - private_q_start;
+		gap_align->subject_start = s_length - private_s_start;
+	}
+	else
+	{
+		q_length = gap_align->q_start;
+		s_length = gap_align->s_start;
+	}
+
+	middle_score = 0;
+	query_var = query+gap_align->q_start;
+	subject_var = subject+gap_align->s_start;
+	for (index=0; index<include_query; index++)
+	{
+		query_var++;
+		subject_var++;
+		if (!(gap_align->positionBased))  /*AAS*/
+		  middle_score += gap_align->matrix[*query_var][*subject_var];
+		else 
+		  middle_score += MtrxScoreGapAlign(gap_align,
+				gap_align->q_start+1 + index,*subject_var);
+	}
+
+	score_right = 0;
+	if (gap_align->q_start+include_query < gap_align->query_length && gap_align->s_start+include_query < gap_align->subject_length)
+	{
+		found_end = TRUE;
+		score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, NULL, &(gap_align->query_stop), &(gap_align->subject_stop), TRUE, NULL, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
+		gap_align->query_stop += gap_align->q_start+include_query;
+		gap_align->subject_stop += gap_align->s_start+include_query;
+	}
+
+	if (found_start == FALSE)
+	{	/* Start never found */
+		gap_align->query_start = gap_align->q_start;
+		gap_align->subject_start = gap_align->s_start;
+	}
+
+	if (found_end == FALSE)
+	{
+		gap_align->query_stop = gap_align->q_start + include_query - 1;
+		gap_align->subject_stop = gap_align->s_start + include_query - 1;
+	}
 
 	gap_align->score = score_right+score_left+middle_score;
 
@@ -937,7 +1232,6 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 	Int4 q_length=0, s_length=0, score_right, middle_score, score_left, private_q_length, private_s_length, tmp;
 	Int4 include_query, index;
 	Int4Ptr tback, tback1, p, q;
-	Uint1Ptr q_left=NULL, s_left=NULL;
 	Uint1Ptr query, subject, query_var, subject_var;
 
 	if (gap_align == NULL)
@@ -956,13 +1250,11 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 	if (gap_align->q_start != 0 && gap_align->s_start != 0)
 	{
 		found_start = TRUE;
-		q_left = (Uint1Ptr) Nlm_Malloc((gap_align->q_start+2)*sizeof(Uint1));
-		s_left = (Uint1Ptr) Nlm_Malloc((gap_align->s_start+2)*sizeof(Uint1));
 
-		q_length = reverse_seq(query, query+gap_align->q_start, q_left);
-		s_length = reverse_seq(subject, subject+gap_align->s_start, s_left);
+		q_length = (gap_align->q_start+1);
+		s_length = (gap_align->s_start+1);
 
-		score_left = SEMI_G_ALIGN(q_left-1, s_left-1, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, TRUE);
+		score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, FALSE, TRUE);
 	        for(p = tback, q = tback1 - 1; p < q; p++, q--) 
 		{
 		        tmp = *p;
@@ -998,7 +1290,7 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 	if ((gap_align->q_start+include_query) < gap_align->query_length && (gap_align->s_start+include_query) < gap_align->subject_length)
 	{
 		found_end = TRUE;
-		score_right = SEMI_G_ALIGN(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, tback1, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start+include_query, FALSE);
+		score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, tback1, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
 		gap_align->query_stop = gap_align->q_start + private_q_length+include_query;
 		gap_align->subject_stop = gap_align->s_start + private_s_length+include_query;
 	}
@@ -1025,8 +1317,6 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 	gap_align->edit_block->translate2 = gap_align->translate2;
 
 	tback = MemFree(tback);
-	q_left = MemFree(q_left);
-	s_left = MemFree(s_left);
 
 	gap_align->score = score_right+score_left+middle_score;
 
@@ -1039,327 +1329,386 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 
 static Int4 get_current_pos(Int4Ptr pos, Int4 length)
 {
-        Int4 val;
-        if(*pos < 0)
-                val = -(*pos + length -1);
-        else
-                val = *pos;
-        *pos += length;
-        return val;
+    Int4 val;
+    if(*pos < 0)
+        val = -(*pos + length -1);
+    else
+        val = *pos;
+    *pos += length;
+    return val;
+}
+
+static SeqAlignPtr GXEMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id, 
+                                   Boolean reverse, Boolean translate1, 
+                                   Boolean translate2, Int4 numseg,
+                                   Int4Ptr length, Int4Ptr start, 
+                                   Uint1Ptr strands)
+{
+    SeqAlignPtr sap;
+    DenseSegPtr dsp;
+    StdSegPtr sseg, sseg_head, sseg_old;
+    SeqLocPtr slp, slp1, slp2;
+    SeqIntPtr seq_int1;
+    Int4 index;
+
+    sap = SeqAlignNew();
+    
+    sap->dim =2; /**only two dimention alignment**/
+    
+    /**make the Denseg Object for SeqAlign**/
+    if (translate1 == FALSE && translate2 == FALSE) {
+        sap->segtype = SAS_DENSEG; /** use denseg to store the alignment **/
+        sap->type = SAT_PARTIAL;   /**partial for gapped translating search.*/
+        dsp = DenseSegNew();
+        dsp->dim = 2;
+        dsp->numseg = numseg;
+        if (reverse) {
+            dsp->ids = SeqIdDup(subject_id);
+            dsp->ids->next = SeqIdDup(query_id);
+        } else {
+            dsp->ids = SeqIdDup(query_id);
+            dsp->ids->next = SeqIdDup(subject_id);
+        }
+        dsp->starts = start;
+        dsp->strands = strands;
+        dsp->lens = length;
+        sap->segs = dsp;
+        sap->next = NULL;
+    } else {
+        sap->type = SAT_PARTIAL; /**partial for gapped translating search. */
+        sap->segtype = SAS_STD;  /**use stdseg to store the alignment**/
+        sseg_head = NULL;
+        sseg_old = NULL;
+        for (index=0; index<numseg; index++) {
+            sseg = StdSegNew();
+            sseg->dim = 2;
+            if (sseg_head == NULL) {
+                sseg_head = sseg;
+            }
+            if (reverse) {
+                sseg->ids = SeqIdDup(subject_id);
+                sseg->ids->next = SeqIdDup(query_id);
+            } else {
+                sseg->ids = SeqIdDup(query_id);
+                sseg->ids->next = SeqIdDup(subject_id);
+            }
+            slp1 = NULL;
+            if (start[2*index] != -1) {
+                seq_int1 = SeqIntNew();
+                seq_int1->from = start[2*index];
+                if (translate1)
+                    seq_int1->to = start[2*index] + CODON_LENGTH*length[index] - 1;
+                else
+                    seq_int1->to = start[2*index] + length[index] - 1;
+                seq_int1->strand = strands[2*index];
+                seq_int1->id = SeqIdDup(query_id);
+                ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
+            } else {
+                ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(query_id));
+            }
+            slp2 = NULL;
+            if (start[2*index+1] != -1) {
+                seq_int1 = SeqIntNew();
+                seq_int1->from = start[2*index+1];
+                if (translate2)
+                    seq_int1->to = start[2*index+1] + CODON_LENGTH*length[index] - 1;
+                else
+                    seq_int1->to = start[2*index+1] + length[index] - 1;
+                seq_int1->strand = strands[2*index+1];
+                seq_int1->id = SeqIdDup(subject_id);
+                ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int1);
+            } else {
+                ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(subject_id));
+            }
+            
+            if (reverse) {
+                slp = slp2;
+                slp2->next = slp1;
+            } else {
+                slp = slp1;
+                slp1->next = slp2;
+            }
+            sseg->loc = slp;
+            
+            if (sseg_old)
+                sseg_old->next = sseg;
+            sseg_old = sseg;
+        }
+        sap->segs = sseg_head;
+        sap->next = NULL;
+    }
+
+    return sap;
+}
+
+Boolean GXECollectDataForSeqalign(GapXEditBlockPtr edit_block, 
+                                  GapXEditScriptPtr curr_in, Int4 numseg,
+                                  Int4Ptr PNTR start_out, 
+                                  Int4Ptr PNTR length_out,
+                                  Uint1Ptr PNTR strands_out,
+                                  Int4Ptr start1, Int4Ptr start2)
+{
+    GapXEditScriptPtr curr;
+    Boolean reverse, translate1, translate2;
+    Int2 frame1, frame2;
+    Int4 begin1, begin2, index, length1, length2;
+    Int4 original_length1, original_length2, i;
+    Int4Ptr length, start;
+    Uint1 strand1, strand2;
+    Uint1Ptr strands;
+    
+    reverse = edit_block->reverse;	
+    length1 = edit_block->length1;
+    length2 = edit_block->length2;
+    original_length1 = edit_block->original_length1;
+    original_length2 = edit_block->original_length2;
+    translate1 = edit_block->translate1;
+    translate2 = edit_block->translate2;
+    frame1 = edit_block->frame1;
+    frame2 = edit_block->frame2;
+    
+    if (frame1 > 0)
+        strand1 = Seq_strand_plus; 
+    else if (frame1 < 0)
+        strand1 = Seq_strand_minus; 
+    else
+        strand1 = Seq_strand_unknown; 
+    
+    if (frame2 > 0)
+        strand2 = Seq_strand_plus; 
+    else if (frame2 < 0)
+        strand2 = Seq_strand_minus; 
+    else
+        strand2 = Seq_strand_unknown; 
+
+    start = MemNew((2*numseg+1)*sizeof(Int4));
+    *start_out = start;
+    length = MemNew((numseg+1)*sizeof(Int4));
+    *length_out = length;
+    strands = MemNew((2*numseg+1)*sizeof(Uint1));
+    *strands_out = strands;
+
+    index=0;
+    for (i = 0, curr=curr_in; curr && i < numseg; curr=curr->next, i++) {
+        switch(curr->op_type) {
+        case GAPALIGN_DECLINE:
+        case GAPALIGN_SUB:
+            if (strand1 != Seq_strand_minus) {
+                if(translate1 == FALSE)
+                    begin1 = get_current_pos(start1, curr->num);
+                else
+                    begin1 = frame1 - 1 + CODON_LENGTH*get_current_pos(start1, curr->num);
+            } else {
+                if(translate1 == FALSE)
+                    begin1 = length1 - get_current_pos(start1, curr->num) - curr->num;
+                else
+                    begin1 = original_length1 - CODON_LENGTH*(get_current_pos(start1, curr->num)+curr->num) + frame1 + 1;
+            }
+					
+            if (strand2 != Seq_strand_minus) {
+                if(translate2 == FALSE)
+                    begin2 = get_current_pos(start2, curr->num);
+                else
+                    begin2 = frame2 - 1 + CODON_LENGTH*get_current_pos(start2, curr->num);
+            } else {
+                if(translate2 == FALSE)
+                    begin2 = length2 - get_current_pos(start2, curr->num) - curr->num;
+                else
+                    begin2 = original_length2 - CODON_LENGTH*(get_current_pos(start2, curr->num)+curr->num) + frame2 + 1;
+            }
+            
+            if (reverse) {
+                strands[2*index] = strand2;
+                strands[2*index+1] = strand1;
+                start[2*index] = begin2;
+                start[2*index+1] = begin1;
+            } else {
+                strands[2*index] = strand1;
+                strands[2*index+1] = strand2;
+                start[2*index] = begin1;
+                start[2*index+1] = begin2;
+            }
+            
+            break;
+            
+        case GAPALIGN_DEL:
+            begin1 = -1;
+            if (strand2 != Seq_strand_minus) {
+                if(translate2 == FALSE)
+                    begin2 = get_current_pos(start2, curr->num);
+                else
+                    begin2 = frame2 - 1 + CODON_LENGTH*get_current_pos(start2, curr->num);
+            } else {
+                if(translate2 == FALSE)
+                    begin2 = length2 - get_current_pos(start2, curr->num) - curr->num;
+                else
+                    begin2 = original_length2 - CODON_LENGTH*(get_current_pos(start2, curr->num)+curr->num) + frame2 + 1;
+            }
+            
+            if (reverse) {
+                strands[2*index] = strand2;
+                if (index > 0)
+                    strands[2*index+1] = strands[2*(index-1)+1];
+                else
+                    strands[2*index+1] = Seq_strand_unknown;
+                start[2*index] = begin2;
+                start[2*index+1] = begin1;
+            } else {
+                if (index > 0)
+                    strands[2*index] = strands[2*(index-1)];
+                else
+                    strands[2*index] = Seq_strand_unknown;
+                strands[2*index+1] = strand2;
+                start[2*index] = begin1;
+                start[2*index+1] = begin2;
+            }
+            
+            break;
+            
+        case GAPALIGN_INS:
+            if (strand1 != Seq_strand_minus) {
+                if(translate1 == FALSE)
+                    begin1 = get_current_pos(start1, curr->num);
+                else
+                    begin1 = frame1 - 1 + CODON_LENGTH*get_current_pos(start1, curr->num);
+            } else {
+                if(translate1 == FALSE)
+                    begin1 = length1 - get_current_pos(start1, curr->num) - curr->num;
+                else
+                    begin1 = original_length1 - CODON_LENGTH*(get_current_pos(start1, curr->num)+curr->num) + frame1 + 1;
+            }
+            begin2 = -1;
+            if (reverse) {
+                if (index > 0)
+                    strands[2*index] = strands[2*(index-1)];
+                else
+                    strands[2*index] = Seq_strand_unknown;
+                strands[2*index+1] = strand1;
+                start[2*index] = begin2;
+                start[2*index+1] = begin1;
+            } else {
+                strands[2*index] = strand1;
+                if (index > 0)
+                    strands[2*index+1] = strands[2*(index-1)+1];
+                else
+                    strands[2*index+1] = Seq_strand_unknown;
+                start[2*index] = begin1;
+                start[2*index+1] = begin2;
+            }
+            
+            break;
+        default:
+            break;
+        }
+        length[index] = curr->num;
+        index++;
+    }    
+
+    return TRUE;
 }
 
 /* 
-	Convert an EditScript chain to a SeqAlign of type DenseSeg.
-	Used for a non-simple interval (i.e., one without subs. or 
-	deletions).  
-
-	The first SeqIdPtr in the chain of subject_id and query_id is duplicated for
-	the SeqAlign.
-*/
+   Convert an EditScript chain to a SeqAlign of type DenseSeg.
+   Used for a non-simple interval (i.e., one without subs. or 
+   deletions).  
+   
+   The first SeqIdPtr in the chain of subject_id and query_id is duplicated for
+   the SeqAlign.
+   */
 
 SeqAlignPtr LIBCALL
 GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdPtr query_id)
 
 {
-	Boolean reverse, translate1, translate2;
-	GapXEditScriptPtr curr, esp;
-	Int2 frame1, frame2, numseg;
-	Int4 begin1, begin2, index, start1, start2, length1, length2;
-	Int4 original_length1, original_length2;
-	Int4Ptr length, start;
-	DenseSegPtr dsp;
-	SeqAlignPtr sap;
-	SeqIntPtr seq_int1;
-	SeqLocPtr slp, slp1, slp2;
-	StdSegPtr sseg, sseg_head, sseg_old;
-	Uint1 strand1, strand2;
-	Uint1Ptr strands;
+    GapXEditScriptPtr curr, curr_last;
+    Int4 numseg, start1, start2;
+    Int4Ptr length, start;
+    Uint1Ptr strands;
+    Boolean is_disc_align = FALSE;
+    SeqAlignPtr sap, sap_disc, sap_head, sap_tail;
+    Boolean skip_region = FALSE;
 
-	reverse = edit_block->reverse;	
+    is_disc_align = FALSE; numseg = 0;
 
-	numseg=0;
-	start1 = edit_block->start1;
-	start2 = edit_block->start2;
-	length1 = edit_block->length1;
-	length2 = edit_block->length2;
-	original_length1 = edit_block->original_length1;
-	original_length2 = edit_block->original_length2;
-	translate1 = edit_block->translate1;
-	translate2 = edit_block->translate2;
-	frame1 = edit_block->frame1;
-	frame2 = edit_block->frame2;
+    for (curr=edit_block->esp; curr; curr = curr->next) {
+        numseg++;
+        if(curr->op_type == GAPALIGN_DECLINE) {
+            is_disc_align = TRUE;
+        }
+    }
+    
+    start1 = edit_block->start1;
+    start2 = edit_block->start2;
+    
+    /* If no GAPALIGN_DECLINE regions exists output seqalign will be
+       regular Den-Seg or Std-seg */
+    if(TRUE || is_disc_align == FALSE) {
+        /* Please note, that edit_block passed only for data like
+           strand, translate, reverse etc. Real data is taken starting
+           from "curr" and taken only "numseg" segments */
+        
+        GXECollectDataForSeqalign(edit_block, edit_block->esp, numseg,
+                                  &start, &length, &strands, &start1, &start2);
+        
+        /* Result of this function will be either den-seg or Std-seg
+           depending on translation options */
+        sap = GXEMakeSeqAlign(query_id, subject_id, edit_block->reverse, 
+                              edit_block->translate1, edit_block->translate2, 
+                              numseg, length, start, strands);
+    } else {
+        sap_disc = SeqAlignNew();
+        sap_disc->dim = 2;
+        sap_disc->type = SAT_PARTIAL; /* ordered segments, over part of seq */
+        sap_disc->segtype = SAS_DISC; /* discontinuous alignment */
+        
+        curr_last = edit_block->esp; 
+        sap_head = NULL; sap_tail = NULL;
+        while(curr_last != NULL) {
+            skip_region = FALSE;                        
+            for (numseg = 0, curr = curr_last; 
+                 curr; curr = curr->next, numseg++) {
 
-	if (frame1 > 0)
-		strand1 = Seq_strand_plus; 
-	else if (frame1 < 0)
-		strand1 = Seq_strand_minus; 
-	else
-		strand1 = Seq_strand_unknown; 
-		
-	if (frame2 > 0)
-		strand2 = Seq_strand_plus; 
-	else if (frame2 < 0)
-		strand2 = Seq_strand_minus; 
-	else
-		strand2 = Seq_strand_unknown; 
+                if(curr->op_type == GAPALIGN_DECLINE) {
+                    if(numseg != 0) { /* End of aligned area */
+                        break;
+                    } else {
+                        while(curr->op_type == GAPALIGN_DECLINE) {
+                            numseg++;
+                            curr = curr->next; 
+                        }
+                        skip_region = TRUE;                        
+                        break;
+                    }
+                }
+            }
 
-	esp = edit_block->esp;
-	for (curr=esp; curr; curr=curr->next)
-	{
-		numseg++;
-	}
+            GXECollectDataForSeqalign(edit_block, curr_last, numseg,
+                                      &start, &length, &strands, 
+                                      &start1, &start2);
+            
+            if(!skip_region) {            
+                sap = GXEMakeSeqAlign(query_id, subject_id, 
+                                      edit_block->reverse, 
+                                      edit_block->translate1, 
+                                      edit_block->translate2,
+                                      numseg, length, start, strands);
+                
+                /* Collecting all seqaligns into single linked list */
+                if(sap_tail == NULL) {
+                    sap_head = sap_tail = sap;
+                } else {
+                    sap_tail->next = sap;
+                    sap_tail = sap;
+                }
+            }
+            
+            curr_last = curr;
+        }
+        sap_disc->segs = sap_head;
+        sap = sap_disc;
+    }
 
-	start = MemNew((2*numseg+1)*sizeof(Int4));
-	length = MemNew((numseg+1)*sizeof(Int4));
-	strands = MemNew((2*numseg+1)*sizeof(Uint1));
-
-	index=0;
-	for (curr=esp; curr; curr=curr->next)
-	{
-		switch(curr->op_type)
-		{
-			case GAPALIGN_SUB:
-			case GAPALIGN_DECLINE:
-				if (strand1 != Seq_strand_minus)
-				{
-				    if(translate1 == FALSE)
-					begin1 = get_current_pos(&start1, curr->num);
-				    else
-					begin1 = frame1 - 1 + CODON_LENGTH*get_current_pos(&start1, curr->num);
-				}
-				else
-				{
-				    if(translate1 == FALSE)
-					begin1 = length1 - get_current_pos(&start1, curr->num) - curr->num;
-				    else
-					begin1 = original_length1 - CODON_LENGTH*(get_current_pos(&start1, curr->num)+curr->num) + frame1 + 1;
-				}
-					
-				if (strand2 != Seq_strand_minus)
-				{
-				    if(translate2 == FALSE)
-					begin2 = get_current_pos(&start2, curr->num);
-				    else
-					begin2 = frame2 - 1 + CODON_LENGTH*get_current_pos(&start2, curr->num);
-				}
-				else
-				{
-				    if(translate2 == FALSE)
-					begin2 = length2 - get_current_pos(&start2, curr->num) - curr->num;
-				    else
-					begin2 = original_length2 - CODON_LENGTH*(get_current_pos(&start2, curr->num)+curr->num) + frame2 + 1;
-				}
-
-				if (reverse)
-				{
-					strands[2*index] = strand2;
-					strands[2*index+1] = strand1;
-					start[2*index] = begin2;
-					start[2*index+1] = begin1;
-				}
-				else
-				{
-					strands[2*index] = strand1;
-					strands[2*index+1] = strand2;
-					start[2*index] = begin1;
-					start[2*index+1] = begin2;
-				}
-
-				break;
-
-			case GAPALIGN_DEL:
-				begin1 = -1;
-				if (strand2 != Seq_strand_minus)
-				{
-				    if(translate2 == FALSE)
-					begin2 = get_current_pos(&start2, curr->num);
-				    else
-					begin2 = frame2 - 1 + CODON_LENGTH*get_current_pos(&start2, curr->num);
-				}
-				else
-				{
-				    if(translate2 == FALSE)
-					begin2 = length2 - get_current_pos(&start2, curr->num) - curr->num;
-				    else
-					begin2 = original_length2 - CODON_LENGTH*(get_current_pos(&start2, curr->num)+curr->num) + frame2 + 1;
-				}
-
-				if (reverse)
-				{
-					strands[2*index] = strand2;
-					if (index > 0)
-						strands[2*index+1] = strands[2*(index-1)+1];
-					else
-						strands[2*index+1] = Seq_strand_unknown;
-					start[2*index] = begin2;
-					start[2*index+1] = begin1;
-				}
-				else
-				{
-					if (index > 0)
-						strands[2*index] = strands[2*(index-1)];
-					else
-						strands[2*index] = Seq_strand_unknown;
-					strands[2*index+1] = strand2;
-					start[2*index] = begin1;
-					start[2*index+1] = begin2;
-				}
-
-				break;
-
-			case GAPALIGN_INS:
-				if (strand1 != Seq_strand_minus)
-				{
-				    if(translate1 == FALSE)
-					begin1 = get_current_pos(&start1, curr->num);
-				    else
-					begin1 = frame1 - 1 + CODON_LENGTH*get_current_pos(&start1, curr->num);
-				}
-				else
-				{
-				    if(translate1 == FALSE)
-					begin1 = length1 - get_current_pos(&start1, curr->num) - curr->num;
-				    else
-					begin1 = original_length1 - CODON_LENGTH*(get_current_pos(&start1, curr->num)+curr->num) + frame1 + 1;
-				}
-				begin2 = -1;
-				if (reverse)
-				{
-					if (index > 0)
-						strands[2*index] = strands[2*(index-1)];
-					else
-						strands[2*index] = Seq_strand_unknown;
-					strands[2*index+1] = strand1;
-					start[2*index] = begin2;
-					start[2*index+1] = begin1;
-				}
-				else
-				{
-					strands[2*index] = strand1;
-					if (index > 0)
-						strands[2*index+1] = strands[2*(index-1)+1];
-					else
-						strands[2*index+1] = Seq_strand_unknown;
-					start[2*index] = begin1;
-					start[2*index+1] = begin2;
-				}
-
-				break;
-			default:
-				break;
-		}
-		length[index] = curr->num;
-		index++;
-	}
-
-	sap = SeqAlignNew();
-
-	sap->dim =2; /**only two dimention alignment**/
-
-	/**make the Denseg Object for SeqAlign**/
-	if (translate1 == FALSE && translate2 == FALSE)
-	{
-		sap->segtype = 2; /**use denseg to store the alignment**/
-		sap->type = 3; /**partial for gapped translating search. */
-		dsp = DenseSegNew();
-		dsp->dim = 2;
-		dsp->numseg = numseg;
-		if (reverse)
-		{
-			dsp->ids = SeqIdDup(subject_id);
-			dsp->ids->next = SeqIdDup(query_id);
-		}
-		else
-		{
-			dsp->ids = SeqIdDup(query_id);
-			dsp->ids->next = SeqIdDup(subject_id);
-		}
-		dsp->starts = start;
-		dsp->strands = strands;
-		dsp->lens = length;
-		sap->segs = dsp;
-		sap->next = NULL;
-	}
-	else
-	{
-		sap->type =3; /**partial for gapped translating search. */
-		sap->segtype =3; /**use denseg to store the alignment**/
-		sseg_head = NULL;
-		sseg_old = NULL;
-		for (index=0; index<numseg; index++)
-		{
-			sseg = StdSegNew();
-			sseg->dim = 2;
-			if (sseg_head == NULL)
-			{
-				sseg_head = sseg;
-			}
-				if (reverse)
-				{
-					sseg->ids = SeqIdDup(subject_id);
-					sseg->ids->next = SeqIdDup(query_id);
-				}
-				else
-				{
-					sseg->ids = SeqIdDup(query_id);
-					sseg->ids->next = SeqIdDup(subject_id);
-				}
-			slp1 = NULL;
-			if (start[2*index] != -1)
-			{
-				seq_int1 = SeqIntNew();
-				seq_int1->from = start[2*index];
-				if (translate1)
-					seq_int1->to = start[2*index] + CODON_LENGTH*length[index] - 1;
-				else
-					seq_int1->to = start[2*index] + length[index] - 1;
-				seq_int1->strand = strands[2*index];
-				seq_int1->id = SeqIdDup(query_id);
-				ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
-			}
-			else
-			{
-				ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(query_id));
-			}
-			slp2 = NULL;
-			if (start[2*index+1] != -1)
-			{
-				seq_int1 = SeqIntNew();
-				seq_int1->from = start[2*index+1];
-				if (translate2)
-					seq_int1->to = start[2*index+1] + CODON_LENGTH*length[index] - 1;
-				else
-					seq_int1->to = start[2*index+1] + length[index] - 1;
-				seq_int1->strand = strands[2*index+1];
-				seq_int1->id = SeqIdDup(subject_id);
-				ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int1);
-			}
-			else
-			{
-				ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(subject_id));
-			}
-
-			if (reverse)
-			{
-				slp = slp2;
-				slp2->next = slp1;
-			}
-			else
-			{
-				slp = slp1;
-				slp1->next = slp2;
-			}
-			sseg->loc = slp;
-
-			if (sseg_old)
-				sseg_old->next = sseg;
-			sseg_old = sseg;
-		}
-		sap->segs = sseg_head;
-		sap->next = NULL;
-	}
-
-	return sap;
+    return sap;
 }
 
 /*

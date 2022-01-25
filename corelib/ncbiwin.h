@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.3  1999/12/21 17:34:56  kans
+* Added ControlDefinitions.h to the Mac client portion to support universal headers version 3.3 (in preparation for Carbon compatibility) - churchill
+*
 * Revision 6.2  1999/02/12 16:01:41  vakatov
 * Added a draft version of Nlm_GetEnvParamEx()
 * Got rid of the old "PROTO" and "LIBCALL" prototype junk, etc.
@@ -106,6 +109,9 @@
 
 #ifdef WIN_MAC
 #include <Controls.h>
+#if UNIVERSAL_INTERFACES_VERSION > 0x0320
+#include <ControlDefinitions.h>  /* pjc added 11/20/99 */
+#endif
 #include <Devices.h>
 #include <Dialogs.h>
 #include <DiskInit.h>

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -107,7 +107,7 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
     ompc.input_itemID = dfp->input_itemID;
     ompc.input_itemtype = dfp->input_itemtype;
     ompc.output_itemtype = dfp->input_itemtype;
-    sdp = ValNodeNew (NULL);
+    sdp = SeqDescrNew (NULL);
     if (sdp != NULL) {
       sdp->choice = dfp->this_subtype;
       switch (sdp->choice) {
@@ -792,6 +792,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Uint2           itemID;
   Boolean         noLeft;
   Boolean         noRight;
+  SeqEntryPtr     oldscope;
   OMProcControl   ompc;
   CharPtr         ptr;
   ReplaceData     rd;
@@ -816,6 +817,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
     ompc.output_itemtype = ffp->input_itemtype;
     sfp = SeqFeatNew ();
     if (sfp != NULL) {
+      sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+      oldscope = SeqEntrySetScope (sep);
       sfp->data.choice = FindFeatFromFeatDefType (ffp->this_subtype);
       switch (sfp->data.choice) {
         case SEQFEAT_BOND :
@@ -859,6 +862,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       sfp->product = DialogToPointer (ffp->product);
       sfp->location = DialogToPointer (ffp->location);
       if (sfp->location == NULL) {
+        SeqEntrySetScope (oldscope);
         ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
         return FALSE;
       }
@@ -935,6 +939,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           Message (MSG_ERROR, "ObjMgrRegister failed");
         }
         SeqLocFree (slp);
+        SeqEntrySetScope (oldscope);
         return TRUE;
       } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
         sfp->qual = DialogToPointer (ffp->gbquals);
@@ -1053,6 +1058,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         }
       }
       SeqLocFree (slp);
+      SeqEntrySetScope (oldscope);
     }
   }
   return rsult;
@@ -1406,6 +1412,7 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
   Char        initials [16];
   Int2        j;
   Int2        k;
+  Char        last;
   Int2        len;
   NameStdPtr  nsp;
   Char        periods [32];
@@ -1439,6 +1446,19 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
   }
   initials [k] = '\0';
   periods [0] = '\0';
+          j = 0;
+          ch = initials [j];
+          while (ch != '\0') {
+            if (ch == ',') {
+              initials [j] = '.';
+            }
+            j++;
+            ch = initials [j];
+          }
+          str = StringStr (initials, ".ST.");
+          if (str != NULL) {
+            *(str + 2) = 't';
+          }
   j = 0;
   k = 0;
   ch = initials [j];
@@ -1451,13 +1471,25 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
     } else if (ch == '.') {
       j++;
       ch = initials [j];
+            } else if (ch == ' ') {
+              j++;
+              ch = initials [j];
     } else {
       periods [k] = ch;
+              last = ch;
       k++;
       j++;
       ch = initials [j];
-      periods [k] = '.';
-      k++;
+              if (ch == '\0') {
+                if (! (IS_LOWER (last))) {
+                  periods [k] = '.';
+                  k++;
+                }
+              /* } else if (ch == '.' && initials [j + 1] == '\0') { */
+              } else if (! (IS_LOWER (ch))) {
+                periods [k] = '.';
+                k++;
+              }
     }
   }
   periods [k] = '\0';
@@ -2460,6 +2492,7 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
   SeqLocPtr        lastSlp;
   SeqLocPtr        location;
   SeqLocPtr        next;
+  SeqEntryPtr      oldscope;
   Boolean          partial5;
   Boolean          partial3;
   SeqEntryPtr      sep;
@@ -2503,6 +2536,13 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
         id = SeqLocId (slp);
         if (id != NULL) {
           bsp = BioseqFind (id);
+          if (bsp == NULL) {
+            oldscope = SeqEntrySetScope (NULL);
+            if (oldscope != NULL) {
+              bsp = BioseqFind (id);
+              SeqEntrySetScope (oldscope);
+            }
+          }
           if (bsp != NULL) {
             isInterval = TRUE;
             isPoint = FALSE;
@@ -2675,6 +2715,8 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
   Boolean          notFirst;
   Boolean          nullsBetween;
   Boolean          okay;
+  Boolean          partial5;
+  Boolean          partial3;
   CharPtr          ptr;
   SeqEntryPtr      sep;
   SeqFeatPtr       sfp;
@@ -2701,6 +2743,8 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
   sfp = SeqFeatNew ();
   if (sfp != NULL) {
     nullsBetween = GetStatus (ipp->nullsBetween);
+    partial5 = GetStatus (ipp->partial5);
+    partial3 = GetStatus (ipp->partial3);
     notFirst = FALSE;
     head = tlp->vnp;
     for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
@@ -2782,7 +2826,7 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
               isInterval = FALSE;
               isPoint = TRUE;
               from++;
-            } else if (to == from) {
+            } else if (to == from && (! partial5) && (! partial3)) {
               isInterval = FALSE;
               isPoint = TRUE;
             }

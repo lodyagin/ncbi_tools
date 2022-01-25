@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.89 1999/08/27 19:30:04 kans Exp $
+#	$Id: makeall.unx,v 6.110 2000/01/20 13:20:45 madden Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -67,7 +67,7 @@ OTHERLIBS = -lm
 VIBLIBS = 
 VIBFLAG =
 LIBCOPY = cp -p
-SRCCOPY = cp -p
+SRCCOPY = ./ln-if-absent
 BINCOPY = cp -p
 
 SUFFIXENV = unx
@@ -78,6 +78,9 @@ LIB3 = libncbicdr.a
 ULIB4 = libvibrant.a
 LIB4 = $(ULIB4)
 LIB4 =
+ULIB400 = libvibrantOGL.a
+LIB400 = $(ULIB400)
+LIB400 =
 LIB5 = libncbiacc.a
 LIB6 = libnetcli.a
 LIB7 = libnetentr.a
@@ -97,6 +100,9 @@ LIB28 =
 ULIB30 = libncbicn3d.a
 LIB30 = $(ULIB30)
 LIB30 = 
+ULIB3000 = libncbicn3dOGL.a
+LIB3000 = $(ULIB3000)
+LIB3000 = 
 ULIB34 = libncbiindx.a
 LIB34= $(ULIB34)
 LIB34 = 
@@ -106,23 +112,32 @@ LIB37 =
 ULIB38 = libnlmzip.a
 LIB38= $(ULIB38)
 LIB38 = 
+ULIB39 = libhumchr.a
+LIB39= $(ULIB39)
+LIB39 =
 #
 # Pseudo-dummy targets when Vibrant is not used
 #
 TLIB4 = D4$(ULIB4)
+TLIB400 = D400$(ULIB400)
 TLIB20 = D20$(ULIB20)
 TLIB28 = D28$(ULIB28)
 TLIB30 = D30$(ULIB30)
+TLIB3000 = D3000$(ULIB3000)
 TLIB34 = D34$(ULIB34)
 TLIB37 = D37$(ULIB37)
 TLIB38 = D38$(ULIB38)
+TLIB39 = D39$(ULIB39)
 DLIB4 = D4$(LIB4)
+DLIB400 = D400$(LIB400)
 DLIB20 = D20$(LIB20)
 DLIB28 = D28$(LIB28)
 DLIB30 = D30$(LIB30)
+DLIB3000 = D3000$(LIB3000)
 DLIB34 = D34$(LIB34)
 DLIB37 = D37$(LIB37)
 DLIB38 = D38$(LIB38)
+DLIB39 = D39$(LIB39)
 NCBI_INCDIR = ../include
 NCBI_LIBDIR = ../lib
 NCBI_LINKINGLIBDIR = $(NCBI_LIBDIR)
@@ -147,14 +162,15 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
-	ncbisock.c matrix.c ncbibuf.c ncbi_buffer.c \
+	ncbisock.c ncbi_socket.c matrix.c ncbibuf.c ncbi_buffer.c \
    connectn.c connutil.c con_url.c con_sock.c \
-	urlquery.c lbapi.c con_stateless.c
+	urlquery.c lbapi.c con_stateless.c binary.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
-	objsub.c objprt.c objfdef.c objmime.c objpubme.c objmdrs.c objproj.c objent2.c \
+	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
+	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c \
 	seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c subutil.c edutil.c asn2ff1.c \
@@ -163,7 +179,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
 	apparam.c codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
-	udvseq.c blocks.c pgppop.c
+	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -196,7 +212,8 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	dlgutil1.c dlgutil2.c \
 	medview.c bspview.c gbfview.c gphview.c \
 	gphdraw.c gxydraw.c gtrdraw.c \
-	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c
+	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c \
+	ddvclick.c ddvcreate.c ddvgraph.c ddvopen.c ddvpanel.c
 
 SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c \
 	mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c mmdbapi4.c mmdbentr.c \
@@ -210,20 +227,22 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
-	pseed3.c pattern1.c impatool.c posit2.c newkar.c ddvcolor.c
+	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c vecscrn.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
-	gdfontl.c gdfonts.c ncbidrwg.c ncbimain.c
+	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
 
-SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c cn3dslct.c \
-	cn3dwipe.c cn3dxprt.c naybor.c cn3dwin.c cn3dentr.c \
-	cn3dpane.c cn3dmsg.c cn3dmatn.c cn3dmodl.c cn3dshim.c
+SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
+	cn3dxprt.c cn3dwin.c cn3dentr.c \
+	cn3dmsg.c cn3dmatn.c cn3dmodl.c cn3dshim.c cn3dmesh.c
 
 SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c
 
 SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ff2asn.c ftamain.c gb_ascii.c genref.c hash.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c utilfeat.c utilref.c
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
+
+SRC39 = humchrow.c humchrom_dat.c humchrom.c humchrdrw.c hc_util.c
 
 
 # objects needed for versions of asntool and entrez
@@ -236,14 +255,14 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
-	ncbisock.o matrix.o ncbibuf.o ncbi_buffer.o \
+	ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o \
    connectn.o connutil.o con_url.o con_sock.o \
-	urlquery.o lbapi.o con_stateless.o
+	urlquery.o lbapi.o con_stateless.o binary.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
-	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o \
-	objmime.o objpubme.o objmdrs.o objproj.o objent2.o \
+	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o objalignloc.o \
+	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o \
 	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
 	tofile.o tomedlin.o \
 	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o \
@@ -252,7 +271,7 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
 	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
 	salpedit.o salpstat.o salpacc.o salsap.o salstruc.o salutil.o salprop.o \
-	udvseq.o blocks.o pgppop.o
+	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -265,6 +284,16 @@ OBJ4 =	vibbutns.o vibextra.o vibfiles.o vibforms.o \
 	pictur3d.o prim3d1.o prim3d2.o prim3d3.o \
 	prim3d4.o prim3d5.o viewer3d.o vibmouse.o netscape.o \
 	imagelst.o treeview.o shim3d.o odlbox.o
+
+OBJ400 =	vibbutns.glo vibextra.glo vibfiles.glo vibforms.glo \
+	vibgroup.glo viblists.glo vibmenus.glo vibprmpt.glo \
+	vibsbars.glo vibslate.glo vibtexts.glo \
+	vibutils.glo vibwndws.glo ncbidraw.glo \
+	drawing.glo mapping.glo picture.glo viewer.glo \
+	document.glo table.glo palette.glo diagnost.glo image.glo \
+	pictur3d.glo prim3d1.glo prim3d2.glo prim3d3.glo \
+	prim3d4.glo prim3d5.glo viewer3d.glo vibmouse.glo netscape.glo \
+	imagelst.glo treeview.glo shim3d.glo odlbox.glo
 
 OBJ5 =	accentr.o accutils.o
 
@@ -285,7 +314,8 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	dlgutil1.o dlgutil2.o \
 	medview.o bspview.o gbfview.o gphview.o \
 	gphdraw.o gxydraw.o gtrdraw.o \
-	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o
+	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o \
+	ddvclick.o ddvcreate.o ddvgraph.o ddvopen.o ddvpanel.o
 
 OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o \
 	mmdbapi.o mmdbapi1.o mmdbapi2.o mmdbapi3.o mmdbapi4.o mmdbentr.o \
@@ -299,14 +329,18 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
-	pseed3.o pattern1.o impatool.o posit2.o newkar.o ddvcolor.o
+	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o vecscrn.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
-	gdfontl.o gdfonts.o ncbidrwg.o ncbimain.o
+	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
 
-OBJ30 = algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o cn3dslct.o \
-	cn3dwipe.o cn3dxprt.o naybor.o cn3dwin.o cn3dentr.o \
-	cn3dpane.o cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o
+OBJ30 = algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o \
+	cn3dxprt.o cn3dwin.o cn3dentr.o \
+	cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o cn3dmesh.o
+
+OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
+	cn3dxprt.glo cn3dwin.glo cn3dentr.glo \
+	cn3dmsg.glo cn3dmatn.glo cn3dmodl.glo cn3dshim.glo cn3dmesh.glo
 
 OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o
 
@@ -314,13 +348,17 @@ OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ff2asn.o ftamain.o gb_ascii.o gen
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
+OBJ39 = humchrow.o humchrom_dat.o humchrom.o humchrdrw.o hc_util.o
+
 
 ## All things to make
 ##
-all : copy .WAIT nocopy asntool
+all : copy .WAIT nocopy asntool .WAIT $(DLIB39)
 
 
-nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(LIB5) $(DLIB20) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB34) $(DLIB37) $(DLIB38) $(NCBI_SHLIBS)
+nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
+	$(LIB5) $(DLIB20) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
+	$(DLIB34) $(DLIB37) $(DLIB38) $(NCBI_SHLIBS)
 
 sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) $(SRC23) $(SRC28) $(SRC30) 
 
@@ -337,12 +375,23 @@ clean :
 ## Implicit actions
 ##
 
+.SUFFIXES: .c .h .o .glo
+
 .c.o :
 	$(CC) $(CFLAGS) $<
+
+# this is ugly, because Solaris cc won't allow compile directly to .glo file
+.c.glo :
+	mv $*.o $*.tmp
+	$(CC) $(CFLAGS) -D_OPENGL $<
+	mv $*.o $*.glo
+	mv $*.tmp $*.o
 
 ## Special case
 ##
 
+ncbi_socket.o : ncbi_socket.c
+	$(CC) $(CFLAGS) -DNCBI_C ncbi_socket.c
 con_stateless.o : con_stateless.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) con_stateless.c
 lbapi.o : lbapi.c
@@ -417,6 +466,26 @@ dcompr.o: dcompr.c
 streamprocs.o: streamprocs.c
 	$(CC) $(CFLAGS) $<
 
+humchrow.o:	humchrow.c
+	$(CC) $(CFLAGS) $<
+humchrom_dat.o:	humchrom_dat.c
+	$(CC) $(CFLAGS) $<
+humchrom.o:	humchrom.c
+	$(CC) $(CFLAGS) $<
+humchrdrw.o:	humchrdrw.c
+	$(CC) $(CFLAGS) $<
+hc_util.o:	hc_util.c
+	$(CC) $(CFLAGS) $<
+hc_gen_obj.o:	hc_gen_obj.c
+	$(CC) $(CFLAGS) $<
+
+humchrom_dat.c: hc_gen_obj humchrom.dat
+	- ./hc_gen_obj -d humchrom.dat -f humchrom_dat
+	- mv -f humchrom_dat.h ../include
+
+hc_gen_obj: hc_gen_obj.o humchrom.o $(LIB1)
+	$(CC) $(LDFLAGS) -o hc_gen_obj hc_gen_obj.o humchrom.o $(LIB1) $(OTHERLIBS)
+
 
 ## use subordinate makefile for building shared libraries
 ##
@@ -465,6 +534,7 @@ copy :
 	$(SRCCOPY) ../corelib/tree*.h ../include
 	$(SRCCOPY) ../corelib/regex.h ../include
 	$(SRCCOPY) ../corelib/matrix.h ../include
+	$(SRCCOPY) ../corelib/binary.h ../include
 	$(SRCCOPY) ../corelib/ncbilcl.$(SUFFIXLCL) ../include/ncbilcl.h
 	$(SRCCOPY) ../corelib/*.c .
 	$(SRCCOPY) ../corelib/core*.h .
@@ -496,12 +566,17 @@ copy :
 	$(SRCCOPY) ../cn3d/*.c .
 	$(SRCCOPY) ../gif/*.c .
 	$(SRCCOPY) ../gif/*.h ../include
+	$(SRCCOPY) ../ddv/*.h ../include
+	$(SRCCOPY) ../ddv/*.c .
 	- $(SRCCOPY) ../internal/compr/*.c .
 	- $(SRCCOPY) ../internal/compr/*.h ../include
 	- $(SRCCOPY) ../internal/libindx/*.c .
 	- $(SRCCOPY) ../internal/libindx/*.h ../include
 	- $(SRCCOPY) ../internal/libpars/*.c .
 	- $(SRCCOPY) ../internal/libpars/*.h ../include
+	- $(SRCCOPY) ../internal/ccap/*.c .
+	- $(SRCCOPY) ../internal/ccap/*.dat .
+	- $(SRCCOPY) ../internal/ccap/*.h ../include
 	$(SRCCOPY) ncbidraw.c ncbidrwg.c
 	$(SRCCOPY) ncbithr.c ncbithrs.c
 	$(SRCCOPY) ../network/id1arch/*.h ../include
@@ -537,11 +612,15 @@ $(LIB3) : $(OBJ3)
 #
 D4:
 
+D400:
+
 D20:
 
 D28:
 
 D30:
+
+D3000:
 
 D34:
 
@@ -549,7 +628,11 @@ D37:
 
 D38:
 
+D39:
+
 $(TLIB4) : $(ULIB4)
+
+$(TLIB400) : $(ULIB400)
 
 $(TLIB20) : $(ULIB20)
 
@@ -557,17 +640,27 @@ $(TLIB28) : $(ULIB28)
 
 $(TLIB30) : $(ULIB30)
 
+$(TLIB3000) : $(ULIB3000)
+
 $(TLIB34) : $(ULIB34)
 
 $(TLIB37) : $(ULIB37)
 
 $(TLIB38) : $(ULIB38)
 
+$(TLIB39) : $(ULIB39)
+
 $(ULIB4) : $(OBJ4)
 	- $(RM_LIB) $(LIB4)
 	$(AR) cru $(LIB4) $(OBJ4)
 	$(LIBCOPY) $(LIB4) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB4)
+
+$(ULIB400) : $(OBJ400)
+	- $(RM_LIB) $(LIB400)
+	$(AR) cru $(LIB400) $(OBJ400)
+	$(LIBCOPY) $(LIB400) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB400)
 
 $(ULIB20) : $(OBJ20)
 	- $(RM_LIB) $(LIB20)
@@ -587,6 +680,12 @@ $(ULIB30) : $(OBJ30)
 	$(LIBCOPY) $(LIB30) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB30)
 
+$(ULIB3000) : $(OBJ3000)
+	- $(RM_LIB) $(LIB3000)
+	$(AR) cru $(LIB3000) $(OBJ3000)
+	$(LIBCOPY) $(LIB3000) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB3000)
+
 $(ULIB34) : $(OBJ34)
 	- $(RM_LIB) $(LIB34)
 	$(AR) cru $(LIB34) $(OBJ34)
@@ -604,6 +703,12 @@ $(ULIB38) : $(OBJ38)
 	$(AR) cru $(LIB38) $(OBJ38)
 	$(LIBCOPY) $(LIB38) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB38)
+
+$(ULIB39) : $(OBJ39)
+	- $(RM_LIB) $(LIB39)
+	$(AR) cru $(LIB39) $(OBJ39)
+	$(LIBCOPY) $(LIB39) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB39)
 
 $(LIB5) : $(OBJ5)
 	- $(RM_LIB) $(LIB5)

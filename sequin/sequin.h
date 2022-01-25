@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.56 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *
@@ -358,6 +358,8 @@ extern int LIBCALLBACK SortByVnpChoice (VoidPtr ptr1, VoidPtr ptr2);
 extern void PrepareToConvertToCDS (SeqEntryPtr sep, Uint2 entityID,
                                    Uint2 subtype, CharPtr findthis);
 extern void ConvertToLocalProc (IteM i);
+extern void PromoteToBestIDProc (IteM i);
+extern void RemoveIDsFromBioseqs (IteM i);
 extern void VectorScreenProc (IteM i);
 extern void SimplePowerBlastProc (IteM i);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
@@ -378,6 +380,7 @@ extern void ParseLocalIDToSource (IteM i);
 extern void ParseFileToSource (IteM i);
 extern void AddStrainToOrg (IteM i);
 extern void AddCloneToOrg (IteM i);
+extern void AddSubspeciesToOrg (IteM i);
 
 extern void ParseInMoreProteins (IteM i);
 extern void ParseInNucUpdates (IteM i);

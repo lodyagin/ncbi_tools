@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.3  1999/10/19 12:48:19  thiessen
+* minor hack to Nlm_RemoveDefaultButton to allow Cn3D to run under RH linux 6 with Lesstif library
+*
 * Revision 6.2  1997/12/12 21:08:28  kans
 * a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
 *
@@ -641,7 +644,10 @@ static void Nlm_RemoveDefaultButton (Nlm_GraphiC b, Nlm_Boolean savePort)
   wptr = Nlm_ParentWindowPtr (b);
   if (Nlm_GetWindowDefaultButton (w) == (Nlm_ButtoN) b) {
     Nlm_SetWindowDefaultButton (w, NULL);
+#ifndef LESSTIF_VERSION
+    /* causes segfault using LessTif (0.89) under RH Linux 6 */
     XtVaSetValues (wptr, XmNdefaultButton, NULL, NULL);
+#endif
     {{
       Widget shell = Nlm_ParentWindowShell((Nlm_GraphiC) b);
       Atom atom =XmInternAtom(Nlm_currentXDisplay, "WM_TAKE_FOCUS", TRUE);

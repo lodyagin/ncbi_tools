@@ -29,13 +29,23 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.25  2000/01/18 17:09:24  tatiana
+* NP added to ValidateAccession
+*
+* Revision 6.24  1999/10/06 20:20:24  bazhin
+* Removed memory leaks in GeneStructContentFree() and GetPubsAwp()
+* functions.
+*
+* Revision 6.23  1999/09/23 18:09:33  tatiana
+* ValidateAccession modified for N*_ accession
+*
 * Revision 6.22  1999/09/15 18:17:12  tatiana
 * GRAPHIK_FMT corrected
 *
@@ -224,7 +234,7 @@ static Uint1 fasta_order[NUM_ORDER] = {
 10, /* 7 = pir */
 10, /* 8 = swissprot */
 15,  /* 9 = patent */
-18, /* 10 = other TextSeqId */
+10, /* 10 = other TextSeqId */
 20, /* 11 = general Dbtag */
 32,  /* 12 = gi */
 10, /* 13 = ddbj */
@@ -294,11 +304,12 @@ static void GeneStructContentFree(GeneStructPtr gsp)
 		}
 		MemFree(v);
 	}
-	if (gsp->standard_name) {
-		if (gsp->standard_name->data.ptrvalue != NULL) {
-			MemFree(gsp->standard_name->data.ptrvalue);
+	for (v = gsp->standard_name; v != NULL; v = vnext) {
+		vnext = v->next;
+		if (v->data.ptrvalue != NULL) {
+			MemFree(v->data.ptrvalue);
 		}
-		gsp->standard_name = ValNodeFree(gsp->standard_name);
+		MemFree(v);
 	}
 	for (v = gsp->ECNum; v; v = vnext) {
 		vnext = v->next;
@@ -2238,9 +2249,10 @@ NLM_EXTERN Int4 GetPubsAwp (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	Char buffer[31];
 	
 	bsp = gbp->bsp;
-	if (bsp != NULL) {
-		isip = bsp->id;
+	if (bsp == NULL) {
+		return 0;
 	}
+	isip = bsp->id;
 	vnp = NULL;
   	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   	gs.get_feats_location = TRUE;
@@ -2283,9 +2295,10 @@ NLM_EXTERN Int4 GetPubsAwp (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			"No refs found that would result in legal flatfile format");
 		}
 		/* found something. */
-		if (status < 0)
+		if (status < 0) {
 			ValNodeFree(vnp);
 			vnp = NULL;
+		}
 	}
 	gbp->Pub = OrganizePubList(vnp); 
 	for (v = gbp->Pub, i=0; v != NULL; v= v->next, i++);
@@ -2352,6 +2365,9 @@ static CharPtr GetDivision(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	BioseqGetGBDivCode(bsp, buffer, buflen, FALSE);
 	if (buffer[0] == NULLB) {
 		StringNCpy_0(buffer, "   ", buflen);
+	}
+	if (ajp->genome_view) {
+		StringNCpy_0(buffer, "CON", buflen);
 	}
 	return buffer;
 }
@@ -2543,7 +2559,7 @@ static Int2 ValidateOtherAccession(CharPtr new_buf, CharPtr orig_buf)
 ****************************************************************************/
 Int2 ValidateAccession(CharPtr new_buf, CharPtr orig_buf)
 {
-	Int2 count;
+	Int2 count, start_count, stop_count;
 	Boolean FirstLetter=FALSE, FiveNum = FALSE;
 
 	if (orig_buf == NULL || orig_buf[0] == '\0') {
@@ -2571,12 +2587,22 @@ Int2 ValidateAccession(CharPtr new_buf, CharPtr orig_buf)
 		} else if (IS_ALPHA(orig_buf[1])) {      /* 2 + 6 accession */
 			if (orig_buf[1] < 'A' || orig_buf[1] > 'Z') {
 				return -1;
-			} 
-			for (count=2; count < 7; count++) {
+			}
+			start_count = 2;
+			stop_count = 7;
+			if (orig_buf[0] == 'N') {
+				if ((orig_buf[1] == 'M' || orig_buf[1] == 'C' 
+						|| orig_buf[1] == 'T'  || orig_buf[1] == 'P') 
+												&&  orig_buf[2] == '_') {
+						start_count = 3;
+						stop_count = 8;
+				}
+			}
+			for (count=start_count; count < stop_count; count++) {
 				if(! IS_DIGIT(orig_buf[count]))
 					break;
 			}			
-			if (count == 7 && (orig_buf[count+1] == '\0' || orig_buf[count+1] == ' ')) {
+			if (count == stop_count && (orig_buf[count+1] == '\0' || orig_buf[count+1] == ' ')) {
 				StringCpy(new_buf, orig_buf);
 				return 0;
 			} else if (IS_ALPHA(orig_buf[2])) {      /* 3 + 5 accession */
@@ -2801,6 +2827,25 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 	
 }	/* MakeBaseLocusAwp */	
 
+static Boolean ValidateVersion(SeqIdPtr sid, Asn2ffJobPtr ajp)
+{
+	TextSeqIdPtr tsip;
+		
+	if (ajp->mode != RELEASE_MODE)
+		return TRUE;
+	switch (sid->choice) {
+	case SEQID_GENBANK:
+	case SEQID_EMBL:
+	case SEQID_DDBJ:
+	case SEQID_OTHER:
+		tsip = (TextSeqIdPtr) sid->data.ptrvalue;
+		if (tsip->version == 0 || tsip->version == INT2_MIN) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
 NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 {
 	BioseqPtr bsp=NULL;
@@ -2916,6 +2961,11 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				sprintf(gbp->locus, "%-10s", buf_locus); 
 				num_seg--;
 			if (ajp->show_version) {
+				if (ValidateVersion(sip, ajp) == FALSE) {
+					gbp->bsp = NULL;
+					ErrPostEx(SEV_ERROR, ERR_ACCESSION_No_VERSION_Number, "%s", gbp->accession);
+					continue;
+				}
 				SeqIdWrite(sip, buf_acc, 
 					PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+6);
 				StringNCpy_0(gbp->version, buf_acc, MAX_ACCESSION_LEN+6);
@@ -3008,7 +3058,9 @@ NLM_EXTERN void AddExtraAccessions(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (gbp == NULL) {
 		return;
 	}
-	bsp = gbp->bsp;
+	if ((bsp = gbp->bsp) == NULL) {
+		return;
+	}
 	ac = gbp->accession;
 	if (ac && *ac == 'U') {
 		ncbi = TRUE;

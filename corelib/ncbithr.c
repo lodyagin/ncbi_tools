@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.20 1999/08/20 19:55:18 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.24 1999/11/08 17:03:05 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,20 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.24  1999/11/08 17:03:05  vakatov
+* [POSIX] NlmThreadCreateEx() -- fixed a bug leading to the thread
+* handle corruption on { BIG_ENDIAN, 64-bit pointer, 32-bit pthread_t}
+* platforms (like 64-bit IRIX/SGI/MIPS)
+*
+* Revision 6.23  1999/10/14 19:43:24  kans
+* new headers for mac
+*
+* Revision 6.22  1999/10/14 19:08:09  kans
+* header changes for Mac
+*
+* Revision 6.21  1999/09/20 17:48:32  vakatov
+* [POSIX_THREADS_AVAIL]  Bug fix for R6.20 -- for the case of "R1, R2, U1, W1"
+*
 * Revision 6.20  1999/08/20 19:55:18  vakatov
 * s_ThreadCounter***:  use {counter + semaphore} instead of just
 * {RWlock} to count and join all threads.
@@ -222,7 +236,11 @@
 ****************************************************************************/
 
 
-#include <ncbilcl.h>
+#include <ncbistd.h>
+#include <ncbimem.h>
+#include <ncbierr.h>
+#include <ncbistr.h>
+#include <ncbiprop.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -701,6 +719,7 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
 #define PTHREAD_CREATE_JOINABLE PTHREAD_CREATE_UNDETACHED
 #endif
     pthread_attr_t attr;
+    pthread_t      thread_id;
     X_VERIFY ( !pthread_attr_init(&attr) );
     X_VERIFY ( !pthread_attr_setdetachstate(&attr, (flags & THREAD_DETACHED) ?
                                             PTHREAD_CREATE_DETACHED :
@@ -724,8 +743,10 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
 #endif
       }
 
-    if (pthread_create((pthread_t *)&thread_handle, &attr,
-                       NlmThreadWrapper, (void *)wrapper_data) != 0) {
+    if (pthread_create(&thread_id, &attr,
+                       NlmThreadWrapper, (void *)wrapper_data) == 0) {
+      thread_handle = (TNlmThread) thread_id;
+    } else { 
       X_ASSERT( 0 );
       thread_handle = NULL_thread;
     }
@@ -764,11 +785,11 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
 NLM_EXTERN TNlmThread NlmThreadSelf(void)
 {
 #if   defined(SOLARIS_THREADS_AVAIL)
-  return (TNlmThread)thr_self();
+  return (TNlmThread) thr_self();
 #elif defined(POSIX_THREADS_AVAIL)
-  return (TNlmThread)pthread_self();
+  return (TNlmThread) pthread_self();
 #elif defined(WIN32_THREADS_AVAIL)
-  return (TNlmThread)thread_self;
+  return (TNlmThread) thread_self;
 #else /* default */
   return NULL_thread;
 #endif
@@ -1039,20 +1060,23 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore)
 }
 
 
+
 /********************************************************************/
 /*                                                                  */
 /* === Semaphore-like object to keep read/write syncronization ==== */
 /*                                                                  */
 /********************************************************************/
 
+
 #if defined(_DEBUG_HARD) && defined(WIN32_THREADS_AVAIL)
-#define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
 #define DO_RW(source_code) source_code
 #define IF_RW X_ASSERT
 #else
 #define DO_RW(source_code)
 #define IF_RW(x)
 #endif
+
+#define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
 
 
 #if   defined (SOLARIS_THREADS_AVAIL)
@@ -1075,7 +1099,7 @@ typedef struct TNlmRWlockTag {
 typedef struct TNlmRWlockTag {
   /* if W-locked -- keeps the lock owner;
    * also, exclusively for the reason of being easier to debug: 
-   *   if R-locked -- keeps the owner of the 1st R-lock,
+   *   if R-locked -- may (but may not!) keep the owner of one of the R-locks,
    *   if Unlocked -- keeps what it kept just before the last unlock.
    */
   TNlmThread owner;
@@ -1239,8 +1263,10 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
       RW->readers++;
       RW->owner = this_thread;
     } else {
-      /* R-locked already -- just increment the # of R-locks */
+      /* R-locked already -- increment the # of R-locks; may reset the owner */
       RW->readers++;
+      if (RW->owner == RW_UNKNOWN_OWNER)
+        RW->owner = this_thread;
     }
 
     /* release members of "*RW" for changing by other threads */
@@ -1378,7 +1404,8 @@ NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
       if ((err_code = pthread_cond_signal(&RW->cond_w)) == 0)
         RW->readers = 0;
     } else {
-      /* nested R-lock -- just decrement the # of R-locks left */
+      /* nested R-lock -- decrement the # of R-locks left;  loose the owner */
+      RW->owner = RW_UNKNOWN_OWNER;
       RW->readers--;
     }
 
@@ -1444,8 +1471,10 @@ NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
       RW->readers = 1;
       RW->owner   = this_thread;
     } else if (RW->readers > 0) {
-      /* R-locked already -- just increment the # of R-locks */
+      /* R-locked already -- increment the # of R-locks; may reset the owner */
       RW->readers++;
+      if (RW->owner == RW_UNKNOWN_OWNER)
+        RW->owner = this_thread;
     } else {
       /* W-locked already -- check if locked by the same thread (nested W) */
       if (RW->owner == this_thread)
@@ -1554,6 +1583,7 @@ NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
   return err_code ? -1 : 0;
 #endif /* else!NO_RWLOCK */
 }
+
 
 
 /********************************************************************

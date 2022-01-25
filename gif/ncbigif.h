@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/20/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       GIF generator header file
@@ -37,6 +37,11 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbigif.h,v $
+* Revision 6.2  1999/10/20 23:13:59  vakatov
+* + Nlm_Picture2gdImage() -- to draw in gdImage.
+* Nlm_PictureToGIF() -- restore current GIF image (if any) when the
+* dump is complete.
+*
 * Revision 6.1  1998/07/02 18:19:28  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -60,20 +65,26 @@
 extern "C" {
 #endif
 
-NLM_EXTERN Nlm_Boolean Nlm_PictureToGIF
+/* Dump a picture to GIF file
+ */
+NLM_EXTERN Boolean Nlm_PictureToGIF
 (FILE* out, Int2 gifWidth, Int2 gifHeight,
  SegmenT picture, Int4 pntX, Int4 pntY,
  Int2 align, Int4 scaleX, Int4 scaleY, 
  Boolean transparent);
 
-NLM_EXTERN Nlm_SegmenT Nlm_FindPrimGIF
+NLM_EXTERN Boolean Nlm_Picture2gdImage
+(struct gdImageStruct* im, SegmenT picture,
+ Int4 pntX, Int4 pntY, Int2 align, Int4 scaleX, Int4 scaleY);
+
+NLM_EXTERN SegmenT Nlm_FindPrimGIF
 (SegmenT picture, PoinT pt, Int2 gifWidth,
  Int2 gifHeight, Int4 pntX, Int4 pntY,
  Int2 align, Int4 scaleX, Int4 scaleY,
  Uint2Ptr segIDPtr, Uint2Ptr primIDPtr, 
  PrimitivE PNTR primPtr);
 
-NLM_EXTERN Nlm_SegmenT Nlm_FindSegGIF
+NLM_EXTERN SegmenT Nlm_FindSegGIF
 (SegmenT picture, PoinT pt, Int2 gifWidth,
  Int2 gifHeight, Int4 pntX, Int4 pntY,
  Int2 align, Int4 scaleX, Int4 scaleY,
@@ -81,9 +92,10 @@ NLM_EXTERN Nlm_SegmenT Nlm_FindSegGIF
  Uint2Ptr primCtPtr);
 
 
-#define PictureToGIF  Nlm_PictureToGIF
-#define FindPrimGIF   Nlm_FindPrimGIF
-#define FindSegGIF    Nlm_FindSegGIF 
+#define PictureToGIF    Nlm_PictureToGIF
+#define Picture2gdImage Nlm_Picture2gdImage
+#define FindPrimGIF     Nlm_FindPrimGIF
+#define FindSegGIF      Nlm_FindSegGIF 
                  
 #ifdef __cplusplus
 }

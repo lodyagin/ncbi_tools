@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_www.c,v $  $Revision: 4.22 $  $Date: 1999/07/21 22:10:36 $
+/*  $RCSfile: ni_www.c,v $  $Revision: 4.23 $  $Date: 1999/11/09 22:04:24 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_www.c,v $
+* Revision 4.23  1999/11/09 22:04:24  vakatov
+* Get rid of S.Shavirin's ad-hoc proto
+*
 * Revision 4.22  1999/07/21 22:10:36  vakatov
 * [LB_DIRECT]  Do not #include <lbapi.h> at all if #LB_DIRECT is not #def'd
 *
@@ -552,193 +555,5 @@ static const NIInterface s_NII_WWWDirect = {
   s_EndServices
 };
 const NIInterface *g_NII_WWWDirect = &s_NII_WWWDirect;
-
-
-
-
-#ifdef SERGEI_SHAVIRIN_CUT_AND_PASTE
-
-/*  ---- Here are set of temporary functions to be deleted */
-
-Boolean NET_Connect(VoidPtr handle)
-{
-    Uint4 conn_try;
-    ServiceInfo *sinfo;
-        
-#ifdef LB_DIRECT
-    unsigned skip_ip[MAX_NUM_HOSTS];
-    MemSet(skip_ip, '\0', sizeof(skip_ip));
-#endif
-
-    sinfo = (ServiceInfo *) handle;
-    
-    if(sinfo->nic != NULL) {
-        NIC_CloseService(sinfo->nic);
-        sinfo->nic = NULL;
-    }
-
-    for (conn_try = 0;  !sinfo->nic  &&  conn_try < sinfo->conn_try;
-         conn_try++) {
-#ifdef LB_DIRECT
-        skip_ip[conn_try] = s_AlternateDispatcher(sinfo, skip_ip,
-                                                  conn_try%MAX_NUM_HOSTS);
-#endif
-        sinfo->nic = NIC_GetService
-            (sinfo->service,
-             sinfo->disp_host, sinfo->disp_port, sinfo->disp_path,
-             &sinfo->timeout, sinfo->agent, sinfo->client_host,
-             NULL, sinfo->flags);
-    }
-    
-    return (Boolean)(sinfo->nic != 0);
-}
-
-
-VoidPtr NET_GenericGetService (CharPtr defService, 
-                               CharPtr configSection, 
-                               Int4 interface)
-{
-    ServiceInfo *sinfo  = (ServiceInfo *)MemNew(sizeof(ServiceInfo));
-    
-    {{ /* alternate service name */
-        static const Char ENV_PREFIX[] = "NI_SERVICE_NAME_";
-        CharPtr envName = (CharPtr)MemNew(sizeof(ENV_PREFIX) +
-                                          StringLen(configSection));
-        StringCpy(envName, ENV_PREFIX);
-        StringCat(envName, configSection);
-        NI_GetEnvParamEx(NULL, configSection, envName, "SERVICE_NAME",
-                         sinfo->service, sizeof(sinfo->service), defService);
-        MemFree(envName);
-    }}
-    
-    /* alternate the dispatcher's host name */
-    NI_GetEnvParam(NULL, SRV_SECTION, ENV_ENGINE_HOST,
-                   sinfo->disp_host, sizeof(sinfo->disp_host), DEF_ENGINE_HOST);
-    {{ /* alternate the dispatcher's port */
-        Char str[32];
-        int  val;
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_ENGINE_PORT,
-                       str, sizeof(str), "");
-        val = atoi(str);
-        sinfo->disp_port = (Uint2)(val > 0 ? val : DEF_ENGINE_PORT);
-    }}
-    
-    /* alternate the dispatcher's CGI path */
-    NI_GetEnvParam(NULL, SRV_SECTION, ENV_ENGINE_URL,
-                   sinfo->disp_path, sizeof(sinfo->disp_path), DEF_ENGINE_URL);
-    
-    {{ /* CERN-like firewall proxy server? */
-        Char proxy_host[sizeof(sinfo->disp_host)];
-        /* get the PROXY server name, if specified */
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_PROXY_HOST,
-                       proxy_host, sizeof(proxy_host), DEF_PROXY_HOST);
-        
-        if ( *proxy_host ) { /* use PROXY server */
-            Char str[32 + sizeof(sinfo->disp_host) + sizeof(sinfo->disp_path)];
-            int  val;
-            Uint2 proxy_port;
-            NI_GetEnvParam(NULL, SRV_SECTION, ENV_PROXY_PORT,
-                           str, sizeof(str), "");
-            val = atoi(str);
-            proxy_port = (Uint2)(val > 0 ? val : DEF_PROXY_PORT);
-            sprintf(str, "http://%s:%u%s",
-                    sinfo->disp_host, (unsigned)sinfo->disp_port, sinfo->disp_path);
-            StringNCpy_0(sinfo->disp_host, proxy_host, sizeof(sinfo->disp_host));
-            sinfo->disp_port = proxy_port;
-            StringNCpy_0(sinfo->disp_path, str, sizeof(sinfo->disp_path));
-            
-            /* non-transparent proxy? */
-            NI_GetEnvParam(NULL, SRV_SECTION, ENV_PROXY_TRANSPARENT,
-                           str, sizeof(str), DEF_PROXY_TRANSPARENT);
-            if (!*str  ||  (StringICmp(str, "1"   )  &&
-                            StringICmp(str, "true")  &&
-                            StringICmp(str, "yes" )))
-                sinfo->flags |= NIC_CERN_PROXY;
-            
-            /* auto-set to FIREWALL mode */
-            sinfo->flags |= NIC_FIREWALL;
-        }
-    }}
-    
-    {{ /* alternate the connection timeout */
-        Char   str[32];
-        double val;
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_CONN_TIMEOUT,
-                       str, sizeof(str), "");
-        val = atof(str);
-        if (val <= 0)
-            val = DEF_CONN_TIMEOUT;
-        sinfo->timeout.sec  = (Uint4)val;
-        sinfo->timeout.usec = (Uint4)((val - sinfo->timeout.sec) * 1000000);
-    }}
-    
-    {{ /* alternate the max. number of attemts to establish a connection */
-        Char str[32];
-        int  val;
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_CONN_TRY,
-                       str, sizeof(str), "");
-        val = atoi(str);
-        sinfo->conn_try = (Uint4)((val > 0) ? val : DEF_CONN_TRY);
-    }}
-    
-    {{ /* alternate the connection flags */
-        Char  str[32];
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_DEBUG_PRINTOUT,
-                       str, sizeof(str), DEF_DEBUG_PRINTOUT);
-        if (*str  &&  (!StringICmp(str, "1"   )  ||
-                       !StringICmp(str, "true")  ||
-                       !StringICmp(str, "yes" )))
-            sinfo->flags |= NIC_DEBUG_PRINTOUT;
-    }}
-    
-#ifdef LB_DIRECT 
-    {{ /* if to prohibit the use of local "nsdaemon" info */
-        Char  str[32];
-        NI_GetEnvParam(NULL, SRV_SECTION, ENV_NO_LB_DIRECT,
-                       str, sizeof(str), "");
-        sinfo->no_lb_direct = (Boolean)
-            (*str  &&  StringICmp(str, "0")  &&
-             StringICmp(str, "false")  &&  StringICmp(str, "no"));
-    }}
-#endif
-    
-    switch (interface) {
-    case eNII_WWWFirewall:
-        sinfo->flags |= NIC_FIREWALL;
-    case eNII_WWW:
-        sinfo->agent = eNIC_WWWClient;
-        break;
-    case eNII_WWWDirect:
-        sinfo->agent = eNIC_WWWDirect;
-        break;
-    default:
-        ASSERT ( 0 );
-        return 0;
-    }
-    
-    return (VoidPtr) sinfo;
-}
-
-SOCK NET_GetSOCK(VoidPtr handle)
-{
-    ServiceInfo *sinfo = (ServiceInfo *) handle;
-
-    if(sinfo != NULL && sinfo->nic != NULL)
-        return NIC_GetSOCK(sinfo->nic);
-
-    return NULL;
-}
-
-Int2 NET_ServiceDisconnect(VoidPtr handle)
-{
-    ServiceInfo *sinfo = (ServiceInfo *) handle;
-    if (sinfo->nic)
-        NIC_CloseService(sinfo->nic);
-    MemFree(sinfo);
-    return 0;
-}
-
-#endif  /* SERGEI_SHAVIRIN_CUT_AND_PASTE */
-
 
 /* EOF */

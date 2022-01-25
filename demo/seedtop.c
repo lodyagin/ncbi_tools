@@ -1,3 +1,4 @@
+/* $Id: seedtop.c,v 6.6 1999/09/22 17:54:21 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,6 +33,11 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
+$Revision: 6.6 $
+
+$Log: seedtop.c,v $
+Revision 6.6  1999/09/22 17:54:21  shavirin
+Now functions will collect messages in ValNodePtr before printing out.
  
 *****************************************************************************/
 
@@ -156,6 +162,7 @@ Int2 Main(void)
                                                      related to pattern1.c*/
         BLAST_OptionsBlkPtr options; /*used as placeholder for fillCandLambda*/
         ValNodePtr error_returns=NULL; /*store error messages*/
+        ValNodePtr info_vnp = NULL;    /* store information messages */
 
         seedSearch = (seedSearchItems *) ckalloc(sizeof(seedSearchItems));
         seedResults = (seedResultItems *) ckalloc(sizeof(seedResultItems));
@@ -224,6 +231,7 @@ Int2 Main(void)
 	    sbp->read_in_matrix = TRUE;
 	    BlastScoreBlkMatFill(sbp, myargs[14].strvalue);
 	    gap_align->matrix = sbp->matrix;
+
 	    if (is_dna) {
 	      for (i = 0; i < DNA_ALPHABET_SIZE; i++) 
 		for (j = 0; j < DNA_ALPHABET_SIZE; j++) 
@@ -274,7 +282,10 @@ Int2 Main(void)
 	}
 	rdpt = readdb_new(database, !is_dna);
 	if (program_flag == PATTERN_FLAG) {
-	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, outfp);
+	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, &info_vnp);
+            PGPOutTextMessages(info_vnp, outfp);
+            info_vnp = ValNodeFreeData(info_vnp);
+
             BlastErrorPrint(error_returns);
 	    rdpt = readdb_destruct(rdpt);
 	    return(0);
@@ -293,8 +304,12 @@ Int2 Main(void)
                                    &effectiveOccurrences,
 				   program_flag, unfilter_query, query, 
                                    queryLength, is_dna,
-                                   patternSearch, seedSearch, outfp, TRUE, &error_returns)) {
-          BlastErrorPrint(error_returns);
+                                   patternSearch, seedSearch, TRUE, &error_returns, &info_vnp)) {
+
+            PGPOutTextMessages(info_vnp, outfp);
+            info_vnp = ValNodeFreeData(info_vnp);
+
+            BlastErrorPrint(error_returns);
           if (patternSearch->patternProbability > PAT_PROB_THRESH &&
 	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
              fprintf(outfp,"Pattern %s is too likely to occur in the database to be informative\n",pname);
@@ -358,22 +373,36 @@ Int2 Main(void)
 			      lenPatMatch, adjustdbLength, gap_align, is_dna, 
 			      effectiveOccurrences, seedSearch, seedResults,
 			      patternSearch, FALSE, totalOccurrences, eThresh,
-			      NULL, 0.0, NULL, matchIndex, NULL, TRUE, outfp);
+			      NULL, 0.0, NULL, matchIndex, NULL, TRUE, 
+                              &info_vnp);
+
+                  if(query_seq != NULL) {
+                      MemFree(query_seq->lseq);
+                      MemFree(query_seq);
+                  }
+
+                  PGPOutTextMessages(info_vnp, outfp);
+                  info_vnp = ValNodeFreeData(info_vnp);
+
 		  seed_free_all(seedResults);
 		}
 	      }
 	    }
 	  }
 	}
+
+        BLAST_ScoreBlkDestruct(sbp);
+        GapAlignBlkDelete(gap_align);
+        BLASTOptionDelete(options);
 	rdpt = readdb_destruct(rdpt);
         MemFree(occurArray);
-        if (NULL != query)
-	  MemFree(query);
-        if (NULL != unfilter_query)
-          MemFree(unfilter_query);
+        MemFree(hitArray);
+        MemFree(query);
+        MemFree(unfilter_query);
         MemFree(seedSearch);
         MemFree(seedResults);
         MemFree(patternSearch);
+
 	return(0);
 }
 

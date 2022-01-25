@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.143 $
+* $Revision: 6.146 $
 *
 * File Description: 
 *
@@ -805,7 +805,7 @@ static void reset_features (PaneL pnl, EditAlignDataPtr adp)
     Select (pnl);
     HideFeatureFunc (adp);
     adp->showfeat = FALSE;
-    ShowFeatureProc (pnl, FALSE);
+    ShowFeatureProc (pnl, TRUE);
  }
 }
 
@@ -1196,7 +1196,7 @@ static Int2 LIBCALLBACK BioseqEditMsgFunc (OMMsgStructPtr ommsp)
                 }
              }
              else if (adp->input_format == OBJ_SEQALIGN) {
-                repopulate_panel (currentport, adp, NULL);
+                repopulate_panel (currentport, adp, (SeqAlignPtr)adp->sap_original->data);
              }
           }
           else if (cutlength == 0 && ommsp->itemtype == OBJ_VIRT)
@@ -3122,14 +3122,14 @@ static void CheckSeqAlignCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, 
                     if (pre==NULL) {
                        bsp->annot=sap->next;
                        sap->next=NULL;
-                       SeqAnnotFree (sap);
+                       sap = SeqAnnotFree (sap);
                        sap=bsp->annot; 
                     }
                     else {
                        pre->next=sap->next;
                        pre=sap->next;
                        sap->next=NULL; 
-                       SeqAnnotFree (sap);
+                       sap = SeqAnnotFree (sap);
                        sap=pre;
                     }
                  }
@@ -3157,13 +3157,13 @@ static void CheckSeqAlignCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, 
                     if (pre==NULL) {
                        bssp->annot=sap->next;
                        sap->next=NULL;
-                       SeqAnnotFree (sap);
+                       sap = SeqAnnotFree (sap);
                        sap=bssp->annot; 
                     }
                     else {
                        pre=sap->next;
                        sap->next=NULL; 
-                       SeqAnnotFree (sap);
+                       sap = SeqAnnotFree (sap);
                        sap=sap->next;
                     }
                  }
@@ -3311,6 +3311,7 @@ static EditAlignDataPtr BioseqToEditAlignData (EditAlignDataPtr adp, BioseqPtr b
      return NULL;
   }
   if (showfeature) {
+     adp->seqfeat = SeqfeatlistFree (adp->seqfeat);
      for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
         anp = (AlignNodePtr)vnp->data.ptrvalue;
         if (anp!=NULL && anp_has_feature(anp)) {
@@ -3430,12 +3431,14 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
          saptmp = SeqAnnotForSeqAlign (salp);
          sap = (SeqAnnotPtr) AsnIoMemCopy (saptmp, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite); 
          saptmp->data=NULL;
-         SeqAnnotFree(saptmp);
+         saptmp = SeqAnnotFree(saptmp);
          if (sap == NULL) 
          {
             return FALSE;
          }
          salp = (SeqAlignPtr)sap->data;
+
+
 /*       if (is_dim2seqalign(salp)) || (salp->dim==2 && adp->display_panel==1)) 
 */
 {{
@@ -3445,7 +3448,7 @@ salp = SeqAlignList2PosStrand(salp);
          {
             salp1 = (SeqAlignPtr) sap->data;
             sap->data=NULL;
-            SeqAnnotFree(sap);
+            sap = SeqAnnotFree(sap);
 /*
             salp1 = SortSeqAlign (&salp1);
 */
@@ -3500,7 +3503,7 @@ salp = SeqAlignList2PosStrand(salp);
          else {
             adp->colorRefs[COLOR_SELECT] = GetColorRGB(0, 0, 0);
          }
-         SeqAnnotFree (sap);
+         sap = SeqAnnotFree (sap);
          ObjMgrDelete (OBJ_SEQANNOT, (Pointer)sap);
   }
   return TRUE;
@@ -3568,6 +3571,7 @@ static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignP
   if (ok) 
   {
         if (showfeature == SEQ_FEAT1 && mastersip != NULL) {
+           adp->seqfeat = SeqfeatlistFree (adp->seqfeat);
            for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
               anp = (AlignNodePtr)vnp->data.ptrvalue; 
               if (anp!=NULL) {
@@ -3584,6 +3588,7 @@ static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignP
            }  
         }
         else if (showfeature) { 
+           adp->seqfeat = SeqfeatlistFree (adp->seqfeat);
            for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
               anp = (AlignNodePtr)vnp->data.ptrvalue; 
               if (anp!=NULL) {
@@ -4291,6 +4296,7 @@ static void DoReplaceBtn (ButtoN b)
   PropaStructPtr     psp;
   BioseqPtr          target_bsp,
                      source_bsp;
+  ValNodePtr         targetfeats = NULL;
   Uint2              master_entityID,
                      master_itemID,
                      master_itemtype;
@@ -4323,9 +4329,19 @@ static void DoReplaceBtn (ButtoN b)
               Remove (w);
               Nlm_RemoveDyingWindows ();
 
+              target_bsp = BioseqLockById (target_id);
+              if (target_bsp) {
+SeqLocPtr target_slp;
+                 target_slp = SeqLocIntNew (0, target_bsp->length-1, Seq_strand_plus, target_id);
+                 targetfeats = CollectFeatureForEditor (target_slp, targetfeats, psp->target_entityID, psp->target_bsp_itemID, NULL, TRUE);
+                 PropagateFeatureBySeqLock (psp->sap, psp->target_bsp_itemID, psp->source_entityID, psp->source_sep, targetfeats, psp->gap_choice);
+                 BioseqUnlock (target_bsp);
+/**** TODO:
+free targetfeats **********************/
+              }
               PropagateFeatureByApply (psp);
               psp->sap->data = NULL;
-              SeqAnnotFree (psp->sap);
+              psp->sap = SeqAnnotFree (psp->sap);
               psp->target_sep = NULL;
               psp->source_seqfeat = NULL;
               psp->target_seqfeat = NULL;
@@ -5043,9 +5059,9 @@ extern Int2 LIBCALLBACK AlgEditFunc (Pointer data)
      salp = (SeqAlignPtr) sap2->data;
      salp->next = NULL;
      sap->data=NULL;
-     SeqAnnotFree (sap);
+     sap = SeqAnnotFree (sap);
      sap2->data=NULL;
-     SeqAnnotFree (sap2);
+     sap2 = SeqAnnotFree (sap2);
   }
 /********** TRICK *********/
 
@@ -5416,14 +5432,16 @@ static void SeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
                  if (pre==NULL) {
                     bsp->annot = sap->next;
                     sap->next=NULL;
-                    SeqAnnotFree (sap);
-                    sap=bsp->annot->next;
+                    sap = SeqAnnotFree (sap);
+                    if (bsp->annot)
+                       sap=bsp->annot->next;
                  }
                  else {
                     pre=sap->next;
                     sap->next=NULL;
-                    SeqAnnotFree (sap);
-                    sap=pre->next;
+                    sap = SeqAnnotFree (sap);
+                    if (pre)
+                       sap=pre->next;
                  }
                  *dirtyp=TRUE;
               }
@@ -5444,14 +5462,16 @@ static void SeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
                  if (pre==NULL) {
                     bssp->annot = sap->next;
                     sap->next=NULL;
-                    SeqAnnotFree (sap);
-                    sap=bssp->annot->next;
+                    sap = SeqAnnotFree (sap);
+                    if (bssp->annot)
+                       sap=bssp->annot->next;
                  }
                  else {
                     pre=sap->next;
                     sap->next=NULL;
-                    SeqAnnotFree (sap);
-                    sap=pre->next;
+                    sap = SeqAnnotFree (sap);
+                    if (pre)
+                       sap=pre->next;
                  }
                  *dirtyp=TRUE;
               }
@@ -5465,22 +5485,6 @@ static void SeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
   }
 }
 
-static void SeqAlignDeleteInSeqEntry (SeqEntryPtr sep)
-{
-  Uint2            entityID;
-  Boolean          dirty = FALSE;
-  
-  entityID = ObjMgrGetEntityIDForChoice (sep);
-  if (entityID) {
-     SeqEntryExplore (sep, &dirty, SeqAlignDeleteInSeqEntryCallBack);
-     if (dirty) {
-        ObjMgrSetDirtyFlag (entityID, TRUE);
-        ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
-     }
-  }
-  return;
-}
-
 extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data)
 {
 
@@ -5491,10 +5495,12 @@ extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data)
                     sapcopy;
   SeqEntryPtr       sep=NULL,
                     sepnew=NULL;
-  Uint2             entityID;
-  Boolean           ok;
+  Uint2             entityID,
+                    itemID;
   MsgAnswer         ans;
   SeqSubmitPtr      ssp;
+  Boolean           ok = TRUE, 
+                    dirty = FALSE;
    
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -5539,23 +5545,17 @@ extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data)
               ans = Message (MSG_OKC, "Do you wish to replace (OK) or add (Cancel) the alignment in your SeqEntry?");
               if (ans == ANS_OK)
               {
-                 SeqAlignDeleteInSeqEntry (sep);
+                 SeqEntryExplore (sep, &dirty, SeqAlignDeleteInSeqEntryCallBack);
               }
-              sap=SeqAnnotForSeqAlign(salpnew);
-              sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
-              SeqAlignAddInSeqEntry (sep, sapcopy);
-              sap->data=NULL;
-              MemFree(sap);
            }
-           else {
-              sap=SeqAnnotForSeqAlign(salpnew);
-              sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
-              SeqAlignAddInSeqEntry (sep, sapcopy);
-              sap->data=NULL;
-              MemFree(sap);
-           }
+           sap=SeqAnnotForSeqAlign(salpnew);
+           sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
+           SeqAlignAddInSeqEntry (sep, sapcopy);
+           sap->data=NULL;
+           MemFree(sap);
            ObjMgrSetDirtyFlag (entityID, TRUE);
-           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+           itemID = GetItemIDGivenPointer (entityID, OBJ_SEQENTRY, (Pointer) sep);
+           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, itemID, OBJ_SEQENTRY);
         }
      }
      ObjMgrFree (OBJ_SEQENTRY, (Pointer)sepnew);

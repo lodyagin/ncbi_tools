@@ -22,14 +22,16 @@
 * of the author(s) as the source of the software or data would be         *
 * appreciated.                                                            *
 *                                                                         *
-**************************************************************************/
-/* $Revision 1.0$ */ 
-/* $Log: bl2seq.c,v $
-/* Revision 6.1  1999/07/06 18:48:20  madden
-/* Compares two sequences
-/*
- *
+***************************************************************************
+*
+* $Log: bl2seq.c,v $
+* Revision 6.2  1999/11/26 20:16:11  vakatov
+* Added <sqnutils.h> to pick up proto of 'UseLocalAsnloadDataAndErrMsg()'
+*
+* Revision 6.1  1999/07/06 18:48:20  madden
+* Compares two sequences
 */
+
 #include <ncbi.h>
 #include <objseq.h>
 #include <objsset.h>
@@ -39,6 +41,7 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <txalign.h>
+#include <sqnutils.h>
 
 		
 #define NUMARG 18
@@ -89,7 +92,6 @@ Int2 Main (void)
 	AsnIoPtr aip;
 	BioseqPtr fake_bsp, fake_subject_bsp, query_bsp, subject_bsp;
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
-	BlastSearchBlkPtr search;
 	BLAST_OptionsBlkPtr options;
 	Boolean is_na;
 	CharPtr ret_buffer=NULL, params_buffer=NULL;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.3 $
+* $Revision: 1.7 $
 *
 * File Description: 
 *
@@ -40,9 +40,12 @@
 */
 
 #include <ent2api.h>
+#include <urlquery.h>
 
 #define ENTREZ_TOOL_PROPERTY "Entrez2Tool"
 #define ENTREZ_TOOL_VERSION 1
+
+/* utility functions */
 
 NLM_EXTERN void EntrezSetProgramName (
   CharPtr progname
@@ -77,24 +80,111 @@ static CharPtr EntrezGetProgramName (
     if (ptr != NULL) {
       ptr++;
       EntrezSetProgramName (ptr);
+      ptr = (CharPtr) GetAppProperty (ENTREZ_TOOL_PROPERTY);
     }
   }
   return ptr;
 }
+
+/* connection functions */
+
+NLM_EXTERN CONN EntrezOpenConnection (
+  void
+)
+
+{
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,
+                             "/entrez/utils/entrez2server.fcgi",
+                             NULL, EntrezGetProgramName (),
+                             30, eMIME_AsnBinary, URLC_SURE_FLUSH);
+}
+
+#ifdef OS_MAC
+#include <Events.h>
+#endif
+
+NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
+  CONN conn
+)
+
+{
+  AsnIoConnPtr     aicp;
+  Entrez2ReplyPtr  e2ry = NULL;
+  Int2             max;
+  EConnStatus      status;
+  STimeout         timeout;
+#ifdef OS_MAC
+  EventRecord      currEvent;
+#endif
+
+  if (conn == NULL) return NULL;
+
+#ifdef OS_MAC
+  timeout.sec = 0;
+  timeout.usec = 0;
+  max = 30;
+#else
+  timeout.sec = 1;
+  timeout.usec = 0;
+  max = 30;
+#endif
+
+  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max > 0) {
+    max--;
+#ifdef OS_MAC
+    WaitNextEvent (0, &currEvent, 0, NULL);
+#endif
+  }
+  if (status == eCONN_Success) {
+    aicp = QUERY_AsnIoConnOpen ("rb", conn);
+    e2ry = Entrez2ReplyAsnRead (aicp->aip, NULL);
+    QUERY_AsnIoConnClose (aicp);
+  }
+  CONN_Close (conn);
+
+  return e2ry;
+}
+
+NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  AsnIoConnPtr     aicp;
+  CONN             conn;
+  Entrez2ReplyPtr  e2ry;
+
+  if (e2rq == NULL) return NULL;
+
+  conn = EntrezOpenConnection ();
+
+  aicp = QUERY_AsnIoConnOpen ("wb", conn);
+  Entrez2RequestAsnWrite (e2rq, aicp->aip, NULL);
+  AsnIoFlush (aicp->aip);
+  QUERY_AsnIoConnClose (aicp);
+
+  QUERY_SendQuery (conn);
+
+  e2ry = EntrezWaitForReply (conn);
+
+  return e2ry;
+}
+
+/* request creation functions */
 
 static Entrez2RequestPtr CreateRequest (
   Uint1 choice, Pointer data
 )
 
 {
-  Entrez2RequestPtr  e2rp;
+  Entrez2RequestPtr  e2rq;
   ValNodePtr         vnp;
 
-  e2rp = Entrez2RequestNew ();
-  if (e2rp == NULL) return NULL;
+  e2rq = Entrez2RequestNew ();
+  if (e2rq == NULL) return NULL;
 
-  e2rp->version = ENTREZ_TOOL_VERSION;
-  e2rp->tool = StringSaveNoNull (EntrezGetProgramName ());
+  e2rq->version = ENTREZ_TOOL_VERSION;
+  e2rq->tool = StringSaveNoNull (EntrezGetProgramName ());
 
   vnp = ValNodeNew (NULL);
   if (vnp == NULL) return NULL;
@@ -102,9 +192,9 @@ static Entrez2RequestPtr CreateRequest (
   vnp->data.ptrvalue = data;
   vnp->next = NULL;
 
-  e2rp->request = vnp;
+  e2rq->request = vnp;
 
-  return e2rp;
+  return e2rq;
 }
 
 NLM_EXTERN Entrez2IdListPtr EntrezCreateEntrezIdList (
@@ -202,7 +292,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
 {
   Entrez2BooleanExpPtr   e2be;
   Entrez2EvalBooleanPtr  e2eb;
-  Entrez2RequestPtr      e2rp;
+  Entrez2RequestPtr      e2rq;
 
   e2be = Entrez2BooleanExpNew ();
   if (e2be == NULL) return NULL;
@@ -218,19 +308,19 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   e2eb->return_parse = return_parsed;
   e2eb->query = e2be;
 
-  e2rp = CreateRequest (E2Request_eval_boolean, (Pointer) e2eb);
-  if (e2rp == NULL) return NULL;
+  e2rq = CreateRequest (E2Request_eval_boolean, (Pointer) e2eb);
+  if (e2rq == NULL) return NULL;
 
   if (! StringHasNoText (query_string)) {
-    EntrezAddToBooleanRequest (e2rp, query_string, 0, NULL, NULL, 0, 0,
+    EntrezAddToBooleanRequest (e2rq, query_string, 0, NULL, NULL, 0, 0,
                                NULL, NULL, do_not_explode, do_not_translate);
   }
 
-  return e2rp;
+  return e2rq;
 }
 
 NLM_EXTERN void EntrezAddToBooleanRequest (
-  Entrez2RequestPtr e2rp,
+  Entrez2RequestPtr e2rq,
   CharPtr query_string,
   Int4 op,
   CharPtr field,
@@ -250,8 +340,8 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
   Entrez2IdListPtr       e2il;
   ValNodePtr             vnp;
 
-  if (e2rp == NULL) return;
-  vnp = e2rp->request;
+  if (e2rq == NULL) return;
+  vnp = e2rq->request;
   if (vnp == NULL || vnp->choice != E2Request_eval_boolean) return;
 
   e2eb = (Entrez2EvalBooleanPtr) vnp->data.ptrvalue;
@@ -438,10 +528,107 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
   return CreateRequest (E2Request_get_link_counts, (Pointer) e2id);
 }
 
+/* reply extraction functions */
 
+static Pointer GeneralEntrezExtractReply (
+  Entrez2ReplyPtr e2ry,
+  Uint1 choice,
+  Int4Ptr termpos
+)
 
+{
+  E2ReplyPtr  reply;
+  Pointer     result = NULL;
 
+  if (e2ry == NULL) return NULL;
+  reply = e2ry->reply;
+  if (reply == NULL) return NULL;
 
+  if (reply->choice == choice) {
+    if (termpos != NULL) {
+      *termpos = reply->data.intvalue;
+    } else {
+      result = (Pointer) reply->data.ptrvalue;
+      reply->data.ptrvalue = NULL;
+    }
+  }
+  Entrez2ReplyFree (e2ry);
 
+  return result;
+}
+
+NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2InfoPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_info, NULL);
+}
+
+NLM_EXTERN Entrez2BooleanReplyPtr EntrezExtractBooleanReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2BooleanReplyPtr) GeneralEntrezExtractReply (e2ry, E2Reply_eval_boolean, NULL);
+}
+
+NLM_EXTERN Entrez2DocsumListPtr EntrezExtractDocsumReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2DocsumListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_docsum, NULL);
+}
+
+NLM_EXTERN Int4 EntrezExtractTermPosReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  Int4  termpos = 0;
+
+  GeneralEntrezExtractReply (e2ry, E2Reply_get_term_pos, &termpos);
+  return termpos;
+}
+
+NLM_EXTERN Entrez2TermListPtr EntrezExtractTermListReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2TermListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_term_list, NULL);
+}
+
+NLM_EXTERN Entrez2TermNodePtr EntrezExtractTermNodeReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2TermNodePtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_term_hierarchy, NULL);
+}
+
+NLM_EXTERN Entrez2LinkSetPtr EntrezExtractLinksReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2LinkSetPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_links, NULL);
+}
+
+NLM_EXTERN Entrez2IdListPtr EntrezExtractLinkedReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2IdListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_linked, NULL);
+}
+NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (Entrez2LinkCountListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_link_counts, NULL);
+}
 
 

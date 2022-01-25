@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: drawing.c,v $
+* Revision 6.12  1999/10/04 17:16:30  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.11  1998/07/01 18:27:39  vakatov
 * Use "const" qualifier somewhere
 *
@@ -109,8 +112,8 @@
 * ==========================================================================
 */
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_

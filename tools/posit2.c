@@ -57,41 +57,6 @@ Contents: utilities for makematrices.
 #define POSIT_SCALE_FACTOR 1000
 
 
-static void freePosFreqs(Nlm_FloatHi ** posFreqs, Int4 length)
-{
-  Int4 i;
-
-  for (i = 0; i <= length; i++)
-    MemFree(posFreqs[i]);
-  MemFree(posFreqs); 
-}
-
-
-static Nlm_FloatHi posit_rounddown(Nlm_FloatHi value)
-{
-  return (Nlm_FloatHi) Nlm_Nint(value);
-}
-
-
-static Nlm_FloatHi ** allocatePosFreqs(Int4 length, Int4 alphabetSize)
-{
-  Int4 c, i; /*loop indices*/
-  Nlm_FloatHi ** returnArray;
-
-  returnArray = (Nlm_FloatHi **) MemNew((length + 1) * sizeof(Nlm_FloatHi *));
-  if (NULL == returnArray)
-    exit(EXIT_FAILURE);
-  for(i = 0; i <= length; i++) {
-    returnArray[i] = (Nlm_FloatHi *) MemNew(alphabetSize * sizeof(Nlm_FloatHi));
-    if (NULL == returnArray[i])
-      exit(EXIT_FAILURE);   
-    for(c = 0; c < alphabetSize; c++)
-      returnArray[i][c] = 0.0;
-  }
-  return(returnArray); 
-}
-
-
 static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArray, Nlm_FloatHi *scoreArray,  BLAST_ScoreFreqPtr return_sfp)
 {
   Int4 minScore, maxScore; /*observed minimum and maximum scores*/

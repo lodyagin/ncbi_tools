@@ -1,25 +1,44 @@
-<HTML>
-<HEAD>
+<HTML> <HEAD>
 
-<TITLE>Sequin Help Documentation</TITLE>
+<TITLE>Sequin help documentation</TITLE>
 
-</HEAD> <BODY BGCOLOR="FFFFFF">
-
-<BODY>
-
-<A NAME="Top"></A>
-
-<map name="sequin">
-<area shape="rect" coords="3,2 43,19" href="http://www.ncbi.nlm.nih.gov/">
-<area shape="rect" coords="424,2   506,19"
-href="http://www.ncbi.nlm.nih.gov/Sequin/">
-<area shape="default" nohref>
-</map>
-
-   <IMG SRC="/Sequin/Imagemap/TBar.Sequin.gif" BORDER=0 usemap="#sequin">
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<!-- if you use the following meta tags, uncomment them.
+ <META NAME="keywords" CONTENT="Sequin">
+ <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the NCBI for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. ">
+-->
+ <link rel="stylesheet" href="ncbi_sequin.css">
 
 
-<H1>Sequin help documentation</H1>
+</HEAD> 
+
+<body bgcolor="#FFFFFF" text="#000000" link="#0033CC" vlink="#0033CC">
+<!-- change the link and vlink colors from the original orange (link="#CC6600" vlink="#CC6600") -->
+
+<!--  the header   --> 
+<table border="0" width="600" cellspacing="0" cellpadding="0">
+  <tr> 
+    <td width="140"><a href="http://www.ncbi.nlm.nih.gov"> <img src="http://www.ncbi.nlm.nih.gov/corehtml/left.GIF" width="130" height="45" border="0"></a></td>
+    <td width="360" class="head1" valign="BOTTOM"> <span class="H1">Sequin Help Documentation</span></td>
+<!--    <td width="100" valign="BOTTOM">Your Logo</td> -->
+  </tr>
+</table>
+
+<!--  the quicklinks bar   --> 
+<table CLASS="TEXT" border="0" width="600" cellspacing="0" cellpadding="3" bgcolor="#000000">
+  <tr CLASS="TEXT"  align="CENTER"> 
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/PubMed/" class="BAR">PubMed</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Entrez/" class="BAR">Entrez</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/BLAST/" class="BAR">BLAST</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/omim/" class="BAR">OMIM</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Taxonomy/taxonomyhome.html"  class="BAR">Taxonomy</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Structure/" class="BAR">Structure</a></td>
+  </tr>
+</table>
+
+<!--  the contents   --> 
+<P>&nbsp
+
 
 <H2>Table of Contents</H2>
 
@@ -3426,13 +3445,13 @@ Sequence editor
 
 *Repeat Finder
 
-#The Repeat Finder searches for repeated sequences, such as Alu
-sequences, within human nucleotide sequences.  If any repeated sequences
+#The Repeat Finder searches for repetitive sequences, such as Alu
+sequences, within human nucleotide sequences.  If any repetitive sequences
 are found, they are indicated as features on the database record.  The
 search may take up to a few minutes on longer sequences.  Since the
-database contains only repeated sequences from humans, the Repeat Finder
+database contains only repetitive sequences from humans, the Repeat Finder
 should only be used on human sequences. The NCBI maintains a database of
-repeated sequences which can be obtained from their 
+repetitive sequences which can be obtained from their 
 <A HREF="ftp://ncbi.nlm.nih.gov/repository/repbase">
 ftp
 </A>
@@ -3681,8 +3700,8 @@ uses.
 in your entry.  For example, you can add or remove nucleotides, or you
 can add or remove CDS (coding sequence) features from the entry.  Using
 the Sequence Alignment Editor if you have an aligned set of sequences,
-you can add new sequences, replace old sequences, and propagate features
-from one sequence to others.
+you can add new sequences, propagate features from one sequence to others, 
+and export the alignment in different formats.
 
 #Even though the Sequence Editor does allow you to undo changes you make
 to the sequence, we strongly suggest that you save a copy of the entry
@@ -3693,7 +3712,7 @@ necessary.
 
 #The sequence which appears in the editor is dependent on the
 sequence(s) selected in the Target Sequence pop-up menu.  There are two
-ways to lauch the sequence editor for nucleotide sequences.  First, you
+ways to launch the sequence editor for nucleotide sequences.  First, you
 can  double click within sequence in any display format of the record
 viewer. A window containing the DNA sequence will appear.  Second, in
 the record viewer, select the sequence you wish to edit in the Target
@@ -3731,9 +3750,7 @@ select the entire sequence, click on a sequence location number on the
 left side of the window.  Any sequence that is highlighted in the Sequence
 Editor
 will show up as a box on the sequence when it is viewed in the Graphic
-<A HREF="#DisplayFormat">
 Display Format.
-</A>
 
 #One way to insert and delete residues is with the mouse.  Move the
 cursor to the appropriate location and type.  Text will be inserted to
@@ -3778,15 +3795,16 @@ strand are reflected in the Complement as well as in the Reading Frames.
 
 #A powerful feature of the Sequence editor is that it allows you to make
 new CDS (coding sequence) features on the nucleotide sequence.  To make
-a new CDS feature, select the residues, and choose Make CDS +, to make a
-CDS from the upper strand, or Make CDS -, to make a CDS from the lower
-strand, under the Sequence Editor Features menu.  The CDS will be
-indicated by a colored bar.  The bar will appear under the highlighted
-sequence. The CDS can be selected by clicking either on it or on the
-word CDS in the left margin.  To remove a CDS, select it and click on
-Clear under the Sequence Editor Edit menu.  Be sure to select the CDS
-only; if the nucleotide sequence is highlighted, it will be deleted as
-well.
+a new CDS feature, select the residues, and choose Features-->Coding 
+Regions and Transcrips-->CDS.  This action launches the CDS editor.  The
+location of the highlighted sequenced will have been automatically filled
+out in the Location page.  Visit the Location page, enter the protein name
+on the Coding Region-->Protein subpage, and press Accept.  Select "Show Features"
+at the bottom of the Sequence Editor to see the CDS as a colored bar.  
+ The CDS can be selected by clicking either on it or on its
+  name in the left margin.  To remove a CDS, select it and click on
+Clear under the Sequin Edit menu.  Click on  yes when Sequin asks if you
+want to delete the associated protein product.   
 
 #You can also have Sequin find coding sequences for you by using the ORF
 Finder, located under the Search menu of the record viewer.  Click on
@@ -3799,23 +3817,6 @@ In the ORF Finder, click on the ORF you want to add the the sequence.
 This ORF will be highlighted on the sequence when it is viewed in the
 sequence editor.  You can then make the sequence into a CDS by following
 the above instructions.
-
-#Translate the coding sequence by clicking on the Translate button on
-the bottom of the Sequence Editor window.  The translation will appear
-under the CDS bar.  You can change the length of the CDS by grabbing the
-bar at one end and shrinking or expanding it.  Move the CDS by grabbing
-the bar in the middle and moving it.  The translation will move along
-with the CDS.
-
-#Until you save a feature, it is considered a "virtual" feature and is
-not added to the record.  To see the features which are an integral part
-of the record, click on the Show feat. button at the bottom of the
-Sequence Editor window.  To hide the features again, click on the Hide
-feat. button.  If you have not changed the default colors, the saved
-features will be pink or black, and the "virtual" features will be
-green.  To save a new CDS and make it an integral part of the record,
-click on the Save button at the bottom of the Sequence Editor window.  
-This action will launch the 
 
 <A HREF="#CDS">
 Coding Region
@@ -3845,7 +3846,7 @@ mode to have the CDS incorporate the changed sequence.
 
 #Sequin allows you to work with aligned sets of closely related
 nucleotide sequences which are part of a population, phylogenetic, or
-mutaion study.  If the sequences are imported in a pre-aligned format,
+mutation study.  If the sequences are imported in a pre-aligned format,
 such as PHYLIP, Sequin uses this alignment.  If the sequences are
 imported individually in FASTA format, Sequin generates its own
 alignment.  
@@ -3869,36 +3870,64 @@ above
 </A>
 ).  In order to access the Sequence Editor for a single sequence, double
 click on the name of that sequence in the Alignment view.
-You can then propagate the feature to other sequences (see propagate
+You can then propagate the feature to other sequences (
+see <A HREF="#Propagate">propagate</A>
 under the Features menu, 
-<A HREF="#Propagate">
 below
-</A>
+
 ). 
 
-#Using the sequence editor, you can also import new sequences into
-Sequin and align them with the pre-existing sequences.  To align a new
-sequence with a single sequence in Sequin, choose
-<A HREF="#Alignwith">
-Align with
-</A> 
-under the Sequence Editor Edit menu.  To align a new sequence with a set
-of pre-aligned sequences, choose
-<A HREF="#Align">
-Align
-</A> 
-under the Sequence Editor Alignment menu.  You can also 
-<A HREF="#Propagate">
-propagate
-</A> 
-features between the aligned sequences.
+*Creating new alignments
 
+#Sequin also allows you to import sequences and align them either 
+with an existing alignment or with a single sequence.  Features
+can be propogated between aligned sequences.  Sequences can either
+be in a file or in Entrez (see Sequence Editor File menu, below).
+
+
+*Sequence Editor File menu
+
+**Read Sequence File 
+
+#Imports FASTA formatted sequence(s) or ASN1 records
+from a file.  
+Three alignment methods are available.  BLAST provides the best local alignment; 
+BLAST with extensions provides a global alignment anchored by the BLAST
+local alignment; Global Alignment uses a dynamic programming algorithm to
+provide a different global alignment.
+
+**Download from Entrez 
+
+#Imports one sequence from Entrez using the accession
+number or gi.  
+
+**Import Alignment 
+
+#Imports sequence alignments in Phylip, NEXUS, and FASTA+Gap
+format.  The first sequence in the file have the identical sequence and 
+Sequence Identifier as the sequence in the record.
+ 
+**Export 
+
+#Exports single sequences in Text or FASTA format, and alignments in
+FASTA+Gap, Phylip, or ASN1 format.  This function allows you to choose the 
+range of the sequence to export.
+
+**Accept Changes 
+
+#Closes the Sequence Editor, committing all changes made in the 
+Sequence Editor.  To save the changes, select File-->Save in the main Sequin
+menu.
+
+**Cancel 
+
+#Cancels the Sequence Editor without committing any changes.
 
 *Sequence Editor Edit menu
 
 **Undo
 
-#Undoes the previous action.
+#Undoes all actions performed in the Sequence Editor since the last save.
 
 **Cut
 
@@ -3912,14 +3941,62 @@ features between the aligned sequences.
 
 #Copies the highlighted sequence.  This sequence can be pasted elsewhere.
 
-**Clear
-
-#Removes the selected sequence.
-
 **Refresh
 
 #Refreshes window by reloading the data.  Note that this option does not
 undo any editing.
+
+**Delete Sequence
+#For alignments, deletes the selected sequence.
+
+
+*Sequence Editor View menu
+
+**View mode
+
+#Allows viewing of the sequence, only.
+
+**Edit mode
+
+#Allows editing of the sequence
+
+**Label
+
+#Allows you to change how the Sequence Identifiers are displayed. 
+Normally, sequence identifiers are only displayed for aligned sequences.
+ If the sequences have been downloaded from Entrez, and have different
+names in their definition lines, you can change which name you see.  You
+can view each sequence labelled by the following names:  FASTA short,
+FASTA long, Locus, Accession, or Report.
+
+**Font
+
+#Choose font
+
+**Preferences
+
+#Allows you to change the style of the display, including the colors,
+font type, and font size.
+
+**Complement
+
+#Shows the complement of the submitted strand underneath the original.
+
+**Reading frames 
+
+#Shows the indicated phase translation of the selected coding sequence. 
+You can select any or all of the six reading frames.
+
+
+**Translation Style
+
+#Allows you to choose between three styles in which to view the coding
+sequence translation.  The default style is to see all amino acids.  If
+you select the *** option, Sequin will display all methionine residue as
+M and all stop codons as *.  If you select the orf option, Sequin will
+show all open reading frames by connecting the M and * in a single
+reading frame with a ~.
+
 
 **Find
 
@@ -3952,109 +4029,14 @@ also specify non-exact patterns.  For example,
 #CDL(1:3)XE finds the sequence CDL, followed by 1-3 occurrences of any
 amino acid, followed by E, i.e., CDLAAE, CDLRSE, or CDLAPQE
 
-**Find previous
+***Find previous
 
 #Find the previous occurrence of a pattern.
 
-**Find next
+***Find next
 
 #Find the next occurrence of a pattern.
 
-**Truncate n's
-
-#This option will remove N's from the ends of a sequence.  If your
-sequence is part of an alignment, the alignment will be automatically
-recalculated after the N's are removed.
-
-**Align with
-
-#This option allows you to import an additional sequence into the
-Sequence Editor, and align it with the sequence that is already there. 
-This new sequence can be used as a reference, or it can replace an
-existing sequence in the record.
-
-#To import the new sequence into Sequin, click on Align with under the
-sequence editor Edit menu.  Choose FASTA or ASN.1, depending on whether
-the sequence is in FASTA or ASN.1 format.  (Your sequence is probably in
-FASTA format, described 
-<A HREF="#FASTAformatfornucleotidesequences">
-above, 
-</A> 
-unless you have downloaded it from Entrez and specified that it should
-be saved as ASN.1 format.)   The sequence must be closely related to the
-sequence already in the record.  For example, the sequence could be
-slightly longer or shorter than the existing sequence, or it could have
-single base bair changes.  The new sequence will be aligned with the
-existing sequence using a global alignment algorithm.  The alignment
-will appear in a new window. If you wish, you can propagate features,
-such as a CDS, from the new sequence to the original sequence. 
-Instructions on propogating features are found
-<A HREF="#Propagate"> 
-below. 
-</A>
-
-#To replace the old sequence with the new sequence, go back to the
-Sequence Editor Edit menu and click on Replace.  You will be asked if
-you really want to replace the old sequence by the new one.  If you do,
-click on proceed, and the replacement will occur.  If you do not wish to
-replace the old sequence with the new one, click on Dismiss.  To remove
-the new sequence, click Dismiss in the alignment editor window.  You
-will be returned to the sequence editor view of the original sequence.
-
-#You may also wish to merge two sequences, if, for example, you have two
-sequence files, one which contains the coding sequence of a gene, and
-another which contains the 5' UTR of the gene along with the first 50
-nucleotides of coding sequence.  In this case, go back to the Sequence
-Editor Edit menu and select Merge.  You will be given the choice of
-merging the 5p (5 prime) or 3p (3 prime) end of the new sequence with
-the old.
-
-*Sequence Editor View menu
-
-**Label
-
-#Allows you to change how the Sequence Identifiers are displayed. 
-Normally, sequence identifiers are only displayed for aligned sequences.
- If the sequences have been downloaded from Entrez, and have different
-names in their definition lines, you can change which name you see.  You
-can view each sequence labelled by the following names:  FASTA short,
-FASTA long, Locus, Accession, or Report.
-
-**Complement
-
-#Shows the complement of the submitted strand underneath the original.
-
-**Reading frames 
-
-#Shows the indicated phase translation of the selected coding sequence. 
-You can select any or all of the six reading frames.
-
-**Preferences
-
-#Allows you to change the style of the display, including the colors,
-font type, and font size.
-
-**Translation Style
-
-#Allows you to choose between three styles in which to view the coding
-sequence translation.  The default style is to see all amino acids.  If
-you select the *** option, Sequin will display all methionine residue as
-M and all stop codons as *.  If you select the orf option, Sequin will
-show all open reading frames by connecting the M and * in a single
-reading frame with a ~.
-
-**Color
-
-#Allows you to change the color by which sequence conservation is
-displayed in an alignment.  It is used in conjunction with the Pretty
-mode in the Sequence Alignment Editor.
-
-**Export
-
-#The export function allows you to save the sequence to a file.  Text
-saves the sequence as a text file.  FASTA saves the sequence in FASTA
-format.  Select the range of sequence you want to export by typing in
-the location in the dialog box.
 
 *Sequence Editor Features menu
 
@@ -4080,28 +4062,10 @@ Features.
 </A>
 
 #If you are viewing a set of aligned sequences, you will see the following
-three
-menu choices:
+menu:
 
-**Make CDS +
 
-#Create a coding sequence from the upper (+) strand of the selected
-sequence.  For more details on working with a CDS, see 
-<A HREF="#EditingaCDS(codingsequence)">
-Editing a CDS (coding sequence),
-</A>
- above.
-
-**Make CDS -
-
-#Create a coding sequence from the lower (-) strand of the selected
-sequence.  For more details on working with a CDS, see 
-<A HREF="#EditingaCDS(codingsequence)">
-Editing a CDS (coding sequence),
-</A>
- above.
-
-**Propagate 
+**Propagate
 
 #The propagate command propagates features, such as gene, mRNA, or CDS,
 from one sequence in the set to one or more other sequence(s). For
@@ -4117,11 +4081,17 @@ clicking on the sequence in the Select source sequences menu which
 contains that feature.  Next, select the target sequences, the sequences
 you want the feature to be propagated to.  Click while holding down the
 Control key on the keyboard to select multiple targets.  Using the radio
-buttons, select whether you want to split gaps or merge gaps. If you
+buttons, select whether you want to split at gaps or extend over gaps. If you
 select split gaps, the feature will be split around any gaps in the
-sequence, resulting in multiple features.  If you select merge gaps, the
+sequence, resulting in multiple features.  If you select extend over gaps, the
 feature will be propagated across the gap, resulting in a single
-feature.  To complete the task, select Propagate.
+feature.  Features are generally extended over gaps, except when features are 
+propagated from mRNA to genomic sequence, and should be split at gaps (introns).
+If you select "stop CDS translation at internal stop codon", the
+CDS translation will stop if there is an internal stop codon in the target sequence.  
+If the source sequence has a stop codon but the target sequence does not,
+you have the option to "translate CDS after partial 3' boundary" to extend the 
+CDS feature on the target.  To complete the task, select Propagate.
 
 *Sequence Editor Alignment menu
 
@@ -4134,15 +4104,7 @@ Align with
 </A> 
 option under the Sequence Editor Edit menu. 
 
-**Select all
-
-#Select all nucleotide sequences. 
-
-**Select all CDS 
-
-#Select all coding sequences. 
-
-**Select master 
+**Select Reference 
 
 #Select which of the aligned sequences should be the master sequence. 
 Click on the desired sequence in the sequence editor, then choose Select
@@ -4150,81 +4112,33 @@ master to change the display.  By default, the master sequence is the
 first sequence listed.  The Sequence Identifier of the master sequence
 is indicated in color.
 
-**Show differences/Show all
+**Select all
+
+#Select all nucleotide sequences. 
+
+
+**Show substitutions/Show all
 
 #Changes the way the sequences are displayed.  When Show all is selected
-(that is, Show differences is visible), the entire sequence of each
-entry is displayed.  When Show differences is selected, the entire
+(that is, Show substitutions is visible), the entire sequence of each
+entry is displayed.  When Show substitutions is selected, the entire
 sequence of the master sequence is shown.  The sequences of the aligned
 entries are shown as dots where they are identical to the master
 sequence, and letters where they are different. 
 
+
+**Select Variations/Conservation
+
+#Use Select Variations to highlight positions at which the sequences are 
+different from the Reference.  Use Conservation to highlight positions that
+are different from the Reference.
 
 **Dot Matrix
 
 #This option shows the result of a dot matrix plot between two selected
 sequences in the alignment.  It is under development.
 
-**Align 
 
-#Note:  This item is under development.  Save your Sequin record before
-using any of the features under this selection.  
-
-#Align allows you to carry out two main functions.  You can recalculate
-the sequence alignment by choosing among three different algorithms. 
-You can also import new sequences into the record and align these
-sequences with each other as well as with the existing sequences.  
-
-#You can use one of three algorithms to recalculate the sequence
-aligment.  Sim3 is the least stringent method and is used for sequences
-which are highly similar.  Sim is the most stringent method and is used
-for sequences which are less similar.  Sim2 is in the middle.  First, in
-the Sequence Alignment Editor, select the sequences you wish to align. 
-Select all sequences by choosing Select all under the Alignment menu, or
-select a subset by holding down the control button as you click on them.
- Next, select Align under the Alignment menu, and click on the desired
-algorithm.  The alignment will open in a new window.  Select Accept to
-incorporate the new alignment.
-
-#If the sequences which you wish to import into the alignment are
-already in files on your computer, they must be in FASTA or  ASN1
-seq-entry format.  Sequences can be obtained in ASN1 format from Entrez.
- Alternatively, if you are running Sequin in its 
-<A HREF="#NetConfigure">
-network-aware
-</A> 
-mode, the program can look up the sequence directly from Entrez.  You
-must have a file on your computer which contains a list of accession
-numbers or GI numbers (a type of accession number).  This list should be
-in the format of
-!gi|#1
-!gi|#2
-!gi|#3
-
-#for GI numbers or
-
-!gb|#1
-!gb|#2
-!gb|#3
-
-#for accession numbers.  
-
-#You can choose the algorithm to use when recomputing the alignment of
-the imported sequences.  Use Sim2 in most cases.  Use Sim3 if the
-nucleotide sequences are highly similar.  
-
-#After you have imported the sequences into Sequin, you can propagate
-features between the old and the new sequences (see 
-<A HREF="#Propagate">
-above
-</A>
-).  
-
-**Align report
-
-#This selection provides a brief report about the alignments.  It
-provides a matrix with the number of mismatches and number of gaps
-between the sequences in the alignment.
 
 
 *Sequence Editor window buttons
@@ -4247,37 +4161,11 @@ interrupts the feature.  For example, if you enter new sequence in the
 middle of a CDS, the CDS will be interrupted by that sequence (see the
 location of the CDS in the record viewer).
 
-**Alignment mode/Block mode/Pretty mode
-
-#This option is only visible in the Alignment Editor.  It allows you to
-change the format in which the alignment is displayed.  Pretty mode
-shades the alignment with different colors for different ranges of
-sequence conservation.  The colors can be changed with the Color option
-under the Sequence Editor View menu.
-
-
 **Hide feat./Show feat.
 
 #This box toggles between hiding and showing the features on a sequence.
  To hide the features, click on the box when it is called Hide feat.  To
 show features, click on the box when it is called Show feat.
-
-**Translate CDS
-
-#Translates the selected CDS.  For more details on working with a CDS, see 
-<A HREF="#EditingaCDS(codingsequence)">
-Editing a CDS (coding sequence),
-</A>
- above.
-
-**Save CDS
-
-#Saves the selected CDS as part of the entry.  For more details on working with
-a CDS, see 
-<A HREF="#EditingaCDS(codingsequence)">
-Editing a CDS (coding sequence),
-</A>
- above.
 
 
 **Refresh
@@ -4302,12 +4190,20 @@ ALT="Table of Contents" ALIGN=top BORDER=2></A>
 <HR> 
 
 
-<p>September 7, 1999
-<p>Credits:  Tyra Wolfsberg
+<CENTER>
+<P>&nbsp
+<P CLASS=medium1><B>Questions or Comments?</B>
+<BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk</A></P>
+<P CLASS=medium1>Revised December 9, 1999
 
+</CENTER>
 
-<br><EM>Comments and questions to:  <a href="mailto:info@ncbi.nlm.nih.gov">
-info@ncbi.nlm.nih.gov</EM></a><br>
+<!--  end of content  -->  
 
-</BODY>
-</HTML>
+   
+
+ 
+
+</body>
+</html>
+

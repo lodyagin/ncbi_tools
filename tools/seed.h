@@ -1,5 +1,4 @@
-
-/*
+/* $Id: seed.h,v 6.15 1999/10/18 19:54:43 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +30,19 @@ File name: seed.h
 Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
+
+$Revision: 6.15 $
+
+$Log: seed.h,v $
+Revision 6.15  1999/10/18 19:54:43  shavirin
+Removed unused definition.
+
+Revision 6.14  1999/10/05 19:36:54  shavirin
+Changed to use functions from blast.c: BlastGetDbChunk and BlastTickProc.
+Removed unused functions.
+
+Revision 6.13  1999/09/22 17:50:18  shavirin
+Now functions will collect messages in ValNodePtr before printing out.
  
  
 *****************************************************************************/
@@ -49,7 +61,7 @@ Contents: header file for PHI-BLAST and pseed3.
 #define BITS_PACKED_PER_WORD 30
 #define OVERFLOW1  (1 << BITS_PACKED_PER_WORD)
 #define allone  ((1 << ALPHABET_SIZE) - 1)
-#define SORT_THRESHOLD 20 /*switch from quicksort to bubble sort*/
+
 #define SEED_INFINITY 1000000 /*large score for array sentinel*/
 
 #define MAX_EVALUE 1000 /*maximum e-value allowed as threshold*/
@@ -103,8 +115,8 @@ Contents: header file for PHI-BLAST and pseed3.
 #define DIAGONAL_DELETE 2
 #define DIAGONAL_INSERT 1
 
-#define BLAST_DB_CHUNK_SIZE 500
-#define BLAST_NTICKS 50
+/* #define BLAST_DB_CHUNK_SIZE 500
+   #define BLAST_NTICKS 50 */
 
 typedef struct hit_str {
     Int4 score;
@@ -202,6 +214,7 @@ typedef struct alignSearchItems {
    Int4   gapCost;   /*gapOpen + gapExtend*/
 } alignSearchItems;
 
+#if 0
 typedef struct threadInfoItems {
      Int4 global_gi_current;
      Boolean global_gi_being_used;
@@ -220,37 +233,39 @@ typedef struct threadInfoItems {
 	Callback functions to indicate progress, or lack thereof.
 */
      int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives));
-} threadInfoItems;
-
+} threadInfoItems; 
+#endif
 
 typedef struct seedParallelItems {
-     ReadDBFILEPtr rdpt; /*pointer to database*/
-     qseq_ptr query_seq; /*multi-piece representation of query sequence*/
-     Int4 lenPatMatch;  /*number of characters in the pattern occurrence*/
-     GapAlignBlkPtr gap_align; /*structure for description of the gapped
-                                  alignment*/
-     Boolean is_dna;  /*is this DNA or protein data*/
-     patternSearchItems * patternSearch; /*holds items about the pattern*/
-     seedResultItems * seedResults; /*holds the results for this thread*/
+    ReadDBFILEPtr rdpt; /*pointer to database*/
+    qseq_ptr query_seq; /*multi-piece representation of query sequence*/
+    Int4 lenPatMatch;  /*number of characters in the pattern occurrence*/
+    GapAlignBlkPtr gap_align; /*structure for description of the gapped
+                                alignment*/
+    Boolean is_dna;  /*is this DNA or protein data*/
+    patternSearchItems * patternSearch; /*holds items about the pattern*/
+    seedResultItems * seedResults; /*holds the results for this thread*/
      seedSearchItems * seedSearch; /*holds preprocessing info about the
                                      search*/
-     Int4 totalOccurrences;  /*total number of pattern occurrences 
+    Int4 totalOccurrences;  /*total number of pattern occurrences 
                               found in this thread*/
-     Int4 matchIndex; /* total number of matches with reportable score in
-                         this thread; match ===> occurrenece, but
-                          occurrence !===> match */
-     threadInfoItems *threadInfo;
+    Int4 matchIndex; /* total number of matches with reportable score in
+                        this thread; match ===> occurrenece, but
+                        occurrence !===> match */
+    /* threadInfoItems *threadInfo; */
+    BlastThrInfoPtr thr_info;
 } seedParallelItems;
 
 
+void PGPOutTextMessages(ValNodePtr info_vnp, FILE *fd);
 
 Char * LIBCALL strsave PROTO((Char *s));
 ValNodePtr LIBCALL  seedEngineCore PROTO((BlastSearchBlkPtr search, 
   BLAST_OptionsBlkPtr options, Uint1Ptr query, Uint1Ptr unfilter_query,
   CharPtr database, CharPtr patfile, Int4 program_flag,  FILE * patfp, 
-  FILE *outfp, Boolean is_dna, Boolean reverseDb, seedSearchItems *seedSearch,
+  Boolean is_dna, Boolean reverseDb, seedSearchItems *seedSearch,
    Nlm_FloatHi posEThresh, Nlm_FloatLo searchSpEff,
-   posSearchItems * posSearch, SeqLocPtr *seed_seq_loc, Boolean showDiagnostics));
+   posSearchItems * posSearch, SeqLocPtr *seed_seq_loc, Boolean showDiagnostics, ValNodePtr PNTR info_vnp));
 void LIBCALL init_order PROTO((Int4 **matrix, Int4 program_flag, Boolean is_dna,
    seedSearchItems *seedSearch));
 
@@ -265,7 +280,7 @@ Int4 LIBCALL init_pattern PROTO((Uint1 *pattern, Boolean is_dna, patternSearchIt
 
 Int4 LIBCALL align_of_pattern PROTO((Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,  Int4 lenDbSeq, Int4 *alignScript,  Int4 **tback,  GapAlignBlkPtr gap_align, Int4 *useful_score,  Nlm_FloatHi *multiple, patternSearchItems *patternSearch, seedSearchItems * seedSearch));
 
-void LIBCALL pat_output PROTO((Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, FILE * outfp));
+void LIBCALL pat_output PROTO((Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, ValNodePtr PNTR info_vnp));
 
 qseq_ptr LIBCALL split_target_seq PROTO((Uint1 *seq, Int4 seed, Int4 len_pat, Int4 len_query));
 
@@ -273,8 +288,7 @@ hit_ptr LIBCALL get_hits PROTO((qseq_ptr qp, Int4 len_of_pat,
 		 Uint1Ptr seq_db, Int4 len_seq_db, GapAlignBlkPtr gap_align, 
 		 Boolean is_dna, patternSearchItems * patternSearch,
                  seedSearchItems * seedSearch, Int4 * newOccurrences));
-void LIBCALL search_pat PROTO((ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch,
-ValNodePtr * error_return, FILE * outfp));
+void LIBCALL search_pat PROTO((ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch, ValNodePtr * error_return, ValNodePtr PNTR info_vnp));
 
 SeqAlignPtr LIBCALL output_hits PROTO((ReadDBFILEPtr rdpt,
 	    Boolean score_only, Uint1 *seq1, qseq_ptr qp, 
@@ -284,13 +298,15 @@ SeqAlignPtr LIBCALL output_hits PROTO((ReadDBFILEPtr rdpt,
             Int4 numOccurrences, Nlm_FloatHi eThresh,
             SeqIdPtr query_id, Nlm_FloatHi posEthresh, 
             posSearchItems *posSearch, Int4 numMatches, 
-            Int4 *totalBelowEThresh, Boolean showDiagnostics, FILE *outfp));
+            Int4 *totalBelowEThresh, Boolean showDiagnostics,
+            ValNodePtr PNTR info_vnp));
 
 Char*  LIBCALL get_a_pat PROTO((FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHitArray, 
    Int4 * numPatOccur, Int4 *numEffectiveOccurrences, Int4 program_flag, 
    Uint1Ptr unfilter_seq, Uint1Ptr seq, Int4 len, Boolean is_dna,
    patternSearchItems *patternSearch, seedSearchItems * seedSearch,
-   FILE *outfp, Boolean showDiagnostics, ValNodePtr * error_return));
+   Boolean showDiagnostics, ValNodePtr * error_return, 
+   ValNodePtr PNTR info_vnp));
 
 
 void LIBCALL quicksort_hits PROTO((Int4 no_of_seq, seedResultItems *seedResults));

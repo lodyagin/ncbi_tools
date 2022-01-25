@@ -65,6 +65,8 @@ static CharPtr GBFeat[number_GBFeat] = {
 "BIOSRC","preprotein","mat_peptide_aa","sig_peptide_aa",
 "transit_peptide_aa" };
 
+NLM_EXTERN void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, Uint2 target_entityID, SeqEntryPtr target_sep, ValNodePtr seqfeat, Uint1 gap_choice);
+
 NLM_EXTERN void PropagateFeatureByApply (PropaStructPtr psp);
 
 NLM_EXTERN PropaStructPtr CreatePropaStruc (SeqIdPtr target_id, 

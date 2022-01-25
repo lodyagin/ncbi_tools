@@ -22,6 +22,12 @@
 *  purpose.
 *
 * $Log: cn3dmodl.h,v $
+* Revision 6.21  1999/11/02 23:06:07  lewisg
+* fix cn3d to launch correctly if there is no seqentry associated with bioseq
+*
+* Revision 6.20  1999/10/29 14:15:29  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.19  1999/07/07 20:45:36  ywang
 * clear domaindata, mediadata, special feature before reading in new data in cn3d
 *
@@ -78,56 +84,72 @@
 
 #ifndef _CN3DMODEL_
 #define _CN3DMODEL_ 1
-  
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct domain_info{
-Char pcPDBName[20];      /* PDB code */
-Char pcMolName[2];     /* Chain Id   */
-Int2 iDomain;       /* domain number */
-Int4 iStrucIndex, iChainIndex;       /* domain number */
-Boolean bVisible, bVisibleParent, bAligned;
+typedef struct domain_info {
+    Char pcPDBName[20];     /* PDB code */
+    Char pcMolName[2];      /* Chain Id   */
+    Int2 iDomain;           /* domain number */
+    Int4 iStrucIndex, iChainIndex; /* domain number */
+    Boolean bVisible, bVisibleParent, bAligned;
 } DomainInfo, PNTR DomainInfoPtr;
 
 typedef struct special_feature_info {
-PARS parsSpecial;
+    PARS parsSpecial;
 /* PRK  prkSpecial;      */
-Boolean On;
-CharPtr title, description;
-Int4 iRes;
+    Boolean On;
+    CharPtr title, description;
+    Int4 iRes;
 } SpecialFeatureInfo, PNTR SpecialFeatureInfoPtr;
+
+extern Boolean Cn3D_fAlignOn, Cn3D_fUnalignOn;
 
 typedef ValNodePtr SpecialFeaturePtr;
 
-extern DomainInfo **domaindata; 
+extern DomainInfo **domaindata;
 extern Boolean Cn3D_DisplayHighlight;
 extern Boolean Cn3D_NoSingleHL;
 
-extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));  
-extern GrouP LIBCALL ModelControls PROTO((Nlm_GrouP prnt));  
+extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));
+extern GrouP LIBCALL ModelControls PROTO((Nlm_GrouP prnt));
 extern void LIBCALL ResetDisplayCtrls(void);
 extern void LIBCALL ResetModelCtrls(void);
 extern void LIBCALL Cn3D_CountDomainProc(void);
-extern void LIBCALLBACK DoLinkSpecialFeatureWithMGD  PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
-extern void  LIBCALLBACK DoCleanSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
-extern void LIBCALLBACK DoCleanJustHLStatusWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
-extern void LIBCALLBACK DoTurnOnSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
-extern void LIBCALLBACK DoDeHighlightWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
-extern SpecialFeaturePtr LIBCALL SpecialFeatureFree(SpecialFeaturePtr sfpThis);
-extern void LIBCALLBACK DoUnLinkSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void LIBCALLBACK DoLinkSpecialFeatureWithMGD
+    PROTO((PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr));
+extern void LIBCALLBACK DoCleanSpecialFeatureWithMGD(PFB pfbThis,
+                                                     Int4 iModel,
+                                                     Int4 iIndex,
+                                                     Pointer ptr);
+extern void LIBCALLBACK DoCleanJustHLStatusWithMGD(PFB pfbThis,
+                                                   Int4 iModel,
+                                                   Int4 iIndex,
+                                                   Pointer ptr);
+extern void LIBCALLBACK DoTurnOnSpecialFeatureWithMGD(PFB pfbThis,
+                                                      Int4 iModel,
+                                                      Int4 iIndex,
+                                                      Pointer ptr);
+extern void LIBCALLBACK DoDeHighlightWithMGD(PFB pfbThis, Int4 iModel,
+                                             Int4 iIndex, Pointer ptr);
+extern SpecialFeaturePtr LIBCALL SpecialFeatureFree(SpecialFeaturePtr
+                                                    sfpThis);
+extern void LIBCALLBACK DoUnLinkSpecialFeatureWithMGD(PFB pfbThis,
+                                                      Int4 iModel,
+                                                      Int4 iIndex,
+                                                      Pointer ptr);
 extern void Cn3D_bDisplayHighlightStatusSet(Boolean Yes);
 extern void Cn3DCheckHighlighted(void);
-extern void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,
+                                                   Int4 iModel,
+                                                   Int4 iIndex,
+                                                   Pointer ptr);
 extern PDNMS Cn3DAddUserDefinedFeature(PDNMS pdnmsThis);
 extern void Cn3DIndexUserDefinedFeature(void);
 extern void ClearRest(void);
 #ifdef __cplusplus
 }
 #endif
-
 #endif
-
-
-

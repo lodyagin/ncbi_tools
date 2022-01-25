@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: alignval.h,v $
+* Revision 6.13  1999/11/23 21:47:31  vakatov
+* Fixed for C++ and/or DLL compilation
 *
 * ==========================================================================
 */
@@ -52,13 +52,25 @@
 #include <objfdef.h>
 
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /*call back function for REGISTER_ALIGNVALIDATION defined in sequin4.c.  
 Starting point for seqalignment validation if user clicked on SeqalignValidation 
 under menu Filer/Alignment.  Either individual alignment or alignment block 
 should be highlighted for this validation to work*/
 
-extern Int2 LIBCALLBACK ValidateSeqAlignFromData (Pointer data);
+NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignFromData (Pointer data);
 
 /*validate each alignment sequentially.  This function will subject the seqalign to all validation functions*/ 
 NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean message,
@@ -89,6 +101,18 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
 #define Err_Segs_Dim_One 16
 #define Err_SeqAlign_Dim_One 17
 #define Err_Segtype 18
+
+#ifdef __cplusplus
+}
+#endif
+
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
 #endif
  

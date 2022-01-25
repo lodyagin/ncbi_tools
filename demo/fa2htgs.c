@@ -30,7 +30,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 24
+#define NUMARG 26
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -56,6 +56,8 @@ Args myargs[NUMARG] = {
    {"Contigs to use, separate by comas if multiple", NULL, NULL ,NULL ,TRUE,'P',ARG_STRING,0.0,0,NULL},
    {"Filename for accession list input",NULL,NULL,NULL,TRUE,'A',ARG_FILE_IN,0.0,0,NULL} ,
    {"Coordinates are on the resulting sequence ?","F", NULL ,NULL ,TRUE,'X',ARG_BOOLEAN,0.0,0,NULL},
+   {"HTGS_DRAFT sequence?","F", NULL ,NULL ,TRUE,'D',ARG_BOOLEAN,0.0,0,NULL},
+   {"Strain name?",NULL, NULL ,NULL ,TRUE,'S',ARG_STRING,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -320,7 +322,7 @@ Int2 Main(void)
    Uint1 htgs_phase; /* a value from 0-3 */
    Uint1 MI_htgs_phase;  /* mapping of htgs_phase to MI_TECH_htgs_? */
    CharPtr  newstr, accession, remark, center, organism, clone, seqbuf,
-      seqname, chromosome, title, extra_ac, clone_lib, map,
+      seqname, strain, chromosome, title, extra_ac, clone_lib, map,
       comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname;
    Char  instr[120];
    Int4   totalen, filelen, len, length = 0, cumlength = 0;
@@ -328,11 +330,11 @@ Int2 Main(void)
    Int2 errs;
    BioseqSetPtr bssp;
    ValNodePtr vnp, PNTR prevpnt, next;
-   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster;
+   Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster, htgsDraft;
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL;
 
-   CharPtr tool_ver = "fa2htgs 1.6";
+   CharPtr tool_ver = "fa2htgs 1.7";
 
                /* check command line arguments */
 
@@ -366,6 +368,8 @@ Int2 Main(void)
    contigs = myargs[21].strvalue;
    accn_fname = myargs[22].strvalue;
    coordsOnMaster = (Boolean) myargs[23].intvalue;
+   htgsDraft = (Boolean) myargs[24].intvalue;
+   strain = myargs[25].strvalue;
 
    UseLocalAsnloadDataAndErrMsg (); /* finds data directory without a .ncbirc file */
 
@@ -655,8 +659,8 @@ Int2 Main(void)
       next = vnp->next;
       if (vnp->choice == Seq_descr_pub
                || (vnp->choice == Seq_descr_comment && temp_comment)
-       || (vnp->choice == Seq_descr_org || vnp->choice == Seq_descr_source)
-                && temp_org)
+       || ((vnp->choice == Seq_descr_org || vnp->choice == Seq_descr_source)
+                && temp_org))
       {
          *prevpnt = next;
          vnp->next = NULL;
@@ -674,22 +678,28 @@ Int2 Main(void)
    
    SeqEntryFree(oldsep);
 
-   if (!temp_org)
+   if (organism != NULL)
       AddOrganismToEntryNew(nsp, the_entry, organism, NULL, NULL, NULL,
                NULL, NULL, NULL, NULL);
 
    AddGenomeToEntry(nsp, the_entry, 1);
-   if (clone != NULL && !temp_org)
+   if (clone != NULL)
       AddSubSourceToEntry(nsp, the_entry, 3, clone);
-   if (chromosome != NULL && !temp_org)
+   if (chromosome != NULL)
        AddSubSourceToEntry(nsp, the_entry, 1, chromosome);
-   if (clone_lib != NULL && !temp_org)
+   if (clone_lib != NULL)
        AddSubSourceToEntry(nsp, the_entry, 11, clone_lib);
-   if (map != NULL && !temp_org)
+   if (map != NULL)
        AddSubSourceToEntry(nsp, the_entry, 2, map);
+   if (strain != NULL)
+       AddOrgModToEntry(nsp, the_entry, 2, strain);
 
    if (title != NULL)
       AddTitleToEntry(nsp, the_entry, title);
+
+   if (htgsDraft) {
+      AddGenBankBlockToEntry (nsp, the_entry, NULL, NULL, "HTGS_DRAFT", NULL, NULL);
+   }
 
    if (extra_ac != NULL)
       AddExtraAc2Entry(the_entry, extra_ac);

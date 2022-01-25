@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -45,6 +45,15 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.12  1999/11/05 14:54:04  tatiana
+ * EMBL_PREFNUM increased to 5
+ *
+ * Revision 6.11  1999/10/27 20:57:07  tatiana
+ * bankit added to ajp
+ *
+ * Revision 6.10  1999/09/23 18:06:04  tatiana
+ * contig_view added to ajp
+ *
  * Revision 6.9  1999/04/02 16:33:15  tatiana
  * added LinkStr struct and ByteStorePtr to ajp
  *
@@ -165,7 +174,7 @@
 
 #define LINKS 20
 #define EMBL_AC       "AFVXYZ"   /* patent is "A" */ /* dbEST = "F" */
-#define EMBL_PREFNUM 4 /* embl two-letter prefix {XX} see asn2ff4.c is_embl()*/
+#define EMBL_PREFNUM 5 /* embl two-letter prefix {XX} see asn2ff4.c is_embl()*/
 
 #define FF_REGULAR 0
 #define FF_TOP_COMPLETE 1
@@ -368,7 +377,7 @@ typedef struct asn2ff_job {
 	SeqEntryPtr sep;
 	SeqLocPtr slp;      	/* or could be a location on a sequence */
 	Boolean gb_style;		/* only complete features are shown e.g. join cds on the last segmented bioseq */
-	Boolean genome_view;	/* not printing the sequence */
+	Boolean genome_view;	/* not printing the sequence and features*/
 	Boolean map_view;	/* not printing the sequence */
 	Boolean hup;		/* for submissions */
 /* taken directly from Biotable, used for printing and formatting */
@@ -386,6 +395,8 @@ typedef struct asn2ff_job {
 	Boolean useSeqMgrIndexes;  /* new style indexing to eliminate nested gathers */
 	Boolean show_version;
 	ByteStorePtr byte_st;
+	Boolean contig_view;	/* CONTIG line and features*/
+	Boolean bankit; /* show Bankit comments*/
 	
 } Asn2ffJob, PNTR Asn2ffJobPtr;
 

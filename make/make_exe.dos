@@ -1,4 +1,4 @@
-# $Id: make_exe.dos,v 6.5 1999/02/17 22:41:58 vakatov Exp $
+# $Id: make_exe.dos,v 6.6 1999/11/26 16:03:19 vakatov Exp $
 ########################################################################
 #  This file describes rules to build NCBI-toolkit-based application.
 #  Below is an example of using this file(along with another template
@@ -25,11 +25,7 @@
 TEST_EXE = $(TEST_NAME).exe
 TEST_MAP = $(TEST_NAME).map
 TEST_RC  = $(TEST_NAME).rc
-!ifdef MSWINDOWS
-!ifndef WIN32
-TEST_DEF = $(TEST_NAME).def
-!endif
-!endif
+
 
 #############################################################################
 # If to link with the "real" MT module
@@ -42,19 +38,19 @@ X_MT_OBJ=$(MT_OBJ)
 # OBJ, RES and EXE building rules
 
 .c.obj:
-        $(CC) @<<
+	$(CC) @<<
 $(TEST_OPT) $(CFLAGS) $*.c
 <<
 
 .cxx.obj:
-        $(CC) @<<
+	$(CC) @<<
 $(TEST_OPT) $(CFLAGS) $*.cxx
 <<
 
 !ifdef RES
 TEST_RES = $(TEST_NAME).res
 $(TEST_RES): $(TEST_RC) $(RES_DEP)
-    $(RC) -r -I$(INCPATH) -I$(LIBPATH) $(TEST_RC)
+	$(RC) -r -I$(INCPATH) -I$(LIBPATH) $(TEST_RC)
 !endif
 
 
@@ -62,41 +58,20 @@ copy:   $(TEST_EXE)
 nocopy: $(TEST_EXE)
 
 $(TEST_EXE): $(TEST_OBJ) $(X_MT_OBJ) $(TEST_LIB) $(TEST_RES) $(TEST_DEF)
-!ifdef BORLAND
+!ifdef BOR
 	$(LINK) @<<
 $(LDFLAGS) $(STD_OBJ) $(TEST_OBJ) $(MAIN_OBJ) $(X_MT_OBJ)
 $(TEST_EXE), $(TEST_MAP)
 $(TEST_LIB) $(TEST_STDLIB) $(STDLIB)
-!ifndef WIN32
-$(TEST_DEF)
-!else
 
-!endif
 $(TEST_RES)
 <<
 !else
-!ifdef WIN32
 	$(LINK)  @<<
 /OUT:$(TEST_EXE)
 /MAP:$(TEST_MAP)
 $(STD_OBJ) $(TEST_OBJ) $(MAIN_OBJ) $(X_MT_OBJ) $(TEST_RES)
 $(LFLAGS) $(TEST_LIB) $(TEST_STDLIB) $(STDLIB)
 <<
-!else
-	$(LINK)  @<<
-$(TEST_OBJ) $(MAIN_OBJ)
-$(TEST_EXE)/align:$(ALIGN)/seg:$(NSEGS)
-$(TEST_MAP)/map
-$(LFLAGS) +
-$(TEST_LIB) +
-$(TEST_STDLIB) +
-$(STDLIB)
-$(TEST_DEF)
-<<
-!ifdef TEST_RES
-	$(RC) -K $(TEST_RES) $(TEST_EXE)
 !endif
-!endif
-!endif
-        $(COPY_BIN) $(TEST_EXE) $(BINPATH)
-
+	$(COPY_BIN) $(TEST_EXE) $(BINPATH)

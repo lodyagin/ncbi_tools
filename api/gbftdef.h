@@ -3,6 +3,12 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.6  2000/01/21 21:06:44  kans
+* reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
+*
+* Revision 6.5  2000/01/21 20:48:19  kans
+* changes to merge several source qualifiers under new organelle qualifier
+*
 * Revision 6.4  1999/02/05 15:40:39  tatiana
 * GBQUAL_country added
 *
@@ -138,8 +144,9 @@
 #define GBQUAL_specimen_voucher  72
 #define GBQUAL_protein_id	     73
 #define GBQUAL_country		     74
+#define GBQUAL_organelle		 75
 
-#define ParFlat_TOTAL_GBQUAL     75
+#define ParFlat_TOTAL_GBQUAL     76
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

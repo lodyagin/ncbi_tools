@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.63 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *
@@ -146,6 +146,11 @@ extern Boolean LIBCALL IsAGenomeRecord (SeqEntryPtr sep)
 
   rsult = FALSE;
   SeqEntryExplore (sep, &rsult, LookForGenomeTag);
+  /*
+  if (FindBioseqSetByClass (sep, BioseqseqSet_class_nuc_prot) != NULL) {
+    rsult = FALSE;
+  }
+  */
   return rsult;
 }
 
@@ -1845,15 +1850,34 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
 {
   EnumFieldAssocPtr  ap;
   BioseqViewFormPtr  bfp;
+  CharPtr            ptr;
+  Char               str [128];
+  Boolean            tryJustAccn = TRUE;
   Int2               val;
 
   bfp = (BioseqViewFormPtr) fp;
   if (bfp == NULL || StringHasNoText (seqId) || bfp->targetAlist == NULL) return;
+  if (StringChr (seqId, '.') != NULL) {
+    tryJustAccn = FALSE;
+  }
   for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
-    if (StringICmp (ap->name, seqId) == 0) {
+    StringNCpy (str, ap->name, sizeof (str));
+    if (StringICmp (str, seqId) == 0) {
       SetValue (bfp->targetControl, val);
       ChangeTarget ((Handle) bfp->targetControl);
       return;
+    }
+    if (tryJustAccn) {
+      /* entered accession without version where the IDs are accession.version */
+      ptr = StringChr (str, '.');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        if (StringICmp (str, seqId) == 0) {
+          SetValue (bfp->targetControl, val);
+          ChangeTarget ((Handle) bfp->targetControl);
+          return;
+        }
+      }
     }
   }
 }
@@ -2428,7 +2452,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
                              length, hasAlignments, bfp->bvd.isGenome,
                              TRUE, FALSE);
       CopyBioseqReportSpecs (svpp->pageSpecs, &(bfp->bioseqProtPageList),
-                             length, hasAlignments, bfp->bvd.isGenome,
+                             length, hasAlignments, /* bfp->bvd.isGenome */ FALSE,
                              FALSE, TRUE);
       if (bfp->bioseqNucPageList == NULL && bfp->bioseqProtPageList == NULL) {
         Message (MSG_ERROR, "No acceptable report forms are currently registered");
@@ -2957,6 +2981,7 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
   Boolean            do_refresh;
   Uint2              itemtype;
   CharPtr            label = NULL;
+  Boolean            last = FALSE;
   ObjMgrPtr          omp;
   ObjMgrDataPtr      omdp;
   ObjMgrTypePtr      omtp = NULL;
@@ -2966,6 +2991,7 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
   SeqEntryPtr        sep;
   SeqLocPtr          slp;
   Char               str [100];
+  SeqEntryPtr        top;
   Int2               val;
 
   omudp = (OMUserDataPtr)(ommsp->omuserdata);
@@ -3046,9 +3072,15 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
       } else {
         val--;
       }
-      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-      if (sep != NULL) {
-        sep = FindNthSequinEntry (sep, val);
+      top = GetTopSeqEntryForEntityID (bfp->input_entityID);
+      if (top != NULL) {
+        sep = FindNthSequinEntry (top, val);
+        /* check to see if user just deleted the last target */
+        while (sep == NULL && val > 1) {
+          last = TRUE;
+          val--;
+          sep = FindNthSequinEntry (top, val);
+        }
         if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
           bsp = (BioseqPtr) sep->data.ptrvalue;
           /*
@@ -3062,6 +3094,14 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
           }
           */
           bfp->bvd.bsp = bsp;
+          if (last) {
+            if (! bfp->bvd.viewWholeEntity) {
+              val++;
+            }
+            SetValue (bfp->targetControl, val);
+          }
+        } else {
+          bfp->bvd.bsp = NULL;
         }
       }
     }
@@ -3172,6 +3212,7 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolB
 {
   BioseqViewFormPtr  bfp;
   GrouP              g;
+  CharPtr            ptr;
   Char               str [256];
   WindoW             w;
 
@@ -3180,6 +3221,10 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolB
   if (bfp->toolForm != NULL) return bfp->toolForm;
   GetTitle (bfp->form, str, sizeof (str));
   TrimSpacesAroundString (str);
+  ptr = StringStr (str, " - ");
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
   if (StringHasNoText (str)) {
     StringCpy (str, "ToolBar");
   }
@@ -3230,8 +3275,9 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
   ValNodePtr         sdp;
   SeqEntryPtr        sep;
   SeqIdPtr           sip;
-  Char               str [64];
+  Char               str [PATH_MAX];
   SeqViewProcsPtr    svpp;
+  CharPtr            timestamptitle;
   ValNodePtr         ttl;
   WindoW             w;
 
@@ -3266,6 +3312,12 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
     if (ttl != NULL && (! StringHasNoText ((CharPtr) ttl->data.ptrvalue))) {
       StringNCpy_0 (str, (CharPtr) ttl->data.ptrvalue, sizeof (str));
     }
+  }
+  /* append timestamp to title */
+  timestamptitle = GetAppProperty ("SmartSequinTimeStampTitle");
+  if (timestamptitle != NULL) {
+    StringCat (str, " ");
+    StringCat (str, timestamptitle);
   }
   w = (WindoW) CreateNewSeqEntryViewFormEx (-50, -33, str, bsp, NULL, ompcp->input_entityID,
                                             ompcp->input_itemID, ompcp->input_itemtype, FALSE);
@@ -3319,8 +3371,9 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
   ValNodePtr         sdp;
   SeqEntryPtr        sep;
   SeqIdPtr           sip;
-  Char               str [64];
+  Char               str [PATH_MAX];
   SeqViewProcsPtr    svpp;
+  CharPtr            timestamptitle;
   ValNodePtr         ttl;
   Int2               val;
   WindoW             w;
@@ -3340,7 +3393,8 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
       return OM_MSG_RET_ERROR;
   }
   /* if (bsp == NULL) return OM_MSG_RET_ERROR; */
-  StringCpy (str, "no record");
+  str [0] = '\0';
+  /* StringCpy (str, "no record"); */
   if (bsp != NULL) {
     sip = SeqIdFindWorst (bsp->id);
     if (sip == NULL) return OM_MSG_RET_ERROR;
@@ -3359,6 +3413,12 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
         StringNCpy_0 (str, (CharPtr) ttl->data.ptrvalue, sizeof (str));
       }
     }
+  }
+  /* append timestamp to title */
+  timestamptitle = GetAppProperty ("SmartSequinTimeStampTitle");
+  if (timestamptitle != NULL) {
+    StringCat (str, " ");
+    StringCat (str, timestamptitle);
   }
   w = NULL;
   reusing = FALSE;

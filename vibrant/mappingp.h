@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/19/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: mappingp.h,v $
+* Revision 6.3  1999/10/04 17:16:32  kans
+* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
+*
 * Revision 6.2  1999/08/06 18:51:11  vakatov
 * typo fixed
 *
@@ -48,8 +51,8 @@
 #ifndef _MAPPINGP_
 #define _MAPPINGP_
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
+#ifndef _NCBIDRAW_
+#include <ncbidraw.h>
 #endif
 
 #ifndef _PICTURE_

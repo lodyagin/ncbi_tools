@@ -1,4 +1,4 @@
-
+/* $Id: pseed3.c,v 6.27 1999/11/30 20:48:53 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,6 +32,55 @@ Original Author: Zheng Zhang
 Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
+
+$Revision: 6.27 $
+
+$Log: pseed3.c,v $
+Revision 6.27  1999/11/30 20:48:53  shavirin
+Corrected the way that returnData->SeedSearch and
+returnData->patternSearch are filled in seedParallelFill.
+
+Revision 6.26  1999/11/30 18:23:53  shavirin
+Added limit to number of patterns to be displayed.
+
+Revision 6.25  1999/11/16 22:20:46  shavirin
+Returned code missing on Revision 6.23
+
+Revision 6.24  1999/11/16 21:33:47  shavirin
+Fixed bug involved posSearch->posResultSequences structure.
+
+Revision 6.23  1999/10/21 16:15:05  shavirin
+Removed unused array and all references to array threshSequences
+
+Revision 6.22  1999/10/19 20:06:37  shavirin
+Added word LIBCALLBACK to the callback SeedSortHits().
+
+Revision 6.21  1999/10/18 19:57:06  shavirin
+Now sorting hits will use HeapSort function with additional sorting by
+sequence number. Removed unused functions.
+
+Revision 6.20  1999/10/13 16:24:16  shavirin
+Reset counter thr_info->db_chunk_last in do_the_seed_search() function.
+
+Revision 6.19  1999/10/13 15:42:40  shavirin
+Reset counter thr_info->last_db_seq in do_the_seed_search() function.
+
+Revision 6.18  1999/10/05 19:36:55  shavirin
+Changed to use functions from blast.c: BlastGetDbChunk and BlastTickProc.
+Removed unused functions.
+
+Revision 6.17  1999/09/28 20:44:30  shavirin
+Returned back readdb_attach() functions.
+
+Revision 6.16  1999/09/28 13:43:48  shavirin
+Changed function reentrant_get_gb_chunk() to use OID list. Only one
+instance of rdfp now used in all threads of the search.
+
+Revision 6.15  1999/09/23 20:39:03  shavirin
+Fixed some memory leaks.
+
+Revision 6.14  1999/09/22 17:51:58  shavirin
+Now functions will collect messages in ValNodePtr before printing out.
  
  
 *****************************************************************************/
@@ -66,404 +115,78 @@ extern "C" {
 
 #define SEED_NTICKS 50
 
-
-
 static Int4 get_pat PROTO((FILE *fp, Char *stringForPattern, Char *pname));
 static Uint1Ptr reverseSequence PROTO((Uint1Ptr seqFromDb, Int4 lenSeqFromDb));
 
-static void initThreadInfo PROTO((threadInfoItems *threadInfo, BlastSearchBlkPtr search));
-
-
 /*creates duplicate data structure for each thread of parallel process*/
-static seedParallelItems * seedParallelFill(ReadDBFILEPtr rdpt, qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align,
-patternSearchItems * patternSearch, seedSearchItems * seedSearch,
-threadInfoItems * threadParallelCreate);
+static seedParallelItems * seedParallelFill(ReadDBFILEPtr rdpt, qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, seedSearchItems * seedSearch, BlastThrInfoPtr thr_info);
 
-static Boolean
-reentrant_get_db_chunk PROTO((ReadDBFILEPtr rdpt, Int4Ptr start, Int4Ptr stop, Int4Ptr id_list, Int4Ptr id_list_number, threadInfoItems *threadInfo));
-
-
-static void do_the_seed_search PROTO((BlastSearchBlkPtr search,
-  ReadDBFILEPtr rdfp, Int4 num_seq, 
-  qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, 
-  GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, 
-  seedSearchItems * seedSearch, Int4 * matchIndex, Int4 * totalOccurrences,
-  seedResultItems * seedResults));
-
-static void reentrant_tick_proc PROTO((threadInfoItems * threadInfo,
-                 Int4 sequence_number));
+static void do_the_seed_search PROTO((BlastSearchBlkPtr search, Int4 num_seq, qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, seedSearchItems * seedSearch, Int4 * matchIndex, Int4 * totalOccurrences, seedResultItems * seedResults));
 
 static Boolean BlastSetLimits PROTO((Int4 cpu_limit, Int2 num_cpu));
 
+void PGPOutTextMessages(ValNodePtr info_vnp, FILE *fd)
+{
+    ValNodePtr vnp;
 
+    for(vnp = info_vnp; vnp != NULL; vnp = vnp->next) {
+        fwrite(vnp->data.ptrvalue, 1, StringLen(vnp->data.ptrvalue), fd);
+    }
+
+    return;
+}
 
 /*seedReturn is a list of lists of SeqAligns in which each list is shortened
     to at most number_of_descriptions elements, the rest are deallocated
    and the list of shortened lists is returned*/
 ValNodePtr  LIBCALL SeedPruneHitsFromSeedReturn(ValNodePtr seedReturn, Int4 number_of_descriptions)
 {
-  ValNodePtr returnList; /*list of SeqAlignPtrs to return*/
-  ValNodePtr thisValNode; /*scan down input list of ValNodes*/
-  SeqAlignPtr thisList; /*one list of seqAlignPtrs*/
-  Int4 counter; /*counter for SeqAligns*/
-  SeqAlignPtr prevSeqAlign = NULL, currentSeqAlign = NULL , nextSeqAlign = NULL; 
-  /*used to walk down list*/
-  DenseSegPtr curSegs, testSegs; /*Used to extract ids from curSeqAlign, testSeqAlign*/
-  SeqIdPtr curId, testId; /*Ids of target sequences in testSeqAlign*/
-
-  curId = NULL;
-  returnList = seedReturn;   
-  if (number_of_descriptions > 1) {
-    thisValNode = returnList;
-    while (NULL != thisValNode) {
-      thisList = thisValNode->data.ptrvalue;
-      counter = 0;
-      while ((thisList != NULL) && (counter < (number_of_descriptions + 1))) {
-	if (NULL != currentSeqAlign)
-	  prevSeqAlign = currentSeqAlign;
-	currentSeqAlign = thisList;
-	testSegs = (DenseSegPtr) currentSeqAlign->segs;
-	testId = testSegs->ids->next; 
-	if ((NULL == curId) || (!(SeqIdMatch(curId, testId)))) {
-	  counter++;
-	  curSegs = testSegs;
-	  curId = testId;
-	}
-	thisList = thisList->next;
-      }
-      if (counter == (number_of_descriptions + 1)) {
-	prevSeqAlign->next = NULL;
-	while(NULL != currentSeqAlign) {
-	  nextSeqAlign = currentSeqAlign->next;
-	  MemFree(currentSeqAlign);
-	  currentSeqAlign = nextSeqAlign;
-	}
-      }
-      thisValNode = thisValNode->next;
-    }
-  }
-  return(returnList);
-}
-
-ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, 
- Uint1Ptr query, Uint1Ptr unfilter_query,
- CharPtr database, CharPtr patfile, Int4 program_flag, 
- FILE * patfp, FILE *outfp, 
- Boolean is_dna, Boolean reverseDb, seedSearchItems *seedSearch, 
- Nlm_FloatHi posEThresh, Nlm_FloatLo searchSpEff,
- posSearchItems *posSearch, SeqLocPtr *seed_seq_loc, Boolean showDiagnostics)
-{
-        Nlm_FloatHi  dbLength, adjustdbLength;  /*total number of characters in database*/
-        qseq_ptr query_seq; /*query sequence in record format*/
-        Char  *pattern; /*string description of a pettern*/
-        Char *pname; /*name of pattern*/
-        Int4 seed; /*position in sequence where pattern match starts*/
-        Int4 lenPatMatch; /*number of positions taken by pattern match*/
-        Int4  num_seq; /*number of sequences in database*/
-	Int4 list[MAX_HIT]; /*list of lengths and start positions where
-                              pattern matches sequence*/
-        Int4  *occurArray; /*places in query where pattern occurs*/
-        Int4  *hitArray; /* beginning and end of pattern in query. */
-        Int4  numPatOccur; /*number of pattern occurrences in query string*/
-        Int4  effectiveOccurrences; /*number of occurrences not overlapping
-                                      in more than half the pattern*/
-        Int4  occurIndex;  /*index over pattern ocuurences*/
-        Int4  twiceNumMatches; /*stores return value from find_hits*/
-        Int4  matchIndex;  /*index for matches to a single sequence*/
-        Int4 totalOccurrences = 0; /*total occurrences of pattern in database*/
-        Int4 totalBelowEThresh = 0;
-        seedResultItems *seedResults = NULL; /*holds list of matching sequences*/
-        patternSearchItems *patternSearch = NULL; /*holds parameters
-                                                     related to pattern1.c*/
-        SeqAlign *thisSeqAlign = NULL; /*return value from output_hits for
-					 list of matches to one pattern occurrence*/
-        ValNodePtr seqAlignList = NULL;  /*list of SeqAlign lists to pass back*/
-        ValNodePtr nextValNodePtr = NULL, lastValNodePtr = NULL;  
-            /*pointers into list of SeqAlign lists to pass back*/
-
-	SeqIntPtr seq_int;
-
-	ReadDBFILEPtr rdpt=NULL;  /*holds result of attempt to read database*/
-        GapAlignBlkPtr gap_align; /*local holder for gap_align*/
-
-        gap_align = search->gap_align;
-        seedResults = (seedResultItems *) ckalloc(sizeof(seedResultItems));
-        patternSearch = (patternSearchItems *) ckalloc(sizeof(patternSearchItems));
-	rdpt = readdb_new(database, !is_dna);
-	if (program_flag == PATTERN_FLAG) {
-	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &(search->error_return), outfp);
-	    rdpt = readdb_destruct(rdpt);
-	    exit(1);
-	} 
-	occurArray = (Int4 *) ckalloc(sizeof(Int4)*search->sbp->query_length*2);
-	hitArray = (Int4 *) MemNew(sizeof(Int4)*search->sbp->query_length*2);
-
-	dbLength = 0;
-	num_seq = readdb_get_num_entries(rdpt);
-	dbLength = (Nlm_FloatHi) readdb_get_dblen(rdpt);              
-	/*correct the effective size of the database to take out
-	  the number of positions at the end of each sequence where
-	  pattern match cannot start*/
-
-		 
-	while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, 
-                                   &effectiveOccurrences,
-				   program_flag, unfilter_query, query, search->sbp->query_length, is_dna,
-                                   patternSearch, seedSearch, outfp, showDiagnostics, &(search->error_return))) {
-          if (patternSearch->patternProbability > PAT_PROB_THRESH &&
-	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
-             fprintf(outfp, "Pattern %s is too likely to occur in the database to be informative\n",pname);
-          }
-	  else {
-            if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
-              fprintf(outfp, "Due to variable wildcards pattern %s is likely to occur too many times in a single sequence\n",pname);
+    ValNodePtr returnList; /*list of SeqAlignPtrs to return*/
+    ValNodePtr thisValNode; /*scan down input list of ValNodes*/
+    SeqAlignPtr thisList; /*one list of seqAlignPtrs*/
+    Int4 counter; /*counter for SeqAligns*/
+    SeqAlignPtr prevSeqAlign = NULL;
+    SeqAlignPtr currentSeqAlign = NULL , nextSeqAlign = NULL; 
+    /*used to walk down list*/
+    DenseSegPtr curSegs, testSegs; /*Used to extract ids from curSeqAlign, testSeqAlign*/
+    SeqIdPtr curId, testId; /*Ids of target sequences in testSeqAlign*/
+    
+    curId = NULL;
+    returnList = seedReturn;   
+    if (number_of_descriptions > 1) {
+        thisValNode = returnList;
+        while (NULL != thisValNode) {
+            thisList = thisValNode->data.ptrvalue;
+            counter = 0;
+            while ((thisList != NULL) && (counter < (number_of_descriptions + 1))) {
+                if (NULL != currentSeqAlign)
+                    prevSeqAlign = currentSeqAlign;
+                currentSeqAlign = thisList;
+                testSegs = (DenseSegPtr) currentSeqAlign->segs;
+                if(testSegs->ids == NULL)
+                    break;
+                testId = testSegs->ids->next; 
+                if ((NULL == curId) || (!(SeqIdMatch(curId, testId)))) {
+                    counter++;
+                    curSegs = testSegs;
+                    curId = testId;
+                }
+                thisList = thisList->next;
             }
-	    else {
-	      *seed_seq_loc = NULL;
-	      adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
-	      if (0.0 < searchSpEff)
-		adjustdbLength = searchSpEff;
-
-	      for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
-		seed = occurArray[occurIndex];
-		if (showDiagnostics)
-		  fprintf(outfp, "%s pattern %s at position %d of query sequence\n",
-			  pname, pattern, seed);
-		if ((twiceNumMatches=find_hits(list, &query[seed-1], search->sbp->query_length-seed+1, FALSE, patternSearch)) < 2 || 
-		    list[1] != 0) {
-		  fprintf(outfp, "twiceNumMatches=%ld list[1]=%ld\n", (long) twiceNumMatches, (long) list[1]);
-		  BlastConstructErrorMessage("seedEngineCore", "pattern does not match the query at the place", 1, &(search->error_return));
-		  exit(1);
-		}
-		seq_int = SeqIntNew();
-		seq_int->from = occurArray[occurIndex] - 1;
-		seq_int->to = list[2*occurIndex] - list[2*occurIndex+1]
-                             + seq_int->from;
-		seq_int->id = SeqIdDup(search->query_id);
-		ValNodeAddPointer(seed_seq_loc, SEQLOC_INT, seq_int);
-		if (program_flag != PAT_MATCH_FLAG) {
-		  lenPatMatch = list[0]+1;
-		  matchIndex = 0;
-		  query_seq = split_target_seq(query, seed, lenPatMatch, search->sbp->query_length);
-		  if (showDiagnostics)
-		    fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", adjustdbLength, 
-			    patternSearch->patternProbability, 
-			    patternSearch->patternProbability * adjustdbLength);
-		  if (!is_dna) {
-		    /*extra caution about what values are tolerated*/
-		    seedSearch->cutoffScore = eValueFit(
-							MIN(MAX_EVALUE, 10 * options->expect_value), adjustdbLength, 
-							seedSearch, effectiveOccurrences, patternSearch->patternProbability);
-		  }
-		}
-		totalOccurrences = 0;
-
-		if (program_flag != PAT_MATCH_FLAG) {
-
-		  do_the_seed_search(search, rdpt, num_seq,
-				   query_seq, lenPatMatch, is_dna, 
-				   gap_align, patternSearch, seedSearch,
-                                   &matchIndex, &totalOccurrences,
-                                   seedResults);
-
-		  if (matchIndex > 0) 
-		    quicksort_hits(matchIndex, seedResults);
-		  if (showDiagnostics)
-		    fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
-		  search->second_pass_hits += totalOccurrences;
-		  search->second_pass_extends += totalOccurrences;
-		  thisSeqAlign = output_hits(rdpt, FALSE, query, query_seq, 
-					     lenPatMatch, adjustdbLength, gap_align, is_dna, 
-					     effectiveOccurrences, seedSearch, seedResults,
-					     patternSearch, reverseDb, totalOccurrences, 
-					     options->expect_value,  
-					     search->query_id, posEThresh, posSearch, 
-					     matchIndex, &totalBelowEThresh, showDiagnostics,
-					     outfp);
-
-		  nextValNodePtr = (ValNodePtr) MemNew(sizeof(ValNode));
-		  nextValNodePtr->data.ptrvalue = thisSeqAlign;
-		  if (NULL == seqAlignList)
-		    seqAlignList = nextValNodePtr;
-		  else
-		    lastValNodePtr->next = nextValNodePtr;
-		  lastValNodePtr = nextValNodePtr;
-		  
-		  search->number_of_seqs_better_E += totalBelowEThresh;
-		  search->second_pass_good_extends += totalBelowEThresh;
-		  seed_free_all(seedResults);
-		} /*if (program_flag...) */
-	      } /*for (occurIndex ...)*/
-	    }  /*else*/
-	  } /*else*/
-	}
-        MemFree(occurArray);
-	rdpt = readdb_destruct(rdpt);
-        if (seedResults)
-	  MemFree(seedResults);
-        MemFree(patternSearch);
-	return(seqAlignList);
-}
-
-
-/*creates duplicate data structure for each thread of parallel process*/
-static seedParallelItems * seedParallelFill(
-     ReadDBFILEPtr rdpt, qseq_ptr query_seq,
-     Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align,
-     patternSearchItems * patternSearch, seedSearchItems * seedSearch,
-     threadInfoItems *threadInfo)
-{
-    seedParallelItems *returnData;
-
-    returnData = (seedParallelItems *) ckalloc(sizeof(seedParallelItems));
-    returnData->rdpt = readdb_attach(rdpt);
-    if (returnData->rdpt == NULL) {
-      MemFree(returnData);
-      return NULL;
+            if (counter == (number_of_descriptions + 1)) {
+                prevSeqAlign->next = NULL;
+                while(NULL != currentSeqAlign) {
+                    nextSeqAlign = currentSeqAlign->next;
+                    MemFree(currentSeqAlign);
+                    currentSeqAlign = nextSeqAlign;
+                }
+            }
+            thisValNode = thisValNode->next;
+        }
     }
-    returnData->query_seq = query_seq;
-    returnData->lenPatMatch = lenPatMatch;
-    returnData->gap_align = GapAlignBlkNew(1,1); 
-    returnData->gap_align->gap_open = gap_align->gap_open;
-    returnData->gap_align->gap_extend = gap_align->gap_extend;
-    returnData->gap_align->decline_align = gap_align->decline_align;
-    returnData->gap_align->x_parameter = gap_align->x_parameter;
-    returnData->gap_align->matrix = gap_align->matrix;
 
-    returnData->is_dna = is_dna;
-    returnData->patternSearch = patternSearch;
-    returnData->seedSearch = seedSearch;
-    returnData->seedResults = 
-      (seedResultItems *) ckalloc(sizeof(seedResultItems));
-    returnData->totalOccurrences = 0;
-    returnData->matchIndex = 0;
-    returnData->threadInfo = threadInfo;
-    return(returnData);
-    /*NEED to free seedResults when concatenating*/
+    return(returnList);
 }
-
-
-
-/*Handles the time intensive part of the seed search in parallel*/
-static VoidPtr
-parallel_seed_search(VoidPtr seedParallel)
-{
-   Int4 seqIndex;  /*index over sequences*/
-   Int4 seqIndex1; /*index over array of sequence indices*/
-   Int4 lenSeqFromDb;  /* length of seqFromDb */
-   Uint1Ptr seqFromDb; /*newly read sequence from database*/
-   Int4  newOccurrences = 0; /*number of new occurrences of pattern*/
-   hit_ptr hit_list = NULL; /*list of matches to one database sequence*/
-   seedParallelItems *localSeedParallel; /*local copy of seedParallel
-                                   coerced to be of the desired type*/
-   Int4  start=0, stop=0; /*starting and stopping indices for
-                            database search*/
-   Int4 id_list_length; /*number of ids of strings to test against*/
-   Int4Ptr id_list=NULL; /*list of ids of sequences to test against*/
-
-   localSeedParallel = (seedParallelItems * ) seedParallel;
-   id_list = NULL;
-   if (localSeedParallel->threadInfo->global_gi_being_used)
-     id_list = MemNew(localSeedParallel->threadInfo->db_chunk_size*sizeof(Int4));
-
-   while (reentrant_get_db_chunk(localSeedParallel->rdpt, &start, &stop, id_list, &id_list_length,
-                   localSeedParallel->threadInfo) 
-	  != TRUE) {
-     if (id_list) {
-       for (seqIndex1 = 0; seqIndex1 < id_list_length; seqIndex1++) {	    	        seqIndex = id_list[seqIndex1];
-	 lenSeqFromDb = readdb_get_sequence(localSeedParallel->rdpt, 
-					seqIndex, &seqFromDb);
-	 hit_list = get_hits(localSeedParallel->query_seq, 
-                         localSeedParallel->lenPatMatch, seqFromDb, 
- 			 lenSeqFromDb, 
-			 localSeedParallel->gap_align, 
-			 localSeedParallel->is_dna, 
-			 localSeedParallel->patternSearch, 
-			 localSeedParallel->seedSearch, &newOccurrences);
-	 if (newOccurrences > 0)
-	   localSeedParallel->totalOccurrences += newOccurrences;
-	 if (hit_list) {
-	   storeOneMatch(hit_list, seqIndex, seqFromDb, 
-			 localSeedParallel->seedResults); 
-	   localSeedParallel->matchIndex++;
-	 }
-	 /* Emit a tick if needed and we're not MT. */
-	 if (localSeedParallel->threadInfo->db_mutex == NULL)
-	   reentrant_tick_proc(localSeedParallel->threadInfo,seqIndex);
-       }
-     }
-     else {
-       for (seqIndex = start; seqIndex < stop; seqIndex++) {	    	
-	 lenSeqFromDb = readdb_get_sequence(localSeedParallel->rdpt, 
-					seqIndex, &seqFromDb);
-	 hit_list = get_hits(localSeedParallel->query_seq, 
-                         localSeedParallel->lenPatMatch, seqFromDb, 
- 			 lenSeqFromDb, 
-			 localSeedParallel->gap_align, 
-			 localSeedParallel->is_dna, 
-			 localSeedParallel->patternSearch, 
-			 localSeedParallel->seedSearch, &newOccurrences);
-	 if (newOccurrences > 0)
-	   localSeedParallel->totalOccurrences += newOccurrences;
-	 if (hit_list) {
-	   storeOneMatch(hit_list, seqIndex, seqFromDb, 
-			 localSeedParallel->seedResults); 
-	   localSeedParallel->matchIndex++;
-	 }
-	 /* Emit a tick if needed and we're not MT. */
-	 if (localSeedParallel->threadInfo->db_mutex == NULL)
-	   reentrant_tick_proc(localSeedParallel->threadInfo,seqIndex);
-       }
-     }
-   }
-   return ((VoidPtr) localSeedParallel);
-}
-
-
-/*Converts the string in program to a number; sets is_dna to TRUE,
-  if program name indicates DNA sequences will be used*/
-Int4 LIBCALL convertProgramToFlag(Char * program, Boolean * is_dna)
-{
-  Int4 program_flag;  /*flag for program name to return*/
-
-  if (strsame(program, "seed")) { 
-    program_flag = SEED_FLAG; 
-    *is_dna = TRUE;
-  } 
-  else 
-    if (strsame(program, "pattern")) {
-      program_flag = PATTERN_FLAG; 
-      *is_dna = TRUE;
-    } 
-    else 
-      if (strsame(program, "patseed")) {
-	program_flag = PAT_SEED_FLAG; 
-	*is_dna = TRUE;
-      } 
-      else 
-	if (strsame(program, "patmatch")) {
-	  program_flag = PAT_MATCH_FLAG; 
-	  *is_dna = TRUE;
-	} 
-	else 
-	  if (strsame(program, "seedp")) 
-	    program_flag = SEED_FLAG; 
-	  else 
-	    if (strsame(program, "patternp")) 
-	      program_flag = PATTERN_FLAG;
-	    else 
-	      if (strsame(program, "patseedp")) 
-		program_flag = PAT_SEED_FLAG;
-	      else 
-		if (strsame(program, "patmatchp")) 
-		  program_flag = PAT_MATCH_FLAG;
-		else {
-		  ErrPostEx(SEV_FATAL, 0, 0, "name of program not recognized %s \n", program);
-		  return(1);
-		}
-  return(program_flag);
-}
-
 
 /*count the number of occurrences of pattern in sequences that
   do not overlap by more than half the pattern match length*/
@@ -499,10 +222,13 @@ static Int4 countEffectiveOccurrences(Int4 numOccur, Int4 *hitArray, patternSear
   unfilter_seq is the unfiltered version of seq, if filtering is on
   len is the length of seq
   is_dna says whether seq is DNA or proteins*/
-Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHitArray, 
+Char * LIBCALL get_a_pat(
+   FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHitArray, 
    Int4 * numPatOccur, Int4 *numEffectiveOccurrences, Int4 program_flag, 
    Uint1Ptr unfilter_seq, Uint1Ptr seq, Int4 len, Boolean is_dna,
-   patternSearchItems *patternSearch, seedSearchItems * seedSearch, FILE * outfp, Boolean showDiagnostics, ValNodePtr * error_return)
+   patternSearchItems *patternSearch, seedSearchItems * seedSearch,
+   Boolean showDiagnostics, ValNodePtr * error_return, 
+   ValNodePtr PNTR info_vnp)
 {
 
     Char line[BUF_SIZE]; /*line of pattern description read in*/
@@ -516,7 +242,7 @@ Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHi
     Int4 twiceUnfilteredHits; /*twice the number of hits to unfiltered
                                 sequence*/
     Int4 linePlace; /*index for characters on a line*/
-
+    Char buffer[512];
 
     if ((program_flag == PAT_SEED_FLAG) || (program_flag == PAT_MATCH_FLAG)) {
       while (get_pat(fp, seedSearch->pat_space, seedSearch->name_space)) {
@@ -527,13 +253,22 @@ Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHi
             unfilterHitArray = (Int4 *) ckalloc(len * sizeof(Int4));
 	    twiceNumHits = find_hits(hitArray, seq, len, FALSE, patternSearch);
             twiceUnfilteredHits = find_hits(unfilterHitArray, unfilter_seq, len, FALSE, patternSearch);
-            if ((twiceUnfilteredHits > twiceNumHits) && showDiagnostics )
-              fprintf(outfp,"\nWARNING: SEG filtering has wiped out %ld occurrence(s) of this pattern\n", (long) ((twiceUnfilteredHits - twiceNumHits)/2));
-
+            if ((twiceUnfilteredHits > twiceNumHits) && showDiagnostics ) {
+                sprintf(buffer,"\nWARNING: SEG filtering has wiped out "
+                        "%ld occurrence(s) of this pattern\n", 
+                        (long) ((twiceUnfilteredHits - twiceNumHits)/2));
+                ValNodeCopyStr(info_vnp, 0, buffer);
+            }
           }
-          if (program_flag == PAT_SEED_FLAG)
-            if (showDiagnostics)
-	      fprintf(outfp,"\n%ld occurrence(s) of pattern in query\n", (long) twiceNumHits/2);
+
+          if (program_flag == PAT_SEED_FLAG) {
+              if (showDiagnostics) {
+                  sprintf(buffer,"\n%ld occurrence(s) of pattern in query\n", 
+                          (long) twiceNumHits/2);
+                  ValNodeCopyStr(info_vnp, 0, buffer);
+              }
+          }
+
 	  if (twiceNumHits >0) {
 	    /* copy start and stop positions. */
 	    for (hitIndex=0; hitIndex<twiceNumHits; hitIndex++)
@@ -598,6 +333,424 @@ Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHi
       return seedSearch->pat_space;
     }
     return NULL;
+}
+
+ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, 
+                                  BLAST_OptionsBlkPtr options, 
+                                  Uint1Ptr query, Uint1Ptr unfilter_query,
+                                  CharPtr database, CharPtr patfile, 
+                                  Int4 program_flag, FILE * patfp, 
+                                  Boolean is_dna, Boolean reverseDb, 
+                                  seedSearchItems *seedSearch, 
+                                  Nlm_FloatHi posEThresh, 
+                                  Nlm_FloatLo searchSpEff,
+                                  posSearchItems *posSearch, 
+                                  SeqLocPtr *seed_seq_loc, 
+                                  Boolean showDiagnostics,
+                                  ValNodePtr PNTR info_vnp)
+{
+    Nlm_FloatHi  dbLength, adjustdbLength;  /*total number of characters in database*/
+    qseq_ptr query_seq; /*query sequence in record format*/
+    Char  *pattern; /*string description of a pettern*/
+    Char *pname; /*name of pattern*/
+    Int4 seed; /*position in sequence where pattern match starts*/
+    Int4 lenPatMatch; /*number of positions taken by pattern match*/
+    Int4  num_seq; /*number of sequences in database*/
+    Int4 list[MAX_HIT]; /*list of lengths and start positions where
+                          pattern matches sequence*/
+    Int4  *occurArray; /*places in query where pattern occurs*/
+    Int4  *hitArray; /* beginning and end of pattern in query. */
+    Int4  numPatOccur, maxNumPatterns; /*number of pattern occurrences in query string*/
+    Int4  effectiveOccurrences; /*number of occurrences not overlapping
+                                  in more than half the pattern*/
+    Int4  occurIndex;  /*index over pattern ocuurences*/
+    Int4  twiceNumMatches; /*stores return value from find_hits*/
+    Int4  matchIndex;  /*index for matches to a single sequence*/
+    Int4 totalOccurrences = 0; /*total occurrences of pattern in database*/
+    Int4 totalBelowEThresh = 0;
+    seedResultItems *seedResults = NULL; /*holds list of matching sequences*/
+    patternSearchItems *patternSearch = NULL; /*holds parameters
+                                                related to pattern1.c*/
+    SeqAlign *thisSeqAlign = NULL; /*return value from output_hits for
+                                     list of matches to one pattern occurrence*/
+    ValNodePtr seqAlignList = NULL;  /*list of SeqAlign lists to pass back*/
+    ValNodePtr nextValNodePtr = NULL, lastValNodePtr = NULL;  
+    /*pointers into list of SeqAlign lists to pass back*/
+    
+    SeqIntPtr seq_int;
+    GapAlignBlkPtr gap_align; /*local holder for gap_align*/
+
+    Char buffer[512];
+
+    /* --------------- The end of parameters definition --------------- */
+
+    if(info_vnp != NULL)
+        *info_vnp = NULL;
+
+    gap_align = search->gap_align;
+    seedResults = (seedResultItems *) ckalloc(sizeof(seedResultItems));
+    patternSearch = (patternSearchItems *) ckalloc(sizeof(patternSearchItems));
+
+    if (program_flag == PATTERN_FLAG) {
+        search_pat(search->rdfp, patfile, is_dna, seedSearch, 
+                   patternSearch, &(search->error_return), info_vnp);
+        return NULL;
+    } 
+    occurArray = (Int4 *) ckalloc(sizeof(Int4)*search->sbp->query_length*2);
+    hitArray = (Int4 *) MemNew(sizeof(Int4)*search->sbp->query_length*2);
+    
+    dbLength = 0;
+    num_seq = readdb_get_num_entries(search->rdfp);
+    dbLength = (Nlm_FloatHi) readdb_get_dblen(search->rdfp);
+    
+    /*correct the effective size of the database to take out
+      the number of positions at the end of each sequence where
+      pattern match cannot start*/
+    
+    
+    while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, &effectiveOccurrences, program_flag, unfilter_query, query, search->sbp->query_length, is_dna, patternSearch, seedSearch, showDiagnostics, &(search->error_return), info_vnp)) {
+        if (patternSearch->patternProbability > PAT_PROB_THRESH &&
+            (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
+            sprintf(buffer, "Pattern %s is too likely to occur in the database to be informative\n", pname);
+            ValNodeCopyStr(info_vnp, 0, buffer);
+        } else {
+            if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
+                sprintf(buffer, "Due to variable wildcards pattern %s is likely to occur too many times in a single sequence\n", pname);
+                ValNodeCopyStr(info_vnp, 0, buffer);
+            } else {
+                *seed_seq_loc = NULL;
+                adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
+                if (0.0 < searchSpEff)
+                    adjustdbLength = searchSpEff;
+
+                if(options->max_num_patterns == 0 || 
+                   numPatOccur < options->max_num_patterns) {
+                    maxNumPatterns = numPatOccur;
+                } else {
+
+                    sprintf(buffer, "Number of times pattern occur in the sequence %d exceded limit %d. Processing only %d occurences.\n", numPatOccur, options->max_num_patterns, options->max_num_patterns);
+                    ValNodeCopyStr(info_vnp, 0, buffer);
+                    
+                    maxNumPatterns = options->max_num_patterns;
+                }
+
+                for (occurIndex = 0; occurIndex < maxNumPatterns; 
+                     occurIndex++) {
+                    seed = occurArray[occurIndex];
+
+                    if (showDiagnostics) {
+                        sprintf(buffer, "%s pattern %s at position %d "
+                                "of query sequence\n", pname, pattern, seed);
+                        ValNodeCopyStr(info_vnp, 0, buffer);
+                    }
+
+                    if ((twiceNumMatches=find_hits(list, &query[seed-1], search->sbp->query_length-seed+1, FALSE, patternSearch)) < 2 || 
+                        list[1] != 0) {
+                        
+                        sprintf(buffer, "twiceNumMatches=%ld list[1]=%ld\n", 
+                                (long) twiceNumMatches, (long) list[1]);
+                        ValNodeCopyStr(info_vnp, 0, buffer);
+                        
+                        BlastConstructErrorMessage("seedEngineCore", "pattern does not match the query at the place", 1, &(search->error_return));
+                        return NULL;
+                    }
+                    
+                    seq_int = SeqIntNew();
+                    seq_int->from = occurArray[occurIndex] - 1;
+                    seq_int->to = list[2*occurIndex] - list[2*occurIndex+1]
+                        + seq_int->from;
+                    seq_int->id = SeqIdDup(search->query_id);
+                    ValNodeAddPointer(seed_seq_loc, SEQLOC_INT, seq_int);
+                    if (program_flag != PAT_MATCH_FLAG) {
+                        lenPatMatch = list[0]+1;
+                        matchIndex = 0;
+                        query_seq = split_target_seq(query, seed, lenPatMatch, search->sbp->query_length);
+                        if (showDiagnostics) {
+                            sprintf(buffer, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", adjustdbLength, patternSearch->patternProbability, patternSearch->patternProbability * adjustdbLength);
+                            ValNodeCopyStr(info_vnp, 0, buffer);
+                        }
+                        
+                        if (!is_dna) {
+                            /*extra caution about what values are tolerated*/
+                            seedSearch->cutoffScore = eValueFit(
+                                                                MIN(MAX_EVALUE, 10 * options->expect_value), adjustdbLength, 
+                                                                seedSearch, effectiveOccurrences, patternSearch->patternProbability);
+                        }
+                    }
+                    totalOccurrences = 0;
+                    
+                    if (program_flag != PAT_MATCH_FLAG) {
+                        
+                        do_the_seed_search(search, num_seq,
+                                           query_seq, lenPatMatch, is_dna, 
+                                           gap_align, patternSearch, 
+                                           seedSearch, &matchIndex, 
+                                           &totalOccurrences, seedResults);
+                        
+                        if (matchIndex > 0) 
+                            quicksort_hits(matchIndex, seedResults);
+
+                        if (showDiagnostics) {
+                            sprintf(buffer,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
+                            ValNodeCopyStr(info_vnp, 0, buffer);
+                        }
+
+                        search->second_pass_hits += totalOccurrences;
+                        search->second_pass_extends += totalOccurrences;
+                        thisSeqAlign = output_hits(search->rdfp, FALSE, query, query_seq, lenPatMatch, adjustdbLength, gap_align, is_dna, effectiveOccurrences, seedSearch, seedResults, patternSearch, reverseDb, totalOccurrences, options->expect_value, search->query_id, posEThresh, posSearch, matchIndex, &totalBelowEThresh, showDiagnostics, info_vnp);
+
+                        if(query_seq != NULL) {
+                            MemFree(query_seq->lseq);
+                            MemFree(query_seq);
+                        }
+                        
+                        nextValNodePtr = (ValNodePtr) MemNew(sizeof(ValNode));
+                        nextValNodePtr->data.ptrvalue = thisSeqAlign;
+
+                        if (NULL == seqAlignList)
+                            seqAlignList = nextValNodePtr;
+                        else
+                            lastValNodePtr->next = nextValNodePtr;
+
+                        lastValNodePtr = nextValNodePtr;
+                         
+                        search->number_of_seqs_better_E += totalBelowEThresh;
+                        search->second_pass_good_extends += totalBelowEThresh;
+                        seed_free_all(seedResults);
+                    } /*if (program_flag...) */
+                } /*for (occurIndex ...)*/
+	    }  /*else*/
+        } /*else*/
+        MemFree(hitArray); 
+    }
+
+    MemFree(occurArray);
+
+    if (seedResults)
+        MemFree(seedResults);
+
+    MemFree(patternSearch);
+
+    return(seqAlignList);
+}
+
+/*creates duplicate data structure for each thread of parallel process*/
+static seedParallelItems * seedParallelFill(
+     ReadDBFILEPtr rdpt, qseq_ptr query_seq,
+     Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align,
+     patternSearchItems * patternSearch, seedSearchItems * seedSearch,
+     BlastThrInfoPtr thr_info)
+{
+  seedParallelItems *returnData; /*structure to return*/
+    int i,j; /*loop indices*/
+
+    returnData = (seedParallelItems *) ckalloc(sizeof(seedParallelItems));
+
+    returnData->rdpt = readdb_attach(rdpt);
+    
+    if (returnData->rdpt == NULL) {
+        MemFree(returnData);
+        return NULL;
+    }
+
+    returnData->query_seq = query_seq;
+    returnData->lenPatMatch = lenPatMatch;
+    returnData->gap_align = GapAlignBlkNew(1,1); 
+    returnData->gap_align->gap_open = gap_align->gap_open;
+    returnData->gap_align->gap_extend = gap_align->gap_extend;
+    returnData->gap_align->decline_align = gap_align->decline_align;
+    returnData->gap_align->x_parameter = gap_align->x_parameter;
+    returnData->gap_align->matrix = gap_align->matrix;
+
+    returnData->is_dna = is_dna;
+    returnData->patternSearch = (patternSearchItems *) ckalloc(sizeof(patternSearchItems));
+    returnData->patternSearch->numWords = patternSearch->numWords;
+    returnData->patternSearch->match_mask = patternSearch->match_mask;
+    for (i = 0; i < BUF_SIZE; i++)
+      returnData->patternSearch->match_maskL[i] = patternSearch->match_maskL[i];
+    for( i = 0; i < ASCII_SIZE; i++)
+      for(j = 0; j < MaxW; j++)
+	returnData->patternSearch->bitPatternByLetter[i][j] =
+	  patternSearch->bitPatternByLetter[i][j];
+    returnData->patternSearch->whichPositionPtr = patternSearch->whichPositionsByCharacter;
+    for( i = 0; i < ASCII_SIZE; i++)
+      returnData->patternSearch->whichPositionsByCharacter[i] =
+	patternSearch->whichPositionsByCharacter[i];
+    for( i = 0; i < MAX_WORDS_IN_PATTERN; i++)
+      for(j = 0; j < ASCII_SIZE; j++)
+	returnData->patternSearch->SLL[i][j] =
+	  patternSearch->SLL[i][j];
+    returnData->patternSearch->flagPatternLength = patternSearch->flagPatternLength;
+    returnData->patternSearch->patternProbability = patternSearch->patternProbability;
+    returnData->patternSearch->whichMostSpecific = patternSearch->whichMostSpecific;
+    for( i = 0; i < MAX_WORDS_IN_PATTERN; i++)
+      returnData->patternSearch->numPlacesInWord[i] =
+	patternSearch->numPlacesInWord[i];
+
+    for( i = 0; i < MAX_WORDS_IN_PATTERN; i++)
+      returnData->patternSearch->spacing[i] =
+	patternSearch->spacing[i];
+
+    for( i = 0; i < MaxP; i++)
+      returnData->patternSearch->inputPatternMasked[i] =
+	patternSearch->inputPatternMasked[i];
+
+   returnData->patternSearch->highestPlace = patternSearch->highestPlace;
+   returnData->patternSearch->minPatternMatchLength = patternSearch->minPatternMatchLength;
+   returnData->patternSearch->wildcardProduct = patternSearch->wildcardProduct;
+
+   returnData->seedSearch = (seedSearchItems *) ckalloc(sizeof(seedSearchItems));
+   for( i = 0; i < ALPHABET_SIZE; i++)
+     returnData->seedSearch->charMultiple[i] = seedSearch->charMultiple[i];
+   returnData->seedSearch->paramC = seedSearch->paramC;
+   returnData->seedSearch->paramLambda = seedSearch->paramLambda;
+   returnData->seedSearch->paramK = seedSearch->paramK;
+   returnData->seedSearch->cutoffScore = seedSearch->cutoffScore;
+   for( i = 0; i < ALPHABET_SIZE; i++)
+     returnData->seedSearch->standardProb[i] = seedSearch->standardProb[i];
+   for( i = 0; i < ASCII_SIZE; i++)
+     returnData->seedSearch->order[i] = seedSearch->order[i];
+   for( i = 0; i <= ALPHABET_SIZE; i++)
+     returnData->seedSearch->pchars[i] = seedSearch->pchars[i];
+   for( i = 0; i <= BUF_SIZE; i++)
+     returnData->seedSearch->name_space[i] = seedSearch->name_space[i];
+   for( i = 0; i <= PATTERN_SPACE_SIZE; i++)
+     returnData->seedSearch->pat_space[i] = seedSearch->pat_space[i];
+
+    returnData->seedResults = 
+      (seedResultItems *) ckalloc(sizeof(seedResultItems));
+    returnData->totalOccurrences = 0;
+    returnData->matchIndex = 0;
+    returnData->thr_info = thr_info;
+
+    return(returnData);
+    /*NEED to free seedResults when concatenating*/
+}
+
+/*Handles the time intensive part of the seed search in parallel*/
+static VoidPtr
+parallel_seed_search(VoidPtr seedParallel)
+{
+    Int4 seqIndex;  /*index over sequences*/
+    Int4 seqIndex1; /*index over array of sequence indices*/
+    Int4 lenSeqFromDb;  /* length of seqFromDb */
+    Uint1Ptr seqFromDb; /*newly read sequence from database*/
+    Int4  newOccurrences = 0; /*number of new occurrences of pattern*/
+    hit_ptr hit_list = NULL; /*list of matches to one database sequence*/
+    seedParallelItems *localSeedParallel; /*local copy of seedParallel
+                                            coerced to be of the desired type*/
+    Int4  start=0, stop=0; /*starting and stopping indices for
+                             database search*/
+    Int4 id_list_length; /*number of ids of strings to test against*/
+    Int4Ptr id_list=NULL; /*list of ids of sequences to test against*/
+    
+    localSeedParallel = (seedParallelItems * ) seedParallel;
+    id_list = NULL;
+    if (localSeedParallel->thr_info->blast_gi_list != NULL ||
+        localSeedParallel->rdpt->oidlist != NULL) {
+        id_list = MemNew(localSeedParallel->thr_info->db_chunk_size*
+                         sizeof(Int4));
+    }
+
+    while (BlastGetDbChunk(localSeedParallel->rdpt, &start, &stop, id_list, &id_list_length, localSeedParallel->thr_info) != TRUE) {
+        if (id_list) {
+            for (seqIndex1 = 0; seqIndex1 < id_list_length; seqIndex1++) {	    	        seqIndex = id_list[seqIndex1];
+            lenSeqFromDb = readdb_get_sequence(localSeedParallel->rdpt, 
+                                               seqIndex, &seqFromDb);
+            hit_list = get_hits(localSeedParallel->query_seq, 
+                                localSeedParallel->lenPatMatch, seqFromDb, 
+                                lenSeqFromDb, 
+                                localSeedParallel->gap_align, 
+                                localSeedParallel->is_dna, 
+                                localSeedParallel->patternSearch, 
+                                localSeedParallel->seedSearch, &newOccurrences);
+            if (newOccurrences > 0)
+                localSeedParallel->totalOccurrences += newOccurrences;
+            if (hit_list) {
+                storeOneMatch(hit_list, seqIndex, seqFromDb, 
+                              localSeedParallel->seedResults); 
+                localSeedParallel->matchIndex++;
+            }
+            /* Emit a tick if needed and we're not MT. */
+            if (localSeedParallel->thr_info->db_mutex == NULL)
+                BlastTickProc(seqIndex, localSeedParallel->thr_info);
+            }
+        } else {
+            for (seqIndex = start; seqIndex < stop; seqIndex++) {	    	
+                lenSeqFromDb = readdb_get_sequence(localSeedParallel->rdpt, 
+                                                   seqIndex, &seqFromDb);
+                hit_list = get_hits(localSeedParallel->query_seq, 
+                                    localSeedParallel->lenPatMatch, seqFromDb, 
+                                    lenSeqFromDb, 
+                                    localSeedParallel->gap_align, 
+                                    localSeedParallel->is_dna, 
+                                    localSeedParallel->patternSearch, 
+                                    localSeedParallel->seedSearch, &newOccurrences);
+                if (newOccurrences > 0)
+                    localSeedParallel->totalOccurrences += newOccurrences;
+                if (hit_list) {
+                    storeOneMatch(hit_list, seqIndex, seqFromDb, 
+                                  localSeedParallel->seedResults); 
+                    localSeedParallel->matchIndex++;
+                }
+                /* Emit a tick if needed and we're not MT. */
+                if (localSeedParallel->thr_info->db_mutex == NULL)
+                    BlastTickProc(seqIndex, localSeedParallel->thr_info);
+                
+            }
+        }
+    }
+    
+    if (localSeedParallel->thr_info->blast_gi_list != NULL ||
+        localSeedParallel->rdpt->oidlist != NULL)    
+        MemFree(id_list);
+    
+    return ((VoidPtr) localSeedParallel);
+}
+
+
+/*Converts the string in program to a number; sets is_dna to TRUE,
+  if program name indicates DNA sequences will be used*/
+Int4 LIBCALL convertProgramToFlag(Char * program, Boolean * is_dna)
+{
+  Int4 program_flag;  /*flag for program name to return*/
+
+  if (strsame(program, "seed")) { 
+    program_flag = SEED_FLAG; 
+    *is_dna = TRUE;
+  } 
+  else 
+    if (strsame(program, "pattern")) {
+      program_flag = PATTERN_FLAG; 
+      *is_dna = TRUE;
+    } 
+    else 
+      if (strsame(program, "patseed")) {
+	program_flag = PAT_SEED_FLAG; 
+	*is_dna = TRUE;
+      } 
+      else 
+	if (strsame(program, "patmatch")) {
+	  program_flag = PAT_MATCH_FLAG; 
+	  *is_dna = TRUE;
+	} 
+	else 
+	  if (strsame(program, "seedp")) 
+	    program_flag = SEED_FLAG; 
+	  else 
+	    if (strsame(program, "patternp")) 
+	      program_flag = PATTERN_FLAG;
+	    else 
+	      if (strsame(program, "patseedp")) 
+		program_flag = PAT_SEED_FLAG;
+	      else 
+		if (strsame(program, "patmatchp")) 
+		  program_flag = PAT_MATCH_FLAG;
+		else {
+		  ErrPostEx(SEV_FATAL, 0, 0, "name of program not recognized %s \n", program);
+		  return(1);
+		}
+  return(program_flag);
 }
 
 /*Free all the memory on a list of hits associated with one matching sequence*/
@@ -911,14 +1064,15 @@ ScorePtr putScoresInSeqAlign(Int4 rawScore, Nlm_FloatHi eValue, Nlm_FloatHi lamb
     
 SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	    Boolean score_only, Uint1 *seq1, qseq_ptr qp, 
-	    Int4 len, Nlm_FloatHi dbLength, GapAlignBlkPtr gap_align, Boolean is_dna,
-            Int4 effectiveOccurrences,
+	    Int4 len, Nlm_FloatHi dbLength, GapAlignBlkPtr gap_align, 
+            Boolean is_dna, Int4 effectiveOccurrences,
             seedSearchItems *seedSearch, seedResultItems *seedResults, 
             patternSearchItems * patternSearch, Boolean reverse, 
             Int4 numOccurences, Nlm_FloatHi eThresh,
             SeqIdPtr query_id, Nlm_FloatHi posEthresh, 
             posSearchItems *posSearch, Int4 numMatches,
-            Int4 * totalBelowEThresh, Boolean showDiagnostics, FILE * outfp)
+            Int4 * totalBelowEThresh, Boolean showDiagnostics,
+            ValNodePtr PNTR info_vnp)
 {
     store_ptr oneMatch;  /*one matching sequence, used as loop index*/
     hit_ptr oneHit; /*one hit reprsenting one place query matches 
@@ -964,6 +1118,8 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
                             + numMatches*/
     Int4 posBaseIndex; /*loop index for copying pos results arrays*/
 
+    Char tmpbuf[512];
+
     probability = ((Nlm_FloatHi) numOccurences /  dbLength);
     oldNumber = -1;
     if (score_only) {
@@ -983,17 +1139,17 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	                 *oneHit->mul;
 
 	  if (eValueForMatch <= eThresh) {
-	    if (oneMatch->seqno != oldNumber) {
-	      fprintf(outfp,"%d\t%s\n", oneMatch->seqno, buff);
-	    }
-	    fprintf(outfp,"%.3g Total Score %ld Outside Pattern Score %ld Match start in db seq %ld\n       Extent in query seq %ld %ld Extent in db seq %ld %ld\n", eValueForMatch, 
-		   oneHit->score, (long) oneHit->l_score, (long) oneHit->hit_pos,
-		   (long) oneHit->bi+1, (long) oneHit->ei, (long) oneHit->bj+1, (long) oneHit->ej);
-	  }
-          else
-	    if (oneMatch->seqno != oldNumber)
-	      eThreshWarning = FALSE;
-	  oldNumber = oneMatch->seqno;
+              if (oneMatch->seqno != oldNumber) {
+                  sprintf(tmpbuf, "%d\t%s\n", oneMatch->seqno, buff);
+                  ValNodeCopyStr(info_vnp, 0, tmpbuf);
+              }
+              sprintf(tmpbuf, "%.3g Total Score %ld Outside Pattern Score %ld Match start in db seq %ld\n       Extent in query seq %ld %ld Extent in db seq %ld %ld\n", eValueForMatch, oneHit->score, (long) oneHit->l_score, (long) oneHit->hit_pos, (long) oneHit->bi+1, (long) oneHit->ei, (long) oneHit->bj+1, (long) oneHit->ej);
+              ValNodeCopyStr(info_vnp, 0, tmpbuf);
+	  } else {
+              if (oneMatch->seqno != oldNumber)
+                  eThreshWarning = FALSE;
+              oldNumber = oneMatch->seqno;
+          }
 	}
       }
     } 
@@ -1003,37 +1159,15 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
       sseq = qp->sseq;
       llen = qp->llen; 
       rlen = qp->rlen;
-      if (posEthresh > 0.0) {
-        if (posSearch->threshSequences) {
-	  totalNumMatches = posSearch->posNumSequences + numMatches;
-          posBaseIndex = posSearch->posNumSequences;
-          tempPosThreshSequences = (Int4 *) 
-	    MemNew(totalNumMatches * sizeof(Int4));
-          for (p = 0; p < posSearch->posNumSequences; p++)
-	    tempPosThreshSequences[p] = posSearch->threshSequences[p];
-          MemFree(posSearch->threshSequences);
-          posSearch->threshSequences = tempPosThreshSequences;
-          totalNumMatches = posSearch->posResultsCounter + numMatches;
-          tempPosResultSequences = (Int4 *) 
-	    MemNew(totalNumMatches * sizeof(Int4));
-          for (p = 0; p < posSearch->posResultsCounter; p++)
-	    tempPosResultSequences[p] = posSearch->posResultSequences[p];
-          MemFree(posSearch->posResultSequences);
-          posSearch->posResultSequences = tempPosResultSequences;
 
-        }
-        else {
+      if(posEthresh > 0.0) {
           posSearch->posNumSequences = 0;
-          posSearch->threshSequences = (Int4 *) MemNew(numMatches * 
-							  sizeof(Int4));
           posSearch->posResultSequences = (Int4 *) MemNew(numMatches * 
 							  sizeof(Int4));
           posSearch->posResultsCounter = 0;
           posBaseIndex = 0;
-	}
-	for (p = posBaseIndex; p < posBaseIndex + numMatches; p++) 
-	  posSearch->threshSequences[p] = 0;
       }
+
       for (oneMatch = seedResults->listOfMatchingSequences; 
 	   oneMatch; oneMatch = oneMatch->next) {
         /*retrieve description of sequence*/
@@ -1061,15 +1195,15 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
            dbLength, seedSearch->paramC, seedSearch->paramLambda, probability, effectiveOccurrences);
           eValueForMatch*=oneHit->mul;
           if (eValueForMatch <= eThresh) {
-	    if ((posEthresh > 0.0) && (oneMatch->seqno != oldNumber)) { 
-	      if (eValueForMatch < posEthresh) {
-                posSearch->threshSequences[posSearch->posNumSequences] = 1;
-                posSearch->posResultSequences[posSearch->posResultsCounter] =
-                  oneMatch->seqno;
-                posSearch->posResultsCounter++;
+              
+              if ((posEthresh > 0.0) && (oneMatch->seqno != oldNumber)) { 
+                  if (eValueForMatch < posEthresh) {
+                      posSearch->posResultSequences[posSearch->posResultsCounter] = oneMatch->seqno;
+                      posSearch->posResultsCounter++;
+                  } 
+                  posSearch->posNumSequences++;
               }
-              posSearch->posNumSequences++;
-	    }
+              
 	    /* if (oneMatch->seqno != oldNumber)
 	       printf("\n%d\t%s\n", oneMatch->seqno, buff);
 	       printf("\n E-value = %.3g: \n", eValueForMatch);
@@ -1102,6 +1236,8 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 						     oneHit->bj);  
 	    nextSeqAlign = GapXEditBlockToSeqAlign(nextEditBlock, sip, 
 						   query_id);
+            GapXEditBlockDelete(nextEditBlock);
+
 	    nextSeqAlign->score = putScoresInSeqAlign(oneHit->l_score,
 						      eValueForMatch,seedSearch->paramLambda, seedSearch->paramC);
 	    if (NULL == seqAlignList)
@@ -1123,10 +1259,14 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	MemFree(reverseAlignScript); 
       }
     }
-    if (eThreshWarning && showDiagnostics)
-      fprintf(outfp, "WARNING: There may be more matching sequences with e-values below the threshold of %lf\n", eThresh);
+    if (eThreshWarning && showDiagnostics) {
+        sprintf(tmpbuf, "WARNING: There may be more matching sequences with e-values below the threshold of %lf\n", eThresh);
+        ValNodeCopyStr(info_vnp, 0, tmpbuf);
+    }
+    
     if (buffer)
-      MemFree(buffer);
+        MemFree(buffer);
+    
     return(seqAlignList);
 }
 
@@ -1147,63 +1287,28 @@ void LIBCALL storeOneMatch(hit_ptr hit_list, Int4 seqno, Uint1Ptr seq,
     seedResults->listOfMatchingSequences = sp;
 }
 
-
-
-/*Bubble sort the entries in qs from index i through j*/
-void bbsort(store_ptr *qs, Int4 i, Int4 j)
+static int LIBCALLBACK SeedSortHits(VoidPtr i, VoidPtr j)
 {
-    Int4 x, y; /*loop bounds for the two ends of the array to be sorted*/
-    store_ptr sp; /*temporary pointer for swapping*/
-    for (x = j; x > i; x--) {
-      for (y = i; y < x; y++) {
-	if (qs[y]->l_score > qs[y+1]->l_score) {
-	  /*swap pointers for inverted adjacent elements*/
-	  sp = qs[y];
-	  qs[y] = qs[y+1]; 
-	  qs[y+1] = sp;
-	}
-      }
-    }
-}
+    store_ptr sp1, sp2;
+    
+    
+    sp1 =  *((store_ptr *) i);
+    sp2 =  *((store_ptr *) j);
+    
+    if (sp1->l_score > sp2->l_score)
+        return (1);
+    
+    if (sp1->l_score < sp2->l_score)
+        return (-1);
 
-/*quicksort the entries in qs from qs[i] through qs[j] */
-void quicksort(store_ptr *qs, Int4 i, Int4 j)
-{
-    Int4 lf, rt;  /*left and right fingers into the array*/
-    Int4 partitionScore; /*score to partition around*/
-    store_ptr tp; /*temporary pointer for swapping*/
-    if (j-i <= SORT_THRESHOLD) {
-      bbsort(qs, i,j);
-      return;
+    if(sp1->l_score == sp2->l_score) {
+        if (sp1->seqno > sp2->seqno)
+            return 1;
+        if (sp1->seqno < sp2->seqno)
+            return -1;
     }
-    /*implicitly choose qs[i] as the partition element*/
-    lf = i+1; 
-    rt = j; 
-    partitionScore = qs[i]->l_score;
-    /*partititon around partitionScore = qs[i]*/
-    while (lf <= rt) {
-      while (qs[lf]->l_score <= partitionScore) 
-	lf++;
-      while (qs[rt]->l_score > partitionScore) 
-	rt--;
-      if (lf < rt) {
-	/*swap elements on wrong side of partition*/
-	tp = qs[lf];
-	qs[lf] = qs[rt];
-	qs[rt] = tp;
-	rt--;
-	lf++;
-      } 
-      else 
-	break;
-    }
-    /*swap partition element into middle position*/
-    tp = qs[i];
-    qs[i] = qs[rt]; 
-    qs[rt] = tp;
-    /*call recursively on two parts*/
-    quicksort(qs, i,rt-1); 
-    quicksort(qs, rt+1, j);
+    
+    return (0);
 }
 
 /*Sort the sequences that hit the query by increasing score;
@@ -1219,57 +1324,27 @@ void LIBCALL quicksort_hits(Int4 no_of_seq, seedResultItems *seedResults)
 
     /*Copy the list starting from seedResults->listOfMatchingSequences 
       into the array qs*/
-    qs = (store_ptr *) ckalloc(sizeof(store_ptr)*(no_of_seq+1));
+    qs = (store_ptr *) MemNew(sizeof(store_ptr)*(no_of_seq));
+
     for (i = 0, sp = seedResults->listOfMatchingSequences; 
-	 i < no_of_seq; i++, sp = sp->next) 
-      qs[i] = sp;
-    /*Put sentinel at the end of the array*/
-    qs[i] = &sentinel; 
-    sentinel.l_score = SEED_INFINITY;
-    quicksort(qs, 0, no_of_seq-1);
+	 i < no_of_seq; i++, sp = sp->next) {
+        qs[i] = sp;
+    }
+
+    HeapSort(qs, no_of_seq, sizeof(store_ptr), SeedSortHits);
+
     /*Copy back to the list starting at seedResults->listOfMatchingSequences*/
+
     for (i = no_of_seq-1; i > 0; i--)
-      qs[i]->next = qs[i-1];
+        qs[i]->next = qs[i-1];
+    
     qs[0]->next = NULL;
+
     seedResults->listOfMatchingSequences = qs[no_of_seq-1];
-    free(qs);
+    MemFree(qs);
+
+    return;
 }
-
-/* ckopen -------------------------------------- open file; check for success */
-/* FILE *ckopen(Char *name, Char *mode)
-{
-  FILE *fp;
-
-  if ((fp = FileOpen(name, mode)) == NULL)
-    fatalf("Cannot open %s.", name);
-  return fp;
-} */
-
-/* ckalloc ----------------------------- allocate space; check for success 
-  amount is the number of bytes to allocate*/
-/* Char *ckalloc(Int4 amount)
-{
-  char *p; 
-
-  if ((p = MemNew( (unsigned) amount)) == NULL)
-    fatal("Ran out of memory.");
-  return p;
-} */
-
-/* strsame --------------------------- tell whether two strings are identical */
-/* Int4 strsame(char *s, char *t)
-{
-  return (strcmp(s, t) == 0);
-} */
-
-/* strsave ----------------------- save string s somewhere; return address */
-/*Char *strsave(Char *s)
-{
-  Char *copy;
-  
-  copy = (Char *) ckalloc(strlen(s)+1);	comment: +1 to hold '\0' 
-  return strcpy(copy, s);
-} */
 
 /*Initialize the order of letters in the alphabet, the score matrix,
 and the row sums of the score matrix. matrixToFill is the
@@ -1361,17 +1436,21 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
 }
 
 /*write out a line with pattern ID pname and pattern content pat*/
-static void pat_write_head(char *pat, char *pname, FILE *outfp)
+static void pat_write_head(char *pat, char *pname, ValNodePtr PNTR info_vnp)
 {
-    fprintf(outfp,"\nID  %sPA  %s", pname, pat);
+    Char buffer[512];
+
+    sprintf(buffer,"\nID  %sPA  %s", pname, pat);
+    ValNodeCopyStr(info_vnp, 0, buffer);
+    
+    return;
 }
 
 
 /*Search for occurrences of all patterns in the file
   patternFileName occurring the database pointed to by rdpt
   is_dna is true if and only if the sequences are DNA sequences*/
-void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch,
-ValNodePtr * error_return, FILE *outfp)
+void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch, ValNodePtr * error_return, ValNodePtr PNTR info_vnp)
 {
     FILE *fp;  /*file descriptor for pattern file*/
     Char *pat; /*description of current pattern*/
@@ -1385,6 +1464,7 @@ ValNodePtr * error_return, FILE *outfp)
     Int4  numMatches; /*number of matches to current sequence*/
     Int4  seqno; /*index over all sequences*/
     SeqIdPtr sip; /*Description of the sequence from the database*/
+    Char buffer[512];
 
     /*FIXED bug here on amount allocated*/
     hitArray = (Int4 *) ckalloc(sizeof(Int4)*MAX_HIT*2);
@@ -1404,14 +1484,18 @@ ValNodePtr * error_return, FILE *outfp)
 	    if (sip)
 	      SeqIdWrite(sip, buff, PRINTID_FASTA_LONG, sizeof(buff));
 	    sip = SeqIdSetFree(sip);
-	    fprintf(outfp,"seqno=%d\t%s\n", seqno, buff);
-	    pat_write_head(pat, pname,outfp);
+	    sprintf(buffer,"seqno=%d\t%s\n", seqno, buff);
+            ValNodeCopyStr(info_vnp, 0, buffer);
+	    pat_write_head(pat, pname, info_vnp);
 	  }
 	  for (i = 0; i < numMatches; i+=2) {
-            if (is_dna)
-              fprintf(outfp,"HI (%ld %ld)\n", (long) hitArray[i+1], (long) hitArray[i]);
-	    else
-	      pat_output(seq, hitArray[i+1], hitArray[i], patternSearch, outfp);
+              if (is_dna) {
+                  sprintf(buffer,"HI (%ld %ld)\n", (long) hitArray[i+1], (long) hitArray[i]);
+                  ValNodeCopyStr(info_vnp, 0, buffer);
+              } else {
+                  pat_output(seq, hitArray[i+1], hitArray[i], 
+                             patternSearch, info_vnp);
+              }
 	  }
 	}
       }
@@ -1439,323 +1523,132 @@ static Uint1Ptr reverseSequence(Uint1Ptr seqFromDb, Int4 lenSeqFromDb)
   return(returnSeq);
 }
 
-static void initThreadInfo(threadInfoItems *threadInfo, BlastSearchBlkPtr search)
-{
-   threadInfo->global_gi_current = 0;
-   threadInfo->global_gi_being_used = FALSE;
-   threadInfo->db_mutex = NULL;
-   threadInfo->results_mutex = NULL;
-   threadInfo->callback_mutex = NULL;
-   threadInfo->global_seqid_list = NULL;
-   threadInfo->global_seqid_ptr = NULL;
-   threadInfo->global_gi_current = 0;
-   threadInfo->db_chunk_last = 0;
-   threadInfo->db_chunk_size = BLAST_DB_CHUNK_SIZE;  
-   threadInfo->final_db_seq = 0;  
-   threadInfo->db_incr = 0;
-   threadInfo->number_seqs_done = 0;
-   threadInfo->blast_gi_list = search->blast_gi_list;
-   threadInfo->tick_callback = search->tick_callback;
-}
-
-
-/*
-	Function to assign chunks of the database to a thread.  
-	The "start" and "stop" points are returned by the arguments.
-	Note that this is a half-closed interval (stop is not searched).
-
-	The Int4 "db_chunk_last" (a global variable) keeps track of the last 
-	database number assigned and is only changed if the db_mutex has been acquired.
-
-	The Boolean done specifies that the search has already been
-	completed.
-*/
-
-static Boolean
-reentrant_get_db_chunk(ReadDBFILEPtr rdpt, Int4Ptr start, Int4Ptr stop, Int4Ptr id_list, Int4Ptr id_list_number, threadInfoItems *threadInfo)
-
-{
-	BlastGiListPtr blast_gi_list;
-	Boolean done=FALSE;
-        Int4 index, index1, number, gi_list_start, gi_list_end, ordinal_id, last_ordinal_id;
-	SeqIdPtr sip;
-
-
-	if (threadInfo->global_gi_being_used)
-	{
-		blast_gi_list = threadInfo->blast_gi_list;
-		if (threadInfo->global_gi_current < blast_gi_list->total)
-		{
-			*id_list_number = 0;
-			number = 0;
-			while (*id_list_number == 0)
-			{
-				NlmMutexLock(threadInfo->db_mutex);
-				number = MIN(threadInfo->db_chunk_size, ((blast_gi_list->total) - threadInfo->global_gi_current));
-				if (number <= 0)
-				{
-					NlmMutexUnlock(threadInfo->db_mutex);
-					break;
-				}
-
-				gi_list_start = threadInfo->global_gi_current;
-				threadInfo->global_gi_current += number;
-				gi_list_end = threadInfo->global_gi_current;
-				
-				NlmMutexUnlock(threadInfo->db_mutex);
-				index1 = 0;
-				last_ordinal_id = -1;
-				for (index=gi_list_start; index<gi_list_end; index++)
-				{
-					ordinal_id = blast_gi_list->gi_list_pointer[index]->ordinal_id;
-					if (ordinal_id > 0 && last_ordinal_id != ordinal_id)
-					{
-						id_list[index1] = ordinal_id;
-						last_ordinal_id = ordinal_id;
-						index1++;
-					}
-				}
-				*id_list_number = index1;
-			}
-		}
-		else
-		{
-			done = TRUE;
-		}
-	}
-	else if (threadInfo->global_seqid_list)
-	{    /* global_seqid_list indicates there is a list of selected ID's, 
-	     global_seqid_ptr is the position in the list. */
-		NlmMutexLock(threadInfo->db_mutex);
-		sip = threadInfo->global_seqid_ptr;
-		if (sip == NULL)
-		{
-			NlmMutexUnlock(threadInfo->db_mutex);
-			return TRUE;
-		}
-
-		ordinal_id = SeqId2OrdinalId(rdpt, sip);
-		while (ordinal_id < 0 && sip)
-		{
-			threadInfo->global_seqid_ptr = threadInfo->global_seqid_ptr->next;
-			sip = threadInfo->global_seqid_ptr;
-			ordinal_id = SeqId2OrdinalId(rdpt, sip);
-		}
-
-		if (threadInfo->global_seqid_ptr)
-		{
-			*start = ordinal_id;
-			*stop = ordinal_id+1;
-			done = FALSE;
-			threadInfo->global_seqid_ptr = threadInfo->global_seqid_ptr->next;
-		}
-		else
-		{
-			done = TRUE;
-		}
-
-		NlmMutexUnlock(threadInfo->db_mutex);
-	}
-	else
-	{
-		if (threadInfo->db_mutex)
-		{
-			NlmMutexLock(threadInfo->db_mutex);
-
-			/* Emit a tick if needed. */
-			reentrant_tick_proc(threadInfo, threadInfo->db_chunk_last);
-			*start = threadInfo->db_chunk_last;
-			if (threadInfo->db_chunk_last < threadInfo->final_db_seq)
-			{
-				*stop = MIN((threadInfo->db_chunk_last+ threadInfo->db_chunk_size), threadInfo->final_db_seq);
-			}
-			else 
-			{/* Already finished. */
-				*stop = threadInfo->db_chunk_last;
-				done = TRUE;
-			}
-			threadInfo->db_chunk_last = *stop;
-			NlmMutexUnlock(threadInfo->db_mutex);
-		}
-		else
-		{
-			if (*stop != threadInfo->final_db_seq)
-			{
-				done = FALSE;
-				*start = 0;
-				*stop = threadInfo->final_db_seq;
-			}
-			else
-			{
-				done = TRUE;
-			}
-		}
-	}
-
-	return done;
-}
-
-static void do_the_seed_search(BlastSearchBlkPtr search,
-  ReadDBFILEPtr rdfp, Int4 num_seq, 
+static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq, 
   qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, 
   GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, 
   seedSearchItems * seedSearch, Int4 * matchIndex, Int4 * totalOccurrences,
   seedResultItems * seedResults)
 {
-  Int2 threadIndex, secondIndex; /*indices over threads*/
-  Int4 number_of_entries;  /*number of entries in the database*/
-  threadInfoItems threadInfo;  /*keeps some information that is manipulated
-                                       by the different threads*/
-
-  seedParallelItems **seedParallelArray; /*keeps search information for each thread*/
-  TNlmThread PNTR thread_array;
-  VoidPtr status=NULL;
-  store_ptr endOfList; /*end of list of matching seuqnecs*/
-  ReadDBFILEPtr local_rdfp; /*local copy for indexing down a list*/
-  if (search == NULL)
-    return;
-
-  initThreadInfo(&threadInfo, search);
-  threadInfo.number_seqs_done = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
-  threadInfo.db_incr = num_seq / BLAST_NTICKS;
-
-  /*readjustment of final_db_seq needs to be after initThreadInfo*/
-  if (search->pbp->final_db_seq > 0)
-    threadInfo.final_db_seq = search->pbp->final_db_seq;
-  else
-    threadInfo.final_db_seq = readdb_get_num_entries_total(search->rdfp);
-
-  if (search->blast_gi_list) {
-    threadInfo.global_gi_current = 0;
-    threadInfo.global_gi_being_used = TRUE;
-  }
-  else 
-    if (search->blast_seqid_list)	{
-      threadInfo.global_seqid_list = search->blast_seqid_list->seqid_list;
-      threadInfo.global_seqid_ptr = search->blast_seqid_list->seqid_list;
-    }
-    else {
-      threadInfo.global_seqid_list = NULL;
-      threadInfo.global_seqid_ptr = NULL;
-    }
-
-  BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
-
-  if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
-    number_of_entries = INT4_MAX;
-    /* Look for smallest database. */
-    local_rdfp = rdfp;
-    while (local_rdfp) {
-      number_of_entries = MIN(number_of_entries, readdb_get_num_entries(local_rdfp));
-      local_rdfp = local_rdfp->next;
-    }
-    /* Divide up the chunks differently if db is small. */
-    if (threadInfo.db_chunk_size*(search->pbp->process_num) > number_of_entries) {
-      /* check that it is at least one. */
-      threadInfo.db_chunk_size = MAX(number_of_entries/(search->pbp->process_num), 1);
-    }
-    NlmMutexInit(&(threadInfo.db_mutex));
-    NlmMutexInit(&(threadInfo.results_mutex));
-
-    seedParallelArray = (seedParallelItems **) 
-      MemNew((search->pbp->process_num)*sizeof(seedParallelItems *));
-    for (threadIndex = 0; threadIndex<search->pbp->process_num; threadIndex++) 
-      seedParallelArray[threadIndex] =  seedParallelFill(
-	  rdfp, query_seq, lenPatMatch, is_dna, gap_align,
-	   patternSearch,  seedSearch, &threadInfo);
-
-    thread_array = (TNlmThread PNTR) MemNew((search->pbp->process_num)*sizeof(TNlmThread));
-    for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) {
-      thread_array[threadIndex] = NlmThreadCreateEx(parallel_seed_search, (VoidPtr) seedParallelArray[threadIndex], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
-
-      if (NlmThreadCompare(thread_array[threadIndex], NULL_thread)) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Unable to open thread.");
-      }
-    }
-    for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) 
-      {
-	NlmThreadJoin(thread_array[threadIndex], &status);
-      }
+    Int2 threadIndex, secondIndex; /*indices over threads*/
+    Int4 number_of_entries;  /*number of entries in the database*/
+    seedParallelItems **seedParallelArray; /*keeps search information for each thread*/
+    TNlmThread PNTR thread_array;
+    VoidPtr status=NULL;
+    store_ptr endOfList; /*end of list of matching seuqnecs*/
+    ReadDBFILEPtr local_rdfp; /*local copy for indexing down a list*/
     
-    seedResults->listOfMatchingSequences = NULL;
-    for (threadIndex=0; threadIndex< search->pbp->process_num; threadIndex++) {
-      if (NULL != seedParallelArray[threadIndex]->seedResults->listOfMatchingSequences) {
-        seedResults->listOfMatchingSequences = seedParallelArray[threadIndex]->seedResults->listOfMatchingSequences;
-        break;
-      }
-    }
+    if (search == NULL)
+        return;
 
-    endOfList = seedResults->listOfMatchingSequences;
-    for (secondIndex= threadIndex; secondIndex< search->pbp->process_num; secondIndex++) {
-      while(NULL != endOfList->next)
-        endOfList = endOfList->next;
-      if (secondIndex < (search->pbp->process_num - 1))
-	endOfList->next = seedParallelArray[secondIndex+1]->seedResults->listOfMatchingSequences;
-    }
-   
-    thread_array = MemFree(thread_array);
+    search->thr_info->last_db_seq = 0; /* This should be reset */
+    search->thr_info->db_chunk_last = 0;
+    
+    search->thr_info->number_seqs_done = 
+        search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
 
-    NlmMutexDestroy(threadInfo.db_mutex);
-    threadInfo.db_mutex = NULL;
-    NlmMutexDestroy(threadInfo.results_mutex);
-    threadInfo.results_mutex = NULL;
-    *matchIndex = 0;
-    *totalOccurrences = 0;
-    for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) {
-      (*matchIndex) += seedParallelArray[threadIndex]->matchIndex;
-      (*totalOccurrences) += seedParallelArray[threadIndex]->totalOccurrences;
-    }
-  }
-  else {
-    seedParallelArray = (seedParallelItems **) 
-      MemNew(1*sizeof(seedParallelItems *));
-    seedParallelArray[0] =  seedParallelFill( rdfp, query_seq, 
-						lenPatMatch, is_dna, gap_align,
-						patternSearch, seedSearch,
-						&threadInfo);
-    parallel_seed_search((VoidPtr) seedParallelArray[0]);
-    (*matchIndex) += seedParallelArray[0]->matchIndex;
-    (*totalOccurrences) += seedParallelArray[0]->totalOccurrences;
-    seedResults->listOfMatchingSequences = 
-      seedParallelArray[0]->seedResults->listOfMatchingSequences;
-  }
-    for (threadIndex=0; threadIndex < MAX(1,threadIndex<search->pbp->process_num); threadIndex++)
-    MemFree(seedParallelArray[threadIndex]);
-  
-  MemFree(seedParallelArray); 
+    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
+    
+    /*readjustment of final_db_seq needs to be after initThreadInfo*/
+    if (search->pbp->final_db_seq > 0)
+        search->thr_info->final_db_seq = search->pbp->final_db_seq;
+    else
+        search->thr_info->final_db_seq = readdb_get_num_entries_total(search->rdfp);
+    
+    BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
+    
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
+        number_of_entries = INT4_MAX;
+        /* Look for smallest database. */
+        /* local_rdfp = readdb_attach(search->rdfp); */
+        local_rdfp = search->rdfp;
 
+        while (local_rdfp) {
+            number_of_entries = MIN(number_of_entries, readdb_get_num_entries(local_rdfp));
+            local_rdfp = local_rdfp->next;
+        }
+        /* Divide up the chunks differently if db is small. */
+        if (search->thr_info->db_chunk_size*(search->pbp->process_num) > number_of_entries) {
+            /* check that it is at least one. */
+            search->thr_info->db_chunk_size = MAX(number_of_entries/(search->pbp->process_num), 1);
+        }
+        NlmMutexInit(&(search->thr_info->db_mutex));
+        NlmMutexInit(&(search->thr_info->results_mutex));
+        
+        seedParallelArray = (seedParallelItems **) 
+            MemNew((search->pbp->process_num)*sizeof(seedParallelItems *));
+        for (threadIndex = 0; threadIndex<search->pbp->process_num; threadIndex++) 
+            seedParallelArray[threadIndex] =  seedParallelFill(
+                   search->rdfp, query_seq, lenPatMatch, is_dna, gap_align,
+                   patternSearch,  seedSearch, search->thr_info);
+        
+        thread_array = (TNlmThread PNTR) MemNew((search->pbp->process_num)*sizeof(TNlmThread));
+        for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) {
+            thread_array[threadIndex] = NlmThreadCreateEx(parallel_seed_search, (VoidPtr) seedParallelArray[threadIndex], THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
+            
+            if (NlmThreadCompare(thread_array[threadIndex], NULL_thread)) {
+                ErrPostEx(SEV_ERROR, 0, 0, "Unable to open thread.");
+            }
+        }
+        for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++)  {
+            NlmThreadJoin(thread_array[threadIndex], &status);
+        }
+        
+        seedResults->listOfMatchingSequences = NULL;
+        for (threadIndex=0; threadIndex< search->pbp->process_num; threadIndex++) {
+            if (NULL != seedParallelArray[threadIndex]->seedResults->listOfMatchingSequences) {
+                seedResults->listOfMatchingSequences = seedParallelArray[threadIndex]->seedResults->listOfMatchingSequences;
+                break;
+            }
+        }
+        
+        endOfList = seedResults->listOfMatchingSequences;
+        for (secondIndex= threadIndex; secondIndex< search->pbp->process_num; secondIndex++) {
+            while(NULL != endOfList->next)
+                endOfList = endOfList->next;
+            if (secondIndex < (search->pbp->process_num - 1))
+                endOfList->next = seedParallelArray[secondIndex+1]->seedResults->listOfMatchingSequences;
+        }
+        
+        thread_array = MemFree(thread_array);
+        
+        NlmMutexDestroy(search->thr_info->db_mutex);
+        search->thr_info->db_mutex = NULL;
+        NlmMutexDestroy(search->thr_info->results_mutex);
+        search->thr_info->results_mutex = NULL;
+        NlmMutexDestroy(search->thr_info->callback_mutex);
+        search->thr_info->callback_mutex = NULL;
+
+        *matchIndex = 0;
+        *totalOccurrences = 0;
+        for (threadIndex=0; threadIndex<search->pbp->process_num; threadIndex++) {
+            (*matchIndex) += seedParallelArray[threadIndex]->matchIndex;
+            (*totalOccurrences) += seedParallelArray[threadIndex]->totalOccurrences;
+        }
+    } else {
+        seedParallelArray = (seedParallelItems **) 
+            MemNew(1*sizeof(seedParallelItems *));
+        seedParallelArray[0] =  seedParallelFill(search->rdfp, query_seq, 
+                                                 lenPatMatch, is_dna, gap_align,
+                                                 patternSearch, seedSearch,
+                                                 search->thr_info);
+        parallel_seed_search((VoidPtr) seedParallelArray[0]);
+        (*matchIndex) += seedParallelArray[0]->matchIndex;
+        (*totalOccurrences) += seedParallelArray[0]->totalOccurrences;
+        seedResults->listOfMatchingSequences = 
+            seedParallelArray[0]->seedResults->listOfMatchingSequences;
+    }
+    for (threadIndex=0; threadIndex < search->pbp->process_num; threadIndex++) {
+        readdb_destruct(seedParallelArray[threadIndex]->rdpt);
+        seedParallelArray[threadIndex]->rdpt = NULL;
+        GapAlignBlkDelete(seedParallelArray[threadIndex]->gap_align);
+        MemFree(seedParallelArray[threadIndex]);
+    }
+    MemFree(seedParallelArray); 
+    
 #ifdef RLIMIT_CPU
-  signal(SIGXCPU, SIG_IGN);
+    signal(SIGXCPU, SIG_IGN);
 #endif
-  return;
-}
-
-
-/*
-	The function that decides whether or not a tick should be
-	emitted.  This is performed through the callback function
-	("tick_callback") that is set in "do_the_blast_run".  This
-	function is called from "parallel_seed_search" for single processing
-	machines and "reentrant_get_db_chunk" 
-        for MT machines, after the db_mutex
-	has been obtained in "get_db_chunk".
-*/
-
-static void reentrant_tick_proc(threadInfoItems * threadInfo,
-                 Int4 sequence_number)
-
-{
-	if(sequence_number > (threadInfo->number_seqs_done+ threadInfo->db_incr))
-	{
-		NlmMutexLockEx(&(threadInfo->callback_mutex));
-		threadInfo->number_seqs_done += threadInfo->db_incr;
-		if (threadInfo->tick_callback)
-		{
-			threadInfo->tick_callback(sequence_number, 0);
-		}
-		NlmMutexUnlock(threadInfo->callback_mutex);
-	}
-	return;
+    return;
 }
 
 Boolean  my_time_out_boolean;

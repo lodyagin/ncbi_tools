@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: sentinel graphs
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gphdraw.c,v $
+* Revision 6.9  1999/10/04 17:46:23  kans
+* include vibrant.h
+*
 * Revision 6.8  1999/03/12 14:23:34  kuzio
 * cast
 *
@@ -50,6 +53,7 @@
 * ==========================================================================
 */
 
+#include <vibrant.h>
 #include <sequtil.h>
 #include <drawingp.h>
 #include <gphdraw.h>

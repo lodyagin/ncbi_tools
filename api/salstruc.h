@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: salstruc.h,v $
+* Revision 6.4  1999/11/24 21:24:29  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
 *
 * ==========================================================================
 */
@@ -48,20 +48,32 @@
 #include <salsa.h>
 #include <txalign.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**********************************************************************/
-extern SelStructPtr     BufferFree (SelStructPtr ssp);
-extern EditAlignDataPtr SetupDataBuffer (EditAlignDataPtr adp);
-extern EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp);
+NLM_EXTERN SelStructPtr     BufferFree (SelStructPtr ssp);
+NLM_EXTERN EditAlignDataPtr SetupDataBuffer (EditAlignDataPtr adp);
+NLM_EXTERN EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp);
 
-extern CharPtr      next_notemptyline (ValNodePtr anp_list, ValNodePtr linebuff, Int2 numberalignline, Int2 *index, Int4 start, Int4 *drw_width, TextAlignBufPtr *tdp, AlignNodePtr *anp);
+NLM_EXTERN CharPtr      next_notemptyline (ValNodePtr anp_list, ValNodePtr linebuff, Int2 numberalignline, Int2 *index, Int4 start, Int4 *drw_width, TextAlignBufPtr *tdp, AlignNodePtr *anp);
 
-extern SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list);
-extern ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boolean include_stop);
-extern void         data_collect_arrange (EditAlignDataPtr adp, Boolean recollect);
+NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list);
+NLM_EXTERN ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boolean include_stop);
+NLM_EXTERN void         data_collect_arrange (EditAlignDataPtr adp, Boolean recollect);
  
-extern CharPtr      get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN CharPtr      get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
 
-extern Boolean      read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *linebuff, Int4 bufferstart, Int4 minbufferlength, Int2 *numberalignline);
+NLM_EXTERN Boolean      read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *linebuff, Int4 bufferstart, Int4 minbufferlength, Int2 *numberalignline);
 
 /**********************************
 ***
@@ -70,12 +82,12 @@ extern Boolean      read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr 
 ***   providing TopSeqEntry sep allows to modify the SeqAlign if any
 ***
 ***********************************/
-extern Boolean BioseqTrimN (BioseqPtr bsp, SeqEntryPtr sep);
+NLM_EXTERN Boolean BioseqTrimN (BioseqPtr bsp, SeqEntryPtr sep);
 
 /*******************************************************************
 *** AddFeatFunc
 ******************************************************************/
-extern ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Uint2 itemsubtype);
+NLM_EXTERN ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Uint2 itemsubtype);
 /******************************************************************
 *
 ***    CollectFeatureForEditor
@@ -83,20 +95,26 @@ extern ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Uint2 
 ***      anp: the AlignNode belong to the target Seq-loc
 ***      csop: the option for gathering the features
 ******************************************************************/
-extern ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat);
+NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat);
 
 /**********************************************************************
 ***  Display alignment in several formats
 *** 
 **********************************************************************/
-extern void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ssp, Int2 leftmargin, Int4 printfrom, Int4 printto, Boolean html_option);
+NLM_EXTERN void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPtr ssp, Int2 leftmargin, Int4 printfrom, Int4 printto, Boolean html_option);
 
-extern void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f);
-
-extern SeqAnnotPtr multseqalign_from_pairseqalign (SeqAlignPtr salp);
-extern SeqAlignPtr PairSeqAlign2MultiSeqAlign (SeqAlignPtr salp);
-extern Int2 LIBCALLBACK MultSeqAlignFromPairSeqAlign (Pointer data);
+NLM_EXTERN void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f);
 
 
+#ifdef __cplusplus
+}
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
 #endif

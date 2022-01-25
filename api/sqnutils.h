@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.33 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -76,6 +76,7 @@ NLM_EXTERN SeqEntryPtr LIBCALL FindNthSeqEntry (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNthBioseq (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNthSequinEntry (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNucSeqEntry (SeqEntryPtr sep);
+NLM_EXTERN SeqEntryPtr LIBCALL FindBioseqSetByClass (SeqEntryPtr sep, Uint1 _class);
 
 NLM_EXTERN Boolean LIBCALL SeqEntryHasNucs (SeqEntryPtr sep);
 NLM_EXTERN Boolean LIBCALL SeqEntryHasProts (SeqEntryPtr sep);
@@ -169,6 +170,10 @@ NLM_EXTERN Uint2 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer 
 
 NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype);
 
+/* finds bioseq from (cds) product, gets largest protein feature packaged on it */
+
+NLM_EXTERN SeqFeatPtr LIBCALL GetBestProteinFeatureUnindexed (SeqLocPtr product);
+
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
 
@@ -204,12 +209,30 @@ NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, B
 
 NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
 
-
 NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
 NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
 NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
+
+/* for sorting and uniquing valnode list by (charptr) data.ptrvalue */
+
+NLM_EXTERN int LIBCALLBACK SortVnpByString (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN ValNodePtr UniqueValNode (ValNodePtr list);
+
+/* keytag sorts/uniques and then owns valnode character list */
+
+typedef struct keytag {
+  Int2               num;
+  ValNodePtr         list;
+  CharPtr PNTR       index; /* elements point into above valnode list */
+} KeyTag;                   /* used as substructure, not allocated separately */
+
+NLM_EXTERN void KeyTagInit (KeyTag PNTR ktp, ValNodePtr list);
+NLM_EXTERN void KeyTagClear (KeyTag PNTR ktp);
+
+NLM_EXTERN Int2 KeyFromTag (KeyTag PNTR ktp, CharPtr tag);
+NLM_EXTERN CharPtr TagFromKey (KeyTag PNTR ktp, Int2 key);
 
 /* from Colombe */
 NLM_EXTERN SeqLocPtr StringSearchInBioseq (SeqIdPtr sip, CharPtr sub);
@@ -266,7 +289,8 @@ NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode);
 /* AddIntervalToLocation is a convenience function to add a single interval, and is called by
 ReadAsnFastaOrFlatFile internally. */
 
-NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start, Int4 stop);
+NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start,
+                                            Int4 stop, Boolean partial5, Boolean partial3);
 
 /* AddQualifierToFeature applies cds product and gene qualifiers as protref or generef stored
 as feature xrefs.  Most others (e.g., protein_id) are stored as gbquals.  PromoteXrefs can then
@@ -279,6 +303,18 @@ does several other conversions, all without changing the itemID structure (which
 require reindexing) */
 
 NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep);
+
+/* general purpose text finite state machine */
+/* based on Practical Algorithms for Programmers by Binstock and Rex */
+
+struct TextFsa;
+typedef struct TextFsa* TextFsaPtr;
+
+NLM_EXTERN TextFsaPtr TextFsaNew (void);
+NLM_EXTERN void TextFsaAdd (TextFsaPtr tbl, CharPtr word);
+NLM_EXTERN Int2 TextFsaNext (TextFsaPtr tbl, Int2 currState, Char ch, ValNodePtr PNTR matches);
+NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl);
+
 
 #ifdef __cplusplus
 }

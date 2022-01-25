@@ -1,4 +1,4 @@
-/*
+/* $Id: pattern1.c,v 6.11 1999/09/22 17:51:02 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,8 +30,14 @@ File name: pattern1.c
 Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
- 
- 
+
+$Revision: 6.11 $ 
+
+$Log: pattern1.c,v $
+Revision 6.11  1999/09/22 17:51:02  shavirin
+Now functions will collect messages in ValNodePtr before printing out.
+
+
 *****************************************************************************/
 
 
@@ -166,6 +172,7 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
     patternSearch->wildcardProduct = 1;
     currentWildcardProduct = 1;
     prevSetMask = 0;
+    currentSetMask = 0;
 
     for (i = 0 ; i < MaxP; i++) {
       patternSearch->inputPatternMasked[i] = 0; 
@@ -1522,7 +1529,7 @@ Int4 LIBCALL align_of_pattern(Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,
 /*print output for sequence seq starting at offset begin and
 ending at offset end
 called once for each match*/
-void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, FILE * outfp)
+void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, ValNodePtr PNTR info_vnp)
 {
     Int4 startSeqMatch, endSeqMatch; /*positions in seq where
                                        pattern match starts and ends*/
@@ -1535,8 +1542,10 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
               sequence used across each variable-length region in pattern*/
     Int4 numPlacesInWord[MAX_WORDS_IN_PATTERN]; /*number of places in each word
                                                 of the pattern*/
+    Char buffer[512];
 
-    fprintf(outfp, "HI "); /*Fixed printing command here*/
+    ValNodeCopyStr(info_vnp, 0, "HI "); /*Fixed printing command here*/
+    
     if (patternSearch->flagPatternLength == ONE_WORD_PATTERN) {
       get_pat(seq+begin, end-begin+1, &startSeqMatch, &endSeqMatch, patternSearch);
     }
@@ -1559,27 +1568,31 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	}
 	position = begin;
 	for (wordIndex = 0; wordIndex < patternSearch->numWords; wordIndex++) {
-	  fprintf(outfp, "(%ld %ld)", (long) position, (long) position+numPlacesInWord[wordIndex]-1);
+	  sprintf(buffer, "(%ld %ld)", (long) position, (long) position+numPlacesInWord[wordIndex]-1);
+          ValNodeCopyStr(info_vnp, 0, buffer);
 	  position += numPlacesInWord[wordIndex]+spacingArray[wordIndex+1];
 	} 
-	fprintf(outfp, "\n");
+        ValNodeCopyStr(info_vnp, 0, "\n");
 	return;
-      } 
+      }
     nextMatchStart  = 0;
     for (i = startSeqMatch; i <= endSeqMatch; ) {
       if (patternSearch->inputPatternMasked[i] != allone) {
 	i++;
-      } 
-      else {
-	fprintf(outfp, "(%ld %ld) ", (long) (begin+nextMatchStart), (long) (begin+i-1));
-	for (; patternSearch->inputPatternMasked[i] == allone && i <= endSeqMatch; i++) ;
-	nextMatchStart = i;
+      } else {
+          sprintf(buffer, "(%ld %ld) ", (long) (begin+nextMatchStart), (long) (begin+i-1));
+          ValNodeCopyStr(info_vnp, 0, buffer);
+          
+          for (; patternSearch->inputPatternMasked[i] == allone && i <= endSeqMatch; i++) ;
+          nextMatchStart = i;
       }
     }
-    if (nextMatchStart != i)  /*last match*/
-      fprintf(outfp,"(%ld %ld)\n", (long) (begin+nextMatchStart), (long) (begin+i-1));
-    else 
-      fprintf(outfp, "\n");
+    if (nextMatchStart != i) {  /*last match*/
+        sprintf(buffer, "(%ld %ld)\n", (long) (begin+nextMatchStart), (long) (begin+i-1));
+        ValNodeCopyStr(info_vnp, 0, buffer);
+    } else { 
+        ValNodeCopyStr(info_vnp, 0, "\n");
+    }
 }
 
 /*find the places where the pattern matches seq;

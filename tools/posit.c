@@ -22,9 +22,7 @@
 *  Please cite the author in any work or product based on this material.
 *
 * ===========================================================================
-*/
-
-/*****************************************************************************
+*
 
 File name: posit.c
 
@@ -32,28 +30,53 @@ Author: Alejandro Schaffer
 
 Contents: utilities for position-based BLAST.
 
+$Revision: 6.38 $ 
+ *****************************************************************************
 
-*****************************************************************************/
-/* $Revision: 6.27 $ */
-/* $Log: posit.c,v $
-/* Revision 6.27  1999/09/03 17:24:38  madden
-/* Eliminated use of posMaxThresh field in posSearchItems.  Recoded findThreshSequences completely and changed CposComputation so as not to use search->result_struct and thereby eliminate the hidden assumption that search->result_struct and listOfSeqAligns have the matches listed in the same order
-/*
-/* Revision 6.26  1999/08/04 13:27:10  madden
-/* Added -B option
-/*
-/* Revision 6.25  1999/04/05 14:45:40  madden
-/* Fixed format mismatches
-/*
-/* Revision 6.24  1999/03/21 19:41:51  madden
-/* Added 3rd argument matrixfp to outputPosMatrix, Took some of the code in outputPosMatrix outside the #ifdef POSIT_DEBUG for use with -Q option
-/*
-/* Revision 6.23  1999/01/26 18:27:58  madden
-/* Made functions public for AS
-/*
-/* Revision 6.22  1998/12/09 18:51:51  madden
-/* fixed counting bug in posCancel
-/*
+ * $Log: posit.c,v $
+ * Revision 6.38  1999/12/16 19:18:00  egorov
+ * Code cleanup
+ *
+ * Revision 6.37  1999/11/16 21:33:46  shavirin
+ * Fixed bug involved posSearch->posResultSequences structure.
+ *
+ * Revision 6.36  1999/11/16 17:30:41  shavirin
+ * Added copying use_best_align parameter in copySearchItems.
+ *
+ * Revision 6.35  1999/11/15 22:21:09  shavirin
+ * Removed nested comments in log space.
+ *
+ * Revision 6.34  1999/11/15 21:48:31  shavirin
+ * Added possibility to take into account best alignments of all
+ * alignments (even with e-thresh value larger than threshhold)
+ *
+ * Revision 6.33  1999/10/21 16:15:04  shavirin
+ * Removed unused array and all references to array threshSequences
+ *
+ * Revision 6.32  1999/09/30 14:15:29  shavirin
+ * Fixed bug in the function findThreshSequences().
+ *
+ * Revision 6.31  1999/09/23 20:58:37  shavirin
+ * Fixed some memory leaks.
+ *
+ * Revision 6.27  1999/09/03 17:24:38  madden
+ * Eliminated use of posMaxThresh field in posSearchItems.  Recoded findThreshSequences completely and changed CposComputation so as not to use search->result_struct and thereby eliminate the hidden assumption that search->result_struct and listOfSeqAligns have the matches listed in the same order
+ *
+ * Revision 6.26  1999/08/04 13:27:10  madden
+ * Added -B option
+ *
+ * Revision 6.25  1999/04/05 14:45:40  madden
+ * Fixed format mismatches
+ *
+ * Revision 6.24  1999/03/21 19:41:51  madden
+ * Added 3rd argument matrixfp to outputPosMatrix, Took some of the code in outputPosMatrix outside the #ifdef POSIT_DEBUG for use with -Q option
+ *
+ * Revision 6.23  1999/01/26 18:27:58  madden
+ * Made functions public for AS
+ *
+ * Revision 6.22  1998/12/09 18:51:51  madden
+ * fixed counting bug in posCancel
+ *
  * Revision 6.21  1998/09/28 12:31:31  madden
  * Used BlastConstructErrorMessage
  *
@@ -186,12 +209,12 @@ Contents: utilities for position-based BLAST.
 */
 
 
-#include<ncbi.h>
+#include <ncbi.h>
 #include <blastpri.h>
-#include<objcode.h>
-#include<objseq.h>
-#include<objsset.h>
-#include<sequtil.h>
+#include <objcode.h>
+#include <objseq.h>
+#include <objsset.h>
+#include <sequtil.h>
 #include <posit.h>
 #include <txalign.h>
 
@@ -357,16 +380,19 @@ static void posFreeMemory(posSearchItems *posSearch, Int4 querySize)
   MemFree(posSearch->posCount);
   MemFree(posSearch->posExtents);
   MemFree(posSearch->posSigma);
-  MemFree(posSearch->threshSequences);
+
   for(i = 0; i <= querySize; i++){
     MemFree(posSearch->posC[i]);
     MemFree(posSearch->posMatrix[i]);
     MemFree(posSearch->posPrivateMatrix[i]);
     MemFree(posSearch->posMatchWeights[i]);
   }
+
   MemFree(posSearch->posC);
+
   for(i = 0; i <= posSearch->posDescMatrixLength; i++)
     MemFree(posSearch->posDescMatrix[i]);
+
   MemFree(posSearch->posMatrix);
   MemFree(posSearch->posPrivateMatrix);
   MemFree(posSearch->posDescMatrix);
@@ -423,6 +449,10 @@ static Nlm_FloatHi minEvalueForSequence(SeqAlignPtr curSeqAlign, SeqAlignPtr lis
    testSeqAlign = listOfSeqAligns;
    while (NULL != testSeqAlign) {
      testSegs = (DenseSegPtr) testSeqAlign->segs;
+
+     if(testSegs->ids == NULL)
+         break;
+
      testId = testSegs->ids->next; 
      if (SeqIdMatch(curId, testId)) {
          seen = TRUE;
@@ -447,28 +477,30 @@ Important assumption: All SeqAligns with  the same target sequence
 are consecutive in the list*/
 static Int4 countSeqAligns(SeqAlignPtr listOfSeqAligns, Int4 * numSequences, Boolean useThreshold, Nlm_FloatHi threshold)
 {
-   SeqAlignPtr curSeqAlign, prevSeqAlign;
-   Int4 seqAlignCounter;
-   DenseSegPtr curSegs;
-   SeqIdPtr curId, prevId; /*Ids of target sequences in current and previous
-                             SeqAlign*/
-
-   seqAlignCounter = 0;
-   *numSequences = 0;
-   curSeqAlign = listOfSeqAligns;
-   prevSeqAlign = NULL;
-   while (NULL != curSeqAlign) {
-     seqAlignCounter++;
-     curSegs = (DenseSegPtr) curSeqAlign->segs;
-     curId = curSegs->ids->next; 
-     if ((NULL == prevSeqAlign) ||  (!(SeqIdMatch(curId, prevId))))
-       if (!useThreshold || (threshold > minEvalueForSequence(curSeqAlign, listOfSeqAligns)))
-	 (*numSequences)++;
-     prevSeqAlign = curSeqAlign;
-     prevId = curId;
-     curSeqAlign = curSeqAlign->next;
-   }
-   return(seqAlignCounter);
+    SeqAlignPtr curSeqAlign, prevSeqAlign;
+    Int4 seqAlignCounter;
+    DenseSegPtr curSegs;
+    SeqIdPtr curId, prevId; /*Ids of target sequences in current and previous
+                              SeqAlign*/
+    
+    seqAlignCounter = 0;
+    *numSequences = 0;
+    curSeqAlign = listOfSeqAligns;
+    prevSeqAlign = NULL;
+    while (NULL != curSeqAlign) {
+        curSegs = (DenseSegPtr) curSeqAlign->segs;
+        if(curSegs->ids == NULL)
+            break;
+        curId = curSegs->ids->next; 
+        seqAlignCounter++;
+        if ((NULL == prevSeqAlign) ||  (!(SeqIdMatch(curId, prevId))))
+            if (!useThreshold || (threshold > minEvalueForSequence(curSeqAlign, listOfSeqAligns)))
+                (*numSequences)++;
+        prevSeqAlign = curSeqAlign;
+        prevId = curId;
+        curSeqAlign = curSeqAlign->next;
+    }
+    return(seqAlignCounter);
 }
 
 /*Find which sequences that match in the i-th pass have an e-value below
@@ -477,45 +509,38 @@ static Int4 countSeqAligns(SeqAlignPtr listOfSeqAligns, Int4 * numSequences, Boo
 static void findThreshSequences(posSearchItems *posSearch, BlastSearchBlkPtr search, SeqAlignPtr listOfSeqAligns, Int4 numalign, Int4 numseq)
 {
 
-   Int4 seqIndex, alignIndex; /* indices for sequences and alignments*/
-   SeqAlignPtr curSeqAlign, prevSeqAlign; /* pointers into list of seqAligns*/
-   DenseSegPtr curSegs;  /*Item in list of seqAligns*/
-   SeqIdPtr thisId, prevId; /*Ids of target sequences in current and previous
-			   SeqAlign*/  
-   Nlm_FloatHi thisEvalue; /*Best E-value for current sequence*/
-   Int4 ordinalNumber; /*index of sequence within database*/
+    Int4 alignIndex; /* indices for sequences and alignments*/
+    SeqAlignPtr curSeqAlign, prevSeqAlign; /* pointers into list of seqAligns*/
+    DenseSegPtr curSegs;  /*Item in list of seqAligns*/
+    SeqIdPtr thisId, prevId; /*Ids of target sequences in current and previous
+                               SeqAlign*/  
+    Nlm_FloatHi thisEvalue; /*Best E-value for current sequence*/
+    Int4 ordinalNumber; /*index of sequence within database*/
+    
+    /*Allocate boolean array to store values*/
+    posSearch->posResultSequences = (Int4 *) MemNew(numseq * sizeof(Int4));
+    posSearch->posResultsCounter = 0;
 
-
-
-   /*Allocate boolean array to store values*/
-   posSearch->threshSequences = (Int4 *) MemNew(numseq * sizeof(Int4)); 
-   posSearch->posResultSequences = (Int4 *) MemNew(numseq * sizeof(Int4));
-   posSearch->posResultsCounter = 0;
-   if (NULL == posSearch->threshSequences)
-     exit(EXIT_FAILURE);
-   for(seqIndex = 0; seqIndex < numseq; seqIndex++)
-     posSearch->threshSequences[seqIndex] = 0;
-   curSeqAlign = listOfSeqAligns;
-   prevSeqAlign = NULL;
-   for(alignIndex = 0; alignIndex < numalign; alignIndex++) {
-    curSegs = (DenseSegPtr) curSeqAlign->segs;
-    thisId = curSegs->ids->next;
-    if ((NULL == prevSeqAlign) ||  (!(SeqIdMatch(thisId, prevId)))) {
-      thisEvalue = minEvalueForSequence(curSeqAlign, curSeqAlign);
-      thisId = curSegs->ids->next;  /*id of target sequence is second*/
-      /*Get ordinal ids of sequences in result*/
-      ordinalNumber = SeqId2OrdinalId(search->rdfp, thisId);
-      if(thisEvalue < (search->pbp->ethresh)) {
-	posSearch->threshSequences[seqIndex] = 1;
-	posSearch->posResultSequences[posSearch->posResultsCounter] =
-           ordinalNumber;
-	posSearch->posResultsCounter++;
-      }
+    curSeqAlign = listOfSeqAligns;
+    prevSeqAlign = NULL;
+    for(alignIndex = 0; alignIndex < numalign; alignIndex++) {
+        curSegs = (DenseSegPtr) curSeqAlign->segs;
+        thisId = curSegs->ids->next;
+        if ((NULL == prevSeqAlign) ||  (!(SeqIdMatch(thisId, prevId)))) {
+            thisEvalue = minEvalueForSequence(curSeqAlign, curSeqAlign);
+            thisId = curSegs->ids->next;  /*id of target sequence is second*/
+            /*Get ordinal ids of sequences in result*/
+            ordinalNumber = SeqId2OrdinalId(search->rdfp, thisId);
+            if(thisEvalue < (search->pbp->ethresh)) {
+                posSearch->posResultSequences[posSearch->posResultsCounter] =
+                    ordinalNumber;
+                posSearch->posResultsCounter++;
+            }
+        }
+        prevSeqAlign = curSeqAlign;
+        prevId = thisId;
+        curSeqAlign = curSeqAlign->next;
     }
-    prevSeqAlign = curSeqAlign;
-    prevId = thisId;
-    curSeqAlign = curSeqAlign->next;
-  }
 }
 
 
@@ -796,6 +821,7 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
    Int4 numsegs; /*Number of pieces in the gapped alignment*/
    Int4 segIndex; /*Index for which piece we are at*/
    Nlm_FloatHi thisEvalue;  /*evalue of current partial alignment*/
+   Boolean is_new_id = FALSE;
 
    q = compactSearch->query;
    length = compactSearch->qlength;
@@ -808,69 +834,88 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
      posSearch->posC[c][q[c]]++;
      posSearch->posCount[c]++;
    }
-   numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, TRUE, compactSearch->ethresh);
+
+   numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, 
+                                 !compactSearch->use_best_align, 
+                                 compactSearch->ethresh);
+   
    posSearch->posNumSequences = numseq;
    /*use only those sequences below e-value threshold*/
    seqIndex = 0;
    curSeqAlign = listOfSeqAligns;
    prevSeqAlign = NULL;
-   while (curSeqAlign != NULL) {
-     if ((thisEvalue = getEvalueFromSeqAlign(curSeqAlign)) < compactSearch->ethresh) {
+   for(curSeqAlign = listOfSeqAligns; curSeqAlign != NULL; 
+       curSeqAlign = curSeqAlign->next) {
+       is_new_id = FALSE;
+
+       thisEvalue = getEvalueFromSeqAlign(curSeqAlign);
+
        curSegs = (DenseSegPtr) curSeqAlign->segs;
        if (NULL != prevSeqAlign) {
-	 prevSegs = (DenseSegPtr) prevSeqAlign->segs;
-         curId = curSegs->ids->next; 
-         prevId = prevSegs->ids->next;
-	 if (!(SeqIdMatch(curId, prevId)))
-	   seqIndex++;
+           prevSegs = (DenseSegPtr) prevSeqAlign->segs;
+           
+           if(curSegs->ids == NULL) 
+               break;
+           
+           curId = curSegs->ids->next; 
+           prevId = prevSegs->ids->next;
+           if (!(SeqIdMatch(curId, prevId)))
+               is_new_id = TRUE;
        }
+       
+       if(!(compactSearch->use_best_align && is_new_id)) { 
+           if (thisEvalue >= compactSearch->ethresh)
+               continue;
+       }
+       
+       if(is_new_id == TRUE)
+           seqIndex++;
+       
        s = GetSequenceWithDenseSeg(curSegs, FALSE, &retrievalOffset, &subjectLength);
        startQ = 0;
        startS = 1;
        numsegs = curSegs->numseg;
        for(segIndex = 0; segIndex < numsegs; segIndex++) {
-	 queryOffset = curSegs->starts[startQ];
-         if (curSegs->starts[startS] != GAP_HERE)
-	   subjectOffset = curSegs->starts[startS] - retrievalOffset;
-	 else
-           subjectOffset = GAP_HERE;
-	 matchLength = curSegs->lens[segIndex];
-	 if ((GAP_HERE ) == queryOffset) {
-	   ; /*do nothing, gap in query*/
-	 }
-	 else
-	   if ((GAP_HERE) == subjectOffset) {
-	     for(c = 0, qplace = queryOffset;
-		 c < matchLength; c++, qplace++) {
-	       posSearch->posDescMatrix[seqIndex + 1][qplace].used = TRUE;
-	       posSearch->posDescMatrix[seqIndex + 1][qplace].letter = GAP_CHAR;
-	       posSearch->posDescMatrix[seqIndex + 1][qplace].e_value = 1.0;
-	     }
-	   }
-	   else {  /*no gap*/
-	     for(c = 0, qplace = queryOffset, splace = subjectOffset;
-		 c < matchLength; c++, qplace++, splace++) {
-	       if ((!posSearch->posDescMatrix[seqIndex+1][qplace].used) ||
-		   (thisEvalue 
-		    < posSearch->posDescMatrix[seqIndex+1][qplace].e_value)) 
-		 if (!posSearch->posDescMatrix[seqIndex+1][qplace].used)
-		   {
-		     posSearch->posDescMatrix[seqIndex+1][qplace].letter = (Int1) s[splace]; 
-		     posSearch->posDescMatrix[seqIndex+1][qplace].used = TRUE; 
-		     posSearch->posDescMatrix[seqIndex+1][qplace].e_value = 
-		       thisEvalue;
-		   }
-	     }
-	   }
-	 startQ += 2;
-	 startS += 2;
+           queryOffset = curSegs->starts[startQ];
+           if (curSegs->starts[startS] != GAP_HERE)
+               subjectOffset = curSegs->starts[startS] - retrievalOffset;
+           else
+               subjectOffset = GAP_HERE;
+           matchLength = curSegs->lens[segIndex];
+           if ((GAP_HERE ) == queryOffset) {
+               ; /*do nothing, gap in query*/
+           }
+           else
+               if ((GAP_HERE) == subjectOffset) {
+                   for(c = 0, qplace = queryOffset;
+                       c < matchLength; c++, qplace++) {
+                       posSearch->posDescMatrix[seqIndex + 1][qplace].used = TRUE;
+                       posSearch->posDescMatrix[seqIndex + 1][qplace].letter = GAP_CHAR;
+                       posSearch->posDescMatrix[seqIndex + 1][qplace].e_value = 1.0;
+                   }
+               }
+               else {  /*no gap*/
+                   for(c = 0, qplace = queryOffset, splace = subjectOffset;
+                       c < matchLength; c++, qplace++, splace++) {
+                       if ((!posSearch->posDescMatrix[seqIndex+1][qplace].used) ||
+                           (thisEvalue 
+                            < posSearch->posDescMatrix[seqIndex+1][qplace].e_value)) 
+                           if (!posSearch->posDescMatrix[seqIndex+1][qplace].used)
+                               {
+                                   posSearch->posDescMatrix[seqIndex+1][qplace].letter = (Int1) s[splace]; 
+                                   posSearch->posDescMatrix[seqIndex+1][qplace].used = TRUE; 
+                                   posSearch->posDescMatrix[seqIndex+1][qplace].e_value = 
+                                       thisEvalue;
+                               }
+                   }
+               }
+           startQ += 2;
+           startS += 2;
        }
        prevSeqAlign = curSeqAlign;
        s = MemFree(s);
-     }
-     curSeqAlign = curSeqAlign->next;
    } /*closes the while loop over seqAligns*/
- }
+}
 
 static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
@@ -890,22 +935,24 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
 	 && (posSearch->posDescMatrix[seqIndex+1][length-1].letter != GAP_CHAR))
        posSearch->posDescMatrix[seqIndex+1][0].leftExtent = 0;
      for(qplace = 1; qplace < length; qplace++)
-       if(posSearch->posDescMatrix[seqIndex+1][qplace].used)
+       if(posSearch->posDescMatrix[seqIndex+1][qplace].used) {
 	 if(posSearch->posDescMatrix[seqIndex+1][qplace-1].used)
 	   posSearch->posDescMatrix[seqIndex+1][qplace].leftExtent =
 	     posSearch->posDescMatrix[seqIndex+1][qplace -1].leftExtent;
 	 else
 	   posSearch->posDescMatrix[seqIndex+1][qplace].leftExtent = qplace;
+       }
      if ((posSearch->posDescMatrix[seqIndex+1][length-1].used)
 	 && (posSearch->posDescMatrix[seqIndex+1][length-1].letter != GAP_CHAR))
        posSearch->posDescMatrix[seqIndex+1][length-1].rightExtent = length -1;
      for(qplace = length -2; qplace >= 0; qplace--)
-       if(posSearch->posDescMatrix[seqIndex+1][qplace].used)
+       if(posSearch->posDescMatrix[seqIndex+1][qplace].used) {
 	 if(posSearch->posDescMatrix[seqIndex+1][qplace+1].used)
 	   posSearch->posDescMatrix[seqIndex+1][qplace].rightExtent =
 	     posSearch->posDescMatrix[seqIndex+1][qplace + 1].rightExtent;
 	 else
 	   posSearch->posDescMatrix[seqIndex+1][qplace].rightExtent = qplace;
+       }
      for(qplace = 0; qplace < length; qplace++) 
        if (posSearch->posDescMatrix[seqIndex+1][qplace].used) {
 	 posSearch->posExtents[qplace].leftExtent = MAX(posSearch->posExtents[qplace].leftExtent,
@@ -1269,52 +1316,80 @@ static void posScaling(posSearchItems *posSearch, compactSearchItems * compactSe
 
 Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return)
 {
-  Int4 numalign, numseq; /*number of alignments and matches in previous round*/
-
-  search->posConverged = FALSE;
-  if (patternSearchStart)
-    posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, posSearch->posNumSequences);
-  else {
+    Int4 numalign, numseq; /*number of alignments and matches in previous round*/
+    
+    search->posConverged = FALSE;
+    /*  if (patternSearchStart)
+        posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, posSearch->posNumSequences);
+        else {
+    */
     numalign = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
     posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, numseq);
-  }
-  if (!patternSearchStart)
-    findThreshSequences(posSearch, search, listOfSeqAligns, numalign, numseq);
-  posDemographics(posSearch, compactSearch, listOfSeqAligns);
-  posPurgeMatches(posSearch, compactSearch);
-  posComputeExtents(posSearch, compactSearch);
-  posComputeSequenceWeights(posSearch, compactSearch);
-  posCheckWeights(posSearch, compactSearch);
-  posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, TRUE);
-  if (NULL != ckptFileName)
-    posTakeCheckpoint(posSearch, compactSearch, ckptFileName, error_return);
-  posFreqsToMatrix(posSearch,compactSearch);
-  posScaling(posSearch, compactSearch);
-  return posSearch->posMatrix;
+    
+    if (!patternSearchStart)
+        findThreshSequences(posSearch, search, listOfSeqAligns, numalign, numseq);
+    posDemographics(posSearch, compactSearch, listOfSeqAligns);
+    posPurgeMatches(posSearch, compactSearch);
+    posComputeExtents(posSearch, compactSearch);
+    posComputeSequenceWeights(posSearch, compactSearch);
+    posCheckWeights(posSearch, compactSearch);
+    posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, TRUE);
+    if (NULL != ckptFileName)
+        posTakeCheckpoint(posSearch, compactSearch, ckptFileName, error_return);
+    posFreqsToMatrix(posSearch,compactSearch);
+    posScaling(posSearch, compactSearch);
+    return posSearch->posMatrix;
 }
 
 /* Top-level routine to compute position-specific matrix, when used through
 the Web, one round at a time*/
 Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns)
 {
-  posSearchItems *posSearch;
-  Int4 numSeqAligns, numseq;
-  Int4Ptr *posMatrix;
+    posSearchItems *posSearch;
+    Int4 i, numSeqAligns, numseq;
+    Int4Ptr *posMatrix;
+    
+    posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
+    numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
+    posAllocateMemory(posSearch, compactSearch->alphabetSize, 
+                      compactSearch->qlength, numseq);
+    posDemographics(posSearch, compactSearch, listOfSeqAligns);
+    posPurgeMatches(posSearch, compactSearch);
+    posComputeExtents(posSearch, compactSearch);
+    posComputeSequenceWeights(posSearch, compactSearch);
+    posCheckWeights(posSearch, compactSearch);
+    posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, 
+                                                FALSE);
+    posFreqsToMatrix(posSearch,compactSearch);
+    posScaling(posSearch, compactSearch);
+    posMatrix = posSearch->posMatrix;
+    
+    for(i = 0; i <= compactSearch->qlength ; i++) {
+        MemFree(posSearch->posMatchWeights[i]);
+        MemFree(posSearch->posFreqs[i]);
+        MemFree(posSearch->posC[i]);
+        MemFree(posSearch->posPrivateMatrix[i]);
+    }
 
-  posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
-  numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
-  posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, numseq);
-  posDemographics(posSearch, compactSearch, listOfSeqAligns);
-  posPurgeMatches(posSearch, compactSearch);
-  posComputeExtents(posSearch, compactSearch);
-  posComputeSequenceWeights(posSearch, compactSearch);
-  posCheckWeights(posSearch, compactSearch);
-  posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, FALSE);
-  posFreqsToMatrix(posSearch,compactSearch);
-  posScaling(posSearch, compactSearch);
-  posMatrix = posSearch->posMatrix;
-  MemFree(posSearch);
-  return posMatrix;
+    MemFree(posSearch->posMatchWeights);
+    MemFree(posSearch->posFreqs);
+    MemFree(posSearch->posC);
+    MemFree(posSearch->posA);
+    MemFree(posSearch->posPrivateMatrix);
+    MemFree(posSearch->posExtents);
+    MemFree(posSearch->posSigma);
+    MemFree(posSearch->posRowSigma);
+    MemFree(posSearch->posIntervalSizes);
+    MemFree(posSearch->posCount);
+
+    for(i = 0; i <= posSearch->posDescMatrixLength; i++) {
+        MemFree(posSearch->posDescMatrix[i]);
+    }
+    MemFree(posSearch->posDescMatrix);
+    
+    MemFree(posSearch);
+
+    return posMatrix;
 }
 
 
@@ -1542,7 +1617,6 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 void LIBCALL posPrintInformation(posSearchItems *posSearch, BlastSearchBlkPtr search, Int4 passNum)
 {
   Int4 querySize;
-  Int4 c;
 
   querySize = search->context[0].query->length;
 
@@ -1627,6 +1701,7 @@ void LIBCALL copySearchItems(compactSearchItems * compactSearch, BlastSearchBlkP
    compactSearch->kbp_gap_std = search->sbp->kbp_gap_std;
    compactSearch->lambda_ideal = search->sbp->kbp_ideal->Lambda;
    compactSearch->K_ideal = search->sbp->kbp_ideal->K;
+   compactSearch->use_best_align = search->pbp->use_best_align;
 
    stdrfp = BlastResFreqNew(search->sbp);
    BlastResFreqStdComp(search->sbp,stdrfp); 
@@ -1674,6 +1749,8 @@ static void  putCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
   FileWrite(numberPtr,numberSize,1,ckptFile) ;
 }
 
+#if 0
+/* TODO: the function is not used in this file */
 static void    putCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
 {
   int  vectorRef;
@@ -1681,6 +1758,7 @@ static void    putCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, F
   for(vectorRef = 0; vectorRef < length; vectorRef++)
     putCkptNlm_FloatHi(theVector[vectorRef],ckptFile) ;
 }
+#endif
 
 
 /*Code to put a vector of frequencies; put only the interesting
@@ -1735,6 +1813,9 @@ void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
   FileRead(numberPtr,numberSize,1,ckptFile) ;
 }
 
+
+#if 0
+/* TODO: the function is not used in this file */
 /*Code to get a vector of type Nlm_FloatHi*/
 
 static void    getCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
@@ -1744,6 +1825,7 @@ static void    getCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, F
   for(vectorRef = 0; vectorRef < length; vectorRef++)
     getCkptNlm_FloatHi(theVector[vectorRef],ckptFile) ;
 }
+#endif
 
 static void    getFreqVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
 {
@@ -2105,7 +2187,6 @@ ValNodePtr * error_return)
   Int4 linePos; /* moving index for a line*/
   Int4 alignPos; /*placeholder for position alignment*/
   Int4 base; /*base for this block*/
-  Int4 seqIndex; /*counter for sequences*/
   posDesc **returnArray; /*array of sequences to retunr*/
   Int4 i,j; /*loop indices*/
   Int4 temp; /*temporary character for swapping sequences*/
@@ -2244,7 +2325,6 @@ Int4Ptr * LIBCALL BposComputation(posSearchItems *posSearch, BlastSearchBlkPtr
   Int4 numSeqs, numBlocks, alignLength; /*number of sequences, number of pieces
                         of alignment, total length of the alignment*/
   Int4 *numCols;  /*number of columns within each block*/
-  Int4 c;  /*Index for query*/
 
   search->posConverged = FALSE;
 

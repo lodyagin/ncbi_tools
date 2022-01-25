@@ -66,6 +66,10 @@
  *       GIF generator
  *
  * $Log: togif.c,v $
+ * Revision 6.2  1999/10/26 15:47:36  vakatov
+ * + gdImageGifEx(), gdFWrite -- to specify an alternative GIF write func
+ * (with V.Chetvernin)
+ *
  * Revision 6.1  1997/11/26 21:26:31  vakatov
  * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
  *
@@ -107,9 +111,6 @@
 #include <ncbi.h>
 #include <gifgen.h>
 
-/**************************************************************************/
-/* DEFINES */
-/**************************************************************************/
 
 /**************************************************************************/
 /* TYPEDEFS */
@@ -125,9 +126,9 @@ typedef long int          count_int;
 static int colorstobpp(int colors);
 static void BumpPixel (void);
 static int GIFNextPixel (gdImagePtr im);
-static void GIFEncode (FILE *fp, int GWidth, int GHeight, int GInterlace, int Background, int Transparent, int BitsPerPixel, int *Red, int *Green, int *Blue, gdImagePtr im);
-static void Putword (int w, FILE *fp);
-static void compress (int init_bits, FILE *outfile, gdImagePtr im);
+static void GIFEncode (int GWidth, int GHeight, int GInterlace, int Background, int Transparent, int BitsPerPixel, int *Red, int *Green, int *Blue, gdImagePtr im);
+static void togifPutw (int w);
+static void compress (int init_bits, gdImagePtr im);
 static void output (code_int code);
 static void cl_block (void);
 static void cl_hash (register count_int hsize);
@@ -136,6 +137,17 @@ static void char_out (int c);
 static void flush_char (void);
 static void init_statics(void);
 static void done_statics(void);
+
+
+/**************************************************************************/
+/* STATIC VARIABLE */
+/**************************************************************************/
+
+static gdFWrite s_WriteFunc = NULL;
+static void*    s_WriteData = NULL;
+
+static char charbuf;
+
 
 /**************************************************************************/
 /* STATIC FUNCTION */
@@ -164,24 +176,57 @@ colorstobpp(int colors)
     return bpp;
 }
 
+
+/* Default callback for gdImageGifEx() -- to write to a FILE*
+ */
+#ifdef __cplusplus
+extern "C" {
+  static size_t s_Write_FILE(const void* buf, size_t size, void* userdata);
+}
+#endif
+static size_t s_Write_FILE(const void* buf, size_t size, void* userdata)
+{
+    return fwrite(buf, 1, size, (FILE*)userdata);
+}
+
+
+/**************************************************************************/
+/* DEFINES */
+/**************************************************************************/
+#define s_WRITE(ptr, size)  ((*s_WriteFunc)((ptr), (size), (s_WriteData)))
+#define s_PUTC(c)           (charbuf=(c), s_WRITE(&charbuf, 1))
+
+
 /**************************************************************************/
 /* GLOBAL FUNCTIONS */
 /**************************************************************************/
-NLM_EXTERN void gdImageGif(gdImagePtr im, FILE *out)
-{
-   int interlace, transparent, BitsPerPixel;
-   interlace = im->interlace;
-   transparent = im->transparent;
 
-   BitsPerPixel = colorstobpp(im->colorsTotal);
-   /* Clear any old values in statics strewn through the GIF code */
-   init_statics();
-   /* All set, let's do it. */
-   GIFEncode(
-      out, im->sx, im->sy, interlace, 0, transparent, BitsPerPixel,
-      im->red, im->green, im->blue, im);
-   done_statics();
+NLM_EXTERN void gdImageGif(gdImagePtr im, FILE* out)
+{
+  gdImageGifEx(im, 0, out);
+  fflush(out);
 }
+
+
+
+NLM_EXTERN void gdImageGifEx(gdImagePtr im, gdFWrite func, void* userdata)
+{
+  /* Allocate & init any old values in statics strewn through the GIF code */
+  init_statics();
+
+  /* Set the write func and its data */
+  s_WriteFunc = func ? func : s_Write_FILE;
+  s_WriteData = userdata;
+
+  /* Do the encoding and write */
+  GIFEncode(im->sx, im->sy, im->interlace, 0, im->transparent,
+            colorstobpp(im->colorsTotal), /* bits per pixel */
+            im->red, im->green, im->blue, im);
+
+  /* Free the temporary structures allocated by init_statics() */
+  done_statics();
+}
+
 
 /*****************************************************************************
  *
@@ -278,7 +323,7 @@ GIFNextPixel(gdImagePtr im)
 /* public */
 
 static void
-GIFEncode(FILE *fp, int GWidth, int GHeight, int GInterlace, int Background, int Transparent, int BitsPerPixel, int *Red, int *Green, int *Blue, gdImagePtr im)
+GIFEncode(int GWidth, int GHeight, int GInterlace, int Background, int Transparent, int BitsPerPixel, int *Red, int *Green, int *Blue, gdImagePtr im)
 {
         int B;
         int RWidth, RHeight;
@@ -324,13 +369,13 @@ GIFEncode(FILE *fp, int GWidth, int GHeight, int GInterlace, int Background, int
         /*
          * Write the Magic header
          */
-        fwrite( Transparent < 0 ? "GIF87a" : "GIF89a", 1, 6, fp );
+        s_WRITE( Transparent < 0 ? "GIF87a" : "GIF89a", 6 );
 
         /*
          * Write out the screen width and height
          */
-        Putword( RWidth, fp );
-        Putword( RHeight, fp );
+        togifPutw( RWidth );
+        togifPutw( RHeight );
 
         /*
          * Indicate that there is a global colour map
@@ -350,92 +395,92 @@ GIFEncode(FILE *fp, int GWidth, int GHeight, int GInterlace, int Background, int
         /*
          * Write it out
          */
-        fputc( B, fp );
+        s_PUTC( B );
 
         /*
          * Write out the Background colour
          */
-        fputc( Background, fp );
+        s_PUTC( Background );
 
         /*
          * Byte of 0's (future expansion)
          */
-        fputc( 0, fp );
+        s_PUTC( 0 );
 
         /*
          * Write out the Global Colour Map
          */
         for( i=0; i<ColorMapSize; ++i ) {
-                fputc( Red[i], fp );
-                fputc( Green[i], fp );
-                fputc( Blue[i], fp );
+                s_PUTC( Red[i] );
+                s_PUTC( Green[i] );
+                s_PUTC( Blue[i] );
         }
 
    /*
     * Write out extension for transparent colour index, if necessary.
     */
    if ( Transparent >= 0 ) {
-       fputc( '!', fp );
-       fputc( 0xf9, fp );
-       fputc( 4, fp );
-       fputc( 1, fp );
-       fputc( 0, fp );
-       fputc( 0, fp );
-       fputc( (unsigned char) Transparent, fp );
-       fputc( 0, fp );
+       s_PUTC( '!' );
+       s_PUTC( 0xf9 );
+       s_PUTC( 4 );
+       s_PUTC( 1 );
+       s_PUTC( 0 );
+       s_PUTC( 0 );
+       s_PUTC( (unsigned char) Transparent );
+       s_PUTC( 0 );
    }
 
         /*
          * Write an Image separator
          */
-        fputc( ',', fp );
+        s_PUTC( ',' );
 
         /*
          * Write the Image header
          */
 
-        Putword( LeftOfs, fp );
-        Putword( TopOfs, fp );
-        Putword( Width, fp );
-        Putword( Height, fp );
+        togifPutw( LeftOfs );
+        togifPutw( TopOfs );
+        togifPutw( Width );
+        togifPutw( Height );
 
         /*
          * Write out whether or not the image is interlaced
          */
         if( Interlace )
-                fputc( 0x40, fp );
+                s_PUTC( 0x40 );
         else
-                fputc( 0x00, fp );
+                s_PUTC( 0x00 );
 
         /*
          * Write out the initial code size
          */
-        fputc( InitCodeSize, fp );
+        s_PUTC( InitCodeSize );
 
         /*
          * Go and actually compress the data
          */
-        compress( InitCodeSize+1, fp, im );
+        compress( InitCodeSize+1, im );
 
         /*
          * Write out a Zero-length packet (to end the series)
          */
-        fputc( 0, fp );
+        s_PUTC( 0 );
 
         /*
          * Write the GIF file terminator
          */
-        fputc( ';', fp );
+        s_PUTC( ';' );
 }
 
 /*
  * Write out a word to the GIF file
  */
 static void
-Putword(int w, FILE *fp)
+togifPutw(int w)
 {
-        fputc( w & 0xff, fp );
-        fputc( (w / 256) & 0xff, fp );
+        s_PUTC( w & 0xff );
+        s_PUTC( (w / 256) & 0xff );
 }
 
 
@@ -539,13 +584,12 @@ static long int out_count = 0;           /* # of codes output (for debugging) */
  */
 
 static int g_init_bits;
-static FILE* g_outfile;
 
 static int ClearCode;
 static int EOFCode;
 
 static void
-compress(int init_bits, FILE *outfile, gdImagePtr im)
+compress(int init_bits, gdImagePtr im)
 {
     register long fcode;
     register code_int i /* = 0 */;
@@ -557,10 +601,8 @@ compress(int init_bits, FILE *outfile, gdImagePtr im)
 
     /*
      * Set up the globals:  g_init_bits - initial number of bits
-     *                      g_outfile   - pointer to output file
      */
     g_init_bits = init_bits;
-    g_outfile = outfile;
 
     /*
      * Set up the necessary values
@@ -713,13 +755,7 @@ output(code_int code)
                 cur_accum >>= 8;
                 cur_bits -= 8;
         }
-
         flush_char();
-
-        fflush( g_outfile );
-
-        if( ferror( g_outfile ) )
-      return;
     }
 }
 
@@ -816,8 +852,8 @@ static void
 flush_char(void)
 {
         if( a_count > 0 ) {
-                fputc( a_count, g_outfile );
-                fwrite( accum, 1, a_count, g_outfile );
+                s_PUTC( a_count );
+                s_WRITE( accum, a_count );
                 a_count = 0;
         }
 }
@@ -852,7 +888,6 @@ static void init_statics(void) {
    cur_accum = 0;
    cur_bits = 0;
    g_init_bits = 0;
-   g_outfile = 0;
    ClearCode = 0;
    EOFCode = 0;
    free_ent = 0;

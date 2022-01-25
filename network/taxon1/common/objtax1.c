@@ -32,7 +32,7 @@ objtax1AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Taxon1
-*    Generated using ASNCODE Revision: 6.0 at Feb 2, 1998  4:16 PM
+*    Generated using ASNCODE Revision: 6.8 at Dec 16, 1999 10:55 AM
 *
 **************************************************/
 
@@ -234,6 +234,13 @@ Taxon1ReqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == TAXON1_REQ_id4gi) {
+      choice = Taxon1Req_id4gi;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -358,6 +365,10 @@ Taxon1ReqAsnWrite(Taxon1ReqPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Req_fini:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, TAXON1_REQ_fini, &av);
+      break;
+   case Taxon1Req_id4gi:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_id4gi, &av);
       break;
    }
    if (writetype != NULL) {
@@ -778,6 +789,13 @@ Taxon1RespAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == TAXON1_RESP_id4gi) {
+      choice = Taxon1Resp_id4gi;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -897,6 +915,10 @@ Taxon1RespAsnWrite(Taxon1RespPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Resp_fini:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, TAXON1_RESP_fini, &av);
+      break;
+   case Taxon1Resp_id4gi:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_RESP_id4gi, &av);
       break;
    }
    if (writetype != NULL) {

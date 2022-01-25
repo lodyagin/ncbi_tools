@@ -27,7 +27,7 @@
 *
 * Author:  Denis Vakatov, Jinghui Zhang
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *  Draw style-dependent feature images for the feature legend map
@@ -35,6 +35,9 @@
 *
 * ----------------------------------------------------------------------------
 * $Log: fea2seg.c,v $
+* Revision 6.4  1999/10/04 17:46:22  kans
+* include vibrant.h
+*
 * Revision 6.3  1999/05/06 21:21:13  vakatov
 * Stricter type casting
 *
@@ -68,6 +71,7 @@
 * ----------------------------------------------------------------------------
 */
 
+#include <vibrant.h>
 #include <fea2seg.h>
 #include <fstyle.h>
 

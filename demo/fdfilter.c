@@ -1,4 +1,4 @@
-/* $Id: fdfilter.c,v 6.8 1999/09/14 15:09:41 shavirin Exp $ */
+/* $Id: fdfilter.c,v 6.9 1999/09/20 18:35:03 shavirin Exp $ */
 /*****************************************************************************
 
   
@@ -31,13 +31,13 @@
    
    Version Creation Date: 05/21/99
 
-   $Revision: 6.8 $
+   $Revision: 6.9 $
 
    File Description:  Filter FASTA databases for identical sequences
 
    $Log: fdfilter.c,v $
-   Revision 6.8  1999/09/14 15:09:41  shavirin
-   Added parameter to reverse query to opposite.
+   Revision 6.9  1999/09/20 18:35:03  shavirin
+   Added dumping of deflines in order defined in tofasta.c file.
 
    Revision 6.7  1999/09/10 17:46:39  shavirin
    Added parameter for the type of the database and added possibility to
@@ -98,6 +98,21 @@ typedef struct gilist
     Int4Ptr seq_num;
 } GiList, *GiListPtr;
 
+typedef struct _DefLine 
+{
+    Int4 type;
+    CharPtr line;
+} DefLine, PNTR DefLinePtr;
+
+typedef struct deflist
+{
+    Int4       count;
+    Int4       allocated;
+    DefLinePtr PNTR defs ;
+} DefList, *DefListPtr;
+
+#define DEF_ALLOCATE_CHUNK 4
+
 typedef struct hashelm
 {
     Int4  hash;
@@ -154,6 +169,18 @@ void FDB_optionsFree(FDB_optionsPtr options)
     MemFree(options);
     
     return;
+}
+
+SeqIdPtr MySeqIdFree(SeqIdPtr sip)
+{
+    SeqIdPtr sip_tmp;
+    do {
+        sip_tmp = sip->next;
+        SeqIdFree(sip);
+        sip = sip_tmp;
+    } while(sip != NULL);
+    
+    return NULL;
 }
 
 Boolean SRReadCharData(CharPtr buffer, CharPtr PNTR div_in)
@@ -328,6 +355,20 @@ static int HashCompare(VoidPtr i, VoidPtr j)
     return (0);
 }
 
+static int DefListCompare(VoidPtr i, VoidPtr j)
+{
+    DefLinePtr dp, dp1;
+    
+    dp =   *((DefLinePtr *) i);
+    dp1 =  *((DefLinePtr *) j);
+
+    if (dp->type > dp1->type)
+        return (1);
+    if (dp->type < dp1->type)
+        return (-1);
+    return (0);
+}
+
 void FDBDestroyHashIndex(HashTablePtr htp)
 {
     if(htp == NULL)
@@ -369,28 +410,158 @@ HashTablePtr FDBCreateHashIndex(CharPtr filename)
     return htp;
 }
 
-CharPtr  ConcatDefline(CharPtr dline, CharPtr dline_tmp)
+static CharPtr ConcatDefline(CharPtr dline, CharPtr dline_tmp)
 {
     CharPtr buf;
-
-    buf = MemNew(StringLen(dline) + StringLen(dline_tmp) + 2);
-    sprintf(buf, "%s%c%s", dline, '\1', dline_tmp);
     
-    MemFree(dline);
-    MemFree(dline_tmp);
+    if(dline == NULL) {
+        buf = MemNew(StringLen(dline_tmp) + 2);
+        sprintf(buf, "%s", dline_tmp);
+    } else {
+        buf = MemNew(StringLen(dline) + StringLen(dline_tmp) + 2);
+        sprintf(buf, "%s%c%s", dline, '\1', dline_tmp);
+    }
+    
+    MemFree(dline); 
     
     return buf;
 }
+/* --------- Functions shuffeling deflines ----------- */
+
+DefListPtr DefListNew(void)
+{
+    DefListPtr dlp;
+    Int4 i;
+
+    dlp = MemNew(sizeof(DefList));
+    dlp->allocated = DEF_ALLOCATE_CHUNK;
+    dlp->defs = MemNew(sizeof(DefLinePtr) * dlp->allocated);
+
+    for(i = 0; i < dlp->allocated; i++) {
+        dlp->defs[i] = MemNew(sizeof(DefLine));
+    }
+    
+    return dlp;
+}
+Boolean DefListRealloc(DefListPtr dlp)
+{
+    Int4 i, old_allocated;
+
+    old_allocated = dlp->allocated;
+    dlp->allocated += DEF_ALLOCATE_CHUNK;
+    if((dlp->defs = Realloc(dlp->defs, 
+                            sizeof(DefLinePtr) * dlp->allocated)) == NULL)
+        return FALSE;
+    
+    for(i = old_allocated; i < dlp->allocated; i++) {
+        if((dlp->defs[i] = MemNew(sizeof(DefLine))) == NULL)
+            return FALSE;
+    }
+    
+    return TRUE;
+}
+void DefListFree(DefListPtr dlp)
+{
+    Int4 i;
+    DefLinePtr dp;
+
+    for(i = 0; i < dlp->allocated; i++) {
+        dp = dlp->defs[i];
+        MemFree(dp->line);
+        MemFree(dp);
+    }
+    MemFree(dlp->defs);
+    MemFree(dlp);
+
+    return;
+}
+
+Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type)
+{
+    DefLinePtr dp;
+
+    if(dlp->count >= dlp->allocated) {
+        if(!DefListRealloc(dlp))
+            return FALSE;
+    }
+    
+    dp = dlp->defs[dlp->count];
+    
+    dp->line = StringSave(line);
+    dp->type = type;
+    
+    dlp->count++;
+    return TRUE;
+}
+
+CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
+{
+    Int4 i, j;
+    DefLinePtr dp;
+    CharPtr chptr, dline = NULL;
+    Char buffer[512];
+    
+    HeapSort(dlp->defs, dlp->count, sizeof(DefLinePtr), DefListCompare);
+
+    for(i = 0; i < dlp->count; i++) {
+        dp = dlp->defs[i];
+
+        if(i == 0) {
+            StringNCpy(buffer, dp->line, sizeof(buffer) -1);
+            
+            if((chptr = StringChr(buffer, ' ')) != NULL)
+                *chptr = NULLB;
+            
+            *seqid = SeqIdParse(buffer);
+            dline = ConcatDefline(NULL, chptr+1);
+        } else {
+            dline = ConcatDefline(dline, dp->line);
+        }
+    }
+    return dline;
+}
+
+
+Int4 GetMinimalType(CharPtr defline)
+{
+    SeqIdPtr sip, sip_tmp;
+    Int4 order, order1 = INT2_MAX;
+    Char buffer[512];
+    CharPtr chptr;
+
+    StringNCpy(buffer, defline, sizeof(buffer) - 1);
+
+    if((chptr = StringChr(buffer, ' ')) != NULL)
+        *chptr = NULLB;
+    else
+        return -1;
+
+    sip = SeqIdParse(buffer);
+
+    for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
+        if((order = GetOrderBySeqId(sip_tmp->choice)) < 0)
+            return -1;
+        order1 = MIN(order, order1);
+    }
+
+    MySeqIdFree(sip);
+    return order1;
+}
+
+/* --------------------------------------------------- */
 
 Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count, 
                     ValNodePtr PNTR seqid, CharPtr PNTR defline, 
                     BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num)
 {
     Int4 i, hash_val, length, len_seq;
-    Int4 first, next_count = 0;
+    Int4 first, next_count = 0, type;
     UcharPtr sequence, buffer;
-    CharPtr dline, dline_tmp;
+    CharPtr dline;
+    DefListPtr dlp;
 
+    dlp = DefListNew();
+    
     for(i = count, hash_val = htp->hep[count].hash, first = TRUE; 
         htp->hep[i].hash == hash_val; i++) {
         
@@ -410,11 +581,19 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
             if(*bsp == NULL)
                 return -1;
             
-            readdb_get_descriptor(rdfp, htp->hep[i].seq_num, seqid, &dline);
+            /* readdb_get_descriptor(rdfp, htp->hep[i].seq_num, 
+               seqid, &dline); */
+            
 
+            readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
+            type = GetMinimalType(dline);
+            
             if(dline == NULL)
                 return -1;
-
+            
+            DefListAddLine(dlp, dline, type);
+            MemFree(dline);          
+            
             first = FALSE;
         } else {
             /* Comparing sequences - if they are different despite hash: */
@@ -422,14 +601,15 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
                 if(next_count == 0) next_count = i;
                 continue;
             }
-            readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline_tmp);
+            readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
             
-            if(dline_tmp == NULL)
+            if(dline == NULL)
                 return -1;
-            
-            dline = ConcatDefline(dline, dline_tmp);
 
-
+            type = GetMinimalType(dline);
+            DefListAddLine(dlp, dline, type);
+            MemFree(dline);
+                
             htp->hep[i].seq_num = -1; /* Label do not pass second time */
         }
 
@@ -442,24 +622,14 @@ Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
         
         /* DumpInfoFile(&htp->hep[i], fd_info, seq_num); */
     }
-    
-    *defline = dline;
+
+    *defline = FinalDefLineOut(dlp, seqid);
+
+    DefListFree(dlp);
     
     if(next_count == 0) next_count = i;
     
     return next_count;
-}
-
-SeqIdPtr MySeqIdFree(SeqIdPtr sip)
-{
-    SeqIdPtr sip_tmp;
-    do {
-        sip_tmp = sip->next;
-        SeqIdFree(sip);
-        sip = sip_tmp;
-    } while(sip != NULL);
-    
-    return NULL;
 }
 
 /* Functions used in filtering by gi number */

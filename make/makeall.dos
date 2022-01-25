@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.71 1999/08/27 19:30:03 kans Exp $
+# $Id: makeall.dos,v 6.85 2000/01/20 13:20:44 madden Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -14,51 +14,53 @@
 ##################################################
 # Library object lists
 
-OBJ1  = +ncbibs.obj +wwwutils.obj +ncbierr.obj +ncbienv.obj +ncbifile.obj \
+OBJ1  = \
+   +ncbibs.obj +wwwutils.obj +ncbierr.obj +ncbienv.obj +ncbifile.obj \
 	+ncbiprop.obj +ncbimath.obj +ncbimem.obj +ncbimisc.obj \
 	+ncbimsg.obj +ncbistr.obj +ncbisgml.obj +ncbitime.obj +ncbilang.obj \
 	+asnbufo.obj +asndebin.obj +asnenbin.obj +asngen.obj +asngenob.obj \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
 	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
-	+ncbibuf.obj +ncbi_buffer.obj +connectn.obj +connutil.obj \
-   +con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj
-OBJ2 = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
+	+ncbibuf.obj +connectn.obj +connutil.obj \
+   +con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj \
+   +binary.obj  +ncbi_socket.obj +ncbi_buffer.obj
+
+OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
-	+objmdrs.obj +objproj.obj + objent2.obj +seqport.obj +sequtil.obj +prtutil.obj \
-	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj +alignmgr.obj \
-	+alignval.obj +subutil.obj +edutil.obj +asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
+	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj \
+   +seqport.obj +sequtil.obj +prtutil.obj \
+	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
+   +alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
+   +asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
 	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +ftusrstr.obj +gbfeat.obj \
 	+gbftglob.obj +gbparint.obj +utilpars.obj +utilpub.obj +ffprint.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +salprop.obj +udvseq.obj \
+	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +salprop.obj \
+	+udvseq.obj \
 	+salsap.obj +salstruc.obj +salutil.obj +salpedit.obj +salpstat.obj \
-	+blocks.obj +pgppop.obj
+	+blocks.obj +pgppop.obj +samutil.obj +objalignloc.obj +ddvcolor.obj
+
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
 
-OBJ4_2D = \
+OBJ4  = \
 	+vibbutns.obj +vibextra.obj +vibfiles.obj +vibforms.obj \
 	+vibgroup.obj +viblists.obj +vibmenus.obj +vibprmpt.obj \
 	+vibsbars.obj +vibslate.obj +vibtexts.obj \
 	+vibutils.obj +vibwndws.obj +ncbidraw.obj \
-	+drawing.obj +mapping.obj +picture.obj +viewer.obj \
-	+document.obj +table.obj +palette.obj +diagnost.obj +image.obj \
-	+vibmouse.obj +treeview.obj +imagelst.obj +odlbox.obj
-OBJ4_3D = \
-	+pictur3d.obj +prim3d1.obj +prim3d2.obj +prim3d3.obj \
-	+prim3d4.obj +prim3d5.obj +viewer3d.obj +shim3d.obj
-!ifdef WIN32
-OBJ4 = $(OBJ4_2D) $(OBJ4_3D)
-!else
-OBJ4 = $(OBJ4_2D)
-!endif
+	+drawing.obj  +mapping.obj  +picture.obj  +viewer.obj \
+	+document.obj +table.obj    +palette.obj  +diagnost.obj +image.obj \
+	+vibmouse.obj +treeview.obj +imagelst.obj +odlbox.obj \
+	+pictur3d.obj +prim3d1.obj  +prim3d2.obj  +prim3d3.obj \
+	+prim3d4.obj  +prim3d5.obj  +viewer3d.obj +shim3d.obj
 
 OBJ5  = +accentr.obj +accutils.obj
+
 OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+smdlg3.obj +smtools.obj +styleman.obj +stylemui.obj +glbpic.obj \
 	+layout.obj +vsm.obj +vsmfile.obj +vsmutil.obj +udvgraph.obj +udvopen.obj \
@@ -71,7 +73,9 @@ OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+seqfltr.obj +seqgraph.obj +seqgrphx.obj +seqmtrx.obj \
 	+seqpcc.obj \
 	+seqanal.obj +aacomp.obj +seqscrl.obj \
-	+mapgene.obj +prtgene.obj
+	+mapgene.obj +prtgene.obj \
+	+ddvclick.obj +ddvcreate.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
+
 OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
 	+mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj +mmdbapi4.obj \
 	+mmdbentr.obj +vastsubs.obj +prunebsc.obj
@@ -89,13 +93,37 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
-	+impatool.obj +posit2.obj +newkar.obj +ddvcolor.obj
-OBJ28 = +ncbidrwg.obj +pictogif.obj \
-        +gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
+	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj +vecscrn.obj
+
+OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
+	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
+
 OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
-        +cn3dslct.obj +cn3dwipe.obj +cn3dxprt.obj +naybor.obj \
-        +cn3dwin.obj  +cn3dentr.obj +cn3dpane.obj \
-        +cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj
+	+cn3dxprt.obj +cn3dwin.obj  +cn3dentr.obj +cn3dmesh.obj \
+	+cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj
+
+
+### OpenGL versions of LIB4(vibrant.lib) and LIB30(ncbicn3d.lib)
+!ifdef OPENGL
+.c.ogl:
+	copy $*.c $*_ogl.c
+
+OBJ4_COPY0 = $(OBJ4:.obj=.ogl)
+OBJ4_COPY = $(OBJ4_COPY0:+=)
+OBJ4_OGL  = $(OBJ4:.=_ogl.)
+
+OBJ30_COPY0 = $(OBJ30:.obj=.ogl)
+OBJ30_COPY  = $(OBJ30_COPY0:+=)
+OBJ30_OGL   = $(OBJ30:.=_ogl.)
+
+PNG_INCLUDES =
+!ifdef LIBPNG_DIR
+!ifdef ZLIB_DIR
+PNG_INCLUDES = -D_PNG -I$(LIBPNG_DIR) -I$(ZLIB_DIR)
+!endif
+!endif
+
+!endif
 
 
 ##################################################
@@ -103,26 +131,26 @@ OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
 
 ASNTOOL_EXE  = asntool.___
 
-DO_OBJ = $(MT_OBJ) $(MAIN_OBJ)
-DO_LIB = $(XLIB1)  $(XLIB2)  $(XLIB3)  $(XLIB4)  $(XLIB5) \
-         $(XLIB20) $(XLIB22) $(XLIB23) $(XLIB28) $(XLIB30)
-DO_EXE = $(ASNTOOL_EXE)
+DO_OBJ = \
+ $(MT_OBJ) $(MAIN_OBJ)
+
+DO_LIB = \
+ $(XLIB1)  $(XLIB2)  $(XLIB3)  $(XLIB4)  $(XLIB5) \
+ $(XLIB20) $(XLIB22) $(XLIB23) $(XLIB28) $(XLIB30) \
+ $(XLIB4_OGL) $(XLIB30_OGL)
+
+DO_EXE = \
+ $(ASNTOOL_EXE)
 
 nocopy:	$(DO_OBJ) $(DO_LIB) $(DO_EXE)
+
 noexe:	$(DO_OBJ) $(DO_LIB)
 
 
 ##################################################
 # Deploy source files
 
-!ifdef WIN32
-ASNDIR = asnstat
-!else
-ASNDIR = asnload
-!endif
-
-
-copy :
+copy_reg:
 !ifdef NC
 	echo "NO COPY"
 !else
@@ -135,6 +163,7 @@ copy :
 	copy ..\corelib\ncbi*.h $(INCPATH)
 	copy ..\corelib\tree*.h $(INCPATH)
 	copy ..\corelib\matrix.h $(INCPATH)
+	copy ..\corelib\binary.h $(INCPATH)
 	copy ..\corelib\ncbilcl.msw $(INCPATH)\ncbilcl.h
 	copy ..\corelib\*.c .
 	copy ..\corelib\core*.h .
@@ -149,7 +178,7 @@ copy :
 	copy ..\object\*.h $(INCPATH)
 	copy ..\access\*.c .
 	copy ..\access\*.h $(INCPATH)
-	copy ..\$(ASNDIR)\*.h $(INCPATH)
+	copy ..\asnstat\*.h $(INCPATH)
 	copy ..\api\*.h $(INCPATH)
 	copy ..\api\*.c .
 	copy ..\cdromlib\*.h $(INCPATH)
@@ -163,22 +192,22 @@ copy :
 	copy ..\link\mswin\*.rc .
 	copy ..\link\mswin\*.ico .
 	copy ..\link\mswin\ncbirc.h .
-!ifndef WIN32
-	copy ..\link\mswin\*.def .
-!endif
-!ifdef MSWINDOWS
+!ifndef CONSOLE
 	copy ..\vibrant\*.h $(INCPATH)
 	copy ..\vibrant\*.c .
 	copy ..\desktop\*.h $(INCPATH)
 	copy ..\desktop\*.c .
 	copy ..\gif\*.c .
 	copy ..\gif\*.h $(INCPATH)
-!ifdef WIN32
 	copy ..\cn3d\*.h $(INCPATH)
 	copy ..\cn3d\*.c .
+	copy ..\ddv\*.h $(INCPATH)
+	copy ..\ddv\*.c .
 !endif
 !endif
-!endif
+
+copy: copy_reg $(OBJ4_COPY) $(OBJ30_COPY)
+
 ##########################################################
 
 
@@ -194,7 +223,7 @@ $(DLL_AVAIL)
 $(INCLUDE_GEN)
 LIB_NAME = $(XLIB1)
 LIB_OBJ = $(OBJ1)
-LIB_LIB = 
+LIB_LIB =
 $(INCLUDE_LIB)
 <<
 !endif
@@ -230,6 +259,18 @@ $(INCLUDE_GEN)
 LIB_NAME = $(XLIB4)
 LIB_OBJ = $(OBJ4)
 LIB_LIB = $(LIB1)
+$(INCLUDE_LIB)
+<<
+!endif
+##########################################################
+!ifdef XLIB4_OGL
+$(XLIB4_OGL):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+LIB_NAME = $(XLIB4_OGL)
+LIB_OBJ = $(OBJ4_OGL)
+LIB_LIB = $(LIB1)
+LIB_OPT = -D_OPENGL $(PNG_INCLUDES)
 $(INCLUDE_LIB)
 <<
 !endif
@@ -298,6 +339,18 @@ $(INCLUDE_GEN)
 LIB_NAME = $(XLIB30)
 LIB_OBJ = $(OBJ30)
 LIB_LIB =
+$(INCLUDE_LIB)
+<<
+!endif
+##########################################################
+!ifdef XLIB30_OGL
+$(XLIB30_OGL):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+LIB_NAME = $(XLIB30_OGL)
+LIB_OBJ = $(OBJ30_OGL)
+LIB_LIB =
+LIB_OPT = -D_OPENGL $(PNG_INCLUDES)
 $(INCLUDE_LIB)
 <<
 !endif

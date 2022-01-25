@@ -22,17 +22,28 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.h,v 6.13 1999/07/30 11:58:22 sicotte Exp $
+ * $Id: salpacc.h,v 6.14 1999/11/24 21:24:26 vakatov Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
 */
 #ifndef _NCBI_salpacc_
 #define _NCBI_salpacc_
+
 #include <ncbi.h>
 #include <objalign.h>
 #include <objsset.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /* Function that returns a pointer to the SeqId chain already in the SeqAlign.
@@ -146,10 +157,21 @@ NLM_EXTERN Boolean SeqAlignStartStopById(SeqAlignPtr align, SeqIdPtr id, Int4Ptr
 NLM_EXTERN Uint4 LIBCALL SeqAlignCountSegs(SeqAlignPtr salp);
 
 /* Add SeqAlign in a SeqEntry */
-extern void SeqAlignAddInSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap);
+NLM_EXTERN void SeqAlignAddInSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap);
 NLM_EXTERN SeqAlignPtr SeqAlignExtractByIds(SeqAlignPtr PNTR align, SeqIdPtr sip_1, SeqIdPtr sip_2);
 
 NLM_EXTERN Int4 SeqAlignCount(SeqAlignPtr align);
+
+#ifdef __cplusplus
+}
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
 #endif
 

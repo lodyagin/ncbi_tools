@@ -39,6 +39,10 @@ Author: Hugues Sicotte
 #include <objalign.h>
 #include <objgen.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct _salpstatsinputblock {
     Int4 window_size;
     Boolean MergeConsistentAlign;
@@ -264,5 +268,9 @@ NLM_EXTERN SalpStatsResultsPtr LIBCALL SeqAlignStats(SeqAlignPtr salp_in, SalpSt
 NLM_EXTERN SalpStatsResultsPtr LIBCALL SeqAlignListGlobalStats(SeqAlignPtr salp_in, SalpStatsInputBlockPtr param,BioseqPtr query_bsp,BioseqPtr subject_bsp);
 
 NLM_EXTERN Int4 LIBCALL SeqAlignGapCount (SeqAlignPtr salp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

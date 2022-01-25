@@ -31,8 +31,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.5 $ 
+/* $Revision: 6.6 $ 
 * $Log: gapxdrop.h,v $
+* Revision 6.6  1999/11/26 22:07:48  madden
+* Added PerformNtGappedAlignment and ALIGN_packed_nucl
+*
 * Revision 6.5  1999/03/17 16:49:10  madden
 * Removed comment within comment
 *
@@ -113,6 +116,7 @@ extern "C" {
 
 
 #include <ncbi.h>
+#include <readdb.h>
 #include <sequtil.h>
 
 #define CODON_LENGTH 3
@@ -229,6 +233,8 @@ GapXEditBlockPtr LIBCALL SimpleIntervalToGapXEditBlock PROTO((Int4 start1, Int4 
 
 GapXEditBlockPtr LIBCALL GapXEditBlockNew PROTO((Int4 start1, Int4 start2));
 GapXEditBlockPtr LIBCALL GapXEditBlockDelete PROTO((GapXEditBlockPtr edit_block));
+
+Boolean LIBCALL PerformNtGappedAlignment PROTO((GapAlignBlkPtr gap_align));
 
 Boolean LIBCALL PerformGappedAlignment PROTO((GapAlignBlkPtr));
 

@@ -1,4 +1,4 @@
-/*   $Id: blocks.c,v 6.2 1999/08/27 14:54:03 durand Exp $
+/*   $Id: blocks.c,v 6.3 1999/11/26 15:42:23 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/99
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: Indexed SeqAlign Functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: blocks.c,v $
+* Revision 6.3  1999/11/26 15:42:23  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
 * Revision 6.2  1999/08/27 14:54:03  durand
 * fix memory leaks in PopSet Viewer
 *
@@ -91,6 +94,9 @@ salsa
 #include <ncbi.h>
 #include <math.h>
 
+static void FlipSequence(SegmentPtr segp, Int4 len);
+static void CalcMinusBounds(SegmentPtr segp, SegmentPtr PNTR segp_storage);
+
 
 /*******************************************************************************
 
@@ -103,7 +109,7 @@ salsa
   Return value : -
 
 *******************************************************************************/
-extern void blk_PrintSABP(SABlockPtr sabp)
+NLM_EXTERN void blk_PrintSABP(SABlockPtr sabp)
 {
 FILE        *hFile;
 SABlockPtr      sabp2;  /*used to scan "SeqALign" Index blocks*/
@@ -170,7 +176,7 @@ SegmentPtr      segp,segp2;     /*used to scan each Bsp segment in a block*/
 *  gap and not a one-residue block.
 *******************************************************************/
 
-SABlockPtr Blockify(SeqAlignPtr sap)
+NLM_EXTERN SABlockPtr Blockify(SeqAlignPtr sap)
 {
    Boolean       added;
    Int4          bioseq;
@@ -716,7 +722,7 @@ SABlockPtr Blockify(SeqAlignPtr sap)
 *  alignment.  DeBlockify does not free the SABlock structure.
 ************************************************************/
 
-SeqAlignPtr DeBlockify(SABlockPtr sabp)
+NLM_EXTERN SeqAlignPtr DeBlockify(SABlockPtr sabp)
 {
    Int4         count_blocks;
    Int4         count_segments;
@@ -785,7 +791,7 @@ SeqAlignPtr DeBlockify(SABlockPtr sabp)
    return sap;
 }
 
-SeqAlignPtr SeqAlignListMergeAll(SeqAnnotPtr sap)
+NLM_EXTERN SeqAlignPtr SeqAlignListMergeAll(SeqAnnotPtr sap)
 {
    SABlockPtr   sabp;
    SABlockPtr   sabp_next;
@@ -816,7 +822,7 @@ SeqAlignPtr SeqAlignListMergeAll(SeqAnnotPtr sap)
    return salp;
 }
 
-SeqIdPtr GetSeqIdList(SABlockPtr sabp)
+NLM_EXTERN SeqIdPtr GetSeqIdList(SABlockPtr sabp)
 {
    SegmentPtr  segp;
    SeqIdPtr    sip;
@@ -849,7 +855,7 @@ SeqIdPtr GetSeqIdList(SABlockPtr sabp)
 *  for all associated segment structures.
 ************************************************************/
 
-void CleanupBlocks(SABlockPtr sabp)
+NLM_EXTERN void CleanupBlocks(SABlockPtr sabp)
 {
    Boolean     done;
    SegmentPtr  segp;
@@ -900,7 +906,7 @@ void CleanupBlocks(SABlockPtr sabp)
 *
 ****************************************************************/
 
-SABlockPtr IndexBlocks(SABlockPtr sabp)
+NLM_EXTERN SABlockPtr IndexBlocks(SABlockPtr sabp)
 {
    Int4        bioseq;
    Int4        block;
@@ -1017,7 +1023,7 @@ SABlockPtr IndexBlocks(SABlockPtr sabp)
    return head;
 }
 
-SegmentPtr PropagateStrandInfo(SegmentPtr segp)
+NLM_EXTERN SegmentPtr PropagateStrandInfo(SegmentPtr segp)
 {
    Boolean     done;
    SegmentPtr  segp_head;
@@ -1056,7 +1062,7 @@ SegmentPtr PropagateStrandInfo(SegmentPtr segp)
 *  the segments to be able to do this.
 ***********************************************************/
 
-SABlockPtr IndexNewBlocks(SABlockPtr sabp)
+NLM_EXTERN SABlockPtr IndexNewBlocks(SABlockPtr sabp)
 {
    Int4        bioseq;
    Int4        block;
@@ -1190,7 +1196,7 @@ SABlockPtr IndexNewBlocks(SABlockPtr sabp)
 *  alignment is valid, *validate will be zero.
 ******************************************************************/
 
-void GetBlockInfo(SABlockPtr sabp, Int4Ptr length, Int4Ptr numbioseqs, Int4Ptr numblocks, Int4Ptr validate)
+NLM_EXTERN void GetBlockInfo(SABlockPtr sabp, Int4Ptr length, Int4Ptr numbioseqs, Int4Ptr numblocks, Int4Ptr validate)
 {
    Int4        blocks;
    Int4        count;
@@ -1282,7 +1288,7 @@ void GetBlockInfo(SABlockPtr sabp, Int4Ptr length, Int4Ptr numbioseqs, Int4Ptr n
 *  alignment.
 *******************************************************************/
 
-SABlockPtr SAMergeBlocks (SABlockPtr sabp1, SABlockPtr sabp2)
+NLM_EXTERN SABlockPtr SAMergeBlocks (SABlockPtr sabp1, SABlockPtr sabp2)
 {
    Int4        c;
    Boolean     done;
@@ -2247,7 +2253,7 @@ SABlockPtr SAMergeBlocks (SABlockPtr sabp1, SABlockPtr sabp2)
 }
 
 
-Int4 GetBlockOrientation(Int4Ptr shift, SegmentPtr segp1, SegmentPtr segp2, Int4 index1, Int4 index2)
+NLM_EXTERN Int4 GetBlockOrientation(Int4Ptr shift, SegmentPtr segp1, SegmentPtr segp2, Int4 index1, Int4 index2)
 {
    Int4  i;
    Int4  orient;
@@ -2377,7 +2383,7 @@ Int4 GetBlockOrientation(Int4Ptr shift, SegmentPtr segp1, SegmentPtr segp2, Int4
    return orient;
 }
 
-SABlockPtr SARemoveSequence(Int4 BspID, SeqIdPtr sip, SABlockPtr sabp)
+NLM_EXTERN SABlockPtr SARemoveSequence(Int4 BspID, SeqIdPtr sip, SABlockPtr sabp)
 {
    SABlockPtr  sabp_head;
    SegmentPtr  segp;
@@ -2460,7 +2466,7 @@ SABlockPtr SARemoveSequence(Int4 BspID, SeqIdPtr sip, SABlockPtr sabp)
 *  or things will get strangely truncated.
 ********************************************************************/
 
-SABlockPtr SquishBlocks(SABlockPtr sabp)
+NLM_EXTERN SABlockPtr SquishBlocks(SABlockPtr sabp)
 {
    Boolean     all_gap1;
    Boolean     all_gap2;
@@ -2607,7 +2613,7 @@ SABlockPtr SquishBlocks(SABlockPtr sabp)
 *  structure unchanged.
 ****************************************************************/
 
-SABlockPtr RearrangeSegments (Int4 BspID, SABlockPtr sabp, Int4 position)
+NLM_EXTERN SABlockPtr RearrangeSegments (Int4 BspID, SABlockPtr sabp, Int4 position)
 {
    Int4        counter;
    Boolean     found;
@@ -2750,7 +2756,7 @@ static void CalcMinusBounds(SegmentPtr segp, SegmentPtr PNTR segp_storage)
 *  happens.
 ***************************************************************/
 
-SABlockPtr SASplitBlock (SABlockPtr sabp, Int4 from)
+NLM_EXTERN SABlockPtr SASplitBlock (SABlockPtr sabp, Int4 from)
 {
    SABlockPtr  sabp_head;
    SABlockPtr  sabp_new;
@@ -2827,7 +2833,7 @@ SABlockPtr SASplitBlock (SABlockPtr sabp, Int4 from)
 *  the function does nothing.
 ****************************************************************/
 
-SABlockPtr TeenyBlock (SABlockPtr sabp, Int4 from, Int4 to)
+NLM_EXTERN SABlockPtr TeenyBlock (SABlockPtr sabp, Int4 from, Int4 to)
 {
    SABlockPtr  sabp_head;
    SABlockPtr  sabp_prev;
@@ -2884,7 +2890,7 @@ SABlockPtr TeenyBlock (SABlockPtr sabp, Int4 from, Int4 to)
 * the beginning may have SegIDs of zero or negative values.
 **********************************************************************/
 
-SABlockPtr AddEmptyBlocks(SABlockPtr sabp, Int4 n, Boolean beginning, Boolean end)
+NLM_EXTERN SABlockPtr AddEmptyBlocks(SABlockPtr sabp, Int4 n, Boolean beginning, Boolean end)
 {
    Int4        count;
    Int4        i;
@@ -3093,7 +3099,7 @@ SABlockPtr AddEmptyBlocks(SABlockPtr sabp, Int4 n, Boolean beginning, Boolean en
 *  set to 2.
 ****************************************************************/
 
-SABlockPtr AddEmptySegments(SABlockPtr sabp)
+NLM_EXTERN SABlockPtr AddEmptySegments(SABlockPtr sabp)
 {
    SABlockPtr  sabp_head;
    SegmentPtr  segp;
@@ -3134,7 +3140,7 @@ SABlockPtr AddEmptySegments(SABlockPtr sabp)
 *  coordinates to zero-based values.
 **********************************************************/
 
-SABlockPtr FillInUnaligned(SABlockPtr sabp)
+NLM_EXTERN SABlockPtr FillInUnaligned(SABlockPtr sabp)
 {
    Int4        c;
    Int4        i;
@@ -3210,7 +3216,7 @@ SABlockPtr FillInUnaligned(SABlockPtr sabp)
 *
 *****************************************************************************/
 
-SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn)
+NLM_EXTERN SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn)
 {
     SABlock *sabp;
     
@@ -3232,7 +3238,7 @@ SABlock * SAReturnBlock(SABlock *sabpHead, Int4 lColumn)
 *
 *****************************************************************************/
 
-Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow)
+NLM_EXTERN Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow)
 {
     SABlock *sabp;
     Int4 i;
@@ -3258,7 +3264,7 @@ Segment * SAReturnSegment(SABlock *sabpHead, Int4 lColumn, Int4 lRow)
 *
 *****************************************************************************/
 
-Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData)
+NLM_EXTERN Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData)
 {
     Segment *segp;
     SABlock *sabp;
@@ -3281,7 +3287,7 @@ Int4 SATraverse(SABlock *sabpHead, pfnSAFunction pFunction, void *pData)
 *
 *****************************************************************************/
 
-void SAClearMove(Segment *pSegment, void *pData)
+NLM_EXTERN void SAClearMove(Segment *pSegment, void *pData)
 {
     if(pSegment == NULL) return;
     pSegment->move = FALSE;
@@ -3294,7 +3300,7 @@ void SAClearMove(Segment *pSegment, void *pData)
 *
 *****************************************************************************/
 
-Int4 SATraverseBlock(SABlock *sabpHead, pfnSABlockFunction pFunction,
+NLM_EXTERN Int4 SATraverseBlock(SABlock *sabpHead, pfnSABlockFunction pFunction,
          void * pData)
 {
     SABlock *sabp;
@@ -3316,7 +3322,7 @@ Int4 SATraverseBlock(SABlock *sabpHead, pfnSABlockFunction pFunction,
 *
 *****************************************************************************/
 
-void SARegionBounds(SABlock *sabp, void *pData)
+NLM_EXTERN void SARegionBounds(SABlock *sabp, void *pData)
 {
     if(sabp == NULL) return;
     if(sabp->RegionID > *(Int4 *)pData) *(Int4 *)pData = sabp->RegionID;

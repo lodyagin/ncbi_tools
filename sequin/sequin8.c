@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.104 $
+* $Revision: 6.109 $
 *
 * File Description: 
 *
@@ -1178,6 +1178,7 @@ static void TakeTop10Alignments (SeqAnnotPtr sap)
 static void DoOnePub (PubdescPtr pdp)
 
 {
+  ValNodePtr    citartptr = NULL;
   Int4          muid = 0;
   Int4          pmid = 0;
   ValNodePtr    tmp = NULL;
@@ -1189,6 +1190,8 @@ static void DoOnePub (PubdescPtr pdp)
         muid = vnp->data.intvalue;
       } else if (vnp->choice == PUB_PMid) {
         pmid = vnp->data.intvalue;
+      } else if (vnp->choice == PUB_Article) {
+        citartptr = vnp;
       }
     }
     if (pmid != 0) {
@@ -1197,6 +1200,12 @@ static void DoOnePub (PubdescPtr pdp)
     } else if (muid != 0) {
       tmp = MedArchGetPub (muid);
       pmid = MedArchMu2Pm (muid);
+    } else if (citartptr != NULL) {
+      muid = MedArchCitMatch (citartptr);
+      if (muid != 0) {
+        tmp = MedArchGetPub (muid);
+        pmid = MedArchMu2Pm (muid);
+      }
     }
     if (tmp != NULL) {
       if (pmid != 0) {
@@ -1362,12 +1371,20 @@ extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
 {
   BioseqPtr      bsp;
   Int2           genCode;
+  SeqEntryPtr    oldscope;
   OMProcControl  ompc;
   SeqEntryPtr    sep;
   SeqFeatPtr     sfp = NULL;
 
   if (sap == NULL) return entityID;
   bsp = GetBioseqReferencedByAnnot (sap, entityID);
+  if (bsp == NULL) {
+    oldscope = SeqEntrySetScope (NULL);
+    if (oldscope != NULL) {
+      bsp = GetBioseqReferencedByAnnot (sap, entityID);
+      SeqEntrySetScope (oldscope);
+    }
+  }
   if (bsp != NULL) {
     sep = SeqMgrGetSeqEntryForData (bsp);
     entityID = ObjMgrGetEntityIDForChoice (sep);
@@ -1743,6 +1760,7 @@ static void RemoveAsnObject (IteM i, Boolean feature)
   RemoveFormPtr      rfp;
   SeqEntryPtr        sep;
   StdEditorProcsPtr  sepp;
+  Char               str [256];
   Uint2              subtype;
   CharPtr            title;
   ValNodePtr         vnp;
@@ -1800,18 +1818,22 @@ static void RemoveAsnObject (IteM i, Boolean feature)
     while (curr != NULL) {
       if (key != FEATDEF_BAD) {
         subtype = curr->featdef_key;
-        if (subtype != FEATDEF_misc_RNA &&
-            subtype != FEATDEF_precursor_RNA &&
-            subtype != FEATDEF_mat_peptide &&
-            subtype != FEATDEF_sig_peptide &&
-            subtype != FEATDEF_transit_peptide) {
-          vnp = ValNodeNew (head);
-          if (head == NULL) {
-            head = vnp;
-          }
-          if (vnp != NULL) {
-            vnp->choice = subtype;
+        vnp = ValNodeNew (head);
+        if (head == NULL) {
+          head = vnp;
+        }
+        if (vnp != NULL) {
+          vnp->choice = subtype;
+          if (subtype != FEATDEF_misc_RNA &&
+              subtype != FEATDEF_precursor_RNA &&
+              subtype != FEATDEF_mat_peptide &&
+              subtype != FEATDEF_sig_peptide &&
+              subtype != FEATDEF_transit_peptide) {
             vnp->data.ptrvalue = StringSave (curr->typelabel);
+          } else {
+            StringNCpy_0 (str, curr->typelabel, sizeof (str) - 10);
+            StringCat (str, "_imp");
+            vnp->data.ptrvalue = StringSave (str);
           }
         }
       }
@@ -2400,6 +2422,7 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 typedef struct refgeneuserdialog {
   DIALOG_MESSAGE_BLOCK
   DialoG        fields;
+  GrouP         status;
 } RefgeneUserDialog, PNTR RefgeneUserDialogPtr;
 
 typedef struct refgeneuserform {
@@ -2562,7 +2585,10 @@ static Pointer VisStringDialogToUserFieldPtr (DialoG d)
 static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
 
 {
+  UserFieldPtr          curr;
+  ObjectIdPtr           oip;
   RefgeneUserDialogPtr  rdp;
+  CharPtr               str;
   UserObjectPtr         uop;
 
   rdp = (RefgeneUserDialogPtr) GetObjectExtra (d);
@@ -2570,9 +2596,27 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
   uop = (UserObjectPtr) data;
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "RefGeneTracking") != 0) {
     PointerToDialog (rdp->fields, NULL);
+    SetValue (rdp->status, 0);
     return;
   }
   PointerToDialog (rdp->fields, uop->data);
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Status") == 0) {
+      break;
+    }
+  }
+  if (curr != NULL && curr->choice == 1) {
+    str = (CharPtr) curr->data.ptrvalue;
+    if (StringICmp (str, "Provisional") == 0) {
+      SetValue (rdp->status, 1);
+      return;
+    } else if (StringICmp (str, "Reviewed") == 0) {
+      SetValue (rdp->status, 2);
+      return;
+    }
+  }
+  SetValue (rdp->status, 0);
 }
 
 static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
@@ -2587,6 +2631,7 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
   Boolean               okay;
   RefgeneUserDialogPtr  rdp;
   Boolean               seqChange;
+  Int2                  status;
   CharPtr               str;
   TagListPtr            tlp;
   CharPtr               txt [5];
@@ -2599,6 +2644,13 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
   uop = CreateRefGeneTrackUserObject ();
   if (uop == NULL) return NULL;
+
+  status = GetValue (rdp->status);
+  if (status == 1) {
+    AddStatusToRefGeneTrackUserObject (uop, "Provisional");
+  } else if (status == 2) {
+    AddStatusToRefGeneTrackUserObject (uop, "Reviewed");
+  }
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
   if (tlp != NULL && tlp->vnp != NULL) {
@@ -2662,6 +2714,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
   GrouP                 q;
   RefgeneUserDialogPtr  rdp;
   TagListPtr            tlp;
+  GrouP                 x;
 
   p = HiddenGroup (g, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -2673,6 +2726,12 @@ static DialoG CreateRefGeneDialog (GrouP g)
   rdp->dialog = (DialoG) p;
   rdp->todialog = UserObjectPtrToRefGeneDialog;
   rdp->fromdialog = RefGeneDialogToUserObjectPtr;
+
+  x = HiddenGroup (p, 3, 0, NULL);
+  /* StaticPrompt (x, "Status", 0, stdLineHeight, programFont, 'l'); */
+  rdp->status = HiddenGroup (x, 3, 0, NULL);
+  RadioButton (rdp->status, "Provisional");
+  RadioButton (rdp->status, "Reviewed");
 
   q = HiddenGroup (p, -6, 0, NULL);
   lastppt = NULL;
@@ -2691,6 +2750,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
     AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) lastppt, NULL);
     AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [4], (HANDLE) ppt, NULL);
   }
+  AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) q, NULL);
   return (DialoG) p;
 }
 
@@ -3685,7 +3745,7 @@ static Boolean LIBCALLBACK SequinHandleURLResults (CONN conn, VoidPtr userdata, 
   QUERY_CopyResultsToFile (conn, fp);
   FileClose (fp);
   if (! SequinHandleNetResults (path)) {
-    LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed");
+    /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
   }
   FileRemove (path);
   return TRUE;
@@ -5253,168 +5313,5 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
   ValNodeFreeData (head1);
   ValNodeFreeData (head2);
   return m;
-}
-
-/***********************/
-
-/* most of the following code will be extern and go in access/entrez2.[ch] */
-
-#include <objent2.h>
-
-static Entrez2RequestPtr CreateRequest (CharPtr tool)
-
-{
-  Entrez2RequestPtr  e2rp;
-
-  e2rp = Entrez2RequestNew ();
-  if (e2rp == NULL) return NULL;
-  e2rp->version = 1;
-  e2rp->tool = StringSaveNoNull (tool);
-
-  return e2rp;
-}
-
-static Entrez2RequestPtr EntrezCreateGetInfoRequest (CharPtr tool)
-
-{
-  Entrez2RequestPtr  e2rp;
-  ValNodePtr         vnp;
-
-  e2rp = CreateRequest (tool);
-  if (e2rp == NULL) return NULL;
-
-  vnp = ValNodeNew (NULL);
-  if (vnp == NULL) return NULL;
-  vnp->choice = E2Request_get_info;
-  vnp->data.ptrvalue = NULL;
-  vnp->next = NULL;
-
-  e2rp->request = vnp;
-
-  return e2rp;
-}
-
-static Entrez2RequestPtr EntrezCreateDocSumRequest (CharPtr tool,
-                                                    CharPtr db,
-                                                    Int4 uid)
-
-{
-  ByteStorePtr       bs;
-  Entrez2IdListPtr   e2id;
-  Entrez2RequestPtr  e2rp;
-  ValNodePtr         vnp;
-
-  e2rp = CreateRequest (tool);
-  if (e2rp == NULL) return NULL;
-
-  vnp = ValNodeNew (NULL);
-  if (vnp == NULL) return NULL;
-  vnp->choice = E2Request_get_docsum;
-
-  e2id = Entrez2IdListNew ();
-  if (e2id == NULL) return NULL;
-  e2id->db = StringSaveNoNull (db);
-  e2id->num = 1;
-
-  bs = BSNew (4);
-  if (bs == NULL) return NULL;
-  e2id->uids = (Pointer) bs;
-
-  Nlm_BSPutUint4 (bs, (Uint4) uid);
-
-  vnp->data.ptrvalue = (Pointer) e2id;
-  vnp->next = NULL;
-
-  e2rp->request = vnp;
-
-  return e2rp;
-}
-
-static Boolean LIBCALLBACK TestEntrezQueryResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
-
-{
-  AsnIoConnPtr     aicp;
-  AsnIoPtr         aop;
-  /*
-  AsnModulePtr     amp;
-  AsnTypePtr       atp;
-  */
-  Entrez2ReplyPtr  e2rp;
-  Char             path [PATH_MAX];
-
-  /*
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp, "Entrez2-reply");
-  */
-  aicp = QUERY_AsnIoConnOpen ("rb", conn);
-  e2rp = Entrez2ReplyAsnRead (aicp->aip, NULL);
-  QUERY_AsnIoConnClose (aicp);
-  TmpNam (path);
-  aop = AsnIoOpen (path, "w");
-  Entrez2ReplyAsnWrite (e2rp, aop, NULL);
-  AsnIoFlush (aop);
-  AsnIoClose (aop);
-  LaunchGeneralTextViewer (path, "Entrez2ReplyAsnRead");
-  FileRemove (path);
-  return TRUE;
-}
-
-static CharPtr e2rMemStr = "Entrez2-request ::= {\n" \
-"  request\n" \
-"    get-info NULL ,\n" \
-"  version 1 ,\n" \
-"  tool \"Sequin/2.90\" }\n";
-
-/* For testing purposes, this generates the following ASN.1 message:
-Entrez2-request ::= {
-  request
-    get-info NULL ,
-  version 1 ,
-  tool "Sequin/2.90" }
-*/
-
-extern void TestEntrezQuery (IteM i);
-extern void TestEntrezQuery (IteM i)
-
-{
-  AsnIoConnPtr       aicp;
-  AsnIoMemPtr        aimp;
-  CONN               conn;
-  Entrez2RequestPtr  e2rp;
-  Char               progname [64];
-
-  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
-
-  /*
-  e2rp = EntrezCreateDocSumRequest (progname, "Medline", 89197757);
-  */
-  /*
-  e2rp = EntrezCreateGetInfoRequest (progname);
-  */
-
-  /* hard code test query here for now */
-  aimp = AsnIoMemOpen ("r", (BytePtr) e2rMemStr, (Int4) StringLen (e2rMemStr));
-  if (aimp == NULL || aimp->aip == NULL) return;
-  e2rp = Entrez2RequestAsnRead (aimp->aip, NULL);
-  AsnIoMemClose (aimp);
-
-  if (e2rp == NULL) return;
-
-  conn = QUERY_OpenUrlQuery ("pluto.nlm.nih.gov", 5701,
-                             /* "/fcgi-bin/olegh/entrez2server", */
-                             "/cgi-bin/entrez2server",
-                             NULL, progname, 30, eMIME_AsnBinary,
-                             URLC_SURE_FLUSH /* | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT */);
-
-  aicp = QUERY_AsnIoConnOpen ("wb", conn);
-  Entrez2RequestAsnWrite (e2rp, aicp->aip, NULL);
-  AsnIoFlush (aicp->aip);
-  QUERY_AsnIoConnClose (aicp);
-
-  QUERY_SendQuery (conn);
-
-  QUERY_AddToQueue (&urlquerylist, conn, TestEntrezQueryResultProc, NULL);
-
-  pendingqueries++;
 }
 

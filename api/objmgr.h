@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.19 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,24 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.19  1999/12/06 22:38:52  durand
+* add UPDATE_TYPE_CARETPOS to be used by DDV
+*
+* Revision 6.18  1999/12/03 23:17:23  lewisg
+* Patrick's new global update msg, argument passing when launching ddv, experimental editing
+*
+* Revision 6.17  1999/11/18 00:21:42  lewisg
+* draw speedups and selection on mouseup
+*
+* Revision 6.16  1999/10/29 18:53:08  durand
+* add DDVUpdateMSG typedef
+*
+* Revision 6.15  1999/10/15 20:56:40  lewisg
+* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
+*
+* Revision 6.14  1999/09/27 20:03:15  kans
+* added rowID to OMMsgStruct, new ObjMgrSendRowMsg function
+*
 * Revision 6.13  1999/08/11 15:17:54  kans
 * added ObjMgrFreeByEntityID
 *
@@ -282,7 +300,8 @@ typedef struct ommsgstruct {
 	Int2 message;    /* the message code, defined below */
 	Uint2 entityID,
 		itemID,
-		itemtype;
+		itemtype,
+		rowID;
 	Uint2 fromProcID,
 		toProcID;         /* allows communication to and from particular procs */
 	Pointer procmsgdata;  /* procedure specific data to be sent, assumes toProcID set */
@@ -325,6 +344,22 @@ typedef Int2 (LIBCALLBACK *OMMessageFunc) PROTO((OMMsgStructPtr message));
 #define OM_MSG_SHOW        12     /* show sequence */
 #define OM_MSG_PROCESS     13     /* process-specific message */
 #define OM_MSG_FLUSH       14     /* close all existed windows */
+#define OM_MSG_MOUSEUP     15     /* mouse up on selection has occurred */
+
+/*****************************************************************************
+*
+*  data type used to send additional information for an update msg
+*
+*****************************************************************************/
+#define UPDATE_TYPE_LAYOUT       (1)
+#define UPDATE_TYPE_COLOR        (2)
+#define UPDATE_TYPE_EDIT_DELBSP  (3)
+#define UPDATE_TYPE_CARETPOS     (4)
+
+typedef struct ddvupdatemsg{
+	Uint1   type;
+	Pointer data;
+	}DDVUpdateMSG, PNTR DDVUpdateMSGPtr;
 
 
 /*****************************************************************************
@@ -342,6 +377,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg PROTO((Uint2 msg, Uint2 entityID, Uint2
 
 NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg PROTO((Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
                                                     Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata));
+
+NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg PROTO((Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 rowID));
 
 	                              /* user supplied data on entity */
 typedef struct omuserdata {
@@ -495,8 +532,9 @@ typedef struct omproccontrol {
 #define OMPROC_REPLACE	11
 #define OMPROC_FILTER	12
 #define OMPROC_FETCH	13
+#define OMPROC_COLORMGR 14
 
-#define OMPROC_MAX      13
+#define OMPROC_MAX      14
 
 
 #define NUM_OMD 50

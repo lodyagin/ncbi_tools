@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -366,9 +366,9 @@ NLM_EXTERN Boolean stringhasnochar (CharPtr str, Int4 from, Int4 to)
   if (str != NULL) {
      if (from <= -1) 
         from = 0;
-     if (to <= -1 || to > StringLen(str)) 
+     if (to <= (Int4)-1 || to > (Int4)StringLen(str)) 
         to = StringLen(str);
-     if (from < to && from < StringLen(str)) {
+     if (from < to && from < (Int4)StringLen(str)) {
         ch = TO_UPPER(str[from]);
         while (ch != '\0' && from < to) 
         {
@@ -394,7 +394,7 @@ NLM_EXTERN Int1 getgapsfromstring (CharPtr str, Int4 from, Int4 to, BoolPtr *gap
      boolgap = *gapline;
      if (from <= -1) 
         from = 0;
-     if (to <= -1 || to > StringLen(str)) 
+     if (to <= (Int4)-1 || to > (Int4)StringLen(str)) 
         to = StringLen(str);
      else 
         to = MIN (to, (Int4)StringLen(str));
@@ -867,6 +867,8 @@ NLM_EXTERN ValNodePtr SeqfeatlistFree (ValNodePtr feathead)
   ValNodePtr     vnp, next;
   SelEdStructPtr sesp;
  
+  if (feathead==NULL)
+     return NULL;
   vnp = feathead; 
   while (vnp != NULL)
   {
@@ -3219,7 +3221,9 @@ NLM_EXTERN Boolean insertchar (CharPtr str, Int4 pos, SeqIdPtr target, Uint1 mol
      return FALSE; 
   insertboard.choice = SEQID_LOCAL;
   oip.str = insertstr;
+  oip.id = 0;
   insertboard.data.ptrvalue = (ObjectIdPtr) &oip; 
+  insertboard.next = NULL;
   sep = StringToSeqEntry (str, &insertboard, strlens, mol_type);
   if (sep != NULL) {
      ok = BioseqInsert(&insertboard, FIRST_RESIDUE, LAST_RESIDUE, Seq_strand_plus, target, pos, TRUE, TRUE, spliteditmode);

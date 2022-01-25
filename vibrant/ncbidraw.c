@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,23 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.26  2000/01/24 16:11:13  lewisg
+* speed up seqid comparison in color manager, make fast windows version of SetColor()
+*
+* Revision 6.25  2000/01/13 23:37:13  beloslyu
+* changes because of port to HP-UX 11.0
+*
+* Revision 6.24  1999/12/21 18:04:23  kans
+* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
+*
+* Revision 6.23  1999/10/20 23:08:10  vakatov
+* + Nlm_SetCurrentGIF() -- to set Nlm_currentGIF directly.
+* + Nlm_DestroyGIF() -- to destroy Nlm_currentGIF.
+* Nlm_CreateGIF() and Nlm_SaveGIF() -- do not destroy Nlm_currentGIF.
+*
+* Revision 6.22  1999/10/04 18:44:02  vakatov
+* [WIN_GIF] Nlm_SelectFont() -- fixed the way the font gets chosen
+*
 * Revision 6.21  1999/03/17 15:10:47  vakatov
 * + Nlm_XLoadStandardFont() to find a "last-resort" font
 *
@@ -246,38 +263,40 @@
 #include <vibincld.h>
 
 #ifdef VAR_ARGS
-#include <varargs.h>
+#  include <varargs.h>
 #else
-#include <stdarg.h>
+#  include <stdarg.h>
 #endif
 
 #ifdef WIN_GIF
-#include <gifgen.h>
-#ifdef Nlm_RgnTool
-#undef Nlm_RgnTool 
-#endif
-#ifdef Nlm_RectTool
-#undef Nlm_RectTool 
-#endif
-#define Nlm_RectTool Nlm_RecT
-#ifdef WIN_MOTIF
-#undef WIN_MOTIF
-#ifdef WIN_X
-#undef WIN_X
-#endif
-#define Nlm_RgnTool Nlm_VoidPtr
-#endif
-#ifdef WIN_MAC
-#undef WIN_MAC
-#define Nlm_RgnTool Handle
-#endif
-#ifdef WIN_MSWIN
-#undef WIN_MSWIN
-#define Nlm_RgnTool HANDLE
-#endif
-#endif
+#  include <gifgen.h>
+#  ifdef Nlm_RgnTool
+#    undef Nlm_RgnTool 
+#  endif
+#  ifdef Nlm_RectTool
+#    undef Nlm_RectTool 
+#  endif
+#  define Nlm_RectTool Nlm_RecT
+#  ifdef WIN_MOTIF
+#    undef WIN_MOTIF
+#    ifdef WIN_X
+#      undef WIN_X
+#    endif
+#    define Nlm_RgnTool Nlm_VoidPtr
+#  endif
+#  ifdef WIN_MAC
+#    undef WIN_MAC
+#    define Nlm_RgnTool Handle
+#  endif
+#  ifdef WIN_MSWIN
+#    undef WIN_MSWIN
+#    define Nlm_RgnTool HANDLE
+#  endif
+#else  /* WIN_GIF */
+typedef struct gdImageStruct { void* dummy; } gdImage;
+#endif /* WIN_GIF */
 
-#ifdef WIN_X
+#if defined(WIN_X) && !defined(__hpux)
 #include <X11/Xmu/Drawing.h>
 #endif
 
@@ -498,40 +517,60 @@ extern  XFontStruct * Nlm_XLoadQueryFont (Display *d, Nlm_CharPtr fDescr, Nlm_Bo
 extern Nlm_Boolean Nlm_CreateGIF(Nlm_Int2 width, Nlm_Int2 height, Nlm_Boolean transparent)
 {
 #ifdef WIN_GIF
-  if ( Nlm_currentGIF != NULL ){
-    gdImageDestroy ( Nlm_currentGIF );
-  }
-  Nlm_currentGIF = gdImageCreate ( (int)width, (int)height );
-  if ( Nlm_currentGIF != NULL ) {
-  	if (transparent) {
-      gdImageColorTransparent ( Nlm_currentGIF, 
-      	gdImageColorAllocate  (Nlm_currentGIF, 255, 255, 255) );
-    } else {
-      gdImageColorAllocate  (Nlm_currentGIF, 255, 255, 255);
-    }
-    gdImageColorAllocate  (Nlm_currentGIF, 0, 0, 0);
-    Nlm_curGIFColor = 1;
-    Nlm_curGIFLType = GIF_SOLID;
-    Nlm_curGIFFont = gdFont7X13b;
-    Nlm_curGIFPoint.x = 0;
-    Nlm_curGIFPoint.y = 0;
+  gdImage* im = gdImageCreate((int)width, (int)height);
+  if ( im ) {
+    int white_color = gdImageColorAllocate(im, 255, 255, 255);
+    if ( transparent )
+      gdImageColorTransparent(im, white_color);
+    gdImageColorAllocate(im, 0, 0, 0);
+
+    Nlm_SetCurrentGIF(im);
     return TRUE;
   }
-#endif
+#endif /* WIN_GIF */
   return FALSE;
 }
 
-Nlm_Boolean  Nlm_SaveGIF ( FILE PNTR out )
+
+extern Nlm_Boolean Nlm_SaveGIF(FILE* out)
 {
 #ifdef WIN_GIF
-  if ( (Nlm_currentGIF != NULL) && (out != NULL) ) {
-    gdImageGif ( Nlm_currentGIF, out );
-    gdImageDestroy ( Nlm_currentGIF );
-    Nlm_currentGIF = NULL;
+  if (Nlm_currentGIF  &&  out) {
+    gdImageGif(Nlm_currentGIF, out);
     return TRUE;
   }
-#endif
+#endif /* WIN_GIF */
   return FALSE;
+}
+
+
+extern void Nlm_DestroyGIF(void)
+{
+#ifdef WIN_GIF
+  gdImage* im = Nlm_SetCurrentGIF(0);
+  if ( im )
+    gdImageDestroy(im);
+#endif /* WIN_GIF */
+}
+
+
+extern struct gdImageStruct* Nlm_SetCurrentGIF(struct gdImageStruct* im)
+{
+#ifdef WIN_GIF
+  gdImage* im_prev = Nlm_currentGIF;
+  if (im == im_prev)
+    return im;
+
+  Nlm_curGIFColor   = 1;
+  Nlm_curGIFLType   = GIF_SOLID;
+  Nlm_curGIFFont    = gdFont7X13b;
+  Nlm_curGIFPoint.x = 0;
+  Nlm_curGIFPoint.y = 0;
+  Nlm_currentGIF    = im;
+  return im_prev;
+#else
+  return 0;
+#endif /* WIN_GIF */
 }
 
 
@@ -1374,6 +1413,28 @@ extern Nlm_Uint4 Nlm_GetColor (void)
 #endif
 #ifdef WIN_GIF
   return (Nlm_Uint4)Nlm_curGIFColor;
+#endif
+}
+
+/*
+Used to set the color of text or foreground color.  This function is the same
+as Nlm_SetColor except on Windows, where it does not call the
+extremely expensive Nlm_RecreateBrushes()
+*/
+
+extern void Nlm_SetColorEx (Nlm_Uint4 color)
+{
+#ifdef WIN_MAC
+    Nlm_SetColor (color);
+#endif
+#ifdef WIN_MSWIN
+    if (Nlm_currentHDC != NULL) {
+        SetTextColor (Nlm_currentHDC, (Nlm_Int4) color);
+        winTextColor = color;
+    }
+#endif
+#ifdef WIN_X
+    Nlm_SetColor (color);
 #endif
 }
 
@@ -2699,15 +2760,15 @@ extern void Nlm_SelectFont (Nlm_FonT f)
     }
 #endif
 #ifdef WIN_GIF
-    if ( fdata.fontspec.size <= 16 ){
-      Nlm_curGIFFont = gdFont7X13b;
-    } else if ( fdata.fontspec.size == 15 ){
+    if (fdata.fontspec.size >= 16) {
+      Nlm_curGIFFont = gdFont8X16;
+    } else if (fdata.fontspec.size >= 15) {
       Nlm_curGIFFont = gdFont9X15b;
-    } else if ( fdata.fontspec.size <= 13 ){
+    } else if (fdata.fontspec.size >= 13) {
       Nlm_curGIFFont = gdFont7X13b;
-    } else if ( fdata.fontspec.size <= 11 ){
+    } else if (fdata.fontspec.size >= 10) {
       Nlm_curGIFFont = gdFont6X12;
-    }else{
+    } else {
       Nlm_curGIFFont = gdFont5X8;
     }
 #endif
@@ -6240,8 +6301,8 @@ extern void Nlm_SetUpDrawingTools (void)
 {
 #ifdef WIN_MAC
   RgnPtr     rptr;
-  SysEnvRec  sysenv;
   Nlm_FontSpec fsp;
+  long       gval;
   char       tmpFontName[256];
 
 
@@ -6280,8 +6341,12 @@ extern void Nlm_SetUpDrawingTools (void)
   Nlm_stdFontHeight = Nlm_FontHeight ();
   Nlm_stdLineHeight = Nlm_LineHeight ();
   Nlm_stdCharWidth = Nlm_MaxCharWidth ();
-  SysEnvirons (1, &sysenv);
-  Nlm_hasColorQD = sysenv.hasColorQD;
+  /* gestalt for quickdraw features are defined as bits in a bitfield
+     for example gestaltHasColor = 0, thus we need to test for lsb set
+   */
+  if( Gestalt( gestaltQuickdrawFeatures, &gval) == noErr){
+      Nlm_hasColorQD = (gval && (1 << gestaltHasColor));
+  }
   if (Nlm_hasColorQD) {
     Nlm_RGBforeColor.red = 0;
     Nlm_RGBforeColor.green = 0;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Cn3d file export to Kinemage / PDB sub menu... 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dxprt.h,v $
+* Revision 6.1  1999/10/29 14:15:32  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
 * Revision 6.0  1997/08/25 18:13:55  madden
 * Revision changed to 6.0
 *
@@ -51,22 +54,19 @@
 *
 * ==========================================================================
 */
- 
+
 /* cn3dxprt.h */
 
 #ifndef _CN3DXPRT_
 #define _CN3DXPTR_ 1
- 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-MenU LIBCALL Cn3D_ExportSub (MenU m);
- 
+MenU LIBCALL Cn3D_ExportSub(MenU m);
+
 #ifdef __cplusplus
 }
 #endif
-
 #endif
-
- 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object manager interface for module NCBI-Biblio
 *
@@ -42,6 +42,9 @@
 *                      C++ compilers take to be a constructor function).
 *
 * $Log: objbibli.h,v $
+* Revision 6.1  2000/01/18 19:40:52  ostell
+* added support for PubStatusDate, ArticleIds
+*
 * Revision 6.0  1997/08/25 18:49:23  madden
 * Revision changed to 6.0
 *
@@ -89,6 +92,58 @@ extern "C" {
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL BiblioAsnLoad PROTO((void));
+
+/*****************************************************************************
+*
+*   ArticleId
+*
+*****************************************************************************/
+typedef ValNode ArticleId, PNTR ArticleIdPtr;
+
+#define ARTICLEID_PUBMED 1    /* pubmed id - integer */
+#define ARTICLEID_MEDLINE 2   /* medline uid - integer */
+#define ARTICLEID_DOI 3       /* doi - string */
+#define ARTICLEID_PII 4       /* pii  - string */
+#define ARTICLEID_PMCID 5     /* pubmed central id - integer */
+#define ARTICLEID_PMCPID 6    /* publisherid from Pubmed central - string */
+#define ARTICLEID_PMPID 7     /* publisherId from pubmed - string */
+#define ARTICLEID_OTHER 8     /* generic - DbTag */
+
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdNew PROTO((void));
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdFree PROTO((ArticleIdPtr aidp));
+NLM_EXTERN ArticleIdPtr LIBCALL ArticleIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean  LIBCALL ArticleIdAsnWrite PROTO((ArticleIdPtr aidp, AsnIoPtr aip, AsnTypePtr atp));
+
+
+/*****************************************************************************
+*
+*   PubStatusDate
+*
+*****************************************************************************/
+#define PUBSTATUS_received 1
+#define PUBSTATUS_accepted 2
+#define PUBSTATUS_epublish 3
+#define PUBSTATUS_ppublish 4
+#define PUBSTATUS_revised 5
+#define PUBSTATUS_pmc 6
+#define PUBSTATUS_pmcr 7
+#define PUBSTATUS_pubmed 8
+#define PUBSTATUS_pubmedr 9
+#define PUBSTATUS_aheadofprint 10
+#define PUBSTATUS_premedline 11
+#define PUBSTATUS_medline 12
+#define PUBSTATUS_other 255
+
+typedef struct _pubstatusdate_ {
+	Uint1 pubstatus;  
+	DatePtr date;
+        struct _pubstatusdate_ * next;
+} PubStatusDate, PNTR PubStatusDatePtr;
+
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateNew PROTO((void));
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateFree PROTO((PubStatusDatePtr psdp));
+NLM_EXTERN PubStatusDatePtr LIBCALL PubStatusDateAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean  LIBCALL PubStatusDateAsnWrite PROTO((PubStatusDatePtr psdp, AsnIoPtr aip, AsnTypePtr atp));
 
 /*****************************************************************************
 *
@@ -158,6 +213,7 @@ typedef struct citart {
 	AuthListPtr authors;
 	Uint1 from;             /* [1]=journal,[2]=book,[3]=proc */
 	Pointer fromptr;
+	ArticleIdPtr ids;
 } CitArt, PNTR CitArtPtr;
 
 NLM_EXTERN CitArtPtr LIBCALL CitArtNew PROTO((void));
@@ -199,6 +255,8 @@ typedef struct imprint {
 	Uint1 prepub;   /* 0=not set 1=submitted 2=in-press 255=other */
 	CharPtr part_supi;   /* part/sup of issue */
 	CitRetractPtr retract;
+        Uint1 pubstatus;
+        PubStatusDatePtr history;
 } Imprint, PNTR ImprintPtr;
 
 NLM_EXTERN ImprintPtr LIBCALL ImprintNew PROTO((void));

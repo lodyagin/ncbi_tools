@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,14 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.4  1999/11/17 18:16:15  bazhin
+* If failed to get pub from MedArch server, then does not return NULL,
+* but use input one.
+* Also removed unused variables.
+*
+* Revision 6.3  1999/11/08 19:32:44  kans
+* removed unnecessary for loop initialization picked up by IRIX C comnpiler
+*
 * Revision 6.2  1999/05/06 18:53:53  kans
 * FixPubEquiv now works on PMID as well as MUID
 *
@@ -237,7 +245,7 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
 static Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp) 
 {
 	Int2 num, numnew, i, match, n;
-	ValNodePtr v, pub;
+	ValNodePtr v;
 	CharPtr ptr, mu[10];
 	AuthorPtr	aup;
     NameStdPtr  namestd;
@@ -336,7 +344,7 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		sap = bssp->annot;
 	}
 
-	for (vnp; vnp != NULL; vnp = vnp->next)
+	for (; vnp != NULL; vnp = vnp->next)
 	{
 		if (vnp->choice == Seq_descr_pub)
 		{
@@ -346,7 +354,7 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		}
 	}
 
-	for (sap; sap != NULL; sap = sap->next)
+	for (; sap != NULL; sap = sap->next)
 	{
 		if (sap->type == 1)   /* feature table */
 		{
@@ -391,9 +399,8 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 *****************************************************************************/
 ValNodePtr FixPub (ValNodePtr pub, FindPubOptionPtr fpop)
 {
-	ValNodePtr newpub, tmp, v;
+	ValNodePtr newpub, tmp;
 	Int4 		muid;
-	Int2 		num, numnew;
 	CitArtPtr	cit;
 	
 
@@ -502,12 +509,10 @@ ValNodePtr SplitMedlineEntry(MedlineEntryPtr mep)
 *****************************************************************************/
 ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 {
-	ValNodePtr tmp, newpub, muidptr=NULL, pmidptr=NULL, citartptr=NULL, mepptr = NULL,
+	ValNodePtr tmp, muidptr=NULL, pmidptr=NULL, citartptr=NULL, mepptr = NULL,
 		otherptr = NULL, tmp2, next, new;
 	Int2 muidctr = 0, pmidctr = 0, citartctr = 0, mepctr = 0, otherctr = 0;
 	Int4 muid = 0, oldmuid=0, pmid = 0, oldpmid=0;
-	Int2 num, numnew;
-	ValNodePtr v;
 	CitArtPtr	cit;
 
 	if (pube == NULL) return NULL;
@@ -765,6 +770,23 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 							citartptr->next = muidptr;
 					}
 				}
+				else
+				{
+					ErrPostEx(SEV_ERROR, 0, 0, "Failed to get pub from MedArch server for muid = %ld. Input one is preserved.", muid);
+					if (muidptr != NULL)
+						tmp = muidptr;
+					else
+					{
+						tmp = ValNodeNew(tmp2);
+						tmp->choice = PUB_Muid;
+					}
+					if (tmp2 == NULL)
+						pube = tmp;
+					tmp->data.intvalue = muid;
+					tmp2 = tmp;
+					tmp->next = citartptr;
+					MedlineToISO(citartptr);
+				}
 			}
 			else
 			{
@@ -884,9 +906,6 @@ ValNodePtr MedlineToISO (ValNodePtr tmp)
 {
 	ValNodePtr titlenode, oldnames, curr, tmp2, v;
 	AuthListPtr alp;
-	AuthorPtr ap;
-	PersonIdPtr pip;
-	NameStdPtr nsp;
 	CitArtPtr cap;
 	CitJourPtr cjp;
 	Int4 titlenum;
@@ -1006,7 +1025,7 @@ void SplitMlAuthorName( CharPtr name, CharPtr last, CharPtr initials, CharPtr su
     	while((p > last) && (*p == ' '))
 		{
 			*p = '\0';
-			*p--;
+			p--;
 		}
 
 	    /* If the last token is not all upper case, and there are more than
@@ -1076,7 +1095,7 @@ ValNodePtr get_std_auth(CharPtr token, Uint1 format)
 {
    static CharPtr      auth, eptr;
 	Char last[80], initials[20], suffix[20];
-   ValNodePtr  tmp;
+   ValNodePtr  tmp = NULL;
    NameStdPtr  namestd = NULL;
    AuthorPtr  aup;
    PersonIdPtr pid;

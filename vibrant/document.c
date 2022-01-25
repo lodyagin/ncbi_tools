@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,12 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.8  1999/11/05 19:59:35  beloslyu
+* cast inserted
+*
+* Revision 6.7  1999/11/02 19:13:53  kans
+* bulk append allows 32767 paragraphs
+*
 * Revision 6.6  1998/06/17 21:14:14  kans
 * reset document clears first, last highlight item
 *
@@ -795,7 +801,7 @@ static void RearrangeText (ItemPtr itemPtr, ParsePtr parsePtr, CharPtr text)
         }
         len += (Int4) minLines + (Int4) 4;
         str = NULL;
-        if (len < SIZE_MAX) {
+        if ((size_t)len < SIZE_MAX) {
           str = (CharPtr) MemNew ((size_t) (Uint4) len);
           if (str != NULL) {
             dst = str;
@@ -2775,7 +2781,7 @@ extern void BulkAppendItem (DoC d, Int2 numItems, DocPrntProc proc,
   ParData    parData;
   RecT       r;
 
-  if (d != NULL && numItems < 32767) {
+  if (d != NULL && numItems <= 32767) {
     GetPanelExtra ((PaneL) d, &ddata);
     if (ddata.master == NULL) {
       ddata.master = (MasterPtr) MemNew (sizeof (MasterData));

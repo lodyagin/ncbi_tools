@@ -90,6 +90,21 @@ Individual sequences must be < 350 KB in length, unless they represent a single 
 $^   ConflictingIdsOnBioseq, 24
 Two SeqIds of the same class was found on this Bioseq. This is probably a software error.
 
+$^   MolNuclAcid, 25
+The specific type of this nucleic acid (DNA or RNA) is not set.
+
+$^   ConflictingBiomolTech, 26
+HTGS/STS/GSS records should be genomic DNA. There is a conflict between the
+technique and expected molecule type.
+
+$^   SeqIdNameHasSpace, 27
+The Seq-id.name field should be a single word without any whitespace. This should be
+fixed by the database staff.
+
+$^   IdOnMultipleBioseqs, 28
+There are multiple occurrences of the same Seq-id in this record. Sequence
+identifiers must be unique within a record.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -141,6 +156,10 @@ $^   InconsistentBioSources, 11
 This population study has BioSource descriptors with different taxonomic names.
 All members of a population study should be from the same organism.
 
+$^   MissingLineage, 12
+A BioSource should have a taxonomic lineage, which can be obtained from the
+taxonomy network server.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -188,6 +207,9 @@ A parts set should not contain both nucleotide and protein Bioseqs.
 
 $^   PartsSetHasSets, 9
 A parts set should not contain BioseqSets.
+
+$^   FeaturePackagingProblem, 10
+A feature should be packaged on its bioseq, or on a set containing the Bisoeq.
 
 $$ SEQ_FEAT, 5
 
@@ -325,4 +347,80 @@ A \transl_except qualifier was not on a codon boundary.
 $^   TrnaCodonWrong, 33
 The tRNA codon recognized does not code for the indicated amino acid using the
 specified genetic code.
+
+$^   BothStrands, 34
+Feature location indicates that it is on both strands. This is not biologically
+possible for this kind of feature. Please indicate the correct strand (plus or
+minus) for this feature.
+
+$^   CDSgeneRange, 35
+A CDS is overlapped by a gene feature, but is not completely contained by it.
+This may be an annotation error.
+
+$^   CDSmRNArange, 36
+A CDS is overlapped by an mRNA feature, but the mRNA does not cover all
+intervals (i.e., exons) on the CDS. This may be an annotation error.
+
+$^ OverlappingPeptideFeat, 37
+The intervals on this processed protein feature overlap another protein feature.
+This may be caused by errors in originally annotating these features on DNA coordinates,
+where start or stop positions do not occur in between codon boundaries.  These then
+appear as errors when the features are converted to protein coordinates by mapping
+through the CDS.
+
+$$ SEQ_ALIGN, 6
+
+$^   SeqIdProblem, 1
+The seqence referenced by an alignment SeqID is not packaged in the record.
+
+$^   StrandRev, 2
+Please contact the sequence database for further help with this error.
+
+$^   DensegLenStart, 3
+Please contact the sequence database for further help with this error.
+
+$^   StartLessthanZero, 4
+Please contact the sequence database for further help with this error.
+
+$^   StartMorethanBiolen, 5
+Please contact the sequence database for further help with this error.
+
+$^   EndLessthanZero, 6
+Please contact the sequence database for further help with this error.
+
+$^   EndMorethanBiolen, 7
+Please contact the sequence database for further help with this error.
+
+$^   LenLessthanZero, 8
+Please contact the sequence database for further help with this error.
+
+$^   LenMorethanBiolen, 9
+Please contact the sequence database for further help with this error.
+
+$^   SumLenStart, 10
+Please contact the sequence database for further help with this error.
+
+$^   AlignDimSeqIdNotMatch, 11
+Please contact the sequence database for further help with this error.
+
+$^   SegsDimSeqIdNotMatch, 12
+Please contact the sequence database for further help with this error.
+
+$^   FastaLike, 13
+Please contact the sequence database for further help with this error.
+
+$^   NullSegs, 14
+Please contact the sequence database for further help with this error.
+
+$^   SegmentGap, 15
+Please contact the sequence database for further help with this error.
+
+$^   SegsDimOne, 16
+Please contact the sequence database for further help with this error.
+
+$^   AlignDimOne, 17
+Please contact the sequence database for further help with this error.
+
+$^   Segtype, 18
+Please contact the sequence database for further help with this error.
 

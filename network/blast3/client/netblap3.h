@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.21  1999/11/24 21:42:31  vakatov
+* Fixed for the C++ and/or MSVC DLL compilation
+*
+* Revision 1.20  1999/10/27 13:00:02  madden
+* Changes to return-parts
+*
 * Revision 1.19  1999/08/19 19:40:01  shavirin
 * Returned to previous version.
 *
@@ -90,10 +96,6 @@
 #ifndef _NETBLAP3_
 #define _NETBLAP3_ 1
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <ncbi.h>
 #include <sequtil.h>
 #include <blstspc.h>
@@ -102,11 +104,23 @@ extern "C" {
 #include <blastdef.h>
 #include <blastpri.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /* BLAST Overview options, more appropriate somewhere else? */
 #define BLAST_OVERVIEW_NONE 0
 #define BLAST_OVERVIEW_1 1
 
-typedef Boolean (LIBCALLBACK *NetProgressCallback) PROTO((BlastResponsePtr response, Boolean PNTR cancel));
+typedef Boolean (LIBCALLBACK *NetProgressCallback)(BlastResponsePtr response, Boolean PNTR cancel);
 
 
 typedef struct _blastnet3h {
@@ -132,79 +146,88 @@ BlastResponsePtr PNTR resp contains a response pointer of type BlastResponse_ini
 This function is MT-safe.
 */
 
-Boolean LIBCALL BlastInit PROTO((CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNTR resp));
+NLM_EXTERN Boolean LIBCALL BlastInit(CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNTR resp);
 
 
 
-SeqAlignPtr LIBCALL BlastBioseq PROTO((BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status));
+NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseq(BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status);
 
 /*
 The BlastNet3Hptr returned by BlastInitMt must be passed in.
 */
 
-Boolean LIBCALL BlastFini PROTO((BlastNet3Hptr bl3hptr));
+NLM_EXTERN Boolean LIBCALL BlastFini(BlastNet3Hptr bl3hptr);
 
 /*
 	Function to get a Bioseq for a give SeqIdPtr.  Should be used 
 	for BioseqFetch function.
 */
 
-BioseqPtr LIBCALL BlastGetBioseq PROTO((BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip));
+NLM_EXTERN BioseqPtr LIBCALL BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip);
 
-BlastNet3BlockPtr LIBCALL BlastNet3BlockNew PROTO((CharPtr program, CharPtr dbname));
+NLM_EXTERN BlastNet3BlockPtr LIBCALL BlastNet3BlockNew(CharPtr program, CharPtr dbname);
 
-BlastNet3BlockPtr LIBCALL BlastNet3BlockDestruct PROTO((BlastNet3BlockPtr blnet));
+NLM_EXTERN BlastNet3BlockPtr LIBCALL BlastNet3BlockDestruct(BlastNet3BlockPtr blnet);
 
-CharPtr LIBCALL Blast3GetMotd PROTO((BlastNet3Hptr bl3hptr));
+NLM_EXTERN CharPtr LIBCALL Blast3GetMotd(BlastNet3Hptr bl3hptr);
 
-SeqLocPtr LIBCALL BlastGetMaskedLoc PROTO((BlastNet3BlockPtr blnet3blkptr));
+NLM_EXTERN SeqLocPtr LIBCALL BlastGetMaskedLoc(BlastNet3BlockPtr blnet3blkptr);
 
-Boolean LIBCALL BlastNetBioseqFetchEnable PROTO((BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na, Boolean now));
+NLM_EXTERN Boolean LIBCALL BlastNetBioseqFetchEnable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na, Boolean now);
 
-void LIBCALL BlastNetBioseqFetchDisable PROTO((BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na));
+NLM_EXTERN void LIBCALL BlastNetBioseqFetchDisable(BlastNet3Hptr bl3hp, CharPtr dbname, Boolean is_na);
 
-BlastParametersPtr LIBCALL BlastOptionsToParameters PROTO((BLAST_OptionsBlkPtr options));
+NLM_EXTERN BlastParametersPtr LIBCALL BlastOptionsToParameters(BLAST_OptionsBlkPtr options);
 
 
-CharPtr LIBCALL BlastGetParameterBuffer PROTO((BlastNet3BlockPtr blnet3blkptr));
+NLM_EXTERN CharPtr LIBCALL BlastGetParameterBuffer(BlastNet3BlockPtr blnet3blkptr);
 
-BlastKABlkPtr LIBCALL BlastGetKaParams PROTO((BlastNet3BlockPtr blnet3blkptr, Boolean gapped));
+NLM_EXTERN BlastKABlkPtr LIBCALL BlastGetKaParams(BlastNet3BlockPtr blnet3blkptr, Boolean gapped);
 
-BlastDbinfoPtr LIBCALL BlastRequestDbInfo PROTO((BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot));
+NLM_EXTERN BlastDbinfoPtr LIBCALL BlastRequestDbInfo(BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot);
 
-BlastDbinfoPtr LIBCALL BlastGetDbInfo PROTO((BlastNet3BlockPtr blnet3blkptr));
+NLM_EXTERN BlastDbinfoPtr LIBCALL BlastGetDbInfo(BlastNet3BlockPtr blnet3blkptr);
 
-TxDfDbInfoPtr LIBCALL NetDbinfo2TxDbinfo PROTO((BlastDbinfoPtr net_dbinfo));
+NLM_EXTERN TxDfDbInfoPtr LIBCALL NetDbinfo2TxDbinfo(BlastDbinfoPtr net_dbinfo);
 
-Boolean LIBCALL TraditionalBlastReport PROTO((BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits));
+NLM_EXTERN Boolean LIBCALL TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits);
 
-Boolean LIBCALL TraditionalBlastReportLoc PROTO((SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits));
+NLM_EXTERN Boolean LIBCALL TraditionalBlastReportLoc(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits);
 
-Boolean LIBCALL TraditionalBlastReportExtra PROTO((BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview));
+NLM_EXTERN Boolean LIBCALL TraditionalBlastReportExtra(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview);
 
-Boolean LIBCALL TraditionalBlastReportLocExtra PROTO((SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview));
+NLM_EXTERN Boolean LIBCALL TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview);
 
-SeqAlignPtr LIBCALL BlastBioseqNet PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback));
+NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseqNet(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback);
 
-SeqAlignPtr LIBCALL BlastSeqLocNet PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback));
+NLM_EXTERN SeqAlignPtr LIBCALL BlastSeqLocNet(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback);
 
-SeqAlignPtr LIBCALL BlastBioseqNetCore PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
+NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status);
 
-SeqAlignPtr LIBCALL BlastSeqLocNetCore PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
+NLM_EXTERN SeqAlignPtr LIBCALL BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status);
 
-BlastPhialignPtr LIBCALL SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status, ValNodePtr PNTR vnp);
+NLM_EXTERN BlastPhialignPtr LIBCALL SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status, ValNodePtr PNTR vnp);
 
-BLAST_MatrixPtr LIBCALL BlastNetMatrixToBlastMatrix PROTO((BlastMatrixPtr net_matrix));
+NLM_EXTERN BlastPartsPtr LIBCALL BlastBioseqNetReturnParts(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status);
 
-BlastMatrixPtr LIBCALL BlastMatrixToBlastNetMatrix PROTO((BLAST_MatrixPtr matrix));
+NLM_EXTERN BLAST_MatrixPtr LIBCALL BlastNetMatrixToBlastMatrix(BlastMatrixPtr net_matrix);
 
-BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameters, CharPtr program,
+NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix);
+
+NLM_EXTERN BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameters, CharPtr program,
 	ValNodePtr PNTR error_returns);
 
-BlastDbinfoPtr LIBCALL Blast3GetDbinfo PROTO((BlastNet3Hptr bl3hptr));
+NLM_EXTERN BlastDbinfoPtr LIBCALL Blast3GetDbinfo(BlastNet3Hptr bl3hptr);
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif /* NETBLAP3 */

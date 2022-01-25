@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,9 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.8  1999/10/01 14:41:40  kans
+* added SEV_REJECT between SEV_ERROR and SEV_FATAL
+*
 * Revision 6.7  1999/08/31 21:36:25  vakatov
 * Nlm_Message(), Nlm_MsgAlert() -- pre-save the temporary "scratch_str"
 * buffer to avoid its overriding on calling the "ncbierr.c"-related code
@@ -361,6 +364,7 @@ MsgAnswer PASCAL _DefMessageHook (MsgKey key, ErrSev sev,
         /* SEV_INFO */    MB_ICONINFORMATION,
         /* SEV_WARNING */ MB_ICONASTERISK, /* same as MB_ICONINFORMATION */
         /* SEV_ERROR */   MB_ICONEXCLAMATION,
+        /* SEV_REJECT */  MB_ICONEXCLAMATION,
         /* SEV_FATAL */   MB_ICONHAND,
         /* SEV_MAX */     MB_ICONHAND
       };

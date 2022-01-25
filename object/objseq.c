@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -249,7 +249,7 @@ static CharPtr seqdesctypename = "SeqDesc";
 
 static Pointer LIBCALLBACK SeqDescNewFunc (void)
 {
-	return (Pointer) ValNodeNew(NULL);
+	return (Pointer) SeqDescrNew(NULL);
 }
 
 static Pointer LIBCALLBACK SeqDescFreeFunc (Pointer data)
@@ -1712,7 +1712,7 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         func = (AsnReadFunc) MolInfoAsnRead;
     }
 
-    anp = ValNodeNew(NULL);
+    anp = SeqDescrNew(NULL);
     if (anp == NULL) goto erret;
     anp->choice = choice;
     if (func != NULL)

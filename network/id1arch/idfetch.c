@@ -26,6 +26,9 @@
 * Author Karl Sirotkin
 *
 $Log: idfetch.c,v $
+Revision 1.2  1999/11/02 18:27:43  yaschenk
+adding -G parameter to idfetch
+
 Revision 1.1  1998/12/28 17:56:29  yaschenk
 preparing idfetch to go to production
 
@@ -60,6 +63,9 @@ syncing sampson from mutant for procs. taking source from sampson. this is now c
 *
 * RCS Modification History:
 * $Log: idfetch.c,v $
+* Revision 1.2  1999/11/02 18:27:43  yaschenk
+* adding -G parameter to idfetch
+*
 * Revision 1.1  1998/12/28 17:56:29  yaschenk
 * preparing idfetch to go to production
 *
@@ -83,6 +89,8 @@ syncing sampson from mutant for procs. taking source from sampson. this is now c
 #include <tofasta.h>
 #include <ni_types.h>
 
+static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex);
+
 Args myargs[] = {
 	{"Filename for output ","stdout", NULL,NULL,FALSE,'o',ARG_FILE_OUT, 0.0,0,NULL},
 	{"Output type: 1=text asn.1 2=binary asn.1 3=genbank (Seq-entry only) 4=genpept (Seq-entry only) 5=fasta (table for history)",
@@ -96,6 +104,7 @@ Args myargs[] = {
 3 - get gi historyn (sequence change only)\n\t\t\t\
 4 - get gi revision history (any change to asn.1)\n", "0","0","4",TRUE,'i',ARG_INT,0.0,0,NULL},
 	{"GI id for single Entity to dump" ,"0","1","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
+	{"File with list of gi's to dump",NULL,NULL,NULL,TRUE,'G',ARG_FILE_IN,0.0,0,NULL},
 	{"Maximum complexity of Entity dump (only for -i 0 )" ,"0","0","4",TRUE,'c',ARG_INT,0.0,0,NULL},
  	{"flaTtened SeqId, format: \n		\'type(name,accession,release,version)\'\n			as \'5(HUMHBB)\' or \n		type=accession, or \n		type:number ",
 		NULL,NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
@@ -118,26 +127,20 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 static Nlm_Int2 Nlm_WhichArg PROTO (( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
 
 DataVal Val;
+Int2 fileoutarg, logarg, outtypearg,maxplexarg,seqidarg, giarg, fastaarg,infotypearg,entarg,dbarg,gifilearg;
+FILE * fp = NULL;
+AsnIoPtr asnout=NULL;
 
 Int2 Main()
 {
-	AsnIoPtr aip, check_aip = NULL;
-	SeqEntryPtr sep = NULL, hold_entry;
-	Int2 fileoutarg, logarg, outtypearg,maxplexarg,
-		 seqidarg, giarg, fastaarg,infotypearg,entarg,dbarg;
 	Boolean has_trouble = FALSE;
-	char * msg;
-	CharPtr outmode;
 	Int4 entity_spec_count = 0;
+	CharPtr	outmode;
 	Int4 ent = 0;
 	Int4 gi = 0;
-	Int4 gi_state;
-	AsnIoPtr asnout=NULL;
-	FILE * fp = NULL;
-	Int4 status;
-	SeqIdPtr sip,sip_ret;
-	ID1SeqHistPtr ishp;
-        Char tbuf[40],buf[200];
+	FILE * fp_in = NULL;
+	SeqIdPtr sip;
+        Char tbuf[1024];
 	
 
 					/* check command line arguments */
@@ -159,6 +162,7 @@ Int2 Main()
 	MACRO_SETARG('e',entarg)
 	MACRO_SETARG('d',dbarg)
 	MACRO_SETARG('g',giarg)
+	MACRO_SETARG('G',gifilearg)
 	MACRO_SETARG('f',seqidarg)
 	MACRO_SETARG('l',logarg)
 	MACRO_SETARG('s',fastaarg)
@@ -175,7 +179,7 @@ Int2 Main()
 			}
 	}
 	if(myargs[infotypearg].intvalue>1 && (myargs[outtypearg].intvalue == 3 || myargs[outtypearg].intvalue == 4)){
-		ErrPostEx(SEV_FATAL,0,0,"-t 3 or -t 4 can be used only with -i 0");
+		ErrPostEx(SEV_ERROR,0,0,"-t 3 or -t 4 can be used only with -i 0");
 		has_trouble=TRUE;
 		goto FATAL;
 	}
@@ -186,11 +190,20 @@ Int2 Main()
 	if (myargs[seqidarg].strvalue){
 		entity_spec_count ++;
 	}
-	if (myargs[fastaarg].strvalue)
+	if (myargs[fastaarg].strvalue){
 		entity_spec_count++;
+	}
+	if (myargs[gifilearg].strvalue){
+		fp_in=FileOpen(myargs[gifilearg].strvalue,"r");
+		if(fp_in==NULL){
+			has_trouble=TRUE;
+			goto FATAL;
+		}
+                entity_spec_count ++;
+        }
 	
 	if (entity_spec_count != 1){
-		ErrPostEx(SEV_FATAL,0,0, "One and only one of the -g, -f, -s parameters must be used");
+		ErrPostEx(SEV_ERROR,0,0, "One and only one parameters may be used: -g,-G,-f,-s");
 		has_trouble=TRUE;
 		goto FATAL;
 	}
@@ -227,7 +240,11 @@ Int2 Main()
 
 	if ( has_trouble )
 		exit (1);
-	NI_SetInterface(eNII_WWWDirect);
+	if(fp_in){ /*** Statefull mode ***/
+		NI_SetInterface(eNII_WWW);
+	} else { /*** Stateless mode ***/
+		NI_SetInterface(eNII_WWWDirect);
+	}
 	if (!ID1BioseqFetchEnable("idfetch",TRUE)){
 		ErrPost(CTX_NCBIIDRETRIEVE,20,
 		"Could not open ID1 service");
@@ -235,17 +252,13 @@ Int2 Main()
 	}
 	if (myargs[giarg].intvalue){
 		gi = myargs[giarg].intvalue;
-	}
-	else if (myargs[fastaarg].strvalue != NULL)
-	{
+	} else if(fp_in){
+	/**** ****/	
+	} else if (myargs[fastaarg].strvalue != NULL) {
 		sip = SeqIdParse((CharPtr)myargs[fastaarg].strvalue);
 		if (sip == NULL)
 		{
-#ifdef IDFETCH_HTML_OUTPUT
-                        fprintf(fp,"<HR><h2>Couldn't parse FASTA format: <I>%s</I></h2>",myargs[fastaarg].strvalue);
-			fflush(fp);
-#endif
-			ErrPostEx(SEV_FATAL,0,0,"Couldn't parse [%s]", myargs[fastaarg].strvalue);
+			ErrPostEx(SEV_ERROR,0,0,"Couldn't parse [%s]", myargs[fastaarg].strvalue);
 			exit(1);
 		}
 	}else{
@@ -358,41 +371,71 @@ Int2 Main()
 			break;
 		}
 	}
-	if (! gi){
+	if (!fp_in && !gi){
 		gi = ID1ArchGIGet (sip);
 		if (gi <= 0){
 			SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
-#ifdef IDFETCH_HTML_OUTPUT
-			fprintf(fp,"<HR><h2>Couldn't find SeqId: <I>%s</I></h2>",tbuf);
-			fflush(fp);
-#endif
-			ErrPostEx(SEV_FATAL, 0,0,"Couldn't find SeqId [%s]", tbuf);
+			ErrPostEx(SEV_ERROR, 0,0,"Couldn't find SeqId [%s]", tbuf);
 			exit(1);
 		}
 	}
+	if(fp_in){
+		while(fgets(tbuf,sizeof(tbuf)-1,fp_in)){
+			IdFetch_func(atoi(tbuf),NULL,0,myargs[maxplexarg].intvalue);
+		}
+	} else {
+		if(!IdFetch_func(gi,myargs[dbarg].strvalue, myargs[entarg].intvalue,myargs[maxplexarg].intvalue)){
+			has_trouble=TRUE;
+			goto FATAL;
+		}
+	}
+FATAL:
+	if(asnout)
+		AsnIoClose(asnout);
+	if(fp)
+		FileClose(fp);
+	if(fp_in)
+		FileClose(fp_in);
+	ID1ArchFini();
+
+	return(has_trouble?1:0);
+}
+
+static Boolean
+IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
+{
+	SeqEntryPtr	sep=NULL;
+	Int4		status,gi_state;
+	SeqIdPtr	sip_ret=NULL;
+	ID1SeqHistPtr	ishp=NULL;
+	Char		buf[200],user_string[100];
+	ErrStrId        utag;
+	Boolean		retval=TRUE;
+
+	sprintf(user_string,"GI=%d|db=%s|ent=%d|",gi,db?db:"NULL",ent);
+	utag=ErrUserInstall(user_string,0);
+
 	switch(myargs[infotypearg].intvalue){
 		case 0:
-			sep = ID1ArchSeqEntryGet (gi, myargs[dbarg].strvalue, myargs[entarg].intvalue,
-					&status,(Int2) myargs[maxplexarg].intvalue);
-			if ( !sep){
+			sep = ID1ArchSeqEntryGet (gi,db,ent,&status,maxplex);
+			if (!sep){
 				switch(status){
 				 case 1:
-					fprintf(stderr,"Sequence has been withdrawn\n");
+					ErrPostEx(SEV_WARNING,0,0,"Sequence has been withdrawn");
 					break;
 				 case 2:
-					fprintf(stderr,"Sequence is not yet available\n");
+					ErrPostEx(SEV_WARNING,0,0,"Sequence is not yet available");
 					break;
 				 default:
-					fprintf(stderr," Unable to read ASN.1 message\n");
+					ErrPostEx(SEV_WARNING,0,0,"Unable to read ASN.1");
+					ID1ArchFini();
+					ID1ArchInit();
 				}
-#ifdef IDFETCH_HTML_OUTPUT
-				printf("<HR><h2>Sorry, Sequence is not available</h2>");
-				fflush(stdout);
-#endif
-					goto FATAL;
+				retval=FALSE;
+				goto DONE;
 			}
 			if (status==3)
-				fprintf(stderr," IS DEAD!\n");
+				ErrPostEx(SEV_INFO,0,0,"IS_DEAD");
 			break;
 		case 1:
 			gi_state = ID1ArcgGIStateGet(gi);
@@ -425,25 +468,17 @@ Int2 Main()
 		 case 3:
                         if(!SeqEntryToFlat(sep, fp, GENBANK_FMT, RELEASE_MODE)){
                                 ErrPostEx(SEV_WARNING,0,0,
-                           "GenBank Format does not exist for this sequence");
-				has_trouble=TRUE;
-#ifdef IDFETCH_HTML_OUTPUT
-                                 fprintf(fp,
-                         "<HR><h2>GenBank Format does not exist for this sequence</h2>");
-                                fflush(fp);
-#endif
+                           "GenBank Format does not exist for this sequence ");
+				retval=FALSE;
+                                goto DONE;
 			}
 			break;
 		 case 4:
 			if(!SeqEntryToFlat(sep, fp, GENPEPT_FMT, RELEASE_MODE)){
 				ErrPostEx(SEV_WARNING,0,0,
 			   "GenPept Format does not exist for this sequence");
-				has_trouble=TRUE;
-#ifdef IDFETCH_HTML_OUTPUT
-				 fprintf(fp,
-			 "<HR><h2>GenPept Format does not exist for this sequence</h2>");
-				fflush(fp);
-#endif
+				retval=FALSE;
+                                goto DONE;
 			}
 			break;
 		 case 5:
@@ -464,17 +499,13 @@ Int2 Main()
 			break;
 		}
 	}
-	SeqEntryFree(sep);
-FATAL:
-	if(asnout)
-		AsnIoClose(asnout);
-	if(fp)
-		FileClose(fp);
-	ID1ArchFini();
-
-	return(has_trouble?1:0);
+DONE:
+	if(sep)		SeqEntryFree(sep);
+	if(sip_ret)	SeqIdFree(sip_ret);
+	if(ishp)	ID1SeqHistFree(ishp);
+	ErrUserDelete(utag);
+	return retval;
 }
-
 /*****************************************************************************
 *
 *   Nlm_WhichArg(ap)

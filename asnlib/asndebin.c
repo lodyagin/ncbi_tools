@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -45,6 +45,9 @@
 * 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
 *
 * $Log: asndebin.c,v $
+* Revision 6.3  1999/12/23 14:18:06  beloslyu
+* fix the AsnBinReadVal function if the atp is NULL
+*
 * Revision 6.2  1998/01/22 20:46:24  volodya
 * fix endless loop
 *
@@ -544,6 +547,9 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
         prevpsp = currpsp - 1;
     else
         prevpsp = NULL;
+
+	if (atp == NULL)
+		return 0;
 
 	base_type = AsnFindBaseType(atp);   
     if (base_type == NULL)     /* not found */

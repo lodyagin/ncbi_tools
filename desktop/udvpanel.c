@@ -29,13 +29,58 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.7 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.22  2000/01/24 16:15:22  durand
+* add loader function for the genome viewer
+*
+* Revision 6.21  2000/01/18 22:49:16  lewisg
+* send OM_MSG_FLUSH to ddv/udv, tweak CPK coloration, misc bugs
+*
+* Revision 6.20  2000/01/12 15:06:52  durand
+* .
+*
+* Revision 6.19  2000/01/11 15:03:18  durand
+* remove network stuff
+*
+* Revision 6.18  2000/01/10 15:29:26  durand
+* add include to netcnfg include file
+*
+* Revision 6.17  2000/01/10 15:18:41  durand
+* use Entrez instead of ID1
+*
+* Revision 6.16  2000/01/08 00:47:54  lewisg
+* fixes to selection, update, color
+*
+* Revision 6.15  2000/01/05 21:06:37  durand
+* update mouse click actions and DrawSequence function for a better use from ddv and cn3d
+*
+* Revision 6.14  2000/01/03 21:06:38  durand
+* update the way the udv main window is created
+*
+* Revision 6.13  1999/12/28 23:06:34  lewisg
+* udv/cn3d communication
+*
+* Revision 6.12  1999/12/15 23:17:47  lewisg
+* make cn3d launch udv, fix launching of non-autonomous udv, add mouseup message
+*
+* Revision 6.11  1999/11/29 15:17:55  durand
+* designed a new GUI; fixed problems under Win95 and Linux
+*
+* Revision 6.10  1999/11/19 15:01:47  durand
+* speed up mouse selection ; avoid sequence flashing during selection ; update menu functionalities
+*
+* Revision 6.9  1999/11/09 21:06:58  durand
+* add sequence selection manager
+*
+* Revision 6.8  1999/10/02 15:11:16  durand
+* update the code to be used by wwwudv
+*
 * Revision 6.7  1999/09/07 19:38:45  durand
 * don't display special features
 *
@@ -54,13 +99,17 @@
 */
 
 #include <udviewer.h>
+#include <samutil.h>
+#ifdef UDV_GENOME
+#include <genview.h>
+#endif
 
 /*local text*/
-static Char szAppName[]="UnD-Viewer";
+static Char szAppName[]="OneD-Viewer";
 
 /*local text*/
-static Char szAbout[]="UnD-Viewer : A sequence viewer for GenBank\n\
-Version 1.0\n\nInformation Engineering Branch\n\
+static Char szAbout[]="OneD-Viewer : A sequence viewer for GenBank\n\
+Version 1.0.2\n\nInformation Engineering Branch\n\
 NCBI - NLM - NIH, Bldg 38A\n\
 8600 Rockville Pike\n\
 Bethesda, MD 20894 - USA\n\n\
@@ -112,10 +161,12 @@ static char *szSeqFeatClassName[]={
 				};
 
 /*local functions*/
+static ValNodePtr UDV_GetParaGNodeGivenPos(ValNodePtr ParaG_head,Int4 bsp_pos);
 static void  UnDViewerVScrlUpdatePage(Int4Ptr PageUpDn,Int2 cyClient,
 				Int2 LineHeight);
 static void  PanelOrgChange(PaneL p,ViewerDialogDataPtr vdp);
-static Boolean  CreateUDVpanel(WindoW w,ViewerMainPtr PNTR vmp);
+static Boolean  CreateUDVpanel(WindoW w,ViewerMainPtr PNTR vmp,
+                               SAM_ViewGlobal *vgp);
 static void UDV_ReLocateRcParaGList(RecT rcP,Boolean ShowTop,Boolean ShowTick,
 			Boolean ShowSequence, Boolean ShowFeatures,
 			Boolean ShowBlank,Int4Ptr nTotL,ValNodePtr ParaG_head);
@@ -123,6 +174,387 @@ static void ShowFeaturesListDlg(IteM i);
 static void UDV_SearchFeatForKey(IteM i);
 static void  UDV_analyse_buffer(UnDViewerGraphDataPtr GrData,
 		ValNodePtr ParaG_list,BspInfoPtr bsp_i,Uint2 ActionType);
+#ifdef UDV_GENOME
+static void UDV_GenViewProc(IteM I);
+#endif
+/*******************************************************************************
+
+  Function : UDV_TimerProc()
+  
+  Purpose :  function called by the timer. Right now, this function is used
+     to highlighte the GoTo letter.
+  				    
+  Return value : 
+
+*******************************************************************************/
+static void UDV_TimerProc (WindoW w)
+{
+ViewerDialogDataPtr vdp;
+ViewerMainPtr		vmp;
+ValNodePtr          vnp;
+ParaGPtr            pgp;
+Int4                bsp_pos;
+
+	vmp=(ViewerMainPtr)GetObjectExtra(w);
+	if (vmp==NULL || vmp->vdp==NULL) return;
+	vdp = vmp->vdp;
+	if (vdp==NULL) return;
+	if (vdp->ParaG==NULL) return;
+		
+	if (vdp->udt.status==UDV_SET_TIMER){
+		vdp->udt.delay=0;
+		if (vdp->udt.action==UDV_INVAL_REGION){
+			vnp=UDV_GetParaGNodeGivenPos(vdp->ParaG,vdp->udt.pos);
+			if (!vnp) return;
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			UDV_InvalRegion(vdp->UnDViewer,&(vdp->udv_graph),
+				pgp,_max_(0,vdp->udt.pos-1),vdp->udt.pos+1,FALSE);
+		}
+		vdp->udt.status=UDV_TEST_TIMER;
+	}
+	if (vdp->udt.status==UDV_TEST_TIMER){
+		if (vdp->udt.delay>10){
+			if (vdp->udt.action==UDV_INVAL_REGION){
+				bsp_pos=vdp->udt.pos;
+				vdp->udt.pos=0;
+				vnp=UDV_GetParaGNodeGivenPos(vdp->ParaG,bsp_pos);
+				if (!vnp) return;
+				pgp=(ParaGPtr)vnp->data.ptrvalue;
+				vdp->udv_graph.GotoLetter=0;
+				UDV_InvalRegion(vdp->UnDViewer,&(vdp->udv_graph),
+					pgp,_max_(0,bsp_pos-1),bsp_pos+1,FALSE);
+				vdp->udt.action=UDV_NOTHING;
+			}
+		}
+	}
+	vdp->udt.delay++;
+}
+
+
+/*******************************************************************************
+
+  Function : UDV_GetSelectedRegions()
+  
+  Purpose :  get the selected region(s) of one bioseq.
+  
+  Parameters :	om_ssp;list of selected regions (usually this field points to
+                  ObjMgr data)
+				bsp_eID,bsp_iID; bioseq identifiers.
+				    
+  Return value : list of selected regions on the bioseq bsp_eID,bsp_iID
+
+*******************************************************************************/
+NLM_EXTERN ValNodePtr UDV_GetSelectedRegions(SelStructPtr om_ssp, Uint2 bsp_eID,
+	Uint2 bsp_iID)
+{
+SelStructPtr ssp;
+SeqLocPtr    slp,slp2;
+ValNodePtr   bsp_vnp=NULL,vnp;
+
+	if (om_ssp==NULL || bsp_eID==0 || bsp_iID==0) return(NULL);
+
+	ssp=om_ssp;
+	
+	while(ssp){
+		if (ssp->entityID==bsp_eID && ssp->itemID==bsp_iID && 
+			ssp->itemtype==OBJ_BIOSEQ && ssp->regiontype==OM_REGION_SEQLOC){
+			slp=(SeqLocPtr)ssp->region;
+			while(slp){
+				slp2=slp->next;
+				slp->next=NULL;
+				if (!bsp_vnp){
+					vnp=ValNodeAddPointer(NULL,0,(Pointer)slp);
+					if (!vnp) return(NULL);
+					bsp_vnp=vnp;
+				}
+				else{
+					vnp=ValNodeAddPointer(&vnp,0,(Pointer)slp);
+					if (!vnp){
+						if (bsp_vnp) ValNodeFree(bsp_vnp);
+						return(NULL);
+					}
+				}
+				slp->next=slp2;
+				slp=slp->next;
+			}
+		}
+		ssp=ssp->next;
+	}
+	return(bsp_vnp);
+}
+
+/*******************************************************************************
+
+  Function : UDV_IsLetterSelected()
+  
+  Purpose : check if a bsp_pos is selected (vnp_bsp is usually built with 
+      DDV_GetSelectedRegions() function)
+  
+  Return value : TRUE if bsp_pos is selected
+
+*******************************************************************************/
+NLM_EXTERN Boolean UDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos)
+{
+Boolean    bSelected=FALSE;
+ValNodePtr vnp;
+SeqLocPtr  slp;
+Int4 bsp_start,bsp_stop;
+	if (vnp_bsp==NULL || bsp_pos==(Int4)-1) return(FALSE);
+
+	vnp=vnp_bsp;
+
+	while(vnp){
+		slp=(SeqLocPtr)vnp->data.ptrvalue;
+		bsp_start=SeqLocStart(slp);
+		bsp_stop=SeqLocStop(slp);
+		if (bsp_pos>=bsp_start && bsp_pos<=bsp_stop){
+			bSelected=TRUE;
+			break;
+		}
+		vnp=vnp->next;
+	}
+	
+	return(bSelected);
+}
+
+/*****************************************************************************
+
+Function: UDV_GetClosetSeqLocGivenBspPos()
+
+Purpose: given a position in the Bioseq, this function return the closest
+         selected region on that bioseq.
+		
+Parameters:	sip, eID, iID; bsioseq identifiers
+            bsp_pos; current position on that bioseq
+			old_pos; returns old_pos of a selection (used only if bModify is TRUE)
+			bModify; if TRUE, create a modified slp
+
+Note : sip can be null ONLY if bModify if FALSE.
+
+Return value: see Purpose.
+
+*****************************************************************************/
+NLM_EXTERN SeqLocPtr UDV_GetClosetSeqLocGivenBspPos(SeqIdPtr sip, Uint2 eID, 
+		Uint2 iID, Int4 bsp_pos, Int4Ptr old_pos, Boolean bModify)
+{
+SelStructPtr ssp;
+SeqLocPtr    slp=NULL;
+ValNodePtr   vnp_bsp,vnp;
+Int4         diff,old_diff,diff_l,diff_r,bsp_start,bsp_stop;
+Uint1        strand;
+
+	ssp=ObjMgrGetSelected();
+	if (ssp==NULL) return(NULL);
+	
+	vnp_bsp=UDV_GetSelectedRegions(ssp,eID,iID);
+	if (vnp_bsp==NULL) return(NULL);
+	vnp=vnp_bsp;
+	*old_pos=(Int4)-1;
+	old_diff=(Int4)INT4_MAX;
+
+	while(vnp){
+		bsp_start=SeqLocStart((SeqLocPtr)vnp->data.ptrvalue);
+		bsp_stop=SeqLocStop((SeqLocPtr)vnp->data.ptrvalue);
+		strand=SeqLocStrand((SeqLocPtr)vnp->data.ptrvalue);
+		if (bsp_pos<bsp_start){/*left of a selected region ?*/
+			diff=bsp_start-bsp_pos;
+			if (diff<old_diff){	
+				if (slp) slp=SeqLocFree(slp);
+				if (bModify){
+					slp = SeqLocIntNew (bsp_pos, bsp_stop, strand/*Seq_strand_minus*/, sip);
+					*old_pos=bsp_stop;
+				}
+				else{
+					slp = SeqLocIntNew (bsp_start, bsp_stop, strand, sip);
+					*old_pos=(Int4)-1;
+				}
+				old_diff=diff;
+			}
+		}
+		else if (bsp_pos>bsp_stop){/*right of a selected region ?*/
+			diff=bsp_pos-bsp_stop;
+			if (diff<old_diff){	
+				if (slp) slp=SeqLocFree(slp);
+				if (bModify){
+					slp = SeqLocIntNew (bsp_start, bsp_pos, strand/*Seq_strand_plus*/, sip);
+					*old_pos=bsp_start;
+				}
+				else{
+					slp = SeqLocIntNew (bsp_start, bsp_stop, strand, sip);
+					*old_pos=(Int4)-1;
+				}
+				old_diff=diff;
+			}
+		}
+		else{/*inside a selected region ?*/
+			if(bModify){
+				diff_l=bsp_pos-bsp_start;
+				diff_r=bsp_stop-bsp_pos;
+				if (diff_l<diff_r){
+					bsp_start=bsp_pos;
+					*old_pos=bsp_stop;
+					/*strand=Seq_strand_plus;*/
+				}
+				else{
+					bsp_stop=bsp_pos;
+					*old_pos=bsp_start;
+					/*strand=Seq_strand_minus;*/
+				}
+				slp = SeqLocIntNew (bsp_start, bsp_stop, strand, sip);
+				break;
+			}
+		}
+		vnp=vnp->next;
+	}
+	ValNodeFree(vnp_bsp);
+	return(slp);
+}
+
+/*******************************************************************************
+
+  Function : UDV_GetParaGNodeGivenPos()
+  
+  Purpose : given a bsp_pos, get back the node in the ParaG list
+  
+  Return value : -
+
+*******************************************************************************/
+static ValNodePtr UDV_GetParaGNodeGivenPos(ValNodePtr ParaG_head,Int4 bsp_pos)
+{
+ValNodePtr vnp,vnp_find;
+ParaGPtr   pgp;
+	
+	vnp_find=NULL;
+	vnp=ParaG_head;
+	while(vnp){
+		if (vnp->data.ptrvalue){
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			if (bsp_pos>=pgp->StartLetter && bsp_pos<=pgp->StopLetter){
+				vnp_find=vnp;
+				break;
+			}
+		}
+		vnp=vnp->next;
+	}
+	return(vnp_find);
+}
+
+/*******************************************************************************
+
+  Function : UDV_GetLineNumGivenPos()
+  
+  Purpose : given a bsp_pos, get back the line number
+  
+  Return value : -
+
+*******************************************************************************/
+static ValNodePtr UDV_GetLineNumGivenPos(ValNodePtr ParaG_head,Int4 bsp_pos,
+	Int4Ptr line_num)
+{
+ValNodePtr vnp;
+ParaGPtr   pgp;
+
+	vnp=UDV_GetParaGNodeGivenPos(ParaG_head,bsp_pos);
+	
+	if (!vnp) {
+		*line_num=(Int4)-1;
+		return(NULL);
+	}
+	
+	pgp=(ParaGPtr)vnp->data.ptrvalue;
+	*line_num=pgp->StartLine;
+	
+	return(vnp);
+}
+
+/*******************************************************************************
+
+  Function : UDV_MSG_SELECT()
+  
+  Purpose : manage select/deselect messages
+  
+  Return value : -
+
+*******************************************************************************/
+static Int2 UDV_MSG_SELECT(ViewerDialogDataPtr vdp,OMMsgStructPtr ommsp,
+		Boolean IsSelect)
+{
+SeqLocPtr     slp;
+ParaGPtr      pgp;
+ValNodePtr    vnp_start,vnp;
+Int4          from_bsp,to_bsp,bsp_start,bsp_stop,tot,pop,decal,start_inval,stop_inval;
+Uint2         bsp_eID,bsp_iID;
+
+	/*some usefull tests...*/
+	if (vdp == NULL) return(OM_MSG_RET_ERROR);
+	if (ommsp->itemtype != OBJ_BIOSEQ) return(OM_MSG_RET_OK);
+	if (ommsp->regiontype!=OM_REGION_SEQLOC) return(OM_MSG_RET_OK);
+
+	/*Am I concern by that Bioseq ?*/
+	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+	if (bsp_eID!=ommsp->entityID || bsp_iID!=ommsp->itemID) return(OM_MSG_RET_ERROR);
+
+	/*get the current display range*/
+	UDV_GetCurrentDispRange(vdp,&from_bsp,&to_bsp,NULL,NULL);
+	if (from_bsp==0 && to_bsp==0) return(OM_MSG_RET_ERROR);
+	
+	/*scan the SeqLoc list to figure out if it's currently on the screen*/
+	slp=(SeqLocPtr)ommsp->region;
+	while(slp){/*for each SeqLoc, I try to see what region(s) has (have) to be
+		uptdated*/
+		bsp_start=SeqLocStart(slp);
+		bsp_stop=SeqLocStop(slp);
+		if (bsp_start<=to_bsp && bsp_stop>=from_bsp){
+			vnp_start=UDV_GetParaGNodeGivenPos(vdp->ParaG,bsp_start);
+			vnp=vnp_start;
+			tot=bsp_stop-bsp_start+1;
+			pop=decal=0;
+			while(vnp){
+				pgp=(ParaGPtr)vnp->data.ptrvalue;
+				start_inval=bsp_start+decal;
+				stop_inval=_min_(bsp_stop,pgp->StopLetter);
+				UDV_InvalRegion(vdp->UnDViewer,&(vdp->udv_graph),pgp,
+					start_inval,stop_inval,IsSelect);
+				pop+=(stop_inval-start_inval+1);
+				if (pop>=tot)
+					break;
+				decal=pop;
+				vnp=vnp->next;
+			}
+		}
+		slp=slp->next;
+	}
+	return(OM_MSG_RET_OK);
+	
+}
+
+/*******************************************************************************
+
+  Function : UDV_MSG_FLUSH()
+  
+  Purpose : kill the viewer in response to a OM_MSG_FLUSH message
+  
+  Return value : OM_MSG_RET_OK if success
+
+*******************************************************************************/
+static Int2 UDV_MSG_FLUSH(ViewerDialogDataPtr vdp,OMMsgStructPtr ommsp)
+{
+Uint2  bsp_eID,bsp_iID;
+	
+	/*Am I concern by that Bioseq ?*/
+	bsp_eID=ObjMgrGetEntityIDForPointer((Pointer)vdp->bsp_i.bsp);
+	bsp_iID = GetItemIDGivenPointer (bsp_eID, 
+			OBJ_BIOSEQ, (Pointer) vdp->bsp_i.bsp);	
+
+	if (bsp_eID==ommsp->entityID &&
+		((bsp_iID==ommsp->itemID && ommsp->itemtype==OBJ_BIOSEQ)
+        || (ommsp->itemID == 0 && ommsp->itemtype==0))){
+		Remove(ParentWindow(vdp->UnDViewer));
+	}
+	return(OM_MSG_RET_OK);
+}
 
 /*******************************************************************************
 
@@ -139,16 +571,13 @@ static Int2 LIBCALLBACK UDV_OM_MsgFunc (OMMsgStructPtr ommsp)
 {
 OMUserDataPtr omudp;
 /*BioseqPtr bsp;*/
-Char buf[41];
 ViewerDialogDataPtr vdp;
    
 	omudp = (OMUserDataPtr)(ommsp->omuserdata);
 	vdp = (ViewerDialogDataPtr)(omudp->userdata.ptrvalue);
 
 	if (!vdp) return(OM_MSG_RET_OK);
-	
-	BioseqLabel(vdp->bsp_i.bsp, buf, 40, OM_LABEL_BOTH); 
-	
+		
 	switch (ommsp->message)
 	{
 		case OM_MSG_DEL:
@@ -156,27 +585,39 @@ ViewerDialogDataPtr vdp;
 		case OM_MSG_CREATE:
 			break;
 		case OM_MSG_UPDATE:
-			/*just for test, when I first implemented ObjMgr*/
-			/*Message(MSG_OK, "Got an update message on [%s]", buf);*/
+
+			if (vdp->UnDViewer){
+				RecT rc;
+                WindoW temport;
+                temport=SavePort((WindoW)vdp->UnDViewer);
+	            Select (vdp->UnDViewer);
+	            ObjectRect(vdp->UnDViewer,&rc);
+	            InvalRect(&rc);
+	            RestorePort(temport);
+			}
 			break;
-		case OM_MSG_SELECT:          /* add highlight code */
+		case OM_MSG_SELECT:
 			/*Click Feat ?*/
 			if (ommsp->itemtype==OBJ_SEQFEAT) {
-				/*just for test, when I first implemented ObjMgr*/
-				/*Message(MSG_OK, "Got a select message on [%s]", buf);*/
-				vdp->udv_graph.bFirst=TRUE;
+
 				UDV_select_feature(vdp->UnDViewer,vdp,ommsp->entityID,
 					ommsp->itemID,
 					(Boolean)(vdp->ClickFeatFromDlg ? TRUE : FALSE));
 			}
+			else if (ommsp->itemtype==OBJ_BIOSEQ){
+				UDV_MSG_SELECT(vdp,ommsp,TRUE);
+			}
 			break;
-		case OM_MSG_DESELECT:        /* add deselect code */
+		case OM_MSG_DESELECT: 
+			if (ommsp->itemtype==OBJ_BIOSEQ){
+				UDV_MSG_SELECT(vdp,ommsp,FALSE);
+			}
 			break;
 		case OM_MSG_CACHED:
 			break;
 		case OM_MSG_UNCACHED:
 			break;
-		case OM_MSG_TO_CLIPBOARD:  /* this is just because no clipboard now */
+		case OM_MSG_TO_CLIPBOARD: 
 			break;
 		case OM_MSG_SETCOLOR:
 			if (vdp->UnDViewer){
@@ -185,6 +626,9 @@ ViewerDialogDataPtr vdp;
 				InvalRect(&rc);
 				Update();
 			}
+			break;
+		case OM_MSG_FLUSH:
+			UDV_MSG_FLUSH(vdp,ommsp);
 			break;
 		default:
 			break;
@@ -216,6 +660,12 @@ ViewerMainPtr 		vmp=NULL;
 ViewerDialogDataPtr vdp=NULL;
 Char 				szBuf[255]={""};
 UdvGlobalsPtr       ugp=NULL;
+RecT                rcP;
+WindoW              temport;
+SAM_ViewGlobal      *vgp=NULL;
+
+
+    vgp = GetAppProperty(SAM_ViewString);
 
 	/*retrieve data*/
 	ompcp = (OMProcControlPtr) data;
@@ -248,15 +698,15 @@ UdvGlobalsPtr       ugp=NULL;
 	/*if w and/or vmp are NULL, they'll be initialized in this function*/
 	if (vmp) {/*reuse the viewer if already there*/
 		w=vmp->hWndMain;
-		if (!vmp->vdp || !vmp->vdp->AlreadyInit){
-			if (!CreateUDVpanel(w,&vmp)) return OM_MSG_RET_ERROR;
-		}
+		if (!CreateUDVpanel(w,&vmp, vgp)) 
+			return OM_MSG_RET_ERROR;
 	}
 	else{/*for each call, create a new viewer window*/
 		/*non-autonomous viewer*/
-		if (!CreateUDVpanel(w,&vmp)) return OM_MSG_RET_ERROR;
+		if (!CreateUDVpanel(w,&vmp, vgp)) return OM_MSG_RET_ERROR;
+		UDV_CreateOneFeatureIndex(0, bsp);
 	}
-	vmp->vdp->udv_graph.bFirst=TRUE;
+
 	/*init specific data for the ObjMgr msg loop*/	
 	vdp=vmp->vdp;
 	if (!vdp) return OM_MSG_RET_ERROR;
@@ -267,9 +717,11 @@ UdvGlobalsPtr       ugp=NULL;
 	if (UDV_init_bsp_forViewer(vmp->vdp->UnDViewer,bsp,ompcp->input_entityID,
 		ompcp->input_itemID,ompcp->input_itemtype,vdp)){
 		UDV_set_MainMenus(&vmp->MainMenu,TRUE);
+		UDV_set_MainControls(vmp,TRUE);
 	}
 	else{
 		UDV_set_MainMenus(&vmp->MainMenu,FALSE);
+		UDV_set_MainControls(vmp,FALSE);
 		return OM_MSG_RET_ERROR;
 	}
 
@@ -278,6 +730,12 @@ UdvGlobalsPtr       ugp=NULL;
 				vdp->bsp_i.bspAccNum,
 				vdp->bsp_i.bspLength);
 	SetTitle(w,szBuf);
+
+	temport=SavePort((WindoW)vdp->UnDViewer);
+	Select (vdp->UnDViewer);
+	ObjectRect(vdp->UnDViewer,&rcP);
+	InvalRect(&rcP);
+	RestorePort(temport);
 
 	vdp->userkey=OMGetNextUserKey ();
 	omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, 
@@ -348,21 +806,35 @@ WindoW				hWinMain;
   Return value : NULL
 
 *******************************************************************************/
-NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr PNTR vdp)
+NLM_EXTERN void * UDV_FreeVDPstruct(ViewerDialogDataPtr vdp,Boolean final)
 {
 
-	if ((*vdp)){
+	if (vdp){
 		/*free some user data of Obj Mgr*/
-		if ((*vdp)->userkey>0) {
-			if ((*vdp)->bsp_i.bsp_entityID>0){
-				ObjMgrFreeUserData((*vdp)->bsp_i.bsp_entityID,
-						(*vdp)->procid,(*vdp)->proctype,(*vdp)->userkey);
+		if (vdp->userkey>0) {
+			if (vdp->bsp_i.bsp_entityID>0){
+				ObjMgrFreeUserData(vdp->bsp_i.bsp_entityID,
+						vdp->procid,vdp->proctype,vdp->userkey);
 			}
 		}
 
-		if ((*vdp)->udv_graph.pClr) MemFree((*vdp)->udv_graph.pClr);
-		UDV_FreeListParaG(&(*vdp)->ParaG);
-		MemFree ((*vdp));
+		UDV_FreeListParaG(&vdp->ParaG);
+		vdp->procid=0;
+		vdp->proctype=0;
+		vdp->userkey=0;
+		if (vdp->bsp_i.SeqBuf)
+			MemFree(vdp->bsp_i.SeqBuf);
+		memset(&vdp->bsp_i,0,sizeof(BspInfo));
+		memset(&vdp->udv_graph.udv_vscrl,0,sizeof(UDVScrollData));
+		vdp->udv_graph.udv_panel.nTotLines=0;
+		if (vdp->udv_graph.udv_panel.region)
+			ValNodeFreeData(vdp->udv_graph.udv_panel.region);
+		memset(&vdp->UDV_ms,0,sizeof(UDV_mouse_select));
+		vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
+		memset(&vdp->Item_select,(Uint2)-1,sizeof(UDV_Item_Select));
+		memset(&vdp->Old_Item_select,(Uint2)-1,sizeof(UDV_Item_Select));
+		if (!final) UnDViewerVScrlUpdate(vdp->UnDViewer,TRUE,0);
+		vdp->ClickFeatFromDlg=FALSE;
 	}
 
 	return(NULL);
@@ -390,7 +862,9 @@ ViewerMainPtr vmp=(ViewerMainPtr)data;
 	/*done only for Autonomous viewer*/
 	if (vmp->dataptr) ObjMgrFree(vmp->datatype,vmp->dataptr);
 
-	UDV_FreeVDPstruct(&vmp->vdp);
+	UDV_FreeVDPstruct(vmp->vdp,TRUE);
+	if (vmp->vdp->udv_graph.pClr) MemFree(vmp->vdp->udv_graph.pClr);
+	MemFree(vmp->vdp);
 	MemFree(vmp);
 }
 
@@ -408,7 +882,7 @@ ViewerMainPtr vmp=(ViewerMainPtr)data;
 *******************************************************************************/
 static void  UDV_AboutProc(IteM i)
 {
-  MsgAlert(KEY_OK, SEV_INFO, "About UnD-Viewer",szAbout);
+  MsgAlert(KEY_OK, SEV_INFO, "About OneD-Viewer",szAbout);
 
 }
 
@@ -487,6 +961,27 @@ NLM_EXTERN void  UDV_set_MainMenus(UDVMainMenuPtr mmp,Boolean enable)
 	}
 }
 
+/*******************************************************************************
+
+  Function : UDV_set_MainControls()
+  
+  Purpose : manage main window controls (GoTO btn, etc)
+  
+  Return value : none 
+
+*******************************************************************************/
+NLM_EXTERN void UDV_set_MainControls(ViewerMainPtr vmp,Boolean enable)
+{
+	
+	if (enable){
+		Enable(vmp->gotoBtn);
+		Enable(vmp->gotoVal);
+	}
+	else{
+		Disable(vmp->gotoBtn);
+		Disable(vmp->gotoVal);
+	}
+}
 
 /*******************************************************************************
 
@@ -637,7 +1132,6 @@ ViewerDialogDataPtr vdp;
 *******************************************************************************/
 static void  PanelOrgChange(PaneL p,ViewerDialogDataPtr vdp)
 {
-/*ViewerDialogDataPtr vdp;*/
 RecT 				rcP;
 BaR 				vsb;
 ValNodePtr 			vnp;
@@ -647,15 +1141,7 @@ Int4 				CurPos=0;
 Boolean				ShowTop=FALSE,
 					ShowTick=FALSE;
 WindoW				temport;
-/*ViewerMainPtr		vmp;*/
 
-/*	vmp = (ViewerMainPtr) GetObjectExtra (w);
-	if (vmp==NULL) return;
-	
-	vdp=vmp->vdp;
-
-	if (vdp == NULL) return;
-	if (vdp->UnDViewer == NULL) return;*/
 	if (vdp->ParaG == NULL) return;
 	
 	temport=SavePort((WindoW)p);
@@ -742,8 +1228,10 @@ NLM_EXTERN void  UDV_SetupMenus(WindoW w,Boolean isEntrezOk)
 MenU			m,s;	/*temp variable*/
 ChoicE			c;	/* " */
 ViewerMainPtr 	vmp;/*program data*/
+UdvGlobalsPtr   ugp;
 
 	vmp = (ViewerMainPtr) GetObjectExtra (w);
+	ugp=(UdvGlobalsPtr)GetAppProperty("UdvGlobals");
 
 	/*File menu*/
 	m=PulldownMenu(w,"File");
@@ -771,9 +1259,9 @@ ViewerMainPtr 	vmp;/*program data*/
 	vmp->MainMenu.ShowFeature=StatusItem(m,"Show features",
 			ShowFeatProc);
 	SetStatus(vmp->MainMenu.ShowFeature,TRUE);
-	vmp->MainMenu.ShowFeatureList=StatusItem(m,"Features List",
+	vmp->MainMenu.ShowFeatureList=StatusItem(m,"Features List...",
 			ShowFeaturesListDlg);
-	vmp->MainMenu.SearchForFeature=CommandItem(m,"Search for features",
+	vmp->MainMenu.SearchForFeature=CommandItem(m,"Search for features...",
 			UDV_SearchFeatForKey);
 	SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
 	SeparatorItem(m);
@@ -784,15 +1272,20 @@ ViewerMainPtr 	vmp;/*program data*/
 	ChoiceItem(c,"Top only");
 	ChoiceItem(c,"Top and left");
 	SetValue(c,3);
-
+	vmp->MainMenu.ScalePosChoice=c;
 	SeparatorItem(m);
 	vmp->MainMenu.RefreshScreen=CommandItem(m,"Refresh screen",
 			RefreshScreenProc);
-	
+	if (vmp->AutonomeViewer && ugp!=NULL && ugp->NetCfgMenuProc!=NULL){/*available only for the Auntonomous viewer*/
+		vmp->MainMenu.ConfigNet=CommandItem(m,"Network...",ugp->NetCfgMenuProc);
+	}	
+#ifdef UDV_GENOME
+	CommandItem(m,"Load Genome Viewer...",UDV_GenViewProc);
+#endif
 	/*Help menu*/
 	m=PulldownMenu(w,"Help");
 	vmp->MainMenu.Help=m;
-	vmp->MainMenu.HelpAbout=CommandItem(m,"About.../Q",UDV_AboutProc);
+	vmp->MainMenu.HelpAbout=CommandItem(m,"About...",UDV_AboutProc);
 }
 
 /*******************************************************************************
@@ -854,61 +1347,6 @@ RecT rcDlg;
 	LoadRect (rcL, (Int2)4*VIEWER_HORZ_MARGIN, (Int2)4*VIEWER_VERT_MARGIN, 
 					(Int2)(rcDlg.right - rcDlg.left - 4*VIEWER_HORZ_MARGIN), 
 					(Int2)(rcDlg.bottom - rcDlg.top - 4*VIEWER_VERT_MARGIN));
-}
-
-/*******************************************************************************
-
-  Function : Resize_Panels()
-  
-  Purpose : resize UnD viewer 
-  
-  Parameters : p; handle of the UnD viewer window
-  				rcP; new rc of the viewer
-  
-  Return value : none (see rcP)
-
-*******************************************************************************/
-static void  Resize_Panels (PaneL Viewer,PaneL Info,RecT PNTR rcP,
-		RecT PNTR rcI,Int2 LineHeight)
-{
-WindoW w;
-RecT rcDlg;
-
-	/*size of the parent Window of the Viewer*/
-	w=ParentWindow(Viewer);
-	ObjectRect(w,&rcDlg);
-
-#ifdef WIN_MAC
-	/*New size of the Info panel*/
-	if (Info){
-		GetPosition(Info,rcI);	
-	
-		rcI->right=rcDlg.right-rcDlg.left-VIEWER_HORZ_MARGIN;
-		rcI->bottom=rcI->top+3*LineHeight/2;
-	}
-	else rcI->bottom=rcDlg.top+VIEWER_VERT_MARGIN;
-
-	/*new size of the Viewer Panel*/
-	GetPosition(Viewer,rcP);	
-	rcP->top=rcI->bottom+4;
-	rcP->right=rcDlg.right-rcDlg.left-VIEWER_HORZ_MARGIN;
-	rcP->bottom=rcDlg.bottom-rcP->top-2*VIEWER_VERT_MARGIN;
-#endif
-
-#ifndef WIN_MAC	
-	/*New size of the Info panel*/
-	if (Info){
-		LoadRect(rcI,(Int2)VIEWER_HORZ_MARGIN, 4,
-			(Int2)(rcDlg.right - rcDlg.left - VIEWER_HORZ_MARGIN),
-			(Int2)(3*LineHeight/2));
-	}
-	else rcI->bottom=rcDlg.top+VIEWER_VERT_MARGIN;
-
-	/*new size of the Viewer Panel*/
-	LoadRect (rcP, (Int2)VIEWER_HORZ_MARGIN, (Int2)(rcI->bottom+3), 
-					(Int2)(rcDlg.right - rcDlg.left - VIEWER_HORZ_MARGIN), 
-					(Int2)(rcDlg.bottom - rcDlg.top - 2*VIEWER_VERT_MARGIN));
-#endif
 }
 
 /*******************************************************************************
@@ -1054,17 +1492,8 @@ BaR 				vsb;
 ViewerDialogDataPtr vdp;
 ViewerMainPtr 		vmp;
 
-	/*get the parent Window of the Panel*/
-	hWnd=ParentWindow(p);
-
-	if (hWnd==NULL) return;
-
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (hWnd);
-	if (vmp==NULL) return;
-	
-	vdp=vmp->vdp;
-
+	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
 	if (vdp == NULL) return;
 
 	/*current scroll status*/
@@ -1235,17 +1664,11 @@ NLM_EXTERN void  UDV_WinMainResize (WindoW w)
 {
 ViewerDialogDataPtr vdp;
 ViewerMainPtr 		vmp;
-RecT				rcP,rcI,rcL;
+RecT				rcP,rcI,rcW;
+Int2                height,diff,gap,width,delta;
 	
 	vmp = (ViewerMainPtr) GetObjectExtra (w);
 	if (vmp==NULL) return;
-
-	if (vmp->Show_logo){
-		UDV_Resize_Logo_Panel (w,&rcL);
-		SetPosition (vmp->Logo_Panel, &rcL );
-		AdjustPrnt (vmp->Logo_Panel, &rcL, FALSE);
-		return;
-	}
 
 	vdp=vmp->vdp;
 
@@ -1255,26 +1678,29 @@ RecT				rcP,rcI,rcL;
 	 just draw the logo*/
 	if (vdp->UnDViewer == NULL) return;
 
-	/*change UnDviewer's panel size*/
-	Resize_Panels (vdp->UnDViewer,vdp->InfoPanel,&rcP,&rcI,
-		vdp->udv_graph.udv_font.LineHeight);
+	/*move UDV_Panel & InfoPanel*/
+	ObjectRect(w,&rcW);
+	width= rcW.right-rcW.left;
+	height= rcW.bottom-rcW.top;
 
-	if (vdp->ParaG == NULL) {
-		SetPosition (vdp->UnDViewer, &rcP );
-		AdjustPrnt (vdp->UnDViewer, &rcP, FALSE);
-		if (vdp->InfoPanel){
-			SetPosition (vdp->InfoPanel, &rcI );
-			AdjustPrnt (vdp->InfoPanel, &rcI, FALSE);
-		}
-		return;
-	}
+	GetPosition(vmp->StatusGroup,&rcI);
+	GetPosition(vdp->UnDViewer,&rcP);
+	diff=rcI.bottom-rcI.top;
+	gap=rcI.top-rcP.bottom;
+    rcI.bottom = height - rcP.left;
+    rcI.top = rcI.bottom - diff;
+    rcI.right = width - rcI.left;
+    rcP.right = width - rcP.left;
 
-	SetPosition (vdp->UnDViewer, &rcP );
-	AdjustPrnt (vdp->UnDViewer, &rcP, FALSE);
-	if (vdp->InfoPanel){
-		SetPosition (vdp->InfoPanel, &rcI );
-		AdjustPrnt (vdp->InfoPanel, &rcI, FALSE);
-	}
+    rcP.bottom = rcI.top - gap;
+    SetPosition (vmp->StatusGroup, &rcI);
+    SetPosition (vdp->InfoPanel, &rcI);
+    SetPosition (vdp->UnDViewer, &rcP);
+    AdjustPrnt (vdp->UnDViewer, &rcP, FALSE);
+
+	Update();
+	
+	if (vdp->ParaG == NULL) return;
 
 	UDV_resize_viewer(vdp->UnDViewer,vdp);
 }
@@ -1405,8 +1831,6 @@ NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,ViewerDialogDataPtr PNTR vdp,
 		return(FALSE);
 	}
 
-	/*store important data for the viewer*/
-	/*(*vdp)->UnDViewer=p;*/
 	(*vdp)->udv_graph.udv_font.hFnt=f;
 
 	/*init font size*/
@@ -1427,9 +1851,198 @@ NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,ViewerDialogDataPtr PNTR vdp,
 	
 	/*general graph data init; scale pos, etc.*/
 	UDV_Init_GraphData((*vdp)->UnDViewer,&(*vdp)->udv_graph);
+		
+	return(TRUE);
+}
+
+/*******************************************************************************
+
+  Function : UDV_GotoBtnProc()
+  
+  Purpose : manage the "Go To" button
+  
+*******************************************************************************/
+static void UDV_GotoBtnProc(ButtoN g)
+{
+WindoW        w;
+ViewerMainPtr vmp;
+CharPtr       szTmp;
+ParaGPtr      pgp;
+ValNodePtr    vnp,vnp_old;
+Int4          iValue,old_ivalue,line_num,old_line_num,from_bsp,to_bsp,
+			  from_line,to_line;
+BaR           vsb;
+Char          szValue[20];
+Char          szRange[100];
+
+	w=ParentWindow(g);
 	
-	(*vdp)->AlreadyInit=TRUE;
+	vmp=(ViewerMainPtr)GetObjectExtra(w);
 	
+	if (vmp->vdp->ParaG==NULL)
+		return;
+
+	GetTitle(vmp->gotoVal, szValue, 19);
+	if (StringHasNoText (szValue)) {
+		Message (MSG_OK, "Please enter a position");
+		Select (vmp->gotoVal);
+		return;
+	}
+	
+	szTmp=szValue;
+	while(*szTmp){
+		if (!IS_DIGIT(*szTmp)){
+			Message (MSG_OK, "The value you entered is wrong.");
+			Select (vmp->gotoVal);
+			return;
+		}
+		szTmp++;
+	}
+
+	iValue=atoi(szValue);
+
+	if (iValue>0 && iValue<=vmp->vdp->bsp_i.bspLength){
+		vnp=UDV_GetLineNumGivenPos(vmp->vdp->ParaG,iValue-1,&line_num);
+		if (line_num==(Int4)-1) return;
+		UDV_GetCurrentDispRange(vmp->vdp,&from_bsp,&to_bsp,&from_line,&to_line);
+		old_ivalue=vmp->vdp->udv_graph.GotoLetter;
+		vmp->vdp->udv_graph.GotoLetter=iValue;
+		if (line_num<from_line || line_num>to_line){
+			vsb = GetSlateVScrollBar ((SlatE) vmp->vdp->UnDViewer);
+			SetValue(vsb,line_num);
+		}
+		vmp->vdp->udt.action=UDV_INVAL_REGION;
+		vmp->vdp->udt.status=UDV_SET_TIMER;
+		vmp->vdp->udt.pos=iValue-1;
+
+/*		else{
+			if (old_ivalue>=from_bsp && old_ivalue<=to_bsp && old_ivalue!=(-1)){
+				vnp_old=UDV_GetLineNumGivenPos(vmp->vdp->ParaG,old_ivalue-1,
+						&old_line_num);
+				if (vnp_old){
+					pgp=(ParaGPtr)vnp_old->data.ptrvalue;
+					UDV_InvalRegion(vmp->vdp->UnDViewer,&(vmp->vdp->udv_graph),
+						 pgp,pgp->StartLetter,pgp->StopLetter,FALSE);
+				}
+			}
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			UDV_InvalRegion(vmp->vdp->UnDViewer,&(vmp->vdp->udv_graph),
+				 pgp,pgp->StartLetter,pgp->StopLetter,FALSE);
+		}*/
+	}
+	else{
+		sprintf(szRange,"Please enter a value in the range\n[1..%i].",
+			vmp->vdp->bsp_i.bspLength);
+		Select (vmp->gotoVal);
+		Message (MSG_OK, szRange);
+	}
+}
+
+/*******************************************************************************
+
+  Function : CreateMainControls()
+  
+  Purpose : create the content of the main window
+  
+  Parameters : w; parent main window
+				vmp; main data structure
+				  
+  Return value : FALSE if failure 
+
+*******************************************************************************/
+NLM_EXTERN Boolean CreateMainControls(WindoW w,ViewerMainPtr vmp,
+	SAM_ViewGlobal *vgp)
+{
+GrouP  g,StatusGroup;
+ButtoN gotoBtn;
+TexT   gotoTxt;
+PrompT info;
+FonT   hFnt;
+Int2   cxChar,cyChar,Margins;
+PaneL  pnl;
+
+	vmp->vdp=(ViewerDialogDataPtr)MemNew(sizeof(ViewerDialogData));
+	if (vmp->vdp==NULL) 
+		return(FALSE);
+
+	/*FonT & FonT size*/
+	if (!UDV_InitFont(&(vmp->vdp->udv_graph.udv_font))) 
+		return(FALSE);
+
+	SelectFont(vmp->vdp->udv_graph.udv_font.hFnt);
+	UDV_FontDim(&(vmp->vdp->udv_graph.udv_font.cxChar),
+			&(vmp->vdp->udv_graph.udv_font.cyChar));
+
+	/*compute Feature Color Palette*/
+	vmp->vdp->udv_graph.pClr=UDV_BuildFeatColorTable();
+	UDV_Build_Other_Colors(&(vmp->vdp->udv_graph));
+	
+	/*compute layout letters for NA and AA*/
+	UDV_Build_NA_LayoutPalette(&(vmp->vdp->udv_graph));
+	UDV_Build_AA_LayoutPalette(&(vmp->vdp->udv_graph));			
+
+	vmp->vdp->udv_graph.udv_font.LineHeight=
+				UDV_ComputeLineHeight(vmp->vdp->udv_graph.udv_font.cyChar);
+
+#ifdef WIN_MAC
+		hFnt = ParseFont ("Monaco, 9");
+#endif
+
+#ifdef WIN_MSWIN
+		hFnt = ParseFont ("Courier, 7");
+#endif
+
+#ifdef WIN_MOTIF
+		hFnt = ParseFont ("fixed, 12");
+#endif
+
+	SelectFont (hFnt);
+	cxChar=MaxCharWidth();
+	cyChar=LineHeight();
+	g = HiddenGroup (w, 3, 0, NULL);                  
+	gotoBtn = PushButton (g, "Go to:", UDV_GotoBtnProc);
+	gotoTxt = DialogText (g, "0", (Int2)6, NULL);
+
+	g = HiddenGroup (w, 1, 0, NULL);
+	
+	Margins=20*stdCharWidth;
+    
+    if(vgp != NULL) {
+        if(vgp->MasterViewer == SAMVIEWCN3D) {
+			pnl = AutonomousPanel4 (g, 
+				vgp->Rect.right-vgp->Rect.left, 
+				vgp->Rect.bottom-vgp->Rect.top, 
+				 UDV_draw_viewer,UnDViewerVScrlProc,NULL,
+				 sizeof(ViewerDialogDataPtr),NULL,NULL);
+		}
+	}
+	else{
+		pnl = AutonomousPanel4 (g, 
+			(Int2)2*((screenRect.right-screenRect.left)-Margins)/3, 
+			(Int2)2*((screenRect.bottom-screenRect.top)-Margins)/3, 
+			 UDV_draw_viewer,UnDViewerVScrlProc,NULL,
+			 sizeof(ViewerDialogDataPtr),NULL,NULL);
+	}
+	SetObjectExtra (pnl, (Pointer) vmp->vdp, NULL);
+	StatusGroup = HiddenGroup (w, 1, 0, NULL);
+	info = StaticPrompt (StatusGroup, "Ready !", 0, 3*cyChar/2, hFnt, 'l');
+
+	if (pnl==NULL || gotoBtn==NULL || gotoTxt==NULL || info==NULL) 
+		return(FALSE);
+
+	SetPanelClick(pnl,UDV_ClickProc,
+		UDV_DragProc,UDV_HoldProc,UDV_ReleaseProc);
+	SetWindowTimer(w,UDV_TimerProc);
+
+	AlignObjects(ALIGN_RIGHT, (HANDLE) pnl, (HANDLE) StatusGroup, NULL);
+
+	vmp->gotoBtn=gotoBtn;
+	vmp->gotoVal=gotoTxt;
+	vmp->StatusGroup=StatusGroup;
+	vmp->vdp->InfoPanel=info;
+	vmp->vdp->UnDViewer=pnl;
+	vmp->vdp->Parent=w;
+
 	return(TRUE);
 }
 
@@ -1445,14 +2058,11 @@ NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,ViewerDialogDataPtr PNTR vdp,
   Return value : FALSE if failure 
 
 *******************************************************************************/
-static Boolean  CreateUDVpanel(WindoW w,ViewerMainPtr PNTR vmp)
+static Boolean  CreateUDVpanel(WindoW w,ViewerMainPtr PNTR vmp,
+                               SAM_ViewGlobal *vgp)
 {
 ViewerDialogDataPtr vdp;
-RecT				rcP,rcI,rcW;
-CharPtr				szTexte;
-WindoW				hParent/*,temport*/;
-
-
+WindoW				hParent;
 
 	/*w==NULL; we have to build a child viewer*/
 	/*w!=NULL; we deal with an autonomous viewer*/
@@ -1468,113 +2078,58 @@ WindoW				hParent/*,temport*/;
 			return(FALSE);
 		}
 
-		Margins=4*stdCharWidth;
-		hParent=DocumentWindow(Margins,Margins ,
-				(Int2)((screenRect.right-screenRect.left)-2*Margins), 
-				(Int2)((screenRect.bottom-screenRect.top)-2*Margins), 
+		Margins=20*stdCharWidth;
+        hParent = NULL;
+        if(vgp != NULL) {
+            if(vgp->MasterViewer == SAMVIEWCN3D) {
+                hParent=DocumentWindow(vgp->Rect.left,vgp->Rect.top,
+                    (Int2)(-10),
+                    (Int2)(-10),
+                    szAppName, 
+                    NULL,
+                    UDV_WinMainResize);
+            }
+        }
+        else {
+			hParent=DocumentWindow(Margins,Margins,
+                (Int2)(-10),
+                (Int2)(-10),
 				szAppName, 
 				NULL,
 				UDV_WinMainResize);
+        }
 
 		if (hParent==NULL){
 			Message (MSG_ERROR, "Viewer creation failed.");
 			MemFree((*vmp));
 			return(FALSE);
 		}
-
+        w = hParent;
 		(*vmp)->hWndMain=hParent;
 		SetObjectExtra (hParent, (Pointer) *vmp, (FreeProc)UDV_WinMainCleanupExtraProc);
 
 		(*vmp)->AutonomeViewer=FALSE;
 
+		/*menus*/
 		UDV_SetupMenus(hParent,FALSE);
-
 		UDV_set_MainMenus(&((*vmp)->MainMenu),FALSE);
+		UDV_set_MainControls(*vmp,FALSE);
+		/*create the windows*/
+		CreateMainControls(w,*vmp,vgp);
+
 		RealizeWindow(hParent);
 		Show(hParent);
 	}
 	else {
 		hParent=w;
 		/*hide the logo panel; only fot the autonomous viewer variant*/
-		if ((*vmp)->AutonomeViewer) Hide((*vmp)->Logo_Panel);
-	}
-
-	if (!(*vmp)->vdp){
-		(*vmp)->vdp=(ViewerDialogDataPtr)MemNew(sizeof(ViewerDialogData));
-		if ((*vmp)->vdp){
-			MemSet((*vmp)->vdp,0,sizeof(ViewerDialogData));
-		}
-		else{
-			Message (MSG_ERROR, "Viewer creation failed.");
-			Remove(hParent);			
-			return(FALSE);
-		}
+		if ((*vmp)->AutonomeViewer) (*vmp)->Show_logo=FALSE;
 	}
 	
 	vdp=(*vmp)->vdp;
-
-	/*create info panel*/
-	vdp->InfoPanel=AutonomousPanel(hParent,10,10,UDV_InfoPanelDrawProc,
-			NULL,NULL,0,NULL,NULL);
-
-	if (vdp->InfoPanel==NULL) return(FALSE);
-
-	szTexte=(CharPtr)MemNew((BUFFER_SIZE+1)*sizeof(char));
-
-	if (szTexte) MemSet(szTexte,0,BUFFER_SIZE+1);
-	else return(FALSE);
-
-	SetObjectExtra (vdp->InfoPanel, (Pointer) szTexte, StdCleanupExtraProc);
-
-	/*create viewer panel*/
-	vdp->UnDViewer=AutonomousPanel4(hParent,10,10,UDV_draw_viewer,
-			UnDViewerVScrlProc,
-			NULL,0,NULL,NULL);
-	if (vdp->UnDViewer==NULL) return(FALSE);
-	SetPanelClick(vdp->UnDViewer,UDV_ClickProc,
-		UDV_DragProc,NULL,UDV_ReleaseProc);
-	/*Dialog Box CallBack*/
-	/*vdp->dialogmessage=(DialogMessageFunc)WinMainMsgProc;*/
-
-	/*FonT & FonT size*/
-	if (!UDV_InitFont(&(vdp->udv_graph.udv_font))) return(FALSE);
-
-/*	temport=SavePort(hParent);
-	Select((WindoW)vdp->UnDViewer);
-*/
-	SelectFont(vdp->udv_graph.udv_font.hFnt);
-	UDV_FontDim(&(vdp->udv_graph.udv_font.cxChar),
-			&(vdp->udv_graph.udv_font.cyChar));
-
-	/*compute Feature Color Palette*/
-	vdp->udv_graph.pClr=UDV_BuildFeatColorTable();
-
-	/*compute layout letters for NA and AA*/
-	UDV_Build_NA_LayoutPalette(&vdp->udv_graph);
-	UDV_Build_AA_LayoutPalette(&vdp->udv_graph);			
-
-	vdp->udv_graph.udv_font.LineHeight=
-				UDV_ComputeLineHeight(vdp->udv_graph.udv_font.cyChar);
 	
-	/*adjust panel size*/	
-	Resize_Panels (vdp->UnDViewer,vdp->InfoPanel,&rcP,&rcI,
-		vdp->udv_graph.udv_font.LineHeight);
-	if (vdp->InfoPanel){
-		SetPosition (vdp->InfoPanel, &rcI );
-		AdjustPrnt (vdp->InfoPanel, &rcI, FALSE);
-	}
-	SetPosition (vdp->UnDViewer, &rcP );
-	AdjustPrnt (vdp->UnDViewer, &rcP, FALSE);
-
 	/*general graph data init; scale pos, etc.*/
 	UDV_Init_GraphData(vdp->UnDViewer,&vdp->udv_graph);
-	
-	vdp->AlreadyInit=TRUE;
-
-/*	InvalRect(&rcP);
-	RestorePort(temport);
-*/	Update();
-	
 	return(TRUE);
 }
 
@@ -1657,9 +2212,6 @@ SeqIdPtr 	sip;
 
 	bsp_i->SeqBuf=UDV_Read_Sequence (sip,bsp_i->StartBuf,bsp_i->StopBuf, 
 		(Boolean)(!bsp_i->bspMolNuc),bsp_i->LengthBuf);
-
-/*printf("%d; %d ; %d ; %d ; %s\n\n",bsp_i->bspMolNuc,bsp_i->StartBuf,
-bsp_i->StopBuf,bsp_i->LengthBuf,bsp_i->SeqBuf);*/
 
 	/*find the ParaG where bsp_i->StartBuf is Located*/
 	if (StartScan==NULL) vnp=ParaG_list;
@@ -1927,13 +2479,13 @@ MIDataPtr mid=(MIDataPtr)data;
 	
 	switch(msg){
 		case ODLB_DrawItem:{
-			/*WindoW temport;
+			WindoW temport;
 			temport=SavePort(ParentWindow(lbox));
 			Select(lbox);
-			ClipRect(&mid->rcP);*/
+			/*ClipRect(&mid->rcP);*/
 			FLB_OnDraw(mid);
-			/*ResetClip();
-			RestorePort(temport);*/
+			/*ResetClip();*/
+			RestorePort(temport);
 			break;
 		}
 		case ODLB_MeasureItem:{
@@ -1957,7 +2509,6 @@ MIDataPtr mid=(MIDataPtr)data;
 			if (fldp==NULL) break;
 			vmp->vdp->ClickFeatFromDlg=TRUE;
 			ObjMgrSendMsg(OM_MSG_SELECT,fldp->eID,fldp->iID,OBJ_SEQFEAT);
-			/*UDV_select_feature(vmp->vdp,fldp->eID,fldp->iID,TRUE);*/
 			break;
 		}
 	}
@@ -2372,7 +2923,7 @@ error:
 	Remove(w);
 	/*update menu*/
 	SetStatus(vmp->MainMenu.ShowFeatureList,FALSE);
-	MsgAlert(KEY_OK, SEV_INFO, "UnD-Viewer","Nothing found.");
+	MsgAlert(KEY_OK, SEV_INFO, "OneD-Viewer","Nothing found.");
 }
 
 /*******************************************************************************
@@ -2539,7 +3090,7 @@ MsgAnswer			nRet;
 	
 	/*if hFeatDlg opens, ask to close it*/
 	if (vmp->hFeatDlg){
-		nRet=MsgAlert(KEY_OKC, SEV_INFO, "UnD-Viewer",
+		nRet=MsgAlert(KEY_OKC, SEV_INFO, "OneD-Viewer",
 			"Features List is already opened.\n Would you like to close it?");
 		if (nRet==ANS_OK){
 			Remove(vmp->hFeatDlg);
@@ -2554,7 +3105,7 @@ MsgAnswer			nRet;
 	MemSet(fksd,0,sizeof(FKSData));		
 
     w = FixedWindow(-30, -20,  -10,  -10, 
-				"UnD-Viewer - Find Features",  NULL);
+				"OneD-Viewer - Find Features",  NULL);
 	g1=HiddenGroup(w,0,2,NULL);
 
 	SetGroupSpacing(g1,10,10);
@@ -2581,4 +3132,29 @@ MsgAnswer			nRet;
 	/*disable all menus*/
     UDV_set_PullMenus(&vmp->MainMenu,FALSE);
 }
+
+/*******************************************************************************
+
+  Function : UDV_GenViewProc()
+  
+  Purpose : Genome Viewer menu Proc
+
+  Return value : TRUE if ok 
+
+*******************************************************************************/
+#ifdef UDV_GENOME
+static void UDV_GenViewProc(IteM i)
+{
+WindoW        w;
+ViewerMainPtr vmp;
+
+	w=ParentWindow(i);
+	vmp = (ViewerMainPtr) GetObjectExtra (w);
+	if (vmp==NULL) return;
+	if (vmp->vdp==NULL) return;
+	
+	GV_LoadGenomeViewer(vmp->vdp->bsp_i.bsp_entityID,
+		vmp->vdp->bsp_i.bsp_itemID,OBJ_BIOSEQ);
+}
+#endif
 

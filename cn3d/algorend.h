@@ -31,9 +31,30 @@
 *
 * File Description: algorithmic rendering structures
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.h,v $
+* Revision 6.24  2000/01/14 21:40:41  lewisg
+* add translucent spheres, ion labels, new cpk, fix misc bugs
+*
+* Revision 6.23  1999/12/13 23:20:44  lewisg
+* bug fixes: duplicate color structures eliminated, clear color doesn't clear case
+*
+* Revision 6.22  1999/12/11 01:30:34  lewisg
+* fix bugs with sharing colors between ddv and cn3d
+*
+* Revision 6.21  1999/11/01 22:10:27  lewisg
+* add ability to call color functions by type, and add this to cn3d
+*
+* Revision 6.20  1999/10/31 22:37:36  thiessen
+* added worm render type to UI
+*
+* Revision 6.19  1999/10/29 14:15:27  thiessen
+* ran all Cn3D source through GNU Indent to prettify
+*
+* Revision 6.18  1999/09/21 18:09:16  lewisg
+* binary search added to color manager, various bug fixes, etc.
+*
 * Revision 6.17  1999/04/06 20:10:16  lewisg
 * fix typo
 *
@@ -119,7 +140,7 @@
  *
 * ==========================================================================
 */
-  
+
 #ifndef _ALGOREND_
 #define _ALGOREND_ 1
 
@@ -133,21 +154,24 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif  
-
-
+#endif
 /***ASN.1 & ANNMM compatible values for Rendering*****/
-
 #define R_DEFAULT 0
 #define R_WIRE  1
 #define R_SPACE 2
 #define R_STICK 3
 #define R_BALLNSTICK 4
 #define R_THICKWIRE 5
+#define R_WORMWIRE 6
+
+#ifdef _OPENGL
+#define R_WORMTHIN 7
+#define R_WORMFAT 8
+#endif
+
 #define R_NAME 10
 #define R_NUMBER 11
 #define R_PDBNUMBER 12
-
 #define C_default  0
 #define C_hotpink  1
 #define C_magenta  2
@@ -175,34 +199,28 @@ extern "C" {
 #define C_BYCHAIN 226
 #define C_BYTEMP 227
 #define C_BYRES 228
-#define C_BYLEN 229
 #define C_BYSSTRU 230
 #define C_BYHYDRO 231
 #define C_BYOBJECT 246
 #define C_BYDOMAIN 247
-#define C_BYALIGN 248	/* color by alignment */
-#define C_BYCONS 249 /* color by structure conservation */
-#define C_BYSEQCONS 250 /* color by sequence conservation */
-
+#define C_BYALIGN 248           /* color by alignment */
+#define C_BYCONS 249            /* color by structure conservation */
+#define C_BYSEQCONS 250         /* color by sequence conservation */
 /* the number of colors available to color aligned structures */
 #define NUM_SLAVES 8
-
 /* these set bond draw styles */
 #define NO_BOND 0
 #define HALF_BOND 1
-
 /* these set atom widths */
 #define ATOM_NONE   0
 #define ATOM_SPACE  1
 #define ATOM_2XBOND 2
 #define ATOM_ISBOND 3
-
 #define HET_BOND_WIDTH   (float)0.4
 #define VIRT_BOND_WIDTH  (float)0.6
 #define SUPER_BOND_WIDTH (float)1.0
 #define CYL_THRESHOLD    (float)0.1
 #define EXPAND_ATOM      (float)1.8
-
 #define CONNECTON  0
 #define VIRTUALBB  1
 #define REALBB     2
@@ -216,11 +234,9 @@ extern "C" {
 #define HETLABELSON 10
 #define PTERMLABON  11
 #define NTTERMLABON 12
-
-
 /* from the ASN.1 spec ...
         default         (0),  -- Default view
-        wire            (1),  -- use wireframe 
+        wire            (1),  -- use wireframe
         space           (2),  -- use spacefill
         stick           (3),  -- use stick model (thin cylinders)
         ballNStick      (4),  -- use ball & stick model
@@ -229,7 +245,7 @@ extern "C" {
         bbVirtual       (7),  -- show BB as virtual c-alpha bonds
         hide            (9),  -- don't show this
         name            (10), -- display its name next to it
-        number          (11), -- display its number next to it 
+        number          (11), -- display its number next to it
         pdbNumber       (12), -- display its PDB number next to it
         hBond           (13), -- show any hBonds this forms
         objWireFrame    (150), -- display MMDB surface object as wireframe
@@ -252,7 +268,7 @@ extern "C" {
         ssOvalArrow     (218), -- show sheets with oval-x-section arrows
         colorsetCPK     (225), -- color atoms like CPK models
         colorsetbyChain (226), -- color each chain different
-        colorsetbyTemp  (227), -- color using isotropic Temp factors 
+        colorsetbyTemp  (227), -- color using isotropic Temp factors
         colorsetbyRes   (228), -- color using residue properties
         colorsetbyLen   (229), -- color changes along chain length
         colorsetbySStru (230), -- color by secondary structure
@@ -271,110 +287,103 @@ extern "C" {
         colorsetBasic   (243), -- color Basic pH
         colorsetAcidic  (244), -- color Acidic pH
         colorsetNeutr   (245), -- color Neutral pH
-        other           (255) 
+        other           (255)
 
-*/
-
-
-/* this AlgorRenderSet gets hung off of an MSD structure for the first go-round */
-/* will later feature-ize it */
-
+*//* this AlgorRenderSet gets hung off of an MSD structure for the first go-round *//* will later feature-ize it */
 #define   L_NAME      0x01
 #define   L_NUM       0x02
 #define   L_PDB       0x04
 #define   L_WHITE     0x20
 #define   L_3LETR     0x40
 #define   L_1LETR     0x80
-
-
 /* 3LETR is both bits set */
-
 #define LA_LEFT   0x01
 #define LA_RIGHT  0x02
 #define LA_UPPER  0x04
 #define LA_LOWER  0x08
 #define LA_CENTER 0x20
 #define LA_FRONT  0x40
- 
-typedef struct AlgorRenderSet {
+ typedef struct AlgorRenderSet {
 
 /* this embeds a camera structure inside */
 #ifndef _OPENGL
-  Int4 dummy[CAMERA_SIZE_I4];
+    Int4 dummy[CAMERA_SIZE_I4];
 #endif
-   
+
 /* global settings */
 
-  Boolean 	   HydrogensOn;  
-  Boolean          DisorderOn;
-  Boolean          AnimateOn;
+    Boolean HydrogensOn;
+    Boolean DisorderOn;
+    Boolean AnimateOn;
 
 /* an On Boolean signifies a separate pass through the structure data with a callback */
 /* Protein Renderings */
-  Boolean          PVirtualBBOn;
-  Boolean          PRealBBOn;
-  Boolean          PExtraBBOn;  /* carbonyl oxygens */
-  Boolean          PResiduesOn;
-  Int2		   PBBRender;  /* valid are {0,1-5} */
-  Int2             PBBColor;  /* valid are {0,225-231} */
-  Int2 		   PResRender;  /* valid are {0, 1-5} */
-  Int2		   PResColor;  /* valid are {0,225-231} */
+    Boolean PVirtualBBOn;
+    Boolean PRealBBOn;
+    Boolean PExtraBBOn;     /* carbonyl oxygens */
+    Boolean PResiduesOn;
+    Int2 PBBRender;         /* valid are {0,1-5} */
+    Int2 PBBColor;          /* valid are {0,225-231} */
+    Int2 PResRender;        /* valid are {0, 1-5} */
+    Int2 PResColor;         /* valid are {0,225-231} */
 
 
-  Uint1            PBBLabelOn;  /* uses PResColor */
-  Uint1            PBBLabelJust;   
-  Uint1            PBBLabelStyle;
-  Int2             PBBLabelScale;
-  
-  Boolean          PTermLabelOn; /* uses PBBColor */
-  Uint1		   PTermLabelJust;
-  Uint1            PTermLabelStyle;
-  Int2             PTermLabelScale;
-  
- 
+    Uint1 PBBLabelOn;       /* uses PResColor */
+    Uint1 PBBLabelJust;
+    Uint1 PBBLabelStyle;
+    Int2 PBBLabelScale;
+
+    Boolean PTermLabelOn;   /* uses PBBColor */
+    Uint1 PTermLabelJust;
+    Uint1 PTermLabelStyle;
+    Int2 PTermLabelScale;
+
+    Boolean IonLabelOn;
+
 /* DNA/RNA  Renderings */
-  Boolean          NTVirtualBBOn;
-  Boolean          NTRealBBOn;
-  Boolean          NTExtraBBOn;  /* phosponyl oxygens */
-  Boolean          NTResiduesOn;
-  Int2             NTBBRender; /* valid are {0,1-5} */
-  Int2             NTBBColor;  /* valid are {0,225-231} */
-  Int2		   NTResRender;/* valid are {0,1-5} */
-  Int2 		   NTResColor; /* valid are {0,225-231} */ 
-  Int2				DomainColor;
- 
-  Uint1            NTBBLabelOn;  /* uses NTResColor */
-  Uint1            NTBBLabelJust;
-  Uint1            NTBBLabelStyle;
-  Int2             NTBBLabelScale;
+    Boolean NTVirtualBBOn;
+    Boolean NTRealBBOn;
+    Boolean NTExtraBBOn;    /* phosponyl oxygens */
+    Boolean NTResiduesOn;
+    Int2 NTBBRender;        /* valid are {0,1-5} */
+    Int2 NTBBColor;         /* valid are {0,225-231} */
+    Int2 NTResRender;       /* valid are {0,1-5} */
+    Int2 NTResColor;        /* valid are {0,225-231} */
+    Int2 DomainColor;
 
-  Boolean          NTTermLabelOn;  /* Uses NTBBColor */
-  Uint1            NTTermLabelJust;
-  Uint1            NTTermLabelStyle;
-  Int2             NTTermLabelScale;
- 
-  Boolean          HeterogensOn;  
-  Int2             HetRender; /* valid are {0,1-5} */
-  Int2             HetColor; /* valid are {0,225,226,227} */ 
+    Uint1 NTBBLabelOn;      /* uses NTResColor */
+    Uint1 NTBBLabelJust;
+    Uint1 NTBBLabelStyle;
+    Int2 NTBBLabelScale;
 
-  Boolean          IonsOn;   
-  Int2             IonRender;  /* valid are {0,2,4} */
-  Int2             IonColor;  /* valid are {0,225,226,227} */
+    Boolean NTTermLabelOn;  /* Uses NTBBColor */
+    Uint1 NTTermLabelJust;
+    Uint1 NTTermLabelStyle;
+    Int2 NTTermLabelScale;
 
-  Boolean          ConnectOn;    
-  Int2             ConnectRender;  /* valid are {0, 1,3,4,5} */
-  Int2             ConnectColor;   /* valid are {0} fixed yellow color */
-  
-  Boolean          SolventOn;   
-  Int2             SolventRender;  /* {} from hets, 0 inherits from HetRender*/
-  Int2             SolventColor;  /* {} from hets,  0 inherits fro HetColor */ 
+    Boolean HeterogensOn;
+    Int2 HetRender;         /* valid are {0,1-5} */
+    Int2 HetColor;          /* valid are {0,225,226,227} */
 
-  Boolean	   ObjectOn;
-  Int2		   ObjectRender;
-  Int2 	           ObjectColor;  /* valid are BYCHAIN, BYSSTRU */
-  
-  Uint1 NumColors;
+    Boolean IonsOn;
+    Int2 IonRender;         /* valid are {0,2,4} */
+    Int2 IonColor;          /* valid are {0,225,226,227} */
+
+    Boolean ConnectOn;
+    Int2 ConnectRender;     /* valid are {0, 1,3,4,5} */
+    Int2 ConnectColor;      /* valid are {0} fixed yellow color */
+
+    Boolean SolventOn;
+    Int2 SolventRender;     /* {} from hets, 0 inherits from HetRender */
+    Int2 SolventColor;      /* {} from hets,  0 inherits fro HetColor */
+
+    Boolean ObjectOn;
+    Int2 ObjectRender;
+    Int2 ObjectColor;       /* valid are BYCHAIN, BYSSTRU */
+
+    Uint1 NumColors;
 /*  Uint1 IndexRGB[CN3D_COLOR_MAX];*/
+
 
 } ARS, PNTR PARS;
 
@@ -382,79 +391,109 @@ typedef struct AlgorRenderSet {
 
 /* this structure keeps data for the rendering callbacks */
 typedef struct RenderKeep {
-   Byte NodeWhat;
-   Byte NodeType;
-   ResidueColorCell Color; /* a fixed color */
-   Byte Bond;  /*  use define */
-   Byte Atom;
-   FloatLo BondWidth; 
-   Uint1 LJust;
-   Uint1 LStyle;
-   Int2  LScale;
-} RK,  PNTR PRK;
+    Byte NodeWhat;
+    Byte NodeType;
+    DDV_ColorCell Color;    /* a fixed color */
+    Byte Bond;              /*  use define */
+    Byte Atom;
+    FloatLo BondWidth;
+    Uint1 LJust;
+    Uint1 LStyle;
+    Int2 LScale;
+} RK, PNTR PRK;
 
 
 /************function prototypes***********/
 
-extern void  LIBCALL SetDefaultAlgorRender PROTO((PARS pars));
-extern void  LIBCALL SetAlignAlgorRender PROTO((PARS pars));
-extern PARS  LIBCALL NewAlgorRenderSet     PROTO((void));
+extern void LIBCALL SetDefaultAlgorRender PROTO((PARS pars));
+extern void LIBCALL SetAlignAlgorRender PROTO((PARS pars));
+extern PARS LIBCALL NewAlgorRenderSet PROTO((void));
 extern PARS LIBCALL NewAlignRenderSet PROTO((void));
-extern void  LIBCALL SetStrucSeqsAlgorRender PROTO((PARS pars));
+extern void LIBCALL SetStrucSeqsAlgorRender PROTO((PARS pars));
 extern PARS LIBCALL NewStrucSeqsRenderSet PROTO((void));
-extern void  LIBCALL FreeAlgorRenderSet    PROTO((PARS pars));
-extern PARS  LIBCALL GetAlgorRenderSet     PROTO((PDNMS pdnmsThis));
-extern void  LIBCALL ResetRenderCtrls      PROTO((void));
-extern GrouP LIBCALL RenderControls        PROTO((Nlm_GrouP prnt));
-extern void  LIBCALL ResetLabelCtrls       PROTO((void));
-extern GrouP LIBCALL LabelControls         PROTO((Nlm_GrouP prnt));
-extern PRK   LIBCALL NewRenderKeep         PROTO((void));
-extern PRK   LIBCALL CopyRenderKeep        PROTO((PRK prkThis));
-extern void  LIBCALL FreeRenderKeep        PROTO((PRK prkThis));
-extern void  LIBCALL RenderObject          PROTO((PVNMO pvnmoThis));
-extern void  LIBCALL RenderBond   PROTO((PALD paldFrom, PALD paldTo,
-                                         ResidueColorCell * iColor, FloatLo fCylRadius));
-extern void  LIBCALL RenderAnAtom PROTO((PALD paldAtom,
-                                         ResidueColorCell *  iColor, FloatLo fRadius));
-extern Int2  LIBCALL GetGraphNCBIstdaa     PROTO((PMGD pmgdThis));
-extern Int2  LIBCALL GetGraphNCBI4na       PROTO((PMGD pmgdThis));
-extern void  LIBCALL MakePaletteModel      PROTO((PDNMS pdnmsThis, Int2 iModel ));
-extern void  LIBCALL MakeStrucPalette      PROTO((void)); 
+extern void LIBCALL FreeAlgorRenderSet PROTO((PARS pars));
+extern PARS LIBCALL GetAlgorRenderSet PROTO((PDNMS pdnmsThis));
+extern void LIBCALL ResetRenderCtrls PROTO((void));
+extern GrouP LIBCALL RenderControls PROTO((Nlm_GrouP prnt));
+extern void LIBCALL ResetLabelCtrls PROTO((void));
+extern GrouP LIBCALL LabelControls PROTO((Nlm_GrouP prnt));
+extern PRK LIBCALL NewRenderKeep PROTO((void));
+extern PRK LIBCALL CopyRenderKeep PROTO((PRK prkThis));
+extern void LIBCALL FreeRenderKeep PROTO((PRK prkThis));
+extern void LIBCALL RenderObject PROTO((PVNMO pvnmoThis));
+extern void LIBCALL RenderBond PROTO((PALD paldFrom, PALD paldTo,
+                                      DDV_ColorCell * iColor,
+                                      FloatLo fCylRadius));
+extern void LIBCALL RenderAnAtom
+    PROTO((PALD paldAtom, DDV_ColorCell * iColor, FloatLo fRadius,
+    FloatHi lfAlpha));
+extern Int2 LIBCALL GetGraphNCBIstdaa PROTO((PMGD pmgdThis));
+extern Int2 LIBCALL GetGraphNCBI4na PROTO((PMGD pmgdThis));
+extern void LIBCALL MakePaletteModel
+    PROTO((PDNMS pdnmsThis, Int2 iModel));
+extern void LIBCALL MakeStrucPalette PROTO((Boolean fSpecial));
 #ifdef _OPENGL
-    extern void LIBCALL AlgorithmicRendering PROTO((void));
+extern void LIBCALL AlgorithmicRendering PROTO((void));
 #else
-    extern Picture3D LIBCALL Do3DOrigin PROTO((Picture3D p3d));
-    extern Picture3D LIBCALL AlgorithmicRendering PROTO((Picture3D p3d));
+extern Picture3D LIBCALL Do3DOrigin PROTO((Picture3D p3d));
+extern Picture3D LIBCALL AlgorithmicRendering PROTO((Picture3D p3d));
 #endif
 extern void Cn3D_RedrawProc PROTO((ButtoN b));
-extern void LIBCALL fnMSPLoop PROTO((PDNMS pdnmsThis));
-extern void LIBCALL fnARLoop PROTO((PDNMS pdnmsThis ));
+extern void LIBCALL fnMSPLoop
+    PROTO((PDNMS pdnmsThis, Boolean fSpecial));
+extern void LIBCALL fnARLoop PROTO((PDNMS pdnmsThis));
 
-extern void Cn3D_RenStruc  PROTO ((IteM i));
-extern void Cn3D_RenWire   PROTO ((IteM i));
-extern void Cn3D_RenTube   PROTO ((IteM i));
-extern void Cn3D_RenHier   PROTO ((IteM i));
-extern void Cn3D_RenSpace  PROTO ((IteM i));
-extern void Cn3D_RenBS     PROTO ((IteM i));
+extern void Cn3D_RenStruc PROTO((IteM i));
+extern void Cn3D_RenWire PROTO((IteM i));
+extern void Cn3D_RenTube PROTO((IteM i));
+extern void Cn3D_RenHier PROTO((IteM i));
+extern void Cn3D_RenSpace PROTO((IteM i));
+extern void Cn3D_RenBS PROTO((IteM i));
 extern void Cn3D_RenDefault PROTO((IteM i));
-extern void Cn3D_RenAlign  PROTO((IteM i));
+extern void Cn3D_RenAlign PROTO((IteM i));
 
 
-extern void Cn3D_ColCPK    PROTO ((IteM i));
-extern void Cn3D_ColDomain PROTO ((IteM i));
-extern void Cn3D_ColCy     PROTO ((IteM i));
-extern void Cn3D_ColStru   PROTO ((IteM i));
-extern void Cn3D_ColRes    PROTO ((IteM i));
-extern void Cn3D_ColHydro  PROTO ((IteM i));
-extern void Cn3D_ColTemp   PROTO ((IteM i));
-extern void Cn3D_ColAlign   PROTO ((IteM i));
-extern void Cn3D_ColCons   PROTO ((IteM i));
-extern void Cn3D_ColSeqCons PROTO ((IteM i));
-extern void Cn3D_DoColSeqCons PROTO ((void));
+extern void Cn3D_ColCPK PROTO((IteM i));
+extern void Cn3D_ColDomain PROTO((IteM i));
+extern void Cn3D_ColCy PROTO((IteM i));
+extern void Cn3D_ColStru PROTO((IteM i));
+extern void Cn3D_ColRes PROTO((IteM i));
+extern void Cn3D_ColHydro PROTO((IteM i));
+extern void Cn3D_ColTemp PROTO((IteM i));
+extern void Cn3D_ColAlign PROTO((IteM i));
+extern void Cn3D_ColCons PROTO((IteM i));
+extern void Cn3D_ColSeqCons PROTO((IteM i));
+extern void Cn3D_DoColSeqCons PROTO((void));
 
+
+/* external color functions */
+extern void Cn3D_Color_CPK(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYCHAIN(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYTEMP(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYRES(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYSSTRU(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYHYDRO(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYOBJECT(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYDOMAIN(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYALIGN(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_Color_BYCONS(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+extern void Cn3D_ColorSpecial(DDV_ColorGlobal * pColorGlobal, void *pData,
+                       DDV_Range * pRange);
+
+/* end external color functions */
+extern Char * Cn3D_ColorFuncFind(void);
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif
